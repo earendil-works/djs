@@ -308,7 +308,10 @@ impl Heap {
         let count: u32 = self.arena().get(t, PropTable::COUNT);
         let deleted: u32 = self.arena().get(t, PropTable::DELETED);
         let live = count - deleted;
-        if live == PropTable::LAYOUT.tail_capacity(self.cell_size(t)) {
+        if live == PropTable::LAYOUT.tail_capacity(self.cell_size(t)) && deleted == 0 {
+            if live > LINEAR_MAX {
+                self.build_table_index_dense(t)?;
+            }
             return Ok(());
         }
         let size = PropTable::ENTRIES
@@ -329,7 +332,7 @@ impl Heap {
         self.arena_mut().set(new, PropTable::COUNT, n);
         self.arena_mut().set(o, Object::PROPS, Ref(new));
         if n > LINEAR_MAX {
-            self.build_table_index(new)?;
+            self.build_table_index_dense(new)?;
         }
         Ok(())
     }

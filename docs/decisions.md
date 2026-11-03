@@ -7684,3 +7684,21 @@ Measured on main ab09a05f (base 196,280 B) and dropped:
   builtin's template is 48 B + ~12 B of code), paid with new Rust in a module close to its
   size ceiling. Reopen only with new facts (a smaller binding, ceiling room, or many more
   pure forwards).
+
+## D2450: The base's property table indexes at a load of three quarters
+date: 2026-11-03 · by: bloat · issue: 0151
+L5, measured on main 14c83b2d: the base has 83 dictionary property tables (14.9 KB) and 23
+hash indexes (7.5 KB), sized at twice the table's capacity. The tables of builtin
+prototypes and namespaces are full after `compact_for_image` and grow only when a script
+adds to a builtin, which first copies the table and builds a normal index
+(`grow_table`). So the image build gives them an index of `next_power_of_two(⌈4n/3⌉)`
+buckets (`Heap::build_table_index_dense`, also after the atom renumbering of D2447): a
+load of at most 3/4, always with an empty bucket for a miss to stop at.
+- **Bought:** base 189,288 → 186,344 B (−2.9 KB; 19-entry tables 64 → 32 buckets,
+  38-47 entries 128 → 64); module gzip −150.
+- **Neutral:** wasm instructions (n=5, all workloads) −0.1..+0.5% cold apart from indexof
+  (+0.7% at n=7), warm props 6997/6989, prop1 2260/2261, pi-like 4226/4232 M.
+- **Not done:** a compact frozen form. The entries are 16 bytes (an atom, flags, a value)
+  and the values are mostly distinct function objects; a shared key description is a
+  shape chain, which costs a cell per key for one-off objects (D1831). Linear search up to
+  12 entries would save 240 B more.

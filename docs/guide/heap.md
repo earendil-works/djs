@@ -205,7 +205,10 @@ one way, when sharing is unlikely or the shape tree would grow without bound:
 A dictionary is a `PropTable` of 16-byte entries (key, flags, value) in insertion order,
 searched linearly up to 8 entries and through a hash index above that. An accessor's
 entry points to an `AccessorPair` cell holding the getter and setter, which is what
-keeps data entries at 16 bytes (D1830).
+keeps data entries at 16 bytes (D1830). An index has room for twice the table's capacity,
+so a growing table probes little; the builtin prototypes and namespaces in the base are
+full and almost never grow, so theirs are sized for a load of three quarters, which
+halves most of them for no measurable cost (D2450).
 
 <!-- gen:cell PropTable -->
 ![The PropTable cell](gen/cell-PropTable.svg)

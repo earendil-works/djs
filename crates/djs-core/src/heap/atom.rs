@@ -625,7 +625,7 @@ impl Heap {
                         self.arena_mut().set(e, PropEntry::KEY, moved(k));
                     }
                     if self.arena().get::<Ref>(c, PropTable::INDEX).get().is_some() {
-                        self.build_table_index(c)?;
+                        self.build_table_index_dense(c)?;
                     }
                 }
                 CellKind::Shape => {

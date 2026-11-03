@@ -1,6 +1,6 @@
 # 0151: Shrink the base heap to a fraction, without removing anything
 
-status: in-progress
+status: done
 agent: bloat
 branch: issue/0151-base-fraction (one branch per landing: issue/0151-<step>)
 depends-on: 0143, 0145, 0147, 0148, 0150
@@ -274,6 +274,14 @@ Found while measuring L4, landed before it on the coordinator's call.
   neutral or faster (pushpop −2.0%, push-pop −1.5%), tree-children −4.7%.
 - Guide: heap.md (closure template paragraph).
 
+### L5: base property table indexes at load 3/4 (branch issue/0151-dicts, D2450)
+- 83 tables 14.9 KB, 23 indexes 7.5 KB (2× capacity). Base tables are full and copy on
+  growth, so `build_table_index_dense` sizes theirs at ⌈4n/3⌉ → pow2.
+- Base 189,288 → 186,344 B (−2.9 KB); gzip −150; cold −0.1..+0.5% (indexof +0.7% at n=7),
+  warm props/prop1/pi-like equal. Compact frozen form not done (entries are atom + flags +
+  distinct values; shapes cost more for one-off objects).
+- Guide: heap.md (index sizing sentence).
+
 ## Follow-ups
 - GC thresholds are rounded to 64 KB pages from offset 0, so collection points depend on
   the base's size (json-date's extra collection under L4). Rounding relative to
@@ -289,3 +297,45 @@ Found while measuring L4, landed before it on the coordinator's call.
   a template field for a non-atom name string would take them too.
 
 ## Result
+The per-VM base image went from 325,008 B (5,852 cells) to 186,344 B (3,100 cells),
+−138.7 KB (−42.7%), with every builtin kept. test262 active, difftest stress,
+determinism, pi's suite (full and slim), order independence and the prefix barrier stayed
+green at every merge.
+
+| step | decision | base raw B | Δ | module gzip Δ | speed |
+| --- | --- | ---: | ---: | ---: | --- |
+| start (main 2e784f25) | | 325,008 | | | |
+| after 0150 (strings) | | 322,720 | −2.3 K | | |
+| L6 prelude functions in a realm table | D2440 | 295,952 | −26.8 K | −5,174 | ±0.8% |
+| dispatch spills, GC allowance | D2441, D2442 | (296,184 with other merges) | 0 | +215 | loop −7.5%, calls −4.9% |
+| L4 short opcode forms, shortened jumps | D2443 | 250,544 | −45.6 K | +377 (trade) | −1.4..+1.5%, first-run outliers |
+| L3.1 code inline in the template, FuncInfo | D2444 | 231,960 | −18.6 K | −912 | −2.7..+1% (noise) |
+| L3.3 lazy closure `length`/`name` | D2445 | 217,608 | −14.4 K | +652 | tree-children −12%/−14% warm |
+| L3.2 one constant pool per unit, pruned | D2446 | 207,920 | −9.95 K | −528 | neutral |
+| L3.4 atoms renumbered without gaps | D2447 | 196,280 | −11.6 K | −239 | warm equal |
+| function objects 32 → 24 B | D2448 | 189,288 | −7.0 K | +26 | −2.6..+0.2%, tree-children −4.7% |
+| L5 base table indexes at load 3/4 | D2450 | 186,344 | −2.9 K | −150 | neutral |
+
+(Base rows are on the main each step merged into; other agents' merges moved the base by a
+few hundred bytes in between: L3.2 started from 217,872.)
+
+Module gzip (gate): 459,027 before L6 → 443,596 now (others' removals included; the
+ceiling went 454,863 → 455,600 for D2443 and is 444,500 today, slim 379,900 at 379,276).
+A wasm instance after `vm_new`: 19 → 17 pages before 0158 changed instance memory; peak
+memory (mem-perturb) equal or lower on every workload measured.
+
+**Not done, with reasons:**
+- L2/L1, direct native binding (D2449): a second argument interpreter next to the
+  bytecode for ~10-13 KB per VM, paid in Rust in a module at its ceiling.
+- L7, complex leaf builtins in Rust: about −16 KB per VM for ~+12 KB gzip, off while the
+  ceilings are tight (coordinator).
+- Under 100 KB: the rest is mostly bytecode of builtins that can call back into user code
+  (~41 KB), templates' fixed parts (874 × 48 B = 42 KB), function objects (21 KB), names
+  and messages (26 KB) and builtin property tables (22 KB). Getting the bytecode out of the
+  VM (natives can't suspend cheaply, D2020) or sharing the prefix between VMs is a
+  different project.
+
+**Tools:** work/scratch/0151 (gitignored): `wq3.sh`/`wmeasure3.py` and `warm.sh` take
+`WASM@SRCROOT` (a build of another commit needs its own JS reader), `tf.sh` (TurboFan
+dispatch of `run_hot`), `memstep.ts`, `tools/` (base histograms: pools, atoms, dicts,
+roles, tstat).
