@@ -19,7 +19,11 @@ committed report as a new round.
 ## Fake tools
 
 The sessions record each nested call's name, arguments and status, never its result, so
-every result is synthetic, in the recorded call order; a failed call rejects.
+every result is synthetic, in the recorded call order; a failed call rejects. Every
+answer, `models` included, goes through the corpus prelude's `later` (0173, D2590), so in
+djs each tool call is an idle point. `build.py --refresh tests/corpus/codemode-harvest`
+rewrites the committed cases' harness with the current templates, keeping their
+answers, scripts and stored values (no new selection or review).
 - String tools (read, bash, ls, grep, find, edit, write, transcribe_file): text of the
   call's kind (file text, command output, grep lines, code, JSON). bash returns
   `{ exit_code, output, truncated }` when the session declared that shape or the script

@@ -202,7 +202,11 @@ known failure (`tests/corpus/expected-failures.txt`), 5 skipped as djs non-goals
 
 A case is what the model sees from a pi codemode script, so every engine runs the same
 JS prelude (`tests/corpus/prelude.js`) first. It defines `console.*`, `text()`, `exit()`,
-`store`/`load` and fake `tools` (`echo`, `fail`) with pi's formatting. The case source is
+`store`/`load` and fake `tools` (`echo`, `fail`) with pi's formatting. The fake tools
+(and the harvested cases' own fakes) answer through `host.later(value, rejected)` (D2590):
+in djs an async host call that the runner settles at the next idle point, one per idle
+point in call order, so every tool call is an idle point as with a real tool; under qjs
+`Promise.resolve`/`Promise.reject`. The case source is
 the body of a strict `async (tools, console) => {...}` evaluated in a global Script, as
 in pi (D008): top-level `await` and `return` work, `this` is the global object, there
 is no `arguments`. The
@@ -257,11 +261,16 @@ $D --engine djs --ratchet --suspend-every 97 --gc-stress --determinism   # what 
                                      # (--suspend-every 97 also runs 1009)
 $D --engine djs --backend bytecode --ratchet               # the gate, too (0063)
 $D --engine djs --update-ratchet     # after fixing cases: rewrite expected-failures.txt
+$D --engine djs --idle-points codemode   # the idle points per case (the total always prints)
 ```
 
 With `--engine djs` the case runs exactly as with qjs: djs evaluates the shared prelude
-and the case Script in-process, and only `host.output`/`host.done` are host functions
-(D1440). `--suspend-every N` and `--gc-stress` run
+and the case Script in-process, and only `host.output`/`host.done` are host functions,
+plus the async `host.later` (D1440, D2590). A case waits on `later` only where it awaits a
+tool, so djs and qjs differ only for a case whose output depends on whether a tool's
+answer comes before or after other promise jobs (none in the corpus at 0173; the glue
+test's `later.js` shows the difference). A stressed run must also pass the same number
+of idle points as the plain run. `--suspend-every N` and `--gc-stress` run
 every case a second (third) time; a transcript that differs from the plain djs run is a
 hard failure, separate from the oracle comparison and the ratchet (D1161). Stressed runs
 get three times the case's time limit, and a stressed run that still times out is a

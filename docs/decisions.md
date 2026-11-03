@@ -7837,3 +7837,21 @@ are engine async host functions (D1374), the body's promise is a host handle, `f
 the writes live in the host, so the prelude holds no in-flight state and is rerun on load
 (D2262). djs builds it as tests/pi/prelude-next.ts and an adapter mode, with pi's suite run
 against both; tests/pi/prelude-source.ts stays verbatim. pi itself is not changed yet.
+
+## D2590: Corpus tool calls are idle points: `host.later`
+date: 2026-11-03 · by: infra · issue: 0173
+The difftest corpus's fake tools resolved through promise jobs, so a djs run never became
+idle and a dump-at-every-idle-point mode (0172, D2561) would have had nothing to test.
+The corpus prelude's `host` now has `later(value, rejected)`. In djs it is an async host
+function (D1374): the runner settles the oldest pending call with its value (or rejects
+with it) whenever `run` returns `Idle`, one per idle point, so a tool's answer arrives
+after every job, as a real tool's does. Under qjs it is `Promise.resolve`/`reject`. The
+prelude's `echo`/`fail` and the harvested cases' fakes (tools and `models`, rewritten
+in place with `build.py --refresh`) answer only through it, and the prelude exposes it as
+a non-enumerable global `later`; a host without `later` gets the Promise versions. The
+harvested fakes are no longer async functions: `later` returns the promise directly, so
+qjs takes the same number of jobs as before and every `.expected` file stayed as it was.
+The two engines can now differ only for a case whose output depends on a tool answer
+racing other promise jobs; no corpus case does. The runner reports idle points per case
+(`--idle-points`; at 0173 1,194 in 294 of the 549 cases, 1,164 in 288 harvested ones),
+and a stress variant must pass as many idle points as the plain run.
