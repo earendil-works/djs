@@ -72,6 +72,11 @@ frame from a dump (0171) and the exporter can name what it finds (0172).
   pinned sources: whoever merges second runs `DJS_UPDATE_SMAPS=1` and checks the summary.
 
 ## Follow-ups
+- Describe the constructs marked unsupported as dumps need them: switch case tests
+  (discriminant), finally blocks (pending completion), using regions (disposal stack),
+  destructuring (source, iterator), class definitions, yield*, closing an async iterator.
+- `for (o[await k] of xs)`: the lhs is parsed before the loop's setup but runs after it; its
+  sites report a count mismatch (unsupported) rather than roles.
 
 ## Result
 `compiler::suspension_maps(heap, src, opts)` (djs-core, `dump` feature) recompiles a source and
