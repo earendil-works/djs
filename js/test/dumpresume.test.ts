@@ -148,15 +148,15 @@ for (const [name, code] of Object.entries(CASES)) {
   });
 }
 
-// Instance fields (public or private) of a class declared in a waiting function are not
-// written by the exporter yet (its field initializer is an internal function).
+// Instance fields (public or private) of a class declared in a waiting function: the
+// frame's hidden bindings of the class are dead after its statement (D2621).
 const FIELDS = `
   class P { #n = 0; x = 1; async add() { this.#n += (await tools.echo(1)).length; return this.#n + this.x; } }
   const p = new P();
   return [await p.add(), await p.add()];
 `;
 
-test("dump and resume at every idle point: class fields", { todo: "the exporter refuses instance fields of a class in a waiting function" }, async () => {
+test("dump and resume at every idle point: class fields", async () => {
   const p = { module: await loadModule() };
   const plain = await drive(p, FIELDS, false);
   const dumped = await drive(p, FIELDS, true);

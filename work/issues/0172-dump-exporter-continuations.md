@@ -111,8 +111,19 @@ fresh VM, continue, same transcript.
   a slot the compiler keeps in its TDZ (`const r = (await x) + r`, a loop reading `r`
   before its declaration) was refused as "an internal value"; now `$dump.TDZ`. Test
   bindings_in_their_tdz_at_an_await.
+- example (0175): classes with instance fields declared in a waiting function were
+  refused at the frame's `<fields 0>`. Class hidden bindings in frames are written as
+  undefined (dead after the statement); a private name as a value was written as a
+  fresh `Symbol("#n")` (found by the FIELDS case: `this.#n += await` resumed into a
+  TypeError) and is now `$dump.private(C, "#n")` (D2621). Tests
+  classes_with_fields_in_a_waiting_frame (5 bodies, every idle point),
+  a_private_name_operand_is_the_class_s; js/test/dumpresume.test.ts's class-fields case
+  is no longer a todo.
 
 ## Follow-ups
+- Computed class member keys (`[k] = 1`, `[k]() {}`) are evaluated again where the dump
+  writes the class text: `k` resolves there (a ReferenceError at load, or another `k`:
+  silent). Needs a refusal (detect computed keys) or writing keys by value (D2621).
 - for-in loops in activations; sites the maps call unsupported (finally, using,
   destructuring, yield*, closing async iterators); iterator helpers, RegExp string
   iterators; allKeyed; async generators awaiting a `return()`.

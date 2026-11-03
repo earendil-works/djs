@@ -8340,3 +8340,19 @@ which lets one module test the transport. Measured at 0175: the dumper adds 274 
 (the image copies). Which one hosts ship is 0177's measurement after images are retired;
 both are tested in the gate (a debug module without the feature beside the one with it,
 js/test/dumpresume.test.ts).
+
+## D2621: A class's hidden bindings in a waiting frame are dead; private names are the class's
+date: 2026-11-04 · by: portable · issue: 0172
+A frame that declared a class holds the class's hidden bindings (`<fields N>`, the
+instance fields' initializer; `<key N>`, computed field keys; `<#m>`/`<get #x>`/`<set
+#x>`, private methods' closures; decorator state) in boxes the class's closures
+capture. The exporter refused them ("an internal function of a class"). The class
+statement writes them and only the class's closures read them, and the dump writes the
+class from its text, which makes its own; so after the statement the frame's slots are
+dead and are written as `undefined` (run again in a loop, the statement writes them
+again). A private name held as a value, the frame's `#x` binding or the key operand of
+`this.#x += await v`, was written as `Symbol("#x")`, a different symbol (the resumed
+assignment threw); it is now `$dump.private(C, "#x")`, a two-argument form of the
+primitive that returns class `C`'s private name, and refused when the dump does not hold
+the class. Known gap (a follow-up): a class's computed member keys are evaluated again
+where the dump writes its text, which reads other bindings than the original did.

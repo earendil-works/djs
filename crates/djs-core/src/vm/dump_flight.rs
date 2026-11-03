@@ -359,7 +359,9 @@ impl Dumper<'_> {
             for (i, slot) in site.locals.iter().enumerate() {
                 let name = match slot {
                     Slot::Binding { name, .. } => name.as_str(),
-                    Slot::Hidden(name) if !computed_hidden(name) => name.as_str(),
+                    Slot::Hidden(name) if !computed_hidden(name) && !class_hidden(name) => {
+                        name.as_str()
+                    }
                     _ => continue,
                 };
                 let v = fp(lp + i);
@@ -1417,8 +1419,10 @@ impl Dumper<'_> {
                 Slot::Hidden(name) if !computed_hidden(name) => quote(name),
                 _ => continue,
             };
-            let v = fv(at);
-            let e = self.slot_expr(v, boxed);
+            let e = match slot {
+                Slot::Hidden(name) if class_hidden(name) => "undefined".into(),
+                _ => self.slot_expr(fv(at), boxed),
+            };
             parts.push_out(("binding", e.clone()));
             bindings.push_out(cat!(key, ": ", e));
         }
@@ -1704,6 +1708,27 @@ fn simple_params(src: &str) -> bool {
         }
     }
     false
+}
+
+/// A class's hidden bindings in the frame that defines it: its instance fields'
+/// initializer, computed field keys, private methods' closures, decorator state. The
+/// class statement writes them and only the class's own closures read them, through
+/// their capture of the box; the dump writes the class from its text, which makes its
+/// own. So after the statement the frame's slot is dead and is written as undefined
+/// (a statement run again, in a loop, writes it again).
+fn class_hidden(name: &str) -> bool {
+    [
+        "<fields ",
+        "<key ",
+        "<#",
+        "<get #",
+        "<set #",
+        "<class decs>",
+        "<dec>",
+        "<arg ",
+    ]
+    .iter()
+    .any(|p| name.starts_with(p))
 }
 
 /// Hidden locals the loader makes itself.

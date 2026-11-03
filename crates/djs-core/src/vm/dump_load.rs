@@ -503,6 +503,27 @@ impl Vm {
     /// (its brand).
     fn primitive_private(&mut self, args: &[Value]) -> Result<Value, String> {
         let arg = |i: usize| args.get(i).copied().unwrap_or(Value::UNDEFINED);
+        if args.len() == 2 {
+            // `$dump.private(C, "#x")`: the private name itself, a value a frame holds
+            // (a binding, the key operand of `this.#x += await v`).
+            let class = arg(0)
+                .as_object()
+                .filter(|c| is_class(&self.heap, *c))
+                .ok_or("$dump.private: not a class")?;
+            let name = arg(1)
+                .as_string()
+                .map(|s| self.heap.str_to_string(s))
+                .ok_or("$dump.private: not a private name")?;
+            let privs = class_privates(&self.heap, class);
+            let p = privs
+                .iter()
+                .find(|p| p.name == name && p.sym.0 != 0)
+                .ok_or_else(|| cat!("$dump.private: the class has no private name ", name))?;
+            if p.ambiguous {
+                return Err(cat!("$dump.private: two private names ", name));
+            }
+            return Ok(Value::symbol(p.sym));
+        }
         let obj = arg(0).as_object().ok_or("$dump.private: not an object")?;
         let class = arg(1)
             .as_object()

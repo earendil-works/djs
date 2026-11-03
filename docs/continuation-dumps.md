@@ -190,6 +190,7 @@ original order). The loader adds only:
 | `$dump.pending(id, name, args)` | an open host call with the host's id; its promise |
 | `$dump.handle(name, value)` | a named handle for the host (the run's promise, a REPL input) |
 | `$dump.private(obj, C, "#x", value)` | a private field (or brand) of the class `C` the dump recreated |
+| `$dump.private(C, "#x")` | the private name `#x` of class `C` itself, for a frame that holds it as a value (D2621) |
 | `$dump.TDZ` | a binding before its declaration ran |
 | `$dump.issued(n)` | the id of the host's next call (0171) |
 
@@ -274,6 +275,12 @@ passes, say, its run's promise as "run").
   compiles the wrapper's maps too and refuses a body whose frame differs there (code
   that reads `arguments`, a global in a body); the report still points into the body
   (D2617).
+- **Classes in a waiting frame:** the frame's hidden bindings of a class it declared
+  (`<fields N>`, `<key N>`, private methods' closures, decorator state) are dead after the
+  class statement and written as `undefined`; the class comes from its text. A private
+  name a frame holds (its `#x` binding, the key operand of `this.#x += await v`) is the
+  class's, `$dump.private(C, "#x")` (D2621). Still wrong: computed member keys
+  (`[k] = 1`, `[k]() {}`) are evaluated again where the dump writes the class.
 - **Host names:** a script's own global lexical binding with a host global's name
   (`const tools = ...`) hides the host's property and is dumped like any binding; the
   checker refuses a free name that would read the host's (or the base's) global after

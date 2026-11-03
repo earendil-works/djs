@@ -1190,3 +1190,52 @@ fn bindings_in_their_tdz_at_an_await() {
         assert!(text.contains(want), "{src}\n{text}");
     }
 }
+
+/// A class with instance fields or private members declared in a
+/// waiting function: the frame's hidden bindings of the class are dead after its
+/// statement and written as undefined; the class comes from its text (0175's repro).
+#[test]
+fn classes_with_fields_in_a_waiting_frame() {
+    for src in [
+        "class C { x = 1; } const c = new C(); await later(1); return c.x;",
+        "class C { #n = 0; inc() { return ++this.#n; } } const c = new C(); await later(1); return c.inc();",
+        "class C { static s = 1; kk = 2; #m() { return 3; } get m() { return this.#m(); } }\n\
+         const c = new C(); await later(1); return c.kk + c.m + C.s;",
+        "class P { #n = 0; x = 1; async add() { this.#n += String(await later(1)).length; return this.#n + this.x; } }\n\
+         const p = new P(); return [await p.add(), await p.add()].join();",
+        "const out = []; for (const v of [1, 2]) { class C { y = v; } out.push(new C().y + (await later(v))); } return out.join();",
+    ] {
+        let (want, _) = body_dump(src, usize::MAX);
+        assert!(!want.last().unwrap().contains("Err"), "{src}: {want:?}");
+        for k in 1..=marks_of(src) {
+            let (mut lines, d) = body_dump(src, k);
+            let d = d.unwrap().unwrap_or_else(|e| panic!("{src} @{k}: {e}"));
+            let mut vm = body_host_vm();
+            let loaded = load(&mut vm, &d.text).unwrap_or_else(|e| panic!("{src} @{k}: {e}"));
+            drive(&mut vm, &mut lines, &mut Vec::new(), None);
+            let run = vm.heap().get_handle(loaded.handles[0].1);
+            let r = vm
+                .promise_state(run)
+                .flatten()
+                .map(|r| r.map(|v| vm.display(v)));
+            lines.push(alloc::format!("run {r:?}"));
+            assert_eq!(lines, want, "{src} @{k}\n{}", d.text);
+        }
+    }
+}
+
+/// A private name in a frame (the key operand of `this.#n += await v`) is its class's
+/// (`$dump.private(C, "#n")`), not a symbol of the same description.
+#[test]
+fn a_private_name_operand_is_the_class_s() {
+    let src = "class P { #n = 1; async add() { this.#n += await later(2); return this.#n; } }\n\
+               const p = new P(); p.add().then(print);";
+    let (got, text) = dump_at(src, 1).unwrap();
+    assert_eq!(got, ["3"]);
+    assert!(text.contains("= $dump.private(P, \"#n\");"), "{text}");
+}
+
+/// The number of idle points of body `src`.
+fn marks_of(src: &str) -> usize {
+    (1..).find(|&k| body_dump(src, k).1.is_none()).unwrap() - 1
+}

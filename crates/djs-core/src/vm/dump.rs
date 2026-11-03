@@ -3236,7 +3236,11 @@ impl<'a> Dumper<'a> {
         self.nodes[n].loc = loc.clone();
         let h = self.h;
         let v = self.nodes[n].v;
-        let e = if let Some(s) = v.as_symbol() {
+        let e = if let Some(s) = v.as_symbol()
+            && h.symbol_private_flags(s) & crate::heap::cells::flags::SYM_PRIVATE != 0
+        {
+            self.private_name_expr(n, s)
+        } else if let Some(s) = v.as_symbol() {
             match (
                 self.registered(Value::symbol(s)),
                 h.symbol_description(s).as_string(),
@@ -3257,6 +3261,35 @@ impl<'a> Dumper<'a> {
         };
         self.nodes[n].state = State::Done;
         e
+    }
+
+    /// A private name held as a value (a frame's binding or operand): its class's,
+    /// `$dump.private(C, "#x")`.
+    fn private_name_expr(&mut self, n: usize, s: crate::value::Sym) -> String {
+        let path = self.nodes[n].path.clone();
+        match self
+            .private_names
+            .iter()
+            .find(|p| p.0 == s.offset())
+            .cloned()
+        {
+            Some((_, c, name, false)) => {
+                self.ns = true;
+                let ce = self.expr_or_loc(self.nodes[c].v);
+                cat!("$dump.private(", ce, ", ", quote(&name), ")")
+            }
+            Some(_) => {
+                self.refuse(
+                    path,
+                    "a private name the class has twice (a nested class's)",
+                );
+                "undefined".into()
+            }
+            None => {
+                self.refuse(path, "a private name of a class the dump does not hold");
+                "undefined".into()
+            }
+        }
     }
 
     /// Whether closure `n` has a home object (a method that uses `super`).
