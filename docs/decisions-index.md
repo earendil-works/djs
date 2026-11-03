@@ -577,3 +577,9 @@ topics when the index is next reorganized.
 - D2651: `dumpEveryIdle`: the next mode's stress mode
 - D2652: prelude-next has no lockdown; the next mode has frozen builtins
 - D2653: The pi adapter counts fuel across sync host calls
+- D2700: Heap images are no longer a persistence format; what was removed
+- D2701: The dump module's instance and VM are kept between dumps
+- D2702: The Sandbox's `maxFuel` counts fuel across sync host calls
+- D2703: Hosts store dump text compressed with zstd; the format stays a plain Script
+- D2704: Packaging B: the shipped module has no dumper, hosts that persist load the dump module
+- D2201: The guide's site follows Elanor d3184572: its retuned type scale
