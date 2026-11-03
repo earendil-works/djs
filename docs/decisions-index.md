@@ -543,3 +543,6 @@ topics when the index is next reorganized.
 - D2580: While a dump loads, static initializers skip static fields and blocks
 - D2581: Format 2 is a Script run by `Vm::load_dump` with the loader's `$dump`
 - D2582: Classes and private fields in dumps
+- D2583: The format 2 promise, concretely
+- D2584: `$dump.resume` builds the frame from the map of the dump's own text
+- D2585: A load's open calls, handles and call ids
