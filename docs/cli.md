@@ -7,6 +7,7 @@ cargo run -p djs-cli -- disasm [--body] file.js
 cargo run -p djs-cli -- heap [--json] [--top N] [--only SECTIONS] [--diff FILE|base|none]
     [--reference FILE] [--all] dump
 cargo run -p djs-cli -- strip-types file.ts
+cargo run -p djs-cli -- resume [--tools answers.json] [--gc-stress] [--suspend-every N] dump.js
 cargo run -p djs-cli -- repl [--ts] [--gc-stress] [--no-history] [--tools answers.json]
 ```
 
@@ -18,11 +19,24 @@ generated Rust state machines (`native`, the default) or as bytecode (D1635).
 (TESTING.md). `heap` analyzes a heap dump (below). This file documents `heap`, the
 REPL and tools.
 
-`run --tools answers.json` defines a global `tools` (and passes it as `tools` to a
-`--body`) whose calls are async host calls (below), answered from the file: whenever the
-run is idle (no jobs, only tool calls open), the oldest open call the file has an answer
-for gets it, then the run continues. A call the file has no answer for ends the run with
-`djs: no answer for #4 tools.read({"path":"x"})` on stderr and exit code 1.
+`run` defines three host globals (D2602): `tools` (also passed as `tools` to a
+`--body`), whose calls are async host calls (below); `later(v, rejected)`, an async host
+call answered with `v` (rejected with it if `rejected`), the corpus's idle point; and
+`print(...)`, which prints like `console.log`. Whenever the run is idle (no jobs, only
+host calls open), the oldest open call that has an answer gets it, then the run
+continues: `later` calls always, tool calls from `--tools answers.json`. A call with no
+answer ends the run with `djs: no answer for #4 tools.read({"path":"x"})` on stderr and
+exit code 1.
+
+`resume dump.js` (D2603) loads a dump (`// djs-dump 1` or `2`, `Vm::load_dump`) into a
+fresh VM with the same globals and runs it on to its end like `run`: the open calls the
+dump recreates keep their ids and are answered the same way. A dump that does not load
+is exit code 2 with the loader's reason. The loader's hand-written fixtures
+(tests/dump/v2/) resume to the rest of their programs' output.
+
+`run --dump-after K` (write a format 2 dump at idle point K and stop) and
+`run --dump-every-idle` (dump and reload at every idle point) need the format 2 exporter
+(0172); until it exists they fail with exit code 2 and say so.
 
 ## `djs heap`
 
@@ -105,7 +119,8 @@ suspending every 300 fuel
 | `.heap [sections]` | arena bytes used, allocated and the limit, handles, atoms; then `djs heap`'s sections over the live VM against the base image (default `summary,diff`: the session's own cells and the base cells it changed, apart from the base realm every VM starts with; `all`, or a list such as `kinds,largest`) (D2340) |
 | `.snapshot [--raw] <file>` | collect, then write a snapshot container (app 3, `repl`) compressed against the base image: about 16 KB for a small session instead of its ~330 KB image. `--raw` writes the image itself (`vm.bytes()`) |
 | `.dump <file\|-> [names]` | write the session's globals (or the named ones, plus the globals their functions read) as a JavaScript dump (docs/functions-as-code.md): functions as their source text, closures that share variables made by one factory, data as literals and constructor calls, binary data as base64, builtins referenced by name and changed builtins as code. Live values (a pending promise, a suspended generator, a Proxy, a class) are refused with their path. `-` prints it |
-| `.restore <file>` | replace the VM with one restored from a container (any app; decompressed with this build's base) or a raw image. It must come from the same build (the build hash is checked). Images from `djs repl` and `djs run` both work: `console` is host function 1 in both. A file starting with `// djs-dump` is a dump instead: a fresh VM loads it (`Vm::load_dump`), from any build |
+| `.restore <file>` | replace the VM with one restored from a container (any app; decompressed with this build's base) or a raw image. It must come from the same build (the build hash is checked). Images from `djs repl` and `djs run` both work: `console` is host function 1 in both. A file starting with `// djs-dump` is a dump instead: a fresh VM loads it (`Vm::load_dump`), from any build; a format 2 dump's waiting run and open calls come back (below) |
+| `.dump-every [on\|off]` | dump and reload at every idle point: needs the format 2 exporter (0172) |
 | `.clear` | a fresh VM |
 | `.pending` | the open tool calls: `#2 tools.read({"path":"a.ts"})  input 1, at repl:1:11`, with the input (or `.resolve`/answer) that made the call and where the innermost activation waiting on it stopped |
 | `.resolve <id> <json>` | answers call `#id` with a JSON value (`null` without one), then runs what that unblocks |
@@ -137,8 +152,27 @@ tool name makes its function through a host call of its own (`tools` is a Proxy 
 creates an async host function per name and keeps it), and `console.log` calls count
 too. Answers are applied through the VM's inbox, one macrotask each, so the order of
 answers is what the script sees. With `--tools`, answered calls print as
-`[answered] #2 tools.read(...)`. `.restore`, `.clear` and a dump forget the waiting
-inputs; the calls a restored image still has open are listed.
+`[answered] #2 tools.read(...)`; `later(v)` calls are answered at once, quietly.
+`.clear` and `.restore` of an image forget the waiting inputs (the calls a restored image
+still has open are listed). `.restore` of a format 2 dump restores them (D2603): a fresh
+VM loads it, its open calls keep their ids (a tool named in the dump gets the id its
+function has afterwards), and the values it names for the host (`$dump.handle("run",
+p)`) become waiting inputs labelled by name, printed as `[run] value` when they settle:
+
+```text
+> .restore reads.dump.js
+loaded reads.dump.js into a fresh VM
+waiting: #2 tools.read({"path":"a"})
+> .bt 2
+#2 tools.read({"path":"a"})
+  async function main at dump.js:4:13 (run)
+    a = <uninitialized>, b = <uninitialized>
+> .resolve 2 "AA"
+[waiting] #4 tools.read({"path":"b"})
+```
+
+`.dump` of a session with open calls or waiting inputs, and `.dump-every [on|off]`, need
+the format 2 exporter (0172) and say so until it exists.
 
 **The answers file** (D2601) maps tool names to lists of answers, each `{"value": v}` or
 `{"error": "message"}`, optionally with `"args": [...]`:

@@ -1,7 +1,11 @@
 //! `djs run [--body] [--ts] [--experimental-decorators] [--emit-decorator-metadata]
 //! [--gc-stress] [--suspend-every N] [--backend B] [--tools answers.json] <file.js>`: run
-//! a script, serving `console.log` as a sync host call and, with `--tools`, `tools.x()`
-//! as async host calls answered from the file (0174).
+//! a script, serving `console.log` and `print` as sync host calls, `later(v)` and
+//! `tools.x()` as async host calls (0174, D2602): `later` is answered with its argument,
+//! tools from `--tools answers.json`, one call at every idle point.
+//!
+//! `djs resume [same options] <dump.js>` loads a dump into a fresh VM and runs it on the
+//! same way (D2603).
 //!
 //! Exit codes: 0 ok, 1 uncaught exception (printed as `Uncaught Name: message`) or a tool
 //! call the answers file has no answer for, 2 usage or compile error.
@@ -27,10 +31,31 @@ const USAGE: &str = "usage: djs run [--body] [--ts] [--experimental-decorators]\
   --suspend-every N  run N fuel at a time; at every stop, continue in a fresh VM\n\
                      restored from the heap image\n\
   --backend B        run the @native builtins as `native` code (default) or `bytecode`\n\
-  --tools FILE       a global `tools` whose calls are async host calls answered from\n\
-                     FILE, one at a time whenever the run is idle (docs/cli.md)";
+  --tools FILE       answer `tools.x()` calls from FILE, one at a time whenever the\n\
+                     run is idle (docs/cli.md)\n\
+  --dump-after K     write a format 2 dump at idle point K and stop (needs 0172)\n\
+  --dump-every-idle  dump and reload at every idle point (needs 0172)";
+
+const RESUME_USAGE: &str = "usage: djs resume [--tools answers.json] [--gc-stress] [--suspend-every N]\n\
+                [--backend B] <dump.js>\n\
+  loads a dump (`// djs-dump 1` or `2`) into a fresh VM and runs it to its end, answering\n\
+  open calls as `djs run` does";
+
+/// What format 2 dumps of a running session still need.
+const NEEDS_EXPORTER: &str = "djs: dumping a waiting run needs the format 2 exporter (issue 0172), \
+which this build does not have yet";
 
 pub fn main(args: &[String]) -> i32 {
+    command(args, false)
+}
+
+/// `djs resume`.
+pub fn resume_main(args: &[String]) -> i32 {
+    command(args, true)
+}
+
+fn command(args: &[String], resume: bool) -> i32 {
+    let usage = if resume { RESUME_USAGE } else { USAGE };
     let mut opts = RunOptions::default();
     let mut path = None;
     let mut tools = Tools::default();
@@ -45,17 +70,18 @@ pub fn main(args: &[String]) -> i32 {
                 opts.emit_decorator_metadata = true;
             }
             "--gc-stress" => opts.gc_stress = true,
+            "--dump-after" | "--dump-every-idle" if !resume => {
+                eprintln!("{NEEDS_EXPORTER}");
+                return 2;
+            }
             "--tools" => match it.next().map(|p| crate::tools::read_answers(p)) {
-                Some(Ok(a)) => {
-                    opts.tools = true;
-                    tools = Tools::with_answers(Some(a));
-                }
+                Some(Ok(a)) => tools = Tools::with_answers(Some(a)),
                 Some(Err(e)) => {
                     eprintln!("djs: {e}");
                     return 2;
                 }
                 None => {
-                    eprintln!("{USAGE}");
+                    eprintln!("{usage}");
                     return 2;
                 }
             },
@@ -63,30 +89,30 @@ pub fn main(args: &[String]) -> i32 {
                 Some("native") => opts.bytecode_builtins = false,
                 Some("bytecode") => opts.bytecode_builtins = true,
                 _ => {
-                    eprintln!("{USAGE}");
+                    eprintln!("{usage}");
                     return 2;
                 }
             },
             "--suspend-every" => match it.next().and_then(|n| n.parse().ok()) {
                 Some(n) if n > 0 => opts.suspend_every = Some(n),
                 _ => {
-                    eprintln!("{USAGE}");
+                    eprintln!("{usage}");
                     return 2;
                 }
             },
             "-h" | "--help" => {
-                println!("{USAGE}");
+                println!("{usage}");
                 return 0;
             }
             _ if path.is_none() && !a.starts_with('-') => path = Some(a.clone()),
             _ => {
-                eprintln!("{USAGE}");
+                eprintln!("{usage}");
                 return 2;
             }
         }
     }
     let Some(path) = path else {
-        eprintln!("{USAGE}");
+        eprintln!("{usage}");
         return 2;
     };
     if path.ends_with(".ts") || path.ends_with(".mts") {
@@ -101,6 +127,17 @@ pub fn main(args: &[String]) -> i32 {
     };
     let stdout = std::io::stdout();
     let stderr = std::io::stderr();
+    if resume {
+        let text = String::from_utf8_lossy(&src);
+        return resume_dump(
+            &text,
+            &path,
+            &opts,
+            &mut tools,
+            &mut stdout.lock(),
+            &mut stderr.lock(),
+        );
+    }
     run_source(
         &src,
         &path,
@@ -170,6 +207,35 @@ pub fn run_source(
     run_main(vm, main, &args, opts, tools, out, err)
 }
 
+/// Loads a dump into a fresh VM and runs it to its end (D2603); exit codes as `run`.
+pub fn resume_dump(
+    text: &str,
+    filename: &str,
+    opts: &RunOptions,
+    tools: &mut Tools,
+    out: &mut impl Write,
+    err: &mut impl Write,
+) -> i32 {
+    let mut vm = new_vm(opts);
+    let host_fn = |name: &str| tools.id_for_call_name(name);
+    let lopts = djs_core::vm::dump_load::LoadOptions {
+        host_fn: &host_fn,
+        ..Default::default()
+    };
+    let loaded = match vm.load_dump(text, &lopts) {
+        Ok(l) => l,
+        Err(e) => {
+            let _ = writeln!(err, "djs: cannot load {filename}: {}", e.message());
+            return 2;
+        }
+    };
+    // The host's handles: the promises stay alive through what waits on them.
+    for (_, h) in loaded.handles {
+        vm.heap_mut().drop_handle(h);
+    }
+    drive(vm, opts, tools, out, err)
+}
+
 /// Host function ids registered by `djs run`.
 pub const CONSOLE_LOG: u32 = 1;
 
@@ -190,8 +256,6 @@ pub struct RunOptions {
     /// TypeScript legacy decorators, and their metadata.
     pub experimental_decorators: bool,
     pub emit_decorator_metadata: bool,
-    /// Define `tools` (`--tools`).
-    pub tools: bool,
 }
 
 impl RunOptions {
@@ -217,9 +281,7 @@ pub fn new_vm(opts: &RunOptions) -> Vm {
     vm.define(console, "log", log).expect("oom");
     vm.define_global("console", Value::object(console))
         .expect("oom");
-    if opts.tools {
-        crate::tools::install(&mut vm);
-    }
+    crate::tools::install(&mut vm);
     vm
 }
 
@@ -237,6 +299,17 @@ pub fn run_main(
     // The top level is called with `this` = the global object in both modes (D1140).
     let this = Value::object(vm.global());
     vm.call(main, this, args).expect("the VM is idle");
+    drive(vm, opts, tools, out, err)
+}
+
+/// Runs the VM to its end, answering open calls at idle points.
+fn drive(
+    mut vm: Vm,
+    opts: &RunOptions,
+    tools: &mut Tools,
+    out: &mut impl Write,
+    err: &mut impl Write,
+) -> i32 {
     let fuel = opts.suspend_every.unwrap_or(u64::MAX);
     loop {
         match vm.run(fuel) {

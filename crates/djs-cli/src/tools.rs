@@ -5,6 +5,11 @@
 //! `tools` is a Proxy over an object of made functions. Reading a new name calls the sync
 //! host function `make`, which creates an async host function with a fresh id and that
 //! name; the Proxy keeps it. So a tool's id and name live in the heap, and survive images.
+//!
+//! Next to it, two globals of the dump fixtures and the corpus's idle points (D2602):
+//! `print(...)`, a sync host call printed like `console.log`, and `later(v, rejected)`,
+//! an async host call that is answered with `v` (rejected with `v` if `rejected`) at the
+//! next idle point.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -20,6 +25,8 @@ use crate::heap::json::J;
 
 /// The sync host function behind `tools`'s Proxy: `make(name)` returns a new tool.
 pub const MAKE_TOOL: u32 = 2;
+/// `later(v, rejected)`: an async host call answered with its own argument.
+pub const LATER: u32 = 3;
 /// Tool functions have ids from here on, in the order they were made.
 pub const TOOL_BASE: u32 = 16;
 
@@ -37,8 +44,14 @@ Object.defineProperty(globalThis, 'tools', {\n\
   configurable: true,\n\
 });";
 
-/// Defines `tools` in `vm`.
+/// Defines `tools`, `later` and `print` in `vm`.
 pub fn install(vm: &mut Vm) {
+    let later = vm.new_async_host_function(LATER, "later").expect("oom");
+    vm.define_global("later", later).expect("oom");
+    let print = vm
+        .new_host_function(crate::run::CONSOLE_LOG, "print")
+        .expect("oom");
+    vm.define_global("print", print).expect("oom");
     let params = ["make"];
     let opts = CompileOptions::async_body("<tools>", &params);
     let f = vm
@@ -68,10 +81,6 @@ impl Tools {
             names: RefCell::new(Vec::new()),
             answers,
         }
-    }
-
-    pub fn has_answers(&self) -> bool {
-        self.answers.is_some()
     }
 
     /// Serves `make(name)`, the parked sync call `call_id`.
@@ -106,15 +115,19 @@ impl Tools {
 
     /// The host function id for a call name a dump names (`tools.read`, 0171's
     /// `LoadOptions::host_fn`); `None` for a name that is not a tool.
-    // Wired to `Vm::load_dump` once 0171 lands.
-    #[allow(dead_code)]
     pub fn id_for_call_name(&self, call_name: &str) -> Option<u32> {
+        if call_name == "later" {
+            return Some(LATER);
+        }
         let name = call_name.strip_prefix("tools.")?;
         (!name.is_empty()).then(|| self.id_for(name))
     }
 
     /// The call name of a tool's host function id (`tools.read`), for a dump's exporter.
     pub fn call_name(&self, fn_id: u32) -> Option<String> {
+        if fn_id == LATER {
+            return Some(String::from("later"));
+        }
         let i = fn_id.checked_sub(TOOL_BASE)? as usize;
         self.names.borrow().get(i).map(|n| format!("tools.{n}"))
     }
@@ -177,7 +190,15 @@ impl Tools {
     /// The scripted answer for the pending call `call_id`, if the answers file has one.
     pub fn answer(&mut self, vm: &mut Vm, call_id: u32) -> Option<Result<Value, Value>> {
         let info = vm.host_call(call_id)?;
-        let name = self.call_name(info.fn_id)?["tools.".len()..].to_string();
+        if info.fn_id == LATER {
+            let v = info.args.first().copied().unwrap_or(Value::UNDEFINED);
+            let rejected = info.args.get(1).copied() == Some(Value::TRUE);
+            return Some(if rejected { Err(v) } else { Ok(v) });
+        }
+        let name = self
+            .call_name(info.fn_id)?
+            .strip_prefix("tools.")?
+            .to_string();
         let parts: Vec<String> = info.args.iter().map(|&a| to_json(vm, a)).collect();
         let args = J::parse(&format!("[{}]", parts.join(","))).ok();
         let entry = self.answers.as_mut()?.pick(&name, args.as_ref())?;
@@ -492,6 +513,8 @@ mod tests {
         assert_eq!(t.id_for("glob"), TOOL_BASE + 1);
         assert_eq!(t.id_for("read"), TOOL_BASE);
         assert_eq!(t.id_for_call_name("console.log"), None);
+        assert_eq!(t.id_for_call_name("later"), Some(LATER));
+        assert_eq!(t.call_name(LATER).as_deref(), Some("later"));
         assert_eq!(t.id_for_call_name("tools."), None);
         assert_eq!(t.call_name(TOOL_BASE + 1).as_deref(), Some("tools.glob"));
         assert_eq!(t.call_name(TOOL_BASE + 2), None);

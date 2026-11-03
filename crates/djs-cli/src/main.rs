@@ -7,7 +7,9 @@ mod strip;
 mod tools;
 
 const USAGE: &str = "usage: djs <command> ...\n\
-  djs run [--body] [--ts] [--gc-stress] [--suspend-every N] [--backend B] <file.js>\n\
+  djs run [--body] [--ts] [--gc-stress] [--suspend-every N] [--backend B]\n\
+          [--tools answers.json] <file.js>\n\
+  djs resume [--tools answers.json] <dump.js>\n\
   djs disasm [--body] <file.js>\n\
   djs heap [--json] [--top N] [--reference FILE] [--diff FILE|base|none] <dump>\n\
   djs repl [--ts] [--gc-stress] [--no-history]\n\
@@ -19,6 +21,7 @@ fn main() {
         Some("disasm") => disasm::main(&args[1..]),
         Some("heap") => heap::main(&args[1..]),
         Some("run") => run::main(&args[1..]),
+        Some("resume") => run::resume_main(&args[1..]),
         Some("repl") => repl::main(&args[1..]),
         Some("strip-types") => strip::main(&args[1..]),
         _ => {

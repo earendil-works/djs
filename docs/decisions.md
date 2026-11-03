@@ -8034,3 +8034,26 @@ counter is set to `$dump.issued(n)` if given, else to what it was before the loa
 never at or below an open call's id. `$dump.handle(name, v)` makes a heap handle;
 `Vm::load_dump` returns `Loaded { calls: [OpenCall {id, fn_id, name}], handles: [(name,
 Handle)] }` and the host drops the handles.
+
+## D2602: The CLI's host globals `later` and `print`
+date: 2026-11-03 · by: repl · issue: 0174
+`djs run`, `djs resume` and `djs repl` define, next to `console` and `tools`, the two host
+functions of the loader's fixtures and the corpus's idle points: `later(v, rejected)`
+(async, id 3), answered with `v` at the next idle point (rejected with it if `rejected`),
+and `print(...)` (sync, printed like `console.log`). So the format 2 fixtures and corpus
+programs run and resume in the CLI as in the core's tests, and `later` gives hand-written
+scripts idle points without an answers file. `run` now always defines `tools` too; a tool
+call with no answer is the same exit code 1 as before.
+
+## D2603: Resuming dumps in the CLI
+date: 2026-11-03 · by: repl · issue: 0174
+`djs resume dump.js` and the REPL's `.restore dump.js` load a dump into a fresh VM with
+`Vm::load_dump`. The loader asks the host for the function id of each open call's name:
+`tools.<name>` gets the tool's id from the registry (D2600; the Proxy's `make` reuses it,
+so a restored call and a new call of the same tool agree), `later` its id, anything else
+refuses the load. After the load the REPL does not read tool names back from the heap (a
+tool of an open call may have no function there yet). The handles the dump names become
+the REPL's waiting inputs, labelled by name (`[run] value`); `resume` drops them and runs
+to the end like `run`. Dumping a waiting session (`.dump`, `.dump-every`,
+`run --dump-after`, `run --dump-every-idle`) refuses with a message naming the missing
+exporter (0172) until it exists.

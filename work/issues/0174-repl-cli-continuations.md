@@ -45,7 +45,20 @@ Make suspension visible and testable by hand (docs/continuation-dumps.md "REPL")
   `Tools::id_for(name)` (a name keeps its id; `make` reuses it), `id_for_call_name`
   (`tools.read` → id, None for other names) and the inverse `call_name(fn_id)` for 0172's
   exporter; names in a RefCell since `host_fn` is a `&dyn Fn`.
-- Waiting for 0171 for the dump part (.dump format 2, .restore of waiting inputs,
+- 0171 landed. Dump part, what the loader allows (D2602, D2603): `djs resume
+  [--tools] dump.js`; REPL `.restore` of a format 2 dump restores open calls (ids kept,
+  tools by the registry) and the dump's handles as waiting inputs (`[run] value`), no
+  rescan of tool names after a load; host globals `later(v, rejected)` (answered with v
+  at idle points) and `print` in run/resume/repl so the loader's fixtures run. `.dump` of
+  a waiting session, `.dump-every`, `run --dump-after`, `run --dump-every-idle` refuse,
+  naming the 0172 exporter. Tests: tests/run.rs resumes every tests/dump/v2 fixture
+  (plain and --suspend-every 13 --gc-stress; the output is the tail of the program's
+  run), a tools-based hand-written dump (tests/run/reads.*) with answers; tests/repl.rs
+  restores reads.dump.js (.pending, .bt, .resolve) and plan.dump.js, and the exporter
+  refusals.
+- Left for after 0172: format 2 `.dump` of a waiting session, `.dump-every`, `run
+  --dump-after K` / `--dump-every-idle`, and the every-K dump/resume CLI test.
+- Earlier note: waiting for 0171 for the dump part (.dump format 2, .restore of waiting inputs,
   .dump-every, run --dump-after/--dump-every-idle, resume).
 
 ## Follow-ups

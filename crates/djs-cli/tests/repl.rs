@@ -377,3 +377,51 @@ fn answers_file() {
          #8 tools.glob()  input 4\n"
     );
 }
+
+#[test]
+fn restore_a_waiting_dump() {
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/run");
+    // A hand-written format 2 dump: a run waiting on `tools.read`. Its handle `run`
+    // becomes a waiting input; new calls of the same tool get the same function id.
+    check(
+        &format!(
+            ".restore {dir}/reads.dump.js\n.pending\n.bt 2\n.resolve 2 \"AA\"\n.bt all\n.resolve 4 \"BBB\"\n.pending\n"
+        ),
+        &format!(
+            "loaded {dir}/reads.dump.js into a fresh VM\n\
+             waiting: #2 tools.read({{\"path\":\"a\"}})\n\
+             #2 tools.read({{\"path\":\"a\"}})  the dump, at dump.js:4:13\n\
+             #2 tools.read({{\"path\":\"a\"}})\n  async function main at dump.js:4:13 (run)\n    a = <uninitialized>, b = <uninitialized>\n\
+             [waiting] #4 tools.read({{\"path\":\"b\"}})\n\
+             \x20 async function main at dump.js:5:13 (run)\n    a = 'AA', b = <uninitialized>\n\
+             AABBB\ntotal 5\n[run] 5\nno open calls\n"
+        ),
+    );
+    // `later(v)` calls are answered at once; the loader's fixtures run to their end.
+    let plan = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/dump/v2/plan.dump.js"
+    );
+    check(
+        &format!(".restore {plan}\n"),
+        &format!(
+            "loaded {plan} into a fresh VM\nwaiting: #5 later(\"TODO four\\nok\\nTODO five\")\n\
+             5 TODOs in 4 files\n[[2,0],[1,2]]\n[run] [ [ 2, 0 ], [ 1, 2 ] ]\n"
+        ),
+    );
+    check(
+        ".restore /nonexistent.js\n",
+        "cannot read /nonexistent.js: No such file or directory (os error 2)\n",
+    );
+}
+
+#[test]
+fn dumping_a_waiting_session_needs_the_exporter() {
+    let out = repl("tools.a()\n.dump -\n.dump-every on\n");
+    assert_eq!(
+        out,
+        "[waiting] #2 tools.a()\nPromise { <pending> }\n\
+         the session waits on 1 open call(s): format 2 dumps of a waiting session need the exporter (issue 0172), which this build does not have yet\n\
+         .dump-every: format 2 dumps of a waiting session need the exporter (issue 0172), which this build does not have yet\n"
+    );
+}

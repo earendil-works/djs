@@ -69,10 +69,16 @@ prompt and prints its value when it settles.
 .reject <id> <msg>    answer call #id with an Error
 .bt <id|all>          the suspended activations waiting on call #id (or all of
                       them), where they stopped and their bindings
+.restore <dump.js>    also restores a format 2 dump's waiting run and open calls
+                      (`later(v)` calls are answered with v at once; print() prints)
+.dump-every [on|off]  dump and reload at every idle point (needs the 0172 exporter)
 
 Ctrl-C cancels the line, or stops a running input between fuel slices.
 Input continues on the next line while it is incomplete (an unclosed bracket, string
 template or comment). Top-level let/const/class/function persist (Script globals).";
+
+/// What `.dump` of a waiting session and `.dump-every` still need.
+const NEEDS_EXPORTER: &str = "format 2 dumps of a waiting session need the exporter (issue 0172), which this build does not have yet";
 
 /// Fuel per slice: how often a running input checks for Ctrl-C (a few ms).
 const SLICE: u64 = 1_000_000;
@@ -157,10 +163,13 @@ enum Step {
 
 /// An input whose promise is still pending: it waits on tool calls.
 struct Waiting {
-    input: u32,
+    /// `input 3`, or the name of a loaded dump's handle.
+    label: String,
     promise: Handle,
-    /// An expression input (`[value]`): its value prints when it settles.
+    /// Print its value when it settles.
     show: bool,
+    /// The value is an expression input's `[value]`.
+    unwrap: bool,
 }
 
 /// How a run ended.
@@ -487,9 +496,10 @@ impl Repl {
                 }
                 let promise = self.vm.heap_mut().new_handle(p).expect("out of memory");
                 self.waiting.push(Waiting {
-                    input: self.inputs,
+                    label: format!("input {}", self.inputs),
                     promise,
                     show,
+                    unwrap: show,
                 });
                 None
             }
@@ -643,14 +653,18 @@ impl Repl {
     }
 
     /// Answers the oldest open call the answers file has an answer for.
+    /// `later(v)` calls are answered with their argument, quietly.
     fn answer_one(&mut self) -> bool {
-        if !self.tools.has_answers() {
-            return false;
-        }
         for id in self.vm.pending_host_calls() {
             let desc = self.tools.describe(&mut self.vm, id);
+            let later = self
+                .vm
+                .host_call(id)
+                .is_some_and(|c| c.fn_id == tools::LATER);
             if let Some(r) = self.tools.answer(&mut self.vm, id) {
-                println!("[answered] #{id} {desc}");
+                if !later {
+                    println!("[answered] #{id} {desc}");
+                }
                 self.fresh.retain(|&c| c != id);
                 self.origins.remove(&id);
                 self.vm.resolve_host_call(id, r).expect("an open call");
@@ -667,22 +681,25 @@ impl Repl {
         while i < self.waiting.len() {
             let w = &self.waiting[i];
             let p = self.vm.heap().get_handle(w.promise);
-            let (input, show) = (w.input, w.show);
+            let (label, show, unwrap) = (w.label.clone(), w.show, w.unwrap);
             match self.vm.promise_state(p) {
                 Some(Some(r)) => {
                     match r {
                         Ok(v) if show => {
-                            let v = v
-                                .as_object()
-                                .and_then(|a| self.vm.heap().get_element_fast(a, 0))
-                                .unwrap_or(Value::UNDEFINED);
-                            println!("[input {input}] {}", inspect::inspect(self.vm.heap(), v));
+                            let v = match v.as_object() {
+                                Some(a) if unwrap => self
+                                    .vm
+                                    .heap()
+                                    .get_element_fast(a, 0)
+                                    .unwrap_or(Value::UNDEFINED),
+                                _ => v,
+                            };
+                            println!("[{label}] {}", inspect::inspect(self.vm.heap(), v));
                         }
                         Ok(_) => {}
-                        Err(e) => println!(
-                            "[input {input}] Uncaught {}",
-                            inspect::inspect(self.vm.heap(), e)
-                        ),
+                        Err(e) => {
+                            println!("[{label}] Uncaught {}", inspect::inspect(self.vm.heap(), e))
+                        }
                     }
                     let w = self.waiting.remove(i);
                     self.vm.heap_mut().drop_handle(w.promise);
@@ -761,16 +778,16 @@ impl Repl {
             println!("collection failed: {e:?}");
             return;
         }
-        let inputs: Vec<(Value, u32)> = self
+        let inputs: Vec<(Value, String)> = self
             .waiting
             .iter()
-            .map(|w| (self.vm.heap().get_handle(w.promise), w.input))
+            .map(|w| (self.vm.heap().get_handle(w.promise), w.label.clone()))
             .collect();
         let print = |a: &activations::Activation| {
             let input = inputs
                 .iter()
                 .find(|(p, _)| *p == a.promise)
-                .map(|(_, n)| format!(" (input {n})"))
+                .map(|(_, n)| format!(" ({n})"))
                 .unwrap_or_default();
             println!("  {} at {}{input}", a.what, a.at);
             if !a.bindings.is_empty() {
@@ -957,15 +974,11 @@ impl Repl {
             ".bt" if !arg.is_empty() => self.backtrace_cmd(arg),
             ".snapshot" if !arg.is_empty() => self.snapshot(arg),
             ".dump" if !arg.is_empty() => self.dump(arg),
+            ".dump-every" => println!(".dump-every: {NEEDS_EXPORTER}"),
             ".restore" if !arg.is_empty() => match std::fs::read(arg) {
                 Ok(bytes) if bytes.starts_with(b"// djs-dump ") => {
                     let src = String::from_utf8_lossy(&bytes).into_owned();
-                    self.replace_vm(new_vm(self.gc_stress));
-                    let opts = djs_core::vm::dump_load::LoadOptions::default();
-                    match self.vm.load_dump(&src, &opts) {
-                        Ok(_) => println!("a fresh VM with the bindings of {arg}"),
-                        Err(e) => println!("cannot load {arg}: {}", e.message()),
-                    }
+                    self.restore_dump(arg, &src);
                 }
                 Ok(bytes) => {
                     let n = bytes.len();
@@ -1003,9 +1016,17 @@ impl Repl {
         let mut parts = arg.split_whitespace();
         let file = parts.next().unwrap_or("-");
         let names: Vec<&str> = parts.collect();
+        let open = self.vm.pending_host_calls().len();
+        if open > 0 || !self.waiting.is_empty() {
+            println!(
+                "the session waits on {open} open call(s): {}",
+                NEEDS_EXPORTER
+            );
+            return;
+        }
         let opts = djs_core::vm::dump::DumpOptions {
             base: djs_prelude::BASE,
-            host: &["console", "tools"],
+            host: &["console", "tools", "print", "later"],
         };
         let sel = (!names.is_empty()).then_some(names.as_slice());
         match self.vm.dump(&opts, sel) {
@@ -1016,6 +1037,59 @@ impl Repl {
             },
             Err(e) => println!("{}", e.message()),
         }
+    }
+
+    /// `.restore` of a dump (D2603): a fresh VM loads it. The open calls it recreates
+    /// keep their ids, named tools get their functions' ids from the registry, and the
+    /// handles it names become waiting inputs (labelled by their names). The tool names
+    /// are not read back from the heap afterwards: an open call's tool may have no
+    /// function there yet.
+    fn restore_dump(&mut self, arg: &str, src: &str) {
+        self.replace_vm(new_vm(self.gc_stress));
+        let tools = &self.tools;
+        let host_fn = |name: &str| tools.id_for_call_name(name);
+        let opts = djs_core::vm::dump_load::LoadOptions {
+            host_fn: &host_fn,
+            ..Default::default()
+        };
+        let loaded = match self.vm.load_dump(src, &opts) {
+            Ok(l) => l,
+            Err(e) => {
+                println!("cannot load {arg}: {}", e.message());
+                return;
+            }
+        };
+        println!("loaded {arg} into a fresh VM");
+        self.inputs = 0;
+        for c in &loaded.calls {
+            self.origins.insert(c.id, String::from("the dump"));
+        }
+        for (name, h) in loaded.handles {
+            let v = self.vm.heap().get_handle(h);
+            match self.vm.promise_state(v) {
+                Some(None) => {
+                    self.vm.mark_promise_handled(v);
+                    self.waiting.push(Waiting {
+                        label: name,
+                        promise: h,
+                        show: true,
+                        unwrap: false,
+                    });
+                }
+                _ => {
+                    println!("[{name}] {}", inspect::inspect(self.vm.heap(), v));
+                    self.vm.heap_mut().drop_handle(h);
+                }
+            }
+        }
+        self.pending_after_restore();
+        // An idle point: `later` calls (and scripted answers) are answered at once.
+        self.current = String::from("the dump");
+        if let Outcome::Stopped(why) = self.pump(false) {
+            println!("{why}");
+        }
+        self.check_waiting();
+        self.report_rejections();
     }
 
     /// After a restore: the calls the image still has open.
