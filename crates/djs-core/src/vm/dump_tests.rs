@@ -43,7 +43,7 @@ fn run(vm: &mut Vm, src: &str) -> String {
 /// Loads a dump with `Vm::load_dump`: empty, or why it failed.
 fn load(vm: &mut Vm, text: &str) -> String {
     match vm.load_dump(text, &super::dump_load::LoadOptions::default()) {
-        Ok(()) => String::new(),
+        Ok(_) => String::new(),
         Err(e) => alloc::format!("throw {}", e.message()),
     }
 }

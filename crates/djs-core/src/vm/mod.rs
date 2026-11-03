@@ -20,6 +20,8 @@ pub mod compat;
 pub mod dump;
 #[cfg(feature = "dump")]
 pub mod dump_load;
+#[cfg(feature = "dump")]
+mod dump_resume;
 mod format;
 mod image;
 pub mod registry;
@@ -1099,6 +1101,8 @@ fn fnv64(bytes: &[u8]) -> u64 {
 mod compat_tests;
 #[cfg(all(test, feature = "dump"))]
 mod dump_harvest;
+#[cfg(all(test, feature = "dump"))]
+mod dump_resume_tests;
 #[cfg(all(test, feature = "dump"))]
 mod dump_tests;
 #[cfg(test)]

@@ -976,7 +976,7 @@ pub extern "C" fn vm_load_dump(vm: u32, len: usize) -> i32 {
         let text = staged_str(staging, 0, len).to_owned();
         let opts = djs_core::vm::dump_load::LoadOptions::default();
         match slot.vm.load_dump(&text, &opts) {
-            Ok(()) => 0,
+            Ok(_) => 0,
             Err(e) => {
                 s.set_out(e.message().as_bytes());
                 1

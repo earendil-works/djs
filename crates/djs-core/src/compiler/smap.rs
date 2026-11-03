@@ -127,6 +127,47 @@ impl fmt::Display for Role {
     }
 }
 
+#[cfg(feature = "dump")]
+impl Role {
+    /// The role's name and its index, as `Display` writes them: `("call.arg", Some(2))`
+    /// for `call.arg[2]`, `("unsupported", None)` for any unsupported construct.
+    pub fn parts(self) -> (&'static str, Option<u16>) {
+        match self {
+            Role::CallCallee => ("call.callee", None),
+            Role::CallThis => ("call.this", None),
+            Role::CallArg(i) => ("call.arg", Some(i)),
+            Role::CallArgs => ("call.args", None),
+            Role::NewCallee => ("new.callee", None),
+            Role::NewArg(i) => ("new.arg", Some(i)),
+            Role::NewArgs => ("new.args", None),
+            Role::SuperCallee => ("super.callee", None),
+            Role::SuperArg(i) => ("super.arg", Some(i)),
+            Role::SuperArgs => ("super.args", None),
+            Role::MemberObject => ("member.object", None),
+            Role::SuperThis => ("super.this", None),
+            Role::SuperBase => ("super.base", None),
+            Role::ObjectLiteral => ("object.literal", None),
+            Role::ObjectKey => ("object.key", None),
+            Role::ArrayElement(i) => ("array.element", Some(i)),
+            Role::ArrayLiteral => ("array.literal", None),
+            Role::BinaryLeft => ("binary.left", None),
+            Role::AssignObject => ("assign.object", None),
+            Role::AssignKey => ("assign.key", None),
+            Role::AssignOld => ("assign.old", None),
+            Role::TemplatePart(i) => ("template.part", Some(i)),
+            Role::ImportSpecifier => ("import.specifier", None),
+            Role::IntrinsicArg(i) => ("intrinsic.arg", Some(i)),
+            Role::LoopIterator(Loop::Of) => ("for-of.iterator", None),
+            Role::LoopIterator(Loop::In) => ("for-in.iterator", None),
+            Role::LoopIterator(Loop::Await) => ("for-await.iterator", None),
+            Role::LoopNext(Loop::Of) => ("for-of.next", None),
+            Role::LoopNext(Loop::In) => ("for-in.next", None),
+            Role::LoopNext(Loop::Await) => ("for-await.next", None),
+            Role::Unsupported(_) => ("unsupported", None),
+        }
+    }
+}
+
 /// What kind of suspension point a site is.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SiteKind {
@@ -236,6 +277,9 @@ mod maps {
         pub args: Vec<Slot>,
         /// The local slots.
         pub locals: Vec<Slot>,
+        /// Which local slots hold a Box at this site (a binding a closure captures): the
+        /// loader puts the value in a Box there.
+        pub boxed: Vec<bool>,
         /// The operands below the awaited value, bottom first.
         pub operands: Vec<Role>,
         /// Why the frame cannot be described here: the construct, or `None`.
@@ -339,8 +383,8 @@ mod maps {
     }
 
     /// Builds the map of function `f` from the parser's record and the final code.
-    /// `slots[v]` is where binding `v` lives: `Some((false, i))` argument `i`,
-    /// `Some((true, i))` local `i`; `n_locals` local slots; `params` argument slots;
+    /// `slots[v]` is where binding `v` lives: `Some((false, i, _))` argument `i`,
+    /// `Some((true, i, boxed))` local `i`, holding a Box if `boxed`; `n_locals` local slots; `params` argument slots;
     /// `at[k]` the final pc of site `k`'s instruction (`None`: not emitted, dead code);
     /// `depth[k]` the operand depth there, the suspended value included.
     #[allow(clippy::too_many_arguments)]
@@ -348,7 +392,7 @@ mod maps {
         heap: &Heap,
         f: &FuncState,
         rec: &Recorder,
-        slots: &[Option<(bool, u16)>],
+        slots: &[Option<(bool, u16, bool)>],
         n_locals: usize,
         params: usize,
         at: &[Option<(u32, u32)>],
@@ -390,11 +434,14 @@ mod maps {
             }
             let mut args = alloc::vec![None; params];
             let mut locals = alloc::vec![Slot::Nothing; n_locals];
+            let mut boxed = alloc::vec![false; n_locals];
             for (i, a) in args.iter_mut().enumerate() {
                 *a = Some(Slot::Argument(i as u16));
             }
             for (v, var) in f.vars.iter().enumerate() {
-                let Some((local, i)) = slots[v] else { continue };
+                let Some((local, i, in_box)) = slots[v] else {
+                    continue;
+                };
                 let name = heap.atom_name(var.name);
                 let slot = match var.kind {
                     VarKind::This
@@ -416,7 +463,12 @@ mod maps {
                     _ => Slot::Nothing,
                 };
                 if local {
-                    locals[i as usize] = slot;
+                    // A slot shared by bindings of disjoint scopes holds the one in
+                    // scope here.
+                    if slot != Slot::Nothing || locals[i as usize] == Slot::Nothing {
+                        boxed[i as usize] = in_box && slot != Slot::Nothing;
+                        locals[i as usize] = slot;
+                    }
                 } else if let Some(a) = args.get_mut(i as usize) {
                     *a = Some(slot);
                 }
@@ -447,6 +499,7 @@ mod maps {
                     .map(|a| a.unwrap_or(Slot::Nothing))
                     .collect(),
                 locals,
+                boxed,
                 operands: if unsupported.is_some() {
                     Vec::new()
                 } else {

@@ -18,25 +18,52 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use super::{Status, Vm};
-use crate::compiler::CompileOptions;
-use crate::heap::cells::{BoxCell, FuncTemplate};
-use crate::heap::{Heap, ObjectClass, PropFlags, Property, PropertyDescriptor};
-use crate::interp::ErrorKind;
+use crate::compiler::{CompileOptions, FunctionMap};
+use crate::heap::cells::{BoxCell, FuncTemplate, HostCall, Interp};
+use crate::heap::{Handle, Heap, ObjectClass, PropFlags, Property, PropertyDescriptor};
+use crate::interp::{ErrorKind, state};
 use crate::value::{Obj, Sym, Value};
 
 /// What `load_dump` needs besides the text.
-#[derive(Clone, Copy, Debug)]
-pub struct LoadOptions {
+#[derive(Clone, Copy)]
+pub struct LoadOptions<'a> {
     /// The fuel the load may use (the Script and the jobs it queues).
     pub fuel: u64,
+    /// The host function id for the name of an open call (`$dump.pending(id, name,
+    /// args)`, e.g. `tools.read`); `None` refuses the load.
+    pub host_fn: &'a dyn Fn(&str) -> Option<u32>,
 }
 
-impl Default for LoadOptions {
+fn no_host_fn(_: &str) -> Option<u32> {
+    None
+}
+
+impl Default for LoadOptions<'_> {
     fn default() -> Self {
         LoadOptions {
             fuel: 10_000_000_000,
+            host_fn: &no_host_fn,
         }
     }
+}
+
+/// A loaded dump: the VM is idle (no jobs, no frames) and waits on `calls`.
+#[derive(Debug, Default)]
+pub struct Loaded {
+    /// The open host calls the dump recreated, in its order.
+    pub calls: Vec<OpenCall>,
+    /// The values the dump named for the host (`$dump.handle(name, v)`): heap handles,
+    /// which the host drops when done.
+    pub handles: Vec<(String, Handle)>,
+}
+
+/// An open host call of a loaded dump: its id (the host's from before the dump), the
+/// function the host named for it, and the name the dump gave.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenCall {
+    pub id: u32,
+    pub fn_id: u32,
+    pub name: String,
 }
 
 /// Why a dump did not load.
@@ -48,7 +75,8 @@ pub enum LoadError {
     Version(String),
     /// The Script does not compile.
     Compile(String),
-    /// The dump (or a job it queued) threw.
+    /// The dump (or a job it queued) threw; a loader primitive that refuses what it was
+    /// given throws a TypeError saying why.
     Threw(String),
     /// It called a host function that is not a loader primitive.
     HostCall(u32),
@@ -81,7 +109,19 @@ impl LoadError {
 /// The loader primitives' host function ids: the top of the id space, which embedders
 /// are asked not to use.
 const PRIVATE: u32 = 0xFFFF_FF00;
-const PRIMITIVES: &[(&str, u32)] = &[("private", PRIVATE)];
+const RESUME: u32 = PRIVATE + 1;
+const CELL: u32 = PRIVATE + 2;
+const PENDING: u32 = PRIVATE + 3;
+const HANDLE: u32 = PRIVATE + 4;
+const ISSUED: u32 = PRIVATE + 5;
+const PRIMITIVES: &[(&str, u32)] = &[
+    ("private", PRIVATE),
+    ("resume", RESUME),
+    ("cell", CELL),
+    ("pending", PENDING),
+    ("handle", HANDLE),
+    ("issued", ISSUED),
+];
 
 /// The format of a dump: the number in its first line, `// djs-dump N`.
 pub fn dump_format(text: &str) -> Option<&str> {
@@ -92,11 +132,95 @@ pub fn dump_format(text: &str) -> Option<&str> {
     rest.get(..end).filter(|v| !v.is_empty())
 }
 
+/// A load in progress.
+pub(super) struct Load<'t> {
+    pub text: &'t str,
+    /// The dump's Script function: functions its text made share its script.
+    pub script: Handle,
+    /// The suspension maps of the dump's functions, made on the first `resume`.
+    pub maps: Option<Vec<FunctionMap>>,
+    pub out: Loaded,
+    /// `$dump.issued(n)`: the id the host's next call gets.
+    issued: Option<u32>,
+}
+
+/// A value the loader gave out that stands for a slot's content: `$dump.TDZ` (a
+/// binding before its declaration) and `$dump.cell(...)` (a captured variable's Box).
+/// Both are internal Records with one slot, never handed to user code otherwise.
+pub(super) enum Given {
+    Value(Value),
+    Tdz,
+    Cell(u32),
+}
+
+pub(super) fn given(heap: &Heap, v: Value) -> Given {
+    match v.as_object() {
+        Some(o) if heap.object_class(o) == ObjectClass::Record => {
+            let s = heap.object_slot(o, 0);
+            match s.as_internal() {
+                Some(b) => Given::Cell(b),
+                None if s == Value::UNINITIALIZED => Given::Tdz,
+                None => Given::Value(v),
+            }
+        }
+        _ => Given::Value(v),
+    }
+}
+
+/// `v` as a string, or why not.
+pub(super) fn string_arg(heap: &Heap, v: Value, what: &str) -> Result<String, String> {
+    v.as_string()
+        .map(|s| heap.str_to_string(s))
+        .ok_or_else(|| cat!(what, ": not a string"))
+}
+
+/// The elements of a dense Array (`undefined`: none).
+pub(super) fn array_arg(heap: &Heap, v: Value, what: &str) -> Result<Vec<Value>, String> {
+    if v.is_undefined() {
+        return Ok(Vec::new());
+    }
+    let a = v
+        .as_object()
+        .filter(|&o| heap.object_class(o) == ObjectClass::Array)
+        .ok_or_else(|| cat!(what, ": not an array"))?;
+    (0..heap.array_length(a))
+        .map(|i| {
+            heap.get_element_fast(a, i)
+                .ok_or_else(|| cat!(what, ": an array with holes"))
+        })
+        .collect()
+}
+
+/// The own data properties of an ordinary object by name (`undefined`: none).
+pub(super) fn entries_arg(
+    heap: &Heap,
+    v: Value,
+    what: &str,
+) -> Result<Vec<(String, Value)>, String> {
+    if v.is_undefined() {
+        return Ok(Vec::new());
+    }
+    let o = v
+        .as_object()
+        .filter(|&o| heap.object_class(o) == ObjectClass::Ordinary)
+        .ok_or_else(|| cat!(what, ": not a plain object"))?;
+    let mut out = Vec::new();
+    for k in heap.own_keys(o) {
+        let name = heap.atom_name(k);
+        match heap.get_own_property(o, k) {
+            Some(Property::Data { value, .. }) => out.push((name, value)),
+            _ => return Err(cat!(what, ": ", name, " is not a data property")),
+        }
+    }
+    Ok(out)
+}
+
 impl Vm {
     /// Loads a dump into this VM: runs it as a Script (with the loader's `$dump` for
     /// format 2) and the jobs it queues, until nothing is left to run. Meant for a fresh
-    /// VM: the dump's bindings become its globals.
-    pub fn load_dump(&mut self, text: &str, opts: &LoadOptions) -> Result<(), LoadError> {
+    /// VM: the dump's bindings become its globals. The VM is then idle, waiting on the
+    /// open calls the dump recreated.
+    pub fn load_dump(&mut self, text: &str, opts: &LoadOptions) -> Result<Loaded, LoadError> {
         let format = dump_format(text).ok_or(LoadError::NotADump)?;
         let privileged = match format {
             "1" => false,
@@ -109,16 +233,39 @@ impl Vm {
         if privileged {
             self.install_loader().map_err(|_| LoadError::Memory)?;
         }
+        let script = self.heap.new_handle(f).map_err(|_| LoadError::Memory)?;
+        let i = state::interp(&self.heap);
+        let next_id = self.heap.arena().get(i, Interp::NEXT_CALL_ID);
+        let mut load = Load {
+            text,
+            script,
+            maps: None,
+            out: Loaded::default(),
+            issued: None,
+        };
         self.heap.loading_dump = true;
-        let r = self.drive_load(f, opts);
+        let r = self.drive_load(f, opts, &mut load);
         self.heap.loading_dump = false;
+        self.heap.drop_handle(script);
         if privileged {
             let g = self.global();
             if let Ok(k) = self.heap.atom_str("$dump") {
                 let _ = self.heap.delete_own_property(g, k);
             }
         }
-        r
+        if let Err(e) = r {
+            for (_, h) in load.out.handles {
+                self.heap.drop_handle(h);
+            }
+            return Err(e);
+        }
+        // The primitives were host calls too: the next call gets the id the dump says,
+        // else the one it would have got, and never one of an open call.
+        let open = load.out.calls.iter().map(|c| c.id + 1).max().unwrap_or(0);
+        let next = load.issued.unwrap_or(next_id).max(open).max(1);
+        let i = state::interp(&self.heap);
+        self.heap.arena_mut().set(i, Interp::NEXT_CALL_ID, next);
+        Ok(load.out)
     }
 
     /// Defines the global `$dump` with the loader's primitives.
@@ -128,6 +275,11 @@ impl Vm {
             let f = self.new_host_function(id, name)?;
             self.define(o, name, f)?;
         }
+        let tdz = self.heap.alloc_object(ObjectClass::Record, None, 1)?;
+        self.heap.set_object_slot(tdz, 0, Value::UNINITIALIZED);
+        let k = self.heap.atom_str("TDZ")?;
+        let d = PropertyDescriptor::data(Value::object(tdz), PropFlags::NONE);
+        self.heap.define_own_property(o, k, &d)?;
         let g = self.global();
         let k = self.heap.atom_str("$dump")?;
         let d = PropertyDescriptor::data(Value::object(o), PropFlags::CONFIGURABLE);
@@ -135,7 +287,12 @@ impl Vm {
         Ok(())
     }
 
-    fn drive_load(&mut self, f: Value, opts: &LoadOptions) -> Result<(), LoadError> {
+    fn drive_load(
+        &mut self,
+        f: Value,
+        opts: &LoadOptions,
+        load: &mut Load,
+    ) -> Result<(), LoadError> {
         const SLICE: u64 = 10_000_000;
         let this = Value::object(self.global());
         self.call(f, this, &[]).map_err(|_| LoadError::Memory)?;
@@ -153,8 +310,20 @@ impl Vm {
                 }
                 Status::HostOutOfMemory => return Err(LoadError::Memory),
                 Status::HostCall { call_id, fn_id } => {
+                    let args = self.host_call(call_id).map(|i| i.args).unwrap_or_default();
                     let r = match fn_id {
-                        PRIVATE => self.primitive_private(call_id),
+                        PRIVATE => self.primitive_private(&args),
+                        RESUME => self.primitive_resume(&args, load),
+                        CELL => self.primitive_cell(&args),
+                        PENDING => self.primitive_pending(&args, opts, load),
+                        HANDLE => self.primitive_handle(&args, load),
+                        ISSUED => match args.first().and_then(|v| v.as_int()) {
+                            Some(n) if n > 0 => {
+                                load.issued = Some(n as u32);
+                                Ok(Value::UNDEFINED)
+                            }
+                            _ => Err(String::from("$dump.issued: not a call id")),
+                        },
                         id => {
                             self.abort();
                             return Err(LoadError::HostCall(id));
@@ -173,12 +342,104 @@ impl Vm {
         }
     }
 
+    /// `$dump.cell(() => x)`: the Box of the one variable the function captures, as a
+    /// value `resume` takes for a binding, so that the frame and the closures share it.
+    fn primitive_cell(&mut self, args: &[Value]) -> Result<Value, String> {
+        let f = args
+            .first()
+            .and_then(|v| v.as_object())
+            .filter(|&f| self.heap.object_class(f) == ObjectClass::Function)
+            .ok_or("$dump.cell: not a function")?;
+        let t = self.heap.closure_template(f);
+        if self.heap.arena().get::<u16>(t, FuncTemplate::CAPTURES) != 1 {
+            return Err("$dump.cell: the function must capture exactly one variable".into());
+        }
+        let b = self
+            .heap
+            .object_slot(f, 0)
+            .as_internal()
+            .ok_or("$dump.cell: no captured variable")?;
+        let r = self
+            .heap
+            .alloc_object(ObjectClass::Record, None, 1)
+            .map_err(|e| String::from(e.as_str()))?;
+        self.heap.set_object_slot(r, 0, Value::internal(b));
+        Ok(Value::object(r))
+    }
+
+    /// `$dump.pending(id, name, args)`: the open async host call `id` of the function the
+    /// host knows as `name`; its promise.
+    fn primitive_pending(
+        &mut self,
+        args: &[Value],
+        opts: &LoadOptions,
+        load: &mut Load,
+    ) -> Result<Value, String> {
+        let arg = |i: usize| args.get(i).copied().unwrap_or(Value::UNDEFINED);
+        let id = arg(0)
+            .as_int()
+            .filter(|&n| n > 0)
+            .ok_or("$dump.pending: not a call id")? as u32;
+        let name = string_arg(&self.heap, arg(1), "$dump.pending")?;
+        let values = array_arg(&self.heap, arg(2), "$dump.pending")?;
+        if crate::interp::run::host_call_cell(&self.heap, id).is_some() {
+            return Err(cat!("$dump.pending: call ", id, " is open already"));
+        }
+        let fn_id = (opts.host_fn)(&name)
+            .ok_or_else(|| cat!("$dump.pending: unknown host function ", name))?;
+        let oom = |e: crate::heap::HeapError| String::from(e.as_str());
+        let arr = self
+            .heap
+            .alloc_value_array(values.len() as u32)
+            .map_err(oom)?;
+        for (i, &v) in values.iter().enumerate() {
+            self.heap.value_array_set(arr, i as u32, v);
+        }
+        self.heap.arena_mut().set(
+            arr,
+            crate::heap::cells::ValueArray::LEN,
+            values.len() as u32,
+        );
+        let proto =
+            crate::interp::realm::intrinsic_obj(&self.heap, crate::interp::Intrinsic::PromiseProto);
+        let p = crate::interp::run::promise::alloc(&mut self.heap, Some(proto)).map_err(oom)?;
+        crate::interp::run::add_loaded_host_call(&mut self.heap, id, fn_id, arr, Value::object(p))
+            .map_err(oom)?;
+        // The host has it already: `new_host_calls` does not report it again.
+        if let Some(c) = crate::interp::run::host_call_cell(&self.heap, id) {
+            let flags = self.heap.arena().get(c, HostCall::FLAGS);
+            self.heap
+                .arena_mut()
+                .set(c, HostCall::FLAGS, flags | super::HOST_CALL_REPORTED);
+        }
+        load.out.calls.push(OpenCall { id, fn_id, name });
+        Ok(Value::object(p))
+    }
+
+    /// `$dump.handle(name, v)`: `v` for the host, under `name`.
+    fn primitive_handle(&mut self, args: &[Value], load: &mut Load) -> Result<Value, String> {
+        let name = string_arg(
+            &self.heap,
+            args.first().copied().unwrap_or(Value::UNDEFINED),
+            "$dump.handle",
+        )?;
+        if load.out.handles.iter().any(|(n, _)| *n == name) {
+            return Err(cat!("$dump.handle: two handles named ", name));
+        }
+        let v = args.get(1).copied().unwrap_or(Value::UNDEFINED);
+        let h = self
+            .heap
+            .new_handle(v)
+            .map_err(|e| String::from(e.as_str()))?;
+        load.out.handles.push((name, h));
+        Ok(Value::UNDEFINED)
+    }
+
     /// `$dump.private(obj, C, "#x", value)`: the private field `#x` of the class `C` the
     /// dump recreated, on `obj`; without `value`, the private method or accessor `#x`
     /// (its brand).
-    fn primitive_private(&mut self, call_id: u32) -> Result<Value, String> {
-        let info = self.host_call(call_id).ok_or("no host call")?;
-        let arg = |i: usize| info.args.get(i).copied().unwrap_or(Value::UNDEFINED);
+    fn primitive_private(&mut self, args: &[Value]) -> Result<Value, String> {
+        let arg = |i: usize| args.get(i).copied().unwrap_or(Value::UNDEFINED);
         let obj = arg(0).as_object().ok_or("$dump.private: not an object")?;
         let class = arg(1)
             .as_object()
@@ -200,7 +461,7 @@ impl Vm {
         if self.heap.has_own_property(obj, key) {
             return Err(cat!("$dump.private: ", name, " is already present"));
         }
-        let prop = if info.args.len() > 3 {
+        let prop = if args.len() > 3 {
             Property::data(arg(3), PropFlags::WRITABLE)
         } else if !p.method.is_undefined() {
             Property::data(p.method, PropFlags::NONE)

@@ -4354,6 +4354,26 @@ fn add_host_call(
     Ok(id)
 }
 
+/// Adds an async host call with the embedder's `id` and `promise` (an open call of a
+/// dump, 0171); later calls get ids after it.
+#[cfg(feature = "dump")]
+pub(crate) fn add_loaded_host_call(
+    heap: &mut Heap,
+    id: u32,
+    fn_id: u32,
+    args: u32,
+    promise: Value,
+) -> Result<(), HeapError> {
+    let i = state::interp(heap);
+    let next = heap.arena().get(i, Interp::NEXT_CALL_ID);
+    heap.arena_mut().set(i, Interp::NEXT_CALL_ID, id);
+    let r = add_host_call(heap, fn_id, args, Value::UNDEFINED, promise);
+    let i = state::interp(heap);
+    let after = next.max(id.wrapping_add(1)).max(1);
+    heap.arena_mut().set(i, Interp::NEXT_CALL_ID, after);
+    r.map(|_| ())
+}
+
 /// Whether an async host call is pending (its promise unsettled), D1374.
 pub(crate) fn pending_async_calls(heap: &Heap) -> bool {
     let table = state::host_calls(heap);

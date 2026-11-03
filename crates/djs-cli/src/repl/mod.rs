@@ -963,7 +963,7 @@ impl Repl {
                     self.replace_vm(new_vm(self.gc_stress));
                     let opts = djs_core::vm::dump_load::LoadOptions::default();
                     match self.vm.load_dump(&src, &opts) {
-                        Ok(()) => println!("a fresh VM with the bindings of {arg}"),
+                        Ok(_) => println!("a fresh VM with the bindings of {arg}"),
                         Err(e) => println!("cannot load {arg}: {}", e.message()),
                     }
                 }

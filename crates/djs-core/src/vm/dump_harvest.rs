@@ -310,6 +310,7 @@ fn run_case(prelude: &str, case: &str) -> Outcome {
             for (i, s) in [stubs, text.as_str()].into_iter().enumerate() {
                 let r = if i == 1 {
                     b.load_dump(s, &super::dump_load::LoadOptions::default())
+                        .map(|_| ())
                         .map_err(|e| e.message())
                 } else {
                     match b.compile(s.as_bytes(), &CompileOptions::script("dump.js")) {

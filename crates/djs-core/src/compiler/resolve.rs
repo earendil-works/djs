@@ -519,11 +519,12 @@ fn suspension_map(
             }
         }
     }
-    let slots: Vec<Option<(bool, u16)>> = storage
+    let slots: Vec<Option<(bool, u16, bool)>> = storage
         .iter()
         .map(|s| match *s {
-            Storage::Local(i) | Storage::Box(i) => Some((true, i)),
-            Storage::Arg(i) => Some((false, i)),
+            Storage::Local(i) => Some((true, i, false)),
+            Storage::Box(i) => Some((true, i, true)),
+            Storage::Arg(i) => Some((false, i, false)),
             _ => None,
         })
         .collect();
