@@ -1,6 +1,6 @@
 # 0167: Persist functions and their closures as readable code (design + prototype)
 
-status: in-progress
+status: done
 agent: portable
 branch: issue/0167-functions-as-code
 depends-on: 0141, 0142, 0145, 0160
@@ -96,10 +96,62 @@ define reusable functions), the refusal list, and sizes. No engine changes.
   buffer), release wasm vs node 25: N=1k 12.9 vs 8.2 ms, 10k 99 vs 52 ms, 50k 508 vs
   255 ms, identical 9.7 MB output; TS builtin names 2.7 ms once per base (cached).
   TS size: 40.2 KB min / 13.7 KB gz (+ layout table 2.0 KB gz shared with the reader).
+  (Final: 7 of 8 round-trip cases byte-identical after fixing two TS naming details.)
   It needs engine facts the layout table does not export (func flags, intrinsic
   numbering, class slots, lazy fn props, collection/regexp encodings); finds the globals
   a function reads by scanning its source (over-approximation); loses Error `stack`.
 
+- Forward compatibility: tests/dump/v1.js (+ .expected) is loaded by
+  `committed_dumps_still_load` in every gate run (D2353). One-off check the other way:
+  the fixture plus its check, run by `djs run` of main at 9e7bcfd5 (issue 0083, 800
+  commits older, built from `git archive` in work/scratch/0167/old): same answer.
+- Coverage harness `vm/dump_harvest.rs` (ignored tests): runs each case as the difftest
+  does, publishes the body's top-level locals through an injected `__snap`, dumps them
+  with `dump_values`, loads into a fresh VM with host stand-ins and compares the bindings
+  (JSON, functions as text). Harvest: 300/300 dump, load and compare equal (205 with
+  bindings, 7 with functions). Private extraction (2,627 scripts, counts only, cases
+  generated into work/scratch/0167/extract): 2,607 dump and load, 2,601 equal (6 hold a
+  tool function re-bound to the stand-in), 6 refused (closure over a TDZ binding), 12
+  compile errors, 2 run errors in the harness. Found and fixed through it: `let x = x`
+  for a captured variable or binding holding the host's value of the same name; and in
+  the harness, Values held across a VM run (the collector moves objects).
+- Docs: docs/functions-as-code.md (design, format, API, promise, trust, storage, pi,
+  Rust vs TS, coverage); decisions D2352-D2354; docs/cli.md (`.dump`, `.restore` of
+  dumps); guide: docs/guide/snapshots.md gets one sentence on dumps in the trade-off box
+  (no other page affected).
+- Touched outside the original `touches:` (scope widened by the coordinator): djs-core
+  vm/dump*.rs, vm/registry.rs (naming walk), builtins/function.rs + regexp.rs
+  (visibility), compat_inputs.rs, build.rs; djs-cli REPL; djs-wasm; scripts/gate.sh
+  (debug wasm with `dump`); js/src/sandbox.ts, js/test, js/proto.
+
 ## Follow-ups
+- TS dumper out of js/proto (D2354): export the engine facts it copies (func flags,
+  intrinsic numbering, class slots, lazy fn props, collection/regexp encodings) through
+  layout.generated.ts; global reads from the opcodes; errors' stack; a gate step requiring
+  the same text as the Rust dumper on the same cases; use it in `Sandbox.dump` when the
+  module has no `vm_dump`.
+- Classes in dumps (body + static state; private fields through the class's own code).
+- Large buffers as side blobs by hash (`$dump.bytes(hash)`), shared between dumps.
+- pi: a `persist(name)` convention in the codemode prelude and host storage of dumps with
+  metadata (build, names, provenance), images kept as the same-build fast path.
+- The Rust dumper allocates heavily (40 ms native for 10k records, 2x slower than the TS
+  one in wasm): an atom-name cache and fewer intermediate Strings, if it stays in wasm.
 
 ## Result
+Dumps: a VM's bindings written as a JavaScript Script that recreates them in any later
+build (docs/functions-as-code.md, D2353).
+- djs-core `Vm::dump(&DumpOptions { base, host }, names)` and `Vm::dump_values` (feature
+  `dump`, default on), `DumpError` lists refusals by path; REPL `.dump <file|-> [names]`
+  and `.restore` of a dump file; djs-wasm `vm_dump` (feature `dump`, off by default,
+  +32.4 KB gzip, D2352) behind `Sandbox.dump(names)` / `Sandbox.load(text)`.
+- Builtins by D2371 paths on the base image (`$dump.builtin` for realm roots), patched
+  builtins as code, closures as verbatim source in one factory per sharing group, data as
+  literals/constructor calls with identity, cycles, attributes and freezing, binary as
+  base64; refusals: pending promises, activations, proxies, unbound host functions,
+  classes, private fields, TDZ, internal builtin values.
+- Tests: vm/dump_tests.rs (round trips, refusals, committed v1 fixture), js dumpload
+  tests; coverage harness vm/dump_harvest.rs (300/300 harvested, 2,607/2,627 private).
+- TS prototype js/proto/dump.ts + compare.ts: same text, 2x faster in node than the Rust
+  dumper in wasm, 13.7 KB gzip; recommended for wasm hosts once productionized (D2354).
+- Known gaps: classes; side blobs; the TS dumper's prerequisites; dumps capture values,
+  never frames.

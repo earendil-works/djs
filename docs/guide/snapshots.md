@@ -137,7 +137,10 @@ bounds-checked.
 > keeps the old engine around to finish it. What survives any upgrade instead is a
 > journal of the run's external inputs, which a new engine replays (D1730, see [the host
 > interface](host.md)); djs records such journals, but has not made them its durable
-> format.
+> format. For the bindings of an idle session there is also a dump: the globals written
+> as a JavaScript program (functions as their source text, closures by small factories
+> that keep shared variables shared, data as literals, builtins by name) that any later
+> build runs to recreate them, values only, never frames (D2353).
 
 ## The base snapshot
 

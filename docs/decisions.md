@@ -7702,3 +7702,55 @@ load of at most 3/4, always with an empty bucket for a miss to stop at.
   and the values are mostly distinct function objects; a shared key description is a
   shape chain, which costs a cell per key for one-off objects (D1831). Linear search up to
   12 entries would save 240 B more.
+
+## D2352: djs-wasm leaves the dumper out by default (+32.4 KB gzip)
+date: 2026-11-03 · by: portable · issue: 0167
+`Vm::dump` (feature `dump` of djs-core, default on: the CLI and native embedders have it)
+reaches djs-wasm only through djs-wasm's own feature `dump` (export `vm_dump`), which is
+off by default. Measured on the `full` wasm build, gzip -9: 443,469 without, 475,863 with
+(+32.4 KB, +93 KB raw), against a ceiling of 444,500. The first version cost +58 KB:
+`BTreeMap`s, slice sorts, `format!`, substring search and str slicing (whose panic path
+pulls `Debug` and Unicode tables) reached from the dump path, plus the registry's
+prelude-functions pass, which compiles the prelude source (~66 KB gzip of text) to name
+internal functions a dump refuses anyway (`registry::reachable_names` skips it). The
+dumper now uses one open-addressing index of cells and atoms, the walk's insertion order,
+`crate::text` (D2339), and the registry's naming walk a bitset and `crate::sort`; what is
+left is its own logic. The gate's debug wasm build enables the feature, so the js tests
+cover `Sandbox.dump`/`load`. The feature is image-neutral and outside SOURCE_HASH's feature
+list: it only reads the heap. A wasm host that wants dumps without the module cost uses
+the host-side dumper (D2354).
+
+## D2353: Dumps are Scripts: format version 1 and the promise that later builds load it
+date: 2026-11-03 · by: portable · issue: 0167
+A dump (docs/functions-as-code.md) is a JavaScript Script whose first line is
+`// djs-dump 1`. It recreates the selected bindings as top-level declarations (`let`/
+`const` for the global lexical record, `var` or the function declaration for the global
+object), using only the language, standard builtins and helpers it defines on a temporary
+`globalThis.$dump` that it deletes at the end. Builtins are referenced by their D2371 paths
+on the base image (cells below BASE_END are builtins at the same offsets in every VM of
+the base), as expressions or through `$dump.builtin(path)` for realm roots with no global;
+builtins the session changed are written as the code that changes them. Closures are
+their verbatim source made by one factory per group of closures that share captured
+variables (not rewritten into environment objects: no parser, the text stays the user's);
+values on cycles are patched after the data. Values that are live (pending promises,
+activations, proxies, host functions not re-bound by name, classes for now) are refused
+with their path. **Promise:** every later djs loads a version 1 dump and recreates the
+same bindings; tests/dump/v1.js is loaded by a test in every gate run, and a format change
+gets a new version and keeps the old fixture. No reader code is kept for it (D024): a
+dump is loaded by running it.
+
+## D2354: A wasm host dumps from the heap bytes in TypeScript; the Rust dumper is the reference
+date: 2026-11-03 · by: portable · issue: 0167
+Measured on the same cases (js/proto/compare.ts): the TypeScript prototype over the heap
+bytes (js/proto/dump.ts, the reader's approach) writes the same text as `Vm::dump` (7 of
+8 round-trip cases byte for byte, the same refusals, 9.7 MB identical for 50,000 records),
+runs twice as fast as the Rust dumper in release wasm on node 25 (10k records: 52 vs
+99 ms) and costs 13.7 KB gzip of JS instead of 32.4 KB gzip of wasm (D2352). The Rust
+dumper stays the reference: it reads the heap through the engine's accessors, serves the
+CLI and native embedders, and its tests define the behavior. Recommended for wasm hosts
+(pi): the TypeScript dumper, once (1) layout.generated.ts exports the engine facts it now
+copies by hand (function flags, intrinsic numbering, object-class slots, lazy function
+properties, collection and regexp encodings), (2) it finds the globals a function reads
+from the two opcodes instead of a source scan and keeps errors' stack, and (3) a gate step
+requires both dumpers to write the same text on the same cases. Until then it stays a
+prototype under js/proto, outside the package.
