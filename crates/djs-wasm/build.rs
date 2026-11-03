@@ -16,13 +16,13 @@ fn main() {
     if wasm && !debug && !names {
         println!("cargo:rustc-link-arg-cdylib=--compress-relocations");
     }
-    // The shadow stack (D1941): 256 KiB instead of rustc's 1 MiB default. It is part of
-    // every instance's linear memory from the start, and the parser's deepest accepted
-    // nesting needs at most ~170 KiB (docs/compiler.md 2.4). DJS_WASM_STACK overrides it
-    // for measurements.
+    // The shadow stack (D1941, D2540): 128 KiB instead of rustc's 1 MiB default. It is
+    // part of every instance's linear memory from the start, and the parser's deepest
+    // accepted nesting needs at most ~115 KiB (docs/compiler.md 2.4). DJS_WASM_STACK
+    // overrides it for measurements.
     println!("cargo:rerun-if-env-changed=DJS_WASM_STACK");
     if wasm {
-        let n = std::env::var("DJS_WASM_STACK").unwrap_or_else(|_| "262144".into());
+        let n = std::env::var("DJS_WASM_STACK").unwrap_or_else(|_| "131072".into());
         println!("cargo:rustc-link-arg-cdylib=-zstack-size={n}");
     }
 }

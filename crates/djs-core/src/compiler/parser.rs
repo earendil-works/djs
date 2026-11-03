@@ -17,12 +17,12 @@ use crate::value::Value;
 
 /// Nesting limit for the recursive descent (docs/compiler.md 2.4). The value is pinned
 /// by the `depth_limit_fits_wasm_stack` test.
-pub(super) const MAX_DEPTH: u32 = 1000;
+pub(super) const MAX_DEPTH: u32 = 650;
 
 /// Extra depth units of a class body, a C-style `for` and a destructuring pattern level:
 /// in wasm one nesting level of each takes ~1.4 KiB, ~210 B and ~230 B of stack, against
 /// 130–160 B for a plain statement level. With them the deepest accepted nesting of every
-/// construct fits in djs-wasm's 256 KiB stack with a third to spare (D1941).
+/// construct fits in djs-wasm's 128 KiB stack with at least 10% to spare (D1941, D2540).
 pub(super) const CLASS_WEIGHT: u32 = 7;
 pub(super) const FOR_WEIGHT: u32 = 1;
 pub(super) const PATTERN_WEIGHT: u32 = 1;

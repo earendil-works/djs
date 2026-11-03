@@ -191,14 +191,14 @@ entry to `parse_statement`, `parse_assign`, `parse_unary` and `parse_primary` (f
 fails with SyntaxError `stack overflow` (QuickJS wording; qjs fails at about 920
 nested parentheses).
 
-- `MAX_DEPTH` is 1000 (0014). One parenthesis level costs 3 depth units (assignment,
-  unary, primary), so about 330 nested parentheses compile. Constructs whose levels
-  take several times the stack of a plain one cost more units (D1941): a class body 7
-  more (`CLASS_WEIGHT`, about 110 nested classes), a C-style `for` and a destructuring
-  pattern level 1 more.
-- djs-wasm's shadow stack is 256 KiB (D1941, `crates/djs-wasm/build.rs`). The deepest
-  accepted nesting of every construct needs at most about 170 KiB of it (wasm frames,
-  measured per level), so a third is spare. `js/test/nesting.test.ts` checks it in the
+- `MAX_DEPTH` is 650 (0014, D2540; 1000 before). One parenthesis level costs 3 depth
+  units (assignment, unary, primary), so about 215 nested parentheses compile. Constructs
+  whose levels take several times the stack of a plain one cost more units (D1941): a
+  class body 7 more (`CLASS_WEIGHT`, about 70 nested classes), a C-style `for` and a
+  destructuring pattern level 1 more.
+- djs-wasm's shadow stack is 128 KiB (D1941, D2540, `crates/djs-wasm/build.rs`). The
+  deepest accepted nesting of every construct needs at most about 115 KiB of it (wasm
+  frames, measured per level), so at least a tenth is spare. `js/test/nesting.test.ts` checks it in the
   gate's wasm build: for each construct, the deepest nesting that compiles runs in wasm
   and one more level is the SyntaxError, never a trap. A native test does the same on a
   1 MiB thread (native frames are smaller). Frames on the recursion paths are kept small:

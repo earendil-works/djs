@@ -1,8 +1,8 @@
 // The parser's nesting limit fits djs-wasm's shadow stack (D1941, docs/compiler.md 2.4):
 // for every recursive construct, the deepest nesting that compiles runs in wasm, and one
-// level more is a SyntaxError ("stack overflow"), never a trap. The stack is 256 KiB, the
-// deepest accepted nesting needs at most ~170 KiB, so a construct whose stack per level
-// grows a lot shows up here.
+// level more is a SyntaxError ("stack overflow"), never a trap. The stack is 128 KiB, the
+// deepest accepted nesting needs at most ~115 KiB (D2540), so a construct whose stack per
+// level grows a lot shows up here.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
