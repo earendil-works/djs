@@ -564,3 +564,4 @@ topics when the index is next reorganized.
 - D2630: Host-driven Sandbox runs, the first piece of the Sandbox run API
 - D2631: The dump exports carry the host's function names both ways; changed in place
 - D2632: Dotted host function names make a namespace object
+- D2620: A codemode body's frame is an async function's
