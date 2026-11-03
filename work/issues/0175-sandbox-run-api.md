@@ -1,7 +1,7 @@
 # 0175: Sandbox run API and the wasm dumper packaging
 
-status: open
-agent: -
+status: in-progress
+agent: example
 branch: issue/0175-sandbox-run-api
 depends-on: 0172
 touches: js/src/sandbox.ts, js/test/, crates/djs-wasm, scripts/build-wasm.sh, js/proto (remove dump.ts, D2564), js/package.json
