@@ -31,7 +31,7 @@ use super::Vm;
 use crate::buf::PushOut;
 use crate::bytecode::template::{self, func_flags};
 use crate::heap::cells::{BoxCell, FuncTemplate, Object as ObjectCell, U32Array};
-use crate::heap::{Atom, Heap, ObjectClass, PropFlags, Property, Ref};
+use crate::heap::{Atom, Heap, ObjectClass, PropFlags, Property, Ref, atoms};
 use crate::interp::realm::{Intrinsic, intrinsic};
 use crate::value::{Kind, Obj, Value};
 
@@ -687,10 +687,10 @@ impl<'a> Dumper<'a> {
             let Some(p) = h.get_own_property(g, k) else {
                 continue;
             };
-            let same = bg.and_then(|bg| {
-                let bk = bkeys.iter().find(|bk| base.atom_name(**bk) == name)?;
-                Some(base.get_own_property(bg, *bk)? == p)
-            });
+            // The VM's atom table starts with the base's: the same keys, the same atoms.
+            let same = bg
+                .filter(|_| bkeys.contains(&k))
+                .and_then(|bg| Some(base.get_own_property(bg, k)? == p));
             if same == Some(true) {
                 continue;
             }
@@ -778,12 +778,7 @@ impl<'a> Dumper<'a> {
                     .push_out(cat!("Object.preventExtensions(", e, ");"));
             }
             for k in &bkeys {
-                let name = base.atom_name(*k);
-                let now = keys.iter().find(|k2| {
-                    h.atom_name(**k2) == name
-                        && h.atom_symbol(**k2).is_none() == base.atom_symbol(*k).is_none()
-                });
-                let patch = match now {
+                let patch = match keys.iter().find(|k2| *k2 == k) {
                     None => Some((*k, None)),
                     Some(k2) => {
                         let (Some(p), Some(bp)) =
@@ -800,8 +795,7 @@ impl<'a> Dumper<'a> {
                 }
             }
             for k in keys {
-                let name = h.atom_name(k);
-                if !bkeys.iter().any(|bk| base.atom_name(*bk) == name) {
+                if !bkeys.contains(&k) {
                     let p = h.get_own_property(o, k);
                     let e = expr.get_or_insert_with(|| self.builtin_expr(i)).clone();
                     self.builtin_patches.push_out((e, k, p));
@@ -997,7 +991,7 @@ impl<'a> Dumper<'a> {
 
     /// The edges of `o`'s own properties (but the ones `skip` takes: name and array
     /// index) and of a prototype its literal or constructor would not give it.
-    fn props(&mut self, n: usize, o: Obj, skip: &dyn Fn(&str, Option<u32>) -> bool) {
+    fn props(&mut self, n: usize, o: Obj, skip: &dyn Fn(Atom, Option<u32>) -> bool) {
         let h = self.h;
         for k in h.own_keys(o) {
             if h.is_private_atom(k) {
@@ -1005,12 +999,22 @@ impl<'a> Dumper<'a> {
                 self.refuse(p, "an object with private fields");
                 continue;
             }
-            if h.atom_symbol(k).is_none() && skip(&h.atom_name(k), h.atom_array_index(k)) {
+            if h.atom_symbol(k).is_none() && skip(k, h.atom_array_index(k)) {
                 continue;
             }
             self.key_edge(n, k);
+            let prop = h.get_own_property(o, k);
+            // Paths only for what may become a node: most values are primitives.
+            let refs = match prop {
+                Some(Property::Data { value, .. }) => cell_of(value).is_some(),
+                Some(Property::Accessor { .. }) => true,
+                None => false,
+            };
+            if !refs {
+                continue;
+            }
             let path = cat!(self.nodes[n].path, self.key_path(k));
-            match h.get_own_property(o, k) {
+            match prop {
                 Some(Property::Data { value, .. }) => {
                     self.edge(n, value, || path);
                 }
@@ -1115,7 +1119,9 @@ impl<'a> Dumper<'a> {
                 }
                 // Sparse elements and named properties.
                 let dense = el.get().map_or(0, |el| h.value_array_len(el));
-                self.props(n, o, &|k, i| k == "length" || i.is_some_and(|i| i < dense));
+                self.props(n, o, &|k, i| {
+                    k == atoms::LENGTH || i.is_some_and(|i| i < dense)
+                });
             }
             ObjectClass::Function => self.closure(n, o),
             ObjectClass::Map | ObjectClass::Set => {
@@ -1132,9 +1138,11 @@ impl<'a> Dumper<'a> {
             ObjectClass::Date | ObjectClass::Boolean | ObjectClass::Number => {
                 self.props(n, o, &|_, _| false)
             }
-            ObjectClass::String => self.props(n, o, &|k, i| k == "length" || i.is_some()),
-            ObjectClass::RegExp => self.props(n, o, &|k, _| k == "lastIndex"),
-            ObjectClass::Error => self.props(n, o, &|k, _| k == "message" || k == "stack"),
+            ObjectClass::String => self.props(n, o, &|k, i| k == atoms::LENGTH || i.is_some()),
+            ObjectClass::RegExp => self.props(n, o, &|k, _| k == atoms::LAST_INDEX),
+            ObjectClass::Error => {
+                self.props(n, o, &|k, _| k == atoms::MESSAGE || k == atoms::STACK)
+            }
             ObjectClass::Promise => {
                 let state = h.object_slot(o, 0).as_int().unwrap_or(0);
                 if state == crate::interp::run::promise::PENDING {
@@ -1158,7 +1166,7 @@ impl<'a> Dumper<'a> {
                         self.edge(n, v, || cat!(path, "<args>[", i, "]"));
                     }
                 }
-                self.props(n, o, &|k, _| k == "name" || k == "length");
+                self.props(n, o, &|k, _| k == atoms::NAME || k == atoms::LENGTH);
             }
             #[cfg(feature = "full")]
             ObjectClass::ArrayBuffer => {
@@ -1234,7 +1242,7 @@ impl<'a> Dumper<'a> {
         // The user globals its code reads by name are part of the dump.
         self.global_refs(t);
         for k in h.own_keys(o) {
-            if h.atom_symbol(k).is_none() && self.default_fn_key(o, &h.atom_name(k)) {
+            if h.atom_symbol(k).is_none() && self.default_fn_key(o, k) {
                 continue;
             }
             self.key_edge(n, k);
@@ -1255,20 +1263,18 @@ impl<'a> Dumper<'a> {
         }
     }
 
-    /// Whether own property `name` of function `f` is one its definition makes.
-    fn default_fn_key(&self, f: Obj, name: &str) -> bool {
-        name == "length" || name == "name" || (name == "prototype" && self.default_fn_prototype(f))
+    /// Whether own property `k` of function `f` is one its definition makes.
+    fn default_fn_key(&self, f: Obj, k: Atom) -> bool {
+        k == atoms::LENGTH
+            || k == atoms::NAME
+            || (k == atoms::PROTOTYPE && self.default_fn_prototype(f))
     }
 
     /// A function's `prototype` as its definition makes it: absent, or an object with
     /// only `constructor` (back to the function), or an empty generator prototype.
     fn default_fn_prototype(&self, f: Obj) -> bool {
         let h = self.h;
-        let Some(atom) = h
-            .own_keys(f)
-            .into_iter()
-            .find(|k| h.atom_symbol(*k).is_none() && h.atom_name(*k) == "prototype")
-        else {
+        let Some(atom) = h.own_keys(f).into_iter().find(|k| *k == atoms::PROTOTYPE) else {
             return true;
         };
         let Some(Property::Data { value, .. }) = h.get_own_property(f, atom) else {
@@ -1280,7 +1286,7 @@ impl<'a> Dumper<'a> {
         let keys = h.own_keys(p);
         keys.is_empty()
             || (keys.len() == 1
-                && h.atom_name(keys[0]) == "constructor"
+                && keys[0] == atoms::CONSTRUCTOR
                 && h.get_own_property(p, keys[0]).and_then(|p| p.value()) == Some(Value::object(f)))
     }
 
@@ -1737,7 +1743,7 @@ impl<'a> Dumper<'a> {
                         return false;
                     };
                     let attrs = flags == PropFlags::ALL
-                        || (class == ObjectClass::Array && h.atom_name(k) == "length");
+                        || (class == ObjectClass::Array && k == atoms::LENGTH);
                     attrs
                         && self.node_of(value).is_none_or(|c| {
                             let d = &self.nodes[c];
@@ -1752,9 +1758,7 @@ impl<'a> Dumper<'a> {
             }
             ObjectClass::Function => {
                 self.fn_name_matches(n, ctx_name)
-                    && h.own_keys(o)
-                        .into_iter()
-                        .all(|k| self.default_fn_key(o, &h.atom_name(k)))
+                    && h.own_keys(o).into_iter().all(|k| self.default_fn_key(o, k))
             }
             ObjectClass::ArrayBuffer
             | ObjectClass::Date
@@ -1765,7 +1769,7 @@ impl<'a> Dumper<'a> {
             | ObjectClass::Number => {
                 h.own_keys(o).into_iter().all(|k| {
                     h.atom_array_index(k).is_some()
-                        || (h.atom_name(k) == "lastIndex"
+                        || (k == atoms::LAST_INDEX
                             && h.get_own_property(o, k).and_then(|p| p.value())
                                 == Some(Value::int(0)))
                 }) && self.default_proto(o, h.get_prototype_of(o))
@@ -1779,7 +1783,7 @@ impl<'a> Dumper<'a> {
         let o = self.nodes[n].v.as_object().expect("a function");
         h.own_keys(o)
             .into_iter()
-            .find(|k| h.atom_symbol(*k).is_none() && h.atom_name(*k) == "name")
+            .find(|k| *k == atoms::NAME)
             .and_then(|k| h.get_own_property(o, k))
             .and_then(|p| p.value())
             .and_then(|v| v.as_string())
@@ -1811,7 +1815,7 @@ impl<'a> Dumper<'a> {
             ));
         }
         for k in h.own_keys(o) {
-            if h.atom_symbol(k).is_none() && self.default_fn_key(o, &h.atom_name(k)) {
+            if h.atom_symbol(k).is_none() && self.default_fn_key(o, k) {
                 continue;
             }
             if let Some(p) = h.get_own_property(o, k) {
@@ -2080,7 +2084,7 @@ impl<'a> Dumper<'a> {
                 let msg = h
                     .own_keys(o)
                     .into_iter()
-                    .find(|k| h.atom_name(*k) == "message")
+                    .find(|k| *k == atoms::MESSAGE)
                     .and_then(|k| h.get_own_property(o, k))
                     .and_then(|p| p.value());
                 let args = match msg {
@@ -2160,20 +2164,17 @@ impl<'a> Dumper<'a> {
     fn extra(&mut self, o: Obj, loc: &str) {
         let h = self.h;
         let class = h.object_class(o);
-        let skip: &dyn Fn(&str, Option<u32>) -> bool = match class {
-            ObjectClass::RegExp => &|k, _| k == "lastIndex",
-            ObjectClass::Error => &|k, _| k == "message" || k == "stack",
-            ObjectClass::String => &|k, i| k == "length" || i.is_some(),
-            ObjectClass::BoundFunction => &|k, _| k == "name" || k == "length",
+        let skip: &dyn Fn(Atom, Option<u32>) -> bool = match class {
+            ObjectClass::RegExp => &|k, _| k == atoms::LAST_INDEX,
+            ObjectClass::Error => &|k, _| k == atoms::MESSAGE || k == atoms::STACK,
+            ObjectClass::String => &|k, i| k == atoms::LENGTH || i.is_some(),
+            ObjectClass::BoundFunction => &|k, _| k == atoms::NAME || k == atoms::LENGTH,
             ObjectClass::TypedArray => &|_, i| i.is_some(),
             _ => &|_, _| false,
         };
         self.other_props(o, loc, skip);
         if class == ObjectClass::RegExp
-            && let Some(li) = h
-                .own_keys(o)
-                .into_iter()
-                .find(|k| h.atom_name(*k) == "lastIndex")
+            && let Some(li) = h.own_keys(o).into_iter().find(|k| *k == atoms::LAST_INDEX)
             && let Some(Property::Data { value, .. }) = h.get_own_property(o, li)
             && value.as_number() != Some(0.0)
         {
@@ -2204,7 +2205,11 @@ impl<'a> Dumper<'a> {
                 Some(el) if i < h.value_array_len(el) => h.value_array_get(el, i),
                 _ => Value::HOLE,
             };
-            let at = cat!(loc, "[", i, "]");
+            let at = if cell_of(v).is_some() {
+                cat!(loc, "[", i, "]")
+            } else {
+                String::new()
+            };
             let e = self.expr(v, Some(&at), None);
             if e.is_empty() && !v.is_hole() {
                 let l = self.expr_or_loc(v);
@@ -2223,7 +2228,7 @@ impl<'a> Dumper<'a> {
         }
         let dense = el.get().map_or(0, |el| h.value_array_len(el));
         self.other_props(o, loc, &|k, i| {
-            k == "length" || i.is_some_and(|i| i < dense)
+            k == atoms::LENGTH || i.is_some_and(|i| i < dense)
         });
         if !h.is_extensible(o) {
             self.finals.push_out(self.freeze_line(o, loc));
@@ -2377,10 +2382,10 @@ impl<'a> Dumper<'a> {
     }
 
     /// Properties of a non-literal object (a Map's, a regexp's) as patches.
-    fn other_props(&mut self, o: Obj, loc: &str, skip: &dyn Fn(&str, Option<u32>) -> bool) {
+    fn other_props(&mut self, o: Obj, loc: &str, skip: &dyn Fn(Atom, Option<u32>) -> bool) {
         let h = self.h;
         for k in h.own_keys(o) {
-            if h.atom_symbol(k).is_none() && skip(&h.atom_name(k), h.atom_array_index(k)) {
+            if h.atom_symbol(k).is_none() && skip(k, h.atom_array_index(k)) {
                 continue;
             }
             if let Some(p) = h.get_own_property(o, k) {
@@ -2420,8 +2425,18 @@ impl<'a> Dumper<'a> {
             let prop = h.get_own_property(o, k);
             match prop {
                 Some(Property::Data { value, flags }) => {
-                    let name = h.atom_name(k);
-                    let at = cat!(loc, self.key_member(k));
+                    // The name an anonymous function gets from the key; only functions
+                    // need it.
+                    let name = if cell_of(value).is_some() {
+                        h.atom_name(k)
+                    } else {
+                        String::new()
+                    };
+                    let at = if cell_of(value).is_some() {
+                        cat!(loc, self.key_member(k))
+                    } else {
+                        String::new()
+                    };
                     // A method written in place: `m() {...}`.
                     if flags == PropFlags::ALL
                         && let Some(c) = self.node_of(value)

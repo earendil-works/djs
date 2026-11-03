@@ -508,7 +508,9 @@ export class Sandbox {
    */
   load(dump: string): void {
     if (!dump.startsWith("// djs-dump ")) throw new SandboxError("misuse", "not a djs dump");
-    this.start(dump, {}, true);
+    // The completion value is not read: a dump may end with a patch whose value is a
+    // cyclic object.
+    this.start(`${dump}\nvoid 0;\n`, {}, true);
     try {
       this.drive(false).next();
     } catch (e) {

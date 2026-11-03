@@ -257,3 +257,31 @@ fn run_value(vm: &mut Vm, src: &str) -> Value {
         s => panic!("{s:?}"),
     }
 }
+
+/// Timing of a large dump (`cargo test --release ... -- --ignored --nocapture big_dump`).
+#[test]
+#[ignore]
+fn big_dump_timing() {
+    let mut a = new_vm();
+    run(
+        &mut a,
+        "const users = [];\n\
+         for (let i = 0; i < 10000; i++) users.push({ id: i, name: 'user' + i, tags: ['a', 'b' + (i % 7)], score: i * 1.5, meta: { created: new Date(i * 1000), active: i % 3 === 0 } });\n\
+         const byId = new Map(users.map((u) => [u.id, u]));",
+    );
+    let t = std::time::Instant::now();
+    let names = super::registry::reachable_names(
+        &Heap::from_bytes_trusted(base().to_vec(), base().len() * 2).unwrap(),
+    );
+    std::println!("names: {} in {:?}", names.len(), t.elapsed());
+    let t = std::time::Instant::now();
+    let mut text = String::new();
+    let reps: u32 = std::env::var("DJS_DUMP_REPS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1);
+    for _ in 0..reps {
+        text = dump(&a, None).unwrap();
+    }
+    std::println!("dump: {} bytes in {:?}", text.len(), t.elapsed());
+}
