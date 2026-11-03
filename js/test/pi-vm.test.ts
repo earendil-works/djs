@@ -6,8 +6,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadModule } from "../src/sandbox.ts";
-import { resumeVm, startVm, type HostToWorkerMessage, type VmSession, type WorkerToHostMessage } from "../pi/vm.ts";
+import { resumeVm, startVm, type HostToWorkerMessage, type VmHooks, type VmSession, type WorkerToHostMessage } from "../pi/vm.ts";
 import { PRELUDE_SOURCE } from "../../tests/pi/prelude-source.ts";
+import { PRELUDE_NEXT } from "../../tests/pi/prelude-next.ts";
 
 type Tool = (args: unknown) => unknown;
 
@@ -37,6 +38,25 @@ interface Outcome {
 
 const wasm = await loadModule();
 
+/**
+ * The adapter's modes: pi's prelude as it is; prelude-next (D2565, D2650); prelude-next with
+ * a dump and a resume in a new instance at every idle point (D2651). Every test runs in each.
+ */
+interface Mode {
+  name: string;
+  prelude: string;
+  hooks: Pick<VmHooks, "shape" | "dumpEveryIdle">;
+}
+const MODES: Mode[] = [
+  { name: "pi", prelude: PRELUDE_SOURCE, hooks: {} },
+  { name: "next", prelude: PRELUDE_NEXT, hooks: { shape: "next" } },
+  { name: "next, dump every idle", prelude: PRELUDE_NEXT, hooks: { shape: "next", dumpEveryIdle: true } },
+];
+
+for (const mode of MODES) suite(mode);
+
+function suite(mode: Mode): void {
+
 /** Starts `code` and answers its calls like pi's host: in a later task, never inside the VM. */
 function start(code: string, options: Options = {}) {
   const tools = options.tools ?? {};
@@ -63,8 +83,9 @@ function start(code: string, options: Options = {}) {
     session!.deliver(message);
   };
   const ready = startVm({
+    ...mode.hooks,
     wasm,
-    prelude: options.prelude ?? PRELUDE_SOURCE,
+    prelude: options.prelude ?? mode.prelude,
     interruptBudget: options.interruptBudget,
     frozenBuiltins: options.frozenBuiltins,
     data: {
@@ -128,7 +149,7 @@ const echo: Tool = (args) => args;
 const later = (ms: number, v: unknown) => new Promise((resolve) => setTimeout(() => resolve(v), ms));
 const PNG = "iVBORw0KGgo=";
 
-test("pi: the return value, top-level await and output in order", async () => {
+test(`${mode.name}: the return value, top-level await and output in order`, async () => {
   assert.deepEqual(value(await run("return { a: 1, b: [true, 'x'] }")), { a: 1, b: [true, "x"] });
   assert.equal(value(await run("")), undefined);
   const outcome = await run(`
@@ -151,7 +172,7 @@ test("pi: the return value, top-level await and output in order", async () => {
   assert.match(last.text, /^Error: bad\n {4}at .*codemode\.js:7/);
 });
 
-test("pi: concurrent tool calls are all issued before the first result", async () => {
+test(`${mode.name}: concurrent tool calls are all issued before the first result`, async () => {
   const outcome = await run(
     `
     const [a, b, c] = await Promise.all([tools.slow(1), tools.fast(2), tools.slow(3)]);
@@ -166,7 +187,7 @@ test("pi: concurrent tool calls are all issued before the first result", async (
   );
 });
 
-test("pi: tool errors are catchable; unknown tools name close matches", async () => {
+test(`${mode.name}: tool errors are catchable; unknown tools name close matches`, async () => {
   const outcome = await run(
     `
     try { await tools.fail({}); } catch (error) { text(error.message); }
@@ -187,14 +208,14 @@ test("pi: tool errors are catchable; unknown tools name close matches", async ()
   assert.match((outcome.output[1] as { text: string }).text, /^TypeError: tools\.ech does not exist\. Did you mean tools\.echo\?/);
 });
 
-test("pi: globals, including namespaces with spread arguments", async () => {
+test(`${mode.name}: globals, including namespaces with spread arguments`, async () => {
   const outcome = await run("return [await add(1), await fs.read('a')]", {
     globals: { add: (n) => (n as number) + 1, "fs.read": (args) => `read ${JSON.stringify(args)}` },
   });
   assert.deepEqual(value(outcome), [2, 'read "a"']);
 });
 
-test("pi: store and load", async () => {
+test(`${mode.name}: store and load`, async () => {
   const outcome = await run(
     `
     const before = load("count");
@@ -212,7 +233,7 @@ test("pi: store and load", async () => {
   assert.equal(error(big).name, "RangeError");
 });
 
-test("pi: script errors with the script's line numbers", async () => {
+test(`${mode.name}: script errors with the script's line numbers`, async () => {
   const thrown = error(await run("const a = 1;\nthrow new TypeError('boom ' + a)"));
   assert.equal(thrown.name, "TypeError");
   assert.equal(thrown.message, "boom 1");
@@ -227,7 +248,7 @@ test("pi: script errors with the script's line numbers", async () => {
   assert.match(stalled.message, /can never settle/);
 });
 
-test("pi: exit() ends the script with its output and store writes", async () => {
+test(`${mode.name}: exit() ends the script with its output and store writes`, async () => {
   const outcome = await run('text("before"); store("k", 1); await tools.echo(1); try { exit(); } catch {} text("after")', {
     tools: { echo },
   });
@@ -235,7 +256,7 @@ test("pi: exit() ends the script with its output and store writes", async () => 
   assert.deepEqual(outcome.output, [{ type: "text", text: "before" }]);
 });
 
-test("pi: an interrupt budget stops loops, including microtask loops", async () => {
+test(`${mode.name}: an interrupt budget stops loops, including microtask loops`, async () => {
   for (const code of ["while (true) {}", "for (;;) await null", "let n = 0; for (;;) { try { n++; } catch {} }"]) {
     const outcome = await run(code, { interruptBudget: 300 });
     assert.deepEqual(outcome.end, { type: "crash", message: "Error: Execution interrupted" }, code);
@@ -244,7 +265,7 @@ test("pi: an interrupt budget stops loops, including microtask loops", async () 
   assert.equal(value(await run("let n = 0; for (let i = 0; i < 1000; i++) n += i; return n", { interruptBudget: 300 })), 499500);
 });
 
-test("pi: a budget means the same on cold and warm starts (prelude images)", async () => {
+test(`${mode.name}: a budget means the same on cold and warm starts (prelude images)`, async () => {
   // A start that reuses a prelude image skips the prelude, so the prelude must not use up
   // interrupt polls (D1660): otherwise a replay after a restart (cold) could time out where
   // the original run (warm) did not.
@@ -256,8 +277,9 @@ test("pi: a budget means the same on cold and warm starts (prelude images)", asy
     let session: VmSession | undefined;
     const ended = new Promise<WorkerToHostMessage>((resolve) => {
       startVm({
+        ...mode.hooks,
         wasm,
-        prelude: PRELUDE_SOURCE,
+        prelude: mode.prelude,
         reuseImages,
         interruptBudget: budget,
         data: {
@@ -293,7 +315,7 @@ test("pi: a budget means the same on cold and warm starts (prelude images)", asy
   }
 });
 
-test("pi: the memory limit", async () => {
+test(`${mode.name}: the memory limit`, async () => {
   const outcome = await run("const a = []; for (;;) a.push({ a: 'x'.repeat(1000) + a.length })", {
     memoryLimitBytes: 8 << 20,
   });
@@ -310,15 +332,16 @@ test("pi: the memory limit", async () => {
     assert.equal(value(caught), "InternalError: out of memory", `${mb} MiB`);
   }
   await assert.rejects(startVm({
+    ...mode.hooks,
     wasm,
-    prelude: PRELUDE_SOURCE,
+    prelude: mode.prelude,
     data: { code: "", tools: [], globals: [], memoryLimitBytes: 1024, store: {} },
     post: () => {},
     shouldInterrupt: () => false,
   }));
 });
 
-test("pi: host globals quickjs-wasi provides", async () => {
+test(`${mode.name}: host globals quickjs-wasi provides`, async () => {
   const outcome = await run(`
     return [btoa("hello"), atob("aGVsbG8="), typeof performance.now(), await new Promise((r) => queueMicrotask(() => r(7))),
       Object.isFrozen(performance)];
@@ -334,7 +357,7 @@ const DETERMINISTIC_CODE = `
   return await tools.echo(first.concat(Math.random(), new Date(0).getHours()));
 `;
 
-test("pi: deterministic runs repeat exactly, with QuickJS's random numbers", async () => {
+test(`${mode.name}: deterministic runs repeat exactly, with QuickJS's random numbers`, async () => {
   const det = { startedAt: STARTED_AT, seed: 1 };
   const one = await run(DETERMINISTIC_CODE, { tools: { echo }, deterministic: det });
   const two = await run(DETERMINISTIC_CODE, { tools: { echo }, deterministic: det });
@@ -350,7 +373,7 @@ test("pi: deterministic runs repeat exactly, with QuickJS's random numbers", asy
   assert.deepEqual(JSON.parse((one.output[0] as { text: string }).text).slice(0, 2), [STARTED_AT + 1000, 1000]);
   const started = one.messages[0];
   assert.equal(started.type, "started");
-  assert.match((started as { fingerprint: string }).fingerprint, /^djs [0-9a-f]{8}, prelude [0-9a-f]{8}, host [0-9a-f]{8}, deterministic 2/);
+  assert.match((started as { fingerprint: string }).fingerprint, /^djs [0-9a-f]{8}, prelude [0-9a-f]{8}, host [0-9a-f]{8}, deterministic 3/);
   assert.deepEqual(
     one.messages.filter((m) => m.type === "idle"),
     [
@@ -372,7 +395,7 @@ test("pi: deterministic runs repeat exactly, with QuickJS's random numbers", asy
   assert.notEqual(a, b);
 });
 
-test("pi: a snapshot of a waiting session resumes in a new instance", async () => {
+test(`${mode.name}: a snapshot of a waiting session resumes in a new instance`, async () => {
   // Reference: the deterministic run without a snapshot.
   const det = { startedAt: STARTED_AT, seed: 9 };
   const reference = await run(DETERMINISTIC_CODE, { tools: { echo }, deterministic: det });
@@ -391,6 +414,7 @@ test("pi: a snapshot of a waiting session resumes in a new instance", async () =
   let seq = 0;
   const done = new Promise<void>((resolve) => {
     resumed = resumeVm(bytes, {
+      ...mode.hooks,
       wasm,
       post: (message) => {
         messages.push(message);
@@ -421,7 +445,7 @@ test("pi: a snapshot of a waiting session resumes in a new instance", async () =
   assert.deepEqual(messages, reference.messages);
 });
 
-test("pi: snapshot() collects first; continuing or resuming the session changes nothing", async () => {
+test(`${mode.name}: snapshot() collects first; continuing or resuming the session changes nothing`, async () => {
   // D1890: a snapshot holds only live cells. The collection it makes is invisible to the
   // script: the same messages and the same number of interrupt polls (fuel) whether the
   // session is not snapshotted, snapshotted and continued, or snapshotted and resumed.
@@ -432,12 +456,13 @@ const r = await tools.echo(junk);
 let more = 0;
 for (let i = 0; i < 3000; i++) more += JSON.stringify({ i, kept: kept.length }).length;
 return [r, more];`;
-  const once = async (code: string, mode: "none" | "continue" | "resume") => {
+  const once = async (code: string, how: "none" | "continue" | "resume") => {
     let polls = 0;
     let size = 0;
     const messages: WorkerToHostMessage[] = [];
     let session!: VmSession;
     const hooks = {
+      ...mode.hooks,
       wasm,
       interruptBudget: Infinity,
       shouldInterrupt: () => ++polls < 0,
@@ -445,10 +470,10 @@ return [r, more];`;
         messages.push(message);
         if (message.type !== "call") return;
         setTimeout(() => {
-          if (mode !== "none") {
+          if (how !== "none") {
             const bytes = session.snapshot();
             size = bytes.length;
-            if (mode === "resume") {
+            if (how === "resume") {
               session.dispose();
               session = resumeVm(bytes, hooks);
             }
@@ -466,7 +491,7 @@ return [r, more];`;
     });
     session = await startVm({
       ...hooks,
-      prelude: PRELUDE_SOURCE,
+      prelude: mode.prelude,
       data: {
         code,
         tools: [{ name: "echo", jsName: "echo", description: "" }],
@@ -502,7 +527,7 @@ function withoutLockdown(prelude: string): string {
   return prelude.slice(0, start) + prelude.slice(end + close.length);
 }
 
-test("pi: frozen builtins without the prelude's lockdown (D2304)", async () => {
+test(`${mode.name}: frozen builtins without the prelude's lockdown (D2304)`, { skip: mode.hooks.shape === "next" && "prelude-next has no lockdown; the VM always has frozen builtins" }, async () => {
   const code = `
     class E extends Error { constructor(m) { super(m); this.name = "E"; } }
     const o = {}; o.toString = () => "own";
@@ -511,7 +536,7 @@ test("pi: frozen builtins without the prelude's lockdown (D2304)", async () => {
     return [String(new E("x")), String(o), added, Object.isFrozen(Array.prototype), Object.isFrozen(globalThis), mine,
       typeof Object.getOwnPropertyDescriptor(Object.prototype, "toString").value];
   `;
-  const prelude = withoutLockdown(PRELUDE_SOURCE);
+  const prelude = withoutLockdown(mode.prelude);
   const frozen = value(await run(code, { frozenBuiltins: true, prelude }));
   assert.deepEqual(frozen, ["E: x", "own", "TypeError", true, false, 1, "function"]);
   // The lockdown gives the same answers, except that its override accessors replace the data
@@ -520,3 +545,4 @@ test("pi: frozen builtins without the prelude's lockdown (D2304)", async () => {
   // Without either, builtins are ordinary.
   assert.deepEqual(value(await run(code, { prelude })), ["E: x", "own", "added", false, false, 1, "function"]);
 });
+}

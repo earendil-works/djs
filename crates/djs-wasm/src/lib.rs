@@ -62,6 +62,8 @@ struct Slot {
     result: u32,
     /// HostCall: the call id the VM is parked on.
     call_id: u32,
+    /// The fuel the last `vm_run` used (`vm_fuel_used`).
+    fuel_used: u64,
 }
 
 #[derive(Default)]
@@ -313,6 +315,7 @@ impl State {
             vm,
             result: 0,
             call_id: 0,
+            fuel_used: 0,
         };
         match self.vms.iter().position(Option::is_none) {
             Some(i) => {
@@ -1224,7 +1227,9 @@ pub extern "C" fn vm_call(vm: u32, f: u32, this: u32, argc: usize) -> i32 {
 pub extern "C" fn vm_run(vm: u32, fuel: u32) -> u32 {
     with(|s| {
         let slot = s.slot(vm);
-        match slot.vm.run(fuel as u64) {
+        let (st, used) = slot.vm.run_metered(fuel as u64);
+        slot.fuel_used = used;
+        match st {
             Status::Done(v) => {
                 slot.result = slot.handle(v);
                 status::DONE
@@ -1243,6 +1248,14 @@ pub extern "C" fn vm_run(vm: u32, fuel: u32) -> u32 {
             Status::HostOutOfMemory => status::HOST_OUT_OF_MEMORY,
         }
     })
+}
+
+/// The fuel the last `vm_run` used (saturated to u32): a host that stops at host calls
+/// counts its fuel across them, so a loop of sync host calls still reaches its interrupt
+/// polls (D2653). It can exceed the fuel given by the cost of the instruction that ran out.
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_fuel_used(vm: u32) -> u32 {
+    with(|s| u32::try_from(s.slot(vm).fuel_used).unwrap_or(u32::MAX))
 }
 
 /// Sets the clock `Date.now()` and `new Date()` read, in ms since the epoch
@@ -1334,6 +1347,29 @@ pub extern "C" fn vm_abort(vm: u32) {
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_result(vm: u32) -> u32 {
     with(|s| core::mem::take(&mut s.slot(vm).result))
+}
+
+/// A new handle (the host frees it) to the entry call's outcome while no frame is active
+/// (`Vm::outcome`): also at IDLE, which is where a host that calls a VM function while
+/// async host calls are pending gets its return value (pi's adapter in its `next` mode,
+/// D2650). Unlike `vm_result` it can be taken any number of times. 0 if there is none (a
+/// frame is active, or nothing was called); out[0] = 1 if the call threw, else 0.
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_outcome(vm: u32) -> u32 {
+    with(|s| {
+        let slot = s.slot(vm);
+        let Some(r) = slot.vm.outcome() else {
+            s.set_out_words(&[0]);
+            return 0;
+        };
+        let (v, threw) = match r {
+            Ok(v) => (v, 0),
+            Err(e) => (e, 1),
+        };
+        let h = slot.handle(v);
+        s.set_out_words(&[threw]);
+        h
+    })
 }
 
 /// Describes the parked host call: writes `[call_id, fn_id, this_lo, this_hi, (arg_lo,

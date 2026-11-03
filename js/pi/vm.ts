@@ -60,6 +60,12 @@ export type { HostToWorkerMessage, VmStartData, WorkerToHostMessage } from "./pr
 
 export interface VmSession {
   deliver(message: HostToWorkerMessage): void;
+  /**
+   * `next` mode: the waiting session as a continuation dump (D2650), for `resumeFromDump`:
+   * only while the VM waits (not from inside `post`). Results the host has not delivered
+   * yet must be delivered to the resumed session. The session may go on either way.
+   */
+  dumpSession(): SessionDump;
   /** Releases the VM's wasm instance. The session must not be used afterwards. */
   dispose(): void;
   /**
@@ -90,7 +96,8 @@ export interface VmHooks {
   /**
    * Frozen builtins (djs's `frozenBuiltins` VM option, D2304): the builtins behave as frozen,
    * and assigning over an inherited builtin property defines an own one (as after a
-   * lockdown). Default false. Part of the prelude image's key: a resumed session keeps the
+   * lockdown). Default false; always on in the `next` mode (D2652). Part of the prelude
+   * image's key: a resumed session keeps the
    * mode it started with, and `resumeVm` needs the same value to recompute its prelude image.
    */
   frozenBuiltins?: boolean;
@@ -99,6 +106,18 @@ export interface VmHooks {
    * writes uncompressed snapshots.
    */
   snapshotCodec?: SnapshotCodec | null;
+  /**
+   * The prelude's shape: "pi" (default) for pi's `PRELUDE_SOURCE`, "next" for
+   * tests/pi/prelude-next.ts (D2565, D2650): tools as engine async host calls, the body's
+   * promise, `finished`, the output counters and the store in the adapter, so a waiting
+   * session persists as a continuation dump (`dumpSession`, `resumeFromDump`).
+   */
+  shape?: "pi" | "next";
+  /**
+   * `next` mode, for tests (D2651): at every idle point the session dumps itself and goes on
+   * in a new instance of the module, resumed from the dump, as a restarted host would.
+   */
+  dumpEveryIdle?: boolean;
   post(message: WorkerToHostMessage): void;
   shouldInterrupt(): boolean;
 }
@@ -130,11 +149,37 @@ export const FUEL_PER_POLL = 10_000;
 /**
  * Bumped whenever this module changes what a deterministic script observes. 2: every start
  * collects after the prelude (D1890), which moves later collection points, and with them
- * the out-of-memory points of allocations that are not retried (D1700).
+ * the out-of-memory points of allocations that are not retried (D1700). 3: the fuel between
+ * polls counts across sync host calls (D2653), so scripts that make them poll at other points.
  */
-const DETERMINISTIC_VERSION = 2;
+const DETERMINISTIC_VERSION = 3;
 
 const BRIDGE_FN = 1;
+/** `next` mode: the async host function `call(kind, name, argsJson)` of tools and globals. */
+const CALL_FN = 2;
+/** The host functions by id - 1, as dumps name them. */
+const FN_NAMES = ["bridge", "call"];
+
+/** pi's limits (prelude-source.ts), which the adapter enforces in `next` mode. */
+const MAX_STORE_VALUE_CHARS = 256 * 1024;
+const MAX_STORE_TOTAL_CHARS = 1024 * 1024;
+const MAX_OUTPUT_CHARS = 16 * 1024 * 1024;
+const MAX_OUTPUT_ITEMS = 100_000;
+const STALLED = JSON.stringify({
+  name: "Error",
+  message: "The script is waiting on a promise that can never settle: no tool call is pending, and timers do not exist here.",
+});
+
+/**
+ * A waiting `next` session as a continuation dump plus the adapter's state (D2650), JSON
+ * serializable. `resumeFromDump` continues it from the session's prelude and start data.
+ */
+export interface SessionDump {
+  /** The VM as a format 2 dump: the script's data, activations and open calls. */
+  dump: string;
+  /** The adapter's state, without VM handles. */
+  state: Omit<SessionState, "api" | "settle" | "stalled" | "next"> & { next: Omit<NextState, "handles"> };
+}
 const SCRIPT_PREFIX = "return (async (tools, console) => {";
 
 /**
@@ -150,6 +195,9 @@ const now = Date.now;
 let origin = 0;
 const performance = {};
 Object.defineProperty(performance, "now", { value: { now() { return now() - origin; } }.now, writable: true, configurable: true });
+// Frozen, as pi's lockdown leaves it, also where frozen builtins replace the lockdown.
+Object.freeze(performance.now);
+Object.freeze(performance);
 define("performance", performance);
 // The host sets the origin per run, after a VM image with the prelude may have been reused.
 return (time) => { origin = time; };
@@ -174,8 +222,37 @@ interface VirtualClock {
   now: number;
 }
 
+/** `next` mode's handles: the prelude's functions and the body's promise. */
+interface NextHandles {
+  api: number;
+  decode: number;
+  failure: number;
+  encode: number;
+  describe: number;
+  /** The body's promise; 0 before the script starts or when `run` threw. */
+  body: number;
+}
+
+/** What the adapter keeps in `next` mode, which pi's prelude keeps itself (D2565). */
+interface NextState {
+  handles: NextHandles;
+  finished: boolean;
+  /** The store: key to JSON text, and the keys written (undefined: deleted), in order. */
+  stored: [string, string][];
+  writes: [string, string | null][];
+  outputChars: number;
+  outputItems: number;
+  /** pi's call ids by the engine's host call ids, and the next pi id. */
+  ids: [number, number][];
+  nextId: number;
+  /** `performance.now()`'s origin, set again on resume. */
+  origin: number;
+}
+
 /** What the adapter keeps outside the VM; all of it goes into a snapshot. */
 interface SessionState {
+  /** `next` mode (D2650); absent in pi's. */
+  next?: NextState;
   /** Handles to the prelude's api object and its functions. */
   api: number;
   settle: number;
@@ -229,9 +306,10 @@ class Session implements VmSession {
   private disposed = false;
   private readonly early: Map<number, HostToWorkerMessage>;
   private readonly fuel: number;
-  private readonly engine: Engine;
+  /** The VM; `next` mode with `dumpEveryIdle` moves the session to new instances. */
+  engine: Engine;
   private readonly hooks: VmHooks;
-  private readonly state: SessionState;
+  readonly state: SessionState;
   private zoneOffset = 0;
   private zoneCheckedAt = -Infinity;
   /**
@@ -249,6 +327,10 @@ class Session implements VmSession {
   fixedClock = false;
   /** The prelude image the session started from, its snapshots' reference (D2260). */
   prelude: PreludeImage | undefined;
+  /** `next` mode: what moving to a new instance needs (`dumpEveryIdle`). */
+  resume: { prelude: string; data: VmStartData } | undefined;
+  /** The prelude's shape (`VmHooks.shape`). */
+  readonly shape: "pi" | "next";
 
   constructor(engine: Engine, hooks: VmHooks, state: SessionState) {
     this.engine = engine;
@@ -256,6 +338,7 @@ class Session implements VmSession {
     this.state = state;
     this.early = new Map(state.early);
     this.fuel = hooks.fuelPerPoll ?? FUEL_PER_POLL;
+    this.shape = hooks.shape ?? "pi";
   }
 
   deliver(message: HostToWorkerMessage): void {
@@ -265,6 +348,7 @@ class Session implements VmSession {
       const clock = state.clock;
       if (!clock) {
         this.apply(message);
+        this.afterIdle();
         return;
       }
       const { seq } = message;
@@ -281,6 +365,7 @@ class Session implements VmSession {
         this.hooks.post({ type: "idle", seq: state.nextSeq, issued: state.issued });
         state.nextSeq++;
       }
+      this.afterIdle();
     } catch (error) {
       this.hooks.post(crashMessage(error));
     }
@@ -290,6 +375,12 @@ class Session implements VmSession {
     if (this.disposed) return;
     this.disposed = true;
     this.engine.dispose();
+  }
+
+  /** Results that arrived early (deterministic mode), as a resumed session has them. */
+  restoreEarly(early: [number, HostToWorkerMessage][]): void {
+    this.early.clear();
+    for (const [seq, m] of early) this.early.set(seq, m);
   }
 
   snapshot(): Uint8Array {
@@ -310,8 +401,24 @@ class Session implements VmSession {
     });
   }
 
+  dumpSession(): SessionDump {
+    if (this.disposed) throw new Error("The session is disposed");
+    const next = this.state.next;
+    if (!next) throw new Error("dumpSession needs the next mode (shape: \"next\" with prelude-next)");
+    const host = this.resume ? hostGlobals(this.resume.data) : [];
+    const handles: [string, number][] = next.handles.body !== 0 ? [["run", next.handles.body]] : [];
+    const dump = this.engine.dump(host, FN_NAMES, handles);
+    const { handles: _, ...rest } = next;
+    const { api: _a, settle: _s, stalled: _t, next: _n, ...state } = this.state;
+    return { dump, state: structuredClone({ ...state, early: [...this.early], next: rest }) };
+  }
+
   /** Settles call `message.id` in the VM and runs the script until it waits again. */
   private apply(message: HostToWorkerMessage): void {
+    if (this.state.next) {
+      this.applyNext(message);
+      return;
+    }
     const { engine, state } = this;
     const args = [
       engine.value(message.id),
@@ -327,9 +434,125 @@ class Session implements VmSession {
     this.drain();
   }
 
+  /** `next` mode: settles the engine's host call with the decoded result (D2650). */
+  private applyNext(message: HostToWorkerMessage): void {
+    const { engine } = this;
+    const next = this.state.next!;
+    const index = next.ids.findIndex(([, id]) => id === message.id);
+    // An unknown or settled id is ignored, as pi's settle does.
+    if (index < 0) return;
+    const [callId] = next.ids[index];
+    next.ids.splice(index, 1);
+    const payload = engine.value(message.payload);
+    let outcome: { handle: number; threw: boolean };
+    try {
+      if (!message.ok) {
+        const properties = engine.value(message.properties);
+        outcome = this.callFn(next.handles.failure, [payload, properties]);
+        engine.free(properties);
+        outcome.threw = true;
+      } else if (message.payload === undefined) outcome = { handle: 0, threw: false };
+      else outcome = this.callFn(next.handles.decode, [payload]);
+    } finally {
+      engine.free(payload);
+    }
+    engine.settleHostCall(callId, !outcome.threw, outcome.handle);
+    engine.free(outcome.handle);
+    this.drain();
+  }
+
   /** Fails a script that waits on nothing that can ever resume it (pi's `stalled`). */
   drain(): void {
+    if (this.state.next) {
+      const status = this.loop();
+      if (status === STATUS_THREW) {
+        const h = this.engine.result();
+        const text = this.engine.display(h);
+        this.engine.free(h);
+        throw new VmThrew(text);
+      }
+      this.drainNext(status);
+      return;
+    }
     this.engine.free(this.invoke(this.state.stalled, this.state.api, []));
+  }
+
+  /**
+   * `next` mode, once the VM is idle or done: reports the body's outcome when it settled,
+   * and a script that waits on nothing (no host call open) as stalled.
+   */
+  private drainNext(status: number): void {
+    const { engine } = this;
+    const next = this.state.next!;
+    const body = next.handles.body;
+    if (next.finished || body === 0) return;
+    const { state, result } = engine.promiseState(body);
+    // Not a promise: `run` threw, and reported it.
+    if (state === 0) return;
+    if (state === 1) {
+      if (status !== STATUS_IDLE) this.done(false, STALLED);
+      return;
+    }
+    let ok = state === 2;
+    let text: unknown;
+    if (ok) {
+      const encoded = this.callFn(next.handles.encode, [result]);
+      if (encoded.threw) {
+        ok = false;
+        text = this.describe(encoded.handle);
+      } else text = engine.read(encoded.handle);
+      engine.free(encoded.handle);
+    } else text = this.describe(result);
+    engine.free(result);
+    this.done(ok, text === undefined ? undefined : String(text));
+  }
+
+  private describe(error: number): string {
+    const d = this.callFn(this.state.next!.handles.describe, [error]);
+    const text = String(this.engine.read(d.handle));
+    this.engine.free(d.handle);
+    return text;
+  }
+
+  /** `next` mode's `done`: once; a success carries the store's writes. */
+  private done(ok: boolean, payload: string | undefined): void {
+    const next = this.state.next!;
+    if (next.finished) return;
+    next.finished = true;
+    const state = this.state;
+    const during = state.clock ? { during: { seq: state.current, issued: state.issued } } : {};
+    if (ok) {
+      const writes = JSON.stringify(next.writes.map(([key, json]) => (json === null ? [key] : [key, json])));
+      this.hooks.post({ type: "done", ok: true, value: payload, writes, ...during });
+    } else this.hooks.post({ type: "done", ok: false, error: String(payload), ...during });
+  }
+
+  /**
+   * `next` mode: calls `f` and runs the VM until it is idle again. Its return value or
+   * exception (`threw`), also when async host calls are pending (`vm_outcome`).
+   */
+  callFn(f: number, args: number[]): { handle: number; threw: boolean } {
+    const { engine } = this;
+    engine.call(f, 0, args);
+    const status = this.loop();
+    if (status === STATUS_THREW) return { handle: engine.result(), threw: true };
+    if (status === STATUS_DONE) return { handle: engine.result(), threw: false };
+    return engine.outcome();
+  }
+
+  /**
+   * After the VM went idle, outside `post`: in `next` mode with `dumpEveryIdle`, the session
+   * moves to a new instance through a dump while it waits (D2651).
+   */
+  afterIdle(): void {
+    const next = this.state.next;
+    if (!next || !this.hooks.dumpEveryIdle || next.finished || next.ids.length === 0 || !this.resume) return;
+    const dumped = this.dumpSession();
+    const fresh = resumeSession(dumped, { ...this.hooks, ...this.resume });
+    this.engine.dispose();
+    this.engine = fresh.engine;
+    Object.assign(this.state, fresh.state);
+    this.prelude = fresh.prelude;
   }
 
   /**
@@ -339,44 +562,84 @@ class Session implements VmSession {
   invoke(f: number, thisArg: number, args: number[]): number {
     const { engine } = this;
     engine.call(f, thisArg, args);
+    const status = this.loop();
+    if (status === STATUS_DONE) return engine.result();
+    if (status === STATUS_THREW) {
+      const h = engine.result();
+      const text = engine.display(h);
+      engine.free(h);
+      throw new VmThrew(text);
+    }
+    return 0;
+  }
+
+  /** Runs the VM until it is idle or done; returns that status (THREW: the result is the exception). */
+  loop(): number {
+    const { engine } = this;
+    // The fuel left until the next poll: counted across sync host calls, which end a
+    // `vm_run` early, so a loop of them still polls (D2653).
+    let left = this.fuel;
+    const poll = () => {
+      left = this.fuel;
+      if (this.polling && this.hooks.shouldInterrupt()) {
+        engine.abort();
+        throw new Error("Execution interrupted");
+      }
+    };
     for (;;) {
       this.setClock();
-      const status = engine.run(this.fuel);
+      const status = engine.run(left);
+      left -= engine.fuelUsed(left);
+      if (this.state.next) this.postCalls();
       switch (status) {
         case STATUS_OUT_OF_FUEL:
-          if (this.polling && this.hooks.shouldInterrupt()) {
-            engine.abort();
-            throw new Error("Execution interrupted");
-          }
+          poll();
           continue;
         case STATUS_HOST_CALL: {
           const { callId, fnId, args: callArgs } = engine.hostCall();
+          let answer = 0;
           try {
             if (fnId !== BRIDGE_FN) throw new Error(`Unknown host function ${fnId}`);
-            this.bridge(callArgs);
+            answer = engine.value(this.bridge(callArgs));
           } catch (error) {
             engine.abort();
             throw error;
           }
-          engine.resolveHostCall(callId, 0);
+          engine.resolveHostCall(callId, answer);
+          engine.free(answer);
+          if (left <= 0) poll();
           continue;
         }
         case STATUS_DONE:
-          return engine.result();
-        case STATUS_THREW: {
-          const h = engine.result();
-          const text = engine.display(h);
-          engine.free(h);
-          throw new VmThrew(text);
-        }
+        case STATUS_THREW:
         case STATUS_IDLE:
-          return 0;
+          return status;
         case STATUS_HOST_OUT_OF_MEMORY:
           // Not a script error: the engine abandoned the call; pi reports a crash (D1690).
           throw new Error("out of host memory");
         default:
           throw new Error(`Unexpected VM status ${status}`);
       }
+    }
+  }
+
+  /** `next` mode: the tool and global calls the script made, as pi's `call` messages. */
+  private postCalls(): void {
+    const next = this.state.next!;
+    for (const callId of this.engine.newHostCalls()) {
+      const { fnId, args } = this.engine.hostCallInfo(callId);
+      if (fnId !== CALL_FN) continue;
+      const [kind, name, json] = args;
+      const id = next.nextId++;
+      next.ids.push([callId, id]);
+      this.state.issued++;
+      this.hooks.post({
+        type: "call",
+        id,
+        target: kind === "call" ? "tool" : "global",
+        name: String(name),
+        args: json === undefined ? undefined : String(json),
+      });
     }
   }
 
@@ -395,10 +658,11 @@ class Session implements VmSession {
     }
   }
 
-  /** The prelude's host bridge, called with primitives only. */
-  private bridge([kind, a, b, c]: unknown[]): void {
+  /** The prelude's host bridge, called with primitives only; returns the answer (`next` mode). */
+  private bridge([kind, a, b, c]: unknown[]): unknown {
     const { post } = this.hooks;
     const state = this.state;
+    const next = state.next;
     switch (kind) {
       case "call":
       case "global":
@@ -411,7 +675,15 @@ class Session implements VmSession {
           args: c === undefined ? undefined : String(c),
         });
         break;
-      case "output":
+      case "output": {
+        if (next) {
+          if (next.finished) return undefined;
+          next.outputChars += String(b).length;
+          next.outputItems++;
+          if (next.outputChars > MAX_OUTPUT_CHARS || next.outputItems > MAX_OUTPUT_ITEMS) {
+            return `script output exceeded the limit of ${MAX_OUTPUT_CHARS} characters or ${MAX_OUTPUT_ITEMS} text(), image(), and console calls. Print a summary instead, or write large data to a file with a tool.`;
+          }
+        }
         post({
           type: "output",
           item:
@@ -422,7 +694,16 @@ class Session implements VmSession {
                 : { type: "text", text: String(b) },
         });
         break;
+      }
+      case "store":
+        return next ? this.store(next, String(a), b === undefined ? undefined : String(b)) : undefined;
+      case "load":
+        return next ? next.stored.find(([key]) => key === String(a))?.[1] : undefined;
       case "done": {
+        if (next) {
+          this.done(a === true, b === undefined ? undefined : String(b));
+          break;
+        }
         // The host stops the VM on `done`, so the `idle` of this drain never arrives: report its numbers here.
         const during = state.clock ? { during: { seq: state.current, issued: state.issued } } : {};
         if (a === true) {
@@ -439,7 +720,50 @@ class Session implements VmSession {
         break;
       }
     }
+    return undefined;
   }
+
+  /** `next` mode's `store(key, json)`: pi's limits; undefined, or the limit's message. */
+  private store(next: NextState, key: string, json: string | undefined): string | undefined {
+    const at = next.stored.findIndex(([k]) => k === key);
+    const previous = at >= 0 ? key.length + next.stored[at][1].length : 0;
+    const used = next.stored.reduce((n, [k, v]) => n + k.length + v.length, 0);
+    const record = (value: string | null) => {
+      const w = next.writes.findIndex(([k]) => k === key);
+      if (w >= 0) next.writes[w][1] = value;
+      else next.writes.push([key, value]);
+    };
+    if (json === undefined) {
+      if (at >= 0) next.stored.splice(at, 1);
+      record(null);
+      return undefined;
+    }
+    if (json.length > MAX_STORE_VALUE_CHARS) {
+      return `store(${JSON.stringify(key)}) value has ${json.length} characters of JSON, more than the limit of ${MAX_STORE_VALUE_CHARS}. `;
+    }
+    if (used - previous + key.length + json.length > MAX_STORE_TOTAL_CHARS) {
+      return `store is full: stored values would exceed ${MAX_STORE_TOTAL_CHARS} characters of JSON. Delete keys with store(key, undefined). `;
+    }
+    if (at >= 0) next.stored[at][1] = json;
+    else next.stored.push([key, json]);
+    record(json);
+    return undefined;
+  }
+}
+
+/**
+ * Whether the VM has frozen builtins (D2304): asked for, or the `next` mode, whose prelude
+ * has no lockdown (D2652).
+ */
+function frozenOf(hooks: VmHooks): boolean {
+  return hooks.frozenBuiltins === true || hooks.shape === "next";
+}
+
+/** The globals the host globals and the prelude define: a dump names them, never writes them. */
+function hostGlobals(data: VmStartData): string[] {
+  const names = new Set(["performance", "tools", "ALL_TOOLS", "console", "text", "image", "exit", "store", "load"]);
+  for (const { name } of data.globals) names.add(name.split(".")[0]);
+  return [...names];
 }
 
 /** Calls an async-body closure and returns its fulfilled value's handle. */
@@ -460,6 +784,8 @@ interface Prepared {
   stalled: number;
   run: number;
   setOrigin: number;
+  /** `next` mode: prelude-next's functions. */
+  next?: Omit<NextHandles, "body">;
 }
 
 /**
@@ -526,7 +852,10 @@ function prepare(session: Session, engine: Engine, prelude: string, data: VmStar
 
 function prepareUnpolled(session: Session, engine: Engine, prelude: string, data: VmStartData): Prepared {
   // Handles live as long as the VM, which the caller disposes as a whole.
+  const shape = session.shape;
   const bridge = engine.hostFunction(BRIDGE_FN, "bridge");
+  // `next` mode: tools and globals are calls of this async host function (D2650).
+  const call = shape === "next" ? engine.asyncHostFunction(CALL_FN, "call") : 0;
   const getter = compileOrThrow(engine, "codemode-prelude.js", ["o", "k"], "return o[k]");
   // Deterministic runs have no WeakRef or FinalizationRegistry, as pi's quickjs VM leaves
   // them out: the VM deletes the globals before the prelude's lockdown (D1680).
@@ -536,12 +865,15 @@ function prepareUnpolled(session: Session, engine: Engine, prelude: string, data
   engine.free(host);
   const preludeFn = compileOrThrow(engine, "codemode-prelude.js", [], `return ${prelude}`);
   const factory = evaluate(session, engine, preludeFn);
-  const args = [
-    bridge,
-    engine.value(JSON.stringify(data.tools)),
-    engine.value(JSON.stringify(data.globals)),
-    engine.value(JSON.stringify(data.store)),
-  ];
+  const args =
+    shape === "next"
+      ? [bridge, call, engine.value(JSON.stringify(data.tools)), engine.value(JSON.stringify(data.globals))]
+      : [
+          bridge,
+          engine.value(JSON.stringify(data.tools)),
+          engine.value(JSON.stringify(data.globals)),
+          engine.value(JSON.stringify(data.store)),
+        ];
   const api = session.invoke(factory, 0, args);
   for (const h of [preludeFn, factory, ...args]) engine.free(h);
   const member = (name: string): number => {
@@ -550,17 +882,29 @@ function prepareUnpolled(session: Session, engine: Engine, prelude: string, data
     engine.free(key);
     return f;
   };
-  const prepared = { api, settle: member("settle"), stalled: member("stalled"), run: member("run"), setOrigin };
+  const prepared: Prepared =
+    shape === "next"
+      ? {
+          api,
+          settle: 0,
+          stalled: 0,
+          run: member("run"),
+          setOrigin,
+          next: { api, decode: member("decode"), failure: member("failure"), encode: member("encode"), describe: member("describe") },
+        }
+      : { api, settle: member("settle"), stalled: member("stalled"), run: member("run"), setOrigin };
   engine.free(getter);
   return prepared;
 }
 
-/** Like pi's `startVm`: rejects only when the VM cannot be created at all. */
-export async function startVm(options: StartVmOptions): Promise<VmSession> {
-  const { data, post, prelude } = options;
+/**
+ * A new session's VM: a restored prelude image, or a fresh VM. Throws only when the VM
+ * cannot be created; `setUp` does the rest.
+ */
+function newSession(options: VmHooks, prelude: string, data: VmStartData): { session: Session; cached: PreludeImage | undefined } {
   const module = options.wasm as WebAssembly.Module;
   const deterministic = data.deterministic;
-  const frozen = options.frozenBuiltins === true;
+  const frozen = frozenOf(options);
   const key = preludeKey(prelude, data, frozen);
   const cached = options.reuseImages === false ? undefined : imageCache.get(module)?.get(key);
   const engine = cached
@@ -578,42 +922,79 @@ export async function startVm(options: StartVmOptions): Promise<VmSession> {
     memoryLimit: data.memoryLimitBytes,
   };
   const session = new Session(engine, options, state);
-  try {
-    let prepared = cached?.prepared;
-    session.prelude = cached;
-    if (!prepared) {
-      // Outside deterministic mode the hash key (D2433) is chosen once, before the
-      // prelude: its image and every session restored from it keep that key, and each
-      // session only reseeds Math.random (rekeying would rehash the prelude's atoms and
-      // tables in every session, ~1 KB more per snapshot).
-      if (!deterministic) engine.setRandomSeed(...entropy());
-      prepared = prepare(session, engine, prelude, data);
-      // Every cold start collects after the prelude (D1890), cached or not: the prelude
-      // image then holds only live cells, and cold and warm starts go on from the same heap.
-      // Sealed (D2041): the prelude's state is old, so the collections while scripts run
-      // only trace and move what they made.
-      engine.seal();
-      // The next cold start reserves for this size up front (D2043): growing the heap
-      // while the prelude runs moved it, and the old block stayed behind as a hole.
-      sealedSize = engine.heapSize;
-      if (options.reuseImages !== false && key.length <= MAX_CACHE_KEY) {
-        const entry = { image: engine.image(), prepared };
-        cachePreludeImage(module, key, entry);
-        session.prelude = entry;
-      }
+  session.resume = { prelude, data };
+  return { session, cached };
+}
+
+/**
+ * Runs the host globals and the prelude (or takes them from the prelude image), seeds
+ * `Math.random` and sets `performance.now()`'s origin.
+ */
+function setUp(session: Session, cached: PreludeImage | undefined, options: VmHooks, prelude: string, data: VmStartData, origin: number): Prepared {
+  const { engine, state } = session;
+  const module = options.wasm as WebAssembly.Module;
+  const deterministic = data.deterministic;
+  const frozen = frozenOf(options);
+  const key = preludeKey(prelude, data, frozen);
+  let prepared = cached?.prepared;
+  session.prelude = cached;
+  if (!prepared) {
+    // Outside deterministic mode the hash key (D2433) is chosen once, before the
+    // prelude: its image and every session restored from it keep that key, and each
+    // session only reseeds Math.random (rekeying would rehash the prelude's atoms and
+    // tables in every session, ~1 KB more per snapshot).
+    if (!deterministic) engine.setRandomSeed(...entropy());
+    prepared = prepare(session, engine, prelude, data);
+    // Every cold start collects after the prelude (D1890), cached or not: the prelude
+    // image then holds only live cells, and cold and warm starts go on from the same heap.
+    // Sealed (D2041): the prelude's state is old, so the collections while scripts run
+    // only trace and move what they made.
+    engine.seal();
+    // The next cold start reserves for this size up front (D2043): growing the heap
+    // while the prelude runs moved it, and the old block stayed behind as a hole.
+    sealedSize = engine.heapSize;
+    if (options.reuseImages !== false && key.length <= MAX_CACHE_KEY) {
+      const entry = { image: engine.image(), prepared };
+      cachePreludeImage(module, key, entry);
+      session.prelude = entry;
     }
-    Object.assign(state, { api: prepared.api, settle: prepared.settle, stalled: prepared.stalled });
-    if (deterministic) {
-      // djs's Math.random is QuickJS's xorshift64*. pi's quickjs VM seeds it with seed + 1 (its
-      // first clock read) and draws once while creating the context, so starting djs one step
-      // after seed + 1 gives the same numbers on both engines.
-      const seed = xorshift(BigInt(deterministic.seed) + 1n);
-      // Keys the hash from the seed too (D2433): same seed, same layout, cold or warm.
-      engine.setRandomSeed(Number(seed & 0xffffffffn), Number(seed >> 32n));
-    } else engine.setMathRandomSeed(...entropy());
-    const origin = engine.value(state.clock ? state.clock.startedAt : Date.now());
-    engine.free(session.invoke(prepared.setOrigin, 0, [origin]));
-    engine.free(origin);
+  }
+  Object.assign(state, { api: prepared.api, settle: prepared.settle, stalled: prepared.stalled });
+  if (prepared.next) {
+    state.next = {
+      handles: { ...prepared.next, body: 0 },
+      finished: false,
+      stored: Object.entries(data.store),
+      writes: [],
+      outputChars: 0,
+      outputItems: 0,
+      ids: [],
+      nextId: 1,
+      origin,
+    };
+  }
+  if (deterministic) {
+    // djs's Math.random is QuickJS's xorshift64*. pi's quickjs VM seeds it with seed + 1 (its
+    // first clock read) and draws once while creating the context, so starting djs one step
+    // after seed + 1 gives the same numbers on both engines.
+    const seed = xorshift(BigInt(deterministic.seed) + 1n);
+    // Keys the hash from the seed too (D2433): same seed, same layout, cold or warm.
+    engine.setRandomSeed(Number(seed & 0xffffffffn), Number(seed >> 32n));
+  } else engine.setMathRandomSeed(...entropy());
+  const h = engine.value(origin);
+  engine.free(session.invoke(prepared.setOrigin, 0, [h]));
+  engine.free(h);
+  return prepared;
+}
+
+/** Like pi's `startVm`: rejects only when the VM cannot be created at all. */
+export async function startVm(options: StartVmOptions): Promise<VmSession> {
+  const { data, post, prelude } = options;
+  const frozen = frozenOf(options);
+  const { session, cached } = newSession(options, prelude, data);
+  const { engine, state } = session;
+  try {
+    const prepared = setUp(session, cached, options, prelude, data, state.clock ? state.clock.startedAt : Date.now());
     if (state.clock) {
       const budget = options.interruptBudget ?? "none";
       const fuel = options.fuelPerPoll ?? FUEL_PER_POLL;
@@ -628,29 +1009,72 @@ export async function startVm(options: StartVmOptions): Promise<VmSession> {
     const compiled = engine.compile(1, "codemode.js", [], `${SCRIPT_PREFIX}${data.code}\n})`);
     if ("error" in compiled) {
       post({ type: "done", ok: false, error: describeCompileError(compiled.error) });
+      if (state.next) state.next.finished = true;
       return session;
     }
     const fn = evaluate(session, engine, compiled.handle);
     engine.free(compiled.handle);
-    engine.free(session.invoke(prepared.run, state.api, [fn]));
+    if (state.next) {
+      // The body's promise is the adapter's (D2650).
+      state.next.handles.body = session.callFn(prepared.run, [fn]).handle;
+    } else engine.free(session.invoke(prepared.run, state.api, [fn]));
     engine.free(fn);
     session.drain();
     if (state.clock) post({ type: "idle", seq: 0, issued: state.issued });
+    session.afterIdle();
   } catch (error) {
     post(crashMessage(error));
   }
   return session;
 }
 
+/**
+ * Continues a `next` session from `VmSession.dumpSession()` (D2650) in a new instance of a
+ * djs module with the dumper (the `dump` feature): the host globals and prelude-next run
+ * again (or come from the prelude image), the dump recreates the script's state and its
+ * open calls, and the adapter's state is restored. `prelude` and `data` must be the
+ * session's. Results the old session did not take are delivered to this one; the host
+ * decides what happens to calls that were open (deliver a recorded result, issue the call
+ * again, reject it). Throws when the dump does not load.
+ */
+export function resumeFromDump(dumped: SessionDump, options: ResumeOptions & { prelude: string; data: VmStartData }): VmSession {
+  return resumeSession(dumped, options);
+}
+
+function resumeSession(dumped: SessionDump, options: VmHooks & { prelude: string; data: VmStartData }): Session {
+  const hooks = { ...options, shape: "next" as const };
+  const { prelude, data } = options;
+  const { session, cached } = newSession(hooks, prelude, data);
+  try {
+    const { engine, state } = session;
+    const saved = structuredClone(dumped.state);
+    setUp(session, cached, hooks, prelude, data, saved.next.origin);
+    const prepared = state.next!.handles;
+    const { calls, handles } = engine.loadDump(FN_NAMES, dumped.dump);
+    const body = handles.get("run") ?? 0;
+    for (const [name, h] of handles) if (name !== "run") engine.free(h);
+    Object.assign(state, { ...saved, api: state.api, settle: 0, stalled: 0, next: { ...saved.next, handles: { ...prepared, body } } });
+    session.restoreEarly(saved.early);
+    const open = new Set(calls.map((c) => c.id));
+    for (const [callId] of saved.next.ids) {
+      if (!open.has(callId)) throw new Error(`The dump does not have the open call ${callId}`);
+    }
+    return session;
+  } catch (error) {
+    session.dispose();
+    throw error;
+  }
+}
+
 /** The prelude image of `prelude` and `data`: a cached one, or computed in a fresh VM. */
 function preludeImageOf(module: WebAssembly.Module, prelude: string, data: VmStartData, hooks: VmHooks): PreludeImage {
-  const frozen = hooks.frozenBuiltins === true;
+  const frozen = frozenOf(hooks);
   const key = preludeKey(prelude, data, frozen);
   const cached = imageCache.get(module)?.get(key);
   if (cached) return cached;
   const engine = Engine.create(module, data.memoryLimitBytes, 0, frozen);
   try {
-    const session = new Session(engine, { wasm: module, post: () => {}, shouldInterrupt: () => false }, {
+    const session = new Session(engine, { wasm: module, post: () => {}, shouldInterrupt: () => false, shape: hooks.shape }, {
       api: 0,
       settle: 0,
       stalled: 0,
@@ -720,6 +1144,7 @@ export function resumeVm(snapshot: Uint8Array, options: ResumeOptions): VmSessio
   const state = header.meta as SessionState;
   const session = new Session(Engine.restore(module, image, state.memoryLimit, into), options, state);
   session.prelude = prelude;
+  if (options.prelude !== undefined && options.data !== undefined) session.resume = { prelude: options.prelude, data: options.data };
   return session;
 }
 

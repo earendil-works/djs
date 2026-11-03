@@ -44,6 +44,14 @@ interface Exports {
   vm_new_with?(memoryLimit: number, live: number, flags: number): number;
   vm_compile_file(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number): number;
   vm_new_host_function(vm: number, fnId: number, nameLen: number): number;
+  vm_new_async_host_function(vm: number, fnId: number, nameLen: number): number;
+  vm_new_host_calls(vm: number): number;
+  vm_host_call_info(vm: number, callId: number): number;
+  /** Since 0176 (D2650): `next` mode. */
+  vm_outcome?(vm: number): number;
+  /** With the `dump` feature (D2352): continuation dumps. */
+  vm_dump?(vm: number, len: number): number;
+  vm_load_dump?(vm: number, namesLen: number, len: number): number;
   vm_decode_wire(vm: number, len: number): number;
   /** Since 0162 (D2551); older modules lack it. */
   vm_string_reserve?(vm: number, len: number): number;
@@ -52,6 +60,8 @@ interface Exports {
   vm_display(vm: number, h: number): number;
   vm_call(vm: number, f: number, thisArg: number, argc: number): number;
   vm_run(vm: number, fuel: number): number;
+  /** Since 0176 (D2653). */
+  vm_fuel_used?(vm: number): number;
   vm_result(vm: number): number;
   vm_host_call(vm: number): number;
   vm_promise_state(vm: number, h: number): number;
@@ -228,6 +238,94 @@ export class Engine {
     return h;
   }
 
+  /** An async host function (D1374): a call returns a promise and adds a pending call. */
+  asyncHostFunction(fnId: number, name: string): number {
+    const len = this.stageText(name);
+    const h = this.trap(() => this.x.vm_new_async_host_function(this.vm, fnId, len));
+    if (h === 0) throw new Error("Out of memory creating a host function");
+    return h;
+  }
+
+  /** The async host calls made since the last check. */
+  newHostCalls(): number[] {
+    return this.trap(() => outWords(this.x, this.x.vm_new_host_calls(this.vm)));
+  }
+
+  /** A pending host call's function id and arguments as host values. */
+  hostCallInfo(callId: number): { fnId: number; args: unknown[] } {
+    return this.trap(() => {
+      const argc = this.x.vm_host_call_info(this.vm, callId);
+      return this.readCall(argc);
+    });
+  }
+
+  /** Settles host call `callId`: returns or throws (sync), fulfills or rejects (async). */
+  settleHostCall(callId: number, ok: boolean, value: number): void {
+    if (this.trap(() => this.x.vm_resolve_host_call(this.vm, callId, ok ? 1 : 0, value)) !== 0) {
+      throw new Error(`No pending host call ${callId}`);
+    }
+  }
+
+  /**
+   * The entry call's outcome while no frame is active, also at IDLE (`vm_outcome`): the
+   * return value (or exception) of a function called while async host calls are pending.
+   */
+  outcome(): { handle: number; threw: boolean } {
+    const x = this.x;
+    if (!x.vm_outcome) throw new Error("The djs-wasm module is too old for the next mode (no vm_outcome)");
+    return this.trap(() => {
+      const handle = x.vm_outcome!(this.vm);
+      return { handle, threw: outWords(x, 1)[0] === 1 };
+    });
+  }
+
+  /**
+   * A format 2 dump of the idle VM (`vm_dump`): `host` are the globals the host defines
+   * (written by name), `fnNames` the host functions by id - 1, `handles` the values to
+   * name for the host. Throws with the reasons when the VM cannot be dumped.
+   */
+  dump(host: string[], fnNames: string[], handles: [string, number][]): string {
+    const x = this.x;
+    if (!x.vm_dump) throw new Error("The djs-wasm module has no dumper (build it with the `dump` feature)");
+    const text = [host.join(","), "", fnNames.join("\t"), handles.map(([n, h]) => `${h}:${n}`).join("\t")].join("\n");
+    let r = this.trap(() => x.vm_dump!(this.vm, this.stageText(text)));
+    if (r === 2) {
+      provideBase(this.module, x);
+      r = this.trap(() => x.vm_dump!(this.vm, this.stageText(text)));
+    }
+    if (r !== 0) throw new Error(r === 1 ? `Cannot dump the session:\n${outText(x)}` : "No base image to dump against");
+    return outText(x);
+  }
+
+  /**
+   * Loads a dump into this VM (`vm_load_dump`): the open host calls it recreated (ids and
+   * function ids, named by `fnNames`) and the handles it named (the caller frees them).
+   */
+  loadDump(fnNames: string[], text: string): { calls: { id: number; fnId: number }[]; handles: Map<string, number> } {
+    const x = this.x;
+    if (!x.vm_load_dump) throw new Error("The djs-wasm module has no dump loader (build it with the `dump` feature)");
+    const names = textEncoder.encode(fnNames.join("\n"));
+    const body = textEncoder.encode(text);
+    const all = new Uint8Array(names.length + body.length);
+    all.set(names);
+    all.set(body, names.length);
+    this.stage(all);
+    const r = this.trap(() => x.vm_load_dump!(this.vm, names.length, body.length));
+    if (r !== 0) throw new Error(`Cannot load the dump: ${outText(x)}`);
+    const [nCalls, nHandles] = outWords(x, 2);
+    const w = outWords(x, 2 + 2 * nCalls + 2 * nHandles);
+    const bytes = new Uint8Array(x.memory.buffer, x.djs_out_ptr(), x.djs_out_len());
+    let at = 4 * w.length;
+    const handles = new Map<string, number>();
+    for (let i = 0; i < nHandles; i++) {
+      const [h, len] = [w[2 + 2 * nCalls + 2 * i], w[3 + 2 * nCalls + 2 * i]];
+      handles.set(textDecoder.decode(bytes.subarray(at, at + len)), h);
+      at += len;
+    }
+    const calls = Array.from({ length: nCalls }, (_, i) => ({ id: w[2 + 2 * i], fnId: w[3 + 2 * i] }));
+    return { calls, handles };
+  }
+
   /**
    * Compiles `src` named `file` in stack traces: goal 0 a Script, 1 an async function body
    * with `params`. Returns the closure's handle, or the compile error's text
@@ -261,6 +359,11 @@ export class Engine {
     return this.trap(() => this.x.vm_run(this.vm, fuel));
   }
 
+  /** The fuel the last `run` used; without `vm_fuel_used` (older modules), all of it. */
+  fuelUsed(fuel: number): number {
+    return this.x.vm_fuel_used ? this.x.vm_fuel_used(this.vm) : fuel;
+  }
+
   /** The DONE/THREW value's handle (the caller frees it). */
   result(): number {
     return this.x.vm_result(this.vm);
@@ -270,14 +373,20 @@ export class Engine {
   hostCall(): { callId: number; fnId: number; args: unknown[] } {
     return this.trap(() => {
       const argc = this.x.vm_host_call(this.vm);
-      const w = outWords(this.x, 4 + 2 * argc);
-      const arena = this.arena();
-      const args: unknown[] = [];
-      for (let i = 0; i < argc; i++) {
-        args.push(readValue(arena, [w[4 + 2 * i], w[5 + 2 * i]], { atomCache: this.atomCache }));
-      }
-      return { callId: w[0], fnId: w[1], args };
+      const w = outWords(this.x, 1);
+      return { callId: w[0], ...this.readCall(argc) };
     });
+  }
+
+  /** Reads `[call_id, fn_id, this, args...]` from the out buffer. */
+  private readCall(argc: number): { fnId: number; args: unknown[] } {
+    const w = outWords(this.x, 4 + 2 * argc);
+    const arena = this.arena();
+    const args: unknown[] = [];
+    for (let i = 0; i < argc; i++) {
+      args.push(readValue(arena, [w[4 + 2 * i], w[5 + 2 * i]], { atomCache: this.atomCache }));
+    }
+    return { fnId: w[1], args };
   }
 
   /** Returns `value` (a handle, 0 = undefined) from the parked host call. */
