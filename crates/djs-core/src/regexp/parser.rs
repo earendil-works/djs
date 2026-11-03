@@ -14,8 +14,11 @@ use super::charset::{self, CharSet, canonicalize};
 use super::{Flags, SyntaxError};
 use crate::unicode;
 
-/// Nesting limit for groups and classes, so that recursion stays bounded.
-const MAX_DEPTH: u32 = 255;
+/// Nesting limit for groups and classes, so that recursion stays bounded: 200 nested
+/// groups are accepted (test262's S15.10.2.8_A3_T15 needs them). In the shipped wasm
+/// module they compile and match in its 128 KiB stack with ~15% to spare: 243 nested
+/// capture groups and 236 lookaheads trapped (D2540).
+const MAX_DEPTH: u32 = 201;
 /// Capture group limit (qjs allows 254 groups; we allow more).
 pub(crate) const MAX_CAPTURES: u32 = 65535;
 /// Quantifier bounds saturate here, like qjs (`{99999999999}` means 2^31 - 1).

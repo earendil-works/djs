@@ -7259,3 +7259,10 @@ SyntaxError with 10–12% of the stack to spare (classes 71 accepted, trap at 82
 JSON parse/stringify, `join`, proxy/bound/prototype chains, getters, a 300k-deep list
 through the GC, regexps, sort, async recursion, `toString`, `flat` give identical results
 at 256 and 128 KiB. test262 `language/` and the native depth test pass unchanged.
+
+The regexp parser's own nesting limit goes from 255 to 201 (200 nested groups, which
+test262's S15.10.2.8_A3_T15 needs): in the release module (opt-level s inlines more into
+the recursion than the debug build), 243 nested capture groups and 236 lookaheads
+trapped at 128 KiB; 200 leave ~15%. Non-capturing groups and `v`-mode classes took 254
+levels. Stack overflow at run time stays a RangeError (D013): the interpreter's call
+depth is in the arena, not on the Rust stack.
