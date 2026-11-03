@@ -198,11 +198,11 @@ fn live_values_are_refused_by_path() {
     let r = refused(
         "const p = new Promise(() => {});\n\
          function* g() { yield 1; } const it = g(); it.next();\n\
-         const px = { inner: new Proxy({}, {}) };",
+         const px = { inner: new WeakMap() };",
         None,
     );
     let all = r.join("\n");
-    assert!(all.contains("px.inner: a Proxy"), "{all}");
+    assert!(all.contains("px.inner: a weak collection"), "{all}");
     // Pending promises and suspended generators are written as what made them (0172).
     round_trip(
         "const p = new Promise(() => {});\n\
@@ -578,6 +578,17 @@ fn class_refusals() {
     ] {
         assert!(all.contains(want), "{all}");
     }
+}
+
+#[test]
+fn proxies_are_made_again() {
+    round_trip(
+        "const target = { a: 1 };\n\
+         const px = new Proxy(target, { get: (o, k) => (k in o ? o[k] : 'no ' + String(k)) });\n\
+         const fx = new Proxy(function f(x) { return x + 1; }, {});",
+        None,
+        "[px.a, px.b, fx(1), typeof fx].join()",
+    );
 }
 
 #[test]

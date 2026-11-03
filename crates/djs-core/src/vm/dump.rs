@@ -1339,7 +1339,13 @@ impl<'a> Dumper<'a> {
             ObjectClass::ArrayIterator | ObjectClass::CollectionIterator => {
                 self.visit_iterator(n, o)
             }
-            ObjectClass::Proxy => self.refuse(path, "a Proxy"),
+            ObjectClass::Proxy => match (h.proxy_target(o), h.proxy_handler(o)) {
+                (Some(t), Some(hd)) => {
+                    self.edge(n, Value::object(t), || cat!(path, "<target>"));
+                    self.edge(n, Value::object(hd), || cat!(path, "<handler>"));
+                }
+                _ => self.refuse(path, "a revoked Proxy"),
+            },
             ObjectClass::WeakMap | ObjectClass::WeakSet => self.refuse(path, "a weak collection"),
             _ => self.refuse(path, "an object of a kind dumps do not write"),
         }
@@ -3267,6 +3273,16 @@ impl<'a> Dumper<'a> {
                         .push_out(cat!("Object.setPrototypeOf(", loc, ", ", p, ");"));
                 }
                 cat!("new ", ctor, "(", args, ")")
+            }
+            ObjectClass::Proxy => {
+                let t = h.proxy_target(o).map_or(Value::NULL, Value::object);
+                let hd = h.proxy_handler(o).map_or(Value::NULL, Value::object);
+                let (t, hd) = (self.expr(t, None, None), self.expr(hd, None, None));
+                if t.is_empty() || hd.is_empty() {
+                    let p = self.nodes[n].path.clone();
+                    self.refuse(p, "a Proxy on a reference cycle");
+                }
+                return cat!("new Proxy(", t, ", ", hd, ")");
             }
             ObjectClass::HostFunction => {
                 let id = h.object_slot(o, 0).as_int().unwrap_or(-1) as u32;
