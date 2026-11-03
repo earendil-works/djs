@@ -217,9 +217,11 @@ image plus a page instead of room up to its first threshold.
 
 > **Trade-off.** Small starts over reserved room. A fresh sandbox is 11 pages instead of
 > 18, pi-like peaks at 1.6 MiB instead of 2.4, and growing runs are 0.3–0.9 MiB lower.
-> The cost: a large `JSON.stringify` result is built in a Rust buffer that sits behind
-> the arena while the arena grows to take the copy; json-date peaks at 5.2 MiB instead
-> of 4.3, where the old layout happened to have a hole the buffer fit in.
+> The cost was a large `JSON.stringify` result built in a Rust buffer that sat behind
+> the arena while the arena grew to take the copy: json-date peaked at 5.2 MiB instead
+> of 4.3. `JSON.stringify` now moves its output into the result string every 4 KB, so
+> the result is built in the arena, at its end, and the buffer stays small: json-date
+> peaks at 3.5 MiB, and one 8 MB result at 26 MiB instead of 34 (D2553).
 
 A run's peak still depends a little on placement, so a memory claim about the collector
 compares distributions over many slightly perturbed runs, never one run per build
