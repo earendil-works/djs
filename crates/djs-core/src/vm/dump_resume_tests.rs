@@ -200,6 +200,11 @@ fn combinators_and_rejections() {
     assert_eq!(ids, [6, 7, 8, 9, 10, 11, 12, 13]);
 }
 
+#[test]
+fn nested_loops() {
+    fixture("loops");
+}
+
 /// Prints the suspension maps of a file, for writing fixtures by hand:
 /// `DJS_SMAP=tests/dump/v2/x.src.js cargo test -p djs-core --lib show_maps -- --ignored --nocapture`.
 #[test]
