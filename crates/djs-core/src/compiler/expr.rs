@@ -6,6 +6,7 @@ use super::func::FuncKind;
 use super::parser::{Parser, syntax};
 use super::pattern::Binding;
 use super::scan::Follow;
+use super::smap::{Role, SiteKind};
 use crate::bytecode::{CodeBuf, Label, Phase1};
 use crate::heap::Atom;
 use crate::lexer::{Kw, TokenKind};
@@ -106,6 +107,17 @@ pub(super) enum LValue {
 }
 
 impl LValue {
+    /// The roles of the values the target keeps (suspension maps, D2563).
+    pub fn roles(self) -> &'static [Role] {
+        match self {
+            LValue::Name { .. } => &[],
+            LValue::Field { .. } => &[Role::AssignObject],
+            LValue::Elem { .. } | LValue::Private { .. } => &[Role::AssignObject, Role::AssignKey],
+            LValue::SuperField { .. } => &[Role::SuperThis, Role::SuperBase],
+            LValue::SuperElem { .. } => &[Role::SuperThis, Role::SuperBase, Role::AssignKey],
+        }
+    }
+
     /// Values the target keeps on the stack until its store.
     pub fn refs(self) -> u8 {
         match self {
@@ -231,6 +243,7 @@ impl Parser<'_, '_> {
         let op = self.tok;
         if op.kind == TokenKind::Assign {
             let lv = self.lvalue(lhs, "invalid assignment left-hand side")?;
+            self.roles_push(lv.roles());
             self.next()?;
             if let LValue::Name { r, .. } = lv
                 && !parenthesized
@@ -241,14 +254,18 @@ impl Parser<'_, '_> {
             } else {
                 self.parse_assign(no_in)?;
             }
+            self.roles_pop(lv.roles().len());
             self.emit_store(lv, true);
             return Ok(Expr::Value);
         }
         if let Some(emit_op) = compound_op(op.kind) {
             let lv = self.lvalue(lhs, "invalid assignment left-hand side")?;
+            self.roles_push(lv.roles());
             self.emit_load(lv);
+            self.roles_push(&[Role::AssignOld]);
             self.next()?;
             self.parse_assign(no_in)?;
+            self.roles_pop(lv.roles().len() + 1);
             self.mark(op.start);
             emit_op(self.code());
             self.emit_store(lv, true);
@@ -274,6 +291,7 @@ impl Parser<'_, '_> {
                 }
             }
             self.code().drop();
+            self.roles_push(lv.roles());
             if let LValue::Name { r, .. } = lv
                 && !parenthesized
             {
@@ -283,6 +301,7 @@ impl Parser<'_, '_> {
             } else {
                 self.parse_assign(no_in)?;
             }
+            self.roles_pop(lv.roles().len());
             self.emit_store(lv, true);
             self.code().jump(l_end);
             self.place(l_keep);
@@ -588,7 +607,15 @@ impl Parser<'_, '_> {
             } else {
                 prec + 1
             };
+            // A logical operator dropped its left operand on this path.
+            let keeps = !matches!(op, BinOp::Nullish | BinOp::Or | BinOp::And);
+            if keeps {
+                self.roles_push(&[Role::BinaryLeft]);
+            }
             let (_, rmix) = self.parse_binary(next_min, no_in)?;
+            if keeps {
+                self.roles_pop(1);
+            }
             let this = match op {
                 BinOp::Nullish => MIX_NULLISH,
                 BinOp::Or | BinOp::And => MIX_ANDOR,
@@ -750,6 +777,7 @@ impl Parser<'_, '_> {
                 self.next()?;
                 self.parse_unary()?;
                 self.mark(tok.start);
+                self.site(SiteKind::Await, tok.start);
                 self.code().await_(0);
             }
             // A type assertion `<T>x` (TypeScript): the operand stays what it was, so
@@ -896,6 +924,7 @@ impl Parser<'_, '_> {
                     let argc = self.parse_tagged_template()?;
                     self.mark(tok.start);
                     self.f.tail_call = Some(self.f.code.pos());
+                    self.roles_pop(2);
                     self.code().call(argc);
                     e = Expr::Value;
                 }
@@ -911,6 +940,8 @@ impl Parser<'_, '_> {
             };
             if callee {
                 self.prepare_call(e);
+                // The call follows the parentheses, past the chain's pads.
+                self.roles_pop(2);
             }
             if delete_operand {
                 // `delete a?.b.c`: delete the chain's last reference.
@@ -967,17 +998,20 @@ impl Parser<'_, '_> {
     }
 
     /// Before the arguments of a call: the callee and `this` on the stack.
+    /// The call's roles (`call.callee call.this`) stay until `emit_call`.
     pub(super) fn prepare_call(&mut self, e: Expr) {
         match e {
             Expr::Field { atom, pos } => {
                 self.truncate_last();
                 self.mark(pos);
                 self.code().get_method(atom, 0);
+                self.roles_push(&[Role::CallCallee, Role::CallThis]);
             }
             Expr::Elem { pos } => {
                 self.truncate_last();
                 self.mark(pos);
                 self.code().get_elem_method();
+                self.roles_push(&[Role::CallCallee, Role::CallThis]);
             }
             Expr::Private { pos } => {
                 // `obj sym` -> `f obj`.
@@ -987,11 +1021,26 @@ impl Parser<'_, '_> {
                 self.mark(pos);
                 self.code().get_private_field();
                 self.code().swap();
+                self.roles_push(&[Role::CallCallee, Role::CallThis]);
             }
             // `super.m()` calls with `this` (read again: nothing can change it).
-            Expr::SuperField { pos, .. } | Expr::SuperElem { pos } => self.emit_this(pos),
-            Expr::Callee => {}
-            _ => self.code().undefined(),
+            Expr::SuperField { pos, .. } | Expr::SuperElem { pos } => {
+                self.roles_push(&[Role::CallCallee]);
+                self.emit_this(pos);
+                self.roles_push(&[Role::CallThis]);
+            }
+            // `(a?.b)()`: the chain left both.
+            Expr::Callee => self.roles_push(&[Role::CallCallee, Role::CallThis]),
+            _ => {
+                self.roles_push(&[Role::CallCallee]);
+                self.code().undefined();
+                self.roles_push(&[Role::CallThis]);
+                #[cfg(test)]
+                if self.test_swap_call {
+                    self.code().swap();
+                    self.roles_replace(2, &[Role::CallThis, Role::CallCallee]);
+                }
+            }
         }
     }
 
@@ -1018,7 +1067,9 @@ impl Parser<'_, '_> {
 
     /// `[expr]` after the `[`. A string literal key becomes a `get_field`.
     fn parse_index(&mut self, pos: u32) -> PResult<Expr> {
+        self.roles_push(&[Role::MemberObject]);
         let key = self.parse_expr(false)?;
+        self.roles_pop(1);
         self.expect(TokenKind::RBracket, "]")?;
         if let Expr::Str { idx } = key {
             let s = self.f.consts[idx as usize].as_string();
@@ -1049,6 +1100,16 @@ impl Parser<'_, '_> {
     /// `( args )`: the arguments are pushed one by one, or, from the first spread
     /// on, collected into an array (`f(a, ...b)` -> `array_from 1; array_spread`).
     pub(super) fn parse_args(&mut self) -> PResult<Args> {
+        self.parse_args_as(Role::CallArg, Role::CallArgs)
+    }
+
+    /// [`Parser::parse_args`] with the arguments' roles: `arg(i)` for each one on the
+    /// stack, `array` for the array they go into from a spread on.
+    pub(super) fn parse_args_as(
+        &mut self,
+        arg: fn(u16) -> Role,
+        array_role: Role,
+    ) -> PResult<Args> {
         self.expect(TokenKind::LParen, "(")?;
         let mut argc: u32 = 0;
         let mut array = false;
@@ -1056,6 +1117,7 @@ impl Parser<'_, '_> {
             if self.is(TokenKind::Ellipsis) {
                 if !array {
                     self.code().array_from(argc as u16);
+                    self.roles_replace(argc as usize, &[array_role]);
                     array = true;
                 }
                 self.next()?;
@@ -1066,6 +1128,7 @@ impl Parser<'_, '_> {
                 if array {
                     self.code().array_push();
                 } else {
+                    self.roles_push(&[arg(argc as u16)]);
                     argc += 1;
                     if argc > u16::MAX as u32 {
                         return syntax(self.tok.start, "Too many call arguments");
@@ -1077,6 +1140,7 @@ impl Parser<'_, '_> {
             }
         }
         self.expect(TokenKind::RParen, ")")?;
+        self.roles_pop(if array { 1 } else { argc as usize });
         Ok(if array {
             Args::Array
         } else {
@@ -1086,6 +1150,7 @@ impl Parser<'_, '_> {
 
     /// The call after `prepare_call`.
     pub(super) fn emit_call(&mut self, args: Args) {
+        self.roles_pop(2);
         match args {
             Args::Count(n) => self.code().call(n),
             Args::Array => self.code().call_spread(),
@@ -1146,6 +1211,7 @@ impl Parser<'_, '_> {
                     self.prepare_call(e);
                     let argc = self.parse_tagged_template()?;
                     self.mark(tok.start);
+                    self.roles_pop(2);
                     self.code().call(argc);
                     e = Expr::Value;
                 }
@@ -1155,11 +1221,13 @@ impl Parser<'_, '_> {
         // The position of `new` is the token after the constructor: its `(`, or what
         // follows `new X` (as in qjs).
         let at = self.tok.start;
+        self.roles_push(&[Role::NewCallee]);
         let args = if self.is(TokenKind::LParen) {
-            self.parse_args()?
+            self.parse_args_as(Role::NewArg, Role::NewArgs)?
         } else {
             Args::Count(0)
         };
+        self.roles_pop(1);
         self.mark(at);
         match args {
             Args::Count(n) => self.code().construct(n),
@@ -1322,7 +1390,9 @@ impl Parser<'_, '_> {
                     self.next()?;
                     self.code().undefined();
                     if self.is(TokenKind::LParen) {
+                        self.roles_push(&[Role::CallCallee]);
                         self.code().undefined();
+                        self.roles_push(&[Role::CallThis]);
                         let args = self.parse_args()?;
                         self.emit_call(args);
                     }
@@ -1355,7 +1425,9 @@ impl Parser<'_, '_> {
         self.expect(TokenKind::LParen, "(")?;
         self.parse_assign(false)?;
         if self.eat(TokenKind::Comma)? && !self.is(TokenKind::RParen) {
+            self.roles_push(&[Role::ImportSpecifier]);
             self.parse_assign(false)?;
+            self.roles_pop(1);
             self.eat(TokenKind::Comma)?;
         } else {
             self.code().undefined();
@@ -1413,7 +1485,9 @@ impl Parser<'_, '_> {
                         pos: tok.start,
                     })
                 } else {
+                    self.roles_push(&[Role::SuperThis, Role::SuperBase]);
                     self.parse_expr(false)?;
+                    self.roles_pop(2);
                     self.expect(TokenKind::RBracket, "]")?;
                     self.mark(tok.start);
                     self.code().get_super_elem();
@@ -1434,8 +1508,10 @@ impl Parser<'_, '_> {
         let r = self.name_ref(active, pos);
         self.code().name_get(r);
         self.code().get_super();
+        self.roles_push(&[Role::SuperCallee]);
         let paren = self.tok.start;
-        let args = self.parse_args()?;
+        let args = self.parse_args_as(Role::SuperArg, Role::SuperArgs)?;
+        self.roles_pop(1);
         let Some(nt) = self.new_target_ref(pos) else {
             return Err(super::resolve::internal("super() without new.target"));
         };
@@ -1504,7 +1580,7 @@ impl Parser<'_, '_> {
         let info = crate::bytecode::intrinsics::intrinsic(id).expect("intrinsic id");
         self.next()?;
         let paren = self.tok.start;
-        let argc = match self.parse_args()? {
+        let argc = match self.parse_args_as(Role::IntrinsicArg, Role::CallArgs)? {
             Args::Count(n) => n,
             Args::Array => return syntax(paren, "spread arguments in an intrinsic call"),
         };
@@ -1566,6 +1642,7 @@ impl Parser<'_, '_> {
             if !units.is_empty() {
                 let idx = self.string_const(&units)?;
                 self.code().push_const(idx);
+                self.roles_push(&[Role::TemplatePart(parts as u16)]);
                 parts = self.template_part(parts);
             }
             if matches!(
@@ -1579,12 +1656,14 @@ impl Parser<'_, '_> {
             self.parse_expr(false)?;
             self.mark(tok.end - 2);
             self.code().to_string();
+            self.roles_push(&[Role::TemplatePart(parts as u16)]);
             parts = self.template_part(parts);
             if !self.is(TokenKind::RBrace) {
                 return syntax(self.tok.start, "expected '}' after template expression");
             }
             self.tok = self.lx.rescan_template_continuation(self.tok)?;
         }
+        self.roles_pop(parts as usize);
         match parts {
             0 => {
                 let idx = self.string_const(&[])?;
@@ -1603,6 +1682,7 @@ impl Parser<'_, '_> {
     fn parse_tagged_template(&mut self) -> PResult<u16> {
         let site = self.add_const(crate::value::Value::UNDEFINED);
         self.code().get_template_object(site);
+        self.roles_push(&[Role::CallArg(0)]);
         let mut cooked: alloc::vec::Vec<crate::value::Value> = alloc::vec::Vec::new();
         let mut raw: alloc::vec::Vec<crate::value::Value> = alloc::vec::Vec::new();
         let mut units = alloc::vec::Vec::new();
@@ -1627,6 +1707,7 @@ impl Parser<'_, '_> {
             }
             self.next()?;
             self.parse_expr(false)?;
+            self.roles_push(&[Role::CallArg(argc as u16)]);
             argc += 1;
             if argc > u16::MAX as u32 {
                 return syntax(self.tok.start, "Too many call arguments");
@@ -1636,6 +1717,7 @@ impl Parser<'_, '_> {
             }
             self.tok = self.lx.rescan_template_continuation(self.tok)?;
         }
+        self.roles_pop(argc as usize);
         // CONSTS[site] = start of `n, cooked x n, raw x n`.
         let start = self.f.consts.len() as u32;
         let n = cooked.len();
@@ -1656,6 +1738,7 @@ impl Parser<'_, '_> {
         let parts = parts + 1;
         if parts == u16::MAX as u32 {
             self.code().concat(u16::MAX);
+            self.roles_replace(parts as usize, &[Role::TemplatePart(0)]);
             return 1;
         }
         parts
@@ -1688,6 +1771,7 @@ impl Parser<'_, '_> {
                     if appending {
                         self.code().array_push();
                     } else {
+                        self.roles_push(&[Role::ArrayElement(on_stack)]);
                         on_stack += 1;
                         if on_stack == STACK_ELEMS {
                             self.start_appending(&mut appending, on_stack);
@@ -1702,6 +1786,9 @@ impl Parser<'_, '_> {
         self.expect(TokenKind::RBracket, "]")?;
         if !appending {
             self.code().array_from(on_stack);
+            self.roles_pop(on_stack as usize);
+        } else {
+            self.roles_pop(1);
         }
         Ok(Expr::ArrayLit)
     }
@@ -1709,6 +1796,7 @@ impl Parser<'_, '_> {
     fn start_appending(&mut self, appending: &mut bool, on_stack: u16) {
         if !*appending {
             self.code().array_from(on_stack);
+            self.roles_replace(on_stack as usize, &[Role::ArrayLiteral]);
             *appending = true;
         }
     }
@@ -1717,6 +1805,7 @@ impl Parser<'_, '_> {
     fn parse_object(&mut self) -> PResult<Expr> {
         self.next()?;
         self.code().object();
+        self.roles_push(&[Role::ObjectLiteral]);
         let mut seen_proto = false;
         while !self.is(TokenKind::RBrace) {
             let tok = self.tok;
@@ -1732,6 +1821,7 @@ impl Parser<'_, '_> {
             }
         }
         self.expect(TokenKind::RBrace, "}")?;
+        self.roles_pop(1);
         Ok(Expr::ObjectLit)
     }
 
@@ -1898,7 +1988,9 @@ impl Parser<'_, '_> {
                     }
                     None => {
                         self.code().to_propkey();
+                        self.roles_push(&[Role::ObjectKey]);
                         self.parse_assign(false)?;
+                        self.roles_pop(1);
                     }
                 }
                 match key {

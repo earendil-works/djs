@@ -1,0 +1,5 @@
+function <anonymous> @1..152
+  await#1 @97 (3:1) pc 37
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>

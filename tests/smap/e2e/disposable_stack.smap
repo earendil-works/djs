@@ -1,0 +1,87 @@
+function <anonymous> @1827..3285
+  await#1 @511 (71:3) pc 220
+    loc0 <state>
+    loc1 a @0
+    loc2 order @0
+    loc3 done @0
+    loc4 b @0
+    loc5 gen @0
+    loc6 g @0
+  await#2 @525 (72:3) pc 225
+    loc0 <state>
+    loc1 a @0
+    loc2 order @0
+    loc3 done @0
+    loc4 b @0
+    loc5 gen @0
+    loc6 g @0
+  await#3 @539 (73:3) pc 230
+    loc0 <state>
+    loc1 a @0
+    loc2 order @0
+    loc3 done @0
+    loc4 b @0
+    loc5 gen @0
+    loc6 g @0
+  await#4 @553 (74:3) pc 235
+    loc0 <state>
+    loc1 a @0
+    loc2 order @0
+    loc3 done @0
+    loc4 b @0
+    loc5 gen @0
+    loc6 g @0
+  await#5 @635 (76:15) pc 313
+    loc0 <state>
+    loc1 a @0
+    loc2 order @0
+    loc3 done @0
+    loc4 b @0
+    loc5 gen @0
+    loc6 g @0
+    op0 call.callee
+    op1 call.this
+  await#6 @852 (83:3) pc 413
+    loc0 <state>
+    loc1 a @0
+    loc2 order @0
+    loc3 done @0
+    loc4 b @0
+    loc5 gen @0
+    loc6 g @0
+  await#7 @1154 (88:3) pc 537
+    loc0 <state>
+    loc1 a @0
+    loc2 order @0
+    loc3 done @0
+    loc4 b @0
+    loc5 gen @0
+    loc6 g @0
+  await#8 @1379 (97:3) pc 555
+    loc0 <state>
+    loc1 a @0
+    loc2 order @0
+    loc3 done @0
+    loc4 b @0
+    loc5 gen @0
+    loc6 g @0
+  await#9 @1409 (98:15) pc 591
+    loc0 <state>
+    loc1 a @0
+    loc2 order @0
+    loc3 done @0
+    loc4 b @0
+    loc5 gen @0
+    loc6 g @0
+    op0 call.callee
+    op1 call.this
+function <anonymous> @2029..2094
+  await#1 @18 (65:5) pc 7
+    loc0 <state>
+function gen @3080..3184
+  yield.await#1 @40 (91:7) pc 7
+    loc0 <state>
+  yield#1 @40 (91:7) pc 10
+    loc0 <state>
+  yield.return#1 @40 (91:7) pc 15
+    loc0 <state>

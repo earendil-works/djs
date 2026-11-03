@@ -1,0 +1,15 @@
+function gen @3662..3700
+  yield#1 @13 (157:5) pc 7
+    loc0 <state>
+  yield#2 @26 (158:5) pc 16
+    loc0 <state>
+function <anonymous> @3710..3755
+  yield*#1 @27 (161:5) pc 43 unsupported: yield*
+    loc0 <state>
+function ag @3798..3828
+  yield.await#1 @18 (167:5) pc 8
+    loc0 <state>
+  yield#1 @18 (167:5) pc 11
+    loc0 <state>
+  yield.return#1 @18 (167:5) pc 16
+    loc0 <state>

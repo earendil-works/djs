@@ -37,6 +37,10 @@ pub(super) enum ScopeKind {
 
 pub(super) struct Scope {
     pub parent: Option<ScopeId>,
+    /// Source offset where the scope starts (the function's start for the body): how a
+    /// suspension map names a binding's declaring scope (D2563).
+    #[cfg_attr(not(feature = "dump"), allow(dead_code))]
+    pub pos: u32,
     pub kind: ScopeKind,
     pub vars: Vec<VarId>,
     /// Function declarations hoisted to this scope's entry: `(binding, child index)`.
@@ -311,6 +315,9 @@ pub(super) struct FuncState {
     pub var_scope: ScopeId,
     /// `(scope, name)` → binding, once the function has many (0092).
     pub index: VarIndex,
+    /// Recording for a suspension map (D2563, compiler/smap.rs), when requested.
+    #[cfg(feature = "dump")]
+    pub smap: Option<alloc::boxed::Box<super::smap::Recorder>>,
 }
 
 /// A hash index of the bindings by `(scope, name)`: the first one declared with that
@@ -387,6 +394,7 @@ impl FuncState {
             code: CodeBuf::phase1(),
             scopes: alloc::vec![Scope {
                 parent: None,
+                pos: 0,
                 kind: ScopeKind::Body,
                 vars: Vec::new(),
                 funcs: Vec::new(),
@@ -430,12 +438,15 @@ impl FuncState {
             ns: None,
             var_scope: BODY_SCOPE,
             index: VarIndex::default(),
+            #[cfg(feature = "dump")]
+            smap: None,
         }
     }
 
-    pub fn new_scope(&mut self, parent: ScopeId, kind: ScopeKind) -> ScopeId {
+    pub fn new_scope(&mut self, parent: ScopeId, kind: ScopeKind, pos: u32) -> ScopeId {
         self.scopes.push_out(Scope {
             parent: Some(parent),
+            pos,
             kind,
             vars: Vec::new(),
             funcs: Vec::new(),

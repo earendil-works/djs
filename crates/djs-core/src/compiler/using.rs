@@ -42,6 +42,7 @@ use alloc::vec::Vec;
 use super::PResult;
 use super::func::{HandlerLabels, VarKind};
 use super::parser::{BlockEnv, BlockKind, Parser, syntax};
+use super::smap::{Role, SiteKind};
 use crate::bytecode::Label;
 use crate::bytecode::intrinsics::intrinsic_id;
 use crate::lexer::{Kw, TokenKind};
@@ -170,6 +171,8 @@ impl Parser<'_, '_> {
     /// Pushes the Record (`base` is the operand depth under it) and starts the region.
     pub(super) fn using_region_start(&mut self, base: u32, is_await: bool) -> UsingRegion {
         self.code().call_intrinsic(intrinsic("UsingCreate"), 0);
+        // The disposal stack is not described in suspension maps yet (D2563).
+        self.roles_push(&[Role::Unsupported("using")]);
         let l_try = self.new_label();
         let l_fin = self.new_label();
         self.place(l_try);
@@ -286,6 +289,10 @@ impl Parser<'_, '_> {
             self.code().dup();
             self.code().call_intrinsic(intrinsic("UsingAwaitValue"), 1);
             self.place(l_a);
+            // The disposal stack and the pending completion are not described yet.
+            self.roles_push(&[Role::Unsupported("await using")]);
+            self.site(SiteKind::AwaitUsing, self.prev_end);
+            self.roles_pop(1);
             self.code().await_(0);
             self.place(l_a_end);
             self.code().drop();
@@ -312,5 +319,6 @@ impl Parser<'_, '_> {
         self.code().ret();
         self.place(l_end);
         self.stmt_depth = r.base;
+        self.roles_pop(1);
     }
 }

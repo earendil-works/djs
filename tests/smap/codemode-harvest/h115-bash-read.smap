@@ -1,0 +1,13 @@
+function <anonymous> @1..1825
+  await#1 @1450 (28:8) pc 174
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 results @0
+    loc2 fake @0
+function <anonymous> @1458..1814
+  await#1 @70 (30:11) pc 94
+    arg0 tools @0
+    loc0 <state>
+    loc1 base @0
+    loc2 r @0

@@ -1,0 +1,32 @@
+function <anonymous> @1..3003
+  await#1 @1959 (41:8) pc 230
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 results @0
+    loc2 fake @0
+    loc5 stored @0
+    loc6 realLoad @0
+    loc7 fakeLoad @0
+function <anonymous> @1967..2982
+  await#1 @56 (43:6) pc 59
+    arg0 tools @0
+    arg1 load @0
+    loc0 <state>
+    loc1 base @0
+    op0 call.callee
+    op1 call.this
+  await#2 @179 (44:6) pc 111
+    arg0 tools @0
+    arg1 load @0
+    loc0 <state>
+    loc1 base @0
+    op0 call.callee
+    op1 call.this
+  await#3 @308 (45:6) pc 152
+    arg0 tools @0
+    arg1 load @0
+    loc0 <state>
+    loc1 base @0
+    op0 call.callee
+    op1 call.this

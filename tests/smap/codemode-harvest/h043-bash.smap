@@ -1,0 +1,21 @@
+function <anonymous> @1..3036
+  await#1 @2319 (34:8) pc 200
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 results @0
+    loc2 fake @0
+function <anonymous> @2327..3025
+  await#1 @543 (41:13) pc 92
+    arg0 argument 0
+    loc0 <state>
+    loc1 tools @0
+    loc2 cmds @0
+    loc3 res @0
+function <anonymous> @2913..2997
+  await#1 @33 (41:89) pc 144
+    arg0 argument 0
+    loc0 <state>
+    loc1 k @0
+    loc2 c @0
+    op0 binary.left

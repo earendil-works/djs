@@ -1,0 +1,47 @@
+function <anonymous> @1..4883
+  await#1 @3265 (65:8) pc 255
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 results @0
+    loc2 fake @0
+    loc5 fakeModels @0
+function <anonymous> @3273..4860
+  await#1 @100 (68:13) pc 66
+    arg0 tools @0
+    arg1 argument 1
+    loc0 <state>
+    loc1 models @0
+    loc2 lines @0
+    loc3 off @54
+    loc4 t @90
+    loc7 model @0
+    loc8 now @0
+    loc9 questions @0
+    loc10 results @0
+    loc11 scored @0
+    loc12 errs @0
+  await#2 @316 (71:15) pc 221
+    arg0 tools @0
+    arg1 argument 1
+    loc0 <state>
+    loc1 models @0
+    loc2 lines @0
+    loc7 model @0
+    loc8 now @0
+    loc9 questions @0
+    loc10 results @0
+    loc11 scored @0
+    loc12 errs @0
+  await#3 @827 (76:17) pc 316
+    arg0 tools @0
+    arg1 argument 1
+    loc0 <state>
+    loc1 models @0
+    loc2 lines @0
+    loc7 model @0
+    loc8 now @0
+    loc9 questions @0
+    loc10 results @0
+    loc11 scored @0
+    loc12 errs @0

@@ -1,0 +1,135 @@
+function <anonymous> @0..2044
+  await#1 @1065 (36:11) pc 255
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 log @0
+    loc2 f @0
+    loc3 g @0
+    loc4 o @0
+    loc5 thrower @0
+    loc6 early @0
+    loc7 r @0
+    loc8 thenable @0
+    loc9 sum @0
+    loc13 plain @0
+  await#2 @1250 (40:13) pc 308
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 log @0
+    loc2 f @0
+    loc3 g @0
+    loc4 o @0
+    loc5 thrower @0
+    loc6 early @0
+    loc7 r @0
+    loc8 thenable @0
+    loc9 sum @0
+    loc13 plain @0
+    op0 call.callee
+    op1 call.this
+  await#3 @1331 (42:52) pc 374
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 log @0
+    loc2 f @0
+    loc3 g @0
+    loc4 o @0
+    loc5 thrower @0
+    loc6 early @0
+    loc7 r @0
+    loc8 thenable @0
+    loc9 sum @0
+    loc10 p @1291
+    loc13 plain @0
+    op0 for-of.iterator
+    op1 for-of.next
+    op2 assign.old
+  await#4 @1386 (43:47) pc 415
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 log @0
+    loc2 f @0
+    loc3 g @0
+    loc4 o @0
+    loc5 thrower @0
+    loc6 early @0
+    loc7 r @0
+    loc8 thenable @0
+    loc9 sum @0
+    loc11 i @1349
+    loc13 plain @0
+    op0 assign.old
+  await#5 @1421 (44:27) pc 456
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 log @0
+    loc2 f @0
+    loc3 g @0
+    loc4 o @0
+    loc5 thrower @0
+    loc6 early @0
+    loc7 r @0
+    loc8 thenable @0
+    loc9 sum @0
+    loc13 plain @0
+    op0 call.callee
+    op1 call.this
+    op2 call.arg[0]
+    op3 call.callee
+    op4 call.this
+  await#6 @1430 (44:36) pc 476
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 log @0
+    loc2 f @0
+    loc3 g @0
+    loc4 o @0
+    loc5 thrower @0
+    loc6 early @0
+    loc7 r @0
+    loc8 thenable @0
+    loc9 sum @0
+    loc13 plain @0
+    op0 call.callee
+    op1 call.this
+    op2 call.arg[0]
+    op3 call.callee
+    op4 call.this
+    op5 call.arg[0]
+  await#7 @1534 (47:3) pc 486
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 log @0
+    loc2 f @0
+    loc3 g @0
+    loc4 o @0
+    loc5 thrower @0
+    loc6 early @0
+    loc7 r @0
+    loc8 thenable @0
+    loc9 sum @0
+    loc13 plain @0
+function f @163..277
+  await#1 @62 (7:13) pc 23
+    arg0 x @0
+    loc0 <state>
+    loc1 v @0
+function g @288..317
+  await#1 @14 (11:25) pc 12
+    arg0 x @0
+    loc0 <state>
+function m @333..513
+  await#1 @33 (15:7) pc 41
+    arg0 argument 0
+    loc0 <state>
+    loc1 a @0
+function thrower @518..590
+  await#1 @29 (24:3) pc 7
+    loc0 <state>

@@ -1,0 +1,36 @@
+function <anonymous> @1..11543
+  await#1 @9814 (179:8) pc 804
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 results @0
+    loc2 fake @0
+    loc5 fakeModels @0
+    loc6 stored @0
+    loc7 realLoad @0
+    loc8 fakeLoad @0
+function <anonymous> @9822..11510
+  await#1 @1181 (197:15) pc 212
+    arg0 tools @0
+    arg1 argument 1
+    arg2 load @0
+    loc0 <state>
+    loc1 models @0
+    loc2 q @0
+    loc3 model @0
+    loc4 issues @0
+    loc5 off @1134
+    loc6 qap @1169
+    loc8 probe @0
+    loc9 pr @0
+  await#2 @1429 (202:12) pc 391
+    arg0 tools @0
+    arg1 argument 1
+    arg2 load @0
+    loc0 <state>
+    loc1 models @0
+    loc2 q @0
+    loc3 model @0
+    loc4 issues @0
+    loc8 probe @0
+    loc9 pr @0

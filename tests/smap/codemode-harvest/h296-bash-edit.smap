@@ -1,0 +1,22 @@
+function <anonymous> @1..3718
+  await#1 @1756 (36:8) pc 210
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 results @0
+    loc2 fake @0
+function <anonymous> @1764..3707
+  await#1 @19 (37:1) pc 219
+    arg0 tools @0
+    loc0 <state>
+  await#2 @1829 (46:6) pc 259
+    arg0 tools @0
+    loc0 <state>
+    op0 call.callee
+    op1 call.this
+function <anonymous> @3562..3584
+  await#1 @14 (45:21) pc 15
+    arg0 p @0
+    loc0 <state>
+    op0 call.callee
+    op1 call.this

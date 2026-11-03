@@ -1,0 +1,47 @@
+function <anonymous> @1..3573
+  await#1 @2333 (57:8) pc 225
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 results @0
+    loc2 fake @0
+    loc5 fakeModels @0
+function <anonymous> @2341..3550
+  await#1 @39 (58:13) pc 47
+    arg0 tools @0
+    arg1 argument 1
+    loc0 <state>
+    loc1 models @0
+    loc2 log @0
+    loc3 commits @0
+    loc4 model @0
+    loc5 criteria @0
+    loc6 started @0
+    loc7 results @0
+  await#2 @300 (63:15) pc 107
+    arg0 tools @0
+    arg1 argument 1
+    loc0 <state>
+    loc1 models @0
+    loc2 log @0
+    loc3 commits @0
+    loc4 model @0
+    loc5 criteria @0
+    loc6 started @0
+    loc7 results @0
+  await#3 @787 (73:17) pc 217
+    arg0 tools @0
+    arg1 argument 1
+    loc0 <state>
+    loc1 models @0
+    loc2 log @0
+    loc3 commits @0
+    loc4 model @0
+    loc5 criteria @0
+    loc6 started @0
+    loc7 results @0
+function <anonymous> @3158..3456
+  await#1 @30 (74:13) pc 81
+    arg0 commit @0
+    loc0 <state>
+    loc1 r @0

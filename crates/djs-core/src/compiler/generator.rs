@@ -11,6 +11,7 @@ use super::PResult;
 use super::expr::Expr;
 use super::func::HandlerLabels;
 use super::parser::{OpenIter, Parser, syntax};
+use super::smap::{Role, SiteKind};
 use crate::bytecode::intrinsics::intrinsic_id;
 use crate::heap::atoms;
 use crate::lexer::TokenKind;
@@ -54,13 +55,18 @@ impl Parser<'_, '_> {
         }
         self.mark(tok.start);
         if is_async {
+            self.site(SiteKind::AsyncYieldAwait, tok.start);
             self.code().await_(0);
+            self.site(SiteKind::AsyncYield, tok.start);
+        } else {
+            self.site(SiteKind::Yield, tok.start);
         }
         self.code().yield_(0);
         let l_next = self.new_label();
         self.code().jump_if_false(l_next);
         if is_async {
             // AsyncGeneratorUnwrapYieldResumption: `return(x)` awaits x.
+            self.site(SiteKind::AsyncYieldReturn, tok.start);
             self.code().await_(0);
         }
         self.emit_return_from_expr();
@@ -71,6 +77,9 @@ impl Parser<'_, '_> {
     /// Returns the value on top of the stack from inside an expression: see the module
     /// docs.
     pub(super) fn emit_return_from_expr(&mut self) {
+        // The handlers below cut the stack: suspensions on this path (closing for-await
+        // iterators) do not have the enclosing expression's operands.
+        self.roles_push(&[Role::Unsupported("return from a generator")]);
         // Close the open iterators, innermost first: each throws `x` to a handler that
         // cuts the stack down to its iterator.
         let open: alloc::vec::Vec<OpenIter> = self.open_iters.iter().rev().copied().collect();
@@ -111,7 +120,7 @@ impl Parser<'_, '_> {
                     self.code().rot3r();
                     self.code().drop();
                     if is_await {
-                        self.emit_async_close_normal();
+                        self.emit_async_close_normal((SiteKind::ForAwaitClose, self.prev_end));
                     } else {
                         self.code().call_intrinsic(intrinsic("IteratorClose"), 1);
                         self.code().drop();
@@ -136,6 +145,7 @@ impl Parser<'_, '_> {
         );
         self.emit_unwind(0, true);
         self.emit_return_value();
+        self.roles_pop(1);
     }
 
     /// `yield* v` with `v` on the stack (ECMA-262 15.5.5): delegation to v's iterator,
@@ -162,6 +172,8 @@ impl Parser<'_, '_> {
         self.code().call_intrinsic(intrinsic(get_iterator), 1);
         self.code().dup();
         self.code().get_field(atoms::NEXT, 0);
+        // Delegation is not described yet: every suspension in it is unsupported.
+        self.roles_push(&[Role::Unsupported("yield*")]);
         self.place(l_base);
         // `it next recv` -> `it next next it recv` -> call.
         self.code().undefined();
@@ -181,9 +193,11 @@ impl Parser<'_, '_> {
         if is_async {
             self.code().get_field(atoms::VALUE, 0);
             self.place(r_start);
+            self.site(SiteKind::YieldStar, pos);
             self.code().yield_(0);
         } else {
             self.place(r_start);
+            self.site(SiteKind::YieldStar, pos);
             self.code().yield_star(0);
         }
         self.place(r_end);
@@ -201,6 +215,7 @@ impl Parser<'_, '_> {
         self.code().jump_if_false(l_loop);
         // return(x): `it next x`.
         if is_async {
+            self.site(SiteKind::YieldStar, pos);
             self.code().await_(0);
         }
         self.emit_inner_method(atoms::RETURN, l_retnone);
@@ -210,6 +225,7 @@ impl Parser<'_, '_> {
         self.code().jump_if_false(l_yield);
         self.code().get_field(atoms::VALUE, 0);
         if is_async {
+            self.site(SiteKind::YieldStar, pos);
             self.code().await_(0);
         }
         self.code().nip();
@@ -219,6 +235,7 @@ impl Parser<'_, '_> {
         self.place(l_retnone);
         self.code().drop();
         if is_async {
+            self.site(SiteKind::YieldStar, pos);
             self.code().await_(0);
         }
         self.code().nip();
@@ -236,7 +253,7 @@ impl Parser<'_, '_> {
         self.code().drop();
         self.mark(pos);
         if is_async {
-            self.emit_async_close_normal();
+            self.emit_async_close_normal((SiteKind::YieldStar, pos));
         } else {
             self.code().call_intrinsic(intrinsic("IteratorClose"), 1);
             self.code().drop();
@@ -255,6 +272,7 @@ impl Parser<'_, '_> {
         self.code().nip();
         self.code().nip();
         self.place(l_end);
+        self.roles_pop(1);
         Ok(())
     }
 
@@ -277,13 +295,14 @@ impl Parser<'_, '_> {
     /// An inner iterator result: awaited in async generators, then it must be an object.
     fn emit_inner_result(&mut self, is_async: bool) {
         if is_async {
+            self.site(SiteKind::YieldStar, self.prev_end);
             self.code().await_(0);
         }
         self.code().iter_check_object();
     }
 
     /// AsyncIteratorClose with a normal completion: `it` -> ``.
-    pub(super) fn emit_async_close_normal(&mut self) {
+    pub(super) fn emit_async_close_normal(&mut self, site: (SiteKind, u32)) {
         let l_skip = self.new_label();
         let l_closed = self.new_label();
         self.code().dup();
@@ -295,6 +314,10 @@ impl Parser<'_, '_> {
         self.code().jump_if_true(l_skip);
         self.code().swap();
         self.code().call(0);
+        // A closing iterator's stack is not described yet.
+        self.roles_push(&[Role::Unsupported("closing an async iterator")]);
+        self.site(site.0, site.1);
+        self.roles_pop(1);
         self.code().await_(0);
         self.code().iter_check_object();
         self.code().drop();

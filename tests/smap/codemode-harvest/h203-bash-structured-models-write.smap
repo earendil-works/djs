@@ -1,0 +1,72 @@
+function <anonymous> @1..5065
+  await#1 @3332 (71:8) pc 295
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 results @0
+    loc2 fake @0
+    loc5 fakeModels @0
+function <anonymous> @3340..5042
+  await#1 @37 (72:11) pc 41
+    arg0 tools @0
+    arg1 argument 1
+    loc0 <state>
+    loc1 models @0
+    loc2 r @0
+    loc3 qol @0
+    loc4 all @0
+    loc5 model @0
+    loc6 criteria @0
+    loc7 q @0
+    loc8 rows @0
+    loc9 t0 @0
+    loc10 errs @0
+    loc14 counts @0
+  await#2 @162 (73:13) pc 64
+    arg0 tools @0
+    arg1 argument 1
+    loc0 <state>
+    loc1 models @0
+    loc2 r @0
+    loc3 qol @0
+    loc4 all @0
+    loc5 model @0
+    loc6 criteria @0
+    loc7 q @0
+    loc8 rows @0
+    loc9 t0 @0
+    loc10 errs @0
+    loc14 counts @0
+  await#3 @1173 (88:15) pc 312
+    arg0 tools @0
+    arg1 argument 1
+    loc0 <state>
+    loc1 models @0
+    loc2 r @0
+    loc3 qol @0
+    loc4 all @0
+    loc5 model @0
+    loc6 criteria @0
+    loc7 q @0
+    loc8 rows @0
+    loc9 t0 @0
+    loc10 errs @0
+    loc11 i @1098
+    loc12 batch @1126
+    loc13 res @1126
+    loc14 counts @0
+  await#4 @1459 (91:1) pc 407
+    arg0 tools @0
+    arg1 argument 1
+    loc0 <state>
+    loc1 models @0
+    loc2 r @0
+    loc3 qol @0
+    loc4 all @0
+    loc5 model @0
+    loc6 criteria @0
+    loc7 q @0
+    loc8 rows @0
+    loc9 t0 @0
+    loc10 errs @0
+    loc14 counts @0

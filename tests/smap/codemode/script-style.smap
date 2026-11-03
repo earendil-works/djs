@@ -1,0 +1,9 @@
+function <anonymous> @1..819
+  await#1 @122 (2:13) pc 25
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 raw @0
+    loc2 byFile @0
+    loc7 report @0
+    loc12 summary @0

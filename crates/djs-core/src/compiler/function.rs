@@ -148,7 +148,9 @@ impl Parser<'_, '_> {
         self.f.name = name;
         self.f.src_start = start;
         if self_binding {
-            let s = self.f.new_scope(BODY_SCOPE, ScopeKind::FuncName);
+            let s = self
+                .f
+                .new_scope(BODY_SCOPE, ScopeKind::FuncName, self.tok.start);
             // The name scope sits outside the body: parameters and body declarations
             // shadow it.
             self.f.scopes[s as usize].parent = None;
@@ -343,7 +345,9 @@ impl Parser<'_, '_> {
         let separate = if self.f.simple_params {
             None
         } else {
-            let vs = self.f.new_scope(BODY_SCOPE, ScopeKind::Block);
+            let vs = self
+                .f
+                .new_scope(BODY_SCOPE, ScopeKind::Block, self.tok.start);
             self.f.var_scope = vs;
             self.scope = vs;
             self.code().enter_scope(vs as u16);

@@ -172,6 +172,13 @@ pub(super) struct Parser<'a, 'h> {
     pub completion: Option<Atom>,
     /// The atoms of the identifiers seen so far, by source text (0096).
     pub ident_atoms: IdentAtoms,
+    /// Record suspension maps (compiler/smap.rs): every function gets a recorder.
+    #[cfg(feature = "dump")]
+    pub smaps: bool,
+    /// Tests only: a plain call pushes `this` under the callee (a lowering whose
+    /// suspension maps must differ, compiler/smap_tests.rs). The code does not run.
+    #[cfg(test)]
+    pub test_swap_call: bool,
 }
 
 /// The atoms of unescaped identifiers by their text in the source: most names repeat,
@@ -330,6 +337,10 @@ impl<'a, 'h> Parser<'a, 'h> {
             using: Default::default(),
             completion: None,
             ident_atoms: IdentAtoms::default(),
+            #[cfg(feature = "dump")]
+            smaps: false,
+            #[cfg(test)]
+            test_swap_call: false,
         };
         p.f.src_end = src.len() as u32;
         if kind == FuncKind::AsyncBody {
@@ -353,6 +364,25 @@ impl<'a, 'h> Parser<'a, 'h> {
     /// Parses the whole source and builds the templates. Also returns the erased type
     /// ranges if they were recorded.
     pub fn compile(mut self) -> PResult<(Ref, Option<Erased>, Option<Vec<crate::heap::Atom>>)> {
+        self.parse_top()?;
+        self.finish_unit()
+    }
+
+    /// Parses the whole source and returns the suspension maps of its functions
+    /// (compiler/smap.rs), in source order. The templates are built too, and are garbage.
+    #[cfg(feature = "dump")]
+    pub fn compile_maps(mut self) -> PResult<(Ref, Vec<super::smap::FunctionMap>)> {
+        self.smaps = true;
+        self.f.smap = Some(Default::default());
+        self.parse_top()?;
+        let mut maps = Vec::new();
+        let (t, ..) = self.finish_unit_with(Some(&mut maps))?;
+        crate::sort::sort_by(&mut maps, |a, b| (a.start, a.end) < (b.start, b.end));
+        Ok((t, maps))
+    }
+
+    /// The top-level code, up to its return.
+    fn parse_top(&mut self) -> PResult<()> {
         if self.f.kind == FuncKind::AsyncBody {
             self.start_flavor((true, false))?;
         }
@@ -373,13 +403,24 @@ impl<'a, 'h> Parser<'a, 'h> {
         } else {
             self.emit_return_undef();
         }
-        self.finish_unit()
+        Ok(())
     }
 
     /// Finishes the unit after its top-level code: resolves every function into
     /// templates (also used by `compile_dynamic`, compiler/dynamic.rs).
     pub(super) fn finish_unit(
+        self,
+    ) -> PResult<(Ref, Option<Erased>, Option<Vec<crate::heap::Atom>>)> {
+        self.finish_unit_with(
+            #[cfg(feature = "dump")]
+            None,
+        )
+    }
+
+    /// [`Parser::finish_unit`], filling `maps` with the suspension maps when recorded.
+    fn finish_unit_with(
         mut self,
+        #[cfg(feature = "dump")] maps: Option<&mut Vec<super::smap::FunctionMap>>,
     ) -> PResult<(Ref, Option<Erased>, Option<Vec<crate::heap::Atom>>)> {
         self.end_async_region();
         let top = core::mem::replace(&mut self.f, FuncState::new(0, FuncKind::Script, None));
@@ -398,6 +439,8 @@ impl<'a, 'h> Parser<'a, 'h> {
             funcs,
             &self.ts_decls,
             names.as_mut(),
+            #[cfg(feature = "dump")]
+            maps,
         )?;
         Ok((t, erased, names))
     }
@@ -408,7 +451,12 @@ impl<'a, 'h> Parser<'a, 'h> {
     pub fn begin_function(&mut self, kind: FuncKind) -> PResult<()> {
         let id = self.done.len() as FuncId;
         self.done.push(None);
-        let child = FuncState::new(id, kind, Some((self.f.id, self.scope)));
+        #[allow(unused_mut)]
+        let mut child = FuncState::new(id, kind, Some((self.f.id, self.scope)));
+        #[cfg(feature = "dump")]
+        if self.smaps {
+            child.smap = Some(Default::default());
+        }
         let parent = core::mem::replace(&mut self.f, child);
         self.stack.push(Suspended {
             f: parent,
@@ -700,6 +748,17 @@ impl<'a, 'h> Parser<'a, 'h> {
             return;
         }
         self.f.code.rotate(start, mid, end);
+        // Suspension sites in the moved blocks move with them.
+        #[cfg(feature = "dump")]
+        if let Some(r) = &mut self.f.smap {
+            for s in &mut r.sites {
+                if (start..mid).contains(&s.p1) {
+                    s.p1 += end - mid;
+                } else if (mid..end).contains(&s.p1) {
+                    s.p1 -= mid - start;
+                }
+            }
+        }
         // The entries are sorted by pc: before `start`, the moved `start..mid` and
         // `mid..end`, the rest. Each block starts with the entry in effect where it
         // started (unless it has its own), and so does the code after `end`.
@@ -1197,7 +1256,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         if self.f.scopes.len() > u16::MAX as usize {
             return syntax(self.tok.start, "too many nested scopes");
         }
-        let s = self.f.new_scope(self.scope, kind);
+        let s = self.f.new_scope(self.scope, kind, self.tok.start);
         self.scope = s;
         self.f.code.enter_scope(s as u16);
         Ok(s)

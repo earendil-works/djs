@@ -1,0 +1,255 @@
+function ag @210..393
+  yield.await#1 @82 (10:17) pc 11
+    arg0 n @0
+    loc0 <state>
+    loc1 i @45
+    loc2 r @72
+  yield#1 @82 (10:17) pc 14
+    arg0 n @0
+    loc0 <state>
+    loc1 i @45
+    loc2 r @72
+  yield.return#1 @82 (10:17) pc 19
+    arg0 n @0
+    loc0 <state>
+    loc1 i @45
+    loc2 r @72
+  return.await#1 @126 (13:5) pc 60
+    arg0 n @0
+    loc0 <state>
+function deleg @394..521
+  yield*#1 @38 (19:13) pc 57 unsupported: yield*
+    loc0 <state>
+    loc1 v @0
+  yield*#2 @38 (19:13) pc 62 unsupported: yield*
+    loc0 <state>
+    loc1 v @0
+  yield*#3 @38 (19:13) pc 104 unsupported: yield*
+    loc0 <state>
+    loc1 v @0
+  yield*#4 @38 (19:13) pc 112 unsupported: yield*
+    loc0 <state>
+    loc1 v @0
+  yield*#5 @38 (19:13) pc 158 unsupported: yield*
+    loc0 <state>
+    loc1 v @0
+  yield*#6 @50 (19:25) pc 36 unsupported: yield*
+    loc0 <state>
+    loc1 v @0
+  yield*#7 @50 (19:25) pc 83 unsupported: yield*
+    loc0 <state>
+    loc1 v @0
+  yield*#8 @50 (19:25) pc 137 unsupported: yield*
+    loc0 <state>
+    loc1 v @0
+  yield*#9 @76 (21:3) pc 265 unsupported: yield*
+    loc0 <state>
+    loc1 v @0
+  yield*#10 @76 (21:3) pc 270 unsupported: yield*
+    loc0 <state>
+    loc1 v @0
+  yield*#11 @76 (21:3) pc 312 unsupported: yield*
+    loc0 <state>
+    loc1 v @0
+  yield*#12 @76 (21:3) pc 320 unsupported: yield*
+    loc0 <state>
+    loc1 v @0
+  yield*#13 @76 (21:3) pc 366 unsupported: yield*
+    loc0 <state>
+    loc1 v @0
+  yield*#14 @112 (21:39) pc 244 unsupported: yield*
+    loc0 <state>
+    loc1 v @0
+  yield*#15 @112 (21:39) pc 291 unsupported: yield*
+    loc0 <state>
+    loc1 v @0
+  yield*#16 @112 (21:39) pc 345 unsupported: yield*
+    loc0 <state>
+    loc1 v @0
+  return.await#1 @116 (22:3) pc 392
+    loc0 <state>
+    loc1 v @0
+function main @522..1409
+  for-await.close#1 @26 (25:3) pc 45 unsupported: closing an async iterator
+    loc0 <state>
+    loc1 x @43
+    loc4 it @0
+    loc5 it2 @0
+    loc6 thrower @0
+    loc9 o @0
+  for-await.next#1 @26 (25:3) pc 81
+    loc0 <state>
+    loc1 x @43
+    loc4 it @0
+    loc5 it2 @0
+    loc6 thrower @0
+    loc9 o @0
+    op0 for-await.iterator
+    op1 for-await.next
+  for-await.close#2 @76 (26:3) pc 140 unsupported: closing an async iterator
+    loc0 <state>
+    loc2 x @93
+    loc4 it @0
+    loc5 it2 @0
+    loc6 thrower @0
+    loc9 o @0
+  for-await.next#2 @76 (26:3) pc 176
+    loc0 <state>
+    loc2 x @93
+    loc4 it @0
+    loc5 it2 @0
+    loc6 thrower @0
+    loc9 o @0
+    op0 for-await.iterator
+    op1 for-await.next
+  for-await.close#3 @144 (27:3) pc 226 unsupported: closing an async iterator
+    loc0 <state>
+    loc3 x @161
+    loc4 it @0
+    loc5 it2 @0
+    loc6 thrower @0
+    loc9 o @0
+  for-await.next#3 @144 (27:3) pc 267
+    loc0 <state>
+    loc3 x @161
+    loc4 it @0
+    loc5 it2 @0
+    loc6 thrower @0
+    loc9 o @0
+    op0 for-await.iterator
+    op1 for-await.next
+  for-await.close#4 @144 (27:3) pc 299 unsupported: closing an async iterator
+    loc0 <state>
+    loc3 x @161
+    loc4 it @0
+    loc5 it2 @0
+    loc6 thrower @0
+    loc9 o @0
+  await#1 @261 (32:14) pc 351
+    loc0 <state>
+    loc4 it @0
+    loc5 it2 @0
+    loc6 thrower @0
+    loc9 o @0
+    op0 call.callee
+    op1 call.this
+    op2 call.callee
+    op3 call.this
+  await#2 @293 (33:14) pc 391
+    loc0 <state>
+    loc4 it @0
+    loc5 it2 @0
+    loc6 thrower @0
+    loc9 o @0
+    op0 call.callee
+    op1 call.this
+    op2 call.callee
+    op3 call.this
+  await#3 @328 (34:14) pc 431
+    loc0 <state>
+    loc4 it @0
+    loc5 it2 @0
+    loc6 thrower @0
+    loc9 o @0
+    op0 call.callee
+    op1 call.this
+    op2 call.callee
+    op3 call.this
+  await#4 @363 (35:14) pc 469
+    loc0 <state>
+    loc4 it @0
+    loc5 it2 @0
+    loc6 thrower @0
+    loc9 o @0
+    op0 call.callee
+    op1 call.this
+    op2 call.callee
+    op3 call.this
+  await#5 @395 (36:14) pc 507
+    loc0 <state>
+    loc4 it @0
+    loc5 it2 @0
+    loc6 thrower @0
+    loc9 o @0
+    op0 call.callee
+    op1 call.this
+    op2 call.callee
+    op3 call.this
+  await#6 @427 (37:14) pc 545
+    loc0 <state>
+    loc4 it @0
+    loc5 it2 @0
+    loc6 thrower @0
+    loc9 o @0
+    op0 call.callee
+    op1 call.this
+    op2 call.callee
+    op3 call.this
+  await#7 @469 (39:3) pc 572
+    loc0 <state>
+    loc4 it @0
+    loc5 it2 @0
+    loc6 thrower @0
+    loc9 o @0
+  await#8 @500 (40:14) pc 625
+    loc0 <state>
+    loc4 it @0
+    loc5 it2 @0
+    loc6 thrower @0
+    loc9 o @0
+    op0 call.callee
+    op1 call.this
+    op2 call.callee
+    op3 call.this
+  for-await.close#5 @634 (46:5) pc 657 unsupported: closing an async iterator
+    loc0 <state>
+    loc4 it @0
+    loc5 it2 @0
+    loc6 thrower @0
+    loc7 x @651
+    loc9 o @0
+  for-await.next#4 @634 (46:5) pc 695
+    loc0 <state>
+    loc4 it @0
+    loc5 it2 @0
+    loc6 thrower @0
+    loc7 x @651
+    loc9 o @0
+    op0 for-await.iterator
+    op1 for-await.next
+  for-await.close#6 @822 (51:3) pc 798 unsupported: closing an async iterator
+    loc0 <state>
+    loc4 it @0
+    loc5 it2 @0
+    loc6 thrower @0
+    loc9 o @0
+    loc10 x @839
+  for-await.next#5 @822 (51:3) pc 833
+    loc0 <state>
+    loc4 it @0
+    loc5 it2 @0
+    loc6 thrower @0
+    loc9 o @0
+    loc10 x @839
+    op0 for-await.iterator
+    op1 for-await.next
+function thrower @1067..1143
+  yield.await#1 @32 (42:5) pc 7
+    loc0 <state>
+  yield#1 @32 (42:5) pc 10
+    loc0 <state>
+  yield.return#1 @32 (42:5) pc 15
+    loc0 <state>
+function m @1279..1330
+  yield.await#1 @13 (50:28) pc 35
+    loc0 <state>
+    loc1 this
+  yield#1 @13 (50:28) pc 38
+    loc0 <state>
+    loc1 this
+  yield.return#1 @13 (50:28) pc 43
+    loc0 <state>
+    loc1 this
+  await#1 @19 (50:34) pc 32
+    loc0 <state>
+    loc1 this

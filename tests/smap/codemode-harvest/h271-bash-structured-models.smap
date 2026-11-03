@@ -1,0 +1,33 @@
+function <anonymous> @1..3719
+  await#1 @2464 (57:8) pc 225
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 results @0
+    loc2 fake @0
+    loc5 fakeModels @0
+function <anonymous> @2472..3696
+  await#1 @37 (58:11) pc 25
+    arg0 tools @0
+    arg1 models @0
+    loc0 <state>
+    loc1 r @0
+    loc2 lines @0
+    loc3 model @0
+    loc4 criteria @0
+    loc5 t0 @0
+    loc6 out @0
+  await#2 @850 (72:15) pc 282
+    arg0 tools @0
+    arg1 models @0
+    loc0 <state>
+    loc1 r @0
+    loc2 lines @0
+    loc3 model @0
+    loc4 criteria @0
+    loc5 t0 @0
+    loc6 out @0
+    loc7 c @822
+    loc8 res @838
+    op0 for-of.iterator
+    op1 for-of.next

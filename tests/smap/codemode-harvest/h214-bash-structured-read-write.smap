@@ -1,0 +1,26 @@
+function <anonymous> @1..3148
+  await#1 @1737 (38:8) pc 226
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 results @0
+    loc2 fake @0
+function <anonymous> @1745..3137
+  await#1 @87 (40:7) pc 43
+    arg0 tools @0
+    loc0 <state>
+    loc1 path @0
+    loc2 t @0
+    loc3 r @0
+  await#2 @1200 (62:1) pc 112
+    arg0 tools @0
+    loc0 <state>
+    loc1 path @0
+    loc2 t @0
+    loc3 r @0
+  await#3 @1245 (63:9) pc 147
+    arg0 tools @0
+    loc0 <state>
+    loc1 path @0
+    loc2 t @0
+    loc3 r @0

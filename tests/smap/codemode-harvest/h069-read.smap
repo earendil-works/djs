@@ -1,0 +1,16 @@
+function <anonymous> @1..2232
+  await#1 @1901 (46:8) pc 254
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 results @0
+    loc2 fake @0
+function <anonymous> @1909..2221
+  await#1 @185 (47:167) pc 142
+    arg0 tools @0
+    loc0 <state>
+    loc1 p @30
+    op0 for-of.iterator
+    op1 for-of.next
+    op2 call.callee
+    op3 call.this

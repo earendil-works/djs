@@ -1,0 +1,56 @@
+function <anonymous> @1..5909
+  await#1 @4873 (187:8) pc 1264
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 results @0
+    loc2 fake @0
+function <anonymous> @4881..5898
+  await#1 @35 (188:17) pc 33
+    arg0 tools @0
+    loc0 <state>
+    loc1 created @0
+    loc2 sc @0
+    loc3 slug @0
+    loc4 scratchId @0
+    loc5 put @0
+    loc6 p @0
+    loc7 qide @0
+    loc8 r @0
+    loc9 c @0
+  await#2 @234 (191:13) pc 115
+    arg0 tools @0
+    loc0 <state>
+    loc1 created @0
+    loc2 sc @0
+    loc3 slug @0
+    loc4 scratchId @0
+    loc5 put @0
+    loc6 p @0
+    loc7 qide @0
+    loc8 r @0
+    loc9 c @0
+  await#3 @506 (194:11) pc 238
+    arg0 tools @0
+    loc0 <state>
+    loc1 created @0
+    loc2 sc @0
+    loc3 slug @0
+    loc4 scratchId @0
+    loc5 put @0
+    loc6 p @0
+    loc7 qide @0
+    loc8 r @0
+    loc9 c @0
+  await#4 @736 (196:11) pc 326
+    arg0 tools @0
+    loc0 <state>
+    loc1 created @0
+    loc2 sc @0
+    loc3 slug @0
+    loc4 scratchId @0
+    loc5 put @0
+    loc6 p @0
+    loc7 qide @0
+    loc8 r @0
+    loc9 c @0

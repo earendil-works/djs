@@ -188,6 +188,8 @@ impl Parser<'_, '_> {
         if receiver {
             // `dec recv`, like a call's callee and `this`.
             self.prepare_call(e);
+            // They stay for the class: its suspensions are not described (D2563).
+            self.roles_pop(2);
         }
         self.leave();
         Ok(())

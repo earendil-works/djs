@@ -1,0 +1,27 @@
+function <anonymous> @1..4044
+  await#1 @3016 (89:8) pc 589
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 results @0
+    loc2 fake @0
+    loc5 stored @0
+    loc6 realLoad @0
+    loc7 fakeLoad @0
+function <anonymous> @3024..4023
+  await#1 @423 (94:9) pc 159
+    arg0 tools @0
+    arg1 load @0
+    loc0 <state>
+    loc1 clean @0
+    loc2 html @0
+    loc3 r @0
+  await#2 @847 (96:6) pc 235
+    arg0 tools @0
+    arg1 load @0
+    loc0 <state>
+    loc1 clean @0
+    loc2 html @0
+    loc3 r @0
+    op0 call.callee
+    op1 call.this

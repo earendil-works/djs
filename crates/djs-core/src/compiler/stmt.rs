@@ -7,6 +7,7 @@ use super::PResult;
 use super::func::{FuncKind, HandlerLabels, ScopeKind, VarKind};
 use super::parser::{BlockEnv, BlockKind, Parser, syntax};
 use super::pattern::Binding;
+use super::smap::{Role, SiteKind};
 use crate::heap::Atom;
 use crate::lexer::{Kw, TokenKind};
 
@@ -734,6 +735,7 @@ impl Parser<'_, '_> {
                 if self.f.is_async && self.f.is_generator {
                     // An async generator awaits the operand of `return`.
                     self.mark(pos);
+                    self.site(SiteKind::AsyncReturn, pos);
                     self.code().await_(0);
                 }
             }
@@ -880,6 +882,8 @@ impl Parser<'_, '_> {
             self.expect(TokenKind::Finally, "finally")?;
             self.place(l_fin);
             self.stmt_depth = base + 2;
+            // The pending completion is not described yet (D2563).
+            self.roles_push(&[Role::Unsupported("finally")]);
             // A normal finally block keeps the completion value of the try statement:
             // it is saved on the stack (a jump out of the block drops it).
             let completion = self.completion_local();
@@ -895,6 +899,7 @@ impl Parser<'_, '_> {
                 self.code().name_put(r);
             }
             self.stmt_depth = base;
+            self.roles_pop(1);
             self.code().ret();
         }
         self.place(l_end);
@@ -947,7 +952,10 @@ impl Parser<'_, '_> {
                     self.place(next_test);
                     next_test = self.new_label();
                     self.code().dup();
+                    // The discriminant (twice) is not described yet (D2563).
+                    self.roles_push(&[Role::Unsupported("switch")]);
                     self.parse_expr(false)?;
+                    self.roles_pop(1);
                     self.code().strict_eq();
                     self.code().jump_if_false(next_test);
                     self.code().drop();

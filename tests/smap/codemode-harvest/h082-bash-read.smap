@@ -1,0 +1,37 @@
+function <anonymous> @1..2437
+  await#1 @1404 (36:8) pc 210
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 results @0
+    loc2 fake @0
+function <anonymous> @1412..2426
+  await#1 @94 (39:1) pc 57
+    arg0 argument 0
+    loc0 <state>
+    loc1 tools @0
+    loc2 searches @0
+  await#2 @694 (44:6) pc 111
+    arg0 argument 0
+    loc0 <state>
+    loc1 tools @0
+    loc2 searches @0
+    op0 call.callee
+    op1 call.this
+  await#3 @762 (45:6) pc 154
+    arg0 argument 0
+    loc0 <state>
+    loc1 tools @0
+    loc2 searches @0
+    op0 call.callee
+    op1 call.this
+function <anonymous> @1561..2097
+  await#1 @493 (42:18) pc 126
+    arg0 q @0
+    arg1 i @0
+    loc0 <state>
+    loc1 narrow @0
+    loc2 command @0
+    op0 call.callee
+    op1 call.this
+    op2 object.literal

@@ -1,0 +1,21 @@
+function <anonymous> @1..8559
+  await#1 @7777 (303:8) pc 2182
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 results @0
+    loc2 fake @0
+function <anonymous> @7785..8548
+  await#1 @132 (308:15) pc 106
+    arg0 tools @0
+    loc0 <state>
+    loc1 all @0
+    loc2 view @53
+    loc3 cursor @99
+    loc4 r @122
+    loc5 s @122
+    loc7 now @0
+    loc8 cutoff @0
+    loc9 list @0
+    op0 for-of.iterator
+    op1 for-of.next

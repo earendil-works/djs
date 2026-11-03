@@ -166,6 +166,7 @@ pub(super) fn finish(
     mut funcs: Vec<FuncState>,
     decls: &[TsDecl],
     builtin_names: Option<&mut Vec<Atom>>,
+    #[cfg(feature = "dump")] mut maps: Option<&mut Vec<super::smap::FunctionMap>>,
 ) -> PResult<Ref> {
     // 1. Classify references, children first. (Member references add a reference to
     // their namespace parameter, classified in turn.)
@@ -263,6 +264,8 @@ pub(super) fn finish(
             script,
             if id == 0 { &mut top } else { &mut pool },
             &mut scratch,
+            #[cfg(feature = "dump")]
+            maps.as_deref_mut(),
         )?;
         templates[id] = t;
     }
@@ -473,6 +476,69 @@ fn assign_storage(
     (storage, names)
 }
 
+/// The suspension map of `f` (D2563) from its final code: where each recorded site
+/// ended up and the operand depth there.
+#[cfg(feature = "dump")]
+#[allow(clippy::too_many_arguments)]
+fn suspension_map(
+    heap: &Heap,
+    f: &FuncState,
+    rec: &super::smap::Recorder,
+    storage: &[Storage],
+    names: &[Atom],
+    code: &crate::bytecode::Code,
+    handlers: &[crate::bytecode::Handler],
+    suspends: &[(u32, u32)],
+) -> PResult<super::smap::FunctionMap> {
+    let depths = crate::bytecode::stack_depths(&code.code, handlers)
+        .map_err(|e| internal(&crate::detail::detail("stack depths", &e)))?;
+    let mut at = Vec::with_capacity(rec.sites.len());
+    let mut depth = Vec::with_capacity(rec.sites.len());
+    for s in &rec.sites {
+        let found = suspends
+            .iter()
+            .find(|e| e.0 == s.p1)
+            .map(|e| code.map_pos(e.1));
+        match found {
+            Some(pc) => {
+                let size = crate::bytecode::decode::decode(&code.code, pc)
+                    .map_err(|e| internal(&crate::detail::detail("decode", &e)))?
+                    .size();
+                at.push(Some((pc, pc + size)));
+                depth.push(
+                    depths
+                        .get(pc as usize)
+                        .copied()
+                        .filter(|&d| d != crate::bytecode::UNKNOWN_DEPTH),
+                );
+            }
+            None => {
+                at.push(None);
+                depth.push(None);
+            }
+        }
+    }
+    let slots: Vec<Option<(bool, u16)>> = storage
+        .iter()
+        .map(|s| match *s {
+            Storage::Local(i) | Storage::Box(i) => Some((true, i)),
+            Storage::Arg(i) => Some((false, i)),
+            _ => None,
+        })
+        .collect();
+    let params = (f.param_count - u16::from(f.rest.is_some())) as usize;
+    Ok(super::smap::build(
+        heap,
+        f,
+        rec,
+        &slots,
+        names.len(),
+        params,
+        &at,
+        &depth,
+    ))
+}
+
 /// Handlers whose depth is relative to a label (`HandlerLabels::depth_from`) get their
 /// absolute depth from the final code. A region may sit in code that only another such
 /// handler reaches (a pattern in a catch block of a pattern default...), so this
@@ -537,7 +603,12 @@ fn emit_function(
     script: Ref,
     pool: &mut UnitPool,
     scratch: &mut Scratch,
+    #[cfg(feature = "dump")] maps: Option<&mut Vec<super::smap::FunctionMap>>,
 ) -> PResult<Ref> {
+    // Suspension sites (D2563): phase-1 index and position in the code before jump
+    // shortening of each emitted `await`/`yield`.
+    #[cfg(feature = "dump")]
+    let mut suspends: Vec<(u32, u32)> = Vec::new();
     let mut needs_uninit = vec![false; f.vars.len()];
     for r in resolved {
         if let (Target::Var(v), true) = (r.target, r.check) {
@@ -649,6 +720,10 @@ fn emit_function(
         }
         dead = insn.info().no_fallthrough();
         flush(&out, &mut li, &mut lines, insn.pc);
+        #[cfg(feature = "dump")]
+        if f.smap.is_some() && matches!(insn.op, Op::Await | Op::Yield | Op::YieldStar) {
+            suspends.push((insn.pc, out.pos()));
+        }
         match insn.op {
             Op::NameGet | Op::NamePut | Op::NameSet | Op::NameInit | Op::NameTypeof => {
                 let r = insn.imm(0) as usize;
@@ -933,6 +1008,12 @@ fn emit_function(
         });
     }
     resolve_relative_depths(f, &code, &mut handlers)?;
+    #[cfg(feature = "dump")]
+    if let (Some(rec), Some(maps)) = (&f.smap, maps) {
+        maps.push(suspension_map(
+            heap, f, rec, storage, names, &code, &handlers, &suspends,
+        )?);
+    }
 
     // ---- Captures, children, line table, template.
     let mut capture_words = crate::buf::vec_with_capacity(f.captures.len());

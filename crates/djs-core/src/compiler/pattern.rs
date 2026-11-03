@@ -143,11 +143,15 @@ impl<'a> Parser<'a, '_> {
     pub(super) fn parse_pattern(&mut self, b: Binding) -> PResult<()> {
         let w = 1 + super::parser::PATTERN_WEIGHT;
         self.enter_n(w)?;
+        // The source and iterator under way are not described in suspension maps yet
+        // (D2563).
+        self.roles_push(&[super::smap::Role::Unsupported("destructuring")]);
         let r = if self.is(TokenKind::LBrace) {
             self.parse_object_pattern(b)
         } else {
             self.parse_array_pattern(b)
         };
+        self.roles_pop(1);
         self.leave_n(w);
         r
     }

@@ -1,0 +1,35 @@
+function <anonymous> @1..582
+  await#1 @102 (2:11) pc 53
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 r @0
+    loc2 d @0
+  await#2 @212 (4:13) pc 87
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 r @0
+    loc2 d @0
+    op0 call.callee
+    op1 call.this
+  await#3 @260 (5:13) pc 110
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 r @0
+    loc2 d @0
+    op0 call.callee
+    op1 call.this
+  await#4 @300 (6:11) pc 143
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 r @0
+    loc2 d @0
+  await#5 @438 (10:3) pc 233
+    arg0 tools @0
+    arg1 console @0
+    loc0 <state>
+    loc1 r @0
+    loc2 d @0

@@ -1,0 +1,41 @@
+# Suspension map coverage (compiler/smap_tests.rs)
+sites 1063
+
+## by kind
+  957 await
+   11 await-using
+   10 for-await.close
+    8 for-await.next
+    2 return.await
+   30 yield
+   23 yield*
+   11 yield.await
+   11 yield.return
+
+## described, by operand roles
+  708 -
+  208 call.callee call.this
+   21 for-of.iterator for-of.next
+   18 call.callee call.this object.literal
+   12 for-of.iterator for-of.next call.callee call.this
+    9 for-of.iterator for-of.next call.callee call.this object.literal
+    8 for-await.iterator for-await.next
+    7 call.callee call.this call.callee call.this
+    3 binary.left
+    3 for-of.iterator for-of.next call.callee call.this binary.left
+    2 array.element[0]
+    2 assign.object assign.key
+    2 call.callee call.this call.arg[0]
+    1 assign.old
+    1 binary.left array.element[0]
+    1 call.callee call.this call.arg[0] call.callee call.this
+    1 call.callee call.this call.arg[0] call.callee call.this call.arg[0]
+    1 call.callee call.this template.part[0] template.part[1] template.part[2]
+    1 for-of.iterator for-of.next assign.old
+    1 object.literal
+
+## unsupported
+   10 closing an async iterator
+    1 destructuring
+   19 using
+   23 yield*

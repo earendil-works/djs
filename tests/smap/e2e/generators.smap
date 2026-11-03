@@ -1,0 +1,77 @@
+function g @339..491
+  yield#1 @29 (8:13) pc 7
+    arg0 a @0
+    loc0 <state>
+    loc1 x @0
+  yield#2 @75 (11:5) pc 35
+    arg0 a @0
+    loc0 <state>
+    loc1 x @0
+  yield#3 @88 (12:5) pc 49
+    arg0 a @0
+    loc0 <state>
+    loc1 x @0
+function inner @739..838
+  yield#1 @32 (30:13) pc 7
+    loc0 <state>
+    loc1 r @0
+  yield#2 @74 (32:3) pc 35
+    loc0 <state>
+    loc1 r @0
+function outer @839..945
+  yield*#1 @32 (36:13) pc 46 unsupported: yield*
+    loc0 <state>
+    loc1 v @0
+  yield*#2 @73 (38:3) pc 198 unsupported: yield*
+    loc0 <state>
+    loc1 v @0
+function fin @1067..1162
+  yield*#1 @30 (48:5) pc 46 unsupported: yield*
+    loc0 <state>
+function expr @1271..1365
+  yield#1 @36 (58:18) pc 9
+    loc0 <state>
+    loc1 r @0
+    op0 binary.left
+  yield#2 @53 (58:35) pc 21
+    loc0 <state>
+    loc1 r @0
+    op0 binary.left
+  yield#3 @63 (58:45) pc 30
+    loc0 <state>
+    loc1 r @0
+    op0 binary.left
+    op1 array.element[0]
+function m @1520..1542
+  yield#1 @7 (66:20) pc 17
+    loc0 <state>
+    loc1 this
+function pass @1863..1895
+  yield*#1 @19 (71:20) pc 44 unsupported: yield*
+    loc0 <state>
+function catcher @1935..2049
+  yield#1 @34 (75:5) pc 7
+    loc0 <state>
+  yield#2 @99 (78:5) pc 39
+    loc0 <state>
+    loc1 e @53
+function fw @2050..2086
+  yield*#1 @17 (81:18) pc 46 unsupported: yield*
+    loc0 <state>
+function nt @2299..2333
+  yield*#1 @17 (90:18) pc 44 unsupported: yield*
+    loc0 <state>
+function cnt @2419..2531
+  yield#1 @53 (100:28) pc 9
+    loc0 <state>
+    loc1 i @39
+function fo @2598..2652
+  yield#1 @44 (109:45) pc 45
+    loc0 <state>
+    loc1 x @28
+    op0 for-of.iterator
+    op1 for-of.next
+function dstr @2919..2991
+  yield#1 @30 (117:31) pc 68 unsupported: destructuring
+    loc0 <state>
+    loc1 a @0

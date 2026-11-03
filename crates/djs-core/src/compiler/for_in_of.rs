@@ -51,6 +51,7 @@ use super::func::{HandlerLabels, ScopeKind, VarKind};
 use super::parser::{BlockEnv, BlockKind, Checkpoint, OpenIter, Parser, syntax};
 use super::pattern::Binding;
 use super::scan::Follow;
+use super::smap::{Loop, Role, SiteKind};
 use crate::bytecode::Label;
 use crate::bytecode::intrinsics::intrinsic_id;
 use crate::heap::{Atom, atoms};
@@ -262,8 +263,15 @@ impl<'a> Parser<'a, '_> {
             self.code().call_intrinsic(get_iterator, 1);
             self.code().dup();
             self.code().get_field(atoms::NEXT, 0);
+            let kind = if is_await {
+                Loop::ForAwait
+            } else {
+                Loop::ForOf
+            };
+            self.roles_push(&[Role::LoopIterator(kind), Role::LoopNext(kind)]);
         } else {
             self.code().for_in_start();
+            self.roles_push(&[Role::LoopIterator(Loop::ForIn)]);
         }
         let l_step = self.new_label();
         self.code().jump(l_step);
@@ -278,6 +286,10 @@ impl<'a> Parser<'a, '_> {
                 // A promise that always fulfills (errors from `return()` are dropped).
                 let close = intrinsic_id("AsyncIteratorCloseThrow").expect("intrinsic");
                 self.code().call_intrinsic(close, 1);
+                // In the close handler: the exception under the promise, not described yet.
+                self.roles_push(&[Role::Unsupported("closing an async iterator")]);
+                self.site(SiteKind::ForAwaitClose, for_pos);
+                self.roles_pop(1);
                 self.code().await_(0);
             } else {
                 let close = intrinsic_id("IteratorCloseThrow").expect("%IteratorCloseThrow");
@@ -409,6 +421,7 @@ impl<'a> Parser<'a, '_> {
             if is_await {
                 self.code().swap();
                 self.code().call(0);
+                self.site(SiteKind::ForAwaitNext, for_pos);
                 self.code().await_(0);
             } else {
                 self.code().iter_next(l_value);
@@ -435,7 +448,7 @@ impl<'a> Parser<'a, '_> {
                 self.code().dup();
                 self.mark(for_pos);
                 if is_await {
-                    self.emit_async_close_normal();
+                    self.emit_async_close_normal((SiteKind::ForAwaitClose, for_pos));
                     self.code().undefined();
                 } else {
                     self.code().call_intrinsic(close, 1);
@@ -449,7 +462,7 @@ impl<'a> Parser<'a, '_> {
                 self.code().drop();
                 self.mark(for_pos);
                 if is_await {
-                    self.emit_async_close_normal();
+                    self.emit_async_close_normal((SiteKind::ForAwaitClose, for_pos));
                 } else {
                     self.code().call_intrinsic(close, 1);
                     self.code().drop();
@@ -463,6 +476,7 @@ impl<'a> Parser<'a, '_> {
             self.place(l_break);
             self.code().drop();
         }
+        self.roles_pop(if is_of { 2 } else { 1 });
         if scoped {
             self.pop_scope();
         }
