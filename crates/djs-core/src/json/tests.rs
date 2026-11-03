@@ -474,6 +474,75 @@ fn stringify_two_byte_runs() {
     }
 }
 
+/// Output past the spill size is moved into the heap at check points (D2553): compare
+/// large results with the independent quoter, for narrow output, output that widens after
+/// spilling, long strings split into parts (a surrogate pair across a split stays whole),
+/// and ropes, whose flattening allocates between spills (the result is then a rope).
+#[test]
+fn stringify_large_output_spills_into_the_heap() {
+    let mut h = Heap::new().unwrap();
+    let mut rng = Rng(0x2545_F491_4F6C_DD1D);
+    let (mut in_place, mut ropes) = (0, 0);
+    for round in 0..40 {
+        let mut want = String::from("[");
+        let mut values = Vec::new();
+        let mut plain = true;
+        for i in 0..(5 + rng.below(200)) {
+            let n = match rng.below(8) {
+                0 => SPILL_AT - 1 + rng.below(3) as usize,
+                1 => 3 * SPILL_AT + rng.below(50) as usize,
+                _ => rng.below(60) as usize,
+            };
+            let wide = round % 4 == 1 && rng.below(10) == 0;
+            let mut units: Vec<u16> = (0..n)
+                .map(|j| match rng.below(40) {
+                    0 => 0x0A,
+                    1 => 0x22,
+                    2 if wide => 0x4E2D,
+                    _ => 0x61 + (j % 26) as u16,
+                })
+                .collect();
+            if wide {
+                // A pair right at the first split, and the width invariant.
+                if n > SPILL_AT {
+                    units[SPILL_AT - 1] = 0xD83D;
+                    units[SPILL_AT] = 0xDE00;
+                }
+                units.push(0x4E2D);
+            }
+            let s = if round % 4 == 2 && n >= 2 && rng.below(4) == 0 {
+                plain = false;
+                let (a, b) = units.split_at(n / 2);
+                let (a, b) = (h.alloc_utf16(a).unwrap(), h.alloc_utf16(b).unwrap());
+                h.concat(a, b).unwrap()
+            } else {
+                h.alloc_utf16(&units).unwrap()
+            };
+            if i > 0 {
+                want.push(',');
+            }
+            want += &quote_units(&units);
+            values.push(Value::string(s));
+        }
+        want.push(']');
+        let arr = h.new_array_from_values(None, &values).unwrap();
+        let out = stringify_fast(&mut h, Value::object(arr), &[])
+            .unwrap()
+            .unwrap();
+        assert_eq!(h.str_to_string(out), want, "round {round}");
+        if plain && round % 4 == 0 && want.len() > 2 * SPILL_AT {
+            // Built in place: one flat cell, the arena's last.
+            assert_eq!(h.cell_kind(out.0), crate::heap::CellKind::Str8);
+            assert_eq!(out.0 + h.cell_size(out.0), h.arena().len());
+            in_place += 1;
+        }
+        if h.cell_kind(out.0) == crate::heap::CellKind::Rope {
+            ropes += 1;
+        }
+    }
+    assert!(in_place > 3 && ropes > 3, "{in_place} {ropes}");
+}
+
 #[test]
 fn stringify_gap() {
     let mut h = Heap::new().unwrap();

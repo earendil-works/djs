@@ -14,7 +14,10 @@
 //! The output goes into a growable one-byte buffer that switches to two-byte the first
 //! time a code unit above 0xFF is written. Its size is checked against the string length
 //! limit and the heap's remaining room (the result has to fit there anyway), so transient
-//! memory stays bounded by the memory cap.
+//! memory stays bounded by the memory cap. Past [`SPILL_AT`] bytes the buffer is moved into
+//! the result's heap string at each check point and starts again (D2553): a large result is
+//! built in the arena, where it ends up, and no Rust copy of it is alive while the arena
+//! grows to take it.
 
 use alloc::vec::Vec;
 
@@ -116,6 +119,8 @@ pub fn stringify_fast_at(
         out: Out {
             // (Most results are a few hundred bytes: no growth through 8, 16, ... 128.)
             buf: Buf::Narrow(crate::buf::vec_with_capacity(256)),
+            pieces: Vec::new(),
+            spilled: 0,
             max_len: limit.0,
             room: limit.1,
         },
@@ -134,12 +139,27 @@ pub fn stringify_fast_at(
     if !s.run(value)? {
         return Ok(None);
     }
-    let str = match s.out.buf {
-        Buf::Narrow(b) => s.heap.alloc_latin1(&b)?,
-        Buf::Wide(w) => s.heap.alloc_utf16(&w)?,
-    };
+    if s.out.pieces.is_empty() {
+        let str = match s.out.buf {
+            Buf::Narrow(b) => s.heap.alloc_latin1(&b)?,
+            Buf::Wide(w) => s.heap.alloc_utf16(&w)?,
+        };
+        return Ok(Some(str));
+    }
+    s.spill()?;
+    // Usually one piece; a rope of them when something else was allocated in between.
+    let mut pieces = s.out.pieces.iter();
+    let mut str = *pieces.next().expect("spilled");
+    for &p in pieces {
+        str = s.heap.concat(str, p)?;
+    }
     Ok(Some(str))
 }
+
+/// The buffered output, in bytes, at which a check point moves it into the heap (D2553).
+/// The buffer then stays below the size that goes to page runs of its own instead of the
+/// allocator's segments.
+pub(super) const SPILL_AT: usize = 4096;
 
 /// QuoteJSONString ( value ), 25.5.2.3, of a string, without a serializer's setup
 /// (the full algorithm quotes every key and string through this).
@@ -148,6 +168,8 @@ pub fn quote(heap: &mut Heap, s: Str) -> Result<Str, HeapError> {
     let view = heap.str_view(flat).expect("flat");
     let mut out = Out {
         buf: Buf::Narrow(crate::buf::vec_with_capacity(view.len() + 2)),
+        pieces: Vec::new(),
+        spilled: 0,
         max_len: usize::MAX,
         room: usize::MAX,
     };
@@ -165,6 +187,11 @@ enum Buf {
 
 struct Out {
     buf: Buf,
+    /// The output moved into the heap so far: flat strings, in order, each of the
+    /// buffer's width when it was started (see [`Ser::spill`]).
+    pieces: Vec<Str>,
+    /// Their total length in code units.
+    spilled: usize,
     max_len: usize,
     room: usize,
 }
@@ -177,6 +204,9 @@ impl Out {
             Buf::Narrow(b) => (b.len(), b.len()),
             Buf::Wide(w) => (w.len(), w.len() * 2),
         };
+        // (The spilled part counted as one byte per unit: the room check bounds transient
+        // memory, and the heap's own limit backs it.)
+        let (len, bytes) = (len + self.spilled, bytes + self.spilled);
         if len > self.max_len {
             Err(StringifyError::Heap(HeapError::StringTooLong))
         } else if bytes > self.room {
@@ -275,6 +305,12 @@ impl Out {
             o.reserve(v.len() + v.len() / 16 + 2);
         }
         self.byte(b'"');
+        self.quote_body(v);
+        self.byte(b'"');
+    }
+
+    /// QuoteJSONString without the quotes.
+    fn quote_body(&mut self, v: StrView<'_>) {
         match v {
             StrView::Latin1(b) => {
                 let mut run = 0;
@@ -334,7 +370,6 @@ impl Out {
                 self.wide_run(&units[run..]);
             }
         }
-        self.byte(b'"');
     }
 }
 
@@ -556,6 +591,58 @@ impl Ser<'_, '_> {
         Some(Class::Date(t))
     }
 
+    /// A check point: moves a buffer past [`SPILL_AT`] into the heap, failing once the
+    /// result could no longer become a heap string. (Below that the buffer is small and
+    /// the result's own allocation does the checks.)
+    #[inline]
+    fn check(&mut self) -> Result<(), StringifyError> {
+        let bytes = match &self.out.buf {
+            Buf::Narrow(b) => b.len(),
+            Buf::Wide(w) => w.len() * 2,
+        };
+        if bytes >= SPILL_AT {
+            self.spill()?;
+        }
+        Ok(())
+    }
+
+    /// Moves the buffer into the heap: appended to the last piece in place when that is
+    /// still the arena's last cell and has the buffer's width, else as a new piece.
+    #[inline(never)]
+    fn spill(&mut self) -> Result<(), StringifyError> {
+        self.out.check()?;
+        let n = match &self.out.buf {
+            Buf::Narrow(b) => b.len(),
+            Buf::Wide(w) => w.len(),
+        };
+        let wide = matches!(self.out.buf, Buf::Wide(_));
+        let last = self.out.pieces.last().copied();
+        let appended = match last {
+            Some(p) if self.heap.str_is_two_byte(p) == wide => match &self.out.buf {
+                Buf::Narrow(b) => self.heap.append_last_latin1(p, b)?,
+                Buf::Wide(w) => self.heap.append_last_str(p, n as u32, |d| {
+                    for (pair, u) in d.as_chunks_mut::<2>().0.iter_mut().zip(w) {
+                        *pair = u.to_le_bytes();
+                    }
+                })?,
+            },
+            _ => false,
+        };
+        if !appended {
+            let piece = match &self.out.buf {
+                Buf::Narrow(b) => self.heap.alloc_latin1(b)?,
+                Buf::Wide(w) => self.heap.alloc_utf16(w)?,
+            };
+            self.out.pieces.push(piece);
+        }
+        self.out.spilled += n;
+        match &mut self.out.buf {
+            Buf::Narrow(b) => b.clear(),
+            Buf::Wide(w) => w.clear(),
+        }
+        Ok(())
+    }
+
     fn newline(&mut self, depth: usize) {
         if self.gap.is_empty() {
             return;
@@ -582,10 +669,39 @@ impl Ser<'_, '_> {
             self.out.latin1(b"null");
         } else if let Some(s) = v.as_string() {
             let flat = self.heap.contiguous(s)?;
-            let view = self.heap.str_view(flat).expect("flat");
-            self.out.quote(view);
+            let len = self.heap.str_len(flat) as usize;
+            if len <= SPILL_AT {
+                let view = self.heap.str_view(flat).expect("flat");
+                self.out.quote(view);
+            } else {
+                // A long string goes out in parts with check points between them, so
+                // that the buffer never holds all of it (D2553).
+                self.out.byte(b'"');
+                let mut at = 0;
+                while at < len {
+                    let view = self.heap.str_view(flat).expect("flat");
+                    let mut end = (at + SPILL_AT).min(len);
+                    let part = match view {
+                        StrView::Latin1(b) => StrView::Latin1(&b[at..end]),
+                        StrView::Utf16(b) => {
+                            // A surrogate pair stays in one part (a lone half is escaped).
+                            if end < len
+                                && (0xD800..=0xDBFF)
+                                    .contains(&u16::from_le_bytes([b[2 * end - 2], b[2 * end - 1]]))
+                            {
+                                end += 1;
+                            }
+                            StrView::Utf16(&b[2 * at..2 * end])
+                        }
+                    };
+                    self.out.quote_body(part);
+                    at = end;
+                    self.check()?;
+                }
+                self.out.byte(b'"');
+            }
         }
-        self.out.check()
+        self.check()
     }
 
     /// Writes the key of an object member.
@@ -639,7 +755,7 @@ impl Ser<'_, '_> {
                     }
                     None => self.out.latin1(b"null"),
                 }
-                return self.out.check();
+                return self.check();
             }
             Class::Object(o, a) => (o, a),
         };
@@ -662,7 +778,7 @@ impl Ser<'_, '_> {
         }
         // Containers without primitives (`[[],[]]` with a long gap) must not grow the
         // output unchecked either.
-        self.out.check()?;
+        self.check()?;
         if is_array {
             self.out.byte(b'[');
             let len = self.heap.array_length(o);
@@ -889,7 +1005,7 @@ impl Ser<'_, '_> {
                     match self.classify(value)? {
                         Class::Skip => {
                             self.out.latin1(b"null");
-                            self.out.check()?;
+                            self.check()?;
                         }
                         c => self.emit(value, c)?,
                     }
