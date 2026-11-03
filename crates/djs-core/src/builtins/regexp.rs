@@ -31,7 +31,7 @@ pub(crate) const IT_UNICODE: i32 = 2;
 pub(crate) const IT_DONE: i32 = 4;
 
 /// The flag letters in `flags` order (hasIndices first, as in RegExp.prototype.flags).
-const FLAG_CHARS: [(u8, Flags); 8] = [
+pub(crate) const FLAG_CHARS: [(u8, Flags); 8] = [
     (b'd', Flags::HAS_INDICES),
     (b'g', Flags::GLOBAL),
     (b'i', Flags::IGNORE_CASE),

@@ -10,13 +10,16 @@ publish.workspace = true
 libm = "=0.2.16"
 
 [features]
-default = ["full", "unicode"]
+default = ["full", "unicode", "dump"]
 # Everything djs implements. Off, the build is slim (D2411, docs/slim-codemode.md): no typed
 # arrays/ArrayBuffer/DataView, Iterator helpers or `Iterator`, BigInt, WeakRef/
 # FinalizationRegistry, DisposableStack/AsyncDisposableStack/SuppressedError, and no
 # `using`, decorator or BigInt literal syntax; their names say "not available in this
 # build". Additive: turning it on only adds.
 full = ["djs-prelude/full"]
+# `Vm::dump` (0167, docs/functions-as-code.md): a VM's bindings written as JavaScript.
+# Code only: images and the base do not depend on it.
+dump = []
 # The Unicode tables: both features below.
 unicode = ["regexp-unicode-props", "unicode-normalization"]
 # (Each feature also turns on djs-prelude's of the same name, for the e2e tests' base: the

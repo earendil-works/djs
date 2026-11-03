@@ -52,7 +52,7 @@ pub(crate) fn to_string(heap: &mut Heap, f: Value) -> Result<Str, Fault> {
     ))?)
 }
 
-fn source_slice(heap: &Heap, f: Obj) -> Option<String> {
+pub(crate) fn source_slice(heap: &Heap, f: Obj) -> Option<String> {
     let t = heap.closure_template(f);
     let a = heap.arena();
     let debug = crate::bytecode::template::debug_info(heap, t);

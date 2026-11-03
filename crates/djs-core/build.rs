@@ -73,13 +73,14 @@ fn libm_version(manifest: &str) -> String {
 /// The enabled features of this crate, sorted, without `default` and `unicode` (which only
 /// name others, D2411) and `unsafe-heap`, which changes how the arena is accessed but no
 /// result or image (D2520): the base snapshot, built by a host build without it, loads into
-/// a build with it, and images move freely between the two.
+/// a build with it, and images move freely between the two. Nor `dump` (0167), which only
+/// adds `Vm::dump`, a reader of the heap: a run never calls it.
 fn features() -> Vec<String> {
     enabled_features()
         .into_iter()
         // `default` and `unicode` only name others (D2411): a build that turns on the
         // same effective features through other names hashes the same.
-        .filter(|f| f != "default" && f != "unicode" && f != "unsafe-heap")
+        .filter(|f| f != "default" && f != "unicode" && f != "unsafe-heap" && f != "dump")
         .collect()
 }
 

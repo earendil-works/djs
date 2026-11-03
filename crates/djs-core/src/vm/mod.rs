@@ -16,6 +16,8 @@
 //! [`Handle`](crate::heap::Handle) to hold them longer.
 
 pub mod compat;
+#[cfg(feature = "dump")]
+pub mod dump;
 mod format;
 mod image;
 pub mod registry;
@@ -1080,6 +1082,8 @@ fn fnv64(bytes: &[u8]) -> u64 {
 
 #[cfg(test)]
 mod compat_tests;
+#[cfg(all(test, feature = "dump"))]
+mod dump_tests;
 #[cfg(test)]
 mod frozen_tests;
 #[cfg(test)]
