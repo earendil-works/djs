@@ -1,7 +1,7 @@
 # 0168: `.dump` loses a closure's captured environment
 
-status: open
-agent: -
+status: in-progress
+agent: portable
 branch: issue/0168-dump-closure-env
 depends-on: 0167
 guide: -
