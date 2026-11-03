@@ -221,6 +221,14 @@ time, nothing in the heap):
   pending completion, destructuring under way, `using` stacks, `yield*` delegation as
   they are added.
 
+As built (0169, D2570), djs's lowering keeps a few values the vocabulary above does not
+name: template literal parts until they are joined (`template.part[i]`, no
+`template.prefix`), up to 256 leading array elements (`array.element[i]`, then
+`array.literal`), the object of `o[await k]` (`member.object`), and the arguments of `new`,
+`super(…)` and spreads (`new.arg[i]`, `super.arg[i]`, `call.args`). Compiler-made sites are
+named `yield.await`, `yield.return`, `return.await`, `for-await.next`, `for-await.close`,
+`await-using` and `yield*`.
+
 The pin test commits the maps of every await in the corpus and the e2e async tests, like
 the bytecode snapshot tests. Accepting a diff means accepting that dumps stopped at those
 sites by an older build refuse (or adding a mapping).

@@ -7878,3 +7878,48 @@ delivered one at a time, at idle points (no jobs, only tool calls open), oldest 
 first, so every answered call is an idle point: the points `--dump-after K` counts.
 Answering by arguments keeps a run split by a dump and `resume` answering the same way as
 an uninterrupted one, with no record of what was consumed.
+## D2570: Suspension maps from a role stack the parser keeps
+date: 2026-11-03 · by: bloat · issue: 0169
+How D2563 is built. The parser keeps, per function, a stack of operand roles: a construct
+that leaves values on the operand stack while it parses a nested expression pushes their roles
+where it emits them (`prepare_call` after `get_method`: `call.callee call.this`; each argument
+after it is parsed; `binary.left` around the right operand; a for-of's `iterator next` after
+its setup) and pops them where it consumes them. Every `await`/`yield` records the stack, its
+innermost scope, its source position and the phase-1 index of its instruction (moved along by
+loop rotation). Resolution finds the instruction in the final code, takes the resume pc and
+checks the role count against the operand depth from `stack_depths`: a mismatch, or a role
+`unsupported:<construct>` on the stack, makes the site unsupported, so a construct that is not
+instrumented is reported, never mislabeled.
+
+- **API:** `compiler::suspension_maps(heap, src, opts)` compiles `src` again with recording on
+  (the templates are garbage) and returns a `FunctionMap` (name, span) per function with sites.
+  A `Site` has its name (`<kind>#N`, numbered per kind in source order: `await`, `yield`,
+  `yield.await`/`yield.return` for an async generator's yield, `return.await`,
+  `for-await.next`/`for-await.close`, `await-using`, `yield*`), its position from the
+  function's start, the resume pc, its operand roles bottom first, and every argument and
+  local slot as a `Slot`: a binding (name and its declaring scope's position from the
+  function's start), a hidden local by name (`<state>`, `this`, `<home>`…), an argument no
+  binding lives in, or nothing (a binding whose scope does not enclose the site).
+- **Vocabulary** (docs/portable-snapshots.md §3.5, where djs's lowering keeps more values):
+  `call.callee`, `call.this`, `call.arg[i]`, `call.args` (the array after a spread),
+  `new.callee`, `new.arg[i]`, `new.args`, `super.callee`, `super.arg[i]`, `super.args`,
+  `member.object` (`o[await k]`), `super.this`, `super.base`, `object.literal`,
+  `object.key`, `array.element[i]` (djs keeps up to 256 leading elements on the stack) then
+  `array.literal`, `binary.left`, `assign.object`, `assign.key`, `assign.old`,
+  `template.part[i]` (djs keeps the parts and joins them at the end: no `template.prefix`),
+  `import.specifier`, `intrinsic.arg[i]`, and the loop records `for-of.iterator`,
+  `for-of.next`, `for-in.iterator`, `for-await.iterator`, `for-await.next`.
+- **Unsupported for now:** `switch` case tests (the discriminant), `finally` blocks (the
+  pending completion), `using` regions (the disposal stack), destructuring, class
+  definitions (heritage, computed keys, everything the class keeps), `yield*`, and the
+  suspensions of closing an async iterator (a for-await left early, a generator's return
+  path).
+- **Cost:** nothing in templates or images. The hooks exist only with the `dump` feature
+  (default on in djs-core, off in the shipped module), where recording is off unless
+  requested; the pin test checks that a recording compile produces the same code. Without
+  the feature the hooks are empty: the shipped module +34 B gzip, the slim one +88 B
+  (argument kinds and positions passed to now-empty hooks).
+- **Pins:** `compiler::smap_tests::pinned_maps` writes tests/smap/{codemode,
+  codemode-harvest,e2e}/*.smap (a slot table per function, one line per site with its roles
+  and the slots out of scope there) and tests/smap/summary.txt (sites by kind, by role
+  sequence, unsupported); `DJS_UPDATE_SMAPS=1` accepts a change.
