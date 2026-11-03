@@ -478,47 +478,98 @@ fn closures_capturing_closures() {
 }
 
 #[test]
-fn zz_debug_classes() {
-    let mut a = new_vm();
-    run(&mut a, "function mk(tag) { class A { #x = 1; static #s = 2; static count = 0; #m() { return this.#x; } get v() { return this.#m() + tag; } static make() { return new A(); } } return A; }\n\
-                 var A = mk('t'); var B = class extends A { foo() { return super.v; } }; var o = { m() { return super.toString; } }; var a = new A();");
-    fn show(h: &Heap, label: &str, v: Value, depth: u32) {
-        let Some(ob) = v.as_object() else { return };
-        let cls = h.object_class(ob);
-        std::println!("{label}: {cls:?}");
-        if cls == crate::heap::ObjectClass::Function {
-            let t = h.closure_template(ob);
-            let ar = h.arena();
-            let flags = ar.get::<u16>(t, crate::heap::cells::FuncTemplate::FLAGS);
-            let caps = ar.get::<u16>(t, crate::heap::cells::FuncTemplate::CAPTURES);
-            let locals = ar.get::<u16>(t, crate::heap::cells::FuncTemplate::LOCALS) as usize;
-            let names = super::dump::template_names_pub(h, t);
-            let src = crate::builtins::function::source_slice(h, ob).unwrap_or_default();
-            std::println!("  flags {flags:#x} kind {} caps {caps} src {:?}", flags & 15, &src[..src.len().min(60)]);
-            for i in 0..u32::from(caps) + u32::from(flags & 64 != 0) {
-                let s = h.object_slot(ob, i);
-                std::println!("  cap {i} {:?} {:?}", names.get(locals + i as usize), s.kind());
-                if depth > 0 && let Some(b) = s.as_internal() {
-                    let inner: Value = h.arena().get(b, crate::heap::cells::BoxCell::VALUE);
-                    show(h, &alloc::format!("{label}~{:?}", names.get(locals + i as usize)), inner, depth - 1);
-                }
-            }
-        }
-        for k in h.own_keys(ob) {
-            std::println!("  key {}", h.atom_name(k));
-        }
-        for (k, p) in h.private_entries(ob) {
-            std::println!("  private {} {:?}", h.atom_name(k), p.value().map(|v| v.kind()));
-        }
-    }
-    for name in ["A", "B", "o", "a"] {
-        let v = run_value(&mut a, name);
-        show(&a.heap, name, v, 2);
-    }
-    let v = run_value(&mut a, "A.prototype");
-    show(&a.heap, "A.prototype", v, 0);
-    for m in ["Object.getOwnPropertyDescriptor(A.prototype, 'v').get", "B.prototype.foo", "o.m", "A.make"] {
-        let v = run_value(&mut a, m);
-        show(&a.heap, m, v, 1);
+fn classes_with_statics_accessors_and_computed_keys() {
+    closure_case(
+        &[
+            "const log = [];",
+            "class Point { constructor(x, y) { this.x = x; this.y = y; } get len() { return Math.sqrt(this.x * this.x + this.y * this.y); }\n\
+               static origin() { return new Point(0, 0); } [Symbol.toPrimitive]() { return this.len; }\n\
+               static count = 0; static { log.push('init'); } toString() { return `(${this.x}, ${this.y})`; } }",
+            "Point.count = 3;",
+            "const p = new Point(3, 4);",
+        ],
+        "[p.len, String(p), +p, Point.origin().len, Point.count, log.join(), p instanceof Point, Object.keys(p).join(),\n\
+          Object.getOwnPropertyNames(Point).join(), Object.getOwnPropertyNames(Point.prototype).join(), Point.name].join()",
+    );
+}
+
+#[test]
+fn class_expressions_extends_and_super() {
+    closure_case(
+        &[
+            "function mk(tag) { return class Base { hi() { return 'hi ' + tag; } }; }",
+            "const Base = mk('a');",
+            "class Child extends Base { hi() { return super.hi() + '!'; } static make() { return new Child(); } }",
+            "const c = new Child();",
+            "const Anon = class extends Child {};",
+            "const base = { greet() { return 'base'; } };",
+            "const obj = { __proto__: base, greet() { return super.greet() + '+'; } };",
+        ],
+        "[c.hi(), Child.make().hi(), new Anon().hi(), Object.getPrototypeOf(Child) === Base, Anon.name, Base.name,\n\
+          c instanceof Base, obj.greet(), Object.getPrototypeOf(Anon.prototype) === Child.prototype].join()",
+    );
+}
+
+#[test]
+fn private_fields_methods_and_brands() {
+    closure_case(
+        &[
+            "class Counter { #n = 0; static #made = 0; #step() { return 1; } get #twice() { return this.#n * 2; }\n\
+               constructor() { Counter.#made++; } inc() { this.#n += this.#step(); return this; } get value() { return this.#n; }\n\
+               get twice() { return this.#twice; } static made() { return Counter.#made; } static has(o) { return #n in o; }\n\
+               static #fmt(v) { return '<' + v + '>'; } static show(c) { return Counter.#fmt(c.value); } }",
+            "const a = new Counter().inc().inc();",
+            "const b = new Counter();",
+        ],
+        "[a.value, a.twice, b.value, Counter.made(), Counter.has(a), Counter.has({}), a.inc().value, new Counter().value,\n\
+          Counter.made(), Object.keys(a).length, Counter.show(a)].join()",
+    );
+}
+
+#[test]
+fn subclasses_of_builtins() {
+    closure_case(
+        &[
+            "class Stack extends Array { top() { return this[this.length - 1]; } }",
+            "class Registry extends Map { names() { return [...this.keys()].join(); } }",
+            "class AppError extends Error { constructor(m) { super(m); this.name = 'AppError'; } }",
+            "class Done extends Promise {}",
+            "const s = Stack.from([1, 2, 3]); const r = new Registry([['a', 1]]); const e = new AppError('boom');",
+            "const pr = Done.resolve(5);",
+        ],
+        "[s.top(), s instanceof Stack, Array.isArray(s), s.length, r.names(), r instanceof Map, r.get('a'), e.message, e.name,\n\
+          e instanceof AppError, e instanceof Error, pr instanceof Done].join()",
+    );
+}
+
+#[test]
+fn classes_changed_after_definition() {
+    closure_case(
+        &[
+            "class T { a() { return 1; } b() { return 2; } static s() { return 3; } }",
+            "delete T.prototype.b; T.prototype.extra = 42;",
+            "Object.defineProperty(T, 'tag', { value: 'x', enumerable: false });",
+            "const Frozen = Object.freeze(class F { static v = 1; });",
+        ],
+        "['b' in T.prototype, T.prototype.extra, T.tag, T.s(), new T().a(), Object.isFrozen(Frozen), Frozen.v,\n\
+          Object.getOwnPropertyDescriptor(T, 'tag').enumerable].join()",
+    );
+}
+
+#[test]
+fn class_refusals() {
+    let r = refused(
+        "class X { getter() { return () => 1; } }\n\
+         const Mixed = class extends (function () { return X; })() {};\n\
+         class K { #x = 1; leak() { const self = this; return function () { return self.#x; }; } }\n\
+         const f = new K().leak();",
+        None,
+    );
+    let all = r.join("\n");
+    for want in [
+        "Mixed: a class whose heritage is an expression",
+        "f: a function that uses a class's private names",
+    ] {
+        assert!(all.contains(want), "{all}");
     }
 }

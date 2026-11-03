@@ -33,7 +33,9 @@ pub struct LoadOptions {
 
 impl Default for LoadOptions {
     fn default() -> Self {
-        LoadOptions { fuel: 10_000_000_000 }
+        LoadOptions {
+            fuel: 10_000_000_000,
+        }
     }
 }
 
@@ -60,10 +62,16 @@ impl LoadError {
     pub fn message(&self) -> String {
         match self {
             LoadError::NotADump => "not a djs dump (no `// djs-dump N` header)".into(),
-            LoadError::Version(v) => cat!("a djs dump of format ", v, ", which this build cannot load"),
+            LoadError::Version(v) => {
+                cat!("a djs dump of format ", v, ", which this build cannot load")
+            }
             LoadError::Compile(m) => cat!("the dump does not compile: ", m),
             LoadError::Threw(m) => cat!("the dump threw: ", m),
-            LoadError::HostCall(id) => cat!("the dump called host function ", *id, ", not a loader primitive"),
+            LoadError::HostCall(id) => cat!(
+                "the dump called host function ",
+                *id,
+                ", not a loader primitive"
+            ),
             LoadError::OutOfFuel => "the dump used up its fuel".into(),
             LoadError::Memory => "out of memory while loading the dump".into(),
         }
@@ -154,7 +162,9 @@ impl Vm {
                     };
                     let r = match r {
                         Ok(v) => Ok(v),
-                        Err(m) => Err(self.new_error(ErrorKind::TypeError, &m).map_err(|_| LoadError::Memory)?),
+                        Err(m) => Err(self
+                            .new_error(ErrorKind::TypeError, &m)
+                            .map_err(|_| LoadError::Memory)?),
                     };
                     self.resolve_host_call(call_id, r)
                         .map_err(|_| LoadError::Memory)?;
@@ -201,7 +211,11 @@ impl Vm {
                 flags: PropFlags::NONE,
             }
         } else {
-            return Err(cat!("$dump.private: ", name, " is a field: it needs a value"));
+            return Err(cat!(
+                "$dump.private: ",
+                name,
+                " is a field: it needs a value"
+            ));
         };
         self.heap
             .add_private_property(obj, key, &prop)

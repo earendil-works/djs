@@ -184,9 +184,18 @@ enum Part {
     /// `C.prototype`.
     Prototype,
     /// A method of the class (`proto`: of its prototype) under `key`.
-    Value { proto: bool, key: Atom },
-    Get { proto: bool, key: Atom },
-    Set { proto: bool, key: Atom },
+    Value {
+        proto: bool,
+        key: Atom,
+    },
+    Get {
+        proto: bool,
+        key: Atom,
+    },
+    Set {
+        proto: bool,
+        key: Atom,
+    },
     /// A hidden closure (a field initializer, a private method).
     Internal,
 }
@@ -1421,19 +1430,39 @@ impl<'a> Dumper<'a> {
                 let Some(holder) = holder else { continue };
                 for k in h.own_keys(holder) {
                     let owned = |v: Value| {
-                        v.as_object()
-                            .is_some_and(|f| is_method_of(h, f, span) && !super::dump_load::is_class(h, f))
+                        v.as_object().is_some_and(|f| {
+                            is_method_of(h, f, span) && !super::dump_load::is_class(h, f)
+                        })
                     };
                     match h.get_own_property(holder, k) {
-                        Some(Property::Data { value, .. }) if owned(value) => {
-                            set(self, value, Part::Value { proto: is_proto, key: k })
-                        }
+                        Some(Property::Data { value, .. }) if owned(value) => set(
+                            self,
+                            value,
+                            Part::Value {
+                                proto: is_proto,
+                                key: k,
+                            },
+                        ),
                         Some(Property::Accessor { getter, setter, .. }) => {
                             if owned(getter) {
-                                set(self, getter, Part::Get { proto: is_proto, key: k });
+                                set(
+                                    self,
+                                    getter,
+                                    Part::Get {
+                                        proto: is_proto,
+                                        key: k,
+                                    },
+                                );
                             }
                             if owned(setter) {
-                                set(self, setter, Part::Set { proto: is_proto, key: k });
+                                set(
+                                    self,
+                                    setter,
+                                    Part::Set {
+                                        proto: is_proto,
+                                        key: k,
+                                    },
+                                );
                             }
                         }
                         _ => {}
@@ -1464,12 +1493,13 @@ impl<'a> Dumper<'a> {
             }
         }
         for n in 0..self.nodes.len() {
-            if self.nodes[n].class_scope
-                && self.nodes[n].member.is_none()
-                && !self.is_class_node(n)
+            if self.nodes[n].class_scope && self.nodes[n].member.is_none() && !self.is_class_node(n)
             {
                 let p = self.nodes[n].path.clone();
-                self.refuse(p, "a function that uses a class's private names or fields outside the class");
+                self.refuse(
+                    p,
+                    "a function that uses a class's private names or fields outside the class",
+                );
             }
         }
     }
@@ -1790,7 +1820,7 @@ impl<'a> Dumper<'a> {
             });
         }
         s.push_str(".\n");
-        if self.ns {
+        if self.helpers != 0 {
             for (bit, text) in HELPERS {
                 if self.helpers & bit != 0 {
                     s.push_str(text);
@@ -1831,6 +1861,14 @@ impl<'a> Dumper<'a> {
             .chain(&self.finals)
         {
             cat_to!(&mut skeleton, l, '\n');
+        }
+        #[cfg(test)]
+        if {
+            extern crate std;
+            std::env::var_os("DJS_DUMP_SKELETON").is_some()
+        } {
+            extern crate std;
+            std::eprintln!("{s}\n---- skeleton\n{skeleton}");
         }
         self.check(&skeleton);
         if !self.refusals.is_empty() {
@@ -1963,7 +2001,11 @@ impl<'a> Dumper<'a> {
                         && !self.base_globals.contains(g)
                         && self.globals.iter().any(|u| u.name == *g)
                     {
-                        why.push_out(cat!("reads the global `", g, "`, which the dump does not hold"));
+                        why.push_out(cat!(
+                            "reads the global `",
+                            g,
+                            "`, which the dump does not hold"
+                        ));
                     }
                 }
                 if why.is_empty() {
@@ -2170,7 +2212,10 @@ impl<'a> Dumper<'a> {
             .is_some_and(|m| m.part == Part::Internal)
         {
             let p = self.nodes[n].path.clone();
-            self.refuse(p, "an internal function of a class (a field initializer, a private method)");
+            self.refuse(
+                p,
+                "an internal function of a class (a field initializer, a private method)",
+            );
             return "undefined".into();
         }
         match self.nodes[n].state {
@@ -2180,7 +2225,9 @@ impl<'a> Dumper<'a> {
             State::New => {}
         }
         if let Some(m) = self.nodes[n].member
-            && self.nodes[n].root.is_none_or(|r| self.roots[r].state != State::New)
+            && self.nodes[n]
+                .root
+                .is_none_or(|r| self.roots[r].state != State::New)
         {
             // Made by its class's text.
             let cv = self.nodes[m.class].v;
@@ -2447,9 +2494,9 @@ impl<'a> Dumper<'a> {
                 }
             };
             self.class_locals.push_out((c, locals[j].clone()));
-            for l in line.split('\n') {
-                cat_to!(&mut text, "  ", l, '\n');
-            }
+            // Only the first line is indented: the rest belongs to a function's text,
+            // which must stay as it was.
+            cat_to!(&mut text, "  ", line, '\n');
         }
         let mut sets: Vec<(usize, Value)> = Vec::new();
         for (bi, &b) in boxes.iter().enumerate() {
@@ -2484,9 +2531,9 @@ impl<'a> Dumper<'a> {
                     cat!("let ", name, " = ", e, ";")
                 }
             };
-            for l in line.split('\n') {
-                cat_to!(&mut text, "  ", l, '\n');
-            }
+            // Only the first line is indented: the rest belongs to a function's text,
+            // which must stay as it was.
+            cat_to!(&mut text, "  ", line, '\n');
         }
         let mut ret: Vec<String> = Vec::new();
         for (j, &c) in closures.iter().enumerate() {
@@ -2565,6 +2612,14 @@ impl<'a> Dumper<'a> {
         };
         let o = self.nodes[n].v.as_object().expect("a class");
         let parent = h.get_prototype_of(o).map_or(Value::NULL, Value::object);
+        // `extends Map`: the builtin of that path needs no binding.
+        if let Some(c) = cell_of(parent)
+            && let Some(b) = self.builtin(c)
+            && b.named == Named::Path
+            && b.path == path
+        {
+            return src;
+        }
         let pe = match self.node_of(parent).and_then(|p| {
             self.class_locals
                 .iter()
@@ -2597,7 +2652,10 @@ impl<'a> Dumper<'a> {
         });
         if hidden {
             let p = self.nodes[n].path.clone();
-            self.refuse(p, "a class whose methods use a variable named like its heritage");
+            self.refuse(
+                p,
+                "a class whose methods use a variable named like its heritage",
+            );
         }
         cat!("((", root, ") => ", src, ")(", arg, ")")
     }
@@ -2623,7 +2681,13 @@ impl<'a> Dumper<'a> {
             let Some(mm) = self.nodes[m].member.filter(|mm| mm.class == n) else {
                 continue;
             };
-            let holder = |proto: bool| if proto { proto_loc.clone() } else { String::from(loc) };
+            let holder = |proto: bool| {
+                if proto {
+                    proto_loc.clone()
+                } else {
+                    String::from(loc)
+                }
+            };
             let mloc = match mm.part {
                 Part::Prototype => proto_loc.clone(),
                 Part::Value { proto, key } => {
@@ -2634,9 +2698,19 @@ impl<'a> Dumper<'a> {
                     if !kept[usize::from(proto)].contains(&key) {
                         kept[usize::from(proto)].push_out(key);
                     }
-                    let which = if matches!(mm.part, Part::Get { .. }) { ").get" } else { ").set" };
+                    let which = if matches!(mm.part, Part::Get { .. }) {
+                        ").get"
+                    } else {
+                        ").set"
+                    };
                     let ke = self.key_expr(key);
-                    cat!("Object.getOwnPropertyDescriptor(", holder(proto), ", ", ke, which)
+                    cat!(
+                        "Object.getOwnPropertyDescriptor(",
+                        holder(proto),
+                        ", ",
+                        ke,
+                        which
+                    )
                 }
                 Part::Internal => String::new(),
             };
@@ -2713,10 +2787,12 @@ impl<'a> Dumper<'a> {
         }
         if let Some(po) = proto_obj {
             let expected = match h.get_prototype_of(o) {
-                Some(parent) if head.1.is_some() => match h.get_own_property(parent, atoms::PROTOTYPE) {
-                    Some(Property::Data { value, .. }) => value.as_object(),
-                    _ => None,
-                },
+                Some(parent) if head.1.is_some() => {
+                    match h.get_own_property(parent, atoms::PROTOTYPE) {
+                        Some(Property::Data { value, .. }) => value.as_object(),
+                        _ => None,
+                    }
+                }
                 _ => intrinsic(h, Intrinsic::ObjectProto).as_object(),
             };
             let now = h.get_prototype_of(po);
@@ -2743,7 +2819,9 @@ impl<'a> Dumper<'a> {
         };
         let privates = core::mem::take(&mut self.nodes[n].privates);
         for (k, p) in &privates {
-            let Some(s) = self.h.atom_symbol(*k) else { continue };
+            let Some(s) = self.h.atom_symbol(*k) else {
+                continue;
+            };
             let Some((_, c, name, _)) = self
                 .private_names
                 .iter()
@@ -2752,11 +2830,25 @@ impl<'a> Dumper<'a> {
             else {
                 continue;
             };
+            if c == n && (self.is_brand(*k) || matches!(p, Property::Accessor { .. })) {
+                // A class's static private methods: its evaluation installs them.
+                continue;
+            }
             let ce = self.expr_or_loc(self.nodes[c].v);
             let line = match p {
                 Property::Data { value, .. } if !self.is_brand(*k) => {
                     let ve = self.expr_or_loc(*value);
-                    cat!("$dump.private(", loc, ", ", ce, ", ", quote(&name), ", ", ve, ");")
+                    cat!(
+                        "$dump.private(",
+                        loc,
+                        ", ",
+                        ce,
+                        ", ",
+                        quote(&name),
+                        ", ",
+                        ve,
+                        ");"
+                    )
                 }
                 _ => cat!("$dump.private(", loc, ", ", ce, ", ", quote(&name), ");"),
             };
@@ -3486,11 +3578,6 @@ fn captured_value(h: &Heap, f: Obj, name: &str) -> Option<Value> {
         .map(|b| a.get(b, BoxCell::VALUE))
 }
 
-#[cfg(test)]
-pub(super) fn template_names_pub(h: &Heap, t: u32) -> Vec<String> {
-    template_names(h, t)
-}
-
 /// The names of a template's locals and then its captures (its debug info).
 pub(super) fn template_names(h: &Heap, t: u32) -> Vec<String> {
     let a = h.arena();
@@ -3616,7 +3703,8 @@ fn is_method_of(h: &Heap, f: Obj, span: (u32, u32, u32)) -> bool {
         return false;
     }
     let kind = func_flags::kind(u32::from(
-        h.arena().get::<u16>(h.closure_template(f), FuncTemplate::FLAGS),
+        h.arena()
+            .get::<u16>(h.closure_template(f), FuncTemplate::FLAGS),
     ));
     let (script, a, b) = fn_span(h, f);
     matches!(

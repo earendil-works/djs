@@ -28,15 +28,14 @@ function 0 <anonymous>: params=0 locals=6 stack=3 captures=0
    93  drop
    94  dup
    95  put_loc1 (A)
-   96  jump_if_loading -> 111
-  101  fclosure child5
-  106  set_home_object
-  107  pick 1
-  109  call0  ; 3:1
-  110  drop
-  111  init_global_lex "A"
-  116  get_loc0 (<completion>)
-  117  return
+   96  fclosure child5
+  101  set_home_object
+  102  pick 1
+  104  call0  ; 3:1
+  105  drop
+  106  init_global_lex "A"
+  111  get_loc0 (<completion>)
+  112  return
 function 0.0 A: params=1 locals=4 stack=3 captures=1
     0  special_object 4
     2  put_loc3 (this)
@@ -129,19 +128,21 @@ function 0.4 <anonymous>: params=0 locals=1 stack=3 captures=3
 function 0.5 <anonymous>: params=0 locals=1 stack=3 captures=0
     0  special_object 4
     2  put_loc0 (this)
-    3  get_loc0 (this)  ; 6:12
-    4  push_atom "s"
-    9  push3
-   10  define_class_field
-   11  drop
-   12  get_loc0 (this)  ; 16:10
-   13  fclosure child0
-   18  set_home_object
-   19  swap
-   20  call0
-   21  drop
-   22  return_undef
-   23  jump8 -> 3
+    3  jump8 -> 25
+    5  get_loc0 (this)  ; 6:12
+    6  push_atom "s"
+   11  push3
+   12  define_class_field
+   13  drop
+   14  get_loc0 (this)  ; 16:10
+   15  fclosure child0
+   20  set_home_object
+   21  swap
+   22  call0
+   23  drop
+   24  return_undef
+   25  jump_if_loading -> 24
+   30  jump8 -> 5
 function 0.5.0 <anonymous>: params=0 locals=1 stack=2 captures=0
     0  special_object 4
     2  put_loc0 (this)
