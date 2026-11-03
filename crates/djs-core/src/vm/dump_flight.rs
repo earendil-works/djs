@@ -42,6 +42,20 @@ const THROWER: usize = 10;
 const FROM_SYNC_UNWRAP: usize = 13;
 const FROM_SYNC_CLOSE: usize = 14;
 
+/// A for-in loop's key iterator (interp/run.rs `for_in_start`): its object (`undefined`
+/// for a string's or a primitive's) and the keys it has yet to visit. `None`: a Proxy's
+/// (a Record its traps walk).
+fn for_in_parts(h: &Heap, v: Value) -> Option<(Value, Vec<Value>)> {
+    let arr = v.as_internal()?;
+    if h.cell_kind(arr) != crate::heap::CellKind::ValueArray {
+        return None;
+    }
+    let len = h.value_array_len(arr);
+    let next = h.value_array_get(arr, 1).as_int().unwrap_or(0).max(0) as u32;
+    let keys = (2 + next..len).map(|i| h.value_array_get(arr, i)).collect();
+    Some((h.value_array_get(arr, 0), keys))
+}
+
 pub(super) struct Flight<'a> {
     pub host_fn_name: &'a dyn Fn(u32) -> Option<String>,
     calls: Vec<Call>,
@@ -384,6 +398,16 @@ impl Dumper<'_> {
             }
             for (k, role) in site.operands.iter().enumerate() {
                 let v = fp(lp + site.locals.len() + k);
+                if *role == Role::LoopIterator(Loop::In) {
+                    // The key iterator: its object (its keys are strings).
+                    match for_in_parts(h, v) {
+                        Some((target, _)) => {
+                            self.edge(n, target, || cat!(path, "<for-in.target>"));
+                        }
+                        None => self.refuse(path.clone(), "a for-in loop over a Proxy"),
+                    }
+                    continue;
+                }
                 if matches!(role, Role::LoopNext(Loop::Await | Loop::Star))
                     && k > 0
                     && fp(lp + site.locals.len() + k - 1)
@@ -1534,6 +1558,18 @@ impl Dumper<'_> {
                     .is_some_and(|o| self.is_from_sync(o));
             let e = if from_sync {
                 cat!(it, ".next")
+            } else if *role == Role::LoopIterator(Loop::In) {
+                let v = fv(lp + site.locals.len() + k);
+                match for_in_parts(h, v) {
+                    Some((target, keys)) => {
+                        let t = self.expr(target, None, None);
+                        let ks: Vec<String> =
+                            keys.into_iter().map(|k| self.expr(k, None, None)).collect();
+                        cat!("$dump.forIn(", t, ", [", join(&ks, ", "), "])")
+                    }
+                    // (Refused by the visit.)
+                    None => "undefined".into(),
+                }
             } else if let Role::FinallyReturn(_) = role {
                 // A return address: the index of its `gosub` (the loader's pc for it).
                 let pc = fv(lp + site.locals.len() + k).as_int();
@@ -1556,11 +1592,11 @@ impl Dumper<'_> {
             };
             parts.push_out(("operand", e.clone()));
             match role {
+                Role::LoopIterator(Loop::In) => {
+                    loops.push_out(cat!("{ kind: \"for-in\", iterator: ", e, " }"));
+                }
                 Role::LoopIterator(_) => it = e,
                 Role::LoopNext(l) => {
-                    if *l == Loop::In {
-                        self.refuse(path.clone(), "an activation in a for-in loop");
-                    }
                     loops.push_out(cat!(
                         "{ kind: \"",
                         l.name(),

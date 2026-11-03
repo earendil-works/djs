@@ -332,25 +332,23 @@ impl Vm {
         for &role in &site.operands {
             let v = match role {
                 Role::LoopIterator(l) | Role::LoopNext(l) => {
-                    if l == Loop::In {
-                        return Err("$dump.resume: for-in loops cannot be resumed yet".into());
-                    }
                     let lp = loops
                         .get(li)
                         .copied()
                         .ok_or_else(|| cat!("$dump.resume: ", site.name, " is in more loops"))?;
                     let mut kind = None;
                     let mut pick = Value::UNDEFINED;
-                    let want = if matches!(role, Role::LoopNext(_)) {
+                    // (A for-in loop has only its key iterator.)
+                    let want = if matches!(role, Role::LoopNext(_)) || l == Loop::In {
                         li += 1;
-                        "next"
+                        if l == Loop::In { "iterator" } else { "next" }
                     } else {
                         "iterator"
                     };
                     for (k, v) in entries_arg(h, lp, "$dump.resume: loop")? {
                         match k.as_str() {
                             "kind" => kind = Some(string_arg(h, v, "$dump.resume: loop kind")?),
-                            "iterator" | "next" => {
+                            "iterator" | "next" if !(l == Loop::In && k == "next") => {
                                 if k == want {
                                     pick = v;
                                 }
@@ -368,7 +366,13 @@ impl Vm {
                             l.name()
                         ));
                     }
-                    pick
+                    if l == Loop::In {
+                        super::dump_prims::for_in_iterator(h, pick).ok_or_else(|| {
+                            cat!("$dump.resume: a for-in loop's iterator is made by $dump.forIn")
+                        })?
+                    } else {
+                        pick
+                    }
                 }
                 _ => {
                     let want = role_name(role);

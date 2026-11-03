@@ -398,7 +398,7 @@ fn resume_refuses_what_the_map_does_not_have() {
         ),
         (
             "$dump.resume(keys, { at: 'await#1', awaiting: $dump.p, args: [{}], bindings: { o: {}, k: 'a' }, loops: [{ kind: 'for-in', iterator: 1 }] });",
-            "for-in loops cannot be resumed yet",
+            "a for-in loop's iterator is made by $dump.forIn",
         ),
         (
             "$dump.resume((async function () {}).constructor('await 1'), { at: 'await#1', awaiting: $dump.p });",
@@ -408,6 +408,8 @@ fn resume_refuses_what_the_map_does_not_have() {
             "(() => { let x, y; $dump.cell(() => [x, y]); })();",
             "capture exactly one variable",
         ),
+        ("$dump.forIn(1, []);", "not an object or undefined"),
+        ("$dump.forIn(undefined, [1]);", "a key that is not a string"),
         ("$dump.using({});", "the resources are not an array"),
         (
             "$dump.using([1, 2, 7]);",
@@ -1347,6 +1349,14 @@ fn dumps_carry_the_random_state_and_iterators_again() {
         let (want, _) = run_program(src);
         assert_eq!(chained(src), want, "{src}");
     }
+}
+
+/// A for-in loop over a Proxy walks a Record its traps fill: refused.
+#[test]
+fn a_for_in_over_a_proxy_is_refused() {
+    let src = "async function main() { for (const k in new Proxy({ a: 1 }, {})) print(k, await later(k)); }\nmain();";
+    let e = dump_at(src, 1).unwrap_err();
+    assert!(e.contains("a for-in loop over a Proxy"), "{e}");
 }
 
 /// The new golden programs' every idle point, dumped once and dumped in a chain.

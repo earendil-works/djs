@@ -15,6 +15,7 @@
 //! | `keep(o, keys)` | deletes the own properties a class's evaluation made that it no longer has |
 //! | `random(lo, hi)` | sets `Math.random`'s state (the hash key stays the VM's, D2624) |
 //! | `using(resources, state)` | the resource Record of a statement list's `using` declarations |
+//! | `forIn(o, keys)` | a for-in loop's key iterator over `o` with `keys` left to visit |
 //!
 //! Stepping an iterator here runs no user code (no `length` getter, no element getter):
 //! the original run did that already.
@@ -48,6 +49,19 @@ pub(super) const USING_FIELDS: [(&str, u32); 8] = [
     ("pending", 9),
     ("hasPending", 10),
 ];
+
+/// The key iterator `$dump.forIn` made, from its wrapper.
+pub(super) fn for_in_iterator(heap: &crate::heap::Heap, v: Value) -> Option<Value> {
+    let r = v.as_object()?;
+    if heap.object_class(r) != ObjectClass::Record
+        || heap.object_slot_count(r) != 2
+        || heap.object_slot(r, 1) != Value::NULL
+    {
+        return None;
+    }
+    let arr = heap.object_slot(r, 0).as_internal()?;
+    (heap.cell_kind(arr) == crate::heap::CellKind::ValueArray).then_some(Value::internal(arr))
+}
 
 fn oom(e: crate::heap::HeapError) -> String {
     String::from(e.as_str())
@@ -225,6 +239,41 @@ impl Vm {
             }
             self.heap.set_object_slot(r, slot, v);
         }
+        Ok(Value::object(r))
+    }
+
+    /// `$dump.forIn(o, keys)`: a for-in loop's key iterator (interp/run.rs
+    /// `for_in_start`: an internal ValueArray `[o, next index, keys...]`), wrapped in a
+    /// two-slot Record for `$dump.resume`'s `loops` ([`for_in_iterator`] unwraps it).
+    pub(super) fn primitive_for_in(&mut self, args: &[Value]) -> Result<Value, String> {
+        let target = args.first().copied().unwrap_or(Value::UNDEFINED);
+        if !target.is_undefined() && target.as_object().is_none() {
+            return Err("$dump.forIn: not an object or undefined".into());
+        }
+        let keys = array_arg(
+            &self.heap,
+            args.get(1).copied().unwrap_or(Value::UNDEFINED),
+            "$dump.forIn",
+        )?;
+        if keys.iter().any(|k| k.as_string().is_none()) {
+            return Err("$dump.forIn: a key that is not a string".into());
+        }
+        let n = keys.len() as u32;
+        let arr = self.heap.alloc_value_array(n + 2).map_err(oom)?;
+        self.heap.value_array_set(arr, 0, target);
+        self.heap.value_array_set(arr, 1, Value::int(0));
+        for (i, k) in keys.into_iter().enumerate() {
+            self.heap.value_array_set(arr, 2 + i as u32, k);
+        }
+        self.heap
+            .arena_mut()
+            .set(arr, crate::heap::cells::ValueArray::LEN, n + 2);
+        let r = self
+            .heap
+            .alloc_object(ObjectClass::Record, None, 2)
+            .map_err(oom)?;
+        self.heap.set_object_slot(r, 0, Value::internal(arr));
+        self.heap.set_object_slot(r, 1, Value::NULL);
         Ok(Value::object(r))
     }
 

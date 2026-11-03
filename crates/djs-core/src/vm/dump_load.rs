@@ -129,6 +129,7 @@ const FN: u32 = PRIVATE + 14;
 const KEEP: u32 = PRIVATE + 15;
 const RANDOM: u32 = PRIVATE + 16;
 const USING: u32 = PRIVATE + 17;
+const FOR_IN: u32 = PRIVATE + 18;
 /// The ids of the primitives' own calls while a dump loads: above every id a dump's open
 /// call may have, so the two never meet.
 const LOADER_CALL_IDS: u32 = 0x8000_0000;
@@ -151,6 +152,7 @@ const PRIMITIVES: &[(&str, u32)] = &[
     ("keep", KEEP),
     ("random", RANDOM),
     ("using", USING),
+    ("forIn", FOR_IN),
 ];
 
 /// How a dump is compiled: a Script, TypeScript when its header says so
@@ -215,12 +217,14 @@ pub(super) enum Given {
 
 pub(super) fn given(heap: &Heap, v: Value) -> Given {
     match v.as_object() {
-        Some(o) if heap.object_class(o) == ObjectClass::Record => {
+        Some(o)
+            if heap.object_class(o) == ObjectClass::Record && heap.object_slot_count(o) == 1 =>
+        {
             let s = heap.object_slot(o, 0);
             match s.as_internal() {
-                Some(b) => Given::Cell(b),
+                Some(b) if heap.cell_kind(b) == crate::heap::CellKind::BoxCell => Given::Cell(b),
                 None if s == Value::UNINITIALIZED => Given::Tdz,
-                None => Given::Value(v),
+                _ => Given::Value(v),
             }
         }
         _ => Given::Value(v),
@@ -398,6 +402,7 @@ impl Vm {
                         KEEP => self.primitive_keep(&args),
                         RANDOM => self.primitive_random(&args),
                         USING => self.primitive_using(&args),
+                        FOR_IN => self.primitive_for_in(&args),
                         // (A positive int32: below LOADER_CALL_IDS.)
                         ISSUED => match args.first().and_then(|v| v.as_int()) {
                             Some(n) if n > 0 => {
