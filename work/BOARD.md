@@ -6,15 +6,15 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
+| 0169 | Suspension maps in the compiler, pinned (D2563) | bloat | .worktrees/bloat |
+| 0170 | Classes and private fields in dumps; the loader's privileged `$dump` | portable | .worktrees/portable |
+| 0173 | Idle points in the difftest corpus (`host.later`) | infra | .worktrees/infra |
+| 0174 | REPL and CLI: tools, waiting inputs (tools part first) | repl | .worktrees/repl |
 
 ## Open (ready)
 
 | issue | title | depends-on | touches |
 | --- | --- | --- | --- |
-| 0169 | Suspension maps in the compiler, pinned (D2563) | - | compiler/ (side table), pin test |
-| 0170 | Classes and private fields in dumps; the loader's privileged `$dump` | - | vm/dump*.rs, Vm::load_dump, djs-wasm, sandbox load |
-| 0173 | Idle points in the difftest corpus (`host.later`) | - | tests/corpus/prelude.js, scripts/harvest, djs-difftest glue |
 
 ## Open (blocked on dependencies)
 
