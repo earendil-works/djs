@@ -373,7 +373,9 @@ impl Heap {
     /// Sets the GC threshold, in the roots cell too (D1601).
     pub(crate) fn set_gc_threshold(&mut self, t: u32) {
         self.gc_threshold = t;
-        self.arena.set_target(t);
+        // The threshold's pages count from the prefix's end (D2544); the arena's growth
+        // stops at whole wasm pages counted from offset 0, where its memory is.
+        self.arena.set_target(t.saturating_add(0xFFFF) & !0xFFFF);
         if self.arena.len() >= Roots::LAYOUT.min_size {
             self.arena.set(0, Roots::GC_THRESHOLD, t);
         }

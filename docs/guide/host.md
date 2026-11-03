@@ -47,7 +47,12 @@ checked and every limit is a thrown error) records a message and traps. The host
 the message and discards the instance. The shipped module records a fixed message: it
 carries no panic messages, panic locations or formatting code, to stay small (D2332,
 D2333). A debug or native build of the engine reproduces the real message. Every sandbox gets its own instance, so one trap
-cannot affect another.
+cannot affect another. One trap is not a bug: the parser's nesting limits keep its
+recursion within the 128 KiB wasm stack, but should some path still exhaust it, the
+stack pointer wraps below 0 and the instance traps with "memory access out of bounds".
+The module exports its stack pointer so that the host can tell: the `Sandbox` and pi's
+adapter then report "stack overflow: the engine's wasm stack is exhausted" instead of a
+bare out-of-bounds access, and never call into that instance again (D2543).
 
 There are about 45 exports; the `Sandbox` class below wraps them, so most hosts never
 call them directly.
@@ -241,7 +246,7 @@ that expects QuickJS's fingerprint.
 
 Decisions on this page:
 
-<!-- gen:decisions D2060 D1180 D1210 D1321 D1370 D1374 D1383 D1495 D1660 D1670 D1680 D1690 D1730 D1740 D1890 D2262 D2265 D2541 -->
+<!-- gen:decisions D2060 D1180 D1210 D1321 D1370 D1374 D1383 D1495 D1660 D1670 D1680 D1690 D1730 D1740 D1890 D2262 D2265 D2541 D2543 -->
 - D2060: The base is decoded or injected straight into the first VM's arena
 - D1180: Inbound wire format, version 1
 - D1210: Exported heap layout drives the host-side reader
@@ -260,4 +265,5 @@ Decisions on this page:
 - D2262: pi's prelude image is the reference of the adapter's snapshots and is recomputable
 - D2265: Images carry a dependency descriptor; loading and containers check it, not the build hash
 - D2541: Instance memory: the arena kept at memory's end, lean start capacity, the coded base outside memory
+- D2543: A wasm stack overflow is reported as one
 <!-- /gen -->

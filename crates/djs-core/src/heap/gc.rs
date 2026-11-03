@@ -98,8 +98,11 @@ pub fn next_threshold(live: u32, base: u32, limit: u32) -> u32 {
     if growth > headroom / 2 {
         return live + headroom / 2;
     }
-    // Whole 64 KiB wasm pages when that stays within the headroom rule (D1870).
-    let t = (live as u64 + growth as u64).next_multiple_of(PAGE);
+    // Whole 64 KiB wasm pages when that stays within the headroom rule (D1870), counted
+    // from the prefix's end (D2544): rounded from offset 0, a prefix a few KB smaller or
+    // larger moved every collection point.
+    let base = u64::from(base.min(live));
+    let t = base + (u64::from(live) - base + u64::from(growth)).next_multiple_of(PAGE);
     if t <= live as u64 + headroom as u64 / 2 {
         t as u32
     } else {
@@ -478,13 +481,21 @@ mod tests {
         assert_eq!(next_threshold(900, 0, 1000), 950);
         assert_eq!(next_threshold(1000, 0, 1000), 1000);
         assert_eq!(next_threshold(2000, 0, 1000), 2000);
-        // A prefix counts as BASE_ALLOWANCE (D2442): at that size as before; a smaller
-        // one leaves the growth as it was.
+        // A prefix counts as BASE_ALLOWANCE (D2442): at that size the growth is as before
+        // (up to where the rounding starts); a smaller one leaves the growth as it was.
         let a = BASE_ALLOWANCE;
-        assert_eq!(
-            next_threshold(a + 100_000, a, big),
-            next_threshold(a + 100_000, 0, big)
+        assert!(
+            next_threshold(a + 100_000, a, big).abs_diff(next_threshold(a + 100_000, 0, big))
+                < PAGE as u32
         );
+        // The rounding counts from the prefix's end (D2544): a prefix of another size moves
+        // the threshold by as much, so collections come after the same allocations.
+        for young in [0, 1, 70_000, 300_000, 5 << 20] {
+            let t = |b: u32| next_threshold(b + young, b, big) - b;
+            assert_eq!(t(a), t(a - 46_000));
+            assert_eq!(t(a), t(a + 12_345));
+            assert_eq!(t(a) % PAGE as u32, 0);
+        }
         let small = next_threshold(100_000 + 100_000, 100_000, big);
         assert!(small >= 200_000 + a + 100_000, "{small}");
     }

@@ -6,6 +6,7 @@
 
 import { IN_PLACE_MIN, encode, stringInPlace } from "../src/wire.ts";
 import { readValue } from "../src/reader.ts";
+import { trapText } from "../src/trap.ts";
 import { baseReference, provideBase, type Reference, rememberBase } from "../src/snapshot.ts";
 
 export const STATUS_DONE = 0;
@@ -30,6 +31,7 @@ interface Exports {
   djs_out_len(): number;
   djs_panic_ptr(): number;
   djs_panic_len(): number;
+  __stack_pointer?: WebAssembly.Global;
   vm_new(memoryLimit: number): number;
   vm_from_bytes(len: number, memoryLimit: number): number;
   vm_free(vm: number): void;
@@ -96,6 +98,8 @@ export class Engine {
   private readonly module: WebAssembly.Module;
   readonly vm: number;
   private readonly atomCache: (string | undefined)[] = [];
+  /** The instance trapped: it is not called again. */
+  private trapped = false;
 
   /**
    * A new VM; throws if the module is not djs-wasm or `memoryLimit` is too small. With
@@ -315,7 +319,8 @@ export class Engine {
   }
 
   dispose(): void {
-    this.x.vm_free(this.vm);
+    // A trapped instance is not called again (a stack overflow would trap once more).
+    if (!this.trapped) this.x.vm_free(this.vm);
   }
 
   private arena(): Uint8Array {
@@ -340,9 +345,8 @@ export class Engine {
       return f();
     } catch (e) {
       if (e instanceof WebAssembly.RuntimeError) {
-        const x = this.x;
-        const msg = textDecoder.decode(new Uint8Array(x.memory.buffer, x.djs_panic_ptr(), x.djs_panic_len()));
-        throw new EngineTrap(`djs-wasm trapped: ${msg || e.message}`);
+        this.trapped = true;
+        throw new EngineTrap(`djs-wasm trapped: ${trapText(this.x, e)}`);
       }
       throw e;
     }

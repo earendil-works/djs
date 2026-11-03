@@ -2,6 +2,7 @@
 // through the wire format (wire.ts) and come out through direct heap reads (reader.ts).
 
 import { IN_PLACE_MIN, encode, stringInPlace } from "./wire.ts";
+import { trapText } from "./trap.ts";
 import { Opaque, readValue } from "./reader.ts";
 import {
   APP_SANDBOX,
@@ -198,6 +199,7 @@ interface Exports {
   djs_out_len(): number;
   djs_panic_ptr(): number;
   djs_panic_len(): number;
+  __stack_pointer?: WebAssembly.Global;
   djs_debug_panic(): void;
   vm_new(memoryLimit: number): number;
   /** Since 0146 (D2304); older modules lack it. */
@@ -630,10 +632,9 @@ export class Sandbox {
       return f();
     } catch (e) {
       if (e instanceof WebAssembly.RuntimeError) {
-        const x = this.x;
-        const msg = textDecoder.decode(new Uint8Array(x.memory.buffer, x.djs_panic_ptr(), x.djs_panic_len()));
-        this.dead = `trapped (${msg || e.message})`;
-        throw new SandboxError("trap", `djs-wasm trapped: ${msg || e.message}`);
+        const msg = trapText(this.x, e);
+        this.dead = `trapped (${msg})`;
+        throw new SandboxError("trap", `djs-wasm trapped: ${msg}`);
       }
       throw e;
     }

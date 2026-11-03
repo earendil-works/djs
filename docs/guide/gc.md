@@ -299,8 +299,10 @@ pub fn next_threshold(live: u32, base: u32, limit: u32) -> u32 {
     if growth > headroom / 2 {
         return live + headroom / 2;
     }
-    // Whole 64 KiB wasm pages when that stays within the headroom rule (D1870).
-    let t = (live as u64 + growth as u64).next_multiple_of(PAGE);
+    // Whole 64 KiB wasm pages counted from the prefix's end, when that stays within
+    // the headroom rule (D1870, D2544).
+    let base = u64::from(base.min(live));
+    let t = base + (u64::from(live) - base + u64::from(growth)).next_multiple_of(PAGE);
     if t <= live as u64 + headroom as u64 / 2 {
         t as u32
     } else {
@@ -314,9 +316,11 @@ whole wasm pages, but never by more than half of what is left below the cap, so 
 collections come more often as memory gets tight. The builtin prefix, which is never
 collected, counts as a fixed allowance (`BASE_ALLOWANCE`, the size it had when the rule
 came in) instead of its real size: making the base smaller should not make collections
-more frequent (D2442). The arena's backing store stops
-growing at the threshold, since wasm memory never shrinks and the peak is what a run
-costs (D1870).
+more frequent (D2442). For the same reason the pages are counted from the prefix's end,
+not from offset 0: a base a few KB smaller moves every threshold by exactly that much, so
+collections still come after the same allocations (D2544). The arena's backing store
+stops growing at the threshold, rounded up to whole pages of memory, since wasm memory
+never shrinks and the peak is what a run costs (D1870).
 
 > **Trade-off.** Twice the live size, not more. Since minor collections skip the old
 > region, a collection's cost is mostly the young data that survives it, and letting the
@@ -411,7 +415,7 @@ not catchable. The run stops with `HostOutOfMemory` and the VM stays usable (D16
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2057 D2063 D2064 D2065 D2042 D2044 D2055 D2056 D2045 D2046 D2047 D2048 D2053 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 D2442 D2541 D2542 -->
+<!-- gen:decisions D2040 D2041 D2057 D2063 D2064 D2065 D2042 D2044 D2055 D2056 D2045 D2046 D2047 D2048 D2053 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 D2442 D2541 D2542 D2544 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
 - D2057: The cells a VM replaces first sit at the end of base and sealed images
@@ -449,4 +453,5 @@ Decisions on this page:
 - D2442: GC growth counts the builtin prefix as a fixed allowance
 - D2541: Instance memory: the arena kept at memory's end, lean start capacity, the coded base outside memory
 - D2542: Slices: substrings that share a one-byte parent, copied out when they pin it
+- D2544: GC thresholds count their pages from the prefix's end
 <!-- /gen -->

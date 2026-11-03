@@ -7502,3 +7502,45 @@ readers, the collector's walks, the canonical copy, JSON.parse's slicing. The pa
 measured and dropped to get there: a sort-and-group of the slices by parent (+4.4 KB
 gzip; the `COUNTED` bit and the parent's `HASH` field do it without a table), slicing
 concatenation ropes (+0.2 KB), a separate unslice path (merged into `flatten`).
+
+## D2543: A wasm stack overflow is reported as one
+date: 2026-11-09 · by: heap · issue: 0166
+djs-wasm exports its shadow stack pointer (`--export=__stack_pointer` in build.rs). A
+frame that does not fit the 128 KiB stack (D2540) takes the pointer below 0, where it
+wraps past the end of memory, and the first store traps as "memory access out of
+bounds". `trapText` (js/src/trap.ts), used by the Sandbox's `guard` and the pi engine's
+`trap`, reads the pointer first: above the memory's size it reports "stack overflow:
+the engine's wasm stack is exhausted (…)" without calling the instance again (with the
+pointer wrapped, `djs_panic_ptr` itself trapped and turned the report into a raw
+RuntimeError); otherwise the panic message or the runtime's text as before. The kind
+stays `trap` (the instance is dead); the pi engine's `dispose` no longer calls a trapped
+instance. Checked on a build without the parser's nesting limit; js/test/trap.test.ts
+covers the cases with a fake instance. Size +20 B raw.
+
+## D2544: GC thresholds count their pages from the prefix's end
+date: 2026-11-09 · by: heap · issue: 0166
+`next_threshold` rounded `live + growth` up to whole 64 KiB pages from offset 0 (D1870),
+so the builtin prefix's size moved every collection point (json-date's phase flips in
+D2443/D2445). It now rounds `live - BASE_END + growth` and adds `BASE_END` back: a
+smaller or larger prefix moves the threshold by exactly as much, and collections come
+after the same allocations (unit test over young sizes and prefixes ±46 KB). The arena's
+growth target (`Arena::set_target`) stays whole pages from offset 0, the threshold
+rounded up, since that is where its memory is.
+
+mem-perturb n=8 against main (mean MiB): json-indent 4.60 → 3.80, json-replacer 4.24 →
+3.60, pi-like 1.60 → 1.40, json-date 5.16 → 5.00, props 1.10 → 1.00, strings 11.02 →
+10.91, strbuild 14.60 → 14.80, jsonh 5.31 → 5.40, the rest equal. Wasm instructions n=5:
+−1.4% to +1.0%. Rejected: the relative rounding with the target unrounded (strbuild
+15.2, json-replacer 4.19), and no rounding at all (strings 12.10, json-replacer 4.60,
+push-pop 1.25).
+
+## D2545: Nesting limits re-measured: parser 550 stays, regexp 212
+date: 2026-11-09 · by: heap · issue: 0166
+Re-measured with the limits lifted (MAX_DEPTH 5000, regexp 2000) on the current main
+(D2521's 16-word `push_out` was already in D2540's last measurement), deepest nesting
+without a trap at 128 KiB, debug | release: blocks 611 | 798, trys 610 | 798, classes 77
+| 90, functions 148 | 189, parentheses 248 | 285; capture groups 258 | 243, lookaheads
+249 | 235. The 10% rule allows a parser MAX_DEPTH of at most ~554 (blocks and trys in
+the debug build the gate tests), so 550 stays. The regexp parser's limit goes from 201
+to 212: 211 nested groups, 10% below release's 235-lookahead limit; both builds reach
+the limit's SyntaxError at 211 for every regexp construct.

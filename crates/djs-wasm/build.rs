@@ -24,5 +24,8 @@ fn main() {
     if wasm {
         let n = std::env::var("DJS_WASM_STACK").unwrap_or_else(|_| "131072".into());
         println!("cargo:rustc-link-arg-cdylib=-zstack-size={n}");
+        // Exported so that a host can tell a stack overflow from other traps: the pointer
+        // wraps below 0, past the end of memory (js/src/trap.ts, D2543).
+        println!("cargo:rustc-link-arg-cdylib=--export=__stack_pointer");
     }
 }
