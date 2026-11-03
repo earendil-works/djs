@@ -125,6 +125,39 @@ impl<'a> CompileOptions<'a> {
         }
     }
 
+    /// The options that decide the code, as a Script cell keeps them (`Script::OPTIONS`):
+    /// the goal in the low two bits, then TypeScript, legacy decorators, metadata.
+    pub(crate) fn bits(&self) -> u32 {
+        let goal = match self.goal {
+            Goal::Script => 0,
+            Goal::AsyncBody => 1,
+            Goal::Eval => 2,
+        };
+        goal | u32::from(self.typescript) << 2
+            | u32::from(self.experimental_decorators) << 3
+            | u32::from(self.emit_decorator_metadata) << 4
+            | u32::from(self.privileged) << 5
+    }
+
+    /// `script` with the options of [`CompileOptions::bits`] `bits` (privileged code
+    /// keeps no source: never compiled again).
+    #[cfg(feature = "dump")]
+    pub(crate) fn from_bits(filename: &'a str, params: &'a [&'a str], bits: u32) -> Self {
+        CompileOptions {
+            goal: match bits & 3 {
+                1 => Goal::AsyncBody,
+                2 => Goal::Eval,
+                _ => Goal::Script,
+            },
+            filename,
+            params,
+            privileged: bits & 1 << 5 != 0,
+            typescript: bits & 1 << 2 != 0,
+            experimental_decorators: bits & 1 << 3 != 0,
+            emit_decorator_metadata: bits & 1 << 4 != 0,
+        }
+    }
+
     /// The same options with the TypeScript grammar.
     pub fn ts(self) -> Self {
         CompileOptions {

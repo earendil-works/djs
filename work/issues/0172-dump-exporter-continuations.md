@@ -32,6 +32,16 @@ fresh VM, continue, same transcript.
 - [ ] Measure the dumper's wasm size (feature `dump`) before and after.
 
 ## Log
+- 2026-11-04 (portable): interfaces (answered for 0179/example and 0174/repl):
+  `DumpOptions { base, host, host_fn_name: &dyn Fn(u32) -> Option<String>, handles:
+  &[(&str, Value)] }` (Default impl). Handles are host-supplied, written last as
+  `$dump.handle(name, v)`; the exporter never adds the entry call's outcome itself (hosts
+  pass it, e.g. "run"). `host_fn_name` names open calls (`$dump.pending(id, name, args)`)
+  and host functions held as values (`$dump.host(name, isAsync)`, a new loader primitive
+  resolved through `LoadOptions::host_fn`). None refuses.
+- Script cells keep their compile options (`Script::OPTIONS`, `Script::PARAMS`), so the
+  exporter compiles an activation's script again exactly as it was (into the scratch base
+  heap; immediates are fixed width, so pcs agree).
 
 ## Follow-ups
 

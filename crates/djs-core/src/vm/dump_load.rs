@@ -114,6 +114,7 @@ const CELL: u32 = PRIVATE + 2;
 const PENDING: u32 = PRIVATE + 3;
 const HANDLE: u32 = PRIVATE + 4;
 const ISSUED: u32 = PRIVATE + 5;
+const HOST: u32 = PRIVATE + 6;
 /// The ids of the primitives' own calls while a dump loads: above every id a dump's open
 /// call may have, so the two never meet.
 const LOADER_CALL_IDS: u32 = 0x8000_0000;
@@ -124,6 +125,7 @@ const PRIMITIVES: &[(&str, u32)] = &[
     ("pending", PENDING),
     ("handle", HANDLE),
     ("issued", ISSUED),
+    ("host", HOST),
 ];
 
 /// The format of a dump: the number in its first line, `// djs-dump N`.
@@ -323,6 +325,7 @@ impl Vm {
                         CELL => self.primitive_cell(&args),
                         PENDING => self.primitive_pending(&args, opts, load),
                         HANDLE => self.primitive_handle(&args, load),
+                        HOST => self.primitive_host(&args, opts),
                         // (A positive int32: below LOADER_CALL_IDS.)
                         ISSUED => match args.first().and_then(|v| v.as_int()) {
                             Some(n) if n > 0 => {
@@ -422,6 +425,24 @@ impl Vm {
         }
         load.out.calls.push(OpenCall { id, fn_id, name });
         Ok(Value::object(p))
+    }
+
+    /// `$dump.host(name, isAsync)`: a host function the host knows as `name`
+    /// (`LoadOptions::host_fn`), held as a value by the dumped session.
+    fn primitive_host(&mut self, args: &[Value], opts: &LoadOptions) -> Result<Value, String> {
+        let name = string_arg(
+            &self.heap,
+            args.first().copied().unwrap_or(Value::UNDEFINED),
+            "$dump.host",
+        )?;
+        let id = (opts.host_fn)(&name)
+            .ok_or_else(|| cat!("$dump.host: unknown host function ", name))?;
+        let r = if args.get(1).copied() == Some(Value::TRUE) {
+            self.new_async_host_function(id, &name)
+        } else {
+            self.new_host_function(id, &name)
+        };
+        r.map_err(|e| String::from(e.as_str()))
     }
 
     /// `$dump.handle(name, v)`: `v` for the host, under `name`.

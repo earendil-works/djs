@@ -306,10 +306,23 @@ fn nonempty<T>(
     }
 }
 
-/// Allocates a `Script` cell.
-pub fn alloc_script(heap: &mut Heap, name: Str, source: Option<Str>) -> Result<Ref, HeapError> {
+/// Allocates a `Script` cell; `options` are `CompileOptions::bits`, `params` an async
+/// body's parameter names joined by `,`.
+pub fn alloc_script(
+    heap: &mut Heap,
+    name: Str,
+    source: Option<Str>,
+    options: u32,
+    params: Option<Str>,
+) -> Result<Ref, HeapError> {
     let off = heap.alloc_cell(CellKind::Script, Script::LAYOUT.min_size)?;
     let a = heap.arena_mut();
+    a.set(off, Script::OPTIONS, options);
+    a.set(
+        off,
+        Script::PARAMS,
+        params.map_or(Ref::NULL, |s| Ref(s.offset())),
+    );
     a.set(off, Script::NAME, Ref(name.offset()));
     a.set(
         off,

@@ -45,7 +45,19 @@ fn new_vm_with(stress: bool) -> Vm {
 }
 
 fn host_fn(name: &str) -> Option<u32> {
-    (name == "later").then_some(LATER)
+    match name {
+        "later" => Some(LATER),
+        "print" => Some(PRINT),
+        _ => None,
+    }
+}
+
+fn host_fn_name(id: u32) -> Option<String> {
+    match id {
+        LATER => Some("later".into()),
+        PRINT => Some("print".into()),
+        _ => None,
+    }
 }
 
 /// Runs the VM to its end, settling `later` calls at idle points (oldest first).
@@ -409,6 +421,83 @@ fn resume_refuses_what_the_map_does_not_have() {
         let got = refusal(tail);
         assert!(got.contains(want), "{tail}\n  got: {got}\n  want: {want}");
     }
+}
+
+/// Runs `src` to idle point `k`, dumps it, loads the dump into a fresh VM and runs that
+/// to the end: the lines before the dump and after, or why the dump was refused.
+fn dump_at(src: &str, k: usize) -> Result<(Vec<String>, String), String> {
+    let mut vm = new_vm();
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("src.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    let mut lines = Vec::new();
+    let mut seen = 0;
+    loop {
+        match vm.run(1_000_000_000) {
+            Status::HostCall { call_id, .. } => {
+                let args = vm.host_call(call_id).unwrap().args;
+                let parts: Vec<String> = args.iter().map(|&v| vm.display(v)).collect();
+                lines.push(parts.join(" "));
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+            }
+            Status::Idle | Status::Done(_) => {
+                let Some(&id) = vm.pending_host_calls().iter().min() else {
+                    panic!("ended before idle point {k}");
+                };
+                seen += 1;
+                if seen == k {
+                    break;
+                }
+                settle(&mut vm, id);
+            }
+            s => panic!("{s:?}"),
+        }
+    }
+    let opts = super::dump::DumpOptions {
+        base: base(),
+        host_fn_name: &host_fn_name,
+        ..Default::default()
+    };
+    let text = vm.dump(&opts, None).map_err(|e| e.message())?;
+    let (_, after) = continue_dump(&text, false);
+    lines.extend(after);
+    Ok((lines, text))
+}
+
+#[test]
+fn exporter_round_trips_at_every_idle_point() {
+    let mut failed = Vec::new();
+    for name in [
+        "plan",
+        "roles",
+        "generator",
+        "asyncgen",
+        "combinators",
+        "loops",
+        "cells",
+    ] {
+        let src =
+            std::fs::read_to_string(fixture_dir().join(alloc::format!("{name}.src.js"))).unwrap();
+        let (want, marks) = run_program(&src);
+        for k in 1..=marks.len() {
+            match dump_at(&src, k) {
+                Ok((got, text)) => {
+                    if got != want {
+                        failed.push(alloc::format!(
+                            "{name} @{k}: {got:?}\n  want {want:?}\n{text}"
+                        ));
+                    }
+                }
+                Err(e) => failed.push(alloc::format!("{name} @{k}: {e}")),
+            }
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 
 /// Prints the suspension maps of a file, for writing fixtures by hand:

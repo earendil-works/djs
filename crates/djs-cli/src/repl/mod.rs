@@ -1027,6 +1027,7 @@ impl Repl {
         let opts = djs_core::vm::dump::DumpOptions {
             base: djs_prelude::BASE,
             host: &["console", "tools", "print", "later"],
+            ..Default::default()
         };
         let sel = (!names.is_empty()).then_some(names.as_slice());
         match self.vm.dump(&opts, sel) {

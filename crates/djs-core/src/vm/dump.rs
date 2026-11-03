@@ -41,12 +41,35 @@ use crate::value::{Kind, Obj, Value};
 pub const HEADER: &str = "// djs-dump 2";
 
 /// What [`Vm::dump`] needs besides the VM.
+#[derive(Clone, Copy)]
 pub struct DumpOptions<'a> {
     /// The base image the VM was made from: builtins are named by their paths on it.
     pub base: &'a [u8],
     /// Globals the host defines in every VM (`console`, `tools`): never dumped; values
     /// reached from them are referenced by name (`tools.read`).
     pub host: &'a [&'a str],
+    /// The host's name of its function `fn_id` (`tools.read`), for open calls and for
+    /// host functions held as values; the loader's `LoadOptions::host_fn` is the
+    /// inverse. `None` refuses.
+    pub host_fn_name: &'a dyn Fn(u32) -> Option<String>,
+    /// Values the host holds (a run's promise, a REPL input's): dumped as
+    /// `$dump.handle(name, v)`, so the loader gives them back.
+    pub handles: &'a [(&'a str, Value)],
+}
+
+fn no_host_fn_name(_: u32) -> Option<String> {
+    None
+}
+
+impl Default for DumpOptions<'_> {
+    fn default() -> Self {
+        DumpOptions {
+            base: &[],
+            host: &[],
+            host_fn_name: &no_host_fn_name,
+            handles: &[],
+        }
+    }
 }
 
 /// Why a dump was refused: one line per value, `path: reason`.
@@ -74,6 +97,7 @@ impl Vm {
         names: Option<&[&str]>,
     ) -> Result<String, DumpError> {
         let mut d = Dumper::new(self, opts)?;
+        d.flight_roots(opts);
         match names {
             Some(names) => {
                 for &n in names {
@@ -102,6 +126,7 @@ impl Vm {
         roots: &[(&str, Value)],
     ) -> Result<String, DumpError> {
         let mut d = Dumper::new(self, opts)?;
+        d.flight_roots(opts);
         // The boxes first, so that a closure of one root that captures another root's
         // box refers to that root, whichever comes first.
         for (i, (_, v)) in roots.iter().enumerate() {
@@ -169,6 +194,11 @@ struct Node {
     class_scope: bool,
     /// Private fields and brands (D1400): key and property.
     privates: Vec<(Atom, Property)>,
+    /// In flight (dump_flight.rs): the index of its pending promise, activation or
+    /// iterator record there, else `NO_FLIGHT`.
+    fl: usize,
+    /// A box an activation's frame holds: its scope group's factory hands out its cell.
+    frame_box: bool,
 }
 
 /// Where a class member sits: `C.m`, `C.prototype.m`, an accessor's function, the
@@ -294,13 +324,21 @@ impl Index {
 }
 
 /// The helpers a dump defines on `$dump` when it uses them.
-const H_BYTES: u8 = 1;
-const H_FN: u8 = 2;
-const H_REJECTED: u8 = 4;
-const H_BUILTIN: u8 = 8;
-const H_KEEP: u8 = 16;
+const H_BYTES: u16 = 1;
+const H_FN: u16 = 2;
+const H_REJECTED: u16 = 4;
+const H_BUILTIN: u16 = 8;
+const H_KEEP: u16 = 16;
+const H_ADVANCE: u16 = 32;
+const H_SPENT: u16 = 64;
 
-const HELPERS: &[(u8, &str)] = &[
+/// A node that is not in flight (`Node::fl`).
+const NO_FLIGHT: usize = usize::MAX;
+
+#[path = "dump_flight.rs"]
+mod flight;
+
+const HELPERS: &[(u16, &str)] = &[
     (
         H_BYTES,
         "$dump.bytes = (s) => {\n  const b = atob(s), u = new Uint8Array(b.length);\n  \
@@ -314,6 +352,14 @@ const HELPERS: &[(u8, &str)] = &[
     (
         H_REJECTED,
         "$dump.rejected = (e) => {\n  const p = Promise.reject(e);\n  p.catch(() => {});\n  return p;\n};\n",
+    ),
+    (
+        H_ADVANCE,
+        "$dump.advance = (it, n) => {\n  for (let i = 0; i < n; i++) it.next();\n  return it;\n};\n",
+    ),
+    (
+        H_SPENT,
+        "$dump.spent = () => {\n  let f;\n  new Promise((res, rej) => (f = [res, rej]));\n  f[0]();\n  return f;\n};\n",
     ),
     (
         H_KEEP,
@@ -648,7 +694,9 @@ struct Dumper<'a> {
     private_names: Vec<(u32, usize, String, bool)>,
     patches: Vec<String>,
     finals: Vec<String>,
-    helpers: u8,
+    /// What is in flight: open calls, pending promises, activations (dump_flight.rs).
+    fl: flight::Flight<'a>,
+    helpers: u16,
     /// Whether the text uses the `$dump` namespace.
     ns: bool,
     next: u32,
@@ -692,6 +740,7 @@ impl<'a> Dumper<'a> {
             private_names: Vec::new(),
             patches: Vec::new(),
             finals: Vec::new(),
+            fl: flight::Flight::new(opts.host_fn_name),
             helpers: 0,
             ns: false,
             next: 0,
@@ -1026,6 +1075,8 @@ impl<'a> Dumper<'a> {
             member: None,
             class_scope: false,
             privates: Vec::new(),
+            fl: NO_FLIGHT,
+            frame_box: false,
         });
         Some(n)
     }
@@ -1178,11 +1229,10 @@ impl<'a> Dumper<'a> {
         let path = self.nodes[n].path.clone();
         if let Some(b) = v.as_internal() {
             let inner: Value = h.arena().get(b, BoxCell::VALUE);
-            if inner.is_uninitialized() {
-                self.refuse(path, "a captured binding before its declaration ran (TDZ)");
-                return;
+            // (In its TDZ: its factory declares it after its `return`.)
+            if !inner.is_uninitialized() {
+                self.edge(n, inner, || path);
             }
-            self.edge(n, inner, || path);
             return;
         }
         let Some(o) = v.as_object() else {
@@ -1240,7 +1290,7 @@ impl<'a> Dumper<'a> {
             ObjectClass::Promise => {
                 let state = h.object_slot(o, 0).as_int().unwrap_or(0);
                 if state == crate::interp::run::promise::PENDING {
-                    self.refuse(path, "a pending promise");
+                    self.visit_pending(n, o);
                     return;
                 }
                 let r = h.object_slot(o, 1);
@@ -1276,9 +1326,22 @@ impl<'a> Dumper<'a> {
                 self.props(n, o, &|_, i| i.is_some());
             }
             ObjectClass::HostFunction => {
-                self.refuse(path, "a host function the host does not re-bind by name")
+                let id = h.object_slot(o, 0).as_int().unwrap_or(-1) as u32;
+                if (self.fl.host_fn_name)(id).is_none() {
+                    self.refuse(path, "a host function the host does not name")
+                }
             }
-            ObjectClass::Generator => self.refuse(path, "a suspended generator or async function"),
+            ObjectClass::Generator => self.visit_activation(n, o),
+            ObjectClass::BuiltinClosure => self.visit_builtin_closure(n, o),
+            ObjectClass::Record => {
+                for i in 0..h.object_slot_count(o) {
+                    let v = h.object_slot(o, i);
+                    self.edge(n, v, || cat!(path, "<", i, ">"));
+                }
+            }
+            ObjectClass::ArrayIterator | ObjectClass::CollectionIterator => {
+                self.visit_iterator(n, o)
+            }
             ObjectClass::Proxy => self.refuse(path, "a Proxy"),
             ObjectClass::WeakMap | ObjectClass::WeakSet => self.refuse(path, "a weak collection"),
             _ => self.refuse(path, "an object of a kind dumps do not write"),
@@ -1763,9 +1826,11 @@ impl<'a> Dumper<'a> {
             return Err(DumpError(self.refusals));
         }
         self.analyze();
+        self.flight_start();
         for r in 0..self.roots.len() {
             self.emit_root(r);
         }
+        self.flight_finish();
         let patches = core::mem::take(&mut self.builtin_patches);
         let mut builtin_lines = Vec::new();
         for (expr, k, p) in patches {
@@ -1820,6 +1885,19 @@ impl<'a> Dumper<'a> {
             });
         }
         s.push_str(".\n");
+        let (calls, acts, pends) = self.fl.counts();
+        if calls + acts + pends > 0 {
+            cat_to!(
+                &mut s,
+                "// In flight: ",
+                calls,
+                " open calls, ",
+                acts,
+                " activations, ",
+                pends,
+                " pending promises. Taken while the VM was idle.\n"
+            );
+        }
         if self.helpers != 0 {
             for (bit, text) in HELPERS {
                 if self.helpers & bit != 0 {
@@ -1901,7 +1979,7 @@ impl<'a> Dumper<'a> {
                 None => return self.refuse("the dump".into(), "does not compile"),
             },
             Some((_, Err(e))) => {
-                let why = cat!("does not compile: ", e.message);
+                let why = cat!("does not compile: ", e.message, " at ", e.line, ":", e.col);
                 return self.refuse("the dump".into(), &why);
             }
             None => return self.refuse("the dump".into(), "no memory to check it"),
@@ -2099,6 +2177,7 @@ impl<'a> Dumper<'a> {
             // closure over a parameter came out as its bare text).
             Some(n)
                 if self.nodes[n].root == Some(r)
+                    && self.nodes[n].fl == NO_FLIGHT
                     && self.nodes[n].state == State::New
                     && self.nodes[n].group == usize::MAX
                     && self.nodes[n].member.is_none() =>
@@ -2209,6 +2288,9 @@ impl<'a> Dumper<'a> {
                 "an internal function of a class (a field initializer, a private method)",
             );
             return "undefined".into();
+        }
+        if self.nodes[n].fl != NO_FLIGHT {
+            return self.flight_expr(n);
         }
         match self.nodes[n].state {
             State::Done => return self.nodes[n].loc.clone(),
@@ -2491,9 +2573,16 @@ impl<'a> Dumper<'a> {
             cat_to!(&mut text, "  ", line, '\n');
         }
         let mut sets: Vec<(usize, Value)> = Vec::new();
+        // Variables in their TDZ: declared after the factory's `return`, so never
+        // initialized.
+        let mut tdz: Vec<String> = Vec::new();
         for (bi, &b) in boxes.iter().enumerate() {
             let name = &box_names[bi];
             let inner = box_value(self, b);
+            if inner.is_uninitialized() {
+                tdz.push_out(cat!("let ", name, ";"));
+                continue;
+            }
             let c = self.node_of(inner);
             let at_home = c.and_then(|c| closures.iter().position(|&x| x == c));
             let line = match (c, at_home) {
@@ -2544,6 +2633,16 @@ impl<'a> Dumper<'a> {
                 }
             }
         }
+        // The cells of the variables an activation's frame shares with the closures.
+        let cells: Vec<String> = boxes
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| self.nodes[**b].frame_box)
+            .map(|(bi, _)| cat!(box_names[bi], ": $dump.cell(() => ", box_names[bi], ")"))
+            .collect();
+        if !cells.is_empty() {
+            ret.push_out(cat!("$cells: { ", join(&cells, ", "), " }"));
+        }
         if !sets.is_empty() {
             let mut s = String::from("$set(v) { ({ ");
             for (i, (bi, _)) in sets.iter().enumerate() {
@@ -2552,7 +2651,16 @@ impl<'a> Dumper<'a> {
             s.push_str(" } = v); }");
             ret.push_out(s);
         }
-        cat_to!(&mut text, "  return { ", join(&ret, ", "), " };\n})();");
+        cat_to!(&mut text, "  return { ", join(&ret, ", "), " };\n");
+        for l in &tdz {
+            cat_to!(&mut text, "  ", l, '\n');
+        }
+        text.push_str("})();");
+        for (bi, &b) in boxes.iter().enumerate() {
+            if self.nodes[b].frame_box {
+                self.nodes[b].loc = cat!(loc, ".$cells.", box_names[bi]);
+            }
+        }
         self.out.push_out(text);
         self.skeleton.push_out(None);
         self.class_locals.clear();
@@ -3013,6 +3121,14 @@ impl<'a> Dumper<'a> {
                         .push_out(cat!("Object.setPrototypeOf(", loc, ", ", p, ");"));
                 }
                 cat!("new ", ctor, "(", args, ")")
+            }
+            ObjectClass::HostFunction => {
+                let id = h.object_slot(o, 0).as_int().unwrap_or(-1) as u32;
+                let name = (self.fl.host_fn_name)(id).unwrap_or_default();
+                let flags = h.cell_flags(o.offset());
+                let asynch = flags & crate::heap::cells::flags::OBJ_HOST_ASYNC != 0;
+                self.ns = true;
+                return cat!("$dump.host(", quote(&name), ", ", tf(asynch), ")");
             }
             ObjectClass::Promise => {
                 let state = h.object_slot(o, 0).as_int().unwrap_or(0);
@@ -3694,6 +3810,7 @@ mod check_tests {
         let opts = DumpOptions {
             base: base(),
             host: &["console"],
+            ..Default::default()
         };
         let mut d = Dumper::new(&vm, &opts).unwrap();
         for n in names {

@@ -940,7 +940,11 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
         let r = BASE.with(|b| {
             let b = b.borrow();
             let base = b.as_deref()?;
-            let opts = djs_core::vm::dump::DumpOptions { base, host: &host };
+            let opts = djs_core::vm::dump::DumpOptions {
+                base,
+                host: &host,
+                ..Default::default()
+            };
             Some(
                 slot.vm
                     .dump(&opts, (!names.is_empty()).then_some(names.as_slice())),

@@ -425,6 +425,11 @@ cells! {
         NAME: Ref = 8,
         /// The source text, a string (D009), or null when stripped.
         SOURCE: Ref = 12,
+        /// The compile options that matter to the code (`CompileOptions::bits`): a dump
+        /// compiles the source again to name a suspended frame's slots (D2610).
+        OPTIONS: u32 = 16,
+        /// An async body's parameter names joined by `,`, a string, or null.
+        PARAMS: Ref = 20,
     };
 
     /// A captured binding, the "Box" of docs/compiler.md 5.4 (named `BoxCell` so it does

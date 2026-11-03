@@ -329,6 +329,17 @@ fn is_slot_object(class: ObjectClass) -> bool {
 
 /// The builtins a `%NewBuiltinClosure(kind, ..)` calls, by kind (D1372; the list in
 /// builtins/intrinsics.d.ts).
+/// The kind of builtin closure `f` (`NewBuiltinClosure`'s first argument: its index in
+/// `BUILTIN_CLOSURES`), for the dumper (0172).
+#[cfg(feature = "dump")]
+pub(crate) fn builtin_closure_kind(
+    heap: &crate::heap::Heap,
+    f: crate::value::Obj,
+) -> Option<usize> {
+    let id = heap.object_slot(f, 0).as_int()?;
+    BUILTIN_CLOSURES.iter().position(|&b| i32::from(b) == id)
+}
+
 const BUILTIN_CLOSURES: [u16; 25] = [
     id("PromiseResolveFunction"),
     id("PromiseRejectFunction"),

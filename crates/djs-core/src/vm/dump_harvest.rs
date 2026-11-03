@@ -295,6 +295,7 @@ fn run_case(prelude: &str, case: &str) -> Outcome {
         &DumpOptions {
             base: base(),
             host: HOST,
+            ..Default::default()
         },
         &refs,
     ) {

@@ -53,6 +53,7 @@ fn dump(vm: &Vm, names: Option<&[&str]>) -> Result<String, DumpError> {
         &DumpOptions {
             base: base(),
             host: &[],
+            ..Default::default()
         },
         names,
     )
@@ -238,6 +239,7 @@ fn function_scope_bindings_by_box() {
             &DumpOptions {
                 base: base(),
                 host: &[],
+                ..Default::default()
             },
             &[("inc", f), ("n", Value::internal(b))],
         )
@@ -364,6 +366,7 @@ fn captured_host_values_read_the_global() {
             &DumpOptions {
                 base: base(),
                 host: &["tools"],
+                ..Default::default()
             },
             Some(&["lib"]),
         )

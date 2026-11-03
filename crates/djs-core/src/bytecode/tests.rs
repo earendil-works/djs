@@ -894,7 +894,7 @@ fn template_cells() {
         depth: 0,
     }];
     let name = heap.alloc_str("test.js").unwrap();
-    let script = alloc_script(&mut heap, name, None).unwrap();
+    let script = alloc_script(&mut heap, name, None, 0, None).unwrap();
     let mut lines = LineTableBuilder::new();
     lines.add(0, 1, 1);
     lines.add(4, 1, 9);

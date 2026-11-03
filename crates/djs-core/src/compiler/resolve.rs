@@ -227,7 +227,12 @@ pub(super) fn finish(
             Ok(s) if !opts.privileged => Some(heap.alloc_str(s)?),
             _ => None,
         };
-        alloc_script(heap, name, source)?
+        let params = if opts.goal == super::Goal::AsyncBody && !opts.params.is_empty() {
+            Some(heap.alloc_str(&opts.params.join(","))?)
+        } else {
+            None
+        };
+        alloc_script(heap, name, source, opts.bits(), params)?
     };
     let line_table = LineTable::new(src);
     let mut phase1 = crate::buf::vec_with_capacity(funcs.len());

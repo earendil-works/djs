@@ -144,6 +144,45 @@ pub(crate) fn dequeue_request(heap: &mut Heap, g: Obj) -> Value {
     first
 }
 
+/// A suspended activation as the dumper reads it (0172).
+#[cfg(feature = "dump")]
+pub(crate) struct Suspended {
+    pub kind: i32,
+    pub state: i32,
+    /// The saved frame (`suspend_frame`), empty unless suspended.
+    pub frame: alloc::vec::Vec<Value>,
+    pub pc: u32,
+    /// The header's position in `frame`.
+    pub hp: u32,
+    /// An async function's result promise.
+    pub promise: Value,
+    /// An async generator's request Records.
+    pub queue: alloc::vec::Vec<Value>,
+}
+
+/// Reads activation `g`.
+#[cfg(feature = "dump")]
+pub(crate) fn read_activation(heap: &Heap, g: Obj) -> Suspended {
+    let int = |slot| heap.object_slot(g, slot).as_int().unwrap_or(0);
+    let list = |v: Value| -> alloc::vec::Vec<Value> {
+        match v.as_internal() {
+            Some(a) => (0..heap.value_array_len(a))
+                .map(|i| heap.value_array_get(a, i))
+                .collect(),
+            None => alloc::vec::Vec::new(),
+        }
+    };
+    Suspended {
+        kind: int(KIND),
+        state: int(STATE),
+        frame: list(heap.object_slot(g, FRAME)),
+        pc: int(PC) as u32,
+        hp: int(HP) as u32,
+        promise: heap.object_slot(g, PROMISE),
+        queue: list(heap.object_slot(g, QUEUE)),
+    }
+}
+
 /// A new activation of closure `f` for the dump loader (0171): a Generator object of
 /// `kind` as `generator_start`/`async_start` make it (an async function's with its result
 /// promise), still EXECUTING; [`set_suspended`] gives it its frame.
