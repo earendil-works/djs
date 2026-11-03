@@ -9,10 +9,18 @@ reads (docs/wire.md, both halves).
 ```sh
 scripts/build-wasm.sh              # target/wasm32-unknown-unknown/wasm/djs_wasm.wasm, stripped
 scripts/build-wasm.sh --keep-names # with the name section (profiling, scripts/wasm-funcs.py)
+scripts/build-wasm.sh --slim       # target/djs-slim.wasm: the slim build (D2411)
 node --test js/test/*.test.ts    # sandbox.test.ts needs a build ($DJS_WASM overrides the path)
 ```
 
 The gate builds a debug djs-wasm and runs the node tests against it.
+
+The slim module (djs-core without its default `full` and `unicode` features, D2411) has
+the same exports and ABI. It lacks typed arrays, BigInt, the Iterator helpers, weak
+references, DisposableStack/`using` and decorators, so the wire format's bytes tag
+(`Uint8Array`) fails to decode there, and its images (build hash, base prefix) load only
+into a slim module. pi's adapter runs it with `frozenBuiltins` and pi's prelude without its
+lockdown (js/pi/pi-tests.ts `--no-lockdown`); the Sandbox keeps the full module by default.
 
 ## The Sandbox API
 

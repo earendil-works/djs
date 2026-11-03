@@ -1,7 +1,8 @@
 # A slim djs for codemode: which globals, and a flag or a build?
 
 Issue 0149, measured at main 0de6c26a (after 0148). Research only: nothing changes on
-main. The prototypes are patches in work/scratch/0149 (see "Reproduce"). Sizes are bytes
+main. (Implemented in 0160 as set A without Proxy/Reflect cuts: the default-on `full` and
+`unicode` features, D2411–D2413; the slim module measured 390,849 B gzip there.) The prototypes are patches in work/scratch/0149 (see "Reproduce"). Sizes are bytes
 of the shipped wasm module, stripped; "gz" is gzip -9. "A", "B" and "full" name the
 prototype builds of section 5.
 
