@@ -149,19 +149,66 @@ fn explain_a_dump() {
     assert!(r.2.contains("not a djs dump"), "{}", r.2);
 }
 
-#[test]
-fn dumping_needs_the_exporter() {
-    let src = format!("{DIR}/reads.src.js");
-    for flag in [&["--dump-after", "1"][..], &["--dump-every-idle"]] {
-        let mut args = flag.to_vec();
-        args.push(&src);
-        let (code, out, err) = djs(&args);
-        assert_eq!((code, out.as_str()), (2, ""));
-        assert!(
-            err.contains("needs the format 2 exporter (issue 0172)"),
-            "{err}"
-        );
+/// `run --dump-after K` then `resume`, for every idle point K of a script, prints what
+/// the uninterrupted run prints; so does `--dump-every-idle`. The number of idle points.
+fn every_idle_point(script: &str, args: &[&str]) -> u64 {
+    let dir = env!("CARGO_TARGET_TMPDIR");
+    let out = format!(
+        "{dir}/dump-{}-{}.js",
+        std::process::id(),
+        script.rsplit('/').next().unwrap()
+    );
+    let mut plain = args.to_vec();
+    plain.push(script);
+    let (code, full, err) = djs(&plain);
+    assert_eq!((code, err.as_str()), (0, ""), "{script}");
+    for k in 1.. {
+        let _ = std::fs::remove_file(&out);
+        let ks = k.to_string();
+        let mut a = args.to_vec();
+        a.extend_from_slice(&["--dump-after", &ks, &out, script]);
+        let (code, head, err) = djs(&a);
+        if !std::path::Path::new(&out).exists() {
+            assert_eq!(head, full, "{script}: no dump at {k}");
+            assert!(err.contains("the run ended after"), "{script} k={k}: {err}");
+            let mut e = args.to_vec();
+            e.extend_from_slice(&["--dump-every-idle", script]);
+            assert_eq!(
+                djs(&e),
+                (0, full, String::new()),
+                "{script} --dump-every-idle"
+            );
+            return k - 1;
+        }
+        assert_eq!((code, err.as_str()), (0, ""), "{script} k={k}");
+        let mut r = vec!["resume"];
+        r.extend(args.iter().filter(|&&a| a != "--body"));
+        r.push(&out);
+        let (code, rest, err) = djs_cmd(&r);
+        assert_eq!((code, err.as_str()), (0, ""), "{script} k={k} resume");
+        assert_eq!(format!("{head}{rest}"), full, "{script} k={k}");
     }
+    unreachable!()
+}
+
+#[test]
+fn dump_after_every_idle_point() {
+    let answers = format!("{DIR}/reads.json");
+    let n = every_idle_point(&format!("{DIR}/reads.src.js"), &["--tools", &answers]);
+    assert_eq!(n, 2);
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/dump/v2");
+    let mut total = 0;
+    for e in std::fs::read_dir(dir).unwrap() {
+        let path = e.unwrap().path();
+        let p = path.to_str().unwrap();
+        // plan.src.js declares its own `const tools`, which the exporter leaves out as
+        // a host global (reported to 0172).
+        if !p.ends_with(".src.js") || p.ends_with("/plan.src.js") {
+            continue;
+        }
+        total += every_idle_point(p, &[]);
+    }
+    assert!(total >= 40, "{total} idle points");
 }
 
 /// Runs `djs args...`.

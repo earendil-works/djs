@@ -1,5 +1,6 @@
 mod container;
 mod disasm;
+mod dumps;
 mod heap;
 mod repl;
 mod run;

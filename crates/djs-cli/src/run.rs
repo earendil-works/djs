@@ -13,6 +13,7 @@
 use std::io::Write;
 
 use djs_core::compiler::{CompileErrorKind, CompileOptions};
+use djs_core::heap::Handle;
 use djs_core::value::Value;
 use djs_core::vm::{ExecOptions, Status, Vm, VmOptions};
 
@@ -33,8 +34,10 @@ const USAGE: &str = "usage: djs run [--body] [--ts] [--experimental-decorators]\
   --backend B        run the @native builtins as `native` code (default) or `bytecode`\n\
   --tools FILE       answer `tools.x()` calls from FILE, one at a time whenever the\n\
                      run is idle (docs/cli.md)\n\
-  --dump-after K     write a format 2 dump at idle point K and stop (needs 0172)\n\
-  --dump-every-idle  dump and reload at every idle point (needs 0172)";
+  --dump-after K OUT write the run as a format 2 dump to OUT at idle point K (from 1)\n\
+                     and stop; `djs resume OUT` continues it\n\
+  --dump-every-idle  at every idle point, dump the run and continue in a fresh VM that\n\
+                     loaded the dump";
 
 const RESUME_USAGE: &str = "usage: djs resume [--explain] [--tools answers.json] [--gc-stress]\n\
                 [--suspend-every N] [--backend B] <dump.js>\n\
@@ -43,9 +46,15 @@ const RESUME_USAGE: &str = "usage: djs resume [--explain] [--tools answers.json]
   --explain          only load it, print its open calls and suspended activations (where\n\
                      each stopped in the dump, with the source line), and exit";
 
-/// What format 2 dumps of a running session still need.
-const NEEDS_EXPORTER: &str = "djs: dumping a waiting run needs the format 2 exporter (issue 0172), \
-which this build does not have yet";
+/// Dumps at idle points (D2604). An idle point is a stop with only host calls open,
+/// before the run answers one, so each answer starts a new one.
+#[derive(Clone, Debug, Default)]
+pub struct Dumping {
+    /// `--dump-after K OUT`.
+    pub after: Option<(u64, String)>,
+    /// `--dump-every-idle`.
+    pub every_idle: bool,
+}
 
 pub fn main(args: &[String]) -> i32 {
     command(args, false)
@@ -74,10 +83,14 @@ fn command(args: &[String], resume: bool) -> i32 {
             }
             "--gc-stress" => opts.gc_stress = true,
             "--explain" if resume => explain = true,
-            "--dump-after" | "--dump-every-idle" if !resume => {
-                eprintln!("{NEEDS_EXPORTER}");
-                return 2;
-            }
+            "--dump-after" => match (it.next().and_then(|k| k.parse().ok()), it.next()) {
+                (Some(k), Some(out)) if k > 0 => opts.dumping.after = Some((k, out.clone())),
+                _ => {
+                    eprintln!("{usage}");
+                    return 2;
+                }
+            },
+            "--dump-every-idle" => opts.dumping.every_idle = true,
             "--tools" => match it.next().map(|p| crate::tools::read_answers(p)) {
                 Some(Ok(a)) => tools = Tools::with_answers(Some(a)),
                 Some(Err(e)) => {
@@ -221,13 +234,6 @@ pub fn run_source(
     run_main(vm, main, &args, opts, tools, out, err)
 }
 
-/// Whether a file is a dump rather than a heap image: it starts with the format marker,
-/// `"djs-dump N";` (D2640) or version 1's `// djs-dump 1` (any version: the loader says
-/// which it cannot load).
-pub fn is_dump(bytes: &[u8]) -> bool {
-    bytes.starts_with(b"\"djs-dump ") || bytes.starts_with(b"// djs-dump ")
-}
-
 /// Loads a dump into a fresh VM and runs it to its end (D2603); exit codes as `run`.
 pub fn resume_dump(
     text: &str,
@@ -238,23 +244,20 @@ pub fn resume_dump(
     err: &mut impl Write,
 ) -> i32 {
     let mut vm = new_vm(opts);
-    let host_fn = |name: &str| tools.id_for_call_name(name);
-    let lopts = djs_core::vm::dump_load::LoadOptions {
-        host_fn: &host_fn,
-        ..Default::default()
-    };
-    let loaded = match vm.load_dump(text, &lopts) {
+    let mut loaded = match crate::dumps::load(&mut vm, tools, text) {
         Ok(l) => l,
         Err(e) => {
-            let _ = writeln!(err, "djs: cannot load {filename}: {}", e.message());
+            let _ = writeln!(err, "djs: cannot load {filename}: {e}");
             return 2;
         }
     };
-    // The host's handles: the promises stay alive through what waits on them.
+    // The run's promise stays the handle `run` for later dumps; the others are dropped
+    // (the promises stay alive through what waits on them).
+    let run = crate::dumps::take_handle(&mut loaded.handles, "run");
     for (_, h) in loaded.handles {
         vm.heap_mut().drop_handle(h);
     }
-    drive(vm, opts, tools, out, err)
+    drive_from(vm, run, opts, tools, out, err)
 }
 
 /// `djs resume --explain` (D2641): what a dump holds in flight, for a reader, since the
@@ -353,7 +356,7 @@ pub fn explain_dump(
 pub const CONSOLE_LOG: u32 = 1;
 
 /// Options of `djs run`.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct RunOptions {
     /// Compile as a codemode async body (D008) instead of a Script.
     pub body: bool,
@@ -369,6 +372,8 @@ pub struct RunOptions {
     /// TypeScript legacy decorators, and their metadata.
     pub experimental_decorators: bool,
     pub emit_decorator_metadata: bool,
+    /// Dumps at idle points.
+    pub dumping: Dumping,
 }
 
 impl RunOptions {
@@ -417,16 +422,67 @@ pub fn run_main(
 
 /// Runs the VM to its end, answering open calls at idle points.
 fn drive(
+    vm: Vm,
+    opts: &RunOptions,
+    tools: &mut Tools,
+    out: &mut impl Write,
+    err: &mut impl Write,
+) -> i32 {
+    drive_from(vm, None, opts, tools, out, err)
+}
+
+/// [`drive`] with the handle of the run's promise of a resumed run (else the entry
+/// call's result is the run's).
+fn drive_from(
     mut vm: Vm,
+    mut run: Option<Handle>,
     opts: &RunOptions,
     tools: &mut Tools,
     out: &mut impl Write,
     err: &mut impl Write,
 ) -> i32 {
     let fuel = opts.suspend_every.unwrap_or(u64::MAX);
+    let mut idle_points = 0;
     loop {
         match vm.run(fuel) {
             Status::Idle if !vm.pending_host_calls().is_empty() => {
+                idle_points += 1;
+                if let Some((k, path)) = &opts.dumping.after
+                    && *k == idle_points
+                {
+                    let _ = out.flush();
+                    return match dump_run(&vm, run, tools) {
+                        Ok(d) => match std::fs::write(path, &d.text) {
+                            Ok(()) => 0,
+                            Err(e) => {
+                                let _ = writeln!(err, "djs: cannot write {path}: {e}");
+                                2
+                            }
+                        },
+                        Err(e) => {
+                            let _ = writeln!(err, "djs: at idle point {k}: {e}");
+                            1
+                        }
+                    };
+                }
+                if opts.dumping.every_idle {
+                    let reloaded = dump_run(&vm, run, tools).and_then(|d| {
+                        let mut fresh = new_vm(opts);
+                        let mut loaded = crate::dumps::load(&mut fresh, tools, &d.text)?;
+                        let run = crate::dumps::take_handle(&mut loaded.handles, "run");
+                        for (_, h) in loaded.handles {
+                            fresh.heap_mut().drop_handle(h);
+                        }
+                        Ok((fresh, run))
+                    });
+                    match reloaded {
+                        Ok((fresh, r)) => (vm, run) = (fresh, r),
+                        Err(e) => {
+                            let _ = writeln!(err, "djs: at idle point {idle_points}: {e}");
+                            return 1;
+                        }
+                    }
+                }
                 // An idle point: answer the oldest call there is an answer for.
                 let open = vm.pending_host_calls();
                 let answered = open
@@ -444,6 +500,12 @@ fn drive(
                 }
             }
             Status::Done(_) | Status::Idle => {
+                if let Some((k, _)) = &opts.dumping.after {
+                    let _ = writeln!(
+                        err,
+                        "djs: --dump-after {k}: the run ended after {idle_points} idle points"
+                    );
+                }
                 // Like qjs: unhandled rejections are reported once the jobs ran out.
                 let rejections = vm.take_unhandled_rejections();
                 for &r in &rejections {
@@ -491,6 +553,22 @@ fn drive(
             }
         }
     }
+}
+
+/// Dumps the run at an idle point; its result promise (an async body's) is the handle
+/// `run`.
+fn dump_run(
+    vm: &Vm,
+    run: Option<Handle>,
+    tools: &Tools,
+) -> Result<djs_core::vm::dump::Dumped, String> {
+    let run = match (run, vm.outcome()) {
+        (Some(h), _) => Some(vm.heap().get_handle(h)),
+        (None, Some(Ok(v))) if vm.promise_state(v).is_some() => Some(v),
+        _ => None,
+    };
+    let handles: Vec<(&str, Value)> = run.map(|v| ("run", v)).into_iter().collect();
+    crate::dumps::dump(vm, tools, &handles)
 }
 
 /// The system clock in ms since the epoch.

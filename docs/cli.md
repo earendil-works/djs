@@ -53,9 +53,19 @@ reads.dump.js: format 2; 1 open call, 1 suspended activation; handles: run
     a = <uninitialized>, b = <uninitialized>
 ```
 
-`run --dump-after K` (write a format 2 dump at idle point K and stop) and
-`run --dump-every-idle` (dump and reload at every idle point) need the format 2 exporter
-(0172); until it exists they fail with exit code 2 and say so.
+Idle points are numbered from 1 (D2604): every stop with only host calls open, before the
+run answers one. `run --dump-after K OUT file.js` writes the run as a format 2 dump to
+`OUT` at idle point K and stops (exit code 0, with what the run printed so far); `djs
+resume OUT` (with the same `--tools`) prints the rest, so the two together print what the
+uninterrupted run prints. A run that ends first says `djs: --dump-after K: the run ended
+after N idle points` on stderr; a dump the exporter refuses is exit code 1 with the
+refusal (`cannot dump:` and one `path: reason` line per value). `run --dump-every-idle`
+dumps at every idle point and continues in a fresh VM that loaded the dump. An async
+body's promise (`--body`) is the dump's handle `run`.
+
+Not yet: a run suspended in the top level of a `--body` script (its own `await`s) is
+refused ("a function without source text") until the exporter writes async-body
+functions (portable's core fix); suspensions inside functions dump.
 
 ## `djs heap`
 
@@ -137,9 +147,9 @@ suspending every 300 fuel
 | `.gc` | collect; the arena size before and after |
 | `.heap [sections]` | arena bytes used, allocated and the limit, handles, atoms; then `djs heap`'s sections over the live VM against the base image (default `summary,diff`: the session's own cells and the base cells it changed, apart from the base realm every VM starts with; `all`, or a list such as `kinds,largest`) (D2340) |
 | `.snapshot [--raw] <file>` | collect, then write a snapshot container (app 3, `repl`) compressed against the base image: about 16 KB for a small session instead of its ~330 KB image. `--raw` writes the image itself (`vm.bytes()`) |
-| `.dump <file\|-> [names]` | write the session's globals (or the named ones, plus the globals their functions read) as a JavaScript dump (docs/functions-as-code.md): functions as their source text, closures that share variables made by one factory, data as literals and constructor calls, binary data as base64, builtins referenced by name and changed builtins as code. Live values (a pending promise, a suspended generator, a Proxy, a class) are refused with their path. `-` prints it |
+| `.dump <file\|-> [names]` | write the session's globals (or the named ones, plus the globals their functions read) as a JavaScript dump (docs/functions-as-code.md): functions as their source text, closures that share variables made by one factory, data as literals and constructor calls, binary data as base64, builtins referenced by name and changed builtins as code. With something in flight it is format 2: open calls, suspended activations and pending promises, with the waiting inputs as handles (below). What a dump cannot write is refused with its path. `-` prints it |
 | `.restore <file>` | replace the VM with one restored from a container (any app; decompressed with this build's base) or a raw image. It must come from the same build (the build hash is checked). Images from `djs repl` and `djs run` both work: `console` is host function 1 in both. A file starting with `"djs-dump ` (format 2) or `// djs-dump` (version 1) is a dump instead: a fresh VM loads it (`Vm::load_dump`), from any build; a format 2 dump's waiting run and open calls come back (below) |
-| `.dump-every [on\|off]` | dump and reload at every idle point: needs the format 2 exporter (0172) |
+| `.dump-every [on\|off]` | at every idle point, dump the session and continue in a fresh VM that loaded the dump, printing `[dumped N bytes]`; a refused dump prints `[not dumped]` with the reasons and turns it off |
 | `.clear` | a fresh VM |
 | `.pending` | the open tool calls: `#2 tools.read({"path":"a.ts"})  input 1, at repl:1:11`, with the input (or `.resolve`/answer) that made the call and where the innermost activation waiting on it stopped |
 | `.resolve <id> <json>` | answers call `#id` with a JSON value (`null` without one), then runs what that unblocks |
@@ -192,8 +202,21 @@ waiting: #2 tools.read({"path":"a"})
 [waiting] #4 tools.read({"path":"b"})
 ```
 
-`.dump` of a session with open calls or waiting inputs, and `.dump-every [on|off]`, need
-the format 2 exporter (0172) and say so until it exists.
+`.dump FILE` of a waiting session writes format 2 (D2604): the waiting inputs are its
+handles, under their labels (`input 2`, or a restored dump's names), so `.restore` brings
+them back as waiting inputs, and it reports what is in flight:
+
+```text
+> let out = []; get('a').then(v => out.push(v)); 0
+[waiting] #2 tools.read({"path":"a"})
+0
+> .dump s.js
+wrote 596 bytes to s.js (1 activation, 1 pending call)
+```
+
+`.dump-every on` does this at every idle point and continues in the loaded copy, as
+`.suspend-every` does with images. An input suspended in its own top-level `await`
+(compiled as an async body) cannot be dumped yet (see `run --dump-after`).
 
 **The answers file** (D2601) maps tool names to lists of answers, each `{"value": v}` or
 `{"error": "message"}`, optionally with `"args": [...]`:

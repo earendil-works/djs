@@ -55,7 +55,8 @@ const HELP: &str = "\
                       summary,diff; `all` for every section)
 .snapshot [--raw] <file>  collect, then write a snapshot container compressed against
                       the base image (--raw: the plain heap image)
-.dump <file> [names]  write the session's globals (or the named ones) as JavaScript
+.dump <file> [names]  write the session's globals (or the named ones) as JavaScript,
+                      with what is in flight (open calls, waiting inputs, format 2)
                       that recreates them: functions as their source, closures and
                       data as code, builtins by name (`-` prints it)
 .restore <file>       replace the VM with one restored from a container or image, or
@@ -71,18 +72,17 @@ prompt and prints its value when it settles.
                       them), where they stopped and their bindings
 .restore <dump.js>    also restores a format 2 dump's waiting run and open calls
                       (`later(v)` calls are answered with v at once; print() prints)
-.dump-every [on|off]  dump and reload at every idle point (needs the 0172 exporter)
+.dump-every [on|off]  dump and reload at every idle point ([dumped N bytes])
 
 Ctrl-C cancels the line, or stops a running input between fuel slices.
 Input continues on the next line while it is incomplete (an unclosed bracket, string
 template or comment). Top-level let/const/class/function persist (Script globals).";
 
-/// What `.dump` of a waiting session and `.dump-every` still need.
-const NEEDS_EXPORTER: &str = "format 2 dumps of a waiting session need the exporter (issue 0172), which this build does not have yet";
-
 /// Fuel per slice: how often a running input checks for Ctrl-C (a few ms).
 const SLICE: u64 = 1_000_000;
 const FILENAME: &str = "repl";
+/// The running input's result, as a handle of `.dump-every`'s dumps.
+const ENTRY: &str = "$entry";
 const HISTORY_MAX: usize = 1000;
 
 pub fn main(args: &[String]) -> i32 {
@@ -207,6 +207,10 @@ struct Repl {
     fresh: Vec<u32>,
     /// The last run announced a waiting call.
     announced: bool,
+    /// `.dump-every`.
+    dump_every: bool,
+    /// The running input's result after `.dump-every` reloaded the VM.
+    entry_override: Option<Handle>,
 }
 
 impl Repl {
@@ -231,12 +235,15 @@ impl Repl {
             current: String::new(),
             fresh: Vec::new(),
             announced: false,
+            dump_every: false,
+            entry_override: None,
         }
     }
 
     /// Replaces the VM; waiting inputs belong to the old one.
     fn replace_vm(&mut self, vm: Vm) {
         self.vm = vm;
+        self.entry_override = None;
         self.waiting.clear();
         self.origins.clear();
         self.fresh.clear();
@@ -550,6 +557,9 @@ impl Repl {
     /// outcome is the result; otherwise (after `.resolve`) the outcome is an old one.
     fn pump(&mut self, entry: bool) -> Outcome {
         let mut used: u64 = 0;
+        if let Some(h) = self.entry_override.take() {
+            self.vm.heap_mut().drop_handle(h);
+        }
         // `.step`: pause at every slice until `c`.
         let mut stepping = self.step.is_some();
         let outcome = loop {
@@ -562,14 +572,46 @@ impl Repl {
             }
             let (st, n) = self.vm.run_metered(slice);
             used += n;
+            // After `.dump-every` reloaded the VM, its outcome is the load's: the running
+            // input's result came through the dump.
+            let st = match (st, self.entry_override.take()) {
+                (Status::Done(_), Some(h)) => {
+                    let v = self.vm.heap().get_handle(h);
+                    self.vm.heap_mut().drop_handle(h);
+                    Status::Done(v)
+                }
+                (st, h) => {
+                    self.entry_override = h;
+                    st
+                }
+            };
             match st {
                 Status::Done(v) if entry => break Outcome::Done(v),
                 Status::Threw(e) if entry => break Outcome::Threw(e),
                 Status::Done(_) | Status::Threw(_) => break Outcome::Done(Value::UNDEFINED),
                 Status::Idle => {
                     self.note_new_calls();
+                    if self.dump_every && !self.vm.pending_host_calls().is_empty() {
+                        match self.dump_and_reload(entry) {
+                            Ok(n) => println!("[dumped {n} bytes]"),
+                            Err(e) => {
+                                println!("[not dumped] {e}");
+                                self.dump_every = false;
+                                println!("dumping at every idle point: off");
+                            }
+                        }
+                    }
                     if self.answer_one() {
                         continue;
+                    }
+                    if let Some(h) = self.entry_override.take() {
+                        let v = self.vm.heap().get_handle(h);
+                        self.vm.heap_mut().drop_handle(h);
+                        break if entry {
+                            Outcome::Done(v)
+                        } else {
+                            Outcome::Done(Value::UNDEFINED)
+                        };
                     }
                     break match self.vm.outcome() {
                         Some(Ok(v)) if entry => Outcome::Done(v),
@@ -966,9 +1008,15 @@ impl Repl {
             ".bt" if !arg.is_empty() => self.backtrace_cmd(arg),
             ".snapshot" if !arg.is_empty() => self.snapshot(arg),
             ".dump" if !arg.is_empty() => self.dump(arg),
-            ".dump-every" => println!(".dump-every: {NEEDS_EXPORTER}"),
+            ".dump-every" => match on_off(arg, &mut self.dump_every) {
+                Ok(()) => println!(
+                    "dumping at every idle point: {}",
+                    if self.dump_every { "on" } else { "off" }
+                ),
+                Err(e) => println!("{e}"),
+            },
             ".restore" if !arg.is_empty() => match std::fs::read(arg) {
-                Ok(bytes) if crate::run::is_dump(&bytes) => {
+                Ok(bytes) if crate::dumps::is_dump(&bytes) => {
                     let src = String::from_utf8_lossy(&bytes).into_owned();
                     self.restore_dump(arg, &src);
                 }
@@ -1003,33 +1051,73 @@ impl Repl {
         None
     }
 
-    /// `.dump <file> [names]`: the session's globals as a Script (0167, `Vm::dump`).
+    /// `.dump <file> [names]`: the session as a dump (0167, 0174: format 2 with what is in
+    /// flight, the waiting inputs as handles).
     fn dump(&mut self, arg: &str) {
         let mut parts = arg.split_whitespace();
         let file = parts.next().unwrap_or("-");
         let names: Vec<&str> = parts.collect();
-        let open = self.vm.pending_host_calls().len();
-        if open > 0 || !self.waiting.is_empty() {
-            println!(
-                "the session waits on {open} open call(s): {}",
-                NEEDS_EXPORTER
-            );
-            return;
-        }
-        let opts = djs_core::vm::dump::DumpOptions {
-            base: djs_prelude::BASE,
-            host: &["console", "tools", "print", "later"],
-            ..Default::default()
-        };
         let sel = (!names.is_empty()).then_some(names.as_slice());
-        match self.vm.dump(&opts, sel) {
-            Ok(text) if file == "-" => print!("{text}"),
-            Ok(text) => match std::fs::write(file, &text) {
-                Ok(()) => println!("wrote {} bytes to {file}", text.len()),
+        let handles = self.waiting_handles(None);
+        let refs: Vec<(&str, Value)> = handles.iter().map(|(n, v)| (n.as_str(), *v)).collect();
+        match crate::dumps::dump_names(&self.vm, &self.tools, &refs, sel) {
+            Ok(d) if file == "-" => print!("{}", d.text),
+            Ok(d) => match std::fs::write(file, &d.text) {
+                Ok(()) => println!(
+                    "wrote {} bytes to {file}{}",
+                    d.text.len(),
+                    crate::dumps::in_flight(&d)
+                ),
                 Err(e) => println!("cannot write {file}: {e}"),
             },
-            Err(e) => println!("{}", e.message()),
+            Err(e) => println!("{e}"),
         }
+    }
+
+    /// The waiting inputs as the host's handles of a dump, by label; with `entry`, also
+    /// the running input's result as `$entry`.
+    fn waiting_handles(&self, entry: Option<Value>) -> Vec<(String, Value)> {
+        let mut out: Vec<(String, Value)> = self
+            .waiting
+            .iter()
+            .map(|w| (w.label.clone(), self.vm.heap().get_handle(w.promise)))
+            .collect();
+        out.extend(entry.map(|v| (String::from(ENTRY), v)));
+        out
+    }
+
+    /// `.dump-every`: dumps the idle VM and continues in a fresh one that loaded the dump
+    /// (D2604). Waiting inputs, the running input's result (`entry`), open calls and the
+    /// tool registry carry over. The dump's size.
+    fn dump_and_reload(&mut self, entry: bool) -> Result<usize, String> {
+        let entry = match (self.entry_override, entry) {
+            (Some(h), _) => Some(self.vm.heap().get_handle(h)),
+            (None, true) => match self.vm.outcome() {
+                Some(Ok(v)) => Some(v),
+                _ => None,
+            },
+            (None, false) => None,
+        };
+        let handles = self.waiting_handles(entry);
+        let refs: Vec<(&str, Value)> = handles.iter().map(|(n, v)| (n.as_str(), *v)).collect();
+        let d = crate::dumps::dump(&self.vm, &self.tools, &refs)?;
+        let mut vm = new_vm(self.gc_stress);
+        let mut loaded = crate::dumps::load(&mut vm, &self.tools, &d.text)?;
+        // The old VM's handles go with it.
+        self.vm = vm;
+        let mut kept = Vec::new();
+        for mut w in std::mem::take(&mut self.waiting) {
+            if let Some(h) = crate::dumps::take_handle(&mut loaded.handles, &w.label) {
+                w.promise = h;
+                kept.push(w);
+            }
+        }
+        self.waiting = kept;
+        self.entry_override = crate::dumps::take_handle(&mut loaded.handles, ENTRY);
+        for (_, h) in loaded.handles {
+            self.vm.heap_mut().drop_handle(h);
+        }
+        Ok(d.text.len())
     }
 
     /// `.restore` of a dump (D2603): a fresh VM loads it. The open calls it recreates
@@ -1039,16 +1127,10 @@ impl Repl {
     /// function there yet.
     fn restore_dump(&mut self, arg: &str, src: &str) {
         self.replace_vm(new_vm(self.gc_stress));
-        let tools = &self.tools;
-        let host_fn = |name: &str| tools.id_for_call_name(name);
-        let opts = djs_core::vm::dump_load::LoadOptions {
-            host_fn: &host_fn,
-            ..Default::default()
-        };
-        let loaded = match self.vm.load_dump(src, &opts) {
+        let loaded = match crate::dumps::load(&mut self.vm, &self.tools, src) {
             Ok(l) => l,
             Err(e) => {
-                println!("cannot load {arg}: {}", e.message());
+                println!("cannot load {arg}: {e}");
                 return;
             }
         };

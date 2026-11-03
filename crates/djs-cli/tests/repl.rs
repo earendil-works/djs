@@ -425,12 +425,52 @@ fn restore_a_waiting_dump() {
 }
 
 #[test]
-fn dumping_a_waiting_session_needs_the_exporter() {
-    let out = repl("tools.a()\n.dump -\n.dump-every on\n");
+fn dump_a_waiting_session() {
+    let dir = env!("CARGO_TARGET_TMPDIR");
+    let dump = format!("{dir}/repl-wait-{}.js", std::process::id());
+    let out = repl(&format!(
+        "async function get(p) {{ const v = await tools.read({{path: p}}); return v.toUpperCase() }}\n\
+         let out = []; get('a').then(v => out.push(v)); 0\n\
+         .dump {dump}\n.clear\n.restore {dump}\n.bt all\n.resolve 2 \"hello\"\nout\n\
+         .dump-every on\nget('c').then(v => out.push(v)); get('d').then(v => out.push(v)); 0\n\
+         .resolve 4 \"c!\"\n.resolve 5 \"d!\"\nout\n.dump-every off\n"
+    ));
+    std::fs::remove_file(&dump).unwrap();
+    let mut lines = out.lines();
     assert_eq!(
-        out,
-        "[waiting] #2 tools.a()\nPromise { <pending> }\n\
-         the session waits on 1 open call(s): format 2 dumps of a waiting session need the exporter (issue 0172), which this build does not have yet\n\
-         .dump-every: format 2 dumps of a waiting session need the exporter (issue 0172), which this build does not have yet\n"
+        lines.next(),
+        Some("[waiting] #2 tools.read({\"path\":\"a\"})")
     );
+    assert_eq!(lines.next(), Some("0"));
+    let wrote = lines.next().unwrap();
+    assert!(
+        wrote.starts_with("wrote ") && wrote.ends_with(" (1 activation, 1 pending call)"),
+        "{out}"
+    );
+    let rest: Vec<&str> = lines.collect();
+    let dumped = |l: &str| l.starts_with("[dumped ") && l.ends_with(" bytes]");
+    assert!(rest.iter().filter(|l| dumped(l)).count() >= 2, "{out}");
+    let rest: Vec<&str> = rest.into_iter().filter(|l| !dumped(l)).collect();
+    assert_eq!(
+        rest,
+        [
+            "a fresh VM",
+            &format!("loaded {dump} into a fresh VM"),
+            "waiting: #2 tools.read({\"path\":\"a\"})",
+            "  async function get at dump.js:6:35",
+            "    p = 'a', v = undefined",
+            "[ 'HELLO' ]",
+            "dumping at every idle point: on",
+            "[waiting] #4 tools.read({\"path\":\"c\"})",
+            "[waiting] #5 tools.read({\"path\":\"d\"})",
+            "0",
+            "[ 'HELLO', 'C!', 'D!' ]",
+            "dumping at every idle point: off",
+        ]
+    );
+    // What cannot be dumped is refused with its path, and `.dump-every` turns itself off.
+    let out = repl(".dump-every on\nconst w = new WeakMap(); tools.x(w); 0\n");
+    assert!(out.contains("[not dumped] cannot dump:\n"), "{out}");
+    assert!(out.contains("a weak collection"), "{out}");
+    assert!(out.contains("dumping at every idle point: off\n"), "{out}");
 }

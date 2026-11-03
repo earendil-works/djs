@@ -8222,3 +8222,16 @@ would read the host's or the base's global after it, and accepts a captured vari
 written where it reads a host global only when it holds that global's current value
 (it accepted any host name before). Found by 0174 (plan.src.js resumed into the host's
 `tools.read`).
+## D2604: Dump commands in the CLI: idle points numbered by answers
+date: 2026-11-04 · by: repl · issue: 0174
+An idle point of `djs run`/`resume` is a stop with only host calls open, before the run
+answers one; the run answers one call per idle point (D2601), so idle points are numbered
+from 1 the same way in every run of a script. `run --dump-after K OUT` dumps at idle point
+K and stops; `resume` continues; `--dump-every-idle` dumps and reloads at each. The REPL's
+`.dump` passes its waiting inputs as the dump's handles under their labels, and
+`.dump-every` does the round trip at every idle point inside a run, carrying the running
+input's result through the dump as the handle `$entry` (after a reload the VM's own outcome
+is the load's). Host globals are `console`, `tools`, `print`, `later`; host functions are
+named by `Tools::call_name`. Dumps are detected by the loader's `dump_format`, not a
+prefix match. Rejected: wrapping `--body` scripts as an arrow in a Script so their top
+level can be dumped; the exporter learns async-body functions instead (core fix).
