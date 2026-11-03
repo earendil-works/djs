@@ -1,25 +1,9 @@
 function <anonymous> @1..2852
-  await#1 @2359 (57:8) pc 225
-    arg0 tools @0
-    arg1 console @0
-    loc0 <state>
-    loc1 results @0
-    loc2 fake @0
-    loc5 fakeModels @0
+  arg0 tools@0, arg1 console@0
+  loc0 <state>, loc1 results@0, loc2 fake@0, loc5 fakeModels@0
+  await#1 @2359 (57:8) pc 225: -
 function <anonymous> @2367..2829
-  await#1 @37 (58:11) pc 34
-    arg0 tools @0
-    arg1 models @0
-    loc0 <state>
-    loc1 r @0
-    loc2 all @0
-  await#2 @229 (60:66) pc 103
-    arg0 tools @0
-    arg1 models @0
-    loc0 <state>
-    loc1 r @0
-    loc2 all @0
-    loc3 t @175
-    loc4 m @219
-    op0 for-of.iterator
-    op1 for-of.next
+  arg0 tools@0, arg1 models@0
+  loc0 <state>, loc1 r@0, loc2 all@0, loc3 t@175, loc4 m@219
+  await#1 @37 (58:11) pc 34: - (out: loc3 loc4)
+  await#2 @229 (60:66) pc 103: for-of.iterator for-of.next

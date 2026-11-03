@@ -1,20 +1,12 @@
 function <anonymous> @1..2599
-  await#1 @2322 (42:8) pc 236
-    arg0 tools @0
-    arg1 console @0
-    loc0 <state>
-    loc1 results @0
-    loc2 fake @0
+  arg0 tools@0, arg1 console@0
+  loc0 <state>, loc1 results@0, loc2 fake@0
+  await#1 @2322 (42:8) pc 236: -
 function <anonymous> @2330..2588
-  await#1 @138 (43:120) pc 55
-    arg0 argument 0
-    loc0 <state>
-    loc1 tools @0
-    loc2 paths @0
+  arg0 argument 0
+  loc0 <state>, loc1 tools@0, loc2 paths@0
+  await#1 @138 (43:120) pc 55: -
 function <anonymous> @2503..2583
-  await#1 @31 (43:186) pc 59
-    arg0 path @0
-    loc0 <state>
-    op0 call.callee
-    op1 call.this
-    op2 object.literal
+  arg0 path@0
+  loc0 <state>
+  await#1 @31 (43:186) pc 59: call.callee call.this object.literal

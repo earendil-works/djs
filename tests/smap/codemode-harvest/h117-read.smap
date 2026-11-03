@@ -1,14 +1,8 @@
 function <anonymous> @1..1959
-  await#1 @1716 (42:8) pc 236
-    arg0 tools @0
-    arg1 console @0
-    loc0 <state>
-    loc1 results @0
-    loc2 fake @0
+  arg0 tools@0, arg1 console@0
+  loc0 <state>, loc1 results@0, loc2 fake@0
+  await#1 @1716 (42:8) pc 236: -
 function <anonymous> @1724..1948
-  await#1 @62 (44:15) pc 109
-    arg0 argument 0
-    loc0 <state>
-    loc1 tools @0
-    loc2 p @0
-    loc3 parts @0
+  arg0 argument 0
+  loc0 <state>, loc1 tools@0, loc2 p@0, loc3 parts@0
+  await#1 @62 (44:15) pc 109: -

@@ -1,43 +1,11 @@
 function <anonymous> @1..3574
-  await#1 @3050 (73:8) pc 444
-    arg0 tools @0
-    arg1 console @0
-    loc0 <state>
-    loc1 results @0
-    loc2 fake @0
-    loc5 stored @0
-    loc6 realLoad @0
-    loc7 fakeLoad @0
+  arg0 tools@0, arg1 console@0
+  loc0 <state>, loc1 results@0, loc2 fake@0, loc5 stored@0, loc6 realLoad@0, loc7 fakeLoad@0
+  await#1 @3050 (73:8) pc 444: -
 function <anonymous> @3058..3553
-  await#1 @38 (74:14) pc 41
-    arg0 tools @0
-    arg1 load @0
-    loc0 <state>
-    loc1 result @0
-    loc2 pid @0
-    loc3 viru @0
-  await#2 @207 (77:12) pc 134
-    arg0 tools @0
-    arg1 load @0
-    loc0 <state>
-    loc1 result @0
-    loc2 pid @0
-    loc3 viru @0
-  await#3 @337 (78:64) pc 198
-    arg0 tools @0
-    arg1 load @0
-    loc0 <state>
-    loc1 result @0
-    loc2 pid @0
-    loc3 viru @0
-    op0 call.callee
-    op1 call.this
-  await#4 @397 (79:6) pc 239
-    arg0 tools @0
-    arg1 load @0
-    loc0 <state>
-    loc1 result @0
-    loc2 pid @0
-    loc3 viru @0
-    op0 call.callee
-    op1 call.this
+  arg0 tools@0, arg1 load@0
+  loc0 <state>, loc1 result@0, loc2 pid@0, loc3 viru@0
+  await#1 @38 (74:14) pc 41: -
+  await#2 @207 (77:12) pc 134: -
+  await#3 @337 (78:64) pc 198: call.callee call.this
+  await#4 @397 (79:6) pc 239: call.callee call.this

@@ -1,48 +1,10 @@
 function <anonymous> @1..3976
-  await#1 @2549 (57:8) pc 225
-    arg0 tools @0
-    arg1 console @0
-    loc0 <state>
-    loc1 results @0
-    loc2 fake @0
-    loc5 fakeModels @0
+  arg0 tools@0, arg1 console@0
+  loc0 <state>, loc1 results@0, loc2 fake@0, loc5 fakeModels@0
+  await#1 @2549 (57:8) pc 225: -
 function <anonymous> @2557..3953
-  await#1 @37 (58:11) pc 35
-    arg0 tools @0
-    arg1 argument 1
-    loc0 <state>
-    loc1 models @0
-    loc2 r @0
-    loc3 commits @0
-    loc4 avail @0
-    loc5 m @0
-    loc6 res @0
-    loc7 out @0
-    loc8 errs @0
-    loc9 buckets @0
-  await#2 @237 (60:15) pc 91
-    arg0 tools @0
-    arg1 argument 1
-    loc0 <state>
-    loc1 models @0
-    loc2 r @0
-    loc3 commits @0
-    loc4 avail @0
-    loc5 m @0
-    loc6 res @0
-    loc7 out @0
-    loc8 errs @0
-    loc9 buckets @0
-  await#3 @413 (63:13) pc 165
-    arg0 tools @0
-    arg1 argument 1
-    loc0 <state>
-    loc1 models @0
-    loc2 r @0
-    loc3 commits @0
-    loc4 avail @0
-    loc5 m @0
-    loc6 res @0
-    loc7 out @0
-    loc8 errs @0
-    loc9 buckets @0
+  arg0 tools@0, arg1 argument 1
+  loc0 <state>, loc1 models@0, loc2 r@0, loc3 commits@0, loc4 avail@0, loc5 m@0, loc6 res@0, loc7 out@0, loc8 errs@0, loc9 buckets@0
+  await#1 @37 (58:11) pc 35: -
+  await#2 @237 (60:15) pc 91: -
+  await#3 @413 (63:13) pc 165: -

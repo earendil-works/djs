@@ -1,19 +1,8 @@
 function <anonymous> @1..1370
-  await#1 @1116 (30:8) pc 182
-    arg0 tools @0
-    arg1 console @0
-    loc0 <state>
-    loc1 results @0
-    loc2 fake @0
+  arg0 tools@0, arg1 console@0
+  loc0 <state>, loc1 results@0, loc2 fake@0
+  await#1 @1116 (30:8) pc 182: -
 function <anonymous> @1124..1359
-  await#1 @157 (33:48) pc 104
-    arg0 tools @0
-    loc0 <state>
-    loc1 files @0
-    loc2 out @0
-    loc3 f @121
-    op0 for-of.iterator
-    op1 for-of.next
-    op2 call.callee
-    op3 call.this
-    op4 binary.left
+  arg0 tools@0
+  loc0 <state>, loc1 files@0, loc2 out@0, loc3 f@121
+  await#1 @157 (33:48) pc 104: for-of.iterator for-of.next call.callee call.this binary.left

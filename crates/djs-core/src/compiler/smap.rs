@@ -251,33 +251,72 @@ mod maps {
     }
 
     impl FunctionMap {
-        /// The map as text, for the pin test and for reading: a header line, then one
-        /// block per site.
+        /// The map as text, for the pin test and for reading: a header with every slot
+        /// that holds something at some site, then one line per site with its operands
+        /// and the slots that hold nothing there (`out`).
         pub fn text(&self, src: &[u8]) -> String {
             let mut out = String::new();
             let _ = writeln!(out, "function {} @{}..{}", self.name, self.start, self.end);
-            for s in &self.sites {
-                let line = line_of(src, self.start, s.pos);
-                let _ = write!(out, "  {} @{} ({line}) pc {}", s.name, s.pos, s.resume_pc);
-                if let Some(u) = &s.unsupported {
-                    let _ = write!(out, " unsupported: {u}");
-                }
-                out.push('\n');
-                for (kind, slots) in [("arg", &s.args), ("loc", &s.locals)] {
-                    for (i, slot) in slots.iter().enumerate() {
+            // A slot holds the same thing wherever it holds something.
+            let table = |pick: fn(&Site) -> &Vec<Slot>| -> Vec<Slot> {
+                let n = self.sites.iter().map(|s| pick(s).len()).max().unwrap_or(0);
+                (0..n)
+                    .map(|i| {
+                        self.sites
+                            .iter()
+                            .find_map(|s| pick(s).get(i).filter(|x| **x != Slot::Nothing))
+                            .cloned()
+                            .unwrap_or(Slot::Nothing)
+                    })
+                    .collect()
+            };
+            let (args, locals) = (table(|s| &s.args), table(|s| &s.locals));
+            for (kind, slots) in [("arg", &args), ("loc", &locals)] {
+                let line: Vec<String> = slots
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, slot)| {
                         let text = match slot {
-                            Slot::Binding { name, scope } => alloc::format!("{name} @{scope}"),
+                            Slot::Binding { name, scope } => alloc::format!("{name}@{scope}"),
                             Slot::Hidden(n) => n.clone(),
                             Slot::Argument(a) => alloc::format!("argument {a}"),
                             Slot::Operand(r) => alloc::format!("{r}"),
-                            Slot::Nothing => continue,
+                            Slot::Nothing => return None,
                         };
-                        let _ = writeln!(out, "    {kind}{i} {text}");
+                        Some(alloc::format!("{kind}{i} {text}"))
+                    })
+                    .collect();
+                if !line.is_empty() {
+                    let _ = writeln!(out, "  {}", line.join(", "));
+                }
+            }
+            for s in &self.sites {
+                let line = line_of(src, self.start, s.pos);
+                let _ = write!(out, "  {} @{} ({line}) pc {}:", s.name, s.pos, s.resume_pc);
+                match &s.unsupported {
+                    Some(u) => {
+                        let _ = write!(out, " unsupported {u}");
+                    }
+                    None if s.operands.is_empty() => out.push_str(" -"),
+                    None => {
+                        for r in &s.operands {
+                            let _ = write!(out, " {r}");
+                        }
                     }
                 }
-                for (i, r) in s.operands.iter().enumerate() {
-                    let _ = writeln!(out, "    op{i} {r}");
+                let mut dead = Vec::new();
+                for (kind, slots, all) in [("arg", &s.args, &args), ("loc", &s.locals, &locals)] {
+                    for (i, slot) in slots.iter().enumerate() {
+                        if *slot == Slot::Nothing && all.get(i).is_some_and(|x| *x != Slot::Nothing)
+                        {
+                            dead.push(alloc::format!("{kind}{i}"));
+                        }
+                    }
                 }
+                if !dead.is_empty() {
+                    let _ = write!(out, " (out: {})", dead.join(" "));
+                }
+                out.push('\n');
             }
             out
         }

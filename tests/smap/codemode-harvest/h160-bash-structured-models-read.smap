@@ -1,57 +1,10 @@
 function <anonymous> @1..84308
-  await#1 @82425 (719:8) pc 3205
-    arg0 tools @0
-    arg1 console @0
-    loc0 <state>
-    loc1 results @0
-    loc2 fake @0
-    loc5 fakeModels @0
+  arg0 tools@0, arg1 console@0
+  loc0 <state>, loc1 results@0, loc2 fake@0, loc5 fakeModels@0
+  await#1 @82425 (719:8) pc 3205: -
 function <anonymous> @82433..84285
-  await#1 @38 (720:12) pc 44
-    arg0 argument 0
-    arg1 argument 1
-    loc0 <state>
-    loc1 tools @0
-    loc2 models @0
-    loc3 ls @0
-    loc4 files @0
-    loc5 issues @0
-    loc6 model @0
-    loc7 questions @0
-    loc8 res @0
-    loc9 rows @0
-    loc10 ok @0
-    loc11 errs @0
-    loc12 lati @0
-  await#2 @145 (722:17) pc 105
-    arg0 argument 0
-    arg1 argument 1
-    loc0 <state>
-    loc1 tools @0
-    loc2 models @0
-    loc3 ls @0
-    loc4 files @0
-    loc5 issues @0
-    loc6 model @0
-    loc7 questions @0
-    loc8 res @0
-    loc9 rows @0
-    loc10 ok @0
-    loc11 errs @0
-    loc12 lati @0
-  await#3 @994 (730:13) pc 297
-    arg0 argument 0
-    arg1 argument 1
-    loc0 <state>
-    loc1 tools @0
-    loc2 models @0
-    loc3 ls @0
-    loc4 files @0
-    loc5 issues @0
-    loc6 model @0
-    loc7 questions @0
-    loc8 res @0
-    loc9 rows @0
-    loc10 ok @0
-    loc11 errs @0
-    loc12 lati @0
+  arg0 argument 0, arg1 argument 1
+  loc0 <state>, loc1 tools@0, loc2 models@0, loc3 ls@0, loc4 files@0, loc5 issues@0, loc6 model@0, loc7 questions@0, loc8 res@0, loc9 rows@0, loc10 ok@0, loc11 errs@0, loc12 lati@0
+  await#1 @38 (720:12) pc 44: -
+  await#2 @145 (722:17) pc 105: -
+  await#3 @994 (730:13) pc 297: -

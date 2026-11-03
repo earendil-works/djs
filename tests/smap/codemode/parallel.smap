@@ -1,31 +1,6 @@
 function <anonymous> @1..694
-  await#1 @138 (3:17) pc 49
-    arg0 argument 0
-    arg1 console @0
-    loc0 <state>
-    loc1 tools @0
-    loc2 files @0
-    loc3 results @0
-    loc4 total @0
-    loc6 settled @0
-    loc7 first @0
-  await#2 @369 (6:17) pc 211
-    arg0 argument 0
-    arg1 console @0
-    loc0 <state>
-    loc1 tools @0
-    loc2 files @0
-    loc3 results @0
-    loc4 total @0
-    loc6 settled @0
-    loc7 first @0
-  await#3 @565 (8:15) pc 287
-    arg0 argument 0
-    arg1 console @0
-    loc0 <state>
-    loc1 tools @0
-    loc2 files @0
-    loc3 results @0
-    loc4 total @0
-    loc6 settled @0
-    loc7 first @0
+  arg0 argument 0, arg1 console@0
+  loc0 <state>, loc1 tools@0, loc2 files@0, loc3 results@0, loc4 total@0, loc6 settled@0, loc7 first@0
+  await#1 @138 (3:17) pc 49: -
+  await#2 @369 (6:17) pc 211: -
+  await#3 @565 (8:15) pc 287: -

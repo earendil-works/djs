@@ -1,23 +1,9 @@
 function <anonymous> @1..2335
-  await#1 @2099 (36:8) pc 211
-    arg0 tools @0
-    arg1 console @0
-    loc0 <state>
-    loc1 results @0
-    loc2 fake @0
-    loc5 stored @0
-    loc6 realLoad @0
-    loc7 fakeLoad @0
+  arg0 tools@0, arg1 console@0
+  loc0 <state>, loc1 results@0, loc2 fake@0, loc5 stored@0, loc6 realLoad@0, loc7 fakeLoad@0
+  await#1 @2099 (36:8) pc 211: -
 function <anonymous> @2107..2314
-  await#1 @30 (37:6) pc 33
-    arg0 tools @0
-    arg1 load @0
-    loc0 <state>
-    op0 call.callee
-    op1 call.this
-  await#2 @92 (38:6) pc 65
-    arg0 tools @0
-    arg1 load @0
-    loc0 <state>
-    op0 call.callee
-    op1 call.this
+  arg0 tools@0, arg1 load@0
+  loc0 <state>
+  await#1 @30 (37:6) pc 33: call.callee call.this
+  await#2 @92 (38:6) pc 65: call.callee call.this

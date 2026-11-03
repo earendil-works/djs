@@ -1,138 +1,28 @@
 function <anonymous> @1..1424
-  await#1 @578 (23:15) pc 56
-    arg0 argument 0
-    arg1 argument 1
-    loc0 <state>
-    loc1 tools @0
-    loc2 console @0
-    loc3 fetchAll @0
-    loc4 withRetry @0
-    loc5 files @0
-    loc6 ok @0
-    loc8 chunks @0
-    loc9 results @0
-    loc10 seen @0
-    loc12 settled @0
-  await#2 @689 (25:12) pc 107
-    arg0 argument 0
-    arg1 argument 1
-    loc0 <state>
-    loc1 tools @0
-    loc2 console @0
-    loc3 fetchAll @0
-    loc4 withRetry @0
-    loc5 files @0
-    loc6 ok @0
-    loc8 chunks @0
-    loc9 results @0
-    loc10 seen @0
-    loc12 settled @0
-  await#3 @814 (28:3) pc 136
-    arg0 argument 0
-    arg1 argument 1
-    loc0 <state>
-    loc1 tools @0
-    loc2 console @0
-    loc3 fetchAll @0
-    loc4 withRetry @0
-    loc5 files @0
-    loc6 ok @0
-    loc8 chunks @0
-    loc9 results @0
-    loc10 seen @0
-    loc12 settled @0
-  for-await.close#1 @1193 (41:1) pc 208 unsupported: closing an async iterator
-    arg0 argument 0
-    arg1 argument 1
-    loc0 <state>
-    loc1 tools @0
-    loc2 console @0
-    loc3 fetchAll @0
-    loc4 withRetry @0
-    loc5 files @0
-    loc6 ok @0
-    loc8 chunks @0
-    loc9 results @0
-    loc10 seen @0
-    loc11 batch @1210
-    loc12 settled @0
-  for-await.next#1 @1193 (41:1) pc 248
-    arg0 argument 0
-    arg1 argument 1
-    loc0 <state>
-    loc1 tools @0
-    loc2 console @0
-    loc3 fetchAll @0
-    loc4 withRetry @0
-    loc5 files @0
-    loc6 ok @0
-    loc8 chunks @0
-    loc9 results @0
-    loc10 seen @0
-    loc11 batch @1210
-    loc12 settled @0
-    op0 for-await.iterator
-    op1 for-await.next
-  await#4 @1308 (43:17) pc 331
-    arg0 argument 0
-    arg1 argument 1
-    loc0 <state>
-    loc1 tools @0
-    loc2 console @0
-    loc3 fetchAll @0
-    loc4 withRetry @0
-    loc5 files @0
-    loc6 ok @0
-    loc8 chunks @0
-    loc9 results @0
-    loc10 seen @0
-    loc12 settled @0
+  arg0 argument 0, arg1 argument 1
+  loc0 <state>, loc1 tools@0, loc2 console@0, loc3 fetchAll@0, loc4 withRetry@0, loc5 files@0, loc6 ok@0, loc8 chunks@0, loc9 results@0, loc10 seen@0, loc11 batch@1210, loc12 settled@0
+  await#1 @578 (23:15) pc 56: - (out: loc11)
+  await#2 @689 (25:12) pc 107: - (out: loc11)
+  await#3 @814 (28:3) pc 136: - (out: loc11)
+  for-await.close#1 @1193 (41:1) pc 208: unsupported closing an async iterator
+  for-await.next#1 @1193 (41:1) pc 248: for-await.iterator for-await.next
+  await#4 @1308 (43:17) pc 331: - (out: loc11)
 function fetchAll @141..319
-  await#1 @95 (6:15) pc 78
-    arg0 paths @0
-    loc0 <state>
-    loc1 out @0
-    loc2 path @64
-    loc3 r @85
-    op0 for-of.iterator
-    op1 for-of.next
+  arg0 paths@0
+  loc0 <state>, loc1 out@0, loc2 path@64, loc3 r@85
+  await#1 @95 (6:15) pc 78: for-of.iterator for-of.next
 function withRetry @338..563
-  await#1 @98 (15:14) pc 28
-    arg0 argument 0
-    arg1 argument 1
-    loc0 <state>
-    loc1 fn @0
-    loc2 tries @0
-    loc3 last @29
-    loc4 i @50
+  arg0 argument 0, arg1 argument 1
+  loc0 <state>, loc1 fn@0, loc2 tries@0, loc3 last@29, loc4 i@50
+  await#1 @98 (15:14) pc 28: -
 function chunks @930..1030
-  yield#1 @71 (33:44) pc 23
-    arg0 list @0
-    arg1 n @0
-    loc0 <state>
-    loc1 i @39
+  arg0 list@0, arg1 n@0
+  loc0 <state>, loc1 i@39
+  yield#1 @71 (33:44) pc 23: -
 function results @1031..1176
-  yield.await#1 @77 (37:5) pc 77
-    arg0 list @0
-    loc0 <state>
-    loc1 chunk @45
-    op0 for-of.iterator
-    op1 for-of.next
-  yield#1 @77 (37:5) pc 80
-    arg0 list @0
-    loc0 <state>
-    loc1 chunk @45
-    op0 for-of.iterator
-    op1 for-of.next
-  yield.return#1 @77 (37:5) pc 85
-    arg0 list @0
-    loc0 <state>
-    loc1 chunk @45
-    op0 for-of.iterator
-    op1 for-of.next
-  await#1 @83 (37:11) pc 74
-    arg0 list @0
-    loc0 <state>
-    loc1 chunk @45
-    op0 for-of.iterator
-    op1 for-of.next
+  arg0 list@0
+  loc0 <state>, loc1 chunk@45
+  yield.await#1 @77 (37:5) pc 77: for-of.iterator for-of.next
+  yield#1 @77 (37:5) pc 80: for-of.iterator for-of.next
+  yield.return#1 @77 (37:5) pc 85: for-of.iterator for-of.next
+  await#1 @83 (37:11) pc 74: for-of.iterator for-of.next

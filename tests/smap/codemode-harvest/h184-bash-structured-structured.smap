@@ -1,56 +1,11 @@
 function <anonymous> @1..4192
-  await#1 @3097 (124:8) pc 787
-    arg0 tools @0
-    arg1 console @0
-    loc0 <state>
-    loc1 results @0
-    loc2 fake @0
+  arg0 tools@0, arg1 console@0
+  loc0 <state>, loc1 results@0, loc2 fake@0
+  await#1 @3097 (124:8) pc 787: -
 function <anonymous> @3105..4181
-  await#1 @75 (126:14) pc 27
-    arg0 tools @0
-    loc0 <state>
-    loc1 slug @0
-    loc2 open @0
-    loc3 scratchId @0
-    loc4 put @0
-    loc5 p @0
-    loc6 zalo @0
-    loc7 r @0
-    loc8 c @0
-    loc9 a @0
-  await#2 @199 (128:13) pc 90
-    arg0 tools @0
-    loc0 <state>
-    loc1 slug @0
-    loc2 open @0
-    loc3 scratchId @0
-    loc4 put @0
-    loc5 p @0
-    loc6 zalo @0
-    loc7 r @0
-    loc8 c @0
-    loc9 a @0
-  await#3 @471 (131:11) pc 213
-    arg0 tools @0
-    loc0 <state>
-    loc1 slug @0
-    loc2 open @0
-    loc3 scratchId @0
-    loc4 put @0
-    loc5 p @0
-    loc6 zalo @0
-    loc7 r @0
-    loc8 c @0
-    loc9 a @0
-  await#4 @701 (133:11) pc 300
-    arg0 tools @0
-    loc0 <state>
-    loc1 slug @0
-    loc2 open @0
-    loc3 scratchId @0
-    loc4 put @0
-    loc5 p @0
-    loc6 zalo @0
-    loc7 r @0
-    loc8 c @0
-    loc9 a @0
+  arg0 tools@0
+  loc0 <state>, loc1 slug@0, loc2 open@0, loc3 scratchId@0, loc4 put@0, loc5 p@0, loc6 zalo@0, loc7 r@0, loc8 c@0, loc9 a@0
+  await#1 @75 (126:14) pc 27: -
+  await#2 @199 (128:13) pc 90: -
+  await#3 @471 (131:11) pc 213: -
+  await#4 @701 (133:11) pc 300: -

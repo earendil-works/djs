@@ -1,50 +1,9 @@
 function <anonymous> @1..12043
-  await#1 @10524 (179:8) pc 804
-    arg0 tools @0
-    arg1 console @0
-    loc0 <state>
-    loc1 results @0
-    loc2 fake @0
-    loc5 fakeModels @0
-    loc6 stored @0
-    loc7 realLoad @0
-    loc8 fakeLoad @0
+  arg0 tools@0, arg1 console@0
+  loc0 <state>, loc1 results@0, loc2 fake@0, loc5 fakeModels@0, loc6 stored@0, loc7 realLoad@0, loc8 fakeLoad@0
+  await#1 @10524 (179:8) pc 804: -
 function <anonymous> @10532..12010
-  await#1 @201 (184:15) pc 112
-    arg0 tools @0
-    arg1 argument 1
-    arg2 load @0
-    loc0 <state>
-    loc1 models @0
-    loc2 questions @0
-    loc3 model @0
-    loc4 issues @0
-    loc5 off @154
-    loc6 qir @189
-    loc8 res @0
-    loc9 rows @0
-    loc10 errs @0
-    loc11 counts @0
-    loc12 pr @0
-    loc13 top @0
-    loc14 upset @0
-    loc15 uMax @0
-    loc16 imMax @0
-  await#2 @370 (187:13) pc 276
-    arg0 tools @0
-    arg1 argument 1
-    arg2 load @0
-    loc0 <state>
-    loc1 models @0
-    loc2 questions @0
-    loc3 model @0
-    loc4 issues @0
-    loc8 res @0
-    loc9 rows @0
-    loc10 errs @0
-    loc11 counts @0
-    loc12 pr @0
-    loc13 top @0
-    loc14 upset @0
-    loc15 uMax @0
-    loc16 imMax @0
+  arg0 tools@0, arg1 argument 1, arg2 load@0
+  loc0 <state>, loc1 models@0, loc2 questions@0, loc3 model@0, loc4 issues@0, loc5 off@154, loc6 qir@189, loc8 res@0, loc9 rows@0, loc10 errs@0, loc11 counts@0, loc12 pr@0, loc13 top@0, loc14 upset@0, loc15 uMax@0, loc16 imMax@0
+  await#1 @201 (184:15) pc 112: -
+  await#2 @370 (187:13) pc 276: - (out: loc5 loc6)

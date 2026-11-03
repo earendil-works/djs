@@ -1,27 +1,9 @@
 function <anonymous> @1..2841
-  await#1 @2152 (47:8) pc 189
-    arg0 tools @0
-    arg1 argument 1
-    loc0 <state>
-    loc1 console @0
-    loc2 results @0
-    loc3 fake @0
-    loc6 fakeModels @0
-    loc7 fakeImage @0
+  arg0 tools@0, arg1 argument 1
+  loc0 <state>, loc1 console@0, loc2 results@0, loc3 fake@0, loc6 fakeModels@0, loc7 fakeImage@0
+  await#1 @2152 (47:8) pc 189: -
 function <anonymous> @2160..2807
-  await#1 @48 (48:15) pc 17
-    arg0 tools @0
-    arg1 models @0
-    arg2 image @0
-    loc0 <state>
-    loc1 avail @0
-    loc2 m @0
-    loc3 result @0
-  await#2 @259 (52:16) pc 117
-    arg0 tools @0
-    arg1 models @0
-    arg2 image @0
-    loc0 <state>
-    loc1 avail @0
-    loc2 m @0
-    loc3 result @0
+  arg0 tools@0, arg1 models@0, arg2 image@0
+  loc0 <state>, loc1 avail@0, loc2 m@0, loc3 result@0
+  await#1 @48 (48:15) pc 17: -
+  await#2 @259 (52:16) pc 117: -

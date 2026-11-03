@@ -1,8 +1,4 @@
 function <anonymous> @0..1073
-  await#1 @977 (18:3) pc 302
-    arg0 tools @0
-    arg1 console @0
-    loc0 <state>
-    loc1 log @0
-    loc2 show @0
-    loc3 p @0
+  arg0 tools@0, arg1 console@0
+  loc0 <state>, loc1 log@0, loc2 show@0, loc3 p@0
+  await#1 @977 (18:3) pc 302: -

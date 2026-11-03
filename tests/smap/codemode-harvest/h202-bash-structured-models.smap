@@ -1,35 +1,9 @@
 function <anonymous> @1..3933
-  await#1 @2295 (57:8) pc 225
-    arg0 tools @0
-    arg1 console @0
-    loc0 <state>
-    loc1 results @0
-    loc2 fake @0
-    loc5 fakeModels @0
+  arg0 tools@0, arg1 console@0
+  loc0 <state>, loc1 results@0, loc2 fake@0, loc5 fakeModels@0
+  await#1 @2295 (57:8) pc 225: -
 function <anonymous> @2303..3910
-  await#1 @37 (58:11) pc 53
-    arg0 tools @0
-    arg1 argument 1
-    loc0 <state>
-    loc1 models @0
-    loc2 r @0
-    loc3 lines @0
-    loc4 commits @0
-    loc7 clef @0
-    loc8 criteria @0
-    loc9 results @0
-    loc10 counts @0
-    loc11 out @0
-  await#2 @944 (77:17) pc 399
-    arg0 tools @0
-    arg1 argument 1
-    loc0 <state>
-    loc1 models @0
-    loc2 r @0
-    loc3 lines @0
-    loc4 commits @0
-    loc7 clef @0
-    loc8 criteria @0
-    loc9 results @0
-    loc10 counts @0
-    loc11 out @0
+  arg0 tools@0, arg1 argument 1
+  loc0 <state>, loc1 models@0, loc2 r@0, loc3 lines@0, loc4 commits@0, loc7 clef@0, loc8 criteria@0, loc9 results@0, loc10 counts@0, loc11 out@0
+  await#1 @37 (58:11) pc 53: -
+  await#2 @944 (77:17) pc 399: -

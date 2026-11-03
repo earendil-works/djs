@@ -238,12 +238,16 @@ fn slots_name_bindings_and_hidden_locals() {
     let maps = suspension_maps(&mut heap, src.as_bytes(), &CompileOptions::script("t.js")).unwrap();
     assert_eq!(
         maps[0].text(src.as_bytes()),
-        "function f @0..76\n  \
-           await#1 @53 (3:16) pc 11\n    arg0 a @0\n    arg1 b @0\n    loc0 <state>\n    \
-           loc1 x @0\n    loc2 y @42\n  \
-           await#2 @66 (4:3) pc 16\n    arg0 a @0\n    arg1 b @0\n    loc0 <state>\n    \
-           loc1 x @0\n"
+        "function f @0..76\n  arg0 a@0, arg1 b@0\n  loc0 <state>, loc1 x@0, loc2 y@42\n  \
+         await#1 @53 (3:16) pc 11: -\n  await#2 @66 (4:3) pc 16: - (out: loc2)\n"
     );
+    let y = super::Slot::Binding {
+        name: String::from("y"),
+        scope: 42,
+    };
+    assert_eq!(maps[0].sites[0].locals[2], y);
+    assert_eq!(maps[0].sites[1].locals[2], super::Slot::Nothing);
+    assert_eq!(maps[0].sites[0].locals[0], super::Slot::Hidden(String::from("<state>")));
 }
 
 /// A site's resume pc is right after the suspending instruction of the code a normal

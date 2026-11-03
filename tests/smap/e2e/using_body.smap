@@ -1,9 +1,4 @@
 function <anonymous> @0..295
-  await-using#1 @294 (7:28) pc 157 unsupported: using
-    arg0 tools @0
-    arg1 argument 1
-    loc0 console @0
-    loc1 <state>
-    loc2 log @0
-    loc3 a @0
-    loc4 b @0
+  arg0 tools@0, arg1 argument 1
+  loc0 console@0, loc1 <state>, loc2 log@0, loc3 a@0, loc4 b@0
+  await-using#1 @294 (7:28) pc 157: unsupported using

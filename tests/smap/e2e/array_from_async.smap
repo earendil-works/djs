@@ -1,140 +1,28 @@
 function agen @167..305
-  yield.await#1 @37 (6:5) pc 7
-    loc0 <state>
-  yield#1 @37 (6:5) pc 10
-    loc0 <state>
-  yield.return#1 @37 (6:5) pc 15
-    loc0 <state>
-  yield.await#2 @50 (7:5) pc 42
-    loc0 <state>
-  yield#2 @50 (7:5) pc 45
-    loc0 <state>
-  yield.return#2 @50 (7:5) pc 50
-    loc0 <state>
-  yield.await#3 @80 (8:5) pc 62
-    loc0 <state>
-  yield#3 @80 (8:5) pc 65
-    loc0 <state>
-  yield.return#3 @80 (8:5) pc 70
-    loc0 <state>
+  loc0 <state>
+  yield.await#1 @37 (6:5) pc 7: -
+  yield#1 @37 (6:5) pc 10: -
+  yield.return#1 @37 (6:5) pc 15: -
+  yield.await#2 @50 (7:5) pc 42: -
+  yield#2 @50 (7:5) pc 45: -
+  yield.return#2 @50 (7:5) pc 50: -
+  yield.await#3 @80 (8:5) pc 62: -
+  yield#3 @80 (8:5) pc 65: -
+  yield.return#3 @80 (8:5) pc 70: -
 function <anonymous> @769..2278
-  await#1 @16 (32:3) pc 42
-    loc0 <state>
-    loc1 C @0
-    loc3 <fields 0>
-    loc4 c @0
-    loc5 d @0
-    loc6 order @0
-    loc7 p @0
-  await#2 @55 (33:3) pc 111
-    loc0 <state>
-    loc1 C @0
-    loc3 <fields 0>
-    loc4 c @0
-    loc5 d @0
-    loc6 order @0
-    loc7 p @0
-  await#3 @153 (34:3) pc 190
-    loc0 <state>
-    loc1 C @0
-    loc3 <fields 0>
-    loc4 c @0
-    loc5 d @0
-    loc6 order @0
-    loc7 p @0
-  await#4 @240 (35:3) pc 237
-    loc0 <state>
-    loc1 C @0
-    loc3 <fields 0>
-    loc4 c @0
-    loc5 d @0
-    loc6 order @0
-    loc7 p @0
-  await#5 @346 (37:3) pc 324
-    loc0 <state>
-    loc1 C @0
-    loc3 <fields 0>
-    loc4 c @0
-    loc5 d @0
-    loc6 order @0
-    loc7 p @0
-  await#6 @468 (39:3) pc 406
-    loc0 <state>
-    loc1 C @0
-    loc3 <fields 0>
-    loc4 c @0
-    loc5 d @0
-    loc6 order @0
-    loc7 p @0
-  await#7 @620 (41:3) pc 504
-    loc0 <state>
-    loc1 C @0
-    loc3 <fields 0>
-    loc4 c @0
-    loc5 d @0
-    loc6 order @0
-    loc7 p @0
-  await#8 @692 (42:3) pc 538
-    loc0 <state>
-    loc1 C @0
-    loc3 <fields 0>
-    loc4 c @0
-    loc5 d @0
-    loc6 order @0
-    loc7 p @0
-  await#9 @731 (43:3) pc 567
-    loc0 <state>
-    loc1 C @0
-    loc3 <fields 0>
-    loc4 c @0
-    loc5 d @0
-    loc6 order @0
-    loc7 p @0
-  await#10 @768 (44:3) pc 597
-    loc0 <state>
-    loc1 C @0
-    loc3 <fields 0>
-    loc4 c @0
-    loc5 d @0
-    loc6 order @0
-    loc7 p @0
-  await#11 @897 (50:13) pc 649
-    loc0 <state>
-    loc1 C @0
-    loc3 <fields 0>
-    loc4 c @0
-    loc5 d @0
-    loc6 order @0
-    loc7 p @0
-  await#12 @948 (51:13) pc 695
-    loc0 <state>
-    loc1 C @0
-    loc3 <fields 0>
-    loc4 c @0
-    loc5 d @0
-    loc6 order @0
-    loc7 p @0
-  await#13 @1442 (58:3) pc 947
-    loc0 <state>
-    loc1 C @0
-    loc3 <fields 0>
-    loc4 c @0
-    loc5 d @0
-    loc6 order @0
-    loc7 p @0
-  await#14 @1453 (59:3) pc 952
-    loc0 <state>
-    loc1 C @0
-    loc3 <fields 0>
-    loc4 c @0
-    loc5 d @0
-    loc6 order @0
-    loc7 p @0
-  await#15 @1467 (60:3) pc 957
-    loc0 <state>
-    loc1 C @0
-    loc3 <fields 0>
-    loc4 c @0
-    loc5 d @0
-    loc6 order @0
-    loc7 p @0
+  loc0 <state>, loc1 C@0, loc3 <fields 0>, loc4 c@0, loc5 d@0, loc6 order@0, loc7 p@0
+  await#1 @16 (32:3) pc 42: -
+  await#2 @55 (33:3) pc 111: -
+  await#3 @153 (34:3) pc 190: -
+  await#4 @240 (35:3) pc 237: -
+  await#5 @346 (37:3) pc 324: -
+  await#6 @468 (39:3) pc 406: -
+  await#7 @620 (41:3) pc 504: -
+  await#8 @692 (42:3) pc 538: -
+  await#9 @731 (43:3) pc 567: -
+  await#10 @768 (44:3) pc 597: -
+  await#11 @897 (50:13) pc 649: -
+  await#12 @948 (51:13) pc 695: -
+  await#13 @1442 (58:3) pc 947: -
+  await#14 @1453 (59:3) pc 952: -
+  await#15 @1467 (60:3) pc 957: -
