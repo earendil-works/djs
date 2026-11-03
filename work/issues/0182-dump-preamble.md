@@ -1,6 +1,6 @@
 # 0182: No helper preamble in dumps; computed class keys
 
-status: in-progress
+status: done
 agent: portable
 branch: issue/0182-dump-preamble
 depends-on: 0178
@@ -46,3 +46,13 @@ really understand."
   functions-as-code.md (example, builtins, refusal table). Guide: none affected.
 
 ## Result
+- Dumps hold only data, functions and `$dump.*` calls: the helpers are read-only loader
+  primitives (vm/dump_prims.rs; table in docs/continuation-dumps.md), D2622.
+- Computed class/method keys that the dump would evaluate again are refused unless
+  literal or a well-known symbol (D2623).
+- `$dump.random(lo, hi)` carries Math.random's state; resumed runs continue the
+  sequence (D2624).
+- Golden dumps rewritten under D2625 (+ spent, bytes, random programs); sleep-dump README
+  updated.
+- Gaps: a user global named `Symbol` makes `[Symbol.iterator]` keys refused, but a
+  factory-local `Symbol` is not checked.
