@@ -33,7 +33,7 @@ readable.
   pi scripts (the rest do not compile or run in the harness, or end with a closure over a
   binding still in its TDZ) dump, load into a fresh VM and print the same bindings. A
   dump written today loads in a build 800 commits older and gives the same answers.
-- **Size:** the Rust dumper adds 32.4 KB gzip to the wasm module (7.3%), so djs-wasm
+- **Size:** the Rust dumper adds 35.6 KB gzip to the wasm module (8.0%), so djs-wasm
   leaves it out by default. The TypeScript prototype costs 13.7 KB gzip of JS and no wasm,
   produces the same text, and is twice as fast on V8. Recommendation (D2354): the Rust
   dumper is the reference (tests, the native CLI); a wasm host such as pi uses the
@@ -199,6 +199,29 @@ written: values reachable from them (two levels deep) are referenced by name
 variable that holds the host's value under the host's own name (a body's `tools`
 parameter) is left to the global.
 
+### The checker
+
+A dump that loads but reads other bindings than the session did would be silent wrong
+output, the worst result a dump can have (0168: a root that was itself a closure over a
+parameter, `const blah2 = blah(2)`, came out as the bare text `() => a`). So after
+writing, the dumper compiles the dump (with the lines that write no function cut down to
+the names they declare: data cannot change what a name resolves to) and compares every
+function it wrote with the original, by the compiler's own resolution (D2355):
+
+- every variable the original captured is captured in the dump too (a variable of the
+  factory it is written in), or is read as a global that holds it: a root holding the
+  variable's box (`dump_values`), or a root or host global of the same name holding its
+  current value;
+- every global the original read or wrote stays a global (no factory variable hides it)
+  and exists after loading if it existed before: a root, a host global or a builtin
+  global (a name that was undefined before may stay undefined);
+- the dump compiles.
+
+Anything else refuses the dump with the function's path (`blah2: captures `a`, which is
+not in scope where the dump writes the function`). The check costs a compile of the cut-down
+dump (djs compiles about 30 MB/s natively), so mostly the size of the functions and
+factories written.
+
 ### What is refused
 
 Everything below fails the dump with one line per value, `path: reason`:
@@ -217,6 +240,7 @@ Everything below fails the dump with one line per value, `path: reason`:
 | a builtin whose prototype was changed | not expressible as a patch the base's builtins accept |
 | weak collections, WeakRef, FinalizationRegistry, resizable buffers, iterators | live or unordered state |
 | two captured variables of the same name in one group | a factory has one scope |
+| a function the checker finds reading another binding than before | see "The checker" |
 
 ## Current state, history and provenance
 
@@ -330,17 +354,18 @@ same refusals; the same 9.7 MB for 50,000 records):
 
 | | Rust (`Vm::dump`, wasm `vm_dump`) | TypeScript (js/proto/dump.ts) |
 | --- | --- | --- |
-| code | ~2,600 lines; wasm +32.4 KB gzip (+93 KB raw) | ~1,550 lines; 40.2 KB minified, 13.7 KB gzip (+2.0 KB for the layout table it shares with the reader) |
-| 1k / 10k / 50k records | 12.9 / 99 / 508 ms | 8.2 / 52 / 255 ms (+2.7 ms once per base for builtin names) |
+| code | ~2,800 lines; wasm +35.6 KB gzip (+101 KB raw), the checker included | ~1,550 lines; 40.2 KB minified, 13.7 KB gzip (+2.0 KB for the layout table it shares with the reader) |
+| 1k / 10k / 50k records | 21.5 / 178 / 875 ms with the checker (12.9 / 99 / 508 before it) | 11.2 / 73 / 360 ms (+3 ms once per base for builtin names), no checker |
 | reads the heap through | the engine's own accessors | the layout table, plus engine facts copied by hand |
 | global reads of functions | from bytecode | from a scan of the source for identifiers (over-approximation) |
 | errors' `stack` | kept | lost |
 | native (CLI, embedders) | yes | no |
 
-(Release wasm in node 25 vs the same node running the TypeScript; N records with nested
-objects, dates, a shared Map, a cycle, N/10 counters and an N×4-byte buffer. Natively the
-Rust dumper takes 40 ms for 10k records; in wasm it allocates heavily and V8's strings and
-JIT win.)
+(Release wasm in node 25 vs the same node running the TypeScript, at machine load ~4.5;
+N records with nested objects, dates, a shared Map, a cycle, N/10 counters and an
+N×4-byte buffer. Natively the Rust dumper takes 40 ms for 10k records without the
+checker; in wasm it allocates heavily and V8's strings and JIT win. The N/10 counters are
+N/10 factories, which the checker compiles.)
 
 The Rust dumper started at +58 KB gzip; most of that was `core::fmt`, `BTreeMap`, slice
 sorts and string search reached from the dump path. It now uses one open-addressing index
@@ -356,7 +381,11 @@ engine facts it copies by hand exported through layout.generated.ts (function fl
 intrinsic numbering, object-class slots, lazy function properties, collection and regexp
 encodings), (2) the global-reads scan replaced by the two opcodes and their operand
 layout, and errors' stack, and (3) a gate step that runs both on the same cases and
-requires the same text, as the wire and reader cross-checks do.
+requires the same text, as the wire and reader cross-checks do (js/test/dumpproto.test.ts
+now runs the comparison in the gate's js tests), and (4) the checker: it has no compiler
+of its own, so it would compile the cut-down dump through the module (a `vm_compile`
+into a scratch VM) or keep its structural guard (a closure of a group is only ever
+written by its factory) as its only check.
 
 ## Coverage and results
 
@@ -364,14 +393,22 @@ requires the same text, as the wire and reader cross-checks do.
   closures, globals functions read, data identity and kinds with attributes and frozen
   objects, cycles through closures, binary buffers and views, builtins by name and
   through the resolver, patched builtins, symbol keys with attributes, function-scope
-  bindings by box, host values), refusals by path, and the committed v1 fixture.
+  bindings by box, host values), refusals by path, and the committed v1 fixture;
+  closures from factories (over parameters, locals, nested scopes, `let` in loops,
+  sharing a binding, capturing other closures), each run as one Script and line by line
+  as the REPL does. The checker's own tests (`dump::check_tests`) feed it the texts it
+  must refuse: 0168's bare closure, a global hidden by a factory variable, a global the
+  dump lacks, a dump that does not compile.
+- js/test/dumpproto.test.ts: the TypeScript prototype and the Rust dumper on the same
+  cases (both input styles): identical text on all closure cases, both load right.
 - js/test/dumpload.test.ts: `Sandbox.dump`/`load` across sandboxes with a host function,
   refusals, a dump that ends with a cycle patch.
 - `vm/dump_harvest.rs` runs every harvested codemode case as the difftest does, then dumps
   the body's top-level bindings with `dump_values`, loads the dump into a fresh VM with
   stand-ins for the host globals, and compares the bindings (JSON, functions as text):
   - 300 harvested cases: 205 leave top-level bindings, 7 of them functions (8
-    functions); 300 dump, 300 load, 300 equal; 397 KB of dumps.
+    functions); 300 dump, 300 load, 300 equal; 397 KB of dumps. The equality compares
+    functions as text, which is why it did not catch 0168; the checker does.
   - 2,627 private pi scripts (tools answer `""` in call order; counts only): 12 do not
     compile in the harness and 2 fail in it; 1,428 leave bindings, 123 of them functions
     (139 functions). 2,607 dump and load; 2,601 give equal bindings, the other 6 hold a
@@ -380,7 +417,7 @@ requires the same text, as the wire and reader cross-checks do.
     tools); 1.36 MB of dumps.
   - Codemode scripts are mostly one-shot data pipelines: functions worth keeping are rare
     in them today, which is the case for making persistence an explicit `persist(name)`.
-- Sizes (wasm `full` build, gzip -9): 443,469 without the dumper, 475,863 with it.
+- Sizes (wasm `full` build, gzip -9): 443,468 without the dumper, 479,077 with it.
 
 Run: `cargo test -p djs-core --lib vm::dump_tests`; coverage
 `DJS_HARVEST=1 cargo test -p djs-core --lib vm::dump_harvest -- --ignored --nocapture`;

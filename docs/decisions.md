@@ -7754,3 +7754,22 @@ properties, collection and regexp encodings), (2) it finds the globals a functio
 from the two opcodes instead of a source scan and keeps errors' stack, and (3) a gate step
 requires both dumpers to write the same text on the same cases. Until then it stays a
 prototype under js/proto, outside the package.
+
+## D2355: A dump is checked by compiling it: every function keeps the bindings it read
+date: 2026-11-03 · by: portable · issue: 0168
+0168: a root whose value was itself a closure of a scope group (`const blah2 =
+blah(2)`) was written in place as its bare text (`() => a`), so the dump loaded a closure
+reading a global `a`. The fix sends such roots through their group's factory; the guard
+against the whole class of bug is a checker at the end of `Vm::dump`: it compiles the
+dump (lines that write no function cut to `let name;` or dropped: data cannot change
+name resolution) into the private copy of the base heap the dumper already holds, and for
+every function node compares the free names of the original template with those of the
+template of the same text in the dump (captures, and globals read or written by the
+function or a nested one, from the bytecode). A captured name must be captured in the dump
+too, or be read as a global that is a root holding the variable's box or the root or host
+global of that name holding its current value; a global must not be captured (a factory
+variable hiding it), and must exist after loading if it existed before (a root, a host
+global, a builtin global). Otherwise the dump is refused with the function's path, as is a
+dump that does not compile. It needs no JS parser of its own (the engine's compiler
+resolves the names) and costs a compile of the cut-down dump plus ~6 KB raw (~3 KB gzip)
+in the wasm module. Functions of identical text and free names are compared once.
