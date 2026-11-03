@@ -1,7 +1,7 @@
 # 0185: Update the guide's design to the latest Elanor (fonts in particular)
 
-status: open
-agent: -
+status: in-progress
+agent: design
 branch: issue/0185-elanor-update
 depends-on: 0114
 guide: all pages (visual only)
