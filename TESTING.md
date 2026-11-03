@@ -48,7 +48,7 @@ a **source scan** for constructs that have no feature tag (direct `eval(`, the
 
 Initial skip set (from ARCH non-goals):
 
-- flags: `noStrict` (djs is always strict), `module` (modules are not planned for now).
+- flags: `noStrict` (djs is always strict), `module` (the module-aware test262 runner is not implemented yet).
 - dirs: `intl402`, `annexB`, `staging`, `built-ins/Temporal`,
   `built-ins/SharedArrayBuffer`, `built-ins/Atomics`, `built-ins/ShadowRealm`,
   `language/module-code`, `language/import`.
@@ -550,3 +550,16 @@ An issue that makes the module smaller lowers the ceiling on its branch
 Raising it is a trade, recorded as a decision with the size and what it buys. The
 attribution tools are in `scripts/size/` (README there).
 
+## Native source modules
+
+`crates/djs-core/tests/modules.rs` checks native binding graphs and executable
+JavaScript source graphs: static named/default imports and reexports, live reads
+in nested functions, read-only imports, TDZ, within-module hoisting, lexical
+isolation, loader/evaluation caching, errors, synthetic host exports, parked host
+calls and fuel/GC/image round trips. Run with
+`scripts/timeout.sh 600 cargo test -p djs-core --test modules`. The module scheduler's
+host allocation failure path has a focused unit test under `vm::modules::`.
+
+These tests cover the implemented acyclic source subset. They do not claim cyclic
+source evaluation, namespaces, dynamic host imports or top-level await. Module
+test262 groups remain skipped until a module-aware runner is implemented.

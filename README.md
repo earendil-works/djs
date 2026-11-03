@@ -45,9 +45,11 @@ measured at. TESTING.md and docs/host.md have the details.
 <!-- /gen -->
 
 Skipped by design: Intl, Temporal, SharedArrayBuffer/Atomics, Annex B, sloppy mode,
-direct eval, modules. Most known failures follow from djs being always strict (TESTING.md
-"Known differences"); pi's failures from that, or from tests that expect the quickjs-wasi
-fingerprint.
+direct eval. Module test262 cases are not enabled yet. Native Rust hosts can execute
+acyclic source-module graphs through `ModuleGraph`; see [docs/modules.md](docs/modules.md)
+for supported syntax and remaining gaps. Most known failures follow from djs being always
+strict (TESTING.md "Known differences"); pi's failures from that, or from tests that
+expect the quickjs-wasi fingerprint.
 
 **Speed in wasm** (node, V8's wasm tier). djs-wasm vs quickjs-wasi (pi's engine), from
 `scripts/perf/wmeasure.py`:

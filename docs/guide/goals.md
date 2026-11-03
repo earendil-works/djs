@@ -79,11 +79,14 @@ is declared in the tests ([how djs is tested](testing.md)).
 
 ## Non-goals
 
-djs is always in strict mode. It has no `with`, no direct `eval`, no ES modules
-(`import()` compiles and rejects), no `Intl`, `Temporal`, `SharedArrayBuffer` or
-workers, and no JIT. Each of these would cost size or complexity for scripts that do not
-need them. Its conformance target is the part of the test262 conformance suite that
+djs is always in strict mode. It has no `with`, no direct `eval`, no `Intl`,
+`Temporal`, `SharedArrayBuffer` or workers, and no JIT. Each of these would cost size or
+complexity for scripts that do not need them. Its conformance target is the part of the test262 conformance suite that
 codemode scripts can reach, not test262 for its own sake.
+
+Native Rust hosts can also execute acyclic source-module graphs with static imports
+and live exports. Cyclic graphs, namespace objects, dynamic host loading and top-level
+await are not implemented yet. In codemode, `import()` still rejects without a loader.
 
 Decisions on this page:
 

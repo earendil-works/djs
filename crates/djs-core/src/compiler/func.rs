@@ -112,6 +112,8 @@ impl VarKind {
 }
 
 pub(super) struct Var {
+    /// A top-level module binding, rooted through module records and template constants.
+    pub module: Option<crate::value::Obj>,
     pub name: Atom,
     pub kind: VarKind,
     /// Where the binding lives (for `var`: the body scope).
@@ -149,6 +151,8 @@ pub(super) struct NameRef {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum FuncKind {
+    /// Strict source module body, with arena-backed top-level bindings.
+    Module,
     Script,
     AsyncBody,
     /// Indirect eval code (`Goal::Eval`): top level like a sync codemode body.
@@ -197,7 +201,7 @@ impl FuncKind {
     pub fn is_top_level(self) -> bool {
         matches!(
             self,
-            FuncKind::Script | FuncKind::AsyncBody | FuncKind::Eval
+            FuncKind::Module | FuncKind::Script | FuncKind::AsyncBody | FuncKind::Eval
         )
     }
 }
@@ -448,6 +452,7 @@ impl FuncState {
         let id = self.vars.len() as VarId;
         let immediate = !matches!(kind, VarKind::Let | VarKind::Const | VarKind::Param);
         self.vars.push_out(Var {
+            module: None,
             name,
             kind,
             scope,

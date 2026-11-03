@@ -146,8 +146,9 @@ pub(super) struct Parser<'a, 'h> {
     pub spec: u32,
     /// The erased type ranges, for `strip_types` (`None`: not recorded).
     pub erased: Option<Erased>,
-    /// When set, `finish_unit` fills it with the names of the prelude function table's
-    /// slots, in slot order (privileged code, D2440).
+    /// Source-module declarations, import requests and binding records.
+    pub source_module: Option<super::source_module::ModuleInfo>,
+    /// When set, collect prelude function table names in slot order (D2440).
     pub builtin_names: Option<Vec<crate::heap::Atom>>,
     /// The next assignment expression is the `b` of `a ? b : c` (TypeScript arrows with
     /// return types, compiler/ts.rs).
@@ -320,6 +321,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             ts: opts.typescript,
             spec: 0,
             erased: None,
+            source_module: None,
             builtin_names: None,
             after_q: false,
             ts_decls: Vec::new(),
@@ -352,7 +354,14 @@ impl<'a, 'h> Parser<'a, 'h> {
 
     /// Parses the whole source and builds the templates. Also returns the erased type
     /// ranges if they were recorded.
-    pub fn compile(mut self) -> PResult<(Ref, Option<Erased>, Option<Vec<crate::heap::Atom>>)> {
+    pub fn compile(self) -> PResult<(Ref, Option<Erased>, Option<Vec<crate::heap::Atom>>)> {
+        self.compile_with_module(None)
+    }
+
+    pub(super) fn compile_with_module(
+        mut self,
+        module_out: Option<&mut super::source_module::ModuleInfo>,
+    ) -> PResult<(Ref, Option<Erased>, Option<Vec<crate::heap::Atom>>)> {
         if self.f.kind == FuncKind::AsyncBody {
             self.start_flavor((true, false))?;
         }
@@ -372,6 +381,17 @@ impl<'a, 'h> Parser<'a, 'h> {
             self.code().return_();
         } else {
             self.emit_return_undef();
+        }
+        if let Some(output) = module_out {
+            // Bindings must be allocated before resolution so every closure embeds
+            // references to the same binding records.
+            if let Some(module) = &mut self.source_module {
+                module.prepare(self.heap, &mut self.f)?;
+            }
+            *output = self
+                .source_module
+                .take()
+                .expect("source module compiler state");
         }
         self.finish_unit()
     }
@@ -915,13 +935,17 @@ impl<'a, 'h> Parser<'a, 'h> {
 
     /// Declares `var name` from the current scope: it binds in the body scope.
     pub fn declare_var(&mut self, name: Atom, pos: u32) -> PResult<VarId> {
+        self.module_declaration_export(name)?;
         // A `var` must not cross a scope with a lexical binding of the same name.
         let mut s = self.scope;
         loop {
             if let Some(v) = self.f.find_in_scope(s, name) {
                 let kind = self.f.vars[v as usize].kind;
                 // Block-level function declarations are lexical too.
-                if kind.is_lexical() || (kind == VarKind::Func && s != self.f.var_scope) {
+                if kind.is_lexical()
+                    || (kind == VarKind::Func
+                        && (s != self.f.var_scope || self.f.kind == FuncKind::Module))
+                {
                     return syntax(pos, "invalid redefinition of lexical identifier");
                 }
             }
@@ -943,6 +967,7 @@ impl<'a, 'h> Parser<'a, 'h> {
 
     /// Declares a `let`/`const` in the current scope.
     pub fn declare_lexical(&mut self, name: Atom, kind: VarKind, pos: u32) -> PResult<VarId> {
+        self.module_declaration_export(name)?;
         // In a separate var scope, the parameters are still the body's names.
         let params_too = self.scope == self.f.var_scope && self.scope != BODY_SCOPE;
         let found = self.f.find_in_scope(self.scope, name).or_else(|| {
@@ -995,6 +1020,13 @@ impl<'a, 'h> Parser<'a, 'h> {
     /// Declares a function declaration's name in the current scope (hoisted to the
     /// scope's entry, docs/compiler.md 5.5) and registers the child that initializes it.
     pub fn declare_function(&mut self, name: Atom, child: u32, pos: u32) -> PResult<()> {
+        self.module_declaration_export(name)?;
+        if self.f.kind == FuncKind::Module
+            && self.scope == BODY_SCOPE
+            && self.f.find_in_scope(self.scope, name).is_some()
+        {
+            return syntax(pos, "duplicate module declaration");
+        }
         let scope = self.scope;
         let v = if scope == self.f.var_scope {
             // Like `var` at the function level: it may share a binding with a `var`,
@@ -1095,7 +1127,7 @@ impl<'a, 'h> Parser<'a, 'h> {
     /// nested in their parameters or bodies (arrow parameters see the enclosing
     /// context, ECMA-262 15.3).
     pub fn await_reserved(&self) -> bool {
-        if self.f.is_async || self.f.kind == FuncKind::StaticBlock {
+        if self.f.is_async || matches!(self.f.kind, FuncKind::Module | FuncKind::StaticBlock) {
             return true;
         }
         if !(self.f.kind == FuncKind::Arrow && self.f.in_params) {

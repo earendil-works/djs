@@ -46,6 +46,12 @@ pub mod flags {
     pub const ALLOC: u16 = 1 << 7;
 }
 
+/// Write modes of module_put, included in the image record dependency hash.
+pub(crate) mod module_mode {
+    pub const ASSIGN: u8 = 0;
+    pub const INITIALIZE: u8 = 1;
+}
+
 /// Kinds for `special_object` (its `U8` immediate).
 pub mod special {
     pub const ARGUMENTS: u8 = 0;
@@ -814,6 +820,11 @@ ops! {
     JumpIfFalse8 jump_if_false8(target: Target8) pop 1 push 0 cost Basic flags BRANCH;
     /// `jump_if_true` with an 8-bit offset.
     JumpIfTrue8 jump_if_true8(target: Target8) pop 1 push 0 cost Basic flags BRANCH;
+
+    /// `binding -> value`: read a shared module binding, checking its TDZ.
+    ModuleGet module_get(atom: Atom) pop 1 push 1 cost Access flags THROWS | ALLOC;
+    /// `value binding ->`: assign (mode 0) or initialize (mode 1) a module binding.
+    ModulePut module_put(atom: Atom, mode: U8) pop 2 push 0 cost Access flags THROWS | ALLOC;
 }
 
 impl Op {

@@ -36,6 +36,12 @@ impl Parser<'_, '_> {
 
     #[inline(never)]
     fn parse_declaration_item(&mut self) -> PResult<()> {
+        if self.source_module.is_some()
+            && matches!(self.tok.kind, TokenKind::Import | TokenKind::Export)
+            && self.strip_at_module_item()
+        {
+            return self.source_module_item();
+        }
         if self.ts && self.ts_statement()? {
             if !self.ts_type_only {
                 self.ts_note_stmt_end();
@@ -712,7 +718,11 @@ impl Parser<'_, '_> {
 
     fn parse_return(&mut self) -> PResult<()> {
         let pos = self.tok.start;
-        if matches!(self.f.kind, FuncKind::Script | FuncKind::Eval) || self.f.ns.is_some() {
+        if matches!(
+            self.f.kind,
+            FuncKind::Module | FuncKind::Script | FuncKind::Eval
+        ) || self.f.ns.is_some()
+        {
             return syntax(pos, "return not in a function");
         }
         if self.f.kind == FuncKind::StaticBlock {

@@ -22,7 +22,7 @@ kind = "skip"
 description = "Non-goals from ARCH.md: never implemented."
 flags = [
   "noStrict",         # djs is always strict
-  "module",           # modules are not planned for now
+  "module",           # source-module test262 runner not implemented yet
   "CanBlockIsFalse",  # agent blocking semantics only matter with Atomics
   "CanBlockIsTrue",   # same
 ]

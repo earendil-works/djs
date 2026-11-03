@@ -324,7 +324,15 @@ The compiler recurses on the Rust stack, unlike the interpreter: compilation is 
 by the size of the input and never needs to suspend. A nesting-depth limit turns
 pathological input (ten thousand nested parentheses) into a SyntaxError instead of a
 stack overflow. Codemode scripts are always strict; there is no `with`, no direct
-`eval`, and no ES modules: `import()` compiles and rejects (D1582). A Script goal with
+`eval`. The native Rust host can compile and execute acyclic source modules with
+static imports and exports. Name resolution directs module-local references,
+including those inside nested functions, to shared arena binding records. Imported
+reads stay live, imported writes fail, and lexical reads check initialization.
+The host supplies canonical names and source text; an arena-backed queue evaluates
+dependencies once and survives suspension and snapshots. Cyclic source graphs,
+namespace objects, dynamic host loading, `import.meta` and top-level await remain
+unbuilt (D2556). In codemode, `import()` still compiles and rejects when there is no
+dynamic loader (D1582). A Script goal with
 global `var` bindings and completion values exists for test262, indirect `eval` and the
 REPL (D004, D1581).
 

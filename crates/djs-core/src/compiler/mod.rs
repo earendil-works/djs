@@ -29,6 +29,7 @@ mod pattern;
 mod peephole;
 mod resolve;
 mod scan;
+pub(crate) mod source_module;
 mod stmt;
 mod ts;
 mod ts_decl;

@@ -18,6 +18,7 @@
 pub mod compat;
 mod format;
 mod image;
+pub mod modules;
 pub mod registry;
 pub mod session;
 

@@ -20,6 +20,7 @@ use super::func::{Capture, FuncKind, FuncState, ScopeKind, VarId, VarKind};
 use super::ts_decl::{DeclKind, EnumVal, TsDecl};
 use super::{CompileOptions, PErr, PResult};
 use crate::bytecode::global_decls::GlobalDecls;
+use crate::bytecode::ops::module_mode;
 use crate::bytecode::{
     CodeBuf, Label, LineTableBuilder, Op, TemplateError, TemplateParts, alloc_script,
     alloc_template_in, capture_desc, func_flags, special,
@@ -102,6 +103,7 @@ impl UnitPool {
 /// Where a binding lives.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Storage {
+    Module(crate::value::Obj),
     /// Never referenced pseudo-bindings.
     None,
     Local(u16),
@@ -121,6 +123,7 @@ enum Storage {
 /// What a name reference resolved to.
 #[derive(Clone, Copy, Debug)]
 enum Target {
+    Module(crate::value::Obj),
     Var(VarId),
     Capture(u16),
     /// A prelude function of function `func` (`Storage::Builtin`), from an inner one.
@@ -324,6 +327,15 @@ fn classify(
         let immutable = var.kind.is_immutable();
         let lexical = var.kind.is_lexical();
         let decl = var.ts_decl;
+        if let Some(binding) = var.module {
+            return Resolved {
+                target: Target::Module(binding),
+                immutable,
+                check: true,
+                lexical,
+                decl,
+            };
+        }
         if var.global {
             return Resolved {
                 target: Target::Global,
@@ -360,6 +372,15 @@ fn classify(
         };
         {
             let var = &mut funcs[pf].vars[v as usize];
+            if let Some(binding) = var.module {
+                return Resolved {
+                    target: Target::Module(binding),
+                    immutable: var.kind.is_immutable(),
+                    check: true,
+                    lexical: var.kind.is_lexical(),
+                    decl: var.ts_decl,
+                };
+            }
             if var.global {
                 return Resolved {
                     target: Target::Global,
@@ -448,7 +469,9 @@ fn assign_storage(
     let mut names = Vec::new();
     for v in &f.vars {
         let pseudo = v.kind.is_pseudo();
-        storage.push(if v.global {
+        storage.push(if let Some(binding) = v.module {
+            Storage::Module(binding)
+        } else if v.global {
             Storage::Global
         } else if v.builtin {
             *next_builtin += 1;
@@ -508,8 +531,19 @@ fn resolve_relative_depths(
 }
 
 /// Stores the value on top of the stack into a binding being initialized.
-fn emit_init(out: &mut CodeBuf, storage: Storage, atom: Atom, lexical: bool) {
+fn emit_init(
+    out: &mut CodeBuf,
+    storage: Storage,
+    atom: Atom,
+    lexical: bool,
+    heap: &Heap,
+    pool: &mut UnitPool,
+) {
     match storage {
+        Storage::Module(binding) => {
+            out.push_const(pool.intern(heap, Value::object(binding)));
+            out.module_put(atom, module_mode::INITIALIZE);
+        }
         Storage::Local(s) => out.put_loc(s),
         Storage::Box(s) => out.put_box(s),
         Storage::Arg(a) => out.put_arg(a),
@@ -598,11 +632,19 @@ fn emit_function(
             let st = storage[v as usize];
             match st {
                 Storage::Local(s) => {
-                    out.special_object(kind);
+                    if f.kind == FuncKind::Module && kind == special::THIS {
+                        out.undefined();
+                    } else {
+                        out.special_object(kind);
+                    }
                     out.put_loc(s);
                 }
                 Storage::Box(s) => {
-                    out.special_object(kind);
+                    if f.kind == FuncKind::Module && kind == special::THIS {
+                        out.undefined();
+                    } else {
+                        out.special_object(kind);
+                    }
                     out.new_box_init(s);
                 }
                 _ => {}
@@ -742,9 +784,18 @@ fn emit_function(
                 }
                 if let Target::Member(obj) = resolved[r].target {
                     let obj = obj as usize;
-                    let load = |out: &mut CodeBuf| {
+                    let mut load = |out: &mut CodeBuf| {
                         let a = f.refs[obj].atom;
-                        emit_name(out, storage, Op::NameGet, a, resolved[obj], atom_undefined);
+                        emit_name(
+                            out,
+                            storage,
+                            Op::NameGet,
+                            a,
+                            resolved[obj],
+                            atom_undefined,
+                            heap,
+                            pool,
+                        );
                     };
                     match insn.op {
                         Op::NameGet | Op::NameTypeof => {
@@ -777,6 +828,8 @@ fn emit_function(
                     atom,
                     resolved[r],
                     atom_undefined,
+                    heap,
+                    pool,
                 );
             }
             Op::EnterScope => {
@@ -851,13 +904,15 @@ fn emit_function(
                         storage[v as usize],
                         f.vars[v as usize].name,
                         false,
+                        heap,
+                        pool,
                     );
                 }
                 // Hoisted function declarations (docs/compiler.md 5.5).
                 for &(v, child) in &scope.funcs {
                     out.fclosure(child);
                     let var = &f.vars[v as usize];
-                    emit_init(&mut out, storage[v as usize], var.name, false);
+                    emit_init(&mut out, storage[v as usize], var.name, false, heap, pool);
                 }
             }
             Op::IterScope => {
@@ -967,7 +1022,7 @@ fn emit_function(
     };
     let kind = match f.kind {
         // Eval code runs like a Script's top level (the embedder supplies `this`).
-        FuncKind::Script | FuncKind::Eval => func_flags::KIND_SCRIPT,
+        FuncKind::Module | FuncKind::Script | FuncKind::Eval => func_flags::KIND_SCRIPT,
         FuncKind::AsyncBody => func_flags::KIND_ASYNC_BODY,
         FuncKind::Normal => func_flags::KIND_NORMAL,
         FuncKind::Arrow => func_flags::KIND_ARROW,
@@ -1090,6 +1145,7 @@ fn emit_number(heap: &Heap, out: &mut CodeBuf, pool: &mut UnitPool, n: f64) {
 }
 
 /// The resolved form of one `name_*` op.
+#[allow(clippy::too_many_arguments)]
 fn emit_name(
     out: &mut CodeBuf,
     storage: &[Storage],
@@ -1097,7 +1153,41 @@ fn emit_name(
     atom: Atom,
     res: Resolved,
     atom_undefined: Atom,
+    heap: &Heap,
+    pool: &mut UnitPool,
 ) {
+    let module = match res.target {
+        Target::Module(binding) => Some(binding),
+        Target::Var(v) => match storage[v as usize] {
+            Storage::Module(binding) => Some(binding),
+            _ => None,
+        },
+        _ => None,
+    };
+    if let Some(binding) = module {
+        let index = pool.intern(heap, Value::object(binding));
+        match op {
+            Op::NameGet | Op::NameTypeof => {
+                out.push_const(index);
+                out.module_get(atom);
+            }
+            _ => {
+                if op == Op::NameSet {
+                    out.dup();
+                }
+                out.push_const(index);
+                out.module_put(
+                    atom,
+                    if op == Op::NameInit {
+                        module_mode::INITIALIZE
+                    } else {
+                        module_mode::ASSIGN
+                    },
+                );
+            }
+        }
+        return;
+    }
     #[derive(Clone, Copy)]
     enum At {
         Loc(u16),
@@ -1113,12 +1203,14 @@ fn emit_name(
             Storage::Box(s) => At::Box(s),
             Storage::Arg(a) => At::Arg(a),
             Storage::Builtin { idx, .. } => At::Builtin(idx),
-            Storage::Global | Storage::None => At::Global,
+            Storage::Global | Storage::None | Storage::Module(_) => At::Global,
         },
         Target::Capture(c) => At::Cap(c),
         Target::Slot(i) => At::Builtin(i),
         // Handled by the caller (a property access); `Builtin` is resolved to `Slot`.
-        Target::Global | Target::Member(_) | Target::Builtin { .. } => At::Global,
+        Target::Global | Target::Module(_) | Target::Member(_) | Target::Builtin { .. } => {
+            At::Global
+        }
     };
     let lexical = res.lexical;
     let chk = res.check;

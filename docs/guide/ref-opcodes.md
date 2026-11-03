@@ -223,4 +223,6 @@ with them.
 | `jump8` | 211 | Target8 | 2 | 0 → 0 | Basic | `jump` with an 8-bit offset. |
 | `jump_if_false8` | 212 | Target8 | 2 | 1 → 0 | Basic | `jump_if_false` with an 8-bit offset. |
 | `jump_if_true8` | 213 | Target8 | 2 | 1 → 0 | Basic | `jump_if_true` with an 8-bit offset. |
+| `module_get` | 214 | Atom | 5 | 1 → 1 | Access | `binding -> value`: read a shared module binding, checking its TDZ. |
+| `module_put` | 215 | Atom, U8 | 6 | 2 → 0 | Access | `value binding ->`: assign (mode 0) or initialize (mode 1) a module binding. |
 <!-- /gen -->

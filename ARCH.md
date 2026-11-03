@@ -31,8 +31,15 @@ In priority order. Each design decision below should be traceable to one of thes
   another process.
 
 Non-goals for now: Intl, Temporal, `SharedArrayBuffer`/Atomics, workers, sloppy mode,
-`with`, direct `eval`, ES modules (`import()` compiles and rejects, D1582), a JIT, and full
-test262 conformance for its own sake.
+`with`, direct `eval`, a JIT, and full test262 conformance for its own sake.
+
+ES modules are now a goal for the Rust pi embedding (D2555, D2556). The native
+`ModuleGraph` API compiles, links and evaluates acyclic JavaScript source graphs
+with static imports/exports, shared live binding cells, synthetic host modules and
+resumable arena-backed evaluation state. Source cycles, namespace objects,
+export-star resolution, dynamic import loading, import.meta and top-level await
+remain unbuilt. Codemode behavior is unchanged; `import()` still compiles and
+rejects when no dynamic loader is available (D1582).
 
 D016 (owner direction) adds the measuring stick: wasm32 is the primary target, so memory
 and performance work is judged by its effect in wasm32 under node/V8. Layouts are designed
@@ -275,8 +282,14 @@ constants are shared across a compilation unit (D1434).
 **Semantics stance:** always strict. Codemode scripts compile as the body of an async
 function (D008, D1410). A Script mode (global `var`/function bindings on the global
 object, a global lexical scope, completion values) exists as well, for test262,
-`$262.evalScript` and the REPL (D004, D1581). Modules are not supported: `import()`
-compiles and rejects (D1582). There is no direct `eval`. Indirect eval and the `Function`
+`$262.evalScript` and the REPL (D004, D1581). Acyclic source modules execute through
+`vm::modules::ModuleGraph` (D2556), a dedicated token-parsing path that resolves
+module references, including nested closures, into shared arena binding records.
+Module declarations stay private to the module; Script and codemode compilation
+keep their existing goals. The graph drives host-controlled static resolution and
+caches successful and failed evaluations. Cyclic source instantiation, namespace
+objects, dynamic import loading, import.meta and top-level await remain unbuilt.
+There is no direct `eval`. Indirect eval and the `Function`
 constructors exist (D014, D1590, D1591): a call `eval(x)` behaves as indirect eval.
 Functions created by the `Function` constructors without a `"use strict"` directive get
 sloppy `this` binding only (D015, D1630), nothing else of sloppy mode. `using` and

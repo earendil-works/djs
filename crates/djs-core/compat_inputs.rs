@@ -68,6 +68,10 @@ pub const REGIONS: &[(&str, Cut)] = &[
     ("src/bytecode/template.rs", Cut::Item("pub mod func_flags")),
     ("src/bytecode/ops.rs", Cut::Item("pub mod capture_desc")),
     ("src/bytecode/ops.rs", Cut::Item("pub mod global_decls")),
+    ("src/bytecode/ops.rs", Cut::Item("pub(crate) mod module_mode")),
+    // Native module graph property names and binding kind codes (D2555).
+    ("src/vm/modules.rs", Cut::TopConsts),
+    ("src/vm/modules/", Cut::TopConsts),
     // The value encoding.
     ("src/value.rs", Cut::Item("pub mod tag")),
     ("src/value.rs", Cut::TopConsts),

@@ -7702,3 +7702,49 @@ load of at most 3/4, always with an empty bucket for a miss to stop at.
   and the values are mostly distinct function objects; a shared key description is a
   shape chain, which costs a cell per key for one-off objects (D1831). Linear search up to
   12 entries would save 240 B more.
+
+## D2555: ES modules become a goal for the Rust pi embedding
+date: 2026-11-03 · by: pi-esm · issue: 0168
+The user explicitly requests ES module support to replace QuickJS in Rust pi,
+changing the previous no-modules non-goal. This does not change codemode's default
+execution or authorize treating source rewrites with copied imports as ESM.
+The first milestone is a native arena binding graph: canonical host-chosen module
+identities, local binding cells, live read-only import aliases and reexports,
+initialization checks and synthetic host updates. Its persistent state uses existing
+ordinary arena objects rooted by a host handle. There are no new cell layouts,
+dependencies, opcodes or changed slot meanings, so no compatibility version bump.
+The new record keys and binding codes enter RECORDS_HASH through compat_inputs.rs.
+The graph is an embedding foundation, not an executable module implementation.
+Source compilation, cyclic evaluation/hoisting, namespace exotic objects, loader
+requests, import.meta, dynamic import and top-level await remain required before
+claiming Rust pi replacement readiness. Hosts must not expose the internal graph
+objects to JavaScript. A future compiler must address these same binding cells
+rather than copy values into script locals.
+
+## D2556: Executable acyclic source modules use shared arena bindings
+date: 2026-11-03 · by: pi-esm · issue: 0168
+The next module stage parses static import/export declarations with the existing
+token parser, records source requests and exports, and resolves all module-local
+references into shared binding records before templates are emitted. References
+from nested functions address the same records directly through constant pools.
+`module_get` and `module_put` implement TDZ, constant and read-only-import checks;
+there is no source rewrite or copied import value. Functions hoist within their
+module; `var` cells start undefined. Module declarations stay private and module
+`this` is undefined.
+
+The native host supplies canonical resolution and UTF-8 source through a synchronous
+loader trait. Loading/compilation/linking finish before any body executes. An arena
+queue then evaluates dependencies once through the existing fuel/host-call API.
+Module functions, dependency identities, queue/cursor, execution state and cached
+failures are rooted in the arena. Snapshots can resume a partially executed body.
+A host allocator failure that abandons frames marks the execution abandoned, so it
+cannot restart a partially executed module. New record keys/state codes enter the
+record hash; new opcodes enter the opcode hash. No dependency or cell layout is added.
+
+Source cycles are rejected explicitly until graph-wide declaration instantiation
+and hoisting are implemented. Namespace objects/imports, star exports, import.meta,
+dynamic import loading, import attributes and top-level await remain unimplemented.
+The compiler supports JavaScript source modules; TypeScript module grammar and a
+wasm module-loading ABI are later work. The test262 module grouping is unchanged
+until its runner can drive this API. This stage is not the completed Rust pi
+replacement; those remaining semantics and integration are still required.

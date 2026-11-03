@@ -21,6 +21,7 @@ use super::realm::{self, ErrorKind, Intrinsic, intrinsic, intrinsic_obj};
 use super::state::{self, PARK_ENTRY, RunState, park_flags};
 use crate::bytecode::decode::{LAYOUT, arity, read_i8};
 use crate::bytecode::global_decls::GlobalDecls;
+use crate::bytecode::ops::module_mode;
 use crate::bytecode::template::{self, func_flags};
 use crate::bytecode::{HandlerTable, OPS, Op, special};
 use crate::heap::cells::flags::OBJ_HOST_ASYNC;
@@ -2179,6 +2180,64 @@ impl<'h> Exec<'h> {
                     self.top(0)
                 };
                 self.set_box_value(b, v);
+            }
+
+            Op::ModuleGet | Op::ModulePut => {
+                let name = self.imm_atom();
+                let binding = self.top(0).as_object().ok_or_else(|| {
+                    Fault::error(
+                        ErrorKind::InternalError,
+                        String::from("invalid module binding"),
+                    )
+                })?;
+                let result = if op == Op::ModuleGet {
+                    crate::vm::modules::compiled_read(self.heap, binding)
+                } else {
+                    let initialize = match self.byte(self.pc + 5) {
+                        module_mode::ASSIGN => false,
+                        module_mode::INITIALIZE => true,
+                        _ => {
+                            return Err(Fault::error(
+                                ErrorKind::InternalError,
+                                String::from("invalid module write mode"),
+                            ));
+                        }
+                    };
+                    crate::vm::modules::compiled_write(self.heap, binding, self.top(1), initialize)
+                        .map(|()| Value::UNDEFINED)
+                };
+                let value = result.map_err(|error| {
+                    use crate::vm::modules::ModuleError;
+                    match error {
+                        ModuleError::Heap(error) => Fault::from(error),
+                        ModuleError::Uninitialized => Fault::error(
+                            ErrorKind::ReferenceError,
+                            crate::text::cat!(
+                                "cannot access '",
+                                conv::describe_key(self.heap, name),
+                                "' before initialization"
+                            ),
+                        ),
+                        ModuleError::ReadOnly => Fault::error(
+                            ErrorKind::TypeError,
+                            crate::text::cat!(
+                                "'",
+                                conv::describe_key(self.heap, name),
+                                "' is read-only"
+                            ),
+                        ),
+                        _ => Fault::error(
+                            ErrorKind::InternalError,
+                            String::from("invalid module binding operation"),
+                        ),
+                    }
+                })?;
+                if op == Op::ModuleGet {
+                    self.pop();
+                    self.push(value);
+                } else {
+                    self.sp -= 2;
+                }
             }
 
             // ---- globals ----

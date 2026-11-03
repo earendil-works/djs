@@ -74,8 +74,9 @@ and pi's tests expect them.
 
 ## What djs is not
 
-djs is always in strict mode, has no ES modules, no `Intl` and no JIT, among other
-things left out on purpose; [the non-goals](goals.md#non-goals) lists them and why.
+djs always uses strict mode. Its native Rust host supports acyclic source modules.
+`Intl` and a JIT are among the features left out on purpose;
+[the non-goals](goals.md#non-goals) lists them and why.
 
 ## How to read this guide
 
