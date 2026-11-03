@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0162 | Act on pico's speed findings (tree, fuel rule, results into heap strings) | speed | .worktrees/speed |
 | 0151 | Shrink the base heap to a fraction (no removals) | bloat | .worktrees/bloat |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 
@@ -82,6 +81,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0162 | pico speed findings: host strings in place (D2551), reduce one frame (D2552), species/ArrayCreate (D2554), stringify into heap (D2553); fuel rule not adopted (D2550) | 0c31e693 (agents speed, speed2) |
 | 0166 | Parser depth kept 550, regexp 212 (D2545); GC thresholds from BASE_END (D2544); stack overflow reported (D2543) | 866e73fd (agent heap) |
 | 0165 | Sliced strings (D2542); steps 2-3 deferred | 01817649 (agent heap; log-5mb arena 12.0 -> 7.2 MiB, snapshot 1.75 -> 0.98 MiB zstd) |
 | 0163 | Seeded hashing: SipHash-1-3, per-VM key (D2433) | 4b3bff97 (agent strings; COMPAT_VERSION 2) |

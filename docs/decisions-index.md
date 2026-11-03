@@ -519,3 +519,5 @@ topics when the index is next reorganized.
 - D2543: A wasm stack overflow is reported as one
 - D2544: GC thresholds count their pages from the prefix's end
 - D2545: Nesting limits re-measured: parser 550 stays, regexp 212
+- D2553: JSON.stringify builds a large result in its heap string
+- D2554: Array species and ArrayCreate shortcuts
