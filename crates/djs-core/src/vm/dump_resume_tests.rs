@@ -287,6 +287,7 @@ fn refusal(tail: &str) -> String {
          async function f(a) {{ const b = a + 1; return o.m(b, await later(b)); }}\n\
          function* gen() {{ yield 1; }}\n\
          async function fin() {{ try {{ return 1; }} finally {{ await later(2); }} }}\n\
+         async function cls() {{ class C {{ [await later(2)]() {{}} }} }}\n\
          async function keys(o) {{ for (const k in o) await later(k); }}\n\
          const o = {{ m: (x, y) => x + y }};\n\
          $dump.p = $dump.pending(1, 'later', [2]);\n\
@@ -384,8 +385,16 @@ fn resume_refuses_what_the_map_does_not_have() {
             "not an async function or a generator",
         ),
         (
-            "$dump.resume(fin, { at: 'await#1', awaiting: $dump.p });",
-            "cannot be resumed: finally",
+            "$dump.resume(cls, { at: 'await#1', awaiting: $dump.p });",
+            "cannot be resumed: class",
+        ),
+        (
+            "$dump.resume(fin, { at: 'await#1', awaiting: $dump.p, operands: [['finally.value', 1], ['finally.return', 7]] });",
+            "await#1 has no such finally.return",
+        ),
+        (
+            "$dump.resume(fin, { at: 'await#1', awaiting: $dump.p, operands: [['finally.value', 1], ['finally.return', 0.5]] });",
+            "await#1 has no such finally.return",
         ),
         (
             "$dump.resume(keys, { at: 'await#1', awaiting: $dump.p, args: [{}], bindings: { o: {}, k: 'a' }, loops: [{ kind: 'for-in', iterator: 1 }] });",
@@ -1334,7 +1343,7 @@ fn dumps_carry_the_random_state_and_iterators_again() {
 /// The new golden programs' every idle point, dumped once and dumped in a chain.
 #[test]
 fn delegation_round_trips() {
-    for name in ["yield-star"] {
+    for name in ["yield-star", "for-await-close", "finally"] {
         let src =
             std::fs::read_to_string(golden_dir().join(alloc::format!("{name}.src.js"))).unwrap();
         let (want, marks) = run_program(&src);

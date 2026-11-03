@@ -328,6 +328,7 @@ impl Vm {
         let ops = array_arg(h, operands, "$dump.resume: operands")?;
         let loops = array_arg(h, loops, "$dump.resume: loops")?;
         let (mut oi, mut li) = (0, 0);
+        let mut rets = site.returns.iter();
         for &role in &site.operands {
             let v = match role {
                 Role::LoopIterator(l) | Role::LoopNext(l) => {
@@ -393,7 +394,21 @@ impl Vm {
                             name
                         ));
                     }
-                    v
+                    match role {
+                        // A return address, by the index of its `gosub`.
+                        Role::FinallyReturn(_) => {
+                            let pc = v
+                                .as_int()
+                                .and_then(|j| usize::try_from(j).ok())
+                                .zip(rets.next())
+                                .and_then(|(j, r)| r.get(j).copied())
+                                .ok_or_else(|| {
+                                    cat!("$dump.resume: ", site.name, " has no such ", want)
+                                })?;
+                            Value::int(pc as i32)
+                        }
+                        _ => v,
+                    }
                 }
             };
             frame.push(v);

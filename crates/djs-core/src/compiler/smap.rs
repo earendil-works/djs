@@ -91,11 +91,22 @@ pub enum Role {
     /// and for-await, its `next` method.
     LoopIterator(Loop),
     LoopNext(Loop),
+    /// `switch (d) { case t: … }`: the discriminant, twice (kept and compared) while a
+    /// case test is evaluated.
+    SwitchDiscriminant,
     /// The exception a `for await` rethrows after closing its iterator (the loop's body
     /// threw).
     Exception,
-    /// Values of a construct that is not described yet (`switch`, `finally`, `using`,
-    /// destructuring, `yield*`, class definitions): the site is unsupported.
+    /// A subroutine entered with `gosub` (a finally block, a `using` disposal, a loop's
+    /// iterator close): the value it carries (`undefined`, the exception or the return
+    /// value) and the return address, an int pc of this build. A dump writes the
+    /// return address as the index of its `gosub` among those to the subroutine, in
+    /// emission order (`Site::returns`). The subroutine is the function's `i`-th
+    /// (recorder order), which is not part of the role's name.
+    FinallyValue,
+    FinallyReturn(u16),
+    /// Values of a construct that is not described yet (`using`, destructuring, class
+    /// definitions): the site is unsupported.
     Unsupported(&'static str),
 }
 
@@ -128,7 +139,10 @@ impl fmt::Display for Role {
             Role::IntrinsicArg(i) => write!(f, "intrinsic.arg[{i}]"),
             Role::LoopIterator(l) => write!(f, "{}.iterator", l.name()),
             Role::LoopNext(l) => write!(f, "{}.next", l.name()),
+            Role::SwitchDiscriminant => f.write_str("switch.discriminant"),
             Role::Exception => f.write_str("exception"),
+            Role::FinallyValue => f.write_str("finally.value"),
+            Role::FinallyReturn(_) => f.write_str("finally.return"),
             Role::Unsupported(c) => write!(f, "unsupported:{c}"),
         }
     }
@@ -172,7 +186,10 @@ impl Role {
             Role::LoopNext(Loop::In) => ("for-in.next", None),
             Role::LoopNext(Loop::Await) => ("for-await.next", None),
             Role::LoopNext(Loop::Star) => ("yield*.next", None),
+            Role::SwitchDiscriminant => ("switch.discriminant", None),
             Role::Exception => ("exception", None),
+            Role::FinallyValue => ("finally.value", None),
+            Role::FinallyReturn(_) => ("finally.return", None),
             Role::Unsupported(_) => ("unsupported", None),
         }
     }
@@ -245,6 +262,8 @@ mod maps {
         pub sites: Vec<SiteRec>,
         /// The computed property keys this function evaluates (`[` to `]`).
         pub computed_keys: Vec<(u32, u32)>,
+        /// The entry labels of its subroutines (`Role::FinallyReturn`'s index).
+        pub subs: Vec<crate::bytecode::Label>,
     }
 
     /// A site as the parser saw it.
@@ -298,6 +317,10 @@ mod maps {
         pub boxed: Vec<bool>,
         /// The operands below the awaited value, bottom first.
         pub operands: Vec<Role>,
+        /// For each `Role::FinallyReturn` operand, bottom first: the return addresses
+        /// (pcs after each `gosub` to its subroutine, in emission order) a dump names by
+        /// index.
+        pub returns: Vec<Vec<u32>>,
         /// Why the frame cannot be described here: the construct, or `None`.
         pub unsupported: Option<String>,
     }
@@ -407,7 +430,8 @@ mod maps {
     /// `slots[v]` is where binding `v` lives: `Some((false, i, _))` argument `i`,
     /// `Some((true, i, boxed))` local `i`, holding a Box if `boxed`; `n_locals` local slots; `params` argument slots;
     /// `at[k]` the final pc of site `k`'s instruction (`None`: not emitted, dead code);
-    /// `depth[k]` the operand depth there, the suspended value included.
+    /// `depth[k]` the operand depth there, the suspended value included; `subs[i]` the
+    /// return addresses of subroutine `i` (`Recorder::subs`).
     #[allow(clippy::too_many_arguments)]
     pub(in crate::compiler) fn build(
         heap: &Heap,
@@ -418,6 +442,7 @@ mod maps {
         params: usize,
         at: &[Option<(u32, u32)>],
         depth: &[Option<u32>],
+        subs: &[Vec<u32>],
     ) -> FunctionMap {
         let base = f.src_start;
         let scope_pos = |s: ScopeId| f.scopes[s as usize].pos.saturating_sub(base);
@@ -520,6 +545,19 @@ mod maps {
                     .collect(),
                 locals,
                 boxed,
+                returns: match unsupported {
+                    Some(_) => Vec::new(),
+                    None => s
+                        .roles
+                        .iter()
+                        .filter_map(|r| match r {
+                            Role::FinallyReturn(i) => {
+                                Some(subs.get(*i as usize).cloned().unwrap_or_default())
+                            }
+                            _ => None,
+                        })
+                        .collect(),
+                },
                 operands: if unsupported.is_some() {
                     Vec::new()
                 } else {
@@ -584,6 +622,18 @@ impl super::parser::Parser<'_, '_> {
         self.roles_push(rs);
     }
 
+    /// A subroutine starts at `l` (placed next): its index for `Role::FinallyReturn`.
+    #[inline]
+    pub(super) fn subroutine(&mut self, l: crate::bytecode::Label) -> u16 {
+        match &mut self.f.smap {
+            Some(r) => {
+                r.subs.push(l);
+                (r.subs.len() - 1) as u16
+            }
+            None => 0,
+        }
+    }
+
     /// A suspension point: the `await`/`yield` instruction is emitted next.
     #[inline]
     pub(super) fn site(&mut self, kind: SiteKind, pos: u32) {
@@ -613,6 +663,10 @@ impl super::parser::Parser<'_, '_> {
     #[inline(always)]
     pub(super) fn roles_take(&mut self, _n: usize) -> alloc::vec::Vec<Role> {
         alloc::vec::Vec::new()
+    }
+    #[inline(always)]
+    pub(super) fn subroutine(&mut self, _l: crate::bytecode::Label) -> u16 {
+        0
     }
     #[inline(always)]
     pub(super) fn site(&mut self, _kind: SiteKind, _pos: u32) {}

@@ -140,7 +140,7 @@ function 0.3 deleg: params=1 locals=1 stack=5 captures=0
   127  nip
   128  nip
   129  return
-function 0.4 agen: params=1 locals=2 stack=6 captures=0
+function 0.4 agen: params=1 locals=2 stack=5 captures=0
   handler [51, 52) -> 52 depth 2
   handler [38, 62) -> 19 depth 2
     0  generator_start loc0 (<state>)
@@ -184,19 +184,19 @@ function 0.4 agen: params=1 locals=2 stack=6 captures=0
    84  rot3r
    85  drop
    86  dup
-   87  dup
-   88  call_intrinsic %AsyncIteratorReturnMethod 1
-   93  dup
-   94  is_undefined
-   95  jump_if_true8 -> 106
-   97  swap
-   98  call0
-   99  await loc0 (<state>)
-  102  iter_check_object
-  103  drop
-  104  jump8 -> 108
+   87  call_intrinsic %AsyncIteratorReturnMethod 1
+   92  dup
+   93  is_undefined
+   94  jump_if_true8 -> 105
+   96  swap
+   97  call0
+   98  await loc0 (<state>)
+  101  iter_check_object
+  102  drop
+  103  jump8 -> 107
+  105  drop
   106  drop
-  107  drop
+  107  undefined
   108  undefined
   109  rot3l
   110  ret

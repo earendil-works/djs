@@ -658,7 +658,7 @@ impl Parser<'_, '_> {
             }
             self.code().gosub(l_sub);
             if kind == BlockKind::Iter {
-                // The subroutine leaves `v it undefined` (a `gosub` keeps the depth).
+                // The subroutine leaves `v x undefined` (a `gosub` keeps the depth).
                 self.code().drop();
                 self.code().drop();
             }
@@ -880,10 +880,10 @@ impl Parser<'_, '_> {
             self.code().gosub(l_fin);
             self.code().throw();
             self.expect(TokenKind::Finally, "finally")?;
+            let sub = self.subroutine(l_fin);
             self.place(l_fin);
             self.stmt_depth = base + 2;
-            // The pending completion is not described yet (D2563).
-            self.roles_push(&[Role::Unsupported("finally")]);
+            self.roles_push(&[Role::FinallyValue, Role::FinallyReturn(sub)]);
             // A normal finally block keeps the completion value of the try statement:
             // it is saved on the stack (a jump out of the block drops it).
             let completion = self.completion_local();
@@ -892,6 +892,8 @@ impl Parser<'_, '_> {
                 self.code().name_get(r);
                 self.stmt_depth += 1;
                 self.reset_completion();
+                // (Script and eval code, which never suspends.)
+                self.roles_push(&[Role::Unsupported("a completion value")]);
             }
             self.parse_block()?;
             if let Some(a) = completion {
@@ -899,7 +901,7 @@ impl Parser<'_, '_> {
                 self.code().name_put(r);
             }
             self.stmt_depth = base;
-            self.roles_pop(1);
+            self.roles_pop(2 + usize::from(completion.is_some()));
             self.code().ret();
         }
         self.place(l_end);
@@ -952,10 +954,9 @@ impl Parser<'_, '_> {
                     self.place(next_test);
                     next_test = self.new_label();
                     self.code().dup();
-                    // The discriminant (twice) is not described yet (D2563).
-                    self.roles_push(&[Role::Unsupported("switch")]);
+                    self.roles_push(&[Role::SwitchDiscriminant, Role::SwitchDiscriminant]);
                     self.parse_expr(false)?;
-                    self.roles_pop(1);
+                    self.roles_pop(2);
                     self.code().strict_eq();
                     self.code().jump_if_false(next_test);
                     self.code().drop();

@@ -36,6 +36,8 @@ const SETTLED_REJECTED: usize = 5;
 const ANY_REJECT: usize = 6;
 const THEN_FINALLY: usize = 7;
 const CATCH_FINALLY: usize = 8;
+const VALUE_THUNK: usize = 9;
+const THROWER: usize = 10;
 const FROM_SYNC_UNWRAP: usize = 13;
 const FROM_SYNC_CLOSE: usize = 14;
 
@@ -553,9 +555,19 @@ impl Dumper<'_> {
                     && names(&w.locals) == names(&site.locals)
                     && w.boxed == site.boxed
                     && w.operands == site.operands
-                    && w.unsupported.is_none() =>
+                    && w.unsupported.is_none()
+                    && w.returns
+                        .iter()
+                        .map(Vec::len)
+                        .eq(site.returns.iter().map(Vec::len)) =>
             {
-                Some(Site { pos: site.pos, ..w })
+                // The return addresses in the frame are the body's: the dump names them
+                // by index, the same in both.
+                Some(Site {
+                    pos: site.pos,
+                    returns: site.returns,
+                    ..w
+                })
             }
             _ => {
                 let why = cat!(
@@ -576,7 +588,8 @@ impl Dumper<'_> {
         let data = h.object_slot(o, 1);
         match kind {
             RESOLVE | REJECT | ALL_ELEMENT | SETTLED_FULFILLED | SETTLED_REJECTED | ANY_REJECT
-            | THEN_FINALLY | CATCH_FINALLY | FROM_SYNC_UNWRAP | FROM_SYNC_CLOSE => {
+            | THEN_FINALLY | CATCH_FINALLY | VALUE_THUNK | THROWER | FROM_SYNC_UNWRAP
+            | FROM_SYNC_CLOSE => {
                 self.edge(n, data, || cat!(path, "<data>"));
             }
             _ => self.refuse(path, "an internal function of a builtin"),
@@ -681,7 +694,15 @@ impl Dumper<'_> {
                 } else {
                     for v in [f, r] {
                         if let Some((k, _)) = kind(self, v)
-                            && !matches!(k, RESOLVE | REJECT | FROM_SYNC_UNWRAP | FROM_SYNC_CLOSE)
+                            && !matches!(
+                                k,
+                                RESOLVE
+                                    | REJECT
+                                    | VALUE_THUNK
+                                    | THROWER
+                                    | FROM_SYNC_UNWRAP
+                                    | FROM_SYNC_CLOSE
+                            )
                         {
                             self.refuse(path.clone(), "a reaction of a builtin in flight");
                         }
@@ -899,6 +920,21 @@ impl Dumper<'_> {
         if kind == FROM_SYNC_CLOSE {
             let it = self.expr(data, None, None);
             return cat!("$dump.closeThrow(", it, ")");
+        }
+        if kind == VALUE_THUNK || kind == THROWER {
+            // A finally's value thunk or thrower, or the handler that makes an
+            // AsyncIteratorClose of a throw ignore `return()`'s outcome: the same as a
+            // function of the dump's.
+            let v = self.expr(data, None, None);
+            if v.is_empty() {
+                let p = self.nodes[node].path.clone();
+                self.refuse(p, "a promise builtin's function on a reference cycle");
+            }
+            return if kind == VALUE_THUNK {
+                cat!("() => (", v, ")")
+            } else {
+                cat!("() => { throw ", v, "; }")
+            };
         }
         if kind != RESOLVE && kind != REJECT {
             let p = self.nodes[node].path.clone();
@@ -1430,6 +1466,7 @@ impl Dumper<'_> {
         let mut ops: Vec<String> = Vec::new();
         let mut loops: Vec<String> = Vec::new();
         let mut it = String::new();
+        let mut rets = site.returns.iter();
         for (k, role) in site.operands.iter().enumerate() {
             let from_sync = matches!(role, Role::LoopNext(Loop::Await | Loop::Star))
                 && k > 0
@@ -1438,6 +1475,23 @@ impl Dumper<'_> {
                     .is_some_and(|o| self.is_from_sync(o));
             let e = if from_sync {
                 cat!(it, ".next")
+            } else if let Role::FinallyReturn(_) = role {
+                // A return address: the index of its `gosub` (the loader's pc for it).
+                let pc = fv(lp + site.locals.len() + k).as_int();
+                let j = rets
+                    .next()
+                    .zip(pc)
+                    .and_then(|(r, pc)| r.iter().position(|&x| x as i32 == pc));
+                match j {
+                    Some(j) => cat!(j),
+                    None => {
+                        self.refuse(
+                            path.clone(),
+                            "a subroutine's return address its map does not know",
+                        );
+                        "undefined".into()
+                    }
+                }
             } else {
                 self.expr(fv(lp + site.locals.len() + k), None, None)
             };

@@ -256,7 +256,7 @@ impl Parser<'_, '_> {
         self.code().drop();
         self.mark(pos);
         if is_async {
-            self.emit_async_close_normal((SiteKind::YieldStarAwait, pos), Some(2));
+            self.emit_async_close_normal((SiteKind::YieldStarAwait, pos), Some((2, &[])));
         } else {
             self.code().call_intrinsic(intrinsic("IteratorClose"), 1);
             self.code().drop();
@@ -304,11 +304,16 @@ impl Parser<'_, '_> {
         self.code().iter_check_object();
     }
 
-    /// AsyncIteratorClose with a normal completion: `it` -> ``. With `hide`, the top
-    /// `hide` roles are values the closing consumed (the loop's `it next`): at the await,
-    /// only the roles below them are on the stack. `None`: not described (a stack that
-    /// holds a subroutine's return address, or one cut by a handler).
-    pub(super) fn emit_async_close_normal(&mut self, site: (SiteKind, u32), hide: Option<usize>) {
+    /// AsyncIteratorClose with a normal completion: `it` -> ``. With `describe` `(n, rs)`,
+    /// the top `n` roles are values the closing consumed (the loop's `it next`) and `rs`
+    /// the values on the stack in their place (a subroutine's value and return address):
+    /// at the await, the roles below them and `rs` are on the stack. `None`: not
+    /// described (a stack cut by a handler).
+    pub(super) fn emit_async_close_normal(
+        &mut self,
+        site: (SiteKind, u32),
+        describe: Option<(usize, &[Role])>,
+    ) {
         let l_skip = self.new_label();
         let l_closed = self.new_label();
         self.code().dup();
@@ -320,10 +325,12 @@ impl Parser<'_, '_> {
         self.code().jump_if_true(l_skip);
         self.code().swap();
         self.code().call(0);
-        match hide {
-            Some(n) => {
+        match describe {
+            Some((n, rs)) => {
                 let kept = self.roles_take(n);
+                self.roles_push(rs);
                 self.site(site.0, site.1);
+                self.roles_pop(rs.len());
                 self.roles_push(&kept);
             }
             None => {

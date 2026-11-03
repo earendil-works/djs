@@ -182,15 +182,47 @@ const LOOPS: &[(&str, &[&str])] = &[
     ),
 ];
 
-/// Constructs whose operands are not described yet: never mislabeled.
-const UNSUPPORTED: &[(&str, &[&str])] = &[
-    ("switch (a) { case await b: break; }", &["await#1 !switch"]),
+/// Case tests and subroutines (finally blocks, a for-await's close on a jump out).
+const STATEMENTS: &[(&str, &[&str])] = &[
+    (
+        "switch (a) { case await b: break; }",
+        &["await#1 switch.discriminant switch.discriminant"],
+    ),
     ("switch (a) { case 1: await b; }", &["await#1 -"]),
-    ("try { a } finally { await b }", &["await#1 !finally"]),
+    (
+        "try { a } finally { await b }",
+        &["await#1 finally.value finally.return"],
+    ),
     (
         "try { await a } catch (e) { await e }",
         &["await#1 -", "await#2 -"],
     ),
+    (
+        "for (const x of xs) { try { await x } finally { f(await y) } }",
+        &[
+            "await#1 for-of.iterator for-of.next",
+            "await#2 for-of.iterator for-of.next finally.value finally.return call.callee call.this",
+        ],
+    ),
+    (
+        "try { try {} finally { await a } } finally { await b }",
+        &[
+            "await#1 finally.value finally.return",
+            "await#2 finally.value finally.return",
+        ],
+    ),
+    (
+        "for await (const x of xs) { if (x) return 1; }",
+        &[
+            "for-await.close#1 exception",
+            "for-await.next#1 for-await.iterator for-await.next",
+            "for-await.close#2 finally.value finally.return",
+        ],
+    ),
+];
+
+/// Constructs whose operands are not described yet: never mislabeled.
+const UNSUPPORTED: &[(&str, &[&str])] = &[
     ("const { a = await b } = o;", &["await#1 !destructuring"]),
     ("const [x] = await y;", &["await#1 -"]),
     ("class C { [await k]() {} }", &["await#1 !class"]),
@@ -219,6 +251,11 @@ fn operand_roles_per_construct() {
 #[test]
 fn loop_records() {
     check(LOOPS);
+}
+
+#[test]
+fn statements() {
+    check(STATEMENTS);
 }
 
 #[test]

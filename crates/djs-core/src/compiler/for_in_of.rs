@@ -37,7 +37,7 @@
 //! subroutine (`BlockKind::Iter`), which sits outside the handler so that an error
 //! from `return()` propagates instead of closing twice. It is entered on
 //! `v it next ret` (`v` a return value or `undefined`) and, as `gosub` keeps the
-//! depth, leaves `v it undefined` for the caller to drop. A `break` of the loop itself
+//! depth, leaves `v x undefined` for the caller to drop. A `break` of the loop itself
 //! goes to `L_break`, which closes inline (it is outside the handler too).
 //!
 //! for-in keeps the key iterator of `for_in_start` on the stack; its step is
@@ -439,18 +439,24 @@ impl<'a> Parser<'a, '_> {
             }
             let close = intrinsic_id("IteratorClose").expect("%IteratorClose");
             if close_used {
-                // `v it next ret` -> `v it undefined` (a subroutine keeps the depth;
+                // `v it next ret` -> `v x undefined` (a subroutine keeps the depth;
                 // the caller drops the two), after closing the iterator.
+                let sub = self.subroutine(l_close);
                 self.place(l_close);
                 self.code().rot3r();
                 self.code().drop();
-                self.code().dup();
                 self.mark(for_pos);
                 if is_await {
-                    // (`v ret it`: a subroutine's return address is on the stack.)
-                    self.emit_async_close_normal((SiteKind::ForAwaitClose, for_pos), None);
+                    // `v ret it` -> `v ret undefined undefined`: only the subroutine's
+                    // value and return address stay below the close's await.
+                    self.emit_async_close_normal(
+                        (SiteKind::ForAwaitClose, for_pos),
+                        Some((2, &[Role::FinallyValue, Role::FinallyReturn(sub)])),
+                    );
+                    self.code().undefined();
                     self.code().undefined();
                 } else {
+                    self.code().dup();
                     self.code().call_intrinsic(close, 1);
                 }
                 self.code().rot3l();
@@ -462,7 +468,10 @@ impl<'a> Parser<'a, '_> {
                 self.code().drop();
                 self.mark(for_pos);
                 if is_await {
-                    self.emit_async_close_normal((SiteKind::ForAwaitClose, for_pos), Some(2));
+                    self.emit_async_close_normal(
+                        (SiteKind::ForAwaitClose, for_pos),
+                        Some((2, &[])),
+                    );
                 } else {
                     self.code().call_intrinsic(close, 1);
                     self.code().drop();
