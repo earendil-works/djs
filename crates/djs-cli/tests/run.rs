@@ -211,8 +211,9 @@ fn dump_after_every_idle_point() {
     let n = every_idle_point(&body, &["--body", "--tools", &answers]);
     std::fs::remove_file(&body).unwrap();
     assert_eq!(n, 5);
-    // TODO(0174): todos.js --body too, once a body parameter captured by a closure
-    // (`tools` in `todos`) dumps (reported to portable: D2617 refuses it).
+    // A codemode body whose helper closes over the `tools` parameter (D2620).
+    let n = every_idle_point(&format!("{DIR}/todos.js"), &["--body", "--tools", &answers]);
+    assert!(n >= 2, "{n} idle points");
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/dump/v2");
     let mut total = 0;
     for e in std::fs::read_dir(dir).unwrap() {

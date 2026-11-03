@@ -344,6 +344,9 @@ impl<'a, 'h> Parser<'a, 'h> {
         };
         p.f.src_end = src.len() as u32;
         if kind == FuncKind::AsyncBody {
+            // Before the parameters, as for an async function: a body's frame is laid out
+            // as the `async function (params) {...}` a dump writes for it (D2617, D2620).
+            p.start_flavor((true, false))?;
             for name in opts.params.iter() {
                 let atom = p.heap.atom_str(name)?;
                 let v = p.declare_param(atom, 0)?;
@@ -383,9 +386,6 @@ impl<'a, 'h> Parser<'a, 'h> {
 
     /// The top-level code, up to its return.
     fn parse_top(&mut self) -> PResult<()> {
-        if self.f.kind == FuncKind::AsyncBody {
-            self.start_flavor((true, false))?;
-        }
         self.code().enter_scope(BODY_SCOPE as u16);
         self.reset_completion();
         // `using` is not allowed at the top level of a Script, but in a codemode body

@@ -99,6 +99,12 @@ fresh VM, continue, same transcript.
   globals unless they hold its value (D2618); the every-idle-point test now uses hosts
   `console, tools, print, later`, plan included. Docs: continuation-dumps.md "The
   exporter as built"; guide: none affected.
+- repl (0174): a body whose parameter a closure captures (`function f() { tools; }`,
+  tests/run/todos.js) was refused by D2617's check: the body put the boxed parameter
+  before `<state>`, an async function after. The parser starts a body's async flavor
+  before its parameters now (D2620); tests a_codemode_body_whose_parameter_a_closure_captures
+  (the repro's maps equal, a run dumped at both idle points) and djs-cli's
+  dump_after_every_idle_point with todos.js --body; using_body.smap re-pinned.
 
 ## Follow-ups
 - for-in loops in activations; sites the maps call unsupported (finally, using,

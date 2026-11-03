@@ -8290,3 +8290,15 @@ Sandbox's dump of codemode-shaped tools resumes in the CLI (`djs resume`, whose 
 `tools.<name>`) and the other way round. One level only (`a.b.c` is the property `b.c` of
 `a`); after `fromBytes`, a new dotted name makes a new namespace object instead of
 extending the restored one.
+
+## D2620: A codemode body's frame is an async function's
+date: 2026-11-04 · by: portable · issue: 0172
+D2617 resumes a body as `async function (params) {...}` and refuses it where the two
+maps differ. They differed in the most common pi shape: a closure over a parameter
+(`tools`) makes it a boxed local, and a body declared its parameters before the async
+state local `<state>`, while an async function adds `<state>` first (`start_flavor`
+before the parameter list). The parser now starts a body's async flavor before
+declaring its parameters, so a body's frame is laid out exactly like the function's
+(`tests/smap/e2e/using_body.smap` shows the swap). No `COMPAT_VERSION` bump: a frame
+saved in an image stays read by the bytecode compiled with it. Rejected: matching slots
+by name in the exporter (two layouts to keep apart, for no gain).

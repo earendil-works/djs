@@ -1115,3 +1115,47 @@ fn write_golden_dumps() {
         }
     }
 }
+
+/// The common pi shape: a closure over a body's parameter makes it a boxed local, which
+/// must sit where the async function the dump writes keeps it (D2620; 0174's repro).
+#[test]
+fn a_codemode_body_whose_parameter_a_closure_captures() {
+    let p = ["tools", "console"];
+    let body = "const a = await later(1);\nfunction f() { tools; }\n";
+    let wrapped = alloc::format!("(async function (tools, console) {{\n{body}\n}})");
+    let mut vm = new_vm();
+    let site = |vm: &mut Vm, src: &str, o: &crate::compiler::CompileOptions<'_>| {
+        let maps = crate::compiler::suspension_maps(vm.heap_mut(), src.as_bytes(), o).unwrap();
+        let s = maps.last().unwrap().sites[0].clone();
+        (s.args, s.locals, s.boxed)
+    };
+    let a = site(
+        &mut vm,
+        body,
+        &crate::compiler::CompileOptions::async_body("b.js", &p),
+    );
+    let b = site(
+        &mut vm,
+        &wrapped,
+        &crate::compiler::CompileOptions::script("d.js"),
+    );
+    assert_eq!(a, b);
+    let src = "const t = tools;\nconst a = await later(1);\nconst f = (k) => tools === t && k;\n\
+               console.log(f(a), await tools.read(\"x\"));\nreturn a;\n";
+    let (want, _) = body_dump(src, usize::MAX);
+    assert_eq!(want, ["1 xx", "run Some(Ok(\"1\"))"]);
+    for k in 1..=2 {
+        let (mut lines, d) = body_dump(src, k);
+        let d = d.unwrap().unwrap_or_else(|e| panic!("@{k}: {e}"));
+        let mut vm = body_host_vm();
+        let loaded = load(&mut vm, &d.text).unwrap();
+        drive(&mut vm, &mut lines, &mut Vec::new(), None);
+        let run = vm.heap().get_handle(loaded.handles[0].1);
+        let r = vm
+            .promise_state(run)
+            .flatten()
+            .map(|r| r.map(|v| vm.display(v)));
+        lines.push(alloc::format!("run {r:?}"));
+        assert_eq!(lines, want, "@{k}");
+    }
+}
