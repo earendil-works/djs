@@ -21,6 +21,16 @@ Measure with mem-perturb on all workloads, pi warm/cold, an empty Sandbox, and
 scripts/size/sandbox-memory.ts; no workload's peak worse beyond noise.
 
 ## Log
+- Stack, measured on the debug wasm (the gate's nesting test), scratch probes in
+  work/scratch/0158/ (nesting-probe.ts, runtime-probe.ts):
+  - parser nesting, deepest level without a trap at 128 KiB vs the accepted limit at
+    MAX_DEPTH 1000: parens 248/332, arrays 266/333, objects 248/332, calls 398/498, funcs
+    164/199, blocks 723/995, trys 721/995, template 248/332, classes 81/110, methods
+    101/124; arrows, ifs, fors, switches, whiles, patterns, regexp groups fit. Worst
+    ratio 0.72 (trys, blocks): MAX_DEPTH ~650 leaves >= ~10% margin everywhere.
+  - runtime recursion (JS calls, JSON both ways, join, proxy/bound/prototype chains,
+    getters, a 300k-deep list through the GC, regexps, sort, async recursion, toString,
+    flat): identical results at 256 and 128 KiB.
 
 ## Follow-ups
 
