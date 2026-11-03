@@ -1,7 +1,7 @@
 # 0164: Image compatibility by dependencies, not by source hash
 
-status: open
-agent: -
+status: in-progress
+agent: snapshot
 branch: issue/0164-image-compat
 depends-on: 0117, 0147, 0148
 guide: docs/guide/snapshots.md (when an image restores), host.md
