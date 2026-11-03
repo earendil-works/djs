@@ -347,11 +347,8 @@ pub fn export_pi(
         e.dedup();
         return Err(e);
     }
-    let build = format!(
-        "{:08x}",
-        heap.arena()
-            .get::<u32>(0, djs_core::heap::cells::Roots::BUILD)
-    );
+    // The engine that exported it (images no longer record it, D2265).
+    let build = format!("{:08x}", djs_core::vm::BUILD_HASH);
     Ok(json!({
         "format": "djs-goldilocks-prototype/1",
         "exportedBy": build,

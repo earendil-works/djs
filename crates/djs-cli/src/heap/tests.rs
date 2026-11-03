@@ -140,7 +140,6 @@ fn a_container_reads_like_its_image() {
     let image = vm.bytes().to_vec();
     let c = container::write(
         container::APP_SANDBOX,
-        djs_core::vm::BUILD_HASH,
         "{}",
         &image,
         Some((container::REFERENCE_BASE, djs_prelude::BASE)),
@@ -289,7 +288,6 @@ fn a_pi_session_waiting_on_a_tool() {
     // The same through a container against the prelude image, given as the reference.
     let c = container::write(
         container::APP_PI_SESSION,
-        djs_core::vm::BUILD_HASH,
         "{}",
         &image,
         Some((container::REFERENCE_PI_PRELUDE, &prelude)),

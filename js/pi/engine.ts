@@ -77,11 +77,6 @@ export function instance(module: WebAssembly.Module): Instance {
   return { module, exports: instantiate(module) };
 }
 
-/** The module's build hash, from an instance (`buildHash` as a number). */
-export function instanceBuild(i: Instance): number {
-  return i.exports.djs_build_hash();
-}
-
 /** The base snapshot of the instance's module, as a snapshot reference (D2260). */
 export function instanceBase(i: Instance): Reference {
   return baseReference(i.module, i.exports);

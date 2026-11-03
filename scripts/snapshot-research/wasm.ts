@@ -202,7 +202,7 @@ async function runCase(code: string): Promise<{ points: Point[]; end: WorkerToHo
     const img = lastImage!;
     // The same image in an uncompressed container, for the restore baseline.
     const header = readSnapshotHeader(bytes);
-    const plain = encodeSnapshot({ app: APP_PI_SESSION, build: header.build, meta: header.meta, image: img, base: baseRef, codec: null });
+    const plain = encodeSnapshot({ app: APP_PI_SESSION, meta: header.meta, image: img, base: baseRef, codec: null });
     t = performance.now();
     resumeVm(plain, hooks).dispose();
     const plainResumeMs = performance.now() - t;

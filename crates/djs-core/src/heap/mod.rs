@@ -143,9 +143,9 @@ impl LoadError {
             } => crate::text::cat!(
                 "the image is from a djs with another ",
                 dep.name(),
-                " (image ",
+                " (image: ",
                 dep.show(*found),
-                ", this build ",
+                "; this build: ",
                 dep.show(*expected),
                 ")"
             ),

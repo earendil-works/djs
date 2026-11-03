@@ -5,17 +5,19 @@
 //!
 //! A container holds a session image (D2066), as a zstd frame compressed with a *reference
 //! image* as a raw-content dictionary: this build's base snapshot, or pi's prelude image,
-//! which the reader has to be given.
+//! which the reader has to be given. Its header names what the image depends on (D2265):
+//! the image's dependency descriptor and the hash of its base's builtin prefix. A
+//! container reads into any djs with the same ones.
 
 use djs_core::heap::CellKind;
 use djs_core::heap::cells::{MAGIC, Roots};
-use djs_core::vm::session;
+use djs_core::vm::{IMAGE_DEPS, ImageDep, ImageDeps, session};
 
 /// "DJSN", little-endian.
 pub const CONTAINER_MAGIC: u32 = 0x4e53_4a44;
 /// The container's version (js/src/snapshot.ts `SNAPSHOT_FORMAT`).
-pub const FORMAT: u16 = 2;
-const HEADER: usize = 40;
+pub const FORMAT: u16 = 3;
+const HEADER: usize = 68;
 
 /// The app byte: what the metadata is.
 pub const APP_SANDBOX: u8 = 1;
@@ -29,7 +31,7 @@ pub const REFERENCE_BASE: u8 = 1;
 /// pi's prelude image: the session's VM right after pi's prelude, sealed.
 pub const REFERENCE_PI_PRELUDE: u8 = 2;
 
-/// What the session image's prefix words are against (byte 13): the build's base image,
+/// What the session image's prefix words are against (byte 41): the build's base image,
 /// or the container's reference.
 pub const AGAINST_BASE: u8 = 0;
 pub const AGAINST_REFERENCE: u8 = 1;
@@ -45,8 +47,10 @@ pub const DEFAULT_LEVEL: i32 = 3;
 pub struct Header {
     pub app: u8,
     pub compression: u8,
-    /// The engine build hash (`djs_build_hash`, `vm::BUILD_HASH`).
-    pub build: u32,
+    /// The image's dependency descriptor (`vm::ImageDeps`, D2265).
+    pub deps: ImageDeps,
+    /// FNV-1a 64 of its base's builtin prefix (`session::prefix_hash`).
+    pub prefix: u64,
     pub reference_kind: u8,
     /// FNV-1a 64 of the reference image.
     pub reference_hash: u64,
@@ -169,6 +173,7 @@ pub fn read(bytes: &[u8], reference: Option<&[u8]>) -> Result<Snapshot, String> 
         return Err("not a heap image or snapshot (no image roots, no DJSs/DJSN magic)".into());
     }
     let (h, meta, payload) = read_header(bytes)?;
+    check(&h)?;
     let (image, reference) = match h.compression {
         COMPRESSION_NONE => {
             if payload.len() != h.image_len as usize {
@@ -239,21 +244,63 @@ pub fn read_header(bytes: &[u8]) -> Result<(Header, String, &[u8]), String> {
     let h = Header {
         app: bytes[6],
         compression: bytes[7],
-        build: word(8),
-        reference_kind: bytes[12],
-        reference_hash: (word(20) as u64) << 32 | word(16) as u64,
-        reference_len: word(24),
-        image_len: word(28),
-        payload_len: word(36),
-        against: bytes[13],
+        deps: ImageDeps {
+            layout: word(8),
+            features: word(12),
+            compat: word(16),
+            ops: word(20),
+            intrinsics: word(24),
+            records: word(28),
+        },
+        prefix: (word(36) as u64) << 32 | word(32) as u64,
+        reference_kind: bytes[40],
+        reference_hash: (word(48) as u64) << 32 | word(44) as u64,
+        reference_len: word(52),
+        image_len: word(56),
+        payload_len: word(64),
+        against: bytes[41],
     };
-    let meta_len = word(32) as usize;
+    let meta_len = word(60) as usize;
     if bytes.len() != HEADER + meta_len + h.payload_len as usize {
         return Err("truncated snapshot".into());
     }
     let meta = std::str::from_utf8(&bytes[HEADER..HEADER + meta_len])
         .map_err(|_| "corrupt snapshot: its metadata is not UTF-8")?;
     Ok((h, meta.to_string(), &bytes[HEADER + meta_len..]))
+}
+
+/// This build's base prefix hash.
+fn our_prefix() -> u64 {
+    session::prefix_hash(djs_prelude::BASE).expect("the base image has a builtin prefix")
+}
+
+/// Checks a container's dependency descriptor against this build's (D2265), before
+/// anything is decompressed: the first component that differs is the error.
+pub fn check(h: &Header) -> Result<(), String> {
+    if let Some((dep, found, expected)) = h.deps.first_difference(&IMAGE_DEPS) {
+        return Err(incompatible(
+            dep.name(),
+            &dep.show(found),
+            &dep.show(expected),
+        ));
+    }
+    let ours = our_prefix();
+    if h.prefix != ours {
+        return Err(incompatible(
+            "base image",
+            &format!("{:016x}", h.prefix),
+            &format!("{ours:016x}"),
+        ));
+    }
+    Ok(())
+}
+
+/// js/src/snapshot.ts `checkSnapshot`'s message.
+fn incompatible(what: &str, found: &str, expected: &str) -> String {
+    format!(
+        "the snapshot is from a djs with another {what} (snapshot: {found}; this djs: {expected}): \
+         it restores only into a djs with the same {what}"
+    )
 }
 
 /// The reference image of a compressed container: the one given (checked against the
@@ -302,10 +349,9 @@ pub fn image_of(bytes: &[u8]) -> Result<Vec<u8>, String> {
 
 /// A container as js/src/snapshot.ts writes it: the session image of `image` (a VM made
 /// from this build's base), compressed with zstd at `level` against `reference` (kind,
-/// bytes), or stored as it is without one.
+/// bytes), or stored as it is without one. The header gets the image's descriptor.
 pub fn write(
     app: u8,
-    build: u32,
     meta: &str,
     image: &[u8],
     reference: Option<(u8, &[u8])>,
@@ -313,6 +359,7 @@ pub fn write(
 ) -> Result<Vec<u8>, String> {
     // The image's own part only (D2066): its prefix words against the reference if that
     // has the same prefix (it holds them in place), else against this build's base.
+    let deps = ImageDeps::of(image).ok_or("not a heap image")?;
     let (against, image) = match reference.and_then(|r| session::session_image(image, r.1).ok()) {
         Some(s) => (AGAINST_REFERENCE, s),
         None => (
@@ -339,7 +386,12 @@ pub fn write(
     } else {
         COMPRESSION_NONE
     });
-    out.extend_from_slice(&build.to_le_bytes());
+    for dep in ImageDep::ALL {
+        out.extend_from_slice(&deps.get(dep).to_le_bytes());
+    }
+    let prefix = our_prefix();
+    out.extend_from_slice(&(prefix as u32).to_le_bytes());
+    out.extend_from_slice(&((prefix >> 32) as u32).to_le_bytes());
     out.push(reference.map_or(REFERENCE_NONE, |r| r.0));
     out.push(against);
     out.extend_from_slice(&[0, 0]);
@@ -396,7 +448,6 @@ mod tests {
         let meta = r#"{"functions":[]}"#;
         let z = write(
             APP_SANDBOX,
-            djs_core::vm::BUILD_HASH,
             meta,
             &img,
             Some((REFERENCE_BASE, base)),
@@ -413,7 +464,7 @@ mod tests {
         assert_eq!(&z[0..4], b"DJSN");
         assert_eq!(u16::from_le_bytes([z[4], z[5]]), FORMAT);
         assert_eq!(
-            (z[6], z[7], z[12], z[13]),
+            (z[6], z[7], z[40], z[41]),
             (
                 APP_SANDBOX,
                 COMPRESSION_ZSTD,
@@ -423,17 +474,21 @@ mod tests {
         );
         // The stored image is the session image (D2066), made against this build's base.
         let session = session::session_image(&img, base).unwrap();
-        assert_eq!(u32_at(&z, 28), Some(session.len() as u32));
+        assert_eq!(u32_at(&z, 56), Some(session.len() as u32));
         let s = read(&z, None).unwrap();
         assert_eq!(s.format, Format::Container);
         assert_eq!(s.image, img);
         assert_eq!(s.meta.as_deref(), Some(meta));
-        assert_eq!(s.header.unwrap().reference_hash, fnv1a64(base));
+        let h = s.header.unwrap();
+        assert_eq!(h.reference_hash, fnv1a64(base));
+        // The image's dependency descriptor and its base's prefix (D2265).
+        assert_eq!(h.deps, IMAGE_DEPS);
+        assert_eq!(Some(h.prefix), session::prefix_hash(base));
         // Uncompressed: the session image against the base.
-        let plain = write(APP_PI_SESSION, 7, "{}", &img, None, DEFAULT_LEVEL).unwrap();
-        assert_eq!(plain[13], AGAINST_BASE);
+        let plain = write(APP_PI_SESSION, "{}", &img, None, DEFAULT_LEVEL).unwrap();
+        assert_eq!(plain[41], AGAINST_BASE);
         let s = read(&plain, None).unwrap();
-        assert_eq!((s.image == img, s.header.unwrap().build), (true, 7));
+        assert_eq!(s.image, img);
         // A session image or a raw image on its own reads too.
         assert_eq!(read(&session, None).unwrap().format, Format::SessionImage);
         assert_eq!(read(&session, None).unwrap().image, img);
@@ -444,12 +499,32 @@ mod tests {
         assert!(
             read(&other, None)
                 .unwrap_err()
-                .contains("snapshot container format 1; this djs reads format 2")
+                .contains("snapshot container format 1; this djs reads format 3")
         );
+        // Each component of the descriptor is refused by name, and so is another base.
+        for (at, what) in [
+            (8, "cell layout"),
+            (12, "feature set"),
+            (16, "compatibility version"),
+            (20, "opcode table"),
+            (24, "intrinsic table"),
+            (28, "internal id tables"),
+            (32, "base image"),
+        ] {
+            let mut other = plain.clone();
+            other[at] ^= 1;
+            let e = read(&other, None).unwrap_err();
+            assert!(
+                e.starts_with(&format!(
+                    "the snapshot is from a djs with another {what} (snapshot: "
+                )),
+                "{e}"
+            );
+        }
         // An image without the base's prefix makes no container.
         let mut bare = djs_core::vm::Vm::new(djs_core::vm::VmOptions::default()).unwrap();
         bare.collect().unwrap();
-        assert!(write(APP_REPL, 7, "{}", bare.bytes(), None, DEFAULT_LEVEL).is_err());
+        assert!(write(APP_REPL, "{}", bare.bytes(), None, DEFAULT_LEVEL).is_err());
     }
 
     #[test]
@@ -457,7 +532,6 @@ mod tests {
         let img = image();
         let z = write(
             APP_SANDBOX,
-            1,
             "{}",
             &img,
             Some((REFERENCE_PI_PRELUDE, djs_prelude::BASE)),
@@ -503,7 +577,6 @@ mod cross {
         vm.collect().unwrap();
         let c = super::write(
             super::APP_SANDBOX,
-            djs_core::vm::BUILD_HASH,
             r#"{"functions":[]}"#,
             vm.bytes(),
             Some((super::REFERENCE_BASE, djs_prelude::BASE)),

@@ -1,8 +1,7 @@
 // The snapshot container (D2260): the Sandbox's bytes()/fromBytes() and the pi adapter's
 // snapshot()/resumeVm() round trip through it; images are collected and zstd-compressed
 // against a reference image (the base snapshot, or pi's prelude image); snapshots of
-// another build or reference are refused with a clear error; the formats before the
-// container still load.
+// another dependency descriptor or reference are refused with a clear error naming it.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -16,7 +15,11 @@ import {
   AGAINST_BASE,
   AGAINST_REFERENCE,
   baseReference,
+  checkSnapshot,
+  depsDifference,
   expandSession,
+  FEATURE_NAMES,
+  moduleDeps,
   readSnapshotHeader,
   REFERENCE_BASE,
   REFERENCE_PI_PRELUDE,
@@ -63,18 +66,38 @@ test("sandbox: bytes() is a compressed container that restores", async () => {
   sb.dispose();
 });
 
-test("sandbox: another build, another reference and damage are refused", async () => {
+test("sandbox: another dependency, another reference and damage are refused", async () => {
   const sb = await Sandbox.create({ functions: { add } });
   const bytes = sb.bytes();
   sb.dispose();
-  const otherBuild = bytes.slice();
-  otherBuild[8] ^= 1; // the engine build hash
-  await assert.rejects(
-    Sandbox.fromBytes(otherBuild, { functions: { add } }),
-    /snapshot from djs build [0-9a-f]{8}; this module is build [0-9a-f]{8}: an image restores only into the engine build that wrote it/,
-  );
+  // The header's dependency descriptor (D2265): each component is refused by name, before
+  // anything is decompressed.
+  const names: [number, RegExp][] = [
+    [8, /another cell layout \(snapshot: [0-9a-f]{8}; this module: [0-9a-f]{8}\)/],
+    // Bit 0 is `full`: a slim snapshot in a full module, or the other way.
+    [12, /another feature set \(snapshot: [a-z, -]+; this module: [a-z, -]+\)/],
+    [16, /another compatibility version \(snapshot: \d+; this module: \d+\): it restores only into a djs with the same compatibility version/],
+    [20, /another opcode table \(snapshot: [0-9a-f]{8}; this module: [0-9a-f]{8}\)/],
+    [24, /another intrinsic table/],
+    [28, /another internal id tables/],
+    [32, /another base image \(snapshot: [0-9a-f]{16}; this module: [0-9a-f]{16}\)/],
+  ];
+  for (const [at, message] of names) {
+    const other = bytes.slice();
+    other[at] ^= 1;
+    await assert.rejects(Sandbox.fromBytes(other, { functions: { add } }), message);
+  }
+  // The descriptor is the image's own, and the module's base has the same one.
+  const h = header(bytes);
+  const b = baseReference(wasm, new WebAssembly.Instance(wasm, {}).exports as never);
+  assert.deepEqual(h.deps, moduleDeps(b));
+  assert.equal(depsDifference(h.deps, moduleDeps(b)), undefined);
+  assert.equal(depsDifference({ ...h.deps, ops: h.deps.ops ^ 1 }, moduleDeps(b)), "ops");
+  // The engine build hash is not in it: a module of another build with this descriptor
+  // restores the snapshot (journals still name the build, D2265).
+  checkSnapshot(h, APP_SANDBOX, b);
   const otherReference = bytes.slice();
-  otherReference[16] ^= 1; // the reference hash
+  otherReference[44] ^= 1; // the reference hash
   await assert.rejects(
     Sandbox.fromBytes(otherReference, { functions: { add } }),
     /compressed against the base image [0-9a-f]{16}; this host's is [0-9a-f]{16}/,
@@ -83,6 +106,12 @@ test("sandbox: another build, another reference and damage are refused", async (
   damaged[damaged.length - 20] ^= 0xff; // in the compressed image (zstd's checksum)
   await assert.rejects(Sandbox.fromBytes(damaged, { functions: { add } }), /corrupt snapshot/);
   await assert.rejects(Sandbox.fromBytes(bytes.subarray(0, 100), { functions: { add } }), /truncated snapshot/);
+});
+
+test("the feature names are djs-core's (compat_inputs.rs IMAGE_FEATURES)", () => {
+  const src = readFileSync(new URL("../../crates/djs-core/compat_inputs.rs", import.meta.url), "utf8");
+  const list = /pub const IMAGE_FEATURES: &\[&str\] = &\[([^\]]*)\]/.exec(src)![1];
+  assert.deepEqual(FEATURE_NAMES, [...list.matchAll(/"([^"]+)"/g)].map((m) => m[1]));
 });
 
 test("sandbox: bytes() stores the session image, not the builtin prefix (D2066)", async () => {
@@ -103,7 +132,7 @@ test("sandbox: bytes() stores the session image, not the builtin prefix (D2066)"
   // Another container version, or no container, is refused (D024).
   const other = sb.bytes();
   new DataView(other.buffer).setUint16(4, 1, true);
-  await assert.rejects(Sandbox.fromBytes(other, { functions: { add } }), /snapshot container format 1; this host reads format 2/);
+  await assert.rejects(Sandbox.fromBytes(other, { functions: { add } }), /snapshot container format 1; this host reads format 3/);
   await assert.rejects(Sandbox.fromBytes(raw, { functions: { add } }), /not a djs snapshot/);
   sb.dispose();
 });
@@ -244,11 +273,11 @@ test("pi: uncompressed snapshots resume; another build is refused", async () => 
       at: 1,
       resume: (bytes, hooks) => {
         const other = bytes.slice();
-        other[8] ^= 1;
+        other[20] ^= 1;
         return resumeVm(other, hooks);
       },
     }),
-    /snapshot from djs build [0-9a-f]{8}; this module is build [0-9a-f]{8}/,
+    /the snapshot is from a djs with another opcode table \(snapshot: [0-9a-f]{8}; this module: [0-9a-f]{8}\)/,
   );
   await assert.rejects(
     Sandbox.fromBytes(resumed.snapshots[0], {}),

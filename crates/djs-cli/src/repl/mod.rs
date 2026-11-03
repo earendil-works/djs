@@ -807,7 +807,6 @@ impl Repl {
         } else {
             match crate::container::write(
                 crate::container::APP_REPL,
-                djs_core::vm::BUILD_HASH,
                 "{}",
                 &image,
                 Some((crate::container::REFERENCE_BASE, djs_prelude::BASE)),

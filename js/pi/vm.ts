@@ -47,7 +47,6 @@ import {
   Engine,
   instance,
   instanceBase,
-  instanceBuild,
   STATUS_DONE,
   STATUS_HOST_CALL,
   STATUS_HOST_OUT_OF_MEMORY,
@@ -301,7 +300,6 @@ class Session implements VmSession {
     this.engine.collect();
     return encodeSnapshot({
       app: APP_PI_SESSION,
-      build: this.engine.build,
       meta: { ...this.state, early: [...this.early] },
       image: this.engine.image(),
       // The prelude image is most of the session's heap; without one, the base image.
@@ -678,16 +676,18 @@ export function preludeImage(module: WebAssembly.Module, prelude: string, data: 
 }
 
 /**
- * Continues a session from `VmSession.snapshot()` in a new instance of the djs build that
- * wrote it. A snapshot compressed against pi's prelude image needs that image: one this
- * process has (a session with the same inputs started here), or `options.prelude` and
- * `options.data` to recompute it. Throws a `SnapshotError` saying why it cannot restore.
+ * Continues a session from `VmSession.snapshot()` in a new instance of a djs module with the
+ * snapshot's dependency descriptor (D2265): the build that wrote it, or one whose layout,
+ * features, tables and builtins are the same. A snapshot compressed against pi's prelude
+ * image needs that image: one this process has (a session with the same inputs started
+ * here), or `options.prelude` and `options.data` to recompute it. Throws a `SnapshotError`
+ * saying why it cannot restore.
  */
 export function resumeVm(snapshot: Uint8Array, options: ResumeOptions): VmSession {
   const header = readSnapshotHeader(snapshot);
   const module = options.wasm as WebAssembly.Module;
   const into = instance(module);
-  checkSnapshot(header, APP_PI_SESSION, instanceBuild(into));
+  checkSnapshot(header, APP_PI_SESSION, instanceBase(into));
   let reference: Reference | undefined;
   let prelude: PreludeImage | undefined;
   if (header.referenceKind === REFERENCE_BASE) reference = instanceBase(into);

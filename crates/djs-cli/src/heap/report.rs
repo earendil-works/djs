@@ -229,6 +229,19 @@ impl Tally {
 
 // ---- Sections ---------------------------------------------------------------------------
 
+/// A descriptor component's JSON key (js/src/snapshot.ts `IMAGE_DEPS`).
+fn dep_key(d: djs_core::vm::ImageDep) -> &'static str {
+    use djs_core::vm::ImageDep::*;
+    match d {
+        Layout => "layout",
+        Features => "features",
+        Compat => "compat",
+        Ops => "ops",
+        Intrinsics => "intrinsics",
+        Records => "records",
+    }
+}
+
 pub fn overview(
     input: &Input,
     g: &Graph,
@@ -238,8 +251,9 @@ pub fn overview(
     let path = input.name;
     let a = g.heap.arena();
     let len = a.len() as u64;
-    let build: u32 = a.get(0, Roots::BUILD);
-    let ours = djs_core::vm::BUILD_HASH;
+    // The image's dependency descriptor (D2265), against this djs's.
+    let deps = djs_core::vm::ImageDeps::of(a.bytes());
+    let differs = deps.and_then(|d| d.first_difference(&djs_core::vm::IMAGE_DEPS));
     let old_end: u32 = a.get(0, Roots::OLD_END);
     let live: u64 = g
         .cells
@@ -263,8 +277,8 @@ pub fn overview(
     ));
     if let Some(c) = &input.header {
         t.push_str(&format!(
-            "  container: build {:08x}, reference {} {:016x} ({} KB)\n",
-            c.build,
+            "  container: base prefix {:016x}, reference {} {:016x} ({} KB)\n",
+            c.prefix,
             reference_name(c.reference_kind),
             c.reference_hash,
             kb(c.reference_len as usize)
@@ -278,13 +292,17 @@ pub fn overview(
         ));
     }
     t.push_str(&format!(
-        "  image: {} KB in {} cells, djs build {build:08x}{}\n",
+        "  image: {} KB in {} cells, {}\n",
         kbu(len),
         g.cells.len(),
-        if build == ours {
-            " (this djs)".to_string()
-        } else {
-            format!(" (this djs is {ours:08x}: names of builtins may be off)")
+        match differs {
+            None => "dependencies as this djs's".to_string(),
+            Some((d, found, ours)) => format!(
+                "another {} than this djs ({}; this djs: {}): names of builtins may be off",
+                d.name(),
+                d.show(found),
+                d.show(ours)
+            ),
         }
     ));
     t.push_str(&format!(
@@ -323,7 +341,7 @@ pub fn overview(
                         "compression",
                         if c.compression == 1 { "zstd" } else { "none" }.into(),
                     ),
-                    ("build", format!("{:08x}", c.build).into()),
+                    ("prefix", format!("{:016x}", c.prefix).into()),
                     ("reference", reference_name(c.reference_kind).into()),
                     (
                         "reference_hash",
@@ -338,8 +356,19 @@ pub fn overview(
         ("meta", input.meta.clone().into()),
         ("image_bytes", len.into()),
         ("cells", g.cells.len().into()),
-        ("build", format!("{build:08x}").into()),
-        ("this_build", (build == ours).into()),
+        (
+            "deps",
+            match deps {
+                Some(d) => J::obj(
+                    djs_core::vm::ImageDep::ALL
+                        .iter()
+                        .map(|&k| (dep_key(k), format!("{:08x}", d.get(k)).into()))
+                        .collect(),
+                ),
+                None => J::Null,
+            },
+        ),
+        ("runs_here", differs.is_none().into()),
         ("live_bytes", live.into()),
         ("garbage_bytes", (len - live).into()),
         ("collected_bytes", collected.into()),

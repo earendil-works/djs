@@ -93,9 +93,9 @@ fn loading_names_the_component_that_differs() {
             .err()
             .unwrap()
             .text(),
-        String::from("the image is from a djs with another compatibility version (image ")
+        String::from("the image is from a djs with another compatibility version (image: ")
             + &(COMPAT_VERSION + 1).to_string()
-            + ", this build "
+            + "; this build: "
             + &COMPAT_VERSION.to_string()
             + ")"
     );
@@ -339,7 +339,7 @@ fn features_are_classified_and_named() {
         .err()
         .unwrap()
         .text();
-    assert!(msg.contains("another feature set (image "), "{msg}");
+    assert!(msg.contains("another feature set (image: "), "{msg}");
     assert!(msg.contains("full"), "{msg}");
 }
 

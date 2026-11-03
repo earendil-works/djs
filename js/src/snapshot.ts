@@ -1,18 +1,60 @@
 // The snapshot container (D2260): a VM image, collected and compressed with zstd against a
 // reference image both sides can produce (the base snapshot in the module, or pi's image
-// taken after its prelude), behind a header that names the engine build and the
+// taken after its prelude), behind a header that names what the image depends on and the
 // reference. The Sandbox (`bytes()`/`fromBytes()`) and the pi adapter
 // (`snapshot()`/`resumeVm()`) write and read it. docs/host.md "Snapshots" has the layout.
 //
-// Images load only into the build that wrote them, so the header is checked before
-// anything else: a snapshot of another build is refused with the build hashes in the
-// message, and so is one whose reference this host cannot produce.
+// An image restores into any djs module with the same dependency descriptor (D026,
+// D2265): the cell layout, feature set, compatibility version, opcode, intrinsic and
+// internal id tables, and the builtin prefix of its base image. The header carries the
+// descriptor and is checked before anything else: a snapshot that needs another one is
+// refused with the component that differs, and so is one whose reference this host cannot
+// produce.
+
+import { LAYOUT } from "./layout.generated.ts";
 
 /** "DJSN", little-endian. */
 export const SNAPSHOT_MAGIC = 0x4e534a44;
 /** The container's version: a container of any other version is refused (D024). */
-export const SNAPSHOT_FORMAT = 2;
-const HEADER = 40;
+export const SNAPSHOT_FORMAT = 3;
+const HEADER = 68;
+
+/** The components of an image's dependency descriptor (D2265), in the order they are
+ * checked; a container adds `prefix`. */
+export const IMAGE_DEPS = ["layout", "features", "compat", "ops", "intrinsics", "records"] as const;
+export type ImageDep = (typeof IMAGE_DEPS)[number] | "prefix";
+
+/** An image's dependency descriptor and the hash of its base's builtin prefix. */
+export type ImageDeps = Record<(typeof IMAGE_DEPS)[number], number> & {
+  /** FNV-1a 64 of the base image's prefix (`base[..BASE_END]`), 16 hex digits. */
+  prefix: string;
+};
+
+const DEP_NAMES: Record<ImageDep, string> = {
+  layout: "cell layout",
+  features: "feature set",
+  compat: "compatibility version",
+  ops: "opcode table",
+  intrinsics: "intrinsic table",
+  records: "internal id tables",
+  // The builtins as the base image holds them (its prefix, `base[..BASE_END]`).
+  prefix: "base image",
+};
+
+/** The `features` bits (crates/djs-core/compat_inputs.rs `IMAGE_FEATURES`, D2267). */
+export const FEATURE_NAMES = ["full", "regexp-unicode-props", "unicode-normalization"];
+
+/** A component's value as messages show it. */
+function showDep(dep: ImageDep, v: number | string): string {
+  if (typeof v === "string") return v;
+  if (dep === "compat") return String(v);
+  if (dep === "features") {
+    const on = FEATURE_NAMES.filter((_, bit) => (v >>> bit) & 1);
+    for (let bit = FEATURE_NAMES.length; bit < 32; bit++) if ((v >>> bit) & 1) on.push(`bit ${bit}`);
+    return on.length === 0 ? "none" : on.join(", ");
+  }
+  return (v >>> 0).toString(16).padStart(8, "0");
+}
 
 /** Who wrote a snapshot: what its metadata means. */
 export const APP_SANDBOX = 1;
@@ -71,7 +113,8 @@ export interface SnapshotHeader {
   format: number;
   app: number;
   compression: number;
-  build: number;
+  /** What the image needs of the module that restores it. */
+  deps: ImageDeps;
   referenceKind: number;
   /** 16 hex digits; "0000000000000000" without a reference. */
   referenceHash: string;
@@ -202,10 +245,49 @@ export function rememberBase(module: object, exports: BaseExports): void {
 /** "DJSs", little-endian. */
 const SESSION_MAGIC = 0x73534a44;
 const SESSION_FORMAT = 1;
-/** Roots fields read from an image: the roots cell's size (header), BUILD, BASE_END. */
-const ROOTS_SIZE_AT = 4;
-const ROOTS_BUILD_AT = 48;
-const ROOTS_BASE_END_AT = 80;
+/** Roots fields read from an image: the roots cell's size (its header), the descriptor,
+ * BASE_END. */
+const ROOTS = LAYOUT.cells.Roots;
+const ROOTS_SIZE_AT = LAYOUT.header.SIZE;
+const ROOTS_DEP_AT: Record<(typeof IMAGE_DEPS)[number], number> = {
+  layout: ROOTS.fields.VERSION.offset,
+  features: ROOTS.fields.FEATURES.offset,
+  compat: ROOTS.fields.COMPAT.offset,
+  ops: ROOTS.fields.OPS.offset,
+  intrinsics: ROOTS.fields.INTRINSICS.offset,
+  records: ROOTS.fields.RECORDS.offset,
+};
+const ROOTS_BASE_END_AT = ROOTS.fields.BASE_END.offset;
+
+/** The descriptor in an image's roots cell (`vm::ImageDeps::of`), without the prefix. */
+function rootsDeps(image: Uint8Array): Record<(typeof IMAGE_DEPS)[number], number> | undefined {
+  if (image.length < ROOTS.minSize || image[0] !== ROOTS.kind) return undefined;
+  const v = new DataView(image.buffer, image.byteOffset, image.byteLength);
+  if (v.getUint32(ROOTS.fields.MAGIC.offset, true) !== LAYOUT.magic) return undefined;
+  const out = {} as Record<(typeof IMAGE_DEPS)[number], number>;
+  for (const d of IMAGE_DEPS) out[d] = v.getUint32(ROOTS_DEP_AT[d], true);
+  return out;
+}
+
+/** All components in one hash (`ImageDeps::hash`): a session image's record of its base. */
+function depsHash(d: Record<(typeof IMAGE_DEPS)[number], number>): number {
+  let h = 0x811c9dc5;
+  for (const k of IMAGE_DEPS) {
+    for (let i = 0; i < 4; i++) h = Math.imul(h ^ ((d[k] >>> (8 * i)) & 0xff), 0x01000193) >>> 0;
+  }
+  return h;
+}
+
+/**
+ * The dependency descriptor of a module, from its base image (`baseReference`): what a
+ * snapshot must match to restore into it.
+ */
+export function moduleDeps(base: Reference): ImageDeps {
+  const d = rootsDeps(base.bytes);
+  const p = prefixOf(base.bytes);
+  if (d === undefined || p === undefined || p.end === 0) throw new SnapshotError("the module's base image has no builtin prefix");
+  return { ...d, prefix: prefixHash(base.bytes, p.end) };
+}
 
 /** FNV-1a 64 of a base image's prefix, by base: hashing 300 KB in JS takes a millisecond. */
 const prefixHashes = new WeakMap<Uint8Array, string>();
@@ -224,13 +306,14 @@ function words(b: Uint8Array): Uint32Array {
   return new Uint32Array(a.buffer, a.byteOffset, a.byteLength >>> 2);
 }
 
-function prefixOf(image: Uint8Array): { end: number; build: number; roots: number } | undefined {
-  if (image.length < 88 || image[0] !== 1) return undefined;
+function prefixOf(image: Uint8Array): { end: number; deps: number; roots: number } | undefined {
+  const d = rootsDeps(image);
+  if (d === undefined) return undefined;
   const v = new DataView(image.buffer, image.byteOffset, image.byteLength);
   const roots = v.getUint32(ROOTS_SIZE_AT, true);
   const end = v.getUint32(ROOTS_BASE_END_AT, true);
   if (end > image.length || roots > end) return undefined;
-  return { end, build: v.getUint32(ROOTS_BUILD_AT, true), roots };
+  return { end, deps: depsHash(d), roots };
 }
 
 /**
@@ -241,7 +324,7 @@ function prefixOf(image: Uint8Array): { end: number; build: number; roots: numbe
 export function sessionImage(image: Uint8Array, base: Uint8Array): Uint8Array | undefined {
   const p = prefixOf(image);
   const b = prefixOf(base);
-  if (p === undefined || p.end === 0 || b === undefined || b.end !== p.end || b.build !== p.build || b.roots !== p.roots) {
+  if (p === undefined || p.end === 0 || b === undefined || b.end !== p.end || b.deps !== p.deps || b.roots !== p.roots) {
     return undefined;
   }
   const iw = words(image.subarray(0, p.end));
@@ -257,7 +340,7 @@ export function sessionImage(image: Uint8Array, base: Uint8Array): Uint8Array | 
   const v = new DataView(out.buffer);
   v.setUint32(0, SESSION_MAGIC, true);
   v.setUint32(4, SESSION_FORMAT, true);
-  v.setUint32(8, p.build, true);
+  v.setUint32(8, p.deps, true);
   v.setUint32(12, p.end, true);
   const h = prefixHash(base, p.end);
   v.setUint32(16, parseInt(h.slice(8), 16), true);
@@ -285,13 +368,13 @@ export function expandSession(session: Uint8Array, base: Uint8Array): Uint8Array
   if (session.length < 32 || v.getUint32(0, true) !== SESSION_MAGIC || v.getUint32(4, true) !== SESSION_FORMAT) {
     throw new SnapshotError("corrupt snapshot: not a session image of this format");
   }
-  const build = v.getUint32(8, true);
+  const deps = v.getUint32(8, true);
   const end = v.getUint32(12, true);
   const hash = v.getUint32(20, true).toString(16).padStart(8, "0") + v.getUint32(16, true).toString(16).padStart(8, "0");
   const roots = v.getUint32(24, true);
   const n = v.getUint32(28, true);
   const b = prefixOf(base);
-  if (b === undefined || b.end !== end || b.build !== build || b.roots !== roots || prefixHash(base, end) !== hash) {
+  if (b === undefined || b.end !== end || b.deps !== deps || b.roots !== roots || prefixHash(base, end) !== hash) {
     throw new SnapshotError("the session image was made against another base image");
   }
   const values = 32 + 4 * n + ((4 * n) % 8);
@@ -314,7 +397,6 @@ export function expandSession(session: Uint8Array, base: Uint8Array): Uint8Array
 
 export interface EncodeOptions {
   app: number;
-  build: number;
   meta: unknown;
   /** The collected image. */
   image: Uint8Array;
@@ -342,6 +424,9 @@ export function encodeSnapshot(o: EncodeOptions): Uint8Array {
     image = sessionImage(o.image, o.base.bytes);
   }
   if (image === undefined) throw new SnapshotError("the image is not one of a VM made from this module's base image");
+  // The image's descriptor (as its roots cell has it) and its base's prefix.
+  const deps = rootsDeps(o.image)!;
+  const prefix = moduleDeps(o.base).prefix;
   const payload = ref === undefined ? image : codec!.compress(image, ref.bytes, o.level ?? DEFAULT_ZSTD_LEVEL);
   const meta = new TextEncoder().encode(JSON.stringify(o.meta));
   const out = new Uint8Array(HEADER + meta.length + payload.length);
@@ -350,16 +435,18 @@ export function encodeSnapshot(o: EncodeOptions): Uint8Array {
   view.setUint16(4, SNAPSHOT_FORMAT, true);
   view.setUint8(6, o.app);
   view.setUint8(7, ref === undefined ? COMPRESSION_NONE : COMPRESSION_ZSTD);
-  view.setUint32(8, o.build >>> 0, true);
-  view.setUint8(12, ref?.kind ?? REFERENCE_NONE);
-  view.setUint8(13, against);
+  IMAGE_DEPS.forEach((d, i) => view.setUint32(8 + 4 * i, deps[d], true));
+  view.setUint32(32, parseInt(prefix.slice(8), 16), true);
+  view.setUint32(36, parseInt(prefix.slice(0, 8), 16), true);
+  view.setUint8(40, ref?.kind ?? REFERENCE_NONE);
+  view.setUint8(41, against);
   const hash = ref?.hash ?? "0".repeat(16);
-  view.setUint32(16, parseInt(hash.slice(8), 16), true);
-  view.setUint32(20, parseInt(hash.slice(0, 8), 16), true);
-  view.setUint32(24, ref?.bytes.length ?? 0, true);
-  view.setUint32(28, image.length, true);
-  view.setUint32(32, meta.length, true);
-  view.setUint32(36, payload.length, true);
+  view.setUint32(44, parseInt(hash.slice(8), 16), true);
+  view.setUint32(48, parseInt(hash.slice(0, 8), 16), true);
+  view.setUint32(52, ref?.bytes.length ?? 0, true);
+  view.setUint32(56, image.length, true);
+  view.setUint32(60, meta.length, true);
+  view.setUint32(64, payload.length, true);
   out.set(meta, HEADER);
   out.set(payload, HEADER + meta.length);
   return out;
@@ -374,8 +461,8 @@ export function readSnapshotHeader(bytes: Uint8Array): SnapshotHeader {
     throw new SnapshotError(`snapshot container format ${format}; this host reads format ${SNAPSHOT_FORMAT}`);
   }
   if (bytes.length < HEADER) throw new SnapshotError("truncated snapshot");
-  const metaLength = view.getUint32(32, true);
-  const payloadLength = view.getUint32(36, true);
+  const metaLength = view.getUint32(60, true);
+  const payloadLength = view.getUint32(64, true);
   if (bytes.length !== HEADER + metaLength + payloadLength) throw new SnapshotError("truncated snapshot");
   const hex = (n: number) => n.toString(16).padStart(8, "0");
   let meta: unknown;
@@ -384,16 +471,18 @@ export function readSnapshotHeader(bytes: Uint8Array): SnapshotHeader {
   } catch {
     throw new SnapshotError("corrupt snapshot: its metadata is not JSON");
   }
+  const deps = { prefix: hex(view.getUint32(36, true)) + hex(view.getUint32(32, true)) } as ImageDeps;
+  IMAGE_DEPS.forEach((d, i) => (deps[d] = view.getUint32(8 + 4 * i, true)));
   return {
     format,
     app: view.getUint8(6),
     compression: view.getUint8(7),
-    build: view.getUint32(8, true),
-    referenceKind: view.getUint8(12),
-    referenceHash: hex(view.getUint32(20, true)) + hex(view.getUint32(16, true)),
-    referenceLength: view.getUint32(24, true),
-    imageLength: view.getUint32(28, true),
-    against: view.getUint8(13),
+    deps,
+    referenceKind: view.getUint8(40),
+    referenceHash: hex(view.getUint32(48, true)) + hex(view.getUint32(44, true)),
+    referenceLength: view.getUint32(52, true),
+    imageLength: view.getUint32(56, true),
+    against: view.getUint8(41),
     meta,
     payload: bytes.subarray(HEADER + metaLength),
   };
@@ -405,20 +494,27 @@ const REFERENCE_NAMES: Record<number, string> = {
   [REFERENCE_PI_PRELUDE]: "pi's prelude image",
 };
 
-export const buildHex = (build: number): string => (build >>> 0).toString(16).padStart(8, "0");
+/** The first component where a snapshot's descriptor differs from a module's. */
+export function depsDifference(snapshot: ImageDeps, module: ImageDeps): ImageDep | undefined {
+  for (const d of IMAGE_DEPS) if (snapshot[d] >>> 0 !== module[d] >>> 0) return d;
+  return snapshot.prefix === module.prefix ? undefined : "prefix";
+}
 
 /**
  * Checks a container against this host before anything is decompressed or restored: the
- * app, then the engine build (`build`, from `djs_build_hash()`).
+ * app, then the dependency descriptor against the module's (`base`, its base image).
  */
-export function checkSnapshot(header: SnapshotHeader, app: number, build: number): void {
+export function checkSnapshot(header: SnapshotHeader, app: number, base: Reference): void {
   if (header.app !== app) {
     throw new SnapshotError(`this is ${APP_NAMES[header.app] ?? `a snapshot of app ${header.app}`}, not ${APP_NAMES[app]}`);
   }
-  if (header.build >>> 0 !== build >>> 0) {
+  const ours = moduleDeps(base);
+  const d = depsDifference(header.deps, ours);
+  if (d !== undefined) {
     throw new SnapshotError(
-      `snapshot from djs build ${buildHex(header.build)}; this module is build ${buildHex(build)}: ` +
-        "an image restores only into the engine build that wrote it",
+      `the snapshot is from a djs with another ${DEP_NAMES[d]} ` +
+        `(snapshot: ${showDep(d, header.deps[d])}; this module: ${showDep(d, ours[d])}): ` +
+        `it restores only into a djs with the same ${DEP_NAMES[d]}`,
     );
   }
 }

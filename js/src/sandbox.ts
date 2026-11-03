@@ -297,9 +297,10 @@ function unpackSnapshot(
 ): { meta: { functions: string[]; clock?: number }; image: Uint8Array } {
   try {
     const header = readSnapshotHeader(snapshot);
-    checkSnapshot(header, APP_SANDBOX, x.djs_build_hash());
-    // The base completes the session image (D2066), and it is the only reference.
+    // The base completes the session image (D2066), and it is the only reference; its
+    // roots hold the module's dependency descriptor (D2265).
     const base = baseReference(module, x);
+    checkSnapshot(header, APP_SANDBOX, base);
     const reference = header.referenceKind === REFERENCE_BASE ? base : undefined;
     return { meta: header.meta as { functions: string[]; clock?: number }, image: snapshotImage(header, reference, codec, base) };
   } catch (e) {
@@ -559,8 +560,9 @@ export class Sandbox {
 
   /**
    * The sandbox as bytes, for `Sandbox.fromBytes` (D2260): the VM image, collected first,
-   * zstd-compressed against the module's base image, in a container that names the engine
-   * build, plus the host function table. Restores only into the same djs build.
+   * zstd-compressed against the module's base image, in a container that names what it
+   * depends on (D2265), plus the host function table. Restores into a djs module with the
+   * same dependency descriptor: the same cell layout, features, tables and builtins.
    */
   bytes(opts: BytesOptions = {}): Uint8Array {
     this.alive();
@@ -570,7 +572,6 @@ export class Sandbox {
     this.guard(() => this.x.vm_collect(this.vm));
     return encodeSnapshot({
       app: APP_SANDBOX,
-      build: this.x.djs_build_hash(),
       meta: { functions: this.fnNames, clock: this.clock },
       image: this.arena(),
       reference: baseReference(this.module, this.x),

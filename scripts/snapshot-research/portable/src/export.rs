@@ -504,12 +504,8 @@ pub fn export(s: &mut Session) -> Result<J, Vec<String>> {
         return Err(vec!["not waiting on the host".into()]);
     }
     s.vm.collect().expect("collect");
-    let build = format!(
-        "{:08x}",
-        s.vm.heap()
-            .arena()
-            .get::<u32>(0, djs_core::heap::cells::Roots::BUILD)
-    );
+    // The engine that exported it (images no longer record it, D2265).
+    let build = format!("{:08x}", djs_core::vm::BUILD_HASH);
     let heap = s.vm.heap();
     let mut ex = Exporter::new(&s.vm);
     let promises = pending_promises(heap);

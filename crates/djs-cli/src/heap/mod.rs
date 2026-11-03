@@ -11,7 +11,7 @@ mod report;
 mod tests;
 
 use djs_core::heap::Heap;
-use djs_core::heap::cells::{Roots, ValueArray};
+use djs_core::heap::cells::ValueArray;
 use djs_core::value::Value;
 
 use crate::container;
@@ -148,14 +148,8 @@ pub fn run(
         meta: snap.meta.clone(),
     };
     // What to compare with: --diff, else the container's reference, else this build's
-    // base for an image of this build.
-    let image_build = container::is_image(&snap.image).then(|| {
-        u32::from_le_bytes(
-            snap.image[Roots::BUILD.offset as usize..][..4]
-                .try_into()
-                .unwrap(),
-        )
-    });
+    // base for an image this build can run (its dependency descriptor, D2265).
+    let runs_here = djs_core::vm::ImageDeps::of(&snap.image) == Some(djs_core::vm::IMAGE_DEPS);
     let against: Option<(String, Vec<u8>)> = match diff {
         Some("none") => None,
         Some("base") => Some(("this build's base image".into(), djs_prelude::BASE.to_vec())),
@@ -165,9 +159,7 @@ pub fn run(
                 container::reference_name(h.reference_kind).to_string(),
                 r.clone(),
             )),
-            _ if image_build == Some(djs_core::vm::BUILD_HASH) => {
-                Some(("the base image".into(), djs_prelude::BASE.to_vec()))
-            }
+            _ if runs_here => Some(("the base image".into(), djs_prelude::BASE.to_vec())),
             _ => None,
         },
     };
