@@ -1,7 +1,7 @@
 # 0167: Persist functions and their closures as readable code (design + prototype)
 
-status: open
-agent: -
+status: in-progress
+agent: portable
 branch: issue/0167-functions-as-code
 depends-on: 0141, 0142, 0145, 0160
 guide: - (later)
