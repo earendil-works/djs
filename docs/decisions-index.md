@@ -555,3 +555,8 @@ topics when the index is next reorganized.
 - D2614: The dumper's size in the dump module
 - D2615: A dump holding TypeScript functions is TypeScript
 - D2616: Where activations stopped is reported, not written as comments
+- D2640: The dump format marker is the directive `"djs-dump 2";`
+- D2641: Dumps carry no comments; `djs resume --explain` explains them
+- D2617: A codemode body is dumped as the async function it runs as
+- D2618: A script binding with a host name is the script's
+- D2604: Dump commands in the CLI: idle points numbered by answers
