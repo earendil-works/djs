@@ -7,22 +7,22 @@ function ag @210..393
   return.await#1 @126 (13:5) pc 60: - (out: loc1 loc2)
 function deleg @394..521
   loc0 <state>, loc1 v@0
-  yield*#1 @38 (19:13) pc 57: unsupported yield*
-  yield*#2 @38 (19:13) pc 62: unsupported yield*
-  yield*#3 @38 (19:13) pc 104: unsupported yield*
-  yield*#4 @38 (19:13) pc 112: unsupported yield*
-  yield*#5 @38 (19:13) pc 158: unsupported yield*
-  yield*#6 @50 (19:25) pc 36: unsupported yield*
-  yield*#7 @50 (19:25) pc 83: unsupported yield*
-  yield*#8 @50 (19:25) pc 137: unsupported yield*
-  yield*#9 @76 (21:3) pc 265: unsupported yield*
-  yield*#10 @76 (21:3) pc 270: unsupported yield*
-  yield*#11 @76 (21:3) pc 312: unsupported yield*
-  yield*#12 @76 (21:3) pc 320: unsupported yield*
-  yield*#13 @76 (21:3) pc 366: unsupported yield*
-  yield*#14 @112 (21:39) pc 244: unsupported yield*
-  yield*#15 @112 (21:39) pc 291: unsupported yield*
-  yield*#16 @112 (21:39) pc 345: unsupported yield*
+  yield*#1 @38 (19:13) pc 57: yield*.iterator yield*.next
+  yield*.await#1 @38 (19:13) pc 62: yield*.iterator yield*.next
+  yield*.await#2 @38 (19:13) pc 104: yield*.iterator yield*.next
+  yield*.await#3 @38 (19:13) pc 112: yield*.iterator yield*.next
+  yield*.await#4 @38 (19:13) pc 158: unsupported closing an async iterator
+  yield*.await#5 @50 (19:25) pc 36: yield*.iterator yield*.next
+  yield*.await#6 @50 (19:25) pc 83: yield*.iterator yield*.next
+  yield*.await#7 @50 (19:25) pc 137: yield*.iterator yield*.next
+  yield*#2 @76 (21:3) pc 265: yield*.iterator yield*.next
+  yield*.await#8 @76 (21:3) pc 270: yield*.iterator yield*.next
+  yield*.await#9 @76 (21:3) pc 312: yield*.iterator yield*.next
+  yield*.await#10 @76 (21:3) pc 320: yield*.iterator yield*.next
+  yield*.await#11 @76 (21:3) pc 366: unsupported closing an async iterator
+  yield*.await#12 @112 (21:39) pc 244: yield*.iterator yield*.next
+  yield*.await#13 @112 (21:39) pc 291: yield*.iterator yield*.next
+  yield*.await#14 @112 (21:39) pc 345: yield*.iterator yield*.next
   return.await#1 @116 (22:3) pc 392: -
 function main @522..1409
   loc0 <state>, loc1 x@43, loc2 x@93, loc3 x@161, loc4 it@0, loc5 it2@0, loc6 thrower@0, loc7 x@651, loc9 o@0, loc10 x@839

@@ -4,7 +4,7 @@ function gen @3662..3700
   yield#2 @26 (158:5) pc 16: -
 function <anonymous> @3710..3755
   loc0 <state>
-  yield*#1 @27 (161:5) pc 43: unsupported yield*
+  yield*#1 @27 (161:5) pc 43: yield*.iterator yield*.next
 function ag @3798..3828
   loc0 <state>
   yield.await#1 @18 (167:5) pc 8: -

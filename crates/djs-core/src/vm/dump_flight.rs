@@ -291,7 +291,9 @@ impl Dumper<'_> {
         let s = suspend::read_activation(h, g);
         self.nodes[n].fl = self.fl.acts.len();
         let site = match s.state {
-            suspend::AWAITING | suspend::SUSPENDED => self.activation_site(&path, &s),
+            suspend::AWAITING | suspend::SUSPENDED | suspend::SUSPENDED_RAW => {
+                self.activation_site(&path, &s)
+            }
             suspend::COMPLETED => {
                 // A finished generator of the same kind and prototype.
                 let proto = h.get_prototype_of(g).map_or(Value::NULL, Value::object);
@@ -379,7 +381,7 @@ impl Dumper<'_> {
             }
             for (k, role) in site.operands.iter().enumerate() {
                 let v = fp(lp + site.locals.len() + k);
-                if matches!(role, Role::LoopNext(Loop::Await))
+                if matches!(role, Role::LoopNext(Loop::Await | Loop::Star))
                     && k > 0
                     && fp(lp + site.locals.len() + k - 1)
                         .as_object()
@@ -476,7 +478,10 @@ impl Dumper<'_> {
         } else {
             site
         };
-        let at_yield = matches!(site.kind, SiteKind::Yield | SiteKind::AsyncYield);
+        let at_yield = matches!(
+            site.kind,
+            SiteKind::Yield | SiteKind::AsyncYield | SiteKind::YieldStar
+        );
         let hp = s.hp as usize;
         let argc = s
             .frame
@@ -491,7 +496,7 @@ impl Dumper<'_> {
                     + crate::interp::frame::HEADER as usize
                     + site.locals.len()
                     + site.operands.len()
-            && at_yield == (s.state == suspend::SUSPENDED);
+            && at_yield == matches!(s.state, suspend::SUSPENDED | suspend::SUSPENDED_RAW);
         if !fits {
             self.refuse(
                 path.into(),
@@ -1426,7 +1431,7 @@ impl Dumper<'_> {
         let mut loops: Vec<String> = Vec::new();
         let mut it = String::new();
         for (k, role) in site.operands.iter().enumerate() {
-            let from_sync = matches!(role, Role::LoopNext(Loop::Await))
+            let from_sync = matches!(role, Role::LoopNext(Loop::Await | Loop::Star))
                 && k > 0
                 && fv(lp + site.locals.len() + k - 1)
                     .as_object()

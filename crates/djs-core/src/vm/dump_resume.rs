@@ -180,7 +180,10 @@ impl Vm {
                 " does not fit the function"
             ));
         }
-        let at_yield = matches!(site.kind, SiteKind::Yield | SiteKind::AsyncYield);
+        let at_yield = matches!(
+            site.kind,
+            SiteKind::Yield | SiteKind::AsyncYield | SiteKind::YieldStar
+        );
         let awaited = promise::as_promise(&self.heap, awaiting);
         match (at_yield, awaited) {
             (true, _) if !awaiting.is_undefined() => {
@@ -283,7 +286,10 @@ impl Vm {
             return Err(cat!("$dump.resume: ", at, " has no binding ", b.key));
         }
         self.resume_operands(site, operands, loops, &mut frame)?;
-        let state = if at_yield {
+        let state = if at_yield && kind == suspend::GENERATOR && site.kind == SiteKind::YieldStar {
+            // A sync generator's `yield_star` passes the inner result through.
+            suspend::SUSPENDED_RAW
+        } else if at_yield {
             suspend::SUSPENDED
         } else {
             suspend::AWAITING

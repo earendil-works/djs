@@ -27,6 +27,8 @@ pub enum Loop {
     In,
     /// `for await (… of …)`.
     Await,
+    /// `yield* v`: the delegated iterator and its `next`, kept for the whole delegation.
+    Star,
 }
 
 impl Loop {
@@ -35,6 +37,7 @@ impl Loop {
             Loop::Of => "for-of",
             Loop::In => "for-in",
             Loop::Await => "for-await",
+            Loop::Star => "yield*",
         }
     }
 }
@@ -160,9 +163,11 @@ impl Role {
             Role::LoopIterator(Loop::Of) => ("for-of.iterator", None),
             Role::LoopIterator(Loop::In) => ("for-in.iterator", None),
             Role::LoopIterator(Loop::Await) => ("for-await.iterator", None),
+            Role::LoopIterator(Loop::Star) => ("yield*.iterator", None),
             Role::LoopNext(Loop::Of) => ("for-of.next", None),
             Role::LoopNext(Loop::In) => ("for-in.next", None),
             Role::LoopNext(Loop::Await) => ("for-await.next", None),
+            Role::LoopNext(Loop::Star) => ("yield*.next", None),
             Role::Unsupported(_) => ("unsupported", None),
         }
     }
@@ -188,8 +193,11 @@ pub enum SiteKind {
     ForAwaitClose,
     /// `await using`: the await of a disposal.
     AwaitUsing,
-    /// `yield*`: its yields and awaits (delegation is not described yet).
+    /// `yield*`: its yields (a sync generator passes the inner result through, an async
+    /// one yields its value) and, in async generators, the awaits of the inner results
+    /// and of a `return(v)` value.
     YieldStar,
+    YieldStarAwait,
 }
 
 impl SiteKind {
@@ -207,6 +215,7 @@ impl SiteKind {
             SiteKind::ForAwaitClose => "for-await.close",
             SiteKind::AwaitUsing => "await-using",
             SiteKind::YieldStar => "yield*",
+            SiteKind::YieldStarAwait => "yield*.await",
         }
     }
 }
@@ -485,7 +494,6 @@ mod maps {
                 _ => None,
             }) {
                 Some(c) => Some(String::from(c)),
-                None if s.kind == SiteKind::YieldStar => Some(String::from("yield*")),
                 None => match depth[k] {
                     Some(d) if d as usize == s.roles.len() + 1 => None,
                     Some(d) => Some(alloc::format!(

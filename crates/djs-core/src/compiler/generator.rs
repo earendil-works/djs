@@ -11,7 +11,7 @@ use super::PResult;
 use super::expr::Expr;
 use super::func::HandlerLabels;
 use super::parser::{OpenIter, Parser, syntax};
-use super::smap::{Role, SiteKind};
+use super::smap::{Loop, Role, SiteKind};
 use crate::bytecode::intrinsics::intrinsic_id;
 use crate::heap::atoms;
 use crate::lexer::TokenKind;
@@ -172,8 +172,8 @@ impl Parser<'_, '_> {
         self.code().call_intrinsic(intrinsic(get_iterator), 1);
         self.code().dup();
         self.code().get_field(atoms::NEXT, 0);
-        // Delegation is not described yet: every suspension in it is unsupported.
-        self.roles_push(&[Role::Unsupported("yield*")]);
+        // `it next` stay below every suspension of the delegation.
+        self.roles_push(&[Role::LoopIterator(Loop::Star), Role::LoopNext(Loop::Star)]);
         self.place(l_base);
         // `it next recv` -> `it next next it recv` -> call.
         self.code().undefined();
@@ -215,7 +215,7 @@ impl Parser<'_, '_> {
         self.code().jump_if_false(l_loop);
         // return(x): `it next x`.
         if is_async {
-            self.site(SiteKind::YieldStar, pos);
+            self.site(SiteKind::YieldStarAwait, pos);
             self.code().await_(0);
         }
         self.emit_inner_method(atoms::RETURN, l_retnone);
@@ -225,7 +225,7 @@ impl Parser<'_, '_> {
         self.code().jump_if_false(l_yield);
         self.code().get_field(atoms::VALUE, 0);
         if is_async {
-            self.site(SiteKind::YieldStar, pos);
+            self.site(SiteKind::YieldStarAwait, pos);
             self.code().await_(0);
         }
         self.code().nip();
@@ -235,7 +235,7 @@ impl Parser<'_, '_> {
         self.place(l_retnone);
         self.code().drop();
         if is_async {
-            self.site(SiteKind::YieldStar, pos);
+            self.site(SiteKind::YieldStarAwait, pos);
             self.code().await_(0);
         }
         self.code().nip();
@@ -253,7 +253,7 @@ impl Parser<'_, '_> {
         self.code().drop();
         self.mark(pos);
         if is_async {
-            self.emit_async_close_normal((SiteKind::YieldStar, pos));
+            self.emit_async_close_normal((SiteKind::YieldStarAwait, pos));
         } else {
             self.code().call_intrinsic(intrinsic("IteratorClose"), 1);
             self.code().drop();
@@ -272,7 +272,7 @@ impl Parser<'_, '_> {
         self.code().nip();
         self.code().nip();
         self.place(l_end);
-        self.roles_pop(1);
+        self.roles_pop(2);
         Ok(())
     }
 
@@ -295,7 +295,7 @@ impl Parser<'_, '_> {
     /// An inner iterator result: awaited in async generators, then it must be an object.
     fn emit_inner_result(&mut self, is_async: bool) {
         if is_async {
-            self.site(SiteKind::YieldStar, self.prev_end);
+            self.site(SiteKind::YieldStarAwait, self.prev_end);
             self.code().await_(0);
         }
         self.code().iter_check_object();

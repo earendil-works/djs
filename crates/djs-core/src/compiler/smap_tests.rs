@@ -158,6 +158,24 @@ const LOOPS: &[(&str, &[&str])] = &[
         &["await#1 binary.left", "await#2 -"],
     ),
     ("while (await a) { await b; }", &["await#1 -", "await#2 -"]),
+    // Delegation: the inner iterator and its `next` below every suspension.
+    (
+        "function* h() { f(yield* xs); }",
+        &["yield*#1 call.callee call.this yield*.iterator yield*.next"],
+    ),
+    (
+        "async function* h() { yield* xs; }",
+        &[
+            "yield*#1 yield*.iterator yield*.next",
+            "yield*.await#1 yield*.iterator yield*.next",
+            "yield*.await#2 yield*.iterator yield*.next",
+            "yield*.await#3 yield*.iterator yield*.next",
+            "yield*.await#4 !closing an async iterator",
+            "yield*.await#5 yield*.iterator yield*.next",
+            "yield*.await#6 yield*.iterator yield*.next",
+            "yield*.await#7 yield*.iterator yield*.next",
+        ],
+    ),
     (
         "do { await b; } while (await a);",
         &["await#1 -", "await#2 -"],
@@ -180,7 +198,6 @@ const UNSUPPORTED: &[(&str, &[&str])] = &[
         "{ await using r = open(); await r.x; }",
         &["await#1 !using", "await-using#1 !using"],
     ),
-    ("function* h() { yield* xs; }", &["yield*#1 !yield*"]),
 ];
 
 fn check(table: &[(&str, &[&str])]) {

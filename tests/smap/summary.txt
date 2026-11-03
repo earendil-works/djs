@@ -8,7 +8,8 @@ sites 1063
     8 for-await.next
     2 return.await
    30 yield
-   23 yield*
+    9 yield*
+   14 yield*.await
    11 yield.await
    11 yield.return
 
@@ -16,6 +17,7 @@ sites 1063
   708 -
   208 call.callee call.this
    21 for-of.iterator for-of.next
+   21 yield*.iterator yield*.next
    18 call.callee call.this object.literal
    12 for-of.iterator for-of.next call.callee call.this
     9 for-of.iterator for-of.next call.callee call.this object.literal
@@ -35,7 +37,6 @@ sites 1063
     1 object.literal
 
 ## unsupported
-   10 closing an async iterator
+   12 closing an async iterator
     1 destructuring
    19 using
-   23 yield*

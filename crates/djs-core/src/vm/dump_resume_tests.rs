@@ -1330,3 +1330,19 @@ fn dumps_carry_the_random_state_and_iterators_again() {
         assert_eq!(chained(src), want, "{src}");
     }
 }
+
+/// The new golden programs' every idle point, dumped once and dumped in a chain.
+#[test]
+fn delegation_round_trips() {
+    for name in ["yield-star"] {
+        let src =
+            std::fs::read_to_string(golden_dir().join(alloc::format!("{name}.src.js"))).unwrap();
+        let (want, marks) = run_program(&src);
+        assert!(!marks.is_empty());
+        for k in 1..=marks.len() {
+            let (got, text) = dump_at(&src, k).unwrap_or_else(|e| panic!("{name} @{k}: {e}"));
+            assert_eq!(got, want, "{name} @{k}\n{text}");
+        }
+        assert_eq!(chained(&src), want, "{name} chained");
+    }
+}
