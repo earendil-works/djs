@@ -21,17 +21,20 @@ use core::fmt;
 /// The loop kinds whose iterator records stay on the operand stack.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Loop {
-    ForOf,
-    ForIn,
-    ForAwait,
+    /// `for (… of …)`.
+    Of,
+    /// `for (… in …)`.
+    In,
+    /// `for await (… of …)`.
+    Await,
 }
 
 impl Loop {
     pub fn name(self) -> &'static str {
         match self {
-            Loop::ForOf => "for-of",
-            Loop::ForIn => "for-in",
-            Loop::ForAwait => "for-await",
+            Loop::Of => "for-of",
+            Loop::In => "for-in",
+            Loop::Await => "for-await",
         }
     }
 }

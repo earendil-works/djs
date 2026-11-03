@@ -39,7 +39,7 @@ pub(super) struct Scope {
     pub parent: Option<ScopeId>,
     /// Source offset where the scope starts (the function's start for the body): how a
     /// suspension map names a binding's declaring scope (D2563).
-    #[cfg_attr(not(feature = "dump"), allow(dead_code))]
+    #[cfg(feature = "dump")]
     pub pos: u32,
     pub kind: ScopeKind,
     pub vars: Vec<VarId>,
@@ -394,6 +394,7 @@ impl FuncState {
             code: CodeBuf::phase1(),
             scopes: alloc::vec![Scope {
                 parent: None,
+                #[cfg(feature = "dump")]
                 pos: 0,
                 kind: ScopeKind::Body,
                 vars: Vec::new(),
@@ -444,8 +445,11 @@ impl FuncState {
     }
 
     pub fn new_scope(&mut self, parent: ScopeId, kind: ScopeKind, pos: u32) -> ScopeId {
+        #[cfg(not(feature = "dump"))]
+        let _ = pos;
         self.scopes.push_out(Scope {
             parent: Some(parent),
+            #[cfg(feature = "dump")]
             pos,
             kind,
             vars: Vec::new(),

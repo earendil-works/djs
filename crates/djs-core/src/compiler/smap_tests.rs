@@ -247,7 +247,10 @@ fn slots_name_bindings_and_hidden_locals() {
     };
     assert_eq!(maps[0].sites[0].locals[2], y);
     assert_eq!(maps[0].sites[1].locals[2], super::Slot::Nothing);
-    assert_eq!(maps[0].sites[0].locals[0], super::Slot::Hidden(String::from("<state>")));
+    assert_eq!(
+        maps[0].sites[0].locals[0],
+        super::Slot::Hidden(String::from("<state>"))
+    );
 }
 
 /// A site's resume pc is right after the suspending instruction of the code a normal

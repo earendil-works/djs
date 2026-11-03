@@ -158,6 +158,7 @@ pub(super) fn internal(what: &str) -> PErr {
 
 /// Resolves all functions of the unit and writes their templates. `funcs` is indexed
 /// by function id; id 0 is the top level.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn finish(
     heap: &mut Heap,
     src: &[u8],

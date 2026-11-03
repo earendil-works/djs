@@ -75,6 +75,37 @@ pub(super) enum Args {
     Array,
 }
 
+/// Whose arguments `parse_args_as` parses: their roles in suspension maps.
+#[derive(Clone, Copy)]
+pub(super) enum ArgsOf {
+    Call,
+    New,
+    Super,
+    Intrinsic,
+}
+
+impl ArgsOf {
+    #[inline]
+    fn arg(self, i: u16) -> Role {
+        match self {
+            ArgsOf::Call => Role::CallArg(i),
+            ArgsOf::New => Role::NewArg(i),
+            ArgsOf::Super => Role::SuperArg(i),
+            ArgsOf::Intrinsic => Role::IntrinsicArg(i),
+        }
+    }
+
+    /// The array the arguments go into from a spread on.
+    #[inline]
+    fn array(self) -> Role {
+        match self {
+            ArgsOf::New => Role::NewArgs,
+            ArgsOf::Super => Role::SuperArgs,
+            ArgsOf::Call | ArgsOf::Intrinsic => Role::CallArgs,
+        }
+    }
+}
+
 /// An assignment target, after lvalue conversion removed the load.
 #[derive(Clone, Copy, Debug)]
 pub(super) enum LValue {
@@ -1100,16 +1131,11 @@ impl Parser<'_, '_> {
     /// `( args )`: the arguments are pushed one by one, or, from the first spread
     /// on, collected into an array (`f(a, ...b)` -> `array_from 1; array_spread`).
     pub(super) fn parse_args(&mut self) -> PResult<Args> {
-        self.parse_args_as(Role::CallArg, Role::CallArgs)
+        self.parse_args_as(ArgsOf::Call)
     }
 
-    /// [`Parser::parse_args`] with the arguments' roles: `arg(i)` for each one on the
-    /// stack, `array` for the array they go into from a spread on.
-    pub(super) fn parse_args_as(
-        &mut self,
-        arg: fn(u16) -> Role,
-        array_role: Role,
-    ) -> PResult<Args> {
+    /// [`Parser::parse_args`] with the arguments' roles (suspension maps).
+    pub(super) fn parse_args_as(&mut self, of: ArgsOf) -> PResult<Args> {
         self.expect(TokenKind::LParen, "(")?;
         let mut argc: u32 = 0;
         let mut array = false;
@@ -1117,7 +1143,7 @@ impl Parser<'_, '_> {
             if self.is(TokenKind::Ellipsis) {
                 if !array {
                     self.code().array_from(argc as u16);
-                    self.roles_replace(argc as usize, &[array_role]);
+                    self.roles_replace(argc as usize, &[of.array()]);
                     array = true;
                 }
                 self.next()?;
@@ -1128,7 +1154,7 @@ impl Parser<'_, '_> {
                 if array {
                     self.code().array_push();
                 } else {
-                    self.roles_push(&[arg(argc as u16)]);
+                    self.roles_push(&[of.arg(argc as u16)]);
                     argc += 1;
                     if argc > u16::MAX as u32 {
                         return syntax(self.tok.start, "Too many call arguments");
@@ -1223,7 +1249,7 @@ impl Parser<'_, '_> {
         let at = self.tok.start;
         self.roles_push(&[Role::NewCallee]);
         let args = if self.is(TokenKind::LParen) {
-            self.parse_args_as(Role::NewArg, Role::NewArgs)?
+            self.parse_args_as(ArgsOf::New)?
         } else {
             Args::Count(0)
         };
@@ -1510,7 +1536,7 @@ impl Parser<'_, '_> {
         self.code().get_super();
         self.roles_push(&[Role::SuperCallee]);
         let paren = self.tok.start;
-        let args = self.parse_args_as(Role::SuperArg, Role::SuperArgs)?;
+        let args = self.parse_args_as(ArgsOf::Super)?;
         self.roles_pop(1);
         let Some(nt) = self.new_target_ref(pos) else {
             return Err(super::resolve::internal("super() without new.target"));
@@ -1580,7 +1606,7 @@ impl Parser<'_, '_> {
         let info = crate::bytecode::intrinsics::intrinsic(id).expect("intrinsic id");
         self.next()?;
         let paren = self.tok.start;
-        let argc = match self.parse_args_as(Role::IntrinsicArg, Role::CallArgs)? {
+        let argc = match self.parse_args_as(ArgsOf::Intrinsic)? {
             Args::Count(n) => n,
             Args::Array => return syntax(paren, "spread arguments in an intrinsic call"),
         };

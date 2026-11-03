@@ -263,15 +263,11 @@ impl<'a> Parser<'a, '_> {
             self.code().call_intrinsic(get_iterator, 1);
             self.code().dup();
             self.code().get_field(atoms::NEXT, 0);
-            let kind = if is_await {
-                Loop::ForAwait
-            } else {
-                Loop::ForOf
-            };
+            let kind = if is_await { Loop::Await } else { Loop::Of };
             self.roles_push(&[Role::LoopIterator(kind), Role::LoopNext(kind)]);
         } else {
             self.code().for_in_start();
-            self.roles_push(&[Role::LoopIterator(Loop::ForIn)]);
+            self.roles_push(&[Role::LoopIterator(Loop::In)]);
         }
         let l_step = self.new_label();
         self.code().jump(l_step);
