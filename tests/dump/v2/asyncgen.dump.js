@@ -1,5 +1,4 @@
-// djs-dump 2: 3 activations, 1 pending host call.
-// at idle point 2: pages waits on later("page 1") for main's next(); ticker at its yield.
+"djs-dump 2";
 async function* pages(n) {
   for (let i = 0; i < n; i++) {
     const page = await later(`page ${i}`);

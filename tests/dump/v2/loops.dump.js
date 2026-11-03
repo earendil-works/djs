@@ -1,5 +1,4 @@
-// djs-dump 2: 2 activations, 1 pending host call.
-// at idle point 3: the outer loop at ["y", 2], the inner at "a".
+"djs-dump 2";
 function* letters() {
   yield "a";
   yield "b";

@@ -1,7 +1,8 @@
 //! The format 2 loader (0171): hand-written dumps in tests/dump/v2/ and refusals.
 //!
 //! A fixture is a program `NAME.src.js` and a dump of it `NAME.dump.js`, written by hand
-//! at idle point K (its second line: `// at idle point K`). The program prints through
+//! at idle point K (the test names K; the program's header comment says what the dump
+//! holds there, since dumps have no comments, D2641). The program prints through
 //! the sync host function `print` and waits through the async host function `later(v,
 //! rejected)`, which the driver settles at idle points, oldest call first, with `v` (a
 //! rejection if `rejected`). The program's output up to idle point K followed by the
@@ -177,19 +178,13 @@ fn fixture_dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/dump/v2")
 }
 
-/// Checks fixture `name`; returns what the load reported.
-fn fixture(name: &str) -> Loaded {
+/// Checks fixture `name`, a dump of its program at idle point `k`; returns what the load
+/// reported.
+fn fixture(name: &str, k: usize) -> Loaded {
     let dir = fixture_dir();
     let src = std::fs::read_to_string(dir.join(alloc::format!("{name}.src.js"))).unwrap();
     let dump = std::fs::read_to_string(dir.join(alloc::format!("{name}.dump.js"))).unwrap();
-    assert!(dump.starts_with("// djs-dump 2"), "{name}: header");
-    let k: usize = dump
-        .lines()
-        .nth(1)
-        .and_then(|l| l.strip_prefix("// at idle point "))
-        .and_then(|l| l.split(|c: char| !c.is_ascii_digit()).next())
-        .and_then(|n| n.parse().ok())
-        .unwrap_or_else(|| panic!("{name}: no `// at idle point K` line"));
+    assert!(dump.starts_with("\"djs-dump 2\";\n"), "{name}: header");
     let (want, marks) = run_program(&src);
     assert!(
         k >= 1 && k <= marks.len(),
@@ -217,7 +212,7 @@ fn fixture(name: &str) -> Loaded {
 
 #[test]
 fn plan_example() {
-    let l = fixture("plan");
+    let l = fixture("plan", 5);
     assert_eq!(
         l.calls,
         [super::dump_load::OpenCall {
@@ -231,40 +226,42 @@ fn plan_example() {
 
 #[test]
 fn every_operand_role() {
-    let l = fixture("roles");
+    let l = fixture("roles", 1);
     assert_eq!(l.calls.len(), 17);
 }
 
 #[test]
 fn generator_at_a_yield() {
-    fixture("generator");
+    fixture("generator", 2);
 }
 
 #[test]
 fn async_generators() {
-    fixture("asyncgen");
+    fixture("asyncgen", 2);
 }
 
 #[test]
 fn combinators_and_rejections() {
-    let l = fixture("combinators");
+    let l = fixture("combinators", 6);
     let ids: Vec<u32> = l.calls.iter().map(|c| c.id).collect();
     assert_eq!(ids, [6, 7, 8, 9, 10, 11, 12, 13]);
 }
 
 #[test]
 fn nested_loops() {
-    fixture("loops");
+    fixture("loops", 3);
 }
 
+/// steps.dump.js was written by the exporter at idle point 1 and is kept as a golden
+/// fixture.
 #[test]
 fn an_exported_dump_stays_loadable() {
-    fixture("steps");
+    fixture("steps", 1);
 }
 
 #[test]
 fn cells_in_their_tdz() {
-    fixture("cells");
+    fixture("cells", 1);
 }
 
 #[test]
@@ -286,7 +283,7 @@ fn role_names_are_the_maps() {
 /// Loads a format 2 dump made of a few functions and `tail`; the reason it is refused.
 fn refusal(tail: &str) -> String {
     let text = alloc::format!(
-        "// djs-dump 2\n\
+        "\"djs-dump 2\";\n\
          async function f(a) {{ const b = a + 1; return o.m(b, await later(b)); }}\n\
          function* gen() {{ yield 1; }}\n\
          async function fin() {{ try {{ return 1; }} finally {{ await later(2); }} }}\n\
@@ -316,7 +313,7 @@ fn resume_refuses_what_the_map_does_not_have() {
     // The description as such loads.
     let mut vm = new_vm();
     let ok = alloc::format!(
-        "// djs-dump 2\nasync function f(a) {{ const b = a + 1; return o.m(b, await later(b)); }}\n\
+        "\"djs-dump 2\";\nasync function f(a) {{ const b = a + 1; return o.m(b, await later(b)); }}\n\
          const o = {{ m: (x, y) => x + y }};\n$dump.p = $dump.pending(1, 'later', [2]);\n\
          $dump.handle('r', {});",
         describe("").trim_end_matches(';')
@@ -417,7 +414,7 @@ fn resume_refuses_what_the_map_does_not_have() {
         if want.is_empty() {
             let mut vm = new_vm();
             let text = alloc::format!(
-                "// djs-dump 2\nasync function f(a) {{ const b = a + 1; return o.m(b, await later(b)); }}\n\
+                "\"djs-dump 2\";\nasync function f(a) {{ const b = a + 1; return o.m(b, await later(b)); }}\n\
                  const o = {{ m: (x, y) => x + y }};\n$dump.p = $dump.pending(1, 'later', [2]);\n{tail}"
             );
             load(&mut vm, &text).unwrap_or_else(|e| panic!("{tail}: {e}"));

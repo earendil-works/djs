@@ -1,5 +1,7 @@
 // Async generators: one awaiting inside its body with a request queued (a for-await
 // waits on it), one suspended at a yield with nothing queued.
+// asyncgen.dump.js, written by hand, is this program at idle point 2: pages waits on
+// later("page 1") for main's next(); ticker at its yield.
 async function* pages(n) {
   for (let i = 0; i < n; i++) {
     const page = await later(`page ${i}`);

@@ -1,5 +1,4 @@
-// djs-dump 2: a suspended run. 1 activation, 1 pending host call.
-// at idle point 1 (no jobs, no frames). Written by hand for djs-cli's tests (0174).
+"djs-dump 2";
 async function main() {
   const a = await tools.read({ path: "a" });
   const b = await tools.read({ path: "b" });

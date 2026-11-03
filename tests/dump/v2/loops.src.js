@@ -1,4 +1,6 @@
 // Nested for-of loops around an await: a Map's iterator outside, a generator inside.
+// loops.dump.js, written by hand, is this program at idle point 3: the outer loop at
+// ["y", 2], the inner at "a".
 function* letters() {
   yield "a";
   yield "b";

@@ -600,3 +600,88 @@ fn frozen_records_keep_their_keys() {
     );
     let _ = t;
 }
+
+/// A dump has no comments (D2641): no header lines, no section or factory notes. Only
+/// the functions' own text could have comments, and these have none.
+#[test]
+fn dumps_have_no_comments() {
+    let mut a = new_vm();
+    run(
+        &mut a,
+        "function makeCounter(start) { let n = start; return { inc: () => ++n, get: () => n }; }\n\
+         const counter = makeCounter(40);\n\
+         const graph = { name: 'root', children: [] }; graph.children.push({ parent: graph });\n\
+         const frozen = Object.freeze({ list: [1, 2] });\n\
+         Array.prototype.last = function () { return this[this.length - 1]; };\n\
+         const iterProto = Object.getPrototypeOf([][Symbol.iterator]());",
+    );
+    let text = dump(&a, None).unwrap_or_else(|e| panic!("{}", e.message()));
+    assert!(text.starts_with("\"djs-dump 2\";\n"), "{text}");
+    for l in text.lines() {
+        let t = l.trim_start();
+        assert!(
+            !t.starts_with("//") && !t.starts_with("/*"),
+            "a comment: {l}\n{text}"
+        );
+    }
+    let mut b = new_vm();
+    assert_eq!(load(&mut b, &text), "");
+    assert_eq!(
+        run(&mut b, "counter.inc() + graph.children[0].parent.name"),
+        "41root"
+    );
+}
+
+/// Functions of a TypeScript script make a TypeScript dump, which says so in its
+/// directive (D2615, D2640).
+#[test]
+fn typescript_dumps_say_so_in_the_directive() {
+    let mut a = new_vm();
+    let f = a
+        .compile(
+            b"var add = (x: number, y: number): number => x + y;",
+            &crate::compiler::CompileOptions {
+                typescript: true,
+                ..crate::compiler::CompileOptions::script("t.ts")
+            },
+        )
+        .unwrap();
+    let this = Value::object(a.global());
+    a.call(f, this, &[]).unwrap();
+    assert!(matches!(a.run(u64::MAX), Status::Done(_)));
+    let text = dump(&a, None).unwrap_or_else(|e| panic!("{}", e.message()));
+    assert!(text.starts_with("\"djs-dump 2 typescript\";\n"), "{text}");
+    let mut b = new_vm();
+    assert_eq!(load(&mut b, &text), "");
+    assert_eq!(run(&mut b, "add(2, 3)"), "5");
+}
+
+/// The loader reads the directive; of the comment headers only version 1's is a dump
+/// (D2353): format 2 had a comment header before it was promised across builds (D2640).
+#[test]
+fn the_loader_reads_the_directive() {
+    use super::dump_load::dump_format;
+    assert_eq!(dump_format("\"djs-dump 2\";\nlet x = 1;"), Some("2"));
+    assert_eq!(dump_format("\"djs-dump 2 typescript\";\n"), Some("2"));
+    assert_eq!(dump_format("\"djs-dump 9\";"), Some("9"));
+    assert_eq!(
+        dump_format("// djs-dump 1: 1 binding (x).\nlet x = 1;"),
+        Some("1")
+    );
+    assert_eq!(
+        dump_format("// djs-dump 2: 1 binding (x).\nlet x = 1;"),
+        None
+    );
+    assert_eq!(dump_format("// djs-dump 12\n"), None);
+    assert_eq!(dump_format("\"djs-dump 2\"\n;"), None);
+    assert_eq!(dump_format("\"use strict\";\n\"djs-dump 2\";"), None);
+    let mut b = new_vm();
+    let old = load(&mut b, "// djs-dump 2\nlet x = 1;");
+    assert!(old.contains("not a djs dump"), "{old}");
+    assert!(load(&mut b, "\"djs-dump 9\";\n").contains("format 9"));
+    // Run as a plain Script, the directive does nothing and the first `$dump` throws.
+    assert_eq!(
+        run(&mut new_vm(), "\"djs-dump 2\";\n$dump.x = 1;"),
+        "throw ReferenceError: '$dump' is not defined"
+    );
+}

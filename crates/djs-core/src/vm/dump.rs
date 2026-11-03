@@ -39,9 +39,12 @@ use crate::interp::realm::{Intrinsic, intrinsic};
 use crate::value::{Kind, Obj, Value};
 
 /// The first line of every dump this build writes: format 2, a Script that
-/// `Vm::load_dump` runs with its `$dump` (D2581). Version 1 dumps (D2353), plain Scripts
-/// that make their own `$dump`, still load.
-pub const HEADER: &str = "// djs-dump 2";
+/// `Vm::load_dump` runs with its `$dump` (D2581), marked by a directive prologue so the
+/// dump has no comments (D2640). Version 1 dumps (D2353), plain Scripts that make their
+/// own `$dump` and start with the comment `// djs-dump 1`, still load.
+pub const HEADER: &str = "\"djs-dump 2\";";
+/// [`HEADER`] of a dump that holds functions of TypeScript scripts (D2615).
+pub const HEADER_TS: &str = "\"djs-dump 2 typescript\";";
 
 /// What [`Vm::dump`] needs besides the VM.
 #[derive(Clone, Copy)]
@@ -745,7 +748,7 @@ struct Dumper<'a> {
     /// writes none).
     fns_read: core::cell::Cell<u32>,
     /// A written function comes from a TypeScript script: the dump is compiled as
-    /// TypeScript (`// djs-dump 2 typescript`).
+    /// TypeScript (`"djs-dump 2 typescript";`).
     ts: core::cell::Cell<bool>,
     /// The base heap: the checker compiles the dump into it.
     scratch: Option<Heap>,
@@ -1962,44 +1965,8 @@ impl<'a> Dumper<'a> {
         if !self.refusals.is_empty() {
             return Err(DumpError(self.refusals));
         }
-        let mut s = String::from(HEADER);
-        if self.ts.get() {
-            s.push_str(" typescript");
-        }
-        let count = self.roots.len();
-        cat_to!(
-            &mut s,
-            ": ",
-            count,
-            if count == 1 {
-                " binding ("
-            } else {
-                " bindings ("
-            }
-        );
-        for (i, r) in self.roots.iter().enumerate() {
-            cat_to!(&mut s, if i > 0 { ", " } else { "" }, r.name);
-        }
-        s.push_str(
-            ").\n// Load it with Vm::load_dump (djs REPL: .restore FILE), which passes in $dump.\n\
-             // Builtins are referenced by name, never written",
-        );
-        if !self.host_names.is_empty() {
-            s.push_str(if self.host_names.len() == 1 {
-                ". The host global "
-            } else {
-                ". The host globals "
-            });
-            for (i, n) in self.host_names.iter().enumerate() {
-                cat_to!(&mut s, if i > 0 { ", " } else { "" }, *n);
-            }
-            s.push_str(if self.host_names.len() == 1 {
-                " is re-bound by name"
-            } else {
-                " are re-bound by name"
-            });
-        }
-        s.push_str(".\n");
+        let mut s = String::from(if self.ts.get() { HEADER_TS } else { HEADER });
+        s.push('\n');
         if self.helpers != 0 {
             for (bit, text) in HELPERS {
                 if self.helpers & bit != 0 {
@@ -2018,13 +1985,11 @@ impl<'a> Dumper<'a> {
             cat_to!(&mut s, l, '\n');
         }
         if !builtin_lines.is_empty() {
-            s.push_str("// Builtins the session changed.\n");
             for l in &builtin_lines {
                 cat_to!(&mut s, l, '\n');
             }
         }
         if !self.patches.is_empty() || !self.finals.is_empty() {
-            s.push_str("// Links that close cycles, and attributes.\n");
             for l in self.patches.iter().chain(&self.finals) {
                 cat_to!(&mut s, l, '\n');
             }
@@ -2753,11 +2718,7 @@ impl<'a> Dumper<'a> {
         for &b in &boxes {
             self.nodes[b].state = State::Busy;
         }
-        let mut text = cat!("// ", join(&keys, ", "), " sharing ");
-        for (i, n) in box_names.iter().enumerate() {
-            cat_to!(&mut text, if i > 0 { ", " } else { "" }, n);
-        }
-        cat_to!(&mut text, "\n", loc, " = (() => {\n");
+        let mut text = cat!(loc, " = (() => {\n");
         // Classes first, a parent before its subclasses: their texts only read the
         // group's variables when their methods run.
         let mut classes: Vec<usize> = Vec::new();

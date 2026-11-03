@@ -3,7 +3,7 @@
 //!
 //! - **Version 1** dumps (`// djs-dump 1`, D2353) are plain JavaScript: they make their own
 //!   `$dump` and run as they are.
-//! - **Format 2** dumps (`// djs-dump 2`) get `$dump` from the loader: a global property
+//! - **Format 2** dumps (first statement the directive `"djs-dump 2";`, D2640) get `$dump` from the loader: a global property
 //!   (not writable, not enumerable, configurable) holding an ordinary object with the
 //!   loader's primitives, removed again when the load ends. The dump adds its helpers to
 //!   it. The primitives are host functions with ids the loader reserves, served only by
@@ -89,7 +89,10 @@ pub enum LoadError {
 impl LoadError {
     pub fn message(&self) -> String {
         match self {
-            LoadError::NotADump => "not a djs dump (no `// djs-dump N` header)".into(),
+            LoadError::NotADump => {
+                "not a djs dump (it does not start with `\"djs-dump 2\";` or `// djs-dump 1`)"
+                    .into()
+            }
             LoadError::Version(v) => {
                 cat!("a djs dump of format ", v, ", which this build cannot load")
             }
@@ -129,7 +132,7 @@ const PRIMITIVES: &[(&str, u32)] = &[
 ];
 
 /// How a dump is compiled: a Script, TypeScript when its header says so
-/// (`// djs-dump 2 typescript`: it holds functions of TypeScript scripts, D2615).
+/// (`"djs-dump 2 typescript";`: it holds functions of TypeScript scripts, D2615).
 pub(super) fn dump_options(typescript: bool) -> CompileOptions<'static> {
     CompileOptions {
         typescript,
@@ -137,21 +140,32 @@ pub(super) fn dump_options(typescript: bool) -> CompileOptions<'static> {
     }
 }
 
-/// Whether a dump's header says it is TypeScript.
+/// Whether a dump's header says it is TypeScript (`"djs-dump 2 typescript";`).
 fn is_typescript(text: &str) -> bool {
-    text.lines()
-        .next()
-        .and_then(|l| l.strip_prefix("// djs-dump 2"))
-        .is_some_and(|r| r.starts_with(" typescript"))
+    header(text).is_some_and(|(_, rest)| rest == " typescript")
 }
 
-/// The format of a dump: the number in its first line, `// djs-dump N`.
+/// The format of a dump: `N` of its first statement, the directive `"djs-dump N";`
+/// (D2640), or of version 1's first line, the comment `// djs-dump 1` (D2353). The
+/// comment form of any other version is not a dump: format 2 had it once, before
+/// anything was promised across builds (D024).
 pub fn dump_format(text: &str) -> Option<&str> {
-    let rest = text.strip_prefix("// djs-dump ")?;
-    let end = rest
+    if let Some(rest) = text.strip_prefix("// djs-dump 1") {
+        return (!rest.starts_with(|c: char| c.is_ascii_digit())).then_some("1");
+    }
+    header(text).map(|(v, _)| v)
+}
+
+/// The directive `"djs-dump N<rest>";` a dump starts with: `N` and `<rest>`.
+fn header(text: &str) -> Option<(&str, &str)> {
+    let rest = text.strip_prefix("\"djs-dump ")?;
+    let line = rest.get(..rest.find('\n').unwrap_or(rest.len()))?;
+    let line = line.trim_end().strip_suffix("\";")?;
+    let end = line
         .find(|c: char| !c.is_ascii_digit())
-        .unwrap_or(rest.len());
-    rest.get(..end).filter(|v| !v.is_empty())
+        .unwrap_or(line.len());
+    let v = line.get(..end).filter(|v| !v.is_empty())?;
+    Some((v, line.get(end..).unwrap_or_default()))
 }
 
 /// A load in progress.

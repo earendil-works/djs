@@ -1,5 +1,8 @@
 // Promise.all, allSettled, any and race in flight; rejections caught in an activation
 // (a try around an await) and by its caller.
+// combinators.dump.js, written by hand, is this program at idle point 6: calls 1-5
+// delivered (Promise.all done, allSettled half way: "x" fulfilled, "bad" rejected, the
+// third open), main at its second await.
 const ok = (v) => later(v);
 const fail = (m) => later(new Error(m), true);
 async function guarded() {

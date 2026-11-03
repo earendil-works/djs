@@ -1,5 +1,4 @@
-// djs-dump 2: 18 activations, 17 pending host calls.
-// at idle point 1: every function waits at its first await, main on their Promise.all.
+"djs-dump 2";
 class Thing {
   constructor(...a) {
     this.a = a;

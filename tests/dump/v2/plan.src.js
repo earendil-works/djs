@@ -1,4 +1,8 @@
 // The example of docs/continuation-dumps.md, with `later` as the tools' transport.
+// plan.dump.js, written by hand, is this program at idle point 5: no jobs, no frames;
+// host calls issued 5, delivered 4. todos shares `seen` with main's frame; the for-of's
+// iterator is past the first batch; Promise.all over the second batch has element 0
+// resolved to 1.
 const contents = {
   "src/a.ts": "TODO one\nTODO two\nok",
   "src/b.ts": "fine",

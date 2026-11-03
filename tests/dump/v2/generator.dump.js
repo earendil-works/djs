@@ -1,5 +1,4 @@
-// djs-dump 2: 2 activations, 1 pending host call.
-// at idle point 2: counter at its yield (i = 1), main waits on later(10).
+"djs-dump 2";
 function* counter(limit) {
   let total = 0;
   for (let i = 0; i < limit; i++) {

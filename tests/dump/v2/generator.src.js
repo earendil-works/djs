@@ -1,5 +1,7 @@
 // A generator suspended at a yield, driven by an async function that awaits between
 // steps.
+// generator.dump.js, written by hand, is this program at idle point 2: counter at its
+// yield (i = 1), main waits on later(10).
 function* counter(limit) {
   let total = 0;
   for (let i = 0; i < limit; i++) {

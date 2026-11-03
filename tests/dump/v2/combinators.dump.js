@@ -1,6 +1,4 @@
-// djs-dump 2: 3 activations, 8 pending host calls.
-// at idle point 6: calls 1-5 delivered (Promise.all done, allSettled half way), main at
-// its second await.
+"djs-dump 2";
 const ok = (v) => later(v);
 const fail = (m) => later(new Error(m), true);
 async function guarded() {
@@ -35,7 +33,6 @@ async function main() {
   print(all[0].reason.message);
 }
 const P = (id, ...args) => $dump.pending(id, "later", args);
-// allSettled: "x" fulfilled, "bad" rejected, the third open.
 $dump.s = Promise.allSettled(["x", Promise.reject(new Error("bad")), P(6, "y")]);
 $dump.y = Promise.any([P(7, new Error("no1"), true), P(8, "any"), P(9, new Error("no2"), true)]);
 $dump.r = Promise.race([P(10, "fast"), P(11, "slow")]);

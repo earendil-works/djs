@@ -1,5 +1,7 @@
 // Every operand role a codemode await can have below it, each in a function of its own,
 // all waiting at once.
+// roles.dump.js, written by hand, is this program at idle point 1: every function waits
+// at its first await, main on their Promise.all.
 class Thing {
   constructor(...a) {
     this.a = a;

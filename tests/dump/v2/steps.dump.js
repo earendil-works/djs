@@ -1,7 +1,4 @@
-// djs-dump 2: 3 bindings (sleep, step, main).
-// at idle point 1: written by the exporter (0172), kept as a golden fixture.
-// Load it with Vm::load_dump (djs REPL: .restore FILE), which passes in $dump.
-// Builtins are referenced by name, never written. The host globals later, print are re-bound by name.
+"djs-dump 2";
 $dump.advance = (it, n) => {
   for (let i = 0; i < n; i++) it.next();
   return it;

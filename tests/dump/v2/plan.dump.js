@@ -1,7 +1,4 @@
-// djs-dump 2: a suspended run. 2 activations, 1 pending host call.
-// at idle point 5 (no jobs, no frames). Host calls issued 5, delivered 4.
-
-// ---- Data
+"djs-dump 2";
 const contents = {
   "src/a.ts": "TODO one\nTODO two\nok",
   "src/b.ts": "fine",
@@ -16,7 +13,6 @@ $dump.files = ["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"];
 $dump.report = [[2, 0]];
 $dump.batches = [$dump.files.slice(0, 2), $dump.files.slice(2)];
 
-// ---- Closures: todos shares `seen` with main's frame.
 $dump.s1 = (() => {
   let seen = new Map([["src/a.ts", 2], ["src/b.ts", 0], ["src/c.ts", 1]]);
   async function todos(path) {
@@ -28,7 +24,6 @@ $dump.s1 = (() => {
   return { todos, $cells: { seen: $dump.cell(() => seen) } };
 })();
 
-// ---- The run's function (never called: it supplies the code of the activation).
 async function main() {
   const files = await tools.glob({ pattern: "src/*.ts" });
   const seen = new Map();
@@ -46,15 +41,12 @@ async function main() {
   return report;
 }
 
-// ---- In flight
-// The for-of's iterator, past the first batch.
 $dump.it1 = $dump.batches[Symbol.iterator]();
 $dump.it1.next();
 $dump.it1.next();
 
 $dump.p5 = $dump.pending(5, "later", [contents["src/d.ts"]]);
 
-// todos("src/d.ts"), called by batch.map: (element, index, array).
 $dump.a2 = $dump.resume($dump.s1.todos, {
   at: "await#1",
   awaiting: $dump.p5,
@@ -63,10 +55,8 @@ $dump.a2 = $dump.resume($dump.s1.todos, {
   bindings: { path: "src/d.ts", body: $dump.TDZ, n: $dump.TDZ },
 });
 
-// Promise.all over the second batch: element 0 resolved to 1.
 $dump.p6 = Promise.all([1, $dump.a2]);
 
-// main, in the second iteration of the for-of.
 $dump.run = $dump.resume(main, {
   at: "await#2",
   awaiting: $dump.p6,
