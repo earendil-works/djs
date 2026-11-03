@@ -73,5 +73,30 @@ fn main() {
             "the coded base image does not decode"
         );
         std::fs::write(dir.join("base.lzr"), &packed).expect("cannot write the coded image");
+        let header: Vec<String> = packed[..16].iter().map(|b| b.to_string()).collect();
+        std::fs::write(
+            dir.join("base_header.rs"),
+            format!(
+                "/// The coded base's header (length and hash of the image).\n\
+                 pub const PACKED_HEADER: [u8; 16] = [{}];\n\
+                 /// The coded base's length.\n\
+                 pub const PACKED_LEN: usize = {};\n",
+                header.join(", "),
+                packed.len()
+            ),
+        )
+        .expect("cannot write the coded image's header");
+        // The wasm module's custom section (lib.rs), as an array literal.
+        let bytes: Vec<String> = packed.iter().map(|b| b.to_string()).collect();
+        std::fs::write(
+            dir.join("base_section.rs"),
+            format!(
+                "#[unsafe(link_section = \"djs_base\")]\n\
+                 pub static BASE_SECTION: [u8; {}] = [{}];\n",
+                packed.len(),
+                bytes.join(",")
+            ),
+        )
+        .expect("cannot write the coded image's section");
     }
 }

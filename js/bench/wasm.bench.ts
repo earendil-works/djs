@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import { encode } from "../src/wire.ts";
 import { readValue } from "../src/reader.ts";
 import { Sandbox, defaultWasmPath } from "../src/sandbox.ts";
+import { provideCodedBase } from "../src/snapshot.ts";
 
 interface X {
   memory: WebAssembly.Memory;
@@ -56,8 +57,9 @@ const tsv = process.argv.includes("--tsv");
 if (!dir) throw new Error("usage: wasm.bench.ts <dir from wire.bench.ts>");
 const path = defaultWasmPath();
 const bytes = readFileSync(typeof path === "string" ? path : fileURLToPath(path));
-const { instance } = await WebAssembly.instantiate(bytes, {});
+const { module, instance } = await WebAssembly.instantiate(bytes, {});
 const x = instance.exports as unknown as X;
+provideCodedBase(module, x as never);
 const textEncoder = new TextEncoder();
 const CAP = 16 << 20;
 const staging = x.djs_staging(CAP);

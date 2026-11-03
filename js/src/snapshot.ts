@@ -190,15 +190,14 @@ const references = new WeakMap<object, Reference>();
  * The base snapshot of the module that `exports` belong to, as a reference (a copy, hashed
  * once per module).
  */
-export function baseReference(
-  module: object,
-  exports: { memory: WebAssembly.Memory; djs_base_ptr(): number; djs_base_len(): number },
-): Reference {
+export function baseReference(module: WebAssembly.Module, exports: BaseExports): Reference {
   let ref = references.get(module);
   if (ref === undefined) {
+    provideCodedBase(module, exports);
     // The pointer first: an instance decodes its base at the first use (D2252), which may
     // grow (and detach) its memory buffer.
     const at = exports.djs_base_ptr();
+    if (at === 0) throw new Error("djs-wasm has no base snapshot (no djs_base section?)");
     const bytes = new Uint8Array(exports.memory.buffer, at, exports.djs_base_len()).slice();
     ref = { kind: REFERENCE_BASE, bytes, hash: fnv1a64(bytes) };
     references.set(module, ref);
@@ -213,6 +212,32 @@ export interface BaseExports {
   djs_base_len(): number;
   djs_base_inject_ptr?(len: number): number;
   djs_base_inject?(): number;
+  djs_base_coded_ptr?(len: number): number;
+}
+
+const codedSections = new WeakMap<WebAssembly.Module, Uint8Array>();
+
+/**
+ * Hands a fresh instance of `module` its coded base, the module's custom section
+ * `djs_base` (D2541): the module keeps it out of its linear memory, and an instance
+ * decodes it when it needs the base and has none injected. `provideBase` and
+ * `baseReference` call it; a host that drives the exports itself calls it right after
+ * instantiating, before anything creates a VM or reads the base. Returns whether the
+ * instance took the bytes (false if it has its base, or the module has no such section).
+ */
+export function provideCodedBase(module: WebAssembly.Module, exports: BaseExports): boolean {
+  if (exports.djs_base_coded_ptr === undefined) return false;
+  let coded = codedSections.get(module);
+  if (coded === undefined) {
+    const [section] = WebAssembly.Module.customSections(module, "djs_base");
+    if (section === undefined) return false;
+    coded = new Uint8Array(section);
+    codedSections.set(module, coded);
+  }
+  const at = exports.djs_base_coded_ptr(coded.length);
+  if (at === 0) return false;
+  new Uint8Array(exports.memory.buffer, at, coded.length).set(coded);
+  return true;
 }
 
 /**
@@ -220,23 +245,26 @@ export interface BaseExports {
  * (D2252): the module ships the base coded, and an instance decodes it at its first use
  * (a few ms) unless the host provides it. Call right after instantiating, before anything
  * that creates a VM or reads the base; and `rememberBase` once a VM exists, so that later
- * instances get it. The instance checks the bytes (length and hash) and decodes its own if
- * they are refused. Returns whether the instance took them; false for a module with the base
- * uncoded (no inject exports) or before an instance remembered the base.
+ * instances get it. The instance checks the bytes (length and hash). Returns whether the
+ * instance took them; if not (refused, or no instance remembered the base yet), it gets
+ * the coded base to decode its own (`provideCodedBase`).
  */
-export function provideBase(module: object, exports: BaseExports): boolean {
+export function provideBase(module: WebAssembly.Module, exports: BaseExports): boolean {
   const ref = references.get(module);
-  if (ref === undefined || exports.djs_base_inject_ptr === undefined || exports.djs_base_inject === undefined) {
-    return false;
+  if (ref !== undefined && exports.djs_base_inject_ptr !== undefined && exports.djs_base_inject !== undefined) {
+    const at = exports.djs_base_inject_ptr(ref.bytes.length);
+    if (at !== 0) {
+      new Uint8Array(exports.memory.buffer, at, ref.bytes.length).set(ref.bytes);
+      if (exports.djs_base_inject() === 1) return true;
+    }
   }
-  const at = exports.djs_base_inject_ptr(ref.bytes.length);
-  if (at === 0) return false;
-  new Uint8Array(exports.memory.buffer, at, ref.bytes.length).set(ref.bytes);
-  return exports.djs_base_inject() === 1;
+  // The instance decodes its own, from the coded base.
+  provideCodedBase(module, exports);
+  return false;
 }
 
 /** Keeps the base of `module` (from this instance, once per module) for `provideBase`. */
-export function rememberBase(module: object, exports: BaseExports): void {
+export function rememberBase(module: WebAssembly.Module, exports: BaseExports): void {
   baseReference(module, exports);
 }
 

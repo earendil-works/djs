@@ -15,7 +15,7 @@ export const STATUS_HOST_CALL = 3;
 export const STATUS_IDLE = 4;
 /** The host could not provide memory below the cap (D1690); the call is abandoned. */
 export const STATUS_HOST_OUT_OF_MEMORY = 5;
-const ABI_VERSION = 1;
+const ABI_VERSION = 2;
 /** `vm_new_with`'s flag: frozen builtins (D2304). */
 const VM_FROZEN_BUILTINS = 1;
 
@@ -64,6 +64,7 @@ interface Exports {
   djs_base_len(): number;
   djs_base_inject_ptr?(len: number): number;
   djs_base_inject?(): number;
+  djs_base_coded_ptr?(len: number): number;
 }
 
 /** An instance of the module, before a VM is created in it (`Engine.restore`). */

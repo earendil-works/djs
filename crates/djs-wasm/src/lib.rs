@@ -42,7 +42,7 @@ use djs_core::vm::{Status, Vm, VmOptions};
 use djs_core::wire::{self, DecodeOptions};
 
 /// The ABI version, bumped on any incompatible change to the exports.
-pub const ABI_VERSION: u32 = 1;
+pub const ABI_VERSION: u32 = 2;
 
 /// `vm_run` results.
 pub mod status {
@@ -93,8 +93,8 @@ instance_locals! {
         staging: Vec::new(),
         out: Vec::new(),
     });
-    /// The base snapshot, decoded from djs-prelude's coded image at the first use (D2252)
-    /// or written by the host (`djs_base_inject`). The first `vm_new` takes it as its
+    /// The base snapshot, decoded from the coded image at the first use (D2252) or written
+    /// by the host (`djs_base_inject`). The first `vm_new` takes it as its
     /// arena, growing it in place to the arena's capacity (at memory's end, D2053). After
     /// that, a use decodes it again and the instance keeps it, for later VMs to copy
     /// (D2060).
@@ -103,6 +103,9 @@ instance_locals! {
     static BASE_TAKEN: core::cell::Cell<bool> = core::cell::Cell::new(false);
     /// A copy of the base the host is writing (`djs_base_inject_ptr`), until checked.
     static INJECTED: RefCell<Option<Vec<u8>>> = RefCell::new(None);
+    /// The coded base the host handed over (`djs_base_coded_ptr`, the module's `djs_base`
+    /// section; D2541), kept while a later decode may need it.
+    static CODED: RefCell<Option<Vec<u8>>> = RefCell::new(None);
     /// The message of the last panic. Separate from `STATE`, which may be left borrowed by
     /// the call that trapped.
     static PANIC: RefCell<String> = RefCell::new(String::new());
@@ -171,15 +174,25 @@ fn base_capacity() -> usize {
 /// The base snapshot (D1321), decoded now unless the instance holds it (D2252), and its
 /// address (valid until the next `vm_new` or `djs_base_inject_ptr`).
 fn base_ptr() -> usize {
-    // Exactly the base's size: an instance that only reads it (to restore a snapshot
-    // against it) does not hold the arena's room.
-    BASE.with(|b| {
-        b.borrow_mut()
-            .get_or_insert_with(|| {
-                djs_prelude::unpack_base_with_capacity(page_block(djs_prelude::base_len()))
-            })
-            .as_ptr() as usize
-    })
+    if BASE.with(|b| b.borrow().is_none()) {
+        // Exactly the base's size: an instance that only reads it (to restore a snapshot
+        // against it) does not hold the arena's room.
+        let Some(base) = decode_base(page_block(djs_prelude::base_len())) else {
+            return 0;
+        };
+        BASE.with(|b| *b.borrow_mut() = Some(base));
+    }
+    BASE.with(|b| b.borrow().as_ref().map_or(0, |b| b.as_ptr() as usize))
+}
+
+/// The base decoded into a buffer of `capacity`: natively from djs-prelude's copy, in wasm
+/// from the coded base the host handed over. `None` without one.
+fn decode_base(capacity: usize) -> Option<Vec<u8>> {
+    #[cfg(not(target_arch = "wasm32"))]
+    if CODED.with(|c| c.borrow().is_none()) {
+        return djs_prelude::unpack_base(djs_prelude::BASE_PACKED, capacity);
+    }
+    CODED.with(|c| djs_prelude::unpack_base(c.borrow().as_deref()?, capacity))
 }
 
 /// At least the page allocator's huge-block size: a base smaller than that would live in
@@ -196,20 +209,34 @@ fn page_block(len: usize) -> usize {
 /// instance takes the instance's bytes (decoded or injected; decoded straight into the
 /// arena's buffer if there are none). Later VMs copy the base, which the instance then
 /// keeps: a host that makes several VMs in one instance decodes twice, not each time.
-fn take_base() -> Vec<u8> {
-    if !BASE_TAKEN.with(|t| t.replace(true)) {
-        return BASE
+fn take_base() -> Option<Vec<u8>> {
+    if !BASE_TAKEN.with(|t| t.get()) {
+        let base = BASE
             .with(|b| b.borrow_mut().take())
-            .unwrap_or_else(|| djs_prelude::unpack_base_with_capacity(base_capacity()));
+            .or_else(|| decode_base(base_capacity()))?;
+        BASE_TAKEN.with(|t| t.set(true));
+        return Some(base);
     }
-    base_ptr();
+    if base_ptr() == 0 {
+        return None;
+    }
+    // The instance keeps the decoded base now: the coded one is no longer needed.
+    CODED.with(|c| c.borrow_mut().take());
     BASE.with(|b| {
         let b = b.borrow();
-        let base = b.as_ref().expect("the base was just decoded");
         let mut v = base_buffer();
-        v.extend_from_slice(base);
-        v
+        v.extend_from_slice(b.as_ref()?);
+        Some(v)
     })
+}
+
+/// A VM from the base snapshot, or the reason there is none.
+fn new_from_base(opts: VmOptions, live: u32) -> Result<Vm, &'static str> {
+    let base = take_base().ok_or(
+        "no base snapshot: the host must hand over the module's djs_base section \
+         (djs_base_coded_ptr) or inject a decoded base",
+    )?;
+    djs_prelude::new_vm_owned(base, opts, live as usize).map_err(|e| e.as_str())
 }
 
 /// Natively, a panic hook records the message (and the default hook still prints). On
@@ -429,7 +456,8 @@ pub extern "C" fn djs_build_hash() -> u32 {
 /// module's memory, read-only. Hosts compress snapshots against it (D2260): it is the
 /// image every `vm_new` starts from, and the build hash fixes its bytes. Valid until the
 /// next `vm_new`, which takes the bytes as its arena (D2060): a host that keeps the base
-/// reads it first (a later call decodes it again).
+/// reads it first (a later call decodes it again). 0 if the instance has no base and no
+/// coded base to decode (`djs_base_coded_ptr`).
 #[unsafe(no_mangle)]
 pub extern "C" fn djs_base_ptr() -> usize {
     base_ptr()
@@ -472,6 +500,27 @@ pub extern "C" fn djs_base_inject() -> u32 {
         }
         *b = Some(buf);
         1
+    })
+}
+
+/// Room for the coded base, the module's custom section `djs_base` (D2541): the module
+/// does not keep it in its memory, so the host hands it over when it has no decoded base
+/// to inject. The host writes the section's `len` bytes there; the instance decodes them
+/// when it needs the base (checking them) and drops them once it keeps a decoded copy. 0
+/// if the instance has its base or the coded one, or `len` is not the section's length.
+#[unsafe(no_mangle)]
+pub extern "C" fn djs_base_coded_ptr(len: usize) -> usize {
+    if BASE.with(|b| b.borrow().is_some())
+        || CODED.with(|c| c.borrow().is_some())
+        || len != djs_prelude::PACKED_LEN
+    {
+        return 0;
+    }
+    CODED.with(|c| {
+        let mut buf = alloc::vec![0; len];
+        let p = buf.as_mut_ptr() as usize;
+        *c.borrow_mut() = Some(buf);
+        p
     })
 }
 
@@ -558,11 +607,7 @@ fn options(memory_limit: u32) -> VmOptions {
 /// the realm.
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_new(memory_limit: u32) -> u32 {
-    add_new_vm(djs_prelude::new_vm_owned(
-        take_base(),
-        options(memory_limit),
-        0,
-    ))
+    add_new_vm(new_from_base(options(memory_limit), 0))
 }
 
 /// Like `vm_new`, with the arena capacity a heap of `live` bytes gets (its next GC
@@ -571,11 +616,7 @@ pub extern "C" fn vm_new(memory_limit: u32) -> u32 {
 /// arena and leave its old block behind as a hole in wasm memory.
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_new_reserved(memory_limit: u32, live: u32) -> u32 {
-    add_new_vm(djs_prelude::new_vm_owned(
-        take_base(),
-        options(memory_limit),
-        live as usize,
-    ))
+    add_new_vm(new_from_base(options(memory_limit), live))
 }
 
 /// `vm_new_with`'s flag: frozen builtins (`VmOptions::frozen_builtins`, D2304).
@@ -595,7 +636,7 @@ pub extern "C" fn vm_new_with(memory_limit: u32, live: u32, flags: u32) -> u32 {
         frozen_builtins: flags & VM_FROZEN_BUILTINS != 0,
         ..options(memory_limit)
     };
-    add_new_vm(djs_prelude::new_vm_owned(take_base(), opts, live as usize))
+    add_new_vm(new_from_base(opts, live))
 }
 
 /// Whether the builtins of `vm` are frozen (`vm_new_with`, D2304): 1 or 0.
@@ -616,14 +657,14 @@ pub extern "C" fn vm_new_compiled(memory_limit: u32) -> u32 {
         vm.prepare_base_image()?;
         Ok(vm)
     });
-    add_new_vm(vm)
+    add_new_vm(vm.map_err(|e| e.as_str()))
 }
 
-fn add_new_vm(vm: Result<Vm, djs_core::heap::HeapError>) -> u32 {
+fn add_new_vm(vm: Result<Vm, &str>) -> u32 {
     with(|s| match vm {
         Ok(vm) => s.add_vm(vm),
         Err(e) => {
-            s.set_out(&[b"cannot create a VM: ", e.as_str().as_bytes()].concat());
+            s.set_out(&[b"cannot create a VM: ", e.as_bytes()].concat());
             0
         }
     })

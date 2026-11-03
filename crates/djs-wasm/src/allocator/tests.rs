@@ -259,7 +259,10 @@ fn a_growing_buffer_behind_the_arena_leaves_it_room() {
         bl = Layout::from_size_align(new, 1).unwrap();
     }
     assert!(b > arena);
-    assert!(grow_arena(a, &mut arena, &mut l, HUGE / PAGE), "the arena moved");
+    assert!(
+        grow_arena(a, &mut arena, &mut l, HUGE / PAGE),
+        "the arena moved"
+    );
     // SAFETY: live, with its layout.
     unsafe { a.dealloc(b, bl) };
 }

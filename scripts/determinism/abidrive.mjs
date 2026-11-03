@@ -7,6 +7,12 @@ const [wasmPath, srcPath, sliceS, traceS, rawOut] = process.argv.slice(2);
 const mod = new WebAssembly.Module(readFileSync(wasmPath));
 const inst = new WebAssembly.Instance(mod, {});
 const x = inst.exports;
+// The coded base is the module's custom section `djs_base`, handed over (D2541).
+const [coded] = WebAssembly.Module.customSections(mod, "djs_base");
+if (coded) {
+  const at = x.djs_base_coded_ptr(coded.byteLength); // may grow (and detach) the memory
+  new Uint8Array(x.memory.buffer, at, coded.byteLength).set(new Uint8Array(coded));
+}
 const src = readFileSync(srcPath);
 const slice = Number(sliceS);
 const trace = Number(traceS ?? 0);
