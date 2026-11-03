@@ -7266,3 +7266,86 @@ the recursion than the debug build), 243 nested capture groups and 236 lookahead
 trapped at 128 KiB; 200 leave ~15%. Non-capturing groups and `v`-mode classes took 254
 levels. Stack overflow at run time stays a RangeError (D013): the interpreter's call
 depth is in the arena, not on the Rust stack.
+
+## D2541: Instance memory: the arena kept at memory's end, lean start capacity, the coded base outside memory
+date: 2026-11-09 · by: heap · issue: 0158
+A fresh Sandbox is 11 wasm pages (704 KiB) instead of 18: 2 stack (D2540), 3 static
+data, 2 dlmalloc, 4 base. Three changes:
+- **The page allocator keeps the arena at the end of memory** (djs-wasm allocator.rs,
+  extends D2053). Whatever lands right after the arena blocks its growth in place; a
+  page log over all workloads showed every growing one moved its arena once, at its
+  initial 10 pages, because dlmalloc's first segment (or the 2-page segment a
+  collection's side tables need) came right after it, and dlmalloc never gives segments
+  back. Now:
+  - `PageAlloc::prime` gives dlmalloc a 2-page first segment before anything else (one
+    page left the pi cold start and json/jsonh 0.4–0.8 MiB worse);
+  - blocks of 16 KiB up to `HUGE` go to dlmalloc only while its segments have room
+    (`Sys::no_grow`), else they are page runs of their own, tracked in a 16-slot list
+    and freed back to the page pool; without this arrays, higher-order and strbuild ended
+    3–4 MiB higher;
+  - the largest huge block is the *top* block; a buffer that a realloc turns into a page
+    run right behind it starts its own size further on (`Keep`), so that the top block
+    can still take the buffer's copy in place (json 6.7 → 5.8, jsonh 6.3 → 5.4 MiB).
+- **Lean start capacity.** A VM from the base, or restored from an image
+  (`djs_image_staging`), reserves the image plus one page (`Heap::image_capacity`)
+  instead of its first GC threshold plus slack (D1942, D1990), which was 2x the base and
+  never touched by most sandboxes. Thresholds and collection points are unchanged. A host
+  that passes a size hint (`vm_new_reserved`, `Vm::from_base_reserved`; pi's cold start)
+  still gets `restore_capacity` (`Heap::start_capacity` chooses).
+- **The coded base is the custom section `djs_base`** (djs-prelude build.rs writes it as
+  a `pub` static array with `#[link_section]`; with `#[used]` or through
+  `include_bytes!` the bytes stayed in the data segment too). Hosts hand it to an
+  instance with the new export `djs_base_coded_ptr(len)` when they have no decoded base
+  to inject (`provideCodedBase` in js/src/snapshot.ts; `provideBase` and `baseReference`
+  call it). The instance drops it once it keeps a decoded copy. Without it there is no
+  base: `djs_base_ptr` returns 0 and `vm_new` fails with a message. ABI version 2.
+  −1 page and ~40–50 KiB resident per instance (the data segment is copied into memory
+  at instantiation).
+
+Measured against main (mem-perturb, 24 runs each, mean MiB; every distribution is
+min = max within 0.1 except json-replacer):
+
+| workload | main | now |
+| --- | ---: | ---: |
+| empty, call1, calls, loop, tight, indexof, prop1, pushpop | 1.10 | 0.70 |
+| pi-like | 2.40 | 1.60 |
+| push-pop | 2.00 | 1.19 |
+| foreach, forof | 4.70 | 3.80 |
+| json-indent | 5.40 | 4.70 |
+| json-replacer | 5.34 | 4.66 |
+| json | 6.20 | 5.80 |
+| jsonh | 5.80 | 5.40 |
+| props, json-text | 1.30 | 1.20 |
+| arrays | 13.70 | 13.10 |
+| higher-order | 14.90 | 14.30 |
+| strbuild | 15.80 | 15.30 |
+| strings | 12.20 | 12.00 |
+| **json-date** | **4.30** | **5.20** |
+
+pi bench, wasm pages per instance: warm start (`return 1`) 23 → 14, warm tool-heavy
+25 → 24, cold (prelude run each time) 26 → 24; the process's first instance 36 → 30.
+Resident per sandbox ~650 → ~610 KiB (noisy). Module 450,277 → 451,262 B gzip (+985,
+the allocator and the base hand-over). Wasm instructions (n=5): within ±1% except
+json-text +4.4%, json-date +3.9%, indexof +2.6% (spreads 2–4%).
+
+**Accepted trade (coordinator): json-date +0.9 MiB.** JSON.stringify builds a large
+result in a Rust `Vec`, which grows into a page run right behind the arena; copying it
+into a heap string grows the arena (to its threshold, +9 pages for a 4-page buffer)
+while the buffer is alive, so the arena moves once. main hid this in the 10-page hole
+its first arena move left. The real fix is in JSON.stringify: not holding a large Rust
+buffer while the arena grows (write large results straight into a heap string).
+
+Measured and rejected (single runs of an instrumented build, final wasm pages, against
+the taken variant's):
+- a gap of half or a quarter of the top block behind growing buffers: json-date 85 →
+  74/64 pages, but unused gaps at the end of runs: json 95 → 134/114, jsonh 88 →
+  124/106, json-replacer 76 → 108/92, strings 194 → 219/203, foreach 63 → 89/76;
+- moving the arena on purpose once it outgrows 8–12 pages, to leave main's hole for
+  transients: growing runs back at main's numbers (only small VMs gain), and
+  json-text/props 20 → 28 at 10 pages;
+- arena growth by eighths instead of doubling up to the threshold: no gain, json worse;
+- letting dlmalloc release segments, and trimming it when the arena is blocked: no
+  change (the blocking segment still holds live blocks after a compile);
+- a dlmalloc prime of 3 or 4 pages: small VMs +1–2 pages, nothing else better;
+- no medium page runs: arrays 209 → 258, higher-order 230 → 277, strbuild 245 → 287,
+  json-indent 76 → 116 pages.

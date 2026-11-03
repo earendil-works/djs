@@ -204,6 +204,23 @@ allocations stay with the general allocator, which takes its pages from the same
 Peaks of allocation-heavy runs halved, to about the arena's size plus the rest of the
 heap.
 
+What blocks the arena is whatever lands right after it at the end of memory. The general
+allocator never gives pages back, so one of its segments there blocked the arena for
+good, and the arena's next growth moved it and left its old pages behind. The
+allocator now keeps the arena at the end (D2541): the general allocator's first two
+pages come before it, a collection's side tables (16–256 KiB, they scale with the heap)
+get pages of their own when the general allocator has no room, which go back to the
+pool after the collection and let the arena grow over them, and a buffer that grows into
+pages of its own right behind the arena starts its own size further on, so that the
+arena can still take the buffer's copy in place. That let a VM start with just its
+image plus a page instead of room up to its first threshold.
+
+> **Trade-off.** Small starts over reserved room. A fresh sandbox is 11 pages instead of
+> 18, pi-like peaks at 1.6 MiB instead of 2.4, and growing runs are 0.3–0.9 MiB lower.
+> The cost: a large `JSON.stringify` result is built in a Rust buffer that sits behind
+> the arena while the arena grows to take the copy; json-date peaks at 5.2 MiB instead
+> of 4.3, where the old layout happened to have a hole the buffer fit in.
+
 A run's peak still depends a little on placement, so a memory claim about the collector
 compares distributions over many slightly perturbed runs, never one run per build
 (D2048).
@@ -366,7 +383,7 @@ not catchable. The run stops with `HostOutOfMemory` and the VM stays usable (D16
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2057 D2063 D2064 D2065 D2042 D2044 D2055 D2056 D2045 D2046 D2047 D2048 D2053 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 D2442 -->
+<!-- gen:decisions D2040 D2041 D2057 D2063 D2064 D2065 D2042 D2044 D2055 D2056 D2045 D2046 D2047 D2048 D2053 D018 D1090 D1052 D1381 D1382 D1513 D1621 D1990 D1870 D1601 D1710 D1720 D1600 D1700 D1900 D1910 D1690 D1831 D1054 D2442 D2541 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
 - D2057: The cells a VM replaces first sit at the end of base and sealed images
@@ -402,4 +419,5 @@ Decisions on this page:
 - D1831: Shapes with strong transitions and a per-heap shape budget
 - D1054: Atom representation; symbols are atoms
 - D2442: GC growth counts the builtin prefix as a fixed allowance
+- D2541: Instance memory: the arena kept at memory's end, lean start capacity, the coded base outside memory
 <!-- /gen -->

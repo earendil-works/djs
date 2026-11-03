@@ -28,14 +28,19 @@ values the host keeps across calls are small integers: a value is a *handle*, an
 into a table of GC roots, freed with `vm_handle_free`. A VM created with `vm_new` is a
 copy of the base snapshot (D1321), so creating one is a memory copy, not an
 initialization. The module carries that snapshot compressed with its own small codec, to
-keep the download small (D2252). An instance decodes it when it creates its first VM,
-which takes a few milliseconds. Because every sandbox is its own instance, the host
-decodes it only once per compiled module: it keeps the first instance's decoded copy and
-writes it into each new instance, which checks its length and hash before using it. A
-host that skips this still works; each instance then decodes its own copy. The decoded or
-written bytes then become the first VM's arena as they are: the instance keeps no copy of
-its own, 0.31 MiB less wasm memory per sandbox (D2060). Only an instance that makes a
-second VM decodes the base again, and keeps that copy for any further VMs.
+keep the download small (D2252), in a custom section named `djs_base`, outside the
+instance's linear memory: a copy in memory would cost every instance a page for bytes it
+reads once (D2541). So a host hands the section to a fresh instance
+(`djs_base_coded_ptr`, then write the bytes), and the instance decodes it when it creates
+its first VM, which takes a few milliseconds. Because every sandbox is its own instance,
+the host decodes it only once per compiled module: it keeps the first instance's decoded
+copy and writes it into each new instance instead, which checks its length and hash
+before using it. The decoded or written bytes then become the first VM's arena as they
+are: the instance keeps no copy of its own, 0.31 MiB less wasm memory per sandbox
+(D2060). Only an instance that makes a second VM decodes the base again (from the coded
+section, handed over once more), and keeps that copy for any further VMs. A fresh
+sandbox is 11 wasm pages (704 KiB): a 128 KiB stack, the static data, the allocator's
+first pages and the base.
 
 A panic in the engine (a bug, never something a script can cause: the heap is bounds
 checked and every limit is a thrown error) records a message and traps. The host reads
@@ -236,7 +241,7 @@ that expects QuickJS's fingerprint.
 
 Decisions on this page:
 
-<!-- gen:decisions D2060 D1180 D1210 D1321 D1370 D1374 D1383 D1495 D1660 D1670 D1680 D1690 D1730 D1740 D1890 D2262 D2265 -->
+<!-- gen:decisions D2060 D1180 D1210 D1321 D1370 D1374 D1383 D1495 D1660 D1670 D1680 D1690 D1730 D1740 D1890 D2262 D2265 D2541 -->
 - D2060: The base is decoded or injected straight into the first VM's arena
 - D1180: Inbound wire format, version 1
 - D1210: Exported heap layout drives the host-side reader
@@ -254,4 +259,5 @@ Decisions on this page:
 - D1890: pi adapter: snapshot() and the prelude image collect first
 - D2262: pi's prelude image is the reference of the adapter's snapshots and is recomputable
 - D2265: Images carry a dependency descriptor; loading and containers check it, not the build hash
+- D2541: Instance memory: the arena kept at memory's end, lean start capacity, the coded base outside memory
 <!-- /gen -->

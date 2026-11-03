@@ -138,10 +138,19 @@ The arena grows like a `Vec`, by reallocating, with two twists:
   what a run costs. Below the threshold, growth doubles but never reserves past the
   threshold; past it, a collection is pending and growth is by a quarter. Thresholds are
   whole 64 KiB wasm pages (D1870).
+- **It starts small.** A VM made from the base or restored from an image reserves the
+  image plus one 64 KiB page, not room up to its first collection threshold: most
+  sandboxes never need more, and the rest grow in place (D2541). Only a host that says
+  how big the heap will get (pi's cold start, which runs its prelude next) gets that
+  room up front.
 - **In wasm it grows in place.** The module's allocator keeps big blocks, the arena
   among them, as runs of whole pages. When the pages after the arena are free or memory
   ends there, a growth adds pages instead of copying the arena into a new block, which
-  would hold the old and the new copy at once (D2053).
+  would hold the old and the new copy at once (D2053). The allocator works to keep the
+  arena at the end of memory: the general-purpose allocator's first pages come before
+  it, mid-sized blocks the general allocator cannot hold get pages of their own that go
+  back when freed instead of staying behind the arena for good, and a buffer that grows
+  right behind the arena leaves room for the arena's next growth (D2541).
 - **It has a cap.** The embedder sets a memory limit. The arena may grow to the limit
   minus a reserve of `min(cap / 32, 1 MiB)`. Reaching that point is the catchable
   `InternalError: out of memory`, a preallocated object, as in QuickJS. Throwing it
@@ -219,7 +228,7 @@ the payload, in a `Ref` field the whole word. This one rule buys four things:
 
 Decisions on this page:
 
-<!-- gen:decisions D2063 D2064 D2053 D1051 D1052 D1261 D1151 D1091 D1870 D1600 D1690 D1700 D1056 D1573 D2520 D2265 -->
+<!-- gen:decisions D2063 D2064 D2053 D1051 D1052 D1261 D1151 D1091 D1870 D1600 D1690 D1700 D1056 D1573 D2520 D2265 D2541 -->
 - D2063: The base image ends with a tail of per-VM cells; nothing writes below BASE_END
 - D2064: Collections never move or free the builtin prefix
 - D2053: A page allocator under dlmalloc in djs-wasm: huge blocks grow in place
@@ -236,4 +245,5 @@ Decisions on this page:
 - D1573: Arena out-of-bounds panics carry no offsets in release builds
 - D2520: Arena access: one u64 compare by default, an optional unchecked `unsafe-heap` build
 - D2265: Images carry a dependency descriptor; loading and containers check it, not the build hash
+- D2541: Instance memory: the arena kept at memory's end, lean start capacity, the coded base outside memory
 <!-- /gen -->
