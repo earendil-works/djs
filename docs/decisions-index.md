@@ -489,3 +489,18 @@ topics when the index is next reorganized.
 - D2306: Array.from(arrayLike, mapfn) runs through `%EachDense`
 - D2307: Callback builtins on short arrays: no `%EachDense` for an empty array, and its call outside `step`
 - D2510: No wasm JIT; ahead-of-time wasm for builtins stays `@native`
+- D2441: The hot loop's dispatch keeps no per-instruction values across calls
+- D2442: GC growth counts the builtin prefix as a fixed allowance
+- D2308: Images hold no dead value-stack slots; embedder collections shrink a grown stack
+- D2309: instr.py patches by checked anchors and splits user code from bytecode builtins
+- D2443: Short opcode forms and shortened jumps, a recorded trade
+- D025: The slim build's feature is `full`
+- D026: Image compatibility keyed on what an image depends on
+- D2520: Arena access: one u64 compare by default, an optional unchecked `unsafe-heap` build
+- D2550: Fuel stays per instruction; charging only at safepoints measured, not adopted
+- D2551: Large ASCII host strings are copied straight into a reserved heap string
+- D2411: The slim build: the `full` and `unicode` features, cut by a constant
+- D2412: The registry lists what the slim build lacks
+- D2413: Testing the slim build: its own legs in the gate
+- D2444: Code inline in the template, the rest of a user function in FuncInfo
+- D2310: A twin stays only where it pays its bytes
