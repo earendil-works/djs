@@ -7395,7 +7395,7 @@ them as JSON keys, computed property names or Map keys would spend quadratic tim
   in the last word; never 0 (0 is "not cached"). `KeyedHasher`, `hash_latin1_with`,
   `hash_units_with`, `keyed_u64` (Map/Set keys that are numbers, BigInts, objects or
   symbols). The old `StrHasher` is gone.
-- **Keys:** `Roots::HASH_KEY` (u64 at 88; Roots' minimum size is 96) is the VM's key; the
+- **Keys:** `Roots::HASH_KEY` (u64 at 104; Roots' minimum size is 112) is the VM's key; the
   base's atom index uses `BASE_HASH_KEY` (0), the same in every VM of the build (the
   prefix is immutable, D2064). The VM's key is `hash_key_for_seed(seed)` (one-way, so it
   is not the `Math.random` state a script can read back): `Vm::new`, `from_base` and
@@ -7434,6 +7434,9 @@ them as JSON keys, computed property names or Map keys would spend quadratic tim
   copy of SipHash's rounds (`compress`, `finish64` out of line), one probe loop for both
   levels and every caller (the needle enum), no dyn iterators and dropping the old fixed
   hash brought it down.
+- **Compatibility:** `vm::COMPAT_VERSION` 1 → 2: the hashes stored in images (string
+  caches, the atom indexes, Map/Set indexes) are computed differently, which the layout
+  and records hashes don't see (the SipHash constants are not top-level consts).
 - **Not done:** the collision test covers strings; keys built against SipHash need the
   key. Atom ids and the base keep their layout.
 

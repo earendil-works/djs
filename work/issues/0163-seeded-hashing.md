@@ -42,6 +42,9 @@ No workload slower than +1%.
   difftest corpus + codemode stress/determinism, js tests, native-vs-wasm, test262
   Map/Set/WeakMap/JSON/Symbol/computed-property-names, registry check (no update).
 - Guide: determinism.md (sources table, deterministic mode), heap.md (atoms, Map/Set).
+- Rebased onto 0164 (D2265): `Roots::HASH_KEY` moved to 104 (Roots 112 B),
+  `vm::COMPAT_VERSION` 1 → 2 (stored hashes change meaning; the SipHash constants are not
+  top-level consts, so RECORDS_HASH does not see them; `BASE_HASH_KEY` is one and is).
 
 ## Follow-ups
 - Map with number keys pays a SipHash per operation (+4.3% on a Map-int micro, not in the
