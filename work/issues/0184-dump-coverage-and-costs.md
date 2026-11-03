@@ -1,6 +1,6 @@
 # 0184: Close the remaining dump refusals; measure dump size and load time
 
-status: in-progress
+status: done
 agent: portable
 branch: issue/0184-dump-coverage
 depends-on: 0182
@@ -89,4 +89,38 @@ Dumps are the persistence format (D2560); before images are retired (0177):
 - Note: `cargo clippy -p djs-core --no-default-features --features dump` fails on main
   too (`base64` unused in slim); not in the gate.
 
+- Final dump-costs run (report work/scratch/0184/report-3.md, machine load 11-27, so
+  timings are noisy): corpus 300 cases, 1,063 idle points, 0 refused; agent-loop 11 idle
+  points, 0 refused (3 before); sizes unchanged.
+
 ## Result
+Landed (D2626, D2627, D2628):
+- **Refusals closed:** `yield*` (Loop::Star, yield*.await sites), closing an async
+  iterator (break, yield*'s close, a throw out of a for await: `exception`), `finally`
+  (roles `finally.value`/`finally.return`, the return address written as the index of its
+  `gosub`, D2627), a for-await's close subroutine (`v ret`), `switch` case tests
+  (`switch.discriminant`), `using`/`await using` (`using.record`, `$dump.using`),
+  destructuring (`pattern.*`, `assign.value`), for-in (`$dump.forIn`), RegExp String
+  Iterators (`$dump.regexpIterator`), iterator helpers (`$dump.iteratorHelper`); promise
+  value thunks/throwers in flight as arrows. Fixed: an array with named properties held
+  once by a frame (patches without a location).
+- **Still refused (cleanly, by path):** a site inside a class definition, closing a
+  for-await iterator on a resumed generator's `return(v)` path, a for-in over a Proxy.
+- **Tests:** golden programs yield-star, for-await-close, finally, using, destructuring,
+  for-in, iterator-helpers (tests/dump/v2/golden/, 64 dumps) with every idle point
+  dumped once and chained (`delegation_round_trips`); smap_tests tables STATEMENTS,
+  USING, PATTERNS; loader refusal cases; pins: no unsupported site left in the corpora
+  (tests/smap/summary.txt).
+- **Costs** (scripts/dump-costs/dump-costs.ts; `scripts/build-wasm.sh && scripts/build-wasm.sh
+  --dump`, then `scripts/timeout.sh 3600 node scripts/dump-costs/dump-costs.ts <dir>
+  [--no-corpus]`). Before/after D2626 (reports work/scratch/0184/report-1.md,
+  report-2.md): packaging A dump ms median empty 2.77 -> 0.93, ask 1.96 -> 1.17,
+  sequential 2.13 -> 0.74; packaging B sequential 2.40 -> 1.80; corpus (B) p50/p90 dump
+  3.50/5.98 -> 1.84/3.65 ms. Sizes (corpus p50/p90): dump raw 6.1/13.6 KB, zstd-3
+  1.7/3.1 KB, container 5.1/9.7 KB, image 23/41 KB. Recommendations: hosts zstd-3 dump
+  text (docs, done); typed arrays as base64 (already done); builtin names cached per VM
+  (D2626, done); no shared strings needed. Packaging B makes a fresh dump-module VM per
+  dump, so only the faster walk helps there unless js/src/sandbox.ts keeps the instance
+  (example's area). Final run (report-3.md): 0 refused at all 1,063 corpus idle points.
+- **Known gaps:** class-definition sites and the generator-return close (rare); slim +
+  dump clippy warning (`base64` unused) predates this issue.
