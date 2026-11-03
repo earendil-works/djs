@@ -115,18 +115,28 @@ impl Tools {
 
     /// The host function id for a call name a dump names (`tools.read`, 0171's
     /// `LoadOptions::host_fn`); `None` for a name that is not a tool.
+    /// Also for host functions a dump holds as values (`$dump.host(name, isAsync)`):
+    /// `print` and the `console` methods share the printing function's id.
     pub fn id_for_call_name(&self, call_name: &str) -> Option<u32> {
-        if call_name == "later" {
-            return Some(LATER);
+        match call_name {
+            "later" => return Some(LATER),
+            "print" | "console.log" | "console.info" | "console.warn" | "console.error"
+            | "console.debug" => return Some(crate::run::CONSOLE_LOG),
+            _ => {}
         }
         let name = call_name.strip_prefix("tools.")?;
         (!name.is_empty()).then(|| self.id_for(name))
     }
 
     /// The call name of a tool's host function id (`tools.read`), for a dump's exporter.
+    /// The printing function (`print`, `console.log`, ...) is `print`: one id, one
+    /// behavior.
     pub fn call_name(&self, fn_id: u32) -> Option<String> {
         if fn_id == LATER {
             return Some(String::from("later"));
+        }
+        if fn_id == crate::run::CONSOLE_LOG {
+            return Some(String::from("print"));
         }
         let i = fn_id.checked_sub(TOOL_BASE)? as usize;
         self.names.borrow().get(i).map(|n| format!("tools.{n}"))
@@ -512,13 +522,18 @@ mod tests {
         assert_eq!(t.id_for_call_name("tools.read"), Some(TOOL_BASE));
         assert_eq!(t.id_for("glob"), TOOL_BASE + 1);
         assert_eq!(t.id_for("read"), TOOL_BASE);
-        assert_eq!(t.id_for_call_name("console.log"), None);
+        assert_eq!(t.id_for_call_name("Math.max"), None);
         assert_eq!(t.id_for_call_name("later"), Some(LATER));
         assert_eq!(t.call_name(LATER).as_deref(), Some("later"));
+        let print = crate::run::CONSOLE_LOG;
+        assert_eq!(t.id_for_call_name("print"), Some(print));
+        assert_eq!(t.id_for_call_name("console.warn"), Some(print));
+        assert_eq!(t.call_name(print).as_deref(), Some("print"));
+        // `make` stays private to the tools Proxy.
+        assert_eq!(t.call_name(MAKE_TOOL), None);
         assert_eq!(t.id_for_call_name("tools."), None);
         assert_eq!(t.call_name(TOOL_BASE + 1).as_deref(), Some("tools.glob"));
         assert_eq!(t.call_name(TOOL_BASE + 2), None);
-        assert_eq!(t.call_name(1), None);
     }
 
     #[test]

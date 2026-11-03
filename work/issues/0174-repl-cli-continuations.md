@@ -56,6 +56,9 @@ Make suspension visible and testable by hand (docs/continuation-dumps.md "REPL")
   run), a tools-based hand-written dump (tests/run/reads.*) with answers; tests/repl.rs
   restores reads.dump.js (.pending, .bt, .resolve) and plan.dump.js, and the exporter
   refusals.
+- For 0172's `$dump.host(name, isAsync)`: the load lookup also accepts `print` and the
+  `console` methods (the printing function's id 1); `call_name(1)` is `print`, `make`
+  (id 2) has no name. Committed on the branch, to land with the post-0172 work.
 - Left for after 0172: format 2 `.dump` of a waiting session, `.dump-every`, `run
   --dump-after K` / `--dump-every-idle`, and the every-K dump/resume CLI test.
 - Earlier note: waiting for 0171 for the dump part (.dump format 2, .restore of waiting inputs,
