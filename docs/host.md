@@ -132,6 +132,33 @@ sb.dispose();
   A host `collect()` at exactly that point can then fail for lack of to-space; collect
   when the VM is idle or done instead.
 
+### Host-driven runs and continuation dumps (D2630)
+
+`runAsync` calls the async host functions itself and returns only at the end. A host that
+wants to persist a run while it waits drives it instead (the first piece of
+docs/continuation-dumps.md "Sandbox API"; examples/sleep-dump shows all of it):
+
+```ts
+const run = sb.begin(code, params, { filename: "task.js" }); // to the first idle point
+run.state;                                  // "idle" | "done" | "threw"
+run.calls;                                  // [{ id, fn: "sleep", args: [5000] }]: open, not called
+run.settle(id, { ok: true, value });        // a result (ok false: rejects with value)
+await run.advance();                        // to the next idle point; run.value / run.error at the end
+const text = run.dump();                    // only while idle: a format 2 dump
+const { sandbox, run: again } = await Sandbox.resume(text, { asyncFunctions }); // same calls, same ids
+```
+
+- A host-driven run never calls async host functions: it lists them in `run.calls`, and
+  the host answers with `settle`, in any order (results are still macrotasks, D1670).
+  Sync host functions are called as in `run`. The sandbox runs nothing else meanwhile.
+- `dump()` writes the idle VM as a format 2 dump: its data, the suspended activations, the
+  open calls (by the host's function names) and the run's result promise, named `run`.
+  `Sandbox.resume` makes a sandbox from the options (the same host functions, by name),
+  loads the dump and continues: `again.calls` are the open calls with their ids. What the
+  host does with them (deliver a recorded result, issue the call again, reject it) is its
+  own policy; timers and other host state are the host's to keep and re-arm.
+- `sb.load(text)` loads a dump into an existing sandbox and returns `{ calls }`.
+
 ### Journals: record and replay (D1730)
 
 A deterministic sandbox can record a run and replay it later, for durability (restart a
@@ -359,6 +386,9 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_set_random_seed(vm, lo, hi)` | reseed `Math.random` (xorshift64*, as QuickJS) with `hi << 32 \| lo`; a new VM has a fixed default seed (0049) |
 | `vm_abort(vm)` | abandon the current call (out of fuel or parked): the VM is idle and usable again |
 | `vm_result(vm) -> h` | the DONE/THREW value, once |
+| `vm_outcome(vm) -> h` | the entry call's outcome while no frame is active, also at IDLE (an async body's promise); any number of times; out[0] = 1 if it threw; 0 if none |
+| `vm_dump(vm, len) -> 0/1/2` | (feature `dump`) a format 2 dump of the idle VM in out. Staging, four lines: host globals and names to dump (comma-separated), the host's function names in id order and the values to name as `handle:name` (tab-separated). 1: refused, reasons in out; 2: no base image (D2631) |
+| `vm_load_dump(vm, names_len, len) -> 0/1` | (feature `dump`) loads the dump after `names_len` bytes of host function names (`\n`-separated, id order). 0: out = u32 `n_calls, n_handles, (call_id, fn_id)*, (handle, name_len)*`, then the handles' names; 1: refused, the reason in out (D2631) |
 | `vm_host_call(vm) -> argc` | out = `[call_id, fn_id, this lo, hi, (arg lo, hi)*]` |
 | `vm_host_call_info(vm, call_id) -> argc` | `vm_host_call` for any pending call (async ones) |
 | `vm_new_host_calls(vm) -> n` | out = the ids (u32) of the async calls made since the last check |
