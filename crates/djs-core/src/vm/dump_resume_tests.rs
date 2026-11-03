@@ -137,7 +137,7 @@ fn fixture(name: &str) -> Loaded {
         .lines()
         .nth(1)
         .and_then(|l| l.strip_prefix("// at idle point "))
-        .and_then(|l| l.split_whitespace().next())
+        .and_then(|l| l.split(|c: char| !c.is_ascii_digit()).next())
         .and_then(|n| n.parse().ok())
         .unwrap_or_else(|| panic!("{name}: no `// at idle point K` line"));
     let (want, marks) = run_program(&src);
@@ -175,4 +175,32 @@ fn plan_example() {
         }]
     );
     assert_eq!(l.handles.len(), 1);
+}
+
+#[test]
+fn every_operand_role() {
+    let l = fixture("roles");
+    assert_eq!(l.calls.len(), 17);
+}
+
+/// Prints the suspension maps of a file, for writing fixtures by hand:
+/// `DJS_SMAP=tests/dump/v2/x.src.js cargo test -p djs-core --lib show_maps -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn show_maps() {
+    let path = std::env::var("DJS_SMAP").expect("DJS_SMAP=file");
+    let src = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(path),
+    )
+    .unwrap();
+    let mut vm = new_vm();
+    let maps = crate::compiler::suspension_maps(
+        vm.heap_mut(),
+        src.as_bytes(),
+        &crate::compiler::CompileOptions::script("src.js"),
+    )
+    .unwrap();
+    for m in maps {
+        std::print!("{}", m.text(src.as_bytes()));
+    }
 }

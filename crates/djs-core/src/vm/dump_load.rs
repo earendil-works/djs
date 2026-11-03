@@ -114,6 +114,9 @@ const CELL: u32 = PRIVATE + 2;
 const PENDING: u32 = PRIVATE + 3;
 const HANDLE: u32 = PRIVATE + 4;
 const ISSUED: u32 = PRIVATE + 5;
+/// The ids of the primitives' own calls while a dump loads: above every id a dump's open
+/// call may have, so the two never meet.
+const LOADER_CALL_IDS: u32 = 0x8000_0000;
 const PRIMITIVES: &[(&str, u32)] = &[
     ("private", PRIVATE),
     ("resume", RESUME),
@@ -236,6 +239,9 @@ impl Vm {
         let script = self.heap.new_handle(f).map_err(|_| LoadError::Memory)?;
         let i = state::interp(&self.heap);
         let next_id = self.heap.arena().get(i, Interp::NEXT_CALL_ID);
+        self.heap
+            .arena_mut()
+            .set(i, Interp::NEXT_CALL_ID, LOADER_CALL_IDS);
         let mut load = Load {
             text,
             script,
@@ -253,18 +259,18 @@ impl Vm {
                 let _ = self.heap.delete_own_property(g, k);
             }
         }
+        // The host's next call gets the id the dump says, else the one it would have
+        // got, and never one of an open call.
+        let open = load.out.calls.iter().map(|c| c.id + 1).max().unwrap_or(0);
+        let next = load.issued.unwrap_or(next_id).max(open).max(1);
+        let i = state::interp(&self.heap);
+        self.heap.arena_mut().set(i, Interp::NEXT_CALL_ID, next);
         if let Err(e) = r {
             for (_, h) in load.out.handles {
                 self.heap.drop_handle(h);
             }
             return Err(e);
         }
-        // The primitives were host calls too: the next call gets the id the dump says,
-        // else the one it would have got, and never one of an open call.
-        let open = load.out.calls.iter().map(|c| c.id + 1).max().unwrap_or(0);
-        let next = load.issued.unwrap_or(next_id).max(open).max(1);
-        let i = state::interp(&self.heap);
-        self.heap.arena_mut().set(i, Interp::NEXT_CALL_ID, next);
         Ok(load.out)
     }
 
@@ -317,6 +323,7 @@ impl Vm {
                         CELL => self.primitive_cell(&args),
                         PENDING => self.primitive_pending(&args, opts, load),
                         HANDLE => self.primitive_handle(&args, load),
+                        // (A positive int32: below LOADER_CALL_IDS.)
                         ISSUED => match args.first().and_then(|v| v.as_int()) {
                             Some(n) if n > 0 => {
                                 load.issued = Some(n as u32);
@@ -380,6 +387,7 @@ impl Vm {
             .as_int()
             .filter(|&n| n > 0)
             .ok_or("$dump.pending: not a call id")? as u32;
+        // (Below LOADER_CALL_IDS, as every positive int32 is.)
         let name = string_arg(&self.heap, arg(1), "$dump.pending")?;
         let values = array_arg(&self.heap, arg(2), "$dump.pending")?;
         if crate::interp::run::host_call_cell(&self.heap, id).is_some() {
