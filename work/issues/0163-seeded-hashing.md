@@ -24,7 +24,7 @@ No workload slower than +1%.
   from_base, set_random_seed); the base index under a fixed key (0). Strings cache their
   level's hash (prefix: base, above: keyed). Rekey = clear cached hashes above the
   prefix, rebuild the VM's atom index and every Map/Set index (order kept).
-- First version (+4.5 KB gzip, props +5.9%): trimmed code to +717 B gzip (one copy of
+- First version (+4.5 KB gzip, props +5.9%): trimmed code to +453 B gzip on today's main (one copy of
   the rounds, one probe loop with a needle enum, no dyn iterators, the old fixed hash
   dropped). props' cost was probe-placement luck plus per-step cost: identity match for
   an atom's own string, cached-hash reads per candidate, own index at 1/4 load below
@@ -56,5 +56,5 @@ No workload slower than +1%.
   unchanged. `Vm::set_math_random_seed` for hosts that key once (pi).
 - Crafted colliding keys stay linear (heap/hash_tests.rs).
 - Perf: native workloads ≤ +0.31%, wasm within noise; Map-int micro +4.3%.
-- Size: +717 B gzip, ceiling 455,100 → 455,900 (D2434).
+- Size: +453 B gzip (444,523 → 444,976), slim +434 B; ceilings unchanged.
 - pi deterministic containers +1 KB; non-deterministic unchanged path (no per-session rekey).

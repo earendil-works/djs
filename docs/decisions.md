@@ -7428,15 +7428,12 @@ them as JSON keys, computed property names or Map keys would spend quadratic tim
   (`collection_set` caches the key's hash), JSON.parse of 500 distinct keys +3.0%. pi
   (scripts/snapshot-research/wasm.ts, deterministic): containers +1.0 KB (ask 2.2 →
   3.2 KB, agent-loop 6.4 → 7.3 KB median), since each session rekeys the prelude's atoms
-  and tables; outside deterministic mode no session rekeys. Module +717 B gzip (D2434).
+  and tables; outside deterministic mode no session rekeys.
+- **Size:** module +453 B gzip (444,523 → 444,976 B), slim module +434 B (378,784 →
+  379,218 B), both under their ceilings, which stay. A first version cost +4.5 KB; one
+  copy of SipHash's rounds (`compress`, `finish64` out of line), one probe loop for both
+  levels and every caller (the needle enum), no dyn iterators and dropping the old fixed
+  hash brought it down.
 - **Not done:** the collision test covers strings; keys built against SipHash need the
   key. Atom ids and the base keep their layout.
 
-## D2434: The size ceiling rises by 800 B for keyed hashing
-date: 2026-11-09 · by: strings · issue: 0163
-D2433 costs +717 B gzip (module 455,081 → 455,798 B, raw +674 B): SipHash's rounds and
-finalization out of line once, the two-level lookup on one needle type, the rekey walk.
-Trimmed from +4.5 KB by keeping one copy of the rounds (`compress`, `finish64` out of
-line), one probe loop for both levels and all callers, no dyn iterators, and dropping
-the fixed multiply-rotate hash. The ceiling in tests/scores/size.tsv rises from 455,100
-to 455,900.
