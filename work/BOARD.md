@@ -6,6 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0164 | Image compatibility by dependencies (D026) | snapshot | .worktrees/snapshot |
 | 0162 | Act on pico's speed findings (tree, fuel rule, results into heap strings) | speed | .worktrees/speed |
 | 0163 | Seeded hashing for VM atoms and Map/Set | strings | .worktrees/strings |
 | 0158 | Instance memory: reservation, arena at end, stack, base outside | heap | .worktrees/heap |
@@ -26,7 +27,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- |
 | - | Tool-result buffers with sliced strings (pico lesson 3; weeks) | 0158 (heap next) |
 | - | Codec-free session images for browsers (pico lesson 4) | - |
-| - | Image compatibility by dependencies instead of source hash (pico lesson 6) | owner decision |
 
 ## Done
 

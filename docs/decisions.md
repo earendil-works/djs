@@ -6815,3 +6815,17 @@ Three fixes found on the way, each worth having on its own:
 - **`run_hot`'s fuel and end exits** are `Exit::General`, not `Decline(0)`: that payload
   made LLVM write the opcode's local at every loop head (two instructions per
   instruction in V8's baseline code).
+
+## D025: The slim build's feature is `full`
+date: 2026-11-03 · by: owner · issue: 0160
+The default-on cargo feature that carries the families the slim build drops is named `full`
+(cargo features must be additive); `unicode` is the second default-on feature. The build
+without them is called slim (`djs-slim.wasm`).
+
+## D026: Image compatibility keyed on what an image depends on
+date: 2026-11-03 · by: owner · issue: 0164
+Instead of refusing every image whose engine build hash (a hash of all djs-core sources)
+differs, a snapshot is compatible when the things it actually depends on are unchanged:
+the image/cell formats (layout hash), the opcode and intrinsic tables, the builtin prefix
+(base hash), the snapshot container format, plus a hand-bumped compatibility version for
+semantic changes those hashes can't see (docs/lessons-from-pico.md lesson 6).
