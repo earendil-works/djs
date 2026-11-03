@@ -2714,9 +2714,9 @@ fn warm_and_cold_addition_caches_behave_the_same() {
 
 #[test]
 fn privileged_templates_have_no_debug_fields() {
-    // D1980: the prelude's templates stop before the optional debug fields; user code
-    // keeps them (line numbers, source text, local names).
-    use crate::bytecode::template::{FULL_SIZE, debug_info};
+    // D1980, D2444: the prelude's templates have no debug info (a FuncInfo only for
+    // child templates); user code keeps it (line numbers, source text, local names).
+    use crate::bytecode::template::debug_info;
     use crate::heap::CellKind;
     use crate::heap::cells::FuncTemplate;
     let (vm, out) = run_script(
@@ -2733,10 +2733,16 @@ fn privileged_templates_have_no_debug_fields() {
         let privileged = h.arena().get(c.offset, FuncTemplate::FLAGS)
             & crate::bytecode::template::func_flags::PRIVILEGED
             != 0;
-        assert_eq!(c.size < FULL_SIZE, privileged, "template at {}", c.offset);
+        let info = h
+            .arena()
+            .get::<crate::heap::Ref>(c.offset, FuncTemplate::INFO);
         if privileged {
             slim += 1;
-            assert_eq!(c.size, FuncTemplate::LAYOUT.min_size);
+            assert!(
+                info.is_null() || crate::bytecode::template::child_count(h, c.offset) > 0,
+                "template at {}",
+                c.offset
+            );
             assert!(debug_info(h, c.offset).script.is_null());
         } else {
             full += 1;
@@ -3750,11 +3756,13 @@ fn seal_puts_the_first_grown_cells_last() {
         "2,3"
     );
     v.collect().unwrap();
-    // Nearly every word of the sealed image is where the seal put it.
+    // Nearly every word of the sealed image is where the seal put it. What moves is about
+    // 4,100 words whatever the image's size, so the share drops as the image shrinks
+    // (D2444 took it from 90.06% to 89.5%).
     let words = |b: &[u8]| b.chunks(8).map(|w| w.to_vec()).collect::<Vec<_>>();
     let (x, y) = (words(&sealed), words(v.bytes()));
     let same = x.iter().zip(&y).filter(|(a, b)| a == b).count();
-    assert!(same * 100 > x.len() * 90, "{same} of {} words", x.len());
+    assert!(same * 100 > x.len() * 88, "{same} of {} words", x.len());
 }
 
 /// The prefix write barrier (D2065): armed, a write into the builtin prefix panics in

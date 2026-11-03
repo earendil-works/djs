@@ -143,7 +143,10 @@ impl Exec<'_> {
                     func: Some(f),
                     name,
                     file: Some(file),
-                    pos: crate::bytecode::lookup_line(bytes_of(self.heap, debug.lines), pc),
+                    pos: crate::bytecode::lookup_line(
+                        crate::bytecode::template::bytes_of(self.heap, debug.lines),
+                        pc,
+                    ),
                     native: false,
                     construct,
                 });

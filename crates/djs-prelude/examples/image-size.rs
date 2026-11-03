@@ -18,24 +18,12 @@ fn main() {
         match c.kind {
             CellKind::FuncTemplate => {
                 let debug = djs_core::bytecode::template::debug_info(heap, c.offset);
+                // Code, capture descriptors and handlers are inline (D2444).
                 for (r, name) in [
-                    (a.get(c.offset, FuncTemplate::CODE), "Bytes: bytecode"),
-                    (
-                        a.get(c.offset, FuncTemplate::HANDLERS),
-                        "Bytes: handler tables",
-                    ),
                     (debug.lines, "Bytes: line tables"),
                     (
                         a.get(c.offset, FuncTemplate::CONSTS),
                         "ValueArray: constant pools",
-                    ),
-                    (
-                        a.get(c.offset, FuncTemplate::CHILDREN),
-                        "RefArray: child templates",
-                    ),
-                    (
-                        a.get(c.offset, FuncTemplate::CAPTURE_DESC),
-                        "U32Array: capture descriptors",
                     ),
                     (debug.names, "U32Array: local names"),
                 ] {

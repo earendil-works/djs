@@ -1,4 +1,4 @@
-//! Heap helpers for compiled code cells (`Bytes`, `RefArray`, `FuncTemplate`) and the
+//! Heap helpers for compiled code cells (`FuncTemplate`, `FuncInfo`, `Bytes`, `RefArray`) and the
 //! template disassembler. The cell layouts live in `heap/cells.rs`.
 
 use alloc::string::String;
@@ -8,7 +8,9 @@ use core::fmt::Write;
 use super::disasm::{DisasmContext, disasm};
 use super::handlers::{Handler, HandlerTable, encode_handlers};
 use super::stack::{StackError, StackScratch, check_stack_in};
-use crate::heap::cells::{Bytes, CellKind, FuncTemplate, RefArray, Script, U32Array, ValueArray};
+use crate::heap::cells::{
+    Bytes, CellKind, FuncInfo, FuncTemplate, RefArray, Script, U32Array, ValueArray,
+};
 use crate::heap::{Atom, Heap, HeapError, Ref};
 use crate::value::{Str, Value};
 
@@ -119,7 +121,8 @@ impl From<HeapError> for TemplateError {
 }
 
 /// Checks the code with the stack checker (which also computes `STACK`) and writes a
-/// `FuncTemplate` cell with its `Bytes`, `ValueArray`, `RefArray` and `U32Array` parts.
+/// `FuncTemplate` cell, its code, capture descriptors and handler table inline (D2444),
+/// with its `ValueArray` of constants and a `FuncInfo` for the children and debug info.
 /// Empty parts are stored as null.
 pub fn alloc_template(heap: &mut Heap, p: &TemplateParts<'_>) -> Result<Ref, TemplateError> {
     alloc_template_in(heap, p, &mut StackScratch::default())
@@ -135,25 +138,20 @@ pub fn alloc_template_in(
     let stack = check_stack_in(p.code, p.handlers, scratch).map_err(TemplateError::Stack)?;
     let cache_sites = &scratch.caches;
     let captures = u16::try_from(p.captures.len()).map_err(|_| TemplateError::TooManyCaptures)?;
-    let mut code_bytes = p.code.to_vec();
-    let ic_count = number_caches(&mut code_bytes, cache_sites);
-    let code = alloc_bytes(heap, &code_bytes)?;
+    let mut data = Vec::with_capacity(p.code.len() + 4 * p.captures.len());
+    data.extend_from_slice(p.code);
+    let ic_count = number_caches(&mut data, cache_sites);
+    for c in p.captures {
+        data.extend_from_slice(&c.to_le_bytes());
+    }
+    data.extend_from_slice(&encode_handlers(p.handlers));
+    let code_len = u32::try_from(p.code.len()).map_err(|_| HeapError::OutOfMemory)?;
+    let data_len = u32::try_from(data.len()).map_err(|_| HeapError::OutOfMemory)?;
     let consts = nonempty(p.consts, |v| alloc_value_array(heap, v))?;
-    let children = nonempty(p.children, |c| alloc_ref_array(heap, c))?;
-    let capture_desc = nonempty(p.captures, |c| alloc_u32_array(heap, c))?;
-    let handlers = nonempty(p.handlers, |h| alloc_bytes(heap, &encode_handlers(h)))?;
-    let lines = nonempty(p.lines, |l| alloc_bytes(heap, l))?;
-    let ids: Vec<u32> = p.names.iter().map(|a| a.id()).collect();
-    let names = nonempty(&ids, |n| alloc_u32_array(heap, n))?;
-    // A privileged (prelude) function has no debug info: its frames are hidden or
-    // `(native)` in traces, its source is `[native code]`, and its locals are never named
-    // (D1980). Its template stops before the optional fields.
-    let slim = p.flags & func_flags::PRIVILEGED != 0 && lines.is_null() && names.is_null();
-    let size = if slim {
-        FuncTemplate::LAYOUT.min_size
-    } else {
-        FULL_SIZE
-    };
+    let info = alloc_info(heap, p)?;
+    let size = FuncTemplate::DATA
+        .cell_size(data_len)
+        .ok_or(HeapError::OutOfMemory)?;
     let off = heap.alloc_cell(CellKind::FuncTemplate, size)?;
     let a = heap.arena_mut();
     a.set(off, FuncTemplate::FLAGS, p.flags);
@@ -164,26 +162,92 @@ pub fn alloc_template_in(
     a.set(off, FuncTemplate::STACK, stack);
     a.set(off, FuncTemplate::CAPTURES, captures);
     a.set(off, FuncTemplate::IC_COUNT, ic_count);
-    a.set(off, FuncTemplate::CODE, code);
+    a.set(off, FuncTemplate::CODE_LEN, code_len);
     a.set(off, FuncTemplate::CONSTS, consts);
-    a.set(off, FuncTemplate::CHILDREN, children);
-    a.set(off, FuncTemplate::CAPTURE_DESC, capture_desc);
-    a.set(off, FuncTemplate::HANDLERS, handlers);
-    if !slim {
-        a.set(off, FuncTemplate::LINES, lines);
-        a.set(off, FuncTemplate::SCRIPT, p.script);
-        a.set(off, FuncTemplate::SRC_START, p.src_start);
-        a.set(off, FuncTemplate::SRC_END, p.src_end);
-        a.set(off, FuncTemplate::NAMES, names);
+    a.set(off, FuncTemplate::INFO, info);
+    a.slice_mut(FuncTemplate::DATA.at(off, 0), data_len)
+        .copy_from_slice(&data);
+    Ok(Ref(off))
+}
+
+/// The `FuncInfo` of a template with parts `p`, or null when it needs none: a privileged
+/// (prelude) function has no debug info, since its frames are hidden or `(native)` in
+/// traces, its source is `[native code]`, and its locals are never named (D1980); it
+/// usually has no children either.
+fn alloc_info(heap: &mut Heap, p: &TemplateParts<'_>) -> Result<Ref, HeapError> {
+    let debug = p.flags & func_flags::PRIVILEGED == 0 || !p.lines.is_empty() || !p.names.is_empty();
+    if !debug && p.children.is_empty() {
+        return Ok(Ref::NULL);
+    }
+    let (script, src_start, src_end) = if debug {
+        (p.script, p.src_start, p.src_end)
+    } else {
+        (Ref::NULL, 0, 0)
+    };
+    let lines = nonempty(p.lines, |l| alloc_bytes(heap, l))?;
+    let ids: Vec<u32> = p.names.iter().map(|a| a.id()).collect();
+    let names = nonempty(&ids, |n| alloc_u32_array(heap, n))?;
+    let n = u32::try_from(p.children.len()).map_err(|_| HeapError::OutOfMemory)?;
+    let size = FuncInfo::CHILDREN
+        .cell_size(n)
+        .ok_or(HeapError::OutOfMemory)?;
+    let off = heap.alloc_cell(CellKind::FuncInfo, size)?;
+    let a = heap.arena_mut();
+    a.set(off, FuncInfo::SCRIPT, script);
+    a.set(off, FuncInfo::SRC_START, src_start);
+    a.set(off, FuncInfo::SRC_END, src_end);
+    a.set(off, FuncInfo::LINES, lines);
+    a.set(off, FuncInfo::NAMES, names);
+    a.set(off, FuncInfo::CHILD_COUNT, n);
+    for (i, &c) in p.children.iter().enumerate() {
+        a.write(FuncInfo::CHILDREN.at(off, i as u32), c);
     }
     Ok(Ref(off))
 }
 
-/// The size of a template with its debug fields.
-pub const FULL_SIZE: u32 = crate::heap::align8(FuncTemplate::NAMES.offset + 4);
+/// The bytecode of template `t`.
+pub fn code(heap: &Heap, t: u32) -> &[u8] {
+    let a = heap.arena();
+    a.slice(
+        FuncTemplate::DATA.at(t, 0),
+        a.get(t, FuncTemplate::CODE_LEN),
+    )
+}
 
-/// The optional debug fields of template `t` (D1980): null and 0 for a privileged one,
-/// which has none.
+/// Capture descriptor `i` of template `t` (`ops::capture_desc`), after the code.
+pub fn capture_desc(heap: &Heap, t: u32, i: u32) -> u32 {
+    let a = heap.arena();
+    a.read(FuncTemplate::DATA.at(t, a.get(t, FuncTemplate::CODE_LEN) + 4 * i))
+}
+
+/// The encoded handler table of template `t` (`bytecode::handlers`): the 16-byte
+/// records after the code and the capture descriptors, to the end of the cell. The
+/// cell's padding is shorter than a record, so the division finds the count.
+pub fn handlers(heap: &Heap, t: u32) -> &[u8] {
+    let a = heap.arena();
+    let at = a.get(t, FuncTemplate::CODE_LEN) + 4 * a.get(t, FuncTemplate::CAPTURES) as u32;
+    let start = FuncTemplate::DATA.at(t, at);
+    let end = t + heap.cell_size(t);
+    a.slice(start, (end - start) / 16 * 16)
+}
+
+/// The number of child templates of template `t`.
+pub fn child_count(heap: &Heap, t: u32) -> u32 {
+    let a = heap.arena();
+    a.get::<Ref>(t, FuncTemplate::INFO)
+        .get()
+        .map_or(0, |i| a.get(i, FuncInfo::CHILD_COUNT))
+}
+
+/// Child template `i` of template `t` (`fclosure i`), if it has one.
+pub fn child(heap: &Heap, t: u32, i: u32) -> Option<Ref> {
+    let a = heap.arena();
+    let info = a.get::<Ref>(t, FuncTemplate::INFO).get()?;
+    (i < a.get(info, FuncInfo::CHILD_COUNT)).then(|| a.read(FuncInfo::CHILDREN.at(info, i)))
+}
+
+/// The debug info of template `t` (D1980): null and 0 for a privileged one, which has
+/// none.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DebugInfo {
     pub lines: Ref,
@@ -195,7 +259,7 @@ pub struct DebugInfo {
 
 pub fn debug_info(heap: &Heap, t: u32) -> DebugInfo {
     let a = heap.arena();
-    if heap.cell_size(t) < FULL_SIZE {
+    let Some(info) = a.get::<Ref>(t, FuncTemplate::INFO).get() else {
         return DebugInfo {
             lines: Ref::NULL,
             script: Ref::NULL,
@@ -203,13 +267,13 @@ pub fn debug_info(heap: &Heap, t: u32) -> DebugInfo {
             src_end: 0,
             names: Ref::NULL,
         };
-    }
+    };
     DebugInfo {
-        lines: a.get(t, FuncTemplate::LINES),
-        script: a.get(t, FuncTemplate::SCRIPT),
-        src_start: a.get(t, FuncTemplate::SRC_START),
-        src_end: a.get(t, FuncTemplate::SRC_END),
-        names: a.get(t, FuncTemplate::NAMES),
+        lines: a.get(info, FuncInfo::LINES),
+        script: a.get(info, FuncInfo::SCRIPT),
+        src_start: a.get(info, FuncInfo::SRC_START),
+        src_end: a.get(info, FuncInfo::SRC_END),
+        names: a.get(info, FuncInfo::NAMES),
     }
 }
 
@@ -381,7 +445,7 @@ pub fn disasm_template(heap: &Heap, template: Ref) -> String {
             a.get(off, FuncTemplate::STACK),
             a.get(off, FuncTemplate::CAPTURES),
         );
-        if let Ok(h) = HandlerTable::new(bytes_of(heap, a.get(off, FuncTemplate::HANDLERS))) {
+        if let Ok(h) = HandlerTable::new(handlers(heap, off)) {
             for h in h.iter() {
                 let _ = writeln!(
                     out,
@@ -398,11 +462,9 @@ pub fn disasm_template(heap: &Heap, template: Ref) -> String {
             phase1: false,
             lines: bytes_of(heap, debug.lines),
         };
-        out.push_str(&disasm(bytes_of(heap, a.get(off, FuncTemplate::CODE)), &cx));
-        let children = a.get(off, FuncTemplate::CHILDREN);
-        let n = ref_array_len(heap, children);
-        for i in (0..n).rev() {
-            if let Some(c) = ref_array_get(heap, children, i) {
+        out.push_str(&disasm(code(heap, off), &cx));
+        for i in (0..child_count(heap, off)).rev() {
+            if let Some(c) = child(heap, off, i) {
                 work.push((c, alloc::format!("{path}.{i}")));
             }
         }

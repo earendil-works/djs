@@ -5,8 +5,8 @@ use alloc::vec;
 
 use crate::bytecode::decode::insns;
 use crate::bytecode::imm::ImmKind;
-use crate::bytecode::template::{debug_info, func_flags};
-use crate::heap::cells::{Bytes, FuncTemplate, PropEntry, PropTable, Shape, Symbol, U32Array};
+use crate::bytecode::template::{code, debug_info, func_flags};
+use crate::heap::cells::{FuncTemplate, PropEntry, PropTable, Shape, Symbol, U32Array};
 use crate::heap::{CellKind, Heap, HeapError, Ref};
 
 /// Drops the prelude's internal names (D2253): the names of privileged functions
@@ -71,14 +71,11 @@ pub(super) fn drop_internal_names(heap: &mut Heap) -> Result<u32, HeapError> {
                         mark(a.read(U32Array::DATA.at(n, i)));
                     }
                 }
-                if let Some(code) = a.get::<Ref>(at, FuncTemplate::CODE).get() {
-                    let bytes = a.slice(Bytes::DATA.at(code, 0), a.get(code, Bytes::LEN));
-                    for insn in insns(bytes) {
-                        let insn = insn.expect("the prelude's bytecode decodes");
-                        for (k, kind) in insn.info().imms.iter().enumerate() {
-                            if *kind == ImmKind::Atom {
-                                mark(insn.imm(k));
-                            }
+                for insn in insns(code(heap, at)) {
+                    let insn = insn.expect("the prelude's bytecode decodes");
+                    for (k, kind) in insn.info().imms.iter().enumerate() {
+                        if *kind == ImmKind::Atom {
+                            mark(insn.imm(k));
                         }
                     }
                 }

@@ -21,8 +21,7 @@ use super::realm::{self, ErrorKind, Intrinsic, intrinsic, intrinsic_obj};
 use super::state::{self, PARK_ENTRY, RunState, park_flags};
 use crate::bytecode::decode::{LAYOUT, arity, read_i8};
 use crate::bytecode::global_decls::GlobalDecls;
-use crate::bytecode::template::func_flags;
-use crate::bytecode::template::{bytes_of, ref_array_get};
+use crate::bytecode::template::{self, func_flags};
 use crate::bytecode::{HandlerTable, OPS, Op, special};
 use crate::heap::cells::flags::OBJ_HOST_ASYNC;
 use crate::heap::cells::{BoxCell, FuncTemplate, HostCall, Interp, Roots, U32Array, ValueArray};
@@ -498,12 +497,10 @@ impl<'h> Exec<'h> {
     /// Sets the cached frame data for template `t` (with `hp` already set).
     #[inline(always)]
     fn enter_template(&mut self, t: u32) {
-        use crate::heap::cells::Bytes;
         let a = self.heap.arena();
-        let code: Ref = a.get(t, FuncTemplate::CODE);
         self.template = t;
-        self.code = Bytes::DATA.at(code.0, 0);
-        self.code_len = code.get().map_or(0, |c| a.get(c, Bytes::LEN));
+        self.code = FuncTemplate::DATA.at(t, 0);
+        self.code_len = a.get(t, FuncTemplate::CODE_LEN);
         self.consts = a.get(t, FuncTemplate::CONSTS).0;
         self.lp = self.hp + HEADER;
         self.native = 0;
@@ -587,8 +584,8 @@ impl<'h> Exec<'h> {
         self.sp = lp + locals;
         self.pc = 0;
         self.template = t;
-        self.code = crate::heap::cells::Bytes::DATA.at(th.code_ref, 0);
-        self.code_len = hot::code_len(self.heap.arena().bytes(), th.code_ref);
+        self.code = FuncTemplate::DATA.at(t, 0);
+        self.code_len = th.code_len;
         self.consts = th.consts_ref;
         self.native = 0;
         // Frame entry is a safepoint, except for the entry call: `Vm::call` must
@@ -890,8 +887,7 @@ impl<'h> Exec<'h> {
                     return None;
                 }
             } else {
-                let handlers = self.heap.arena().get(self.template, FuncTemplate::HANDLERS);
-                let found = HandlerTable::new(bytes_of(self.heap, handlers))
+                let found = HandlerTable::new(template::handlers(self.heap, self.template))
                     .ok()
                     .and_then(|t| t.find(key));
                 if let Some(h) = found {
@@ -3025,11 +3021,9 @@ impl<'h> Exec<'h> {
 
     /// Creates the closure for child template `child` of the current function.
     fn closure(&mut self, child: u32) -> Result<Value, Fault> {
-        let children = self.heap.arena().get(self.template, FuncTemplate::CHILDREN);
-        let t = ref_array_get(self.heap, children, child).expect("child template");
+        let t = template::child(self.heap, self.template, child).expect("child template");
         let a = self.heap.arena();
         let ncap = a.get(t.0, FuncTemplate::CAPTURES) as u32;
-        let desc: Ref = a.get(t.0, FuncTemplate::CAPTURE_DESC);
         // [[Prototype]] by the ASYNC/GENERATOR bits, for every kind (D1420).
         let flags = a.get(t.0, FuncTemplate::FLAGS);
         let proto = intrinsic_obj(
@@ -3051,7 +3045,7 @@ impl<'h> Exec<'h> {
             .alloc_object(ObjectClass::Function, Some(proto), 1 + ncap + home)?;
         self.heap.set_object_slot(f, 0, Value::internal(t.0));
         for i in 0..ncap {
-            let d = self.heap.arena().read::<u32>(U32Array::DATA.at(desc.0, i));
+            let d = template::capture_desc(self.heap, t.0, i);
             let b = if d & 0x8000_0000 != 0 {
                 self.capture(d & 0x7FFF_FFFF)
             } else {

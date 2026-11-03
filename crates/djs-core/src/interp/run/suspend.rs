@@ -300,8 +300,7 @@ impl Exec<'_> {
         if state != START && mode == 1 {
             // Thrown at the suspension point: without a handler there, it leaves the
             // activation at once, as if thrown by this intrinsic.
-            let handlers = self.heap.arena().get(t, FuncTemplate::HANDLERS);
-            let caught = HandlerTable::new(bytes_of(self.heap, handlers))
+            let caught = HandlerTable::new(crate::bytecode::template::handlers(self.heap, t))
                 .ok()
                 .and_then(|h| h.find(pc - 1))
                 .is_some();

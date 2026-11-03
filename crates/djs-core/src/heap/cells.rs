@@ -332,9 +332,11 @@ cells! {
     /// An immutable compiled function, one per source function. The meaning of `FLAGS`
     /// belongs to the compiler.
     ///
-    /// The debug fields from `LINES` on are optional (D1980): a privileged (prelude)
-    /// template has none of them and is 56 bytes instead of 80. Read them through
-    /// `bytecode::template::debug_info`, which checks the cell size.
+    /// The code is inline (D2444): `DATA` holds the bytecode (`CODE_LEN` bytes), then the
+    /// capture descriptors (`CAPTURES` words), then the handler table (16-byte records),
+    /// which fills the rest of the cell (`bytecode::template::handlers`). What a
+    /// privileged (prelude) function never has, child templates and debug info, is in a
+    /// [`FuncInfo`] cell, so a builtin's template is 48 bytes plus its code.
     12 => FuncTemplate {
         /// Function kind and properties (async, generator, simple params, ...).
         FLAGS: u32 = 8,
@@ -352,38 +354,22 @@ cells! {
         CAPTURES: u16 = 24,
         /// Inline cache slots of the code (the `Cache` immediates, D1620).
         IC_COUNT: u16 = 26,
-        /// [`Bytes`]: the bytecode.
-        CODE: Ref = 28,
+        /// Length of the bytecode at the start of `DATA`.
+        CODE_LEN: u32 = 28,
         /// [`ValueArray`] of constants (numbers, strings, template-object caches), or null.
         CONSTS: Ref = 32,
-        /// [`RefArray`] of child [`FuncTemplate`]s, or null.
-        CHILDREN: Ref = 36,
-        /// [`U32Array`]: one word per capture, bit 31 set = from the parent's captures,
-        /// else from a parent local; low bits = the index. Null without captures.
-        CAPTURE_DESC: Ref = 40,
-        /// [`Bytes`]: the handler table (16-byte records), or null.
-        HANDLERS: Ref = 44,
         /// [`U32Array`] of `IC_COUNT` inline cache slots (`interp::run::ic`), allocated
         /// the first time one is filled; null before.
-        IC: Ref = 48,
+        IC: Ref = 36,
+        /// [`FuncInfo`]: child templates and debug info, or null for neither.
+        INFO: Ref = 40,
         /// A `@native` builtin's index into the generated table (with
         /// `func_flags::NATIVE`), else 0.
-        NATIVE: u16 = 52,
+        NATIVE: u16 = 44,
         /// A `@fast` builtin's index into `builtins::fast::FAST` (with
         /// `func_flags::FAST`, D1850), else 0.
-        FAST: u16 = 54,
-        // ---- optional: absent from privileged templates (56 bytes) ----
-        /// [`Bytes`]: the line table, or null.
-        LINES: Ref = 56,
-        /// The [`Script`] the function comes from.
-        SCRIPT: Ref = 60,
-        /// Source span of the function in the script (`Function.prototype.toString`).
-        SRC_START: u32 = 64,
-        SRC_END: u32 = 68,
-        /// [`U32Array`] of atom ids: local names, then capture names (TDZ messages,
-        /// disassembler). Null if not recorded.
-        NAMES: Ref = 72,
-    } min 56;
+        FAST: u16 = 46,
+    } tail DATA: [u8] = 48;
 
     /// One compiled source.
     13 => Script {
@@ -399,7 +385,7 @@ cells! {
         VALUE: Value = 8,
     };
 
-    /// Raw bytes (bytecode, line and handler tables). Not traced.
+    /// Raw bytes (line tables). Not traced.
     15 => Bytes {
         /// Length in bytes.
         LEN: u32 = 8,
@@ -410,6 +396,25 @@ cells! {
         /// Entries in use.
         LEN: u32 = 8,
     } tail REFS: [Ref] = 12;
+
+    /// The parts of a [`FuncTemplate`] that privileged (prelude) functions never have
+    /// (D2444): child templates, and the debug info of D1980 (a privileged function's
+    /// frames are hidden or `(native)` in traces, its source is `[native code]`, its
+    /// locals are never named).
+    21 => FuncInfo {
+        /// The [`Script`] the function comes from, or null.
+        SCRIPT: Ref = 8,
+        /// Source span of the function in the script (`Function.prototype.toString`).
+        SRC_START: u32 = 12,
+        SRC_END: u32 = 16,
+        /// [`Bytes`]: the line table, or null.
+        LINES: Ref = 20,
+        /// [`U32Array`] of atom ids: local names, then capture names (TDZ messages,
+        /// disassembler). Null if not recorded.
+        NAMES: Ref = 24,
+        /// Number of child templates in `CHILDREN`.
+        CHILD_COUNT: u32 = 28,
+    } tail CHILDREN: [Ref] = 32;
 
     // ---- Interpreter state (docs/compiler.md 7; ids 17-19 follow 0013's code cells) ----
 

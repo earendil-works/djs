@@ -64,12 +64,11 @@ fn main() {
             .cloned()
             .unwrap_or_else(|| "other".into());
         template_family.insert(o, fam);
+        // The code, capture descriptors and handlers are inline (D2444).
         part.insert(o, "templates");
         for (f, role) in [
-            (FuncTemplate::CODE, "bytecode"),
-            (FuncTemplate::HANDLERS, "handler tables"),
             (FuncTemplate::CONSTS, "constant pools"),
-            (FuncTemplate::CAPTURE_DESC, "capture descriptors"),
+            (FuncTemplate::INFO, "template infos"),
         ] {
             let r: Ref = a.get(o, f);
             if let Some(r) = r.get() {
@@ -198,10 +197,8 @@ fn main() {
     let parts = [
         "function objects",
         "templates",
-        "bytecode",
         "constant pools",
-        "capture descriptors",
-        "handler tables",
+        "template infos",
         "closure boxes",
         "property storage",
         "strings",
@@ -242,26 +239,15 @@ fn main() {
     }
     println!("base image: {} cells, {total} bytes\n", cells.len());
     println!(
-        "{:<26} {:>6} {:>8} {:>6} {:>5} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7}",
-        "family",
-        "cells",
-        "bytes",
-        "funcs",
-        "vis",
-        "fn-obj",
-        "templ",
-        "code",
-        "pools",
-        "props",
-        "strs"
+        "{:<26} {:>6} {:>8} {:>6} {:>5} {:>7} {:>7} {:>7} {:>7} {:>7}",
+        "family", "cells", "bytes", "funcs", "vis", "fn-obj", "templ", "pools", "props", "strs"
     );
     for (f, (n, b, ps, fu, vi)) in &rows {
         let g = |p: &str| ps.get(p).copied().unwrap_or(0);
         println!(
-            "{f:<26} {n:>6} {b:>8} {fu:>6} {vi:>5} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7}",
+            "{f:<26} {n:>6} {b:>8} {fu:>6} {vi:>5} {:>7} {:>7} {:>7} {:>7} {:>7}",
             g("function objects"),
             g("templates"),
-            g("bytecode") + g("handler tables") + g("capture descriptors"),
             g("constant pools"),
             g("property storage"),
             g("strings"),
@@ -277,6 +263,14 @@ fn main() {
     for p in parts {
         let (n, b) = by_part.get(p).copied().unwrap_or_default();
         println!("  {p:<38} {n:>6} {b:>8}");
+        if p == "templates" {
+            let code: u64 = cells
+                .iter()
+                .filter(|c| c.1 == CellKind::FuncTemplate)
+                .map(|c| a.get::<u32>(c.0, FuncTemplate::CODE_LEN) as u64)
+                .sum();
+            println!("    {:<36} {:>6} {code:>8}", "of which bytecode", "");
+        }
     }
     let _ = size;
 }
@@ -406,12 +400,7 @@ fn touched_report(
             if let Some(t) = heap.object_slot(obj_at(vm, o), 0).as_internal() {
                 fn_of_template.insert(t, o);
                 b += size[&t] as u64;
-                for f in [
-                    FuncTemplate::CODE,
-                    FuncTemplate::HANDLERS,
-                    FuncTemplate::CONSTS,
-                    FuncTemplate::CAPTURE_DESC,
-                ] {
+                for f in [FuncTemplate::CONSTS, FuncTemplate::INFO] {
                     let r: Ref = a.get(t, f);
                     if let Some(r) = r.get() {
                         b += size[&r] as u64;

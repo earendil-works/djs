@@ -10,11 +10,10 @@ use std::collections::HashSet;
 
 use super::ops::hash_ops;
 use super::template::{
-    TemplateError, TemplateParts, alloc_script, alloc_template, bytes_of, disasm_template,
-    ref_array_get,
+    self, TemplateError, TemplateParts, alloc_script, alloc_template, bytes_of, debug_info,
+    disasm_template,
 };
 use super::*;
-use crate::heap::cells::FuncTemplate;
 use crate::heap::{Atom, Heap, Ref};
 use crate::value::Value;
 
@@ -915,15 +914,19 @@ fn template_cells() {
         },
     )
     .unwrap();
-    let a = heap.arena();
-    let children = a.get(parent.0, FuncTemplate::CHILDREN);
-    let line_bytes = bytes_of(&heap, a.get(parent.0, FuncTemplate::LINES));
+    let debug = debug_info(&heap, parent.0);
+    let line_bytes = bytes_of(&heap, debug.lines);
     assert_eq!(lookup_line(line_bytes, 5), Some((1, 9)));
-    assert_eq!(a.get(parent.0, FuncTemplate::SCRIPT), script);
+    assert_eq!(debug.script, script);
+    // Inline code, capture descriptors and handlers (D2444).
+    assert_eq!(template::code(&heap, parent.0), &code[..]);
+    assert_eq!(template::handlers(&heap, parent.0).len(), 16);
+    assert!(template::handlers(&heap, child.0).is_empty());
 
     assert_eq!(bytes_of(&heap, Ref::NULL), &[] as &[u8]);
-    assert_eq!(ref_array_get(&heap, children, 0), Some(child));
-    assert_eq!(ref_array_get(&heap, children, 1), None);
+    assert_eq!(template::child_count(&heap, parent.0), 1);
+    assert_eq!(template::child(&heap, parent.0, 0), Some(child));
+    assert_eq!(template::child(&heap, parent.0, 1), None);
 
     let text = disasm_template(&heap, parent);
     let expect = [

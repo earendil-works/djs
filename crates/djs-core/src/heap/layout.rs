@@ -166,21 +166,6 @@ impl CellLayout {
         }
     }
 
-    /// A layout whose cells may be as small as `min` (when given): the fields from
-    /// `min` on are optional, present only in cells big enough to hold them. Readers of
-    /// such a field check the cell size (`FuncTemplate`'s debug fields, D1980); the
-    /// walker skips the fields a cell does not have.
-    pub const fn with_min_size(mut self, min: Option<u32>) -> CellLayout {
-        if let Some(m) = min {
-            assert!(
-                m.is_multiple_of(8) && m <= self.min_size,
-                "layout: bad min size"
-            );
-            self.min_size = m;
-        }
-        self
-    }
-
     /// Number of tail elements a cell of `size` bytes can hold. Inline: with a constant
     /// layout the division becomes a shift; out of line in wasm it was a call and a
     /// division in every `object_slot` (0107).
@@ -581,8 +566,7 @@ macro_rules! cells {
         $id:literal => $name:ident {
             $( $(#[$fmeta:meta])* $field:ident : $fty:ty = $off:literal, )*
         }
-        $( tail $(#[$tmeta:meta])* $tail:ident : [$tty:ty] = $toff:literal )?
-        $( min $min:literal )? ;
+        $( tail $(#[$tmeta:meta])* $tail:ident : [$tty:ty] = $toff:literal )? ;
     )*) => {
         /// The kind byte of a cell header. 0 is never a valid kind, so zeroed memory is
         /// detected by the heap walker.
@@ -631,8 +615,7 @@ macro_rules! cells {
                             offset: $toff,
                             elem: <$tty as $crate::heap::layout::Elem>::INFO,
                         } )?),
-                    )
-                    .with_min_size($crate::heap::layout::opt!($( $min )?));
+                    );
             }
 
             const _: () = $crate::heap::layout::validate_cell(&$name::LAYOUT);

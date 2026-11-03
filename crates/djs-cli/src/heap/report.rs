@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 
 use djs_core::bytecode::intrinsics::INTRINSICS;
+use djs_core::bytecode::template::debug_info;
 use djs_core::heap::cells::flags;
 use djs_core::heap::cells::{
     EphemeronArray, FuncTemplate, HostCall, Interp, Object, PropValues, Roots, Str8, Str16,
@@ -16,7 +17,7 @@ use djs_core::value::Value;
 
 use super::Input;
 use super::diff::{Diff, Status};
-use super::graph::{Graph, has_field};
+use super::graph::Graph;
 use super::json::J;
 use crate::container::reference_name;
 
@@ -1056,26 +1057,19 @@ pub fn functions(g: &Graph, o: &Options, scope: &Scope) -> Section {
                 };
                 e[0] += 1;
                 e[1] += c.size as u64;
-                for f in [
-                    FuncTemplate::CODE,
-                    FuncTemplate::CONSTS,
-                    FuncTemplate::CHILDREN,
-                    FuncTemplate::CAPTURE_DESC,
-                    FuncTemplate::HANDLERS,
-                    FuncTemplate::IC,
-                    FuncTemplate::LINES,
-                    FuncTemplate::NAMES,
+                // The code is inline (D2444); the rest hangs off the template.
+                e[2] += a.get::<u32>(c.offset, FuncTemplate::CODE_LEN) as u64;
+                let info: Ref = a.get(c.offset, FuncTemplate::INFO);
+                let debug = debug_info(g.heap, c.offset);
+                for r in [
+                    a.get(c.offset, FuncTemplate::CONSTS),
+                    a.get(c.offset, FuncTemplate::IC),
+                    info,
+                    debug.lines,
+                    debug.names,
                 ] {
-                    if !has_field(c.size, f.offset) {
-                        continue;
-                    }
-                    let r: Ref = a.get(c.offset, f);
                     if let Some(r) = r.get() {
-                        let size = g.heap.cell_size(r) as u64;
-                        e[1] += size;
-                        if f.offset == FuncTemplate::CODE.offset {
-                            e[2] += size;
-                        }
+                        e[1] += g.heap.cell_size(r) as u64;
                     }
                 }
             }

@@ -26,7 +26,7 @@ use super::{Exec, fast};
 use crate::bytecode::decode::arity;
 use crate::bytecode::special;
 use crate::bytecode::{OPS, Op};
-use crate::heap::cells::{Bytes, FuncTemplate, Header, Object, Realm, Roots, ValueArray};
+use crate::heap::cells::{FuncTemplate, Header, Object, Realm, Roots, ValueArray};
 use crate::heap::{Atom, ObjectClass, atoms};
 use crate::interp::conv;
 use crate::interp::frame::{self, Continuation, HEADER};
@@ -143,7 +143,7 @@ pub(super) struct TemplateHead {
     pub params: u32,
     pub locals: u32,
     pub stack: u32,
-    pub code_ref: u32,
+    pub code_len: u32,
     pub consts_ref: u32,
 }
 
@@ -159,7 +159,7 @@ pub(super) fn template_head(b: &[u8], t: u32) -> TemplateHead {
             && inside(FuncTemplate::PARAMS.offset, 2)
             && inside(FuncTemplate::LOCALS.offset, 2)
             && inside(FuncTemplate::STACK.offset, 2)
-            && inside(FuncTemplate::CODE.offset, 4)
+            && inside(FuncTemplate::CODE_LEN.offset, 4)
             && inside(FuncTemplate::CONSTS.offset, 4)
     );
     let tw: [u8; 28] = window(b, t + W0);
@@ -169,18 +169,8 @@ pub(super) fn template_head(b: &[u8], t: u32) -> TemplateHead {
         params: u16_at(&tw, tf(FuncTemplate::PARAMS.offset)),
         locals: u16_at(&tw, tf(FuncTemplate::LOCALS.offset)),
         stack: u16_at(&tw, tf(FuncTemplate::STACK.offset)),
-        code_ref: u32_at(&tw, tf(FuncTemplate::CODE.offset)),
+        code_len: u32_at(&tw, tf(FuncTemplate::CODE_LEN.offset)),
         consts_ref: u32_at(&tw, tf(FuncTemplate::CONSTS.offset)),
-    }
-}
-
-/// The length of the code `Bytes` at `code_ref` (0 for none).
-#[inline(always)]
-pub(super) fn code_len(b: &[u8], code_ref: u32) -> u32 {
-    if code_ref == 0 {
-        0
-    } else {
-        ld32(b, code_ref + Bytes::LEN.offset)
     }
 }
 
@@ -503,7 +493,7 @@ impl Exec<'_> {
                                 params,
                                 locals,
                                 stack,
-                                code_ref,
+                                code_len,
                                 consts_ref,
                             } = template_head(b, t);
                             let n = argc.max(params);
@@ -512,7 +502,6 @@ impl Exec<'_> {
                             if flags & slow_call_flags != 0 || new_lp + locals + stack > cap {
                                 break Exit::Decline(op);
                             }
-                            let code_len = code_len(b, code_ref);
                             let info = &OPS[$op as usize];
                             fuel -= info.cost.fuel() as i64;
                             let ret_pc = ip + info.size as u32 - code;
@@ -533,7 +522,7 @@ impl Exec<'_> {
                             self.hp = new_hp;
                             self.lp = new_lp;
                             self.template = t;
-                            self.code = Bytes::DATA.at(code_ref, 0);
+                            self.code = FuncTemplate::DATA.at(t, 0);
                             self.code_len = code_len;
                             self.consts = consts_ref;
                             self.native = 0;
@@ -1101,9 +1090,8 @@ impl Exec<'_> {
                             let t = ld(b, object_slot(b, f.offset(), 0))
                                 .as_internal()
                                 .expect("closure template");
-                            let code_ref = ld32(b, t + FuncTemplate::CODE.offset);
+                            let code_len = ld32(b, t + FuncTemplate::CODE_LEN.offset);
                             let consts_ref = ld32(b, t + FuncTemplate::CONSTS.offset);
-                            let code_len = code_len(b, code_ref);
                             let v = if op == fast::RETURN {
                                 top!(0)
                             } else {
@@ -1122,7 +1110,7 @@ impl Exec<'_> {
                             self.hp = prev_hp;
                             self.lp = prev_hp + HEADER;
                             self.template = t;
-                            self.code = Bytes::DATA.at(code_ref, 0);
+                            self.code = FuncTemplate::DATA.at(t, 0);
                             self.code_len = code_len;
                             self.consts = consts_ref;
                             self.native = 0;

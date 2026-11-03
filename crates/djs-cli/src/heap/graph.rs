@@ -5,6 +5,7 @@
 
 use std::collections::VecDeque;
 
+use djs_core::bytecode::template::{bytes_of, debug_info, func_flags};
 use djs_core::heap::cells::{
     AccessorPair, EphemeronArray, FuncTemplate, HandleTable, Interp, Object, PropEntry, PropTable,
     PropValues, Realm, Roots, Script, Shape, U32Array, ValueArray,
@@ -45,12 +46,6 @@ pub fn str_at(off: u32) -> Str {
     Value::from_bits(bits)
         .and_then(Value::as_string)
         .expect("a string offset")
-}
-
-/// Whether the optional field at `offset` of a cell of `size` bytes exists (templates of
-/// privileged code are shorter, `min 56` in the layout).
-pub fn has_field(size: u32, offset: u32) -> bool {
-    offset < size
 }
 
 impl<'h> Graph<'h> {
@@ -443,11 +438,7 @@ impl<'h> Graph<'h> {
     /// The recorded local and capture names of a template (absent for privileged code).
     pub fn template_names(&self, t: u32) -> Vec<String> {
         let a = self.heap.arena();
-        if !has_field(self.heap.cell_size(t), FuncTemplate::NAMES.offset) {
-            return Vec::new();
-        }
-        let names: Ref = a.get(t, FuncTemplate::NAMES);
-        let Some(n) = names.get() else {
+        let Some(n) = debug_info(self.heap, t).names.get() else {
             return Vec::new();
         };
         let len: u32 = a.get(n, U32Array::LEN);
@@ -472,11 +463,14 @@ impl<'h> Graph<'h> {
     /// The file name of a template's script; privileged (prelude) templates have none.
     pub fn template_script(&self, t: u32) -> String {
         let a = self.heap.arena();
-        if !has_field(self.heap.cell_size(t), FuncTemplate::SCRIPT.offset) {
-            return "<prelude>".into();
-        }
-        let s: Ref = a.get(t, FuncTemplate::SCRIPT);
-        let Some(s) = s.get() else { return "?".into() };
+        let Some(s) = debug_info(self.heap, t).script.get() else {
+            let flags: u32 = a.get(t, FuncTemplate::FLAGS);
+            return if flags & func_flags::PRIVILEGED != 0 {
+                "<prelude>".into()
+            } else {
+                "?".into()
+            };
+        };
         let name: Ref = a.get(s, Script::NAME);
         name.get()
             .map(|n| self.heap.str_to_string(str_at(n)))
@@ -485,15 +479,8 @@ impl<'h> Graph<'h> {
 
     /// `line:col` of `pc` in a template, from its line table.
     pub fn template_line(&self, t: u32, pc: u32) -> Option<(u32, u32)> {
-        let a = self.heap.arena();
-        if !has_field(self.heap.cell_size(t), FuncTemplate::LINES.offset) {
-            return None;
-        }
-        let lines: Ref = a.get(t, FuncTemplate::LINES);
-        let l = lines.get()?;
-        let n: u32 = a.get(l, djs_core::heap::cells::Bytes::LEN);
-        let bytes = a.slice(djs_core::heap::cells::Bytes::DATA.at(l, 0), n);
-        djs_core::bytecode::lookup_line(bytes, pc)
+        let lines = debug_info(self.heap, t).lines;
+        djs_core::bytecode::lookup_line(bytes_of(self.heap, lines), pc)
     }
 
     /// A short printable form of a string cell: quoted, at most `max` characters.

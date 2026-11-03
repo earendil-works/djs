@@ -2,7 +2,7 @@
 // Regenerate: DJS_UPDATE_LAYOUT=1 cargo test -p djs-core layout_generated
 
 export const LAYOUT = {
-  "layoutHash": 387811722,
+  "layoutHash": 627669571,
   "magic": 5458500,
   "headerSize": 8,
   "header": { "KIND": 0, "GC": 1, "FLAGS": 2, "SIZE": 4 },
@@ -200,7 +200,7 @@ export const LAYOUT = {
     },
     "FuncTemplate": {
       "kind": 12,
-      "minSize": 56,
+      "minSize": 48,
       "fields": {
         "FLAGS": { "offset": 8, "type": "u32" },
         "NAME": { "offset": 12, "type": "u32" },
@@ -210,21 +210,22 @@ export const LAYOUT = {
         "STACK": { "offset": 22, "type": "u16" },
         "CAPTURES": { "offset": 24, "type": "u16" },
         "IC_COUNT": { "offset": 26, "type": "u16" },
-        "CODE": { "offset": 28, "type": "Ref" },
+        "CODE_LEN": { "offset": 28, "type": "u32" },
         "CONSTS": { "offset": 32, "type": "Ref" },
-        "CHILDREN": { "offset": 36, "type": "Ref" },
-        "CAPTURE_DESC": { "offset": 40, "type": "Ref" },
-        "HANDLERS": { "offset": 44, "type": "Ref" },
-        "IC": { "offset": 48, "type": "Ref" },
-        "NATIVE": { "offset": 52, "type": "u16" },
-        "FAST": { "offset": 54, "type": "u16" },
-        "LINES": { "offset": 56, "type": "Ref" },
-        "SCRIPT": { "offset": 60, "type": "Ref" },
-        "SRC_START": { "offset": 64, "type": "u32" },
-        "SRC_END": { "offset": 68, "type": "u32" },
-        "NAMES": { "offset": 72, "type": "Ref" }
+        "IC": { "offset": 36, "type": "Ref" },
+        "INFO": { "offset": 40, "type": "Ref" },
+        "NATIVE": { "offset": 44, "type": "u16" },
+        "FAST": { "offset": 46, "type": "u16" }
       },
-      "tail": null
+      "tail": {
+        "name": "DATA",
+        "offset": 48,
+        "elem": "u8",
+        "elemSize": 1,
+        "fields": {
+          "": { "offset": 0, "type": "u8" }
+        }
+      }
     },
     "Script": {
       "kind": 13,
@@ -268,6 +269,27 @@ export const LAYOUT = {
       "tail": {
         "name": "REFS",
         "offset": 12,
+        "elem": "Ref",
+        "elemSize": 4,
+        "fields": {
+          "": { "offset": 0, "type": "Ref" }
+        }
+      }
+    },
+    "FuncInfo": {
+      "kind": 21,
+      "minSize": 32,
+      "fields": {
+        "SCRIPT": { "offset": 8, "type": "Ref" },
+        "SRC_START": { "offset": 12, "type": "u32" },
+        "SRC_END": { "offset": 16, "type": "u32" },
+        "LINES": { "offset": 20, "type": "Ref" },
+        "NAMES": { "offset": 24, "type": "Ref" },
+        "CHILD_COUNT": { "offset": 28, "type": "u32" }
+      },
+      "tail": {
+        "name": "CHILDREN",
+        "offset": 32,
         "elem": "Ref",
         "elemSize": 4,
         "fields": {

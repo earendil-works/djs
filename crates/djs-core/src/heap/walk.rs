@@ -7,9 +7,9 @@
 use alloc::vec::Vec;
 
 use super::cells::{
-    AtomTable, BigInt, EphemeronArray, HANDLE_LIVE, HandleSlot, HandleTable, Header, Object,
-    PropTable, PropValues, RefArray, Roots, Rope, Shape, Str8, Str16, Symbol, U32Array, ValueArray,
-    flags,
+    AtomTable, BigInt, EphemeronArray, FuncInfo, FuncTemplate, HANDLE_LIVE, HandleSlot,
+    HandleTable, Header, Object, PropTable, PropValues, RefArray, Roots, Rope, Shape, Str8, Str16,
+    Symbol, U32Array, ValueArray, flags,
 };
 use super::layout::{FieldTy, Ref};
 use super::object::ObjectClass;
@@ -501,6 +501,12 @@ impl Heap {
                 EphemeronArray::VALUES.cell_size(a.get(cell, EphemeronArray::LEN))
             }
             CellKind::U32Array => U32Array::DATA.cell_size(a.get(cell, U32Array::LEN)),
+            // The code and the capture descriptors (the handler records fill the rest).
+            CellKind::FuncTemplate => a
+                .get(cell, FuncTemplate::CODE_LEN)
+                .checked_add(4 * a.get(cell, FuncTemplate::CAPTURES) as u32)
+                .and_then(|n| FuncTemplate::DATA.cell_size(n)),
+            CellKind::FuncInfo => FuncInfo::CHILDREN.cell_size(a.get(cell, FuncInfo::CHILD_COUNT)),
             CellKind::BigInt => BigInt::LIMBS.cell_size(a.get(cell, BigInt::LEN)),
             _ => Some(0),
         };
@@ -514,10 +520,6 @@ impl Heap {
 pub fn for_each_slot(kind: CellKind, cell: u32, size: u32, mut f: impl FnMut(Slot)) {
     let layout = kind.layout();
     for field in layout.fields {
-        // Optional fields (`CellLayout::with_min_size`) a smaller cell does not have.
-        if field.offset >= size {
-            break;
-        }
         visit(field.ty, cell + field.offset, &mut f);
     }
     if let Some(tail) = &layout.tail {
