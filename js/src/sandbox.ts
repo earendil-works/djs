@@ -680,9 +680,9 @@ export class Sandbox {
     }
   }
 
-  /** `Run.dump()`: the waiting run as a format 2 dump (needs the exporter, 0172). */
-  private dumpRun(_core: RunCore): string {
-    throw new SandboxError("misuse", "dumping a waiting run needs the format 2 exporter (issue 0172)");
+  /** `Run.dump()`: the waiting run as a format 2 dump, its result promise named "run". */
+  private dumpRun(core: RunCore): string {
+    return this.dumpText([], [["run", core.result]]);
   }
 
   /**
@@ -694,15 +694,30 @@ export class Sandbox {
    * written, by its path (a pending promise, a Proxy, a class, ...).
    */
   dump(names: string[] = []): string {
+    return this.dumpText(names, []);
+  }
+
+  /**
+   * `vm_dump`. staging: the globals the host defines and the names to dump (comma
+   * separated, a line each), then this sandbox's host function names (tab separated, id
+   * order: an open call or a host function held as a value is written by name), then
+   * the values to name for the host (`handle:name`, tab separated).
+   */
+  private dumpText(names: string[], handles: [string, number][]): string {
     const x = this.x;
     if (!x.vm_dump) throw new SandboxError("misuse", "the djs-wasm module has no dump (vm_dump)");
     const host = new Set(["console"]);
     for (const n of this.fnNames) host.add(n.split(".")[0]);
-    const len = this.stageText(`${[...host].join(",")}\n${names.join(",")}`);
-    let r = this.guard(() => x.vm_dump!(this.vm, len));
+    const text = [
+      [...host].join(","),
+      names.join(","),
+      this.fnNames.join("\t"),
+      handles.map(([name, h]) => `${h}:${name}`).join("\t"),
+    ].join("\n");
+    let r = this.guard(() => x.vm_dump!(this.vm, this.stageText(text)));
     if (r === 2) {
       provideBase(this.module, x);
-      r = this.guard(() => x.vm_dump!(this.vm, this.stageText(`${[...host].join(",")}\n${names.join(",")}`)));
+      r = this.guard(() => x.vm_dump!(this.vm, this.stageText(text)));
     }
     if (r !== 0) throw new SandboxError("misuse", r === 1 ? `cannot dump:\n${outText(x)}` : "no base image");
     return outText(x);

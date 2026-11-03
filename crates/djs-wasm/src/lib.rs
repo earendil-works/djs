@@ -934,9 +934,24 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
         let text = staged_str(staging, 0, len).to_owned();
-        let (host, names) = text.split_once('\n').unwrap_or((&text, ""));
-        let host: Vec<&str> = host.split(',').filter(|n| !n.is_empty()).collect();
-        let names: Vec<&str> = names.split(',').filter(|n| !n.is_empty()).collect();
+        let mut lines = text.split('\n');
+        let mut line = || lines.next().unwrap_or("");
+        let host: Vec<&str> = line().split(',').filter(|n| !n.is_empty()).collect();
+        let names: Vec<&str> = line().split(',').filter(|n| !n.is_empty()).collect();
+        let fns: Vec<&str> = line().split('\t').collect();
+        let handles: Vec<(&str, Value)> = line()
+            .split('\t')
+            .filter_map(|e| {
+                let (h, name) = e.split_once(':')?;
+                Some((name, slot.value(h.parse().ok()?)))
+            })
+            .collect();
+        // Not written yet: the exporter of waiting runs is 0172.
+        let _ = &fns;
+        if !handles.is_empty() {
+            s.set_out(b"dumping a waiting run needs the format 2 exporter (issue 0172)\n");
+            return 1;
+        }
         let r = BASE.with(|b| {
             let b = b.borrow();
             let base = b.as_deref()?;

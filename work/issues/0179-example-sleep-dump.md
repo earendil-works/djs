@@ -45,4 +45,23 @@ Build exactly what's needed, in the shape docs/continuation-dumps.md "Sandbox AP
 
 ## Log
 
+- Prep (before 0172): the smallest piece of 0175's Sandbox API. `sandbox.begin(code,
+  params)` -> `Run { state, calls, value, error, settle(id, {ok, value}), advance(),
+  dump() }`; `Sandbox.resume(text, opts)` -> `{ sandbox, run }`. A host-driven run never
+  calls async host functions (they are listed in `run.calls`); sync ones as in `run`.
+  The run's result promise is taken at the first idle point with the new export
+  `vm_outcome` (the entry call's outcome while no frame is active, also at IDLE) and
+  named "run" in the dump; on resume it is the load's handle "run", and DONE reads it
+  instead of `vm_result` (a loaded VM's entry call was the dump Script).
+- wasm: `vm_load_dump(vm, names_len, len)` takes the host's function names (id order)
+  for `LoadOptions::host_fn` and returns `Loaded` (calls and handles) in out;
+  `Sandbox.load` returns `{ calls }`. `vm_dump` staging gained two lines: the fn-name
+  table (id -> name for the exporter's `host_fn_name`) and `handle:name` pairs (for
+  `DumpOptions::handles`); until 0172 a handle list is refused with "needs the exporter".
+- js/test/run.test.ts: begin/settle/advance, threw, refusals, and resume from a
+  hand-written format 2 dump (works on main's loader already).
+- examples/sleep-dump: sleep-dump.ts (in-process, `--restart` two processes, `start`/
+  `resume` halves), run.sh (builds the dump-enabled debug module), README skeleton;
+  js/test/sleep-dump.test.ts (fails until the exporter).
+
 ## Result
