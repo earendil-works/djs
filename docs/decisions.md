@@ -7385,3 +7385,58 @@ each_dense) at ~5%, so moving it into the hot loop would save at most 2–3% for
 (marking and compacting the live tree), closure creation ~6–8% (fclosure through `step`,
 then `function_properties`' two define_own_property calls), species and ArrayCreate's
 `length` define in `map`'s fixed cost.
+## D2433: Keyed string hashing for the VM's own atoms and Map/Set
+date: 2026-11-09 · by: strings · issue: 0163
+docs/lessons-from-pico.md lesson 5: djs hashed strings with a fixed multiply-rotate hash,
+so keys could be built offline to collide (2,048 ASCII strings with one hash take a few
+birthday searches over a 32-bit state, the test does it in 0.1 s), and a script reading
+them as JSON keys, computed property names or Map keys would spend quadratic time.
+- **The hash:** SipHash-1-3 over UTF-16 code units, four to a 64-bit word, the unit count
+  in the last word; never 0 (0 is "not cached"). `KeyedHasher`, `hash_latin1_with`,
+  `hash_units_with`, `keyed_u64` (Map/Set keys that are numbers, BigInts, objects or
+  symbols). The old `StrHasher` is gone.
+- **Keys:** `Roots::HASH_KEY` (u64 at 88; Roots' minimum size is 96) is the VM's key; the
+  base's atom index uses `BASE_HASH_KEY` (0), the same in every VM of the build (the
+  prefix is immutable, D2064). The VM's key is `hash_key_for_seed(seed)` (one-way, so it
+  is not the `Math.random` state a script can read back): `Vm::new`, `from_base` and
+  `set_random_seed` set it with the seed, a restored image keeps its own. Deterministic
+  mode passes its seed, so the same seed lays out the same heap; hosts seed from entropy
+  otherwise (the Sandbox, pi). A host that never seeds gets the default seed's key.
+- **Caches:** a string caches the hash of its level: below `BASE_END` the base hash (set
+  at the base build, `prefix_hashes_to_base`), above it the keyed one. `str_eq`'s
+  fast reject compares cached hashes only on the same side.
+- **Lookups:** the VM's own atom index by the keyed hash, then the base's by the base
+  hash, computed only when needed; a string of the prefix (an atom's own string pushed
+  back as a key) tries the base first, whose hash it caches. An atom's own string is
+  matched by identity before any hash compare. The VM's own atoms are always strings
+  above the prefix (`intern` copies a prefix string), which cache their keyed hash. The
+  VM's index stays at most 1/4 full below 1,024 buckets (1/2 above, pi's prelude), since
+  every lookup of a base atom's name misses there first.
+- **Rekeying** (`Heap::set_hash_key`, when the key changes): the cached hashes above the
+  prefix are cleared, the VM's own atom index and every Map/Set index are rebuilt.
+  Insertion order is the entries' order and does not change. The prefix is not written.
+  `Vm::set_math_random_seed` (wasm `vm_set_math_random_seed`) reseeds `Math.random`
+  alone: pi keys its VM from entropy before running its prelude outside deterministic
+  mode and only reseeds `Math.random` per session; in deterministic mode it keys every
+  session from its seed (layout = function of the seed, cold or warm start).
+- **Natives:** `n_str("toJSON")` and `n_str("rawJSON")` return the atoms' strings instead
+  of new ones, which the JSON natives looked up per value (two hashes per lookup now).
+- **Measured** against main: native instructions on the perf workloads all within
+  +0.31% (props), json-date −4.9%, json-indent −1.8%, json-replacer −1.5%; wasm
+  (wmeasure, repeated) within ±0.9%. Not in the workloads: Map with int keys +4.3%
+  (a SipHash per operation where a multiply-xorshift was), Map with string keys −2.4%
+  (`collection_set` caches the key's hash), JSON.parse of 500 distinct keys +3.0%. pi
+  (scripts/snapshot-research/wasm.ts, deterministic): containers +1.0 KB (ask 2.2 →
+  3.2 KB, agent-loop 6.4 → 7.3 KB median), since each session rekeys the prelude's atoms
+  and tables; outside deterministic mode no session rekeys. Module +717 B gzip (D2434).
+- **Not done:** the collision test covers strings; keys built against SipHash need the
+  key. Atom ids and the base keep their layout.
+
+## D2434: The size ceiling rises by 800 B for keyed hashing
+date: 2026-11-09 · by: strings · issue: 0163
+D2433 costs +717 B gzip (module 455,081 → 455,798 B, raw +674 B): SipHash's rounds and
+finalization out of line once, the two-level lookup on one needle type, the rekey walk.
+Trimmed from +4.5 KB by keeping one copy of the rounds (`compress`, `finish64` out of
+line), one probe loop for both levels and all callers, no dyn iterators, and dropping
+the fixed multiply-rotate hash. The ceiling in tests/scores/size.tsv rises from 455,100
+to 455,900.

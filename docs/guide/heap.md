@@ -105,6 +105,16 @@ refer to them as constants. In a VM made from the base image the table has two l
 the base's atoms with their hash index in the builtin prefix, never written, and the
 VM's own after them, in a small list and index of its own (D2431).
 
+The two levels hash strings with the same function, SipHash-1-3 over code units, under
+different keys (D2433). The base's index uses a fixed key, the same in every VM of the
+build, since the prefix must be. The VM's own index, and Map and Set, use a key derived
+from the VM's random seed and kept in the image, the seed a host takes from its entropy
+or, in deterministic mode, from the run's seed. A multiplicative hash with no key is
+cheaper, but anyone can build thousands of strings that collide under it, and a script
+that reads such keys from a web page would spend quadratic time on them; under a secret
+key that doesn't work. A string caches the hash of its level: the base's strings the
+fixed one, the rest the keyed one. Reseeding a VM rehashes its own atoms and tables.
+
 > **Trade-off.** Atoms are never freed. A script that creates millions of distinct keys
 > (`obj["k" + i]`) grows the atom table for the life of the VM. Codemode VMs live for
 > one script, so atom collection is a follow-up, not a feature.
@@ -224,6 +234,8 @@ order, a linear-probing index of entry numbers, and a live count. Keys follow
 SameValueZero: numbers are normalized (−0 to +0, one NaN, the int32 form where it fits)
 and strings hash by content. Objects and symbols hash by their offset, which the
 collector changes, so after every collection it rehashes each table it copied, in place.
+Every key goes through the VM's keyed hash, described with the atoms above, so tool data
+built to collide can't make a table's lookups quadratic (D2433).
 
 WeakMap and WeakSet keep their pairs in an `EphemeronArray`, a cell the collector does
 not trace normally (D1382). A pair survives a collection only if its key is reachable

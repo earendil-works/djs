@@ -44,6 +44,7 @@ image carries it along:
 | `Date.now()`, `new Date()` | Reads a time the host sets with `vm_set_now` (0 until then). A host that wants time to pass sets it again between fuel slices, or with each async result. | D1383 |
 | The local time zone | A fixed offset the host sets (`vm_set_time_zone_offset`), UTC by default, no daylight-saving rules. | D1383 |
 | `Math.random()` | xorshift64*, as in QuickJS, seeded by the host (`vm_set_random_seed`). The state is in the heap, so a restored VM continues the sequence. | D1314 |
+| The string hash's key | Derived from the same seed (one-way), and kept in the image. It decides where the VM's own atoms and Map and Set keys sit in their tables, never what a script sees: iteration follows insertion order. | D2433 |
 | `WeakRef`, `FinalizationRegistry` | By default they work as specified, and collection timing is observable. The host can make them strong (nothing ever dies) or absent (the globals are deleted). | D1680 |
 | Tool results | Applied in delivery order, as macrotasks (below). | D1670 |
 
@@ -133,7 +134,8 @@ ordinary engine: the clock follows the host's clock, `Math.random` gets a seed f
 host's entropy, and weak references are collected. With
 `deterministic: { startedAt, seed }` (D1680), it sets everything up for repeatable runs:
 
-- `Math.random` is seeded from `seed`, and the time zone is UTC;
+- `Math.random` is seeded from `seed`, and so is the key of the string hash, so the same
+  seed lays the heap out the same way; the time zone is UTC;
 - weak references are strong, unless the host asks for them to be absent (pi's
   deterministic contract, matching quickjs-wasi);
 - the clock starts at `startedAt` and moves only when an async result is delivered: to
