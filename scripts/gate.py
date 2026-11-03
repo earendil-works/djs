@@ -166,7 +166,7 @@ class Job:
         self.group, self.ext, self.full_only, self.summary, self.build = group, ext, full_only, summary, build
         self.state = "pending"  # pending, skipped, cached, running, ok, failed
         self.wall = self.cpu = 0.0
-        self.log = f"{G}/log/{name}.log"
+        self.log = f"{G}/log/{re.sub(r'[^A-Za-z0-9_.-]+', '-', name).strip('-')}.log"
 
     def key(self):
         h = hashlib.sha256(f"leg {self.name}\n{class_hash(self.cls)}\n".encode())
@@ -463,6 +463,28 @@ def run(argv):
     signal.signal(signal.SIGINT, interrupted)
     signal.signal(signal.SIGHUP, interrupted)
 
+    try:
+        schedule(todo, by_name, ready, launch, running, lock, failed, clean, sha)
+    finally:
+        for p in list(running.values()):
+            try:
+                os.killpg(p.pid, signal.SIGTERM)
+            except OSError:
+                pass
+
+    wall = time.time() - start
+    write_steps(all_jobs, wall)
+    if failed:
+        print(f"gate: FAILED: {', '.join(j.name for j in failed)} ({wall:.0f}s)")
+        return 1
+    if full:
+        record_full(sha)
+    print(f"gate: OK ({wall:.0f}s; {len(cached)} legs cached)")
+    return 0
+
+
+def schedule(todo, by_name, ready, launch, running, lock, failed, clean, sha):
+    """Launches ready jobs until all are done or one failed (then stops the others)."""
     with lock:
         while True:
             for j in todo:
@@ -498,15 +520,6 @@ def run(argv):
                 break
             lock.wait(1.0)
 
-    wall = time.time() - start
-    write_steps(all_jobs, wall)
-    if failed:
-        print(f"gate: FAILED: {', '.join(j.name for j in failed)} ({wall:.0f}s)")
-        return 1
-    if full:
-        record_full(sha)
-    print(f"gate: OK ({wall:.0f}s; {len(cached)} legs cached)")
-    return 0
 
 
 def report(j):
@@ -546,12 +559,16 @@ def write_steps(all_jobs, wall):
         rows = sorted((l.split("\t") for l in times.read_text().splitlines() if l.count("\t") == 2),
                       key=lambda r: -float(r[0]))[:10]
         Path("target/gate-slowest-tests.tsv").write_text("".join("\t".join(r) + "\n" for r in rows))
-    log = Path(G, "log/test262.log")
+    log = Path(by_name_log("test262"))
     if log.exists():
         text = log.read_text(errors="replace")
         part = text.split("slowest:", 1)[1].split("\n\n", 1)[0] if "slowest:" in text else ""
         Path("target/gate-slowest-test262.txt").write_text(
             "".join(l + "\n" for l in part.splitlines() if re.match(r"^ +[0-9]", l)))
+
+
+def by_name_log(name):
+    return Job(name, "").log
 
 
 def record_full(sha):
