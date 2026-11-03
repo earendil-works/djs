@@ -1,7 +1,7 @@
 # 0171: Loader: suspended activations, open calls, handles
 
-status: open
-agent: -
+status: in-progress
+agent: portable
 branch: issue/0171-dump-loader
 depends-on: 0169, 0170
 touches: crates/djs-core/src/vm/ (load_dump primitives), interp/run/suspend.rs (building a Generator from a description), host call table, tests/dump/v2/ (hand-written fixtures), docs/continuation-dumps.md
