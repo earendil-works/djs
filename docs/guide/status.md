@@ -68,8 +68,8 @@ Module sizes measured at d780463b0d, 2026-11-01.
 | cell kinds ([reference](ref-cells.md)) | 25 |
 | intrinsics ([reference](ref-intrinsics.md)) | 452 |
 | builtins in `builtins/*.ts` | 455 |
-| of them `@native` (also compiled to Rust) | 10 |
-| of them `@fast` (a Rust leaf entry) | 72 |
+| of them `@native` (also compiled to Rust) | 8 |
+| of them `@fast` (a Rust leaf entry) | 18 |
 | difftest corpus cases | 546 |
 | base snapshot, bytes | 231,960 |
 <!-- /gen -->

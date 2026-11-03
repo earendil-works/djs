@@ -52,7 +52,6 @@ function GetMethod(v: Value, key: Value): Value {
 /**
  * ToNumber ( argument ), 7.1.4.
  * @intrinsic
- * @fast
  */
 function ToNumber(v: Value): f64 {
   if (IsObject(v)) {
@@ -75,7 +74,6 @@ function ToString(v: Value): Str {
 
 /**
  * ToIntegerOrInfinity ( argument ), 7.1.5.
- * @fast
  */
 function ToIntegerOrInfinity(v: Value): f64 {
   return ToIntegerOrInfinityNumber(ToNumber(v));
@@ -83,7 +81,6 @@ function ToIntegerOrInfinity(v: Value): f64 {
 
 /**
  * ToLength ( argument ), 7.1.20.
- * @fast
  */
 function ToLength(v: Value): f64 {
   const len: f64 = ToIntegerOrInfinity(v);
@@ -124,7 +121,6 @@ function ToPropertyKey(v: Value): Value {
  * `newTarget` undefined means the builtin was called as a function, so the active
  * function is the constructor and its prototype is the realm's.
  * @intrinsic
- * @native
  */
 function GetPrototypeFromConstructor(newTarget: Value, fallback: Str): Obj {
   if (newTarget === undefined) {

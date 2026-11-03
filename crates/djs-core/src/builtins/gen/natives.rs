@@ -9,19 +9,13 @@ use crate::value::Value;
 
 const I_ARRAY_CREATE: u16 = iid("ArrayCreate");
 const I_ARRAY_PUSH_DENSE: u16 = iid("ArrayPushDense");
-const I_ASYNC_GENERATOR_STATE: u16 = iid("AsyncGeneratorState");
-const I_ASYNC_GENERATOR_STEP: u16 = iid("AsyncGeneratorStep");
 const I_CALL: u16 = iid("Call");
 const I_COLLECT_PRESENT: u16 = iid("CollectPresent");
 const I_COMPARE_STRINGS: u16 = iid("CompareStrings");
 const I_DELETE_PROPERTY_OR_THROW: u16 = iid("DeletePropertyOrThrow");
-const I_GENERATOR_RESUME: u16 = iid("GeneratorResume");
 const I_GET_V: u16 = iid("GetV");
 const I_IS_ARRAY: u16 = iid("IsArray");
-const I_IS_ASYNC_FUNCTION_STATE: u16 = iid("IsAsyncFunctionState");
 const I_IS_BIG_INT: u16 = iid("IsBigInt");
-const I_IS_PROMISE: u16 = iid("IsPromise");
-const I_IS_PROXY: u16 = iid("IsProxy");
 const I_IS_RAW_J_S_O_N: u16 = iid("IsRawJSON");
 const I_J_S_O_N_JOIN: u16 = iid("JSONJoin");
 const I_J_S_O_N_STACK_INCLUDES: u16 = iid("JSONStackIncludes");
@@ -30,13 +24,6 @@ const I_JSON_STRINGIFY_FAST_AT: u16 = iid("JsonStringifyFastAt");
 const I_NEW_TYPE_ERROR: u16 = iid("NewTypeError");
 const I_OWN_PROPERTY_KEYS: u16 = iid("OwnPropertyKeys");
 const I_PRIMITIVE_VALUE: u16 = iid("PrimitiveValue");
-const I_PROMISE_CLAIM_RESOLVE: u16 = iid("PromiseClaimResolve");
-const I_PROXY_TARGET: u16 = iid("ProxyTarget");
-const I_REALM_INTRINSIC: u16 = iid("RealmIntrinsic");
-const I_RECORD_GET: u16 = iid("RecordGet");
-const I_RECORD_SET: u16 = iid("RecordSet");
-const I_REJECT_PROMISE: u16 = iid("RejectPromise");
-const I_RESOLVE_PROMISE: u16 = iid("ResolvePromise");
 const I_SERIALIZE_J_S_O_N_ARRAY: u16 = iid("SerializeJSONArray");
 const I_SERIALIZE_J_S_O_N_OBJECT: u16 = iid("SerializeJSONObject");
 const I_SERIALIZE_J_S_O_N_PROPERTY: u16 = iid("SerializeJSONProperty");
@@ -51,16 +38,14 @@ pub(crate) static NATIVES: &[NativeFn] = &[
     NativeFn { name: "ArrayPrototypePush", params: 0, locals: 5, run: native_ArrayPrototypePush, handler: handler_ArrayPrototypePush },
     NativeFn { name: "SortList", params: 3, locals: 27, run: native_SortList, handler: handler_SortList },
     NativeFn { name: "ArrayPrototypeSort", params: 1, locals: 7, run: native_ArrayPrototypeSort, handler: handler_ArrayPrototypeSort },
-    NativeFn { name: "GetPrototypeFromConstructor", params: 2, locals: 2, run: native_GetPrototypeFromConstructor, handler: handler_GetPrototypeFromConstructor },
     NativeFn { name: "SerializeJSONProperty", params: 7, locals: 11, run: native_SerializeJSONProperty, handler: handler_SerializeJSONProperty },
     NativeFn { name: "JSONStackIncludes", params: 2, locals: 3, run: native_JSONStackIncludes, handler: handler_JSONStackIncludes },
     NativeFn { name: "JSONJoin", params: 7, locals: 4, run: native_JSONJoin, handler: handler_JSONJoin },
     NativeFn { name: "SerializeJSONObject", params: 6, locals: 11, run: native_SerializeJSONObject, handler: handler_SerializeJSONObject },
     NativeFn { name: "SerializeJSONArray", params: 6, locals: 6, run: native_SerializeJSONArray, handler: handler_SerializeJSONArray },
-    NativeFn { name: "PromiseReactionJob", params: 4, locals: 8, run: native_PromiseReactionJob, handler: handler_PromiseReactionJob },
 ];
 
-// builtins/array.ts:222 (Array.prototype.push)
+// builtins/array.ts:221 (Array.prototype.push)
 #[allow(unused_assignments)]
 fn native_ArrayPrototypePush(ex: &mut Exec<'_>) -> Step {
     let mut st = ex.n_state();
@@ -139,7 +124,7 @@ fn handler_ArrayPrototypePush(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:948
+// builtins/array.ts:944
 #[allow(unused_assignments)]
 fn native_SortList(ex: &mut Exec<'_>) -> Step {
     let mut st = ex.n_state();
@@ -470,7 +455,7 @@ fn handler_SortList(state: u32) -> Option<(u32, u32)> {
     None
 }
 
-// builtins/array.ts:1045 (Array.prototype.sort)
+// builtins/array.ts:1041 (Array.prototype.sort)
 #[allow(unused_assignments)]
 fn native_ArrayPrototypeSort(ex: &mut Exec<'_>) -> Step {
     let mut st = ex.n_state();
@@ -567,53 +552,6 @@ fn native_ArrayPrototypeSort(ex: &mut Exec<'_>) -> Step {
 }
 
 fn handler_ArrayPrototypeSort(state: u32) -> Option<(u32, u32)> {
-    let _ = state;
-    None
-}
-
-// builtins/conversion.ts:129
-fn native_GetPrototypeFromConstructor(ex: &mut Exec<'_>) -> Step {
-    let mut st = ex.n_state();
-    loop {
-        ex.n_goto(st);
-        match st {
-            0 => {
-                if ex.n_arg(0).is_undefined() { st = 1; continue; } else { st = 2; continue; }
-            }
-            1 => {
-                let v = { let a0 = ex.n_arg(1); ex.n_leaf(I_REALM_INTRINSIC, &[a0])? }; return ex.n_ret(v);
-            }
-            2 => {
-                // resume point: Get
-                match { let a0 = { let a0 = ex.n_arg(0); ex.n_as_obj(a0)? }; let a1 = ex.n_str("prototype")?; ex.n_get(&[a0, a1], 3) }? { Flow::Inline => { st = 3; continue } Flow::Leave(s) => return Ok(s) }
-            }
-            3 => {
-                let r = ex.n_result(); ex.n_set_slot(0, r);
-                if { let a0 = ex.n_slot(0); a0.as_object().is_some() } { st = 4; continue; } else { st = 5; continue; }
-            }
-            4 => {
-                let v = { let a0 = ex.n_slot(0); ex.n_as_obj(a0)? }; return ex.n_ret(v);
-            }
-            5 => {
-                let v = { let a0 = ex.n_arg(0); ex.n_as_obj(a0)? }; ex.n_set_slot(1, v);
-                st = 6; continue;
-            }
-            6 => {
-                if bool_of({ let a0 = ex.n_slot(1); ex.n_leaf(I_IS_PROXY, &[a0])? }) { st = 7; continue; } else { st = 8; continue; }
-            }
-            7 => {
-                let v = { let a0 = ex.n_slot(1); ex.n_leaf(I_PROXY_TARGET, &[a0])? }; ex.n_set_slot(1, v);
-                if ex.n_backedge(6) { return Ok(None); } st = 6; continue;
-            }
-            8 => {
-                let v = { let a0 = ex.n_arg(1); ex.n_leaf(I_REALM_INTRINSIC, &[a0])? }; return ex.n_ret(v);
-            }
-            _ => return Err(bad_state()),
-        }
-    }
-}
-
-fn handler_GetPrototypeFromConstructor(state: u32) -> Option<(u32, u32)> {
     let _ = state;
     None
 }
@@ -1106,152 +1044,4 @@ fn native_SerializeJSONArray(ex: &mut Exec<'_>) -> Step {
 fn handler_SerializeJSONArray(state: u32) -> Option<(u32, u32)> {
     let _ = state;
     None
-}
-
-// builtins/promise.ts:210
-#[allow(unused_assignments)]
-fn native_PromiseReactionJob(ex: &mut Exec<'_>) -> Step {
-    let mut st = ex.n_state();
-    let mut l0b: bool = false;
-    match st {
-        7 | 12 => { l0b = bool_of(ex.n_slot(0)); }
-        _ => {}
-    }
-    loop {
-        ex.n_goto(st);
-        match st {
-            0 => {
-                if bool_of({ let a0 = ex.n_arg(1); ex.n_leaf(I_IS_ASYNC_FUNCTION_STATE, &[a0])? }) { st = 1; continue; } else { st = 2; continue; }
-            }
-            1 => {
-                // resume point: GeneratorResume
-                match { let a0 = { let a0 = ex.n_arg(1); ex.n_as_obj(a0)? }; let a1 = ex.n_arg(2); let a2 = (if bool_of(ex.n_arg(3)) { Value::int(0) } else { Value::int(1) }); ex.n_call(I_GENERATOR_RESUME, &[a0, a1, a2], 3) }? { Flow::Inline => { st = 3; continue } Flow::Leave(s) => return Ok(s) }
-            }
-            2 => {
-                if (i32_of({ let a0 = ex.n_arg(1); ex.n_leaf(I_ASYNC_GENERATOR_STATE, &[a0])? }) >= 0_i32) { st = 4; continue; } else { st = 5; continue; }
-            }
-            3 => {
-                ex.n_result();
-                let v = Value::UNDEFINED; return ex.n_ret(v);
-            }
-            4 => {
-                // resume point: AsyncGeneratorStep
-                match { let a0 = { let a0 = ex.n_arg(1); ex.n_as_obj(a0)? }; let a1 = ex.n_arg(2); let a2 = (if bool_of(ex.n_arg(3)) { Value::int(0) } else { Value::int(1) }); ex.n_call(I_ASYNC_GENERATOR_STEP, &[a0, a1, a2], 6) }? { Flow::Inline => { st = 6; continue } Flow::Leave(s) => return Ok(s) }
-            }
-            5 => {
-                let rv = bool_of(ex.n_arg(3)); l0b = rv; ex.n_set_slot(0, Value::bool(rv));
-                let v = ex.n_arg(2); ex.n_set_slot(1, v);
-                if !ex.n_arg(1).is_undefined() { st = 9; continue; } else { st = 7; continue; }
-            }
-            6 => {
-                ex.n_result();
-                let v = Value::UNDEFINED; return ex.n_ret(v);
-            }
-            7 => {
-                if ex.n_arg(0).is_undefined() { st = 11; continue; } else { st = 12; continue; }
-            }
-            8 => {
-                let v = ex.n_slot(2); ex.n_set_slot(1, v);
-                let rv = false; l0b = rv; ex.n_set_slot(0, Value::bool(rv));
-                st = 7; continue;
-            }
-            9 => {
-                // resume point: Call
-                match { let a0 = ex.n_arg(1); let a1 = Value::UNDEFINED; let a2 = ex.n_arg(2); ex.n_call(I_CALL, &[a0, a1, a2], 10) }? { Flow::Inline => { st = 10; continue } Flow::Leave(s) => return Ok(s) }
-            }
-            10 => {
-                let r = ex.n_result(); ex.n_set_slot(1, r);
-                let rv = true; l0b = rv; ex.n_set_slot(0, Value::bool(rv));
-                st = 7; continue;
-            }
-            11 => {
-                let v = Value::UNDEFINED; return ex.n_ret(v);
-            }
-            12 => {
-                if l0b { st = 13; continue; } else { st = 15; continue; }
-            }
-            13 => {
-                // inlined: ResolveCapability
-                let v = ex.n_arg(0); ex.n_set_slot(3, v);
-                let v = ex.n_slot(1); ex.n_set_slot(4, v);
-                if bool_of({ let a0 = ex.n_slot(3); ex.n_leaf(I_IS_PROMISE, &[a0])? }) { st = 16; continue; } else { st = 17; continue; }
-            }
-            14 => {
-                let v = Value::UNDEFINED; return ex.n_ret(v);
-            }
-            15 => {
-                // inlined: RejectCapability
-                let v = ex.n_arg(0); ex.n_set_slot(4, v);
-                let v = ex.n_slot(1); ex.n_set_slot(3, v);
-                if bool_of({ let a0 = ex.n_slot(4); ex.n_leaf(I_IS_PROMISE, &[a0])? }) { st = 21; continue; } else { st = 22; continue; }
-            }
-            16 => {
-                // inlined: ResolveWithData
-                let v = ex.n_slot(3); ex.n_set_slot(5, v);
-                let v = ex.n_slot(4); ex.n_set_slot(6, v);
-                let v = { let a0 = ex.n_slot(5); leaf_ClaimResolution(ex, a0)? }; ex.n_set_slot(7, v);
-                if !ex.n_slot(7).is_undefined() { st = 18; continue; } else { st = 14; continue; }
-            }
-            17 => {
-                // resume point: Call
-                match { let a0 = { let a0 = { let a0 = ex.n_slot(3); ex.n_as_obj(a0)? }; let a1 = Value::int(1); ex.n_leaf(I_RECORD_GET, &[a0, a1])? }; let a1 = Value::UNDEFINED; let a2 = ex.n_slot(4); ex.n_call(I_CALL, &[a0, a1, a2], 20) }? { Flow::Inline => { st = 20; continue } Flow::Leave(s) => return Ok(s) }
-            }
-            18 => {
-                // resume point: ResolvePromise
-                match { let a0 = { let a0 = ex.n_slot(7); ex.n_as_obj(a0)? }; let a1 = ex.n_slot(6); ex.n_call(I_RESOLVE_PROMISE, &[a0, a1], 19) }? { Flow::Inline => { st = 19; continue } Flow::Leave(s) => return Ok(s) }
-            }
-            19 => {
-                ex.n_result();
-                st = 14; continue;
-            }
-            20 => {
-                ex.n_result();
-                st = 14; continue;
-            }
-            21 => {
-                let _ = { let a0 = ex.n_slot(4); let a1 = ex.n_slot(3); leaf_RejectWithData(ex, a0, a1)? };
-                st = 14; continue;
-            }
-            22 => {
-                // resume point: Call
-                match { let a0 = { let a0 = { let a0 = ex.n_slot(4); ex.n_as_obj(a0)? }; let a1 = Value::int(2); ex.n_leaf(I_RECORD_GET, &[a0, a1])? }; let a1 = Value::UNDEFINED; let a2 = ex.n_slot(3); ex.n_call(I_CALL, &[a0, a1, a2], 23) }? { Flow::Inline => { st = 23; continue } Flow::Leave(s) => return Ok(s) }
-            }
-            23 => {
-                ex.n_result();
-                st = 14; continue;
-            }
-            _ => return Err(bad_state()),
-        }
-    }
-}
-
-fn handler_PromiseReactionJob(state: u32) -> Option<(u32, u32)> {
-    match state {
-        9 | 10 => Some((8, 2)),
-        _ => None,
-    }
-}
-
-// builtins/promise.ts:47 (leaf)
-fn leaf_ClaimResolution(ex: &mut Exec<'_>, mut l_data: Value) -> Result<Value, Fault> {
-    if bool_of({ let a0 = l_data; ex.n_leaf(I_IS_PROMISE, &[a0])? }) {
-        return Ok((if bool_of({ let a0 = { let a0 = l_data; ex.n_as_obj(a0)? }; ex.n_leaf(I_PROMISE_CLAIM_RESOLVE, &[a0])? }) { l_data } else { Value::UNDEFINED }));
-    }
-    let mut l_r: Value = { let a0 = l_data; ex.n_as_obj(a0)? };
-    if { let a0 = { let a0 = l_r; let a1 = Value::int(1); ex.n_leaf(I_RECORD_GET, &[a0, a1])? }; let a1 = Value::bool(true); ex.n_strict_eq(a0, a1) } {
-        return Ok(Value::UNDEFINED);
-    }
-    let _ = { let a0 = l_r; let a1 = Value::int(1); let a2 = Value::bool(true); ex.n_leaf(I_RECORD_SET, &[a0, a1, a2])? };
-    return Ok({ let a0 = l_r; let a1 = Value::int(0); ex.n_leaf(I_RECORD_GET, &[a0, a1])? });
-    #[allow(unreachable_code)]
-    Err(bad_state())
-}
-
-// builtins/promise.ts:76 (leaf)
-fn leaf_RejectWithData(ex: &mut Exec<'_>, mut l_data: Value, mut l_reason: Value) -> Result<(), Fault> {
-    let mut l_promise: Value = { let a0 = l_data; leaf_ClaimResolution(ex, a0)? };
-    if !l_promise.is_undefined() {
-        let _ = { let a0 = { let a0 = l_promise; ex.n_as_obj(a0)? }; let a1 = l_reason; ex.n_leaf(I_REJECT_PROMISE, &[a0, a1])? };
-    }
-    Ok(())
 }

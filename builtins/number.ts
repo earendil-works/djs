@@ -35,7 +35,6 @@ function ThisNumberValue(value: Value): f64 {
  * Number.prototype.toString ( [ radix ] ), 21.1.3.6.
  * @builtin Number.prototype.toString
  * @length 1
- * @fast
  */
 function NumberPrototypeToString(this: Value, radix?: Value): Str {
   const x: f64 = ThisNumberValue(this);
@@ -65,7 +64,6 @@ function NumberPrototypeValueOf(this: Value): f64 {
 /**
  * Number.prototype.toFixed ( fractionDigits ), 21.1.3.3.
  * @builtin Number.prototype.toFixed
- * @fast
  */
 function NumberPrototypeToFixed(this: Value, fractionDigits: Value): Str {
   const x: f64 = ThisNumberValue(this);
@@ -214,7 +212,6 @@ function NumberPositiveInfinity(): f64 {
  * parseFloat ( string ), 19.2.4 (also Number.parseFloat).
  * @builtin globalThis.parseFloat
  * @builtin Number.parseFloat
- * @fast
  */
 function GlobalParseFloat(string: Value): f64 {
   return StringParseFloat(ToString(string));
@@ -224,7 +221,6 @@ function GlobalParseFloat(string: Value): f64 {
  * parseInt ( string, radix ), 19.2.5 (also Number.parseInt).
  * @builtin globalThis.parseInt
  * @builtin Number.parseInt
- * @fast
  */
 function GlobalParseInt(string: Value, radix: Value): f64 {
   const s: Str = ToString(string);
@@ -234,7 +230,6 @@ function GlobalParseInt(string: Value, radix: Value): f64 {
 /**
  * isNaN ( number ), 19.2.3.
  * @builtin globalThis.isNaN
- * @fast
  */
 function GlobalIsNaN(number: Value): boolean {
   const n: f64 = ToNumber(number);
@@ -244,7 +239,6 @@ function GlobalIsNaN(number: Value): boolean {
 /**
  * isFinite ( number ), 19.2.2.
  * @builtin globalThis.isFinite
- * @fast
  */
 function GlobalIsFinite(number: Value): boolean {
   return IsFiniteNumber(ToNumber(number));

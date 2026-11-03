@@ -6990,3 +6990,141 @@ cell. `fclosure` reads its child through `INFO` (one load more, beside an alloca
   per-run 3878 vs 3896 and 400 vs 400 M). Peak memory (mem-perturb n=6) equal, strbuild
   15.8 → 15.4 and json-date 4.3 → 3.7–4.3 MiB. A wasm instance after `vm_new` stays at 18
   pages.
+
+## D2310: A twin stays only where it pays its bytes
+date: 2026-11-09 · by: perf · issue: 0159
+`@native` state machines and `@fast` entries (D1632, D1850) are second implementations
+of builtins that bytecode already provides. The bloat audit put them at 10.6 + 8.3 KB gz.
+Each was measured alone, turned off at run time in a measurement build (a byte mask in
+the module, so every variant had identical code and layout):
+- **Benchmarks:** wasm instructions, node's default tiering (Liftoff, then TurboFan),
+  on the 22 workloads, pi-like, an async microbenchmark and the pi bench (djs only).
+  - The relative numbers are net of an empty run.
+  - Noise is about ±0.5% on workloads and about ±1% on the pi bench.
+  - A first pass with `--no-liftoff` hid real costs: dropping `indexOf`'s entry cost
+    `strings` +5% under default tiering and nothing under TurboFan alone.
+- **Calls:** each twin's calls, counted in the workloads, the pi bench and the 310
+  codemode corpus cases.
+  - The corpus scripts are short: their calls of any twin are at most a few thousand.
+    The native run-to-run noise of the whole corpus (±4%) is larger than any twin's
+    effect there, so the corpus decided nothing.
+
+**The rule.** A twin stays if turning it off costs:
+- (a) at least 1% on pi-like or on the pi bench (the codemode-shaped work; a pi-bench
+  effect counts only if the twin has calls there), or
+- (b) on some workload, at least 10% per KB gz of the twin's code (estimated as its
+  functions' raw bytes × 0.385, the module's code ratio).
+
+Twins that call each other are judged together: the sort pair (`SortList`,
+`ArrayPrototypeSort`) and the five `JSON.stringify` serializer natives. Those two groups
+were kept at the coordinator's call: sort with a comparator +13.5% on higher-order, and
+`JSON.stringify` with a replacer +14% as a group. Under (b) alone they fall short (2.4 and
+4.2 KB gz).
+
+**The set as a whole:** with an earlier drop set off (the rule's set plus `indexOf`,
+`Array.prototype.includes` and the sort native, whose costs only default tiering
+showed), pi-like was +1.5% and the pi bench +1.7% (pi-like +0.9% in another run:
+noise). Three cheap entries with calls
+in both, `ToPropertyKey`, `ToString` and `Array.prototype.join` (about 250 B gz),
+were kept back, which brought the two to +0.40% and +0.32%. The full set would have
+saved 198 B gz more.
+
+**Result:**
+- **Kept:** 18 `@fast` entries and 8 `@native` builtins. **Dropped:** 54 entries and
+  the natives `GetPrototypeFromConstructor` and `PromiseReactionJob`.
+  - Both of those natives were as fast or faster as bytecode: pi-like −0.7% without
+    the first; the async microbenchmark within ±1% without the second.
+- **Code:** `fast.rs` loses its `Math` entry kind.
+- **Size:** module 455,081 → 448,823 B gz (−6,258) on the branch. On main after
+  the slim build (0160): full 450,369 → 445,107 (−5,262), slim 385,842 → 379,276
+  (−6,566). Both ceilings lowered (446,131 and 380,300).
+- **Speed, real build against main** (wasm instructions, n = 3):
+  - all 22 workloads between −2.2% and +0.92%; pi-like +0.45%;
+  - the pi bench +0.1% (within noise); async +0.65% (n = 5).
+
+Per twin (alone off; workloads where it has calls; `–`: no calls in any workload):
+
+| twin | kind | raw B | est. gz B | pi-like | pi bench | worst workload | corpus calls | kept |
+| --- | --- | ---: | ---: | ---: | ---: | --- | ---: | --- |
+| ToString | @fast | 134 | 52 | +0.43% | -0.26% | json-text +1.8% | 330 | yes |
+| ToNumber | @fast | 233 | 90 | +0.00% | +0.59% | json-date +0.1% | 22 | no |
+| ToIntegerOrInfinity | @fast | 233 | 90 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| ToLength | @fast | 281 | 108 | -0.10% | +0.01% | pi-like -0.1% | 1 | no |
+| LengthOfArrayLike | @fast | 200 | 77 | +1.18% | +1.71% | foreach +2.3% | 2190 | yes |
+| ToPropertyKey | @fast | 215 | 83 | +0.00% | +0.94% | json-indent +0.3% | 2273 | yes |
+| ThisToString | @fast | 169 | 65 | +0.00% | +0.30% | – +0.0% | 0 | no |
+| RequireThisCoercible | @fast | 72 | 28 | +0.00% | -0.31% | – +0.0% | 31 | no |
+| IsRegExp | @fast | 65 | 25 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| ClampPosition | @fast | 341 | 131 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| RelativeIndex | @fast | 374 | 144 | +0.00% | -0.02% | – +0.0% | 0 | no |
+| StrLen | @fast | 124 | 48 | +0.00% | +0.08% | – +0.0% | 28 | no |
+| StringConstructor | @fast | 119 | 46 | -0.28% | -0.13% | pi-like -0.3% | 523 | no |
+| StringPrototypeIncludes | @fast | 401 | 154 | +35.00% | +5.11% | pi-like +35.0% | 86 | yes |
+| StringPrototypeIndexOf | @fast | 461 | 177 | +0.00% | +0.31% | strings +5.1% | 45 | yes |
+| StringPrototypeLastIndexOf | @fast | 559 | 215 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| StringPrototypeStartsWith | @fast | 427 | 164 | +0.00% | +0.49% | – +0.0% | 597 | no |
+| StringPrototypeEndsWith | @fast | 429 | 165 | +0.00% | -0.19% | – +0.0% | 38 | no |
+| StringPrototypeSlice | @fast | 414 | 159 | +0.00% | +1.00% | push-pop +4.6% | 190 | yes |
+| StringPrototypeSubstring | @fast | 567 | 218 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| StringPrototypeCharAt | @fast | 306 | 118 | +0.00% | +1.08% | push-pop +4.1% | 0 | yes |
+| StringPrototypeCharCodeAt | @fast | 352 | 136 | +0.00% | +0.77% | push-pop +9.3% | 0 | yes |
+| StringPrototypeCodePointAt | @fast | 420 | 162 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| StringPrototypeAt | @fast | 381 | 147 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| StringPrototypeRepeat | @fast | 511 | 197 | +0.00% | +0.03% | push-pop -0.7% | 0 | no |
+| StringPrototypePadEnd | @fast | 18 | 7 | +0.59% | +0.22% | pi-like +0.6% | 0 | no |
+| StringPrototypePadStart | @fast | 18 | 7 | +0.84% | +0.07% | pi-like +0.8% | 3 | no |
+| StringPrototypeToLowerCase | @fast | 189 | 73 | +0.00% | +0.02% | – +0.0% | 23 | no |
+| StringPrototypeToUpperCase | @fast | 189 | 73 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| StringPrototypeToLocaleLowerCase | @fast | 189 | 73 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| StringPrototypeToLocaleUpperCase | @fast | 189 | 73 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| StringPrototypeTrim | @fast | 14 | 5 | +0.00% | -0.02% | – +0.0% | 202 | no |
+| StringPrototypeTrimStart | @fast | 14 | 5 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| StringPrototypeTrimEnd | @fast | 14 | 5 | +0.00% | +0.23% | – +0.0% | 3 | no |
+| StringPrototypeSplit | @fast | 2139 | 824 | +30.87% | +4.37% | pi-like +30.9% | 172 | yes |
+| StringPrototypeReplace | @fast | 475 | 183 | +0.00% | +0.16% | – +0.0% | 7 | no |
+| StringPrototypeReplaceAll | @fast | 778 | 300 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| NumberConstructor | @fast | 236 | 91 | +1.23% | -0.04% | pi-like +1.2% | 4 | yes |
+| GlobalParseInt | @fast | 370 | 142 | +0.00% | +0.23% | – +0.0% | 2 | no |
+| GlobalParseFloat | @fast | 268 | 103 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| GlobalIsNaN | @fast | 127 | 49 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| GlobalIsFinite | @fast | 134 | 52 | +0.00% | +1.13% | – +0.0% | 12 | no |
+| NumberPrototypeToString | @fast | 437 | 168 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| NumberPrototypeToFixed | @fast | 382 | 147 | +0.00% | -0.01% | – +0.0% | 39 | no |
+| MathMax | @fast | 359 | 138 | +0.00% | +0.26% | – +0.0% | 61 | no |
+| MathMin | @fast | 359 | 138 | +0.00% | +0.56% | – +0.0% | 12 | no |
+| MathAbs | @fast | 0 | 0 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| MathCeil | @fast | 0 | 0 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| MathFloor | @fast | 0 | 0 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| MathRound | @fast | 0 | 0 | +0.00% | -0.04% | – +0.0% | 5 | no |
+| MathSign | @fast | 0 | 0 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| MathSqrt | @fast | 0 | 0 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| MathTrunc | @fast | 0 | 0 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| MathExp | @fast | 0 | 0 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| MathLog | @fast | 0 | 0 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| MathLog2 | @fast | 0 | 0 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| MathLog10 | @fast | 0 | 0 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| MathSin | @fast | 0 | 0 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| MathCos | @fast | 0 | 0 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| ObjectPrototypeHasOwnProperty | @fast | 46 | 18 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| ObjectHasOwn | @fast | 71 | 27 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| ArrayIsArray | @fast | 130 | 50 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| ArraySpeciesCreate | @fast | 444 | 171 | +5.10% | +0.19% | pi-like +5.1% | 422 | yes |
+| ArrayPrototypePush | @fast | 187 | 72 | +0.47% | +1.84% | pushpop +46.7% | 102 | yes |
+| ArrayPrototypePop | @fast | 88 | 34 | +0.00% | +1.07% | pushpop +56.8% | 0 | yes |
+| ArrayPrototypeIndexOf | @fast | 484 | 186 | +0.00% | +0.03% | indexof +22.3% | 0 | yes |
+| ArrayPrototypeLastIndexOf | @fast | 505 | 194 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| ArrayPrototypeIncludes | @fast | 401 | 154 | +0.00% | +0.45% | foreach +2.5% | 86 | yes |
+| ArrayPrototypeSlice | @fast | 829 | 319 | +4.29% | -0.01% | arrays +5.1% | 18 | yes |
+| ArrayPrototypeJoin | @fast | 303 | 117 | +0.59% | +0.02% | json-text +1.8% | 272 | yes |
+| ArrayPrototypeFill | @fast | 421 | 162 | +0.00% | +0.00% | – +0.0% | 0 | no |
+| StringFromCharCode | @fast | 557 | 214 | +0.00% | +0.22% | strings +38.8% | 0 | yes |
+| ArrayPrototypePush | @native | 1496 | 576 | +0.52% | +0.61% | push-pop +72.0% | 3 | yes |
+| SortList | @native | 6105 | 2350 | +0.43% | -0.25% | higher-order +13.5% | 11 | yes |
+| ArrayPrototypeSort | @native | 1816 | 699 | +0.59% | -0.12% | higher-order +2.3% | 11 | yes |
+| GetPrototypeFromConstructor | @native | 824 | 317 | -0.74% | -0.26% | json-date -0.2% | 385 | no |
+| SerializeJSONProperty | @native | 4967 | 1912 | +0.00% | -0.07% | json-replacer +6.5% | 28 | yes |
+| JSONStackIncludes | @native | 609 | 234 | +0.00% | +0.02% | json-replacer -0.1% | 13 | yes |
+| JSONJoin | @native | 1627 | 626 | +0.00% | +0.21% | json-replacer +2.8% | 13 | yes |
+| SerializeJSONObject | @native | 2363 | 910 | +0.00% | -0.04% | json-replacer +3.0% | 11 | yes |
+| SerializeJSONArray | @native | 1401 | 539 | +0.00% | -0.00% | json-replacer +1.4% | 2 | yes |
+| PromiseReactionJob | @native | 2495 | 961 | +0.00% | -0.18% | – +0.0% | 2187 | no |

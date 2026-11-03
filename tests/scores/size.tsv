@@ -4,6 +4,6 @@
 # (lowered with --update, raised only by a recorded decision; last raised: D2443).
 # quickjs_wasi_gzip: quickjs-wasi 3.6.2 quickjs.wasm (pi's engine), gzip -9.
 quickjs_wasi_gzip	286655
-ceiling_gzip	455600
+ceiling_gzip	446131
 # slim_ceiling_gzip: the slim module (scripts/build-wasm.sh --slim, D2411), its own ratchet.
-slim_ceiling_gzip	391873
+slim_ceiling_gzip	380300

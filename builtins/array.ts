@@ -206,7 +206,6 @@ function ArrayConstructor(...values: Value[]): Obj {
 /**
  * Array.isArray ( arg ), 23.1.2.2.
  * @builtin Array.isArray
- * @fast
  */
 function ArrayIsArray(arg: Value): boolean {
   return IsArray(arg);
@@ -245,7 +244,6 @@ function ArrayPrototypePush(this: Value, ...items: Value[]): f64 {
 /**
  * A relative index (at, slice, fill, ...): ToIntegerOrInfinity(v), counted from the end
  * when negative, clamped to [0, len]. `undefined` gives `dflt`.
- * @fast
  */
 function RelativeIndex(v: Value, len: f64, dflt: f64): f64 {
   if (v === undefined) {
@@ -366,7 +364,6 @@ function ArrayPrototypeAt(this: Value, index: Value): Value {
 /**
  * Array.prototype.lastIndexOf ( searchElement [ , fromIndex ] ), 23.1.3.20.
  * @builtin Array.prototype.lastIndexOf
- * @fast
  */
 function ArrayPrototypeLastIndexOf(this: Value, searchElement: Value, ...rest: Value[]): f64 {
   const o: Obj = ToObject(this);
@@ -777,7 +774,6 @@ function ArrayPrototypeCopyWithin(this: Value, target: Value, start: Value, end?
 /**
  * Array.prototype.fill ( value [ , start [ , end ] ] ), 23.1.3.7.
  * @builtin Array.prototype.fill
- * @fast
  */
 function ArrayPrototypeFill(this: Value, value: Value, start?: Value, end?: Value): Obj {
   const o: Obj = ToObject(this);

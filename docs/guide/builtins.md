@@ -148,8 +148,8 @@ slot) instead of `get_cap`; the wrapper fills the table once with `put_builtin`.
 took 27 KB off every VM, about a twelfth of the base image. User code never sees the
 table, and its closures work as before.
 
-**The Rust backend** is opt-in. A builtin tagged `@native` (ten of them: `push`, `sort`
-and its merge, `JSON.stringify`'s slow path, promise reaction jobs, ...) is also
+**The Rust backend** is opt-in. A builtin tagged `@native` (eight of them: `push`, `sort`
+and its merge, and `JSON.stringify`'s slow path) is also
 compiled to a Rust state machine in
 `crates/djs-core/src/builtins/gen/natives.rs` (D1632). bgen splits the function into
 basic blocks, and each block becomes one arm of a `match` on the state. A resume point
@@ -158,7 +158,7 @@ from the generated file. The source is the plain loop
 `for (let i = 0; i < argCount; i++) { Set(o, len, Get(items, i)); len++; }`:
 
 <!-- gen:excerpt crates/djs-core/src/builtins/gen/natives.rs "fn native_ArrayPrototypePush(" "7 => {" 18 -->
-[`crates/djs-core/src/builtins/gen/natives.rs`](../../crates/djs-core/src/builtins/gen/natives.rs#L108-L125), lines 108–125:
+[`crates/djs-core/src/builtins/gen/natives.rs`](../../crates/djs-core/src/builtins/gen/natives.rs#L93-L110), lines 93–110:
 
 ```rust
 7 => {
@@ -234,13 +234,13 @@ gate runs the corpus with both (D1635, [How djs is tested](testing.md)).
 
 ## `@fast`: leaf entries for everyday calls
 
-Many hot builtins rarely meet user code: `"a,b".split(",")`, `xs.includes(3)`,
-`Math.max(a, b)`, `xs.push(v)`. Even as native code, entering a frame and running
+Many hot builtins rarely meet user code: `"a,b".split(",")`, `s.includes("x")`,
+`xs.indexOf(3)`, `xs.push(v)`. Even as native code, entering a frame and running
 `ToObject` and `LengthOfArrayLike` costs more than the work itself. A builtin tagged
 `@fast` has a hand-written Rust entry of the same name in
 `crates/djs-core/src/builtins/fast.rs` (D1850). With the native backend, a call first
 runs the entry, which either returns the builtin's result or *declines*, and then the
-builtin runs as usual. About 80 builtins have one.
+builtin runs as usual. 18 builtins have one.
 
 An entry is allowed to answer only when nothing observable can happen: primitive
 arguments, dense arrays whose elements are plain data, no proxies. Every case that would
@@ -282,6 +282,16 @@ true
 > the entries against QuickJS, including every case where they must decline, and the
 > gate's bytecode-backend run, which never takes them, keeps testing the TypeScript
 > path.
+
+Each twin, an `@native` state machine or an `@fast` entry, is code in every module, so
+each must pay for its bytes. A twin stays only where turning it off makes pi-like
+codemode work (the pi-like workload, the pi bench) at least 1% slower in wasm
+instructions, or makes some workload slower by at least 10% for each kilobyte (gzipped)
+of the twin's code (D2310). The measurement kept 18 `@fast` entries (`split`,
+`includes`, `push` and `pop`, the dense array searches and slices, `String.fromCharCode`,
+the conversion helpers the builtins call most) and 8 `@native` builtins (`push`, `sort`
+and the `JSON.stringify` serializer). The other 56 came out: they saved under 1%
+anywhere, and some were slower than their bytecode builtins.
 
 ## Names that outlive a build: the builtin registry
 
@@ -463,7 +473,7 @@ slim VM therefore names its builtins with the same ids as a full one.
 
 Decisions on this page:
 
-<!-- gen:decisions D1170 D1171 D1172 D1270 D1310 D1321 D1430 D1631 D1632 D1633 D1634 D1635 D1801 D1850 D1900 D1910 D2000 D2020 D2060 D2090 D2304 D2306 D2307 D2371 D2440 -->
+<!-- gen:decisions D1170 D1171 D1172 D1270 D1310 D1321 D1430 D1631 D1632 D1633 D1634 D1635 D1801 D1850 D1900 D1910 D2000 D2020 D2060 D2090 D2304 D2306 D2307 D2310 D2371 D2440 -->
 - D1170: djs-bgen is Rust with its own parser for the subset
 - D1171: Builtin subset rules
 - D1172: Generated prelude format and installation
@@ -487,6 +497,7 @@ Decisions on this page:
 - D2304: Frozen builtins: gates in the property layer, the override fix in [[Set]]
 - D2306: Array.from(arrayLike, mapfn) runs through `%EachDense`
 - D2307: Callback builtins on short arrays: no `%EachDense` for an empty array, and its call outside `step`
+- D2310: A twin stays only where it pays its bytes
 - D2371: The builtin registry: stable ids by spec path, append-only, gate-checked
 - D2440: Prelude functions live in a realm table, not in captured Boxes
 <!-- /gen -->

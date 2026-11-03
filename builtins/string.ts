@@ -4,7 +4,6 @@
  * String ( value ), 22.1.1.1.
  * @constructor String
  * @length 1
- * @fast
  */
 function StringConstructor(...args: Value[]): Value {
   let s: Str = "";
@@ -50,7 +49,6 @@ function StringPrototypeValueOf(this: Value): Str {
 
 /**
  * The length of a string in code units, as a Number.
- * @fast
  */
 function StrLen(s: Str): f64 {
   return StrLength(s);
@@ -58,7 +56,6 @@ function StrLen(s: Str): f64 {
 
 /**
  * RequireObjectCoercible ( this ) and ToString, QuickJS's message.
- * @fast
  */
 function ThisToString(v: Value): Str {
   if (v === undefined || v === null) {
@@ -69,7 +66,6 @@ function ThisToString(v: Value): Str {
 
 /**
  * IsRegExp ( argument ), 7.2.6.
- * @fast
  */
 function IsRegExp(v: Value): boolean {
   if (!IsObject(v)) {
@@ -84,7 +80,6 @@ function IsRegExp(v: Value): boolean {
 
 /**
  * A position argument clamped to [0, len] (ToIntegerOrInfinity first).
- * @fast
  */
 function ClampPosition(v: Value, len: f64): f64 {
   const p: f64 = ToIntegerOrInfinity(v);
@@ -99,7 +94,6 @@ function ClampPosition(v: Value, len: f64): f64 {
 /**
  * String.prototype.at ( index ), 22.1.3.1.
  * @builtin String.prototype.at
- * @fast
  */
 function StringPrototypeAt(this: Value, index: Value): Value {
   const s: Str = ThisToString(this);
@@ -139,7 +133,6 @@ function StringPrototypeCharCodeAt(this: Value, pos: Value): f64 {
 /**
  * String.prototype.codePointAt ( pos ), 22.1.3.4.
  * @builtin String.prototype.codePointAt
- * @fast
  */
 function StringPrototypeCodePointAt(this: Value, pos: Value): Value {
   const s: Str = ThisToString(this);
@@ -163,7 +156,6 @@ function StringPrototypeIndexOf(this: Value, searchString: Value, position?: Val
 /**
  * String.prototype.lastIndexOf ( searchString [ , position ] ), 22.1.3.11.
  * @builtin String.prototype.lastIndexOf
- * @fast
  */
 function StringPrototypeLastIndexOf(this: Value, searchString: Value, position?: Value): f64 {
   const s: Str = ThisToString(this);
@@ -197,7 +189,6 @@ function StringPrototypeIncludes(this: Value, searchString: Value, position?: Va
 /**
  * String.prototype.startsWith ( searchString [ , position ] ), 22.1.3.24.
  * @builtin String.prototype.startsWith
- * @fast
  */
 function StringPrototypeStartsWith(this: Value, searchString: Value, position?: Value): boolean {
   const s: Str = ThisToString(this);
@@ -217,7 +208,6 @@ function StringPrototypeStartsWith(this: Value, searchString: Value, position?: 
 /**
  * String.prototype.endsWith ( searchString [ , endPosition ] ), 22.1.3.7.
  * @builtin String.prototype.endsWith
- * @fast
  */
 function StringPrototypeEndsWith(this: Value, searchString: Value, endPosition?: Value): boolean {
   const s: Str = ThisToString(this);
@@ -264,7 +254,6 @@ function StringPrototypeSlice(this: Value, start: Value, end: Value): Str {
 /**
  * String.prototype.substring ( start, end ), 22.1.3.25.
  * @builtin String.prototype.substring
- * @fast
  */
 function StringPrototypeSubstring(this: Value, start: Value, end: Value): Str {
   const s: Str = ThisToString(this);
@@ -313,7 +302,6 @@ function StringPrototypeConcat(this: Value, ...args: Value[]): Str {
 /**
  * String.prototype.repeat ( count ), 22.1.3.19.
  * @builtin String.prototype.repeat
- * @fast
  */
 function StringPrototypeRepeat(this: Value, count: Value): Str {
   const s: Str = ThisToString(this);
@@ -347,7 +335,6 @@ function StringPad(s: Str, maxLength: Value, fillString: Value, atStart: boolean
 /**
  * String.prototype.padEnd ( maxLength [ , fillString ] ), 22.1.3.16.
  * @builtin String.prototype.padEnd
- * @fast
  */
 function StringPrototypePadEnd(this: Value, maxLength: Value, fillString?: Value): Str {
   return StringPad(ThisToString(this), maxLength, fillString, false);
@@ -356,7 +343,6 @@ function StringPrototypePadEnd(this: Value, maxLength: Value, fillString?: Value
 /**
  * String.prototype.padStart ( maxLength [ , fillString ] ), 22.1.3.17.
  * @builtin String.prototype.padStart
- * @fast
  */
 function StringPrototypePadStart(this: Value, maxLength: Value, fillString?: Value): Str {
   return StringPad(ThisToString(this), maxLength, fillString, true);
@@ -367,7 +353,6 @@ function StringPrototypePadStart(this: Value, maxLength: Value, fillString?: Val
 /**
  * String.prototype.toLowerCase ( ), 22.1.3.28.
  * @builtin String.prototype.toLowerCase
- * @fast
  */
 function StringPrototypeToLowerCase(this: Value): Str {
   return StrToCase(ThisToString(this), false);
@@ -376,7 +361,6 @@ function StringPrototypeToLowerCase(this: Value): Str {
 /**
  * String.prototype.toUpperCase ( ), 22.1.3.30.
  * @builtin String.prototype.toUpperCase
- * @fast
  */
 function StringPrototypeToUpperCase(this: Value): Str {
   return StrToCase(ThisToString(this), true);
@@ -385,7 +369,6 @@ function StringPrototypeToUpperCase(this: Value): Str {
 /**
  * String.prototype.toLocaleLowerCase ( ), 22.1.3.26 (no locales: toLowerCase).
  * @builtin String.prototype.toLocaleLowerCase
- * @fast
  */
 function StringPrototypeToLocaleLowerCase(this: Value): Str {
   return StrToCase(ThisToString(this), false);
@@ -394,7 +377,6 @@ function StringPrototypeToLocaleLowerCase(this: Value): Str {
 /**
  * String.prototype.toLocaleUpperCase ( ), 22.1.3.27 (no locales: toUpperCase).
  * @builtin String.prototype.toLocaleUpperCase
- * @fast
  */
 function StringPrototypeToLocaleUpperCase(this: Value): Str {
   return StrToCase(ThisToString(this), true);
@@ -403,7 +385,6 @@ function StringPrototypeToLocaleUpperCase(this: Value): Str {
 /**
  * String.prototype.trim ( ), 22.1.3.32.
  * @builtin String.prototype.trim
- * @fast
  */
 function StringPrototypeTrim(this: Value): Str {
   return StrTrim(ThisToString(this), 0);
@@ -413,7 +394,6 @@ function StringPrototypeTrim(this: Value): Str {
  * String.prototype.trimStart ( ), 22.1.3.34 (trimLeft is the same function, B.2.2.15).
  * @builtin String.prototype.trimStart
  * @builtin String.prototype.trimLeft
- * @fast
  */
 function StringPrototypeTrimStart(this: Value): Str {
   return StrTrim(ThisToString(this), 1);
@@ -423,7 +403,6 @@ function StringPrototypeTrimStart(this: Value): Str {
  * String.prototype.trimEnd ( ), 22.1.3.33 (trimRight is the same function, B.2.2.16).
  * @builtin String.prototype.trimEnd
  * @builtin String.prototype.trimRight
- * @fast
  */
 function StringPrototypeTrimEnd(this: Value): Str {
   return StrTrim(ThisToString(this), 2);
