@@ -1,7 +1,7 @@
 # 0159: Re-benchmark every @native / @fast twin; keep only those that pay
 
-status: open
-agent: -
+status: in-progress
+agent: perf
 branch: issue/0159-twins
 depends-on: 0137, 0154, 0155 (instr.py)
 guide: docs/guide/builtins.md
