@@ -4,7 +4,7 @@ A host (node) gives a script one tool, `sleep(ms)`, which waits on the host side
 script calls it twice, 5000 ms each, from a helper inside a loop. While the first call is
 open, the VM has nothing to do: it is **idle**, and the host writes it as a **format 2
 dump**, a JavaScript file that recreates the script's suspended state: not only data, but
-the operations in the middle of running, each shown with the line of code it stopped at. The host then throws the sandbox away (or exits), loads the
+the operations in the middle of running. The host then throws the sandbox away (or exits), loads the
 dump into a new sandbox (or a new process), and delivers the sleep's result when it is
 due. The script continues after its `await` as if nothing had happened.
 
@@ -45,8 +45,8 @@ When the host dumps, during the first sleep, three things are in the middle of r
 - the `for (const label of ...)` loop, whose iterator has handed out `"first"` and will
   hand out `"second"` next.
 
-The host calls the script `sleep.js` (`begin`'s `filename`), which the dump's comments use
-to point at the code.
+The host calls the script `sleep.js` (`begin`'s `filename`), so stack traces and the
+description of the suspended sites below point into it.
 
 ## The host
 
@@ -73,17 +73,17 @@ process that made it.
 
 ## What the output looks like
 
-TODO: the transcript and the dump, once the exporter writes it.
+TODO: the transcript, the dump, and the description of its suspended sites (each with its
+source line), once the exporter writes the dump.
 
 ## What the dump keeps, and what the host keeps
 
 The dump holds the VM's side, and only that:
 
 - the script's code, verbatim, and `step`'s, as functions the dump defines again;
-- each suspended activation, as a `$dump.resume(fn, {...})` call. A comment above it shows
-  the function, the site (`await#1`: its first `await` in the text) and the source line
-  with a caret under the `await` it stopped at. Its options say what the activation
-  holds there: `bindings` (`label`, `ms`; `r` still in its temporal dead zone, `$dump.TDZ`),
+- each suspended activation, as a `$dump.resume(fn, {...})` call: the function, the site
+  it stopped at (`at: "await#1"`: the function's first `await` in its text), and what the
+  activation holds there: `bindings` (`label`, `ms`; `r` still in its temporal dead zone, `$dump.TDZ`),
   `awaiting` (what it waits on), `operands` (values computed before the `await`: for the
   script, `push` and `results`, the callee and `this` of the half-done call) and `loops`
   (the for-of's iterator);

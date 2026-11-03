@@ -189,8 +189,7 @@ export interface LoadedDump {
 /** Options of `Sandbox.begin`. */
 export interface BeginOptions {
   /**
-   * The script's name in stack traces and in a dump's site comments (`step, at await#1
-   * (sleep.js:4:13)`); default `sandbox.js`.
+   * The script's name, as stack traces show it (`sleep.js:4:13`); default `sandbox.js`.
    */
   filename?: string;
 }
