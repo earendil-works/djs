@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0169 | Suspension maps in the compiler, pinned (D2563) | bloat | .worktrees/bloat |
 | 0170 | Classes and private fields in dumps; the loader's privileged `$dump` | portable | .worktrees/portable |
 | 0174 | REPL and CLI: tools, waiting inputs (tools part first) | repl | .worktrees/repl |
 
@@ -89,6 +88,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0169 | Suspension maps in the compiler, pinned (D2570) | e43e7e20 (agent bloat; 1,063 sites in 315 cases, 53 unsupported) |
 | 0173 | Corpus idle points via host.later (D2590) | 90aa5acf (agent infra; 1,194 idle points in 294 cases) |
 | 0168 | Dump bug: closures held directly in bindings skipped the factory; compile-based checker (D2355) | 494dbd00 (agent portable) |
 | 0167 | Semantic dumps: Vm::dump, .dump/.restore, Sandbox.dump/load, TS dumper prototype (D2352-D2354) | 6be9cd54 (agent portable; off in djs-wasm: +32 KB gz) |

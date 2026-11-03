@@ -537,3 +537,6 @@ topics when the index is next reorganized.
 - D2564: One dumper, in Rust; the TypeScript dumper is dropped
 - D2565: djs builds pi's future prelude shape in its own adapter first
 - D2590: Corpus tool calls are idle points: `host.later`
+- D2600: The CLI's `tools`: a Proxy that makes one async host function per name
+- D2601: Scripted tool answers: by arguments, else in order
+- D2570: Suspension maps from a role stack the parser keeps
