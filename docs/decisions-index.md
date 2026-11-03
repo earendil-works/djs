@@ -521,3 +521,8 @@ topics when the index is next reorganized.
 - D2545: Nesting limits re-measured: parser 550 stays, regexp 212
 - D2553: JSON.stringify builds a large result in its heap string
 - D2554: Array species and ArrayCreate shortcuts
+- D2446: One constant pool per compilation unit
+- D2447: The base's atoms are renumbered without gaps
+- D2448: A closure's template in its ELEMENTS field
+- D2449: No direct native binding for thin builtins (L1, L2)
+- D2450: The base's property table indexes at a load of three quarters
