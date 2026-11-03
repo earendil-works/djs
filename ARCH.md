@@ -53,9 +53,9 @@ djs-core uses no BTree collections and no core slice sorts, for code size (D1432
 
 Each goal follows from this:
 
-- **G4:** within a process, a snapshot is a compacting GC followed by a copy of the arena
-  bytes and a small header. The durable form, the continuation dump, is written by walking
-  that same heap (D2560).
+- **G4:** within a process, an image of the VM is a compacting GC followed by a copy of
+  the arena bytes. The durable form, the continuation dump, is written by walking that
+  same heap at an idle point (D2560, D2561); images never leave the process (D2700).
 - **G5:** the interpreter never recurses on the Rust stack for JS calls. Every frame is in
   the arena, so returning from `run()` at any instruction boundary leaves a complete,
   resumable state.
@@ -67,12 +67,14 @@ Each goal follows from this:
 
 Native code is never referenced by pointer from the heap. Native builtins are stored as `u16`
 indices into a static table, and host functions as host-assigned `u32` ids. This is what
-makes the heap position independent and snapshots possible. It works the same way as
+makes the heap position independent and images possible. It works the same way as
 dquickts' native registry, but by construction instead of by fixup.
 
 Accessing the heap through bounds-checked offsets also hardens the sandbox: a VM bug or a
-corrupted snapshot can corrupt the JS heap or cause a panic (a wasm trap), but it cannot
-cause Rust UB. Images are verified when loaded (D1056). In wasm every access is
+corrupted image can corrupt the JS heap or cause a panic (a wasm trap), but it cannot
+cause Rust UB. The tools and stress modes verify every image they load (D1056); the wasm
+module loads only images made in its own process and checks their header and dependency
+descriptor (D2700). In wasm every access is
 bounds-checked against linear memory as well, so the arena checks are a second check
 (D016); hoisting them to one check per cell or frame is an open performance item (0081),
 and unchecked access would need its own decision.
@@ -83,7 +85,7 @@ and unchecked access would need its own decision.
 stackless trampolined interpreter, fuel, and host callbacks that the executor polls instead
 of calling recursively. We do **not** adopt its **memory side** (`gc-arena`). There, `Gc`
 values are real pointers to Rust-typed allocations, which works against G1 (the host cannot
-read the heap) and G4 (snapshots need a full graph serializer). We trade some type safety
+read the heap) and G4/G5 (copying or suspending a VM would need a full graph serializer). We trade some type safety
 for an arena whose bytes are the state.
 
 ## Crate / Repo Layout
@@ -175,7 +177,8 @@ scaled by the 8-byte alignment.
   rehashed by the collector (D1381); WeakMap, WeakSet, WeakRef and FinalizationRegistry
   use ephemeron tables (D1382, D1513).
 - **Code:** function templates (bytecode, constants, line table, scope info) are heap cells.
-  That way compiled code is part of snapshots and can be cached as a snapshot.
+  That way compiled code is part of images: the base image carries the builtins' code,
+  and pi's prelude image carries its compiled prelude (D1495).
 - **GC:** two collectors over one layout-driven trace (D1090, D2040).
   - **In-VM collections slide in place** (mark-compact, D018/D2040). The four passes are
     mark, block table, update and slide. The side tables are allocated up front: a
@@ -334,7 +337,7 @@ loop {
 - **Fuel:** a counter decremented per instruction, weighted by cost. Native ops charge fuel
   in proportion to the work they do (bytes copied, elements visited); `@fast` entries
   cost a flat 2 (D1850). Running out of fuel is just another suspension. The embedder
-  turns it into a timeout, a time slice, or a snapshot point. An instruction's overshoot
+  turns it into a timeout or a time slice. An instruction's overshoot
   carries to the next run as a debt in the heap, so a budget given in different slices
   stops at the same instruction (D1740, D1711, D1712).
 
@@ -427,8 +430,8 @@ record is a JS frame's (callee, `this`, arguments, header) with a native bit in 
 header; the callee's template holds the native function's index, `pc` holds the state,
 and the locals are bgen's slots (D1631). bgen knows every local and its type, so
 it lays them out as slots. Every local lives in a frame slot (as a Value), which makes
-it a GC root. Because the frame holds no pointers, native frames suspend, snapshot and
-restore like JS frames.
+it a GC root. Because the frame holds no pointers, native frames suspend and travel in
+images like JS frames.
 
 The GC and fuel rules that keep this simple:
 
@@ -547,15 +550,17 @@ the protocol (D1503, D1560).
 ### Execution API
 
 The plan was a handful of exports (`vm_new`, `vm_compile`, `vm_call`, `vm_run`,
-`vm_resolve_host_call`, `vm_snapshot(vm, base?)`, `vm_restore`). What exists is the
+`vm_resolve_host_call`, `vm_snapshot(vm, base?)`, `vm_restore`; snapshots were later
+replaced by continuation dumps, D2560, D2700). What exists is the
 integer ABI of djs-wasm (D1230): numbered VMs and handles, a staging buffer for bytes in
 and an out buffer for bytes back, and about 45 exports, documented in docs/host.md "The
 ABI". In outline:
 
 ```
 vm_new(memory_limit) -> vm                       // a copy of the base image (D1321)
-vm_from_bytes(len, memory_limit) -> vm           // restore an image from staging
+vm_from_bytes(len, memory_limit) -> vm           // an image of this process, from staging (D2700)
 vm_arena_ptr / vm_arena_len                      // the image: the arena bytes
+vm_dump / vm_load_dump / vm_replace_image        // continuation dumps (the dump module, D2704)
 vm_compile(vm, goal, params_len, src_len) -> h   // goal: async body, Script, TS, ...
 vm_call(vm, f, this, argc)                       // pushes a frame, does not run it
 vm_run(vm, fuel) -> status                       // Done | Threw | OutOfFuel | HostCall |
@@ -567,8 +572,10 @@ vm_collect, vm_canonical_hash, vm_abort, vm_take_unhandled_rejections, ...
 ```
 
 The JS host package wraps it: `Sandbox` (js/src/sandbox.ts) runs codemode bodies with
-host functions, fuel slices, snapshots, a deterministic mode and journals; js/pi/vm.ts
-adapts it to pi's codemode contract (D1490).
+host functions, fuel slices, host-driven runs that persist as continuation dumps (with
+the dump module beside the shipped one, D2630, D2704), a deterministic mode and journals;
+js/pi/vm.ts adapts it to pi's codemode contract (D1490), and in its next mode persists pi
+sessions as dumps (D2650).
 
 - **Async host functions** (`tools.*`, `models.*`): calling one creates a promise and an
   entry `{call_id, fn_id, args, promise}` in the heap's pending host call table. Execution
@@ -580,10 +587,11 @@ adapts it to pi's codemode contract (D1490).
   `HostCall` with the frame parked mid-instruction. The host handles it (possibly
   asynchronously on its side), resolves it, and calls `run` again. This is dquickts'
   `JS_SuspendCall` in stackless form, and it means every host call is a suspension point.
-- **Durability:** pending host calls are heap state, so they are part of snapshots. After a
-  restore, the host decides whether to re-issue them or replay journaled results. The VM
-  provides the call ids and arguments. The Sandbox records and replays journals of a
-  run's external inputs, checked against canonical heap hashes (D1730).
+- **Durability:** pending host calls are heap state. At an idle point a dump writes each
+  open one as `$dump.pending(id, name, args)`; after loading it the host decides whether
+  to deliver a recorded result, re-issue the call or reject it (D2560). The VM provides
+  the call ids and arguments. The Sandbox also records and replays journals of a run's
+  external inputs, checked against canonical heap hashes (D1730).
 - **Nondeterminism** comes only from the host: the clock is set by the host (`Date` reads
   it, D1383; with an async result it travels in the inbox entry, D1670), the time zone
   is a fixed offset, `Math.random` is seeded (D1314), and weak references can be made
@@ -614,50 +622,60 @@ similarly shaped objects; base64 images).
   The wire interface is defined so the encoding can be swapped.
 - **Host refs (Not built):** opaque handles to host objects, for pass-through data such as
   image blocks that the script only forwards to `image()`. They would avoid copying
-  entirely. In snapshots a host ref would be written as an id; the host persists the
-  referenced objects or accepts that they are dead after a restore. The value tag and the
+  entirely. In a dump a host ref would be written as an id; the host persists the
+  referenced objects or accepts that they are dead after a load. The value tag and the
   wire tag are reserved (docs/wire.md).
 
 As built (D1180, D1210, D1211, D1781; docs/wire.md and docs/host.md have the formats and
 the numbers): the wire format beats `JSON.stringify` + `JSON.parse` in wasm by 1.4x on
 objects up to 9x on one big string inbound, and the reader by 3x to 130x outbound.
 
-### Snapshots (G4)
+### Images and dumps (G4)
 
-Persistence is moving to continuation dumps (D2560, docs/continuation-dumps.md): what
-follows describes images, which stay for use inside a process; the containers and session
-images built on them are retired by 0177.
+A waiting run persists as a continuation dump (D2560, docs/continuation-dumps.md); heap
+images are the in-process mechanism (D2700).
 
-- **Format:** an image is the arena bytes after a compacting GC; the roots and the
+- **Images:** an image is the arena bytes after a compacting GC; the roots and the
   image's **dependency descriptor** live in the arena's root cell (D026, D2265): hashes
   of the cell layouts, the opcode and intrinsic tables and the internal id tables
   (D2266), the image feature set (D2267) and a hand-bumped compatibility version (D2268).
-  An image loads into any build with the same descriptor; a snapshot container also
-  names its base image's builtin prefix. (Until D026 an image was keyed on the engine
-  build hash of D1320/D1330/D1750, which still identifies the build for journals.)
-  Images are verified when loaded (D1056). Everything is little-endian, which matches
-  wasm and the usual native targets.
-- **Base snapshot:** the initialized realm and the precompiled builtins (about 400 KB,
+  An image loads into any build with the same descriptor. (Until D026 an image was keyed
+  on the engine build hash of D1320/D1330/D1750, which still identifies the build for
+  journals.) Images are used for the base image every VM is copied from, pi's prelude
+  images (D1495, D1890), the stress and determinism checks, and the transport between
+  the shipped module and the dump module (D2635, D2701). The tools and stress modes
+  verify every image they load (D1056); the wasm module checks only the header and the
+  descriptor, since its images come from its own process (D2700). Everything is
+  little-endian, which matches wasm and the usual native targets.
+- **Base snapshot:** the initialized realm and the precompiled builtins (about 190 KB,
   compacted before it is collected, D1431). djs-prelude produces it at build time and it
   is embedded in the wasm. `vm_new` copies it into the arena; that copy *is* startup
-  (microseconds). The pi adapter also reuses an image taken after pi's own prelude
-  (D1495), collected first (D1890).
+  (microseconds).
+- **Continuation dumps:** at an idle point (no frame, no job, only open host calls,
+  D2561) the exporter writes the run as a format 2 dump: a Script that recreates its
+  data, its functions stopped at their `await`s and `yield`s (checked against the
+  compiler's suspension maps, D2563), in-flight builtin state as the calls that make it
+  (D2562, D2610), the open calls and `Math.random`'s state (D2624). Any later build loads
+  it and continues, or refuses it with a reason; golden dumps hold that promise (D2619).
+  Hosts store dumps zstd-compressed; the format stays a plain Script (D2703).
+- **Packaging:** the dumper is in a second module of the same build (packaging B,
+  D2564, D2704): the shipped module has none, and a host that persists runs loads the
+  dump module and moves the VM's image there and back, keeping that instance between
+  dumps (D2701).
 - **Determinism:** the GC threshold is in the image (D1601) and collection points do not
   depend on fuel slices (D1710), so the same inputs give the same image; the gate
   compares images across schedules and between native and wasm (D1720, D1725).
   `vm_canonical_hash` hashes the graph independently of collection points (D1730).
-- **Deltas: Superseded (not built).** The proposal planned page-level deltas against the
-  base: the base-derived region would become a non-moving **old generation**, collected
-  only on a full snapshot, so that "big prelude + small user state" deltas stay small.
-  (The GC's old region of D2041 is a collector feature, not a snapshot format: images
-  stay the raw arena, old region included.)
-  0088's research measured the alternatives on real pi sessions and recommends instead:
-  raw images for same-build use, made small by compressing against a reference image
-  (a dictionary), and journal replay with pinned engine versions for durability across
-  versions; no logical format for now. The owner's decision is pending, so neither the
-  delta format nor the dictionary compression is built.
-- **Restore:** validate, copy the bytes, re-bind host functions by id and native builtins
-  by index. There are no fixups because there are no pointers.
+- **Deltas and containers: Superseded.** The proposal planned page-level deltas against
+  the base (a non-moving old generation, collected only on a full snapshot). 0088's
+  research recommended raw images compressed against a reference image instead, which
+  was built as the snapshot container (D2260, D2066, D2400): a waiting pi session took 2
+  to 8 KB, but restored only into builds of the same descriptor. Continuation dumps
+  replaced it for persistence (D2560) and the containers, session images and reference
+  compression were removed (D2700). (The GC's old region of D2041 is a collector
+  feature, not a format.)
+- **Restore of an image:** check, copy the bytes, re-bind host functions by id and native
+  builtins by index. There are no fixups because there are no pointers.
 
 ## Performance Budget
 
@@ -714,9 +732,11 @@ The loop, as practiced (work/README.md, D012):
   natively and in wasm).
 
 The **suspension stress mode** (borrowed from dquickts) runs the whole corpus while suspending
-every N instructions, snapshotting, restoring into a fresh VM, and resuming (D1161). Output must be
-identical. A GC stress mode collects at every safepoint, and a determinism mode compares
-heap images across schedules. This turns G4 and G5 from claims into tested properties.
+every N instructions, restoring into a fresh VM from its image, and resuming (D1161). Output must be
+identical. A dump mode writes a continuation dump at every idle point and continues in a
+fresh VM that loaded it (D2613). A GC stress mode collects at every safepoint, and a
+determinism mode compares heap images across schedules. This turns G4 and G5 from claims
+into tested properties.
 
 ## Phases
 
@@ -728,10 +748,10 @@ The original phases, with their status:
 - **P2, codemode MVP:** done. pi codemode runs on djs through js/pi/vm.ts (D1490).
 - **P3, TypeScript:** done (the type skipper, enums, namespaces, parameter properties,
   decorators).
-- **P4, durability:** snapshot/restore of whole images, deterministic images, journals and
-  canonical hashes are done. Deltas are **Superseded** (see "Snapshots"); the follow-up
-  depends on the owner's decision on 0088. The GC has an old region (D2041), but images
-  stay whole.
+- **P4, durability:** done, in a different form than planned: deterministic images,
+  journals and canonical hashes, and continuation dumps as the persistence format (D2560,
+  0169-0178), with images kept inside a process (D2700). Deltas and the snapshot
+  containers are **Superseded** (see "Images and dumps").
 - **P5, long tail:** done for the listed areas (regex, generators, collections, symbols,
   iterators, typed arrays, BigInt, Proxy, Reflect, stack traces, WeakRef, disposables);
   the test262 active group passes 99.8%.
@@ -759,8 +779,9 @@ The original list, with what happened:
   by every collection.
 - **Hand-rolled heap ergonomics.** Resolved as proposed: one layout description (D1052)
   generates the accessors and the JS reader's layout (D1210).
-- **Delta snapshots versus a moving GC.** Superseded by 0088's research (see "Snapshots");
-  pending the owner's decision.
+- **Delta snapshots versus a moving GC.** Resolved differently: persistence is by
+  continuation dumps, which do not depend on the heap's layout at all (D2560); images,
+  in-process only, stay whole (see "Images and dumps").
 - **Strictness of matching qjs.** Decided: djs matches QuickJS's messages verbatim
   (D1100, D1113, D1541); deliberate differences are marked per case (`djs-expect`,
   D1540), e.g. stack overflow is a RangeError (D013).

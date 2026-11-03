@@ -26,7 +26,7 @@ include!(concat!(env!("OUT_DIR"), "/image_deps.rs"));
 
 /// The compatibility version (D2265): bump it when a change alters what an image means
 /// without changing one of the hashed tables. Images of another version are refused. See
-/// TESTING.md "Snapshot compatibility" for when; the usual cases are a change in what an
+/// TESTING.md "Image compatibility" for when; the usual cases are a change in what an
 /// existing slot or record field holds, in how the builtins' JS reads internal records
 /// (`%RecordGet` indexes), in Map/Set or string invariants, in what an inline cache word
 /// or an opcode's immediate means, or in the frame layout of suspended generators.

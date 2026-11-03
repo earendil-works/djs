@@ -1,4 +1,4 @@
-//! The base snapshot (ARCH G2, "Snapshots"; D1321): the image of an idle VM with its
+//! The base snapshot (ARCH G2, "Images and dumps"; D1321): the image of an idle VM with its
 //! realm and prelude, made by `build.rs` when djs-core changes and embedded here. A new
 //! VM is a copy of it, with no compile at startup.
 //!

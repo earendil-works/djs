@@ -258,7 +258,7 @@ each of those tables, and loading checks them first (`Vm::from_bytes` refuses wi
 | --- | --- | --- |
 | cell layout | `VERSION` | every cell kind with its fields, records and tails, and the well-known atoms (`LAYOUT_HASH`) |
 | feature set | `FEATURES` | the cargo features that change images, by bit: `full` (the builtin set), `regexp-unicode-props`, `unicode-normalization` (D2267) |
-| compatibility version | `COMPAT` | `vm::COMPAT_VERSION`, bumped by hand for a change of meaning the hashes cannot see (TESTING.md "Snapshot compatibility") |
+| compatibility version | `COMPAT` | `vm::COMPAT_VERSION`, bumped by hand for a change of meaning the hashes cannot see (TESTING.md "Image compatibility") |
 | opcode table | `OPS` | the instruction table: names, immediates, stack effects, costs, flags, numbering (`OPS_HASH`) |
 | intrinsic table | `INTRINSICS` | intrinsic names, kinds, arities and numbering (`INTRINSICS_HASH`) |
 | internal id tables | `RECORDS` | the id tables and slot conventions in source: object classes, realm slots, run states, header and template flags, value tags, frame continuations, the fast and native builtin tables, and the named slot numbers of internal records (`RECORDS_HASH`, D2266) |

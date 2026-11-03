@@ -8,8 +8,8 @@ There are three layers of tests:
    check: `console.log` formatting, error messages, stack traces, TypeScript, and codemode
    scripts.
 3. **Stress modes**, which re-run layers 1 and 2 under conditions that must not change the
-   outcome: suspend/snapshot/restore every N instructions, and the bytecode versus native
-   builtin backend.
+   outcome: suspend and restore from the VM's image every N instructions, dump and load
+   at every idle point, and the bytecode versus native builtin backend.
 
 Plus ordinary Rust unit tests for internals (lexer, number conversion, heap, …).
 
@@ -441,14 +441,16 @@ builtins (D2304) arm it always. Armed in the gate:
 Not armed: the rest of the corpus, e2e and test262, whose cases change builtins on purpose
 (`defineProperty` on prototypes, Proxy and BigInt tests).
 
-## Snapshot compatibility (D026, D2265)
+## Image compatibility (D026, D2265)
 
-A VM image restores into any build whose dependency descriptor matches the one in its
-roots cell (`vm::ImageDeps`, crates/djs-core/src/vm/compat.rs): the layout hash, the
-image feature set, `COMPAT_VERSION`, the opcode and intrinsic table hashes and
-`RECORDS_HASH` (the id tables and slot constants that crates/djs-core/compat_inputs.rs
-lists, read from the sources), and for a snapshot container also the base image's
-builtin prefix. The engine build hash is not part of it. `vm::compat_tests` (run by the
+Images do not persist runs (dumps do, below; D2560, D2700), but they still cross from one
+build's module to another inside a process: the shipped module and the dump module
+(D2704), and the base image every VM is copied from. A VM image restores into any build
+whose dependency descriptor matches the one in its roots cell (`vm::ImageDeps`,
+crates/djs-core/src/vm/compat.rs): the layout hash, the image feature set,
+`COMPAT_VERSION`, the opcode and intrinsic table hashes and `RECORDS_HASH` (the id tables
+and slot constants that crates/djs-core/compat_inputs.rs lists, read from the sources).
+The engine build hash is not part of it. `vm::compat_tests` (run by the
 gate) checks that each hash changes when one entry of its table does, that every region
 of compat_inputs.rs is found, and that loading names the component that differs.
 

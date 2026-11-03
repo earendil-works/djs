@@ -1,4 +1,4 @@
-//! Makes the base snapshot (ARCH "Snapshots", D1321): a VM with the prelude installed,
+//! Makes the base snapshot (ARCH "Images and dumps", D1321): a VM with the prelude installed,
 //! collected, as a heap image in `$OUT_DIR/base.img`. The GC is deterministic (D1090), so
 //! the same djs-core gives the same bytes; the image is verified here once, so loading it
 //! can skip verification.
