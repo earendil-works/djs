@@ -648,8 +648,15 @@ impl Heap {
         if self.str_array_index(s).is_some() {
             return None;
         }
+        // As `intern` looks (D2433): a prefix string among the base's atoms first.
+        let s = self.resolve_str(s);
+        if s.0 < self.base_end()
+            && let Some(a) = self.find_base_atom(Needle::Str(s))
+        {
+            return Some(a);
+        }
         let hash = self.str_hash(s);
-        self.find_string_atom(hash, |h, t| h.str_eq(s, t))
+        self.find_string_atom(hash, Needle::Str(s))
     }
 
     /// Interns a Rust string; allocates only if it is not interned yet.
