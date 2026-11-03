@@ -55,7 +55,7 @@ test("a rejected call and a script exception end the run as threw", async () => 
 });
 
 // Hand-written until the exporter writes it (0172): the body stopped at its await.
-const DUMP = `// djs-dump 2
+const DUMP = `"djs-dump 2";
 $dump.f1 = async function (ms) {
 ${BODY}
 };
@@ -83,7 +83,7 @@ test("resume continues a dumped run with the same open calls", async () => {
 
 test("resume refuses a dump without a run, and unknown host functions", async () => {
   const module = await loadModule();
-  await assert.rejects(Sandbox.resume("// djs-dump 2\nvar x = 1;", { module }), /holds no run/);
+  await assert.rejects(Sandbox.resume("\"djs-dump 2\";\nvar x = 1;", { module }), /holds no run/);
   await assert.rejects(Sandbox.resume(DUMP, { module }), /unknown host function sleep/);
   const sb = new Sandbox({ module, asyncFunctions: { sleep: () => 0 } });
   const { calls } = sb.load(DUMP);
