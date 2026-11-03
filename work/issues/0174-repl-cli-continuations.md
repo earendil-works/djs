@@ -15,9 +15,9 @@ Make suspension visible and testable by hand (docs/continuation-dumps.md "REPL")
       inputs that wait do not block the prompt and print their result when they settle.
 - [x] `.pending`, `.resolve <id> <json>`, `.reject <id> <message>`, `.bt <id|all>`
       (suspended activations and their bindings); `--tools answers.json` for scripted answers.
-- [ ] `.dump` writes format 2 when something is in flight; `.restore` restores waiting inputs
+- [x] `.dump` writes format 2 when something is in flight; `.restore` restores waiting inputs
       and open calls; `.dump-every [on|off]` dumps and reloads at every idle point.
-- [ ] `djs run --tools answers.json --dump-after K out.js`, `djs resume out.js --tools
+- [x] `djs run --tools answers.json --dump-after K out.js`, `djs resume out.js --tools
       answers.json`, `djs run --dump-every-idle`.
 - [ ] Line-mode transcripts in crates/djs-cli/tests/repl.rs for each command; a CLI test that
       runs `--dump-after K` / `resume` for every K of a few scripts and compares with the
@@ -59,7 +59,20 @@ Make suspension visible and testable by hand (docs/continuation-dumps.md "REPL")
 - For 0172's `$dump.host(name, isAsync)`: the load lookup also accepts `print` and the
   `console` methods (the printing function's id 1); `call_name(1)` is `print`, `make`
   (id 2) has no name. Committed on the branch, to land with the post-0172 work.
-- Left for after 0172: format 2 `.dump` of a waiting session, `.dump-every`, `run
+- 0172 landed. Dump commands (D2604): `run --dump-after K OUT` / `--dump-every-idle`
+  (idle point = a stop with only host calls open, before answering; the run's async-body
+  promise is the handle `run`), REPL `.dump` of a waiting session (waiting inputs as
+  handles by label, "wrote N bytes (A activations, C pending calls)"), `.dump-every`
+  (round trip at every idle point, the running input's result through the handle
+  `$entry`; a refusal prints `[not dumped]` and turns it off). Dumps detected by
+  `dump_format`, not the comment prefix. New djs-cli/src/dumps.rs. Tests: every K of
+  reads.src.js and of every tests/dump/v2 program except plan (exporter drops a script's
+  own `const tools` shadowing the host global; reported), --dump-every-idle equal; REPL
+  transcript dump/restore/bt/resolve/dump-every and a refusal.
+- Not dumpable yet, waiting on portable's core fix (async-body functions get source
+  text): suspensions in the top level of `run --body` (tests/run/todos.js) and the REPL's
+  await inputs. The CLI wrapper idea was dropped (coordinator).
+- Left for after 0172 (done above, except the async-body cases): format 2 `.dump` of a waiting session, `.dump-every`, `run
   --dump-after K` / `--dump-every-idle`, and the every-K dump/resume CLI test.
 - Earlier note: waiting for 0171 for the dump part (.dump format 2, .restore of waiting inputs,
   .dump-every, run --dump-after/--dump-every-idle, resume).
