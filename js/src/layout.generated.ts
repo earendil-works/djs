@@ -2,7 +2,7 @@
 // Regenerate: DJS_UPDATE_LAYOUT=1 cargo test -p djs-core layout_generated
 
 export const LAYOUT = {
-  "layoutHash": 627669571,
+  "layoutHash": 5924045,
   "magic": 5458500,
   "headerSize": 8,
   "header": { "KIND": 0, "GC": 1, "FLAGS": 2, "SIZE": 4 },
@@ -18,7 +18,7 @@ export const LAYOUT = {
   "cells": {
     "Roots": {
       "kind": 1,
-      "minSize": 88,
+      "minSize": 104,
       "fields": {
         "MAGIC": { "offset": 8, "type": "u32" },
         "VERSION": { "offset": 12, "type": "u32" },
@@ -29,7 +29,7 @@ export const LAYOUT = {
         "HOST_CALLS": { "offset": 36, "type": "Ref" },
         "HANDLES": { "offset": 40, "type": "Ref" },
         "INTERP": { "offset": 44, "type": "Ref" },
-        "BUILD": { "offset": 48, "type": "u32" },
+        "COMPAT": { "offset": 48, "type": "u32" },
         "FLAGS": { "offset": 52, "type": "u32" },
         "GC_THRESHOLD": { "offset": 56, "type": "u32" },
         "PROTO_EPOCH": { "offset": 60, "type": "u32" },
@@ -37,7 +37,11 @@ export const LAYOUT = {
         "SHAPES": { "offset": 68, "type": "u32" },
         "OLD_END": { "offset": 72, "type": "u32" },
         "MINORS": { "offset": 76, "type": "u32" },
-        "BASE_END": { "offset": 80, "type": "u32" }
+        "BASE_END": { "offset": 80, "type": "u32" },
+        "OPS": { "offset": 84, "type": "u32" },
+        "INTRINSICS": { "offset": 88, "type": "u32" },
+        "RECORDS": { "offset": 92, "type": "u32" },
+        "FEATURES": { "offset": 96, "type": "u32" }
       },
       "tail": null
     },

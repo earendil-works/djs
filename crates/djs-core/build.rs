@@ -1,8 +1,8 @@
 //! Computes `SOURCE_HASH` (D1330): a hash of everything that goes into the library and so
 //! into its heap images: the non-test Rust sources under `src/` and the generated prelude.
-//! `vm::BUILD_HASH` includes it, so an image only loads into the build that made it, even
-//! when a change keeps the layout, op and intrinsic tables (a reordered realm slot, a new
-//! object class id, a changed builtin).
+//! `vm::BUILD_HASH` includes it and so identifies the exact build (`djs_build_hash`, run
+//! journals, djs-prelude's check that the base image is this build's). Images are not keyed
+//! on it but on their dependency descriptor (below, D2265).
 //!
 //! Test files (`*tests.rs`) are left out, so editing a test does not rebuild the library
 //! and the base snapshot. Line endings are normalized, so a CRLF checkout hashes the same.
@@ -130,8 +130,7 @@ fn main() {
     let out_dir = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     let records = compat_inputs::records_hash(&root)
         .unwrap_or_else(|e| panic!("compat_inputs.rs: a region is missing: {e}"));
-    let mask =
-        compat_inputs::feature_mask(&enabled_features()).unwrap_or_else(|e| panic!("{e}"));
+    let mask = compat_inputs::feature_mask(&enabled_features()).unwrap_or_else(|e| panic!("{e}"));
     std::fs::write(
         out_dir.join("image_deps.rs"),
         format!(
