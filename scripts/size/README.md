@@ -14,6 +14,7 @@ older tools in scripts/: `wasm-size.py` (sections, code by crate/path/function),
 | `budget.py MODULE` | the gate's budget check (TESTING.md) |
 | `datamap.py MAP.txt MODULE` | the data section by symbol and category from a wasm-ld link map (0156) |
 | `sandbox-memory.ts [MODULE] [N]` | a fresh Sandbox's wasm memory: pages, arena length and capacity, RSS per sandbox (0156; node --expose-gc) |
+| `vec-sites.py NAMES [--check\|--update scripts/size/vec-sites.txt]` | inlined container glue (push, drop, with_capacity, reserve) per function, against a baseline (0161, D2521) |
 | `patches/onepath.py` | variant: no `@native`, `@fast` or `run_hot` (`ONEPATH=native,fast,hot`) (0156) |
 | `patches/optsize.py` | variant: `#[optimize(size)]` on cold modules or `OPTSIZE=all` (0156) |
 
