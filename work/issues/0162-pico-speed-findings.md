@@ -1,7 +1,7 @@
 # 0162: Act on pico's speed findings
 
-status: open
-agent: -
+status: in-progress
+agent: speed
 branch: issue/0162-pico-speed
 depends-on: 0152, 0154, 0151 L4 (merged first)
 guide: docs/guide/interpreter.md / builtins.md as affected
