@@ -86,6 +86,11 @@ Make suspension visible and testable by hand (docs/continuation-dumps.md "REPL")
   REPL held a handle to the body there: a reload panicked with "dropped handle").
   Found: a body parameter captured by a closure is refused by the exporter (reported).
   Guide: no page affected.
+- From example (0179), folded in: `resume --explain` loads any host function name (names the
+  CLI does not define get ids from 1<<20; calls are shown under the dump's names), and
+  positions show the dump's file instead of the loader's `dump.js` (also the REPL's
+  `.pending`/`.bt` after `.restore FILE`, until `.dump-every` reloads). Test: tests/run
+  sleep.dump.js (a `sleep` open call and `$dump.host("sleep", true)`); expectations updated.
 
 ## Follow-ups
 - tests/run.rs `dump_after_every_idle_point`: add `tests/run/todos.js --body` once the

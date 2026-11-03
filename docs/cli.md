@@ -40,14 +40,17 @@ since a dump has no comments: the open calls, each with the activations waiting 
 then the other suspended activations (a generator at a `yield`, an async function
 waiting on another's result), each with where it stopped in the dump, the source line
 with a caret under the `await`/`yield`, and its bindings; handles name the activation
-whose promise they are. Nothing is answered; exit code 0, or 2 if it does not load.
-Loading runs the dump's code, as `resume` does.
+whose promise they are. Positions are in the dump's own file. Nothing is answered, so
+open calls and held host functions of any name load (`sleep(100)`, not only `tools.*` and
+`later`), shown under the dump's names. Exit code 0, or 2 if it does not load. Loading
+runs the dump's code, as `resume` does. The REPL's `.pending` and `.bt` after `.restore
+FILE` also show positions in `FILE` (until `.dump-every` reloads the VM).
 
 ```text
 $ djs resume --explain reads.dump.js
 reads.dump.js: format 2; 1 open call, 1 suspended activation; handles: run
 #2 tools.read({"path":"a"})
-  async function main at dump.js:3:13 (run)
+  async function main at reads.dump.js:3:13 (run)
       const a = await tools.read({ path: "a" });
                 ^
     a = <uninitialized>, b = <uninitialized>
@@ -195,7 +198,7 @@ loaded reads.dump.js into a fresh VM
 waiting: #2 tools.read({"path":"a"})
 > .bt 2
 #2 tools.read({"path":"a"})
-  async function main at dump.js:3:13 (run)
+  async function main at reads.dump.js:3:13 (run)
       const a = await tools.read({ path: "a" });
                 ^
     a = <uninitialized>, b = <uninitialized>
