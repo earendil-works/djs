@@ -1,7 +1,7 @@
 # 0170: Classes and private fields in dumps; the loader's privileged `$dump`
 
-status: open
-agent: -
+status: in-progress
+agent: portable
 branch: issue/0170-dump-classes
 depends-on: -
 touches: crates/djs-core/src/vm/dump*.rs, the loader entry point (Vm::load_dump, new), privileged builtins for $dump (builtins/ or vm/), crates/djs-wasm (vm_load_dump), js/src/sandbox.ts (load), tests/dump/, docs/functions-as-code.md
