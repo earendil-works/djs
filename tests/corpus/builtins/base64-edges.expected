@@ -1,0 +1,47 @@
+atob "" => 
+atob "YQ" => 61
+atob "YQ=" => throws DOMException InvalidCharacterError 5 true true
+atob "YQ==" => 61
+atob "YR==" => 61
+atob "YWI" => 61 62
+atob "YWI=" => 61 62
+atob "YWJj" => 61 62 63
+atob "YWJj=" => throws DOMException InvalidCharacterError 5 true true
+atob "YWJj==" => throws DOMException InvalidCharacterError 5 true true
+atob "Y" => throws DOMException InvalidCharacterError 5 true true
+atob "YWJjZ" => throws DOMException InvalidCharacterError 5 true true
+atob "====" => throws DOMException InvalidCharacterError 5 true true
+atob "YQ===" => throws DOMException InvalidCharacterError 5 true true
+atob "Y=Q=" => throws DOMException InvalidCharacterError 5 true true
+atob "YQ= =" => 61
+atob " Y Q = = " => 61
+atob "\tY\nQ\fx\r " => 61 c
+atob "YQ\u000b" => throws DOMException InvalidCharacterError 5 true true
+atob "YQ " => throws DOMException InvalidCharacterError 5 true true
+atob "YQ　" => throws DOMException InvalidCharacterError 5 true true
+atob "Y-_Q" => throws DOMException InvalidCharacterError 5 true true
+atob "Y+/Q" => 63 ef d0
+atob "/w==" => ff
+atob "//79" => ff fe fd
+atob "YQ==YQ==" => throws DOMException InvalidCharacterError 5 true true
+atob "YWJjĀ" => throws DOMException InvalidCharacterError 5 true true
+atob "YQ\u0000" => throws DOMException InvalidCharacterError 5 true true
+atob(null) => 9e e9 65
+atob(undefined) => throws DOMException InvalidCharacterError 5 true true
+atob() => throws TypeError TypeError undefined false true
+atob(1234) => d7 6d f8
+atob(obj) => 61
+atob(symbol) => throws TypeError TypeError undefined false true
+btoa('') => 
+btoa latin1 => 2f 77 43 41
+btoa(\u0100) => throws DOMException InvalidCharacterError 5 true true
+btoa(lone surrogate) => throws DOMException InvalidCharacterError 5 true true
+btoa(null) => 62 6e 56 73 62 41 3d 3d
+btoa(undefined) => 64 57 35 6b 5a 57 5a 70 62 6d 56 6b
+btoa() => throws TypeError TypeError undefined false true
+btoa(obj) => 59 57 49 3d
+btoa(symbol) => throws TypeError TypeError undefined false true
+round trip true 344
+true false true 1 atob 1 btoa
+TypeError
+=== completed
