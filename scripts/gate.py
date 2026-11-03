@@ -195,19 +195,23 @@ def jobs():
         J("registry", "python3 scripts/registry.py check main"),
         J("paths", "python3 scripts/gate.py paths"),
 
-        # --- target/: the workspace's dev builds, and their release unsafe-heap build.
+        # --- Host builds. Each cargo configuration (package and features) has its own target
+        # directory, so that they build at once (cargo locks a target directory's profile).
         J("build:tests", f"cargo test --workspace --no-run --quiet {cargo_json} > {G}/tests.json",
           group=tgt, build=True),
-        J("build:core-tests", f"cargo test -p djs-core --lib --no-run --quiet {cargo_json} > {G}/core-tests.json",
-          group=tgt, build=True),
-        J("build:difftest", f"cargo build -p djs-difftest --bins --quiet {cargo_json} > {G}/difftest.json"
-          f" && {exe} {G}/difftest.json djs-difftest djs-abidrive", group=tgt, build=True),
-        J("build:test262", f"cargo build -p djs-test262 --quiet {cargo_json} > {G}/test262.json"
-          f" && {exe} {G}/test262.json djs-test262", group=tgt, build=True),
-        J("build:docs", f"cargo build -p djs-docs --quiet {cargo_json} > {G}/docs.json"
-          f" && {exe} {G}/docs.json djs-docs", group=tgt, build=True),
-        J("build:unsafe-tests", "cargo test -p djs-core --features unsafe-heap --no-run --quiet"
-          f" --test verify_fuzz --test e2e {cargo_json} > {G}/unsafe-tests.json", group=tgt, build=True),
+        J("build:core-tests", f"CARGO_TARGET_DIR=target/gate-core cargo test -p djs-core --lib --no-run --quiet"
+          f" {cargo_json} > {G}/core-tests.json", group="target/gate-core", build=True),
+        J("build:difftest", f"CARGO_TARGET_DIR=target/gate-difftest cargo build -p djs-difftest --bins --quiet"
+          f" {cargo_json} > {G}/difftest.json && {exe} {G}/difftest.json djs-difftest djs-abidrive",
+          group="target/gate-difftest", build=True),
+        J("build:test262", f"CARGO_TARGET_DIR=target/gate-test262 cargo build -p djs-test262 --quiet"
+          f" {cargo_json} > {G}/test262.json && {exe} {G}/test262.json djs-test262",
+          group="target/gate-test262", build=True),
+        J("build:docs", f"CARGO_TARGET_DIR=target/gate-docs cargo build -p djs-docs --quiet {cargo_json}"
+          f" > {G}/docs.json && {exe} {G}/docs.json djs-docs", group="target/gate-docs", build=True),
+        J("build:unsafe-tests", "CARGO_TARGET_DIR=target/gate-unsafe cargo test -p djs-core --features unsafe-heap"
+          f" --no-run --quiet --test verify_fuzz --test e2e {cargo_json} > {G}/unsafe-tests.json",
+          group="target/gate-unsafe", build=True),
         J("build:unsafe-release", "cargo build --release -p djs-difftest --features djs-core/unsafe-heap"
           f" --quiet {cargo_json} > {G}/unsafe-release.json"
           f" && {exe} {G}/unsafe-release.json djs-difftest", group="target/release", build=True),
@@ -657,21 +661,24 @@ def cmd_tests(args):
             env = dict(os.environ, CARGO_MANIFEST_DIR=pdir, CARGO_PKG_NAME=name)
             if times:
                 env["DJS_TEST_TIMES"] = str(times.resolve())
+            t0 = time.time()
             p = subprocess.run([str(ROOT / "scripts/test-runner.sh"), exe, *extra], cwd=pdir, env=env,
                                capture_output=True, text=True)
-            results[exe] = (p.returncode, p.stdout + p.stderr)
+            results[exe] = (p.returncode, p.stdout + p.stderr, time.time() - t0)
     threads = [threading.Thread(target=one, args=(r,)) for r in runs]
     for t in threads:
         t.start()
     for t in threads:
         t.join()
     rc = 0
+    print("binaries: " + ", ".join(f"{Path(e).name} {results[e][2]:.1f}s"
+                                   for e in sorted(results, key=lambda e: -results[e][2])[:8]))
     for name, _, exe in runs:
-        code, out = results[exe]
+        code, out, _ = results[exe]
         if code != 0:
             rc = 1
             print(f"--- {name}: {Path(exe).name} failed ({code}):\n{out}")
-    passed = sum(1 for c, _ in results.values() if c == 0)
+    passed = sum(1 for c, _, _ in results.values() if c == 0)
     print(f"tests: {passed}/{len(runs)} binaries passed")
     if times and times.exists():
         rows = sorted((l.split("\t") for l in times.read_text().splitlines() if l.count("\t") == 2),
