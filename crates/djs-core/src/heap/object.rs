@@ -31,8 +31,11 @@ use alloc::vec::Vec;
 
 use super::atom::{Atom, atoms};
 use super::cells::{
-    AccessorPair, Object, PropEntry, PropTable, PropValues, Roots, ValueArray,
-    flags::{OBJ_DICTIONARY, OBJ_EXTENSIBLE, OBJ_INDEXED_PROPS, OBJ_IS_PROTO, OBJ_LENGTH_READONLY},
+    AccessorPair, FuncTemplate, Object, PropEntry, PropTable, PropValues, Roots, ValueArray,
+    flags::{
+        OBJ_DICTIONARY, OBJ_EXTENSIBLE, OBJ_INDEXED_PROPS, OBJ_IS_PROTO, OBJ_LAZY_LENGTH,
+        OBJ_LAZY_NAME, OBJ_LENGTH_READONLY,
+    },
 };
 use super::layout::Ref;
 use super::shape::SHAPE_MAX;
@@ -413,7 +416,13 @@ enum Loc {
     /// A named property slot (`prop_*`).
     Prop(u32),
     ArrayLength,
+    /// A closure's unstored `length` and `name` (D2445, `OBJ_LAZY_LENGTH`/`_NAME`).
+    LazyLength,
+    LazyName,
 }
+
+/// Both lazy-property flags of a closure (D2445).
+const OBJ_LAZY: u16 = OBJ_LAZY_LENGTH | OBJ_LAZY_NAME;
 
 /// Why an object became a dictionary (test statistics, `Heap::dict_reasons`).
 #[derive(Clone, Copy)]
@@ -1474,7 +1483,12 @@ impl Heap {
     #[inline]
     pub fn shaped_add(&mut self, o: Obj, old: u32, new: u32, v: Value) -> bool {
         let f = self.obj_flags(o);
-        if f & (OBJ_DICTIONARY | OBJ_IS_PROTO) != 0 || f & OBJ_EXTENSIBLE == 0 || self.frozen(o) {
+        // A lazy `length` or `name` (D2445) is not in the shape: the cached key could be
+        // one of them.
+        if f & (OBJ_DICTIONARY | OBJ_IS_PROTO | OBJ_LAZY) != 0
+            || f & OBJ_EXTENSIBLE == 0
+            || self.frozen(o)
+        {
             return false;
         }
         let p = self.props(o);
@@ -1693,10 +1707,192 @@ impl Heap {
             if self.obj_flags(o) & OBJ_INDEXED_PROPS == 0 {
                 return Loc::None;
             }
-        } else if key == atoms::LENGTH && self.object_class(o) == ObjectClass::Array {
-            return Loc::ArrayLength;
+        } else if (key == atoms::LENGTH || key == atoms::NAME)
+            && let Some(loc) = self.unstored_loc(o, key)
+        {
+            return loc;
         }
         self.prop_find(o, key).map_or(Loc::None, Loc::Prop)
+    }
+
+    /// The location of an own `length` or `name` that has no table entry: an array's
+    /// `length`, a closure's lazy ones (D2445).
+    #[inline]
+    fn unstored_loc(&self, o: Obj, key: Atom) -> Option<Loc> {
+        let f = self.obj_flags(o);
+        if key == atoms::LENGTH {
+            if f & OBJ_LAZY_LENGTH != 0 {
+                return Some(Loc::LazyLength);
+            }
+            (self.object_class(o) == ObjectClass::Array).then_some(Loc::ArrayLength)
+        } else {
+            (f & OBJ_LAZY_NAME != 0).then_some(Loc::LazyName)
+        }
+    }
+
+    /// The template of closure `o` (a lazy property's source, D2445).
+    fn closure_template(&self, o: Obj) -> u32 {
+        self.object_slot(o, 0)
+            .as_internal()
+            .expect("closure template")
+    }
+
+    /// The value of a closure's lazy `length` or `name` (D2445): the template's `LENGTH`,
+    /// the string of its `NAME` atom (empty for none).
+    fn lazy_value(&self, o: Obj, loc: Loc) -> Value {
+        let t = self.closure_template(o);
+        if loc == Loc::LazyLength {
+            return Value::int(self.arena().get(t, FuncTemplate::LENGTH) as i32);
+        }
+        let name = Atom::from_id(self.arena().get(t, FuncTemplate::NAME));
+        let name = if name.is_null() { atoms::EMPTY } else { name };
+        Value::string(self.atom_str_value(name).expect("a string atom name"))
+    }
+
+    /// Gives closure `o` its `length` and `name` as lazy properties (D2445), if its
+    /// template's name is a string atom (or none): what defining them as
+    /// `{writable: false, enumerable: false, configurable: true}` would do, before any
+    /// other key. False, with nothing changed, otherwise.
+    pub(crate) fn set_lazy_fn_props(&mut self, o: Obj) -> bool {
+        debug_assert!(self.object_class(o) == ObjectClass::Function && self.prop_slots(o) == 0);
+        let t = self.closure_template(o);
+        let name = Atom::from_id(self.arena().get(t, FuncTemplate::NAME));
+        if !name.is_null() && self.atom_str_value(name).is_none() {
+            return false;
+        }
+        self.set_obj_flag(o, OBJ_LAZY, true);
+        true
+    }
+
+    /// Stores a closure's lazy `length` and `name` (D2445) as ordinary properties, first
+    /// in key order as they are: before a change to one of them other than deleting it.
+    /// Allocates before it commits (D1700).
+    fn materialize_lazy(&mut self, o: Obj) -> Result<(), HeapError> {
+        let f = self.obj_flags(o);
+        let configurable = PropFlags::CONFIGURABLE.bits() as u32;
+        let mut entries = Vec::new();
+        if f & OBJ_LAZY_LENGTH != 0 {
+            entries.push((
+                atoms::LENGTH,
+                configurable,
+                self.lazy_value(o, Loc::LazyLength),
+            ));
+        }
+        if f & OBJ_LAZY_NAME != 0 {
+            entries.push((atoms::NAME, configurable, self.lazy_value(o, Loc::LazyName)));
+        }
+        entries.extend(self.stored_entries(o));
+        self.rebuild_props(o, &entries)?;
+        self.set_obj_flag(o, OBJ_LAZY, false);
+        Ok(())
+    }
+
+    /// The stored properties of `o` in key order: key, stored flags, value slot.
+    fn stored_entries(&self, o: Obj) -> Vec<(Atom, u32, Value)> {
+        let p = self.props(o);
+        let n = self.prop_slots(o);
+        let mut out = Vec::with_capacity(n as usize + 2);
+        for i in 0..n {
+            if self.is_dictionary(o) {
+                let e = PropTable::ENTRIES.at(p, i);
+                let a = self.arena();
+                let key = Atom::from_id(a.get(e, PropEntry::KEY));
+                if !key.is_null() {
+                    out.push((key, a.get(e, PropEntry::FLAGS), a.get(e, PropEntry::VALUE)));
+                }
+            } else {
+                let (key, fl) = self.shape_desc(self.arena().get(p, PropValues::SHAPE).0, i);
+                out.push((key, fl, self.arena().read(PropValues::VALUES.at(p, i))));
+            }
+        }
+        out
+    }
+
+    /// Replaces the stored properties of `o` by `entries` (key, stored flags, value
+    /// slot), keeping its mode: a new shape chain from the root in shape mode (a
+    /// dictionary if a shape limit is reached), a new table in dictionary mode.
+    /// Everything is allocated before `o` changes (D1700).
+    fn rebuild_props(&mut self, o: Obj, entries: &[(Atom, u32, Value)]) -> Result<(), HeapError> {
+        let n = entries.len() as u32;
+        if !self.is_dictionary(o) {
+            if n == 0 {
+                self.arena_mut().set(o.0, Object::PROPS, Ref::NULL);
+                return Ok(());
+            }
+            let mut s = Some(self.root_shape()?);
+            for &(key, fl, _) in entries {
+                s = match s {
+                    Some(s) => self.shape_child(s, key, fl)?,
+                    None => None,
+                };
+            }
+            if let Some(s) = s {
+                let v = self.alloc_values(n)?;
+                let a = self.arena_mut();
+                for (i, &(_, _, value)) in entries.iter().enumerate() {
+                    a.write(PropValues::VALUES.at(v, i as u32), value);
+                }
+                a.set(v, PropValues::LEN, n);
+                a.set(v, PropValues::SHAPE, Ref(s));
+                a.set(o.0, Object::PROPS, Ref(v));
+                return Ok(());
+            }
+        }
+        let t = self.alloc_table(n.max(4))?;
+        for (i, &(key, fl, value)) in entries.iter().enumerate() {
+            let e = PropTable::ENTRIES.at(t, i as u32);
+            let a = self.arena_mut();
+            a.set(e, PropEntry::KEY, key.id());
+            a.set(e, PropEntry::FLAGS, fl);
+            a.set(e, PropEntry::VALUE, value);
+        }
+        self.arena_mut().set(t, PropTable::COUNT, n);
+        if n > LINEAR_MAX {
+            self.build_index(t)?;
+        }
+        self.arena_mut().set(o.0, Object::PROPS, Ref(t));
+        self.set_obj_flag(o, OBJ_DICTIONARY, true);
+        Ok(())
+    }
+
+    /// For the base image (D2445): if builtin closure `o`'s first two stored properties
+    /// are the `length` and `name` that `%Install*` defined (non-writable,
+    /// non-enumerable, configurable; an int32 length up to `u16::MAX`, a string name
+    /// that is a string atom already), moves them to its template (`LENGTH`, `NAME` and
+    /// `func_flags::LAZY_NAME`) and makes them lazy. The caller checked that no other
+    /// closure shares the template. False, with nothing changed, otherwise.
+    pub(crate) fn make_builtin_props_lazy(&mut self, o: Obj) -> Result<bool, HeapError> {
+        use crate::bytecode::template::func_flags;
+        if self.object_class(o) != ObjectClass::Function || self.obj_flags(o) & OBJ_LAZY != 0 {
+            return Ok(false);
+        }
+        let entries = self.stored_entries(o);
+        let configurable = PropFlags::CONFIGURABLE.bits() as u32;
+        let [(k0, f0, v0), (k1, f1, v1), ..] = entries[..] else {
+            return Ok(false);
+        };
+        let length = v0.as_int().and_then(|l| u16::try_from(l).ok());
+        let (Some(length), Some(name), true) = (
+            length,
+            v1.as_string(),
+            k0 == atoms::LENGTH && k1 == atoms::NAME && f0 == configurable && f1 == configurable,
+        ) else {
+            return Ok(false);
+        };
+        // Only names that are atoms already (property keys, mostly): a new atom costs
+        // more than the property it saves, and can grow the atom index.
+        let Some(atom) = self.find_string_atom_of(name) else {
+            return Ok(false);
+        };
+        self.rebuild_props(o, &entries[2..])?;
+        let t = self.closure_template(o);
+        let a = self.arena_mut();
+        let flags = a.get(t, FuncTemplate::FLAGS);
+        a.set(t, FuncTemplate::FLAGS, flags | func_flags::LAZY_NAME);
+        a.set(t, FuncTemplate::NAME, atom.id());
+        a.set(t, FuncTemplate::LENGTH, length);
+        self.set_obj_flag(o, OBJ_LAZY, true);
+        Ok(true)
     }
 
     fn read_loc(&self, o: Obj, loc: Loc) -> Option<Property> {
@@ -1727,6 +1923,10 @@ impl Heap {
             )),
             Loc::Prop(i) => Some(self.prop_read(o, i)),
             Loc::ArrayLength => Some(self.array_length_property(o)),
+            Loc::LazyLength | Loc::LazyName => Some(Property::data(
+                self.lazy_value(o, loc),
+                PropFlags::CONFIGURABLE,
+            )),
         }
     }
 
@@ -1764,7 +1964,7 @@ impl Heap {
                 true
             }
             Loc::Prop(i) => self.prop_set_value(o, i, v),
-            Loc::None | Loc::ArrayLength => false,
+            Loc::None | Loc::ArrayLength | Loc::LazyLength | Loc::LazyName => false,
         }
     }
 
@@ -1878,6 +2078,13 @@ impl Heap {
             }
             Loc::Prop(i) => self.prop_write(o, i, key, &p)?,
             Loc::ArrayLength => unreachable!("array length is written by array_set_length"),
+            Loc::LazyLength | Loc::LazyName => {
+                self.materialize_lazy(o)?;
+                let Loc::Prop(i) = self.find_own(o, key) else {
+                    unreachable!("materialized")
+                };
+                self.prop_write(o, i, key, &p)?;
+            }
             Loc::None => {
                 if let (true, Some(i), Property::Data { value, .. }) = (dense_ok, key.as_int(), p)
                     && self.dense_accepts(o, i)
@@ -2262,6 +2469,15 @@ impl Heap {
                 true
             }
             Loc::ArrayLength => false,
+            // Configurable; the other keys keep their order.
+            Loc::LazyLength => {
+                self.set_obj_flag(o, OBJ_LAZY_LENGTH, false);
+                true
+            }
+            Loc::LazyName => {
+                self.set_obj_flag(o, OBJ_LAZY_NAME, false);
+                true
+            }
             Loc::Prop(i) => {
                 if !self.prop_read(o, i).flags().configurable() {
                     return Ok(false);
@@ -2279,8 +2495,11 @@ impl Heap {
         o: Obj,
         key: Atom,
     ) -> Result<(), HeapError> {
-        if let Loc::Prop(i) = self.find_own(o, key) {
-            self.prop_remove(o, i)?;
+        match self.find_own(o, key) {
+            Loc::Prop(i) => self.prop_remove(o, i)?,
+            Loc::LazyLength => self.set_obj_flag(o, OBJ_LAZY_LENGTH, false),
+            Loc::LazyName => self.set_obj_flag(o, OBJ_LAZY_NAME, false),
+            _ => {}
         }
         Ok(())
     }
@@ -2372,10 +2591,18 @@ impl Heap {
         if sort {
             crate::sort::sort_by(&mut indexes, |a, b| a.0 < b.0);
         }
-        let mut out = Vec::with_capacity(indexes.len() + strings.len() + symbols.len() + 1);
+        let mut out = Vec::with_capacity(indexes.len() + strings.len() + symbols.len() + 3);
         out.extend(indexes.into_iter().map(|(_, k)| k));
         if self.object_class(o) == ObjectClass::Array {
             out.push_out(atoms::LENGTH);
+        }
+        // A closure's lazy `length` and `name` come before its stored keys (D2445).
+        let f = self.obj_flags(o);
+        if f & OBJ_LAZY_LENGTH != 0 {
+            out.push(atoms::LENGTH);
+        }
+        if f & OBJ_LAZY_NAME != 0 {
+            out.push(atoms::NAME);
         }
         out.extend(strings);
         out.extend(symbols);

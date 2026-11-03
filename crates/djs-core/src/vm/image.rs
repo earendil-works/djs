@@ -26,7 +26,8 @@ pub(super) fn drop_internal_names(heap: &mut Heap) -> Result<u32, HeapError> {
         .map(|c| c.offset)
         .collect();
     for &t in &templates {
-        if heap.arena().get(t, FuncTemplate::FLAGS) & func_flags::PRIVILEGED != 0 {
+        let flags = heap.arena().get(t, FuncTemplate::FLAGS);
+        if flags & (func_flags::PRIVILEGED | func_flags::LAZY_NAME) == func_flags::PRIVILEGED {
             heap.arena_mut().set(t, FuncTemplate::NAME, 0u32);
         }
     }
@@ -93,6 +94,37 @@ pub(super) fn drop_internal_names(heap: &mut Heap) -> Result<u32, HeapError> {
     heap.forget_string_atoms(&keep)
 }
 
+/// D2445: the builtin closures whose `length` and `name` are the ones `%Install*`
+/// defined get them lazily from their template (`Heap::make_builtin_props_lazy`), if no
+/// other closure shares it. Before the base's shape tree is replaced: the rebuilt
+/// shapes are the prelude's. Returns how many.
+pub(super) fn lazy_builtin_props(heap: &mut Heap) -> Result<u32, HeapError> {
+    use crate::heap::ObjectClass;
+    use alloc::collections::BTreeMap;
+    let mut closures: alloc::vec::Vec<(crate::value::Obj, u32)> = vec![];
+    let mut per_template: BTreeMap<u32, u32> = BTreeMap::new();
+    for c in heap.cells().filter(|c| c.kind == CellKind::Object) {
+        let o = crate::value::Obj(c.offset);
+        if heap.object_class(o) != ObjectClass::Function {
+            continue;
+        }
+        if let Some(t) = heap.object_slot(o, 0).as_internal() {
+            closures.push((o, t));
+            *per_template.entry(t).or_default() += 1;
+        }
+    }
+    let mut n = 0;
+    for (o, t) in closures {
+        if per_template[&t] == 1
+            && heap.arena().get(t, FuncTemplate::FLAGS) & func_flags::PRIVILEGED != 0
+            && heap.make_builtin_props_lazy(o)?
+        {
+            n += 1;
+        }
+    }
+    Ok(n)
+}
+
 /// The shapes of the objects that builtins and the engine create with named properties,
 /// as key chains with their stored flags (D2067). The base has them in every VM's shape
 /// tree, so using a builtin adds no shape, whatever the order. From a survey of builtin
@@ -126,8 +158,11 @@ pub(super) const BUILTIN_RESULT_SHAPES: &[&[(&str, u32)]] = {
             ("enumerable", ALL),
             ("configurable", ALL),
         ],
-        &[("length", C), ("name", C), ("prototype", W)],
-        &[("length", C), ("name", C), ("prototype", 0)],
+        // Builtin and bound closures; a closure's own `length` and `name` are lazy
+        // (D2445), so its `prototype` is its first stored key.
+        &[("length", C), ("name", C)],
+        &[("prototype", W)],
+        &[("prototype", 0)],
         &[("constructor", WC)],
         &[("lastIndex", W)],
         &[("message", WC), ("cause", WC)],

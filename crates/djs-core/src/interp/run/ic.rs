@@ -63,12 +63,15 @@ fn kind(w0: u32) -> u32 {
 
 /// Whether `obj` could have an own property `key` that its named properties don't show,
 /// so that a shape compare cannot stand in for a lookup: a typed array's numeric keys, a
-/// proxy's traps, an array's `length`.
+/// proxy's traps, an array's `length`, a closure's lazy `length` and `name` (D2445).
 #[inline(always)]
 fn exotic_own(heap: &Heap, obj: Obj, key: Atom) -> bool {
     match heap.object_class(obj) {
         ObjectClass::Proxy | ObjectClass::TypedArray => true,
         ObjectClass::Array => key == crate::heap::atoms::LENGTH,
+        ObjectClass::Function => {
+            key == crate::heap::atoms::LENGTH || key == crate::heap::atoms::NAME
+        }
         _ => false,
     }
 }

@@ -3068,16 +3068,16 @@ impl<'h> Exec<'h> {
             // The prelude: `%Install*` names the builtins user code can see (D1433).
             return Ok(());
         }
-        let ro = PropFlags::CONFIGURABLE;
-        let d = PropertyDescriptor::data(Value::int(length as i32), ro);
-        self.heap.define_own_property(f, atoms::LENGTH, &d)?;
-        let name = if name.is_null() {
-            self.heap.atom_string(atoms::EMPTY)?
-        } else {
-            self.heap.atom_string(name)?
-        };
-        let d = PropertyDescriptor::data(Value::string(name), ro);
-        self.heap.define_own_property(f, atoms::NAME, &d)?;
+        // `length` and `name` come from the template until changed (D2445); stored only
+        // for a name that is not a string atom (an integer key's).
+        if !self.heap.set_lazy_fn_props(f) {
+            let ro = PropFlags::CONFIGURABLE;
+            let d = PropertyDescriptor::data(Value::int(length as i32), ro);
+            self.heap.define_own_property(f, atoms::LENGTH, &d)?;
+            let name = self.heap.atom_string(name)?;
+            let d = PropertyDescriptor::data(Value::string(name), ro);
+            self.heap.define_own_property(f, atoms::NAME, &d)?;
+        }
         if func_flags::kind(flags) == func_flags::KIND_NORMAL
             && flags & (func_flags::ASYNC | func_flags::GENERATOR) == 0
         {

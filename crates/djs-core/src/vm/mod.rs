@@ -886,6 +886,9 @@ impl Vm {
     /// by copying so that the image depends on its graph alone (0101), then its cells
     /// ordered by kind for the module's gzip (D2251).
     pub fn prepare_base_image(&mut self) -> Result<(), HeapError> {
+        // Builtins' `length` and `name` from their templates (D2445), in the prelude's
+        // shape tree.
+        image::lazy_builtin_props(&mut self.heap)?;
         // A VM's own shape tree (D2063), with the shapes of the objects builtins create
         // already in it (D2067): the builtins' shapes keep the prelude's root.
         self.heap

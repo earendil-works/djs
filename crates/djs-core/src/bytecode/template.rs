@@ -49,6 +49,9 @@ pub mod func_flags {
     /// `builtins::fast::FAST`, set by `%MarkFast`. With `ExecOptions::native_builtins`
     /// a call tries the fast path first and runs the builtin only when it declines.
     pub const FAST: u32 = 1 << 11;
+    /// D2445: a privileged template whose `NAME` and `LENGTH` are its builtin closure's
+    /// lazy `name` and `length` (set at base-image build time): the base keeps the name.
+    pub const LAZY_NAME: u32 = 1 << 12;
 
     pub const fn kind(flags: u32) -> u32 {
         flags & KIND_MASK

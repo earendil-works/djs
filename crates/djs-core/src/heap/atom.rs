@@ -521,6 +521,15 @@ impl Heap {
         self.add_string_atom(flat, hash)
     }
 
+    /// The string atom of `s` if it is interned already (never an integer atom).
+    pub(crate) fn find_string_atom_of(&mut self, s: Str) -> Option<Atom> {
+        if self.str_array_index(s).is_some() {
+            return None;
+        }
+        let hash = self.str_hash(s);
+        self.find_string_atom(hash, |h, t| h.str_eq(s, t))
+    }
+
     /// Interns a Rust string; allocates only if it is not interned yet.
     pub fn atom_str(&mut self, t: &str) -> Result<Atom, HeapError> {
         if let Some(i) = parse_array_index(t.bytes().map(u16::from))
@@ -616,6 +625,15 @@ impl Heap {
         }
         assert!(!a.is_symbol(), "atom_string on a symbol atom");
         Ok(self.atom_entry(a).as_string().expect("string atom"))
+    }
+
+    /// The string of a string atom, without allocating; `None` for integer and symbol
+    /// atoms (and the null atom).
+    pub(crate) fn atom_str_value(&self, a: Atom) -> Option<Str> {
+        if a.is_int() || a.is_null() || a.is_symbol() {
+            return None;
+        }
+        self.atom_entry(a).as_string()
     }
 
     /// The key as a JS value: a string or a symbol. Integer atoms allocate a string.

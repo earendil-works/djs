@@ -91,6 +91,14 @@ pub mod flags {
     /// null, an empty dictionary). Without it `PROPS` is a
     /// [`PropValues`](super::PropValues) block (or null, the root shape). One-way.
     pub const OBJ_DICTIONARY: u16 = 128;
+    /// Function (a closure): it has an own `length` that is not stored (D2445): the
+    /// template's `LENGTH`, `{writable: false, enumerable: false, configurable: true}`,
+    /// before every stored key. Deleting it clears the flag; any other change stores it
+    /// first (`Heap::materialize_lazy`).
+    pub const OBJ_LAZY_LENGTH: u16 = 256;
+    /// Function: likewise an own `name`, the string of the template's `NAME` atom (the
+    /// empty string for none), after the lazy `length`.
+    pub const OBJ_LAZY_NAME: u16 = 512;
     /// BigInt: the value is negative.
     pub const BIGINT_NEG: u16 = 1;
     /// Symbol: a private name (`#x`, D1400). Never an own key of [[OwnPropertyKeys]],
