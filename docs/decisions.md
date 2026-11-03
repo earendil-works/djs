@@ -8147,3 +8147,14 @@ same dump are parsed as TypeScript too, which reads a few JavaScript forms diffe
 (`a < b > (c)` is a generic call there); the checker does not see that. Rejected: erasing
 the types (`strip_types` keeps positions) — it changes `toString()` and cannot erase enums
 or parameter properties.
+
+## D2616: Where activations stopped is reported, not written as comments
+date: 2026-11-04 · by: portable · issue: 0172
+The owner decided that the dump format carries no comments (0180 moves the existing ones
+out and adds a separate human-readable explanation). So the exporter writes no comment
+lines for what is in flight: `Vm::dump_report(opts, names) -> Dumped { text,
+activations: [ResumedSite { loc, function, site, file, line, col, source_line }],
+open_calls, pending_promises }` gives a host or a reader where each resumed activation
+stopped (`Vm::dump` is its text). This replaces 0172's first take, a comment block with a
+caret above every `$dump.resume`, and its "In flight" header line.
+

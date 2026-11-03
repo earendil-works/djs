@@ -51,6 +51,8 @@ pub(super) struct Flight<'a> {
     maps: Vec<(u32, Option<Vec<FunctionMap>>)>,
     /// Promises in the order the dump made them: the end writes their other reactions.
     made: Vec<usize>,
+    /// The activations written, where they stopped (`Vm::dump_report`).
+    sites: Vec<ResumedSite>,
 }
 
 impl<'a> Flight<'a> {
@@ -65,12 +67,17 @@ impl<'a> Flight<'a> {
             clos: Vec::new(),
             maps: Vec::new(),
             made: Vec::new(),
+            sites: Vec::new(),
         }
     }
 
-    /// Whether anything is in flight (the header says so).
+    /// Open calls, activations, pending promises.
     pub fn counts(&self) -> (usize, usize, usize) {
         (self.calls.len(), self.acts.len(), self.pends.len())
+    }
+
+    pub fn take_sites(&mut self) -> Vec<ResumedSite> {
+        core::mem::take(&mut self.sites)
     }
 }
 
@@ -1431,13 +1438,12 @@ impl Dumper<'_> {
             Some(p) if kind == suspend::ASYNC => self.reserve(self.fl.pends[p].node, "a"),
             _ => self.reserve(n, "a"),
         };
-        let comment = fv(0)
-            .as_object()
-            .map(|f| self.site_comment(f, &site))
-            .unwrap_or_default();
+        if let Some(f) = fv(0).as_object() {
+            let info = self.site_info(f, &site, &name);
+            self.fl.sites.push(info);
+        }
         self.line(
             cat!(
-                comment,
                 name,
                 " = $dump.resume(",
                 fe,
@@ -1526,46 +1532,33 @@ impl Dumper<'_> {
             )
         };
         let name = self.reserve(n, "a");
-        let comment = if state == suspend::START {
-            "// a generator that has not started\n"
-        } else {
-            "// a finished generator\n"
-        };
-        self.line(cat!(comment, name, " = ", e, ";"), before);
+        self.line(cat!(name, " = ", e, ";"), before);
         self.nodes[n].loc = name.clone();
         self.nodes[n].state = State::Done;
         self.fl.acts[a].state = State::Done;
         name
     }
 
-    /// Where an activation stopped, for the reader: its function, the site, and the
-    /// source line with a caret under the `await`/`yield`. Comments only.
-    fn site_comment(&self, f: Obj, site: &Site) -> String {
+    /// Where an activation stopped (`Vm::dump_report`): its function, the site, and the
+    /// site's line, column and source line in its script.
+    fn site_info(&self, f: Obj, site: &Site, loc: &str) -> ResumedSite {
         let h = self.h;
         let t = h.closure_template(f);
         let info = template::debug_info(h, t);
         let a = h.arena();
         let text = |r: Ref| r.get().map(|s| h.str_to_string(crate::value::Str(s)));
         let script = info.script.get();
-        let src = script.and_then(|s| text(a.get::<Ref>(s, Script::SOURCE)));
+        let src = script
+            .and_then(|s| text(a.get::<Ref>(s, Script::SOURCE)))
+            .unwrap_or_default();
         let file = script
             .and_then(|s| text(a.get::<Ref>(s, Script::NAME)))
             .unwrap_or_default();
         let atom = Atom::from_id(a.get::<u32>(t, FuncTemplate::NAME));
-        let fname = if atom.is_null() {
+        let function = if atom.is_null() {
             String::new()
         } else {
             h.atom_name(atom)
-        };
-        let fname = if fname.is_empty() {
-            String::from("<anonymous>")
-        } else {
-            fname
-        };
-        let mut out = cat!("// ", fname, ", at ", site.name);
-        let Some(src) = src else {
-            out.push_str(":\n");
-            return out;
         };
         let at = (info.src_start + site.pos) as usize;
         let start = src
@@ -1576,24 +1569,17 @@ impl Dumper<'_> {
             .get(at..)
             .and_then(|r| r.find('\n'))
             .map_or(src.len(), |i| at + i);
-        let line_no = src.get(..at).map_or(0, |b| b.matches('\n').count()) + 1;
-        let before = src.get(start..at).unwrap_or_default();
-        let col = before.chars().count() + 1;
-        cat_to!(&mut out, " (", file, ":", line_no, ":", col, "):\n");
-        let line: String = src
-            .get(start..end)
-            .unwrap_or_default()
-            .chars()
-            .take(120)
-            .collect();
-        let caret: String = before
-            .chars()
-            .map(|c| if c == '\t' { '\t' } else { ' ' })
-            .collect();
-        if col <= 120 {
-            cat_to!(&mut out, "//   ", line.trim_end(), "\n//   ", caret, "^\n");
+        let line = src.get(..at).map_or(0, |b| b.matches('\n').count()) + 1;
+        let col = src.get(start..at).map_or(0, |b| b.chars().count()) + 1;
+        ResumedSite {
+            loc: String::from(loc),
+            function,
+            site: site.name.clone(),
+            file,
+            line: line as u32,
+            col: col as u32,
+            source_line: String::from(src.get(start..end).unwrap_or_default()),
         }
-        out
     }
 
     /// A frame slot's value: `$dump.TDZ`, a Box's cell when closures share it, else the

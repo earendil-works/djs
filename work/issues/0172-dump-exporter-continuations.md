@@ -47,7 +47,7 @@ fresh VM, continue, same transcript.
   activations (frames read by the map from compiling the function's script again with
   its stored options into the scratch base heap), builtin closures (resolving functions,
   combinator elements, finally, async-from-sync), Records; creators of pending promises
-  and reactions in order with a cursor per promise (D2610). Site comments over every
+  and reactions in order with a cursor per promise (D2610). Site comments over every (later dropped, D2616)
   resume (asked by example/0179).
 - Found on the way: scope groups could not hold two variables of one name (the corpus
   prelude's per-iteration `impl`/`name`): nested factories (D2611). Frozen arrays lost
@@ -79,6 +79,10 @@ fresh VM, continue, same transcript.
   closures); a frame's hidden binding shared with closures (`<fields 0>`) is refused.
   The exporter round-trip tests treat `later`/`print` as host globals, as `djs resume`
   (0174) does; steps.dump.js regenerated so `djs resume` loads it.
+- Owner: no comments in the format. The site comments, the "In flight" header line and
+  the generator comment lines are gone; `Vm::dump_report` returns the sites instead
+  (D2616), tested on example's scenario (the_report_names_where_activations_stopped);
+  steps.dump.js regenerated without them.
 - Size (D2614): dump module 507,129 -> 537,056 gz; default 443,610 -> 443,813 (Script
   options). Docs: continuation-dumps.md "The exporter as built", functions-as-code.md
   refusal table; guide: none affected.
@@ -97,7 +101,7 @@ fresh VM, continue, same transcript.
 ## Result
 Landed: `Vm::dump` writes what is in flight (format 2): open calls, pending promises with
 their reactions in order, suspended activations (by the suspension maps, with a site
-comment each), generators, iterators, Proxies, arguments objects; `DumpOptions {
+report entry each, `Vm::dump_report`), generators, iterators, Proxies, arguments objects; `DumpOptions {
 host_fn_name, handles }`; `$dump.host`. Gate: difftest `--dump-every-idle` over the corpus
 (1,194 idle points, identical), e2e dump mode. Coverage: every harvested and private idle
 point dumps, loads and continues identically. Known gaps: see Follow-ups.

@@ -75,6 +75,31 @@ impl Default for DumpOptions<'_> {
     }
 }
 
+/// A dump and what it holds in flight ([`Vm::dump_report`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Dumped {
+    pub text: String,
+    /// The suspended activations it resumes, in the dump's order.
+    pub activations: Vec<ResumedSite>,
+    /// Open host calls and pending promises it recreates.
+    pub open_calls: usize,
+    pub pending_promises: usize,
+}
+
+/// Where a resumed activation stopped: the location the dump gives it (`$dump.a3`), its
+/// function, the site (`await#1`), and the site's place in the function's script, with
+/// the source line (`col` counts characters from 1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResumedSite {
+    pub loc: String,
+    pub function: String,
+    pub site: String,
+    pub file: String,
+    pub line: u32,
+    pub col: u32,
+    pub source_line: String,
+}
+
 /// Why a dump was refused: one line per value, `path: reason`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DumpError(pub Vec<String>);
@@ -99,6 +124,17 @@ impl Vm {
         opts: &DumpOptions<'_>,
         names: Option<&[&str]>,
     ) -> Result<String, DumpError> {
+        self.dump_report(opts, names).map(|d| d.text)
+    }
+
+    /// [`Vm::dump`] with what the dump holds in flight, for hosts and readers: the
+    /// activations it resumes (where each stopped) and the counts. The text itself has
+    /// no comments about them (0180 moves comments out of the format).
+    pub fn dump_report(
+        &self,
+        opts: &DumpOptions<'_>,
+        names: Option<&[&str]>,
+    ) -> Result<Dumped, DumpError> {
         let mut d = Dumper::new(self, opts)?;
         d.flight_roots(opts);
         match names {
@@ -141,7 +177,7 @@ impl Vm {
             d.add_root(name, Decl::Let, *v);
         }
         d.explicit = d.roots.len();
-        d.finish()
+        d.finish().map(|d| d.text)
     }
 }
 
@@ -1894,7 +1930,7 @@ impl<'a> Dumper<'a> {
 
     // ---------------------------------------------------------------- emission
 
-    fn finish(mut self) -> Result<String, DumpError> {
+    fn finish(mut self) -> Result<Dumped, DumpError> {
         self.drain();
         self.assign_members();
         self.resolve_privates();
@@ -1964,19 +2000,6 @@ impl<'a> Dumper<'a> {
             });
         }
         s.push_str(".\n");
-        let (calls, acts, pends) = self.fl.counts();
-        if calls + acts + pends > 0 {
-            cat_to!(
-                &mut s,
-                "// In flight: ",
-                calls,
-                " open calls, ",
-                acts,
-                " activations, ",
-                pends,
-                " pending promises. Taken while the VM was idle.\n"
-            );
-        }
         if self.helpers != 0 {
             for (bit, text) in HELPERS {
                 if self.helpers & bit != 0 {
@@ -2023,7 +2046,13 @@ impl<'a> Dumper<'a> {
         if !self.refusals.is_empty() {
             return Err(DumpError(self.refusals));
         }
-        Ok(s)
+        let (open_calls, _, pending_promises) = self.fl.counts();
+        Ok(Dumped {
+            text: s,
+            activations: self.fl.take_sites(),
+            open_calls,
+            pending_promises,
+        })
     }
 
     /// The checker (0168): compiles the finished dump and compares every function it

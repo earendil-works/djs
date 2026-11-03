@@ -611,3 +611,71 @@ fn dumps_need_an_idle_vm() {
         "{r}"
     );
 }
+
+/// example's scenario (0179): dumped during the first sleep, the report names both
+/// activations and where they stopped; the text has no comments about them.
+#[test]
+fn the_report_names_where_activations_stopped() {
+    let src = std::fs::read_to_string(fixture_dir().join("steps.src.js")).unwrap();
+    let mut vm = new_vm();
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("steps.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    assert!(matches!(
+        vm.run(1_000_000_000),
+        Status::Idle | Status::Done(_)
+    ));
+    let opts = super::dump::DumpOptions {
+        base: base(),
+        host: &["later", "print"],
+        host_fn_name: &host_fn_name,
+        ..Default::default()
+    };
+    let d = vm.dump_report(&opts, None).unwrap();
+    let got: Vec<(String, String, u32, u32, String)> = d
+        .activations
+        .iter()
+        .map(|s| {
+            (
+                s.function.clone(),
+                s.site.clone(),
+                s.line,
+                s.col,
+                String::from(s.source_line.trim()),
+            )
+        })
+        .collect();
+    assert_eq!(
+        got,
+        [
+            (
+                "step".into(),
+                "await#1".into(),
+                6,
+                3,
+                "await sleep(ms);".into()
+            ),
+            (
+                "main".into(),
+                "await#1".into(),
+                13,
+                18,
+                "results.push(await step(label, 10));".into()
+            ),
+        ]
+    );
+    assert_eq!(
+        (d.open_calls, d.activations[0].file.as_str()),
+        (1, "steps.js")
+    );
+    assert!(
+        d.text
+            .contains(&cat!(d.activations[1].loc, " = $dump.resume(main"))
+    );
+    assert!(!d.text.contains("^\n"), "{}", d.text);
+}

@@ -245,10 +245,12 @@ passes, say, its run's promise as "run").
   by the map: parameters and bindings in scope by name (`name@scope` when shadowed), the
   `arguments` object if the function has one, operands by role, loops as `{kind,
   iterator, next}`, an async generator's request queue. Bindings that closures share are
-  handed over as `$dump.cell`s from their factory (`$cN` keys). Every `$dump.resume` line
-  has a comment above it: the function, the site, its `file:line:col`, and the source
-  line with a caret under the `await`/`yield`. Generators that have not started are
-  called again (their parameters must run no code); finished ones are made finished.
+  handed over as `$dump.cell`s from their factory (`$cN` keys). The dump's text has no
+  comments about them (the owner's call: comments leave the format, 0180);
+  `Vm::dump_report` returns, per resumed activation, its location in the dump, the
+  function, the site, and the site's file, line, column and source line. Generators that
+  have not started are called again (their parameters must run no code); finished ones
+  are made finished.
 - **Re-enacted iterators:** array, string (by code points), Map and Set iterators are
   made on their target and advanced (`$dump.advance`); a collection only an iterator
   holds is made again with its entries. A `for await` over a sync iterable gets the

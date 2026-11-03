@@ -2,7 +2,6 @@
 // at idle point 1: written by the exporter (0172), kept as a golden fixture.
 // Load it with Vm::load_dump (djs REPL: .restore FILE), which passes in $dump.
 // Builtins are referenced by name, never written. The host globals later, print are re-bound by name.
-// In flight: 1 open calls, 2 activations, 3 pending promises. Taken while the VM was idle.
 $dump.advance = (it, n) => {
   for (let i = 0; i < n; i++) it.next();
   return it;
@@ -51,13 +50,7 @@ async function main() {
   }
   print(JSON.stringify(results));
 }
-// step, at await#1 (src.js:6:3):
-//     await sleep(ms);
-//     ^
 $dump.a2 = $dump.resume(step, { at: "await#1", awaiting: $dump.p1, args: ["a", 10], bindings: { label: "a", ms: 10 } });
 $dump.n3 = [];
 $dump.i4 = $dump.advance(Array.prototype.values.call(["a", "b", "c"]), 1);
-// main, at await#1 (src.js:13:18):
-//       results.push(await step(label, 10));
-//                    ^
 $dump.a5 = $dump.resume(main, { at: "await#1", awaiting: $dump.a2, bindings: { results: $dump.n3, label: "a" }, operands: [["call.callee", Array.prototype.push], ["call.this", $dump.n3]], loops: [{ kind: "for-of", iterator: $dump.i4, next: $dump.builtin("%ArrayIteratorPrototype%.next") }] });
