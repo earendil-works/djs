@@ -1,7 +1,7 @@
 # 0184: Close the remaining dump refusals; measure dump size and load time
 
-status: open
-agent: -
+status: in-progress
+agent: portable
 branch: issue/0184-dump-coverage
 depends-on: 0182
 guide: -
