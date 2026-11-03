@@ -202,6 +202,10 @@ original order). The loader adds:
 | `$dump.fn({ m() {} })` | the method, getter or setter of a one-member literal |
 | `$dump.keep(o, keys)` | deletes the members a class's evaluation made that the class no longer has; every key must be there |
 | `$dump.random(lo, hi)` | `Math.random`'s state (D2624) |
+| `$dump.using(resources, state)` | the resource Record of a statement list's `using` declarations: `[value, method, kind]` triples and the disposal's progress by name (D2628) |
+| `$dump.forIn(o, keys)` | a for-in loop's key iterator over `o` with the keys it has yet to visit, for `loops` (D2628) |
+| `$dump.regexpIterator(re, s, flags)` | `matchAll`'s iterator over the regexp it made (D2628) |
+| `$dump.iteratorHelper(slots)` | an iterator helper (`map`, `take`, `Iterator.from`, `concat`, `zip`, …) with its state machine's slots (D2628) |
 
 Hosts store and send dump text compressed (zstd level 3, no dictionary: a third of an
 image container for typical pi sessions, about equal for data-heavy ones, 0184); the format
@@ -280,14 +284,21 @@ passes, say, its run's promise as "run").
   holds is made again with its entries. A `for await` over a sync iterable gets the
   dump's own async-from-sync iterator (`$dump.fromSync`, which steps the same way: the
   object is never visible to user code). Proxies are `new Proxy(target, handler)`.
+  `matchAll`'s iterators and iterator helpers are made from their state
+  (`$dump.regexpIterator`, `$dump.iteratorHelper`); a for-in loop's key iterator from its
+  object and the keys left (`$dump.forIn`: keys deleted meanwhile are still skipped).
+- **Statements in flight:** a case test keeps the discriminant (`switch.discriminant`,
+  twice); a statement list with `using` declarations keeps its resource Record
+  (`using.record`, `$dump.using`); a destructuring pattern under way keeps its value or
+  iterator, the keys a rest property excludes and a computed key (`pattern.*`), an
+  assignment pattern also the assignment's value (`assign.value`).
 - **Subroutines:** a finally block (and a for-await's close when `break`, `continue` or
   `return` leaves the loop) runs as a subroutine whose stack holds the value it carries
   and a return address; the dump writes the address as the index of the `gosub` that
   entered it (`["finally.return", 2]`), which the loader maps to its own pc (D2627).
-- **Still refused, with their path:** sites the maps call unsupported (`using`,
-  destructuring, closing a for-await's iterator on a generator's `return(v)` path),
-  for-in loops, revoked Proxies,
-  iterator helpers and RegExp string iterators, weak collections, a generator object
+- **Still refused, with their path:** sites the maps call unsupported (inside a class
+  definition, closing a for-await's iterator on a generator's `return(v)` path), a for-in
+  loop over a Proxy, revoked Proxies, weak collections, a generator object
   with another prototype or own properties, keyed combinators (`allKeyed`), an async
   generator awaiting a `return()` value, then-reactions on promises of other
   constructors.

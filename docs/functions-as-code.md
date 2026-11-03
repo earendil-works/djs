@@ -287,7 +287,7 @@ Everything below fails the dump with one line per value, `path: reason`:
 | a captured `this`, `arguments` or `new.target` | not a variable a factory can declare |
 | a builtin's internal value, a builtin with no name | see "Builtins" |
 | a builtin whose prototype was changed | not expressible as a patch the base's builtins accept |
-| weak collections, WeakRef, FinalizationRegistry, resizable buffers, revoked Proxies, iterators other than array, string, Map and Set iterators | live or unordered state |
+| weak collections, WeakRef, FinalizationRegistry, resizable buffers, revoked Proxies, iterators other than array, string, Map, Set and RegExp String iterators and iterator helpers | live or unordered state |
 | two captured variables of the same name in one group | a factory has one scope |
 | a function the checker finds reading another binding than before | see "The checker" |
 

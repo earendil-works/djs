@@ -8584,3 +8584,31 @@ handler AsyncIteratorClose of a throw puts on `return()`'s promise (`PromiseValu
 react in flight. Still refused: a finally's saved completion value (Script and eval code,
 which do not suspend) and closing a for-await iterator on the return path of a resumed
 generator (`return(v)` at a yield).
+
+## D2628: Dumps write using Records, destructuring, for-in and builtin iterators from their state
+date: 2026-11-04 · by: portable · issue: 0184
+The constructs suspension maps still called unsupported get roles, and the builtin
+state they keep gets a loader primitive that makes it from data, checked where the
+builtins trust its shape:
+- `using`: the resource Record stays under the statements (`using.record`; the
+  disposal's `s v ret s` adds `finally.value`/`finally.return`, D2627). Written once,
+  shared by both stack slots: `$dump.using([value, method, kind, …], { error, hasError,
+  needsAwait, hasAwaited, next, value, pending, hasPending })`, the state by name (only
+  slots that hold something), not by builtins/disposable.ts's slot numbers.
+- Destructuring: an object pattern keeps its value (`pattern.source`), the keys a rest
+  property excludes (`pattern.excluded`) and a computed key (`pattern.key`); an array
+  pattern `next` and the iterator (`pattern.next`, `pattern.iterator`, `undefined` once
+  done); targets their references (the assignment roles); an assignment pattern
+  expression its value (`assign.value`). Plain operands, no primitive.
+- for-in: the key iterator is an internal array; the dump writes `$dump.forIn(o, keys)`
+  with the keys not yet visited (deleted ones are still skipped at each step, as in the
+  original), in `loops` as `{ kind: "for-in", iterator }`. A for-in over a Proxy (a
+  Record its traps fill) is refused.
+- `matchAll`'s iterator: `$dump.regexpIterator(re, s, flags)` over the regexp clone it
+  holds (written with its `lastIndex`); iterator helpers: `$dump.iteratorHelper(slots)`,
+  builtins/iterator.ts's slots as they are (kind and state checked; a wrong slot makes a
+  step fail with an internal error, never more). Both refuse another prototype.
+Still refused: a site inside a class definition (the class under construction is on the
+stack; the dump makes classes from their text) and closing a for-await iterator on the
+return path of a resumed generator. Also fixed on the way: an array with named
+properties that a frame holds once was written inline, its patches without a location.
