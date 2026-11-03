@@ -1,0 +1,728 @@
+#!/usr/bin/env python3
+"""The merge gate (scripts/gate.sh runs this; TESTING.md "The gate", D2660-D2669).
+
+    scripts/gate.sh [--full] [--no-cache] [--only LEG,...] [--list] [--clear-cache]
+
+A commit must pass the gate before main fast-forwards to it. The gate is a set of *legs*
+(checks) and the *builds* they need. Builds sharing a cargo target directory run one at a
+time (cargo locks it); everything else runs at once, at the machine's full width (D2661).
+
+Each leg is cached by its inputs (D2662): the key hashes the leg's name, the committed tree
+restricted to the leg's input class, and what the leg reads outside the repository (the
+toolchain, the qjs binary, vendor/test262, pi-private). A leg whose key passed before is
+not run again; a build whose legs are all cached is not built. `--full` reads no cache and
+also runs the full-only legs (D2664).
+
+The input classes (D2663), from widest to narrowest:
+  all     every tracked file
+  nodocs  all minus docs/, work/, .github/ and the top-level *.md files
+  rust    nodocs minus js/ (but js/src/layout.generated.ts, which a djs-core test reads)
+          and examples/
+scripts/ is in every class, so a change to the gate reruns every leg. The `paths` leg
+(always run) fails when Rust code starts naming a path outside the rust class, so the
+classes stay true.
+"""
+
+import hashlib
+import json
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import threading
+import time
+import tomllib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+os.chdir(ROOT)
+NCPU = os.cpu_count() or 4
+G = "target/gate"  # logs, build manifests, binary copies, per-leg times
+
+# ---------------------------------------------------------------------------------------
+# Input classes
+
+
+def _common_root():
+    common = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                            capture_output=True, text=True, check=True).stdout.strip()
+    return Path(common).parent
+
+
+PRIMARY = _common_root()
+CACHE = Path(os.environ.get("DJS_GATE_CACHE", PRIMARY / "work/scratch/gate-cache"))
+DOCS = re.compile(r"^(docs/|work/|\.github/|[^/]+\.md$)")
+JS_ONLY = re.compile(r"^(js/|examples/)")
+RUST_KEEP = {"js/src/layout.generated.ts"}
+
+
+def in_class(cls, path):
+    if cls == "all":
+        return True
+    if DOCS.match(path):
+        return False
+    if cls == "nodocs":
+        return True
+    assert cls == "rust", cls
+    return not JS_ONLY.match(path) or path in RUST_KEEP
+
+
+_tree = None
+
+
+def tree():
+    """(path, blob sha) of every tracked file of HEAD."""
+    global _tree
+    if _tree is None:
+        out = subprocess.run(["git", "ls-tree", "-r", "-z", "HEAD"], capture_output=True,
+                             check=True).stdout.decode()
+        _tree = []
+        for entry in out.split("\0"):
+            if entry:
+                meta, path = entry.split("\t", 1)
+                _tree.append((path, meta))
+    return _tree
+
+
+_class_hashes = {}
+
+
+def class_hash(cls):
+    if cls in _class_hashes:
+        return _class_hashes[cls]
+    h = hashlib.sha256(cls.encode())
+    for path, meta in tree():
+        if in_class(cls, path):
+            h.update(f"{meta}\t{path}\n".encode())
+    _class_hashes[cls] = h.hexdigest()
+    return _class_hashes[cls]
+
+
+# ---------------------------------------------------------------------------------------
+# What legs read outside the repository (TESTING.md lists them)
+
+
+def _run(*cmd, cwd=None):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd).stdout
+    except OSError:
+        return "missing"
+
+
+def _stat(path):
+    try:
+        st = Path(path).stat()
+        return f"{path} {st.st_size} {st.st_mtime_ns}"
+    except OSError:
+        return f"{path} missing"
+
+
+def _git_state(path):
+    if not Path(path, ".git").exists():
+        return f"{path} missing"
+    head = _run("git", "rev-parse", "HEAD", cwd=path).strip()
+    dirty = hashlib.sha256(_run("git", "status", "--porcelain", "--untracked-files=normal",
+                                cwd=path).encode()).hexdigest()
+    return f"{path} {head} {dirty}"
+
+
+def _externals():
+    pi = os.environ.get("PI_PRIVATE", str(Path.home() / "Development/pi-private"))
+    return {
+        # Every leg: the tools that build and run it, and the oracle and data files that
+        # tests of every crate may read.
+        "base": lambda: "\n".join([
+            _run("rustc", "-vV"), _run("cargo", "-V"), _run("node", "--version"),
+            sys.version, _run("uname", "-sm"),
+            _stat(os.environ.get("DJS_QJS", Path.home() / "Development/dquickts/qjs")),
+            _git_state(os.environ.get("DJS_TEST262", PRIMARY / "vendor/test262")),
+            _stat(PRIMARY / "vendor/unicode/17.0.0/NormalizationTest.txt"),
+        ]),
+        # pi's codemode tests and prelude, and its installed packages.
+        "pi": lambda: "\n".join([_git_state(pi), _stat(Path(pi) / "node_modules/.package-lock.json")]),
+    }
+
+
+EXTERNALS = _externals()
+_ext_cache = {}
+
+
+def external(name):
+    if name not in _ext_cache:
+        _ext_cache[name] = EXTERNALS[name]()
+    return _ext_cache[name]
+
+
+# ---------------------------------------------------------------------------------------
+# Legs and builds
+
+
+class Job:
+    def __init__(self, name, cmd, *, needs=(), cls=None, group=None, ext=("base",),
+                 full_only=False, summary=None, build=False):
+        self.name, self.cmd, self.needs, self.cls = name, cmd, list(needs), cls
+        self.group, self.ext, self.full_only, self.summary, self.build = group, ext, full_only, summary, build
+        self.state = "pending"  # pending, skipped, cached, running, ok, failed
+        self.wall = self.cpu = 0.0
+        self.log = f"{G}/log/{name}.log"
+
+    def key(self):
+        h = hashlib.sha256(f"leg {self.name}\n{class_hash(self.cls)}\n".encode())
+        for e in self.ext:
+            h.update(external(e).encode())
+        return h.hexdigest()
+
+
+def jobs():
+    """The gate. A leg has an input class (`cls`); a build has none and runs only when a
+    leg that needs it runs. `group` names the cargo target directory a job builds in:
+    jobs of one group run one at a time."""
+    tgt = "target"
+    cargo_json = "--message-format=json-render-diagnostics"
+    exe = f"python3 scripts/gate.py exe"
+    tests = f"python3 scripts/gate.py tests"
+    size_mod = "target/size/wasm32-unknown-unknown/wasm/djs_wasm.wasm"
+    slim_mod = "target/size-slim/wasm32-unknown-unknown/wasm/djs_wasm.wasm"
+    wasm = "target/wasm-dev/wasm32-unknown-unknown/debug/djs_wasm.wasm"
+    nodump = "target/wasm-nodump/wasm32-unknown-unknown/debug/djs_wasm.wasm"
+    J = Job
+    return [
+        # Cheap and always run: formatting, the registry against main (which is not in
+        # the key), and the input classes' guard.
+        J("fmt", "cargo fmt --all --check"),
+        J("registry", "python3 scripts/registry.py check main"),
+        J("paths", "python3 scripts/gate.py paths"),
+
+        # --- target/: the workspace's dev builds, and their release unsafe-heap build.
+        J("build:tests", f"cargo test --workspace --no-run --quiet {cargo_json} > {G}/tests.json",
+          group=tgt, build=True),
+        J("build:core-tests", f"cargo test -p djs-core --lib --no-run --quiet {cargo_json} > {G}/core-tests.json",
+          group=tgt, build=True),
+        J("build:difftest", f"cargo build -p djs-difftest --bins --quiet {cargo_json} > {G}/difftest.json"
+          f" && {exe} {G}/difftest.json djs-difftest djs-abidrive", group=tgt, build=True),
+        J("build:test262", f"cargo build -p djs-test262 --quiet {cargo_json} > {G}/test262.json"
+          f" && {exe} {G}/test262.json djs-test262", group=tgt, build=True),
+        J("build:docs", f"cargo build -p djs-docs --quiet {cargo_json} > {G}/docs.json"
+          f" && {exe} {G}/docs.json djs-docs", group=tgt, build=True),
+        J("build:unsafe-tests", "cargo test -p djs-core --features unsafe-heap --no-run --quiet"
+          f" --test verify_fuzz --test e2e {cargo_json} > {G}/unsafe-tests.json", group=tgt, build=True),
+        J("build:unsafe-release", "cargo build --release -p djs-difftest --features djs-core/unsafe-heap"
+          f" --quiet {cargo_json} > {G}/unsafe-release.json"
+          f" && {exe} {G}/unsafe-release.json djs-difftest", group="target/release", build=True),
+        J("bgen", "./scripts/bgen.sh --check", cls="rust", group=tgt),
+        J("doctests", "cargo test --workspace --doc --quiet", cls="rust", group=tgt, needs=["build:tests"]),
+
+        # --- Clippy, host and wasm32 release (no debug_assertions, so warnings that only
+        # appear there fail too; with djs-wasm's docs feature for the docs site's module).
+        J("clippy", "CARGO_TARGET_DIR=target/clippy cargo clippy --workspace --all-targets --quiet -- -D warnings",
+          cls="rust", group="target/clippy"),
+        J("clippy (wasm32, release)", "CARGO_TARGET_DIR=target/clippy cargo clippy -p djs-core -p djs-wasm"
+          " --features djs-wasm/docs --target wasm32-unknown-unknown --release --quiet -- -D warnings",
+          cls="rust", group="target/clippy"),
+
+        # --- wasm32 dev builds: djs-core no_std, and the modules the js tests load (0023),
+        # with and without the dumper (0175, D2635).
+        J("no_std/wasm build of djs-core",
+          "CARGO_TARGET_DIR=target/wasm-dev cargo build -p djs-core --target wasm32-unknown-unknown --quiet",
+          cls="rust", group="target/wasm-dev"),
+        J("build:wasm", "CARGO_TARGET_DIR=target/wasm-dev cargo build -p djs-wasm --target wasm32-unknown-unknown"
+          " --features compiled-prelude,dump --quiet", group="target/wasm-dev", build=True),
+        J("build:wasm-nodump", "CARGO_TARGET_DIR=target/wasm-nodump cargo build -p djs-wasm"
+          " --target wasm32-unknown-unknown --features compiled-prelude --quiet",
+          group="target/wasm-nodump", build=True),
+
+        # --- The shipped modules (D020, D2411): LTO, one codegen unit, one core each.
+        J("build:size", "CARGO_TARGET_DIR=target/size scripts/with-wasm-env.sh cargo build -p djs-wasm"
+          " --target wasm32-unknown-unknown --profile wasm --quiet", group="target/size", build=True),
+        J("build:size-slim", "CARGO_TARGET_DIR=target/size-slim scripts/with-wasm-env.sh cargo build -p djs-wasm"
+          " --target wasm32-unknown-unknown --profile wasm --no-default-features --quiet",
+          group="target/size-slim", build=True),
+
+        # --- The slim build (D2411), natively in its own target directory.
+        J("build:slim-tests", "CARGO_TARGET_DIR=target/slim cargo test -p djs-core --no-default-features --lib"
+          f" --no-run --quiet {cargo_json} > {G}/slim-core-tests.json"
+          " && CARGO_TARGET_DIR=target/slim cargo test -p djs-prelude --no-default-features"
+          f" --features raw,registry --no-run --quiet {cargo_json} > {G}/slim-prelude-tests.json",
+          group="target/slim", build=True),
+        J("build:slim-bins", "CARGO_TARGET_DIR=target/slim cargo build -p djs-difftest --no-default-features"
+          f" --quiet {cargo_json} > {G}/slim-difftest.json && {exe} {G}/slim-difftest.json djs-difftest"
+          " && CARGO_TARGET_DIR=target/slim cargo build -p djs-test262 --no-default-features"
+          f" --quiet {cargo_json} > {G}/slim-test262.json && {exe} {G}/slim-test262.json djs-test262",
+          group="target/slim", build=True),
+
+        # --- Unit and integration tests of the workspace (through scripts/test-runner.sh,
+        # which records each test's time, 0079), djs-docs's apart: they read the guide.
+        J("test", f"{tests} {G}/tests.json --not djs-docs --times", cls="rust", needs=["build:tests"],
+          summary=r"^slowest tests:|^  +[0-9.]+s  "),
+        J("test (djs-docs)", f"{tests} {G}/tests.json --only djs-docs", cls="all", needs=["build:tests"]),
+        # 0103: the guide's generated regions are fresh, its examples print what they
+        # printed, its links and decision IDs resolve (D2100).
+        J("guide (docs/guide)", f"{G}/bin/djs-docs check", cls="all", needs=["build:docs"]),
+
+        # --- The host-side JS package (0018), on the dev modules.
+        J("js tests", f"DJS_WASM=$PWD/{wasm} DJS_WASM_NODUMP=$PWD/{nodump} node --test js/test/*.test.ts",
+          cls="nodocs", needs=["build:wasm", "build:wasm-nodump"]),
+        # 0072: native and wasm builds leave byte-identical heap images and spend the same fuel.
+        J("native vs wasm images", f"DJS_ABIDRIVE={G}/bin/djs-abidrive"
+          f" ./scripts/determinism/native-vs-wasm.sh $PWD/{wasm}",
+          cls="nodocs", needs=["build:wasm", "build:difftest"]),
+        # 0018/0021: the wire format across languages (node encodes, djs decodes) and the
+        # outbound reader on heap images of the same corpus plus hand-built cases.
+        J("wire and heap reader cross-language",
+          'w=$(mktemp -d) h=$(mktemp -d); node js/test/gen-cross.ts "$w" > /dev/null'
+          f' && DJS_WIRE_CROSS="$w" {tests} {G}/core-tests.json -- wire_cross --ignored'
+          f' && DJS_WIRE_CROSS="$w" DJS_READER_DIR="$h" {tests} {G}/core-tests.json -- reader_images --ignored'
+          ' && node js/test/reader-cross.ts "$w" "$h"; rc=$?; rm -rf "$w" "$h"; exit $rc',
+          cls="nodocs", needs=["build:core-tests"]),
+
+        # --- The corpus (0016, 0072, 0172): ratchet, suspension and GC stress, heap images,
+        # a dump at every idle point; and with the @native builtins as bytecode (0063).
+        J("difftest", f"{G}/bin/djs-difftest --engine djs --ratchet --suspend-every 97 --gc-stress"
+          f" --determinism --dump-every-idle --quiet --no-diff --times {G}/times/difftest.tsv",
+          cls="rust", needs=["build:difftest"], summary=r"^(stress|ratchet):"),
+        J("difftest (bytecode backend)", f"{G}/bin/djs-difftest --engine djs --backend bytecode --ratchet"
+          f" --quiet --no-diff --times {G}/times/difftest-bytecode.tsv",
+          cls="rust", needs=["build:difftest"], summary=r"^ratchet:"),
+        # 0161: the unchecked accessor build (D2520): the verifier against corrupt images
+        # and e2e in debug (the accessors assert their bounds), then the corpus in release,
+        # where they really do not check, with suspension and GC stress.
+        J("unsafe-heap tests", f"{tests} {G}/unsafe-tests.json", cls="rust", needs=["build:unsafe-tests"]),
+        J("unsafe-heap difftest", f"{G}/bin/release/djs-difftest --engine djs --ratchet --suspend-every 97"
+          f" --gc-stress --quiet --no-diff --times {G}/times/difftest-unsafe.tsv",
+          cls="rust", needs=["build:unsafe-release"], summary=r"^(stress|ratchet):"),
+        # 0007: test262's active group against the ratchet.
+        J("test262", f"./scripts/fetch-test262.sh > /dev/null && {G}/bin/djs-test262 run --engine djs"
+          " --group active --quiet --slowest 10 --expected tests/test262/expected-failures.txt",
+          cls="rust", needs=["build:test262"], summary=r"^ratchet:|^\| active|^slowest:|^ +[0-9.]+s "),
+
+        # --- Slim (D2411): the djs-core and djs-prelude tests that hold in both builds, the
+        # codemode corpora with the stress modes, test262 without the families it leaves out
+        # against its own ratchet.
+        J("slim tests", f"{tests} {G}/slim-core-tests.json -- vm::slim_tests vm::frozen_tests vm::registry"
+          f" && {tests} {G}/slim-prelude-tests.json", cls="rust", needs=["build:slim-tests"]),
+        J("slim difftest", f"{G}/bin/slim/djs-difftest --engine djs --ratchet --suspend-every 97 --gc-stress"
+          f" --determinism --quiet --no-diff --times {G}/times/difftest-slim.tsv codemode codemode-harvest",
+          cls="rust", needs=["build:slim-bins"], summary=r"^(stress|ratchet):"),
+        J("slim test262", f"./scripts/fetch-test262.sh > /dev/null && {G}/bin/slim/djs-test262 run --engine djs"
+          " --group active --quiet --expected tests/test262/expected-failures-slim.txt",
+          cls="rust", needs=["build:slim-bins"], summary=r"^ratchet:|^\| active"),
+
+        # --- The shipped modules: the size budget (D020), pi's tests on the slim module
+        # without pi's lockdown (D2411), and in the adapter's next mode (0176, D2650).
+        J("size budget", f"python3 scripts/size/budget.py {size_mod} && python3 scripts/size/budget.py"
+          f" {slim_mod} --slim", cls="rust", needs=["build:size", "build:size-slim"]),
+        J("pi tests (slim, no lockdown)", f"DJS_WASM=$PWD/{slim_mod} node js/pi/pi-tests.ts --no-lockdown"
+          " --out target/pi-codemode-slim --expected tests/pi/slim-expected-failures.txt",
+          cls="nodocs", ext=("base", "pi"), needs=["build:size-slim"], summary=r"^pi tests:"),
+        J("pi tests (next mode)", f"DJS_WASM=$PWD/{size_mod} node js/pi/pi-tests.ts --next"
+          " --out target/pi-codemode-next --expected tests/pi/expected-failures.txt",
+          cls="nodocs", ext=("base", "pi"), needs=["build:size"], summary=r"^pi tests:"),
+
+        # --- Full runs only (D2664): pi's tests in the next mode with a dump and a resume at
+        # every idle point, on the release dump module (its own LTO build, 0176).
+        J("pi tests (next mode, dump at every idle point)", "scripts/pi-dump-every-idle.sh",
+          cls="nodocs", ext=("base", "pi"), group="target/dump-wasm", full_only=True,
+          summary=r"^pi tests:"),
+    ]
+
+
+# ---------------------------------------------------------------------------------------
+# The cache: one file per passed key
+
+
+def cache_get(key):
+    try:
+        return (CACHE / key[:2] / key).read_text().startswith("pass ")
+    except (OSError, UnicodeDecodeError):
+        return False  # missing, unreadable or corrupt: run the leg
+
+
+def cache_put(key, job, sha):
+    d = CACHE / key[:2]
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        tmp = d / f".{key}.{os.getpid()}"
+        tmp.write_text(f"pass {job.name}\t{sha}\t{time.strftime('%F %T')}\t{job.wall:.0f}s\n")
+        tmp.replace(d / key)
+    except OSError as e:
+        print(f"gate: cannot write the cache entry of {job.name}: {e}", file=sys.stderr)
+
+
+def cache_prune(max_age_days=14):
+    """Entries unused for max_age_days go (a hit touches its entry)."""
+    cutoff = time.time() - max_age_days * 86400
+    for f in CACHE.glob("*/*"):
+        try:
+            if f.stat().st_mtime < cutoff:
+                f.unlink()
+        except OSError:
+            pass
+
+
+# ---------------------------------------------------------------------------------------
+# Running
+
+
+def run(argv):
+    full = "--full" in argv
+    use_cache = not full and "--no-cache" not in argv
+    only = None
+    if "--only" in argv:
+        only = set(argv[argv.index("--only") + 1].split(","))
+    all_jobs = jobs()
+    by_name = {j.name: j for j in all_jobs}
+    if "--list" in argv:
+        for j in all_jobs:
+            kind = "build" if j.build else ("full-only" if j.full_only else (j.cls or "always"))
+            print(f"{kind:10} {j.name}")
+        return 0
+
+    for d in ("log", "bin", "times"):
+        Path(G, d).mkdir(parents=True, exist_ok=True)
+    clean = subprocess.run(["git", "status", "--porcelain", "--untracked-files=normal"],
+                           capture_output=True, text=True).stdout == ""
+    if not clean and use_cache:
+        print("gate: the worktree has uncommitted changes: no cache (the keys are the commit's)")
+        use_cache = False
+    sha = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+
+    # Which legs run: not cached, selected, full-only only in full runs.
+    legs = [j for j in all_jobs if not j.build]
+    for j in legs:
+        if (j.full_only and not full) or (only and j.name not in only):
+            j.state = "skipped"
+        elif j.cls and use_cache and cache_get(j.key()):
+            j.state = "cached"
+            try:
+                os.utime(CACHE / j.key()[:2] / j.key())
+            except OSError:
+                pass
+    # Builds run when a running leg needs them (transitively).
+    wanted = set()
+
+    def want(j):
+        for n in j.needs:
+            if n not in wanted:
+                wanted.add(n)
+                want(by_name[n])
+    for j in legs:
+        if j.state == "pending":
+            want(j)
+    for j in all_jobs:
+        if j.build and j.name not in wanted:
+            j.state = "skipped"
+
+    cached = [j.name for j in legs if j.state == "cached"]
+    if cached:
+        print(f"== cached ({len(cached)}): {', '.join(cached)}")
+    todo = [j for j in all_jobs if j.state == "pending"]
+    env = dict(os.environ, CARGO_BUILD_JOBS=str(NCPU), RUST_TEST_THREADS=str(NCPU),
+               DJS_JOBS=str(NCPU), DJS_GATE="1")
+    start = time.time()
+    running = {}  # name -> Popen
+    lock = threading.Condition()
+    failed = []
+
+    def launch(j):
+        j.state = "running"
+        j.t0 = time.time()
+        log = open(j.log, "w")
+        p = subprocess.Popen(["bash", "-o", "pipefail", "-ec", j.cmd], stdout=log, stderr=subprocess.STDOUT,
+                             stdin=subprocess.DEVNULL, env=env, start_new_session=True)
+        running[j.name] = p
+
+        def waiter():
+            _, status, ru = os.wait4(p.pid, 0)
+            log.close()
+            with lock:
+                j.wall = time.time() - j.t0
+                j.cpu = ru.ru_utime + ru.ru_stime
+                j.state = "ok" if os.waitstatus_to_exitcode(status) == 0 else "failed"
+                running.pop(j.name, None)
+                p.returncode = 0  # reaped here
+                lock.notify_all()
+        threading.Thread(target=waiter, daemon=True).start()
+
+    def ready(j):
+        if j.state != "pending":
+            return False
+        if any(by_name[n].state != "ok" for n in j.needs):
+            return False
+        return not (j.group and any(by_name[r].group == j.group for r in running))
+
+    def interrupted(signum, _frame):
+        for p in list(running.values()):
+            try:
+                os.killpg(p.pid, signal.SIGTERM)
+            except OSError:
+                pass
+        sys.exit(128 + signum)
+    signal.signal(signal.SIGTERM, interrupted)
+    signal.signal(signal.SIGINT, interrupted)
+    signal.signal(signal.SIGHUP, interrupted)
+
+    with lock:
+        while True:
+            for j in todo:
+                if ready(j) and not failed:
+                    print(f"-> {j.name}", flush=True)
+                    launch(j)
+            done_now = [j for j in todo if j.state in ("ok", "failed") and not getattr(j, "reported", False)]
+            for j in done_now:
+                j.reported = True
+                if getattr(j, "stopped", False):
+                    print(f"-- {j.name}: stopped")
+                    continue
+                report(j)
+                if j.state == "failed":
+                    failed.append(j)
+                elif j.cls and clean:
+                    cache_put(j.key(), j, sha)
+            if failed:
+                # Fail fast: the first failure stops the rest.
+                for name, p in list(running.items()):
+                    by_name[name].stopped = True
+                    try:
+                        os.killpg(p.pid, signal.SIGTERM)
+                    except OSError:
+                        pass
+                if not running:
+                    break
+            elif not running:
+                if any(j.state == "pending" for j in todo):
+                    stuck = [j.name for j in todo if j.state == "pending"]
+                    print(f"gate: cannot schedule {stuck}", file=sys.stderr)
+                    failed.append(by_name[stuck[0]])
+                break
+            lock.wait(1.0)
+
+    wall = time.time() - start
+    write_steps(all_jobs, wall)
+    if failed:
+        print(f"gate: FAILED: {', '.join(j.name for j in failed)} ({wall:.0f}s)")
+        return 1
+    if full:
+        record_full(sha)
+    print(f"gate: OK ({wall:.0f}s; {len(cached)} legs cached)")
+    return 0
+
+
+def report(j):
+    if j.state == "failed":
+        print(f"!! {j.name}: FAILED after {j.wall:.0f}s; its output ({j.log}):")
+        try:
+            sys.stdout.write(Path(j.log).read_text(errors="replace")[-60000:])
+        except OSError:
+            pass
+        print(f"!! end of {j.name}", flush=True)
+        return
+    print(f"ok {j.name} ({j.wall:.0f}s)", flush=True)
+    if j.summary:
+        try:
+            for line in Path(j.log).read_text(errors="replace").splitlines():
+                if re.search(j.summary, line):
+                    print(f"   {line}")
+        except OSError:
+            pass
+
+
+def write_steps(all_jobs, wall):
+    """target/gate-steps.tsv (0079): name, wall and CPU seconds of each job that ran, cached
+    legs with 0 0 and a `(cached)` suffix, and a total; merge-to-main collects them."""
+    lines = []
+    for j in all_jobs:
+        if j.state in ("ok", "failed"):
+            lines.append(f"{j.name}\t{j.wall:.0f}\t{j.cpu:.1f}")
+        elif j.state == "cached":
+            lines.append(f"{j.name} (cached)\t0\t0")
+    cpu = sum(j.cpu for j in all_jobs)
+    lines.append(f"total\t{wall:.0f}\t{cpu:.1f}")
+    Path("target/gate-steps.tsv").write_text("\n".join(lines) + "\n")
+    # The slowest unit tests and test262 tests, for merge-to-main's slow-tests.tsv.
+    times = Path(G, "test-times.tsv")
+    if times.exists():
+        rows = sorted((l.split("\t") for l in times.read_text().splitlines() if l.count("\t") == 2),
+                      key=lambda r: -float(r[0]))[:10]
+        Path("target/gate-slowest-tests.tsv").write_text("".join("\t".join(r) + "\n" for r in rows))
+    log = Path(G, "log/test262.log")
+    if log.exists():
+        text = log.read_text(errors="replace")
+        part = text.split("slowest:", 1)[1].split("\n\n", 1)[0] if "slowest:" in text else ""
+        Path("target/gate-slowest-test262.txt").write_text(
+            "".join(l + "\n" for l in part.splitlines() if re.match(r"^ +[0-9]", l)))
+
+
+def record_full(sha):
+    """A full pass, for merge-to-main's reminder (D2664)."""
+    f = CACHE / "full-passes.tsv"
+    try:
+        CACHE.mkdir(parents=True, exist_ok=True)
+        with open(f, "a") as out:
+            out.write(f"{int(time.time())}\t{time.strftime('%F %T')}\t{sha}\n")
+    except OSError:
+        pass
+
+
+# ---------------------------------------------------------------------------------------
+# Helpers the legs call
+
+
+def artifacts(manifest):
+    for line in Path(manifest).read_text().splitlines():
+        try:
+            m = json.loads(line)
+        except ValueError:
+            continue
+        if m.get("reason") == "compiler-artifact" and m.get("executable"):
+            yield m
+
+
+def cmd_exe(args):
+    """exe MANIFEST NAME...: copy the named binaries a build produced to target/gate/bin
+    (bin/release, bin/slim by the manifest's name), so that later builds that write the same
+    path (another feature set) do not change what a leg runs."""
+    manifest, names = args[0], args[1:]
+    sub = {"unsafe-release.json": "release", "slim-difftest.json": "slim", "slim-test262.json": "slim"}
+    dest = Path(G, "bin", sub.get(Path(manifest).name, ""))
+    dest.mkdir(parents=True, exist_ok=True)
+    found = set()
+    for m in artifacts(manifest):
+        if m["target"]["name"] in names and "bin" in m["target"]["kind"] and not m["profile"]["test"]:
+            shutil.copy2(m["executable"], dest / m["target"]["name"])
+            found.add(m["target"]["name"])
+    missing = set(names) - found
+    if missing:
+        print(f"gate exe: {manifest} built no {sorted(missing)}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def cmd_tests(args):
+    """tests MANIFEST [--only PKG | --not PKG] [--times] [-- ARGS...]: run the test binaries
+    of a `cargo test --no-run` build in parallel, the way `cargo test` runs them one after
+    another: in the package's directory, with its CARGO_MANIFEST_DIR and CARGO_PKG_NAME,
+    through scripts/test-runner.sh."""
+    extra = []
+    if "--" in args:
+        extra = args[args.index("--") + 1:]
+        args = args[:args.index("--")]
+    manifest = args[0]
+    only = args[args.index("--only") + 1] if "--only" in args else None
+    skip = args[args.index("--not") + 1] if "--not" in args else None
+    times = Path(G, "test-times.tsv") if "--times" in args else None
+    runs = []
+    seen = set()
+    for m in artifacts(manifest):
+        if not m["profile"]["test"]:
+            continue
+        pdir = str(Path(m["manifest_path"]).parent)
+        with open(m["manifest_path"], "rb") as f:
+            name = tomllib.load(f)["package"]["name"]
+        if (only and name != only) or (skip and name == skip) or m["executable"] in seen:
+            continue
+        seen.add(m["executable"])
+        runs.append((name, pdir, m["executable"]))
+    if not runs:
+        print(f"gate tests: no test binaries in {manifest}", file=sys.stderr)
+        return 1
+    if times:
+        times.write_text("")
+    # The biggest binaries (djs-core's) first; each runs its tests on all cores.
+    runs.sort(key=lambda r: -Path(r[2]).stat().st_size)
+    results = {}
+    sem = threading.Semaphore(max(2, NCPU // 3))
+
+    def one(r):
+        name, pdir, exe = r
+        with sem:
+            env = dict(os.environ, CARGO_MANIFEST_DIR=pdir, CARGO_PKG_NAME=name)
+            if times:
+                env["DJS_TEST_TIMES"] = str(times.resolve())
+            p = subprocess.run([str(ROOT / "scripts/test-runner.sh"), exe, *extra], cwd=pdir, env=env,
+                               capture_output=True, text=True)
+            results[exe] = (p.returncode, p.stdout + p.stderr)
+    threads = [threading.Thread(target=one, args=(r,)) for r in runs]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    rc = 0
+    for name, _, exe in runs:
+        code, out = results[exe]
+        if code != 0:
+            rc = 1
+            print(f"--- {name}: {Path(exe).name} failed ({code}):\n{out}")
+    passed = sum(1 for c, _ in results.values() if c == 0)
+    print(f"tests: {passed}/{len(runs)} binaries passed")
+    if times and times.exists():
+        rows = sorted((l.split("\t") for l in times.read_text().splitlines() if l.count("\t") == 2),
+                      key=lambda r: -float(r[0]))[:10]
+        print("slowest tests:")
+        for secs, binary, test in rows:
+            print(f"  {float(secs):7.2f}s  {binary}  {test}")
+    return rc
+
+
+# Rust code may name paths outside the rust class only here: each entry is a file and the
+# path it names, with the reason it is safe (D2663).
+PATHS_ALLOWED = {
+    # The benchmark harness runs js/bench; no test runs it.
+    ("crates/djs-bench/src/wasm.rs", "js/bench/wasm.bench.ts"),
+    # In the rust class (RUST_KEEP).
+    ("crates/djs-core/src/heap/layout.rs", "js/src/layout.generated.ts"),
+}
+# A repository path in a string literal: at its start, or after `../` (relative to a crate).
+PATH_LITERAL = re.compile(r'(?:"|\.\./)((?:js|examples|docs|work|\.github)/[^"\s)]*|[A-Z][A-Za-z_-]*\.md(?="))')
+DOC_LITERAL = re.compile(r"^docs/[a-z0-9-]+\.md$")  # help texts cite design docs
+
+
+def cmd_paths(_args):
+    """paths: Rust code outside djs-docs (whose legs read everything) must not name paths
+    outside the rust class in string literals, or the cache would skip its tests when those
+    paths change (D2663)."""
+    bad = []
+    for path, _ in tree():
+        if not path.startswith("crates/") or path.startswith("crates/djs-docs/") or not path.endswith(".rs"):
+            continue
+        try:
+            text = Path(path).read_text()
+        except (OSError, UnicodeDecodeError):
+            continue
+        for n, line in enumerate(text.splitlines(), 1):
+            if line.lstrip().startswith("//"):
+                continue
+            for m in PATH_LITERAL.finditer(line):
+                named = m.group(1).rstrip(".,;:")
+                if DOC_LITERAL.match(named) or (path, named) in PATHS_ALLOWED:
+                    continue
+                if not in_class("rust", named) or named.startswith(("js/", "examples/")):
+                    if named not in RUST_KEEP:
+                        bad.append(f"{path}:{n}: names {named}")
+    if bad:
+        print("gate paths: Rust code names files outside the rust input class (scripts/gate.py):")
+        print("\n".join(f"  {b}" for b in bad))
+        print("Move the file under tests/ or scripts/, or widen the class in scripts/gate.py (D2663).")
+        return 1
+    print("paths: OK")
+    return 0
+
+
+def main(argv):
+    if argv[:1] == ["exe"]:
+        return cmd_exe(argv[1:])
+    if argv[:1] == ["tests"]:
+        return cmd_tests(argv[1:])
+    if argv[:1] == ["paths"]:
+        return cmd_paths(argv[1:])
+    if "--clear-cache" in argv:
+        shutil.rmtree(CACHE, ignore_errors=True)
+        print(f"gate: cleared {CACHE}")
+        return 0
+    cache_prune()
+    return run(argv)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
