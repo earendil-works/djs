@@ -463,8 +463,10 @@ fn dump_at(src: &str, k: usize) -> Result<(Vec<String>, String), String> {
             s => panic!("{s:?}"),
         }
     }
+    // `later` and `print` are host globals, as for `djs resume` (0174).
     let opts = super::dump::DumpOptions {
         base: base(),
+        host: &["later", "print"],
         host_fn_name: &host_fn_name,
         ..Default::default()
     };
