@@ -4,7 +4,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { loadModule, Sandbox, SandboxError } from "../src/sandbox.ts";
+import { type JournalEntry, loadModule, Sandbox, SandboxError } from "../src/sandbox.ts";
 
 const BODY = `
   console.log("before");
@@ -103,4 +103,29 @@ test("dotted names make a namespace object; dumps and loads name the call so", a
   assert.equal(sb.run("return [typeof tools.sleep, tools.sleep.name, typeof tools.other]").join(), "function,sleep,function");
   const run = sb.begin("return await tools.sleep(3)");
   assert.deepEqual(run.calls.map((c) => c.fn), ["tools.sleep"]);
+});
+
+test("a host-driven run records a journal that replay runs", async () => {
+  const module = await loadModule();
+  const opts = { module, console: capture().console, deterministic: { startedAt: 1000, seed: 7 }, now: 5000, asyncFunctions: { "tools.get": () => 0 }, functions: { inc: (n: unknown) => (n as number) + 1 } };
+  const code = `
+    const [a, b] = await Promise.all([tools.get("a"), tools.get("b")]);
+    const c = await tools.get(a + b);
+    return [a, b, c, inc(1), Math.random(), Date.now()];
+  `;
+  const journal: JournalEntry[] = [];
+  const sb = new Sandbox(opts);
+  const run = sb.begin(code, {}, { journal });
+  // Several results at once, in another order than the calls.
+  const [ca, cb] = run.calls;
+  run.settle(cb.id, { ok: true, value: "B" });
+  run.settle(ca.id, { ok: true, value: "A" });
+  await run.advance();
+  run.settle(run.calls[0].id, { ok: true, value: run.calls[0].args[0] + "!" });
+  await run.advance();
+  assert.equal(run.state, "done");
+  assert.deepEqual(journal.map((e) => e.type), ["run", "check", "async", "async", "check", "async", "sync", "end"]);
+  const replayed = await new Sandbox(opts).replay(journal);
+  assert.deepEqual(replayed, run.value);
+  assert.deepEqual((run.value as unknown[]).slice(0, 4), ["A", "B", "AB!", 2]);
 });

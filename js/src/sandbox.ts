@@ -191,8 +191,12 @@ export interface LoadedDump {
   calls: OpenCall[];
 }
 
-/** Options of `Sandbox.begin`. */
-export interface BeginOptions {
+/**
+ * Options of `Sandbox.begin`. A `journal` records the run while it stays in this sandbox:
+ * the sync calls, every `settle` in order and a check at every idle point; `replay` runs
+ * it like a `runAsync` journal.
+ */
+export interface BeginOptions extends RunOptions {
   /**
    * The script's name, as stack traces show it (`sleep.js:4:13`); default `sandbox.js`.
    */
@@ -352,12 +356,24 @@ function unpackSnapshot(
 
 /** What a run in progress needs from its sandbox. */
 interface RunCore {
-  /** The open async calls: the host settles them (the run never calls them itself). */
+  /** The open async calls, oldest first, until their results are delivered. */
   open: Map<number, OpenCall>;
-  /** A handle to the run's result promise once known (0: not yet), freed at the end. */
+  /**
+   * A handle to the run's result promise once known (0: not yet), freed at the end. Taken
+   * at the first idle point when `keepResult` (a dump names it), else DONE's value is used.
+   */
   result: number;
+  keepResult: boolean;
+  /** Fuel used so far: `maxFuel` is per run, across all its steps. */
+  used: number;
+  /** A new async call (`runAsync`: call the host function now). */
+  onCall?(call: OpenCall, fnId: number): void;
+  /** Before every fuel slice (`runAsync`: pass back the results that came in). */
+  beforeSlice?(): void;
   advance(): Promise<RunEnd>;
   settle(id: number, s: Settlement): void;
+  /** Passes a result back; `at`: a replayed result's clock. */
+  deliver(id: number, ok: boolean, value: unknown, at?: number): void;
   dump(): string;
 }
 
@@ -446,7 +462,7 @@ export class Sandbox {
   /** Namespace objects this sandbox made for dotted function names (`tools`), as handles. */
   private readonly namespaces = new Map<string, number>();
   /** The host-driven run in progress (`begin`, `resume`), until it ends. */
-  private active: { run: Run; core: RunCore } | null = null;
+  private active: RunCore | null = null;
 
   /** A new sandbox; loads (and caches) the default module unless `opts.module` is given. */
   static async create(opts: SandboxOptions = {}): Promise<Sandbox> {
@@ -475,7 +491,7 @@ export class Sandbox {
       const result = handles.get("run") ?? 0;
       for (const [name, h] of handles) if (name !== "run") sandbox.x.vm_handle_free(sandbox.vm, h);
       if (result === 0) throw new SandboxError("misuse", "the dump holds no run (no handle named run)");
-      const run = sandbox.startRun(calls, result);
+      const run = sandbox.startRun(calls, result, true).run;
       return { sandbox, run };
     } catch (e) {
       sandbox.dispose();
@@ -627,10 +643,13 @@ export class Sandbox {
     this.start(code, params);
     try {
       // In sync mode the loop never yields: a promise from a host function is an error.
-      return this.drive(false).next().value;
+      return this.auto(false).next().value;
     } catch (e) {
       this.abandon(e);
       throw e;
+    } finally {
+      this.endRun();
+      this.journal = null;
     }
   }
 
@@ -643,25 +662,31 @@ export class Sandbox {
    * ends.
    */
   begin(code: string, params: Record<string, unknown> = {}, opts: BeginOptions = {}): Run {
-    this.journal = null;
+    this.beginJournal(code, params, opts);
     this.start(code, params, false, opts.filename);
-    const run = this.startRun([], 0);
+    const core = this.startRun([], 0, true);
     try {
-      run.end(this.step(this.active!.core, false).next().value as RunEnd);
+      core.run.end(this.step(core, false).next().value as RunEnd);
     } catch (e) {
       this.endRun();
       this.abandon(e);
       throw e;
     }
-    if (run.state !== "idle") this.endRun();
-    return run;
+    if (core.run.state !== "idle") this.endRun();
+    return core.run;
   }
 
-  /** Makes the host-driven run, waiting on `calls`, with its result promise `result`. */
-  private startRun(calls: OpenCall[], result: number): Run {
-    const core: RunCore = {
+  /**
+   * Makes a run, waiting on `calls`, with its result promise `result`; `keepResult`: a
+   * host-driven run, whose result promise is kept for `dump`.
+   */
+  private startRun(calls: OpenCall[], result: number, keepResult: boolean): RunCore & { run: Run } {
+    const core: RunCore & { run: Run } = {
       open: new Map(calls.map((c) => [c.id, c])),
       result,
+      keepResult,
+      used: 0,
+      run: undefined as unknown as Run,
       advance: async () => {
         try {
           const it = this.step(core, true);
@@ -677,38 +702,122 @@ export class Sandbox {
         }
       },
       settle: (id, s) => {
-        if (this.active?.core !== core) throw new SandboxError("misuse", "the run has ended");
-        if (!core.open.delete(id)) throw new SandboxError("misuse", `no open call ${id}`);
-        this.complete(id, s.ok, s.value, true);
+        if (this.active !== core) throw new SandboxError("misuse", "the run has ended");
+        if (!core.open.has(id)) throw new SandboxError("misuse", `no open call ${id}`);
+        core.deliver(id, s.ok, s.value);
+      },
+      deliver: (id, ok, value, at) => {
+        const call = core.open.get(id);
+        core.open.delete(id);
+        const now = this.complete(id, ok, value, true, at);
+        const j = this.journal;
+        if (j) j.delivered++;
+        if (j?.mode === "record" && call) {
+          j.push({ type: "async", callId: id, fn: call.fn, args: call.args, ok, value: errorJson(ok, value), now: now! });
+        }
       },
       dump: () => {
-        if (this.active?.core !== core) throw new SandboxError("misuse", "the run has ended");
+        if (this.active !== core) throw new SandboxError("misuse", "the run has ended");
         return this.dumpRun(core);
       },
     };
-    const run = new Run(core);
-    this.active = { run, core };
-    return run;
+    core.run = new Run(core);
+    this.active = core;
+    return core;
   }
 
-  /** One step of a host-driven run: `drive` until idle or the end. */
+  /** One step of a host-driven run: `drive` until idle (recording a check) or the end. */
   private *step(core: RunCore, async: boolean): Generator<Promise<unknown>, RunEnd, unknown> {
     try {
       const r = yield* this.drive(async, core);
-      return r === IDLE ? { state: "idle" } : { state: "done", value: r };
+      if (r !== IDLE) return { state: "done", value: r };
+      this.recordCheck();
+      return { state: "idle" };
     } catch (e) {
       if (e instanceof SandboxError && e.kind === "threw") return { state: "threw", error: e };
       throw e;
     }
   }
 
+  /**
+   * The run loop of `run`, `runAsync` and `replay`, on top of the host-driven run (`drive`
+   * to each idle point): calls the async host functions as soon as the script calls them
+   * (or, replaying, takes their results from the journal), passes their results back
+   * before the next fuel slice, and at an idle point waits for the next one. Yields a
+   * promise when the host must wait (only when `async`), returns the result.
+   */
+  private *auto(async: boolean): Generator<Promise<unknown>, unknown, unknown> {
+    const j = this.journal;
+    // Async host calls being served, and those that finished but are not passed back yet.
+    const inflight = new Map<number, Promise<void>>();
+    const finished: { callId: number; ok: boolean; value: unknown }[] = [];
+    const core = this.startRun([], 0, false);
+    core.beforeSlice = () => {
+      for (const { callId, ok, value } of finished.splice(0)) {
+        inflight.delete(callId);
+        core.deliver(callId, ok, value);
+      }
+    };
+    core.onCall = (call, fnId) => {
+      // Replay: the result comes from the journal, at an idle point.
+      if (j?.mode === "replay") return;
+      const callId = call.id;
+      let p: Promise<unknown>;
+      try {
+        const r = this.invoke(fnId, call.args);
+        if (!(r instanceof Promise)) {
+          finished.push({ callId, ok: true, value: r });
+          return;
+        }
+        if (!async) throw new TypeError(`host function ${call.fn} returned a promise; use runAsync`);
+        p = r;
+      } catch (e) {
+        finished.push({ callId, ok: false, value: e });
+        return;
+      }
+      inflight.set(
+        callId,
+        p.then(
+          (value) => void finished.push({ callId, ok: true, value }),
+          (value) => void finished.push({ callId, ok: false, value }),
+        ),
+      );
+    };
+    for (;;) {
+      const r = yield* this.drive(async, core);
+      if (r !== IDLE) return r;
+      if (j?.mode === "record") this.recordCheck();
+      else if (j && core.open.size > 0) {
+        // Replay: the checks recorded at this point, then the next result.
+        j.checkIdle(this.canonicalHash());
+        const e = j.take("async");
+        const call = core.open.get(e.callId);
+        j.expect(call !== undefined, () => `result ${j.delivered + 1} is for call ${e.callId}, which the script has not made`);
+        j.expectCall(e.fn, e.args, call!.fn, call!.args);
+        core.deliver(e.callId, e.ok, e.ok ? e.value : errorFromJson(e.value), e.now);
+        continue;
+      }
+      if (finished.length > 0) continue;
+      if (inflight.size === 0) return undefined; // nothing was called
+      // Only async host calls are left: wait for one of them.
+      yield Promise.race(inflight.values());
+    }
+  }
+
+  /** Records a `check` entry at an idle point, when recording. */
+  private recordCheck(): void {
+    const j = this.journal;
+    if (j?.mode === "record") j.push({ type: "check", delivered: j.delivered, issued: j.issued, hash: this.canonicalHash() });
+  }
+
   /** The run has ended: frees its result handle; the sandbox can run again. */
   private endRun(): void {
     const a = this.active;
     this.active = null;
-    if (a !== null && a.core.result !== 0 && this.dead === null) {
-      this.x.vm_handle_free(this.vm, a.core.result);
-      a.core.result = 0;
+    this.journal = null;
+    if (a !== null && a.result !== 0 && this.dead === null) {
+      this.x.vm_handle_free(this.vm, a.result);
+      a.result = 0;
     }
   }
 
@@ -815,13 +924,16 @@ export class Sandbox {
     this.beginJournal(code, params, opts);
     this.start(code, params);
     try {
-      const it = this.drive(true);
+      const it = this.auto(true);
       let r = it.next();
       while (!r.done) r = it.next(await r.value);
       return r.value;
     } catch (e) {
       this.abandon(e);
       throw e;
+    } finally {
+      this.endRun();
+      this.journal = null;
     }
   }
 
@@ -843,10 +955,10 @@ export class Sandbox {
     j.expect(head.engine === this.buildHash(), () => `engine ${this.buildHash()}, the journal was made by ${head.engine}`);
     j.expect(head.hash === this.canonicalHash(), () => "the sandbox's state before the run differs from the recording's");
     j.next = 1;
-    this.journal = j;
     this.start(head.code, head.params);
+    this.journal = j;
     try {
-      const it = this.drive(true);
+      const it = this.auto(true);
       let r = it.next();
       while (!r.done) r = it.next(await r.value);
       return r.value;
@@ -854,6 +966,7 @@ export class Sandbox {
       this.abandon(e);
       throw e;
     } finally {
+      this.endRun();
       this.journal = null;
     }
   }
@@ -873,6 +986,7 @@ export class Sandbox {
 
   /** Starts recording a run into `opts.journal`, if given. */
   private beginJournal(code: string, params: Record<string, unknown>, opts: RunOptions): void {
+    if (this.active !== null) throw new SandboxError("misuse", "a run is in progress");
     this.journal = null;
     if (opts.journal === undefined) return;
     if (this.opts.deterministic === undefined) throw new SandboxError("misuse", "recording needs a deterministic sandbox");
@@ -1043,7 +1157,7 @@ export class Sandbox {
 
   /** Compiles `code` and starts the call; returns nothing (the VM holds the call). */
   private start(code: string, params: Record<string, unknown>, script = false, filename?: string): void {
-    if (this.active !== null) throw new SandboxError("misuse", "a run is in progress (Sandbox.begin)");
+    if (this.active !== null) throw new SandboxError("misuse", "a run is in progress");
     this.guard(() => {
       const x = this.x;
       const vm = this.vm;
@@ -1082,74 +1196,33 @@ export class Sandbox {
   }
 
   /**
-   * The run loop, as a generator: yields a promise when the host must wait (a sync host
-   * function's promise, or until one of the outstanding async calls settles; only when
-   * `async`), returns the result.
+   * The run loop to the next idle point or the end, as a generator: yields a promise when
+   * the host must wait for a sync host function (only when `async`), returns the result,
+   * or `IDLE` when only async host calls are left (they are in `run.open`).
    */
-  private *drive(async: boolean, run?: RunCore): Generator<Promise<unknown>, unknown, unknown> {
+  private *drive(async: boolean, run: RunCore): Generator<Promise<unknown>, unknown, unknown> {
     const x = this.x;
     const vm = this.vm;
     const slice = this.opts.fuelSlice ?? 1_000_000;
     const maxFuel = this.opts.maxFuel ?? Infinity;
-    let used = 0;
-    // Async host calls being served, and those that finished but are not passed back yet.
-    const inflight = new Map<number, Promise<void>>();
-    const finished: { callId: number; ok: boolean; value: unknown }[] = [];
     const j = this.journal;
-    // Async calls made and not resolved yet, for the journal.
-    const calls = new Map<number, { fn: string; args: unknown[] }>();
     for (;;) {
-      for (const { callId, ok, value } of finished.splice(0)) {
-        inflight.delete(callId);
-        const call = calls.get(callId);
-        calls.delete(callId);
-        const now = this.complete(callId, ok, value, true);
-        if (j) j.delivered++;
-        if (j && call) j.push({ type: "async", callId, fn: call.fn, args: call.args, ok, value: errorJson(ok, value), now: now! });
-      }
+      run.beforeSlice?.();
       const st = this.guard(() => {
         this.setClock();
         return x.vm_run(vm, slice);
       });
       for (const callId of this.newHostCalls()) {
         const { fnId, args } = this.callInfo(callId);
-        const fn = this.fnNames[fnId - 1];
-        if (run) {
-          // A host-driven run: the host answers it (`Run.settle`).
-          run.open.set(callId, { id: callId, fn, args });
-          continue;
-        }
-        if (j) {
-          j.issued++;
-          calls.set(callId, { fn, args });
-          // Replay: the result comes from the journal, at an idle point.
-          if (j.mode === "replay") continue;
-        }
-        let p: Promise<unknown>;
-        try {
-          const r = this.invoke(fnId, args);
-          if (!(r instanceof Promise)) {
-            finished.push({ callId, ok: true, value: r });
-            continue;
-          }
-          if (!async) throw new TypeError(`host function ${this.fnNames[fnId - 1]} returned a promise; use runAsync`);
-          p = r;
-        } catch (e) {
-          finished.push({ callId, ok: false, value: e });
-          continue;
-        }
-        inflight.set(
-          callId,
-          p.then(
-            (value) => void finished.push({ callId, ok: true, value }),
-            (value) => void finished.push({ callId, ok: false, value }),
-          ),
-        );
+        const call = { id: callId, fn: this.fnNames[fnId - 1], args };
+        run.open.set(callId, call);
+        if (j) j.issued++;
+        run.onCall?.(call, fnId);
       }
       if (st === STATUS_DONE || st === STATUS_THREW) {
         const outcome = this.guard(() => {
           let h = x.vm_result(vm);
-          if (run && run.result !== 0) {
+          if (run.result !== 0) {
             // The run's result promise, taken at an idle point (or named by its dump): a
             // loaded run's entry call was the dump's Script.
             x.vm_handle_free(vm, h);
@@ -1184,10 +1257,10 @@ export class Sandbox {
         return value;
       }
       if (st === STATUS_OUT_OF_FUEL) {
-        used += slice;
-        if (used >= maxFuel) {
+        run.used += slice;
+        if (run.used >= maxFuel) {
           // `run` abandons the call (vm_abort), so the sandbox stays usable.
-          throw new SandboxError("fuel", `out of fuel after ${used} units`);
+          throw new SandboxError("fuel", `out of fuel after ${run.used} units`);
         }
         continue;
       }
@@ -1198,29 +1271,8 @@ export class Sandbox {
       }
       if (st === STATUS_IDLE) {
         this.checkRejections();
-        if (run) {
-          if (run.result === 0) run.result = this.guard(() => this.outcomeHandle());
-          return IDLE;
-        }
-        if (j?.mode === "record") {
-          j.push({ type: "check", delivered: j.delivered, issued: j.issued, hash: this.canonicalHash() });
-        } else if (j && calls.size > 0) {
-          // Replay: the checks recorded at this point, then the next result.
-          j.checkIdle(this.canonicalHash());
-          const e = j.take("async");
-          const call = calls.get(e.callId);
-          j.expect(call !== undefined, () => `result ${j.delivered + 1} is for call ${e.callId}, which the script has not made`);
-          j.expectCall(e.fn, e.args, call!.fn, call!.args);
-          calls.delete(e.callId);
-          this.complete(e.callId, e.ok, e.ok ? e.value : errorFromJson(e.value), true, e.now);
-          j.delivered++;
-          continue;
-        }
-        if (finished.length > 0) continue;
-        if (inflight.size === 0) return undefined; // nothing was called
-        // Only async host calls are left: wait for one of them.
-        yield Promise.race(inflight.values());
-        continue;
+        if (run.keepResult && run.result === 0) run.result = this.guard(() => this.outcomeHandle());
+        return IDLE;
       }
       if (st !== STATUS_HOST_CALL) return undefined;
       const { callId, fnId, args } = this.guard(() => {
