@@ -285,3 +285,59 @@ fn big_dump_timing() {
     }
     std::println!("dump: {} bytes in {:?}", text.len(), t.elapsed());
 }
+
+/// The committed dump of [`FIXTURE_SETUP`] (tests/dump/v1.js): every later build must load
+/// it and give [`FIXTURE_CHECK`]'s answer (tests/dump/v1.expected). The format promise in
+/// docs/functions-as-code.md: a dump stays loadable by later builds.
+const FIXTURE_SETUP: &str = "\
+function makeCounter(start) { let n = start; return { inc: () => ++n, get: () => n }; }\n\
+const counter = makeCounter(40); counter.inc();\n\
+const bytes = new Uint8Array(100).map((_, i) => i * 3);\n\
+const small = new Int16Array([-1, 2, 300]);\n\
+const key = { k: 1 };\n\
+const index = new Map([[key, 'object key'], ['when', new Date(1700000000000)]]);\n\
+const graph = { name: 'root', children: [] }; graph.children.push({ parent: graph });\n\
+const frozen = Object.freeze({ list: [1, 2] });\n\
+const tag = Symbol.for('app.tag');\n\
+const re = /ab+c/gi;\n\
+const iterProto = Object.getPrototypeOf([][Symbol.iterator]());\n\
+var legacy = { [tag]: 'tagged', big: 12345678901234567890n };\n\
+Array.prototype.last = function () { return this[this.length - 1]; };";
+
+const FIXTURE_CHECK: &str = "\
+[counter.inc(), counter.get(), bytes.length, bytes[99], small.join(), index.get(key), \
+index.get('when').toISOString(), graph.children[0].parent === graph, Object.isFrozen(frozen), \
+frozen.list.last(), legacy[Symbol.for('app.tag')], String(legacy.big), re.flags, re.test('xabbbc'), \
+iterProto === Object.getPrototypeOf([].values())].join('|')";
+
+fn fixture_dir() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/dump")
+}
+
+/// Rewrites the fixture (`DJS_DUMP_FIXTURE=1 cargo test ... write_fixture -- --ignored`).
+/// Only when the format changes on purpose: a new version keeps the old file next to it.
+#[test]
+#[ignore]
+fn write_fixture() {
+    if std::env::var_os("DJS_DUMP_FIXTURE").is_none() {
+        return;
+    }
+    let mut a = new_vm();
+    run(&mut a, FIXTURE_SETUP);
+    let text = dump(&a, None).unwrap_or_else(|e| panic!("{}", e.message()));
+    let want = run(&mut a, FIXTURE_CHECK);
+    std::fs::create_dir_all(fixture_dir()).unwrap();
+    std::fs::write(fixture_dir().join("v1.js"), text).unwrap();
+    std::fs::write(fixture_dir().join("v1.expected"), want + "\n").unwrap();
+}
+
+#[test]
+fn committed_dumps_still_load() {
+    let text = std::fs::read_to_string(fixture_dir().join("v1.js")).unwrap();
+    let want = std::fs::read_to_string(fixture_dir().join("v1.expected")).unwrap();
+    assert!(text.starts_with(super::dump::HEADER));
+    let mut b = new_vm();
+    let loaded = run(&mut b, &text);
+    assert!(!loaded.starts_with("throw"), "{loaded}");
+    assert_eq!(run(&mut b, FIXTURE_CHECK), want.trim_end());
+}
