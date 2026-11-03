@@ -1,6 +1,6 @@
 # 0176: pi's future shape: prelude-next, adapter mode, dumps
 
-status: in-progress
+status: done
 agent: example
 branch: issue/0176-pi-future-shape
 depends-on: 0175
@@ -12,16 +12,16 @@ Build the shape pi should move to (D2565) in djs's own adapter, and persist pi s
 continuation dumps. pi itself is not changed.
 
 ## Acceptance criteria
-- [ ] tests/pi/prelude-next.ts: pi's prelude with tools as engine async host functions, the
+- [x] tests/pi/prelude-next.ts: pi's prelude with tools as engine async host functions, the
       body's promise as a host handle, `finished` and the store's writes in the adapter; the
       differences listed at its top. tests/pi/prelude-source.ts stays verbatim.
-- [ ] An adapter mode that uses it, with `dumpSession()` / `resumeFromDump()`; the prelude is
+- [x] An adapter mode that uses it, with `dumpSession()` / `resumeFromDump()`; the prelude is
       rerun on resume (deterministic, D2262) and the dump names its globals as host globals.
-- [ ] pi's suite (`node js/pi/pi-tests.ts`) passes in both modes; in the new mode also with
+- [x] pi's suite (`node js/pi/pi-tests.ts`) passes in both modes; in the new mode also with
       `--dump-every-idle`, each wait resumed in a new module instance.
-- [ ] pi-vm.test.ts covers dump and resume through the adapter, with the open-call policies
+- [x] pi-vm.test.ts covers dump and resume through the adapter, with the open-call policies
       (deliver recorded, re-issue, reject).
-- [ ] docs/host.md describes the new shape as what pi should adopt.
+- [x] docs/host.md describes the new shape as what pi should adopt.
 
 ## Log
 
@@ -52,5 +52,23 @@ continuation dumps. pi itself is not changed.
   js/proto comparison.
 
 ## Follow-ups
+- portable (0182): dumps carry `Math.random`'s state; then drop the `todo` of "next: a
+  dump keeps Math.random's sequence" in js/test/pi-vm.test.ts.
+- Packaging B in the pi adapter (a dump module beside the release module) would make the
+  dump-every-idle suite run as cheap as `--next` (no extra LTO build).
+- The Sandbox's `maxFuel` counts only slices that ran out (`used += slice`), so sync host
+  calls in a loop do not use up its budget either; `vm_fuel_used` (D2653) would fix it.
 
 ## Result
+
+- tests/pi/prelude-next.ts: pi's prelude in the shape pi should adopt (D2565, D2650,
+  D2652), differences listed at its top; prelude-source.ts untouched.
+- js/pi/vm.ts `shape: "next"`: `dumpSession()` -> `{ dump, state }` (JSON),
+  `resumeFromDump(saved, { wasm, prelude, data, ... })`, `openCalls()`, `dumpEveryIdle`
+  (D2651). pi's mode unchanged except the fuel fix and a frozen `performance`.
+- Fixed in both modes: loops of sync host calls are interrupted (`vm_fuel_used`, D2653;
+  DETERMINISTIC_VERSION 3). `vm_outcome` back for calls between results.
+- pi's suite: 215/226 in pi's mode, `--next`, and `--next --dump-every-idle` (the same 11
+  failures, tests/pi/expected-failures.txt). Gate: `--next` every merge;
+  scripts/pi-dump-every-idle.sh for the full run.
+- Known gap: Math.random's state is not in dumps yet (0182; a todo test).
