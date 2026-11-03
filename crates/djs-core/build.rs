@@ -81,6 +81,7 @@ fn main() {
     let mut files = Vec::new();
     collect(&root.join("src"), &mut files);
     files.push(root.join("../../builtins/gen/prelude.js"));
+    files.push(root.join("../../builtins/gen/prelude-slim.js"));
     let mut h: u32 = 0x811c_9dc5;
     for f in &files {
         // Every hashed file reruns the script. A new source file needs a `mod` line in an

@@ -20,6 +20,9 @@ use diag::Sources;
 pub struct Output {
     /// `gen/prelude.js`
     pub prelude: String,
+    /// `gen/prelude-slim.js`: the prelude without the files marked `// @slim-omit`, for the
+    /// slim build (D2411).
+    pub prelude_slim: String,
     /// `gen/resume-points.txt`
     pub report: String,
     /// `crates/djs-core/src/builtins/gen/natives.rs`: the Rust backend (0063).
@@ -27,6 +30,9 @@ pub struct Output {
 }
 
 pub const PRELUDE_PATH: &str = "gen/prelude.js";
+pub const PRELUDE_SLIM_PATH: &str = "gen/prelude-slim.js";
+/// A line of a builtin file that leaves the file out of the slim build's prelude (D2411).
+pub const SLIM_OMIT: &str = "// @slim-omit";
 pub const REPORT_PATH: &str = "gen/resume-points.txt";
 /// Relative to the builtins directory.
 pub const NATIVES_PATH: &str = "../crates/djs-core/src/builtins/gen/natives.rs";
@@ -45,6 +51,11 @@ pub fn compile(intrinsics: (&str, &str), modules: &[(String, String)]) -> Result
         }
     };
     let mut parsed = Vec::new();
+    let omitted: Vec<&str> = modules
+        .iter()
+        .filter(|(_, text)| text.lines().any(|l| l.starts_with(SLIM_OMIT)))
+        .map(|(name, _)| name.as_str())
+        .collect();
     for (name, text) in modules {
         let file = sources.add(name.clone(), text.clone());
         match parser::parse_module(file, text) {
@@ -70,7 +81,8 @@ pub fn compile(intrinsics: (&str, &str), modules: &[(String, String)]) -> Result
     let natives = emit_rust::emit(&program, &analysis, &sources)
         .map_err(|errors| render(&errors, &sources))?;
     Ok(Output {
-        prelude: emit_js::emit(&program, &sources),
+        prelude: emit_js::emit(&program, &sources, &[]),
+        prelude_slim: emit_js::emit(&program, &sources, &omitted),
         report: analysis::report(&program, &analysis, &sources),
         natives,
     })

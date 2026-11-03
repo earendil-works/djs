@@ -1,6 +1,7 @@
 // WeakRef and FinalizationRegistry (ECMA-262 26.1, 26.2; 0051, D1513). The weak
 // storage is heap/weakref.rs; collections only happen at safepoints, and the cleanup
 // jobs are queued after a collection (or when the host asks, VmOptions).
+// @slim-omit: left out of the slim build (D2411).
 
 /**
  * WeakRef ( target ), 26.1.1.1.

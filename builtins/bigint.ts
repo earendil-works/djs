@@ -1,4 +1,5 @@
 // BigInt (ECMA-262 21.2) and the BigInt conversions (7.1.13).
+// @slim-omit: left out of the slim build (D2411).
 
 /**
  * ToBigInt ( argument ), 7.1.13.
@@ -6,18 +7,6 @@
  */
 function ToBigInt(v: Value): Value {
   return ToBigIntPrimitive(ToPrimitive(v, "number"));
-}
-
-/**
- * ToNumeric ( value ), 7.1.3: a Number, or a BigInt.
- * @intrinsic
- */
-function ToNumeric(v: Value): Value {
-  const prim: Value = ToPrimitive(v, "number");
-  if (IsBigInt(prim)) {
-    return prim;
-  }
-  return ToNumberPrimitive(prim);
 }
 
 /**

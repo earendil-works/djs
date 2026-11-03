@@ -141,3 +141,16 @@ function GetPrototypeFromConstructor(newTarget: Value, fallback: Str): Obj {
   }
   return RealmIntrinsic(fallback);
 }
+
+/**
+ * ToNumeric ( value ), 7.1.3: a Number, or a BigInt. Here and
+ * not in bigint.ts: the interpreter's numeric operators need it in every build (D2411).
+ * @intrinsic
+ */
+function ToNumeric(v: Value): Value {
+  const prim: Value = ToPrimitive(v, "number");
+  if (IsBigInt(prim)) {
+    return prim;
+  }
+  return ToNumberPrimitive(prim);
+}

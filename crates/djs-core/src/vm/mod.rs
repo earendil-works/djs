@@ -36,8 +36,12 @@ use crate::value::{Obj, Str, Value};
 /// `HostCall::FLAGS`: returned by `Vm::new_host_calls` already.
 const HOST_CALL_REPORTED: u32 = 1;
 
-/// The generated prelude (`builtins/gen/prelude.js`, D1172).
+/// The generated prelude (`builtins/gen/prelude.js`, D1172); the slim build's leaves out
+/// the families it doesn't have (D2411).
+#[cfg(feature = "full")]
 const PRELUDE: &str = include_str!("../../../../builtins/gen/prelude.js");
+#[cfg(not(feature = "full"))]
+const PRELUDE: &str = include_str!("../../../../builtins/gen/prelude-slim.js");
 
 // `SOURCE_HASH`: the library's non-test sources and the prelude (build.rs, D1330), the
 // enabled cargo features and the libm version (`BUILD_INPUTS`, D1750).

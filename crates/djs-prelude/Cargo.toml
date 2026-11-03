@@ -7,7 +7,10 @@ publish.workspace = true
 description = "The base snapshot: djs-core's realm with the prelude installed, made at build time (D1321)."
 
 [features]
-default = ["raw", "registry"]
+default = ["raw", "registry", "full", "unicode"]
+# djs-core's features (D2411), for the base image this crate builds.
+full = ["djs-core/full"]
+unicode = ["djs-core/unicode"]
 # `BASE`, the image as it is: native builds (copied per VM with no decode).
 raw = []
 # `BASE_PACKED`, the image coded with djs-lzrc (D2252): djs-wasm, where the module's size
@@ -18,11 +21,11 @@ packed = ["dep:djs-lzrc"]
 registry = []
 
 [dependencies]
-djs-core = { path = "../djs-core" }
+djs-core = { path = "../djs-core", default-features = false }
 djs-lzrc = { path = "../djs-lzrc", optional = true }
 
 # build.rs creates the base image with a host build of djs-core. Cargo reruns it whenever
 # djs-core changes, which includes builtins/gen/prelude.js (include_str! in vm/).
 [build-dependencies]
-djs-core = { path = "../djs-core" }
+djs-core = { path = "../djs-core", default-features = false }
 djs-lzrc = { path = "../djs-lzrc" }

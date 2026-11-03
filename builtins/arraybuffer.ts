@@ -1,4 +1,5 @@
 // ArrayBuffer (ECMA-262 25.1). The bytes live in a Bytes cell (heap/typed.rs, D1390).
+// @slim-omit: left out of the slim build (D2411).
 
 /** ToIndex ( value ), 7.1.22 (qjs's message). */
 function ToIndex(v: Value): f64 {

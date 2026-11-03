@@ -10,7 +10,15 @@ publish.workspace = true
 libm = "=0.2.16"
 
 [features]
-default = ["regexp-unicode-props", "unicode-normalization"]
+default = ["full", "unicode"]
+# Everything djs implements. Off, the build is slim (D2411, docs/slim-codemode.md): no typed
+# arrays/ArrayBuffer/DataView, Iterator helpers or `Iterator`, BigInt, WeakRef/
+# FinalizationRegistry, DisposableStack/AsyncDisposableStack/SuppressedError, and no
+# `using`, decorator or BigInt literal syntax; their names say "not available in this
+# build". Additive: turning it on only adds.
+full = ["djs-prelude/full"]
+# The Unicode tables: both features below.
+unicode = ["regexp-unicode-props", "unicode-normalization"]
 # `\p{..}` / `\P{..}` in regular expressions: about 21 KB of Unicode property tables
 # (D1500). Without it they are a SyntaxError (D1112).
 regexp-unicode-props = []
@@ -25,4 +33,4 @@ unsafe-heap = []
 [dev-dependencies]
 # e2e tests start from the base snapshot like the embedders (a dev-dependency cycle,
 # which cargo allows: integration tests link the same djs-core).
-djs-prelude = { path = "../djs-prelude" }
+djs-prelude = { path = "../djs-prelude", default-features = false, features = ["raw", "registry"] }

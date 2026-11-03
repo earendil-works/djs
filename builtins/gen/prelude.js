@@ -1021,7 +1021,7 @@ function ArraySetLength(a, v, strict) {
   return ok;
 }
 
-// builtins/arraybuffer.ts:4
+// builtins/arraybuffer.ts:5
 function ToIndex(v) {
   const i = ToIntegerOrInfinity(v);
   if (!(i >= 0 && i <= 9007199254740991)) {
@@ -1030,13 +1030,13 @@ function ToIndex(v) {
   return i;
 }
 
-// builtins/arraybuffer.ts:13
+// builtins/arraybuffer.ts:14
 function ThisArrayBuffer(v) {
   %BufferInfo(v, 0);
   return %AsObj(v);
 }
 
-// builtins/arraybuffer.ts:19
+// builtins/arraybuffer.ts:20
 function AllocateArrayBuffer(newTarget, byteLength, max) {
   if (max !== undefined && byteLength > %AsNumber(max)) {
     throw %NewRangeError("invalid array buffer max length");
@@ -1045,7 +1045,7 @@ function AllocateArrayBuffer(newTarget, byteLength, max) {
   return %ArrayBufferCreate(proto, byteLength, max);
 }
 
-// builtins/arraybuffer.ts:32 constructor ArrayBuffer
+// builtins/arraybuffer.ts:33 constructor ArrayBuffer
 function ArrayBufferConstructor(length, options) {
   if (new.target === undefined) {
     throw %NewTypeError("must be called with new");
@@ -1061,57 +1061,57 @@ function ArrayBufferConstructor(length, options) {
   return AllocateArrayBuffer(new.target, byteLength, max);
 }
 
-// builtins/arraybuffer.ts:51 ArrayBuffer.isView
+// builtins/arraybuffer.ts:52 ArrayBuffer.isView
 function ArrayBufferIsView(arg) {
   return %IsTypedArray(arg) || %IsDataView(arg);
 }
 
-// builtins/arraybuffer.ts:59 get ArrayBuffer[Symbol.species]
+// builtins/arraybuffer.ts:60 get ArrayBuffer[Symbol.species]
 function ArrayBufferSpecies() {
   return this;
 }
 
-// builtins/arraybuffer.ts:67 get ArrayBuffer.prototype.byteLength
+// builtins/arraybuffer.ts:68 get ArrayBuffer.prototype.byteLength
 function ArrayBufferPrototypeByteLength() {
   return %BufferInfo(this, 0);
 }
 
-// builtins/arraybuffer.ts:75 get ArrayBuffer.prototype.maxByteLength
+// builtins/arraybuffer.ts:76 get ArrayBuffer.prototype.maxByteLength
 function ArrayBufferPrototypeMaxByteLength() {
   return %BufferInfo(this, 1);
 }
 
-// builtins/arraybuffer.ts:83 get ArrayBuffer.prototype.resizable
+// builtins/arraybuffer.ts:84 get ArrayBuffer.prototype.resizable
 function ArrayBufferPrototypeResizable() {
   return %BufferInfo(this, 2);
 }
 
-// builtins/arraybuffer.ts:91 get ArrayBuffer.prototype.detached
+// builtins/arraybuffer.ts:92 get ArrayBuffer.prototype.detached
 function ArrayBufferPrototypeDetached() {
   return %BufferInfo(this, 3);
 }
 
-// builtins/arraybuffer.ts:99 get ArrayBuffer.prototype.immutable
+// builtins/arraybuffer.ts:100 get ArrayBuffer.prototype.immutable
 function ArrayBufferPrototypeImmutable() {
   return %BufferInfo(this, 4);
 }
 
-// builtins/arraybuffer.ts:104
+// builtins/arraybuffer.ts:105
 function IsImmutableBuffer(b) {
   return %AsBool(%BufferInfo(b, 4));
 }
 
-// builtins/arraybuffer.ts:109
+// builtins/arraybuffer.ts:110
 function IsDetached(b) {
   return %AsBool(%BufferInfo(b, 3));
 }
 
-// builtins/arraybuffer.ts:114
+// builtins/arraybuffer.ts:115
 function BufferLength(b) {
   return %AsNumber(%BufferInfo(b, 0));
 }
 
-// builtins/arraybuffer.ts:122 ArrayBuffer.prototype.resize
+// builtins/arraybuffer.ts:123 ArrayBuffer.prototype.resize
 function ArrayBufferPrototypeResize(newLength) {
   const o = ThisArrayBuffer(this);
   if (!%AsBool(%BufferInfo(o, 2))) {
@@ -1127,7 +1127,7 @@ function ArrayBufferPrototypeResize(newLength) {
   %BufferResize(o, newByteLength);
 }
 
-// builtins/arraybuffer.ts:141 ArrayBuffer.prototype.slice
+// builtins/arraybuffer.ts:142 ArrayBuffer.prototype.slice
 function ArrayBufferPrototypeSlice(start, end) {
   const o = ThisArrayBuffer(this);
   if (IsDetached(o)) {
@@ -1163,7 +1163,7 @@ function ArrayBufferPrototypeSlice(start, end) {
   return created;
 }
 
-// builtins/arraybuffer.ts:180
+// builtins/arraybuffer.ts:181
 function ArrayBufferCopyAndDetach(thisValue, newLength, mode) {
   const o = ThisArrayBuffer(thisValue);
   let newByteLength = 0;
@@ -1191,22 +1191,22 @@ function ArrayBufferCopyAndDetach(thisValue, newLength, mode) {
   return %BufferTransfer(o, newByteLength, max);
 }
 
-// builtins/arraybuffer.ts:212 ArrayBuffer.prototype.transfer
+// builtins/arraybuffer.ts:213 ArrayBuffer.prototype.transfer
 function ArrayBufferPrototypeTransfer(newLength) {
   return ArrayBufferCopyAndDetach(this, newLength, 1);
 }
 
-// builtins/arraybuffer.ts:220 ArrayBuffer.prototype.transferToFixedLength
+// builtins/arraybuffer.ts:221 ArrayBuffer.prototype.transferToFixedLength
 function ArrayBufferPrototypeTransferToFixedLength(newLength) {
   return ArrayBufferCopyAndDetach(this, newLength, 0);
 }
 
-// builtins/arraybuffer.ts:228 ArrayBuffer.prototype.transferToImmutable
+// builtins/arraybuffer.ts:229 ArrayBuffer.prototype.transferToImmutable
 function ArrayBufferPrototypeTransferToImmutable(newLength) {
   return ArrayBufferCopyAndDetach(this, newLength, 2);
 }
 
-// builtins/arraybuffer.ts:237 ArrayBuffer.prototype.sliceToImmutable
+// builtins/arraybuffer.ts:238 ArrayBuffer.prototype.sliceToImmutable
 function ArrayBufferPrototypeSliceToImmutable(start, end) {
   const o = ThisArrayBuffer(this);
   if (IsDetached(o)) {
@@ -1227,7 +1227,7 @@ function ArrayBufferPrototypeSliceToImmutable(start, end) {
   return created;
 }
 
-// builtins/arraybuffer.ts:262 value ArrayBuffer.prototype[Symbol.toStringTag]
+// builtins/arraybuffer.ts:263 value ArrayBuffer.prototype[Symbol.toStringTag]
 function ArrayBufferPrototypeToStringTag() {
   return "ArrayBuffer";
 }
@@ -1522,21 +1522,12 @@ function AsyncFromSyncIteratorThrow(...args) {
   return AsyncFromSyncIteratorContinuation(%AsObj(result), iterator, true);
 }
 
-// builtins/bigint.ts:7 %ToBigInt
+// builtins/bigint.ts:8 %ToBigInt
 function ToBigInt(v) {
   return %ToBigIntPrimitive(ToPrimitive(v, "number"));
 }
 
-// builtins/bigint.ts:15 %ToNumeric
-function ToNumeric(v) {
-  const prim = ToPrimitive(v, "number");
-  if (%IsBigInt(prim)) {
-    return prim;
-  }
-  return %ToNumberPrimitive(prim);
-}
-
-// builtins/bigint.ts:27 constructor BigInt
+// builtins/bigint.ts:16 constructor BigInt
 function BigIntConstructor(value) {
   if (new.target !== undefined) {
     throw %NewTypeError("BigInt is not a constructor");
@@ -1551,19 +1542,19 @@ function BigIntConstructor(value) {
   return %ToBigIntPrimitive(prim);
 }
 
-// builtins/bigint.ts:46 BigInt.asIntN
+// builtins/bigint.ts:35 BigInt.asIntN
 function BigIntAsIntNBuiltin(bits, bigint) {
   const n = ToIndex(bits);
   return %BigIntAsIntN(n, ToBigInt(bigint));
 }
 
-// builtins/bigint.ts:55 BigInt.asUintN
+// builtins/bigint.ts:44 BigInt.asUintN
 function BigIntAsUintNBuiltin(bits, bigint) {
   const n = ToIndex(bits);
   return %BigIntAsUintN(n, ToBigInt(bigint));
 }
 
-// builtins/bigint.ts:61
+// builtins/bigint.ts:50
 function ThisBigIntValue(value) {
   const b = %PrimitiveValue(value);
   if (!%IsBigInt(b)) {
@@ -1572,7 +1563,7 @@ function ThisBigIntValue(value) {
   return b;
 }
 
-// builtins/bigint.ts:73 BigInt.prototype.toString
+// builtins/bigint.ts:62 BigInt.prototype.toString
 function BigIntPrototypeToString(radix) {
   const x = ThisBigIntValue(this);
   let r = 10;
@@ -1585,17 +1576,17 @@ function BigIntPrototypeToString(radix) {
   return %BigIntToString(x, %F64ToI32(r));
 }
 
-// builtins/bigint.ts:90 BigInt.prototype.toLocaleString
+// builtins/bigint.ts:79 BigInt.prototype.toLocaleString
 function BigIntPrototypeToLocaleString() {
   return %BigIntToString(ThisBigIntValue(this), 10);
 }
 
-// builtins/bigint.ts:98 BigInt.prototype.valueOf
+// builtins/bigint.ts:87 BigInt.prototype.valueOf
 function BigIntPrototypeValueOf() {
   return ThisBigIntValue(this);
 }
 
-// builtins/bigint.ts:107 value BigInt.prototype[Symbol.toStringTag]
+// builtins/bigint.ts:96 value BigInt.prototype[Symbol.toStringTag]
 function BigIntPrototypeToStringTag() {
   return "BigInt";
 }
@@ -1736,7 +1727,16 @@ function GetPrototypeFromConstructor(newTarget, fallback) {
   return %RealmIntrinsic(fallback);
 }
 
-// builtins/dataview.ts:6
+// builtins/conversion.ts:150 %ToNumeric
+function ToNumeric(v) {
+  const prim = ToPrimitive(v, "number");
+  if (%IsBigInt(prim)) {
+    return prim;
+  }
+  return %ToNumberPrimitive(prim);
+}
+
+// builtins/dataview.ts:7
 function DVOutOfBounds(view) {
   const buffer = %DataViewField(view, 0);
   if (%AsBool(%BufferInfo(buffer, 3))) {
@@ -1749,7 +1749,7 @@ function DVOutOfBounds(view) {
   return start > bufferByteLength || end > bufferByteLength;
 }
 
-// builtins/dataview.ts:19
+// builtins/dataview.ts:20
 function DVByteLength(view) {
   const length = %AsNumber(%DataViewField(view, 2));
   if (length >= 0) {
@@ -1758,7 +1758,7 @@ function DVByteLength(view) {
   return %AsNumber(%BufferInfo(%DataViewField(view, 0), 0)) - %AsNumber(%DataViewField(view, 1));
 }
 
-// builtins/dataview.ts:32 constructor DataView
+// builtins/dataview.ts:33 constructor DataView
 function DataViewConstructor(buffer, byteOffset, byteLength) {
   if (new.target === undefined) {
     throw %NewTypeError("must be called with new");
@@ -1799,12 +1799,12 @@ function DataViewConstructor(buffer, byteOffset, byteLength) {
   return %DataViewCreate(proto, b, offset, viewByteLength);
 }
 
-// builtins/dataview.ts:77 get DataView.prototype.buffer
+// builtins/dataview.ts:78 get DataView.prototype.buffer
 function DataViewPrototypeBuffer() {
   return %DataViewField(this, 0);
 }
 
-// builtins/dataview.ts:85 get DataView.prototype.byteLength
+// builtins/dataview.ts:86 get DataView.prototype.byteLength
 function DataViewPrototypeByteLength() {
   %DataViewField(this, 0);
   const view = %AsObj(this);
@@ -1814,7 +1814,7 @@ function DataViewPrototypeByteLength() {
   return DVByteLength(view);
 }
 
-// builtins/dataview.ts:98 get DataView.prototype.byteOffset
+// builtins/dataview.ts:99 get DataView.prototype.byteOffset
 function DataViewPrototypeByteOffset() {
   %DataViewField(this, 0);
   const view = %AsObj(this);
@@ -1824,12 +1824,12 @@ function DataViewPrototypeByteOffset() {
   return %AsNumber(%DataViewField(view, 1));
 }
 
-// builtins/dataview.ts:112 value DataView.prototype[Symbol.toStringTag]
+// builtins/dataview.ts:113 value DataView.prototype[Symbol.toStringTag]
 function DataViewPrototypeToStringTag() {
   return "DataView";
 }
 
-// builtins/dataview.ts:117
+// builtins/dataview.ts:118
 function DVByteIndex(view, getIndex, kind) {
   if (DVOutOfBounds(view)) {
     if (%AsBool(%BufferInfo(%DataViewField(view, 0), 3))) {
@@ -1843,12 +1843,12 @@ function DVByteIndex(view, getIndex, kind) {
   return getIndex + %AsNumber(%DataViewField(view, 1));
 }
 
-// builtins/dataview.ts:131
+// builtins/dataview.ts:132
 function GetViewValue(view, requestIndex, isLittleEndian, kind) {
   return %AsNumber(GetViewElement(view, requestIndex, isLittleEndian, kind));
 }
 
-// builtins/dataview.ts:136
+// builtins/dataview.ts:137
 function GetViewElement(view, requestIndex, isLittleEndian, kind) {
   %DataViewField(view, 0);
   const getIndex = ToIndex(requestIndex);
@@ -1857,7 +1857,7 @@ function GetViewElement(view, requestIndex, isLittleEndian, kind) {
   return %DataViewGet(v, DVByteIndex(v, getIndex, kind), kind, little);
 }
 
-// builtins/dataview.ts:145
+// builtins/dataview.ts:146
 function SetViewValue(view, requestIndex, isLittleEndian, kind, value) {
   if (IsImmutableBuffer(%AsObj(%DataViewField(view, 0)))) {
     throw %NewTypeError("ArrayBuffer is immutable");
@@ -1874,112 +1874,112 @@ function SetViewValue(view, requestIndex, isLittleEndian, kind, value) {
   %DataViewSet(v, DVByteIndex(v, getIndex, kind), kind, n, little);
 }
 
-// builtins/dataview.ts:166 DataView.prototype.getInt8
+// builtins/dataview.ts:167 DataView.prototype.getInt8
 function DataViewPrototypeGetInt8(byteOffset) {
   return GetViewValue(this, byteOffset, false, 0);
 }
 
-// builtins/dataview.ts:174 DataView.prototype.getUint8
+// builtins/dataview.ts:175 DataView.prototype.getUint8
 function DataViewPrototypeGetUint8(byteOffset) {
   return GetViewValue(this, byteOffset, false, 1);
 }
 
-// builtins/dataview.ts:182 DataView.prototype.getInt16
+// builtins/dataview.ts:183 DataView.prototype.getInt16
 function DataViewPrototypeGetInt16(byteOffset, littleEndian) {
   return GetViewValue(this, byteOffset, littleEndian, 3);
 }
 
-// builtins/dataview.ts:190 DataView.prototype.getUint16
+// builtins/dataview.ts:191 DataView.prototype.getUint16
 function DataViewPrototypeGetUint16(byteOffset, littleEndian) {
   return GetViewValue(this, byteOffset, littleEndian, 4);
 }
 
-// builtins/dataview.ts:198 DataView.prototype.getInt32
+// builtins/dataview.ts:199 DataView.prototype.getInt32
 function DataViewPrototypeGetInt32(byteOffset, littleEndian) {
   return GetViewValue(this, byteOffset, littleEndian, 5);
 }
 
-// builtins/dataview.ts:206 DataView.prototype.getUint32
+// builtins/dataview.ts:207 DataView.prototype.getUint32
 function DataViewPrototypeGetUint32(byteOffset, littleEndian) {
   return GetViewValue(this, byteOffset, littleEndian, 6);
 }
 
-// builtins/dataview.ts:214 DataView.prototype.getBigInt64
+// builtins/dataview.ts:215 DataView.prototype.getBigInt64
 function DataViewPrototypeGetBigInt64(byteOffset, littleEndian) {
   return GetViewElement(this, byteOffset, littleEndian, 10);
 }
 
-// builtins/dataview.ts:222 DataView.prototype.getBigUint64
+// builtins/dataview.ts:223 DataView.prototype.getBigUint64
 function DataViewPrototypeGetBigUint64(byteOffset, littleEndian) {
   return GetViewElement(this, byteOffset, littleEndian, 11);
 }
 
-// builtins/dataview.ts:230 DataView.prototype.getFloat16
+// builtins/dataview.ts:231 DataView.prototype.getFloat16
 function DataViewPrototypeGetFloat16(byteOffset, littleEndian) {
   return GetViewValue(this, byteOffset, littleEndian, 7);
 }
 
-// builtins/dataview.ts:238 DataView.prototype.getFloat32
+// builtins/dataview.ts:239 DataView.prototype.getFloat32
 function DataViewPrototypeGetFloat32(byteOffset, littleEndian) {
   return GetViewValue(this, byteOffset, littleEndian, 8);
 }
 
-// builtins/dataview.ts:246 DataView.prototype.getFloat64
+// builtins/dataview.ts:247 DataView.prototype.getFloat64
 function DataViewPrototypeGetFloat64(byteOffset, littleEndian) {
   return GetViewValue(this, byteOffset, littleEndian, 9);
 }
 
-// builtins/dataview.ts:254 DataView.prototype.setInt8
+// builtins/dataview.ts:255 DataView.prototype.setInt8
 function DataViewPrototypeSetInt8(byteOffset, value) {
   SetViewValue(this, byteOffset, false, 0, value);
 }
 
-// builtins/dataview.ts:262 DataView.prototype.setUint8
+// builtins/dataview.ts:263 DataView.prototype.setUint8
 function DataViewPrototypeSetUint8(byteOffset, value) {
   SetViewValue(this, byteOffset, false, 1, value);
 }
 
-// builtins/dataview.ts:270 DataView.prototype.setInt16
+// builtins/dataview.ts:271 DataView.prototype.setInt16
 function DataViewPrototypeSetInt16(byteOffset, value, littleEndian) {
   SetViewValue(this, byteOffset, littleEndian, 3, value);
 }
 
-// builtins/dataview.ts:278 DataView.prototype.setUint16
+// builtins/dataview.ts:279 DataView.prototype.setUint16
 function DataViewPrototypeSetUint16(byteOffset, value, littleEndian) {
   SetViewValue(this, byteOffset, littleEndian, 4, value);
 }
 
-// builtins/dataview.ts:286 DataView.prototype.setInt32
+// builtins/dataview.ts:287 DataView.prototype.setInt32
 function DataViewPrototypeSetInt32(byteOffset, value, littleEndian) {
   SetViewValue(this, byteOffset, littleEndian, 5, value);
 }
 
-// builtins/dataview.ts:294 DataView.prototype.setUint32
+// builtins/dataview.ts:295 DataView.prototype.setUint32
 function DataViewPrototypeSetUint32(byteOffset, value, littleEndian) {
   SetViewValue(this, byteOffset, littleEndian, 6, value);
 }
 
-// builtins/dataview.ts:302 DataView.prototype.setBigInt64
+// builtins/dataview.ts:303 DataView.prototype.setBigInt64
 function DataViewPrototypeSetBigInt64(byteOffset, value, littleEndian) {
   SetViewValue(this, byteOffset, littleEndian, 10, value);
 }
 
-// builtins/dataview.ts:310 DataView.prototype.setBigUint64
+// builtins/dataview.ts:311 DataView.prototype.setBigUint64
 function DataViewPrototypeSetBigUint64(byteOffset, value, littleEndian) {
   SetViewValue(this, byteOffset, littleEndian, 11, value);
 }
 
-// builtins/dataview.ts:318 DataView.prototype.setFloat16
+// builtins/dataview.ts:319 DataView.prototype.setFloat16
 function DataViewPrototypeSetFloat16(byteOffset, value, littleEndian) {
   SetViewValue(this, byteOffset, littleEndian, 7, value);
 }
 
-// builtins/dataview.ts:326 DataView.prototype.setFloat32
+// builtins/dataview.ts:327 DataView.prototype.setFloat32
 function DataViewPrototypeSetFloat32(byteOffset, value, littleEndian) {
   SetViewValue(this, byteOffset, littleEndian, 8, value);
 }
 
-// builtins/dataview.ts:334 DataView.prototype.setFloat64
+// builtins/dataview.ts:335 DataView.prototype.setFloat64
 function DataViewPrototypeSetFloat64(byteOffset, value, littleEndian) {
   SetViewValue(this, byteOffset, littleEndian, 9, value);
 }
@@ -2315,7 +2315,7 @@ function DatePrototypeToPrimitive(hint) {
   throw %NewTypeError("invalid hint");
 }
 
-// builtins/decorators.ts:14
+// builtins/decorators.ts:15
 function DecoratorKindName(kind) {
   if (kind === 0) {
     return "class";
@@ -2335,12 +2335,12 @@ function DecoratorKindName(kind) {
   return "field";
 }
 
-// builtins/decorators.ts:34
+// builtins/decorators.ts:35
 function DecoratorPush(list, v) {
   %CreateDataPropertyOrThrow(list, LengthOfArrayLike(list), v);
 }
 
-// builtins/decorators.ts:43 %DecoratorStart
+// builtins/decorators.ts:44 %DecoratorStart
 function DecoratorStart(cls, heritage) {
   let parent = null;
   if (heritage) {
@@ -2362,7 +2362,7 @@ function DecoratorStart(cls, heritage) {
   return state;
 }
 
-// builtins/decorators.ts:68
+// builtins/decorators.ts:69
 function DecoratorNewAccess(kind, key) {
   const access = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
   if (kind !== 3) {
@@ -2375,7 +2375,7 @@ function DecoratorNewAccess(kind, key) {
   return access;
 }
 
-// builtins/decorators.ts:84
+// builtins/decorators.ts:85
 function DecoratorNewContext(flags, name, access, metadata, adder) {
   const kind = flags & 7;
   const ctx = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
@@ -2391,14 +2391,14 @@ function DecoratorNewContext(flags, name, access, metadata, adder) {
   return ctx;
 }
 
-// builtins/decorators.ts:100
+// builtins/decorators.ts:101
 function DecoratorCheckResult(v, kind) {
   if (v !== undefined && !%IsCallable(v)) {
     throw %NewTypeError(DecoratorKindName(kind) + " decorator must return a function or undefined");
   }
 }
 
-// builtins/decorators.ts:107
+// builtins/decorators.ts:108
 function DecoratorAccessorFn(o, name) {
   const f = %Get(o, name);
   if (f !== undefined && !%IsCallable(f)) {
@@ -2407,7 +2407,7 @@ function DecoratorAccessorFn(o, name) {
   return f;
 }
 
-// builtins/decorators.ts:126 %ApplyDecorators
+// builtins/decorators.ts:127 %ApplyDecorators
 function ApplyDecorators(target, key, value, decs, stateV, flags) {
   const kind = flags & 7;
   const isPrivate = (flags & 16) !== 0;
@@ -2556,14 +2556,14 @@ function ApplyDecorators(target, key, value, decs, stateV, flags) {
   return undefined;
 }
 
-// builtins/decorators.ts:276
+// builtins/decorators.ts:277
 function DecoratorDefine(o, key, desc) {
   if (!%DefineOwnPropertyFromRecord(o, key, desc)) {
     throw %NewTypeError("cannot redefine property");
   }
 }
 
-// builtins/decorators.ts:287 %DecoratorRunInits
+// builtins/decorators.ts:288 %DecoratorRunInits
 function DecoratorRunInits(value, rec, thisValue) {
   const inits = %AsObj(%RecordGet(%AsObj(rec), 0));
   let v = value;
@@ -2575,7 +2575,7 @@ function DecoratorRunInits(value, rec, thisValue) {
   return v;
 }
 
-// builtins/decorators.ts:303 %DecoratorRunExtras
+// builtins/decorators.ts:304 %DecoratorRunExtras
 function DecoratorRunExtras(r, i, thisValue) {
   const list = %AsObj(%RecordGet(%AsObj(r), i));
   const n = LengthOfArrayLike(list);
@@ -2584,7 +2584,7 @@ function DecoratorRunExtras(r, i, thisValue) {
   }
 }
 
-// builtins/decorators.ts:315 %DecoratorAddInitializer
+// builtins/decorators.ts:316 %DecoratorAddInitializer
 function DecoratorAddInitializer(initializer) {
   const adder = %AsObj(this);
   if (%AsBool(%RecordGet(adder, 1))) {
@@ -2596,7 +2596,7 @@ function DecoratorAddInitializer(initializer) {
   DecoratorPush(%AsObj(%RecordGet(adder, 0)), initializer);
 }
 
-// builtins/decorators.ts:330 %DecoratorAccessGet
+// builtins/decorators.ts:331 %DecoratorAccessGet
 function DecoratorAccessGet(o) {
   if (!%IsObject(o)) {
     throw %NewTypeError("not an object");
@@ -2604,7 +2604,7 @@ function DecoratorAccessGet(o) {
   return %Get(%AsObj(o), this);
 }
 
-// builtins/decorators.ts:341 %DecoratorAccessSet
+// builtins/decorators.ts:342 %DecoratorAccessSet
 function DecoratorAccessSet(o, value) {
   if (!%IsObject(o)) {
     throw %NewTypeError("not an object");
@@ -2612,7 +2612,7 @@ function DecoratorAccessSet(o, value) {
   %Set(%AsObj(o), this, value);
 }
 
-// builtins/decorators.ts:352 %DecoratorAccessHas
+// builtins/decorators.ts:353 %DecoratorAccessHas
 function DecoratorAccessHas(o) {
   if (!%IsObject(o)) {
     throw %NewTypeError("not an object");
@@ -2620,7 +2620,7 @@ function DecoratorAccessHas(o) {
   return %HasProperty(%AsObj(o), this);
 }
 
-// builtins/decorators.ts:362
+// builtins/decorators.ts:363
 function DecoratorReflectFn(reflect, name) {
   if (!%IsObject(reflect)) {
     return undefined;
@@ -2629,7 +2629,7 @@ function DecoratorReflectFn(reflect, name) {
   return %IsCallable(f) ? f : undefined;
 }
 
-// builtins/decorators.ts:378 %ApplyLegacyDecorators
+// builtins/decorators.ts:379 %ApplyLegacyDecorators
 function ApplyLegacyDecorators(target, key, decs, kind) {
   let r = undefined;
   if (kind === 0) {
@@ -2669,7 +2669,7 @@ function ApplyLegacyDecorators(target, key, decs, kind) {
   return undefined;
 }
 
-// builtins/decorators.ts:421 %DecoratorParam
+// builtins/decorators.ts:422 %DecoratorParam
 function DecoratorParam(dec, index) {
   const data = %NewRecord(2);
   %RecordSet(data, 0, dec);
@@ -2677,13 +2677,13 @@ function DecoratorParam(dec, index) {
   return %NewBuiltinClosure(24, data, 2);
 }
 
-// builtins/decorators.ts:433 %DecoratorParamCall
+// builtins/decorators.ts:434 %DecoratorParamCall
 function DecoratorParamCall(target, key) {
   const data = %AsObj(this);
   %Call(%RecordGet(data, 0), undefined, target, key, %RecordGet(data, 1));
 }
 
-// builtins/decorators.ts:443 %DecoratorMetadata
+// builtins/decorators.ts:444 %DecoratorMetadata
 function DecoratorMetadata(key, value) {
   const reflect = %Get(%GlobalObject(), "Reflect");
   const f = DecoratorReflectFn(reflect, "metadata");
@@ -2693,12 +2693,12 @@ function DecoratorMetadata(key, value) {
   return %Call(f, reflect, key, value);
 }
 
-// builtins/decorators.ts:456 value Symbol.metadata
+// builtins/decorators.ts:457 value Symbol.metadata
 function SymbolMetadata() {
   return %WellKnownSymbol("metadata");
 }
 
-// builtins/disposable.ts:15
+// builtins/disposable.ts:16
 function NewSuppressedError(error, suppressed) {
   const o = %ErrorCreate(%RealmIntrinsic("SuppressedErrorPrototype"));
   %DefineDataPropertyOrThrow(o, "error", error, 5);
@@ -2707,7 +2707,7 @@ function NewSuppressedError(error, suppressed) {
   return o;
 }
 
-// builtins/disposable.ts:24
+// builtins/disposable.ts:25
 function PendingDisposableStack(v, isAsync) {
   const stack = %ThisDisposableStack(v, isAsync);
   if (%F64ToI32(%AsNumber(%RecordGet(stack, 1))) !== 0) {
@@ -2716,7 +2716,7 @@ function PendingDisposableStack(v, isAsync) {
   return stack;
 }
 
-// builtins/disposable.ts:33
+// builtins/disposable.ts:34
 function AddResource(stack, value, method, kind) {
   const resources = %AsObj(%RecordGet(stack, 2));
   const n = LengthOfArrayLike(resources);
@@ -2725,7 +2725,7 @@ function AddResource(stack, value, method, kind) {
   %CreateDataPropertyOrThrow(resources, n + 2, kind);
 }
 
-// builtins/disposable.ts:45
+// builtins/disposable.ts:46
 function AddDisposableValue(stack, v, isAsync) {
   if (v === undefined || v === null) {
     if (isAsync) {
@@ -2756,7 +2756,7 @@ function AddDisposableValue(stack, v, isAsync) {
   AddResource(stack, v, method, kind);
 }
 
-// builtins/disposable.ts:76
+// builtins/disposable.ts:77
 function CallDisposeMethod(resources, i) {
   const value = %Get(resources, i);
   const method = %Get(resources, i + 1);
@@ -2766,7 +2766,7 @@ function CallDisposeMethod(resources, i) {
   return %Call(method, value);
 }
 
-// builtins/disposable.ts:89 constructor DisposableStack
+// builtins/disposable.ts:90 constructor DisposableStack
 function DisposableStackConstructor() {
   if (new.target === undefined) {
     throw %NewTypeError("must be called with new");
@@ -2774,12 +2774,12 @@ function DisposableStackConstructor() {
   return %DisposableStackCreate(GetPrototypeFromConstructor(new.target, "DisposableStackPrototype"), false);
 }
 
-// builtins/disposable.ts:100 get DisposableStack.prototype.disposed
+// builtins/disposable.ts:101 get DisposableStack.prototype.disposed
 function DisposableStackPrototypeDisposed() {
   return %F64ToI32(%AsNumber(%RecordGet(%ThisDisposableStack(this, false), 1))) === 1;
 }
 
-// builtins/disposable.ts:110 DisposableStack.prototype.dispose DisposableStack.prototype[Symbol.dispose]
+// builtins/disposable.ts:111 DisposableStack.prototype.dispose DisposableStack.prototype[Symbol.dispose]
 function DisposableStackPrototypeDispose() {
   const stack = %ThisDisposableStack(this, false);
   if (%F64ToI32(%AsNumber(%RecordGet(stack, 1))) === 1) {
@@ -2803,13 +2803,13 @@ function DisposableStackPrototypeDispose() {
   }
 }
 
-// builtins/disposable.ts:137 DisposableStack.prototype.use
+// builtins/disposable.ts:138 DisposableStack.prototype.use
 function DisposableStackPrototypeUse(value) {
   AddDisposableValue(PendingDisposableStack(this, false), value, false);
   return value;
 }
 
-// builtins/disposable.ts:146 DisposableStack.prototype.adopt
+// builtins/disposable.ts:147 DisposableStack.prototype.adopt
 function DisposableStackPrototypeAdopt(value, onDispose) {
   const stack = PendingDisposableStack(this, false);
   if (!%IsCallable(onDispose)) {
@@ -2819,7 +2819,7 @@ function DisposableStackPrototypeAdopt(value, onDispose) {
   return value;
 }
 
-// builtins/disposable.ts:159 DisposableStack.prototype.defer
+// builtins/disposable.ts:160 DisposableStack.prototype.defer
 function DisposableStackPrototypeDefer(onDispose) {
   const stack = PendingDisposableStack(this, false);
   if (!%IsCallable(onDispose)) {
@@ -2828,7 +2828,7 @@ function DisposableStackPrototypeDefer(onDispose) {
   AddResource(stack, undefined, onDispose, 0);
 }
 
-// builtins/disposable.ts:168
+// builtins/disposable.ts:169
 function DisposableStackMove(thisValue, isAsync) {
   const stack = PendingDisposableStack(thisValue, isAsync);
   const proto = %RealmIntrinsic(isAsync ? "AsyncDisposableStackPrototype" : "DisposableStackPrototype");
@@ -2839,17 +2839,17 @@ function DisposableStackMove(thisValue, isAsync) {
   return newStack;
 }
 
-// builtins/disposable.ts:182 DisposableStack.prototype.move
+// builtins/disposable.ts:183 DisposableStack.prototype.move
 function DisposableStackPrototypeMove() {
   return DisposableStackMove(this, false);
 }
 
-// builtins/disposable.ts:191 value DisposableStack.prototype[Symbol.toStringTag]
+// builtins/disposable.ts:192 value DisposableStack.prototype[Symbol.toStringTag]
 function DisposableStackPrototypeToStringTag() {
   return "DisposableStack";
 }
 
-// builtins/disposable.ts:199 constructor AsyncDisposableStack
+// builtins/disposable.ts:200 constructor AsyncDisposableStack
 function AsyncDisposableStackConstructor() {
   if (new.target === undefined) {
     throw %NewTypeError("must be called with new");
@@ -2857,18 +2857,18 @@ function AsyncDisposableStackConstructor() {
   return %DisposableStackCreate(GetPrototypeFromConstructor(new.target, "AsyncDisposableStackPrototype"), true);
 }
 
-// builtins/disposable.ts:210 get AsyncDisposableStack.prototype.disposed
+// builtins/disposable.ts:211 get AsyncDisposableStack.prototype.disposed
 function AsyncDisposableStackPrototypeDisposed() {
   return %F64ToI32(%AsNumber(%RecordGet(%ThisDisposableStack(this, true), 1))) === 1;
 }
 
-// builtins/disposable.ts:218 AsyncDisposableStack.prototype.use
+// builtins/disposable.ts:219 AsyncDisposableStack.prototype.use
 function AsyncDisposableStackPrototypeUse(value) {
   AddDisposableValue(PendingDisposableStack(this, true), value, true);
   return value;
 }
 
-// builtins/disposable.ts:227 AsyncDisposableStack.prototype.adopt
+// builtins/disposable.ts:228 AsyncDisposableStack.prototype.adopt
 function AsyncDisposableStackPrototypeAdopt(value, onDisposeAsync) {
   const stack = PendingDisposableStack(this, true);
   if (!%IsCallable(onDisposeAsync)) {
@@ -2878,7 +2878,7 @@ function AsyncDisposableStackPrototypeAdopt(value, onDisposeAsync) {
   return value;
 }
 
-// builtins/disposable.ts:240 AsyncDisposableStack.prototype.defer
+// builtins/disposable.ts:241 AsyncDisposableStack.prototype.defer
 function AsyncDisposableStackPrototypeDefer(onDisposeAsync) {
   const stack = PendingDisposableStack(this, true);
   if (!%IsCallable(onDisposeAsync)) {
@@ -2887,17 +2887,17 @@ function AsyncDisposableStackPrototypeDefer(onDisposeAsync) {
   AddResource(stack, undefined, onDisposeAsync, 0);
 }
 
-// builtins/disposable.ts:252 AsyncDisposableStack.prototype.move
+// builtins/disposable.ts:253 AsyncDisposableStack.prototype.move
 function AsyncDisposableStackPrototypeMove() {
   return DisposableStackMove(this, true);
 }
 
-// builtins/disposable.ts:261 value AsyncDisposableStack.prototype[Symbol.toStringTag]
+// builtins/disposable.ts:262 value AsyncDisposableStack.prototype[Symbol.toStringTag]
 function AsyncDisposableStackPrototypeToStringTag() {
   return "AsyncDisposableStack";
 }
 
-// builtins/disposable.ts:278 AsyncDisposableStack.prototype.disposeAsync AsyncDisposableStack.prototype[Symbol.asyncDispose]
+// builtins/disposable.ts:279 AsyncDisposableStack.prototype.disposeAsync AsyncDisposableStack.prototype[Symbol.asyncDispose]
 function AsyncDisposableStackPrototypeDisposeAsync() {
   const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
   let stack = promise;
@@ -2926,7 +2926,7 @@ function AsyncDisposableStackPrototypeDisposeAsync() {
   return promise;
 }
 
-// builtins/disposable.ts:307
+// builtins/disposable.ts:308
 function AsyncDisposeError(s, e) {
   if (%RecordGet(s, 4) === true) {
     %RecordSet(s, 3, NewSuppressedError(e, %RecordGet(s, 3)));
@@ -2936,13 +2936,13 @@ function AsyncDisposeError(s, e) {
   }
 }
 
-// builtins/disposable.ts:317
+// builtins/disposable.ts:318
 function AsyncDisposeAwait(s, v) {
   const promise = PromiseResolve(%IntrinsicPromise(), v);
   %PerformPromiseThen(%AsObj(promise), %NewBuiltinClosure(18, s, 1), %NewBuiltinClosure(19, s, 1), undefined);
 }
 
-// builtins/disposable.ts:326
+// builtins/disposable.ts:327
 function AsyncDisposeContinue(s) {
   const resources = %AsObj(%RecordGet(s, 1));
   while (true) {
@@ -2992,7 +2992,7 @@ function AsyncDisposeContinue(s) {
   }
 }
 
-// builtins/disposable.ts:380 %AsyncDisposeFulfilled
+// builtins/disposable.ts:381 %AsyncDisposeFulfilled
 function AsyncDisposeFulfilled(value) {
   const s = %AsObj(this);
   const pending = %RecordGet(s, 7);
@@ -3003,27 +3003,27 @@ function AsyncDisposeFulfilled(value) {
   AsyncDisposeContinue(s);
 }
 
-// builtins/disposable.ts:394 %AsyncDisposeRejected
+// builtins/disposable.ts:395 %AsyncDisposeRejected
 function AsyncDisposeRejected(reason) {
   const s = %AsObj(this);
   AsyncDisposeError(s, reason);
   AsyncDisposeContinue(s);
 }
 
-// builtins/disposable.ts:414 %UsingCreate
+// builtins/disposable.ts:415 %UsingCreate
 function UsingCreate() {
   const s = %NewRecord(11);
   %RecordSet(s, 2, %ArrayCreate(0));
   return s;
 }
 
-// builtins/disposable.ts:424 %UsingAdd
+// builtins/disposable.ts:425 %UsingAdd
 function UsingAdd(s, v) {
   AddDisposableValue(s, v, false);
   return v;
 }
 
-// builtins/disposable.ts:433 %AwaitUsingAdd
+// builtins/disposable.ts:434 %AwaitUsingAdd
 function AwaitUsingAdd(s, v) {
   AddDisposableValue(s, v, true);
   const resources = %AsObj(%RecordGet(s, 2));
@@ -3034,12 +3034,12 @@ function AwaitUsingAdd(s, v) {
   return v;
 }
 
-// builtins/disposable.ts:450 %UsingDisposeError
+// builtins/disposable.ts:451 %UsingDisposeError
 function UsingDisposeError(s, e) {
   AsyncDisposeError(s, e);
 }
 
-// builtins/disposable.ts:459 %UsingDispose
+// builtins/disposable.ts:460 %UsingDispose
 function UsingDispose(s) {
   const resources = %AsObj(%RecordGet(s, 2));
   for (let i = LengthOfArrayLike(resources) - 3; i >= 0; i = i - 3) {
@@ -3054,7 +3054,7 @@ function UsingDispose(s) {
   }
 }
 
-// builtins/disposable.ts:479 %UsingDisposeStep
+// builtins/disposable.ts:480 %UsingDisposeStep
 function UsingDisposeStep(s) {
   if (%RecordGet(s, 10) === true) {
     %RecordSet(s, 10, false);
@@ -3117,12 +3117,12 @@ function UsingDisposeStep(s) {
   return false;
 }
 
-// builtins/disposable.ts:547 %UsingAwaitValue
+// builtins/disposable.ts:548 %UsingAwaitValue
 function UsingAwaitValue(s) {
   return %RecordGet(s, 8);
 }
 
-// builtins/disposable.ts:555 Iterator.prototype[Symbol.dispose]
+// builtins/disposable.ts:556 Iterator.prototype[Symbol.dispose]
 function IteratorPrototypeDispose() {
   const method = GetMethod(this, "return");
   if (method !== undefined) {
@@ -3130,7 +3130,7 @@ function IteratorPrototypeDispose() {
   }
 }
 
-// builtins/disposable.ts:566 %AsyncIteratorPrototype%[Symbol.asyncDispose]
+// builtins/disposable.ts:567 %AsyncIteratorPrototype%[Symbol.asyncDispose]
 function AsyncIteratorPrototypeAsyncDispose() {
   const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
   let wrapper = undefined;
@@ -3149,12 +3149,12 @@ function AsyncIteratorPrototypeAsyncDispose() {
   return promise;
 }
 
-// builtins/disposable.ts:589 value Symbol.dispose
+// builtins/disposable.ts:590 value Symbol.dispose
 function SymbolDispose() {
   return %WellKnownSymbol("dispose");
 }
 
-// builtins/disposable.ts:597 value Symbol.asyncDispose
+// builtins/disposable.ts:598 value Symbol.asyncDispose
 function SymbolAsyncDispose() {
   return %WellKnownSymbol("asyncDispose");
 }
@@ -4243,17 +4243,17 @@ function StringIteratorToStringTag() {
   return "String Iterator";
 }
 
-// builtins/iterator.ts:25
+// builtins/iterator.ts:26
 function HelperState(o) {
   return %F64ToI32(%AsNumber(%RecordGet(o, 1)));
 }
 
-// builtins/iterator.ts:30
+// builtins/iterator.ts:31
 function GetIteratorDirectNext(o) {
   return %Get(o, "next");
 }
 
-// builtins/iterator.ts:38
+// builtins/iterator.ts:39
 function IteratorStepResult(iterator, next) {
   const result = IteratorNextResult(iterator, next);
   if (%ToBoolean(%Get(result, "done"))) {
@@ -4262,7 +4262,7 @@ function IteratorStepResult(iterator, next) {
   return result;
 }
 
-// builtins/iterator.ts:50
+// builtins/iterator.ts:51
 function GetIteratorFlattenable(obj, strings) {
   if (!%IsObject(obj)) {
     if (!strings || !%IsString(obj)) {
@@ -4280,7 +4280,7 @@ function GetIteratorFlattenable(obj, strings) {
   return %AsObj(iterator);
 }
 
-// builtins/iterator.ts:68
+// builtins/iterator.ts:69
 function ThisIteratorObject(v) {
   if (!%IsObject(v)) {
     throw %NewTypeError("not an object");
@@ -4288,7 +4288,7 @@ function ThisIteratorObject(v) {
   return %AsObj(v);
 }
 
-// builtins/iterator.ts:79
+// builtins/iterator.ts:80
 function HelperCallable(o, f) {
   if (!%IsCallable(f)) {
     const error = %NewTypeError("not a function");
@@ -4297,7 +4297,7 @@ function HelperCallable(o, f) {
   }
 }
 
-// builtins/iterator.ts:91
+// builtins/iterator.ts:92
 function HelperLimit(o, limit) {
   let numLimit = 0;
   try {
@@ -4320,7 +4320,7 @@ function HelperLimit(o, limit) {
   return integerLimit;
 }
 
-// builtins/iterator.ts:115
+// builtins/iterator.ts:116
 function NewIteratorHelper(kind, o, data) {
   const next = GetIteratorDirectNext(o);
   const helper = %CreateIteratorHelper(kind, o, next);
@@ -4329,13 +4329,13 @@ function NewIteratorHelper(kind, o, data) {
   return helper;
 }
 
-// builtins/iterator.ts:124
+// builtins/iterator.ts:125
 function HelperYield(o, value) {
   %RecordSet(o, 1, 1);
   return value;
 }
 
-// builtins/iterator.ts:133
+// builtins/iterator.ts:134
 function HelperCallFunction(o, iterator, value) {
   const counter = %AsNumber(%RecordGet(o, 5));
   let result = undefined;
@@ -4349,7 +4349,7 @@ function HelperCallFunction(o, iterator, value) {
   return result;
 }
 
-// builtins/iterator.ts:147
+// builtins/iterator.ts:148
 function IteratorHelperStep(o) {
   const kind = %F64ToI32(%AsNumber(%RecordGet(o, 0)));
   if (kind === 6) {
@@ -4421,7 +4421,7 @@ function IteratorHelperStep(o) {
   return WindowsStep(o, iterator, next);
 }
 
-// builtins/iterator.ts:219
+// builtins/iterator.ts:220
 function ArrayPrefixCopy(a, from, n) {
   const copy = %ArrayCreate(0);
   for (let i = 0; i < n; i++) {
@@ -4430,7 +4430,7 @@ function ArrayPrefixCopy(a, from, n) {
   return copy;
 }
 
-// builtins/iterator.ts:228
+// builtins/iterator.ts:229
 function ChunksStep(o, iterator, next) {
   if (%RecordGet(o, 6) === true) {
     return undefined;
@@ -4455,7 +4455,7 @@ function ChunksStep(o, iterator, next) {
   }
 }
 
-// builtins/iterator.ts:256
+// builtins/iterator.ts:257
 function WindowsStep(o, iterator, next) {
   if (%RecordGet(o, 6) === true) {
     return undefined;
@@ -4492,7 +4492,7 @@ function WindowsStep(o, iterator, next) {
   }
 }
 
-// builtins/iterator.ts:298
+// builtins/iterator.ts:299
 function IteratorCloseAll(iters, open, error, isThrow) {
   let threw = isThrow;
   let err = error;
@@ -4516,7 +4516,7 @@ function IteratorCloseAll(iters, open, error, isThrow) {
   }
 }
 
-// builtins/iterator.ts:322
+// builtins/iterator.ts:323
 function ZipStep(o) {
   const iters = %AsObj(%RecordGet(o, 2));
   const nexts = %AsObj(%RecordGet(o, 3));
@@ -4589,7 +4589,7 @@ function ZipStep(o) {
   return HelperYield(o, obj);
 }
 
-// builtins/iterator.ts:395
+// builtins/iterator.ts:396
 function ZipAnyOpen(open, n) {
   for (let i = 0; i < n; i++) {
     if (%Get(open, i) === true) {
@@ -4599,7 +4599,7 @@ function ZipAnyOpen(open, n) {
   return false;
 }
 
-// builtins/iterator.ts:405
+// builtins/iterator.ts:406
 function FlatMapStep(o, iterator, next) {
   while (true) {
     const inner = %RecordGet(o, 6);
@@ -4638,7 +4638,7 @@ function FlatMapStep(o, iterator, next) {
   }
 }
 
-// builtins/iterator.ts:444
+// builtins/iterator.ts:445
 function ConcatStep(o) {
   while (true) {
     const current = %RecordGet(o, 2);
@@ -4667,7 +4667,7 @@ function ConcatStep(o) {
   }
 }
 
-// builtins/iterator.ts:477
+// builtins/iterator.ts:478
 function IteratorHelperReturnAtYield(o) {
   const kind = %F64ToI32(%AsNumber(%RecordGet(o, 0)));
   if (kind === 9) {
@@ -4691,7 +4691,7 @@ function IteratorHelperReturnAtYield(o) {
   IteratorClose(%AsObj(%RecordGet(o, 2)));
 }
 
-// builtins/iterator.ts:505 %IteratorHelperPrototype%.next
+// builtins/iterator.ts:506 %IteratorHelperPrototype%.next
 function IteratorHelperPrototypeNext() {
   const o = %ThisIteratorHelper(this, false);
   const state = HelperState(o);
@@ -4716,7 +4716,7 @@ function IteratorHelperPrototypeNext() {
   return %CreateIterResultObject(undefined, true);
 }
 
-// builtins/iterator.ts:533 %IteratorHelperPrototype%.return
+// builtins/iterator.ts:534 %IteratorHelperPrototype%.return
 function IteratorHelperPrototypeReturn() {
   const o = %ThisIteratorHelper(this, false);
   const state = HelperState(o);
@@ -4747,12 +4747,12 @@ function IteratorHelperPrototypeReturn() {
   return %CreateIterResultObject(undefined, true);
 }
 
-// builtins/iterator.ts:569 value %IteratorHelperPrototype%[Symbol.toStringTag]
+// builtins/iterator.ts:570 value %IteratorHelperPrototype%[Symbol.toStringTag]
 function IteratorHelperPrototypeToStringTag() {
   return "Iterator Helper";
 }
 
-// builtins/iterator.ts:577 constructor Iterator
+// builtins/iterator.ts:578 constructor Iterator
 function IteratorConstructor() {
   if (new.target === undefined) {
     throw %NewTypeError("constructor requires 'new'");
@@ -4763,7 +4763,7 @@ function IteratorConstructor() {
   return %ObjectCreate(GetPrototypeFromConstructor(new.target, "IteratorPrototype"));
 }
 
-// builtins/iterator.ts:591 Iterator.from
+// builtins/iterator.ts:592 Iterator.from
 function IteratorFrom(o) {
   const iterator = GetIteratorFlattenable(o, true);
   const next = GetIteratorDirectNext(iterator);
@@ -4773,13 +4773,13 @@ function IteratorFrom(o) {
   return %CreateIteratorHelper(0, iterator, next);
 }
 
-// builtins/iterator.ts:604 %WrapForValidIteratorPrototype%.next
+// builtins/iterator.ts:605 %WrapForValidIteratorPrototype%.next
 function WrapForValidIteratorPrototypeNext() {
   const o = %ThisIteratorHelper(this, true);
   return %Call(%RecordGet(o, 3), %RecordGet(o, 2));
 }
 
-// builtins/iterator.ts:613 %WrapForValidIteratorPrototype%.return
+// builtins/iterator.ts:614 %WrapForValidIteratorPrototype%.return
 function WrapForValidIteratorPrototypeReturn() {
   const o = %ThisIteratorHelper(this, true);
   const iterator = %AsObj(%RecordGet(o, 2));
@@ -4790,7 +4790,7 @@ function WrapForValidIteratorPrototypeReturn() {
   return %Call(method, iterator);
 }
 
-// builtins/iterator.ts:627 Iterator.concat
+// builtins/iterator.ts:628 Iterator.concat
 function IteratorConcat(...items) {
   const n = LengthOfArrayLike(items);
   const iterables = %ArrayCreate(0);
@@ -4811,40 +4811,40 @@ function IteratorConcat(...items) {
   return helper;
 }
 
-// builtins/iterator.ts:651 Iterator.prototype.map
+// builtins/iterator.ts:652 Iterator.prototype.map
 function IteratorPrototypeMap(mapper) {
   const o = ThisIteratorObject(this);
   HelperCallable(o, mapper);
   return NewIteratorHelper(1, o, mapper);
 }
 
-// builtins/iterator.ts:661 Iterator.prototype.filter
+// builtins/iterator.ts:662 Iterator.prototype.filter
 function IteratorPrototypeFilter(predicate) {
   const o = ThisIteratorObject(this);
   HelperCallable(o, predicate);
   return NewIteratorHelper(2, o, predicate);
 }
 
-// builtins/iterator.ts:671 Iterator.prototype.take
+// builtins/iterator.ts:672 Iterator.prototype.take
 function IteratorPrototypeTake(limit) {
   const o = ThisIteratorObject(this);
   return NewIteratorHelper(3, o, HelperLimit(o, limit));
 }
 
-// builtins/iterator.ts:680 Iterator.prototype.drop
+// builtins/iterator.ts:681 Iterator.prototype.drop
 function IteratorPrototypeDrop(limit) {
   const o = ThisIteratorObject(this);
   return NewIteratorHelper(4, o, HelperLimit(o, limit));
 }
 
-// builtins/iterator.ts:689 Iterator.prototype.flatMap
+// builtins/iterator.ts:690 Iterator.prototype.flatMap
 function IteratorPrototypeFlatMap(mapper) {
   const o = ThisIteratorObject(this);
   HelperCallable(o, mapper);
   return NewIteratorHelper(5, o, mapper);
 }
 
-// builtins/iterator.ts:700 Iterator.prototype.reduce
+// builtins/iterator.ts:701 Iterator.prototype.reduce
 function IteratorPrototypeReduce(reducer, ...rest) {
   const o = ThisIteratorObject(this);
   HelperCallable(o, reducer);
@@ -4877,7 +4877,7 @@ function IteratorPrototypeReduce(reducer, ...rest) {
   }
 }
 
-// builtins/iterator.ts:736 Iterator.prototype.toArray
+// builtins/iterator.ts:737 Iterator.prototype.toArray
 function IteratorPrototypeToArray() {
   const o = ThisIteratorObject(this);
   const next = GetIteratorDirectNext(o);
@@ -4893,7 +4893,7 @@ function IteratorPrototypeToArray() {
   }
 }
 
-// builtins/iterator.ts:756
+// builtins/iterator.ts:757
 function IteratorConsume(thisValue, fn, mode) {
   const o = ThisIteratorObject(thisValue);
   HelperCallable(o, fn);
@@ -4932,27 +4932,27 @@ function IteratorConsume(thisValue, fn, mode) {
   }
 }
 
-// builtins/iterator.ts:798 Iterator.prototype.forEach
+// builtins/iterator.ts:799 Iterator.prototype.forEach
 function IteratorPrototypeForEach(procedure) {
   return IteratorConsume(this, procedure, 0);
 }
 
-// builtins/iterator.ts:806 Iterator.prototype.some
+// builtins/iterator.ts:807 Iterator.prototype.some
 function IteratorPrototypeSome(predicate) {
   return IteratorConsume(this, predicate, 1);
 }
 
-// builtins/iterator.ts:814 Iterator.prototype.every
+// builtins/iterator.ts:815 Iterator.prototype.every
 function IteratorPrototypeEvery(predicate) {
   return IteratorConsume(this, predicate, 2);
 }
 
-// builtins/iterator.ts:822 Iterator.prototype.find
+// builtins/iterator.ts:823 Iterator.prototype.find
 function IteratorPrototypeFind(predicate) {
   return IteratorConsume(this, predicate, 3);
 }
 
-// builtins/iterator.ts:829
+// builtins/iterator.ts:830
 function SetterThatIgnoresPrototypeProperties(thisValue, home, p, v) {
   if (!%IsObject(thisValue)) {
     throw %NewTypeError("not an object");
@@ -4968,27 +4968,27 @@ function SetterThatIgnoresPrototypeProperties(thisValue, home, p, v) {
   }
 }
 
-// builtins/iterator.ts:848 get Iterator.prototype.constructor
+// builtins/iterator.ts:849 get Iterator.prototype.constructor
 function IteratorPrototypeConstructorGet() {
   return %RealmConstructor("Iterator");
 }
 
-// builtins/iterator.ts:856 set Iterator.prototype.constructor
+// builtins/iterator.ts:857 set Iterator.prototype.constructor
 function IteratorPrototypeConstructorSet(v) {
   SetterThatIgnoresPrototypeProperties(this, %RealmIntrinsic("IteratorPrototype"), "constructor", v);
 }
 
-// builtins/iterator.ts:864 get Iterator.prototype[Symbol.toStringTag]
+// builtins/iterator.ts:865 get Iterator.prototype[Symbol.toStringTag]
 function IteratorPrototypeToStringTagGet() {
   return "Iterator";
 }
 
-// builtins/iterator.ts:872 set Iterator.prototype[Symbol.toStringTag]
+// builtins/iterator.ts:873 set Iterator.prototype[Symbol.toStringTag]
 function IteratorPrototypeToStringTagSet(v) {
   SetterThatIgnoresPrototypeProperties(this, %RealmIntrinsic("IteratorPrototype"), %WellKnownSymbol("toStringTag"), v);
 }
 
-// builtins/iterator.ts:880
+// builtins/iterator.ts:881
 function ChunkingSize(o, size, name) {
   let error = undefined;
   if (!%IsNumber(size) || %ToIntegerOrInfinityNumber(%AsNumber(size)) !== %AsNumber(size) || %AsNumber(size) - %AsNumber(size) !== 0) {
@@ -5003,13 +5003,13 @@ function ChunkingSize(o, size, name) {
   return %AsNumber(size);
 }
 
-// builtins/iterator.ts:899 Iterator.prototype.chunks
+// builtins/iterator.ts:900 Iterator.prototype.chunks
 function IteratorPrototypeChunks(chunkSize) {
   const o = ThisIteratorObject(this);
   return NewIteratorHelper(7, o, ChunkingSize(o, chunkSize, "chunkSize"));
 }
 
-// builtins/iterator.ts:909 Iterator.prototype.windows
+// builtins/iterator.ts:910 Iterator.prototype.windows
 function IteratorPrototypeWindows(windowSize, undersized) {
   const o = ThisIteratorObject(this);
   const size = ChunkingSize(o, windowSize, "windowSize");
@@ -5023,7 +5023,7 @@ function IteratorPrototypeWindows(windowSize, undersized) {
   return helper;
 }
 
-// builtins/iterator.ts:927 Iterator.prototype.includes
+// builtins/iterator.ts:928 Iterator.prototype.includes
 function IteratorPrototypeIncludes(searchElement, skippedElements) {
   const o = ThisIteratorObject(this);
   let toSkip = 0;
@@ -5061,7 +5061,7 @@ function IteratorPrototypeIncludes(searchElement, skippedElements) {
   }
 }
 
-// builtins/iterator.ts:968 Iterator.prototype.join
+// builtins/iterator.ts:969 Iterator.prototype.join
 function IteratorPrototypeJoin(separator) {
   const o = ThisIteratorObject(this);
   let sep = ",";
@@ -5097,7 +5097,7 @@ function IteratorPrototypeJoin(separator) {
   }
 }
 
-// builtins/iterator.ts:1007
+// builtins/iterator.ts:1008
 function ZipOptions(options) {
   let opts = %ObjectCreate(null);
   if (options !== undefined) {
@@ -5128,7 +5128,7 @@ function ZipOptions(options) {
   return r;
 }
 
-// builtins/iterator.ts:1042
+// builtins/iterator.ts:1043
 function ZipAddIterator(iters, nexts, open, value, outer) {
   const n = LengthOfArrayLike(iters);
   try {
@@ -5148,7 +5148,7 @@ function ZipAddIterator(iters, nexts, open, value, outer) {
   }
 }
 
-// builtins/iterator.ts:1063
+// builtins/iterator.ts:1064
 function ZipCreate(iters, nexts, open, padding, mode, keys) {
   const helper = %CreateIteratorHelper(9, iters, nexts);
   %RecordSet(helper, 4, padding);
@@ -5158,7 +5158,7 @@ function ZipCreate(iters, nexts, open, padding, mode, keys) {
   return helper;
 }
 
-// builtins/iterator.ts:1077 Iterator.zip
+// builtins/iterator.ts:1078 Iterator.zip
 function IteratorZip(iterables, options) {
   if (!%IsObject(iterables)) {
     throw %NewTypeError("not an object");
@@ -5232,7 +5232,7 @@ function IteratorZip(iterables, options) {
   return ZipCreate(iters, nexts, open, padding, mode, undefined);
 }
 
-// builtins/iterator.ts:1155 Iterator.zipKeyed
+// builtins/iterator.ts:1156 Iterator.zipKeyed
 function IteratorZipKeyed(iterables, options) {
   if (!%IsObject(iterables)) {
     throw %NewTypeError("not an object");
@@ -9836,7 +9836,7 @@ function SymbolUnscopables() {
   return %WellKnownSymbol("unscopables");
 }
 
-// builtins/typedarray.ts:7
+// builtins/typedarray.ts:8
 function ElementSize(kind) {
   if (kind <= 2) {
     return 1;
@@ -9850,7 +9850,7 @@ function ElementSize(kind) {
   return 8;
 }
 
-// builtins/typedarray.ts:21
+// builtins/typedarray.ts:22
 function KindName(kind) {
   if (kind === 0) {
     return "Int8Array";
@@ -9888,22 +9888,22 @@ function KindName(kind) {
   return "BigUint64Array";
 }
 
-// builtins/typedarray.ts:59
+// builtins/typedarray.ts:60
 function KindOf(o) {
   return %F64ToI32(%AsNumber(%TypedArrayField(o, 0)));
 }
 
-// builtins/typedarray.ts:64
+// builtins/typedarray.ts:65
 function TALength(o) {
   return %AsNumber(%TypedArrayField(o, 3));
 }
 
-// builtins/typedarray.ts:69
+// builtins/typedarray.ts:70
 function TAOutOfBounds(o) {
   return %AsBool(%TypedArrayField(o, 5));
 }
 
-// builtins/typedarray.ts:77
+// builtins/typedarray.ts:78
 function ValidateTypedArray(v) {
   %TypedArrayField(v, 0);
   const o = %AsObj(v);
@@ -9913,12 +9913,12 @@ function ValidateTypedArray(v) {
   return o;
 }
 
-// builtins/typedarray.ts:87
+// builtins/typedarray.ts:88
 function SameContentType(a, b) {
   return (KindOf(a) >= 10) === (KindOf(b) >= 10);
 }
 
-// builtins/typedarray.ts:95
+// builtins/typedarray.ts:96
 function ToElementValue(o, v) {
   if (KindOf(o) >= 10) {
     return ToBigInt(v);
@@ -9926,12 +9926,12 @@ function ToElementValue(o, v) {
   return ToNumber(v);
 }
 
-// builtins/typedarray.ts:109 %TypedArraySetElementSlow
+// builtins/typedarray.ts:110 %TypedArraySetElementSlow
 function TypedArraySetElementSlow(o, index, v) {
   %TypedArraySet(o, index, ToElementValue(o, v));
 }
 
-// builtins/typedarray.ts:114
+// builtins/typedarray.ts:115
 function IsElementValue(o, v) {
   if (KindOf(o) >= 10) {
     return %IsBigInt(v);
@@ -9939,7 +9939,7 @@ function IsElementValue(o, v) {
   return %IsNumber(v);
 }
 
-// builtins/typedarray.ts:122
+// builtins/typedarray.ts:123
 function AllocateTypedArrayOfLength(kind, proto, length) {
   const size = ElementSize(kind);
   if (length * size > 2147483648) {
@@ -9949,7 +9949,7 @@ function AllocateTypedArrayOfLength(kind, proto, length) {
   return %TypedArrayCreate(proto, kind, buffer, 0, length);
 }
 
-// builtins/typedarray.ts:132
+// builtins/typedarray.ts:133
 function TypedArrayFromBuffer(kind, proto, buffer, byteOffset, length) {
   const size = ElementSize(kind);
   const offset = ToIndex(byteOffset);
@@ -9985,7 +9985,7 @@ function TypedArrayFromBuffer(kind, proto, buffer, byteOffset, length) {
   return %TypedArrayCreate(proto, kind, buffer, offset, newLength);
 }
 
-// builtins/typedarray.ts:168
+// builtins/typedarray.ts:169
 function TypedArrayFromValues(kind, proto, values) {
   const len = LengthOfArrayLike(values);
   const o = AllocateTypedArrayOfLength(kind, proto, len);
@@ -9998,7 +9998,7 @@ function TypedArrayFromValues(kind, proto, values) {
   return o;
 }
 
-// builtins/typedarray.ts:181
+// builtins/typedarray.ts:182
 function TypedArrayConstruct(newTarget, kind, args) {
   if (newTarget === undefined) {
     throw %NewTypeError("must be called with new");
@@ -10038,7 +10038,7 @@ function TypedArrayConstruct(newTarget, kind, args) {
   return TypedArrayFromValues(kind, proto, src);
 }
 
-// builtins/typedarray.ts:224
+// builtins/typedarray.ts:225
 function BufferInfoOrUndefined(o) {
   try {
     %BufferInfo(o, 0);
@@ -10048,24 +10048,24 @@ function BufferInfoOrUndefined(o) {
   }
 }
 
-// builtins/typedarray.ts:237 constructor %TypedArray%
+// builtins/typedarray.ts:238 constructor %TypedArray%
 function TypedArrayAbstract() {
   throw %NewTypeError("cannot be called");
 }
 
-// builtins/typedarray.ts:245 get %TypedArray%[Symbol.species]
+// builtins/typedarray.ts:246 get %TypedArray%[Symbol.species]
 function TypedArraySpecies() {
   return this;
 }
 
-// builtins/typedarray.ts:253
+// builtins/typedarray.ts:254
 function RequireMutableTypedArray(o) {
   if (IsImmutableBuffer(%AsObj(%TypedArrayField(o, 1)))) {
     throw %NewTypeError("ArrayBuffer is immutable");
   }
 }
 
-// builtins/typedarray.ts:260
+// builtins/typedarray.ts:261
 function TypedArrayCreateWithLength(c, length) {
   const created = %Construct(c, length);
   ValidateTypedArray(created);
@@ -10076,7 +10076,7 @@ function TypedArrayCreateWithLength(c, length) {
   return created;
 }
 
-// builtins/typedarray.ts:272
+// builtins/typedarray.ts:273
 function TypedArraySpeciesCreate(exemplar, length) {
   const c = SpeciesConstructor(exemplar, %RealmConstructor(KindName(KindOf(exemplar))));
   const r = TypedArrayCreateWithLength(c, length);
@@ -10086,7 +10086,7 @@ function TypedArraySpeciesCreate(exemplar, length) {
   return r;
 }
 
-// builtins/typedarray.ts:285 %TypedArray%.from
+// builtins/typedarray.ts:286 %TypedArray%.from
 function TypedArrayFrom(source, mapfn, thisArg) {
   if (!%IsConstructor(this)) {
     throw %NewTypeError("not a constructor");
@@ -10112,7 +10112,7 @@ function TypedArrayFrom(source, mapfn, thisArg) {
   return target;
 }
 
-// builtins/typedarray.ts:314 %TypedArray%.of
+// builtins/typedarray.ts:315 %TypedArray%.of
 function TypedArrayOf(...items) {
   if (!%IsConstructor(this)) {
     throw %NewTypeError("not a constructor");
@@ -10125,27 +10125,27 @@ function TypedArrayOf(...items) {
   return target;
 }
 
-// builtins/typedarray.ts:330 get %TypedArray%.prototype.buffer
+// builtins/typedarray.ts:331 get %TypedArray%.prototype.buffer
 function TypedArrayPrototypeBuffer() {
   return %TypedArrayField(this, 1);
 }
 
-// builtins/typedarray.ts:338 get %TypedArray%.prototype.byteLength
+// builtins/typedarray.ts:339 get %TypedArray%.prototype.byteLength
 function TypedArrayPrototypeByteLength() {
   return %TypedArrayField(this, 4);
 }
 
-// builtins/typedarray.ts:346 get %TypedArray%.prototype.byteOffset
+// builtins/typedarray.ts:347 get %TypedArray%.prototype.byteOffset
 function TypedArrayPrototypeByteOffset() {
   return %TypedArrayField(this, 2);
 }
 
-// builtins/typedarray.ts:354 get %TypedArray%.prototype.length
+// builtins/typedarray.ts:355 get %TypedArray%.prototype.length
 function TypedArrayPrototypeLength() {
   return %TypedArrayField(this, 3);
 }
 
-// builtins/typedarray.ts:362 get %TypedArray%.prototype[Symbol.toStringTag]
+// builtins/typedarray.ts:363 get %TypedArray%.prototype[Symbol.toStringTag]
 function TypedArrayPrototypeToStringTag() {
   if (!%IsTypedArray(this)) {
     return undefined;
@@ -10153,7 +10153,7 @@ function TypedArrayPrototypeToStringTag() {
   return KindName(KindOf(%AsObj(this)));
 }
 
-// builtins/typedarray.ts:373 %TypedArray%.prototype.set
+// builtins/typedarray.ts:374 %TypedArray%.prototype.set
 function TypedArrayPrototypeSet(source, offset) {
   %TypedArrayField(this, 0);
   const target = %AsObj(this);
@@ -10192,7 +10192,7 @@ function TypedArrayPrototypeSet(source, offset) {
   }
 }
 
-// builtins/typedarray.ts:416 %TypedArray%.prototype.subarray
+// builtins/typedarray.ts:417 %TypedArray%.prototype.subarray
 function TypedArrayPrototypeSubarray(start, end) {
   %TypedArrayField(this, 0);
   const o = %AsObj(this);
@@ -10219,7 +10219,7 @@ function TypedArrayPrototypeSubarray(start, end) {
   return %AsObj(created);
 }
 
-// builtins/typedarray.ts:447 %TypedArray%.prototype.slice
+// builtins/typedarray.ts:448 %TypedArray%.prototype.slice
 function TypedArrayPrototypeSlice(start, end) {
   const o = ValidateTypedArray(this);
   const srcLength = TALength(o);
@@ -10250,7 +10250,7 @@ function TypedArrayPrototypeSlice(start, end) {
   return a;
 }
 
-// builtins/typedarray.ts:484 %TypedArray%.prototype.fill
+// builtins/typedarray.ts:485 %TypedArray%.prototype.fill
 function TypedArrayPrototypeFill(value, start, end) {
   const o = ValidateTypedArray(this);
   RequireMutableTypedArray(o);
@@ -10269,7 +10269,7 @@ function TypedArrayPrototypeFill(value, start, end) {
   return o;
 }
 
-// builtins/typedarray.ts:505
+// builtins/typedarray.ts:506
 function ValidateUint8Array(v) {
   if (!%IsTypedArray(v) || KindOf(%AsObj(v)) !== 1) {
     throw %NewTypeError("not a Uint8Array");
@@ -10277,7 +10277,7 @@ function ValidateUint8Array(v) {
   return %AsObj(v);
 }
 
-// builtins/typedarray.ts:513
+// builtins/typedarray.ts:514
 function GetOptionsObject(options) {
   if (options === undefined) {
     return undefined;
@@ -10288,7 +10288,7 @@ function GetOptionsObject(options) {
   return options;
 }
 
-// builtins/typedarray.ts:524
+// builtins/typedarray.ts:525
 function Base64Alphabet(opts) {
   if (opts === undefined) {
     return false;
@@ -10303,7 +10303,7 @@ function Base64Alphabet(opts) {
   throw %NewTypeError("invalid alphabet");
 }
 
-// builtins/typedarray.ts:539
+// builtins/typedarray.ts:540
 function LastChunkHandling(opts) {
   if (opts === undefined) {
     return 0;
@@ -10321,14 +10321,14 @@ function LastChunkHandling(opts) {
   throw %NewTypeError("invalid lastChunkHandling option");
 }
 
-// builtins/typedarray.ts:557
+// builtins/typedarray.ts:558
 function Uint8ArrayFromRecord(rec) {
   const bytes = %AsObj(%Get(rec, "bytes"));
   const len = BufferLength(bytes);
   return %TypedArrayCreate(%RealmIntrinsic("Uint8ArrayPrototype"), 1, bytes, 0, len);
 }
 
-// builtins/typedarray.ts:567 Uint8Array.fromBase64
+// builtins/typedarray.ts:568 Uint8Array.fromBase64
 function Uint8ArrayFromBase64(string, options) {
   if (!%IsString(string)) {
     throw %NewTypeError("expected string");
@@ -10343,7 +10343,7 @@ function Uint8ArrayFromBase64(string, options) {
   return Uint8ArrayFromRecord(rec);
 }
 
-// builtins/typedarray.ts:585 Uint8Array.fromHex
+// builtins/typedarray.ts:586 Uint8Array.fromHex
 function Uint8ArrayFromHex(string) {
   if (!%IsString(string)) {
     throw %NewTypeError("expected string");
@@ -10355,7 +10355,7 @@ function Uint8ArrayFromHex(string) {
   return Uint8ArrayFromRecord(rec);
 }
 
-// builtins/typedarray.ts:600 Uint8Array.prototype.toBase64
+// builtins/typedarray.ts:601 Uint8Array.prototype.toBase64
 function Uint8ArrayPrototypeToBase64(options) {
   const o = ValidateUint8Array(this);
   const opts = GetOptionsObject(options);
@@ -10367,12 +10367,12 @@ function Uint8ArrayPrototypeToBase64(options) {
   return %Base64Encode(o, url, omit);
 }
 
-// builtins/typedarray.ts:615 Uint8Array.prototype.toHex
+// builtins/typedarray.ts:616 Uint8Array.prototype.toHex
 function Uint8ArrayPrototypeToHex() {
   return %HexEncode(ValidateUint8Array(this));
 }
 
-// builtins/typedarray.ts:620
+// builtins/typedarray.ts:621
 function WriteDecoded(into, rec, isHex) {
   const bytes = %AsObj(%Get(rec, "bytes"));
   const written = BufferLength(bytes);
@@ -10386,7 +10386,7 @@ function WriteDecoded(into, rec, isHex) {
   return result;
 }
 
-// builtins/typedarray.ts:637 Uint8Array.prototype.setFromBase64
+// builtins/typedarray.ts:638 Uint8Array.prototype.setFromBase64
 function Uint8ArrayPrototypeSetFromBase64(string, options) {
   const into = ValidateUint8Array(this);
   RequireMutableTypedArray(into);
@@ -10403,7 +10403,7 @@ function Uint8ArrayPrototypeSetFromBase64(string, options) {
   return WriteDecoded(into, rec, false);
 }
 
-// builtins/typedarray.ts:657 Uint8Array.prototype.setFromHex
+// builtins/typedarray.ts:658 Uint8Array.prototype.setFromHex
 function Uint8ArrayPrototypeSetFromHex(string) {
   const into = ValidateUint8Array(this);
   RequireMutableTypedArray(into);
@@ -10417,187 +10417,187 @@ function Uint8ArrayPrototypeSetFromHex(string) {
   return WriteDecoded(into, rec, true);
 }
 
-// builtins/typedarray.ts:676 constructor Int8Array
+// builtins/typedarray.ts:677 constructor Int8Array
 function Int8ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 0, args);
 }
 
-// builtins/typedarray.ts:684 value Int8Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:685 value Int8Array.BYTES_PER_ELEMENT
 function Int8ArrayBytesPerElement() {
   return 1;
 }
 
-// builtins/typedarray.ts:692 value Int8Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:693 value Int8Array.prototype.BYTES_PER_ELEMENT
 function Int8ArrayPrototypeBytesPerElement() {
   return 1;
 }
 
-// builtins/typedarray.ts:702 constructor Uint8Array
+// builtins/typedarray.ts:703 constructor Uint8Array
 function Uint8ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 1, args);
 }
 
-// builtins/typedarray.ts:710 value Uint8Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:711 value Uint8Array.BYTES_PER_ELEMENT
 function Uint8ArrayBytesPerElement() {
   return 1;
 }
 
-// builtins/typedarray.ts:718 value Uint8Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:719 value Uint8Array.prototype.BYTES_PER_ELEMENT
 function Uint8ArrayPrototypeBytesPerElement() {
   return 1;
 }
 
-// builtins/typedarray.ts:728 constructor Uint8ClampedArray
+// builtins/typedarray.ts:729 constructor Uint8ClampedArray
 function Uint8ClampedArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 2, args);
 }
 
-// builtins/typedarray.ts:736 value Uint8ClampedArray.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:737 value Uint8ClampedArray.BYTES_PER_ELEMENT
 function Uint8ClampedArrayBytesPerElement() {
   return 1;
 }
 
-// builtins/typedarray.ts:744 value Uint8ClampedArray.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:745 value Uint8ClampedArray.prototype.BYTES_PER_ELEMENT
 function Uint8ClampedArrayPrototypeBytesPerElement() {
   return 1;
 }
 
-// builtins/typedarray.ts:754 constructor Int16Array
+// builtins/typedarray.ts:755 constructor Int16Array
 function Int16ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 3, args);
 }
 
-// builtins/typedarray.ts:762 value Int16Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:763 value Int16Array.BYTES_PER_ELEMENT
 function Int16ArrayBytesPerElement() {
   return 2;
 }
 
-// builtins/typedarray.ts:770 value Int16Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:771 value Int16Array.prototype.BYTES_PER_ELEMENT
 function Int16ArrayPrototypeBytesPerElement() {
   return 2;
 }
 
-// builtins/typedarray.ts:780 constructor Uint16Array
+// builtins/typedarray.ts:781 constructor Uint16Array
 function Uint16ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 4, args);
 }
 
-// builtins/typedarray.ts:788 value Uint16Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:789 value Uint16Array.BYTES_PER_ELEMENT
 function Uint16ArrayBytesPerElement() {
   return 2;
 }
 
-// builtins/typedarray.ts:796 value Uint16Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:797 value Uint16Array.prototype.BYTES_PER_ELEMENT
 function Uint16ArrayPrototypeBytesPerElement() {
   return 2;
 }
 
-// builtins/typedarray.ts:806 constructor Int32Array
+// builtins/typedarray.ts:807 constructor Int32Array
 function Int32ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 5, args);
 }
 
-// builtins/typedarray.ts:814 value Int32Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:815 value Int32Array.BYTES_PER_ELEMENT
 function Int32ArrayBytesPerElement() {
   return 4;
 }
 
-// builtins/typedarray.ts:822 value Int32Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:823 value Int32Array.prototype.BYTES_PER_ELEMENT
 function Int32ArrayPrototypeBytesPerElement() {
   return 4;
 }
 
-// builtins/typedarray.ts:832 constructor Uint32Array
+// builtins/typedarray.ts:833 constructor Uint32Array
 function Uint32ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 6, args);
 }
 
-// builtins/typedarray.ts:840 value Uint32Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:841 value Uint32Array.BYTES_PER_ELEMENT
 function Uint32ArrayBytesPerElement() {
   return 4;
 }
 
-// builtins/typedarray.ts:848 value Uint32Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:849 value Uint32Array.prototype.BYTES_PER_ELEMENT
 function Uint32ArrayPrototypeBytesPerElement() {
   return 4;
 }
 
-// builtins/typedarray.ts:858 constructor Float16Array
+// builtins/typedarray.ts:859 constructor Float16Array
 function Float16ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 7, args);
 }
 
-// builtins/typedarray.ts:866 value Float16Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:867 value Float16Array.BYTES_PER_ELEMENT
 function Float16ArrayBytesPerElement() {
   return 2;
 }
 
-// builtins/typedarray.ts:874 value Float16Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:875 value Float16Array.prototype.BYTES_PER_ELEMENT
 function Float16ArrayPrototypeBytesPerElement() {
   return 2;
 }
 
-// builtins/typedarray.ts:884 constructor Float32Array
+// builtins/typedarray.ts:885 constructor Float32Array
 function Float32ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 8, args);
 }
 
-// builtins/typedarray.ts:892 value Float32Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:893 value Float32Array.BYTES_PER_ELEMENT
 function Float32ArrayBytesPerElement() {
   return 4;
 }
 
-// builtins/typedarray.ts:900 value Float32Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:901 value Float32Array.prototype.BYTES_PER_ELEMENT
 function Float32ArrayPrototypeBytesPerElement() {
   return 4;
 }
 
-// builtins/typedarray.ts:910 constructor Float64Array
+// builtins/typedarray.ts:911 constructor Float64Array
 function Float64ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 9, args);
 }
 
-// builtins/typedarray.ts:918 value Float64Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:919 value Float64Array.BYTES_PER_ELEMENT
 function Float64ArrayBytesPerElement() {
   return 8;
 }
 
-// builtins/typedarray.ts:926 value Float64Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:927 value Float64Array.prototype.BYTES_PER_ELEMENT
 function Float64ArrayPrototypeBytesPerElement() {
   return 8;
 }
 
-// builtins/typedarray.ts:936 constructor BigInt64Array
+// builtins/typedarray.ts:937 constructor BigInt64Array
 function BigInt64ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 10, args);
 }
 
-// builtins/typedarray.ts:944 value BigInt64Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:945 value BigInt64Array.BYTES_PER_ELEMENT
 function BigInt64ArrayBytesPerElement() {
   return 8;
 }
 
-// builtins/typedarray.ts:952 value BigInt64Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:953 value BigInt64Array.prototype.BYTES_PER_ELEMENT
 function BigInt64ArrayPrototypeBytesPerElement() {
   return 8;
 }
 
-// builtins/typedarray.ts:962 constructor BigUint64Array
+// builtins/typedarray.ts:963 constructor BigUint64Array
 function BigUint64ArrayConstructor(...args) {
   return TypedArrayConstruct(new.target, 11, args);
 }
 
-// builtins/typedarray.ts:970 value BigUint64Array.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:971 value BigUint64Array.BYTES_PER_ELEMENT
 function BigUint64ArrayBytesPerElement() {
   return 8;
 }
 
-// builtins/typedarray.ts:978 value BigUint64Array.prototype.BYTES_PER_ELEMENT
+// builtins/typedarray.ts:979 value BigUint64Array.prototype.BYTES_PER_ELEMENT
 function BigUint64ArrayPrototypeBytesPerElement() {
   return 8;
 }
 
-// builtins/typedarray.ts:989 %TypedArray%.prototype.at
+// builtins/typedarray.ts:990 %TypedArray%.prototype.at
 function TypedArrayPrototypeAt(index) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10609,7 +10609,7 @@ function TypedArrayPrototypeAt(index) {
   return %TypedArrayGet(o, k);
 }
 
-// builtins/typedarray.ts:1004 %TypedArray%.prototype.copyWithin
+// builtins/typedarray.ts:1005 %TypedArray%.prototype.copyWithin
 function TypedArrayPrototypeCopyWithin(target, start, end) {
   const o = ValidateTypedArray(this);
   RequireMutableTypedArray(o);
@@ -10636,22 +10636,22 @@ function TypedArrayPrototypeCopyWithin(target, start, end) {
   return o;
 }
 
-// builtins/typedarray.ts:1035 %TypedArray%.prototype.entries
+// builtins/typedarray.ts:1036 %TypedArray%.prototype.entries
 function TypedArrayPrototypeEntries() {
   return %CreateArrayIterator(ValidateTypedArray(this), 2);
 }
 
-// builtins/typedarray.ts:1043 %TypedArray%.prototype.keys
+// builtins/typedarray.ts:1044 %TypedArray%.prototype.keys
 function TypedArrayPrototypeKeys() {
   return %CreateArrayIterator(ValidateTypedArray(this), 0);
 }
 
-// builtins/typedarray.ts:1052 %TypedArray%.prototype.values %TypedArray%.prototype[Symbol.iterator]
+// builtins/typedarray.ts:1053 %TypedArray%.prototype.values %TypedArray%.prototype[Symbol.iterator]
 function TypedArrayPrototypeValues() {
   return %CreateArrayIterator(ValidateTypedArray(this), 1);
 }
 
-// builtins/typedarray.ts:1057
+// builtins/typedarray.ts:1058
 function TAEveryOrSome(o, callbackfn, thisArg, wantAll) {
   const len = TALength(o);
   RequireCallable(callbackfn);
@@ -10664,17 +10664,17 @@ function TAEveryOrSome(o, callbackfn, thisArg, wantAll) {
   return wantAll;
 }
 
-// builtins/typedarray.ts:1073 %TypedArray%.prototype.every
+// builtins/typedarray.ts:1074 %TypedArray%.prototype.every
 function TypedArrayPrototypeEvery(callbackfn, thisArg) {
   return TAEveryOrSome(ValidateTypedArray(this), callbackfn, thisArg, true);
 }
 
-// builtins/typedarray.ts:1081 %TypedArray%.prototype.some
+// builtins/typedarray.ts:1082 %TypedArray%.prototype.some
 function TypedArrayPrototypeSome(callbackfn, thisArg) {
   return TAEveryOrSome(ValidateTypedArray(this), callbackfn, thisArg, false);
 }
 
-// builtins/typedarray.ts:1089 %TypedArray%.prototype.filter
+// builtins/typedarray.ts:1090 %TypedArray%.prototype.filter
 function TypedArrayPrototypeFilter(callbackfn, thisArg) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10695,7 +10695,7 @@ function TypedArrayPrototypeFilter(callbackfn, thisArg) {
   return a;
 }
 
-// builtins/typedarray.ts:1110
+// builtins/typedarray.ts:1111
 function TAFind(thisValue, predicate, thisArg, fromEnd, wantIndex) {
   const o = ValidateTypedArray(thisValue);
   const len = TALength(o);
@@ -10713,27 +10713,27 @@ function TAFind(thisValue, predicate, thisArg, fromEnd, wantIndex) {
   return undefined;
 }
 
-// builtins/typedarray.ts:1131 %TypedArray%.prototype.find
+// builtins/typedarray.ts:1132 %TypedArray%.prototype.find
 function TypedArrayPrototypeFind(predicate, thisArg) {
   return TAFind(this, predicate, thisArg, false, false);
 }
 
-// builtins/typedarray.ts:1139 %TypedArray%.prototype.findIndex
+// builtins/typedarray.ts:1140 %TypedArray%.prototype.findIndex
 function TypedArrayPrototypeFindIndex(predicate, thisArg) {
   return TAFind(this, predicate, thisArg, false, true);
 }
 
-// builtins/typedarray.ts:1147 %TypedArray%.prototype.findLast
+// builtins/typedarray.ts:1148 %TypedArray%.prototype.findLast
 function TypedArrayPrototypeFindLast(predicate, thisArg) {
   return TAFind(this, predicate, thisArg, true, false);
 }
 
-// builtins/typedarray.ts:1155 %TypedArray%.prototype.findLastIndex
+// builtins/typedarray.ts:1156 %TypedArray%.prototype.findLastIndex
 function TypedArrayPrototypeFindLastIndex(predicate, thisArg) {
   return TAFind(this, predicate, thisArg, true, true);
 }
 
-// builtins/typedarray.ts:1163 %TypedArray%.prototype.forEach
+// builtins/typedarray.ts:1164 %TypedArray%.prototype.forEach
 function TypedArrayPrototypeForEach(callbackfn, thisArg) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10743,7 +10743,7 @@ function TypedArrayPrototypeForEach(callbackfn, thisArg) {
   }
 }
 
-// builtins/typedarray.ts:1176 %TypedArray%.prototype.includes
+// builtins/typedarray.ts:1177 %TypedArray%.prototype.includes
 function TypedArrayPrototypeIncludes(searchElement, fromIndex) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10768,7 +10768,7 @@ function TypedArrayPrototypeIncludes(searchElement, fromIndex) {
   return false;
 }
 
-// builtins/typedarray.ts:1204 %TypedArray%.prototype.indexOf
+// builtins/typedarray.ts:1205 %TypedArray%.prototype.indexOf
 function TypedArrayPrototypeIndexOf(searchElement, fromIndex) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10794,7 +10794,7 @@ function TypedArrayPrototypeIndexOf(searchElement, fromIndex) {
   return -1;
 }
 
-// builtins/typedarray.ts:1234 %TypedArray%.prototype.lastIndexOf
+// builtins/typedarray.ts:1235 %TypedArray%.prototype.lastIndexOf
 function TypedArrayPrototypeLastIndexOf(searchElement, ...rest) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10818,7 +10818,7 @@ function TypedArrayPrototypeLastIndexOf(searchElement, ...rest) {
   return -1;
 }
 
-// builtins/typedarray.ts:1261 %TypedArray%.prototype.join
+// builtins/typedarray.ts:1262 %TypedArray%.prototype.join
 function TypedArrayPrototypeJoin(separator) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10839,7 +10839,7 @@ function TypedArrayPrototypeJoin(separator) {
   return r;
 }
 
-// builtins/typedarray.ts:1285 %TypedArray%.prototype.map
+// builtins/typedarray.ts:1286 %TypedArray%.prototype.map
 function TypedArrayPrototypeMap(callbackfn, thisArg) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10852,7 +10852,7 @@ function TypedArrayPrototypeMap(callbackfn, thisArg) {
   return a;
 }
 
-// builtins/typedarray.ts:1298
+// builtins/typedarray.ts:1299
 function TAReduce(o, callbackfn, rest, fromEnd) {
   const len = TALength(o);
   RequireCallable(callbackfn);
@@ -10874,17 +10874,17 @@ function TAReduce(o, callbackfn, rest, fromEnd) {
   return accumulator;
 }
 
-// builtins/typedarray.ts:1324 %TypedArray%.prototype.reduce
+// builtins/typedarray.ts:1325 %TypedArray%.prototype.reduce
 function TypedArrayPrototypeReduce(callbackfn, ...rest) {
   return TAReduce(ValidateTypedArray(this), callbackfn, rest, false);
 }
 
-// builtins/typedarray.ts:1333 %TypedArray%.prototype.reduceRight
+// builtins/typedarray.ts:1334 %TypedArray%.prototype.reduceRight
 function TypedArrayPrototypeReduceRight(callbackfn, ...rest) {
   return TAReduce(ValidateTypedArray(this), callbackfn, rest, true);
 }
 
-// builtins/typedarray.ts:1341 %TypedArray%.prototype.reverse
+// builtins/typedarray.ts:1342 %TypedArray%.prototype.reverse
 function TypedArrayPrototypeReverse() {
   const o = ValidateTypedArray(this);
   RequireMutableTypedArray(o);
@@ -10899,7 +10899,7 @@ function TypedArrayPrototypeReverse() {
   return o;
 }
 
-// builtins/typedarray.ts:1356
+// builtins/typedarray.ts:1357
 function TASortedList(o, len, comparefn) {
   const list = %ArrayCreate(0);
   for (let k = 0; k < len; k++) {
@@ -10913,7 +10913,7 @@ function TASortedList(o, len, comparefn) {
   return list;
 }
 
-// builtins/typedarray.ts:1373 %TypedArray%.prototype.sort
+// builtins/typedarray.ts:1374 %TypedArray%.prototype.sort
 function TypedArrayPrototypeSort(comparefn) {
   if (comparefn !== undefined && !%IsCallable(comparefn)) {
     throw %NewTypeError("not a function");
@@ -10928,7 +10928,7 @@ function TypedArrayPrototypeSort(comparefn) {
   return o;
 }
 
-// builtins/typedarray.ts:1391 %TypedArray%.prototype.toSorted
+// builtins/typedarray.ts:1392 %TypedArray%.prototype.toSorted
 function TypedArrayPrototypeToSorted(comparefn) {
   if (comparefn !== undefined && !%IsCallable(comparefn)) {
     throw %NewTypeError("not a function");
@@ -10943,7 +10943,7 @@ function TypedArrayPrototypeToSorted(comparefn) {
   return a;
 }
 
-// builtins/typedarray.ts:1409 %TypedArray%.prototype.toReversed
+// builtins/typedarray.ts:1410 %TypedArray%.prototype.toReversed
 function TypedArrayPrototypeToReversed() {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10954,7 +10954,7 @@ function TypedArrayPrototypeToReversed() {
   return a;
 }
 
-// builtins/typedarray.ts:1423 %TypedArray%.prototype.with
+// builtins/typedarray.ts:1424 %TypedArray%.prototype.with
 function TypedArrayPrototypeWith(index, value) {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10971,7 +10971,7 @@ function TypedArrayPrototypeWith(index, value) {
   return a;
 }
 
-// builtins/typedarray.ts:1443 %TypedArray%.prototype.toLocaleString
+// builtins/typedarray.ts:1444 %TypedArray%.prototype.toLocaleString
 function TypedArrayPrototypeToLocaleString() {
   const o = ValidateTypedArray(this);
   const len = TALength(o);
@@ -10988,7 +10988,7 @@ function TypedArrayPrototypeToLocaleString() {
   return r;
 }
 
-// builtins/typedarray.ts:1460
+// builtins/typedarray.ts:1461
 function IsCanonicalNumericKey(key) {
   if (%IsNumber(key)) {
     return true;
@@ -10999,7 +10999,7 @@ function IsCanonicalNumericKey(key) {
   return key === "-0" || ToString(ToNumber(key)) === key;
 }
 
-// builtins/typedarray.ts:1476
+// builtins/typedarray.ts:1477
 function TASet(o, k, v) {
   %TypedArraySet(o, k, ToElementValue(o, v));
 }
@@ -11195,7 +11195,7 @@ function WeakSetPrototypeToStringTag() {
   return "WeakSet";
 }
 
-// builtins/weakref.ts:9 constructor WeakRef
+// builtins/weakref.ts:10 constructor WeakRef
 function WeakRefConstructor(target) {
   if (new.target === undefined) {
     throw %NewTypeError("constructor requires 'new'");
@@ -11206,17 +11206,17 @@ function WeakRefConstructor(target) {
   return %WeakRefCreate(GetPrototypeFromConstructor(new.target, "WeakRefPrototype"), target);
 }
 
-// builtins/weakref.ts:23 WeakRef.prototype.deref
+// builtins/weakref.ts:24 WeakRef.prototype.deref
 function WeakRefPrototypeDeref() {
   return %WeakRefDeref(this);
 }
 
-// builtins/weakref.ts:32 value WeakRef.prototype[Symbol.toStringTag]
+// builtins/weakref.ts:33 value WeakRef.prototype[Symbol.toStringTag]
 function WeakRefPrototypeToStringTag() {
   return "WeakRef";
 }
 
-// builtins/weakref.ts:40 constructor FinalizationRegistry
+// builtins/weakref.ts:41 constructor FinalizationRegistry
 function FinalizationRegistryConstructor(cleanupCallback) {
   if (new.target === undefined) {
     throw %NewTypeError("constructor requires 'new'");
@@ -11228,7 +11228,7 @@ function FinalizationRegistryConstructor(cleanupCallback) {
   return %FinalizationRegistryCreate(proto, cleanupCallback);
 }
 
-// builtins/weakref.ts:57 FinalizationRegistry.prototype.register
+// builtins/weakref.ts:58 FinalizationRegistry.prototype.register
 function FinalizationRegistryPrototypeRegister(target, heldValue, unregisterToken) {
   const r = %ThisFinalizationRegistry(this);
   if (!%CanBeHeldWeakly(target)) {
@@ -11243,7 +11243,7 @@ function FinalizationRegistryPrototypeRegister(target, heldValue, unregisterToke
   %FinalizationRegistryRegister(r, target, heldValue, unregisterToken);
 }
 
-// builtins/weakref.ts:75 FinalizationRegistry.prototype.unregister
+// builtins/weakref.ts:76 FinalizationRegistry.prototype.unregister
 function FinalizationRegistryPrototypeUnregister(unregisterToken) {
   const r = %ThisFinalizationRegistry(this);
   if (!%CanBeHeldWeakly(unregisterToken)) {
@@ -11252,12 +11252,12 @@ function FinalizationRegistryPrototypeUnregister(unregisterToken) {
   return %FinalizationRegistryUnregister(r, unregisterToken);
 }
 
-// builtins/weakref.ts:88 value FinalizationRegistry.prototype[Symbol.toStringTag]
+// builtins/weakref.ts:89 value FinalizationRegistry.prototype[Symbol.toStringTag]
 function FinalizationRegistryPrototypeToStringTag() {
   return "FinalizationRegistry";
 }
 
-// builtins/weakref.ts:99 %FinalizationRegistryCleanupJob
+// builtins/weakref.ts:100 %FinalizationRegistryCleanupJob
 function FinalizationRegistryCleanupJob(r) {
   %FinalizationRegistrySetQueued(r, false);
   const callback = %RecordGet(r, 0);
@@ -12129,13 +12129,13 @@ function GlobalAtob(...args) {
 %InstallIntrinsic("AsyncFromSyncIteratorUnwrap", AsyncFromSyncIteratorUnwrap);
 %InstallIntrinsic("AsyncFromSyncIteratorCloseThrow", AsyncFromSyncIteratorCloseThrow);
 %InstallIntrinsic("ToBigInt", ToBigInt);
-%InstallIntrinsic("ToNumeric", ToNumeric);
 %InstallIntrinsic("ToPrimitive", ToPrimitive);
 %InstallIntrinsic("ToNumber", ToNumber);
 %InstallIntrinsic("ToString", ToString);
 %InstallIntrinsic("LengthOfArrayLike", LengthOfArrayLike);
 %InstallIntrinsic("ToPropertyKey", ToPropertyKey);
 %InstallIntrinsic("GetPrototypeFromConstructor", GetPrototypeFromConstructor);
+%InstallIntrinsic("ToNumeric", ToNumeric);
 %InstallIntrinsic("DatePrototypeValueOf", DatePrototypeValueOf);
 %InstallIntrinsic("DatePrototypeToISOString", DatePrototypeToISOString);
 %InstallIntrinsic("DatePrototypeToJSON", DatePrototypeToJSON);

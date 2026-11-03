@@ -389,18 +389,18 @@ ArraySetLength: reentrant (%ArraySetLength)
   builtins/array.ts:1235:23  DefineOwnPropertyFromRecord (intrinsic)
 
 ToIndex: reentrant
-  builtins/arraybuffer.ts:5:18  ToIntegerOrInfinity (builtin)
+  builtins/arraybuffer.ts:6:18  ToIntegerOrInfinity (builtin)
 
 ThisArrayBuffer: leaf
 
 AllocateArrayBuffer: reentrant
-  builtins/arraybuffer.ts:23:22  GetPrototypeFromConstructor (builtin)
+  builtins/arraybuffer.ts:24:22  GetPrototypeFromConstructor (builtin)
 
 ArrayBufferConstructor: reentrant (constructor ArrayBuffer)
-  builtins/arraybuffer.ts:36:27  ToIndex (builtin)
-  builtins/arraybuffer.ts:39:22  Get (intrinsic)
-  builtins/arraybuffer.ts:41:13  ToIndex (builtin)
-  builtins/arraybuffer.ts:44:10  AllocateArrayBuffer (builtin)
+  builtins/arraybuffer.ts:37:27  ToIndex (builtin)
+  builtins/arraybuffer.ts:40:22  Get (intrinsic)
+  builtins/arraybuffer.ts:42:13  ToIndex (builtin)
+  builtins/arraybuffer.ts:45:10  AllocateArrayBuffer (builtin)
 
 ArrayBufferIsView: leaf (ArrayBuffer.isView)
 
@@ -423,29 +423,29 @@ IsDetached: leaf
 BufferLength: leaf
 
 ArrayBufferPrototypeResize: reentrant (ArrayBuffer.prototype.resize)
-  builtins/arraybuffer.ts:127:30  ToIndex (builtin)
+  builtins/arraybuffer.ts:128:30  ToIndex (builtin)
 
 ArrayBufferPrototypeSlice: reentrant (ArrayBuffer.prototype.slice)
-  builtins/arraybuffer.ts:147:22  RelativeIndex (builtin)
-  builtins/arraybuffer.ts:148:20  RelativeIndex (builtin)
-  builtins/arraybuffer.ts:150:23  SpeciesConstructor (builtin)
-  builtins/arraybuffer.ts:151:24  Construct (intrinsic)
+  builtins/arraybuffer.ts:148:22  RelativeIndex (builtin)
+  builtins/arraybuffer.ts:149:20  RelativeIndex (builtin)
+  builtins/arraybuffer.ts:151:23  SpeciesConstructor (builtin)
+  builtins/arraybuffer.ts:152:24  Construct (intrinsic)
 
 ArrayBufferCopyAndDetach: reentrant
-  builtins/arraybuffer.ts:186:21  ToIndex (builtin)
+  builtins/arraybuffer.ts:187:21  ToIndex (builtin)
 
 ArrayBufferPrototypeTransfer: reentrant (ArrayBuffer.prototype.transfer)
-  builtins/arraybuffer.ts:213:10  ArrayBufferCopyAndDetach (builtin)
+  builtins/arraybuffer.ts:214:10  ArrayBufferCopyAndDetach (builtin)
 
 ArrayBufferPrototypeTransferToFixedLength: reentrant (ArrayBuffer.prototype.transferToFixedLength)
-  builtins/arraybuffer.ts:221:10  ArrayBufferCopyAndDetach (builtin)
+  builtins/arraybuffer.ts:222:10  ArrayBufferCopyAndDetach (builtin)
 
 ArrayBufferPrototypeTransferToImmutable: reentrant (ArrayBuffer.prototype.transferToImmutable)
-  builtins/arraybuffer.ts:229:10  ArrayBufferCopyAndDetach (builtin)
+  builtins/arraybuffer.ts:230:10  ArrayBufferCopyAndDetach (builtin)
 
 ArrayBufferPrototypeSliceToImmutable: reentrant (ArrayBuffer.prototype.sliceToImmutable)
-  builtins/arraybuffer.ts:243:22  RelativeIndex (builtin)
-  builtins/arraybuffer.ts:244:20  RelativeIndex (builtin)
+  builtins/arraybuffer.ts:244:22  RelativeIndex (builtin)
+  builtins/arraybuffer.ts:245:20  RelativeIndex (builtin)
 
 ArrayBufferPrototypeToStringTag: leaf (value ArrayBuffer.prototype[Symbol.toStringTag])
 
@@ -538,26 +538,23 @@ AsyncFromSyncIteratorThrow: reentrant (%AsyncFromSyncIteratorPrototype%.throw)
   builtins/asyncgen.ts:365:10  AsyncFromSyncIteratorContinuation (builtin)
 
 ToBigInt: reentrant (%ToBigInt)
-  builtins/bigint.ts:8:28  ToPrimitive (builtin)
-
-ToNumeric: reentrant (%ToNumeric)
-  builtins/bigint.ts:16:23  ToPrimitive (builtin)
+  builtins/bigint.ts:9:28  ToPrimitive (builtin)
 
 BigIntConstructor: reentrant (constructor BigInt)
-  builtins/bigint.ts:31:23  ToPrimitive (builtin)
+  builtins/bigint.ts:20:23  ToPrimitive (builtin)
 
 BigIntAsIntNBuiltin: reentrant (BigInt.asIntN)
-  builtins/bigint.ts:47:18  ToIndex (builtin)
-  builtins/bigint.ts:48:26  ToBigInt (builtin)
+  builtins/bigint.ts:36:18  ToIndex (builtin)
+  builtins/bigint.ts:37:26  ToBigInt (builtin)
 
 BigIntAsUintNBuiltin: reentrant (BigInt.asUintN)
-  builtins/bigint.ts:56:18  ToIndex (builtin)
-  builtins/bigint.ts:57:27  ToBigInt (builtin)
+  builtins/bigint.ts:45:18  ToIndex (builtin)
+  builtins/bigint.ts:46:27  ToBigInt (builtin)
 
 ThisBigIntValue: leaf
 
 BigIntPrototypeToString: reentrant (BigInt.prototype.toString)
-  builtins/bigint.ts:77:9  ToIntegerOrInfinity (builtin)
+  builtins/bigint.ts:66:9  ToIntegerOrInfinity (builtin)
 
 BigIntPrototypeToLocaleString: leaf (BigInt.prototype.toLocaleString)
 
@@ -608,14 +605,17 @@ ToPropertyKey: reentrant (%ToPropertyKey)
 GetPrototypeFromConstructor: reentrant (%GetPrototypeFromConstructor, @native)
   builtins/conversion.ts:133:24  Get (intrinsic)
 
+ToNumeric: reentrant (%ToNumeric)
+  builtins/conversion.ts:151:23  ToPrimitive (builtin)
+
 DVOutOfBounds: leaf
 
 DVByteLength: leaf
 
 DataViewConstructor: reentrant (constructor DataView)
-  builtins/dataview.ts:38:23  ToIndex (builtin)
-  builtins/dataview.ts:53:22  ToIndex (builtin)
-  builtins/dataview.ts:58:22  GetPrototypeFromConstructor (builtin)
+  builtins/dataview.ts:39:23  ToIndex (builtin)
+  builtins/dataview.ts:54:22  ToIndex (builtin)
+  builtins/dataview.ts:59:22  GetPrototypeFromConstructor (builtin)
 
 DataViewPrototypeBuffer: leaf (get DataView.prototype.buffer)
 
@@ -628,81 +628,81 @@ DataViewPrototypeToStringTag: leaf (value DataView.prototype[Symbol.toStringTag]
 DVByteIndex: leaf
 
 GetViewValue: reentrant
-  builtins/dataview.ts:132:19  GetViewElement (builtin)
+  builtins/dataview.ts:133:19  GetViewElement (builtin)
 
 GetViewElement: reentrant
-  builtins/dataview.ts:138:25  ToIndex (builtin)
+  builtins/dataview.ts:139:25  ToIndex (builtin)
 
 SetViewValue: reentrant
-  builtins/dataview.ts:150:25  ToIndex (builtin)
-  builtins/dataview.ts:153:9  ToBigInt (builtin)
-  builtins/dataview.ts:155:9  ToNumber (builtin)
+  builtins/dataview.ts:151:25  ToIndex (builtin)
+  builtins/dataview.ts:154:9  ToBigInt (builtin)
+  builtins/dataview.ts:156:9  ToNumber (builtin)
 
 DataViewPrototypeGetInt8: reentrant (DataView.prototype.getInt8)
-  builtins/dataview.ts:167:10  GetViewValue (builtin)
+  builtins/dataview.ts:168:10  GetViewValue (builtin)
 
 DataViewPrototypeGetUint8: reentrant (DataView.prototype.getUint8)
-  builtins/dataview.ts:175:10  GetViewValue (builtin)
+  builtins/dataview.ts:176:10  GetViewValue (builtin)
 
 DataViewPrototypeGetInt16: reentrant (DataView.prototype.getInt16)
-  builtins/dataview.ts:183:10  GetViewValue (builtin)
+  builtins/dataview.ts:184:10  GetViewValue (builtin)
 
 DataViewPrototypeGetUint16: reentrant (DataView.prototype.getUint16)
-  builtins/dataview.ts:191:10  GetViewValue (builtin)
+  builtins/dataview.ts:192:10  GetViewValue (builtin)
 
 DataViewPrototypeGetInt32: reentrant (DataView.prototype.getInt32)
-  builtins/dataview.ts:199:10  GetViewValue (builtin)
+  builtins/dataview.ts:200:10  GetViewValue (builtin)
 
 DataViewPrototypeGetUint32: reentrant (DataView.prototype.getUint32)
-  builtins/dataview.ts:207:10  GetViewValue (builtin)
+  builtins/dataview.ts:208:10  GetViewValue (builtin)
 
 DataViewPrototypeGetBigInt64: reentrant (DataView.prototype.getBigInt64)
-  builtins/dataview.ts:215:10  GetViewElement (builtin)
+  builtins/dataview.ts:216:10  GetViewElement (builtin)
 
 DataViewPrototypeGetBigUint64: reentrant (DataView.prototype.getBigUint64)
-  builtins/dataview.ts:223:10  GetViewElement (builtin)
+  builtins/dataview.ts:224:10  GetViewElement (builtin)
 
 DataViewPrototypeGetFloat16: reentrant (DataView.prototype.getFloat16)
-  builtins/dataview.ts:231:10  GetViewValue (builtin)
+  builtins/dataview.ts:232:10  GetViewValue (builtin)
 
 DataViewPrototypeGetFloat32: reentrant (DataView.prototype.getFloat32)
-  builtins/dataview.ts:239:10  GetViewValue (builtin)
+  builtins/dataview.ts:240:10  GetViewValue (builtin)
 
 DataViewPrototypeGetFloat64: reentrant (DataView.prototype.getFloat64)
-  builtins/dataview.ts:247:10  GetViewValue (builtin)
+  builtins/dataview.ts:248:10  GetViewValue (builtin)
 
 DataViewPrototypeSetInt8: reentrant (DataView.prototype.setInt8)
-  builtins/dataview.ts:255:3  SetViewValue (builtin)
+  builtins/dataview.ts:256:3  SetViewValue (builtin)
 
 DataViewPrototypeSetUint8: reentrant (DataView.prototype.setUint8)
-  builtins/dataview.ts:263:3  SetViewValue (builtin)
+  builtins/dataview.ts:264:3  SetViewValue (builtin)
 
 DataViewPrototypeSetInt16: reentrant (DataView.prototype.setInt16)
-  builtins/dataview.ts:271:3  SetViewValue (builtin)
+  builtins/dataview.ts:272:3  SetViewValue (builtin)
 
 DataViewPrototypeSetUint16: reentrant (DataView.prototype.setUint16)
-  builtins/dataview.ts:279:3  SetViewValue (builtin)
+  builtins/dataview.ts:280:3  SetViewValue (builtin)
 
 DataViewPrototypeSetInt32: reentrant (DataView.prototype.setInt32)
-  builtins/dataview.ts:287:3  SetViewValue (builtin)
+  builtins/dataview.ts:288:3  SetViewValue (builtin)
 
 DataViewPrototypeSetUint32: reentrant (DataView.prototype.setUint32)
-  builtins/dataview.ts:295:3  SetViewValue (builtin)
+  builtins/dataview.ts:296:3  SetViewValue (builtin)
 
 DataViewPrototypeSetBigInt64: reentrant (DataView.prototype.setBigInt64)
-  builtins/dataview.ts:303:3  SetViewValue (builtin)
+  builtins/dataview.ts:304:3  SetViewValue (builtin)
 
 DataViewPrototypeSetBigUint64: reentrant (DataView.prototype.setBigUint64)
-  builtins/dataview.ts:311:3  SetViewValue (builtin)
+  builtins/dataview.ts:312:3  SetViewValue (builtin)
 
 DataViewPrototypeSetFloat16: reentrant (DataView.prototype.setFloat16)
-  builtins/dataview.ts:319:3  SetViewValue (builtin)
+  builtins/dataview.ts:320:3  SetViewValue (builtin)
 
 DataViewPrototypeSetFloat32: reentrant (DataView.prototype.setFloat32)
-  builtins/dataview.ts:327:3  SetViewValue (builtin)
+  builtins/dataview.ts:328:3  SetViewValue (builtin)
 
 DataViewPrototypeSetFloat64: reentrant (DataView.prototype.setFloat64)
-  builtins/dataview.ts:335:3  SetViewValue (builtin)
+  builtins/dataview.ts:336:3  SetViewValue (builtin)
 
 DateValueFromArgs: reentrant
   builtins/date.ts:7:18  LengthOfArrayLike (builtin)
@@ -851,159 +851,159 @@ DatePrototypeToPrimitive: reentrant (Date.prototype[Symbol.toPrimitive], %DatePr
 DecoratorKindName: leaf
 
 DecoratorPush: reentrant
-  builtins/decorators.ts:35:35  LengthOfArrayLike (builtin)
-  builtins/decorators.ts:35:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:36:35  LengthOfArrayLike (builtin)
+  builtins/decorators.ts:36:3  CreateDataPropertyOrThrow (intrinsic)
 
 DecoratorStart: reentrant (%DecoratorStart)
-  builtins/decorators.ts:46:31  GetPrototypeOf (intrinsic)
-  builtins/decorators.ts:48:16  Get (intrinsic)
+  builtins/decorators.ts:47:31  GetPrototypeOf (intrinsic)
+  builtins/decorators.ts:49:16  Get (intrinsic)
 
 DecoratorNewAccess: reentrant
-  builtins/decorators.ts:71:5  CreateDataPropertyOrThrow (intrinsic)
-  builtins/decorators.ts:74:5  CreateDataPropertyOrThrow (intrinsic)
-  builtins/decorators.ts:76:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:72:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:75:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:77:3  CreateDataPropertyOrThrow (intrinsic)
 
 DecoratorNewContext: reentrant
-  builtins/decorators.ts:87:3  CreateDataPropertyOrThrow (intrinsic)
-  builtins/decorators.ts:89:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:88:3  CreateDataPropertyOrThrow (intrinsic)
   builtins/decorators.ts:90:5  CreateDataPropertyOrThrow (intrinsic)
   builtins/decorators.ts:91:5  CreateDataPropertyOrThrow (intrinsic)
-  builtins/decorators.ts:93:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:92:5  CreateDataPropertyOrThrow (intrinsic)
   builtins/decorators.ts:94:3  CreateDataPropertyOrThrow (intrinsic)
   builtins/decorators.ts:95:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:96:3  CreateDataPropertyOrThrow (intrinsic)
 
 DecoratorCheckResult: leaf
 
 DecoratorAccessorFn: reentrant
-  builtins/decorators.ts:108:20  Get (intrinsic)
+  builtins/decorators.ts:109:20  Get (intrinsic)
 
 ApplyDecorators: reentrant (%ApplyDecorators)
-  builtins/decorators.ts:137:14  Get (intrinsic)
-  builtins/decorators.ts:145:13  Get (intrinsic)
-  builtins/decorators.ts:146:16  Get (intrinsic)
-  builtins/decorators.ts:154:14  DecoratorNewAccess (builtin)
-  builtins/decorators.ts:156:27  GetOwnPropertyDescriptorObject (intrinsic)
-  builtins/decorators.ts:159:17  Get (intrinsic)
-  builtins/decorators.ts:161:17  Get (intrinsic)
-  builtins/decorators.ts:163:17  Get (intrinsic)
-  builtins/decorators.ts:165:22  Get (intrinsic)
-  builtins/decorators.ts:189:9  LengthOfArrayLike (builtin)
-  builtins/decorators.ts:193:24  Get (intrinsic)
-  builtins/decorators.ts:194:25  Get (intrinsic)
-  builtins/decorators.ts:198:22  DecoratorNewContext (builtin)
-  builtins/decorators.ts:202:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:138:14  Get (intrinsic)
+  builtins/decorators.ts:146:13  Get (intrinsic)
+  builtins/decorators.ts:147:16  Get (intrinsic)
+  builtins/decorators.ts:155:14  DecoratorNewAccess (builtin)
+  builtins/decorators.ts:157:27  GetOwnPropertyDescriptorObject (intrinsic)
+  builtins/decorators.ts:160:17  Get (intrinsic)
+  builtins/decorators.ts:162:17  Get (intrinsic)
+  builtins/decorators.ts:164:17  Get (intrinsic)
+  builtins/decorators.ts:166:22  Get (intrinsic)
+  builtins/decorators.ts:190:9  LengthOfArrayLike (builtin)
+  builtins/decorators.ts:194:24  Get (intrinsic)
+  builtins/decorators.ts:195:25  Get (intrinsic)
+  builtins/decorators.ts:199:22  DecoratorNewContext (builtin)
   builtins/decorators.ts:203:7  CreateDataPropertyOrThrow (intrinsic)
-  builtins/decorators.ts:208:13  Call (intrinsic)
-  builtins/decorators.ts:216:9  DecoratorPush (builtin)
-  builtins/decorators.ts:220:26  DecoratorAccessorFn (builtin)
+  builtins/decorators.ts:204:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:209:13  Call (intrinsic)
+  builtins/decorators.ts:217:9  DecoratorPush (builtin)
   builtins/decorators.ts:221:26  DecoratorAccessorFn (builtin)
-  builtins/decorators.ts:222:29  DecoratorAccessorFn (builtin)
-  builtins/decorators.ts:230:11  DecoratorPush (builtin)
-  builtins/decorators.ts:243:5  DefineDataPropertyOrThrow (intrinsic)
-  builtins/decorators.ts:252:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:222:26  DecoratorAccessorFn (builtin)
+  builtins/decorators.ts:223:29  DecoratorAccessorFn (builtin)
+  builtins/decorators.ts:231:11  DecoratorPush (builtin)
+  builtins/decorators.ts:244:5  DefineDataPropertyOrThrow (intrinsic)
   builtins/decorators.ts:253:7  CreateDataPropertyOrThrow (intrinsic)
-  builtins/decorators.ts:254:7  DecoratorDefine (builtin)
-  builtins/decorators.ts:265:5  CreateDataPropertyOrThrow (intrinsic)
-  builtins/decorators.ts:267:5  CreateDataPropertyOrThrow (intrinsic)
-  builtins/decorators.ts:269:5  CreateDataPropertyOrThrow (intrinsic)
-  builtins/decorators.ts:271:3  DecoratorDefine (builtin)
+  builtins/decorators.ts:254:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:255:7  DecoratorDefine (builtin)
+  builtins/decorators.ts:266:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:268:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:270:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/decorators.ts:272:3  DecoratorDefine (builtin)
 
 DecoratorDefine: reentrant
-  builtins/decorators.ts:277:8  DefineOwnPropertyFromRecord (intrinsic)
+  builtins/decorators.ts:278:8  DefineOwnPropertyFromRecord (intrinsic)
 
 DecoratorRunInits: reentrant (%DecoratorRunInits)
-  builtins/decorators.ts:290:16  LengthOfArrayLike (builtin)
-  builtins/decorators.ts:293:14  Get (intrinsic)
-  builtins/decorators.ts:293:9  Call (intrinsic)
+  builtins/decorators.ts:291:16  LengthOfArrayLike (builtin)
+  builtins/decorators.ts:294:14  Get (intrinsic)
+  builtins/decorators.ts:294:9  Call (intrinsic)
 
 DecoratorRunExtras: reentrant (%DecoratorRunExtras)
-  builtins/decorators.ts:305:18  LengthOfArrayLike (builtin)
-  builtins/decorators.ts:307:10  Get (intrinsic)
-  builtins/decorators.ts:307:5  Call (intrinsic)
+  builtins/decorators.ts:306:18  LengthOfArrayLike (builtin)
+  builtins/decorators.ts:308:10  Get (intrinsic)
+  builtins/decorators.ts:308:5  Call (intrinsic)
 
 DecoratorAddInitializer: reentrant (%DecoratorAddInitializer)
-  builtins/decorators.ts:323:3  DecoratorPush (builtin)
+  builtins/decorators.ts:324:3  DecoratorPush (builtin)
 
 DecoratorAccessGet: reentrant (%DecoratorAccessGet)
-  builtins/decorators.ts:334:10  Get (intrinsic)
+  builtins/decorators.ts:335:10  Get (intrinsic)
 
 DecoratorAccessSet: reentrant (%DecoratorAccessSet)
-  builtins/decorators.ts:345:3  Set (intrinsic)
+  builtins/decorators.ts:346:3  Set (intrinsic)
 
 DecoratorAccessHas: reentrant (%DecoratorAccessHas)
-  builtins/decorators.ts:356:10  HasProperty (intrinsic)
+  builtins/decorators.ts:357:10  HasProperty (intrinsic)
 
 DecoratorReflectFn: reentrant
-  builtins/decorators.ts:366:20  Get (intrinsic)
+  builtins/decorators.ts:367:20  Get (intrinsic)
 
 ApplyLegacyDecorators: reentrant (%ApplyLegacyDecorators)
-  builtins/decorators.ts:383:9  ObjectGetOwnPropertyDescriptor (builtin)
-  builtins/decorators.ts:385:26  Get (intrinsic)
-  builtins/decorators.ts:386:27  DecoratorReflectFn (builtin)
-  builtins/decorators.ts:389:11  Call (intrinsic)
-  builtins/decorators.ts:391:11  Call (intrinsic)
-  builtins/decorators.ts:395:18  LengthOfArrayLike (builtin)
-  builtins/decorators.ts:398:26  Get (intrinsic)
-  builtins/decorators.ts:402:39  Call (intrinsic)
-  builtins/decorators.ts:402:65  Call (intrinsic)
-  builtins/decorators.ts:412:5  ObjectDefineProperty (builtin)
+  builtins/decorators.ts:384:9  ObjectGetOwnPropertyDescriptor (builtin)
+  builtins/decorators.ts:386:26  Get (intrinsic)
+  builtins/decorators.ts:387:27  DecoratorReflectFn (builtin)
+  builtins/decorators.ts:390:11  Call (intrinsic)
+  builtins/decorators.ts:392:11  Call (intrinsic)
+  builtins/decorators.ts:396:18  LengthOfArrayLike (builtin)
+  builtins/decorators.ts:399:26  Get (intrinsic)
+  builtins/decorators.ts:403:39  Call (intrinsic)
+  builtins/decorators.ts:403:65  Call (intrinsic)
+  builtins/decorators.ts:413:5  ObjectDefineProperty (builtin)
 
 DecoratorParam: leaf (%DecoratorParam)
 
 DecoratorParamCall: reentrant (%DecoratorParamCall)
-  builtins/decorators.ts:435:3  Call (intrinsic)
+  builtins/decorators.ts:436:3  Call (intrinsic)
 
 DecoratorMetadata: reentrant (%DecoratorMetadata)
-  builtins/decorators.ts:444:26  Get (intrinsic)
-  builtins/decorators.ts:445:20  DecoratorReflectFn (builtin)
-  builtins/decorators.ts:449:10  Call (intrinsic)
+  builtins/decorators.ts:445:26  Get (intrinsic)
+  builtins/decorators.ts:446:20  DecoratorReflectFn (builtin)
+  builtins/decorators.ts:450:10  Call (intrinsic)
 
 SymbolMetadata: leaf (value Symbol.metadata)
 
 NewSuppressedError: reentrant
-  builtins/disposable.ts:17:3  DefineDataPropertyOrThrow (intrinsic)
   builtins/disposable.ts:18:3  DefineDataPropertyOrThrow (intrinsic)
-  builtins/disposable.ts:19:3  RecordStack (builtin)
+  builtins/disposable.ts:19:3  DefineDataPropertyOrThrow (intrinsic)
+  builtins/disposable.ts:20:3  RecordStack (builtin)
 
 PendingDisposableStack: leaf
 
 AddResource: reentrant
-  builtins/disposable.ts:35:18  LengthOfArrayLike (builtin)
-  builtins/disposable.ts:36:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/disposable.ts:36:18  LengthOfArrayLike (builtin)
   builtins/disposable.ts:37:3  CreateDataPropertyOrThrow (intrinsic)
   builtins/disposable.ts:38:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/disposable.ts:39:3  CreateDataPropertyOrThrow (intrinsic)
 
 AddDisposableValue: reentrant
-  builtins/disposable.ts:48:7  AddResource (builtin)
-  builtins/disposable.ts:58:14  GetV (intrinsic)
-  builtins/disposable.ts:61:14  GetV (intrinsic)
-  builtins/disposable.ts:72:3  AddResource (builtin)
+  builtins/disposable.ts:49:7  AddResource (builtin)
+  builtins/disposable.ts:59:14  GetV (intrinsic)
+  builtins/disposable.ts:62:14  GetV (intrinsic)
+  builtins/disposable.ts:73:3  AddResource (builtin)
 
 CallDisposeMethod: reentrant
-  builtins/disposable.ts:77:24  Get (intrinsic)
-  builtins/disposable.ts:78:25  Get (intrinsic)
+  builtins/disposable.ts:78:24  Get (intrinsic)
   builtins/disposable.ts:79:25  Get (intrinsic)
-  builtins/disposable.ts:80:12  Call (intrinsic)
-  builtins/disposable.ts:82:10  Call (intrinsic)
+  builtins/disposable.ts:80:25  Get (intrinsic)
+  builtins/disposable.ts:81:12  Call (intrinsic)
+  builtins/disposable.ts:83:10  Call (intrinsic)
 
 DisposableStackConstructor: reentrant (constructor DisposableStack)
-  builtins/disposable.ts:93:32  GetPrototypeFromConstructor (builtin)
+  builtins/disposable.ts:94:32  GetPrototypeFromConstructor (builtin)
 
 DisposableStackPrototypeDisposed: leaf (get DisposableStack.prototype.disposed)
 
 DisposableStackPrototypeDispose: reentrant (DisposableStack.prototype.dispose, DisposableStack.prototype[Symbol.dispose])
-  builtins/disposable.ts:120:21  LengthOfArrayLike (builtin)
-  builtins/disposable.ts:122:7  CallDisposeMethod (builtin)
-  builtins/disposable.ts:124:26  NewSuppressedError (builtin)
+  builtins/disposable.ts:121:21  LengthOfArrayLike (builtin)
+  builtins/disposable.ts:123:7  CallDisposeMethod (builtin)
+  builtins/disposable.ts:125:26  NewSuppressedError (builtin)
 
 DisposableStackPrototypeUse: reentrant (DisposableStack.prototype.use)
-  builtins/disposable.ts:138:3  AddDisposableValue (builtin)
+  builtins/disposable.ts:139:3  AddDisposableValue (builtin)
 
 DisposableStackPrototypeAdopt: reentrant (DisposableStack.prototype.adopt)
-  builtins/disposable.ts:151:3  AddResource (builtin)
+  builtins/disposable.ts:152:3  AddResource (builtin)
 
 DisposableStackPrototypeDefer: reentrant (DisposableStack.prototype.defer)
-  builtins/disposable.ts:164:3  AddResource (builtin)
+  builtins/disposable.ts:165:3  AddResource (builtin)
 
 DisposableStackMove: leaf
 
@@ -1012,90 +1012,90 @@ DisposableStackPrototypeMove: leaf (DisposableStack.prototype.move)
 DisposableStackPrototypeToStringTag: leaf (value DisposableStack.prototype[Symbol.toStringTag])
 
 AsyncDisposableStackConstructor: reentrant (constructor AsyncDisposableStack)
-  builtins/disposable.ts:203:32  GetPrototypeFromConstructor (builtin)
+  builtins/disposable.ts:204:32  GetPrototypeFromConstructor (builtin)
 
 AsyncDisposableStackPrototypeDisposed: leaf (get AsyncDisposableStack.prototype.disposed)
 
 AsyncDisposableStackPrototypeUse: reentrant (AsyncDisposableStack.prototype.use)
-  builtins/disposable.ts:219:3  AddDisposableValue (builtin)
+  builtins/disposable.ts:220:3  AddDisposableValue (builtin)
 
 AsyncDisposableStackPrototypeAdopt: reentrant (AsyncDisposableStack.prototype.adopt)
-  builtins/disposable.ts:232:3  AddResource (builtin)
+  builtins/disposable.ts:233:3  AddResource (builtin)
 
 AsyncDisposableStackPrototypeDefer: reentrant (AsyncDisposableStack.prototype.defer)
-  builtins/disposable.ts:245:3  AddResource (builtin)
+  builtins/disposable.ts:246:3  AddResource (builtin)
 
 AsyncDisposableStackPrototypeMove: leaf (AsyncDisposableStack.prototype.move)
 
 AsyncDisposableStackPrototypeToStringTag: leaf (value AsyncDisposableStack.prototype[Symbol.toStringTag])
 
 AsyncDisposableStackPrototypeDisposeAsync: reentrant (AsyncDisposableStack.prototype.disposeAsync, AsyncDisposableStack.prototype[Symbol.asyncDispose])
-  builtins/disposable.ts:288:5  ResolvePromise (builtin)
-  builtins/disposable.ts:297:19  LengthOfArrayLike (builtin)
-  builtins/disposable.ts:302:3  AsyncDisposeContinue (builtin)
+  builtins/disposable.ts:289:5  ResolvePromise (builtin)
+  builtins/disposable.ts:298:19  LengthOfArrayLike (builtin)
+  builtins/disposable.ts:303:3  AsyncDisposeContinue (builtin)
 
 AsyncDisposeError: reentrant
-  builtins/disposable.ts:309:21  NewSuppressedError (builtin)
+  builtins/disposable.ts:310:21  NewSuppressedError (builtin)
 
 AsyncDisposeAwait: reentrant
-  builtins/disposable.ts:318:26  PromiseResolve (builtin)
+  builtins/disposable.ts:319:26  PromiseResolve (builtin)
 
 AsyncDisposeContinue: reentrant
-  builtins/disposable.ts:334:41  Get (intrinsic)
-  builtins/disposable.ts:341:16  CallDisposeMethod (builtin)
-  builtins/disposable.ts:344:9  AsyncDisposeError (builtin)
-  builtins/disposable.ts:356:7  AsyncDisposeAwait (builtin)
-  builtins/disposable.ts:358:7  AsyncDisposeError (builtin)
-  builtins/disposable.ts:365:5  AsyncDisposeAwait (builtin)
-  builtins/disposable.ts:372:5  ResolvePromise (builtin)
+  builtins/disposable.ts:335:41  Get (intrinsic)
+  builtins/disposable.ts:342:16  CallDisposeMethod (builtin)
+  builtins/disposable.ts:345:9  AsyncDisposeError (builtin)
+  builtins/disposable.ts:357:7  AsyncDisposeAwait (builtin)
+  builtins/disposable.ts:359:7  AsyncDisposeError (builtin)
+  builtins/disposable.ts:366:5  AsyncDisposeAwait (builtin)
+  builtins/disposable.ts:373:5  ResolvePromise (builtin)
 
 AsyncDisposeFulfilled: reentrant (%AsyncDisposeFulfilled)
-  builtins/disposable.ts:385:5  AsyncDisposeError (builtin)
-  builtins/disposable.ts:387:3  AsyncDisposeContinue (builtin)
+  builtins/disposable.ts:386:5  AsyncDisposeError (builtin)
+  builtins/disposable.ts:388:3  AsyncDisposeContinue (builtin)
 
 AsyncDisposeRejected: reentrant (%AsyncDisposeRejected)
-  builtins/disposable.ts:396:3  AsyncDisposeError (builtin)
-  builtins/disposable.ts:397:3  AsyncDisposeContinue (builtin)
+  builtins/disposable.ts:397:3  AsyncDisposeError (builtin)
+  builtins/disposable.ts:398:3  AsyncDisposeContinue (builtin)
 
 UsingCreate: leaf (%UsingCreate)
 
 UsingAdd: reentrant (%UsingAdd)
-  builtins/disposable.ts:425:3  AddDisposableValue (builtin)
+  builtins/disposable.ts:426:3  AddDisposableValue (builtin)
 
 AwaitUsingAdd: reentrant (%AwaitUsingAdd)
-  builtins/disposable.ts:434:3  AddDisposableValue (builtin)
-  builtins/disposable.ts:438:18  LengthOfArrayLike (builtin)
-  builtins/disposable.ts:439:25  Get (intrinsic)
-  builtins/disposable.ts:440:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/disposable.ts:435:3  AddDisposableValue (builtin)
+  builtins/disposable.ts:439:18  LengthOfArrayLike (builtin)
+  builtins/disposable.ts:440:25  Get (intrinsic)
+  builtins/disposable.ts:441:5  CreateDataPropertyOrThrow (intrinsic)
 
 UsingDisposeError: reentrant (%UsingDisposeError)
-  builtins/disposable.ts:451:3  AsyncDisposeError (builtin)
+  builtins/disposable.ts:452:3  AsyncDisposeError (builtin)
 
 UsingDispose: reentrant (%UsingDispose)
-  builtins/disposable.ts:461:21  LengthOfArrayLike (builtin)
-  builtins/disposable.ts:463:7  CallDisposeMethod (builtin)
-  builtins/disposable.ts:465:7  AsyncDisposeError (builtin)
+  builtins/disposable.ts:462:21  LengthOfArrayLike (builtin)
+  builtins/disposable.ts:464:7  CallDisposeMethod (builtin)
+  builtins/disposable.ts:466:7  AsyncDisposeError (builtin)
 
 UsingDisposeStep: reentrant (%UsingDisposeStep)
-  builtins/disposable.ts:482:5  AsyncDisposeError (builtin)
-  builtins/disposable.ts:487:9  LengthOfArrayLike (builtin)
-  builtins/disposable.ts:492:41  Get (intrinsic)
-  builtins/disposable.ts:505:9  CallDisposeMethod (builtin)
-  builtins/disposable.ts:507:9  AsyncDisposeError (builtin)
-  builtins/disposable.ts:513:18  CallDisposeMethod (builtin)
-  builtins/disposable.ts:521:11  AsyncDisposeError (builtin)
+  builtins/disposable.ts:483:5  AsyncDisposeError (builtin)
+  builtins/disposable.ts:488:9  LengthOfArrayLike (builtin)
+  builtins/disposable.ts:493:41  Get (intrinsic)
+  builtins/disposable.ts:506:9  CallDisposeMethod (builtin)
+  builtins/disposable.ts:508:9  AsyncDisposeError (builtin)
+  builtins/disposable.ts:514:18  CallDisposeMethod (builtin)
+  builtins/disposable.ts:522:11  AsyncDisposeError (builtin)
 
 UsingAwaitValue: leaf (%UsingAwaitValue)
 
 IteratorPrototypeDispose: reentrant (Iterator.prototype[Symbol.dispose])
-  builtins/disposable.ts:556:25  GetMethod (builtin)
-  builtins/disposable.ts:558:5  Call (intrinsic)
+  builtins/disposable.ts:557:25  GetMethod (builtin)
+  builtins/disposable.ts:559:5  Call (intrinsic)
 
 AsyncIteratorPrototypeAsyncDispose: reentrant (%AsyncIteratorPrototype%[Symbol.asyncDispose])
-  builtins/disposable.ts:570:27  GetMethod (builtin)
-  builtins/disposable.ts:572:7  ResolvePromise (builtin)
-  builtins/disposable.ts:575:50  Call (intrinsic)
-  builtins/disposable.ts:575:15  PromiseResolve (builtin)
+  builtins/disposable.ts:571:27  GetMethod (builtin)
+  builtins/disposable.ts:573:7  ResolvePromise (builtin)
+  builtins/disposable.ts:576:50  Call (intrinsic)
+  builtins/disposable.ts:576:15  PromiseResolve (builtin)
 
 SymbolDispose: leaf (value Symbol.dispose)
 
@@ -1490,324 +1490,324 @@ StringIteratorToStringTag: leaf (value %StringIteratorPrototype%[Symbol.toString
 HelperState: leaf
 
 GetIteratorDirectNext: reentrant
-  builtins/iterator.ts:31:10  Get (intrinsic)
+  builtins/iterator.ts:32:10  Get (intrinsic)
 
 IteratorStepResult: reentrant
-  builtins/iterator.ts:39:23  IteratorNextResult (builtin)
-  builtins/iterator.ts:40:17  Get (intrinsic)
+  builtins/iterator.ts:40:23  IteratorNextResult (builtin)
+  builtins/iterator.ts:41:17  Get (intrinsic)
 
 GetIteratorFlattenable: reentrant
-  builtins/iterator.ts:56:25  GetMethod (builtin)
-  builtins/iterator.ts:59:16  Call (intrinsic)
+  builtins/iterator.ts:57:25  GetMethod (builtin)
+  builtins/iterator.ts:60:16  Call (intrinsic)
 
 ThisIteratorObject: leaf
 
 HelperCallable: reentrant
-  builtins/iterator.ts:82:5  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:83:5  IteratorCloseThrow (builtin)
 
 HelperLimit: reentrant
-  builtins/iterator.ts:94:16  ToNumber (builtin)
-  builtins/iterator.ts:96:5  IteratorCloseThrow (builtin)
-  builtins/iterator.ts:102:5  IteratorCloseThrow (builtin)
-  builtins/iterator.ts:108:5  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:95:16  ToNumber (builtin)
+  builtins/iterator.ts:97:5  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:103:5  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:109:5  IteratorCloseThrow (builtin)
 
 NewIteratorHelper: reentrant
-  builtins/iterator.ts:116:23  GetIteratorDirectNext (builtin)
+  builtins/iterator.ts:117:23  GetIteratorDirectNext (builtin)
 
 HelperYield: leaf
 
 HelperCallFunction: reentrant
-  builtins/iterator.ts:137:14  Call (intrinsic)
-  builtins/iterator.ts:139:5  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:138:14  Call (intrinsic)
+  builtins/iterator.ts:140:5  IteratorCloseThrow (builtin)
 
 IteratorHelperStep: reentrant
-  builtins/iterator.ts:150:12  ConcatStep (builtin)
-  builtins/iterator.ts:153:12  ZipStep (builtin)
-  builtins/iterator.ts:158:27  IteratorStepResult (builtin)
-  builtins/iterator.ts:162:26  Get (intrinsic)
-  builtins/iterator.ts:163:27  HelperCallFunction (builtin)
-  builtins/iterator.ts:167:29  IteratorStepResult (builtin)
-  builtins/iterator.ts:171:28  Get (intrinsic)
-  builtins/iterator.ts:172:21  HelperCallFunction (builtin)
-  builtins/iterator.ts:180:7  IteratorClose (builtin)
-  builtins/iterator.ts:186:27  IteratorStepResult (builtin)
-  builtins/iterator.ts:190:27  Get (intrinsic)
-  builtins/iterator.ts:199:11  IteratorStepResult (builtin)
-  builtins/iterator.ts:203:27  IteratorStepResult (builtin)
-  builtins/iterator.ts:207:27  Get (intrinsic)
-  builtins/iterator.ts:210:12  FlatMapStep (builtin)
-  builtins/iterator.ts:213:12  ChunksStep (builtin)
-  builtins/iterator.ts:215:10  WindowsStep (builtin)
+  builtins/iterator.ts:151:12  ConcatStep (builtin)
+  builtins/iterator.ts:154:12  ZipStep (builtin)
+  builtins/iterator.ts:159:27  IteratorStepResult (builtin)
+  builtins/iterator.ts:163:26  Get (intrinsic)
+  builtins/iterator.ts:164:27  HelperCallFunction (builtin)
+  builtins/iterator.ts:168:29  IteratorStepResult (builtin)
+  builtins/iterator.ts:172:28  Get (intrinsic)
+  builtins/iterator.ts:173:21  HelperCallFunction (builtin)
+  builtins/iterator.ts:181:7  IteratorClose (builtin)
+  builtins/iterator.ts:187:27  IteratorStepResult (builtin)
+  builtins/iterator.ts:191:27  Get (intrinsic)
+  builtins/iterator.ts:200:11  IteratorStepResult (builtin)
+  builtins/iterator.ts:204:27  IteratorStepResult (builtin)
+  builtins/iterator.ts:208:27  Get (intrinsic)
+  builtins/iterator.ts:211:12  FlatMapStep (builtin)
+  builtins/iterator.ts:214:12  ChunksStep (builtin)
+  builtins/iterator.ts:216:10  WindowsStep (builtin)
 
 ArrayPrefixCopy: reentrant
-  builtins/iterator.ts:222:40  Get (intrinsic)
-  builtins/iterator.ts:222:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:223:40  Get (intrinsic)
+  builtins/iterator.ts:223:5  CreateDataPropertyOrThrow (intrinsic)
 
 ChunksStep: reentrant
-  builtins/iterator.ts:236:27  IteratorStepResult (builtin)
-  builtins/iterator.ts:244:42  Get (intrinsic)
-  builtins/iterator.ts:244:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:237:27  IteratorStepResult (builtin)
+  builtins/iterator.ts:245:42  Get (intrinsic)
+  builtins/iterator.ts:245:5  CreateDataPropertyOrThrow (intrinsic)
 
 WindowsStep: reentrant
-  builtins/iterator.ts:268:18  LengthOfArrayLike (builtin)
-  builtins/iterator.ts:269:27  IteratorStepResult (builtin)
-  builtins/iterator.ts:273:31  ArrayPrefixCopy (builtin)
-  builtins/iterator.ts:277:26  Get (intrinsic)
-  builtins/iterator.ts:281:45  Get (intrinsic)
-  builtins/iterator.ts:281:9  CreateDataPropertyOrThrow (intrinsic)
-  builtins/iterator.ts:285:5  CreateDataPropertyOrThrow (intrinsic)
-  builtins/iterator.ts:286:5  Set (intrinsic)
-  builtins/iterator.ts:288:29  ArrayPrefixCopy (builtin)
+  builtins/iterator.ts:269:18  LengthOfArrayLike (builtin)
+  builtins/iterator.ts:270:27  IteratorStepResult (builtin)
+  builtins/iterator.ts:274:31  ArrayPrefixCopy (builtin)
+  builtins/iterator.ts:278:26  Get (intrinsic)
+  builtins/iterator.ts:282:45  Get (intrinsic)
+  builtins/iterator.ts:282:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:286:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:287:5  Set (intrinsic)
+  builtins/iterator.ts:289:29  ArrayPrefixCopy (builtin)
 
 IteratorCloseAll: reentrant
-  builtins/iterator.ts:301:21  LengthOfArrayLike (builtin)
-  builtins/iterator.ts:302:9  Get (intrinsic)
-  builtins/iterator.ts:303:31  Get (intrinsic)
-  builtins/iterator.ts:305:9  IteratorCloseThrow (builtin)
-  builtins/iterator.ts:308:11  IteratorClose (builtin)
+  builtins/iterator.ts:302:21  LengthOfArrayLike (builtin)
+  builtins/iterator.ts:303:9  Get (intrinsic)
+  builtins/iterator.ts:304:31  Get (intrinsic)
+  builtins/iterator.ts:306:9  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:309:11  IteratorClose (builtin)
 
 ZipStep: reentrant
-  builtins/iterator.ts:328:18  LengthOfArrayLike (builtin)
-  builtins/iterator.ts:334:25  Get (intrinsic)
-  builtins/iterator.ts:337:15  Get (intrinsic)
-  builtins/iterator.ts:341:50  Get (intrinsic)
-  builtins/iterator.ts:341:18  IteratorStepResult (builtin)
-  builtins/iterator.ts:343:19  Get (intrinsic)
-  builtins/iterator.ts:346:9  CreateDataPropertyOrThrow (intrinsic)
-  builtins/iterator.ts:347:9  IteratorCloseAll (builtin)
-  builtins/iterator.ts:350:9  CreateDataPropertyOrThrow (intrinsic)
-  builtins/iterator.ts:352:11  IteratorCloseAll (builtin)
-  builtins/iterator.ts:357:13  IteratorCloseAll (builtin)
-  builtins/iterator.ts:362:47  Get (intrinsic)
-  builtins/iterator.ts:362:63  Get (intrinsic)
-  builtins/iterator.ts:362:22  IteratorStepResult (builtin)
-  builtins/iterator.ts:364:15  CreateDataPropertyOrThrow (intrinsic)
-  builtins/iterator.ts:365:15  IteratorCloseAll (builtin)
-  builtins/iterator.ts:368:15  IteratorCloseAll (builtin)
-  builtins/iterator.ts:370:13  CreateDataPropertyOrThrow (intrinsic)
-  builtins/iterator.ts:374:14  ZipAnyOpen (builtin)
-  builtins/iterator.ts:377:9  CreateDataPropertyOrThrow (intrinsic)
-  builtins/iterator.ts:378:17  Get (intrinsic)
-  builtins/iterator.ts:381:5  CreateDataPropertyOrThrow (intrinsic)
-  builtins/iterator.ts:389:36  Get (intrinsic)
-  builtins/iterator.ts:389:57  Get (intrinsic)
-  builtins/iterator.ts:389:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:329:18  LengthOfArrayLike (builtin)
+  builtins/iterator.ts:335:25  Get (intrinsic)
+  builtins/iterator.ts:338:15  Get (intrinsic)
+  builtins/iterator.ts:342:50  Get (intrinsic)
+  builtins/iterator.ts:342:18  IteratorStepResult (builtin)
+  builtins/iterator.ts:344:19  Get (intrinsic)
+  builtins/iterator.ts:347:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:348:9  IteratorCloseAll (builtin)
+  builtins/iterator.ts:351:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:353:11  IteratorCloseAll (builtin)
+  builtins/iterator.ts:358:13  IteratorCloseAll (builtin)
+  builtins/iterator.ts:363:47  Get (intrinsic)
+  builtins/iterator.ts:363:63  Get (intrinsic)
+  builtins/iterator.ts:363:22  IteratorStepResult (builtin)
+  builtins/iterator.ts:365:15  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:366:15  IteratorCloseAll (builtin)
+  builtins/iterator.ts:369:15  IteratorCloseAll (builtin)
+  builtins/iterator.ts:371:13  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:375:14  ZipAnyOpen (builtin)
+  builtins/iterator.ts:378:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:379:17  Get (intrinsic)
+  builtins/iterator.ts:382:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:390:36  Get (intrinsic)
+  builtins/iterator.ts:390:57  Get (intrinsic)
+  builtins/iterator.ts:390:5  CreateDataPropertyOrThrow (intrinsic)
 
 ZipAnyOpen: reentrant
-  builtins/iterator.ts:397:9  Get (intrinsic)
+  builtins/iterator.ts:398:9  Get (intrinsic)
 
 FlatMapStep: reentrant
-  builtins/iterator.ts:412:18  IteratorStepResult (builtin)
-  builtins/iterator.ts:414:19  Get (intrinsic)
-  builtins/iterator.ts:417:9  IteratorCloseThrow (builtin)
-  builtins/iterator.ts:426:26  IteratorStepResult (builtin)
-  builtins/iterator.ts:430:59  Get (intrinsic)
-  builtins/iterator.ts:430:27  HelperCallFunction (builtin)
-  builtins/iterator.ts:432:34  GetIteratorFlattenable (builtin)
-  builtins/iterator.ts:433:32  GetIteratorDirectNext (builtin)
-  builtins/iterator.ts:437:7  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:413:18  IteratorStepResult (builtin)
+  builtins/iterator.ts:415:19  Get (intrinsic)
+  builtins/iterator.ts:418:9  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:427:26  IteratorStepResult (builtin)
+  builtins/iterator.ts:431:59  Get (intrinsic)
+  builtins/iterator.ts:431:27  HelperCallFunction (builtin)
+  builtins/iterator.ts:433:34  GetIteratorFlattenable (builtin)
+  builtins/iterator.ts:434:32  GetIteratorDirectNext (builtin)
+  builtins/iterator.ts:438:7  IteratorCloseThrow (builtin)
 
 ConcatStep: reentrant
-  builtins/iterator.ts:448:29  IteratorStepResult (builtin)
-  builtins/iterator.ts:450:31  Get (intrinsic)
-  builtins/iterator.ts:457:18  LengthOfArrayLike (builtin)
-  builtins/iterator.ts:461:29  Get (intrinsic)
-  builtins/iterator.ts:462:30  Get (intrinsic)
-  builtins/iterator.ts:462:44  Get (intrinsic)
-  builtins/iterator.ts:462:25  Call (intrinsic)
-  builtins/iterator.ts:466:25  GetIteratorDirectNext (builtin)
+  builtins/iterator.ts:449:29  IteratorStepResult (builtin)
+  builtins/iterator.ts:451:31  Get (intrinsic)
+  builtins/iterator.ts:458:18  LengthOfArrayLike (builtin)
+  builtins/iterator.ts:462:29  Get (intrinsic)
+  builtins/iterator.ts:463:30  Get (intrinsic)
+  builtins/iterator.ts:463:44  Get (intrinsic)
+  builtins/iterator.ts:463:25  Call (intrinsic)
+  builtins/iterator.ts:467:25  GetIteratorDirectNext (builtin)
 
 IteratorHelperReturnAtYield: reentrant
-  builtins/iterator.ts:480:5  IteratorCloseAll (builtin)
-  builtins/iterator.ts:491:9  IteratorClose (builtin)
-  builtins/iterator.ts:493:9  IteratorCloseThrow (builtin)
-  builtins/iterator.ts:498:3  IteratorClose (builtin)
+  builtins/iterator.ts:481:5  IteratorCloseAll (builtin)
+  builtins/iterator.ts:492:9  IteratorClose (builtin)
+  builtins/iterator.ts:494:9  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:499:3  IteratorClose (builtin)
 
 IteratorHelperPrototypeNext: reentrant (%IteratorHelperPrototype%.next)
-  builtins/iterator.ts:517:13  IteratorHelperStep (builtin)
+  builtins/iterator.ts:518:13  IteratorHelperStep (builtin)
 
 IteratorHelperPrototypeReturn: reentrant (%IteratorHelperPrototype%.return)
-  builtins/iterator.ts:545:7  IteratorCloseAll (builtin)
-  builtins/iterator.ts:551:7  IteratorClose (builtin)
-  builtins/iterator.ts:557:5  IteratorHelperReturnAtYield (builtin)
+  builtins/iterator.ts:546:7  IteratorCloseAll (builtin)
+  builtins/iterator.ts:552:7  IteratorClose (builtin)
+  builtins/iterator.ts:558:5  IteratorHelperReturnAtYield (builtin)
 
 IteratorHelperPrototypeToStringTag: leaf (value %IteratorHelperPrototype%[Symbol.toStringTag])
 
 IteratorConstructor: reentrant (constructor Iterator)
-  builtins/iterator.ts:584:23  GetPrototypeFromConstructor (builtin)
+  builtins/iterator.ts:585:23  GetPrototypeFromConstructor (builtin)
 
 IteratorFrom: reentrant (Iterator.from)
-  builtins/iterator.ts:592:25  GetIteratorFlattenable (builtin)
-  builtins/iterator.ts:593:23  GetIteratorDirectNext (builtin)
-  builtins/iterator.ts:594:7  OrdinaryHasInstance (builtin)
+  builtins/iterator.ts:593:25  GetIteratorFlattenable (builtin)
+  builtins/iterator.ts:594:23  GetIteratorDirectNext (builtin)
+  builtins/iterator.ts:595:7  OrdinaryHasInstance (builtin)
 
 WrapForValidIteratorPrototypeNext: reentrant (%WrapForValidIteratorPrototype%.next)
-  builtins/iterator.ts:606:10  Call (intrinsic)
+  builtins/iterator.ts:607:10  Call (intrinsic)
 
 WrapForValidIteratorPrototypeReturn: reentrant (%WrapForValidIteratorPrototype%.return)
-  builtins/iterator.ts:616:25  GetMethod (builtin)
-  builtins/iterator.ts:620:10  Call (intrinsic)
+  builtins/iterator.ts:617:25  GetMethod (builtin)
+  builtins/iterator.ts:621:10  Call (intrinsic)
 
 IteratorConcat: reentrant (Iterator.concat)
-  builtins/iterator.ts:628:18  LengthOfArrayLike (builtin)
-  builtins/iterator.ts:631:25  Get (intrinsic)
-  builtins/iterator.ts:635:27  GetMethod (builtin)
-  builtins/iterator.ts:639:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:629:18  LengthOfArrayLike (builtin)
+  builtins/iterator.ts:632:25  Get (intrinsic)
+  builtins/iterator.ts:636:27  GetMethod (builtin)
+  builtins/iterator.ts:640:5  CreateDataPropertyOrThrow (intrinsic)
 
 IteratorPrototypeMap: reentrant (Iterator.prototype.map)
-  builtins/iterator.ts:653:3  HelperCallable (builtin)
-  builtins/iterator.ts:654:10  NewIteratorHelper (builtin)
+  builtins/iterator.ts:654:3  HelperCallable (builtin)
+  builtins/iterator.ts:655:10  NewIteratorHelper (builtin)
 
 IteratorPrototypeFilter: reentrant (Iterator.prototype.filter)
-  builtins/iterator.ts:663:3  HelperCallable (builtin)
-  builtins/iterator.ts:664:10  NewIteratorHelper (builtin)
+  builtins/iterator.ts:664:3  HelperCallable (builtin)
+  builtins/iterator.ts:665:10  NewIteratorHelper (builtin)
 
 IteratorPrototypeTake: reentrant (Iterator.prototype.take)
-  builtins/iterator.ts:673:34  HelperLimit (builtin)
-  builtins/iterator.ts:673:10  NewIteratorHelper (builtin)
+  builtins/iterator.ts:674:34  HelperLimit (builtin)
+  builtins/iterator.ts:674:10  NewIteratorHelper (builtin)
 
 IteratorPrototypeDrop: reentrant (Iterator.prototype.drop)
-  builtins/iterator.ts:682:34  HelperLimit (builtin)
-  builtins/iterator.ts:682:10  NewIteratorHelper (builtin)
+  builtins/iterator.ts:683:34  HelperLimit (builtin)
+  builtins/iterator.ts:683:10  NewIteratorHelper (builtin)
 
 IteratorPrototypeFlatMap: reentrant (Iterator.prototype.flatMap)
-  builtins/iterator.ts:691:3  HelperCallable (builtin)
-  builtins/iterator.ts:692:10  NewIteratorHelper (builtin)
+  builtins/iterator.ts:692:3  HelperCallable (builtin)
+  builtins/iterator.ts:693:10  NewIteratorHelper (builtin)
 
 IteratorPrototypeReduce: reentrant (Iterator.prototype.reduce)
-  builtins/iterator.ts:702:3  HelperCallable (builtin)
-  builtins/iterator.ts:703:23  GetIteratorDirectNext (builtin)
-  builtins/iterator.ts:706:7  LengthOfArrayLike (builtin)
-  builtins/iterator.ts:707:26  IteratorStepResult (builtin)
-  builtins/iterator.ts:711:19  Get (intrinsic)
-  builtins/iterator.ts:714:19  Get (intrinsic)
-  builtins/iterator.ts:717:27  IteratorStepResult (builtin)
-  builtins/iterator.ts:721:26  Get (intrinsic)
-  builtins/iterator.ts:723:21  Call (intrinsic)
-  builtins/iterator.ts:725:7  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:703:3  HelperCallable (builtin)
+  builtins/iterator.ts:704:23  GetIteratorDirectNext (builtin)
+  builtins/iterator.ts:707:7  LengthOfArrayLike (builtin)
+  builtins/iterator.ts:708:26  IteratorStepResult (builtin)
+  builtins/iterator.ts:712:19  Get (intrinsic)
+  builtins/iterator.ts:715:19  Get (intrinsic)
+  builtins/iterator.ts:718:27  IteratorStepResult (builtin)
+  builtins/iterator.ts:722:26  Get (intrinsic)
+  builtins/iterator.ts:724:21  Call (intrinsic)
+  builtins/iterator.ts:726:7  IteratorCloseThrow (builtin)
 
 IteratorPrototypeToArray: reentrant (Iterator.prototype.toArray)
-  builtins/iterator.ts:738:23  GetIteratorDirectNext (builtin)
-  builtins/iterator.ts:742:27  IteratorStepResult (builtin)
-  builtins/iterator.ts:746:41  Get (intrinsic)
-  builtins/iterator.ts:746:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:739:23  GetIteratorDirectNext (builtin)
+  builtins/iterator.ts:743:27  IteratorStepResult (builtin)
+  builtins/iterator.ts:747:41  Get (intrinsic)
+  builtins/iterator.ts:747:5  CreateDataPropertyOrThrow (intrinsic)
 
 IteratorConsume: reentrant
-  builtins/iterator.ts:758:3  HelperCallable (builtin)
-  builtins/iterator.ts:759:23  GetIteratorDirectNext (builtin)
-  builtins/iterator.ts:762:27  IteratorStepResult (builtin)
-  builtins/iterator.ts:772:26  Get (intrinsic)
-  builtins/iterator.ts:775:11  Call (intrinsic)
-  builtins/iterator.ts:777:7  IteratorCloseThrow (builtin)
-  builtins/iterator.ts:783:9  IteratorClose (builtin)
+  builtins/iterator.ts:759:3  HelperCallable (builtin)
+  builtins/iterator.ts:760:23  GetIteratorDirectNext (builtin)
+  builtins/iterator.ts:763:27  IteratorStepResult (builtin)
+  builtins/iterator.ts:773:26  Get (intrinsic)
+  builtins/iterator.ts:776:11  Call (intrinsic)
+  builtins/iterator.ts:778:7  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:784:9  IteratorClose (builtin)
 
 IteratorPrototypeForEach: reentrant (Iterator.prototype.forEach)
-  builtins/iterator.ts:799:10  IteratorConsume (builtin)
+  builtins/iterator.ts:800:10  IteratorConsume (builtin)
 
 IteratorPrototypeSome: reentrant (Iterator.prototype.some)
-  builtins/iterator.ts:807:10  IteratorConsume (builtin)
+  builtins/iterator.ts:808:10  IteratorConsume (builtin)
 
 IteratorPrototypeEvery: reentrant (Iterator.prototype.every)
-  builtins/iterator.ts:815:10  IteratorConsume (builtin)
+  builtins/iterator.ts:816:10  IteratorConsume (builtin)
 
 IteratorPrototypeFind: reentrant (Iterator.prototype.find)
-  builtins/iterator.ts:823:10  IteratorConsume (builtin)
+  builtins/iterator.ts:824:10  IteratorConsume (builtin)
 
 SetterThatIgnoresPrototypeProperties: reentrant
-  builtins/iterator.ts:837:7  OwnPropertyAttributes (intrinsic)
-  builtins/iterator.ts:838:5  CreateDataPropertyOrThrow (intrinsic)
-  builtins/iterator.ts:840:5  Set (intrinsic)
+  builtins/iterator.ts:838:7  OwnPropertyAttributes (intrinsic)
+  builtins/iterator.ts:839:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:841:5  Set (intrinsic)
 
 IteratorPrototypeConstructorGet: leaf (get Iterator.prototype.constructor)
 
 IteratorPrototypeConstructorSet: reentrant (set Iterator.prototype.constructor)
-  builtins/iterator.ts:857:3  SetterThatIgnoresPrototypeProperties (builtin)
+  builtins/iterator.ts:858:3  SetterThatIgnoresPrototypeProperties (builtin)
 
 IteratorPrototypeToStringTagGet: leaf (get Iterator.prototype[Symbol.toStringTag])
 
 IteratorPrototypeToStringTagSet: reentrant (set Iterator.prototype[Symbol.toStringTag])
-  builtins/iterator.ts:873:3  SetterThatIgnoresPrototypeProperties (builtin)
+  builtins/iterator.ts:874:3  SetterThatIgnoresPrototypeProperties (builtin)
 
 ChunkingSize: reentrant
-  builtins/iterator.ts:889:5  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:890:5  IteratorCloseThrow (builtin)
 
 IteratorPrototypeChunks: reentrant (Iterator.prototype.chunks)
-  builtins/iterator.ts:901:34  ChunkingSize (builtin)
-  builtins/iterator.ts:901:10  NewIteratorHelper (builtin)
+  builtins/iterator.ts:902:34  ChunkingSize (builtin)
+  builtins/iterator.ts:902:10  NewIteratorHelper (builtin)
 
 IteratorPrototypeWindows: reentrant (Iterator.prototype.windows)
-  builtins/iterator.ts:911:21  ChunkingSize (builtin)
-  builtins/iterator.ts:914:5  IteratorCloseThrow (builtin)
-  builtins/iterator.ts:917:23  NewIteratorHelper (builtin)
+  builtins/iterator.ts:912:21  ChunkingSize (builtin)
+  builtins/iterator.ts:915:5  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:918:23  NewIteratorHelper (builtin)
 
 IteratorPrototypeIncludes: reentrant (Iterator.prototype.includes)
-  builtins/iterator.ts:943:7  IteratorCloseThrow (builtin)
-  builtins/iterator.ts:947:23  GetIteratorDirectNext (builtin)
-  builtins/iterator.ts:950:27  IteratorStepResult (builtin)
-  builtins/iterator.ts:954:26  Get (intrinsic)
-  builtins/iterator.ts:958:7  IteratorClose (builtin)
+  builtins/iterator.ts:944:7  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:948:23  GetIteratorDirectNext (builtin)
+  builtins/iterator.ts:951:27  IteratorStepResult (builtin)
+  builtins/iterator.ts:955:26  Get (intrinsic)
+  builtins/iterator.ts:959:7  IteratorClose (builtin)
 
 IteratorPrototypeJoin: reentrant (Iterator.prototype.join)
-  builtins/iterator.ts:973:13  ToString (builtin)
-  builtins/iterator.ts:975:7  IteratorCloseThrow (builtin)
-  builtins/iterator.ts:979:23  GetIteratorDirectNext (builtin)
-  builtins/iterator.ts:983:27  IteratorStepResult (builtin)
-  builtins/iterator.ts:987:26  Get (intrinsic)
-  builtins/iterator.ts:994:14  ToString (builtin)
-  builtins/iterator.ts:996:9  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:974:13  ToString (builtin)
+  builtins/iterator.ts:976:7  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:980:23  GetIteratorDirectNext (builtin)
+  builtins/iterator.ts:984:27  IteratorStepResult (builtin)
+  builtins/iterator.ts:988:26  Get (intrinsic)
+  builtins/iterator.ts:995:14  ToString (builtin)
+  builtins/iterator.ts:997:9  IteratorCloseThrow (builtin)
 
 ZipOptions: reentrant
-  builtins/iterator.ts:1015:23  Get (intrinsic)
-  builtins/iterator.ts:1026:15  Get (intrinsic)
+  builtins/iterator.ts:1016:23  Get (intrinsic)
+  builtins/iterator.ts:1027:15  Get (intrinsic)
 
 ZipAddIterator: reentrant
-  builtins/iterator.ts:1043:18  LengthOfArrayLike (builtin)
-  builtins/iterator.ts:1045:23  GetIteratorFlattenable (builtin)
-  builtins/iterator.ts:1046:25  GetIteratorDirectNext (builtin)
-  builtins/iterator.ts:1047:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:1044:18  LengthOfArrayLike (builtin)
+  builtins/iterator.ts:1046:23  GetIteratorFlattenable (builtin)
+  builtins/iterator.ts:1047:25  GetIteratorDirectNext (builtin)
   builtins/iterator.ts:1048:5  CreateDataPropertyOrThrow (intrinsic)
   builtins/iterator.ts:1049:5  CreateDataPropertyOrThrow (intrinsic)
-  builtins/iterator.ts:1053:7  IteratorCloseAll (builtin)
-  builtins/iterator.ts:1056:9  IteratorCloseThrow (builtin)
+  builtins/iterator.ts:1050:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:1054:7  IteratorCloseAll (builtin)
+  builtins/iterator.ts:1057:9  IteratorCloseThrow (builtin)
 
 ZipCreate: leaf
 
 IteratorZip: reentrant (Iterator.zip)
-  builtins/iterator.ts:1081:21  ZipOptions (builtin)
-  builtins/iterator.ts:1087:26  GetIterator (builtin)
-  builtins/iterator.ts:1088:28  Get (intrinsic)
-  builtins/iterator.ts:1093:16  IteratorStepResult (builtin)
-  builtins/iterator.ts:1095:17  Get (intrinsic)
-  builtins/iterator.ts:1098:7  IteratorCloseAll (builtin)
-  builtins/iterator.ts:1103:5  ZipAddIterator (builtin)
-  builtins/iterator.ts:1105:18  LengthOfArrayLike (builtin)
-  builtins/iterator.ts:1110:9  CreateDataPropertyOrThrow (intrinsic)
-  builtins/iterator.ts:1116:23  GetIterator (builtin)
-  builtins/iterator.ts:1117:23  Get (intrinsic)
-  builtins/iterator.ts:1119:9  IteratorCloseAll (builtin)
-  builtins/iterator.ts:1126:35  IteratorStepResult (builtin)
-  builtins/iterator.ts:1130:23  Get (intrinsic)
-  builtins/iterator.ts:1133:13  IteratorCloseAll (builtin)
-  builtins/iterator.ts:1136:9  CreateDataPropertyOrThrow (intrinsic)
-  builtins/iterator.ts:1140:11  IteratorClose (builtin)
-  builtins/iterator.ts:1142:11  IteratorCloseAll (builtin)
+  builtins/iterator.ts:1082:21  ZipOptions (builtin)
+  builtins/iterator.ts:1088:26  GetIterator (builtin)
+  builtins/iterator.ts:1089:28  Get (intrinsic)
+  builtins/iterator.ts:1094:16  IteratorStepResult (builtin)
+  builtins/iterator.ts:1096:17  Get (intrinsic)
+  builtins/iterator.ts:1099:7  IteratorCloseAll (builtin)
+  builtins/iterator.ts:1104:5  ZipAddIterator (builtin)
+  builtins/iterator.ts:1106:18  LengthOfArrayLike (builtin)
+  builtins/iterator.ts:1111:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:1117:23  GetIterator (builtin)
+  builtins/iterator.ts:1118:23  Get (intrinsic)
+  builtins/iterator.ts:1120:9  IteratorCloseAll (builtin)
+  builtins/iterator.ts:1127:35  IteratorStepResult (builtin)
+  builtins/iterator.ts:1131:23  Get (intrinsic)
+  builtins/iterator.ts:1134:13  IteratorCloseAll (builtin)
+  builtins/iterator.ts:1137:9  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:1141:11  IteratorClose (builtin)
+  builtins/iterator.ts:1143:11  IteratorCloseAll (builtin)
 
 IteratorZipKeyed: reentrant (Iterator.zipKeyed)
-  builtins/iterator.ts:1160:21  ZipOptions (builtin)
-  builtins/iterator.ts:1167:24  OwnPropertyKeys (intrinsic)
-  builtins/iterator.ts:1168:22  LengthOfArrayLike (builtin)
-  builtins/iterator.ts:1170:24  Get (intrinsic)
-  builtins/iterator.ts:1173:26  OwnPropertyAttributes (intrinsic)
-  builtins/iterator.ts:1175:17  Get (intrinsic)
-  builtins/iterator.ts:1178:7  IteratorCloseAll (builtin)
-  builtins/iterator.ts:1181:7  ZipAddIterator (builtin)
-  builtins/iterator.ts:1182:39  LengthOfArrayLike (builtin)
-  builtins/iterator.ts:1182:7  CreateDataPropertyOrThrow (intrinsic)
-  builtins/iterator.ts:1185:18  LengthOfArrayLike (builtin)
-  builtins/iterator.ts:1192:45  Get (intrinsic)
-  builtins/iterator.ts:1192:19  Get (intrinsic)
-  builtins/iterator.ts:1194:11  IteratorCloseAll (builtin)
-  builtins/iterator.ts:1197:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:1161:21  ZipOptions (builtin)
+  builtins/iterator.ts:1168:24  OwnPropertyKeys (intrinsic)
+  builtins/iterator.ts:1169:22  LengthOfArrayLike (builtin)
+  builtins/iterator.ts:1171:24  Get (intrinsic)
+  builtins/iterator.ts:1174:26  OwnPropertyAttributes (intrinsic)
+  builtins/iterator.ts:1176:17  Get (intrinsic)
+  builtins/iterator.ts:1179:7  IteratorCloseAll (builtin)
+  builtins/iterator.ts:1182:7  ZipAddIterator (builtin)
+  builtins/iterator.ts:1183:39  LengthOfArrayLike (builtin)
+  builtins/iterator.ts:1183:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/iterator.ts:1186:18  LengthOfArrayLike (builtin)
+  builtins/iterator.ts:1193:45  Get (intrinsic)
+  builtins/iterator.ts:1193:19  Get (intrinsic)
+  builtins/iterator.ts:1195:11  IteratorCloseAll (builtin)
+  builtins/iterator.ts:1198:7  CreateDataPropertyOrThrow (intrinsic)
 
 JSONObject: leaf (value JSON)
 
@@ -3598,39 +3598,39 @@ ValidateTypedArray: leaf
 SameContentType: leaf
 
 ToElementValue: reentrant
-  builtins/typedarray.ts:97:12  ToBigInt (builtin)
-  builtins/typedarray.ts:99:10  ToNumber (builtin)
+  builtins/typedarray.ts:98:12  ToBigInt (builtin)
+  builtins/typedarray.ts:100:10  ToNumber (builtin)
 
 TypedArraySetElementSlow: reentrant (%TypedArraySetElementSlow)
-  builtins/typedarray.ts:110:27  ToElementValue (builtin)
+  builtins/typedarray.ts:111:27  ToElementValue (builtin)
 
 IsElementValue: leaf
 
 AllocateTypedArrayOfLength: leaf
 
 TypedArrayFromBuffer: reentrant
-  builtins/typedarray.ts:134:23  ToIndex (builtin)
-  builtins/typedarray.ts:140:17  ToIndex (builtin)
+  builtins/typedarray.ts:135:23  ToIndex (builtin)
+  builtins/typedarray.ts:141:17  ToIndex (builtin)
 
 TypedArrayFromValues: reentrant
-  builtins/typedarray.ts:169:20  LengthOfArrayLike (builtin)
-  builtins/typedarray.ts:175:43  Get (intrinsic)
-  builtins/typedarray.ts:175:25  ToElementValue (builtin)
+  builtins/typedarray.ts:170:20  LengthOfArrayLike (builtin)
+  builtins/typedarray.ts:176:43  Get (intrinsic)
+  builtins/typedarray.ts:176:25  ToElementValue (builtin)
 
 TypedArrayConstruct: reentrant
-  builtins/typedarray.ts:185:18  LengthOfArrayLike (builtin)
-  builtins/typedarray.ts:186:32  Get (intrinsic)
-  builtins/typedarray.ts:189:32  ToIndex (builtin)
-  builtins/typedarray.ts:190:45  GetPrototypeFromConstructor (builtin)
-  builtins/typedarray.ts:192:22  GetPrototypeFromConstructor (builtin)
-  builtins/typedarray.ts:207:59  Get (intrinsic)
-  builtins/typedarray.ts:207:93  Get (intrinsic)
-  builtins/typedarray.ts:207:12  TypedArrayFromBuffer (builtin)
-  builtins/typedarray.ts:209:32  GetMethod (builtin)
-  builtins/typedarray.ts:213:12  TypedArrayFromValues (builtin)
-  builtins/typedarray.ts:217:25  ArrayFromIterator (builtin)
-  builtins/typedarray.ts:218:12  TypedArrayFromValues (builtin)
-  builtins/typedarray.ts:220:10  TypedArrayFromValues (builtin)
+  builtins/typedarray.ts:186:18  LengthOfArrayLike (builtin)
+  builtins/typedarray.ts:187:32  Get (intrinsic)
+  builtins/typedarray.ts:190:32  ToIndex (builtin)
+  builtins/typedarray.ts:191:45  GetPrototypeFromConstructor (builtin)
+  builtins/typedarray.ts:193:22  GetPrototypeFromConstructor (builtin)
+  builtins/typedarray.ts:208:59  Get (intrinsic)
+  builtins/typedarray.ts:208:93  Get (intrinsic)
+  builtins/typedarray.ts:208:12  TypedArrayFromBuffer (builtin)
+  builtins/typedarray.ts:210:32  GetMethod (builtin)
+  builtins/typedarray.ts:214:12  TypedArrayFromValues (builtin)
+  builtins/typedarray.ts:218:25  ArrayFromIterator (builtin)
+  builtins/typedarray.ts:219:12  TypedArrayFromValues (builtin)
+  builtins/typedarray.ts:221:10  TypedArrayFromValues (builtin)
 
 BufferInfoOrUndefined: leaf
 
@@ -3641,26 +3641,26 @@ TypedArraySpecies: leaf (get %TypedArray%[Symbol.species])
 RequireMutableTypedArray: leaf
 
 TypedArrayCreateWithLength: reentrant
-  builtins/typedarray.ts:261:24  Construct (intrinsic)
+  builtins/typedarray.ts:262:24  Construct (intrinsic)
 
 TypedArraySpeciesCreate: reentrant
-  builtins/typedarray.ts:273:20  SpeciesConstructor (builtin)
-  builtins/typedarray.ts:274:18  TypedArrayCreateWithLength (builtin)
+  builtins/typedarray.ts:274:20  SpeciesConstructor (builtin)
+  builtins/typedarray.ts:275:18  TypedArrayCreateWithLength (builtin)
 
 TypedArrayFrom: reentrant (%TypedArray%.from)
-  builtins/typedarray.ts:293:32  GetMethod (builtin)
-  builtins/typedarray.ts:296:14  ArrayFromIterator (builtin)
-  builtins/typedarray.ts:300:20  LengthOfArrayLike (builtin)
-  builtins/typedarray.ts:301:23  TypedArrayCreateWithLength (builtin)
-  builtins/typedarray.ts:303:27  Get (intrinsic)
-  builtins/typedarray.ts:304:37  Call (intrinsic)
-  builtins/typedarray.ts:305:5  TASet (builtin)
+  builtins/typedarray.ts:294:32  GetMethod (builtin)
+  builtins/typedarray.ts:297:14  ArrayFromIterator (builtin)
+  builtins/typedarray.ts:301:20  LengthOfArrayLike (builtin)
+  builtins/typedarray.ts:302:23  TypedArrayCreateWithLength (builtin)
+  builtins/typedarray.ts:304:27  Get (intrinsic)
+  builtins/typedarray.ts:305:37  Call (intrinsic)
+  builtins/typedarray.ts:306:5  TASet (builtin)
 
 TypedArrayOf: reentrant (%TypedArray%.of)
-  builtins/typedarray.ts:318:20  LengthOfArrayLike (builtin)
-  builtins/typedarray.ts:319:23  TypedArrayCreateWithLength (builtin)
-  builtins/typedarray.ts:321:22  Get (intrinsic)
-  builtins/typedarray.ts:321:5  TASet (builtin)
+  builtins/typedarray.ts:319:20  LengthOfArrayLike (builtin)
+  builtins/typedarray.ts:320:23  TypedArrayCreateWithLength (builtin)
+  builtins/typedarray.ts:322:22  Get (intrinsic)
+  builtins/typedarray.ts:322:5  TASet (builtin)
 
 TypedArrayPrototypeBuffer: leaf (get %TypedArray%.prototype.buffer)
 
@@ -3673,164 +3673,164 @@ TypedArrayPrototypeLength: leaf (get %TypedArray%.prototype.length)
 TypedArrayPrototypeToStringTag: leaf (get %TypedArray%.prototype[Symbol.toStringTag])
 
 TypedArrayPrototypeSet: reentrant (%TypedArray%.prototype.set)
-  builtins/typedarray.ts:377:29  ToIntegerOrInfinity (builtin)
-  builtins/typedarray.ts:402:26  LengthOfArrayLike (builtin)
-  builtins/typedarray.ts:407:49  Get (intrinsic)
-  builtins/typedarray.ts:407:26  ToElementValue (builtin)
+  builtins/typedarray.ts:378:29  ToIntegerOrInfinity (builtin)
+  builtins/typedarray.ts:403:26  LengthOfArrayLike (builtin)
+  builtins/typedarray.ts:408:49  Get (intrinsic)
+  builtins/typedarray.ts:408:26  ToElementValue (builtin)
 
 TypedArrayPrototypeSubarray: reentrant (%TypedArray%.prototype.subarray)
-  builtins/typedarray.ts:423:27  RelativeIndex (builtin)
-  builtins/typedarray.ts:427:20  SpeciesConstructor (builtin)
-  builtins/typedarray.ts:430:15  Construct (intrinsic)
-  builtins/typedarray.ts:432:27  RelativeIndex (builtin)
-  builtins/typedarray.ts:434:15  Construct (intrinsic)
+  builtins/typedarray.ts:424:27  RelativeIndex (builtin)
+  builtins/typedarray.ts:428:20  SpeciesConstructor (builtin)
+  builtins/typedarray.ts:431:15  Construct (intrinsic)
+  builtins/typedarray.ts:433:27  RelativeIndex (builtin)
+  builtins/typedarray.ts:435:15  Construct (intrinsic)
 
 TypedArrayPrototypeSlice: reentrant (%TypedArray%.prototype.slice)
-  builtins/typedarray.ts:450:27  RelativeIndex (builtin)
-  builtins/typedarray.ts:451:25  RelativeIndex (builtin)
-  builtins/typedarray.ts:453:18  TypedArraySpeciesCreate (builtin)
-  builtins/typedarray.ts:473:9  TASet (builtin)
+  builtins/typedarray.ts:451:27  RelativeIndex (builtin)
+  builtins/typedarray.ts:452:25  RelativeIndex (builtin)
+  builtins/typedarray.ts:454:18  TypedArraySpeciesCreate (builtin)
+  builtins/typedarray.ts:474:9  TASet (builtin)
 
 TypedArrayPrototypeFill: reentrant (%TypedArray%.prototype.fill)
-  builtins/typedarray.ts:488:20  ToElementValue (builtin)
-  builtins/typedarray.ts:489:18  RelativeIndex (builtin)
-  builtins/typedarray.ts:490:20  RelativeIndex (builtin)
+  builtins/typedarray.ts:489:20  ToElementValue (builtin)
+  builtins/typedarray.ts:490:18  RelativeIndex (builtin)
+  builtins/typedarray.ts:491:20  RelativeIndex (builtin)
 
 ValidateUint8Array: leaf
 
 GetOptionsObject: leaf
 
 Base64Alphabet: reentrant
-  builtins/typedarray.ts:528:27  Get (intrinsic)
+  builtins/typedarray.ts:529:27  Get (intrinsic)
 
 LastChunkHandling: reentrant
-  builtins/typedarray.ts:543:20  Get (intrinsic)
+  builtins/typedarray.ts:544:20  Get (intrinsic)
 
 Uint8ArrayFromRecord: reentrant
-  builtins/typedarray.ts:558:28  Get (intrinsic)
+  builtins/typedarray.ts:559:28  Get (intrinsic)
 
 Uint8ArrayFromBase64: reentrant (Uint8Array.fromBase64)
-  builtins/typedarray.ts:572:24  Base64Alphabet (builtin)
-  builtins/typedarray.ts:573:21  LastChunkHandling (builtin)
-  builtins/typedarray.ts:575:14  Get (intrinsic)
-  builtins/typedarray.ts:578:10  Uint8ArrayFromRecord (builtin)
+  builtins/typedarray.ts:573:24  Base64Alphabet (builtin)
+  builtins/typedarray.ts:574:21  LastChunkHandling (builtin)
+  builtins/typedarray.ts:576:14  Get (intrinsic)
+  builtins/typedarray.ts:579:10  Uint8ArrayFromRecord (builtin)
 
 Uint8ArrayFromHex: reentrant (Uint8Array.fromHex)
-  builtins/typedarray.ts:590:14  Get (intrinsic)
-  builtins/typedarray.ts:593:10  Uint8ArrayFromRecord (builtin)
+  builtins/typedarray.ts:591:14  Get (intrinsic)
+  builtins/typedarray.ts:594:10  Uint8ArrayFromRecord (builtin)
 
 Uint8ArrayPrototypeToBase64: reentrant (Uint8Array.prototype.toBase64)
-  builtins/typedarray.ts:603:24  Base64Alphabet (builtin)
-  builtins/typedarray.ts:606:22  Get (intrinsic)
+  builtins/typedarray.ts:604:24  Base64Alphabet (builtin)
+  builtins/typedarray.ts:607:22  Get (intrinsic)
 
 Uint8ArrayPrototypeToHex: leaf (Uint8Array.prototype.toHex)
 
 WriteDecoded: reentrant
-  builtins/typedarray.ts:621:28  Get (intrinsic)
-  builtins/typedarray.ts:624:14  Get (intrinsic)
-  builtins/typedarray.ts:628:45  Get (intrinsic)
-  builtins/typedarray.ts:628:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/typedarray.ts:622:28  Get (intrinsic)
+  builtins/typedarray.ts:625:14  Get (intrinsic)
+  builtins/typedarray.ts:629:45  Get (intrinsic)
   builtins/typedarray.ts:629:3  CreateDataPropertyOrThrow (intrinsic)
+  builtins/typedarray.ts:630:3  CreateDataPropertyOrThrow (intrinsic)
 
 Uint8ArrayPrototypeSetFromBase64: reentrant (Uint8Array.prototype.setFromBase64)
-  builtins/typedarray.ts:644:24  Base64Alphabet (builtin)
-  builtins/typedarray.ts:645:21  LastChunkHandling (builtin)
-  builtins/typedarray.ts:650:10  WriteDecoded (builtin)
+  builtins/typedarray.ts:645:24  Base64Alphabet (builtin)
+  builtins/typedarray.ts:646:21  LastChunkHandling (builtin)
+  builtins/typedarray.ts:651:10  WriteDecoded (builtin)
 
 Uint8ArrayPrototypeSetFromHex: reentrant (Uint8Array.prototype.setFromHex)
-  builtins/typedarray.ts:667:10  WriteDecoded (builtin)
+  builtins/typedarray.ts:668:10  WriteDecoded (builtin)
 
 Int8ArrayConstructor: reentrant (constructor Int8Array)
-  builtins/typedarray.ts:677:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:678:10  TypedArrayConstruct (builtin)
 
 Int8ArrayBytesPerElement: leaf (value Int8Array.BYTES_PER_ELEMENT)
 
 Int8ArrayPrototypeBytesPerElement: leaf (value Int8Array.prototype.BYTES_PER_ELEMENT)
 
 Uint8ArrayConstructor: reentrant (constructor Uint8Array)
-  builtins/typedarray.ts:703:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:704:10  TypedArrayConstruct (builtin)
 
 Uint8ArrayBytesPerElement: leaf (value Uint8Array.BYTES_PER_ELEMENT)
 
 Uint8ArrayPrototypeBytesPerElement: leaf (value Uint8Array.prototype.BYTES_PER_ELEMENT)
 
 Uint8ClampedArrayConstructor: reentrant (constructor Uint8ClampedArray)
-  builtins/typedarray.ts:729:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:730:10  TypedArrayConstruct (builtin)
 
 Uint8ClampedArrayBytesPerElement: leaf (value Uint8ClampedArray.BYTES_PER_ELEMENT)
 
 Uint8ClampedArrayPrototypeBytesPerElement: leaf (value Uint8ClampedArray.prototype.BYTES_PER_ELEMENT)
 
 Int16ArrayConstructor: reentrant (constructor Int16Array)
-  builtins/typedarray.ts:755:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:756:10  TypedArrayConstruct (builtin)
 
 Int16ArrayBytesPerElement: leaf (value Int16Array.BYTES_PER_ELEMENT)
 
 Int16ArrayPrototypeBytesPerElement: leaf (value Int16Array.prototype.BYTES_PER_ELEMENT)
 
 Uint16ArrayConstructor: reentrant (constructor Uint16Array)
-  builtins/typedarray.ts:781:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:782:10  TypedArrayConstruct (builtin)
 
 Uint16ArrayBytesPerElement: leaf (value Uint16Array.BYTES_PER_ELEMENT)
 
 Uint16ArrayPrototypeBytesPerElement: leaf (value Uint16Array.prototype.BYTES_PER_ELEMENT)
 
 Int32ArrayConstructor: reentrant (constructor Int32Array)
-  builtins/typedarray.ts:807:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:808:10  TypedArrayConstruct (builtin)
 
 Int32ArrayBytesPerElement: leaf (value Int32Array.BYTES_PER_ELEMENT)
 
 Int32ArrayPrototypeBytesPerElement: leaf (value Int32Array.prototype.BYTES_PER_ELEMENT)
 
 Uint32ArrayConstructor: reentrant (constructor Uint32Array)
-  builtins/typedarray.ts:833:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:834:10  TypedArrayConstruct (builtin)
 
 Uint32ArrayBytesPerElement: leaf (value Uint32Array.BYTES_PER_ELEMENT)
 
 Uint32ArrayPrototypeBytesPerElement: leaf (value Uint32Array.prototype.BYTES_PER_ELEMENT)
 
 Float16ArrayConstructor: reentrant (constructor Float16Array)
-  builtins/typedarray.ts:859:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:860:10  TypedArrayConstruct (builtin)
 
 Float16ArrayBytesPerElement: leaf (value Float16Array.BYTES_PER_ELEMENT)
 
 Float16ArrayPrototypeBytesPerElement: leaf (value Float16Array.prototype.BYTES_PER_ELEMENT)
 
 Float32ArrayConstructor: reentrant (constructor Float32Array)
-  builtins/typedarray.ts:885:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:886:10  TypedArrayConstruct (builtin)
 
 Float32ArrayBytesPerElement: leaf (value Float32Array.BYTES_PER_ELEMENT)
 
 Float32ArrayPrototypeBytesPerElement: leaf (value Float32Array.prototype.BYTES_PER_ELEMENT)
 
 Float64ArrayConstructor: reentrant (constructor Float64Array)
-  builtins/typedarray.ts:911:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:912:10  TypedArrayConstruct (builtin)
 
 Float64ArrayBytesPerElement: leaf (value Float64Array.BYTES_PER_ELEMENT)
 
 Float64ArrayPrototypeBytesPerElement: leaf (value Float64Array.prototype.BYTES_PER_ELEMENT)
 
 BigInt64ArrayConstructor: reentrant (constructor BigInt64Array)
-  builtins/typedarray.ts:937:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:938:10  TypedArrayConstruct (builtin)
 
 BigInt64ArrayBytesPerElement: leaf (value BigInt64Array.BYTES_PER_ELEMENT)
 
 BigInt64ArrayPrototypeBytesPerElement: leaf (value BigInt64Array.prototype.BYTES_PER_ELEMENT)
 
 BigUint64ArrayConstructor: reentrant (constructor BigUint64Array)
-  builtins/typedarray.ts:963:10  TypedArrayConstruct (builtin)
+  builtins/typedarray.ts:964:10  TypedArrayConstruct (builtin)
 
 BigUint64ArrayBytesPerElement: leaf (value BigUint64Array.BYTES_PER_ELEMENT)
 
 BigUint64ArrayPrototypeBytesPerElement: leaf (value BigUint64Array.prototype.BYTES_PER_ELEMENT)
 
 TypedArrayPrototypeAt: reentrant (%TypedArray%.prototype.at)
-  builtins/typedarray.ts:992:20  ToIntegerOrInfinity (builtin)
+  builtins/typedarray.ts:993:20  ToIntegerOrInfinity (builtin)
 
 TypedArrayPrototypeCopyWithin: reentrant (%TypedArray%.prototype.copyWithin)
-  builtins/typedarray.ts:1008:19  RelativeIndex (builtin)
-  builtins/typedarray.ts:1009:21  RelativeIndex (builtin)
-  builtins/typedarray.ts:1010:20  RelativeIndex (builtin)
+  builtins/typedarray.ts:1009:19  RelativeIndex (builtin)
+  builtins/typedarray.ts:1010:21  RelativeIndex (builtin)
+  builtins/typedarray.ts:1011:20  RelativeIndex (builtin)
 
 TypedArrayPrototypeEntries: leaf (%TypedArray%.prototype.entries)
 
@@ -3839,101 +3839,101 @@ TypedArrayPrototypeKeys: leaf (%TypedArray%.prototype.keys)
 TypedArrayPrototypeValues: leaf (%TypedArray%.prototype.values, %TypedArray%.prototype[Symbol.iterator])
 
 TAEveryOrSome: reentrant
-  builtins/typedarray.ts:1061:34  Call (intrinsic)
+  builtins/typedarray.ts:1062:34  Call (intrinsic)
 
 TypedArrayPrototypeEvery: reentrant (%TypedArray%.prototype.every)
-  builtins/typedarray.ts:1074:10  TAEveryOrSome (builtin)
+  builtins/typedarray.ts:1075:10  TAEveryOrSome (builtin)
 
 TypedArrayPrototypeSome: reentrant (%TypedArray%.prototype.some)
-  builtins/typedarray.ts:1082:10  TAEveryOrSome (builtin)
+  builtins/typedarray.ts:1083:10  TAEveryOrSome (builtin)
 
 TypedArrayPrototypeFilter: reentrant (%TypedArray%.prototype.filter)
-  builtins/typedarray.ts:1097:19  Call (intrinsic)
-  builtins/typedarray.ts:1098:7  CreateDataPropertyOrThrow (intrinsic)
-  builtins/typedarray.ts:1102:18  TypedArraySpeciesCreate (builtin)
-  builtins/typedarray.ts:1104:17  Get (intrinsic)
-  builtins/typedarray.ts:1104:5  TASet (builtin)
+  builtins/typedarray.ts:1098:19  Call (intrinsic)
+  builtins/typedarray.ts:1099:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/typedarray.ts:1103:18  TypedArraySpeciesCreate (builtin)
+  builtins/typedarray.ts:1105:17  Get (intrinsic)
+  builtins/typedarray.ts:1105:5  TASet (builtin)
 
 TAFind: reentrant
-  builtins/typedarray.ts:1117:19  Call (intrinsic)
+  builtins/typedarray.ts:1118:19  Call (intrinsic)
 
 TypedArrayPrototypeFind: reentrant (%TypedArray%.prototype.find)
-  builtins/typedarray.ts:1132:10  TAFind (builtin)
+  builtins/typedarray.ts:1133:10  TAFind (builtin)
 
 TypedArrayPrototypeFindIndex: reentrant (%TypedArray%.prototype.findIndex)
-  builtins/typedarray.ts:1140:10  TAFind (builtin)
+  builtins/typedarray.ts:1141:10  TAFind (builtin)
 
 TypedArrayPrototypeFindLast: reentrant (%TypedArray%.prototype.findLast)
-  builtins/typedarray.ts:1148:10  TAFind (builtin)
+  builtins/typedarray.ts:1149:10  TAFind (builtin)
 
 TypedArrayPrototypeFindLastIndex: reentrant (%TypedArray%.prototype.findLastIndex)
-  builtins/typedarray.ts:1156:10  TAFind (builtin)
+  builtins/typedarray.ts:1157:10  TAFind (builtin)
 
 TypedArrayPrototypeForEach: reentrant (%TypedArray%.prototype.forEach)
-  builtins/typedarray.ts:1168:5  Call (intrinsic)
+  builtins/typedarray.ts:1169:5  Call (intrinsic)
 
 TypedArrayPrototypeIncludes: reentrant (%TypedArray%.prototype.includes)
-  builtins/typedarray.ts:1182:16  ToIntegerOrInfinity (builtin)
+  builtins/typedarray.ts:1183:16  ToIntegerOrInfinity (builtin)
 
 TypedArrayPrototypeIndexOf: reentrant (%TypedArray%.prototype.indexOf)
-  builtins/typedarray.ts:1210:16  ToIntegerOrInfinity (builtin)
+  builtins/typedarray.ts:1211:16  ToIntegerOrInfinity (builtin)
 
 TypedArrayPrototypeLastIndexOf: reentrant (%TypedArray%.prototype.lastIndexOf)
-  builtins/typedarray.ts:1241:7  LengthOfArrayLike (builtin)
-  builtins/typedarray.ts:1242:29  Get (intrinsic)
-  builtins/typedarray.ts:1242:9  ToIntegerOrInfinity (builtin)
+  builtins/typedarray.ts:1242:7  LengthOfArrayLike (builtin)
+  builtins/typedarray.ts:1243:29  Get (intrinsic)
+  builtins/typedarray.ts:1243:9  ToIntegerOrInfinity (builtin)
 
 TypedArrayPrototypeJoin: reentrant (%TypedArray%.prototype.join)
-  builtins/typedarray.ts:1266:11  ToString (builtin)
-  builtins/typedarray.ts:1275:12  ToString (builtin)
+  builtins/typedarray.ts:1267:11  ToString (builtin)
+  builtins/typedarray.ts:1276:12  ToString (builtin)
 
 TypedArrayPrototypeMap: reentrant (%TypedArray%.prototype.map)
-  builtins/typedarray.ts:1289:18  TypedArraySpeciesCreate (builtin)
-  builtins/typedarray.ts:1291:27  Call (intrinsic)
-  builtins/typedarray.ts:1292:5  TASet (builtin)
+  builtins/typedarray.ts:1290:18  TypedArraySpeciesCreate (builtin)
+  builtins/typedarray.ts:1292:27  Call (intrinsic)
+  builtins/typedarray.ts:1293:5  TASet (builtin)
 
 TAReduce: reentrant
-  builtins/typedarray.ts:1303:7  LengthOfArrayLike (builtin)
-  builtins/typedarray.ts:1304:19  Get (intrinsic)
-  builtins/typedarray.ts:1314:19  Call (intrinsic)
+  builtins/typedarray.ts:1304:7  LengthOfArrayLike (builtin)
+  builtins/typedarray.ts:1305:19  Get (intrinsic)
+  builtins/typedarray.ts:1315:19  Call (intrinsic)
 
 TypedArrayPrototypeReduce: reentrant (%TypedArray%.prototype.reduce)
-  builtins/typedarray.ts:1325:10  TAReduce (builtin)
+  builtins/typedarray.ts:1326:10  TAReduce (builtin)
 
 TypedArrayPrototypeReduceRight: reentrant (%TypedArray%.prototype.reduceRight)
-  builtins/typedarray.ts:1334:10  TAReduce (builtin)
+  builtins/typedarray.ts:1335:10  TAReduce (builtin)
 
 TypedArrayPrototypeReverse: leaf (%TypedArray%.prototype.reverse)
 
 TASortedList: reentrant
-  builtins/typedarray.ts:1359:5  CreateDataPropertyOrThrow (intrinsic)
-  builtins/typedarray.ts:1364:5  SortList (builtin)
+  builtins/typedarray.ts:1360:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/typedarray.ts:1365:5  SortList (builtin)
 
 TypedArrayPrototypeSort: reentrant (%TypedArray%.prototype.sort)
-  builtins/typedarray.ts:1380:21  TASortedList (builtin)
-  builtins/typedarray.ts:1382:25  Get (intrinsic)
+  builtins/typedarray.ts:1381:21  TASortedList (builtin)
+  builtins/typedarray.ts:1383:25  Get (intrinsic)
 
 TypedArrayPrototypeToSorted: reentrant (%TypedArray%.prototype.toSorted)
-  builtins/typedarray.ts:1398:21  TASortedList (builtin)
-  builtins/typedarray.ts:1400:25  Get (intrinsic)
+  builtins/typedarray.ts:1399:21  TASortedList (builtin)
+  builtins/typedarray.ts:1401:25  Get (intrinsic)
 
 TypedArrayPrototypeToReversed: leaf (%TypedArray%.prototype.toReversed)
 
 TypedArrayPrototypeWith: reentrant (%TypedArray%.prototype.with)
-  builtins/typedarray.ts:1426:20  ToIntegerOrInfinity (builtin)
-  builtins/typedarray.ts:1428:20  ToElementValue (builtin)
+  builtins/typedarray.ts:1427:20  ToIntegerOrInfinity (builtin)
+  builtins/typedarray.ts:1429:20  ToElementValue (builtin)
 
 TypedArrayPrototypeToLocaleString: reentrant (%TypedArray%.prototype.toLocaleString)
-  builtins/typedarray.ts:1453:26  GetV (intrinsic)
-  builtins/typedarray.ts:1453:21  Call (intrinsic)
-  builtins/typedarray.ts:1453:12  ToString (builtin)
+  builtins/typedarray.ts:1454:26  GetV (intrinsic)
+  builtins/typedarray.ts:1454:21  Call (intrinsic)
+  builtins/typedarray.ts:1454:12  ToString (builtin)
 
 IsCanonicalNumericKey: reentrant
-  builtins/typedarray.ts:1468:35  ToNumber (builtin)
-  builtins/typedarray.ts:1468:26  ToString (builtin)
+  builtins/typedarray.ts:1469:35  ToNumber (builtin)
+  builtins/typedarray.ts:1469:26  ToString (builtin)
 
 TASet: reentrant
-  builtins/typedarray.ts:1477:23  ToElementValue (builtin)
+  builtins/typedarray.ts:1478:23  ToElementValue (builtin)
 
 GlobalDecodeURI: reentrant (decodeURI)
   builtins/uri.ts:9:20  ToString (builtin)
@@ -3997,14 +3997,14 @@ WeakSetPrototypeHas: leaf (WeakSet.prototype.has)
 WeakSetPrototypeToStringTag: leaf (value WeakSet.prototype[Symbol.toStringTag])
 
 WeakRefConstructor: reentrant (constructor WeakRef)
-  builtins/weakref.ts:16:24  GetPrototypeFromConstructor (builtin)
+  builtins/weakref.ts:17:24  GetPrototypeFromConstructor (builtin)
 
 WeakRefPrototypeDeref: leaf (WeakRef.prototype.deref)
 
 WeakRefPrototypeToStringTag: leaf (value WeakRef.prototype[Symbol.toStringTag])
 
 FinalizationRegistryConstructor: reentrant (constructor FinalizationRegistry)
-  builtins/weakref.ts:47:22  GetPrototypeFromConstructor (builtin)
+  builtins/weakref.ts:48:22  GetPrototypeFromConstructor (builtin)
 
 FinalizationRegistryPrototypeRegister: leaf (FinalizationRegistry.prototype.register)
 
@@ -4013,7 +4013,7 @@ FinalizationRegistryPrototypeUnregister: leaf (FinalizationRegistry.prototype.un
 FinalizationRegistryPrototypeToStringTag: leaf (value FinalizationRegistry.prototype[Symbol.toStringTag])
 
 FinalizationRegistryCleanupJob: reentrant (%FinalizationRegistryCleanupJob)
-  builtins/weakref.ts:109:7  Call (intrinsic)
+  builtins/weakref.ts:110:7  Call (intrinsic)
 
 DOMExceptionPrototypeObject: reentrant
   builtins/web.ts:9:16  Get (intrinsic)

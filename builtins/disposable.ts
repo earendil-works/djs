@@ -10,6 +10,7 @@
 // AsyncDisposableStack resource with only a Symbol.dispose method (GetDisposeMethod's
 // closure: the call's outcome is awaited), 3 is an AsyncDisposableStack resource of
 // null or undefined (no method; only forces an await).
+// @slim-omit: left out of the slim build (D2411).
 
 /** The SuppressedError DisposeResources throws when a disposal throws after another. */
 function NewSuppressedError(error: Value, suppressed: Value): Obj {

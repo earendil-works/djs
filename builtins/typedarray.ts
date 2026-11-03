@@ -2,6 +2,7 @@
 // and hex methods. Elements live in the buffer; the integer-indexed exotic behavior is in
 // heap/typed.rs (D1390). Kinds: 0 Int8, 1 Uint8, 2 Uint8Clamped, 3 Int16, 4 Uint16,
 // 5 Int32, 6 Uint32, 7 Float16, 8 Float32, 9 Float64, 10 BigInt64, 11 BigUint64.
+// @slim-omit: left out of the slim build (D2411).
 
 /** The element size of a kind. */
 function ElementSize(kind: i32): f64 {

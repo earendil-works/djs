@@ -9,6 +9,7 @@
 //
 // Flags (the compiler's DEC_*): the kind in bits 0-2 (0 class, 1 method, 2 getter, 3
 // setter, 4 accessor, 5 field), 8 static, 16 private.
+// @slim-omit: left out of the slim build (D2411).
 
 /** The `kind` of a context object, also in qjs's messages. */
 function DecoratorKindName(kind: i32): Str {

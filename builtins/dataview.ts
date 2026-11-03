@@ -1,6 +1,7 @@
 // DataView (ECMA-262 25.3): a view of an ArrayBuffer's bytes, either endianness. Slots in
 // builtins/typed.rs (`data_view_create`); the bytes go through heap/typed.rs's element
 // encodings (D1390). BigInt64/BigUint64 read and write BigInts (0046).
+// @slim-omit: left out of the slim build (D2411).
 
 /** IsViewOutOfBounds ( viewRecord ), 25.3.1.3 (detached counts). */
 function DVOutOfBounds(view: Obj): boolean {

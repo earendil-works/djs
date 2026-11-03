@@ -20,6 +20,7 @@
 //
 // A step either yields (sets state 1 and returns the value) or returns with the state
 // still executing, which completes the helper.
+// @slim-omit: left out of the slim build (D2411).
 
 /** The first slot of the per-kind state. */
 function HelperState(o: Obj): i32 {
