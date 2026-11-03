@@ -546,3 +546,12 @@ topics when the index is next reorganized.
 - D2583: The format 2 promise, concretely
 - D2584: `$dump.resume` builds the frame from the map of the dump's own text
 - D2585: A load's open calls, handles and call ids
+- D2602: The CLI's host globals `later` and `print`
+- D2603: Resuming dumps in the CLI
+- D2610: The exporter writes what is in flight as the calls that make it
+- D2611: Variables of one name in several scopes get nested factories
+- D2612: Re-enactments of iterators and for-await state
+- D2613: The gate dumps at every idle point of the corpus
+- D2614: The dumper's size in the dump module
+- D2615: A dump holding TypeScript functions is TypeScript
+- D2616: Where activations stopped is reported, not written as comments
