@@ -13,7 +13,7 @@ Make suspension visible and testable by hand (docs/continuation-dumps.md "REPL")
 ## Acceptance criteria
 - [x] A host-provided `tools`: `tools.x(args)` is an async host call answered by hand;
       inputs that wait do not block the prompt and print their result when they settle.
-- [ ] `.pending`, `.resolve <id> <json>`, `.reject <id> <message>`, `.bt <id|all>`
+- [x] `.pending`, `.resolve <id> <json>`, `.reject <id> <message>`, `.bt <id|all>`
       (suspended activations and their bindings); `--tools answers.json` for scripted answers.
 - [ ] `.dump` writes format 2 when something is in flight; `.restore` restores waiting inputs
       and open calls; `.dump-every [on|off]` dumps and reloads at every idle point.
@@ -22,7 +22,7 @@ Make suspension visible and testable by hand (docs/continuation-dumps.md "REPL")
 - [ ] Line-mode transcripts in crates/djs-cli/tests/repl.rs for each command; a CLI test that
       runs `--dump-after K` / `resume` for every K of a few scripts and compares with the
       uninterrupted run. docs/cli.md updated.
-- [ ] `.snapshot` stays until 0177.
+- [x] `.snapshot` stays until 0177.
 
 ## Log
 - 2026-11-03 (repl): tools part. `tools` is a Proxy that makes one async host function
