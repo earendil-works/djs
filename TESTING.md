@@ -445,8 +445,8 @@ integration tests; the no_std wasm32 build of djs-core; `scripts/bgen.sh --check
 versus wasm heap images (`scripts/determinism/native-vs-wasm.sh`); the wire and reader
 cross-language checks; difftest on djs with the ratchet, suspension, GC stress and
 heap-image determinism; difftest with the bytecode backend; and the test262 active group
-against its ratchet; and the size budget (below). It prints the slowest unit and test262
-tests. Issues that add a test
+against its ratchet; the slim build's own legs (below); and the size budget (below). It
+prints the slowest unit and test262 tests. Issues that add a test
 suite also add it to the gate; agents do not run the gate's steps by hand (AGENTS.md).
 
 ### Builtin registry (D2371)
@@ -464,6 +464,31 @@ intrinsic a stable id, keyed by a spec-style path. Two checks keep it honest:
 The file merges with git's union driver; scripts/regen.sh (run by merge-to-main after the
 rebase) renumbers a merged tail after main's entries and runs the update, so two branches
 that both appended need no hand resolution.
+
+### The slim build (D2411, D2413)
+
+djs-core's default features `full` and `unicode` make the default build; without them it
+is the slim build (`scripts/build-wasm.sh --slim`: target/djs-slim.wasm). Everything above
+runs the full build. The slim build, natively in `target/slim`
+(`--no-default-features`), gets:
+- `cargo test -p djs-core --no-default-features --lib -- vm::slim_tests vm::frozen_tests
+  vm::registry`, and djs-prelude's tests with `--features raw,registry` (the registry
+  against tests/builtins/registry-slim.txt). `vm::slim_tests` runs in both builds and
+  checks both sides of the boundary;
+- difftest's `codemode` and `codemode-harvest` with `--ratchet --suspend-every 97
+  --gc-stress --determinism`;
+- test262's active group: a runner built without `full` skips tests/test262-slim.toml's
+  groups and compares with tests/test262/expected-failures-slim.txt (update it with the
+  same command and `--update`);
+- pi's codemode tests on djs-slim.wasm, with pi's prelude minus its lockdown on frozen
+  builtins: `DJS_WASM=target/djs-slim.wasm node js/pi/pi-tests.ts --no-lockdown --expected
+  tests/pi/slim-expected-failures.txt` (only new failures fail);
+- its size ratchet, `slim_ceiling_gzip` (`scripts/size/budget.py MODULE --slim`).
+
+A change that adds or removes a builtin in an omitted family updates
+tests/builtins/registry-slim.txt with `scripts/registry-update.sh` (merge-to-main runs it).
+A new builtin file or builtin that belongs to the slim cut gets `// @slim-omit` (file) or
+`@slim-omit` (builtin), and its globals go into `realm::ABSENT_GLOBALS`.
 
 ### Size budget (D020)
 

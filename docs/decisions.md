@@ -6891,3 +6891,77 @@ non-ASCII string then paid a reservation, a second encoding and a second arena g
 MiB with one em dash: 1.85 → 2.55 ms, 4.4 → 5.7 MiB); deciding from the wire encoding
 costs it nothing. Two-byte strings and strings inside objects keep the wire path; pico's
 result buffer with slices (lesson 3) is the larger step.
+## D2411: The slim build: the `full` and `unicode` features, cut by a constant
+date: 2026-11-03 · by: slim · issue: 0160
+docs/slim-codemode.md's set as additive cargo features (D025): djs-core's default is
+`["full", "unicode"]`; without them the build is slim (`scripts/build-wasm.sh --slim`,
+target/djs-slim.wasm).
+- **What `full` carries:** typed arrays, ArrayBuffer, DataView (incl. Float16Array and
+  Uint8Array base64/hex), BigInt (global and literals), the Iterator helpers and the
+  `Iterator` global, WeakRef and FinalizationRegistry, DisposableStack,
+  AsyncDisposableStack, SuppressedError and `using`, decorators. `unicode` turns on
+  `regexp-unicode-props` and `unicode-normalization`, which stay as finer features. The
+  newest proposals and the Annex B leftovers of 0149's optional list stay in both builds.
+- **Builtins:** a builtins/*.ts file with a `// @slim-omit` line, or a builtin tagged
+  `@slim-omit` (SuppressedError, in error.ts), is left out of gen/prelude-slim.js, which bgen
+  writes next to gen/prelude.js. Installs of kept builtins onto an omitted constructor
+  (`%TypedArray%.prototype.toString`) go too. Calls from kept builtins into omitted ones stay
+  (global reads behind `IsTypedArray` checks no slim value passes) and are listed in the
+  slim prelude's header, so a new one shows in review. ToNumeric moved from bigint.ts to
+  conversion.ts: the interpreter calls it in every build.
+- **Rust:** `djs_core::FULL` (a `const` of `cfg!(feature = "full")`) guards what the slim
+  build can't reach, so both builds type-check the same code, the slim one has no
+  dead-code warnings, and the full one compiles to the same thing: the 40 leaf-intrinsic
+  arms of the omitted families (`X if FULL =>`), the BIGINT tag in `Value::kind` and
+  `as_bigint` (−7.5 KB gzip: the BigInt arithmetic behind every numeric operator goes),
+  the wire format's bytes tag. The realm leaves the families' prototypes `undefined`
+  (`SLIM_LEAVES_OUT`). Only the prelude source is chosen by `#[cfg]`. Guarding object
+  classes in `ObjectClass::from_u32` the same way saved nothing (measured) and is not in.
+- **Errors:** a missing global in `realm::ABSENT_GLOBALS` throws `ReferenceError: 'X' is
+  not available in this build`; BigInt literals, decorators and `using` are a SyntaxError
+  that says the same; the chain's last intrinsic arm says `%Name is not available in this
+  build`.
+- **Builds stay consistent:** djs-prelude, djs-wasm, djs-difftest, djs-test262 and djs-cli
+  forward `full`/`unicode` (their default) and depend on djs-core without its defaults.
+  djs-prelude's build script makes the base with a build-dependency djs-core whose
+  features cargo resolves apart, so lib.rs asserts at compile time that the base's build
+  hash is the library's. The umbrella `unicode` is left out of SOURCE_HASH (it changes
+  nothing by itself); prelude-slim.js is in it.
+- **Shapes (D2067):** no chain of `BUILTIN_RESULT_SHAPES` belongs only to the omitted
+  families (Proxy, whose `{proxy, revoke}` is one, stays), so the list is the same in
+  both builds.
+- **Sizes:** full module 455,468 B gzip (main 455,502: −34 B); slim 390,849 B gzip
+  (1.36x quickjs-wasi). Base image 250,544 B / 4,848 cells, slim 180,552 B / 3,495 cells
+  (−28%, the prefix every VM copies).
+
+## D2412: The registry lists what the slim build lacks
+date: 2026-11-03 · by: slim · issue: 0160
+tests/builtins/registry-slim.txt has the registry ids and paths that don't resolve in the
+slim build (D2411), written by scripts/registry-update.sh from a slim build of the same tree
+(target/slim) and checked by the slim build's registry test
+(`Registry::check_build(heap, absent)`: exactly those must not resolve, all others must).
+`djs_prelude::registry::absent`/`is_absent` give the set of the current build (empty in a
+full one). A test checks `realm::ABSENT_GLOBALS` against the list's global names. A path
+`X.prototype` whose global `X` the build lacks resolves through the realm's prototype slot,
+so `Iterator.prototype` (every iterator's %IteratorPrototype%) keeps its id in the slim
+build; exports name builtins with the same ids in both builds.
+
+## D2413: Testing the slim build: its own legs in the gate
+date: 2026-11-03 · by: slim · issue: 0160
+The gate builds djs-slim.wasm beside the size build and tests the slim build natively in
+target/slim:
+- djs-core's `vm::slim_tests` (both builds: present in full, absent with the message in
+  slim), `vm::frozen_tests` and `vm::registry`; djs-prelude's tests;
+- difftest's `codemode/` and `codemode-harvest/` with `--suspend-every 97 --gc-stress
+  --determinism` against the common ratchet;
+- test262's active group: a runner whose djs-core lacks `full` (or `unicode`) puts
+  tests/test262-slim.toml's `slim` (or `no-unicode`) skip group first (features, paths,
+  and globals scanned for), and compares with tests/test262/expected-failures-slim.txt
+  (BigInt literals in harness files and similar);
+- pi's codemode tests on djs-slim.wasm with pi's prelude minus `lockdown()` on frozen
+  builtins (`js/pi/pi-tests.ts --no-lockdown --expected tests/pi/slim-expected-failures.txt`:
+  new failures fail; 19 expected, 11 of them also on the full module).
+
+Its size has its own ratchet, `slim_ceiling_gzip` in tests/scores/size.tsv
+(`budget.py --slim`), without the 1.5x budget it is under by design. The rest of the gate
+runs the full build only.

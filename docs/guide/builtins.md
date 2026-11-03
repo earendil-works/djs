@@ -383,6 +383,65 @@ The mode is part of the image: a restored VM keeps it.
 > leave every cell below its end in place, and the per-VM objects that must stay
 > writable, such as the global object, live above it (D2064).
 
+## Two builds: full and slim
+
+djs builds in two variants from one source. The default build has every builtin family.
+The *slim* build leaves out the families that codemode scripts never use and that cost
+real size: typed arrays with ArrayBuffer and DataView, BigInt, the Iterator helpers and
+the `Iterator` global, WeakRef and FinalizationRegistry, DisposableStack with
+SuppressedError and the `using` declarations, and decorators. A count over thousands of
+real codemode scripts found none of them. The slim module is about 57 KB smaller in
+gzip (the full one is 455 KB). Its base image is a quarter smaller, which every VM copies.
+
+The variants are cargo features, and features may only add things. So the default build
+turns on a feature called `full`, which carries those families, and a second one,
+`unicode`, which carries the Unicode property tables of `\p{…}` in regular expressions
+and full normalization. Building without the default features gives the slim build
+(D2411, D025).
+
+Three mechanisms take a family out:
+- **Builtins.** A builtin file can be marked as left out of the slim build, and so can a
+  single builtin (SuppressedError lives with the other errors). The builtin compiler then
+  writes a second prelude without them, and the slim build compiles that one into its base
+  image. Installs that a kept builtin makes onto an object of a left-out family, such as
+  `%TypedArray%.prototype.toString`, which is Array's `toString`, go too.
+- **Rust.** Code is cut with a constant (`FULL` in
+  [crates/djs-core/src/lib.rs](../../crates/djs-core/src/lib.rs)) rather than with
+  conditional compilation, so both builds type-check the same code and the optimizer drops
+  what the slim one can't reach:
+  - the leaf intrinsics of the left-out families have a `FULL` guard on their dispatch
+    arms;
+  - `Value` never reports a BigInt in the slim build, so the BigInt arithmetic behind
+    every numeric operator falls away.
+- **Syntax.** BigInt literals, decorators and `using` are a SyntaxError that names the
+  build.
+
+What a script sees in the slim build:
+
+```js
+new Uint8Array(4);   // ReferenceError: 'Uint8Array' is not available in this build
+typeof BigInt;       // "undefined": feature tests keep working
+[].values().map;     // undefined: the Iterator helpers are gone
+10n;                 // SyntaxError: BigInt literals are not available in this build
+```
+
+The builtin registry stays one table. Next to it a committed list names the entries the
+slim build doesn't have, and the slim build's tests check that exactly those don't
+resolve. The prototype of an absent constructor that the engine still has
+(`Iterator.prototype`, which every iterator inherits from) keeps its id. An export from a
+slim VM therefore names its builtins with the same ids as a full one.
+
+> **Trade-off.** One feature for the whole cut, not one per family. Each extra
+> combination would need its own base image, test runs and size budget, and the families
+> were chosen together from the same evidence. The slim build can't run all of test262
+> or the differential corpus, so it is tested on its own terms:
+> - its codemode corpora, with the stress modes;
+> - test262 with the tests of the left-out families skipped, against its own list of
+>   expected failures;
+> - pi's own codemode tests, with pi's prelude run on frozen builtins instead of its
+>   lockdown, which walks the typed arrays;
+> - its own size ceiling.
+
 ## Where to look
 
 - [`crates/djs-core/src/heap/frozen.rs`](../../crates/djs-core/src/heap/frozen.rs): the
