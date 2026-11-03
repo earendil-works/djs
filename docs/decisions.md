@@ -6855,3 +6855,19 @@ functions, but the inliner spends the savings: −1.1 KB raw, +0.2 KB gz); `core
 unreachable` instead of the panic (+2.2 KB); `#[inline]` instead of `#[inline(always)]`
 (no change). Per-cell views (`&[u8; N]` taken once, fields at constant offsets) remain the
 way to close the rest of the gap, at call sites.
+## D2550: Fuel stays per instruction; charging only at safepoints measured, not adopted
+date: 2026-11-03 · by: speed · issue: 0162
+pico charges fuel only at calls and taken backward jumps (docs/lessons-from-pico.md lesson
+7). An experiment build (work/scratch/0162/fuel-safepoint.diff) did that in `run_hot`
+only: no charge and no check on straight-line ops, the charge plus a `fuel <= 0` exit at
+calls, returns and taken backward jumps; `step` unchanged. Against main after D2443, wasm
+instructions (wmeasure.py, n=5): loop −6.8%, tight −6.7%, prop1 −6.1%, arrays −3.7%,
+calls −3.7%, call1 −3.3%, props −3.1%, pushpop −3.0%, foreach −2.9%, tiny-reduce2 −2.4%,
+forof −2.3%, push-loop −1.8%, higher-order −1.0%, tree-children −0.9%, push-pop −1.2%;
+pi-like −0.2%; json, json-date, json-indent, json-replacer, json-text, jsonh, strings,
+strbuild, indexof within ±0.5% (noise). So: at most ~7% on interpreter-bound loops and
+nothing on codemode-like, JSON or builtin-heavy work. Adopting it would change G5 from
+"stop between any two bytecode instructions" to "stop at a safepoint, at most one
+straight-line block (bounded by the function's code size) later", change every fuel
+count and every stress-mode stop point (suspend every 97), and need `step` and `run_hot`
+to charge alike. Not worth that now; kept as an option for the owner.
