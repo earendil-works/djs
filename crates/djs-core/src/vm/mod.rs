@@ -1083,6 +1083,8 @@ fn fnv64(bytes: &[u8]) -> u64 {
 #[cfg(test)]
 mod compat_tests;
 #[cfg(all(test, feature = "dump"))]
+mod dump_harvest;
+#[cfg(all(test, feature = "dump"))]
 mod dump_tests;
 #[cfg(test)]
 mod frozen_tests;

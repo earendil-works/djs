@@ -341,3 +341,28 @@ fn committed_dumps_still_load() {
     assert!(!loaded.starts_with("throw"), "{loaded}");
     assert_eq!(run(&mut b, FIXTURE_CHECK), want.trim_end());
 }
+
+#[test]
+fn captured_host_values_read_the_global() {
+    // A body's closure that captures its `tools` parameter: the host re-binds `tools`.
+    let mut a = new_vm();
+    run(
+        &mut a,
+        "globalThis.tools = { read: (p) => 'read ' + p };\n\
+         var lib = ((tools) => ({ go: (p) => tools.read(p) }))(tools);",
+    );
+    let text = a
+        .dump(
+            &DumpOptions {
+                base: base(),
+                host: &["tools"],
+            },
+            Some(&["lib"]),
+        )
+        .unwrap_or_else(|e| panic!("{}", e.message()));
+    assert!(!text.contains("let tools"), "{text}");
+    let mut b = new_vm();
+    run(&mut b, "globalThis.tools = { read: (p) => 'host ' + p };");
+    run(&mut b, &text);
+    assert_eq!(run(&mut b, "lib.go('x')"), "host x", "{text}");
+}

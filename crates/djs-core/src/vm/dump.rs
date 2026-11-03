@@ -1639,6 +1639,12 @@ impl<'a> Dumper<'a> {
             }
             _ => {
                 let e = self.expr(value, None, Some(&name));
+                if e == name {
+                    // The host's value under its own name (a binding `text = text`):
+                    // the global is the binding.
+                    self.roots[r].state = State::Done;
+                    return;
+                }
                 cat!(kw, name, " = ", e, ";")
             }
         };
@@ -1935,6 +1941,11 @@ impl<'a> Dumper<'a> {
                 }
                 _ => {
                     let e = self.expr(inner, None, Some(name));
+                    if e == *name {
+                        // A captured `tools` that holds the host's `tools`: the closures
+                        // read the global (`let tools = tools;` would be a TDZ error).
+                        continue;
+                    }
                     cat!("let ", name, " = ", e, ";")
                 }
             };

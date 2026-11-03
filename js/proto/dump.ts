@@ -993,7 +993,14 @@ class Dumper {
         this.fnPatches(n, root.name);
         line = src;
       } else line = `${root.decl} ${root.name} = ${this.render(n, root.name, root.name)};`;
-    } else line = `${root.decl} ${root.name} = ${this.expr(root.value, null, root.name)};`;
+    } else {
+      const e = this.expr(root.value, null, root.name);
+      if (e === root.name) {
+        root.state = DONE;
+        return;
+      }
+      line = `${root.decl} ${root.name} = ${e};`;
+    }
     this.out.push(line);
     root.state = DONE;
   }
@@ -1166,6 +1173,7 @@ class Dumper {
       const inner = boxValue(b);
       const c = this.nodeOf(inner);
       let line: string;
+      if (c < 0 && this.expr(inner, null, name) === name) return; // the host value of the same name
       if (c >= 0 && home.get(c) === bi) {
         const src = this.fnSource(c);
         line = declaredName(this.fnKind(c), src) === name ? src : `let ${name} = ${this.fnExpr(c, src)};`;
