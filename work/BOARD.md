@@ -6,6 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0185 | Guide design: latest Elanor (fonts) | design | .worktrees/design |
 | 0184 | Remaining dump refusals; dump size and load time vs images | portable | .worktrees/portable |
 | 0183 | The gate in seconds | gate-speed | .worktrees/gate-speed |
 | 0177 | Retire heap images as persistence; packaging; guide | example | .worktrees/example |
