@@ -751,10 +751,7 @@ export class Sandbox {
   /** Loads a dump: the open calls it recreated and the handles it named (the caller frees them). */
   private loadDump(dump: string): { calls: OpenCall[]; handles: Map<string, number> } {
     const x = this.x;
-    // Format 2 starts with the directive `"djs-dump 2";` (D2640), version 1 with a comment.
-    if (!dump.startsWith('"djs-dump ') && !dump.startsWith("// djs-dump ")) {
-      throw new SandboxError("misuse", "not a djs dump");
-    }
+    // Whether it is a dump, and of which format, is the loader's to say.
     if (!x.vm_load_dump) {
       throw new SandboxError("misuse", "the djs-wasm module has no dump loader (vm_load_dump)");
     }

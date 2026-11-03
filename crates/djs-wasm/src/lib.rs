@@ -920,11 +920,16 @@ pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32) -> i
     })
 }
 
-/// Writes the VM's global bindings as JavaScript that recreates them (`Vm::dump`, 0167,
-/// docs/functions-as-code.md) to the out buffer. staging[0..len] is UTF-8: the names of
-/// the globals the host defines (re-bound by name, never written), a newline, the names
-/// to dump (none: all of the VM's own), each list comma-separated. 0: the dump is in out;
-/// 1: refused, the reasons in out (one per line); 2: no base image (inject it first).
+/// Writes the idle VM as a format 2 dump (`Vm::dump`, 0167, 0172; docs/functions-as-code.md,
+/// docs/continuation-dumps.md) to the out buffer: its global bindings, and what is in
+/// flight (suspended activations, open host calls, pending promises). staging[0..len] is
+/// UTF-8, four lines (0179): the globals the host defines (re-bound by name, never
+/// written) and the names to dump (none: all of the VM's own), each comma-separated; the
+/// host's function names in id order, tab-separated (`DumpOptions::host_fn_name`: open
+/// calls and host functions held as values are written by name); the values to name for
+/// the host, `handle:name`, tab-separated (`DumpOptions::handles`, written as
+/// `$dump.handle(name, v)`). 0: the dump is in out; 1: refused, the reasons in out (one
+/// per line); 2: no base image (inject it first).
 #[cfg(feature = "dump")]
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
@@ -939,6 +944,10 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
         let host: Vec<&str> = line().split(',').filter(|n| !n.is_empty()).collect();
         let names: Vec<&str> = line().split(',').filter(|n| !n.is_empty()).collect();
         let fns: Vec<&str> = line().split('\t').collect();
+        let host_fn_name = |id: u32| {
+            let name = fns.get((id as usize).checked_sub(1)?)?;
+            (!name.is_empty()).then(|| String::from(*name))
+        };
         let handles: Vec<(&str, Value)> = line()
             .split('\t')
             .filter_map(|e| {
@@ -946,19 +955,14 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
                 Some((name, slot.value(h.parse().ok()?)))
             })
             .collect();
-        // Not written yet: the exporter of waiting runs is 0172.
-        let _ = &fns;
-        if !handles.is_empty() {
-            s.set_out(b"dumping a waiting run needs the format 2 exporter (issue 0172)\n");
-            return 1;
-        }
         let r = BASE.with(|b| {
             let b = b.borrow();
             let base = b.as_deref()?;
             let opts = djs_core::vm::dump::DumpOptions {
                 base,
                 host: &host,
-                ..Default::default()
+                host_fn_name: &host_fn_name,
+                handles: &handles,
             };
             Some(
                 slot.vm

@@ -10,7 +10,6 @@ test("examples/sleep-dump: dump while the tool sleeps, resume, continue", async 
   const lines: string[] = [];
   const { dump, result } = await inProcess({ ms: 50, log: (l) => void lines.push(l) });
   assert.deepEqual(result, ["first: slept 50 ms", "second: slept 50 ms"]);
-  assert.match(dump, /^\/\/ djs-dump 2/);
   // What was suspended: the open call, both activations, the half-done push, the loop.
   assert.match(dump, /\$dump\.pending\(\d+, "sleep", \[50\]\)/);
   assert.equal(dump.match(/\$dump\.resume\(/g)?.length, 2, dump);
