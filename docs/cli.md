@@ -73,17 +73,17 @@ writes for it"), reported to the exporter.
 
 ## `djs heap`
 
-What is in a heap dump (D2264): a raw image (`.snapshot --raw` of the REPL, `Vm::bytes`), a
-session image (D2066) or a snapshot container (`Sandbox.bytes()`, pi's `snapshot()`, the
-REPL's `.snapshot`, D2260). Sections (`--only summary,kinds,...` picks some; `--json` prints one object with
+What is in a heap image (D2264): a raw image (the REPL's `.image FILE`, `Vm::bytes`).
+Images are an in-process mechanism, not a persistence format (D2700): this is a tool for
+looking at a VM's heap. Sections (`--only summary,kinds,...` picks some; `--json` prints one object with
 a key per section):
 
 | section | shows |
 | --- | --- |
-| `summary` | format, build, image size, live vs garbage (and what a collection leaves), old region (`OLD_END`) vs young, the session image's size (what a container stores before compression, D2066) |
+| `summary` | format, build, image size, live vs garbage (and what a collection leaves), old region (`OLD_END`) vs young, the VM's own part (past `BASE_END`) and how many builtin prefix words it changed |
 | `kinds` | cells and bytes per cell kind (garbage, old) and per object class |
 | `prefix` | the words of the builtin prefix that differ from this build's base, by cell and builtin path (`%Array.prototype%`): the builtins a script changed (D2066) |
-| `diff` | against the reference image: unchanged cells in place or moved, changed, new (grouped into subtrees with their path and the new bytes only they keep alive), gone; how much of the image sits at the reference's offsets. This is what a snapshot compressed against the reference costs. A changed cell counts its differing words; a regrown one compares over the words both have, plus its nonzero new words |
+| `diff` | against the reference image: unchanged cells in place or moved, changed, new (grouped into subtrees with their path and the new bytes only they keep alive), gone; how much of the image sits at the reference's offsets. A changed cell counts its differing words; a regrown one compares over the words both have, plus its nonzero new words |
 | `largest` | the largest cells and the largest retained sizes (dominator tree), with paths like `globalThis.cache[3].body`; in the session view, retained sizes count the session's cells only |
 | `strings` | flat strings and ropes, duplicated contents, the largest strings |
 | `shapes` | shapes, objects with a shape or in dictionary mode, the most common key lists |
@@ -97,15 +97,8 @@ image instead, as does `--diff none`. In the session view, a string the referenc
 holds counts whole as an extra copy. In JSON these sections carry `scope` (`session` or
 `all`) and, in the session view, `reference_part` with the totals.
 
-The diff compares with a container's reference by default, or with this build's base
-for a raw image of this build; `--diff FILE` picks another image, `--diff none` skips it.
-A container compressed against the base decompresses with this build's base when the
-hashes match. Anything else needs its reference: `node scripts/heap/reference.ts base
-[--wasm MODULE] -o base.img` writes a module's base, and `node scripts/heap/reference.ts
-pi-prelude --data START.json -o prelude.img` pi's prelude image for a session's start
-data (tools, globals, store, memory limit, deterministic mode;
-scripts/snapshot-research/wasm.ts writes its cases' as `start.json`). Then `djs heap
---reference prelude.img session.djsn`.
+The diff compares with this build's base for an image of this build; `--diff FILE`
+picks another image, `--diff none` skips it.
 
 Builtins are named by their registry paths (D2371, tests/builtins/registry.tsv):
 `%Array.prototype.map%`, `%get Map.prototype.size%`, `%ArrayIteratorPrototype%.next`;
@@ -150,9 +143,9 @@ suspending every 300 fuel
 | `.time [on\|off]` | after each input: wall time (compile and run) and fuel |
 | `.gc` | collect; the arena size before and after |
 | `.heap [sections]` | arena bytes used, allocated and the limit, handles, atoms; then `djs heap`'s sections over the live VM against the base image (default `summary,diff`: the session's own cells and the base cells it changed, apart from the base realm every VM starts with; `all`, or a list such as `kinds,largest`) (D2340) |
-| `.snapshot [--raw] <file>` | collect, then write a snapshot container (app 3, `repl`) compressed against the base image: about 16 KB for a small session instead of its ~330 KB image. `--raw` writes the image itself (`vm.bytes()`) |
+| `.image <file>` | collect, then write the heap image (`vm.image()`, about 200 KB with the base), for `djs heap` |
 | `.dump <file\|-> [names]` | write the session's globals (or the named ones, plus the globals their functions read) as a JavaScript dump (docs/functions-as-code.md): functions as their source text, closures that share variables made by one factory, data as literals and constructor calls, binary data as base64, builtins referenced by name and changed builtins as code. With something in flight it is format 2: open calls, suspended activations and pending promises, with the waiting inputs as handles (below). What a dump cannot write is refused with its path. `-` prints it |
-| `.restore <file>` | replace the VM with one restored from a container (any app; decompressed with this build's base) or a raw image. It must come from the same build (the build hash is checked). Images from `djs repl` and `djs run` both work: `console` is host function 1 in both. A file starting with `"djs-dump ` (format 2) or `// djs-dump` (version 1) is a dump instead: a fresh VM loads it (`Vm::load_dump`), from any build; a format 2 dump's waiting run and open calls come back (below) |
+| `.restore <file>` | replace the VM with a fresh one that loaded a dump (a file starting with `"djs-dump ` for format 2 or `// djs-dump` for version 1; `Vm::load_dump`), from any build; a format 2 dump's waiting run and open calls come back (below). Images are not restored (D2700) |
 | `.dump-every [on\|off]` | at every idle point, dump the session and continue in a fresh VM that loaded the dump, printing `[dumped N bytes]`; a refused dump prints `[not dumped]` with the reasons and turns it off |
 | `.clear` | a fresh VM |
 | `.pending` | the open tool calls: `#2 tools.read({"path":"a.ts"})  input 1, at repl:1:11`, with the input (or `.resolve`/answer) that made the call and where the innermost activation waiting on it stopped |

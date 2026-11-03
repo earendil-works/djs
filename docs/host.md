@@ -44,17 +44,16 @@ const sb = await Sandbox.create({
 });
 sb.run("return readFile(path).length", { path: "README.md" });   // codemode function body
 await sb.runAsync("return await fetchJson(url)", { url });       // host functions may return promises
-const snap = sb.bytes();                                         // compact snapshot (see "Snapshots")
-const sb2 = await Sandbox.fromBytes(snap, { functions: { readFile } });
+const run = sb.begin(code, params);                             // a run the host drives; run.dump() while idle
 sb.dispose();
 ```
 
 - `loadModule(location?)` compiles the module once per location and caches the
   `WebAssembly.Module`. Every sandbox gets its own instance and VM (`new WebAssembly.Instance`,
   about 30 µs), so a trap in one cannot affect another.
-- `new Sandbox(opts, snapshot?)` is the synchronous form. It needs `opts.module`, or a
-  finished `loadModule()` of the default location. `Sandbox.create` / `Sandbox.fromBytes`
-  load the module first.
+- `new Sandbox(opts)` is the synchronous form. It needs `opts.module`, or a finished
+  `loadModule()` of the default location. `Sandbox.create` / `Sandbox.resume` load the
+  module first.
 - `run(code, params)` compiles `code` as a codemode async function body. The `params` are
   its parameters, sent in through the wire format. `return` gives the result, read out
   through the reader. Objects come back as plain JS objects. Values without a host form
@@ -86,8 +85,7 @@ sb.dispose();
   overrides it), and the clock starts at `startedAt`. It moves only when an async
   function's result is delivered: to `opts.now` at that moment (never backwards), applied
   when the VM takes the result from its inbox (D1670). Fuel slices and sync host
-  functions do not move it. With a fixed `now` the clock is fully reproducible; a
-  snapshot keeps it. Without `deterministic`, `randomSeed` (default: entropy) seeds a new
+  functions do not move it. With a fixed `now` the clock is fully reproducible. Without `deterministic`, `randomSeed` (default: entropy) seeds a new
   sandbox and `weakRefs` defaults to `"collected"`.
 - Unhandled rejections (D1423): promises rejected with no handler once the VM's job queue
   is empty (after the run, after each async result, and whenever it waits on async host
@@ -110,16 +108,12 @@ sb.dispose();
     not grow. That is not a script error, scripts cannot catch it, and the call is
     abandoned.
   - `fuel`: `maxFuel` ran out. `trap`: the module trapped (a djs bug), with the panic
-    message. `misuse`: a bad snapshot, a missing host function, a disposed sandbox.
+    message. `misuse`: a dump that does not load, a missing host function, a disposed
+    sandbox.
 
   After a `trap` the sandbox is unusable. Every other error leaves it usable. A failed
   run that left the VM mid-call (`fuel`, or a host-side error escaping the run loop) is
   abandoned with `vm_abort`, and globals set earlier stay intact.
-- Snapshots: `bytes()` collects, then writes the container below ("Snapshots") with the
-  host function names and the clock as its metadata, compressed against the module's base
-  image. `fromBytes` binds the host function ids to the implementations by name. It refuses
-  a snapshot whose functions are not all provided, one whose dependency descriptor or
-  builtin prefix differs from the module's (D2265), and one whose reference it lacks. The image is the arena itself and is validated on load (`Vm::from_bytes`).
 - **Choosing `memoryLimit` (D1690).** A JS `InternalError: out of memory` means the heap
   reached its cap, which depends only on the program and the cap. If the host cannot back
   the heap below the cap, the run ends with `memory` / `out of host memory` instead, and
@@ -167,26 +161,42 @@ const { sandbox, run: again } = await Sandbox.resume(text, { asyncFunctions }); 
   handle, so it leaves the VM byte for byte as it was (D2633): a recorded run can be
   dumped and still replays.
 
-**Packagings (D2635).** The dumper (cargo feature `dump`) is not in the shipped module. A
-host that persists runs either uses a module built with it (A: `scripts/build-wasm.sh
---dump` writes target/djs-dump.wasm, usable as `module`), or keeps the small module and
-passes the dump module beside it (B):
+**Packaging (D2635, D2704).** The dumper (cargo feature `dump`) is not in the shipped
+module: hosts that persist runs pass the dump module beside it (B), built by
+`scripts/build-wasm.sh --dump` (target/djs-dump.wasm). A module built with the feature
+also works on its own as `module` (A); djs ships B.
 
 ```ts
 const sb = await Sandbox.create({ module: await loadModule(), dumpModule: await loadModule("djs-dump.wasm"), asyncFunctions });
 ```
 
 With `dumpModule`, `dump`, `load`, `Run.dump` and `Sandbox.resume` move the VM's image to
-a transient instance of the dump module and back (the feature leaves images alone, D2352,
-so either module reads the other's). Dumping copies the arena as it is (the VM is
-untouched); loading collects in the dump module and replaces the sandbox's VM by the
-result. Measured at 0175 (`wasm` profile, node 25, load ~10, medians of 21; a run waiting
-in a nested call with 10 / 1000 records in scope, 3.4 / 51 KB of dump):
+an instance of the dump module and back (the feature leaves images alone, D2352, so
+either module reads the other's). The sandbox keeps that instance and its VM between
+dumps (`vm_replace_image` loads the next image into the same VM, D2701), so the instance
+and the dumper's per-VM work are paid once. Dumping copies the arena as it is (the main VM
+is untouched); loading collects in the dump module and replaces the sandbox's VM by the
+result. Images move only inside the process, so `vm_from_bytes` and `vm_replace_image`
+check their header and dependency descriptor but do not verify every cell (D2700).
 
-| | main module (gzip) | `Run.dump()` | `Sandbox.resume()` |
-| --- | ---: | ---: | ---: |
-| A: one module with the dumper | 1,312 KB raw, 540.6 KB | 2.4 / 5.3 ms | 1.1 / 5.5 ms |
-| B: djs.wasm + djs-dump.wasm | 1,038 KB raw, 443.8 KB (+ the dump module, loaded when needed) | 2.4 / 6.3 ms | 1.4 / 6.5 ms |
+Measured at 0177 (`wasm` profile, node 25, load ~7; the harvested corpus: 300 scripts,
+1063 idle points; the dump-costs cases for single sessions):
+
+| | main module | dump module | corpus dump p50 / p90 / p99 | corpus resume p50 / p90 / p99 |
+| --- | ---: | ---: | ---: | ---: |
+| B (shipped) | 1,029,026 B, 440.5 KB gzip | 1,332,899 B, 548.9 KB gzip | 2.8 / 4.4 / 40.9 ms | 0.9 / 1.6 / 5.6 ms |
+| A (one module) | 1,332,899 B, 548.9 KB gzip | - | as B within noise (agent-loop 2.9 vs 2.6 ms, records 19.5 vs 19.2 ms) | as B within noise |
+
+**Storing dumps (D2703).** A dump is plain JavaScript text and stays that way: the
+format is a Script, not a container. Hosts compress it when they store it, with zstd at
+level 3 (node: `zlib.zstdCompressSync(text, { params: { [zlib.constants.ZSTD_c_compressionLevel]: 3 } })`,
+and `zstdDecompressSync` back): over the harvested corpus a dump is 6.1 KB raw and 1.7 KB
+compressed at the median, 17 KB compressed at p99; a session holding a 1.8 MB log is
+394 KB. That is a third of what the image containers took (5.1 KB at the median), with
+no dictionary and no reference image to keep: any zstd reads it, and so does any later
+djs once decompressed. Level 19 saves a fifth to a quarter more on megabyte dumps (big-log
+394 → 299 KB), at a much slower compression. pi's `{ dump, state }` is JSON and
+compresses the same way.
 
 ### Journals: record and replay (D1730)
 
@@ -196,8 +206,8 @@ run after a crash), debugging, or to check a build against another.
 ```ts
 const journal: JournalEntry[] = [];
 const result = await sb.runAsync(code, params, { journal });   // or sb.run(...)
-// later, in a sandbox in the same state (a fresh one made the same way, or one restored
-// from a snapshot taken right before the run), with any fuel slice:
+// later, in a sandbox in the same state (a fresh one made the same way and given the same
+// runs before), with any fuel slice:
 await sb2.replay(journal);   // the same result; a mismatch is a `diverged` SandboxError
 ```
 
@@ -216,86 +226,25 @@ delivers the async results one per idle point in the recorded order with their c
 (checking that the script has made that call with those arguments), and compares the
 canonical hashes at the start, at the recorded idle points and at the end. It never calls
 the host functions. Results are macrotasks (D1670), so only their order matters, not
-when they arrived. That is why a replay at another fuel slice, after a snapshot, or
+when they arrived. That is why a replay at another fuel slice, or
 delivering one result at a time where the recording got several at once, reaches the
 same states. Raw value bits and offsets are never journaled: they depend on collection
 points.
 
 `sb.canonicalHash()` (`vm_canonical_hash`, `Vm::canonical_hash`) is FNV-1a (64 bits) of
 the image a collection would leave, computed on a copy: the VM itself is unchanged, and
-the hash does not depend on fuel slices, snapshots or when the VM last collected.
+the hash does not depend on fuel slices or when the VM last collected.
 
-### Snapshots (D2260)
+### Images inside a process (D2700)
 
-`Sandbox.bytes()` and the pi adapter's `snapshot()` write one container; `Sandbox.fromBytes()`
-and `resumeVm()` read it (js/src/snapshot.ts). The VM collects first, so the image holds
-only live cells (D1890, D2263). The image is compressed with zstd against a *reference
-image* that the writer and the reader can both produce without storing it: the module's
-base snapshot (`djs_base_ptr`, `djs_base_len`), or for the pi adapter the prelude image
-the session started from (D2262). Little-endian:
-
-| offset | size | field |
-| ---: | ---: | --- |
-| 0 | 4 | magic `"DJSN"` (`0x4e534a44`) |
-| 4 | 2 | format version, 3: any other version is refused (D024) |
-| 6 | 1 | app, which says what the metadata is: 1 Sandbox, 2 pi session, 3 the djs REPL (`{}`) |
-| 7 | 1 | compression: 0 none, 1 zstd |
-| 8 | 24 | the image's dependency descriptor (D2265), six u32 from its roots cell: the cell layout hash (`Roots::VERSION`), the feature set (`Roots::FEATURES`), the compatibility version (`Roots::COMPAT`), the opcode table hash (`OPS`), the intrinsic table hash (`INTRINSICS`), the internal id tables hash (`RECORDS`) |
-| 32 | 8 | FNV-1a 64 of the base image's builtin prefix (`base[0..BASE_END]`), low word first |
-| 40 | 1 | the reference: 0 none, 1 the base image, 2 pi's prelude image |
-| 41 | 1 | what the session image's prefix words are against: 0 the base image, 1 the reference |
-| 42 | 2 | reserved, 0 |
-| 44 | 8 | the reference's FNV-1a 64, low word first; 0 without one |
-| 52 | 4 | the reference's length in bytes |
-| 56 | 4 | the session image's length |
-| 60 | 4 | the metadata's length |
-| 64 | 4 | the payload's length |
-| 68 | | the metadata (UTF-8 JSON), then the payload: the session image as is, or one zstd frame with a content checksum, compressed with the reference as a raw-content dictionary |
-
-The engine build hash (`djs_build_hash`) is not in it (D026, D2265): a snapshot restores
-into any module whose base image has the same descriptor and the same builtin prefix,
-not only into the build that wrote it. What the components cover is in "What an image
-depends on" below.
-
-The stored image is a *session image* (D2066): what the base does not already hold of a VM
-made from the module's base (its builtin prefix ends at `Roots::BASE_END`). A writer
-refuses an image without that prefix. Little-endian:
-
-| offset | size | field |
-| ---: | ---: | --- |
-| 0 | 4 | magic `"DJSs"` (`0x73534a44`) |
-| 4 | 4 | format, 2 |
-| 8 | 4 | the base's dependency descriptor, hashed (`ImageDeps::hash`: FNV-1a of the six u32) |
-| 12 | 4 | `BASE_END`, the prefix's end |
-| 16 | 8 | FNV-1a 64 of the base's bytes `0..BASE_END` |
-| 24 | 4 | the roots cell's size |
-| 28 | 4 | n, the changed prefix words |
-| 32 | | n u32 offsets, ascending (padded to 8 bytes); n u64 values; the roots cell; the image from `BASE_END` on |
-
-The prefix words are taken against the container's reference when it has the same prefix
-(the base image, or pi's prelude image, which already holds the builtins pi's prelude
-changed: as a diff against the base they would cost about 8 KB per container), else
-against the base image. A VM that leaves its builtins alone has none. The reader puts the
-image back together from the base or the reference (`expandSession`,
-`vm::session::expand_session`) and checks that it is the one the image was made against.
-
-A reader checks, in this order, and stops at the first problem with a clear message (a
-`misuse` SandboxError; a `SnapshotError` from `resumeVm`):
-1. the container: magic, format version, lengths ("truncated snapshot");
-2. the app ("a pi session snapshot, not a sandbox snapshot");
-3. the dependency descriptor and the builtin prefix, against the module's base image, in
-   the order of the header; the first that differs is named: "the snapshot is from a djs
-   with another opcode table (snapshot: 1a2b3c4d; this module: 5e6f7a8b): it restores
-   only into a djs with the same opcode table". The feature set shows by name ("snapshot:
-   full, regexp-unicode-props, unicode-normalization; this module:
-   regexp-unicode-props, unicode-normalization" is a full build's snapshot in a slim
-   module), the compatibility version in decimal, the prefix as "another base image". A
-   host that must restore snapshots whose descriptor differs has to keep the builds that
-   wrote them (an engine registry: not built);
-4. the reference: kind, hash and length ("compressed against the base image X; this
-   host's is Y");
-5. zstd's checksum ("corrupt snapshot"); a session image's prefix hash ("made against
-   another base image"); then the image's verification (`Vm::from_bytes`).
+Heap images are not a persistence format: a run that must outlive its process is written
+as a continuation dump. Images remain the engine's in-process mechanism: the base image
+every VM is copied from, pi's prelude images (a start restores one instead of running
+the prelude), the stress and determinism checks, and the image transport to and from the
+dump module. `vm_arena_ptr`/`vm_arena_len` read an image, `vm_from_bytes` and
+`vm_replace_image` load one. Snapshot containers, session images, reference compression,
+`Sandbox.bytes()`/`fromBytes()` and pi's `snapshot()`/`resumeVm()` were removed in 0177;
+the REPL's `.image` still writes a raw image for `djs heap`.
 
 #### What an image depends on (D026, D2265)
 
@@ -314,49 +263,10 @@ each of those tables, and loading checks them first (`Vm::from_bytes` refuses wi
 | intrinsic table | `INTRINSICS` | intrinsic names, kinds, arities and numbering (`INTRINSICS_HASH`) |
 | internal id tables | `RECORDS` | the id tables and slot conventions in source: object classes, realm slots, run states, header and template flags, value tags, frame continuations, the fast and native builtin tables, and the named slot numbers of internal records (`RECORDS_HASH`, D2266) |
 
-A container adds the hash of its base's builtin prefix, since a session image is a diff
-against it. Everything else in the engine can change between the build that wrote a
-snapshot and the one that restores it: the restored VM simply runs on the new code. The
-engine build hash (`djs_build_hash`) still identifies the exact build where that matters:
-Sandbox journals replay only on it, and pi's fingerprint names it.
-
-Compression runs in the host (D2261): `nodeZstd()` uses node's built-in zstd
-(`node:zlib`, node 22.15 and 23.8 on), found through `process.getBuiltinModule`, so the
-package still loads in a browser. Level 3 (`DEFAULT_ZSTD_LEVEL`), a window covering the
-reference and the image. Without it (a browser, an older node) snapshots are written
-uncompressed, and a compressed one cannot be read. `snapshotCodec` (SandboxOptions,
-VmHooks) plugs in any zstd that takes raw-content dictionaries (a wasm build such as
-zstd-rs interoperates with node's), `null` never compresses, and
-`bytes({ compression: "none" })` skips it for one snapshot.
-
-Measured on the `wasm` profile with node 25 (`scripts/snapshot-research/wasm.ts`: six pi
-codemode cases, a snapshot and a resume at each of their 144 idle points; medians, max
-where given; re-measured at 0133; times rough at a machine load of about 30):
-
-| | image (collected) | container | `snapshot()` | `resumeVm()` | uncompressed resume |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| pi session waiting on a tool (ask; agent-loop, sequential) | 489; 501–503 KB | 2.1; 7.0–7.4 KB | 2.8–3.1 ms | 1.0–1.3 ms | 0.9–1.0 ms |
-| pi session holding 60 files (tool-heavy), median / max | 671 / 854 KB | 58 / 111 KB | 4.2 ms | 1.5 ms | 1.0 ms |
-| pi session holding 1500 records / a 1.5 MB log | 1.7 / 2.2 MB | 335 / 404 KB | 9.4 / 9.8 ms | 4.1 / 3.6 ms | 2.2 / 1.2 ms |
-| a new Sandbox / one holding 1000 records | 333 / 498 KB | 15.7 / 31.2 KB | 3.3 / 4.0 ms | 1.4 / 2.4 ms | 1.3 / 2.2 ms |
-
-A waiting session compresses to what it changed because in-VM collections slide cells in
-allocation order (D2040): the cells it inherited from the prelude image stay at their
-offsets (99% of its words), and zstd encodes them as one long match. Against the base
-image instead, the same session is 51 KB; without a dictionary 134 KB. A Sandbox's
-`console` grows the global object's property table, exactly full in the base image; the
-collection then slides everything after its old place down by 1.1 KB, so only the first
-68 KB line up with the base, and the moved cells' references to other moved cells (43 KB)
-are what the 15.7 KB encode. `djs heap` (docs/cli.md, D2264) shows all of this for any
-snapshot: `djs heap --only diff session.djsn`.
-
-Since 0117, images are about 57 KB smaller (the base image went from 376 to 314 KB:
-internal names dropped and cells ordered by kind, D2251, D2253), and waiting sessions'
-containers are unchanged. A new Sandbox's went 33 → 15.7 KB with the kind-ordered base:
-the first of the cells its first definitions grow (the atom table's entries, the global
-object's property table) used to sit 3 KB into the base; now it is the global object's
-table, 68 KB in, so less of the image moves. tool-heavy and records changed with their corpus (this repository's sources
-and docs, which grew).
+Within a process the descriptor guards the image transport between two modules (a main
+module and the dump module must be of one build's tables). The engine build hash
+(`djs_build_hash`) still identifies the exact build where that matters: Sandbox journals
+replay only on it, and pi's fingerprint names it.
 
 ## The ABI
 
@@ -426,9 +336,9 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_resolve_host_call_at(vm, call_id, ok, value, now: f64) -> 0/-1` | the same, and `Date` reads `now` (ms) from when the result is applied: a virtual clock per result (D1670) |
 | `vm_promise_state(vm, h) -> state` | 0 not a promise, 1 pending, 2 fulfilled, 3 rejected; settled: out = a handle (u32) to the result, and the promise counts as handled |
 | `vm_take_unhandled_rejections(vm) -> n` | out = handles (u32) to the reasons of promises rejected with no handler, oldest first (D1423) |
-| `djs_build_hash() -> u32` | the engine build hash: identifies the engine build (0049), including its sources, cargo features and libm version (D1750). Images and snapshots are keyed on their dependency descriptor instead (D2265), which the base image's roots cell holds |
-| `djs_base_ptr()`, `djs_base_len()` | the base snapshot in the module's memory (read-only): the reference image of compact snapshots (D2260). The module ships it coded (D2252): the first call (or `vm_new`) decodes it, unless the host injected it. The pointer is valid until the next `vm_new`: the instance's first VM takes the bytes as its arena (D2060), and a later call decodes them again. 0 if there is nothing to decode (no `djs_base_coded_ptr` bytes) |
-| `djs_base_coded_ptr(len) -> ptr` | room for the coded base, the module's custom section `djs_base` (D2541: not in linear memory); the host writes the section there when it has no decoded base to inject (`provideCodedBase`, js/src/snapshot.ts). Without either, there is no base and `vm_new` fails. 0 if the instance has its base or coded base already, or `len` is not the section's length |
+| `djs_build_hash() -> u32` | the engine build hash: identifies the engine build (0049), including its sources, cargo features and libm version (D1750). Images are keyed on their dependency descriptor instead (D2265), which the base image's roots cell holds |
+| `djs_base_ptr()`, `djs_base_len()` | the base snapshot in the module's memory (read-only). The module ships it coded (D2252): the first call (or `vm_new`) decodes it, unless the host injected it. The pointer is valid until the next `vm_new`: the instance's first VM takes the bytes as its arena (D2060), and a later call decodes them again. 0 if there is nothing to decode (no `djs_base_coded_ptr` bytes) |
+| `djs_base_coded_ptr(len) -> ptr` | room for the coded base, the module's custom section `djs_base` (D2541: not in linear memory); the host writes the section there when it has no decoded base to inject (`provideCodedBase`, js/src/base.ts). Without either, there is no base and `vm_new` fails. 0 if the instance has its base or coded base already, or `len` is not the section's length |
 | `djs_base_inject_ptr(len) -> ptr` | room for the base snapshot that another instance of the same module decoded (its `djs_base_ptr` bytes), so that this one need not decode (D2252); 0 if the instance has its base already or `len` is not the base's length |
 | `djs_base_inject() -> 1/0` | takes the bytes written at `djs_base_inject_ptr` as the base if their length and hash match the coded base's; 0: refused, the instance decodes its own |
 | `djs_panic_ptr()`, `djs_panic_len()` | the last panic message, after a trap |
@@ -460,7 +370,7 @@ The result waits in the VM's inbox, part of the heap and of images. Whenever the
 queue runs empty, `vm_run` takes the oldest result, settles its promise and drains the
 queue again, then takes the next. IDLE means: no jobs, no results waiting, async calls
 pending. So what a script does depends only on the order of the results, not on when the
-host delivered them, the fuel slice, or snapshots in between (as I/O callbacks in an
+host delivered them, or the fuel slice (as I/O callbacks in an
 event loop).
 
 `vm_take_unhandled_rejections` lists rejected promises nobody handled, as qjs reports
@@ -517,7 +427,7 @@ Since the base snapshot, instantiating the module is most of a sandbox's startup
 **The coded base (D2252).** Since 0122 the module carries the base snapshot coded
 (djs-lzrc: 79 KB instead of 385 KB, for the size budget D020), and an instance decodes it
 at its first VM: about 5 ms, once. Every sandbox is its own instance, so the host decodes
-once per compiled module instead: `js/src/snapshot.ts`'s `provideBase` (right after
+once per compiled module instead: `js/src/base.ts`'s `provideBase` (right after
 instantiating) copies the base an earlier instance of the module decoded into the new
 one, which checks its length and hash, and `rememberBase` keeps it, per
 `WebAssembly.Module`. Both the Sandbox and pi's engine do this. A later instance then costs
@@ -573,9 +483,9 @@ host code and runs at the same speed.
 
 - **Host refs** (ARCH "Data passing") are not built: pass-through data such as images is
   copied in and out.
-- **Snapshots** load only into the build that wrote them (D2260). Restoring old snapshots
-  after an upgrade needs the old builds (an engine registry, not built); durability across
-  engine versions (journal replay) is undecided.
+- **Persistence** is by continuation dumps (D2560): any later djs loads one or refuses it
+  with a reason. A run computing between idle points cannot be persisted (D2561): give it
+  fuel to reach one, or rerun it.
 - **Sync host functions** run one at a time (the VM parks); use `asyncFunctions` for
   concurrent calls.
 
@@ -591,11 +501,10 @@ unmodified `PRELUDE_SOURCE`. To try it, swap that one module (issue 0049).
 
 ```ts
 import { loadModule } from "@djs/host";
-import { startVm, resumeVm } from "@djs/host/pi";          // js/pi/vm.ts
+import { startVm } from "@djs/host/pi";                  // js/pi/vm.ts
 const session = await startVm({ data, wasm: await loadModule(), prelude: PRELUDE_SOURCE, post, shouldInterrupt });
 session.deliver({ type: "result", id, ok: true, payload: "42" });
-const bytes = session.snapshot();                        // djs only: the whole session
-const again = resumeVm(bytes, { wasm, post, shouldInterrupt, prelude: PRELUDE_SOURCE, data });
+// Persisting a waiting session: the next mode (prelude-next), below.
 ```
 
 `js/pi/engine.ts` is a handle-level client of the exports (the Sandbox runs whole bodies,
@@ -616,7 +525,7 @@ but pi keeps the prelude's `settle`/`run`/`stalled` alive across calls).
 | `Math.random` seeded by QuickJS from its first clock read (seed + 1), one draw used up while creating the context | djs's `Math.random` is the same xorshift64*, so the adapter seeds it one step after seed + 1. **The same seed gives the same numbers on both engines**; pi's pinned values pass |
 | fingerprint `quickjs-wasi X, quickjs Y, prelude H, deterministic 1, stack S, heap M, budget B` | `djs <build hash>, prelude H, host G, deterministic 3, fuel per poll F, heap M, budget B` (`djs_build_hash`; G hashes the adapter's own globals, D1660; the adapter's version is 2 since it collects after the prelude, D1890, and 3 since the fuel between polls counts across sync host calls, D2653) |
 | quickjs-wasi's host global `performance` (`queueMicrotask` is native since 0059, `atob`, `btoa` and `DOMException` since 0084) | defined by the adapter in JS before the prelude, so the lockdown freezes it too. `performance.now()` counts from the run's start on the VM clock (deterministic: from `startedAt`, as on quickjs) |
-| no snapshots: durability by deterministic replay | `snapshot()` / `resumeVm()` in addition: the session's state and its VM image in the snapshot container ("Snapshots"), taken while the script waits. The session collects first (D1890), and the image is compressed against the prelude image the session started from (D2262): 2–9 KB for a session waiting on a tool (489–503 KB as an image). `resumeVm` finds that prelude image in the process, or recomputes it from `prelude` and `data` (the session's start data); a session started with `reuseImages: false` is compressed against the base image. A resumed session continues with no replay (tested against an uninterrupted run, with the same messages and interrupt polls) |
+| no snapshots: durability by deterministic replay | the same in pi's mode; with prelude-next (`shape: "next"`), `dumpSession()` / `resumeFromDump()` in addition: the session as a continuation dump plus the adapter's state, taken while the script waits, resumed in a new instance (or process, or a later djs) with no replay (below) |
 
 **Prelude images.** Running pi's prelude is most of a start: its lockdown walks and freezes
 about 700 objects, and builtin-heavy code like it still runs 1.5-4x more instructions on
@@ -625,8 +534,8 @@ keyed by everything the prelude saw (prelude, tools, globals, store, heap limit,
 16 images per module, 540 KB each at 0117: every cold start collects after the prelude,
 D1890; they were 933 KB of mostly garbage before 0089). A start with the same inputs
 restores the image (0.6 ms) instead. The prelude runs with the clock at 0 in UTC, so its
-image depends only on those inputs and the build, and another process can recompute it to
-restore a snapshot compressed against it (D2262). Only `performance`'s origin and the seed are set per run, after the
+image depends only on those inputs and the build (D2262), and a session resumed from a
+dump reruns the same prelude. Only `performance`'s origin and the seed are set per run, after the
 restore. `reuseImages: false` turns it off. pi's worker launcher creates a worker per
 execution, so it would need to keep the image in the parent (or keep workers warm) to
 benefit. The in-thread and remote launchers benefit as they are.
@@ -693,8 +602,7 @@ Besides the failures above:
 
 pi's prelude keeps the run's in-flight state itself: a `pending` map of resolve/reject
 functions per call, `nextId`, `finished`, the output counters, the store's contents and
-writes, and `then` reactions on the body's promise. A snapshot of the whole heap carries
-that along, but a continuation dump, which writes the run as JavaScript, would have to
+writes, and `then` reactions on the body's promise. A continuation dump, which writes the run as JavaScript, would have to
 write the prelude's internals too. tests/pi/prelude-next.ts is pi's prelude changed so
 that it keeps none of it (the changes are listed at its top):
 
@@ -748,8 +656,8 @@ results after a restart.
    js/pi/{vm,engine,protocol}.ts).
 2. Replays must not mix engines. The fingerprints already differ. pi's fingerprint test would
    accept either prefix.
-3. Optionally, durable runs through `snapshot()`/`resumeVm()` instead of replaying all
-   results after a restart.
+3. Optionally, durable runs through continuation dumps instead of replaying all results
+   after a restart: with prelude-next's shape (above).
 4. Optionally, for fast starts in the worker launcher: keep prelude images in the parent
    thread, or keep warm workers. Splitting the lockdown out of the argument-dependent part of
    the prelude would let one image serve every tool table and store.

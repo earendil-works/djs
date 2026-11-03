@@ -6,10 +6,10 @@ call tools, process their results and print or return data. Its design follows f
 use (ARCH.md):
 
 - **All VM state is one byte arena addressed by `u32` offsets**: objects, strings,
-  bytecode, frames, the job queue, pending host calls. Snapshotting a VM means copying the
-  bytes; restoring one means copying them back.
+  bytecode, frames, the job queue, pending host calls. Suspending a VM inside a process
+  is free; creating one is a copy of a prebuilt image.
 - **Suspend anywhere.** The interpreter never recurses on the Rust stack for JS calls.
-  It can stop between any two instructions (fuel, a host call, a snapshot) and resume,
+  It can stop between any two instructions (fuel, a host call) and resume,
   also inside getters, callbacks of builtins, promise jobs, generators and async
   functions.
 - **Cheap data passing.** Values go in through a compact wire format and come out through
@@ -18,6 +18,9 @@ use (ARCH.md):
   TypeScript erased while parsing.
 - **Builtins in a strict TypeScript subset**, compiled to bytecode for the base snapshot
   and, for the hot ones, to resumable Rust state machines.
+- **Persistence as code**: a run waiting on its tools is written out as a continuation
+  dump, a JavaScript program that recreates it, which any later djs loads or refuses
+  with a reason (docs/continuation-dumps.md).
 - **Deterministic by construction**: the clock, randomness and weak references come from
   the host, and the same inputs give byte-identical heap images, natively and in wasm.
 
@@ -111,14 +114,16 @@ scripts/build-wasm.sh                        # target/wasm32-unknown-unknown/was
 From JavaScript (`js/`, package `@djs/host`, docs/host.md):
 
 ```ts
-import { Sandbox } from "@djs/host";
+import { loadModule, Sandbox } from "@djs/host";
 
 const sb = await Sandbox.create({
   asyncFunctions: { search: (q) => mySearch(q as string) },
   memoryLimit: 64 << 20,
+  dumpModule: await loadModule("djs-dump.wasm"),  // only to persist runs (scripts/build-wasm.sh --dump)
 });
 const result = await sb.runAsync("const hits = await search(q); return hits.length;", { q: "djs" });
-const image = sb.bytes();                    // snapshot: compressed VM image plus host function names
+const run = sb.begin("return (await search(q)).length", { q: "djs" });  // a run the host drives
+const dump = run.dump();                     // while it waits: a format 2 dump, plain JavaScript
 ```
 
 `js/pi/vm.ts` implements pi's codemode VM contract (`startVm`) on djs, running pi's
