@@ -526,3 +526,6 @@ topics when the index is next reorganized.
 - D2448: A closure's template in its ELEMENTS field
 - D2449: No direct native binding for thin builtins (L1, L2)
 - D2450: The base's property table indexes at a load of three quarters
+- D2352: djs-wasm leaves the dumper out by default (+32.4 KB gzip)
+- D2353: Dumps are Scripts: format version 1 and the promise that later builds load it
+- D2354: A wasm host dumps from the heap bytes in TypeScript; the Rust dumper is the reference

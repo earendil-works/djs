@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0167 | Persist functions and closures as readable code (design + prototype) | portable | .worktrees/portable |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
 
 ## Open (ready)
@@ -18,6 +17,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
+| - | TS dumper out of prototype (layout constants, bytecode global reads, both dumpers equal in gate); classes; blob buffers; persist() convention for pi | owner (0167 follow-ups) |
 | - | Vec push_out/with_capacity in bloat's files (~1 KB); scratch buffers for Vec drops (few KB) | 0151 L3 |
 | - | Result buffers + snapshots referencing tool results (0165 steps 2-3) | pi adopting snapshots as a fast path (pi has no snapshots; replay + NestedCallDoc keep results) |
 | - | Codec-free session images for browsers (pico lesson 4) | - |
@@ -81,6 +81,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0167 | Semantic dumps: Vm::dump, .dump/.restore, Sandbox.dump/load, TS dumper prototype (D2352-D2354) | 6be9cd54 (agent portable; off in djs-wasm: +32 KB gz) |
 | 0151 | Base heap 325 -> 186 KB, every builtin kept (D2440-D2450) | 88356782 (agent bloat; -42.7%, 3,100 cells) |
 | 0162 | pico speed findings: host strings in place (D2551), reduce one frame (D2552), species/ArrayCreate (D2554), stringify into heap (D2553); fuel rule not adopted (D2550) | 0c31e693 (agents speed, speed2) |
 | 0166 | Parser depth kept 550, regexp 212 (D2545); GC thresholds from BASE_END (D2544); stack overflow reported (D2543) | 866e73fd (agent heap) |
