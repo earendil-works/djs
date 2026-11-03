@@ -29,6 +29,7 @@
 //! and GC points do not depend on which collector runs. The side tables (len/64 + len/128
 //! bytes, a fixed stack, and in a minor collection the remembered list) are allocated
 //! before anything is touched: a refusal leaves the heap as it was.
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -272,7 +273,7 @@ impl Marker<'_> {
             self.overflow_from = self.overflow_from.min(off);
             return off;
         }
-        self.stack.push(off);
+        self.stack.push_out(off);
         off
     }
 
@@ -434,7 +435,7 @@ impl Marker<'_> {
             self.remembered_ok = false;
             return;
         }
-        self.remembered.push(entry);
+        self.remembered.push_out(entry);
     }
 
     /// The first ephemeron table to resolve at or after `from`, in address order: old
@@ -708,7 +709,7 @@ impl Heap {
         // 2. Block table.
         let mut sum = old;
         for &w in &live.bits {
-            table.push(sum);
+            table.push_out(sum);
             sum += 8 * w.count_ones();
         }
         let after = sum;
@@ -760,7 +761,7 @@ impl Heap {
             let gc = arena.get(c, Header::GC);
             arena.set(c, Header::GC, gc & !gc_bits::REHASH);
             if collections.len() < collections.capacity() {
-                collections.push(c);
+                collections.push_out(c);
             } else {
                 all_collections = false;
             }
@@ -811,7 +812,7 @@ impl Heap {
                 super::gc::clear_offset_caches(arena, c);
             } else if kind == CellKind::Object && is_collection(arena, c) {
                 if collections.len() < collections.capacity() {
-                    collections.push(live.forward(&table, c));
+                    collections.push_out(live.forward(&table, c));
                 } else {
                     all_collections = false;
                 }
@@ -868,13 +869,13 @@ mod tests {
             if p.fixed[i] as u32 >= size {
                 break;
             }
-            out.push(slot(c + p.fixed[i] as u32, p.fixed_refs & (1 << i) != 0));
+            out.push_out(slot(c + p.fixed[i] as u32, p.fixed_refs & (1 << i) != 0));
         }
         if p.n_tail > 0 {
             let mut e = c + p.tail_offset as u32;
             while e + p.elem_size as u32 <= c + size {
                 for i in 0..p.n_tail as usize {
-                    out.push(slot(e + p.tail[i] as u32, p.tail_refs & (1 << i) != 0));
+                    out.push_out(slot(e + p.tail[i] as u32, p.tail_refs & (1 << i) != 0));
                 }
                 e += p.elem_size as u32;
             }
@@ -892,7 +893,7 @@ mod tests {
             let mut size = l.min_size;
             for _ in 0..6 {
                 let mut want = Vec::new();
-                walk::for_each_slot(kind, 64, size, |s| want.push(s));
+                walk::for_each_slot(kind, 64, size, |s| want.push_out(s));
                 assert_eq!(plan_slots(l.kind, 64, size), want, "{} size {size}", l.name);
                 size += step;
             }

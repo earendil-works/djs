@@ -7186,3 +7186,20 @@ written before the change would load (every hash equal) but be read differently 
 The guideline is TESTING.md "Snapshot compatibility"; AGENTS.md points to it. A reviewer
 asks for it like for a test: a forgotten bump lets an old image restore into an engine that
 misreads it, which the verifier only catches when the structure breaks.
+## D2521: Vec pushes out of line outside the hot loops (`PushOut::push_out`)
+date: 2026-11-09 · by: audit · issue: 0161
+`Vec::push` inlines a capacity check and a call to `RawVec::grow_one` that takes the
+vector by reference, so the vector is spilled to the shadow stack at every site; at ~370
+sites that was ~13 KB of wasm. `crate::PushOut::push_out` (djs-core/src/buf.rs) is
+`push` in one `#[inline(never)]` function per element type (and for `String` and
+`char`). 343 sites in 54 files use it now: everything except JSON (`json/`), the dense
+array builtins, the bytecode emitter and lexer, the resolver and peephole passes, the
+stack walker, and the files 0151 is editing (heap cells/walk/atom/compact, vm image/mod,
+the template, run.rs and hot.rs), which may follow in a separate merge. Measured: module
+−3.2 KB gz (450.3 → 447.0); wasm instructions within ±1.3% on the 15 perf workloads, all
+but one lower; compile instructions −0.9 to +0.6% (the noise of wcompile is ~1%). All
+pushes out of line would be −4.8 KB gz but +1.0–1.7% on json, json-text and pushpop and
++1% compile. New code uses `push_out` unless the push is in a measured hot loop;
+`scripts/size/vec-sites.py --check scripts/size/vec-sites.txt` reports inlined pushes,
+drops, `with_capacity`, `reserve` and allocation-error paths per function against the
+baseline.

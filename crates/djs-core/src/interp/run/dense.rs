@@ -1,6 +1,7 @@
 //! The leaf intrinsics over dense arrays of the builtin language (0080, D1801): fuel and
 //! argument checks around builtins/dense.rs, plus Object.values/entries and typed
 //! arrays from dense arrays.
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -91,7 +92,7 @@ impl Exec<'_> {
             }
             match self.heap.get_own_property_alloc(o, k)? {
                 Some(Property::Data { value, flags }) if flags.enumerable() => {
-                    props.push((k, value))
+                    props.push_out((k, value))
                 }
                 Some(Property::Accessor { flags, .. }) if flags.enumerable() => {
                     return Ok(Value::UNDEFINED);
@@ -102,7 +103,7 @@ impl Exec<'_> {
         let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
         let mut out = Vec::with_capacity(props.len());
         for (k, v) in props {
-            out.push(if kind == 1 {
+            out.push_out(if kind == 1 {
                 v
             } else {
                 let key = self.heap.atom_to_value(k)?;

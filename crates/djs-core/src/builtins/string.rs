@@ -1,5 +1,6 @@
 //! String leaf intrinsics on the heap representation (one-byte and two-byte strings,
 //! ropes walked in chunks where that avoids flattening).
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -33,7 +34,7 @@ pub(crate) fn code_points(heap: &mut Heap, s: Str) -> Result<Obj, Fault> {
         } else {
             1
         };
-        values.push(Value::string(heap.alloc_utf16(&units[i..i + n])?));
+        values.push_out(Value::string(heap.alloc_utf16(&units[i..i + n])?));
         i += n;
     }
     let proto = realm::intrinsic_obj(heap, Intrinsic::ArrayProto);
@@ -234,13 +235,13 @@ fn code_points_of(u: &[u16]) -> Vec<(usize, u32)> {
         if (0xD800..0xDC00).contains(&c)
             && u.get(i + 1).is_some_and(|l| (0xDC00..0xE000).contains(l))
         {
-            out.push((
+            out.push_out((
                 i,
                 0x10000 + ((c - 0xD800) << 10) + (u[i + 1] as u32 - 0xDC00),
             ));
             i += 2;
         } else {
-            out.push((i, c));
+            out.push_out((i, c));
             i += 1;
         }
     }
@@ -250,10 +251,10 @@ fn code_points_of(u: &[u16]) -> Vec<(usize, u32)> {
 fn push_code_point(out: &mut Vec<u16>, c: u32) {
     if c >= 0x10000 {
         let c = c - 0x10000;
-        out.push(0xD800 + (c >> 10) as u16);
-        out.push(0xDC00 + (c & 0x3FF) as u16);
+        out.push_out(0xD800 + (c >> 10) as u16);
+        out.push_out(0xDC00 + (c & 0x3FF) as u16);
     } else {
-        out.push(c as u16);
+        out.push_out(c as u16);
     }
 }
 
@@ -444,10 +445,10 @@ impl Units {
             }
             Units::Small(buf, n) => {
                 let mut v = buf[..*n].to_vec();
-                v.push(u);
+                v.push_out(u);
                 *self = Units::Big(v);
             }
-            Units::Big(v) => v.push(u),
+            Units::Big(v) => v.push_out(u),
         }
     }
 

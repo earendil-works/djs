@@ -10,6 +10,7 @@
 //! Every erased range is recorded (when `Parser::erased` is on) by the code that commits
 //! to it, never during speculation, for `djs strip-types` (the parse-only oracle against
 //! ts-blank-space, TESTING.md).
+use crate::PushOut;
 
 use alloc::borrow::Cow;
 use alloc::string::String;
@@ -169,7 +170,7 @@ impl<'a> Parser<'a, '_> {
             && start < end
             && let Some(e) = &mut self.erased
         {
-            e.push((start, end, kind));
+            e.push_out((start, end, kind));
         }
     }
 
@@ -217,10 +218,10 @@ impl<'a> Parser<'a, '_> {
             }
             first = false;
             match self.tok.kind {
-                TokenKind::LParen => stack.push(b'('),
-                TokenKind::LBracket => stack.push(b'['),
-                TokenKind::LBrace => stack.push(b'{'),
-                TokenKind::TemplateHead => stack.push(b'`'),
+                TokenKind::LParen => stack.push_out(b'('),
+                TokenKind::LBracket => stack.push_out(b'['),
+                TokenKind::LBrace => stack.push_out(b'{'),
+                TokenKind::TemplateHead => stack.push_out(b'`'),
                 TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
                     let Some(c) = stack.pop() else {
                         return Ok(());
@@ -231,7 +232,7 @@ impl<'a> Parser<'a, '_> {
                         }
                         self.tok = self.lx.rescan_template_continuation(self.tok)?;
                         if self.tok.kind == TokenKind::TemplateMiddle {
-                            stack.push(b'`');
+                            stack.push_out(b'`');
                         }
                     } else {
                         let open = match self.tok.kind {
@@ -1443,7 +1444,7 @@ impl<'a> Parser<'a, '_> {
                     p.next()?;
                 }
                 if modifier && p.is(TokenKind::Ident) {
-                    names.push(p.tok);
+                    names.push_out(p.tok);
                 }
                 p.ts_skip_binding()?;
                 if p.is(TokenKind::Question) {
@@ -1468,7 +1469,7 @@ impl<'a> Parser<'a, '_> {
         for t in names {
             let bytes = self.lx.ident_value(&t, &mut self.buf8);
             let s = core::str::from_utf8(bytes).unwrap_or("\u{FFFD}");
-            atoms.push(self.heap.atom_str(s)?);
+            atoms.push_out(self.heap.atom_str(s)?);
         }
         Ok(atoms)
     }
@@ -1721,16 +1722,16 @@ pub(super) fn blank(src: &[u8], mut ranges: super::parser::Erased) -> Vec<u8> {
             _ => None,
         };
         if let Some(c) = first {
-            out.push(c);
+            out.push_out(c);
             start += 1;
         }
         for &b in &src[start..end] {
             match b {
-                b'\n' | b'\r' => out.push(b),
+                b'\n' | b'\r' => out.push_out(b),
                 // UTF-8 continuation bytes add no unit; a 4-byte sequence is two.
                 0x80..=0xBF => {}
                 0xF0..=0xFF => out.extend_from_slice(b"  "),
-                _ => out.push(b' '),
+                _ => out.push_out(b' '),
             }
         }
         pos = end;

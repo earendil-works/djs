@@ -1,5 +1,6 @@
 //! JSON leaf intrinsics over `crate::json` (D1331): the parse without a reviver, the
 //! stringify fast path, and QuoteJSONString. builtins/json.ts does the rest.
+use crate::PushOut;
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -46,7 +47,7 @@ pub(crate) fn stringify_fast_in(
     let mut outer = Vec::with_capacity(n as usize);
     for i in 0..n {
         match heap.get_element_fast(stack, i).and_then(|v| v.as_object()) {
-            Some(o) => outer.push(o),
+            Some(o) => outer.push_out(o),
             None => return Ok(Value::NULL),
         }
     }
@@ -64,7 +65,7 @@ pub(crate) fn stringify_fast_in(
             let mut keys = Vec::with_capacity(n as usize);
             for i in 0..n {
                 match heap.get_element_fast(l, i).and_then(|v| v.as_string()) {
-                    Some(s) => keys.push(heap.intern(s)?),
+                    Some(s) => keys.push_out(heap.intern(s)?),
                     None => return Ok(Value::NULL),
                 }
             }
@@ -165,9 +166,9 @@ fn decode_string(units: &[u16], i: &mut usize) -> Vec<u16> {
                 }
                 _ => e, // `"`, `\`, `/`
             };
-            out.push(u);
+            out.push_out(u);
         } else {
-            out.push(c);
+            out.push_out(c);
             *i += 1;
         }
     }
@@ -193,7 +194,7 @@ pub(crate) fn source_records(heap: &mut Heap, text: Str, root: Value) -> Result<
         let finished = match units[i] as u8 {
             b'[' => {
                 i += 1;
-                stack.push(Open::Array {
+                stack.push_out(Open::Array {
                     value: current,
                     items: Vec::new(),
                 });
@@ -202,7 +203,7 @@ pub(crate) fn source_records(heap: &mut Heap, text: Str, root: Value) -> Result<
             b'{' => {
                 i += 1;
                 let entries = heap.new_object(None)?;
-                stack.push(Open::Object {
+                stack.push_out(Open::Object {
                     value: current,
                     entries,
                     key: None,
@@ -241,7 +242,7 @@ pub(crate) fn source_records(heap: &mut Heap, text: Str, root: Value) -> Result<
                         done = Some(rec);
                         break;
                     }
-                    Some(Open::Array { items, .. }) => items.push(rec),
+                    Some(Open::Array { items, .. }) => items.push_out(rec),
                     Some(Open::Object { entries, key, .. }) => {
                         let k = key.take().expect("a member key");
                         heap.create_data_property(*entries, k, rec)?;

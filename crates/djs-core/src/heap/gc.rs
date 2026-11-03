@@ -43,6 +43,7 @@
 //! so the layout stays deterministic.
 //!
 //! [`Roots`]: super::cells::Roots
+use crate::PushOut;
 
 use super::arena::Arena;
 use alloc::vec::Vec;
@@ -333,7 +334,7 @@ impl Heap {
                 if kind == CellKind::EphemeronArray {
                     // Not traced: a pair lives only through its key (below).
                     let pairs = to.get(scan, EphemeronArray::LEN) / 2;
-                    ephemerons.push((scan, alloc::vec![false; pairs as usize]));
+                    ephemerons.push_out((scan, alloc::vec![false; pairs as usize]));
                     scan += size;
                     continue;
                 }
@@ -348,7 +349,7 @@ impl Heap {
                         )
                     })
                 {
-                    collections.push(scan);
+                    collections.push_out(scan);
                 }
                 walk::for_each_slot(kind, scan, size, |slot| trace(from, &mut to, base, slot));
                 if kind == CellKind::FuncTemplate {

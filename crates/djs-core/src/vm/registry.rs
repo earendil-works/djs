@@ -25,6 +25,7 @@
 //! Several registered paths may lead to the same object (a new alias); the object's id is
 //! the lowest. New builtins are appended under their canonical path: the first one a
 //! breadth-first walk from the roots reaches, with keys in sorted order.
+use crate::PushOut;
 
 use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
 use alloc::format;
@@ -126,7 +127,7 @@ impl Registry {
             if removed.is_none() && !live.insert((kind, cols[2].to_string())) {
                 return Err(format!("line {}: {} registered twice", n + 1, cols[2]));
             }
-            entries.push(Entry {
+            entries.push_out(Entry {
                 id,
                 kind,
                 path: cols[2].to_string(),
@@ -145,7 +146,7 @@ impl Registry {
                 out.push_str("\tremoved: ");
                 out.push_str(r);
             }
-            out.push('\n');
+            out.push_out('\n');
         }
         out
     }
@@ -221,12 +222,12 @@ impl Registry {
         let named = self.name_cells(heap);
         for (cell, path) in canonical_names(heap) {
             if !named.contains_key(&cell) {
-                problems.push(format!("value {path} has no entry"));
+                problems.push_out(format!("value {path} has no entry"));
             }
         }
         for i in INTRINSICS {
             if self.id_of(EntryKind::Intrinsic, i.name).is_none() {
-                problems.push(format!("intrinsic {} has no entry", i.name));
+                problems.push_out(format!("intrinsic {} has no entry", i.name));
             }
         }
         problems
@@ -257,19 +258,19 @@ impl Registry {
             };
             if !ok {
                 e.removed = Some(reason.to_string());
-                u.removed.push(e.id);
+                u.removed.push_out(e.id);
             }
         }
         let named = self.name_cells(heap);
         for (cell, path) in canonical_names(heap) {
             if !named.contains_key(&cell) {
-                u.added.push(self.push(EntryKind::Value, path));
+                u.added.push_out(self.push(EntryKind::Value, path));
             }
         }
         for i in INTRINSICS {
             if self.id_of(EntryKind::Intrinsic, i.name).is_none() {
                 u.added
-                    .push(self.push(EntryKind::Intrinsic, i.name.to_string()));
+                    .push_out(self.push(EntryKind::Intrinsic, i.name.to_string()));
             }
         }
         u
@@ -277,7 +278,7 @@ impl Registry {
 
     fn push(&mut self, kind: EntryKind, path: String) -> u32 {
         let id = self.entries.len() as u32;
-        self.entries.push(Entry {
+        self.entries.push_out(Entry {
             id,
             kind,
             path,
@@ -394,7 +395,7 @@ pub fn canonical_names(heap: &Heap) -> Vec<(u32, String)> {
     let global = intrinsic(heap, Intrinsic::Global);
     if let Some(c) = cell_of(global) {
         seen.insert(c);
-        out.push((global, String::from("globalThis")));
+        out.push_out((global, String::from("globalThis")));
     }
     // Passes, so that a builtin gets the most readable path it has: what the globals
     // reach by properties (breadth-first), then the realm roots (`%TypedArray%` rather than
@@ -409,7 +410,7 @@ pub fn canonical_names(heap: &Heap) -> Vec<(u32, String)> {
                 Some(name) => name.to_string(),
                 None => p,
             };
-            globals.push((v, p));
+            globals.push_out((v, p));
         }
     }
     walk(heap, globals, false, &mut seen, &mut out);
@@ -454,7 +455,7 @@ fn walk(
     while let Some((v, path, expand, root)) = queue.pop_front() {
         let Some(c) = cell_of(v) else { continue };
         if seen.insert(c) {
-            out.push((v, path.clone()));
+            out.push_out((v, path.clone()));
         } else if !root {
             continue;
         }
@@ -515,10 +516,10 @@ fn edges(heap: &Heap, o: Obj, proto: bool) -> Vec<(String, Value, bool)> {
             continue;
         };
         match heap.get_own_property(o, k) {
-            Some(Property::Data { value, .. }) => out.push((seg, value, true)),
+            Some(Property::Data { value, .. }) => out.push_out((seg, value, true)),
             Some(Property::Accessor { getter, setter, .. }) => {
-                out.push((format!("get {seg}"), getter, false));
-                out.push((format!("set {seg}"), setter, false));
+                out.push_out((format!("get {seg}"), getter, false));
+                out.push_out((format!("set {seg}"), setter, false));
             }
             None => {}
         }
@@ -526,7 +527,7 @@ fn edges(heap: &Heap, o: Obj, proto: bool) -> Vec<(String, Value, bool)> {
     out.retain(|(_, v, _)| cell_of(*v).is_some());
     out.sort_by(|a, b| a.0.cmp(&b.0));
     if proto && let Some(p) = heap.get_prototype_of(o) {
-        out.push((String::from(".[[Prototype]]"), Value::object(p), true));
+        out.push_out((String::from(".[[Prototype]]"), Value::object(p), true));
     }
     out
 }
@@ -558,10 +559,10 @@ fn quote(s: &str) -> String {
         match c {
             '"' => out.push_str("\\\""),
             '\\' => out.push_str("\\\\"),
-            c => out.push(c),
+            c => out.push_out(c),
         }
     }
-    out.push('"');
+    out.push_out('"');
     out
 }
 
@@ -605,10 +606,10 @@ impl<'h> Resolver<'h> {
                     continue;
                 };
                 match heap.get_own_property(o, k) {
-                    Some(Property::Data { value, .. }) => out.push((seg, value)),
+                    Some(Property::Data { value, .. }) => out.push_out((seg, value)),
                     Some(Property::Accessor { getter, setter, .. }) => {
-                        out.push((format!("get {seg}"), getter));
-                        out.push((format!("set {seg}"), setter));
+                        out.push_out((format!("get {seg}"), getter));
+                        out.push_out((format!("set {seg}"), setter));
                     }
                     None => {}
                 }
@@ -628,7 +629,7 @@ impl<'h> Resolver<'h> {
         let mut rest_iter = rest;
         while !rest_iter.is_empty() {
             let (seg, tail) = split_segment(rest_iter)?;
-            segs.push(seg);
+            segs.push_out(seg);
             rest_iter = tail;
         }
         // The accessor prefix belongs to the last property segment.

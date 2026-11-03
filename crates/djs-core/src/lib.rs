@@ -22,7 +22,10 @@ pub const UNICODE: bool = cfg!(all(
     feature = "unicode-normalization"
 ));
 
+pub(crate) use buf::PushOut;
+
 pub mod bigint;
+mod buf;
 pub(crate) mod builtins;
 pub mod bytecode;
 pub mod compiler;

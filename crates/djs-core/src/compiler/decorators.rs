@@ -23,6 +23,7 @@
 //! TypeScript legacy decorators (`experimentalDecorators`, D1651) are the second half:
 //! thunks evaluated after the class (`Thunk`), parameter decorators (`DecParams`) and
 //! tsc's `__decorate` (`emit_legacy_apply`); the metadata types are in ts_meta.rs.
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -701,7 +702,7 @@ impl Parser<'_, '_> {
                     Some(m) => m.clone(),
                     None if is_async => {
                         let mut m = TsMeta::new(MetaKind::Ref);
-                        m.names.push(self.heap.atom_str("Promise")?);
+                        m.names.push_out(self.heap.atom_str("Promise")?);
                         m
                     }
                     None => TsMeta::new(MetaKind::Void),

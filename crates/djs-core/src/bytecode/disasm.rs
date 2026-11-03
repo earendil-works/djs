@@ -6,6 +6,7 @@
 //!    10  jump_if_false -> 25
 //!    15  get_loc loc1 (x)
 //! ```
+use crate::PushOut;
 
 use alloc::string::String;
 use core::fmt::Write;
@@ -51,7 +52,7 @@ pub fn disasm(code: &[u8], cx: &DisasmContext<'_>) -> String {
                 if let Some(e) = at {
                     let _ = write!(out, "  ; {}:{}", e.line, e.col);
                 }
-                out.push('\n');
+                out.push_out('\n');
             }
             Err(e) => {
                 let _ = writeln!(out, "<invalid {e:?}>");
@@ -76,7 +77,7 @@ fn line(out: &mut String, insn: &Insn, cx: &DisasmContext<'_>) {
     }
     let _ = write!(out, "{:>5}  {}", insn.pc, info.name);
     for (i, &kind) in info.imms.iter().enumerate() {
-        out.push(' ');
+        out.push_out(' ');
         operand(out, insn, i, kind.wide(), cx);
     }
     // `get_loc2 (x)`: the name of an implied local.
@@ -121,7 +122,7 @@ fn operand(out: &mut String, insn: &Insn, i: usize, kind: ImmKind, cx: &DisasmCo
                     if !list.is_empty() {
                         let _ = write!(out, " {kw}");
                         for &a in list.iter() {
-                            out.push(' ');
+                            out.push_out(' ');
                             atom(out, a, cx);
                         }
                     }
@@ -134,7 +135,7 @@ fn operand(out: &mut String, insn: &Insn, i: usize, kind: ImmKind, cx: &DisasmCo
             if let Some(&v) = cx.consts.get(raw as usize) {
                 out.push_str(" (");
                 value(out, v, cx);
-                out.push(')');
+                out.push_out(')');
             }
             Ok(())
         }
@@ -164,7 +165,7 @@ fn name(out: &mut String, cx: &DisasmContext<'_>, idx: usize, ok: bool) -> core:
                 let _ = write!(out, "atom#{}", a.id());
             }
         }
-        out.push(')');
+        out.push_out(')');
     }
     Ok(())
 }

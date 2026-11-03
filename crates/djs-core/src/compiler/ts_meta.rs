@@ -7,6 +7,7 @@
 //! is emitted as `typeof (v = typeof A !== "undefined" && A.B) === "function" ? v :
 //! Object`. Unions and intersections fold their constituents
 //! (`serializeUnionOrIntersectionConstituents()` with `strictNullChecks`).
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -326,7 +327,7 @@ impl Parser<'_, '_> {
         loop {
             if m.names.len() < MAX_NAMES {
                 let a = self.ident_atom()?;
-                m.names.push(a);
+                m.names.push_out(a);
             } else {
                 overflow = true;
             }

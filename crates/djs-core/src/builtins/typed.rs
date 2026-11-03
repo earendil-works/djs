@@ -1,5 +1,6 @@
 //! ArrayBuffer, typed array and DataView leaf intrinsics, and base64/hex (0039), over
 //! `heap/typed.rs`.
+use crate::PushOut;
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -255,11 +256,11 @@ pub(crate) fn to_base64(bytes: &[u8], url: bool, omit_padding: bool) -> String {
         ];
         let keep = chunk.len() + 1;
         for &c in &chars[..keep] {
-            out.push(c as char);
+            out.push_out(c as char);
         }
         if !omit_padding {
             for _ in keep..4 {
-                out.push('=');
+                out.push_out('=');
             }
         }
     }
@@ -270,8 +271,8 @@ pub(crate) fn to_hex(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut out = String::with_capacity(bytes.len() * 2);
     for &b in bytes {
-        out.push(HEX[(b >> 4) as usize] as char);
-        out.push(HEX[(b & 15) as usize] as char);
+        out.push_out(HEX[(b >> 4) as usize] as char);
+        out.push_out(HEX[(b & 15) as usize] as char);
     }
     out
 }
@@ -305,7 +306,7 @@ fn decode_chunk(chunk: &[u32], strict: bool, out: &mut Vec<u8>) -> bool {
             if strict && bytes[1] != 0 {
                 return false;
             }
-            out.push(bytes[0]);
+            out.push_out(bytes[0]);
         }
         3 => {
             if strict && bytes[2] != 0 {
@@ -402,7 +403,7 @@ pub(crate) fn from_base64(s: &[u16], url: bool, last: u8, max: usize) -> Decoded
         if (remaining == 1 && chunk.len() == 2) || (remaining == 2 && chunk.len() == 3) {
             return d;
         }
-        chunk.push(v);
+        chunk.push_out(v);
         if chunk.len() == 4 {
             decode_chunk(&chunk, false, &mut d.bytes);
             chunk.clear();
@@ -432,7 +433,7 @@ pub(crate) fn from_hex(s: &[u16], max: usize) -> Decoded {
             return d;
         };
         d.read += 2;
-        d.bytes.push((h * 16 + l) as u8);
+        d.bytes.push_out((h * 16 + l) as u8);
     }
     d
 }

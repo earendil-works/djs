@@ -23,6 +23,7 @@
 //! comes before the fields. The instance one is the hidden binding `<fields N>` that
 //! constructors call: a base constructor at entry, a derived one after `super()`.
 //! Static blocks are functions of their own, called by the static initializer.
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -234,7 +235,7 @@ impl Parser<'_, '_> {
             self.heap
                 .atom_str(&crate::text::cat!("<fields ", self.classes.len(), ">"))?;
         self.f.add_var(fields_atom, VarKind::Hidden, scope);
-        self.classes.push(ClassCtx {
+        self.classes.push_out(ClassCtx {
             privates: Vec::new(),
             refs: Vec::new(),
         });
@@ -449,7 +450,7 @@ impl Parser<'_, '_> {
                 continue;
             }
             match self.classes.last_mut() {
-                Some(outer) => outer.refs.push((atom, pos)),
+                Some(outer) => outer.refs.push_out((atom, pos)),
                 None => {
                     let name = self.heap.atom_name(atom);
                     return syntax(
@@ -467,7 +468,7 @@ impl Parser<'_, '_> {
     pub(super) fn private_ref(&mut self, pos: u32) -> PResult<u32> {
         let atom = self.ident_atom()?;
         match self.classes.last_mut() {
-            Some(c) => c.refs.push((atom, pos)),
+            Some(c) => c.refs.push_out((atom, pos)),
             None => {
                 let name = self.heap.atom_name(atom);
                 return syntax(
@@ -715,7 +716,7 @@ impl Parser<'_, '_> {
                     DecKey::Computed(v)
                 }
             };
-            b.decs.push(DecElem {
+            b.decs.push_out(DecElem {
                 kind: dk,
                 is_static,
                 key,
@@ -755,7 +756,7 @@ impl Parser<'_, '_> {
                 let is_async = flavor == (true, false);
                 t = self.thunk_method_metadata(t, dk, &dp, is_async)?;
             }
-            b.legacy_elems.push(LegacyElem {
+            b.legacy_elems.push_out(LegacyElem {
                 kind: dk,
                 is_static,
                 key: lkey,
@@ -829,7 +830,7 @@ impl Parser<'_, '_> {
                     m.set = Some(v);
                 }
             }
-            None => list.push(Install {
+            None => list.push_out(Install {
                 name: a,
                 kind: match kind {
                     FuncKind::Getter | FuncKind::Setter => PrivKind::Accessor,
@@ -866,7 +867,7 @@ impl Parser<'_, '_> {
             }
             return Ok(());
         }
-        ctx.privates.push(Private {
+        ctx.privates.push_out(Private {
             name,
             kind,
             is_static,
@@ -945,7 +946,7 @@ impl Parser<'_, '_> {
         };
         let rec = match (decs, rec) {
             (Some(decs), Some(rec)) => {
-                b.decs.push(DecElem {
+                b.decs.push_out(DecElem {
                     kind: if auto { DEC_ACCESSOR } else { DEC_FIELD },
                     is_static,
                     key: match key {
@@ -961,7 +962,7 @@ impl Parser<'_, '_> {
             _ => None,
         };
         if let Some(t) = thunk {
-            b.legacy_elems.push(LegacyElem {
+            b.legacy_elems.push_out(LegacyElem {
                 kind: if auto { DEC_ACCESSOR } else { DEC_FIELD },
                 is_static,
                 key: match key {

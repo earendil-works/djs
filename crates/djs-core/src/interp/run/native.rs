@@ -17,6 +17,7 @@
 //! resume state in the same Rust loop) or pushes a frame and returns to the run loop,
 //! which re-enters the state machine at the resume state with the result on the
 //! operand stack. Loop back-edges charge fuel and are safepoints.
+use crate::PushOut;
 
 use super::*;
 use crate::builtins::r#gen::natives::NATIVES;
@@ -352,7 +353,7 @@ impl Exec<'_> {
         let argc = self.header_int(frame::ARGC);
         let mut vals = alloc::vec::Vec::new();
         for i in index..argc.max(index) {
-            vals.push(self.get(self.bp + 2 + i));
+            vals.push_out(self.get(self.bp + 2 + i));
         }
         let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
         Ok(Value::object(
@@ -873,7 +874,7 @@ mod tests {
                     assert_eq!(fn_id, LOG);
                     let info = vm.host_call(call_id).unwrap();
                     let line: Vec<String> = info.args.iter().map(|&a| vm.display(a)).collect();
-                    log.push(line.join(" "));
+                    log.push_out(line.join(" "));
                     vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
                 }
                 Status::Idle => panic!("idle"),
@@ -968,14 +969,14 @@ mod tests {
     fn backends_agree_in_every_mode() {
         let mut modes = Vec::new();
         for native in [true, false] {
-            modes.push(Mode { native, ..PLAIN });
-            modes.push(Mode {
+            modes.push_out(Mode { native, ..PLAIN });
+            modes.push_out(Mode {
                 native,
                 fuel: 7,
                 suspend: true,
                 ..PLAIN
             });
-            modes.push(Mode {
+            modes.push_out(Mode {
                 native,
                 fuel: 50,
                 gc_stress: true,

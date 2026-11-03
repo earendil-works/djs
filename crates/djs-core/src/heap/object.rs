@@ -25,6 +25,7 @@
 //! An array's `length` is internal slot 0 (a Number), not a table entry. It is reported as
 //! an own data property `{writable: !OBJ_LENGTH_READONLY, enumerable: false,
 //! configurable: false}`.
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -863,7 +864,7 @@ impl Heap {
                 values.extend(core::iter::repeat_n(Value::UNDEFINED, insert as usize));
             }
             if i < start || i >= start + delete {
-                values.push(v);
+                values.push_out(v);
             }
         }
         if start == len {
@@ -2172,7 +2173,7 @@ impl Heap {
                         stop = idx + 1;
                         ok = false;
                     }
-                    doomed.push((idx, key));
+                    doomed.push_out((idx, key));
                 }
             }
             for (idx, key) in doomed {
@@ -2343,7 +2344,7 @@ impl Heap {
         if el != 0 {
             for i in 0..self.value_array_len(el) {
                 if !self.value_array_get(el, i).is_hole() {
-                    indexes.push((i, Atom::int(i).expect("dense index fits an int atom")));
+                    indexes.push_out((i, Atom::int(i).expect("dense index fits an int atom")));
                 }
             }
         }
@@ -2358,13 +2359,13 @@ impl Heap {
                 if key.is_symbol() {
                     // Private names are not property keys to the language (D1400).
                     if !self.is_private_atom(key) {
-                        symbols.push(key);
+                        symbols.push_out(key);
                     }
                 } else if let Some(idx) = indexed.then(|| self.atom_array_index(key)).flatten() {
-                    indexes.push((idx, key));
+                    indexes.push_out((idx, key));
                     sort = true;
                 } else {
-                    strings.push(key);
+                    strings.push_out(key);
                 }
             }
         }
@@ -2374,7 +2375,7 @@ impl Heap {
         let mut out = Vec::with_capacity(indexes.len() + strings.len() + symbols.len() + 1);
         out.extend(indexes.into_iter().map(|(_, k)| k));
         if self.object_class(o) == ObjectClass::Array {
-            out.push(atoms::LENGTH);
+            out.push_out(atoms::LENGTH);
         }
         out.extend(strings);
         out.extend(symbols);

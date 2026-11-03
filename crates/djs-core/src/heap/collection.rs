@@ -20,6 +20,7 @@
 //! hashing and equality agree. Object and symbol keys hash by their offset, which the
 //! copying collector changes: `collect` rebuilds the index of every collection it copied
 //! (`Heap::collection_rehash`), without allocating.
+use crate::PushOut;
 
 use super::cells::{EphemeronArray, ValueArray};
 use super::{CellKind, Heap, HeapError, ObjectClass};
@@ -288,7 +289,7 @@ impl Heap {
         for n in 0..used {
             let k = self.coll_key(old, base, n);
             if k.is_hole() {
-                removed.push(n);
+                removed.push_out(n);
                 continue;
             }
             let v = self.value_array_get(old, base + 2 * n + 1);

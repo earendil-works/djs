@@ -21,6 +21,7 @@
 //!
 //! Nothing here recurses: rope walks use an explicit stack, so a million-deep rope built by
 //! `s += x` in a loop is fine.
+use crate::PushOut;
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -641,7 +642,7 @@ impl Heap {
         while let Some((off, len)) = stack.pop() {
             match self.cell_kind(off) {
                 CellKind::Rope => self.push_children(off, &mut stack),
-                _ => out.push((off, len)),
+                _ => out.push_out((off, len)),
             }
         }
     }
@@ -739,7 +740,7 @@ impl Heap {
         while let Some((off, len)) = stack.pop() {
             match self.cell_kind(off) {
                 CellKind::Rope => self.push_children(off, &mut stack),
-                _ => out.push((off, len)),
+                _ => out.push_out((off, len)),
             }
         }
     }

@@ -58,6 +58,15 @@ grow/drop sites so it doesn't regress. Measure bytes per change; no workload slo
   accepted, never a panic, also with the feature); a gate step (fuzz + e2e with the
   feature, difftest in release with suspension and GC stress: ~1 min); D2520; guide
   arena.md updated.
+- Part 2 survey (names build of 0e59af8f): calls into Vec glue at 1,045 drop sites
+  (`RawVecInner::deallocate`, the Vec spilled to the stack for each), 369 inlined
+  `grow_one` (push), 194 `with_capacity`, 184 `reserve`, 263 allocation-error paths; DWARF
+  attributes 101 KB raw to vec/raw_vec, spread over ~2,000 functions (top: emit_function
+  2.7 KB, step_once 2.4, json_regexp_intrinsic 2.1). Element types of the drops: u32 300,
+  u8/String 255, 8-byte pairs 153, u16 134, Value 80.
+- Experiment: every push out of line (patch pushcold.py): −4.8 KB gz, json-text +1.7%,
+  pushpop +1.3%, json +1.0%. Landed selectively (D2521): 343 sites, −3.2 KB gz, workloads
+  within ±1.3% (mostly lower), compile within noise. scripts/size/vec-sites.py + baseline.
 
 ## Follow-ups
 

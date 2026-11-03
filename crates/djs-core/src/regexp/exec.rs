@@ -10,6 +10,7 @@
 //! below would otherwise grow the stack by an entry per retry). Nothing lives on the Rust stack between
 //! instructions, so running out of fuel at any instruction returns an [`ExecState`] that
 //! [`resume`] continues exactly where it stopped.
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -612,7 +613,7 @@ impl Machine<'_> {
                 bp = (w >> 2) as usize;
                 break;
             }
-            tops.push(f);
+            tops.push_out(f);
             bp = (w >> 2) as usize;
         }
         // A lookaround does not consume input.

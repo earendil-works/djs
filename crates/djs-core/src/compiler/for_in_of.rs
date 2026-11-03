@@ -42,6 +42,7 @@
 //!
 //! for-in keeps the key iterator of `for_in_start` on the stack; its step is
 //! `for_in_next` and leaving the loop just drops it.
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -173,7 +174,8 @@ impl<'a> Parser<'a, '_> {
                 let end = self.new_label();
                 self.place(start);
                 if is_of {
-                    self.open_iters.push(OpenIter::ForOf(base + 2, is_await));
+                    self.open_iters
+                        .push_out(OpenIter::ForOf(base + 2, is_await));
                 }
                 if self.starts_assignment_pattern(Follow::InOf) {
                     // `for ([a, b] of xs)`: the pattern takes the value.
@@ -202,7 +204,7 @@ impl<'a> Parser<'a, '_> {
                     self.open_iters.pop();
                 }
                 self.place(end);
-                regions.push((start, end));
+                regions.push_out((start, end));
                 self.code().jump(l_body);
                 self.place(l_rhs);
                 Target::Expr
@@ -314,7 +316,7 @@ impl<'a> Parser<'a, '_> {
                     self.mark(pos);
                     self.code().name_put(r);
                 }
-                regions.push((start, l_step));
+                regions.push_out((start, l_step));
                 self.place(l_body);
             }
             Target::Pattern { cp, b } => {
@@ -334,7 +336,8 @@ impl<'a> Parser<'a, '_> {
                 let end = self.checkpoint();
                 self.rewind(cp);
                 if is_of {
-                    self.open_iters.push(OpenIter::ForOf(base + 2, is_await));
+                    self.open_iters
+                        .push_out(OpenIter::ForOf(base + 2, is_await));
                 }
                 self.parse_pattern(b)?;
                 if is_of {
@@ -343,14 +346,14 @@ impl<'a> Parser<'a, '_> {
                 self.rewind(end);
                 // Initialized per iteration before the body runs.
                 self.end_pattern_bindings(mark, head_end);
-                regions.push((start, l_step));
+                regions.push_out((start, l_step));
                 self.place(l_body);
             }
             Target::Expr => {
                 self.place(l_body);
                 let start = self.new_label();
                 self.place(start);
-                regions.push((start, l_step));
+                regions.push_out((start, l_step));
             }
         }
 
@@ -358,7 +361,7 @@ impl<'a> Parser<'a, '_> {
         let l_close = self.new_label();
         let l_break = self.new_label();
         if is_of {
-            self.blocks.push(BlockEnv {
+            self.blocks.push_out(BlockEnv {
                 labels: Vec::new(),
                 kind: BlockKind::Iter,
                 break_label: l_close,
@@ -367,7 +370,7 @@ impl<'a> Parser<'a, '_> {
                 used: false,
             });
         }
-        self.blocks.push(BlockEnv {
+        self.blocks.push_out(BlockEnv {
             labels,
             kind: BlockKind::Loop,
             break_label: l_break,
@@ -393,7 +396,7 @@ impl<'a> Parser<'a, '_> {
         self.place(l_step);
         if is_of {
             for &(start, end) in &regions {
-                self.f.handlers.push(HandlerLabels {
+                self.f.handlers.push_out(HandlerLabels {
                     start,
                     end,
                     target: l_throw,

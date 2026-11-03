@@ -24,6 +24,7 @@
 //! handler with `%IteratorCloseThrow`; the steps are left out of its regions, as an
 //! error from the iterator itself does not close it. After the last element a
 //! not-done iterator is closed with `%IteratorClose` (D1361).
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -165,7 +166,7 @@ impl<'a> Parser<'a, '_> {
                     return syntax(pos, "duplicate argument names not allowed in this context");
                 }
                 let v = self.f.add_var(name, VarKind::Param, BODY_SCOPE);
-                self.f.params.push(v);
+                self.f.params.push_out(v);
                 v
             }
             Binding::Member => {
@@ -174,7 +175,7 @@ impl<'a> Parser<'a, '_> {
             }
             Binding::Assign => unreachable!("assignment patterns declare nothing"),
         };
-        self.pattern_vars.push(v);
+        self.pattern_vars.push_out(v);
         Ok(())
     }
 
@@ -408,7 +409,7 @@ impl<'a> Parser<'a, '_> {
         let l_base = self.new_label();
         self.place(l_base);
         self.open_iters
-            .push(super::parser::OpenIter::Pattern(l_base));
+            .push_out(super::parser::OpenIter::Pattern(l_base));
         let mut regions = Regions {
             list: Vec::new(),
             start: l_base,
@@ -494,7 +495,7 @@ impl<'a> Parser<'a, '_> {
             self.code().throw();
             self.place(l_after);
             for (start, end) in regions.list {
-                self.f.handlers.push(HandlerLabels {
+                self.f.handlers.push_out(HandlerLabels {
                     start,
                     end,
                     target: l_handler,
@@ -510,7 +511,7 @@ impl<'a> Parser<'a, '_> {
         if self.f.code.pos() != regions.start_pc {
             let end = self.new_label();
             self.place(end);
-            regions.list.push((regions.start, end));
+            regions.list.push_out((regions.start, end));
         }
     }
 

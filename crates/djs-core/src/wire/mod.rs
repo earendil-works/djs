@@ -10,6 +10,7 @@
 //! GC contract: decoding allocates but never collects. Values held in the Rust vectors are
 //! not visible to the collector, which is fine because nothing can collect before `decode`
 //! returns; the caller checks `Heap::gc_pending` afterwards.
+use crate::PushOut;
 
 #[cfg(test)]
 mod tests;
@@ -195,7 +196,7 @@ impl<'a> Decoder<'a, '_> {
                 && f.is_object
             {
                 let key = self.key()?;
-                self.keys.push(key);
+                self.keys.push_out(key);
             }
             let v = match self.value()? {
                 Some(v) => v,
@@ -210,7 +211,7 @@ impl<'a> Decoder<'a, '_> {
                     }
                     return Ok(v);
                 };
-                self.values.push(v);
+                self.values.push_out(v);
                 f.remaining -= 1;
                 if f.remaining > 0 {
                     break;
@@ -287,7 +288,7 @@ impl<'a> Decoder<'a, '_> {
                         self.pos = at;
                         return self.invalid("nesting too deep");
                     }
-                    self.stack.push(Frame {
+                    self.stack.push_out(Frame {
                         is_object,
                         remaining: count,
                         values_start: self.values.len(),
@@ -339,7 +340,7 @@ impl<'a> Decoder<'a, '_> {
                 return self.invalid("expected a key string");
             }
             let atom = self.string(t, true)?.1;
-            self.key_table.push(atom);
+            self.key_table.push_out(atom);
             return Ok(atom);
         }
         match self.key_table.get(k as usize - 1) {

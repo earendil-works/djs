@@ -1,4 +1,5 @@
 //! Statements.
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -368,7 +369,7 @@ impl Parser<'_, '_> {
     fn push_loop(&mut self, labels: Vec<Atom>) -> (crate::bytecode::Label, crate::bytecode::Label) {
         let l_break = self.new_label();
         let l_cont = self.new_label();
-        self.blocks.push(BlockEnv {
+        self.blocks.push_out(BlockEnv {
             labels,
             kind: BlockKind::Loop,
             break_label: l_break,
@@ -766,7 +767,7 @@ impl Parser<'_, '_> {
         let l_fin = self.new_label();
         let l_end = self.new_label();
         if has_finally {
-            self.blocks.push(BlockEnv {
+            self.blocks.push_out(BlockEnv {
                 labels: Vec::new(),
                 kind: BlockKind::Finally,
                 break_label: l_fin,
@@ -797,7 +798,7 @@ impl Parser<'_, '_> {
             self.next()?;
             let l_catch = self.new_label();
             self.place(l_catch);
-            self.f.handlers.push(HandlerLabels {
+            self.f.handlers.push_out(HandlerLabels {
                 start: l_try,
                 end: l_try_end,
                 target: l_catch,
@@ -867,7 +868,7 @@ impl Parser<'_, '_> {
             self.blocks.pop();
             let l_exc = self.new_label();
             self.place(l_exc);
-            self.f.handlers.push(HandlerLabels {
+            self.f.handlers.push_out(HandlerLabels {
                 start: exc_region.0,
                 end: exc_region.1,
                 target: l_exc,
@@ -926,7 +927,7 @@ impl Parser<'_, '_> {
         // Not in the statement lists of the clauses (a block in one is fine).
         let using = self.begin_using_list(false);
         let l_break = self.new_label();
-        self.blocks.push(BlockEnv {
+        self.blocks.push_out(BlockEnv {
             labels,
             kind: BlockKind::Switch,
             break_label: l_break,
@@ -1005,7 +1006,7 @@ impl Parser<'_, '_> {
             if labels.contains(&a) || self.blocks.iter().any(|b| b.labels.contains(&a)) {
                 return syntax(tok.start, "duplicate label name");
             }
-            labels.push(a);
+            labels.push_out(a);
             self.next()?;
             self.next()?;
         }
@@ -1015,7 +1016,7 @@ impl Parser<'_, '_> {
             TokenKind::For => self.parse_for(labels),
             _ => {
                 let l_break = self.new_label();
-                self.blocks.push(BlockEnv {
+                self.blocks.push_out(BlockEnv {
                     labels,
                     kind: BlockKind::Labeled,
                     break_label: l_break,

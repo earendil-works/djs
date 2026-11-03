@@ -1,5 +1,6 @@
 //! Per-function compiler state: the scope tree, bindings, name references, captures,
 //! constants (docs/compiler.md 2.1, 5.1 to 5.4).
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -433,7 +434,7 @@ impl FuncState {
     }
 
     pub fn new_scope(&mut self, parent: ScopeId, kind: ScopeKind) -> ScopeId {
-        self.scopes.push(Scope {
+        self.scopes.push_out(Scope {
             parent: Some(parent),
             kind,
             vars: Vec::new(),
@@ -446,7 +447,7 @@ impl FuncState {
     pub fn add_var(&mut self, name: Atom, kind: VarKind, scope: ScopeId) -> VarId {
         let id = self.vars.len() as VarId;
         let immediate = !matches!(kind, VarKind::Let | VarKind::Const | VarKind::Param);
-        self.vars.push(Var {
+        self.vars.push_out(Var {
             name,
             kind,
             scope,
@@ -458,7 +459,7 @@ impl FuncState {
             used: false,
             ts_decl: None,
         });
-        self.scopes[scope as usize].vars.push(id);
+        self.scopes[scope as usize].vars.push_out(id);
         if !self.index.slots.is_empty() {
             self.index.insert(VarIndex::key(scope, name), id);
         } else if self.vars.len() >= VarIndex::MIN {
@@ -510,8 +511,8 @@ impl FuncState {
         if let Some(i) = self.captures.iter().position(|&x| x == c) {
             return i as u16;
         }
-        self.captures.push(c);
-        self.capture_names.push(name);
+        self.captures.push_out(c);
+        self.capture_names.push_out(name);
         (self.captures.len() - 1) as u16
     }
 }

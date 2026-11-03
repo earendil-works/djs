@@ -5,6 +5,7 @@
 //! summaries) are built with it instead of `format!`, so that the shipped module carries no
 //! formatting machinery (`core::fmt::write`, `Formatter`, the `Display` impls of every
 //! argument type). The output is byte for byte what the `format!` it replaces produced.
+use crate::PushOut;
 
 use alloc::string::String;
 
@@ -27,7 +28,7 @@ impl Piece for String {
 
 impl Piece for char {
     fn put(&self, out: &mut String) {
-        out.push(*self);
+        out.push_out(*self);
     }
 }
 
@@ -86,7 +87,7 @@ fn decimal(mut v: u64, width: usize, out: &mut String) {
 /// `v` as `format!("{v:0width$}")` writes it: the sign counts towards the width.
 fn signed(v: i64, width: usize, out: &mut String) {
     if v < 0 {
-        out.push('-');
+        out.push_out('-');
         decimal(v.unsigned_abs(), width.saturating_sub(1), out);
     } else {
         decimal(v as u64, width, out);
@@ -127,10 +128,10 @@ impl Piece for Hex {
             }
         }
         for _ in buf.len() - i..self.1 {
-            out.push('0');
+            out.push_out('0');
         }
         for &b in &buf[i..] {
-            out.push(b as char);
+            out.push_out(b as char);
         }
     }
 }

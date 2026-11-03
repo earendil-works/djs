@@ -2,6 +2,7 @@
 //! The algorithms follow QuickJS (quickjs.c `get_date_fields`, `set_date_fields`,
 //! `get_date_string`, `js_Date_parse`), so output and parsing match it. Local time is a
 //! fixed offset the host sets (D1383).
+use crate::PushOut;
 
 use alloc::string::String;
 
@@ -228,7 +229,7 @@ pub(crate) fn format(t: f64, fmt: u8, part: u8, offset: i64) -> Option<String> {
                     year(y)
                 );
                 if part == 3 {
-                    out.push(' ');
+                    out.push_out(' ');
                 }
             }
             2 => {
@@ -285,10 +286,10 @@ pub(crate) fn format(t: f64, fmt: u8, part: u8, offset: i64) -> Option<String> {
                     " GMT"
                 );
                 if tz < 0 {
-                    out.push('-');
+                    out.push_out('-');
                     tz = -tz;
                 } else {
-                    out.push('+');
+                    out.push_out('+');
                 }
                 crate::text::cat_to!(
                     &mut out,
@@ -724,7 +725,7 @@ pub(crate) fn parse(units: impl Iterator<Item = u16>, offset: i64) -> f64 {
         } else {
             c as u8
         };
-        buf.push(b);
+        buf.push_out(b);
     }
     let mut f = [0i64; 9];
     let mut local = false;

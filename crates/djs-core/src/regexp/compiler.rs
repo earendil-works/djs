@@ -5,6 +5,7 @@
 //! the bits above are flags) followed by its operands. The quantifier scheme follows
 //! QuickJS: counters and saved positions live in registers next to the capture slots, and
 //! empty iterations beyond the minimum fail (the spec's RepeatMatcher rule).
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -139,10 +140,10 @@ pub(crate) fn compile(parsed: &Parsed, flags: Flags) -> super::Program {
     for name in &parsed.names[1..] {
         match name {
             Some(n) => {
-                words.push(n.len() as u32);
+                words.push_out(n.len() as u32);
                 words.extend(n.iter().map(|&u| u as u32));
             }
-            None => words.push(0),
+            None => words.push_out(0),
         }
     }
     let mut c = Compiler {
@@ -379,14 +380,14 @@ impl Compiler {
     }
 
     fn emit(&mut self, op: u32) -> usize {
-        self.code.push(op);
+        self.code.push_out(op);
         self.code.len() - 1
     }
 
     /// Emits an instruction with one operand; returns the operand's index for patching.
     fn emit2(&mut self, op: u32, a: u32) -> usize {
-        self.code.push(op);
-        self.code.push(a);
+        self.code.push_out(op);
+        self.code.push_out(a);
         self.code.len() - 1
     }
 
@@ -489,8 +490,8 @@ impl Compiler {
         let ranges = set.ranges();
         self.emit2(op, ranges.len() as u32);
         for &(lo, hi) in ranges {
-            self.code.push(lo);
-            self.code.push(hi);
+            self.code.push_out(lo);
+            self.code.push_out(hi);
         }
     }
 
@@ -528,7 +529,7 @@ impl Compiler {
             if i + 1 < n {
                 let split = self.emit2(SPLIT_NEXT, 0);
                 self.node(alt, back);
-                gotos.push(self.emit2(GOTO, 0));
+                gotos.push_out(self.emit2(GOTO, 0));
                 let next = self.here();
                 self.patch(split, next);
             } else {
@@ -557,14 +558,14 @@ impl Compiler {
             .map(|s| Node::Concat(s.iter().map(|&c| Node::Char { c, icase }).collect()))
             .collect();
         if !set.is_empty() {
-            alts.push(Node::Class {
+            alts.push_out(Node::Class {
                 set: set.clone(),
                 strings: Vec::new(),
                 icase,
             });
         }
         if strings.iter().any(|s| s.is_empty()) {
-            alts.push(Node::Empty);
+            alts.push_out(Node::Empty);
         }
         self.alternatives(alts.iter(), back, None);
     }
@@ -588,7 +589,7 @@ impl Compiler {
         if is_single_char(body) {
             let r = self.alloc_regs(2);
             self.emit2(SET_REG, r);
-            self.code.push(0);
+            self.code.push_out(0);
             self.emit2(SET_POS, r + 1);
             let follow = follow.filter(|_| !back);
             let mut check = match &follow {
@@ -610,22 +611,22 @@ impl Compiler {
                 | check
                 | if lead.is_some() { F_LEAD } else { 0 };
             self.emit2(STAR | flags, r);
-            self.code.push(min);
-            self.code.push(max);
+            self.code.push_out(min);
+            self.code.push_out(max);
             let len_at = self.code.len();
-            self.code.push(0);
+            self.code.push_out(0);
             let follow_ranges: Vec<(u32, u32)> =
                 follow.map(|(f, _)| f.ranges().to_vec()).unwrap_or_default();
-            self.code.push(follow_ranges.len() as u32);
+            self.code.push_out(follow_ranges.len() as u32);
             let body_start = self.here();
             self.node(body, back);
             self.code[len_at] = self.here() - body_start;
             for (lo, hi) in follow_ranges {
-                self.code.push(lo);
-                self.code.push(hi);
+                self.code.push_out(lo);
+                self.code.push_out(hi);
             }
             if let Some(skip) = lead {
-                self.code.push(skip);
+                self.code.push_out(skip);
             }
             self.reg_top -= 2;
             return;
@@ -637,8 +638,8 @@ impl Compiler {
         let reset = |c: &mut Compiler| {
             if caps.0 < caps.1 {
                 c.emit(RESET);
-                c.code.push(caps.0);
-                c.code.push(caps.1 - 1);
+                c.code.push_out(caps.0);
+                c.code.push_out(caps.1 - 1);
             }
         };
         if min == 0 && (max == 1 || max == INF) {
@@ -676,7 +677,7 @@ impl Compiler {
         let nregs = if check { 2 } else { 1 };
         let r = self.alloc_regs(nregs);
         self.emit2(SET_REG, r);
-        self.code.push(max);
+        self.code.push_out(max);
         let top = self.here();
         if check {
             self.emit2(SET_POS, r + 1);
@@ -685,11 +686,11 @@ impl Compiler {
         self.node(body, back);
         if min == max {
             self.emit2(LOOP, r);
-            self.code.push(top);
+            self.code.push_out(top);
         } else {
             self.emit2(LOOP_SPLIT | g | if check { F_CHECK } else { 0 }, r);
-            self.code.push(max - min);
-            self.code.push(top);
+            self.code.push_out(max - min);
+            self.code.push_out(top);
         }
         self.reg_top -= nregs;
         if let Some(split) = split {

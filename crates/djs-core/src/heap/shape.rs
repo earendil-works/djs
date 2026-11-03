@@ -18,6 +18,7 @@
 //! chain: a child of the shape that wrote the last used pair appends in place (if there is
 //! room) and every other child copies the prefix. So a chain of n shapes costs O(n)
 //! descriptor words.
+use crate::PushOut;
 
 use super::atom::Atom;
 use super::cells::{RefArray, Roots, Shape, U32Array};
@@ -71,16 +72,16 @@ impl Heap {
             .into_iter()
             .collect();
         while let Some(s) = stack.pop() {
-            out.push(s);
+            out.push_out(s);
             let a = self.arena();
             if let Some(d) = a.get::<Ref>(s, Shape::DESCS).get() {
-                out.push(d);
+                out.push_out(d);
             }
             if let Some(t) = a.get::<Ref>(s, Shape::TRANSITIONS).get() {
-                out.push(t);
+                out.push_out(t);
                 let len = a.get(t, RefArray::LEN);
                 for i in (0..len).rev() {
-                    stack.push(a.read::<Ref>(RefArray::REFS.at(t, i)).0);
+                    stack.push_out(a.read::<Ref>(RefArray::REFS.at(t, i)).0);
                 }
             }
         }

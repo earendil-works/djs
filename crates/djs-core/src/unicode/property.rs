@@ -4,6 +4,7 @@
 //! Names are matched exactly (no loose matching), with the aliases ECMA-262 allows:
 //! `General_Category`/`gc`, `Script`/`sc` and `Script_Extensions`/`scx` with a value, or a
 //! lone General_Category value, binary property or (in `v` mode) property of strings.
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -101,7 +102,7 @@ fn decode_set(off: u32) -> Vec<(u32, u32)> {
     for _ in 0..n {
         let lo = prev + varint(&mut p);
         let hi = lo + varint(&mut p);
-        out.push((lo, hi));
+        out.push_out((lo, hi));
         prev = hi + 1;
     }
     out
@@ -127,9 +128,9 @@ fn decode_sequences(off: u32) -> Vec<Vec<u32>> {
                 -(((z + 1) >> 1) as i64)
             };
             last = (last as i64 + d) as u32;
-            s.push(last);
+            s.push_out(last);
         }
-        out.push(s);
+        out.push_out(s);
     }
     out
 }
@@ -161,7 +162,7 @@ fn decode_zwj(off: u32) -> Vec<Vec<u32>> {
         }
         for _ in 0..len {
             let t = varint(&mut p);
-            sk.push(match t {
+            sk.push_out(match t {
                 0 => MOD_SLOT,
                 1 => HAIR_SLOT,
                 2 => 0x200D,
@@ -194,7 +195,7 @@ fn decode_zwj(off: u32) -> Vec<Vec<u32>> {
                     let mut seq = Vec::with_capacity(sk.len());
                     let mut first = true;
                     for &c in &sk {
-                        seq.push(match c {
+                        seq.push_out(match c {
                             MOD_SLOT => {
                                 let t = if first { a } else { b };
                                 first = false;
@@ -204,7 +205,7 @@ fn decode_zwj(off: u32) -> Vec<Vec<u32>> {
                             c => c,
                         });
                     }
-                    out.push(seq);
+                    out.push_out(seq);
                 }
             }
         }
@@ -231,7 +232,7 @@ fn gc_set(mask: u32) -> Vec<(u32, u32)> {
         if mask >> (b & 31) & 1 != 0 {
             match out.last_mut() {
                 Some(last) if last.1 + 1 == c => last.1 = c + n - 1,
-                _ => out.push((c, c + n - 1)),
+                _ => out.push_out((c, c + n - 1)),
             }
         }
         c += n;
@@ -252,7 +253,7 @@ fn normalize(mut v: Vec<(u32, u32)>) -> Vec<(u32, u32)> {
     for (lo, hi) in v {
         match out.last_mut() {
             Some(last) if lo <= last.1.saturating_add(1) => last.1 = last.1.max(hi),
-            _ => out.push((lo, hi)),
+            _ => out.push_out((lo, hi)),
         }
     }
     out
@@ -270,11 +271,11 @@ fn subtract(a: &[(u32, u32)], b: &[(u32, u32)]) -> Vec<(u32, u32)> {
         let mut k = j;
         while lo <= hi {
             if k >= b.len() || b[k].0 > hi {
-                out.push((lo, hi));
+                out.push_out((lo, hi));
                 break;
             }
             if b[k].0 > lo {
-                out.push((lo, b[k].0 - 1));
+                out.push_out((lo, b[k].0 - 1));
             }
             if b[k].1 >= hi {
                 break;
@@ -351,13 +352,13 @@ fn decode_strings(off: u32, kind: u8) -> Vec<Vec<u32>> {
     for (lo, hi) in decode_set(off) {
         for c in lo..=hi {
             match kind {
-                1 => out.push(alloc::vec![c, 0xFE0F]),
+                1 => out.push_out(alloc::vec![c, 0xFE0F]),
                 2 => {
                     for m in 0x1F3FB..0x1F400 {
-                        out.push(alloc::vec![c, m]);
+                        out.push_out(alloc::vec![c, m]);
                     }
                 }
-                _ => out.push(alloc::vec![0x1F1E6 + c / 26, 0x1F1E6 + c % 26]),
+                _ => out.push_out(alloc::vec![0x1F1E6 + c / 26, 0x1F1E6 + c % 26]),
             }
         }
     }

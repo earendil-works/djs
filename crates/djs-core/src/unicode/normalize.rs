@@ -4,6 +4,7 @@
 //! Input and output are UTF-16 code units; lone surrogates pass through unchanged (they
 //! have no decomposition and combining class 0). A quick check first decides most inputs
 //! are already normalized, and then the caller keeps the original string.
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -148,7 +149,7 @@ fn table_decomposition(c: u32, out: &mut Vec<u32>) -> Option<bool> {
             return true;
         }
         if c <= last {
-            out.push(map[0] + (c - first));
+            out.push_out(map[0] + (c - first));
             out.extend_from_slice(&map[1..]);
             found = Some(compat);
             return true;
@@ -162,16 +163,16 @@ fn table_decomposition(c: u32, out: &mut Vec<u32>) -> Option<bool> {
 fn decompose_char(c: u32, compat: bool, out: &mut Vec<u32>) {
     if (S_BASE..S_BASE + S_COUNT).contains(&c) {
         let s = c - S_BASE;
-        out.push(L_BASE + s / N_COUNT);
-        out.push(V_BASE + (s % N_COUNT) / T_COUNT);
+        out.push_out(L_BASE + s / N_COUNT);
+        out.push_out(V_BASE + (s % N_COUNT) / T_COUNT);
         let t = s % T_COUNT;
         if t != 0 {
-            out.push(T_BASE + t);
+            out.push_out(T_BASE + t);
         }
         return;
     }
     if c < 0xA0 {
-        out.push(c);
+        out.push_out(c);
         return;
     }
     let mut map = Vec::new();
@@ -181,7 +182,7 @@ fn decompose_char(c: u32, compat: bool, out: &mut Vec<u32>) {
                 decompose_char(m, compat, out);
             }
         }
-        _ => out.push(c),
+        _ => out.push_out(c),
     }
 }
 
@@ -208,7 +209,7 @@ impl Compositions {
                     && ccc(map[0]) == 0
                     && COMPOSE_EXCLUDED.binary_search(&cp).is_err()
                 {
-                    pairs.push((map[0] as u64) << 42 | (map[1] as u64) << 21 | cp as u64);
+                    pairs.push_out((map[0] as u64) << 42 | (map[1] as u64) << 21 | cp as u64);
                 }
                 false
             });
@@ -358,7 +359,7 @@ pub fn normalize(units: &[u16], form: Form, comp: &mut Compositions) -> Vec<u16>
                 out.extend_from_slice(ch.encode_utf16(&mut buf));
             }
             // A lone surrogate.
-            None => out.push(c as u16),
+            None => out.push_out(c as u16),
         }
     }
     out
@@ -385,7 +386,7 @@ fn compose(d: &[u32], comp: &mut Compositions) -> Vec<u32> {
         } else {
             last_ccc = k;
         }
-        out.push(c);
+        out.push_out(c);
     }
     out
 }

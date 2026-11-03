@@ -35,6 +35,7 @@
 //!
 //! A for-of head (`for (using x of xs)`) opens a region per iteration around the
 //! binding and the body; a `for (using x = ...; ...)` head one around the whole loop.
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -183,7 +184,7 @@ impl Parser<'_, '_> {
     /// The region's `Finally` env: jumps out of it dispose. Statements continue one
     /// deeper.
     pub(super) fn using_env(&mut self, r: &UsingRegion) {
-        self.blocks.push(BlockEnv {
+        self.blocks.push_out(BlockEnv {
             labels: Vec::new(),
             kind: BlockKind::Finally,
             break_label: r.l_fin,
@@ -259,7 +260,7 @@ impl Parser<'_, '_> {
         self.code().drop();
         self.code().drop();
         self.code().jump(l_end);
-        self.f.handlers.push(HandlerLabels {
+        self.f.handlers.push_out(HandlerLabels {
             start: r.l_try,
             end: l_try_end,
             target: l_exc,
@@ -289,7 +290,7 @@ impl Parser<'_, '_> {
             self.place(l_a_end);
             self.code().drop();
             self.code().jump(l_loop);
-            self.f.handlers.push(HandlerLabels {
+            self.f.handlers.push_out(HandlerLabels {
                 start: l_a,
                 end: l_a_end,
                 target: l_rej,

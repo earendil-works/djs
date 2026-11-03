@@ -14,6 +14,7 @@
 //! a member that a later block exports. Constant enum initializers are evaluated at
 //! compile time (tsc's constant enum expressions); a `const enum` requires them. A
 //! namespace that only declares types emits nothing and binds nothing.
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -148,7 +149,7 @@ impl<'a> Parser<'a, '_> {
         }
         let id = self.ts_decls.len() as u32;
         let param = self.heap.atom_str(&crate::text::cat!("<ns ", id, ">"))?;
-        self.ts_decls.push(TsDecl {
+        self.ts_decls.push_out(TsDecl {
             name,
             kind,
             owner: match parent {
@@ -177,7 +178,7 @@ impl<'a> Parser<'a, '_> {
                     m.child = child;
                 }
             }
-            None => decl.members.push(TsMember { name, value, child }),
+            None => decl.members.push_out(TsMember { name, value, child }),
         }
     }
 

@@ -4,6 +4,7 @@
 //!
 //! The structure and the error checks follow QuickJS' `libregexp.c` (MIT, Fabrice Bellard
 //! and Charlie Gordon) closely, so that valid/invalid decisions and messages match qjs.
+use crate::PushOut;
 
 use alloc::boxed::Box;
 use alloc::string::String;
@@ -111,7 +112,7 @@ impl ClassSet {
         if s.len() == 1 {
             self.chars.add(s[0]);
         } else if !self.strings.contains(&s) {
-            self.strings.push(s);
+            self.strings.push_out(s);
         }
     }
 
@@ -301,12 +302,12 @@ impl Parser<'_> {
         self.enter()?;
         let id = self.next_disjunction;
         self.next_disjunction += 1;
-        self.path.push((id, 0));
+        self.path.push_out((id, 0));
         let mut alts = alloc::vec![self.alternative(backward)?];
         while !self.at_end() && self.cur() == '|' as u32 {
             self.pos += 1;
             self.path.last_mut().unwrap().1 += 1;
-            alts.push(self.alternative(backward)?);
+            alts.push_out(self.alternative(backward)?);
         }
         self.path.pop();
         self.depth -= 1;
@@ -321,7 +322,7 @@ impl Parser<'_> {
         let mut terms = Vec::new();
         while !self.at_end() && self.cur() != '|' as u32 && self.cur() != ')' as u32 {
             if let Some(t) = self.term(backward)? {
-                terms.push(t);
+                terms.push_out(t);
             }
         }
         Ok(match terms.len() {
@@ -628,7 +629,7 @@ impl Parser<'_> {
         let index = self.capture_count;
         self.capture_count += 1;
         if let Some(name) = name {
-            self.names.push(GroupName {
+            self.names.push_out(GroupName {
                 index,
                 name,
                 path: self.path.clone(),
@@ -1059,7 +1060,7 @@ impl Parser<'_> {
             if name.len() >= 63 {
                 return err("unknown unicode property name");
             }
-            name.push(self.cur() as u8 as char);
+            name.push_out(self.cur() as u8 as char);
             self.pos += 1;
         }
         let mut value = None;
@@ -1070,7 +1071,7 @@ impl Parser<'_> {
                 if v.len() >= 63 {
                     return err("unknown unicode property value");
                 }
-                v.push(self.cur() as u8 as char);
+                v.push_out(self.cur() as u8 as char);
                 self.pos += 1;
             }
             value = Some(v);
@@ -1132,7 +1133,7 @@ impl Parser<'_> {
             let mut s = Vec::new();
             while !self.at_end() && self.cur() != '}' as u32 && self.cur() != '|' as u32 {
                 match self.class_atom(true, false)? {
-                    ClassAtom::Char(c) => s.push(c),
+                    ClassAtom::Char(c) => s.push_out(c),
                     ClassAtom::Set(_) => unreachable!("sets are not allowed in \\q"),
                 }
             }

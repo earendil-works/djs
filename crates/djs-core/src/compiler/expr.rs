@@ -1,4 +1,5 @@
 //! Expressions (docs/compiler.md 2.3, 3.7, 4.5).
+use crate::PushOut;
 
 use super::PResult;
 use super::func::FuncKind;
@@ -1613,10 +1614,10 @@ impl Parser<'_, '_> {
                 Ok(_) => crate::value::Value::string(self.template_string(&units)?),
                 Err(_) => crate::value::Value::UNDEFINED,
             };
-            cooked.push(c);
+            cooked.push_out(c);
             units.clear();
             self.lx.template_raw(&tok, &mut units);
-            raw.push(crate::value::Value::string(self.template_string(&units)?));
+            raw.push_out(crate::value::Value::string(self.template_string(&units)?));
             if matches!(
                 tok.kind,
                 TokenKind::NoSubstTemplate | TokenKind::TemplateTail
@@ -1638,7 +1639,7 @@ impl Parser<'_, '_> {
         // CONSTS[site] = start of `n, cooked x n, raw x n`.
         let start = self.f.consts.len() as u32;
         let n = cooked.len();
-        self.f.consts.push(crate::value::Value::int(n as i32));
+        self.f.consts.push_out(crate::value::Value::int(n as i32));
         self.f.consts.extend(cooked);
         self.f.consts.extend(raw);
         self.f.consts[site as usize] = crate::value::Value::int(start as i32);

@@ -1,5 +1,6 @@
 //! Array leaf intrinsics: the primitive sort (ARCH "The leaf rule": `sort` on
 //! primitives without a comparator stays leaf).
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -18,7 +19,7 @@ pub(crate) fn sort_primitives(heap: &mut Heap, list: Obj) -> Result<bool, Fault>
     let mut values = Vec::with_capacity(n as usize);
     for i in 0..n {
         match heap.get_element_fast(list, i) {
-            Some(v) if !matches!(v.kind(), Kind::Object | Kind::Symbol) => values.push(v),
+            Some(v) if !matches!(v.kind(), Kind::Object | Kind::Symbol) => values.push_out(v),
             _ => return Ok(false),
         }
     }
@@ -30,7 +31,7 @@ pub(crate) fn sort_primitives(heap: &mut Heap, list: Obj) -> Result<bool, Fault>
             continue;
         }
         let s = conv::to_string(heap, v)?;
-        keyed.push((heap.str_units(s).collect(), v));
+        keyed.push_out((heap.str_units(s).collect(), v));
     }
     // A stable sort by code units, as IsLessThan compares strings.
     crate::sort::sort_by(&mut keyed, |a, b| a.0 < b.0);

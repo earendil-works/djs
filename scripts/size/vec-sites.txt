@@ -1,0 +1,672 @@
+# scripts/size/vec-sites.py --update: inlined container glue of the shipped code (D2521)
+total	grow	170
+total	drop	1045
+total	with_capacity	194
+total	reserve	164
+total	alloc_error	263
+2	<&str as core::convert::Into<alloc::string::String>>::into
+1	<&str as djs_core::text::Piece>::put
+2	<(djs_core::heap::atom::Atom, u32, u32) as alloc::vec::spec_from_elem::SpecFromElem>::from_elem::<alloc::alloc::Global>
+2	<(u32, u32, u32, djs_core::heap::atom::Atom) as alloc::vec::spec_from_elem::SpecFromElem>::from_elem::<alloc::alloc::Global>
+2	<[&[u8]] as alloc::slice::Concat<u8>>::concat
+2	<alloc::borrow::Cow<str>>::into_owned
+1	<alloc::raw_vec::RawVec<(djs_core::heap::atom::Atom, djs_core::value::Value)>>::grow_one
+1	<alloc::raw_vec::RawVec<alloc::vec::Vec<u32>>>::grow_one
+1	<alloc::raw_vec::RawVec<bool> as core::ops::drop::Drop>::drop
+1	<alloc::raw_vec::RawVec<core::option::Option<(u32, djs_core::compiler::scan::Follow)>> as core::ops::drop::Drop>::drop
+1	<alloc::raw_vec::RawVec<core::option::Option<djs_core::compiler::func::FuncState>>>::grow_one
+1	<alloc::raw_vec::RawVec<core::option::Option<djs_wasm::Slot>>>::grow_one
+1	<alloc::raw_vec::RawVec<core::option::Option<u32>>>::grow_one
+1	<alloc::raw_vec::RawVec<djs_core::builtins::json::Open>>::grow_one
+1	<alloc::raw_vec::RawVec<djs_core::bytecode::code::P1>>::grow_one
+1	<alloc::raw_vec::RawVec<djs_core::compiler::decorators::LegacyElem>>::grow_one
+1	<alloc::raw_vec::RawVec<djs_core::compiler::func::Scope>>::grow_one
+1	<alloc::raw_vec::RawVec<djs_core::compiler::parser::Suspended>>::grow_one
+1	<alloc::raw_vec::RawVec<djs_core::compiler::resolve::Storage>>::grow_one
+1	<alloc::raw_vec::RawVec<djs_core::compiler::ts_decl::TsDecl>>::grow_one
+1	<alloc::raw_vec::RawVec<djs_core::compiler::ts_decl::TsMember>>::grow_one
+1	<alloc::raw_vec::RawVec<djs_core::json::stringify::Frame>>::grow_one
+1	<alloc::raw_vec::RawVec<djs_core::regexp::parser::Node>>::grow_one
+1	<alloc::raw_vec::RawVec<djs_core::value::Obj> as core::ops::drop::Drop>::drop
+1	<alloc::raw_vec::RawVec<djs_core::value::Obj>>::grow_one
+1	<alloc::raw_vec::RawVec<djs_core::value::Value> as core::ops::drop::Drop>::drop
+1	<alloc::raw_vec::RawVec<djs_core::value::Value>>::grow_one
+1	<alloc::raw_vec::RawVec<djs_core::vm::registry::Entry>>::grow_one
+1	<alloc::raw_vec::RawVec<djs_core::wire::Frame>>::grow_one
+1	<alloc::raw_vec::RawVec<u16>>::grow_one
+1	<alloc::raw_vec::RawVec<u8>>::grow_one
+2	<alloc::raw_vec::RawVecInner<_>>::reserve::do_reserve_and_handle::<alloc::alloc::Global>
+1	<alloc::raw_vec::RawVecInner>::reserve_exact
+2	<alloc::string::String as core::convert::From<&str>>::from
+1	<alloc::string::String as core::convert::From<alloc::borrow::Cow<str>>>::from
+1	<alloc::string::String as core::iter::traits::collect::Extend<char>>::extend::<core::iter::adapters::map::Map<core::char::decode::DecodeUtf16<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>, <djs_core::heap::Heap>::str_to_string::{closure#0}>>
+2	<alloc::string::String as djs_core::buf::PushOut<char>>::push_out
+1	<alloc::string::String as djs_core::text::Piece>::put
+5	<alloc::string::String>::from_utf8_lossy
+1	<alloc::vec::Vec<&alloc::vec::Vec<u32>>>::insert
+2	<alloc::vec::Vec<&str> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<&str, core::iter::adapters::filter::Filter<core::str::iter::Split<char>, djs_wasm::compile::{closure#0}::{closure#0}>>>::from_iter
+1	<alloc::vec::Vec<&str>>::extend_desugared::<core::iter::adapters::filter::Filter<core::str::iter::Split<char>, djs_wasm::compile::{closure#0}::{closure#0}>>
+2	<alloc::vec::Vec<(alloc::vec::Vec<djs_core::compiler::resolve::Storage>, alloc::vec::Vec<djs_core::heap::atom::Atom>)> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<(alloc::vec::Vec<djs_core::compiler::resolve::Storage>, alloc::vec::Vec<djs_core::heap::atom::Atom>), core::iter::adapters::map::Map<core::slice::iter::Iter<djs_core::compiler::func::FuncState>, djs_core::compiler::resolve::finish::{closure#4}>>>::from_iter
+2	<alloc::vec::Vec<(alloc::vec::Vec<djs_core::compiler::resolve::Storage>, alloc::vec::Vec<djs_core::heap::atom::Atom>)> as core::ops::drop::Drop>::drop
+1	<alloc::vec::Vec<(alloc::vec::Vec<djs_core::compiler::resolve::Storage>, alloc::vec::Vec<djs_core::heap::atom::Atom>)>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<djs_core::compiler::func::FuncState>, djs_core::compiler::resolve::finish::{closure#4}>>
+1	<alloc::vec::Vec<(alloc::vec::Vec<djs_core::compiler::resolve::Storage>, alloc::vec::Vec<djs_core::heap::atom::Atom>)>>::reserve
+1	<alloc::vec::Vec<(alloc::vec::Vec<u16>, djs_core::value::Str)> as core::ops::drop::Drop>::drop
+1	<alloc::vec::Vec<(alloc::vec::Vec<u16>, djs_core::value::Str)>>::insert
+1	<alloc::vec::Vec<(alloc::vec::Vec<u16>, djs_core::value::Value)> as core::ops::drop::Drop>::drop
+1	<alloc::vec::Vec<(alloc::vec::Vec<u16>, djs_core::value::Value)>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<u32>, djs_core::sort::sort_by<(alloc::vec::Vec<u16>, djs_core::value::Value), djs_core::builtins::array::sort_primitives::{closure#0}>::{closure#0}>>
+2	<alloc::vec::Vec<(djs_core::bigint::BigInt, djs_core::value::Value)> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<(djs_core::bigint::BigInt, djs_core::value::Value), core::iter::adapters::map::Map<core::iter::adapters::filter_map::FilterMap<core::ops::range::Range<u32>, djs_core::builtins::array::sort_numbers::{closure#1}>, djs_core::builtins::array::sort_numbers::{closure#2}>>>::from_iter
+1	<alloc::vec::Vec<(djs_core::bigint::BigInt, djs_core::value::Value)>>::extend_desugared::<core::iter::adapters::map::Map<core::iter::adapters::filter_map::FilterMap<core::ops::range::Range<u32>, djs_core::builtins::array::sort_numbers::{closure#1}>, djs_core::builtins::array::sort_numbers::{closure#2}>>
+2	<alloc::vec::Vec<(djs_core::compiler::parser::BlockKind, djs_core::bytecode::code::Label, u32)> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<(djs_core::compiler::parser::BlockKind, djs_core::bytecode::code::Label, u32), core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<core::iter::adapters::rev::Rev<core::slice::iter::Iter<djs_core::compiler::parser::BlockEnv>>, <djs_core::compiler::parser::Parser>::emit_unwind::{closure#0}>, <djs_core::compiler::parser::Parser>::emit_unwind::{closure#1}>>>::from_iter
+1	<alloc::vec::Vec<(djs_core::compiler::parser::BlockKind, djs_core::bytecode::code::Label, u32)>>::extend_desugared::<core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<core::iter::adapters::rev::Rev<core::slice::iter::Iter<djs_core::compiler::parser::BlockEnv>>, <djs_core::compiler::parser::Parser>::emit_unwind::{closure#0}>, <djs_core::compiler::parser::Parser>::emit_unwind::{closure#1}>>
+1	<alloc::vec::Vec<(djs_core::heap::atom::Atom, djs_core::value::Value)> as djs_core::buf::PushOut<(djs_core::heap::atom::Atom, djs_core::value::Value)>>::push_out
+1	<alloc::vec::Vec<(djs_core::heap::atom::Atom, u32)> as djs_core::buf::PushOut<(djs_core::heap::atom::Atom, u32)>>::push_out
+1	<alloc::vec::Vec<(djs_core::heap::atom::Atom, u32, u32)>>::extend_with
+1	<alloc::vec::Vec<(djs_core::heap::layout::Ref, alloc::string::String)> as core::ops::drop::Drop>::drop
+2	<alloc::vec::Vec<(djs_core::value::Str, u32, u32)> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<(djs_core::value::Str, u32, u32), core::iter::adapters::map::Map<core::ops::range::Range<u32>, djs_core::builtins::string::repeat::{closure#0}>>>::from_iter
+1	<alloc::vec::Vec<(djs_core::value::Str, u32, u32)>>::extend_trusted::<core::iter::adapters::map::Map<core::ops::range::Range<u32>, djs_core::builtins::string::repeat::{closure#0}>>
+2	<alloc::vec::Vec<(djs_core::value::Str, u32, u32)>>::with_capacity
+1	<alloc::vec::Vec<(u32, djs_core::compiler::scan::Follow)> as djs_core::buf::PushOut<(u32, djs_core::compiler::scan::Follow)>>::push_out
+1	<alloc::vec::Vec<(u32, djs_core::compiler::scan::Follow)>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<u32>, djs_core::sort::sort_by<(u32, djs_core::compiler::scan::Follow), <djs_core::compiler::scan::PatternScan>::scan::{closure#0}>::{closure#0}>>
+1	<alloc::vec::Vec<(u32, djs_core::heap::atom::Atom)>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<u32>, djs_core::sort::sort_by<(u32, djs_core::heap::atom::Atom), <djs_core::heap::Heap>::ordinary_own_keys::{closure#1}>::{closure#0}>>
+1	<alloc::vec::Vec<(u32, u32)> as alloc::vec::spec_extend::SpecExtend<&(u32, u32), core::slice::iter::Iter<(u32, u32)>>>::spec_extend
+2	<alloc::vec::Vec<(u32, u32)> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<(u32, u32), &mut core::iter::sources::once::Once<(u32, u32)>>>::from_iter
+2	<alloc::vec::Vec<(u32, u32)> as core::clone::Clone>::clone
+1	<alloc::vec::Vec<(u32, u32)>>::extend_trusted::<&mut core::iter::sources::once::Once<(u32, u32)>>
+1	<alloc::vec::Vec<(u32, u32)>>::extend_trusted::<core::iter::adapters::cloned::Cloned<core::iter::adapters::rev::Rev<core::slice::iter::Iter<(u32, u32)>>>>
+1	<alloc::vec::Vec<(u32, u32)>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<(u32, u32)>, <djs_core::compiler::parser::Parser>::rotate_code::{closure#3}>>
+1	<alloc::vec::Vec<(u32, u32)>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<(u32, u32)>, <djs_core::compiler::parser::Parser>::rotate_code::{closure#5}>>
+1	<alloc::vec::Vec<(u32, u32)>>::extend_trusted::<core::option::IntoIter<(u32, u32)>>
+1	<alloc::vec::Vec<(u32, u32)>>::insert
+2	<alloc::vec::Vec<(u32, u32)>>::with_capacity
+1	<alloc::vec::Vec<(u32, u32, u32, djs_core::heap::atom::Atom)>>::extend_with
+1	<alloc::vec::Vec<(u64, u32)>>::extend_with
+1	<alloc::vec::Vec<(u64, u32)>>::insert
+1	<alloc::vec::Vec<[u16; 256]>>::extend_with
+1	<alloc::vec::Vec<[u16; 256]>>::reserve
+2	<alloc::vec::Vec<alloc::vec::Vec<djs_core::compiler::resolve::Resolved>> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<alloc::vec::Vec<djs_core::compiler::resolve::Resolved>, core::iter::adapters::map::Map<core::ops::range::Range<usize>, djs_core::compiler::resolve::finish::{closure#0}>>>::from_iter
+1	<alloc::vec::Vec<alloc::vec::Vec<djs_core::compiler::resolve::Resolved>> as core::ops::drop::Drop>::drop
+1	<alloc::vec::Vec<alloc::vec::Vec<djs_core::compiler::resolve::Resolved>>>::extend_trusted::<core::iter::adapters::map::Map<core::ops::range::Range<usize>, djs_core::compiler::resolve::finish::{closure#0}>>
+1	<alloc::vec::Vec<alloc::vec::Vec<djs_core::compiler::resolve::Resolved>>>::reserve
+2	<alloc::vec::Vec<alloc::vec::Vec<u32>> as alloc::vec::spec_extend::SpecExtend<alloc::vec::Vec<u32>, alloc::vec::into_iter::IntoIter<alloc::vec::Vec<u32>>>>::spec_extend
+1	<alloc::vec::Vec<alloc::vec::Vec<u32>> as core::ops::drop::Drop>::drop
+1	<alloc::vec::Vec<alloc::vec::Vec<u32>> as djs_core::buf::PushOut<alloc::vec::Vec<u32>>>::push_out
+2	<alloc::vec::Vec<alloc::vec::Vec<u32>>>::retain_mut::<<alloc::vec::Vec<alloc::vec::Vec<u32>>>::retain<<djs_core::regexp::parser::ClassSet>::intersect::{closure#0}>::{closure#0}>
+2	<alloc::vec::Vec<alloc::vec::Vec<u32>>>::retain_mut::<<alloc::vec::Vec<alloc::vec::Vec<u32>>>::retain<<djs_core::regexp::parser::ClassSet>::subtract::{closure#0}>::{closure#0}>
+2	<alloc::vec::Vec<bool> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<bool, core::iter::adapters::map::Map<core::slice::iter::Iter<(u32, u32)>, <djs_core::bytecode::code::CodeBuf>::finish::{closure#0}>>>::from_iter
+1	<alloc::vec::Vec<bool>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<(u32, u32)>, <djs_core::bytecode::code::CodeBuf>::finish::{closure#0}>>
+1	<alloc::vec::Vec<bool>>::extend_with
+1	<alloc::vec::Vec<bool>>::reserve
+2	<alloc::vec::Vec<core::option::Option<(alloc::vec::Vec<u16>, djs_core::value::Value)>> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<core::option::Option<(alloc::vec::Vec<u16>, djs_core::value::Value)>, core::iter::adapters::map::Map<alloc::vec::drain::Drain<(alloc::vec::Vec<u16>, djs_core::value::Value)>, core::option::Option<(alloc::vec::Vec<u16>, djs_core::value::Value)>::Some>>>::from_iter
+1	<alloc::vec::Vec<core::option::Option<(alloc::vec::Vec<u16>, djs_core::value::Value)>> as core::ops::drop::Drop>::drop
+1	<alloc::vec::Vec<core::option::Option<(alloc::vec::Vec<u16>, djs_core::value::Value)>>>::extend_trusted::<core::iter::adapters::map::Map<alloc::vec::drain::Drain<(alloc::vec::Vec<u16>, djs_core::value::Value)>, core::option::Option<(alloc::vec::Vec<u16>, djs_core::value::Value)>::Some>>
+1	<alloc::vec::Vec<core::option::Option<(alloc::vec::Vec<u16>, djs_core::value::Value)>>>::reserve
+2	<alloc::vec::Vec<core::option::Option<(djs_core::bigint::BigInt, djs_core::value::Value)>> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<core::option::Option<(djs_core::bigint::BigInt, djs_core::value::Value)>, core::iter::adapters::map::Map<alloc::vec::drain::Drain<(djs_core::bigint::BigInt, djs_core::value::Value)>, core::option::Option<(djs_core::bigint::BigInt, djs_core::value::Value)>::Some>>>::from_iter
+1	<alloc::vec::Vec<core::option::Option<(djs_core::bigint::BigInt, djs_core::value::Value)>> as core::ops::drop::Drop>::drop
+1	<alloc::vec::Vec<core::option::Option<(djs_core::bigint::BigInt, djs_core::value::Value)>>>::extend_trusted::<core::iter::adapters::map::Map<alloc::vec::drain::Drain<(djs_core::bigint::BigInt, djs_core::value::Value)>, core::option::Option<(djs_core::bigint::BigInt, djs_core::value::Value)>::Some>>
+2	<alloc::vec::Vec<core::option::Option<(djs_core::regexp::charset::CharSet, bool)>>>::extend_with
+1	<alloc::vec::Vec<core::option::Option<(djs_core::regexp::charset::CharSet, bool)>>>::reserve
+2	<alloc::vec::Vec<core::option::Option<(u32, djs_core::compiler::scan::Follow)>> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<core::option::Option<(u32, djs_core::compiler::scan::Follow)>, core::iter::adapters::map::Map<alloc::vec::drain::Drain<(u32, djs_core::compiler::scan::Follow)>, core::option::Option<(u32, djs_core::compiler::scan::Follow)>::Some>>>::from_iter
+1	<alloc::vec::Vec<core::option::Option<(u32, djs_core::compiler::scan::Follow)>>>::extend_trusted::<core::iter::adapters::map::Map<alloc::vec::drain::Drain<(u32, djs_core::compiler::scan::Follow)>, core::option::Option<(u32, djs_core::compiler::scan::Follow)>::Some>>
+1	<alloc::vec::Vec<core::option::Option<(u32, djs_core::compiler::scan::Follow)>>>::reserve
+2	<alloc::vec::Vec<core::option::Option<(u32, djs_core::heap::atom::Atom)>> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<core::option::Option<(u32, djs_core::heap::atom::Atom)>, core::iter::adapters::map::Map<alloc::vec::drain::Drain<(u32, djs_core::heap::atom::Atom)>, core::option::Option<(u32, djs_core::heap::atom::Atom)>::Some>>>::from_iter
+1	<alloc::vec::Vec<core::option::Option<(u32, djs_core::heap::atom::Atom)>>>::extend_trusted::<core::iter::adapters::map::Map<alloc::vec::drain::Drain<(u32, djs_core::heap::atom::Atom)>, core::option::Option<(u32, djs_core::heap::atom::Atom)>::Some>>
+1	<alloc::vec::Vec<core::option::Option<alloc::vec::Vec<u16>>> as core::ops::drop::Drop>::drop
+2	<alloc::vec::Vec<core::option::Option<alloc::vec::Vec<u16>>>>::extend_with
+1	<alloc::vec::Vec<core::option::Option<djs_core::compiler::func::FuncState>> as djs_core::buf::PushOut<core::option::Option<djs_core::compiler::func::FuncState>>>::push_out
+2	<alloc::vec::Vec<core::option::Option<f64>> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<core::option::Option<f64>, core::iter::adapters::map::Map<alloc::vec::drain::Drain<f64>, core::option::Option<f64>::Some>>>::from_iter
+1	<alloc::vec::Vec<core::option::Option<f64>>>::extend_trusted::<core::iter::adapters::map::Map<alloc::vec::drain::Drain<f64>, core::option::Option<f64>::Some>>
+1	<alloc::vec::Vec<core::option::Option<f64>>>::reserve
+1	<alloc::vec::Vec<core::option::Option<u32>> as djs_core::buf::PushOut<core::option::Option<u32>>>::push_out
+2	<alloc::vec::Vec<core::option::Option<u64>> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<core::option::Option<u64>, core::iter::adapters::map::Map<alloc::vec::drain::Drain<u64>, core::option::Option<u64>::Some>>>::from_iter
+1	<alloc::vec::Vec<core::option::Option<u64>>>::extend_trusted::<core::iter::adapters::map::Map<alloc::vec::drain::Drain<u64>, core::option::Option<u64>::Some>>
+1	<alloc::vec::Vec<djs_core::builtins::json::Open> as core::ops::drop::Drop>::drop
+1	<alloc::vec::Vec<djs_core::builtins::json::Open> as djs_core::buf::PushOut<djs_core::builtins::json::Open>>::push_out
+1	<alloc::vec::Vec<djs_core::bytecode::code::P1>>::reserve
+1	<alloc::vec::Vec<djs_core::bytecode::code::Phase1Code> as core::ops::drop::Drop>::drop
+1	<alloc::vec::Vec<djs_core::bytecode::decode::Insn> as alloc::vec::spec_extend::SpecExtend<&djs_core::bytecode::decode::Insn, core::slice::iter::Iter<djs_core::bytecode::decode::Insn>>>::spec_extend
+2	<alloc::vec::Vec<djs_core::bytecode::decode::Insn> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::bytecode::decode::Insn, core::iter::adapters::map::Map<core::iter::adapters::enumerate::Enumerate<alloc::vec::into_iter::IntoIter<djs_core::bytecode::code::P1>>, djs_core::compiler::resolve::emit_function::{closure#0}>>>::from_iter
+1	<alloc::vec::Vec<djs_core::bytecode::decode::Insn>>::extend_trusted::<core::iter::adapters::map::Map<core::iter::adapters::enumerate::Enumerate<alloc::vec::into_iter::IntoIter<djs_core::bytecode::code::P1>>, djs_core::compiler::resolve::emit_function::{closure#0}>>
+2	<alloc::vec::Vec<djs_core::compiler::class::ClassCtx> as core::ops::drop::Drop>::drop
+1	<alloc::vec::Vec<djs_core::compiler::decorators::DecElem> as djs_core::buf::PushOut<djs_core::compiler::decorators::DecElem>>::push_out
+1	<alloc::vec::Vec<djs_core::compiler::decorators::LegacyElem> as djs_core::buf::PushOut<djs_core::compiler::decorators::LegacyElem>>::push_out
+1	<alloc::vec::Vec<djs_core::compiler::func::Capture> as djs_core::buf::PushOut<djs_core::compiler::func::Capture>>::push_out
+1	<alloc::vec::Vec<djs_core::compiler::func::HandlerLabels>>::insert
+3	<alloc::vec::Vec<djs_core::compiler::func::Scope> as core::ops::drop::Drop>::drop
+1	<alloc::vec::Vec<djs_core::compiler::func::Scope> as djs_core::buf::PushOut<djs_core::compiler::func::Scope>>::push_out
+1	<alloc::vec::Vec<djs_core::compiler::parser::BlockEnv> as core::ops::drop::Drop>::drop
+2	<alloc::vec::Vec<djs_core::compiler::parser::OpenIter> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::compiler::parser::OpenIter, core::iter::adapters::copied::Copied<core::iter::adapters::rev::Rev<core::slice::iter::Iter<djs_core::compiler::parser::OpenIter>>>>>::from_iter
+1	<alloc::vec::Vec<djs_core::compiler::parser::OpenIter>>::extend_trusted::<core::iter::adapters::copied::Copied<core::iter::adapters::rev::Rev<core::slice::iter::Iter<djs_core::compiler::parser::OpenIter>>>>
+2	<alloc::vec::Vec<djs_core::compiler::parser::Suspended> as core::ops::drop::Drop>::drop
+1	<alloc::vec::Vec<djs_core::compiler::parser::Suspended> as djs_core::buf::PushOut<djs_core::compiler::parser::Suspended>>::push_out
+1	<alloc::vec::Vec<djs_core::compiler::ts_decl::TsDecl> as core::ops::drop::Drop>::drop
+1	<alloc::vec::Vec<djs_core::compiler::ts_decl::TsDecl> as djs_core::buf::PushOut<djs_core::compiler::ts_decl::TsDecl>>::push_out
+1	<alloc::vec::Vec<djs_core::compiler::ts_decl::TsMember> as core::ops::drop::Drop>::drop
+1	<alloc::vec::Vec<djs_core::compiler::ts_decl::TsMember> as djs_core::buf::PushOut<djs_core::compiler::ts_decl::TsMember>>::push_out
+1	<alloc::vec::Vec<djs_core::compiler::ts_meta::TsMeta> as core::ops::drop::Drop>::drop
+1	<alloc::vec::Vec<djs_core::heap::atom::Atom> as alloc::vec::spec_extend::SpecExtend<&djs_core::heap::atom::Atom, core::slice::iter::Iter<djs_core::heap::atom::Atom>>>::spec_extend
+2	<alloc::vec::Vec<djs_core::heap::atom::Atom> as alloc::vec::spec_extend::SpecExtend<djs_core::heap::atom::Atom, alloc::vec::into_iter::IntoIter<djs_core::heap::atom::Atom>>>::spec_extend
+2	<alloc::vec::Vec<djs_core::heap::atom::Atom> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::heap::atom::Atom, core::iter::adapters::filter_map::FilterMap<core::ops::range::Range<u32>, <djs_core::heap::atom::Atom>::int>>>::from_iter
+2	<alloc::vec::Vec<djs_core::heap::atom::Atom> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::heap::atom::Atom, core::iter::adapters::map::Map<core::slice::iter::Iter<core::option::Option<u32>>, <djs_core::compiler::parser::Parser>::finish_init::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<djs_core::heap::atom::Atom> as core::clone::Clone>::clone
+1	<alloc::vec::Vec<djs_core::heap::atom::Atom>>::extend_desugared::<core::iter::adapters::filter_map::FilterMap<core::ops::range::Range<u32>, <djs_core::heap::atom::Atom>::int>>
+1	<alloc::vec::Vec<djs_core::heap::atom::Atom>>::extend_trusted::<core::iter::adapters::map::Map<alloc::vec::into_iter::IntoIter<(u32, djs_core::heap::atom::Atom)>, <djs_core::heap::Heap>::ordinary_own_keys::{closure#2}>>
+1	<alloc::vec::Vec<djs_core::heap::atom::Atom>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<core::option::Option<u32>>, <djs_core::compiler::parser::Parser>::finish_init::{closure#0}>>
+2	<alloc::vec::Vec<djs_core::heap::atom::Atom>>::with_capacity
+2	<alloc::vec::Vec<djs_core::heap::layout::Ref> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::heap::layout::Ref, core::iter::adapters::map::Map<core::slice::iter::Iter<u32>, djs_core::compiler::resolve::emit_function::{closure#12}>>>::from_iter
+1	<alloc::vec::Vec<djs_core::heap::layout::Ref>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<u32>, djs_core::compiler::resolve::emit_function::{closure#12}>>
+1	<alloc::vec::Vec<djs_core::heap::layout::Ref>>::extend_with
+3	<alloc::vec::Vec<djs_core::heap::typed::Elem> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::heap::typed::Elem, core::iter::adapters::GenericShunt<core::iter::adapters::map::Map<alloc::vec::into_iter::IntoIter<djs_core::value::Value>, <djs_core::interp::run::Exec>::typed_array_set_from_dense::{closure#1}::{closure#0}>, core::option::Option<core::convert::Infallible>>>>::from_iter
+2	<alloc::vec::Vec<djs_core::heap::typed::Elem> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::heap::typed::Elem, core::iter::adapters::map::Map<core::ops::range::Range<u32>, djs_core::builtins::typed::typed_array_copy::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<djs_core::heap::typed::Elem>>::extend_desugared::<core::iter::adapters::GenericShunt<core::iter::adapters::map::Map<alloc::vec::into_iter::IntoIter<djs_core::value::Value>, <djs_core::interp::run::Exec>::typed_array_set_from_dense::{closure#1}::{closure#0}>, core::option::Option<core::convert::Infallible>>>
+1	<alloc::vec::Vec<djs_core::heap::typed::Elem>>::extend_trusted::<core::iter::adapters::map::Map<core::ops::range::Range<u32>, djs_core::builtins::typed::typed_array_copy::{closure#0}>>
+2	<alloc::vec::Vec<djs_core::regexp::parser::GroupName> as core::ops::drop::Drop>::drop
+2	<alloc::vec::Vec<djs_core::regexp::parser::Node> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::regexp::parser::Node, core::iter::adapters::map::Map<core::slice::iter::Iter<&alloc::vec::Vec<u32>>, <djs_core::regexp::compiler::Compiler>::class_with_strings::{closure#2}>>>::from_iter
+2	<alloc::vec::Vec<djs_core::regexp::parser::Node> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::regexp::parser::Node, core::iter::adapters::map::Map<core::slice::iter::Iter<u32>, <djs_core::regexp::compiler::Compiler>::class_with_strings::{closure#2}::{closure#0}>>>::from_iter
+1	<alloc::vec::Vec<djs_core::regexp::parser::Node> as djs_core::buf::PushOut<djs_core::regexp::parser::Node>>::push_out
+1	<alloc::vec::Vec<djs_core::regexp::parser::Node>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<&alloc::vec::Vec<u32>>, <djs_core::regexp::compiler::Compiler>::class_with_strings::{closure#2}>>
+1	<alloc::vec::Vec<djs_core::regexp::parser::Node>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<u32>, <djs_core::regexp::compiler::Compiler>::class_with_strings::{closure#2}::{closure#0}>>
+1	<alloc::vec::Vec<djs_core::regexp::parser::Node>>::reserve
+2	<alloc::vec::Vec<djs_core::value::Obj> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::value::Obj, core::iter::adapters::filter::Filter<core::iter::adapters::filter_map::FilterMap<core::ops::range::Range<u32>, <djs_core::heap::Heap>::registries_needing_cleanup::{closure#0}>, <djs_core::heap::Heap>::registries_needing_cleanup::{closure#1}>>>::from_iter
+2	<alloc::vec::Vec<djs_core::value::Obj> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::value::Obj, core::iter::adapters::filter_map::FilterMap<core::ops::range::Range<u32>, djs_core::interp::run::promise::take_rejections::{closure#0}>>>::from_iter
+1	<alloc::vec::Vec<djs_core::value::Obj> as djs_core::buf::PushOut<djs_core::value::Obj>>::push_out
+1	<alloc::vec::Vec<djs_core::value::Obj>>::extend_desugared::<core::iter::adapters::filter::Filter<core::iter::adapters::filter_map::FilterMap<core::ops::range::Range<u32>, <djs_core::heap::Heap>::registries_needing_cleanup::{closure#0}>, <djs_core::heap::Heap>::registries_needing_cleanup::{closure#1}>>
+1	<alloc::vec::Vec<djs_core::value::Obj>>::extend_desugared::<core::iter::adapters::filter_map::FilterMap<core::ops::range::Range<u32>, djs_core::interp::run::promise::take_rejections::{closure#0}>>
+1	<alloc::vec::Vec<djs_core::value::Obj>>::reserve
+2	<alloc::vec::Vec<djs_core::value::Value> as alloc::vec::spec_extend::SpecExtend<djs_core::value::Value, alloc::vec::into_iter::IntoIter<djs_core::value::Value>>>::spec_extend
+2	<alloc::vec::Vec<djs_core::value::Value> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::value::Value, core::iter::adapters::map::Map<alloc::vec::into_iter::IntoIter<djs_core::value::Obj>, <djs_core::vm::Vm>::take_unhandled_rejections::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<djs_core::value::Value> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::value::Value, core::iter::adapters::map::Map<core::iter::adapters::map::Map<core::slice::iter::Iter<[u8; 8]>, <djs_core::heap::Heap>::dense_array_values::{closure#0}>, <djs_core::interp::run::Exec>::call_intrinsic::{closure#14}::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<djs_core::value::Value> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::value::Value, core::iter::adapters::map::Map<core::ops::range::Range<u32>, <djs_core::interp::run::Exec>::global_decls::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<djs_core::value::Value> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::value::Value, core::iter::adapters::map::Map<core::ops::range::Range<u32>, <djs_core::interp::run::Exec>::n_retry<djs_core::value::Value, <djs_core::interp::run::Exec>::n_concat_gc::{closure#0}>::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<djs_core::value::Value> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::value::Value, core::iter::adapters::map::Map<core::ops::range::Range<u32>, <djs_core::interp::run::Exec>::template_object::{closure#1}>>>::from_iter
+2	<alloc::vec::Vec<djs_core::value::Value> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::value::Value, core::iter::adapters::map::Map<core::ops::range::Range<u32>, <djs_core::interp::run::Exec>::template_object::{closure#2}>>>::from_iter
+2	<alloc::vec::Vec<djs_core::value::Value> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::value::Value, core::iter::adapters::map::Map<core::ops::range::Range<u32>, <djs_core::vm::Vm>::host_call::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<djs_core::value::Value> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::value::Value, core::iter::adapters::map::Map<core::slice::iter::Iter<&alloc::vec::Vec<djs_core::heap::atom::Atom>>, <djs_core::bytecode::ops::global_decls::GlobalDecls>::encode::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<djs_core::value::Value> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::value::Value, core::iter::adapters::map::Map<core::slice::iter::Iter<[u8; 4]>, djs_wasm::vm_call::{closure#0}::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<djs_core::value::Value> as core::clone::Clone>::clone
+1	<alloc::vec::Vec<djs_core::value::Value> as djs_core::buf::PushOut<djs_core::value::Value>>::push_out
+1	<alloc::vec::Vec<djs_core::value::Value>>::extend_trusted::<core::iter::adapters::map::Map<alloc::vec::into_iter::IntoIter<djs_core::value::Obj>, <djs_core::vm::Vm>::take_unhandled_rejections::{closure#0}>>
+1	<alloc::vec::Vec<djs_core::value::Value>>::extend_trusted::<core::iter::adapters::map::Map<core::iter::adapters::map::Map<core::slice::iter::Iter<[u8; 8]>, <djs_core::heap::Heap>::dense_array_values::{closure#0}>, <djs_core::interp::run::Exec>::call_intrinsic::{closure#14}::{closure#0}>>
+1	<alloc::vec::Vec<djs_core::value::Value>>::extend_trusted::<core::iter::adapters::map::Map<core::ops::range::Range<u32>, <djs_core::interp::run::Exec>::global_decls::{closure#0}>>
+1	<alloc::vec::Vec<djs_core::value::Value>>::extend_trusted::<core::iter::adapters::map::Map<core::ops::range::Range<u32>, <djs_core::interp::run::Exec>::n_retry<djs_core::value::Value, <djs_core::interp::run::Exec>::n_concat_gc::{closure#0}>::{closure#0}>>
+1	<alloc::vec::Vec<djs_core::value::Value>>::extend_trusted::<core::iter::adapters::map::Map<core::ops::range::Range<u32>, <djs_core::interp::run::Exec>::template_object::{closure#1}>>
+1	<alloc::vec::Vec<djs_core::value::Value>>::extend_trusted::<core::iter::adapters::map::Map<core::ops::range::Range<u32>, <djs_core::interp::run::Exec>::template_object::{closure#2}>>
+1	<alloc::vec::Vec<djs_core::value::Value>>::extend_trusted::<core::iter::adapters::map::Map<core::ops::range::Range<u32>, <djs_core::vm::Vm>::host_call::{closure#0}>>
+1	<alloc::vec::Vec<djs_core::value::Value>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<&alloc::vec::Vec<djs_core::heap::atom::Atom>>, <djs_core::bytecode::ops::global_decls::GlobalDecls>::encode::{closure#0}>>
+1	<alloc::vec::Vec<djs_core::value::Value>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<[u8; 4]>, djs_wasm::vm_call::{closure#0}::{closure#0}>>
+1	<alloc::vec::Vec<djs_core::value::Value>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<djs_core::heap::atom::Atom>, <djs_core::bytecode::ops::global_decls::GlobalDecls>::encode::{closure#1}>>
+1	<alloc::vec::Vec<djs_core::value::Value>>::extend_trusted::<core::iter::sources::repeat_n::RepeatN<djs_core::value::Value>>
+1	<alloc::vec::Vec<djs_core::value::Value>>::reserve
+2	<alloc::vec::Vec<djs_core::value::Value>>::with_capacity
+1	<alloc::vec::Vec<djs_core::vm::registry::Entry> as djs_core::buf::PushOut<djs_core::vm::registry::Entry>>::push_out
+1	<alloc::vec::Vec<djs_core::wire::Frame> as djs_core::buf::PushOut<djs_core::wire::Frame>>::push_out
+2	<alloc::vec::Vec<f64> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<f64, core::iter::adapters::map::Map<core::ops::range::Range<u32>, <djs_core::interp::run::Exec>::call_intrinsic::{closure#17}>>>::from_iter
+1	<alloc::vec::Vec<f64>>::extend_trusted::<core::iter::adapters::map::Map<core::ops::range::Range<u32>, <djs_core::interp::run::Exec>::call_intrinsic::{closure#17}>>
+1	<alloc::vec::Vec<f64>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<u32>, djs_core::sort::sort_by<f64, djs_core::builtins::array::sort_numbers::{closure#5}>::{closure#0}>>
+1	<alloc::vec::Vec<u16> as alloc::vec::spec_extend::SpecExtend<&u16, core::slice::iter::Iter<u16>>>::spec_extend
+2	<alloc::vec::Vec<u16> as alloc::vec::spec_extend::SpecExtend<u16, alloc::vec::into_iter::IntoIter<u16>>>::spec_extend
+3	<alloc::vec::Vec<u16> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u16, core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>>::from_iter
+2	<alloc::vec::Vec<u16> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u16, core::iter::adapters::map::Map<core::slice::iter::Iter<u32>, djs_core::builtins::regexp::define_group::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<u16> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u16, core::iter::adapters::map::Map<core::slice::iter::Iter<u8>, djs_core::builtins::dense::units_of::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<u16> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u16, core::str::iter::EncodeUtf16>>::from_iter
+2	<alloc::vec::Vec<u16> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u16, djs_core::heap::string::Units>>::from_iter
+2	<alloc::vec::Vec<u16> as core::clone::Clone>::clone
+1	<alloc::vec::Vec<u16> as djs_core::buf::PushOut<u16>>::push_out
+2	<alloc::vec::Vec<u16>>::extend_desugared::<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>
+1	<alloc::vec::Vec<u16>>::extend_desugared::<core::str::iter::EncodeUtf16>
+1	<alloc::vec::Vec<u16>>::extend_desugared::<djs_core::heap::string::Units>
+1	<alloc::vec::Vec<u16>>::extend_trusted::<core::iter::adapters::map::Map<core::ops::range::Range<usize>, djs_core::builtins::regexp::substitute::{closure#0}::{closure#0}>>
+1	<alloc::vec::Vec<u16>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<[u8; 2]>, <djs_core::json::stringify::Out>::wide_run::{closure#0}>>
+1	<alloc::vec::Vec<u16>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<u32>, djs_core::builtins::regexp::define_group::{closure#0}>>
+1	<alloc::vec::Vec<u16>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<u8>, <djs_core::json::stringify::Out>::widen::{closure#0}>>
+1	<alloc::vec::Vec<u16>>::extend_trusted::<core::iter::adapters::map::Map<core::str::iter::Bytes, <u16 as core::convert::From<u8>>::from>>
+1	<alloc::vec::Vec<u16>>::reserve
+2	<alloc::vec::Vec<u32> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u32, core::iter::adapters::filter::Filter<core::iter::adapters::map::Map<core::ops::range::Range<u32>, <djs_core::vm::Vm>::async_calls::{closure#0}>, <djs_core::vm::Vm>::async_calls::{closure#1}>>>::from_iter
+2	<alloc::vec::Vec<u32> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u32, core::iter::adapters::map::Map<alloc::vec::into_iter::IntoIter<djs_core::value::Value>, djs_wasm::vm_take_unhandled_rejections::{closure#0}::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<u32> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u32, core::iter::adapters::map::Map<core::char::decode::DecodeUtf16<core::iter::adapters::copied::Copied<core::slice::iter::Iter<u16>>>, djs_core::unicode::normalize::code_points::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<u32> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u32, core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<core::slice::iter::Iter<djs_core::regexp::parser::GroupName>, djs_core::regexp::parser::resolve_names::{closure#0}>, djs_core::regexp::parser::resolve_names::{closure#1}>>>::from_iter
+2	<alloc::vec::Vec<u32> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u32, core::iter::adapters::map::Map<core::iter::adapters::zip::Zip<core::slice::iter::Iter<u32>, core::slice::iter::Iter<u32>>, <djs_core::bigint::BigInt>::bitwise<<djs_core::bigint::BigInt>::and::{closure#0}>::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<u32> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u32, core::iter::adapters::map::Map<core::iter::adapters::zip::Zip<core::slice::iter::Iter<u32>, core::slice::iter::Iter<u32>>, <djs_core::bigint::BigInt>::bitwise<<djs_core::bigint::BigInt>::or::{closure#0}>::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<u32> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u32, core::iter::adapters::map::Map<core::iter::adapters::zip::Zip<core::slice::iter::Iter<u32>, core::slice::iter::Iter<u32>>, <djs_core::bigint::BigInt>::bitwise<<djs_core::bigint::BigInt>::xor::{closure#0}>::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<u32> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u32, core::iter::adapters::map::Map<core::ops::range::Range<u32>, <djs_core::interp::run::Exec>::load_exec_state::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<u32> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u32, core::iter::adapters::map::Map<core::slice::iter::Iter<[u8; 4]>, <djs_core::heap::Heap>::bigint_limbs::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<u32> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u32, core::iter::adapters::map::Map<core::slice::iter::Iter<djs_core::heap::atom::Atom>, djs_core::bytecode::template::alloc_template_in::{closure#6}>>>::from_iter
+2	<alloc::vec::Vec<u32> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u32, core::iter::adapters::map::Map<core::slice::iter::Iter<u32>, <djs_core::regexp::parser::Parser>::canonicalize_class::{closure#0}>>>::from_iter
+3	<alloc::vec::Vec<u32> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u32, core::option::IntoIter<u32>>>::from_iter
+1	<alloc::vec::Vec<u32>>::extend_desugared::<core::iter::adapters::filter::Filter<core::iter::adapters::map::Map<core::ops::range::Range<u32>, <djs_core::vm::Vm>::async_calls::{closure#0}>, <djs_core::vm::Vm>::async_calls::{closure#1}>>
+1	<alloc::vec::Vec<u32>>::extend_desugared::<core::iter::adapters::map::Map<core::char::decode::DecodeUtf16<core::iter::adapters::copied::Copied<core::slice::iter::Iter<u16>>>, djs_core::unicode::normalize::code_points::{closure#0}>>
+1	<alloc::vec::Vec<u32>>::extend_desugared::<core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<core::iter::adapters::zip::Zip<core::slice::iter::Iter<(u32, u32)>, core::slice::iter::Iter<bool>>, <djs_core::bytecode::code::CodeBuf>::finish::{closure#1}>, <djs_core::bytecode::code::CodeBuf>::finish::{closure#2}>>
+1	<alloc::vec::Vec<u32>>::extend_desugared::<core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<core::slice::iter::Iter<djs_core::regexp::parser::GroupName>, djs_core::regexp::parser::resolve_names::{closure#0}>, djs_core::regexp::parser::resolve_names::{closure#1}>>
+1	<alloc::vec::Vec<u32>>::extend_trusted::<core::iter::adapters::map::Map<alloc::vec::into_iter::IntoIter<djs_core::value::Value>, djs_wasm::vm_take_unhandled_rejections::{closure#0}::{closure#0}>>
+1	<alloc::vec::Vec<u32>>::extend_trusted::<core::iter::adapters::map::Map<core::iter::adapters::zip::Zip<core::slice::iter::Iter<u32>, core::slice::iter::Iter<u32>>, <djs_core::bigint::BigInt>::bitwise<<djs_core::bigint::BigInt>::and::{closure#0}>::{closure#0}>>
+1	<alloc::vec::Vec<u32>>::extend_trusted::<core::iter::adapters::map::Map<core::iter::adapters::zip::Zip<core::slice::iter::Iter<u32>, core::slice::iter::Iter<u32>>, <djs_core::bigint::BigInt>::bitwise<<djs_core::bigint::BigInt>::or::{closure#0}>::{closure#0}>>
+1	<alloc::vec::Vec<u32>>::extend_trusted::<core::iter::adapters::map::Map<core::iter::adapters::zip::Zip<core::slice::iter::Iter<u32>, core::slice::iter::Iter<u32>>, <djs_core::bigint::BigInt>::bitwise<<djs_core::bigint::BigInt>::xor::{closure#0}>::{closure#0}>>
+1	<alloc::vec::Vec<u32>>::extend_trusted::<core::iter::adapters::map::Map<core::ops::range::Range<u32>, <djs_core::interp::run::Exec>::load_exec_state::{closure#0}>>
+1	<alloc::vec::Vec<u32>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<[u8; 4]>, <djs_core::heap::Heap>::bigint_limbs::{closure#0}>>
+1	<alloc::vec::Vec<u32>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<djs_core::heap::atom::Atom>, djs_core::bytecode::template::alloc_template_in::{closure#6}>>
+1	<alloc::vec::Vec<u32>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<u16>, djs_core::regexp::compiler::compile::{closure#0}>>
+1	<alloc::vec::Vec<u32>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<u32>, <djs_core::regexp::parser::Parser>::canonicalize_class::{closure#0}>>
+1	<alloc::vec::Vec<u64>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<u32>, djs_core::sort::sort_by<u64, <djs_core::unicode::normalize::Compositions>::ensure::{closure#1}>::{closure#0}>>
+1	<alloc::vec::Vec<u64>>::extend_with
+1	<alloc::vec::Vec<u8> as alloc::vec::spec_extend::SpecExtend<&u8, core::slice::iter::Iter<u8>>>::spec_extend
+3	<alloc::vec::Vec<u8> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u8, core::iter::adapters::GenericShunt<core::iter::adapters::map::Map<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>, djs_core::builtins::dom::btoa<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>::{closure#0}>, core::option::Option<core::convert::Infallible>>>>::from_iter
+2	<alloc::vec::Vec<u8> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u8, core::iter::adapters::map::Map<core::iter::adapters::copied::Copied<core::slice::iter::Iter<u16>>, djs_core::num::parse::narrow_units<core::iter::adapters::copied::Copied<core::slice::iter::Iter<u16>>>::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<u8> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u8, core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<core::slice::iter::Iter<(u8, djs_core::regexp::Flags)>, djs_core::builtins::regexp::flags_string::{closure#0}>, djs_core::builtins::regexp::flags_string::{closure#1}>>>::from_iter
+3	<alloc::vec::Vec<u8> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u8, core::iter::adapters::map::Map<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>, djs_core::num::parse::narrow_units<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<u8> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u8, core::iter::adapters::map::Map<core::slice::iter::Iter<u16>, <djs_core::compiler::parser::Parser>::alloc_units::{closure#1}>>>::from_iter
+2	<alloc::vec::Vec<u8> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u8, core::iter::adapters::map::Map<core::slice::iter::Iter<u16>, djs_core::builtins::string::to_case::{closure#1}>>>::from_iter
+2	<alloc::vec::Vec<u8> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u8, core::iter::adapters::map::Map<djs_core::heap::string::Units, djs_core::num::parse::narrow_units<djs_core::heap::string::Units>::{closure#0}>>>::from_iter
+1	<alloc::vec::Vec<u8> as djs_core::buf::PushOut<u8>>::push_out
+2	<alloc::vec::Vec<u8>>::extend_desugared::<core::iter::adapters::GenericShunt<core::iter::adapters::map::Map<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>, djs_core::builtins::dom::btoa<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>::{closure#0}>, core::option::Option<core::convert::Infallible>>>
+1	<alloc::vec::Vec<u8>>::extend_desugared::<core::iter::adapters::filter::Filter<core::iter::adapters::copied::Copied<core::slice::iter::Iter<u8>>, djs_core::lexer::number::strip_separators::{closure#0}>>
+1	<alloc::vec::Vec<u8>>::extend_desugared::<core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<core::slice::iter::Iter<(u8, djs_core::regexp::Flags)>, djs_core::builtins::regexp::flags_string::{closure#0}>, djs_core::builtins::regexp::flags_string::{closure#1}>>
+2	<alloc::vec::Vec<u8>>::extend_desugared::<core::iter::adapters::map::Map<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>, djs_core::num::parse::narrow_units<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>::{closure#0}>>
+1	<alloc::vec::Vec<u8>>::extend_desugared::<core::iter::adapters::map::Map<djs_core::heap::string::Units, djs_core::num::parse::narrow_units<djs_core::heap::string::Units>::{closure#0}>>
+1	<alloc::vec::Vec<u8>>::extend_from_within::<core::ops::range::Range<usize>>
+1	<alloc::vec::Vec<u8>>::extend_trusted::<core::iter::adapters::copied::Copied<core::slice::iter::Iter<u8>>>
+1	<alloc::vec::Vec<u8>>::extend_trusted::<core::iter::adapters::flatten::FlatMap<core::slice::iter::Iter<u16>, [u8; 2], <djs_core::heap::Heap>::alloc_utf16::{closure#2}>>
+1	<alloc::vec::Vec<u8>>::extend_trusted::<core::iter::adapters::flatten::FlatMap<core::slice::iter::Iter<u32>, [u8; 4], <djs_core::heap::Heap>::alloc_bigint::{closure#0}>>
+1	<alloc::vec::Vec<u8>>::extend_trusted::<core::iter::adapters::map::Map<core::iter::adapters::copied::Copied<core::slice::iter::Iter<u16>>, djs_core::num::parse::narrow_units<core::iter::adapters::copied::Copied<core::slice::iter::Iter<u16>>>::{closure#0}>>
+1	<alloc::vec::Vec<u8>>::extend_trusted::<core::iter::adapters::map::Map<core::ops::range::Range<usize>, djs_core::json::parse::lex_number<1>::{closure#0}>>
+1	<alloc::vec::Vec<u8>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<u16>, <djs_core::compiler::parser::Parser>::alloc_units::{closure#1}>>
+1	<alloc::vec::Vec<u8>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<u16>, djs_core::builtins::string::to_case::{closure#1}>>
+1	<alloc::vec::Vec<u8>>::extend_with
+1	<alloc::vec::Vec<u8>>::reserve
+1	<alloc::vec::Vec<u8>>::shrink_to
+2	<alloc::vec::Vec<usize> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<usize, core::iter::adapters::filter::Filter<core::ops::range::Range<usize>, djs_core::compiler::resolve::resolve_relative_depths::{closure#0}>>>::from_iter
+2	<alloc::vec::Vec<usize> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<usize, core::ops::range::Range<usize>>>::from_iter
+1	<alloc::vec::Vec<usize>>::extend_desugared::<core::iter::adapters::filter::Filter<core::ops::range::Range<usize>, djs_core::compiler::resolve::resolve_relative_depths::{closure#0}>>
+1	<alloc::vec::Vec<usize>>::extend_trusted::<core::ops::range::Range<usize>>
+1	<alloc::vec::Vec<usize>>::insert
+1	<alloc::vec::drain::Drain<(alloc::vec::Vec<u16>, djs_core::value::Value)> as core::ops::drop::Drop>::drop
+1	<alloc::vec::drain::Drain<(djs_core::bigint::BigInt, djs_core::value::Value)> as core::ops::drop::Drop>::drop
+1	<alloc::vec::drain::Drain<(u32, u32)>>::move_tail
+2	<alloc::vec::into_iter::IntoIter<(alloc::vec::Vec<u16>, djs_core::value::Value)> as core::ops::drop::Drop>::drop
+2	<alloc::vec::into_iter::IntoIter<(djs_core::bigint::BigInt, djs_core::value::Value)> as core::ops::drop::Drop>::drop
+1	<alloc::vec::into_iter::IntoIter<(u32, djs_core::heap::atom::Atom)> as core::iter::traits::iterator::Iterator>::fold::<(), core::iter::adapters::map::map_fold<(u32, djs_core::heap::atom::Atom), djs_core::heap::atom::Atom, (), <djs_core::heap::Heap>::ordinary_own_keys::{closure#2}, core::iter::traits::iterator::Iterator::for_each::call<djs_core::heap::atom::Atom, <alloc::vec::Vec<djs_core::heap::atom::Atom>>::extend_trusted<core::iter::adapters::map::Map<alloc::vec::into_iter::IntoIter<(u32, djs_core::heap::atom::Atom)>, <djs_core::heap::Heap>::ordinary_own_keys::{closure#2}>>::{closure#0}>::{closure#0}>::{closure#0}>
+2	<alloc::vec::into_iter::IntoIter<alloc::vec::Vec<u32>> as core::ops::drop::Drop>::drop
+2	<alloc::vec::into_iter::IntoIter<core::option::Option<(djs_core::regexp::charset::CharSet, bool)>> as core::ops::drop::Drop>::drop
+1	<alloc::vec::into_iter::IntoIter<core::option::Option<djs_core::compiler::func::FuncState>> as core::ops::drop::Drop>::drop
+1	<alloc::vec::into_iter::IntoIter<core::option::Option<djs_core::compiler::func::FuncState>>>::forget_allocation_drop_remaining
+1	<alloc::vec::into_iter::IntoIter<djs_core::bytecode::code::P1> as core::iter::traits::iterator::Iterator>::fold::<(), <core::iter::adapters::enumerate::Enumerate<_> as core::iter::traits::iterator::Iterator>::fold::enumerate<djs_core::bytecode::code::P1, (), core::iter::adapters::map::map_fold<(usize, djs_core::bytecode::code::P1), djs_core::bytecode::decode::Insn, (), djs_core::compiler::resolve::emit_function::{closure#0}, core::iter::traits::iterator::Iterator::for_each::call<djs_core::bytecode::decode::Insn, <alloc::vec::Vec<djs_core::bytecode::decode::Insn>>::extend_trusted<core::iter::adapters::map::Map<core::iter::adapters::enumerate::Enumerate<alloc::vec::into_iter::IntoIter<djs_core::bytecode::code::P1>>, djs_core::compiler::resolve::emit_function::{closure#0}>>::{closure#0}>::{closure#0}>::{closure#0}>::{closure#0}>
+3	<alloc::vec::into_iter::IntoIter<djs_core::compiler::decorators::LegacyElem> as core::iter::traits::iterator::Iterator>::fold::<(), core::iter::traits::iterator::Iterator::partition::extend<djs_core::compiler::decorators::LegacyElem, alloc::vec::Vec<djs_core::compiler::decorators::LegacyElem>, <djs_core::compiler::parser::Parser>::parse_class_inner::{closure#3}>::{closure#0}>
+1	<alloc::vec::into_iter::IntoIter<djs_core::compiler::decorators::LegacyElem> as core::ops::drop::Drop>::drop
+1	<alloc::vec::into_iter::IntoIter<djs_core::value::Obj> as core::iter::traits::iterator::Iterator>::fold::<(), core::iter::adapters::map::map_fold<djs_core::value::Obj, djs_core::value::Value, (), <djs_core::vm::Vm>::take_unhandled_rejections::{closure#0}, core::iter::traits::iterator::Iterator::for_each::call<djs_core::value::Value, <alloc::vec::Vec<djs_core::value::Value>>::extend_trusted<core::iter::adapters::map::Map<alloc::vec::into_iter::IntoIter<djs_core::value::Obj>, <djs_core::vm::Vm>::take_unhandled_rejections::{closure#0}>>::{closure#0}>::{closure#0}>::{closure#0}>
+1	<alloc::vec::splice::Splice<core::iter::sources::once::Once<(u32, u32)>> as core::ops::drop::Drop>::drop
+1	<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units> as core::iter::traits::iterator::Iterator>::any::<djs_core::builtins::fast::replace_args::{closure#0}>
+3	<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units> as core::iter::traits::iterator::Iterator>::cmp_by::<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>, <core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units> as core::iter::traits::iterator::Iterator>::cmp<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>::{closure#0}>
+3	<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units> as core::iter::traits::iterator::Iterator>::eq_by::<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>, <core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units> as core::iter::traits::iterator::Iterator>::eq<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>::{closure#0}>
+2	<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units> as core::iter::traits::iterator::Iterator>::eq_by::<core::str::iter::EncodeUtf16, <core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units> as core::iter::traits::iterator::Iterator>::eq<core::str::iter::EncodeUtf16>::{closure#0}>
+1	<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units> as core::iter::traits::iterator::Iterator>::next
+3	<core::iter::adapters::map::Map<core::char::decode::DecodeUtf16<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>, <djs_core::heap::Heap>::str_to_string::{closure#0}> as core::iter::traits::iterator::Iterator>::fold::<(), core::iter::traits::iterator::Iterator::for_each::call<char, <alloc::string::String as core::iter::traits::collect::Extend<char>>::extend<core::iter::adapters::map::Map<core::char::decode::DecodeUtf16<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>, <djs_core::heap::Heap>::str_to_string::{closure#0}>>::{closure#0}>::{closure#0}>
+1	<core::iter::adapters::map::Map<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>, djs_core::builtins::dom::btoa<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>::{closure#0}> as core::iter::traits::iterator::Iterator>::try_fold::<(), <core::iter::adapters::GenericShunt<core::iter::adapters::map::Map<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>, djs_core::builtins::dom::btoa<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>::{closure#0}>, core::option::Option<core::convert::Infallible>> as core::iter::traits::iterator::Iterator>::try_fold<(), core::iter::traits::iterator::Iterator::try_for_each::call<u8, core::ops::control_flow::ControlFlow<u8>, core::ops::control_flow::ControlFlow<u8>::Break>::{closure#0}, core::ops::control_flow::ControlFlow<u8>>::{closure#0}, core::ops::control_flow::ControlFlow<core::ops::control_flow::ControlFlow<u8>>>
+4	<core::iter::adapters::map::Map<core::slice::iter::Iter<djs_core::compiler::func::FuncState>, djs_core::compiler::resolve::finish::{closure#4}> as core::iter::traits::iterator::Iterator>::fold::<(), core::iter::traits::iterator::Iterator::for_each::call<(alloc::vec::Vec<djs_core::compiler::resolve::Storage>, alloc::vec::Vec<djs_core::heap::atom::Atom>), <alloc::vec::Vec<(alloc::vec::Vec<djs_core::compiler::resolve::Storage>, alloc::vec::Vec<djs_core::heap::atom::Atom>)>>::extend_trusted<core::iter::adapters::map::Map<core::slice::iter::Iter<djs_core::compiler::func::FuncState>, djs_core::compiler::resolve::finish::{closure#4}>>::{closure#0}>::{closure#0}>
+2	<core::option::Option<(djs_core::regexp::charset::CharSet, bool)> as alloc::vec::spec_from_elem::SpecFromElem>::from_elem::<alloc::alloc::Global>
+2	<core::option::Option<alloc::vec::Vec<u16>> as alloc::vec::spec_from_elem::SpecFromElem>::from_elem::<alloc::alloc::Global>
+2	<core::option::Option<djs_core::bigint::BigInt>>::is_some_and::<djs_core::interp::conv::loose_equals::{closure#0}>
+2	<djs_core::bigint::BigInt>::and
+5	<djs_core::bigint::BigInt>::as_int_n
+1	<djs_core::bigint::BigInt>::check
+1	<djs_core::bigint::BigInt>::cmp_f64
+4	<djs_core::bigint::BigInt>::divrem
+1	<djs_core::bigint::BigInt>::from_f64
+2	<djs_core::bigint::BigInt>::not
+2	<djs_core::bigint::BigInt>::or
+3	<djs_core::bigint::BigInt>::parse_digits::<core::iter::adapters::map::Map<core::slice::iter::Iter<u16>, <djs_core::bigint::BigInt>::parse_string::{closure#4}>>
+3	<djs_core::bigint::BigInt>::parse_digits::<core::iter::adapters::map::Map<core::slice::iter::Iter<u8>, <djs_core::compiler::parser::Parser>::bigint_literal::{closure#0}>>
+7	<djs_core::bigint::BigInt>::pow
+2	<djs_core::bigint::BigInt>::sar_bits
+1	<djs_core::bigint::BigInt>::shr
+3	<djs_core::bigint::BigInt>::shr_mag
+1	<djs_core::bigint::BigInt>::sub
+1	<djs_core::bigint::BigInt>::to_f64
+7	<djs_core::bigint::BigInt>::to_string_radix
+2	<djs_core::bigint::BigInt>::xor
+2	<djs_core::builtins::string::Units>::push
+1	<djs_core::bytecode::code::CodeBuf<djs_core::bytecode::code::Phase1>>::encode
+3	<djs_core::bytecode::code::CodeBuf<djs_core::bytecode::code::Phase1>>::finish
+1	<djs_core::bytecode::code::CodeBuf<djs_core::bytecode::code::Phase1>>::new_label
+3	<djs_core::bytecode::code::CodeBuf<djs_core::bytecode::code::Phase1>>::rotate
+1	<djs_core::bytecode::code::CodeBuf>::encode
+23	<djs_core::bytecode::code::CodeBuf>::finish
+2	<djs_core::bytecode::ops::global_decls::GlobalDecls>::decode
+3	<djs_core::compiler::CompileError>::text
+1	<djs_core::compiler::func::FuncState>::new
+1	<djs_core::compiler::func::VarIndex>::insert
+2	<djs_core::compiler::parser::Parser>::alloc_units
+2	<djs_core::compiler::parser::Parser>::atom_of_units
+1	<djs_core::compiler::parser::Parser>::begin_ctor
+2	<djs_core::compiler::parser::Parser>::bigint_literal
+4	<djs_core::compiler::parser::Parser>::check_private_refs
+1	<djs_core::compiler::parser::Parser>::close_using
+2	<djs_core::compiler::parser::Parser>::dec_hidden
+2	<djs_core::compiler::parser::Parser>::discard_function
+6	<djs_core::compiler::parser::Parser>::emit_auto_accessor
+2	<djs_core::compiler::parser::Parser>::emit_bigint_literal
+1	<djs_core::compiler::parser::Parser>::emit_param_prop_assigns
+1	<djs_core::compiler::parser::Parser>::emit_param_prop_decls
+1	<djs_core::compiler::parser::Parser>::emit_return_from_expr
+2	<djs_core::compiler::parser::Parser>::emit_synth_fn
+1	<djs_core::compiler::parser::Parser>::emit_unwind
+2	<djs_core::compiler::parser::Parser>::end_function_at
+1	<djs_core::compiler::parser::Parser>::finish_init
+26	<djs_core::compiler::parser::Parser>::finish_unit
+1	<djs_core::compiler::parser::Parser>::ident_atom
+1	<djs_core::compiler::parser::Parser>::lx_text_is
+2	<djs_core::compiler::parser::Parser>::park_function
+2	<djs_core::compiler::parser::Parser>::parse_assign
+8	<djs_core::compiler::parser::Parser>::parse_class
+9	<djs_core::compiler::parser::Parser>::parse_class_element
+6	<djs_core::compiler::parser::Parser>::parse_ctor
+2	<djs_core::compiler::parser::Parser>::parse_do_while
+5	<djs_core::compiler::parser::Parser>::parse_for
+7	<djs_core::compiler::parser::Parser>::parse_for_in_of
+1	<djs_core::compiler::parser::Parser>::parse_function_body
+2	<djs_core::compiler::parser::Parser>::parse_labeled
+1	<djs_core::compiler::parser::Parser>::parse_lhs
+1	<djs_core::compiler::parser::Parser>::parse_method_function_dp
+5	<djs_core::compiler::parser::Parser>::parse_object
+5	<djs_core::compiler::parser::Parser>::parse_params_dp
+4	<djs_core::compiler::parser::Parser>::parse_pattern
+13	<djs_core::compiler::parser::Parser>::parse_primary
+5	<djs_core::compiler::parser::Parser>::parse_property_key
+4	<djs_core::compiler::parser::Parser>::parse_statement
+4	<djs_core::compiler::parser::Parser>::parse_tagged_template
+2	<djs_core::compiler::parser::Parser>::parse_while
+3	<djs_core::compiler::parser::Parser>::private_closure_atom
+1	<djs_core::compiler::parser::Parser>::private_ref
+3	<djs_core::compiler::parser::Parser>::rotate_code
+2	<djs_core::compiler::parser::Parser>::skip_pattern
+4	<djs_core::compiler::parser::Parser>::string_const
+1	<djs_core::compiler::parser::Parser>::thunk_field_metadata
+12	<djs_core::compiler::parser::Parser>::thunk_method_metadata
+1	<djs_core::compiler::parser::Parser>::ts_add_member
+4	<djs_core::compiler::parser::Parser>::ts_const_expr
+7	<djs_core::compiler::parser::Parser>::ts_const_unary
+6	<djs_core::compiler::parser::Parser>::ts_enum
+1	<djs_core::compiler::parser::Parser>::ts_error_value
+2	<djs_core::compiler::parser::Parser>::ts_get_decl
+1	<djs_core::compiler::parser::Parser>::ts_meta_annotation
+5	<djs_core::compiler::parser::Parser>::ts_meta_list
+3	<djs_core::compiler::parser::Parser>::ts_meta_union
+1	<djs_core::compiler::parser::Parser>::ts_skip_tokens
+1	<djs_core::compiler::parser::Parser>::unexpected::<()>
+1	<djs_core::compiler::parser::Parser>::unexpected::<djs_core::compiler::expr::Expr>
+5	<djs_core::compiler::scan::PatternScan>::follow
+3	<djs_core::compiler::ts_meta::Fold>::add
+1	<djs_core::compiler::ts_meta::Fold>::result
+1	<djs_core::heap::Heap>::alloc_bigint_i64
+1	<djs_core::heap::Heap>::append_into
+5	<djs_core::heap::Heap>::array_splice_dense
+7	<djs_core::heap::Heap>::atom_name
+2	<djs_core::heap::Heap>::canonical_numeric_index
+4	<djs_core::heap::Heap>::check_proto_cycles::<core::iter::sources::from_fn::FromFn<<djs_core::heap::Heap>::verify::{closure#2}::{closure#0}>>
+3	<djs_core::heap::Heap>::collect_canonical
+1	<djs_core::heap::Heap>::collect_leaves
+1	<djs_core::heap::Heap>::collect_leaves_of
+2	<djs_core::heap::Heap>::collection_compact
+1	<djs_core::heap::Heap>::concat
+1	<djs_core::heap::Heap>::elem_value
+2	<djs_core::heap::Heap>::element_of
+2	<djs_core::heap::Heap>::first_grown
+2	<djs_core::heap::Heap>::flatten
+2	<djs_core::heap::Heap>::from_bytes
+2	<djs_core::heap::Heap>::from_bytes_trusted
+8	<djs_core::heap::Heap>::mark_compact
+5	<djs_core::heap::Heap>::ordinary_own_keys
+2	<djs_core::heap::Heap>::str_array_index
+2	<djs_core::heap::Heap>::truncate_elements
+1	<djs_core::heap::Heap>::verify
+1	<djs_core::heap::LoadError as core::fmt::Display>::fmt
+3	<djs_core::heap::LoadError>::text
+1	<djs_core::heap::arena::Arena>::with_capacity
+2	<djs_core::heap::layout::Ref as alloc::vec::spec_from_elem::SpecFromElem>::from_elem::<alloc::alloc::Global>
+1	<djs_core::interp::run::Exec>::args_array
+3	<djs_core::interp::run::Exec>::array_slice_dense
+8	<djs_core::interp::run::Exec>::array_spread
+4	<djs_core::interp::run::Exec>::bigint_add_small
+7	<djs_core::interp::run::Exec>::bigint_binary
+1	<djs_core::interp::run::Exec>::bigint_of_primitive::{closure#0}
+4	<djs_core::interp::run::Exec>::bigint_unary
+1	<djs_core::interp::run::Exec>::call
+30	<djs_core::interp::run::Exec>::call_intrinsic
+3	<djs_core::interp::run::Exec>::class_op
+1	<djs_core::interp::run::Exec>::construct_with
+3	<djs_core::interp::run::Exec>::copy_data_props
+11	<djs_core::interp::run::Exec>::enumerable_own_data
+4	<djs_core::interp::run::Exec>::fault_value
+9	<djs_core::interp::run::Exec>::for_in_start
+5	<djs_core::interp::run::Exec>::global_decls
+1	<djs_core::interp::run::Exec>::global_lexical
+6	<djs_core::interp::run::Exec>::install_accessor
+5	<djs_core::interp::run::Exec>::install_constructor
+4	<djs_core::interp::run::Exec>::install_key
+2	<djs_core::interp::run::Exec>::install_method
+3	<djs_core::interp::run::Exec>::install_prototype
+49	<djs_core::interp::run::Exec>::json_regexp_intrinsic
+1	<djs_core::interp::run::Exec>::load_exec_state
+1	<djs_core::interp::run::Exec>::local_generator
+3	<djs_core::interp::run::Exec>::mark_fast
+3	<djs_core::interp::run::Exec>::mark_native
+2	<djs_core::interp::run::Exec>::n_call
+2	<djs_core::interp::run::Exec>::n_concat_gc
+2	<djs_core::interp::run::Exec>::n_create_data_property_or_throw
+2	<djs_core::interp::run::Exec>::n_leaf_gc
+2	<djs_core::interp::run::Exec>::n_set
+7	<djs_core::interp::run::Exec>::new_stack
+2	<djs_core::interp::run::Exec>::not_a_constructor_message
+2	<djs_core::interp::run::Exec>::nullish_base::<core::option::Option<djs_core::interp::run::Status>>
+2	<djs_core::interp::run::Exec>::nullish_base::<djs_core::interp::run::Got>
+2	<djs_core::interp::run::Exec>::private_own
+2	<djs_core::interp::run::Exec>::private_read_only::<core::option::Option<djs_core::interp::run::Status>>
+2	<djs_core::interp::run::Exec>::put_on_primitive
+12	<djs_core::interp::run::Exec>::regexp_exec_raw
+8	<djs_core::interp::run::Exec>::regexp_replace_raw
+7	<djs_core::interp::run::Exec>::regexp_split_raw
+1	<djs_core::interp::run::Exec>::save_exec_state
+4	<djs_core::interp::run::Exec>::set_function_name
+1	<djs_core::interp::run::Exec>::set_property
+1	<djs_core::interp::run::Exec>::set_property::{closure#0}
+2	<djs_core::interp::run::Exec>::set_super::{closure#0}
+10	<djs_core::interp::run::Exec>::step_once
+6	<djs_core::interp::run::Exec>::template_object
+4	<djs_core::interp::run::Exec>::trace_frames
+1	<djs_core::interp::run::Exec>::typed_array_set_from_dense
+2	<djs_core::interp::run::Exec>::uninitialized::<core::option::Option<djs_core::interp::run::Status>>
+16	<djs_core::json::parse::Msg>::text
+3	<djs_core::json::parse::Parser>::key_colon::<0>
+3	<djs_core::json::parse::Parser>::key_colon::<1>
+6	<djs_core::json::parse::Parser>::key_colon::<2>
+3	<djs_core::json::parse::Parser>::next::<1>
+2	<djs_core::json::stringify::Out>::byte
+5	<djs_core::json::stringify::Out>::quote
+3	<djs_core::json::stringify::Out>::widen
+1	<djs_core::json::stringify::Ser>::classify
+10	<djs_core::json::stringify::Ser>::emit
+11	<djs_core::json::stringify::Ser>::member
+5	<djs_core::json::stringify::Ser>::newline
+1	<djs_core::lexer::Lexer>::cook_ident
+2	<djs_core::lexer::Lexer>::template_raw
+5	<djs_core::lexer::line_table::LineTable>::new
+1	<djs_core::regexp::SyntaxError>::flags
+5	<djs_core::regexp::charset::CharSet>::canonicalize
+2	<djs_core::regexp::charset::CharSet>::invert
+1	<djs_core::regexp::charset::CharSet>::subtract
+2	<djs_core::regexp::charset::CharSet>::union
+3	<djs_core::regexp::compiler::Compiler>::alternatives::<core::slice::iter::Iter<djs_core::regexp::parser::Node>>
+20	<djs_core::regexp::compiler::Compiler>::node
+6	<djs_core::regexp::exec::ExecState>::from_words
+1	<djs_core::regexp::exec::Machine>::push_frame
+1	<djs_core::regexp::exec::Machine>::write_slot
+1	<djs_core::regexp::parser::ClassSet>::add_string
+2	<djs_core::regexp::parser::ClassSet>::union
+2	<djs_core::regexp::parser::Parser>::alternative
+2	<djs_core::regexp::parser::Parser>::canonicalize_class
+1	<djs_core::regexp::parser::Parser>::capture
+1	<djs_core::regexp::parser::Parser>::class_atom
+2	<djs_core::regexp::parser::Parser>::class_operations
+1	<djs_core::regexp::parser::Parser>::class_strings
+1	<djs_core::regexp::parser::Parser>::group_name
+4	<djs_core::regexp::parser::Parser>::nested_class
+1	<djs_core::regexp::parser::Parser>::prescan
+8	<djs_core::regexp::parser::Parser>::property_escape
+6	<djs_core::vm::Vm>::canonical_hash
+2	<djs_core::vm::Vm>::compile
+5	<djs_core::vm::Vm>::display
+3	<djs_core::vm::Vm>::from_base_vec
+1	<djs_core::vm::Vm>::from_bytes
+2	<djs_core::vm::Vm>::new_host_calls
+2	<djs_core::vm::Vm>::over
+2	<djs_core::vm::Vm>::seal
+3	<djs_core::wire::Decoder>::string
+2	<djs_core::wire::WireError>::text
+1	<djs_wasm::State>::add_vm
+2	<djs_wasm::State>::describe_call
+4	alloc::vec::from_elem::<(u64, u32)>
+2	alloc::vec::from_elem::<[u16; 256]>
+4	alloc::vec::from_elem::<bool>
+4	alloc::vec::from_elem::<u64>
+4	alloc::vec::from_elem::<usize>
+1	core::iter::adapters::try_process::<core::iter::adapters::map::Map<alloc::vec::into_iter::IntoIter<core::option::Option<djs_core::compiler::func::FuncState>>, <djs_core::compiler::parser::Parser>::finish_unit::{closure#0}>, djs_core::compiler::func::FuncState, core::result::Result<core::convert::Infallible, djs_core::compiler::PErr>, <core::result::Result<alloc::vec::Vec<djs_core::compiler::func::FuncState>, djs_core::compiler::PErr> as core::iter::traits::collect::FromIterator<core::result::Result<djs_core::compiler::func::FuncState, djs_core::compiler::PErr>>>::from_iter<core::iter::adapters::map::Map<alloc::vec::into_iter::IntoIter<core::option::Option<djs_core::compiler::func::FuncState>>, <djs_core::compiler::parser::Parser>::finish_unit::{closure#0}>>::{closure#0}, alloc::vec::Vec<djs_core::compiler::func::FuncState>>
+1	core::iter::adapters::try_process::<core::iter::adapters::map::Map<alloc::vec::into_iter::IntoIter<djs_core::value::Value>, <djs_core::interp::run::Exec>::typed_array_set_from_dense::{closure#1}::{closure#0}>, djs_core::heap::typed::Elem, core::option::Option<core::convert::Infallible>, <core::option::Option<alloc::vec::Vec<djs_core::heap::typed::Elem>> as core::iter::traits::collect::FromIterator<core::option::Option<djs_core::heap::typed::Elem>>>::from_iter<core::iter::adapters::map::Map<alloc::vec::into_iter::IntoIter<djs_core::value::Value>, <djs_core::interp::run::Exec>::typed_array_set_from_dense::{closure#1}::{closure#0}>>::{closure#0}, alloc::vec::Vec<djs_core::heap::typed::Elem>>
+1	core::iter::adapters::try_process::<core::iter::adapters::map::Map<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>, djs_core::builtins::dom::btoa<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>::{closure#0}>, u8, core::option::Option<core::convert::Infallible>, <core::option::Option<alloc::vec::Vec<u8>> as core::iter::traits::collect::FromIterator<core::option::Option<u8>>>::from_iter<core::iter::adapters::map::Map<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>, djs_core::builtins::dom::btoa<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>::{closure#0}>>::{closure#0}, alloc::vec::Vec<u8>>
+2	core::ptr::drop_glue::<(djs_core::heap::layout::Ref, core::option::Option<alloc::vec::Vec<(u32, u32, u8)>>, core::option::Option<alloc::vec::Vec<djs_core::heap::atom::Atom>>)>
+1	core::ptr::drop_glue::<alloc::vec::Vec<djs_core::compiler::ts_meta::TsMeta>>
+1	core::ptr::drop_glue::<alloc::vec::Vec<djs_core::interp::run::stack::TraceFrame>>
+1	core::ptr::drop_glue::<alloc::vec::Vec<djs_core::regexp::parser::Node>>
+3	core::ptr::drop_glue::<djs_core::bytecode::code::Code>
+4	core::ptr::drop_glue::<djs_core::bytecode::code::CodeBuf<djs_core::bytecode::code::Phase1>>
+4	core::ptr::drop_glue::<djs_core::bytecode::ops::global_decls::GlobalDecls>
+5	core::ptr::drop_glue::<djs_core::bytecode::stack::StackScratch>
+1	core::ptr::drop_glue::<djs_core::compiler::PErr>
+5	core::ptr::drop_glue::<djs_core::compiler::class::ClassBuild>
+2	core::ptr::drop_glue::<djs_core::compiler::decorators::DecParams>
+15	core::ptr::drop_glue::<djs_core::compiler::func::FuncState>
+13	core::ptr::drop_glue::<djs_core::compiler::parser::Parser>
+1	core::ptr::drop_glue::<djs_core::interp::conv::Fault>
+2	core::ptr::drop_glue::<djs_core::interp::run::stack::TraceFrame>
+4	core::ptr::drop_glue::<djs_core::json::parse::Parser>
+3	core::ptr::drop_glue::<djs_core::regexp::exec::ExecState>
+2	core::ptr::drop_glue::<djs_core::regexp::parser::ClassSet>
+4	core::ptr::drop_glue::<djs_core::regexp::parser::Node>
+4	djs_core::bigint::add_mag
+1	djs_core::bigint::mul_small_add
+5	djs_core::bigint::shl_small
+3	djs_core::bigint::sub_mag
+10	djs_core::builtins::array::sort_numbers
+13	djs_core::builtins::array::sort_primitives
+4	djs_core::builtins::date::format
+2	djs_core::builtins::date::parse::<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>
+4	djs_core::builtins::dense::dense_range
+16	djs_core::builtins::dense::join
+1	djs_core::builtins::dom::atob
+1	djs_core::builtins::dom::btoa::<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>
+1	djs_core::builtins::eval::compile_error
+1	djs_core::builtins::eval::compile_eval
+6	djs_core::builtins::eval::compile_function
+5	djs_core::builtins::fast::from_char_code
+2	djs_core::builtins::fast::pad
+2	djs_core::builtins::fast::replace_all
+2	djs_core::builtins::fast::replace_args
+5	djs_core::builtins::fast::split
+9	djs_core::builtins::function::to_string
+7	djs_core::builtins::json::source_records
+1	djs_core::builtins::json::stringify_fast_at
+1	djs_core::builtins::number::parse
+2	djs_core::builtins::number::range_error::<djs_core::value::Str>
+2	djs_core::builtins::object::cannot_define::<()>
+5	djs_core::builtins::object::own_keys
+2	djs_core::builtins::object::set_integrity_level
+1	djs_core::builtins::object::test_integrity_level
+1	djs_core::builtins::regexp::alloc_units
+1	djs_core::builtins::regexp::define_group
+4	djs_core::builtins::string::code_points
+2	djs_core::builtins::string::code_points_of
+4	djs_core::builtins::string::from_codes
+2	djs_core::builtins::string::index_of
+4	djs_core::builtins::string::join
+11	djs_core::builtins::string::locale_compare
+4	djs_core::builtins::string::normalize
+1	djs_core::builtins::string::repeat
+9	djs_core::builtins::string::to_case
+6	djs_core::builtins::string::well_formed
+3	djs_core::builtins::typed::buffer_copy
+3	djs_core::builtins::typed::buffer_transfer
+1	djs_core::builtins::typed::decode_chunk
+1	djs_core::builtins::typed::decoded_record
+2	djs_core::builtins::typed::from_base64
+2	djs_core::builtins::typed::range_error::<djs_core::value::Obj>
+2	djs_core::builtins::typed::to_base64
+2	djs_core::builtins::typed::to_hex
+1	djs_core::builtins::typed::typed_array_copy
+6	djs_core::builtins::uri::decode
+6	djs_core::builtins::uri::encode
+6	djs_core::builtins::uri::escape
+6	djs_core::builtins::uri::unescape
+2	djs_core::builtins::uri::uri_error
+3	djs_core::bytecode::handlers::encode_handlers
+2	djs_core::bytecode::lines::write_uleb
+4	djs_core::bytecode::stack::stack_depths
+7	djs_core::bytecode::stack::walk
+6	djs_core::bytecode::template::alloc_template_in
+1	djs_core::bytecode::template::nonempty::<djs_core::bytecode::handlers::Handler, djs_core::bytecode::template::alloc_template_in::{closure#4}>
+13	djs_core::compiler::compile_dynamic_function
+3	djs_core::compiler::error_at
+1	djs_core::compiler::resolve::classify::{closure#0}
+70	djs_core::compiler::resolve::emit_function
+1	djs_core::compiler::scan::is_arrow_head
+1	djs_core::compiler::scan::try_has_finally
+1	djs_core::compiler::ts_decl::to_num
+1	djs_core::heap::string::hash_units::<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>
+3	djs_core::interp::conv::describe_key
+6	djs_core::interp::conv::less_than
+2	djs_core::interp::conv::loose_equals
+1	djs_core::interp::conv::string_to_bigint
+1	djs_core::interp::conv::string_to_number
+3	djs_core::interp::conv::to_string
+2	djs_core::interp::conv::type_error_fault
+8	djs_core::interp::realm::error_summary
+2	djs_core::interp::run::bigint::bigint_fault
+2	djs_core::interp::run::class::reference_error::<core::option::Option<djs_core::interp::run::Status>>
+1	djs_core::interp::run::json_regexp::regexp_overflow::<core::option::Option<djs_core::interp::run::Status>>
+1	djs_core::interp::run::late::schedule_finalization_cleanup
+1	djs_core::interp::run::native::bad_state
+4	djs_core::json::parse::parse
+2	djs_core::json::parse::parse_utf8
+4	djs_core::json::stringify::quote
+21	djs_core::json::stringify::stringify_fast_at
+2	djs_core::json::stringify::write_int
+1	djs_core::lexer::string::cook
+3	djs_core::lexer::string::push_utf16
+7	djs_core::regexp::compile
+1	djs_core::regexp::compiler::case_closure
+9	djs_core::regexp::compiler::first_chars
+6	djs_core::regexp::compiler::start_cond
+1	djs_core::regexp::exec::exec_at
+3	djs_core::regexp::exec::resume
+2	djs_core::regexp::parser::err::<()>
+2	djs_core::regexp::parser::err::<core::option::Option<djs_core::regexp::parser::Node>>
+2	djs_core::regexp::parser::err::<djs_core::regexp::parser::ClassAtom>
+2	djs_core::regexp::parser::err::<djs_core::regexp::parser::ClassSet>
+2	djs_core::regexp::parser::err::<djs_core::regexp::parser::Node>
+1	djs_core::regexp::parser::resolve_names
+1	djs_core::text::decimal
+2	djs_core::unicode::normalize::decompose_char
+5	djs_core::unicode::normalize::is_normalized_quick
+13	djs_core::unicode::normalize::normalize
+4	djs_core::unicode::property::binary_set
+2	djs_core::unicode::property::decode_set
+8	djs_core::unicode::property::decode_strings
+3	djs_core::unicode::property::lookup
+1	djs_core::unicode::property::string_property
+6	djs_core::unicode::property::union
+4	djs_core::wire::decode
+7	djs_lzrc::decode_with_capacity
+2	djs_wasm::base_buffer
+8	djs_wasm::compile
+2	djs_wasm::record_panic::<djs_wasm::wasm::panic::{closure#0}>
+2	vm_decode_wire
+2	vm_define
+2	vm_new_async_host_function
+2	vm_new_error
+2	vm_new_host_function
+4	vm_parse_json

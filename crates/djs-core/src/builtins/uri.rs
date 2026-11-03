@@ -2,6 +2,7 @@
 //! on a string the builtin already converted. Messages follow QuickJS (`URIError:
 //! expecting %`, `expecting hex digit`, `malformed UTF-8`, `expecting surrogate pair`,
 //! `invalid character`), which quickjs-wasi shares.
+use crate::PushOut;
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -34,14 +35,14 @@ fn units(heap: &mut Heap, s: Str) -> Result<Vec<u16>, Fault> {
 
 /// `%XX` for a byte, `%uXXXX` for a code unit above 0xFF (escape).
 fn push_hex(out: &mut Vec<u16>, c: u32) {
-    out.push(b'%' as u16);
+    out.push_out(b'%' as u16);
     if c >= 0x100 {
-        out.push(b'u' as u16);
-        out.push(HEX[(c >> 12) as usize & 15] as u16);
-        out.push(HEX[(c >> 8) as usize & 15] as u16);
+        out.push_out(b'u' as u16);
+        out.push_out(HEX[(c >> 12) as usize & 15] as u16);
+        out.push_out(HEX[(c >> 8) as usize & 15] as u16);
     }
-    out.push(HEX[(c >> 4) as usize & 15] as u16);
-    out.push(HEX[c as usize & 15] as u16);
+    out.push_out(HEX[(c >> 4) as usize & 15] as u16);
+    out.push_out(HEX[c as usize & 15] as u16);
 }
 
 fn hex_value(c: u16) -> Option<u32> {
@@ -69,7 +70,7 @@ pub(crate) fn encode(heap: &mut Heap, s: Str, component: bool) -> Result<Str, Fa
         let c = u[k];
         k += 1;
         if is_uri_unescaped(c, component) {
-            out.push(c);
+            out.push_out(c);
             continue;
         }
         let cp = match c {
@@ -114,7 +115,7 @@ pub(crate) fn decode(heap: &mut Heap, s: Str, component: bool) -> Result<Str, Fa
     let mut k = 0;
     while k < u.len() {
         if u[k] != b'%' as u16 {
-            out.push(u[k]);
+            out.push_out(u[k]);
             k += 1;
             continue;
         }
@@ -123,7 +124,7 @@ pub(crate) fn decode(heap: &mut Heap, s: Str, component: bool) -> Result<Str, Fa
             if !component && RESERVED.contains(&(b as u8)) {
                 out.extend_from_slice(&u[k..k + 3]);
             } else {
-                out.push(b as u16);
+                out.push_out(b as u16);
             }
             k += 3;
             continue;
@@ -148,10 +149,10 @@ pub(crate) fn decode(heap: &mut Heap, s: Str, component: bool) -> Result<Str, Fa
         }
         if cp >= 0x10000 {
             let v = cp - 0x10000;
-            out.push(0xD800 + (v >> 10) as u16);
-            out.push(0xDC00 + (v & 0x3FF) as u16);
+            out.push_out(0xD800 + (v >> 10) as u16);
+            out.push_out(0xDC00 + (v & 0x3FF) as u16);
         } else {
-            out.push(cp as u16);
+            out.push_out(cp as u16);
         }
     }
     Ok(heap.alloc_utf16(&out)?)
@@ -169,7 +170,7 @@ pub(crate) fn escape(heap: &mut Heap, s: Str) -> Result<Str, Fault> {
     let mut out = Vec::with_capacity(u.len() * 3);
     for &c in &u {
         if keep(c) {
-            out.push(c);
+            out.push_out(c);
         } else {
             push_hex(&mut out, c as u32);
         }
@@ -191,17 +192,17 @@ pub(crate) fn unescape(heap: &mut Heap, s: Str) -> Result<Str, Fault> {
             if u.get(k + 1) == Some(&(b'u' as u16))
                 && let Some(v) = hex_at(&u, k + 2, 4)
             {
-                out.push(v as u16);
+                out.push_out(v as u16);
                 k += 6;
                 continue;
             }
             if let Some(v) = hex_at(&u, k + 1, 2) {
-                out.push(v as u16);
+                out.push_out(v as u16);
                 k += 3;
                 continue;
             }
         }
-        out.push(c);
+        out.push_out(c);
         k += 1;
     }
     Ok(heap.alloc_utf16(&out)?)

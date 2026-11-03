@@ -1,5 +1,6 @@
 //! Functions: declarations, expressions, arrows, parameters and bodies
 //! (docs/compiler.md 5.5, 5.7, 6.3).
+use crate::PushOut;
 
 use super::PResult;
 use super::decorators::DecParams;
@@ -196,7 +197,7 @@ impl Parser<'_, '_> {
                     && dp.metadata
                 {
                     let m = self.ts_meta_pattern_annotation();
-                    dp.types.push(if rest { m.rest_elem() } else { m });
+                    dp.types.push_out(if rest { m.rest_elem() } else { m });
                 }
                 self.parse_pattern_param(rest, &mut seen_default)?;
                 if rest {
@@ -225,7 +226,7 @@ impl Parser<'_, '_> {
                 && dp.metadata
             {
                 let m = self.ts_meta_annotation();
-                dp.types.push(if rest { m.rest_elem() } else { m });
+                dp.types.push_out(if rest { m.rest_elem() } else { m });
             }
             self.ts_annotation()?;
             let index = self.f.vars[v as usize].param;
@@ -399,7 +400,7 @@ impl Parser<'_, '_> {
                 if let Some(p) = self.f.find_in_scope(BODY_SCOPE, var.name)
                     && self.f.vars[p as usize].kind == VarKind::Param
                 {
-                    copies.push((v, p));
+                    copies.push_out((v, p));
                 }
             }
             self.f.scopes[vs as usize].copies = copies;
@@ -441,7 +442,7 @@ impl Parser<'_, '_> {
         let end = self.new_label();
         self.place(end);
         self.code().async_reject(0);
-        self.f.handlers.push(HandlerLabels {
+        self.f.handlers.push_out(HandlerLabels {
             start,
             end,
             target: end,

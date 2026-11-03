@@ -3,6 +3,7 @@
 //! They work on ordinary objects (and arrays) without running user code; the builtins
 //! in `builtins/object.ts` do the conversions (ToPropertyKey, ToPropertyDescriptor)
 //! first.
+use crate::PushOut;
 
 use crate::heap::{Atom, Heap, PropFlags, Property, PropertyDescriptor, atoms};
 use crate::interp::conv::{self, Fault, type_error};
@@ -137,7 +138,7 @@ pub(crate) fn own_keys(heap: &mut Heap, o: Obj, kind: i32) -> Result<Value, Faul
             }
         };
         if keep {
-            values.push(heap.atom_to_value(k)?);
+            values.push_out(heap.atom_to_value(k)?);
         }
     }
     let proto = crate::interp::realm::intrinsic_obj(heap, crate::interp::Intrinsic::ArrayProto);

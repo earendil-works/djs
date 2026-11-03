@@ -1,5 +1,6 @@
 //! The parser core: state, token helpers, errors, names, constants and declarations
 //! (docs/compiler.md 2). Statements are in `stmt.rs`, expressions in `expr.rs`.
+use crate::PushOut;
 
 use alloc::borrow::Cow;
 use alloc::string::String;
@@ -406,10 +407,10 @@ impl<'a, 'h> Parser<'a, 'h> {
     /// Starts parsing a nested function: `f` becomes the new function.
     pub fn begin_function(&mut self, kind: FuncKind) -> PResult<()> {
         let id = self.done.len() as FuncId;
-        self.done.push(None);
+        self.done.push_out(None);
         let child = FuncState::new(id, kind, Some((self.f.id, self.scope)));
         let parent = core::mem::replace(&mut self.f, child);
-        self.stack.push(Suspended {
+        self.stack.push_out(Suspended {
             f: parent,
             scope: self.scope,
             blocks: core::mem::take(&mut self.blocks),
@@ -447,7 +448,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             self.f.children[i as usize] = id;
             return Ok(i);
         }
-        self.f.children.push(id);
+        self.f.children.push_out(id);
         Ok((self.f.children.len() - 1) as u32)
     }
 
@@ -472,7 +473,7 @@ impl<'a, 'h> Parser<'a, 'h> {
 
     /// Reserves the child index of a function that is parsed later.
     pub fn reserve_child(&mut self) -> u32 {
-        self.f.children.push(u32::MAX);
+        self.f.children.push_out(u32::MAX);
         (self.f.children.len() - 1) as u32
     }
 
@@ -480,7 +481,7 @@ impl<'a, 'h> Parser<'a, 'h> {
     /// current one again, with the current function suspended as its parent.
     pub fn resume_function(&mut self, f: FuncState) {
         let parent = core::mem::replace(&mut self.f, f);
-        self.stack.push(Suspended {
+        self.stack.push_out(Suspended {
             f: parent,
             scope: self.scope,
             blocks: core::mem::take(&mut self.blocks),
@@ -518,7 +519,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         }
         let v = self.f.add_var(name, VarKind::Param, BODY_SCOPE);
         self.f.vars[v as usize].param = self.f.param_count;
-        self.f.params.push(v);
+        self.f.params.push_out(v);
         self.f.param_count += 1;
         Ok(v)
     }
@@ -688,7 +689,7 @@ impl<'a, 'h> Parser<'a, 'h> {
                 return;
             }
         }
-        self.f.lines.push((pc, pos));
+        self.f.lines.push_out((pc, pos));
     }
 
     /// Moves the code in `mid..end` in front of `start..mid` (loop rotation, 0086), with
@@ -736,7 +737,7 @@ impl<'a, 'h> Parser<'a, 'h> {
 
     /// A name reference at `pos` in the current scope.
     pub fn name_ref(&mut self, atom: Atom, pos: u32) -> u32 {
-        self.f.refs.push(NameRef {
+        self.f.refs.push_out(NameRef {
             atom,
             scope: self.scope,
             pos,
@@ -779,7 +780,7 @@ impl<'a, 'h> Parser<'a, 'h> {
     }
 
     pub fn add_const(&mut self, v: Value) -> u32 {
-        self.f.consts.push(v);
+        self.f.consts.push_out(v);
         (self.f.consts.len() - 1) as u32
     }
 
@@ -929,7 +930,7 @@ impl<'a, 'h> Parser<'a, 'h> {
                 None => break,
             }
         }
-        self.f.var_decls.push((name, self.scope));
+        self.f.var_decls.push_out((name, self.scope));
         let vs = self.f.var_scope;
         if let Some(v) = self.f.find_in_scope(vs, name) {
             // `var` after `var`, or a parameter: the same binding.
@@ -1028,7 +1029,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             // `var f; function f() {}`: the function now initializes it.
             var.kind = VarKind::Func;
         }
-        self.f.scopes[scope as usize].funcs.push((v, child));
+        self.f.scopes[scope as usize].funcs.push_out((v, child));
         Ok(())
     }
 

@@ -31,6 +31,7 @@
 //!
 //! The encoding is a function of the raw image and the base alone, so equal raw images
 //! give equal session images.
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -120,7 +121,7 @@ pub fn session_image(image: &[u8], base: &[u8]) -> Result<Vec<u8>, SessionError>
         let stop = i + run;
         while i < stop {
             if a[i..i + 8] != b[i..i + 8] {
-                diff.push((from + i) as u32);
+                diff.push_out((from + i) as u32);
             }
             i += 8;
         }

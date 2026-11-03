@@ -1,5 +1,6 @@
 //! Token-level lookahead scans (docs/compiler.md 3.1, 3.4). Scans only move a copy of
 //! the lexer; they never emit.
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -40,10 +41,10 @@ impl<'a> Scanner<'a> {
                     self.stack.pop();
                 }
             }
-            TokenKind::TemplateHead => self.stack.push(b'`'),
-            TokenKind::LParen => self.stack.push(b'('),
-            TokenKind::LBracket => self.stack.push(b'['),
-            TokenKind::LBrace => self.stack.push(b'{'),
+            TokenKind::TemplateHead => self.stack.push_out(b'`'),
+            TokenKind::LParen => self.stack.push_out(b'('),
+            TokenKind::LBracket => self.stack.push_out(b'['),
+            TokenKind::LBrace => self.stack.push_out(b'{'),
             TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
                 let open = match tok.kind {
                     TokenKind::RParen => b'(',
@@ -175,11 +176,11 @@ impl PatternScan {
                 return Follow::Other;
             };
             if let Some(p) = pending.take() {
-                self.entries.push((p, classify(&tok)));
+                self.entries.push_out((p, classify(&tok)));
             }
             if s.stack.len() > before {
                 let bracket = matches!(tok.kind, TokenKind::LBrace | TokenKind::LBracket);
-                opens.push(bracket.then_some(tok.start));
+                opens.push_out(bracket.then_some(tok.start));
             } else if s.stack.len() < before {
                 pending = opens.pop().flatten();
             }
@@ -189,7 +190,7 @@ impl PatternScan {
             Ok(t) => classify(&t),
             Err(_) => Follow::Other,
         };
-        self.entries.push((open.start, follow));
+        self.entries.push_out((open.start, follow));
         crate::sort::sort_by(&mut self.entries, |a, b| a.0 < b.0);
         self.start = open.start;
         self.end = end;
@@ -309,10 +310,10 @@ pub(super) fn for_lhs_ends_with_of(lx: Lexer<'_>, first: Token) -> bool {
         stack: alloc::vec![b'('],
     };
     match first.kind {
-        TokenKind::LParen => s.stack.push(b'('),
-        TokenKind::LBracket => s.stack.push(b'['),
-        TokenKind::LBrace => s.stack.push(b'{'),
-        TokenKind::TemplateHead => s.stack.push(b'`'),
+        TokenKind::LParen => s.stack.push_out(b'('),
+        TokenKind::LBracket => s.stack.push_out(b'['),
+        TokenKind::LBrace => s.stack.push_out(b'{'),
+        TokenKind::TemplateHead => s.stack.push_out(b'`'),
         _ => {}
     }
     loop {
@@ -402,7 +403,7 @@ mod tests {
             match t.kind {
                 TokenKind::Eof => break,
                 TokenKind::LBracket | TokenKind::LBrace => {
-                    found.push((t.start, memo.follow(lx, t)));
+                    found.push_out((t.start, memo.follow(lx, t)));
                 }
                 _ => {}
             }

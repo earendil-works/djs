@@ -10,6 +10,7 @@
 //! throw calls `%ThrowWithStack`, see `Exec::throw_fault`), and any other error when its
 //! `stack` is first read. Rust readers (`Vm::error_stack`, the REPL) see the default
 //! string of a pending record.
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -74,7 +75,7 @@ impl Exec<'_> {
             return out;
         }
         if let Some(pos) = input {
-            out.push(TraceFrame {
+            out.push_out(TraceFrame {
                 func: None,
                 name: None,
                 file: Some(String::from("<input>")),
@@ -115,7 +116,7 @@ impl Exec<'_> {
                     .and_then(|v| v.as_string())
                     .map(|s| self.heap.str_to_string(s))
                     .filter(|s| !s.is_empty());
-                out.push(TraceFrame {
+                out.push_out(TraceFrame {
                     func: Some(f),
                     name,
                     file: None,
@@ -139,7 +140,7 @@ impl Exec<'_> {
                     .and_then(|s| a.get(s, Script::NAME).get())
                     .map(|n| self.heap.str_to_string(crate::value::Str(n)))
                     .unwrap_or_default();
-                out.push(TraceFrame {
+                out.push_out(TraceFrame {
                     func: Some(f),
                     name,
                     file: Some(file),
@@ -309,7 +310,7 @@ impl Exec<'_> {
             {
                 self.heap.set_object_slot(site, i as u32, v);
             }
-            sites.push(Value::object(site));
+            sites.push_out(Value::object(site));
         }
         let array_proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
         let sites = self.heap.new_array_from_values(Some(array_proto), &sites)?;

@@ -13,6 +13,7 @@
 //! own-property check of a non-proxy). Anything else, and every case where the builtin
 //! would throw, declines, so errors and their stack traces come from the builtin itself.
 //! Each entry mirrors its TS source step by step; keep them in sync.
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -314,7 +315,7 @@ fn split(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
     let mut parts = Vec::new();
     if m == 0 {
         for i in 0..n.min(lim) {
-            parts.push(Value::string(string::substring(heap, s, i, i + 1)?));
+            parts.push_out(Value::string(string::substring(heap, s, i, i + 1)?));
         }
         return new_array(heap, &parts);
     }
@@ -328,21 +329,21 @@ fn split(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
         let mut cuts: Vec<(u32, u32)> = Vec::with_capacity(16);
         let mut p = 0;
         while let Some(q) = string::find_latin1(h, t, p) {
-            cuts.push((p as u32, q as u32));
+            cuts.push_out((p as u32, q as u32));
             if cuts.len() as u32 == lim {
                 break;
             }
             p = q + t.len();
         }
         if (cuts.len() as u32) < lim {
-            cuts.push((p as u32, n));
+            cuts.push_out((p as u32, n));
         }
         // Each piece copied straight from `s` (flat, one-byte), the empty ones shared
         // (0129: through `substring` and `join` each paid their checks again).
         let empty = Value::string(heap.atom_string(atoms::EMPTY)?);
         parts.reserve_exact(cuts.len());
         for (a, b) in cuts {
-            parts.push(if a == b {
+            parts.push_out(if a == b {
                 empty
             } else if a == 0 && b == n {
                 Value::string(s)
@@ -355,14 +356,14 @@ fn split(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
     let mut p = 0;
     let mut q = string::index_of(heap, s, r, 0, false)?;
     while q >= 0.0 {
-        parts.push(Value::string(string::substring(heap, s, p, q as u32)?));
+        parts.push_out(Value::string(string::substring(heap, s, p, q as u32)?));
         if parts.len() as u32 == lim {
             return new_array(heap, &parts);
         }
         p = q as u32 + m;
         q = string::index_of(heap, s, r, p, false)?;
     }
-    parts.push(Value::string(string::substring(heap, s, p, n)?));
+    parts.push_out(Value::string(string::substring(heap, s, p, n)?));
     new_array(heap, &parts)
 }
 
@@ -579,7 +580,7 @@ fn from_char_code(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
         let Some(n) = num(heap, v)? else {
             return Ok(None);
         };
-        units.push(conv::to_int32(n) as u16);
+        units.push_out(conv::to_int32(n) as u16);
     }
     let s = if units.iter().all(|&u| u < 256) {
         let bytes: Vec<u8> = units.iter().map(|&u| u as u8).collect();

@@ -5,6 +5,7 @@
 //! A RegExp object (`ObjectClass::RegExp`) holds its compiled program in a U32Array cell
 //! (pointer-free words, so the heap image carries it as is), its source string and its
 //! flag bits. `lastIndex` is an ordinary own data property (writable only).
+use crate::PushOut;
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -168,23 +169,23 @@ pub(crate) fn escaped_source(heap: &mut Heap, o: Obj) -> Result<Str, Fault> {
         i += 1;
         match c {
             0x5C => {
-                out.push(c);
+                out.push_out(c);
                 if i < units.len() {
-                    out.push(units[i]);
+                    out.push_out(units[i]);
                     i += 1;
                 }
             }
             0x5D => {
                 in_class = false;
-                out.push(c);
+                out.push_out(c);
             }
             0x5B => {
-                out.push(c);
+                out.push_out(c);
                 if !in_class {
                     in_class = true;
                     // `[]` and `[^]`-style leading `]` stays literal.
                     if i < units.len() && units[i] == 0x5D {
-                        out.push(units[i]);
+                        out.push_out(units[i]);
                         i += 1;
                     }
                 }
@@ -192,7 +193,7 @@ pub(crate) fn escaped_source(heap: &mut Heap, o: Obj) -> Result<Str, Fault> {
             0x0A => out.extend_from_slice(&[0x5C, b'n' as u16]),
             0x0D => out.extend_from_slice(&[0x5C, b'r' as u16]),
             0x2F if !in_class => out.extend_from_slice(&[0x5C, 0x2F]),
-            _ => out.push(c),
+            _ => out.push_out(c),
         }
     }
     if out == units {
@@ -272,7 +273,7 @@ pub(crate) fn match_result(
     let n = caps.len();
     let mut values = Vec::with_capacity(n);
     for i in 0..n {
-        values.push(match caps.get(i) {
+        values.push_out(match caps.get(i) {
             Some((a, b)) => substring(heap, s, a, b)?,
             None => Value::UNDEFINED,
         });
@@ -301,7 +302,7 @@ pub(crate) fn match_result(
     if prog.flags().contains(Flags::HAS_INDICES) {
         let mut pairs = Vec::with_capacity(n);
         for i in 0..n {
-            pairs.push(match caps.get(i) {
+            pairs.push_out(match caps.get(i) {
                 Some((a, b)) => {
                     let pair = [Value::int(a as i32), Value::int(b as i32)];
                     Value::object(heap.new_array_from_values(Some(array_proto), &pair)?)
@@ -379,13 +380,13 @@ pub(crate) fn escape(heap: &mut Heap, s: Str) -> Result<Str, Fault> {
         if hex2 {
             crate::text::cat_to!(&mut out, "\\x", crate::text::hex(c, 2));
         } else if (9..=13).contains(&c) {
-            out.push('\\');
-            out.push(b"tnvfr"[c as usize - 9] as char);
+            out.push_out('\\');
+            out.push_out(b"tnvfr"[c as usize - 9] as char);
         } else if c < 128 {
             if !(c as u8).is_ascii_alphanumeric() && c != b'_' as u32 {
-                out.push('\\');
+                out.push_out('\\');
             }
-            out.push(c as u8 as char);
+            out.push_out(c as u8 as char);
         } else if (0xD800..0xE000).contains(&c)
             || matches!(
                 c,
@@ -394,7 +395,7 @@ pub(crate) fn escape(heap: &mut Heap, s: Str) -> Result<Str, Fault> {
         {
             crate::text::cat_to!(&mut out, "\\u", crate::text::hex(c, 4));
         } else {
-            out.push(char::from_u32(c).unwrap_or('\u{FFFD}'));
+            out.push_out(char::from_u32(c).unwrap_or('\u{FFFD}'));
         }
     }
     Ok(heap.alloc_str(&out)?)
@@ -432,14 +433,14 @@ pub(crate) fn substitute(
     while i < template.len() {
         let c = template[i];
         if c != b'$' as u16 || i + 1 >= template.len() {
-            out.push(c);
+            out.push_out(c);
             i += 1;
             continue;
         }
         let d = template[i + 1];
         match d {
             0x24 => {
-                out.push(0x24);
+                out.push_out(0x24);
                 i += 2;
             }
             0x26 => {
@@ -472,7 +473,7 @@ pub(crate) fn substitute(
                     }
                     i += 1 + digits;
                 } else {
-                    out.push(0x24);
+                    out.push_out(0x24);
                     i += 1;
                 }
             }
@@ -501,7 +502,7 @@ pub(crate) fn substitute(
                 }
             }
             _ => {
-                out.push(0x24);
+                out.push_out(0x24);
                 i += 1;
             }
         }

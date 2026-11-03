@@ -1,5 +1,6 @@
 //! Code point sets as sorted ranges, and the spec's Canonicalize for case-insensitive
 //! matching.
+use crate::PushOut;
 
 use alloc::vec::Vec;
 
@@ -82,7 +83,7 @@ impl CharSet {
             };
             match all.last_mut() {
                 Some(last) if r.0 <= last.1.saturating_add(1) => last.1 = last.1.max(r.1),
-                _ => all.push(r),
+                _ => all.push_out(r),
             }
         }
         CharSet { ranges: all }
@@ -97,7 +98,7 @@ impl CharSet {
             let lo = a0.max(b0);
             let hi = a1.min(b1);
             if lo <= hi {
-                out.push((lo, hi));
+                out.push_out((lo, hi));
             }
             if a1 < b1 {
                 i += 1;
@@ -114,12 +115,12 @@ impl CharSet {
         let mut next = 0u32;
         for &(lo, hi) in &self.ranges {
             if lo > next {
-                out.push((next, lo - 1));
+                out.push_out((next, lo - 1));
             }
             next = hi + 1;
         }
         if next <= MAX_CP {
-            out.push((next, MAX_CP));
+            out.push_out((next, MAX_CP));
         }
         CharSet { ranges: out }
     }
@@ -319,7 +320,7 @@ mod tests {
             for_each_moved(unicode, |c, m| {
                 assert_eq!(canonicalize(c, unicode), m, "{c:#x}");
                 assert_ne!(c, m);
-                moved.push(c);
+                moved.push_out(c);
             });
             for c in 0..0x11000 {
                 let changes = canonicalize(c, unicode) != c;
@@ -330,7 +331,7 @@ mod tests {
         let mut to_ascii = Vec::new();
         for_each_moved(true, |c, m| {
             if c >= 0x80 && m < 0x80 {
-                to_ascii.push(c);
+                to_ascii.push_out(c);
             }
         });
         assert_eq!(to_ascii, [0x17F, 0x212A]);
