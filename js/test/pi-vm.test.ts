@@ -653,7 +653,7 @@ test("next: a session dumped while a call is open resumes from the dump in a new
   assert.match((rejected.end as { error: string }).error, /interrupted/);
 });
 
-test("next: a dump keeps Math.random's sequence", { todo: "dumps do not carry Math.random's state yet (0182)" }, async () => {
+test("next: a dump keeps Math.random's sequence", async () => {
   const code = "const a = Math.random(); await tools.echo(1); return [a, Math.random()];";
   const data: VmStartData = { ...DUMP_DATA, code, tools: [{ name: "echo", jsName: "echo", description: "" }] };
   let session!: VmSession;

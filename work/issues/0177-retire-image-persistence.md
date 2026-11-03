@@ -1,7 +1,7 @@
 # 0177: Retire heap images as persistence; decide the packaging
 
-status: open
-agent: -
+status: in-progress
+agent: example
 branch: issue/0177-retire-images
 depends-on: 0176
 touches: crates/djs-cli/src/container.rs, crates/djs-cli/src/heap/, crates/djs-cli/src/repl/, crates/djs-core/src/vm/session.rs and image loading of untrusted images, crates/djs-wasm, js/src/snapshot.ts, js/src/sandbox.ts, js/pi/vm.ts, js/test/, scripts/size, docs/guide/ (snapshots.md, suspension.md, goals.md, host.md), README.md
