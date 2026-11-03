@@ -448,6 +448,18 @@ impl Heap {
         Some((entries, live as u32))
     }
 
+    /// The live entries of a Map or Set entries array.
+    #[cfg(feature = "dump")]
+    pub fn collection_entries_of(&self, entries: u32) -> alloc::vec::Vec<(Value, Value)> {
+        let used = (self.value_array_len(entries) - MAP_BASE) / 2;
+        (0..used)
+            .filter_map(|n| {
+                let k = self.coll_key(entries, MAP_BASE, n);
+                (!k.is_hole()).then(|| (k, self.value_array_get(entries, MAP_BASE + 2 * n + 1)))
+            })
+            .collect()
+    }
+
     /// The entries array of a Map or Set (the one its iterators lead to).
     #[cfg(feature = "dump")]
     pub fn collection_entries_ref(&self, o: Obj) -> Option<u32> {

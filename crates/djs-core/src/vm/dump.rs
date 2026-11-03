@@ -331,6 +331,7 @@ const H_BUILTIN: u16 = 8;
 const H_KEEP: u16 = 16;
 const H_ADVANCE: u16 = 32;
 const H_SPENT: u16 = 64;
+const H_FROM_SYNC: u16 = 128;
 
 /// A node that is not in flight (`Node::fl`).
 const NO_FLIGHT: usize = usize::MAX;
@@ -360,6 +361,25 @@ const HELPERS: &[(u16, &str)] = &[
     (
         H_SPENT,
         "$dump.spent = () => {\n  let f;\n  new Promise((res, rej) => (f = [res, rej]));\n  f[0]();\n  return f;\n};\n",
+    ),
+    (
+        H_FROM_SYNC,
+        "$dump.closeIt = (it) => {\n  try {\n    const m = it.return;\n    if (m !== undefined && m !== null) m.call(it);\n  } catch {}\n};\n\
+$dump.closeThrow = (it) => (e) => {\n  $dump.closeIt(it);\n  throw e;\n};\n\
+$dump.fromSync = (it, next) => {\n  \
+const step = (r, close) => {\n    \
+if (Object(r) !== r) return Promise.reject(new TypeError(\"iterator must return an object\"));\n    \
+let done, wrapper;\n    try {\n      done = !!r.done;\n      const value = r.value;\n      \
+try {\n        wrapper = Promise.resolve(value);\n      } catch (e) {\n        if (!done && close) $dump.closeIt(it);\n        throw e;\n      }\n    \
+} catch (e) {\n      return Promise.reject(e);\n    }\n    \
+return wrapper.then((v) => ({ value: v, done }), !done && close ? $dump.closeThrow(it) : undefined);\n  };\n  \
+const call = (f, args, close) => {\n    let r;\n    try {\n      r = f.apply(it, args);\n    } catch (e) {\n      return Promise.reject(e);\n    }\n    return step(r, close);\n  };\n  \
+return {\n    next(...args) {\n      return call(next, args, true);\n    },\n    \
+return(...args) {\n      let m;\n      try {\n        m = it.return;\n      } catch (e) {\n        return Promise.reject(e);\n      }\n      \
+if (m === undefined || m === null) return Promise.resolve({ value: args[0], done: true });\n      return call(m, args, false);\n    },\n    \
+throw(...args) {\n      let m;\n      try {\n        m = it.throw;\n      } catch (e) {\n        return Promise.reject(e);\n      }\n      \
+if (m === undefined || m === null) {\n        $dump.closeIt(it);\n        return Promise.reject(new TypeError(\"throw is not a method\"));\n      }\n      \
+return call(m, args, true);\n    },\n  };\n};\n",
     ),
     (
         H_KEEP,
@@ -1331,6 +1351,8 @@ impl<'a> Dumper<'a> {
             ObjectClass::Generator => self.visit_activation(n, o),
             ObjectClass::BuiltinClosure => self.visit_builtin_closure(n, o),
             ObjectClass::Record => {
+                // Written by dump_flight.rs (or refused there).
+                self.nodes[n].fl = 0;
                 for i in 0..h.object_slot_count(o) {
                     let v = h.object_slot(o, i);
                     self.edge(n, v, || cat!(path, "<", i, ">"));
@@ -1338,6 +1360,21 @@ impl<'a> Dumper<'a> {
             }
             ObjectClass::ArrayIterator | ObjectClass::CollectionIterator => {
                 self.visit_iterator(n, o)
+            }
+            ObjectClass::Arguments => {
+                let len = self.arguments_len(o);
+                match len {
+                    Some(len) => {
+                        for i in 0..len {
+                            let v = Atom::int(i)
+                                .and_then(|k| h.get_own_property(o, k))
+                                .and_then(|p| p.value())
+                                .unwrap_or(Value::UNDEFINED);
+                            self.edge(n, v, || cat!(path, "[", i, "]"));
+                        }
+                    }
+                    None => self.refuse(path, "an arguments object that was changed"),
+                }
             }
             ObjectClass::Proxy => match (h.proxy_target(o), h.proxy_handler(o)) {
                 (Some(t), Some(hd)) => {
@@ -1455,6 +1492,27 @@ impl<'a> Dumper<'a> {
         } else if !self.default_proto(o, proto) {
             self.refuse(path, "a function with another prototype");
         }
+    }
+
+    /// The length of an arguments object as a call makes it (indexes `0..length` with
+    /// default attributes, `length`, `callee` and `Symbol.iterator` untouched), else
+    /// `None`.
+    fn arguments_len(&self, o: Obj) -> Option<u32> {
+        let h = self.h;
+        let len = h
+            .get_own_property(o, atoms::LENGTH)
+            .and_then(|p| p.value())
+            .and_then(|v| v.as_int())? as u32;
+        let keys = h.own_keys(o);
+        let fixed = |k: Atom| k == atoms::LENGTH || k == atoms::CALLEE || k == atoms::SYM_ITERATOR;
+        let ok = keys.len() == len as usize + 3
+            && keys.iter().all(|&k| {
+                fixed(k)
+                    || h.atom_array_index(k).is_some_and(|i| i < len)
+                        && matches!(h.get_own_property(o, k), Some(Property::Data { flags, .. }) if flags == PropFlags::ALL)
+            })
+            && h.get_prototype_of(o).map(Value::object) == Some(intrinsic(h, Intrinsic::ObjectProto));
+        ok.then_some(len)
     }
 
     /// A private key that holds a method or accessor (a brand), not a field.
@@ -3273,6 +3331,26 @@ impl<'a> Dumper<'a> {
                         .push_out(cat!("Object.setPrototypeOf(", loc, ", ", p, ");"));
                 }
                 cat!("new ", ctor, "(", args, ")")
+            }
+            ObjectClass::Arguments => {
+                let len = self.arguments_len(o).unwrap_or(0);
+                let mut args = Vec::new();
+                for i in 0..len {
+                    let v = Atom::int(i)
+                        .and_then(|k| h.get_own_property(o, k))
+                        .and_then(|p| p.value())
+                        .unwrap_or(Value::UNDEFINED);
+                    args.push_out(self.expr(v, None, None));
+                }
+                if args.iter().any(String::is_empty) {
+                    let p = self.nodes[n].path.clone();
+                    self.refuse(p, "an arguments object on a reference cycle");
+                }
+                return cat!(
+                    "(function () { \"use strict\"; return arguments; })(",
+                    join(&args, ", "),
+                    ")"
+                );
             }
             ObjectClass::Proxy => {
                 let t = h.proxy_target(o).map_or(Value::NULL, Value::object);

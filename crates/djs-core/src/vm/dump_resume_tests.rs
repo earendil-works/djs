@@ -469,6 +469,9 @@ fn dump_at(src: &str, k: usize) -> Result<(Vec<String>, String), String> {
         ..Default::default()
     };
     let text = vm.dump(&opts, None).map_err(|e| e.message())?;
+    if std::env::var("DJS_DUMP_SHOW").is_ok_and(|v| v == "all") {
+        std::println!("{text}");
+    }
     let (_, after) = continue_dump(&text, false);
     lines.extend(after);
     Ok((lines, text))
@@ -486,6 +489,7 @@ fn exporter_round_trips_at_every_idle_point() {
         "loops",
         "cells",
         "steps",
+        "reenact",
     ] {
         let src =
             std::fs::read_to_string(fixture_dir().join(alloc::format!("{name}.src.js"))).unwrap();

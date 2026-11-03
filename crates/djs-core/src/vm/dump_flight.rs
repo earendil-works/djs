@@ -36,6 +36,8 @@ const SETTLED_REJECTED: usize = 5;
 const ANY_REJECT: usize = 6;
 const THEN_FINALLY: usize = 7;
 const CATCH_FINALLY: usize = 8;
+const FROM_SYNC_UNWRAP: usize = 13;
+const FROM_SYNC_CLOSE: usize = 14;
 
 pub(super) struct Flight<'a> {
     pub host_fn_name: &'a dyn Fn(u32) -> Option<String>,
@@ -357,6 +359,15 @@ impl Dumper<'_> {
             }
             for (k, role) in site.operands.iter().enumerate() {
                 let v = fp(lp + site.locals.len() + k);
+                if matches!(role, Role::LoopNext(Loop::Await))
+                    && k > 0
+                    && fp(lp + site.locals.len() + k - 1)
+                        .as_object()
+                        .is_some_and(|o| self.is_from_sync(o))
+                {
+                    // The dump's own iterator brings its `next`.
+                    continue;
+                }
                 self.edge(n, v, || {
                     cat!(path, "<", super::super::dump_resume::role_name(*role), ">")
                 });
@@ -472,7 +483,7 @@ impl Dumper<'_> {
         let data = h.object_slot(o, 1);
         match kind {
             RESOLVE | REJECT | ALL_ELEMENT | SETTLED_FULFILLED | SETTLED_REJECTED | ANY_REJECT
-            | THEN_FINALLY | CATCH_FINALLY => {
+            | THEN_FINALLY | CATCH_FINALLY | FROM_SYNC_UNWRAP | FROM_SYNC_CLOSE => {
                 self.edge(n, data, || cat!(path, "<data>"));
             }
             _ => self.refuse(path, "an internal function of a builtin in flight"),
@@ -490,6 +501,12 @@ impl Dumper<'_> {
         let path = self.nodes[n].path.clone();
         if h.object_class(o) == ObjectClass::ArrayIterator {
             self.edge(n, h.object_slot(o, 0), || cat!(path, "<target>"));
+        } else if let Some((entries, _)) = h.collection_iterator_position(o) {
+            // (Written again if only the iterator holds the collection.)
+            for (i, (k, v)) in h.collection_entries_of(entries).into_iter().enumerate() {
+                self.edge(n, k, || cat!(path, "<entries>[", i, "]"));
+                self.edge(n, v, || cat!(path, "<entries>[", i, "]"));
+            }
         }
         let extra = self.h.own_keys(o).len();
         if extra > 0 {
@@ -571,8 +588,7 @@ impl Dumper<'_> {
                 } else {
                     for v in [f, r] {
                         if let Some((k, _)) = kind(self, v)
-                            && k != RESOLVE
-                            && k != REJECT
+                            && !matches!(k, RESOLVE | REJECT | FROM_SYNC_UNWRAP | FROM_SYNC_CLOSE)
                         {
                             self.refuse(path.clone(), "a reaction of a builtin in flight");
                         }
@@ -737,6 +753,7 @@ impl Dumper<'_> {
             ObjectClass::BuiltinClosure => self.closure_expr(i),
             ObjectClass::ArrayIterator => self.iterator_expr(n, o),
             ObjectClass::CollectionIterator => self.collection_iterator_expr(n, o),
+            ObjectClass::Record if self.is_from_sync(o) => self.from_sync_expr(n, o),
             _ => {
                 let p = self.nodes[n].path.clone();
                 self.refuse(p, "internal: a promise builtin's record as a value");
@@ -745,9 +762,53 @@ impl Dumper<'_> {
         }
     }
 
+    /// The iterator a `for await` over a sync iterable makes (CreateAsyncFromSyncIterator):
+    /// a Record `[iterator, next]` with %AsyncFromSyncIteratorPrototype%.
+    pub(super) fn is_from_sync(&self, o: Obj) -> bool {
+        let h = self.h;
+        h.object_class(o) == ObjectClass::Record
+            && h.get_prototype_of(o).map(Value::object)
+                == Some(intrinsic(h, Intrinsic::AsyncFromSyncIteratorProto))
+    }
+
+    /// An async-from-sync iterator: the dump's own, `$dump.fromSync(it, next)`, which steps
+    /// the same way (the object is never visible to user code).
+    fn from_sync_expr(&mut self, n: usize, o: Obj) -> String {
+        if self.nodes[n].state == State::Done {
+            return self.nodes[n].loc.clone();
+        }
+        self.nodes[n].state = State::Busy;
+        let h = self.h;
+        let before = self.fns_read.get();
+        let it = self.expr(h.object_slot(o, 0), None, None);
+        let next = self.expr(h.object_slot(o, 1), None, None);
+        if it.is_empty() || next.is_empty() {
+            let p = self.nodes[n].path.clone();
+            self.refuse(p, "a for-await over an iterator on a reference cycle");
+        }
+        self.helpers |= H_FROM_SYNC;
+        let name = self.fresh("i");
+        self.line(
+            cat!(name, " = $dump.fromSync(", it, ", ", next, ");"),
+            before,
+        );
+        self.nodes[n].loc = name.clone();
+        self.nodes[n].state = State::Done;
+        name
+    }
+
     fn closure_expr(&mut self, k: usize) -> String {
         let h = self.h;
         let Clo { node, kind, data } = self.fl.clos[k];
+        if kind == FROM_SYNC_UNWRAP {
+            // A for-await over a sync iterator: the result of a step (D2612).
+            return cat!("(v) => ({ value: v, done: ", tf(data == Value::TRUE), " })");
+        }
+        if kind == FROM_SYNC_CLOSE {
+            let it = self.expr(data, None, None);
+            self.helpers |= H_FROM_SYNC;
+            return cat!("$dump.closeThrow(", it, ")");
+        }
         if kind != RESOLVE && kind != REJECT {
             let p = self.nodes[node].path.clone();
             self.refuse(p, "internal: a promise builtin's function as a value");
@@ -792,13 +853,27 @@ impl Dumper<'_> {
         let before = self.fns_read.get();
         let target = h.object_slot(o, 0);
         let index = h.object_slot(o, 1).as_int().unwrap_or(0);
-        let method = match h.object_slot(o, 2).as_int() {
-            Some(0) => "keys",
-            Some(2) => "entries",
-            _ => "values",
+        let kind = h.object_slot(o, 2).as_int();
+        let method = match kind {
+            Some(0) => "Array.prototype.keys",
+            Some(2) => "Array.prototype.entries",
+            // A String Iterator (D1346): it steps by code points.
+            Some(3) => "String.prototype[Symbol.iterator]",
+            _ => "Array.prototype.values",
         };
         let (t, steps) = if target.is_undefined() {
-            (String::from("[]"), 1)
+            (String::from(if kind == Some(3) { "\"\"" } else { "[]" }), 1)
+        } else if kind == Some(3) {
+            let units: Vec<u16> = target
+                .as_string()
+                .map(|s| h.str_units(s).take(index.max(0) as usize).collect())
+                .unwrap_or_default();
+            let low = |u: u16| (0xDC00..0xE000).contains(&u);
+            let high = |u: u16| (0xD800..0xDC00).contains(&u);
+            let cps = (0..units.len())
+                .filter(|&i| !(low(units[i]) && i > 0 && high(units[i - 1])))
+                .count();
+            (self.expr(target, None, None), cps as i32)
         } else {
             (self.expr(target, None, None), index)
         };
@@ -806,7 +881,7 @@ impl Dumper<'_> {
             let p = self.nodes[n].path.clone();
             self.refuse(p, "an iterator over an array on a reference cycle");
         }
-        let mut e = cat!("Array.prototype.", method, ".call(", t, ")");
+        let mut e = cat!(method, ".call(", t, ")");
         if steps > 0 {
             self.helpers |= H_ADVANCE;
             e = cat!("$dump.advance(", e, ", ", steps, ")");
@@ -855,12 +930,23 @@ impl Dumper<'_> {
                             && h.collection_entries_ref(c) == Some(entries)
                     })
                 });
-                let Some(c) = owner else {
-                    let p = self.nodes[n].path.clone();
-                    self.refuse(p, "an iterator over a collection the dump does not hold");
-                    return "undefined".into();
+                let t = match owner {
+                    Some(c) => self.expr(self.nodes[c].v, None, None),
+                    // Only the iterator holds the collection: a new one with its entries.
+                    None => {
+                        let mut items = Vec::new();
+                        for (k, v) in h.collection_entries_of(entries) {
+                            let k = self.expr(k, None, None);
+                            if set {
+                                items.push_out(k);
+                            } else {
+                                let v = self.expr(v, None, None);
+                                items.push_out(cat!("[", k, ", ", v, "]"));
+                            }
+                        }
+                        cat!("new ", class, "([", join(&items, ", "), "])")
+                    }
                 };
-                let t = self.expr(self.nodes[c].v, None, None);
                 if t.is_empty() {
                     let p = self.nodes[n].path.clone();
                     self.refuse(p, "an iterator over a collection on a reference cycle");
@@ -1234,7 +1320,16 @@ impl Dumper<'_> {
         let mut loops: Vec<String> = Vec::new();
         let mut it = String::new();
         for (k, role) in site.operands.iter().enumerate() {
-            let e = self.expr(fv(lp + site.locals.len() + k), None, None);
+            let from_sync = matches!(role, Role::LoopNext(Loop::Await))
+                && k > 0
+                && fv(lp + site.locals.len() + k - 1)
+                    .as_object()
+                    .is_some_and(|o| self.is_from_sync(o));
+            let e = if from_sync {
+                cat!(it, ".next")
+            } else {
+                self.expr(fv(lp + site.locals.len() + k), None, None)
+            };
             parts.push_out(e.clone());
             match role {
                 Role::LoopIterator(_) => it = e,
