@@ -414,6 +414,11 @@ test("fuel budget", async () => {
   assert.equal(sb.run("return kept + 1"), 42);
   assert.throws(() => sb.run("let a = 0; for (;;) a++"), (e: unknown) => e instanceof SandboxError && e.kind === "fuel");
   assert.equal(sb.run("return 'again'"), "again");
+  // A loop of sync host calls uses up the budget too: each call ends a slice early, and
+  // the fuel is counted across them (D2702).
+  sb.defineFunction("f", () => 1);
+  assert.throws(() => sb.run("for (;;) f()"), (e: unknown) => e instanceof SandboxError && e.kind === "fuel");
+  assert.equal(sb.run("return f() + 1"), 2);
   sb.dispose();
 });
 

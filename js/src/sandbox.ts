@@ -242,6 +242,8 @@ interface Exports {
   vm_display(vm: number, h: number): number;
   vm_call(vm: number, f: number, thisArg: number, argc: number): number;
   vm_run(vm: number, fuel: number): number;
+  /** Since 0176 (D2653). */
+  vm_fuel_used?(vm: number): number;
   vm_result(vm: number): number;
   vm_host_call(vm: number): number;
   vm_host_call_info(vm: number, callId: number): number;
@@ -1233,6 +1235,8 @@ export class Sandbox {
         this.setClock();
         return x.vm_run(vm, slice);
       });
+      // Counted across sync host calls too, which end a slice early (D2653, D2702).
+      run.used += x.vm_fuel_used ? x.vm_fuel_used(vm) : st === STATUS_OUT_OF_FUEL ? slice : 0;
       for (const callId of this.newHostCalls()) {
         const { fnId, args } = this.callInfo(callId);
         const call = { id: callId, fn: this.fnNames[fnId - 1], args };
@@ -1277,7 +1281,6 @@ export class Sandbox {
         return value;
       }
       if (st === STATUS_OUT_OF_FUEL) {
-        run.used += slice;
         if (run.used >= maxFuel) {
           // `run` abandons the call (vm_abort), so the sandbox stays usable.
           throw new SandboxError("fuel", `out of fuel after ${run.used} units`);
@@ -1294,6 +1297,7 @@ export class Sandbox {
         return IDLE;
       }
       if (st !== STATUS_HOST_CALL) return undefined;
+      if (run.used >= maxFuel) throw new SandboxError("fuel", `out of fuel after ${run.used} units`);
       const { callId, fnId, args } = this.guard(() => {
         const argc = x.vm_host_call(vm);
         return this.readCall(argc);
