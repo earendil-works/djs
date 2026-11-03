@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""budget.py MODULE.wasm [--update]: the gate's size check (D020, 0122).
+"""budget.py MODULE.wasm [--update] [--slim]: the gate's size check (D020, 0122).
+
+--slim checks the slim module (scripts/build-wasm.sh --slim, D2411) against its own
+ceiling, `slim_ceiling_gzip`: a ratchet like the default module's, with no 1.5x budget.
 
 The budget is gzip -9 of the shipped module (scripts/build-wasm.sh) within 1.5x
 quickjs-wasi's, recorded in tests/scores/size.tsv (the gate's machine needs no copy of
@@ -48,23 +51,27 @@ def main():
         sys.exit(1)
     size = len(gzip.compress(data, 9, mtime=0))
     vals, lines = read()
-    qjs, ceiling = vals["quickjs_wasi_gzip"], vals["ceiling_gzip"]
-    budget = qjs * 3 // 2
-    print(f"size: {size:,} bytes gzip ({len(data):,} raw), {size / qjs:.3f}x quickjs-wasi "
-          f"({qjs:,}); budget 1.5x = {budget:,} (D020), ratchet ceiling {ceiling:,}")
+    slim = "--slim" in sys.argv
+    key = "slim_ceiling_gzip" if slim else "ceiling_gzip"
+    qjs, ceiling = vals["quickjs_wasi_gzip"], vals[key]
+    # The slim module has only its ratchet: it is under the 1.5x budget by design.
+    budget = ceiling if slim else qjs * 3 // 2
+    what = "slim size" if slim else "size"
+    print(f"{what}: {size:,} bytes gzip ({len(data):,} raw), {size / qjs:.3f}x quickjs-wasi "
+          f"({qjs:,}); budget 1.5x = {qjs * 3 // 2:,} (D020), ratchet ceiling {ceiling:,}")
     if "--update" in sys.argv:
         new = min(ceiling, max(size + SLACK, 0))
         if new < ceiling:
-            out = [l if not l.startswith("ceiling_gzip\t") else f"ceiling_gzip\t{new}" for l in lines]
+            out = [l if not l.startswith(key + "\t") else f"{key}\t{new}" for l in lines]
             open(FILE, "w").write("\n".join(out) + "\n")
             print(f"size: ceiling lowered to {new:,}")
         return
     limit = min(ceiling, budget) if size <= budget else ceiling
     if size > limit:
-        print(f"size: FAIL: {size:,} > {limit:,} (D020; see TESTING.md \"Size budget\")")
+        print(f"{what}: FAIL: {size:,} > {limit:,} (D020; see TESTING.md \"Size budget\")")
         sys.exit(1)
     if size + SLACK < ceiling:
-        print(f"size: {ceiling - size:,} bytes below the ceiling: lower it with "
-              f"`scripts/size/budget.py {args[0]} --update`")
+        print(f"{what}: {ceiling - size:,} bytes below the ceiling: lower it with "
+              f"`scripts/size/budget.py {args[0]} --update{' --slim' if slim else ''}`")
 
 main()

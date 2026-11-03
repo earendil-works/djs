@@ -37,7 +37,12 @@ size_log=target/size-build.log
 ( CARGO_TARGET_DIR=target/size scripts/with-wasm-env.sh cargo build -p djs-wasm --target wasm32-unknown-unknown \
     --profile wasm --quiet > "$size_log" 2>&1 ) &
 size_pid=$!
-trap 'kill "$size_pid" 2>/dev/null || true' EXIT
+# D2411: the slim module (scripts/build-wasm.sh --slim), beside it for the same reason.
+slim_log=target/size-slim-build.log
+( CARGO_TARGET_DIR=target/size-slim scripts/with-wasm-env.sh cargo build -p djs-wasm --target wasm32-unknown-unknown \
+    --profile wasm --no-default-features --quiet > "$slim_log" 2>&1 ) &
+slim_pid=$!
+trap 'kill "$size_pid" "$slim_pid" 2>/dev/null || true' EXIT
 
 step "fmt";   cargo fmt --all --check
 step "clippy"; cargo clippy --workspace --all-targets --quiet -- -D warnings
@@ -116,9 +121,34 @@ grep -E '^ratchet:|^\| active' target/test262-djs.log
 echo "slowest test262 tests:"
 sed -n '/^slowest:/,/^$/p' target/test262-djs.log | { grep -E '^ +[0-9]' || true; } |
   tee target/gate-slowest-test262.txt
+# D2411: the slim build (no default features: no `full`, no `unicode`), natively in its own
+# target directory: its djs-core and djs-prelude tests that hold in both builds, the
+# codemode corpora with the stress modes, test262 without the families it leaves out
+# (tests/test262-slim.toml) against its own ratchet, and pi's tests on the slim module with
+# pi's prelude minus its lockdown, on frozen builtins.
+step "slim build (D2411): unit tests, codemode corpora, test262"
+CARGO_TARGET_DIR=target/slim cargo test -p djs-core --no-default-features --lib --quiet \
+  -- vm::slim_tests vm::frozen_tests vm::registry
+CARGO_TARGET_DIR=target/slim cargo test -p djs-prelude --no-default-features --features raw,registry --quiet
+CARGO_TARGET_DIR=target/slim cargo run --quiet -p djs-difftest --no-default-features -- --engine djs --ratchet \
+  --suspend-every 97 --gc-stress --determinism --quiet --no-diff codemode codemode-harvest > target/difftest-slim.log \
+  || { cat target/difftest-slim.log; exit 1; }
+grep -E '^(stress|ratchet):' target/difftest-slim.log
+CARGO_TARGET_DIR=target/slim cargo run --quiet -p djs-test262 --no-default-features -- run --engine djs \
+  --group active --quiet --expected tests/test262/expected-failures-slim.txt > target/test262-slim.log \
+  || { cat target/test262-slim.log; exit 1; }
+grep -E '^ratchet:|^\| active' target/test262-slim.log
+step "slim module (D2411): pi's tests without lockdown"
+wait "$slim_pid" || { cat "$slim_log"; exit 1; }
+slim_wasm=target/size-slim/wasm32-unknown-unknown/wasm/djs_wasm.wasm
+DJS_WASM="$PWD/$slim_wasm" node js/pi/pi-tests.ts --no-lockdown --out target/pi-codemode-slim \
+  --expected tests/pi/slim-expected-failures.txt > target/pi-slim.log 2>&1 \
+  || { cat target/pi-slim.log; exit 1; }
+grep -E '^pi tests:' target/pi-slim.log
 step "size budget (D020)"
 wait "$size_pid" || { cat "$size_log"; exit 1; }
 python3 scripts/size/budget.py target/size/wasm32-unknown-unknown/wasm/djs_wasm.wasm
+python3 scripts/size/budget.py "$slim_wasm" --slim
 step END
 cpu; printf 'total\t%s\t%s\n' $(($(date +%s) - gate_start)) "$cpu_s" >> "$step_log"
 echo "gate: OK"

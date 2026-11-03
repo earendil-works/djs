@@ -15,6 +15,13 @@ extern crate alloc;
 /// slim one can't reach.
 pub const FULL: bool = cfg!(feature = "full");
 
+/// Whether this build has the Unicode tables (`\p{..}` in regular expressions and full
+/// normalization: the `unicode` feature, D2411).
+pub const UNICODE: bool = cfg!(all(
+    feature = "regexp-unicode-props",
+    feature = "unicode-normalization"
+));
+
 pub mod bigint;
 pub(crate) mod builtins;
 pub mod bytecode;

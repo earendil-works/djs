@@ -3,6 +3,13 @@
 // target/pi-codemode), swaps in two modules, and runs pi's installed vitest on the copy.
 //
 //   node js/pi/pi-tests.ts [--pi ~/Development/pi-private] [--out target/pi-codemode] [--no-run]
+//                          [--no-lockdown] [--expected FILE]
+//
+// --no-lockdown runs pi's prelude with its `lockdown()` cut out, on frozen builtins (D2304):
+// what pi would run on djs, and what the slim module needs (its builtins don't include the
+// typed arrays the lockdown walks; D2411). The gate runs it on djs-slim.wasm.
+// --expected FILE: the run passes when every failing test is listed in FILE (one full test
+// name per line, `#` comments); listed tests that pass are reported as stale.
 //
 // The swapped modules:
 // - src/runtime/vm.ts: `startVm` from js/pi/vm.ts with pi's own PRELUDE_SOURCE,
@@ -33,6 +40,7 @@ const pkg = join(pi, "packages/codemode");
 if (!existsSync(join(pkg, "src/runtime/vm.ts"))) throw new Error(`no pi codemode package at ${pkg}`);
 if (!existsSync(wasm)) throw new Error(`no djs-wasm at ${wasm}: run scripts/build-wasm.sh or set DJS_WASM`);
 
+const noLockdown = process.argv.includes("--no-lockdown");
 const commit = spawnSync("git", ["-C", pi, "rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
 
 rmSync(out, { recursive: true, force: true });
@@ -60,10 +68,28 @@ import { PRELUDE_SOURCE } from "./prelude-source.ts";
 export type { VmSession };
 export type StartVmOptions = Omit<DjsOptions, "prelude">;
 
+${
+    noLockdown
+      ? `
+/** pi's prelude without its lockdown (frozen builtins do that job, D2304). */
+function withoutLockdown(prelude: string): string {
+\tconst start = prelude.indexOf("\\t(function lockdown() {");
+\tconst close = "\\n\\t})();";
+\tconst end = prelude.indexOf(close, start);
+\tif (start < 0 || end < 0) throw new Error("pi's prelude has no lockdown() to cut out");
+\treturn prelude.slice(0, start) + prelude.slice(end + close.length);
+}
+
+export function startVm(options: StartVmOptions): Promise<VmSession> {
+\treturn startDjsVm({ ...options, prelude: withoutLockdown(PRELUDE_SOURCE), frozenBuiltins: true });
+}
+`
+      : `
 export function startVm(options: StartVmOptions): Promise<VmSession> {
 \treturn startDjsVm({ ...options, prelude: PRELUDE_SOURCE });
 }
-`,
+`
+  }`,
 );
 
 writeFileSync(
@@ -138,4 +164,25 @@ for (const file of results.testResults) {
 }
 writeFileSync(join(out, "report.md"), lines.join("\n"));
 console.log(`\n${results.numPassedTests} / ${results.numTotalTests} passed; report: ${relative(process.cwd(), join(out, "report.md"))}`);
+const expectedFile = process.argv.includes("--expected") ? arg("--expected", "") : "";
+if (expectedFile) {
+  const expected = new Set(
+    readFileSync(expectedFile, "utf8")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("#")),
+  );
+  const failed = results.testResults.flatMap((f) =>
+    f.assertionResults.filter((a) => a.status === "failed").map((a) => a.fullName),
+  );
+  const fresh = failed.filter((name) => !expected.has(name));
+  const stale = [...expected].filter((name) => !failed.includes(name));
+  for (const name of stale) console.log(`stale (passes now): ${name}`);
+  for (const name of fresh) console.log(`NEW FAILURE: ${name}`);
+  // A file that fails to load reports no assertions: count those as failures too.
+  const broken = results.testResults.filter((f) => f.assertionResults.length === 0 && f.message);
+  for (const f of broken) console.log(`NEW FAILURE: ${relative(out, f.name)}: ${f.message?.split("\n")[0]}`);
+  console.log(`pi tests: ${fresh.length + broken.length} new failures, ${stale.length} stale (${relative(repo, expectedFile)})`);
+  process.exit(fresh.length + broken.length === 0 ? 0 : 1);
+}
 process.exit(run.status ?? 1);

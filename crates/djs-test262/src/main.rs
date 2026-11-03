@@ -203,7 +203,19 @@ fn main() -> ExitCode {
 }
 
 fn real_main(args: &Args) -> Result<ExitCode, String> {
-    let config = Config::load(&args.config)?;
+    let mut config = Config::load(&args.config)?;
+    // A djs-core without some features (the slim build, D2411) skips what it leaves out:
+    // the matching groups of tests/test262-slim.toml come first.
+    if args.engine == "djs" && (!djs_core::FULL || !djs_core::UNICODE) {
+        let slim = Config::load(&suite::workspace_root().join("tests/test262-slim.toml"))?;
+        let want = |name: &str| match name {
+            "slim" => !djs_core::FULL,
+            "no-unicode" => !djs_core::UNICODE,
+            _ => false,
+        };
+        let groups: Vec<_> = slim.groups.into_iter().filter(|g| want(&g.name)).collect();
+        config.groups.splice(0..0, groups);
+    }
     let root = match &args.test262 {
         Some(p) => p.clone(),
         None => suite::locate_test262()?,

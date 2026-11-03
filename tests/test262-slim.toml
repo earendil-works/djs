@@ -1,0 +1,77 @@
+# test262 groups of the slim build (D2411), put before tests/test262.toml's when the
+# runner's djs-core lacks a feature: `slim` without `full`, `no-unicode` without the
+# Unicode tables. The tests of what that build leaves out are skipped (by feature tag, by
+# directory, and by the globals they use); everything else runs as usual, against
+# tests/test262/expected-failures-slim.txt in the gate's slim run (no default features).
+
+[[group]]
+name = "slim"
+kind = "skip"
+description = "Families the slim build leaves out (D2411): typed arrays, ArrayBuffer, DataView, BigInt, Iterator helpers, DisposableStack and `using`, decorators, WeakRef and FinalizationRegistry."
+features = [
+  "TypedArray",
+  "TypedArray.*",
+  "Int8Array",
+  "Uint8Array",
+  "Uint8ClampedArray",
+  "Int16Array",
+  "Uint16Array",
+  "Int32Array",
+  "Uint32Array",
+  "Float16Array",
+  "Float32Array",
+  "Float64Array",
+  "BigInt",
+  "ArrayBuffer",
+  "DataView",
+  "DataView.*",
+  "resizable-arraybuffer",
+  "arraybuffer-transfer",
+  "immutable-arraybuffer",
+  "uint8array-base64",
+  "stable-typedarray-sort",
+  "iterator-helpers",
+  "iterator-sequencing",
+  "iterator-chunking",
+  "iterator-includes",
+  "Iterator.*",
+  "joint-iteration",
+  "explicit-resource-management",
+  "decorators",
+  "WeakRef",
+  "FinalizationRegistry",
+]
+paths = [
+  "built-ins/TypedArray",
+  "built-ins/TypedArrayConstructors",
+  "built-ins/ArrayBuffer",
+  "built-ins/DataView",
+  "built-ins/BigInt",
+  "built-ins/Iterator",
+  "built-ins/WeakRef",
+  "built-ins/FinalizationRegistry",
+  "built-ins/DisposableStack",
+  "built-ins/AsyncDisposableStack",
+  "built-ins/SuppressedError",
+  "language/statements/using",
+  "language/statements/await-using",
+]
+scan = [
+  "Uint8Array",
+  "Int8Array",
+  "ArrayBuffer",
+  "Float64Array",
+  "BigInt(",
+  "Iterator.prototype",
+  "Iterator.from",
+]
+
+[[group]]
+name = "no-unicode"
+kind = "skip"
+description = "Without djs-core's `unicode` features (D1500, D1760, D2411): `\\p{..}` in regular expressions and full normalization."
+features = ["regexp-unicode-property-escapes"]
+paths = [
+  "built-ins/RegExp/property-escapes",
+  "built-ins/String/prototype/normalize",
+]
