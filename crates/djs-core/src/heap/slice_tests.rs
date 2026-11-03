@@ -147,9 +147,8 @@ fn a_full_collection_drops_a_parent_its_slices_barely_cover() {
     assert_eq!(h.str_to_string(s), &t[..64]);
     assert_eq!(h.cell_flags(s.0) & flags::SLICE_DETACH, 0);
     h.verify().unwrap();
-    let before = h.arena().len();
-    h.collect().unwrap();
-    assert!(h.arena().len() + n <= before, "the parent is gone");
+    // The same collection dropped the parent.
+    assert!(h.arena().len() < n);
     let s = h.get_handle(hs[0]).as_string().unwrap();
     assert_eq!(h.str_to_string(s), &t[..64]);
     // A quarter covered: kept, the slices stay.

@@ -232,17 +232,27 @@ impl Heap {
             return Err(HeapError::HostOutOfMemory);
         }
         let base = self.base_end();
-        let (before, after, old, detach) = self.without_barrier(|h| h.mark_compact(base, true))?;
+        let (before, mut after, old, detach) =
+            self.without_barrier(|h| h.mark_compact(base, true))?;
         self.set_old_region(old, 0);
         self.after_collect(after);
-        // Slices whose parent only they kept get their own units now (D2542); the parent
-        // dies at the next full collection. Without room a slice stays as it is.
+        if detach.is_empty() {
+            return Ok(GcStats { before, after });
+        }
+        // Slices whose parent only they kept get their own units now (D2542), and a second
+        // pass drops the parents: a snapshot right after a collection should not carry
+        // them. Without room a slice stays as it is.
         for s in detach {
             let s = crate::value::Str(s);
             if self.flatten(s).is_err() {
                 let f = self.cell_flags(s.0);
                 self.set_cell_flags(s.0, f & !flags::SLICE_DETACH);
             }
+        }
+        if let Ok((_, a, old, _)) = self.without_barrier(|h| h.mark_compact(base, true)) {
+            after = a;
+            self.set_old_region(old, 0);
+            self.after_collect(after);
         }
         Ok(GcStats { before, after })
     }
