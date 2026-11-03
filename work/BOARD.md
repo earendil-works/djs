@@ -8,7 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0162 | Act on pico's speed findings (tree, fuel rule, results into heap strings) | speed | .worktrees/speed |
 | 0163 | Seeded hashing for VM atoms and Map/Set | strings | .worktrees/strings |
-| 0158 | Instance memory: reservation, arena at end, stack, base outside | heap | .worktrees/heap |
+| 0165 | Tool results stored once (sliced strings over result buffers) | heap | .worktrees/heap |
 | 0161 | Safe-as-unsafe heap access; Vec hygiene | audit | .worktrees/audit |
 | 0151 | Shrink the base heap to a fraction (no removals) | bloat | .worktrees/bloat |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
@@ -22,7 +22,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| - | Tool-result buffers with sliced strings (pico lesson 3; weeks) | 0158 (heap next) |
 | - | Codec-free session images for browsers (pico lesson 4) | - |
 
 ## Done
@@ -84,6 +83,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0158 | Instance memory: fresh Sandbox 18 -> 11 pages (D2540, D2541) | 47d32099 (agent heap; 128 KiB stack, MAX_DEPTH 550, coded base outside memory, ABI 2) |
 | 0164 | Image compatibility by dependency descriptor (D2265-D2268) | cb43e070 (agent snapshot; container format 3) |
 | 0159 | Twin re-benchmark: 54 @fast + 2 @native dropped (D2310); wmeasure fails loudly | ec8042f5 (agent perf; full 445.1 KB, slim 379.3 KB) |
 | 0160 | Slim build: full + unicode features (D2411-D2413, D025) | 7074117e (agent slim; full 450.4 KB 1.57x, slim 385.8 KB 1.35x; gate legs) |
