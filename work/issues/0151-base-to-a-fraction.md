@@ -163,7 +163,7 @@ Found while measuring L4, landed before it on the coordinator's call.
   wide arm), `exec` arms for call_intrinsic8/call0-3/jump_if_*8, `exec_short` for the
   rest; `fast_leaf_call(op)`, `each_dense_decline` read either form.
 - Base 296,184 → 250,544 B (−45.6 KB); bytecode 86.0 → 42.3 KB; cells 4,848 unchanged.
-  Instance after vm_new 19 → 18 pages. Module gzip +377 B (ceiling 455,400, D2443).
+  Instance after vm_new 19 → 18 pages. Module gzip +377 B vs pre-0155 main, 455,502 in the merge gate (ceiling 455,600, D2443).
 - wasm instructions vs main (with D2441): −1.4..+1.5% on most, indexof +2.7% (first run
   only: warm equal, --no-liftoff −0.3%), pushpop +3.9% (spread 1.6), json-date +4.8%
   (one more collection in wasm: page-rounded thresholds, phase). Natively run_hot slower

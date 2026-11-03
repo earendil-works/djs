@@ -6784,7 +6784,8 @@ hot loop has one arm per short form, merged with the wide arm where that arm is 
   arrays 13.8 → 13.7, strings 12.4 → 12.2, indexof and calls 1.2 → 1.1, strbuild 15.6 →
   15.8, json-date 3.8 → 4.3; pi bench warm start 0.43 → 0.41 ms, cold 5.04 → 4.99 ms,
   tool-heavy warm 3.06 → 2.87 ms, cold 7.30 → 7.22 ms.
-- **Paid:** module gzip +377 B (455,006 → 455,383; ceiling raised to 455,400); wasm
+- **Paid:** module gzip +377 B measured against main before 0155 (455,006 → 455,383),
+  455,502 in the merge gate on main with 0155 (≈+420 B; ceiling raised to 455,600); wasm
   instructions against main with D2441 (n=5): loop −1.4%, tight −1.1%, forof −0.1%,
   higher-order +0.2%, json-replacer +0.5%, call1 +0.6%, arrays +0.7%, json-indent +0.7%,
   foreach +0.8%, strbuild +0.9%, push-pop +0.9%, jsonh +1.0%, calls +1.2%, props +1.2%,
