@@ -158,6 +158,19 @@ pub fn activation(heap: &Heap, g: Obj) -> Option<Activation> {
 }
 
 impl Activation {
+    /// The file name a dump's loader compiled its functions as.
+    pub const DUMP_FILE: &'static str = "dump.js";
+
+    /// Shows positions in a loaded dump under the dump's real file name.
+    pub fn in_file(mut self, dump: &str) -> Activation {
+        if let Some(rest) = self.at.strip_prefix(Self::DUMP_FILE)
+            && rest.starts_with(':')
+        {
+            self.at = format!("{dump}{rest}");
+        }
+        self
+    }
+
     /// For `.bt` and `djs resume --explain`: what it is and where it stopped (`label`
     /// names the input or handle whose promise it is), the source line with a caret
     /// under the `await`/`yield`, and the bindings, indented by two spaces.

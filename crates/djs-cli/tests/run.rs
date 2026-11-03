@@ -126,7 +126,7 @@ fn explain_a_dump() {
             format!(
                 "{dump}: format 2; 1 open call, 1 suspended activation; handles: run\n\
                  #2 tools.read({{\"path\":\"a\"}})\n\
-                 \x20 async function main at dump.js:3:13 (run)\n\
+                 \x20 async function main at {dump}:3:13 (run)\n\
                  \x20     const a = await tools.read({{ path: \"a\" }});\n\
                  \x20               ^\n\
                  \x20   a = <uninitialized>, b = <uninitialized>\n"
@@ -141,7 +141,9 @@ fn explain_a_dump() {
     let (code, out, err) = djs_cmd(&["resume", "--explain", generator]);
     assert_eq!((code, err.as_str()), (0, ""));
     assert!(
-        out.contains("not waiting on a call:\n  generator counter at dump.js:"),
+        out.contains(&format!(
+            "not waiting on a call:\n  generator counter at {generator}:"
+        )),
         "{out}"
     );
     let r = djs_cmd(&["resume", "--explain", &format!("{DIR}/reads.src.js")]);
@@ -238,4 +240,28 @@ fn djs_cmd(args: &[&str]) -> (i32, String, String) {
         String::from_utf8(out.stdout).unwrap(),
         String::from_utf8(out.stderr).unwrap(),
     )
+}
+
+/// `--explain` answers nothing, so a dump naming host functions the CLI does not define
+/// loads; positions are in the dump's own file. Resuming it refuses.
+#[test]
+fn explain_any_host_function() {
+    let dump = format!("{DIR}/sleep.dump.js");
+    assert_eq!(
+        djs_cmd(&["resume", "--explain", &dump]),
+        (
+            0,
+            format!(
+                "{dump}: format 2; 1 open call, 1 suspended activation; handles: run\n\
+                 #2 sleep(100)\n\
+                 \x20 async function main at {dump}:4:3 (run)\n\
+                 \x20     await sleep(100);\n\
+                 \x20     ^\n"
+            ),
+            String::new()
+        )
+    );
+    let (code, _, err) = djs_cmd(&["resume", &dump]);
+    assert_eq!(code, 2);
+    assert!(err.contains("unknown host function sleep"), "{err}");
 }

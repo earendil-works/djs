@@ -393,13 +393,13 @@ fn restore_a_waiting_dump() {
         &format!(
             "loaded {dir}/reads.dump.js into a fresh VM\n\
              waiting: #2 tools.read({{\"path\":\"a\"}})\n\
-             #2 tools.read({{\"path\":\"a\"}})  the dump, at dump.js:3:13\n\
-             #2 tools.read({{\"path\":\"a\"}})\n  async function main at dump.js:3:13 (run)\n\
+             #2 tools.read({{\"path\":\"a\"}})  the dump, at {dir}/reads.dump.js:3:13\n\
+             #2 tools.read({{\"path\":\"a\"}})\n  async function main at {dir}/reads.dump.js:3:13 (run)\n\
              \x20     const a = await tools.read({{ path: \"a\" }});\n\
              \x20               ^\n\
              \x20   a = <uninitialized>, b = <uninitialized>\n\
              [waiting] #4 tools.read({{\"path\":\"b\"}})\n\
-             \x20 async function main at dump.js:4:13 (run)\n\
+             \x20 async function main at {dir}/reads.dump.js:4:13 (run)\n\
              \x20     const b = await tools.read({{ path: \"b\" }});\n\
              \x20               ^\n\
              \x20   a = 'AA', b = <uninitialized>\n\
@@ -457,7 +457,7 @@ fn dump_a_waiting_session() {
             "a fresh VM",
             &format!("loaded {dump} into a fresh VM"),
             "waiting: #2 tools.read({\"path\":\"a\"})",
-            "  async function get at dump.js:4:35",
+            &format!("  async function get at {dump}:4:35"),
             "      async function get(p) { const v = await tools.read({path: p}); return v.toUpperCase() }",
             "                                        ^",
             "    p = 'a', v = undefined",
@@ -514,8 +514,8 @@ fn dump_waiting_await_inputs() {
             "waiting: #2 tools.read({\"path\":\"a\"})",
             "waiting: #3 tools.read({\"path\":\"b\"})",
             "[waiting] #5 tools.read({\"path\":\"c\"})",
-            "#2 tools.read({\"path\":\"a\"})  the dump, at dump.js:6:11",
-            "#3 tools.read({\"path\":\"b\"})  the dump, at dump.js:9:10",
+            &format!("#2 tools.read({{\"path\":\"a\"}})  the dump, at {dump}:6:11"),
+            &format!("#3 tools.read({{\"path\":\"b\"}})  the dump, at {dump}:9:10"),
             "#5 tools.read({\"path\":\"c\"})  input 3, at repl:1:10",
             "[input 2] 'bee'",
             "'hello'",

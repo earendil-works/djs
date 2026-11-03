@@ -246,6 +246,8 @@ struct Repl {
     entry_override: Option<Handle>,
     /// A handle outside the waiting inputs is held: `.dump-every` must not replace the VM.
     hold_vm: bool,
+    /// The dump file the VM was `.restore`d from (its functions' positions are in it).
+    dump_file: Option<String>,
 }
 
 impl Repl {
@@ -273,6 +275,7 @@ impl Repl {
             dump_every: false,
             entry_override: None,
             hold_vm: false,
+            dump_file: None,
         }
     }
 
@@ -280,6 +283,7 @@ impl Repl {
     fn replace_vm(&mut self, vm: Vm) {
         self.vm = vm;
         self.entry_override = None;
+        self.dump_file = None;
         self.waiting.clear();
         self.origins.clear();
         self.fresh.clear();
@@ -828,6 +832,14 @@ impl Repl {
         self.report_rejections();
     }
 
+    /// Positions in the functions of a `.restore`d dump under the dump's file name.
+    fn in_dump_file(&self, a: activations::Activation) -> activations::Activation {
+        match &self.dump_file {
+            Some(f) => a.in_file(f),
+            None => a,
+        }
+    }
+
     /// `.pending`: the open calls, what issued them and where the code waits.
     fn pending(&mut self) {
         let ids = self.vm.pending_host_calls();
@@ -843,7 +855,7 @@ impl Repl {
             let heap = self.vm.heap();
             if let Some(p) = activations::call_promise(heap, id)
                 && let Some(&g) = activations::waiting_on(heap, p).first()
-                && let Some(a) = activations::activation(heap, g)
+                && let Some(a) = activations::activation(heap, g).map(|a| self.in_dump_file(a))
             {
                 line.push_str(&format!(", at {}", a.at));
             }
@@ -874,7 +886,10 @@ impl Repl {
             print!("{}", a.describe(&input));
         };
         if arg == "all" {
-            let all = activations::all(self.vm.heap());
+            let all: Vec<_> = activations::all(self.vm.heap())
+                .into_iter()
+                .map(|a| self.in_dump_file(a))
+                .collect();
             if all.is_empty() {
                 println!("no suspended activations");
             }
@@ -894,6 +909,7 @@ impl Repl {
         let acts: Vec<_> = gens
             .iter()
             .filter_map(|&g| activations::activation(heap, g))
+            .map(|a| self.in_dump_file(a))
             .collect();
         let desc = self.tools.describe(&mut self.vm, id);
         println!("#{id} {desc}");
@@ -1143,8 +1159,9 @@ impl Repl {
         let d = crate::dumps::dump(&self.vm, &self.tools, &refs)?;
         let mut vm = new_vm(self.gc_stress);
         let mut loaded = crate::dumps::load(&mut vm, &self.tools, &d.text)?;
-        // The old VM's handles go with it.
+        // The old VM's handles go with it; positions are now in this dump, which has no file.
         self.vm = vm;
+        self.dump_file = None;
         let mut kept = Vec::new();
         for mut w in std::mem::take(&mut self.waiting) {
             if let Some(h) = crate::dumps::take_handle(&mut loaded.handles, &w.handle_name()) {
@@ -1175,6 +1192,7 @@ impl Repl {
             }
         };
         println!("loaded {arg} into a fresh VM");
+        self.dump_file = Some(arg.to_string());
         // New inputs are numbered after the restored ones (`input 3`), so labels stay
         // unique handle names for later dumps.
         self.inputs = loaded

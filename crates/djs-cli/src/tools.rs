@@ -197,6 +197,15 @@ impl Tools {
         format!("{}({})", self.name(info.fn_id), args.join(", "))
     }
 
+    /// [`Tools::describe`] under a name given by the caller (a dump's own name for it).
+    pub fn describe_as(vm: &mut Vm, call_id: u32, name: &str) -> String {
+        let Some(info) = vm.host_call(call_id) else {
+            return format!("call {call_id}");
+        };
+        let args: Vec<String> = info.args.iter().map(|&a| to_json(vm, a)).collect();
+        format!("{name}({})", args.join(", "))
+    }
+
     /// The scripted answer for the pending call `call_id`, if the answers file has one.
     pub fn answer(&mut self, vm: &mut Vm, call_id: u32) -> Option<Result<Value, Value>> {
         let info = vm.host_call(call_id)?;

@@ -275,7 +275,19 @@ pub fn explain_dump(
 ) -> i32 {
     use crate::repl::activations;
     let mut vm = new_vm(opts);
-    let host_fn = |name: &str| tools.id_for_call_name(name);
+    // `--explain` answers nothing, so any host function name loads: names the CLI does not
+    // define get ids of their own (from EXPLAIN_IDS), and calls show the dump's names.
+    let others = std::cell::RefCell::new(Vec::<String>::new());
+    let host_fn = |name: &str| {
+        tools.id_for_call_name(name).or_else(|| {
+            let mut o = others.borrow_mut();
+            let i = o.iter().position(|n| n == name).unwrap_or_else(|| {
+                o.push(name.to_string());
+                o.len() - 1
+            });
+            Some(EXPLAIN_IDS + i as u32)
+        })
+    };
     let lopts = djs_core::vm::dump_load::LoadOptions {
         host_fn: &host_fn,
         ..Default::default()
@@ -300,7 +312,10 @@ pub fn explain_dump(
         .iter()
         .map(|(n, h)| (vm.heap().get_handle(*h), n.clone()))
         .collect();
-    let all = activations::all(vm.heap());
+    let all: Vec<activations::Activation> = activations::all(vm.heap())
+        .into_iter()
+        .map(|a| a.in_file(filename))
+        .collect();
     let plural =
         |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
     let mut s = format!(
@@ -322,7 +337,11 @@ pub fn explain_dump(
     };
     let mut shown: Vec<String> = Vec::new();
     for c in &loaded.calls {
-        s.push_str(&format!("#{} {}\n", c.id, tools.describe(&mut vm, c.id)));
+        s.push_str(&format!(
+            "#{} {}\n",
+            c.id,
+            Tools::describe_as(&mut vm, c.id, &c.name)
+        ));
         let heap = vm.heap();
         let waiting = activations::call_promise(heap, c.id)
             .map(|p| activations::waiting_on(heap, p))
@@ -330,6 +349,7 @@ pub fn explain_dump(
         for a in waiting
             .iter()
             .filter_map(|&g| activations::activation(heap, g))
+            .map(|a| a.in_file(filename))
         {
             let d = a.describe(&label(&a));
             s.push_str(&d);
@@ -354,6 +374,9 @@ pub fn explain_dump(
 
 /// Host function ids registered by `djs run`.
 pub const CONSOLE_LOG: u32 = 1;
+
+/// `resume --explain`: ids for host function names the CLI does not define.
+const EXPLAIN_IDS: u32 = 1 << 20;
 
 /// Options of `djs run`.
 #[derive(Clone, Debug, Default)]
