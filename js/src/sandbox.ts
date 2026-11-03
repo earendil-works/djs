@@ -42,12 +42,17 @@ export interface SandboxOptions {
    * abandoned; the sandbox stays usable). Default: none.
    */
   maxFuel?: number;
-  /** Global host functions, by name. A call parks the VM until the function returns. */
+  /**
+   * Global host functions, by name. A call parks the VM until the function returns. A
+   * dotted name (`tools.read`) is a property of a global object (`tools`) the sandbox
+   * makes for its first such name; the host function's name is the last part (`read`).
+   * Dumps name host functions by these names.
+   */
   functions?: Record<string, HostFunction>;
   /**
    * Global async host functions, by name (D1374): a call returns a promise in the VM at
    * once and the script goes on, so several calls can be outstanding (`Promise.all`
-   * over tools). The function may return a value or a promise.
+   * over tools). The function may return a value or a promise. Names as in `functions`.
    */
   asyncFunctions?: Record<string, HostFunction>;
   /** Receives `console.*` calls from the sandbox; default: the host's `console`. */
@@ -438,6 +443,8 @@ export class Sandbox {
   private clock: number | undefined;
   /** The journal of the current run, being recorded or replayed (D1730). */
   private journal: Journal | null = null;
+  /** Namespace objects this sandbox made for dotted function names (`tools`), as handles. */
+  private readonly namespaces = new Map<string, number>();
   /** The host-driven run in progress (`begin`, `resume`), until it ends. */
   private active: { run: Run; core: RunCore } | null = null;
 
@@ -574,11 +581,27 @@ export class Sandbox {
 
   private defineGlobalFunction(name: string, f: HostFunction, async: boolean): void {
     this.guard(() => {
+      const x = this.x;
       const h = this.hostFunction(name, f, async);
-      const g = this.x.vm_global(this.vm);
-      this.defineOn(g, name, h);
-      this.x.vm_handle_free(this.vm, g);
-      this.x.vm_handle_free(this.vm, h);
+      const dot = name.indexOf(".");
+      if (dot > 0) {
+        // `tools.read`: a property of the namespace object `tools`, made on first use.
+        const ns = name.slice(0, dot);
+        let o = this.namespaces.get(ns);
+        if (o === undefined) {
+          o = this.check(x.vm_new_object(this.vm), "memory");
+          const g = x.vm_global(this.vm);
+          this.defineOn(g, ns, o);
+          x.vm_handle_free(this.vm, g);
+          this.namespaces.set(ns, o);
+        }
+        this.defineOn(o, name.slice(dot + 1), h);
+      } else {
+        const g = x.vm_global(this.vm);
+        this.defineOn(g, name, h);
+        x.vm_handle_free(this.vm, g);
+      }
+      x.vm_handle_free(this.vm, h);
     });
   }
 

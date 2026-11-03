@@ -95,3 +95,12 @@ test("begin names the script for stack traces", async () => {
   const run = sb.begin("\nreturn new Error('x').stack;", {}, { filename: "sleep.js" });
   assert.match(String(run.value), /sleep\.js:2/);
 });
+
+test("dotted names make a namespace object; dumps and loads name the call so", async () => {
+  const module = await loadModule();
+  const asyncFunctions = { "tools.sleep": () => 0, "tools.other": () => 0 };
+  const sb = new Sandbox({ module, asyncFunctions });
+  assert.equal(sb.run("return [typeof tools.sleep, tools.sleep.name, typeof tools.other]").join(), "function,sleep,function");
+  const run = sb.begin("return await tools.sleep(3)");
+  assert.deepEqual(run.calls.map((c) => c.fn), ["tools.sleep"]);
+});

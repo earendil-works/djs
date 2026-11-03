@@ -22,7 +22,7 @@ import { type ConsoleLike, type OpenCall, type Run, Sandbox } from "../../js/src
 export const SCRIPT = `
 async function step(label, ms) {
   console.log(label, "sleeps", ms, "ms");
-  const r = await sleep(ms);
+  const r = await tools.sleep(ms);
   return label + ": " + r;
 }
 const t0 = Date.now();
@@ -53,7 +53,7 @@ export interface Options {
 function sandboxOptions(log: (line: string) => void) {
   const say = (...a: unknown[]) => log(`  [vm] ${a.map(String).join(" ")}`);
   const console: ConsoleLike = { log: say, info: say, warn: say, error: say };
-  return { asyncFunctions: { sleep }, console };
+  return { asyncFunctions: { "tools.sleep": sleep }, console };
 }
 
 /** Starts the host's timer for every open call it has not started yet. */

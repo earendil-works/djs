@@ -11,7 +11,7 @@ test("examples/sleep-dump: dump while the tool sleeps, resume, continue", async 
   const { dump, result } = await inProcess({ ms: 50, log: (l) => void lines.push(l) });
   assert.deepEqual(result, ["first: slept 50 ms", "second: slept 50 ms"]);
   // What was suspended: the open call, both activations, the half-done push, the loop.
-  assert.match(dump, /\$dump\.pending\(\d+, "sleep", \[50\]\)/);
+  assert.match(dump, /\$dump\.pending\(\d+, "tools\.sleep", \[50\]\)/);
   assert.equal(dump.match(/\$dump\.resume\(/g)?.length, 2, dump);
   assert.match(dump, /"call\.this"/);
   assert.match(dump, /for-of/);

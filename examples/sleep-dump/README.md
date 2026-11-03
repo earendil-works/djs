@@ -1,6 +1,6 @@
 # sleep-dump: dump a run while a host tool sleeps, continue it somewhere else
 
-A host (node) gives a script one tool, `sleep(ms)`, which waits on the host side. The
+A host (node) gives a script one tool, `tools.sleep(ms)`, which waits on the host side. The
 script calls it twice, 5000 ms each, from a helper inside a loop. While the first call is
 open, the VM has nothing to do: it is **idle**, and the host writes it as a **format 2
 dump**, a JavaScript file that recreates the script's suspended state: not only data, but
@@ -24,7 +24,7 @@ sleep.
 ```js
 async function step(label, ms) {
   console.log(label, "sleeps", ms, "ms");
-  const r = await sleep(ms);
+  const r = await tools.sleep(ms);
   return label + ": " + r;
 }
 const t0 = Date.now();
@@ -38,7 +38,7 @@ return results;
 
 When the host dumps, during the first sleep, three things are in the middle of running:
 
-- `step("first", 5000)`, stopped at its `await sleep(ms)`;
+- `step("first", 5000)`, stopped at its `await tools.sleep(ms)`;
 - the script itself, stopped at `await step(...)` halfway through the call
   `results.push(...)`: it has already looked up `results.push` and is waiting for the
   argument;
@@ -53,14 +53,14 @@ description of the suspended sites below point into it.
 The host drives the run itself with the Sandbox's host-driven run API:
 
 ```ts
-const sb = await Sandbox.create({ asyncFunctions: { sleep } });
+const sb = await Sandbox.create({ asyncFunctions: { "tools.sleep": sleep } });
 const run = sb.begin(SCRIPT, { ms: 5000 }, { filename: "sleep.js" }); // to the first idle point
-run.calls;                                   // [{ id: 2, fn: "sleep", args: [5000] }]
+run.calls;                                   // [{ id: 2, fn: "tools.sleep", args: [5000] }]
 // ... the host starts its timer for call 2 ...
 const dump = run.dump();                     // only while idle
 sb.dispose();                                // the restart: the VM and the timer are gone
 
-const { sandbox, run: again } = await Sandbox.resume(dump, { asyncFunctions: { sleep } });
+const { sandbox, run: again } = await Sandbox.resume(dump, { asyncFunctions: { "tools.sleep": sleep } });
 again.calls;                                 // the same call, the same id
 // ... the host re-arms its timer for call 2; when it fires:
 again.settle(2, { ok: true, value: "slept 5000 ms" });
@@ -89,7 +89,7 @@ The dump holds the VM's side, and only that:
   (the for-of's iterator);
 - the for-of's array iterator, made again and advanced past `"first"` with `next()`, the
   same calls that put it in that state the first time;
-- the open host call: `$dump.pending(id, "sleep", [5000])`, with the id the VM gave it, the
+- the open host call: `$dump.pending(id, "tools.sleep", [5000])`, with the id the VM gave it, the
   function by the host's name for it, and its arguments. `step("first")` awaits it, and
   the script awaits `step("first")`'s promise;
 - the run's result promise, named `run` for the host (`$dump.handle("run", ...)`).
@@ -98,7 +98,7 @@ A loader that does not find the same site, bindings, operands and loops in this 
 compiled code refuses the dump with the reason, instead of resuming somewhere else.
 
 The timer is not in the VM: it is host state. A new sandbox that loads the dump knows that
-call 2 to `sleep(5000)` is open, nothing more. (The second sleep is not issued yet: the
+call 2 to `tools.sleep(5000)` is open, nothing more. (The second sleep is not issued yet: the
 restarted sandbox makes that call itself, and the host arms a fresh timer for it.) What happens to it is the host's decision:
 
 - **re-arm it** (this example): the host keeps when each call is due (`out/host.json` in
