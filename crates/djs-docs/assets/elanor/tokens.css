@@ -315,16 +315,31 @@
   --primitive-font-family-mono: "Commit Mono", "SFMono-Regular", ui-monospace, "Menlo", "Monaco", "Consolas", monospace;
   --primitive-font-family-sans-serif: "Inter", "Helvetica Neue", "Arial", sans-serif;
   --primitive-font-family-serif: "Mallos Serif", "Georgia", serif;
-  --primitive-font-weight-black: 900;
-  --primitive-font-weight-bold: 700;
-  --primitive-font-weight-extra-black: 950;
-  --primitive-font-weight-extra-bold: 800;
-  --primitive-font-weight-extra-light: 200;
-  --primitive-font-weight-light: 300;
-  --primitive-font-weight-medium: 500;
-  --primitive-font-weight-normal: 400;
-  --primitive-font-weight-semi-bold: 600;
-  --primitive-font-weight-thin: 100;
+  /* Thin. */
+  --primitive-font-weight-100: 100;
+  /* Extra light. */
+  --primitive-font-weight-200: 200;
+  /* Light. */
+  --primitive-font-weight-300: 300;
+  /* Normal (regular). */
+  --primitive-font-weight-400: 400;
+  /* Half a step between 400 and 500. Needs a variable font; static fonts render the nearest weight. */
+  --primitive-font-weight-450: 450;
+  /* Medium. */
+  --primitive-font-weight-500: 500;
+  /* Half a step between 500 and 600. Needs a variable font; static fonts render the nearest weight. */
+  --primitive-font-weight-550: 550;
+  /* Semi-bold. */
+  --primitive-font-weight-600: 600;
+  /* Bold. */
+  --primitive-font-weight-700: 700;
+  /* Extra bold. */
+  --primitive-font-weight-800: 800;
+  /* Black. */
+  --primitive-font-weight-900: 900;
+  /* Extra black. */
+  --primitive-font-weight-950: 950;
+  --primitive-number-font-scale-9375: 0.9375;
   --primitive-number-layer-1: 1;
   --primitive-number-layer-10: 10;
   --primitive-number-layer-100: 100;
@@ -565,9 +580,13 @@
   --semantic-font-family-code: var(--primitive-font-family-mono);
   --semantic-font-family-prose: var(--primitive-font-family-serif);
   --semantic-font-family-ui: var(--primitive-font-family-serif);
-  --semantic-font-weight-emphasis: var(--primitive-font-weight-bold);
-  --semantic-font-weight-ui-emphasis: var(--primitive-font-weight-bold);
-  --semantic-font-weight-ui-selected: var(--primitive-font-weight-semi-bold);
+  /* Bold. */
+  --semantic-font-weight-emphasis: var(--primitive-font-weight-700);
+  /* Bold. */
+  --semantic-font-weight-ui-emphasis: var(--primitive-font-weight-700);
+  /* Half a step between 500 and 600. Needs a variable font; static fonts render the nearest weight. */
+  --semantic-font-weight-ui-selected: var(--primitive-font-weight-550);
+  --semantic-number-font-scale-inline-code: var(--primitive-number-font-scale-9375);
   --semantic-number-layer-background: var(--primitive-number-layer-below);
   --semantic-number-layer-floating: var(--primitive-number-layer-10);
   --semantic-number-layer-overlay: var(--primitive-number-layer-1000);
@@ -672,7 +691,7 @@
   /* Use for primary code content, including source code, commands, and structured machine-readable text. */
   --semantic-typography-code-primary-font-size: var(--primitive-dimension-font-size-300);
   /* Use for primary code content, including source code, commands, and structured machine-readable text. */
-  --semantic-typography-code-primary-font-weight: var(--primitive-font-weight-normal);
+  --semantic-typography-code-primary-font-weight: var(--primitive-font-weight-400);
   /* Use for primary code content, including source code, commands, and structured machine-readable text. */
   --semantic-typography-code-primary-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
   /* Use for primary code content, including source code, commands, and structured machine-readable text. */
@@ -684,7 +703,7 @@
   /* Use for supporting code content, such as annotations or ancillary technical metadata. Use the primary code style for the main code content. */
   --semantic-typography-code-secondary-font-size: var(--primitive-dimension-font-size-200);
   /* Use for supporting code content, such as annotations or ancillary technical metadata. Use the primary code style for the main code content. */
-  --semantic-typography-code-secondary-font-weight: var(--primitive-font-weight-normal);
+  --semantic-typography-code-secondary-font-weight: var(--primitive-font-weight-400);
   /* Use for supporting code content, such as annotations or ancillary technical metadata. Use the primary code style for the main code content. */
   --semantic-typography-code-secondary-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
   /* Use for supporting code content, such as annotations or ancillary technical metadata. Use the primary code style for the main code content. */
@@ -696,7 +715,7 @@
   /* Use for the highest-level heading in an application interface, such as a page title. */
   --semantic-typography-heading-app-1-font-size: var(--primitive-dimension-font-size-1000);
   /* Use for the highest-level heading in an application interface, such as a page title. */
-  --semantic-typography-heading-app-1-font-weight: var(--primitive-font-weight-semi-bold);
+  --semantic-typography-heading-app-1-font-weight: var(--primitive-font-weight-500);
   /* Use for the highest-level heading in an application interface, such as a page title. */
   --semantic-typography-heading-app-1-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
   /* Use for the highest-level heading in an application interface, such as a page title. */
@@ -708,7 +727,7 @@
   /* Use for second-level headings in an application interface beneath a level 1 heading. */
   --semantic-typography-heading-app-2-font-size: var(--primitive-dimension-font-size-900);
   /* Use for second-level headings in an application interface beneath a level 1 heading. */
-  --semantic-typography-heading-app-2-font-weight: var(--primitive-font-weight-semi-bold);
+  --semantic-typography-heading-app-2-font-weight: var(--primitive-font-weight-500);
   /* Use for second-level headings in an application interface beneath a level 1 heading. */
   --semantic-typography-heading-app-2-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
   /* Use for second-level headings in an application interface beneath a level 1 heading. */
@@ -720,7 +739,7 @@
   /* Use for third-level headings in an application interface beneath a level 2 heading. */
   --semantic-typography-heading-app-3-font-size: var(--primitive-dimension-font-size-800);
   /* Use for third-level headings in an application interface beneath a level 2 heading. */
-  --semantic-typography-heading-app-3-font-weight: var(--primitive-font-weight-semi-bold);
+  --semantic-typography-heading-app-3-font-weight: var(--primitive-font-weight-500);
   /* Use for third-level headings in an application interface beneath a level 2 heading. */
   --semantic-typography-heading-app-3-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
   /* Use for third-level headings in an application interface beneath a level 2 heading. */
@@ -732,7 +751,7 @@
   /* Use for fourth-level headings in an application interface beneath a level 3 heading. */
   --semantic-typography-heading-app-4-font-size: var(--primitive-dimension-font-size-700);
   /* Use for fourth-level headings in an application interface beneath a level 3 heading. */
-  --semantic-typography-heading-app-4-font-weight: var(--primitive-font-weight-semi-bold);
+  --semantic-typography-heading-app-4-font-weight: var(--primitive-font-weight-550);
   /* Use for fourth-level headings in an application interface beneath a level 3 heading. */
   --semantic-typography-heading-app-4-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
   /* Use for fourth-level headings in an application interface beneath a level 3 heading. */
@@ -744,7 +763,7 @@
   /* Use for fifth-level headings in an application interface beneath a level 4 heading. */
   --semantic-typography-heading-app-5-font-size: var(--primitive-dimension-font-size-600);
   /* Use for fifth-level headings in an application interface beneath a level 4 heading. */
-  --semantic-typography-heading-app-5-font-weight: var(--primitive-font-weight-semi-bold);
+  --semantic-typography-heading-app-5-font-weight: var(--primitive-font-weight-550);
   /* Use for fifth-level headings in an application interface beneath a level 4 heading. */
   --semantic-typography-heading-app-5-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
   /* Use for fifth-level headings in an application interface beneath a level 4 heading. */
@@ -756,7 +775,7 @@
   /* Use for sixth-level headings in an application interface beneath a level 5 heading; it is the lowest application heading level. */
   --semantic-typography-heading-app-6-font-size: var(--primitive-dimension-font-size-500);
   /* Use for sixth-level headings in an application interface beneath a level 5 heading; it is the lowest application heading level. */
-  --semantic-typography-heading-app-6-font-weight: var(--primitive-font-weight-semi-bold);
+  --semantic-typography-heading-app-6-font-weight: var(--primitive-font-weight-600);
   /* Use for sixth-level headings in an application interface beneath a level 5 heading; it is the lowest application heading level. */
   --semantic-typography-heading-app-6-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
   /* Use for sixth-level headings in an application interface beneath a level 5 heading; it is the lowest application heading level. */
@@ -768,7 +787,7 @@
   /* Use for the highest-level document heading in marketing content. Use the display style only for promotional text outside the heading hierarchy. */
   --semantic-typography-heading-marketing-1-font-size: var(--primitive-dimension-font-size-1500);
   /* Use for the highest-level document heading in marketing content. Use the display style only for promotional text outside the heading hierarchy. */
-  --semantic-typography-heading-marketing-1-font-weight: var(--primitive-font-weight-bold);
+  --semantic-typography-heading-marketing-1-font-weight: var(--primitive-font-weight-450);
   /* Use for the highest-level document heading in marketing content. Use the display style only for promotional text outside the heading hierarchy. */
   --semantic-typography-heading-marketing-1-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
   /* Use for the highest-level document heading in marketing content. Use the display style only for promotional text outside the heading hierarchy. */
@@ -780,7 +799,7 @@
   /* Use for second-level headings in marketing content beneath a level 1 heading. */
   --semantic-typography-heading-marketing-2-font-size: var(--primitive-dimension-font-size-1300);
   /* Use for second-level headings in marketing content beneath a level 1 heading. */
-  --semantic-typography-heading-marketing-2-font-weight: var(--primitive-font-weight-bold);
+  --semantic-typography-heading-marketing-2-font-weight: var(--primitive-font-weight-450);
   /* Use for second-level headings in marketing content beneath a level 1 heading. */
   --semantic-typography-heading-marketing-2-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
   /* Use for second-level headings in marketing content beneath a level 1 heading. */
@@ -792,7 +811,7 @@
   /* Use for third-level headings in marketing content beneath a level 2 heading. */
   --semantic-typography-heading-marketing-3-font-size: var(--primitive-dimension-font-size-1100);
   /* Use for third-level headings in marketing content beneath a level 2 heading. */
-  --semantic-typography-heading-marketing-3-font-weight: var(--primitive-font-weight-bold);
+  --semantic-typography-heading-marketing-3-font-weight: var(--primitive-font-weight-450);
   /* Use for third-level headings in marketing content beneath a level 2 heading. */
   --semantic-typography-heading-marketing-3-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
   /* Use for third-level headings in marketing content beneath a level 2 heading. */
@@ -804,7 +823,7 @@
   /* Use for fourth-level headings in marketing content beneath a level 3 heading. */
   --semantic-typography-heading-marketing-4-font-size: var(--primitive-dimension-font-size-900);
   /* Use for fourth-level headings in marketing content beneath a level 3 heading. */
-  --semantic-typography-heading-marketing-4-font-weight: var(--primitive-font-weight-bold);
+  --semantic-typography-heading-marketing-4-font-weight: var(--primitive-font-weight-500);
   /* Use for fourth-level headings in marketing content beneath a level 3 heading. */
   --semantic-typography-heading-marketing-4-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
   /* Use for fourth-level headings in marketing content beneath a level 3 heading. */
@@ -816,7 +835,7 @@
   /* Use for fifth-level headings in marketing content beneath a level 4 heading. */
   --semantic-typography-heading-marketing-5-font-size: var(--primitive-dimension-font-size-700);
   /* Use for fifth-level headings in marketing content beneath a level 4 heading. */
-  --semantic-typography-heading-marketing-5-font-weight: var(--primitive-font-weight-bold);
+  --semantic-typography-heading-marketing-5-font-weight: var(--primitive-font-weight-500);
   /* Use for fifth-level headings in marketing content beneath a level 4 heading. */
   --semantic-typography-heading-marketing-5-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
   /* Use for fifth-level headings in marketing content beneath a level 4 heading. */
@@ -828,7 +847,7 @@
   /* Use for sixth-level headings in marketing content beneath a level 5 heading; it is the lowest marketing heading level. */
   --semantic-typography-heading-marketing-6-font-size: var(--primitive-dimension-font-size-500);
   /* Use for sixth-level headings in marketing content beneath a level 5 heading; it is the lowest marketing heading level. */
-  --semantic-typography-heading-marketing-6-font-weight: var(--primitive-font-weight-bold);
+  --semantic-typography-heading-marketing-6-font-weight: var(--primitive-font-weight-550);
   /* Use for sixth-level headings in marketing content beneath a level 5 heading; it is the lowest marketing heading level. */
   --semantic-typography-heading-marketing-6-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
   /* Use for sixth-level headings in marketing content beneath a level 5 heading; it is the lowest marketing heading level. */
@@ -840,7 +859,7 @@
   /* Use for oversized promotional text above the standard marketing heading hierarchy. Do not use for document headings. */
   --semantic-typography-heading-marketing-display-font-size: var(--primitive-dimension-font-size-1700);
   /* Use for oversized promotional text above the standard marketing heading hierarchy. Do not use for document headings. */
-  --semantic-typography-heading-marketing-display-font-weight: var(--primitive-font-weight-bold);
+  --semantic-typography-heading-marketing-display-font-weight: var(--primitive-font-weight-450);
   /* Use for oversized promotional text above the standard marketing heading hierarchy. Do not use for document headings. */
   --semantic-typography-heading-marketing-display-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
   /* Use for oversized promotional text above the standard marketing heading hierarchy. Do not use for document headings. */
@@ -862,25 +881,25 @@
   /* Use for default body copy in long-form content. */
   --semantic-typography-prose-primary-font-family: var(--semantic-font-family-prose);
   /* Use for default body copy in long-form content. */
-  --semantic-typography-prose-primary-font-size: var(--primitive-dimension-font-size-500);
+  --semantic-typography-prose-primary-font-size: var(--primitive-dimension-font-size-400);
   /* Use for default body copy in long-form content. */
-  --semantic-typography-prose-primary-font-weight: var(--primitive-font-weight-normal);
+  --semantic-typography-prose-primary-font-weight: var(--primitive-font-weight-400);
   /* Use for default body copy in long-form content. */
   --semantic-typography-prose-primary-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
   /* Use for default body copy in long-form content. */
-  --semantic-typography-prose-primary-line-height: var(--primitive-number-line-height-500);
+  --semantic-typography-prose-primary-line-height: var(--primitive-number-line-height-400);
   /* Use for supporting long-form content, such as annotations or ancillary copy. Use the primary prose style for default body copy. */
   --semantic-typography-prose-secondary: var(--semantic-typography-prose-secondary-font-weight) var(--semantic-typography-prose-secondary-font-size)/var(--semantic-typography-prose-secondary-line-height) var(--semantic-typography-prose-secondary-font-family);
   /* Use for supporting long-form content, such as annotations or ancillary copy. Use the primary prose style for default body copy. */
   --semantic-typography-prose-secondary-font-family: var(--semantic-font-family-prose);
   /* Use for supporting long-form content, such as annotations or ancillary copy. Use the primary prose style for default body copy. */
-  --semantic-typography-prose-secondary-font-size: var(--primitive-dimension-font-size-400);
+  --semantic-typography-prose-secondary-font-size: var(--primitive-dimension-font-size-300);
   /* Use for supporting long-form content, such as annotations or ancillary copy. Use the primary prose style for default body copy. */
-  --semantic-typography-prose-secondary-font-weight: var(--primitive-font-weight-normal);
+  --semantic-typography-prose-secondary-font-weight: var(--primitive-font-weight-400);
   /* Use for supporting long-form content, such as annotations or ancillary copy. Use the primary prose style for default body copy. */
   --semantic-typography-prose-secondary-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
   /* Use for supporting long-form content, such as annotations or ancillary copy. Use the primary prose style for default body copy. */
-  --semantic-typography-prose-secondary-line-height: var(--primitive-number-line-height-400);
+  --semantic-typography-prose-secondary-line-height: var(--primitive-number-line-height-300);
   /* Use for supporting running text in components that adapt to their context. Resolves to the secondary UI style in interfaces and to the secondary prose style inside long-form content. */
   --semantic-typography-secondary: var(--semantic-typography-secondary-font-weight) var(--semantic-typography-secondary-font-size)/var(--semantic-typography-secondary-line-height) var(--semantic-typography-secondary-font-family);
   /* Use for supporting running text in components that adapt to their context. Resolves to the secondary UI style in interfaces and to the secondary prose style inside long-form content. */
@@ -893,30 +912,30 @@
   --semantic-typography-secondary-letter-spacing: var(--semantic-typography-ui-secondary-letter-spacing);
   /* Use for supporting running text in components that adapt to their context. Resolves to the secondary UI style in interfaces and to the secondary prose style inside long-form content. */
   --semantic-typography-secondary-line-height: var(--semantic-typography-ui-secondary-line-height);
-  /* Use for structural interface labels, such as navigation and menu group labels and the table of contents title: the primary UI style's size in a heavier weight. Do not use for default interface copy. */
+  /* Use for interface labels: form field and fieldset labels, and structural labels such as navigation and menu group labels and the table of contents title. The primary UI style's size, half a step heavier than medium, so a label stands apart from the value beside it. Do not use for default interface copy. */
   --semantic-typography-ui-label: var(--semantic-typography-ui-label-font-weight) var(--semantic-typography-ui-label-font-size)/var(--semantic-typography-ui-label-line-height) var(--semantic-typography-ui-label-font-family);
-  /* Use for structural interface labels, such as navigation and menu group labels and the table of contents title: the primary UI style's size in a heavier weight. Do not use for default interface copy. */
+  /* Use for interface labels: form field and fieldset labels, and structural labels such as navigation and menu group labels and the table of contents title. The primary UI style's size, half a step heavier than medium, so a label stands apart from the value beside it. Do not use for default interface copy. */
   --semantic-typography-ui-label-font-family: var(--semantic-font-family-ui);
-  /* Use for structural interface labels, such as navigation and menu group labels and the table of contents title: the primary UI style's size in a heavier weight. Do not use for default interface copy. */
-  --semantic-typography-ui-label-font-size: var(--primitive-dimension-font-size-400);
-  /* Use for structural interface labels, such as navigation and menu group labels and the table of contents title: the primary UI style's size in a heavier weight. Do not use for default interface copy. */
-  --semantic-typography-ui-label-font-weight: var(--primitive-font-weight-bold);
-  /* Use for structural interface labels, such as navigation and menu group labels and the table of contents title: the primary UI style's size in a heavier weight. Do not use for default interface copy. */
+  /* Use for interface labels: form field and fieldset labels, and structural labels such as navigation and menu group labels and the table of contents title. The primary UI style's size, half a step heavier than medium, so a label stands apart from the value beside it. Do not use for default interface copy. */
+  --semantic-typography-ui-label-font-size: var(--primitive-dimension-font-size-300);
+  /* Use for interface labels: form field and fieldset labels, and structural labels such as navigation and menu group labels and the table of contents title. The primary UI style's size, half a step heavier than medium, so a label stands apart from the value beside it. Do not use for default interface copy. */
+  --semantic-typography-ui-label-font-weight: var(--primitive-font-weight-550);
+  /* Use for interface labels: form field and fieldset labels, and structural labels such as navigation and menu group labels and the table of contents title. The primary UI style's size, half a step heavier than medium, so a label stands apart from the value beside it. Do not use for default interface copy. */
   --semantic-typography-ui-label-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
-  /* Use for structural interface labels, such as navigation and menu group labels and the table of contents title: the primary UI style's size in a heavier weight. Do not use for default interface copy. */
-  --semantic-typography-ui-label-line-height: var(--primitive-number-line-height-400);
+  /* Use for interface labels: form field and fieldset labels, and structural labels such as navigation and menu group labels and the table of contents title. The primary UI style's size, half a step heavier than medium, so a label stands apart from the value beside it. Do not use for default interface copy. */
+  --semantic-typography-ui-label-line-height: var(--primitive-number-line-height-300);
   /* Use for default text in application interfaces, including controls, labels, and navigation. */
   --semantic-typography-ui-primary: var(--semantic-typography-ui-primary-font-weight) var(--semantic-typography-ui-primary-font-size)/var(--semantic-typography-ui-primary-line-height) var(--semantic-typography-ui-primary-font-family);
   /* Use for default text in application interfaces, including controls, labels, and navigation. */
   --semantic-typography-ui-primary-font-family: var(--semantic-font-family-ui);
   /* Use for default text in application interfaces, including controls, labels, and navigation. */
-  --semantic-typography-ui-primary-font-size: var(--primitive-dimension-font-size-400);
+  --semantic-typography-ui-primary-font-size: var(--primitive-dimension-font-size-300);
   /* Use for default text in application interfaces, including controls, labels, and navigation. */
-  --semantic-typography-ui-primary-font-weight: var(--primitive-font-weight-normal);
+  --semantic-typography-ui-primary-font-weight: var(--primitive-font-weight-400);
   /* Use for default text in application interfaces, including controls, labels, and navigation. */
   --semantic-typography-ui-primary-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
   /* Use for default text in application interfaces, including controls, labels, and navigation. */
-  --semantic-typography-ui-primary-line-height: var(--primitive-number-line-height-400);
+  --semantic-typography-ui-primary-line-height: var(--primitive-number-line-height-300);
   /* Component token for the search dialog's field, the dialog's main input. Larger than the primary UI style, so the query reads as the dialog's heading. Do not use for other fields. */
   --semantic-typography-ui-search-dialog-input: var(--semantic-typography-ui-search-dialog-input-font-weight) var(--semantic-typography-ui-search-dialog-input-font-size)/var(--semantic-typography-ui-search-dialog-input-line-height) var(--semantic-typography-ui-search-dialog-input-font-family);
   /* Component token for the search dialog's field, the dialog's main input. Larger than the primary UI style, so the query reads as the dialog's heading. Do not use for other fields. */
@@ -924,35 +943,35 @@
   /* Component token for the search dialog's field, the dialog's main input. Larger than the primary UI style, so the query reads as the dialog's heading. Do not use for other fields. */
   --semantic-typography-ui-search-dialog-input-font-size: var(--primitive-dimension-font-size-500);
   /* Component token for the search dialog's field, the dialog's main input. Larger than the primary UI style, so the query reads as the dialog's heading. Do not use for other fields. */
-  --semantic-typography-ui-search-dialog-input-font-weight: var(--primitive-font-weight-normal);
+  --semantic-typography-ui-search-dialog-input-font-weight: var(--primitive-font-weight-400);
   /* Component token for the search dialog's field, the dialog's main input. Larger than the primary UI style, so the query reads as the dialog's heading. Do not use for other fields. */
   --semantic-typography-ui-search-dialog-input-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
   /* Component token for the search dialog's field, the dialog's main input. Larger than the primary UI style, so the query reads as the dialog's heading. Do not use for other fields. */
   --semantic-typography-ui-search-dialog-input-line-height: var(--primitive-number-line-height-500);
-  /* Use for supporting interface text, such as helper text or secondary labels. Use the primary UI style for default interface copy. */
+  /* Use for supporting interface text, such as helper text or secondary labels. A step heavier than the primary UI style, so the smaller size stays legible. Use the primary UI style for default interface copy. */
   --semantic-typography-ui-secondary: var(--semantic-typography-ui-secondary-font-weight) var(--semantic-typography-ui-secondary-font-size)/var(--semantic-typography-ui-secondary-line-height) var(--semantic-typography-ui-secondary-font-family);
-  /* Use for supporting interface text, such as helper text or secondary labels. Use the primary UI style for default interface copy. */
+  /* Use for supporting interface text, such as helper text or secondary labels. A step heavier than the primary UI style, so the smaller size stays legible. Use the primary UI style for default interface copy. */
   --semantic-typography-ui-secondary-font-family: var(--semantic-font-family-ui);
-  /* Use for supporting interface text, such as helper text or secondary labels. Use the primary UI style for default interface copy. */
-  --semantic-typography-ui-secondary-font-size: var(--primitive-dimension-font-size-300);
-  /* Use for supporting interface text, such as helper text or secondary labels. Use the primary UI style for default interface copy. */
-  --semantic-typography-ui-secondary-font-weight: var(--primitive-font-weight-normal);
-  /* Use for supporting interface text, such as helper text or secondary labels. Use the primary UI style for default interface copy. */
+  /* Use for supporting interface text, such as helper text or secondary labels. A step heavier than the primary UI style, so the smaller size stays legible. Use the primary UI style for default interface copy. */
+  --semantic-typography-ui-secondary-font-size: var(--primitive-dimension-font-size-200);
+  /* Use for supporting interface text, such as helper text or secondary labels. A step heavier than the primary UI style, so the smaller size stays legible. Use the primary UI style for default interface copy. */
+  --semantic-typography-ui-secondary-font-weight: var(--primitive-font-weight-500);
+  /* Use for supporting interface text, such as helper text or secondary labels. A step heavier than the primary UI style, so the smaller size stays legible. Use the primary UI style for default interface copy. */
   --semantic-typography-ui-secondary-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
-  /* Use for supporting interface text, such as helper text or secondary labels. Use the primary UI style for default interface copy. */
-  --semantic-typography-ui-secondary-line-height: var(--primitive-number-line-height-300);
-  /* Use for the lowest-priority interface text, such as compact metadata or supplemental labels. Do not use when the primary or secondary UI style provides sufficient hierarchy. */
+  /* Use for supporting interface text, such as helper text or secondary labels. A step heavier than the primary UI style, so the smaller size stays legible. Use the primary UI style for default interface copy. */
+  --semantic-typography-ui-secondary-line-height: var(--primitive-number-line-height-200);
+  /* Use for the lowest-priority interface text, such as compact metadata or supplemental labels. A step and a half heavier than the primary UI style, so the smallest size stays legible. Do not use when the primary or secondary UI style provides sufficient hierarchy. */
   --semantic-typography-ui-tertiary: var(--semantic-typography-ui-tertiary-font-weight) var(--semantic-typography-ui-tertiary-font-size)/var(--semantic-typography-ui-tertiary-line-height) var(--semantic-typography-ui-tertiary-font-family);
-  /* Use for the lowest-priority interface text, such as compact metadata or supplemental labels. Do not use when the primary or secondary UI style provides sufficient hierarchy. */
+  /* Use for the lowest-priority interface text, such as compact metadata or supplemental labels. A step and a half heavier than the primary UI style, so the smallest size stays legible. Do not use when the primary or secondary UI style provides sufficient hierarchy. */
   --semantic-typography-ui-tertiary-font-family: var(--semantic-font-family-ui);
-  /* Use for the lowest-priority interface text, such as compact metadata or supplemental labels. Do not use when the primary or secondary UI style provides sufficient hierarchy. */
-  --semantic-typography-ui-tertiary-font-size: var(--primitive-dimension-font-size-200);
-  /* Use for the lowest-priority interface text, such as compact metadata or supplemental labels. Do not use when the primary or secondary UI style provides sufficient hierarchy. */
-  --semantic-typography-ui-tertiary-font-weight: var(--primitive-font-weight-normal);
-  /* Use for the lowest-priority interface text, such as compact metadata or supplemental labels. Do not use when the primary or secondary UI style provides sufficient hierarchy. */
+  /* Use for the lowest-priority interface text, such as compact metadata or supplemental labels. A step and a half heavier than the primary UI style, so the smallest size stays legible. Do not use when the primary or secondary UI style provides sufficient hierarchy. */
+  --semantic-typography-ui-tertiary-font-size: var(--primitive-dimension-font-size-100);
+  /* Use for the lowest-priority interface text, such as compact metadata or supplemental labels. A step and a half heavier than the primary UI style, so the smallest size stays legible. Do not use when the primary or secondary UI style provides sufficient hierarchy. */
+  --semantic-typography-ui-tertiary-font-weight: var(--primitive-font-weight-550);
+  /* Use for the lowest-priority interface text, such as compact metadata or supplemental labels. A step and a half heavier than the primary UI style, so the smallest size stays legible. Do not use when the primary or secondary UI style provides sufficient hierarchy. */
   --semantic-typography-ui-tertiary-letter-spacing: var(--primitive-dimension-letter-spacing-normal);
-  /* Use for the lowest-priority interface text, such as compact metadata or supplemental labels. Do not use when the primary or secondary UI style provides sufficient hierarchy. */
-  --semantic-typography-ui-tertiary-line-height: var(--primitive-number-line-height-200);
+  /* Use for the lowest-priority interface text, such as compact metadata or supplemental labels. A step and a half heavier than the primary UI style, so the smallest size stays legible. Do not use when the primary or secondary UI style provides sufficient hierarchy. */
+  --semantic-typography-ui-tertiary-line-height: var(--primitive-number-line-height-100);
 }
 
 :root[data-color-scheme="light"] {

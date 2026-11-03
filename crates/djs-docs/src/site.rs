@@ -338,7 +338,7 @@ fn template(
 <main id="main" tabindex="-1"><div class="page"><article data-text-context="prose">
 {body}
 </article>{pager}
-<footer class="foot"><p>djs is built by <a href="https://earendil.com">Earendil</a>. <a href="{repo}">Source on GitHub</a>.</p><p>Designed with Elanor, Earendil's design system (<a href="https://github.com/earendil-works/elanor/commit/{sha}">{short}</a>, {brand} tokens). Fonts: Mallos Serif and Commit Mono, <a href="elanor/fonts/licenses/mallos-serif.txt">SIL Open Font License 1.1</a>. Icons: Material Symbols, <a href="elanor/icons/LICENSE">Apache License 2.0</a>.</p></footer></div>
+<footer class="foot"><p>djs is built by <a href="https://earendil.com">Earendil</a>. <a href="{repo}">Source on GitHub</a>.</p><p>Designed with Elanor, Earendil's design system (<a href="https://github.com/earendil-works/elanor/commit/{sha}">{short}</a>, {brand} tokens, <a href="elanor/tokens.LICENSE">ISC License</a>). Fonts: Mallos Serif and Commit Mono, SIL Open Font License 1.1 (<a href="elanor/fonts/licenses/mallos-serif.txt">Mallos Serif</a>, <a href="elanor/fonts/licenses/commit-mono.txt">Commit Mono</a>). Icons: Material Symbols, <a href="elanor/icons/LICENSE">Apache License 2.0</a>.</p></footer></div>
 <aside class="toc">{toc}</aside></main>
 </div>
 <script type="module" src="page.js"></script>

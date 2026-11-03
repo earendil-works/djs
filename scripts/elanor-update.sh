@@ -62,6 +62,7 @@ mkdir -p "$out/fonts/files" "$out/fonts/licenses" "$out/icons" "$out/logos"
 
 # Design tokens: one brand's stylesheet.
 cp "$tokens/tokens.css" "$out/tokens.css"
+cp "$nm/design-tokens/LICENSE" "$out/tokens.LICENSE"
 # The resolved light and dark value of every semantic color, from the catalog: the
 # fallbacks of the diagrams' colors (an <img> on GitHub has no token stylesheet).
 node -e '

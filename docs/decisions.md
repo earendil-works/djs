@@ -8528,3 +8528,28 @@ to ship and an image copy per dump. The size ceiling stays on the main module an
 lowered after the removal (444,500 -> 441,522; slim 379,900 -> 376,679). Hosts get the
 dump module from `scripts/build-wasm.sh --dump`; a module built with the `dump` feature
 still works alone as `module` (A) where one file matters more than size.
+## D2201: The guide's site follows Elanor d3184572: its retuned type scale
+date: 2026-11-03 · by: design · issue: 0185
+The vendored Elanor (D2200) moves from ccdb0d9e to d3184572 (`scripts/elanor-update.sh
+main`). What changed upstream is typography only. The font files are the same (Mallos
+Serif 0.1.1 was already vendored); the tokens are now tuned to it, because it draws its
+letters at 1.1 times the earlier font's size:
+- every text style is a step smaller (prose 18 → 16 px, UI 16/14/12 → 14/12/10 px, the
+  UI label 16 → 14 px), and the small UI styles are heavier (secondary 500, tertiary 550);
+- headings are lighter (app headings 500 to 600 by size), the selected item is 550;
+- primitive font weights are numbers (`--primitive-font-weight-700`, with half steps 450
+  and 550) instead of names;
+- inline code is sized by a new token, `--semantic-number-font-scale-inline-code`
+  (0.9375 of the surrounding text).
+Colors, font families, the code style and the Shiki theme did not change, so the
+highlighter roles and the diagrams stay as they are.
+The site takes the new tokens as they are, with these choices of its own: inline code uses
+the scale token everywhere (the per-heading and per-table overrides are gone, since the
+code follows its surroundings); tables, search results and the live widget's buttons use
+the UI's primary style (14 px; the secondary style is now 12 px, too small for dense
+reference tables and controls); the footer uses the secondary style instead of the 10 px
+tertiary one. The token package now ships an ISC license, vendored as
+`assets/elanor/tokens.LICENSE` and linked from the footer.
+Elanor's preview builds still expire after 30 days, but a maintainer can now keep a main
+build permanently as `main-<12 hex>`, and releases get permanent `vX.Y.Z` labels. Nothing
+is on public npm yet, so the vendored copy stays.

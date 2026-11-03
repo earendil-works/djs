@@ -97,7 +97,7 @@ header.top {
   border-radius: var(--semantic-dimension-radius-medium);
   background: var(--semantic-color-background-canvas);
   box-shadow: var(--semantic-shadow-popup);
-  font: var(--semantic-typography-ui-secondary);
+  font: var(--semantic-typography-ui-primary);
 }
 #search-results a { display: block; padding: var(--semantic-dimension-space-padding-small) var(--semantic-dimension-space-padding-medium); border-radius: var(--semantic-dimension-radius-small); color: var(--semantic-color-text-secondary); text-decoration: none; overflow-wrap: anywhere; }
 #search-results a:hover, #search-results a.sel { background: var(--semantic-color-background-fill-ghost-neutral-active); }
@@ -211,11 +211,11 @@ code {
   border-radius: var(--semantic-dimension-radius-small);
   background: var(--semantic-color-background-fill-secondary);
   color: var(--semantic-color-text-code);
-  font-family: var(--semantic-font-family-code); font-size: 0.875em;
+  font-family: var(--semantic-font-family-code);
+  font-size: calc(var(--semantic-number-font-scale-inline-code) * 1em);
   overflow-wrap: anywhere; hyphens: none;
 }
 a code { color: inherit; }
-:where(h1, h2, h3, h4) code { font-size: 0.85em; }
 @media (forced-colors: active) { code { outline: var(--semantic-dimension-border-width-small) solid CanvasText; } }
 
 /* Code blocks: Elanor's CodeSnippet. Long lines scroll inside the block. */
@@ -246,9 +246,8 @@ pre code { padding: 0; border-radius: 0; background: none; font: inherit; color:
 article table, .bars {
   inline-size: 100%;
   border-spacing: 0; border-collapse: collapse;
-  font: var(--semantic-typography-ui-secondary);
+  font: var(--semantic-typography-ui-primary);
 }
-article table code { font-size: 0.93em; }
 /* A table's first column names things (opcodes, cells, intrinsics): keep the names whole.
    The column sizes to them, and a table that gets too wide scrolls in its wrapper. */
 article td:first-child code { overflow-wrap: normal; }
@@ -337,7 +336,7 @@ figure.diagram figcaption { margin-block-start: var(--semantic-dimension-space-g
   padding: var(--semantic-dimension-space-control-padding-block-small) var(--semantic-dimension-space-control-padding-inline-small);
   border: 0; border-radius: var(--semantic-dimension-radius-small);
   background: var(--semantic-color-background-fill-secondary); color: var(--semantic-color-text-primary);
-  font: var(--semantic-typography-ui-secondary); cursor: pointer;
+  font: var(--semantic-typography-ui-primary); cursor: pointer;
 }
 @media (hover: hover) { .live button:hover { background: var(--semantic-color-background-fill-secondary-hover); } }
 .live button.live-run { background: var(--semantic-color-background-fill-primary); color: var(--semantic-color-text-on-primary-fill); font-weight: var(--semantic-font-weight-ui-emphasis); }
@@ -413,7 +412,7 @@ footer.foot {
   margin-block-start: var(--semantic-dimension-space-flow-x-large);
   padding-block-start: var(--semantic-dimension-space-padding-large);
   border-block-start: var(--semantic-dimension-border-width-small) solid var(--semantic-color-border-secondary);
-  color: var(--semantic-color-text-secondary); font: var(--semantic-typography-ui-tertiary);
+  color: var(--semantic-color-text-secondary); font: var(--semantic-typography-ui-secondary);
 }
 footer.foot p { margin: 0 0 var(--semantic-dimension-space-gap-x-small); }
 footer.foot a { color: inherit; }
