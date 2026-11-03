@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0185 | Guide design: latest Elanor (fonts) | design | .worktrees/design |
 | 0184 | Remaining dump refusals; dump size and load time vs images | portable | .worktrees/portable |
 | 0183 | The gate in seconds | gate-speed | .worktrees/gate-speed |
 | 0186 | ARCH/TESTING for continuation dumps | example | .worktrees/example |
@@ -83,6 +82,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0185 | Guide on Elanor d3184572: smaller type scale, inline code scale, tokens license (D2201) | e18ca671 (agent design) |
 | 0177 | Images in-process only; packaging B; dumps stored zstd; maxFuel fix (D2700-D2704) | 62413af5 (agent example; shipped 440.5 KB gz) |
 | 0176 | pi's future shape: prelude-next, adapter next mode, dumpSession/resumeFromDump, fuel across sync calls (D2650-D2653) | 380df83a (agent example) |
 | 0182 | No helper code in dumps (D2622), computed class keys refused (D2623), Math.random in dumps (D2624), goldens D2625 | 8a9a7e70 (agent portable; sleep dump 3,159 -> 1,308 B) |
