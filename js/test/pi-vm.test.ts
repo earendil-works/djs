@@ -6,7 +6,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadModule } from "../src/sandbox.ts";
-import { resumeVm, startVm, type HostToWorkerMessage, type VmHooks, type VmSession, type WorkerToHostMessage } from "../pi/vm.ts";
+import {
+  resumeFromDump,
+  resumeVm,
+  type SessionDump,
+  startVm,
+  type HostToWorkerMessage,
+  type VmHooks,
+  type VmSession,
+  type VmStartData,
+  type WorkerToHostMessage,
+} from "../pi/vm.ts";
 import { PRELUDE_SOURCE } from "../../tests/pi/prelude-source.ts";
 import { PRELUDE_NEXT } from "../../tests/pi/prelude-next.ts";
 
@@ -37,6 +47,8 @@ interface Outcome {
 }
 
 const wasm = await loadModule();
+const STARTED_AT = Date.UTC(2026, 0, 15, 10, 0, 0);
+const later = (ms: number, v: unknown) => new Promise((resolve) => setTimeout(() => resolve(v), ms));
 
 /**
  * The adapter's modes: pi's prelude as it is; prelude-next (D2565, D2650); prelude-next with
@@ -146,7 +158,6 @@ function error(outcome: Outcome): { name?: string; message: string; stack?: stri
 }
 
 const echo: Tool = (args) => args;
-const later = (ms: number, v: unknown) => new Promise((resolve) => setTimeout(() => resolve(v), ms));
 const PNG = "iVBORw0KGgo=";
 
 test(`${mode.name}: the return value, top-level await and output in order`, async () => {
@@ -349,7 +360,6 @@ test(`${mode.name}: host globals quickjs-wasi provides`, async () => {
   assert.deepEqual(value(outcome), ["aGVsbG8=", "hello", "number", 7, true]);
 });
 
-const STARTED_AT = Date.UTC(2026, 0, 15, 10, 0, 0);
 const DETERMINISTIC_CODE = `
   const values = [Date.now(), performance.now(), Math.random(), Math.random(), new Date().toISOString()];
   const first = await tools.echo(values);
@@ -546,3 +556,110 @@ test(`${mode.name}: frozen builtins without the prelude's lockdown (D2304)`, { s
   assert.deepEqual(value(await run(code, { prelude })), ["E: x", "own", "added", false, false, 1, "function"]);
 });
 }
+
+// ---- Continuation dumps of next-mode sessions (D2650): the session is dumped while a call
+// is open, the instance thrown away, and the dump resumed in a new one; the host then
+// decides what happens to the open call.
+
+const DUMP_CODE = `
+const seen = [];
+for (const n of [1, 2]) seen.push(await tools.slow(n));
+text("seen " + seen.join());
+store("k", { seen });
+let caught;
+try { await tools.flaky(3); } catch (e) { caught = e.message + "/" + e.code; }
+return { seen, caught, kept: load("k"), at: Date.now() };
+`;
+
+/** A next-mode session of DUMP_CODE that answers its calls itself, except `held` ones. */
+function nextSession(data: VmStartData, onCall: (m: Extract<WorkerToHostMessage, { type: "call" }>) => void) {
+  const messages: WorkerToHostMessage[] = [];
+  let end!: (m: WorkerToHostMessage) => void;
+  const ended = new Promise<WorkerToHostMessage>((r) => (end = r));
+  const hooks = {
+    wasm,
+    shape: "next" as const,
+    shouldInterrupt: () => false,
+    post: (m: WorkerToHostMessage) => {
+      messages.push(m);
+      setTimeout(() => {
+        if (m.type === "call") onCall(m);
+        if (m.type === "done" || m.type === "crash") end(m);
+      });
+    },
+  };
+  return { messages, ended, hooks };
+}
+
+const DUMP_DATA: VmStartData = {
+  code: DUMP_CODE,
+  tools: ["slow", "flaky"].map((name) => ({ name, jsName: name, description: "" })),
+  globals: [],
+  memoryLimitBytes: undefined,
+  store: { old: "1" },
+  deterministic: { startedAt: STARTED_AT, seed: 7 },
+};
+
+function answerOf(m: Extract<WorkerToHostMessage, { type: "call" }>, seq: number): HostToWorkerMessage {
+  const now = STARTED_AT + 1000 * seq;
+  if (m.name === "flaky") return { type: "result", id: m.id, ok: false, payload: "flaky failed", properties: JSON.stringify({ code: 7 }), seq, now };
+  return { type: "result", id: m.id, ok: true, payload: JSON.stringify(Number(JSON.parse(m.args!)) * 10), seq, now };
+}
+
+/** Runs DUMP_CODE; with `policy`, dumps at the first call and resumes, applying it. */
+async function dumpRun(policy?: "deliver" | "reissue" | "reject"): Promise<{ messages: WorkerToHostMessage[]; end: WorkerToHostMessage; dumped?: SessionDump }> {
+  let seq = 0;
+  let session!: VmSession;
+  const deliver = (m: Extract<WorkerToHostMessage, { type: "call" }>) => session.deliver(answerOf(m, ++seq));
+  let held: Extract<WorkerToHostMessage, { type: "call" }> | undefined;
+  const run = nextSession(DUMP_DATA, (m) => {
+    if (policy !== undefined && held === undefined) held = m;
+    else deliver(m);
+  });
+  session = await startVm({ ...run.hooks, prelude: PRELUDE_NEXT, data: DUMP_DATA });
+  if (policy === undefined) return { messages: run.messages, end: await run.ended };
+  while (held === undefined) await later(1, null);
+  // A restart: the dump (JSON, as a host would store it) is all that survives.
+  const dumped = JSON.parse(JSON.stringify(session.dumpSession())) as SessionDump;
+  session.dispose();
+  session = resumeFromDump(dumped, { ...run.hooks, prelude: PRELUDE_NEXT, data: DUMP_DATA });
+  const open = session.openCalls();
+  assert.deepEqual(open, [held]);
+  if (policy === "deliver") deliver(held);
+  else if (policy === "reissue") {
+    // Issued again: the host's own record says what to call (here the same answer).
+    deliver(open[0]);
+  } else session.deliver({ type: "result", id: held.id, ok: false, payload: "interrupted", seq: ++seq, now: STARTED_AT + 1000 * seq });
+  return { messages: run.messages, end: await run.ended, dumped };
+}
+
+test("next: a session dumped while a call is open resumes from the dump in a new instance", async () => {
+  const plain = await dumpRun();
+  const value = (end: WorkerToHostMessage) => {
+    assert.equal(end.type, "done", JSON.stringify(end));
+    return JSON.parse((end as { value: string }).value);
+  };
+  assert.deepEqual(value(plain.end), { seen: [10, 20], caught: "flaky failed/7", kept: { seen: [10, 20] }, at: STARTED_AT + 3000 });
+  for (const policy of ["deliver", "reissue"] as const) {
+    const resumed = await dumpRun(policy);
+    // The same messages as without the restart: output, calls, store writes, result.
+    assert.deepEqual(resumed.messages, plain.messages, policy);
+    assert.match(resumed.dumped!.dump, /^"djs-dump 2";/);
+    assert.match(resumed.dumped!.dump, /\$dump\.pending\(\d+, "call", \["call", "slow", "1"\]\)/);
+  }
+  const rejected = await dumpRun("reject");
+  assert.equal(rejected.end.type, "done");
+  assert.equal((rejected.end as { ok: boolean }).ok, false);
+  assert.match((rejected.end as { error: string }).error, /interrupted/);
+});
+
+test("next: a dump keeps Math.random's sequence", { todo: "dumps do not carry Math.random's state yet (0182)" }, async () => {
+  const code = "const a = Math.random(); await tools.echo(1); return [a, Math.random()];";
+  const data: VmStartData = { ...DUMP_DATA, code, tools: [{ name: "echo", jsName: "echo", description: "" }] };
+  let session!: VmSession;
+  const run = nextSession(data, (m) => session.deliver({ type: "result", id: m.id, ok: true, payload: "1", seq: 1, now: STARTED_AT }));
+  session = await startVm({ ...run.hooks, dumpEveryIdle: true, prelude: PRELUDE_NEXT, data });
+  const end = await run.ended;
+  const [a, b] = JSON.parse((end as { value: string }).value);
+  assert.notEqual(a, b);
+});

@@ -66,6 +66,12 @@ export interface VmSession {
    * yet must be delivered to the resumed session. The session may go on either way.
    */
   dumpSession(): SessionDump;
+  /**
+   * `next` mode: the tool and global calls without a result yet, as pi's `call` messages
+   * posted them. A session resumed from a dump does not post them again: the host decides
+   * what to do with each (deliver a recorded result, issue it again, reject it).
+   */
+  openCalls(): Extract<WorkerToHostMessage, { type: "call" }>[];
   /** Releases the VM's wasm instance. The session must not be used afterwards. */
   dispose(): void;
   /**
@@ -411,6 +417,15 @@ class Session implements VmSession {
     const { handles: _, ...rest } = next;
     const { api: _a, settle: _s, stalled: _t, next: _n, ...state } = this.state;
     return { dump, state: structuredClone({ ...state, early: [...this.early], next: rest }) };
+  }
+
+  openCalls(): Extract<WorkerToHostMessage, { type: "call" }>[] {
+    const next = this.state.next;
+    if (!next) throw new Error("openCalls needs the next mode");
+    return next.ids.map(([callId, id]) => {
+      const [kind, name, json] = this.engine.hostCallInfo(callId).args;
+      return { type: "call" as const, id, target: kind === "call" ? ("tool" as const) : ("global" as const), name: String(name), args: json === undefined ? undefined : String(json) };
+    });
   }
 
   /** Settles call `message.id` in the VM and runs the script until it waits again. */
