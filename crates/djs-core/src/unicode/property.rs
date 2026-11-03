@@ -97,7 +97,7 @@ fn varint_in(bytes: &[u8], p: &mut usize) -> u32 {
 fn decode_set(off: u32) -> Vec<(u32, u32)> {
     let mut p = off as usize;
     let n = varint(&mut p);
-    let mut out = Vec::with_capacity(n as usize);
+    let mut out = crate::buf::vec_with_capacity(n as usize);
     let mut prev = 0;
     for _ in 0..n {
         let lo = prev + varint(&mut p);
@@ -111,7 +111,7 @@ fn decode_set(off: u32) -> Vec<(u32, u32)> {
 fn decode_sequences(off: u32) -> Vec<Vec<u32>> {
     let mut p = off as usize;
     let n = varint(&mut p);
-    let mut out: Vec<Vec<u32>> = Vec::with_capacity(n as usize);
+    let mut out: Vec<Vec<u32>> = crate::buf::vec_with_capacity(n as usize);
     for _ in 0..n {
         let prefix = varint(&mut p) as usize;
         let len = varint(&mut p);
@@ -192,7 +192,7 @@ fn decode_zwj(off: u32) -> Vec<Vec<u32>> {
                     if !keep {
                         continue;
                     }
-                    let mut seq = Vec::with_capacity(sk.len());
+                    let mut seq = crate::buf::vec_with_capacity(sk.len());
                     let mut first = true;
                     for &c in &sk {
                         seq.push_out(match c {
@@ -249,7 +249,7 @@ fn union(mut a: Vec<(u32, u32)>, b: &[(u32, u32)]) -> Vec<(u32, u32)> {
 /// Sorts and merges overlapping or adjacent ranges.
 fn normalize(mut v: Vec<(u32, u32)>) -> Vec<(u32, u32)> {
     crate::sort::sort_by(&mut v, |x, y| x.0 < y.0);
-    let mut out: Vec<(u32, u32)> = Vec::with_capacity(v.len());
+    let mut out: Vec<(u32, u32)> = crate::buf::vec_with_capacity(v.len());
     for (lo, hi) in v {
         match out.last_mut() {
             Some(last) if lo <= last.1.saturating_add(1) => last.1 = last.1.max(hi),

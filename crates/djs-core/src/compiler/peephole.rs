@@ -52,8 +52,8 @@ fn rewrite_all(mut code: Vec<Insn>) -> (Vec<Insn>, bool) {
     // Rules match at most this many instructions, so a replacement can complete a match
     // starting this many before it.
     const WINDOW: usize = 5;
-    let mut out = Vec::with_capacity(code.len());
-    let mut repl = Vec::with_capacity(WINDOW);
+    let mut out = crate::buf::vec_with_capacity(code.len());
+    let mut repl = crate::buf::vec_with_capacity(WINDOW);
     let mut jumps = false;
     // `code[..i]` is free (moved to `out`); a replacement is shorter than what it
     // replaces, so it and the instructions taken back from `out` fit in front of `i`.
@@ -176,7 +176,7 @@ fn thread_jumps(code: &mut Vec<Insn>, label_count: &mut u32) -> (bool, bool) {
     let labels = label_after.contains(&true);
     if changed || labels {
         // Without the removed `dup`s, with the new labels.
-        let mut out = Vec::with_capacity(code.len() + 4);
+        let mut out = crate::buf::vec_with_capacity(code.len() + 4);
         for (k, insn) in code.iter().enumerate() {
             if insn.op != Op::Nop {
                 out.push(*insn);

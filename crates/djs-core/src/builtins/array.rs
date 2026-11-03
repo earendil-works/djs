@@ -16,14 +16,14 @@ pub(crate) fn sort_primitives(heap: &mut Heap, list: Obj) -> Result<bool, Fault>
         return Ok(false);
     }
     let n = heap.array_length(list);
-    let mut values = Vec::with_capacity(n as usize);
+    let mut values = crate::buf::vec_with_capacity(n as usize);
     for i in 0..n {
         match heap.get_element_fast(list, i) {
             Some(v) if !matches!(v.kind(), Kind::Object | Kind::Symbol) => values.push_out(v),
             _ => return Ok(false),
         }
     }
-    let mut keyed: Vec<(Vec<u16>, Value)> = Vec::with_capacity(values.len());
+    let mut keyed: Vec<(Vec<u16>, Value)> = crate::buf::vec_with_capacity(values.len());
     let mut undefined = 0;
     for v in values {
         if v.is_undefined() {

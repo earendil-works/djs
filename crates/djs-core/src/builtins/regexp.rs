@@ -161,7 +161,7 @@ pub(crate) fn escaped_source(heap: &mut Heap, o: Obj) -> Result<Str, Fault> {
     if units.is_empty() {
         return Ok(heap.alloc_str("(?:)")?);
     }
-    let mut out = Vec::with_capacity(units.len() + 4);
+    let mut out = crate::buf::vec_with_capacity(units.len() + 4);
     let mut in_class = false;
     let mut i = 0;
     while i < units.len() {
@@ -271,7 +271,7 @@ pub(crate) fn match_result(
     caps: &Captures,
 ) -> Result<Value, Fault> {
     let n = caps.len();
-    let mut values = Vec::with_capacity(n);
+    let mut values = crate::buf::vec_with_capacity(n);
     for i in 0..n {
         values.push_out(match caps.get(i) {
             Some((a, b)) => substring(heap, s, a, b)?,
@@ -300,7 +300,7 @@ pub(crate) fn match_result(
     let groups_key = atoms::GROUPS;
     heap.create_data_property(a, groups_key, groups)?;
     if prog.flags().contains(Flags::HAS_INDICES) {
-        let mut pairs = Vec::with_capacity(n);
+        let mut pairs = crate::buf::vec_with_capacity(n);
         for i in 0..n {
             pairs.push_out(match caps.get(i) {
                 Some((a, b)) => {

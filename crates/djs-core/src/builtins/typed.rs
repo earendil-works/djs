@@ -335,7 +335,7 @@ pub(crate) fn from_base64(s: &[u16], url: bool, last: u8, max: usize) -> Decoded
         d
     };
     let len = s.len();
-    let mut chunk: Vec<u32> = Vec::with_capacity(4);
+    let mut chunk: Vec<u32> = crate::buf::vec_with_capacity(4);
     let mut i = 0;
     loop {
         while i < len && is_ascii_ws(s[i]) {

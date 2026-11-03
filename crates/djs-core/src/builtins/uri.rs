@@ -64,7 +64,7 @@ pub(crate) fn encode(heap: &mut Heap, s: Str, component: bool) -> Result<Str, Fa
     if u.iter().all(|&c| is_uri_unescaped(c, component)) {
         return Ok(s);
     }
-    let mut out = Vec::with_capacity(u.len() * 3);
+    let mut out = crate::buf::vec_with_capacity(u.len() * 3);
     let mut k = 0;
     while k < u.len() {
         let c = u[k];
@@ -111,7 +111,7 @@ pub(crate) fn decode(heap: &mut Heap, s: Str, component: bool) -> Result<Str, Fa
     if !u.contains(&(b'%' as u16)) {
         return Ok(s);
     }
-    let mut out = Vec::with_capacity(u.len());
+    let mut out = crate::buf::vec_with_capacity(u.len());
     let mut k = 0;
     while k < u.len() {
         if u[k] != b'%' as u16 {
@@ -167,7 +167,7 @@ pub(crate) fn escape(heap: &mut Heap, s: Str) -> Result<Str, Fault> {
     if u.iter().all(|&c| keep(c)) {
         return Ok(s);
     }
-    let mut out = Vec::with_capacity(u.len() * 3);
+    let mut out = crate::buf::vec_with_capacity(u.len() * 3);
     for &c in &u {
         if keep(c) {
             out.push_out(c);
@@ -184,7 +184,7 @@ pub(crate) fn unescape(heap: &mut Heap, s: Str) -> Result<Str, Fault> {
     if !u.contains(&(b'%' as u16)) {
         return Ok(s);
     }
-    let mut out = Vec::with_capacity(u.len());
+    let mut out = crate::buf::vec_with_capacity(u.len());
     let mut k = 0;
     while k < u.len() {
         let c = u[k];

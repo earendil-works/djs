@@ -67,6 +67,10 @@ grow/drop sites so it doesn't regress. Measure bytes per change; no workload slo
 - Experiment: every push out of line (patch pushcold.py): −4.8 KB gz, json-text +1.7%,
   pushpop +1.3%, json +1.0%. Landed selectively (D2521): 343 sites, −3.2 KB gz, workloads
   within ±1.3% (mostly lower), compile within noise. scripts/size/vec-sites.py + baseline.
+- Merged D2521 (f27b07b9). The debug wasm build's nesting test caught `push_out` of an
+  832-byte FuncState (parse_arrow's frame 64 → 864 bytes): push_out now asserts values of
+  at most 16 words at compile time.
+- `Vec::with_capacity` out of line (D2522): 60 sites, −1.3 KB gz, workloads −2.1..+0.5%.
 
 ## Follow-ups
 

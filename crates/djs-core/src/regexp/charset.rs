@@ -69,7 +69,8 @@ impl CharSet {
     }
 
     pub(crate) fn union(&self, other: &CharSet) -> CharSet {
-        let mut all: Vec<(u32, u32)> = Vec::with_capacity(self.ranges.len() + other.ranges.len());
+        let mut all: Vec<(u32, u32)> =
+            crate::buf::vec_with_capacity(self.ranges.len() + other.ranges.len());
         let (mut i, mut j) = (0, 0);
         while i < self.ranges.len() || j < other.ranges.len() {
             let take_a = j >= other.ranges.len()
@@ -111,7 +112,7 @@ impl CharSet {
 
     /// The complement within 0..=0x10FFFF.
     pub(crate) fn invert(&self) -> CharSet {
-        let mut out = Vec::with_capacity(self.ranges.len() + 1);
+        let mut out = crate::buf::vec_with_capacity(self.ranges.len() + 1);
         let mut next = 0u32;
         for &(lo, hi) in &self.ranges {
             if lo > next {

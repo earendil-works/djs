@@ -279,7 +279,7 @@ impl Exec<'_> {
             return Ok(default);
         };
         let proto = intrinsic_obj(self.heap, Intrinsic::CallSiteProto);
-        let mut sites = Vec::with_capacity(frames.len());
+        let mut sites = crate::buf::vec_with_capacity(frames.len());
         for fr in &frames {
             let site = self.heap.alloc_object(
                 ObjectClass::CallSite,

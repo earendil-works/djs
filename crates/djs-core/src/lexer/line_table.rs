@@ -16,7 +16,7 @@ pub struct LineTable {
 
 impl LineTable {
     pub fn new(src: &[u8]) -> Self {
-        let mut starts = Vec::with_capacity(src.len() / 32 + 1);
+        let mut starts = crate::buf::vec_with_capacity(src.len() / 32 + 1);
         starts.push(0);
         let mut ascii = true;
         let mut p = 0;

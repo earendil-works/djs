@@ -124,7 +124,7 @@ pub(crate) fn attributes(heap: &Heap, o: Obj, key: Atom) -> i32 {
 /// The own keys as a new array: kind 0 strings, 1 symbols, 2 both, 3 enumerable strings.
 pub(crate) fn own_keys(heap: &mut Heap, o: Obj, kind: i32) -> Result<Value, Fault> {
     let keys = heap.own_keys(o);
-    let mut values = alloc::vec::Vec::with_capacity(keys.len());
+    let mut values = crate::buf::vec_with_capacity(keys.len());
     for k in keys {
         let keep = match kind {
             0 => !k.is_symbol(),

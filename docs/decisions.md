@@ -7352,3 +7352,10 @@ the taken variant's):
 - a dlmalloc prime of 3 or 4 pages: small VMs +1–2 pages, nothing else better;
 - no medium page runs: arrays 209 → 258, higher-order 230 → 277, strbuild 245 → 287,
   json-indent 76 → 116 pages.
+## D2522: `Vec::with_capacity` out of line (`buf::vec_with_capacity`)
+date: 2026-11-09 · by: audit · issue: 0161
+Like D2521's pushes: `Vec::with_capacity` inlines the allocation call, the vector's
+spill and the allocation-error path at every site. `crate::buf::vec_with_capacity` is one
+`#[inline(never)]` function per element type; 60 sites use it (all but run.rs and the
+template, which 0151 is editing). Module −1.3 KB gz (442.1 → 440.8), the 15 perf
+workloads within −2.1 to +0.5% (an allocation is a call anyway). New code uses it.

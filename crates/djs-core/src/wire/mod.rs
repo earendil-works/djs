@@ -358,7 +358,7 @@ impl<'a> Decoder<'a, '_> {
         }
         if t == tag::STR_UTF16 {
             let data = self.take(units as usize * 2)?;
-            let mut buf: Vec<u16> = Vec::with_capacity(units as usize);
+            let mut buf: Vec<u16> = crate::buf::vec_with_capacity(units as usize);
             buf.extend(
                 data.as_chunks::<2>()
                     .0

@@ -81,7 +81,7 @@ pub(crate) fn join(heap: &mut Heap, pieces: &mut [(Str, u32, u32)]) -> Result<St
         }
         return Ok(heap.alloc_latin1_pieces(pieces, total as u32)?);
     }
-    let mut units: Vec<u16> = Vec::with_capacity(total);
+    let mut units: Vec<u16> = crate::buf::vec_with_capacity(total);
     for &(s, a, b) in pieces.iter() {
         let v = heap.str_view_flat(s)?;
         units.extend((a as usize..b as usize).map(|i| v.get(i)));
@@ -228,7 +228,7 @@ pub(crate) fn code_point_at(heap: &Heap, s: Str, i: u32) -> Option<f64> {
 
 /// Code points of `u` (lone surrogates as themselves), with their unit positions.
 fn code_points_of(u: &[u16]) -> Vec<(usize, u32)> {
-    let mut out = Vec::with_capacity(u.len());
+    let mut out = crate::buf::vec_with_capacity(u.len());
     let mut i = 0;
     while i < u.len() {
         let c = u[i] as u32;
@@ -281,7 +281,7 @@ pub(crate) fn to_case(heap: &mut Heap, s: Str, upper: bool) -> Result<Str, Fault
         return Ok(heap.alloc_latin1(&mapped)?);
     }
     let cps = code_points_of(&u);
-    let mut out = Vec::with_capacity(u.len());
+    let mut out = crate::buf::vec_with_capacity(u.len());
     for (k, &(_, c)) in cps.iter().enumerate() {
         if !upper && c == 0x03A3 {
             // Final_Sigma: preceded by a cased letter and not followed by one (case
@@ -415,7 +415,7 @@ pub(crate) fn from_codes(heap: &mut Heap, list: Obj, points: bool) -> Result<Str
     let mut out = if n <= 32 {
         Units::Small([0; 64], 0)
     } else {
-        Units::Big(Vec::with_capacity(n as usize))
+        Units::Big(crate::buf::vec_with_capacity(n as usize))
     };
     match heap.dense_array_values(list) {
         // One pass over the dense store (D1784).

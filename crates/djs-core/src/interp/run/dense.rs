@@ -85,7 +85,7 @@ impl Exec<'_> {
         }
         let keys = self.heap.own_keys(o);
         self.charge_elements(keys.len() as u32);
-        let mut props = Vec::with_capacity(keys.len());
+        let mut props = crate::buf::vec_with_capacity(keys.len());
         for k in keys {
             if k.is_symbol() {
                 continue;
@@ -101,7 +101,7 @@ impl Exec<'_> {
             }
         }
         let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
-        let mut out = Vec::with_capacity(props.len());
+        let mut out = crate::buf::vec_with_capacity(props.len());
         for (k, v) in props {
             out.push_out(if kind == 1 {
                 v

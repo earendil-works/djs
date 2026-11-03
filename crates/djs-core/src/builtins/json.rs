@@ -44,7 +44,7 @@ pub(crate) fn stringify_fast_in(
     list: Value,
 ) -> Result<Value, Fault> {
     let n = heap.dense_len(stack);
-    let mut outer = Vec::with_capacity(n as usize);
+    let mut outer = crate::buf::vec_with_capacity(n as usize);
     for i in 0..n {
         match heap.get_element_fast(stack, i).and_then(|v| v.as_object()) {
             Some(o) => outer.push_out(o),
@@ -62,7 +62,7 @@ pub(crate) fn stringify_fast_in(
             if heap.object_class(l) != ObjectClass::Array || heap.array_length(l) != n {
                 return Ok(Value::NULL);
             }
-            let mut keys = Vec::with_capacity(n as usize);
+            let mut keys = crate::buf::vec_with_capacity(n as usize);
             for i in 0..n {
                 match heap.get_element_fast(l, i).and_then(|v| v.as_string()) {
                     Some(s) => keys.push_out(heap.intern(s)?),

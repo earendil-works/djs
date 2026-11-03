@@ -1465,7 +1465,7 @@ impl<'a> Parser<'a, '_> {
             }
             Ok(true)
         });
-        let mut atoms = Vec::with_capacity(names.len());
+        let mut atoms = crate::buf::vec_with_capacity(names.len());
         for t in names {
             let bytes = self.lx.ident_value(&t, &mut self.buf8);
             let s = core::str::from_utf8(bytes).unwrap_or("\u{FFFD}");
@@ -1706,7 +1706,7 @@ pub(super) const ER_CLOSE_PAREN: u8 = 4;
 /// UTF-16 unit, line feeds and carriage returns kept.
 pub(super) fn blank(src: &[u8], mut ranges: super::parser::Erased) -> Vec<u8> {
     crate::sort::sort_by(&mut ranges, |a, b| a.0 < b.0);
-    let mut out = Vec::with_capacity(src.len());
+    let mut out = crate::buf::vec_with_capacity(src.len());
     let mut pos = 0usize;
     for (start, end, kind) in ranges {
         let (start, end) = (start as usize, end as usize);

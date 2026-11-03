@@ -10,6 +10,13 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
+/// `Vec::with_capacity`, out of line: the allocation call and its error path are one
+/// function per element type instead of being inlined at each site (D2521).
+#[inline(never)]
+pub(crate) fn vec_with_capacity<T>(n: usize) -> Vec<T> {
+    Vec::with_capacity(n)
+}
+
 pub(crate) trait PushOut<T> {
     /// `push`, out of line.
     fn push_out(&mut self, x: T);

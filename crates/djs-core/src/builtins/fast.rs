@@ -326,7 +326,7 @@ fn split(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
     if let (Some(StrView::Latin1(h)), Some(StrView::Latin1(t))) =
         (heap.str_view(s), heap.str_view(r))
     {
-        let mut cuts: Vec<(u32, u32)> = Vec::with_capacity(16);
+        let mut cuts: Vec<(u32, u32)> = crate::buf::vec_with_capacity(16);
         let mut p = 0;
         while let Some(q) = string::find_latin1(h, t, p) {
             cuts.push_out((p as u32, q as u32));
@@ -575,7 +575,7 @@ fn array_join(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
 
 /// String.fromCharCode ( ...codeUnits ) of primitives (ToUint16 of ToNumber).
 fn from_char_code(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
-    let mut units: Vec<u16> = Vec::with_capacity(args.len());
+    let mut units: Vec<u16> = crate::buf::vec_with_capacity(args.len());
     for &v in args {
         let Some(n) = num(heap, v)? else {
             return Ok(None);

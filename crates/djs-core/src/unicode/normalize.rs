@@ -322,7 +322,7 @@ pub fn is_normalized_quick(units: &[u16], form: Form) -> bool {
 pub fn normalize(units: &[u16], form: Form, comp: &mut Compositions) -> Vec<u16> {
     let cps = code_points(units);
     // Decompose.
-    let mut d = Vec::with_capacity(cps.len());
+    let mut d = crate::buf::vec_with_capacity(cps.len());
     for &c in &cps {
         decompose_char(c, form.compat(), &mut d);
     }
@@ -351,7 +351,7 @@ pub fn normalize(units: &[u16], form: Form, comp: &mut Compositions) -> Vec<u16>
     } else {
         d
     };
-    let mut out = Vec::with_capacity(out_cps.len());
+    let mut out = crate::buf::vec_with_capacity(out_cps.len());
     for c in out_cps {
         match char::from_u32(c) {
             Some(ch) => {
@@ -367,7 +367,7 @@ pub fn normalize(units: &[u16], form: Form, comp: &mut Compositions) -> Vec<u16>
 
 /// The canonical composition algorithm over a canonically ordered decomposition.
 fn compose(d: &[u32], comp: &mut Compositions) -> Vec<u32> {
-    let mut out: Vec<u32> = Vec::with_capacity(d.len());
+    let mut out: Vec<u32> = crate::buf::vec_with_capacity(d.len());
     let mut starter: Option<usize> = None;
     let mut last_ccc: i32 = -1;
     for &c in d {

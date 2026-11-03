@@ -98,7 +98,7 @@ fn cmp_mag(a: &[u32], b: &[u32]) -> Ordering {
 
 fn add_mag(a: &[u32], b: &[u32]) -> Vec<u32> {
     let (a, b) = if a.len() >= b.len() { (a, b) } else { (b, a) };
-    let mut r = Vec::with_capacity(a.len() + 1);
+    let mut r = crate::buf::vec_with_capacity(a.len() + 1);
     let mut carry = 0u64;
     for (i, &x) in a.iter().enumerate() {
         let s = x as u64 + *b.get(i).unwrap_or(&0) as u64 + carry;
@@ -113,7 +113,7 @@ fn add_mag(a: &[u32], b: &[u32]) -> Vec<u32> {
 
 /// `a - b` for `a >= b`.
 fn sub_mag(a: &[u32], b: &[u32]) -> Vec<u32> {
-    let mut r = Vec::with_capacity(a.len());
+    let mut r = crate::buf::vec_with_capacity(a.len());
     let mut borrow = 0i64;
     for (i, &x) in a.iter().enumerate() {
         let mut d = x as i64 - *b.get(i).unwrap_or(&0) as i64 - borrow;
@@ -179,7 +179,7 @@ fn divrem_small(a: &[u32], d: u32) -> (Vec<u32>, u32) {
 
 /// Shifts a magnitude left by `s < 32` bits into a vector with `extra` more limbs.
 fn shl_small(a: &[u32], s: u32, extra: usize) -> Vec<u32> {
-    let mut r = Vec::with_capacity(a.len() + extra);
+    let mut r = crate::buf::vec_with_capacity(a.len() + extra);
     let mut carry = 0u32;
     for &x in a {
         r.push(if s == 0 { x } else { (x << s) | carry });
@@ -541,7 +541,7 @@ impl BigInt {
         }
         let s = (n % 32) as u32;
         let src = &self.mag[limbs..];
-        let mut v = Vec::with_capacity(src.len());
+        let mut v = crate::buf::vec_with_capacity(src.len());
         for i in 0..src.len() {
             let hi = *src.get(i + 1).unwrap_or(&0);
             v.push(if s == 0 {
@@ -711,7 +711,7 @@ impl BigInt {
             return None;
         }
         let (per, value) = chunk(radix);
-        let mut mag: Vec<u32> = Vec::with_capacity(n / 9 + 1);
+        let mut mag: Vec<u32> = crate::buf::vec_with_capacity(n / 9 + 1);
         let mut acc = 0u32;
         let mut acc_digits = 0u32;
         for c in digits {

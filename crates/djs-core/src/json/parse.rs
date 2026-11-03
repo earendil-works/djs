@@ -611,7 +611,7 @@ fn lex_number<const E: u8>(b: &[u8], start: usize) -> Result<(f64, usize), Fail>
     }
     // The token is ASCII; hand it to the shared decimal parser (correctly rounded, D1041).
     let v = if E == UTF16 {
-        let mut text = Vec::with_capacity(p - start);
+        let mut text = crate::buf::vec_with_capacity(p - start);
         text.extend((start..p).map(|i| peek::<E>(b, i) as u8));
         num::string_to_number(&text[..])
     } else {

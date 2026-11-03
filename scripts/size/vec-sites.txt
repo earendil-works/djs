@@ -1,9 +1,9 @@
 # scripts/size/vec-sites.py --update: inlined container glue of the shipped code (D2521)
-total	grow	170
-total	drop	1037
-total	with_capacity	193
-total	reserve	165
-total	alloc_error	262
+total	grow	172
+total	drop	1040
+total	with_capacity	148
+total	reserve	167
+total	alloc_error	214
 2	<&str as core::convert::Into<alloc::string::String>>::into
 1	<&str as djs_core::text::Piece>::put
 2	<(djs_core::heap::atom::Atom, u32, u32) as alloc::vec::spec_from_elem::SpecFromElem>::from_elem::<alloc::alloc::Global>
@@ -76,7 +76,6 @@ total	alloc_error	262
 1	<alloc::vec::Vec<(u32, u32)>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<(u32, u32)>, <djs_core::compiler::parser::Parser>::rotate_code::{closure#5}>>
 1	<alloc::vec::Vec<(u32, u32)>>::extend_trusted::<core::option::IntoIter<(u32, u32)>>
 1	<alloc::vec::Vec<(u32, u32)>>::insert
-2	<alloc::vec::Vec<(u32, u32)>>::with_capacity
 1	<alloc::vec::Vec<(u32, u32, u32, djs_core::heap::atom::Atom)>>::extend_with
 1	<alloc::vec::Vec<(u64, u32)>>::extend_with
 1	<alloc::vec::Vec<(u64, u32)>>::insert
@@ -111,7 +110,6 @@ total	alloc_error	262
 1	<alloc::vec::Vec<core::option::Option<(u32, djs_core::heap::atom::Atom)>>>::extend_trusted::<core::iter::adapters::map::Map<alloc::vec::drain::Drain<(u32, djs_core::heap::atom::Atom)>, core::option::Option<(u32, djs_core::heap::atom::Atom)>::Some>>
 1	<alloc::vec::Vec<core::option::Option<alloc::vec::Vec<u16>>> as core::ops::drop::Drop>::drop
 2	<alloc::vec::Vec<core::option::Option<alloc::vec::Vec<u16>>>>::extend_with
-1	<alloc::vec::Vec<core::option::Option<djs_core::compiler::func::FuncState>> as djs_core::buf::PushOut<core::option::Option<djs_core::compiler::func::FuncState>>>::push_out
 2	<alloc::vec::Vec<core::option::Option<f64>> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<core::option::Option<f64>, core::iter::adapters::map::Map<alloc::vec::drain::Drain<f64>, core::option::Option<f64>::Some>>>::from_iter
 1	<alloc::vec::Vec<core::option::Option<f64>>>::extend_trusted::<core::iter::adapters::map::Map<alloc::vec::drain::Drain<f64>, core::option::Option<f64>::Some>>
 1	<alloc::vec::Vec<core::option::Option<f64>>>::reserve
@@ -136,7 +134,6 @@ total	alloc_error	262
 2	<alloc::vec::Vec<djs_core::compiler::parser::OpenIter> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::compiler::parser::OpenIter, core::iter::adapters::copied::Copied<core::iter::adapters::rev::Rev<core::slice::iter::Iter<djs_core::compiler::parser::OpenIter>>>>>::from_iter
 1	<alloc::vec::Vec<djs_core::compiler::parser::OpenIter>>::extend_trusted::<core::iter::adapters::copied::Copied<core::iter::adapters::rev::Rev<core::slice::iter::Iter<djs_core::compiler::parser::OpenIter>>>>
 2	<alloc::vec::Vec<djs_core::compiler::parser::Suspended> as core::ops::drop::Drop>::drop
-1	<alloc::vec::Vec<djs_core::compiler::parser::Suspended> as djs_core::buf::PushOut<djs_core::compiler::parser::Suspended>>::push_out
 1	<alloc::vec::Vec<djs_core::compiler::ts_decl::TsDecl> as core::ops::drop::Drop>::drop
 1	<alloc::vec::Vec<djs_core::compiler::ts_decl::TsDecl> as djs_core::buf::PushOut<djs_core::compiler::ts_decl::TsDecl>>::push_out
 1	<alloc::vec::Vec<djs_core::compiler::ts_decl::TsMember> as core::ops::drop::Drop>::drop
@@ -150,7 +147,6 @@ total	alloc_error	262
 1	<alloc::vec::Vec<djs_core::heap::atom::Atom>>::extend_desugared::<core::iter::adapters::filter_map::FilterMap<core::ops::range::Range<u32>, <djs_core::heap::atom::Atom>::int>>
 1	<alloc::vec::Vec<djs_core::heap::atom::Atom>>::extend_trusted::<core::iter::adapters::map::Map<alloc::vec::into_iter::IntoIter<(u32, djs_core::heap::atom::Atom)>, <djs_core::heap::Heap>::ordinary_own_keys::{closure#2}>>
 1	<alloc::vec::Vec<djs_core::heap::atom::Atom>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<core::option::Option<u32>>, <djs_core::compiler::parser::Parser>::finish_init::{closure#0}>>
-2	<alloc::vec::Vec<djs_core::heap::atom::Atom>>::with_capacity
 2	<alloc::vec::Vec<djs_core::heap::layout::Ref> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<djs_core::heap::layout::Ref, core::iter::adapters::map::Map<core::slice::iter::Iter<u32>, djs_core::compiler::resolve::emit_function::{closure#12}>>>::from_iter
 1	<alloc::vec::Vec<djs_core::heap::layout::Ref>>::extend_trusted::<core::iter::adapters::map::Map<core::slice::iter::Iter<u32>, djs_core::compiler::resolve::emit_function::{closure#12}>>
 1	<alloc::vec::Vec<djs_core::heap::layout::Ref>>::extend_with
@@ -297,7 +293,7 @@ total	alloc_error	262
 1	<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units> as core::iter::traits::iterator::Iterator>::next
 3	<core::iter::adapters::map::Map<core::char::decode::DecodeUtf16<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>, <djs_core::heap::Heap>::str_to_string::{closure#0}> as core::iter::traits::iterator::Iterator>::fold::<(), core::iter::traits::iterator::Iterator::for_each::call<char, <alloc::string::String as core::iter::traits::collect::Extend<char>>::extend<core::iter::adapters::map::Map<core::char::decode::DecodeUtf16<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>, <djs_core::heap::Heap>::str_to_string::{closure#0}>>::{closure#0}>::{closure#0}>
 1	<core::iter::adapters::map::Map<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>, djs_core::builtins::dom::btoa<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>::{closure#0}> as core::iter::traits::iterator::Iterator>::try_fold::<(), <core::iter::adapters::GenericShunt<core::iter::adapters::map::Map<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>, djs_core::builtins::dom::btoa<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>::{closure#0}>, core::option::Option<core::convert::Infallible>> as core::iter::traits::iterator::Iterator>::try_fold<(), core::iter::traits::iterator::Iterator::try_for_each::call<u8, core::ops::control_flow::ControlFlow<u8>, core::ops::control_flow::ControlFlow<u8>::Break>::{closure#0}, core::ops::control_flow::ControlFlow<u8>>::{closure#0}, core::ops::control_flow::ControlFlow<core::ops::control_flow::ControlFlow<u8>>>
-4	<core::iter::adapters::map::Map<core::slice::iter::Iter<djs_core::compiler::func::FuncState>, djs_core::compiler::resolve::finish::{closure#4}> as core::iter::traits::iterator::Iterator>::fold::<(), core::iter::traits::iterator::Iterator::for_each::call<(alloc::vec::Vec<djs_core::compiler::resolve::Storage>, alloc::vec::Vec<djs_core::heap::atom::Atom>), <alloc::vec::Vec<(alloc::vec::Vec<djs_core::compiler::resolve::Storage>, alloc::vec::Vec<djs_core::heap::atom::Atom>)>>::extend_trusted<core::iter::adapters::map::Map<core::slice::iter::Iter<djs_core::compiler::func::FuncState>, djs_core::compiler::resolve::finish::{closure#4}>>::{closure#0}>::{closure#0}>
+2	<core::iter::adapters::map::Map<core::slice::iter::Iter<djs_core::compiler::func::FuncState>, djs_core::compiler::resolve::finish::{closure#4}> as core::iter::traits::iterator::Iterator>::fold::<(), core::iter::traits::iterator::Iterator::for_each::call<(alloc::vec::Vec<djs_core::compiler::resolve::Storage>, alloc::vec::Vec<djs_core::heap::atom::Atom>), <alloc::vec::Vec<(alloc::vec::Vec<djs_core::compiler::resolve::Storage>, alloc::vec::Vec<djs_core::heap::atom::Atom>)>>::extend_trusted<core::iter::adapters::map::Map<core::slice::iter::Iter<djs_core::compiler::func::FuncState>, djs_core::compiler::resolve::finish::{closure#4}>>::{closure#0}>::{closure#0}>
 2	<core::option::Option<(djs_core::regexp::charset::CharSet, bool)> as alloc::vec::spec_from_elem::SpecFromElem>::from_elem::<alloc::alloc::Global>
 2	<core::option::Option<alloc::vec::Vec<u16>> as alloc::vec::spec_from_elem::SpecFromElem>::from_elem::<alloc::alloc::Global>
 2	<core::option::Option<djs_core::bigint::BigInt>>::is_some_and::<djs_core::interp::conv::loose_equals::{closure#0}>
@@ -309,12 +305,12 @@ total	alloc_error	262
 1	<djs_core::bigint::BigInt>::from_f64
 2	<djs_core::bigint::BigInt>::not
 2	<djs_core::bigint::BigInt>::or
-3	<djs_core::bigint::BigInt>::parse_digits::<core::iter::adapters::map::Map<core::slice::iter::Iter<u16>, <djs_core::bigint::BigInt>::parse_string::{closure#4}>>
-3	<djs_core::bigint::BigInt>::parse_digits::<core::iter::adapters::map::Map<core::slice::iter::Iter<u8>, <djs_core::compiler::parser::Parser>::bigint_literal::{closure#0}>>
+1	<djs_core::bigint::BigInt>::parse_digits::<core::iter::adapters::map::Map<core::slice::iter::Iter<u16>, <djs_core::bigint::BigInt>::parse_string::{closure#4}>>
+1	<djs_core::bigint::BigInt>::parse_digits::<core::iter::adapters::map::Map<core::slice::iter::Iter<u8>, <djs_core::compiler::parser::Parser>::bigint_literal::{closure#0}>>
 7	<djs_core::bigint::BigInt>::pow
 2	<djs_core::bigint::BigInt>::sar_bits
 1	<djs_core::bigint::BigInt>::shr
-3	<djs_core::bigint::BigInt>::shr_mag
+1	<djs_core::bigint::BigInt>::shr_mag
 1	<djs_core::bigint::BigInt>::sub
 1	<djs_core::bigint::BigInt>::to_f64
 7	<djs_core::bigint::BigInt>::to_string_radix
@@ -325,7 +321,7 @@ total	alloc_error	262
 1	<djs_core::bytecode::code::CodeBuf<djs_core::bytecode::code::Phase1>>::new_label
 3	<djs_core::bytecode::code::CodeBuf<djs_core::bytecode::code::Phase1>>::rotate
 1	<djs_core::bytecode::code::CodeBuf>::encode
-23	<djs_core::bytecode::code::CodeBuf>::finish
+19	<djs_core::bytecode::code::CodeBuf>::finish
 2	<djs_core::bytecode::ops::global_decls::GlobalDecls>::decode
 3	<djs_core::compiler::CompileError>::text
 1	<djs_core::compiler::func::FuncState>::new
@@ -333,6 +329,7 @@ total	alloc_error	262
 2	<djs_core::compiler::parser::Parser>::alloc_units
 2	<djs_core::compiler::parser::Parser>::atom_of_units
 1	<djs_core::compiler::parser::Parser>::begin_ctor
+2	<djs_core::compiler::parser::Parser>::begin_function
 2	<djs_core::compiler::parser::Parser>::bigint_literal
 4	<djs_core::compiler::parser::Parser>::check_private_refs
 1	<djs_core::compiler::parser::Parser>::close_using
@@ -347,14 +344,14 @@ total	alloc_error	262
 1	<djs_core::compiler::parser::Parser>::emit_unwind
 2	<djs_core::compiler::parser::Parser>::end_function_at
 1	<djs_core::compiler::parser::Parser>::finish_init
-26	<djs_core::compiler::parser::Parser>::finish_unit
+24	<djs_core::compiler::parser::Parser>::finish_unit
 1	<djs_core::compiler::parser::Parser>::ident_atom
 1	<djs_core::compiler::parser::Parser>::lx_text_is
 2	<djs_core::compiler::parser::Parser>::park_function
 2	<djs_core::compiler::parser::Parser>::parse_assign
 8	<djs_core::compiler::parser::Parser>::parse_class
 9	<djs_core::compiler::parser::Parser>::parse_class_element
-6	<djs_core::compiler::parser::Parser>::parse_ctor
+4	<djs_core::compiler::parser::Parser>::parse_ctor
 2	<djs_core::compiler::parser::Parser>::parse_do_while
 5	<djs_core::compiler::parser::Parser>::parse_for
 7	<djs_core::compiler::parser::Parser>::parse_for_in_of
@@ -372,6 +369,7 @@ total	alloc_error	262
 2	<djs_core::compiler::parser::Parser>::parse_while
 3	<djs_core::compiler::parser::Parser>::private_closure_atom
 1	<djs_core::compiler::parser::Parser>::private_ref
+1	<djs_core::compiler::parser::Parser>::resume_function
 3	<djs_core::compiler::parser::Parser>::rotate_code
 2	<djs_core::compiler::parser::Parser>::skip_pattern
 4	<djs_core::compiler::parser::Parser>::string_const
@@ -394,7 +392,7 @@ total	alloc_error	262
 1	<djs_core::compiler::ts_meta::Fold>::result
 1	<djs_core::heap::Heap>::alloc_bigint_i64
 1	<djs_core::heap::Heap>::append_into
-5	<djs_core::heap::Heap>::array_splice_dense
+3	<djs_core::heap::Heap>::array_splice_dense
 7	<djs_core::heap::Heap>::atom_name
 2	<djs_core::heap::Heap>::canonical_numeric_index
 4	<djs_core::heap::Heap>::check_proto_cycles::<core::iter::sources::from_fn::FromFn<<djs_core::heap::Heap>::verify::{closure#2}::{closure#0}>>
@@ -410,12 +408,12 @@ total	alloc_error	262
 2	<djs_core::heap::Heap>::from_bytes
 2	<djs_core::heap::Heap>::from_bytes_trusted
 8	<djs_core::heap::Heap>::mark_compact
-5	<djs_core::heap::Heap>::ordinary_own_keys
+3	<djs_core::heap::Heap>::ordinary_own_keys
 2	<djs_core::heap::Heap>::str_array_index
 2	<djs_core::heap::Heap>::truncate_elements
 1	<djs_core::heap::Heap>::verify
 1	<djs_core::heap::LoadError as core::fmt::Display>::fmt
-3	<djs_core::heap::LoadError>::text
+5	<djs_core::heap::LoadError>::text
 1	<djs_core::heap::arena::Arena>::with_capacity
 2	<djs_core::heap::layout::Ref as alloc::vec::spec_from_elem::SpecFromElem>::from_elem::<alloc::alloc::Global>
 1	<djs_core::interp::run::Exec>::args_array
@@ -430,7 +428,7 @@ total	alloc_error	262
 3	<djs_core::interp::run::Exec>::class_op
 1	<djs_core::interp::run::Exec>::construct_with
 3	<djs_core::interp::run::Exec>::copy_data_props
-11	<djs_core::interp::run::Exec>::enumerable_own_data
+7	<djs_core::interp::run::Exec>::enumerable_own_data
 4	<djs_core::interp::run::Exec>::fault_value
 9	<djs_core::interp::run::Exec>::for_in_start
 5	<djs_core::interp::run::Exec>::global_decls
@@ -440,7 +438,7 @@ total	alloc_error	262
 4	<djs_core::interp::run::Exec>::install_key
 2	<djs_core::interp::run::Exec>::install_method
 3	<djs_core::interp::run::Exec>::install_prototype
-49	<djs_core::interp::run::Exec>::json_regexp_intrinsic
+45	<djs_core::interp::run::Exec>::json_regexp_intrinsic
 1	<djs_core::interp::run::Exec>::load_exec_state
 1	<djs_core::interp::run::Exec>::local_generator
 3	<djs_core::interp::run::Exec>::mark_fast
@@ -450,14 +448,14 @@ total	alloc_error	262
 2	<djs_core::interp::run::Exec>::n_create_data_property_or_throw
 2	<djs_core::interp::run::Exec>::n_leaf_gc
 2	<djs_core::interp::run::Exec>::n_set
-7	<djs_core::interp::run::Exec>::new_stack
+5	<djs_core::interp::run::Exec>::new_stack
 2	<djs_core::interp::run::Exec>::not_a_constructor_message
 2	<djs_core::interp::run::Exec>::nullish_base::<core::option::Option<djs_core::interp::run::Status>>
 2	<djs_core::interp::run::Exec>::nullish_base::<djs_core::interp::run::Got>
 2	<djs_core::interp::run::Exec>::private_own
 2	<djs_core::interp::run::Exec>::private_read_only::<core::option::Option<djs_core::interp::run::Status>>
 2	<djs_core::interp::run::Exec>::put_on_primitive
-12	<djs_core::interp::run::Exec>::regexp_exec_raw
+8	<djs_core::interp::run::Exec>::regexp_exec_raw
 8	<djs_core::interp::run::Exec>::regexp_replace_raw
 7	<djs_core::interp::run::Exec>::regexp_split_raw
 1	<djs_core::interp::run::Exec>::save_exec_state
@@ -474,22 +472,20 @@ total	alloc_error	262
 3	<djs_core::json::parse::Parser>::key_colon::<0>
 3	<djs_core::json::parse::Parser>::key_colon::<1>
 6	<djs_core::json::parse::Parser>::key_colon::<2>
-3	<djs_core::json::parse::Parser>::next::<1>
+1	<djs_core::json::parse::Parser>::next::<1>
 2	<djs_core::json::stringify::Out>::byte
 5	<djs_core::json::stringify::Out>::quote
-3	<djs_core::json::stringify::Out>::widen
+1	<djs_core::json::stringify::Out>::widen
 1	<djs_core::json::stringify::Ser>::classify
 10	<djs_core::json::stringify::Ser>::emit
 11	<djs_core::json::stringify::Ser>::member
 5	<djs_core::json::stringify::Ser>::newline
 1	<djs_core::lexer::Lexer>::cook_ident
 2	<djs_core::lexer::Lexer>::template_raw
-5	<djs_core::lexer::line_table::LineTable>::new
+4	<djs_core::lexer::line_table::LineTable>::new
 1	<djs_core::regexp::SyntaxError>::flags
 5	<djs_core::regexp::charset::CharSet>::canonicalize
-2	<djs_core::regexp::charset::CharSet>::invert
 1	<djs_core::regexp::charset::CharSet>::subtract
-2	<djs_core::regexp::charset::CharSet>::union
 3	<djs_core::regexp::compiler::Compiler>::alternatives::<core::slice::iter::Iter<djs_core::regexp::parser::Node>>
 20	<djs_core::regexp::compiler::Compiler>::node
 6	<djs_core::regexp::exec::ExecState>::from_words
@@ -515,7 +511,8 @@ total	alloc_error	262
 2	<djs_core::vm::Vm>::new_host_calls
 2	<djs_core::vm::Vm>::over
 2	<djs_core::vm::Vm>::seal
-3	<djs_core::wire::Decoder>::string
+4	<djs_core::vm::compat::ImageDep>::show
+1	<djs_core::wire::Decoder>::string
 2	<djs_core::wire::WireError>::text
 1	<djs_wasm::State>::add_vm
 2	<djs_wasm::State>::describe_call
@@ -546,22 +543,32 @@ total	alloc_error	262
 3	core::ptr::drop_glue::<djs_core::regexp::exec::ExecState>
 2	core::ptr::drop_glue::<djs_core::regexp::parser::ClassSet>
 4	core::ptr::drop_glue::<djs_core::regexp::parser::Node>
-4	djs_core::bigint::add_mag
+2	djs_core::bigint::add_mag
 1	djs_core::bigint::mul_small_add
-5	djs_core::bigint::shl_small
-3	djs_core::bigint::sub_mag
+3	djs_core::bigint::shl_small
+1	djs_core::bigint::sub_mag
+2	djs_core::buf::vec_with_capacity::<(alloc::vec::Vec<u16>, djs_core::value::Value)>
+2	djs_core::buf::vec_with_capacity::<(djs_core::heap::atom::Atom, djs_core::value::Value)>
+2	djs_core::buf::vec_with_capacity::<(usize, u32)>
+2	djs_core::buf::vec_with_capacity::<alloc::vec::Vec<u32>>
+2	djs_core::buf::vec_with_capacity::<djs_core::bytecode::code::Phase1Code>
+2	djs_core::buf::vec_with_capacity::<djs_core::compiler::resolve::Storage>
+2	djs_core::buf::vec_with_capacity::<djs_core::value::Obj>
+2	djs_core::buf::vec_with_capacity::<djs_core::value::Value>
+2	djs_core::buf::vec_with_capacity::<u16>
+2	djs_core::buf::vec_with_capacity::<u8>
 10	djs_core::builtins::array::sort_numbers
-13	djs_core::builtins::array::sort_primitives
+9	djs_core::builtins::array::sort_primitives
 4	djs_core::builtins::date::format
 2	djs_core::builtins::date::parse::<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>
-4	djs_core::builtins::dense::dense_range
-16	djs_core::builtins::dense::join
+2	djs_core::builtins::dense::dense_range
+14	djs_core::builtins::dense::join
 1	djs_core::builtins::dom::atob
 1	djs_core::builtins::dom::btoa::<core::iter::adapters::flatten::FlatMap<djs_core::heap::string::Chunks, djs_core::heap::string::Units, <djs_core::heap::string::StrView>::units>>
 1	djs_core::builtins::eval::compile_error
 1	djs_core::builtins::eval::compile_eval
 6	djs_core::builtins::eval::compile_function
-5	djs_core::builtins::fast::from_char_code
+3	djs_core::builtins::fast::from_char_code
 5	djs_core::builtins::fast::split
 9	djs_core::builtins::function::to_string
 7	djs_core::builtins::json::source_records
@@ -569,36 +576,35 @@ total	alloc_error	262
 1	djs_core::builtins::number::parse
 2	djs_core::builtins::number::range_error::<djs_core::value::Str>
 2	djs_core::builtins::object::cannot_define::<()>
-5	djs_core::builtins::object::own_keys
+3	djs_core::builtins::object::own_keys
 2	djs_core::builtins::object::set_integrity_level
 1	djs_core::builtins::object::test_integrity_level
 1	djs_core::builtins::regexp::alloc_units
 1	djs_core::builtins::regexp::define_group
 4	djs_core::builtins::string::code_points
-2	djs_core::builtins::string::code_points_of
-4	djs_core::builtins::string::from_codes
+2	djs_core::builtins::string::from_codes
 2	djs_core::builtins::string::index_of
-4	djs_core::builtins::string::join
+2	djs_core::builtins::string::join
 11	djs_core::builtins::string::locale_compare
 4	djs_core::builtins::string::normalize
 1	djs_core::builtins::string::repeat
-9	djs_core::builtins::string::to_case
+7	djs_core::builtins::string::to_case
 6	djs_core::builtins::string::well_formed
 3	djs_core::builtins::typed::buffer_copy
 3	djs_core::builtins::typed::buffer_transfer
 1	djs_core::builtins::typed::decode_chunk
 1	djs_core::builtins::typed::decoded_record
-2	djs_core::builtins::typed::from_base64
+1	djs_core::builtins::typed::from_base64
 2	djs_core::builtins::typed::range_error::<djs_core::value::Obj>
 2	djs_core::builtins::typed::to_base64
 2	djs_core::builtins::typed::to_hex
 1	djs_core::builtins::typed::typed_array_copy
-6	djs_core::builtins::uri::decode
-6	djs_core::builtins::uri::encode
-6	djs_core::builtins::uri::escape
-6	djs_core::builtins::uri::unescape
+4	djs_core::builtins::uri::decode
+4	djs_core::builtins::uri::encode
+4	djs_core::builtins::uri::escape
+4	djs_core::builtins::uri::unescape
 2	djs_core::builtins::uri::uri_error
-3	djs_core::bytecode::handlers::encode_handlers
+1	djs_core::bytecode::handlers::encode_handlers
 2	djs_core::bytecode::lines::write_uleb
 4	djs_core::bytecode::stack::stack_depths
 7	djs_core::bytecode::stack::walk
@@ -607,7 +613,7 @@ total	alloc_error	262
 13	djs_core::compiler::compile_dynamic_function
 3	djs_core::compiler::error_at
 1	djs_core::compiler::resolve::classify::{closure#0}
-70	djs_core::compiler::resolve::emit_function
+61	djs_core::compiler::resolve::emit_function
 1	djs_core::compiler::scan::is_arrow_head
 1	djs_core::compiler::scan::try_has_finally
 1	djs_core::compiler::ts_decl::to_num
@@ -628,8 +634,8 @@ total	alloc_error	262
 1	djs_core::interp::run::undefined_global
 4	djs_core::json::parse::parse
 2	djs_core::json::parse::parse_utf8
-4	djs_core::json::stringify::quote
-21	djs_core::json::stringify::stringify_fast_at
+2	djs_core::json::stringify::quote
+20	djs_core::json::stringify::stringify_fast_at
 2	djs_core::json::stringify::write_int
 1	djs_core::lexer::string::cook
 3	djs_core::lexer::string::push_utf16
@@ -637,7 +643,6 @@ total	alloc_error	262
 1	djs_core::regexp::compiler::case_closure
 9	djs_core::regexp::compiler::first_chars
 6	djs_core::regexp::compiler::start_cond
-1	djs_core::regexp::exec::exec_at
 3	djs_core::regexp::exec::resume
 2	djs_core::regexp::parser::err::<()>
 2	djs_core::regexp::parser::err::<core::option::Option<djs_core::regexp::parser::Node>>
@@ -648,13 +653,12 @@ total	alloc_error	262
 1	djs_core::text::decimal
 2	djs_core::unicode::normalize::decompose_char
 5	djs_core::unicode::normalize::is_normalized_quick
-13	djs_core::unicode::normalize::normalize
+7	djs_core::unicode::normalize::normalize
 4	djs_core::unicode::property::binary_set
-2	djs_core::unicode::property::decode_set
-8	djs_core::unicode::property::decode_strings
+4	djs_core::unicode::property::decode_strings
 3	djs_core::unicode::property::lookup
 1	djs_core::unicode::property::string_property
-6	djs_core::unicode::property::union
+4	djs_core::unicode::property::union
 4	djs_core::wire::decode
 7	djs_lzrc::decode_with_capacity
 2	djs_wasm::base_buffer

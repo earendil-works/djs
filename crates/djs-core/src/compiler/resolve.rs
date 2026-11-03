@@ -155,7 +155,7 @@ pub(super) fn finish(
         alloc_script(heap, name, source)?
     };
     let line_table = LineTable::new(src);
-    let mut phase1 = Vec::with_capacity(funcs.len());
+    let mut phase1 = crate::buf::vec_with_capacity(funcs.len());
     for f in funcs.iter_mut() {
         let code = core::mem::take(&mut f.code)
             .finish()
@@ -346,7 +346,7 @@ fn assign_storage(
     next_builtin: &mut u16,
     builtins: u16,
 ) -> (Vec<Storage>, Vec<Atom>) {
-    let mut storage = Vec::with_capacity(f.vars.len());
+    let mut storage = crate::buf::vec_with_capacity(f.vars.len());
     let mut names = Vec::new();
     for v in &f.vars {
         let pseudo = v.kind.is_pseudo();
@@ -804,7 +804,7 @@ fn emit_function(
     for e in &mut lines {
         e.0 = code.map_pos(e.0);
     }
-    let mut handlers = Vec::with_capacity(f.handlers.len());
+    let mut handlers = crate::buf::vec_with_capacity(f.handlers.len());
     for h in &f.handlers {
         let pos = |l| {
             code.label_pos(l)
@@ -824,7 +824,7 @@ fn emit_function(
     resolve_relative_depths(f, &code, &mut handlers)?;
 
     // ---- Captures, children, line table, template.
-    let mut capture_words = Vec::with_capacity(f.captures.len());
+    let mut capture_words = crate::buf::vec_with_capacity(f.captures.len());
     for &c in &f.captures {
         capture_words.push(match c {
             Capture::Outer(i) => capture_desc::outer(i),

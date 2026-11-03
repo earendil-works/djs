@@ -863,7 +863,8 @@ impl Heap {
             p = self.get_prototype_of(q);
         }
         let el = self.elements(o);
-        let mut values: Vec<Value> = Vec::with_capacity((len - delete + insert) as usize);
+        let mut values: Vec<Value> =
+            crate::buf::vec_with_capacity((len - delete + insert) as usize);
         for i in 0..len {
             let v = self.value_array_get(el, i);
             if v.is_hole() {
@@ -2581,7 +2582,8 @@ impl Heap {
         if sort {
             crate::sort::sort_by(&mut indexes, |a, b| a.0 < b.0);
         }
-        let mut out = Vec::with_capacity(indexes.len() + strings.len() + symbols.len() + 3);
+        let mut out =
+            crate::buf::vec_with_capacity(indexes.len() + strings.len() + symbols.len() + 3);
         out.extend(indexes.into_iter().map(|(_, k)| k));
         if self.object_class(o) == ObjectClass::Array {
             out.push_out(atoms::LENGTH);

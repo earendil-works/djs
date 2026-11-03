@@ -27,7 +27,7 @@ pub(crate) fn dense_range(heap: &Heap, o: Obj, from: u32, to: u32) -> Option<Vec
     if heap.object_class(o) != ObjectClass::Array || to > heap.dense_len(o) {
         return None;
     }
-    let mut out = Vec::with_capacity(to.saturating_sub(from) as usize);
+    let mut out = crate::buf::vec_with_capacity(to.saturating_sub(from) as usize);
     for i in from..to {
         out.push(heap.get_element_fast(o, i)?);
     }
@@ -174,7 +174,7 @@ pub(crate) fn join(heap: &mut Heap, o: Obj, len: u32, sep: Str) -> Result<Option
         .all(|v| v.as_string().is_some() || v.is_nullish())
     {
         let sep_len = heap.str_len(sep);
-        let mut pieces: Vec<(Str, u32, u32)> = Vec::with_capacity(2 * values.len());
+        let mut pieces: Vec<(Str, u32, u32)> = crate::buf::vec_with_capacity(2 * values.len());
         for (i, v) in values.iter().enumerate() {
             if i > 0 && sep_len > 0 {
                 pieces.push((sep, 0, sep_len));

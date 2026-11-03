@@ -224,7 +224,7 @@ pub fn exec_at(
         slots: alloc::vec![UNSET; nslots],
         slot_gen: alloc::vec![UNSET; nslots],
         // Most matches need a few frames; growing from empty reallocates repeatedly.
-        stack: Vec::with_capacity(64),
+        stack: crate::buf::vec_with_capacity(64),
     };
     resume(prog, input, state, fuel, limits)
 }

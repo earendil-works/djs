@@ -29,7 +29,7 @@ impl Handler {
 
 /// Encodes handler records.
 pub fn encode_handlers(handlers: &[Handler]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(handlers.len() * RECORD);
+    let mut out = crate::buf::vec_with_capacity(handlers.len() * RECORD);
     for h in handlers {
         for w in [h.start, h.end, h.target, h.depth] {
             out.extend_from_slice(&w.to_le_bytes());

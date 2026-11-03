@@ -115,7 +115,7 @@ pub fn stringify_fast_at(
         heap,
         out: Out {
             // (Most results are a few hundred bytes: no growth through 8, 16, ... 128.)
-            buf: Buf::Narrow(Vec::with_capacity(256)),
+            buf: Buf::Narrow(crate::buf::vec_with_capacity(256)),
             max_len: limit.0,
             room: limit.1,
         },
@@ -147,7 +147,7 @@ pub fn quote(heap: &mut Heap, s: Str) -> Result<Str, HeapError> {
     let flat = heap.flatten(s)?;
     let view = heap.str_view(flat).expect("flat");
     let mut out = Out {
-        buf: Buf::Narrow(Vec::with_capacity(view.len() + 2)),
+        buf: Buf::Narrow(crate::buf::vec_with_capacity(view.len() + 2)),
         max_len: usize::MAX,
         room: usize::MAX,
     };
@@ -220,7 +220,7 @@ impl Out {
     /// Switches to the wide buffer (the result will have a unit above 0xFF).
     fn widen(&mut self) {
         if let Buf::Narrow(b) = &mut self.buf {
-            let mut w = Vec::with_capacity(b.len() * 2 + 16);
+            let mut w = crate::buf::vec_with_capacity(b.len() * 2 + 16);
             w.extend(b.iter().map(|&c| c as u16));
             self.buf = Buf::Wide(w);
         }

@@ -375,7 +375,7 @@ impl CodeBuf<Final> {
         } = self;
         // Each fixup: the instruction's start and the target's position, as emitted
         // (a jump's target is its only immediate, after the opcode byte).
-        let mut jumps = Vec::with_capacity(fixups.len());
+        let mut jumps = crate::buf::vec_with_capacity(fixups.len());
         for &at in &fixups {
             let at = at as usize;
             let id = u32::from_le_bytes(code[at..at + 4].try_into().unwrap_or([0; 4]));
@@ -416,7 +416,8 @@ impl CodeBuf<Final> {
             }
         }
         // The code with the final offsets.
-        let mut out = Vec::with_capacity(code.len() - JUMP_SAVING as usize * shortened.len());
+        let mut out =
+            crate::buf::vec_with_capacity(code.len() - JUMP_SAVING as usize * shortened.len());
         let mut from = 0usize;
         for (&(start, target), &s) in jumps.iter().zip(&short) {
             let start_us = start as usize;

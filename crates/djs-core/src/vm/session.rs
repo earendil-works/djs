@@ -128,7 +128,8 @@ pub fn session_image(image: &[u8], base: &[u8]) -> Result<Vec<u8>, SessionError>
     }
     let n = diff.len();
     let pad = (4 * n) % 8;
-    let mut out = Vec::with_capacity(HEADER + 12 * n + pad + roots as usize + image.len() - to);
+    let mut out =
+        crate::buf::vec_with_capacity(HEADER + 12 * n + pad + roots as usize + image.len() - to);
     out.extend_from_slice(&SESSION_MAGIC.to_le_bytes());
     out.extend_from_slice(&SESSION_FORMAT.to_le_bytes());
     out.extend_from_slice(&deps.to_le_bytes());
