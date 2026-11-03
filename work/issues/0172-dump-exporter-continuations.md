@@ -1,7 +1,7 @@
 # 0172: Exporter: continuations, re-enactment, and the dump-every-idle stress mode
 
-status: open
-agent: -
+status: in-progress
+agent: portable
 branch: issue/0172-dump-exporter
 depends-on: 0171, 0173
 touches: crates/djs-core/src/vm/dump*.rs, crates/djs-difftest (--dump-every-idle), crates/djs-core/tests/e2e.rs (dump mode), scripts/gate.sh (the new stress leg), vm/dump_harvest.rs, TESTING.md, docs/continuation-dumps.md, docs/functions-as-code.md
