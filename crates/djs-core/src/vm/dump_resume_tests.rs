@@ -1352,7 +1352,13 @@ fn dumps_carry_the_random_state_and_iterators_again() {
 /// The new golden programs' every idle point, dumped once and dumped in a chain.
 #[test]
 fn delegation_round_trips() {
-    for name in ["yield-star", "for-await-close", "finally", "using"] {
+    for name in [
+        "yield-star",
+        "for-await-close",
+        "finally",
+        "using",
+        "destructuring",
+    ] {
         let src =
             std::fs::read_to_string(golden_dir().join(alloc::format!("{name}.src.js"))).unwrap();
         let (want, marks) = run_program(&src);

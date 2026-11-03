@@ -44,4 +44,4 @@ function fo @2598..2652
   yield#1 @44 (109:45) pc 45: for-of.iterator for-of.next
 function dstr @2919..2991
   loc0 <state>, loc1 a@0
-  yield#1 @30 (117:31) pc 68: unsupported destructuring
+  yield#1 @30 (117:31) pc 68: pattern.next pattern.iterator

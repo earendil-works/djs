@@ -239,12 +239,47 @@ const USING: &[(&str, &[&str])] = &[
     ),
 ];
 
-/// Constructs whose operands are not described yet: never mislabeled.
-const UNSUPPORTED: &[(&str, &[&str])] = &[
-    ("const { a = await b } = o;", &["await#1 !destructuring"]),
+/// Destructuring: the value or iterator under way, keys, assignment targets.
+const PATTERNS: &[(&str, &[&str])] = &[
+    ("const { a = await b } = o;", &["await#1 pattern.source"]),
     ("const [x] = await y;", &["await#1 -"]),
-    ("class C { [await k]() {} }", &["await#1 !class"]),
+    (
+        "const { a, [await k]: { b = await c }, ...r } = o;",
+        &[
+            "await#1 pattern.source pattern.excluded",
+            "await#2 pattern.source pattern.excluded pattern.key pattern.source",
+        ],
+    ),
+    (
+        "const [x = await a, [y = await b] = []] = xs;",
+        &[
+            "await#1 pattern.next pattern.iterator",
+            "await#2 pattern.next pattern.iterator pattern.next pattern.iterator",
+        ],
+    ),
+    (
+        "[o[await k], p.q = await d] = xs;",
+        &[
+            "await#1 assign.value pattern.next pattern.iterator member.object",
+            "await#2 assign.value pattern.next pattern.iterator assign.object",
+        ],
+    ),
+    (
+        "({ x: o[k] = await d } = v);",
+        &["await#1 assign.value pattern.source assign.object assign.key"],
+    ),
+    (
+        "for (const { a = await d } of xs) f(a);",
+        &["await#1 for-of.iterator for-of.next pattern.source"],
+    ),
+    (
+        "try {} catch ({ e = await d }) {}",
+        &["await#1 pattern.source"],
+    ),
 ];
+
+/// Constructs whose operands are not described yet: never mislabeled.
+const UNSUPPORTED: &[(&str, &[&str])] = &[("class C { [await k]() {} }", &["await#1 !class"])];
 
 fn check(table: &[(&str, &[&str])]) {
     let mut bad = Vec::new();
@@ -275,6 +310,11 @@ fn statements() {
 #[test]
 fn using_records() {
     check(USING);
+}
+
+#[test]
+fn patterns() {
+    check(PATTERNS);
 }
 
 #[test]

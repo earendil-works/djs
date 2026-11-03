@@ -33,6 +33,7 @@ use super::expr::{Expr, LValue};
 use super::func::{BODY_SCOPE, FuncKind, HandlerLabels, VarKind};
 use super::parser::{Checkpoint, Parser, syntax};
 use super::scan::Follow;
+use super::smap::Role;
 use crate::bytecode::Label;
 use crate::bytecode::intrinsics::intrinsic_id;
 use crate::heap::{Atom, atoms};
@@ -71,6 +72,14 @@ impl Target<'_> {
         match self {
             Target::Ref(lv) => lv.refs(),
             _ => 0,
+        }
+    }
+
+    /// Their roles (suspension maps).
+    fn roles(&self) -> &'static [Role] {
+        match self {
+            Target::Ref(lv) => lv.roles(),
+            _ => &[],
         }
     }
 }
@@ -143,15 +152,12 @@ impl<'a> Parser<'a, '_> {
     pub(super) fn parse_pattern(&mut self, b: Binding) -> PResult<()> {
         let w = 1 + super::parser::PATTERN_WEIGHT;
         self.enter_n(w)?;
-        // The source and iterator under way are not described in suspension maps yet
-        // (D2563).
-        self.roles_push(&[super::smap::Role::Unsupported("destructuring")]);
+        // (Each kind pops the roles it pushed; an error ends the compile.)
         let r = if self.is(TokenKind::LBrace) {
             self.parse_object_pattern(b)
         } else {
             self.parse_array_pattern(b)
         };
-        self.roles_pop(1);
         self.leave_n(w);
         r
     }
@@ -288,9 +294,11 @@ impl<'a> Parser<'a, '_> {
         self.next()?;
         self.mark(open.start);
         self.code().require_object_coercible();
+        self.roles_push(&[Role::PatternSource]);
         if rest {
             // The keys of the properties before the rest, to exclude from it.
             self.code().array_from(0);
+            self.roles_push(&[Role::PatternExcluded]);
         }
         let s = u8::from(rest);
         while !self.is(TokenKind::RBrace) {
@@ -307,12 +315,14 @@ impl<'a> Parser<'a, '_> {
                     self.parse_binding_target(b)?
                 };
                 let r = t.refs();
+                self.roles_push(t.roles());
                 self.code().pick(r + 1);
                 self.code().pick(r + 1);
                 self.mark(pos);
                 self.code()
                     .call_intrinsic(intrinsic("CopyDataPropertiesExcluding"), 2);
                 self.store_target(b, t)?;
+                self.roles_pop(t.roles().len());
                 if !self.is(TokenKind::RBrace) {
                     return syntax(self.tok.start, "assignment rest property must be last");
                 }
@@ -358,6 +368,7 @@ impl<'a> Parser<'a, '_> {
                             self.code().array_push();
                             self.code().swap();
                         }
+                        self.roles_push(&[Role::PatternKey]);
                     }
                 }
                 if !self.is(TokenKind::Colon) {
@@ -367,6 +378,7 @@ impl<'a> Parser<'a, '_> {
                 (key, self.parse_target(b)?)
             };
             let r = t.refs();
+            self.roles_push(t.roles());
             match key {
                 Some(a) => {
                     self.code().pick(s + r);
@@ -383,8 +395,10 @@ impl<'a> Parser<'a, '_> {
             let name = self.target_name(&t);
             self.parse_pattern_default(name)?;
             self.store_target(b, t)?;
+            self.roles_pop(t.roles().len());
             if key.is_none() {
                 self.code().drop();
+                self.roles_pop(1);
             }
             if !self.eat(TokenKind::Comma)? {
                 break;
@@ -395,6 +409,7 @@ impl<'a> Parser<'a, '_> {
             self.code().drop();
         }
         self.code().drop();
+        self.roles_pop(1 + usize::from(rest));
         Ok(())
     }
 
@@ -409,6 +424,7 @@ impl<'a> Parser<'a, '_> {
         self.code().dup();
         self.code().get_field(atoms::NEXT, 0);
         self.code().swap();
+        self.roles_push(&[Role::PatternNext, Role::PatternIterator]);
         // `next it`: the close handler's depth is the depth here.
         let l_base = self.new_label();
         self.place(l_base);
@@ -444,21 +460,25 @@ impl<'a> Parser<'a, '_> {
                         return syntax(self.tok.start, "rest element must be the last one");
                     }
                     may_throw |= matches!(t, Target::Pattern(_));
+                    self.roles_push(t.roles());
                     self.region_end(&mut regions);
                     self.emit_iter_rest(t.refs(), first, open.start);
                     self.region_start(&mut regions);
                     self.store_target(b, t)?;
+                    self.roles_pop(t.roles().len());
                     break;
                 }
                 _ => {
                     let t = self.parse_target(b)?;
                     may_throw |= matches!(t, Target::Pattern(_));
+                    self.roles_push(t.roles());
                     self.region_end(&mut regions);
                     self.emit_iter_step(t.refs(), first, open.start);
                     self.region_start(&mut regions);
                     let name = self.target_name(&t);
                     may_throw |= self.parse_pattern_default(name)?;
                     self.store_target(b, t)?;
+                    self.roles_pop(t.roles().len());
                     first = false;
                 }
             }
@@ -481,6 +501,7 @@ impl<'a> Parser<'a, '_> {
         self.code().call_intrinsic(intrinsic("IteratorClose"), 1);
         self.place(l_skip);
         self.code().drop();
+        self.roles_pop(2);
         if may_throw && !regions.list.is_empty() {
             // `next it exc`: close a not-done iterator, rethrow.
             let l_after = self.new_label();

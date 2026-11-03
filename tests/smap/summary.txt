@@ -39,6 +39,6 @@ sites 1063
     1 for-of.iterator for-of.next assign.old
     1 for-of.iterator for-of.next using.record finally.value finally.return using.record
     1 object.literal
+    1 pattern.next pattern.iterator
 
 ## unsupported
-    1 destructuring

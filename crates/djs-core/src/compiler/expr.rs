@@ -264,8 +264,10 @@ impl Parser<'_, '_> {
                 p.next()?;
                 p.parse_assign(no_in)?;
                 p.code().dup();
+                p.roles_push(&[Role::AssignValue]);
                 Ok(())
             })?;
+            self.roles_pop(1);
             return Ok(Expr::Value);
         }
         // `(f) = function () {}` names nothing: the target is not an identifier.

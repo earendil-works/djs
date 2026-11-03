@@ -81,6 +81,8 @@ pub enum Role {
     AssignObject,
     AssignKey,
     AssignOld,
+    /// `[a, b] = v`: the value (the expression's result) while the pattern runs.
+    AssignValue,
     /// The parts of a template literal so far (strings, joined at the end).
     TemplatePart(u16),
     /// `import(s, o)`: the specifier while the options are evaluated.
@@ -91,6 +93,14 @@ pub enum Role {
     /// and for-await, its `next` method.
     LoopIterator(Loop),
     LoopNext(Loop),
+    /// A destructuring pattern under way: an object pattern's value, the keys a rest
+    /// property excludes so far, a computed key while its target and default are
+    /// evaluated; an array pattern's iterator (`undefined` once done) and its `next`.
+    PatternSource,
+    PatternExcluded,
+    PatternKey,
+    PatternNext,
+    PatternIterator,
     /// A statement list's `using` declarations: the resource Record its disposal reads,
     /// below its statements.
     UsingRecord,
@@ -108,8 +118,7 @@ pub enum Role {
     /// (recorder order), which is not part of the role's name.
     FinallyValue,
     FinallyReturn(u16),
-    /// Values of a construct that is not described yet (destructuring, class
-    /// definitions): the site is unsupported.
+    /// Values of a construct that is not described yet (class definitions): the site is unsupported.
     Unsupported(&'static str),
 }
 
@@ -137,6 +146,7 @@ impl fmt::Display for Role {
             Role::AssignObject => f.write_str("assign.object"),
             Role::AssignKey => f.write_str("assign.key"),
             Role::AssignOld => f.write_str("assign.old"),
+            Role::AssignValue => f.write_str("assign.value"),
             Role::TemplatePart(i) => write!(f, "template.part[{i}]"),
             Role::ImportSpecifier => f.write_str("import.specifier"),
             Role::IntrinsicArg(i) => write!(f, "intrinsic.arg[{i}]"),
@@ -144,6 +154,11 @@ impl fmt::Display for Role {
             Role::LoopNext(l) => write!(f, "{}.next", l.name()),
             Role::SwitchDiscriminant => f.write_str("switch.discriminant"),
             Role::UsingRecord => f.write_str("using.record"),
+            Role::PatternSource => f.write_str("pattern.source"),
+            Role::PatternExcluded => f.write_str("pattern.excluded"),
+            Role::PatternKey => f.write_str("pattern.key"),
+            Role::PatternNext => f.write_str("pattern.next"),
+            Role::PatternIterator => f.write_str("pattern.iterator"),
             Role::Exception => f.write_str("exception"),
             Role::FinallyValue => f.write_str("finally.value"),
             Role::FinallyReturn(_) => f.write_str("finally.return"),
@@ -179,6 +194,7 @@ impl Role {
             Role::AssignObject => ("assign.object", None),
             Role::AssignKey => ("assign.key", None),
             Role::AssignOld => ("assign.old", None),
+            Role::AssignValue => ("assign.value", None),
             Role::TemplatePart(i) => ("template.part", Some(i)),
             Role::ImportSpecifier => ("import.specifier", None),
             Role::IntrinsicArg(i) => ("intrinsic.arg", Some(i)),
@@ -192,6 +208,11 @@ impl Role {
             Role::LoopNext(Loop::Star) => ("yield*.next", None),
             Role::SwitchDiscriminant => ("switch.discriminant", None),
             Role::UsingRecord => ("using.record", None),
+            Role::PatternSource => ("pattern.source", None),
+            Role::PatternExcluded => ("pattern.excluded", None),
+            Role::PatternKey => ("pattern.key", None),
+            Role::PatternNext => ("pattern.next", None),
+            Role::PatternIterator => ("pattern.iterator", None),
             Role::Exception => ("exception", None),
             Role::FinallyValue => ("finally.value", None),
             Role::FinallyReturn(_) => ("finally.return", None),

@@ -1,0 +1,45 @@
+"djs-dump 2";
+$dump.random(2135587861, -1640531527);
+$dump.p1 = $dump.pending(7, "later", [0]);
+var letters = function* letters() {
+  yield "a";
+  yield undefined;
+  yield "c";
+};
+async function objects(o) {
+  const { a = await later("a"), [await later("k")]: { b = await later("b") } = {}, ...rest } = o;
+  return [a, b, JSON.stringify(rest)].join(" ");
+}
+async function arrays() {
+  const [x, y = await later("y"), [z = await later("z")] = [], ...more] = letters();
+  return [x, y, z, more.length].join(" ");
+}
+async function assigns() {
+  const t = { list: [] };
+  let n;
+  const r = ([t.p, t.list[await later(0)] = await later("d"), n = 1] = [1]);
+  ({ q: t["q" + (await later(2))] = await later("e") } = {});
+  return JSON.stringify(t) + " " + n + " " + r.length;
+}
+var defaults = function* defaults(v) {
+  const { a = yield "need a", b: [c = yield "need c"] = [] } = v;
+  return a + c;
+};
+async function main() {
+  print("objects", await objects({ k: {}, extra: 1 }));
+  print("arrays", await arrays());
+  print("assigns", await assigns());
+  const g = defaults({});
+  const seen = [g.next().value];
+  await later("g");
+  seen.push(g.next("A").value);
+  await later("g2");
+  seen.push(g.next("C").value);
+  print("defaults", seen.join(" "));
+}
+$dump.n3 = [];
+$dump.n2 = { list: $dump.n3, p: 1 };
+$dump.n4 = [1];
+$dump.i5 = $dump.advance(Array.prototype.values.call($dump.n4), 1);
+$dump.a6 = $dump.resume(assigns, { at: "await#1", awaiting: $dump.p1, bindings: { t: $dump.n2, n: undefined, r: undefined }, operands: [["assign.value", $dump.n4], ["pattern.next", $dump.builtin("%ArrayIteratorPrototype%.next")], ["pattern.iterator", $dump.i5], ["member.object", $dump.n3]] });
+$dump.a7 = $dump.resume(main, { at: "await#3", awaiting: $dump.a6, bindings: { g: undefined, seen: undefined }, operands: [["call.callee", print], ["call.this", undefined], ["call.arg[0]", "assigns"]] });
