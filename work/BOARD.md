@@ -6,6 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0181 | atob/btoa and performance.now (research) | globals | .worktrees/globals |
 | 0179 | Example: host tool sleeps 5 s; dump, restart, continue | example | .worktrees/example |
 | 0172 | Exporter: continuations, re-enactment; --dump-every-idle in the gate | portable | .worktrees/portable |
 | 0174 | REPL and CLI: tools, waiting inputs (tools part first) | repl | .worktrees/repl |
