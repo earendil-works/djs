@@ -569,3 +569,7 @@ topics when the index is next reorganized.
 - D2634: `run`, `runAsync` and `replay` are built on the host-driven run
 - D2635: Both dumper packagings, chosen by the host; the image moves between modules
 - D2621: A class's hidden bindings in a waiting frame are dead; private names are the class's
+- D2622: Format 2 dumps carry no helper code; the helpers are loader primitives
+- D2623: Computed keys the dump would evaluate again are refused
+- D2624: A dump carries Math.random's state
+- D2625: The golden dumps are rewritten for D2622 and D2624

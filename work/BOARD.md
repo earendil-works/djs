@@ -8,7 +8,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0183 | The gate in seconds | gate-speed | .worktrees/gate-speed |
 | 0176 | pi's future shape: prelude-next, adapter mode, dumps (D2565) | example | .worktrees/example |
-| 0182 | Dump preamble out: $dump.builtin/advance as loader primitives (registry paths); computed class keys refused or by value | portable | .worktrees/portable |
 
 ## Open (ready)
 
@@ -83,6 +82,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0182 | No helper code in dumps (D2622), computed class keys refused (D2623), Math.random in dumps (D2624), goldens D2625 | 8a9a7e70 (agent portable; sleep dump 3,159 -> 1,308 B) |
 | 0178 | Dumps across builds: golden fixtures, two-commit check (D2619); exporter fixes D2617-D2621 | 4ee8c2c2 (agent portable) |
 | 0175 | Sandbox run API on host-driven runs (D2633-D2635); packaging B (dump module) | 7f380233 (agent example; dumper +96.8 KB gz) |
 | 0174 | REPL/CLI: tools, waiting inputs, .dump/.restore/.dump-every, run --dump-after, resume (D2600-D2604) | 242f8294 (agent repl) |
