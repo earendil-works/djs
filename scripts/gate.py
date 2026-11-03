@@ -180,7 +180,9 @@ def jobs():
     leg that needs it runs. `group` names the cargo target directory a job builds in:
     jobs of one group run one at a time."""
     tgt = "target"
-    cargo_json = "--message-format=json-render-diagnostics"
+    # Cargo's artifact messages, through `stream` (which starts each new executable once as
+    # soon as it is linked, see cmd_stream) into a manifest the legs read.
+    cargo_json = "--message-format=json-render-diagnostics | python3 scripts/gate.py stream"
     exe = f"python3 scripts/gate.py exe"
     tests = f"python3 scripts/gate.py tests"
     size_mod = "target/size/wasm32-unknown-unknown/wasm/djs_wasm.wasm"
@@ -601,7 +603,7 @@ def artifacts(manifest):
 
 
 def cmd_exe(args):
-    """exe MANIFEST NAME...: copy the named binaries a build produced to target/gate/bin
+    """exe MANIFEST NAME...: link the named binaries a build produced into target/gate/bin
     (bin/release, bin/slim by the manifest's name), so that later builds that write the same
     path (another feature set) do not change what a leg runs."""
     manifest, names = args[0], args[1:]
@@ -611,12 +613,52 @@ def cmd_exe(args):
     found = set()
     for m in artifacts(manifest):
         if m["target"]["name"] in names and "bin" in m["target"]["kind"] and not m["profile"]["test"]:
-            shutil.copy2(m["executable"], dest / m["target"]["name"])
+            # A hard link, not a copy: macOS scans every new executable file on its first
+            # run (syspolicyd), and a copy is a new file. Cargo replaces the linked file
+            # rather than rewriting it, so a later build cannot change what the link runs.
+            target = dest / m["target"]["name"]
+            target.unlink(missing_ok=True)
+            os.link(os.path.realpath(m["executable"]), target)
             found.add(m["target"]["name"])
     missing = set(names) - found
     if missing:
         print(f"gate exe: {manifest} built no {sorted(missing)}", file=sys.stderr)
         return 1
+    return 0
+
+
+def cmd_stream(_args):
+    """stream: copy cargo's JSON messages from stdin to stdout and run each executable a
+    build links once, with `--list` (test binaries) or `--help`, output discarded. macOS
+    scans every new executable on its first run, one at a time (syspolicyd); doing that
+    while the build goes on keeps it off the legs' path."""
+    threads = []
+    sem = threading.Semaphore(4)
+
+    def warm(exe, is_test):
+        with sem:
+            try:
+                subprocess.run([exe, "--list" if is_test else "--help"], stdin=subprocess.DEVNULL,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
+            except (OSError, subprocess.SubprocessError):
+                pass
+    for line in sys.stdin:
+        sys.stdout.write(line)
+        sys.stdout.flush()
+        try:
+            m = json.loads(line)
+        except ValueError:
+            continue
+        if m.get("reason") != "compiler-artifact" or not m.get("executable") or m.get("fresh"):
+            continue
+        # Test binaries list their tests; of the programs only those known to just print
+        # their usage on --help (djs-bgen without arguments would rewrite files).
+        if m["profile"]["test"] or m["target"]["name"] in ("djs", "djs-difftest"):
+            t = threading.Thread(target=warm, args=(m["executable"], m["profile"]["test"]))
+            t.start()
+            threads.append(t)
+    for t in threads:
+        t.join()
     return 0
 
 
@@ -736,6 +778,8 @@ def cmd_paths(_args):
 def main(argv):
     if argv[:1] == ["exe"]:
         return cmd_exe(argv[1:])
+    if argv[:1] == ["stream"]:
+        return cmd_stream(argv[1:])
     if argv[:1] == ["tests"]:
         return cmd_tests(argv[1:])
     if argv[:1] == ["paths"]:
