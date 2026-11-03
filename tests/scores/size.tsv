@@ -7,4 +7,4 @@
 quickjs_wasi_gzip	286655
 ceiling_gzip	441522
 # slim_ceiling_gzip: the slim module (scripts/build-wasm.sh --slim, D2411), its own ratchet.
-slim_ceiling_gzip	379900
+slim_ceiling_gzip	376679
