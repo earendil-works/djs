@@ -19,6 +19,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
+| 0180 | Dump format without comments (agent nocomment prepares) | 0172 |
 | 0174 | REPL and CLI: tools, waiting inputs, continuation dumps, `run --dump-after`/`resume` | 0171 (tools part earlier) |
 | 0175 | Sandbox run API (`begin`/`settle`/`advance`/`dump`/`resume`), wasm packagings | 0172 |
 | 0176 | pi's future shape: prelude-next, adapter mode, dumps (D2565) | 0175 |
