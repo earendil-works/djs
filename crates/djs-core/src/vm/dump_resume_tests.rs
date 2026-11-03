@@ -205,6 +205,156 @@ fn nested_loops() {
     fixture("loops");
 }
 
+#[test]
+fn cells_in_their_tdz() {
+    fixture("cells");
+}
+
+/// Loads a format 2 dump made of a few functions and `tail`; the reason it is refused.
+fn refusal(tail: &str) -> String {
+    let text = alloc::format!(
+        "// djs-dump 2\n\
+         async function f(a) {{ const b = a + 1; return o.m(b, await later(b)); }}\n\
+         function* gen() {{ yield 1; }}\n\
+         async function fin() {{ try {{ return 1; }} finally {{ await later(2); }} }}\n\
+         async function keys(o) {{ for (const k in o) await later(k); }}\n\
+         const o = {{ m: (x, y) => x + y }};\n\
+         $dump.p = $dump.pending(1, 'later', [2]);\n\
+         {tail}"
+    );
+    let mut vm = new_vm();
+    match load(&mut vm, &text) {
+        Ok(_) => panic!("loaded: {tail}"),
+        Err(e) => e,
+    }
+}
+
+/// A description of `f` at its await, with `extra` keys (overriding).
+fn describe(extra: &str) -> String {
+    alloc::format!(
+        "$dump.resume(f, {{ at: 'await#1', awaiting: $dump.p, args: [1], \
+         bindings: {{ a: 1, b: 2 }}, \
+         operands: [['call.callee', o.m], ['call.this', o], ['call.arg[0]', 2]], {extra} }});"
+    )
+}
+
+#[test]
+fn resume_refuses_what_the_map_does_not_have() {
+    // The description as such loads.
+    let mut vm = new_vm();
+    let ok = alloc::format!(
+        "// djs-dump 2\nasync function f(a) {{ const b = a + 1; return o.m(b, await later(b)); }}\n\
+         const o = {{ m: (x, y) => x + y }};\n$dump.p = $dump.pending(1, 'later', [2]);\n\
+         $dump.handle('r', {});",
+        describe("").trim_end_matches(';')
+    );
+    load(&mut vm, &ok).unwrap_or_else(|e| panic!("{e}"));
+
+    let cases: &[(&str, &str)] = &[
+        (&describe("at: 'await#2'"), "f has no site await#2"),
+        (&describe("at: 'yield#1'"), "f has no site yield#1"),
+        (&describe("bindings: { a: 1 }"), "no value for binding b"),
+        (
+            &describe("bindings: { a: 1, b: 2, c: 3 }"),
+            "await#1 has no binding c",
+        ),
+        (&describe("bindings: { a: 1, 'b@0': 2 }"), ""),
+        (
+            &describe("bindings: { a: 1, 'b@7': 2 }"),
+            "no value for binding b",
+        ),
+        (
+            &describe("operands: [['call.callee', o.m], ['call.arg[0]', 2], ['call.this', o]]"),
+            "operand 1 of await#1 is call.this, not call.arg[0]",
+        ),
+        (
+            &describe("operands: [['call.callee', o.m], ['call.this', o]]"),
+            "await#1 needs call.arg[0]",
+        ),
+        (
+            &describe(
+                "operands: [['call.callee', o.m], ['call.this', o], ['call.arg[0]', 2], ['binary.left', 1]]",
+            ),
+            "fewer operands or loops than given",
+        ),
+        (
+            &describe("loops: [{ kind: 'for-of', iterator: [].values(), next: [].values().next }]"),
+            "fewer operands or loops than given",
+        ),
+        (
+            &describe("operands: [['call.callee', o.m, 1]]"),
+            "a [role, value] pair",
+        ),
+        (
+            &describe("awaiting: 1"),
+            "await#1 awaits a promise: give it",
+        ),
+        (
+            &describe("awaiting: undefined"),
+            "await#1 awaits a promise: give it",
+        ),
+        (&describe("wait: 1"), "unknown key wait"),
+        (&describe("args: [1, , 2]"), "an array with holes"),
+        (
+            &describe(
+                "bindings: { a: (() => { let z = 1; return $dump.cell(() => z); })(), b: 2 }",
+            ),
+            "a is not captured",
+        ),
+        (
+            &describe("queue: [{ type: 'next', promise: new Promise(() => {}) }]"),
+            "only async generators have a request queue",
+        ),
+        (
+            "$dump.resume(gen, { at: 'yield#1', awaiting: $dump.p });",
+            "yield#1 is a yield",
+        ),
+        (
+            "$dump.resume(o.m, { at: 'await#1' });",
+            "not an async function or a generator",
+        ),
+        (
+            "$dump.resume(fin, { at: 'await#1', awaiting: $dump.p });",
+            "cannot be resumed: finally",
+        ),
+        (
+            "$dump.resume(keys, { at: 'await#1', awaiting: $dump.p, args: [{}], bindings: { o: {}, k: 'a' }, loops: [{ kind: 'for-in', iterator: 1 }] });",
+            "for-in loops cannot be resumed yet",
+        ),
+        (
+            "$dump.resume((async function () {}).constructor('await 1'), { at: 'await#1', awaiting: $dump.p });",
+            "not made by the dump's text",
+        ),
+        (
+            "(() => { let x, y; $dump.cell(() => [x, y]); })();",
+            "capture exactly one variable",
+        ),
+        ("$dump.pending(1, 'later', []);", "call 1 is open already"),
+        (
+            "$dump.pending(2, 'tools.read', []);",
+            "unknown host function tools.read",
+        ),
+        ("$dump.pending(-1, 'later', []);", "not a call id"),
+        (
+            "$dump.handle('x', 1); $dump.handle('x', 2);",
+            "two handles named x",
+        ),
+    ];
+    for (tail, want) in cases {
+        if want.is_empty() {
+            let mut vm = new_vm();
+            let text = alloc::format!(
+                "// djs-dump 2\nasync function f(a) {{ const b = a + 1; return o.m(b, await later(b)); }}\n\
+                 const o = {{ m: (x, y) => x + y }};\n$dump.p = $dump.pending(1, 'later', [2]);\n{tail}"
+            );
+            load(&mut vm, &text).unwrap_or_else(|e| panic!("{tail}: {e}"));
+            continue;
+        }
+        let got = refusal(tail);
+        assert!(got.contains(want), "{tail}\n  got: {got}\n  want: {want}");
+    }
+}
+
 /// Prints the suspension maps of a file, for writing fixtures by hand:
 /// `DJS_SMAP=tests/dump/v2/x.src.js cargo test -p djs-core --lib show_maps -- --ignored --nocapture`.
 #[test]
@@ -212,7 +362,9 @@ fn nested_loops() {
 fn show_maps() {
     let path = std::env::var("DJS_SMAP").expect("DJS_SMAP=file");
     let src = std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(path),
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join(path),
     )
     .unwrap();
     let mut vm = new_vm();
