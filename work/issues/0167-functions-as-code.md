@@ -45,6 +45,19 @@ helper-library-style scripts (from the harvested corpus, scripts/harvest: find s
 define reusable functions), the refusal list, and sizes. No engine changes.
 
 ## Log
+- Scope (coordinator, owner): `.dump` = semantic serialization written as JS, not an image;
+  builtins referenced, never dumped. Widened to a real implementation in djs-core
+  (`Vm::dump`), REPL `.dump`/`.restore`, a djs-wasm export + `Sandbox.dump/load`, behind a
+  default-on cargo feature `dump`; doc covers going beyond the REPL.
+- 0141's portable crate no longer builds on main (FuncTemplate split into FuncInfo, D2444;
+  closure template in ELEMENTS, D2448): not extended; the dumper lives in djs-core.
+- Builtin names: `registry::canonical_names` over a heap of the *base image* (prefix cells
+  have the same offsets in every VM of the base), so a user global aliasing a builtin
+  never names it. Paths without `%`/`~`/`get `/`[[Prototype]]` are JS expressions;
+  the others go through the loader's `$builtin(path)`; `~N`/`%intrinsic:` refuse.
+- Closures: one factory per group of closures that share captured boxes (verbatim source
+  text, no identifier rewriting); captured values that close a cycle are set after the
+  data through the factory's `$set`.
 
 ## Follow-ups
 
