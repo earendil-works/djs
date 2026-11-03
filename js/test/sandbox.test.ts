@@ -481,3 +481,27 @@ test("large host strings land in the heap in place when ASCII (D2551), others th
   assert.equal(sb.run(`return JSON.parse(get(0)).k.length`), 600_000);
   sb.dispose();
 });
+
+test("slices of a long text reach the host and survive snapshots (D2542)", async () => {
+  const text = Array.from({ length: 200 }, (_, i) => `line ${i} `.padEnd(60, "x")).join("\n");
+  const sb = await Sandbox.create();
+  const seen: unknown[] = [];
+  sb.defineFunction("see", (v) => {
+    seen.push(v);
+    return null;
+  });
+  sb.run(`globalThis.lines = text.split("\\n"); globalThis.doc = JSON.parse(json); see([lines[3], doc.a]);`, {
+    text,
+    json: JSON.stringify({ a: text.slice(0, 300), b: [1, 2] }),
+  });
+  assert.deepEqual(seen, [[text.split("\n")[3], text.slice(0, 300)]]);
+  const restored = await Sandbox.fromBytes(sb.bytes(), { functions: { see: () => null } });
+  assert.deepEqual(restored.run("return [lines.length, lines[199], doc.a.length, lines[5].slice(2, 40)]"), [
+    200,
+    text.split("\n")[199],
+    300,
+    text.split("\n")[5].slice(2, 40),
+  ]);
+  sb.dispose();
+  restored.dispose();
+});
