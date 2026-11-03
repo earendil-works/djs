@@ -7544,3 +7544,52 @@ without a trap at 128 KiB, debug | release: blocks 611 | 798, trys 610 | 798, cl
 the debug build the gate tests), so 550 stays. The regexp parser's limit goes from 201
 to 212: 211 nested groups, 10% below release's 235-lookahead limit; both builds reach
 the limit's SyntaxError at 211 for every regexp construct.
+## D2553: JSON.stringify builds a large result in its heap string
+date: 2026-11-03 · by: speed2 · issue: 0162
+The fast path's output buffer no longer holds the whole result. At a check point (after
+a primitive, a Date, a container's opening and, new, its closing) a buffer of 4096 units
+or more moves into the result's heap string and starts again
+(`Ser::spill`): appended in place while that string is still the arena's last cell
+(`Heap::append_last_latin1`: the cell grows at the frontier, the units are written once),
+else as a new piece; several pieces are joined into a rope at the end. 0116's objection
+to writing in place (the fast path must never allocate in between, which nobody enforces)
+does not apply: an allocation in between (a rope flattened, an index atom) only starts a
+new piece. Two-byte output also starts a new piece at each spill (an in-place two-byte
+append cost ~200 B gzip; such results end as ropes of 4096-unit pieces). The buffer's
+own checks against the string length limit and the heap's room went: the buffer stays
+small, and the heap's allocations apply both limits as the result grows.
+
+Peak wasm memory (mem-perturb, 12 runs, mean MiB, main → now): json-date 5.14 → 3.50
+(D2541's accepted +0.9 MiB is gone), json 5.80 → 5.40, jsonh 5.31 → 4.91, json-replacer
+4.23 → 4.02, an 8 MB result of 80,000 records 34.2 → 25.9; json-indent, json-text,
+pi-like, strings and a 4 MB string unchanged. Wasm instructions (default tiering, n = 5,
+outliers re-run at n = 9) within ±0.8% on every workload and pico case; json-big −1.6%,
+the pi bench −0.3%. Natively, json and json-text +0.1%. Size with D2554: +185 B gzip,
+slim within its ceiling.
+
+Measured and dropped:
+- Long strings quoted in 4096-unit parts with check points between them (a pair kept
+  whole): +200 B gzip, and a 4 MB string built by `repeat` peaked higher (13.9 → 15.8
+  MiB; 0.5–2 MB strings 0.3–2.2 MiB lower). A long string goes into the buffer whole
+  and moves out at the next check point.
+- Reserving the arena for a long string's length before writing it: worse on small
+  strings, no better on large ones.
+
+## D2554: Array species and ArrayCreate shortcuts
+date: 2026-11-03 · by: speed2 · issue: 0162
+- `Heap::new_array_with_length`: ArrayCreate(len) sets the fresh array's length directly
+  instead of through `define_own_property` and ArraySetLength's descriptor checks, which
+  a fresh array always passes (`%ArraySpeciesCreate` fast entry and the ARRAY_CREATE
+  intrinsic).
+- `plain_species`: when `%Array.prototype%` and `%Array%` are frozen builtins (D2304),
+  their `constructor` and `@@species` are the base's, so the four own-property lookups
+  are skipped. The receiver checks before it are unchanged; without frozen builtins
+  nothing changes. Tested in vm/frozen_tests.rs (the difftest corpus does not run with
+  frozen builtins).
+
+`[].map(f)` was 6.3k wasm instructions, about 10% in plain_species and 4% in the length
+define. Wasm instructions against main (default tiering, n = 5): tiny-map0 −5.5%,
+tiny-filter0 −5.6%, tiny-map1/2 −3.6/−3.3%, tiny-filter1/2 −4.0/−2.1%, tree-children
+−1.7%, tree-filter −2.1%; every other workload and pico case within ±0.8% (props,
+push-pop, tiny-reduce2 re-run at n = 9: −0.6%, +0.2%, −0.7%); pi bench −0.3%. Size
+−88 B gzip.
