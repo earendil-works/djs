@@ -55,7 +55,10 @@ fn main() {
     // library's: the two are separate builds whose features cargo resolves apart (D2411).
     std::fs::write(
         dir.join("built_by.rs"),
-        format!("const BUILT_BY: u32 = {:#010x};\n", djs_core::vm::BUILD_HASH),
+        format!(
+            "const BUILT_BY: u32 = {:#010x};\n",
+            djs_core::vm::BUILD_HASH
+        ),
     )
     .expect("cannot write the build hash");
     if std::env::var_os("CARGO_FEATURE_REGISTRY").is_some() {

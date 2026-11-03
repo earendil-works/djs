@@ -11,7 +11,7 @@ use crate::value::{Obj, Value};
 
 /// The globals of the builtin families the slim build leaves out (D2411): their
 /// ReferenceError says so.
-pub(crate) const ABSENT_GLOBALS: &[&str] = &[
+pub const ABSENT_GLOBALS: &[&str] = &[
     "ArrayBuffer",
     "AsyncDisposableStack",
     "BigInt",
@@ -33,6 +33,33 @@ pub(crate) const ABSENT_GLOBALS: &[&str] = &[
     "Uint8Array",
     "Uint8ClampedArray",
     "WeakRef",
+];
+
+/// The realm slots of the families the slim build leaves out (D2411): `undefined` there.
+const SLIM_LEAVES_OUT: &[Intrinsic] = &[
+    Intrinsic::IteratorHelperProto,
+    Intrinsic::WrapForValidIteratorProto,
+    Intrinsic::ArrayBufferProto,
+    Intrinsic::DataViewProto,
+    Intrinsic::TypedArrayProto,
+    Intrinsic::Int8ArrayProto,
+    Intrinsic::Uint8ArrayProto,
+    Intrinsic::Uint8ClampedArrayProto,
+    Intrinsic::Int16ArrayProto,
+    Intrinsic::Uint16ArrayProto,
+    Intrinsic::Int32ArrayProto,
+    Intrinsic::Uint32ArrayProto,
+    Intrinsic::Float16ArrayProto,
+    Intrinsic::Float32ArrayProto,
+    Intrinsic::Float64ArrayProto,
+    Intrinsic::BigInt64ArrayProto,
+    Intrinsic::BigUint64ArrayProto,
+    Intrinsic::DisposableStackProto,
+    Intrinsic::AsyncDisposableStackProto,
+    Intrinsic::SuppressedErrorProto,
+    Intrinsic::WeakRefProto,
+    Intrinsic::FinalizationRegistryProto,
+    Intrinsic::BigIntProto,
 ];
 
 /// Intrinsics, by index into `Realm::INTRINSICS`.
@@ -541,6 +568,13 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
         .set(r, Realm::GLOBAL_LEX, crate::heap::Ref(lex.offset()));
     let oom = new_error(heap, ErrorKind::InternalError, "out of memory")?;
     set(heap, Intrinsic::OutOfMemoryError, oom);
+    // The slim build has no objects of these families (D2411): their prototypes go, and
+    // the base image's canonical collection drops them.
+    if !crate::FULL {
+        for i in SLIM_LEAVES_OUT {
+            set(heap, *i, Value::UNDEFINED);
+        }
+    }
     debug_assert_eq!(heap.arena().get(0, Roots::REALM).as_internal(), Some(r));
     Ok(())
 }

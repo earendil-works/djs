@@ -18,6 +18,32 @@ include!(concat!(env!("OUT_DIR"), "/registry_offsets.rs"));
 /// The registry file, as committed.
 pub static TEXT: &str = include_str!("../../../tests/builtins/registry.tsv");
 
+/// The registry ids the slim build doesn't have (D2411), as committed:
+/// tests/builtins/registry-slim.txt, one `id<TAB>path` per line.
+pub static SLIM_TEXT: &str = include_str!("../../../tests/builtins/registry-slim.txt");
+
+/// The registry ids this build leaves out: none in a full build, the slim list in the
+/// slim build. [`base_offset`] is `None` for them.
+pub fn absent() -> alloc::collections::BTreeSet<u32> {
+    if djs_core::FULL {
+        return alloc::collections::BTreeSet::new();
+    }
+    parse_slim(SLIM_TEXT)
+}
+
+/// Whether this build leaves out the builtin with registry id `id`.
+pub fn is_absent(id: u32) -> bool {
+    !djs_core::FULL && absent().contains(&id)
+}
+
+/// The ids of a registry-slim.txt text.
+pub fn parse_slim(text: &str) -> alloc::collections::BTreeSet<u32> {
+    text.lines()
+        .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
+        .filter_map(|l| l.split('\t').next()?.parse().ok())
+        .collect()
+}
+
 /// The parsed registry. Empty if the file does not parse (the registry test reports it).
 pub fn registry() -> Registry {
     Registry::parse(TEXT).unwrap_or_default()
