@@ -560,3 +560,7 @@ topics when the index is next reorganized.
 - D2617: A codemode body is dumped as the async function it runs as
 - D2618: A script binding with a host name is the script's
 - D2604: Dump commands in the CLI: idle points numbered by answers
+- D2619: Golden format 2 dumps change only with a decision
+- D2630: Host-driven Sandbox runs, the first piece of the Sandbox run API
+- D2631: The dump exports carry the host's function names both ways; changed in place
+- D2632: Dotted host function names make a namespace object

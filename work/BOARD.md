@@ -6,7 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0179 | Example: host tool sleeps 5 s; dump, restart, continue | example | .worktrees/example |
+| 0175 | Sandbox run API (rest), wasm packaging | example | .worktrees/example |
 | 0178 | Continuation dumps across builds: golden fixtures, two-commit check | portable | .worktrees/portable |
 | 0174 | REPL and CLI: tools, waiting inputs (tools part first) | repl | .worktrees/repl |
 
@@ -20,7 +20,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | depends-on |
 | --- | --- | --- |
 | 0174 | REPL and CLI: tools, waiting inputs, continuation dumps, `run --dump-after`/`resume` | 0171 (tools part earlier) |
-| 0175 | Sandbox run API (`begin`/`settle`/`advance`/`dump`/`resume`), wasm packagings | 0172 |
 | 0176 | pi's future shape: prelude-next, adapter mode, dumps (D2565) | 0175 |
 | 0177 | Retire heap images as persistence; packaging decided; guide | 0176 |
 | - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |
@@ -86,6 +85,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0179 | examples/sleep-dump: dump while a host tool sleeps, restart, continue; Sandbox begin/resume (D2630-D2632) | 19fe4b71 (agent example) |
 | 0180 | Dumps without comments: "djs-dump 2"; directive (D2640), djs resume --explain (D2641) | dd98ec06 (agent nocomment) |
 | 0181 | atob/btoa/performance.now: already provided (engine + pi adapter); docs/web-globals.md | b73b16c0 (agent globals) |
 | 0172 | Exporter: continuations, re-enactment, dump_report; --dump-every-idle in the gate (D2610-D2616) | 23835fa9 (agent portable; 1,197 idle points identical) |
