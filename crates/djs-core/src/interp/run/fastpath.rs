@@ -39,7 +39,9 @@ impl Exec<'_> {
             return false;
         }
         let t = self.template_of(o);
-        if self.heap.arena().get(t, FuncTemplate::FLAGS) & self.slow_call_flags & func_flags::FAST
+        if u32::from(self.heap.arena().get::<u16>(t, FuncTemplate::FLAGS))
+            & self.slow_call_flags
+            & func_flags::FAST
             == 0
         {
             return false;
@@ -87,10 +89,10 @@ impl Exec<'_> {
             ));
         };
         let a = self.heap.arena_mut();
-        let flags = a.get(t, FuncTemplate::FLAGS);
-        a.set(t, FuncTemplate::FLAGS, flags | func_flags::FAST);
-        // The table is far below 2^16 entries (a u16 field, D1980).
-        a.set(t, FuncTemplate::FAST, i as u16);
+        let flags = u32::from(a.get::<u16>(t, FuncTemplate::FLAGS));
+        a.set(t, FuncTemplate::FLAGS, (flags | func_flags::FAST) as u16);
+        // The table is far below 2^8 entries (a u8 field, D2448; a test checks).
+        a.set(t, FuncTemplate::FAST, i as u8);
         Ok(())
     }
 

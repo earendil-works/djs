@@ -53,12 +53,12 @@ pub(crate) fn to_string(heap: &mut Heap, f: Value) -> Result<Str, Fault> {
 }
 
 fn source_slice(heap: &Heap, f: Obj) -> Option<String> {
-    let t = heap.object_slot(f, 0).as_internal()?;
+    let t = heap.closure_template(f);
     let a = heap.arena();
     let debug = crate::bytecode::template::debug_info(heap, t);
     let source: Ref = a.get(debug.script.get()?, Script::SOURCE);
     let (start, end) = (debug.src_start as usize, debug.src_end as usize);
-    let kind = func_flags::kind(a.get(t, FuncTemplate::FLAGS));
+    let kind = func_flags::kind(u32::from(a.get::<u16>(t, FuncTemplate::FLAGS)));
     if matches!(kind, func_flags::KIND_SCRIPT | func_flags::KIND_ASYNC_BODY) {
         return None;
     }

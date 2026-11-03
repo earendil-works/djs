@@ -254,6 +254,12 @@ as ordinary properties in front of the others, which keeps the key order the spe
 requires. Inline caches cannot see the two keys in a shape, so for functions they look
 `length` and `name` up instead of trusting a shape compare.
 
+Only arrays ever get dense elements, so a closure keeps its template in the `ELEMENTS`
+field instead of in a slot, and its slots are just its captured bindings: a closure is 8
+bytes smaller, and so is each of the builtins in every VM (D2448). The element paths stay
+free of class checks: a template's first word, where an elements array keeps its length,
+is always zero, so a closure read as an array has no elements.
+
 ## Map, Set and the weak collections
 
 Map and Set are ordered hash tables in the heap (D1381): an entries array in insertion

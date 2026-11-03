@@ -99,11 +99,11 @@ impl Exec<'_> {
             return false;
         };
         if !self.is_class(f, ObjectClass::Function)
-            || self
-                .heap
-                .arena()
-                .get(self.template_of(f), FuncTemplate::FLAGS)
-                & self.slow_call_flags
+            || u32::from(
+                self.heap
+                    .arena()
+                    .get::<u16>(self.template_of(f), FuncTemplate::FLAGS),
+            ) & self.slow_call_flags
                 != 0
         {
             return false;

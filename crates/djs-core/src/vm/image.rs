@@ -26,7 +26,7 @@ pub(super) fn drop_internal_names(heap: &mut Heap) -> Result<u32, HeapError> {
         .map(|c| c.offset)
         .collect();
     for &t in &templates {
-        let flags = heap.arena().get(t, FuncTemplate::FLAGS);
+        let flags = u32::from(heap.arena().get::<u16>(t, FuncTemplate::FLAGS));
         if flags & (func_flags::PRIVILEGED | func_flags::LAZY_NAME) == func_flags::PRIVILEGED {
             heap.arena_mut().set(t, FuncTemplate::NAME, 0u32);
         }
@@ -275,15 +275,15 @@ pub(super) fn lazy_builtin_props(heap: &mut Heap) -> Result<u32, HeapError> {
         if heap.object_class(o) != ObjectClass::Function {
             continue;
         }
-        if let Some(t) = heap.object_slot(o, 0).as_internal() {
-            closures.push((o, t));
-            *per_template.entry(t).or_default() += 1;
-        }
+        let t = heap.closure_template(o);
+        closures.push((o, t));
+        *per_template.entry(t).or_default() += 1;
     }
     let mut n = 0;
     for (o, t) in closures {
         if per_template[&t] == 1
-            && heap.arena().get(t, FuncTemplate::FLAGS) & func_flags::PRIVILEGED != 0
+            && u32::from(heap.arena().get::<u16>(t, FuncTemplate::FLAGS)) & func_flags::PRIVILEGED
+                != 0
             && heap.make_builtin_props_lazy(o)?
         {
             n += 1;

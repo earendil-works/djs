@@ -261,6 +261,19 @@ Found while measuring L4, landed before it on the coordinator's call.
 - Size-threshold tests: base atoms > 400 (was > 1000), raw REPL image > 150 KB (was 200).
 - Guide: snapshots.md (diet list: unit pool and renumbering, atom table size, base 196 KB).
 
+### L2/L1 dropped (D2449) and function objects 32 → 24 B (branch issue/0151-fnobj, D2448)
+- L1: 9 pure forwards in the prelude; L2: 290 thin bodies whose arguments are JS coercions,
+  receiver checks and constants: a binding needs a second argument interpreter for
+  ~10-13 KB/VM. Dropped with the coordinator (D2449).
+- Closures keep their template in ELEMENTS; captures from slot 0. First version checked
+  the class in `elements()`: warm arrays +1.3%, pushpop +1.7% (owner: "try again").
+  Second: FuncTemplate word 8 is NO_ELEMENTS (0), so a closure reads as an empty array;
+  FLAGS u16, NATIVE/FAST u8 to keep 48 B. Debug asserts in `elements()`/`dense_put`,
+  verifier checks.
+- Base 196,280 → 189,288 B (−7.0 KB); gzip +26, slim −88; cold −2.6..+0.2%, warm
+  neutral or faster (pushpop −2.0%, push-pop −1.5%), tree-children −4.7%.
+- Guide: heap.md (closure template paragraph).
+
 ## Follow-ups
 - GC thresholds are rounded to 64 KB pages from offset 0, so collection points depend on
   the base's size (json-date's extra collection under L4). Rounding relative to

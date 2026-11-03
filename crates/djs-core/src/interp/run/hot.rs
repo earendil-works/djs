@@ -139,7 +139,7 @@ pub(super) fn write_values(b: &mut [u8], off: u32, vs: &[Value]) {
     }
 }
 
-/// The fields of a function template a call reads (FLAGS .. CONSTS, in one read).
+/// The fields of a function template a call reads (PARAMS .. FLAGS, in one read).
 pub(super) struct TemplateHead {
     pub flags: u32,
     pub params: u32,
@@ -151,23 +151,23 @@ pub(super) struct TemplateHead {
 
 #[inline(always)]
 pub(super) fn template_head(b: &[u8], t: u32) -> TemplateHead {
-    const W0: u32 = FuncTemplate::FLAGS.offset;
+    const W0: u32 = FuncTemplate::PARAMS.offset;
     // The fields must lie in the window (a layout change shows up here).
     const fn inside(o: u32, n: u32) -> bool {
-        o >= W0 && o + n <= W0 + 28
+        o >= W0 && o + n <= W0 + 32
     }
     const _: () = assert!(
-        inside(FuncTemplate::FLAGS.offset, 4)
+        inside(FuncTemplate::FLAGS.offset, 2)
             && inside(FuncTemplate::PARAMS.offset, 2)
             && inside(FuncTemplate::LOCALS.offset, 2)
             && inside(FuncTemplate::STACK.offset, 2)
             && inside(FuncTemplate::CODE_LEN.offset, 4)
             && inside(FuncTemplate::CONSTS.offset, 4)
     );
-    let tw: [u8; 28] = window(b, t + W0);
+    let tw: [u8; 32] = window(b, t + W0);
     let tf = |f: u32| (f - W0) as usize;
     TemplateHead {
-        flags: u32_at(&tw, tf(FuncTemplate::FLAGS.offset)),
+        flags: u16_at(&tw, tf(FuncTemplate::FLAGS.offset)),
         params: u16_at(&tw, tf(FuncTemplate::PARAMS.offset)),
         locals: u16_at(&tw, tf(FuncTemplate::LOCALS.offset)),
         stack: u16_at(&tw, tf(FuncTemplate::STACK.offset)),
@@ -493,9 +493,8 @@ impl Exec<'_> {
                             {
                                 break Exit::Decline(op);
                             }
-                            let Some(t) = ld(b, object_slot(b, f.offset(), 0)).as_internal() else {
-                                break Exit::Decline(op);
-                            };
+                            // The template is in the ELEMENTS field (D2448).
+                            let t = ld32(b, f.offset() + Object::ELEMENTS.offset);
                             let TemplateHead {
                                 flags,
                                 params,
@@ -660,11 +659,11 @@ impl Exec<'_> {
                             ) {
                                 ld(b, slot!(lp + imm16!()))
                             } else {
-                                // The Box in slot 1 + i of the closure (stack[bp]).
+                                // The Box in slot i of the closure (stack[bp]).
                                 let Some(f) = ld(b, slot!(bp)).as_object() else {
                                     break Exit::Decline(op);
                                 };
-                                ld(b, object_slot(b, f.offset(), 1 + imm16!()))
+                                ld(b, object_slot(b, f.offset(), imm16!()))
                             };
                             let at = bx.as_internal().expect("a Box")
                                 + crate::heap::cells::BoxCell::VALUE.offset;
@@ -1095,9 +1094,7 @@ impl Exec<'_> {
                                 & frame::FLAG_NATIVE
                                 != 0;
                             let f = ld(b, slot!(prev_bp)).as_object().expect("frame callee");
-                            let t = ld(b, object_slot(b, f.offset(), 0))
-                                .as_internal()
-                                .expect("closure template");
+                            let t = ld32(b, f.offset() + Object::ELEMENTS.offset);
                             let code_len = ld32(b, t + FuncTemplate::CODE_LEN.offset);
                             let consts_ref = ld32(b, t + FuncTemplate::CONSTS.offset);
                             let v = if op == fast::RETURN {
@@ -1123,9 +1120,12 @@ impl Exec<'_> {
                             self.consts = consts_ref;
                             self.native = 0;
                             if native {
-                                // NATIVE is a u16 (D1980); FAST is the next u16.
+                                // FLAGS, NATIVE and FAST in one word (D2448).
+                                const _: () = assert!(
+                                    FuncTemplate::NATIVE.offset == FuncTemplate::FLAGS.offset + 2
+                                );
                                 self.native =
-                                    (ld32(b, t + FuncTemplate::NATIVE.offset) & 0xFFFF) + 1;
+                                    (ld32(b, t + FuncTemplate::FLAGS.offset) >> 16 & 0xFF) + 1;
                                 self.code_len = 0;
                             }
                             code = self.code;

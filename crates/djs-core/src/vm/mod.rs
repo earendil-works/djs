@@ -431,10 +431,7 @@ impl Vm {
     /// A closure for a top-level `FuncTemplate` (one without captures).
     pub fn instantiate(&mut self, template: Ref) -> Result<Value, HeapError> {
         let proto = intrinsic_obj(&self.heap, Intrinsic::FunctionProto);
-        let f = self
-            .heap
-            .alloc_object(ObjectClass::Function, Some(proto), 1)?;
-        self.heap.set_object_slot(f, 0, Value::internal(template.0));
+        let f = self.heap.alloc_closure(Some(proto), template.0, 0)?;
         Ok(Value::object(f))
     }
 

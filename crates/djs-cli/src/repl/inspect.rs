@@ -388,10 +388,9 @@ impl<'h> Printer<'h> {
         let heap = self.heap;
         let name = self.own_string(o, atoms::NAME).unwrap_or_default();
         let mut kind = "Function";
-        if heap.object_class(o) == ObjectClass::Function
-            && let Some(t) = heap.object_slot(o, 0).as_internal()
-        {
-            let flags: u32 = heap.arena().get(t, FuncTemplate::FLAGS);
+        if heap.object_class(o) == ObjectClass::Function {
+            let t = heap.closure_template(o);
+            let flags: u32 = u32::from(heap.arena().get::<u16>(t, FuncTemplate::FLAGS));
             match func_flags::kind(flags) {
                 func_flags::KIND_CLASS_CTOR | func_flags::KIND_DERIVED_CTOR => {
                     let mut s = String::from("[class ");

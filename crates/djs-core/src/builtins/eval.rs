@@ -6,7 +6,7 @@
 use alloc::vec::Vec;
 
 use crate::compiler::{self, CompileErrorKind, CompileOptions, DynamicKind};
-use crate::heap::{Heap, HeapError, ObjectClass};
+use crate::heap::{Heap, HeapError};
 use crate::interp::conv::Fault;
 use crate::interp::{Intrinsic, realm};
 use crate::value::{Str, Value};
@@ -53,8 +53,7 @@ fn compile_error(e: compiler::CompileError, col_shift: u32) -> Compiled {
 /// A closure for a top-level template (as `Vm::instantiate`).
 fn instantiate(heap: &mut Heap, template: crate::heap::layout::Ref) -> Result<Value, Fault> {
     let proto = realm::intrinsic_obj(heap, Intrinsic::FunctionProto);
-    let f = heap.alloc_object(ObjectClass::Function, Some(proto), 1)?;
-    heap.set_object_slot(f, 0, Value::internal(template.0));
+    let f = heap.alloc_closure(Some(proto), template.0, 0)?;
     Ok(Value::object(f))
 }
 

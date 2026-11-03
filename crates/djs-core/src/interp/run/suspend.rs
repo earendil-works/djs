@@ -207,7 +207,11 @@ impl Exec<'_> {
         // function's own `prototype` if it is an object (a data property of generator
         // functions), else %GeneratorPrototype% / %AsyncGeneratorPrototype%.
         let callee = self.get(self.bp).as_object().expect("frame callee");
-        let flags = self.heap.arena().get(self.template, FuncTemplate::FLAGS);
+        let flags = u32::from(
+            self.heap
+                .arena()
+                .get::<u16>(self.template, FuncTemplate::FLAGS),
+        );
         let (kind, fallback) = if flags & func_flags::ASYNC != 0 {
             (ASYNC_GENERATOR, Intrinsic::AsyncGeneratorProto)
         } else {

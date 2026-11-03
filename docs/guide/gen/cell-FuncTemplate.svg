@@ -71,7 +71,7 @@
 <text class="mono" x="440" y="48" text-anchor="middle">SIZE</text>
 <text class="small" x="440" y="62" text-anchor="middle">u32</text>
 <rect class="box" x="57" y="75" width="254" height="40" rx="3"/>
-<text class="mono" x="184" y="92" text-anchor="middle">FLAGS</text>
+<text class="mono" x="184" y="92" text-anchor="middle">NO_ELEMENTS</text>
 <text class="small" x="184" y="106" text-anchor="middle">u32</text>
 <rect class="box" x="313" y="75" width="254" height="40" rx="3"/>
 <text class="mono" x="440" y="92" text-anchor="middle">NAME</text>
@@ -107,11 +107,14 @@
 <text class="mono" x="184" y="268" text-anchor="middle">INFO</text>
 <text class="small" x="184" y="282" text-anchor="middle">Ref</text>
 <rect class="box" x="313" y="251" width="126" height="40" rx="3"/>
-<text class="mono" x="376" y="268" text-anchor="middle">NATIVE</text>
+<text class="mono" x="376" y="268" text-anchor="middle">FLAGS</text>
 <text class="small" x="376" y="282" text-anchor="middle">u16</text>
-<rect class="box" x="441" y="251" width="126" height="40" rx="3"/>
-<text class="mono" x="504" y="268" text-anchor="middle">FAST</text>
-<text class="small" x="504" y="282" text-anchor="middle">u16</text>
+<rect class="box" x="441" y="251" width="62" height="40" rx="3"/>
+<text class="mono" x="472" y="268" text-anchor="middle">NATIVE</text>
+<text class="small" x="472" y="282" text-anchor="middle">u8</text>
+<rect class="box" x="505" y="251" width="62" height="40" rx="3"/>
+<text class="mono" x="536" y="268" text-anchor="middle">FAST</text>
+<text class="small" x="536" y="282" text-anchor="middle">u8</text>
 <rect class="tail" x="57" y="295" width="510" height="40" rx="3"/>
 <text class="mono" x="312" y="312" text-anchor="middle">DATA: u8 × n</text>
 <text class="small" x="312" y="326" text-anchor="middle">variable-length tail; n follows from SIZE</text>

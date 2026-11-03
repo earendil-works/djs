@@ -431,8 +431,8 @@ impl<'h> Graph<'h> {
         if self.class(obj) != Some(ObjectClass::Function) {
             return None;
         }
-        let v: Value = self.heap.arena().read(Object::SLOTS.at(obj, 0));
-        v.as_internal()
+        // The template is in the ELEMENTS field (D2448).
+        self.heap.arena().get::<Ref>(obj, Object::ELEMENTS).get()
     }
 
     /// The recorded local and capture names of a template (absent for privileged code).
@@ -464,7 +464,7 @@ impl<'h> Graph<'h> {
     pub fn template_script(&self, t: u32) -> String {
         let a = self.heap.arena();
         let Some(s) = debug_info(self.heap, t).script.get() else {
-            let flags: u32 = a.get(t, FuncTemplate::FLAGS);
+            let flags: u32 = u32::from(a.get::<u16>(t, FuncTemplate::FLAGS));
             return if flags & func_flags::PRIVILEGED != 0 {
                 "<prelude>".into()
             } else {
@@ -654,6 +654,10 @@ impl<'h> Graph<'h> {
         match c.kind {
             CellKind::Object => match field {
                 Some("PROTO") => "<proto>".into(),
+                // A closure's ELEMENTS field is its template (D2448).
+                Some("ELEMENTS") if self.class(c.offset) == Some(ObjectClass::Function) => {
+                    "<code>".into()
+                }
                 Some("PROPS") | Some("ELEMENTS") => String::new(),
                 _ => match tail {
                     Some((i, _)) => self.object_slot_label(c.offset, i),
@@ -717,16 +721,15 @@ impl<'h> Graph<'h> {
     fn object_slot_label(&self, o: u32, i: u32) -> String {
         use ObjectClass as C;
         let name = match (self.class(o), i) {
-            (Some(C::Function), 0) => "<code>",
             (Some(C::Function), _) => {
                 let t = self.closure_template(o);
                 let names = t.map(|t| self.template_names(t)).unwrap_or_default();
                 let locals = t
                     .map(|t| self.heap.arena().get::<u16>(t, FuncTemplate::LOCALS) as usize)
                     .unwrap_or(0);
-                return match names.get(locals + i as usize - 1) {
+                return match names.get(locals + i as usize) {
                     Some(n) if !n.is_empty() => format!("~{n}"),
-                    _ => format!("~capture{}", i - 1),
+                    _ => format!("~capture{i}"),
                 };
             }
             (Some(C::BoundFunction), 0) => "<target>",

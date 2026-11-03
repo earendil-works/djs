@@ -91,7 +91,7 @@ impl Exec<'_> {
         let (mut bp, mut hp, mut pc) = (self.bp, self.hp, pc);
         loop {
             let f = self.get(bp).as_object().expect("frame callee");
-            let t = self.heap.object_slot(f, 0).as_internal().expect("template");
+            let t = self.heap.closure_template(f);
             let a = self.heap.arena();
             let debug = crate::bytecode::template::debug_info(self.heap, t);
             let script = debug.script;
@@ -99,8 +99,9 @@ impl Exec<'_> {
             let flags = self.get(hp + frame::FLAGS).as_int().unwrap_or(0);
             let construct = flags & frame::FLAG_CONSTRUCT != 0;
             // Prelude frames: privileged templates (D1980), or the prelude's script.
-            let in_prelude = a.get(t, FuncTemplate::FLAGS) & func_flags::PRIVILEGED != 0
-                || (prelude.is_some() && prelude == script.get());
+            let in_prelude =
+                u32::from(a.get::<u16>(t, FuncTemplate::FLAGS)) & func_flags::PRIVILEGED != 0
+                    || (prelude.is_some() && prelude == script.get());
             skip_prelude &= in_prelude;
             let skipping = below.is_some();
             if below == Some(f) {
@@ -125,7 +126,7 @@ impl Exec<'_> {
                     construct,
                 });
             } else if !in_prelude {
-                let kind = func_flags::kind(a.get(t, FuncTemplate::FLAGS));
+                let kind = func_flags::kind(u32::from(a.get::<u16>(t, FuncTemplate::FLAGS)));
                 let name = if matches!(kind, func_flags::KIND_SCRIPT | func_flags::KIND_ASYNC_BODY)
                 {
                     Some(String::from("<eval>"))

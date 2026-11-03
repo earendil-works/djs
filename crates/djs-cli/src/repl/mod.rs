@@ -749,7 +749,7 @@ impl Repl {
         let mut o = v.as_object()?;
         for _ in 0..100 {
             match heap.object_class(o) {
-                ObjectClass::Function => return heap.object_slot(o, 0).as_internal().map(Ref),
+                ObjectClass::Function => return Some(Ref(heap.closure_template(o))),
                 ObjectClass::BoundFunction => o = heap.object_slot(o, 0).as_object()?,
                 _ => return None,
             }

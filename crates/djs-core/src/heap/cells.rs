@@ -382,8 +382,10 @@ cells! {
     /// privileged (prelude) function never has, child templates and debug info, is in a
     /// [`FuncInfo`] cell, so a builtin's template is 48 bytes plus its code.
     12 => FuncTemplate {
-        /// Function kind and properties (async, generator, simple params, ...).
-        FLAGS: u32 = 8,
+        /// Always 0, where a [`ValueArray`] has its `LEN`: a closure's `ELEMENTS` field
+        /// is its template (D2448), so the element paths read a closure's elements as an
+        /// empty array without checking its class.
+        NO_ELEMENTS: u32 = 8,
         /// The function's name, an [`Atom`](super::Atom) id (`name`, stack traces).
         NAME: u32 = 12,
         /// Formal parameter count: the argument area is padded to it.
@@ -407,12 +409,14 @@ cells! {
         IC: Ref = 36,
         /// [`FuncInfo`]: child templates and debug info, or null for neither.
         INFO: Ref = 40,
+        /// Function kind and properties (async, generator, simple params, ...).
+        FLAGS: u16 = 44,
         /// A `@native` builtin's index into the generated table (with
         /// `func_flags::NATIVE`), else 0.
-        NATIVE: u16 = 44,
+        NATIVE: u8 = 46,
         /// A `@fast` builtin's index into `builtins::fast::FAST` (with
         /// `func_flags::FAST`, D1850), else 0.
-        FAST: u16 = 46,
+        FAST: u8 = 47,
     } tail DATA: [u8] = 48;
 
     /// One compiled source.

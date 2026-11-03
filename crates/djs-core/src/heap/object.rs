@@ -66,8 +66,9 @@ pub enum ObjectClass {
     Ordinary = 0,
     /// An Array exotic object: dense elements and a `length` in slot 0.
     Array = 1,
-    /// A JS closure: slot 0 is an internal reference to its `FuncTemplate`, slots 1.. the
-    /// internal references to its captured Boxes.
+    /// A JS closure: its `FuncTemplate` is in the object's `ELEMENTS` field (D2448: a
+    /// closure has no dense elements), its slots are the internal references to its
+    /// captured Boxes, then the home object if the template has `HOME`.
     Function = 2,
     /// A function implemented by the embedder: slot 0 is its host function id (int32).
     HostFunction = 3,
@@ -214,7 +215,8 @@ impl ObjectClass {
             | ObjectClass::RawJSON => 0,
             ObjectClass::Promise => 4,
             ObjectClass::BuiltinClosure => 2,
-            ObjectClass::Array | ObjectClass::Function | ObjectClass::HostFunction => 1,
+            ObjectClass::Function => 0,
+            ObjectClass::Array | ObjectClass::HostFunction => 1,
             // The stack trace (D1971); a DOMException has two more (D1840).
             ObjectClass::Error => 1,
             ObjectClass::ArrayIterator => 3,
@@ -777,9 +779,45 @@ impl Heap {
         self.set_object_slot(o, 0, v);
     }
 
+    /// The dense elements (0 for none). A closure's `ELEMENTS` field is its template
+    /// (D2448), whose word where a `ValueArray` has its `LEN` is always 0
+    /// (`FuncTemplate::NO_ELEMENTS`): read as elements, it is an empty array, so the
+    /// element paths need no class check. Nothing writes a closure's elements: only
+    /// arrays get dense elements (`dense_accepts`).
     #[inline]
     fn elements(&self, o: Obj) -> u32 {
-        self.arena().get(o.0, Object::ELEMENTS).0
+        let el = self.arena().get::<Ref>(o.0, Object::ELEMENTS).0;
+        debug_assert!(
+            el == 0
+                || self.cell_kind(el) == CellKind::ValueArray
+                || (self.cell_kind(el) == CellKind::FuncTemplate
+                    && self.object_class(o) == ObjectClass::Function
+                    && self.value_array_len(el) == 0),
+            "the elements of object {} are a {:?}",
+            o.0,
+            self.cell_kind(el)
+        );
+        el
+    }
+
+    /// A new closure of template `t` with `slots` slots (captures, home object), set to
+    /// `undefined` (D2448: the template is in the `ELEMENTS` field).
+    pub fn alloc_closure(
+        &mut self,
+        proto: Option<Obj>,
+        t: u32,
+        slots: u32,
+    ) -> Result<Obj, HeapError> {
+        let f = self.alloc_object(ObjectClass::Function, proto, slots)?;
+        self.arena_mut().set(f.0, Object::ELEMENTS, Ref(t));
+        Ok(f)
+    }
+
+    /// The template of closure `o` (D2448).
+    #[inline]
+    pub fn closure_template(&self, o: Obj) -> u32 {
+        debug_assert_eq!(self.object_class(o), ObjectClass::Function);
+        self.arena().get::<Ref>(o.0, Object::ELEMENTS).0
     }
 
     /// The dense length (0 without elements).
@@ -1000,6 +1038,7 @@ impl Heap {
 
     /// Stores `v` in dense slot `i`, growing the elements (with holes) as needed.
     fn dense_put(&mut self, o: Obj, i: u32, v: Value) -> Result<(), HeapError> {
+        debug_assert_ne!(self.object_class(o), ObjectClass::Function);
         let mut el = self.elements(o);
         let len = if el == 0 { 0 } else { self.value_array_len(el) };
         if i >= len {
@@ -1745,13 +1784,6 @@ impl Heap {
         }
     }
 
-    /// The template of closure `o` (a lazy property's source, D2445).
-    fn closure_template(&self, o: Obj) -> u32 {
-        self.object_slot(o, 0)
-            .as_internal()
-            .expect("closure template")
-    }
-
     /// The value of a closure's lazy `length` or `name` (D2445): the template's `LENGTH`,
     /// the string of its `NAME` atom (empty for none).
     fn lazy_value(&self, o: Obj, loc: Loc) -> Value {
@@ -1891,8 +1923,12 @@ impl Heap {
         }
         let t = self.closure_template(o);
         let a = self.arena_mut();
-        let flags = a.get(t, FuncTemplate::FLAGS);
-        a.set(t, FuncTemplate::FLAGS, flags | func_flags::LAZY_NAME);
+        let flags = u32::from(a.get::<u16>(t, FuncTemplate::FLAGS));
+        a.set(
+            t,
+            FuncTemplate::FLAGS,
+            (flags | func_flags::LAZY_NAME) as u16,
+        );
         a.set(t, FuncTemplate::NAME, atom.id());
         a.set(t, FuncTemplate::LENGTH, length);
         self.set_obj_flag(o, OBJ_LAZY, true);

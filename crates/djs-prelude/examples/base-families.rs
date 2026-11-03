@@ -397,7 +397,8 @@ fn touched_report(
         }
         let mut b = s as u64;
         if part[&o] == "function objects" {
-            if let Some(t) = heap.object_slot(obj_at(vm, o), 0).as_internal() {
+            if heap.object_class(obj_at(vm, o)) == ObjectClass::Function {
+                let t = heap.closure_template(obj_at(vm, o));
                 fn_of_template.insert(t, o);
                 b += size[&t] as u64;
                 for f in [FuncTemplate::CONSTS, FuncTemplate::INFO] {

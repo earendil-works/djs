@@ -478,10 +478,7 @@ impl<'h> Exec<'h> {
     /// The template of a closure (slot 0 of a Function object).
     #[inline(always)]
     fn template_of(&self, f: Obj) -> u32 {
-        self.heap
-            .object_slot(f, 0)
-            .as_internal()
-            .expect("closure template")
+        self.heap.closure_template(f)
     }
 
     /// Re-derives the cached frame data from `stack[bp]`.
@@ -609,7 +606,7 @@ impl<'h> Exec<'h> {
         match self.heap.object_class(o) {
             ObjectClass::Function => {
                 let t = self.template_of(o);
-                let flags = self.heap.arena().get(t, FuncTemplate::FLAGS);
+                let flags = u32::from(self.heap.arena().get::<u16>(t, FuncTemplate::FLAGS));
                 if flags & self.slow_call_flags & func_flags::FAST != 0
                     && self.try_fast_call(t, base, argc, cont, ret_pc)?
                 {
@@ -1647,7 +1644,9 @@ impl<'h> Exec<'h> {
         }
         let t = self.template_of(o);
         if self.frame_top(t, base, argc) > self.heap.value_array_capacity(self.stack)
-            || self.heap.arena().get(t, FuncTemplate::FLAGS) & self.slow_call_flags != 0
+            || u32::from(self.heap.arena().get::<u16>(t, FuncTemplate::FLAGS))
+                & self.slow_call_flags
+                != 0
         {
             return false;
         }
@@ -1806,7 +1805,7 @@ impl<'h> Exec<'h> {
 
     fn capture(&self, i: u32) -> Value {
         let f = self.get(self.bp).as_object().unwrap();
-        self.heap.object_slot(f, 1 + i)
+        self.heap.object_slot(f, i)
     }
 
     fn constant(&self, i: u32) -> Value {
@@ -3025,7 +3024,7 @@ impl<'h> Exec<'h> {
         let a = self.heap.arena();
         let ncap = a.get(t.0, FuncTemplate::CAPTURES) as u32;
         // [[Prototype]] by the ASYNC/GENERATOR bits, for every kind (D1420).
-        let flags = a.get(t.0, FuncTemplate::FLAGS);
+        let flags = u32::from(a.get::<u16>(t.0, FuncTemplate::FLAGS));
         let proto = intrinsic_obj(
             self.heap,
             match (
@@ -3040,10 +3039,7 @@ impl<'h> Exec<'h> {
         );
         // Methods that use `super` get a home object slot after the captures.
         let home = u32::from(flags & func_flags::HOME != 0);
-        let f = self
-            .heap
-            .alloc_object(ObjectClass::Function, Some(proto), 1 + ncap + home)?;
-        self.heap.set_object_slot(f, 0, Value::internal(t.0));
+        let f = self.heap.alloc_closure(Some(proto), t.0, ncap + home)?;
         for i in 0..ncap {
             let d = template::capture_desc(self.heap, t.0, i);
             let b = if d & 0x8000_0000 != 0 {
@@ -3051,7 +3047,7 @@ impl<'h> Exec<'h> {
             } else {
                 self.get(self.lp + d)
             };
-            self.heap.set_object_slot(f, 1 + i, b);
+            self.heap.set_object_slot(f, i, b);
         }
         self.function_properties(f, t.0)?;
         Ok(Value::object(f))
@@ -3063,7 +3059,7 @@ impl<'h> Exec<'h> {
         let a = self.heap.arena();
         let length = a.get(t, FuncTemplate::LENGTH);
         let name = Atom::from_id(a.get(t, FuncTemplate::NAME));
-        let flags = a.get(t, FuncTemplate::FLAGS);
+        let flags = u32::from(a.get::<u16>(t, FuncTemplate::FLAGS));
         if flags & func_flags::PRIVILEGED != 0 {
             // The prelude: `%Install*` names the builtins user code can see (D1433).
             return Ok(());
@@ -4087,12 +4083,8 @@ impl<'h> Exec<'h> {
             return flags & OBJ_BUILTIN_CTOR != 0;
         }
         self.heap.object_class(fo) == ObjectClass::Function && {
-            let t = self
-                .heap
-                .object_slot(fo, 0)
-                .as_internal()
-                .expect("template");
-            let flags = self.heap.arena().get(t, FuncTemplate::FLAGS);
+            let t = self.heap.closure_template(fo);
+            let flags = u32::from(self.heap.arena().get::<u16>(t, FuncTemplate::FLAGS));
             flags & (func_flags::ASYNC | func_flags::GENERATOR) == 0
                 && matches!(
                     func_flags::kind(flags),
@@ -4106,8 +4098,9 @@ impl<'h> Exec<'h> {
     fn is_derived_ctor(&self, fo: Obj) -> bool {
         self.heap.object_class(fo) == ObjectClass::Function && {
             let t = self.template_of(fo);
-            func_flags::kind(self.heap.arena().get(t, FuncTemplate::FLAGS))
-                == func_flags::KIND_DERIVED_CTOR
+            func_flags::kind(u32::from(
+                self.heap.arena().get::<u16>(t, FuncTemplate::FLAGS),
+            )) == func_flags::KIND_DERIVED_CTOR
         }
     }
 

@@ -7640,3 +7640,47 @@ JSON's key cache), never across the image build.
 - **Neutral:** warm wasm instructions equal (json 625/626, props 7066/7071 M); cold
   −0.1..+1.5% (props +1.2% at n=7, the only one beyond noise: first-run tier-up of a
   module whose code moved by 249 bytes).
+
+## D2448: A closure's template in its ELEMENTS field
+date: 2026-11-03 · by: bloat · issue: 0151
+Only arrays get dense elements (`dense_accepts`), so a closure (`ObjectClass::Function`)
+keeps its `FuncTemplate` in the object's `ELEMENTS` field (`Heap::alloc_closure`,
+`Heap::closure_template`), and its slots are its captures, then the home object
+(`Function.slots()` is 0). A builtin's function object is 24 bytes instead of 32.
+
+A first version checked the class in `Heap::elements`: warm wasm instructions arrays +1.3%,
+pushpop +1.7%. Instead the template's first word is `NO_ELEMENTS`, always 0, where a
+`ValueArray` has its `LEN`: every element path reads a closure's template as an empty
+array, with no check, and none writes one (dense stores are for arrays only, and
+`set_element_fast` declines for other classes before appending). To make room, `FLAGS` is
+a `u16` (13 flags used) and `NATIVE`/`FAST` are `u8` (2 and 54 entries; a test keeps
+both tables below 255); `FLAGS`, `NATIVE` and `FAST` share one word, which the hot
+return path reads at once. The template stays 48 bytes. In debug builds `Heap::elements`
+asserts that a non-null field is a `ValueArray`, or a template of a closure with
+`NO_ELEMENTS` 0; the verifier checks both, and `dense_put` asserts it never runs on a
+closure.
+- **Bought:** base 196,280 → 189,288 B (−7.0 KB per VM; function objects 27,968 →
+  20,976); every user closure 8 bytes smaller. Module gzip 443,720 → 443,746 (+26), slim
+  379,378 → 379,290.
+- **Speed:** wasm instructions (n=5, all workloads) −2.6..+0.2% cold (call1 −2.6%, calls
+  −2.6%, pushpop −2.1%, push-pop −1.3%, pi-like −0.6%, arrays −0.8%); warm arrays
+  9601/9649 and 9700/9498 (noise), pushpop 3667 → 3592, push-pop 3423 → 3373, forof and
+  foreach equal, pi-like 4252 → 4228; pico's tree-children −4.7%. Peak memory equal.
+
+## D2449: No direct native binding for thin builtins (L1, L2)
+date: 2026-11-03 · by: bloat · issue: 0151
+Measured on main ab09a05f (base 196,280 B) and dropped:
+- L1, compiling calls of thin forwarding helpers as direct intrinsic calls: only 9
+  prelude functions are pure `return %I(params)` / `return F(params)` forwards.
+- L2, builtin function objects bound straight to a Rust entry with an argument map (as
+  QuickJS's magic): 290 prelude functions are one `return` of a call, but their
+  arguments are coercions and receiver checks written in JS (`%I(ToNumber(v))` 49,
+  `%I(ThisMap(this), v)` 13), constants and `new.target` passed to shared helpers
+  (`EveryOrSome(%ToObject(this), cb, t, true)`, `ErrorConstruct(new.target,
+  "XPrototype", ...)`, `%BufferInfo(this, k)`). Those helpers can run user code, so a
+  binding would need its own small argument interpreter next to the bytecode, with
+  reentrancy, suspension, fuel, stack traces, `new` and `length`/`name` without a
+  template: a second calling convention for ~10-13 KB per VM (after D2444-D2448 a thin
+  builtin's template is 48 B + ~12 B of code), paid with new Rust in a module close to its
+  size ceiling. Reopen only with new facts (a smaller binding, ceiling room, or many more
+  pure forwards).

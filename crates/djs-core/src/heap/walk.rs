@@ -320,7 +320,12 @@ impl Heap {
                             &[CellKind::PropValues]
                         },
                     )
-                    && fits(a.get(cell, Object::ELEMENTS), true, &[CellKind::ValueArray])
+                    // A closure's ELEMENTS field is its template (D2448).
+                    && if a.get(cell, Object::CLASS) == ObjectClass::Function as u32 {
+                        fits(a.get(cell, Object::ELEMENTS), false, &[CellKind::FuncTemplate])
+                    } else {
+                        fits(a.get(cell, Object::ELEMENTS), true, &[CellKind::ValueArray])
+                    }
             }
             CellKind::PropTable => {
                 let count = a.get(cell, PropTable::COUNT);
@@ -512,6 +517,8 @@ impl Heap {
                 EphemeronArray::VALUES.cell_size(a.get(cell, EphemeronArray::LEN))
             }
             CellKind::U32Array => U32Array::DATA.cell_size(a.get(cell, U32Array::LEN)),
+            // A closure reads its template as an empty elements array (D2448).
+            CellKind::FuncTemplate if a.get(cell, FuncTemplate::NO_ELEMENTS) != 0 => None,
             // The code and the capture descriptors (the handler records fill the rest).
             CellKind::FuncTemplate => a
                 .get(cell, FuncTemplate::CODE_LEN)

@@ -2740,7 +2740,7 @@ fn privileged_templates_have_no_debug_fields() {
     let h = vm.heap();
     let (mut slim, mut full) = (0, 0);
     for c in h.cells().filter(|c| c.kind == CellKind::FuncTemplate) {
-        let privileged = h.arena().get(c.offset, FuncTemplate::FLAGS)
+        let privileged = u32::from(h.arena().get::<u16>(c.offset, FuncTemplate::FLAGS))
             & crate::bytecode::template::func_flags::PRIVILEGED
             != 0;
         let info = h
@@ -2760,8 +2760,8 @@ fn privileged_templates_have_no_debug_fields() {
         }
     }
     assert!(slim > 500 && full >= 2, "{slim} {full}");
-    assert!(crate::builtins::fast::FAST.len() < u16::MAX as usize);
-    assert!(crate::builtins::r#gen::natives::NATIVES.len() < u16::MAX as usize);
+    assert!(crate::builtins::fast::FAST.len() < u8::MAX as usize);
+    assert!(crate::builtins::r#gen::natives::NATIVES.len() < u8::MAX as usize);
 }
 
 /// 0101 follow-up (docs/old-generation.md): what a collection of a VM made from the base

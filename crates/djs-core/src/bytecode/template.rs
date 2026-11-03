@@ -155,7 +155,9 @@ pub fn alloc_template_in(
         .ok_or(HeapError::OutOfMemory)?;
     let off = heap.alloc_cell(CellKind::FuncTemplate, size)?;
     let a = heap.arena_mut();
-    a.set(off, FuncTemplate::FLAGS, p.flags);
+    // Every flag is below bit 16 (D2448: a u16 field).
+    debug_assert!(p.flags <= u32::from(u16::MAX));
+    a.set(off, FuncTemplate::FLAGS, p.flags as u16);
     a.set(off, FuncTemplate::NAME, p.name.id());
     a.set(off, FuncTemplate::PARAMS, p.params);
     a.set(off, FuncTemplate::LENGTH, p.length);

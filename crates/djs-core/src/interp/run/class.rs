@@ -356,10 +356,10 @@ impl Exec<'_> {
         }
         let t = self.template_of(f);
         let a = self.heap.arena();
-        if a.get(t, FuncTemplate::FLAGS) & func_flags::HOME == 0 {
+        if u32::from(a.get::<u16>(t, FuncTemplate::FLAGS)) & func_flags::HOME == 0 {
             return None;
         }
-        Some(1 + a.get(t, FuncTemplate::CAPTURES) as u32)
+        Some(a.get(t, FuncTemplate::CAPTURES) as u32)
     }
 
     /// Sets the home object of `f` (if it has a home slot).
