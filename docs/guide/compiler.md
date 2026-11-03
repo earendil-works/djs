@@ -45,6 +45,14 @@ has, the child templates and the debug info (script, source span, line table, lo
 names), lives in a separate info cell that a builtin's template does not point to: a
 builtin's template is 48 bytes plus its code.
 
+The functions of one compilation unit share one constant pool (D2446): a string or number
+that many functions use, an error message or a property name passed as a string, is
+stored once, and the unit pays one cell header instead of one per function. The top
+level gets a pool of its own, since it runs once. Indexes are handed out as the functions
+are emitted, so the short `push_const8` form covers the first 256 constants. The base
+image drops the entries that only dead code used (the prelude's set-up code), keeping
+the order, so every index only gets smaller and the code is patched in place.
+
 ## Emitting while parsing
 
 Expressions are parsed by precedence climbing, and each operator is emitted after its
@@ -341,7 +349,7 @@ REPL (D004, D1581).
 
 Decisions on this page:
 
-<!-- gen:decisions D1080 D1360 D1081 D1083 D1082 D1130 D1131 D1860 D1620 D1480 D1481 D1482 D008 D1582 D2443 D2444 -->
+<!-- gen:decisions D1080 D1360 D1081 D1083 D1082 D1130 D1131 D1860 D1620 D1480 D1481 D1482 D008 D1582 D2443 D2444 D2446 -->
 - D1080: Speculative parsing never emits bytecode
 - D1360: destructuring patterns are parsed after their value (deferred patterns)
 - D1081: Name resolution runs once per compilation unit, children first
@@ -358,4 +366,5 @@ Decisions on this page:
 - D1582: `import()` without modules: compiled, rejected in a job
 - D2443: Short opcode forms and shortened jumps, a recorded trade
 - D2444: Code inline in the template, the rest of a user function in FuncInfo
+- D2446: One constant pool per compilation unit
 <!-- /gen -->

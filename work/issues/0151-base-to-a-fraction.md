@@ -229,6 +229,27 @@ Found while measuring L4, landed before it on the coordinator's call.
 - Guide: heap.md (lazy closure properties paragraph), snapshots.md (base diet item, base
   size 315 → 218 KB).
 
+### L3 step 2: one constant pool per unit (branch issue/0151-pool, D2446)
+- Base pools on main cfb49dec: 396 pools, 904 entries, 371 distinct (884 strings; error
+  messages and keys, "not a function" 42 times), 13,568 B.
+- Compiler: `resolve::UnitPool` shared by a unit's functions (strings by content, numbers
+  by bits, open addressing table); tagged-template runs and global declarations appended
+  privately; the top level its own pool. Templates allocated without consts, CONSTS set at
+  the end (`set_pool`).
+- The prelude's installing IIFE is a function of the unit: its constants went into the
+  shared pool (913 entries, strings +7 KB). `image::prune_pools` after a collection drops
+  unused entries keeping order (indexes only shrink, immediates patched in place).
+- Tried and dropped: ranking constants by (weighted) use before emitting: −138 B base
+  bytecode for +2 KB wasm; `slice::sort_by` +6 KB, `BTreeMap` +16 KB of wasm.
+- Base 217,872 → 207,920 B (−9.95 KB); module gzip 444,487 → 443,959, slim 379,910 →
+  379,601 (the ceilings are within budget.py's 1 KB slack, so `--update` leaves them).
+  wasm instructions neutral.
+- `strong_weak_refs_never_lose_their_targets` assumed cleanup runs after the explicit
+  collect, but heap sizes decide whether the first script already collected: it now
+  counts the callbacks of both runs. Compiler snapshots updated (const indexes).
+- djs-cli heap report counts a shared pool once.
+- Guide: compiler.md (unit pool paragraph).
+
 ## Follow-ups
 - GC thresholds are rounded to 64 KB pages from offset 0, so collection points depend on
   the base's size (json-date's extra collection under L4). Rounding relative to

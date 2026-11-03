@@ -1,5 +1,5 @@
 function 0 <anonymous>: params=0 locals=1 stack=5 captures=0
-    0  global_decls #5 let "o"
+    0  global_decls #0 let "o"
     5  undefined
     6  put_loc0 (<completion>)
     7  object
@@ -145,7 +145,7 @@ function 0 <anonymous>: params=0 locals=1 stack=5 captures=0
   407  put_loc0 (<completion>)
   408  get_global "console" ic39  ; 7:1
   415  get_method "log" ic40  ; 7:8
-  422  push_const8 #4 ("hello")
+  422  push_const8 #5 ("hello")
   424  get_global "o" ic41  ; 7:22
   431  get_field "a" ic42  ; 7:23
   438  dup

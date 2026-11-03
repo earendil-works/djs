@@ -1120,11 +1120,13 @@ fn strong_weak_refs(stress_registrations: u32) {
         assert_eq!(out.log, ["1 true"]);
     }
     // The same script with collected weak refs: the targets die and callbacks run.
-    let (mut vm, _) = run_script(vm(), &weak_script(3000));
+    let (mut vm, first) = run_script(vm(), &weak_script(3000));
     vm.collect().unwrap();
     let (_, out) = run_script(vm, "console.log(w1.deref() === kept, w2.deref());\n");
     assert_eq!(out.log[0], "true undefined");
-    assert!(out.log.len() > 1, "cleanup ran");
+    // Callbacks run after the collection that found the targets dead: during the first
+    // script or after the explicit one, depending on when the heap grows enough.
+    assert!(first.log.len() + out.log.len() > 1, "cleanup ran");
 }
 
 #[test]

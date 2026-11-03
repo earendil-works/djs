@@ -1,8 +1,8 @@
 function 0 <anonymous>: params=0 locals=1 stack=4 captures=0
-    0  global_decls #2 const "k" "o"
+    0  global_decls #0 const "k" "o"
     5  undefined
     6  put_loc0 (<completion>)
-    7  push_const8 #0 ("dyn")
+    7  push_const8 #6 ("dyn")
     9  init_global_lex "k"
    14  object
    15  push1
@@ -19,7 +19,7 @@ function 0 <anonymous>: params=0 locals=1 stack=4 captures=0
    66  set_function_name 0
    68  define_elem
    69  get_global "k" ic2  ; 9:4
-   76  push_const8 #1 ("m")
+   76  push_const8 #7 ("m")
    78  add  ; 9:6
    79  fclosure child4
    84  set_function_name 0

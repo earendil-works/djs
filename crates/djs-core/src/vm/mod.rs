@@ -897,8 +897,10 @@ impl Vm {
     /// ordered by kind for the module's gzip (D2251).
     pub fn prepare_base_image(&mut self) -> Result<(), HeapError> {
         // Builtins' `length` and `name` from their templates (D2445), in the prelude's
-        // shape tree.
+        // shape tree; the constant pool without the dead installing code's (D2446).
         image::lazy_builtin_props(&mut self.heap)?;
+        self.collect()?;
+        image::prune_pools(&mut self.heap)?;
         // A VM's own shape tree (D2063), with the shapes of the objects builtins create
         // already in it (D2067): the builtins' shapes keep the prelude's root.
         self.heap

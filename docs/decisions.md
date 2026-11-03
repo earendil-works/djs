@@ -7595,3 +7595,26 @@ tiny-filter0 −5.6%, tiny-map1/2 −3.6/−3.3%, tiny-filter1/2 −4.0/−2.1%,
 −1.7%, tree-filter −2.1%; every other workload and pico case within ±0.8% (props,
 push-pop, tiny-reduce2 re-run at n = 9: −0.6%, +0.2%, −0.7%); pi bench −0.3%. Size
 −88 B gzip.
+
+## D2446: One constant pool per compilation unit
+date: 2026-11-03 · by: bloat · issue: 0151
+The functions of a compilation unit share one `ValueArray` of constants (`resolve::UnitPool`):
+strings are shared by content, numbers by bits, as the re-emit meets each `push_const`
+(indexes in emit order, so the first 256 get `push_const8`). The runs that must stay
+contiguous and private, a tagged template site with its `n, cooked, raw` strings (the
+site slot caches the template object) and the global declaration list, are appended as
+they are emitted. The top level has a pool of its own: it runs once. Ranking the
+constants by use before emitting saved 138 B of base bytecode for 2 KB of wasm (and
+`slice::sort_by` another 6 KB; a `BTreeMap` for the dedupe cost 16 KB, now a small open
+addressing table): not done.
+
+The base image build drops what only dead code used (`image::prune_pools`, after a
+collection): the prelude's installing code is a function of the same unit that dies
+before the base is written. Entries keep their order, so every index only gets smaller
+and `push_const8` still fits: the immediates are patched in place.
+- **Bought:** base 217,872 → 207,920 B (−9.95 KB per VM; 396 pools, 13,568 B → one of
+  371 entries, 2,984 B; bytecode +606 B for the indexes past 255); module gzip 444,487 →
+  443,959 (−528), slim 379,910 → 379,601 (−309). User scripts get one pool cell per unit
+  and per top level.
+- **Neutral:** wasm instructions (n=3, all workloads) −0.8..+1.4%, re-measured n=7
+  −2.5..+0.2%, warm equal.

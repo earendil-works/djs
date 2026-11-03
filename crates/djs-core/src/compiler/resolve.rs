@@ -9,7 +9,8 @@
 //! 2. every binding gets storage: an argument slot, a local slot, a local slot holding a
 //!    Box (captured bindings, D1083), or global;
 //! 3. each function's phase-1 code is re-emitted into final code and written as a
-//!    template, children before parents.
+//!    template, children before parents. The functions share one constant pool, the
+//!    unit's (D2446).
 
 use alloc::borrow::Cow;
 use alloc::vec;
@@ -23,8 +24,80 @@ use crate::bytecode::{
     CodeBuf, Label, LineTableBuilder, Op, TemplateError, TemplateParts, alloc_script,
     alloc_template_in, capture_desc, func_flags, special,
 };
+use crate::heap::cells::FuncTemplate;
 use crate::heap::{Atom, Heap, Ref};
 use crate::lexer::LineTable;
+use crate::value::Value;
+
+/// The constant pool of a compilation unit (D2446): every template of the unit refers to
+/// the same `ValueArray`, so a string or number used by many functions (an error message,
+/// a property name passed as a string) is stored once, and the unit pays one cell header.
+/// Strings are shared by content, numbers by bits; the runs of a tagged template site
+/// and the global declaration list stay private and contiguous.
+#[derive(Default)]
+struct UnitPool {
+    values: Vec<Value>,
+    /// Open addressing over the shared constants' hashes: `index + 1`, 0 empty. (A
+    /// `BTreeMap` here cost 16 KB of wasm.)
+    table: Vec<u32>,
+    shared: u32,
+}
+
+impl UnitPool {
+    fn hash(heap: &Heap, v: Value) -> u32 {
+        match v.as_string() {
+            Some(s) => heap.str_hash_uncached(s),
+            None => {
+                let b = v.to_bits();
+                ((b ^ (b >> 29)).wrapping_mul(0x9E37_79B9_7F4A_7C15) >> 32) as u32
+            }
+        }
+    }
+
+    fn same(heap: &Heap, a: Value, b: Value) -> bool {
+        match (a.as_string(), b.as_string()) {
+            (Some(x), Some(y)) => heap.str_eq(x, y),
+            (None, None) => a.to_bits() == b.to_bits(),
+            _ => false,
+        }
+    }
+
+    /// The index of a shared constant (a string or a number).
+    fn intern(&mut self, heap: &Heap, v: Value) -> u32 {
+        if 2 * (self.shared as usize + 1) > self.table.len() {
+            let mut bigger = vec![0u32; (self.table.len() * 2).max(64)];
+            for &e in self.table.iter().filter(|&&e| e != 0) {
+                let mask = bigger.len() - 1;
+                let mut b = Self::hash(heap, self.values[e as usize - 1]) as usize & mask;
+                while bigger[b] != 0 {
+                    b = (b + 1) & mask;
+                }
+                bigger[b] = e;
+            }
+            self.table = bigger;
+        }
+        let mask = self.table.len() - 1;
+        let mut b = Self::hash(heap, v) as usize & mask;
+        loop {
+            match self.table[b] {
+                0 => break,
+                e if Self::same(heap, self.values[e as usize - 1], v) => return e - 1,
+                _ => b = (b + 1) & mask,
+            }
+        }
+        self.values.push(v);
+        self.table[b] = self.values.len() as u32;
+        self.shared += 1;
+        self.values.len() as u32 - 1
+    }
+
+    /// Appends private constants; returns the index of the first.
+    fn append(&mut self, vs: &[Value]) -> u32 {
+        let start = self.values.len() as u32;
+        self.values.extend_from_slice(vs);
+        start
+    }
+}
 
 /// Where a binding lives.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -162,6 +235,10 @@ pub(super) fn finish(
             .map_err(|e| internal(&crate::detail::detail("bytecode", &e)))?;
         phase1.push(code);
     }
+    // The top level has its own pool: it runs once, and its constants need not live as
+    // long as the functions it creates.
+    let mut pool = UnitPool::default();
+    let mut top = UnitPool::default();
     let mut templates: Vec<Ref> = vec![Ref::NULL; funcs.len()];
     let mut scratch = Scratch::default();
     for id in (0..funcs.len()).rev() {
@@ -184,11 +261,32 @@ pub(super) fn finish(
             opts.privileged,
             src,
             script,
+            if id == 0 { &mut top } else { &mut pool },
             &mut scratch,
         )?;
         templates[id] = t;
     }
+    set_pool(heap, &pool, &templates[1..])?;
+    set_pool(heap, &top, &templates[..1])?;
     Ok(templates[0])
+}
+
+/// Writes `pool` into a `ValueArray` and makes it the constants of `templates`.
+fn set_pool(heap: &mut Heap, pool: &UnitPool, templates: &[Ref]) -> PResult<()> {
+    if pool.values.is_empty() {
+        return Ok(());
+    }
+    let n = pool.values.len() as u32;
+    let consts = heap.alloc_value_array(n)?;
+    heap.arena_mut()
+        .set(consts, crate::heap::cells::ValueArray::LEN, n);
+    for (i, &v) in pool.values.iter().enumerate() {
+        heap.value_array_set(consts, i as u32, v);
+    }
+    for &t in templates {
+        heap.arena_mut().set(t.0, FuncTemplate::CONSTS, Ref(consts));
+    }
+    Ok(())
 }
 
 /// Classifies reference `r` of function `id`, walking into enclosing functions for
@@ -437,9 +535,9 @@ fn emit_function(
     privileged: bool,
     src: &[u8],
     script: Ref,
+    pool: &mut UnitPool,
     scratch: &mut Scratch,
 ) -> PResult<Ref> {
-    let mut consts = f.consts.clone();
     let mut needs_uninit = vec![false; f.vars.len()];
     for r in resolved {
         if let (Target::Var(v), true) = (r.target, r.check) {
@@ -471,8 +569,7 @@ fn emit_function(
             }
         }
         if !decls.is_empty() {
-            let idx = consts.len() as u32;
-            consts.extend(decls.encode());
+            let idx = pool.append(&decls.encode());
             out.global_decls(idx);
         }
     }
@@ -628,7 +725,7 @@ fn emit_function(
                 {
                     // `CE.A`, `N.CE.A` of a const enum: the member's value (as tsc).
                     match v {
-                        EnumVal::Num(x) => emit_number(&mut out, &mut consts, *x),
+                        EnumVal::Num(x) => emit_number(heap, &mut out, pool, *x),
                         EnumVal::Str(units) => {
                             let s = if units.iter().all(|&u| u <= 0xFF) {
                                 let b: Vec<u8> = units.iter().map(|&u| u as u8).collect();
@@ -636,8 +733,8 @@ fn emit_function(
                             } else {
                                 heap.alloc_utf16(units)?
                             };
-                            consts.push(crate::value::Value::string(s));
-                            out.push_const((consts.len() - 1) as u32);
+                            let idx = pool.intern(heap, Value::string(s));
+                            out.push_const(idx);
                         }
                     }
                     i += n;
@@ -795,6 +892,20 @@ fn emit_function(
             }
             Op::LeaveScope => {}
             Op::Label => out.place_label(Label(insn.imm(0))),
+            // The function's constants become the unit's (D2446).
+            Op::PushConst => out.push_const(pool.intern(heap, f.consts[insn.imm(0) as usize])),
+            Op::GetTemplateObject => {
+                // The site's slot holds the start of `n, cooked x n, raw x n` (D1362):
+                // copied as one run, and the slot itself is private (it caches the
+                // template object).
+                let local = |i: u32| f.consts[i as usize];
+                let start = local(insn.imm(0)).as_int().unwrap_or(0) as u32;
+                let n = local(start).as_int().unwrap_or(0) as u32;
+                let run: Vec<Value> = (start..start + 1 + 2 * n).map(local).collect();
+                let run_start = pool.append(&run);
+                let site = pool.append(&[Value::int(run_start as i32)]);
+                out.get_template_object(site);
+            }
             _ => out.emit_insn(&insn),
         }
     }
@@ -893,7 +1004,7 @@ fn emit_function(
         locals: names.len() as u16,
         captures: &capture_words,
         code: &code.code,
-        consts: &consts,
+        consts: &[],
         children: &children,
         handlers: &handlers,
         lines: &line_bytes,
@@ -966,7 +1077,7 @@ fn unchecked_local(storage: &[Storage], res: Resolved) -> Option<u16> {
 }
 
 /// Pushes a number constant (small integers inline).
-fn emit_number(out: &mut CodeBuf, consts: &mut Vec<crate::value::Value>, n: f64) {
+fn emit_number(heap: &Heap, out: &mut CodeBuf, pool: &mut UnitPool, n: f64) {
     let i = n as i32;
     if i as f64 == n && !(n == 0.0 && n.is_sign_negative()) {
         match i8::try_from(i) {
@@ -975,8 +1086,7 @@ fn emit_number(out: &mut CodeBuf, consts: &mut Vec<crate::value::Value>, n: f64)
         }
         return;
     }
-    consts.push(crate::value::Value::number(n));
-    out.push_const((consts.len() - 1) as u32);
+    out.push_const(pool.intern(heap, Value::number(n)));
 }
 
 /// The resolved form of one `name_*` op.

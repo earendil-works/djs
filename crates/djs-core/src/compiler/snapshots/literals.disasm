@@ -1,5 +1,5 @@
 function 0 <anonymous>: params=0 locals=2 stack=17 captures=0
-    0  global_decls #12 let "n" "s" "t" "k" "holes" "o"
+    0  global_decls #0 let "n" "s" "t" "k" "holes" "o"
     5  special_object 4
     7  put_loc1 (this)
     8  undefined
@@ -13,32 +13,32 @@ function 0 <anonymous>: params=0 locals=2 stack=17 captures=0
    21  push_i32 129
    26  neg  ; 2:30
    27  push_i32 2147483647
-   32  push_const8 #0 (2147483648)
-   34  push_const8 #1 (1.5)
-   36  push_const8 #2 (0.1)
+   32  push_const8 #10 (2147483648)
+   34  push_const8 #11 (1.5)
+   36  push_const8 #12 (0.1)
    38  push0
    39  neg  ; 2:70
    40  push_i8 31
    42  push_i8 5
    44  push_i8 15
    46  push_i32 1000000
-   51  push_const8 #3 (1e+21)
-   53  push_const8 #1 (1.5)
+   51  push_const8 #13 (1e+21)
+   53  push_const8 #11 (1.5)
    55  array_from 17
    58  init_global_lex "n"
-   63  push_const8 #4 ("a")
-   65  push_const8 #4 ("a")
-   67  push_const8 #5 ("\n\té")
-   69  push_const8 #6 ("😀")
-   71  push_const8 #7 ("")
-   73  push_const8 #4 ("a")
+   63  push_const8 #14 ("a")
+   65  push_const8 #14 ("a")
+   67  push_const8 #15 ("\n\té")
+   69  push_const8 #16 ("😀")
+   71  push_const8 #17 ("")
+   73  push_const8 #14 ("a")
    75  array_from 6
    78  init_global_lex "s"
-   83  push_const8 #8 ("plain")
-   85  push_const8 #9 ("x")
+   83  push_const8 #18 ("plain")
+   85  push_const8 #19 ("x")
    87  get_global "n" ic0  ; 4:23
    94  to_string  ; 4:21
-   95  push_const8 #10 ("y")
+   95  push_const8 #20 ("y")
    97  concat 3
   100  get_global "s" ic1  ; 4:32
   107  to_string  ; 4:30
@@ -47,8 +47,8 @@ function 0 <anonymous>: params=0 locals=2 stack=17 captures=0
   116  get_global "s" ic3  ; 4:44
   123  to_string  ; 4:42
   124  concat 2
-  127  push_const8 #7 ("")
-  129  push_const8 #11 ("aA")
+  127  push_const8 #17 ("")
+  129  push_const8 #21 ("aA")
   131  array_from 6
   134  init_global_lex "t"
   139  null

@@ -1065,6 +1065,7 @@ pub fn functions(g: &Graph, o: &Options, scope: &Scope) -> Section {
     // The reference's part: templates with their parts, closures.
     let mut rest: HashMap<String, [u64; 4]> = HashMap::new();
     let mut rest_closures = 0u64;
+    let mut pools_seen = std::collections::HashSet::new();
     for (i, c) in g.cells.iter().enumerate() {
         if !g.live[i] {
             continue;
@@ -1090,8 +1091,14 @@ pub fn functions(g: &Graph, o: &Options, scope: &Scope) -> Section {
                 e[2] += a.get::<u32>(c.offset, FuncTemplate::CODE_LEN) as u64;
                 let info: Ref = a.get(c.offset, FuncTemplate::INFO);
                 let debug = debug_info(g.heap, c.offset);
+                // A unit's functions share their constant pool (D2446): counted once.
+                let consts: Ref = a.get(c.offset, FuncTemplate::CONSTS);
+                if let Some(p) = consts.get()
+                    && pools_seen.insert(p)
+                {
+                    e[1] += g.heap.cell_size(p) as u64;
+                }
                 for r in [
-                    a.get(c.offset, FuncTemplate::CONSTS),
                     a.get(c.offset, FuncTemplate::IC),
                     info,
                     debug.lines,

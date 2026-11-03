@@ -200,7 +200,7 @@ function 0 <anonymous>: params=2 locals=8 stack=6 captures=0
   492  drop
   493  get_global "tag" ic25  ; 9:1
   500  undefined
-  501  get_template_object #0 (1)
+  501  get_template_object #5 (0)
   506  get_loc1 (a)  ; 9:10
   507  call2  ; 9:4
   508  drop
