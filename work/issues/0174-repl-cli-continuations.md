@@ -11,7 +11,7 @@ guide: -
 Make suspension visible and testable by hand (docs/continuation-dumps.md "REPL").
 
 ## Acceptance criteria
-- [ ] A host-provided `tools`: `tools.x(args)` is an async host call answered by hand;
+- [x] A host-provided `tools`: `tools.x(args)` is an async host call answered by hand;
       inputs that wait do not block the prompt and print their result when they settle.
 - [ ] `.pending`, `.resolve <id> <json>`, `.reject <id> <message>`, `.bt <id|all>`
       (suspended activations and their bindings); `--tools answers.json` for scripted answers.
@@ -25,6 +25,24 @@ Make suspension visible and testable by hand (docs/continuation-dumps.md "REPL")
 - [ ] `.snapshot` stays until 0177.
 
 ## Log
+- 2026-11-03 (repl): tools part. `tools` is a Proxy that makes one async host function
+  per name through a sync `make` host call (D2600); `crates/djs-cli/src/tools.rs` (new
+  file, shared by repl and run) has it, the answers file (D2601, a small JSON reader:
+  djs-cli has no serde) and JSON helpers. REPL: waiting inputs (kept as handles on their
+  promises, printed `[input N] value` when they settle), `[waiting] #id ...`,
+  `.pending`, `.resolve`, `.reject`, `.bt <id|all>` (repl/activations.rs reads Generator
+  objects: location, parameters named from the function source, locals; the chain from a
+  call's promise through await reactions, `then` capabilities and combinator element
+  records). `djs run --tools` answers at idle points, exit 1 for a call with no answer.
+- Outside touches, coordinated: `Vm::outcome()` (vm/mod.rs, +test), the entry call's
+  value while `run` stops Idle; `crates/djs-cli/src/heap/mod.rs`: `json` module made
+  `pub(crate)` (the J type); `crates/djs-cli/src/tools.rs` new.
+- Tests: tests/repl.rs (tools_wait_and_resolve, backtraces_of_waiting_activations,
+  answers_file), tests/run.rs (todos script with answers, plain/--suspend-every/
+  --gc-stress; missing answer). A tools transcript is identical under --gc-stress and
+  .suspend-every 50. Guide: no page affected.
+- Waiting for 0171 for the dump part (.dump format 2, .restore of waiting inputs,
+  .dump-every, run --dump-after/--dump-every-idle, resume).
 
 ## Follow-ups
 
