@@ -14,3 +14,19 @@ async function main() {
   print(await state.task, state.runs.join());
 }
 main();
+// A parameter past the arguments given, assigned before an await and shared.
+const shared = [];
+async function late(a, b) {
+  b = shared;
+  await later(a);
+  return b.length;
+}
+const lateRun = late(3);
+shared.push(1);
+lateRun.then((n) => print("late", n));
+// An argument object that is also its parameter's binding.
+async function both(list) {
+  await later(list.length);
+  return list.join("+");
+}
+both(["x", "y"]).then((s) => print("both", s));

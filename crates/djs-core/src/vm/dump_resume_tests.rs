@@ -539,3 +539,73 @@ fn show_maps() {
         std::print!("{}", m.text(src.as_bytes()));
     }
 }
+
+#[test]
+fn dumps_need_an_idle_vm() {
+    let opts = super::dump::DumpOptions {
+        base: base(),
+        host_fn_name: &host_fn_name,
+        ..Default::default()
+    };
+    let reason = |vm: &Vm| match vm.dump(&opts, None) {
+        Ok(t) => panic!("dumped:\n{t}"),
+        Err(e) => e.message(),
+    };
+    // Parked on a sync host call.
+    let mut vm = new_vm();
+    let f = vm
+        .compile(
+            b"print(1);",
+            &crate::compiler::CompileOptions::script("t.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    assert!(matches!(vm.run(1_000_000), Status::HostCall { .. }));
+    assert!(reason(&vm).contains("is not idle"), "{}", reason(&vm));
+    // Out of fuel in the middle of a call.
+    let mut vm = new_vm();
+    let f = vm
+        .compile(
+            b"for (let i = 0; i < 1e6; i++);",
+            &crate::compiler::CompileOptions::script("t.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    assert!(matches!(vm.run(100), Status::OutOfFuel));
+    assert!(reason(&vm).contains("is not idle"), "{}", reason(&vm));
+    // A host result delivered and not applied yet.
+    let mut vm = new_vm();
+    let f = vm
+        .compile(
+            b"globalThis.p = later(1);",
+            &crate::compiler::CompileOptions::script("t.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    assert!(matches!(vm.run(1_000_000), Status::Idle | Status::Done(_)));
+    let id = vm.pending_host_calls()[0];
+    vm.resolve_host_call(id, Ok(Value::int(1))).unwrap();
+    assert!(reason(&vm).contains("not applied yet"), "{}", reason(&vm));
+    // A call of a host function the host does not name.
+    let mut vm = new_vm();
+    let anon = vm.new_async_host_function(9, "anon").unwrap();
+    vm.define_global("anon", anon).unwrap();
+    let f = vm
+        .compile(b"anon();", &crate::compiler::CompileOptions::script("t.js"))
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    vm.run(1_000_000);
+    let r = reason(&vm);
+    assert!(
+        r.contains("<call 1>: a call of a host function the host does not name"),
+        "{r}"
+    );
+    assert!(
+        r.contains("anon: a host function the host does not name"),
+        "{r}"
+    );
+}

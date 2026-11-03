@@ -606,7 +606,7 @@ fn idle_call(
                         Err(e) => {
                             let first = e.0.first().cloned().unwrap_or_default();
                             let why = first.split_once(": ").map_or(first.as_str(), |(_, w)| w);
-                            let why = why.split(" (").next().unwrap_or(why).to_string();
+                            let why = why.to_string();
                             *st.refusals.entry(why).or_default() += 1;
                         }
                         Ok(text) => {

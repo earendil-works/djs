@@ -342,6 +342,13 @@ impl Dumper<'_> {
             for i in 0..argc {
                 self.edge(n, fp(2 + i), || cat!(path, "<args>[", i, "]"));
             }
+            // Parameters: written as bindings too (and past the arguments given,
+            // assigned since).
+            for (i, slot) in site.args.iter().enumerate() {
+                if let Slot::Binding { name, .. } = slot {
+                    self.edge(n, fp(2 + i), || cat!(path, ".", name));
+                }
+            }
             for (i, slot) in site.locals.iter().enumerate() {
                 let name = match slot {
                     Slot::Binding { name, .. } => name.as_str(),
@@ -1272,18 +1279,18 @@ impl Dumper<'_> {
         let fv = |i: usize| frame.get(i).copied().unwrap_or(Value::UNDEFINED);
         let mut fields: Vec<String> = alloc::vec![cat!("at: ", quote(&site.name))];
         let awaiting = self.fl.acts[a].awaiting;
-        let mut parts: Vec<String> = Vec::new();
+        let mut parts: Vec<(&str, String)> = Vec::new();
         let fe = self.expr(fv(0), None, None);
-        parts.push_out(fe.clone());
+        parts.push_out(("function", fe.clone()));
         if let Some((q, _)) = awaiting {
             let ql = self.make(q);
-            parts.push_out(ql.clone());
+            parts.push_out(("awaited promise", ql.clone()));
             fields.push_out(cat!("awaiting: ", ql));
         } else if s_state_awaiting(&self.fl.acts[a].s) {
             fields.push_out("awaiting: new Promise(() => {})".into());
         }
         let this = self.expr(fv(1), None, None);
-        parts.push_out(this.clone());
+        parts.push_out(("this", this.clone()));
         if this != "undefined" {
             fields.push_out(cat!("this: ", this));
         }
@@ -1293,7 +1300,7 @@ impl Dumper<'_> {
         if !args.is_empty() {
             fields.push_out(cat!("args: [", join(&args, ", "), "]"));
         }
-        parts.extend(args);
+        parts.extend(args.into_iter().map(|a| ("argument", a)));
         // Bindings: by name, or `name@scope` where two of a name are in scope.
         let names: Vec<&str> = site
             .args
@@ -1333,7 +1340,7 @@ impl Dumper<'_> {
             };
             let v = fv(at);
             let e = self.slot_expr(v, boxed);
-            parts.push_out(e.clone());
+            parts.push_out(("binding", e.clone()));
             bindings.push_out(cat!(key, ": ", e));
         }
         if !bindings.is_empty() {
@@ -1353,7 +1360,7 @@ impl Dumper<'_> {
             } else {
                 self.expr(fv(lp + site.locals.len() + k), None, None)
             };
-            parts.push_out(e.clone());
+            parts.push_out(("operand", e.clone()));
             match role {
                 Role::LoopIterator(_) => it = e,
                 Role::LoopNext(l) => {
@@ -1398,8 +1405,8 @@ impl Dumper<'_> {
                 Some(p) => self.make(p),
                 None => String::new(),
             };
-            parts.push_out(v.clone());
-            parts.push_out(p.clone());
+            parts.push_out(("queue", v.clone()));
+            parts.push_out(("queue", p.clone()));
             reqs.push_out(cat!(
                 "{ type: \"",
                 t,
@@ -1413,8 +1420,9 @@ impl Dumper<'_> {
         if !reqs.is_empty() {
             fields.push_out(cat!("queue: [", join(&reqs, ", "), "]"));
         }
-        if parts.iter().any(String::is_empty) {
-            self.refuse(path.clone(), "an activation on a reference cycle");
+        if let Some((what, _)) = parts.iter().find(|p| p.1.is_empty()) {
+            let why = cat!("an activation on a reference cycle (its ", *what, ")");
+            self.refuse(path.clone(), &why);
         }
         if let Some((q, j)) = awaiting {
             self.react_upto(q, j);
