@@ -66,7 +66,9 @@ fn generated_builtins_match_qjs() {
     let prelude = std::fs::read_to_string(root.join("../../builtins/gen/prelude.js")).unwrap();
     // `%Name` outside strings is an intrinsic call; inside a string (an install target
     // such as `"%ArrayIteratorPrototype%"`) it stays as it is.
-    let prelude = intrinsic_calls_to_js(&prelude);
+    let prelude = intrinsic_calls_to_js(&prelude)
+        // The calling builtin's argument count (0162): in a JS function, its `arguments`.
+        .replace("I.ArgumentCount()", "arguments.length");
     let script = std::fs::read_to_string(root.join("tests/behavior.js"))
         .unwrap()
         .replace("PRELUDE;", &prelude);
