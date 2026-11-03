@@ -1,7 +1,7 @@
 # 0166: Heap follow-ups: parser depth, GC threshold rounding, stack-overflow errors
 
-status: open
-agent: -
+status: in-progress
+agent: heap
 branch: issue/0166-heap-followups
 depends-on: 0158, 0161, 0151 L4
 guide: docs/guide/gc.md, host.md as affected
