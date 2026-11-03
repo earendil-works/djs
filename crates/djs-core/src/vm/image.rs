@@ -91,7 +91,71 @@ pub(super) fn drop_internal_names(heap: &mut Heap) -> Result<u32, HeapError> {
             _ => {}
         }
     }
-    heap.forget_string_atoms(&keep)
+    let map = heap.forget_string_atoms(&keep)?;
+    let forgotten = map.iter().filter(|&&m| m == u32::MAX).count() as u32;
+    renumber_atoms(heap, &map)?;
+    Ok(forgotten)
+}
+
+/// D2447: renumbers every atom id in the heap after `forget_string_atoms` closed the
+/// holes of the forgotten ones (`map`: old table index to new): the heap's own structures
+/// (`Heap::renumber_heap_atoms`), templates' names, local names, the atom immediates of
+/// the code and the global declaration lists in constant pools.
+fn renumber_atoms(heap: &mut Heap, map: &[u32]) -> Result<(), HeapError> {
+    use crate::bytecode::Op;
+    use crate::heap::Atom;
+    use crate::heap::cells::FuncInfo;
+    heap.renumber_heap_atoms(map)?;
+    let moved = |a: u32| Heap::moved_atom(map, Atom::from_id(a)).id();
+    let templates: alloc::vec::Vec<u32> = heap
+        .cells()
+        .filter(|c| c.kind == CellKind::FuncTemplate)
+        .map(|c| c.offset)
+        .collect();
+    let mut decls = alloc::collections::BTreeSet::new();
+    for &t in &templates {
+        let name = heap.arena().get(t, FuncTemplate::NAME);
+        heap.arena_mut().set(t, FuncTemplate::NAME, moved(name));
+        if let Some(info) = heap.arena().get::<Ref>(t, FuncTemplate::INFO).get()
+            && let Some(n) = heap.arena().get::<Ref>(info, FuncInfo::NAMES).get()
+        {
+            for i in 0..heap.arena().get(n, U32Array::LEN) {
+                let at = U32Array::DATA.at(n, i);
+                let id = heap.arena().read::<u32>(at);
+                heap.arena_mut().write(at, moved(id));
+            }
+        }
+        // The atom immediates (u32 wide), patched in place.
+        let mut patches = vec![];
+        for insn in insns(code(heap, t)) {
+            let insn = insn.expect("the base's bytecode decodes");
+            let mut at = insn.pc + 1;
+            for (k, kind) in insn.info().imms.iter().enumerate() {
+                if *kind == ImmKind::Atom {
+                    patches.push((at, moved(insn.imm(k))));
+                }
+                at += u32::from(kind.width());
+            }
+            if insn.op == Op::GlobalDecls
+                && let Some(p) = heap.arena().get::<Ref>(t, FuncTemplate::CONSTS).get()
+            {
+                decls.insert((p, insn.imm(0)));
+            }
+        }
+        for (at, id) in patches {
+            heap.arena_mut().write(FuncTemplate::DATA.at(t, at), id);
+        }
+    }
+    // `n_var, n_func, n_let, n_const`, then the atom ids (ops.rs `global_decls`).
+    for (p, idx) in decls {
+        let count = |k: u32| heap.value_array_get(p, idx + k).as_int().unwrap_or(0) as u32;
+        let n: u32 = (0..4).map(count).sum();
+        for i in idx + 4..idx + 4 + n {
+            let id = heap.value_array_get(p, i).as_int().unwrap_or(0) as u32;
+            heap.value_array_set(p, i, crate::value::Value::int(moved(id) as i32));
+        }
+    }
+    Ok(())
 }
 
 /// D2446: drops the entries of the shared constant pools that no live template uses (a

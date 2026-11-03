@@ -7618,3 +7618,25 @@ and `push_const8` still fits: the immediates are patched in place.
   and per top level.
 - **Neutral:** wasm instructions (n=3, all workloads) −0.8..+1.4%, re-measured n=7
   −2.5..+0.2%, warm equal.
+
+## D2447: The base's atoms are renumbered without gaps
+date: 2026-11-03 · by: bloat · issue: 0151
+`forget_string_atoms` (D2253) used to leave a forgotten atom's entry `undefined`: 1,455 of
+the base's 1,946 atom table entries were such holes, 11.6 KB in every VM. It now moves the
+kept entries down (the well-known atoms keep their fixed ids), copies them into an entries
+array of exactly their size and returns the map from old to new index, and the base build
+renumbers every atom id the heap holds by it (`Heap::moved_atom`, which panics on a
+forgotten atom still in use):
+- `Heap::renumber_heap_atoms`: property table keys (hashed tables get new indexes),
+  shape descriptor arrays (shared along a chain: each once), each transition list
+  re-sorted by its children's new last keys, symbols' own atoms;
+- `image::renumber_atoms`: template names, `FuncInfo` local names, the `Atom`
+  immediates of the code (u32, patched in place), and the atom ids of global
+  declaration lists in constant pools.
+Atom ids are otherwise only held in Rust while code runs (the wire format's key tables,
+JSON's key cache), never across the image build.
+- **Bought:** base 207,920 → 196,280 B (−11.6 KB per VM; atom entries 15,584 → 3,944);
+  module gzip 443,959 → 443,720, slim 379,601 → 379,392.
+- **Neutral:** warm wasm instructions equal (json 625/626, props 7066/7071 M); cold
+  −0.1..+1.5% (props +1.2% at n=7, the only one beyond noise: first-run tier-up of a
+  module whose code moved by 249 bytes).

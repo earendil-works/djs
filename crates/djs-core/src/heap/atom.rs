@@ -23,6 +23,7 @@
 //! list below, and are interned in order when the heap is created.
 
 use alloc::string::String;
+use alloc::vec::Vec;
 use core::fmt;
 
 use super::cells::{AtomTable, Roots, Symbol, ValueArray};
@@ -541,35 +542,49 @@ impl Heap {
     }
 
     /// Forgets the string atoms whose table index `keep` does not list (indexes past its
-    /// end are kept): their entries become `undefined` and the intern index is rebuilt
-    /// without them, sized for the rest. The well-known atoms and every symbol are kept.
-    /// Only for the base image (D2253): the caller guarantees that nothing in the heap
-    /// refers to a forgotten atom, which interns again as a new id if it is needed later.
-    /// Returns the number forgotten.
-    pub(crate) fn forget_string_atoms(&mut self, keep: &[bool]) -> Result<u32, HeapError> {
+    /// end are kept): the other entries move down over theirs, into an entries array of
+    /// exactly their size, and the intern index is rebuilt without them, sized for the
+    /// rest. The well-known atoms and every symbol are kept. Only for the base image
+    /// (D2253, D2447): the caller guarantees that nothing in the heap refers to a
+    /// forgotten atom, which interns again as a new id if it is needed later, and
+    /// renumbers every atom id in the heap by the returned map ([`Heap::moved_atom`]).
+    pub(crate) fn forget_string_atoms(&mut self, keep: &[bool]) -> Result<Vec<u32>, HeapError> {
         assert_eq!(self.atom_base_count(), 0, "the atom table is split already");
         let table = self.atom_table();
         let entries = self.atom_entries();
         let n = self.value_array_len(entries);
         let fixed = (WELL_KNOWN_STRINGS.len() + WELL_KNOWN_SYMBOLS.len()) as u32;
+        // The kept entries move down over the forgotten ones (D2447): `map[old]` is the
+        // new index (`u32::MAX` for a forgotten atom). The well-known atoms keep theirs.
+        let mut map = alloc::vec![u32::MAX; n as usize];
+        map[0] = 0;
+        let mut next = 1;
         let mut strings: u32 = 0;
-        let mut forgotten = 0;
         for i in 1..n {
-            if self.value_array_get(entries, i).as_string().is_none() {
+            let v = self.value_array_get(entries, i);
+            let string = v.as_string().is_some();
+            if string && i > fixed && keep.get(i as usize) == Some(&false) {
                 continue;
             }
-            if i > fixed && keep.get(i as usize) == Some(&false) {
-                self.value_array_set(entries, i, Value::UNDEFINED);
-                forgotten += 1;
-            } else {
-                strings += 1;
-            }
+            strings += u32::from(string);
+            map[i as usize] = next;
+            self.value_array_set(entries, next, v);
+            next += 1;
         }
+        let compact = self.alloc_value_array(next)?;
+        let a = self.arena_mut();
+        a.copy_within(
+            ValueArray::VALUES.at(entries, 0),
+            8 * next,
+            ValueArray::VALUES.at(compact, 0),
+        );
+        a.set(compact, ValueArray::LEN, next);
+        a.set(table, AtomTable::ENTRIES, Ref(compact));
         // The index at a load factor of at most 1/2, as `add_string_atom` keeps it.
         let len = (2 * strings).next_power_of_two().max(INITIAL_BUCKETS);
         let index = self.alloc_u32_array(len)?;
-        for i in 1..n {
-            if let Some(t) = self.value_array_get(entries, i).as_string() {
+        for i in 1..next {
+            if let Some(t) = self.value_array_get(compact, i).as_string() {
                 let h = self.str_hash_uncached(t);
                 self.index_insert(index, h, i);
             }
@@ -577,7 +592,85 @@ impl Heap {
         let a = self.arena_mut();
         a.set(table, AtomTable::INDEX, Ref(index));
         a.set(table, AtomTable::STRINGS, strings);
-        Ok(forgotten)
+        Ok(map)
+    }
+
+    /// The atom of `a` after [`Heap::forget_string_atoms`] moved the entries (`map`):
+    /// integer atoms and the null atom stay.
+    pub(crate) fn moved_atom(map: &[u32], a: Atom) -> Atom {
+        if a.is_int() || a.is_null() {
+            return a;
+        }
+        let new = map[a.table_index() as usize];
+        assert!(new != u32::MAX, "a forgotten atom is still in use: {a:?}");
+        Atom((a.0 & SYM_BIT) | new)
+    }
+
+    /// Renumbers the atom ids that heap structures hold by `map` (after
+    /// [`Heap::forget_string_atoms`], D2447): property table keys (whose hash indexes
+    /// are rebuilt), shape descriptors (shared along a chain: each array once) with their
+    /// parents' transition lists re-sorted, and symbols' own atoms. Code and templates
+    /// are the caller's (`vm::image`).
+    pub(crate) fn renumber_heap_atoms(&mut self, map: &[u32]) -> Result<(), HeapError> {
+        use super::cells::{PropEntry, PropTable, RefArray, Shape, U32Array};
+        let cells: Vec<(u32, CellKind)> = self.cells().map(|c| (c.offset, c.kind)).collect();
+        let moved = |a: u32| Self::moved_atom(map, Atom(a)).0;
+        let mut descs = alloc::collections::BTreeSet::new();
+        for &(c, kind) in &cells {
+            match kind {
+                CellKind::PropTable => {
+                    for i in 0..self.arena().get(c, PropTable::COUNT) {
+                        let e = PropTable::ENTRIES.at(c, i);
+                        let k = self.arena().get(e, PropEntry::KEY);
+                        self.arena_mut().set(e, PropEntry::KEY, moved(k));
+                    }
+                    if self.arena().get::<Ref>(c, PropTable::INDEX).get().is_some() {
+                        self.build_table_index(c)?;
+                    }
+                }
+                CellKind::Shape => {
+                    if let Some(d) = self.arena().get::<Ref>(c, Shape::DESCS).get()
+                        && descs.insert(d)
+                    {
+                        let used = self.arena().read::<u32>(U32Array::DATA.at(d, 0));
+                        for i in 0..used {
+                            let at = U32Array::DATA.at(d, 1 + 2 * i);
+                            let k = self.arena().read::<u32>(at);
+                            self.arena_mut().write(at, moved(k));
+                        }
+                    }
+                }
+                CellKind::Symbol => {
+                    let k = self.arena().get(c, Symbol::ATOM);
+                    self.arena_mut().set(c, Symbol::ATOM, moved(k));
+                }
+                _ => {}
+            }
+        }
+        // Transition lists are sorted by the key and flags of the child's last descriptor.
+        for &(s, kind) in &cells {
+            if kind != CellKind::Shape {
+                continue;
+            }
+            let Some(tr) = self.arena().get::<Ref>(s, Shape::TRANSITIONS).get() else {
+                continue;
+            };
+            let count = self.shape_count(s);
+            let len = self.arena().get(tr, RefArray::LEN);
+            let mut children: Vec<(u32, u32, u32)> = (0..len)
+                .map(|i| {
+                    let c = self.arena().read::<Ref>(RefArray::REFS.at(tr, i)).0;
+                    let (k, f) = self.shape_desc(c, count);
+                    (k.0, f, c)
+                })
+                .collect();
+            crate::sort::sort_by(&mut children, |a, b| (a.0, a.1) < (b.0, b.1));
+            for (i, &(_, _, c)) in children.iter().enumerate() {
+                self.arena_mut()
+                    .write(RefArray::REFS.at(tr, i as u32), Ref(c));
+            }
+        }
+        Ok(())
     }
 
     /// Makes the atom table two-level for a base image (D2431): its entries and index

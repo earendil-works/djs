@@ -3984,7 +3984,7 @@ fn the_atom_table_has_two_levels() {
     let table: Ref = a.get(0, Roots::ATOMS);
     let count: u32 = a.get(table.0, AtomTable::BASE_COUNT);
     let field = |f| a.get::<Ref>(table.0, f).0;
-    assert!(count > 1000, "{count} base atoms");
+    assert!(count > 400, "{count} base atoms");
     for f in [AtomTable::BASE_ENTRIES, AtomTable::BASE_INDEX] {
         assert!(field(f) != 0 && field(f) < h.base_end());
     }

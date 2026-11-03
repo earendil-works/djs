@@ -202,7 +202,8 @@ fn snapshot_and_restore() {
     ));
     assert!(out.contains("(the heap image)"), "{out}");
     assert!(out.ends_with("(raw image)\n7\n"), "{out}");
-    assert!(std::fs::metadata(&snap).unwrap().len() > 200 * 1024);
+    // The whole heap, base included (about 200 KB), against the container's 64 KB.
+    assert!(std::fs::metadata(&snap).unwrap().len() > 150 * 1024);
     std::fs::remove_file(&snap).unwrap();
     check(
         ".restore /nonexistent/x.img\n",

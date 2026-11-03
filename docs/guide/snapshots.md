@@ -182,9 +182,14 @@ on a diet:
   its internal helper closures get no `length`, `name` or `prototype` (D1433), and the
   installed builtins keep their `length` and `name` in their templates rather than as
   properties (D2445);
-- shapes replaced private property tables for small objects (D1831).
+- shapes replaced private property tables for small objects (D1831);
+- the functions of the prelude share one constant pool, without the entries only its
+  set-up code used (D2446);
+- the atoms of names the base no longer needs are dropped and the remaining ones
+  renumbered to close the gaps, rewriting every atom id in the heap: property tables,
+  shapes, symbols, templates and the atom operands of the code (D2447).
 
-It is about 218 KB today. Building it twice gives the same bytes, and the base built
+It is about 196 KB today. Building it twice gives the same bytes, and the base built
 natively is byte for byte the realm that djs-wasm builds inside wasm32, which a test
 checks, so nothing in it depends on the platform.
 
@@ -255,12 +260,11 @@ other moved cells. So the base image puts those cells last, and so does `Vm::sea
 image an embedder seals itself, like pi's prelude image. A dead copy then moves nothing
 before it.
 
-The atom table is split for the same reason (D2431). The base's atoms, about 1,950
-entries (many of them empty, names the base no longer needs) and their hash index, sit
-in the builtin prefix and are never written. The atoms a VM adds go to a second, small
+The atom table is split for the same reason (D2431). The base's atoms, about 490
+entries, and their hash index sit in the builtin prefix and are never written. The atoms a VM adds go to a second, small
 list and index in the tail, with room for 32 before they grow, and interning looks in
 the VM's own index first. So a session's first atoms change only the words they add,
-and the session image no longer carries the base's 15 KB of entries: a fresh REPL's
+and the session image no longer carries the base's entries (15 KB at the time): a fresh REPL's
 session image went from 34.6 to 11.5 KB.
 
 What a snapshot stores is a **session image** (D2066): the image without the builtin
@@ -418,7 +422,7 @@ of the call it waits on, and the container is 2.1 KB.
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2057 D2063 D2066 D2067 D024 D2400 D2058 D2043 D1091 D1890 D1725 D1052 D026 D2265 D2266 D2267 D2268 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 D2264 D2308 D2445 -->
+<!-- gen:decisions D2040 D2041 D2057 D2063 D2066 D2067 D024 D2400 D2058 D2043 D1091 D1890 D1725 D1052 D026 D2265 D2266 D2267 D2268 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 D2264 D2308 D2445 D2446 D2447 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
 - D2057: The cells a VM replaces first sit at the end of base and sealed images
@@ -457,4 +461,6 @@ Decisions on this page:
 - D2264: `djs heap` analyzes dumps through djs-core's heap code; djs-cli reads and writes snapshot containers
 - D2308: Images hold no dead value-stack slots; embedder collections shrink a grown stack
 - D2445: A closure's length and name come from its template until changed
+- D2446: One constant pool per compilation unit
+- D2447: The base's atoms are renumbered without gaps
 <!-- /gen -->

@@ -250,6 +250,17 @@ Found while measuring L4, landed before it on the coordinator's call.
 - djs-cli heap report counts a shared pool once.
 - Guide: compiler.md (unit pool paragraph).
 
+### L3 step 4: atom renumbering (branch issue/0151-atoms, D2447)
+- Base atom table: 1,946 entries, 1,455 holes (forgotten names), 474 strings, 16 symbols.
+- `forget_string_atoms` compacts (well-known prefix fixed) and returns old→new;
+  `Heap::renumber_heap_atoms` (PropTable keys + index rebuild, shape descs once per array,
+  transitions re-sorted, Symbol::ATOM) and `image::renumber_atoms` (template NAME,
+  FuncInfo NAMES, Atom immediates patched in place, global decl lists).
+- Base 207,920 → 196,280 B (−11.6 KB); gzip 443,959 → 443,720, slim 379,601 → 379,392;
+  warm instructions equal, cold props +1.2% (n=7; tier-up noise, warm equal).
+- Size-threshold tests: base atoms > 400 (was > 1000), raw REPL image > 150 KB (was 200).
+- Guide: snapshots.md (diet list: unit pool and renumbering, atom table size, base 196 KB).
+
 ## Follow-ups
 - GC thresholds are rounded to 64 KB pages from offset 0, so collection points depend on
   the base's size (json-date's extra collection under L4). Rounding relative to
