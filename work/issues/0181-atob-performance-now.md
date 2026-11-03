@@ -1,7 +1,7 @@
 # 0181: Should djs provide atob/btoa and performance.now? (research)
 
-status: open
-agent: -
+status: in-progress
+agent: globals
 branch: issue/0181-atob-performance
 depends-on: -
 guide: -
