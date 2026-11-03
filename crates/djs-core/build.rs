@@ -61,14 +61,16 @@ fn libm_version(manifest: &str) -> String {
 }
 
 /// The enabled features of this crate, sorted, without `default` (which only names
-/// others).
+/// others) and `unsafe-heap`, which changes how the arena is accessed but no result or
+/// image (D2520): the base snapshot, built by a host build without it, loads into a
+/// build with it, and images move freely between the two.
 fn features() -> Vec<String> {
     let mut out: Vec<String> = std::env::vars()
         .filter_map(|(k, _)| {
             k.strip_prefix("CARGO_FEATURE_")
                 .map(|f| f.to_lowercase().replace('_', "-"))
         })
-        .filter(|f| f != "default")
+        .filter(|f| f != "default" && f != "unsafe-heap")
         .collect();
     out.sort();
     out

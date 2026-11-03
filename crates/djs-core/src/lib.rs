@@ -2,6 +2,10 @@
 //!
 //! `no_std` + `alloc`. See ARCH.md at the repository root.
 #![no_std]
+// No `unsafe` in djs-core (AGENTS.md), except the arena's unchecked accessors in
+// heap/layout/access.rs with the `unsafe-heap` feature (D2520).
+#![cfg_attr(not(feature = "unsafe-heap"), forbid(unsafe_code))]
+#![cfg_attr(feature = "unsafe-heap", deny(unsafe_code))]
 
 extern crate alloc;
 

@@ -562,7 +562,9 @@ mod tests {
         Arena::new(1 << 20).alloc_init(8, 4, b"12345").unwrap();
     }
 
+    // With `unsafe-heap`, only debug builds check (D2520).
     #[test]
+    #[cfg(any(debug_assertions, not(feature = "unsafe-heap")))]
     #[should_panic]
     fn out_of_bounds_panics() {
         let mut a = Arena::new(1 << 20);

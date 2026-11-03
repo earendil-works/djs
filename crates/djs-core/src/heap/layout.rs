@@ -25,6 +25,8 @@
 
 use core::marker::PhantomData;
 
+mod access;
+
 use crate::value::Value;
 
 /// A raw, untyped reference to a cell: its arena offset, or 0 for null.
@@ -201,25 +203,20 @@ pub trait FieldType: Copy {
 // The field accessors are the innermost loop of everything (decode, parse, the
 // interpreter). `inline(always)` and fixed-size chunks keep them a bounds check plus one
 // load or store even at opt-level "z", where `copy_from_slice` stays a call (D1260).
+// The check itself, or none with `unsafe-heap`, is in `access` (D2520).
 #[inline(always)]
 fn read_array<const N: usize>(bytes: &[u8], off: usize) -> [u8; N] {
-    match bytes.get(off..).and_then(<[u8]>::first_chunk::<N>) {
-        Some(a) => *a,
-        None => out_of_bounds(off, N, bytes.len()),
-    }
+    access::read(bytes, off)
 }
 
 #[inline(always)]
 fn write_array<const N: usize>(bytes: &mut [u8], off: usize, v: [u8; N]) {
-    let len = bytes.len();
-    match bytes.get_mut(off..).and_then(<[u8]>::first_chunk_mut::<N>) {
-        Some(a) => *a = v,
-        None => out_of_bounds(off, N, len),
-    }
+    access::write(bytes, off, v)
 }
 
 // Release builds report no offsets: passing three arguments from each of the ~1,300
 // inlined accessor sites was ~16 KB of wasm (D1573). The bounds check itself stays.
+#[cfg_attr(feature = "unsafe-heap", allow(dead_code))]
 #[inline(always)]
 fn out_of_bounds(off: usize, n: usize, len: usize) -> ! {
     #[cfg(debug_assertions)]
@@ -234,6 +231,7 @@ fn out_of_bounds(off: usize, n: usize, len: usize) -> ! {
 }
 
 #[cfg(debug_assertions)]
+#[cfg_attr(feature = "unsafe-heap", allow(dead_code))]
 #[cold]
 #[inline(never)]
 fn out_of_bounds_at(off: usize, n: usize, len: usize) -> ! {
@@ -241,6 +239,7 @@ fn out_of_bounds_at(off: usize, n: usize, len: usize) -> ! {
 }
 
 #[cfg(not(debug_assertions))]
+#[cfg_attr(feature = "unsafe-heap", allow(dead_code))]
 #[cold]
 #[inline(never)]
 fn out_of_bounds_release() -> ! {

@@ -18,6 +18,9 @@ regexp-unicode-props = []
 # qjs: about 38 KB (20 KB gzipped) of wasm (D1760). Without it normalize throws for strings that would
 # need them, and localeCompare compares code points.
 unicode-normalization = []
+# Unchecked arena field access (D2520): heap/layout/access.rs reads and writes without a
+# bounds check (debug builds still assert it). Off by default; the gate runs both builds.
+unsafe-heap = []
 
 [dev-dependencies]
 # e2e tests start from the base snapshot like the embedders (a dev-dependency cycle,

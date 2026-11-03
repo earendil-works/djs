@@ -21,6 +21,8 @@ alloc-stats = []
 # Exports `djs_disasm` (bytecode listings) for the docs site's live examples (0113).
 # Off by default: the shipping module does not carry the disassembler.
 docs = []
+# Unchecked arena field access in djs-core (D2520); off in the shipped module.
+unsafe-heap = ["djs-core/unsafe-heap"]
 
 [dependencies]
 djs-core = { path = "../djs-core" }
