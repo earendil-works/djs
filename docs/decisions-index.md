@@ -514,3 +514,4 @@ topics when the index is next reorganized.
 - D2541: Instance memory: the arena kept at memory's end, lean start capacity, the coded base outside memory
 - D2522: `Vec::with_capacity` out of line (`buf::vec_with_capacity`)
 - D2552: reduce by argument count, its accumulator in the dense loop's state
+- D2433: Keyed string hashing for the VM's own atoms and Map/Set
