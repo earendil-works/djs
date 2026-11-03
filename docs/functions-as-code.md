@@ -31,8 +31,10 @@ readable.
   sharing stays shared and nothing in the user's code is rewritten.
 - **Current state, by default and only.** A dump captures values at the time of the dump.
   History (the scripts that built them) is the job of the host's journal.
-- **What cannot be written is refused, by path:** `p: a pending promise`,
-  `lib.run~cache: a Proxy`. Nothing is silently dropped.
+- **What cannot be written is refused, by path:** `w.cache: a weak collection`,
+  `lib.run~fmt: a decorated class (its decorators would run again)`. Nothing is silently
+  dropped. (Pending promises, suspended activations and Proxies are written since 0172:
+  docs/continuation-dumps.md.)
 - **Measured:** every one of the 300 harvested codemode cases and 2,607 of 2,627 private
   pi scripts (the rest do not compile or run in the harness, or end with a closure over a
   binding still in its TDZ) dump, load into a fresh VM and print the same bindings. A
@@ -259,6 +261,10 @@ instances of builtin subclasses are the builtin (`new Map(...)`, an array, `new
 Error(...)`, a settled promise) with their prototype set afterwards. Methods that use
 `super` in object literals are written in their home object's literal.
 
+Pending promises, suspended generators and async functions, Proxies, array/string/Map/Set
+iterators and arguments objects are written since 0172 (docs/continuation-dumps.md, "As
+built (0172)").
+
 What a class's evaluation still runs at load: its computed keys and its heritage path.
 Keys with side effects (`[counter++]()`) would run again; such classes are rare and the
 checker cannot see it.
@@ -269,20 +275,17 @@ Everything below fails the dump with one line per value, `path: reason`:
 
 | value | why |
 | --- | --- |
-| a pending promise | its reactions are live state of the run |
-| a suspended generator or async function | an activation, not a value (images and journals keep those) |
-| a Proxy | its behavior is its handler's code at every operation |
-| a host function the host does not re-bind by name | the host owns it |
+| a host function the host does not name (`DumpOptions::host_fn_name`) | the host owns it |
 | a decorated class | its decorators would run again at load |
 | a class whose heritage is an expression (`extends mixin(Base)`) | only a name or a path is bound to the parent (see "Classes") |
 | a function that uses a class's private names outside the class text (a closure a method returned) | only the class's text makes its private scope |
 | a private field of a class the dump does not hold, or whose code never uses the name | the loader finds private names through the recreated class's code |
 | a method that uses `super` written outside its object literal | its home object is the literal it is written in |
-| a binding in its TDZ, or a closure over one | there is no value to write |
+| a binding in its TDZ outside a scope group (a closure over one is written, its variable declared after the factory's `return`) | there is no value to write |
 | a captured `this`, `arguments` or `new.target` | not a variable a factory can declare |
 | a builtin's internal value, a builtin with no name | see "Builtins" |
 | a builtin whose prototype was changed | not expressible as a patch the base's builtins accept |
-| weak collections, WeakRef, FinalizationRegistry, resizable buffers, iterators | live or unordered state |
+| weak collections, WeakRef, FinalizationRegistry, resizable buffers, revoked Proxies, iterators other than array, string, Map and Set iterators | live or unordered state |
 | two captured variables of the same name in one group | a factory has one scope |
 | a function the checker finds reading another binding than before | see "The checker" |
 

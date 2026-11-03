@@ -11,9 +11,12 @@
 //! - Data are literals or constructor calls; an object reached twice or on a cycle is
 //!   made once as `$dump.nN`, others inline. Links that close cycles, non-default
 //!   property attributes and non-extensible objects are patched at the end.
-//! - Live things are refused with the path of the value: pending promises, suspended
-//!   generators, proxies, weak collections, host functions the host does not re-bind by
-//!   name, classes (not yet).
+//! - What is in flight (pending promises and their reactions, suspended activations,
+//!   open host calls, iterators) is written as the calls that recreate it
+//!   (dump_flight.rs, 0172). Closures that share variables of one name in several scopes
+//!   (a loop's per-iteration bindings) get nested factories.
+//! - Live things are refused with the path of the value: weak collections, host
+//!   functions the host does not name, decorated classes, ...
 //!
 //! The roots are top-level declarations of the Script (`let`/`const` for the global
 //! lexical record, `var`/`function` for the global object), so loading a dump into a

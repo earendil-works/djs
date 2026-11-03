@@ -216,6 +216,53 @@ As built (0171, D2583–D2585):
   call gets (else one past the largest open id). `handle(name, v)`: a heap handle the host
   gets back. `Vm::load_dump` returns the open calls and the handles; the VM is idle.
 
+### The exporter as built (0172, D2610–D2614)
+
+`Vm::dump(&DumpOptions { base, host, host_fn_name, handles }, names)` writes format 2 with
+whatever is in flight when the VM is idle (no frames, no jobs, no parked call, no result
+delivered and not applied yet; else it refuses: D2561). The host names its functions
+(`host_fn_name`, the inverse of the loader's `host_fn`) and the values it needs back
+(`handles`, written last as `$dump.handle(name, v)`; the exporter adds none itself: a host
+passes, say, its run's promise as "run").
+
+- **Roots:** the open async host calls (written first, in the host call table's order, as
+  `$dump.pending(id, name, args)`), the handles, the selected globals. Everything in
+  flight is found from them: a pending promise's reactions lead to the activations that
+  await it (and their frames), to `then` handlers and derived promises, to combinator and
+  resolving-function records.
+- **Pending promises** are written by what made them: an open call, an activation (its
+  result promise is `$dump.resume`'s), reaction `j` of another promise (`then`, `catch`,
+  `finally` called again with the same handlers), a combinator (`Promise.all`/
+  `allSettled`/`any` called again with the settled elements' values, or rejected promises
+  for their reasons, in place), `new Promise((res, rej) => ...)` when resolving functions
+  are held (user code's, `race`'s, an async function that returned a promise), else
+  `new Promise(() => {})`. Each promise's reactions are added in their order; a dump
+  whose dependencies would add them in another order is refused. Data that holds such a
+  promise gets it by a patch at the end, so an activation can need that data first.
+- **Activations:** the suspension map comes from compiling the function's script again
+  with the options it was compiled with (Script cells keep them, `Script::OPTIONS` and
+  `Script::PARAMS`; D2610), into the dump's scratch copy of the base. The frame is read
+  by the map: parameters and bindings in scope by name (`name@scope` when shadowed), the
+  `arguments` object if the function has one, operands by role, loops as `{kind,
+  iterator, next}`, an async generator's request queue. Bindings that closures share are
+  handed over as `$dump.cell`s from their factory (`$cN` keys). Every `$dump.resume` line
+  has a comment above it: the function, the site, its `file:line:col`, and the source
+  line with a caret under the `await`/`yield`. Generators that have not started are
+  called again (their parameters must run no code); finished ones are made finished.
+- **Re-enacted iterators:** array, string (by code points), Map and Set iterators are
+  made on their target and advanced (`$dump.advance`); a collection only an iterator
+  holds is made again with its entries. A `for await` over a sync iterable gets the
+  dump's own async-from-sync iterator (`$dump.fromSync`, which steps the same way: the
+  object is never visible to user code). Proxies are `new Proxy(target, handler)`.
+- **Still refused, with their path:** sites the maps call unsupported (`finally`, `using`,
+  destructuring, `yield*`, closing an async iterator), for-in loops, revoked Proxies,
+  iterator helpers and RegExp string iterators, weak collections, a generator object
+  with another prototype or own properties, keyed combinators (`allKeyed`), an async
+  generator awaiting a `return()` value, then-reactions on promises of other
+  constructors.
+- **Not carried:** the VM's clock and `Math.random`'s state are the host's to set again;
+  unhandled-rejection bookkeeping of promises the session has not looked at yet.
+
 ### Re-enactment
 
 Builtin state in flight is written as the calls that make it, wherever the spec makes the

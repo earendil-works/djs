@@ -1,6 +1,6 @@
 # 0172: Exporter: continuations, re-enactment, and the dump-every-idle stress mode
 
-status: in-progress
+status: done
 agent: portable
 branch: issue/0172-dump-exporter
 depends-on: 0171, 0173
@@ -13,23 +13,23 @@ guide: -
 fresh VM, continue, same transcript.
 
 ## Acceptance criteria
-- [ ] Dumping requires an idle VM (D2561) and refuses otherwise with the reason.
-- [ ] Roots: the host's handles and open host calls, plus the selected bindings; activations
+- [x] Dumping requires an idle VM (D2561) and refuses otherwise with the reason.
+- [x] Roots: the host's handles and open host calls, plus the selected bindings; activations
       found through promise reactions and generator objects, written in dependency order with
       the sites and roles from 0169.
-- [ ] Re-enactment (D2562): promise combinators with settled elements, then/catch/finally
+- [x] Re-enactment (D2562): promise combinators with settled elements, then/catch/finally
       reactions in order, resolving functions, array/Map/Set/string/regexp-string iterators,
       for-await and async-from-sync iterator state. Anything else in flight is refused with its
       path.
-- [ ] Unit round trips per construct (each role, each loop kind, each re-enactment) and
+- [x] Unit round trips per construct (each role, each loop kind, each re-enactment) and
       refusal tests.
-- [ ] difftest `--dump-every-idle` over codemode and codemode-harvest (needs 0173's idle
+- [x] difftest `--dump-every-idle` over codemode and codemode-harvest (needs 0173's idle
       points): a transcript that differs from the plain djs run is a hard failure. Added to
       the gate next to `--suspend-every 97`; TESTING.md updated.
-- [ ] e2e: `DJS_E2E_MODE=dump`.
-- [ ] Coverage: vm::dump_harvest at every idle point of the harvested cases and of the private
+- [x] e2e: `DJS_E2E_MODE=dump`.
+- [x] Coverage: vm::dump_harvest at every idle point of the harvested cases and of the private
       scripts (counts by refusal reason) in the result. Target: every harvested idle point.
-- [ ] Measure the dumper's wasm size (feature `dump`) before and after.
+- [x] Measure the dumper's wasm size (feature `dump`) before and after.
 
 ## Log
 - 2026-11-04 (portable): interfaces (answered for 0179/example and 0174/repl):
@@ -42,7 +42,56 @@ fresh VM, continue, same transcript.
 - Script cells keep their compile options (`Script::OPTIONS`, `Script::PARAMS`), so the
   exporter compiles an activation's script again exactly as it was (into the scratch base
   heap; immediates are fixed width, so pcs agree).
+- Exporter (vm/dump_flight.rs, a child module of dump.rs): idle check; roots (open calls
+  in table order, handles, globals); discovery through pending promises' reactions,
+  activations (frames read by the map from compiling the function's script again with
+  its stored options into the scratch base heap), builtin closures (resolving functions,
+  combinator elements, finally, async-from-sync), Records; creators of pending promises
+  and reactions in order with a cursor per promise (D2610). Site comments over every
+  resume (asked by example/0179).
+- Found on the way: scope groups could not hold two variables of one name (the corpus
+  prelude's per-iteration `impl`/`name`): nested factories (D2611). Frozen arrays lost
+  their elements in dumps (elements live in properties): fixed (`array_element`). A
+  parameter slot both in `args` and `bindings` was inlined once and empty the second
+  time: parameters count as two references now (found by the private scripts).
+- Re-enactments: then/catch/finally, combinators (settled elements in place, dead ones
+  when the result already settled), resolving functions (`new Promise` + `$dump.rN`,
+  `$dump.spent()` when settled), race, async functions returning promises, array/string/
+  Map/Set iterators, collections only an iterator holds, `for await` over sync iterables
+  (`$dump.fromSync`), unstarted and finished generators, arguments objects, Proxies
+  (D2612).
+- Tests: tests/dump/v2/*.src.js round-trip at every idle point (plan, roles, generator,
+  asyncgen, combinators, loops, cells, steps (example's scenario, also kept as an exported
+  golden fixture steps.dump.js), reenact, cycles); refusals (non-idle VM, delivered result,
+  unnamed host functions); value round trips for pending promises, generators, Proxies,
+  frozen records.
+- Gate: difftest `--dump-every-idle` in the main djs step (1,194 idle points, all
+  identical, ~15 CPU-s debug); e2e dump mode in the default modes (52 round-trip, 11
+  refused); TESTING.md (D2613).
+- Coverage (`vm::dump_harvest::idle_harvest_coverage`/`idle_extract_coverage`): harvest
+  1,164 idle points in 288 cases, all dumped/loaded/equal; private scripts (1,312 cases
+  regenerated with scripts/harvest/build.py from work/scratch/0130/extract.jsonl into
+  work/scratch/0172/private, so their fakes answer through `later`; the 0167 extraction
+  has no idle points): 5,257 idle points in 1,260 cases, all dumped, loaded and equal.
+- Size (D2614): dump module 507,129 -> 537,056 gz; default 443,610 -> 443,813 (Script
+  options). Docs: continuation-dumps.md "The exporter as built", functions-as-code.md
+  refusal table; guide: none affected.
 
 ## Follow-ups
+- for-in loops in activations; sites the maps call unsupported (finally, using,
+  destructuring, yield*, closing async iterators); iterator helpers, RegExp string
+  iterators; allKeyed; async generators awaiting a `return()`.
+- The VM's clock and Math.random state are not in dumps (the host sets them again).
+- Trim the dumper's size (+29.9 KB gz in the dump module).
+- A dump per idle point copies the base image (Dumper::new) and compiles twice (maps,
+  checker): ~13 ms per idle point in debug; cache the base copy if the leg gets slow.
+- Sandbox/wasm (0175/0179): `vm_dump` needs host_fn_name and handles staged, `vm_load_dump`
+  host_fn (example has it on its branch).
 
 ## Result
+Landed: `Vm::dump` writes what is in flight (format 2): open calls, pending promises with
+their reactions in order, suspended activations (by the suspension maps, with a site
+comment each), generators, iterators, Proxies, arguments objects; `DumpOptions {
+host_fn_name, handles }`; `$dump.host`. Gate: difftest `--dump-every-idle` over the corpus
+(1,194 idle points, identical), e2e dump mode. Coverage: every harvested and private idle
+point dumps, loads and continues identically. Known gaps: see Follow-ups.

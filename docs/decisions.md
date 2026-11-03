@@ -8057,3 +8057,80 @@ the REPL's waiting inputs, labelled by name (`[run] value`); `resume` drops them
 to the end like `run`. Dumping a waiting session (`.dump`, `.dump-every`,
 `run --dump-after`, `run --dump-every-idle`) refuses with a message naming the missing
 exporter (0172) until it exists.
+## D2610: The exporter writes what is in flight as the calls that make it
+date: 2026-11-04 · by: portable · issue: 0172
+`Vm::dump` writes format 2 with whatever is in flight when the VM is idle (D2561; refused
+otherwise, also with a delivered host result not applied yet). The roots are the open
+async host calls (first, in table order, `$dump.pending(id, name, args)`), the host's
+handles (`DumpOptions::handles`, last, `$dump.handle`) and the globals; the host names its
+functions (`DumpOptions::host_fn_name`, the inverse of `LoadOptions::host_fn`), which
+also writes host functions held as values (`$dump.host(name, isAsync)`, a loader
+primitive). A pending promise is written by what made it (an open call, an activation,
+reaction `j` of another promise, a combinator, `new Promise` handing out its resolving
+functions, else `new Promise(() => {})`), and each promise's reactions are added in their
+original order (activations by `$dump.resume`, `then`/`catch`/`finally` called again,
+combinators called again with the settled elements in place); a dependency that would
+change that order refuses the dump. Promises that data holds are patched into it at the
+end, so an activation can need that data first. Activations are read by their function's
+suspension map, which the exporter gets by compiling the function's script again into its
+scratch copy of the base with the options it was compiled with: Script cells now keep
+them (`Script::OPTIONS`, the goal and TypeScript/decorator flags; `Script::PARAMS`, an
+async body's parameters), so a TypeScript or async-body script maps exactly (immediates
+are fixed width, so pcs agree across heaps). The layout changed (images key on it); cost
+in the default module +203 B gzip (443,610 -> 443,813: the two fields and the params
+string; `join` was avoided, its generic copy alone is 1.3 KB). Rejected: guessing the
+options (a wrong guess would name the wrong slots, never refuse), describing reaction
+records by schema (D2562).
+
+## D2611: Variables of one name in several scopes get nested factories
+date: 2026-11-04 · by: portable · issue: 0172
+A scope group (closures and the variables they share, D2353) wrote every variable in one
+factory, so two variables of the same name (a loop's per-iteration bindings captured by
+the closures of each iteration, as in the corpus prelude's `tools`) were refused. Now each
+variable whose name is not unique in the group lives in a nested factory of its own, one
+per set of closures that capture it; those sets must nest or be disjoint (else refused),
+other variables go to the deepest factory whose closures include all of theirs, and a
+closure is written in the deepest factory that holds it. Nested factories return their
+closures and spread into their parent's returned object; keys stay unique in the group.
+Cells an activation shares are returned as `$cN`; a variable in its TDZ is declared after
+its factory's `return`, so it stays uninitialized and closures over it are written.
+Classes in a nested factory are refused.
+
+## D2612: Re-enactments of iterators and for-await state
+date: 2026-11-04 · by: portable · issue: 0172
+Array iterators and Map/Set iterators are made on their target and advanced by `next()`
+(`$dump.advance`; nothing user-visible runs), string iterators by code points; a Map or
+Set that only an iterator holds is made again from its live entries. The iterator a `for
+await` over a sync iterable makes (CreateAsyncFromSyncIterator, never visible to user
+code) is replaced by the dump's own `$dump.fromSync(it, next)`, whose `next`/`return`/
+`throw` step like 27.1.6 (PromiseResolve of the value, one `then`, closing the sync
+iterator on a rejection), and its in-flight reactions by the equivalent handlers; job
+counts are the same. A generator that has not started is called again
+(`Reflect.apply(fn, this, args)`, only when its parameter list runs no code: no defaults,
+no destructuring); a finished one is a new finished generator with its prototype.
+Arguments objects are made by a strict function's `arguments` when they are as a call
+made them. Proxies are `new Proxy(target, handler)` (revoked ones refused). Rejected:
+loader primitives for these (they would put builtin state shapes into the format).
+
+## D2613: The gate dumps at every idle point of the corpus
+date: 2026-11-04 · by: portable · issue: 0172
+difftest `--dump-every-idle` dumps the VM at every idle point (the corpus prelude's state
+included, its `api` as a handle), loads the dump into a fresh VM and continues there; the
+transcript must equal the plain run's and a refused dump fails the case. It runs in the
+gate's main difftest step: 1,194 idle points in 294 cases at 0172, about 15 CPU-s in a
+debug build. e2e gets a fourth mode, dump, in its default modes: each case's final state is
+dumped, loaded and dumped again twice; the second round must reproduce itself (the first
+may order globals differently); refusals are counted (52 round-trip, 11 refuse at 0172:
+decorators, private names outside their class, iterator helpers, weak collections).
+`vm::dump_harvest::idle_*` count the same at every idle point of the harvested cases and of
+private scripts (counts only): 1,164 and 5,257 idle points at 0172, all dumped, loaded and
+equal.
+
+## D2614: The dumper's size in the dump module
+date: 2026-11-04 · by: portable · issue: 0172
+Continuations cost the `dump` module (default wasm build + `dump`, gzip -9, same toolchain)
+507,129 -> 537,056 B (+29.9 KB, +93 KB raw): the in-flight discovery and emission, nested
+factories, site comments, and the helpers' JavaScript (`fromSync`, `advance`, `spent`).
+Accepted for now: whether the dumper ships in the main module or in a second module of the
+same build is 0177's measurement (D2564), and the plan leans to the second module, where
+the main module pays nothing. Trimming is a follow-up.
