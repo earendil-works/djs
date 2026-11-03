@@ -1,7 +1,7 @@
 # 0180: The dump format without comments
 
-status: open
-agent: -
+status: in-progress
+agent: nocomment
 branch: issue/0180-dump-no-comments
 depends-on: 0172 (lands first; both edit vm/dump*.rs)
 guide: -
