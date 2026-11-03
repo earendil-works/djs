@@ -4,6 +4,7 @@ mod heap;
 mod repl;
 mod run;
 mod strip;
+mod tools;
 
 const USAGE: &str = "usage: djs <command> ...\n\
   djs run [--body] [--ts] [--gc-stress] [--suspend-every N] [--backend B] <file.js>\n\

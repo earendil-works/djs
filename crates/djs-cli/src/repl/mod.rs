@@ -5,26 +5,30 @@
 //! limit and `.suspend-every`. With stdin not a terminal it reads lines without prompts
 //! or editing (line mode, for tests and pipes).
 
+mod activations;
 mod complete;
 mod input;
 mod inspect;
 mod term;
 
+use std::collections::HashMap;
 use std::io::{BufRead, IsTerminal, Write};
 use std::time::Instant;
 
 use djs_core::bytecode::template::disasm_template;
 use djs_core::compiler::{self, CompileError, CompileErrorKind, CompileOptions};
-use djs_core::heap::{ObjectClass, Ref};
+use djs_core::heap::{Handle, ObjectClass, Ref};
 use djs_core::value::Value;
-use djs_core::vm::{ExecOptions, Status, Vm, VmOptions};
+use djs_core::vm::{ErrorKind, ExecOptions, Status, Vm, VmOptions};
 
 use crate::run::{CONSOLE_LOG, now_ms};
+use crate::tools::{self, MAKE_TOOL, Tools};
 use input::SCRIPT_COMPLETION_VALUES;
 use term::{Input, Terminal};
 
-const USAGE: &str = "usage: djs repl [--ts] [--gc-stress] [--no-history]\n\
+const USAGE: &str = "usage: djs repl [--ts] [--gc-stress] [--no-history] [--tools answers.json]\n\
   --ts            parse inputs as TypeScript (.ts toggles it)\n\
+  --tools FILE    answer tools.x(...) calls from FILE (docs/cli.md); others wait for .resolve\n\
   --gc-stress     collect garbage at every safepoint\n\
   --no-history    do not read or write the history file ($DJS_HISTORY, ~/.djs_history)";
 
@@ -58,6 +62,14 @@ const HELP: &str = "\
                       with a fresh VM that ran a .dump file
 .clear                start over with a fresh VM
 
+tools.<name>(args) is an async host call: an input that waits on one returns to the
+prompt and prints its value when it settles.
+.pending              the open tool calls
+.resolve <id> <json>  answer call #id with a JSON value
+.reject <id> <msg>    answer call #id with an Error
+.bt <id|all>          the suspended activations waiting on call #id (or all of
+                      them), where they stopped and their bindings
+
 Ctrl-C cancels the line, or stops a running input between fuel slices.
 Input continues on the next line while it is incomplete (an unclosed bracket, string
 template or comment). Top-level let/const/class/function persist (Script globals).";
@@ -71,8 +83,21 @@ pub fn main(args: &[String]) -> i32 {
     let mut typescript = false;
     let mut gc_stress = false;
     let mut history = true;
-    for a in args {
+    let mut answers = None;
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
         match a.as_str() {
+            "--tools" => match it.next().map(|p| tools::read_answers(p)) {
+                Some(Ok(a)) => answers = Some(a),
+                Some(Err(e)) => {
+                    eprintln!("djs: {e}");
+                    return 2;
+                }
+                None => {
+                    eprintln!("{USAGE}");
+                    return 2;
+                }
+            },
             "--ts" => typescript = true,
             "--gc-stress" => gc_stress = true,
             "--no-history" => history = false,
@@ -93,6 +118,7 @@ pub fn main(args: &[String]) -> i32 {
     };
     let mut repl = Repl::new(gc_stress);
     repl.typescript = typescript;
+    repl.tools = Tools::with_answers(answers);
     match term {
         Some(t) => {
             let path = history.then(history_path).flatten();
@@ -129,6 +155,14 @@ enum Step {
     Quit,
 }
 
+/// An input whose promise is still pending: it waits on tool calls.
+struct Waiting {
+    input: u32,
+    promise: Handle,
+    /// An expression input (`[value]`): its value prints when it settles.
+    show: bool,
+}
+
 /// How a run ended.
 enum Outcome {
     Done(Value),
@@ -152,6 +186,18 @@ struct Repl {
     step: Option<u64>,
     /// Line mode: the lines still to read (the `step>` prompt reads from them too).
     source: Option<Box<dyn Iterator<Item = String>>>,
+    tools: Tools,
+    /// Inputs evaluated so far (numbers the inputs).
+    inputs: u32,
+    waiting: Vec<Waiting>,
+    /// What issued each open call: `input 3`, `.resolve 1`.
+    origins: HashMap<u32, String>,
+    /// The origin of calls made now.
+    current: String,
+    /// Calls made during the current run, reported as waiting when it stops.
+    fresh: Vec<u32>,
+    /// The last run announced a waiting call.
+    announced: bool,
 }
 
 impl Repl {
@@ -169,7 +215,23 @@ impl Repl {
             decorator_metadata: false,
             step: None,
             source: None,
+            tools: Tools::default(),
+            inputs: 0,
+            waiting: Vec::new(),
+            origins: HashMap::new(),
+            current: String::new(),
+            fresh: Vec::new(),
+            announced: false,
         }
+    }
+
+    /// Replaces the VM; waiting inputs belong to the old one.
+    fn replace_vm(&mut self, vm: Vm) {
+        self.vm = vm;
+        self.waiting.clear();
+        self.origins.clear();
+        self.fresh.clear();
+        self.tools.rescan(&mut self.vm);
     }
 
     /// Line mode: no prompts, no editing.
@@ -353,11 +415,15 @@ impl Repl {
         let start = Instant::now();
         let plan = self.plan(src, last, expr, filename);
         self.last_fuel = 0;
+        if !matches!(plan, Plan::Incomplete) {
+            self.inputs += 1;
+            self.current = format!("input {}", self.inputs);
+        }
         match plan {
             Plan::Incomplete => return false,
             Plan::Error(e) => println!("{e}"),
             Plan::Expr(f) => {
-                if let Some(v) = self.run_body(f) {
+                if let Some(v) = self.run_body(f, true) {
                     let v = match v.as_object() {
                         Some(a) => self
                             .vm
@@ -387,10 +453,11 @@ impl Repl {
                 let body = self.vm.heap().get_handle(h);
                 self.vm.heap_mut().drop_handle(h);
                 if ok {
-                    self.run_body(body);
+                    self.run_body(body, false);
                 }
             }
         }
+        self.check_waiting();
         self.report_rejections();
         if self.time {
             let ms = start.elapsed().as_secs_f64() * 1000.0;
@@ -401,7 +468,9 @@ impl Repl {
 
     /// Runs an async body to its promise's settlement. Returns the fulfillment value; a
     /// rejection is reported.
-    fn run_body(&mut self, f: Value) -> Option<Value> {
+    /// If it waits on tool calls, it is kept as a waiting input and `None` is returned;
+    /// `show`: print its value once it settles.
+    fn run_body(&mut self, f: Value, show: bool) -> Option<Value> {
         let Outcome::Done(p) = self.report(f) else {
             return None;
         };
@@ -410,6 +479,18 @@ impl Repl {
             Some(Some(Ok(v))) => Some(v),
             Some(Some(Err(e))) => {
                 self.print_uncaught(e);
+                None
+            }
+            Some(None) if !self.vm.pending_host_calls().is_empty() => {
+                if !self.announced {
+                    println!("[input {} waiting]", self.inputs);
+                }
+                let promise = self.vm.heap_mut().new_handle(p).expect("out of memory");
+                self.waiting.push(Waiting {
+                    input: self.inputs,
+                    promise,
+                    show,
+                });
                 None
             }
             Some(None) => {
@@ -451,6 +532,13 @@ impl Repl {
         if self.vm.call(f, this, &[]).is_err() {
             return Outcome::Stopped("djs: the VM is busy".into());
         }
+        self.pump(true)
+    }
+
+    /// Runs the VM until it stops: done, threw, or idle with only tool calls left (it
+    /// answers those it has scripted answers for). `entry`: a call was started, so its
+    /// outcome is the result; otherwise (after `.resolve`) the outcome is an old one.
+    fn pump(&mut self, entry: bool) -> Outcome {
         let mut used: u64 = 0;
         // `.step`: pause at every slice until `c`.
         let mut stepping = self.step.is_some();
@@ -465,9 +553,20 @@ impl Repl {
             let (st, n) = self.vm.run_metered(slice);
             used += n;
             match st {
-                Status::Done(v) => break Outcome::Done(v),
-                Status::Idle => break Outcome::Done(Value::UNDEFINED),
-                Status::Threw(e) => break Outcome::Threw(e),
+                Status::Done(v) if entry => break Outcome::Done(v),
+                Status::Threw(e) if entry => break Outcome::Threw(e),
+                Status::Done(_) | Status::Threw(_) => break Outcome::Done(Value::UNDEFINED),
+                Status::Idle => {
+                    self.note_new_calls();
+                    if self.answer_one() {
+                        continue;
+                    }
+                    break match self.vm.outcome() {
+                        Some(Ok(v)) if entry => Outcome::Done(v),
+                        Some(Err(e)) if entry => Outcome::Threw(e),
+                        _ => Outcome::Done(Value::UNDEFINED),
+                    };
+                }
                 Status::HostOutOfMemory => break Outcome::Stopped("out of host memory".into()),
                 Status::OutOfFuel => {
                     if self.term.as_mut().is_some_and(|t| t.interrupted()) {
@@ -499,6 +598,10 @@ impl Repl {
                             .expect("a valid heap image");
                     }
                 }
+                Status::HostCall {
+                    call_id,
+                    fn_id: MAKE_TOOL,
+                } => self.tools.make(&mut self.vm, call_id),
                 Status::HostCall { call_id, fn_id } => {
                     let info = self.vm.host_call(call_id).expect("parked call");
                     let result = if fn_id == CONSOLE_LOG {
@@ -520,7 +623,193 @@ impl Repl {
             }
         };
         self.last_fuel += used;
+        self.note_new_calls();
+        let fresh = std::mem::take(&mut self.fresh);
+        let pending = self.vm.pending_host_calls();
+        self.announced = false;
+        for id in fresh.into_iter().filter(|id| pending.contains(id)) {
+            self.announced = true;
+            println!("[waiting] #{id} {}", self.tools.describe(&mut self.vm, id));
+        }
         outcome
+    }
+
+    /// Records the tool calls made since the last look.
+    fn note_new_calls(&mut self) {
+        for id in self.vm.new_host_calls() {
+            self.origins.insert(id, self.current.clone());
+            self.fresh.push(id);
+        }
+    }
+
+    /// Answers the oldest open call the answers file has an answer for.
+    fn answer_one(&mut self) -> bool {
+        if !self.tools.has_answers() {
+            return false;
+        }
+        for id in self.vm.pending_host_calls() {
+            let desc = self.tools.describe(&mut self.vm, id);
+            if let Some(r) = self.tools.answer(&mut self.vm, id) {
+                println!("[answered] #{id} {desc}");
+                self.fresh.retain(|&c| c != id);
+                self.origins.remove(&id);
+                self.vm.resolve_host_call(id, r).expect("an open call");
+                self.current = format!("answer #{id}");
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Prints the inputs that settled and forgets them.
+    fn check_waiting(&mut self) {
+        let mut i = 0;
+        while i < self.waiting.len() {
+            let w = &self.waiting[i];
+            let p = self.vm.heap().get_handle(w.promise);
+            let (input, show) = (w.input, w.show);
+            match self.vm.promise_state(p) {
+                Some(Some(r)) => {
+                    match r {
+                        Ok(v) if show => {
+                            let v = v
+                                .as_object()
+                                .and_then(|a| self.vm.heap().get_element_fast(a, 0))
+                                .unwrap_or(Value::UNDEFINED);
+                            println!("[input {input}] {}", inspect::inspect(self.vm.heap(), v));
+                        }
+                        Ok(_) => {}
+                        Err(e) => println!(
+                            "[input {input}] Uncaught {}",
+                            inspect::inspect(self.vm.heap(), e)
+                        ),
+                    }
+                    let w = self.waiting.remove(i);
+                    self.vm.heap_mut().drop_handle(w.promise);
+                }
+                _ => i += 1,
+            }
+        }
+    }
+
+    /// `.resolve <id> <json>` / `.reject <id> <message>`.
+    fn settle(&mut self, arg: &str, ok: bool) {
+        let (id, rest) = match arg.split_once(char::is_whitespace) {
+            Some((i, r)) => (i, r.trim()),
+            None => (arg, ""),
+        };
+        let Some(id) = id.trim_start_matches('#').parse::<u32>().ok() else {
+            println!("usage: .resolve <id> <json> or .reject <id> <message>");
+            return;
+        };
+        if !self.vm.pending_host_calls().contains(&id) {
+            println!("no open call #{id} (.pending lists them)");
+            return;
+        }
+        let result = if ok {
+            let text = if rest.is_empty() { "null" } else { rest };
+            match tools::parse_json(&mut self.vm, text) {
+                Ok(v) => Ok(v),
+                Err(e) => {
+                    println!("not JSON: {e}");
+                    return;
+                }
+            }
+        } else {
+            Err(self.vm.new_error(ErrorKind::Error, rest).expect("oom"))
+        };
+        self.vm.resolve_host_call(id, result).expect("an open call");
+        self.origins.remove(&id);
+        self.current = format!(".resolve {id}");
+        self.vm.set_now(now_ms());
+        if let Outcome::Stopped(why) = self.pump(false) {
+            println!("{why}");
+        }
+        self.check_waiting();
+        self.report_rejections();
+    }
+
+    /// `.pending`: the open calls, what issued them and where the code waits.
+    fn pending(&mut self) {
+        let ids = self.vm.pending_host_calls();
+        if ids.is_empty() {
+            println!("no open calls");
+        }
+        for id in ids {
+            let desc = self.tools.describe(&mut self.vm, id);
+            let mut line = format!("#{id} {desc}");
+            if let Some(o) = self.origins.get(&id) {
+                line.push_str(&format!("  {o}"));
+            }
+            let heap = self.vm.heap();
+            if let Some(p) = activations::call_promise(heap, id)
+                && let Some(&g) = activations::waiting_on(heap, p).first()
+                && let Some(a) = activations::activation(heap, g)
+            {
+                line.push_str(&format!(", at {}", a.at));
+            }
+            println!("{line}");
+        }
+    }
+
+    /// `.bt <id|all>`: suspended activations with their bindings.
+    fn backtrace_cmd(&mut self, arg: &str) {
+        // Dead activations would be listed too.
+        if arg == "all"
+            && let Err(e) = self.vm.collect()
+        {
+            println!("collection failed: {e:?}");
+            return;
+        }
+        let inputs: Vec<(Value, u32)> = self
+            .waiting
+            .iter()
+            .map(|w| (self.vm.heap().get_handle(w.promise), w.input))
+            .collect();
+        let print = |a: &activations::Activation| {
+            let input = inputs
+                .iter()
+                .find(|(p, _)| *p == a.promise)
+                .map(|(_, n)| format!(" (input {n})"))
+                .unwrap_or_default();
+            println!("  {} at {}{input}", a.what, a.at);
+            if !a.bindings.is_empty() {
+                let b: Vec<String> = a
+                    .bindings
+                    .iter()
+                    .map(|(k, v)| format!("{k} = {v}"))
+                    .collect();
+                println!("    {}", b.join(", "));
+            }
+        };
+        if arg == "all" {
+            let all = activations::all(self.vm.heap());
+            if all.is_empty() {
+                println!("no suspended activations");
+            }
+            all.iter().for_each(print);
+            return;
+        }
+        let Some(id) = arg.trim_start_matches('#').parse::<u32>().ok() else {
+            println!("usage: .bt <id|all>");
+            return;
+        };
+        let heap = self.vm.heap();
+        let Some(p) = activations::call_promise(heap, id) else {
+            println!("no open call #{id} (.pending lists them)");
+            return;
+        };
+        let gens = activations::waiting_on(heap, p);
+        let acts: Vec<_> = gens
+            .iter()
+            .filter_map(|&g| activations::activation(heap, g))
+            .collect();
+        let desc = self.tools.describe(&mut self.vm, id);
+        println!("#{id} {desc}");
+        if acts.is_empty() {
+            println!("  no suspended activation waits on it");
+        }
+        acts.iter().for_each(print);
     }
 
     /// The `step>` prompt of a paused input: shows where it stands, reads commands until
@@ -662,12 +951,16 @@ impl Repl {
                 }
             }
             ".heap" => self.heap_report(arg),
+            ".pending" => self.pending(),
+            ".resolve" if !arg.is_empty() => self.settle(arg, true),
+            ".reject" if !arg.is_empty() => self.settle(arg, false),
+            ".bt" if !arg.is_empty() => self.backtrace_cmd(arg),
             ".snapshot" if !arg.is_empty() => self.snapshot(arg),
             ".dump" if !arg.is_empty() => self.dump(arg),
             ".restore" if !arg.is_empty() => match std::fs::read(arg) {
                 Ok(bytes) if bytes.starts_with(djs_core::vm::dump::HEADER.as_bytes()) => {
                     let src = String::from_utf8_lossy(&bytes).into_owned();
-                    self.vm = new_vm(self.gc_stress);
+                    self.replace_vm(new_vm(self.gc_stress));
                     self.eval_named(&src, false, false, arg);
                     println!("a fresh VM with the bindings of {arg}");
                 }
@@ -683,8 +976,9 @@ impl Repl {
                     let what = snap.describe();
                     match Vm::from_bytes(snap.image, self.vm.options()) {
                         Ok(vm) => {
-                            self.vm = vm;
+                            self.replace_vm(vm);
                             println!("restored {n} bytes from {arg} ({what})");
+                            self.pending_after_restore();
                         }
                         Err(e) => println!("not a heap image of this build: {e}"),
                     }
@@ -692,7 +986,7 @@ impl Repl {
                 Err(e) => println!("cannot read {arg}: {e}"),
             },
             ".clear" => {
-                self.vm = new_vm(self.gc_stress);
+                self.replace_vm(new_vm(self.gc_stress));
                 println!("a fresh VM");
             }
             ".disasm" if !arg.is_empty() => self.disasm(arg),
@@ -708,7 +1002,7 @@ impl Repl {
         let names: Vec<&str> = parts.collect();
         let opts = djs_core::vm::dump::DumpOptions {
             base: djs_prelude::BASE,
-            host: &["console"],
+            host: &["console", "tools"],
         };
         let sel = (!names.is_empty()).then_some(names.as_slice());
         match self.vm.dump(&opts, sel) {
@@ -718,6 +1012,13 @@ impl Repl {
                 Err(e) => println!("cannot write {file}: {e}"),
             },
             Err(e) => println!("{}", e.message()),
+        }
+    }
+
+    /// After a restore: the calls the image still has open.
+    fn pending_after_restore(&mut self) {
+        for id in self.vm.pending_host_calls() {
+            println!("waiting: #{id} {}", self.tools.describe(&mut self.vm, id));
         }
     }
 
@@ -744,7 +1045,9 @@ impl Repl {
         if let Some(body) = input::expression_body(src)
             && let Ok(f) = self.compile(&body, true, FILENAME)
         {
-            let Some(v) = self.run_body(f) else { return };
+            let Some(v) = self.run_body(f, true) else {
+                return;
+            };
             let v = v
                 .as_object()
                 .and_then(|a| self.vm.heap().get_element_fast(a, 0))
@@ -934,5 +1237,6 @@ fn new_vm(gc_stress: bool) -> Vm {
     }
     vm.define_global("console", Value::object(console))
         .expect("oom");
+    tools::install(&mut vm);
     vm
 }

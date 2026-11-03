@@ -1,9 +1,10 @@
 //! `djs run [--body] [--ts] [--experimental-decorators] [--emit-decorator-metadata]
-//! [--gc-stress] [--suspend-every N] [--backend B] <file.js>`: run a script,
-//! serving `console.log` as a sync host call.
+//! [--gc-stress] [--suspend-every N] [--backend B] [--tools answers.json] <file.js>`: run
+//! a script, serving `console.log` as a sync host call and, with `--tools`, `tools.x()`
+//! as async host calls answered from the file (0174).
 //!
-//! Exit codes: 0 ok, 1 uncaught exception (printed as `Uncaught Name: message`), 2 usage
-//! or compile error.
+//! Exit codes: 0 ok, 1 uncaught exception (printed as `Uncaught Name: message`) or a tool
+//! call the answers file has no answer for, 2 usage or compile error.
 
 use std::io::Write;
 
@@ -11,9 +12,11 @@ use djs_core::compiler::{CompileErrorKind, CompileOptions};
 use djs_core::value::Value;
 use djs_core::vm::{ExecOptions, Status, Vm, VmOptions};
 
+use crate::tools::{MAKE_TOOL, Tools};
+
 const USAGE: &str = "usage: djs run [--body] [--ts] [--experimental-decorators]\n\
                 [--emit-decorator-metadata] [--gc-stress] [--suspend-every N] [--backend B]\n\
-                <file.js>\n\
+                [--tools answers.json] <file.js>\n\
   --body             run as a codemode async body with parameters (tools, console)\n\
   --ts               parse as TypeScript (the default for .ts files)\n\
   --experimental-decorators\n\
@@ -23,11 +26,14 @@ const USAGE: &str = "usage: djs run [--body] [--ts] [--experimental-decorators]\
   --gc-stress        collect garbage at every safepoint\n\
   --suspend-every N  run N fuel at a time; at every stop, continue in a fresh VM\n\
                      restored from the heap image\n\
-  --backend B        run the @native builtins as `native` code (default) or `bytecode`";
+  --backend B        run the @native builtins as `native` code (default) or `bytecode`\n\
+  --tools FILE       a global `tools` whose calls are async host calls answered from\n\
+                     FILE, one at a time whenever the run is idle (docs/cli.md)";
 
 pub fn main(args: &[String]) -> i32 {
     let mut opts = RunOptions::default();
     let mut path = None;
+    let mut tools = Tools::default();
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -39,6 +45,20 @@ pub fn main(args: &[String]) -> i32 {
                 opts.emit_decorator_metadata = true;
             }
             "--gc-stress" => opts.gc_stress = true,
+            "--tools" => match it.next().map(|p| crate::tools::read_answers(p)) {
+                Some(Ok(a)) => {
+                    opts.tools = true;
+                    tools = Tools::with_answers(Some(a));
+                }
+                Some(Err(e)) => {
+                    eprintln!("djs: {e}");
+                    return 2;
+                }
+                None => {
+                    eprintln!("{USAGE}");
+                    return 2;
+                }
+            },
             "--backend" => match it.next().map(|s| s.as_str()) {
                 Some("native") => opts.bytecode_builtins = false,
                 Some("bytecode") => opts.bytecode_builtins = true,
@@ -81,7 +101,14 @@ pub fn main(args: &[String]) -> i32 {
     };
     let stdout = std::io::stdout();
     let stderr = std::io::stderr();
-    run_source(&src, &path, &opts, &mut stdout.lock(), &mut stderr.lock())
+    run_source(
+        &src,
+        &path,
+        &opts,
+        &mut tools,
+        &mut stdout.lock(),
+        &mut stderr.lock(),
+    )
 }
 
 /// Compiles and runs `src`. See the module docs for the exit codes.
@@ -89,6 +116,7 @@ pub fn run_source(
     src: &[u8],
     filename: &str,
     opts: &RunOptions,
+    tools: &mut Tools,
     out: &mut impl Write,
     err: &mut impl Write,
 ) -> i32 {
@@ -127,18 +155,19 @@ pub fn run_source(
         }
     };
     let args: Vec<Value> = if opts.body {
-        // `tools` is not provided by `djs run`; `console` is the global console object.
-        let key = vm.heap_mut().atom_str("console").expect("oom");
-        let console = vm
-            .heap()
-            .find_property(vm.global(), key)
-            .and_then(|(_, p)| p.value())
-            .unwrap_or(Value::UNDEFINED);
-        vec![Value::UNDEFINED, console]
+        // `tools` (with `--tools`) and `console` are the globals.
+        let mut global = |name: &str| {
+            let key = vm.heap_mut().atom_str(name).expect("oom");
+            vm.heap()
+                .find_property(vm.global(), key)
+                .and_then(|(_, p)| p.value())
+                .unwrap_or(Value::UNDEFINED)
+        };
+        vec![global("tools"), global("console")]
     } else {
         Vec::new()
     };
-    run_main(vm, main, &args, opts, out, err)
+    run_main(vm, main, &args, opts, tools, out, err)
 }
 
 /// Host function ids registered by `djs run`.
@@ -161,6 +190,8 @@ pub struct RunOptions {
     /// TypeScript legacy decorators, and their metadata.
     pub experimental_decorators: bool,
     pub emit_decorator_metadata: bool,
+    /// Define `tools` (`--tools`).
+    pub tools: bool,
 }
 
 impl RunOptions {
@@ -186,6 +217,9 @@ pub fn new_vm(opts: &RunOptions) -> Vm {
     vm.define(console, "log", log).expect("oom");
     vm.define_global("console", Value::object(console))
         .expect("oom");
+    if opts.tools {
+        crate::tools::install(&mut vm);
+    }
     vm
 }
 
@@ -196,6 +230,7 @@ pub fn run_main(
     main: Value,
     args: &[Value],
     opts: &RunOptions,
+    tools: &mut Tools,
     out: &mut impl Write,
     err: &mut impl Write,
 ) -> i32 {
@@ -205,6 +240,23 @@ pub fn run_main(
     let fuel = opts.suspend_every.unwrap_or(u64::MAX);
     loop {
         match vm.run(fuel) {
+            Status::Idle if !vm.pending_host_calls().is_empty() => {
+                // An idle point: answer the oldest call there is an answer for.
+                let open = vm.pending_host_calls();
+                let answered = open
+                    .iter()
+                    .find_map(|&id| Some((id, tools.answer(&mut vm, id)?)));
+                match answered {
+                    Some((id, r)) => vm.resolve_host_call(id, r).expect("an open call"),
+                    None => {
+                        for id in open {
+                            let d = tools.describe(&mut vm, id);
+                            let _ = writeln!(err, "djs: no answer for #{id} {d}");
+                        }
+                        return 1;
+                    }
+                }
+            }
             Status::Done(_) | Status::Idle => {
                 // Like qjs: unhandled rejections are reported once the jobs ran out.
                 let rejections = vm.take_unhandled_rejections();
@@ -234,6 +286,10 @@ pub fn run_main(
                 let o = vm.options();
                 vm = Vm::from_bytes(vm.image().to_vec(), o).expect("valid heap image");
             }
+            Status::HostCall {
+                call_id,
+                fn_id: MAKE_TOOL,
+            } => tools.make(&mut vm, call_id),
             Status::HostCall { call_id, fn_id } => {
                 let info = vm.host_call(call_id).expect("parked call");
                 let result = match fn_id {

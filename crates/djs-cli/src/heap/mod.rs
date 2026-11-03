@@ -5,7 +5,7 @@
 
 mod diff;
 mod graph;
-mod json;
+pub(crate) mod json;
 mod report;
 #[cfg(test)]
 mod tests;
