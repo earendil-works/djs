@@ -1,6 +1,6 @@
 # 0164: Image compatibility by dependencies, not by source hash
 
-status: in-progress
+status: done
 agent: snapshot
 branch: issue/0164-image-compat
 depends-on: 0117, 0147, 0148
@@ -66,6 +66,11 @@ merges (0140's churn.py) to show how much more often snapshots now survive.
   the base commit (455,502 → 456,337, over the 455,600 ceiling there); main has since
   dropped to ~450.4 K, so after the rebase it is under. `#[inline(never)]` on check_image
   changed nothing (not inlined anyway).
+- Rebased onto main with 0160 (slim, `full`), 0161 (`unsafe-heap`) and 0159: build.rs
+  now classifies every enabled feature (umbrellas too) through `enabled_features()`;
+  djs-prelude's `BUILT_BY == BUILD_HASH` check of the base stays (the base must be the
+  exact build's). After the rebase the shipped module is 450,651 B gzip (ceiling
+  455,600); the slim compat tests pass in the slim build.
 - Docs: docs/host.md (container table, refusal order, "What an image depends on"),
   guide snapshots.md (section rewritten: "What an image depends on"), arena.md, heap.md,
   values.md, compiler.md, determinism.md, host.md; TESTING.md "Snapshot compatibility"
@@ -87,3 +92,32 @@ merges (0140's churn.py) to show how much more often snapshots now survive.
   messages in Rust); not attempted.
 
 ## Result
+
+Landed (D2265–D2268):
+- **Descriptor in every image** (`vm::ImageDeps`, vm/compat.rs): layout, features,
+  `COMPAT_VERSION` (1), opcode, intrinsic and internal-id-table hashes in the roots cell
+  (`VERSION`, `FEATURES` 96, `COMPAT` 48, `OPS` 84, `INTRINSICS` 88, `RECORDS` 92).
+  `Vm::from_bytes`/`from_base*` refuse with `LoadError::Incompatible { dep, found,
+  expected }`: "the image is from a djs with another opcode table (image: X; this
+  build: Y)". `RECORDS_HASH` and `FEATURES` come from build.rs + compat_inputs.rs; a
+  missing region or an unclassified cargo feature fails the build.
+- **Container format 3** (js/src/snapshot.ts, djs-cli container.rs): the descriptor and
+  the base image's prefix hash replace the build hash; `checkSnapshot(header, app,
+  base)` / `container::check` compare them with the module's base image before
+  decompressing and name the component ("another base image", features by name).
+  Session images format 2. `djs_build_hash`/`BUILD_HASH` stay for journals, pi's
+  fingerprint and djs-prelude's base check.
+- **Gate checks**: vm/compat_tests.rs (each table hash sees a flipped entry, regions found
+  and comment-insensitive, every component refused by name, features named and
+  classified, session header), js snapshot tests per header component.
+- **Guideline**: TESTING.md "Snapshot compatibility" (when to bump COMPAT_VERSION),
+  AGENTS.md pointer, ARCH.md Snapshots bullet.
+- **Churn**: `churn.py --deps` + `base-churn.sh`: an old snapshot survives about 1.5x as
+  many merges: raw images 51% vs 30% (all 158 issues), containers 47% vs 31% (129 issues
+  with every base built), last 30: 63% / 60% vs 47%. docs/snapshot-versioning.md
+  "Since D026".
+
+Known gaps: the descriptor sees numbering, not meaning (COMPAT_VERSION is by hand); pi
+containers against pi's prelude image also need that image unchanged (not measured);
++~0.8 KB gzip on the module; djs-wasm's `djs_build_hash` doc comment still says "the build
+hash of VM images" (djs-wasm edits go through the coordinator).
