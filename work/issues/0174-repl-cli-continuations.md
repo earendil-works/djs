@@ -1,7 +1,7 @@
 # 0174: REPL and CLI: tools, waiting inputs, continuation dumps
 
-status: open
-agent: -
+status: in-progress
+agent: repl
 branch: issue/0174-repl-continuations
 depends-on: 0171 (the tools and pending-call part can land before it)
 touches: crates/djs-cli/src/repl/, crates/djs-cli/src/run.rs, crates/djs-cli/src/main.rs, crates/djs-cli/tests/, docs/cli.md
