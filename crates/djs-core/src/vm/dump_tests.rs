@@ -32,13 +32,11 @@ fn run(vm: &mut Vm, src: &str) -> String {
     };
     let this = Value::object(vm.global());
     vm.call(f, this, &[]).unwrap();
-    loop {
-        match vm.run(u64::MAX) {
-            Status::Done(v) => return vm.display(v),
-            Status::Threw(v) => return alloc::format!("throw {}", vm.display(v)),
-            Status::Idle => return String::from("idle"),
-            s => panic!("{s:?}"),
-        }
+    match vm.run(u64::MAX) {
+        Status::Done(v) => vm.display(v),
+        Status::Threw(v) => alloc::format!("throw {}", vm.display(v)),
+        Status::Idle => String::from("idle"),
+        s => panic!("{s:?}"),
     }
 }
 
@@ -203,5 +201,59 @@ fn live_values_are_refused_by_path() {
         "A: a class",
     ] {
         assert!(all.contains(want), "{all}");
+    }
+}
+
+#[test]
+fn symbol_keys_keep_identity_across_patches() {
+    round_trip(
+        "const o = { visible: 1 };\n\
+         Object.defineProperty(o, Symbol('hidden'), { value: 2, enumerable: false });",
+        None,
+        "const ks = Object.getOwnPropertySymbols(o);\n\
+         [ks.length, ks[0].description, o[ks[0]], o.propertyIsEnumerable(ks[0])].join()",
+    );
+}
+
+#[test]
+fn function_scope_bindings_by_box() {
+    // A harness dumps a function's locals: `n` is a captured variable (its box), and
+    // the closure that captures it refers to it by name, whatever the order of roots.
+    let mut a = new_vm();
+    run(
+        &mut a,
+        "function mk() { let n = 1; const inc = () => ++n; return inc; }\nvar f = mk(); f();",
+    );
+    let f = run_value(&mut a, "f");
+    let o = f.as_object().unwrap();
+    let b = a.heap.object_slot(o, 0).as_internal().unwrap();
+    let text = a
+        .dump_values(
+            &DumpOptions {
+                base: base(),
+                host: &[],
+            },
+            &[("inc", f), ("n", Value::internal(b))],
+        )
+        .unwrap_or_else(|e| panic!("{}", e.message()));
+    assert!(text.contains("let n = 2;"), "{text}");
+    let mut b = new_vm();
+    run(&mut b, &text);
+    assert_eq!(run(&mut b, "inc(); inc(); n"), "4", "{text}");
+}
+
+/// The value of a global expression.
+fn run_value(vm: &mut Vm, src: &str) -> Value {
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("v.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    match vm.run(u64::MAX) {
+        Status::Done(v) => v,
+        s => panic!("{s:?}"),
     }
 }

@@ -27,7 +27,7 @@
 //! breadth-first walk from the roots reaches, with keys in sorted order.
 use crate::PushOut;
 
-use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
+use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -401,7 +401,8 @@ pub fn reachable_names(heap: &Heap) -> Vec<(u32, String)> {
 }
 
 fn names(heap: &Heap, prelude: impl FnOnce(&Heap) -> Vec<(Value, String)>) -> Vec<(u32, String)> {
-    let mut seen: BTreeSet<u32> = BTreeSet::new();
+    // Cells are 8-byte aligned: one bit per word of the heap.
+    let mut seen = Seen(alloc::vec![0; heap.bytes().len() / 512 + 1]);
     let mut out: Vec<(Value, String)> = Vec::new();
     let global = intrinsic(heap, Intrinsic::Global);
     if let Some(c) = cell_of(global) {
@@ -418,7 +419,7 @@ fn names(heap: &Heap, prelude: impl FnOnce(&Heap) -> Vec<(Value, String)>) -> Ve
             // A global's path is its name; keys that aren't identifiers keep `globalThis`.
             let p = child_path("globalThis", &seg);
             let p = match p.strip_prefix("globalThis.") {
-                Some(name) => name.to_string(),
+                Some(name) => String::from(name),
                 None => p,
             };
             globals.push_out((v, p));
@@ -427,7 +428,7 @@ fn names(heap: &Heap, prelude: impl FnOnce(&Heap) -> Vec<(Value, String)>) -> Ve
     walk(heap, globals, false, &mut seen, &mut out);
     let realm = REALM_ROOTS
         .iter()
-        .map(|(i, name)| (intrinsic(heap, *i), format!("%{name}%")))
+        .map(|(i, name)| (intrinsic(heap, *i), cat!("%", *name, "%")))
         .collect();
     walk(heap, realm, false, &mut seen, &mut out);
     let installed = INTRINSICS
@@ -436,7 +437,7 @@ fn names(heap: &Heap, prelude: impl FnOnce(&Heap) -> Vec<(Value, String)>) -> Ve
         .map(|(id, info)| {
             (
                 installed_intrinsic(heap, id as u16),
-                format!("%intrinsic:{}%", info.name),
+                cat!("%intrinsic:", info.name, "%"),
             )
         })
         .collect();
@@ -451,6 +452,23 @@ fn names(heap: &Heap, prelude: impl FnOnce(&Heap) -> Vec<(Value, String)>) -> Ve
         .collect()
 }
 
+/// The cells a naming walk has seen: a bit per 8-byte word of the heap.
+struct Seen(Vec<u64>);
+
+impl Seen {
+    /// Marks `cell`; whether it was new.
+    fn insert(&mut self, cell: u32) -> bool {
+        let w = (cell / 8) as usize;
+        let (i, bit) = (w / 64, 1u64 << (w % 64));
+        if i >= self.0.len() {
+            self.0.resize(i + 1, 0);
+        }
+        let new = self.0[i] & bit == 0;
+        self.0[i] |= bit;
+        new
+    }
+}
+
 /// Breadth-first from `roots`, adding the cells not `seen` yet to `out` with their paths.
 /// A root that was seen before is still walked from (the last pass starts from everything
 /// named so far).
@@ -458,12 +476,16 @@ fn walk(
     heap: &Heap,
     roots: Vec<(Value, String)>,
     proto: bool,
-    seen: &mut BTreeSet<u32>,
+    seen: &mut Seen,
     out: &mut Vec<(Value, String)>,
 ) {
-    let mut queue: VecDeque<(Value, String, bool, bool)> =
+    let mut queue: Vec<(Value, String, bool, bool)> =
         roots.into_iter().map(|(v, p)| (v, p, true, true)).collect();
-    while let Some((v, path, expand, root)) = queue.pop_front() {
+    let mut head = 0;
+    while head < queue.len() {
+        let e = &mut queue[head];
+        let (v, path, expand, root) = (e.0, core::mem::take(&mut e.1), e.2, e.3);
+        head += 1;
         let Some(c) = cell_of(v) else { continue };
         if seen.insert(c) {
             out.push_out((v, path.clone()));
@@ -474,7 +496,7 @@ fn walk(
             continue;
         };
         for (seg, child, child_expand) in edges(heap, o, proto) {
-            queue.push_back((child, child_path(&path, &seg), child_expand, false));
+            queue.push_out((child, child_path(&path, &seg), child_expand, false));
         }
     }
 }
@@ -512,8 +534,8 @@ fn child_path(path: &str, seg: &str) -> String {
         .strip_prefix("get ")
         .or_else(|| seg.strip_prefix("set "))
     {
-        Some(rest) => format!("{} {path}{rest}", &seg[..3]),
-        None => format!("{path}{seg}"),
+        Some(rest) => cat!(&seg[..3], " ", path, rest),
+        None => cat!(path, seg),
     }
 }
 
@@ -529,14 +551,14 @@ fn edges(heap: &Heap, o: Obj, proto: bool) -> Vec<(String, Value, bool)> {
         match heap.get_own_property(o, k) {
             Some(Property::Data { value, .. }) => out.push_out((seg, value, true)),
             Some(Property::Accessor { getter, setter, .. }) => {
-                out.push_out((format!("get {seg}"), getter, false));
-                out.push_out((format!("set {seg}"), setter, false));
+                out.push_out((cat!("get ", seg), getter, false));
+                out.push_out((cat!("set ", seg), setter, false));
             }
             None => {}
         }
     }
     out.retain(|(_, v, _)| cell_of(*v).is_some());
-    out.sort_by(|a, b| a.0.cmp(&b.0));
+    crate::sort::sort_by(&mut out, |a, b| a.0 < b.0);
     if proto && let Some(p) = heap.get_prototype_of(o) {
         out.push_out((String::from(".[[Prototype]]"), Value::object(p), true));
     }
@@ -549,7 +571,7 @@ fn segment(heap: &Heap, k: Atom) -> Option<String> {
     if let Some(s) = heap.atom_symbol(k) {
         let d = heap.symbol_description(s).as_string()?;
         let d = heap.str_to_string(d);
-        return d.starts_with("Symbol.").then(|| format!("[{d}]"));
+        return d.starts_with("Symbol.").then(|| cat!("[", d, "]"));
     }
     let name = heap.atom_name(k);
     let ident = !name.is_empty()
@@ -558,9 +580,9 @@ fn segment(heap: &Heap, k: Atom) -> Option<String> {
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$');
     Some(if ident {
-        format!(".{name}")
+        cat!(".", name)
     } else {
-        format!("[{}]", quote(&name))
+        cat!("[", quote(&name), "]")
     })
 }
 
