@@ -244,10 +244,17 @@ pub fn analyze(
 /// and roots cell size.
 fn prefix_diff(image: &[u8], base: &[u8]) -> Option<Vec<(u32, u64)>> {
     use djs_core::heap::cells::{Header, Roots};
-    let u32_at = |b: &[u8], at: u32| Some(u32::from_le_bytes(b.get(at as usize..at as usize + 4)?.try_into().ok()?));
+    let u32_at = |b: &[u8], at: u32| {
+        Some(u32::from_le_bytes(
+            b.get(at as usize..at as usize + 4)?.try_into().ok()?,
+        ))
+    };
     let end = u32_at(image, Roots::BASE_END.offset)?;
     let roots = u32_at(image, Header::SIZE.offset)?;
-    if end == 0 || u32_at(base, Roots::BASE_END.offset)? != end || u32_at(base, Header::SIZE.offset)? != roots {
+    if end == 0
+        || u32_at(base, Roots::BASE_END.offset)? != end
+        || u32_at(base, Header::SIZE.offset)? != roots
+    {
         return None;
     }
     let (from, to) = (roots as usize, end as usize);

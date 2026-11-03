@@ -347,4 +347,3 @@ fn features_are_classified_and_named() {
     assert!(msg.contains("another feature set (image: "), "{msg}");
     assert!(msg.contains("full"), "{msg}");
 }
-
