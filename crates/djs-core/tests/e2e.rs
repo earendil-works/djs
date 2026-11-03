@@ -18,8 +18,15 @@
 //! Cases run in parallel (`DJS_JOBS` threads, else one per CPU). Each run has a fuel
 //! budget and a time limit: a case that loops forever fails its plain run within seconds
 //! (and then skips the stress modes) instead of hanging the test.
-//! `DJS_E2E_MODE=plain|suspend|gc` runs one mode, `DJS_E2E_CASE=<substring>` only the
-//! matching cases.
+//! 4. dump (`DJS_E2E_MODE=dump` only, 0172): the plain run, then a format 2 dump of the
+//!    finished VM (its globals and whatever is still in flight), loaded into a fresh VM
+//!    and dumped again: the second dump must be the first. The cases have no idle points
+//!    before their end (their awaits settle through jobs), so this checks the exporter
+//!    and the loader on every construct the cases leave behind. Refusals are counted, not
+//!    failures.
+//!
+//! `DJS_E2E_MODE=plain|suspend|gc|dump` runs one mode, `DJS_E2E_CASE=<substring>` only
+//! the matching cases.
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -64,7 +71,70 @@ enum Mode {
     Plain,
     Suspend,
     GcStress,
+    Dump,
 }
+
+/// Dumps a finished VM and loads the dump into a fresh VM, twice: a failure if a load
+/// fails or the second round does not give the same text again (the first may order the
+/// global bindings differently: a loaded dump declares them in its own order). Refusals
+/// are counted in `DUMP_REFUSED`.
+fn dump_round_trip(vm: &Vm) -> Option<String> {
+    use djs_core::vm::dump::DumpOptions;
+    use djs_core::vm::dump_load::LoadOptions;
+    let name = |id: u32| (id == LOG).then(|| String::from("log"));
+    let opts = DumpOptions {
+        base: djs_prelude::BASE,
+        host_fn_name: &name,
+        ..DumpOptions::default()
+    };
+    let id = |n: &str| (n == "log").then_some(LOG);
+    let load = LoadOptions {
+        host_fn: &id,
+        ..LoadOptions::default()
+    };
+    let first = match vm.dump(&opts, None) {
+        Ok(t) => t,
+        Err(e) => {
+            DUMP_REFUSED.fetch_add(1, Ordering::Relaxed);
+            if std::env::var_os("DJS_E2E_DUMP_REFUSALS").is_some() {
+                eprintln!("{}", e.message());
+            }
+            return None;
+        }
+    };
+    let mut texts = vec![first];
+    for round in 0..2 {
+        let text = texts.last().unwrap();
+        let mut b = djs_prelude::new_vm(VmOptions::default()).unwrap();
+        if let Err(e) = b.load_dump(text, &load) {
+            return Some(format!(
+                "<e2e: dump {} does not load: {}>\n{text}\n",
+                round + 1,
+                e.message()
+            ));
+        }
+        match b.dump(&opts, None) {
+            Ok(again) => texts.push(again),
+            Err(e) => {
+                return Some(format!(
+                    "<e2e: the loaded dump is refused: {}>\n{text}\n",
+                    e.message()
+                ));
+            }
+        }
+    }
+    if texts[1] != texts[2] {
+        return Some(format!(
+            "<e2e: a loaded dump dumps differently>\n--- first\n{}\n--- second\n{}\n",
+            texts[1], texts[2]
+        ));
+    }
+    DUMP_OK.fetch_add(1, Ordering::Relaxed);
+    None
+}
+
+static DUMP_OK: AtomicUsize = AtomicUsize::new(0);
+static DUMP_REFUSED: AtomicUsize = AtomicUsize::new(0);
 
 fn cases_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/e2e")
@@ -144,6 +214,11 @@ fn run_case(src: &str, name: &str, mode: Mode) -> (String, Option<Images>) {
         let status = vm.run(fuel);
         match status {
             Status::Done(v) => {
+                if matches!(mode, Mode::Dump)
+                    && let Some(f) = dump_round_trip(&vm)
+                {
+                    out += &f;
+                }
                 let rejections = vm.take_unhandled_rejections();
                 // A body is an async function (D008): gen-expected.sh catches its
                 // rejected promise and prints `Uncaught <reason>`.
@@ -203,6 +278,7 @@ fn e2e_cases() {
         Ok("plain") => (true, vec![]),
         Ok("suspend") => (false, vec![Mode::Suspend]),
         Ok("gc") => (false, vec![Mode::GcStress]),
+        Ok("dump") => (false, vec![Mode::Dump]),
         _ => (true, vec![Mode::GcStress, Mode::Suspend]),
     };
     let mut failures = Vec::new();
@@ -232,7 +308,7 @@ fn e2e_cases() {
         .collect();
     for (&(path, mode), (f, image)) in jobs.iter().zip(run_parallel(&jobs)) {
         // GC stress is not compared (see the module docs).
-        if !matches!(mode, Mode::GcStress) {
+        if matches!(mode, Mode::Suspend) || matches!(mode, Mode::Plain) {
             images[index(path)].push((mode, image));
         }
         failures.extend(f);
@@ -244,6 +320,13 @@ fn e2e_cases() {
                 "{name}: the heap images (raw, and the canonical hash) differ between the plain and suspension modes: {images:x?}"
             ));
         }
+    }
+    if stress.iter().any(|m| matches!(m, Mode::Dump)) {
+        eprintln!(
+            "dump: {} cases round-trip, {} refused",
+            DUMP_OK.load(Ordering::Relaxed),
+            DUMP_REFUSED.load(Ordering::Relaxed)
+        );
     }
     assert!(
         failures.is_empty(),

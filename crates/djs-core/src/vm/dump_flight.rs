@@ -486,7 +486,7 @@ impl Dumper<'_> {
             | THEN_FINALLY | CATCH_FINALLY | FROM_SYNC_UNWRAP | FROM_SYNC_CLOSE => {
                 self.edge(n, data, || cat!(path, "<data>"));
             }
-            _ => self.refuse(path, "an internal function of a builtin in flight"),
+            _ => self.refuse(path, "an internal function of a builtin"),
         }
         self.nodes[n].fl = self.fl.clos.len();
         self.fl.clos.push_out(Clo {
