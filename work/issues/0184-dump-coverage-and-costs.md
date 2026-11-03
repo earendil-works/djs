@@ -35,5 +35,14 @@ Dumps are the persistence format (D2560); before images are retired (0177):
   registry::reachable_names per dump. Recommendations: hosts zstd-3 dump text; typed
   arrays as base64 bytes; cache the builtin names per base; no shared strings needed.
   Only refusal in the cases: yield* (agent-loop, 3 of 11 points).
+- Coordinator approved all four. (2) turned out done already: typed arrays over 64
+  elements were `new Float64Array($dump.bytes(...))` before (checked the binary case's
+  dump); the binary case's 1.3x raw / 1.09x zstd is base64's cost. (3) D2626: the walk
+  skips seen cells before making paths (805 -> 433 us native, same 734 names) and the VM
+  keeps the table after its first dump (next dumps of an empty VM 0.05 ms native).
+  Re-measured (report-after-names.md): A dump ms median empty 2.77 -> 0.93, ask 1.96 ->
+  1.17, sequential 2.13 -> 0.74; B sequential 2.40 -> 1.80, corpus p50/p90 dump 3.50/5.98
+  -> 1.84/3.65 ms (B makes a fresh dump-module VM per dump: only the faster walk). Docs:
+  hosts compress dump text (continuation-dumps.md).
 
 ## Result
