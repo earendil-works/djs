@@ -1,7 +1,7 @@
 # 0160: The slim codemode build as additive cargo features
 
-status: open
-agent: -
+status: in-progress
+agent: slim
 branch: issue/0160-slim-feature
 depends-on: 0149
 guide: docs/guide/builtins.md (a section on the build variants), goals.md if relevant
