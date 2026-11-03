@@ -37,3 +37,14 @@ test("live values are refused with their path", async () => {
   assert.throws(() => s.dump(), (e: SandboxError) => e.kind === "misuse" && /p: a pending promise/.test(e.message));
   assert.throws(() => s.load("x = 1"), /not a djs dump/);
 });
+
+test("a dump that ends with a cycle patch loads", async () => {
+  const module = await loadModule();
+  const a = new Sandbox({ module });
+  a.run("globalThis.data = { name: 'x' }; data.self = data;");
+  const text = a.dump();
+  assert.match(text, /data\.self = data;\n$/);
+  const b = new Sandbox({ module });
+  b.load(text);
+  assert.equal(b.run("return data.self === data && data.name"), "x");
+});
