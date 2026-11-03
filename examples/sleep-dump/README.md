@@ -4,9 +4,9 @@ A host (node) gives a script one tool, `tools.sleep(ms)`, which waits on the hos
 script calls it twice, 5000 ms each, from a helper inside a loop. While the first call is
 open, the VM has nothing to do: it is **idle**, and the host writes it as a **format 2
 dump**, a JavaScript file that recreates the script's suspended state: not only data, but
-the operations in the middle of running. The host then throws the sandbox away (or exits), loads the
-dump into a new sandbox (or a new process), and delivers the sleep's result when it is
-due. The script continues after its `await` as if nothing had happened.
+the operations in the middle of running. The host then throws the sandbox away (or
+exits), loads the dump into a new sandbox (or a new process), and delivers the sleep's
+result when it is due. The script continues after its `await` as if nothing had happened.
 
 ```sh
 examples/sleep-dump/run.sh              # one process: dump, drop the sandbox, resume
@@ -45,9 +45,6 @@ When the host dumps, during the first sleep, three things are in the middle of r
 - the `for (const label of ...)` loop, whose iterator has handed out `"first"` and will
   hand out `"second"` next.
 
-The host calls the script `sleep.js` (`begin`'s `filename`), so stack traces and the
-description of the suspended sites below point into it.
-
 ## The host
 
 The host drives the run itself with the Sandbox's host-driven run API:
@@ -64,7 +61,7 @@ const { sandbox, run: again } = await Sandbox.resume(dump, { asyncFunctions: { "
 again.calls;                                 // the same call, the same id
 // ... the host re-arms its timer for call 2; when it fires:
 again.settle(2, { ok: true, value: "slept 5000 ms" });
-await again.advance();                       // the script prints "after ..."; again.value
+await again.advance();                       // the script goes on: "second sleeps", call 4 opens
 ```
 
 A host-driven run never calls async host functions itself (`runAsync` does): it lists them
@@ -73,24 +70,156 @@ process that made it.
 
 ## What the output looks like
 
-TODO: the transcript, the dump, and the description of its suspended sites (each with its
-source line), once the exporter writes the dump.
+In one process (`run.sh`); `[vm]` lines are the script's `console.log`:
+
+```
+  [vm] first sleeps 5000 ms
+host: call #2 tools.sleep(5000): timer armed, 5000 ms left
+host: the VM is idle, waiting on tools.sleep(5000); dumping it
+host: the dump (3159 bytes):
+  | ... (the dump below)
+host: loaded the dump into a new sandbox; open calls: #2 tools.sleep(5000)
+host: call #2 tools.sleep(5000): timer armed, 4958 ms left
+  [vm] second sleeps 5000 ms
+host: call #4 tools.sleep(5000): timer armed, 5000 ms left
+  [vm] done after at least 10000 ms: first: slept 5000 ms, second: slept 5000 ms
+host: the run returned ["first: slept 5000 ms","second: slept 5000 ms"]
+```
+
+The first sandbox printed only `first sleeps`; everything after `loaded the dump` comes
+from the second one, which never ran the start of the script. Calls #1 and #3 are the
+`console.log`s (sync host calls), so the second sleep is call #4.
+
+With `--restart` the halves are two node processes, and the dump travels as a file:
+
+```
+--- node sleep-dump.ts start (process 1)
+  [vm] first sleeps 5000 ms
+host: call #2 tools.sleep(5000): timer armed, 5000 ms left
+host: the VM is idle, waiting on tools.sleep(5000); dumping it
+host: wrote examples/sleep-dump/out/sleep.dump.js (3159 bytes) and host.json; exiting
+--- node sleep-dump.ts resume (process 2)
+host: loaded the dump into a new sandbox; open calls: #2 tools.sleep(5000)
+host: call #2 tools.sleep(5000): timer armed, 4792 ms left
+  [vm] second sleeps 5000 ms
+host: call #4 tools.sleep(5000): timer armed, 5000 ms left
+  [vm] done after at least 10000 ms: first: slept 5000 ms, second: slept 5000 ms
+host: the run returned ["first: slept 5000 ms","second: slept 5000 ms"]
+```
+
+### The dump
+
+`out/sleep.dump.js`, as written (only `t0`, a clock reading, differs between runs):
+
+```js
+"djs-dump 2";
+$dump.advance = (it, n) => {
+  for (let i = 0; i < n; i++) it.next();
+  return it;
+};
+$dump.builtin = (path) => {
+  const roots = {
+    IteratorPrototype: () => Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]())),
+    ArrayIteratorPrototype: () => Object.getPrototypeOf([][Symbol.iterator]()),
+    StringIteratorPrototype: () => Object.getPrototypeOf(''[Symbol.iterator]()),
+    MapIteratorPrototype: () => Object.getPrototypeOf(new Map().entries()),
+    SetIteratorPrototype: () => Object.getPrototypeOf(new Set().values()),
+    RegExpStringIteratorPrototype: () => Object.getPrototypeOf(/./[Symbol.matchAll]('')),
+    GeneratorFunction: () => (function* () {}).constructor,
+    GeneratorPrototype: () => Object.getPrototypeOf(function* () {}).prototype,
+    AsyncFunction: () => (async function () {}).constructor,
+    AsyncGeneratorFunction: () => (async function* () {}).constructor,
+    AsyncGeneratorPrototype: () => Object.getPrototypeOf(async function* () {}).prototype,
+    TypedArray: () => Object.getPrototypeOf(Int8Array),
+    TypedArrayPrototype: () => Object.getPrototypeOf(Int8Array.prototype),
+    ThrowTypeError: () => Object.getOwnPropertyDescriptor(Function.prototype, 'caller').get,
+  };
+  const [, acc, root, rest] = /^(get |set )?(%\w+%|[\w$]+)(.*)$/.exec(path);
+  let v = root[0] === "%" ? roots[root.slice(1, -1)]() : globalThis[root];
+  const segs = rest.match(/\.\[\[Prototype\]\]|\.[\w$]+|\["(?:[^"\\]|\\.)*"\]|\[Symbol\.\w+\]/g) || [];
+  segs.forEach((s, i) => {
+    if (s === ".[[Prototype]]") return void (v = Object.getPrototypeOf(v));
+    const key = s[0] === "." ? s.slice(1) : s.startsWith("[Symbol.") ? Symbol[s.slice(8, -1)] : JSON.parse(s.slice(1, -1));
+    if (acc && i === segs.length - 1) {
+      const d = Object.getOwnPropertyDescriptor(v, key);
+      v = acc === "get " ? d.get : d.set;
+    } else v = v[key];
+  });
+  return v;
+};
+$dump.p1 = $dump.pending(2, "tools.sleep", [5000]);
+$dump.n2 = async function step(label, ms) {
+  console.log(label, "sleeps", ms, "ms");
+  const r = await tools.sleep(ms);
+  return label + ": " + r;
+};
+$dump.a3 = $dump.resume($dump.n2, { at: "await#1", awaiting: $dump.p1, args: ["first", 5000], bindings: { label: "first", ms: 5000, r: undefined } });
+$dump.n4 = [];
+$dump.i5 = $dump.advance(Array.prototype.values.call(["first", "second"]), 1);
+$dump.a6 = $dump.resume(async function (ms) {
+
+async function step(label, ms) {
+  console.log(label, "sleeps", ms, "ms");
+  const r = await tools.sleep(ms);
+  return label + ": " + r;
+}
+const t0 = Date.now();
+const results = [];
+for (const label of ["first", "second"]) {
+  results.push(await step(label, ms));
+}
+console.log("done after at least", Date.now() - t0 >= 2 * ms ? 2 * ms : "(less than!)", "ms:", results.join(", "));
+return results;
+
+}, { at: "await#1", awaiting: $dump.a3, args: [5000], bindings: { ms: 5000, step: $dump.n2, t0: 1793738478154, results: $dump.n4, label: "first" }, operands: [["call.callee", Array.prototype.push], ["call.this", $dump.n4]], loops: [{ kind: "for-of", iterator: $dump.i5, next: $dump.builtin("%ArrayIteratorPrototype%.next") }] });
+$dump.handle("run", $dump.a6);
+```
+
+Read from the bottom: `$dump.handle("run", $dump.a6)` gives the host the run's result
+promise. `a6` is the script's own activation, the codemode body written as the async
+function it runs as, verbatim, resumed at its first `await` (`await#1`, the one in
+`results.push(await step(label, ms))`). It awaits `a3`, the activation of `step("first",
+5000)` at its own first `await`, which awaits `p1`, the open host call. `n4` is the
+`results` array, shared by the binding and the half-done call's `this`; `i5` is the
+loop's iterator, made again and advanced once. `$dump.advance` and `$dump.builtin` are
+helpers every dump defines; `$dump.builtin` finds builtins by name (here the array
+iterator's `next`), so none is written as code.
+
+### What the dump holds, explained
+
+`djs resume --explain` loads a dump without running anything and describes it: the open
+calls, and each suspended activation with its source line (positions are in the dump
+file) and its bindings:
+
+```
+$ cargo run -q -p djs-cli -- resume --explain examples/sleep-dump/out/sleep.dump.js
+examples/sleep-dump/out/sleep.dump.js: format 2; 1 open call, 2 suspended activations; handles: run
+#2 tools.sleep(5000)
+  async function step at dump.js:39:13
+      const r = await tools.sleep(ms);
+                ^
+    label = 'first', ms = 5000, r = undefined
+  async function <anonymous> at dump.js:55:16 (run)
+      results.push(await step(label, ms));
+                   ^
+    ms = 5000, step = [AsyncFunction: step], t0 = 1793738494362, results = [], label = 'first'
+```
 
 ## What the dump keeps, and what the host keeps
 
 The dump holds the VM's side, and only that:
 
-- the script's code, verbatim, and `step`'s, as functions the dump defines again;
+- the script's code, verbatim, as the async function the body runs as, and `step`'s;
 - each suspended activation, as a `$dump.resume(fn, {...})` call: the function, the site
   it stopped at (`at: "await#1"`: the function's first `await` in its text), and what the
-  activation holds there: `bindings` (`label`, `ms`; `r` still in its temporal dead zone, `$dump.TDZ`),
+  activation holds there: `bindings` (`label`, `ms`, and `r`, not assigned yet),
   `awaiting` (what it waits on), `operands` (values computed before the `await`: for the
   script, `push` and `results`, the callee and `this` of the half-done call) and `loops`
   (the for-of's iterator);
-- the for-of's array iterator, made again and advanced past `"first"` with `next()`, the
-  same calls that put it in that state the first time;
-- the open host call: `$dump.pending(id, "tools.sleep", [5000])`, with the id the VM gave it, the
-  function by the host's name for it, and its arguments. `step("first")` awaits it, and
+- the for-of's array iterator, made again and advanced past `"first"` with one `next()`,
+  the same call that put it in that state the first time;
+- the open host call: `$dump.pending(2, "tools.sleep", [5000])`, with the id the VM gave
+  it, the function by the host's name for it, and its arguments. `step("first")` awaits it, and
   the script awaits `step("first")`'s promise;
 - the run's result promise, named `run` for the host (`$dump.handle("run", ...)`).
 
@@ -99,7 +228,8 @@ compiled code refuses the dump with the reason, instead of resuming somewhere el
 
 The timer is not in the VM: it is host state. A new sandbox that loads the dump knows that
 call 2 to `tools.sleep(5000)` is open, nothing more. (The second sleep is not issued yet: the
-restarted sandbox makes that call itself, and the host arms a fresh timer for it.) What happens to it is the host's decision:
+restarted sandbox makes that call itself, as #4, and the host arms a fresh timer for it.)
+What happens to the open call is the host's decision:
 
 - **re-arm it** (this example): the host keeps when each call is due (`out/host.json` in
   the two-process mode, a plain object in one process) and re-arms the timer for the time

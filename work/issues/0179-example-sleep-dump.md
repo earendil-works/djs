@@ -1,6 +1,6 @@
 # 0179: Example: a host tool that sleeps 5 s; dump while waiting, restart, continue
 
-status: in-progress
+status: done
 agent: example
 branch: issue/0179-example-sleep-dump
 depends-on: 0171, 0172 (the exporter writes format 2 dumps of waiting sessions)
@@ -40,8 +40,8 @@ Build exactly what's needed, in the shape docs/continuation-dumps.md "Sandbox AP
 (0175), and tell the coordinator so 0175 builds on it rather than duplicating it.
 
 ## Acceptance criteria
-- [ ] `examples/sleep-dump` runs with one command (in-process mode and two-process mode).
-- [ ] A js test runs the in-process mode with a short sleep in the gate.
+- [x] `examples/sleep-dump` runs with one command (in-process mode and two-process mode).
+- [x] A js test runs the in-process mode with a short sleep in the gate.
 
 ## Log
 
@@ -78,7 +78,31 @@ Build exactly what's needed, in the shape docs/continuation-dumps.md "Sandbox AP
 - The Sandbox no longer checks the dump marker itself (nocomment, 0180, changes it): the
   loader refuses non-dumps. docs/host.md: host-driven runs and the dump exports; guide
   docs/guide/host.md: "Persisting a run that waits", pointing at the example.
+- Rebased onto 0180 (directive marker; the Sandbox leaves the check to the loader) and
+  portable's async-body fix (4572d540). The tool became `tools.sleep` (D2632: dotted
+  names make a namespace object), so `djs resume --explain`, whose host knows
+  `tools.<name>`, explains the example's dump. Both modes run with 5 s; README filled in
+  with the transcripts, the dump and the --explain output.
 - Decisions D2630 (host-driven runs) and D2631 (dump exports' staging; no ABI bump, as
   the coordinator agreed).
 
+## Follow-ups
+- `djs resume --explain` refuses dumps whose open calls name functions the CLI does not
+  know (`$dump.pending: unknown host function sleep`); since it answers nothing it could
+  accept any name. It also prints positions as `dump.js:L:C` rather than the file's name.
+- The rest of the Sandbox run API (0175): journals over host-driven runs, `runAsync` on
+  top of begin/advance, packaging.
+
 ## Result
+
+- `examples/sleep-dump/`: `run.sh` (builds the dump-enabled module, runs node) with
+  `--restart` for two processes; `sleep-dump.ts`; README with the real transcript, dump
+  and `djs resume --explain` output, and what is VM state vs host state.
+- Sandbox: host-driven runs, `sandbox.begin(code, params, {filename})` -> `Run {state,
+  calls, value, error, settle, advance, dump}`, `Sandbox.resume(text, opts)`;
+  `load()` returns `{calls}`; dotted host function names (D2630, D2632).
+- djs-wasm: `vm_outcome`; `vm_load_dump(vm, names_len, len)` returns Loaded;
+  `vm_dump` passes the host's name table and handles to the exporter (D2631).
+- Tests: js/test/run.test.ts, js/test/sleep-dump.test.ts (50 ms, in the gate's js step).
+- Docs: docs/host.md (host-driven runs, the exports), guide docs/guide/host.md
+  ("Persisting a run that waits").

@@ -8278,3 +8278,14 @@ names: the same name table (tab-separated, id order; `DumpOptions::host_fn_name`
 values to name (`handle:name`, tab-separated; `DumpOptions::handles`). The signatures
 change in place without an ABI version bump (D024): the dump exports are optional,
 behind djs-wasm's `dump` feature, and only the Sandbox of the same package calls them.
+
+## D2632: Dotted host function names make a namespace object
+date: 2026-11-03 · by: example · issue: 0179
+`functions`/`asyncFunctions` (and `defineFunction`/`defineAsyncFunction`) take dotted
+names: `"tools.sleep"` defines `sleep` on a global object `tools`, which the sandbox makes
+for its first such name and keeps a handle to, as `console.log` always was. Dumps and loads
+name host functions by these full names (`$dump.pending(2, "tools.sleep", [5000])`), so a
+Sandbox's dump of codemode-shaped tools resumes in the CLI (`djs resume`, whose tools are
+`tools.<name>`) and the other way round. One level only (`a.b.c` is the property `b.c` of
+`a`); after `fromBytes`, a new dotted name makes a new namespace object instead of
+extending the restored one.

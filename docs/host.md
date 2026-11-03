@@ -99,7 +99,8 @@ sb.dispose();
 - A promise as the result is unwrapped: its value, or `threw` with its reason; a promise
   that can never settle is a `threw` error.
 - `defineFunction(name, f)`, `defineAsyncFunction(name, f)` and `setGlobal(name, value)`
-  add globals between runs.
+  add globals between runs. A dotted function name (`tools.read`) is a property of a
+  global object (`tools`) the sandbox makes for its first such name (D2632).
 - Errors are `SandboxError` with a `kind`:
   - `threw`: an uncaught exception in the VM. `message` is the display form (`TypeError: x`);
     `value` is the value as read.
