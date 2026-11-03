@@ -33,8 +33,8 @@ test("a dump recreates closures, data and buffers in another sandbox", async () 
 
 test("live values are refused with their path", async () => {
   const s = new Sandbox({ module: await loadModule() });
-  s.run("globalThis.p = new Promise(() => {});");
-  assert.throws(() => s.dump(), (e: SandboxError) => e.kind === "misuse" && /p: a pending promise/.test(e.message));
+  s.run("globalThis.w = { cache: new WeakMap() };");
+  assert.throws(() => s.dump(), (e: SandboxError) => e.kind === "misuse" && /w\.cache: a weak collection/.test(e.message));
   assert.throws(() => s.load("x = 1"), /not a djs dump/);
 });
 
