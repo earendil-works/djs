@@ -9,10 +9,16 @@ publish.workspace = true
 name = "djs"
 path = "src/main.rs"
 
+[features]
+default = ["full", "unicode"]
+# djs-core's features (D2411): `--no-default-features` builds against the slim engine.
+full = ["djs-prelude/full"]
+unicode = ["djs-prelude/unicode"]
+
 [dependencies]
-djs-core = { path = "../djs-core" }
+djs-core = { path = "../djs-core", default-features = false }
 # The base snapshot: VMs start as a copy, not a prelude compile (D1321).
-djs-prelude = { path = "../djs-prelude" }
+djs-prelude = { path = "../djs-prelude", default-features = false, features = ["raw", "registry"] }
 # `djs heap`: snapshot containers are zstd frames against a reference image (D2260); the
 # C library is the only decoder that takes raw-content dictionaries (D2264).
 zstd = { version = "0.13", default-features = false }

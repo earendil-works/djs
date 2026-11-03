@@ -51,6 +51,13 @@ fn main() {
         format!("/// The base image's builtin prefix (`Roots::BASE_END`).\npub const BASE_END: u32 = {base_end};\n"),
     )
     .expect("cannot write the base's prefix length");
+    // The build hash of the djs-core that made the image, which lib.rs compares with the
+    // library's: the two are separate builds whose features cargo resolves apart (D2411).
+    std::fs::write(
+        dir.join("built_by.rs"),
+        format!("const BUILT_BY: u32 = {:#010x};\n", djs_core::vm::BUILD_HASH),
+    )
+    .expect("cannot write the build hash");
     if std::env::var_os("CARGO_FEATURE_REGISTRY").is_some() {
         registry_offsets(&vm, &dir);
     }

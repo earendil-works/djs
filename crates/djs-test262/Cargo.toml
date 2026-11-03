@@ -9,7 +9,13 @@ publish.workspace = true
 name = "djs-test262"
 path = "src/main.rs"
 
+[features]
+default = ["full", "unicode"]
+# djs-core's features (D2411): `--no-default-features` builds against the slim engine.
+full = ["djs-prelude/full"]
+unicode = ["djs-prelude/unicode"]
+
 [dependencies]
-djs-core = { path = "../djs-core" }
+djs-core = { path = "../djs-core", default-features = false }
 # The base snapshot: VMs start as a copy, not a prelude compile (D1321).
-djs-prelude = { path = "../djs-prelude" }
+djs-prelude = { path = "../djs-prelude", default-features = false, features = ["raw", "registry"] }

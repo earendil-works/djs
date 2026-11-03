@@ -117,6 +117,9 @@ pub struct Builtin {
     /// `@fast`: has a leaf fast path in Rust (`builtins/fast.rs`, D1850), tried before the
     /// builtin runs; the prelude marks it with `%MarkFast(f)`.
     pub fast: bool,
+    /// `@slim-omit`: left out of the slim build's prelude, like every builtin of a file
+    /// marked `// @slim-omit` (D2411).
+    pub slim_omit: bool,
 }
 
 /// A checked program: every name resolved and every function type-correct.
@@ -146,6 +149,7 @@ const BUILTIN_TAGS: &[&str] = &[
     "native",
     "intrinsic",
     "fast",
+    "slim-omit",
 ];
 
 pub fn check(decls: Declarations, modules: Vec<Module>) -> Result<Program, Vec<Diagnostic>> {
@@ -329,6 +333,7 @@ fn builtin_info(
         intrinsic: false,
         native: false,
         fast: false,
+        slim_omit: false,
     };
     let mut length = None;
     let mut parent = None;
@@ -398,6 +403,7 @@ fn builtin_info(
             }
             "native" => b.native = true,
             "fast" => b.fast = true,
+            "slim-omit" => b.slim_omit = true,
             "intrinsic" => b.intrinsic = true,
             other => err(format!(
                 "unknown tag `@{other}` (builtin functions know {})",

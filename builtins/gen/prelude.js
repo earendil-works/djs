@@ -3353,7 +3353,7 @@ function AggregateErrorConstructor(errors, message, options) {
   return o;
 }
 
-// builtins/error.ts:301 constructor SuppressedError
+// builtins/error.ts:302 constructor SuppressedError
 function SuppressedErrorConstructor(error, suppressed, message) {
   const o = %ErrorCreate(GetPrototypeFromConstructor(new.target, "SuppressedErrorPrototype"));
   if (message !== undefined) {
@@ -3365,44 +3365,44 @@ function SuppressedErrorConstructor(error, suppressed, message) {
   return o;
 }
 
-// builtins/error.ts:319 %CallSitePrototype%.isNative
+// builtins/error.ts:320 %CallSitePrototype%.isNative
 function CallSiteIsNative() {
   return %CallSiteSlot(this, 5);
 }
 
-// builtins/error.ts:327 %CallSitePrototype%.isConstructor
+// builtins/error.ts:328 %CallSitePrototype%.isConstructor
 function CallSiteIsConstructor() {
   return %CallSiteSlot(this, 6);
 }
 
-// builtins/error.ts:335 %CallSitePrototype%.getFileName
+// builtins/error.ts:336 %CallSitePrototype%.getFileName
 function CallSiteGetFileName() {
   return %CallSiteSlot(this, 2);
 }
 
-// builtins/error.ts:343 %CallSitePrototype%.getFunction
+// builtins/error.ts:344 %CallSitePrototype%.getFunction
 function CallSiteGetFunction() {
   return %CallSiteSlot(this, 0);
 }
 
-// builtins/error.ts:351 %CallSitePrototype%.getFunctionName
+// builtins/error.ts:352 %CallSitePrototype%.getFunctionName
 function CallSiteGetFunctionName() {
   return %CallSiteSlot(this, 1);
 }
 
-// builtins/error.ts:359 %CallSitePrototype%.getLineNumber
+// builtins/error.ts:360 %CallSitePrototype%.getLineNumber
 function CallSiteGetLineNumber() {
   const line = %CallSiteSlot(this, 3);
   return line === 0 ? null : line;
 }
 
-// builtins/error.ts:368 %CallSitePrototype%.getColumnNumber
+// builtins/error.ts:369 %CallSitePrototype%.getColumnNumber
 function CallSiteGetColumnNumber() {
   const line = %CallSiteSlot(this, 3);
   return line === 0 ? null : %CallSiteSlot(this, 4);
 }
 
-// builtins/error.ts:378 value %CallSitePrototype%[Symbol.toStringTag]
+// builtins/error.ts:379 value %CallSitePrototype%[Symbol.toStringTag]
 function CallSiteToStringTag() {
   return "CallSite";
 }

@@ -11,6 +11,11 @@ description = "The wasm32 export layer over djs-core's Vm (docs/host.md)."
 crate-type = ["cdylib", "rlib"]
 
 [features]
+default = ["full", "unicode"]
+# djs-core's features (D2411); without `full` this is the slim module
+# (`scripts/build-wasm.sh --slim`, djs-slim.wasm).
+full = ["djs-prelude/full"]
+unicode = ["djs-prelude/unicode"]
 # Exports `vm_new_compiled` (Vm::new: builds the realm and compiles the prelude), for
 # checking the base snapshot in wasm. Off by default, so release modules do not carry
 # the prelude source next to its compiled base. The gate's debug build turns it on.
@@ -25,7 +30,7 @@ docs = []
 unsafe-heap = ["djs-core/unsafe-heap"]
 
 [dependencies]
-djs-core = { path = "../djs-core" }
+djs-core = { path = "../djs-core", default-features = false }
 # The base snapshot: vm_new copies it (D1321).
 # The base snapshot, coded (D2252): vm_new copies it after a decode once per instance.
 djs-prelude = { path = "../djs-prelude", default-features = false, features = ["packed"] }

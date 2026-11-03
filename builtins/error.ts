@@ -297,6 +297,7 @@ function AggregateErrorConstructor(errors: Value, message: Value, options?: Valu
  * SuppressedError ( error, suppressed, message ), 20.5.8.1.1.
  * @constructor SuppressedError
  * @extends Error
+ * @slim-omit
  */
 function SuppressedErrorConstructor(error: Value, suppressed: Value, message: Value): Obj {
   const o: Obj = ErrorCreate(GetPrototypeFromConstructor(new.target, "SuppressedErrorPrototype"));

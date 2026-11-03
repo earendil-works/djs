@@ -15,12 +15,18 @@ path = "src/main.rs"
 name = "djs-abidrive"
 path = "src/bin/djs-abidrive.rs"
 
+[features]
+default = ["full", "unicode"]
+# djs-core's features (D2411): `--no-default-features` builds against the slim engine.
+full = ["djs-prelude/full", "djs-wasm/full", "djs-test262/full"]
+unicode = ["djs-prelude/unicode", "djs-wasm/unicode", "djs-test262/unicode"]
+
 [dependencies]
-djs-core = { path = "../djs-core" }
+djs-core = { path = "../djs-core", default-features = false }
 # The base snapshot: VMs start as a copy, not a prelude compile (D1321).
-djs-prelude = { path = "../djs-prelude" }
+djs-prelude = { path = "../djs-prelude", default-features = false, features = ["raw", "registry"] }
 # The wasm export layer, driven natively by djs-abidrive to compare images with the wasm
 # build (0072).
-djs-wasm = { path = "../djs-wasm" }
+djs-wasm = { path = "../djs-wasm", default-features = false }
 # Shared runner utilities (parallel map, ratchet file, globs, tables); see D1101.
-djs-test262 = { path = "../djs-test262" }
+djs-test262 = { path = "../djs-test262", default-features = false }

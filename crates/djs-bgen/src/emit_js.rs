@@ -37,16 +37,32 @@ pub const HEADER: &str =
 pub fn emit(p: &Program, sources: &Sources, omit: &[&str]) -> String {
     let e = Emitter { p };
     let file_of = |b: &Builtin| sources.file(p.function(b).span).name.as_str();
-    let kept: Vec<&Builtin> = p.builtins.iter().filter(|b| !omit.contains(&file_of(b))).collect();
+    let slim = !omit.is_empty();
+    let gone = |b: &Builtin| slim && (b.slim_omit || omit.contains(&file_of(b)));
+    let kept: Vec<&Builtin> = p.builtins.iter().filter(|b| !gone(b)).collect();
+    // The constructors the omitted builtins make: kept builtins installed onto them
+    // (`%TypedArray%.prototype.toString` is Array's) go too.
+    let gone_ctors: Vec<&str> = p
+        .builtins
+        .iter()
+        .filter(|b| gone(b))
+        .flat_map(|b| &b.installs)
+        .filter(|i| i.on_global() && matches!(i.kind, InstallKind::Constructor { .. }))
+        .map(|i| i.key.as_str())
+        .collect();
+    let on_gone = |i: &Install| {
+        let root = i.target.split('.').next().unwrap_or("");
+        gone_ctors.contains(&root)
+    };
     let mut out = String::from(HEADER);
-    if !omit.is_empty() {
+    if slim {
         out.push_str("// The slim build's prelude (D2411): without ");
         out.push_str(&omit.join(", "));
-        out.push_str(".\n");
+        out.push_str(" and the builtins tagged @slim-omit.\n");
         let gone: Vec<&str> = p
             .builtins
             .iter()
-            .filter(|b| omit.contains(&file_of(b)))
+            .filter(|b| gone(b))
             .map(|b| b.name.as_str())
             .collect();
         let mut dangling: Vec<String> = Vec::new();
@@ -134,7 +150,7 @@ pub fn emit(p: &Program, sources: &Sources, omit: &[&str]) -> String {
         for i in b
             .installs
             .iter()
-            .filter(|i| !i.on_global() && !ctor_keys.contains(&i.target.as_str()))
+            .filter(|i| !i.on_global() && !ctor_keys.contains(&i.target.as_str()) && !on_gone(i))
         {
             rest.push((i.target.clone(), i.key.clone(), install(b, i)));
         }

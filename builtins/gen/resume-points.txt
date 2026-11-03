@@ -1186,12 +1186,12 @@ AggregateErrorConstructor: reentrant (constructor AggregateError)
   builtins/error.ts:292:3  DefineDataPropertyOrThrow (intrinsic)
 
 SuppressedErrorConstructor: reentrant (constructor SuppressedError)
-  builtins/error.ts:302:30  GetPrototypeFromConstructor (builtin)
-  builtins/error.ts:304:45  ToString (builtin)
-  builtins/error.ts:304:5  DefineDataPropertyOrThrow (intrinsic)
-  builtins/error.ts:306:3  DefineDataPropertyOrThrow (intrinsic)
+  builtins/error.ts:303:30  GetPrototypeFromConstructor (builtin)
+  builtins/error.ts:305:45  ToString (builtin)
+  builtins/error.ts:305:5  DefineDataPropertyOrThrow (intrinsic)
   builtins/error.ts:307:3  DefineDataPropertyOrThrow (intrinsic)
-  builtins/error.ts:308:3  RecordStack (builtin)
+  builtins/error.ts:308:3  DefineDataPropertyOrThrow (intrinsic)
+  builtins/error.ts:309:3  RecordStack (builtin)
 
 CallSiteIsNative: leaf (%CallSitePrototype%.isNative)
 

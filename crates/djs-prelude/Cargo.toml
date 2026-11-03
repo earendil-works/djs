@@ -8,9 +8,13 @@ description = "The base snapshot: djs-core's realm with the prelude installed, m
 
 [features]
 default = ["raw", "registry", "full", "unicode"]
-# djs-core's features (D2411), for the base image this crate builds.
+# djs-core's features (D2411), for the base image this crate builds: its build script's
+# djs-core must have the same as the library's (a build-dependency resolves its features
+# on its own), which lib.rs checks by the build hash.
 full = ["djs-core/full"]
-unicode = ["djs-core/unicode"]
+unicode = ["regexp-unicode-props", "unicode-normalization"]
+regexp-unicode-props = ["djs-core/regexp-unicode-props"]
+unicode-normalization = ["djs-core/unicode-normalization"]
 # `BASE`, the image as it is: native builds (copied per VM with no decode).
 raw = []
 # `BASE_PACKED`, the image coded with djs-lzrc (D2252): djs-wasm, where the module's size
