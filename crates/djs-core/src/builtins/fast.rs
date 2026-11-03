@@ -338,8 +338,8 @@ fn split(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
         if (cuts.len() as u32) < lim {
             cuts.push_out((p as u32, n));
         }
-        // Each piece copied straight from `s` (flat, one-byte), the empty ones shared
-        // (0129: through `substring` and `join` each paid their checks again).
+        // Each piece a slice of `s` or copied straight from it (flat, one-byte), the empty
+        // ones shared (0129: through `substring` and `join` each paid their checks again).
         let empty = Value::string(heap.atom_string(atoms::EMPTY)?);
         parts.reserve_exact(cuts.len());
         for (a, b) in cuts {
@@ -347,6 +347,9 @@ fn split(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
                 empty
             } else if a == 0 && b == n {
                 Value::string(s)
+            } else if let Some(piece) = heap.substring_slice(s, a, b)? {
+                // Long lines of a long text share its units (D2542).
+                Value::string(piece)
             } else {
                 Value::string(heap.alloc_latin1_pieces(&[(s, a, b)], b - a)?)
             });

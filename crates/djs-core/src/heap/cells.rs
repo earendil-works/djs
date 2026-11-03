@@ -53,6 +53,10 @@ pub mod gc_bits {
     /// A Map/Set/WeakMap/WeakSet object in the old region whose keys include young cells:
     /// a minor collection rehashes it (set by the mark walk, cleared by the update walk).
     pub const REHASH: u8 = 4;
+    /// A slice's parent whose slices a full collection counts (`HASH` holds the sum
+    /// meanwhile), then one whose slices get copies (compactor.rs, D2542). Cleared with
+    /// the mark.
+    pub const COUNTED: u8 = 8;
 }
 
 /// Per-kind header flags.

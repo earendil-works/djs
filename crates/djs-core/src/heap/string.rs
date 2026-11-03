@@ -1004,15 +1004,13 @@ impl Heap {
     /// referenced directly, so it is never written again); a shorter one is copied.
     pub fn flatten(&mut self, s: Str) -> Result<Str, HeapError> {
         let k = self.arena().get(s.0, Header::KIND);
-        if k == CellKind::Slice as u8 {
-            return self.unslice(s);
-        }
-        if k != CellKind::Rope as u8 {
+        let slice = k == CellKind::Slice as u8;
+        if k != CellKind::Rope as u8 && !slice {
             // Flat already (a flat cell's kind is checked where it is read).
             return Ok(s);
         }
         let s = self.resolve_str(s);
-        if self.cell_kind(s.0) != CellKind::Rope {
+        if !matches!(self.cell_kind(s.0), CellKind::Rope | CellKind::Slice) {
             return Ok(s);
         }
         let len = self.str_len(s);
@@ -1041,27 +1039,13 @@ impl Heap {
         if hash != 0 && a.get(dst, Str8::HASH) == 0 {
             a.set(dst, Str8::HASH, hash);
         }
-        a.set(s.0, Rope::LEFT, Ref(dst));
-        a.set(s.0, Rope::RIGHT, Ref::NULL);
-        let f = self.cell_flags(s.0);
-        self.set_cell_flags(s.0, (f & !flags::ROPE_APPEND) | flags::ROPE_FLATTENED);
-        Ok(Str(dst))
-    }
-
-    /// Copies the slice `s` into a flat cell and turns `s` into a flattened rope over it,
-    /// in place: later reads of `s` find the copy, and the parent is no longer kept.
-    pub(crate) fn unslice(&mut self, s: Str) -> Result<Str, HeapError> {
-        let len = self.str_len(s);
-        let dst = self.alloc_flat(len, false)?;
-        let (from, _) = self.leaf_data(s.0);
-        let a = self.arena_mut();
-        a.copy_within(from, len, dst + Str8::DATA.offset);
-        let hash = a.get(s.0, Slice::HASH);
-        a.set(dst, Str8::HASH, hash);
+        // A slice becomes a flattened rope in place (same size, `PARENT` is `LEFT`): later
+        // reads find the copy, and the parent is no longer kept.
         a.set(s.0, Header::KIND, CellKind::Rope as u8);
         a.set(s.0, Rope::LEFT, Ref(dst));
         a.set(s.0, Rope::RIGHT, Ref::NULL);
-        self.set_cell_flags(s.0, flags::ROPE_FLATTENED);
+        let f = if slice { 0 } else { self.cell_flags(s.0) };
+        self.set_cell_flags(s.0, (f & !flags::ROPE_APPEND) | flags::ROPE_FLATTENED);
         Ok(Str(dst))
     }
 
@@ -1088,27 +1072,47 @@ impl Heap {
         if end - start < SLICE_MIN_LEN || self.str_len(s) < SLICE_PARENT_MIN_LEN {
             return Ok(None);
         }
-        let mut s = self.resolve_str(s);
-        let (parent, base) = match self.cell_kind(s.0) {
-            CellKind::Str8 if self.cell_flags(s.0) & flags::STR_APPEND_BUF == 0 => (s.0, 0),
-            CellKind::Slice => self.slice_parts(s.0),
-            CellKind::Rope if !self.str_is_two_byte(s) => {
-                // A concatenation (or an append rope): its flat form is the parent (a
-                // whole append buffer is frozen by `flatten` and used as is).
-                s = self.flatten(s)?;
-                (s.0, 0)
-            }
-            _ => return Ok(None),
-        };
-        if self.cell_kind(parent) != CellKind::Str8 {
-            return Ok(None);
+        // (A rope is not sliced: callers that cut many pieces flatten it first.)
+        match self.slice_source(s) {
+            Some((parent, base)) => self
+                .alloc_slice(parent, base + start, end - start)
+                .map(Some),
+            None => Ok(None),
         }
+    }
+
+    /// The parent and offset that slices of `s` read from: `s` itself if it is a flat
+    /// one-byte string, its parent if it is a slice, else `None`.
+    pub(crate) fn slice_source(&self, s: Str) -> Option<(u32, u32)> {
+        let s = self.resolve_str(s);
+        match self.cell_kind(s.0) {
+            CellKind::Str8 => Some((s.0, 0)),
+            CellKind::Slice => Some(self.slice_parts(s.0)),
+            _ => None,
+        }
+    }
+
+    /// A slice of `len` units of the flat one-byte string `parent` from unit `off` on.
+    pub(crate) fn alloc_slice(
+        &mut self,
+        parent: u32,
+        off: u32,
+        len: u32,
+    ) -> Result<Str, HeapError> {
         let c = self.alloc_cell(CellKind::Slice, Slice::LAYOUT.min_size)?;
         let a = self.arena_mut();
-        a.set(c, Slice::LEN, end - start);
+        a.set(c, Slice::LEN, len);
         a.set(c, Slice::PARENT, Ref(parent));
-        a.set(c, Slice::OFF, base + start);
-        Ok(Some(Str(c)))
+        a.set(c, Slice::OFF, off);
+        Ok(Str(c))
+    }
+
+    /// Where the units of `s` start in the arena and whether they are two-byte; `s` must
+    /// be [`Heap::contiguous`] (a flat cell, an append rope or a slice).
+    pub(crate) fn contiguous_data(&self, s: Str) -> (u32, bool) {
+        let s = self.resolve_str(s);
+        let cell = self.append_rope_buffer(s).unwrap_or(s.0);
+        self.leaf_data(cell)
     }
 
     /// Concatenates two strings. Results shorter than [`ROPE_MIN_LEN`] are flat copies;

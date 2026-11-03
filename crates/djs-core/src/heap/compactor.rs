@@ -336,42 +336,61 @@ impl Marker<'_> {
     /// After the mark of a full collection: keeps each slice's parent that nothing else
     /// reached if its slices cover enough of it ([`SLICE_KEEP_SHARE`]); otherwise keeps it
     /// for this collection only and flags its slices (`SLICE_DETACH`) for a copy right
-    /// after it. Returns the flagged slices. Without memory for the bookkeeping every
-    /// parent is kept, as in a minor collection.
+    /// after it. Returns the flagged slices.
+    ///
+    /// Two walks over the marked cells, no table. The first sums, in each such parent's
+    /// `HASH` field, the units its slices cover (the cached hash is dropped; it is
+    /// computed again when needed) and sets `gc_bits::COUNTED`. The second marks the
+    /// parent at its first slice and leaves `COUNTED` set if its slices are to be copied
+    /// (the update pass clears it with the mark).
     fn resolve_slices(&mut self) -> Vec<u32> {
-        let mut found: Vec<(u32, u32)> = Vec::new();
         let mut detach: Vec<u32> = Vec::new();
-        let room = found.try_reserve_exact(self.slices as usize).is_ok()
-            && detach.try_reserve_exact(self.slices as usize).is_ok();
-        let mut at = self.live.next_live(self.old);
-        while let Some(c) = at {
-            let h: u64 = self.arena.read(c);
-            if h as u8 == CellKind::Slice as u8 {
+        let room = detach.try_reserve_exact(self.slices as usize).is_ok();
+        for pass in 0..2 {
+            let mut at = self.live.next_live(self.old);
+            while let Some(c) = at {
+                let h: u64 = self.arena.read(c);
+                at = self.live.next_live(c + (h >> 32) as u32);
+                if h as u8 != CellKind::Slice as u8 {
+                    continue;
+                }
                 let p = self.arena.get(c, Slice::PARENT).0;
-                if !room {
+                let gc = self.arena.get(p, Header::GC);
+                let counted = gc & gc_bits::COUNTED != 0;
+                let marked = self.is_marked(p);
+                if pass == 0 {
+                    if !marked {
+                        let n = self.arena.get(c, Slice::LEN);
+                        let sum = self.arena.get(p, Str8::HASH);
+                        let sum = if counted { sum.saturating_add(n) } else { n };
+                        self.arena.set(p, Header::GC, gc | gc_bits::COUNTED);
+                        self.arena.set(p, Str8::HASH, sum);
+                    }
+                    continue;
+                }
+                if !counted {
+                    // Reached otherwise, or kept for its slices.
+                    continue;
+                }
+                if !marked {
+                    // The parent's first slice: decide. This collection keeps the parent
+                    // either way (its slices still read it).
+                    let len = self.arena.get(p, Str8::LEN);
+                    let covered = u64::from(self.arena.get(p, Str8::HASH));
+                    self.arena.set(p, Str8::HASH, 0);
+                    let copy = room
+                        && len >= SLICE_KEEP_LEN
+                        && covered * SLICE_KEEP_SHARE < u64::from(len);
+                    if !copy {
+                        self.arena.set(p, Header::GC, gc & !gc_bits::COUNTED);
+                        self.mark(p);
+                        continue;
+                    }
                     self.mark(p);
-                } else if !self.is_marked(p) {
-                    found.push_out((p, c));
                 }
-            }
-            at = self.live.next_live(c + (h >> 32) as u32);
-        }
-        found.sort_unstable();
-        for group in found.chunk_by(|a, b| a.0 == b.0) {
-            let p = group[0].0;
-            let len = self.arena.get(p, Str8::LEN);
-            let covered: u64 = group
-                .iter()
-                .map(|&(_, c)| u64::from(self.arena.get(c, Slice::LEN)))
-                .sum();
-            // This collection keeps the parent either way: its slices still read it.
-            self.mark(p);
-            if len >= SLICE_KEEP_LEN && covered * SLICE_KEEP_SHARE < u64::from(len) {
-                for &(_, c) in group {
-                    let f = self.arena.get(c, Header::FLAGS);
-                    self.arena.set(c, Header::FLAGS, f | flags::SLICE_DETACH);
-                    detach.push_out(c);
-                }
+                let f = self.arena.get(c, Header::FLAGS);
+                self.arena.set(c, Header::FLAGS, f | flags::SLICE_DETACH);
+                detach.push_out(c);
             }
         }
         detach
@@ -884,7 +903,7 @@ impl Heap {
             let size = arena.get(c, Header::SIZE);
             // The mark is not needed past this point (the bitmap has it).
             let gc = arena.get(c, Header::GC);
-            arena.set(c, Header::GC, gc & !gc_bits::MARK);
+            arena.set(c, Header::GC, gc & !(gc_bits::MARK | gc_bits::COUNTED));
             if kind == CellKind::FuncTemplate {
                 // Before its IC ref is updated: the slots are cleared where they are now.
                 super::gc::clear_offset_caches(arena, c);

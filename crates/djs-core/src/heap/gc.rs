@@ -173,34 +173,30 @@ fn forward(from: &mut Arena, to: &mut Arena, mut off: u32, base: u32) -> u32 {
     if from.get(off, Header::GC) & gc_bits::FORWARDED != 0 {
         return from.read::<u32>(off + FORWARD);
     }
-    if from.get(off, Header::KIND) == CellKind::Slice as u8 {
-        return forward_slice(from, to, off);
+    // A slice comes out as the flat string it reads (D2542): the image, and so the
+    // canonical hash, does not depend on which strings are slices.
+    let slice = from.get(off, Header::KIND) == CellKind::Slice as u8;
+    let (size, at, src, n) = if slice {
+        let len = from.get(off, Slice::LEN);
+        let parent = from.get(off, Slice::PARENT).0;
+        let size = Str8::DATA
+            .cell_size(len)
+            .expect("a slice fits a flat string");
+        let data = parent + Str8::DATA.offset + from.get(off, Slice::OFF);
+        (size, Str8::DATA.offset, data, len)
+    } else {
+        let size = from.get(off, Header::SIZE);
+        (size, 0, off, size)
+    };
+    let new = to
+        .alloc_init(size, at, from.slice(src, n))
+        .expect("the to-space has room for the whole from-space");
+    if slice {
+        to.set(new, Header::KIND, CellKind::Str8 as u8);
+        to.set(new, Header::SIZE, size);
+        to.set(new, Str8::LEN, n);
+        to.set(new, Str8::HASH, from.get(off, Slice::HASH));
     }
-    let size = from.get(off, Header::SIZE);
-    let new = to
-        .alloc_init(size, 0, from.slice(off, size))
-        .expect("to-space is reserved for the whole from-space");
-    from.set(off, Header::GC, gc_bits::FORWARDED);
-    from.write::<u32>(off + FORWARD, new);
-    new
-}
-
-/// A slice comes out of a canonical copy as the flat string it reads (D2542): the image,
-/// and so the canonical hash, does not depend on which strings are slices.
-fn forward_slice(from: &mut Arena, to: &mut Arena, off: u32) -> u32 {
-    let len = from.get(off, Slice::LEN);
-    let size = Str8::DATA
-        .cell_size(len)
-        .expect("a slice's length fits a flat string");
-    let parent = from.get(off, Slice::PARENT).0;
-    let data = parent + Str8::DATA.offset + from.get(off, Slice::OFF);
-    let new = to
-        .alloc_init(size, Str8::DATA.offset, from.slice(data, len))
-        .expect("the canonical to-space has no cap below the largest arena");
-    to.set(new, Header::KIND, CellKind::Str8 as u8);
-    to.set(new, Header::SIZE, size);
-    to.set(new, Str8::LEN, len);
-    to.set(new, Str8::HASH, from.get(off, Slice::HASH));
     from.set(off, Header::GC, gc_bits::FORWARDED);
     from.write::<u32>(off + FORWARD, new);
     new
@@ -243,7 +239,7 @@ impl Heap {
         // dies at the next full collection. Without room a slice stays as it is.
         for s in detach {
             let s = crate::value::Str(s);
-            if self.unslice(s).is_err() {
+            if self.flatten(s).is_err() {
                 let f = self.cell_flags(s.0);
                 self.set_cell_flags(s.0, f & !flags::SLICE_DETACH);
             }

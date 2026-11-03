@@ -51,14 +51,19 @@ impl Default for ParseOptions {
 
 /// Parses the JSON text in the heap string `input`.
 pub fn parse(heap: &mut Heap, input: Str, opts: &ParseOptions) -> Result<Value, ParseError> {
-    let flat = heap.flatten(input)?;
+    // Read in place (a slice too, D2542); long strings of a long one-byte text become
+    // slices of it.
+    let flat = heap.contiguous(input)?;
     let len = heap.str_len(flat);
-    let two_byte = heap.str_is_two_byte(flat);
+    let (data, two_byte) = heap.contiguous_data(flat);
     let src = Src::Heap {
-        data: Heap::str_data_offset(flat),
+        data,
         nbytes: if two_byte { len * 2 } else { len },
     };
     let mut p = Parser::new(heap, src, opts);
+    if len >= crate::heap::string::SLICE_PARENT_MIN_LEN {
+        p.slices = p.heap.slice_source(flat);
+    }
     if two_byte {
         p.run::<UTF16>()
     } else {
@@ -755,6 +760,8 @@ struct Parser<'a, 'o> {
     /// the parse runs (0116: a copy of each key was an allocation per distinct key per
     /// parse).
     key_cache: [(u32, u32, Atom); KEY_CACHE],
+    /// The parent and offset string values may be slices of (a long one-byte input).
+    slices: Option<(u32, u32)>,
 }
 
 #[inline]
@@ -783,6 +790,7 @@ impl<'a, 'o> Parser<'a, 'o> {
             values: Vec::new(),
             key_buf: Vec::new(),
             key_cache: [(0, 0, Atom::NULL); KEY_CACHE],
+            slices: None,
         }
     }
 
@@ -951,6 +959,16 @@ impl<'a, 'o> Parser<'a, 'o> {
     fn string_value<const E: u8>(&mut self, s: &StrTok) -> Result<Value, Fail> {
         if s.len == 0 {
             return Ok(Value::string(self.heap.atom_string(atoms::EMPTY)?));
+        }
+        if let Some((parent, base)) = self.slices
+            && !s.escaped
+            && s.len >= crate::heap::string::SLICE_MIN_LEN
+        {
+            // (One-byte input, so `start` counts units.)
+            let v = self
+                .heap
+                .alloc_slice(parent, base + s.start as u32, s.len)?;
+            return Ok(Value::string(v));
         }
         let dst = self.heap.alloc_str_uninit(s.len, s.two_byte)?;
         let data = Heap::str_data_offset(dst);

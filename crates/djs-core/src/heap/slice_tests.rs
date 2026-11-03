@@ -87,9 +87,12 @@ fn short_pieces_short_strings_and_two_byte_strings_are_copied() {
     assert_eq!(h.substring_slice(small, 0, 100).unwrap(), None);
     let wide = h.alloc_str(&"→".repeat(500)).unwrap();
     assert_eq!(h.substring_slice(wide, 0, 100).unwrap(), None);
-    // A concatenation is flattened first, then sliced.
+    // A concatenation is not sliced; flattened, it is (a flattened rope stands for its
+    // flat string).
     let half = h.alloc_str(&text(300)).unwrap();
     let rope = h.concat(half, half).unwrap();
+    assert_eq!(h.substring_slice(rope, 250, 350).unwrap(), None);
+    h.flatten(rope).unwrap();
     let s = slice(&mut h, rope, 250, 350);
     assert_eq!(kind(&h, s), CellKind::Slice);
     let t = text(300);
@@ -191,4 +194,62 @@ fn a_canonical_copy_writes_slices_as_flat_strings() {
         h.bytes().to_vec()
     };
     assert!(image(true) == image(false));
+}
+
+#[test]
+fn json_parse_slices_long_plain_strings_of_a_long_text() {
+    let mut h = Heap::new().unwrap();
+    let long = text(100);
+    let src = alloc::format!(
+        r#"{{"a":"{long}","b":"short","c":"{long}\n","d":["{long}"],"e":"é{long}"}}"#
+    );
+    let mut src = src;
+    while src.len() < SLICE_PARENT_MIN_LEN as usize {
+        src.push(' ');
+    }
+    let input = h.alloc_str(&src).unwrap();
+    let opts = crate::json::ParseOptions::default();
+    let v = crate::json::parse(&mut h, input, &opts).unwrap();
+    let o = v.as_object().unwrap();
+    let get = |h: &mut Heap, k: &str| {
+        let a = h.atom_str(k).unwrap();
+        match h.get_own_property(o, a) {
+            Some(object::Property::Data { value, .. }) => value.as_string().unwrap(),
+            _ => panic!("no {k}"),
+        }
+    };
+    let a = get(&mut h, "a");
+    assert_eq!(kind(&h, a), CellKind::Slice);
+    assert_eq!(h.str_to_string(a), long);
+    // Short, escaped: copies. (`é` is one Latin-1 unit: still sliced.)
+    let b = get(&mut h, "b");
+    assert_eq!(kind(&h, b), CellKind::Str8);
+    let c = get(&mut h, "c");
+    assert_eq!(kind(&h, c), CellKind::Str8);
+    assert_eq!(h.str_to_string(c), alloc::format!("{long}\n"));
+    let e = get(&mut h, "e");
+    assert_eq!(kind(&h, e), CellKind::Slice);
+    assert_eq!(h.str_to_string(e), alloc::format!("é{long}"));
+    // Parsing a slice reads it in place, and its strings slice the same parent.
+    let outer = h
+        .alloc_str(&alloc::format!(
+            "{:300}[\"{long}\",\"{long}\",\"{long}\"]",
+            ""
+        ))
+        .unwrap();
+    let inner = h
+        .substring_slice(outer, 300, h.str_len(outer))
+        .unwrap()
+        .unwrap();
+    let v = crate::json::parse(&mut h, inner, &opts).unwrap();
+    let x = h
+        .get_element_fast(v.as_object().unwrap(), 0)
+        .unwrap()
+        .as_string()
+        .unwrap();
+    assert_eq!(kind(&h, x), CellKind::Slice);
+    assert_eq!(h.arena().get(x.0, Slice::PARENT).0, outer.0);
+    assert_eq!(h.arena().get(x.0, Slice::OFF), 302);
+    assert_eq!(h.str_to_string(x), long);
+    h.verify().unwrap();
 }
