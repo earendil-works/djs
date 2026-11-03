@@ -8325,3 +8325,18 @@ record the same entries; `begin(code, params, { journal })` records a host-drive
 `runAsync` journal. Every run, host-driven or not, makes the sandbox refuse another until
 it ends (a host function that called `run` while `runAsync` waited used to start a second
 call over the first).
+
+## D2635: Both dumper packagings, chosen by the host; the image moves between modules
+date: 2026-11-03 · by: example · issue: 0175
+The Sandbox supports both packagings of D2564. A: `module` is built with the `dump`
+feature (`scripts/build-wasm.sh --dump`, target/djs-dump.wasm). B: `module` is the shipped
+module and `SandboxOptions.dumpModule` the dump module; `dump`, `load`, `Run.dump` and
+`Sandbox.resume` then run in a transient sandbox of the dump module restored from the VM's
+arena as it is (dumping leaves the main VM untouched, as in A), and a load collects there
+and replaces the main sandbox's VM with the image (handles, such as the loaded run's, are
+roots and keep their numbers). Given `dumpModule`, the Sandbox always goes through it,
+which lets one module test the transport. Measured at 0175: the dumper adds 274 KB raw,
+96.8 KB gzip (443.8 -> 540.6 KB gzip, +22%), and B costs 0–1 ms per dump or resume over A
+(the image copies). Which one hosts ship is 0177's measurement after images are retired;
+both are tested in the gate (a debug module without the feature beside the one with it,
+js/test/dumpresume.test.ts).

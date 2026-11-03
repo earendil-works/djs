@@ -80,6 +80,11 @@ step "guide (docs/guide)"; cargo run --quiet -p djs-docs -- check
 step "djs-wasm"
 cargo build -p djs-wasm --target wasm32-unknown-unknown --features compiled-prelude,dump --quiet
 export DJS_WASM="$PWD/target/wasm32-unknown-unknown/debug/djs_wasm.wasm"
+# 0175: the same build without the dumper, the main module of packaging B (D2635):
+# js/test/dumpresume.test.ts moves images between it and the module above. Its own target
+# directory, so the two modules do not overwrite each other.
+CARGO_TARGET_DIR=target/wasm-nodump cargo build -p djs-wasm --target wasm32-unknown-unknown --features compiled-prelude --quiet
+export DJS_WASM_NODUMP="$PWD/target/wasm-nodump/wasm32-unknown-unknown/debug/djs_wasm.wasm"
 step "js tests"; node --test js/test/*.test.ts
 # 0072: native and wasm builds leave byte-identical heap images and spend the same fuel.
 step "native vs wasm images"; ./scripts/determinism/native-vs-wasm.sh "$DJS_WASM"

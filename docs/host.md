@@ -133,7 +133,7 @@ sb.dispose();
   A host `collect()` at exactly that point can then fail for lack of to-space; collect
   when the VM is idle or done instead.
 
-### Host-driven runs and continuation dumps (D2630)
+### Host-driven runs and continuation dumps (D2630, D2633–D2635)
 
 `runAsync` calls the async host functions itself and returns only at the end. A host that
 wants to persist a run while it waits drives it instead (the first piece of
@@ -159,6 +159,34 @@ const { sandbox, run: again } = await Sandbox.resume(text, { asyncFunctions }); 
   host does with them (deliver a recorded result, issue the call again, reject it) is its
   own policy; timers and other host state are the host's to keep and re-arm.
 - `sb.load(text)` loads a dump into an existing sandbox and returns `{ calls }`.
+- `run`, `runAsync` and `replay` are this loop with the host's part built in (D2634): they
+  call each async host function as soon as the script calls it, pass results back before
+  every fuel slice, and wait at idle points. `begin(code, params, { journal })` records a
+  host-driven run (its `settle`s in order, a check at every idle point), and `replay` runs
+  that journal like a `runAsync` one. A dump names the run's result without taking a
+  handle, so it leaves the VM byte for byte as it was (D2633): a recorded run can be
+  dumped and still replays.
+
+**Packagings (D2635).** The dumper (cargo feature `dump`) is not in the shipped module. A
+host that persists runs either uses a module built with it (A: `scripts/build-wasm.sh
+--dump` writes target/djs-dump.wasm, usable as `module`), or keeps the small module and
+passes the dump module beside it (B):
+
+```ts
+const sb = await Sandbox.create({ module: await loadModule(), dumpModule: await loadModule("djs-dump.wasm"), asyncFunctions });
+```
+
+With `dumpModule`, `dump`, `load`, `Run.dump` and `Sandbox.resume` move the VM's image to
+a transient instance of the dump module and back (the feature leaves images alone, D2352,
+so either module reads the other's). Dumping copies the arena as it is (the VM is
+untouched); loading collects in the dump module and replaces the sandbox's VM by the
+result. Measured at 0175 (`wasm` profile, node 25, load ~10, medians of 21; a run waiting
+in a nested call with 10 / 1000 records in scope, 3.4 / 51 KB of dump):
+
+| | main module (gzip) | `Run.dump()` | `Sandbox.resume()` |
+| --- | ---: | ---: | ---: |
+| A: one module with the dumper | 1,312 KB raw, 540.6 KB | 2.4 / 5.3 ms | 1.1 / 5.5 ms |
+| B: djs.wasm + djs-dump.wasm | 1,038 KB raw, 443.8 KB (+ the dump module, loaded when needed) | 2.4 / 6.3 ms | 1.4 / 6.5 ms |
 
 ### Journals: record and replay (D1730)
 
