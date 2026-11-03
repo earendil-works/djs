@@ -464,6 +464,12 @@ impl Dumper<'_> {
             self.refuse(path.into(), &why);
             return None;
         }
+        let kind = func_flags::kind(u32::from(h.arena().get::<u16>(t, FuncTemplate::FLAGS)));
+        let site = if kind == func_flags::KIND_ASYNC_BODY {
+            self.body_site(path, f, site)?
+        } else {
+            site
+        };
         let at_yield = matches!(site.kind, SiteKind::Yield | SiteKind::AsyncYield);
         let hp = s.hp as usize;
         let argc = s
@@ -488,6 +494,68 @@ impl Dumper<'_> {
             return None;
         }
         Some(site)
+    }
+
+    /// A codemode body's site as the loader sees it: the dump writes the body as an
+    /// async function (`fn_text`), whose map must have the same site with the same
+    /// slots and operands. Its bindings' scopes are the function's (they are offsets
+    /// from its start); its position stays the body's, for the report.
+    fn body_site(&mut self, path: &str, f: Obj, site: Site) -> Option<Site> {
+        let h = self.h;
+        let t = h.closure_template(f);
+        let bits = template::debug_info(h, t)
+            .script
+            .get()
+            .map_or(0, |s| h.arena().get::<u32>(s, Script::OPTIONS));
+        let text = super::fn_text(h, f).map(|s| cat!("(", s, ")"));
+        let maps = match (text, self.scratch.as_mut()) {
+            (Some(text), Some(scratch)) => {
+                // The dump's goal (a Script) with the body's TypeScript options.
+                let opts = CompileOptions::from_bits("dump.js", &[], bits & !3);
+                crate::compiler::suspension_maps(scratch, text.as_bytes(), &opts)
+                    .ok()
+                    .map(|m| (m, text.len() as u32))
+            }
+            _ => None,
+        };
+        let wrapped = maps.and_then(|(maps, len)| {
+            maps.into_iter()
+                .find(|m| m.start == 1 && m.end == len - 1)
+                .and_then(|m| m.sites.into_iter().find(|s| s.name == site.name))
+        });
+        let names = |slots: &[Slot]| -> Vec<Slot> {
+            slots
+                .iter()
+                .map(|s| match s {
+                    Slot::Binding { name, .. } => Slot::Binding {
+                        name: name.clone(),
+                        scope: 0,
+                    },
+                    s => s.clone(),
+                })
+                .collect()
+        };
+        match wrapped {
+            Some(w)
+                if w.kind == site.kind
+                    && names(&w.args) == names(&site.args)
+                    && names(&w.locals) == names(&site.locals)
+                    && w.boxed == site.boxed
+                    && w.operands == site.operands
+                    && w.unsupported.is_none() =>
+            {
+                Some(Site { pos: site.pos, ..w })
+            }
+            _ => {
+                let why = cat!(
+                    "a codemode body whose frame at ",
+                    site.name,
+                    " differs from the async function the dump writes for it"
+                );
+                self.refuse(path.into(), &why);
+                None
+            }
+        }
     }
 
     pub(super) fn visit_builtin_closure(&mut self, n: usize, o: Obj) {

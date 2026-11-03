@@ -1463,7 +1463,7 @@ impl<'a> Dumper<'a> {
         if flags & func_flags::PRIVILEGED != 0 {
             return self.refuse(path, "an internal function of a builtin");
         }
-        let Some(src) = crate::builtins::function::source_slice(h, o) else {
+        let Some(src) = fn_text(h, o) else {
             return self.refuse(path, "a function without source text");
         };
         let class = matches!(
@@ -1554,7 +1554,9 @@ impl<'a> Dumper<'a> {
             {
                 self.edge(n, Value::object(p), || cat!(path, ".[[Prototype]]"));
             }
-        } else if !self.default_proto(o, proto) {
+        } else if !self.default_proto(o, proto) && kind != func_flags::KIND_ASYNC_BODY {
+            // (A codemode body is made with `Function.prototype` and only its run holds
+            // it: the function the dump writes for it is an async function's.)
             self.refuse(path, "a function with another prototype");
         }
     }
@@ -2356,7 +2358,7 @@ impl<'a> Dumper<'a> {
         {
             self.ts.set(true);
         }
-        crate::builtins::function::source_slice(self.h, f)
+        fn_text(self.h, f)
     }
 
     /// The expression for a value, in a context that may give a name (`ctx_name`: the
@@ -4004,6 +4006,29 @@ fn hash_text(s: &str) -> u64 {
         h = (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
     }
     h | 1
+}
+
+/// The text the dump writes for function `f`: its source; for a codemode body, which
+/// has none of its own (its span is the whole script), the async function it runs as,
+/// `async function (tools, console) {\n<body>\n}` (D2617).
+pub(super) fn fn_text(h: &Heap, f: Obj) -> Option<String> {
+    let t = h.closure_template(f);
+    let kind = func_flags::kind(u32::from(h.arena().get::<u16>(t, FuncTemplate::FLAGS)));
+    if kind != func_flags::KIND_ASYNC_BODY {
+        return crate::builtins::function::source_slice(h, f);
+    }
+    let a = h.arena();
+    let script = template::debug_info(h, t).script.get()?;
+    let text = |r: Ref| r.get().map(|s| h.str_to_string(crate::value::Str(s)));
+    let src = text(a.get::<Ref>(script, crate::heap::cells::Script::SOURCE))?;
+    let params = text(a.get::<Ref>(script, crate::heap::cells::Script::PARAMS)).unwrap_or_default();
+    Some(cat!(
+        "async function (",
+        params.replace(',', ", "),
+        ") {\n",
+        src,
+        "\n}"
+    ))
 }
 
 /// A function's text position: its script and source span.

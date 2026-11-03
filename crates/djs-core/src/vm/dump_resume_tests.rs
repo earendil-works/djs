@@ -677,3 +677,166 @@ fn the_report_names_where_activations_stopped() {
     );
     assert!(!d.text.contains("^\n"), "{}", d.text);
 }
+
+/// A codemode run (pi's Sandbox, `djs run --body`): the body, compiled as an async body
+/// with the parameters `tools` and `console`, which the host also defines as globals.
+const BODY: &str = "console.log(\"start\");\nlet n = 0;\nfor (const f of await tools.list()) {\n  \
+                    const body = await tools.read(f);\n  n += body.length;\n  console.log(f, body);\n}\n\
+                    const total = () => n;\nawait later(0);\nconsole.log(\"total\", total());\nreturn n;\n";
+
+/// A VM with the codemode host's `tools` and `console` (made by host code).
+fn body_host_vm() -> Vm {
+    let mut vm = new_vm();
+    run_value(
+        &mut vm,
+        "globalThis.tools = { list: () => later([\"a\", \"b\"]), read: (f) => later(f + f) };\n\
+         globalThis.console = { log: print }; 0",
+    );
+    vm
+}
+
+/// The body run up to idle point `k` (all of it with `usize::MAX`): its lines, the
+/// run's promise and the dump there.
+fn body_at(k: usize) -> (Vec<String>, Option<super::dump::Dumped>) {
+    let (lines, d) = body_dump(BODY, k);
+    (
+        lines,
+        d.map(|d| d.unwrap_or_else(|e| panic!("idle point {k}: {e}"))),
+    )
+}
+
+/// [`body_at`] for body `src`: the dump, or why it was refused.
+#[allow(clippy::type_complexity)]
+fn body_dump(src: &str, k: usize) -> (Vec<String>, Option<Result<super::dump::Dumped, String>>) {
+    let mut vm = body_host_vm();
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::async_body("body.js", &["tools", "console"]),
+        )
+        .unwrap();
+    let g = vm.global();
+    let args = ["tools", "console"].map(|n| {
+        let k = vm.heap_mut().atom_str(n).unwrap();
+        vm.heap().get_own_property(g, k).unwrap().value().unwrap()
+    });
+    vm.call(f, Value::object(g), &args).unwrap();
+    let (mut lines, mut seen, mut run) = (Vec::new(), 0, None);
+    loop {
+        match vm.run(1_000_000_000) {
+            Status::HostCall { call_id, .. } => {
+                let args = vm.host_call(call_id).unwrap().args;
+                let parts: Vec<String> = args.iter().map(|&v| vm.display(v)).collect();
+                lines.push(parts.join(" "));
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+            }
+            Status::Idle | Status::Done(_) => {
+                // The run's promise (`Idle` after the call returned, while it waits).
+                run.get_or_insert(state::result(&vm.heap));
+                let Some(&id) = vm.pending_host_calls().iter().min() else {
+                    let r = vm.promise_state(run.unwrap());
+                    let r = r.flatten().map(|r| r.map(|v| vm.display(v)));
+                    lines.push(alloc::format!("run {r:?}"));
+                    return (lines, None);
+                };
+                seen += 1;
+                if seen == k {
+                    break;
+                }
+                settle(&mut vm, id);
+            }
+            Status::Threw(e) => {
+                lines.push(alloc::format!("threw {}", vm.display(e)));
+                return (lines, None);
+            }
+            s => panic!("{s:?}"),
+        }
+    }
+    let handles = [("run", run.unwrap())];
+    let opts = super::dump::DumpOptions {
+        base: base(),
+        host: &["console", "tools", "print", "later"],
+        host_fn_name: &host_fn_name,
+        handles: &handles,
+    };
+    let d = vm.dump_report(&opts, None).map_err(|e| e.message());
+    (lines, Some(d))
+}
+
+/// The run's own activation is written as `async function (tools, console) {...}` and
+/// resumed at every idle point; the report points into the body.
+#[test]
+fn a_codemode_body_run_round_trips() {
+    let (want, _) = body_at(usize::MAX);
+    assert_eq!(want.last().unwrap(), "run Some(Ok(\"4\"))", "{want:?}");
+    for k in 1..=4 {
+        let (mut lines, d) = body_at(k);
+        let d = d.unwrap();
+        if std::env::var("DJS_DUMP_SHOW").is_ok_and(|v| v == alloc::format!("body@{k}")) {
+            std::println!("{}", d.text);
+        }
+        assert!(
+            d.text
+                .contains("$dump.resume(async function (tools, console) {\nconsole.log("),
+            "{}",
+            d.text
+        );
+        let mut vm = body_host_vm();
+        let loaded = load(&mut vm, &d.text).unwrap_or_else(|e| panic!("@{k}: {e}\n{}", d.text));
+        let (mut after, mut marks) = (Vec::new(), Vec::new());
+        drive(&mut vm, &mut after, &mut marks, None);
+        lines.extend(after);
+        let run = vm.heap().get_handle(loaded.handles[0].1);
+        let r = vm
+            .promise_state(run)
+            .flatten()
+            .map(|r| r.map(|v| vm.display(v)));
+        lines.push(alloc::format!("run {r:?}"));
+        assert_eq!(lines, want, "@{k}\n{}", d.text);
+        let at: Vec<(String, u32, u32, String)> = d
+            .activations
+            .iter()
+            .map(|s| {
+                (
+                    s.site.clone(),
+                    s.line,
+                    s.col,
+                    String::from(s.source_line.trim()),
+                )
+            })
+            .collect();
+        let want_at = match k {
+            1 => ("await#1", 3, 17, "for (const f of await tools.list()) {"),
+            2 | 3 => ("await#2", 4, 16, "const body = await tools.read(f);"),
+            _ => ("await#3", 9, 1, "await later(0);"),
+        };
+        assert_eq!(
+            at,
+            [(want_at.0.into(), want_at.1, want_at.2, want_at.3.into())],
+            "@{k}"
+        );
+        assert_eq!(d.activations[0].file, "body.js");
+    }
+}
+
+/// A body whose code would mean something else as a function is refused: `arguments`
+/// is a global in a body and the call's arguments in a function.
+#[test]
+fn a_codemode_body_that_differs_as_a_function_is_refused() {
+    let (_, d) = body_dump("await later(1); console.log(typeof arguments);", 1);
+    let e = d.unwrap().unwrap_err();
+    assert!(
+        e.contains("a codemode body whose frame at await#1 differs from the async function"),
+        "{e}"
+    );
+    // `this` is the global object in both.
+    let src = "const t = this; await later(1); console.log(t === globalThis); return 5";
+    let (want, _) = body_dump(src, usize::MAX);
+    let (mut lines, d) = body_dump(src, 1);
+    let d = d.unwrap().unwrap();
+    let mut vm = body_host_vm();
+    load(&mut vm, &d.text).unwrap();
+    drive(&mut vm, &mut lines, &mut Vec::new(), None);
+    assert_eq!(lines, want[..want.len() - 1]);
+    assert_eq!(want, ["true", "run Some(Ok(\"5\"))"]);
+}

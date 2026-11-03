@@ -268,6 +268,17 @@ passes, say, its run's promise as "run").
   with another prototype or own properties, keyed combinators (`allKeyed`), an async
   generator awaiting a `return()` value, then-reactions on promises of other
   constructors.
+- **Codemode bodies:** a run compiled as an async body (pi's Sandbox, `djs run --body`)
+  has no function text of its own; the dump writes it as the async function it runs as,
+  `async function (tools, console) {\n<body>\n}`, and resumes that. The exporter
+  compiles the wrapper's maps too and refuses a body whose frame differs there (code
+  that reads `arguments`, a global in a body); the report still points into the body
+  (D2617).
+- **Host names:** a script's own global lexical binding with a host global's name
+  (`const tools = ...`) hides the host's property and is dumped like any binding; the
+  checker refuses a free name that would read the host's (or the base's) global after
+  the dump where it read a script binding before, and a captured variable read as a
+  host global unless it holds the host's current value (D2618).
 - **TypeScript:** a dump that writes a function of a TypeScript script says so in its
   directive (`"djs-dump 2 typescript";`) and is compiled as TypeScript (D2615).
 - **Not carried:** the VM's clock and `Math.random`'s state are the host's to set again;

@@ -86,6 +86,19 @@ fresh VM, continue, same transcript.
 - Size (D2614): dump module 507,129 -> 537,056 gz; default 443,610 -> 443,813 (Script
   options). Docs: continuation-dumps.md "The exporter as built", functions-as-code.md
   refusal table; guide: none affected.
+- After the merge, two blockers (branch issue/0172-async-body-source): (1) example
+  (0179): a codemode body run's own activation was refused ("a function without source
+  text"). The exporter writes an async body as `async function (tools, console)
+  {\n<body>\n}`, takes the wrapper's map site after checking it equals the body's
+  (refuses otherwise, e.g. `arguments`), report positions stay the body's (D2617);
+  tests a_codemode_body_run_round_trips (every idle point, run's promise as a handle,
+  report line/col), a_codemode_body_that_differs_as_a_function_is_refused. (2) repl
+  (0174): a global lexical binding with a host name (plan.src.js `const tools`) was taken
+  for the host's value and dropped; now dumped, and the checker refuses free names that
+  would switch from a script binding to a host/base global, and captures read as host
+  globals unless they hold its value (D2618); the every-idle-point test now uses hosts
+  `console, tools, print, later`, plan included. Docs: continuation-dumps.md "The
+  exporter as built"; guide: none affected.
 
 ## Follow-ups
 - for-in loops in activations; sites the maps call unsupported (finally, using,

@@ -8193,3 +8193,32 @@ file the reader has. Hosts that write dumps get the original positions from
 `Vm::dump_report` (D2616). The hand-written fixtures in tests/dump/v2 lost their
 comments too: the test names each one's idle point, and its program's header comment
 says what the dump holds there.
+## D2617: A codemode body is dumped as the async function it runs as
+date: 2026-11-04 · by: portable · issue: 0172
+Every pi run is compiled as a codemode async body (`Goal::AsyncBody`), whose function has
+no source text of its own (its span is the whole script; `toString()` prints native
+code), so the exporter refused the run's own activation. The exporter now writes such a
+function as `async function (p1, p2) {\n<body>\n}` (the parameters from
+`Script::PARAMS`) and resumes that; sites are named by order, so `await#N` is the same
+site. Since the loader reads the frame by the wrapper's map, the exporter compiles the
+wrapper's maps too (as the dump's goal, with the body's TypeScript options) and takes
+the wrapper's site, after checking that its kind, parameter and local slots (by name),
+boxes and operand roles equal the body's; else it refuses the body ("differs from the
+async function the dump writes for it": a body that reads `arguments`, which is a
+global there and the call's arguments in a function). Binding scopes are the wrapper's
+(offsets from its start), the reported position stays the body's. The body's own
+`Function.prototype` prototype is not checked (only the run holds the function).
+`Function.prototype.toString` of a body is unchanged. Rejected: mapping scope offsets
+by the header's length (fragile where the maps differ anyway).
+
+## D2618: A script binding with a host name is the script's
+date: 2026-11-04 · by: portable · issue: 0172
+`DumpOptions::host` names the host's globals, which the loading VM defines again. A
+global lexical binding of such a name (`const tools = {...}`) is the script's own and
+hides the host's global object property, so it is dumped like any binding; only global
+object properties of host names are taken as the host's values. The checker (D2355's
+free-names check) refuses a free name that reads a script binding before the dump and
+would read the host's or the base's global after it, and accepts a captured variable
+written where it reads a host global only when it holds that global's current value
+(it accepted any host name before). Found by 0174 (plan.src.js resumed into the host's
+`tools.read`).
