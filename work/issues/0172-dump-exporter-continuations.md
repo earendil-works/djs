@@ -73,6 +73,12 @@ fresh VM, continue, same transcript.
   regenerated with scripts/harvest/build.py from work/scratch/0130/extract.jsonl into
   work/scratch/0172/private, so their fakes answer through `later`; the 0167 extraction
   has no idle points): 5,257 idle points in 1,260 cases, all dumped, loaded and equal.
+- After rebasing on 0174/0179: tests/corpus/ts/codemode-tools.ts has idle points now; its
+  functions are TypeScript text: dumps holding them are `// djs-dump 2 typescript`
+  (D2615). Frame boxes no longer join scope groups through the frame (only through
+  closures); a frame's hidden binding shared with closures (`<fields 0>`) is refused.
+  The exporter round-trip tests treat `later`/`print` as host globals, as `djs resume`
+  (0174) does; steps.dump.js regenerated so `djs resume` loads it.
 - Size (D2614): dump module 507,129 -> 537,056 gz; default 443,610 -> 443,813 (Script
   options). Docs: continuation-dumps.md "The exporter as built", functions-as-code.md
   refusal table; guide: none affected.

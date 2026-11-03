@@ -708,6 +708,9 @@ struct Dumper<'a> {
     /// Functions whose source was read so far (an over-count: a line that read none
     /// writes none).
     fns_read: core::cell::Cell<u32>,
+    /// A written function comes from a TypeScript script: the dump is compiled as
+    /// TypeScript (`// djs-dump 2 typescript`).
+    ts: core::cell::Cell<bool>,
     /// The base heap: the checker compiles the dump into it.
     scratch: Option<Heap>,
     /// The classes of the factory being written, by their names inside it.
@@ -761,6 +764,7 @@ impl<'a> Dumper<'a> {
             out: Vec::new(),
             skeleton: Vec::new(),
             fns_read: core::cell::Cell::new(0),
+            ts: core::cell::Cell::new(false),
             scratch: None,
             class_locals: Vec::new(),
             private_names: Vec::new(),
@@ -1775,9 +1779,13 @@ impl<'a> Dumper<'a> {
             if is_box[i] {
                 continue;
             }
+            // Closures share their boxes; an activation's frame holds its own, which
+            // join a group only through the closures that capture them.
+            let closure =
+                d.v.as_object()
+                    .is_some_and(|o| self.h.object_class(o) == ObjectClass::Function);
             for &e in &d.edges {
-                // Only closures have box edges.
-                if is_box[e] {
+                if closure && is_box[e] {
                     let (a, b) = (find(&mut parent, i), find(&mut parent, e));
                     parent[a] = b;
                 }
@@ -1919,6 +1927,9 @@ impl<'a> Dumper<'a> {
             return Err(DumpError(self.refusals));
         }
         let mut s = String::from(HEADER);
+        if self.ts.get() {
+            s.push_str(" typescript");
+        }
         let count = self.roots.len();
         cat_to!(
             &mut s,
@@ -2037,7 +2048,7 @@ impl<'a> Dumper<'a> {
             return;
         }
         let compiled = self.scratch.take().map(|mut scratch| {
-            let opts = crate::compiler::CompileOptions::script("dump.js");
+            let opts = super::dump_load::dump_options(self.ts.get());
             let r = crate::compiler::compile(&mut scratch, text.as_bytes(), &opts);
             (scratch, r)
         });
@@ -2318,7 +2329,20 @@ impl<'a> Dumper<'a> {
 
     fn fn_source(&self, n: usize) -> Option<String> {
         self.fns_read.set(self.fns_read.get() + 1);
-        crate::builtins::function::source_slice(self.h, self.nodes[n].v.as_object()?)
+        let f = self.nodes[n].v.as_object()?;
+        // A function of a TypeScript script makes the dump TypeScript (D2615).
+        let t = self.h.closure_template(f);
+        if let Some(script) = template::debug_info(self.h, t).script.get()
+            && self
+                .h
+                .arena()
+                .get::<u32>(script, crate::heap::cells::Script::OPTIONS)
+                & crate::compiler::CompileOptions::TYPESCRIPT_BIT
+                != 0
+        {
+            self.ts.set(true);
+        }
+        crate::builtins::function::source_slice(self.h, f)
     }
 
     /// The expression for a value, in a context that may give a name (`ctx_name`: the
@@ -2549,6 +2573,13 @@ impl<'a> Dumper<'a> {
             .map(|&b| String::from(self.nodes[b].path.rsplit('~').next().unwrap_or_default()))
             .collect();
         let dup = |name: &str| box_names.iter().filter(|n| *n == name).count() > 1;
+        for (bi, n) in box_names.iter().enumerate() {
+            if !is_ident(n) {
+                // A frame's hidden binding (a class's `<fields 0>`) that closures share.
+                let p = self.nodes[boxes[bi]].path.clone();
+                self.refuse(p, "an activation's hidden binding that closures share");
+            }
+        }
 
         // Scopes. A variable's name must be unique where it is declared; variables of the
         // same name (a loop's per-iteration bindings captured by several closures) go into

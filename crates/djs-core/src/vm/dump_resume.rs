@@ -28,7 +28,7 @@ use alloc::vec::Vec;
 use super::Vm;
 use super::dump_load::{Given, Load, array_arg, entries_arg, given, string_arg};
 use crate::bytecode::template::{debug_info, func_flags};
-use crate::compiler::{CompileOptions, Loop, Role, Site, SiteKind, Slot};
+use crate::compiler::{Loop, Role, Site, SiteKind, Slot};
 use crate::heap::cells::{BoxCell, FuncTemplate};
 use crate::heap::{CellKind, Heap, HeapError, ObjectClass};
 use crate::interp::frame;
@@ -112,7 +112,7 @@ impl Vm {
             let maps = crate::compiler::suspension_maps(
                 &mut self.heap,
                 load.text.as_bytes(),
-                &CompileOptions::script("dump.js"),
+                &super::dump_load::dump_options(load.typescript),
             )
             .map_err(|e| cat!("$dump.resume: ", e.message))?;
             load.maps = Some(maps);

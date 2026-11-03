@@ -125,6 +125,10 @@ impl<'a> CompileOptions<'a> {
         }
     }
 
+    /// The TypeScript bit of [`CompileOptions::bits`].
+    #[cfg(feature = "dump")]
+    pub(crate) const TYPESCRIPT_BIT: u32 = 1 << 2;
+
     /// The options that decide the code, as a Script cell keeps them (`Script::OPTIONS`):
     /// the goal in the low two bits, then TypeScript, legacy decorators, metadata.
     pub(crate) fn bits(&self) -> u32 {

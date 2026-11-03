@@ -260,6 +260,8 @@ passes, say, its run's promise as "run").
   with another prototype or own properties, keyed combinators (`allKeyed`), an async
   generator awaiting a `return()` value, then-reactions on promises of other
   constructors.
+- **TypeScript:** a dump that writes a function of a TypeScript script says so in its
+  first line (`// djs-dump 2 typescript`) and is compiled as TypeScript (D2615).
 - **Not carried:** the VM's clock and `Math.random`'s state are the host's to set again;
   unhandled-rejection bookkeeping of promises the session has not looked at yet.
 

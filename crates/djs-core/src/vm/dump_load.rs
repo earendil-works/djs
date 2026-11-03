@@ -128,6 +128,23 @@ const PRIMITIVES: &[(&str, u32)] = &[
     ("host", HOST),
 ];
 
+/// How a dump is compiled: a Script, TypeScript when its header says so
+/// (`// djs-dump 2 typescript`: it holds functions of TypeScript scripts, D2615).
+pub(super) fn dump_options(typescript: bool) -> CompileOptions<'static> {
+    CompileOptions {
+        typescript,
+        ..CompileOptions::script("dump.js")
+    }
+}
+
+/// Whether a dump's header says it is TypeScript.
+fn is_typescript(text: &str) -> bool {
+    text.lines()
+        .next()
+        .and_then(|l| l.strip_prefix("// djs-dump 2"))
+        .is_some_and(|r| r.starts_with(" typescript"))
+}
+
 /// The format of a dump: the number in its first line, `// djs-dump N`.
 pub fn dump_format(text: &str) -> Option<&str> {
     let rest = text.strip_prefix("// djs-dump ")?;
@@ -140,6 +157,8 @@ pub fn dump_format(text: &str) -> Option<&str> {
 /// A load in progress.
 pub(super) struct Load<'t> {
     pub text: &'t str,
+    /// Compiled as TypeScript (`dump_options`).
+    pub typescript: bool,
     /// The dump's Script function: functions its text made share its script.
     pub script: Handle,
     /// The suspension maps of the dump's functions, made on the first `resume`.
@@ -233,7 +252,7 @@ impl Vm {
             v => return Err(LoadError::Version(String::from(v))),
         };
         let f = self
-            .compile(text.as_bytes(), &CompileOptions::script("dump.js"))
+            .compile(text.as_bytes(), &dump_options(is_typescript(text)))
             .map_err(|e| LoadError::Compile(e.message))?;
         if privileged {
             self.install_loader().map_err(|_| LoadError::Memory)?;
@@ -246,6 +265,7 @@ impl Vm {
             .set(i, Interp::NEXT_CALL_ID, LOADER_CALL_IDS);
         let mut load = Load {
             text,
+            typescript: is_typescript(text),
             script,
             maps: None,
             out: Loaded::default(),

@@ -8134,3 +8134,16 @@ factories, site comments, and the helpers' JavaScript (`fromSync`, `advance`, `s
 Accepted for now: whether the dumper ships in the main module or in a second module of the
 same build is 0177's measurement (D2564), and the plan leans to the second module, where
 the main module pays nothing. Trimming is a follow-up.
+
+## D2615: A dump holding TypeScript functions is TypeScript
+date: 2026-11-04 · by: portable · issue: 0172
+Functions are written as their source text, and a function of a TypeScript script has
+TypeScript text (types, `as`, enums), which a JavaScript Script does not compile. When a
+dump writes such a function its first line is `// djs-dump 2 typescript: ...` and the
+loader (and the exporter's checker, and the loader's suspension maps) compiles it with
+the TypeScript grammar; the text stays verbatim, so `toString()`, enums and parameter
+properties behave as before, and the maps agree. Residual: JavaScript functions in the
+same dump are parsed as TypeScript too, which reads a few JavaScript forms differently
+(`a < b > (c)` is a generic call there); the checker does not see that. Rejected: erasing
+the types (`strip_types` keeps positions) — it changes `toString()` and cannot erase enums
+or parameter properties.
