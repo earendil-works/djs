@@ -186,6 +186,15 @@ export interface LoadedDump {
   calls: OpenCall[];
 }
 
+/** Options of `Sandbox.begin`. */
+export interface BeginOptions {
+  /**
+   * The script's name in stack traces and in a dump's site comments (`step, at await#1
+   * (sleep.js:4:13)`); default `sandbox.js`.
+   */
+  filename?: string;
+}
+
 /** Why a sandbox operation failed. `value` is the thrown VM value (kind "threw"). */
 export class SandboxError extends Error {
   readonly kind: SandboxErrorKind;
@@ -234,6 +243,7 @@ interface Exports {
   vm_arena_len(vm: number): number;
   vm_collect(vm: number): number;
   vm_compile(vm: number, goal: number, paramsLen: number, srcLen: number): number;
+  vm_compile_file(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number): number;
   vm_global(vm: number): number;
   vm_new_object(vm: number): number;
   vm_new_host_function(vm: number, fnId: number, nameLen: number): number;
@@ -610,9 +620,9 @@ export class Sandbox {
    * `run.state === "threw"`. One run at a time: the sandbox runs nothing else until it
    * ends.
    */
-  begin(code: string, params: Record<string, unknown> = {}): Run {
+  begin(code: string, params: Record<string, unknown> = {}, opts: BeginOptions = {}): Run {
     this.journal = null;
-    this.start(code, params);
+    this.start(code, params, false, opts.filename);
     const run = this.startRun([], 0);
     try {
       run.end(this.step(this.active!.core, false).next().value as RunEnd);
@@ -1013,19 +1023,21 @@ export class Sandbox {
   }
 
   /** Compiles `code` and starts the call; returns nothing (the VM holds the call). */
-  private start(code: string, params: Record<string, unknown>, script = false): void {
+  private start(code: string, params: Record<string, unknown>, script = false, filename?: string): void {
     if (this.active !== null) throw new SandboxError("misuse", "a run is in progress (Sandbox.begin)");
     this.guard(() => {
       const x = this.x;
       const vm = this.vm;
       const names = Object.keys(params);
       const handles = Object.values(params).map((v) => this.toHandle(v));
+      const name = textEncoder.encode(filename ?? "");
       const head = textEncoder.encode(names.join("\n"));
       const src = textEncoder.encode(code);
-      const both = new Uint8Array(head.length + src.length);
-      both.set(head);
-      both.set(src, head.length);
-      this.stage(both);
+      const all = new Uint8Array(name.length + head.length + src.length);
+      all.set(name);
+      all.set(head, name.length);
+      all.set(src, name.length + head.length);
+      this.stage(all);
       const o = this.opts;
       const goal = script
         ? 0
@@ -1033,7 +1045,7 @@ export class Sandbox {
         (o.typescript ? 2 : 0) |
         (o.experimentalDecorators || o.emitDecoratorMetadata ? 4 : 0) |
         (o.emitDecoratorMetadata ? 8 : 0);
-      const f = x.vm_compile(vm, goal, head.length, src.length);
+      const f = x.vm_compile_file(vm, goal, name.length, head.length, src.length);
       if (f === 0) {
         const msg = outText(x);
         for (const h of handles) if (h !== 0) x.vm_handle_free(vm, h);

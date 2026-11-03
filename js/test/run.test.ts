@@ -89,3 +89,9 @@ test("resume refuses a dump without a run, and unknown host functions", async ()
   const { calls } = sb.load(DUMP);
   assert.deepEqual(calls, [{ id: 3, fn: "sleep", args: [5] }]);
 });
+
+test("begin names the script for stack traces", async () => {
+  const sb = new Sandbox({ module: await loadModule() });
+  const run = sb.begin("\nreturn new Error('x').stack;", {}, { filename: "sleep.js" });
+  assert.match(String(run.value), /sleep\.js:2/);
+});

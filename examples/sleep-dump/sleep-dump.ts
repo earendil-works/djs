@@ -13,13 +13,25 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type ConsoleLike, type OpenCall, type Run, Sandbox } from "../../js/src/sandbox.ts";
 
-/** The script: a codemode body, `ms` its parameter. */
+/**
+ * The script: a codemode body, `ms` its parameter. The dump is taken while the first
+ * sleep is open, so it holds two suspended activations (`step("first", ms)` at its
+ * `await`, and the body in the middle of `results.push(await step(...))` inside the
+ * for-of loop), the open call, and the loop's iterator past its first element.
+ */
 export const SCRIPT = `
-console.log("before");
+async function step(label, ms) {
+  console.log(label, "sleeps", ms, "ms");
+  const r = await sleep(ms);
+  return label + ": " + r;
+}
 const t0 = Date.now();
-const r = await sleep(ms);
-console.log("after", r, "(the script waited", Date.now() - t0 >= ms ? "at least" : "less than", ms, "ms)");
-return r;
+const results = [];
+for (const label of ["first", "second"]) {
+  results.push(await step(label, ms));
+}
+console.log("done after at least", Date.now() - t0 >= 2 * ms ? 2 * ms : "(less than!)", "ms:", results.join(", "));
+return results;
 `;
 
 /**
@@ -88,7 +100,7 @@ function describe(c: OpenCall): string {
 async function start(opts: Options): Promise<{ dump: string; due: HostState }> {
   const log = opts.log ?? console.log;
   const sb = await Sandbox.create(sandboxOptions(log));
-  const run = sb.begin(SCRIPT, { ms: opts.ms });
+  const run = sb.begin(SCRIPT, { ms: opts.ms }, { filename: "sleep.js" });
   const due: HostState = {};
   const timers = new Map<number, NodeJS.Timeout>();
   arm(run, due, timers, { now: () => {} }, log);
