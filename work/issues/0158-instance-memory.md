@@ -33,7 +33,8 @@ scripts/size/sandbox-memory.ts; no workload's peak worse beyond noise.
     flat): identical results at 256 and 128 KiB.
 
 - Stack: MAX_DEPTH 1000 -> 650 (all constructs reach the limit's SyntaxError at 128 KiB
-  with 10–12% spare, debug and release identical); test262 language/ and the difftest
+  with 10–12% spare, debug and release identical); after the rebase onto 0161 the gate's
+  nesting test trapped (debug blocks/trys at 612/611, were 724), so 550; test262 language/ and the difftest
   ratchet unchanged. The release module also needed the regexp parser's limit lowered
   255 -> 201 (243 nested capture groups / 236 lookaheads trapped at 128 KiB in release
   only; test262 S15.10.2.8_A3_T15 needs 200 groups). D2540.
@@ -83,5 +84,5 @@ scripts/size/sandbox-memory.ts; no workload's peak worse beyond noise.
   json-text +4.4%, json-date +3.9%, indexof +2.6% (spreads 2–4%).
 - Hosts must hand over the `djs_base` section (`provideCodedBase`, or `provideBase` /
   `baseReference` which call it); ABI version 2.
-- Nesting limits: ~215 nested parentheses/arrays/objects, ~70 classes, 645 blocks; 200
+- Nesting limits: ~180 nested parentheses/arrays/objects, ~60 classes, 545 blocks; 200
   nested regexp groups.

@@ -7245,13 +7245,16 @@ changes nothing changes nothing.
 - **Paid:** module gzip +652 B (444,537 → 445,189; the materialization and lookup
   paths). Other workloads within noise (n=3 cold −1.3..+2.3%, re-measured n=7 −1.1..+1.3%;
   warm ±1%, pi-like −0.7%).
-## D2540: A 128 KiB wasm stack; parser nesting limit 650
+## D2540: A 128 KiB wasm stack; parser nesting limit 550
 date: 2026-11-09 · by: heap · issue: 0158
 Supersedes D1941's size. djs-wasm links with `-zstack-size=131072` (two pages of every
 instance instead of four; `DJS_WASM_STACK` still overrides it), and the parser's
-`MAX_DEPTH` goes from 1000 to 650 units: about 215 nested parentheses, arrays, objects or
-template substitutions, 320 calls or arrows, 645 blocks, statements or `try`s, 70 classes
-(qjs accepts ~920 parentheses). Measured on the debug wasm (the gate's nesting test): at
+`MAX_DEPTH` goes from 1000 to 550 units: about 180 nested parentheses, arrays, objects or
+template substitutions, 270 calls or arrows, 545 blocks, statements or `try`s, 60 classes
+(qjs accepts ~920 parentheses). 650 was measured first, with 10–12% to spare; after
+rebasing onto 0161 (out-of-line `Vec` pushes) blocks and `try`s trapped at 612 and 611
+in the debug build (were 724), so 550 (blocks 545 of 611, classes 60 of 77, functions
+109 of 148: at least 10% spare; the release module has more). Measured on the debug wasm (the gate's nesting test): at
 1000 units, the deepest nesting that did not trap at 128 KiB was 0.72 of the accepted
 depth for blocks and `try`s, 0.73 for classes; at 650 every construct reaches its
 SyntaxError with 10–12% of the stack to spare (classes 71 accepted, trap at 82; blocks

@@ -1344,7 +1344,7 @@ fn depth_limit_fits_wasm_stack() {
                     assert!(lo >= 1 << 12, "{kind}: {lo}");
                     continue;
                 }
-                assert!(lo >= 200, "{kind}: {lo}");
+                assert!(lo >= 150, "{kind}: {lo}");
                 let mut heap = Heap::new().unwrap();
                 let e = compile(
                     &mut heap,

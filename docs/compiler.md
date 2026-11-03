@@ -191,10 +191,10 @@ entry to `parse_statement`, `parse_assign`, `parse_unary` and `parse_primary` (f
 fails with SyntaxError `stack overflow` (QuickJS wording; qjs fails at about 920
 nested parentheses).
 
-- `MAX_DEPTH` is 650 (0014, D2540; 1000 before). One parenthesis level costs 3 depth
-  units (assignment, unary, primary), so about 215 nested parentheses compile. Constructs
+- `MAX_DEPTH` is 550 (0014, D2540; 1000 before). One parenthesis level costs 3 depth
+  units (assignment, unary, primary), so about 180 nested parentheses compile. Constructs
   whose levels take several times the stack of a plain one cost more units (D1941): a
-  class body 7 more (`CLASS_WEIGHT`, about 70 nested classes), a C-style `for` and a
+  class body 7 more (`CLASS_WEIGHT`, about 60 nested classes), a C-style `for` and a
   destructuring pattern level 1 more.
 - djs-wasm's shadow stack is 128 KiB (D1941, D2540, `crates/djs-wasm/build.rs`). The
   deepest accepted nesting of every construct needs at most about 115 KiB of it (wasm
