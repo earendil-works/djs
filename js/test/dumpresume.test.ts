@@ -1,7 +1,10 @@
 // Continuation dumps through the Sandbox (0175, docs/continuation-dumps.md): at every idle
 // point of a run, dump it, resume the dump in a fresh sandbox and continue there. The
 // transcript (console output, the open calls at each idle point, the result) must equal
-// the uninterrupted run's.
+// the uninterrupted run's. In both packagings (D2635): A, the main module with the dumper;
+// B, a main module without it plus the dump module, the VM's image moving between them.
+// B runs with the module below as the dump module and, when $DJS_WASM_NODUMP names a
+// build without the `dump` feature (the gate builds one), with that as the main module.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -76,11 +79,28 @@ interface Transcript {
   result: unknown;
 }
 
-function sandboxOptions(module: WebAssembly.Module, lines: string[]): SandboxOptions {
+interface Packaging {
+  module: WebAssembly.Module;
+  dumpModule?: WebAssembly.Module;
+}
+
+/** The packagings to test: A, B with one module, B with a real dumper-less main module. */
+async function packagings(): Promise<[string, Packaging][]> {
+  const module = await loadModule();
+  const out: [string, Packaging][] = [
+    ["A", { module }],
+    ["B (image transport)", { module, dumpModule: module }],
+  ];
+  const nodump = process.env.DJS_WASM_NODUMP;
+  if (nodump) out.push(["B (djs.wasm + djs-dump.wasm)", { module: await loadModule(nodump), dumpModule: module }]);
+  return out;
+}
+
+function sandboxOptions(p: Packaging, lines: string[]): SandboxOptions {
   const log = (...a: unknown[]) => void lines.push(a.map(String).join(" "));
   const tool = () => 0; // a host-driven run never calls them
   return {
-    module,
+    ...p,
     console: { log, info: log, warn: log, error: log },
     deterministic: { startedAt: 1000, seed: 1 },
     now: 2000,
@@ -92,7 +112,7 @@ function sandboxOptions(module: WebAssembly.Module, lines: string[]): SandboxOpt
  * Runs `code` one result per idle point (the oldest open call first). With `dumpEvery`,
  * the run moves to a fresh sandbox through a dump at every idle point.
  */
-async function drive(module: WebAssembly.Module, code: string, dumpEvery: boolean): Promise<Transcript & { dumps: number }> {
+async function drive(module: Packaging, code: string, dumpEvery: boolean): Promise<Transcript & { dumps: number }> {
   const lines: string[] = [];
   let sb = new Sandbox(sandboxOptions(module, lines));
   let run: Run = sb.begin(code);
@@ -115,13 +135,16 @@ async function drive(module: WebAssembly.Module, code: string, dumpEvery: boolea
 }
 
 for (const [name, code] of Object.entries(CASES)) {
-  test(`dump and resume at every idle point: ${name}`, async () => {
-    const module = await loadModule();
-    const plain = await drive(module, code, false);
-    const dumped = await drive(module, code, true);
-    assert.ok(dumped.dumps >= 2, `${dumped.dumps} idle points`);
-    assert.deepEqual(dumped.lines, plain.lines);
-    assert.deepEqual(dumped.result, plain.result);
+  test(`dump and resume at every idle point: ${name}`, async (t) => {
+    for (const [pk, p] of await packagings()) {
+      await t.test(pk, async () => {
+        const plain = await drive(p, code, false);
+        const dumped = await drive(p, code, true);
+        assert.ok(dumped.dumps >= 2, `${dumped.dumps} idle points`);
+        assert.deepEqual(dumped.lines, plain.lines);
+        assert.deepEqual(dumped.result, plain.result);
+      });
+    }
   });
 }
 
@@ -134,17 +157,20 @@ const FIELDS = `
 `;
 
 test("dump and resume at every idle point: class fields", { todo: "the exporter refuses instance fields of a class in a waiting function" }, async () => {
-  const module = await loadModule();
-  const plain = await drive(module, FIELDS, false);
-  const dumped = await drive(module, FIELDS, true);
+  const p = { module: await loadModule() };
+  const plain = await drive(p, FIELDS, false);
+  const dumped = await drive(p, FIELDS, true);
   assert.deepEqual(dumped.lines, plain.lines);
   assert.deepEqual(dumped.result, plain.result);
 });
 
-test("refusals are SandboxErrors", async () => {
-  const module = await loadModule();
+test("refusals are SandboxErrors", async (t) => {
+  for (const [pk, p] of await packagings()) await t.test(pk, () => refusals(p));
+});
+
+async function refusals(p: Packaging): Promise<void> {
   const lines: string[] = [];
-  const sb = new Sandbox(sandboxOptions(module, lines));
+  const sb = new Sandbox(sandboxOptions(p, lines));
   // A weak collection cannot be written.
   const run = sb.begin("const w = new WeakMap(); w.set({}, 1); await tools.echo(1); return w;");
   assert.equal(run.state, "idle");
@@ -158,9 +184,9 @@ test("refusals are SandboxErrors", async () => {
   assert.throws(() => run.dump(), /the run is done/);
   const waiting = sb.begin("return await tools.echo(1);");
   const text = waiting.dump();
-  await assert.rejects(Sandbox.resume(text, { module }), (e: unknown) => e instanceof SandboxError && /unknown host function tools.echo/.test(e.message));
-  await assert.rejects(Sandbox.resume("return 1", { module }), (e: unknown) => e instanceof SandboxError && /not a djs dump/.test(e.message));
+  await assert.rejects(Sandbox.resume(text, { ...p }), (e: unknown) => e instanceof SandboxError && /unknown host function tools.echo/.test(e.message));
+  await assert.rejects(Sandbox.resume("return 1", { ...p }), (e: unknown) => e instanceof SandboxError && /not a djs dump/.test(e.message));
   // A dump that a build cannot resume at its site refuses with the reason.
   const broken = text.replace(/at: "await#1"/, 'at: "await#9"');
-  await assert.rejects(Sandbox.resume(broken, sandboxOptions(module, [])), (e: unknown) => e instanceof SandboxError && e.kind === "misuse");
-});
+  await assert.rejects(Sandbox.resume(broken, sandboxOptions(p, [])), (e: unknown) => e instanceof SandboxError && e.kind === "misuse");
+}

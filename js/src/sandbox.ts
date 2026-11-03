@@ -33,6 +33,13 @@ export interface ConsoleLike {
 export interface SandboxOptions {
   /** The compiled djs-wasm module; default: `loadModule()`. */
   module?: WebAssembly.Module;
+  /**
+   * The dump module (`djs-dump.wasm`: djs-wasm with the `dump` feature) for a `module`
+   * without the dumper (packaging B, D2635): `dump`, `load`, `Run.dump` and
+   * `Sandbox.resume` move the VM's image to an instance of it and back. Not needed when
+   * `module` has the dumper itself.
+   */
+  dumpModule?: WebAssembly.Module;
   /** Heap cap in bytes; default: the engine's (4 GiB). */
   memoryLimit?: number;
   /** Fuel per `vm_run` call: how often the host gets control back. Default 1,000,000. */
@@ -437,13 +444,25 @@ export class Run {
   }
 }
 
+/**
+ * A VM image moving between the main module and the dump module (packaging B, D2635):
+ * the arena as is, with what the sandbox keeps beside it.
+ */
+interface RawImage {
+  image: Uint8Array;
+  functions: string[];
+  clock?: number;
+  namespaces: [string, number][];
+}
+
 /** `drive`'s value at an idle point of a host-driven run. */
 const IDLE = Symbol("idle");
 
 export class Sandbox {
   private readonly x: Exports;
   private readonly module: WebAssembly.Module;
-  private readonly vm: number;
+  /** The VM; replaced when a dump is loaded through the dump module (`viaDumper`). */
+  private vm: number;
   private readonly opts: SandboxOptions;
   /** Host function names by id - 1. */
   private readonly fnNames: string[] = [];
@@ -501,7 +520,7 @@ export class Sandbox {
    * `opts.module` or one `loadModule()` has finished loading. With `snapshot`, restores
    * it like `fromBytes`.
    */
-  constructor(opts: SandboxOptions = {}, snapshot?: Uint8Array) {
+  constructor(opts: SandboxOptions = {}, snapshot?: Uint8Array | RawImage) {
     const module = opts.module ?? loadedDefault;
     if (module === undefined) {
       throw new SandboxError("misuse", "no compiled module: pass opts.module or await loadModule() first");
@@ -524,9 +543,11 @@ export class Sandbox {
       } else vm = x.vm_new(opts.memoryLimit ?? 0);
       if (vm === 0) throw new SandboxError("memory", "memory limit too small for the realm");
     } else {
-      const { meta, image } = unpackSnapshot(snapshot, module, x, opts.snapshotCodec);
+      const { meta, image } =
+        snapshot instanceof Uint8Array ? unpackSnapshot(snapshot, module, x, opts.snapshotCodec) : { meta: snapshot, image: snapshot.image };
       restoredFns = meta.functions;
       if (opts.deterministic) this.clock = meta.clock ?? opts.deterministic.startedAt;
+      if (!(snapshot instanceof Uint8Array)) for (const [ns, h] of snapshot.namespaces) this.namespaces.set(ns, h);
       // May grow memory: take the buffer afterwards. The image's buffer becomes the arena,
       // so it is staged with the arena's capacity (D1942).
       const limit = opts.memoryLimit ?? 0;
@@ -842,8 +863,62 @@ export class Sandbox {
    * the values to name for the host (`handle:name`, tab separated).
    */
   private dumpText(names: string[], handles: [string, number][]): string {
+    return this.viaDumper((sb) => sb.dumpHere(names, handles), false);
+  }
+
+  /**
+   * Runs `f` on a sandbox with the dumper: this one, or (with `opts.dumpModule`, D2635)
+   * a transient sandbox in the dump module made from this VM's image. With `back`, the
+   * image comes back afterwards (a load): this sandbox's VM is replaced by it. The image
+   * travels as is, so a dump leaves this VM untouched (D2633).
+   */
+  private viaDumper<T>(f: (sb: Sandbox) => T, back: boolean): T {
+    const dm = this.opts.dumpModule;
+    if (dm === undefined) return f(this);
+    this.alive();
+    const raw = (sb: Sandbox): RawImage => ({
+      image: sb.arena().slice(),
+      functions: [...sb.fnNames],
+      clock: sb.clock,
+      namespaces: [...sb.namespaces],
+    });
+    const tmp = new Sandbox({ ...this.opts, module: dm, dumpModule: undefined }, raw(this));
+    try {
+      const r = f(tmp);
+      if (back) {
+        // Only live cells cross back; handles (the loaded run's) are roots and survive.
+        tmp.collect();
+        this.replaceVm(raw(tmp));
+      }
+      return r;
+    } finally {
+      tmp.dispose();
+    }
+  }
+
+  /** Replaces this sandbox's VM with an image (from the dump module). */
+  private replaceVm(raw: RawImage): void {
     const x = this.x;
-    if (!x.vm_dump) throw new SandboxError("misuse", "the djs-wasm module has no dump (vm_dump)");
+    this.guard(() => {
+      x.vm_free(this.vm);
+      const limit = this.opts.memoryLimit ?? 0;
+      const at = x.djs_image_staging ? x.djs_image_staging(raw.image.length, limit) : x.djs_staging(raw.image.length);
+      new Uint8Array(x.memory.buffer).set(raw.image, at);
+      const vm = x.vm_from_bytes(raw.image.length, limit);
+      if (vm === 0) {
+        this.dead = `lost its VM: ${outText(x)}`;
+        throw new SandboxError("misuse", `the dump module's image does not load here: ${outText(x)}`);
+      }
+      this.vm = vm;
+    });
+    this.clock = raw.clock;
+    this.atomCache.length = 0;
+  }
+
+  /** `vm_dump` in this sandbox's own module. */
+  private dumpHere(names: string[], handles: [string, number][]): string {
+    const x = this.x;
+    if (!x.vm_dump) throw new SandboxError("misuse", "the djs-wasm module has no dump (vm_dump): build it with the `dump` feature, or pass `dumpModule`");
     const host = new Set(["console"]);
     for (const n of this.fnNames) host.add(n.split(".")[0]);
     const text = [
@@ -879,12 +954,17 @@ export class Sandbox {
 
   /** Loads a dump: the open calls it recreated and the handles it named (the caller frees them). */
   private loadDump(dump: string): { calls: OpenCall[]; handles: Map<string, number> } {
+    if (this.active !== null) throw new SandboxError("misuse", "a run is in progress");
+    return this.viaDumper((sb) => sb.loadHere(dump), true);
+  }
+
+  /** `vm_load_dump` in this sandbox's own module. */
+  private loadHere(dump: string): { calls: OpenCall[]; handles: Map<string, number> } {
     const x = this.x;
     // Whether it is a dump, and of which format, is the loader's to say.
     if (!x.vm_load_dump) {
-      throw new SandboxError("misuse", "the djs-wasm module has no dump loader (vm_load_dump)");
+      throw new SandboxError("misuse", "the djs-wasm module has no dump loader (vm_load_dump): build it with the `dump` feature, or pass `dumpModule`");
     }
-    if (this.active !== null) throw new SandboxError("misuse", "a run is in progress");
     // The loader names open calls' functions by the host's names (`$dump.pending(1,
     // "sleep", [5000])`); this sandbox's ids are their places in the table.
     const names = textEncoder.encode(this.fnNames.join("\n"));
