@@ -11,7 +11,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0163 | Seeded hashing for VM atoms and Map/Set | strings | .worktrees/strings |
 | 0158 | Instance memory: reservation, arena at end, stack, base outside | heap | .worktrees/heap |
 | 0159 | Re-benchmark @native/@fast twins | perf | .worktrees/perf |
-| 0160 | Slim build as additive features (+ unicode feature) | slim | .worktrees/slim |
 | 0161 | Safe-as-unsafe heap access; Vec hygiene | audit | .worktrees/audit |
 | 0151 | Shrink the base heap to a fraction (no removals) | bloat | .worktrees/bloat |
 | 0037 | P2 Promises, job queue, async host calls, suspendable frames | heap | .worktrees/0037-p2-promises-jobs |
@@ -87,6 +86,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0160 | Slim build: full + unicode features (D2411-D2413, D025) | 7074117e (agent slim; full 450.4 KB 1.57x, slim 385.8 KB 1.35x; gate legs) |
 | 0155 | instr.py fixed + user/builtin split (D2309); no stale stack slots in images (D2308) | f1095c99 (agent perf; pi-like: 47% user bytecode, 39% builtins, 12% GC) |
 | 0156 | Architecture bloat audit (research) | 4f53e325 (agent audit; docs/architecture-bloat-audit.md: no big misstep; floor ~0.75-0.8x; memory on par with qjs) |
 | 0157 | Pages deploy retry | b7233a0f (agent pages) |
