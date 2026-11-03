@@ -40,6 +40,14 @@ fn run(vm: &mut Vm, src: &str) -> String {
     }
 }
 
+/// Loads a dump with `Vm::load_dump`: empty, or why it failed.
+fn load(vm: &mut Vm, text: &str) -> String {
+    match vm.load_dump(text, &super::dump_load::LoadOptions::default()) {
+        Ok(()) => String::new(),
+        Err(e) => alloc::format!("throw {}", e.message()),
+    }
+}
+
 fn dump(vm: &Vm, names: Option<&[&str]>) -> Result<String, DumpError> {
     vm.dump(
         &DumpOptions {
@@ -68,7 +76,7 @@ fn round_trip(setup: &str, names: Option<&[&str]>, check: &str) -> String {
     }
     let want = run(&mut a, check);
     let mut b = new_vm();
-    let loaded = run(&mut b, &text);
+    let loaded = load(&mut b, &text);
     assert!(
         !loaded.starts_with("throw") && !loaded.starts_with("compile"),
         "load: {loaded}\n{text}"
@@ -189,8 +197,7 @@ fn live_values_are_refused_by_path() {
     let r = refused(
         "const p = new Promise(() => {});\n\
          function* g() { yield 1; } const it = g(); it.next();\n\
-         const px = { inner: new Proxy({}, {}) };\n\
-         class A {} const a = new A();",
+         const px = { inner: new Proxy({}, {}) };",
         None,
     );
     let all = r.join("\n");
@@ -198,7 +205,6 @@ fn live_values_are_refused_by_path() {
         "p: a pending promise",
         "it: a suspended generator",
         "px.inner: a Proxy",
-        "A: a class",
     ] {
         assert!(all.contains(want), "{all}");
     }
@@ -238,7 +244,7 @@ fn function_scope_bindings_by_box() {
         .unwrap_or_else(|e| panic!("{}", e.message()));
     assert!(text.contains("let n = 2;"), "{text}");
     let mut b = new_vm();
-    run(&mut b, &text);
+    assert_eq!(load(&mut b, &text), "", "{text}");
     assert_eq!(run(&mut b, "inc(); inc(); n"), "4", "{text}");
 }
 
@@ -337,9 +343,9 @@ fn write_fixture() {
 fn committed_dumps_still_load() {
     let text = std::fs::read_to_string(fixture_dir().join("v1.js")).unwrap();
     let want = std::fs::read_to_string(fixture_dir().join("v1.expected")).unwrap();
-    assert!(text.starts_with(super::dump::HEADER));
+    assert!(text.starts_with("// djs-dump 1"));
     let mut b = new_vm();
-    let loaded = run(&mut b, &text);
+    let loaded = load(&mut b, &text);
     assert!(!loaded.starts_with("throw"), "{loaded}");
     assert_eq!(run(&mut b, FIXTURE_CHECK), want.trim_end());
 }
@@ -365,7 +371,7 @@ fn captured_host_values_read_the_global() {
     assert!(!text.contains("let tools"), "{text}");
     let mut b = new_vm();
     run(&mut b, "globalThis.tools = { read: (p) => 'host ' + p };");
-    run(&mut b, &text);
+    assert_eq!(load(&mut b, &text), "", "{text}");
     assert_eq!(run(&mut b, "lib.go('x')"), "host x", "{text}");
 }
 
@@ -395,7 +401,7 @@ fn closure_case(lines: &[&str], check: &str) {
         }
         let want = run(&mut a, check);
         let mut b = new_vm();
-        let loaded = run(&mut b, &text);
+        let loaded = load(&mut b, &text);
         assert!(!loaded.starts_with("throw"), "load: {loaded}\n{text}");
         assert_eq!(run(&mut b, check), want, "one script: {one_script}\n{text}");
     }

@@ -18,6 +18,8 @@
 pub mod compat;
 #[cfg(feature = "dump")]
 pub mod dump;
+#[cfg(feature = "dump")]
+pub mod dump_load;
 mod format;
 mod image;
 pub mod registry;
