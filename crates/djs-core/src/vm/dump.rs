@@ -1659,8 +1659,8 @@ impl<'a> Dumper<'a> {
             }
         }
         let mut has_box = alloc::vec![false; n];
-        for i in 0..n {
-            if is_box[i] {
+        for (i, &b) in is_box.iter().enumerate() {
+            if b {
                 let r = find(&mut parent, i);
                 has_box[r] = true;
             }
@@ -1861,14 +1861,6 @@ impl<'a> Dumper<'a> {
             .chain(&self.finals)
         {
             cat_to!(&mut skeleton, l, '\n');
-        }
-        #[cfg(test)]
-        if {
-            extern crate std;
-            std::env::var_os("DJS_DUMP_SKELETON").is_some()
-        } {
-            extern crate std;
-            std::eprintln!("{s}\n---- skeleton\n{skeleton}");
         }
         self.check(&skeleton);
         if !self.refusals.is_empty() {
@@ -3601,6 +3593,76 @@ fn hash_text(s: &str) -> u64 {
     h | 1
 }
 
+/// A function's text position: its script and source span.
+fn fn_span(h: &Heap, f: Obj) -> (u32, u32, u32) {
+    let d = template::debug_info(h, h.closure_template(f));
+    (d.script.get().unwrap_or(0), d.src_start, d.src_end)
+}
+
+/// Whether `f` is a method, getter or setter written inside the text at `span`.
+fn is_method_of(h: &Heap, f: Obj, span: (u32, u32, u32)) -> bool {
+    if h.object_class(f) != ObjectClass::Function {
+        return false;
+    }
+    let kind = func_flags::kind(u32::from(
+        h.arena()
+            .get::<u16>(h.closure_template(f), FuncTemplate::FLAGS),
+    ));
+    let (script, a, b) = fn_span(h, f);
+    matches!(
+        kind,
+        func_flags::KIND_METHOD | func_flags::KIND_GETTER | func_flags::KIND_SETTER
+    ) && script == span.0
+        && a >= span.1
+        && b <= span.2
+        && (a, b) != (span.1, span.2)
+}
+
+/// The words of a class's head: its name (if any) and its heritage path (`extends a.b`).
+/// `None` for a heritage that is not a name or a path.
+fn class_head(src: &str) -> Option<(Option<&str>, Option<&str>)> {
+    fn ident(s: &str) -> (&str, &str) {
+        let end = s
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$'))
+            .unwrap_or(s.len());
+        s.split_at(end)
+    }
+    let s = src.strip_prefix("class")?.trim_start();
+    let (word, rest) = ident(s);
+    let (name, rest) = match word {
+        "" | "extends" => (None, s),
+        w => (Some(w), rest.trim_start()),
+    };
+    let rest = rest.trim_start();
+    if rest.starts_with('{') {
+        return Some((name, None));
+    }
+    let rest = rest.strip_prefix("extends")?.trim_start();
+    let mut end = 0;
+    loop {
+        let (w, after) = ident(rest.get(end..)?);
+        if w.is_empty() || w.starts_with(|c: char| c.is_ascii_digit()) {
+            return None;
+        }
+        end += w.len();
+        if after.starts_with('.') {
+            end += 1;
+        } else {
+            break;
+        }
+    }
+    let path = rest.get(..end)?;
+    rest.get(end..)?
+        .trim_start()
+        .starts_with('{')
+        .then_some((name, Some(path)))
+}
+
+/// A derived class's heritage path.
+fn heritage(src: &str) -> Option<&str> {
+    class_head(src)?.1
+}
+
 /// The checker against texts the dumper must never write (0168).
 #[cfg(test)]
 mod check_tests {
@@ -3707,74 +3769,4 @@ mod check_tests {
         );
         assert!(r[0].starts_with("the dump: does not compile"), "{r:?}");
     }
-}
-
-/// A function's text position: its script and source span.
-fn fn_span(h: &Heap, f: Obj) -> (u32, u32, u32) {
-    let d = template::debug_info(h, h.closure_template(f));
-    (d.script.get().unwrap_or(0), d.src_start, d.src_end)
-}
-
-/// Whether `f` is a method, getter or setter written inside the text at `span`.
-fn is_method_of(h: &Heap, f: Obj, span: (u32, u32, u32)) -> bool {
-    if h.object_class(f) != ObjectClass::Function {
-        return false;
-    }
-    let kind = func_flags::kind(u32::from(
-        h.arena()
-            .get::<u16>(h.closure_template(f), FuncTemplate::FLAGS),
-    ));
-    let (script, a, b) = fn_span(h, f);
-    matches!(
-        kind,
-        func_flags::KIND_METHOD | func_flags::KIND_GETTER | func_flags::KIND_SETTER
-    ) && script == span.0
-        && a >= span.1
-        && b <= span.2
-        && (a, b) != (span.1, span.2)
-}
-
-/// The words of a class's head: its name (if any) and its heritage path (`extends a.b`).
-/// `None` for a heritage that is not a name or a path.
-fn class_head(src: &str) -> Option<(Option<&str>, Option<&str>)> {
-    fn ident(s: &str) -> (&str, &str) {
-        let end = s
-            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$'))
-            .unwrap_or(s.len());
-        s.split_at(end)
-    }
-    let s = src.strip_prefix("class")?.trim_start();
-    let (word, rest) = ident(s);
-    let (name, rest) = match word {
-        "" | "extends" => (None, s),
-        w => (Some(w), rest.trim_start()),
-    };
-    let rest = rest.trim_start();
-    if rest.starts_with('{') {
-        return Some((name, None));
-    }
-    let rest = rest.strip_prefix("extends")?.trim_start();
-    let mut end = 0;
-    loop {
-        let (w, after) = ident(rest.get(end..)?);
-        if w.is_empty() || w.starts_with(|c: char| c.is_ascii_digit()) {
-            return None;
-        }
-        end += w.len();
-        if after.starts_with('.') {
-            end += 1;
-        } else {
-            break;
-        }
-    }
-    let path = rest.get(..end)?;
-    rest.get(end..)?
-        .trim_start()
-        .starts_with('{')
-        .then_some((name, Some(path)))
-}
-
-/// A derived class's heritage path.
-fn heritage(src: &str) -> Option<&str> {
-    class_head(src)?.1
 }
