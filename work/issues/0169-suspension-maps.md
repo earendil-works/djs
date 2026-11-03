@@ -1,7 +1,7 @@
 # 0169: Suspension maps in the compiler, pinned
 
-status: open
-agent: -
+status: in-progress
+agent: bloat
 branch: issue/0169-suspension-maps
 depends-on: -
 touches: crates/djs-core/src/compiler/ (a side table computed on demand), a new pin test and its committed maps (tests/ or compiler/snapshots), docs/continuation-dumps.md (only to correct the plan)
