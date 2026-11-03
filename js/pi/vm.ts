@@ -23,30 +23,14 @@
  * `FinalizationRegistry` (`vm_set_weak_refs`, D1680), as pi's quickjs VM leaves them out, so
  * its GC is not observable.
  *
- * Beyond pi's contract: `snapshot()` returns the whole session (the VM image plus the
- * adapter's state) while the VM waits for results, and `resumeVm` continues it in a new
- * instance, possibly in another process: the script resumes where it waited, with no replay.
- * Snapshots are compact containers (D2260): the collected image, zstd-compressed against
- * the session's prelude image (or the module's base image), restorable only by the same
- * djs build.
+ * Beyond pi's contract, in the `next` mode (prelude-next, D2650): `dumpSession()` writes a
+ * waiting session as a continuation dump plus the adapter's state, and `resumeFromDump`
+ * continues it in a new instance, possibly in another process or a later djs: the script
+ * resumes where it waited, with no replay. Heap images are not a persistence format
+ * (D2700); the adapter uses them only in-process, for its prelude images.
  */
 import {
-  APP_PI_SESSION,
-  checkSnapshot,
-  encodeSnapshot,
-  fnv1a64,
-  readSnapshotHeader,
-  type Reference,
-  REFERENCE_BASE,
-  REFERENCE_PI_PRELUDE,
-  type SnapshotCodec,
-  SnapshotError,
-  snapshotImage,
-} from "../src/snapshot.ts";
-import {
   Engine,
-  instance,
-  instanceBase,
   STATUS_DONE,
   STATUS_HOST_CALL,
   STATUS_HOST_OUT_OF_MEMORY,
@@ -74,12 +58,6 @@ export interface VmSession {
   openCalls(): Extract<WorkerToHostMessage, { type: "call" }>[];
   /** Releases the VM's wasm instance. The session must not be used afterwards. */
   dispose(): void;
-  /**
-   * The session as bytes, for `resumeVm`: only while the VM waits (not from inside `post`).
-   * Results the host has not delivered yet must be delivered to the resumed session. It
-   * collects the session's garbage first (D1890), so the session may go on either way.
-   */
-  snapshot(): Uint8Array;
 }
 
 export interface VmHooks {
@@ -103,15 +81,9 @@ export interface VmHooks {
    * Frozen builtins (djs's `frozenBuiltins` VM option, D2304): the builtins behave as frozen,
    * and assigning over an inherited builtin property defines an own one (as after a
    * lockdown). Default false; always on in the `next` mode (D2652). Part of the prelude
-   * image's key: a resumed session keeps the
-   * mode it started with, and `resumeVm` needs the same value to recompute its prelude image.
+   * image's key.
    */
   frozenBuiltins?: boolean;
-  /**
-   * zstd for `snapshot()` and `resumeVm()` (D2260): node's built-in one by default; `null`
-   * writes uncompressed snapshots.
-   */
-  snapshotCodec?: SnapshotCodec | null;
   /**
    * The prelude's shape: "pi" (default) for pi's `PRELUDE_SOURCE`, "next" for
    * tests/pi/prelude-next.ts (D2565, D2650): tools as engine async host calls, the body's
@@ -128,14 +100,10 @@ export interface VmHooks {
   shouldInterrupt(): boolean;
 }
 
-/**
- * `resumeVm`'s options. A snapshot compressed against pi's prelude image needs that image:
- * found in this process's prelude images, or recomputed from the session's `prelude` and
- * start `data` (the image is a function of them, D2262).
- */
+/** `resumeFromDump`'s options: the session's prelude and start data, which run again. */
 export interface ResumeOptions extends VmHooks {
-  prelude?: string;
-  data?: VmStartData;
+  prelude: string;
+  data: VmStartData;
 }
 
 export interface StartVmOptions extends VmHooks {
@@ -255,7 +223,7 @@ interface NextState {
   origin: number;
 }
 
-/** What the adapter keeps outside the VM; all of it goes into a snapshot. */
+/** What the adapter keeps outside the VM; a dump carries it beside the VM's dump. */
 interface SessionState {
   /** `next` mode (D2650); absent in pi's. */
   next?: NextState;
@@ -326,12 +294,12 @@ class Session implements VmSession {
   polling = true;
   /**
    * While pi's prelude runs: the clock reads 0 in UTC, so the prelude image is a function of
-   * its inputs alone and another process can recompute it (D2262). Nothing in the host
+   * its inputs alone (D2262), and a session resumed from a dump reruns the same prelude. Nothing in the host
    * globals or the prelude reads the time; each run sets the real clock before its first
    * slice.
    */
   fixedClock = false;
-  /** The prelude image the session started from, its snapshots' reference (D2260). */
+  /** The prelude image the session started from. */
   prelude: PreludeImage | undefined;
   /** `next` mode: what moving to a new instance needs (`dumpEveryIdle`). */
   resume: { prelude: string; data: VmStartData } | undefined;
@@ -387,24 +355,6 @@ class Session implements VmSession {
   restoreEarly(early: [number, HostToWorkerMessage][]): void {
     this.early.clear();
     for (const [seq, m] of early) this.early.set(seq, m);
-  }
-
-  snapshot(): Uint8Array {
-    if (this.disposed) throw new Error("The session is disposed");
-    // The image holds only live cells (D1890): the session itself collects, so continuing
-    // it and resuming the snapshot go on from the same heap. A collection that cannot get
-    // memory leaves the heap as it was, and the snapshot is merely larger.
-    this.engine.collect();
-    return encodeSnapshot({
-      app: APP_PI_SESSION,
-      meta: { ...this.state, early: [...this.early] },
-      image: this.engine.image(),
-      // The prelude image is most of the session's heap; without one, the base image.
-      reference: this.prelude ? preludeReference(this.prelude) : this.engine.baseReference(),
-      // The session's own part of the heap: no builtin prefix (D2066).
-      base: this.engine.baseReference(),
-      codec: this.hooks.snapshotCodec,
-    });
   }
 
   dumpSession(): SessionDump {
@@ -822,13 +772,6 @@ let sealedSize = 0;
 interface PreludeImage {
   image: Uint8Array;
   prepared: Prepared;
-  /** As a snapshot reference, hashed the first time a snapshot needs it. */
-  reference?: Reference;
-}
-
-function preludeReference(entry: PreludeImage): Reference {
-  entry.reference ??= { kind: REFERENCE_PI_PRELUDE, bytes: entry.image, hash: fnv1a64(entry.image) };
-  return entry.reference;
 }
 
 /** Everything the prelude image depends on, besides the engine build. */
@@ -957,7 +900,7 @@ function setUp(session: Session, cached: PreludeImage | undefined, options: VmHo
     // Outside deterministic mode the hash key (D2433) is chosen once, before the
     // prelude: its image and every session restored from it keep that key, and each
     // session only reseeds Math.random (rekeying would rehash the prelude's atoms and
-    // tables in every session, ~1 KB more per snapshot).
+    // tables in every session).
     if (!deterministic) engine.setRandomSeed(...entropy());
     prepared = prepare(session, engine, prelude, data);
     // Every cold start collects after the prelude (D1890), cached or not: the prelude
@@ -1052,7 +995,7 @@ export async function startVm(options: StartVmOptions): Promise<VmSession> {
  * decides what happens to calls that were open (deliver a recorded result, issue the call
  * again, reject it). Throws when the dump does not load.
  */
-export function resumeFromDump(dumped: SessionDump, options: ResumeOptions & { prelude: string; data: VmStartData }): VmSession {
+export function resumeFromDump(dumped: SessionDump, options: ResumeOptions): VmSession {
   return resumeSession(dumped, options);
 }
 
@@ -1079,88 +1022,6 @@ function resumeSession(dumped: SessionDump, options: VmHooks & { prelude: string
     session.dispose();
     throw error;
   }
-}
-
-/** The prelude image of `prelude` and `data`: a cached one, or computed in a fresh VM. */
-function preludeImageOf(module: WebAssembly.Module, prelude: string, data: VmStartData, hooks: VmHooks): PreludeImage {
-  const frozen = frozenOf(hooks);
-  const key = preludeKey(prelude, data, frozen);
-  const cached = imageCache.get(module)?.get(key);
-  if (cached) return cached;
-  const engine = Engine.create(module, data.memoryLimitBytes, 0, frozen);
-  try {
-    const session = new Session(engine, { wasm: module, post: () => {}, shouldInterrupt: () => false, shape: hooks.shape }, {
-      api: 0,
-      settle: 0,
-      stalled: 0,
-      issued: 0,
-      nextSeq: 1,
-      current: 0,
-      early: [],
-      clock: null,
-      memoryLimit: data.memoryLimitBytes,
-    });
-    const prepared = prepare(session, engine, prelude, data);
-    // Sealed as in `startVm`, so that the image is the same byte for byte.
-    engine.seal();
-    const entry = { image: engine.image(), prepared };
-    if (hooks.reuseImages !== false) cachePreludeImage(module, key, entry);
-    return entry;
-  } finally {
-    engine.dispose();
-  }
-}
-
-/**
- * pi's prelude image for `prelude` and the start data `data` (tools, globals, store, heap
- * limit, deterministic mode): the reference image of the session snapshots those inputs
- * start (D2262). For tools that read snapshots, such as `djs heap --reference`.
- */
-export function preludeImage(module: WebAssembly.Module, prelude: string, data: VmStartData): Uint8Array {
-  return preludeImageOf(module, prelude, data, { wasm: module, post: () => {}, shouldInterrupt: () => false }).image;
-}
-
-/**
- * Continues a session from `VmSession.snapshot()` in a new instance of a djs module with the
- * snapshot's dependency descriptor (D2265): the build that wrote it, or one whose layout,
- * features, tables and builtins are the same. A snapshot compressed against pi's prelude
- * image needs that image: one this process has (a session with the same inputs started
- * here), or `options.prelude` and `options.data` to recompute it. Throws a `SnapshotError`
- * saying why it cannot restore.
- */
-export function resumeVm(snapshot: Uint8Array, options: ResumeOptions): VmSession {
-  const header = readSnapshotHeader(snapshot);
-  const module = options.wasm as WebAssembly.Module;
-  const into = instance(module);
-  checkSnapshot(header, APP_PI_SESSION, instanceBase(into));
-  let reference: Reference | undefined;
-  let prelude: PreludeImage | undefined;
-  if (header.referenceKind === REFERENCE_BASE) reference = instanceBase(into);
-  else if (header.referenceKind === REFERENCE_PI_PRELUDE) {
-    const hash = header.referenceHash;
-    prelude = [...(imageCache.get(module)?.values() ?? [])].find((e) => preludeReference(e).hash === hash);
-    if (prelude === undefined && options.prelude !== undefined && options.data !== undefined) {
-      const made = preludeImageOf(module, options.prelude, options.data, options);
-      if (preludeReference(made).hash !== hash) {
-        throw new SnapshotError(
-          `the snapshot is compressed against pi's prelude image ${hash}; the given prelude and start data make ${preludeReference(made).hash}`,
-        );
-      }
-      prelude = made;
-    }
-    if (prelude === undefined) {
-      throw new SnapshotError(
-        `the snapshot is compressed against pi's prelude image ${hash}: resume it with the session's prelude and start data (\`prelude\`, \`data\`)`,
-      );
-    }
-    reference = preludeReference(prelude);
-  }
-  const image = snapshotImage(header, reference, options.snapshotCodec, instanceBase(into));
-  const state = header.meta as SessionState;
-  const session = new Session(Engine.restore(module, image, state.memoryLimit, into), options, state);
-  session.prelude = prelude;
-  if (options.prelude !== undefined && options.data !== undefined) session.resume = { prelude: options.prelude, data: options.data };
-  return session;
 }
 
 function compileOrThrow(engine: Engine, file: string, params: string[], src: string): number {

@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Sandbox, defaultWasmPath, loadModule } from "../src/sandbox.ts";
-import { provideCodedBase } from "../src/snapshot.ts";
+import { provideCodedBase } from "../src/base.ts";
 
 function median(f: () => void, n = 200): number {
   for (let i = 0; i < 10; i++) f();

@@ -1,6 +1,6 @@
 // The pi codemode adapter (js/pi/vm.ts) running pi's real prelude (tests/pi, copied from
 // pi-private) through a small host like pi's in-thread launcher: tool calls, output,
-// store/load, errors, interrupts, determinism and snapshots. pi's own test suite runs
+// store/load, errors, interrupts, determinism, and continuation dumps (the next mode). pi's own test suite runs
 // against the adapter with `node js/pi/pi-tests.ts` (docs/host.md "pi codemode").
 
 import { test } from "node:test";
@@ -8,7 +8,6 @@ import assert from "node:assert/strict";
 import { loadModule } from "../src/sandbox.ts";
 import {
   resumeFromDump,
-  resumeVm,
   type SessionDump,
   startVm,
   type HostToWorkerMessage,
@@ -403,129 +402,6 @@ test(`${mode.name}: deterministic runs repeat exactly, with QuickJS's random num
   const a = value(await run("return Math.random()"));
   const b = value(await run("return Math.random()"));
   assert.notEqual(a, b);
-});
-
-test(`${mode.name}: a snapshot of a waiting session resumes in a new instance`, async () => {
-  // Reference: the deterministic run without a snapshot.
-  const det = { startedAt: STARTED_AT, seed: 9 };
-  const reference = await run(DETERMINISTIC_CODE, { tools: { echo }, deterministic: det });
-
-  // The same run, but snapshotted while the first call waits; the original is disposed and
-  // the call answered on the resumed session.
-  const first = start(DETERMINISTIC_CODE, { tools: { echo }, deterministic: det, hold: ["echo"] });
-  await first.ready;
-  while (!first.messages.some((m) => m.type === "idle")) await later(1, null);
-  const session = await first.ready;
-  const bytes = session.snapshot();
-  session.dispose();
-
-  const messages: WorkerToHostMessage[] = first.messages.slice();
-  let resumed!: VmSession;
-  let seq = 0;
-  const done = new Promise<void>((resolve) => {
-    resumed = resumeVm(bytes, {
-      ...mode.hooks,
-      wasm,
-      post: (message) => {
-        messages.push(message);
-        if (message.type === "call") {
-          setTimeout(() => {
-            seq++;
-            resumed.deliver({ type: "result", id: message.id, ok: true, payload: message.args, seq, now: STARTED_AT + 1000 * seq });
-          });
-        }
-        if (message.type === "done" || message.type === "crash") resolve();
-      },
-      shouldInterrupt: () => false,
-    });
-  });
-  const pending = first.messages.find((m) => m.type === "call")!;
-  assert.equal(pending.type, "call");
-  seq++;
-  resumed.deliver({
-    type: "result",
-    id: (pending as { id: number }).id,
-    ok: true,
-    payload: (pending as { args: string }).args,
-    seq,
-    now: STARTED_AT + 1000 * seq,
-  });
-  await done;
-  resumed.dispose();
-  assert.deepEqual(messages, reference.messages);
-});
-
-test(`${mode.name}: snapshot() collects first; continuing or resuming the session changes nothing`, async () => {
-  // D1890: a snapshot holds only live cells. The collection it makes is invisible to the
-  // script: the same messages and the same number of interrupt polls (fuel) whether the
-  // session is not snapshotted, snapshotted and continued, or snapshotted and resumed.
-  const garbage = `let junk = 0;
-for (let i = 0; i < 3000; i++) junk += JSON.stringify({ i, s: "x".repeat(i % 50) }).length;
-const kept = Array.from({ length: 50 }, (_, i) => ({ i }));
-const r = await tools.echo(junk);
-let more = 0;
-for (let i = 0; i < 3000; i++) more += JSON.stringify({ i, kept: kept.length }).length;
-return [r, more];`;
-  const once = async (code: string, how: "none" | "continue" | "resume") => {
-    let polls = 0;
-    let size = 0;
-    const messages: WorkerToHostMessage[] = [];
-    let session!: VmSession;
-    const hooks = {
-      ...mode.hooks,
-      wasm,
-      interruptBudget: Infinity,
-      shouldInterrupt: () => ++polls < 0,
-      post: (message: WorkerToHostMessage) => {
-        messages.push(message);
-        if (message.type !== "call") return;
-        setTimeout(() => {
-          if (how !== "none") {
-            const bytes = session.snapshot();
-            size = bytes.length;
-            if (how === "resume") {
-              session.dispose();
-              session = resumeVm(bytes, hooks);
-            }
-          }
-          session.deliver({ type: "result", id: message.id, ok: true, payload: message.args, seq: 1, now: STARTED_AT + 1000 });
-        });
-      },
-    };
-    const ended = new Promise<void>((resolve) => {
-      const post = hooks.post;
-      hooks.post = (message) => {
-        post(message);
-        if (message.type === "done" || message.type === "crash") setTimeout(resolve);
-      };
-    });
-    session = await startVm({
-      ...hooks,
-      prelude: mode.prelude,
-      data: {
-        code,
-        tools: [{ name: "echo", jsName: "echo", description: "" }],
-        globals: [],
-        memoryLimitBytes: undefined,
-        store: {},
-        deterministic: { startedAt: STARTED_AT, seed: 5 },
-      },
-    });
-    await ended;
-    session.dispose();
-    return { messages, polls, size };
-  };
-  const plain = await once(garbage, "none");
-  assert.ok(plain.messages.some((m) => m.type === "done" && m.ok), JSON.stringify(plain.messages));
-  assert.ok(plain.polls > 10, `${plain.polls} polls`);
-  const continued = await once(garbage, "continue");
-  const resumed = await once(garbage, "resume");
-  assert.deepEqual([continued.messages, continued.polls], [plain.messages, plain.polls]);
-  assert.deepEqual([resumed.messages, resumed.polls], [plain.messages, plain.polls]);
-  // The garbage of the first loop is not in the image: it is about as large as the image of
-  // a script that made none (they differ by the source text and `kept`).
-  const small = await once("return await tools.echo(1)", "continue");
-  assert.ok(continued.size - small.size < 16 * 1024, `${continued.size} vs ${small.size} bytes`);
 });
 
 /** pi's prelude without its lockdown: what it would run on frozen builtins (D2304). */

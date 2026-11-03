@@ -697,6 +697,32 @@ pub extern "C" fn vm_from_bytes(len: usize, memory_limit: u32) -> u32 {
     })
 }
 
+/// Replaces VM `vm`'s state by the image in staging[0..len] (as `vm_from_bytes`, an image
+/// made in this process), keeping what the VM derived from the base on an earlier dump
+/// (`Vm::replace_image`, D2701): a host that dumps through a dump module keeps one VM
+/// there for all its dumps. Handles of the old state are gone. 0: done; 1: refused, the
+/// reason in out (the VM keeps its old state).
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_replace_image(vm: u32, len: usize) -> i32 {
+    with(|s| {
+        staged(&s.staging, 0, len);
+        let mut bytes = core::mem::take(&mut s.staging);
+        bytes.truncate(len);
+        let slot = s.slot(vm);
+        match slot.vm.replace_image(bytes) {
+            Ok(()) => {
+                slot.result = 0;
+                slot.call_id = 0;
+                0
+            }
+            Err(e) => {
+                s.set_out(&[b"cannot restore the VM image: ", e.text().as_bytes()].concat());
+                1
+            }
+        }
+    })
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_free(vm: u32) {
     with(|s| {

@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defaultWasmPath } from "../src/sandbox.ts";
-import { provideCodedBase } from "../src/snapshot.ts";
+import { provideCodedBase } from "../src/base.ts";
 
 const path = defaultWasmPath();
 const module = new WebAssembly.Module(readFileSync(typeof path === "string" ? path : fileURLToPath(path)));

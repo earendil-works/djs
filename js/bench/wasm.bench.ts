@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import { encode } from "../src/wire.ts";
 import { readValue } from "../src/reader.ts";
 import { Sandbox, defaultWasmPath } from "../src/sandbox.ts";
-import { provideCodedBase } from "../src/snapshot.ts";
+import { provideCodedBase } from "../src/base.ts";
 
 interface X {
   memory: WebAssembly.Memory;

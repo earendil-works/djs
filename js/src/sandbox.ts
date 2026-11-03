@@ -4,21 +4,7 @@
 import { IN_PLACE_MIN, encode, stringInPlace } from "./wire.ts";
 import { trapText } from "./trap.ts";
 import { Opaque, readValue } from "./reader.ts";
-import {
-  APP_SANDBOX,
-  baseReference,
-  checkSnapshot,
-  encodeSnapshot,
-  provideBase,
-  readSnapshotHeader,
-  REFERENCE_BASE,
-  rememberBase,
-  type SnapshotCodec,
-  SnapshotError,
-  snapshotImage,
-} from "./snapshot.ts";
-
-export { DEFAULT_ZSTD_LEVEL, nodeZstd, type SnapshotCodec, SnapshotError } from "./snapshot.ts";
+import { provideBase, rememberBase } from "./base.ts";
 
 /** A host function callable from the sandbox. Arguments and the result are host values. */
 export type HostFunction = (...args: unknown[]) => unknown;
@@ -130,23 +116,6 @@ export interface SandboxOptions {
    * `Reflect.metadata`); implies `experimentalDecorators`. Default false.
    */
   emitDecoratorMetadata?: boolean;
-  /**
-   * zstd for snapshots (`bytes()`, `fromBytes()`): node's built-in one by default
-   * (`nodeZstd()`). `null` writes uncompressed snapshots; a browser can pass a zstd built
-   * for wasm (D2260).
-   */
-  snapshotCodec?: SnapshotCodec | null;
-}
-
-/** Options of `Sandbox.bytes()`. */
-export interface BytesOptions {
-  /**
-   * `"zstd"` (default when a codec is available): compressed against the module's base
-   * image; `"none"`: the collected image as is.
-   */
-  compression?: "zstd" | "none";
-  /** zstd level, default `DEFAULT_ZSTD_LEVEL` (3). */
-  level?: number;
 }
 
 export type SandboxErrorKind = "threw" | "syntax" | "fuel" | "trap" | "memory" | "misuse" | "diverged";
@@ -251,6 +220,8 @@ interface Exports {
   vm_dump?(vm: number, len: number): number;
   vm_load_dump?(vm: number, namesLen: number, len: number): number;
   vm_from_bytes(len: number, memoryLimit: number): number;
+  /** Since 0177 (D2701). */
+  vm_replace_image?(vm: number, len: number): number;
   vm_free(vm: number): void;
   vm_arena_ptr(vm: number): number;
   vm_arena_len(vm: number): number;
@@ -286,7 +257,7 @@ interface Exports {
   vm_resolve_host_call_at(vm: number, callId: number, ok: number, value: number, now: number): number;
   vm_canonical_hash(vm: number): number;
   djs_build_hash(): number;
-  /** The base snapshot (D2260); the inject exports only with the base coded (D2252). */
+  /** The base snapshot (D1321); the inject exports only with the base coded (D2252). */
   djs_base_ptr(): number;
   djs_base_len(): number;
   djs_base_inject_ptr?(len: number): number;
@@ -338,27 +309,6 @@ export function loadModule(location: string | URL = defaultWasmPath()): Promise<
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
-/** The metadata and image of a sandbox snapshot container. */
-function unpackSnapshot(
-  snapshot: Uint8Array,
-  module: WebAssembly.Module,
-  x: Exports,
-  codec: SnapshotCodec | null | undefined,
-): { meta: { functions: string[]; clock?: number }; image: Uint8Array } {
-  try {
-    const header = readSnapshotHeader(snapshot);
-    // The base completes the session image (D2066), and it is the only reference; its
-    // roots hold the module's dependency descriptor (D2265).
-    const base = baseReference(module, x);
-    checkSnapshot(header, APP_SANDBOX, base);
-    const reference = header.referenceKind === REFERENCE_BASE ? base : undefined;
-    return { meta: header.meta as { functions: string[]; clock?: number }, image: snapshotImage(header, reference, codec, base) };
-  } catch (e) {
-    if (e instanceof SnapshotError) throw new SandboxError("misuse", e.message);
-    throw e;
-  }
-}
-
 /** What a run in progress needs from its sandbox. */
 interface RunCore {
   /** The open async calls, oldest first, until their results are delivered. */
@@ -479,18 +429,12 @@ export class Sandbox {
   private readonly namespaces = new Map<string, number>();
   /** The host-driven run in progress (`begin`, `resume`), until it ends. */
   private active: RunCore | null = null;
+  /** With `dumpModule`: the dump module's sandbox, kept between dumps (D2701). */
+  private dumper: Sandbox | null = null;
 
   /** A new sandbox; loads (and caches) the default module unless `opts.module` is given. */
   static async create(opts: SandboxOptions = {}): Promise<Sandbox> {
     return new Sandbox({ ...opts, module: opts.module ?? (await loadModule()) });
-  }
-
-  /**
-   * A sandbox restored from `bytes()`. Host functions are matched by name; `opts.functions`
-   * must provide every function the snapshot's VM refers to.
-   */
-  static async fromBytes(snapshot: Uint8Array, opts: SandboxOptions = {}): Promise<Sandbox> {
-    return new Sandbox({ ...opts, module: opts.module ?? (await loadModule()) }, snapshot);
   }
 
   /**
@@ -517,10 +461,10 @@ export class Sandbox {
 
   /**
    * A new sandbox (its own wasm instance and VM), synchronously: needs a compiled module,
-   * `opts.module` or one `loadModule()` has finished loading. With `snapshot`, restores
-   * it like `fromBytes`.
+   * `opts.module` or one `loadModule()` has finished loading. (`raw`: internal, a VM image
+   * of this process moving to the dump module, D2635.)
    */
-  constructor(opts: SandboxOptions = {}, snapshot?: Uint8Array | RawImage) {
+  constructor(opts: SandboxOptions = {}, raw?: RawImage) {
     const module = opts.module ?? loadedDefault;
     if (module === undefined) {
       throw new SandboxError("misuse", "no compiled module: pass opts.module or await loadModule() first");
@@ -531,7 +475,7 @@ export class Sandbox {
     }
     let vm: number;
     let restoredFns: string[] = [];
-    if (snapshot === undefined) {
+    if (raw === undefined) {
       // The module's base, decoded once by its first instance, not by each (D2252), and
       // kept for later instances before `vm_new` takes this instance's bytes as its arena
       // (D2060).
@@ -543,11 +487,10 @@ export class Sandbox {
       } else vm = x.vm_new(opts.memoryLimit ?? 0);
       if (vm === 0) throw new SandboxError("memory", "memory limit too small for the realm");
     } else {
-      const { meta, image } =
-        snapshot instanceof Uint8Array ? unpackSnapshot(snapshot, module, x, opts.snapshotCodec) : { meta: snapshot, image: snapshot.image };
-      restoredFns = meta.functions;
-      if (opts.deterministic) this.clock = meta.clock ?? opts.deterministic.startedAt;
-      if (!(snapshot instanceof Uint8Array)) for (const [ns, h] of snapshot.namespaces) this.namespaces.set(ns, h);
+      const image = raw.image;
+      restoredFns = raw.functions;
+      if (opts.deterministic) this.clock = raw.clock ?? opts.deterministic.startedAt;
+      for (const [ns, h] of raw.namespaces) this.namespaces.set(ns, h);
       // May grow memory: take the buffer afterwards. The image's buffer becomes the arena,
       // so it is staged with the arena's capacity (D1942).
       const limit = opts.memoryLimit ?? 0;
@@ -564,11 +507,11 @@ export class Sandbox {
     this.cons = cons;
     const builtins: Record<string, HostFunction> = {};
     for (const m of CONSOLE_METHODS) builtins[`console.${m}`] = (...a) => cons[m](...a);
-    if (snapshot !== undefined) {
+    if (raw !== undefined) {
       // The VM already has its host functions; bind the ids to the given implementations.
       restoredFns.forEach((name, i) => {
         const f = builtins[name] ?? opts.functions?.[name] ?? opts.asyncFunctions?.[name];
-        if (f === undefined) throw new SandboxError("misuse", `snapshot needs host function ${name}`);
+        if (f === undefined) throw new SandboxError("misuse", `the image needs host function ${name}`);
         this.fnNames.push(name);
         this.fns.set(i + 1, f);
       });
@@ -882,18 +825,41 @@ export class Sandbox {
       clock: sb.clock,
       namespaces: [...sb.namespaces],
     });
-    const tmp = new Sandbox({ ...this.opts, module: dm, dumpModule: undefined }, raw(this));
-    try {
-      const r = f(tmp);
-      if (back) {
-        // Only live cells cross back; handles (the loaded run's) are roots and survive.
-        tmp.collect();
-        this.replaceVm(raw(tmp));
-      }
-      return r;
-    } finally {
-      tmp.dispose();
+    // One dump-module sandbox per sandbox, kept between dumps (D2701): an instance costs a
+    // base, and its VM keeps what the dumper derives from the base on the first dump.
+    let d = this.dumper;
+    if (d === null || d.dead !== null) {
+      d = this.dumper = new Sandbox({ ...this.opts, module: dm, dumpModule: undefined }, raw(this));
+    } else d.takeImage(raw(this));
+    const r = f(d);
+    if (back) {
+      // Only live cells cross back; handles (the loaded run's) are roots and survive.
+      d.collect();
+      this.replaceVm(raw(d));
     }
+    return r;
+  }
+
+  /** The dump module's sandbox: takes the main sandbox's image into the same VM. */
+  private takeImage(raw: RawImage): void {
+    const x = this.x;
+    this.fnNames.splice(0, this.fnNames.length, ...raw.functions);
+    this.namespaces.clear();
+    for (const [ns, h] of raw.namespaces) this.namespaces.set(ns, h);
+    if (!x.vm_replace_image) {
+      this.replaceVm(raw);
+      return;
+    }
+    this.guard(() => {
+      const limit = this.opts.memoryLimit ?? 0;
+      const at = x.djs_image_staging ? x.djs_image_staging(raw.image.length, limit) : x.djs_staging(raw.image.length);
+      new Uint8Array(x.memory.buffer).set(raw.image, at);
+      if (x.vm_replace_image!(this.vm, raw.image.length) !== 0) {
+        throw new SandboxError("misuse", `the image does not load in the dump module: ${outText(x)}`);
+      }
+    });
+    this.clock = raw.clock;
+    this.atomCache.length = 0;
   }
 
   /** Replaces this sandbox's VM with an image (from the dump module). */
@@ -1020,8 +986,8 @@ export class Sandbox {
    * still goes to the console), delivers the async results in the recorded order with
    * their clocks, and checks the calls the script makes and the canonical hashes at the
    * start, at every recorded idle point and at the end. The sandbox must be deterministic
-   * and in the state the recording one was in (a fresh one created the same way, or one
-   * restored from a snapshot taken right before the run); the fuel slice may differ.
+   * and in the state the recording one was in (a fresh one created the same way, given the
+   * same runs before); the fuel slice may differ.
    * Returns the run's result; a mismatch is a `diverged` SandboxError.
    */
   async replay(journal: JournalEntry[]): Promise<unknown> {
@@ -1083,30 +1049,6 @@ export class Sandbox {
   }
 
   /**
-   * The sandbox as bytes, for `Sandbox.fromBytes` (D2260): the VM image, collected first,
-   * zstd-compressed against the module's base image, in a container that names what it
-   * depends on (D2265), plus the host function table. Restores into a djs module with the
-   * same dependency descriptor: the same cell layout, features, tables and builtins.
-   */
-  bytes(opts: BytesOptions = {}): Uint8Array {
-    this.alive();
-    // Only live cells (as pi's adapter, D1890): the sandbox itself collects, so going on
-    // with it and restoring the bytes continue from the same heap. A collection that cannot
-    // get memory leaves the heap as it was; the snapshot is then just larger.
-    this.guard(() => this.x.vm_collect(this.vm));
-    return encodeSnapshot({
-      app: APP_SANDBOX,
-      meta: { functions: this.fnNames, clock: this.clock },
-      image: this.arena(),
-      reference: baseReference(this.module, this.x),
-      // Only the sandbox's own part of the heap (D2066).
-      base: baseReference(this.module, this.x),
-      codec: opts.compression === "none" ? null : this.opts.snapshotCodec,
-      level: opts.level,
-    });
-  }
-
-  /**
    * The VM's arena: a view into wasm memory, valid until the next call into the sandbox
    * (the arena may move when it grows). For inspecting the heap with `LAYOUT` (the docs'
    * live examples walk it cell by cell).
@@ -1130,6 +1072,8 @@ export class Sandbox {
   /** Releases the VM. The sandbox cannot be used afterwards. */
   dispose(): void {
     this.active = null;
+    this.dumper?.dispose();
+    this.dumper = null;
     if (this.dead === null) {
       this.x.vm_free(this.vm);
       this.dead = "disposed";

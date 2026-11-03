@@ -267,6 +267,16 @@ impl Vm {
         Vm::over(Heap::from_bytes_trusted(bytes, opts.memory_limit)?, opts)
     }
 
+    /// Replaces this VM's state by an image this process made, as
+    /// [`Vm::from_bytes_trusted`] would restore it, but keeps what the VM holds outside
+    /// its heap (its options, and what it derived from the base once): for a host that
+    /// dumps many images with one VM (a wasm host's dump module, D2701).
+    pub fn replace_image(&mut self, bytes: Vec<u8>) -> Result<(), LoadError> {
+        let fresh = Vm::from_bytes_trusted(bytes, self.opts)?;
+        self.heap = fresh.heap;
+        Ok(())
+    }
+
     /// A new VM from a base snapshot: the image of an idle VM with its prelude installed,
     /// made at build time (`djs-prelude`, D1321). Creating a VM is then a copy, with no
     /// compile. The image is trusted (its cells are not verified: it was verified when it

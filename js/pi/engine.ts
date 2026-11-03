@@ -1,13 +1,13 @@
 // A thin handle-level client of djs-wasm for the pi codemode adapter (vm.ts). The Sandbox
 // (src/sandbox.ts) runs whole function bodies; pi's VM contract instead keeps functions
 // from its prelude (`settle`, `run`, `stalled`) alive across many calls, so this works on
-// heap handles directly. Handles are GC roots and survive collections and snapshots; raw
+// heap handles directly. Handles are GC roots and survive collections and images; raw
 // values do not (docs/host.md "The ABI").
 
 import { IN_PLACE_MIN, encode, stringInPlace } from "../src/wire.ts";
 import { readValue } from "../src/reader.ts";
 import { trapText } from "../src/trap.ts";
-import { baseReference, provideBase, type Reference, rememberBase } from "../src/snapshot.ts";
+import { provideBase, rememberBase } from "../src/base.ts";
 
 export const STATUS_DONE = 0;
 export const STATUS_THREW = 1;
@@ -80,22 +80,6 @@ interface Exports {
   djs_base_coded_ptr?(len: number): number;
 }
 
-/** An instance of the module, before a VM is created in it (`Engine.restore`). */
-export interface Instance {
-  readonly module: WebAssembly.Module;
-  readonly exports: Exports;
-}
-
-/** A new instance of `module`, checked to be djs-wasm. */
-export function instance(module: WebAssembly.Module): Instance {
-  return { module, exports: instantiate(module) };
-}
-
-/** The base snapshot of the instance's module, as a snapshot reference (D2260). */
-export function instanceBase(i: Instance): Reference {
-  return baseReference(i.module, i.exports);
-}
-
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
@@ -134,14 +118,9 @@ export class Engine {
     return new Engine(module, x, vm);
   }
 
-  /** A VM restored from `image()` of the same build, in `into` (default: a new instance). */
-  static restore(
-    module: WebAssembly.Module,
-    image: Uint8Array,
-    memoryLimit: number | undefined,
-    into: Instance = instance(module),
-  ): Engine {
-    const x = into.exports;
+  /** A VM restored from `image()` (a prelude image of this process) in a new instance. */
+  static restore(module: WebAssembly.Module, image: Uint8Array, memoryLimit: number | undefined): Engine {
+    const x = instantiate(module);
     // The image's buffer becomes the arena: stage it with the arena's capacity (D1942).
     const at = x.djs_image_staging ? x.djs_image_staging(image.length, memoryLimit ?? 0) : x.djs_staging(image.length);
     new Uint8Array(x.memory.buffer).set(image, at);
@@ -159,11 +138,6 @@ export class Engine {
   /** The build hash as a number (`djs_build_hash`). */
   get build(): number {
     return this.x.djs_build_hash();
-  }
-
-  /** The module's base snapshot as a snapshot reference (D2260). */
-  baseReference(): Reference {
-    return baseReference(this.module, this.x);
   }
 
   /** The engine's build hash, as 8 hex digits: identifies the engine build. */

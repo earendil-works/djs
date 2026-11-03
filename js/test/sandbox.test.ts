@@ -70,9 +70,7 @@ test("the synchronous constructor", async () => {
   // After loadModule() of the default location, the module is optional.
   const sb2 = new Sandbox();
   assert.equal(sb2.run("return 2"), 2);
-  const restored = new Sandbox({}, sb.bytes());
-  assert.equal(restored.run("return 3"), 3);
-  for (const s of [sb, sb2, restored]) s.dispose();
+  for (const s of [sb, sb2]) s.dispose();
 });
 
 test("console and parameters", async () => {
@@ -256,11 +254,7 @@ test("frozenBuiltins (D2304): builtins behave as frozen, with the override fix",
   `;
   const sb = await Sandbox.create({ frozenBuiltins: true });
   assert.equal(sb.run(code), "true,own,TypeError,true");
-  // The mode is part of the snapshot.
-  const restored = await Sandbox.fromBytes(sb.bytes());
-  assert.equal(restored.run(code), "true,own,TypeError,true");
   sb.dispose();
-  restored.dispose();
   const plain = await Sandbox.create({});
   assert.equal(plain.run(code), "false,own,TypeError,true");
   plain.dispose();
@@ -277,47 +271,58 @@ test("journals: record, replay, divergence (D1730)", async () => {
     globalThis.state = (globalThis.state ?? 0) + r.length;
     return r;
   `;
-  let t = 1_000_000;
-  const options = (fuelSlice: number) => ({
-    fuelSlice,
-    console: collect().console,
-    deterministic: { startedAt: 1000, seed: 3 },
-    now: () => (t += 1000),
-    functions: { sync: (n: unknown) => (n as number) + 1 },
-    asyncFunctions: {
-      tool: async (name: unknown, ms: unknown) => {
-        await new Promise((r) => setTimeout(r, ms as number));
-        if (name === "bad") throw new RangeError("bad tool");
-        return name;
+  // While replaying, the host functions must not be called.
+  let replaying = false;
+  const host = () => {
+    if (replaying) throw new Error("replay called a host function");
+  };
+  // Each sandbox has its own clock, so equal runs see equal times.
+  const options = (fuelSlice: number) => {
+    let t = 1_000_000;
+    return {
+      fuelSlice,
+      console: collect().console,
+      deterministic: { startedAt: 1000, seed: 3 },
+      now: () => (t += 1000),
+      functions: { sync: (n: unknown) => (host(), (n as number) + 1) },
+      asyncFunctions: {
+        tool: async (name: unknown, ms: unknown) => {
+          host();
+          await new Promise((r) => setTimeout(r, ms as number));
+          if (name === "bad") throw new RangeError("bad tool");
+          return name;
+        },
       },
-    },
-  });
-  // A first run, then a snapshot, then the recorded run.
+    };
+  };
+  // A first run, then the recorded run.
   const sb = await Sandbox.create(options(1_000_000));
   await sb.runAsync(code);
-  const snap = sb.bytes();
   const journal: JournalEntry[] = [];
   const result = await sb.runAsync(code, {}, { journal });
   assert.deepEqual(journal[0].type, "run");
   assert.deepEqual(journal.at(-1)!.type, "end");
   assert.ok(journal.some((e) => e.type === "check"));
   assert.ok(journal.some((e) => e.type === "sync"));
-  // Replayed in a sandbox restored from the snapshot, at another fuel slice: the same
-  // result, calls and states, without calling the host functions.
-  const neverCalled = () => {
-    throw new Error("replay called a host function");
+  // Replayed in a sandbox in the same state (made the same way, given the same first run),
+  // at another fuel slice: the same result, calls and states, without calling the host
+  // functions.
+  const prepared = async () => {
+    replaying = false;
+    const s = await Sandbox.create(options(97));
+    await s.runAsync(code);
+    replaying = true;
+    return s;
   };
-  const replayOptions = { ...options(97), functions: { sync: neverCalled }, asyncFunctions: { tool: neverCalled } };
-  const restored = await Sandbox.fromBytes(snap, replayOptions);
-  assert.deepEqual(await restored.replay(journal), result);
+  assert.deepEqual(await (await prepared()).replay(journal), result);
   // A different state before the run, a changed result, or other calls diverge.
-  const fresh = await Sandbox.create(replayOptions);
+  const fresh = await Sandbox.create(options(97));
   await assert.rejects(fresh.replay(journal), (e: unknown) => e instanceof SandboxError && e.kind === "diverged");
   const changed = journal.map((e) => (e.type === "async" && e.value === "a" ? { ...e, value: "A" } : e));
-  await assert.rejects((await Sandbox.fromBytes(snap, replayOptions)).replay(changed), /diverged/);
+  await assert.rejects((await prepared()).replay(changed), /diverged/);
   const otherCall = journal.map((e) => (e.type === "sync" ? { ...e, args: [2] } : e));
   await assert.rejects(
-    (await Sandbox.fromBytes(snap, replayOptions)).replay(otherCall),
+    (await prepared()).replay(otherCall),
     /the script called sync\(\[1\]\), the recording sync\(\[2\]\)/,
   );
   // Recording needs a deterministic sandbox.
@@ -392,36 +397,6 @@ test("legacy decorators", async () => {
   standard.dispose();
 });
 
-/** An uncompressed snapshot (the image is in the container as is). */
-const uncompressed = (sb: Sandbox) => sb.bytes({ compression: "none" });
-
-test("snapshots", async () => {
-  const c = collect();
-  const sb = await Sandbox.create({ console: c.console, functions: { add: (a, b) => (a as number) + (b as number) } });
-  sb.setGlobal("config", { greeting: "hello", n: 2 });
-  const snap = sb.bytes();
-  sb.dispose();
-  const c2 = collect();
-  const restored = await Sandbox.fromBytes(snap, { console: c2.console, functions: { add: (a, b) => (a as number) - (b as number) } });
-  // The global survives; host functions bind by name to the new implementations.
-  assert.equal(restored.run("console.log(config.greeting); return add(config.n, 5)"), -3);
-  assert.deepEqual(c2.lines, ["hello"]);
-  await assert.rejects(Sandbox.fromBytes(snap), /snapshot needs host function add/);
-  await assert.rejects(Sandbox.fromBytes(new Uint8Array(20)), /not a djs snapshot/);
-  // A damaged image is refused (the heap verifies images on load). Uncompressed, so the
-  // damage reaches the image: the container is 68 bytes of header, the metadata, the image.
-  const broken = uncompressed(restored);
-  const view = new DataView(broken.buffer);
-  const meta = view.getUint32(60, true);
-  // A session image (D2066): its roots cell follows the 32-byte header and the prefix diff
-  // (n words: 4 + 8 bytes each, offsets padded to 8).
-  const image = 68 + meta;
-  const n = view.getUint32(image + 28, true);
-  broken[image + 32 + 12 * n + ((4 * n) % 8) + 12] ^= 0xff; // Roots.VERSION
-  await assert.rejects(Sandbox.fromBytes(broken, { functions: { add: () => 0 } }), /cannot restore the VM image/);
-  restored.dispose();
-});
-
 test("out of memory is a clean error", async () => {
   const sb = await Sandbox.create({ memoryLimit: 2 << 20 });
   assert.throws(
@@ -482,7 +457,7 @@ test("large host strings land in the heap in place when ASCII (D2551), others th
   sb.dispose();
 });
 
-test("slices of a long text reach the host and survive snapshots (D2542)", async () => {
+test("slices of a long text reach the host and survive dumps (D2542)", async () => {
   const text = Array.from({ length: 200 }, (_, i) => `line ${i} `.padEnd(60, "x")).join("\n");
   const sb = await Sandbox.create();
   const seen: unknown[] = [];
@@ -495,7 +470,8 @@ test("slices of a long text reach the host and survive snapshots (D2542)", async
     json: JSON.stringify({ a: text.slice(0, 300), b: [1, 2] }),
   });
   assert.deepEqual(seen, [[text.split("\n")[3], text.slice(0, 300)]]);
-  const restored = await Sandbox.fromBytes(sb.bytes(), { functions: { see: () => null } });
+  const restored = await Sandbox.create({ functions: { see: () => null } });
+  restored.load(sb.dump());
   assert.deepEqual(restored.run("return [lines.length, lines[199], doc.a.length, lines[5].slice(2, 40)]"), [
     200,
     text.split("\n")[199],

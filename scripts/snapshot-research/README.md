@@ -1,5 +1,10 @@
 # Snapshot design measurements (issues 0088, 0117, 0133, 0140, 0141, 0142)
 
+Historical: heap images are no longer a persistence format (0177, D2700); continuation
+dumps are. The container measurements `wasm.ts` and the cross-build `upgrade.ts` were
+removed with the containers they measured; their results stay in the decisions and docs
+that cite them (git history has the scripts).
+
 Two tools on the same six cases (`cases/`), neither part of the workspace or the gate (like
 `scripts/determinism/probe`):
 
