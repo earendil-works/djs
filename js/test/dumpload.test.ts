@@ -22,7 +22,8 @@ test("a dump recreates closures, data and buffers in another sandbox", async () 
     lib.name(1); lib.name(1);
   `);
   const text = a.dump();
-  assert.match(text, /^\/\/ djs-dump 2/);
+  assert.match(text, /^"djs-dump 2";\n/);
+  assert.doesNotMatch(text, /^\s*\/\//m);
   assert.doesNotMatch(text, /user1"\)|fetchName = /);
   const b = new Sandbox({ module, functions });
   b.load(text);
@@ -68,5 +69,5 @@ test("classes with private fields round-trip through the loader", async () => {
   b.load(text);
   const check = "return JSON.stringify([acct.balance, acct.deposit(2).balance, Account.opened(), acct instanceof Account]);";
   assert.equal(b.run(check), a.run(check));
-  assert.throws(() => b.load("// djs-dump 9\n"), /format 9/);
+  assert.throws(() => b.load('"djs-dump 9";\n'), /format 9/);
 });

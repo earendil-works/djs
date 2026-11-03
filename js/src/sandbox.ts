@@ -510,7 +510,10 @@ export class Sandbox {
    */
   load(dump: string): void {
     const x = this.x;
-    if (!dump.startsWith("// djs-dump ")) throw new SandboxError("misuse", "not a djs dump");
+    // Format 2 starts with the directive `"djs-dump 2";` (D2640), version 1 with a comment.
+    if (!dump.startsWith('"djs-dump ') && !dump.startsWith("// djs-dump ")) {
+      throw new SandboxError("misuse", "not a djs dump");
+    }
     if (!x.vm_load_dump) {
       throw new SandboxError("misuse", "the djs-wasm module has no dump loader (vm_load_dump)");
     }
