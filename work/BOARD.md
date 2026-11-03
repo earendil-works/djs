@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0181 | atob/btoa and performance.now (research) | globals | .worktrees/globals |
 | 0179 | Example: host tool sleeps 5 s; dump, restart, continue | example | .worktrees/example |
 | 0178 | Continuation dumps across builds: golden fixtures, two-commit check | portable | .worktrees/portable |
 | 0180 | Dump format without comments; djs resume --explain | nocomment | .worktrees/nocomment |
@@ -88,6 +87,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0181 | atob/btoa/performance.now: already provided (engine + pi adapter); docs/web-globals.md | b73b16c0 (agent globals) |
 | 0172 | Exporter: continuations, re-enactment, dump_report; --dump-every-idle in the gate (D2610-D2616) | 23835fa9 (agent portable; 1,197 idle points identical) |
 | 0171 | Loader: $dump.resume, cells, pending calls, handles; v2 fixtures (D2583-D2585) | 38a37048 (agent portable) |
 | 0170 | Classes and private fields in dumps; Vm::load_dump with $dump; jump_if_loading (D2580-D2582) | 8b78bca5 (agent portable) |
