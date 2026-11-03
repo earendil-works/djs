@@ -504,3 +504,8 @@ topics when the index is next reorganized.
 - D2413: Testing the slim build: its own legs in the gate
 - D2444: Code inline in the template, the rest of a user function in FuncInfo
 - D2310: A twin stays only where it pays its bytes
+- D2265: Images carry a dependency descriptor; loading and containers check it, not the build hash
+- D2266: RECORDS_HASH: the id tables images store numbers of, read from the sources
+- D2267: Cargo features are classified as image features or image-neutral
+- D2268: When to bump COMPAT_VERSION
+- D2521: Vec pushes out of line outside the hot loops (`PushOut::push_out`)
