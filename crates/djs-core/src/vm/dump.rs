@@ -3625,7 +3625,7 @@ fn class_head(src: &str) -> Option<(Option<&str>, Option<&str>)> {
         let end = s
             .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$'))
             .unwrap_or(s.len());
-        s.split_at(end)
+        (s.get(..end).unwrap_or(""), s.get(end..).unwrap_or(""))
     }
     let s = src.strip_prefix("class")?.trim_start();
     let (word, rest) = ident(s);
