@@ -172,42 +172,21 @@ fn fuel_and_suspension() {
 }
 
 #[test]
-fn snapshot_and_restore() {
+fn image_writes_the_heap_and_restore_reads_only_dumps() {
+    // Images are not a persistence format (D2700): `.image` writes one for `djs heap`,
+    // `.restore` reads dumps only.
     let dir = env!("CARGO_TARGET_TMPDIR");
-    let snap = format!("{dir}/repl-test-{}.img", std::process::id());
-    let out = repl(&format!(
-        "let kept = {{v: [1, 2]}}\nfunction twice(x) {{ return 2 * x }}\n.snapshot {snap}\n.clear\ntypeof kept\n.restore {snap}\nkept\ntwice(21)\n"
-    ));
-    let lines: Vec<&str> = out.lines().collect();
-    assert!(
-        lines[0].starts_with("wrote ") && lines[0].contains(&snap),
-        "{out}"
-    );
-    assert_eq!(lines[1], "a fresh VM");
-    assert_eq!(lines[2], "'undefined'");
-    assert!(lines[3].starts_with("restored "), "{out}");
-    assert_eq!(&lines[4..], ["{ v: [ 1, 2 ] }", "42"]);
-    // The default is a container compressed against the base image (D2340): a fraction
-    // of the image, and named so when restored.
-    let size = std::fs::metadata(&snap).unwrap().len();
-    assert!(size < 64 * 1024, "{size}");
-    assert_eq!(&std::fs::read(&snap).unwrap()[..4], b"DJSN");
-    assert!(lines[3].contains("DJSN container (repl"), "{out}");
-    // A new process restores it too.
-    let out = repl(&format!(".restore {snap}\ntwice(kept.v[1])\n"));
-    assert!(out.ends_with("\n4\n"), "{out}");
-    // `--raw` writes the image itself, which restores as well.
-    let out = repl(&format!(
-        "let r = 7\n.snapshot --raw {snap}\n.restore {snap}\nr\n"
-    ));
+    let img = format!("{dir}/repl-test-{}.img", std::process::id());
+    let out = repl(&format!("let r = 7\n.image {img}\n.restore {img}\nr\n"));
     assert!(out.contains("(the heap image)"), "{out}");
-    assert!(out.ends_with("(raw image)\n7\n"), "{out}");
-    // The whole heap, base included (about 200 KB), against the container's 64 KB.
-    assert!(std::fs::metadata(&snap).unwrap().len() > 150 * 1024);
-    std::fs::remove_file(&snap).unwrap();
+    assert!(out.contains("is not a djs dump"), "{out}");
+    assert!(out.ends_with("\n7\n"), "{out}");
+    // The whole heap, base included (about 200 KB).
+    assert!(std::fs::metadata(&img).unwrap().len() > 150 * 1024);
+    std::fs::remove_file(&img).unwrap();
     check(
-        ".restore /nonexistent/x.img\n",
-        "cannot read /nonexistent/x.img: No such file or directory (os error 2)\n",
+        ".restore /nonexistent/x.js\n",
+        "cannot read /nonexistent/x.js: No such file or directory (os error 2)\n",
     );
 }
 
@@ -227,7 +206,7 @@ fn meta_commands() {
         ".nope\n.exit\n1\n",
         "unknown command or missing argument: .nope (.help lists them)\n",
     );
-    assert!(repl(".help\n").contains(".snapshot [--raw] <file>"));
+    assert!(repl(".help\n").contains(".image <file>"));
 }
 
 #[test]

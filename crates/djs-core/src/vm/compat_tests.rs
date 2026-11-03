@@ -348,29 +348,3 @@ fn features_are_classified_and_named() {
     assert!(msg.contains("full"), "{msg}");
 }
 
-#[test]
-fn session_images_record_the_descriptor_of_their_base() {
-    let base = {
-        let mut b = Vm::new(VmOptions::default()).unwrap();
-        if b.heap().base_end() == 0 {
-            b.prepare_base_image().unwrap();
-        }
-        b.bytes().to_vec()
-    };
-    let mut vm = Vm::from_base(&base, VmOptions::default()).unwrap();
-    let s = vm.session_bytes(&base).unwrap();
-    assert_eq!(s[8..12], IMAGE_DEPS.hash().to_le_bytes());
-    let end = crate::heap::Heap::image_base_end(&base) as usize;
-    assert_eq!(
-        super::session::prefix_hash(&base),
-        Some(super::fnv64(&base[..end]))
-    );
-    // A base of another descriptor is another base.
-    let mut other = base.clone();
-    let at = ImageDep::Records.field().offset as usize;
-    other[at] ^= 1;
-    assert_eq!(
-        super::session::expand_session(&s, &other),
-        Err(super::session::SessionError::BaseMismatch)
-    );
-}

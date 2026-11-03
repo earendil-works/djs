@@ -27,7 +27,6 @@ mod dump_resume;
 mod format;
 mod image;
 pub mod registry;
-pub mod session;
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -252,10 +251,20 @@ impl Vm {
 
     /// Restores a VM from [`Vm::bytes`] of a build with the same dependency descriptor
     /// ([`ImageDeps`], D2265), in any state (including
-    /// suspended mid-call or parked on a host call). The whole image is verified.
+    /// suspended mid-call or parked on a host call). The whole image is verified: for the
+    /// stress modes and tools, which check the heap at every restore.
     pub fn from_bytes(bytes: Vec<u8>, opts: VmOptions) -> Result<Vm, LoadError> {
         Vm::check_image(&bytes)?;
         Vm::over(Heap::from_bytes(bytes, opts.memory_limit)?, opts)
+    }
+
+    /// [`Vm::from_bytes`] for an image this process made (a wasm host's module
+    /// transport, pi's prelude images): only the header and the dependency descriptor are
+    /// checked, not every cell. Images are not a persistence format (D2700): nothing
+    /// loads one from outside the process, so nothing needs the verification there.
+    pub fn from_bytes_trusted(bytes: Vec<u8>, opts: VmOptions) -> Result<Vm, LoadError> {
+        Vm::check_image(&bytes)?;
+        Vm::over(Heap::from_bytes_trusted(bytes, opts.memory_limit)?, opts)
     }
 
     /// A new VM from a base snapshot: the image of an idle VM with its prelude installed,
@@ -387,21 +396,6 @@ impl Vm {
     pub fn image(&mut self) -> &[u8] {
         tidy_stack(&mut self.heap, false);
         self.heap.bytes()
-    }
-
-    /// The VM's session image (D2066): the image without the builtin prefix it shares
-    /// with every VM of the build, given that prefix's image `base` (the base snapshot).
-    /// Only the roots cell, the prefix words a script changed and the cells from
-    /// `Roots::BASE_END` on.
-    pub fn session_bytes(&mut self, base: &[u8]) -> Result<Vec<u8>, session::SessionError> {
-        session::session_image(self.image(), base)
-    }
-
-    /// Restores a VM from [`Vm::session_bytes`] and the same base. Verified like
-    /// [`Vm::from_bytes`].
-    pub fn from_session(session: &[u8], base: &[u8], opts: VmOptions) -> Result<Vm, LoadError> {
-        let raw = session::expand_session(session, base).map_err(|_| LoadError::BadHeader)?;
-        Vm::from_bytes(raw, opts)
     }
 
     pub fn heap(&self) -> &Heap {

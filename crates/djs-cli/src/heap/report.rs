@@ -19,7 +19,6 @@ use super::Input;
 use super::diff::{Diff, Status};
 use super::graph::Graph;
 use super::json::J;
-use crate::container::reference_name;
 
 /// One section of the report: `key` names it in `--only` and the JSON output.
 pub struct Section {
@@ -246,7 +245,7 @@ pub fn overview(
     input: &Input,
     g: &Graph,
     collected: Option<u32>,
-    session_bytes: Option<usize>,
+    prefix_words: Option<usize>,
 ) -> Section {
     let path = input.name;
     let a = g.heap.arena();
@@ -275,22 +274,6 @@ pub fn overview(
         kb(input.file_len),
         input.format
     ));
-    if let Some(c) = &input.header {
-        t.push_str(&format!(
-            "  container: base prefix {:016x}, reference {} {:016x} ({} KB)\n",
-            c.prefix,
-            reference_name(c.reference_kind),
-            c.reference_hash,
-            kb(c.reference_len as usize)
-        ));
-    }
-    if let Some(m) = &input.meta {
-        let short: String = m.chars().take(200).collect();
-        t.push_str(&format!(
-            "  metadata: {short}{}\n",
-            if m.chars().count() > 200 { "…" } else { "" }
-        ));
-    }
     t.push_str(&format!(
         "  image: {} KB in {} cells, {}\n",
         kbu(len),
@@ -321,10 +304,9 @@ pub fn overview(
         g.cells.len() as u64 - old_cells
     ));
     let base_end = g.heap.base_end();
-    if let Some(n) = session_bytes {
+    if let Some(n) = prefix_words {
         t.push_str(&format!(
-            "  session image: {n} bytes ({} KB): the builtin prefix's changed words, the roots cell and the {} KB from BASE_END {base_end} on\n",
-            kb(n),
+            "  own part: {} KB from BASE_END {base_end} on; {n} words of the builtin prefix changed\n",
             kbu(len - base_end as u64)
         ));
     }
@@ -332,28 +314,6 @@ pub fn overview(
         ("file", path.into()),
         ("format", input.format.clone().into()),
         ("file_bytes", input.file_len.into()),
-        (
-            "container",
-            match &input.header {
-                Some(c) => J::obj(vec![
-                    ("app", c.app_name().into()),
-                    (
-                        "compression",
-                        if c.compression == 1 { "zstd" } else { "none" }.into(),
-                    ),
-                    ("prefix", format!("{:016x}", c.prefix).into()),
-                    ("reference", reference_name(c.reference_kind).into()),
-                    (
-                        "reference_hash",
-                        format!("{:016x}", c.reference_hash).into(),
-                    ),
-                    ("reference_bytes", c.reference_len.into()),
-                    ("payload_bytes", c.payload_len.into()),
-                ]),
-                None => J::Null,
-            },
-        ),
-        ("meta", input.meta.clone().into()),
         ("image_bytes", len.into()),
         ("cells", g.cells.len().into()),
         (
@@ -376,7 +336,8 @@ pub fn overview(
         ("old_cells", old_cells.into()),
         ("old_bytes", old_bytes.into()),
         ("base_end", base_end.into()),
-        ("session_image_bytes", session_bytes.into()),
+        ("own_bytes", (len - base_end as u64).into()),
+        ("prefix_words", prefix_words.into()),
     ]);
     section("summary", "summary", t, json)
 }

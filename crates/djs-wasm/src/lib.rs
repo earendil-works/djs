@@ -675,7 +675,10 @@ fn add_new_vm(vm: Result<Vm, &str>) -> u32 {
     })
 }
 
-/// A VM restored from an image (`vm_arena_*` bytes of the same build) in staging[0..len].
+/// A VM restored from an image (`vm_arena_*` bytes of a module with the same dependency
+/// descriptor) in staging[0..len]: images made in this process only (the dump module's
+/// transport, pi's prelude images). They are not a persistence format (D2700), so only the
+/// header and the descriptor are checked, not every cell (`Vm::from_bytes_trusted`).
 /// Returns its number, or 0 with the reason in the out buffer.
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_from_bytes(len: usize, memory_limit: u32) -> u32 {
@@ -684,7 +687,7 @@ pub extern "C" fn vm_from_bytes(len: usize, memory_limit: u32) -> u32 {
         // The image becomes the arena: hand over the staging buffer instead of copying.
         let mut bytes = core::mem::take(&mut s.staging);
         bytes.truncate(len);
-        match Vm::from_bytes(bytes, options(memory_limit)) {
+        match Vm::from_bytes_trusted(bytes, options(memory_limit)) {
             Ok(vm) => s.add_vm(vm),
             Err(e) => {
                 s.set_out(&[b"cannot restore the VM image: ", e.text().as_bytes()].concat());

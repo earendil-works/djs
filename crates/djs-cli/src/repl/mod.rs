@@ -53,14 +53,13 @@ const HELP: &str = "\
 .heap [sections]      what is in the heap: this session's cells apart from the base
                       realm every VM starts with (`djs heap` sections, default
                       summary,diff; `all` for every section)
-.snapshot [--raw] <file>  collect, then write a snapshot container compressed against
-                      the base image (--raw: the plain heap image)
+.image <file>         collect, then write the heap image (for `djs heap`; images are
+                      not a persistence format: .dump is)
 .dump <file> [names]  write the session's globals (or the named ones) as JavaScript,
                       with what is in flight (open calls, waiting inputs, format 2)
                       that recreates them: functions as their source, closures and
                       data as code, builtins by name (`-` prints it)
-.restore <file>       replace the VM with one restored from a container or image, or
-                      with a fresh VM that ran a .dump file
+.restore <file>       replace the VM with a fresh one that ran a .dump file
 .clear                start over with a fresh VM
 
 tools.<name>(args) is an async host call: an input that waits on one returns to the
@@ -1062,7 +1061,7 @@ impl Repl {
             ".resolve" if !arg.is_empty() => self.settle(arg, true),
             ".reject" if !arg.is_empty() => self.settle(arg, false),
             ".bt" if !arg.is_empty() => self.backtrace_cmd(arg),
-            ".snapshot" if !arg.is_empty() => self.snapshot(arg),
+            ".image" if !arg.is_empty() => self.write_image(arg),
             ".dump" if !arg.is_empty() => self.dump(arg),
             ".dump-every" => match on_off(arg, &mut self.dump_every) {
                 Ok(()) => println!(
@@ -1076,25 +1075,7 @@ impl Repl {
                     let src = String::from_utf8_lossy(&bytes).into_owned();
                     self.restore_dump(arg, &src);
                 }
-                Ok(bytes) => {
-                    let n = bytes.len();
-                    let snap = match crate::container::read(&bytes, None) {
-                        Ok(s) => s,
-                        Err(e) => {
-                            println!("cannot read {arg}: {e}");
-                            return None;
-                        }
-                    };
-                    let what = snap.describe();
-                    match Vm::from_bytes(snap.image, self.vm.options()) {
-                        Ok(vm) => {
-                            self.replace_vm(vm);
-                            println!("restored {n} bytes from {arg} ({what})");
-                            self.pending_after_restore();
-                        }
-                        Err(e) => println!("not a heap image of this build: {e}"),
-                    }
-                }
+                Ok(_) => println!("{arg} is not a djs dump (.restore reads what .dump writes)"),
                 Err(e) => println!("cannot read {arg}: {e}"),
             },
             ".clear" => {
@@ -1335,46 +1316,15 @@ impl Repl {
         }
     }
 
-    /// `.snapshot [--raw] <file>`: collects, then writes a container compressed against
-    /// the base image (D2260), or with `--raw` the image itself (D2340).
-    fn snapshot(&mut self, arg: &str) {
-        let (raw, path) = match arg.strip_prefix("--raw") {
-            Some(rest) => (true, rest.trim()),
-            None => (false, arg),
-        };
-        if path.is_empty() {
-            println!(".snapshot needs a file");
-            return;
-        }
+    /// `.image <file>`: collects, then writes the heap image (D2340), for `djs heap`.
+    fn write_image(&mut self, path: &str) {
         if let Err(e) = self.vm.collect() {
             println!("collection failed: {e:?}");
             return;
         }
-        let image = self.vm.image().to_vec();
-        let bytes = if raw {
-            image.clone()
-        } else {
-            match crate::container::write(
-                crate::container::APP_REPL,
-                "{}",
-                &image,
-                Some((crate::container::REFERENCE_BASE, djs_prelude::BASE)),
-                crate::container::DEFAULT_LEVEL,
-            ) {
-                Ok(b) => b,
-                Err(e) => {
-                    println!("cannot write the container: {e}");
-                    return;
-                }
-            }
-        };
-        match std::fs::write(path, &bytes) {
-            Ok(()) if raw => println!("wrote {} bytes to {path} (the heap image)", bytes.len()),
-            Ok(()) => println!(
-                "wrote {} bytes to {path} (a {} byte image, zstd against the base image)",
-                bytes.len(),
-                image.len()
-            ),
+        let image = self.vm.image();
+        match std::fs::write(path, image) {
+            Ok(()) => println!("wrote {} bytes to {path} (the heap image)", image.len()),
             Err(e) => println!("cannot write {path}: {e}"),
         }
     }

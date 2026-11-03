@@ -14,9 +14,9 @@
 //! | records | object classes, realm slots, flags, record slots, native and fast builtin indexes, RegExp program codes | [`RECORDS_HASH`] (build.rs, `compat_inputs.rs`) |
 //!
 //! [`crate::vm::Vm::new`] writes them into the roots cell, and loading an image checks
-//! them first and names the component that differs ([`ImageDep`]). A container adds the
-//! builtin prefix's hash (a session image holds only what differs from the base image)
-//! and its own format version. The engine build hash (`vm::BUILD_HASH`) is not part of
+//! them first and names the component that differs ([`ImageDep`]). Images stay inside a
+//! process (D2700): the base, prelude images, the stress modes and a wasm host's module
+//! transport; persistence is a continuation dump. The engine build hash (`vm::BUILD_HASH`) is not part of
 //! it: it changes with every source edit, and an image only cares about these.
 
 use crate::heap::cells::{self, Roots};

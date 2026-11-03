@@ -20,6 +20,3 @@ unicode = ["djs-prelude/unicode"]
 djs-core = { path = "../djs-core", default-features = false, features = ["dump"] }
 # The base snapshot: VMs start as a copy, not a prelude compile (D1321).
 djs-prelude = { path = "../djs-prelude", default-features = false, features = ["raw", "registry"] }
-# `djs heap`: snapshot containers are zstd frames against a reference image (D2260); the
-# C library is the only decoder that takes raw-content dictionaries (D2264).
-zstd = { version = "0.13", default-features = false }

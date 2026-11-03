@@ -1,6 +1,7 @@
-//! `djs heap`: what is in a heap dump (a raw image, a session image, a snapshot
-//! container). Every section reads the image through djs-core's own heap code: the image
-//! is verified on load, the walker and the layout table decide what a reference is and
+//! `djs heap`: what is in a heap image (`Vm::bytes`, the REPL's `.image`): images are an
+//! in-process mechanism (D2700), so this is a tool for looking at a VM's heap, not at a
+//! persisted session. Every section reads the image through djs-core's own heap code: the
+//! image is verified on load, the walker and the layout table decide what a reference is and
 //! what a field is called, so the tool cannot drift from the engine (D2264).
 
 mod diff;
@@ -14,19 +15,14 @@ use djs_core::heap::Heap;
 use djs_core::heap::cells::ValueArray;
 use djs_core::value::Value;
 
-use crate::container;
-
 use self::graph::Graph;
 use self::json::J;
 pub use self::report::{Options, Section};
 
-const USAGE: &str = "usage: djs heap [--json] [--top N] [--reference FILE] [--diff FILE|base|none] [--only SECTIONS] [--all] <dump>\n\
-  <dump>       a heap image (the REPL's `.snapshot --raw`, Vm::bytes), a session image or\n\
-               a snapshot container (Sandbox.bytes(), pi's snapshot(), `.snapshot`)\n\
-  --reference  the image a container is compressed against, if it is not this build's\n\
-               base: pi's prelude image (node scripts/heap/reference.ts pi-prelude ...)\n\
-  --diff       compare with this image instead of the container's reference (the\n\
-               default; this build's base for a raw image of this build), or not at all\n\
+const USAGE: &str = "usage: djs heap [--json] [--top N] [--diff FILE|base|none] [--only SECTIONS] [--all] <image>\n\
+  <image>      a heap image (the REPL's `.image FILE`, Vm::bytes)\n\
+  --diff       compare with this image (default: this build's base for an image of this\n\
+               build), or not at all\n\
   --only       some of: summary,kinds,diff,prefix,largest,strings,shapes,functions,session\n\
   --all        largest, strings, shapes and functions over the whole image, not only the\n\
                session's own part (the cells new or changed against the reference)\n\
@@ -38,8 +34,6 @@ pub struct Input<'a> {
     pub name: &'a str,
     pub file_len: usize,
     pub format: String,
-    pub header: Option<container::Header>,
-    pub meta: Option<String>,
 }
 
 /// Heap limit for loading a dump: room for a collection of a copy.
@@ -51,7 +45,6 @@ pub fn main(args: &[String]) -> i32 {
     let mut json = false;
     let mut all = false;
     let mut top = 10;
-    let mut reference: Option<String> = None;
     let mut diff: Option<String> = None;
     let mut only: Option<Vec<String>> = None;
     let mut path: Option<String> = None;
@@ -72,7 +65,6 @@ pub fn main(args: &[String]) -> i32 {
                     .map(|n| top = n)
                     .map_err(|_| "--top needs a number".into())
             }),
-            "--reference" => value("--reference").map(|v| reference = Some(v)),
             "--diff" => value("--diff").map(|v| diff = Some(v)),
             "--only" => {
                 value("--only").map(|v| only = Some(v.split(',').map(str::to_string).collect()))
@@ -93,7 +85,7 @@ pub fn main(args: &[String]) -> i32 {
         return 2;
     };
     let opts = Options { top, only, all };
-    match run(&path, reference.as_deref(), diff.as_deref(), &opts) {
+    match run(&path, diff.as_deref(), &opts) {
         Ok(sections) => {
             if json {
                 print!("{}", to_json(&sections));
@@ -130,41 +122,26 @@ fn read_file(p: &str) -> Result<Vec<u8>, String> {
     std::fs::read(p).map_err(|e| format!("cannot read {p}: {e}"))
 }
 
-/// Reads the dump at `path` and analyzes it.
-pub fn run(
-    path: &str,
-    reference: Option<&str>,
-    diff: Option<&str>,
-    o: &Options,
-) -> Result<Vec<Section>, String> {
-    let bytes = read_file(path)?;
-    let given = reference.map(read_file).transpose()?;
-    let snap = container::read(&bytes, given.as_deref())?;
+/// Reads the image at `path` and analyzes it.
+pub fn run(path: &str, diff: Option<&str>, o: &Options) -> Result<Vec<Section>, String> {
+    let image = read_file(path)?;
     let input = Input {
         name: path,
-        file_len: bytes.len(),
-        format: snap.describe(),
-        header: snap.header.clone(),
-        meta: snap.meta.clone(),
+        file_len: image.len(),
+        format: "raw image".into(),
     };
-    // What to compare with: --diff, else the container's reference, else this build's
-    // base for an image this build can run (its dependency descriptor, D2265).
-    let runs_here = djs_core::vm::ImageDeps::of(&snap.image) == Some(djs_core::vm::IMAGE_DEPS);
+    // What to compare with: --diff, else this build's base for an image this build can
+    // run (its dependency descriptor, D2265).
+    let runs_here = djs_core::vm::ImageDeps::of(&image) == Some(djs_core::vm::IMAGE_DEPS);
     let against: Option<(String, Vec<u8>)> = match diff {
         Some("none") => None,
         Some("base") => Some(("this build's base image".into(), djs_prelude::BASE.to_vec())),
-        Some(p) => Some((p.to_string(), container::image_of(&read_file(p)?)?)),
-        None => match (&snap.reference, &snap.header) {
-            (Some(r), Some(h)) => Some((
-                container::reference_name(h.reference_kind).to_string(),
-                r.clone(),
-            )),
-            _ if runs_here => Some(("the base image".into(), djs_prelude::BASE.to_vec())),
-            _ => None,
-        },
+        Some(p) => Some((p.to_string(), read_file(p)?)),
+        None if runs_here => Some(("the base image".into(), djs_prelude::BASE.to_vec())),
+        None => None,
     };
     analyze(
-        &snap.image,
+        &image,
         &input,
         against.as_ref().map(|(n, b)| (n.as_str(), b.as_slice())),
         o,
@@ -181,8 +158,6 @@ pub fn analyze_image(
         name: "(in memory)",
         file_len: image.len(),
         format: "raw image".into(),
-        header: None,
-        meta: None,
     };
     analyze(image, &input, reference, o)
 }
@@ -202,15 +177,15 @@ pub fn analyze(
 ) -> Result<Vec<Section>, String> {
     let heap = load(image, "the image")?;
     let g = Graph::new(&heap);
-    // The session image against this build's base (D2066), for an image of this build.
-    let session = djs_core::vm::session::session_image(image, djs_prelude::BASE).ok();
+    // The builtin prefix's words this image changed against this build's base.
+    let prefix = prefix_diff(image, djs_prelude::BASE);
     let mut out = Vec::new();
     if o.wants("summary") {
         out.push(report::overview(
             input,
             &g,
             collected_len(image, &g),
-            session.as_ref().map(Vec::len),
+            prefix.as_ref().map(Vec::len),
         ));
     }
     if o.wants("kinds") {
@@ -241,10 +216,9 @@ pub fn analyze(
         }
     }
     if o.wants("prefix")
-        && let Some(s) = &session
-        && let Ok(d) = djs_core::vm::session::session_diff(s)
+        && let Some(d) = &prefix
     {
-        out.push(report::prefix(&g, &d, o));
+        out.push(report::prefix(&g, d, o));
     }
     if o.wants("largest") {
         out.push(report::largest(&g, o, &scope));
@@ -262,6 +236,32 @@ pub fn analyze(
         out.push(report::session(&g, o));
     }
     Ok(out)
+}
+
+/// The words of the builtin prefix (from the roots cell to `Roots::BASE_END`) where
+/// `image` differs from `base`, as (byte offset, value), ascending: what a script changed
+/// in the builtins (none with frozen builtins). None unless both have the same prefix end
+/// and roots cell size.
+fn prefix_diff(image: &[u8], base: &[u8]) -> Option<Vec<(u32, u64)>> {
+    use djs_core::heap::cells::{Header, Roots};
+    let u32_at = |b: &[u8], at: u32| Some(u32::from_le_bytes(b.get(at as usize..at as usize + 4)?.try_into().ok()?));
+    let end = u32_at(image, Roots::BASE_END.offset)?;
+    let roots = u32_at(image, Header::SIZE.offset)?;
+    if end == 0 || u32_at(base, Roots::BASE_END.offset)? != end || u32_at(base, Header::SIZE.offset)? != roots {
+        return None;
+    }
+    let (from, to) = (roots as usize, end as usize);
+    let (a, b) = (image.get(from..to)?, base.get(from..to)?);
+    Some(
+        a.as_chunks::<8>()
+            .0
+            .iter()
+            .zip(b.as_chunks::<8>().0)
+            .enumerate()
+            .filter(|(_, (x, y))| x != y)
+            .map(|(i, (x, _))| ((from + 8 * i) as u32, u64::from_le_bytes(*x)))
+            .collect(),
+    )
 }
 
 /// The size a full collection would leave, on a copy (popped stack slots cleared first,

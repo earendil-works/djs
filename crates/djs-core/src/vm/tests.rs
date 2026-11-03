@@ -3828,54 +3828,10 @@ fn prefixed_base() -> Vec<u8> {
 }
 
 #[test]
-fn session_images_round_trip() {
-    // D2066: a session image holds the roots cell, the changed prefix words and the
-    // session region; with the base it restores the same VM.
-    use crate::vm::session::{SessionError, expand_session, session_diff};
-    let base = prefixed_base();
-    let mut vm = Vm::from_base(&base, VmOptions::default()).unwrap();
-    assert_eq!(eval(&mut vm, "globalThis.kept = [1, 2, 3]; return 1"), "1");
-    vm.collect().unwrap();
-    let s = vm.session_bytes(&base).unwrap();
-    assert!(
-        session_diff(&s).unwrap().is_empty(),
-        "nothing changed a builtin"
-    );
-    assert!(s.len() < vm.bytes().len() - (vm.heap().base_end() as usize) + 200);
-    assert_eq!(expand_session(&s, &base).unwrap(), vm.bytes());
-    let mut back = Vm::from_session(&s, &base, VmOptions::default()).unwrap();
-    assert_eq!(eval(&mut back, "return kept.join()"), "1,2,3");
-    // A script that changes a builtin: its words travel in the diff, in offset order.
-    assert_eq!(eval(&mut vm, "Array.prototype.extra = 7; return 1"), "1");
-    vm.collect().unwrap();
-    let s = vm.session_bytes(&base).unwrap();
-    let d = session_diff(&s).unwrap();
-    assert!(!d.is_empty());
-    assert!(d.windows(2).all(|w| w[0].0 < w[1].0));
-    let mut back = Vm::from_session(&s, &base, VmOptions::default()).unwrap();
-    assert_eq!(eval(&mut back, "return [].extra"), "7");
-    // Equal raw images give equal session images.
-    let raw = vm.bytes().to_vec();
-    assert_eq!(
-        crate::vm::session::session_image(&raw, &base).unwrap(),
-        s,
-        "a function of the raw image and the base"
-    );
-    // Another base is refused.
-    let mut other = base.clone();
-    other[200] ^= 1;
-    assert_eq!(expand_session(&s, &other), Err(SessionError::BaseMismatch));
-    assert_eq!(
-        crate::vm::session::session_image(vm.bytes(), &other[..100]),
-        Err(SessionError::BaseMismatch)
-    );
-}
-
-#[test]
-fn touching_builtins_in_any_order_leaves_the_same_session() {
+fn touching_builtins_in_any_order_leaves_the_same_image() {
     // D022: builtins are never created or written at run time, so two runs that use
-    // different builtins in different orders, and keep nothing, leave identical session
-    // images and canonical hashes. Armed, the barrier also checks the prefix (D2065).
+    // different builtins in different orders, and keep nothing, leave identical images
+    // and canonical hashes. Armed, the barrier also checks the prefix (D2065).
     let base = prefixed_base();
     let opts = VmOptions {
         prefix_barrier: true,
@@ -3888,10 +3844,7 @@ fn touching_builtins_in_any_order_leaves_the_same_session() {
             assert_eq!(eval(&mut vm, &src), "undefined");
         }
         vm.collect().unwrap();
-        (
-            vm.session_bytes(&base).unwrap(),
-            vm.canonical_hash().unwrap(),
-        )
+        (vm.image().to_vec(), vm.canonical_hash().unwrap())
     };
     // The objects builtins create find their shapes in the base (D2067), and the engine's
     // queues are there too. (No identifiers, object literals with keys, group names or
@@ -4009,11 +3962,12 @@ fn the_atom_table_has_two_levels() {
     }
     assert_eq!(h.atom_str("map").unwrap(), map);
     assert_eq!(h.atom_name(map), "map");
-    // The session image holds the VM's atoms, not the base's 15 KB of entries.
+    // The VM's own part of the image holds its atoms, not the base's 15 KB of entries.
     vm.collect().unwrap();
-    let s = vm.session_bytes(&base).unwrap();
-    assert!(s.len() < 16 * 1024, "{} bytes", s.len());
-    let mut back = Vm::from_session(&s, &base, VmOptions::default()).unwrap();
+    let image = vm.image().to_vec();
+    let own = image.len() - vm.heap().base_end() as usize;
+    assert!(own < 16 * 1024, "{own} bytes");
+    let mut back = Vm::from_bytes(image, VmOptions::default()).unwrap();
     let f = back.heap_mut().atom_str("fresh_atom_7").unwrap();
     assert_eq!(f, fresh[7]);
 }
@@ -4069,9 +4023,6 @@ fn images_have_nothing_above_sp() {
             Status::OutOfFuel => {
                 stops += 1;
                 assert_eq!(dead(sliced.image()).0, 0);
-                let session = sliced.session_bytes(&base).unwrap();
-                let raw = super::session::expand_session(&session, &base).unwrap();
-                assert_eq!(dead(&raw).0, 0);
                 let o = sliced.options();
                 sliced = Vm::from_bytes(sliced.image().to_vec(), o).unwrap();
             }

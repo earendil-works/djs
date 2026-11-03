@@ -1,5 +1,5 @@
 //! `djs heap` over images made here: a sandbox-like VM, one holding data, one waiting on
-//! an async host call, and the same image in a snapshot container.
+//! an async host call, and the same image read from a file.
 
 use djs_core::compiler::CompileOptions;
 use djs_core::value::Value;
@@ -7,7 +7,6 @@ use djs_core::vm::{Status, Vm, VmOptions};
 
 use super::json::J;
 use super::{Options, Section, analyze_image};
-use crate::container;
 
 fn vm() -> Vm {
     djs_prelude::new_vm(VmOptions::default()).unwrap()
@@ -134,36 +133,25 @@ fn a_waiting_vm_shows_its_suspended_function_and_pending_call() {
 }
 
 #[test]
-fn a_container_reads_like_its_image() {
+fn an_image_file_reads_like_the_image() {
     let mut vm = sandbox();
     vm.collect().unwrap();
     let image = vm.bytes().to_vec();
-    let c = container::write(
-        container::APP_SANDBOX,
-        "{}",
-        &image,
-        Some((container::REFERENCE_BASE, djs_prelude::BASE)),
-        container::DEFAULT_LEVEL,
-    )
-    .unwrap();
     let dir = std::env::temp_dir().join(format!("djs-heap-test-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("sandbox.djsn");
-    std::fs::write(&path, &c).unwrap();
-    let r = super::run(path.to_str().unwrap(), None, None, &Options::default()).unwrap();
+    let path = dir.join("sandbox.img");
+    std::fs::write(&path, &image).unwrap();
+    let r = super::run(path.to_str().unwrap(), None, &Options::default()).unwrap();
     std::fs::remove_dir_all(&dir).ok();
     let s = json(&r, "summary");
     assert_eq!(s.at(&["image_bytes"]).num(), image.len() as f64);
-    assert_eq!(s.at(&["container", "reference"]).str(), "the base image");
     assert_eq!(
         json(&r, "diff").at(&["new_subtrees", "0", "path"]).str(),
         "globalThis.console"
     );
     let all = super::to_json(&r);
     assert!(all.contains("\"summary\"") && all.contains("\"session\""));
-    // The container holds the session image (D2066), and nothing of the prefix changed.
-    let (h, _, _) = container::read_header(&c).unwrap();
-    assert_eq!(h.against, container::AGAINST_REFERENCE);
+    // Nothing of the builtin prefix changed.
     assert_eq!(json(&r, "prefix").at(&["words"]).num(), 0.0);
 }
 
@@ -284,37 +272,6 @@ fn a_pi_session_waiting_on_a_tool() {
         d.at(&["gone", "bytes"]).num() < 1024.0,
         "{:?}",
         d.at(&["gone"])
-    );
-    // The same through a container against the prelude image, given as the reference.
-    let c = container::write(
-        container::APP_PI_SESSION,
-        "{}",
-        &image,
-        Some((container::REFERENCE_PI_PRELUDE, &prelude)),
-        3,
-    )
-    .unwrap();
-    let dir = std::env::temp_dir().join(format!("djs-heap-pi-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let (cpath, rpath) = (dir.join("session.djsn"), dir.join("prelude.img"));
-    std::fs::write(&cpath, &c).unwrap();
-    std::fs::write(&rpath, &prelude).unwrap();
-    let missing = super::run(cpath.to_str().unwrap(), None, None, &Options::default())
-        .err()
-        .unwrap();
-    assert!(missing.contains("pi's prelude image"), "{missing}");
-    let r2 = super::run(
-        cpath.to_str().unwrap(),
-        rpath.to_str(),
-        None,
-        &Options::default(),
-    )
-    .unwrap();
-    std::fs::remove_dir_all(&dir).ok();
-    assert_eq!(json(&r2, "diff").at(&["new", "bytes"]).num(), new);
-    assert_eq!(
-        json(&r2, "summary").at(&["container", "reference"]).str(),
-        "pi's prelude image"
     );
 }
 
