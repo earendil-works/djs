@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" class="dg-cell-Roots" viewBox="0 0 580 654" width="580" height="654" role="img" aria-label="Layout of the Roots cell">
+<svg xmlns="http://www.w3.org/2000/svg" class="dg-cell-Roots" viewBox="0 0 580 698" width="580" height="698" role="img" aria-label="Layout of the Roots cell">
 <title>Layout of the Roots cell</title>
 <style>
   .dg-cell-Roots text { font-family: var(--semantic-font-family-ui, "Mallos Serif", Georgia, serif); font-size: 12px; fill: var(--semantic-color-text-primary, #111111); }
@@ -64,6 +64,7 @@
 <text class="small mono" x="48" y="495" text-anchor="end">80</text>
 <text class="small mono" x="48" y="539" text-anchor="end">88</text>
 <text class="small mono" x="48" y="583" text-anchor="end">96</text>
+<text class="small mono" x="48" y="627" text-anchor="end">104</text>
 <rect class="hdr" x="57" y="31" width="62" height="40" rx="3"/>
 <text class="mono" x="88" y="48" text-anchor="middle">KIND</text>
 <text class="small" x="88" y="62" text-anchor="middle">u8</text>
@@ -142,16 +143,19 @@
 <rect class="box" x="57" y="559" width="254" height="40" rx="3"/>
 <text class="mono" x="184" y="576" text-anchor="middle">FEATURES</text>
 <text class="small" x="184" y="590" text-anchor="middle">u32</text>
+<rect class="box" x="57" y="603" width="510" height="40" rx="3"/>
+<text class="mono" x="312" y="620" text-anchor="middle">HASH_KEY</text>
+<text class="small" x="312" y="634" text-anchor="middle">u64</text>
 <rect class="pad" x="313" y="559" width="62" height="40" rx="3"/>
 <rect class="pad" x="377" y="559" width="62" height="40" rx="3"/>
 <rect class="pad" x="441" y="559" width="62" height="40" rx="3"/>
 <rect class="pad" x="505" y="559" width="62" height="40" rx="3"/>
-<rect class="hdr" x="56" y="628" width="14" height="12" rx="3"/>
-<text class="small" x="76" y="638" text-anchor="start">header</text>
-<rect class="traced" x="129.6" y="628" width="14" height="12" rx="3"/>
-<text class="small" x="149.6" y="638" text-anchor="start">traced by the GC (Value, Ref)</text>
-<rect class="box" x="332" y="628" width="14" height="12" rx="3"/>
-<text class="small" x="352" y="638" text-anchor="start">plain data</text>
-<rect class="pad" x="428" y="628" width="14" height="12" rx="3"/>
-<text class="small" x="448" y="638" text-anchor="start">padding</text>
+<rect class="hdr" x="56" y="672" width="14" height="12" rx="3"/>
+<text class="small" x="76" y="682" text-anchor="start">header</text>
+<rect class="traced" x="129.6" y="672" width="14" height="12" rx="3"/>
+<text class="small" x="149.6" y="682" text-anchor="start">traced by the GC (Value, Ref)</text>
+<rect class="box" x="332" y="672" width="14" height="12" rx="3"/>
+<text class="small" x="352" y="682" text-anchor="start">plain data</text>
+<rect class="pad" x="428" y="672" width="14" height="12" rx="3"/>
+<text class="small" x="448" y="682" text-anchor="start">padding</text>
 </svg>
