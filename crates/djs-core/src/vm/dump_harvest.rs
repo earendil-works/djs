@@ -98,6 +98,9 @@ struct Outcome {
     status: String,
     roots: usize,
     functions: usize,
+    /// Classes among the bindings, and whether the script's text defines one.
+    classes: usize,
+    defines_class: bool,
     bytes: usize,
     refusals: Vec<String>,
     loaded: bool,
@@ -113,6 +116,33 @@ fn is_ident(s: &str) -> bool {
         && cs.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
 }
 
+/// Whether a script's text has a class definition (`class Name`, `class {`, `class
+/// extends`), outside of identifiers.
+fn defines_class(text: &str) -> bool {
+    let b = text.as_bytes();
+    let mut i = 0;
+    while let Some(at) = text.get(i..).and_then(|t| t.find("class")) {
+        let p = i + at;
+        i = p + 5;
+        let before = p.checked_sub(1).map(|j| b[j]);
+        if before.is_some_and(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'$' || c == b'.')
+        {
+            continue;
+        }
+        let rest = text.get(p + 5..).unwrap_or("");
+        if !rest.starts_with([' ', '\n', '\t', '{']) {
+            continue;
+        }
+        let next = rest.trim_start();
+        if next.starts_with('{')
+            || next.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_' || c == '$')
+        {
+            return true;
+        }
+    }
+    false
+}
+
 fn run_case(prelude: &str, case: &str) -> Outcome {
     let mut out = Outcome::default();
     // The script's own body: the arrow the harvest wraps it in, `return await (async
@@ -125,6 +155,7 @@ fn run_case(prelude: &str, case: &str) -> Outcome {
         out.status = "no body".into();
         return out;
     };
+    out.defines_class = defines_class(&lines[open..].join("\n"));
     let params: Vec<&str> = lines[open]
         .trim_start_matches("return await (async (")
         .split(')')
@@ -244,6 +275,9 @@ fn run_case(prelude: &str, case: &str) -> Outcome {
             )
         }) {
             out.functions += 1;
+            if super::dump_load::is_class(vm.heap(), v.as_object().unwrap()) {
+                out.classes += 1;
+            }
         }
         roots.push((name, v));
     }
@@ -273,13 +307,18 @@ fn run_case(prelude: &str, case: &str) -> Outcome {
                          globalThis.tools = {}; globalThis.store = () => {}; globalThis.load = () => {}; \
                          globalThis.exit = () => {}; globalThis.ALL_TOOLS = [];";
             out.loaded = true;
-            for s in [stubs, text.as_str()] {
-                let r = match b.compile(s.as_bytes(), &CompileOptions::script("dump.js")) {
-                    Ok(f) => {
-                        let g = Value::object(b.global());
-                        call(&mut b, f, g, &[])
+            for (i, s) in [stubs, text.as_str()].into_iter().enumerate() {
+                let r = if i == 1 {
+                    b.load_dump(s, &super::dump_load::LoadOptions::default())
+                        .map_err(|e| e.message())
+                } else {
+                    match b.compile(s.as_bytes(), &CompileOptions::script("dump.js")) {
+                        Ok(f) => {
+                            let g = Value::object(b.global());
+                            call(&mut b, f, g, &[]).map(|_| ())
+                        }
+                        Err(e) => Err(format!("compile {:?}", e.kind)),
                     }
-                    Err(e) => Err(format!("compile {:?}", e.kind)),
                 };
                 if let Err(e) = r {
                     out.loaded = false;
@@ -357,6 +396,8 @@ fn coverage(cases: impl Iterator<Item = (String, String)>, private: bool) {
     let (mut n, mut with_roots, mut with_fns, mut dumped, mut loaded, mut fns, mut fns_dumped) =
         (0, 0, 0, 0, 0, 0, 0);
     let mut same = 0;
+    let (mut def_class, mut with_class, mut classes, mut class_dumped) = (0, 0, 0, 0);
+    let mut def_class_ok = 0;
     let mut bytes = 0;
     for (name, case) in cases {
         n += 1;
@@ -370,6 +411,11 @@ fn coverage(cases: impl Iterator<Item = (String, String)>, private: bool) {
             with_fns += 1;
         }
         fns += o.functions;
+        def_class += usize::from(o.defines_class);
+        def_class_ok += usize::from(o.defines_class && o.status == "dumped" && o.same);
+        with_class += usize::from(o.classes > 0);
+        classes += o.classes;
+        class_dumped += usize::from(o.classes > 0 && o.status == "dumped" && o.same);
         if o.status == "dumped" {
             dumped += 1;
             fns_dumped += o.functions;
@@ -415,6 +461,9 @@ fn coverage(cases: impl Iterator<Item = (String, String)>, private: bool) {
     );
     std::println!(
         "dumped: {dumped} (functions {fns_dumped}), loaded: {loaded}, same bindings: {same}, dump bytes: {bytes}"
+    );
+    std::println!(
+        "defining a class: {def_class} ({def_class_ok} dumped and equal); with class bindings: {with_class} ({classes} classes), dumped and equal: {class_dumped}"
     );
     std::println!("refusal reasons (cases): {reasons:?}");
     std::println!("load errors: {load_errors:?}");

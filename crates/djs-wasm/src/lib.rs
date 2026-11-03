@@ -965,6 +965,26 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
     })
 }
 
+/// Loads the dump staging[0..len] (UTF-8) into the VM with `Vm::load_dump` (0170, D2581):
+/// version 1 as a plain Script, format 2 with the loader's `$dump`. 0: loaded; 1: not
+/// loaded, the reason in out.
+#[cfg(feature = "dump")]
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_load_dump(vm: u32, len: usize) -> i32 {
+    with(|s| {
+        let (slot, staging) = s.vm_and_staging(vm);
+        let text = staged_str(staging, 0, len).to_owned();
+        let opts = djs_core::vm::dump_load::LoadOptions::default();
+        match slot.vm.load_dump(&text, &opts) {
+            Ok(()) => 0,
+            Err(e) => {
+                s.set_out(e.message().as_bytes());
+                1
+            }
+        }
+    })
+}
+
 /// Decodes the wire buffer staging[0..len] (docs/wire.md) into a handle. 0 on error, with
 /// the reason in the out buffer.
 #[unsafe(no_mangle)]

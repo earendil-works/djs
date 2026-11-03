@@ -958,11 +958,14 @@ impl Repl {
             ".snapshot" if !arg.is_empty() => self.snapshot(arg),
             ".dump" if !arg.is_empty() => self.dump(arg),
             ".restore" if !arg.is_empty() => match std::fs::read(arg) {
-                Ok(bytes) if bytes.starts_with(djs_core::vm::dump::HEADER.as_bytes()) => {
+                Ok(bytes) if bytes.starts_with(b"// djs-dump ") => {
                     let src = String::from_utf8_lossy(&bytes).into_owned();
                     self.replace_vm(new_vm(self.gc_stress));
-                    self.eval_named(&src, false, false, arg);
-                    println!("a fresh VM with the bindings of {arg}");
+                    let opts = djs_core::vm::dump_load::LoadOptions::default();
+                    match self.vm.load_dump(&src, &opts) {
+                        Ok(()) => println!("a fresh VM with the bindings of {arg}"),
+                        Err(e) => println!("cannot load {arg}: {}", e.message()),
+                    }
                 }
                 Ok(bytes) => {
                     let n = bytes.len();

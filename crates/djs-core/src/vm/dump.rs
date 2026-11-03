@@ -3680,6 +3680,24 @@ mod check_tests {
     }
 
     #[test]
+    fn a_class_outside_its_scope_is_refused() {
+        let setup = "function mk(t) { return class K { m() { return t; } }; } const K = mk(1);";
+        let r = check(
+            setup,
+            &["K"],
+            &[],
+            "const K = class K { m() { return t; } };\n",
+        );
+        assert!(
+            r.iter()
+                .any(|l| l.contains("captures `t`, which is not in scope")),
+            "{r:?}"
+        );
+        let ok = "const K = (() => { let t = 1; return class K { m() { return t; } }; })();\n";
+        assert_eq!(check(setup, &["K"], &[], ok), Vec::<String>::new());
+    }
+
+    #[test]
     fn a_dump_that_does_not_compile_is_refused() {
         let r = check(
             SETUP,

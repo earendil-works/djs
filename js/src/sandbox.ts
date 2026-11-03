@@ -205,6 +205,7 @@ interface Exports {
   /** Since 0146 (D2304); older modules lack it. */
   vm_new_with?(memoryLimit: number, live: number, flags: number): number;
   vm_dump?(vm: number, len: number): number;
+  vm_load_dump?(vm: number, len: number): number;
   vm_from_bytes(len: number, memoryLimit: number): number;
   vm_free(vm: number): void;
   vm_arena_ptr(vm: number): number;
@@ -502,21 +503,20 @@ export class Sandbox {
   }
 
   /**
-   * Runs a dump (the text of `dump()`) as a Script: its bindings become globals of this
-   * sandbox. A dump is code: load only dumps you trust, into a fresh sandbox (with
-   * `frozenBuiltins` the dump cannot change builtins). Not recorded in a journal.
+   * Loads a dump (the text of `dump()`) with the module's loader (`vm_load_dump`,
+   * `Vm::load_dump`): its bindings become globals of this sandbox. Format 2 dumps get the
+   * loader's privileged `$dump`; version 1 dumps run as plain Scripts. A dump is code:
+   * load only dumps you trust, into a fresh sandbox. Not recorded in a journal.
    */
   load(dump: string): void {
+    const x = this.x;
     if (!dump.startsWith("// djs-dump ")) throw new SandboxError("misuse", "not a djs dump");
-    // The completion value is not read: a dump may end with a patch whose value is a
-    // cyclic object.
-    this.start(`${dump}\nvoid 0;\n`, {}, true);
-    try {
-      this.drive(false).next();
-    } catch (e) {
-      this.abandon(e);
-      throw e;
+    if (!x.vm_load_dump) {
+      throw new SandboxError("misuse", "the djs-wasm module has no dump loader (vm_load_dump)");
     }
+    const len = this.stageText(dump);
+    const r = this.guard(() => x.vm_load_dump!(this.vm, len));
+    if (r !== 0) throw new SandboxError("misuse", `cannot load the dump: ${outText(x)}`);
   }
 
   /**

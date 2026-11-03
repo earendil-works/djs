@@ -22,7 +22,7 @@ test("a dump recreates closures, data and buffers in another sandbox", async () 
     lib.name(1); lib.name(1);
   `);
   const text = a.dump();
-  assert.match(text, /^\/\/ djs-dump 1/);
+  assert.match(text, /^\/\/ djs-dump 2/);
   assert.doesNotMatch(text, /user1"\)|fetchName = /);
   const b = new Sandbox({ module, functions });
   b.load(text);
@@ -47,4 +47,26 @@ test("a dump that ends with a cycle patch loads", async () => {
   const b = new Sandbox({ module });
   b.load(text);
   assert.equal(b.run("return data.self === data && data.name"), "x");
+});
+
+test("classes with private fields round-trip through the loader", async () => {
+  const module = await loadModule();
+  const a = new Sandbox({ module });
+  a.run(`
+    globalThis.Account = class Account {
+      #balance = 0;
+      static #opened = 0;
+      constructor() { Account.#opened++; }
+      deposit(n) { this.#balance += n; return this; }
+      get balance() { return this.#balance; }
+      static opened() { return Account.#opened; }
+    };
+    globalThis.acct = new Account().deposit(5);
+  `);
+  const text = a.dump();
+  const b = new Sandbox({ module });
+  b.load(text);
+  const check = "return JSON.stringify([acct.balance, acct.deposit(2).balance, Account.opened(), acct instanceof Account]);";
+  assert.equal(b.run(check), a.run(check));
+  assert.throws(() => b.load("// djs-dump 9\n"), /format 9/);
 });
