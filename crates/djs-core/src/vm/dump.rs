@@ -1310,7 +1310,7 @@ impl<'a> Dumper<'a> {
             }
         }
         if internal {
-            s.push_str("delete globalThis.$dump;\n");
+            s.push_str("void delete globalThis.$dump;\n");
         }
         Ok(s)
     }
@@ -1518,6 +1518,20 @@ impl<'a> Dumper<'a> {
                     name == "length" || name == "name" || (name == "prototype" && self.default_fn_prototype(o))
                 })
             }
+            ObjectClass::ArrayBuffer
+            | ObjectClass::Date
+            | ObjectClass::RegExp
+            | ObjectClass::TypedArray
+            | ObjectClass::DataView
+            | ObjectClass::Boolean
+            | ObjectClass::Number => {
+                h.own_keys(o).into_iter().all(|k| {
+                    let name = h.atom_name(k);
+                    name.parse::<u32>().is_ok()
+                        || (name == "lastIndex"
+                            && h.get_own_property(o, k).and_then(|p| p.value()) == Some(Value::int(0)))
+                }) && self.default_proto(o, h.get_prototype_of(o))
+            }
             _ => false,
         }
     }
@@ -1685,8 +1699,12 @@ impl<'a> Dumper<'a> {
                 ret.push_out(key);
             } else {
                 let src = self.fn_source(c).unwrap_or_default();
-                let e = self.fn_expr(c, &src);
-                ret.push_out(format!("{key}: {e}"));
+                if self.method_text(c, &key, func_flags::KIND_METHOD) {
+                    ret.push_out(src);
+                } else {
+                    let e = self.fn_expr(c, &src);
+                    ret.push_out(format!("{key}: {e}"));
+                }
             }
         }
         if !sets.is_empty() {
@@ -1959,18 +1977,17 @@ impl<'a> Dumper<'a> {
             #[cfg(feature = "full")]
             ObjectClass::TypedArray | ObjectClass::DataView => {
                 let b = h.object_slot(o, 0);
-                let buf = self.expr(b, None, None);
                 let (name, off, len) = if class == ObjectClass::TypedArray {
                     (
                         h.ta_kind(o).name(),
                         h.ta_byte_offset(o),
-                        h.object_slot(o, 3).as_int().unwrap_or(-1),
+                        h.object_slot(o, 3).as_number().unwrap_or(-1.0) as i64,
                     )
                 } else {
                     (
                         "DataView",
                         h.object_slot(o, 1).as_number().unwrap_or(0.0) as u32,
-                        h.object_slot(o, 2).as_int().unwrap_or(-1),
+                        h.object_slot(o, 2).as_number().unwrap_or(-1.0) as i64,
                     )
                 };
                 let whole = off == 0
@@ -1980,8 +1997,30 @@ impl<'a> Dumper<'a> {
                         } else {
                             1
                         };
-                        len >= 0 && h.buffer_len(b) == len as u32 * size
+                        len >= 0 && h.buffer_len(b) as i64 == len * size as i64
                     });
+                // A small typed array that is its buffer's only view: its elements.
+                let bn = self.node_of(b).expect("a buffer node");
+                if whole
+                    && class == ObjectClass::TypedArray
+                    && !h.ta_kind(o).is_bigint()
+                    && len <= 64
+                    && self.nodes[bn].refs == 1
+                    && self.nodes[bn].state == State::New
+                    && self.simple(bn, None)
+                    && self.simple(n, None)
+                {
+                    self.nodes[bn].state = State::Done;
+                    self.nodes[bn].loc = format!("{loc}.buffer");
+                    let kind = h.ta_kind(o);
+                    let data = h.buffer_data(b.as_object().expect("a buffer"));
+                    let items: Vec<String> = data
+                        .chunks(kind.size() as usize)
+                        .map(|c| number(crate::heap::typed::decode(kind, c)))
+                        .collect();
+                    return format!("new {name}([{}])", items.join(", "));
+                }
+                let buf = self.expr(b, None, None);
                 if whole {
                     format!("new {name}({buf})")
                 } else if len < 0 {
@@ -2093,6 +2132,15 @@ impl<'a> Dumper<'a> {
                 }
             }
         }
+        let freeze = if h.is_extensible(o) {
+            0
+        } else {
+            match self.freeze_line(o, loc) {
+                l if l.starts_with("Object.freeze") => 2,
+                l if l.starts_with("Object.seal") => 1,
+                _ => 0,
+            }
+        };
         for k in h.own_keys(o) {
             let key = self.literal_key(k);
             let prop = h.get_own_property(o, k);
@@ -2117,10 +2165,18 @@ impl<'a> Dumper<'a> {
                         let l = self.expr_or_loc(value);
                         self.patches.push_out(format!("{at} = {l};"));
                         items.push_out(format!("{key}: undefined"));
+                    } else if e == key {
+                        items.push_out(e);
                     } else {
                         items.push_out(format!("{key}: {e}"));
                     }
-                    if flags != PropFlags::ALL {
+                    // `Object.freeze`/`seal` at the end set these attributes.
+                    let implied = match freeze {
+                        2 => flags == PropFlags::ENUMERABLE,
+                        1 => flags == PropFlags::new(true, true, false),
+                        _ => false,
+                    };
+                    if flags != PropFlags::ALL && !implied {
                         let ke = self.key_expr(k);
                         self.patches.push_out(format!(
                             "Object.defineProperty({loc}, {}, {{ writable: {}, enumerable: {}, configurable: {} }});",
@@ -2194,6 +2250,14 @@ impl<'a> Dumper<'a> {
         {
             return false;
         }
+        if self.fn_kind(c) != kind {
+            return false;
+        }
+        self.method_text(c, key, kind)
+    }
+
+    /// Whether closure `c`'s text is a method (getter, setter) definition of `key`.
+    fn method_text(&self, c: usize, key: &str, kind: u32) -> bool {
         if self.fn_kind(c) != kind {
             return false;
         }

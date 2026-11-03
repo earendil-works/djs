@@ -51,7 +51,11 @@ const HELP: &str = "\
                       summary,diff; `all` for every section)
 .snapshot [--raw] <file>  collect, then write a snapshot container compressed against
                       the base image (--raw: the plain heap image)
-.restore <file>       replace the VM with one restored from a container or image
+.dump <file> [names]  write the session's globals (or the named ones) as JavaScript
+                      that recreates them: functions as their source, closures and
+                      data as code, builtins by name (`-` prints it)
+.restore <file>       replace the VM with one restored from a container or image, or
+                      with a fresh VM that ran a .dump file
 .clear                start over with a fresh VM
 
 Ctrl-C cancels the line, or stops a running input between fuel slices.
@@ -659,7 +663,14 @@ impl Repl {
             }
             ".heap" => self.heap_report(arg),
             ".snapshot" if !arg.is_empty() => self.snapshot(arg),
+            ".dump" if !arg.is_empty() => self.dump(arg),
             ".restore" if !arg.is_empty() => match std::fs::read(arg) {
+                Ok(bytes) if bytes.starts_with(djs_core::vm::dump::HEADER.as_bytes()) => {
+                    let src = String::from_utf8_lossy(&bytes).into_owned();
+                    self.vm = new_vm(self.gc_stress);
+                    self.eval_named(&src, false, false, arg);
+                    println!("a fresh VM with the bindings of {arg}");
+                }
                 Ok(bytes) => {
                     let n = bytes.len();
                     let snap = match crate::container::read(&bytes, None) {
@@ -688,6 +699,26 @@ impl Repl {
             _ => println!("unknown command or missing argument: {line} (.help lists them)"),
         }
         None
+    }
+
+    /// `.dump <file> [names]`: the session's globals as a Script (0167, `Vm::dump`).
+    fn dump(&mut self, arg: &str) {
+        let mut parts = arg.split_whitespace();
+        let file = parts.next().unwrap_or("-");
+        let names: Vec<&str> = parts.collect();
+        let opts = djs_core::vm::dump::DumpOptions {
+            base: djs_prelude::BASE,
+            host: &["console"],
+        };
+        let sel = (!names.is_empty()).then_some(names.as_slice());
+        match self.vm.dump(&opts, sel) {
+            Ok(text) if file == "-" => print!("{text}"),
+            Ok(text) => match std::fs::write(file, &text) {
+                Ok(()) => println!("wrote {} bytes to {file}", text.len()),
+                Err(e) => println!("cannot write {file}: {e}"),
+            },
+            Err(e) => println!("{}", e.message()),
+        }
     }
 
     fn load(&mut self, path: &str) {
