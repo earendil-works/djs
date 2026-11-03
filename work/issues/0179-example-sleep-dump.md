@@ -1,7 +1,7 @@
 # 0179: Example: a host tool that sleeps 5 s; dump while waiting, restart, continue
 
-status: open
-agent: -
+status: in-progress
+agent: example
 branch: issue/0179-example-sleep-dump
 depends-on: 0171, 0172 (the exporter writes format 2 dumps of waiting sessions)
 guide: maybe a short pointer in docs/guide/host.md
