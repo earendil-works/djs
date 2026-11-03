@@ -252,15 +252,20 @@ const TABLE: [u8; 2] = [
 ];
 pub const fn helper() -> u32 { 3 }
 const _: () = assert!(true);
+const GET: u16 = id(\"Get\");
+pub(super) const CALL: u16 =
+    super::intrinsics::id(\"Call\");
+const NOT_AN_ID: u16 = id(\"Get\") + 1;
 fn body() { const INNER: u32 = 9; let s = \"// } not a comment\"; let c = '}'; }
 ";
     let enum_of = |s: &str| cut(s, Cut::Item("pub enum ObjectClass")).unwrap();
     let consts_of = |s: &str| cut(s, Cut::TopConsts).unwrap();
     let e = enum_of(src);
     assert_eq!(e, "pubenumObjectClass{Ordinary=0,Array=1,}");
+    // Intrinsic ids by name are the intrinsic table's (its hash covers them).
     assert_eq!(
         consts_of(src),
-        "pub(crate)constSTATE:u32=0;constTABLE:[u8;2]=[1,2,];"
+        "pub(crate)constSTATE:u32=0;constTABLE:[u8;2]=[1,2,];constNOT_AN_ID:u16=id(\"Get\")+1;"
     );
     // A renumbered entry, an added one, a changed slot: other text.
     assert_ne!(enum_of(&src.replace("Array = 1", "Array = 2")), e);

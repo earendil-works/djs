@@ -42,7 +42,8 @@ pub enum Cut {
     /// closing brace, or its `;`.
     Item(&'static str),
     /// Every top-level `const` item of the file, or of each non-test `.rs` file under the
-    /// directory (a path ending in `/`).
+    /// directory (a path ending in `/`), but those that name an intrinsic (`= id("Name")`):
+    /// the intrinsic table's hash covers them.
     TopConsts,
     /// The whole file.
     All,
@@ -55,6 +56,11 @@ pub const REGIONS: &[(&str, Cut)] = &[
     ("src/heap/object.rs", Cut::Item("impl PropFlags")),
     // Cell header flags.
     ("src/heap/cells.rs", Cut::Item("pub mod flags")),
+    // Typed array element kinds (the builtins use the numbers) and frame continuations
+    // (a suspended frame's flags).
+    ("src/heap/typed.rs", Cut::Item("pub enum Kind")),
+    ("src/interp/frame.rs", Cut::Item("pub enum Continuation")),
+    ("src/interp/frame.rs", Cut::Item("impl Continuation")),
     // Realm slots (`Realm::INTRINSICS`) and run states (`Interp::STATE`).
     ("src/interp/realm.rs", Cut::Item("pub enum Intrinsic")),
     ("src/interp/state.rs", Cut::Item("pub enum RunState")),
@@ -235,7 +241,11 @@ pub fn cut(src: &str, cut: Cut) -> Result<String, String> {
                 .filter(|&at| {
                     let before = at.checked_sub(1).map(|p| s.as_bytes()[p]);
                     let after = s.as_bytes().get(at + pat.len()).copied();
-                    !after.is_some_and(is_ident) && !before.is_some_and(is_ident)
+                    // Whole identifiers only: `pub enum Intrinsic` is not
+                    // `pub enum IntrinsicKind`.
+                    let (first, last) = (pat.as_bytes()[0], pat.as_bytes()[pat.len() - 1]);
+                    !(is_ident(last) && after.is_some_and(is_ident))
+                        && !(is_ident(first) && before.is_some_and(is_ident))
                 })
                 .collect();
             if found.len() != 1 {
@@ -257,13 +267,33 @@ pub fn cut(src: &str, cut: Cut) -> Result<String, String> {
                 {
                     let s = strip(&src[at..]);
                     let end = item_end(s.as_bytes(), 0).ok_or("a const without its `;`")?;
-                    out.push_str(&s[..end]);
+                    if !names_an_intrinsic(&s[..end]) {
+                        out.push_str(&s[..end]);
+                    }
                 }
                 at += line.len();
             }
             Ok(out)
         }
     }
+}
+
+/// Whether a stripped const item is an intrinsic id by name: `constX:u16=id("Name");`,
+/// also with a path (`super::intrinsics::id`) or `iid`.
+fn names_an_intrinsic(item: &str) -> bool {
+    let Some(eq) = item.find('=') else {
+        return false;
+    };
+    let value = &item[eq + 1..];
+    let Some(call) = value.find("id(\"") else {
+        return false;
+    };
+    let path = &value[..call];
+    let args = &value[call + 4..];
+    (path.is_empty() || path == "i" || path.ends_with("::") || path.ends_with("::i"))
+        && path.bytes().all(|c| is_ident(c) || c == b':')
+        && args.ends_with("\");")
+        && !args[..args.len() - 3].contains(['"', '('])
 }
 
 /// FNV-1a.

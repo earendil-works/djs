@@ -117,8 +117,8 @@ sb.dispose();
 - Snapshots: `bytes()` collects, then writes the container below ("Snapshots") with the
   host function names and the clock as its metadata, compressed against the module's base
   image. `fromBytes` binds the host function ids to the implementations by name. It refuses
-  a snapshot whose functions are not all provided, and one of another engine build or
-  reference. The image is the arena itself and is validated on load (`Vm::from_bytes`).
+  a snapshot whose functions are not all provided, one whose dependency descriptor or
+  builtin prefix differs from the module's (D2265), and one whose reference it lacks. The image is the arena itself and is validated on load (`Vm::from_bytes`).
 - **Choosing `memoryLimit` (D1690).** A JS `InternalError: out of memory` means the heap
   reached its cap, which depends only on the program and the cap. If the host cannot back
   the heap below the cap, the run ends with `memory` / `out of host memory` instead, and
@@ -181,19 +181,25 @@ the session started from (D2262). Little-endian:
 | offset | size | field |
 | ---: | ---: | --- |
 | 0 | 4 | magic `"DJSN"` (`0x4e534a44`) |
-| 4 | 2 | format version, 2: any other version is refused (D024) |
+| 4 | 2 | format version, 3: any other version is refused (D024) |
 | 6 | 1 | app, which says what the metadata is: 1 Sandbox, 2 pi session, 3 the djs REPL (`{}`) |
 | 7 | 1 | compression: 0 none, 1 zstd |
-| 8 | 4 | the engine build hash (`djs_build_hash`) |
-| 12 | 1 | the reference: 0 none, 1 the base image, 2 pi's prelude image |
-| 13 | 1 | what the session image's prefix words are against: 0 the base image, 1 the reference |
-| 14 | 2 | reserved, 0 |
-| 16 | 8 | the reference's FNV-1a 64, low word first; 0 without one |
-| 24 | 4 | the reference's length in bytes |
-| 28 | 4 | the session image's length |
-| 32 | 4 | the metadata's length |
-| 36 | 4 | the payload's length |
-| 40 | | the metadata (UTF-8 JSON), then the payload: the session image as is, or one zstd frame with a content checksum, compressed with the reference as a raw-content dictionary |
+| 8 | 24 | the image's dependency descriptor (D2265), six u32 from its roots cell: the cell layout hash (`Roots::VERSION`), the feature set (`Roots::FEATURES`), the compatibility version (`Roots::COMPAT`), the opcode table hash (`OPS`), the intrinsic table hash (`INTRINSICS`), the internal id tables hash (`RECORDS`) |
+| 32 | 8 | FNV-1a 64 of the base image's builtin prefix (`base[0..BASE_END]`), low word first |
+| 40 | 1 | the reference: 0 none, 1 the base image, 2 pi's prelude image |
+| 41 | 1 | what the session image's prefix words are against: 0 the base image, 1 the reference |
+| 42 | 2 | reserved, 0 |
+| 44 | 8 | the reference's FNV-1a 64, low word first; 0 without one |
+| 52 | 4 | the reference's length in bytes |
+| 56 | 4 | the session image's length |
+| 60 | 4 | the metadata's length |
+| 64 | 4 | the payload's length |
+| 68 | | the metadata (UTF-8 JSON), then the payload: the session image as is, or one zstd frame with a content checksum, compressed with the reference as a raw-content dictionary |
+
+The engine build hash (`djs_build_hash`) is not in it (D026, D2265): a snapshot restores
+into any module whose base image has the same descriptor and the same builtin prefix,
+not only into the build that wrote it. What the components cover is in "What an image
+depends on" below.
 
 The stored image is a *session image* (D2066): what the base does not already hold of a VM
 made from the module's base (its builtin prefix ends at `Roots::BASE_END`). A writer
@@ -202,8 +208,8 @@ refuses an image without that prefix. Little-endian:
 | offset | size | field |
 | ---: | ---: | --- |
 | 0 | 4 | magic `"DJSs"` (`0x73534a44`) |
-| 4 | 4 | format, 1 |
-| 8 | 4 | the engine build hash |
+| 4 | 4 | format, 2 |
+| 8 | 4 | the base's dependency descriptor, hashed (`ImageDeps::hash`: FNV-1a of the six u32) |
 | 12 | 4 | `BASE_END`, the prefix's end |
 | 16 | 8 | FNV-1a 64 of the base's bytes `0..BASE_END` |
 | 24 | 4 | the roots cell's size |
@@ -221,13 +227,42 @@ A reader checks, in this order, and stops at the first problem with a clear mess
 `misuse` SandboxError; a `SnapshotError` from `resumeVm`):
 1. the container: magic, format version, lengths ("truncated snapshot");
 2. the app ("a pi session snapshot, not a sandbox snapshot");
-3. the engine build: "snapshot from djs build 1a2b3c4d; this module is build 5e6f7a8b: an
-   image restores only into the engine build that wrote it". A host that must restore
-   snapshots of older builds has to keep those builds (an engine registry: not built);
+3. the dependency descriptor and the builtin prefix, against the module's base image, in
+   the order of the header; the first that differs is named: "the snapshot is from a djs
+   with another opcode table (snapshot: 1a2b3c4d; this module: 5e6f7a8b): it restores
+   only into a djs with the same opcode table". The feature set shows by name ("snapshot:
+   full, regexp-unicode-props, unicode-normalization; this module:
+   regexp-unicode-props, unicode-normalization" is a full build's snapshot in a slim
+   module), the compatibility version in decimal, the prefix as "another base image". A
+   host that must restore snapshots whose descriptor differs has to keep the builds that
+   wrote them (an engine registry: not built);
 4. the reference: kind, hash and length ("compressed against the base image X; this
    host's is Y");
 5. zstd's checksum ("corrupt snapshot"); a session image's prefix hash ("made against
    another base image"); then the image's verification (`Vm::from_bytes`).
+
+#### What an image depends on (D026, D2265)
+
+An image holds numbers whose meaning is fixed by the engine: cell kinds and field offsets,
+opcodes in every function's bytecode, intrinsic ids in the builtins' calls, realm slots,
+object classes, native builtin indexes. The roots cell of every VM image carries a hash of
+each of those tables, and loading checks them first (`Vm::from_bytes` refuses with
+`LoadError::Incompatible`, naming the component):
+
+| component | `Roots` field | what it covers |
+| --- | --- | --- |
+| cell layout | `VERSION` | every cell kind with its fields, records and tails, and the well-known atoms (`LAYOUT_HASH`) |
+| feature set | `FEATURES` | the cargo features that change images, by bit: `full` (the builtin set), `regexp-unicode-props`, `unicode-normalization` (D2267) |
+| compatibility version | `COMPAT` | `vm::COMPAT_VERSION`, bumped by hand for a change of meaning the hashes cannot see (TESTING.md "Snapshot compatibility") |
+| opcode table | `OPS` | the instruction table: names, immediates, stack effects, costs, flags, numbering (`OPS_HASH`) |
+| intrinsic table | `INTRINSICS` | intrinsic names, kinds, arities and numbering (`INTRINSICS_HASH`) |
+| internal id tables | `RECORDS` | the id tables and slot conventions in source: object classes, realm slots, run states, header and template flags, value tags, frame continuations, the fast and native builtin tables, and the named slot numbers of internal records (`RECORDS_HASH`, D2266) |
+
+A container adds the hash of its base's builtin prefix, since a session image is a diff
+against it. Everything else in the engine can change between the build that wrote a
+snapshot and the one that restores it: the restored VM simply runs on the new code. The
+engine build hash (`djs_build_hash`) still identifies the exact build where that matters:
+Sandbox journals replay only on it, and pi's fingerprint names it.
 
 Compression runs in the host (D2261): `nodeZstd()` uses node's built-in zstd
 (`node:zlib`, node 22.15 and 23.8 on), found through `process.getBuiltinModule`, so the
@@ -331,7 +366,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_resolve_host_call_at(vm, call_id, ok, value, now: f64) -> 0/-1` | the same, and `Date` reads `now` (ms) from when the result is applied: a virtual clock per result (D1670) |
 | `vm_promise_state(vm, h) -> state` | 0 not a promise, 1 pending, 2 fulfilled, 3 rejected; settled: out = a handle (u32) to the result, and the promise counts as handled |
 | `vm_take_unhandled_rejections(vm) -> n` | out = handles (u32) to the reasons of promises rejected with no handler, oldest first (D1423) |
-| `djs_build_hash() -> u32` | the build hash of VM images: identifies the engine build (0049), including its sources, cargo features and libm version (D1750) |
+| `djs_build_hash() -> u32` | the engine build hash: identifies the engine build (0049), including its sources, cargo features and libm version (D1750). Images and snapshots are keyed on their dependency descriptor instead (D2265), which the base image's roots cell holds |
 | `djs_base_ptr()`, `djs_base_len()` | the base snapshot in the module's memory (read-only): the reference image of compact snapshots (D2260). The module ships it coded (D2252): the first call (or `vm_new`) decodes it, unless the host injected it. The pointer is valid until the next `vm_new`: the instance's first VM takes the bytes as its arena (D2060), and a later call decodes them again |
 | `djs_base_inject_ptr(len) -> ptr` | room for the base snapshot that another instance of the same module decoded (its `djs_base_ptr` bytes), so that this one need not decode (D2252); 0 if the instance has its base already or `len` is not the base's length |
 | `djs_base_inject() -> 1/0` | takes the bytes written at `djs_base_inject_ptr` as the base if their length and hash match the coded base's; 0: refused, the instance decodes its own |
