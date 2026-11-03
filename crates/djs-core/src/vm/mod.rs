@@ -272,9 +272,10 @@ impl Vm {
         // it right away (D1942).
         let mut bytes = Vec::new();
         bytes
-            .try_reserve_exact(Heap::restore_capacity(
-                base.len().max(live),
+            .try_reserve_exact(Heap::start_capacity(
+                base.len(),
                 Heap::image_base_end(base),
+                live,
                 opts.memory_limit,
             ))
             .map_err(|_| LoadError::TooLarge)?;
@@ -290,9 +291,10 @@ impl Vm {
         live: usize,
     ) -> Result<Vm, LoadError> {
         Vm::check_image(&bytes)?;
-        let cap = Heap::restore_capacity(
-            bytes.len().max(live),
+        let cap = Heap::start_capacity(
+            bytes.len(),
             Heap::image_base_end(&bytes),
+            live,
             opts.memory_limit,
         );
         bytes

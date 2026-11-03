@@ -24,6 +24,9 @@
 //! - **Everything smaller** is dlmalloc's, as before, but dlmalloc gets its memory from
 //!   the same pages instead of growing memory itself, so the pages a huge block freed
 //!   serve it too. It keeps its segments, as it did before.
+//! - **Medium blocks** (16 KiB up to `HUGE`) are dlmalloc's while its segments have room,
+//!   else page runs of their own, and dlmalloc's first segment comes before the arena:
+//!   both keep the arena at memory's end (D2541, [`PageAlloc`]).
 //!
 //! (Not named `alloc`: that is the `alloc` crate inside this crate.)
 
@@ -46,6 +49,20 @@ pub(crate) mod pages {
     /// fixed array. A run freed while it is full is leaked; in practice a VM has a handful
     /// of free ranges.
     const FREE_CAP: usize = 64;
+
+    /// Pages an allocation leaves to the top block's growth (see [`PageAlloc`]): a free run
+    /// that starts at one of `near` (right after the top block) is used only from page
+    /// `from` on.
+    #[derive(Clone, Copy)]
+    pub(crate) struct Keep {
+        near: [usize; 2],
+        from: usize,
+    }
+
+    const NO_KEEP: Keep = Keep {
+        near: [usize::MAX; 2],
+        from: 0,
+    };
 
     /// Linear memory: a run of pages that can only grow.
     pub(crate) trait Memory {
@@ -86,9 +103,40 @@ pub(crate) mod pages {
         /// `n` pages: the best-fitting free run (from its start), else memory's end (taking
         /// a free run that ends there and growing the rest).
         pub(crate) fn alloc(&mut self, n: usize) -> Option<usize> {
-            if let Some(start) = self.take_best(n) {
-                return Some(start);
+            self.alloc_keep(n, NO_KEEP)
+        }
+
+        /// [`Pages::alloc`], leaving pages free for the top block's growth ([`Keep`]).
+        pub(crate) fn alloc_keep(&mut self, n: usize, keep: Keep) -> Option<usize> {
+            // The best-fitting free run (the part of it `keep` allows).
+            let usable = |(s, len): (usize, usize)| {
+                let u = if keep.near.contains(&s) {
+                    keep.from.max(s)
+                } else {
+                    s
+                };
+                (u, (s + len).saturating_sub(u))
+            };
+            let (mut best, mut at) = (usize::MAX, 0);
+            for i in 0..self.n {
+                let (_, len) = usable(self.free[i]);
+                if len >= n && len < best {
+                    (best, at) = (len, i);
+                }
             }
+            if best != usize::MAX {
+                let (s, len) = self.free[at];
+                let (u, _) = usable((s, len));
+                self.remove(at);
+                if u > s {
+                    self.free(s, u - s);
+                }
+                if u + n < s + len {
+                    self.free(u + n, s + len - u - n);
+                }
+                return Some(u);
+            }
+            // Else at memory's end, taking (the usable part of) a free run that ends there.
             let end = self.mem.pages();
             let trailing = self.n > 0 && self.free[self.n - 1].0 + self.free[self.n - 1].1 == end;
             let tail = if trailing {
@@ -96,30 +144,14 @@ pub(crate) mod pages {
             } else {
                 end
             };
-            // Best fit took any free run of `n` pages, so the block reaches past `end`.
-            self.mem.grow(tail + n - end)?;
+            let (start, _) = usable((tail, 0));
+            // No free run had `n` usable pages, so the block reaches past `end`.
+            self.mem.grow(start + n - end)?;
             if trailing {
                 self.n -= 1;
             }
-            Some(tail)
-        }
-
-        /// `n` pages from the start of the best-fitting free run.
-        fn take_best(&mut self, n: usize) -> Option<usize> {
-            let (mut best, mut at) = (usize::MAX, 0);
-            for i in 0..self.n {
-                let len = self.free[i].1;
-                if len >= n && len < best {
-                    (best, at) = (len, i);
-                }
-            }
-            if best == usize::MAX {
-                return None;
-            }
-            let start = self.free[at].0;
-            self.free[at] = (start + n, best - n);
-            if best == n {
-                self.remove(at);
+            if start > tail {
+                self.free(tail, start - tail);
             }
             Some(start)
         }
@@ -187,9 +219,18 @@ pub(crate) mod pages {
         }
     }
 
+    /// Blocks from this size up to `HUGE` go to dlmalloc only while its segments have room;
+    /// otherwise they are page runs of their own (see [`PageAlloc`]).
+    pub(crate) const MEDIUM: usize = 16 * 1024;
+
+    /// Medium page runs live at once: a collection's side tables are four.
+    const MEDIUM_CAP: usize = 16;
+
     /// dlmalloc's system allocator: segments are pages of the [`Pages`] manager.
     pub(crate) struct Sys<M> {
         pages: *mut Pages<M>,
+        /// Refuse new segments (a medium block that dlmalloc cannot place without growing).
+        no_grow: core::cell::Cell<bool>,
     }
 
     // SAFETY: wasm32 has one thread; natively only tests use it, each on its own instance.
@@ -203,6 +244,9 @@ pub(crate) mod pages {
             // SAFETY: the manager outlives the allocator and nothing else is borrowing it
             // (the allocator is not reentrant).
             let pages = unsafe { &mut *self.pages };
+            if self.no_grow.get() {
+                return (ptr::null_mut(), 0, 0);
+            }
             let n = size.div_ceil(PAGE);
             match pages.alloc(n) {
                 Some(p) => (pages.addr(p) as *mut u8, n * PAGE, 0),
@@ -224,7 +268,8 @@ pub(crate) mod pages {
 
         fn can_release_part(&self, _flags: u32) -> bool {
             // dlmalloc keeps its segments, as it did over memory.grow alone: releasing
-            // them was measured to save no memory and cost code (D2053).
+            // them was measured to save no memory and cost code (D2053); a segment that
+            // blocks the arena is still in use when it matters (0158).
             false
         }
 
@@ -239,10 +284,32 @@ pub(crate) mod pages {
     }
 
     /// The allocator: huge blocks as page runs, the rest dlmalloc's on pages too.
+    ///
+    /// The arena should end where memory ends, so that it grows in place; whatever lands
+    /// right after it blocks that until it is freed, and then the arena moves and leaves
+    /// its old pages behind as a hole (D2541). So:
+    /// - dlmalloc gets its first segment before anything else (`prime`), below the arena;
+    /// - a medium block (`MEDIUM` up to `HUGE`) that dlmalloc's segments cannot hold is a
+    ///   page run of its own instead of a new segment. dlmalloc never returns a segment,
+    ///   so one taken right after the arena would block it for good, while a page run is
+    ///   freed and the arena grows over it. Medium blocks are mostly a collection's side
+    ///   tables, which scale with the heap and live for one collection;
+    /// - the largest huge block is the *top* block (in practice the arena). A buffer that
+    ///   grows into a page run right behind it starts its own size further on (`Keep`).
     pub(crate) struct PageAlloc<M> {
         pages: Pages<M>,
         dl: dlmalloc::Dlmalloc<Sys<M>>,
+        /// The live medium page runs `(first page, pages)`; `(usize::MAX, 0)` is a free slot.
+        medium: [(usize, usize); MEDIUM_CAP],
+        /// The largest huge block `(first page, pages)`, usually the arena; `(usize::MAX, 0)`:
+        /// none.
+        top: (usize, usize),
+        /// What a page run allocated now leaves to the top block.
+        keep: Keep,
     }
+
+    /// dlmalloc's first segment, in pages (`PageAlloc::prime`).
+    const PRIME: usize = 2;
 
     /// Whether a block of `layout` is huge (its own pages).
     fn huge(size: usize, align: usize) -> bool {
@@ -255,7 +322,11 @@ pub(crate) mod pages {
                 pages: Pages::new(mem),
                 dl: dlmalloc::Dlmalloc::new_with_allocator(Sys {
                     pages: ptr::null_mut(),
+                    no_grow: core::cell::Cell::new(false),
                 }),
+                medium: [(usize::MAX, 0); MEDIUM_CAP],
+                top: (usize::MAX, 0),
+                keep: NO_KEEP,
             }
         }
 
@@ -267,7 +338,68 @@ pub(crate) mod pages {
         /// `self` must not move afterwards.
         pub(crate) unsafe fn init(&mut self) {
             let pages: *mut Pages<M> = &mut self.pages;
-            self.dl = dlmalloc::Dlmalloc::new_with_allocator(Sys { pages });
+            self.dl = dlmalloc::Dlmalloc::new_with_allocator(Sys {
+                pages,
+                no_grow: core::cell::Cell::new(false),
+            });
+        }
+
+        /// Gives dlmalloc its first segment now (`PRIME` pages), below everything else: the
+        /// first block an instance allocates is usually the arena, and a segment right after
+        /// it would keep it from growing in place. Two pages hold what a VM keeps in
+        /// dlmalloc and what most compiles need.
+        pub(crate) fn prime(&mut self) {
+            // SAFETY: a valid size and alignment; the block is freed right away (dlmalloc
+            // keeps the segment).
+            unsafe {
+                let n = PRIME * PAGE - 4096;
+                let p = self.dl.malloc(n, 8);
+                if !p.is_null() {
+                    self.dl.free(p, n, 8);
+                }
+            }
+        }
+
+        /// A huge block at `start` now has `len` pages: it becomes the top block if there is
+        /// none or it is at least as large.
+        fn note_huge(&mut self, start: usize, len: usize) {
+            if self.top.0 == usize::MAX || self.top.0 == start || len >= self.top.1 {
+                self.top = (start, len);
+            }
+        }
+
+        /// The slot of the medium page run starting at `p`, if it is one.
+        fn medium_slot(&self, p: *mut u8) -> Option<usize> {
+            let addr = p as usize;
+            if addr < self.pages.addr(0) || !(addr - self.pages.addr(0)).is_multiple_of(PAGE) {
+                return None;
+            }
+            let page = self.pages.page(addr);
+            self.medium.iter().position(|&(s, _)| s == page)
+        }
+
+        /// A medium block: in dlmalloc's segments if they have room, else a page run (or,
+        /// with no slot left, a new dlmalloc segment after all).
+        unsafe fn alloc_medium(&mut self, l: Layout) -> *mut u8 {
+            self.dl.allocator().no_grow.set(true);
+            // SAFETY: the caller's contract.
+            let p = unsafe { self.dl.malloc(l.size(), l.align()) };
+            self.dl.allocator().no_grow.set(false);
+            if !p.is_null() {
+                return p;
+            }
+            if let Some(slot) = self.medium.iter().position(|&(s, _)| s == usize::MAX) {
+                let n = l.size().div_ceil(PAGE);
+                return match self.pages.alloc_keep(n, self.keep) {
+                    Some(start) => {
+                        self.medium[slot] = (start, n);
+                        self.pages.addr(start) as *mut u8
+                    }
+                    None => ptr::null_mut(),
+                };
+            }
+            // SAFETY: the caller's contract.
+            unsafe { self.dl.malloc(l.size(), l.align()) }
         }
 
         /// # Safety
@@ -276,10 +408,16 @@ pub(crate) mod pages {
         pub(crate) unsafe fn alloc(&mut self, l: Layout) -> *mut u8 {
             if huge(l.size(), l.align()) {
                 let n = l.size().div_ceil(PAGE);
-                match self.pages.alloc(n) {
-                    Some(p) => self.pages.addr(p) as *mut u8,
+                match self.pages.alloc_keep(n, self.keep) {
+                    Some(p) => {
+                        self.note_huge(p, n);
+                        self.pages.addr(p) as *mut u8
+                    }
                     None => ptr::null_mut(),
                 }
+            } else if l.size() >= MEDIUM && l.align() <= PAGE {
+                // SAFETY: the caller's contract.
+                unsafe { self.alloc_medium(l) }
             } else {
                 // SAFETY: the caller's contract.
                 unsafe { self.dl.malloc(l.size(), l.align()) }
@@ -292,7 +430,14 @@ pub(crate) mod pages {
         pub(crate) unsafe fn dealloc(&mut self, p: *mut u8, l: Layout) {
             if huge(l.size(), l.align()) {
                 let start = self.pages.page(p as usize);
+                if self.top.0 == start {
+                    self.top = (usize::MAX, 0);
+                }
                 self.pages.free(start, l.size().div_ceil(PAGE));
+            } else if let Some(slot) = self.medium_slot(p) {
+                let (start, n) = self.medium[slot];
+                self.medium[slot] = (usize::MAX, 0);
+                self.pages.free(start, n);
             } else {
                 // SAFETY: the caller's contract.
                 unsafe { self.dl.free(p, l.size(), l.align()) }
@@ -304,7 +449,26 @@ pub(crate) mod pages {
         /// The contract of `GlobalAlloc::realloc`; `init` has run.
         pub(crate) unsafe fn realloc(&mut self, p: *mut u8, l: Layout, new: usize) -> *mut u8 {
             let (old_huge, new_huge) = (huge(l.size(), l.align()), huge(new, l.align()));
-            if !old_huge && !new_huge {
+            if !old_huge && let Some(slot) = self.medium_slot(p) {
+                let (start, n) = self.medium[slot];
+                let want = new.div_ceil(PAGE);
+                if !new_huge && want <= n {
+                    return p;
+                }
+                if !new_huge && self.pages.extend(start, n, want) {
+                    self.medium[slot] = (start, want);
+                    return p;
+                }
+            } else if !old_huge && !new_huge && new >= MEDIUM && l.align() <= PAGE {
+                // A medium block in dlmalloc: grows there if its segments have room.
+                self.dl.allocator().no_grow.set(true);
+                // SAFETY: the caller's contract.
+                let q = unsafe { self.dl.realloc(p, l.size(), l.align(), new) };
+                self.dl.allocator().no_grow.set(false);
+                if !q.is_null() {
+                    return q;
+                }
+            } else if !old_huge && !new_huge {
                 // SAFETY: the caller's contract.
                 return unsafe { self.dl.realloc(p, l.size(), l.align(), new) };
             }
@@ -312,12 +476,41 @@ pub(crate) mod pages {
                 let start = self.pages.page(p as usize);
                 let (len, want) = (l.size().div_ceil(PAGE), new.div_ceil(PAGE));
                 if want <= len {
+                    if self.top.0 == start {
+                        self.top.1 = want;
+                    }
                     self.pages.free(start + want, len - want);
                     return p;
                 }
                 if self.pages.extend(start, len, want) {
+                    self.note_huge(start, want);
                     return p;
                 }
+            }
+            if old_huge && self.top.0 == self.pages.page(p as usize) {
+                // The top block moves: its new place is the top.
+                self.top = (usize::MAX, 0);
+            } else if self.top.0 != usize::MAX {
+                // A growing buffer, which may well be copied into the arena next (a
+                // JSON.stringify result): if it becomes a page run right behind the top
+                // block, it starts its own size further on, leaving the top block room for
+                // the copy. Its old block, a page run right behind the top block, counts
+                // as free there.
+                let top_end = self.top.0 + self.top.1;
+                let start = self.pages.page(p as usize);
+                let old_run = match self.medium_slot(p) {
+                    Some(slot) => Some(self.medium[slot].1),
+                    None if old_huge => Some(l.size().div_ceil(PAGE)),
+                    None => None,
+                };
+                let after = match old_run {
+                    Some(len) if start == top_end => top_end + len,
+                    _ => usize::MAX,
+                };
+                self.keep = Keep {
+                    near: [top_end, after],
+                    from: top_end + new.div_ceil(PAGE),
+                };
             }
             // Moves (between dlmalloc and pages, or a huge block that cannot extend).
             // SAFETY: the caller's contract: `new` is a valid size for `l.align()`; both
@@ -329,6 +522,7 @@ pub(crate) mod pages {
                     ptr::copy_nonoverlapping(p, q, l.size().min(new));
                     self.dealloc(p, l);
                 }
+                self.keep = NO_KEEP;
                 q
             }
         }
@@ -407,6 +601,7 @@ mod wasm {
                 if first < end {
                     a.free_pages(first, end - first);
                 }
+                a.prime();
             }
             a
         }

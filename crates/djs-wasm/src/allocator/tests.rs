@@ -121,14 +121,14 @@ fn moved_blocks_reuse_free_pages_before_growing_memory() {
     unsafe {
         let x = a.alloc(l(8));
         let y = a.alloc(l(4));
-        let z = a.alloc(l(1));
+        let z = a.alloc(l(4));
         a.dealloc(x, l(8));
         let pages = a.pages().memory().pages();
         let y2 = a.realloc(y, l(4), 6 * PAGE);
         assert_eq!(y2, x, "into the old pages of x");
         assert_eq!(a.pages().memory().pages(), pages, "no growth");
         a.dealloc(y2, l(6));
-        a.dealloc(z, l(1));
+        a.dealloc(z, l(4));
     }
 }
 
@@ -161,7 +161,107 @@ fn page_alloc(cap: usize) -> &'static mut PageAlloc<Fake> {
     // SAFETY: leaked: it never moves.
     unsafe { a.init() };
     a.free_pages(0, 2);
+    a.prime();
     a
+}
+
+/// A fresh `page_alloc` with an arena-like block of `pages` pages at memory's end, as
+/// after `vm_new`.
+fn with_arena(pages: usize) -> (&'static mut PageAlloc<Fake>, *mut u8, Layout) {
+    let a = page_alloc(1024);
+    let l = Layout::from_size_align(pages * PAGE, 8).unwrap();
+    // SAFETY: a non-zero size.
+    let arena = unsafe { a.alloc(l) };
+    assert_eq!(
+        arena as usize + l.size(),
+        a.pages().addr(a.pages().memory().pages())
+    );
+    (a, arena, l)
+}
+
+/// Grows the arena block by `pages` pages; whether it stayed in place.
+fn grow_arena(a: &mut PageAlloc<Fake>, arena: &mut *mut u8, l: &mut Layout, pages: usize) -> bool {
+    let new = l.size() + pages * PAGE;
+    // SAFETY: live, with its layout; a non-zero size.
+    let q = unsafe { a.realloc(*arena, *l, new) };
+    let kept = q == *arena;
+    (*arena, *l) = (q, Layout::from_size_align(new, 8).unwrap());
+    kept
+}
+
+#[test]
+fn dlmalloc_is_primed_below_the_arena() {
+    // What a VM keeps in dlmalloc and a compile's temporaries fit the primed segment, so
+    // nothing lands behind the arena.
+    let (a, mut arena, mut l) = with_arena(5);
+    let small: Vec<(*mut u8, Layout)> = (0..200)
+        .map(|i| {
+            let sl = Layout::from_size_align(64 + i * 5, 8).unwrap();
+            // SAFETY: a non-zero size.
+            (unsafe { a.alloc(sl) }, sl)
+        })
+        .collect();
+    assert!(small.iter().all(|&(p, _)| p < arena));
+    assert!(grow_arena(a, &mut arena, &mut l, 5), "the arena moved");
+    for (p, sl) in small {
+        // SAFETY: live, with its layout.
+        unsafe { a.dealloc(p, sl) };
+    }
+}
+
+#[test]
+fn medium_blocks_dlmalloc_cannot_hold_are_page_runs() {
+    let (a, mut arena, mut l) = with_arena(5);
+    // A collection's side tables: more than the primed segment holds.
+    let tables: Vec<(*mut u8, Layout)> = [96 << 10, 48 << 10, 16 << 10, 64 << 10]
+        .into_iter()
+        .map(|n| {
+            let tl = Layout::from_size_align(n, 8).unwrap();
+            // SAFETY: a non-zero size.
+            (unsafe { a.alloc(tl) }, tl)
+        })
+        .collect();
+    let runs = tables.iter().filter(|&&(p, _)| p > arena).count();
+    assert!(runs > 0, "all in dlmalloc");
+    // A page run grows in place at memory's end and shrinks in place.
+    let (p, tl) = tables[3];
+    if p > arena {
+        // SAFETY: live, with its layout.
+        let q = unsafe { a.realloc(p, tl, 200 << 10) };
+        assert!(q == p || q > arena);
+        // SAFETY: live, with the layout of the last realloc.
+        unsafe { a.dealloc(q, Layout::from_size_align(200 << 10, 8).unwrap()) };
+    } else {
+        // SAFETY: live, with its layout.
+        unsafe { a.dealloc(p, tl) };
+    }
+    for &(p, tl) in &tables[..3] {
+        // SAFETY: live, with its layout.
+        unsafe { a.dealloc(p, tl) };
+    }
+    // Freed, they no longer block the arena (a dlmalloc segment would, for good).
+    assert!(grow_arena(a, &mut arena, &mut l, 8), "the arena moved");
+}
+
+#[test]
+fn a_growing_buffer_behind_the_arena_leaves_it_room() {
+    // JSON.stringify's output: a buffer doubles behind the arena, then the arena grows by
+    // its size to copy it in, while the buffer is still alive.
+    let (a, mut arena, mut l) = with_arena(8);
+    let mut bl = Layout::from_size_align(4096, 1).unwrap();
+    // SAFETY: a non-zero size.
+    let mut b = unsafe { a.alloc(bl) };
+    while bl.size() < HUGE {
+        let new = bl.size() * 2;
+        // SAFETY: live, with its layout; a non-zero size.
+        b = unsafe { a.realloc(b, bl, new) };
+        assert!(!b.is_null());
+        bl = Layout::from_size_align(new, 1).unwrap();
+    }
+    assert!(b > arena);
+    assert!(grow_arena(a, &mut arena, &mut l, HUGE / PAGE), "the arena moved");
+    // SAFETY: live, with its layout.
+    unsafe { a.dealloc(b, bl) };
 }
 
 /// A block of the stress test: its address, layout and fill byte.

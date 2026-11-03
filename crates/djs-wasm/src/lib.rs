@@ -165,11 +165,7 @@ fn base_buffer() -> Vec<u8> {
 
 /// [`base_buffer`]'s capacity.
 fn base_capacity() -> usize {
-    djs_core::heap::Heap::restore_capacity(
-        djs_prelude::base_len(),
-        djs_prelude::BASE_END,
-        djs_core::heap::DEFAULT_LIMIT,
-    )
+    djs_core::heap::Heap::image_capacity(djs_prelude::base_len(), djs_core::heap::DEFAULT_LIMIT)
 }
 
 /// The base snapshot (D1321), decoded now unless the instance holds it (D2252), and its
@@ -491,12 +487,7 @@ pub extern "C" fn djs_base_len() -> usize {
 /// more and leaves the staging block behind as a hole (D1942).
 #[unsafe(no_mangle)]
 pub extern "C" fn djs_image_staging(len: usize, memory_limit: u32) -> usize {
-    // (Images of this module's VMs share the base's prefix.)
-    let cap = djs_core::heap::Heap::restore_capacity(
-        len,
-        djs_prelude::BASE_END,
-        options(memory_limit).memory_limit,
-    );
+    let cap = djs_core::heap::Heap::image_capacity(len, options(memory_limit).memory_limit);
     with(|s| {
         if s.staging.capacity() < cap {
             // Free the old buffer first, so the new one can take its place.

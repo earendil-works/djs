@@ -258,11 +258,32 @@ impl Heap {
         Ok(heap)
     }
 
-    /// The arena capacity a heap restored from an image of `image_len` bytes, `base_end`
-    /// of them its builtin prefix ([`Heap::image_base_end`]), reserves (D1942): at most
-    /// this, so a host can stage the image in a buffer that becomes the arena without
-    /// growing again (`djs_image_staging`). The prefix must be the image's, or the
-    /// first threshold (D2442) is past the capacity and the arena grows at once.
+    /// The arena capacity a heap restored from an image of `image_len` bytes reserves
+    /// (D1942, D2541): the image plus one wasm page, in whole pages. A host can stage the
+    /// image in a buffer of this capacity, which becomes the arena without growing again
+    /// (`djs_image_staging`). The arena grows from there on demand; in wasm it stays at the
+    /// end of memory and grows in place, so reserving the first GC threshold up front
+    /// (twice the image) only held pages most VMs never touch.
+    pub fn image_capacity(image_len: usize, limit: usize) -> usize {
+        const PAGE: usize = 64 << 10;
+        let hard = (limit.min(arena::MAX_ARENA as usize) & !7).max(image_len);
+        (image_len + PAGE).next_multiple_of(PAGE).min(hard)
+    }
+
+    /// The arena capacity of a VM made from an image of `image_len` bytes for a host that
+    /// expects `live` bytes (`Vm::from_base_reserved`; 0: no hint, [`Heap::image_capacity`]).
+    pub fn start_capacity(image_len: usize, base_end: u32, live: usize, limit: usize) -> usize {
+        if live == 0 {
+            Heap::image_capacity(image_len, limit)
+        } else {
+            Heap::restore_capacity(image_len.max(live), base_end, limit)
+        }
+    }
+
+    /// The arena capacity for a heap of `image_len` bytes that is expected to grow on: its
+    /// first GC threshold plus the slack (D1990), `base_end` of the bytes its builtin
+    /// prefix ([`Heap::image_base_end`]). The prefix must be the image's, or the first
+    /// threshold (D2442) is past the capacity and the arena grows at once.
     pub fn restore_capacity(image_len: usize, base_end: u32, limit: usize) -> usize {
         let hard = (limit.min(arena::MAX_ARENA as usize) as u32) & !7;
         let len = u32::try_from(image_len).unwrap_or(u32::MAX);
@@ -299,7 +320,9 @@ impl Heap {
         };
         heap.apply_reserve();
         if heap.arena.len() >= Roots::LAYOUT.min_size {
-            heap.arena.reserve_total(capacity_target(heap.gc_threshold));
+            let len = heap.arena.len() as usize;
+            heap.arena
+                .reserve_total(Heap::image_capacity(len, hard_limit as usize) as u32);
         }
         heap.refresh_frozen();
         heap
