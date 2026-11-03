@@ -1362,7 +1362,22 @@ impl Dumper<'_> {
         } else {
             let g = self.nodes[n].v.as_object().expect("a generator");
             let proto = h.get_prototype_of(g).map_or(Value::NULL, Value::object);
-            let p = self.expr(proto, None, None);
+            // A generator function's own `prototype` is written with the function.
+            let owner = self.nodes.iter().position(|d| {
+                d.v.as_object().is_some_and(|f| {
+                    h.object_class(f) == ObjectClass::Function
+                        && h.get_own_property(f, crate::heap::atoms::PROTOTYPE)
+                            .and_then(|p| p.value())
+                            == Some(proto)
+                })
+            });
+            let p = match owner {
+                Some(f) => {
+                    let e = self.expr(self.nodes[f].v, None, None);
+                    cat!(e, ".prototype")
+                }
+                None => self.expr(proto, None, None),
+            };
             let make = if kind == suspend::ASYNC_GENERATOR {
                 "(async function* () {})()"
             } else {

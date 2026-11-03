@@ -202,13 +202,16 @@ fn live_values_are_refused_by_path() {
         None,
     );
     let all = r.join("\n");
-    for want in [
-        "p: a pending promise",
-        "it: a suspended generator",
-        "px.inner: a Proxy",
-    ] {
-        assert!(all.contains(want), "{all}");
-    }
+    assert!(all.contains("px.inner: a Proxy"), "{all}");
+    // Pending promises and suspended generators are written as what made them (0172).
+    round_trip(
+        "const p = new Promise(() => {});\n\
+         function* g(a) { yield a; yield a + 1; } const it = g(1); it.next();\n\
+         const fresh = g(5), done = g(0); done.return();",
+        None,
+        "[it.next().value, fresh.next().value, done.next().done, \
+         Object.getPrototypeOf(done) === g.prototype, p instanceof Promise].join()",
+    );
 }
 
 #[test]
