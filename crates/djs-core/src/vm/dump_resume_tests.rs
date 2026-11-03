@@ -193,6 +193,13 @@ fn async_generators() {
     fixture("asyncgen");
 }
 
+#[test]
+fn combinators_and_rejections() {
+    let l = fixture("combinators");
+    let ids: Vec<u32> = l.calls.iter().map(|c| c.id).collect();
+    assert_eq!(ids, [6, 7, 8, 9, 10, 11, 12, 13]);
+}
+
 /// Prints the suspension maps of a file, for writing fixtures by hand:
 /// `DJS_SMAP=tests/dump/v2/x.src.js cargo test -p djs-core --lib show_maps -- --ignored --nocapture`.
 #[test]
