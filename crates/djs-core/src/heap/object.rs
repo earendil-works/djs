@@ -1716,8 +1716,9 @@ impl Heap {
     }
 
     /// The location of an own `length` or `name` that has no table entry: an array's
-    /// `length`, a closure's lazy ones (D2445).
-    #[inline]
+    /// `length`, a closure's lazy ones (D2445). Out of line: `find_own` is inlined into
+    /// many callers, and only these two keys get here.
+    #[inline(never)]
     fn unstored_loc(&self, o: Obj, key: Atom) -> Option<Loc> {
         let f = self.obj_flags(o);
         if key == atoms::LENGTH {
@@ -1766,92 +1767,61 @@ impl Heap {
 
     /// Stores a closure's lazy `length` and `name` (D2445) as ordinary properties, first
     /// in key order as they are: before a change to one of them other than deleting it.
-    /// Allocates before it commits (D1700).
+    /// The object becomes a dictionary (rare: a redefined `name` or `length`), whose
+    /// entries move up to make room at the front. Allocates before it commits (D1700).
+    #[cold]
+    #[inline(never)]
     fn materialize_lazy(&mut self, o: Obj) -> Result<(), HeapError> {
         let f = self.obj_flags(o);
         let configurable = PropFlags::CONFIGURABLE.bits() as u32;
-        let mut entries = Vec::new();
+        let mut first = [(Atom::NULL, Value::UNDEFINED); 2];
+        let mut k = 0;
         if f & OBJ_LAZY_LENGTH != 0 {
-            entries.push((
-                atoms::LENGTH,
-                configurable,
-                self.lazy_value(o, Loc::LazyLength),
-            ));
+            first[0] = (atoms::LENGTH, self.lazy_value(o, Loc::LazyLength));
+            k = 1;
         }
         if f & OBJ_LAZY_NAME != 0 {
-            entries.push((atoms::NAME, configurable, self.lazy_value(o, Loc::LazyName)));
+            first[k as usize] = (atoms::NAME, self.lazy_value(o, Loc::LazyName));
+            k += 1;
         }
-        entries.extend(self.stored_entries(o));
-        self.rebuild_props(o, &entries)?;
-        self.set_obj_flag(o, OBJ_LAZY, false);
-        Ok(())
-    }
-
-    /// The stored properties of `o` in key order: key, stored flags, value slot.
-    fn stored_entries(&self, o: Obj) -> Vec<(Atom, u32, Value)> {
-        let p = self.props(o);
-        let n = self.prop_slots(o);
-        let mut out = Vec::with_capacity(n as usize + 2);
-        for i in 0..n {
-            if self.is_dictionary(o) {
-                let e = PropTable::ENTRIES.at(p, i);
-                let a = self.arena();
-                let key = Atom::from_id(a.get(e, PropEntry::KEY));
-                if !key.is_null() {
-                    out.push((key, a.get(e, PropEntry::FLAGS), a.get(e, PropEntry::VALUE)));
-                }
-            } else {
-                let (key, fl) = self.shape_desc(self.arena().get(p, PropValues::SHAPE).0, i);
-                out.push((key, fl, self.arena().read(PropValues::VALUES.at(p, i))));
-            }
-        }
-        out
-    }
-
-    /// Replaces the stored properties of `o` by `entries` (key, stored flags, value
-    /// slot), keeping its mode: a new shape chain from the root in shape mode (a
-    /// dictionary if a shape limit is reached), a new table in dictionary mode.
-    /// Everything is allocated before `o` changes (D1700).
-    fn rebuild_props(&mut self, o: Obj, entries: &[(Atom, u32, Value)]) -> Result<(), HeapError> {
-        let n = entries.len() as u32;
         if !self.is_dictionary(o) {
-            if n == 0 {
-                self.arena_mut().set(o.0, Object::PROPS, Ref::NULL);
-                return Ok(());
-            }
-            let mut s = Some(self.root_shape()?);
-            for &(key, fl, _) in entries {
-                s = match s {
-                    Some(s) => self.shape_child(s, key, fl)?,
-                    None => None,
-                };
-            }
-            if let Some(s) = s {
-                let v = self.alloc_values(n)?;
-                let a = self.arena_mut();
-                for (i, &(_, _, value)) in entries.iter().enumerate() {
-                    a.write(PropValues::VALUES.at(v, i as u32), value);
-                }
-                a.set(v, PropValues::LEN, n);
-                a.set(v, PropValues::SHAPE, Ref(s));
-                a.set(o.0, Object::PROPS, Ref(v));
-                return Ok(());
-            }
+            self.become_dictionary(o, k, Dict::Attributes)?;
         }
-        let t = self.alloc_table(n.max(4))?;
-        for (i, &(key, fl, value)) in entries.iter().enumerate() {
+        let mut t = self.props(o);
+        if t == 0 || self.arena().get(t, PropTable::COUNT) + k > self.table_capacity(t) {
+            t = self.grow_table(o, t)?;
+        }
+        let count = self.arena().get(t, PropTable::COUNT);
+        if self.arena().get::<Ref>(t, PropTable::INDEX).is_null() && count + k > LINEAR_MAX {
+            self.build_index(t)?;
+        }
+        // Nothing allocates from here on.
+        let esize = PropTable::ENTRIES.elem_size();
+        let (src, dst) = (PropTable::ENTRIES.at(t, 0), PropTable::ENTRIES.at(t, k));
+        self.arena_mut().copy_within(src, esize * count, dst);
+        for (i, &(key, value)) in first[..k as usize].iter().enumerate() {
             let e = PropTable::ENTRIES.at(t, i as u32);
             let a = self.arena_mut();
             a.set(e, PropEntry::KEY, key.id());
-            a.set(e, PropEntry::FLAGS, fl);
+            a.set(e, PropEntry::FLAGS, configurable);
             a.set(e, PropEntry::VALUE, value);
         }
-        self.arena_mut().set(t, PropTable::COUNT, n);
-        if n > LINEAR_MAX {
-            self.build_index(t)?;
+        self.arena_mut().set(t, PropTable::COUNT, count + k);
+        if let Some(index) = self.arena().get::<Ref>(t, PropTable::INDEX).get() {
+            for b in 0..self.u32_array_len(index) {
+                let v = self.u32_array_get(index, b);
+                if v != 0 && v != TOMBSTONE {
+                    self.u32_array_set(index, b, v + k);
+                }
+            }
+            for (i, &(key, _)) in first[..k as usize].iter().enumerate() {
+                let b = self.probe(index, key_hash(key), |b, v| {
+                    matches!(v, 0 | TOMBSTONE).then_some(b)
+                });
+                self.u32_array_set(index, b, i as u32 + 1);
+            }
         }
-        self.arena_mut().set(o.0, Object::PROPS, Ref(t));
-        self.set_obj_flag(o, OBJ_DICTIONARY, true);
+        self.set_obj_flag(o, OBJ_LAZY, false);
         Ok(())
     }
 
@@ -1863,19 +1833,32 @@ impl Heap {
     /// closure shares the template. False, with nothing changed, otherwise.
     pub(crate) fn make_builtin_props_lazy(&mut self, o: Obj) -> Result<bool, HeapError> {
         use crate::bytecode::template::func_flags;
-        if self.object_class(o) != ObjectClass::Function || self.obj_flags(o) & OBJ_LAZY != 0 {
+        if self.object_class(o) != ObjectClass::Function
+            || self.obj_flags(o) & OBJ_LAZY != 0
+            || self.prop_slots(o) < 2
+            || self.prop_key(o, 0) != atoms::LENGTH
+            || self.prop_key(o, 1) != atoms::NAME
+        {
             return Ok(false);
         }
-        let entries = self.stored_entries(o);
-        let configurable = PropFlags::CONFIGURABLE.bits() as u32;
-        let [(k0, f0, v0), (k1, f1, v1), ..] = entries[..] else {
+        let (
+            Property::Data {
+                value: v0,
+                flags: f0,
+            },
+            Property::Data {
+                value: v1,
+                flags: f1,
+            },
+        ) = (self.prop_read(o, 0), self.prop_read(o, 1))
+        else {
             return Ok(false);
         };
         let length = v0.as_int().and_then(|l| u16::try_from(l).ok());
         let (Some(length), Some(name), true) = (
             length,
             v1.as_string(),
-            k0 == atoms::LENGTH && k1 == atoms::NAME && f0 == configurable && f1 == configurable,
+            f0 == PropFlags::CONFIGURABLE && f1 == PropFlags::CONFIGURABLE,
         ) else {
             return Ok(false);
         };
@@ -1884,7 +1867,14 @@ impl Heap {
         let Some(atom) = self.find_string_atom_of(name) else {
             return Ok(false);
         };
-        self.rebuild_props(o, &entries[2..])?;
+        for key in [atoms::LENGTH, atoms::NAME] {
+            let i = self.prop_find(o, key).expect("checked above");
+            self.prop_remove(o, i)?;
+        }
+        if !self.is_dictionary(o) && self.prop_slots(o) == 0 {
+            // No stored keys left: no values block either (the root shape).
+            self.arena_mut().set(o.0, Object::PROPS, Ref::NULL);
+        }
         let t = self.closure_template(o);
         let a = self.arena_mut();
         let flags = a.get(t, FuncTemplate::FLAGS);

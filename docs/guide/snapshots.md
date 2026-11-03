@@ -179,10 +179,12 @@ on a diet:
   apart by where they live, so the base keeps the atom table's copy and points the
   others at it (D2430);
 - the prelude keeps no source text (D1340), no line tables or local names (D1430), and
-  its internal helper closures get no `length`, `name` or `prototype` (D1433);
+  its internal helper closures get no `length`, `name` or `prototype` (D1433), and the
+  installed builtins keep their `length` and `name` in their templates rather than as
+  properties (D2445);
 - shapes replaced private property tables for small objects (D1831).
 
-It is about 315 KB today. Building it twice gives the same bytes, and the base built
+It is about 218 KB today. Building it twice gives the same bytes, and the base built
 natively is byte for byte the realm that djs-wasm builds inside wasm32, which a test
 checks, so nothing in it depends on the platform.
 
@@ -416,7 +418,7 @@ of the call it waits on, and the container is 2.1 KB.
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2057 D2063 D2066 D2067 D024 D2400 D2058 D2043 D1091 D1890 D1725 D1052 D026 D2265 D2266 D2267 D2268 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 D2264 D2308 -->
+<!-- gen:decisions D2040 D2041 D2057 D2063 D2066 D2067 D024 D2400 D2058 D2043 D1091 D1890 D1725 D1052 D026 D2265 D2266 D2267 D2268 D1320 D1330 D1750 D1056 D1730 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2261 D2262 D2264 D2308 D2445 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
 - D2057: The cells a VM replaces first sit at the end of base and sealed images
@@ -454,4 +456,5 @@ Decisions on this page:
 - D2262: pi's prelude image is the reference of the adapter's snapshots and is recomputable
 - D2264: `djs heap` analyzes dumps through djs-core's heap code; djs-cli reads and writes snapshot containers
 - D2308: Images hold no dead value-stack slots; embedder collections shrink a grown stack
+- D2445: A closure's length and name come from its template until changed
 <!-- /gen -->

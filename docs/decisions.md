@@ -7207,3 +7207,41 @@ in a measured hot loop or the value is large;
 `scripts/size/vec-sites.py --check scripts/size/vec-sites.txt` reports inlined pushes,
 drops, `with_capacity`, `reserve` and allocation-error paths per function against the
 baseline.
+
+## D2445: A closure's length and name come from its template until changed
+date: 2026-11-03 · by: bloat · issue: 0151
+A closure (`ObjectClass::Function`) has two header flags, `OBJ_LAZY_LENGTH` and
+`OBJ_LAZY_NAME`: while set, the object has an own `length` (the template's `LENGTH`) and
+`name` (the string of the template's `NAME` atom, empty for none), both `{writable:
+false, enumerable: false, configurable: true}`, that are not stored. `find_own` reports
+them (`Loc::LazyLength`/`LazyName`), `[[OwnPropertyKeys]]` lists them before the stored
+string keys, `[[Set]]` fails on them like on any read-only property, and `[[Delete]]`
+clears the flag (the other keys keep their order). Any other change that validation
+accepts (a redefinition with a new value or attributes, a freeze) first stores both as
+ordinary properties at the front (`materialize_lazy`: the object becomes a dictionary
+whose entries move up; rare, and it allocates before it commits); a redefinition that
+changes nothing changes nothing.
+- User closures: `function_properties` sets both flags when the template's name is a
+  string atom or none (an integer key's name, `{1() {}}`, is still stored). A closure
+  then needs no property definition; ordinary functions still get their `prototype`.
+- Builtins: at base-image build (`image::lazy_builtin_props`, before the prelude's shape
+  tree is replaced), a builtin closure whose first two stored properties are the
+  `length` and `name` `%Install*` defined, with a name that is already a string atom and
+  a template no other closure shares, moves them into its template (`LENGTH`, `NAME`,
+  `func_flags::LAZY_NAME`, which keeps the name when `drop_internal_names` clears the
+  others). Names that are not atoms ("get size", "[Symbol.iterator]", 59 of them) stay
+  stored: interning them grew the atom index by 4 KB.
+- Inline caches: a shape does not show the two keys, so `exotic_own` makes a function's
+  `length` and `name` look up rather than trust a shape compare for prototype reads and
+  additions, and `shaped_add` refuses a lazy object.
+- `BUILTIN_RESULT_SHAPES` precreates `prototype` alone (writable for functions, not for
+  classes) and `length, name` for builtin and bound closures, instead of the
+  `length, name, prototype` chains.
+- **Bought:** base 231,960 → 217,608 B (−14.4 KB per VM; property storage 37,088 →
+  22,528); a wasm instance after `vm_new` 18 → 17 pages; tree-children (pico's tree
+  benchmark: a closure per call) −11.9% wasm instructions cold, −14% warm; every closure
+  32 B smaller (no values block for `length` and `name`). Peak memory (mem-perturb n=6)
+  −0.1 MiB on most workloads.
+- **Paid:** module gzip +652 B (444,537 → 445,189; the materialization and lookup
+  paths). Other workloads within noise (n=3 cold −1.3..+2.3%, re-measured n=7 −1.1..+1.3%;
+  warm ±1%, pi-like −0.7%).

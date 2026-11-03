@@ -206,6 +206,17 @@ The fast paths check the flag once and can then trust the dense store. An array'
 `length` is slot 0 of its tail, a Number, and read-only lengths are a header flag. Typed
 arrays and ArrayBuffers keep their bytes in an untraced `Bytes` cell (D1390).
 
+A closure's `length` and `name` are not stored either (D2445). Every function has both,
+read-only and non-enumerable, and almost none ever changes them, so two header flags say
+"this function still has the `length` and `name` its template records", and property
+lookup, key listing and deletion answer from the template. Creating a closure then
+defines no properties (an arrow function passed to `map` inside a loop used to pay two
+property definitions and a shape search each time), and the builtins in every VM carry
+no storage for them. Deleting one clears its flag; any other change first stores both
+as ordinary properties in front of the others, which keeps the key order the spec
+requires. Inline caches cannot see the two keys in a shape, so for functions they look
+`length` and `name` up instead of trusting a shape compare.
+
 ## Map, Set and the weak collections
 
 Map and Set are ordered hash tables in the heap (D1381): an entries array in insertion
@@ -256,7 +267,7 @@ helo
 
 Decisions on this page:
 
-<!-- gen:decisions D1052 D1053 D1610 D1871 D1054 D1055 D1830 D1831 D1621 D1390 D1381 D1382 D1513 -->
+<!-- gen:decisions D1052 D1053 D1610 D1871 D1054 D1055 D1830 D1831 D1621 D1390 D1381 D1382 D1513 D2445 -->
 - D1052: Layout description macro
 - D1053: String representation
 - D1610: Append ropes: `s += x` writes into a growable buffer
@@ -270,4 +281,5 @@ Decisions on this page:
 - D1381: Map and Set are ordered hash tables rehashed by the collector
 - D1382: WeakMap and WeakSet are ephemerons in the Cheney collector
 - D1513: WeakRef and FinalizationRegistry on ephemeron tables; cleanup jobs after a collection
+- D2445: A closure's length and name come from its template until changed
 <!-- /gen -->
