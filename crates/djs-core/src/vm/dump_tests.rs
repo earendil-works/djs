@@ -579,3 +579,13 @@ fn class_refusals() {
         assert!(all.contains(want), "{all}");
     }
 }
+
+#[test]
+fn frozen_records_keep_their_keys() {
+    let t = round_trip(
+        "const ALL = Object.freeze([Object.freeze({ name: 'echo', description: 'd' })]);",
+        None,
+        "ALL.map((t) => t.name).join() + Object.isFrozen(ALL[0])",
+    );
+    let _ = t;
+}

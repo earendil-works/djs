@@ -1255,10 +1255,7 @@ impl<'a> Dumper<'a> {
                 let len = h.array_length(o);
                 let el: Ref = h.arena().get(o.offset(), ObjectCell::ELEMENTS);
                 for i in 0..len {
-                    let v = match el.get() {
-                        Some(el) if i < h.value_array_len(el) => h.value_array_get(el, i),
-                        _ => Value::HOLE,
-                    };
+                    let v = array_element(h, o, el, i);
                     self.edge(n, v, || cat!(path, "[", i, "]"));
                 }
                 // Sparse elements and named properties.
@@ -2726,12 +2723,21 @@ impl<'a> Dumper<'a> {
                     _ => {
                         let e = self.expr(inner, None, Some(name));
                         if e == *name {
-                            // A captured `tools` that holds the host's `tools`: the
-                            // closures read the global (`let tools = tools;` would be a TDZ
-                            // error).
-                            continue;
+                            if !self.nodes[b].frame_box {
+                                // A captured `tools` that holds the host's `tools`: the
+                                // closures read the global (`let tools = tools;` would be
+                                // a TDZ error).
+                                continue;
+                            }
+                            // A frame shares the variable: it must exist, with the value
+                            // read before the factory.
+                            let v = self.fresh("v");
+                            self.out.push_out(cat!(v, " = ", e, ";"));
+                            self.skeleton.push_out(Some(String::new()));
+                            cat!("let ", name, " = ", v, ";")
+                        } else {
+                            cat!("let ", name, " = ", e, ";")
                         }
-                        cat!("let ", name, " = ", e, ";")
                     }
                 };
                 // Only the first line is indented: the rest belongs to a function's
@@ -3360,10 +3366,7 @@ impl<'a> Dumper<'a> {
         let el: Ref = h.arena().get(o.offset(), ObjectCell::ELEMENTS);
         let mut items = Vec::new();
         for i in 0..len {
-            let v = match el.get() {
-                Some(el) if i < h.value_array_len(el) => h.value_array_get(el, i),
-                _ => Value::HOLE,
-            };
+            let v = array_element(h, o, el, i);
             let at = if cell_of(v).is_some() {
                 cat!(loc, "[", i, "]")
             } else {
@@ -3378,11 +3381,7 @@ impl<'a> Dumper<'a> {
                 items.push_out(e);
             }
         }
-        if len > 0
-            && el.get().is_none_or(|el| {
-                len > h.value_array_len(el) || h.value_array_get(el, len - 1).is_hole()
-            })
-        {
+        if len > 0 && array_element(h, o, el, len - 1).is_hole() {
             items.push_out(String::new());
         }
         let dense = el.get().map_or(0, |el| h.value_array_len(el));
@@ -3739,6 +3738,20 @@ impl<'a> Dumper<'a> {
         is_ident(key)
             && s.strip_prefix(key)
                 .is_some_and(|r| r.trim_start().starts_with('('))
+    }
+}
+
+/// Element `i` of array `o` whose dense elements are `el`: a frozen array keeps its
+/// elements as properties, the dense slots holding holes.
+fn array_element(h: &Heap, o: Obj, el: Ref, i: u32) -> Value {
+    match el.get() {
+        Some(el) if i < h.value_array_len(el) && !h.value_array_get(el, i).is_hole() => {
+            h.value_array_get(el, i)
+        }
+        _ => Atom::int(i)
+            .and_then(|k| h.get_own_property(o, k))
+            .and_then(|p| p.value())
+            .unwrap_or(Value::HOLE),
     }
 }
 

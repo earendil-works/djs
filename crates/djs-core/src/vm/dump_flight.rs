@@ -1422,7 +1422,12 @@ impl Dumper<'_> {
         let file = script
             .and_then(|s| text(a.get::<Ref>(s, Script::NAME)))
             .unwrap_or_default();
-        let fname = h.atom_name(Atom::from_id(a.get::<u32>(t, FuncTemplate::NAME)));
+        let atom = Atom::from_id(a.get::<u32>(t, FuncTemplate::NAME));
+        let fname = if atom.is_null() {
+            String::new()
+        } else {
+            h.atom_name(atom)
+        };
         let fname = if fname.is_empty() {
             String::from("<anonymous>")
         } else {
