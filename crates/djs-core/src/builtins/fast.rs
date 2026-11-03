@@ -19,7 +19,7 @@ use alloc::vec::Vec;
 
 use crate::builtins::{dense, number, string};
 use crate::bytecode::intrinsics::INTRINSICS;
-use crate::heap::{Heap, ObjectClass, Property, PropertyDescriptor, StrView, atoms};
+use crate::heap::{Heap, ObjectClass, Property, StrView, atoms};
 use crate::interp::conv::{self, Fault};
 use crate::interp::{Intrinsic, realm};
 use crate::value::{Kind, Obj, Str, Value};
@@ -420,12 +420,7 @@ fn array_species_create(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
         return Ok(None);
     }
     let array_proto = realm::intrinsic_obj(heap, Intrinsic::ArrayProto);
-    let a = heap.new_array(Some(array_proto), 0)?;
-    let d = PropertyDescriptor {
-        value: Some(conv::number(n)),
-        ..Default::default()
-    };
-    heap.define_own_property(a, atoms::LENGTH, &d)?;
+    let a = heap.new_array_with_length(Some(array_proto), n as u32)?;
     Ok(Some(Value::object(a)))
 }
 
@@ -445,6 +440,14 @@ pub(crate) fn plain_species(heap: &Heap, o: Obj) -> bool {
         return false;
     }
     let array = realm::installed_intrinsic(heap, ARRAY_CONSTRUCTOR);
+    // Frozen builtins (D2304): %Array.prototype%.constructor and %Array%[@@species] are
+    // as the base made them, which is plain (0162).
+    if let Some(a) = array.as_object()
+        && heap.frozen(array_proto)
+        && heap.frozen(a)
+    {
+        return true;
+    }
     match heap.get_own_property(array_proto, atoms::CONSTRUCTOR) {
         Some(Property::Data { value, .. }) if value == array => {}
         _ => return false,

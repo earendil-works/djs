@@ -673,13 +673,7 @@ impl Exec<'_> {
                     ));
                 }
                 let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
-                let a = self.heap.new_array(Some(proto), 0)?;
-                let d = PropertyDescriptor {
-                    value: Some(conv::number(n)),
-                    ..Default::default()
-                };
-                self.heap.define_own_property(a, atoms::LENGTH, &d)?;
-                Value::object(a)
+                Value::object(self.heap.new_array_with_length(Some(proto), n as u32)?)
             }
             NEW_TYPE_ERROR | NEW_RANGE_ERROR | NEW_SYNTAX_ERROR | NEW_REFERENCE_ERROR => {
                 let msg = match a0.as_string() {

@@ -133,6 +133,12 @@ const FROZEN: &str = r#"
     Symbol.for('frozen-test') === Symbol.for('frozen-test') => true
     [3, 1, 2].sort().join() => 1,2,3
     JSON.stringify({ a: [1, { b: 2 }] }) => {"a":[1,{"b":2}]}
+    Array.prototype.constructor = Object => throws TypeError
+    Reflect.defineProperty(Array, Symbol.species, { get() { return Object; } }) => false
+    [1, 2].map((x) => x * 2).constructor === Array => true
+    (() => { class S extends Array {} return S.from([1]).map((x) => x) instanceof S; })() => true
+    (() => { const a = [1]; a.constructor = { [Symbol.species]: function (n) { this.n = n; } }; return a.map((x) => x).n; })() => 1
+    (() => { const a = [1]; Object.setPrototypeOf(a, Object.create(Array.prototype, { constructor: { value: undefined } })); return Array.isArray(a.filter(() => true)); })() => true
 "#;
 
 #[test]

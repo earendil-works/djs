@@ -494,6 +494,19 @@ impl Heap {
         Ok(o)
     }
 
+    /// ArrayCreate(len) with prototype `proto`: an empty array whose `length` is `len`
+    /// (all holes), without ArraySetLength's descriptor checks, which a fresh array always
+    /// passes (0162).
+    pub fn new_array_with_length(
+        &mut self,
+        proto: Option<Obj>,
+        len: u32,
+    ) -> Result<Obj, HeapError> {
+        let o = self.new_array(proto, 0)?;
+        self.set_array_length_raw(o, len);
+        Ok(o)
+    }
+
     /// A new ordinary object with the data properties `keys[i]: values[i]` (writable,
     /// enumerable, configurable), defined in order: a repeated key keeps its first
     /// position and its last value, as repeated CreateDataProperty calls would. The table is
