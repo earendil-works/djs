@@ -1,7 +1,7 @@
 //! Parses the frontmatter of every test in the test262 checkout. Ignored by default
 //! because it needs the checkout (scripts/fetch-test262.sh):
 //!
-//!     cargo test -p djs-test262 --test frontmatter_all -- --ignored
+//!     cargo test -p djs-test262 --test it frontmatter_all -- --ignored
 //!
 //! With `DJS_DUMP_META=<file>` it also writes one tab-separated line per test
 //! (path, description, includes, flags, features, negative), for comparing against
