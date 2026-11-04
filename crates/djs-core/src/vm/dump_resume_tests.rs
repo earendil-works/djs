@@ -806,7 +806,7 @@ fn write_golden_dumps() {
                 host_fn_name: &host_fn_name,
                 handles: if body { &handles } else { &[] },
                 call_states: &[],
-                        source_refs: false,
+                source_refs: false,
             };
             let text = match vm.dump(&opts, None) {
                 Ok(t) => t,
