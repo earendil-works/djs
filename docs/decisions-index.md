@@ -656,3 +656,7 @@ topics when the index is next reorganized.
 - D2881: Classes in a scope a waiting frame shares go into the continuation's block
 - D2883: Classes that name themselves dump plainly; a class's own static private fields
 - D2960: Exception handlers in unreachable code are dropped
+- D2884: Re-dumps through loops, finally blocks and `using` scopes
+- D2940: A seeded fuzzer of codemode-like programs checks plain dumps from every idle point
+- D2941: `difftest: plain-xfail <reason>` marks a known plain-dump bug in a corpus case
+- D2885: Re-dumps inside K's own operators, templates, callees and assignments; helper classes in bodies
