@@ -1753,3 +1753,29 @@ fn plain_dump_chains_continue_like_the_run() {
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(links >= 10, "{links} links");
 }
+
+/// A plain continuation's `super` is read again (K is a method of an object whose
+/// prototype is the home object's): a base read before the dump that the home object no
+/// longer has is refused, not changed.
+#[test]
+fn a_super_base_changed_since_it_was_read_is_refused() {
+    let src = "class A { m(x) { return 'a' + x; } }\nclass B { m(x) { return 'b' + x; } }\n\
+               class C extends A { async m() { return super[await later('m')](1); } }\n\
+               new C().m().then(print);\nObject.setPrototypeOf(C.prototype, B.prototype);";
+    let mut vm = new_vm();
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("src.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    let mut lines = Vec::new();
+    plain_step(&mut vm, &mut lines).expect("an idle point");
+    let e = plain_dump(&vm).unwrap_err();
+    assert!(
+        e.contains("a super base or this the method no longer has"),
+        "{e}"
+    );
+}

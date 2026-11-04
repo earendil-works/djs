@@ -103,6 +103,9 @@ pub(super) struct Act {
     pub kind: i32,
     /// A generator object's prototype (its continuation's `prototype`).
     pub proto: Option<String>,
+    /// A method that uses `super`: its home object's prototype (its continuation is a
+    /// method of an object of that prototype).
+    pub super_proto: Option<String>,
 }
 
 pub(super) struct Slot {
@@ -1425,6 +1428,7 @@ impl W<'_> {
                     // Its origin's function (`K.$djs.f`) and the generator's prototype.
                     cat_to!(&mut text, act.fexpr, "\n");
                     cat_to!(&mut text, act.proto.as_deref().unwrap_or(""), "\n");
+                    cat_to!(&mut text, act.super_proto.as_deref().unwrap_or(""), "\n");
                     // Function texts: their globals are read when they run.
                     let mut lazy = String::new();
                     for &(_, sc, v) in &self.acts[a].cells {

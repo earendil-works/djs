@@ -73,6 +73,8 @@ pub(super) struct Flight<'a> {
     made: Vec<usize>,
     /// The activations written, where they stopped (`Vm::dump_report`).
     sites: Vec<ResumedSite>,
+    /// Activations whose function uses `super`: the prototype of its home object.
+    supers: Vec<(usize, Value)>,
 }
 
 impl<'a> Flight<'a> {
@@ -88,6 +90,7 @@ impl<'a> Flight<'a> {
             maps: Vec::new(),
             made: Vec::new(),
             sites: Vec::new(),
+            supers: Vec::new(),
         }
     }
 
@@ -388,6 +391,8 @@ impl Dumper<'_> {
                 self.edge(n, proto, || cat!(path, ".[[Prototype]]"));
             }
         }
+        // What `super[...]` read before the site: its continuation reads `super` again.
+        let mut super_read: Vec<(bool, Value, Value)> = Vec::new();
         if let Some(site) = &site {
             let hp = s.hp as usize;
             let argc = s
@@ -440,6 +445,9 @@ impl Dumper<'_> {
             for slot in named.iter().filter(|x| matches!(x.holds, Holds::Temp)) {
                 let v = fp(at(slot.place));
                 match slot.construct() {
+                    c @ ("super.base" | "super.this") => {
+                        super_read.push_out((c == "super.base", v, fp(1)));
+                    }
                     "for-in.iterator" => {
                         // The key iterator: its object (its keys are strings).
                         match for_in_parts(h, v) {
@@ -491,6 +499,30 @@ impl Dumper<'_> {
                     self.edge(n, h.object_slot(r, 2), || cat!(path, "<queue ", k, ">"));
                 }
             }
+        }
+        // A method's `super`: its home object's prototype, which its continuation's
+        // home object gets (plain dumps).
+        if self.pl.is_some()
+            && syntax.as_ref().is_some_and(|sx| {
+                sx.special
+                    .iter()
+                    .any(|x| x.0 == crate::compiler::Special::Super)
+            })
+            && let Some(rf) = runs.as_object()
+            && let Some(home) = home_object(h, rf)
+        {
+            let p = h.get_prototype_of(home).map_or(Value::NULL, Value::object);
+            if super_read
+                .iter()
+                .any(|&(base, v, this)| v != if base { p } else { this })
+            {
+                self.refuse(
+                    path.clone(),
+                    "a super base or this the method no longer has",
+                );
+            }
+            self.edge(n, p, || cat!(path, "<super>"));
+            self.fl.supers.push_out((self.fl.acts.len(), p));
         }
         self.fl.acts.push(Act {
             node: n,
@@ -1804,8 +1836,11 @@ impl Dumper<'_> {
                     let p = h.get_prototype_of(g).map_or(Value::NULL, Value::object);
                     self.expr(p, None, None)
                 });
+            let sp = self.fl.supers.iter().find(|x| x.0 == a).map(|x| x.1);
+            let super_proto = sp.map(|p| self.expr(p, None, None));
             let act = plain::Act {
                 proto,
+                super_proto,
                 name: String::from(name.strip_prefix("$dump.").unwrap_or(&name)),
                 fexpr: fe.clone(),
                 fkind: if fnode == usize::MAX {
@@ -1991,6 +2026,20 @@ impl Dumper<'_> {
         }
         self.expr(inner, None, None)
     }
+}
+
+/// The home object of method `f` (one that uses `super`).
+fn home_object(h: &Heap, f: Obj) -> Option<Obj> {
+    if h.object_class(f) != ObjectClass::Function {
+        return None;
+    }
+    let t = h.closure_template(f);
+    let a = h.arena();
+    if u32::from(a.get::<u16>(t, FuncTemplate::FLAGS)) & func_flags::HOME == 0 {
+        return None;
+    }
+    let captures = u32::from(a.get::<u16>(t, FuncTemplate::CAPTURES));
+    h.object_slot(f, captures).as_object()
 }
 
 fn s_state_awaiting(s: &suspend::Suspended) -> bool {

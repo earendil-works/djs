@@ -1,21 +1,4 @@
 # Idle points of tests/dump/v2 whose plain dump is refused (plain_dumps_at_every_idle_point).
-operands@1: plain dump: plain dumps: new.target or super in a continuation's function (0203)
-operands@2: plain dump: plain dumps: new.target or super in a continuation's function (0203)
-operands@3: plain dump: plain dumps: new.target or super in a continuation's function (0203)
-operands@4: plain dump: plain dumps: new.target or super in a continuation's function (0203)
-operands@5: plain dump: plain dumps: new.target or super in a continuation's function (0203)
-operands@6: plain dump: plain dumps: new.target or super in a continuation's function (0203)
-operands@7: plain dump: plain dumps: new.target or super in a continuation's function (0203)
-operands@8: plain dump: plain dumps: new.target or super in a continuation's function (0203)
-operands@9: plain dump: plain dumps: new.target or super in a continuation's function (0203)
-operands@10: plain dump: plain dumps: new.target or super in a continuation's function (0203)
-operands@11: plain dump: plain dumps: new.target or super in a continuation's function (0203)
-operands@12: plain dump: plain dumps: new.target or super in a continuation's function (0203)
-operands@13: plain dump: plain dumps: new.target or super in a continuation's function (0203)
-operands@14: plain dump: plain dumps: new.target or super in a continuation's function (0203)
-operands@15: plain dump: plain dumps: new.target or super in a continuation's function (0203)
-operands@16: plain dump: plain dumps: new.target or super in a continuation's function (0203)
-operands@17: plain dump: plain dumps: new.target or super in a continuation's function (0203)
 asyncgen@1: plain dump: plain dumps: a site of kind for-await.next#1 (0203)
 asyncgen@2: plain dump: plain dumps: a site of kind for-await.next#1 (0203)
 asyncgen@3: plain dump: plain dumps: a site of kind for-await.next#1 (0203)
@@ -30,7 +13,6 @@ reenact@8: <call 8><reaction 0>.onRejected: plain dumps: an async-from-sync clos
 reenact@9: plain dump: plain dumps: a site of kind for-await.next#2 (0203)
 reenact@10: plain dump: plain dumps: a site of kind for-await.next#2 (0203)
 golden/class-closure@1: plain dump: an activation of a factory's cell
-golden/class-derived@1: plain dump: plain dumps: new.target or super in a continuation's function (0203)
 golden/class-fields@1: <call 1><reaction 0>.onFulfilled<this>: plain dumps: a private field of an instance
 golden/destructuring@1: plain dump: plain dumps: a site in a pattern (0203)
 golden/destructuring@2: plain dump: plain dumps: a site in a pattern (0203)
@@ -64,8 +46,6 @@ golden/loop-for-await@2: plain dump: plain dumps: a site of kind for-await.next#
 golden/loop-for-await@3: plain dump: plain dumps: a for await around the site (0203)
 golden/loop-for-await@4: plain dump: plain dumps: a for await around the site (0203)
 golden/return-path@1: plain dump: plain dumps: a site of kind for-await.close#2 (0203)
-golden/role-object@1: plain dump: plain dumps: unused slot object.key@61
-golden/role-super@1: plain dump: plain dumps: new.target or super in a continuation's function (0203)
 golden/using@1: <call 1><reaction 0>.onFulfilled<using.record@39>: plain dumps: a using declaration's record (0203)
 golden/using@2: <call 4><reaction 0>.onFulfilled<promise><reaction 0>.onFulfilled<using.record@39>: plain dumps: a using declaration's record (0203)
 golden/using@3: <call 9><reaction 0>.onFulfilled<promise><reaction 0>.onFulfilled<using.record@51>: plain dumps: a using declaration's record (0203)

@@ -63,9 +63,16 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
             " (0203)"
         ));
     }
+    let arrow = act.fkind == crate::bytecode::template::func_flags::KIND_ARROW;
     for &(k, _) in &act.syntax.special {
-        if k != Special::Arguments {
-            return no("new.target or super in a continuation's function (0203)");
+        match k {
+            // An async function or generator is never constructed: `new.target` is
+            // undefined in K too. An arrow's is its context's.
+            Special::NewTarget if arrow => return no("new.target in an arrow (0203)"),
+            Special::Super if act.super_proto.is_none() => {
+                return no("super outside a method (0203)");
+            }
+            _ => {}
         }
     }
     let mut g = G {
@@ -89,7 +96,24 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
         (false, suspend::GENERATOR) => "function* () {\n",
         (false, _) => "async function* () {\n",
     };
-    let parts = P::L(alloc::vec![s(head), P::Helpers, body, s("\n}")]);
+    let parts = match &act.super_proto {
+        // A method of an object whose prototype is the original's home object's: its
+        // `super` reads what the original's does.
+        Some(p) => {
+            let m = match act.kind {
+                suspend::ASYNC => "async K() {\n",
+                suspend::GENERATOR => "*K() {\n",
+                _ => "async *K() {\n",
+            };
+            P::L(alloc::vec![
+                P::S(cat!("({ __proto__: ", p, ", ", m)),
+                P::Helpers,
+                body,
+                s("\n} }).K")
+            ])
+        }
+        None => P::L(alloc::vec![s(head), P::Helpers, body, s("\n}")]),
+    };
     Ok(g.flatten(parts))
 }
 
@@ -999,7 +1023,7 @@ impl G<'_, '_> {
                 if let Some(o) = pt(Role::Object)
                     && self.text(n.parts[o].start, n.parts[o].end) == "super"
                 {
-                    return no("super around the site (0203)");
+                    return self.super_member(i, &n, k);
                 }
                 if role == Role::Object {
                     let e = self.expr(i + 1)?;
@@ -1020,6 +1044,24 @@ impl G<'_, '_> {
                 kind_name(n.kind)
             )),
         }
+    }
+
+    /// `super[<site>]`: K is a method whose home object's prototype is the base the
+    /// original read (`Act::super_proto`), called with the original's `this`, so the
+    /// `super` it evaluates again is the one the original evaluated.
+    fn super_member(&mut self, i: usize, n: &Node, k: usize) -> R<P> {
+        if n.parts[k].role != Role::Property {
+            return no("a site in super's base");
+        }
+        // The exporter checked they are what K's `super` and `this` are.
+        self.take(&cat!("super.this@", n.start))?;
+        self.take(&cat!("super.base@", n.start))?;
+        let e = self.expr(i + 1)?;
+        Ok(P::L(alloc::vec![
+            P::V(n.start, n.parts[k].start + 1),
+            e,
+            s("]")
+        ]))
     }
 
     fn call(&mut self, i: usize, n: &Node, k: usize) -> R<P> {
@@ -1255,6 +1297,9 @@ impl G<'_, '_> {
                         } else {
                             return no("a numeric key in an object literal around the site");
                         }
+                    } else if m < k {
+                        // Evaluated before the site, as a property key.
+                        self.tmp("object.key", p.start)?
                     } else {
                         self.rest(p.start + 1, p.end - 1)
                     };
