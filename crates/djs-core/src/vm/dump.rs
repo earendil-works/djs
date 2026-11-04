@@ -40,6 +40,22 @@ use crate::heap::{Atom, Heap, ObjectClass, PropFlags, Property, Ref, atoms};
 use crate::interp::realm::{Intrinsic, intrinsic};
 use crate::value::{Kind, Obj, Value};
 
+/// `crate::text::cat!`, with the string sized up front: dumps concatenate large pieces
+/// (a quoted megabyte string, a function's text), and growing by doubling copied them
+/// again and again (0198). Each piece is evaluated once.
+macro_rules! cat {
+    ($($piece:expr),+ $(,)?) => {{
+        let pieces = [$(&$piece as &dyn $crate::text::Piece),+];
+        let mut out = alloc::string::String::with_capacity(
+            pieces.iter().map(|p| p.size_hint()).sum(),
+        );
+        for p in pieces {
+            p.put(&mut out);
+        }
+        out
+    }};
+}
+
 /// The first line of every dump this build writes: format 2, a Script that
 /// `Vm::load_dump` runs with its `$dump` (D2581), marked by a directive prologue so the
 /// dump has no comments (D2640). Version 1 dumps (D2353), plain Scripts that make their
@@ -491,7 +507,9 @@ fn tf(b: bool) -> &'static str {
 
 /// `items` separated by `sep`.
 fn join(items: &[String], sep: &str) -> String {
-    let mut s = String::new();
+    let mut s = String::with_capacity(
+        items.iter().map(String::len).sum::<usize>() + sep.len() * items.len(),
+    );
     for (i, it) in items.iter().enumerate() {
         if i > 0 {
             s.push_str(sep);

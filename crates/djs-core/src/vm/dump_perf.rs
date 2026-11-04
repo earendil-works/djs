@@ -7,7 +7,10 @@
 //! - `DJS_DUMP_PERF=corpus|cases|all` (default all); `DJS_DUMP_PERF_FILTER=substr` runs only
 //!   matching files;
 //! - `DJS_DUMP_PERF_REPS=n`: dumps and loads per idle point, the best counts (default 3);
-//! - `DJS_DUMP_PERF_OUT=dir`: writes every dump there (`<case>.<idle>.js`) for profiling.
+//! - `DJS_DUMP_PERF_OUT=dir`: writes every dump there (`<case>.<idle>.js`) for profiling;
+//! - `DJS_DUMP_PERF_SKIP=load`: dumps only, `=all`: neither (for counting the
+//!   instructions of each side with `/usr/bin/time -l` when the machine is too busy for
+//!   timings: scripts/dump-costs/instructions.sh).
 
 extern crate std;
 
@@ -44,6 +47,10 @@ fn measure(vm: &Vm, api: Value, name: &str, idle: usize, points: &mut Vec<Point>
         handles: &handles,
         ..Default::default()
     };
+    let skip = std::env::var("DJS_DUMP_PERF_SKIP").unwrap_or_default();
+    if skip == "all" {
+        return;
+    }
     let mut p = Point {
         dump: Duration::MAX,
         load: Duration::MAX,
@@ -65,6 +72,10 @@ fn measure(vm: &Vm, api: Value, name: &str, idle: usize, points: &mut Vec<Point>
     if let Some(dir) = std::env::var_os("DJS_DUMP_PERF_OUT") {
         let path = std::path::Path::new(&dir).join(format!("{name}.{idle}.js"));
         std::fs::write(path, &text).unwrap();
+    }
+    if skip == "load" {
+        points.push(p);
+        return;
     }
     let load = super::dump_load::LoadOptions {
         host_fn: &host_fn,
