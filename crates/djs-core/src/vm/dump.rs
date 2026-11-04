@@ -2159,14 +2159,7 @@ impl<'a> Dumper<'a> {
         }
         let (by_text, written) = match self.checked(text) {
             Ok(t) => t,
-            Err(why) => {
-                if self.pl.is_some() {
-                    // (While plain dumps are being built: the text, for whoever debugs.)
-                    let why = cat!(why, "\n", text);
-                    return self.refuse("the dump".into(), &why);
-                }
-                return self.refuse("the dump".into(), &why);
-            }
+            Err(why) => return self.refuse("the dump".into(), &why),
         };
         for n in fns {
             let o = self.nodes[n].v.as_object().expect("a function");

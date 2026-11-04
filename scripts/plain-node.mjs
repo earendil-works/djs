@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// plain-node.mjs DIR [--list]: runs the plain dumps `djs-difftest --plain-out DIR` wrote
+// plain-node.mjs DIR [--list] [--refusals FILE [--update]]: runs the plain dumps `djs-difftest --plain-out DIR` wrote
 // in node and checks that each continues exactly like the uninterrupted djs run (D2864).
 //
 // DIR/<case>/<k>.js is link k's dump, <k>.pre the output before it and `transcript` the
@@ -9,7 +9,13 @@
 // and the plain-dump hooks $djs.seed / $djs.resume. The transcript it produces, after
 // <k>.pre, must equal `transcript`.
 //
-// Exit status 1 if any link differs; one line per differing link, and a summary.
+// A case whose dump the exporter refused has a `refused` file (the run went on without
+// dumps). With --refusals, FILE lists the cases that may refuse, one per line with the
+// reason after a tab (the ratchet): another case's refusal fails, entries that no longer
+// refuse are reported as stale; --update rewrites FILE.
+//
+// Exit status 1 if any link differs or a case refuses that FILE does not list; one line
+// per problem, and a summary.
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
@@ -18,8 +24,11 @@ process.env.TZ = "UTC"; // as the difftest runs djs and qjs
 
 const dir = process.argv[2];
 const list = process.argv.includes("--list");
-if (!dir) {
-  console.error("usage: plain-node.mjs DIR [--list]");
+const update = process.argv.includes("--update");
+const ri = process.argv.indexOf("--refusals");
+const refusalsFile = ri > 0 ? process.argv[ri + 1] : null;
+if (!dir || (ri > 0 && !refusalsFile)) {
+  console.error("usage: plain-node.mjs DIR [--list] [--refusals FILE [--update]]");
   process.exit(2);
 }
 
@@ -118,7 +127,11 @@ const walk = (d) => {
   }
   return found;
 };
+const refused = new Map();
 for (const c of walk(dir).sort()) {
+  if (fs.existsSync(path.join(c, "refused"))) {
+    refused.set(path.relative(dir, c), fs.readFileSync(path.join(c, "refused"), "utf8").split("\n")[0]);
+  }
   const want = norm(fs.readFileSync(path.join(c, "transcript"), "utf8"));
   const ks = fs
     .readdirSync(c)
@@ -148,5 +161,29 @@ for (const c of walk(dir).sort()) {
     }
   }
 }
-console.log(`plain-node: ${links} links in ${cases} cases, ${bad} differ`);
-process.exit(bad ? 1 : 0);
+let unlisted = 0;
+if (refusalsFile) {
+  const listed = new Map();
+  if (fs.existsSync(refusalsFile)) {
+    for (const l of fs.readFileSync(refusalsFile, "utf8").split("\n")) {
+      if (!l.trim() || l.startsWith("#")) continue;
+      const [name, why] = l.split("\t");
+      listed.set(name, why ?? "");
+    }
+  }
+  if (update) {
+    const head = "# Corpus cases whose plain dump the exporter refuses (scripts/plain-node.mjs --refusals).\n";
+    const body = [...refused].map(([n, w]) => `${n}\t${w}\n`).join("");
+    fs.writeFileSync(refusalsFile, head + body);
+  } else {
+    for (const [n, w] of refused) {
+      if (!listed.has(n)) {
+        unlisted++;
+        console.log(`${n}: refused, not in ${refusalsFile}: ${w}`);
+      }
+    }
+    for (const n of listed.keys()) if (!refused.has(n)) console.log(`${n}: stale entry in ${refusalsFile} (no longer refused)`);
+  }
+}
+console.log(`plain-node: ${links} links in ${cases} cases, ${bad} differ; ${refused.size} cases refused${unlisted ? ` (${unlisted} not listed)` : ""}`);
+process.exit(bad || unlisted ? 1 : 0);

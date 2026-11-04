@@ -30,7 +30,8 @@ options:
                       it; its output must equal the plain run (hard failure)
   --plain-dumps       djs only: also run every case writing a plain dump (format 3,
                       D2830) at each of its first 50 idle points and continuing in a
-                      fresh VM that runs it as a Script (hard failure)
+                      fresh VM that runs it as a Script (hard failure; a refused
+                      dump ends the dumps, and the run goes on)
   --plain-out DIR     --plain-dumps, writing each dump to DIR/<case>/<link>.js and the
                       output before it to <link>.pre (scripts/plain-node.mjs runs them)
   --determinism       djs only: also run every case suspending every 1009 fuel (and 97

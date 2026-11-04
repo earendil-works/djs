@@ -393,25 +393,33 @@ impl Session {
         self.links += 1;
         let api = self.vm.heap().get_handle(self.api.ok_or("no api")?);
         let handles = [("run", api)];
-        let text = self
-            .vm
-            .dump(
-                &DumpOptions {
-                    base: djs_prelude::BASE,
-                    host_fn_name: &host_fn_name,
-                    handles: &handles,
-                    plain: true,
-                    ..DumpOptions::default()
-                },
-                None,
-            )
-            .map_err(|e| {
-                format!(
-                    "plain dump at idle point {}: {}",
-                    self.idle_points + 1,
-                    e.message()
-                )
-            })?;
+        let text = self.vm.dump(
+            &DumpOptions {
+                base: djs_prelude::BASE,
+                host_fn_name: &host_fn_name,
+                handles: &handles,
+                plain: true,
+                ..DumpOptions::default()
+            },
+            None,
+        );
+        let text = match text {
+            Ok(t) => t,
+            Err(e) => {
+                // A refusal is no failure: the run goes on without dumps. The node check
+                // holds the list of cases that may refuse (tests/plain-refusals.txt).
+                self.links = PLAIN_LINKS;
+                if let Some(dir) = PLAIN_OUT.get() {
+                    let d = dir.join(&self.name);
+                    let msg = e.message().split_whitespace().collect::<Vec<_>>().join(" ");
+                    let why = format!("idle point {}: {msg}\n", self.idle_points + 1);
+                    std::fs::create_dir_all(&d)
+                        .and_then(|_| std::fs::write(d.join("refused"), why))
+                        .map_err(|e| format!("--plain-out: {e}"))?;
+                }
+                return Ok(());
+            }
+        };
         if let Some(dir) = PLAIN_OUT.get() {
             let d = dir.join(&self.name);
             let w = std::fs::create_dir_all(&d)

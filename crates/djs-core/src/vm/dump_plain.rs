@@ -396,7 +396,7 @@ enum Pl {
 }
 
 /// What is written at a place.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum Put {
     Prop(Sc, usize),
     Sub(Sc),
@@ -631,55 +631,8 @@ pub(super) fn write(
     w.read_items(lines)?;
     w.activations()?;
     w.place_all()?;
-    let plan = match w.schedule() {
-        Ok(p) => p,
-        Err(e) => {
-            // DEBUG(0201): the items and their dependencies.
-            let mut t = e;
-            for (i, it) in w.items.iter().enumerate() {
-                t.push_str(&alloc::format!(
-                    "\n  [{i}] {:?} deps {:?} start {:?} slots {:?}: {}",
-                    match it.kind {
-                        IK::Act(a) => alloc::format!("act{a}"),
-                        IK::Factory(f) => alloc::format!("fac{f}"),
-                        IK::Def(ref n) => alloc::format!("def {n}"),
-                        _ => String::from("other"),
-                    },
-                    it.deps,
-                    it.start_deps,
-                    it.slot_deps,
-                    it.text.chars().take(100).collect::<String>()
-                ));
-            }
-            return Err(t);
-        }
-    };
-    let mut t = w.emit(&plan, ts)?;
-    // DEBUG(0201)
-    t.push_str("/*\n");
-    for f in &ir.factories {
-        t.push_str(&alloc::format!("factory {}\n", f.name));
-        for (k, s) in f.scopes.iter().enumerate() {
-            let vars: Vec<&str> = s.vars.iter().map(|v| v.name.as_str()).collect();
-            let props: Vec<&str> = s.props.iter().map(|v| v.key.as_str()).collect();
-            t.push_str(&alloc::format!(
-                "  scope {k} parent {} vars {vars:?} props {props:?} other {}\n",
-                s.parent as isize,
-                s.other.len()
-            ));
-        }
-    }
-    for a in &ir.acts {
-        t.push_str(&alloc::format!("act {}\n", a.name));
-    }
-    t.push_str(&alloc::format!(
-        "merged {:?}\nplaced {:?}\nact_place {:?}\ngroup_place {:?}\n*/\n",
-        w.merged,
-        w.placed,
-        w.act_place,
-        w.group_place
-    ));
-    Ok(t)
+    let plan = w.schedule()?;
+    w.emit(&plan, ts)
 }
 
 impl W<'_> {
