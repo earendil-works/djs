@@ -637,6 +637,7 @@ struct Dumper<'a> {
     finals: Vec<String>,
     /// What is in flight: open calls, pending promises, activations (dump_flight.rs).
     fl: flight::Flight<'a>,
+    sources: Sources,
     /// Objects being written as data (`render`): promises made by activations or
     /// reactions are patched into them instead (dump_flight.rs `make`).
     data_depth: u32,
@@ -685,6 +686,7 @@ impl<'a> Dumper<'a> {
             patches: Vec::new(),
             finals: Vec::new(),
             fl: flight::Flight::new(opts.host_fn_name),
+            sources: Sources::default(),
             data_depth: 0,
             ns: false,
             next: 0,
@@ -1354,7 +1356,7 @@ impl<'a> Dumper<'a> {
         if flags & func_flags::PRIVILEGED != 0 {
             return self.refuse(path, "an internal function of a builtin");
         }
-        let Some(src) = fn_text(h, o) else {
+        let Some(src) = self.sources.fn_text(h, o) else {
             return self.refuse(path, "a function without source text");
         };
         let class = matches!(
@@ -2295,7 +2297,7 @@ impl<'a> Dumper<'a> {
         {
             self.ts.set(true);
         }
-        fn_text(self.h, f)
+        self.sources.fn_text(self.h, f)
     }
 
     /// The expression for a value, in a context that may give a name (`ctx_name`: the
@@ -3985,27 +3987,62 @@ fn hash_text(s: &str) -> u64 {
     h | 1
 }
 
-/// The text the dump writes for function `f`: its source; for a codemode body, which
-/// has none of its own (its span is the whole script), the async function it runs as,
-/// `async function (tools, console) {\n<body>\n}` (D2617).
-pub(super) fn fn_text(h: &Heap, f: Obj) -> Option<String> {
-    let t = h.closure_template(f);
-    let kind = func_flags::kind(u32::from(h.arena().get::<u16>(t, FuncTemplate::FLAGS)));
-    if kind != func_flags::KIND_ASYNC_BODY {
-        return crate::builtins::function::source_slice(h, f);
+/// The source text of the scripts whose functions a dump writes, by script cell. A
+/// function's text is a slice of its script's: converting the whole script once per
+/// function made a dump quadratic in the size of a script with many functions (0198).
+#[derive(Default)]
+struct Sources {
+    index: core::cell::RefCell<Index>,
+    texts: core::cell::RefCell<Vec<String>>,
+}
+
+impl Sources {
+    /// The text the dump writes for function `f`: its source; for a codemode body, which
+    /// has none of its own (its span is the whole script), the async function it runs
+    /// as, `async function (tools, console) {\n<body>\n}` (D2617).
+    fn fn_text(&self, h: &Heap, f: Obj) -> Option<String> {
+        let t = h.closure_template(f);
+        let a = h.arena();
+        let kind = func_flags::kind(u32::from(a.get::<u16>(t, FuncTemplate::FLAGS)));
+        let debug = template::debug_info(h, t);
+        let script = debug.script.get()?;
+        let source: Ref = a.get(script, crate::heap::cells::Script::SOURCE);
+        let source = source.get()?;
+        let known = self.index.borrow().get(key(source));
+        let at = match known {
+            Some(i) => i as usize,
+            None => {
+                let mut texts = self.texts.borrow_mut();
+                texts.push_out(h.str_to_string(crate::value::Str(source)));
+                self.index
+                    .borrow_mut()
+                    .insert(key(source), texts.len() as u32 - 1);
+                texts.len() - 1
+            }
+        };
+        let texts = self.texts.borrow();
+        let src = texts[at].as_str();
+        match kind {
+            func_flags::KIND_SCRIPT => None,
+            func_flags::KIND_ASYNC_BODY => {
+                let params: Ref = a.get(script, crate::heap::cells::Script::PARAMS);
+                let params = params
+                    .get()
+                    .map(|p| h.str_to_string(crate::value::Str(p)))
+                    .unwrap_or_default();
+                Some(cat!(
+                    "async function (",
+                    params.replace(',', ", "),
+                    ") {\n",
+                    src,
+                    "\n}"
+                ))
+            }
+            _ => src
+                .get(debug.src_start as usize..debug.src_end as usize)
+                .map(String::from),
+        }
     }
-    let a = h.arena();
-    let script = template::debug_info(h, t).script.get()?;
-    let text = |r: Ref| r.get().map(|s| h.str_to_string(crate::value::Str(s)));
-    let src = text(a.get::<Ref>(script, crate::heap::cells::Script::SOURCE))?;
-    let params = text(a.get::<Ref>(script, crate::heap::cells::Script::PARAMS)).unwrap_or_default();
-    Some(cat!(
-        "async function (",
-        params.replace(',', ", "),
-        ") {\n",
-        src,
-        "\n}"
-    ))
 }
 
 /// Whether computed key `[...]` has the same value wherever it is evaluated: a string or

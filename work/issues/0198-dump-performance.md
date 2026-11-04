@@ -37,5 +37,25 @@ plain Script unless a decision says otherwise; keep every gate check green (gold
 dump-every-idle, idle-point counts at 100%).
 
 ## Log
+- Harnesses. Native: `vm/dump_perf.rs` (ignored test, `DJS_DUMP_PERF=all`, release): the
+  harvested corpus as dump_harvest's idle run, plus the data-heavy cases of
+  scripts/dump-costs/native (fake tools answering through `later`, data made in JS);
+  best of 3 dumps and loads per idle point. Wasm: scripts/dump-costs/dump-costs.ts, image
+  columns dropped (images are gone), corpus for both packagings, best of `--reps`.
+- Baseline, native release (quiet machine): corpus 1,164 idle points (23 MB: the native
+  harness dumps the corpus prelude too) dump total 3,086 ms, p50/p90/p99 2.23/3.18/13.6
+  ms; load total 441 ms, p50 0.31 ms. records dump/load 12.0/13.2 ms, log-5mb 52.9/32.9,
+  binary 15.6/28.8, empty 2.5/0.36.
+- Baseline, wasm (node 25; corpus 1,063 idle points as Sandbox bodies): dump p50/p90/p99
+  0.92/2.58/35.5 ms (A), 0.97/2.66/35.6 (B), totals 2,130/2,181 ms; resume p50 0.44 (A) /
+  0.78 (B). records 17.5/22.0 ms dump/resume, log-5mb 60/39, binary 27/60, big-log 26/12.
+- Profile (macOS `sample`, native corpus): 75% of dump time was in `source_slice`, which
+  converted the whole script source to a String for every function text the dumper read
+  (closure visit, render, the checker): quadratic in a script's functions. Next: the
+  checker's compile (~10%), the suspension maps' compile (~4%), emit.
+- Win 1: a per-dump cache of script source texts (`Sources`), function texts sliced from
+  it. Output byte-identical over all corpus and case dumps. Native corpus dump total
+  3,086 -> ~965 ms (p50 2.23 -> 0.64 ms, p99 13.6 -> 4.2). Wasm corpus dump p50/p99
+  0.92/35.5 -> 0.61/8.5 ms (A), total 2,130 -> 988 ms; B 2,181 -> 1,087 ms.
 
 ## Result

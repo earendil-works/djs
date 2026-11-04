@@ -1,18 +1,15 @@
-// dump-costs (0184): format 2 dumps next to session images, on djs-wasm. For every case
+// dump-costs (0184, 0198): format 2 dump costs on djs-wasm. For every case
 // (scripts/snapshot-research/cases, the data-heavy scripts/dump-costs/cases and the
 // harvested corpus, tests/corpus/codemode-harvest) a Sandbox runs the script host-driven
-// and at every idle point measures
-//   - the dump: `Run.dump()` time, text size raw and zstd (levels 3 and 19),
-//     `Sandbox.resume()` time (a new sandbox included; the bare `Sandbox.create` is given
-//     separately);
-//   - the image: `Sandbox.bytes()` (the container, zstd against the base) and its size
-//     uncompressed, `Sandbox.fromBytes()` time;
-// with packaging A (one module with the dumper) and B (the shipped module plus the dump
-// module, D2635: dumps move the image to the dump module and back). The run goes on in the
-// original sandbox. Writes work/scratch/dump-costs/report.md (or OUT/report.md).
+// and at every idle point measures the dump: `Run.dump()` time (the best of REPS), text
+// size raw and zstd (levels 3 and 19), `Sandbox.resume()` time (the best of REPS; a new
+// sandbox included, the bare `Sandbox.create` is given separately); with packaging A (one
+// module with the dumper) and B (the shipped module plus the dump module, D2635: dumps
+// move the image to the dump module and back). The run goes on in the original sandbox.
+// Writes work/scratch/dump-costs/report.md (or OUT/report.md).
 //
 //   scripts/build-wasm.sh && scripts/build-wasm.sh --dump
-//   node scripts/dump-costs/dump-costs.ts [OUT] [--no-corpus]
+//   node scripts/dump-costs/dump-costs.ts [OUT] [--no-corpus] [--no-cases] [--reps=N] [--packaging=A|B]
 //
 // The tools are scripts/snapshot-research/wasm.ts's (real source files and prose).
 
@@ -26,6 +23,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "../..");
 const argv = process.argv.slice(2);
 const noCorpus = argv.includes("--no-corpus");
+const noCases = argv.includes("--no-cases");
+const REPS = Number(argv.find((a) => a.startsWith("--reps="))?.slice(7) ?? 3);
+const onlyPackaging = argv.find((a) => a.startsWith("--packaging="))?.slice(12);
 const out = argv.filter((a) => !a.startsWith("--"))[0] ?? join(root, "work/scratch/dump-costs");
 mkdirSync(out, { recursive: true });
 
@@ -150,10 +150,16 @@ const mainPath = process.env.DJS_WASM ?? join(root, "target/wasm32-unknown-unkno
 const dumpPath = process.env.DJS_DUMP_WASM ?? join(root, "target/djs-dump.wasm");
 const main = await loadModule(mainPath);
 const dumper = await loadModule(dumpPath);
-const PACKAGINGS: [string, SandboxOptions][] = [
-  ["A (dump module alone)", { module: dumper }],
-  ["B (djs.wasm + djs-dump.wasm)", { module: main, dumpModule: dumper }],
-];
+const PACKAGINGS: [string, SandboxOptions][] = (
+  [
+    ["A (dump module alone)", { module: dumper }],
+    ["B (djs.wasm + djs-dump.wasm)", { module: main, dumpModule: dumper }],
+  ] as [string, SandboxOptions][]
+).filter(([k]) => onlyPackaging === undefined || k.startsWith(onlyPackaging));
+// A corpus case whose script throws after its run was given up on rejects in the
+// background: counted, not fatal.
+let lateRejections = 0;
+process.on("unhandledRejection", () => void lateRejections++);
 const DET = { deterministic: { startedAt: 1_762_000_000_000, seed: 42 } };
 
 interface Point {
@@ -162,10 +168,6 @@ interface Point {
   z3: number;
   z19: number;
   resumeMs: number;
-  container: number;
-  image: number;
-  bytesMs: number;
-  fromBytesMs: number;
 }
 
 const zsize = (s: Uint8Array, level: number) =>
@@ -182,32 +184,32 @@ async function timeAsync<T>(f: () => Promise<T>): Promise<[T, number]> {
 }
 
 /** Measures one idle point of `run` in `sb`. */
-async function measure(sb: Sandbox, run: Run, opts: SandboxOptions, z19: boolean): Promise<Point | string> {
-  let dump: string;
-  let dumpMs: number;
+async function measure(_sb: Sandbox, run: Run, opts: SandboxOptions, z19: boolean): Promise<Point | string> {
+  let dump = "";
+  let dumpMs = Infinity;
   try {
-    [dump, dumpMs] = time(() => run.dump());
+    for (let i = 0; i < REPS; i++) {
+      const [d, t] = time(() => run.dump());
+      dump = d;
+      dumpMs = Math.min(dumpMs, t);
+    }
   } catch (e) {
     // A refusal: its first reason, without the path.
     return String((e as Error).message).split("\n")[1]?.replace(/^.*?: /, "") ?? String(e);
   }
   const text = new TextEncoder().encode(dump);
-  const [r, resumeMs] = await timeAsync(() => Sandbox.resume(dump, opts));
-  r.sandbox.dispose();
-  const [bytes, bytesMs] = time(() => sb.bytes());
-  const image = sb.bytes({ compression: "none" }).length;
-  const [s2, fromBytesMs] = time(() => new Sandbox(opts, bytes));
-  s2.dispose();
+  let resumeMs = Infinity;
+  for (let i = 0; i < REPS; i++) {
+    const [r, t] = await timeAsync(() => Sandbox.resume(dump, opts));
+    r.sandbox.dispose();
+    resumeMs = Math.min(resumeMs, t);
+  }
   return {
     dumpMs,
     raw: text.length,
     z3: zsize(text, 3),
     z19: z19 ? zsize(text, 19) : 0,
     resumeMs,
-    container: bytes.length,
-    image,
-    bytesMs,
-    fromBytesMs,
   };
 }
 
@@ -285,16 +287,16 @@ const caseFiles = [
   ...readdirSync(join(root, "scripts/snapshot-research/cases")).sort().map((f) => join(root, "scripts/snapshot-research/cases", f)),
   ...readdirSync(join(here, "cases")).sort().map((f) => join(here, "cases", f)),
 ];
-const head = "| case | idle (refused) | dump raw KB med / max | zstd-3 KB med / max | zstd-19 KB max | container KB med / max | image KB med / max | dump ms med / max | resume ms med / max | bytes() ms med / max | fromBytes ms med / max |\n| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n";
+const head = "| case | idle (refused) | dump raw KB med / max | zstd-3 KB med / max | zstd-19 KB max | dump ms med / max | resume ms med / max |\n| --- | ---: | ---: | ---: | ---: | ---: | ---: |\n";
 const row = (name: string, ps: Point[], refused: number) => {
   if (ps.length === 0) return `| ${name} | 0 (${refused}) |\n`;
   const m = (k: keyof Point, f: (x: number) => string) => `${f(pct(col(ps, k), 50))} / ${f(Math.max(...col(ps, k)))}`;
-  return `| ${name} | ${ps.length + refused}${refused ? ` (${refused})` : ""} | ${m("raw", kb)} | ${m("z3", kb)} | ${kb(Math.max(...col(ps, "z19")))} | ${m("container", kb)} | ${m("image", kb)} | ${m("dumpMs", ms)} | ${m("resumeMs", ms)} | ${m("bytesMs", ms)} | ${m("fromBytesMs", ms)} |\n`;
+  return `| ${name} | ${ps.length + refused}${refused ? ` (${refused})` : ""} | ${m("raw", kb)} | ${m("z3", kb)} | ${kb(Math.max(...col(ps, "z19")))} | ${m("dumpMs", ms)} | ${m("resumeMs", ms)} |\n`;
 };
 const all: Record<string, unknown> = {};
 const reasons = new Map<string, number>();
 let lastError: unknown;
-for (const [pk, base] of PACKAGINGS) {
+for (const [pk, base] of noCases ? [] : PACKAGINGS) {
   report += `\n### Cases, packaging ${pk}\n\n${head}`;
   for (const path of caseFiles) {
     failedPage2 = false;
@@ -308,10 +310,9 @@ for (const [pk, base] of PACKAGINGS) {
   }
 }
 
-if (!noCorpus) {
+for (const [pk, base] of noCorpus ? [] : PACKAGINGS) {
   const dir = join(root, "tests/corpus/codemode-harvest");
   const names = readdirSync(dir).filter((f) => f.endsWith(".js")).sort();
-  const [pk, base] = PACKAGINGS[1];
   const points: Point[] = [];
   let ran = 0;
   let failed = 0;
@@ -328,15 +329,15 @@ if (!noCorpus) {
       failed++;
     }
   }
-  all.corpus = points;
+  all[`corpus ${pk}`] = points;
   const dist = (k: keyof Point, f: (x: number) => string) =>
     [50, 90, 99, 100].map((p) => f(pct(col(points, k), p))).join(" / ");
+  const sum = (k: keyof Point) => ms(points.reduce((a, p) => a + p[k], 0));
   report += `\n### The harvested corpus, packaging ${pk}\n\n${ran} cases ran (${failed} failed to start), ${points.length + refusedPoints} idle points, ${refusedPoints} refused${[...corpusReasons].map(([r, n]) => ` (${n}: ${r})`).join("")}.\n\n`;
-  report += "| at every idle point | p50 / p90 / p99 / max |\n| --- | --- |\n";
-  report += `| dump raw KB | ${dist("raw", kb)} |\n| dump zstd-3 KB | ${dist("z3", kb)} |\n| container KB | ${dist("container", kb)} |\n| image (uncompressed) KB | ${dist("image", kb)} |\n`;
-  report += `| dump ms | ${dist("dumpMs", ms)} |\n| resume ms | ${dist("resumeMs", ms)} |\n| bytes() ms | ${dist("bytesMs", ms)} |\n| fromBytes ms | ${dist("fromBytesMs", ms)} |\n`;
-  const ratio = points.map((p) => p.z3 / p.container);
-  report += `| dump zstd-3 / container | ${[50, 90, 99, 100].map((p) => pct(ratio, p).toFixed(2)).join(" / ")} |\n`;
+  report += "| at every idle point | p50 / p90 / p99 / max | total |\n| --- | --- | ---: |\n";
+  report += `| dump raw KB | ${dist("raw", kb)} | |\n| dump zstd-3 KB | ${dist("z3", kb)} | |\n`;
+  report += `| dump ms | ${dist("dumpMs", ms)} | ${sum("dumpMs")} |\n| resume ms | ${dist("resumeMs", ms)} | ${sum("resumeMs")} |\n`;
+  console.error(`corpus ${pk}: ${points.length} idle points`);
 }
 if (reasons.size) report += `\nRefused in the cases (packagings together): ${[...reasons].map(([r, n]) => `${n}: ${r}`).join("; ")}\n`;
 writeFileSync(join(out, "report.md"), report);

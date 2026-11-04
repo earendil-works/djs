@@ -20,7 +20,7 @@ use crate::compiler::CompileOptions;
 use crate::heap::Atom;
 use crate::heap::cells::{FuncTemplate, U32Array};
 
-fn base() -> &'static [u8] {
+pub(super) fn base() -> &'static [u8] {
     static BASE: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
     BASE.get_or_init(|| {
         let mut v = Vm::new(VmOptions::default()).unwrap();
@@ -533,7 +533,7 @@ struct IdleStats {
     load_errors: BTreeMap<String, usize>,
 }
 
-fn host_fn_name(id: u32) -> Option<String> {
+pub(super) fn host_fn_name(id: u32) -> Option<String> {
     match id {
         OUTPUT => Some("output".into()),
         DONE => Some("done".into()),
@@ -542,13 +542,22 @@ fn host_fn_name(id: u32) -> Option<String> {
     }
 }
 
-fn host_fn(name: &str) -> Option<u32> {
+pub(super) fn host_fn(name: &str) -> Option<u32> {
     match name {
         "output" => Some(OUTPUT),
         "done" => Some(DONE),
         "later" => Some(LATER),
         _ => None,
     }
+}
+
+/// What `idle_call` does at an idle point besides settling the oldest `later` call.
+enum AtIdle<'a> {
+    Nothing,
+    /// Dump, load into a fresh VM and go on there.
+    Dump(&'a mut IdleStats),
+    /// Call the hook with the VM and the prelude's api (dump_perf.rs).
+    Hook(&'a mut dyn FnMut(&Vm, Value)),
 }
 
 /// Runs `f` to the end as the difftest's djs engine does: output and done recorded,
@@ -561,9 +570,13 @@ fn idle_call(
     this: Value,
     args: &[Value],
     out: &mut Vec<String>,
-    dump: Option<&mut IdleStats>,
+    at_idle: AtIdle<'_>,
 ) -> Result<Value, String> {
-    let mut dump = dump;
+    let (mut dump, mut hook) = match at_idle {
+        AtIdle::Nothing => (None, None),
+        AtIdle::Dump(st) => (Some(st), None),
+        AtIdle::Hook(h) => (None, Some(h)),
+    };
     vm.call(f, this, args).map_err(|e| format!("{e:?}"))?;
     let mut slices = 0;
     loop {
@@ -592,6 +605,9 @@ fn idle_call(
                     .map_err(|e| format!("{e:?}"))?;
             }
             Status::Idle => {
+                if let Some(hook) = hook.as_deref_mut() {
+                    hook(vm, vm.heap().get_handle(*api));
+                }
                 if let Some(st) = dump.as_deref_mut() {
                     st.idle += 1;
                     let apiv = vm.heap().get_handle(*api);
@@ -653,6 +669,20 @@ fn idle_run(
     case: &str,
     dump: Option<&mut IdleStats>,
 ) -> Result<Vec<String>, String> {
+    idle_run_hooked(prelude, case, dump.map_or(AtIdle::Nothing, AtIdle::Dump))
+}
+
+/// [`idle_run`] calling `hook` with the VM and the prelude's api at every idle point
+/// (dump_perf.rs).
+pub(super) fn idle_run_with(
+    prelude: &str,
+    case: &str,
+    hook: &mut dyn FnMut(&Vm, Value),
+) -> Result<Vec<String>, String> {
+    idle_run_hooked(prelude, case, AtIdle::Hook(hook))
+}
+
+fn idle_run_hooked(prelude: &str, case: &str, at_idle: AtIdle<'_>) -> Result<Vec<String>, String> {
     let mut vm = Vm::from_base(base(), VmOptions::default()).unwrap();
     let mut out = Vec::new();
     let p = vm
@@ -660,7 +690,7 @@ fn idle_run(
         .map_err(|e| e.message)?;
     let g = Value::object(vm.global());
     let mut none = vm.heap_mut().new_handle(Value::UNDEFINED).unwrap();
-    let setup = idle_call(&mut vm, &mut none, p, g, &[], &mut out, None)?;
+    let setup = idle_call(&mut vm, &mut none, p, g, &[], &mut out, AtIdle::Nothing)?;
     let host = vm.new_object().map_err(|e| format!("{e:?}"))?;
     for (id, name) in [(OUTPUT, "output"), (DONE, "done"), (LATER, "later")] {
         let f = if id == LATER {
@@ -678,7 +708,7 @@ fn idle_run(
         Value::UNDEFINED,
         &[Value::object(host)],
         &mut out,
-        None,
+        AtIdle::Nothing,
     )?;
     let mut api = vm
         .heap_mut()
@@ -689,13 +719,21 @@ fn idle_run(
         .compile(src.as_bytes(), &CompileOptions::script("case.js"))
         .map_err(|e| e.message)?;
     let g = Value::object(vm.global());
-    let f = idle_call(&mut vm, &mut api, script, g, &[], &mut out, None)?;
+    let f = idle_call(&mut vm, &mut api, script, g, &[], &mut out, AtIdle::Nothing)?;
     let apiv = vm.heap().get_handle(api);
     let run = get(&mut vm, apiv.as_object().unwrap(), "run");
-    idle_call(&mut vm, &mut api, run, apiv, &[f], &mut out, dump)?;
+    idle_call(&mut vm, &mut api, run, apiv, &[f], &mut out, at_idle)?;
     let apiv = vm.heap().get_handle(api);
     let stalled = get(&mut vm, apiv.as_object().unwrap(), "stalled");
-    idle_call(&mut vm, &mut api, stalled, apiv, &[], &mut out, None)?;
+    idle_call(
+        &mut vm,
+        &mut api,
+        stalled,
+        apiv,
+        &[],
+        &mut out,
+        AtIdle::Nothing,
+    )?;
     // Stack frames name the dump's script after a load: compared without them, as the
     // difftest does.
     Ok(out

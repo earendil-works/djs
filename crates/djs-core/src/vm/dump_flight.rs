@@ -345,7 +345,7 @@ impl Dumper<'_> {
                     .frame
                     .first()
                     .and_then(|f| f.as_object())
-                    .and_then(|f| crate::builtins::function::source_slice(h, f))
+                    .and_then(|f| self.sources.fn_text(h, f))
                     .is_some_and(|src| simple_params(&src));
                 if !simple {
                     self.refuse(
@@ -592,7 +592,7 @@ impl Dumper<'_> {
             .script
             .get()
             .map_or(0, |s| h.arena().get::<u32>(s, Script::OPTIONS));
-        let text = super::fn_text(h, f).map(|s| cat!("(", s, ")"));
+        let text = self.sources.fn_text(h, f).map(|s| cat!("(", s, ")"));
         let maps = match (text, self.scratch.as_mut()) {
             (Some(text), Some(scratch)) => {
                 // The dump's goal (a Script) with the body's TypeScript options.

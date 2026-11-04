@@ -1124,6 +1124,8 @@ mod compat_tests;
 #[cfg(all(test, feature = "dump"))]
 mod dump_harvest;
 #[cfg(all(test, feature = "dump"))]
+mod dump_perf;
+#[cfg(all(test, feature = "dump"))]
 mod dump_resume_tests;
 #[cfg(all(test, feature = "dump"))]
 mod dump_tests;
