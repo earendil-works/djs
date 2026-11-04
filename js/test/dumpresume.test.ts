@@ -20,6 +20,15 @@ function answer(c: OpenCall): { ok: boolean; value: unknown } {
 }
 
 const CASES: Record<string, string> = {
+  // Host values held across the dump: written as \$djs.host(name) and given back as the
+  // same objects (D2970, D2971), for a namespace that is not \`tools\` too.
+  "held host values": `
+    const fetch = sdk.fetch, ns = sdk, log = console.log;
+    const a = await fetch("a");
+    const b = await ns.fetch("b");
+    log("same", fetch === sdk.fetch, ns === sdk, log === console.log);
+    return [a, b];
+  `,
   "parallel tools": `
     const files = await tools.list();
     const todos = async (f) => (await tools.read(f)).split("\\n").filter((l) => l.includes("TODO")).length;
@@ -105,7 +114,7 @@ function sandboxOptions(p: Packaging, lines: string[]): SandboxOptions {
     console: { log, info: log, warn: log, error: log },
     deterministic: { startedAt: 1000, seed: 1 },
     now: 2000,
-    asyncFunctions: { "tools.read": tool, "tools.list": tool, "tools.echo": tool },
+    asyncFunctions: { "tools.read": tool, "tools.list": tool, "tools.echo": tool, "sdk.fetch": tool },
   };
 }
 

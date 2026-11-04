@@ -84,7 +84,7 @@ test("$djs holds the dump runtime while a plain dump loads", async () => {
 globalThis.r = [Object.getOwnPropertyNames($djs).sort().join(), $djs.R(Math.max, undefined, [1, 2]), $djs.advance([1, 2, 3].values(), 1).next().value];
 delete globalThis.$djs;
 `);
-  const want = [...Object.keys(helpers), "resume", "seed", "source"].sort().join();
+  const want = [...Object.keys(helpers), "host", "resume", "seed", "source"].sort().join();
   assert.deepEqual(sb.run(`return r`), [want, 2, 2]);
   sb.dispose();
 });

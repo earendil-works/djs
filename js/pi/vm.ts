@@ -133,17 +133,18 @@ const BRIDGE_FN = 1;
 /** `next` mode: the async host function `call(kind, name, argsJson)` of tools and globals. */
 const CALL_FN = 2;
 /**
- * The host functions by id - 1, as dumps (D2830) name them: a held host function is
- * written as its name, an expression the dump evaluates while it loads, and `bridge` and
- * `call` are no globals (the prelude gets them as arguments), so they are properties of
- * `$djs` meanwhile (D2893).
+ * The identities of the host functions by id - 1 (D2970): a dump writes a held one as
+ * `$djs.host("call")` and an open call as `$djs.resume(id, "call", ...)` (D2971); the
+ * adapter answers `$djs.host` with the functions it gave the prelude.
  */
-export const PLAIN_FN_NAMES = ["$djs.bridge", "$djs.call"];
+export const FN_NAMES = ["bridge", "call"];
 /** A plain dump's hooks `$djs.resume` and `$djs.seed` (D2890). */
 const HOOK_RESUME = 0x7fff_fff0;
 const HOOK_SEED = 0x7fff_fff1;
 /** `$djs.source(name, hash, params, 1)` (D2882): the codemode function the dump continues. */
 const HOOK_SOURCE = 0x7fff_fff2;
+/** `$djs.host(name)` (D2971): `bridge`, `call`, or one of the host globals by name. */
+const HOOK_HOST = 0x7fff_fff3;
 
 /** pi's limits (prelude-source.ts), which the adapter enforces in `next` mode. */
 const MAX_STORE_VALUE_CHARS = 256 * 1024;
@@ -164,7 +165,7 @@ export interface SessionDump {
   dump: string;
   /**
    * The adapter's state, without VM handles and without its call table: the dump carries
-   * each open call's pi id as the call's state (`$djs.resume(4, "$djs.call", [...], {"id":2})`,
+   * each open call's pi id as the call's state (`$djs.resume(4, "call", [...], {"id":2})`,
    * D2770), and a resumed session rebuilds the table from it.
    */
   state: Omit<SessionState, "api" | "settle" | "stalled" | "next"> & { next: Omit<NextState, "handles" | "ids"> };
@@ -219,6 +220,9 @@ interface VirtualClock {
 /** `next` mode's handles: the prelude's functions and the body's promise. */
 interface NextHandles {
   api: number;
+  /** The host functions the prelude got, by their identities (`$djs.host`, D2971). */
+  bridge: number;
+  call: number;
   decode: number;
   failure: number;
   encode: number;
@@ -331,6 +335,8 @@ class Session implements VmSession {
   private source: { handle: number; hash: string } | undefined;
   /** `$djs.seed`'s next call id and the highest reopened one, for the counter (D2897). */
   private plainIds: [number | undefined, number] = [undefined, 0];
+  /** While a plain dump loads: `$djs.host`'s values by name, as handles (D2971). */
+  private hostValues = new Map<string, number>();
 
   constructor(engine: Engine, hooks: VmHooks, state: SessionState) {
     this.engine = engine;
@@ -390,7 +396,7 @@ class Session implements VmSession {
     const host = this.resume ? hostGlobals(this.resume.data) : [];
     const handles: [string, number][] = next.handles.body !== 0 ? [["run", next.handles.body]] : [];
     const states = next.ids.map(([callId, id]): [number, string] => [callId, JSON.stringify({ id } satisfies CallState)]);
-    const dump = this.engine.dump(host, PLAIN_FN_NAMES, handles, states);
+    const dump = this.engine.dump(host, FN_NAMES, handles, states);
     const { handles: _, ids: _i, ...rest } = next;
     const { api: _a, settle: _s, stalled: _t, next: _n, ...state } = this.state;
     return { dump, state: structuredClone({ ...state, early: [...this.early], next: rest }) };
@@ -589,7 +595,7 @@ class Session implements VmSession {
           continue;
         case STATUS_HOST_CALL: {
           const { callId, fnId, args: callArgs } = engine.hostCall();
-          if (this.loading && (fnId === HOOK_RESUME || fnId === HOOK_SEED || fnId === HOOK_SOURCE)) {
+          if (this.loading && (fnId === HOOK_RESUME || fnId === HOOK_SEED || fnId === HOOK_SOURCE || fnId === HOOK_HOST)) {
             this.serveHook(callId, fnId, callArgs);
             continue;
           }
@@ -622,7 +628,7 @@ class Session implements VmSession {
   /**
    * Loads the plain dump `text` (D2830) into this session's VM, which ran the host globals
    * and the prelude: runs it as a Script with `$djs` = the dump runtime (D2903) and
-   * {resume, seed, bridge, call} to its first stop that is not a sync call (the dump
+   * {resume, seed, source, host} to its first stop that is not a sync call (the dump
    * deletes `$djs` at its end, the adapter too). Each `$djs.resume` reopens a `call` under its engine id and takes pi's id from
    * its state into the call table. Returns the run's promise (the Script's completion
    * value; the caller owns the handle). Throws when the dump does not load.
@@ -640,13 +646,24 @@ class Session implements VmSession {
       engine.free(w);
       this.source = { handle: f, hash: scriptHash(wrapper, "", 1) };
     }
+    // `$djs.host`'s answers (D2971): the prelude's own `bridge` and `call`, and the host
+    // globals' values, read now (the hook cannot run JS while the dump waits on it).
+    const fns0 = this.state.next!.handles;
+    const values = new Map<string, number>([["bridge", fns0.bridge], ["call", fns0.call]]);
+    const read = compileOrThrow(engine, "dump.js", ["k"], "return globalThis[k]");
+    for (const name of this.resume ? hostGlobals(this.resume.data) : []) {
+      const k = engine.value(name);
+      values.set(name, evaluate(this, engine, read, [k]));
+      engine.free(k);
+    }
+    engine.free(read);
+    this.hostValues = values;
     const hooks = engine.dumpRuntime();
     const fns: [string, number][] = [
       ["resume", engine.hostFunction(HOOK_RESUME, "resume")],
       ["seed", engine.hostFunction(HOOK_SEED, "seed")],
       ["source", engine.hostFunction(HOOK_SOURCE, "source")],
-      ["bridge", engine.hostFunction(BRIDGE_FN, "bridge")],
-      ["call", engine.asyncHostFunction(CALL_FN, "call")],
+      ["host", engine.hostFunction(HOOK_HOST, "host")],
     ];
     for (const [name, h] of fns) {
       engine.define(hooks, name, h);
@@ -665,6 +682,8 @@ class Session implements VmSession {
       this.loading = false;
       if (this.source) engine.free(this.source.handle);
       this.source = undefined;
+      for (const [name, h] of this.hostValues) if (name !== "bridge" && name !== "call") engine.free(h);
+      this.hostValues = new Map();
     }
     if (status === STATUS_THREW) {
       const h = engine.result();
@@ -682,11 +701,18 @@ class Session implements VmSession {
     return run;
   }
 
-  /** Serves `$djs.resume(id, name, args, state)` and `$djs.seed(lo, hi, next)` while a dump loads. */
+  /** Serves `$djs.resume(id, name, args, state)`, `$djs.seed(lo, hi, next)`, `$djs.source` and `$djs.host` while a dump loads. */
   private serveHook(callId: number, fnId: number, [a, b, c, d]: unknown[]): void {
     const { engine } = this;
     let why: string | undefined;
-    if (fnId === HOOK_SOURCE) {
+    if (fnId === HOOK_HOST) {
+      const h = typeof a === "string" ? this.hostValues.get(a) : undefined;
+      if (h !== undefined) {
+        engine.resolveHostCall(callId, h);
+        return;
+      }
+      why = `host: unknown host value ${String(a)}`;
+    } else if (fnId === HOOK_SOURCE) {
       if (a === "codemode.js" && this.source && b === this.source.hash) {
         engine.resolveHostCall(callId, this.source.handle);
         return;
@@ -698,7 +724,7 @@ class Session implements VmSession {
       if (typeof c === "number") this.plainIds[0] = c;
     } else {
       const id = (d as Partial<CallState> | undefined)?.id;
-      if (b !== "$djs.call" || typeof id !== "number") why = `resume: call ${String(a)} is not a tool call with a pi id`;
+      if (b !== "call" || typeof id !== "number") why = `resume: call ${String(a)} is not a tool call with a pi id`;
       else {
         why = engine.openCall(callId, CALL_FN);
         if (why === undefined) {
@@ -961,7 +987,8 @@ function prepareUnpolled(session: Session, engine: Engine, prelude: string, data
           engine.value(JSON.stringify(data.store)),
         ];
   const api = session.invoke(factory, 0, args);
-  for (const h of [preludeFn, factory, ...args]) engine.free(h);
+  // `next` mode keeps `bridge` and `call`: a dump's `$djs.host` gets them (D2971).
+  for (const h of [preludeFn, factory, ...args]) if (shape !== "next" || (h !== bridge && h !== call)) engine.free(h);
   const member = (name: string): number => {
     const key = engine.value(name);
     const f = evaluate(session, engine, getter, [api, key]);
@@ -976,7 +1003,7 @@ function prepareUnpolled(session: Session, engine: Engine, prelude: string, data
           stalled: 0,
           run: member("run"),
           setOrigin,
-          next: { api, decode: member("decode"), failure: member("failure"), encode: member("encode"), describe: member("describe") },
+          next: { api, bridge, call, decode: member("decode"), failure: member("failure"), encode: member("encode"), describe: member("describe") },
         }
       : { api, settle: member("settle"), stalled: member("stalled"), run: member("run"), setOrigin };
   engine.free(getter);

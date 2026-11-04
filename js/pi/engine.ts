@@ -17,7 +17,7 @@ export const STATUS_HOST_CALL = 3;
 export const STATUS_IDLE = 4;
 /** The host could not provide memory below the cap (D1690); the call is abandoned. */
 export const STATUS_HOST_OUT_OF_MEMORY = 5;
-const ABI_VERSION = 4;
+const ABI_VERSION = 5;
 /** `vm_new_with`'s flag: frozen builtins (D2304). */
 const VM_FROZEN_BUILTINS = 1;
 
@@ -263,12 +263,13 @@ export class Engine {
 
   /**
    * A dump of the idle VM (`vm_dump`, a plain Script, D2830; the VM needs frozen builtins,
-   * D2836): `host` are the globals the host defines
-   * (written by name), `fnNames` the host functions by id - 1, `handles` the values to
+   * D2836): `host` are the globals the host defines (never written; their values are
+   * host roots by the global's name), `fnNames` the host functions' identities by id - 1,
+   * `roots` other values the host names (`$djs.host(name)`, D2971), `handles` the values to
    * name for the host, `states` the host's state of open calls as JSON text, by call id
    * (D2770). Throws with the reasons when the VM cannot be dumped.
    */
-  dump(host: string[], fnNames: string[], handles: [string, number][], states: [number, string][] = []): string {
+  dump(host: string[], fnNames: string[], handles: [string, number][], states: [number, string][] = [], roots: [string, number][] = []): string {
     const x = this.x;
     if (!x.vm_dump) throw new Error("The djs-wasm module has no dumper (build it with the `dump` feature)");
     const text = [
@@ -276,6 +277,7 @@ export class Engine {
       "",
       fnNames.join("\t"),
       handles.map(([n, h]) => `${h}:${n}`).join("\t"),
+      roots.map(([n, h]) => `${h}:${n}`).join("\t"),
       states.map(([id, json]) => `${id}:${textEncoder.encode(json).length}`).join("\t"),
       states.map(([, json]) => json).join(""),
     ].join("\n");
