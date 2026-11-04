@@ -280,8 +280,9 @@ exist only while it loads (D2562):
 
 - data is written as literals and the calls that make it; builtins are referred to by
   name, never written;
-- `$dump.pending` recreates the open tool call with the id the host knows it by, and the
-  host's name for the function;
+- `$dump.pending` recreates the open tool call with the id the host knows it by, the
+  host's name for the function and, when the host gave one, its own state of the call as
+  JSON (D2770);
 - `$dump.resume` builds the suspended activation of the script's function (its source,
   verbatim) at its first `await`, with its bindings, the values computed before the
   `await` (here the half-done `notes.push(` call: its function and `this`) and the loop
@@ -405,15 +406,15 @@ that made 50 small objects:
 - [`crates/djs-core/src/vm/dump.rs`](../../crates/djs-core/src/vm/dump.rs): the
   exporter; [`vm/dump_load.rs`](../../crates/djs-core/src/vm/dump_load.rs): the loader
   and its primitives; [`tests/dump/v2/`](../../tests/dump/v2/): golden dumps.
-- [`js/src/sandbox.ts`](../../js/src/sandbox.ts): `begin`, `Run.dump` and
-  `Sandbox.resume`, and the dump module; [`js/pi/vm.ts`](../../js/pi/vm.ts): the
+- [`js/src/sandbox.ts`](../../js/src/sandbox.ts): tasks (`start`, `suspend`,
+  `Sandbox.resume`), `begin`, `Run.dump` and `loadRun`, and the dump module; [`js/pi/vm.ts`](../../js/pi/vm.ts): the
   adapter's prelude images and its dumps of pi sessions.
 - [`crates/djs-cli/src/heap/`](../../crates/djs-cli/src/heap/): the heap report behind the
   REPL's `.heap`.
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2063 D2067 D2043 D1091 D1890 D1725 D1052 D026 D2265 D2266 D2267 D2268 D1320 D1330 D1750 D1056 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2262 D2264 D2308 D2445 D2446 D2447 D2560 D2561 D2562 D2563 D2700 D2703 D2704 D2432 D2340 D2269 -->
+<!-- gen:decisions D2040 D2041 D2063 D2067 D2043 D1091 D1890 D1725 D1052 D026 D2265 D2266 D2267 D2268 D1320 D1330 D1750 D1056 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2262 D2264 D2308 D2445 D2446 D2447 D2560 D2561 D2562 D2563 D2700 D2703 D2704 D2432 D2340 D2269 D2770 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
 - D2063: The base image ends with a tail of per-VM cells; nothing writes below BASE_END
@@ -457,4 +458,5 @@ Decisions on this page:
 - D2432: `djs heap` shows the session's own part by default
 - D2340: Heap views show the program's own cells apart from the base realm; REPL dumps are containers
 - D2269: No `djs heap` command and no `.image`; the REPL's `.heap` keeps the heap report
+- D2770: A call's state is JSON text, written verbatim as `$dump.pending`'s fourth argument
 <!-- /gen -->

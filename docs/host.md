@@ -44,6 +44,7 @@ const sb = await Sandbox.create({
 });
 sb.run("return readFile(path).length", { path: "README.md" });   // codemode function body
 await sb.runAsync("return await fetchJson(url)", { url });       // host functions may return promises
+const task = sb.start(code, params);                            // a task: suspend() into a dump while it waits
 const run = sb.begin(code, params);                             // a run the host drives; run.dump() while idle
 sb.dispose();
 ```
@@ -66,7 +67,8 @@ sb.dispose();
 - `functions` are *sync* host functions: a call parks the VM until it returns. `run` needs
   them to return synchronously (a promise is a TypeError in the VM); `runAsync` awaits a
   promise while the VM stays parked at the call.
-- `asyncFunctions` are *async* host functions (D1374): a call returns a promise in the VM
+- `asyncFunctions` are *async* host functions (D1374), plain functions or `{ call, save,
+  resume }` with hooks for dumps (below): a call returns a promise in the VM
   at once and the script goes on, so several calls are outstanding together (`Promise.all`
   over tools). `runAsync` starts each call as soon as `vm_run` returns, and when only
   pending calls are left (IDLE) awaits whichever settles first, passes its result back and
@@ -127,11 +129,54 @@ sb.dispose();
   A host `collect()` at exactly that point can then fail for lack of to-space; collect
   when the VM is idle or done instead.
 
-### Host-driven runs and continuation dumps (D2630, D2633–D2635)
+### Tasks: suspending a run into a dump (D2770, D2771)
 
-`runAsync` calls the async host functions itself and returns only at the end. A host that
-wants to persist a run while it waits drives it instead (the first piece of
-docs/continuation-dumps.md "Sandbox API"; examples/sleep-dump shows all of it):
+`runAsync` returns only at the end. A task is the same run, driven by the sandbox, that
+can be suspended into a continuation dump while it waits on async host calls and
+continued from it later, in another sandbox or process (examples/sleep-dump shows all of
+it):
+
+```ts
+const sleep: AsyncHostFunction<{ due: number }> = {
+  async call(ms) { const due = Date.now() + Number(ms); this.state = { due }; await until(due, this.signal); },
+  save: (call) => call.state,                     // the default: the call's state, JSON data
+  async resume({ due }, call) { await until(due, call.signal); }, // after a load
+};
+const opts = { asyncFunctions: { "tools.sleep": sleep } };
+const task = (await Sandbox.create(opts)).start(code, params, { filename: "task.js" });
+task.calls;                                 // the open calls: { id, fn, args, startedAt, state, signal }
+const dump = await task.suspend();          // at the next idle point: save() per call, dump, stop
+const again = await Sandbox.resume(dump, opts); // any time later, any process
+await again.result;
+```
+
+- `start` runs the body like `runAsync` (the first step at once: a compile error throws)
+  and calls the async host functions as the script calls them. `task.result` is the
+  outcome; it rejects with a SandboxError (`threw`, `fuel`, ...).
+- `suspend()` waits for the next idle point with no result left to deliver, takes each
+  open call's state (its function's `save(call)`, by default `call.state`; JSON data) and
+  writes the run as a format 2 dump, the states with their calls
+  (`$dump.pending(id, name, args, state)`). The task stops: the calls' `signal`s abort,
+  their late results are dropped, and `result` rejects with kind `suspended` (counted as
+  handled). A dump that fails (a value that cannot be written, a `save` that throws, a
+  state that is not JSON) rejects the `suspend` only, and the task goes on.
+  `checkpoint()` dumps the same way and goes on. Both reject if the run ends first.
+- `Sandbox.resume(dump, opts)` makes a sandbox from `opts` (the same host functions, by
+  name), loads the dump and drives it as a task (`task.sandbox` is the new sandbox;
+  `sb.resume(dump)` does it in an existing fresh one). Each open call continues by its
+  function's hooks: `resume(state, call)` with the saved state; `call` again for a
+  function without `resume`; a plain function's call is rejected (an Error naming the
+  function), since the sandbox cannot know whether calling it again is safe.
+- The hooks see a `HostCall`: `id`, `fn`, `args`, `startedAt` (this sandbox's
+  `Date.now()` when it started or resumed the call), `state` (set it any time; a resumed
+  call starts with its saved state, so it is saved again by default) and `signal`
+  (aborted when the task is suspended or the sandbox disposed). It is `this` of `call`.
+- One task or run at a time per sandbox; `dispose()` ends a task in progress (`misuse`).
+
+### Host-driven runs (D2630, D2633–D2635)
+
+A host that wants to decide every call itself drives the run instead (the first piece of
+docs/continuation-dumps.md "Sandbox API"):
 
 ```ts
 const run = sb.begin(code, params, { filename: "task.js" }); // to the first idle point
@@ -139,21 +184,23 @@ run.state;                                  // "idle" | "done" | "threw"
 run.calls;                                  // [{ id, fn: "sleep", args: [5000] }]: open, not called
 run.settle(id, { ok: true, value });        // a result (ok false: rejects with value)
 await run.advance();                        // to the next idle point; run.value / run.error at the end
-const text = run.dump();                    // only while idle: a format 2 dump
-const { sandbox, run: again } = await Sandbox.resume(text, { asyncFunctions }); // same calls, same ids
+const text = run.dump({ [id]: { due } });   // only while idle: a format 2 dump, with call states
+const again = (await Sandbox.create({ asyncFunctions })).loadRun(text); // same calls, same ids
+again.calls;                                // [{ id, fn: "sleep", args: [5000], state: { due } }]
 ```
 
 - A host-driven run never calls async host functions: it lists them in `run.calls`, and
   the host answers with `settle`, in any order (results are still macrotasks, D1670).
   Sync host functions are called as in `run`. The sandbox runs nothing else meanwhile.
-- `dump()` writes the idle VM as a format 2 dump: its data, the suspended activations, the
-  open calls (by the host's function names) and the run's result promise, named `run`.
-  `Sandbox.resume` makes a sandbox from the options (the same host functions, by name),
-  loads the dump and continues: `again.calls` are the open calls with their ids. What the
-  host does with them (deliver a recorded result, issue the call again, reject it) is its
-  own policy; timers and other host state are the host's to keep and re-arm.
+- `dump(states)` writes the idle VM as a format 2 dump: its data, the suspended
+  activations, the open calls (by the host's function names, with the states given for
+  them, JSON data by call id) and the run's result promise, named `run`. `loadRun` loads
+  the dump into a fresh sandbox made with the same host functions, by name, and
+  continues: `again.calls` are the open calls with their ids and states. What the host
+  does with them (deliver a recorded result, issue the call again, reject it) is its own
+  policy; no hooks run.
 - `sb.load(text)` loads a dump into an existing sandbox and returns `{ calls }`.
-- `run`, `runAsync` and `replay` are this loop with the host's part built in (D2634): they
+- `run`, `runAsync`, `replay` and tasks are this loop with the host's part built in (D2634): they
   call each async host function as soon as the script calls it, pass results back before
   every fuel slice, and wait at idle points. `begin(code, params, { journal })` records a
   host-driven run (its `settle`s in order, a check at every idle point), and `replay` runs
@@ -170,7 +217,7 @@ also works on its own as `module` (A); djs ships B.
 const sb = await Sandbox.create({ module: await loadModule(), dumpModule: await loadModule("djs-dump.wasm"), asyncFunctions });
 ```
 
-With `dumpModule`, `dump`, `load`, `Run.dump` and `Sandbox.resume` move the VM's image to
+With `dumpModule`, `dump`, `load`, `Run.dump`, `loadRun`, the tasks' dumps and `Sandbox.resume` move the VM's image to
 an instance of the dump module and back (the feature leaves images alone, D2352, so
 either module reads the other's). The sandbox keeps that instance and its VM between
 dumps (`vm_replace_image` loads the next image into the same VM, D2701), so the instance
@@ -273,7 +320,7 @@ replay only on it, and pi's fingerprint names it.
 
 Exports take and return only `i32`s, except the `f64` clock of `vm_set_now` and `vm_resolve_host_call_at`. There are no imports: the module needs nothing from
 the host, so `WebAssembly.instantiate(module, {})` works anywhere. `djs_abi_version()`
-returns `1` and is bumped on any incompatible change. The Sandbox checks it.
+returns `3` (since 0189: call states in `vm_dump`/`vm_load_dump`) and is bumped on any incompatible change. The Sandbox checks it.
 
 **Buffers.** Data crosses the boundary through two buffers in linear memory.
 - `djs_staging(len) -> ptr` makes the *staging* buffer at least `len` bytes. The host writes
@@ -328,8 +375,8 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_abort(vm)` | abandon the current call (out of fuel or parked): the VM is idle and usable again |
 | `vm_result(vm) -> h` | the DONE/THREW value, once |
 | `vm_outcome(vm) -> h` | the entry call's outcome while no frame is active, also at IDLE (a function the host called while async calls are pending); any number of times; out[0] = 1 if it threw; 0 if none (D2650) |
-| `vm_dump(vm, len) -> 0/1/2` | (feature `dump`) a format 2 dump of the idle VM in out. Staging, four lines: host globals and names to dump (comma-separated), the host's function names in id order and the values to name as `handle:name` (tab-separated; handle 0 names the entry call's outcome). 1: refused, reasons in out; 2: no base image (D2631) |
-| `vm_load_dump(vm, names_len, len) -> 0/1` | (feature `dump`) loads the dump after `names_len` bytes of host function names (`\n`-separated, id order). 0: out = u32 `n_calls, n_handles, (call_id, fn_id)*, (handle, name_len)*`, then the handles' names; 1: refused, the reason in out (D2631) |
+| `vm_dump(vm, len) -> 0/1/2` | (feature `dump`) a format 2 dump of the idle VM in out. Staging, five lines: host globals and names to dump (comma-separated), the host's function names in id order, the values to name as `handle:name` (tab-separated; handle 0 names the entry call's outcome) and the open calls' states as `call_id:byte_len` (tab-separated), then the states' JSON texts one after another (D2770). 1: refused, reasons in out; 2: no base image (D2631) |
+| `vm_load_dump(vm, names_len, len) -> 0/1` | (feature `dump`) loads the dump after `names_len` bytes of host function names (`\n`-separated, id order). 0: out = u32 `n_calls, n_handles, (call_id, fn_id, state_len)*, (handle, name_len)*`, then the handles' names, then the calls' states (JSON, `state_len` bytes; 0: none, D2770); 1: refused, the reason in out (D2631) |
 | `vm_host_call(vm) -> argc` | out = `[call_id, fn_id, this lo, hi, (arg lo, hi)*]` |
 | `vm_host_call_info(vm, call_id) -> argc` | `vm_host_call` for any pending call (async ones) |
 | `vm_new_host_calls(vm) -> n` | out = the ids (u32) of the async calls made since the last check |

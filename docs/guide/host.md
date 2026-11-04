@@ -243,31 +243,56 @@ which finishes on djs before the cancel.
 
 An async call can take longer than the process that made it should live: a tool that
 waits for a person, or a host that restarts. While a run waits only on async calls, the
-VM is idle: no frame on the stack, no job queued. The Sandbox lets the host drive such a
-run itself (D2630): `begin` runs the script to its first idle point and lists the open
-calls instead of calling the functions, the host answers each with `settle` and moves
-on with `advance`, and while the run is idle `dump` writes it out as JavaScript: its
-data, the async functions stopped at their `await`s, the open calls by the host's names
-for them, and the run's result promise. `Sandbox.resume` loads that text in a new
-sandbox, perhaps in another process, and the run waits on the same calls with the same
-ids, ready for their results.
+VM is idle: no frame on the stack, no job queued. At such a point the run can be written
+out as JavaScript, a continuation dump: its data, the async functions stopped at their
+`await`s, the open calls by the host's names for them, and the run's result promise.
+Loaded in a new sandbox, perhaps in another process, the run waits on the same calls
+with the same ids.
 
-What is not in the VM is not in the dump. A timer, a request in flight, a person's
-pending answer: those are the host's, and the host keeps and re-arms them from the open
-calls the load reports. [`examples/sleep-dump/`](../../examples/sleep-dump/) does this
-with a tool that sleeps five seconds on the host side.
+What is not in the VM is not in the dump by itself: a timer, a request in flight, a
+person's pending answer. Those are the host's, so each open call can carry a piece of
+host state, JSON the dump writes next to the call and the load gives back (D2770): when a
+sleep is due, which request to poll. The engine keeps none of it between dumps; it only
+checks that the text is JSON, so it cannot smuggle code into the dump.
 
-The protocol from the host's side, in order:
+The Sandbox turns that into a few lines of host code (D2771). An async host function may
+be declared with hooks:
 
-1. `begin(code, params)` runs to the first idle point; `run.calls` lists the open calls
-   (an id, the host function's name, the arguments). The host starts the work for each.
-2. As results come in, `settle(id, outcome)` hands each one to the VM, and `advance()`
-   runs to the next idle point, which may have new calls, or to the end.
-3. Whenever the run is idle, `dump()` writes it out. The host stores the text, compressed
-   (below), together with whatever state of its own the open calls need.
-4. Later, `Sandbox.resume(text, options)` makes a sandbox with the same host functions by
-   name, loads the dump and returns the run with its open calls. For each, the host
-   decides: deliver a result it recorded, issue the call again, or reject it.
+```ts
+const sleep = {
+  async call(ms) {                          // the script called it
+    const due = Date.now() + Number(ms);
+    this.state = { due };                   // the call's state: a dump keeps it
+    await until(due, this.signal);
+  },
+  async resume({ due }, call) {             // after a load, with that state
+    await until(due, call.signal);
+  },
+};
+const task = sandbox.start(code, params);   // runs like runAsync
+const dump = await task.suspend();          // at the next idle point
+// ... any time later, any process:
+const result = await (await Sandbox.resume(dump, options)).result;
+```
+
+`start` runs the script and calls the host functions as the script calls them.
+`suspend()` waits for the next idle point, asks every open call for its state (a `save`
+hook, or the state the call recorded), writes the dump and stops the run; the calls'
+abort signals tell the host to stop waiting for them. `Sandbox.resume` loads the dump
+into a new sandbox and continues each open call through its function's `resume` hook. A
+function without `resume` is called again, which suits calls without side effects; a
+plain function, without hooks, has its call rejected, because the sandbox cannot know
+whether calling it twice is safe. [`examples/sleep-dump/`](../../examples/sleep-dump/)
+is such a host, with a tool that sleeps five seconds on the host side, in one process or
+two.
+
+A host that wants to decide every call itself drives the run instead (D2630): `begin`
+runs the script to its first idle point and lists the open calls instead of calling the
+functions, the host answers each with `settle` and moves on with `advance`, and while
+the run is idle `dump(states)` writes it out with the states the host gives. `loadRun`
+loads such a dump into a fresh sandbox and returns the run with its open calls and their
+states; for each, the host delivers a result it recorded, issues the call again or
+rejects it.
 
 A dump is plain JavaScript and stays plain: the host compresses it when it stores it,
 with zstd at level 3, which node has built in (D2703). Over a corpus of 300 real codemode
@@ -294,7 +319,7 @@ build's tables.
 
 Decisions on this page:
 
-<!-- gen:decisions D2060 D1180 D1210 D1321 D1370 D1374 D1383 D1495 D1660 D1670 D1680 D1690 D1730 D1740 D1890 D2262 D2265 D2541 D2543 D2630 D2650 D2651 D2652 D2700 D2701 D2703 D2704 -->
+<!-- gen:decisions D2060 D1180 D1210 D1321 D1370 D1374 D1383 D1495 D1660 D1670 D1680 D1690 D1730 D1740 D1890 D2262 D2265 D2541 D2543 D2630 D2650 D2651 D2652 D2700 D2701 D2703 D2704 D2770 D2771 -->
 - D2060: The base is decoded or injected straight into the first VM's arena
 - D1180: Inbound wire format, version 1
 - D1210: Exported heap layout drives the host-side reader
@@ -322,4 +347,6 @@ Decisions on this page:
 - D2701: The dump module's instance and VM are kept between dumps
 - D2703: Hosts store dump text compressed with zstd; the format stays a plain Script
 - D2704: Packaging B: the shipped module has no dumper, hosts that persist load the dump module
+- D2770: A call's state is JSON text, written verbatim as `$dump.pending`'s fourth argument
+- D2771: Tasks: the Sandbox drives the run and the open calls' hooks
 <!-- /gen -->

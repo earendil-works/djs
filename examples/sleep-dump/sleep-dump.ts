@@ -5,6 +5,7 @@
 //   node examples/sleep-dump/sleep-dump.ts [both|start|resume] [ms]
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type AsyncHostFunction, Sandbox, type SandboxOptions } from "../../js/src/sandbox.ts";
 
@@ -71,7 +72,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const dump = await suspend(Number(ms));
     mkdirSync(new URL("out", import.meta.url), { recursive: true });
     writeFileSync(file, dump);
-    console.log(`host: suspended the run into ${file} (${dump.length} bytes)`);
+    console.log(`host: suspended the run into ${relative(".", file)} (${dump.length} bytes)`);
   }
   if (mode !== "start") console.log("host: the run returned", await resume(readFileSync(file, "utf8")));
 }

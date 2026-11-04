@@ -187,7 +187,7 @@ original order). The loader adds:
 | --- | --- |
 | `$dump.resume(fn, {at, awaiting, this, args, bindings, operands, loops, …})` | builds a suspended activation of `fn` at the named site, subscribes it to `awaiting`, returns its result promise (async functions) or its generator object (generators: `yield#N`, no `awaiting`) |
 | `$dump.cell(() => x)` | the variable cell an arrow that captures exactly one variable closes over, so a frame and closures share it |
-| `$dump.pending(id, name, args)` | an open host call with the host's id; its promise |
+| `$dump.pending(id, name, args, state?)` | an open host call with the host's id and the host's JSON state of it (D2770); its promise |
 | `$dump.handle(name, value)` | a named handle for the host (the run's promise, a REPL input) |
 | `$dump.private(obj, C, "#x", value)` | a private field (or brand) of the class `C` the dump recreated |
 | `$dump.private(C, "#x")` | the private name `#x` of class `C` itself, for a frame that holds it as a value (D2621) |
@@ -239,8 +239,9 @@ As built (0171, D2583–D2585):
 - A captured binding gets a new Box, or the Box of a `$dump.cell(() => x)` (also in its
   TDZ, when the cell is taken before the declaration runs); `$dump.TDZ` and cells are
   values only `resume` takes.
-- `pending(id, name, args)`: the host maps `name` to its function id
-  (`LoadOptions::host_fn`; an unknown name refuses). `issued(n)`: the id the host's next
+- `pending(id, name, args, state?)`: the host maps `name` to its function id
+  (`LoadOptions::host_fn`; an unknown name refuses); `state`, if given, goes back to the
+  host as JSON text (`OpenCall::state`; a value that is not JSON data refuses). `issued(n)`: the id the host's next
   call gets (else one past the largest open id). `handle(name, v)`: a heap handle the host
   gets back. `Vm::load_dump` returns the open calls and the handles; the VM is idle.
 
@@ -442,10 +443,15 @@ dumps of values.
 
 ### Open host calls
 
-The dump lists every open call with the host's id. What happens on load is the host's
-policy, the dump only states the facts: deliver a recorded result, issue the call again,
-or reject it as interrupted. A tool with side effects should not be issued twice; pi's
-host keeps calls by id already.
+The dump lists every open call with the host's id, and with the host's own state of the
+call when the host gave one (D2770): JSON text the host passes at dump time
+(`DumpOptions::call_states`), written as is as the fourth argument of
+`$dump.pending`, after a check that it is JSON and reads the same as a JavaScript
+expression (no key `__proto__`). The engine keeps nothing of it between dumps. What
+happens on load is the host's policy, the dump only states the facts: deliver a recorded
+result, issue the call again (from its state), or reject it as interrupted. A tool with
+side effects should not be issued twice; pi's host keeps calls by id already. The
+Sandbox's tasks run that policy from hooks the host function declares (D2771, below).
 
 ### Compatibility (D2560)
 
@@ -564,14 +570,21 @@ run.state;     // "idle" | "done" | "threw"
 run.calls;     // [{ id, fn: "tools.read", args }] still open
 run.settle(id, { ok: true, value });       // delivers one result
 await run.advance();                       // to the next idle point
-const text = run.dump();                   // only while idle: a format 2 dump
+const text = run.dump(states);             // only while idle: a format 2 dump, call states by id
 
-const { sandbox: s2, run: r2 } = await Sandbox.resume(text, { functions, asyncFunctions });
-r2.calls;      // the same open calls; the host settles or re-issues them
+const r2 = (await Sandbox.create({ functions, asyncFunctions })).loadRun(text);
+r2.calls;      // the same open calls, with their states; the host settles or re-issues them
 ```
 
 `runAsync` becomes `begin` + calling the async functions for `run.calls` + `advance` in a
 loop. Journals (D1730) stay available on top; persistence does not need them.
+
+On top of it, tasks (D2771) keep the bookkeeping in the Sandbox: an async host function
+declared `{ call, save, resume }` records its call's state, `task.suspend()` dumps at the
+next idle point with `save`'s states and stops, and `Sandbox.resume(text, opts)` loads
+and drives the run, continuing each open call by `resume(state, call)` (or `call` again
+without `resume`; a plain function's call is rejected). docs/host.md "Tasks" has the API,
+examples/sleep-dump a whole host in 40 lines.
 
 ## Issues
 
