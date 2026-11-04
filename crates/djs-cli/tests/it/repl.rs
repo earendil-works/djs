@@ -482,7 +482,8 @@ fn dump_a_waiting_session() {
             &format!("  async function <anonymous> at {dump}:9:12"),
             "      const v = (await $dump.p1);",
             "                 ^",
-            "    p = 'a', v = undefined",
+            // (`p` is dead after the await: the continuation leaves it out, D2911.)
+            "    v = undefined",
             "[ 'HELLO' ]",
             "dumping at every idle point: on",
             // The restored tools are made already (the calls' states, D2897): no `make`

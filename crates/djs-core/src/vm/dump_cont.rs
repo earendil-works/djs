@@ -45,6 +45,12 @@ enum P {
     /// Where K's captured helpers are declared.
     Helpers,
     L(Vec<P>),
+    /// A line that declares or assigns binding `.0` of the frame: left out where nothing
+    /// in its scope reads the binding (liveness, D2911).
+    Decl(String, String),
+    /// A block of K: the names it declares, whether it is written in braces when one of
+    /// them is left, its content.
+    Scope(Vec<String>, bool, alloc::boxed::Box<P>),
 }
 
 fn s(t: &str) -> P {
@@ -105,9 +111,24 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
         params: Vec::new(),
         deferred: Vec::new(),
     };
-    let body = g.body()?;
+    let mut body = g.body()?;
     if !g.deferred.is_empty() {
         return no("a value the dump's callback makes in a block the continuation does not reach");
+    }
+    // Liveness (D2911): bindings nothing in K reads are left out, unless K may read names
+    // in ways its text does not show.
+    let mut all = String::new();
+    render(&body, &act.ftext, "", &mut all);
+    if !has_ident(&all, "eval") && !has_ident(&all, "with") {
+        prune(&mut body, &act.ftext);
+        let mut text = String::new();
+        render(&body, &act.ftext, "", &mut text);
+        let params = core::mem::take(&mut g.params);
+        for (n, v) in params {
+            if has_ident(&text, &n) || !g.unique(&n) {
+                g.params.push_out((n, v));
+            }
+        }
     }
     // The body's `using` resources are disposed at its end: a site there.
     let close = if g
@@ -280,7 +301,7 @@ struct G<'a, 'c> {
     params: Vec<(String, String)>,
     /// Assignments that wait for a part of the dump's callback (D2907): the part, the
     /// statement.
-    deferred: Vec<(usize, Vec<String>, String)>,
+    deferred: Vec<(usize, Vec<String>, P)>,
 }
 
 impl G<'_, '_> {
@@ -365,7 +386,7 @@ impl G<'_, '_> {
             Some(p) => {
                 let names: Vec<String> = pairs.iter().map(|(n, _)| n.clone()).collect();
                 self.deferred
-                    .push_out((p, names.clone(), cat!(join(&list, ", "), ";")));
+                    .push_out((p, names.clone(), P::S(cat!(join(&list, ", "), ";"))));
                 cat!("let ", join(&names, ", "), ";")
             }
             None => cat!("const ", join(&list, ", "), ";"),
@@ -475,9 +496,9 @@ impl G<'_, '_> {
     /// The declarations of a block of K: the live bindings with their values, the dump's
     /// code for this block, bindings whose values exist only after the dump's callback.
     fn declare(&mut self, decls: &[(String, DeclKind, u32, bool)]) -> R<P> {
-        let mut early = Vec::new();
-        let mut late = Vec::new();
-        let mut after = Vec::new();
+        let mut early: Vec<P> = Vec::new();
+        let mut late: Vec<P> = Vec::new();
+        let mut after: Vec<P> = Vec::new();
         let mut info = Vec::new();
         let block = self.block_index;
         // (A waiting assignment must reach the binding it was made for.)
@@ -555,7 +576,13 @@ impl G<'_, '_> {
             } else {
                 name.as_str()
             };
-            let line = cat!(kw, " ", target, " = ", value, ";");
+            // (A `using` resource's scope ends where its block does: never left out.)
+            let using = matches!(kind, DeclKind::Using | DeclKind::AwaitUsing);
+            let line = if using {
+                P::S(cat!(kw, " ", target, " = ", value, ";"))
+            } else {
+                self.decl_line(target, cat!(kw, " ", target, " = ", value, ";"))
+            };
             if let Some(p) = made.filter(|&p| p > block) {
                 // Made by a part of the dump's callback in a block below: declared now,
                 // assigned once that part ran (D2907).
@@ -563,12 +590,10 @@ impl G<'_, '_> {
                     return no("a constant whose value the dump makes in a block below its own");
                 }
                 let kw = if kw == "const" { "let" } else { kw };
-                early.push_out(cat!(kw, " ", target, ";"));
-                self.deferred.push_out((
-                    p,
-                    alloc::vec![String::from(target)],
-                    cat!(target, " = ", value, ";"),
-                ));
+                early.push_out(self.decl_line(target, cat!(kw, " ", target, ";")));
+                let assign = self.decl_line(target, cat!(target, " = ", value, ";"));
+                self.deferred
+                    .push_out((p, alloc::vec![String::from(target)], assign));
             } else if self.ctx.after_go(&sname) || made == Some(block) {
                 after.push_out(line);
             } else if has_factory_ref(&value) {
@@ -581,14 +606,14 @@ impl G<'_, '_> {
         self.block_index += 1;
         let mut lines = early;
         if !content.is_empty() {
-            lines.push_out(content);
+            lines.push_out(P::S(content));
         }
         lines.extend(late);
         // The part of the dump's callback that needs this block's code, before the
         // bindings that take what it makes and the code nested in the block (D2907).
         let go = self.ctx.go(block);
         if !go.is_empty() {
-            lines.push_out(go);
+            lines.push_out(P::S(go));
         }
         // What waited for this part (scaffolds and bindings of the blocks above).
         for (p, names, st) in core::mem::take(&mut self.deferred) {
@@ -599,7 +624,35 @@ impl G<'_, '_> {
             }
         }
         lines.extend(after);
-        Ok(P::S(join(&lines, "\n")))
+        let mut out = Vec::new();
+        for l in lines {
+            if !out.is_empty() {
+                out.push_out(s("\n"));
+            }
+            out.push_out(l);
+        }
+        Ok(P::L(out))
+    }
+
+    /// A line of binding `name`: prunable where the frame has one binding of the name
+    /// (origin tracking reads a binding K leaves out as one not yet initialized).
+    fn decl_line(&self, name: &str, line: String) -> P {
+        if self.unique(name) {
+            P::Decl(String::from(name), line)
+        } else {
+            P::S(line)
+        }
+    }
+
+    /// Whether the frame has one binding of `name` (none of `name@scope`).
+    fn unique(&self, name: &str) -> bool {
+        let prefix = cat!(name, "@");
+        name != "$djs_arguments"
+            && !self.act.slots.iter().any(|s| {
+                s.name
+                    .strip_prefix(prefix.as_str())
+                    .is_some_and(|r| !r.is_empty() && r.bytes().all(|b| b.is_ascii_digit()))
+            })
     }
 
     /// The bindings of the function body, statement `j` holding the site.
@@ -713,10 +766,17 @@ impl G<'_, '_> {
                             | NodeKind::ForAwait
                             | NodeKind::Switch
                     );
-                if decls.is_empty() && label.is_none() && listed {
-                    return Ok(P::L(alloc::vec![l, end]));
+                let names: Vec<String> = decls.iter().map(|d| d.0.clone()).collect();
+                let using = decls
+                    .iter()
+                    .any(|d| matches!(d.1, DeclKind::Using | DeclKind::AwaitUsing));
+                if label.is_none() && listed && !using {
+                    // (Braces only where something it declares is left, D2911.)
+                    let b = P::Scope(names, true, alloc::boxed::Box::new(l));
+                    return Ok(P::L(alloc::vec![b, end]));
                 }
-                Ok(P::L(alloc::vec![lbl(label), s("{\n"), l, s("\n}"), end]))
+                let b = P::Scope(names, false, alloc::boxed::Box::new(l));
+                Ok(P::L(alloc::vec![lbl(label), s("{\n"), b, s("\n}"), end]))
             }
             NodeKind::Expr => {
                 let e = self.expr(i + 1)?;
@@ -1182,19 +1242,13 @@ impl G<'_, '_> {
             Some(_) => cat!(ib, ", ", nb),
             None => ib.clone(),
         };
-        // (Braces only where the iteration declares something.)
-        let (open, close) = if decls.is_empty() {
-            ("", "\n")
-        } else {
-            ("{ ", "\n}\n")
-        };
+        // (Braces only where the iteration declares something live, D2911.)
+        let names = decls.iter().map(|d| d.0.clone()).collect();
+        let body = alloc::boxed::Box::new(P::L(alloc::vec![d, s("\n"), first]));
         Ok(P::L(alloc::vec![
             P::S(consts),
-            s(open),
-            d,
+            P::Scope(names, true, body),
             s("\n"),
-            first,
-            s(close),
             label.unwrap_or_else(|| s("")),
             rec,
             P::V(n.start, head.start),
@@ -2368,8 +2422,20 @@ impl Flat {
     fn walk(&mut self, p: &P, ftext: &str, scaf: &mut [(&'static str, u32, u32, String)]) {
         match p {
             // (No blank lines of K's own.)
-            P::S(t) if self.text.ends_with('\n') => self.text.push_str(t.trim_start_matches('\n')),
-            P::S(t) => self.text.push_str(t),
+            P::S(t) | P::Decl(_, t) if self.text.ends_with('\n') => {
+                self.text.push_str(t.trim_start_matches('\n'))
+            }
+            P::S(t) | P::Decl(_, t) => self.text.push_str(t),
+            P::Scope(names, braced, q) => {
+                let braces = *braced && !names.is_empty();
+                if braces {
+                    self.walk(&s("{\n"), ftext, scaf);
+                }
+                self.walk(q, ftext, scaf);
+                if braces {
+                    self.walk(&s("\n}\n"), ftext, scaf);
+                }
+            }
             P::V(a, b) => {
                 if b > a {
                     self.segs.push_out(self.text.len() as u32);
@@ -2391,6 +2457,99 @@ impl Flat {
                 }
             }
         }
+    }
+}
+
+/// `p` as text, without the lines of binding `skip` (for liveness, D2911).
+fn render(p: &P, ftext: &str, skip: &str, out: &mut String) {
+    match p {
+        P::S(t) => out.push_str(t),
+        P::Decl(n, t) => {
+            if n != skip {
+                out.push_str(t)
+            }
+        }
+        P::V(a, b) => out.push_str(ftext.get(*a as usize..*b as usize).unwrap_or("")),
+        P::Mark(_) | P::Helpers => {}
+        P::L(list) => {
+            for q in list {
+                render(q, ftext, skip, out);
+            }
+        }
+        P::Scope(_, _, q) => {
+            out.push(' ');
+            render(q, ftext, skip, out);
+            out.push(' ');
+        }
+    }
+}
+
+/// The bindings `p` declares itself (not in nested scopes).
+fn decl_names(p: &P, out: &mut Vec<String>) {
+    match p {
+        P::Decl(n, _) => {
+            if !out.contains(n) {
+                out.push_out(n.clone());
+            }
+        }
+        P::L(list) => {
+            for q in list {
+                decl_names(q, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Leaves out every line of binding `name` in `p`.
+fn drop_decls(p: &mut P, name: &str) {
+    match p {
+        P::Decl(n, _) if n == name => *p = s(""),
+        P::L(list) => {
+            for q in list {
+                drop_decls(q, name);
+            }
+        }
+        P::Scope(names, _, q) => {
+            names.retain(|n| n != name);
+            drop_decls(q, name);
+        }
+        _ => {}
+    }
+}
+
+/// Liveness (D2911): leaves out the frame bindings scope `p` declares (and the scopes in
+/// it) that nothing in the scope reads: their declarations, assignments and, in a scope
+/// whose names are all gone, its braces.
+fn prune(p: &mut P, ftext: &str) {
+    let mut names = Vec::new();
+    match &*p {
+        P::Scope(_, _, q) => decl_names(q, &mut names),
+        _ => decl_names(p, &mut names),
+    }
+    for n in names {
+        let mut text = String::new();
+        render(p, ftext, &n, &mut text);
+        if !has_ident(&text, &n) {
+            drop_decls(p, &n);
+        }
+    }
+    match p {
+        P::Scope(_, _, q) => prune_nested(q, ftext),
+        _ => prune_nested(p, ftext),
+    }
+}
+
+/// [`prune`] for the scopes in `p`.
+fn prune_nested(p: &mut P, ftext: &str) {
+    match p {
+        P::L(list) => {
+            for q in list {
+                prune_nested(q, ftext);
+            }
+        }
+        P::Scope(..) => prune(p, ftext),
+        _ => {}
     }
 }
 

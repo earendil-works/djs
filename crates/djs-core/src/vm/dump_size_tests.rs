@@ -294,7 +294,8 @@ f(1, 2);
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 1, "{ok}");
     let d = plain_dump_at(src, 1);
-    assert!(d.contains("async function (a, b, n, c) {"), "{d}");
+    // (`a` and `b` are dead after the site, D2911.)
+    assert!(d.contains("async function (n, c) {"), "{d}");
     assert!(
         d.contains("const k = 3;") && d.contains("const d = 4;"),
         "{d}"

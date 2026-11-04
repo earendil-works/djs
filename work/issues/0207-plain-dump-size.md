@@ -224,6 +224,11 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   bindings after their part or assigned after a deeper part, scaffold constants too.
   Corpus cases plain-fuzz/instance-before-callback.js, for-await-promise-all-chain.js.
 
+- C (D2911): liveness pruning in dump_cont (P::Decl lines, P::Scope blocks, `prune`);
+  dump_origin: a dead parameter reads as undefined on re-dump. v2 497,821 → 494,430,
+  sleep 1,377 → 1,339 (gzip 697). Data that only dead bindings reach is still written in
+  the first dump (flight renders all slots); a re-dump drops it.
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a

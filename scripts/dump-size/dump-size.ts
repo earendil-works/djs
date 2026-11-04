@@ -407,7 +407,9 @@ function envSpans(t: string, spans: Span[]): Span[] {
     if (!/^(fn|scope|globals|fixup|data|patch)/.test(c)) return [c, s, e];
     const lines = text.split("\n").map((l) => l.trim()).filter((l) => l.length >= 8);
     if (!lines.length) return [c, s, e];
-    const env = lines.filter((l) => ENV_LINES.has(l)).length;
+    // (The harness's synthetic results, a line of their own once a dump writes them in
+    // place: `let queue = [{ ok: true, value: … }];`.)
+    const env = lines.filter((l) => ENV_LINES.has(l) || /^let queue = \[\{ ok: (true|false), value: /.test(l)).length;
     return env * 2 >= lines.length ? [`env.${c.split(".")[0]}`, s, e] : [c, s, e];
   });
 }

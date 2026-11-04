@@ -338,8 +338,14 @@ impl Dumper<'_> {
                     let at = fs.iter().position(|y| y.name == x.name).unwrap_or(0);
                     if ks.len() != fs.len() {
                         if fs.len() == 1 && ks.is_empty() {
-                            // Declared later in K (in its TDZ) or never reached.
-                            Value::UNINITIALIZED
+                            // Declared later in K (in its TDZ) or never reached; or left
+                            // out of K as dead (D2911): a parameter, which has no TDZ,
+                            // is undefined then.
+                            if matches!(x.place, Place::Arg(_)) {
+                                Value::UNDEFINED
+                            } else {
+                                Value::UNINITIALIZED
+                            }
                         } else {
                             return Err(cat!(
                                 "a continuation of an earlier dump: its bindings `",

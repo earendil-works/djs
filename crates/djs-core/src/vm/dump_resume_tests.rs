@@ -1311,7 +1311,9 @@ fn plain_chain_program(name: &str, src: &str) -> (Vec<String>, usize, Vec<String
     for (k, &len) in sizes.iter().enumerate() {
         let fresh = plain_dump_at(src, k + 1).len();
         let own = len - runtime_bytes(&texts[k], &runtime);
-        if len.abs_diff(fresh) > 512 && own.abs_diff(fresh) > 512 {
+        // (A link may be smaller: a binding its continuation leaves out as dead, D2911,
+        // keeps no data in the next dump.)
+        if len > fresh + 512 && own > fresh + 512 {
             failed.push(alloc::format!(
                 "{name}: link {} is {len} bytes, a dump of the run there {fresh}",
                 k + 1

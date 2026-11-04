@@ -9585,6 +9585,21 @@ the callback. A for-of written as the placeholder scaffold, whose iterator the h
 read, refuses such an iterator, and an assignment that a deeper block's binding of the
 same name would capture is refused.
 
+## D2911: A continuation leaves out the frame's bindings nothing in it reads
+date: 2026-11-04 · by: pjs · issue: 0207
+(The issue's proposal C.) After K is generated, a binding of the frame that K declares
+(or takes as a parameter) and that nothing in its scope of K reads is left out, with its
+assignments; a block of K whose declarations are all gone loses its braces. "Reads" is a
+scan of K's text in the binding's scope for the name, so closures K's blocks make count,
+and a name used anywhere in the scope keeps the binding. Not left out: a binding whose
+name the frame has twice (`name@scope`, which origin tracking needs to match), K's
+`$djs_arguments`, `using` resources (their block is their disposal scope), K's own
+scaffold bindings, and everything when K's text names `eval` or `with`. On a re-dump,
+origin tracking reads a binding K left out as one not yet initialized, a parameter as
+undefined, so the next dump writes no data for it; a link of a chain may therefore be
+smaller than a dump of the run at that point. The size score's scanner counts the
+harness's synthetic results as environment also when the dump writes them in place.
+
 ## D2875: `yield*` in plain continuations: a `yield*` over a wrapper of the inner record
 date: 2026-11-05 · by: pjr · issue: 0203
 At a `yield*` site, `K` delegates again with `yield* $dump.Y(it, next, async, ...first)`.
