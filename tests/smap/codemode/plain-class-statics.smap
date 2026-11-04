@@ -1,0 +1,19 @@
+function <anonymous> @1..877
+  arg0 tools@0, arg1 console@0
+  loc0 <state>, loc1 log@0, loc2 P@0, loc4 <fields 0>, loc5 #c, loc6 Q@0, loc8 <fields 0>
+  node 0 Body @0..876: Params 6..22 Stmt 287..302 Stmt 303..540 Stmt 541..561 Stmt 562..602 Stmt 603..623 Stmt 624..671 Stmt 672..769 Stmt 770..790 Stmt 791..854 Stmt 855..873 | Param tools@0#0 Param console@0#0 Const log@0#1 Class P@0#2 Class Q@0#6
+  node 1 Expr @603..623: Operand 603..622
+  node 2 Await @603..622: Operand 609..622
+  node 3 Expr @770..790: Operand 770..789
+  node 4 Await @770..789: Operand 776..789
+  await#1 @603 (16:1) pc 151: -
+    path 0.5 1.0 2
+  await#2 @770 (19:1) pc 300: -
+    path 0.8 3.0 4
+function <anonymous> @500..539
+  loc0 <state>
+  node 0 Body @0..39: Params 18..20 Stmt 23..37
+  node 1 Expr @23..37: Operand 23..36
+  node 2 Yield @23..36: Operand 29..36
+  yield#1 @23 (12:26) pc 16: -
+    path 0.1 1.0 2

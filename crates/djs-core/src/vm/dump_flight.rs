@@ -1131,11 +1131,11 @@ impl Dumper<'_> {
     /// a Record `[iterator, next]` with %AsyncFromSyncIteratorPrototype%.
     /// The dump runtime's `fromSync` iterator counts as one (dump_flight_runtime.rs).
     pub(super) fn is_from_sync(&self, o: Obj) -> bool {
-        self.from_sync_parts(o).is_some()
+        self.async_from_sync_parts(o).is_some()
     }
 
     /// An async-from-sync iterator's sync iterator and `next`.
-    fn from_sync_parts(&self, o: Obj) -> Option<(Value, Value)> {
+    fn async_from_sync_parts(&self, o: Obj) -> Option<(Value, Value)> {
         let h = self.h;
         if h.object_class(o) == ObjectClass::Record
             && h.get_prototype_of(o).map(Value::object)
@@ -1155,7 +1155,7 @@ impl Dumper<'_> {
         self.nodes[n].state = State::Busy;
         let before = self.fns_read.get();
         let (it, next) = self
-            .from_sync_parts(o)
+            .async_from_sync_parts(o)
             .unwrap_or((Value::UNDEFINED, Value::UNDEFINED));
         let it = self.expr(it, None, None);
         let next = self.expr(next, None, None);

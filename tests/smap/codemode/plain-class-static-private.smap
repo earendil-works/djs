@@ -1,0 +1,8 @@
+function <anonymous> @1..371
+  arg0 tools@0, arg1 console@0
+  loc0 <state>, loc1 made@0, loc2 C@0, loc4 <fields 0>, loc5 #id
+  node 0 Body @0..370: Params 6..22 Stmt 226..239 Stmt 240..306 Stmt 307..327 Stmt 328..354 Stmt 355..367 | Param tools@0#0 Param console@0#0 Let made@0#1 Class C@0#2
+  node 1 Expr @307..327: Operand 307..326
+  node 2 Await @307..326: Operand 313..326
+  await#1 @307 (9:1) pc 80: -
+    path 0.3 1.0 2

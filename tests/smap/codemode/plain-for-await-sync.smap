@@ -1,0 +1,51 @@
+function <anonymous> @1..872
+  arg0 argument 0, arg1 argument 1
+  loc0 <state>, loc1 tools@0, loc2 console@0, loc3 out@0, loc4 x@331, loc10 gen@0, loc11 y@624, loc18 ret@0, loc19 z@791
+  node 0 Body @0..871: Params 6..22 Stmt 298..313 Stmt 314..443 FuncDecl 444..598 Stmt 599..699 FuncDecl 700..773 Stmt 774..815 Stmt 816..849 Stmt 850..868 | Param tools@0#0 Param console@0#0 Const out@0#1 Function gen@0#3 Function ret@0#5
+  node 1 ForAwait @314..443: Head 325..332 Iterable 336..381 Body 383..443 | Const x@331#0
+  node 2 Block @383..443: Stmt 387..399 Stmt 402..441
+  node 3 Expr @402..441: Operand 402..440
+  node 4 Call @402..440: Callee 402..410 Open 410..411 Arg 411..439
+  node 5 Await @411..439: Operand 417..439
+  node 6 Try @599..699: Block 603..650 CatchParam 658..659 CatchBody 661..699 | CatchParam e@657#1
+  node 7 Block @603..650: Stmt 607..648
+  node 8 ForAwait @607..648: Head 618..625 Iterable 629..634 Body 636..648 | Const y@624#0
+  node 9 ForAwait @774..815: Head 785..792 Iterable 796..801 Body 803..815 | Const z@791#0
+  for-await.close#1 @314 (5:1) pc 99: for-await.exception@314 (out: loc11 loc19)
+    path 0.2 1
+  for-await.next#1 @314 (5:1) pc 161: for-await.iterator@314 for-await.next@314 (out: loc11 loc19)
+    path 0.2 1
+  await#1 @411 (7:12) pc 151: for-await.iterator@314 for-await.next@314 call.callee@402 call.this@402 (out: loc11 loc19)
+    path 0.2 1.2 2.1 3.0 4.2 5
+  for-await.close#2 @607 (19:3) pc 208: for-await.exception@607 (out: loc4 loc19)
+    path 0.4 6.0 7.0 8
+  for-await.next#2 @607 (19:3) pc 241: for-await.iterator@607 for-await.next@607 (out: loc4 loc19)
+    path 0.4 6.0 7.0 8
+  for-await.close#3 @774 (27:1) pc 314: for-await.exception@774 (out: loc4 loc11)
+    path 0.6 9
+  for-await.next#3 @774 (27:1) pc 347: for-await.iterator@774 for-await.next@774 (out: loc4 loc11)
+    path 0.6 9
+function gen @445..599
+  loc0 <state>
+  node 0 Body @0..154: Params 13..15 Stmt 20..152
+  node 1 Try @20..152: Block 24..111 Finally 120..152
+  node 2 Block @24..111: Stmt 30..53 Stmt 58..94 Stmt 99..107
+  node 3 Expr @30..53: Operand 30..52
+  node 4 Yield @30..52: Operand 36..52
+  node 5 Expr @58..94: Operand 58..93
+  node 6 Yield @58..93: Operand 64..93
+  node 7 Expr @99..107: Operand 99..106
+  node 8 Yield @99..106: Operand 105..106
+  yield#1 @30 (11:5) pc 19: -
+    path 0.1 1.0 2.0 3.0 4
+  yield#2 @58 (12:5) pc 52: -
+    path 0.1 1.0 2.1 5.0 6
+  yield#3 @99 (13:5) pc 65: -
+    path 0.1 1.0 2.2 7.0 8
+function ret @701..774
+  loc0 <state>
+  node 0 Body @0..73: Params 13..15 Stmt 20..43 Stmt 46..71
+  node 1 Expr @20..43: Operand 20..42
+  node 2 Yield @20..42: Operand 26..42
+  yield#1 @20 (24:3) pc 19: -
+    path 0.1 1.0 2
