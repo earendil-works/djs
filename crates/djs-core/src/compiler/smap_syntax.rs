@@ -261,14 +261,19 @@ pub enum NodeKind {
     YieldStar,
     /// `Callee Open Arg*` (args `Arg` or `Spread`); `call.callee@`/`call.this@` name it
     /// by its start. `optional`: this call is `?.(`.
-    Call { optional: bool },
+    Call {
+        optional: bool,
+    },
     /// `new Callee Open? Arg*`; `new.callee@` names it by its start.
     New,
     /// `import(Arg Arg?)`.
     ImportCall,
     /// `Object Property`; `member.object@` names it by its start. `optional`: this
     /// member is `?.`.
-    Member { computed: bool, optional: bool },
+    Member {
+        computed: bool,
+        optional: bool,
+    },
     /// `Left Op Right`: binary operators (`binary.left@` by its start), `&&`/`||`/`??`,
     /// assignments (`assign.*@` by its start).
     Binary,

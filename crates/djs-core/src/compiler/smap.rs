@@ -66,9 +66,9 @@ impl SiteKind {
 }
 
 #[cfg(feature = "dump")]
-pub use maps::*;
-#[cfg(feature = "dump")]
 pub use super::smap_syntax::*;
+#[cfg(feature = "dump")]
+pub use maps::*;
 
 #[cfg(feature = "dump")]
 mod maps {
