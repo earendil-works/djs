@@ -9671,3 +9671,17 @@ difftest without `--plain-out`, else plain-node.mjs, which learns the djs side f
 `plain-xfail` file the difftest writes next to the transcript). Bad refusals go to
 tests/plain-refusals.txt instead, which already is a ratchet. A plain-xfail case still
 runs every other variant and its `.expected`.
+
+## D2885: Re-dumps inside K's own operators, templates, callees and assignments; helper classes in bodies
+date: 2026-11-05 · by: pjr · issue: 0207
+A continuation that stops again inside its own rewritten statement is now read back for
+more constructs. Where the original's operand sits in a construct of `K`'s own, `tmp`
+records name it: a binary operator's left operand, a template substitution's value, a
+call's callee and `this` whose key awaited. `k` records mark `K`'s own constructs whose
+temporaries origin tracking rebuilds: the operator after a saved left operand, an
+assignment's target, a compound assignment's operator. A class's inner name binding (the
+`C` its own methods use) is no variable of the factory, because the class's text makes it
+again. That kept such a class from a scope of its own, which neither format could write
+("a class in a nested scope of shared variables"). A class whose outer binding a waiting
+frame shares is declared by the continuation as that variable ("a cell without its
+variable").

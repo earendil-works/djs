@@ -73,6 +73,8 @@ pub(super) struct Var {
     pub tdz: bool,
     /// Its box's node.
     pub boxn: usize,
+    /// A class statement's binding (its line is the class).
+    pub class: bool,
 }
 
 /// A member of a scope's returned object.

@@ -169,6 +169,11 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   test plain_redumps_of_loops_finally_and_using. Classes C/D (class in a nested scope of
   shared variables, "a cell without its variable") are not done: a cause of their own (the
   class's inner name binding gets a scope of its own); format 2 refuses them too.
+- D2885: pjz's items 3, 4, 5 and batch 2 (binary left operands, operator chains,
+  template substitutions, awaited callee keys, assignments whose value awaits twice) and
+  the classes C/D (inner name binding no factory variable; a frame-shared class binding
+  declared by the continuation). Corpus cases codemode/redump-operands.js,
+  codemode/classes-in-body.js; test plain_redumps_inside_rewritten_statements.
 
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s

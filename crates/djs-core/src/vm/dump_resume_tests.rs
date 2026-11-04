@@ -2332,3 +2332,26 @@ main();
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 6, "{ok}");
 }
+
+/// Re-dumps of a continuation stopped again inside its own rewritten statement: a binary
+/// operator's left operand, a chain of them, a template's substitution, a callee whose key
+/// awaited, an assignment whose value awaits twice (D2885).
+#[test]
+fn plain_redumps_inside_rewritten_statements() {
+    let src = r#"
+async function t3() { const x = (await later(1)) + (await later(2)); const o = {}; o.a = (await later(3)) + (await later(4)); print(x, o.a, (await later(5)) + (await later(6))); }
+async function t4() { print(1 + (await later(1)) + (await later(2)) + (await later(3))); }
+async function t5() { print(`${await later("a")}-${await later("b")}`); }
+async function t8() { const fs = [(v) => "f" + v]; print(fs[await later(0)](await later(2))); }
+async function t9() { const f = async (v) => { let s = 0; for (const i of [1, 2]) s += await later(i); return s + v; }; const o = {}; o["k"] = await f(await later(1)); print(o.k); }
+async function main() { await t3(); await t4(); await t5(); await t8(); await t9(); }
+main();
+"#;
+    let (failed, refused, ok) = plain_check_program("rewritten", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, _, refused) = plain_chain_program("rewritten", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 10, "{ok}");
+}

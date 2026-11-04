@@ -2802,11 +2802,42 @@ impl<'a> Dumper<'a> {
             .closures
             .iter()
             .partition(|&&c| self.nodes[c].member.is_some());
-        let boxes = self.groups[g].boxes.clone();
         let box_value = |d: &Self, b: usize| -> Value {
             h.arena()
                 .get(d.nodes[b].v.as_internal().expect("a box"), BoxCell::VALUE)
         };
+        // A class's inner name binding (`class C { m() { return C; } }`), captured only by
+        // its own members: the class's text makes it again, so it is no variable of the
+        // factory (D2885).
+        let inner_name = |d: &Self, b: usize| -> bool {
+            let Some(c) = d.node_of(box_value(d, b)) else {
+                return false;
+            };
+            if !d.is_class_node(c) {
+                return false;
+            }
+            let name = d.nodes[b].path.rsplit('~').next().unwrap_or_default();
+            let src = d.fn_source(c).unwrap_or_default();
+            if class_head(&src).and_then(|h| h.0) != Some(name) {
+                return false;
+            }
+            let users: Vec<usize> = d.groups[g]
+                .closures
+                .iter()
+                .copied()
+                .filter(|&x| d.nodes[x].edges.contains(&b))
+                .collect();
+            !users.is_empty()
+                && users
+                    .iter()
+                    .all(|&x| x == c || d.nodes[x].member.as_ref().is_some_and(|m| m.class == c))
+        };
+        let boxes: Vec<usize> = self.groups[g]
+            .boxes
+            .clone()
+            .into_iter()
+            .filter(|&b| !inner_name(self, b))
+            .collect();
         // The boxes' variable names (their paths end in `~name`).
         let box_names: Vec<String> = boxes
             .iter()
@@ -3021,7 +3052,30 @@ impl<'a> Dumper<'a> {
                 }
             };
             self.class_locals.push_out((c, locals[j].clone()));
-            rec[0].other.push_out(line.clone());
+            match home[j] {
+                // A class whose binding a frame shares: the plain writer declares it as
+                // that variable (the continuation declares it), the class its value,
+                // before the others (D2885).
+                Some(bi) if self.nodes[boxes[bi]].frame_box => {
+                    let init = match line.strip_prefix(&cat!("let ", locals[j], " = ")) {
+                        Some(e) => String::from(e.strip_suffix(';').unwrap_or(e)),
+                        None => line.clone(),
+                    };
+                    let at = rec[0].vars.iter().take_while(|v| v.class).count();
+                    rec[0].vars.insert(
+                        at,
+                        plain::Var {
+                            name: locals[j].clone(),
+                            line: line.clone(),
+                            init: Some(init),
+                            tdz: false,
+                            boxn: boxes[bi],
+                            class: true,
+                        },
+                    );
+                }
+                _ => rec[0].other.push_out(line.clone()),
+            }
             // Only the first line is indented: the rest belongs to a function's text,
             // which must stay as it was.
             cat_to!(&mut text, "  ", line, '\n');
@@ -3064,6 +3118,7 @@ impl<'a> Dumper<'a> {
                         init: None,
                         tdz: true,
                         boxn: b,
+                        class: false,
                     });
                     continue;
                 }
@@ -3139,6 +3194,7 @@ impl<'a> Dumper<'a> {
                     line: line.clone(),
                     tdz: false,
                     boxn: b,
+                    class: false,
                 });
                 // Only the first line is indented: the rest belongs to a function's
                 // text, which must stay as it was.

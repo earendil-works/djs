@@ -1472,7 +1472,9 @@ impl G<'_, '_> {
                         }
                         Role::Subst if m == k => {
                             // (The substitution's value is the original's part.)
-                            out.push_out(self.ktemp(cat!("template.part@", p.start), "template.part"));
+                            out.push_out(
+                                self.ktemp(cat!("template.part@", p.start), "template.part"),
+                            );
                             out.push_out(self.expr(i + 1)?);
                             seen = true;
                         }
