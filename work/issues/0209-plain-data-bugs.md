@@ -100,6 +100,19 @@ and rebase often. Decision IDs D2950–D2959.
   the TypeScript (that also fixes `enum F {...}; await 1; F.B`, which failed before).
   Cases: ts/plain-parameter-properties.ts, a repl test.
 
+- Bug 3 (runtime-made objects, D2951): dump_flight_runtime.rs recognizes `fromSync`'s
+  iterator, `closeThrow`'s handler and a `fromSync` step in flight by their closures'
+  text (the runtime's, checked by a test) and captures. The iterator counts as an
+  async-from-sync iterator (`is_from_sync`, written `$djs.fromSync(it, next)`); the
+  closures become `Clo`s of the engine's kinds (`FROM_SYNC_UNWRAP`/`FROM_SYNC_CLOSE`);
+  the step's reaction gets the step's promise as its derived promise (the runtime's own
+  derived one is dropped) and no reject handler where the step passes rejections on.
+  Case codemode/plain-for-await-sync.js (10 links, djs and node, none holds runtime
+  code); a re-dump of such a loop is −1.7 KB.
+
 ## Follow-ups
+- dump_resume_tests.rs `plain_dump_chains_continue_like_the_run` still discounts lines
+  that copy the runtime's code (`runtime_bytes`); after D2951 the allowance should be
+  unneeded (left alone: 0205 is deleting/moving that file).
 
 ## Result

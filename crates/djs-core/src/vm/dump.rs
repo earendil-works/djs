@@ -1406,6 +1406,7 @@ impl<'a> Dumper<'a> {
         }
         self.nodes[n].privates = privates;
         match h.object_class(o) {
+            ObjectClass::Ordinary if self.visit_runtime_made(n, o) => {}
             ObjectClass::Ordinary => self.props(n, o, &|_, _| false),
             ObjectClass::Array => {
                 let len = h.array_length(o);
@@ -1420,6 +1421,7 @@ impl<'a> Dumper<'a> {
                     k == atoms::LENGTH || i.is_some_and(|i| i < dense)
                 });
             }
+            ObjectClass::Function if self.visit_runtime_made(n, o) => {}
             ObjectClass::Function => self.closure(n, o),
             ObjectClass::Map | ObjectClass::Set => {
                 let map = h.object_class(o) == ObjectClass::Map;
@@ -2250,7 +2252,9 @@ impl<'a> Dumper<'a> {
         let h = self.h;
         let fns: Vec<usize> = (0..self.nodes.len())
             .filter(|&n| {
+                // (A closure of the dump runtime written as a builtin's has `fl`.)
                 self.nodes[n].state == State::Done
+                    && self.nodes[n].fl == NO_FLIGHT
                     && self.nodes[n]
                         .v
                         .as_object()

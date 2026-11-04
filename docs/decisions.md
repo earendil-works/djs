@@ -9833,3 +9833,17 @@ the CLI's REPL does so, because its inputs are gone in another process. Only cod
 bodies are named this way: a function inside a script (pi's and the difftest's
 `async (tools, console) => …` in a Script) is still written from its text. The sleep
 example's dump loses its second copy of the script (2,321 → ~1.9 KB).
+## D2951: Objects the dump runtime made are written as its helper calls again
+date: 2026-11-05 · by: pjd · issue: 0209
+Removes D2903's cost. A run that loaded a plain dump holds objects `$djs.fromSync` and
+`$djs.closeThrow` made for a `for await` over a sync iterator: the iterator `{ next,
+return, throw }`, the handler, and a step in flight (a `then` on the awaited value whose
+handlers resolve the step's own promise). The exporter recognizes them by their closures'
+text, which is the runtime's (one table, dump_runtime.rs; a test checks the copies), and
+by their captured variables, and writes what they stand for as the engine's equivalents
+are written: `$djs.fromSync(it, next)`, `$djs.closeThrow(it)`, and the step's promise as
+`then.call(w, (v) => ({ value: v, done }), $djs.closeThrow(it) | undefined)` (the
+derived promise of the runtime's own `then` is dropped: nothing else holds it). A re-dump
+of such a loop is the size of the first dump again (−1.7 KB per link). A user function
+with the runtime's exact text and captures would be read the same way; that is the
+price of recognizing by text, and such a function would behave the same.

@@ -392,7 +392,7 @@ names can become imports later. The members:
 | `X(it)` | AsyncIteratorClose of a throw: a promise that always fulfills |
 | `O(r)` | the check that an iterator result is an object |
 | `fromSync(it, next)` | the async-from-sync iterator of a `for await` over a sync iterator |
-| `closeThrow(it)` | its handler that closes the sync iterator when a step's value rejects, and rethrows |
+| `closeThrow(it)` | its handler that closes the sync iterator when a step's value rejects, and rethrows (a re-dump writes the objects these two made as the calls again, D2951) |
 | `forIn(o, keys)` | a `for-in`'s key iterator over the keys left, skipping deleted ones |
 | `advance(it, n)` | steps an iterator `n` times, returns it |
 | `regexpIterator(re, s, flags)` | a `matchAll` iterator over `re` and `s` (`flags & 4`: done) |

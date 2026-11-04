@@ -33,6 +33,8 @@ use crate::interp::run::{builtin_closure_kind, promise, suspend};
 
 #[path = "dump_flight_helpers.rs"]
 mod helpers;
+#[path = "dump_flight_runtime.rs"]
+mod runtime;
 
 /// The resource Record of `using` declarations (builtins/disposable.ts `UsingCreate`):
 /// its slot count, and its slots by name (slot 2 is the resources, an Array of `[value,
@@ -115,6 +117,9 @@ pub(super) struct Flight<'a> {
     supers: Vec<(usize, Value)>,
     /// Plain dumps: the `using` records written, by their text (`Act::usings`).
     usings: Vec<plain::Using>,
+    /// Closures of the dump runtime written as the engine's builtin closures
+    /// (dump_flight_runtime.rs): their cell, the closure kind and its data.
+    runtime: Vec<(u32, usize, Value)>,
 }
 
 impl<'a> Flight<'a> {
@@ -132,6 +137,7 @@ impl<'a> Flight<'a> {
             sites: Vec::new(),
             supers: Vec::new(),
             usings: Vec::new(),
+            runtime: Vec::new(),
         }
     }
 
@@ -303,7 +309,23 @@ impl Dumper<'_> {
         if let Some(r) = h.object_slot(o, 2).as_internal() {
             for j in 0..h.value_array_len(r) / 3 {
                 let get = |k| h.value_array_get(r, 3 * j + k);
-                let (cap, f, rj) = (get(0), get(1), get(2));
+                let (mut cap, f, mut rj) = (get(0), get(1), get(2));
+                if let Some(step) = self.runtime_step(f, rj)
+                    && self.node_of(f).is_none()
+                    && self.node_of(rj).is_none()
+                {
+                    // A step of the dump runtime's `fromSync` in flight: the step's
+                    // promise, made by a `then` with the engine's handlers.
+                    cap = step.promise;
+                    let cell = |v: Value| v.as_object().map_or(u32::MAX, |o| o.offset());
+                    self.fl
+                        .runtime
+                        .push_out((cell(f), FROM_SYNC_UNWRAP, step.done));
+                    match step.close {
+                        Some(it) => self.fl.runtime.push_out((cell(rj), FROM_SYNC_CLOSE, it)),
+                        None => rj = Value::UNDEFINED,
+                    }
+                }
                 let p = cat!(path, "<reaction ", j, ">");
                 self.edge(n, cap, || cat!(p, ".promise"));
                 self.edge(n, f, || cat!(p, ".onFulfilled"));
@@ -750,6 +772,38 @@ impl Dumper<'_> {
         }
     }
 
+    /// An object the dump runtime made (dump_flight_runtime.rs), visited as what it
+    /// stands for; false for any other.
+    pub(super) fn visit_runtime_made(&mut self, n: usize, o: Obj) -> bool {
+        let h = self.h;
+        let path = self.nodes[n].path.clone();
+        if h.object_class(o) == ObjectClass::Function {
+            let v = Value::object(o);
+            let clo = match self.fl.runtime.iter().find(|r| r.0 == o.offset()) {
+                Some(&(_, kind, data)) => (kind, data),
+                None => match self.runtime_close_throw(v) {
+                    Some(it) => (FROM_SYNC_CLOSE, it),
+                    None => return false,
+                },
+            };
+            self.edge(n, clo.1, || cat!(path, "<data>"));
+            self.nodes[n].fl = self.fl.clos.len();
+            self.fl.clos.push_out(Clo {
+                node: n,
+                kind: clo.0,
+                data: clo.1,
+            });
+            return true;
+        }
+        let Some((it, next)) = self.runtime_from_sync(o) else {
+            return false;
+        };
+        self.edge(n, it, || cat!(path, "<iterator>"));
+        self.edge(n, next, || cat!(path, "<next>"));
+        self.nodes[n].fl = 0;
+        true
+    }
+
     pub(super) fn visit_builtin_closure(&mut self, n: usize, o: Obj) {
         let h = self.h;
         let path = self.nodes[n].path.clone();
@@ -819,7 +873,10 @@ impl Dumper<'_> {
     fn clo_of(&self, v: Value) -> Option<&Clo> {
         let n = self.node_of(v)?;
         let o = self.nodes[n].v.as_object()?;
-        (self.h.object_class(o) == ObjectClass::BuiltinClosure && self.nodes[n].fl != NO_FLIGHT)
+        // (A closure of the dump runtime may stand for one, dump_flight_runtime.rs.)
+        let class = self.h.object_class(o);
+        ((class == ObjectClass::BuiltinClosure || class == ObjectClass::Function)
+            && self.nodes[n].fl != NO_FLIGHT)
             .then(|| &self.fl.clos[self.nodes[n].fl])
     }
 
@@ -1053,12 +1110,14 @@ impl Dumper<'_> {
                 }
                 self.emit_act(i)
             }
-            ObjectClass::BuiltinClosure => self.closure_expr(i),
+            ObjectClass::BuiltinClosure | ObjectClass::Function => self.closure_expr(i),
             ObjectClass::ArrayIterator => self.iterator_expr(n, o),
             ObjectClass::CollectionIterator => self.collection_iterator_expr(n, o),
             ObjectClass::RegExpStringIterator => self.regexp_iterator_expr(n, o),
             ObjectClass::IteratorHelper => self.helper_expr(n, o),
-            ObjectClass::Record if self.is_from_sync(o) => self.async_from_sync_expr(n, o),
+            ObjectClass::Record | ObjectClass::Ordinary if self.is_from_sync(o) => {
+                self.async_from_sync_expr(n, o)
+            }
             ObjectClass::Record if self.nodes[n].using_record => self.using_expr(n, o),
             _ => {
                 let p = self.nodes[n].path.clone();
@@ -1070,11 +1129,21 @@ impl Dumper<'_> {
 
     /// The iterator a `for await` over a sync iterable makes (CreateAsyncFromSyncIterator):
     /// a Record `[iterator, next]` with %AsyncFromSyncIteratorPrototype%.
+    /// The dump runtime's `fromSync` iterator counts as one (dump_flight_runtime.rs).
     pub(super) fn is_from_sync(&self, o: Obj) -> bool {
+        self.from_sync_parts(o).is_some()
+    }
+
+    /// An async-from-sync iterator's sync iterator and `next`.
+    fn from_sync_parts(&self, o: Obj) -> Option<(Value, Value)> {
         let h = self.h;
-        h.object_class(o) == ObjectClass::Record
+        if h.object_class(o) == ObjectClass::Record
             && h.get_prototype_of(o).map(Value::object)
                 == Some(intrinsic(h, Intrinsic::AsyncFromSyncIteratorProto))
+        {
+            return Some((h.object_slot(o, 0), h.object_slot(o, 1)));
+        }
+        self.runtime_from_sync(o)
     }
 
     /// An async-from-sync iterator: the dump's own, `$dump.fromSync(it, next)`, which steps
@@ -1084,10 +1153,12 @@ impl Dumper<'_> {
             return self.nodes[n].loc.clone();
         }
         self.nodes[n].state = State::Busy;
-        let h = self.h;
         let before = self.fns_read.get();
-        let it = self.expr(h.object_slot(o, 0), None, None);
-        let next = self.expr(h.object_slot(o, 1), None, None);
+        let (it, next) = self
+            .from_sync_parts(o)
+            .unwrap_or((Value::UNDEFINED, Value::UNDEFINED));
+        let it = self.expr(it, None, None);
+        let next = self.expr(next, None, None);
         if it.is_empty() || next.is_empty() {
             let p = self.nodes[n].path.clone();
             self.refuse(p, "a for-await over an iterator on a reference cycle");
