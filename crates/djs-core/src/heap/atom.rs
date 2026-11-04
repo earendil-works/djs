@@ -862,6 +862,15 @@ impl Heap {
         }
     }
 
+    /// The string of a string atom; `None` for an array index or a symbol.
+    #[cfg(feature = "dump")]
+    pub fn atom_string_of(&self, a: Atom) -> Option<crate::value::Str> {
+        if a.is_int() || a.is_null() || a.is_symbol() {
+            return None;
+        }
+        self.atom_entry(a).as_string()
+    }
+
     /// The symbol of a symbol atom.
     pub fn atom_symbol(&self, a: Atom) -> Option<Sym> {
         if a.is_symbol() {

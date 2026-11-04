@@ -294,7 +294,7 @@ impl Dumper<'_> {
             Some(i) => i,
             None => {
                 let a = h.arena();
-                let text = |r: Ref| r.get().map(|s| h.str_to_string(crate::value::Str(s)));
+                let text = |r: Ref| r.get().map(|s| super::text_of(h, crate::value::Str(s)));
                 let src = text(a.get::<Ref>(script, Script::SOURCE));
                 let params = text(a.get::<Ref>(script, Script::PARAMS)).unwrap_or_default();
                 let bits = a.get::<u32>(script, Script::OPTIONS);
@@ -1519,7 +1519,7 @@ impl Dumper<'_> {
         let get = |o: Obj, k: &str| {
             h.own_keys(o)
                 .into_iter()
-                .find(|a| h.atom_name(*a) == k)
+                .find(|a| super::atom_text(h, *a) == k)
                 .and_then(|a| h.get_own_property(o, a))
                 .and_then(|p| p.value())
         };
@@ -1534,7 +1534,7 @@ impl Dumper<'_> {
                     return "undefined".into();
                 };
                 let status = get(o, "status").and_then(|s| s.as_string());
-                let fulfilled = status.is_some_and(|s| h.str_to_string(s) == "fulfilled");
+                let fulfilled = status.is_some_and(|s| super::text_of(h, s) == "fulfilled");
                 if fulfilled {
                     let x = get(o, "value").unwrap_or(Value::UNDEFINED);
                     self.expr(x, None, None)
@@ -1801,7 +1801,7 @@ impl Dumper<'_> {
         let t = h.closure_template(f);
         let info = template::debug_info(h, t);
         let a = h.arena();
-        let text = |r: Ref| r.get().map(|s| h.str_to_string(crate::value::Str(s)));
+        let text = |r: Ref| r.get().map(|s| super::text_of(h, crate::value::Str(s)));
         let script = info.script.get();
         let src = script
             .and_then(|s| text(a.get::<Ref>(s, Script::SOURCE)))
@@ -1813,7 +1813,7 @@ impl Dumper<'_> {
         let function = if atom.is_null() {
             String::new()
         } else {
-            h.atom_name(atom)
+            super::atom_text(h, atom)
         };
         let at = (info.src_start + site.pos) as usize;
         let start = src

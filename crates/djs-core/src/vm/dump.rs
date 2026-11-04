@@ -735,7 +735,7 @@ impl<'a> Dumper<'a> {
             d.base_globals = base
                 .own_keys(bg)
                 .into_iter()
-                .map(|k| base.atom_name(k))
+                .map(|k| atom_text(&base, k))
                 .collect();
         }
         d.read_globals(&base);
@@ -785,7 +785,7 @@ impl<'a> Dumper<'a> {
             if h.atom_symbol(k).is_some() {
                 continue;
             }
-            let name = h.atom_name(k);
+            let name = atom_text(h, k);
             let Some(p) = h.get_own_property(g, k) else {
                 continue;
             };
@@ -808,7 +808,7 @@ impl<'a> Dumper<'a> {
     }
 
     fn global_binding(&mut self, k: Atom, value: Value, decl: Decl) {
-        let name = self.h.atom_name(k);
+        let name = atom_text(self.h, k);
         // A host name on the global object is the host's; a lexical binding of that
         // name is the script's own and hides the host's property, so it is dumped.
         if decl == Decl::Var && self.host_names.contains(&name.as_str()) {
@@ -833,7 +833,7 @@ impl<'a> Dumper<'a> {
             && v.is_some()
             && h.own_keys(g)
                 .into_iter()
-                .find(|&k| h.atom_symbol(k).is_none() && h.atom_name(k) == name)
+                .find(|&k| h.atom_symbol(k).is_none() && atom_text(h, k) == name)
                 .and_then(|k| h.get_own_property(g, k))
                 .and_then(|p| p.value())
                 == v
@@ -855,7 +855,7 @@ impl<'a> Dumper<'a> {
                 continue;
             }
             if let Some(Property::Data { value, .. }) = self.h.get_own_property(o, k) {
-                let e = cat!(expr, member(&self.h.atom_name(k)));
+                let e = cat!(expr, member(&atom_text(self.h, k)));
                 self.host_values(value, e, depth + 1);
             }
         }
@@ -1097,12 +1097,12 @@ impl<'a> Dumper<'a> {
                     let d = h.symbol_description(s).as_string();
                     cat!(
                         "[Symbol(",
-                        d.map(|d| h.str_to_string(d)).unwrap_or_default(),
+                        d.map(|d| text_of(h, d)).unwrap_or_default(),
                         ")]"
                     )
                 }
             },
-            None => member(&h.atom_name(k)),
+            None => member(&atom_text(h, k)),
         }
     }
 
@@ -1110,7 +1110,7 @@ impl<'a> Dumper<'a> {
     fn key_member(&mut self, k: Atom) -> String {
         match self.h.atom_symbol(k) {
             Some(s) => cat!("[", self.expr(Value::symbol(s), None, None), "]"),
-            None => member(&self.h.atom_name(k)),
+            None => member(&atom_text(self.h, k)),
         }
     }
 
@@ -1235,7 +1235,7 @@ impl<'a> Dumper<'a> {
             if let Property::Data { value, .. } = p
                 && !self.is_brand(*k)
             {
-                let path = cat!(path, ".", h.atom_name(*k));
+                let path = cat!(path, ".", atom_text(h, *k));
                 self.edge(n, *value, || path);
             }
         }
@@ -1494,7 +1494,7 @@ impl<'a> Dumper<'a> {
                     .get::<Ref>(s, crate::heap::cells::Script::SOURCE)
                     .get()
             })
-            .map(|s| h.str_to_string(crate::value::Str(s)))
+            .map(|s| text_of(h, crate::value::Str(s)))
         else {
             return;
         };
@@ -1682,7 +1682,7 @@ impl<'a> Dumper<'a> {
                     Some(p) if p.3 => "a private name the class has twice (a nested class's)",
                     Some(_) => continue,
                 };
-                let path = cat!(self.nodes[n].path, ".", h.atom_name(k));
+                let path = cat!(self.nodes[n].path, ".", atom_text(h, k));
                 self.refuse(path, why);
             }
         }
@@ -2156,7 +2156,7 @@ impl<'a> Dumper<'a> {
     fn key_expr(&mut self, k: Atom) -> String {
         match self.h.atom_symbol(k) {
             Some(s) => self.expr(Value::symbol(s), None, None),
-            None => quote(&self.h.atom_name(k)),
+            None => quote(&atom_text(self.h, k)),
         }
     }
 
@@ -2166,7 +2166,7 @@ impl<'a> Dumper<'a> {
         match h.atom_symbol(k) {
             Some(s) => cat!("[", self.expr(Value::symbol(s), None, None), "]"),
             None => {
-                let name = h.atom_name(k);
+                let name = atom_text(h, k);
                 if name == "__proto__" {
                     cat!("[", quote(&name), "]")
                 } else if is_ident(&name) || h.atom_array_index(k).is_some() {
@@ -2441,7 +2441,7 @@ impl<'a> Dumper<'a> {
                             d.state == State::Done
                                 || (d.refs == 1
                                     && !d.cyclic
-                                    && self.simple(c, Some(&h.atom_name(k))))
+                                    && self.simple(c, Some(&atom_text(h, k))))
                         })
                 }) && h
                     .get_prototype_of(o)
@@ -2478,7 +2478,7 @@ impl<'a> Dumper<'a> {
             .and_then(|k| h.get_own_property(o, k))
             .and_then(|p| p.value())
             .and_then(|v| v.as_string())
-            .map(|s| h.str_to_string(s))
+            .map(|s| text_of(h, s))
             .unwrap_or_default()
     }
 
@@ -3055,9 +3055,9 @@ impl<'a> Dumper<'a> {
         };
         if let Some(Property::Data { value, .. }) = h.get_own_property(o, atoms::NAME)
             && let Some(s) = value.as_string()
-            && h.str_to_string(s) != given
+            && text_of(h, s) != given
         {
-            let q = quote(&h.str_to_string(s));
+            let q = quote(&text_of(h, s));
             self.patches.push_out(cat!(
                 "Object.defineProperty(",
                 loc,
@@ -3287,7 +3287,7 @@ impl<'a> Dumper<'a> {
         let reg = intrinsic(h, Intrinsic::SymbolRegistry).as_object()?;
         for k in h.own_keys(reg) {
             if h.get_own_property(reg, k).and_then(|p| p.value()) == Some(s) {
-                return Some(quote(&h.atom_name(k)));
+                return Some(quote(&atom_text(h, k)));
             }
         }
         None
@@ -3338,10 +3338,7 @@ impl<'a> Dumper<'a> {
                         f.push_out(c as char);
                     }
                 }
-                let s = src
-                    .as_string()
-                    .map(|s| h.str_to_string(s))
-                    .unwrap_or_default();
+                let s = src.as_string().map(|s| text_of(h, s)).unwrap_or_default();
                 if !s.is_empty() && !s.contains(['/', '\n', '\r']) {
                     cat!("/", s, "/", f)
                 } else {
@@ -3737,7 +3734,7 @@ impl<'a> Dumper<'a> {
                     // The name an anonymous function gets from the key; only functions
                     // need it.
                     let name = if cell_of(value).is_some() {
-                        h.atom_name(k)
+                        atom_text(h, k)
                     } else {
                         String::new()
                     };
@@ -3796,7 +3793,7 @@ impl<'a> Dumper<'a> {
                     setter,
                     flags,
                 }) => {
-                    let name = h.atom_name(k);
+                    let name = atom_text(h, k);
                     let g = self
                         .node_of(getter)
                         .filter(|&c| self.inline_method(c, &name, func_flags::KIND_GETTER, o));
@@ -3904,7 +3901,7 @@ fn same_property(h: &Heap, p: &Property, base: &Heap, bp: &Property) -> bool {
     let same = |a: Value, b: Value| {
         a.to_bits() == b.to_bits()
             || match (a.as_string(), b.as_string()) {
-                (Some(x), Some(y)) => h.str_to_string(x) == base.str_to_string(y),
+                (Some(x), Some(y)) => text_of(h, x) == text_of(base, y),
                 _ => false,
             }
     };
@@ -4015,7 +4012,7 @@ fn free_names(h: &Heap, t: u32) -> FreeNames {
                 insn.info().name,
                 "get_global" | "get_global_typeof" | "put_global"
             ) {
-                let g = h.atom_name(insn.atom(0));
+                let g = atom_text(h, insn.atom(0));
                 if !globals.contains(&g) {
                     globals.push_out(g);
                 }
@@ -4050,10 +4047,32 @@ pub(super) fn template_names(h: &Heap, t: u32) -> Vec<String> {
         Some(n) => {
             let len: u32 = a.get(n, U32Array::LEN);
             (0..len)
-                .map(|i| h.atom_name(Atom::from_id(a.read::<u32>(U32Array::DATA.at(n, i)))))
+                .map(|i| atom_text(h, Atom::from_id(a.read::<u32>(U32Array::DATA.at(n, i)))))
                 .collect()
         }
         None => Vec::new(),
+    }
+}
+
+/// The text of heap string `s`: [`Heap::str_to_string`], with ASCII in one piece copied
+/// as is (0198: dumps convert scripts and names; core's conversion decodes unit by unit,
+/// and a fast path there would cost the shipped modules' size budget).
+pub(super) fn text_of(h: &Heap, s: crate::value::Str) -> String {
+    // (Latin-1 above 0x7F is not UTF-8 of the same characters: ASCII only.)
+    if let Some(crate::heap::StrView::Latin1(b)) = h.str_view(s)
+        && b.is_ascii()
+        && let Ok(t) = core::str::from_utf8(b)
+    {
+        return String::from(t);
+    }
+    h.str_to_string(s)
+}
+
+/// [`Heap::atom_name`] through [`text_of`].
+pub(super) fn atom_text(h: &Heap, a: Atom) -> String {
+    match h.atom_string_of(a) {
+        Some(s) => text_of(h, s),
+        None => h.atom_name(a),
     }
 }
 
@@ -4092,7 +4111,7 @@ impl Sources {
             Some(i) => i as usize,
             None => {
                 let mut texts = self.texts.borrow_mut();
-                texts.push_out(h.str_to_string(crate::value::Str(source)));
+                texts.push_out(text_of(h, crate::value::Str(source)));
                 self.index
                     .borrow_mut()
                     .insert(key(source), texts.len() as u32 - 1);
@@ -4107,7 +4126,7 @@ impl Sources {
                 let params: Ref = a.get(script, crate::heap::cells::Script::PARAMS);
                 let params = params
                     .get()
-                    .map(|p| h.str_to_string(crate::value::Str(p)))
+                    .map(|p| text_of(h, crate::value::Str(p)))
                     .unwrap_or_default();
                 Some(cat!(
                     "async function (",
