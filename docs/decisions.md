@@ -9228,7 +9228,9 @@ the next 40 lines), removes the `incremental/` directories of the job's target d
 nested target directory; nothing else builds there meanwhile), keeps the failed log as
 `<leg>.log.corrupt`, prints what it did and runs the job once more; a second failure is
 reported as usual, and nothing is retried once another job failed. Preferred over
-`CARGO_INCREMENTAL=0` for the gate's builds: every Rust change rebuilds djs-core in about
-nine configurations, where incremental compilation is what keeps a gate at a minute or
-two, while the corruption is rare and costs one non-incremental rebuild of that target
-directory when it happens.
+`CARGO_INCREMENTAL=0` for the gate's builds, not measured again: every Rust change
+rebuilds djs-core in about nine configurations, and 0047 measured a gate's rustc wall time
+at 76 s from scratch (djs-core 49 s) against 20-34 s incremental; without incremental
+caches every djs-core edit would pay close to the from-scratch djs-core time in each
+configuration, while the corruption is rare (twice) and costs one such rebuild of one
+target directory when it happens.
