@@ -167,6 +167,10 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   modules grow by 5/13 bytes), wasm `vm_set_dump_source_refs`, sleep example in node.
   pi and the difftest are unaffected: their codemode function is an arrow in a Script, not
   a body. Sleep example dump 2,104 → 1,730 B.
+- 0211 items 3 (a suspended async method of a body class: its continuation goes where the
+  class's member was placed) and 4 (template substitutions before the site get `k`
+  records; dump_cont.rs, agreed). Corpus cases class-method-suspended, redump-template.
+  Merged with D2882 (7496c0e8).
 - D2884: pjz's re-dump items 6 (functions/generators declared in loop bodies), 7 (`await
   using` disposal after copied text), G (await in `finally` in a loop on a chain), H
   (disposal block with a function sharing a `let`); continuation in an unmerged factory
