@@ -3030,7 +3030,24 @@ impl<'a> Dumper<'a> {
                     }
                     _ => {
                         let e = self.expr(inner, None, Some(name));
-                        if e == *name {
+                        // The value named by a global (`done`) that a variable of the
+                        // factory shadows: read before the factory.
+                        // (Not a function's text: what it names is its own business,
+                        // which the checker sees to.)
+                        let shadowed = e != *name
+                            && !e.contains("=>")
+                            && !e.contains("function")
+                            && !e.contains("class")
+                            && plain::refs(&e)
+                                .names
+                                .iter()
+                                .any(|n| box_names.iter().any(|b| b == n));
+                        if shadowed {
+                            let v = self.fresh("v");
+                            self.out.push_out(cat!(v, " = ", e, ";"));
+                            self.skeleton.push_out(Some(String::new()));
+                            cat!("let ", name, " = ", v, ";")
+                        } else if e == *name {
                             if !self.nodes[b].frame_box {
                                 // A captured `tools` that holds the host's `tools`: the
                                 // closures read the global (`let tools = tools;` would be

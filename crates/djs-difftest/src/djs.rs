@@ -392,7 +392,7 @@ impl Session {
         }
         self.links += 1;
         let api = self.vm.heap().get_handle(self.api.ok_or("no api")?);
-        let handles = [("api", api)];
+        let handles = [("run", api)];
         let text = self
             .vm
             .dump(

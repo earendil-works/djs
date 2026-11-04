@@ -34,7 +34,7 @@ pub(super) struct Ir {
     pub lines: Vec<(usize, Rec)>,
     /// `Math.random`'s state.
     pub seed: (i32, i32),
-    /// The handles (at most one is written).
+    /// The handles, in the host's order: name, expression.
     pub handles: Vec<(String, String)>,
 }
 
@@ -328,7 +328,7 @@ enum Pl {
 }
 
 /// What is written at a place.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Put {
     Prop(Sc, usize),
     Sub(Sc),
@@ -498,9 +498,6 @@ pub(super) fn write(
     ts: bool,
     write_k: &dyn Fn(&Act, &mut dyn Ctx) -> Result<KText, String>,
 ) -> R<String> {
-    if ir.handles.len() > 1 {
-        return refuse("a plain dump holds one handle");
-    }
     let mut w = W {
         ir,
         items: Vec::new(),
@@ -571,7 +568,32 @@ pub(super) fn write(
             return Err(t);
         }
     };
-    w.emit(&plan, ts)
+    let mut t = w.emit(&plan, ts)?;
+    // DEBUG(0201)
+    t.push_str("/*\n");
+    for f in &ir.factories {
+        t.push_str(&alloc::format!("factory {}\n", f.name));
+        for (k, s) in f.scopes.iter().enumerate() {
+            let vars: Vec<&str> = s.vars.iter().map(|v| v.name.as_str()).collect();
+            let props: Vec<&str> = s.props.iter().map(|v| v.key.as_str()).collect();
+            t.push_str(&alloc::format!(
+                "  scope {k} parent {} vars {vars:?} props {props:?} other {}\n",
+                s.parent as isize,
+                s.other.len()
+            ));
+        }
+    }
+    for a in &ir.acts {
+        t.push_str(&alloc::format!("act {}\n", a.name));
+    }
+    t.push_str(&alloc::format!(
+        "merged {:?}\nplaced {:?}\nact_place {:?}\ngroup_place {:?}\n*/\n",
+        w.merged,
+        w.placed,
+        w.act_place,
+        w.group_place
+    ));
+    Ok(t)
 }
 
 impl W<'_> {
@@ -949,7 +971,9 @@ impl W<'_> {
                 let Some((vs, v)) = self.box_var(b) else {
                     continue;
                 };
-                if !chain.contains(&vs) || vs == sc {
+                // (The group's own live variables count: its block goes where their
+                // frame declares them.)
+                if !chain.contains(&vs) || vs == sc && self.dead(vs, v) {
                     continue;
                 }
                 match self.vblock[vs.0][vs.1][v] {
@@ -1252,7 +1276,7 @@ impl W<'_> {
     }
 
     /// What a factory's text evaluates when it runs: its class statements and the
-    /// values of its variables that are not functions.
+    /// values of its variables and members that are not functions.
     fn scope_eager(&self, sc: Sc, out: &mut String) {
         for (k, s) in self.ir.factories[sc.0].scopes.iter().enumerate() {
             if k != sc.1 && s.parent == sc.1 && !self.is_merged((sc.0, k)) {
@@ -1269,6 +1293,17 @@ impl W<'_> {
                 && !is_fn_text(init)
             {
                 cat_to!(out, init, "\n");
+            }
+        }
+        for p in &s.props {
+            // `key: expr` (not `key`, a method or a function).
+            if let Some(e) = p
+                .text
+                .strip_prefix(p.key.as_str())
+                .and_then(|t| t.strip_prefix(": "))
+                && !is_fn_text(e)
+            {
+                cat_to!(out, e, "\n");
             }
         }
     }
@@ -1420,18 +1455,21 @@ impl W<'_> {
                     if self.is_merged((f, 0)) {
                         (Vec::new(), Vec::new(), Vec::new())
                     } else {
-                        let mut text = String::new();
-                        self.scope_text((f, 0), &mut text);
-                        let mut k = self.keys_in(&text, false);
                         let mut eager = String::new();
                         self.scope_eager((f, 0), &mut eager);
-                        for g in self.keys_of(&eager) {
-                            if !k.contains(&g) {
-                                k.push_out(g);
-                            }
-                        }
+                        let k = self.keys_of(&eager);
                         (self.dep_items(&k, i, &providers)?, Vec::new(), Vec::new())
                     }
+                }
+                IK::Def(_)
+                    if self.items[i]
+                        .text
+                        .split_once(" = ")
+                        .is_some_and(|(_, rhs)| is_fn_text(rhs)) =>
+                {
+                    // A function's text: what it names is read when it runs. (A
+                    // continuation of an earlier dump names that dump's `$dump`.)
+                    (Vec::new(), Vec::new(), Vec::new())
                 }
                 _ => {
                     let k = self.keys_of(&self.items[i].text.clone());
@@ -1840,11 +1878,20 @@ impl W<'_> {
         for l in &body {
             cat_to!(&mut s, l, "\n");
         }
-        let handle = ir.handles.first().map_or("undefined", |h| h.1.as_str());
+        // The completion value: nothing, the one handle named "run" (what Sandbox, pi
+        // and the CLI resume), else every handle by name (D2863).
+        let handle = match &ir.handles[..] {
+            [] => String::from("undefined"),
+            [(name, e)] if name == "run" => e.clone(),
+            hs => {
+                let fields: Vec<String> = hs.iter().map(|(n, e)| cat!(quote(n), ": ", e)).collect();
+                cat!("{ __proto__: null, ", join(&fields, ", "), " }")
+            }
+        };
         cat_to!(
             &mut s,
             "try { (",
-            handle,
+            handle.as_str(),
             // The host's hooks go with the helpers: the Script's end is the moment
             // the load is over, and hosts need no delete of their own (D2862).
             "); } finally { delete globalThis.$dump; delete globalThis.$djs; }\n"
