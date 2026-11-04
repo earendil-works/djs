@@ -21,10 +21,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0202 | Origin tracking (step 3) | 0201 (agent pjx) |
 | 0203 | Plain encodings for remaining refusals (step 4) | 0202 (agent pjx) |
 | 0205 | Retire format 2 (step 6) | 0203, 0204 |
-| - | Gate: rustc incremental corruption in .worktrees/gate (linker Undefined _anon.*.llvm.*): auto-clear incremental dirs and retry once, or CARGO_INCREMENTAL=0 for gate builds (measure) | - |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
-| - | djs-wasm base_equals_a_compiled_realm fails (--features compiled-prelude, no gate leg) | - |
-| - | CLI/REPL dumps write no host-call states | - |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
 | - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |
 | - | Vec push_out/with_capacity in bloat's files (~1 KB); scratch buffers for Vec drops (few KB) | 0151 L3 |
@@ -91,6 +88,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
 | 0190-0196 | SM migration: slot names (D2730), named slots (D2731), construct temporaries + iter_next_loc (D2732), finally completions (D2733), roles deleted (D2734), one compile per load (D2735) | 9cc8741b (agent sm) |
 | 0198 | Dump performance: corpus dump p50 1.42 -> 0.43 ms wasm, totals 3,243 -> 610 ms; data cases 2-6x (D2800-D2802) | 429184db (agent dumpperf) |
+| - | base_equals_a_compiled_realm test fixed (8f0fdd72); gate recovers from incremental corruption (D2896, b55180dd); CLI/REPL call states (D2894) | agent pjh |
 | 0206 | Site records: pattern nodes (D2852), transparent TS (D2853), Decl.at, ctor params | 10eac128 (agent pjc; 1,063/1,063 complete paths) |
 | 0200 | Compiler site-structure records for plain dumps (D2850, D2851) | 0cd63ec1 (agent pjc; 1,062/1,063 sites with complete paths) |
 | 0199 | Plain-JS dumps prototype: continuations with origin tracking; 1,161/1,161 harvested identical in djs and node; bounded re-dumps; recommends switching (D2830-D2833 proposed) | cdd46c56 (agent plainjs) |

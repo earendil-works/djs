@@ -629,3 +629,4 @@ topics when the index is next reorganized.
 - D2852: Destructuring patterns are site-syntax nodes
 - D2853: TypeScript expressions are transparent on site paths
 - D2895: Several handles in a plain dump: a null-prototype object as the completion value
+- D2896: The gate clears a corrupt incremental cache and runs the job once more
