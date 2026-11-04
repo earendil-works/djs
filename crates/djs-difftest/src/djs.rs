@@ -488,7 +488,7 @@ impl Session {
             .compile(
                 text.as_bytes(),
                 &CompileOptions {
-                    typescript: text.starts_with("\"djs-dump 3 typescript\""),
+                    typescript: text.starts_with("\"djs-dump typescript\""),
                     ..CompileOptions::script("dump.js")
                 },
             )

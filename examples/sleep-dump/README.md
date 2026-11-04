@@ -113,7 +113,7 @@ are the dump, which the host prints as it writes it (explained [below](#the-dump
 ```
   [vm] first sleeps 5000 ms
 host: suspended the run into examples/sleep-dump/out/sleep.dump.js (2666 bytes):
-  | "djs-dump 3";
+  | "djs-dump";
   | "use strict";
   | $djs.seed(-350684953, 2010418043, 3);
   | globalThis.$dump = { R: Reflect.apply,
@@ -177,7 +177,7 @@ host's functions as plain globals (`resumeInNode` in [sleep-dump.ts](sleep-dump.
 --- node sleep-dump.ts start (process 1)
   [vm] first sleeps 5000 ms
 host: suspended the run into examples/sleep-dump/out/sleep.dump.js (2666 bytes):
-  | "djs-dump 3";
+  | "djs-dump";
   | ... (the same dump as above)
 --- node sleep-dump.ts node (process 2, no djs)
 second sleeps 5000 ms
@@ -223,7 +223,7 @@ scaffolding (`$djs_*`):
 
 ```
 $ cargo run -q -p djs-cli -- resume --explain examples/sleep-dump/out/sleep.dump.js
-examples/sleep-dump/out/sleep.dump.js: format 3; 1 open call, 2 suspended activations; handles: run
+examples/sleep-dump/out/sleep.dump.js: format plain; 1 open call, 2 suspended activations; handles: run
 #2 tools.sleep(5000), state {"due":1793814489133}
   async function <anonymous> at examples/sleep-dump/out/sleep.dump.js:17:12
       const r = (await $dump.p1);

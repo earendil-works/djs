@@ -149,7 +149,7 @@ for (const c of walk(dir).sort()) {
       bad++;
       console.log(`${path.relative(dir, c)} link ${k}: a continuation of a continuation`);
     }
-    if (text.startsWith('"djs-dump 3 typescript"')) continue;
+    if (text.startsWith('"djs-dump typescript"')) continue;
     links++;
     const pre = fs.readFileSync(path.join(c, `${k}.pre`), "utf8");
     const now = fs.existsSync(path.join(c, "now")) ? Number(fs.readFileSync(path.join(c, "now"), "utf8")) : Date.now();

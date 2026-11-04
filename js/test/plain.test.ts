@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { type AsyncHostFunction, type HostCall, loadModule, plainDump, Sandbox, SandboxError } from "../src/sandbox.ts";
 
 /** `main` stopped at its first await of `job(1)`, call 4 with state {n: 1}. */
-const DUMP = `"djs-dump 3";
+const DUMP = `"djs-dump";
 $djs.seed(5, 7);
 globalThis.$dump = {};
 try {
@@ -43,7 +43,7 @@ function host() {
 
 test("plainDump reads the header", () => {
   assert.deepEqual(plainDump(DUMP), { typescript: false });
-  assert.deepEqual(plainDump(`"djs-dump 3 typescript";\n`), { typescript: true });
+  assert.deepEqual(plainDump(`"djs-dump typescript";\n`), { typescript: true });
   assert.equal(plainDump(`"djs-dump 2";\n`), undefined);
 });
 
@@ -67,7 +67,7 @@ test("Sandbox.resume continues a plain dump through the hooks", async () => {
   assert.match(line, /^100 20 undefined 0\.\d+$/);
   // Math.random continues from the dumped state: a VM given that state draws the same.
   const sb = new Sandbox({ module });
-  sb.load(`"djs-dump 3";\n$djs.seed(5, 7);\nglobalThis.r = Math.random();\ndelete globalThis.$djs;\n`);
+  sb.load(`"djs-dump";\n$djs.seed(5, 7);\nglobalThis.r = Math.random();\ndelete globalThis.$djs;\n`);
   assert.equal(String(sb.run(`return r`)), line.split(" ")[3]);
   task.sandbox.dispose();
   sb.dispose();
@@ -77,7 +77,7 @@ test("seed sets Math.random's state whatever the sandbox's seed", async () => {
   const module = await loadModule();
   const draws = [1, 2].map((randomSeed) => {
     const sb = new Sandbox({ module, randomSeed });
-    sb.load(`"djs-dump 3";\n$djs.seed(5, 7);\nglobalThis.r = Math.random();\ndelete globalThis.$djs;\n`);
+    sb.load(`"djs-dump";\n$djs.seed(5, 7);\nglobalThis.r = Math.random();\ndelete globalThis.$djs;\n`);
     const r = sb.run(`return [r, typeof $djs]`);
     sb.dispose();
     return r;
@@ -123,10 +123,10 @@ test("a dump that does not load", async () => {
   const module = await loadModule();
   const h = host();
   for (const [text, why] of [
-    [`"djs-dump 3";\n$djs.resume(1, "nope", []);\n`, "cannot load the dump: the dump threw: Error: resume: unknown host function nope"],
-    [`"djs-dump 3";\n$djs.resume(1, "job", [1]); $djs.resume(1, "job", [2]);\n`, "cannot load the dump: the dump threw: Error: resume: the call is open already"],
-    [`"djs-dump 3";\n$djs.seed("x");\n`, "cannot load the dump: the dump threw: TypeError: seed: not two int32 halves"],
-    [`"djs-dump 3";\n1;\n`, "the dump holds no run (no handle named run)"],
+    [`"djs-dump";\n$djs.resume(1, "nope", []);\n`, "cannot load the dump: the dump threw: Error: resume: unknown host function nope"],
+    [`"djs-dump";\n$djs.resume(1, "job", [1]); $djs.resume(1, "job", [2]);\n`, "cannot load the dump: the dump threw: Error: resume: the call is open already"],
+    [`"djs-dump";\n$djs.seed("x");\n`, "cannot load the dump: the dump threw: TypeError: seed: not two int32 halves"],
+    [`"djs-dump";\n1;\n`, "the dump holds no run (no handle named run)"],
   ]) {
     const sb = new Sandbox({ module, ...h.opts });
     assert.throws(() => sb.loadRun(text), (e: unknown) => e instanceof SandboxError && e.kind === "misuse" && e.message === why, text);
@@ -158,7 +158,7 @@ test("a task suspended into a plain dump (the exporter's) resumes through the ho
   const dump = await task.suspend();
   await assert.rejects(task.result, (e: unknown) => e instanceof SandboxError && e.kind === "suspended");
   task.sandbox.dispose();
-  assert.match(dump, /^"djs-dump 3";\n/);
+  assert.match(dump, /^"djs-dump";\n/);
   assert.match(dump, /\$djs\.seed\(-?\d+, -?\d+, 2\);/);
   assert.match(dump, /\$djs\.resume\(1, "sleep", \[1\], \{"n":1\}\)/);
   const again = await Sandbox.resume(dump, opts);

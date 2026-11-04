@@ -491,7 +491,7 @@ fn plain_dump_waiting_await_inputs() {
     ));
     let text = std::fs::read_to_string(&dump).unwrap();
     std::fs::remove_file(&dump).unwrap();
-    assert!(text.starts_with("\"djs-dump 3\";"), "{text}");
+    assert!(text.starts_with("\"djs-dump\";"), "{text}");
     let lines: Vec<String> = out
         .lines()
         .filter(|l| !(l.starts_with("[dumped ") || l.starts_with("wrote ")))

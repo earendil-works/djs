@@ -1942,9 +1942,9 @@ impl W<'_> {
         let body = self.emit_list(plan, 0, &mut hoisted)?;
         let ir = self.ir;
         let mut s = String::from(if ts {
-            "\"djs-dump 3 typescript\";\n"
+            "\"djs-dump typescript\";\n"
         } else {
-            "\"djs-dump 3\";\n"
+            "\"djs-dump\";\n"
         });
         // djs runs all code strict (D015): so does node.
         s.push_str("\"use strict\";\n");

@@ -96,6 +96,10 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   Before → after: corpus w/o env 8,827,779 → 7,996,238 raw (−9.4%), 2,623,606 →
   2,555,267 gzip (−2.6%); v2 533,139 → 526,329 raw (−1.3%), 191,848 → 190,536 gzip.
 
+- (b) merged (ee39f80a). Slice (a): header `"djs-dump";` / `"djs-dump typescript";`
+  (D2835) in the exporter, readers (CLI, sandbox.ts, difftest, plain-node.mjs), tests,
+  docs; `djs resume --explain` says `format plain`.
+
 ## Follow-ups
 
 ## Result

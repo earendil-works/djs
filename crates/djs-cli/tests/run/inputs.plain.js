@@ -1,4 +1,4 @@
-"djs-dump 3";
+"djs-dump";
 // By hand for djs-cli's REPL tests: two waiting inputs (one printing its value) and a
 // settled one, in the shape of the plain exporter (D2895).
 $djs.seed(1, 2);

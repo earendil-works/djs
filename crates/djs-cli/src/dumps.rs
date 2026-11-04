@@ -1,7 +1,7 @@
 //! Continuation dumps in the CLI (0174, D2604): writing a waiting session as a dump and
 //! loading one, with the host's names for its functions from [`Tools`].
 //!
-//! A plain dump (`"djs-dump 3";`, D2830) is an ordinary Script: loading it is running it
+//! A plain dump (`"djs-dump";`, D2830) is an ordinary Script: loading it is running it
 //! with the host hooks of D2832 in the global object `$djs` (D2890): `$djs.seed(lo, hi)`
 //! sets `Math.random`'s state, `$djs.resume(id, name, args, state)` opens the call `id`
 //! of the host function `name` again (the CLI answers it as any other call). The hooks
@@ -26,13 +26,13 @@ pub const RESUME: u32 = 4;
 /// `$djs.seed(lo, hi)`.
 pub const SEED: u32 = 5;
 
-/// A plain dump's header: `Some(typescript)` for `"djs-dump 3";` or
-/// `"djs-dump 3 typescript";`.
+/// A plain dump's header: `Some(typescript)` for `"djs-dump";` or
+/// `"djs-dump typescript";`.
 pub fn plain_format(text: &str) -> Option<bool> {
     let t = text.trim_start();
-    if t.starts_with("\"djs-dump 3\";") {
+    if t.starts_with("\"djs-dump\";") {
         Some(false)
-    } else if t.starts_with("\"djs-dump 3 typescript\";") {
+    } else if t.starts_with("\"djs-dump typescript\";") {
         Some(true)
     } else {
         None
@@ -54,7 +54,7 @@ pub struct PlainLoad {
 /// the Script. The caller runs the VM, serving the hooks with [`serve_hook`], and calls
 /// [`end_load`] at the first stop that is not a sync host call.
 pub fn begin_plain(vm: &mut Vm, text: &str, filename: &str) -> Result<(), String> {
-    let ts = plain_format(text).ok_or("not a plain dump (no \"djs-dump 3\"; header)")?;
+    let ts = plain_format(text).ok_or("not a plain dump (no \"djs-dump\"; header)")?;
     let oom = |_| String::from("out of memory");
     let hooks = vm.new_object().map_err(oom)?;
     let resume = vm.new_host_function(RESUME, "resume").map_err(oom)?;

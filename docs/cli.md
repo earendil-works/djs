@@ -34,7 +34,7 @@ programs' output.
 
 `--plain` (on `run`, and on `resume` for the dumps it writes) makes `--dump-after` and
 `--dump-every-idle` write plain dumps instead of format 2.
-A plain dump (`"djs-dump 3";`, D2830) is a Script: `resume` runs it with the global
+A plain dump (`"djs-dump";`, D2830) is a Script: `resume` runs it with the global
 object `$djs` (D2890), whose `seed(lo, hi, next)` sets `Math.random`'s state and the next
 call's id (D2897) and whose
 `resume(id, name, args, state)` opens the dump's call `id` of `name` (`later`,
@@ -156,7 +156,7 @@ suspending every 300 fuel
 | `.heap [sections]` | arena bytes used, allocated and the limit, handles, atoms; then the heap report's sections over the live VM against the base image (above; default `summary,diff`: the session's own cells and the base cells it changed, apart from the base realm every VM starts with; `all`, or a list such as `kinds,largest`) (D2340) |
 | `.dump <file\|-> [names]` | write the session's globals (or the named ones, plus the globals their functions read) as a JavaScript dump (docs/functions-as-code.md): functions as their source text, closures that share variables made by one factory, data as literals and constructor calls, binary data as base64, builtins referenced by name and changed builtins as code. With something in flight it is format 2: open calls, suspended activations and pending promises, with the waiting inputs as handles (below). What a dump cannot write is refused with its path. `-` prints it |
 | `.restore <file>` | replace the VM with a fresh one that loaded a dump (a file starting with `"djs-dump ` for format 2 or a plain dump, run as a Script, or `// djs-dump` for version 1; `Vm::load_dump`), from any build; a plain dump's run becomes the waiting input `run`; a format 2 dump's waiting run and open calls come back (below). Images are not restored (D2700) |
-| `.plain [on\|off]` | `.dump` and `.dump-every` write plain dumps (`"djs-dump 3";`, D2830; `djs repl --plain` starts with it on); several waiting inputs become the properties of the dump's completion value (D2895) |
+| `.plain [on\|off]` | `.dump` and `.dump-every` write plain dumps (`"djs-dump";`, D2830; `djs repl --plain` starts with it on); several waiting inputs become the properties of the dump's completion value (D2895) |
 | `.dump-every [on\|off]` | at every idle point, dump the session and continue in a fresh VM that loaded the dump, printing `[dumped N bytes]`; a refused dump prints `[not dumped]` with the reasons and turns it off |
 | `.clear` | a fresh VM |
 | `.pending` | the open tool calls: `#2 tools.read({"path":"a.ts"})  input 1, at repl:1:11`, with the input (or `.resolve`/answer) that made the call and where the innermost activation waiting on it stopped |

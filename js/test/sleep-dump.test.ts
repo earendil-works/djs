@@ -14,7 +14,7 @@ test("examples/sleep-dump: suspend while the tool sleeps, resume, continue", asy
   const t0 = Date.now();
   const dump = await suspend(50, options(log));
   // A plain dump: the open call with its deadline, both activations as continuations.
-  assert.match(dump, /^"djs-dump 3";\n/);
+  assert.match(dump, /^"djs-dump";\n/);
   const m = /\$djs\.resume\(\d+, "tools\.sleep", \[50\], \{"due":(\d+)\}\);/.exec(dump);
   assert.ok(m, dump);
   assert.ok(Number(m[1]) >= t0 + 50 && Number(m[1]) <= Date.now() + 50, dump);

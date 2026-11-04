@@ -529,7 +529,7 @@ test("next: a session dumped while a call is open resumes from the dump in a new
   for (const policy of ["deliver", "reissue"] as const) {
     const resumed = await dumpRun(policy, true);
     assert.deepEqual(resumed.messages, plain.messages, `plain ${policy}`);
-    assert.match(resumed.dumped!.dump, /^"djs-dump 3";/);
+    assert.match(resumed.dumped!.dump, /^"djs-dump";/);
     const id = (resumed.messages.find((m) => m.type === "call") as { id: number }).id;
     assert.match(resumed.dumped!.dump, new RegExp(`\\$djs\\.resume\\(\\d+, "\\$djs\\.call", \\["call", "slow", "1"\\], \\{"id":${id}\\}\\)`));
   }
@@ -560,7 +560,7 @@ test("next: a plain dump (D2830) resumes with its call's pi id from the state", 
   const { state } = session.dumpSession();
   session.dispose();
   // The plain dump of that state, by hand in the exporter's shape (PLAIN_FN_NAMES).
-  const dump = `"djs-dump 3";
+  const dump = `"djs-dump";
 $djs.seed(268435466, 0);
 globalThis.$dump = {};
 try {

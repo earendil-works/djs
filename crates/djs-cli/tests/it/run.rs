@@ -139,7 +139,7 @@ fn resume_a_plain_dump() {
     assert_eq!((code, err.as_str()), (0, ""));
     assert!(
         out.starts_with(&format!(
-            "{dump}: format 3; 1 open call, 1 suspended activation; handles: run\n\
+            "{dump}: format plain; 1 open call, 1 suspended activation; handles: run\n\
              #2 tools.read({{\"path\":\"a\"}}), state {{\"at\":\"a\"}}\n"
         )),
         "{out}"
@@ -147,7 +147,7 @@ fn resume_a_plain_dump() {
     // A hook that fails throws in the Script: the dump does not load.
     let dir = env!("CARGO_TARGET_TMPDIR");
     let bad = format!("{dir}/bad-plain-{}.js", std::process::id());
-    std::fs::write(&bad, "\"djs-dump 3\";\n$djs.resume(1, \"nope\", []);\n").unwrap();
+    std::fs::write(&bad, "\"djs-dump\";\n$djs.resume(1, \"nope\", []);\n").unwrap();
     let r = djs_cmd(&["resume", &bad]);
     std::fs::remove_file(&bad).unwrap();
     assert_eq!(

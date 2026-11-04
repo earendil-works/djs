@@ -1,4 +1,4 @@
-"djs-dump 3";
+"djs-dump";
 $djs.seed(5, 7);
 globalThis.$dump = {};
 try {

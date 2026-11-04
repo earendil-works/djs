@@ -264,9 +264,9 @@ const PLAIN_HOOKS = "$djs";
 const HOOK_RESUME = 0x7fff_fff0;
 const HOOK_SEED = 0x7fff_fff1;
 
-/** A plain dump (D2830): `"djs-dump 3";`, and whether its text is TypeScript. */
+/** A plain dump (D2830): `"djs-dump";`, and whether its text is TypeScript. */
 export function plainDump(text: string): { typescript: boolean } | undefined {
-  const m = /^\s*"djs-dump 3( typescript)?";/.exec(text);
+  const m = /^\s*"djs-dump( typescript)?";/.exec(text);
   return m ? { typescript: m[1] !== undefined } : undefined;
 }
 

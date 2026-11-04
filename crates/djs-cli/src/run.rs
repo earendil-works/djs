@@ -38,12 +38,12 @@ const USAGE: &str = "usage: djs run [--body] [--ts] [--experimental-decorators]\
                      and stop; `djs resume OUT` continues it\n\
   --dump-every-idle  at every idle point, dump the run and continue in a fresh VM that\n\
                      loaded the dump\n\
-  --plain            write plain dumps (`\"djs-dump 3\";`, a Script, D2830) instead of\n\
+  --plain            write plain dumps (`\"djs-dump\";`, a Script, D2830) instead of\n\
                      format 2";
 
 const RESUME_USAGE: &str = "usage: djs resume [--explain] [--tools answers.json] [--gc-stress]\n\
                 [--suspend-every N] [--backend B] <dump.js>\n\
-  loads a dump (plain, `\"djs-dump 3\";`, format 2, `\"djs-dump 2\";`, or version 1)\n\
+  loads a dump (plain, `\"djs-dump\";`, format 2, `\"djs-dump 2\";`, or version 1)\n\
   into a fresh VM and runs it
   to its end, answering open calls as `djs run` does (--dump-after, --dump-every-idle\n\
   and --plain as for run)\n\
@@ -322,7 +322,7 @@ pub fn explain_dump(
             .iter()
             .map(|(n, h)| (vm.heap().get_handle(*h), n.clone()))
             .collect();
-        format = format!("3{}", if ts { ", TypeScript" } else { "" });
+        format = format!("plain{}", if ts { ", TypeScript" } else { "" });
     } else {
         // `--explain` answers nothing, so any host function name loads: names the CLI does
         // not define get ids of their own (from EXPLAIN_IDS), and calls show the dump's

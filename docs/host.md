@@ -167,7 +167,7 @@ await again.result;
   function's hooks: `resume(state, call)` with the saved state; `call` again for a
   function without `resume`; a plain function's call is rejected (an Error naming the
   function), since the sandbox cannot know whether calling it again is safe.
-- **Plain dumps** (`"djs-dump 3";`, D2830, D2890, D2898): the sandbox writes its dumps
+- **Plain dumps** (`"djs-dump";`, D2830, D2890, D2898): the sandbox writes its dumps
   (tasks', `Run.dump`, `dump`) as ordinary Scripts in which every suspended function is a
   continuation, the rest of its code from where it waits. This is the default;
   `plainDumps: false` writes format 2 until it is retired. `Sandbox.resume`, `loadRun` and `load`

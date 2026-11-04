@@ -73,7 +73,7 @@ prompt and prints its value when it settles.
 .restore <dump.js>    also restores a dump's waiting run and open calls
                       (`later(v)` calls are answered with v at once; print() prints)
 .dump-every [on|off]  dump and reload at every idle point ([dumped N bytes])
-.plain [on|off]       write plain dumps (\"djs-dump 3\";, a Script) instead of format 2
+.plain [on|off]       write plain dumps (\"djs-dump\";, a Script) instead of format 2
 
 Ctrl-C cancels the line, or stops a running input between fuel slices.
 Input continues on the next line while it is incomplete (an unclosed bracket, string
