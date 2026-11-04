@@ -1,17 +1,12 @@
 # Programs of tests/dump/v2 whose plain-dump chain is refused at some link (plain_dump_chains_continue_like_the_run).
-asyncgen: plain dump: plain dumps: a site of kind for-await.next#1 (0203)
-reenact: <call 8><reaction 0>.onRejected: plain dumps: an async-from-sync close (0203) | <call 1><reaction 0>.promise<reaction 0>.promise: a promise reacted to before the dump can make it
 golden/activations: <call 3><reaction 0>.onFulfilled<promise><reaction 0>.onFulfilled: a continuation of an earlier dump: its frame has no value for call.callee@24
 golden/class-closure: plain dump: an activation of a factory's cell
 golden/class-fields: <call 1><reaction 0>.onFulfilled<this>: plain dumps: a private field of an instance
 golden/combinators: <call 3><reaction 0>.onFulfilled<data><3><reaction 0>.onFulfilled: a continuation of an earlier dump: its frame has no value for call.callee@297
 golden/destructuring: plain dump: plain dumps: a site in a pattern (0203)
 golden/finally: plain dump: plain dumps: a finally entered by break or continue (0203)
-golden/for-await-close: plain dump: plain dumps: a site of kind for-await.close#2 (0203)
 golden/for-in: <call 3><reaction 0>.onFulfilled: a continuation of an earlier dump: its frame has no value for for-in.iterator@146
 golden/iterator-helpers: <call 4><reaction 0>.onFulfilled.evens<slot 2><slot 2><slot 2>: plain dumps: an iterator helper in flight (0203) | <call 4><reaction 0>.onFulfilled.evens<slot 2><slot 2>: plain dumps: an iterator helper in flight (0203) | <call 4><reaction 0>.onFulfilled.evens<slot 2>: plain dumps: an iterator helper in flight (0203) | <call 4><reaction 0>.onFulfilled.evens: plain dumps: an iterator helper in flight (0203)
-golden/loop-for-await: <call 1><reaction 0>.onRejected: plain dumps: an async-from-sync close (0203)
-golden/return-path: plain dump: plain dumps: a site of kind for-await.close#2 (0203)
 golden/role-binary: <call 3><reaction 0>.onFulfilled: a continuation of an earlier dump: its frame has no value for array.element@49
 golden/using: <call 1><reaction 0>.onFulfilled<using.record@39>: plain dumps: a using declaration's record (0203)
 golden/yield-star: plain dump: plain dumps: a site of kind yield*#1 (0203)

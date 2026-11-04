@@ -1,2 +1,1 @@
 # Corpus cases whose plain dump the exporter refuses (scripts/plain-node.mjs --refusals).
-codemode/async-helpers.js	idle point 8: cannot dump: plain dump: plain dumps: a site of kind for-await.next#1 (0203)

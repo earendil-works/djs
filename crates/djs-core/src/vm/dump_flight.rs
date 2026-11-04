@@ -1113,10 +1113,6 @@ impl Dumper<'_> {
             return cat!("(v) => ({ value: v, done: ", tf(data == Value::TRUE), " })");
         }
         if kind == FROM_SYNC_CLOSE {
-            if self.pl.is_some() {
-                let p = self.nodes[node].path.clone();
-                self.refuse(p, "plain dumps: an async-from-sync close (0203)");
-            }
             let it = self.expr(data, None, None);
             return cat!("$dump.closeThrow(", it, ")");
         }
@@ -1838,7 +1834,12 @@ impl Dumper<'_> {
                 });
             let sp = self.fl.supers.iter().find(|x| x.0 == a).map(|x| x.1);
             let super_proto = sp.map(|p| self.expr(p, None, None));
+            let closes = match fv(0).as_object() {
+                Some(f) if site.kind == SiteKind::ForAwaitClose => self.close_sites(f, &site),
+                _ => Vec::new(),
+            };
             let act = plain::Act {
+                closes,
                 proto,
                 super_proto,
                 name: String::from(name.strip_prefix("$dump.").unwrap_or(&name)),
@@ -2025,6 +2026,30 @@ impl Dumper<'_> {
             return "$dump.TDZ".into();
         }
         self.expr(inner, None, None)
+    }
+}
+
+impl Dumper<'_> {
+    /// The names of the `for-await.close` sites of `site`'s loop in `f`, in order (the
+    /// close of an exception, of a jump out, of a `break`; the last two where used).
+    fn close_sites(&mut self, f: Obj, site: &Site) -> Vec<String> {
+        let h = self.h;
+        let t = h.closure_template(f);
+        let info = template::debug_info(h, t);
+        let Some(maps) = self.script_maps(t) else {
+            return Vec::new();
+        };
+        let Some(m) = maps
+            .iter()
+            .find(|m| m.start == info.src_start && m.end == info.src_end)
+        else {
+            return Vec::new();
+        };
+        m.sites
+            .iter()
+            .filter(|x| x.kind == SiteKind::ForAwaitClose && x.pos == site.pos)
+            .map(|x| x.name.clone())
+            .collect()
     }
 }
 

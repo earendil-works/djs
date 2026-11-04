@@ -103,6 +103,9 @@ pub(super) struct Act {
     pub kind: i32,
     /// A generator object's prototype (its continuation's `prototype`).
     pub proto: Option<String>,
+    /// At a `for-await.close` site: the names of its loop's close sites, in order
+    /// (empty if unknown).
+    pub closes: Vec<String>,
     /// A method that uses `super`: its home object's prototype (its continuation is a
     /// method of an object of that prototype).
     pub super_proto: Option<String>,
@@ -431,6 +434,8 @@ struct Item {
     /// An activation's: what its awaited promise needs; per slot, what its value needs.
     start_deps: Vec<usize>,
     slot_deps: Vec<(String, Vec<usize>)>,
+    /// An activation's: what defines its continuation (never moved into its callback).
+    def_deps: Vec<usize>,
     pure: bool,
 }
 
@@ -675,9 +680,6 @@ impl W<'_> {
                     if l.starts_with("$dump.handle(") {
                         continue;
                     }
-                    if l.contains("$dump.fromSync(") {
-                        return refuse("plain dumps: a for await over a sync iterator (0203)");
-                    }
                     classify(l)
                 }
             };
@@ -696,6 +698,7 @@ impl W<'_> {
                 deps: Vec::new(),
                 start_deps: Vec::new(),
                 slot_deps: Vec::new(),
+                def_deps: Vec::new(),
                 pure: false,
             });
         }
@@ -1453,6 +1456,7 @@ impl W<'_> {
                         }
                     }
                     let mut deps = self.dep_items(&keys, i, &providers)?;
+                    let n0 = deps.len();
                     // Its continuation's definition.
                     match self.acts[a].place {
                         Some(Pl::Fac(sc)) => {
@@ -1484,6 +1488,7 @@ impl W<'_> {
                         }
                         _ => {}
                     }
+                    self.items[i].def_deps = deps[n0..].to_vec();
                     let start = match &act.awaiting {
                         Some(t) => {
                             let k = self.keys_of(t);
@@ -1579,7 +1584,12 @@ impl W<'_> {
                 continue;
             };
             let deps = self.items[i].deps.clone();
-            let cyc: Vec<usize> = deps.iter().copied().filter(|&d| self.needs(d, i)).collect();
+            let defs = self.items[i].def_deps.clone();
+            let cyc: Vec<usize> = deps
+                .iter()
+                .copied()
+                .filter(|&d| !defs.contains(&d) && self.needs(d, i))
+                .collect();
             if cyc.is_empty() {
                 continue;
             }
@@ -1745,9 +1755,28 @@ const HELPERS: &[(&str, &str)] = &[
         "L",
         "(it, next) => { let first = true; const r = { next() { if (first) { first = false; return { value: undefined, done: false }; } return Reflect.apply(next ?? it.next, it, []); }, return(v) { const m = it.return; return m == null ? { done: true, value: v } : Reflect.apply(m, it, [v]); }, [Symbol.iterator]() { return r; } }; return r; }",
     ),
+    // An async iterator over a saved record for a `for await`: its first step `first`
+    // (the promise the loop was awaiting) if given. `return` is the iterator's own,
+    // looked up when the loop closes, so a missing one is not called.
     (
         "N",
-        "(it, next, p) => { let first = true; const r = { next() { if (first) { first = false; return p; } return Reflect.apply(next, it, []); }, return(v) { const m = it.return; return m == null ? { done: true, value: v } : Reflect.apply(m, it, [v]); }, [Symbol.asyncIterator]() { return r; } }; return r; }",
+        "(it, next, ...first) => { const r = { next() { return first.length ? first.pop() : Reflect.apply(next, it, []); }, get return() { const m = it.return; return m == null ? m : (...v) => Reflect.apply(m, it, v); }, [Symbol.asyncIterator]() { return r; } }; return r; }",
+    ),
+    // AsyncIteratorClose of an exception: a promise to await that always fulfills.
+    (
+        "X",
+        "(it) => { let p; try { const m = it.return; if (m == null) return; p = Promise.resolve(Reflect.apply(m, it, [])); } catch { return; } return p.then(() => {}, () => {}); }",
+    ),
+    // The check of an iterator result.
+    (
+        "O",
+        "(r) => { if (Object(r) !== r) throw new TypeError('iterator must return an object'); }",
+    ),
+    // The async-from-sync iterator a `for await` over a sync iterable makes (never
+    // visible to user code): its `next` and `return` step as the language's do.
+    (
+        "fromSync",
+        "(it, next) => { const q = () => { try { const m = it.return; if (m != null) Reflect.apply(m, it, []); } catch {} }; const step = (f, close) => new Promise((res, rej) => { const r = f(); if (Object(r) !== r) throw new TypeError('iterator must return an object'); const done = !!r.done; let w; try { w = Promise.resolve(r.value); } catch (e) { if (!done && close) q(); throw e; } w.then((v) => res({ value: v, done }), !done && close ? (e) => { q(); rej(e); } : rej); }); return { next: (...a) => step(() => Reflect.apply(next, it, a), true), return: (...a) => { const m = it.return; return m == null ? Promise.resolve({ value: a[0], done: true }) : step(() => Reflect.apply(m, it, a), false); } }; }",
     ),
     (
         "Q",
@@ -1758,6 +1787,12 @@ const HELPERS: &[(&str, &str)] = &[
         "(re, s, f) => { const it = $dump.MA.call(re, s); if (f & 4) while (!it.next().done); return it; }",
     ),
     ("MA", "RegExp.prototype[Symbol.matchAll]"),
+    // The async-from-sync wrapper's handler that closes the sync iterator when a step's
+    // value rejects (IteratorClose of a throw: its errors are ignored), and rethrows.
+    (
+        "closeThrow",
+        "(it) => (e) => { try { const m = it.return; if (m != null) Reflect.apply(m, it, []); } catch {} throw e; }",
+    ),
     (
         "forIn",
         "(o, keys) => { let i = 0; const r = { next() { while (i < keys.length) { const k = keys[i++]; if (o == null || k in o) return { value: k, done: false }; } return { value: undefined, done: true }; }, [Symbol.iterator]() { return r; } }; return r; }",

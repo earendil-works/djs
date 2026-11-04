@@ -31,9 +31,17 @@ struct Record {
     cmap: Vec<(String, CVal)>,
 }
 
-/// A construct `K` made: kind, offset in `f`, offset in `K`, and a finally's completion
-/// (its kind, the binding of `K` that holds its value).
-type Scaffold = (String, u32, u32, Option<(i32, String)>);
+/// A construct `K` made: kind, offset in `f`, offset in `K`, and what else it records:
+/// a finally's completion (its kind, the binding of `K` that holds its value), a `for
+/// await`'s bindings of its iterator and `next` (`[0, it, next]`), the origin's site name
+/// of a site that is not one of `K`'s kind (a close awaited by K's own `await`).
+type Scaffold = (String, u32, u32, Option<(i32, String)>, Extra);
+
+#[derive(Default)]
+struct Extra {
+    next: Option<String>,
+    site: Option<String>,
+}
 
 enum CVal {
     Binding(String),
@@ -93,11 +101,19 @@ fn record(h: &Heap, k: Obj) -> Option<Record> {
         let e = elements(h, e)?;
         let kind = string(h, *e.first()?)?;
         let (fo, ko) = (number(*e.get(1)?)?, number(*e.get(2)?)?);
+        let mut extra = Extra::default();
         let fin = match (e.get(3), e.get(4)) {
             (Some(k), Some(b)) => Some((k.as_number()? as i32, string(h, *b)?)),
+            (Some(n), None) => {
+                extra.site = Some(string(h, *n)?);
+                None
+            }
             _ => None,
         };
-        scaf.push_out((kind, fo, ko, fin));
+        if let Some(n) = e.get(5) {
+            extra.next = Some(string(h, *n)?);
+        }
+        scaf.push_out((kind, fo, ko, fin, extra));
     }
     let mut cmap = Vec::new();
     for e in elements(h, own(h, r, "cmap")?)? {
@@ -160,11 +176,9 @@ impl Dumper<'_> {
         };
         let no = |why: &str| Err(cat!("a continuation of an earlier dump: ", why));
         // K's site in f's text: K's own (the site it was written for) or a copied one.
-        let at_site = rec
-            .scaf
-            .iter()
-            .find(|r| r.0 == "site" && r.2 == ksite.pos)
-            .map(|r| r.1);
+        let site_rec = rec.scaf.iter().find(|r| r.0 == "site" && r.2 == ksite.pos);
+        let at_site = site_rec.map(|r| r.1);
+        let site_name = site_rec.and_then(|r| r.4.site.clone());
         let Some(fpos) = at_site.or_else(|| to_f(&rec.segs, ksite.pos)) else {
             return no("its site is not one of its origin's");
         };
@@ -184,11 +198,10 @@ impl Dumper<'_> {
         let Some(m) = maps.iter().find(|m| m.start == a && m.end == b) else {
             return no("its origin has no suspension map");
         };
-        let Some(fsite) = m
-            .sites
-            .iter()
-            .find(|x| x.pos == fpos && same_kind(x.kind, ksite.kind))
-        else {
+        let Some(fsite) = m.sites.iter().find(|x| match &site_name {
+            Some(n) => x.name == *n && x.pos == fpos,
+            None => x.pos == fpos && same_kind(x.kind, ksite.kind),
+        }) else {
             return no("its origin has no site there");
         };
         let mut fsite = fsite.clone();
@@ -281,7 +294,16 @@ impl Dumper<'_> {
                         kv(ks[at].place)
                     }
                 }
-                Holds::Hidden => match kslot(&x.name) {
+                // (`arguments` is K's binding `$djs_arguments`.)
+                Holds::Hidden => match kslot(&x.name).or_else(|| {
+                    (x.name == "arguments")
+                        .then(|| {
+                            bindings(&knamed, "$djs_arguments")
+                                .first()
+                                .map(|y| kv(y.place))
+                        })
+                        .flatten()
+                }) {
                     Some(v) => v,
                     None => {
                         return Err(cat!(
@@ -369,6 +391,23 @@ impl Dumper<'_> {
                     if let Some(w) = kslot(&cat!("for-of.iterator@", r.2)) {
                         let (it, next) = unwrap_loop(h, w)?;
                         return Some(if c == "for-of.iterator" { it } else { next });
+                    }
+                }
+                ("for-await", "for-await.iterator") | ("for-await", "for-await.next") => {
+                    // Its record's constants, while K is inside the scaffold.
+                    let b = if c == "for-await.iterator" {
+                        r.3.as_ref().map(|x| x.1.clone())
+                    } else {
+                        r.4.next.clone()
+                    };
+                    if let Some(v) = b.and_then(|b| kslot(&b)) {
+                        return Some(v);
+                    }
+                }
+                ("try", "completion.kind") | ("try", "completion.value") => {
+                    // A try statement K wrote around the site: its finally's completion.
+                    if let Some(v) = kslot(&cat!(c, "@", r.2)) {
+                        return Some(v);
                     }
                 }
                 ("finally", "completion.kind") => {

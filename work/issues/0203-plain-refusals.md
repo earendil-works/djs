@@ -38,6 +38,19 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
   earlier fails. It lists 4 origin-tracking gaps for 0203: a frame with no value for
   `call.callee`/`array.element` (stopped again inside its rewritten statement) and
   `for-in.iterator` (for-in scaffold).
+- pjr: `for await` (D2872): body sites, `next` sites, close sites (exception, jump out
+  with the completion's kind, `break`), async-from-sync (`$dump.fromSync`,
+  `$dump.closeThrow` as plain helpers). Origin tracking reads the loop's record from K's
+  constants, a `try`'s completion K wrote, `arguments` as `$djs_arguments`; the `await`/
+  `yield` keywords of a rewritten statement are copied so K stopping there again maps to
+  the original's site. Scheduler fix: an activation's continuation definition is never
+  moved into a callback (the codemode body's for await over an async generator).
+  New test plain_dumps_of_for_await_closes. v2 refusals 68 -> 41 (the 3 yield-star ones
+  now stop at the yield* site); chain refusals 16 -> 11; corpus: async-helpers no longer
+  refused, plain-node 1194 links, 0 differ, 0 refused.
+  Known gap: K re-dumped while closing inside its own copied loop picks the first close
+  site at that offset (no ordinal); a single labelled jump out with a close awaited is
+  refused.
 
 ## Follow-ups
 

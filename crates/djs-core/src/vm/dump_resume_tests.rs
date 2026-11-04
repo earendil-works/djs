@@ -1604,56 +1604,67 @@ fn plain_refusals_file() -> std::path::PathBuf {
 /// Every program dumped (plainly) at each of its idle points, the dump run in a fresh VM
 /// to the end: the lines before and after must be the uninterrupted run's. Refusals are
 /// checked against tests/dump/v2/plain-refusals.txt.
+/// Program `src` dumped plainly at each of its idle points, each dump run in a fresh VM to
+/// the end: the failures (`name@k: ...`), the refusals and how many continued identically.
+fn plain_check_program(name: &str, src: &str) -> (Vec<String>, Vec<String>, usize) {
+    let (mut failed, mut refused, mut ok) = (Vec::new(), Vec::new(), 0);
+    let (want, marks) = run_program(src);
+    for k in 1..=marks.len() {
+        let mut vm = new_vm();
+        let f = vm
+            .compile(
+                src.as_bytes(),
+                &crate::compiler::CompileOptions::script("src.js"),
+            )
+            .unwrap();
+        let this = Value::object(vm.global());
+        vm.call(f, this, &[]).unwrap();
+        let mut lines = Vec::new();
+        for _ in 1..k {
+            let id = plain_step(&mut vm, &mut lines).expect("an idle point");
+            settle(&mut vm, id);
+        }
+        plain_step(&mut vm, &mut lines).expect("an idle point");
+        let text = match plain_dump(&vm) {
+            Ok(t) => t,
+            Err(e) => {
+                let why: Vec<&str> = e.lines().skip(1).map(str::trim).collect();
+                refused.push(alloc::format!("{name}@{k}: {}", why.join(" | ")));
+                continue;
+            }
+        };
+        if std::env::var("DJS_PLAIN_SHOW").is_ok_and(|v| v == alloc::format!("{name}@{k}")) {
+            std::println!("{text}");
+        }
+        let mut vm = match plain_load(&text) {
+            Ok(vm) => vm,
+            Err(e) => {
+                failed.push(alloc::format!("{name}@{k}: {e}\n{text}"));
+                continue;
+            }
+        };
+        while let Some(id) = plain_step(&mut vm, &mut lines) {
+            settle(&mut vm, id);
+        }
+        if lines != want {
+            failed.push(alloc::format!(
+                "{name}@{k}: {lines:?}\n  want {want:?}\n{text}"
+            ));
+        } else {
+            ok += 1;
+        }
+    }
+    (failed, refused, ok)
+}
+
 #[test]
 fn plain_dumps_at_every_idle_point() {
     let (mut failed, mut refused, mut ok) = (Vec::new(), Vec::new(), 0);
     for (name, src) in plain_programs() {
-        let (want, marks) = run_program(&src);
-        for k in 1..=marks.len() {
-            let mut vm = new_vm();
-            let f = vm
-                .compile(
-                    src.as_bytes(),
-                    &crate::compiler::CompileOptions::script("src.js"),
-                )
-                .unwrap();
-            let this = Value::object(vm.global());
-            vm.call(f, this, &[]).unwrap();
-            let mut lines = Vec::new();
-            for _ in 1..k {
-                let id = plain_step(&mut vm, &mut lines).expect("an idle point");
-                settle(&mut vm, id);
-            }
-            plain_step(&mut vm, &mut lines).expect("an idle point");
-            let text = match plain_dump(&vm) {
-                Ok(t) => t,
-                Err(e) => {
-                    let why: Vec<&str> = e.lines().skip(1).map(str::trim).collect();
-                    refused.push(alloc::format!("{name}@{k}: {}", why.join(" | ")));
-                    continue;
-                }
-            };
-            if std::env::var("DJS_PLAIN_SHOW").is_ok_and(|v| v == alloc::format!("{name}@{k}")) {
-                std::println!("{text}");
-            }
-            let mut vm = match plain_load(&text) {
-                Ok(vm) => vm,
-                Err(e) => {
-                    failed.push(alloc::format!("{name}@{k}: {e}\n{text}"));
-                    continue;
-                }
-            };
-            while let Some(id) = plain_step(&mut vm, &mut lines) {
-                settle(&mut vm, id);
-            }
-            if lines != want {
-                failed.push(alloc::format!(
-                    "{name}@{k}: {lines:?}\n  want {want:?}\n{text}"
-                ));
-            } else {
-                ok += 1;
-            }
-        }
+        let (f, r, n) = plain_check_program(&name, &src);
+        failed.extend(f);
+        refused.extend(r);
+        ok += n;
     }
     let path = plain_refusals_file();
     if std::env::var("DJS_UPDATE_PLAIN_REFUSALS").is_ok() {
@@ -1808,4 +1819,36 @@ fn a_super_base_changed_since_it_was_read_is_refused() {
         e.contains("a super base or this the method no longer has"),
         "{e}"
     );
+}
+
+/// `for await` loops closed while `return()` awaits: left by `continue` and `break` to an
+/// outer label and by `return` (the completion's kind in the frame), and by a `break`.
+#[test]
+fn plain_dumps_of_for_await_closes() {
+    let src = r#"
+async function* source(tag) {
+  try { yield tag + "1"; yield tag + "2"; } finally { print(tag, "closing", await later(tag)); }
+}
+async function pick(mode) {
+  outer: for (let i = 0; i < 2; i++) {
+    inner: for await (const v of source(mode + i)) {
+      print("got", v);
+      if (mode === "c") continue outer;
+      if (mode === "b") break outer;
+      if (mode === "r") return "returned " + v;
+      break inner;
+    }
+    print("after", i);
+  }
+  return mode;
+}
+async function main() {
+  for (const m of ["c", "b", "r", "x"]) print(await pick(m));
+}
+main();
+"#;
+    let (failed, refused, ok) = plain_check_program("closes", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 6, "{ok}");
 }

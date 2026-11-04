@@ -9328,3 +9328,39 @@ then buys nothing. `plainDumps: false` still writes format 2; the tests that ass
 format 2's text (dumpload, task, dumpresume's format 2 packagings) opt into it until
 0205 rewrites them. The CLI (`--plain`) and the pi adapter (`plainDumps`) keep format 2
 as their default until 0205.
+
+## D2871: Plain continuations of methods that use `super` are methods of the home's prototype
+date: 2026-11-05 · by: pjr · issue: 0203
+A continuation `K` of a method that uses `super` is written as `({ __proto__: P, async
+K() { … } }).K`, P the original home object's prototype, and called with the original's
+`this`, so `super[…]` and `super.x` in the rest of the method read what the original
+reads. A `super[<site>]` in flight writes `super[` again; the exporter refuses the dump
+when a base or `this` read before the site is no longer what `super`/`this` give (a home
+object whose prototype changed since). `K`'s `segs` and `scaf` count from the method's
+own text (what origin tracking reads back), not from the wrapper. `new.target` stays
+allowed in async functions and generators (never constructed: undefined in `K` too), and
+is refused in arrows.
+
+## D2872: `for await` in plain continuations: a loop over the saved record, the iteration in flight before it
+date: 2026-11-05 · by: pjr · issue: 0203
+A `for await` around a site is written as the rest of the current iteration in a loop
+that runs once (so `continue` ends it and `break` leaves it, recorded in a state
+variable), inside `try`/`catch`/`finally` that close the iterator as the loop would
+(AsyncIteratorClose: `return()` awaited and its result checked after a `break` or a jump
+out; on an exception a promise that always fulfills, `$dump.X`), followed by the loop
+itself over the saved record (`$dump.N(it, next)`). A real `for await` around the
+iteration in flight would add an await before its rest (the first `next()` is always
+awaited) and change job order. At the loop's `next` the loop is `for await` over
+`$dump.N(it, next, awaited)`, whose first step is the awaited promise. At a close site
+the statement is `$dump.O(await p)` (or `await p; throw e`) and the exit taken after it:
+the completion's kind from the frame, else the loop's close sites (exception, jump out,
+`break`) say which; a single labelled jump with no kind in the frame is refused. The
+async-from-sync iterator is the dump's `$dump.fromSync(it, next)`, a plain object whose
+`next`/`return` step as %AsyncFromSyncIteratorPrototype%'s do (the object is never
+visible to user code), and its close-on-rejection handler is `$dump.closeThrow(it)`.
+The record's iterator and `next` are constants of `K` named in the scaffold record
+(`["for-await", fo, ko, 0, it, next]`) for origin tracking; a site record may name the
+origin's site (`["site", fo, ko, "for-await.close#2"]`) where `K`'s own site is of
+another kind. An activation whose continuation is defined in another activation's prefix
+always waits for it: the scheduler's cycle breaking never moves that dependency into a
+callback.

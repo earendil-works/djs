@@ -27,6 +27,7 @@ fn no<T>(why: &str) -> R<T> {
 }
 
 /// Generated text: strings, verbatim spans of the original, marks.
+#[derive(Clone)]
 enum P {
     S(String),
     V(u32, u32),
@@ -56,6 +57,8 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
         crate::compiler::SiteKind::Await
             | crate::compiler::SiteKind::Yield
             | crate::compiler::SiteKind::AsyncYield
+            | crate::compiler::SiteKind::ForAwaitNext
+            | crate::compiler::SiteKind::ForAwaitClose
     ) {
         return Err(cat!(
             "plain dumps: a site of kind ",
@@ -503,6 +506,7 @@ impl G<'_, '_> {
                         | NodeKind::For
                         | NodeKind::ForOf
                         | NodeKind::ForIn
+                        | NodeKind::ForAwait
                 ) {
                     // On the scaffold's loop, so `continue label` still works.
                     self.stmt(i + 1, Some(l))
@@ -562,7 +566,7 @@ impl G<'_, '_> {
             }
             NodeKind::For => self.for_stmt(i, &n, label),
             NodeKind::ForOf | NodeKind::ForIn => self.for_of(i, &n, label),
-            NodeKind::ForAwait => no("a for await around the site (0203)"),
+            NodeKind::ForAwait => self.for_await(i, &n, label),
             NodeKind::Try => self.try_stmt(i, &n),
             NodeKind::Switch => self.switch_stmt(i, &n),
             _ => Err(cat!(
@@ -804,6 +808,255 @@ impl G<'_, '_> {
         ]))
     }
 
+    /// A `for await` around the site or at it (its `next` or a close awaited). The loop
+    /// goes on over the saved async iterator record (an async-from-sync one is the
+    /// dump's `$dump.fromSync`), bound to constants of K that origin tracking reads back
+    /// (the scaffold record `["for-await", fo, ko, 0, it, next]`).
+    fn for_await(&mut self, i: usize, n: &Node, label: Option<P>) -> R<P> {
+        let fo = n.start;
+        let lbl = label.unwrap_or_else(|| s(""));
+        if self.is_site(i) && self.act.site.kind == crate::compiler::SiteKind::ForAwaitClose {
+            return self.for_await_close(n, &lbl);
+        }
+        let head = n
+            .parts
+            .iter()
+            .find(|p| p.role == Role::Head)
+            .copied()
+            .ok_or("plain dumps: a loop without its head")?;
+        let body = n
+            .parts
+            .iter()
+            .position(|p| p.role == Role::Body)
+            .ok_or("plain dumps: a loop without its body")?;
+        if n.decls.is_empty()
+            && self
+                .text(head.start, head.end)
+                .trim_start()
+                .starts_with("var")
+        {
+            return no("a for await (var ...) around the site (0203)");
+        }
+        let it = self.take(&cat!("for-await.iterator@", fo))?;
+        let next = self.take(&cat!("for-await.next@", fo))?;
+        let ib = self.fresh(cat!("$djs_i", i));
+        let nb = self.fresh(cat!("$djs_n", i));
+        let rec = self.mark("for-await", fo);
+        if let P::Mark(x) = rec {
+            self.scaf[x].3 = cat!(",0,", quote(&ib), ",", quote(&nb));
+        }
+        let consts = P::S(cat!("{ const ", ib, " = ", it, ", ", nb, " = ", next, "; "));
+        // `for await (Head of <the record>) Body`, `first` the awaited promise of the
+        // first step (a site at the loop's `next`).
+        let lp = |first: &str| {
+            P::L(alloc::vec![
+                P::V(n.start, head.start),
+                P::V(head.start, head.end),
+                P::S(cat!(" of $djs_N(", ib, ", ", nb, first, ")) ")),
+                P::V(n.parts[body].start, n.parts[body].end),
+            ])
+        };
+        if self.is_site(i) {
+            // At the loop's `next`: its first step is the awaited promise.
+            let site = self.mark("site", fo);
+            let p = cat!(", ", self.ctx.awaiting());
+            let l = lp(&p);
+            return Ok(self.with_go(P::L(alloc::vec![consts, rec, lbl, site, l, s(" }")])));
+        }
+        if self.next_part(i) != Some(body) {
+            return no("a site in a for await's head (0203)");
+        }
+        // The rest of this iteration in a loop that runs once, so `continue` ends it and
+        // `break` leaves it (state 2, else 1); the iterator is closed as the loop
+        // would: after a `break` or a jump out (AsyncIteratorClose: `return()` awaited,
+        // its result checked), on an exception ignoring what `return()` does.
+        let st = self.fresh(cat!("$djs_s", i));
+        let once = self.fresh(cat!("$djs_o", i));
+        let exc = self.fresh(cat!("$djs_e", i));
+        let m = self.fresh(cat!("$djs_m", i));
+        let close = cat!(
+            "{ const ",
+            m,
+            " = ",
+            ib,
+            ".return; if (",
+            m,
+            " != null) $djs_O(await $djs_R(",
+            m,
+            ", ",
+            ib,
+            ", [])); }"
+        );
+        let decls: Vec<_> = n
+            .decls
+            .iter()
+            .map(|d| (d.name.clone(), d.kind, d.scope, true))
+            .collect();
+        let d = self.declare(&decls)?;
+        let first = self.stmt(i + 1, None)?;
+        let rest = lp("");
+        Ok(P::L(alloc::vec![
+            consts,
+            P::S(cat!("let ", st, " = 2;\ntry { ")),
+            lbl.clone(),
+            P::S(cat!(
+                "for (let ",
+                once,
+                " = 0; ",
+                once,
+                " < 1; ",
+                once,
+                "++, ",
+                st,
+                " = 1) {\n"
+            )),
+            d,
+            s("\n"),
+            first,
+            P::S(cat!(
+                "\n} ",
+                st,
+                " += 10; } catch (",
+                exc,
+                ") { ",
+                st,
+                " = 20; await $djs_X(",
+                ib,
+                "); throw ",
+                exc,
+                "; } finally { if (",
+                st,
+                " < 10) ",
+                close,
+                " }\nif (",
+                st,
+                " === 12) ",
+                close,
+                " else { "
+            )),
+            rec,
+            lbl,
+            rest,
+            s(" } }"),
+        ]))
+    }
+
+    /// A `for await` stopped while its iterator's `return()` is awaited: on an exception
+    /// (rethrown after), a jump out of the loop (taken after) or a `break`.
+    fn for_await_close(&mut self, n: &Node, lbl: &P) -> R<P> {
+        let fo = n.start;
+        let site = self.mark("site", fo);
+        if let P::Mark(x) = site {
+            self.scaf[x].3 = cat!(",", quote(&self.act.site.name));
+        }
+        let p = self.ctx.awaiting();
+        let awaited = P::L(alloc::vec![s("("), site, P::S(cat!("await ", p)), s(")")]);
+        let exc = cat!("for-await.exception@", fo);
+        if self.has(&exc) {
+            let e = self.tmp("for-await.exception", fo)?;
+            return Ok(self.with_go(P::L(alloc::vec![
+                lbl.clone(),
+                s("{ "),
+                awaited,
+                s("; throw "),
+                e,
+                s("; }")
+            ])));
+        }
+        let (kname, vname) = (cat!("completion.kind@", fo), cat!("completion.value@", fo));
+        // Which close this is: the loop's close sites are the exception's, a jump out's
+        // and a `break`'s (the last two where used).
+        let closes = &self.act.closes;
+        let nth = closes.iter().position(|c| *c == self.act.site.name);
+        let jump = if self.has(&kname) || self.has(&vname) {
+            true
+        } else if closes.len() == 3 {
+            nth == Some(1)
+        } else {
+            // One of them: a `break`, unless a labelled jump could leave the loop (its
+            // completion is not in the frame then: the only exit, which the code knows).
+            let body = n.parts.iter().find(|p| p.role == Role::Body).copied();
+            let text = body.map_or("", |b| self.text(b.start, b.end));
+            let path = &self.act.site.path;
+            for j in 0..path.len().saturating_sub(2) {
+                let o = self.node(j);
+                if o.kind == NodeKind::Label
+                    && let Some(lp) = o.parts.iter().find(|p| p.role == Role::Label)
+                {
+                    let name = self.text(lp.start, lp.end);
+                    if has_ident(text, name) {
+                        return no("a for await left by a labelled jump, closing (0203)");
+                    }
+                }
+            }
+            false
+        };
+        let exit = if !jump {
+            s("")
+        } else if self.has(&kname) {
+            let k = self.take(&kname)?;
+            match k.parse::<i32>() {
+                Ok(2) => P::L(alloc::vec![
+                    s(" return "),
+                    self.tmp("completion.value", fo)?,
+                    s(";")
+                ]),
+                Ok(c) if c >= 3 => {
+                    if self.has(&vname) {
+                        self.take(&vname)?;
+                    }
+                    let l = self.label_at(((c - 3) / 2) as u32)?;
+                    P::S(cat!(
+                        if c % 2 == 1 { " break " } else { " continue " },
+                        l,
+                        ";"
+                    ))
+                }
+                _ => return Err(cat!("plain dumps: a for await closed with completion ", k)),
+            }
+        } else if self.has(&vname) {
+            P::L(alloc::vec![
+                s(" return "),
+                self.tmp("completion.value", fo)?,
+                s(";")
+            ])
+        } else {
+            return no("a for await left by a labelled jump, closing (0203)");
+        };
+        Ok(self.with_go(P::L(alloc::vec![
+            lbl.clone(),
+            s("{ $djs_O("),
+            awaited,
+            s(");"),
+            exit,
+            s(" }")
+        ])))
+    }
+
+    /// The label of the statement at offset `o` on the site's path (a labelled
+    /// statement's first label, or a loop's).
+    fn label_at(&self, o: u32) -> R<String> {
+        let path = &self.act.site.path;
+        for j in 0..path.len() {
+            let nd = self.node(j);
+            if nd.start != o {
+                continue;
+            }
+            for jj in (0..=j).rev() {
+                let l = self.node(jj);
+                if l.kind == NodeKind::Label
+                    && let Some(lp) = l.parts.iter().find(|p| p.role == Role::Label)
+                {
+                    return Ok(String::from(self.text(lp.start, lp.end)));
+                }
+                if jj < j && l.kind != NodeKind::Label {
+                    break;
+                }
+            }
+        }
+        no("a jump to a statement off the site's path")
+    }
+
     fn try_stmt(&mut self, i: usize, n: &Node) -> R<P> {
         let k = self.next_part(i).unwrap_or(0);
         let part = |r: Role| n.parts.iter().position(|p| p.role == r);
@@ -914,13 +1167,16 @@ impl G<'_, '_> {
         let role = n.parts[k].role;
         let pt = |r: Role| n.parts.iter().position(|p| p.role == r);
         match n.kind {
-            NodeKind::Await => {
+            // The keyword copied: K stopping there again maps to the original's site.
+            NodeKind::Await | NodeKind::Yield => {
                 let e = self.expr(i + 1)?;
-                Ok(P::L(alloc::vec![s("(await "), e, s(")")]))
-            }
-            NodeKind::Yield => {
-                let e = self.expr(i + 1)?;
-                Ok(P::L(alloc::vec![s("(yield "), e, s(")")]))
+                Ok(P::L(alloc::vec![
+                    s("("),
+                    P::V(n.start, n.start + 5),
+                    s(" "),
+                    e,
+                    s(")")
+                ]))
             }
             NodeKind::Call { .. } | NodeKind::New => self.call(i, &n, k),
             NodeKind::Binary | NodeKind::Logical => {
@@ -1342,7 +1598,7 @@ impl G<'_, '_> {
         out.walk(&parts, &act.ftext, &mut self.scaf);
         let mut text = out.text;
         // K's helpers, captured where the marker is.
-        let names: Vec<&str> = ["R", "G", "C", "D", "A", "L", "N", "Q"]
+        let names: Vec<&str> = ["R", "G", "C", "D", "A", "L", "N", "Q", "X", "O"]
             .into_iter()
             .filter(|h| text.contains(&cat!("$djs_", *h, "(")))
             // A continuation of a continuation declares them already (its own
