@@ -6,7 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0188 | Suspension as state machines vs suspension maps (research; owner: migrate if directionally possible, then optimize dump speed) | critic | .worktrees/critic |
+| 0188 | Suspension as state machines vs suspension maps (research; owner: migrate if directionally possible with fresh agents, concurrently where touches allow; then optimize dump speed) | critic | .worktrees/critic |
 
 ## Open (ready)
 
