@@ -8972,3 +8972,25 @@ engine workloads within -1.7%..+0.5% native and -0.1%..+0.6% wasm. Size: -156 B 
 a disposal or a close) are rewritten under this decision, the other 111 load unchanged; a
 new golden program (return-path, 2 dumps) dumps the formerly refused for-await close. The op table
 changes, so images get a new descriptor.
+
+## D2734: No role vocabulary: stack values are named by construct; class sites refused by a marker
+date: 2026-11-04 · by: sm · issue: 0194
+The `Role` enum (with list indexes, `call.arg[2]`) and `Site::operands` are gone. The
+parser pushes the constructs of the values an expression keeps on the operand stack
+(`names_push(at, &["call.callee", "call.this"])`) with the offsets that name their slots
+(D2721, D2730); a site keeps their names (`Site::stack`, bottom first) and
+`NamedSlot::holds` is `Temp` without a role. Nothing read a role beyond its name: the
+exporter and loader already went by slot names (D2731). The depth check stays as an
+internal consistency check: a site whose stack holds a value the parser did not name is
+unsupported ("N operands, M named"), never misnamed, since the loader sizes the frame by
+the names. Class definitions keep refusing their suspensions (heritage, computed keys,
+decorators), now by an `unsupported_begin("class")`/`unsupported_end` marker instead of a
+pseudo-role: the half-made class is not a value a dump can write (classes are written by
+their text, which defines them whole), so this is the one refusal of the old
+`unsupported:<construct>` set that stays. The last statement-level stack value, the
+exception a `for await` rethrows while its iterator's close is awaited, moves into a
+temporary `for-await.exception@S` (a local; same name as before), so statements keep
+nothing on the operand stack at any site. Slot names at every site are unchanged; the pins
+change only in local numbering (one more local per for-await loop), the summary in its
+construct lists (no indexes), and no golden dump changes. No image format change:
+COMPAT_VERSION stays.
