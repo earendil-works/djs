@@ -249,10 +249,6 @@ pub(super) struct FuncState {
     pub captures: Vec<Capture>,
     pub capture_names: Vec<Atom>,
     pub consts: Vec<Value>,
-    /// Constant pool dedup, sorted by key (binary search; a map type would cost code
-    /// size, 0043).
-    pub str_consts: Vec<(Vec<u16>, u32)>,
-    pub num_consts: Vec<(u64, u32)>,
     /// Try regions in phase-1 labels, innermost first (docs/compiler.md 7.4).
     pub handlers: Vec<HandlerLabels>,
     /// `(phase-1 code position, source offset)`, in increasing code position.
@@ -413,8 +409,6 @@ impl FuncState {
             captures: Vec::new(),
             capture_names: Vec::new(),
             consts: Vec::new(),
-            str_consts: Vec::new(),
-            num_consts: Vec::new(),
             handlers: Vec::new(),
             lines: Vec::new(),
             var_decls: Vec::new(),

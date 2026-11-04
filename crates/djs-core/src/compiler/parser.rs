@@ -132,10 +132,12 @@ pub(super) struct Parser<'a, 'h> {
     pub pattern_vars: Vec<VarId>,
     /// Iterators to close on a return from inside an expression, innermost last.
     pub open_iters: Vec<OpenIter>,
-    /// String constants of the whole unit, sorted by content: functions share them
+    /// String constants of the whole unit: functions share them
     /// (strings are immutable, so sharing is invisible; the prelude repeats its error
     /// messages and keys across hundreds of functions, 0043).
     pub str_pool: Vec<(Vec<u16>, crate::value::Str)>,
+    /// `str_pool` by the hash of the units: `(hash, index)`, hash 0 empty.
+    pub str_table: Vec<(u32, u32)>,
     /// The TypeScript grammar is on (`CompileOptions::typescript`).
     pub ts: bool,
     /// Nesting of TypeScript speculation (compiler/ts.rs): errors inside are cheap and
@@ -320,6 +322,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             pattern_vars: Vec::new(),
             open_iters: Vec::new(),
             str_pool: Vec::new(),
+            str_table: Vec::new(),
             ts: opts.typescript,
             spec: 0,
             erased: None,
@@ -817,15 +820,9 @@ impl<'a, 'h> Parser<'a, 'h> {
             }
             return;
         }
-        let bits = n.to_bits();
-        let idx = match self.f.num_consts.binary_search_by_key(&bits, |e| e.0) {
-            Ok(k) => self.f.num_consts[k].1,
-            Err(k) => {
-                let i = self.add_const(Value::number(n));
-                self.f.num_consts.insert(k, (bits, i));
-                i
-            }
-        };
+        // Not deduplicated here: resolution interns every constant of the unit by value
+        // (D2446), and a sorted list made a compile quadratic in distinct constants (0198).
+        let idx = self.add_const(Value::number(n));
         self.code().push_const(idx);
     }
 
@@ -834,30 +831,54 @@ impl<'a, 'h> Parser<'a, 'h> {
         (self.f.consts.len() - 1) as u32
     }
 
-    /// The constant index of a string (deduplicated per function).
+    /// The constant index of a string. Its heap string is shared by the unit's
+    /// functions; resolution interns the constants by value (D2446).
     pub fn string_const(&mut self, units: &[u16]) -> PResult<u32> {
-        let k = match self
-            .f
-            .str_consts
-            .binary_search_by(|e| e.0.as_slice().cmp(units))
-        {
-            Ok(k) => return Ok(self.f.str_consts[k].1),
-            Err(k) => k,
-        };
-        let s = match self
-            .str_pool
-            .binary_search_by(|e| e.0.as_slice().cmp(units))
-        {
-            Ok(p) => self.str_pool[p].1,
-            Err(p) => {
-                let s = self.alloc_units(units)?;
-                self.str_pool.insert(p, (units.to_vec(), s));
-                s
+        let s = self.str_pool_get(units)?;
+        Ok(self.add_const(Value::string(s)))
+    }
+
+    /// The unit's heap string of `units`: open addressing over their hash, compared
+    /// by their units (a sorted list, inserted into, made a compile quadratic in
+    /// distinct strings: a dump's data has thousands, 0198).
+    fn str_pool_get(&mut self, units: &[u16]) -> PResult<crate::value::Str> {
+        // A long string by its length and a sample of ~256 units: a dump's megabyte
+        // literal is compared once on a match instead of hashed whole.
+        let h = units
+            .iter()
+            .step_by(units.len() / 256 + 1)
+            .fold(units.len() as u32, |h, &u| {
+                (h ^ u32::from(u)).wrapping_mul(0x0100_0193)
+            })
+            | 1;
+        if 2 * (self.str_pool.len() + 1) > self.str_table.len() {
+            let mut bigger = alloc::vec![(0u32, 0u32); (self.str_table.len() * 2).max(64)];
+            let mask = bigger.len() - 1;
+            for &(k, e) in self.str_table.iter().filter(|e| e.0 != 0) {
+                let mut i = k as usize & mask;
+                while bigger[i].0 != 0 {
+                    i = (i + 1) & mask;
+                }
+                bigger[i] = (k, e);
             }
-        };
-        let i = self.add_const(Value::string(s));
-        self.f.str_consts.insert(k, (units.to_vec(), i));
-        Ok(i)
+            self.str_table = bigger;
+        }
+        let mask = self.str_table.len() - 1;
+        let mut i = h as usize & mask;
+        loop {
+            match self.str_table[i] {
+                (0, _) => break,
+                (k, e) if k == h && self.str_pool[e as usize].0 == units => {
+                    return Ok(self.str_pool[e as usize].1);
+                }
+                _ => {}
+            }
+            i = (i + 1) & mask;
+        }
+        let s = self.alloc_units(units)?;
+        self.str_table[i] = (h, self.str_pool.len() as u32);
+        self.str_pool.push_out((units.to_vec(), s));
+        Ok(s)
     }
 
     /// A heap string from UTF-16 units (one byte per unit when they are Latin-1).
