@@ -1,3 +1,4 @@
+// In language/, not codemode/: the slim build has no `using` (D2411).
 // Found by the plain-dump fuzzer (0208): a continuation dumped again while it waits in
 // the disposal of an `await using` at the end of a block.
 await tools.echo(0);
