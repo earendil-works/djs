@@ -90,6 +90,16 @@ and rebase often. Decision IDs D2950–D2959.
   setter and non-enumerable accessor), removed F's plain-xfail marker, dropped the two
   stale refusals, raised dump-size for the links that now dump (+17 KB raw).
 
+- Item 6 (TS parameter properties): D2879 already meant such texts to stay TypeScript,
+  but the blanking erased `public`/`readonly` and the result compiled. `strip_types` now
+  keeps the modifiers of constructor parameters (not erasable, like an enum), so the
+  dump's JavaScript check fails and the dump keeps `"djs-dump typescript";`. Outside my
+  touches (minimal): compiler/ts.rs (the one erase), its ts_strip test, and the REPL's
+  top-level-await path (djs-cli repl/mod.rs), which used the stripped text whenever
+  strip_types succeeded: it now checks that the text compiles as JavaScript, else rewrites
+  the TypeScript (that also fixes `enum F {...}; await 1; F.B`, which failed before).
+  Cases: ts/plain-parameter-properties.ts, a repl test.
+
 ## Follow-ups
 
 ## Result

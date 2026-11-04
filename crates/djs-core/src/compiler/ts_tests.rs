@@ -582,6 +582,12 @@ fn ts_strip() {
             "class C { m(@dec private p: number) {} }",
             "class C { m(@dec         p        ) {} }",
         ),
+        // A parameter property is not erasable (it assigns `this.x`): it stays, and the
+        // text is not JavaScript.
+        (
+            "class P { constructor(public x: number, readonly y) {} }",
+            "class P { constructor(public x        , readonly y) {} }",
+        ),
     ];
     let mut bad = Vec::new();
     for &(src, want) in cases {

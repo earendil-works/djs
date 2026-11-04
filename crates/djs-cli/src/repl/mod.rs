@@ -458,10 +458,22 @@ impl Repl {
     fn await_parts(&mut self, src: &str, filename: &str) -> Option<(String, String, bool)> {
         let (js, ts) = if self.typescript {
             let opts = self.opts(true, filename);
-            match compiler::strip_types(self.vm.heap_mut(), src.as_bytes(), &opts) {
-                Ok(b) => (String::from_utf8(b).ok()?, false),
-                // Enums and namespaces are not erasable: rewrite the TypeScript as it is.
-                Err(_) => (src.to_string(), true),
+            let js = compiler::strip_types(self.vm.heap_mut(), src.as_bytes(), &opts)
+                .ok()
+                .and_then(|b| String::from_utf8(b).ok());
+            // Enums, namespaces and parameter properties are not erasable (strip_types
+            // keeps them, so the text is not JavaScript): rewrite the TypeScript as it is.
+            let js_opts = CompileOptions {
+                typescript: false,
+                ..opts
+            };
+            match js {
+                Some(js)
+                    if compiler::compile(self.vm.heap_mut(), js.as_bytes(), &js_opts).is_ok() =>
+                {
+                    (js, false)
+                }
+                _ => (src.to_string(), true),
             }
         } else {
             (src.to_string(), false)

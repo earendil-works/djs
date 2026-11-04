@@ -229,6 +229,16 @@ fn typescript() {
         "SyntaxError: expecting ';' at repl:1:6\n",
     );
     assert_eq!(repl_with(&["--ts"], "let n: number = 1\nn\n"), "1\n");
+    // Top-level await over TypeScript that is not erasable (0209): an enum and a
+    // parameter property keep their meaning.
+    assert_eq!(
+        repl_with(
+            &["--ts"],
+            "enum F { A, B }; await 1; console.log(F.B)\n\
+             class Q { constructor(public x: number) {} }; await 1; console.log(new Q(9).x)\n"
+        ),
+        "1\n9\n"
+    );
 }
 
 #[test]

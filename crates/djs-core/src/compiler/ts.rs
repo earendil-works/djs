@@ -1385,8 +1385,9 @@ impl<'a> Parser<'a, '_> {
 
     /// At the start of a formal parameter: a `this` parameter (type only: erased with
     /// its comma, returns true) or parameter decorators (legacy, into `dp`) and
-    /// accessibility / `readonly` / `override` modifiers (erased; parameter properties
-    /// are found by `ts_scan_param_props` beforehand).
+    /// accessibility / `readonly` / `override` modifiers (erased, but for `strip_types`
+    /// not in a constructor; parameter properties are found by `ts_scan_param_props`
+    /// beforehand).
     pub(super) fn ts_param_prefix(
         &mut self,
         dp: Option<&mut super::decorators::DecParams>,
@@ -1418,7 +1419,19 @@ impl<'a> Parser<'a, '_> {
             any = true;
         }
         if any {
-            self.ts_erase(start);
+            if matches!(
+                self.f.kind,
+                super::func::FuncKind::ClassCtor | super::func::FuncKind::DerivedCtor
+            ) {
+                // A parameter property: `public x` also means `this.x = x`, so it is not
+                // erasable. `strip_types` keeps it, as it keeps an enum, and the text
+                // does not compile as JavaScript (plain dumps stay TypeScript, 0209).
+                let erased = self.erased.take();
+                self.ts_erase(start);
+                self.erased = erased;
+            } else {
+                self.ts_erase(start);
+            }
         }
         Ok(false)
     }
