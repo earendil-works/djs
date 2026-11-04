@@ -2237,3 +2237,32 @@ fn the_sleep_example_dumps() {
         std::fs::write(std::path::Path::new(&dir).join("sleep.dump.js"), &text).unwrap();
     }
 }
+
+/// Classes whose methods read variables a waiting frame shares: their statements go into
+/// the continuation's block, a subclass after its parent (D2881).
+#[test]
+fn plain_dumps_of_shared_classes() {
+    let src = r#"
+async function classShared() {
+  let count = 0;
+  const tag = "t";
+  class C { inc() { return ++count; } static make() { return new C(); } }
+  class D extends C { inc() { return super.inc() * 10 + tag.length; } }
+  const c = C.make();
+  const d = new D();
+  c.inc();
+  await later("cls");
+  const r = [c.inc(), d.inc(), count, d instanceof C];
+  await later("cls2");
+  return r.concat(c.inc()).join();
+}
+classShared().then(print);
+"#;
+    let (failed, refused, ok) = plain_check_program("classes", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, _, refused) = plain_chain_program("classes", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 2, "{ok}");
+}

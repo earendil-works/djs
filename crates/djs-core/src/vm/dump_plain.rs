@@ -421,6 +421,9 @@ enum Pl {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Put {
     Prop(Sc, usize),
+    /// A merged scope's class statement (`scope.other[i]`): where the members that
+    /// name it are.
+    Other(Sc, usize),
     Sub(Sc),
     Group(Sc),
     K(usize),
@@ -528,6 +531,9 @@ struct W<'x> {
     placed: Vec<(Pl, Put)>,
     act_place: Vec<Option<Pl>>,
     group_place: Vec<(Sc, Pl)>,
+    /// Class statements of merged scopes written as expressions in a continuation's
+    /// block (its own binding is the frame's there): scope, class name, local.
+    class_exprs: Vec<(Sc, String, String)>,
     in_progress: Vec<Sc>,
     kkeys: Vec<String>,
     /// The dump's top-level names (roots, functions, classes).
@@ -630,6 +636,7 @@ pub(super) fn write(
         placed: Vec::new(),
         act_place: alloc::vec![None; ir.acts.len()],
         group_place: Vec::new(),
+        class_exprs: Vec::new(),
         in_progress: Vec::new(),
         globals: Vec::new(),
         // A continuation's key in its factory: `$K<act>`, unless a member has that name
@@ -785,13 +792,6 @@ impl W<'_> {
             for &(ref sn, sc, v) in &self.acts[a].cells {
                 if self.vblock[sc.0][sc.1][v].is_none() {
                     return Err(cat!("no block of the continuation declares ", sn));
-                }
-            }
-        }
-        for (f, fac) in ir.factories.iter().enumerate() {
-            for (s, sc) in fac.scopes.iter().enumerate() {
-                if self.merged[f][s] && !sc.other.is_empty() {
-                    return refuse("plain dumps: a class in a scope a frame shares (0203)");
                 }
             }
         }
@@ -1183,6 +1183,50 @@ impl W<'_> {
                     let pl = self.code_place(put, &caps)?;
                     self.placed.push_out((pl, put));
                 }
+                // A class statement goes where the variables its methods read are
+                // declared (as a closure does), and the members that name it with it.
+                let others = self.scope(sc).other.clone();
+                for (i, l) in others.iter().enumerate() {
+                    let name = l
+                        .strip_prefix("let ")
+                        .and_then(|r| r.split_once(" = "))
+                        .map(|x| String::from(x.0))
+                        .or_else(|| {
+                            // `class C …`: the statement declares the scope's variable.
+                            l.strip_prefix("class ")
+                                .map(|r| String::from(r.split([' ', '{']).next().unwrap_or("")))
+                        });
+                    let Some(name) = name else {
+                        return refuse("plain dumps: a class statement the exporter cannot place");
+                    };
+                    let names = refs(l).names;
+                    let caps: Vec<usize> = self
+                        .scope(sc)
+                        .vars
+                        .iter()
+                        .filter(|v| names.contains(&v.name))
+                        .map(|v| v.boxn)
+                        .collect();
+                    let pl = self.place_of_code(sc, &caps)?;
+                    if matches!(pl, Pl::Top | Pl::Fac(_)) {
+                        return refuse(
+                            "plain dumps: a class in a scope a frame shares that reads none of its variables",
+                        );
+                    }
+                    for x in 0..self.placed.len() {
+                        if let Put::Prop(psc, pi) = self.placed[x].1
+                            && psc == sc
+                            && refs(&self.scope(sc).props[pi].text).names.contains(&name)
+                        {
+                            self.placed[x].0 = pl;
+                        }
+                    }
+                    if l.starts_with("class ") {
+                        let local = cat!("$djs_c", sc.0, "_", sc.1, "_", i);
+                        self.class_exprs.push_out((sc, name.clone(), local));
+                    }
+                    self.placed.push_out((pl, Put::Other(sc, i)));
+                }
                 if self.has_dead(sc) {
                     let pl = self.place_of_group(sc)?;
                     self.placed.push_out((pl, Put::Group(sc)));
@@ -1248,7 +1292,14 @@ impl W<'_> {
         for (s, sc) in ir.factories[f].scopes.iter().enumerate() {
             if let Some(p) = sc.props.iter().position(|p| p.key == key) {
                 let caps = sc.props[p].caps.clone();
-                pl = Some(if self.is_merged((f, s)) {
+                // (Where it was placed, if it was: a class's members go with the class.)
+                let placed = self.placed.iter().find_map(|x| match x.1 {
+                    Put::Prop(psc, pi) if psc == (f, s) && pi == p => Some(x.0),
+                    _ => None,
+                });
+                pl = Some(if let Some(pl) = placed {
+                    pl
+                } else if self.is_merged((f, s)) {
                     self.code_place(Put::Prop((f, s), p), &caps)?
                 } else {
                     self.factory_place((f, s))?
@@ -1335,6 +1386,9 @@ impl W<'_> {
             match put {
                 Put::Prop(sc, i) => {
                     cat_to!(out, self.scope(sc).props[i].text, "\n");
+                }
+                Put::Other(sc, i) => {
+                    cat_to!(out, self.scope(sc).other[i], "\n");
                 }
                 Put::Sub(sc) => self.scope_text(sc, out),
                 Put::Group(sc) => {
@@ -2136,6 +2190,20 @@ impl W<'_> {
         Ok(join(&lines, "\n"))
     }
 
+    /// Member `i` of scope `sc` as written in a continuation's block (a class statement
+    /// written as an expression is named by its local there).
+    fn prop_text(&self, sc: Sc, i: usize) -> String {
+        let text = self.scope(sc).props[i].text.clone();
+        match self
+            .class_exprs
+            .iter()
+            .find(|x| x.0 == sc && (text == x.1 || text == cat!(x.1, ": ", x.1)))
+        {
+            Some((_, n, local)) => cat!(n, ": ", local),
+            None => text,
+        }
+    }
+
     /// What the dump writes at a place (a block of a continuation, a dead group).
     fn emit_place(&mut self, pl: Pl) -> R<Vec<String>> {
         let ir = self.ir;
@@ -2158,14 +2226,65 @@ impl W<'_> {
             .filter(|x| x.0 == pl)
             .map(|x| x.1)
             .collect();
+        // Class statements first, each with the members that name it.
+        let mut done: Vec<(Sc, usize)> = Vec::new();
+        let mut here = here;
+        here.sort_by_key(|p| !matches!(p, Put::Other(..)));
         for put in here {
             match put {
+                Put::Other(sc, i) => {
+                    flush(&mut assign, &mut lines);
+                    let l = self.scope(sc).other[i].clone();
+                    // `class C {…}` would declare C again where the frame's binding is:
+                    // an expression, its members naming the local.
+                    let local = self.class_exprs.iter().find(|x| {
+                        x.0 == sc
+                            && l.strip_prefix("class ")
+                                .is_some_and(|r| r.starts_with(x.1.as_str()))
+                    });
+                    let named = match local {
+                        Some((_, n, local)) => {
+                            lines.push_out(cat!("let ", local, " = ", l, ";"));
+                            n.clone()
+                        }
+                        None => {
+                            lines.push_out(l.clone());
+                            l.strip_prefix("let ")
+                                .and_then(|r| r.split_once(" = "))
+                                .map(|x| String::from(x.0))
+                                .unwrap_or_default()
+                        }
+                    };
+                    // Its members right after it: a later class may extend it.
+                    for &(p2, put2) in &self.placed {
+                        if p2 != pl {
+                            continue;
+                        }
+                        if let Put::Prop(psc, pi) = put2
+                            && psc == sc
+                            && refs(&self.scope(sc).props[pi].text).names.contains(&named)
+                            && !done.contains(&(psc, pi))
+                        {
+                            let text = self.prop_text(psc, pi);
+                            lines.push_out(cat!(
+                                "Object.assign($dump.",
+                                ir.factories[sc.0].name,
+                                ", { ",
+                                text,
+                                " });"
+                            ));
+                            done.push_out((psc, pi));
+                        }
+                    }
+                }
                 Put::Prop(..) | Put::K(_) => {
                     let (top, text) = match put {
-                        Put::Prop(sc2, i2) => (
-                            ir.factories[sc2.0].name.clone(),
-                            self.scope(sc2).props[i2].text.clone(),
-                        ),
+                        Put::Prop(sc2, i2) => {
+                            if done.contains(&(sc2, i2)) {
+                                continue;
+                            }
+                            (ir.factories[sc2.0].name.clone(), self.prop_text(sc2, i2))
+                        }
                         Put::K(a) => {
                             let Some((hsc, _)) = self.acts[a].home else {
                                 return refuse("internal: a placed continuation without a home");

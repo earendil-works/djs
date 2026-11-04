@@ -9590,3 +9590,16 @@ writes the reference again. A tagged template is the call `K` makes with the sav
 is not identical to the one the realm caches for that location. A site in a `catch`
 parameter's pattern declares the parameter in a block of `K` with the rest of the
 pattern, followed by the catch block.
+
+## D2881: Classes in a scope a waiting frame shares go into the continuation's block
+date: 2026-11-05 · by: pjr · issue: 0203
+A class whose methods read variables that a suspended frame shares (a class declared in
+a codemode body or an async function, its methods using the function's `let`s) is
+written in the continuation's block, where those variables are declared. It goes to the
+innermost block among the variables its text names, as a closure does, and the members
+that name the class go to the same block, right after it, so a subclass placed later can
+extend it. A class statement `class C {…}` would declare `C` a second time next to the
+frame's binding, so it is written as an expression (`let $djs_c… = class C {…}`). Its
+own inner binding `C` still names the class, and the frame's `C` takes the member as
+before. A class that names none of the scope's variables, or whose members land in
+different blocks, is refused.

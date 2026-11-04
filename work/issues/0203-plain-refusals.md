@@ -89,6 +89,13 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
   tagged templates, member updates, catch parameters): all 17 idle points of the probe
   continue identically, chains included (test plain_dumps_of_heads_and_more; the
   ignored test plain_dumps_probe runs a program from DJS_PROBE).
+- pjr: D2881 classes in a scope a frame shares (dump_plain only; dump_cont.rs left to pjs
+  for 0207 items 1-3), test plain_dumps_of_shared_classes. Still open, all in
+  dump_cont.rs and waiting for pjs: a site in a `using` declaration (`await using r =
+  await x`), a site in an assignment's member target (`o[await k] = v`), and a yield*
+  waiting for its inner return() (async generator return through yield*). Found by the
+  probe, outside plain dumps: an arrow capturing `this`/`super` in a method is refused by
+  the exporter generally ("a captured `this`").
 
 ## Follow-ups
 - Private names on instances (D2878) stay refused. If codemode ever needs them, the
