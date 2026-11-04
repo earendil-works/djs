@@ -1,0 +1,11 @@
+function <anonymous> @1..325
+  arg0 tools@0, arg1 console@0
+  loc0 <state>, loc1 i@218, loc6 C@235, loc8 <fields 0>
+  node 0 Body @0..324: Params 6..22 Stmt 207..311 Stmt 312..321 | Param tools@0#0 Param console@0#0
+  node 1 ForOf @207..311: Head 212..219 Iterable 223..229 Body 231..311 | Const i@218#0
+  node 2 Block @231..311: Stmt 235..264 Stmt 267..309 | Class C@235#0
+  node 3 Expr @267..309: Operand 267..308
+  node 4 Call @267..308: Callee 267..278 Open 278..279 Arg 279..298 Arg 300..307
+  node 5 Await @279..298: Operand 285..298
+  await#1 @279 (5:15) pc 104: for-of.iterator@207 for-of.next@207 call.callee@267 call.this@267
+    path 0.1 1.2 2.1 3.0 4.2 5
