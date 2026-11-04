@@ -1,6 +1,6 @@
 # 0183: The gate in seconds
 
-status: in-progress
+status: done
 agent: gate-speed
 branch: issue/0183-gate-in-seconds
 depends-on: -
@@ -82,8 +82,43 @@ Record each choice as a decision; document the new gate in TESTING.md; keep `scr
   every 1.5 s (third attempt locked, merged). gate.py: flock per worktree, and a pass
   counts only if HEAD stayed put, so an old-protocol merge-to-main that checks out under a
   new gate (or the reverse) fails safely.
+- Part 2 merged (..f9a0a6b6); its merge: 3 attempts (main moved twice), the last 7 s with
+  20 legs cached, merge lock held 17 s in all.
+- Part 3: clippy legs for the shipped feature combinations (D2668, after slim+dump broke
+  main unnoticed); `--full` in the primary checkout runs in `.worktrees/full` (D2669);
+  leg names without commas (`--only` splits on them); djs-test262's four integration
+  tests in one binary.
+- Final numbers, same lab method (load 20–40 during the run): docs-only 8 s, js-only
+  12 s, core 127 s, heap 139 s. Core/heap: the workspace test build is the longest path
+  (~110 s under that load, ~35 s alone), much of it waiting for macOS's first-run checks.
 - Guide: docs/guide/testing.md's gate section rewritten (legs, parallel builds, cache,
   classes, full run). TESTING.md "The gate" rewritten; AGENTS.md: the cache note under
   "Testing while iterating", the coordinator's daily full run.
 
+## Follow-ups
+
+- Owner: Developer Tools permission for the app that runs agents and gates (System
+  Settings › Privacy & Security › Developer Tools). Every new executable's first run
+  waits for syspolicyd's online check today; it is most of a Rust change's gate.
+- A second gate worktree, if the gate lock becomes the queue (D2666 keeps one).
+- Fewer test binaries elsewhere: djs-bgen's three and djs-cli's two integration tests
+  could be one binary each (docs/cli.md and continuation-dumps.md name the files);
+  bins without unit tests could set `test = false` (five empty 1 MB harnesses), with a
+  guard so a later `#[test]` there is not silently skipped.
+- The doctests leg compiles and runs a fresh merged doctest binary per crate (3 doctests,
+  all ignored) on every Rust change.
+- Unifying the cargo configurations (test262, difftest and the docs each build djs-core
+  in another feature set) would save CPU but changes what is tested; owner's call.
+
 ## Result
+
+The gate is scripts/gate.py (gate.sh execs it; TESTING.md "The gate"): legs and builds,
+every cargo configuration in its own target directory so all build at once, legs cached
+by input class (all / nodocs / rust) plus outside inputs, an always-run `paths` guard,
+`--full` (no cache, plus full-only legs; daily on main, in .worktrees/full), `--list`,
+`--only`, `--no-cache`, `--clear-cache`. merge-to-main gates outside the merge lock and
+holds it only to fast-forward, re-gating (mostly cached) when main moved (D2666).
+Before/after (lab, trivial commit per category, loaded machine): docs-only 249 → 8 s,
+js-only 252 → 12 s, core 407 → 127 s, heap 581 → 139 s; merge lock held seconds instead
+of the whole gate. Decisions D2660–D2669. Known gaps: see Follow-ups (macOS first-run
+checks dominate Rust changes; one gate worktree).
