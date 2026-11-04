@@ -6,10 +6,12 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0203 | Plain encodings for remaining refusals (step 4) | pjr (after pjx) | .worktrees/pjx |
 | 0207 | Make plain dumps small (owner priority): header "djs-dump", helpers and source(ref) on host-provided $djs (D2834, D2835), record cuts, liveness pruning | pjs | .worktrees/pjs |
 | 0205 | Retire format 2 (step 6) | pjf | .worktrees/pjf |
 | 0208 | Fuzz plain dumps (generated codemode-like programs, every idle point, djs+node) | pjz | .worktrees/pjz |
+| 0207+ | pjr: class self-reference cycles, origin/re-dump bugs from 0208, $djs.source(ref), 0203 follow-ups | pjr | .worktrees/pjx |
+| 0209 | Plain dump data bugs (accessors of factory closures, static privates, runtime-made objects) | pjd | .worktrees/pjd |
+| 0210 | Compiler: array pattern default in unreachable code | pjk | .worktrees/pjk |
 
 ## Open (ready)
 
@@ -88,6 +90,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0190-0196 | SM migration: slot names (D2730), named slots (D2731), construct temporaries + iter_next_loc (D2732), finally completions (D2733), roles deleted (D2734), one compile per load (D2735) | 9cc8741b (agent sm) |
 | 0198 | Dump performance: corpus dump p50 1.42 -> 0.43 ms wasm, totals 3,243 -> 610 ms; data cases 2-6x (D2800-D2802) | 429184db (agent dumpperf) |
 | - | base_equals_a_compiled_realm test fixed (8f0fdd72); gate recovers from incremental corruption (D2896, b55180dd); CLI/REPL call states (D2894) | agent pjh |
+| 0203 | Plain encodings for remaining refusals (D2871-D2881) | 6cc75827 (agents pjx, pjr; corpus 0 refusals, v2 192/193, private-field instances refused by design D2878) |
 | 0204 | Host hooks for plain dumps: $djs.seed/resume, Sandbox/pi/CLI/REPL load and write plain dumps, plain is the Sandbox default, sleep-dump on plain (D2890-D2898) | 153e642b (agents pjh, pjm; CLI/pi write format 2 unless asked until 0205) |
 | 0202 | Origin tracking (D2870): continuations dumped as activations of their origin | 2cca1e52 (agent pjx; chain links within 512 B of an uninterrupted dump; corpus plain text 36.0 to 24.5 MB) |
 | 0201 | Plain-JS exporter (format 3, DumpOptions::plain; D2860, D2861) | e0057402 (agent pjx; 1,197/1,197 idle points continue in djs, 1,187 links in node; 1 refusal ratcheted in tests/plain-refusals.txt) |

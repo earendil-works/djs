@@ -653,3 +653,4 @@ topics when the index is next reorganized.
 - D2904: The hosts' plain-dump paths run with frozen builtins
 - D2879: TypeScript plain dumps are written as JavaScript where the TypeScript is only types
 - D2880: Sites in loop heads, `var` declarations, catch parameters and more literals
+- D2881: Classes in a scope a waiting frame shares go into the continuation's block
