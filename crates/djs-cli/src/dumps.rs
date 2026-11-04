@@ -35,6 +35,7 @@ pub fn dump_names(
         host: HOST_GLOBALS,
         host_fn_name: &name,
         handles,
+        call_states: &[],
     };
     vm.dump_report(&opts, names).map_err(|e| e.message())
 }

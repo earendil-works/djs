@@ -61,6 +61,10 @@ pub struct DumpOptions<'a> {
     /// Values the host holds (a run's promise, a REPL input's): dumped as
     /// `$dump.handle(name, v)`, so the loader gives them back.
     pub handles: &'a [(&'a str, Value)],
+    /// The host's state of its open calls, by call id, as JSON text (D2770): written as
+    /// the fourth argument of the call's `$dump.pending`, and given back by the loader
+    /// (`OpenCall::state`). A call without an entry is written without one.
+    pub call_states: &'a [(u32, &'a str)],
 }
 
 fn no_host_fn_name(_: u32) -> Option<String> {
@@ -74,6 +78,7 @@ impl Default for DumpOptions<'_> {
             host: &[],
             host_fn_name: &no_host_fn_name,
             handles: &[],
+            call_states: &[],
         }
     }
 }

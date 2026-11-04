@@ -337,10 +337,12 @@ pub fn explain_dump(
     };
     let mut shown: Vec<String> = Vec::new();
     for c in &loaded.calls {
+        let state = c.state.as_deref().map(|j| format!(", state {j}"));
         s.push_str(&format!(
-            "#{} {}\n",
+            "#{} {}{}\n",
             c.id,
-            Tools::describe_as(&mut vm, c.id, &c.name)
+            Tools::describe_as(&mut vm, c.id, &c.name),
+            state.unwrap_or_default()
         ));
         let heap = vm.heap();
         let waiting = activations::call_promise(heap, c.id)

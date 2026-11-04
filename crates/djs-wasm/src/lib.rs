@@ -42,7 +42,7 @@ use djs_core::vm::{Status, Vm, VmOptions};
 use djs_core::wire::{self, DecodeOptions};
 
 /// The ABI version, bumped on any incompatible change to the exports.
-pub const ABI_VERSION: u32 = 2;
+pub const ABI_VERSION: u32 = 3;
 
 /// `vm_run` results.
 pub mod status {
@@ -960,8 +960,11 @@ pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32) -> i
 /// host's function names in id order, tab-separated (`DumpOptions::host_fn_name`: open
 /// calls and host functions held as values are written by name); the values to name for
 /// the host, `handle:name`, tab-separated (`DumpOptions::handles`, written as
-/// `$dump.handle(name, v)`; handle 0: the entry call's outcome, `Vm::outcome`, D2633). 0: the dump is in out; 1: refused, the reasons in out (one
-/// per line); 2: no base image (inject it first).
+/// `$dump.handle(name, v)`; handle 0: the entry call's outcome, `Vm::outcome`, D2633);
+/// the host's states of open calls (D2770), `call_id:byte_len`, tab-separated, and after
+/// that line's newline the states' JSON texts one after another (`DumpOptions::call_states`,
+/// written as `$dump.pending`'s fourth argument). 0: the dump is in out; 1: refused, the
+/// reasons in out (one per line); 2: no base image (inject it first).
 #[cfg(feature = "dump")]
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
@@ -971,7 +974,8 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
         let text = staged_str(staging, 0, len).to_owned();
-        let mut lines = text.split('\n');
+        // Five lines, then the states' text, which may hold newlines of its own.
+        let mut lines = text.splitn(6, '\n');
         let mut line = || lines.next().unwrap_or("");
         let host: Vec<&str> = line().split(',').filter(|n| !n.is_empty()).collect();
         let names: Vec<&str> = line().split(',').filter(|n| !n.is_empty()).collect();
@@ -994,6 +998,25 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
                 Some((name, v))
             })
             .collect();
+        let state_lens = line();
+        let state_text = line();
+        let mut call_states: Vec<(u32, &str)> = Vec::new();
+        let mut at = 0;
+        for e in state_lens.split('\t').filter(|e| !e.is_empty()) {
+            let state = e.split_once(':').and_then(|(id, n)| {
+                let end = at + n.parse::<usize>().ok()?;
+                let json = state_text.get(at..end)?;
+                at = end;
+                Some((id.parse().ok()?, json))
+            });
+            match state {
+                Some(s) => call_states.push(s),
+                None => {
+                    s.set_out(b"bad call states in staging\n");
+                    return 1;
+                }
+            }
+        }
         let r = BASE.with(|b| {
             let b = b.borrow();
             let base = b.as_deref()?;
@@ -1002,6 +1025,7 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
                 host: &host,
                 host_fn_name: &host_fn_name,
                 handles: &handles,
+                call_states: &call_states,
             };
             Some(
                 slot.vm
@@ -1032,9 +1056,10 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
 /// functions, `\n`-separated, the i-th (from 0) having id i + 1: the loader maps an open
 /// call's name (`$dump.pending(id, "sleep", args)`) to its id with it (0179). The dump's
 /// UTF-8 text follows, `len` bytes. 0: loaded, out = what the load returned (`Loaded`):
-/// u32 words `n_calls, n_handles, (call_id, fn_id) * n_calls, (handle, name_len) *
-/// n_handles`, then the handles' names, UTF-8, one after another. The handles are the
-/// host's to free. 1: not loaded, the reason in out.
+/// u32 words `n_calls, n_handles, (call_id, fn_id, state_len) * n_calls, (handle,
+/// name_len) * n_handles`, then the handles' names, UTF-8, one after another, then the
+/// calls' states (D2770; JSON text, `state_len` bytes, 0: the call has none). The handles
+/// are the host's to free. 1: not loaded, the reason in out.
 #[cfg(feature = "dump")]
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_load_dump(vm: u32, names_len: usize, len: usize) -> i32 {
@@ -1055,13 +1080,17 @@ pub extern "C" fn vm_load_dump(vm: u32, names_len: usize, len: usize) -> i32 {
         match slot.vm.load_dump(&text, &opts) {
             Ok(loaded) => {
                 let mut words = vec![loaded.calls.len() as u32, loaded.handles.len() as u32];
-                for c in &loaded.calls {
-                    words.extend([c.id, c.fn_id]);
-                }
                 let mut text = Vec::new();
+                for c in &loaded.calls {
+                    let state = c.state.as_deref().unwrap_or("");
+                    words.extend([c.id, c.fn_id, state.len() as u32]);
+                }
                 for (name, h) in &loaded.handles {
                     words.extend([h.index() + 1, name.len() as u32]);
                     text.extend_from_slice(name.as_bytes());
+                }
+                for c in &loaded.calls {
+                    text.extend_from_slice(c.state.as_deref().unwrap_or("").as_bytes());
                 }
                 s.set_out_words(&words);
                 s.out.extend_from_slice(&text);

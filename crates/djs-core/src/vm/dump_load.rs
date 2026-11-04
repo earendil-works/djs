@@ -58,12 +58,14 @@ pub struct Loaded {
 }
 
 /// An open host call of a loaded dump: its id (the host's from before the dump), the
-/// function the host named for it, and the name the dump gave.
+/// function the host named for it, the name the dump gave, and the host's state of the
+/// call as JSON text, if the dump has one (D2770).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenCall {
     pub id: u32,
     pub fn_id: u32,
     pub name: String,
+    pub state: Option<String>,
 }
 
 /// Why a dump did not load.
@@ -460,8 +462,9 @@ impl Vm {
         Ok(Value::object(r))
     }
 
-    /// `$dump.pending(id, name, args)`: the open async host call `id` of the function the
-    /// host knows as `name`; its promise.
+    /// `$dump.pending(id, name, args, state?)`: the open async host call `id` of the
+    /// function the host knows as `name`; its promise. `state`, the host's state of the
+    /// call (D2770), goes back to the host as JSON text (`OpenCall::state`).
     fn primitive_pending(
         &mut self,
         args: &[Value],
@@ -476,6 +479,13 @@ impl Vm {
         // (Below LOADER_CALL_IDS, as every positive int32 is.)
         let name = string_arg(&self.heap, arg(1), "$dump.pending")?;
         let values = array_arg(&self.heap, arg(2), "$dump.pending")?;
+        let state = match arg(3) {
+            v if v.is_undefined() => None,
+            v => match crate::json::stringify_fast(&mut self.heap, v, &[]) {
+                Ok(Some(s)) => Some(self.heap.str_to_string(s)),
+                _ => return Err("$dump.pending: the call's state is not JSON data".into()),
+            },
+        };
         if crate::interp::run::host_call_cell(&self.heap, id).is_some() {
             return Err(cat!("$dump.pending: call ", id, " is open already"));
         }
@@ -506,7 +516,12 @@ impl Vm {
                 .arena_mut()
                 .set(c, HostCall::FLAGS, flags | super::HOST_CALL_REPORTED);
         }
-        load.out.calls.push(OpenCall { id, fn_id, name });
+        load.out.calls.push(OpenCall {
+            id,
+            fn_id,
+            name,
+            state,
+        });
         Ok(Value::object(p))
     }
 

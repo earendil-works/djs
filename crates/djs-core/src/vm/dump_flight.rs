@@ -4,7 +4,8 @@
 //! them.
 //!
 //! - An open call is `$dump.pending(id, name, args)`, by the name the host gives its
-//!   function (`DumpOptions::host_fn_name`).
+//!   function (`DumpOptions::host_fn_name`), with the host's JSON state of the call as a
+//!   fourth argument when it gave one (`DumpOptions::call_states`, D2770).
 //! - A pending promise is written by what made it: an open call, an activation (its
 //!   result promise), a `then` on another promise (its derived promise), a combinator
 //!   (`Promise.all` ...), or `new Promise` whose resolving functions the dump hands to
@@ -104,6 +105,8 @@ struct Call {
     name: String,
     args: Vec<Value>,
     promise: Value,
+    /// The host's state of the call, JSON text checked by `dump_state::check`.
+    state: Option<String>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -199,7 +202,8 @@ impl Dumper<'_> {
                 "is not idle (a host result was delivered and not applied yet)",
             );
         }
-        for id in vm.pending_host_calls() {
+        let open = vm.pending_host_calls();
+        for &id in &open {
             let Some(info) = vm.host_call(id) else {
                 continue;
             };
@@ -214,12 +218,28 @@ impl Dumper<'_> {
                 self.note(a, || cat!(path, ".args[", i, "]"));
             }
             self.note(promise, || path.clone());
+            let mut state = None;
+            if let Some(&(_, json)) = opts.call_states.iter().find(|(c, _)| *c == id) {
+                match crate::vm::dump_state::check(json) {
+                    Ok(()) => state = Some(String::from(json)),
+                    Err(why) => self.refuse(cat!(path, ".state"), why),
+                }
+            }
             self.fl.calls.push_out(Call {
                 id,
                 name,
                 args: info.args,
                 promise,
+                state,
             });
+        }
+        for &(id, _) in opts.call_states {
+            if !open.contains(&id) {
+                self.refuse(
+                    cat!("<call ", id, ">"),
+                    "a state for a call that is not open",
+                );
+            }
         }
         for &(name, v) in opts.handles {
             self.note(v, || cat!("<handle ", name, ">"));
@@ -1297,7 +1317,10 @@ impl Dumper<'_> {
                     );
                 }
                 let name = self.reserve(n, "p");
-                let Call { id, name: f, .. } = &self.fl.calls[c];
+                let Call {
+                    id, name: f, state, ..
+                } = &self.fl.calls[c];
+                let state = state.as_deref().map_or(String::new(), |s| cat!(", ", s));
                 let l = cat!(
                     name,
                     " = $dump.pending(",
@@ -1306,7 +1329,9 @@ impl Dumper<'_> {
                     quote(f),
                     ", [",
                     join(&a, ", "),
-                    "]);"
+                    "]",
+                    state,
+                    ");"
                 );
                 self.line(l, before);
                 self.made(p, name);

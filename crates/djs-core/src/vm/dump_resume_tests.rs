@@ -218,7 +218,8 @@ fn plan_example() {
         [super::dump_load::OpenCall {
             id: 5,
             fn_id: LATER,
-            name: "later".into()
+            name: "later".into(),
+            state: None,
         }]
     );
     assert_eq!(l.handles.len(), 1);
@@ -803,6 +804,7 @@ fn body_dump(src: &str, k: usize) -> (Vec<String>, Option<Result<super::dump::Du
         host: &["console", "tools", "print", "later"],
         host_fn_name: &host_fn_name,
         handles: &handles,
+        call_states: &[],
     };
     let d = vm.dump_report(&opts, None).map_err(|e| e.message());
     (lines, Some(d))
@@ -1141,6 +1143,7 @@ fn write_golden_dumps() {
                 host: GOLDEN_HOST,
                 host_fn_name: &host_fn_name,
                 handles: if body { &handles } else { &[] },
+                call_states: &[],
             };
             let text = vm
                 .dump(&opts, None)
