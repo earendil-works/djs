@@ -564,14 +564,19 @@ def write_steps(all_jobs, wall):
     cpu = sum(j.cpu for j in all_jobs)
     lines.append(f"total\t{wall:.0f}\t{cpu:.1f}")
     Path("target/gate-steps.tsv").write_text("\n".join(lines) + "\n")
-    # The slowest unit tests and test262 tests, for merge-to-main's slow-tests.tsv.
+    # The slowest unit tests and test262 tests, for merge-to-main's slow-tests.tsv: from
+    # this run's legs only (empty when they were cached).
+    ran = {j.name for j in all_jobs if j.state == "ok"}
+    for name, out in (("test", "target/gate-slowest-tests.tsv"), ("test262", "target/gate-slowest-test262.txt")):
+        if name not in ran:
+            Path(out).write_text("")
     times = Path(G, "test-times.tsv")
-    if times.exists():
+    if "test" in ran and times.exists():
         rows = sorted((l.split("\t") for l in times.read_text().splitlines() if l.count("\t") == 2),
                       key=lambda r: -float(r[0]))[:10]
         Path("target/gate-slowest-tests.tsv").write_text("".join("\t".join(r) + "\n" for r in rows))
     log = Path(by_name_log("test262"))
-    if log.exists():
+    if "test262" in ran and log.exists():
         text = log.read_text(errors="replace")
         part = text.split("slowest:", 1)[1].split("\n\n", 1)[0] if "slowest:" in text else ""
         Path("target/gate-slowest-test262.txt").write_text(
