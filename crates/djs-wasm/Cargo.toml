@@ -7,6 +7,8 @@ publish.workspace = true
 description = "The wasm32 export layer over djs-core's Vm (docs/host.md)."
 
 [lib]
+# No doctests (scripts/gate.py `targets` fails if one appears): none to compile (0197).
+doctest = false
 # cdylib: the .wasm module; rlib: so native unit tests can call the exports.
 crate-type = ["cdylib", "rlib"]
 

@@ -179,7 +179,7 @@ fn fuel_independent_of_slice() {
     assert!(errors.is_empty(), "{}", errors.join("\n"));
 }
 
-/// Every e2e case at a few slices (slow; `cargo test --test slices -- --ignored`).
+/// Every e2e case at a few slices (slow; `cargo test -p djs-core --test it slices:: -- --ignored`).
 #[test]
 #[ignore]
 fn raw_images_independent_of_slice_all_e2e() {

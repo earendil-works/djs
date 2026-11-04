@@ -6,6 +6,10 @@ license.workspace = true
 publish.workspace = true
 description = "The base snapshot: djs-core's realm with the prelude installed, made at build time (D1321)."
 
+[lib]
+# No doctests (scripts/gate.py `targets` fails if one appears): none to compile (0197).
+doctest = false
+
 [features]
 default = ["raw", "registry", "full", "unicode"]
 # djs-core's features (D2411), for the base image this crate builds: its build script's

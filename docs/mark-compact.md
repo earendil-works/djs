@@ -185,7 +185,7 @@ threshold, the capacity) can go into a shared tail, so the net cost is somewhat 
   - Map/Set rehash;
   - IC slots emptied;
   - mark-stack overflow (a small stack forced in tests, a long linked list).
-- The 0071 slice tests (tests/slices.rs), e2e image equality, difftest `--determinism`
+- The 0071 slice tests (tests/it/slices.rs), e2e image equality, difftest `--determinism`
   and native-vs-wasm unchanged and green.
 - `canonical_hash` equal before and after `Vm::collect` (it already is a test), and
   equal across collection points with mark-compact in-VM.
@@ -287,7 +287,7 @@ from Cheney: 382,392 B on both).
 
 **Tests:**
 - lib (+ `both_collectors_keep_the_same_graph` with a 3-entry stack,
-  `collection_points_do_not_change_compacted_images`), e2e ×3, `tests/slices.rs`;
+  `collection_points_do_not_change_compacted_images`), e2e ×3, `tests/it/slices.rs`;
 - difftest with suspension, GC stress and `--determinism` over builtins, language,
   codemode and errors;
 - native vs wasm, the node tests (the base equals a compiled realm), the djs-prelude

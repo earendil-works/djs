@@ -539,7 +539,7 @@ and the oracle's `.expected` files stay as they are.
 | e2e | `DJS_E2E_MODE=dump`: the async tests with a dump round trip at every idle point |
 | difftest | `--dump-every-idle` over `codemode` and `codemode-harvest`, in the gate next to `--suspend-every 97` |
 | coverage | `vm::dump_harvest` at every idle point of the harvested cases and the 2,627 private scripts, counted by refusal reason |
-| REPL | line-mode transcripts in `crates/djs-cli/tests/repl.rs` |
+| REPL | line-mode transcripts in `crates/djs-cli/tests/it/repl.rs` |
 | CLI | `djs run --dump-after K` / `djs resume` for every K of a few scripts |
 | Sandbox | `js/test/dumpresume.test.ts`: round trips at every idle point; refusals |
 | pi | `pi-vm.test.ts` through the adapter; `node js/pi/pi-tests.ts --dump-every-idle` with prelude-next, every wait resumed in a new module instance |

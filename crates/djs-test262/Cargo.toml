@@ -5,8 +5,14 @@ version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[lib]
+# No doctests (scripts/gate.py `targets` fails if one appears): none to compile (0197).
+doctest = false
+
 [[bin]]
 name = "djs-test262"
+# No unit tests in the program (scripts/gate.py `targets` checks): no empty test binary (0197).
+test = false
 path = "src/main.rs"
 
 [features]

@@ -7,12 +7,20 @@ publish.workspace = true
 # `cargo run -p djs-difftest` (scripts, the gate) runs the difftest, not djs-abidrive.
 default-run = "djs-difftest"
 
+[lib]
+# No doctests (scripts/gate.py `targets` fails if one appears): none to compile (0197).
+doctest = false
+
 [[bin]]
 name = "djs-difftest"
+# No unit tests in the program (scripts/gate.py `targets` checks): no empty test binary (0197).
+test = false
 path = "src/main.rs"
 
 [[bin]]
 name = "djs-abidrive"
+# No unit tests in the program (scripts/gate.py `targets` checks): no empty test binary (0197).
+test = false
 path = "src/bin/djs-abidrive.rs"
 
 [features]

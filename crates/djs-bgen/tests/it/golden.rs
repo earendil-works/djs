@@ -47,12 +47,15 @@ fn native_fixture() {
     compare(&dir.join("native.js"), &out.prelude);
 }
 
+/// The same files `scripts/bgen.sh --check` compares, so the gate needs no run of the
+/// djs-bgen program of its own (0197).
 #[test]
 fn builtins_gen_is_fresh() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../builtins");
     let out = djs_bgen::compile_dir(&dir).unwrap_or_else(|e| panic!("{e}"));
     for (path, text) in [
         (djs_bgen::PRELUDE_PATH, &out.prelude),
+        (djs_bgen::PRELUDE_SLIM_PATH, &out.prelude_slim),
         (djs_bgen::REPORT_PATH, &out.report),
         (djs_bgen::NATIVES_PATH, &out.natives),
     ] {

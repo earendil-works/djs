@@ -5,6 +5,10 @@ version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[lib]
+# No doctests (scripts/gate.py `targets` fails if one appears): none to compile (0197).
+doctest = false
+
 [dependencies]
 # Pinned: Math results depend on the version, which is hashed into BUILD_HASH (D1750).
 libm = "=0.2.16"

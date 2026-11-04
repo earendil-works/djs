@@ -93,7 +93,7 @@ fn suspended_match_resumes_from_the_image() {
     resumes_from_the_image(13);
 }
 
-/// Every stop restored (`cargo test --test regexp_fuel -- --ignored`).
+/// Every stop restored (`cargo test -p djs-core --test it regexp_fuel:: -- --ignored`).
 #[test]
 #[ignore]
 fn suspended_match_resumes_from_the_image_at_every_stop() {

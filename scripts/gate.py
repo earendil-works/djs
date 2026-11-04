@@ -197,6 +197,7 @@ def jobs():
         J("fmt", "cargo fmt --all --check"),
         J("registry", "python3 scripts/registry.py check main"),
         J("paths", "python3 scripts/gate.py paths"),
+        J("targets", "python3 scripts/gate.py targets"),
 
         # --- Host builds. Each cargo configuration (package and features) has its own target
         # directory, so that they build at once (cargo locks a target directory's profile).
@@ -213,13 +214,13 @@ def jobs():
         J("build:docs", f"CARGO_TARGET_DIR=target/gate-docs cargo build -p djs-docs --quiet {cargo_json}"
           f" > {G}/docs.json && {exe} {G}/docs.json djs-docs", group="target/gate-docs", build=True),
         J("build:unsafe-tests", "CARGO_TARGET_DIR=target/gate-unsafe cargo test -p djs-core --features unsafe-heap"
-          f" --no-run --quiet --test verify_fuzz --test e2e {cargo_json} > {G}/unsafe-tests.json",
+          f" --no-run --quiet --test it --test e2e {cargo_json} > {G}/unsafe-tests.json",
           group="target/gate-unsafe", build=True),
         J("build:unsafe-release", "cargo build --release -p djs-difftest --features djs-core/unsafe-heap"
           f" --quiet {cargo_json} > {G}/unsafe-release.json"
           f" && {exe} {G}/unsafe-release.json djs-difftest", group="target/release", build=True),
-        J("bgen", "./scripts/bgen.sh --check", cls="rust", group=tgt),
-        J("doctests", "cargo test --workspace --doc --quiet", cls="rust", group=tgt, needs=["build:tests"]),
+        # builtins/gen's freshness is djs-bgen's `builtins_gen_is_fresh` test (in `test`), and
+        # no crate has doctests (`targets` keeps it so): no programs of their own (D2790).
 
         # --- Clippy, host and wasm32 release (no debug_assertions, so warnings that only
         # appear there fail too; with djs-wasm's docs feature for the docs site's module).
@@ -238,12 +239,13 @@ def jobs():
           " do CARGO_TARGET_DIR=target/clippy-combos cargo clippy -p djs-core $f --lib --quiet -- -D warnings"
           " || { echo \"in: cargo clippy -p djs-core $f\"; exit 1; }; done",
           cls="rust", group="target/clippy-combos"),
-        J("clippy (wasm modules in release)", "for f in '' '--no-default-features' '--features dump'"
-          " '--no-default-features --features dump';"
-          " do CARGO_TARGET_DIR=target/clippy-wasm-combos cargo clippy -p djs-wasm --target wasm32-unknown-unknown"
-          " --release $f --quiet -- -D warnings"
-          " || { echo \"in: cargo clippy -p djs-wasm --target wasm32-unknown-unknown --release $f\"; exit 1; }; done",
-          cls="rust", group="target/clippy-wasm-combos"),
+        *[J(f"clippy (wasm {name} module in release)",
+            f"CARGO_TARGET_DIR=target/clippy-wasm-{name} cargo clippy -p djs-wasm --target wasm32-unknown-unknown"
+            f" --release {flags} --quiet -- -D warnings", cls="rust", group=f"target/clippy-wasm-{name}")
+          # One target directory each: four feature sets build nothing in common, and one
+          # after another they were the gate's second-longest path (0197).
+          for name, flags in (("main", ""), ("slim", "--no-default-features"), ("dump", "--features dump"),
+                              ("slim-dump", "--no-default-features --features dump"))],
 
         # --- wasm32 dev builds: djs-core no_std, and the modules the js tests load (0023),
         # with and without the dumper (0175, D2635).
@@ -697,11 +699,13 @@ def cmd_stream(_args):
 
     def warm(exe, is_test):
         with sem:
+            t0 = time.time()
             try:
                 subprocess.run([exe, "--list" if is_test else "--help"], stdin=subprocess.DEVNULL,
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
             except (OSError, subprocess.SubprocessError):
                 pass
+            print(f"gate stream: {Path(exe).name} first run {time.time() - t0:.1f}s", file=sys.stderr)
     for line in sys.stdin:
         sys.stdout.write(line)
         sys.stdout.flush()
@@ -717,8 +721,11 @@ def cmd_stream(_args):
             t = threading.Thread(target=warm, args=(m["executable"], m["profile"]["test"]))
             t.start()
             threads.append(t)
+    built = time.time()
     for t in threads:
         t.join()
+    print(f"gate stream: cargo done; {len(threads)} new executables run once, the last"
+          f" {time.time() - built:.1f}s after", file=sys.stderr)
     return 0
 
 
@@ -835,6 +842,64 @@ def cmd_paths(_args):
     return 0
 
 
+# rustdoc's code block attributes: a block whose info string has only these (or none) is
+# Rust, and compiled as a doctest unless it is `ignore`d.
+RUSTDOC_ATTRS = re.compile(r"^(rust|should_panic|no_run|compile_fail|test_harness|standalone_crate"
+                           r"|edition\d+|ignore(-.*)?|E\d+)?$")
+DOC_LINE = re.compile(r"^\s*//[/!] ?(.*)$")
+
+
+def doctests_in(src_dir):
+    """`file:line` of every doctest rustdoc would compile in a crate's sources."""
+    found = []
+    for f in sorted(Path(src_dir).rglob("*.rs")):
+        fence = None
+        for n, line in enumerate(f.read_text(errors="replace").splitlines(), 1):
+            m = DOC_LINE.match(line)
+            text = m.group(1).strip() if m else None
+            if text is None:
+                fence = None
+                continue
+            if fence is None:
+                if text.startswith(("```", "~~~")):
+                    fence = text[:3]
+                    info = [t for t in re.split(r"[\s,]+", text[3:].strip()) if t]
+                    rust = all(RUSTDOC_ATTRS.match(t) for t in info)
+                    if rust and not any(t.startswith("ignore") for t in info):
+                        found.append(f"{f}:{n}")
+            elif text.startswith(fence):
+                fence = None
+    return found
+
+
+def cmd_targets(_args):
+    """targets: what the manifests leave out of `cargo test` must have nothing to test
+    (D2790): a library with `doctest = false` has no doctests, a program with `test =
+    false` no unit tests (no #[test], no cfg(test), no modules of its own)."""
+    bad = []
+    for manifest in sorted(Path("crates").glob("*/Cargo.toml")):
+        crate = manifest.parent
+        with open(manifest, "rb") as f:
+            m = tomllib.load(f)
+        lib = m.get("lib", {})
+        if (crate / "src/lib.rs").exists() and lib.get("doctest", True) is False:
+            bad += [f"{d}: a doctest, but {manifest} has doctest = false" for d in doctests_in(crate / "src")]
+        for b in m.get("bin", []):
+            if b.get("test", True) is not False:
+                continue
+            path = crate / b.get("path", f"src/bin/{b['name']}.rs")
+            text = path.read_text()
+            if re.search(r"#\[test\]|cfg\(test\)|^\s*(pub(\(\w+\))? )?mod \w+;", text, re.M):
+                bad.append(f"{path}: tests or modules, but its [[bin]] has test = false")
+    if bad:
+        print("gate targets: cargo test would skip these (scripts/gate.py, D2790):")
+        print("\n".join(f"  {b}" for b in bad))
+        print("Remove the `doctest = false` / `test = false` line from the manifest.")
+        return 1
+    print("targets: OK")
+    return 0
+
+
 def main(argv):
     if argv[:1] == ["exe"]:
         return cmd_exe(argv[1:])
@@ -842,6 +907,8 @@ def main(argv):
         return cmd_stream(argv[1:])
     if argv[:1] == ["tests"]:
         return cmd_tests(argv[1:])
+    if argv[:1] == ["targets"]:
+        return cmd_targets(argv[1:])
     if argv[:1] == ["paths"]:
         return cmd_paths(argv[1:])
     if "--full" in argv and Path(".").resolve() == PRIMARY.resolve():

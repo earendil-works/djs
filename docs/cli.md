@@ -285,7 +285,7 @@ uncaught error prints as `Uncaught Name: message` with its stack. `console.log` 
 ### Line mode and tests
 
 When stdin is not a terminal, the REPL reads lines with no prompt, banner or editing,
-and prints only results. `crates/djs-cli/tests/repl.rs` drives it that way.
+and prints only results. `crates/djs-cli/tests/it/repl.rs` drives it that way.
 
 ### The line editor
 

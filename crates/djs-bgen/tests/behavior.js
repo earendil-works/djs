@@ -1,6 +1,6 @@
 // Runs the generated builtins (builtins/gen/prelude.js, with %Name(...) rewritten to
 // I.Name(...)) against qjs's native implementations. Prints one line per mismatch and
-// "ok N" at the end. Used by tests/behavior.rs; PRELUDE is prepended by the test.
+// "ok N" at the end. Used by tests/it/behavior.rs; PRELUDE is prepended by the test.
 "use strict";
 
 const installed = {};
