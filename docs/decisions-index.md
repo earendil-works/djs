@@ -630,3 +630,5 @@ topics when the index is next reorganized.
 - D2853: TypeScript expressions are transparent on site paths
 - D2895: Several handles in a plain dump: a null-prototype object as the completion value
 - D2896: The gate clears a corrupt incremental cache and runs the job once more
+- D2860: The plain exporter writes format 2's lines and an IR, and rewrites them
+- D2861: Plain dumps are checked over every corpus idle point, in djs and in node

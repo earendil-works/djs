@@ -1,6 +1,6 @@
 # 0201: Exporter: plain-JS continuations in Rust (behind a flag), djs run of plain dumps, node harness and chain check in the gate
 
-status: in-progress
+status: done
 agent: pjx
 branch: issue/0201-plain-exporter
 depends-on: 0200 (interface first)
@@ -55,5 +55,51 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
   args[, state])`, one handle, header `"djs-dump 3"` (`typescript` variant), host
   functions written inline as their host_fn_name expression (evaluated during the load).
 
+### Second session (pjx)
+- Rebased on 0200 (site syntax recorded) and 0206 (patterns, TS ranges), and on 0204
+  (pjh's host side; `djs-cli` `dump_names` now passes `plain` through).
+- Fixes found by the corpus: dependencies of a factory or a statement are what its
+  evaluation reads (`eager_refs` skips function and class bodies; a global named inside
+  a closure is read when it runs, and a continuation of an earlier dump names that
+  dump's `$dump`); a group's block is placed where its frame declares its live variables;
+  values written by a global's name that a factory variable shadows are read before the
+  factory (also fixes the same latent case in format 2); continuations of continuations
+  get fresh scaffold/temporary names and no second helper declaration; continuation keys
+  avoid member names (an earlier dump's `$Ka18`); the final block parenthesizes the
+  handle and deletes `$djs` too (pjh, D2890); several handles by name (D2895).
+- difftest: `--plain-out DIR` (dumps, output before each, the plain run's transcript and
+  clock); a refusal ends a case's dumps; `$djs.resume` through `Vm::open_host_call`
+  like the hosts; TS plain dumps compile as TypeScript.
+- scripts/plain-node.mjs (node check, refusal ratchet tests/plain-refusals.txt), gate leg
+  "plain dumps (djs and node)", TESTING.md paragraph, D2860/D2861.
+- djs-core tests: `plain::tests` (scanner), `plain_dump_chains_continue_like_the_run`
+  (the v2 fixtures as chains: 35 links; refused: operands (new.target/super),
+  asyncgen (for-await site), reenact (async-from-sync close, a promise reacted to
+  before the dump can make it)).
+- Guide: no page describes plain dumps yet (none affected).
+
+## Follow-ups
+- 0202: origin tracking. Today a continuation of a continuation keeps the earlier ones
+  as its `$djs.f` (linear growth, ~3 kB per link in h261); stale `$dump.` names inside
+  old continuation texts are harmless (never run) but ugly.
+- 0203: for-await sites (codemode/async-helpers.js idle point 8), new.target/super,
+  patterns and defaults (now on paths, 0206), yield*, update expressions, tagged
+  templates, async-from-sync close, iterator helpers, `using`.
+- TS plain dumps as plain JS (strip every function text the dump writes, D2853), then
+  run them in node too (plain-node.mjs skips `"djs-dump 3 typescript"`).
+- `djs run --plain` (pjh's run.rs has the `plain` field "once the plain exporter
+  lands"): the exporter is in; wiring the flag is CLI work.
+- The node check maps only V8's `Cannot read properties of ...` wording; other
+  engine-specific messages would need entries.
 
 ## Result
+Plain dumps (format 3, D2830) behind `DumpOptions::plain`: `vm.dump(&DumpOptions {
+plain: true, .. })` returns a Script starting `"djs-dump 3";` that a host runs with
+`$djs = { seed, resume }` (D2890); its completion value is the `run` handle (or every
+handle by name, D2895). Over the whole difftest corpus 1,197 idle points: every case is
+dumped at each idle point as a chain of up to 50 links and continues identically in
+djs; 1,187 links also run in node identically (TS dumps skipped in node); 1 case refuses
+(for-await site, 0203), listed in tests/plain-refusals.txt. Check: `djs-difftest
+--engine djs --plain-out DIR` then `node scripts/plain-node.mjs DIR --refusals
+tests/plain-refusals.txt` (the gate leg). Known gaps: the 0203 constructs refuse; chain
+growth until 0202.
