@@ -9600,6 +9600,21 @@ undefined, so the next dump writes no data for it; a link of a chain may therefo
 smaller than a dump of the run at that point. The size score's scanner counts the
 harness's synthetic results as environment also when the dump writes them in place.
 
+## D2912: A continuation writes origin records only where it can stop again, and less text
+date: 2026-11-04 · by: pjs · issue: 0207
+From a line-by-line review of the sleep-dump example's dump. The records of K's own
+constructs (`k`, `tmp`), which origin tracking needs only when K stops again inside its
+rewritten statement, are written only where the construct can: its text after the site
+has an `await` or a `yield`, or one lies between it and the site. A block's end is a site
+(for its `using` disposal) only where the block or the loop head declares `using`. Text K
+writes that goes on the original's right after a copied stretch (` of `, `const r = `), and
+a copy right after another, extend that stretch instead of starting a segment. The site is
+written without parentheses where an assignment expression may stand (an argument, an
+element, a property's value, an initializer, an expression statement, a `return`'s or
+`throw`'s operand, an assignment's right side, a template's substitution). A placeholder
+loop whose iterator the dump's callback makes inside the loop's first iteration takes the
+record late (`$djs.L`'s `set`, after that part ran; D2910 refused it).
+
 ## D2875: `yield*` in plain continuations: a `yield*` over a wrapper of the inner record
 date: 2026-11-05 · by: pjr · issue: 0203
 At a `yield*` site, `K` delegates again with `yield* $dump.Y(it, next, async, ...first)`.

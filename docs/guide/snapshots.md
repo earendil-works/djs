@@ -264,54 +264,49 @@ is this dump (`djs run --body --dump-after 2`; the open call's state is the CLI'
 "use strict";
 $djs.seed(2135587861, -1640531527, 4);
 globalThis.$dump = {};
-$dump.b0 = Object.getPrototypeOf([][Symbol.iterator]())["next"];
 $dump.p1 = $djs.resume(3, "tools.read", [{ path: "b.md" }], {"made":["read"],"answered":{"read":1}});
 $dump.n2 = ["# A"];
 $dump.i3 = $djs.advance(Array.prototype.values.call(["a.md", "b.md"]), 2);
-$dump.a4_0 = tools;
-$dump.a4_1 = console;
-$dump.Ka4 = async function () {
-const $djs_L = $djs.L;
-var tools = $dump.a4_0;
-var console = $dump.a4_1;
-const notes = $dump.n2;
-{ let $djs_f1 = true; for (const $djs_v1 of $djs_L($dump.i3, $dump.b0)) { if ($djs_f1) { $djs_f1 = false; {
-const path = "b.md";
-notes.push((await $dump.p1));
-} } else { const path = $djs_v1; {
+$dump.Fa4 = $djs.source("notes.js", "3753c3a1172c33f7", "tools,console");
+$dump.a4 = $djs.k(async function (tools, notes) {
+const $djs_I = $djs.I;
+const $djs_i1 = $dump.i3;
+notes.push(await $dump.p1);
+for (const path of $djs_I($djs_i1)) {
   notes.push(await tools.read({ path }));
-} } } }
+}
 return notes.join("\n");
-};
-$dump.Fa4 = async function (tools, console) { /* the script, verbatim */ };
-Object.defineProperty($dump.Ka4, "$djs", { value: { f: $dump.Fa4, segs: […], scaf: […] } });
-$dump.a4 = $dump.Ka4.call(globalThis);
+}, { f: $dump.Fa4, segs: […], scaf: […] }).call(globalThis, tools, $dump.n2);
 try { ($dump.a4); } finally { delete globalThis.$dump; delete globalThis.$djs; }
 ```
 
 It is an ordinary Script (D2830): djs, or node, runs it given the host's functions and
 one object the host provides while it loads, `$djs` (D2834, D2890):
 
-- data is written as literals and the calls that make it; a builtin the run already
-  looked up (the loop's `next`) is the expression that finds it, never its contents;
+- data is written as literals and the calls that make it; a builtin is the expression
+  that finds it, never its contents;
 - `$djs.seed(...)` restores `Math.random`'s sequence and says which id the run's next
   host call gets (D2897);
 - `$djs.resume(id, name, args, state)` stands for the open tool call: the host continues
   call `id` of its function `name` under the same id and gives back its promise; the
   last argument is the host's own state of the call, JSON it gave when it dumped (D2770);
-- `$dump.Ka4` is the suspended function as its **continuation**: a function of the same
-  kind whose body is the rest of the original from the `await` on. It declares the values
-  the frame held there (`notes`, `path`), and the loop around the `await` is a real loop
-  over the saved iterator, whose first step is a placeholder, so the rest of the current
-  iteration runs first and later iterations run the original's text;
+- `$dump.a4` is what the suspended function's **continuation** returned: a function of
+  the same kind whose body is the rest of the original from the `await` on, written where
+  it is called. Its parameters are the values the frame held there that the rest still
+  reads (`tools`, `notes`; the dead `path` and `console` are left out), passed as the
+  call's arguments. The rest of the current loop iteration comes first, `notes.push(await
+  …)` reading `notes.push` again, which gives what the run had looked up, since builtins
+  cannot change (D2836). Then the loop goes on as written over the saved iterator;
 - the loop's iterator is made again and advanced with the same calls that put it there:
   in-flight builtin state is re-enacted, not described by the engine's internal layout
-  (D2562). The small helpers that takes, here `$djs.advance` and the loop wrapper
-  `$djs.L`, are the same in every dump, so the host provides them as a fixed runtime
-  instead of each dump carrying them (D2903); djs makes that object for its hosts, and a
-  host without djs imports it from [js/src/dump-runtime.js](../../js/src/dump-runtime.js);
+  (D2562). The small helpers that takes, here `$djs.advance`, the loop wrapper `$djs.I`
+  and `$djs.k`, which gives the continuation its origin record, are the same in every
+  dump, so the host provides them as a fixed runtime instead of each dump carrying them
+  (D2903); djs makes that object for its hosts, and a host without djs imports it from
+  [js/src/dump-runtime.js](../../js/src/dump-runtime.js);
 - the continuation's `$djs` record names its origin, the script's function (`$dump.Fa4`,
-  never called) and which stretches of its text the continuation copied. A dump of a run
+  which the host makes again from the script it ran, named by its file and hash, and never
+  calls) and which stretches of its text the continuation copied. A dump of a run
   that resumed this one reads the continuation's frame as one of the original and writes
   the original again (**origin tracking**, D2833), so a dump stays the same size however
   many times a run is resumed and dumped;

@@ -104,6 +104,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const dump = await suspend(Number(ms));
     mkdirSync(new URL("out", import.meta.url), { recursive: true });
     writeFileSync(file, dump);
+    // The script beside it: the dump names the script it continues (`$djs.source`), which
+    // `djs resume` reads from that path.
+    writeFileSync(new URL("out/sleep.js", import.meta.url), SCRIPT);
     console.log(`host: suspended the run into ${relative(".", file)} (${dump.length} bytes):`);
     console.log(dump.trimEnd().replace(/^/gm, "  | "));
   }

@@ -238,6 +238,15 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   sleep 1,377 → 1,339 (gzip 697). Data that only dead bindings reach is still written in
   the first dump (flight renders all slots); a re-dump drops it.
 
+- D2912 (review findings): k/tmp records only where K can stop again in the construct;
+  block-end `site` records only with `using`; merged segments; bare `await` where it may
+  stand. Sync-generator loop with Promise.all (pjz 0211): `$djs.L` `set` takes the
+  iterator late. Docs refreshed: examples/sleep-dump/README.md (output, "The dump",
+  `--explain`, which needs the script beside the dump: sleep-dump.ts writes out/sleep.js),
+  docs/continuation-dumps.md (the plan example and its `--explain`). Sleep 1,339 → 1,247 B
+  (gzip 648); v2 494,430 → 471,916. Not done from the review: the records' always-zero
+  fields (records go with item 4), inlining single-use values (`$dump.n4 = []`).
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a

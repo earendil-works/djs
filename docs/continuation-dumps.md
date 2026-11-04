@@ -68,7 +68,6 @@ between them. `djs run --dump-after 5 plan.js tests/dump/v2/plan.src.js` writes 
 "use strict";
 $djs.seed(2135587861, -1640531527, 6);
 globalThis.$dump = {};
-$dump.b0 = Object.getPrototypeOf([][Symbol.iterator]())["next"];
 $dump.s2 = {};
 async function main() { /* … verbatim … */ }
 $dump.p1 = $djs.resume(5, "later", ["TODO four\nok\nTODO five"]);
@@ -77,35 +76,34 @@ $dump.n4 = ["src/c.ts", "src/d.ts"];
 $dump.n7 = [[2, 0]];
 $dump.i8 = $djs.advance(Array.prototype.values.call([["src/a.ts", "src/b.ts"], $dump.n4]), 2);
 $dump.ga9 = () => {
-Object.defineProperty($dump.s2.$Ka5, "$djs", { value: { f: $dump.s2.todos, segs: […], scaf: […] } });
-$dump.a5 = $dump.s2.$Ka5.call(undefined);
+$djs.k($dump.s2.$Ka5, { f: $dump.s2.todos, segs: […], scaf: […] });
+$dump.a5 = $dump.s2.$Ka5.call(undefined, "src/d.ts");
 $dump.p6 = Promise.all([1, $dump.a5]);
 };
-$dump.Ka9 = async function () {
-const $djs_L = $djs.L;
-const files = ["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"];
+$dump.a9 = $djs.k(async function (files, report) {
+const $djs_I = $djs.I;
 const seen = $dump.n3;
-const report = $dump.n7;
-Object.assign($dump.s2, { todos: async function todos(path) { /* … verbatim … */ }, $Ka5: async function () {
-var path = "src/d.ts";
-const body = (await $dump.p1);
+Object.assign($dump.s2, { todos: async function todos(path) {
+    const body = await tools.read({ path });
+    const n = body.split("\n").filter((l) => l.includes("TODO")).length;
+    seen.set(path, n);
+    return n;
+  }, $Ka5: async function (path) {
+const body = await $dump.p1;
 const n = body.split("\n").filter((l) => l.includes("TODO")).length;
 seen.set(path, n);
 return n;
 } });
 var todos = $dump.s2.todos;
 $dump.ga9();
-{ let $djs_f1 = true; for (const $djs_v1 of $djs_L($dump.i8, $dump.b0)) { if ($djs_f1) { $djs_f1 = false; {
-const batch = $dump.n4;
-report.push((await $dump.p6));
-} } else { const batch = $djs_v1; {
+const $djs_i1 = $dump.i8;
+report.push(await $dump.p6);
+for (const batch of $djs_I($djs_i1)) {
     report.push(await Promise.all(batch.map(todos)));
-  } } } }
+  }
 print(`${report.flat().reduce((a, b) => a + b, 0)} TODOs in ${seen.size} files`);
 return report;
-};
-Object.defineProperty($dump.Ka9, "$djs", { value: { f: main, at: "await#2", segs: […], scaf: […] } });
-$dump.a9 = $dump.Ka9.call(undefined);
+}, { f: main, at: "await#2", segs: […], scaf: […] })(["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"], $dump.n7);
 $dump.p10 = Promise.prototype.then.call($dump.a9, (r) => print(JSON.stringify(r)), undefined);
 try { ($dump.p10); } finally { delete globalThis.$dump; delete globalThis.$djs; }
 ```
@@ -118,23 +116,25 @@ Read top to bottom:
 - `$djs.seed(lo, hi, next)`: `Math.random`'s state and the id the dumped VM's next host
   call gets (D2897). `$dump` is an ordinary global object the dump makes for its own
   locations and deletes at the end, with `$djs`.
-- A builtin a frame looked up (the loop's `next`) is its expression, evaluated before user
-  code runs.
 - Host call 5, issued before the dump: `$djs.resume(id, name, args, state)` asks the host
   to continue it, under the same id. What it means is the host's policy (deliver a
   recorded result, issue it again, reject it); the hook returns the call's promise.
 - Data: the Map, the batches, the report; the for-of's iterator advanced past the first
   batch (`$djs.advance` runs no user code).
-- `$dump.Ka9` is `main`'s continuation: its prefix declares the bindings live at the site
-  with their values, makes the closures of its frame's scopes where they are declared
-  (`todos` shares `seen` with the frame, so it is made inside the continuation), and the
-  loop around the site is a real loop over the saved iterator, whose first step is a
-  placeholder so the rest of the current iteration runs first. Its `$djs` record names
-  its origin (`f: main`, the site, the stretches copied from `main`), which a later dump
-  reads back (origin tracking).
-- `$dump.s2.$Ka5` is `todos("src/d.ts")`'s continuation. It is made by `Ka9`'s prefix
-  (it captures `seen`), so the part of the dump that needs it, starting the activation and
-  the `Promise.all` over it, is a callback `Ka9` calls right before its site (`$dump.ga9`).
+- `$dump.a9` is what `main`'s continuation returned: an async function written in place,
+  given its origin record by `$djs.k` and called at once (D2909). Its parameters are
+  bindings live at the site (`files`, `report`), passed as the call's arguments; a binding
+  shared with closures (`seen`) is declared, and the closures of the frame's scopes are
+  made where they are declared (`todos` shares `seen` with the frame, so it is made inside
+  the continuation). The rest of the current loop iteration comes first, the half-done
+  `report.push(await …)` reading `report.push` again (D2905), then the loop goes on over the
+  saved iterator, `for (const batch of $djs_I($djs_i1))` (D2908). The record names its
+  origin (`f: main`, the site, the stretches copied from `main`), which a later dump reads
+  back (origin tracking).
+- `$dump.s2.$Ka5` is `todos("src/d.ts")`'s continuation. It is made by `a9`'s prefix (it
+  captures `seen`), so the part of the dump that needs it, starting the activation and the
+  `Promise.all` over it, is a callback the continuation calls once the block that makes it
+  has its code (`$dump.ga9`, D2907).
 - The Script's completion value is what the host named, here the run's promise
   (D2895).
 
@@ -143,15 +143,19 @@ Where each activation stopped is what `djs resume --explain` prints:
 ```text
 plan.js: 1 open call, 2 suspended activations; handles: run
 #5 later("TODO four\nok\nTODO five")
-  async function $Ka5 at plan.js:47:15
-      const body = (await $dump.p1);
-                    ^
-    path = 'src/d.ts', body = undefined, n = undefined
-  async function <anonymous> at plan.js:59:14
-      report.push((await $dump.p6));
+  async function $Ka5 at plan.js:43:14
+      const body = await $dump.p1;
                    ^
-    files = [ 'src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts' ], seen = Map(3) { … }, report = [ [ 2, 0 ] ], todos = [AsyncFunction: todos], batch = [ 'src/c.ts', 'src/d.ts' ]
+    path = 'src/d.ts', body = undefined, n = undefined
+  async function <anonymous> at plan.js:51:13
+      report.push(await $dump.p6);
+                  ^
+    files = [ 'src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts' ], report = [ [ 2, 0 ] ], seen = Map(3) { … }, todos = [AsyncFunction: todos], batch = undefined
 ```
+
+(`batch = undefined`: the rest of the iteration no longer reads it, so the continuation
+leaves it out, D2911.)
+
 
 Loading is running the Script with `$djs` defined, to its first stop that is not a sync
 host call: the `Promise.all` job fills element 0 and the VM is idle, waiting on call 5,
