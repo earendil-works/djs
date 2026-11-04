@@ -7,7 +7,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0188 | Suspension as state machines vs suspension maps (research) | critic | .worktrees/critic |
-| 0184b | clippy slim+dump fix | portable | .worktrees/portable |
 | 0183 | The gate in seconds | gate-speed | .worktrees/gate-speed |
 
 ## Open (ready)
