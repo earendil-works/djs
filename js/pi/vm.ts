@@ -151,8 +151,17 @@ const STALLED = JSON.stringify({
 export interface SessionDump {
   /** The VM as a format 2 dump: the script's data, activations and open calls. */
   dump: string;
-  /** The adapter's state, without VM handles. */
-  state: Omit<SessionState, "api" | "settle" | "stalled" | "next"> & { next: Omit<NextState, "handles"> };
+  /**
+   * The adapter's state, without VM handles and without its call table: the dump carries
+   * each open call's pi id as the call's state (`$dump.pending(4, "call", [...], {"id":2})`,
+   * D2770), and a resumed session rebuilds the table from it.
+   */
+  state: Omit<SessionState, "api" | "settle" | "stalled" | "next"> & { next: Omit<NextState, "handles" | "ids"> };
+}
+
+/** An open tool or global call's state in a dump: its id in pi's protocol. */
+interface CallState {
+  id: number;
 }
 const SCRIPT_PREFIX = "return (async (tools, console) => {";
 
@@ -363,8 +372,9 @@ class Session implements VmSession {
     if (!next) throw new Error("dumpSession needs the next mode (shape: \"next\" with prelude-next)");
     const host = this.resume ? hostGlobals(this.resume.data) : [];
     const handles: [string, number][] = next.handles.body !== 0 ? [["run", next.handles.body]] : [];
-    const dump = this.engine.dump(host, FN_NAMES, handles);
-    const { handles: _, ...rest } = next;
+    const states = next.ids.map(([callId, id]): [number, string] => [callId, JSON.stringify({ id } satisfies CallState)]);
+    const dump = this.engine.dump(host, FN_NAMES, handles, states);
+    const { handles: _, ids: _i, ...rest } = next;
     const { api: _a, settle: _s, stalled: _t, next: _n, ...state } = this.state;
     return { dump, state: structuredClone({ ...state, early: [...this.early], next: rest }) };
   }
@@ -1011,12 +1021,15 @@ function resumeSession(dumped: SessionDump, options: VmHooks & { prelude: string
     const { calls, handles } = engine.loadDump(FN_NAMES, dumped.dump);
     const body = handles.get("run") ?? 0;
     for (const [name, h] of handles) if (name !== "run") engine.free(h);
-    Object.assign(state, { ...saved, api: state.api, settle: 0, stalled: 0, next: { ...saved.next, handles: { ...prepared, body } } });
+    // pi's ids of the open calls, from their states, in the order they were made.
+    const ids = calls.map(({ id: callId, fnId, state }): [number, number] => {
+      const id = state === undefined ? undefined : (JSON.parse(state) as Partial<CallState>).id;
+      if (fnId !== CALL_FN || typeof id !== "number") throw new Error(`The dump's open call ${callId} is not a tool call with a pi id`);
+      return [callId, id];
+    });
+    ids.sort((a, b) => a[1] - b[1]);
+    Object.assign(state, { ...saved, api: state.api, settle: 0, stalled: 0, next: { ...saved.next, ids, handles: { ...prepared, body } } });
     session.restoreEarly(saved.early);
-    const open = new Set(calls.map((c) => c.id));
-    for (const [callId] of saved.next.ids) {
-      if (!open.has(callId)) throw new Error(`The dump does not have the open call ${callId}`);
-    }
     return session;
   } catch (error) {
     session.dispose();
