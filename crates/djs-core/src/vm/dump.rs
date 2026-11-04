@@ -513,6 +513,8 @@ fn member(key: &str) -> String {
     }
 }
 
+/// (Only ArrayBuffers, which the slim build does not have, are written as base64.)
+#[cfg(feature = "full")]
 fn base64(bytes: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::new();
