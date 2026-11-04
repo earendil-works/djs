@@ -600,3 +600,8 @@ topics when the index is next reorganized.
 - D2720: Suspended frames become named-slot state machines in the compiler (SM)
 - D2721: Slot names are construct@span; states keep kind#N
 - D2722: Open host calls carry host JSON state; save/resume hooks; the Sandbox keeps the bookkeeping
+- D2730: Slot names: offsets from the function's start of the element or the construct; pins list them
+- D2770: A call's state is JSON text, written verbatim as `$dump.pending`'s fourth argument
+- D2771: Tasks: the Sandbox drives the run and the open calls' hooks
+- D2731: Slots name every frame index; the operand stack stays in memory (refines D2720)
+- D2772: The pi adapter's open calls carry their pi ids as call states

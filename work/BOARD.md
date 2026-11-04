@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0189 | Host calls as data (SM step 1) | hostcalls | .worktrees/hostcalls |
 | 0190 | Slot naming contract (SM step 2), then 0191-0194, 0196 in sequence | sm | .worktrees/sm |
 
 ## Open (ready)
@@ -22,7 +21,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0192 | Constructs into slots (SM step 4) | 0191 (agent sm) |
 | 0193 | finally completions in slots (SM step 5) | 0191 (agent sm) |
 | 0194 | Delete roles; final format (SM step 6) | 0192, 0193 (agent sm) |
-| 0195 | pi adapter host-call hooks (SM step 7) | 0189 (agent hostcalls) |
+| - | djs-wasm base_equals_a_compiled_realm fails (--features compiled-prelude, no gate leg) | - |
+| - | CLI/REPL dumps write no host-call states | - |
 | 0196 | One compile per load (SM step 8) | 0194 (agent sm) |
 | - | Dump performance optimization | after SM migration (owner) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
@@ -89,6 +89,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0189 | Host calls as data: per-call state, {call, save, resume}, tasks; sleep example 77 lines (D2770, D2771) | 891fc12c (agent hostcalls) |
+| 0195 | pi adapter next mode: call ids as call states (D2772) | 6a8759bd (agent hostcalls) |
 | 0188 | Suspension design review: switch to SM (state machines in the compiler); residualizer prototype | d7b62185 (agent critic) |
 | 0183 | Gate in seconds: gate.py legs + input-hash cache, merge lock only for ff, clippy combos, --full worktree (D2660-D2669) | 1638b342 (agent gate-speed; docs 249->8 s, js 252->12 s, core 407->127 s) |
 | 0187 | Removed djs heap and .image; .heap kept (D2269) | 6d857a55 (agent snapshot) |
