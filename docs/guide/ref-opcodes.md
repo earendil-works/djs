@@ -179,49 +179,50 @@ with them.
 | `async_reject` | 167 | Loc | 3 | 1 → 0 | Call | `e ->`: an exception leaves an async function: rejects the result promise with `e` and returns the promise (the target of the body's catch-all handler). |
 | `get_iterator` | 168 | – | 1 | 1 → 1 | Access | `obj -> iterator` |
 | `iter_next` | 169 | Target | 5 | 2 → 1 | Call | `it next -> r`: `r = next.call(it)`, an iterator result. When `next` is the original `next` of an Array or String Iterator and that step runs no user code, `r` is the next value itself and the instruction jumps (no result object, D1800). |
-| `iter_check_object` | 170 | – | 1 | 1 → 1 | Basic | `v -> v`: TypeError if `v` is not an object (iterator results). |
-| `iterator_close` | 171 | – | 1 | 1 → 0 | Access | `iterator ->`: call `iterator.return()` if present. |
-| `for_in_start` | 172 | – | 1 | 1 → 1 | Alloc | `obj -> for-in iterator` (a snapshot of the enumerable keys) |
-| `for_in_next` | 173 | – | 1 | 1 → 3 | Access | `it -> it key done` |
-| `check_ctor` | 174 | – | 1 | 0 → 0 | Basic | TypeError if a class constructor is called without `new`. |
-| `check_this` | 175 | – | 1 | 1 → 1 | Basic | `v -> v`: a derived constructor's `this`: ReferenceError while uninitialized (`undefined`, before `super()`). |
-| `check_this_uninit` | 176 | – | 1 | 1 → 0 | Basic | `v ->`: before `super()` binds `this`: ReferenceError if it is bound already. |
-| `check_ctor_return` | 177 | – | 1 | 1 → 1 | Basic | `v -> v`: a derived constructor's return value: TypeError unless an object or `undefined`. |
-| `throw_error` | 178 | Atom, U8 | 6 | 0 → 0 | Basic | Throws a new error with message `atom`; `kind` 0: TypeError, 1: ReferenceError. |
-| `debugger` | 179 | – | 1 | 0 → 0 | Free | `debugger` (no effect). |
-| `nop` | 180 | – | 1 | 0 → 0 | Free | No operation. |
-| `get_loc0` | 181 | – | 1 | 0 → 1 | Basic | `get_loc 0` |
-| `get_loc1` | 182 | – | 1 | 0 → 1 | Basic | `get_loc 1` |
-| `get_loc2` | 183 | – | 1 | 0 → 1 | Basic | `get_loc 2` |
-| `get_loc3` | 184 | – | 1 | 0 → 1 | Basic | `get_loc 3` |
-| `put_loc0` | 185 | – | 1 | 1 → 0 | Basic | `put_loc 0` |
-| `put_loc1` | 186 | – | 1 | 1 → 0 | Basic | `put_loc 1` |
-| `put_loc2` | 187 | – | 1 | 1 → 0 | Basic | `put_loc 2` |
-| `put_loc3` | 188 | – | 1 | 1 → 0 | Basic | `put_loc 3` |
-| `get_arg0` | 189 | – | 1 | 0 → 1 | Basic | `get_arg 0` |
-| `get_arg1` | 190 | – | 1 | 0 → 1 | Basic | `get_arg 1` |
-| `get_arg2` | 191 | – | 1 | 0 → 1 | Basic | `get_arg 2` |
-| `get_arg3` | 192 | – | 1 | 0 → 1 | Basic | `get_arg 3` |
-| `set_loc0` | 193 | – | 1 | 1 → 1 | Basic | `set_loc 0` |
-| `set_loc1` | 194 | – | 1 | 1 → 1 | Basic | `set_loc 1` |
-| `set_loc2` | 195 | – | 1 | 1 → 1 | Basic | `set_loc 2` |
-| `set_loc3` | 196 | – | 1 | 1 → 1 | Basic | `set_loc 3` |
-| `push0` | 197 | – | 1 | 0 → 1 | Basic | `push_i8 0` |
-| `push1` | 198 | – | 1 | 0 → 1 | Basic | `push_i8 1` |
-| `push2` | 199 | – | 1 | 0 → 1 | Basic | `push_i8 2` |
-| `push3` | 200 | – | 1 | 0 → 1 | Basic | `push_i8 3` |
-| `call0` | 201 | – | 1 | 2 → 1 | Call | `call 0` |
-| `call1` | 202 | – | 1 | 3 → 1 | Call | `call 1` |
-| `call2` | 203 | – | 1 | 4 → 1 | Call | `call 2` |
-| `call3` | 204 | – | 1 | 5 → 1 | Call | `call 3` |
-| `get_loc8` | 205 | Loc8 | 2 | 0 → 1 | Basic | `get_loc` of a local below 256. |
-| `put_loc8` | 206 | Loc8 | 2 | 1 → 0 | Basic | `put_loc` of a local below 256. |
-| `set_loc8` | 207 | Loc8 | 2 | 1 → 1 | Basic | `set_loc` of a local below 256. |
-| `get_arg8` | 208 | Arg8 | 2 | 0 → 1 | Basic | `get_arg` of an argument below 256. |
-| `push_const8` | 209 | Const8 | 2 | 0 → 1 | Basic | `push_const` of a constant below 256. |
-| `call_intrinsic8` | 210 | Intrinsic8 | 2 | 0 → 1 | Call | `a1 .. an -> r`: `call_intrinsic id, n` of an intrinsic below 256 with a fixed arity `n` (its declared parameters: privileged calls pass exactly those). |
-| `get_builtin_callee8` | 211 | Builtin8 | 2 | 0 → 2 | Basic | `-> f undefined`: `get_builtin idx; undefined`, a prelude function as the callee of a call with `this` undefined. |
-| `jump8` | 212 | Target8 | 2 | 0 → 0 | Basic | `jump` with an 8-bit offset. |
-| `jump_if_false8` | 213 | Target8 | 2 | 1 → 0 | Basic | `jump_if_false` with an 8-bit offset. |
-| `jump_if_true8` | 214 | Target8 | 2 | 1 → 0 | Basic | `jump_if_true` with an 8-bit offset. |
+| `iter_next_loc` | 170 | Loc, Target | 7 | 0 → 1 | Call | `-> r`: `iter_next` of the iterator in local `loc` and its `next` in `loc + 1` (a loop's or pattern's temporaries, D2732): one instruction for for-of's step. |
+| `iter_check_object` | 171 | – | 1 | 1 → 1 | Basic | `v -> v`: TypeError if `v` is not an object (iterator results). |
+| `iterator_close` | 172 | – | 1 | 1 → 0 | Access | `iterator ->`: call `iterator.return()` if present. |
+| `for_in_start` | 173 | – | 1 | 1 → 1 | Alloc | `obj -> for-in iterator` (a snapshot of the enumerable keys) |
+| `for_in_next` | 174 | – | 1 | 1 → 3 | Access | `it -> it key done` |
+| `check_ctor` | 175 | – | 1 | 0 → 0 | Basic | TypeError if a class constructor is called without `new`. |
+| `check_this` | 176 | – | 1 | 1 → 1 | Basic | `v -> v`: a derived constructor's `this`: ReferenceError while uninitialized (`undefined`, before `super()`). |
+| `check_this_uninit` | 177 | – | 1 | 1 → 0 | Basic | `v ->`: before `super()` binds `this`: ReferenceError if it is bound already. |
+| `check_ctor_return` | 178 | – | 1 | 1 → 1 | Basic | `v -> v`: a derived constructor's return value: TypeError unless an object or `undefined`. |
+| `throw_error` | 179 | Atom, U8 | 6 | 0 → 0 | Basic | Throws a new error with message `atom`; `kind` 0: TypeError, 1: ReferenceError. |
+| `debugger` | 180 | – | 1 | 0 → 0 | Free | `debugger` (no effect). |
+| `nop` | 181 | – | 1 | 0 → 0 | Free | No operation. |
+| `get_loc0` | 182 | – | 1 | 0 → 1 | Basic | `get_loc 0` |
+| `get_loc1` | 183 | – | 1 | 0 → 1 | Basic | `get_loc 1` |
+| `get_loc2` | 184 | – | 1 | 0 → 1 | Basic | `get_loc 2` |
+| `get_loc3` | 185 | – | 1 | 0 → 1 | Basic | `get_loc 3` |
+| `put_loc0` | 186 | – | 1 | 1 → 0 | Basic | `put_loc 0` |
+| `put_loc1` | 187 | – | 1 | 1 → 0 | Basic | `put_loc 1` |
+| `put_loc2` | 188 | – | 1 | 1 → 0 | Basic | `put_loc 2` |
+| `put_loc3` | 189 | – | 1 | 1 → 0 | Basic | `put_loc 3` |
+| `get_arg0` | 190 | – | 1 | 0 → 1 | Basic | `get_arg 0` |
+| `get_arg1` | 191 | – | 1 | 0 → 1 | Basic | `get_arg 1` |
+| `get_arg2` | 192 | – | 1 | 0 → 1 | Basic | `get_arg 2` |
+| `get_arg3` | 193 | – | 1 | 0 → 1 | Basic | `get_arg 3` |
+| `set_loc0` | 194 | – | 1 | 1 → 1 | Basic | `set_loc 0` |
+| `set_loc1` | 195 | – | 1 | 1 → 1 | Basic | `set_loc 1` |
+| `set_loc2` | 196 | – | 1 | 1 → 1 | Basic | `set_loc 2` |
+| `set_loc3` | 197 | – | 1 | 1 → 1 | Basic | `set_loc 3` |
+| `push0` | 198 | – | 1 | 0 → 1 | Basic | `push_i8 0` |
+| `push1` | 199 | – | 1 | 0 → 1 | Basic | `push_i8 1` |
+| `push2` | 200 | – | 1 | 0 → 1 | Basic | `push_i8 2` |
+| `push3` | 201 | – | 1 | 0 → 1 | Basic | `push_i8 3` |
+| `call0` | 202 | – | 1 | 2 → 1 | Call | `call 0` |
+| `call1` | 203 | – | 1 | 3 → 1 | Call | `call 1` |
+| `call2` | 204 | – | 1 | 4 → 1 | Call | `call 2` |
+| `call3` | 205 | – | 1 | 5 → 1 | Call | `call 3` |
+| `get_loc8` | 206 | Loc8 | 2 | 0 → 1 | Basic | `get_loc` of a local below 256. |
+| `put_loc8` | 207 | Loc8 | 2 | 1 → 0 | Basic | `put_loc` of a local below 256. |
+| `set_loc8` | 208 | Loc8 | 2 | 1 → 1 | Basic | `set_loc` of a local below 256. |
+| `get_arg8` | 209 | Arg8 | 2 | 0 → 1 | Basic | `get_arg` of an argument below 256. |
+| `push_const8` | 210 | Const8 | 2 | 0 → 1 | Basic | `push_const` of a constant below 256. |
+| `call_intrinsic8` | 211 | Intrinsic8 | 2 | 0 → 1 | Call | `a1 .. an -> r`: `call_intrinsic id, n` of an intrinsic below 256 with a fixed arity `n` (its declared parameters: privileged calls pass exactly those). |
+| `get_builtin_callee8` | 212 | Builtin8 | 2 | 0 → 2 | Basic | `-> f undefined`: `get_builtin idx; undefined`, a prelude function as the callee of a call with `this` undefined. |
+| `jump8` | 213 | Target8 | 2 | 0 → 0 | Basic | `jump` with an 8-bit offset. |
+| `jump_if_false8` | 214 | Target8 | 2 | 1 → 0 | Basic | `jump_if_false` with an 8-bit offset. |
+| `jump_if_true8` | 215 | Target8 | 2 | 1 → 0 | Basic | `jump_if_true` with an 8-bit offset. |
 <!-- /gen -->
