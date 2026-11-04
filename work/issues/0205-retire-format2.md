@@ -1,6 +1,6 @@
 # 0205: Retire format 2: delete the loader, $dump.resume, primitives, recording compile; plain goldens; docs and guide
 
-status: in-progress
+status: done
 agent: pjf
 branch: issue/0205-retire-format2
 depends-on: 0203 (closing), 0204
@@ -95,3 +95,18 @@ compile, format 1, `DumpOptions::plain`, goldens → plain, core tests); M3 the
 - docs/decisions-index.md needs D2920/D2921 (coordinator's file).
 
 ## Result
+
+Plain dumps are the only format (D2920). Landed in two merges: M1 0f20019b (hosts: CLI,
+Sandbox, pi adapter, wasm ABI 4, difftest) and M2 ee23d3c6 (core deletions, plain
+goldens, `jump_if_loading` removed per D2921, docs). Gone: `Vm::load_dump` and its
+types, `$dump.resume`, the loader primitives, the recording compile at load, version 1,
+`DumpOptions::plain`, `plainDumps`, `--plain`/`.plain`, `vm_load_dump`, vm_dump's options
+line, difftest `--dump-every-idle`, the format 2 fixtures and the two-commit check. A VM
+or sandbox without frozen builtins cannot dump: the exporter says "dumps need frozen
+builtins (… D2836)", the Sandbox throws misuse, `djs repl` asks for `--frozen`.
+Hosts load dumps by running them (`run_plain_dump` in dump_tests.rs is the test helper).
+The goldens (tests/dump/v2/golden, 131 plain dumps) are run by every gate. Docs:
+docs/continuation-dumps.md describes the plain format as built; guide snapshots,
+suspension and host updated. Sizes: dump module −19.6 KB gzip over the issue, shipped
+−98 B, slim −138 B. Known gaps: the follow-ups below (plain exporter bugs the conversion
+exposed, and the exporter's now-dead format-2-only branches).
