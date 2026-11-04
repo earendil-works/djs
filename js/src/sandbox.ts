@@ -321,7 +321,6 @@ interface Exports {
   vm_outcome(vm: number): number;
   /** Since 0204 (D2890): loading plain dumps. */
   vm_open_call?(vm: number, parked: number, fnId: number): number;
-  vm_delete?(vm: number, obj: number, nameLen: number): number;
   vm_set_weak_refs(vm: number, mode: number): number;
   vm_resolve_host_call_at(vm: number, callId: number, ok: number, value: number, now: number): number;
   vm_canonical_hash(vm: number): number;
@@ -1254,7 +1253,8 @@ export class Sandbox {
 
   /**
    * Loads a plain dump (D2830): runs it as a Script with the hooks in `$djs` (D2890), to
-   * its first stop that is not a sync host call (idle, or done), then deletes `$djs`.
+   * its first stop that is not a sync host call (idle, or done); the hooks are served only
+   * meanwhile. The dump deletes `$djs` at the end of its Script.
    * `$djs.resume(id, name, args, state)` opens the dump's call `id` of host function
    * `name` again under its id (`vm_open_call`): one of the calls returned, with its state;
    * `$djs.seed(lo, hi)` sets `Math.random`'s state. Other sync host functions are called
@@ -1265,7 +1265,7 @@ export class Sandbox {
   private loadPlain(dump: string, typescript: boolean): { calls: OpenCall[]; handles: Map<string, number> } {
     const x = this.x;
     const vm = this.vm;
-    if (!x.vm_open_call || !x.vm_delete) throw new SandboxError("misuse", "the djs-wasm module cannot load plain dumps (no vm_open_call): rebuild it");
+    if (!x.vm_open_call) throw new SandboxError("misuse", "the djs-wasm module cannot load plain dumps (no vm_open_call): rebuild it");
     const calls: OpenCall[] = [];
     this.guard(() => {
       const hooks = this.check(x.vm_new_object(vm), "memory");
@@ -1280,59 +1280,56 @@ export class Sandbox {
       x.vm_handle_free(vm, hooks);
     });
     let st = STATUS_DONE;
-    try {
-      this.enter(dump, {}, true, "dump.js", typescript);
-      const slice = this.opts.fuelSlice ?? 1_000_000;
-      for (;;) {
-        st = this.guard(() => {
-          this.setClock();
-          return x.vm_run(vm, slice);
-        });
-        if (st === STATUS_OUT_OF_FUEL) continue;
-        if (st !== STATUS_HOST_CALL) break;
-        const { callId, fnId, args } = this.guard(() => this.readCall(x.vm_host_call(vm)));
-        if (fnId === HOOK_RESUME) {
-          const [id, name, callArgs, state] = args;
-          const f = typeof name === "string" ? this.fnNames.indexOf(name) + 1 : 0;
-          if (f === 0) {
-            this.complete(callId, false, new Error(`resume: unknown host function ${String(name)}`), false);
-            continue;
-          }
-          if (this.guard(() => x.vm_open_call!(vm, callId, f)) !== 0) {
-            // (Out of memory may come after the parked call returned: then this is a no-op.)
-            this.complete(callId, false, new Error(outText(x)), false);
-            continue;
-          }
-          const call: OpenCall = { id: id as number, fn: name as string, args: Array.isArray(callArgs) ? callArgs : [] };
-          if (state !== undefined) call.state = state;
-          calls.push(call);
+    this.enter(dump, {}, true, "dump.js", typescript);
+    const slice = this.opts.fuelSlice ?? 1_000_000;
+    const maxFuel = this.opts.maxFuel ?? Infinity;
+    let used = 0;
+    for (;;) {
+      st = this.guard(() => {
+        this.setClock();
+        return x.vm_run(vm, slice);
+      });
+      used += x.vm_fuel_used ? x.vm_fuel_used(vm) : st === STATUS_OUT_OF_FUEL ? slice : 0;
+      if (used >= maxFuel) {
+        this.guard(() => x.vm_abort(vm));
+        throw new SandboxError("fuel", `out of fuel after ${used} units while loading the dump`);
+      }
+      if (st === STATUS_OUT_OF_FUEL) continue;
+      if (st !== STATUS_HOST_CALL) break;
+      const { callId, fnId, args } = this.guard(() => this.readCall(x.vm_host_call(vm)));
+      if (fnId === HOOK_RESUME) {
+        const [id, name, callArgs, state] = args;
+        const f = typeof name === "string" ? this.fnNames.indexOf(name) + 1 : 0;
+        if (f === 0) {
+          this.complete(callId, false, new Error(`resume: unknown host function ${String(name)}`), false);
           continue;
         }
-        let ok = true;
-        let result: unknown;
-        if (fnId === HOOK_SEED) {
-          const [lo, hi] = args;
-          if (typeof lo === "number" && typeof hi === "number") this.guard(() => x.vm_set_math_random_seed(vm, lo >>> 0, hi >>> 0));
-          else [ok, result] = [false, new TypeError("seed: not two int32 halves")];
-        } else {
-          try {
-            result = this.invoke(fnId, args);
-            if (result instanceof Promise) throw new TypeError(`host function ${this.fnNames[fnId - 1]} returned a promise while a dump loads`);
-          } catch (e) {
-            if (e instanceof SandboxError && e.kind === "trap") throw e;
-            [ok, result] = [false, e];
-          }
+        if (this.guard(() => x.vm_open_call!(vm, callId, f)) !== 0) {
+          // (Out of memory may come after the parked call returned: then this is a no-op.)
+          this.complete(callId, false, new Error(outText(x)), false);
+          continue;
         }
-        this.complete(callId, ok, result, false);
+        const call: OpenCall = { id: id as number, fn: name as string, args: Array.isArray(callArgs) ? callArgs : [] };
+        if (state !== undefined) call.state = state;
+        calls.push(call);
+        continue;
       }
-    } finally {
-      if (this.dead === null) {
-        this.guard(() => {
-          const g = x.vm_global(vm);
-          x.vm_delete!(vm, g, this.stageText(PLAIN_HOOKS));
-          x.vm_handle_free(vm, g);
-        });
+      let ok = true;
+      let result: unknown;
+      if (fnId === HOOK_SEED) {
+        const [lo, hi] = args;
+        if (typeof lo === "number" && typeof hi === "number") this.guard(() => x.vm_set_math_random_seed(vm, lo >>> 0, hi >>> 0));
+        else [ok, result] = [false, new TypeError("seed: not two int32 halves")];
+      } else {
+        try {
+          result = this.invoke(fnId, args);
+          if (result instanceof Promise) throw new TypeError(`host function ${this.fnNames[fnId - 1]} returned a promise while a dump loads`);
+        } catch (e) {
+          if (e instanceof SandboxError && e.kind === "trap") throw e;
+          [ok, result] = [false, e];
+        }
       }
+      this.complete(callId, ok, result, false);
     }
     return this.guard(() => {
       if (st === STATUS_THREW || st === STATUS_HOST_OUT_OF_MEMORY) {

@@ -4125,7 +4125,7 @@ fn open_host_call_keeps_the_dump_s_id() {
     vm.define_global("tool", tool).unwrap();
     let resume = vm.new_host_function(RESUME, "resume").unwrap();
     vm.define_global("resume", resume).unwrap();
-    let src = "const p = resume(2, 'tool', ['a', 1]); const q = resume(7, 'tool');\n\
+    let src = "const p = resume(2, 'tool', ['a', 1]); const q = resume(7, 'tool', []);\n\
                let bad; try { resume(7, 'tool', []); } catch (e) { bad = e.message; }\n\
                const r = tool('new');\n\
                globalThis.out = []; p.then(v => out.push(v)); q.then(v => out.push(v));\n\
@@ -4143,7 +4143,7 @@ fn open_host_call_keeps_the_dump_s_id() {
             Status::HostCall { call_id, fn_id } => {
                 assert_eq!(fn_id, RESUME);
                 if let Err(m) = vm.open_host_call(call_id, TOOL) {
-                    let e = vm.new_error(ErrorKind::Error, &m).unwrap();
+                    let e = vm.new_error(ErrorKind::Error, m).unwrap();
                     vm.resolve_host_call(call_id, Err(e)).unwrap();
                 }
             }
@@ -4153,7 +4153,7 @@ fn open_host_call_keeps_the_dump_s_id() {
     assert_eq!(status, Status::Idle);
     assert_eq!(
         vm.display(vm.outcome().unwrap().unwrap()),
-        "resume: call 7 is open already"
+        "resume: the call is open already"
     );
     // The opened calls are the host's already; the new one comes after them (the
     // failed resume, a sync call, took 8).

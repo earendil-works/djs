@@ -36,7 +36,8 @@ A plain dump (`"djs-dump 3";`, D2830) is a Script: `resume` runs it with the glo
 object `$djs` (D2890), whose `seed(lo, hi)` sets `Math.random`'s state and whose
 `resume(id, name, args, state)` opens the dump's call `id` of `name` (`later`,
 `tools.read`, ...) again under that id; the CLI then answers it like any call and
-ignores its state. `$djs` is deleted once the Script stops at an idle point (or ends).
+ignores its state. The dump deletes `$djs` at the end of its Script (the CLI also does,
+once the Script stops at an idle point or ends).
 A dump whose Script throws (a hook refused an unknown name, say) is exit code 2 with
 `djs: the dump did not load: Uncaught ...`. `--explain`, and the REPL's `.restore`,
 load plain dumps the same way; `--explain` lists each call's state.

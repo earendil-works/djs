@@ -174,7 +174,7 @@ await again.result;
   same id (`vm_open_call`) and gives the dump its promise. The calls opened that way are
   the loaded calls above, with their states, and go to the hooks as described. The hooks
   are served only while the Script runs to its first stop (an idle point, or the end);
-  then `$djs` is deleted. Sync host functions the dump's code calls meanwhile are called
+  the dump deletes `$djs` at the end of its Script. Sync host functions the dump's code calls meanwhile are called
   (they must return synchronously). The Script's completion value is the run's promise.
   Loading a plain dump needs no dumper (`dumpModule`): it is code.
 - The hooks see a `HostCall`: `id`, `fn`, `args`, `startedAt` (this sandbox's
@@ -389,7 +389,6 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_dump(vm, len) -> 0/1/2` | (feature `dump`) a format 2 dump of the idle VM in out. Staging, five lines: host globals and names to dump (comma-separated), the host's function names in id order, the values to name as `handle:name` (tab-separated; handle 0 names the entry call's outcome) and the open calls' states as `call_id:byte_len` (tab-separated), then the states' JSON texts one after another (D2770). 1: refused, reasons in out; 2: no base image (D2631) |
 | `vm_load_dump(vm, names_len, len) -> 0/1` | (feature `dump`) loads the dump after `names_len` bytes of host function names (`\n`-separated, id order). 0: out = u32 `n_calls, n_handles, (call_id, fn_id, state_len)*, (handle, name_len)*`, then the handles' names, then the calls' states (JSON, `state_len` bytes; 0: none, D2770); 1: refused, the reason in out (D2631) |
 | `vm_open_call(vm, parked, fn_id) -> 0/-1` | while parked on the sync call `parked`, a plain dump's `$djs.resume(id, name, args, state)`: opens async call `id` of host function `fn_id` with `args`' elements under that id, and returns its promise from `parked` (`Vm::open_host_call`, D2890). The call is not reported by `vm_new_host_calls`; the next new call gets a higher id. -1: the reason in out (an open id, not an array), for the host to throw at the call |
-| `vm_delete(vm, obj, name_len) -> 0/-1` | deletes own property staging[0..name_len] of `obj` (the plain dump's `$djs` after the load); -1 if `obj` is not an object or the property is not configurable |
 | `vm_host_call(vm) -> argc` | out = `[call_id, fn_id, this lo, hi, (arg lo, hi)*]` |
 | `vm_host_call_info(vm, call_id) -> argc` | `vm_host_call` for any pending call (async ones) |
 | `vm_new_host_calls(vm) -> n` | out = the ids (u32) of the async calls made since the last check |

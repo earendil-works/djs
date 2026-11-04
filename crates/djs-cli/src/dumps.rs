@@ -100,11 +100,13 @@ pub fn serve_hook(
             Some((_, Some(f))) => {
                 let state = (!arg(3).is_undefined()).then(|| crate::tools::to_json(vm, arg(3)));
                 let id = arg(0).as_int();
-                vm.open_host_call(call_id, f).map(|()| {
-                    if let (Some(id), Some(s)) = (id, state) {
-                        load.states.push((id as u32, s));
-                    }
-                })
+                vm.open_host_call(call_id, f)
+                    .map_err(String::from)
+                    .map(|()| {
+                        if let (Some(id), Some(s)) = (id, state) {
+                            load.states.push((id as u32, s));
+                        }
+                    })
             }
             Some((n, None)) => Err(format!("resume: unknown host function {n}")),
             None => Err(String::from("resume: not a function name")),

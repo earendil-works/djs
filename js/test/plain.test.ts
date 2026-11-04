@@ -21,7 +21,7 @@ log(a, b, typeof $djs, Math.random());
 return a + b;
 };
 $dump.Ka.call(undefined);
-} finally { delete globalThis.$dump; }
+} finally { delete globalThis.$dump; delete globalThis.$djs; }
 `;
 
 function host() {
@@ -67,7 +67,7 @@ test("Sandbox.resume continues a plain dump through the hooks", async () => {
   assert.match(line, /^100 20 undefined 0\.\d+$/);
   // Math.random continues from the dumped state: a VM given that state draws the same.
   const sb = new Sandbox({ module });
-  sb.load(`"djs-dump 3";\n$djs.seed(5, 7);\nglobalThis.r = Math.random();\n`);
+  sb.load(`"djs-dump 3";\n$djs.seed(5, 7);\nglobalThis.r = Math.random();\ndelete globalThis.$djs;\n`);
   assert.equal(String(sb.run(`return r`)), line.split(" ")[3]);
   task.sandbox.dispose();
   sb.dispose();
@@ -77,7 +77,7 @@ test("seed sets Math.random's state whatever the sandbox's seed", async () => {
   const module = await loadModule();
   const draws = [1, 2].map((randomSeed) => {
     const sb = new Sandbox({ module, randomSeed });
-    sb.load(`"djs-dump 3";\n$djs.seed(5, 7);\nglobalThis.r = Math.random();\n`);
+    sb.load(`"djs-dump 3";\n$djs.seed(5, 7);\nglobalThis.r = Math.random();\ndelete globalThis.$djs;\n`);
     const r = sb.run(`return [r, typeof $djs]`);
     sb.dispose();
     return r;
@@ -124,7 +124,7 @@ test("a dump that does not load", async () => {
   const h = host();
   for (const [text, why] of [
     [`"djs-dump 3";\n$djs.resume(1, "nope", []);\n`, "cannot load the dump: the dump threw: Error: resume: unknown host function nope"],
-    [`"djs-dump 3";\n$djs.resume(1, "job", [1]); $djs.resume(1, "job", [2]);\n`, "cannot load the dump: the dump threw: Error: resume: call 1 is open already"],
+    [`"djs-dump 3";\n$djs.resume(1, "job", [1]); $djs.resume(1, "job", [2]);\n`, "cannot load the dump: the dump threw: Error: resume: the call is open already"],
     [`"djs-dump 3";\n$djs.seed("x");\n`, "cannot load the dump: the dump threw: TypeError: seed: not two int32 halves"],
     [`"djs-dump 3";\n1;\n`, "the dump holds no run (no handle named run)"],
   ]) {

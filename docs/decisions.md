@@ -9103,9 +9103,10 @@ object `$djs`: `$djs.seed(lo, hi)`, the dump's first statement, sets `Math.rando
 (today's int32 halves; `Vm::set_math_random_seed`), and `$djs.resume(id, name, args,
 state?)`, in place of `$dump.pending`, continues the open call `id` of the host function
 the host calls `name`. Both are sync host functions, served only while the Script runs to
-its first stop that is not a sync host call (an idle point, or the end); then the host
-deletes `$djs` (`vm_delete`), so user code cannot forge a resumed call later and a re-dump
-never sees it. The exporter refuses runs with globals `$djs` or `$dump`. The host side of
+its first stop that is not a sync host call (an idle point, or the end), and the dump
+deletes `$djs` in the `finally` that ends its Script (with `$dump`), so user code cannot
+forge a resumed call later and a re-dump never sees it (the CLI deletes it after the load
+too; the shipped module has no export for it, D2892). The exporter refuses runs with globals `$djs` or `$dump`. The host side of
 `resume` is an embedding call, not a dump primitive: `Vm::open_host_call(parked, fn_id)`
 (`vm_open_call`) reads `id` and `args` from the parked call, returns, opens async call
 `id` under that very id and gives its promise as `resume`'s value; the id counter moves
@@ -9128,3 +9129,14 @@ following run reports. The calls `resume` opened are the loaded calls: the Sandb
 them as `OpenCall`s with their states (D2770) and a task continues them by its hooks
 (D2771); the CLI answers them like any call and shows their states in `--explain`. A
 Script that throws (a refused hook) is a load error, not the run's.
+
+## D2892: The size ceilings rise for plain-dump loading in the shipped module
+date: 2026-11-04 · by: pjh · issue: 0204
+A trade under D020: `Vm::open_host_call`, `vm_open_call` and `add_loaded_host_call` (no
+longer behind the `dump` feature) add 452 bytes gzip to the shipped module (441,355 →
+441,807; 1.3 KB raw) and 498 to the slim one (376,679 ceiling → 377,177). They buy resuming
+a dump with the shipped module alone: loading a plain dump is running a Script with the
+hooks (D2890), so a host needs the dump module (548.9 KB gzip) only to write dumps, not to
+continue them. Kept small on purpose: no formatting, no iterator adapters, static error
+texts, and no export to delete `$djs` (the dump deletes it, D2890). Ceilings set by the
+ratchet's convention, the measured size plus 1 KB: 442,831 and 378,201.

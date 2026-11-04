@@ -18,4 +18,4 @@ return a.length + b.length;
 $dump.a = $dump.Ka.call(undefined);
 $dump.a.then((n) => print("total", n));
 $dump.a;
-} finally { delete globalThis.$dump; }
+} finally { delete globalThis.$dump; delete globalThis.$djs; }

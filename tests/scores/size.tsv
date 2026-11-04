@@ -1,10 +1,11 @@
 # The size budget (D020, 0122): gzip -9 of the shipped djs-wasm module (scripts/build-wasm.sh)
 # must stay within 1.5x quickjs-wasi's. The gate's last step checks it with
 # scripts/size/budget.py; until the module is within 1.5x, `ceiling_gzip` is a ratchet
-# (lowered with --update, raised only by a recorded decision; last raised: D2542; lowered by
-# 0177, D2704: images are no persistence format, so the shipped module verifies none).
+# (lowered with --update, raised only by a recorded decision; last raised: D2892, 0204: the
+# shipped module loads plain dumps itself; lowered by 0177, D2704: images are no persistence
+# format, so the shipped module verifies none).
 # quickjs_wasi_gzip: quickjs-wasi 3.6.2 quickjs.wasm (pi's engine), gzip -9.
 quickjs_wasi_gzip	286655
-ceiling_gzip	441522
+ceiling_gzip	442831
 # slim_ceiling_gzip: the slim module (scripts/build-wasm.sh --slim, D2411), its own ratchet.
-slim_ceiling_gzip	376679
+slim_ceiling_gzip	378201
