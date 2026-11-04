@@ -22,7 +22,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import vm from "node:vm";
-import { generate } from "./gen.mjs";
+import { stripTypeScriptTypes } from "node:module";
+import { generate, seedOptions } from "./gen.mjs";
 
 const ROOT = path.resolve(new URL("../..", import.meta.url).pathname);
 const argv = process.argv.slice(2);
@@ -202,21 +203,30 @@ function corpusDir(work) {
 }
 
 // The signatures of one program's failures (the reducer's test).
-async function sigsOf(bin, work, text) {
+async function sigsOf(bin, work, text, ext) {
   const c = corpusDir(work);
-  fs.writeFileSync(path.join(c, "codemode/p.js"), text);
-  const r = await check(bin, work, ["codemode/p.js"]);
+  fs.writeFileSync(path.join(c, `codemode/p.${ext}`), text);
+  const r = await check(bin, work, [`codemode/p.${ext}`]);
   const sigs = new Set(r.fails.map((f) => f.sig));
   // The uninterrupted run's end too, for a bug that needs no dump.
-  const m = /^=== (\w+)\n(.*)/m.exec(r.transcripts.get("codemode/p.js") ?? "");
+  const m = /^=== (\w+)\n(.*)/m.exec(r.transcripts.get(`codemode/p.${ext}`) ?? "");
   if (m) sigs.add(`plain ${m[1]}: ${blank(m[2])}`);
   return sigs;
 }
 
 // Parses as pi's case body (node's parser; djs's own errors would show as a crash).
-function parses(text) {
+function parses(text, ts = false) {
   try {
-    new vm.Script(`(async (tools, console) => {${text}\n})`);
+    let body = `(async (tools, console) => {${text}\n})`;
+    if (ts) {
+      // node only strips types: an enum or a parameter property passes unchecked.
+      try {
+        body = stripTypeScriptTypes(body);
+      } catch (e) {
+        return e.code === "ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX";
+      }
+    }
+    new vm.Script(body);
     return true;
   } catch {
     return false;
@@ -245,10 +255,11 @@ function matching(text, i) {
 async function reduce(bin, file, sig, out, deadline) {
   const work = path.join(dir, "reduce");
   let lines = fs.readFileSync(file, "utf8").split("\n");
+  const ext = file.endsWith(".ts") ? "ts" : "js";
   const fails = async (ls) => {
     const text = ls.join("\n");
-    if (!parses(text)) return false;
-    for (const s of await sigsOf(bin, work, text)) if (s.includes(sig)) return true;
+    if (!parses(text, ext === "ts")) return false;
+    for (const s of await sigsOf(bin, work, text, ext)) if (s.includes(sig)) return true;
     return false;
   };
   if (!(await fails(lines))) {
@@ -303,8 +314,10 @@ async function fuzz(bin) {
     const c = corpusDir(work);
     const names = [];
     for (let k = s; k < Math.min(s + batch, seed0 + cases); k++) {
-      fs.writeFileSync(path.join(c, `codemode/s${k}.js`), generate(k));
-      names.push(`codemode/s${k}.js`);
+      const o = seedOptions(k);
+      const name = `codemode/s${k}.${o.ts ? "ts" : "js"}`;
+      fs.writeFileSync(path.join(c, name), generate(k, o));
+      names.push(name);
     }
     const r = await check(bin, work, names);
     done += names.length;
@@ -318,8 +331,8 @@ async function fuzz(bin) {
       ends.set(end, (ends.get(end) ?? 0) + 1);
     }
     for (const f of r.fails) {
-      const seed = Number(/s(\d+)\.js/.exec(f.name)?.[1]);
-      const size = generate(seed).length;
+      const seed = Number(/s(\d+)\.[jt]s/.exec(f.name)?.[1]);
+      const size = generate(seed, seedOptions(seed)).length;
       const e = found.get(f.sig);
       if (!e) found.set(f.sig, { ...f, seed, size, count: 1, seeds: new Set([seed]) });
       else {
@@ -347,8 +360,9 @@ if (argv[0] === "check") {
   const work = path.join(dir, "check");
   const c = corpusDir(work);
   const names = argv.slice(1).map((f, i) => {
-    fs.copyFileSync(f, path.join(c, `codemode/c${i}.js`));
-    return `codemode/c${i}.js`;
+    const ext = f.endsWith(".ts") ? "ts" : "js";
+    fs.copyFileSync(f, path.join(c, `codemode/c${i}.${ext}`));
+    return `codemode/c${i}.${ext}`;
   });
   const r = await check(bin, work, names);
   // One line per program and signature, with the idle points whose chains show it.
@@ -367,7 +381,7 @@ if (argv[0] === "check") {
   const deadline = Date.now() + Number(flag("--time", 600)) * 1000;
   await reduce(bin, argv[1], sig, out, deadline);
 } else if (argv[0] === "gen") {
-  process.stdout.write(generate(Number(argv[1])));
+  process.stdout.write(generate(Number(argv[1]), seedOptions(Number(argv[1]))));
 } else {
   await fuzz(bin);
 }

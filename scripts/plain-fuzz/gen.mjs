@@ -22,6 +22,24 @@ function rng(seed) {
 }
 
 const TYPES = ["num", "str", "arr", "obj"];
+// Round 2 (0211, D2942): values codemode holds across awaits beyond plain JSON data.
+const WIDE = ["map", "set", "date", "re", "bytes", "err"];
+// TypeScript annotations of the value types.
+const TS_TYPES = {
+  num: "number",
+  str: "string",
+  arr: "number[]",
+  obj: "{ a: number; b: number }",
+  map: "Map<string, number>",
+  set: "Set<number>",
+  date: "Date",
+  re: "RegExp",
+  bytes: "Uint8Array | Float64Array",
+  err: "Error",
+};
+// Strings that are hard to write back: escapes, line separators, astral characters,
+// markup, template-looking text.
+const STRINGS = ["a", "b", "x", "ok", "s1", "", "line\nbreak", 'quo"te', "üñí", "\u2028", "😀", "</script>", "a\\b", "${x}"];
 
 class Gen {
   constructor(seed, opts) {
@@ -126,8 +144,86 @@ class Gen {
         return this.obj(d);
       case "bool":
         return this.bool(d);
+      default:
+        return this.wide(type, d);
+    }
+  }
+  valueTypes() {
+    return this.opts.wide ? [...TYPES, ...WIDE] : TYPES;
+  }
+  // A Map, Set, Date, RegExp, typed array or Error, new or a variable.
+  wide(type, d) {
+    const v = this.varOf(type);
+    if (v && (d <= 0 || this.chance(0.5))) return v;
+    const n = () => this.num(Math.max(0, d - 1));
+    const s = () => this.str(Math.max(0, d - 1));
+    switch (type) {
+      case "map":
+        return this.oneOf([
+          [3, () => `new Map([[${s()}, ${n()}], ["k", ${n()}]])`],
+          [1, () => `new Map(Object.entries(${this.obj(d - 1)}))`],
+        ]);
+      case "set":
+        return this.oneOf([
+          [2, () => `new Set([${n()}, ${n()}, ${n()}])`],
+          [1, () => `new Set(${this.arr(d - 1)})`],
+        ]);
+      case "date":
+        return this.oneOf([
+          [2, () => `new Date(Date.UTC(2024, ${n()} % 12, ${n()} + 1))`],
+          [1, () => `new Date(${n()} * 86400000)`],
+        ]);
+      case "re":
+        return this.oneOf([
+          [3, () => this.pick(["/a(b)?/g", "/x+/y", "/(?<w>\\w)\\d/gu", "/^l/m", "/./s"])],
+          [1, () => `new RegExp(${this.pick(['"a"', '"x+"', '"[ab]"'])}, "g")`],
+        ]);
+      case "bytes":
+        return this.oneOf([
+          [3, () => `new Uint8Array([${n()}, ${n()}, ${n()}])`],
+          [1, () => `new Float64Array([${n()}, 0.5])`],
+          [1, () => `new Uint8Array(new ArrayBuffer(4), 1, 2)`],
+          [1, () => `Uint8Array.from(${this.arr(d - 1)})`],
+        ]);
+      case "err":
+        return this.oneOf([
+          [2, () => `new Error(${s()})`],
+          [1, () => `new TypeError(${s()}, { cause: ${n()} })`],
+          [1, () => `Object.assign(new RangeError("r"), { code: ${n()} })`],
+        ]);
     }
     throw new Error(type);
+  }
+  // Something of a wide type made into a number, a string or an array.
+  wideUse(kind, d) {
+    const t = this.pick(WIDE);
+    const e = this.wide(t, d - 1);
+    const uses = {
+      map: { num: [`(${e}.get("k") ?? 0)`, `${e}.size`], str: [`[...${e}.keys()].join(",")`], arr: [`[...${e}.values()]`] },
+      set: { num: [`${e}.size`, `(${e}.has(1) ? 1 : 0)`], str: [`[...${e}].join(",")`], arr: [`[...${e}]`] },
+      date: { num: [`${e}.getUTCDate()`, `(${e}.getTime() / 86400000)`], str: [`${e}.toISOString()`], arr: [`[${e}.getUTCMonth(), ${e}.getUTCDate()]`] },
+      re: { num: [`${e}.lastIndex`, `(${e}.test("abab xx1") ? 1 : 0)`], str: [`String(${e}.exec("xabab x1 l"))`, `${e}.source`], arr: [`[${e}.lastIndex]`] },
+      bytes: { num: [`${e}.length`, `(${e}[0] ?? 0)`, `${e}.byteOffset`], str: [`${e}.join(":")`], arr: [`Array.from(${e})`] },
+      err: { num: [`${e}.message.length`], str: [`String(${e})`, `String(${e}.cause)`], arr: [`[${e}.message.length]`] },
+    };
+    return this.pick(uses[t][kind]);
+  }
+  // What the program returns for a variable, so that its state is compared.
+  show(v) {
+    switch (v.type) {
+      case "map":
+      case "set":
+        return `[...${v.name}]`;
+      case "date":
+        return `${v.name}.toISOString()`;
+      case "re":
+        return `[${v.name}.source, ${v.name}.flags, ${v.name}.lastIndex]`;
+      case "bytes":
+        return `Array.from(${v.name})`;
+      case "err":
+        return `[${v.name}.name, ${v.name}.message, ${v.name}.extra ?? null]`;
+    }
+    return v.name;
   }
   varOf(type) {
     const vs = this.vars((v) => v.type === type);
@@ -160,6 +256,12 @@ class Gen {
       [2, () => this.callNum(d)],
       [a ? 1 : 0, () => `(await (async () => (${sub()}))())`],
       [a ? 1 : 0, () => `(await new Promise((res) => res(${this.sync(sub)})))`],
+      [this.opts.wide ? 3 : 0, () => this.wideUse("num", d)],
+      [this.varOf("sym") ? 1 : 0, () => `(${this.obj(d - 1)}[${this.varOf("sym")}] ?? 0)`],
+      [this.varOf("enum") ? 1 : 0, () => `${this.varOf("enum")}.B`],
+      [this.opts.ts ? 1 : 0, () => `(${sub()} as number)`],
+      [this.opts.ts && v ? 1 : 0, () => `${v}!`],
+      [this.opts.ts ? 1 : 0, () => `id<number>(${sub()})`],
     ]);
   }
   // A call of something in scope that gives a number.
@@ -180,6 +282,8 @@ class Gen {
           [2, () => `${f.name}.get(${arg()})`],
           [2, () => `${f.name}.twice`],
           [1, () => `(${f.name}.value = ${arg()})`],
+          [this.opts.wide ? 1 : 0, () => `(${f.name}.v = ${arg()})`],
+          [this.opts.wide ? 1 : 0, () => `${f.name}.v`],
           [
             this.canAwait() ? 2 : 0,
             () => {
@@ -189,7 +293,11 @@ class Gen {
           ],
         ]);
       case "cls":
-        return this.chance(0.5) ? `new ${f.name}(${arg()}).twice` : `${f.name}.make(${arg()}).get(${arg()})`;
+        return this.oneOf([
+          [2, () => `new ${f.name}(${arg()}).twice`],
+          [2, () => `${f.name}.make(${arg()}).get(${arg()})`],
+          [this.opts.wide ? 1 : 0, () => `(${f.name}.count++)`],
+        ]);
       case "gen":
         return this.oneOf([
           [1, () => `[...${f.name}(${this.rand(4)})].reduce((s, x) => s + x, 0)`],
@@ -199,7 +307,7 @@ class Gen {
   }
   str(d) {
     const v = this.varOf("str");
-    const lit = () => JSON.stringify(this.pick(["a", "b", "x", "ok", "s1", ""]));
+    const lit = () => JSON.stringify(this.pick(this.opts.wide ? STRINGS : STRINGS.slice(0, 6)));
     if (d <= 0) return v && this.chance(0.6) ? v : lit();
     const a = this.canAwait();
     return this.oneOf([
@@ -214,6 +322,10 @@ class Gen {
       [1, () => `(typeof ${this.num(d - 1)})`],
       [1, () => `Object.keys(${this.obj(d - 1)}).join("")`],
       [1, () => `JSON.stringify(${this.obj(d - 1)})`],
+      [this.opts.wide ? 3 : 0, () => this.wideUse("str", d)],
+      [this.opts.wide ? 1 : 0, () => `${this.str(d - 1)}.repeat(3).padStart(8, "*")`],
+      [this.opts.wide ? 1 : 0, () => `[...${this.str(d - 1)}].reverse().join("")`],
+      [this.varOf("enum") ? 1 : 0, () => `${this.varOf("enum")}[${this.varOf("enum")}.A]`],
     ]);
   }
   arr(d) {
@@ -246,6 +358,7 @@ class Gen {
         },
       ],
       [this.vars((v) => v.type === "gen").length ? 1 : 0, () => `[...${this.pick(this.vars((v) => v.type === "gen")).name}(${this.rand(3) + 1})]`],
+      [this.opts.wide ? 2 : 0, () => this.wideUse("arr", d)],
     ]);
   }
   obj(d) {
@@ -261,6 +374,9 @@ class Gen {
       [1, () => `{ [${this.pick(['"a"', '"b"'])}]: ${sub()}, ${this.pick(["a", "b"])}: ${sub()}, a: ${sub()}, b: ${sub()} }`],
       [3, () => this.accessorObj(d)],
       [1, () => `{ a: ${sub()}, b: ${sub()}, m() { return this.a; } }`],
+      [this.opts.wide ? 1 : 0, () => `JSON.parse(JSON.stringify(${this.obj(d - 1)}))`],
+      [this.varOf("sym") ? 2 : 0, () => `{ a: ${sub()}, b: ${sub()}, [${this.varOf("sym")}]: ${sub()} }`],
+      [this.opts.ts ? 1 : 0, () => `(${this.obj(d - 1)} satisfies object)`],
     ]);
   }
   // An object with accessors that capture a variable of the frame (the `get m() { n++ }`
@@ -321,16 +437,34 @@ class Gen {
       [this.fn.top && d > 0 && a ? 1 : 0, () => this.asyncGenStmt(d)],
       [this.opts.using && d > 0 ? 1 : 0, () => this.usingStmt(d)],
       [this.fn.loops.length ? 1 : 0, () => this.jumpStmt()],
+      [this.vars((v) => WIDE.includes(v.type)).length ? 3 : 0, () => this.wideStmt()],
     ]);
   }
   declStmt() {
-    const type = this.pick(TYPES);
+    const type = this.pick(this.valueTypes());
     const mut = this.chance(0.5);
     const name = this.fresh("v");
     const e = this.expr(type, 2);
-    this.line(`${mut ? "let" : "const"} ${name} = ${e};`);
+    const ann = this.opts.ts && this.chance(0.7) ? `: ${TS_TYPES[type]}` : "";
+    this.line(`${mut ? "let" : "const"} ${name}${ann} = ${e};`);
     this.declare(name, type, { mut });
-    if (this.chance(0.3)) this.print(name);
+    if (this.chance(0.3)) this.print(this.show({ name, type }));
+  }
+  // A change to a Map, Set, Date, RegExp, typed array or Error in scope.
+  wideStmt() {
+    const v = this.pick(this.vars((v) => WIDE.includes(v.type)));
+    const x = v.name;
+    const n = () => this.num(2);
+    const lines = {
+      map: [`${x}.set(${this.str(1)}, ${n()});`, `${x}.delete("k");`],
+      set: [`${x}.add(${n()});`, `${x}.delete(${n()});`],
+      date: [`${x}.setUTCDate(${n()} + 1);`, `${x}.setUTCHours(${n()});`],
+      re: [`${x}.lastIndex = ${n()} % 3;`, `${x}.exec("abab xx1 l");`],
+      bytes: [`${x}[${n()} % 2] = ${n()};`],
+      err: [`${x}.extra = ${n()};`],
+    };
+    this.line(this.pick(lines[v.type]));
+    if (this.chance(0.4)) this.print(this.show(v));
   }
   assignStmt() {
     const v = this.pick(this.vars((v) => v.mut && v.type === "num")).name;
@@ -554,7 +688,9 @@ class Gen {
     const arrow = this.chance(0.4);
     // Its awaits count where it is called.
     const start = this.awaits;
-    this.line(arrow ? `const ${name} = async (${x}) => {` : `async function ${name}(${x}) {`);
+    const p = this.opts.ts ? `${x}: number` : x;
+    const r = this.opts.ts ? ": Promise<number>" : "";
+    this.line(arrow ? `const ${name} = async (${p})${r} => {` : `async function ${name}(${p})${r} {`);
     this.inFunction({ async: true, gen: false, loops: [], mult: 1, top: false }, () =>
       this.block(() => {
         this.declare(x, "num");
@@ -588,8 +724,17 @@ class Gen {
     const caps = this.vars((v) => v.type === "num" && v.mut);
     const cap = caps.length ? this.pick(caps).name : "0";
     this.line(`class ${c} {`);
-    this.line(`  constructor(v) { this.value = v; }`);
+    if (this.opts.ts && this.chance(0.5)) this.line(`  constructor(public value: number) {}`);
+    else if (this.opts.ts) this.line(`  value: number;\n${"  ".repeat(this.indent)}  constructor(v: number) { this.value = v; }`);
+    else this.line(`  constructor(v) { this.value = v; }`);
     this.line(`  get twice() { return this.value * 2; }`);
+    if (this.opts.wide) {
+      // Class accessors and a static field the program changes.
+      this.line(`  get v() { return this.value; }`);
+      this.line(`  set v(x) { this.value = x; }`);
+      this.line(`  static count = ${this.num(0)};`);
+    }
+    if (this.opts.statics && caps.length) this.line(`  static { ${cap} += 1; }`);
     this.line(`  get(x) { return this.value + x + ${cap}; }`);
     this.line(`  async fetch(x) { return this.value + (await tools.echo(x)); }`);
     this.line(`  static make(v) { return new ${c}(v + 1); }`);
@@ -651,10 +796,27 @@ class Gen {
     const n = this.fresh("n");
     this.line(`let ${n} = 0;`);
     this.declare(n, "num", { mut: true });
+    if (this.opts.wide && this.chance(0.5)) {
+      const sym = this.fresh("sym");
+      this.line(`const ${sym} = ${this.pick(['Symbol("k")', 'Symbol.for("shared")', "Symbol()"])};`);
+      this.declare(sym, "sym");
+    }
+    if (this.opts.ts) {
+      // Declarations that are only types, a generic helper, sometimes an enum (which
+      // keeps a dump TypeScript).
+      this.line(`interface I${this.n} { a: number; b?: number }`);
+      this.line(`type T${this.n} = number | string;`);
+      this.line(`function id<T>(x: T): T { return x; }`);
+      if (this.chance(0.3)) {
+        const e = this.fresh("E");
+        this.line(`enum ${e} { A, B = ${this.rand(9) + 1}, C }`);
+        this.declare(e, "enum");
+      }
+    }
     this.stmts(this.opts.statements, this.opts.depth);
     const a = this.canAwait();
     // Everything the body declared that is a value, so that its state is compared.
-    const seen = this.scopes[0].filter((v) => TYPES.includes(v.type)).map((v) => v.name);
+    const seen = this.scopes[0].filter((v) => this.valueTypes().includes(v.type)).map((v) => this.show(v));
     const fields = [
       `n: ${n}`,
       `vars: [${seen.join(", ")}]`,
@@ -667,13 +829,19 @@ class Gen {
   }
 }
 
-export const DEFAULTS = { statements: 8, depth: 3, budget: 30, using: true };
+// `wide` (0211): Map/Set/Date/RegExp/typed arrays/Errors, symbol keys, class accessors
+// and static fields, string-heavy data; `ts`: a TypeScript body; `statics`: static blocks
+// with side effects (after 0209 item 7).
+export const DEFAULTS = { statements: 8, depth: 3, budget: 30, using: true, wide: true, ts: false, statics: false };
 
 export function generate(seed, opts = {}) {
   return new Gen(seed, { ...DEFAULTS, ...opts }).program();
 }
 
+// The options of a seed: every third program is TypeScript.
+export const seedOptions = (seed, opts = {}) => ({ ts: seed % 3 === 0, ...opts });
+
 // `node gen.mjs SEED`: prints the program.
 if (import.meta.url === `file://${process.argv[1]}`) {
-  process.stdout.write(generate(Number(process.argv[2] ?? 1)));
+  process.stdout.write(generate(Number(process.argv[2] ?? 1), seedOptions(Number(process.argv[2] ?? 1))));
 }
