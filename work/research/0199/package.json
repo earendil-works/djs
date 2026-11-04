@@ -1,0 +1,1 @@
+{ "name": "djs-0199-plain", "private": true, "type": "module", "dependencies": { "acorn": "8.15.0" } }
