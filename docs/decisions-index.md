@@ -673,3 +673,4 @@ topics when the index is next reorganized.
 - D2950: Plain dumps write class text with its static code blanked
 - D2911: A continuation leaves out the frame's bindings nothing in it reads
 - D2942: The plain-dump fuzzer's second round generates wider values and TypeScript bodies
+- D2886: `$djs.source(name, hash, params, 1)`: the one function a host's wrapper script makes

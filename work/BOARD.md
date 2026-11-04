@@ -9,7 +9,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0207 | Make plain dumps small (owner priority): header "djs-dump", helpers and source(ref) on host-provided $djs (D2834, D2835), record cuts, liveness pruning | pjs | .worktrees/pjs |
 | 0211 | Plain dump fuzzing round 2 (wider generator, new seeds) | pjz | .worktrees/pjz |
 | 0207+ | pjr: class self-reference cycles, origin/re-dump bugs from 0208, $djs.source(ref), 0203 follow-ups | pjr | .worktrees/pjx |
-| 0214 | Conflict-free derived files (smap summary, dump-size score) | pjd | .worktrees/pjd |
 | 0213 | Generic host bindings: `tools.foo` stops being special (owner; DSH imports later) | hb | .worktrees/hb |
 
 ## Open (ready)
@@ -89,6 +88,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0190-0196 | SM migration: slot names (D2730), named slots (D2731), construct temporaries + iter_next_loc (D2732), finally completions (D2733), roles deleted (D2734), one compile per load (D2735) | 9cc8741b (agent sm) |
 | 0198 | Dump performance: corpus dump p50 1.42 -> 0.43 ms wasm, totals 3,243 -> 610 ms; data cases 2-6x (D2800-D2802) | 429184db (agent dumpperf) |
 | - | base_equals_a_compiled_realm test fixed (8f0fdd72); gate recovers from incremental corruption (D2896, b55180dd); CLI/REPL call states (D2894) | agent pjh |
+| 0214 | Conflict-free derived files: smap summary regenerated, dump-size merge driver by case | ba956eb9 (agent pjd) |
 | 0212 | Exporter cleanup after format 2; docs site copies js/src .js files | cbe1109e, 4a67076d (agent pjd) |
 | 0209 | Plain dump data bugs: deferred references, static code blanked (D2950), runtime-made objects as helper calls (D2951), TS parameter properties | 7e5855cc (agent pjd) |
 | 0205 | Retire format 2: plain dumps are the only format (D2920, D2921) | ee23d3c6 (agent pjf; loader/resume/prims/jump_if_loading deleted, ABI 4, 131 plain goldens; dump module -19.6 KB gz) |
