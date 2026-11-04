@@ -669,3 +669,5 @@ topics when the index is next reorganized.
 - D2909: A continuation is a function called with the frame's values
 - D2910: A continuation reads a value of the callback only after the part that makes it
 - D2882: `$djs.source(name, hash, params)`: a dump names the codemode body it continues
+- D2951: Objects the dump runtime made are written as its helper calls again
+- D2950: Plain dumps write class text with its static code blanked
