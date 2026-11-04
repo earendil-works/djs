@@ -309,7 +309,7 @@ process keeps that instance, shared by its sandboxes, for the next dumps (D2701,
 process, so neither module verifies it cell by cell, only that it was made by the same
 build's tables.
 
-Dumps are becoming **plain JavaScript** (D2830): with `plainDumps: true` the sandbox
+Dumps are **plain JavaScript** (D2830, the sandbox's default, D2898): the sandbox
 writes each stopped function as a continuation, an ordinary function holding the rest of
 its code from the `await` it waits at, and the whole dump as a Script that needs nothing
 from djs. Loading one is running it, so the shipped module loads plain dumps without the

@@ -312,9 +312,10 @@ held there declared at its top and the loops around the `await` written as real 
 over the saved iterators. The dump is then an ordinary Script, which any later djs, or
 node, runs given the host's functions; it calls `$djs.seed(...)` and one
 `$djs.resume(id, name, args, state)` per open call, functions the host provides for the
-load (D2890). Its completion value is the run's result promise. Until the plain writer
-covers everything format 2 does, a host asks for it (`plainDumps`, `djs run --plain`)
-and gets a refusal with the reason where it cannot write a run yet.
+load (D2890). Its completion value is the run's result promise. The Sandbox writes
+plain dumps by default (D2898); the CLI and the pi adapter still ask for them
+(`djs run --plain`, `plainDumps`) until format 2 is retired. Where the plain writer
+cannot write a run yet, the dump is refused with the reason.
 
 **What a dump costs.** Over 300 real codemode scripts and their 1,063 idle points, a
 dump is 6 KB of text at the median and 17 KB compressed at p99; with zstd at level 3,

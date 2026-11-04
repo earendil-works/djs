@@ -31,7 +31,7 @@ return results;
 /** Resolves at `due` (ms since the epoch), unless `signal` aborts first. */
 function until(due: number, signal: AbortSignal): Promise<void> {
   return new Promise((done) => {
-    const timer = setTimeout(done, due - Date.now());
+    const timer = setTimeout(done, Math.max(0, due - Date.now())); // a passed deadline: at once
     signal.addEventListener("abort", () => clearTimeout(timer));
   });
 }
@@ -51,9 +51,8 @@ const sleep = {
 } satisfies AsyncHostFunction<{ due: number }>;
 
 export const options = (log = (...a: unknown[]) => console.log("  [vm]", ...a)): SandboxOptions => ({
+  // Dumps are plain (D2830, the default): a Script that runs given only the host's functions.
   asyncFunctions: { "tools.sleep": sleep },
-  // Plain dumps (D2830): the dump is a Script that runs given only the host's functions.
-  plainDumps: true,
   console: { log, info: log, warn: log, error: log },
 });
 

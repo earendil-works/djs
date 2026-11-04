@@ -90,11 +90,12 @@ interface Packaging {
 async function packagings(): Promise<[string, Packaging][]> {
   const module = await loadModule();
   const out: [string, Packaging][] = [
-    ["A", { module }],
-    ["B (image transport)", { module, dumpModule: module }],
+    // Format 2 explicitly until 0205 retires it; the plain variants follow.
+    ["A", { module, plainDumps: false }],
+    ["B (image transport)", { module, dumpModule: module, plainDumps: false }],
   ];
   const nodump = process.env.DJS_WASM_NODUMP;
-  if (nodump) out.push(["B (djs.wasm + djs-dump.wasm)", { module: await loadModule(nodump), dumpModule: module }]);
+  if (nodump) out.push(["B (djs.wasm + djs-dump.wasm)", { module: await loadModule(nodump), dumpModule: module, plainDumps: false }]);
   for (const [name, p] of [...out]) out.push([`${name}, plain`, { ...p, plainDumps: true }]);
   return out;
 }
@@ -172,7 +173,7 @@ const FIELDS = `
 `;
 
 test("dump and resume at every idle point: class fields", async () => {
-  const p = { module: await loadModule() };
+  const p = { module: await loadModule(), plainDumps: false };
   const plain = await drive(p, FIELDS, false);
   const dumped = await drive(p, FIELDS, true);
   assert.deepEqual(dumped.lines, plain.lines);

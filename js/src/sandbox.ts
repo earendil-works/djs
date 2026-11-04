@@ -72,8 +72,8 @@ export interface SandboxOptions {
   dumpModule?: WebAssembly.Module;
   /**
    * Write plain dumps (format 3, D2830): Scripts that run given only the host's functions,
-   * which `load`/`resume` run with the hooks of D2890. Default false (format 2) until format
-   * 2 is retired; loading takes either.
+   * which `load`/`resume` run with the hooks of D2890. Default true; `false` writes format 2
+   * until it is retired (0205). Loading takes either.
    */
   plainDumps?: boolean;
   /** Heap cap in bytes; default: the engine's (4 GiB). */
@@ -1131,7 +1131,7 @@ export class Sandbox {
    * states (`id:bytes`, tab separated) followed by their JSON texts (D2770).
    */
   private dumpText(names: string[], handles: [string, number][], states: [number, string][]): string {
-    const plain = this.opts.plainDumps === true;
+    const plain = this.opts.plainDumps !== false;
     return this.viaDumper((sb) => sb.dumpHere(names, handles, states, plain), false);
   }
 

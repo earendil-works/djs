@@ -10,16 +10,18 @@ import { type AsyncHostFunction, type HostCall, loadModule, Sandbox, SandboxErro
 interface Packaging {
   module: WebAssembly.Module;
   dumpModule?: WebAssembly.Module;
+  plainDumps?: boolean;
 }
 
 async function packagings(): Promise<[string, Packaging][]> {
   const module = await loadModule();
   const out: [string, Packaging][] = [
-    ["A", { module }],
-    ["B (image transport)", { module, dumpModule: module }],
+    // Format 2 explicitly until 0205 retires it.
+    ["A", { module, plainDumps: false }],
+    ["B (image transport)", { module, dumpModule: module, plainDumps: false }],
   ];
   const nodump = process.env.DJS_WASM_NODUMP;
-  if (nodump) out.push(["B (djs.wasm + djs-dump.wasm)", { module: await loadModule(nodump), dumpModule: module }]);
+  if (nodump) out.push(["B (djs.wasm + djs-dump.wasm)", { module: await loadModule(nodump), dumpModule: module, plainDumps: false }]);
   return out;
 }
 
@@ -225,7 +227,7 @@ test("suspend before an idle point waits for it; a run that ends first rejects i
 
 test("host-driven runs dump states and load them back", async () => {
   const module = await loadModule();
-  const opts = { module, asyncFunctions: { "tools.sleep": () => 0 } };
+  const opts = { module, plainDumps: false, asyncFunctions: { "tools.sleep": () => 0 } };
   const sb = new Sandbox(opts);
   const run = sb.begin("return await tools.sleep(5) + await tools.sleep(6);");
   const id = run.calls[0].id;

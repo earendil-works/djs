@@ -155,8 +155,8 @@ await again.result;
   outcome; it rejects with a SandboxError (`threw`, `fuel`, ...).
 - `suspend()` waits for the next idle point with no result left to deliver, takes each
   open call's state (its function's `save(call)`, by default `call.state`; JSON data) and
-  writes the run as a format 2 dump, the states with their calls
-  (`$dump.pending(id, name, args, state)`). The task stops: the calls' `signal`s abort,
+  writes the run as a dump, the states with their calls (a plain dump's
+  `$djs.resume(id, name, args, state)`, format 2's `$dump.pending(...)`). The task stops: the calls' `signal`s abort,
   their late results are dropped, and `result` rejects with kind `suspended` (counted as
   handled). A dump that fails (a value that cannot be written, a `save` that throws, a
   state that is not JSON) rejects the `suspend` only, and the task goes on.
@@ -167,10 +167,10 @@ await again.result;
   function's hooks: `resume(state, call)` with the saved state; `call` again for a
   function without `resume`; a plain function's call is rejected (an Error naming the
   function), since the sandbox cannot know whether calling it again is safe.
-- **Plain dumps** (`"djs-dump 3";`, D2830, D2890): with `plainDumps: true` the sandbox
-  writes its dumps (tasks', `Run.dump`, `dump`) as ordinary Scripts in which every
-  suspended function is a continuation, the rest of its code from where it waits; until
-  format 2 is retired the default stays format 2. `Sandbox.resume`, `loadRun` and `load`
+- **Plain dumps** (`"djs-dump 3";`, D2830, D2890, D2898): the sandbox writes its dumps
+  (tasks', `Run.dump`, `dump`) as ordinary Scripts in which every suspended function is a
+  continuation, the rest of its code from where it waits. This is the default;
+  `plainDumps: false` writes format 2 until it is retired. `Sandbox.resume`, `loadRun` and `load`
   take either and run a plain one with the global object `$djs` defined: the dump calls
   `$djs.seed(lo, hi, next)` first (Math.random's state and the id of the next host call)
   and `$djs.resume(id, name, args, state)` for each open call, which opens call `id` of the
@@ -201,7 +201,7 @@ run.state;                                  // "idle" | "done" | "threw"
 run.calls;                                  // [{ id, fn: "sleep", args: [5000] }]: open, not called
 run.settle(id, { ok: true, value });        // a result (ok false: rejects with value)
 await run.advance();                        // to the next idle point; run.value / run.error at the end
-const text = run.dump({ [id]: { due } });   // only while idle: a format 2 dump, with call states
+const text = run.dump({ [id]: { due } });   // only while idle: a plain dump, with call states
 const again = (await Sandbox.create({ asyncFunctions })).loadRun(text); // same calls, same ids
 again.calls;                                // [{ id, fn: "sleep", args: [5000], state: { due } }]
 ```
@@ -209,7 +209,7 @@ again.calls;                                // [{ id, fn: "sleep", args: [5000],
 - A host-driven run never calls async host functions: it lists them in `run.calls`, and
   the host answers with `settle`, in any order (results are still macrotasks, D1670).
   Sync host functions are called as in `run`. The sandbox runs nothing else meanwhile.
-- `dump(states)` writes the idle VM as a format 2 dump: its data, the suspended
+- `dump(states)` writes the idle VM as a dump (plain unless `plainDumps: false`): its data, the suspended
   activations, the open calls (by the host's function names, with the states given for
   them, JSON data by call id) and the run's result promise, named `run`. `loadRun` loads
   the dump into a fresh sandbox made with the same host functions, by name, and

@@ -9319,3 +9319,12 @@ without a call. Checked by the CLI's plain every-idle-point test, which compares
 hook calls (ids, states, seed) of each resumed dump's next dump with the uninterrupted
 run's dump there, by js/test/dumpresume.test.ts's plain variants, whose transcripts list
 the ids, and by pi's adapter test, whose messages carry pi's `issued` counts.
+## D2898: The Sandbox writes plain dumps by default
+date: 2026-11-04 · by: pjm · issue: 0204
+`SandboxOptions.plainDumps` defaults to true: new Sandbox dumps (tasks' `suspend`/
+`checkpoint`, `Run.dump`, `dump`) are plain Scripts (D2830). The owner wants the plain
+format first, and format 2 is retired in 0205 anyway, so keeping it the default until
+then buys nothing. `plainDumps: false` still writes format 2; the tests that assert
+format 2's text (dumpload, task, dumpresume's format 2 packagings) opt into it until
+0205 rewrites them. The CLI (`--plain`) and the pi adapter (`plainDumps`) keep format 2
+as their default until 0205.

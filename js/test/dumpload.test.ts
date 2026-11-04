@@ -8,7 +8,7 @@ import { loadModule, Sandbox, SandboxError } from "../src/sandbox.ts";
 test("a dump recreates closures, data and buffers in another sandbox", async () => {
   const module = await loadModule();
   const functions = { fetchName: (id: unknown) => `user${String(id)}` };
-  const a = new Sandbox({ module, functions });
+  const a = new Sandbox({ module, functions, plainDumps: false }); // format 2 until 0205
   a.run(`
     globalThis.lib = (() => {
       let calls = 0;
@@ -33,7 +33,7 @@ test("a dump recreates closures, data and buffers in another sandbox", async () 
 });
 
 test("live values are refused with their path", async () => {
-  const s = new Sandbox({ module: await loadModule() });
+  const s = new Sandbox({ module: await loadModule(), plainDumps: false });
   s.run("globalThis.w = { cache: new WeakMap() };");
   assert.throws(() => s.dump(), (e: SandboxError) => e.kind === "misuse" && /w\.cache: a weak collection/.test(e.message));
   assert.throws(() => s.load("x = 1"), /not a djs dump/);
@@ -41,7 +41,7 @@ test("live values are refused with their path", async () => {
 
 test("a dump that ends with a cycle patch loads", async () => {
   const module = await loadModule();
-  const a = new Sandbox({ module });
+  const a = new Sandbox({ module, plainDumps: false });
   a.run("globalThis.data = { name: 'x' }; data.self = data;");
   const text = a.dump();
   assert.match(text, /data\.self = data;\n$/);
@@ -52,7 +52,7 @@ test("a dump that ends with a cycle patch loads", async () => {
 
 test("classes with private fields round-trip through the loader", async () => {
   const module = await loadModule();
-  const a = new Sandbox({ module });
+  const a = new Sandbox({ module, plainDumps: false });
   a.run(`
     globalThis.Account = class Account {
       #balance = 0;

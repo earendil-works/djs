@@ -1,7 +1,7 @@
 # 0204: Host hooks for plain dumps: resume(id, name, args, state), seed(lo, hi); Sandbox tasks, pi adapter, CLI/REPL
 
-status: in-progress
-agent: pjh
+status: done
+agent: pjh, pjm
 branch: issue/0204-host-hooks-plain
 depends-on: -
 guide: docs/guide/snapshots.md, suspension.md, host.md
@@ -71,6 +71,13 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
 - Docs: docs/host.md (plain dumps, ABI rows, pi), docs/cli.md, docs/plain-js-dumps.md
   (the interface as built). Guide: host.md (plain dumps paragraph), snapshots.md (the
   plain format, short); suspension.md unchanged (0205 rewrites the dump chapters).
+- pjm took over: `SandboxOptions.plainDumps` defaults to true (D2898); the js tests that
+  assert format 2's text opt into it with `plainDumps: false` (dumpload, task, dumpresume's
+  format 2 packagings; 0205 rewrites them). sleep-dump drops its now-default option and
+  clamps a passed deadline's timeout at 0 (node warned on the negative delay after a
+  resume). Checked: js tests (152 pass), `run.sh`, `run.sh 300`, `--restart 300`,
+  `--node 300`, js/test/sleep-dump.test.ts. Docs: docs/host.md, guide host.md and
+  snapshots.md (the default); CLI and pi adapter unchanged (format 2 default until 0205).
 
 ## Follow-ups
 
@@ -81,3 +88,15 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
   back to the original line through `$djs.segs` would read better.
 
 ## Result
+
+Plain dumps (format 3, D2830) are written and loaded by every host: `$djs.seed(lo, hi,
+next)` and `$djs.resume(id, name, args, state)` (D2890, D2897), several handles as one
+object (D2895), call states in the CLI (D2894). The Sandbox writes plain dumps by default
+(D2898; `plainDumps: false` for format 2); the CLI asks with `djs run/resume --plain` and
+REPL `--plain`/`.plain`, the pi adapter with `VmHooks.plainDumps`. Loading takes either
+format and needs no dumper for plain dumps. examples/sleep-dump runs on plain dumps:
+`examples/sleep-dump/run.sh [ms]`, `run.sh --restart [ms]` (two processes) and
+`run.sh --node [ms]` (process 2 continues the dump in node). Known gaps (0205): format 2
+is still the CLI's and pi's default and is not removed; the exporter's refusals (0203:
+for-await, private fields, a factory cell's activation); `--explain` shows continuation
+lines.

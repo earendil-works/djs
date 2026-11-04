@@ -68,7 +68,7 @@ const sleep = {
     return `slept ${call.args[0]} ms`;
   },
 } satisfies AsyncHostFunction<{ due: number }>;
-const options = { asyncFunctions: { "tools.sleep": sleep }, plainDumps: true };
+const options = { asyncFunctions: { "tools.sleep": sleep } };
 
 // Process 1: start the script, suspend it at its first idle point.
 const sandbox = await Sandbox.create(options);
