@@ -532,16 +532,91 @@ is worse than main if its distribution is, not if one run is.
 ## The gate
 
 `scripts/gate.sh` must pass before anything merges into `main` (`scripts/merge-to-main.sh`
-runs it in the shared gate worktree after rebasing, D1792). Its steps: fmt; clippy
-(workspace, and wasm32 release for djs-core and djs-wasm); the workspace's unit and
-integration tests; the no_std wasm32 build of djs-core; `scripts/bgen.sh --check`; the builtin registry's append-only check
-(`scripts/registry.py check main`); the djs-wasm build and the JS host package's tests (`node --test js/test/*.test.ts`); native
-versus wasm heap images (`scripts/determinism/native-vs-wasm.sh`); the wire and reader
-cross-language checks; difftest on djs with the ratchet, suspension, GC stress,
-heap-image determinism and a dump at every idle point; difftest with the bytecode backend; and the test262 active group
-against its ratchet; the slim build's own legs (below); and the size budget (below). It
-prints the slowest unit and test262 tests. Issues that add a test
-suite also add it to the gate; agents do not run the gate's steps by hand (AGENTS.md).
+runs it in the shared gate worktree after rebasing, D1792). It runs `scripts/gate.py`: a
+set of **legs**, the checks, and the **builds** they need (D2660). `scripts/gate.sh
+--list` prints them. The legs: fmt; clippy (workspace, and wasm32 release for djs-core
+and djs-wasm); the workspace's unit and integration tests (djs-docs's apart) and its
+doctests; the no_std wasm32 build of djs-core; `scripts/bgen.sh --check`; the builtin
+registry's append-only check (`scripts/registry.py check main`); the guide (`djs-docs
+check`); the JS host package's tests on the dev modules; native versus wasm heap images;
+the wire and reader cross-language checks; difftest on djs with the ratchet, suspension,
+GC stress, heap-image determinism and a dump at every idle point; difftest with the
+bytecode backend; the unsafe-heap build (verifier and e2e in debug, the stressed corpus
+in release); the test262 active group against its ratchet; the slim build's legs (below);
+the size budget (below); pi's tests on the slim module and in the adapter's next mode.
+The `test` and `test262` legs print the slowest tests. Issues that add a test suite add a
+leg (`jobs()` in scripts/gate.py: its command, the builds it needs, its input class);
+agents do not run the gate's steps by hand (AGENTS.md).
+
+### How it runs (D2661)
+
+Every cargo configuration the gate builds (a package and feature set, a profile, a
+target) has its own target directory (`target/` for the workspace, `target/gate-core`,
+`gate-difftest`, `gate-test262`, `gate-docs`, `gate-unsafe`, `slim`, `clippy`,
+`wasm-dev`, `wasm-nodump`, `size`, `size-slim`; the release unsafe-heap build in
+`target/` under its own profile), because cargo locks a target directory while it builds:
+so they all build at once. The commands are the ones the serial gate ran (the same
+packages, features and profiles), split into a build and a run: legs run the built
+binaries (hard links in `target/gate/bin/`) instead of `cargo run`, and the test binaries
+of a `cargo test --no-run` in parallel, each the way `cargo test` runs it (in its
+package's directory, through scripts/test-runner.sh). A leg starts when its builds are
+done. The first failure stops the gate and prints that leg's output; every leg's output
+is in `target/gate/log/`, the step times in `target/gate-steps.tsv`.
+
+macOS scans every new executable on its first run (syspolicyd and XProtect, one at a time,
+~0.1–2 s per binary); a gate after a Rust change links ~60 of them. The gate runs each new
+test binary once (`--list`) as soon as cargo reports it, so the scans overlap the rest of
+the build instead of delaying the legs (D2665). Builds that are not on the longest path
+(everything but the workspace's test build) run at `nice 4`.
+
+### The cache (D2662, D2663)
+
+A leg that passed is not run again on the same inputs. Its key hashes the leg's name,
+the committed tree restricted to the leg's **input class**, and what it reads outside the
+repository. The classes, defined by what they leave out, so a new top-level directory is in
+all of them:
+
+| class | leaves out | legs |
+|---|---|---|
+| `all` | nothing | the guide, djs-docs's tests |
+| `nodocs` | `docs/`, `work/`, `.github/`, the top-level `*.md` | js tests, wire/reader cross-language, native vs wasm, pi's tests |
+| `rust` | `nodocs`'s, and `js/` (but `js/src/layout.generated.ts`) and `examples/` | everything else |
+
+`scripts/` is in every class, so a change to the gate reruns every leg. Outside the
+repository, every leg's key has the toolchain (`rustc -vV`, `cargo -V`, node, python),
+the qjs binary (size and mtime; `$DJS_QJS`), vendor/test262's commit and local changes
+(`$DJS_TEST262`) and vendor/unicode's NormalizationTest.txt; pi's legs also have
+pi-private's commit, its local changes and its installed packages
+(`$PI_PRIVATE`, node_modules/.package-lock.json). A leg that reads something new outside
+the repository adds it to `EXTERNALS` in scripts/gate.py.
+
+Why nothing the uncached gate caught can pass: a cached leg passed on a tree whose files
+in its class are byte-identical, with the same tools and outside inputs, and a leg reads
+nothing else, so it would pass again. The classes hold because only djs-docs reads
+`docs/` and the top-level Markdown (its legs are `all`), nothing reads `work/` or
+`.github/`, and of `js/` and `examples/` Rust reads only the layout file; the always-run
+`paths` leg fails when Rust code outside djs-docs names a path outside the `rust` class
+(`PATHS_ALLOWED` lists the exceptions with their reasons). Legs that depend on more than
+the tree run every time: `fmt`, `registry` (it compares with main) and `paths`. Builds are
+not cached (cargo's own incremental builds are); a build runs when a leg that needs it
+runs.
+
+The cache is `work/scratch/gate-cache/` of the primary checkout, one file per passed key
+(`$DJS_GATE_CACHE` moves it). Entries are written only from a clean worktree (the keys
+are the commit's), read entries that are missing, unreadable or corrupt mean "run the
+leg", and entries unused for 14 days are pruned on every run. `scripts/gate.sh
+--clear-cache` empties it; `--no-cache` runs every leg without reading it.
+
+### Full runs (D2664)
+
+`scripts/gate.sh --full` reads no cache and also runs the **full-only** legs, checks too
+slow for every merge: pi's tests in the next mode with a dump and a resume at every idle
+point (`scripts/pi-dump-every-idle.sh`, its own LTO build). It must run on main at least
+daily (the coordinator) and before a release; passes are recorded in
+`work/scratch/gate-cache/full-passes.tsv`, and every other gate run reminds when the last
+one is older than 24 hours. A full run also catches what the cache cannot see: a flaky test,
+and a leg that reads a path outside its class without the `paths` leg noticing (a path
+built at run time).
 
 ### Builtin registry (D2371)
 

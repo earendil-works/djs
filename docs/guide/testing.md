@@ -186,13 +186,14 @@ tested against it:
 
 ## The gate
 
-`scripts/gate.sh` is the one check that guards `main`. In order: formatting, clippy
-(also for wasm32), all unit and integration tests, the `no_std` wasm32 build, the
-freshness of the generated builtins, `djs-docs check` for this guide, the djs-wasm build
-and the host package's tests, native-versus-wasm images, the cross-language wire and
-reader checks, the difftest corpus with suspension, GC stress and determinism, the
-corpus again with the bytecode backend, and the active test262 group against its
-ratchet.
+`scripts/gate.sh` is the one check that guards `main`. It consists of legs: formatting,
+clippy (also for wasm32), all unit and integration tests, the `no_std` wasm32 build, the
+freshness of the generated builtins, `djs-docs check` for this guide, the host package's
+tests on the djs-wasm modules, native-versus-wasm images, the cross-language wire and
+reader checks, the difftest corpus with suspension, GC stress and determinism, the corpus
+again with the bytecode backend and on the unchecked-heap build, the active test262 group
+against its ratchet, the slim build's tests and corpora, the size budget, and pi's own
+tests on the shipped modules.
 
 Nothing reaches `main` without passing it. `scripts/merge-to-main.sh` takes a lock,
 rebases the branch onto `main`, regenerates the generated files from the merged sources
@@ -201,11 +202,24 @@ fast-forwards `main` only if it passes. Merges are serial, so `main` always pass
 gate, and the gate runs at full priority while everything else on the machine runs niced
 (D1793).
 
-> **Trade-off.** One serial gate on every merge over checks after the fact. `main` is
-> always green, and a regression is caught in the change that caused it, by the agent
-> that wrote it. The cost: merges queue behind each other, and the gate's run time
-> (minutes, dominated by test262 and the stressed corpus) is paid on every merge; so the
-> gate is kept fast enough to run in full every time rather than sampled.
+Three things keep it fast without checking less. Every build the legs need gets its own
+cargo target directory, so they all build at once, and each leg starts as soon as its
+builds are done (D2661). Each leg is cached by its inputs: a hash of the files it can
+read, and of what it reads outside the repository (the toolchain, the oracle, the
+test262 checkout, pi's sources). A leg that passed on exactly those inputs is not run
+again (D2662). Which files a leg can read is one of three classes: everything (the
+guide), everything but the documentation (the JavaScript legs), and that minus the
+JavaScript package (the Rust legs). An always-run check fails when Rust code starts
+naming a file outside its class (D2663). So a documentation change gates in seconds, a
+change to the host package in about ten, and a change to the engine reruns everything.
+`scripts/gate.sh --full` ignores the cache and adds checks too slow for every merge; it
+runs daily and before releases (D2664).
+
+> **Trade-off.** One gate on every merge over checks after the fact. `main` is always
+> green, and a regression is caught in the change that caused it, by the agent that wrote
+> it. The cost: merges queue behind each other. The cache makes that cost proportional
+> to what a change can affect, at the price of trusting the input classes; the full run
+> is the backstop for what a class misses.
 
 ## Where to look
 
@@ -217,13 +231,14 @@ gate, and the gate runs at full priority while everything else on the machine ru
   [`crates/djs-difftest/`](../../crates/djs-difftest/): the runner.
 - [`crates/djs-core/tests/e2e.rs`](../../crates/djs-core/tests/e2e.rs) and
   [`tests/data/e2e/`](../../tests/data/e2e/): the end-to-end tests.
-- [`scripts/gate.sh`](../../scripts/gate.sh) and
-  [`scripts/merge-to-main.sh`](../../scripts/merge-to-main.sh): the gate and the merge
-  flow.
+- [`scripts/gate.py`](../../scripts/gate.py) (run by
+  [`scripts/gate.sh`](../../scripts/gate.sh)) and
+  [`scripts/merge-to-main.sh`](../../scripts/merge-to-main.sh): the gate's legs, their
+  input classes and the cache, and the merge flow.
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D008 D012 D1022 D1023 D1100 D1102 D1161 D1440 D1530 D1540 D1635 D1720 D1725 D1790 D1791 D1792 D1793 D2032 -->
+<!-- gen:decisions D2040 D008 D012 D1022 D1023 D1100 D1102 D1161 D1440 D1530 D1540 D1635 D1720 D1725 D1790 D1791 D1792 D1793 D2032 D2661 D2662 D2663 D2664 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D008: Codemode top level is a function body
 - D012: Development flow: per-agent job caps, iteration habits, worktree slots

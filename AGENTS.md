@@ -122,7 +122,10 @@ Rules:
 ## Testing while iterating
 
 The gate runs once, inside `scripts/merge-to-main.sh`. Don't run `scripts/gate.sh` yourself
-before merging; while iterating, run only what your change can break (0047, D012):
+before merging; while iterating, run only what your change can break (0047, D012). The
+gate caches each leg by its inputs (TESTING.md "The gate", D2662): a change to docs or
+js/ gates in seconds, one to Rust reruns every Rust leg, so a gate that fails costs a
+full rerun of what you touched. A new test suite is a new leg in scripts/gate.py.
 
 - Unit tests of one area: `cargo test -p djs-core --lib compiler::` (2–3 s).
 - e2e: `DJS_E2E_MODE=plain cargo test -p djs-core --test e2e`; the stress modes once
@@ -159,4 +162,6 @@ merge the coordinator checks that those pages still read true and turns larger g
 updates into issues of their own. It works
 directly on `main` only for coordination files (issues, board, docs) and commits right
 away, so `main` is never left dirty. It commits through `scripts/with-merge-lock.sh`, so
-that main never moves while an agent is between rebase and fast-forward.
+that main never moves while an agent is between rebase and fast-forward. It runs the
+full gate (`scripts/gate.sh --full`, no cache, plus the full-only legs) on main at least
+daily and before a release (D2664).

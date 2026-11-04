@@ -489,6 +489,8 @@ def run(argv):
     if full:
         record_full(sha)
     print(f"gate: OK ({wall:.0f}s; {len(cached)} legs cached)")
+    if not full:
+        remind_full()
     return 0
 
 
@@ -578,6 +580,18 @@ def write_steps(all_jobs, wall):
 
 def by_name_log(name):
     return Job(name, "").log
+
+
+def remind_full():
+    """The last full pass is older than a day: say so (it does not fail the gate)."""
+    try:
+        last = int((CACHE / "full-passes.tsv").read_text().splitlines()[-1].split("\t")[0])
+    except (OSError, ValueError, IndexError):
+        last = 0
+    hours = (time.time() - last) / 3600
+    if hours > 24:
+        when = f"{hours:.0f} hours ago" if last else "never"
+        print(f"gate: the last full run (scripts/gate.sh --full) passed {when}; one is due (TESTING.md \"Full runs\")")
 
 
 def record_full(sha):

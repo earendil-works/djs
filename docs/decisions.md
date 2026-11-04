@@ -8612,3 +8612,79 @@ Still refused: a site inside a class definition (the class under construction is
 stack; the dump makes classes from their text) and closing a for-await iterator on the
 return path of a resumed generator. Also fixed on the way: an array with named
 properties that a frame holds once was written inline, its patches without a location.
+## D2660: The gate is legs and builds in scripts/gate.py
+date: 2026-11-04 · by: gate-speed · issue: 0183
+The serial gate.sh (239–573 s, median ~400 s, every merge) became a table of jobs in
+scripts/gate.py: legs (checks, each with an input class and the builds it needs) and builds
+(cargo invocations whose outputs the legs run); gate.sh only execs it. A table makes the
+schedule, the cache and the full run one mechanism instead of shell plumbing per step. New
+checks are added as legs. Supersedes D1792's "the gate is gate.sh's steps in order"; the
+persistent gate worktree stays.
+
+## D2661: Every build configuration builds at once in its own target directory
+date: 2026-11-04 · by: gate-speed · issue: 0183
+Cargo locks a target directory's profile while it builds, so the serial gate's cargo
+commands are kept as they were (the same packages, features and profiles, so the same
+binaries) but each configuration gets a directory of its own and they build concurrently.
+Legs run the built binaries instead of `cargo run` (hard links in target/gate/bin, which a
+later build cannot change), and `cargo test --no-run`'s test binaries run in parallel the way
+`cargo test` runs them one by one (package directory, CARGO_MANIFEST_DIR,
+scripts/test-runner.sh). The first failure stops the rest. Unifying the configurations
+(one djs-core build for test262, difftest and the docs) would save CPU but changes what is
+tested, so it was not done.
+
+## D2662: Gate legs are cached by input hash
+date: 2026-11-04 · by: gate-speed · issue: 0183
+A leg's key hashes its name, the committed tree restricted to its input class (D2663) and
+what it reads outside the repository (toolchain, qjs binary, vendor/test262 and
+vendor/unicode; pi-private for pi's legs). A passed key is a file in
+work/scratch/gate-cache/ of the primary checkout; a leg whose key is there is skipped, and a
+build runs only if a leg that needs it runs. Written only from a clean tree; missing,
+unreadable or corrupt entries mean "run"; 14 days unused are pruned; `--clear-cache` and
+`--no-cache` exist. Sound because a leg's verdict is a function of exactly those inputs: the
+same inputs passed before. Legs that read more than the tree (`registry` compares with main)
+or cost nothing (`fmt`, `paths`) always run. A docs-only merge gates in ~8 s instead of
+~250 s, a js-only one in ~12 s.
+
+## D2663: Three input classes, guarded
+date: 2026-11-04 · by: gate-speed · issue: 0183
+`all` (the guide and djs-docs's tests: djs-docs reads the whole repository), `nodocs` (all
+minus docs/, work/, .github/, the top-level *.md: the node legs and pi's tests) and `rust`
+(nodocs minus js/ but js/src/layout.generated.ts, and minus examples/: everything else).
+Defined by exclusion, so unknown paths are inputs of every leg; scripts/ is in every class,
+so changing the gate reruns it all. Per-crate selection (djs-docs changes not rerunning
+djs-core's tests) was left out: little gain, more ways to be wrong. The always-run `paths`
+leg fails when Rust code outside djs-docs names a path outside `rust` in a string literal
+(PATHS_ALLOWED lists the reasoned exceptions); paths built at run time are left to the full
+run.
+
+## D2664: `--full` and full-only legs; a full run daily
+date: 2026-11-04 · by: gate-speed · issue: 0183
+`scripts/gate.sh --full` reads no cache and adds the full-only legs, checks too slow for
+every merge (the first: pi's suite with a dump at every idle point, D2651, on its own LTO
+module). It must run on main at least daily (the coordinator) and before a release, not
+before every push; passes go to work/scratch/gate-cache/full-passes.tsv and every other gate
+run prints a reminder once the last is more than 24 hours old. It catches what the cache
+cannot: flaky tests and reads outside a leg's class that the `paths` leg does not see.
+
+## D2665: The gate runs new executables once while the build goes on
+date: 2026-11-04 · by: gate-speed · issue: 0183
+macOS assesses every new executable on its first exec (syspolicyd and XProtect, serialized,
+~0.1–2 s each; syspolicyd at ~250% CPU during a gate). Tiny test binaries waited 30–60 s,
+so the test leg took 84–125 s for ~15 s of work. Builds now pipe cargo's JSON through
+`gate.py stream`, which runs each new test binary with `--list` (and the `djs` and
+`djs-difftest` programs with their harmless usage) as soon as it is linked, and legs run hard
+links rather than copies (a copy is a new file, assessed again). The test leg went to ~13 s;
+the scans still cost build time. Adding the app that runs the agents to System Settings ›
+Privacy & Security › Developer Tools skips the assessment; that is the owner's call.
+
+## D2667: difftest runs stress variants as separate tasks, longest first
+date: 2026-11-04 · by: gate-speed · issue: 0183
+A case and its stress variants ran as one task, so a slow case serialized its five runs on
+one worker; now each run is a task, compared with the plain run after all finish, and
+`--times FILE` orders tasks by the last run's times (the gate keeps one file per leg).
+builtins/array-from-arraylike.js built a 100000-element array, quadratic under GC stress
+(a collection per callback copies the growing array: 77 s, the whole difftest leg's wall);
+it builds 10000 now, through the same %EachDense path (mode 8, D2306, no length threshold),
+still under GC stress. That quadratic cost is what GC stress does, not an engine bug.
+vm::tests::hot_loop_is_invisible runs its 16 traces on threads (33 s → ~9 s).
