@@ -76,6 +76,7 @@ export function sites(fn) {
     for (const c of children(n)) visit(c);
   })(fn);
   for (const k of Object.keys(out)) out[k].sort((a, b) => a.start - b.start);
+  out["for-await.next"] = out.forAwait;
   return out;
 }
 
@@ -138,7 +139,7 @@ export function flatten(parts, ftext, markRecs = () => []) {
   })(parts);
   // K's captured helpers go where the marker is; offsets after it move.
   if (helperAt >= 0) {
-    const names = ["R", "C", "D", "A", "L"].filter((h) => text.includes(`$djs_${h}(`));
+    const names = ["R", "G", "C", "D", "A", "L", "N", "Q"].filter((h) => text.includes(`$djs_${h}(`));
     const decl = names.length ? `const ${names.map((h) => `$djs_${h} = $dump.${h}`).join(", ")};\n` : "";
     text = text.slice(0, helperAt) + decl + text.slice(helperAt);
     for (let i = 0; i < segs.length; i += 3) if (segs[i] >= helperAt) segs[i] += decl.length;
@@ -199,6 +200,13 @@ export function gen(ctx) {
   };
   const tmpOpt = (construct, off) => (hasSlot(`${construct}@${off}`) ? tmp(construct, off) : null);
   const inline = (construct, off) => take(`${construct}@${off}`);
+  // the array of a spread call's (or new's) arguments so far: named by the `(`
+  const tmpAcc = (construct, from, n) => {
+    const open = ftext.indexOf("(", from);
+    const name = `${construct}@${open}`;
+    if (!hasSlot(name)) refuse(`missing slot ${name}`);
+    return { name, v: tmp(construct, open) };
+  };
   const flushTemps = () => {
     if (!temps.length) return "";
     const base = tempCount - temps.length;
@@ -294,7 +302,7 @@ export function gen(ctx) {
   }
 
   // ---- expressions on the path, from the site up -----------------------------------------
-  function expr(i) {
+  function expr(i, superThis) {
     const n = path[i];
     const next = path[i + 1];
     if (n === site) {
@@ -310,6 +318,12 @@ export function gen(ctx) {
       case "ChainExpression":
         return expr(i + 1);
       case "CallExpression": {
+        if (next === n.callee && n.callee.type === "MemberExpression" && n.callee.object.type === "Super") {
+          // super[key](args) with the key awaited: the method read from the saved base with
+          // the saved this, then called with it
+          const st = tmp("super.this", n.callee.start);
+          return ["$djs_R(", expr(i + 1, st), ", ", st, ", [", join(n.arguments.map(rest), ", "), "])"];
+        }
         if (next === n.callee) return [expr(i + 1), n.optional ? "?.(" : "(", join(n.arguments.map(rest), ", "), ")"];
         if (n.callee.type === "Super" || n.callee.type === "Import") refuse("super/import call around a site");
         const callee = tmp("call.callee", n.start);
@@ -318,8 +332,10 @@ export function gen(ctx) {
         const spreadAt = n.arguments.findIndex((a) => a.type === "SpreadElement");
         const args = [];
         if (spreadAt >= 0 && spreadAt < site) {
-          args.push(`...${tmp("call.args", n.arguments[0].start - 1)}`);
-          refuse("spread call before the site");
+          // the argument list so far is one array: the rest is appended to it
+          const acc = tmpAcc("call.args", n.callee.end, n);
+          const more = n.arguments.slice(site + 1).map(rest);
+          return [ign("call.callee", "call.this"), "$djs_R(", cm(`call.callee@${n.start}`, "call.arg"), callee, ", ", cm(`call.this@${n.start}`, "call.arg"), self, ", ", ign("call.callee", "call.this"), "$djs_Q(", cm(acc.name, "call.arg"), acc.v, ", ", join([expr(i + 1), ...more], ", "), "))"];
         }
         n.arguments.forEach((a, k) => {
           const c = cm(`call.arg@${a.start}`, "array.element");
@@ -345,9 +361,13 @@ export function gen(ctx) {
       }
       case "NewExpression": {
         if (next === n.callee) refuse("site in a new's callee");
-        if (n.arguments.some((a) => a.type === "SpreadElement")) refuse("new with spread");
         const callee = tmp("new.callee", n.start);
         const site = n.arguments.indexOf(next);
+        if (n.arguments.some((a) => a.type === "SpreadElement")) {
+          const acc = tmpAcc("new.args", n.callee.end, n);
+          const more = n.arguments.slice(site + 1).map(rest);
+          return [ign("call.callee", "call.this"), "$djs_C(", cm(`new.callee@${n.start}`, "call.arg"), callee, ", ", ign("call.callee", "call.this"), "$djs_Q(", cm(acc.name, "call.arg"), acc.v, ", ", join([expr(i + 1), ...more], ", "), "))"];
+        }
         const args = n.arguments.map((a, k) => [cm(`new.arg@${a.start}`, "array.element"), k < site ? tmp("new.arg", a.start) : k === site ? expr(i + 1) : rest(a)]);
         return [ign("call.callee", "call.this"), "$djs_C(", cm(`new.callee@${n.start}`, "call.arg"), callee, ", ", ign("call.arg"), "[", join(args, ", "), "])"];
       }
@@ -395,7 +415,13 @@ export function gen(ctx) {
       case "TaggedTemplateExpression":
         refuse("tagged template around a site");
       case "ArrayExpression": {
-        if (hasSlot(`array.literal@${n.start}`)) refuse("array literal kept as a whole");
+        if (hasSlot(`array.literal@${n.start}`)) {
+          const k = n.elements.indexOf(next);
+          if (n.elements.slice(k + 1).some((e) => e === null)) refuse("a hole after the site in a kept array");
+          const v = tmp("array.literal", n.start);
+          const more = n.elements.slice(k + 1).map((e) => rest(e));
+          return [ign("call.callee", "call.this"), "$djs_Q(", cm(`array.literal@${n.start}`, "call.arg"), v, ", ", join([expr(i + 1), ...more], ", "), ")"];
+        }
         const els = [];
         let seen = false;
         for (const e of n.elements) {
@@ -411,6 +437,12 @@ export function gen(ctx) {
         return ["[", join(els, ", "), "]"];
       }
       case "MemberExpression":
+        if (n.object.type === "Super") {
+          if (!n.computed || next !== n.property) refuse("super around a site");
+          const st = superThis ?? tmp("super.this", n.start);
+          const sb = tmp("super.base", n.start);
+          return ["$djs_G(", sb, ", ", expr(i + 1), ", ", st, ")"];
+        }
         if (next === n.object) return [expr(i + 1), n.computed ? ["[", rest(n.property), "]"] : [n.optional ? "?." : ".", P(n.property)]];
         return [cm(`member.object@${n.start}`, "member.object"), tmp("member.object", n.start), "[", expr(i + 1), "]"];
       case "AssignmentExpression": {
@@ -535,6 +567,7 @@ export function gen(ctx) {
       case "LabeledStatement":
         return [P(n.label), ": ", stmt(i + 1)];
       case "ForOfStatement":
+      case "ForInStatement":
         return forOf(n, i);
       case "WhileStatement": {
         if (next !== n.body) refuse("site in a while test");
@@ -626,11 +659,13 @@ export function gen(ctx) {
   // `break`, `continue`, `return` and exceptions close the iterator as the original's.
   function forOf(n, i) {
     const next = path[i + 1];
+    if (n === site) return forAwaitHead(n, i);
     if (next !== n.body) refuse("site in a for-of head");
     const isAwait = n.await;
-    const c = isAwait ? "for-await" : "for-of";
+    const forIn = n.type === "ForInStatement";
+    const c = isAwait ? "for-await" : forIn ? "for-in" : "for-of";
     let it = inline(`${c}.iterator`, n.start);
-    let nx = inline(`${c}.next`, n.start);
+    let nx = forIn ? "null" : inline(`${c}.next`, n.start);
     if (isAwait) {
       // A for await over a sync iterable steps the iterator djs made for it; plain code gets
       // the same steps from a for await over the sync iterator itself.
@@ -668,6 +703,20 @@ export function gen(ctx) {
     ];
   }
 
+  // The site is a for await's step (`for-await.next`): the loop goes on over the saved
+  // iterator record, its first step being the promise the frame awaits.
+  function forAwaitHead(n, i) {
+    const it = inline("for-await.iterator", n.start);
+    const nx = inline("for-await.next", n.start);
+    if (/^\$dump\.fromSync/.test(it)) refuse("for await over a sync iterator at its step");
+    const v = `$djs_v${i}`;
+    const head = n.left;
+    let bind;
+    if (head.type === "VariableDeclaration") bind = [head.kind, " ", P(head.declarations[0].id), ` = ${v};`];
+    else bind = [P(head), ` = ${v};`];
+    return withGo([markScaf("site", n.start), `for await (const ${v} of $djs_N(`, it, ", ", nx, ", ", ctx.awaiting, ")) { ", bind, " ", rest(n.body), " }"]);
+  }
+
   // ---- the function -----------------------------------------------------------------------
   let body;
   if (fn.body.type === "BlockStatement") {
@@ -692,15 +741,20 @@ export function gen(ctx) {
 // the load): same names as the loader primitives where the primitive has a plain encoding.
 const HELPERS = {
   R: "Reflect.apply",
+  G: "Reflect.get",
   C: "Reflect.construct",
-  D: "(o, k, v) => (Object.defineProperty(o, k, { value: v, writable: true, enumerable: true, configurable: true }), o)",
-  A: "(o, from) => Object.assign(o, from)",
+  D: "(o, k, v) => Object.defineProperty(o, k, { value: v, writable: true, enumerable: true, configurable: true })",
+  A: "Object.assign",
   // An iterable over a saved iterator record whose first step is a placeholder: the rest
   // of the current iteration runs in it, the next ones take the iterator's steps.
-  L: `(it, next) => { let first = true; const r = { next() { if (first) { first = false; return { value: undefined, done: false }; } return Reflect.apply(next, it, []); }, return(v) { const m = it.return; return m === undefined || m === null ? { done: true, value: v } : Reflect.apply(m, it, [v]); }, [Symbol.iterator]() { return r; } }; return r; }`,
-  pending: "(id, name, args) => { const path = name.split('.'); let self = globalThis; for (const k of path.slice(0, -1)) self = self[k]; return Reflect.apply(self[path.at(-1)], self, args); }",
-  random: "() => {}",
-  issued: "() => {}",
+  L: `(it, next) => { let first = true; const r = { next() { if (first) { first = false; return { value: undefined, done: false }; } return Reflect.apply(next ?? it.next, it, []); }, return(v) { const m = it.return; return m == null ? { done: true, value: v } : Reflect.apply(m, it, [v]); }, [Symbol.iterator]() { return r; } }; return r; }`,
+  N: `(it, next, p) => { let first = true; const r = { next() { if (first) { first = false; return p; } return Reflect.apply(next, it, []); }, return(v) { const m = it.return; return m == null ? { done: true, value: v } : Reflect.apply(m, it, [v]); }, [Symbol.asyncIterator]() { return r; } }; return r; }`,
+  regexpIterator: "(re, s, f) => { const it = $dump.MA.call(re, s); if (f & 4) while (!it.next().done); return it; }",
+  MA: "RegExp.prototype[Symbol.matchAll]",
+  // a for-in loop's key iterator over o with the keys it has yet to visit (deleted ones are
+  // skipped, as the loop does)
+  forIn: "(o, keys) => { let i = 0; const r = { next() { while (i < keys.length) { const k = keys[i++]; if (o == null || k in o) return { value: k, done: false }; } return { value: undefined, done: true }; }, [Symbol.iterator]() { return r; } }; return r; }",
+  Q: "(a, ...v) => { let n = a.length; for (const x of v) Object.defineProperty(a, n++, { value: x, writable: true, enumerable: true, configurable: true }); return a; }",
   advance: "(it, n) => { const next = it.next; for (let i = 0; i < n; i++) Reflect.apply(next, it, []); return it; }",
   fn: "(o) => { const d = Object.getOwnPropertyDescriptor(o, Reflect.ownKeys(o)[0]); return 'value' in d ? d.value : d.get ?? d.set; }",
   spent: "(k) => { let f; new Promise((a, b) => { f = k ? b : a; a(); }); return f; }",
@@ -759,7 +813,7 @@ export function toPlain(text, opts = {}) {
   const omittedDefs = new Set();
   if (!/^"djs-dump 2( typescript)?";/.test(text)) refuse("not a format 2 dump");
   if (text.startsWith('"djs-dump 2 typescript";')) refuse("TypeScript text");
-  for (const p of ["private", "closeThrow", "using", "forIn", "regexpIterator", "iteratorHelper"])
+  for (const p of ["private", "closeThrow", "using", "iteratorHelper"])
     if (text.includes(`$dump.${p}(`)) refuse(`$dump.${p}`);
 
   // -- factories --------------------------------------------------------------------------
@@ -884,6 +938,8 @@ export function toPlain(text, opts = {}) {
       if (r.type === "ClassExpression") refuse("class method activation");
     }
     if (n.type === "CallExpression" && src(n.callee) === "$dump.fn") return { text: src(n.arguments[0].properties[0]), home: null, ref: null, inline: n };
+    const cm = classMethod(n);
+    if (cm) return cm;
     if (n.type === "Identifier" && globals.has(n.name)) {
       const d = fnDecls.find((f) => f.id.name === n.name);
       if (d) return { text: src(d), home: null, ref: n.name };
@@ -895,6 +951,57 @@ export function toPlain(text, opts = {}) {
           }
     }
     refuse(`activation of ${src(n).slice(0, 40)}`);
+  }
+
+  // A class method: `C.prototype.m` or `C.m`, C a class the dump writes (a top-level class,
+  // or a factory's). K is written where the class is; names only the class's own scope
+  // binds (its name, an enclosing wrapper's parameters) are refused.
+  function classMethod(n) {
+    if (n.type !== "MemberExpression" || n.computed) return null;
+    const m = n.property.name;
+    let obj = n.object;
+    let isStatic = true;
+    if (obj.type === "MemberExpression" && !obj.computed && obj.property.name === "prototype") {
+      isStatic = false;
+      obj = obj.object;
+    }
+    let cls = null;
+    let home = null;
+    let wrapperParams = [];
+    const fromInit = (init) => {
+      if (!init) return null;
+      if (init.type === "ClassExpression") return init;
+      // ((Base) => class C extends Base {...})(Base)
+      if (init.type === "CallExpression" && init.callee.type === "ArrowFunctionExpression" && init.callee.body.type === "ClassExpression") {
+        wrapperParams = init.callee.params.flatMap((p) => patNames(p));
+        return init.callee.body;
+      }
+      return null;
+    };
+    if (obj.type === "Identifier") {
+      for (const st of ast.body) {
+        if (st.type === "ClassDeclaration" && st.id.name === obj.name) cls = st;
+        if (st.type === "VariableDeclaration") for (const d of st.declarations) if (d.id.name === obj.name) cls = fromInit(d.init) ?? cls;
+      }
+    } else {
+      const fr = factoryRef(obj);
+      if (fr && fr.kind === "prop") {
+        const p = fr.F.props.get(fr.key);
+        let v = p.value;
+        if (v.type === "Identifier") {
+          const V = fr.F.vars.find((x) => x.name === v.name);
+          cls = fromInit(V?.init);
+        } else cls = fromInit(v);
+        home = fr.F;
+      }
+    }
+    if (!cls) return null;
+    const md = cls.body.body.find((x) => x.type === "MethodDefinition" && !x.computed && (x.key.name ?? x.key.value) === m && !!x.static === isStatic && x.kind === "method");
+    if (!md) return null;
+    const free = freeVars(md.value);
+    const own = [...wrapperParams, cls.id?.name].filter(Boolean);
+    if (own.some((x) => free.has(x))) refuse("a class method that names its class's own scope");
+    return { text: src(md), home, ref: src(n), key: null, placeNode: cls, classRef: src(obj) };
   }
 
   // ---- origins that are only origins ------------------------------------------------------
@@ -1008,7 +1115,7 @@ export function toPlain(text, opts = {}) {
     A.fn = parsed.fn;
     A.fkind = parsed.kind;
     const [k, nth] = A.at.split("#");
-    if (k !== "await" && k !== "yield") refuse(`site ${k}`);
+    if (k !== "await" && k !== "yield" && k !== "for-await.next") refuse(`site ${k}`);
     A.site = sites(A.fn)[k]?.[Number(nth) - 1] ?? refuse(`no site ${A.at}`);
     A.siteKind = k;
     A.blocks = [];
@@ -1170,7 +1277,7 @@ export function toPlain(text, opts = {}) {
     if (!A.f.home) pl = TOP;
     else if (!merged.has(A.f.home)) pl = factoryPlace(A.f.home);
     else {
-      const p = A.f.home.props.get(A.f.key);
+      const p = A.f.placeNode ?? A.f.home.props.get(A.f.key);
       pl = codePlace({ kind: "prop", key: A.f.key, node: p, F: A.f.home });
     }
     actPlace.set(A, pl);
@@ -1257,6 +1364,21 @@ export function toPlain(text, opts = {}) {
       if (it.kind === "decl") (it.node.type === "ClassDeclaration" ? [it.node.id.name] : it.node.declarations.flatMap((d) => patNames(d.id))).forEach((n) => providers.set("g:" + n, it));
     }
     const actItem = new Map(items.filter((x) => x.kind === "act").map((x) => [x.A, x]));
+    // An async generator's queued requests are made again on its continuation: their
+    // promises come from the activation's call, not from their placeholder definitions.
+    for (const [A, it] of actItem) {
+      A.queue = A.opts.has("queue") ? A.opts.get("queue").elements.map(objProps) : [];
+      for (const q of A.queue) {
+        const ch = memberChain(q.get("promise"));
+        if (!ch || ch.length !== 1) refuse("a queued request's promise");
+        const def = providers.get(ch[0]);
+        if (def && def.kind === "def") {
+          if (src(def.node.expression.right) !== "new Promise(() => {})") refuse("a queued request's promise is not a placeholder");
+          def.skip = true;
+        }
+        providers.set(ch[0], it);
+      }
+    }
     const depItems = (refs, self) => {
       const out = [];
       for (const r of refs) {
@@ -1309,7 +1431,7 @@ export function toPlain(text, opts = {}) {
         it.startDeps = A.opts.has("awaiting") ? depItems(refsOf(A.opts.get("awaiting")), it) : [];
         it.slotDeps = new Map();
         for (const [k, v] of A.slots) if (!A.cells.has(k)) it.slotDeps.set(k, depItems(refsOf(v), it));
-        if (A.opts.has("queue") && A.opts.get("queue").elements.length) refuse("async generator queue");
+
       } else if (it.kind === "factory") {
         const F = it.F;
         if (merged.has(F)) it.deps = [];
@@ -1318,6 +1440,16 @@ export function toPlain(text, opts = {}) {
           it.deps = depItems(refsOf(F.call, skip), it);
         }
       } else it.deps = depItems(refsOf(it.node), it);
+      // matchAll's iterator clones its regexp when made: the regexp's lastIndex (a patch
+      // the dump writes later) must be set before
+      const m = it.kind === "def" && /^\$dump\.regexpIterator\(\$dump\.(\w+),/.exec(src(it.node.expression.right));
+      if (m) {
+        const patch = items.find((x) => x.kind === "stmt" && src(x.node).startsWith(`$dump.${m[1]}.lastIndex = `));
+        if (patch) {
+          patch.pure = true;
+          it.deps.push(patch);
+        }
+      }
       it.deps = [...new Set(it.deps.filter(Boolean))];
     }
     // Deps of an activation that need its own closures go into its callback, and the
@@ -1345,7 +1477,7 @@ export function toPlain(text, opts = {}) {
     const emitted = new Set();
     const index = new Map(items.map((x, i) => [x, i]));
     const pure = (it) => {
-      if (it.kind === "factory" || it.kind === "decl") return true;
+      if (it.kind === "factory" || it.kind === "decl" || it.pure) return true;
       if (it.kind !== "def") return false;
       const t = src(it.node);
       return !/Promise\.(all|allSettled|any|race)|\.then\b|\$dump\.pending|\.next\(\)|\$dump\.resume/.test(t);
@@ -1414,7 +1546,9 @@ export function toPlain(text, opts = {}) {
     const out = [];
     const hoisted = []; // `var x;` of global vars assigned in callbacks
     const used = new Set();
-    for (const k of Object.keys(HELPERS)) if (k.length === 1 || text.includes(`$dump.${k}(`)) used.add(k);
+    for (const k of Object.keys(HELPERS)) if ((k.length === 1 && k !== "N") || text.includes(`$dump.${k}(`)) used.add(k);
+    if (used.has("regexpIterator")) used.add("MA");
+    if (acts.some((A) => A.siteKind === "for-await.next")) used.add("N");
     const body = [];
     function emitItems(list, depth) {
       const lines = [];
@@ -1446,6 +1580,7 @@ export function toPlain(text, opts = {}) {
         }
         if (it.kind === "stmt" && omittedTarget(it.node)) continue;
         if (it.kind === "def" && omittedDefs.has(it.name)) continue;
+        if (it.skip) continue;
         lines.push(rw(it.node));
       }
       return lines;
@@ -1501,13 +1636,20 @@ export function toPlain(text, opts = {}) {
     for (const [name, ref] of A.pre ?? []) lines.push(`${ref} = ${rw(A.slots.get(name))};`);
     if (!A.f.home) lines.push(`$dump.K${A.name} = ${k.text};`);
     const fref = A.f.ref && !A.f.omitKey && !A.f.omitDef ? A.f.ref : opts.pieces === false ? JSON.stringify(A.f.text) : JSON.stringify(originPieces(A.f.text, k));
-    lines.push(`Object.defineProperty(${kref(A)}, "$djs", { value: { f: ${fref}, at: ${JSON.stringify(A.at)}, segs: [${k.segs.join(",")}], scaf: ${JSON.stringify(k.scaf)}, temps: ${JSON.stringify(k.temps)}, cmap: ${JSON.stringify(k.cmap)} } });`);
+    lines.push(`Object.defineProperty(${kref(A)}, "$djs", { value: { f: ${fref}, at: ${JSON.stringify(A.at)}, segs: [${k.segs.join(",")}], scaf: ${JSON.stringify(k.scaf)}${k.cmap.length ? "" : `, temps: ${JSON.stringify(k.temps)}`}, cmap: ${JSON.stringify(k.cmap)} } });`);
     const self = A.opts.has("this") ? rw(A.opts.get("this")) : "undefined";
     if (A.fn.generator) {
       if (A.f.ref && !A.f.omitKey && !A.f.omitDef) lines.push(`${kref(A)}.prototype = ${A.f.ref}.prototype;`);
       lines.push(`$dump.${A.name} = ${kref(A)}.call(${self});`);
+      // primed: at a yield it runs to the placeholder yield; at an await the request being
+      // served starts it (the first queued request)
+      const q = A.queue ?? [];
       if (A.siteKind === "yield") lines.push(`$dump.${A.name}.next();`);
-      else refuse("a generator at an await");
+      else if (!A.fn.async || !q.length) refuse("a generator at an await without a request");
+      q.forEach((r, i) => {
+        const call = i === 0 && A.siteKind !== "yield" ? "next" : r.get("type").value;
+        lines.push(`${rw(r.get("promise"))} = $dump.${A.name}.${call}(${i === 0 && A.siteKind !== "yield" ? "" : rw(r.get("value"))});`);
+      });
     } else if (A.fkind === "arrow") lines.push(`$dump.${A.name} = (0, ${kref(A)})();`);
     else lines.push(`$dump.${A.name} = ${kref(A)}.call(${self});`);
     return lines;
@@ -1575,6 +1717,15 @@ export function toPlain(text, opts = {}) {
     (function visit(n) {
       if (n.type === "CallExpression" && src(n.callee) === "$dump.builtin") {
         reps.push([n.start, n.end, builtinRef(n.arguments[0].value)]);
+        return;
+      }
+      if (n.type === "CallExpression" && src(n.callee) === "$dump.pending") {
+        // an open host call is made again: the host decides what a repeated call means
+        // (deliver a recorded result, run it again); its state, if any, is the host's
+        const name = n.arguments[1].value;
+        if (!/^[\w$]+(\.[\w$]+)*$/.test(name)) refuse(`host function ${name}`);
+        const args = n.arguments[2].elements.map((e) => rw(e)).join(", ");
+        reps.push([n.start, n.end, `${name}(${args})`]);
         return;
       }
       for (const c of children(n)) visit(c);

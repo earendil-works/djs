@@ -156,6 +156,10 @@ export function normalize(text) {
       if (scaf && (construct === "for-of.iterator" || construct === "for-await.iterator")) {
         // the scaffold's iterable: unwrap the saved iterator record
         const w = unwrapLoop(p.value);
+        if (scaf[0] === "for-in") {
+          out.push([`for-in.iterator@${scaf[1]}`, unwrapForIn(w.itNode)]);
+          continue;
+        }
         const c = construct.split(".")[0];
         out.push([`${c}.iterator@${scaf[1]}`, w.it]);
         out.push([`${c}.next@${scaf[1]}`, w.next]);
@@ -211,7 +215,17 @@ export function normalize(text) {
     if (!fch || fch.length !== 2 || !factories.has(fch[0])) refuse("loop wrapper's next not found");
     const vars = factoryParts(factories.get(fch[0])).vars;
     if (!vars.has("it") || !vars.has("next")) refuse("loop wrapper's record not found");
-    return { it: src(vars.get("it")), next: src(vars.get("next")) };
+    return { it: src(vars.get("it")), next: src(vars.get("next")), itNode: vars.get("it") };
+  }
+  // the plain for-in key iterator: its object and the keys it has not visited
+  function unwrapForIn(n) {
+    const ch = memberChain(n);
+    const obj = ch?.length === 1 ? defs.get(ch[0])?.expression.right : n.type === "ObjectExpression" ? n : null;
+    if (!obj || obj.type !== "ObjectExpression") refuse("for-in iterator not found");
+    const fch = memberChain(objProps(obj).get("next").value);
+    if (!fch || fch.length !== 2 || !factories.has(fch[0])) refuse("for-in iterator's next not found");
+    const vars = factoryParts(factories.get(fch[0])).vars;
+    return `$dump.forIn(${src(vars.get("o"))}, ${src(vars.get("keys"))}.slice(${src(vars.get("i"))}))`;
   }
   let outText = text;
   edits.sort((a, b) => b[0] - a[0]);
