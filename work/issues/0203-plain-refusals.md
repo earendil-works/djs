@@ -67,6 +67,9 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
   literals map array.literal; new corpus case codemode/nested-literals.js (12 links).
   v2: 174 identical, 19 refused (using 11, iterator-helpers 6, class-closure,
   class-fields); chains: 4 refused. Corpus 1206 links, 0 differ, 0 refused.
+- pjr: D2876 using (all 11 golden/using points and the chain), test plain_dumps_of_using.
+  v2: 185 identical, 8 refused (iterator-helpers 6, class-closure, class-fields); chains
+  3 refused. Dump size score raised for the using dumps now covered (v2 +46 KB).
 
 ## Follow-ups
 

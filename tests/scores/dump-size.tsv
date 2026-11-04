@@ -4,7 +4,7 @@
 # with DJS_PLAIN_OUT), raw and gzip -9 per dump. The gate leg "plain dumps (djs and node)"
 # fails when a total grows; lower it with
 #   node scripts/dump-size/dump-size.ts --score tests/scores/dump-size.tsv --update corpus=DIR v2=DIR
-corpus_raw	8057767
-corpus_gzip	2575560
-v2_raw	577915
-v2_gzip	207575
+corpus_raw	8062700
+corpus_gzip	2577579
+v2_raw	624062
+v2_gzip	223879

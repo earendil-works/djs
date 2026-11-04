@@ -9478,3 +9478,22 @@ the plain exporter requires it and refuses otherwise. It may then assume no buil
 between the original evaluation and the load: an already-evaluated operand that resolves to
 a builtin (`results.push`, an iterator's `next`) is written as its original expression or
 its builtin path, with no saved temporaries and no checks.
+
+## D2876: `using` in plain continuations: the resources added again, a disposal as a scope of K
+date: 2026-11-05 · by: pjr · issue: 0203
+A plain dump writes no `using` record. The exporter hands the continuation the scope's
+`[value, method, kind]` triples and its disposal state (`Act::usings`). A site in the
+scope's code: `K` declares the `using` bindings as constants and adds the resources
+again at the start of its scope, in their order, as `using`/`await using` of
+`$dump.U(value, method, kind)`, an object whose dispose method calls the saved method
+on the saved value; a `null` resource is `await using … = null`. The language then
+disposes them as the original would. A site in the disposal itself: `K` writes a scope
+that adds the resources not yet disposed, and last (so disposed first) the one being
+awaited: its awaited value again, the await a `null` resource causes (`null`), or the
+exception a sync disposal method of an `await using` threw. The scope completes as the
+original did (the carried exception thrown, else its return or jump), so suppressed
+errors and the remaining awaits follow from the language. Origin tracking maps `K`'s
+scope record to the original's (`["using", fo, ko]`, at `K`'s first resource binding)
+and reads `$dump.U`'s closures back (`$djs_v`, `$djs_m`). The disposal sites at a block's,
+an iteration's and the body's end are site records. A disposal waiting for a `null`
+resource's await with `needsAwait` set is refused.
