@@ -296,10 +296,10 @@ impl<'a> Parser<'a, '_> {
         self.code().require_object_coercible();
         // The value and, with a rest property, the keys of the properties before it,
         // to exclude from it (D2732).
-        let src = self.temp("pattern.source", open.start)?;
+        let src = self.temp("pattern.source", open.start);
         self.temp_put(src);
         let excl = if rest {
-            let e = self.temp("pattern.excluded", open.start)?;
+            let e = self.temp("pattern.excluded", open.start);
             self.code().array_from(0);
             self.temp_put(e);
             Some(e)
@@ -435,8 +435,8 @@ impl<'a> Parser<'a, '_> {
         self.code().dup();
         self.code().get_field(atoms::NEXT, 0);
         // The iterator (`undefined` once done) and its `next` (D2732).
-        let it = self.temp("pattern.iterator", open.start)?;
-        let next = self.temp("pattern.next", open.start)?;
+        let it = self.temp("pattern.iterator", open.start);
+        let next = self.temp("pattern.next", open.start);
         self.temp_put(next);
         self.temp_put(it);
         // The close handler's depth is the depth here.
@@ -566,7 +566,11 @@ impl<'a> Parser<'a, '_> {
     fn emit_iter_step(&mut self, (it, next): (Atom, Atom), first: bool, pos: u32) {
         let l_end = self.new_label();
         let l_done = self.new_label();
-        // `it next`, for `iter_next` (D1800).
+        // `it next`, for `iter_next` (D1800; the first step is one `iter_next_loc`, whose
+        // position is marked before it).
+        if first {
+            self.mark(pos);
+        }
         self.temp_get(it);
         if !first {
             // A done iterator is `undefined`, which is also the value.

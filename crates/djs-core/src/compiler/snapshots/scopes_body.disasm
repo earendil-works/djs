@@ -23,9 +23,9 @@ function 0 <anonymous>: params=2 locals=9 stack=4 captures=0
    40  push2  ; 8:18
    41  put_loc3 (late)
    42  get_loc1 (total)  ; 9:9
-   43  put_loc8 loc4 (<t0>)
+   43  put_loc8 loc4 (0)
    45  set_loc_uninit loc5 (y)
-   48  get_loc8 loc4 (<t0>)
+   48  get_loc8 loc4 (0)
    50  push0
    51  strict_eq
    52  jump_if_false8 -> 66
@@ -35,7 +35,7 @@ function 0 <anonymous>: params=2 locals=9 stack=4 captures=0
    60  inc  ; 10:23
    61  put_loc_chk loc5 (y)  ; 10:22
    64  jump8 -> 72
-   66  get_loc8 loc4 (<t0>)
+   66  get_loc8 loc4 (0)
    68  push1
    69  strict_eq
    70  jump_if_false8 -> 76

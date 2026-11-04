@@ -141,16 +141,14 @@ impl Parser<'_, '_> {
         }
         self.next()?;
         // qjs reports a misplaced declaration at its first binding.
-        self.open_using(self.tok.start, is_await)?;
-        let UsingList::Open(r) = self.using else {
-            return Err(super::resolve::internal("using without a region"));
-        };
-        self.parse_using_bindings(r.rec, is_await, false)?;
+        let rec = self.open_using(self.tok.start, is_await)?;
+        self.parse_using_bindings(rec, is_await, false)?;
         self.expect_semicolon()
     }
 
     /// The list's region starts at its first declaration (nothing to dispose before).
-    pub(super) fn open_using(&mut self, pos: u32, is_await: bool) -> PResult<()> {
+    /// Returns the region's Record temporary.
+    pub(super) fn open_using(&mut self, pos: u32, is_await: bool) -> PResult<crate::heap::Atom> {
         match &mut self.using {
             UsingList::Forbidden => syntax(
                 pos,
@@ -162,38 +160,33 @@ impl Parser<'_, '_> {
             ),
             UsingList::Open(r) => {
                 r.is_async |= is_await;
-                Ok(())
+                Ok(r.rec)
             }
             UsingList::Allowed => {
-                let r = self.using_region_start(self.stmt_depth, is_await, pos)?;
+                let r = self.using_region_start(self.stmt_depth, is_await, pos);
                 self.using_env(&r);
                 self.using = UsingList::Open(r);
-                Ok(())
+                Ok(r.rec)
             }
         }
     }
 
     /// Makes the Record and starts the region (`base` is the operand depth). `at`, the
     /// start of the region's first bound name, names the Record's temporary.
-    pub(super) fn using_region_start(
-        &mut self,
-        base: u32,
-        is_await: bool,
-        at: u32,
-    ) -> PResult<UsingRegion> {
+    pub(super) fn using_region_start(&mut self, base: u32, is_await: bool, at: u32) -> UsingRegion {
         self.code().call_intrinsic(intrinsic("UsingCreate"), 0);
-        let rec = self.temp("using.record", at)?;
+        let rec = self.temp("using.record", at);
         self.temp_put(rec);
         let l_try = self.new_label();
         let l_fin = self.new_label();
         self.place(l_try);
-        Ok(UsingRegion {
+        UsingRegion {
             base,
             rec,
             l_try,
             l_fin,
             is_async: is_await,
-        })
+        }
     }
 
     /// The region's `Finally` env: jumps out of it dispose.

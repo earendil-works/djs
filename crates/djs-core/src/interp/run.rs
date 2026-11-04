@@ -2488,62 +2488,52 @@ impl<'h> Exec<'h> {
                 self.push(key);
                 self.push(Value::bool(done));
             }
-            Op::IterNext => {
+            Op::IterNext | Op::IterNextLoc => {
                 // `it next -> r` (D1800): the value itself when `next` is the original
                 // one of an Array or String Iterator and the step runs no user code;
                 // otherwise `next.call(it)`, whose result the code after this checks.
-                let (it, f) = (self.top(1), self.top(0));
-                match self.iter_fast_next(it, f)? {
+                // `iter_next_loc` (D2732) is the same step on two locals: it pushes the
+                // result (or the call's callee and `this`), touching no other slot, as
+                // the hot loop does.
+                let loc = op == Op::IterNextLoc;
+                let (it, f, off) = if loc {
+                    let at = self.lp + self.imm_u16(1);
+                    (self.get(at), self.get(at + 1), 3)
+                } else {
+                    (self.top(1), self.top(0), 1)
+                };
+                let r = match self.iter_fast_next(it, f)? {
                     iter::FastStep::Value(v) => {
-                        self.sp -= 1;
-                        self.set(self.sp - 1, v);
-                        self.pc = self.jump_target(next);
-                        if self.pc < next {
-                            self.safepoint();
-                        }
-                        return Ok(None);
+                        self.pc = (next as i64 + self.imm_i32(off) as i64) as u32;
+                        Some(v)
                     }
                     // The one result object of the loop, as `next` would return it.
                     iter::FastStep::Done => {
                         let r = self.done_result()?;
+                        self.pc = next;
+                        Some(r)
+                    }
+                    iter::FastStep::Slow => None,
+                };
+                if let Some(r) = r {
+                    if loc {
+                        self.push(r);
+                    } else {
                         self.sp -= 1;
                         self.set(self.sp - 1, r);
-                        self.pc = next;
-                        return Ok(None);
                     }
-                    iter::FastStep::Slow => {}
+                    if self.pc < next {
+                        self.safepoint();
+                    }
+                    return Ok(None);
+                }
+                if loc {
+                    self.ensure(self.sp + 2)?;
+                    self.sp += 2;
                 }
                 let base = self.sp - 2;
                 self.set(base, f);
                 self.set(base + 1, it);
-                return self.call(base, 0, Continuation::PushResult, next);
-            }
-            Op::IterNextLoc => {
-                // `iter_next` on a loop's temporaries (D2732): the same steps, with the
-                // call's callee and `this` pushed for the slow path.
-                let loc = self.lp + self.imm_u16(1);
-                let (it, f) = (self.get(loc), self.get(loc + 1));
-                match self.iter_fast_next(it, f)? {
-                    iter::FastStep::Value(v) => {
-                        self.push(v);
-                        self.pc = (next as i64 + self.imm_i32(3) as i64) as u32;
-                        if self.pc < next {
-                            self.safepoint();
-                        }
-                        return Ok(None);
-                    }
-                    iter::FastStep::Done => {
-                        let r = self.done_result()?;
-                        self.push(r);
-                        self.pc = next;
-                        return Ok(None);
-                    }
-                    iter::FastStep::Slow => {}
-                }
-                let base = self.sp;
-                self.ensure(base + 2)?;
-                self.push(f);
-                self.push(it);
                 return self.call(base, 0, Continuation::PushResult, next);
             }
             Op::IterCheckObject => {

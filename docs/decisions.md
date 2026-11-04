@@ -8914,10 +8914,15 @@ Generators' return path marks a closed pattern or loop iterator `undefined` befo
 calling `return()`, so the construct's own close handler, which covers that code, does
 not close it again when `return()` throws (13 test262 dstr tests showed it).
 
-Measured (instructions retired, native release; wasm in node, n=3-6), base 36a7f9ed:
-for-of loop -7.0% native, -3.6% wasm; forEach/for-of -3.3%/-2.0%; destructuring loop
--7.8%/-7.4%; generators with yield* -3.7%/-1.0%; switch -1.8%/-0.7%; await-heavy for-of
--1.2%/+0.1%; the other engine workloads within +-0.5% (props +0.45%, code layout).
+Measured (instructions retired, native release; wasm in node, n=4), base 36a7f9ed:
+for-of loop -7.0% native, -3.6% wasm; forEach/for-of -3.6%/-1.5%; destructuring loop
+-7.9%/-7.3%; switch -2.0%/-0.5%; await-heavy for-of -1.5%/-0.6%; the other engine
+workloads within -3%..+0.5% (props +0.5%/-0.5%). In the hot loop `iter_next_loc` has an
+arm of its own: one arm shared with `iter_next` saved 60 bytes gzip but cost wasm
+0.5-1.2% on unrelated workloads (D1352). Size: +1.92 KB raw, +736 B gzip of the shipped
+module (the temporaries' compiler code, the op in three tiers, `CodeBuf::finish`), within
+the ratchet ceiling after making `temp` infallible, naming temporaries by integer atoms
+and sharing one copy of the step in `step_once`.
 The op table changes, so images get a new descriptor; no COMPAT_VERSION bump. 14 of 130
 golden dumps refused (their states' slot sets changed: a pattern's source no longer live,
 a `case` copy, a Record copy) and are rewritten under this decision; the other 116 load

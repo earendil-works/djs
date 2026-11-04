@@ -17,10 +17,10 @@ function 0 <anonymous>: params=2 locals=27 stack=3 captures=0
    17  call_intrinsic %GetIterator 1  ; 4:1
    22  dup
    23  get_field "next" ic1
-   30  put_loc3 (<t1>)
-   31  put_loc2 (<t0>)
+   30  put_loc3 (1)
+   31  put_loc2 (0)
    32  jump8 -> 65
-   34  get_loc2 (<t0>)
+   34  get_loc2 (0)
    35  dup
    36  is_undefined
    37  jump_if_true8 -> 44
@@ -34,7 +34,7 @@ function 0 <anonymous>: params=2 locals=27 stack=3 captures=0
    62  get_loc1 (x)  ; 4:33
    63  call1  ; 4:32
    64  drop
-   65  iter_next_loc loc2 (<t0>) -> 53  ; 4:1
+   65  iter_next_loc loc2 (0) -> 53  ; 4:1
    72  iter_check_object
    73  dup
    74  get_field "done" ic4
@@ -44,10 +44,10 @@ function 0 <anonymous>: params=2 locals=27 stack=3 captures=0
    91  call_intrinsic %GetIterator 1  ; 6:1
    96  dup
    97  get_field "next" ic6
-  104  put_loc8 loc6 (<t3>)
-  106  put_loc8 loc5 (<t2>)
+  104  put_loc8 loc6 (3)
+  106  put_loc8 loc5 (2)
   108  jump8 -> 132
-  110  get_loc8 loc5 (<t2>)
+  110  get_loc8 loc5 (2)
   112  dup
   113  is_undefined
   114  jump_if_true8 -> 121
@@ -56,7 +56,7 @@ function 0 <anonymous>: params=2 locals=27 stack=3 captures=0
   122  throw
   123  get_field "value" ic7
   130  put_loc8 loc4 (v)  ; 6:10
-  132  iter_next_loc loc5 (<t2>) -> 130  ; 6:1
+  132  iter_next_loc loc5 (2) -> 130  ; 6:1
   139  iter_check_object
   140  dup
   141  get_field "done" ic8
@@ -72,17 +72,17 @@ function 0 <anonymous>: params=2 locals=27 stack=3 captures=0
   184  call_intrinsic %GetIterator 1  ; 7:1
   189  dup
   190  get_field "next" ic13
-  197  put_loc8 loc8 (<t5>)
-  199  put_loc8 loc7 (<t4>)
+  197  put_loc8 loc8 (5)
+  199  put_loc8 loc7 (4)
   201  jump8 -> 216
-  203  get_loc8 loc7 (<t4>)
+  203  get_loc8 loc7 (4)
   205  dup
   206  is_undefined
   207  jump_if_true8 -> 214
   209  call_intrinsic %IteratorCloseThrow 1
   214  drop
   215  throw
-  216  iter_next_loc loc7 (<t4>) -> 160
+  216  iter_next_loc loc7 (4) -> 160
   223  iter_check_object
   224  dup
   225  get_field "done" ic14
@@ -99,17 +99,17 @@ function 0 <anonymous>: params=2 locals=27 stack=3 captures=0
   269  call_intrinsic %GetIterator 1  ; 8:1
   274  dup
   275  get_field "next" ic19
-  282  put_loc8 loc10 (<t7>)
-  284  put_loc8 loc9 (<t6>)
+  282  put_loc8 loc10 (7)
+  284  put_loc8 loc9 (6)
   286  jump8 -> 301
-  288  get_loc8 loc9 (<t6>)
+  288  get_loc8 loc9 (6)
   290  dup
   291  is_undefined
   292  jump_if_true8 -> 299
   294  call_intrinsic %IteratorCloseThrow 1
   299  drop
   300  throw
-  301  iter_next_loc loc9 (<t6>) -> 244
+  301  iter_next_loc loc9 (6) -> 244
   308  iter_check_object
   309  dup
   310  get_field "done" ic20
@@ -119,10 +119,10 @@ function 0 <anonymous>: params=2 locals=27 stack=3 captures=0
   327  call_intrinsic %GetIterator 1  ; 10:1
   332  dup
   333  get_field "next" ic22
-  340  put_loc8 loc13 (<t9>)
-  342  put_loc8 loc12 (<t8>)
+  340  put_loc8 loc13 (9)
+  342  put_loc8 loc12 (8)
   344  jump8 -> 376
-  346  get_loc8 loc12 (<t8>)
+  346  get_loc8 loc12 (8)
   348  dup
   349  is_undefined
   350  jump_if_true8 -> 357
@@ -135,24 +135,24 @@ function 0 <anonymous>: params=2 locals=27 stack=3 captures=0
   370  jump_if_false8 -> 376
   372  jump8 -> 397
   374  jump8 -> 376
-  376  iter_next_loc loc12 (<t8>) -> 366  ; 10:1
+  376  iter_next_loc loc12 (8) -> 366  ; 10:1
   383  iter_check_object
   384  dup
   385  get_field "done" ic24
   392  jump_if_false8 -> 359
   394  drop
   395  jump8 -> 405
-  397  get_loc8 loc12 (<t8>)
+  397  get_loc8 loc12 (8)
   399  call_intrinsic %IteratorClose 1
   404  drop
   405  get_global "xs" ic25  ; 12:24
   412  call_intrinsic %GetIterator 1  ; 12:8
   417  dup
   418  get_field "next" ic26
-  425  put_loc8 loc16 (<t11>)
-  427  put_loc8 loc15 (<t10>)
+  425  put_loc8 loc16 (11)
+  427  put_loc8 loc15 (10)
   429  jump8 -> 540
-  431  get_loc8 loc15 (<t10>)
+  431  get_loc8 loc15 (10)
   433  dup
   434  is_undefined
   435  jump_if_true8 -> 442
@@ -165,10 +165,10 @@ function 0 <anonymous>: params=2 locals=27 stack=3 captures=0
   460  call_intrinsic %GetIterator 1  ; 12:30
   465  dup
   466  get_field "next" ic29
-  473  put_loc8 loc19 (<t13>)
-  475  put_loc8 loc18 (<t12>)
+  473  put_loc8 loc19 (13)
+  475  put_loc8 loc18 (12)
   477  jump8 -> 510
-  479  get_loc8 loc18 (<t12>)
+  479  get_loc8 loc18 (12)
   481  dup
   482  is_undefined
   483  jump_if_true8 -> 490
@@ -181,25 +181,25 @@ function 0 <anonymous>: params=2 locals=27 stack=3 captures=0
   502  gosub -> 531
   507  drop
   508  jump8 -> 561
-  510  iter_next_loc loc18 (<t12>) -> 499  ; 12:30
+  510  iter_next_loc loc18 (12) -> 499  ; 12:30
   517  iter_check_object
   518  dup
   519  get_field "done" ic31
   526  jump_if_false8 -> 492
   528  drop
   529  jump8 -> 540
-  531  get_loc8 loc18 (<t12>)
+  531  get_loc8 loc18 (12)
   533  call_intrinsic %IteratorClose 1
   538  drop
   539  ret
-  540  iter_next_loc loc15 (<t10>) -> 451  ; 12:8
+  540  iter_next_loc loc15 (10) -> 451  ; 12:8
   547  iter_check_object
   548  dup
   549  get_field "done" ic32
   556  jump_if_false8 -> 444
   558  drop
   559  jump8 -> 569
-  561  get_loc8 loc15 (<t10>)
+  561  get_loc8 loc15 (10)
   563  call_intrinsic %IteratorClose 1
   568  drop
   569  new_box loc21 (x)
@@ -207,10 +207,10 @@ function 0 <anonymous>: params=2 locals=27 stack=3 captures=0
   579  call_intrinsic %GetIterator 1  ; 15:1
   584  dup
   585  get_field "next" ic34
-  592  put_loc8 loc23 (<t15>)
-  594  put_loc8 loc22 (<t14>)
+  592  put_loc8 loc23 (15)
+  594  put_loc8 loc22 (14)
   596  jump8 -> 645
-  598  get_loc8 loc22 (<t14>)
+  598  get_loc8 loc22 (14)
   600  dup
   601  is_undefined
   602  jump_if_true8 -> 609
@@ -225,7 +225,7 @@ function 0 <anonymous>: params=2 locals=27 stack=3 captures=0
   638  fclosure child1
   643  call1  ; 15:27
   644  drop
-  645  iter_next_loc loc22 (<t14>) -> 618  ; 15:1
+  645  iter_next_loc loc22 (14) -> 618  ; 15:1
   652  iter_check_object
   653  dup
   654  get_field "done" ic38
@@ -233,7 +233,7 @@ function 0 <anonymous>: params=2 locals=27 stack=3 captures=0
   663  drop
   664  get_global "o" ic39  ; 17:17
   671  for_in_start  ; 17:1
-  672  put_loc8 loc25 (<t16>)
+  672  put_loc8 loc25 (16)
   674  jump8 -> 691
   676  nip
   677  put_loc8 loc24 (k)  ; 17:12
@@ -242,7 +242,7 @@ function 0 <anonymous>: params=2 locals=27 stack=3 captures=0
   687  get_loc8 loc24 (k)  ; 17:32
   689  call1  ; 17:31
   690  drop
-  691  get_loc8 loc25 (<t16>)
+  691  get_loc8 loc25 (16)
   693  for_in_next
   694  jump_if_false8 -> 676
   696  drop
@@ -255,11 +255,11 @@ function 0 <anonymous>: params=2 locals=27 stack=3 captures=0
   716  jump8 -> 730
   718  get_global "o" ic43  ; 18:13
   725  for_in_start  ; 18:1
-  726  put_loc8 loc26 (<t17>)
+  726  put_loc8 loc26 (17)
   728  jump8 -> 739
   730  get_global "k" ic44  ; 18:22
   737  jump_if_true8 -> 746
-  739  get_loc8 loc26 (<t17>)
+  739  get_loc8 loc26 (17)
   741  for_in_next
   742  jump_if_false8 -> 700
   744  drop
@@ -273,10 +273,10 @@ function 0.0 f: params=0 locals=3 stack=3 captures=0
     7  call_intrinsic %GetIterator 1  ; 13:16
    12  dup
    13  get_field "next" ic1
-   20  put_loc2 (<t1>)
-   21  put_loc1 (<t0>)
+   20  put_loc2 (1)
+   21  put_loc1 (0)
    22  jump8 -> 51
-   24  get_loc1 (<t0>)
+   24  get_loc1 (0)
    25  dup
    26  is_undefined
    27  jump_if_true8 -> 34
@@ -288,14 +288,14 @@ function 0.0 f: params=0 locals=3 stack=3 captures=0
    44  get_loc0 (x)  ; 13:45
    45  gosub -> 72
    50  return
-   51  iter_next_loc loc1 (<t0>) -> 43  ; 13:16
+   51  iter_next_loc loc1 (0) -> 43  ; 13:16
    58  iter_check_object
    59  dup
    60  get_field "done" ic3
    67  jump_if_false8 -> 36
    69  drop
    70  jump8 -> 80
-   72  get_loc1 (<t0>)
+   72  get_loc1 (0)
    73  call_intrinsic %IteratorClose 1
    78  drop
    79  ret

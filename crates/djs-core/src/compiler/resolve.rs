@@ -801,7 +801,7 @@ fn emit_function(
                     && let Some(s) = unchecked_local(storage, resolved[r])
                     && unchecked_local(storage, resolved[get.imm(0) as usize]) == Some(s + 1)
                 {
-                    flush(&out, &mut li, &mut lines, step.pc);
+                    // (Its position is marked before the first `get`.)
                     out.iter_next_loc(s, Label(step.imm(0)));
                     i += 2;
                     continue;

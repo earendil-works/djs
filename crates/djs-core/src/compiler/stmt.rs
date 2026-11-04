@@ -531,7 +531,7 @@ impl Parser<'_, '_> {
                 self.next()?;
                 self.push_scope(ScopeKind::For)?;
                 scoped = true;
-                let r = self.using_region_start(self.stmt_depth, is_await, self.tok.start)?;
+                let r = self.using_region_start(self.stmt_depth, is_await, self.tok.start);
                 self.using_env(&r);
                 using = Some(r);
                 self.parse_using_bindings(r.rec, is_await, true)?;
@@ -918,7 +918,7 @@ impl Parser<'_, '_> {
         self.next()?;
         self.reset_completion();
         self.parse_paren_expr()?;
-        let d = self.temp("switch.discriminant", switch_pos)?;
+        let d = self.temp("switch.discriminant", switch_pos);
         self.temp_put(d);
         self.expect(TokenKind::LBrace, "{")?;
         self.push_scope(ScopeKind::Switch)?;
