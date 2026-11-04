@@ -553,6 +553,57 @@ fn exporter_round_trips_at_every_idle_point() {
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 
+/// A loaded dump is its own fixed point: dumping the VM right after the load (the loaded
+/// state, the next idle point) writes the same text (docs/suspension-design-review.md
+/// section 7: hosts can skip re-dumping an unchanged run).
+#[test]
+fn dumping_a_loaded_dump_writes_the_same_text() {
+    // (`dump_at`'s.)
+    let opts = super::dump::DumpOptions {
+        base: base(),
+        host: &["console", "tools", "print", "later"],
+        host_fn_name: &host_fn_name,
+        ..Default::default()
+    };
+    let mut failed = Vec::new();
+    for name in [
+        "plan",
+        "operands",
+        "generator",
+        "asyncgen",
+        "combinators",
+        "loops",
+        "cells",
+        "steps",
+        "reenact",
+        "cycles",
+    ] {
+        let src =
+            std::fs::read_to_string(fixture_dir().join(alloc::format!("{name}.src.js"))).unwrap();
+        let (_, marks) = run_program(&src);
+        for k in 1..=marks.len() {
+            let text = match dump_at(&src, k) {
+                Ok((_, text)) => text,
+                Err(e) => {
+                    failed.push(alloc::format!("{name} @{k}: {e}"));
+                    continue;
+                }
+            };
+            let mut vm = new_vm();
+            if let Err(e) = load(&mut vm, &text) {
+                failed.push(alloc::format!("{name} @{k}: {e}"));
+                continue;
+            }
+            match vm.dump(&opts, None) {
+                Ok(again) if again == text => {}
+                Ok(again) => failed.push(alloc::format!("{name} @{k}:\n{text}\nagain:\n{again}")),
+                Err(e) => failed.push(alloc::format!("{name} @{k}: {}", e.message())),
+            }
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
 /// Prints the suspension maps of a file, for writing fixtures by hand:
 /// `DJS_SMAP=tests/dump/v2/x.src.js cargo test -p djs-core --lib show_maps -- --ignored --nocapture`.
 #[test]

@@ -291,12 +291,26 @@ pub fn suspension_maps(
     src: &[u8],
     opts: &CompileOptions<'_>,
 ) -> Result<Vec<smap::FunctionMap>, CompileError> {
+    compile_with_maps(heap, src, opts).map(|(_, maps)| maps)
+}
+
+/// [`compile`] and [`suspension_maps`] in one compile: recording changes nothing in the
+/// code (the pin test checks it), so a loader that runs a dump's text and resumes its
+/// activations needs no second compile.
+#[cfg(feature = "dump")]
+pub fn compile_with_maps(
+    heap: &mut Heap,
+    src: &[u8],
+    opts: &CompileOptions<'_>,
+) -> Result<(Ref, Vec<smap::FunctionMap>), CompileError> {
     let result = parser::Parser::new(heap, src, opts).and_then(|p| p.compile_maps());
     result
-        .map(|(_, maps)| {
-            maps.into_iter()
+        .map(|(t, maps)| {
+            let maps = maps
+                .into_iter()
                 .filter(|m| !m.sites.is_empty() || !m.computed_keys.is_empty())
-                .collect()
+                .collect();
+            (t, maps)
         })
         .map_err(|e| error_at(src, e))
 }

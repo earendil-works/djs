@@ -199,14 +199,11 @@ fn header(text: &str) -> Option<(&str, &str)> {
 }
 
 /// A load in progress.
-pub(super) struct Load<'t> {
-    pub text: &'t str,
-    /// Compiled as TypeScript (`dump_options`).
-    pub typescript: bool,
+pub(super) struct Load {
     /// The dump's Script function: functions its text made share its script.
     pub script: Handle,
-    /// The suspension maps of the dump's functions, made on the first `resume`.
-    pub maps: Option<Vec<FunctionMap>>,
+    /// The suspension maps of the dump's functions, recorded by the compile that ran it.
+    pub maps: Vec<FunctionMap>,
     pub out: Loaded,
     /// `$dump.issued(n)`: the id the host's next call gets.
     issued: Option<u32>,
@@ -297,9 +294,17 @@ impl Vm {
             "2" => true,
             v => return Err(LoadError::Version(String::from(v))),
         };
-        let f = self
-            .compile(text.as_bytes(), &dump_options(is_typescript(text)))
-            .map_err(|e| LoadError::Compile(e.message))?;
+        let copts = dump_options(is_typescript(text));
+        // Format 2 resumes activations by the suspension maps of its own text: one
+        // compile records them (D2563; the code is the same as without recording).
+        let (template, maps) = if privileged {
+            crate::compiler::compile_with_maps(&mut self.heap, text.as_bytes(), &copts)
+                .map(|(t, maps)| (t, Some(maps)))
+        } else {
+            crate::compiler::compile(&mut self.heap, text.as_bytes(), &copts).map(|t| (t, None))
+        }
+        .map_err(|e| LoadError::Compile(e.message))?;
+        let f = self.instantiate(template).map_err(|_| LoadError::Memory)?;
         if privileged {
             self.install_loader().map_err(|_| LoadError::Memory)?;
         }
@@ -310,10 +315,8 @@ impl Vm {
             .arena_mut()
             .set(i, Interp::NEXT_CALL_ID, LOADER_CALL_IDS);
         let mut load = Load {
-            text,
-            typescript: is_typescript(text),
             script,
-            maps: None,
+            maps: maps.unwrap_or_default(),
             out: Loaded::default(),
             issued: None,
         };

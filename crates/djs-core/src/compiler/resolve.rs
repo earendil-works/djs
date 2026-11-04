@@ -517,6 +517,10 @@ fn suspension_map(
     all: &[crate::bytecode::Insn],
     resolved: &[Resolved],
 ) -> PResult<super::smap::FunctionMap> {
+    if rec.sites.is_empty() {
+        // Only the computed keys: no stack or liveness analysis.
+        return Ok(super::smap::build(heap, f, rec, &[], 0, 0, &[], &[], &[]));
+    }
     let decode = |pc: u32| {
         crate::bytecode::decode::decode(&code.code, pc)
             .map_err(|e| internal(&crate::detail::detail("decode", &e)))
@@ -561,15 +565,21 @@ fn suspension_map(
     let live = if f.temps.is_empty() {
         alloc::vec![Vec::new(); rec.sites.len()]
     } else {
+        // (One pass over the code: the suspending instructions are few.)
+        let suspending: Vec<(u32, usize)> = all
+            .iter()
+            .enumerate()
+            .filter(|(_, i)| matches!(i.op, Op::Await | Op::Yield | Op::YieldStar))
+            .map(|(k, i)| (i.pc, k))
+            .collect();
         let index: Vec<usize> = rec
             .sites
             .iter()
             .map(|s| {
-                all.iter()
-                    .position(|i| {
-                        i.pc == s.p1 && matches!(i.op, Op::Await | Op::Yield | Op::YieldStar)
-                    })
-                    .unwrap_or(usize::MAX)
+                suspending
+                    .iter()
+                    .find(|x| x.0 == s.p1)
+                    .map_or(usize::MAX, |x| x.1)
             })
             .collect();
         let temp_of = |r: u32| match resolved.get(r as usize).map(|x| x.target) {

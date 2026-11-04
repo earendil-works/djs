@@ -93,7 +93,7 @@ impl Vm {
 
     /// The site `at` of closure `f` in the dump's suspension maps: the indexes of its map
     /// and of the site in it.
-    fn resume_site(&mut self, f: Obj, at: &str, load: &mut Load) -> Result<(usize, usize), String> {
+    fn resume_site(&mut self, f: Obj, at: &str, load: &Load) -> Result<(usize, usize), String> {
         let t = self.heap.closure_template(f);
         let info = debug_info(&self.heap, t);
         let script = self.heap.get_handle(load.script).as_object().map(|s| {
@@ -103,16 +103,7 @@ impl Vm {
         if script != Some(info.script) {
             return Err("$dump.resume: the function is not made by the dump's text".into());
         }
-        if load.maps.is_none() {
-            let maps = crate::compiler::suspension_maps(
-                &mut self.heap,
-                load.text.as_bytes(),
-                &super::dump_load::dump_options(load.typescript),
-            )
-            .map_err(|e| cat!("$dump.resume: ", e.message))?;
-            load.maps = Some(maps);
-        }
-        let maps = load.maps.as_deref().unwrap_or_default();
+        let maps = &load.maps;
         let mi = maps
             .iter()
             .position(|m| m.start == info.src_start && m.end == info.src_end)
@@ -159,7 +150,7 @@ impl Vm {
             self.resume_desc(args.get(1).copied().unwrap_or(Value::UNDEFINED))?;
         let at = string_arg(&self.heap, at, "$dump.resume: at")?;
         let (mi, si) = self.resume_site(f, &at, load)?;
-        let site = &load.maps.as_deref().unwrap_or_default()[mi].sites[si];
+        let site = &load.maps[mi].sites[si];
         if site.args.len() != params || site.locals.len() != n_locals {
             return Err(cat!(
                 "$dump.resume: the map of ",
