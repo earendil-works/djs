@@ -646,3 +646,7 @@ topics when the index is next reorganized.
 - D2902: Anonymous closures in a scope factory are written as `key: (0, f)`
 - D2875: `yield*` in plain continuations: a `yield*` over a wrapper of the inner record
 - D2836: Plain dumps are written only for VMs with frozen builtins
+- D2903: The plain dump runtime: the format's helpers are members of `$djs`
+- D2876: `using` in plain continuations: the resources added again, a disposal as a scope of K
+- D2877: Iterator helpers in plain dumps are made again by their public methods
+- D2878: Plain dumps refuse instances that carry private names
