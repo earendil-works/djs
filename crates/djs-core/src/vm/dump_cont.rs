@@ -73,6 +73,7 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
         ctx,
         used: Vec::new(),
         scaf: Vec::new(),
+        cmap: Vec::new(),
         temps: Vec::new(),
         ntemps: 0,
         go_done: false,
@@ -112,7 +113,12 @@ struct G<'a, 'c> {
     ctx: &'c mut dyn Ctx,
     used: Vec<String>,
     /// Scaffold constructs: kind, offset in the original, offset in K.
-    scaf: Vec<(&'static str, u32, u32)>,
+    /// Scaffold constructs: kind, offset in the original, offset in K, and what else
+    /// origin tracking needs of it (a finally's completion: `, kind, "binding"`).
+    scaf: Vec<(&'static str, u32, u32, String)>,
+    /// The original's temporaries of the rewritten statement: slot, and the binding of K
+    /// that holds the value or the literal written in its place.
+    cmap: Vec<(String, String, bool)>,
     /// Temporaries of the site's statement not yet declared.
     temps: Vec<String>,
     ntemps: usize,
@@ -162,7 +168,7 @@ impl G<'_, '_> {
     }
 
     fn mark(&mut self, kind: &'static str, f: u32) -> P {
-        self.scaf.push_out((kind, f, 0));
+        self.scaf.push_out((kind, f, 0, String::new()));
         P::Mark(self.scaf.len() - 1)
     }
 
@@ -185,8 +191,10 @@ impl G<'_, '_> {
     /// A temporary of the site's statement: a literal in place, else a const declared
     /// right before the statement (the dump's values are reachable only while it loads).
     fn tmp(&mut self, construct: &str, off: u32) -> R<P> {
-        let v = self.take(&cat!(construct, "@", off))?;
+        let slot = cat!(construct, "@", off);
+        let v = self.take(&slot)?;
         if literal(&v) {
+            self.cmap.push_out((slot, v.clone(), true));
             return Ok(P::S(v));
         }
         let mut name = cat!("$djs_t", self.ntemps);
@@ -198,6 +206,7 @@ impl G<'_, '_> {
             self.ntemps += 1;
         }
         self.temps.push_out(cat!(name, " = ", v));
+        self.cmap.push_out((slot, name.clone(), false));
         Ok(P::S(name))
     }
 
@@ -747,8 +756,9 @@ impl G<'_, '_> {
         let first = self.stmt(i + 1, None)?;
         Ok(P::L(alloc::vec![
             P::S(cat!("{ let ", f, " = true; ")),
-            m,
             label.unwrap_or_else(|| s("")),
+            // (At the loop's own start: its temporaries are named by it.)
+            m,
             P::S(cat!(
                 "for (const ",
                 v,
@@ -830,6 +840,9 @@ impl G<'_, '_> {
                     _ => return no("a finally entered by break or continue (0203)"),
                 };
                 let m = self.mark("finally", n.start);
+                if let P::Mark(x) = m {
+                    self.scaf[x].3 = cat!(",", kind, ",", quote(&cv));
+                }
                 let first = self.stmt(i + 1, None)?;
                 Ok(P::L(alloc::vec![
                     m,
@@ -1315,15 +1328,26 @@ impl G<'_, '_> {
             }
         }
         let mut scaf = Vec::new();
-        for (k, f, ko) in &self.scaf {
+        for (k, f, ko, extra) in &self.scaf {
             let ko = if *ko as usize >= at { ko + shift } else { *ko };
-            scaf.push_out(cat!("[", quote(k), ",", *f, ",", ko, "]"));
+            scaf.push_out(cat!("[", quote(k), ",", *f, ",", ko, extra, "]"));
         }
+        let cmap: Vec<String> = self
+            .cmap
+            .iter()
+            .map(|(slot, v, lit)| {
+                if *lit {
+                    cat!("[", quote(slot), ",1,", v, "]")
+                } else {
+                    cat!("[", quote(slot), ",0,", quote(v), "]")
+                }
+            })
+            .collect();
         KText {
             text,
             segs,
             scaf: cat!("[", join(&scaf, ","), "]"),
-            cmap: String::from("[]"),
+            cmap: cat!("[", join(&cmap, ","), "]"),
             used: self.used,
         }
     }
@@ -1341,7 +1365,7 @@ struct Flat {
 }
 
 impl Flat {
-    fn walk(&mut self, p: &P, ftext: &str, scaf: &mut [(&'static str, u32, u32)]) {
+    fn walk(&mut self, p: &P, ftext: &str, scaf: &mut [(&'static str, u32, u32, String)]) {
         match p {
             P::S(t) => self.text.push_str(t),
             P::V(a, b) => {

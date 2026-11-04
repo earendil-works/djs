@@ -9275,3 +9275,29 @@ one that went away is reported stale. The gate leg "plain dumps (djs and node)" 
 over the whole corpus (about 1,190 links). The djs-core test
 `plain_dump_chains_continue_like_the_run` does the same in-process for the format 2
 fixtures (tests/dump/v2).
+
+## D2870: Origin tracking reads a continuation's frame as its origin's
+date: 2026-11-05 · by: pjx · issue: 0202
+A plain dump of a run that loaded a plain dump holds activations of continuations `K`.
+Dumped as they are, each link's continuation would be written from the previous one's
+text (its prefix included), and chains grow by a few kB per link. The exporter instead
+reads such an activation (a function with an own `$djs = { f, at, segs, scaf, cmap }`) as
+one of `f` (dump_origin.rs): `K`'s site maps to `f`'s through `scaf`'s `site` record (K
+still at the site it was written for) or the stretches `K` copied (`segs`); the frame is
+rebuilt in `f`'s layout from `f`'s suspension map: bindings by name (shadowed ones in scope
+order), `arguments` from `$djs_arguments`, `f`'s temporaries of its rewritten statement
+from `cmap` (`[slot, 0, "binding of K"]` or `[slot, 1, literal]`, which the generator now
+records), a loop scaffold's iterator record from its `$dump.L` wrapper's captures, a
+finally's completion from its `scaf` record (`["finally", fo, ko, kind, "binding"]`), the
+other temporaries at `K`'s offsets mapped back through `segs`; `K`'s `$djs_*` locals are
+dropped. The rest of the exporter sees an activation of `f`, so the next continuation is
+written from `f`'s text again and what only `K` held (helpers, the earlier origin
+records) is not dumped. For that `f` must be a function whose template the exporter can
+read maps from: `K.$djs.f` is the run's function when the dump reaches it by name, else
+`$dump.F<act>`, made from its text by the dump (where it is never called). A generator's
+continuation takes the generator object's prototype (`Act::proto`), not `f`'s
+`prototype`. Refused, for 0203: a continuation that stopped again inside its own rewritten
+statement, a for-in scaffold, a codemode body held by reference. Measured over the corpus:
+a link is the size of a dump of the uninterrupted run at the same point (the djs-core
+chain test checks it within 512 bytes per link), and the corpus's plain dumps total 24.5
+MB instead of 36 MB.

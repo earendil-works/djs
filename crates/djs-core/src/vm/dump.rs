@@ -453,6 +453,9 @@ mod plain;
 #[path = "dump_cont.rs"]
 mod cont;
 
+#[path = "dump_origin.rs"]
+mod origin;
+
 const RESERVED: &[&str] = &[
     "break",
     "case",

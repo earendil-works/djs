@@ -311,15 +311,35 @@ impl Dumper<'_> {
     pub(super) fn visit_activation(&mut self, n: usize, g: Obj) {
         let h = self.h;
         let path = self.nodes[n].path.clone();
-        let s = suspend::read_activation(h, g);
+        let mut s = suspend::read_activation(h, g);
         self.nodes[n].fl = self.fl.acts.len();
         let mut syntax = None;
+        // The function the frame runs (a continuation's, not its origin's).
+        let runs = s.frame.first().copied().unwrap_or(Value::UNDEFINED);
         let site = match s.state {
             suspend::AWAITING | suspend::SUSPENDED | suspend::SUSPENDED_RAW => {
-                self.activation_site(&path, &s).map(|(site, sx)| {
-                    syntax = Some(sx);
-                    site
-                })
+                match self.activation_site(&path, &s) {
+                    Some((site, sx)) if self.pl.is_some() => match self.origin_frame(&s, &site) {
+                        Ok(Some((fs, fsite, fsx))) => {
+                            s = fs;
+                            syntax = Some(fsx);
+                            Some(fsite)
+                        }
+                        Ok(None) => {
+                            syntax = Some(sx);
+                            Some(site)
+                        }
+                        Err(why) => {
+                            self.refuse(path.clone(), &why);
+                            None
+                        }
+                    },
+                    Some((site, sx)) => {
+                        syntax = Some(sx);
+                        Some(site)
+                    }
+                    None => None,
+                }
             }
             suspend::COMPLETED => {
                 // A finished generator of the same kind and prototype.
@@ -361,8 +381,12 @@ impl Dumper<'_> {
             }
         };
         if site.is_some() && s.kind != suspend::ASYNC {
-            let f = s.frame.first().copied().unwrap_or(Value::UNDEFINED);
-            self.check_generator_proto(&path, g, f);
+            self.check_generator_proto(&path, g, runs);
+            if self.pl.is_some() {
+                // Its prototype is its continuation's (`Act::proto`).
+                let proto = h.get_prototype_of(g).map_or(Value::NULL, Value::object);
+                self.edge(n, proto, || cat!(path, ".[[Prototype]]"));
+            }
         }
         if let Some(site) = &site {
             let hp = s.hp as usize;
@@ -1771,7 +1795,17 @@ impl Dumper<'_> {
             } else {
                 self.fn_source(fnode).unwrap_or_default()
             };
+            // A generator's prototype: its continuation's (the origin's function made
+            // from its text has a `prototype` of its own).
+            let proto = (kind != suspend::ASYNC)
+                .then(|| self.nodes[n].v.as_object())
+                .flatten()
+                .map(|g| {
+                    let p = h.get_prototype_of(g).map_or(Value::NULL, Value::object);
+                    self.expr(p, None, None)
+                });
             let act = plain::Act {
+                proto,
                 name: String::from(name.strip_prefix("$dump.").unwrap_or(&name)),
                 fexpr: fe.clone(),
                 fkind: if fnode == usize::MAX {

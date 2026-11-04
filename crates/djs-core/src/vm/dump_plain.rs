@@ -99,6 +99,8 @@ pub(super) struct Act {
     pub queue: Vec<(&'static str, String, String)>,
     /// `suspend::ASYNC`, `GENERATOR`, `ASYNC_GENERATOR`.
     pub kind: i32,
+    /// A generator object's prototype (its continuation's `prototype`).
+    pub proto: Option<String>,
 }
 
 pub(super) struct Slot {
@@ -1418,6 +1420,9 @@ impl W<'_> {
                         }
                     }
                     cat_to!(&mut text, act.this, "\n");
+                    // Its origin's function (`K.$djs.f`) and the generator's prototype.
+                    cat_to!(&mut text, act.fexpr, "\n");
+                    cat_to!(&mut text, act.proto.as_deref().unwrap_or(""), "\n");
                     // Function texts: their globals are read when they run.
                     let mut lazy = String::new();
                     for &(_, sc, v) in &self.acts[a].cells {
@@ -1998,14 +2003,19 @@ impl W<'_> {
 
     /// The function a continuation stands for, as its origin record names it: the
     /// dump's reference, or its text.
-    fn fref(&self, a: usize) -> String {
+    /// The origin's function for `K.$djs.f`: the run's own when the dump reaches it by
+    /// a name, else made from its text (`$dump.F<act>`, written first): a function either
+    /// way, whose template the next dump reads the site maps of (origin tracking, D2870).
+    fn fref(&self, a: usize) -> (String, Option<String>) {
         let act = &self.ir.acts[a];
         let e = act.fexpr.as_str();
         let reference = e.split('.').all(|p| !p.is_empty() && is_ident(p));
         if reference {
-            String::from(e)
+            (String::from(e), None)
         } else {
-            quote(&act.ftext)
+            let name = cat!("$dump.F", act.name);
+            let def = cat!(name, " = ", e, ";");
+            (name, Some(def))
         }
     }
 
@@ -2027,11 +2037,13 @@ impl W<'_> {
             lines.push_out(cat!(kref, " = ", k.text, ";"));
         }
         let segs: Vec<String> = k.segs.iter().map(|x| cat!(*x)).collect();
+        let (fref, fdef) = self.fref(a);
+        lines.extend(fdef);
         lines.push_out(cat!(
             "Object.defineProperty(",
             kref,
             ", \"$djs\", { value: { f: ",
-            self.fref(a),
+            fref,
             ", at: ",
             quote(&act.site.name),
             ", segs: [",
@@ -2047,8 +2059,8 @@ impl W<'_> {
             || act.kind == crate::interp::run::suspend::ASYNC_GENERATOR;
         let at_yield = act.site.name.starts_with("yield#");
         if generator {
-            if !self.fref(a).starts_with('"') {
-                lines.push_out(cat!(kref, ".prototype = ", act.fexpr, ".prototype;"));
+            if let Some(p) = &act.proto {
+                lines.push_out(cat!(kref, ".prototype = ", p, ";"));
             }
             lines.push_out(cat!(me, " = ", kref, ".call(", act.this, ");"));
             if at_yield {

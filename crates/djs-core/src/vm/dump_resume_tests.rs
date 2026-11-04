@@ -1500,6 +1500,26 @@ fn plain_dump(vm: &Vm) -> Result<String, String> {
     vm.dump(&opts, None).map_err(|e| e.message())
 }
 
+/// The plain dump of program `src` run to idle point `k`.
+fn plain_dump_at(src: &str, k: usize) -> String {
+    let mut vm = new_vm();
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("src.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    let mut lines = Vec::new();
+    for _ in 1..k {
+        let id = plain_step(&mut vm, &mut lines).expect("an idle point");
+        settle(&mut vm, id);
+    }
+    plain_step(&mut vm, &mut lines).expect("an idle point");
+    plain_dump(&vm).unwrap()
+}
+
 /// A fresh VM that ran plain dump `text` as a Script, with the host's hooks: `$djs.seed`
 /// a no-op (the fixtures draw no random numbers), `$djs.resume` making the call again.
 fn plain_load(text: &str) -> Result<Vm, String> {
@@ -1559,12 +1579,22 @@ fn plain_dump_chains_continue_like_the_run() {
         vm.call(f, this, &[]).unwrap();
         let mut lines = Vec::new();
         let mut dumping = true;
+        let show = std::env::var("DJS_PLAIN_SHOW").is_ok_and(|v| v == name);
+        let mut sizes = Vec::new();
         while let Some(id) = plain_step(&mut vm, &mut lines) {
             if dumping {
                 match plain_dump(&vm) {
                     Ok(text) => match plain_load(&text) {
+                        _ if show && {
+                            std::println!("--- {name} link {}\n{text}", links + 1);
+                            false
+                        } =>
+                        {
+                            unreachable!()
+                        }
                         Ok(v) => {
                             links += 1;
+                            sizes.push(text.len());
                             vm = v;
                             let id = vm.pending_host_calls().iter().min().copied();
                             settle(&mut vm, id.expect("the dump's open call"));
@@ -1585,6 +1615,18 @@ fn plain_dump_chains_continue_like_the_run() {
         }
         if lines != want {
             failed.push(alloc::format!("{name}: {lines:?}\n  want {want:?}"));
+        }
+        // Origin tracking keeps a chain's dumps the size of their state (D2870): a
+        // continuation of a continuation is written from the original's text, so link k
+        // is about as long as a dump of the uninterrupted run at idle point k.
+        for (k, &len) in sizes.iter().enumerate() {
+            let fresh = plain_dump_at(&src, k + 1).len();
+            if len.abs_diff(fresh) > 512 {
+                failed.push(alloc::format!(
+                    "{name}: link {} is {len} bytes, a dump of the run there {fresh}",
+                    k + 1
+                ));
+            }
         }
     }
     std::println!("plain dumps: {links} links, refused: {refused:#?}");

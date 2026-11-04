@@ -142,8 +142,14 @@ for (const c of walk(dir).sort()) {
   cases++;
   for (const k of ks) {
     const file = path.join(c, `${k}.js`);
-    const head = fs.readFileSync(file, "utf8").slice(0, 40);
-    if (head.startsWith('"djs-dump 3 typescript"')) continue;
+    const text = fs.readFileSync(file, "utf8");
+    // Origin tracking (D2870): a continuation is written from its origin's text, never
+    // from an earlier continuation's (whose scaffold names it would have to rename).
+    if (/\$djs_[a-z]\d+_\d+\b/.test(text)) {
+      bad++;
+      console.log(`${path.relative(dir, c)} link ${k}: a continuation of a continuation`);
+    }
+    if (text.startsWith('"djs-dump 3 typescript"')) continue;
     links++;
     const pre = fs.readFileSync(path.join(c, `${k}.pre`), "utf8");
     const now = fs.existsSync(path.join(c, "now")) ? Number(fs.readFileSync(path.join(c, "now"), "utf8")) : Date.now();
