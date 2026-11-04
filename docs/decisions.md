@@ -9051,3 +9051,30 @@ and runs no host function there (the loader refuses host calls, the dumper runs 
 code), so the VM is the only state, and it is replaced by the next image. B's resume is
 now ~0.15 ms over A's at the median. A process keeps one dump instance per limit, sized by
 the largest image it took, instead of one per live sandbox.
+
+## D2830: Continuation dumps become plain JavaScript
+date: 2026-11-04 · by: owner · issue: 0199
+Every suspended activation is a continuation function (the rest of the original from its
+site) that is also the factory of its frame's scopes; the dump defines nothing privileged
+and runs as an ordinary Script given the host's functions (in djs and in node). Format 2 and
+its loader primitives are retired once the plain exporter covers the corpus
+(docs/plain-js-dumps.md; issues 0200-0205).
+
+## D2831: The plain dump is written by the Rust exporter
+date: 2026-11-04 · by: owner · issue: 0199
+The compiler records each site's statement path, block declarations and expression
+constructs with spans; the exporter splices the original text. The JavaScript prototype in
+work/research/0199 is not shipped.
+
+## D2832: Open host calls and Math.random's state are restored through host functions
+date: 2026-11-04 · by: owner · issue: 0199
+The dump calls host functions (`resume(id, name, args, state)`, `seed(lo, hi)`), not
+engine primitives; the Sandbox tasks provide them from the {call, save, resume} hooks
+(D2771).
+
+## D2833: Re-dumps use origin tracking
+date: 2026-11-04 · by: owner · issue: 0199
+A continuation carries `$djs = {f, at, segs, scaf, cmap}`; the exporter writes the frame
+of a continuation as an activation of its origin, so a dump always carries the original
+code (pruned of what cannot run again) and its size stays bounded over any number of
+re-dumps.

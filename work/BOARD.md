@@ -6,6 +6,9 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0200 | Compiler: site structure records (plain dumps step 1) | pjc | .worktrees/pjc |
+| 0201 | Plain-JS exporter in Rust (step 2), then 0202, 0203 | pjx | .worktrees/pjx |
+| 0204 | Host hooks for plain dumps (step 5) | pjh | .worktrees/pjh |
 
 ## Open (ready)
 
@@ -16,6 +19,9 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
+| 0202 | Origin tracking (step 3) | 0201 (agent pjx) |
+| 0203 | Plain encodings for remaining refusals (step 4) | 0202 (agent pjx) |
+| 0205 | Retire format 2 (step 6) | 0203, 0204 |
 | - | Gate: rustc incremental corruption in .worktrees/gate (linker Undefined _anon.*.llvm.*): auto-clear incremental dirs and retry once, or CARGO_INCREMENTAL=0 for gate builds (measure) | - |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | - | djs-wasm base_equals_a_compiled_realm fails (--features compiled-prelude, no gate leg) | - |

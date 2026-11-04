@@ -615,3 +615,7 @@ topics when the index is next reorganized.
 - D2800: String and number constants are not deduplicated per function while parsing
 - D2801: With the dumper, pattern scans stop at a literal element
 - D2802: One dump-module sandbox per module and memory limit in the process
+- D2830: Continuation dumps become plain JavaScript
+- D2831: The plain dump is written by the Rust exporter
+- D2832: Open host calls and Math.random's state are restored through host functions
+- D2833: Re-dumps use origin tracking
