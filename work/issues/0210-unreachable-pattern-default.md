@@ -1,6 +1,6 @@
 # 0210: Compiler: array destructuring with a default in unreachable code
 
-status: in-progress
+status: done
 agent: pjk
 branch: issue/0210-unreachable-pattern-default
 depends-on: -
@@ -41,3 +41,10 @@ break/continue/throw, inside try/finally), and add tests. Decision IDs D2960–D
 ## Follow-ups
 
 ## Result
+Functions with array-pattern defaults (or `yield*`, or `yield` inside patterns) in
+unreachable code compile and run. When relative handler depths stop resolving, the
+compiler (`drop_dead_handlers` in compiler/resolve.rs) recomputes reachability from the
+entry and drops every exception handler no execution reaches (D2960); code without such
+handlers compiles exactly as before. Tests: `compiler::tests::dead_pattern_handlers_dropped`
+and the corpus case `tests/corpus/language/dead-code-patterns.js`. Known gaps: none
+found; dead code is still emitted (only its handlers go).
