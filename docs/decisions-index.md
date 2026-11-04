@@ -663,3 +663,5 @@ topics when the index is next reorganized.
 - D2905: A continuation reads an evaluated operand again where that is exact
 - D2906: The dump size score is per case
 - D2907: A continuation's callback runs in parts, at the ends of the blocks it needs
+- D2920: Format 2 is retired; plain dumps are the only format, and the goldens are plain dumps
+- D2921: The `jump_if_loading` opcode is removed
