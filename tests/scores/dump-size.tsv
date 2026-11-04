@@ -306,6 +306,7 @@ corpus	codemode/plain-fuzz/binary-three-awaits.js	9466	3704
 corpus	codemode/plain-fuzz/binary-two-awaits.js	13249	5163
 corpus	codemode/plain-fuzz/callee-and-argument-awaits.js	6622	2543
 corpus	codemode/plain-fuzz/class-from-waiting-closure.js	3653	1406
+corpus	codemode/plain-fuzz/class-in-switch-block.js	3822	1398
 corpus	codemode/plain-fuzz/class-instance-in-idle-function.js	3299	1267
 corpus	codemode/plain-fuzz/class-instance-loop-closure.js	8412	3182
 corpus	codemode/plain-fuzz/class-static-in-promise-all.js	7425	2716

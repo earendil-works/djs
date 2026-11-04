@@ -1,6 +1,6 @@
 # 0208: Fuzz plain dumps: generated codemode-like programs, every idle point, djs and node
 
-status: in-progress
+status: done
 agent: pjz
 branch: issue/0208-plain-dump-fuzz
 depends-on: 0201, 0202 (on main)
@@ -55,9 +55,36 @@ variable (`{ get m() { n++; … } }`) written as `get: ,`. Find these systematic
 - 0210 fixed the compiler bug: language/unreachable-destructuring-default.js passes now.
 - After rebasing onto 0203/0205/0207 work: function-declared-in-loop, finally-await-in-loop
   and both await-using cases no longer refuse (refusals ratchet updated).
+- Batch 4: class-in-switch-block (two classes in one continuation block with one temporary
+  name) and for-await-break (missing slot for-await.next); both fixed on main by pjs before
+  this merge (pjs added its own for-await-break case, which replaced mine).
+- Fuzzer throttled (owner's rule): 4 niced jobs by default, waits while load > 30;
+  `--known FILE` folds reported signatures into one line. Seeds 1001..1400 with the known
+  list: only the accessor-pair bug (fixed since).
 - Corpus dump-size score raised for the new cases' dumps (+25 KB raw).
 - Guide: none affected.
 
 ## Follow-ups
+- Rerun the fuzzer after the open fixes land (the refusal family of re-dumps, class
+  placement): `node scripts/plain-fuzz/fuzz.mjs --seed 2001 --cases 400 --time 900`;
+  most of its signatures were masked by the big ones (`get: ,`, the async generator
+  ordering) in the first runs.
+- The generator has no private fields (refused by design, D2878), TypeScript, `eval`,
+  Proxies, Maps/Sets, Dates or regexps; adding Map/Set/Date values and labeled blocks
+  would widen the data side.
+- `reduce` is line- and bracket-based and slow (it runs every chain per candidate);
+  hand minimizing was faster for most findings.
 
 ## Result
+- `node scripts/plain-fuzz/fuzz.mjs [--seed S] [--cases N] [--time SECS] [--known FILE]`:
+  seeded codemode-like programs (gen.mjs) through the difftest's plain-dump variant with a
+  chain starting at every idle point (`djs-difftest --plain-from K`, D2940) and node
+  (plain-node.mjs); distinct failure signatures with the smallest seed. `fuzz.mjs check
+  FILE...`, `fuzz.mjs reduce FILE --sig TEXT`, `fuzz.mjs gen S`. TESTING.md documents it.
+- `// difftest: plain-xfail <reason>` (D2941) marks a known plain-dump bug in a corpus case;
+  stale marks are reported by the difftest / plain-node.mjs.
+- 26 corpus cases in tests/corpus/codemode/plain-fuzz/ and language/plain-fuzz/ (+ the
+  compiler case language/unreachable-destructuring-default.js), from ~25 distinct
+  signatures over ~1,100 programs / ~19,000 idle points, all reported and routed. All
+  but two are fixed on main; the two left are deliberate refusals (await in an assignment
+  target / in a pattern around the site), listed in tests/plain-refusals.txt.
