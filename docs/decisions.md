@@ -9543,3 +9543,17 @@ class and the private name. A class's static private members, which its evaluati
 installs, are unaffected. In the same change, the continuation of a method of a class
 that a factory makes (`$dump.s2.Tagged.prototype.tag`) is placed in the factory, next to
 the class, so it sees the same variables.
+
+## D2879: TypeScript plain dumps are written as JavaScript where the TypeScript is only types
+date: 2026-11-05 · by: pjr · issue: 0203
+A plain dump that holds functions of TypeScript scripts is written as JavaScript. The
+finished dump is parsed with the TypeScript grammar, and every erased range (annotations,
+`as`, `satisfies`, `!`, type arguments, type-only statements) is blanked with spaces.
+Offsets do not move, so the continuations' origin records (`segs`, `scaf`, `cmap`) stay
+true, and origin tracking reads the blanked texts as it reads the originals. The header is
+then `"djs-dump";` and node runs the dump. If the result does not compile as JavaScript,
+because the TypeScript is more than types (an enum, a namespace, parameter properties),
+the dump keeps its TypeScript and the `"djs-dump typescript";` header. djs runs that
+dump, node does not, and scripts/plain-node.mjs counts it separately. This replaces
+D2861's "TypeScript dumps are not run in node". Origin tracking also gives a function's
+`this` local the continuation's `this`, because `K` is called with it.

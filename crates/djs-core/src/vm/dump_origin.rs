@@ -334,6 +334,8 @@ impl Dumper<'_> {
                     // A class's hidden bindings (its field initializers, keys, private
                     // methods): dead once its statement ran, which K's prefix holds.
                     None if super::flight::class_hidden(&x.name) => Value::UNDEFINED,
+                    // The function's `this` kept in a local: K is called with it.
+                    None if x.name == "this" => frame[1],
                     None => {
                         return Err(cat!(
                             "a continuation of an earlier dump: no `",

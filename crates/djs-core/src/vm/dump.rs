@@ -2138,8 +2138,17 @@ impl<'a> Dumper<'a> {
             lines.extend(builtin_lines);
             lines.extend(core::mem::take(&mut self.patches));
             lines.extend(core::mem::take(&mut self.finals));
-            s = plain::write(&ir, &lines, self.ts.get(), &cont::generate)
+            s = plain::write(&ir, &lines, false, &cont::generate)
                 .map_err(|e| DumpError(alloc::vec![cat!("plain dump: ", e)]))?;
+            if self.ts.get() {
+                // TypeScript functions are written as JavaScript: their types blanked
+                // (offsets kept, so origin records stay true; D2879). TypeScript that
+                // is not only types (an enum, a namespace) stays: a TypeScript dump.
+                s = match self.strip_types(&s)? {
+                    Some(js) => js,
+                    None => s.replacen("\"djs-dump\";", "\"djs-dump typescript\";", 1),
+                };
+            }
         }
         let (open_calls, _, pending_promises) = self.fl.counts();
         Ok(Dumped {
@@ -2148,6 +2157,28 @@ impl<'a> Dumper<'a> {
             open_calls,
             pending_promises,
         })
+    }
+
+    /// `text`, a plain dump whose function texts are TypeScript's, as JavaScript; `None`
+    /// if its TypeScript is more than types.
+    fn strip_types(&mut self, text: &str) -> Result<Option<String>, DumpError> {
+        let fail = |why: &str| DumpError(alloc::vec![cat!("plain dump: ", why)]);
+        // (The checker used the scratch heap up: a fresh one, only for the parse.)
+        let mut heap = match self.scratch.take() {
+            Some(h) => h,
+            None => Heap::new().map_err(|_| fail("no memory to write TypeScript as JavaScript"))?,
+        };
+        let opts = super::dump_load::dump_options(true);
+        let out = crate::compiler::strip_types(&mut heap, text.as_bytes(), &opts);
+        let out = out.map_err(|e| fail(&cat!("its TypeScript does not compile: ", e.message)))?;
+        let js = String::from_utf8(out).map_err(|_| fail("its TypeScript is not UTF-8"))?;
+        let ok = crate::compiler::compile(
+            &mut heap,
+            js.as_bytes(),
+            &super::dump_load::dump_options(false),
+        )
+        .is_ok();
+        Ok(ok.then_some(js))
     }
 
     /// The checker (0168): compiles the finished dump and compares every function it

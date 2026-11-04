@@ -120,6 +120,7 @@ async function runLink(file, now) {
 }
 
 let links = 0;
+let tsLinks = 0;
 let bad = 0;
 let cases = 0;
 const walk = (d) => {
@@ -155,7 +156,12 @@ for (const c of walk(dir).sort()) {
       bad++;
       console.log(`${path.relative(dir, c)} link ${k}: a continuation of a continuation`);
     }
-    if (text.startsWith('"djs-dump typescript"')) continue;
+    // TypeScript dumps are written as JavaScript (D2879); one whose TypeScript is more
+    // than types (an enum, a namespace) stays TypeScript, which node cannot run.
+    if (text.startsWith('"djs-dump typescript"')) {
+      tsLinks++;
+      continue;
+    }
     links++;
     const pre = fs.readFileSync(path.join(c, `${k}.pre`), "utf8");
     const now = fs.existsSync(path.join(c, "now")) ? Number(fs.readFileSync(path.join(c, "now"), "utf8")) : Date.now();
@@ -197,5 +203,5 @@ if (refusalsFile) {
     for (const n of listed.keys()) if (!refused.has(n)) console.log(`${n}: stale entry in ${refusalsFile} (no longer refused)`);
   }
 }
-console.log(`plain-node: ${links} links in ${cases} cases, ${bad} differ; ${refused.size} cases refused${unlisted ? ` (${unlisted} not listed)` : ""}`);
+console.log(`plain-node: ${links} links in ${cases} cases, ${bad} differ; ${refused.size} cases refused${unlisted ? ` (${unlisted} not listed)` : ""}${tsLinks ? `; ${tsLinks} TypeScript links (not only types) not run` : ""}`);
 process.exit(bad || unlisted ? 1 : 0);

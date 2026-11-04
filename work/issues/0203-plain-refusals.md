@@ -78,9 +78,17 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
   (D2878, coordinator's call: no class-text rewriting), with a message that names the
   class and the private name; docs/plain-js-dumps.md section 10. v2: 192 identical,
   1 refused (golden/class-fields).
+- pjr: a class's hidden bindings are dead in an origin frame (fixes the js dumpresume
+  `classes` case, which now dumps; its test expects that).
+- pjr: D2879 TypeScript plain dumps written as JavaScript (strip after writing; fall back
+  to a TS header when the TypeScript is more than types). New corpus case
+  ts/awaits-typed.ts (5 links run in node). ts/codemode-tools.ts has an enum: it stays
+  TypeScript (3 links, counted by plain-node as not run).
 
 ## Follow-ups
 - Private names on instances (D2878) stay refused. If codemode ever needs them, the
   only encoding is rewriting class text in the dump, which the owner rejects.
+- TypeScript dumps with enums or namespaces stay TypeScript (D2879). Lowering those to
+  JavaScript in the dump would let node run them too.
 
 ## Result
