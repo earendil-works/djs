@@ -187,6 +187,11 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   --update. My tests moved to dump_size_tests.rs (a submodule of dump_resume_tests) to stop
   the end-of-file conflicts with 0203.
 
+- pjz's ordering bugs (fixed, corpus case codemode/dump-order.js): the callback now runs in
+  parts at the ends of the continuation's blocks it needs (D2907, dump_plain
+  split_callback, Ctx::go(block)); the accessor pair after a site: `$djs.DD` defines a
+  getter's or setter's descriptor without the other half, as the literal does.
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a

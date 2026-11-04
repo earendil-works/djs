@@ -99,7 +99,6 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
         temps: Vec::new(),
         lets: Vec::new(),
         ntemps: 0,
-        go_done: false,
         block_index: 0,
         uses_arguments: false,
         arrow: act.fkind == crate::bytecode::template::func_flags::KIND_ARROW,
@@ -173,7 +172,6 @@ struct G<'a, 'c> {
     /// Variables the site's statement assigns (`let`, declared with the temporaries).
     lets: Vec<String>,
     ntemps: usize,
-    go_done: bool,
     block_index: usize,
     uses_arguments: bool,
     arrow: bool,
@@ -282,19 +280,11 @@ impl G<'_, '_> {
         if t.is_empty() { s("") } else { P::S(t) }
     }
 
-    /// The statement at the site, after the dump's callback and the temporaries.
+    /// The statement at the site, after the temporaries. (The dump's callback ran at
+    /// the ends of the blocks, D2907.)
     fn with_go(&mut self, parts: P) -> P {
         let t = self.flush_temps();
-        if self.go_done {
-            return P::L(alloc::vec![t, parts]);
-        }
-        self.go_done = true;
-        let go = self.ctx.go();
-        P::L(alloc::vec![
-            P::S(if go.is_empty() { go } else { cat!(go, "\n") }),
-            t,
-            parts
-        ])
+        P::L(alloc::vec![t, parts])
     }
 
     /// The original's text `[a, b)`, with `arguments` renamed (the continuation's own
@@ -393,19 +383,19 @@ impl G<'_, '_> {
                 early.push_out(line);
             }
         }
-        let content = self.ctx.block(self.block_index, &info)?;
+        let block = self.block_index;
+        let content = self.ctx.block(block, &info)?;
         self.block_index += 1;
         let mut lines = early;
         if !content.is_empty() {
             lines.push_out(content);
         }
         lines.extend(late);
-        if !after.is_empty() && !self.go_done {
-            self.go_done = true;
-            let go = self.ctx.go();
-            if !go.is_empty() {
-                lines.push_out(go);
-            }
+        // The part of the dump's callback that needs this block's code, before the
+        // bindings that take what it makes and the code nested in the block (D2907).
+        let go = self.ctx.go(block);
+        if !go.is_empty() {
+            lines.push_out(go);
         }
         lines.extend(after);
         Ok(P::S(join(&lines, "\n")))

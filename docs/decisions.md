@@ -9517,6 +9517,22 @@ RAW GZIP`; a case is the directory of its dumps). A case that grows past its lin
 than 8 bytes and 0.1% raw or 0.5% gzip) fails the gate leg; a new case, a removed one, or
 one that shrank only asks for `--update`, which rewrites the suites' lines.
 
+## D2907: A continuation's callback runs in parts, at the ends of the blocks it needs
+date: 2026-11-04 · by: pjs · issue: 0207
+A plain dump's callback (`$dump.gaN()`, what the dump makes inside a continuation because
+it needs the closures, classes or continuations the continuation's blocks make) ran once,
+at the first block with a binding that takes its values, else at the site's statement.
+pjz's fuzzer found both ways that fails: a loop scaffold's head (`const $djs_i1 =
+$dump.a9` of a `for await` over a suspended generator) read a value the callback made only
+later, at the site; and a callback placed after the top block needed a continuation a
+loop's block made later. Now the callback is split by the continuation's block each of
+its entries needs (the latest block that makes a factory key the entry, or an entry it
+depends on, uses): part `b` (`$dump.gaN_b()`) runs at the end of block `b`'s code, before
+the bindings of `b` that take its values and before everything nested in `b`, so loop
+heads and bindings see what the callback made for their block. Statements and calls keep
+their order among themselves. A binding whose value only a deeper block's part makes is
+refused.
+
 ## D2875: `yield*` in plain continuations: a `yield*` over a wrapper of the inner record
 date: 2026-11-05 · by: pjr · issue: 0203
 At a `yield*` site, `K` delegates again with `yield* $dump.Y(it, next, async, ...first)`.

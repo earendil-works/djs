@@ -60,10 +60,12 @@ pub(crate) const HELPERS: &[(&str, &str)] = &[
     // A `using` resource added again (D2876): its saved dispose method called on its
     // value; the exporter reads `$djs_v`/`$djs_m` back.
     // An object literal's method, getter or setter after a continuation's site (D2880):
-    // defined on the object with its descriptor from a literal of its own.
+    // defined on the object with its descriptor from a literal of its own. A getter's
+    // descriptor has no `set` (nor a setter's a `get`), as the literal's definition: a
+    // getter and a setter of one key make one accessor (0207).
     (
         "DD",
-        "(o, src) => Object.defineProperties(o, Object.getOwnPropertyDescriptors(src))",
+        "(o, src) => { for (const k of Reflect.ownKeys(src)) { const d = Reflect.getOwnPropertyDescriptor(src, k); if ('get' in d) { if (d.get === undefined) delete d.get; if (d.set === undefined) delete d.set; } Object.defineProperty(o, k, d); } return o; }",
     ),
     (
         "U",

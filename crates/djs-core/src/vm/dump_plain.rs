@@ -485,8 +485,9 @@ pub(super) trait Ctx {
     fn rereads(&self, slot: &str) -> bool;
     /// The code the dump puts in the continuation's block `index`.
     fn block(&mut self, index: usize, info: &[BDecl]) -> Result<String, String>;
-    /// The call of the dump's callback, or "".
-    fn go(&self) -> String;
+    /// The call of the part of the dump's callback that runs once block `block` of the
+    /// continuation has its code, or "" (D2907).
+    fn go(&self, block: usize) -> String;
     fn awaiting(&self) -> String;
 }
 
@@ -516,12 +517,15 @@ struct AState {
     pre: Vec<(String, String)>,
     after_go: Vec<String>,
     needs_go: bool,
-    go: String,
+    /// The calls of its callback's parts, by the block of the continuation each runs at
+    /// the end of (D2907).
+    go: Vec<String>,
     k: Option<KText>,
     blocks_done: bool,
 }
 
 /// One entry of the schedule: an item, or an activation's call with its callback.
+#[derive(Clone)]
 enum Plan {
     Item(usize),
     Call(usize, Option<Vec<Plan>>),
@@ -888,11 +892,15 @@ impl Ctx for C<'_, '_> {
         Ok(join(&lines, "\n"))
     }
 
-    fn go(&self) -> String {
+    fn go(&self, block: usize) -> String {
         if self.dry {
             String::new()
         } else {
-            self.w.acts[self.a].go.clone()
+            self.w.acts[self.a]
+                .go
+                .get(block)
+                .cloned()
+                .unwrap_or_default()
         }
     }
 
@@ -1301,6 +1309,11 @@ impl W<'_> {
     /// The activation whose continuation makes key `key` of factory `name`; `Ok(None)`
     /// when the factory makes it.
     fn creator_of(&mut self, name: &str, key: &str) -> R<Option<usize>> {
+        Ok(self.creator_block(name, key)?.map(|x| x.0))
+    }
+
+    /// [`W::creator_of`] and the block of its continuation the key is made in.
+    fn creator_block(&mut self, name: &str, key: &str) -> R<Option<(usize, usize)>> {
         let ir = self.ir;
         let Some(f) = ir.factories.iter().position(|x| x.name == name) else {
             return Ok(None);
@@ -1336,7 +1349,7 @@ impl W<'_> {
                 return refuse("cyclic placement");
             }
             match q {
-                Pl::Block(a, _) => return Ok(Some(a)),
+                Pl::Block(a, b) => return Ok(Some((a, b))),
                 Pl::Fac(sc) if self.parent_scope(sc).is_none() => return Ok(None),
                 _ => {}
             }
@@ -2023,10 +2036,23 @@ impl W<'_> {
             match p {
                 Plan::Call(a, cb) => {
                     if let Some(cb) = cb {
-                        let name = cat!("$dump.g", ir.acts[*a].name);
-                        self.acts[*a].go = cat!(name, "();");
-                        let inner = self.emit_list(cb, depth + 1, hoisted)?;
-                        lines.push_out(cat!(name, " = () => {\n", join(&inner, "\n"), "\n};"));
+                        let parts = self.split_callback(*a, cb)?;
+                        let mut go = Vec::new();
+                        for (b, part) in parts.iter().enumerate() {
+                            if part.is_empty() {
+                                go.push_out(String::new());
+                                continue;
+                            }
+                            let name = if b == 0 {
+                                cat!("$dump.g", ir.acts[*a].name)
+                            } else {
+                                cat!("$dump.g", ir.acts[*a].name, "_", b)
+                            };
+                            go.push_out(cat!(name, "();"));
+                            let inner = self.emit_list(part, depth + 1, hoisted)?;
+                            lines.push_out(cat!(name, " = () => {\n", join(&inner, "\n"), "\n};"));
+                        }
+                        self.acts[*a].go = go;
                     }
                     lines.extend(self.call_text(*a)?);
                 }
@@ -2060,6 +2086,110 @@ impl W<'_> {
             }
         }
         Ok(lines)
+    }
+
+    /// Activation `a`'s callback split by the block of its continuation each entry
+    /// needs (D2907): an entry that uses what block `b`'s code makes (a closure, a class,
+    /// a continuation of the frame's scopes) runs at the end of block `b`, so that the
+    /// continuation's loops and bindings around and below `b` already see what it makes.
+    /// An entry runs in the part of the latest block it or the entries it depends on need;
+    /// statements and calls keep their order among themselves (property order, side
+    /// effects).
+    fn split_callback(&mut self, a: usize, cb: &[Plan]) -> R<Vec<Vec<Plan>>> {
+        let mut items: Vec<Vec<usize>> = Vec::new();
+        let mut parts: Vec<usize> = Vec::new();
+        let mut ordered = 0;
+        for e in cb {
+            let mine = self.plan_items(e);
+            let mut part = 0;
+            let mut deps: Vec<usize> = Vec::new();
+            for &i in &mine {
+                for k in self.keys_in(&self.items[i].text.clone(), false) {
+                    if let Key::Factory(n, key) = k
+                        && let Some((b_act, b)) = self.creator_block(&n, &key)?
+                        && b_act == a
+                    {
+                        part = part.max(b);
+                    }
+                }
+                deps.extend(self.items[i].deps.iter().copied());
+                deps.extend(self.items[i].start_deps.iter().copied());
+            }
+            if let Plan::Call(a2, _) = e {
+                for k in self.keys_in(&self.kref(*a2), false) {
+                    if let Key::Factory(n, key) = k
+                        && let Some((b_act, b)) = self.creator_block(&n, &key)?
+                        && b_act == a
+                    {
+                        part = part.max(b);
+                    }
+                }
+            }
+            for (j, its) in items.iter().enumerate() {
+                if deps.iter().any(|d| its.contains(d)) {
+                    part = part.max(parts[j]);
+                }
+            }
+            let keeps_order = match e {
+                Plan::Call(..) => true,
+                Plan::Item(i) => self.items[*i].kind == IK::Stmt,
+            };
+            if keeps_order {
+                part = part.max(ordered);
+                ordered = part;
+            }
+            items.push_out(mine);
+            parts.push_out(part);
+        }
+        // A binding declared after the callback takes a value its own block's part
+        // makes, or an earlier one's.
+        let act_item = self.act_item(a);
+        if act_item != usize::MAX {
+            for (k, ds) in self.items[act_item].slot_deps.clone() {
+                if !self.acts[a].after_go.contains(&k) {
+                    continue;
+                }
+                let block = self.acts[a]
+                    .blocks
+                    .iter()
+                    .position(|b| b.iter().any(|d| d.sname.as_deref() == Some(k.as_str())));
+                let need = items
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, its)| ds.iter().any(|d| its.contains(d)))
+                    .map(|(j, _)| parts[j])
+                    .max();
+                if let (Some(b), Some(p)) = (block, need)
+                    && p > b
+                {
+                    return refuse(
+                        "a binding whose value a deeper block of its continuation makes",
+                    );
+                }
+            }
+        }
+        let n = parts.iter().copied().max().map_or(0, |m| m + 1);
+        let mut out: Vec<Vec<Plan>> = (0..n).map(|_| Vec::new()).collect();
+        for (e, p) in cb.iter().zip(parts) {
+            out[p].push_out(e.clone());
+        }
+        Ok(out)
+    }
+
+    /// The items an entry of a plan stands for: an item, or an activation and what its
+    /// callback holds.
+    fn plan_items(&self, e: &Plan) -> Vec<usize> {
+        match e {
+            Plan::Item(i) => alloc::vec![*i],
+            Plan::Call(a, cb) => {
+                let mut v = alloc::vec![self.act_item(*a)];
+                for x in cb.iter().flatten() {
+                    v.extend(self.plan_items(x));
+                }
+                v.retain(|&i| i != usize::MAX);
+                v
+            }
+        }
     }
 
     fn kref(&self, a: usize) -> String {
