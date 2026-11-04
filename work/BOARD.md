@@ -8,6 +8,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0203 | Plain encodings for remaining refusals (step 4) | pjr (after pjx) | .worktrees/pjx |
 | 0207 | Make plain dumps small (owner priority): header "djs-dump", helpers and source(ref) on host-provided $djs (D2834, D2835), record cuts, liveness pruning | pjs | .worktrees/pjs |
+| 0205 | Retire format 2 (step 6) | pjf | .worktrees/pjf |
+| 0208 | Fuzz plain dumps (generated codemode-like programs, every idle point, djs+node) | pjz | .worktrees/pjz |
 
 ## Open (ready)
 
@@ -18,7 +20,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0205 | Retire format 2 (step 6) | 0203 |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
 | - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |

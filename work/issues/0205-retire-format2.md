@@ -3,7 +3,7 @@
 status: open
 agent: -
 branch: issue/0205-retire-format2
-depends-on: 0203, 0204
+depends-on: 0203 (closing), 0204
 guide: docs/guide/snapshots.md, suspension.md, host.md
 touches: vm/dump_load.rs, dump_resume.rs, dump_prims.rs, compiler recording at load, tests/dump, docs/continuation-dumps.md, guide snapshots/suspension/host
 
