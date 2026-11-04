@@ -277,17 +277,18 @@ fn abort_after_out_of_fuel() {
     vm_free(vm);
 }
 
+/// The base a VM starts from (the module's coded base, decoded) is the image of a realm
+/// built here: what `vm_new_compiled` (feature `compiled-prelude`) makes, built directly,
+/// so that the default test run checks it. `prepare_base_image` leaves the canonical
+/// image; a collection after it would not (the first collection after a canonical image
+/// is full and resets `Roots::MINORS`, D2045), which is why the test with one failed.
 #[test]
-#[cfg(feature = "compiled-prelude")]
 fn base_equals_a_compiled_realm() {
     let base = vm_new(0);
-    let compiled = vm_new_compiled(0);
-    assert_ne!(compiled, 0);
-    assert_eq!(vm_collect(compiled), 0);
-    let bytes = |vm| with(|s| s.slot(vm).vm.bytes().to_vec());
-    assert!(bytes(base) == bytes(compiled));
+    let mut compiled = Vm::new(options(0)).unwrap();
+    compiled.prepare_base_image().unwrap();
+    assert!(with(|s| s.slot(base).vm.bytes() == compiled.bytes()));
     vm_free(base);
-    vm_free(compiled);
 }
 
 #[test]
