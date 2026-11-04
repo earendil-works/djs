@@ -952,6 +952,25 @@ pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32) -> i
     })
 }
 
+/// Deletes own property staging[0..name_len] of object `obj` (a handle): a host's
+/// globals that live only while a plain dump loads (`$djs`, D2890). Returns 0 (also when
+/// there was none), or -1 if `obj` is not an object or the property is not configurable.
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_delete(vm: u32, obj: u32, name_len: usize) -> i32 {
+    with(|s| {
+        let (slot, staging) = s.vm_and_staging(vm);
+        let name = staged_str(staging, 0, name_len).to_owned();
+        let Some(o) = slot.value(obj).as_object() else {
+            return -1;
+        };
+        let heap = slot.vm.heap_mut();
+        match heap.atom_str(&name).map(|k| heap.delete_own_property(o, k)) {
+            Ok(Ok(true)) => 0,
+            _ => -1,
+        }
+    })
+}
+
 /// Writes the idle VM as a format 2 dump (`Vm::dump`, 0167, 0172; docs/functions-as-code.md,
 /// docs/continuation-dumps.md) to the out buffer: its global bindings, and what is in
 /// flight (suspended activations, open host calls, pending promises). staging[0..len] is
