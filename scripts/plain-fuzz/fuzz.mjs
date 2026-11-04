@@ -379,7 +379,7 @@ if (argv[0] === "check") {
   process.exit(r.fails.length ? 1 : 0);
 } else if (argv[0] === "reduce") {
   const sig = flag("--sig", "");
-  const out = flag("-o", argv[1].replace(/\.js$/, "") + ".min.js");
+  const out = flag("-o", argv[1].replace(/\.([jt]s)$/, ".min.$1"));
   const deadline = Date.now() + Number(flag("--time", 600)) * 1000;
   await reduce(bin, argv[1], sig, out, deadline);
 } else if (argv[0] === "gen") {
