@@ -271,13 +271,49 @@ impl From<HeapError> for PErr {
 
 pub(super) type PResult<T> = Result<T, PErr>;
 
+/// Runs `f` on a parser of `src`. With the dumper, a scan for patterns stops at the
+/// first literal that shows a group is none (compiler/scan.rs), which can change which
+/// error a program that is not valid gets: after a syntax error the source is parsed
+/// again with exact scans, so errors stay what they were. Valid programs compile the
+/// same either way (0198).
+#[cfg(feature = "dump")]
+fn parse<T>(
+    heap: &mut Heap,
+    src: &[u8],
+    opts: &CompileOptions<'_>,
+    f: impl Fn(parser::Parser<'_, '_>) -> PResult<T>,
+) -> PResult<T> {
+    let mut exact = false;
+    loop {
+        let r = parser::Parser::new(heap, src, opts).and_then(|mut p| {
+            p.pat_scan.exact = exact;
+            f(p)
+        });
+        match r {
+            Err(e) if !exact && matches!(*e.0, PErrKind::Syntax { .. }) => exact = true,
+            r => return r,
+        }
+    }
+}
+
+/// Runs `f` on a parser of `src` (the scans are always exact without the dumper).
+#[cfg(not(feature = "dump"))]
+fn parse<T>(
+    heap: &mut Heap,
+    src: &[u8],
+    opts: &CompileOptions<'_>,
+    f: impl FnOnce(parser::Parser<'_, '_>) -> PResult<T>,
+) -> PResult<T> {
+    parser::Parser::new(heap, src, opts).and_then(f)
+}
+
 /// Compiles `src` (UTF-8) into a function template.
 pub fn compile(
     heap: &mut Heap,
     src: &[u8],
     opts: &CompileOptions<'_>,
 ) -> Result<Ref, CompileError> {
-    let result = parser::Parser::new(heap, src, opts).and_then(|p| p.compile());
+    let result = parse(heap, src, opts, |p| p.compile());
     result.map(|(t, ..)| t).map_err(|e| error_at(src, e))
 }
 
@@ -303,7 +339,7 @@ pub fn compile_with_maps(
     src: &[u8],
     opts: &CompileOptions<'_>,
 ) -> Result<(Ref, Vec<smap::FunctionMap>), CompileError> {
-    let result = parser::Parser::new(heap, src, opts).and_then(|p| p.compile_maps());
+    let result = parse(heap, src, opts, |p| p.compile_maps());
     result
         .map(|(t, maps)| {
             let maps = maps
@@ -394,9 +430,10 @@ pub fn compile_dynamic_function(
         goal: Goal::Script,
         ..*opts
     };
-    parser::Parser::new(heap, src, &opts)
-        .and_then(|p| p.compile_dynamic(flavor, params_close))
-        .map_err(|e| error_at(src, e))
+    parse(heap, src, &opts, |p| {
+        p.compile_dynamic(flavor, params_close)
+    })
+    .map_err(|e| error_at(src, e))
 }
 
 /// TypeScript erasure for the strip-types oracle (TESTING.md): compiles `src` with the
@@ -412,7 +449,7 @@ pub fn strip_types(
         typescript: true,
         ..*opts
     };
-    let result = parser::Parser::new(heap, src, &opts).and_then(|mut p| {
+    let result = parse(heap, src, &opts, |mut p| {
         p.erased = Some(Vec::new());
         p.strip = true;
         p.compile()

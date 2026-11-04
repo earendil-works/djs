@@ -133,6 +133,12 @@ fn classify(t: &Token) -> Follow {
 /// follows every `{`/`[` group closed inside it, so nested literals are not rescanned.
 #[derive(Default)]
 pub(super) struct PatternScan {
+    /// Scan every group to its end, also one that cannot be a pattern: the compile again
+    /// after a syntax error (compiler/mod.rs `parse`), so that errors stay the same.
+    /// Only the dumper's builds stop early (data-heavy dumps); the shipped modules keep
+    /// their size.
+    #[cfg(feature = "dump")]
+    pub exact: bool,
     start: u32,
     end: u32,
     /// `(start offset of the bracket, what follows its closer)`, sorted.
@@ -168,13 +174,22 @@ impl PatternScan {
         // Parallel to `s.stack`: the start of each open `{`/`[`.
         let mut opens: Vec<Option<u32>> = alloc::vec![Some(open.start)];
         let mut pending: Option<u32> = None;
+        #[cfg(feature = "dump")]
+        let mut early = EarlyStop::new(self.exact);
         let mut end = open.end;
         while !s.stack.is_empty() {
             let before = s.stack.len();
+            #[cfg(feature = "dump")]
+            let (prev, group) = (s.prev.kind, s.stack.last().copied());
             let Some(tok) = s.next() else {
                 self.entries.clear();
                 return Follow::Other;
             };
+            #[cfg(feature = "dump")]
+            if early.stops(prev, group, &tok, s.stack.len().cmp(&before)) {
+                self.entries.clear();
+                return Follow::Other;
+            }
             if let Some(p) = pending.take() {
                 self.entries.push_out((p, classify(&tok)));
             }
@@ -195,6 +210,67 @@ impl PatternScan {
         self.start = open.start;
         self.end = end;
         follow
+    }
+}
+
+/// Where a pattern scan can stop early (with the dumper only, compiler/mod.rs `parse`):
+/// a literal that is a whole element or property value of a group where a nested
+/// pattern could be (an element, a property's value) shows that the scanned literal is
+/// no pattern, once its group's `,` or closer follows. A dump's data was lexed twice to
+/// its end (0198).
+#[cfg(feature = "dump")]
+struct EarlyStop {
+    exact: bool,
+    /// Per open group: whether a nested pattern could be there.
+    nested: Vec<bool>,
+    /// The last token was such a literal.
+    literal: bool,
+}
+
+#[cfg(feature = "dump")]
+impl EarlyStop {
+    fn new(exact: bool) -> EarlyStop {
+        EarlyStop {
+            exact,
+            nested: alloc::vec![true],
+            literal: false,
+        }
+    }
+
+    /// With `tok` read after `prev` inside `group`, `depth` how it moved the nesting:
+    /// whether the scan can stop.
+    fn stops(
+        &mut self,
+        prev: TokenKind,
+        group: Option<u8>,
+        tok: &Token,
+        depth: core::cmp::Ordering,
+    ) -> bool {
+        use TokenKind::*;
+        let element = self.nested.last() == Some(&true)
+            && match group {
+                Some(b'[') => matches!(prev, LBracket | Comma),
+                Some(b'{') => prev == Colon,
+                _ => false,
+            };
+        if self.literal && !self.exact && matches!(tok.kind, Comma | RBracket | RBrace) {
+            return true;
+        }
+        self.literal = element
+            && matches!(
+                tok.kind,
+                String | Number | BigInt | NoSubstTemplate | True | False | Null
+            );
+        match depth {
+            core::cmp::Ordering::Greater => self
+                .nested
+                .push_out(element && matches!(tok.kind, LBrace | LBracket)),
+            core::cmp::Ordering::Less => {
+                self.nested.pop();
+            }
+            core::cmp::Ordering::Equal => {}
+        }
+        false
     }
 }
 
@@ -421,13 +497,35 @@ mod tests {
             ]
         );
         // The first scan covered the nested groups: they come from the memo.
-        let mut lx = Lexer::new(b"[[[1], 2]] = x").unwrap();
+        let mut lx = Lexer::new(b"[[[a], b]] = x").unwrap();
         let open = lx.next_token().unwrap();
         assert_eq!(memo.follow(lx, open), Assign);
         assert_eq!(memo.entries.len(), 3);
         let inner = lx.next_token().unwrap();
         assert_eq!(memo.follow(lx, inner), ElemEnd);
         assert_eq!(memo.entries.len(), 3);
+        // A literal element or property value ends the scan: no pattern, no memo. A
+        // literal elsewhere (a default, a key, inside a call or a function) does not.
+        #[cfg(feature = "dump")]
+        for (src, follow) in [
+            ("[a, 1, [b] = c] = d", Other),
+            ("[{x: \"big\"}, [f()]] = d", Other),
+            (
+                "[a = 1, {k: v = 2}, {[1]: w}, o[\"k\"], f(1).x, () => { a: 1 }] = d",
+                Assign,
+            ),
+        ] {
+            let mut lx = Lexer::new(src.as_bytes()).unwrap();
+            let open = lx.next_token().unwrap();
+            let mut memo = PatternScan::default();
+            assert_eq!(memo.follow(lx, open), follow, "{src}");
+            assert_eq!(memo.entries.is_empty(), follow == Other, "{src}");
+            let mut memo = PatternScan {
+                exact: true,
+                ..Default::default()
+            };
+            assert_eq!(memo.follow(lx, open), Assign, "{src}");
+        }
         let mut lx = Lexer::new(b"for ([a] of b)").unwrap();
         lx.next_token().unwrap();
         lx.next_token().unwrap();
