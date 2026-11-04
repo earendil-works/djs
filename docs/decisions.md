@@ -9621,12 +9621,14 @@ date: 2026-11-05 · by: pjk · issue: 0210
 An array pattern's close handler (and `yield*`'s throw handler, and the iterator closes
 of `return` inside a pattern) gets its stack depth relative to a label, read from the
 final code's stack walk. In code after `return`, `throw`, `break` and the like that
-label has no depth, so when the relative depths stop resolving, the compiler finds what
-is reachable from the function's entry alone, adding a handler only once code in its
-region is reached, and drops every handler that never was (absolute ones too). They can
-never fire, and keeping them would make the stack checker enter their targets at a
-made-up depth (a `yield*` throw path rejoins its loop and would underflow). Not chosen:
-skipping dead statements in the compiler (early errors and hoisting still need them
-parsed and the region bookkeeping is spread over many emitters), or giving dead
-handlers an arbitrary depth. Functions without dead relative handlers take the old path
-and walk their code as often as before.
+label has no depth. So in a function with such handlers, the compiler finds what is
+reachable from the entry alone, adding a handler as an entry point of the walk only
+once code in its region is reached, and drops every handler that never was (absolute
+ones too). They can never fire, and keeping them would make the stack checker enter
+their targets at a made-up depth (a `yield*` throw path rejoins its loop and would
+underflow), while a dead absolute handler would make the dead pattern region around it
+look live. Functions with no relative handler keep their table as emitted and are not
+walked. Not chosen: skipping dead statements in the compiler (early errors and hoisting
+still need them parsed, and the region bookkeeping is spread over many emitters), or
+giving dead handlers an arbitrary depth. A first version kept the old loop and ran this
+pass only when it stalled; the single loop is 570 bytes smaller in the slim module.

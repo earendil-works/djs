@@ -31,6 +31,11 @@ break/continue/throw, inside try/finally), and add tests. Decision IDs D2960–D
   from the entry alone, activating a handler (resolving its relative depth) once code in
   its region is reached, and drops all handlers never activated. Fast path unchanged.
   D2960.
+- First merge attempt failed the gate's slim size ratchet (+460 bytes gzip over main;
+  ceiling had 162 bytes of room). Replaced the two loops by a single one: when a function
+  has relative handlers, all handlers start inactive and are activated as their regions
+  are reached; the loop stops once all are active, so live code still takes one walk in
+  the common case. Slim module now 377,925 (main 378,039).
 - Tests: `compiler::tests::dead_pattern_handlers_dropped` (handler counts + runs),
   corpus case `language/dead-code-patterns.js` (34 shapes, live patterns beside dead
   ones, idle points); passes plain, --suspend-every 1/97, --gc-stress, --determinism,
@@ -43,8 +48,8 @@ break/continue/throw, inside try/finally), and add tests. Decision IDs D2960–D
 ## Result
 Functions with array-pattern defaults (or `yield*`, or `yield` inside patterns) in
 unreachable code compile and run. When relative handler depths stop resolving, the
-compiler (`drop_dead_handlers` in compiler/resolve.rs) recomputes reachability from the
-entry and drops every exception handler no execution reaches (D2960); code without such
-handlers compiles exactly as before. Tests: `compiler::tests::dead_pattern_handlers_dropped`
+compiler (`resolve_relative_depths` in compiler/resolve.rs) finds reachability from the
+entry and drops every exception handler no execution reaches (D2960); functions without
+relative handlers compile exactly as before. Tests: `compiler::tests::dead_pattern_handlers_dropped`
 and the corpus case `tests/corpus/language/dead-code-patterns.js`. Known gaps: none
 found; dead code is still emitted (only its handlers go).
