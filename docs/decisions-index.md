@@ -645,3 +645,4 @@ topics when the index is next reorganized.
 - D2901: The plain dump size score
 - D2902: Anonymous closures in a scope factory are written as `key: (0, f)`
 - D2875: `yield*` in plain continuations: a `yield*` over a wrapper of the inner record
+- D2836: Plain dumps are written only for VMs with frozen builtins

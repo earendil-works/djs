@@ -9470,3 +9470,11 @@ and a yield. The dump's async-from-sync iterator gained `throw`. Literals rewrit
 `$dump.D` calls mark them for origin tracking, and their computed keys are converted
 first (`$dump.P`), as the original converts them before the value. An array literal of
 `K` that appends maps to the original's.
+
+## D2836: Plain dumps are written only for VMs with frozen builtins
+date: 2026-11-04 · by: owner · issue: 0207
+Only the frozen-builtins mode (D022, D2304; pi's next mode has it, D2652) needs dumps, so
+the plain exporter requires it and refuses otherwise. It may then assume no builtin changes
+between the original evaluation and the load: an already-evaluated operand that resolves to
+a builtin (`results.push`, an iterator's `next`) is written as its original expression or
+its builtin path, with no saved temporaries and no checks.
