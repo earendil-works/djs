@@ -36,9 +36,11 @@ pub(crate) const HELPERS: &[(&str, &str)] = &[
     ("A", "Object.assign"),
     // An iterable over a saved iterator record whose first step is a placeholder: the
     // rest of the current iteration runs in it, the next ones take the iterator's steps.
+    // `set(it, next)` gives it the record later, where the dump's callback makes the
+    // iterator inside the loop's first iteration (D2910).
     (
         "L",
-        "(it, next) => { let first = true; const r = { next() { if (first) { first = false; return { value: undefined, done: false }; } return Reflect.apply(next ?? it.next, it, []); }, get return() { const m = it.return; return m == null ? m : (...v) => Reflect.apply(m, it, v); }, [Symbol.iterator]() { return r; } }; return r; }",
+        "(it, next) => { let first = true; const r = { next() { if (first) { first = false; return { value: undefined, done: false }; } return Reflect.apply(next ?? it.next, it, []); }, get return() { const m = it.return; return m == null ? m : (...v) => Reflect.apply(m, it, v); }, set(i, n) { it = i; next = n; }, [Symbol.iterator]() { return r; } }; return r; }",
     ),
     // The same without the placeholder (a pattern's element whose step is to come, a loop
     // going on after the rest of its iteration; `next` left out: the iterator's own), and

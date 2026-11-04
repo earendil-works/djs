@@ -1118,9 +1118,23 @@ impl G<'_, '_> {
         } else {
             self.next_method(&cat!(c, ".next@", n.start))?
         };
-        if self.made_later(&it) || self.made_later(&next) {
-            return no("a loop's iterator that the dump's callback makes inside the loop");
-        }
+        // An iterator the dump's callback makes inside the loop's first iteration: the
+        // wrapper takes it once that part ran (D2910).
+        let late = if self.made_later(&it) || self.made_later(&next) {
+            let w = self.fresh(cat!("$djs_w", i));
+            let cur = self.block_index.saturating_sub(1);
+            let p = [&it, &next]
+                .iter()
+                .filter_map(|v| self.ctx.made_in(v))
+                .max()
+                .filter(|&p| p > cur)
+                .unwrap_or(cur + 1);
+            self.deferred
+                .push_out((p, Vec::new(), P::S(cat!(w, ".set(", it, ", ", next, ");"))));
+            Some(w)
+        } else {
+            None
+        };
         let head = n
             .parts
             .iter()
@@ -1154,19 +1168,21 @@ impl G<'_, '_> {
             let u = self.using_readd(i)?;
             (P::L(alloc::vec![d, s("\n"), u]), self.stmt(i + 1, None)?)
         };
+        let (pre, wrapper) = match &late {
+            Some(w) => (cat!("let ", w, "; "), cat!(w, " = $djs_L()")),
+            None => (String::new(), cat!("$djs_L(", it, ", ", next, ")")),
+        };
         Ok(P::L(alloc::vec![
-            P::S(cat!("{ let ", f, " = true; ")),
+            P::S(cat!(pre, "{ let ", f, " = true; ")),
             label.unwrap_or_else(|| s("")),
             // (At the loop's own start: its temporaries are named by it.)
             m,
             P::S(cat!(
                 "for (const ",
                 v,
-                " of $djs_L(",
-                it,
-                ", ",
-                next,
-                ")) { if (",
+                " of ",
+                wrapper,
+                ") { if (",
                 f,
                 ") { ",
                 f,
