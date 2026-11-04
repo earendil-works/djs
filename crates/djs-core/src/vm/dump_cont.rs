@@ -96,25 +96,22 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
         (false, suspend::GENERATOR) => "function* () {\n",
         (false, _) => "async function* () {\n",
     };
-    let parts = match &act.super_proto {
+    match &act.super_proto {
         // A method of an object whose prototype is the original's home object's: its
-        // `super` reads what the original's does.
+        // `super` reads what the original's does. Offsets (`segs`, `scaf`) are in the
+        // method's own text, which is what origin tracking reads back.
         Some(p) => {
             let m = match act.kind {
                 suspend::ASYNC => "async K() {\n",
                 suspend::GENERATOR => "*K() {\n",
                 _ => "async *K() {\n",
             };
-            P::L(alloc::vec![
-                P::S(cat!("({ __proto__: ", p, ", ", m)),
-                P::Helpers,
-                body,
-                s("\n} }).K")
-            ])
+            let mut k = g.flatten(P::L(alloc::vec![s(m), P::Helpers, body, s("\n}")]));
+            k.text = cat!("({ __proto__: ", p, ", ", k.text, " }).K");
+            Ok(k)
         }
-        None => P::L(alloc::vec![s(head), P::Helpers, body, s("\n}")]),
-    };
-    Ok(g.flatten(parts))
+        None => Ok(g.flatten(P::L(alloc::vec![s(head), P::Helpers, body, s("\n}")]))),
+    }
 }
 
 /// Whether `text` holds the identifier `name` (not as part of a longer one).

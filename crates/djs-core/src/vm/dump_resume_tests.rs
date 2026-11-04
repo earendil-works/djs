@@ -1726,7 +1726,8 @@ fn plain_dump_chains_continue_like_the_run() {
                         }
                     },
                     Err(e) => {
-                        refused.push(alloc::format!("{name}: {e}"));
+                        let why: Vec<&str> = e.lines().skip(1).map(str::trim).collect();
+                        refused.push(alloc::format!("{name}: {}", why.join(" | ")));
                         dumping = false;
                     }
                 }
@@ -1749,7 +1750,36 @@ fn plain_dump_chains_continue_like_the_run() {
             }
         }
     }
-    std::println!("plain dumps: {links} links, refused: {refused:#?}");
+    // Where chains stop: a ratchet like the single dumps' (the same variable updates it).
+    let path = fixture_dir().join("plain-chain-refusals.txt");
+    if std::env::var("DJS_UPDATE_PLAIN_REFUSALS").is_ok() {
+        let mut t = String::from(
+            "# Programs of tests/dump/v2 whose plain-dump chain is refused at some link (plain_dump_chains_continue_like_the_run).\n",
+        );
+        for r in &refused {
+            t.push_str(r);
+            t.push('\n');
+        }
+        std::fs::write(&path, t).unwrap();
+    }
+    let listed = std::fs::read_to_string(&path).unwrap_or_default();
+    let listed: Vec<&str> = listed.lines().filter(|l| !l.starts_with('#')).collect();
+    for r in &refused {
+        if !listed.contains(&r.as_str()) {
+            failed.push(alloc::format!(
+                "refused, not in plain-chain-refusals.txt: {r}"
+            ));
+        }
+    }
+    for l in &listed {
+        if !refused.iter().any(|r| r == l) {
+            std::println!("stale in plain-chain-refusals.txt: {l}");
+        }
+    }
+    std::println!(
+        "plain dumps: {links} links, {} chains refused",
+        refused.len()
+    );
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(links >= 10, "{links} links");
 }

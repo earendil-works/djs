@@ -31,6 +31,13 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
   constructed); in an arrow it is refused. Also: a site in the value of a computed key
   takes the key from `object.key@`. v2 refusals 88 -> 68; corpus plain-node unchanged
   (1187 links, 0 differ).
+- pjr: the first merge's gate caught a chain bug the djs-core chain test let through (a
+  method continuation's `segs`/`scaf` counted from the `({ __proto__: ` wrapper, not the
+  method's own text). Fixed; the chain test's refusals are now a ratchet too,
+  tests/dump/v2/plain-chain-refusals.txt (same update variable), so a chain that stops
+  earlier fails. It lists 4 origin-tracking gaps for 0203: a frame with no value for
+  `call.callee`/`array.element` (stopped again inside its rewritten statement) and
+  `for-in.iterator` (for-in scaffold).
 
 ## Follow-ups
 
