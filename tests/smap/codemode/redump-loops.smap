@@ -1,49 +1,34 @@
-function <anonymous> @1..787
-  arg0 argument 0, arg1 argument 1
-  loc0 <state>, loc1 tools@0, loc2 console@0, loc3 x@291, loc8 g@308, loc9 h@308, loc10 x@450, loc20 r@594, loc21 n@594, loc22 f@594
-  node 0 Body @0..786: Params 6..22 Stmt 280..438 Stmt 439..568 Stmt 569..589 Stmt 590..763 Stmt 764..783 | Param tools@0#0 Param console@0#0
-  node 1 ForOf @280..438: Head 285..292 Iterable 296..302 Body 304..438 | Const x@291#0
-  node 2 Block @304..438: FuncDecl 308..358 FuncDecl 361..392 Stmt 395..436 | Function g@308#0 Function h@308#1
-  node 3 Expr @395..436: Operand 395..435
-  node 4 Call @395..435: Callee 395..406 Open 406..407 Arg 407..416 Arg 418..434
-  node 5 Await @407..416: Operand 413..416
-  node 6 ForOf @439..568: Head 444..451 Iterable 455..461 Body 463..568 | Const x@450#0
-  node 7 Block @463..568: Stmt 467..566
-  node 8 Try @467..566: Block 471..503 Finally 512..566
-  node 9 Block @512..566: Stmt 518..562
-  node 10 Expr @518..562: Operand 518..561
-  node 11 Call @518..561: Callee 518..529 Open 529..530 Arg 530..539 Arg 541..560
-  node 12 Await @541..560: Operand 547..560
-  node 13 Expr @569..589: Operand 569..588
-  node 14 Await @569..588: Operand 575..588
-  node 15 Block @590..763: Stmt 594..689 Stmt 692..702 FuncDecl 705..740 Stmt 743..761 | AwaitUsing r@594#0 Let n@594#1 Function f@594#2
-  await#1 @407 (7:15) pc 91: for-of.iterator@280 for-of.next@280 call.callee@395 call.this@395 (out: loc10 loc20 loc21 loc22)
+function <anonymous> @1..582
+  arg0 argument 0, arg1 console@0
+  loc0 <state>, loc1 tools@0, loc2 x@281, loc7 g@298, loc8 h@298, loc9 x@440
+  node 0 Body @0..581: Params 6..22 Stmt 270..428 Stmt 429..558 Stmt 559..578 | Param tools@0#0 Param console@0#0
+  node 1 ForOf @270..428: Head 275..282 Iterable 286..292 Body 294..428 | Const x@281#0
+  node 2 Block @294..428: FuncDecl 298..348 FuncDecl 351..382 Stmt 385..426 | Function g@298#0 Function h@298#1
+  node 3 Expr @385..426: Operand 385..425
+  node 4 Call @385..425: Callee 385..396 Open 396..397 Arg 397..406 Arg 408..424
+  node 5 Await @397..406: Operand 403..406
+  node 6 ForOf @429..558: Head 434..441 Iterable 445..451 Body 453..558 | Const x@440#0
+  node 7 Block @453..558: Stmt 457..556
+  node 8 Try @457..556: Block 461..493 Finally 502..556
+  node 9 Block @502..556: Stmt 508..552
+  node 10 Expr @508..552: Operand 508..551
+  node 11 Call @508..551: Callee 508..519 Open 519..520 Arg 520..529 Arg 531..550
+  node 12 Await @531..550: Operand 537..550
+  await#1 @397 (7:15) pc 83: for-of.iterator@270 for-of.next@270 call.callee@385 call.this@385 (out: loc9)
     path 0.1 1.2 2.2 3.0 4.2 5
-  await#2 @541 (13:28) pc 220: for-of.iterator@439 for-of.next@439 completion.kind@467 completion.value@467 call.callee@518 call.this@518 call.arg@530 (out: loc3 loc8 loc9 loc20 loc21 loc22)
+  await#2 @531 (13:28) pc 208: for-of.iterator@429 for-of.next@429 completion.kind@457 completion.value@457 call.callee@508 call.this@508 call.arg@520 (out: loc2 loc7 loc8)
     path 0.2 6.2 7.0 8.1 9.0 10.0 11.3 12
-  await#3 @569 (16:1) pc 273: - (out: loc3 loc8 loc9 loc10 loc20 loc21 loc22)
-    path 0.3 13.0 14
-  await-using#1 @763 (22:2) pc 367: using.record@606 completion.kind@606 completion.value@606 (out: loc3 loc8 loc9 loc10)
-    path 0.4 15
-function g @309..359
+function g @299..349
   loc0 <state>
   node 0 Body @0..50: Params 16..18 Stmt 21..48
   node 1 Return @21..48: Operand 28..47
   node 2 Await @28..47: Operand 34..47
   await#1 @28 (5:31) pc 20: -
     path 0.1 1.0 2
-function h @362..393
+function h @352..383
   loc0 <state>
   node 0 Body @0..31: Params 11..13 Stmt 16..29
   node 1 Expr @16..29: Operand 16..28
   node 2 Yield @16..28: Operand 22..28
   yield#1 @16 (6:19) pc 12: -
     path 0.1 1.0 2
-function <anonymous> @613..687
-  loc0 <state>
-  node 0 Body @0..74: Params 27..29 Stmt 32..72
-  node 1 Expr @32..72: Operand 32..71
-  node 2 Call @32..71: Callee 32..43 Open 43..44 Arg 44..49 Arg 51..70
-  node 3 Await @51..70: Operand 57..70
-  await#1 @51 (18:72) pc 30: call.callee@32 call.this@32 call.arg@44
-    path 0.1 1.0 2.3 3
