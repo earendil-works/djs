@@ -407,7 +407,7 @@ def run(argv):
         another commit under it): only then may a pass be cached or reported."""
         head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
         return head == sha and (not clean or subprocess.run(
-            ["git", "status", "--porcelain", "--untracked-files=normal"],
+            ["git", "status", "--porcelain", "--untracked-files=no"],
             capture_output=True, text=True).stdout == "")
 
     # Which legs run: not cached, selected, full-only only in full runs.
