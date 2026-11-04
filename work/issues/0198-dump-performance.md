@@ -96,5 +96,9 @@ dump-every-idle, idle-point counts at 100%).
   `atob`); the encoder writes bytes by 3-byte chunks; the dumper skipped a typed array's
   element keys only after `own_keys` made a million index atoms. binary dump/load
   15.6/28.8 -> 8.6/10.5 ms native.
+- Win 8 (compiler): the unit pool's hash of a long (>1 KB) flat string is its length and
+  ~256 sampled units, not SipHash of every unit (equal strings still hash equal; a match
+  is compared whole). log-5mb load 15 -> 10.8 ms, binary 10.5 -> 6.0 ms. Slim module now
+  376,652 B gzip of 376,679 (win 6 paid for it).
 
 ## Result
