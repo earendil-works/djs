@@ -1,6 +1,6 @@
 # 0209: Plain dump data bugs: accessors of factory closures, static private members, runtime-made objects
 
-status: in-progress
+status: done
 agent: pjd
 branch: issue/0209-plain-data-bugs
 depends-on: -
@@ -147,6 +147,32 @@ and rebase often. Decision IDs D2950–D2959.
 ## Follow-ups
 - dump_resume_tests.rs `plain_dump_chains_continue_like_the_run` still discounts lines
   that copy the runtime's code (`runtime_bytes`); after D2951 the allowance should be
-  unneeded (left alone: 0205 is deleting/moving that file).
+  unneeded (left alone: 0205 was deleting/moving that file).
+- Computed class keys (coordinator): they also run at class evaluation; the exporter
+  already refuses any but literals and well-known symbols (`computed_keys`/`stable_key`).
+  Writing other computed keys (e.g. as their evaluated key) is open.
+- A global `const` that a callback must write is still refused ("a global const
+  declaration inside a callback"); no case reaches it so far.
+- Dead format-2 branches in the exporter (0205's follow-up) are still there.
+- The decisions index needs D2950/D2951 (coordinator's file).
 
 ## Result
+Merged in two batches (main a4bd72fb, 8bfa2779):
+- `get: ,` and empty prototype references (bug 1, F): one cause, values whose location
+  is known only once a continuation runs. `expr_or_loc` writes a deferred reference that
+  `finish` resolves (or refuses as internal). E: shorthand keys only for identifiers.
+- Static private members (item 2): fixed by pjr (D2883).
+- Runtime-made objects (bug 3, D2951): `fromSync`'s iterator, `closeThrow`'s handler
+  and a step in flight are read back by their text and written as the helper calls
+  again (dump_flight_runtime.rs); −1.7 KB per re-dump of such a loop.
+- TS parameter properties (item 6): not erasable; the dump stays TypeScript. Also fixes
+  the REPL's top-level-await path for non-erasable TypeScript.
+- Static code (item 7, D2950): class text written with static blocks and static field
+  initializers blanked (compiler::class_spans, dump_statics.rs); literal static private
+  initializers stay, others are refused. toString shows the blanks after a load.
+- A global `let`/class assigned in a callback (item 8): declared at the top.
+- gate.py: link failures on any `.llvm.<n>` symbol count as incremental corruption.
+Cases: codemode/plain-accessors, plain-for-await-sync, plain-class-statics,
+plain-class-static-private (refusal), plain-class-static-loop, ts/plain-parameter-properties;
+pjz's fuzz cases for E/F/bug 1 now pass; dump_tests/dump_resume_tests cases 0205 avoided
+are restored. Guide: no page affected.
