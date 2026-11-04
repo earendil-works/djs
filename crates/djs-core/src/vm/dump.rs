@@ -4011,15 +4011,47 @@ type CheckTable = (Index, Vec<(u32, u32, FreeNames, u32)>);
 
 /// The checker's table of the dump `text` compiled to template `t`.
 fn check_table(scratch: &Heap, t: u32, text: &str) -> CheckTable {
+    // Every template after its parent, then each one's globals (its code's and its
+    // nested functions') gathered children first, so each code is read once (0198: a
+    // walk of the subtree per template was quadratic in nesting).
+    let mut ts: Vec<(u32, usize)> = alloc::vec![(t, usize::MAX)];
+    let mut i = 0;
+    while let Some(&(t, _)) = ts.get(i) {
+        for c in 0..template::child_count(scratch, t) {
+            if let Some(c) = template::child(scratch, t, c).and_then(|r| r.get()) {
+                ts.push_out((c, i));
+            }
+        }
+        i += 1;
+    }
+    let mut globals: Vec<Vec<Atom>> = alloc::vec![Vec::new(); ts.len()];
+    for i in (0..ts.len()).rev() {
+        let mut own = core::mem::take(&mut globals[i]);
+        for g in code_globals(scratch, ts[i].0) {
+            if !own.contains(&g) {
+                own.push_out(g);
+            }
+        }
+        if let Some(up) = globals.get_mut(ts[i].1) {
+            for &g in &own {
+                if !up.contains(&g) {
+                    up.push_out(g);
+                }
+            }
+        }
+        globals[i] = own;
+    }
     let mut by_text = Index::default();
     let mut written: Vec<(u32, u32, FreeNames, u32)> = Vec::new();
-    let mut stack = alloc::vec![t];
-    while let Some(t) = stack.pop() {
+    for (i, &(t, _)) in ts.iter().enumerate() {
         let info = template::debug_info(scratch, t);
         let (a, b) = (info.src_start, info.src_end);
         if let Some(src) = text.get(a as usize..b as usize) {
             let key = hash_text(src);
-            let names = free_names(scratch, t);
+            let names = FreeNames {
+                captures: capture_names(scratch, t),
+                globals: globals[i].iter().map(|&g| atom_text(scratch, g)).collect(),
+            };
             let first = by_text.get(key).unwrap_or(u32::MAX);
             // One entry per text and free names: a thousand closures of one factory
             // function are one entry.
@@ -4040,39 +4072,18 @@ fn check_table(scratch: &Heap, t: u32, text: &str) -> CheckTable {
                 written.push_out((a, b, names, first));
             }
         }
-        for i in 0..template::child_count(scratch, t) {
-            if let Some(c) = template::child(scratch, t, i).and_then(|r| r.get()) {
-                stack.push_out(c);
-            }
-        }
     }
     (by_text, written)
 }
 
 fn free_names(h: &Heap, t: u32) -> FreeNames {
-    let a = h.arena();
-    let names = template_names(h, t);
-    let locals = usize::from(a.get::<u16>(t, FuncTemplate::LOCALS));
-    let captures = usize::from(a.get::<u16>(t, FuncTemplate::CAPTURES));
-    let captures = names
-        .iter()
-        .skip(locals)
-        .take(captures)
-        .filter(|n| is_ident(n))
-        .cloned()
-        .collect();
     let mut globals = Vec::new();
     let mut stack = alloc::vec![t];
     while let Some(t) = stack.pop() {
-        for insn in crate::bytecode::insns(template::code(h, t)).flatten() {
-            if matches!(
-                insn.info().name,
-                "get_global" | "get_global_typeof" | "put_global"
-            ) {
-                let g = atom_text(h, insn.atom(0));
-                if !globals.contains(&g) {
-                    globals.push_out(g);
-                }
+        for g in code_globals(h, t) {
+            let g = atom_text(h, g);
+            if !globals.contains(&g) {
+                globals.push_out(g);
             }
         }
         for i in 0..template::child_count(h, t) {
@@ -4081,7 +4092,36 @@ fn free_names(h: &Heap, t: u32) -> FreeNames {
             }
         }
     }
-    FreeNames { captures, globals }
+    FreeNames {
+        captures: capture_names(h, t),
+        globals,
+    }
+}
+
+/// The names of template `t`'s captures that are identifiers.
+fn capture_names(h: &Heap, t: u32) -> Vec<String> {
+    let a = h.arena();
+    let locals = u32::from(a.get::<u16>(t, FuncTemplate::LOCALS));
+    let captures = u32::from(a.get::<u16>(t, FuncTemplate::CAPTURES));
+    let Some(n) = template::debug_info(h, t).names.get() else {
+        return Vec::new();
+    };
+    let len: u32 = a.get(n, U32Array::LEN);
+    (locals..(locals + captures).min(len))
+        .map(|i| atom_text(h, Atom::from_id(a.read::<u32>(U32Array::DATA.at(n, i)))))
+        .filter(|n| is_ident(n))
+        .collect()
+}
+
+/// The globals template `t`'s own code reads or writes by name, in code order.
+fn code_globals(h: &Heap, t: u32) -> impl Iterator<Item = Atom> + '_ {
+    crate::bytecode::insns(template::code(h, t))
+        .flatten()
+        .filter(|insn| {
+            use crate::bytecode::Op;
+            matches!(insn.op, Op::GetGlobal | Op::GetGlobalTypeof | Op::PutGlobal)
+        })
+        .map(|insn| insn.atom(0))
 }
 
 /// The current value of closure `f`'s captured variable `name`.
