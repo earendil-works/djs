@@ -57,6 +57,13 @@ merges (at most one every 1-2 hours), run the gate's checks locally first. Decis
 D2970-D2989.
 
 ## Log
+- Phase 1 (design): inventory and proposal in work/research/0213/README.md. Finding: the engine is
+  already generic about bodies (Script::PARAMS, D2617/D2882); the coupling is that dumps name host values
+  by global path expressions (dump.rs HostFunction writer, `host_values`), from which pi's `$djs.call`
+  (D2893), the D2618 `let tools = tools` case and the hosts' global lists follow. Proposal: identities +
+  one object per identity, bindings (globals, namespaces, body bindings, later imports) to identities,
+  `$djs.host(name)` hook in dumps, Sandbox `globals`/`bindings` options, CLI `--bind`. Sent to the
+  coordinator with open questions; waiting for OK before implementing.
 
 ## Follow-ups
 
