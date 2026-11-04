@@ -1,7 +1,7 @@
 # 0198: Make dumping and loading fast
 
-status: open
-agent: -
+status: in-progress
+agent: dumpperf
 branch: issue/0198-dump-perf
 depends-on: 0196
 guide: docs/guide/snapshots.md (dump costs) if numbers change
