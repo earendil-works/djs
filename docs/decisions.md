@@ -9632,3 +9632,16 @@ walked. Not chosen: skipping dead statements in the compiler (early errors and h
 still need them parsed, and the region bookkeeping is spread over many emitters), or
 giving dead handlers an arbitrary depth. A first version kept the old loop and ran this
 pass only when it stalled; the single loop is 570 bytes smaller in the slim module.
+
+## D2884: Re-dumps through loops, finally blocks and `using` scopes
+date: 2026-11-05 · by: pjr · issue: 0207
+Several re-dump refusals that pjz found by fuzzing are fixed. A function declared in a
+block is declared in `K` with `let` (strict code: it belongs to the block), so origin
+tracking finds it in the block where the original has it, not hoisted to `K`'s function.
+A `using` scope's disposal site right after a `}` that `K` copied maps to the original's
+end of that stretch. A finally scaffold's completion record applies only while `K` is in
+the scaffold (its constant is in scope); in a later iteration the copied `finally` is
+read like any copied text. A disposal continuation declares the scope's bindings first,
+so a function of the scope that shares a `let` has its variable. A continuation placed in
+an unmerged factory written inside another continuation's block waits for that
+activation (the callback), as one placed in the block does.

@@ -162,6 +162,13 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
 - WIP on branch issue/0207-source-ref (not merged): `$djs.source(name, hash)` for codemode
   bodies (DumpOptions::source_refs, script_hash, Vm::source_function, origin of
   KIND_ASYNC_BODY via the wrapper's map); hosts not done yet.
+- D2884: pjz's re-dump items 6 (functions/generators declared in loop bodies), 7 (`await
+  using` disposal after copied text), G (await in `finally` in a loop on a chain), H
+  (disposal block with a function sharing a `let`); continuation in an unmerged factory
+  inside a block waits for the block's activation. Corpus case codemode/redump-loops.js,
+  test plain_redumps_of_loops_finally_and_using. Classes C/D (class in a nested scope of
+  shared variables, "a cell without its variable") are not done: a cause of their own (the
+  class's inner name binding gets a scope of its own); format 2 refuses them too.
 
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s

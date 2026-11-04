@@ -1549,11 +1549,37 @@ impl W<'_> {
                         Some(Pl::Fac(sc)) => {
                             let top = (sc.0, 0);
                             if sc != top && self.is_merged(top) {
-                                let name = ir.factories[sc.0].name.clone();
-                                let key = self.scope(sc).props.first().map(|p| p.key.clone());
-                                if let Some(key) = key
-                                    && let Some(c) = self.creator_of(&name, &key)?
-                                {
+                                // Its factory is written in a continuation's block: that
+                                // activation (else the one making its first member).
+                                let mut found = None;
+                                let sub = self.placed.iter().find_map(|x| match x.1 {
+                                    Put::Sub(s2) if s2 == sc => Some(x.0),
+                                    _ => None,
+                                });
+                                let mut p = match sub {
+                                    Some(pl) => Some(pl),
+                                    None => self.parent_of(Pl::Fac(sc))?,
+                                };
+                                let mut n = 0;
+                                while let Some(q) = p {
+                                    n += 1;
+                                    if n > 10_000 {
+                                        return refuse("cyclic placement");
+                                    }
+                                    if let Pl::Block(b, _) = q {
+                                        found = Some(b);
+                                        break;
+                                    }
+                                    p = self.parent_of(q)?;
+                                }
+                                if found.is_none() {
+                                    let name = ir.factories[sc.0].name.clone();
+                                    let key = self.scope(sc).props.first().map(|p| p.key.clone());
+                                    if let Some(key) = key {
+                                        found = self.creator_of(&name, &key)?;
+                                    }
+                                }
+                                if let Some(c) = found {
                                     deps.push_out(self.act_item(c));
                                 }
                             } else if let Some(p) = providers

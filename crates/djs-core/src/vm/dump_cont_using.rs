@@ -161,8 +161,17 @@ impl G<'_, '_> {
         let m = self.mark("site", self.act.site.pos);
         // (In a block of its own: its constants come before it, and it stands where a
         // statement does, a `try`'s block included.)
+        // The scope's bindings (its code ran): closures of the scope may share them.
+        let own: Vec<_> = self
+            .node(i)
+            .decls
+            .iter()
+            .filter(|d| !matches!(d.kind, DeclKind::Using | DeclKind::AwaitUsing))
+            .map(|d| (d.name.clone(), d.kind, d.scope, true))
+            .collect();
+        let bd = self.declare(&own)?;
         let st = self.with_go(P::L(alloc::vec![s("{\n"), decls, P::S(exit), s("\n}"), m]));
-        Ok(P::L(alloc::vec![s("{\n"), st, s("\n}")]))
+        Ok(P::L(alloc::vec![s("{\n"), bd, s("\n"), st, s("\n}")]))
     }
 }
 

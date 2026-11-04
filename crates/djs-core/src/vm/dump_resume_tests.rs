@@ -2292,3 +2292,43 @@ main();
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 1, "{ok}");
 }
+
+/// Re-dumps pjz found refused (0207): a function declared in a loop body, an `await
+/// using` block's disposal after copied text, an await in a `finally` in a loop's later
+/// iteration, a disposal whose block has a function sharing a `let` (D2884).
+#[test]
+fn plain_redumps_of_loops_finally_and_using() {
+    let src = r#"
+async function f6() {
+  for (const x of [1, 2]) {
+    async function g() { return await later(x); }
+    print(await g());
+  }
+}
+
+
+async function f7() {
+  await later(0);
+  { await using r = { async [Symbol.asyncDispose]() { print("bye", await later(1)); } }; }
+  print("after");
+}
+
+
+async function g() { for (const x of [1, 2]) { try {} finally { print(await later(x)); } } }
+
+
+async function h() {
+  { await using r = { async [Symbol.asyncDispose]() { print("bye", await later(2)); } }; let n = 1; function f(y) { return n * 2 + y; } print(f(1)); }
+}
+
+async function main() { await f6(); await f7(); await g(); await h(); }
+main();
+"#;
+    let (failed, refused, ok) = plain_check_program("redumps", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, _, refused) = plain_chain_program("redumps", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 6, "{ok}");
+}

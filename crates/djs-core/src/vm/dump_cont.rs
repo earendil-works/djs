@@ -372,6 +372,9 @@ impl G<'_, '_> {
                 DeclKind::Const | DeclKind::FuncName | DeclKind::Using | DeclKind::AwaitUsing => {
                     "const"
                 }
+                // A function declared in a block is the block's (strict code), as K's
+                // must be for origin tracking to find it there.
+                DeclKind::Function if *scope != 0 => "let",
                 DeclKind::Var | DeclKind::Param | DeclKind::Function => "var",
                 _ => "let",
             };

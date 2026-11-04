@@ -193,7 +193,18 @@ impl Dumper<'_> {
         let site_rec = rec.scaf.iter().find(|r| r.0 == "site" && r.2 == ksite.pos);
         let at_site = site_rec.map(|r| r.1);
         let site_name = site_rec.and_then(|r| r.4.site.clone());
-        let Some(fpos) = at_site.or_else(|| to_f(&rec.segs, ksite.pos)) else {
+        // (A site at the end of a copied stretch: a `using` scope's disposal after its
+        // `}`.)
+        let at_end = || {
+            rec.segs
+                .chunks(3)
+                .find(|s| s.len() == 3 && s[0] + s[2] == ksite.pos)
+                .map(|s| s[1] + s[2])
+        };
+        let Some(fpos) = at_site
+            .or_else(|| to_f(&rec.segs, ksite.pos))
+            .or_else(|| (ksite.kind == SiteKind::AwaitUsing).then(at_end).flatten())
+        else {
             return no("its site is not one of its origin's");
         };
         // f's maps: its template's script compiled again.
@@ -531,11 +542,18 @@ impl Dumper<'_> {
                         return Some(v);
                     }
                 }
-                ("finally", "completion.kind") => {
-                    return r.3.as_ref().map(|(k, _)| Value::int(*k));
-                }
-                ("finally", "completion.value") => {
-                    return r.3.as_ref().and_then(|(_, b)| kslot(b));
+                // While K is in its finally scaffold (its completion's constant is in
+                // scope); a later iteration runs the copied text.
+                ("finally", "completion.kind") | ("finally", "completion.value") => {
+                    if let Some((k, b)) = r.3.as_ref()
+                        && let Some(v) = kslot(b)
+                    {
+                        return Some(if c == "completion.kind" {
+                            Value::int(*k)
+                        } else {
+                            v
+                        });
+                    }
                 }
                 _ => {}
             }
