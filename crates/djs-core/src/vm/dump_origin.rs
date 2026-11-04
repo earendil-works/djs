@@ -200,20 +200,32 @@ impl Dumper<'_> {
         if kind == func_flags::KIND_ASYNC_BODY {
             return no("its origin is a codemode body (0203)");
         }
+        // Several sites of a kind at one construct (a `for await`'s closes): the one
+        // with K's place among K's at its copy.
+        let nth = if site_name.is_none() {
+            self.nth_site_at(k, ksite)
+        } else {
+            0
+        };
         let Some(maps) = self.script_maps(t) else {
             return no("its origin's script cannot be compiled again");
         };
         let Some(m) = maps.iter().find(|m| m.start == a && m.end == b) else {
             return no("its origin has no suspension map");
         };
-        let Some(fsite) = m.sites.iter().find(|x| match &site_name {
-            Some(n) => x.name == *n && x.pos == fpos,
-            None => x.pos == fpos && same_kind(x.kind, ksite.kind),
-        }) else {
+        let fsite = m
+            .sites
+            .iter()
+            .filter(|x| match &site_name {
+                Some(n) => x.name == *n && x.pos == fpos,
+                None => x.pos == fpos && same_kind(x.kind, ksite.kind),
+            })
+            .nth(nth)
+            .cloned();
+        let syntax = Rc::new(m.syntax.clone());
+        let Some(mut fsite) = fsite else {
             return no("its origin has no site there");
         };
-        let mut fsite = fsite.clone();
-        let syntax = Rc::new(m.syntax.clone());
         if let Some(u) = &fsite.unsupported {
             return Err(cat!(
                 "an activation at ",
@@ -342,7 +354,11 @@ impl Dumper<'_> {
                 };
                 let scaffold = rec.scaf.iter().any(|r| r.2 == off);
                 if !scaffold && to_f(&rec.segs, off).is_none() {
-                    return no("it stopped again inside its rewritten statement (0203)");
+                    return Err(cat!(
+                        "a continuation of an earlier dump: it stopped again inside its rewritten statement, its ",
+                        x.name,
+                        " (0203)"
+                    ));
                 }
             }
         }
@@ -369,6 +385,25 @@ impl Dumper<'_> {
         Ok(Some((out, fsite, syntax)))
     }
 
+    /// The place of site `ksite` among the sites of its kind at its offset in `k`'s map.
+    fn nth_site_at(&mut self, k: Obj, ksite: &Site) -> usize {
+        let h = self.h;
+        let t = h.closure_template(k);
+        let info = template::debug_info(h, t);
+        let Some(maps) = self.script_maps(t) else {
+            return 0;
+        };
+        maps.iter()
+            .find(|m| m.start == info.src_start && m.end == info.src_end)
+            .and_then(|m| {
+                m.sites
+                    .iter()
+                    .filter(|x| x.pos == ksite.pos && x.kind == ksite.kind)
+                    .position(|x| x.name == ksite.name)
+            })
+            .unwrap_or(0)
+    }
+
     /// The value of the origin's temporary `x`; a completion's kind that names a
     /// statement (a `break` or `continue`, D2733) by its offset in `K` names it in `f`.
     fn origin_temp(
@@ -379,7 +414,14 @@ impl Dumper<'_> {
         at_site: Option<u32>,
         x: &NamedSlot,
     ) -> Option<Value> {
-        let v = self.origin_temp_k(rec, knamed, kv, at_site, x)?;
+        let mut v = self.origin_temp_k(rec, knamed, kv, at_site, x)?;
+        // A constant of K that closures capture (a pattern's source, read by K's
+        // getters) is a box in K's frame; the original's temporary is its value.
+        if let Some(b) = v.as_internal()
+            && self.h.cell_kind(b) == crate::heap::cells::BoxCell::KIND
+        {
+            v = self.h.arena().get(b, crate::heap::cells::BoxCell::VALUE);
+        }
         let (c, foff) = split(&x.name)?;
         let from_k = !rec
             .scaf
@@ -435,6 +477,16 @@ impl Dumper<'_> {
                     if let Some(w) = kslot(&cat!("for-of.iterator@", r.2)) {
                         let (it, next) = unwrap_loop(h, w)?;
                         return Some(if c == "for-of.iterator" { it } else { next });
+                    }
+                }
+                ("pattern", "pattern.iterator") | ("pattern", "pattern.next") => {
+                    // K's array pattern over the record (`undefined` once done).
+                    if let Some(w) = kslot(&cat!("pattern.iterator@", r.2)) {
+                        if w.is_undefined() {
+                            return Some(w);
+                        }
+                        let (it, next) = unwrap_loop(h, w)?;
+                        return Some(if c == "pattern.iterator" { it } else { next });
                     }
                 }
                 ("for-in", "for-in.iterator") => {

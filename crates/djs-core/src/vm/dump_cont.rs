@@ -20,6 +20,9 @@ use crate::buf::PushOut;
 use crate::compiler::{DeclKind, Node, NodeKind, Role, Special};
 use crate::interp::run::suspend;
 
+#[path = "dump_cont_pattern.rs"]
+mod pattern;
+
 type R<T> = Result<T, String>;
 
 fn no<T>(why: &str) -> R<T> {
@@ -85,6 +88,7 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
         scaf: Vec::new(),
         cmap: Vec::new(),
         temps: Vec::new(),
+        lets: Vec::new(),
         ntemps: 0,
         go_done: false,
         block_index: 0,
@@ -145,6 +149,8 @@ struct G<'a, 'c> {
     cmap: Vec<(String, String, bool)>,
     /// Temporaries of the site's statement not yet declared.
     temps: Vec<String>,
+    /// Variables the site's statement assigns (`let`, declared with the temporaries).
+    lets: Vec<String>,
     ntemps: usize,
     go_done: bool,
     block_index: usize,
@@ -221,26 +227,38 @@ impl G<'_, '_> {
             self.cmap.push_out((slot, v.clone(), true));
             return Ok(P::S(v));
         }
-        let mut name = cat!("$djs_t", self.ntemps);
-        self.ntemps += 1;
-        while has_ident(self.ftext(), &name)
-            || self.temps.iter().any(|t| t.starts_with(&cat!(name, " ")))
-        {
-            name = cat!("$djs_t", self.ntemps);
-            self.ntemps += 1;
-        }
+        let name = self.new_temp();
         self.temps.push_out(cat!(name, " = ", v));
         self.cmap.push_out((slot, name.clone(), false));
         Ok(P::S(name))
     }
 
-    fn flush_temps(&mut self) -> P {
-        if self.temps.is_empty() {
-            return s("");
+    /// A fresh name for a temporary of the site's statement.
+    fn new_temp(&mut self) -> String {
+        loop {
+            let name = cat!("$djs_t", self.ntemps);
+            self.ntemps += 1;
+            let taken = |l: &Vec<String>| {
+                l.iter()
+                    .any(|t| t == &name || t.starts_with(&cat!(name, " ")))
+            };
+            if !has_ident(self.ftext(), &name) && !taken(&self.temps) && !taken(&self.lets) {
+                return name;
+            }
         }
-        let t = cat!("const ", join(&self.temps, ", "), ";\n");
+    }
+
+    fn flush_temps(&mut self) -> P {
+        let mut t = String::new();
+        if !self.temps.is_empty() {
+            t = cat!("const ", join(&self.temps, ", "), ";\n");
+        }
+        if !self.lets.is_empty() {
+            cat_to!(&mut t, "let ", join(&self.lets, ", "), ";\n");
+        }
         self.temps.clear();
-        P::S(t)
+        self.lets.clear();
+        if t.is_empty() { s("") } else { P::S(t) }
     }
 
     /// The statement at the site, after the dump's callback and the temporaries.
@@ -539,8 +557,8 @@ impl G<'_, '_> {
                 Ok(if n.kind == NodeKind::While {
                     P::L(alloc::vec![
                         P::S(cat!("{ let ", f, " = true; ")),
-                        m,
                         lbl(label),
+                        m,
                         P::S(cat!("while (", f, " || (")),
                         test,
                         P::S(cat!(")) { if (", f, ") { ", f, " = false; ")),
@@ -552,8 +570,8 @@ impl G<'_, '_> {
                 } else {
                     P::L(alloc::vec![
                         P::S(cat!("{ let ", f, " = true; ")),
-                        m,
                         lbl(label),
+                        m,
                         P::S(cat!("do { if (", f, ") { ", f, " = false; ")),
                         first,
                         s(" } else "),
@@ -586,8 +604,8 @@ impl G<'_, '_> {
         let Some(k) = self.next_part(i) else {
             return no("a declaration at the site");
         };
-        if n.parts[k].role != Role::Init {
-            return no("a site in a pattern (0203)");
+        if !matches!(n.parts[k].role, Role::Init | Role::Target) {
+            return no("a site in a declaration the exporter does not know");
         }
         let mut items: Vec<P> = Vec::new();
         let mut m = 0;
@@ -600,33 +618,40 @@ impl G<'_, '_> {
             let init =
                 (m + 1 < n.parts.len() && n.parts[m + 1].role == Role::Init).then_some(m + 1);
             let end = init.map_or(t.end, |x| n.parts[x].end);
-            if init == Some(k) {
+            if m == k {
+                // The site in this declarator's pattern: the bindings it initialized,
+                // then the rest of it over its saved state.
+                for name in self.pattern_done_bindings(i + 1) {
+                    let v = self.decl_value(&name)?;
+                    items.push_out(P::S(cat!(name, " = ", v)));
+                }
+                let (pt, ps) = self.pattern(i + 1)?;
+                items.push_out(P::L(alloc::vec![pt, s(" = "), ps]));
+            } else if init == Some(k) {
                 let e = self.expr(i + 1)?;
                 items.push_out(P::L(alloc::vec![P::V(t.start, t.end), s(" = "), e]));
             } else if t.start > n.parts[k].start {
                 items.push_out(self.rest(t.start, end));
             } else {
-                // Declared before the site: its value is in the frame.
+                // Declared before the site: its values are in the frame.
                 let name = String::from(self.text(t.start, t.end).trim());
-                if !is_ident(&name) {
-                    return no("a pattern declared before the site in its statement (0203)");
-                }
-                let scope = self.enclosing_scope_of(&name);
-                let v = match self.binding_slot(&name, scope) {
-                    Some(sn) => {
-                        let v = match self.ctx.cell(&sn) {
-                            Some(Some(init)) => init,
-                            Some(None) => return no("a shared binding in its TDZ"),
-                            None => self.take(&sn)?,
-                        };
-                        if !self.used.contains(&sn) {
-                            self.used.push_out(sn);
+                let names: Vec<String> = if is_ident(&name) {
+                    alloc::vec![name]
+                } else {
+                    let mut v: Vec<String> = Vec::new();
+                    for j in 0..self.act.site.path.len() {
+                        for d in &self.node(j).decls {
+                            if t.start <= d.at && d.at < t.end && !v.contains(&d.name) {
+                                v.push_out(d.name.clone());
+                            }
                         }
-                        v
                     }
-                    None => String::from("undefined"),
+                    v
                 };
-                items.push_out(P::S(cat!(name, " = ", v)));
+                for name in names {
+                    let v = self.decl_value(&name)?;
+                    items.push_out(P::S(cat!(name, " = ", v)));
+                }
             }
             m = init.map_or(m + 1, |x| x + 1);
         }
@@ -639,6 +664,25 @@ impl G<'_, '_> {
         }
         out.push_out(s(";"));
         Ok(self.with_go(P::L(out)))
+    }
+
+    /// The value of binding `name` of the site's declaration, initialized already.
+    fn decl_value(&mut self, name: &str) -> R<String> {
+        let scope = self.enclosing_scope_of(name);
+        Ok(match self.binding_slot(name, scope) {
+            Some(sn) => {
+                let v = match self.ctx.cell(&sn) {
+                    Some(Some(init)) => init,
+                    Some(None) => return no("a shared binding in its TDZ"),
+                    None => self.take(&sn)?,
+                };
+                if !self.used.contains(&sn) {
+                    self.used.push_out(sn);
+                }
+                v
+            }
+            None => String::from("undefined"),
+        })
     }
 
     /// The scope offset of a binding declared by the statement list around path node
@@ -709,8 +753,9 @@ impl G<'_, '_> {
         let first = self.stmt(i + 1, None)?;
         Ok(P::L(alloc::vec![
             P::S(cat!("{ let ", f, " = true; ")),
-            m,
+            // (At the loop's keyword: a jump's completion names the loop by it.)
             label.unwrap_or_else(|| s("")),
+            m,
             s("for ("),
             P::L(init),
             P::S(cat!("; ", f, " || (")),
@@ -995,6 +1040,8 @@ impl G<'_, '_> {
             s("")
         } else if self.has(&kname) {
             let k = self.take(&kname)?;
+            // (The original's at this site, should K stop here again.)
+            self.cmap.push_out((kname.clone(), k.clone(), true));
             match k.parse::<i32>() {
                 Ok(2) => P::L(alloc::vec![
                     s(" return "),
@@ -1581,6 +1628,25 @@ impl G<'_, '_> {
     }
 
     fn assign(&mut self, i: usize, n: &Node, k: usize) -> R<P> {
+        if n.parts[k].role == Role::Left
+            && matches!(
+                self.node(i + 1).kind,
+                NodeKind::ObjectPattern | NodeKind::ArrayPattern
+            )
+        {
+            // The rest of the pattern; the assignment's value is its right side's.
+            let (pt, ps) = self.pattern(i + 1)?;
+            let v = self.tmp("assign.value", n.start)?;
+            return Ok(P::L(alloc::vec![
+                s("(("),
+                pt,
+                s(" = "),
+                ps,
+                s("), "),
+                v,
+                s(")")
+            ]));
+        }
         if n.parts[k].role != Role::Right {
             return no("a site in an assignment's target (0203)");
         }
@@ -1738,13 +1804,15 @@ impl G<'_, '_> {
         out.walk(&parts, &act.ftext, &mut self.scaf);
         let mut text = out.text;
         // K's helpers, captured where the marker is.
-        let names: Vec<&str> = ["R", "G", "C", "D", "A", "L", "N", "Q", "X", "O"]
-            .into_iter()
-            .filter(|h| text.contains(&cat!("$djs_", *h, "(")))
-            // A continuation of a continuation declares them already (its own
-            // first line, restored from its slot).
-            .filter(|h| !act.slots.iter().any(|s| s.name == cat!("$djs_", *h)))
-            .collect();
+        let names: Vec<&str> = [
+            "R", "G", "C", "D", "A", "L", "N", "Q", "X", "O", "I", "E", "P", "S",
+        ]
+        .into_iter()
+        .filter(|h| text.contains(&cat!("$djs_", *h, "(")))
+        // A continuation of a continuation declares them already (its own
+        // first line, restored from its slot).
+        .filter(|h| !act.slots.iter().any(|s| s.name == cat!("$djs_", *h)))
+        .collect();
         let mut decl = String::new();
         if !names.is_empty() {
             let list: Vec<String> = names

@@ -9383,3 +9383,28 @@ by its label. A site in a case test writes the switch again over the saved discr
 with the tests that already failed as `case {}:` (a fresh object, never equal); a site in
 the discriminant rewrites it in place. A for-in scaffold's `$dump.forIn` iterator is read
 back by its closure's captures.
+
+## D2874: Destructuring around a continuation's site is written as a pattern again
+date: 2026-11-05 · by: pjr · issue: 0203
+The rest of a pattern whose evaluation stopped is a pattern again over a source that
+goes on where the original stopped (dump_cont_pattern.rs). An array pattern goes on over
+the saved record: `$dump.L(it, next)`, whose placeholder first step makes the element's
+default run (the site's default, or the rest of a nested pattern written as that
+default), `$dump.I(it, next)` where the element's step is still to come (the site is in a
+reference target, evaluated before the step), and `$dump.E()` once done. The language
+closes the iterator as the original would. An object pattern becomes `{ v0: …, v1: …,
+vR: rest }` over an object of the dump's whose getters read the saved source when the
+original reads it. Computed keys are evaluated in the pattern's own computed keys,
+converted once (`$dump.P`, ToPropertyKey as a computed key does it), and appended to the
+excluded keys at the key, as the original does. The rest property is `$dump.S(src,
+excluded)`, CopyDataProperties without the keys taken. Bindings the pattern initialized
+before the site are declared with their values (a binding's `at` lies in a part before
+the site's). An assignment pattern is `((pattern = source), value)`. The loop wrapper's
+`return` is now a getter that looks up the iterator's own, so a missing one is not
+called and the call gets the arguments the language passes. Origin tracking reads K's
+pattern state back: its array pattern's iterator (`["pattern", fo, ko]`), its own
+reference targets and `$dump.P` calls (`tmp`/`k` records), the keys as K's variables.
+Constants that K's closures capture are unboxed. Several sites of one kind at one
+construct (a `for await`'s closes) are matched by their place among K's. Scaffold marks
+of `for`/`while` loops now sit at the keyword, after a label, because a jump's completion
+names the loop by its keyword.

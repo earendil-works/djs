@@ -53,10 +53,14 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
   refused.
 - pjr: D2873: finally entered by break/continue, sites in a switch's case test or
   discriminant, origin tracking inside K's rewritten statement (tmp/k records), for-in
-  scaffold read back, completion kinds translated. v2 refusals 41 -> 39... (finally
-  cases all identical now); chain refusals 11 -> 6 (left: class-closure, class-fields,
+  scaffold read back, completion kinds translated (finally and switch cases all
+  identical now); chain refusals 11 -> 6 (left: class-closure, class-fields,
   destructuring, iterator-helpers, using, yield-star). Corpus unchanged (1194 links, 0
   differ, 0 refused).
+- pjr: D2874 destructuring (all golden/destructuring idle points and chains), new tests
+  plain_dumps_of_patterns, plain_dumps_of_for_await_closes now also run chains
+  (plain_chain_program). v2: 164 identical, 29 refused (using 11, yield-star 10,
+  iterator-helpers 6, class-closure, class-fields); chain refusals 5.
 
 ## Follow-ups
 

@@ -1693,73 +1693,83 @@ fn plain_dumps_at_every_idle_point() {
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 
+/// Program `src` dumped plainly at its first idle point, the dump run to its first, dumped
+/// again, and so on: the failures, the links and the refusal that ended the chain.
+fn plain_chain_program(name: &str, src: &str) -> (Vec<String>, usize, Vec<String>) {
+    let (mut failed, mut links, mut refused) = (Vec::new(), 0, Vec::new());
+    let (want, _) = run_program(src);
+    let mut vm = new_vm();
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("src.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    let mut lines = Vec::new();
+    let mut dumping = true;
+    let show = std::env::var("DJS_PLAIN_SHOW").is_ok_and(|v| v == name);
+    let mut sizes = Vec::new();
+    while let Some(id) = plain_step(&mut vm, &mut lines) {
+        if dumping {
+            match plain_dump(&vm) {
+                Ok(text) => match plain_load(&text) {
+                    _ if show && {
+                        std::println!("--- {name} link {}\n{text}", links + 1);
+                        false
+                    } =>
+                    {
+                        unreachable!()
+                    }
+                    Ok(v) => {
+                        links += 1;
+                        sizes.push(text.len());
+                        vm = v;
+                        let id = vm.pending_host_calls().iter().min().copied();
+                        settle(&mut vm, id.expect("the dump's open call"));
+                        continue;
+                    }
+                    Err(e) => {
+                        failed.push(alloc::format!("{name} link {}: {e}\n{text}", links + 1));
+                        break;
+                    }
+                },
+                Err(e) => {
+                    let why: Vec<&str> = e.lines().skip(1).map(str::trim).collect();
+                    refused.push(alloc::format!("{name}: {}", why.join(" | ")));
+                    dumping = false;
+                }
+            }
+        }
+        settle(&mut vm, id);
+    }
+    if lines != want {
+        failed.push(alloc::format!("{name}: {lines:?}\n  want {want:?}"));
+    }
+    // Origin tracking keeps a chain's dumps the size of their state (D2870): a
+    // continuation of a continuation is written from the original's text, so link k
+    // is about as long as a dump of the uninterrupted run at idle point k.
+    for (k, &len) in sizes.iter().enumerate() {
+        let fresh = plain_dump_at(src, k + 1).len();
+        if len.abs_diff(fresh) > 512 {
+            failed.push(alloc::format!(
+                "{name}: link {} is {len} bytes, a dump of the run there {fresh}",
+                k + 1
+            ));
+        }
+    }
+    (failed, links, refused)
+}
+
 #[test]
 fn plain_dump_chains_continue_like_the_run() {
     let (mut failed, mut links, mut refused) = (Vec::new(), 0, Vec::new());
     for (name, src) in plain_programs() {
-        let name = name.as_str();
-        let (want, _) = run_program(&src);
-        let mut vm = new_vm();
-        let f = vm
-            .compile(
-                src.as_bytes(),
-                &crate::compiler::CompileOptions::script("src.js"),
-            )
-            .unwrap();
-        let this = Value::object(vm.global());
-        vm.call(f, this, &[]).unwrap();
-        let mut lines = Vec::new();
-        let mut dumping = true;
-        let show = std::env::var("DJS_PLAIN_SHOW").is_ok_and(|v| v == name);
-        let mut sizes = Vec::new();
-        while let Some(id) = plain_step(&mut vm, &mut lines) {
-            if dumping {
-                match plain_dump(&vm) {
-                    Ok(text) => match plain_load(&text) {
-                        _ if show && {
-                            std::println!("--- {name} link {}\n{text}", links + 1);
-                            false
-                        } =>
-                        {
-                            unreachable!()
-                        }
-                        Ok(v) => {
-                            links += 1;
-                            sizes.push(text.len());
-                            vm = v;
-                            let id = vm.pending_host_calls().iter().min().copied();
-                            settle(&mut vm, id.expect("the dump's open call"));
-                            continue;
-                        }
-                        Err(e) => {
-                            failed.push(alloc::format!("{name} link {}: {e}\n{text}", links + 1));
-                            break;
-                        }
-                    },
-                    Err(e) => {
-                        let why: Vec<&str> = e.lines().skip(1).map(str::trim).collect();
-                        refused.push(alloc::format!("{name}: {}", why.join(" | ")));
-                        dumping = false;
-                    }
-                }
-            }
-            settle(&mut vm, id);
-        }
-        if lines != want {
-            failed.push(alloc::format!("{name}: {lines:?}\n  want {want:?}"));
-        }
-        // Origin tracking keeps a chain's dumps the size of their state (D2870): a
-        // continuation of a continuation is written from the original's text, so link k
-        // is about as long as a dump of the uninterrupted run at idle point k.
-        for (k, &len) in sizes.iter().enumerate() {
-            let fresh = plain_dump_at(&src, k + 1).len();
-            if len.abs_diff(fresh) > 512 {
-                failed.push(alloc::format!(
-                    "{name}: link {} is {len} bytes, a dump of the run there {fresh}",
-                    k + 1
-                ));
-            }
-        }
+        let (f, n, r) = plain_chain_program(&name, &src);
+        failed.extend(f);
+        links += n;
+        refused.extend(r);
     }
     // Where chains stop: a ratchet like the single dumps' (the same variable updates it).
     let path = fixture_dir().join("plain-chain-refusals.txt");
@@ -1848,6 +1858,61 @@ async function main() {
 main();
 "#;
     let (failed, refused, ok) = plain_check_program("closes", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, _, refused) = plain_chain_program("closes", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 6, "{ok}");
+}
+
+/// Destructuring stopped at every kind of place: holes and rest elements after the site,
+/// an object nested in an array and an array in an object, computed keys and a rest
+/// property after the site, getters read in order, reference targets of assignment
+/// patterns, a source that is a string, an iterator closed after the pattern.
+#[test]
+fn plain_dumps_of_patterns() {
+    let src = r#"
+const log = [];
+const src = {
+  get a() { log.push("get a"); return undefined; },
+  get b() { log.push("get b"); return [undefined, 2, 3, 4]; },
+  c: 3, d: 4, [Symbol.for("s")]: 5,
+};
+function* gen() {
+  try { yield 1; yield undefined; yield 3; yield 4; } finally { log.push("closed"); }
+}
+async function f1() {
+  const { a = await later("A"), b: [x = await later("X"), , ...ys], ["c" + ""]: c, ...rest } = src;
+  return [a, x, ys.join(), c, Object.keys(rest).join(), log.join()].join(" ");
+}
+async function f2() {
+  const [p, q = await later("Q"), { r = await later("R") } = {}] = gen();
+  return [p, q, r, log.join()].join(" ");
+}
+async function f3() {
+  const t = {};
+  let m;
+  [t.a = await later("ta"), t[await later("k")] = await later("tk"), ...m] = "xyz".split("");
+  ({ length: t.len = await later("len"), 0: t.first } = "hello");
+  return JSON.stringify(t) + " " + m.join();
+}
+async function f4() {
+  const [{ u = await later("U"), ...more } = { v: 1, w: 2 }] = [];
+  return u + " " + JSON.stringify(more);
+}
+async function main() {
+  print(await f1());
+  print(await f2());
+  print(await f3());
+  print(await f4());
+}
+main();
+"#;
+    let (failed, refused, ok) = plain_check_program("patterns", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, _, refused) = plain_chain_program("patterns", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 6, "{ok}");

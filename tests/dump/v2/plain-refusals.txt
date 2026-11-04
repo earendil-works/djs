@@ -1,16 +1,6 @@
 # Idle points of tests/dump/v2 whose plain dump is refused (plain_dumps_at_every_idle_point).
 golden/class-closure@1: plain dump: an activation of a factory's cell
 golden/class-fields@1: <call 1><reaction 0>.onFulfilled<this>: plain dumps: a private field of an instance
-golden/destructuring@1: plain dump: plain dumps: a site in a pattern (0203)
-golden/destructuring@2: plain dump: plain dumps: a site in a pattern (0203)
-golden/destructuring@3: plain dump: plain dumps: a site in a pattern (0203)
-golden/destructuring@4: plain dump: plain dumps: a site in a pattern (0203)
-golden/destructuring@5: plain dump: plain dumps: a site in an assignment's target (0203)
-golden/destructuring@6: plain dump: plain dumps: a site in an assignment's target (0203)
-golden/destructuring@7: plain dump: plain dumps: a site in an assignment's target (0203)
-golden/destructuring@8: plain dump: plain dumps: a site in an assignment's target (0203)
-golden/destructuring@9: plain dump: plain dumps: a site in a pattern (0203)
-golden/destructuring@10: plain dump: plain dumps: a site in a pattern (0203)
 golden/iterator-helpers@5: <call 8><reaction 0>.onFulfilled.evens<slot 2><slot 2><slot 2>: plain dumps: an iterator helper in flight (0203) | <call 8><reaction 0>.onFulfilled.evens<slot 2><slot 2>: plain dumps: an iterator helper in flight (0203) | <call 8><reaction 0>.onFulfilled.evens<slot 2>: plain dumps: an iterator helper in flight (0203) | <call 8><reaction 0>.onFulfilled.evens: plain dumps: an iterator helper in flight (0203)
 golden/iterator-helpers@6: <call 9><reaction 0>.onFulfilled.evens<slot 2><slot 2><slot 2>: plain dumps: an iterator helper in flight (0203) | <call 9><reaction 0>.onFulfilled.evens<slot 2><slot 2>: plain dumps: an iterator helper in flight (0203) | <call 9><reaction 0>.onFulfilled.evens<slot 2>: plain dumps: an iterator helper in flight (0203) | <call 9><reaction 0>.onFulfilled.evens: plain dumps: an iterator helper in flight (0203)
 golden/iterator-helpers@7: <call 10><reaction 0>.onFulfilled.evens<slot 2><slot 2><slot 2>: plain dumps: an iterator helper in flight (0203) | <call 10><reaction 0>.onFulfilled.evens<slot 2><slot 2>: plain dumps: an iterator helper in flight (0203) | <call 10><reaction 0>.onFulfilled.evens<slot 2>: plain dumps: an iterator helper in flight (0203) | <call 10><reaction 0>.onFulfilled.evens: plain dumps: an iterator helper in flight (0203)

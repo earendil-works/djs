@@ -1753,7 +1753,24 @@ const HELPERS: &[(&str, &str)] = &[
     // rest of the current iteration runs in it, the next ones take the iterator's steps.
     (
         "L",
-        "(it, next) => { let first = true; const r = { next() { if (first) { first = false; return { value: undefined, done: false }; } return Reflect.apply(next ?? it.next, it, []); }, return(v) { const m = it.return; return m == null ? { done: true, value: v } : Reflect.apply(m, it, [v]); }, [Symbol.iterator]() { return r; } }; return r; }",
+        "(it, next) => { let first = true; const r = { next() { if (first) { first = false; return { value: undefined, done: false }; } return Reflect.apply(next ?? it.next, it, []); }, get return() { const m = it.return; return m == null ? m : (...v) => Reflect.apply(m, it, v); }, [Symbol.iterator]() { return r; } }; return r; }",
+    ),
+    // The same without the placeholder (a pattern's element whose step is to come), and
+    // an iterable that is done (a pattern's iterator that was).
+    (
+        "I",
+        "(it, next) => { const r = { next() { return Reflect.apply(next, it, []); }, get return() { const m = it.return; return m == null ? m : (...v) => Reflect.apply(m, it, v); }, [Symbol.iterator]() { return r; } }; return r; }",
+    ),
+    (
+        "E",
+        "() => ({ [Symbol.iterator]() { return { next() { return { value: undefined, done: true }; } }; } })",
+    ),
+    // ToPropertyKey, as a computed key does it.
+    ("P", "(k) => Reflect.ownKeys({ [k]: 0 })[0]"),
+    // A pattern's rest property: CopyDataProperties without the keys taken.
+    (
+        "S",
+        "(o, ex) => { const r = {}, f = Object(o), ks = Reflect.ownKeys(f); for (let i = 0; i < ks.length; i++) { const k = ks[i]; let skip = false; for (let j = 0; j < ex.length; j++) if (ex[j] === k) skip = true; if (skip) continue; const d = Reflect.getOwnPropertyDescriptor(f, k); if (d && d.enumerable) Object.defineProperty(r, k, { value: f[k], writable: true, enumerable: true, configurable: true }); } return r; }",
     ),
     // An async iterator over a saved record for a `for await`: its first step `first`
     // (the promise the loop was awaiting) if given. `return` is the iterator's own,
