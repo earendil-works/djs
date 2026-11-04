@@ -1,0 +1,14 @@
+[package]
+name = "plain-timing"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+djs-core = { path = "../../../../crates/djs-core", default-features = false, features = ["dump", "full"] }
+djs-prelude = { path = "../../../../crates/djs-prelude", default-features = false, features = ["raw", "registry", "full"] }
+
+[profile.release]
+debug = false

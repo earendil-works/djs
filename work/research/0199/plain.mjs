@@ -120,7 +120,7 @@ function varNames(n, out = []) {
 // ---- text pieces ----------------------------------------------------------------------------
 // Generated code is a tree of strings and verbatim spans of the origin text {v: [s, e]};
 // flattening gives the text and the segments [kStart, fStart, len] (origin tracking).
-export function flatten(parts, ftext, markRecs = []) {
+export function flatten(parts, ftext, markRecs = () => []) {
   let text = "";
   let helperAt = -1;
   const segs = [];
@@ -142,7 +142,7 @@ export function flatten(parts, ftext, markRecs = []) {
     const decl = names.length ? `const ${names.map((h) => `$djs_${h} = $dump.${h}`).join(", ")};\n` : "";
     text = text.slice(0, helperAt) + decl + text.slice(helperAt);
     for (let i = 0; i < segs.length; i += 3) if (segs[i] >= helperAt) segs[i] += decl.length;
-    for (const r of markRecs) if (r[2] >= helperAt) r[2] += decl.length;
+    for (const r of markRecs()) if (r[2] >= helperAt) r[2] += decl.length;
   }
   return { text, segs };
 }
@@ -169,6 +169,11 @@ export function gen(ctx) {
     return { mark: (k) => (rec[2] = k) };
   };
   const path = pathTo(fn.body, site);
+  // Origin of K's own temporaries in the site's rewritten statement: K slot construct@k
+  // stands for f's slot fName (null: K's helper, dropped).
+  const cmap = [];
+  const cm = (fName, kConstruct) => ({ mark: (k) => cmap.push([fName, kConstruct, k]) });
+  const ign = (...ks) => ks.map((kConstruct) => ({ mark: (k) => cmap.push([null, kConstruct, k]) }));
   const hasSlot = (name) => ctx.slot(name) !== undefined;
   const take = (name) => {
     const v = ctx.slot(name);
@@ -317,24 +322,38 @@ export function gen(ctx) {
           refuse("spread call before the site");
         }
         n.arguments.forEach((a, k) => {
-          if (k < site) args.push(tmp("call.arg", a.start));
-          else if (k === site) args.push(expr(i + 1));
-          else args.push(rest(a));
+          const c = cm(`call.arg@${a.start}`, "array.element");
+          if (k < site) args.push([c, tmp("call.arg", a.start)]);
+          else if (k === site) args.push([c, expr(i + 1)]);
+          else args.push([c, rest(a)]);
         });
         // The call with the callee and this value evaluated before the site.
-        return ["$djs_R(", callee, ", ", self, ", [", join(args, ", "), "])"];
+        return [
+          ign("call.callee", "call.this"),
+          "$djs_R(",
+          cm(`call.callee@${n.start}`, "call.arg"),
+          callee,
+          ", ",
+          cm(`call.this@${n.start}`, "call.arg"),
+          self,
+          ", ",
+          ign("call.arg"),
+          "[",
+          join(args, ", "),
+          "])",
+        ];
       }
       case "NewExpression": {
         if (next === n.callee) refuse("site in a new's callee");
         if (n.arguments.some((a) => a.type === "SpreadElement")) refuse("new with spread");
         const callee = tmp("new.callee", n.start);
         const site = n.arguments.indexOf(next);
-        const args = n.arguments.map((a, k) => (k < site ? tmp("new.arg", a.start) : k === site ? expr(i + 1) : rest(a)));
-        return ["$djs_C(", callee, ", [", join(args, ", "), "])"];
+        const args = n.arguments.map((a, k) => [cm(`new.arg@${a.start}`, "array.element"), k < site ? tmp("new.arg", a.start) : k === site ? expr(i + 1) : rest(a)]);
+        return [ign("call.callee", "call.this"), "$djs_C(", cm(`new.callee@${n.start}`, "call.arg"), callee, ", ", ign("call.arg"), "[", join(args, ", "), "])"];
       }
       case "BinaryExpression":
         if (next === n.left) return ["(", expr(i + 1), ` ${n.operator} `, rest(n.right), ")"];
-        return ["(", tmp("binary.left", n.start), ` ${n.operator} `, expr(i + 1), ")"];
+        return ["(", cm(`binary.left@${n.start}`, "binary.left"), tmp("binary.left", n.start), ` ${n.operator} `, expr(i + 1), ")"];
       case "LogicalExpression":
         if (next === n.left) return ["(", expr(i + 1), ` ${n.operator} `, rest(n.right), ")"];
         return expr(i + 1); // the left side decided to evaluate the right
@@ -354,18 +373,20 @@ export function gen(ctx) {
       case "TemplateLiteral": {
         // Parts evaluated so far are strings already (ToString applied); djs keeps the
         // literal parts before the site too (`template.part@<quasi>`).
-        const out = ["`"];
+        const out = [cm(`template.part@${n.quasis[0].start - 1}`, "template.part"), "`"];
         let seen = false;
         n.quasis.forEach((q, k) => {
           if (!seen && hasSlot(`template.part@${q.start - 1}`)) used.add(`template.part@${q.start - 1}`);
           out.push(q.value.raw);
           if (k < n.expressions.length) {
             const e = n.expressions[k];
+            const c = cm(`template.part@${e.start}`, "template.part");
             if (e === next) {
-              out.push("${", expr(i + 1), "}");
+              out.push("${", c, expr(i + 1), "}");
               seen = true;
-            } else if (seen) out.push("${", rest(e), "}");
-            else out.push("${", tmp("template.part", e.start), "}");
+            } else if (seen) out.push("${", c, rest(e), "}");
+            else out.push("${", c, tmp("template.part", e.start), "}");
+            if (k + 1 < n.quasis.length) out.push(cm(`template.part@${n.quasis[k + 1].start - 1}`, "template.part"));
           }
         });
         out.push("`");
@@ -378,24 +399,25 @@ export function gen(ctx) {
         const els = [];
         let seen = false;
         for (const e of n.elements) {
+          const c = e ? cm(`array.element@${e.start}`, "array.element") : "";
           if (e === next) {
-            els.push(expr(i + 1));
+            els.push([c, expr(i + 1)]);
             seen = true;
-          } else if (seen) els.push(e ? rest(e) : "");
+          } else if (seen) els.push(e ? [c, rest(e)] : "");
           else if (e === null) els.push("");
           else if (e.type === "SpreadElement") refuse("spread in an array before the site");
-          else els.push(tmp("array.element", e.start));
+          else els.push([c, tmp("array.element", e.start)]);
         }
         return ["[", join(els, ", "), "]"];
       }
       case "MemberExpression":
         if (next === n.object) return [expr(i + 1), n.computed ? ["[", rest(n.property), "]"] : [n.optional ? "?." : ".", P(n.property)]];
-        return [tmp("member.object", n.start), "[", expr(i + 1), "]"];
+        return [cm(`member.object@${n.start}`, "member.object"), tmp("member.object", n.start), "[", expr(i + 1), "]"];
       case "AssignmentExpression": {
         if (next !== n.right) refuse("site in an assignment target");
         if (n.left.type === "Identifier") {
           if (n.operator === "=" || n.operator.length === 3 && /[&|?]/.test(n.operator[0])) return ["(", P(n.left), " = ", expr(i + 1), ")"];
-          return ["(", P(n.left), " = ", tmp("assign.old", n.start), ` ${n.operator.slice(0, -1)} `, expr(i + 1), ")"];
+          return ["(", P(n.left), " = ", cm(`assign.old@${n.start}`, "binary.left"), tmp("assign.old", n.start), ` ${n.operator.slice(0, -1)} `, expr(i + 1), ")"];
         }
         if (n.left.type !== "MemberExpression" || n.left.object.type === "Super") refuse("assignment to a pattern or super");
         if (/^(&&|\|\||\?\?)=$/.test(n.operator)) refuse("logical assignment to a member around a site");
@@ -406,8 +428,9 @@ export function gen(ctx) {
           target = [o, "[", k ?? rest(n.left.property), "]"];
         } else target = [o, ".", P(n.left.property)];
         // A member target evaluated before the site: assign through Reflect-free plain code.
-        if (n.operator === "=") return ["(", target, " = ", expr(i + 1), ")"];
-        return ["(", target, " = ", tmp("assign.old", n.start), ` ${n.operator.slice(0, -1)} `, expr(i + 1), ")"];
+        const marks = [cm(`assign.object@${n.start}`, "assign.object"), cm(`assign.key@${n.start}`, "assign.key")];
+        if (n.operator === "=") return ["(", marks, target, " = ", expr(i + 1), ")"];
+        return ["(", marks, target, " = ", cm(`assign.old@${n.start}`, "binary.left"), tmp("assign.old", n.start), ` ${n.operator.slice(0, -1)} `, expr(i + 1), ")"];
       }
       case "ObjectExpression": {
         // The object made so far; the rest of the literal is defined on it in order.
@@ -416,9 +439,11 @@ export function gen(ctx) {
         let seen = false;
         for (const p of n.properties) {
           if (!seen && p !== next) continue;
+          const oo = [cm(`object.literal@${n.start}`, "call.arg"), o];
+          const head = (h) => [ign("call.callee", "call.this"), h];
           if (p.type === "SpreadElement") {
-            if (p === next) out.push(["$djs_A(", o, ", ", expr(i + 2), ")"]);
-            else out.push(["$djs_A(", o, ", ", rest(p.argument), ")"]);
+            if (p === next) out.push([head("$djs_A("), oo, ", ", expr(i + 2), ")"]);
+            else out.push([head("$djs_A("), oo, ", ", rest(p.argument), ")"]);
             seen = true;
             continue;
           }
@@ -430,8 +455,8 @@ export function gen(ctx) {
           if (p === next) {
             seen = true;
             if (path[i + 2] !== p.value) refuse("site in a computed key");
-            out.push(["$djs_D(", o, ", ", key, ", ", expr(i + 2), ")"]);
-          } else out.push(["$djs_D(", o, ", ", key, ", ", rest(p.value), ")"]);
+            out.push([head("$djs_D("), oo, ", ", ign("call.arg"), key, ", ", expr(i + 2), ")"]);
+          } else out.push([head("$djs_D("), oo, ", ", ign("call.arg"), key, ", ", rest(p.value), ")"]);
         }
         return ["(", join(out, ", "), ", ", o, ")"];
       }
@@ -659,7 +684,7 @@ export function gen(ctx) {
   const head = isArrow ? [fn.async ? "async " : "", "() => {\n"] : [kind, "() {\n"];
   // Only the helpers K uses are captured (filled in by flatten's caller via `helpersFor`).
   const parts = [head, { helpers: true }, body, "\n}"];
-  return { parts, scaf, used, usesArguments, tempNames };
+  return { parts, scaf, used, usesArguments, tempNames, cmap };
 }
 
 // ---- the dump -------------------------------------------------------------------------------
@@ -731,6 +756,7 @@ export function toPlain(text, opts = {}) {
   const stats = { activations: 0, merged: 0, callbacks: 0 };
   const builtins = new Map();
   const ktexts = new Map();
+  const omittedDefs = new Set();
   if (!/^"djs-dump 2( typescript)?";/.test(text)) refuse("not a format 2 dump");
   if (text.startsWith('"djs-dump 2 typescript";')) refuse("TypeScript text");
   for (const p of ["private", "closeThrow", "using", "forIn", "regexpIterator", "iteratorHelper"])
@@ -742,7 +768,7 @@ export function toPlain(text, opts = {}) {
   const isFactoryCall = (n) =>
     n?.type === "CallExpression" && n.arguments.length === 0 && n.callee.type === "ArrowFunctionExpression" && n.callee.body.type === "BlockStatement";
   function parseFactory(name, call, parent, top) {
-    const F = { name, call, parent, top: top ?? null, subs: [], vars: [], ret: null, props: new Map(), cells: new Map(), spreads: [], other: [], ks: [] };
+    const F = { name, call, parent, top: top ?? null, subs: [], vars: [], ret: null, props: new Map(), cells: new Map(), spreads: [], other: [], ks: [], omit: new Set() };
     F.top = top ?? F;
     allFactories.push(F);
     let afterReturn = false;
@@ -871,6 +897,80 @@ export function toPlain(text, opts = {}) {
     refuse(`activation of ${src(n).slice(0, 40)}`);
   }
 
+  // ---- origins that are only origins ------------------------------------------------------
+  // A function nothing but its activation holds (a codemode body, a callback the frame
+  // runs) is not written as a function: K's origin is its text, pruned of the top-level
+  // statements before the site (they never run again; declarations keep a skeleton for
+  // their names and kinds). The dump then carries no code that already ran, which is why
+  // R's dumps were smaller than today's.
+  function originOnly(A) {
+    if (A.f.inline) return false;
+    if (!A.f.ref) return true;
+    const ref = A.f.ref;
+    if (/^\$dump\.[a-z]+\d+$/.test(ref)) {
+      // a top-level definition only the activation names
+      const name = ref.slice(6);
+      const uses = ast.body.filter((st) => st !== A.node && st !== defs.get(name) && src(st).includes(ref) && !(st.expression?.type === "CallExpression" && src(st.expression.callee) === "Object.defineProperty" && src(st.expression.arguments[0]) === ref));
+      if (uses.length) return false;
+      A.f.omitDef = name;
+      omittedDefs.add(name);
+      return true;
+    }
+    if (!/^\$dump\.s\d+\.[\w$]+$/.test(ref)) return false;
+    // no other reference than the activation and name patches
+    let n = 0;
+    for (const st of ast.body) {
+      const t = src(st);
+      if (!t.includes(ref)) continue;
+      if (st === A.node) continue;
+      if (st.expression?.type === "CallExpression" && src(st.expression.callee) === "Object.defineProperty" && src(st.expression.arguments[0]) === ref) continue;
+      n += t.split(ref).length - 1;
+      // the factory holding it defines it, which is not a use
+      const [, top, key] = /^\$dump\.(s\d+)\.([\w$]+)$/.exec(ref);
+      if (st.expression?.type === "AssignmentExpression" && memberChain(st.expression.left)?.[0] === top) n -= t.split(ref).length - 1;
+    }
+    if (n > 0) return false;
+    const [, top, key] = /^\$dump\.(s\d+)\.([\w$]+)$/.exec(ref);
+    // a function some other code of its factory refers to by key is not only an origin
+    A.f.omitKey = key;
+    A.f.home.omit.add(key);
+    return true;
+  }
+  function prune(A) {
+    const fp = parseFunctionText(A.f.text);
+    const fn = fp.fn;
+    const [kind, nth] = A.at.split("#");
+    const site = sites(fn)[kind]?.[Number(nth) - 1];
+    if (!site || fn.body.type !== "BlockStatement" || (kind !== "await" && kind !== "yield")) return;
+    const body = fn.body.body;
+    const j = body.findIndex((st) => st.start <= site.start && site.end <= st.end);
+    if (j <= 0) return;
+    const t = A.f.text;
+    const skel = [];
+    const vars = [];
+    for (const st of body.slice(0, j)) {
+      if (st.type === "VariableDeclaration" && st.kind !== "var") skel.push(`${st.kind} ${st.declarations.map((d) => `${t.slice(d.id.start, d.id.end)} = 0`).join(", ")};`);
+      else if (st.type === "FunctionDeclaration") skel.push(`${st.async ? "async " : ""}function${st.generator ? "*" : ""} ${st.id.name}() {}`);
+      else if (st.type === "ClassDeclaration") skel.push(`class ${st.id.name} {}`);
+      varNames(st).forEach((v) => vars.push(v));
+    }
+    if (vars.length) skel.unshift(`var ${[...new Set(vars)].join(", ")};`);
+    const head = t.slice(0, body[0].start) + skel.join("\n") + "\n";
+    const delta = body[j].start - head.length;
+    if (delta <= 0) return;
+    A.f.text = head + t.slice(body[j].start);
+    const map = (S) => (S >= body[j].start ? S - delta : S);
+    const renamed = new Map();
+    for (const [k, v] of A.slots) {
+      const m = /^(.*)@(\d+)$/.exec(k);
+      renamed.set(m ? `${m[1]}@${map(Number(m[2]))}` : k, v);
+    }
+    A.slots = renamed;
+    const fs2 = sites(parseFunctionText(A.f.text).fn)[kind];
+    A.at = `${kind}#${fs2.findIndex((x) => x.start === site.start - delta) + 1}`;
+    A.f.pruned = true;
+  }
+
   // ---- merged factories: variables a frame shares with closures ---------------------------
   // A factory one of whose variables an activation takes as a cell is "merged": its
   // variables become declarations of continuations, its closures are made inside them.
@@ -880,6 +980,8 @@ export function toPlain(text, opts = {}) {
     A.opts = objProps(optsNode);
     A.slots = A.opts.has("slots") ? objProps(A.opts.get("slots")) : new Map();
     A.f = resolveFn(fnNode);
+    A.at = A.opts.get("at").value;
+    if (opts.prune !== false && originOnly(A)) prune(A);
     A.cells = new Map(); // slot name -> {F, V}
     for (const [k, v] of A.slots) {
       const fr = factoryRef(v);
@@ -905,9 +1007,9 @@ export function toPlain(text, opts = {}) {
     const parsed = parseFunctionText(A.f.text);
     A.fn = parsed.fn;
     A.fkind = parsed.kind;
-    const [k, nth] = A.opts.get("at").value.split("#");
+    const [k, nth] = A.at.split("#");
     if (k !== "await" && k !== "yield") refuse(`site ${k}`);
-    A.site = sites(A.fn)[k]?.[Number(nth) - 1] ?? refuse(`no site ${A.opts.get("at").value}`);
+    A.site = sites(A.fn)[k]?.[Number(nth) - 1] ?? refuse(`no site ${A.at}`);
     A.siteKind = k;
     A.blocks = [];
     const dry = gen(ctxFor(A, true));
@@ -1056,7 +1158,7 @@ export function toPlain(text, opts = {}) {
   // The code of a factory that is placed: closures (props), unmerged subs, continuations.
   function factoryCode(F) {
     const out = [];
-    for (const [key, p] of F.props) out.push({ kind: "prop", key, node: p, F });
+    for (const [key, p] of F.props) if (!F.omit.has(key)) out.push({ kind: "prop", key, node: p, F });
     for (const sub of F.subs) if (!merged.has(sub)) out.push({ kind: "sub", node: sub.call, sub, F });
     return out;
   }
@@ -1130,6 +1232,7 @@ export function toPlain(text, opts = {}) {
     const F = factories.get(name);
     let pl = null;
     const r = findKey(F, key);
+    if (r && r[1] === "prop" && r[0].omit.has(key)) return null;
     if (r && r[1] === "prop") {
       const item = factoryCode(r[0]).find((x) => x.kind === "prop" && x.key === key);
       pl = merged.has(r[0]) ? codePlace(item) : factoryPlace(r[0]);
@@ -1341,6 +1444,8 @@ export function toPlain(text, opts = {}) {
           }
           continue;
         }
+        if (it.kind === "stmt" && omittedTarget(it.node)) continue;
+        if (it.kind === "def" && omittedDefs.has(it.name)) continue;
         lines.push(rw(it.node));
       }
       return lines;
@@ -1356,6 +1461,37 @@ export function toPlain(text, opts = {}) {
     head.push(...hoisted);
     return [...head, ...body, `try { ${rw(handle)} } finally { delete globalThis.$dump; }`, ""].join("\n");
   }
+  // The origin text as pieces: spans of K's own text ([start, length]) where K copied f
+  // verbatim, and strings for the rest (the header, skeletons, loop heads, the site's
+  // statement as it was), so the text a continuation already holds is not written twice.
+  function originPieces(ftext, k) {
+    const segs = [];
+    for (let i = 0; i < k.segs.length; i += 3) segs.push([k.segs[i], k.segs[i + 1], k.segs[i + 2]]);
+    const out = [];
+    let lit = "";
+    let p = 0;
+    while (p < ftext.length) {
+      let best = null;
+      for (const [ks, fs, len] of segs) if (fs <= p && p < fs + len && (!best || fs + len > best[1] + best[2])) best = [ks, fs, len];
+      if (best && best[1] + best[2] - p >= 8) {
+        if (lit) out.push(lit), (lit = "");
+        const len = best[1] + best[2] - p;
+        out.push([best[0] + (p - best[1]), len]);
+        p += len;
+      } else lit += ftext[p++];
+    }
+    if (lit) out.push(lit);
+    return out;
+  }
+  function omittedTarget(st) {
+    const e = st.expression;
+    if (e?.type !== "CallExpression" || src(e.callee) !== "Object.defineProperty") return false;
+    const ch = memberChain(e.arguments[0]);
+    if (ch?.length === 1 && omittedDefs.has(ch[0])) return true;
+    if (!ch || ch.length !== 2 || !factories.has(ch[0])) return false;
+    const r = findKey(factories.get(ch[0]), ch[1]);
+    return r && r[0].omit.has(ch[1]);
+  }
   function kref(A) {
     return A.f.home ? `$dump.${A.f.home.top.name}.$K${A.name}` : `$dump.K${A.name}`;
   }
@@ -1364,11 +1500,11 @@ export function toPlain(text, opts = {}) {
     const k = ktext(A);
     for (const [name, ref] of A.pre ?? []) lines.push(`${ref} = ${rw(A.slots.get(name))};`);
     if (!A.f.home) lines.push(`$dump.K${A.name} = ${k.text};`);
-    const fref = A.f.ref ?? JSON.stringify(A.f.text);
-    lines.push(`Object.defineProperty(${kref(A)}, "$djs", { value: { f: ${fref}, at: ${JSON.stringify(A.opts.get("at").value)}, segs: [${k.segs.join(",")}], scaf: ${JSON.stringify(k.scaf)}, temps: ${JSON.stringify(k.temps)} } });`);
+    const fref = A.f.ref && !A.f.omitKey && !A.f.omitDef ? A.f.ref : opts.pieces === false ? JSON.stringify(A.f.text) : JSON.stringify(originPieces(A.f.text, k));
+    lines.push(`Object.defineProperty(${kref(A)}, "$djs", { value: { f: ${fref}, at: ${JSON.stringify(A.at)}, segs: [${k.segs.join(",")}], scaf: ${JSON.stringify(k.scaf)}, temps: ${JSON.stringify(k.temps)}, cmap: ${JSON.stringify(k.cmap)} } });`);
     const self = A.opts.has("this") ? rw(A.opts.get("this")) : "undefined";
     if (A.fn.generator) {
-      if (A.f.ref) lines.push(`${kref(A)}.prototype = ${A.f.ref}.prototype;`);
+      if (A.f.ref && !A.f.omitKey && !A.f.omitDef) lines.push(`${kref(A)}.prototype = ${A.f.ref}.prototype;`);
       lines.push(`$dump.${A.name} = ${kref(A)}.call(${self});`);
       if (A.siteKind === "yield") lines.push(`$dump.${A.name}.next();`);
       else refuse("a generator at an await");
@@ -1382,8 +1518,8 @@ export function toPlain(text, opts = {}) {
     const g = gen(ctxFor(A, false));
     const unused = [...A.slots.keys()].filter((k) => !g.used.has(k) && !k.includes("@") === false && !A.cells.has(k));
     for (const k of A.slots.keys()) if (!g.used.has(k) && k.includes("@") && /[.-]/.test(k)) refuse(`unused slot ${k}`);
-    const fl = flatten(g.parts, A.f.text, g.scaf);
-    const r = { text: fl.text, segs: fl.segs, scaf: g.scaf, temps: g.tempNames };
+    const fl = flatten(g.parts, A.f.text, () => [...g.scaf, ...g.cmap]);
+    const r = { text: fl.text, segs: fl.segs, scaf: g.scaf, temps: g.tempNames, cmap: g.cmap };
     ktexts.set(A, r);
     return r;
   }
@@ -1395,7 +1531,7 @@ export function toPlain(text, opts = {}) {
     for (const v of F.vars) if (!v.tdz) lines.push(`let ${v.name}${v.init ? ` = ${rw(v.init)}` : ""};`);
     const props = [];
     for (const sub of F.subs) if (!merged.has(sub) && F.spreads.includes(sub.name)) props.push(`...${sub.name}`);
-    for (const p of F.props.values()) props.push(rw(p));
+    for (const [key, p] of F.props) if (!F.omit.has(key)) props.push(rw(p));
     for (const A of F.ks) props.push(`$K${A.name}: ${ktext(A).text}`);
     lines.push(`return { ${props.join(", ")} };`);
     for (const v of F.vars) if (v.tdz) lines.push(`let ${v.name};`);

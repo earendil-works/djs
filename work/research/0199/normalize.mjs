@@ -96,6 +96,7 @@ export function normalize(text) {
       segs: val("segs").elements.map((x) => (x.type === "UnaryExpression" ? -x.argument.value : x.value)),
       scaf: val("scaf").elements.map((x) => x.elements.map((y) => (y.type === "Literal" ? y.value : -y.argument.value))),
       temps: (val("temps")?.elements ?? []).map((x) => x.elements.map((y) => y.value)),
+      cmap: (val("cmap")?.elements ?? []).map((x) => x.elements.map((y) => y.value)),
     });
     edits.push([st.start, st.end, ""]);
   }
@@ -115,7 +116,11 @@ export function normalize(text) {
     // f and its text
     let ftext;
     let fref;
-    if (o.f.type === "Literal" && typeof o.f.value === "string") {
+    if (o.f.type === "ArrayExpression") {
+      // pieces: spans of K's text and strings
+      ftext = o.f.elements.map((x) => (x.type === "Literal" ? x.value : k.text.slice(x.elements[0].value, x.elements[0].value + x.elements[1].value))).join("");
+      fref = ftext;
+    } else if (o.f.type === "Literal" && typeof o.f.value === "string") {
       ftext = o.f.value;
       fref = ftext; // an inline function again
     } else {
@@ -137,7 +142,7 @@ export function normalize(text) {
     // K still at the original site: f's temporaries are K's consts (or literals)
     const atSite = o.scaf.some((s) => s[0] === "site" && s[2] === ksite.start);
     // slots
-    const kslots = objProps(opts.get("slots").value);
+    const kslots = opts.has("slots") ? objProps(opts.get("slots").value) : new Map();
     const out = [];
     for (const [name, p] of kslots) {
       if (name.startsWith("$djs_")) continue;
@@ -159,12 +164,18 @@ export function normalize(text) {
       if (scaf && /\.next$/.test(construct)) continue; // the wrapper's next
       const f = toF(Number(off));
       if (f === null) {
-        if (atSite) continue; // K's own rewriting of the site's statement
-        refuse("re-suspended inside the rewritten statement");
+        // K's own temporaries of the rewritten statement
+        const c = o.cmap.filter((x) => x[1] === construct && x[2] === Number(off));
+        if (c.length) {
+          for (const [fName] of c) if (fName) out.push([fName, src(p.value)]);
+          continue;
+        }
+        if (atSite) continue;
+        refuse(`re-suspended inside the rewritten statement (${name})`);
       }
       out.push([`${construct}@${f}`, src(p.value)]);
     }
-    if (atSite)
+    if (atSite && !o.cmap.length)
       for (const [fname, isConst, v] of o.temps) {
         if (!isConst) out.push([fname, v]);
         else if (kslots.has(v)) out.push([fname, src(kslots.get(v).value)]);
@@ -178,7 +189,15 @@ export function normalize(text) {
       }
     const keep = ["awaiting", "queue"].filter((x) => opts.has(x)).map((x) => `${x}: ${src(opts.get(x).value)}`);
     if (opts.has("this") && fp.kind !== "arrow") keep.push(`this: ${src(opts.get("this").value)}`);
-    const fexpr = typeof fref === "string" && o.f.type === "Literal" ? ftext : fref;
+    // An origin given as text takes K's place (its factory or definition: where f lived),
+    // so the next continuation is written there again.
+    let fexpr = fref;
+    if (o.f.type === "Literal" || o.f.type === "ArrayExpression") {
+      fexpr = src(fnNode);
+      const kn = k.node.type === "CallExpression" ? k.node : k.node;
+      edits.push([kn.start, kn.end, ftext]);
+      if (isFn(fnNode)) fexpr = ftext;
+    }
     const slotsText = out.map(([k2, v]) => `${JSON.stringify(k2)}: ${v}`).join(", ");
     edits.push([e.right.start, e.right.end, `$dump.resume(${fexpr}, { at: ${JSON.stringify(at)}, ${keep.join(", ")}${keep.length ? ", " : ""}slots: { ${slotsText} } })`]);
   }
@@ -227,10 +246,18 @@ export function dce(text) {
     else if (e?.type === "CallExpression" && src(e.callee) === "Object.defineProperty" && e.arguments[0] && memberChain(e.arguments[0])) target = memberChain(e.arguments[0])[0];
     else if (e?.type === "CallExpression" && e.callee.type === "MemberExpression" && memberChain(e.callee)?.length >= 2 && /^(\$set|next)$/.test(e.callee.property.name ?? "")) target = memberChain(e.callee)[0];
     else if (e?.type === "CallExpression" && src(e.callee) === "$dump.keep") target = memberChain(e.arguments[0])?.[0] ?? null;
-    const isRoot =
-      !defines && !target
-        ? true
-        : defines && e.right.type === "CallExpression" && /^\$dump\.(resume|pending)$/.test(src(e.right.callee));
+    // a definition is dead code when unreferenced only if making it has no effect: functions,
+    // factories, literals; anything else (a then, a combinator, a call) is kept
+    const pureValue = (v) =>
+      isFn(v) ||
+      v.type === "ClassExpression" ||
+      v.type === "ObjectExpression" ||
+      v.type === "ArrayExpression" ||
+      v.type === "Literal" ||
+      (v.type === "CallExpression" && v.callee.type === "ArrowFunctionExpression" && v.arguments.length === 0) ||
+      (v.type === "CallExpression" && /^\$dump\.(fn|advance|builtin)$/.test(src(v.callee))) ||
+      (v.type === "NewExpression" && /^(Map|Set|Error|TypeError|RangeError|Date|RegExp)$/.test(src(v.callee)));
+    const isRoot = !defines && !target ? true : defines ? !pureValue(e.right) : false;
     return { st, defines, target, refs: refs(st), root: isRoot };
   });
   const live = new Set();

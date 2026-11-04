@@ -31,13 +31,14 @@ await pool(
     let d = fs.readFileSync(path.join(here, "today", `${p.name}.1.dump.js`), "utf8");
     const sizes = [];
     const dsizes = [];
+    const tsizes = [];
     let status = "ok";
     let nodeBad = 0;
     let k = 1;
     for (; k <= MAX; k++) {
       let plain;
       try {
-        plain = toPlain(k === 1 ? d : normalize(d).text).text;
+        plain = toPlain(k === 1 ? d : normalize(d).text, { prune: process.env.PRUNE !== "0", pieces: process.env.PIECES !== "0" }).text;
       } catch (e) {
         status = `refused at link ${k}: ${e.message}`;
         break;
@@ -46,6 +47,9 @@ await pool(
       fs.writeFileSync(path.join(here, pk), plain);
       sizes.push(plain.length);
       dsizes.push(d.length);
+      // today's dump of the same state (idle point k of the uninterrupted run)
+      const t = path.join(here, "today", `${p.name}.${k}.dump.js`);
+      tsizes.push(fs.existsSync(t) ? fs.statSync(t).size : null);
       if (useNode) {
         const n = await run("node", [path.join(here, "harness.mjs"), pk]);
         if (norm(clean(out + n.out)) !== norm(full)) nodeBad++;
@@ -61,7 +65,7 @@ await pool(
     }
     const got = clean(out);
     const same = got === full ? "same" : norm(got) === norm(full) ? "same-env" : "DIFF";
-    rows.push({ name: p.name, links: Math.min(k, MAX), status, same, sizes, dsizes, nodeBad });
+    rows.push({ name: p.name, links: Math.min(k, MAX), status, same, sizes, dsizes, tsizes, nodeBad });
   }),
   4,
 );
@@ -69,12 +73,20 @@ rows.sort((a, b) => a.name.localeCompare(b.name));
 fs.writeFileSync(path.join(here, "chain.json"), JSON.stringify(rows, null, 1));
 const sum = { programs: rows.length, same: 0, sameEnv: 0, diff: 0, refused: 0, links: 0, nodeBad: 0 };
 let worst = 0;
+let worstVsToday = 0;
+let worstName = "";
 for (const r of rows) {
   if (r.status !== "ok") sum.refused++;
   sum[r.same === "same" ? "same" : r.same === "same-env" ? "sameEnv" : "diff"]++;
   sum.links += r.links;
   sum.nodeBad += r.nodeBad;
   if (r.sizes.length > 1) worst = Math.max(worst, Math.max(...r.sizes) / r.sizes[0]);
+  // plain size / today's size at the same idle point, relative to the first link
+  const rel = r.sizes.map((s, i) => (r.tsizes[i] ? s / r.tsizes[i] : null)).filter((x) => x !== null);
+  if (rel.length > 1) {
+    const g = Math.max(...rel) / rel[0];
+    if (g > worstVsToday) [worstVsToday, worstName] = [g, r.name];
+  }
 }
-console.log(JSON.stringify(sum), "largest link / first link:", worst.toFixed(2));
+console.log(JSON.stringify(sum), "largest link / first link:", worst.toFixed(2), "; (plain/today at the same state) max over links / first link:", worstVsToday.toFixed(2), worstName);
 for (const r of rows) if (r.status !== "ok" || r.same === "DIFF") console.log(r.name, r.status, r.same);
