@@ -1,7 +1,7 @@
 # 0210: Compiler: array destructuring with a default in unreachable code
 
-status: open
-agent: -
+status: in-progress
+agent: pjk
 branch: issue/0210-unreachable-pattern-default
 depends-on: -
 guide: -
