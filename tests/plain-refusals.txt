@@ -1,5 +1,3 @@
 # Corpus cases whose plain dump the exporter refuses (scripts/plain-node.mjs --refusals).
 codemode/plain-fuzz/await-in-assignment-target.js	idle point 1: cannot dump: plain dump: plain dumps: a site in an assignment's target (0203)
 codemode/plain-fuzz/await-in-pattern-target.js	idle point 1: cannot dump: plain dump: plain dumps: an assignment to a pattern around the site (0203)
-codemode/plain-fuzz/getter-capturing-frame-variable.js	idle point 1: cannot dump: the dump: does not compile: unexpected token in expression: ',' at 211:45
-codemode/plain-fuzz/integer-key-equal-value.js	idle point 1: cannot dump: the dump: does not compile: expecting '}' at 196:112

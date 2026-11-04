@@ -1,4 +1,3 @@
-// difftest: plain-xfail the instance's prototype, a class made in K's block, is written as an empty reference: load TypeError
 // Found by the plain-dump fuzzer (0208): an instance of a class naming a variable of the
 // codemode body, captured by an async function that is not running.
 class C {

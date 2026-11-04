@@ -1,8 +1,8 @@
 # Suspension map coverage (compiler/smap_tests.rs)
-sites 1099
+sites 1101
 
 ## by kind
-  992 await
+  994 await
    11 await-using
    10 for-await.close
     8 for-await.next
@@ -14,7 +14,7 @@ sites 1099
    11 yield.return
 
 ## described, by temporaries (in locals, then on the stack)
-  724 -
+  726 -
   210 call.callee call.this
    20 for-of.iterator for-of.next
    18 call.callee call.this object.literal
@@ -56,7 +56,7 @@ sites 1099
     1 pattern.iterator
 
 ## paths (D2850)
- 1099 complete
+ 1101 complete
 
 ## path gaps, by the part they are in
 

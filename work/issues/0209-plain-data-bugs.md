@@ -35,6 +35,18 @@ Fix plain-dump bugs on the data side (found by 0208's fuzzer and by pjf in 0205)
    return await tools.echo(1);
    ```
 
+6. (pjf) TypeScript parameter properties are lost: `class P { constructor(public x:
+   number) {} }` is blanked to `constructor(       x        ) {}` under the plain
+   `"djs-dump";` header (D2879 treats `public` as a type), so `new P(1).x` is undefined
+   after a load. Keep such texts TypeScript, insert the assignments, or refuse clearly;
+   never change behaviour silently.
+7. (pjf) Static blocks and static field initializers with side effects run again when a
+   plain dump evaluates the class text (format 2 skipped them with jump_if_loading, which
+   0205 deletes): `const log = []; class P { static { log.push('init') } }` gives "log is
+   not initialized", or would push twice. Their effects are in the dumped heap already.
+   Approach to be agreed with the coordinator first (class text, readability,
+   Function.prototype.toString).
+
 Each fix gets a corpus case (or a dumpload case), and any plain-xfail marker 0208 added
 for it is removed.
 
@@ -72,6 +84,11 @@ and rebase often. Decision IDs D2950–D2959.
   --plain-out over the corpus, plain-node: 1228 links, 0 differ, 0 refused) and the
   dump-size score: corpus_raw +21 KB from the three new cases' six links, so the score
   was raised with `--update`. Pinned the new cases' suspension maps.
+- Rebased onto 0208's fuzz cases, which cover E (integer-key-equal-value), bug 1
+  (getter-capturing-frame-variable) and F (class-instance-in-idle-function, plain-xfail):
+  dropped my duplicates plain-literal-keys/plain-class-instances (kept plain-accessors:
+  setter and non-enumerable accessor), removed F's plain-xfail marker, dropped the two
+  stale refusals, raised dump-size for the links that now dump (+17 KB raw).
 
 ## Follow-ups
 
