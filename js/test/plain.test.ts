@@ -46,6 +46,7 @@ test("plainDump reads the header", () => {
   assert.deepEqual(plainDump(DUMP), { typescript: false });
   assert.deepEqual(plainDump(`"djs-dump typescript";\n`), { typescript: true });
   assert.equal(plainDump(`"djs-dump 2";\n`), undefined);
+  assert.equal(plainDump(`"use strict";\n"djs-dump";\n`), undefined);
 });
 
 test("Sandbox.resume continues a plain dump through the hooks", async () => {

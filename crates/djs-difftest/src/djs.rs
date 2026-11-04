@@ -11,8 +11,9 @@
 //!
 //! Stress variants: `suspend_every` runs N fuel at a time and continues each slice in a
 //! fresh VM restored from the heap image; `gc_stress` collects at every safepoint.
-//! `dump_every_idle` (0172) dumps the VM at every idle point (a format 2 dump, with the
-//! prelude's `api` as a handle) and continues in a fresh VM that loaded the dump.
+//! `dump_every_idle` (0172, 0201) dumps the VM at every idle point (a plain dump, D2830,
+//! whose completion value is the prelude's `api`) and continues in a fresh VM that runs
+//! the dump.
 //! Their transcripts must equal the plain run's (checked by the runner).
 
 use std::time::{Duration, Instant};
@@ -53,11 +54,10 @@ pub struct Djs {
     pub image: bool,
     /// Run the `@native` builtins as bytecode (`--backend bytecode`, 0063).
     pub bytecode_builtins: bool,
-    /// Dump at every idle point and continue in a fresh VM that loaded the dump.
+    /// Dump at every idle point (a plain dump, D2830) and continue in a fresh VM that runs
+    /// the dump as a Script; a chain of at most `PLAIN_LINKS` dumps, then the run goes on.
+    /// The VMs have frozen builtins, which dumps need (D2836).
     pub dump_every_idle: bool,
-    /// With `dump_every_idle`: plain dumps (format 3, D2830), run as a Script in the
-    /// fresh VM; a chain of at most `PLAIN_LINKS` dumps, then the run goes on.
-    pub plain: bool,
 }
 
 /// The longest chain of plain dumps a case runs through (later idle points are not
@@ -81,10 +81,7 @@ impl Djs {
             s += " --backend bytecode";
         }
         if self.dump_every_idle {
-            s += " --dump-every-idle";
-        }
-        if self.plain {
-            s += " --plain";
+            s += " --plain-dumps";
         }
         s
     }
@@ -96,7 +93,7 @@ impl Engine for Djs {
     }
 
     fn only_with_idle_points(&self) -> bool {
-        self.plain
+        self.dump_every_idle
     }
 
     fn run(&self, job: &Job<'_>) -> RunResult {
@@ -180,9 +177,7 @@ struct Session {
     /// clock to set in it.
     #[cfg_attr(not(feature = "dump"), allow(dead_code))]
     dump: Option<(VmOptions, f64)>,
-    /// Plain dumps, and how many were taken.
-    #[cfg_attr(not(feature = "dump"), allow(dead_code))]
-    plain: bool,
+    /// How many dumps were taken.
     #[cfg_attr(not(feature = "dump"), allow(dead_code))]
     links: u32,
     /// The case's name (for `--plain-out`).
@@ -213,15 +208,14 @@ impl Djs {
                 ..ExecOptions::default()
             },
             prefix_barrier: ARMED_AREAS.iter().any(|a| job.name.starts_with(a)),
-            // Plain dumps are written only with frozen builtins (D2836), as pi's next
-            // mode runs.
-            frozen_builtins: self.plain,
+            // Dumps are written only with frozen builtins (D2836), as pi's next mode runs.
+            frozen_builtins: self.dump_every_idle,
             ..VmOptions::default()
         };
         let mut vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;
         #[cfg(not(feature = "dump"))]
         if self.dump_every_idle {
-            return Err("--dump-every-idle needs the `dump` feature".into());
+            return Err("--plain-dumps needs the `dump` feature".into());
         }
         // The wall clock, read once per case, in UTC (D1383); the qjs engine runs with
         // TZ=UTC to match.
@@ -242,7 +236,6 @@ impl Djs {
             timeout: job.timeout,
             suspend: self.suspend_every.is_some(),
             dump: self.dump_every_idle.then_some((opts, job.now)),
-            plain: self.plain,
             links: 0,
             name: job.name.to_string(),
             api: None,
@@ -338,69 +331,13 @@ impl Session {
         Ok(())
     }
 
-    /// Dumps the idle VM and replaces it by a fresh VM that loaded the dump.
+    /// Dumps the idle VM (a plain dump, D2830) and replaces it by a fresh VM that ran the
+    /// dump: the fresh VM gets the host's functions as globals (`output`, `done`, `later`,
+    /// and `$djs`: the dump runtime with `seed` and `resume`, which issues the call again)
+    /// and runs the dump as a Script, whose completion value is the api.
     #[cfg(feature = "dump")]
     fn dump_and_load(&mut self) -> Result<(), Stop> {
-        use djs_core::vm::dump::DumpOptions;
-        use djs_core::vm::dump_load::LoadOptions;
         let (opts, now) = self.dump.ok_or("no dump options")?;
-        if self.plain {
-            return self.plain_dump_and_load(opts, now);
-        }
-        let api = self.vm.heap().get_handle(self.api.ok_or("no api")?);
-        let handles = [("api", api)];
-        let text = self
-            .vm
-            .dump(
-                &DumpOptions {
-                    base: djs_prelude::BASE,
-                    host_fn_name: &host_fn_name,
-                    handles: &handles,
-                    ..DumpOptions::default()
-                },
-                None,
-            )
-            .map_err(|e| {
-                format!(
-                    "dump at idle point {}: {}",
-                    self.idle_points + 1,
-                    e.message()
-                )
-            })?;
-        let mut vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;
-        vm.set_now(now);
-        let loaded = vm
-            .load_dump(
-                &text,
-                &LoadOptions {
-                    host_fn: &host_fn,
-                    ..LoadOptions::default()
-                },
-            )
-            .map_err(|e| {
-                format!(
-                    "load at idle point {}: {}\n{text}",
-                    self.idle_points + 1,
-                    e.message()
-                )
-            })?;
-        let api = loaded
-            .handles
-            .iter()
-            .find(|h| h.0 == "api")
-            .map(|h| h.1)
-            .ok_or("the dump lost the api handle")?;
-        self.vm = vm;
-        self.api = Some(api);
-        Ok(())
-    }
-
-    /// [`Session::dump_and_load`] with a plain dump: the fresh VM gets the host's
-    /// functions as globals (`output`, `done`, `later`, and `$djs`: the dump runtime with
-    /// `seed` and `resume`, which issues the call again) and runs the dump as a Script, whose
-    /// completion value is the api.
-    #[cfg(feature = "dump")]
-    fn plain_dump_and_load(&mut self, opts: VmOptions, now: f64) -> Result<(), Stop> {
         use djs_core::vm::dump::DumpOptions;
         if self.links >= PLAIN_LINKS {
             return Ok(());
@@ -653,16 +590,6 @@ fn host_fn_name(id: u32) -> Option<String> {
         OUTPUT => Some("output".into()),
         DONE => Some("done".into()),
         LATER => Some("later".into()),
-        _ => None,
-    }
-}
-
-#[cfg(feature = "dump")]
-fn host_fn(name: &str) -> Option<u32> {
-    match name {
-        "output" => Some(OUTPUT),
-        "done" => Some(DONE),
-        "later" => Some(LATER),
         _ => None,
     }
 }

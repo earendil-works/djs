@@ -464,7 +464,7 @@ test("large host strings land in the heap in place when ASCII (D2551), others th
 
 test("slices of a long text reach the host and survive dumps (D2542)", async () => {
   const text = Array.from({ length: 200 }, (_, i) => `line ${i} `.padEnd(60, "x")).join("\n");
-  const sb = await Sandbox.create();
+  const sb = await Sandbox.create({ frozenBuiltins: true });
   const seen: unknown[] = [];
   sb.defineFunction("see", (v) => {
     seen.push(v);

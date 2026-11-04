@@ -317,10 +317,8 @@ already evaluated or an iterator advanced past the steps it took, are members of
 too: they are the same in every dump, so the host provides them as a fixed runtime
 instead of each dump carrying them (D2903); djs makes that object for its hosts, and a
 host without djs imports it from [js/src/dump-runtime.js](../../js/src/dump-runtime.js).
-Its completion value is the run's result promise. The Sandbox writes plain dumps by
-default (D2898) when its builtins are frozen; the CLI and the pi adapter still ask for
-them (`djs run --plain`, `plainDumps`) until format 2 is retired. Plain dumps are written
-only for VMs with frozen builtins, the mode pi's sessions run in: the writer may then
+Its completion value is the run's result promise. The Sandbox, the CLI and the pi
+adapter write only plain dumps. Plain dumps are written only for VMs with frozen builtins, the mode pi's sessions run in: the writer may then
 assume that no builtin changes between the moment a value was read and the load, and
 write a builtin the run already looked up as the expression that finds it again (D2836).
 Where the plain writer cannot write a run yet, the dump is refused with the reason.

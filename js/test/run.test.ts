@@ -1,6 +1,6 @@
 // Host-driven runs (0179, the first piece of docs/continuation-dumps.md "Sandbox API"):
 // `begin` runs to an idle point, the host settles the open async calls itself, `advance`
-// continues; `Sandbox.resume` continues a run from a format 2 dump.
+// continues; `Sandbox.resume` continues a run from a dump (a plain Script, D2830).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -54,18 +54,18 @@ test("a rejected call and a script exception end the run as threw", async () => 
   assert.equal(sb.begin("return 7").value, 7);
 });
 
-// Hand-written until the exporter writes it (0172): the body stopped at its await.
-const DUMP = `"djs-dump 2";
-$dump.f1 = async function (ms) {
-${BODY}
+// Hand-written: the body stopped at its await, as a continuation (D2830) of what is left.
+const DUMP = `"djs-dump";
+globalThis.$dump = {};
+try {
+$dump.p3 = $djs.resume(3, "sleep", [5]);
+$dump.K = async function (ms) {
+  const r = (await $dump.p3);
+  console.log("after", r);
+  return r + 1;
 };
-$dump.handle("run", $dump.resume($dump.f1, {
-  at: "await#1",
-  awaiting: $dump.pending(3, "sleep", [5]),
-  this: undefined,
-  args: [5],
-  slots: { ms: 5, r: $dump.TDZ },
-}));
+$dump.K.call(undefined, 5);
+} finally { delete globalThis.$dump; delete globalThis.$djs; }
 `;
 
 test("resume continues a dumped run with the same open calls", async () => {
@@ -84,7 +84,7 @@ test("resume continues a dumped run with the same open calls", async () => {
 
 test("resume refuses a dump without a run, and unknown host functions", async () => {
   const module = await loadModule();
-  await assert.rejects(Sandbox.resume("\"djs-dump 2\";\nvar x = 1;", { module }), /holds no run/);
+  await assert.rejects(Sandbox.resume("\"djs-dump\";\nvar x = 1;", { module }), /holds no run/);
   await assert.rejects(Sandbox.resume(DUMP, { module }), /unknown host function sleep/);
   const sb = new Sandbox({ module, asyncFunctions: { sleep: () => 0 } });
   const { calls } = sb.load(DUMP);
@@ -133,7 +133,7 @@ test("a host-driven run records a journal that replay runs", async () => {
 
 test("dumping a recorded run leaves its state alone: the journal still replays", async () => {
   const module = await loadModule();
-  const opts = { module, console: capture().console, deterministic: { startedAt: 1, seed: 1 }, now: 2, asyncFunctions: { "tools.get": () => 0 } };
+  const opts = { module, frozenBuiltins: true, console: capture().console, deterministic: { startedAt: 1, seed: 1 }, now: 2, asyncFunctions: { "tools.get": () => 0 } };
   const journal: JournalEntry[] = [];
   const sb = new Sandbox(opts);
   const run = sb.begin("const a = await tools.get(1); return a + (await tools.get(2));", {}, { journal });

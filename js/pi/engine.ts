@@ -17,7 +17,7 @@ export const STATUS_HOST_CALL = 3;
 export const STATUS_IDLE = 4;
 /** The host could not provide memory below the cap (D1690); the call is abandoned. */
 export const STATUS_HOST_OUT_OF_MEMORY = 5;
-const ABI_VERSION = 3;
+const ABI_VERSION = 4;
 /** `vm_new_with`'s flag: frozen builtins (D2304). */
 const VM_FROZEN_BUILTINS = 1;
 
@@ -52,7 +52,6 @@ interface Exports {
   vm_outcome?(vm: number): number;
   /** With the `dump` feature (D2352): continuation dumps. */
   vm_dump?(vm: number, len: number): number;
-  vm_load_dump?(vm: number, namesLen: number, len: number): number;
   /** Since 0204 (D2890): loading plain dumps. */
   vm_open_call?(vm: number, parked: number, fnId: number): number;
   vm_set_next_call_id?(vm: number, id: number): void;
@@ -263,12 +262,13 @@ export class Engine {
   }
 
   /**
-   * A format 2 dump of the idle VM (`vm_dump`): `host` are the globals the host defines
+   * A dump of the idle VM (`vm_dump`, a plain Script, D2830; the VM needs frozen builtins,
+   * D2836): `host` are the globals the host defines
    * (written by name), `fnNames` the host functions by id - 1, `handles` the values to
    * name for the host, `states` the host's state of open calls as JSON text, by call id
    * (D2770). Throws with the reasons when the VM cannot be dumped.
    */
-  dump(host: string[], fnNames: string[], handles: [string, number][], states: [number, string][] = [], plain = false): string {
+  dump(host: string[], fnNames: string[], handles: [string, number][], states: [number, string][] = []): string {
     const x = this.x;
     if (!x.vm_dump) throw new Error("The djs-wasm module has no dumper (build it with the `dump` feature)");
     const text = [
@@ -277,7 +277,6 @@ export class Engine {
       fnNames.join("\t"),
       handles.map(([n, h]) => `${h}:${n}`).join("\t"),
       states.map(([id, json]) => `${id}:${textEncoder.encode(json).length}`).join("\t"),
-      plain ? "plain" : "",
       states.map(([, json]) => json).join(""),
     ].join("\n");
     let r = this.trap(() => x.vm_dump!(this.vm, this.stageText(text)));
@@ -287,42 +286,6 @@ export class Engine {
     }
     if (r !== 0) throw new Error(r === 1 ? `Cannot dump the session:\n${outText(x)}` : "No base image to dump against");
     return outText(x);
-  }
-
-  /**
-   * Loads a dump into this VM (`vm_load_dump`): the open host calls it recreated (ids and
-   * function ids, named by `fnNames`) and the handles it named (the caller frees them).
-   */
-  loadDump(fnNames: string[], text: string): { calls: { id: number; fnId: number; state?: string }[]; handles: Map<string, number> } {
-    const x = this.x;
-    if (!x.vm_load_dump) throw new Error("The djs-wasm module has no dump loader (build it with the `dump` feature)");
-    const names = textEncoder.encode(fnNames.join("\n"));
-    const body = textEncoder.encode(text);
-    const all = new Uint8Array(names.length + body.length);
-    all.set(names);
-    all.set(body, names.length);
-    this.stage(all);
-    const r = this.trap(() => x.vm_load_dump!(this.vm, names.length, body.length));
-    if (r !== 0) throw new Error(`Cannot load the dump: ${outText(x)}`);
-    // Per call: id, function id and the byte length of its state (D2770), which follows
-    // the handles' names.
-    const [nCalls, nHandles] = outWords(x, 2);
-    const w = outWords(x, 2 + 3 * nCalls + 2 * nHandles);
-    const bytes = new Uint8Array(x.memory.buffer, x.djs_out_ptr(), x.djs_out_len());
-    let at = 4 * w.length;
-    const handles = new Map<string, number>();
-    for (let i = 0; i < nHandles; i++) {
-      const [h, len] = [w[2 + 3 * nCalls + 2 * i], w[3 + 3 * nCalls + 2 * i]];
-      handles.set(textDecoder.decode(bytes.subarray(at, at + len)), h);
-      at += len;
-    }
-    const calls = Array.from({ length: nCalls }, (_, i) => {
-      const len = w[4 + 3 * i];
-      const state = len > 0 ? textDecoder.decode(bytes.subarray(at, at + len)) : undefined;
-      at += len;
-      return { id: w[2 + 3 * i], fnId: w[3 + 3 * i], state };
-    });
-    return { calls, handles };
   }
 
   /**

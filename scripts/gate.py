@@ -303,10 +303,10 @@ def jobs():
           ' && node js/test/reader-cross.ts "$w" "$h"; rc=$?; rm -rf "$w" "$h"; exit $rc',
           cls="nodocs", needs=["build:core-tests"]),
 
-        # --- The corpus (0016, 0072, 0172): ratchet, suspension and GC stress, heap images,
-        # a dump at every idle point; and with the @native builtins as bytecode (0063).
+        # --- The corpus (0016, 0072): ratchet, suspension and GC stress, heap images; and
+        # with the @native builtins as bytecode (0063). (Dumps: the plain dumps leg.)
         J("difftest", f"{G}/bin/djs-difftest --engine djs --ratchet --suspend-every 97 --gc-stress"
-          f" --determinism --dump-every-idle --quiet --no-diff --times {G}/times/difftest.tsv",
+          f" --determinism --quiet --no-diff --times {G}/times/difftest.tsv",
           cls="rust", needs=["build:difftest"], summary=r"^(stress|ratchet):"),
         # 0201: plain dumps (D2830) at every idle point of the corpus (chains of at most 50),
         # continued in djs and in node; refusals only as tests/plain-refusals.txt lists.

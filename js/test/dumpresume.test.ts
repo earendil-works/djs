@@ -1,7 +1,7 @@
-// Continuation dumps through the Sandbox (0175, docs/continuation-dumps.md): at every idle
+// Continuation dumps through the Sandbox (0175, D2830, docs/plain-js-dumps.md): at every idle
 // point of a run, dump it, resume the dump in a fresh sandbox and continue there. The
-// transcript (console output, the open calls at each idle point, the result) must equal
-// the uninterrupted run's. In both packagings (D2635): A, the main module with the dumper;
+// transcript (console output, the open calls with their ids at each idle point, the
+// result) must equal the uninterrupted run's. Dumps need frozen builtins (D2836). In both packagings (D2635): A, the main module with the dumper;
 // B, a main module without it plus the dump module, the VM's image moving between them.
 // B runs with the module below as the dump module and, when $DJS_WASM_NODUMP names a
 // build without the `dump` feature (the gate builds one), with that as the main module.
@@ -82,23 +82,18 @@ interface Transcript {
 interface Packaging {
   module: WebAssembly.Module;
   dumpModule?: WebAssembly.Module;
-  /** Plain dumps (format 3, D2830): the transcript, call ids included, must be the same. */
-  plainDumps?: boolean;
-  frozenBuiltins?: boolean;
+  frozenBuiltins: boolean;
 }
 
 /** The packagings to test: A, B with one module, B with a real dumper-less main module. */
 async function packagings(): Promise<[string, Packaging][]> {
   const module = await loadModule();
   const out: [string, Packaging][] = [
-    // Format 2 explicitly until 0205 retires it; the plain variants follow.
-    ["A", { module, plainDumps: false }],
-    ["B (image transport)", { module, dumpModule: module, plainDumps: false }],
+    ["A", { module, frozenBuiltins: true }],
+    ["B (image transport)", { module, dumpModule: module, frozenBuiltins: true }],
   ];
   const nodump = process.env.DJS_WASM_NODUMP;
-  if (nodump) out.push(["B (djs.wasm + djs-dump.wasm)", { module: await loadModule(nodump), dumpModule: module, plainDumps: false }]);
-  // Plain dumps need frozen builtins (D2836).
-  for (const [name, p] of [...out]) out.push([`${name}, plain`, { ...p, plainDumps: true, frozenBuiltins: true }]);
+  if (nodump) out.push(["B (djs.wasm + djs-dump.wasm)", { module: await loadModule(nodump), dumpModule: module, frozenBuiltins: true }]);
   return out;
 }
 
@@ -126,19 +121,11 @@ async function drive(module: Packaging, code: string, dumpEvery: boolean): Promi
   while (run.state === "idle") {
     lines.push(`idle: ${run.calls.map((c) => `#${c.id} ${c.fn}(${JSON.stringify(c.args)})`).join(", ")}`);
     if (dumpEvery) {
-      let text: string | undefined;
-      try {
-        text = run.dump();
-      } catch (e) {
-        // What plain dumps cannot write yet (0203) is refused; the run goes on here.
-        if (!(module.plainDumps && e instanceof SandboxError && /plain dumps?: /.test(e.message))) throw e;
-      }
-      if (text !== undefined) {
-        sb.dispose();
-        sb = new Sandbox(sandboxOptions(module, lines));
-        run = sb.loadRun(text);
-        dumps++;
-      }
+      const text = run.dump();
+      sb.dispose();
+      sb = new Sandbox(sandboxOptions(module, lines));
+      run = sb.loadRun(text);
+      dumps++;
     }
     const c = run.calls[0];
     run.settle(c.id, answer(c));
@@ -155,8 +142,7 @@ for (const [name, code] of Object.entries(CASES)) {
       await t.test(pk, async () => {
         const plain = await drive(p, code, false);
         const dumped = await drive(p, code, true);
-        const least = !p.plainDumps ? 2 : 1;
-        assert.ok(dumped.dumps >= least, `${dumped.dumps} idle points`);
+        assert.ok(dumped.dumps >= 2, `${dumped.dumps} idle points`);
         assert.deepEqual(dumped.lines, plain.lines);
         assert.deepEqual(dumped.result, plain.result);
       });
@@ -164,25 +150,8 @@ for (const [name, code] of Object.entries(CASES)) {
   });
 }
 
-// Instance fields (public or private) of a class declared in a waiting function: the
-// frame's hidden bindings of the class are dead after its statement (D2621).
-const FIELDS = `
-  class P { #n = 0; x = 1; async add() { this.#n += (await tools.echo(1)).length; return this.#n + this.x; } }
-  const p = new P();
-  return [await p.add(), await p.add()];
-`;
-
-test("dump and resume at every idle point: class fields", async () => {
-  const p = { module: await loadModule(), plainDumps: false };
-  const plain = await drive(p, FIELDS, false);
-  const dumped = await drive(p, FIELDS, true);
-  assert.deepEqual(dumped.lines, plain.lines);
-  assert.deepEqual(dumped.result, plain.result);
-});
-
 test("refusals are SandboxErrors", async (t) => {
-  // Format 2's loader refusals (plain dumps: plain.test.ts).
-  for (const [pk, p] of await packagings()) if (!p.plainDumps) await t.test(pk, () => refusals(p));
+  for (const [pk, p] of await packagings()) await t.test(pk, () => refusals(p));
 });
 
 async function refusals(p: Packaging): Promise<void> {
@@ -203,7 +172,13 @@ async function refusals(p: Packaging): Promise<void> {
   const text = waiting.dump();
   await assert.rejects(Sandbox.resume(text, { ...p }), (e: unknown) => e instanceof SandboxError && /unknown host function tools.echo/.test(e.message));
   await assert.rejects(Sandbox.resume("return 1", { ...p }), (e: unknown) => e instanceof SandboxError && /not a djs dump/.test(e.message));
-  // A dump that a build cannot resume at its site refuses with the reason.
-  const broken = text.replace(/at: "await#1"/, 'at: "await#9"');
-  await assert.rejects(Sandbox.resume(broken, sandboxOptions(p, [])), (e: unknown) => e instanceof SandboxError && e.kind === "misuse");
+  // A dump whose Script throws while it loads does not load.
+  const broken = text.replace(/\$djs\.resume\(/, "$$djs.nope(");
+  await assert.rejects(Sandbox.resume(broken, sandboxOptions(p, [])), (e: unknown) => e instanceof SandboxError && /cannot load the dump: the dump threw/.test(e.message));
+  // An instance with a private name cannot be written (D2878): only its class's
+  // construction can add the name. Neither can a sandbox without frozen builtins dump.
+  const fields = new Sandbox(sandboxOptions(p, lines)).begin("class P { #n = 0; async add() { this.#n += await tools.echo(1); return this.#n; } } return await new P().add();");
+  assert.throws(() => fields.dump(), (e: unknown) => e instanceof SandboxError && /with private name #n/.test(e.message));
+  const thawed = new Sandbox({ ...sandboxOptions(p, lines), frozenBuiltins: false }).begin("return await tools.echo(1);");
+  assert.throws(() => thawed.dump(), (e: unknown) => e instanceof SandboxError && /dumps need frozen builtins/.test(e.message));
 }

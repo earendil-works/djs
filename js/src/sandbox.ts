@@ -66,19 +66,12 @@ export interface SandboxOptions {
   module?: WebAssembly.Module;
   /**
    * The dump module (`djs-dump.wasm`: djs-wasm with the `dump` feature) for a `module`
-   * without the dumper (packaging B, D2635): `dump`, `load`, `Run.dump` and
-   * `Sandbox.resume` move the VM's image to an instance of it and back. Not needed when
-   * `module` has the dumper itself.
+   * without the dumper (packaging B, D2635): `dump`, `Run.dump` and a task's `suspend`
+   * and `checkpoint` copy the VM's image to an instance of it. Not needed when `module`
+   * has the dumper itself, nor for loading (`load`, `loadRun`, `Sandbox.resume`): a dump
+   * is a Script.
    */
   dumpModule?: WebAssembly.Module;
-  /**
-   * Write plain dumps (format 3, D2830): Scripts that run given only the host's functions,
-   * which `load`/`resume` run with the hooks of D2890. They need `frozenBuiltins` (D2836):
-   * the default is true with frozen builtins, else `false`, which writes format 2 until it
-   * is retired (0205); `true` without frozen builtins refuses every dump. Loading takes
-   * either.
-   */
-  plainDumps?: boolean;
   /** Heap cap in bytes; default: the engine's (4 GiB). */
   memoryLimit?: number;
   /** Fuel per `vm_run` call: how often the host gets control back. Default 1,000,000. */
@@ -219,7 +212,7 @@ export interface Settlement {
   value: unknown;
 }
 
-/** What `Sandbox.load` recreated: the open host calls of a format 2 dump (0171). */
+/** What `Sandbox.load` recreated: the open host calls of a dump (0171, D2890). */
 export interface LoadedDump {
   calls: OpenCall[];
 }
@@ -254,7 +247,7 @@ const STATUS_OUT_OF_FUEL = 2;
 const STATUS_HOST_CALL = 3;
 const STATUS_IDLE = 4;
 const STATUS_HOST_OUT_OF_MEMORY = 5;
-const ABI_VERSION = 3;
+const ABI_VERSION = 4;
 /** `vm_new_with`'s flag: frozen builtins (D2304). */
 const VM_FROZEN_BUILTINS = 1;
 const CONSOLE_METHODS = ["log", "info", "warn", "error"] as const;
@@ -290,7 +283,6 @@ interface Exports {
   vm_new_with?(memoryLimit: number, live: number, flags: number): number;
   vm_frozen_builtins?(vm: number): number;
   vm_dump?(vm: number, len: number): number;
-  vm_load_dump?(vm: number, namesLen: number, len: number): number;
   vm_from_bytes(len: number, memoryLimit: number): number;
   /** Since 0177 (D2701). */
   vm_replace_image?(vm: number, len: number): number;
@@ -467,9 +459,9 @@ export class Run {
   }
 
   /**
-   * The waiting run as a format 2 dump (docs/continuation-dumps.md): its suspended
-   * activations, open calls and data as JavaScript, for `loadRun` in another sandbox or
-   * process. Only while idle. `states` are the host's states of open calls, by id (JSON
+   * The waiting run as a dump (a plain Script, D2830; docs/plain-js-dumps.md): its
+   * suspended activations, open calls and data as JavaScript, for `loadRun` in another
+   * sandbox or process. Only while idle, and only with `frozenBuiltins` (D2836). `states` are the host's states of open calls, by id (JSON
    * data, D2770): the dump writes each with its call, and the load gives it back
    * (`OpenCall.state`).
    */
@@ -536,7 +528,7 @@ export class Task {
    * Suspends the task at its next idle point (no script work left, only host calls to
    * wait for): calls `save` for every open call, dumps the run with those states and
    * stops. The open calls' signals are aborted and their results ignored; `result`
-   * rejects with kind `suspended`. Resolves to the dump (format 2 text, for
+   * rejects with kind `suspended`. Resolves to the dump (a Script, for
    * `Sandbox.resume`). Rejects, and the task goes on, when the run cannot be dumped (or a
    * `save` throws); rejects when the run ends first.
    */
@@ -567,7 +559,7 @@ const IDLE = Symbol("idle");
 export class Sandbox {
   private readonly x: Exports;
   private readonly module: WebAssembly.Module;
-  /** The VM; replaced when a dump is loaded through the dump module (`viaDumper`). */
+  /** The VM; replaced when the dump module's sandbox takes another image (`takeImage`). */
   private vm: number;
   private readonly opts: SandboxOptions;
   /** Host function names by id - 1. */
@@ -1109,7 +1101,7 @@ export class Sandbox {
   }
 
   /**
-   * `Run.dump()`: the waiting run as a format 2 dump, its result promise named "run" (handle
+   * `Run.dump()`: the waiting run as a dump, its result promise named "run" (handle
    * 0: the entry call's outcome, which takes no handle, so a dump leaves the heap as it
    * was and a journal's later checks still replay).
    */
@@ -1122,8 +1114,8 @@ export class Sandbox {
    * when `load`ed into another sandbox, also of a later djs (docs/functions-as-code.md):
    * functions as their source text, closures and data as code, builtins by name. The
    * host's functions and `console` are not written: the loading sandbox provides them
-   * under the same names. Throws a "misuse" error listing every value that cannot be
-   * written, by its path (a pending promise, a Proxy, a class, ...).
+   * under the same names. Needs `frozenBuiltins` (D2836). Throws a "misuse" error listing
+   * every value that cannot be written, by its path (a weak collection, a Proxy, ...).
    */
   dump(names: string[] = []): string {
     return this.dumpText(names, [], []);
@@ -1137,19 +1129,20 @@ export class Sandbox {
    * states (`id:bytes`, tab separated) followed by their JSON texts (D2770).
    */
   private dumpText(names: string[], handles: [string, number][], states: [number, string][]): string {
-    // Plain dumps need frozen builtins (D2836): the default follows the VM's mode, which
-    // a restored sandbox keeps from its image.
-    const plain = this.opts.plainDumps ?? this.x.vm_frozen_builtins?.(this.vm) === 1;
-    return this.viaDumper((sb) => sb.dumpHere(names, handles, states, plain), false);
+    // Dumps need frozen builtins (D2836): the VM's mode, which a restored sandbox keeps
+    // from its image.
+    if (this.x.vm_frozen_builtins?.(this.vm) !== 1) {
+      throw new SandboxError("misuse", "cannot dump: dumps need frozen builtins (SandboxOptions.frozenBuiltins, D2836)");
+    }
+    return this.viaDumper((sb) => sb.dumpHere(names, handles, states));
   }
 
   /**
    * Runs `f` on a sandbox with the dumper: this one, or (with `opts.dumpModule`, D2635)
-   * a transient sandbox in the dump module made from this VM's image. With `back`, the
-   * image comes back afterwards (a load): this sandbox's VM is replaced by it. The image
-   * travels as is, so a dump leaves this VM untouched (D2633).
+   * a transient sandbox in the dump module made from this VM's image. The image travels
+   * as is, so a dump leaves this VM untouched (D2633).
    */
-  private viaDumper<T>(f: (sb: Sandbox) => T, back: boolean): T {
+  private viaDumper<T>(f: (sb: Sandbox) => T): T {
     const dm = this.opts.dumpModule;
     if (dm === undefined) return f(this);
     this.alive();
@@ -1170,13 +1163,7 @@ export class Sandbox {
       d = new Sandbox({ ...this.opts, module: dm, dumpModule: undefined }, raw(this));
       byLimit.set(limit, d);
     } else d.takeImage(raw(this));
-    const r = f(d);
-    if (back) {
-      // Only live cells cross back; handles (the loaded run's) are roots and survive.
-      d.collect();
-      this.replaceVm(raw(d));
-    }
-    return r;
+    return f(d);
   }
 
   /** The dump module's sandbox: takes the main sandbox's image into the same VM. */
@@ -1221,7 +1208,7 @@ export class Sandbox {
   }
 
   /** `vm_dump` in this sandbox's own module. */
-  private dumpHere(names: string[], handles: [string, number][], states: [number, string][], plain: boolean): string {
+  private dumpHere(names: string[], handles: [string, number][], states: [number, string][]): string {
     const x = this.x;
     if (!x.vm_dump) throw new SandboxError("misuse", "the djs-wasm module has no dump (vm_dump): build it with the `dump` feature, or pass `dumpModule`");
     const host = new Set(["console"]);
@@ -1232,7 +1219,6 @@ export class Sandbox {
       this.fnNames.join("\t"),
       handles.map(([name, h]) => `${h}:${name}`).join("\t"),
       states.map(([id, json]) => `${id}:${textEncoder.encode(json).length}`).join("\t"),
-      plain ? "plain" : "",
       states.map(([, json]) => json).join(""),
     ].join("\n");
     let r = this.guard(() => x.vm_dump!(this.vm, this.stageText(text)));
@@ -1245,12 +1231,11 @@ export class Sandbox {
   }
 
   /**
-   * Loads a dump (the text of `dump()`) with the module's loader (`vm_load_dump`,
-   * `Vm::load_dump`): its bindings become globals of this sandbox. Format 2 dumps get the
-   * loader's privileged `$dump`; version 1 dumps run as plain Scripts. A dump is code:
-   * load only dumps you trust, into a fresh sandbox. Not recorded in a journal. Returns
-   * the open host calls a format 2 dump recreated (its open calls name this sandbox's
-   * host functions); `Sandbox.resume` continues a dumped run.
+   * Loads a dump (the text of `dump()`): runs it as a Script (D2890), so its bindings
+   * become globals of this sandbox. A dump is code: load only dumps you trust, into a
+   * fresh sandbox. Not recorded in a journal. Returns the open host calls the dump
+   * recreated (its open calls name this sandbox's host functions); `Sandbox.resume`
+   * continues a dumped run. The dumper is not needed.
    */
   load(dump: string): LoadedDump {
     const { calls, handles } = this.loadDump(dump);
@@ -1264,8 +1249,8 @@ export class Sandbox {
   private loadDump(dump: string): { calls: OpenCall[]; handles: Map<string, number> } {
     if (this.active !== null) throw new SandboxError("misuse", "a run is in progress");
     const plain = plainDump(dump);
-    if (plain) return this.loadPlain(dump, plain.typescript);
-    return this.viaDumper((sb) => sb.loadHere(dump), true);
+    if (!plain) throw new SandboxError("misuse", 'cannot load the dump: not a djs dump (no "djs-dump"; header)');
+    return this.loadPlain(dump, plain.typescript);
   }
 
   /**
@@ -1376,44 +1361,6 @@ export class Sandbox {
       else if (h !== 0) x.vm_handle_free(vm, h);
       return { calls, handles };
     });
-  }
-
-  /** `vm_load_dump` in this sandbox's own module. */
-  private loadHere(dump: string): { calls: OpenCall[]; handles: Map<string, number> } {
-    const x = this.x;
-    // Whether it is a dump, and of which format, is the loader's to say.
-    if (!x.vm_load_dump) {
-      throw new SandboxError("misuse", "the djs-wasm module has no dump loader (vm_load_dump): build it with the `dump` feature, or pass `dumpModule`");
-    }
-    // The loader names open calls' functions by the host's names (`$dump.pending(1,
-    // "sleep", [5000])`); this sandbox's ids are their places in the table.
-    const names = textEncoder.encode(this.fnNames.join("\n"));
-    const text = textEncoder.encode(dump);
-    const both = new Uint8Array(names.length + text.length);
-    both.set(names);
-    both.set(text, names.length);
-    this.stage(both);
-    const r = this.guard(() => x.vm_load_dump!(this.vm, names.length, text.length));
-    if (r !== 0) throw new SandboxError("misuse", `cannot load the dump: ${outText(x)}`);
-    const [nCalls, nHandles] = outWords(x, 2);
-    const w = outWords(x, 2 + 3 * nCalls + 2 * nHandles);
-    const bytes = new Uint8Array(x.memory.buffer, x.djs_out_ptr(), x.djs_out_len()).slice();
-    let at = 4 * w.length;
-    const handles = new Map<string, number>();
-    for (let i = 0; i < nHandles; i++) {
-      const [h, len] = [w[2 + 3 * nCalls + 2 * i], w[3 + 3 * nCalls + 2 * i]];
-      handles.set(textDecoder.decode(bytes.subarray(at, at + len)), h);
-      at += len;
-    }
-    const calls = Array.from({ length: nCalls }, (_, i): OpenCall => {
-      const [id, len] = [w[2 + 3 * i], w[4 + 3 * i]];
-      const { fnId, args } = this.callInfo(id);
-      const call: OpenCall = { id, fn: this.fnNames[fnId - 1], args };
-      if (len > 0) call.state = JSON.parse(textDecoder.decode(bytes.subarray(at, at + len)));
-      at += len;
-      return call;
-    });
-    return { calls, handles };
   }
 
   /**

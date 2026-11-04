@@ -483,7 +483,7 @@ function answerOf(m: Extract<WorkerToHostMessage, { type: "call" }>, seq: number
 }
 
 /** Runs DUMP_CODE; with `policy`, dumps at the first call and resumes, applying it. */
-async function dumpRun(policy?: "deliver" | "reissue" | "reject", plainDumps = false): Promise<{ messages: WorkerToHostMessage[]; end: WorkerToHostMessage; dumped?: SessionDump }> {
+async function dumpRun(policy?: "deliver" | "reissue" | "reject"): Promise<{ messages: WorkerToHostMessage[]; end: WorkerToHostMessage; dumped?: SessionDump }> {
   let seq = 0;
   let session!: VmSession;
   const deliver = (m: Extract<WorkerToHostMessage, { type: "call" }>) => session.deliver(answerOf(m, ++seq));
@@ -492,7 +492,7 @@ async function dumpRun(policy?: "deliver" | "reissue" | "reject", plainDumps = f
     if (policy !== undefined && held === undefined) held = m;
     else deliver(m);
   });
-  session = await startVm({ ...run.hooks, plainDumps, prelude: PRELUDE_NEXT, data: DUMP_DATA });
+  session = await startVm({ ...run.hooks, prelude: PRELUDE_NEXT, data: DUMP_DATA });
   if (policy === undefined) return { messages: run.messages, end: await run.ended };
   while (held === undefined) await later(1, null);
   // A restart: the dump (JSON, as a host would store it) is all that survives.
@@ -510,28 +510,22 @@ async function dumpRun(policy?: "deliver" | "reissue" | "reject", plainDumps = f
 }
 
 test("next: a session dumped while a call is open resumes from the dump in a new instance", async () => {
-  const plain = await dumpRun();
+  const straight = await dumpRun();
   const value = (end: WorkerToHostMessage) => {
     assert.equal(end.type, "done", JSON.stringify(end));
     return JSON.parse((end as { value: string }).value);
   };
-  assert.deepEqual(value(plain.end), { seen: [10, 20], caught: "flaky failed/7", kept: { seen: [10, 20] }, at: STARTED_AT + 3000 });
+  assert.deepEqual(value(straight.end), { seen: [10, 20], caught: "flaky failed/7", kept: { seen: [10, 20] }, at: STARTED_AT + 3000 });
   for (const policy of ["deliver", "reissue"] as const) {
     const resumed = await dumpRun(policy);
     // The same messages as without the restart: output, calls, store writes, result.
-    assert.deepEqual(resumed.messages, plain.messages, policy);
-    assert.match(resumed.dumped!.dump, /^"djs-dump 2";/);
-    // The open call carries its pi id as its state (D2770); the adapter keeps no call table.
-    assert.match(resumed.dumped!.dump, new RegExp(`\\$dump\\.pending\\(\\d+, "call", \\["call", "slow", "1"\\], \\{"id":${(resumed.messages.find((m) => m.type === "call") as { id: number }).id}\\}\\)`));
-    assert.equal("ids" in resumed.dumped!.state.next, false);
-  }
-  // Plain dumps (D2830, D2893): the same messages, the call's pi id in `$djs.resume`.
-  for (const policy of ["deliver", "reissue"] as const) {
-    const resumed = await dumpRun(policy, true);
-    assert.deepEqual(resumed.messages, plain.messages, `plain ${policy}`);
+    assert.deepEqual(resumed.messages, straight.messages, policy);
     assert.match(resumed.dumped!.dump, /^"djs-dump";/);
+    // The open call carries its pi id as its state (D2770, D2893), in `$djs.resume`; the
+    // adapter keeps no call table.
     const id = (resumed.messages.find((m) => m.type === "call") as { id: number }).id;
     assert.match(resumed.dumped!.dump, new RegExp(`\\$djs\\.resume\\(\\d+, "\\$djs\\.call", \\["call", "slow", "1"\\], \\{"id":${id}\\}\\)`));
+    assert.equal("ids" in resumed.dumped!.state.next, false);
   }
   const rejected = await dumpRun("reject");
   assert.equal(rejected.end.type, "done");

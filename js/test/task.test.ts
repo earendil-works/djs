@@ -10,18 +10,18 @@ import { type AsyncHostFunction, type HostCall, loadModule, Sandbox, SandboxErro
 interface Packaging {
   module: WebAssembly.Module;
   dumpModule?: WebAssembly.Module;
-  plainDumps?: boolean;
+  frozenBuiltins: boolean;
 }
 
 async function packagings(): Promise<[string, Packaging][]> {
   const module = await loadModule();
   const out: [string, Packaging][] = [
-    // Format 2 explicitly until 0205 retires it.
-    ["A", { module, plainDumps: false }],
-    ["B (image transport)", { module, dumpModule: module, plainDumps: false }],
+    // Dumps need frozen builtins (D2836).
+    ["A", { module, frozenBuiltins: true }],
+    ["B (image transport)", { module, dumpModule: module, frozenBuiltins: true }],
   ];
   const nodump = process.env.DJS_WASM_NODUMP;
-  if (nodump) out.push(["B (djs.wasm + djs-dump.wasm)", { module: await loadModule(nodump), dumpModule: module, plainDumps: false }]);
+  if (nodump) out.push(["B (djs.wasm + djs-dump.wasm)", { module: await loadModule(nodump), dumpModule: module, frozenBuiltins: true }]);
   return out;
 }
 
@@ -120,9 +120,9 @@ test("suspend dumps the call states; resume continues every call by its hooks", 
       const sb = new Sandbox(h.opts);
       const task = sb.start(CODE, { n: 1 });
       const dump = await task.suspend();
-      assert.match(dump, /\$dump\.pending\(\d+, "tools\.job", \[1\], \{"n":1,"step":"started, saved"\}\);/);
-      assert.match(dump, /\$dump\.pending\(\d+, "tools\.again", \["x"\]\);/);
-      assert.match(dump, /\$dump\.pending\(\d+, "tools\.plain", \["y"\]\);/);
+      assert.match(dump, /\$djs\.resume\(\d+, "tools\.job", \[1\], \{"n":1,"step":"started, saved"\}\);/);
+      assert.match(dump, /\$djs\.resume\(\d+, "tools\.again", \["x"\]\);/);
+      assert.match(dump, /\$djs\.resume\(\d+, "tools\.plain", \["y"\]\);/);
       await assert.rejects(task.result, (e: unknown) => e instanceof SandboxError && e.kind === "suspended");
       assert.ok(h.seen.calls[0].signal.aborted, "the suspended task stops waiting for its calls");
       assert.equal(h.seen.saved.length, 1);
@@ -142,7 +142,7 @@ test("suspend dumps the call states; resume continues every call by its hooks", 
       await h.answer("again x", "B2");
       // Dumped again while waiting on job(2): a fresh call's state, saved.
       const second = await again.suspend();
-      assert.match(second, /\$dump\.pending\(\d+, "tools\.job", \[2\], \{"n":2,"step":"started, saved"\}\);/);
+      assert.match(second, /\$djs\.resume\(\d+, "tools\.job", \[2\], \{"n":2,"step":"started, saved"\}\);/);
       again.sandbox.dispose();
       const third = await Sandbox.resume(second, h.opts);
       await h.answer("resumed 2", "D3");
@@ -159,7 +159,7 @@ test("suspend dumps the call states; resume continues every call by its hooks", 
 });
 
 test("checkpoint dumps and goes on; a dump that fails leaves the task running", async () => {
-  const h = host({ module: await loadModule() });
+  const h = host({ module: await loadModule(), frozenBuiltins: true });
   const sb = new Sandbox(h.opts);
   const task = sb.start("const w = new WeakMap(); const r = await tools.job(1); return [r, await tools.job(2)];");
   // A weak collection cannot be written: the task goes on.
@@ -188,6 +188,7 @@ test("states must be JSON data; save errors reject the dump only", async () => {
   const module = await loadModule();
   const sb = new Sandbox({
     module,
+    frozenBuiltins: true,
     asyncFunctions: {
       odd: {
         call() {
@@ -201,7 +202,7 @@ test("states must be JSON data; save errors reject the dump only", async () => {
   await assert.rejects(t1.suspend(), /the state of call \d+ is not JSON data/);
   sb.dispose();
   await assert.rejects(t1.result, (e: unknown) => e instanceof SandboxError && /disposed/.test(e.message));
-  const sb2 = new Sandbox({ module, asyncFunctions: { thrower: { call: () => new Promise(() => {}), save: () => { throw new Error("no state"); } } } });
+  const sb2 = new Sandbox({ module, frozenBuiltins: true, asyncFunctions: { thrower: { call: () => new Promise(() => {}), save: () => { throw new Error("no state"); } } } });
   const t2 = sb2.start("return await thrower();");
   await assert.rejects(t2.suspend(), /no state/);
   sb2.dispose();
@@ -227,12 +228,12 @@ test("suspend before an idle point waits for it; a run that ends first rejects i
 
 test("host-driven runs dump states and load them back", async () => {
   const module = await loadModule();
-  const opts = { module, plainDumps: false, asyncFunctions: { "tools.sleep": () => 0 } };
+  const opts = { module, frozenBuiltins: true, asyncFunctions: { "tools.sleep": () => 0 } };
   const sb = new Sandbox(opts);
   const run = sb.begin("return await tools.sleep(5) + await tools.sleep(6);");
   const id = run.calls[0].id;
   const text = run.dump({ [id]: { due: 123, note: "é\n\u2028" } });
-  assert.match(text, new RegExp(`\\$dump\\.pending\\(${id}, "tools\\.sleep", \\[5\\], \\{"due":123,"note":"é\\\\n\u2028"\\}\\);`));
+  assert.match(text, new RegExp(`\\$djs\\.resume\\(${id}, "tools\\.sleep", \\[5\\], \\{"due":123,"note":"é\\\\n\u2028"\\}\\);`));
   assert.throws(() => run.dump({ [id + 1]: 1 }), /a state for a call that is not open/);
   assert.throws(() => run.dump({ [id]: { __proto__: null, ["__proto__"]: 1 } }), /__proto__/);
   const again = new Sandbox(opts).loadRun(text);

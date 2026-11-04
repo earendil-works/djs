@@ -97,12 +97,6 @@ export interface VmHooks {
    * in a new instance of the module, resumed from the dump, as a restarted host would.
    */
   dumpEveryIdle?: boolean;
-  /**
-   * `next` mode: `dumpSession()` writes plain dumps (format 3, D2830), whose host functions
-   * are `$djs.bridge`/`$djs.call` (D2893). Default false (format 2) until format 2 is
-   * retired; `resumeFromDump` loads either.
-   */
-  plainDumps?: boolean;
   post(message: WorkerToHostMessage): void;
   shouldInterrupt(): boolean;
 }
@@ -138,12 +132,11 @@ const DETERMINISTIC_VERSION = 3;
 const BRIDGE_FN = 1;
 /** `next` mode: the async host function `call(kind, name, argsJson)` of tools and globals. */
 const CALL_FN = 2;
-/** The host functions by id - 1, as dumps name them. */
-const FN_NAMES = ["bridge", "call"];
 /**
- * The same in plain dumps (D2830): a held host function is written as its name, an
- * expression the dump evaluates while it loads, and `bridge` and `call` are no globals
- * (the prelude gets them as arguments), so they are properties of `$djs` meanwhile (D2893).
+ * The host functions by id - 1, as dumps (D2830) name them: a held host function is
+ * written as its name, an expression the dump evaluates while it loads, and `bridge` and
+ * `call` are no globals (the prelude gets them as arguments), so they are properties of
+ * `$djs` meanwhile (D2893).
  */
 export const PLAIN_FN_NAMES = ["$djs.bridge", "$djs.call"];
 /** A plain dump's hooks `$djs.resume` and `$djs.seed` (D2890). */
@@ -165,11 +158,11 @@ const STALLED = JSON.stringify({
  * serializable. `resumeFromDump` continues it from the session's prelude and start data.
  */
 export interface SessionDump {
-  /** The VM as a format 2 dump: the script's data, activations and open calls. */
+  /** The VM as a dump (a plain Script, D2830): the script's data, activations and open calls. */
   dump: string;
   /**
    * The adapter's state, without VM handles and without its call table: the dump carries
-   * each open call's pi id as the call's state (`$dump.pending(4, "call", [...], {"id":2})`,
+   * each open call's pi id as the call's state (`$djs.resume(4, "$djs.call", [...], {"id":2})`,
    * D2770), and a resumed session rebuilds the table from it.
    */
   state: Omit<SessionState, "api" | "settle" | "stalled" | "next"> & { next: Omit<NextState, "handles" | "ids"> };
@@ -393,8 +386,7 @@ class Session implements VmSession {
     const host = this.resume ? hostGlobals(this.resume.data) : [];
     const handles: [string, number][] = next.handles.body !== 0 ? [["run", next.handles.body]] : [];
     const states = next.ids.map(([callId, id]): [number, string] => [callId, JSON.stringify({ id } satisfies CallState)]);
-    const plain = this.hooks.plainDumps === true;
-    const dump = this.engine.dump(host, plain ? PLAIN_FN_NAMES : FN_NAMES, handles, states, plain);
+    const dump = this.engine.dump(host, PLAIN_FN_NAMES, handles, states);
     const { handles: _, ids: _i, ...rest } = next;
     const { api: _a, settle: _s, stalled: _t, next: _n, ...state } = this.state;
     return { dump, state: structuredClone({ ...state, early: [...this.early], next: rest }) };
@@ -1122,27 +1114,13 @@ function resumeSession(dumped: SessionDump, options: VmHooks & { prelude: string
     const saved = structuredClone(dumped.state);
     setUp(session, cached, hooks, prelude, data, saved.next.origin);
     const prepared = state.next!.handles;
-    if (plainDump(dumped.dump)) {
-      // The adapter's state first: the dump's code runs while it loads (D2891).
-      Object.assign(state, { ...saved, api: state.api, settle: 0, stalled: 0, next: { ...saved.next, ids: [], handles: { ...prepared, body: 0 } } });
-      session.restoreEarly(saved.early);
-      const body = session.loadPlain(dumped.dump);
-      state.next!.ids.sort((a, b) => a[1] - b[1]);
-      state.next!.handles.body = body;
-      return session;
-    }
-    const { calls, handles } = engine.loadDump(FN_NAMES, dumped.dump);
-    const body = handles.get("run") ?? 0;
-    for (const [name, h] of handles) if (name !== "run") engine.free(h);
-    // pi's ids of the open calls, from their states, in the order they were made.
-    const ids = calls.map(({ id: callId, fnId, state }): [number, number] => {
-      const id = state === undefined ? undefined : (JSON.parse(state) as Partial<CallState>).id;
-      if (fnId !== CALL_FN || typeof id !== "number") throw new Error(`The dump's open call ${callId} is not a tool call with a pi id`);
-      return [callId, id];
-    });
-    ids.sort((a, b) => a[1] - b[1]);
-    Object.assign(state, { ...saved, api: state.api, settle: 0, stalled: 0, next: { ...saved.next, ids, handles: { ...prepared, body } } });
+    if (!plainDump(dumped.dump)) throw new Error('Cannot load the dump: not a djs dump (no "djs-dump"; header)');
+    // The adapter's state first: the dump's code runs while it loads (D2891).
+    Object.assign(state, { ...saved, api: state.api, settle: 0, stalled: 0, next: { ...saved.next, ids: [], handles: { ...prepared, body: 0 } } });
     session.restoreEarly(saved.early);
+    const body = session.loadPlain(dumped.dump);
+    state.next!.ids.sort((a, b) => a[1] - b[1]);
+    state.next!.handles.body = body;
     return session;
   } catch (error) {
     session.dispose();

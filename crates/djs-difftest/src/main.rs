@@ -25,10 +25,7 @@ options:
                       heap images; its output must equal the plain run (hard failure)
   --gc-stress         djs only: also run every case collecting at every safepoint;
                       its output must equal the plain run (hard failure)
-  --dump-every-idle   djs only: also run every case dumping the VM at every idle point
-                      (a format 2 dump, D2610) and continuing in a fresh VM that loaded
-                      it; its output must equal the plain run (hard failure)
-  --plain-dumps       djs only: also run every case writing a plain dump (format 3,
+  --plain-dumps       djs only: also run every case writing a dump (a plain Script,
                       D2830) at each of its first 50 idle points and continuing in a
                       fresh VM that runs it as a Script (hard failure; a refused
                       dump ends the dumps, and the run goes on); with frozen builtins
@@ -83,7 +80,6 @@ struct Args {
     quiet: bool,
     suspend_every: Option<u64>,
     gc_stress: bool,
-    dump_every_idle: bool,
     plain_dumps: bool,
     determinism: bool,
     bytecode_builtins: bool,
@@ -127,7 +123,6 @@ fn parse_args() -> Result<Args, String> {
         quiet: false,
         suspend_every: None,
         gc_stress: false,
-        dump_every_idle: false,
         plain_dumps: false,
         determinism: false,
         bytecode_builtins: false,
@@ -187,7 +182,6 @@ fn parse_args() -> Result<Args, String> {
                 args.suspend_every = Some(n);
             }
             "--gc-stress" => args.gc_stress = true,
-            "--dump-every-idle" => args.dump_every_idle = true,
             "--plain-dumps" => args.plain_dumps = true,
             "--plain-out" => {
                 args.plain_dumps = true;
@@ -217,15 +211,11 @@ fn parse_args() -> Result<Args, String> {
     if args.update_ratchet && args.ratchet.is_none() {
         args.ratchet = Some(args.corpus.join("expected-failures.txt"));
     }
-    if (args.suspend_every.is_some()
-        || args.gc_stress
-        || args.determinism
-        || args.dump_every_idle
-        || args.plain_dumps)
+    if (args.suspend_every.is_some() || args.gc_stress || args.determinism || args.plain_dumps)
         && args.engine != "djs"
     {
         return Err(
-            "--suspend-every, --gc-stress, --determinism and --dump-every-idle need --engine djs"
+            "--suspend-every, --gc-stress, --determinism and --plain-dumps need --engine djs"
                 .into(),
         );
     }
@@ -606,7 +596,6 @@ fn stress_variants(args: &Args) -> Vec<(String, Box<dyn Engine>)> {
             image: args.determinism,
             bytecode_builtins: args.bytecode_builtins,
             dump_every_idle: false,
-            plain: false,
         };
         v.push((e.label(), Box::new(e)));
     }
@@ -617,22 +606,12 @@ fn stress_variants(args: &Args) -> Vec<(String, Box<dyn Engine>)> {
             image: false,
             bytecode_builtins: args.bytecode_builtins,
             dump_every_idle: false,
-            plain: false,
-        };
-        v.push((e.label(), Box::new(e)));
-    }
-    if args.dump_every_idle {
-        let e = Djs {
-            dump_every_idle: true,
-            bytecode_builtins: args.bytecode_builtins,
-            ..Djs::default()
         };
         v.push((e.label(), Box::new(e)));
     }
     if args.plain_dumps {
         let e = Djs {
             dump_every_idle: true,
-            plain: true,
             bytecode_builtins: args.bytecode_builtins,
             ..Djs::default()
         };

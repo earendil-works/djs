@@ -25,7 +25,7 @@ path = "src/bin/djs-abidrive.rs"
 
 [features]
 default = ["full", "unicode", "dump"]
-# `--dump-every-idle` (0172): djs-core's dumper.
+# `--plain-dumps` (0172, 0201): djs-core's dumper.
 dump = ["djs-core/dump"]
 # djs-core's features (D2411): `--no-default-features` builds against the slim engine.
 full = ["djs-prelude/full", "djs-wasm/full", "djs-test262/full"]

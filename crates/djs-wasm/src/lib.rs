@@ -42,7 +42,7 @@ use djs_core::vm::{Status, Vm, VmOptions};
 use djs_core::wire::{self, DecodeOptions};
 
 /// The ABI version, bumped on any incompatible change to the exports.
-pub const ABI_VERSION: u32 = 3;
+pub const ABI_VERSION: u32 = 4;
 
 /// `vm_run` results.
 pub mod status {
@@ -969,19 +969,17 @@ pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32) -> i
     })
 }
 
-/// Writes the idle VM as a format 2 dump (`Vm::dump`, 0167, 0172; docs/functions-as-code.md,
-/// docs/continuation-dumps.md) to the out buffer: its global bindings, and what is in
-/// flight (suspended activations, open host calls, pending promises). staging[0..len] is
-/// UTF-8, four lines (0179): the globals the host defines (re-bound by name, never
+/// Writes the idle VM as a dump (`Vm::dump`, 0167, 0172, a plain Script, D2830;
+/// docs/plain-js-dumps.md) to the out buffer: its global bindings, and what is in flight
+/// (suspended activations, open host calls, pending promises). The VM needs frozen
+/// builtins (D2836). staging[0..len] is UTF-8, five lines (0179): the globals the host defines (re-bound by name, never
 /// written) and the names to dump (none: all of the VM's own), each comma-separated; the
 /// host's function names in id order, tab-separated (`DumpOptions::host_fn_name`: open
 /// calls and host functions held as values are written by name); the values to name for
-/// the host, `handle:name`, tab-separated (`DumpOptions::handles`, written as
-/// `$dump.handle(name, v)`; handle 0: the entry call's outcome, `Vm::outcome`, D2633);
-/// the host's states of open calls (D2770), `call_id:byte_len`, tab-separated; the
-/// options, comma-separated (`plain`: a plain dump, format 3, D2830, `DumpOptions::plain`;
-/// this line goes when format 2 does); and after that line's newline the states' JSON
-/// texts one after another (`DumpOptions::call_states`, written as `$dump.pending`'s or
+/// the host, `handle:name`, tab-separated (`DumpOptions::handles`, the dump's completion
+/// value, D2895; handle 0: the entry call's outcome, `Vm::outcome`, D2633); the host's
+/// states of open calls (D2770), `call_id:byte_len`, tab-separated; and after that line's
+/// newline the states' JSON texts one after another (`DumpOptions::call_states`, written as
 /// `$djs.resume`'s fourth argument). 0: the dump is in out; 1: refused, the reasons in out
 /// (one per line); 2: no base image (inject it first).
 #[cfg(feature = "dump")]
@@ -993,8 +991,8 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
         let text = staged_str(staging, 0, len).to_owned();
-        // Six lines, then the states' text, which may hold newlines of its own.
-        let mut lines = text.splitn(7, '\n');
+        // Five lines, then the states' text, which may hold newlines of its own.
+        let mut lines = text.splitn(6, '\n');
         let mut line = || lines.next().unwrap_or("");
         let host: Vec<&str> = line().split(',').filter(|n| !n.is_empty()).collect();
         let names: Vec<&str> = line().split(',').filter(|n| !n.is_empty()).collect();
@@ -1018,7 +1016,6 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
             })
             .collect();
         let state_lens = line();
-        let plain = line().split(',').any(|f| f == "plain");
         let state_text = line();
         let mut call_states: Vec<(u32, &str)> = Vec::new();
         let mut at = 0;
@@ -1046,7 +1043,7 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
                 host_fn_name: &host_fn_name,
                 handles: &handles,
                 call_states: &call_states,
-                plain,
+                plain: true,
             };
             Some(
                 slot.vm
@@ -1068,59 +1065,6 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
                 1
             }
             None => 2,
-        }
-    })
-}
-
-/// Loads a dump into the VM with `Vm::load_dump` (0170, D2581): version 1 as a plain
-/// Script, format 2 with the loader's `$dump`. staging[0..names_len] names the host's
-/// functions, `\n`-separated, the i-th (from 0) having id i + 1: the loader maps an open
-/// call's name (`$dump.pending(id, "sleep", args)`) to its id with it (0179). The dump's
-/// UTF-8 text follows, `len` bytes. 0: loaded, out = what the load returned (`Loaded`):
-/// u32 words `n_calls, n_handles, (call_id, fn_id, state_len) * n_calls, (handle,
-/// name_len) * n_handles`, then the handles' names, UTF-8, one after another, then the
-/// calls' states (D2770; JSON text, `state_len` bytes, 0: the call has none). The handles
-/// are the host's to free. 1: not loaded, the reason in out.
-#[cfg(feature = "dump")]
-#[unsafe(no_mangle)]
-pub extern "C" fn vm_load_dump(vm: u32, names_len: usize, len: usize) -> i32 {
-    with(|s| {
-        let (slot, staging) = s.vm_and_staging(vm);
-        let names = staged_str(staging, 0, names_len).to_owned();
-        let text = staged_str(staging, names_len, len).to_owned();
-        let host_fn = |name: &str| {
-            names
-                .split('\n')
-                .position(|n| !n.is_empty() && n == name)
-                .map(|i| i as u32 + 1)
-        };
-        let opts = djs_core::vm::dump_load::LoadOptions {
-            host_fn: &host_fn,
-            ..Default::default()
-        };
-        match slot.vm.load_dump(&text, &opts) {
-            Ok(loaded) => {
-                let mut words = vec![loaded.calls.len() as u32, loaded.handles.len() as u32];
-                let mut text = Vec::new();
-                for c in &loaded.calls {
-                    let state = c.state.as_deref().unwrap_or("");
-                    words.extend([c.id, c.fn_id, state.len() as u32]);
-                }
-                for (name, h) in &loaded.handles {
-                    words.extend([h.index() + 1, name.len() as u32]);
-                    text.extend_from_slice(name.as_bytes());
-                }
-                for c in &loaded.calls {
-                    text.extend_from_slice(c.state.as_deref().unwrap_or("").as_bytes());
-                }
-                s.set_out_words(&words);
-                s.out.extend_from_slice(&text);
-                0
-            }
-            Err(e) => {
-                s.set_out(e.message().as_bytes());
-                1
-            }
         }
     })
 }

@@ -27,6 +27,33 @@ host docs), and drop `plainDumps`/`--plain`/`.plain`. The header is `"djs-dump";
 
 ## Log
 
+Plan (pjf): M1 hosts off format 2; M2 core deletions (loader, primitives, recording
+compile, format 1, `DumpOptions::plain`, goldens → plain, core tests); M3 the
+`jump_if_loading` op and `heap.loading_dump`; M4 docs and guide.
+
+- M1 (hosts). CLI: `--plain`/`.plain` gone; `run --dump-after/--dump-every-idle` and
+  every `resume` make frozen VMs; `djs repl --frozen` (was `--plain`), `.dump` and
+  `.dump-every` without it print "dumps need frozen builtins (D2836): start the REPL with
+  --frozen"; `resume`/`--explain`/`.restore` read only `"djs-dump";`; `--explain`'s
+  header drops "format X" (` (TypeScript)` when it is); a dump naming an unknown host
+  function no longer loads for `--explain` (its code calls it while loading). Fixtures:
+  tests/run/reads.dump.js and inputs.dump.js are the former .plain.js, sleep.dump.js
+  hand-written plain; the generator and plan explain/restore cases dump on the fly.
+  wasm: `vm_load_dump` removed, `vm_dump`'s options line removed, ABI 3 → 4. Sandbox:
+  `plainDumps` gone, `dump`/`Run.dump`/tasks throw misuse "dumps need frozen builtins"
+  without `frozenBuiltins`; `load`/`loadRun`/`resume` take only plain dumps (the
+  dump-module round trip for loads is gone, `viaDumper` lost `back`). pi adapter:
+  `plainDumps` gone, `dumpSession` always plain (`PLAIN_FN_NAMES`), `Engine.loadDump`
+  gone; pi-tests `--plain` gone. difftest: `--dump-every-idle` (format 2) gone, the Djs
+  engine's `plain` folded into `dump_every_idle` (label `--plain-dumps`); the gate's
+  difftest leg no longer passes it (the plain dumps leg covers dumps). JS tests converted
+  (dumpload, task, dumpresume, run, pi-vm, sandbox). docs/cli.md, docs/host.md,
+  TESTING.md (difftest part), ARCH.md's export list, guide snapshots.md's one sentence.
+- Found while converting (reported to the coordinator, not fixed here): plain dumps refuse
+  any class with a static private member ("an instance of class … with private name #o",
+  contradicting D2878), and a class in a factory scope that names itself in a method or
+  constructor gives "plain dump: cyclic dependencies".
+
 ## Follow-ups
 
 ## Result

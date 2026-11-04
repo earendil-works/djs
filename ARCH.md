@@ -560,7 +560,7 @@ ABI". In outline:
 vm_new(memory_limit) -> vm                       // a copy of the base image (D1321)
 vm_from_bytes(len, memory_limit) -> vm           // an image of this process, from staging (D2700)
 vm_arena_ptr / vm_arena_len                      // the image: the arena bytes
-vm_dump / vm_load_dump / vm_replace_image        // continuation dumps (the dump module, D2704)
+vm_dump / vm_replace_image                       // continuation dumps (the dump module, D2704)
 vm_compile(vm, goal, params_len, src_len) -> h   // goal: async body, Script, TS, ...
 vm_call(vm, f, this, argc)                       // pushes a frame, does not run it
 vm_run(vm, fuel) -> status                       // Done | Threw | OutOfFuel | HostCall |

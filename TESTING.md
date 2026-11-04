@@ -257,7 +257,7 @@ $D --update-ratchet                  # rewrite tests/corpus/expected-failures.tx
 scripts/difftest-import-dquickts.py  # re-split the dquickts tests (then --update dquickts)
 
 $D --engine djs --clusters           # djs in-process; failures grouped by error
-$D --engine djs --ratchet --suspend-every 97 --gc-stress --determinism --dump-every-idle
+$D --engine djs --ratchet --suspend-every 97 --gc-stress --determinism
                                      # what the gate runs (--suspend-every 97 also runs 1009)
 $D --engine djs --backend bytecode --ratchet               # the gate, too (0063)
 $D --engine djs --update-ratchet     # after fixing cases: rewrite expected-failures.txt
@@ -275,20 +275,17 @@ every case a second (third) time; a transcript that differs from the plain djs r
 hard failure, separate from the oracle comparison and the ratchet (D1161). Stressed runs
 get three times the case's time limit, and a stressed run that still times out is a
 failure too: mark such a case `no-stress` with the measured reason (D1530).
-`--dump-every-idle` (0172, D2610) dumps the VM at every idle point as a format 2 dump
-(docs/continuation-dumps.md: the session's globals, the prelude's state, open calls,
-pending promises, suspended activations, with the prelude's `api` as a handle), loads it
-into a fresh VM and continues there; the transcript must equal the plain run's, and a
-dump that is refused fails the case (a crash with the reason). Only `codemode` and
-`codemode-harvest` have idle points (1,194 at 0172); the leg costs about 15 CPU-s in a
-debug build.
-`--plain-dumps` (0201, D2830) does the same with plain dumps (format 3, run as a Script in
-the fresh VM, with the host's `$djs.seed`/`$djs.resume`), at most 50 links per case; a
-refused dump ends the case's dumps and the run goes on. `--plain-out DIR` also writes
-every link's dump, the output before it and the plain run's transcript, and
-`scripts/plain-node.mjs DIR` runs each dump in node and requires the same transcript
-(node's clock pinned to djs's, its wording of the common TypeErrors mapped to djs's).
-Its `--refusals tests/plain-refusals.txt` is the ratchet of cases that may refuse
+`--plain-dumps` (0172, 0201, D2830) dumps the VM at every idle point (a plain Script: the
+session's globals, the prelude's state, open calls, pending promises, suspended
+activations as continuations, the prelude's `api` as the completion value), runs the dump
+in a fresh VM with the host's `$djs.seed`/`$djs.resume` and continues there, at most 50
+links per case; the transcript must equal the plain run's. The VMs have frozen builtins
+(D2836), so only cases with idle points are compared (only `codemode` and
+`codemode-harvest` have them). A refused dump ends the case's dumps and the run goes on.
+`--plain-out DIR` also writes every link's dump, the output before it and the plain run's
+transcript, and `scripts/plain-node.mjs DIR` runs each dump in node and requires the same
+transcript (node's clock pinned to djs's, its wording of the common TypeErrors mapped to
+djs's). Its `--refusals tests/plain-refusals.txt` is the ratchet of cases that may refuse
 (`--update` rewrites it). The gate leg "plain dumps (djs and node)" runs both.
 `--determinism` adds a second suspension slice (1009) and requires the suspended runs to
 leave the same heap image as the plain run, both the raw image and its canonical hash

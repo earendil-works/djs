@@ -1,5 +1,6 @@
-// Dumps (0167, docs/functions-as-code.md): `sandbox.dump()` writes the VM's bindings as
-// JavaScript, `load()` runs it in another sandbox; host functions are re-bound by name.
+// Dumps (0167, docs/functions-as-code.md, D2830): `sandbox.dump()` writes the VM's
+// bindings as a Script, `load()` runs it in another sandbox; host functions are re-bound by
+// name. Dumps need frozen builtins (D2836).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -8,7 +9,7 @@ import { loadModule, Sandbox, SandboxError } from "../src/sandbox.ts";
 test("a dump recreates closures, data and buffers in another sandbox", async () => {
   const module = await loadModule();
   const functions = { fetchName: (id: unknown) => `user${String(id)}` };
-  const a = new Sandbox({ module, functions, plainDumps: false }); // format 2 until 0205
+  const a = new Sandbox({ module, functions, frozenBuiltins: true });
   a.run(`
     globalThis.lib = (() => {
       let calls = 0;
@@ -22,18 +23,20 @@ test("a dump recreates closures, data and buffers in another sandbox", async () 
     lib.name(1); lib.name(1);
   `);
   const text = a.dump();
-  assert.match(text, /^"djs-dump 2";\n/);
+  assert.match(text, /^"djs-dump";\n/);
   assert.doesNotMatch(text, /^\s*\/\//m);
   assert.doesNotMatch(text, /user1"\)|fetchName = /);
   const b = new Sandbox({ module, functions });
   b.load(text);
   const check = "return JSON.stringify([lib.name(2), lib.stats(), [...blob]]);";
   assert.equal(b.run(check), a.run(check));
-  assert.equal(b.run("return typeof $dump"), "undefined");
+  assert.equal(b.run("return typeof $dump + typeof $djs"), "undefinedundefined");
 });
 
 test("live values are refused with their path", async () => {
-  const s = new Sandbox({ module: await loadModule(), plainDumps: false });
+  const module = await loadModule();
+  assert.throws(() => new Sandbox({ module }).dump(), (e: SandboxError) => e.kind === "misuse" && /dumps need frozen builtins/.test(e.message));
+  const s = new Sandbox({ module, frozenBuiltins: true });
   s.run("globalThis.w = { cache: new WeakMap() };");
   assert.throws(() => s.dump(), (e: SandboxError) => e.kind === "misuse" && /w\.cache: a weak collection/.test(e.message));
   assert.throws(() => s.load("x = 1"), /not a djs dump/);
@@ -41,33 +44,35 @@ test("live values are refused with their path", async () => {
 
 test("a dump that ends with a cycle patch loads", async () => {
   const module = await loadModule();
-  const a = new Sandbox({ module, plainDumps: false });
+  const a = new Sandbox({ module, frozenBuiltins: true });
   a.run("globalThis.data = { name: 'x' }; data.self = data;");
   const text = a.dump();
-  assert.match(text, /data\.self = data;\n$/);
+  assert.match(text, /data\.self = data;\n/);
   const b = new Sandbox({ module });
   b.load(text);
   assert.equal(b.run("return data.self === data && data.name"), "x");
 });
 
-test("classes with private fields round-trip through the loader", async () => {
+test("classes with private fields round-trip; instances with private names are refused", async () => {
   const module = await loadModule();
-  const a = new Sandbox({ module, plainDumps: false });
+  const a = new Sandbox({ module, frozenBuiltins: true });
   a.run(`
-    globalThis.Account = class Account {
+    globalThis.Account = class {
       #balance = 0;
-      static #opened = 0;
-      constructor() { Account.#opened++; }
+      static opened = 0;
+      constructor() { new.target.opened++; }
       deposit(n) { this.#balance += n; return this; }
       get balance() { return this.#balance; }
-      static opened() { return Account.#opened; }
     };
-    globalThis.acct = new Account().deposit(5);
+    new Account();
   `);
   const text = a.dump();
   const b = new Sandbox({ module });
   b.load(text);
-  const check = "return JSON.stringify([acct.balance, acct.deposit(2).balance, Account.opened(), acct instanceof Account]);";
+  const check = "return JSON.stringify([new Account().deposit(2).balance, Account.opened]);";
   assert.equal(b.run(check), a.run(check));
-  assert.throws(() => b.load('"djs-dump 9";\n'), /format 9/);
+  // Only the class's own construction can add a private name to an object (D2878).
+  a.run("globalThis.acct = new Account().deposit(5);");
+  assert.throws(() => a.dump(), /acct: plain dumps: an instance of class \S*Account with private name #balance/);
+  assert.throws(() => b.load('"djs-dump 9";\n'), /not a djs dump/);
 });
