@@ -21,6 +21,23 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
 
 ## Log
 
+### Plan (pjx, start)
+- Exporter in plain mode (`DumpOptions::plain`) still writes format 2 lines (the checker
+  compiles them) but writes plain forms at the source: builtins `$dump.bN` captured at
+  the top, open calls `$djs.resume(id, name, args[, state])`, host fns by name, no
+  `$dump.random` (`$djs.seed(lo, hi)` first). It records an IR next to `out`: factories
+  (scopes, vars, props with captured boxes), activations (fn node, site, slots with
+  cells, awaiting, this, args, queue). References to closures of merged factories (a
+  frame shares their variables) inside data become exporter patches.
+- vm/dump_plain.rs: the writer (port of plain.mjs toPlain after parsing: placement,
+  scheduling with callbacks, emission, helpers); vm/dump_cont.rs: the continuation
+  generator (port of gen()), fed by pjc's site-structure records (0200).
+- Interface agreed with pjh/coordinator: header `"djs-dump 3";`, host hooks under the
+  global `$djs` (`seed`, `resume`), completion value = the single handle, `$dump`
+  deleted in a final try/finally.
+- Testing: difftest `--dump-every-idle --plain` (in-process chains, cap 50 links), with
+  `--plain-out DIR` for a node harness (scripts/plain-node.mjs) comparing transcripts.
+
 ## Follow-ups
 
 ## Result
