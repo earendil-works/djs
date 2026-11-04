@@ -411,6 +411,12 @@ pub fn run_all(
                     idle_points: None,
                 };
             };
+            if let Some(dir) = crate::djs::PLAIN_OUT.get() {
+                // What every plain dump's continuation must end in (scripts/plain-node.mjs).
+                let d = dir.join(&case.name);
+                let t = crate::engine::transcript(&plain, None);
+                let _ = fs::create_dir_all(&d).and_then(|_| fs::write(d.join("transcript"), t));
+            }
             let timeout = case.meta.timeout.unwrap_or(opts.timeout);
             let (verdict, actual) = verdict(case, &plain, opts, timeout);
             let stress = variants
