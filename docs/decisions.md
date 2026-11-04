@@ -9364,3 +9364,22 @@ origin's site (`["site", fo, ko, "for-await.close#2"]`) where `K`'s own site is 
 another kind. An activation whose continuation is defined in another activation's prefix
 always waits for it: the scheduler's cycle breaking never moves that dependency into a
 callback.
+
+## D2873: Origin tracking inside a continuation's rewritten statement, case tests, finally by jumps
+date: 2026-11-05 · by: pjr · issue: 0203
+A continuation that stops again inside its own rewritten statement is read back as its
+origin: the `await`/`yield` keywords there are copied from the original (so the site
+maps through `segs`); the original's temporaries come first from what `K` copied (a later
+loop iteration runs the original's text), then from `K`'s own constructs named in
+`["tmp", 0, ko, "call.arg@424", "array.element"]` records (an argument or element `K`
+evaluated into its own array literal), then from `cmap`'s constants. `K`'s own call
+(`$djs_R(`, its callee, `this` and fixed arguments) is marked with `["k", 0, ko]`
+records: those temporaries are rebuilt from the origin's frame, so they no longer make
+origin tracking refuse. A completion kind that names a statement by offset (break,
+continue) is translated from `K`'s offsets to the original's. A finally entered by
+`break`/`continue` ends with the jump: unlabelled where the target is the innermost loop
+(or switch) around it, since `K`'s scaffolds nest like the original's statements, else
+by its label. A site in a case test writes the switch again over the saved discriminant
+with the tests that already failed as `case {}:` (a fresh object, never equal); a site in
+the discriminant rewrites it in place. A for-in scaffold's `$dump.forIn` iterator is read
+back by its closure's captures.

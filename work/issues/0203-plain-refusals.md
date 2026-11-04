@@ -51,6 +51,12 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
   Known gap: K re-dumped while closing inside its own copied loop picks the first close
   site at that offset (no ordinal); a single labelled jump out with a close awaited is
   refused.
+- pjr: D2873: finally entered by break/continue, sites in a switch's case test or
+  discriminant, origin tracking inside K's rewritten statement (tmp/k records), for-in
+  scaffold read back, completion kinds translated. v2 refusals 41 -> 39... (finally
+  cases all identical now); chain refusals 11 -> 6 (left: class-closure, class-fields,
+  destructuring, iterator-helpers, using, yield-star). Corpus unchanged (1194 links, 0
+  differ, 0 refused).
 
 ## Follow-ups
 

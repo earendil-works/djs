@@ -49,6 +49,16 @@ const FROM_SYNC_CLOSE: usize = 14;
 /// for a string's or a primitive's) and the keys it has yet to visit. `None`: a Proxy's
 /// (a Record its traps walk).
 fn for_in_parts(h: &Heap, v: Value) -> Option<(Value, Vec<Value>)> {
+    if let Some(o) = v.as_object() {
+        // A plain dump's `$dump.forIn(o, keys)` (a continuation's loop, origin
+        // tracking): its `next` closes over the object, the keys and the index.
+        let next = super::origin::own(h, o, "next")?.as_object()?;
+        let target = captured_value(h, next, "o")?;
+        let keys = super::origin::elements(h, captured_value(h, next, "keys")?)?;
+        let i = captured_value(h, next, "i")?.as_number()?;
+        let i = (i.max(0.0) as usize).min(keys.len());
+        return Some((target, keys[i..].to_vec()));
+    }
     let arr = v.as_internal()?;
     if h.cell_kind(arr) != crate::heap::CellKind::ValueArray {
         return None;

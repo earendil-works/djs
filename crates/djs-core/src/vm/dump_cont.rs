@@ -1111,7 +1111,10 @@ impl G<'_, '_> {
                     "0" => String::new(),
                     "1" => cat!("throw ", cv, ";"),
                     "2" => cat!("return ", cv, ";"),
-                    _ => return no("a finally entered by break or continue (0203)"),
+                    c => match c.parse::<i32>() {
+                        Ok(c) if c >= 3 => self.jump_to(i, ((c - 3) / 2) as u32, c % 2 == 0)?,
+                        _ => return Err(cat!("plain dumps: a finally's completion ", c)),
+                    },
                 };
                 let m = self.mark("finally", n.start);
                 if let P::Mark(x) = m {
@@ -1131,8 +1134,22 @@ impl G<'_, '_> {
 
     fn switch_stmt(&mut self, i: usize, n: &Node) -> R<P> {
         let k = self.next_part(i).unwrap_or(0);
-        if n.parts[k].role != Role::Stmt {
-            return no("a site in a switch's discriminant or case test (0203)");
+        match n.parts[k].role {
+            Role::Discriminant => {
+                let e = self.expr(i + 1)?;
+                let d = n.parts[k];
+                let open = self.text(d.end, n.end).find('{').map(|x| d.end + x as u32);
+                let open = open.ok_or("plain dumps: a switch without its block")?;
+                return Ok(self.with_go(P::L(alloc::vec![
+                    P::V(n.start, d.start),
+                    e,
+                    s(") "),
+                    P::V(open, n.end)
+                ])));
+            }
+            Role::Case => return self.switch_case(i, n, k),
+            Role::Stmt => {}
+            _ => return no("a site in a switch's clause"),
         }
         // The clause holding the site: its statements from the site's on, then the
         // statements of the later clauses (fall-through); `break` leaves `switch (0)`.
@@ -1140,6 +1157,97 @@ impl G<'_, '_> {
         let m = self.mark("switch", n.start);
         let l = self.list(n, k, i + 1, &decls)?;
         Ok(P::L(alloc::vec![m, s("switch (0) { case 0: "), l, s(" }")]))
+    }
+
+    /// A site in case test `k`: the switch again with the saved discriminant, the tests
+    /// that failed before it never matching (`case {}`: a fresh object), the site's
+    /// test rewritten and the rest as they are.
+    fn switch_case(&mut self, i: usize, n: &Node, k: usize) -> R<P> {
+        if n.decls.iter().any(|d| d.kind == DeclKind::Function) {
+            return no("a function declared in a switch whose case test awaits (0203)");
+        }
+        // A case's `case` keyword: before its test (the value it compares is named by it).
+        let case_kw = |g: &Self, m: usize| -> R<u32> {
+            let from = if m == 0 { n.start } else { n.parts[m - 1].end };
+            let to = n.parts[m].start;
+            g.text(from, to)
+                .rfind("case")
+                .map(|x| from + x as u32)
+                .ok_or_else(|| String::from("plain dumps: a case without its keyword"))
+        };
+        let kw = case_kw(self, k)?;
+        // The value the test compares: the discriminant (its temporary is dead once the
+        // last test runs).
+        let left = self.tmp("binary.left", kw)?;
+        let dname = cat!("switch.discriminant@", n.start);
+        let disc = if self.has(&dname) {
+            self.tmp("switch.discriminant", n.start)?
+        } else {
+            left
+        };
+        let d = n
+            .parts
+            .iter()
+            .find(|p| p.role == Role::Discriminant)
+            .copied()
+            .ok_or("plain dumps: a switch without its discriminant")?;
+        let mut out = alloc::vec![P::V(n.start, d.start), disc, s(") {\n")];
+        for m in 0..n.parts.len() {
+            let p = n.parts[m];
+            match p.role {
+                Role::Case if m < k => out.push_out(s("case {}:\n")),
+                Role::Case if m == k => {
+                    out.push_out(P::V(kw, p.start));
+                    out.push_out(self.expr(i + 1)?);
+                    out.push_out(s(":\n"));
+                }
+                Role::Case => {
+                    let c = case_kw(self, m)?;
+                    out.push_out(P::V(c, p.end));
+                    out.push_out(s(":\n"));
+                }
+                Role::Default => {
+                    out.push_out(P::V(p.start, p.end));
+                    out.push_out(s(":\n"));
+                }
+                Role::Stmt | Role::FuncDecl => {
+                    out.push_out(P::V(p.start, p.end));
+                    out.push_out(s("\n"));
+                }
+                _ => {}
+            }
+        }
+        out.push_out(s("}"));
+        let m = self.mark("switch", n.start);
+        out.insert(0, m);
+        Ok(self.with_go(P::L(out)))
+    }
+
+    /// `break`/`continue` to the statement at offset `o`, from inside path node `i`:
+    /// without a label where the innermost loop (or switch, for `break`) is that
+    /// statement, as K's scaffolds nest like the original's statements.
+    fn jump_to(&self, i: usize, o: u32, cont: bool) -> R<String> {
+        let kw = if cont { "continue" } else { "break" };
+        for j in (0..i).rev() {
+            let nd = self.node(j);
+            let target = match nd.kind {
+                NodeKind::While
+                | NodeKind::DoWhile
+                | NodeKind::For
+                | NodeKind::ForOf
+                | NodeKind::ForIn
+                | NodeKind::ForAwait => true,
+                NodeKind::Switch => !cont,
+                _ => false,
+            };
+            if target {
+                if nd.start == o {
+                    return Ok(cat!(kw, ";"));
+                }
+                break;
+            }
+        }
+        Ok(cat!(kw, " ", self.label_at(o)?, ";"))
     }
 
     // ---------------------------------------------------------------- expressions
@@ -1351,8 +1459,11 @@ impl G<'_, '_> {
             .any(|&m| m < k && n.parts[m].role == Role::Spread);
         let mut list: Vec<P> = Vec::new();
         let head = if new { "$djs_C(" } else { "$djs_R(" };
-        let mut out = alloc::vec![s(head), ce, s(", ")];
+        // K's own call: its callee, `this` and arguments are rebuilt from the
+        // original's frame if K stops again inside it ("k" records, origin tracking).
+        let mut out = alloc::vec![self.kmark(), s(head), self.kmark(), ce, s(", ")];
         if let Some(t) = this {
+            out.push_out(self.kmark());
             out.push_out(t);
             out.push_out(s(", "));
         }
@@ -1376,16 +1487,24 @@ impl G<'_, '_> {
             out.push_out(s("))"));
             return Ok(P::L(out));
         }
+        let construct = if new { "new.arg" } else { "call.arg" };
+        let simple = !args.iter().any(|&m| n.parts[m].role == Role::Spread);
         for &m in &args {
             let p = n.parts[m];
-            if m < k {
-                list.push_out(self.tmp(if new { "new.arg" } else { "call.arg" }, p.start)?);
+            let e = if m < k {
+                self.tmp(construct, p.start)?
             } else if m == k {
-                list.push_out(self.arg(i, n, m)?);
+                self.arg(i, n, m)?
             } else {
-                list.push_out(self.rest_part(n, m));
-            }
+                self.rest_part(n, m)
+            };
+            list.push_out(if simple {
+                self.as_element(cat!(construct, "@", p.start), e)
+            } else {
+                e
+            });
         }
+        out.push_out(self.kmark());
         out.push_out(s("["));
         push_joined(&mut out, list);
         out.push_out(s("])"));
@@ -1400,6 +1519,23 @@ impl G<'_, '_> {
         } else {
             e
         })
+    }
+
+    /// A construct of K's own whose temporaries origin tracking rebuilds from the
+    /// original's frame (K's `$djs_R(` call, its fixed arguments).
+    fn kmark(&mut self) -> P {
+        self.mark("k", 0)
+    }
+
+    /// Element `p` of K's own array literal standing for the original's temporary
+    /// `fslot` (an argument or element evaluated at or after the site): recorded for
+    /// origin tracking, should K stop again before the literal is complete.
+    fn as_element(&mut self, fslot: String, p: P) -> P {
+        let m = self.mark("tmp", 0);
+        if let P::Mark(x) = m {
+            self.scaf[x].3 = cat!(",", quote(&fslot), ",\"array.element\"");
+        }
+        P::L(alloc::vec![m, p])
     }
 
     fn array(&mut self, i: usize, n: &Node, k: usize) -> R<P> {
@@ -1423,6 +1559,9 @@ impl G<'_, '_> {
             let p = n.parts[m];
             if p.role == Role::Hole {
                 list.push_out(s(""));
+            } else if m == k && p.role != Role::Spread {
+                let e = self.arg(i, n, m)?;
+                list.push_out(self.as_element(cat!("array.element@", p.start), e));
             } else if m == k {
                 list.push_out(self.arg(i, n, m)?);
             } else if m > k {
@@ -1430,7 +1569,8 @@ impl G<'_, '_> {
             } else if p.role == Role::Spread {
                 return no("a spread before the site in an array");
             } else {
-                list.push_out(self.tmp("array.element", p.start)?);
+                let e = self.tmp("array.element", p.start)?;
+                list.push_out(self.as_element(cat!("array.element@", p.start), e));
             }
         }
         let trailing_hole = n.parts.last().is_some_and(|p| p.role == Role::Hole);

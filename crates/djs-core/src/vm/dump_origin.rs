@@ -41,6 +41,10 @@ type Scaffold = (String, u32, u32, Option<(i32, String)>, Extra);
 struct Extra {
     next: Option<String>,
     site: Option<String>,
+    /// A temporary of the rewritten statement that K keeps in a construct of its own
+    /// (`["tmp", fo, ko, "call.arg@424", "array.element"]`): the origin's slot and K's
+    /// construct at `ko`.
+    tmp: Option<(String, String)>,
 }
 
 enum CVal {
@@ -49,7 +53,7 @@ enum CVal {
 }
 
 /// The own data property `name` of `o`.
-fn own(h: &Heap, o: Obj, name: &str) -> Option<Value> {
+pub(super) fn own(h: &Heap, o: Obj, name: &str) -> Option<Value> {
     h.own_keys(o)
         .into_iter()
         .find(|&k| h.atom_symbol(k).is_none() && atom_text(h, k) == name)
@@ -61,7 +65,7 @@ fn own(h: &Heap, o: Obj, name: &str) -> Option<Value> {
 }
 
 /// The elements of a dense array.
-fn elements(h: &Heap, v: Value) -> Option<Vec<Value>> {
+pub(super) fn elements(h: &Heap, v: Value) -> Option<Vec<Value>> {
     let o = v.as_object()?;
     if h.object_class(o) != ObjectClass::Array {
         return None;
@@ -102,18 +106,22 @@ fn record(h: &Heap, k: Obj) -> Option<Record> {
         let kind = string(h, *e.first()?)?;
         let (fo, ko) = (number(*e.get(1)?)?, number(*e.get(2)?)?);
         let mut extra = Extra::default();
-        let fin = match (e.get(3), e.get(4)) {
-            (Some(k), Some(b)) => Some((k.as_number()? as i32, string(h, *b)?)),
-            (Some(n), None) => {
+        let fin = match (kind.as_str(), e.get(3), e.get(4)) {
+            ("tmp", Some(f), Some(k)) => {
+                extra.tmp = Some((string(h, *f)?, string(h, *k)?));
+                None
+            }
+            ("site", Some(n), None) => {
                 extra.site = Some(string(h, *n)?);
                 None
             }
+            (_, Some(k), Some(b)) => Some((k.as_number()? as i32, string(h, *b)?)),
             _ => None,
         };
         if let Some(n) = e.get(5) {
             extra.next = Some(string(h, *n)?);
         }
-        scaf.push_out((kind, fo, ko, fin, extra));
+        scaf.push((kind, fo, ko, fin, extra));
     }
     let mut cmap = Vec::new();
     for e in elements(h, own(h, r, "cmap")?)? {
@@ -361,8 +369,38 @@ impl Dumper<'_> {
         Ok(Some((out, fsite, syntax)))
     }
 
-    /// The value of the origin's temporary `x`.
+    /// The value of the origin's temporary `x`; a completion's kind that names a
+    /// statement (a `break` or `continue`, D2733) by its offset in `K` names it in `f`.
     fn origin_temp(
+        &self,
+        rec: &Record,
+        knamed: &[NamedSlot],
+        kv: &dyn Fn(Place) -> Value,
+        at_site: Option<u32>,
+        x: &NamedSlot,
+    ) -> Option<Value> {
+        let v = self.origin_temp_k(rec, knamed, kv, at_site, x)?;
+        let (c, foff) = split(&x.name)?;
+        let from_k = !rec
+            .scaf
+            .iter()
+            .any(|r| r.0 == "finally" && r.1 == foff && c == "completion.kind");
+        match v.as_int() {
+            Some(code) if c == "completion.kind" && code >= 3 && from_k => {
+                let ko = ((code - 3) / 2) as u32;
+                let fo = rec
+                    .scaf
+                    .iter()
+                    .find(|r| r.2 == ko && r.0 != "site")
+                    .map(|r| r.1)
+                    .or_else(|| to_f(&rec.segs, ko))?;
+                Some(Value::int(3 + 2 * fo as i32 + (code - 3) % 2))
+            }
+            _ => Some(v),
+        }
+    }
+
+    fn origin_temp_k(
         &self,
         rec: &Record,
         knamed: &[NamedSlot],
@@ -373,14 +411,20 @@ impl Dumper<'_> {
         let h = self.h;
         let (c, foff) = split(&x.name)?;
         let kslot = |name: &str| knamed.iter().find(|y| y.name == name).map(|y| kv(y.place));
-        // A temporary of the rewritten statement, while K is still at its site.
+        // A temporary of the rewritten statement evaluated before the site: K's constant.
+        let from_cmap = || {
+            rec.cmap
+                .iter()
+                .find(|e| e.0 == x.name)
+                .and_then(|(_, cv)| match cv {
+                    CVal::Binding(b) => kslot(b),
+                    CVal::Literal(v) => Some(*v),
+                })
+        };
         if at_site.is_some()
-            && let Some((_, cv)) = rec.cmap.iter().find(|e| e.0 == x.name)
+            && let Some(v) = from_cmap()
         {
-            return match cv {
-                CVal::Binding(b) => kslot(b),
-                CVal::Literal(v) => Some(*v),
-            };
+            return Some(v);
         }
         // A scaffold's: the loop's saved iterator record, a finally's completion.
         for r in rec.scaf.iter().filter(|r| r.1 == foff) {
@@ -391,6 +435,12 @@ impl Dumper<'_> {
                     if let Some(w) = kslot(&cat!("for-of.iterator@", r.2)) {
                         let (it, next) = unwrap_loop(h, w)?;
                         return Some(if c == "for-of.iterator" { it } else { next });
+                    }
+                }
+                ("for-in", "for-in.iterator") => {
+                    // The dump's key iterator (`$dump.forIn`), in K's loop over it.
+                    if let Some(w) = kslot(&cat!("for-of.iterator@", r.2)) {
+                        return unwrap_loop(h, w).map(|x| x.0);
                     }
                 }
                 ("for-await", "for-await.iterator") | ("for-await", "for-await.next") => {
@@ -419,11 +469,26 @@ impl Dumper<'_> {
                 _ => {}
             }
         }
-        // A construct of the text K copied: the same slot at K's offset.
-        knamed.iter().find_map(|y| {
+        // A construct of the text K copied: the same slot at K's offset. (First: in a
+        // later iteration of a loop K runs the original's text again.)
+        let copied = knamed.iter().find_map(|y| {
             let (yc, ko) = split(&y.name)?;
             (yc == c && to_f(&rec.segs, ko) == Some(foff)).then(|| kv(y.place))
-        })
+        });
+        if copied.is_some() {
+            return copied;
+        }
+        // K stopped again inside its rewritten statement: what it evaluated after the
+        // site is in K's own constructs, what came before in its constants.
+        for r in rec.scaf.iter().filter(|r| r.0 == "tmp") {
+            if let Some((f, kc)) = &r.4.tmp
+                && *f == x.name
+                && let Some(v) = kslot(&cat!(kc, "@", r.2))
+            {
+                return Some(v);
+            }
+        }
+        from_cmap()
     }
 }
 
