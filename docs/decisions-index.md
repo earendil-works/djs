@@ -619,3 +619,9 @@ topics when the index is next reorganized.
 - D2831: The plain dump is written by the Rust exporter
 - D2832: Open host calls and Math.random's state are restored through host functions
 - D2833: Re-dumps use origin tracking
+- D2850: Suspension maps carry the syntax around each site
+- D2890: Plain dumps load as a Script with `$djs.resume`/`$djs.seed`; open calls keep their ids
+- D2891: Hosts load plain dumps themselves; sync host functions run meanwhile
+- D2892: The size ceilings rise for plain-dump loading in the shipped module
+- D2851: Site syntax: member targets split, recording only in async functions and generators, pinned
+- D2893: pi's next mode names its host functions `$djs.bridge`/`$djs.call` in plain dumps
