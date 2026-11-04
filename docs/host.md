@@ -657,7 +657,9 @@ that it keeps none of it (the changes are listed at its top):
 - tools and globals are engine async host calls: `tools.x(args)` serializes as before and
   returns the promise of the adapter's async host function `call(kind, name, argsJson)`.
   An open call is engine state, and a dump writes it as `$dump.pending(id, "call",
-  [kind, name, argsJson])`. The adapter numbers the calls for pi's protocol;
+  [kind, name, argsJson], {"id": n})`. The adapter numbers the calls for pi's protocol,
+  and that number is the call's state (D2770), so the dump carries it and the adapter's
+  own state has no call table;
 - the body's promise is the adapter's (a handle), and so are `finished`, the output
   counters and the store. `bridge("output" | "store" | "load", ...)` answer: nothing, a
   limit's message, or the stored JSON. When the body settles the adapter calls the
@@ -679,16 +681,19 @@ resumed.deliver({ type: "result", id, ok: true, payload, seq, now });
 
 `dumpSession()` writes the VM as a format 2 dump (the script's functions, data, suspended
 activations and open calls; the prelude's globals are host globals, written by name) and
-the adapter's state beside it. `resumeFromDump` runs the host globals and prelude-next
-again (deterministic, D2262; or restores the prelude image), loads the dump and restores
-the adapter's state. The open calls are not posted again: the host delivers a recorded
-result, issues the call again, or rejects it. The module needs the dumper (the `dump`
+the adapter's state beside it (`finished`, the store, the output counters, the
+deterministic clock and sequence numbers; each open call's pi id is in the dump, as its
+state). `resumeFromDump` runs the host globals and prelude-next again (deterministic,
+D2262; or restores the prelude image), loads the dump, rebuilds the call table from the
+calls' states and restores the adapter's state. The open calls are not posted again: the
+host delivers a recorded result, issues the call again, or rejects it (pi's host is the
+`resume` hook here: the adapter cannot run tools). The module needs the dumper (the `dump`
 feature). `dumpEveryIdle: true` dumps and resumes in a new instance at every idle point
 (D2651); pi's suite passes the same in all three modes (`node js/pi/pi-tests.ts`,
-`--next`, `--next --dump-every-idle`: 215 of 226 at 0176, the same 11 failures as
-above), and js/test/pi-vm.test.ts runs every adapter test in each and the open-call
-policies through a real dump. Not yet: a dump does not carry `Math.random`'s state, so a
-resumed deterministic run restarts its sequence (0182).
+`--next`, `--next --dump-every-idle`: 215 of 226 at 0176 and again at 0195 with the call
+states, the same 11 failures as above), and js/test/pi-vm.test.ts runs every adapter test
+in each and the open-call policies through a real dump. A dump carries `Math.random`'s
+state (`$dump.random`, 0182), so a resumed deterministic run continues its sequence.
 
 What pi would change to adopt it: take prelude-next's changes into its prelude (they are
 small and engine-neutral except the async host function), let the engine own call ids
