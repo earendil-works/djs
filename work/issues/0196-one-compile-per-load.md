@@ -1,7 +1,7 @@
 # 0196: Load performance: one compile per load (state tables kept or cached)
 
-status: open
-agent: -
+status: in-progress
+agent: sm
 branch: issue/0196-one-compile-per-load
 depends-on: 0194
 guide: -
