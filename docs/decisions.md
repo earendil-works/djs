@@ -8994,3 +8994,22 @@ nothing on the operand stack at any site. Slot names at every site are unchanged
 change only in local numbering (one more local per for-await loop), the summary in its
 construct lists (no indexes), and no golden dump changes. No image format change:
 COMPAT_VERSION stays.
+
+## D2735: One compile per load: the loader records the maps in the compile that runs the dump
+date: 2026-11-04 · by: sm · issue: 0196
+A format 2 load compiled the dump's text to run it and, at the first `$dump.resume`,
+compiled it again with recording on for the suspension maps. Recording does not change
+the code (the pin test compares the disassembly over the corpus), so the loader now
+compiles format 2 text once with recording on (`compiler::compile_with_maps`) and keeps
+the maps for every `resume`; format 1 keeps the plain compile. Recording no longer runs
+the stack-depth and liveness analyses for functions without suspension sites (they only
+contribute their computed keys), and finds the sites' instructions in one pass. Measured
+natively over the 1,164 harvested idle-point dumps (23 MB of text, best of 5, release):
+plain compile 343 ms, compile + maps (the old load) 711–741 ms, compile with maps 377–381
+ms; `load_dump` overall 450–463 ms against about 800 ms before (0.56x). A 12 MB data-only
+dump compiles in the same time with recording as without, so recording is not gated on
+the text having activations. Alternatives: keeping state tables in templates of a dump
+build (a per-function table in the heap for every compile, for a cost recording already
+nearly removes), or a per-script map cache across loads (a load is one compile now; the
+exporter's compiles at dump time are a separate matter). A test now checks that a loaded
+dump is its own fixed point: dumping right after the load writes the same text.

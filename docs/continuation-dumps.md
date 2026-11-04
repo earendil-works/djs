@@ -228,8 +228,9 @@ As built (0171, D2583–D2585):
 
 - `resume(fn, {at, awaiting, this, args, slots, queue})` (D2731; before 0191 `slots`
   was three keys, `bindings`, `operands` by role bottom first and `loops` outermost
-  first). `fn` must be made by the dump's own text: the loader compiles that text again
-  with recording on, so the map's slots and resume pc are those of `fn`'s code. `slots`
+  first). `fn` must be made by the dump's own text: the loader compiles that text with
+  recording on (one compile that both runs the dump and gives the maps, D2735), so the
+  map's slots and resume pc are those of `fn`'s code. `slots`
   names every slot of the frame at the site and nothing else ("Slot names"): every
   binding in scope (`name`, or `name@scope` with the declaring scope's offset when two of
   a name are in scope), the hidden locals the loader does not make itself (it makes
@@ -363,8 +364,10 @@ with its path, as in version 1.
 
 ### Suspension maps (D2563)
 
-Per `await`/`yield`, computed by compiling the function again on demand (no cost at run
-time, nothing in the heap):
+Per `await`/`yield`, recorded by a compile with recording on (no cost at run time,
+nothing in the heap): the exporter compiles a function's script again on demand, the
+loader records them in the one compile of the dump's text (D2735; recording leaves the
+code as it is, which the pin test checks):
 
 - the site: `await#N`/`yield#N` in the function's text order, compiler-made sites (`for
   await`, async generator `yield`/`return`, `await using`) with a kind;
