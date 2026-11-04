@@ -48,6 +48,16 @@ struct UnitPool {
 impl UnitPool {
     fn hash(heap: &Heap, v: Value) -> u32 {
         match v.as_string() {
+            // A long flat string by its length and ~256 sampled units: a dump's megabyte
+            // literal is compared on a match instead of hashed whole (0198).
+            Some(s) if heap.str_len(s) > 1024 => match heap.str_view(s) {
+                Some(view) => (0..view.len())
+                    .step_by(view.len() / 256)
+                    .fold(view.len() as u32, |h, i| {
+                        (h ^ u32::from(view.get(i))).wrapping_mul(0x0100_0193)
+                    }),
+                None => heap.str_hash_uncached(s),
+            },
             Some(s) => heap.str_hash_uncached(s),
             None => {
                 let b = v.to_bits();
