@@ -177,7 +177,9 @@ struct Session {
     #[cfg_attr(not(feature = "dump"), allow(dead_code))]
     dump: Option<(VmOptions, f64)>,
     /// Plain dumps, and how many were taken.
+    #[cfg_attr(not(feature = "dump"), allow(dead_code))]
     plain: bool,
+    #[cfg_attr(not(feature = "dump"), allow(dead_code))]
     links: u32,
     /// The case's name (for `--plain-out`).
     #[cfg_attr(not(feature = "dump"), allow(dead_code))]
