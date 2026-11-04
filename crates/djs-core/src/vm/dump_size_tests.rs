@@ -101,6 +101,7 @@ fn the_sleep_example_dumps() {
     const SOURCE: u32 = 9;
     const RESUME: u32 = 10;
     const SEED_HOOK: u32 = 11;
+    const HOST_HOOK: u32 = 12;
     let mut vm = Vm::from_base(
         base(),
         VmOptions {
@@ -125,6 +126,8 @@ fn the_sleep_example_dumps() {
     vm.define(rt, "resume", resume).unwrap();
     let seed = vm.new_host_function(SEED_HOOK, "seed").unwrap();
     vm.define(rt, "seed", seed).unwrap();
+    let host = vm.new_host_function(HOST_HOOK, "host").unwrap();
+    vm.define(rt, "host", host).unwrap();
     vm.define_global("$djs", Value::object(rt)).unwrap();
     let f = vm
         .compile(
@@ -152,6 +155,10 @@ fn the_sleep_example_dumps() {
             }
             Status::HostCall { call_id, fn_id } if fn_id == RESUME => {
                 vm.open_host_call(call_id, SLEEP).unwrap();
+            }
+            Status::HostCall { call_id, fn_id } if fn_id == HOST_HOOK => {
+                let r = super::dump_tests::serve_host_hook(&mut vm, call_id);
+                vm.resolve_host_call(call_id, r).unwrap();
             }
             Status::HostCall { call_id, fn_id } if fn_id == SEED_HOOK => {
                 vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();

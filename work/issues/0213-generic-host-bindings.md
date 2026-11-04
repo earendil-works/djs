@@ -64,6 +64,10 @@ D2970-D2989.
   one object per identity, bindings (globals, namespaces, body bindings, later imports) to identities,
   `$djs.host(name)` hook in dumps, Sandbox `globals`/`bindings` options, CLI `--bind`. Sent to the
   coordinator with open questions; waiting for OK before implementing.
+- Coordinator OK with answers: `$djs.host` covers roots too; Sandbox bindings per sandbox (namespaces
+  bindable as body bindings); dotted-name globals kept as documented sugar for an explicit `globals` entry;
+  CLI answers by full name only; batch 1 (engine, wasm, Rust hosts) now, rebased onto 0212 before merging;
+  batch 3 (pi, CLI --bind) after pjr's merge.
 
 ## Follow-ups
 

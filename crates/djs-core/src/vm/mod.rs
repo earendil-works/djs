@@ -579,6 +579,20 @@ impl Vm {
         self.define(g, name, v)
     }
 
+    /// The value at the dotted `path` from the global object (`tools.read`): own data
+    /// properties only, no getters or Proxy traps run. For hosts that bind their values
+    /// as globals and resolve a dump's `$djs.host(name)` by the binding (D2971); `None`
+    /// if a step is missing.
+    pub fn global_path(&mut self, path: &str) -> Option<Value> {
+        let mut v = Value::object(self.global());
+        for part in path.split('.') {
+            let o = v.as_object()?;
+            let k = self.heap.atom_str(part).ok()?;
+            v = self.heap.get_own_property(o, k)?.value()?;
+        }
+        Some(v)
+    }
+
     /// A new Error object of `kind`.
     /// Sets the clock that `Date.now()` and `new Date()` read, in ms since the epoch
     /// (ARCH "Nondeterminism", D1383). The VM never reads a system clock: the host sets

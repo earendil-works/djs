@@ -32,11 +32,13 @@ fn new_vm() -> Vm {
 /// Host function ids of a dump's hooks in the tests: above every test's own.
 const HOOK_SEED: u32 = 0x7fff_fff0;
 const HOOK_RESUME: u32 = 0x7fff_fff1;
+const HOOK_HOST: u32 = 0x7fff_fff2;
 
 /// Runs dump `text` in `vm`, a fresh VM, as a host does (D2890, D2903): `$djs` is the
 /// dump runtime with the hooks `seed` (`Math.random`'s state, the next call id, D2897)
 /// and `resume` (opens call `id` of the host function `host_fn` names again, under its
-/// id); the Script runs to its first stop that is not a hook call, `serve` answering the
+/// id) and `host` (a host value by name, D2971: the tests bind every one as the global of
+/// that path); the Script runs to its first stop that is not a hook call, `serve` answering the
 /// other sync host calls it makes meanwhile. The Script's completion value (what the dump
 /// names for the host, D2895), or why the dump did not load.
 pub(super) fn run_plain_dump(
@@ -57,6 +59,8 @@ pub(super) fn run_plain_dump(
     vm.define(hooks, "seed", seed).unwrap();
     let resume = vm.new_host_function(HOOK_RESUME, "resume").unwrap();
     vm.define(hooks, "resume", resume).unwrap();
+    let host = vm.new_host_function(HOOK_HOST, "host").unwrap();
+    vm.define(hooks, "host", host).unwrap();
     vm.define_global("$djs", Value::object(hooks)).unwrap();
     let opts = crate::compiler::CompileOptions {
         typescript: ts,
@@ -99,6 +103,10 @@ pub(super) fn run_plain_dump(
                     }
                 }
             }
+            Status::HostCall { call_id, fn_id } if fn_id == HOOK_HOST => {
+                let r = serve_host_hook(vm, call_id);
+                vm.resolve_host_call(call_id, r).unwrap();
+            }
             Status::HostCall { call_id, fn_id } => serve(vm, call_id, fn_id),
             Status::Threw(e) => return Err(alloc::format!("the dump threw {}", vm.display(e))),
             s => return Err(alloc::format!("the dump stopped: {s:?}")),
@@ -108,6 +116,17 @@ pub(super) fn run_plain_dump(
         vm.set_next_call_id(n.max(last + 1));
     }
     Ok(done)
+}
+
+/// `$djs.host(name)` of a host that binds every host value as the global of its path.
+pub(super) fn serve_host_hook(vm: &mut Vm, call_id: u32) -> Result<Value, Value> {
+    let args = vm.host_call(call_id).unwrap().args;
+    let name = args.first().and_then(|v| v.as_string());
+    let name = name.map(|s| vm.heap().str_to_string(s)).unwrap_or_default();
+    vm.global_path(&name).ok_or_else(|| {
+        let m = alloc::format!("host: unknown host value {name}");
+        vm.new_error(ErrorKind::Error, &m).unwrap()
+    })
 }
 
 /// Runs a Script; its completion value as `display` shows it, or `throw ...`.

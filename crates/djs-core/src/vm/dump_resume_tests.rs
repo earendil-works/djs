@@ -1072,7 +1072,7 @@ fn plain_dump_at(src: &str, k: usize) -> String {
 
 /// A fresh VM that ran plain dump `text` as a Script, with the dump runtime and the host's
 /// hooks on `$djs` (D2903): `$djs.seed` a no-op (the fixtures draw no random numbers),
-/// `$djs.resume` making the call again.
+/// `$djs.resume` making the call again, `$djs.host` the global of the name's path.
 fn plain_load(text: &str) -> Result<Vm, String> {
     let mut vm = plain_vm();
     let seed = vm.new_host_function(SEED, "seed").unwrap();
@@ -1081,7 +1081,7 @@ fn plain_load(text: &str) -> Result<Vm, String> {
     vm.define_global("$djs", rt).unwrap();
     run_value(
         &mut vm,
-        "Object.assign($djs, { seed: $djs_seed, resume: (id, name, args) => later(...args) }); delete globalThis.$djs_seed; 0",
+        "Object.assign($djs, { seed: $djs_seed, resume: (id, name, args) => later(...args), host: (n) => n.split('.').reduce((o, k) => o[k], globalThis) }); delete globalThis.$djs_seed; 0",
     );
     let f = vm
         .compile(

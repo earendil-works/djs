@@ -73,12 +73,18 @@ fn dump_options(typescript: bool) -> crate::compiler::CompileOptions<'static> {
 pub struct DumpOptions<'a> {
     /// The base image the VM was made from: builtins are named by their paths on it.
     pub base: &'a [u8],
-    /// Globals the host defines in every VM (`console`, `tools`): never dumped; values
-    /// reached from them are referenced by name (`tools.read`).
+    /// Globals the host defines again in every VM it loads a dump into (`console`,
+    /// `tools`): never dumped. Each one's value is a host root named by the global's name
+    /// (see `host_roots`), unless it is a host function or named otherwise.
     pub host: &'a [&'a str],
-    /// The host's name of its function `fn_id` (`tools.read`), for open calls and for
-    /// host functions held as values (an expression the dump evaluates while it loads).
-    /// `None` refuses.
+    /// Values the host made and names (D2971): namespace objects, objects of its own
+    /// code. The dump writes such a value as `$djs.host(name)` and its own data
+    /// properties, two levels deep, as reads on it (`$djs.host("tools").list`), never by
+    /// where they are bound.
+    pub host_roots: &'a [(&'a str, Value)],
+    /// The identity of the host's function `fn_id` (`tools.read`, `@sdk/x#myTool`; any
+    /// string, D2970), for open calls (`$djs.resume(id, name, ...)`) and for host
+    /// functions held as values (`$djs.host(name)`). `None` refuses.
     pub host_fn_name: &'a dyn Fn(u32) -> Option<String>,
     /// Values the host holds (a run's promise, a REPL input's): the dump's completion
     /// value (D2895), the value itself for one named `run`, else an object of all.
@@ -103,6 +109,7 @@ impl Default for DumpOptions<'_> {
         DumpOptions {
             base: &[],
             host: &[],
+            host_roots: &[],
             host_fn_name: &no_host_fn_name,
             handles: &[],
             call_states: &[],
@@ -587,6 +594,12 @@ fn quote_units(units: impl Iterator<Item = u16>) -> String {
     out
 }
 
+/// A host value by its name (D2971): `$djs.host("tools.read")`, which the loading host
+/// resolves while the dump runs.
+fn host_ref(name: &str) -> String {
+    cat!("$djs.host(", quote(name), ")")
+}
+
 fn quote(s: &str) -> String {
     if s.is_ascii() {
         return quote_latin1(s.as_bytes());
@@ -892,6 +905,9 @@ impl<'a> Dumper<'a> {
         d.builtins = table.clone();
         d.cells = table.cells.clone();
         d.base_globals = table.globals.clone();
+        for &(name, v) in opts.host_roots {
+            d.host_values(v, host_ref(name), 0);
+        }
         d.read_globals(&base);
         d.scratch = Some(base);
         Ok(d)
@@ -965,7 +981,7 @@ impl<'a> Dumper<'a> {
         // A host name on the global object is the host's; a lexical binding of that
         // name is the script's own and hides the host's property, so it is dumped.
         if decl == Decl::Var && self.host_names.contains(&name.as_str()) {
-            self.host_values(value, name, 0);
+            self.host_values(value, host_ref(&name), 0);
         } else if name == "$dump" || name == "$djs" {
             // A plain dump's own names: its values live in `$dump` during the load
             // and the host's runtime and hooks in `$djs` (D2890, D2903).
@@ -983,22 +999,15 @@ impl<'a> Dumper<'a> {
         }
     }
 
-    /// Whether `v` is the host's global `name` (what the name reads after the dump).
-    fn is_host_value(&self, v: Option<Value>, name: &str) -> bool {
-        let (h, g) = (self.h, self.vm.global());
-        self.host_names.contains(&name)
-            && v.is_some()
-            && h.own_keys(g)
-                .into_iter()
-                .find(|&k| h.atom_symbol(k).is_none() && atom_text(h, k) == name)
-                .and_then(|k| h.get_own_property(g, k))
-                .and_then(|p| p.value())
-                == v
-    }
-
+    /// Marks `v`, a host root or a value reached from one, as the host's: written as
+    /// `expr` (`$djs.host("tools")`, `$djs.host("tools").list`), never dumped.
     fn host_values(&mut self, v: Value, expr: String, depth: u32) {
         let Some(o) = v.as_object() else { return };
-        if o.offset() < self.base_end || self.cell(o.offset()).is_some() {
+        // A host function is written by its identity wherever it is bound (D2970).
+        if o.offset() < self.base_end
+            || self.cell(o.offset()).is_some()
+            || self.h.object_class(o) == ObjectClass::HostFunction
+        {
             return;
         }
         self.cells
@@ -2236,16 +2245,15 @@ impl<'a> Dumper<'a> {
                 let mut why: Vec<String> = Vec::new();
                 for c in &orig.captures {
                     // Or read as a global: a root holding the variable's box, or a root
-                    // or the host's global of the same name holding its current value
-                    // (the factory leaves such a variable to the global).
+                    // of the same name holding its current value (the factory leaves
+                    // such a variable to the global).
                     let value = captured_value(h, o, c);
                     let ok = new.captures.contains(c)
                         || (new.globals.contains(c)
-                            && (self.is_host_value(value, c)
-                                || self
-                                    .roots
-                                    .iter()
-                                    .any(|r| r.name == *c && (r.boxed || Some(r.value) == value))));
+                            && self
+                                .roots
+                                .iter()
+                                .any(|r| r.name == *c && (r.boxed || Some(r.value) == value)));
                     if !ok {
                         why.push_out(cat!(
                             "captures `",
@@ -3171,9 +3179,9 @@ impl<'a> Dumper<'a> {
                             cat!("let ", name, " = ", v, ";")
                         } else if e == *name {
                             if !self.nodes[b].frame_box {
-                                // A captured `tools` that holds the host's `tools`: the
-                                // closures read the global (`let tools = tools;` would be
-                                // a TDZ error).
+                                // A captured variable that holds the global of its name
+                                // (a builtin): the closures read the global (`let x =
+                                // x;` would be a TDZ error).
                                 continue;
                             }
                             // A frame shares the variable: it must exist, with the value
@@ -3831,12 +3839,8 @@ impl<'a> Dumper<'a> {
             ObjectClass::HostFunction => {
                 let id = h.object_slot(o, 0).as_int().unwrap_or(-1) as u32;
                 let name = (self.fl.host_fn_name)(id).unwrap_or_default();
-                // The host defines its functions as globals by these names.
-                if name.is_empty() || !name.split('.').all(is_ident) {
-                    let p = self.nodes[n].path.clone();
-                    self.refuse(p, "a host function without a global name");
-                }
-                return name;
+                // By its identity, not by where it is bound (D2971).
+                return host_ref(&name);
             }
             ObjectClass::Promise => {
                 let state = h.object_slot(o, 0).as_int().unwrap_or(0);
