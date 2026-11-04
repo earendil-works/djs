@@ -1,7 +1,7 @@
 # 0211: Plain dump fuzzing, round 2: wider generator, new seeds
 
-status: open
-agent: -
+status: in-progress
+agent: pjz
 branch: issue/0211-plain-fuzz-2
 depends-on: 0208
 guide: -
