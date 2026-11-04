@@ -775,8 +775,9 @@ struct Dumper<'a> {
     /// A written function comes from a TypeScript script: the dump is compiled as
     /// TypeScript (`"djs-dump 2 typescript";`).
     ts: core::cell::Cell<bool>,
-    /// The TypeScript scripts whose functions the dump writes (or names, D2882): whether
-    /// their TypeScript is only types decides if the dump can be JavaScript (D2879).
+    /// The TypeScript scripts the dump names by `$djs.source` (D2882): it holds only part
+    /// of them, so whether their TypeScript is only types decides too if the dump can be
+    /// JavaScript (D2879).
     ts_scripts: core::cell::RefCell<Vec<u32>>,
     /// The base heap: the checker compiles the dump into it.
     scratch: Option<Heap>,
@@ -2100,8 +2101,8 @@ impl<'a> Dumper<'a> {
         let js = String::from_utf8(out).map_err(|_| fail("its TypeScript is not UTF-8"))?;
         let mut ok =
             crate::compiler::compile(&mut heap, js.as_bytes(), &dump_options(false)).is_ok();
-        // The scripts themselves too: a dump that names a script by `$djs.source` holds
-        // only part of it, and an enum outside that part still changes what it means.
+        // The scripts it names too: a dump that names a script by `$djs.source` holds only
+        // part of it, and an enum outside that part still changes what the part means.
         let h = self.h;
         for &script in self.ts_scripts.borrow().iter() {
             if !ok {
@@ -2171,6 +2172,12 @@ impl<'a> Dumper<'a> {
             }
             cat!(", ", quote(&params), ", 1")
         };
+        if bits & crate::compiler::CompileOptions::TYPESCRIPT_BIT != 0 {
+            let mut s = self.ts_scripts.borrow_mut();
+            if !s.contains(&script) {
+                s.push_out(script);
+            }
+        }
         Some(cat!(
             "$djs.source(",
             quote(&name),
@@ -2549,10 +2556,6 @@ impl<'a> Dumper<'a> {
                 != 0
         {
             self.ts.set(true);
-            let mut s = self.ts_scripts.borrow_mut();
-            if !s.contains(&script) {
-                s.push_out(script);
-            }
         }
         let text = self.sources.fn_text(self.h, f)?;
         // (Also for the class's own internal functions, whose text is the class's.)
