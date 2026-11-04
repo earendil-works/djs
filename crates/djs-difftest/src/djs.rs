@@ -43,6 +43,9 @@ const LATER: u32 = 2;
 const SEED: u32 = 3;
 /// A plain dump's `$djs.resume(id, name, args)`: the open call, under its id (D2890).
 const RESUME: u32 = 4;
+/// A plain dump's `$djs.source(name, hash, params, 1)` (D2882): the case's function, its
+/// wrapper Script evaluated again.
+const SOURCE: u32 = 5;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Djs {
@@ -198,6 +201,10 @@ struct Session {
     /// A plain dump being loaded: `$djs.seed`'s next call id and the highest reopened id,
     /// for the counter after the load (D2897).
     plain_ids: (Option<u32>, u32),
+    /// The case's wrapper Script and its options (`$djs.source`), and while a dump loads
+    /// the function it makes.
+    case: Option<(String, CompileOptions<'static>)>,
+    source_fn: Option<djs_core::heap::Handle>,
 }
 
 /// The corpus areas whose cases never change builtins, run with the prefix write barrier
@@ -251,6 +258,8 @@ impl Djs {
             name: job.name.to_string(),
             api: None,
             plain_ids: (None, 0),
+            case: None,
+            source_fn: None,
         })
     }
 }
@@ -292,15 +301,15 @@ impl Session {
         // `async (tools, console) => {...}` (D008), so `this` is the global object. The
         // arrow starts on the case's first line, keeping its line numbers.
         let src = format!("(async (tools, console) => {{{}\n}})", job.source);
-        match self.vm.compile(
-            src.as_bytes(),
-            &CompileOptions {
-                typescript: job.ts,
-                experimental_decorators: job.legacy_decorators,
-                emit_decorator_metadata: job.decorator_metadata,
-                ..CompileOptions::script(job.name)
-            },
-        ) {
+        let name: &'static str = Box::leak(job.name.to_string().into_boxed_str());
+        let copts = CompileOptions {
+            typescript: job.ts,
+            experimental_decorators: job.legacy_decorators,
+            emit_decorator_metadata: job.decorator_metadata,
+            ..CompileOptions::script(name)
+        };
+        self.case = Some((src.clone(), copts));
+        match self.vm.compile(src.as_bytes(), &copts) {
             Ok(script) => {
                 // (Read again: the global object moves when the heap is collected.)
                 let global = Value::object(self.vm.global());
@@ -361,6 +370,8 @@ impl Session {
                 base: djs_prelude::BASE,
                 host_fn_name: &host_fn_name,
                 handles: &handles,
+                // The case's function by reference (D2882): the corpus measures it.
+                source_refs: true,
                 ..DumpOptions::default()
             },
             None,
@@ -417,9 +428,26 @@ impl Session {
         vm.define(hooks, "seed", seed).map_err(err)?;
         let resume = vm.new_host_function(RESUME, "resume").map_err(err)?;
         vm.define(hooks, "resume", resume).map_err(err)?;
+        let source = vm.new_host_function(SOURCE, "source").map_err(err)?;
+        vm.define(hooks, "source", source).map_err(err)?;
         vm.define_global("$djs", Value::object(hooks))
             .map_err(err)?;
+        // The case's function, made again by its wrapper (which runs none of its code),
+        // for `$djs.source` (D2882).
+        let mut source_fn = None;
+        if let Some((src, copts)) = &self.case {
+            let f = vm
+                .compile(src.as_bytes(), copts)
+                .map_err(|e| format!("source: {}", e.message))?;
+            let global = Value::object(vm.global());
+            vm.call(f, global, &[])
+                .map_err(|e| format!("source: {e:?}"))?;
+            if let Status::Done(v) = vm.run(self.slice) {
+                source_fn = Some(vm.heap_mut().new_handle(v).map_err(err)?);
+            }
+        }
         let old = std::mem::replace(&mut self.vm, vm);
+        self.source_fn = source_fn;
         let api = match self.load_plain(&text) {
             Ok(api) => api,
             Err(e) => {
@@ -570,6 +598,23 @@ impl Session {
                 let seed = (half(arg(1)) << 32) | half(arg(0));
                 self.vm.set_math_random_seed(seed);
                 self.plain_ids.0 = arg(2).as_int().map(|n| n as u32);
+            }
+            SOURCE => {
+                let hash = text(self, arg(1))?;
+                let ok = self.case.as_ref().is_some_and(|(src, copts)| {
+                    djs_core::vm::script_hash(src, "", copts.bits()) == hash
+                });
+                let r = match (ok, self.source_fn) {
+                    (true, Some(h)) => Ok(self.vm.heap().get_handle(h)),
+                    _ => Err(Stop::Crash(format!(
+                        "$djs.source: not the case's script ({hash})"
+                    ))),
+                };
+                let v = r?;
+                self.vm
+                    .resolve_host_call(call_id, Ok(v))
+                    .map_err(|e| Stop::Crash(format!("{e:?}")))?;
+                return Ok(());
             }
             RESUME => {
                 // Only `later` is async; the call returns the reopened call's promise.

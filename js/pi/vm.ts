@@ -39,7 +39,7 @@ import {
   STATUS_THREW,
 } from "./engine.ts";
 import type { HostToWorkerMessage, VmStartData, WorkerToHostMessage } from "./protocol.ts";
-import { plainDump } from "../src/sandbox.ts";
+import { plainDump, scriptHash } from "../src/sandbox.ts";
 
 export type { HostToWorkerMessage, VmStartData, WorkerToHostMessage } from "./protocol.ts";
 
@@ -142,6 +142,8 @@ export const PLAIN_FN_NAMES = ["$djs.bridge", "$djs.call"];
 /** A plain dump's hooks `$djs.resume` and `$djs.seed` (D2890). */
 const HOOK_RESUME = 0x7fff_fff0;
 const HOOK_SEED = 0x7fff_fff1;
+/** `$djs.source(name, hash, params, 1)` (D2882): the codemode function the dump continues. */
+const HOOK_SOURCE = 0x7fff_fff2;
 
 /** pi's limits (prelude-source.ts), which the adapter enforces in `next` mode. */
 const MAX_STORE_VALUE_CHARS = 256 * 1024;
@@ -325,6 +327,8 @@ class Session implements VmSession {
   readonly shape: "pi" | "next";
   /** While a plain dump loads: its hooks are served (`loadPlain`). */
   private loading = false;
+  /** While a dump loads: the codemode function `$djs.source` returns, and its hash. */
+  private source: { handle: number; hash: string } | undefined;
   /** `$djs.seed`'s next call id and the highest reopened one, for the counter (D2897). */
   private plainIds: [number | undefined, number] = [undefined, 0];
 
@@ -585,7 +589,7 @@ class Session implements VmSession {
           continue;
         case STATUS_HOST_CALL: {
           const { callId, fnId, args: callArgs } = engine.hostCall();
-          if (this.loading && (fnId === HOOK_RESUME || fnId === HOOK_SEED)) {
+          if (this.loading && (fnId === HOOK_RESUME || fnId === HOOK_SEED || fnId === HOOK_SOURCE)) {
             this.serveHook(callId, fnId, callArgs);
             continue;
           }
@@ -623,14 +627,24 @@ class Session implements VmSession {
    * its state into the call table. Returns the run's promise (the Script's completion
    * value; the caller owns the handle). Throws when the dump does not load.
    */
-  loadPlain(text: string): number {
+  loadPlain(text: string, code?: string): number {
     const { engine } = this;
     const compiled = engine.compile(plainDump(text)!.typescript ? 2 : 0, "dump.js", [], text);
     if ("error" in compiled) throw new Error(`Cannot load the dump: ${compiled.error}`);
+    // `$djs.source`'s answer (D2882): the codemode function, made again by its wrapper,
+    // which runs none of the script's code.
+    if (code !== undefined) {
+      const wrapper = `${SCRIPT_PREFIX}${code}\n})`;
+      const w = compileOrThrow(engine, "codemode.js", [], wrapper);
+      const f = evaluate(this, engine, w);
+      engine.free(w);
+      this.source = { handle: f, hash: scriptHash(wrapper, "", 1) };
+    }
     const hooks = engine.dumpRuntime();
     const fns: [string, number][] = [
       ["resume", engine.hostFunction(HOOK_RESUME, "resume")],
       ["seed", engine.hostFunction(HOOK_SEED, "seed")],
+      ["source", engine.hostFunction(HOOK_SOURCE, "source")],
       ["bridge", engine.hostFunction(BRIDGE_FN, "bridge")],
       ["call", engine.asyncHostFunction(CALL_FN, "call")],
     ];
@@ -649,6 +663,8 @@ class Session implements VmSession {
       status = this.loop();
     } finally {
       this.loading = false;
+      if (this.source) engine.free(this.source.handle);
+      this.source = undefined;
     }
     if (status === STATUS_THREW) {
       const h = engine.result();
@@ -670,7 +686,13 @@ class Session implements VmSession {
   private serveHook(callId: number, fnId: number, [a, b, c, d]: unknown[]): void {
     const { engine } = this;
     let why: string | undefined;
-    if (fnId === HOOK_SEED) {
+    if (fnId === HOOK_SOURCE) {
+      if (a === "codemode.js" && this.source && b === this.source.hash) {
+        engine.resolveHostCall(callId, this.source.handle);
+        return;
+      }
+      why = `source: the dump continues the script ${String(a)} (${String(b)}), not this session's code`;
+    } else if (fnId === HOOK_SEED) {
       if (typeof a === "number" && typeof b === "number") engine.setMathRandomSeed(a >>> 0, b >>> 0);
       else why = "seed: not two int32 halves";
       if (typeof c === "number") this.plainIds[0] = c;
@@ -1118,7 +1140,7 @@ function resumeSession(dumped: SessionDump, options: VmHooks & { prelude: string
     // The adapter's state first: the dump's code runs while it loads (D2891).
     Object.assign(state, { ...saved, api: state.api, settle: 0, stalled: 0, next: { ...saved.next, ids: [], handles: { ...prepared, body: 0 } } });
     session.restoreEarly(saved.early);
-    const body = session.loadPlain(dumped.dump);
+    const body = session.loadPlain(dumped.dump, data.code);
     state.next!.ids.sort((a, b) => a[1] - b[1]);
     state.next!.handles.body = body;
     return session;

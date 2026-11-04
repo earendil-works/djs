@@ -91,6 +91,9 @@ async function runLink(file, now) {
       // node's Math.random cannot be seeded: cases that use it are not comparable.
       seed() {},
       resume: (id, name, args) => g.later(...args),
+      // The case's function the dump continues (D2882): node never dumps again, the one
+      // thing that reads it, so any function stands for it.
+      source: () => function source() {},
     }),
     writable: true,
     configurable: true,

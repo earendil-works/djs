@@ -372,7 +372,7 @@ names can become imports later. The members:
 | --- | --- |
 | `seed(lo, hi, next)` | hook: `Math.random`'s state, the next call id (above) |
 | `resume(id, name, args, state)` | hook: an open host call (above) |
-| `source(name, hash, params)` | hook: the codemode body `name` the host ran, which the continuations name as their origin instead of a second copy of its text (D2882); djs hosts compile it again and check the hash, node returns any function (it never dumps again) |
+| `source(name, hash, params[, 1])` | hook: the codemode body `name` the host ran, or with `1` the one function its wrapper script makes (pi's, the difftest's), which the continuations name as their origin instead of a second copy of its text (D2882, D2886); djs hosts compile it again (and evaluate the wrapper) and check the hash, node returns any function (it never dumps again) |
 | `R`, `G`, `C`, `A` | `Reflect.apply`, `Reflect.get`, `Reflect.construct`, `Object.assign`: a call, read or construction whose callee or receiver was evaluated before the site |
 | `D(o, k, v)` | defines a data property (an object literal's member written after the site) |
 | `P(k)` | ToPropertyKey, as a computed key does it |

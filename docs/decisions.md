@@ -9894,3 +9894,18 @@ TypeScript body (annotations, interfaces, generics, `as`/`satisfies`/`!`, parame
 properties, sometimes an enum). What a program returns shows those values' state (a Map's
 entries, a RegExp's `lastIndex`). `--no-statics` leaves the static members out; `--known
 FILE` folds reported signatures into one line. Round-1 seeds give other programs now.
+## D2886: `$djs.source(name, hash, params, 1)`: the one function a host's wrapper script makes
+date: 2026-11-05 · by: pjr · issue: 0207
+D2882 extended to pi's and the difftest's shape. Their codemode function is an arrow that
+a host-made wrapper script yields: pi's async body `return (async (tools, console) =>
+{…})`, the difftest's Script `(async (tools, console) => {…})`. The exporter names such
+a function `$djs.source(name, hash, params, 1)` when the script is that function and
+nothing else (only `(`, `return (` before it, `)` after it). Evaluating the wrapper then
+makes the function and runs none of the run's code. The host evaluates its wrapper again
+before the dump runs and returns that function: pi's adapter from the session's code, the
+difftest from the case. node returns any function. A dump's TypeScript is written as
+JavaScript only if every TypeScript script whose functions it writes or names is only
+types (D2879): a dump that names a script holds only part of it, and an enum outside that
+part still changes what the part means. pi suite (next mode, a dump at every idle point,
+106 dumps): median 824 → 782 B raw, largest 1,253 → 1,095 B, total 91.1 → 81.4 KB; gzip
+median 450 → 448 B, total 47.4 → 47.0 KB.

@@ -133,8 +133,9 @@ impl<'a> CompileOptions<'a> {
     pub(crate) const TYPESCRIPT_BIT: u32 = 1 << 2;
 
     /// The options that decide the code, as a Script cell keeps them (`Script::OPTIONS`):
-    /// the goal in the low two bits, then TypeScript, legacy decorators, metadata.
-    pub(crate) fn bits(&self) -> u32 {
+    /// the goal in the low two bits, then TypeScript, legacy decorators, metadata (also
+    /// what a dump's `$djs.source` hash counts, D2882).
+    pub fn bits(&self) -> u32 {
         let goal = match self.goal {
             Goal::Script => 0,
             Goal::AsyncBody => 1,

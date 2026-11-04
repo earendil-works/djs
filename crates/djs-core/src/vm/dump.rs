@@ -775,6 +775,9 @@ struct Dumper<'a> {
     /// A written function comes from a TypeScript script: the dump is compiled as
     /// TypeScript (`"djs-dump 2 typescript";`).
     ts: core::cell::Cell<bool>,
+    /// The TypeScript scripts whose functions the dump writes (or names, D2882): whether
+    /// their TypeScript is only types decides if the dump can be JavaScript (D2879).
+    ts_scripts: core::cell::RefCell<Vec<u32>>,
     /// The base heap: the checker compiles the dump into it.
     scratch: Option<Heap>,
     /// Plain dumps: the text written for a class whose static code is blanked
@@ -852,6 +855,7 @@ impl<'a> Dumper<'a> {
             skeleton: Vec::new(),
             fns_read: core::cell::Cell::new(0),
             ts: core::cell::Cell::new(false),
+            ts_scripts: core::cell::RefCell::new(Vec::new()),
             scratch: None,
             class_texts: Vec::new(),
             class_locals: Vec::new(),
@@ -2094,11 +2098,42 @@ impl<'a> Dumper<'a> {
         let out = crate::compiler::strip_types(&mut heap, text.as_bytes(), &opts);
         let out = out.map_err(|e| fail(&cat!("its TypeScript does not compile: ", e.message)))?;
         let js = String::from_utf8(out).map_err(|_| fail("its TypeScript is not UTF-8"))?;
-        let ok = crate::compiler::compile(&mut heap, js.as_bytes(), &dump_options(false)).is_ok();
+        let mut ok =
+            crate::compiler::compile(&mut heap, js.as_bytes(), &dump_options(false)).is_ok();
+        // The scripts themselves too: a dump that names a script by `$djs.source` holds
+        // only part of it, and an enum outside that part still changes what it means.
+        let h = self.h;
+        for &script in self.ts_scripts.borrow().iter() {
+            if !ok {
+                break;
+            }
+            let a = h.arena();
+            let text = |r: Ref| {
+                r.get()
+                    .map(|s| text_of(h, crate::value::Str(s)))
+                    .unwrap_or_default()
+            };
+            let src = text(a.get::<Ref>(script, crate::heap::cells::Script::SOURCE));
+            let params = text(a.get::<Ref>(script, crate::heap::cells::Script::PARAMS));
+            let list: Vec<&str> = params.split(',').filter(|p| !p.is_empty()).collect();
+            let bits = a.get::<u32>(script, crate::heap::cells::Script::OPTIONS);
+            let sopts = crate::compiler::CompileOptions::from_bits("dump.js", &list, bits);
+            ok = match crate::compiler::strip_types(&mut heap, src.as_bytes(), &sopts) {
+                Ok(js) => {
+                    let jopts = crate::compiler::CompileOptions {
+                        typescript: false,
+                        ..sopts
+                    };
+                    crate::compiler::compile(&mut heap, &js, &jopts).is_ok()
+                }
+                Err(_) => false,
+            };
+        }
         Ok(ok.then_some(js))
     }
 
-    /// `$djs.source(name, hash, params)` for codemode body `f` (D2882), when the dump refers to
+    /// `$djs.source(name, hash, params[, 1])` for codemode body `f`, or the one function a
+    /// host's wrapper script makes (D2882, D2886), when the dump refers to
     /// the scripts the host ran instead of writing their text.
     pub(super) fn source_ref(&self, f: Obj) -> Option<String> {
         if !self.source_refs {
@@ -2107,10 +2142,8 @@ impl<'a> Dumper<'a> {
         let h = self.h;
         let t = h.closure_template(f);
         let kind = func_flags::kind(u32::from(h.arena().get::<u16>(t, FuncTemplate::FLAGS)));
-        if kind != func_flags::KIND_ASYNC_BODY {
-            return None;
-        }
-        let script = template::debug_info(h, t).script.get()?;
+        let info = template::debug_info(h, t);
+        let script = info.script.get()?;
         let a = h.arena();
         let text = |r: Ref| r.get().map(|s| text_of(h, crate::value::Str(s)));
         let source = text(a.get::<Ref>(script, crate::heap::cells::Script::SOURCE))?;
@@ -2118,11 +2151,25 @@ impl<'a> Dumper<'a> {
             text(a.get::<Ref>(script, crate::heap::cells::Script::PARAMS)).unwrap_or_default();
         let name = text(a.get::<Ref>(script, crate::heap::cells::Script::NAME)).unwrap_or_default();
         let bits = a.get::<u32>(script, crate::heap::cells::Script::OPTIONS);
-        // (Its parameter names too: the host compiles the body with them.)
-        let ps = if params.is_empty() {
-            String::new()
+        // The body itself, or the one function the host's script makes and nothing else
+        // (`(async (tools, console) => {…})`, pi's `return (async … => {…})`): what the
+        // host gets by evaluating its wrapper, which runs no code of the run's (`, 1`).
+        let ps = if kind == func_flags::KIND_ASYNC_BODY {
+            if params.is_empty() {
+                String::new()
+            } else {
+                cat!(", ", quote(&params))
+            }
         } else {
-            cat!(", ", quote(&params))
+            let (s, e) = (info.src_start as usize, info.src_end as usize);
+            let before = source.get(..s)?.trim();
+            let after = source.get(e..)?.trim();
+            let wrapper =
+                matches!(before, "(" | "return (" | "return(") && matches!(after, ")" | ");");
+            if !wrapper {
+                return None;
+            }
+            cat!(", ", quote(&params), ", 1")
         };
         Some(cat!(
             "$djs.source(",
@@ -2502,6 +2549,10 @@ impl<'a> Dumper<'a> {
                 != 0
         {
             self.ts.set(true);
+            let mut s = self.ts_scripts.borrow_mut();
+            if !s.contains(&script) {
+                s.push_out(script);
+            }
         }
         let text = self.sources.fn_text(self.h, f)?;
         // (Also for the class's own internal functions, whose text is the class's.)

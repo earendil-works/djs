@@ -171,6 +171,11 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   class's member was placed) and 4 (template substitutions before the site get `k`
   records; dump_cont.rs, agreed). Corpus cases class-method-suspended, redump-template.
   Merged with D2882 (7496c0e8).
+- D2886: source refs for the one function a host's wrapper script makes (pi's codemode
+  arrow, the difftest's case function); pi adapter and difftest resolve it, plain-node
+  stubs it. pi suite (106 dumps, next mode with dumps): median 824 → 782 B raw, largest
+  1,253 → 1,095 B, total 91.1 → 81.4 KB (gzip 47.4 → 47.0 KB). TS dumps stay TypeScript
+  when a named script has non-type TypeScript outside the dumped part.
 - D2884: pjz's re-dump items 6 (functions/generators declared in loop bodies), 7 (`await
   using` disposal after copied text), G (await in `finally` in a loop on a chain), H
   (disposal block with a function sharing a `let`); continuation in an unmerged factory
