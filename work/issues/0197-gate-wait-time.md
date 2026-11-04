@@ -1,7 +1,7 @@
 # 0197: Gate wall time vs CPU: remove the waits
 
-status: open
-agent: -
+status: in-progress
+agent: gate-speed
 branch: issue/0197-gate-waits
 depends-on: 0183
 guide: -

@@ -8849,3 +8849,36 @@ refuses the resume). `SessionDump.state.next` keeps the counters, the store and 
 clock, not the calls. pi's host stays the policy for open calls after a resume (it runs
 the tools; the adapter cannot), so the adapter has no `resume` hook of its own and
 prelude-next needed no change: its tool calls were engine async host calls already.
+
+## D2790: No doctests, no empty test binaries, no bgen program in the gate; guarded
+date: 2026-11-04 · by: gate-speed · issue: 0197
+Every freshly linked executable waits for macOS's first-run check (D2665), and the gate's
+`target/` jobs ran one after another: build:tests, then a `cargo run` of djs-bgen, then
+`cargo test --doc` (rustdoc builds a merged doctest binary per crate, for 3 doctests, all
+`ignore`d). In 0191's gate that chain was the whole 639 s (316 + 95 + 228). Now every library
+has `doctest = false`, the five programs without unit tests have `test = false`, and the
+bgen leg is gone: djs-bgen's `builtins_gen_is_fresh` test, which the `test` leg runs, now
+compares all four files `bgen.sh --check` compares (prelude-slim.js was missing). The
+always-run `targets` leg fails when a library with `doctest = false` gains a doctest (a
+Rust code block rustdoc would compile, not `ignore`d) or a `test = false` program gains a
+#[test], cfg(test) or a module, so nothing that cargo would test is skipped silently.
+
+## D2791: One integration-test binary per package
+date: 2026-11-04 · by: gate-speed · issue: 0197
+Each integration-test file was a binary linked against the whole engine and checked by
+macOS on its first run. djs-bgen's three, djs-cli's two, djs-test262's four (0183) and
+djs-core's slices, regexp_fuel and verify_fuzz are now `tests/it/main.rs` with one module
+per former file (`cargo test -p X --test it [module::]`). djs-core's e2e stays its own
+binary: agents run it alone (`--test e2e`, DJS_E2E_MODE). The unsafe-heap leg runs `it`
+and e2e, so slices and regexp_fuel now also run in that build. Moving integration tests
+into unit tests would save more but tests the crate built with cfg(test), so it was not
+done.
+
+## D2792: Builds end when cargo does; first runs overlap the legs
+date: 2026-11-04 · by: gate-speed · issue: 0197
+D2665's builds waited until every new test binary had had its first run. They now end when
+cargo does, and the runs still waiting for macOS's check continue beside the legs that use
+the binaries. Measured on the same core change (lab, loaded machine): 77 and 85 s this way,
+88 and 100 s waiting, 105 and 105 s with no early runs at all. The four wasm clippy
+combinations (D2668) run as four legs in target directories of their own (124 s one after
+another, ~45 s side by side).

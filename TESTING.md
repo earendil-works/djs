@@ -564,7 +564,8 @@ agents do not run the gate's steps by hand (AGENTS.md).
 Every cargo configuration the gate builds (a package and feature set, a profile, a
 target) has its own target directory (`target/` for the workspace, `target/gate-core`,
 `gate-difftest`, `gate-test262`, `gate-docs`, `gate-unsafe`, `slim`, `clippy`,
-`wasm-dev`, `wasm-nodump`, `size`, `size-slim`; the release unsafe-heap build in
+`wasm-dev`, `wasm-nodump`, `size`, `size-slim`, `clippy-combos`, one `clippy-wasm-*` per
+module; the release unsafe-heap build in
 `target/` under its own profile), because cargo locks a target directory while it builds:
 so they all build at once. The commands are the ones the serial gate ran (the same
 packages, features and profiles), split into a build and a run: legs run the built
@@ -577,7 +578,9 @@ is in `target/gate/log/`, the step times in `target/gate-steps.tsv`.
 macOS scans every new executable on its first run (syspolicyd and XProtect, one at a time,
 ~0.1–2 s per binary); a gate after a Rust change links ~60 of them. The gate runs each new
 test binary once (`--list`) as soon as cargo reports it, so the scans overlap the rest of
-the build instead of delaying the legs (D2665). Builds that are not on the longest path
+the build (D2665); a build ends when cargo does, and the runs still waiting go on beside
+the legs (D2792). Fewer new executables is the other lever: no doctest binaries, no empty
+test binaries, one integration-test binary per package (D2790, D2791). Builds that are not on the longest path
 (everything but the workspace's test build) run at `nice 4`.
 
 ### The cache (D2662, D2663)
