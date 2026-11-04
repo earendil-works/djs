@@ -635,3 +635,5 @@ topics when the index is next reorganized.
 - D2870: Origin tracking reads a continuation's frame as its origin's
 - D2897: `$djs.seed(lo, hi, next)`: call ids go on after a plain load as in the uninterrupted run
 - D2898: The Sandbox writes plain dumps by default
+- D2871: Plain continuations of methods that use `super` are methods of the home's prototype
+- D2872: `for await` in plain continuations: a loop over the saved record, the iteration in flight before it
