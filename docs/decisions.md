@@ -9603,3 +9603,16 @@ frame's binding, so it is written as an expression (`let $djs_c… = class C {�
 own inner binding `C` still names the class, and the frame's `C` takes the member as
 before. A class that names none of the scope's variables, or whose members land in
 different blocks, is refused.
+
+## D2883: Classes that name themselves dump plainly; a class's own static private fields
+date: 2026-11-05 · by: pjr · issue: 0207
+The plain writer's scan of what a statement reads counted a class's own name (`class
+A {…}`) as a read of the global `A`. A factory that makes a class whose methods name it
+then depended on the global the dump defines from that factory, which reported "cyclic
+dependencies". The name after `class` binds and reads nothing. A frame's binding of a
+private name (`#x`, which the class's methods capture) is dead like the class's other
+hidden bindings: the class written from its text makes its own. A class's own static
+private field still holds the literal its text initializes it with (`static #n = 0`)
+needs no patch, because the class's evaluation sets it. One that changed since is
+refused with a message that names the class and the field (only the class's code can set
+it, D2878); before, the message called the class an instance.

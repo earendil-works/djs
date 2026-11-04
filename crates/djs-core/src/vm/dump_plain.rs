@@ -176,6 +176,7 @@ fn scan(text: &str, skip_fns: bool) -> Refs {
     let mut arrow = false;
     let mut prev_close = false;
     let mut class = false;
+    let mut after_class = false;
     // Template literal nesting: brace depth at each `${`.
     let mut tpl: Vec<u32> = Vec::new();
     let mut depth: u32 = 0;
@@ -307,8 +308,13 @@ fn scan(text: &str, skip_fns: bool) -> Refs {
                 i += 1;
             }
             let word = &text[s..i];
+            // A class's own name (`class A`) binds, it reads nothing.
+            let class_name = core::mem::take(&mut after_class) && word != "extends";
+            if !after_dot && word == "class" && b.get(i) != Some(&b':') {
+                after_class = true;
+            }
             class = !after_dot && word == "class" && b.get(i) != Some(&b':') || class;
-            if !after_dot && lazy.is_none() {
+            if !after_dot && lazy.is_none() && !class_name {
                 if word == "$dump" && b.get(i) == Some(&b'.') {
                     let (name, j) = ident_at(text, i + 1);
                     if !name.is_empty() {

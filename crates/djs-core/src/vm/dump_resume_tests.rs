@@ -2266,3 +2266,29 @@ classShared().then(print);
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 2, "{ok}");
 }
+
+/// Classes that name themselves (a class expression on a global, a class in a waiting
+/// frame) and a class whose static private field is still at its initial value (D2883).
+#[test]
+fn plain_dumps_of_self_naming_classes() {
+    let src = r#"
+globalThis.A = class A { static n = 0; m() { return A; } };
+A.n++;
+class B { static #o = 0; static o() { return B.#o++; } }
+globalThis.B = B;
+async function main() {
+  class C { static n = 0; constructor() { C.n++; } m() { return C; } }
+  const c = new C();
+  await later(1);
+  print(A.n, new A().m() === A, B.o(), B.o(), C.n, c.m() === C);
+}
+main();
+"#;
+    let (failed, refused, ok) = plain_check_program("self-classes", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, _, refused) = plain_chain_program("self-classes", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 1, "{ok}");
+}

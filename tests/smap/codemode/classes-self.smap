@@ -1,0 +1,12 @@
+function <anonymous> @1..852
+  arg0 tools@0, arg1 console@0
+  loc0 <state>, loc1 Counter@0, loc3 <fields 0>, loc5 <fields 0>, loc6 Ids@0, loc8 <fields 0>, loc9 #next, loc10 a@0, loc11 r1@0, loc12 b@0, loc13 r2@0
+  node 0 Body @0..851: Params 6..22 Stmt 327..476 Stmt 477..545 Stmt 546..613 Stmt 614..641 Stmt 642..679 Stmt 680..700 Stmt 701..709 Stmt 710..764 Stmt 765..827 Stmt 828..848 | Param tools@0#0 Param console@0#0 Class Counter@0#1 Class Ids@0#3 Const a@0#4 Const r1@0#5 Const b@0#6 Const r2@0#8
+  node 1 Decl(Const) @642..679: Target 648..650 Init 653..678
+  node 2 Await @653..678: Operand 659..678
+  node 3 Decl(Const) @710..764: Target 716..718 Init 721..763
+  node 4 Await @721..763: Operand 727..763
+  await#1 @653 (13:12) pc 195: -
+    path 0.5 1.1 2
+  await#2 @721 (16:12) pc 270: -
+    path 0.8 3.1 4

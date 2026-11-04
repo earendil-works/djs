@@ -152,6 +152,17 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   to DJS_SLEEP_OUT; the gate leg scores it as `sleep_*` (2,321 B raw, 938 gzip; target
   ≈700). Items 1–3: asked pjr how to sequence them with 0203's dump_cont.rs work.
 
+### pjr
+- D2883: classes naming themselves (pjf's "cyclic dependencies": `class A {…}` in a
+  factory scope whose methods/constructor name `A`, class expressions on globals),
+  private-name bindings in frames dead like other class hidden bindings, a class's own
+  static private field at its initial literal needs no patch (else a refusal that names
+  class and field). Corpus case codemode/classes-self.js, test
+  plain_dumps_of_self_naming_classes.
+- WIP on branch issue/0207-source-ref (not merged): `$djs.source(name, hash)` for codemode
+  bodies (DumpOptions::source_refs, script_hash, Vm::source_function, origin of
+  KIND_ASYNC_BODY via the wrapper's map); hosts not done yet.
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a

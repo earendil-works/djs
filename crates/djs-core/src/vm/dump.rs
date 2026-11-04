@@ -3508,9 +3508,28 @@ impl<'a> Dumper<'a> {
             }
             let ce = self.expr_or_loc(self.nodes[c].v);
             if self.pl.is_some() {
-                // Only the class's own construction adds a private name to an object;
-                // plain dumps do not rewrite class text to do it (D2878).
+                // Only the class's own code adds a private name to an object or sets one;
+                // plain dumps do not rewrite class text to do it (D2878). A class's own
+                // static field still at the literal its evaluation gives it is written
+                // by that evaluation.
                 let path = self.nodes[n].path.clone();
+                if c == n {
+                    if let Property::Data { value, .. } = p
+                        && let Some(init) = self.static_private_literal(c, &name)
+                        && self.expr_or_loc(*value) == init
+                    {
+                        continue;
+                    }
+                    let why = cat!(
+                        "plain dumps: class ",
+                        ce,
+                        "'s static private field ",
+                        name,
+                        " changed since the class was made (only the class's code can set it, D2878)"
+                    );
+                    self.refuse(path, &why);
+                    continue;
+                }
                 let why = cat!(
                     "plain dumps: an instance of class ",
                     ce,
@@ -3541,6 +3560,24 @@ impl<'a> Dumper<'a> {
             self.patches.push_out(line);
         }
         self.nodes[n].privates = privates;
+    }
+
+    /// The literal class `c`'s text initializes its static private field `name` with
+    /// (`static #n = 0;`), if it is one: what its evaluation sets the field to.
+    fn static_private_literal(&self, c: usize, name: &str) -> Option<String> {
+        let src = self.fn_source(c)?;
+        let at = src.find(&cat!("static ", name))?;
+        let rest = src[at + "static ".len() + name.len()..].trim_start();
+        let rest = rest.strip_prefix('=')?;
+        let end = rest.find([';', '\n', '}'])?;
+        let lit = rest[..end].trim();
+        let simple = matches!(lit, "true" | "false" | "null" | "undefined")
+            || lit.parse::<f64>().is_ok() && !lit.contains(['x', 'o', 'b', 'e', 'n', '_'])
+            || lit.len() >= 2
+                && lit.starts_with('"')
+                && lit.ends_with('"')
+                && !lit[1..lit.len() - 1].contains(['"', '\\']);
+        simple.then(|| String::from(lit))
     }
 
     /// A function's source as an expression: methods and accessors through `$dump.fn`.

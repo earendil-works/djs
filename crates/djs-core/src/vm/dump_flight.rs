@@ -2204,6 +2204,7 @@ pub(super) fn class_hidden(name: &str) -> bool {
         "<fields ",
         "<key ",
         "<#",
+        "#",
         "<get #",
         "<set #",
         "<class decs>",
