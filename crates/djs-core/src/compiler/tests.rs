@@ -2954,6 +2954,40 @@ fn ops_of_f(src: &str) -> Vec<String> {
         .collect()
 }
 
+/// Array patterns in unreachable code (0210): their close handlers' relative depths
+/// have no anchor to come from, so they (and the handlers only dead code reaches) are
+/// dropped, while the live pattern beside them keeps its handler.
+#[test]
+fn dead_pattern_handlers_dropped() {
+    let src = "function f() { let [a = 1] = []; return a; let [b = 1] = []; }\n\
+               function* g() { return 1; let [a = yield* h()] = []; }\n\
+               function k() { throw 1; try { let [a = 1] = []; } catch { let [b = 1] = []; } }";
+    let mut heap = Heap::new().unwrap();
+    let t = compile_src(&mut heap, src).unwrap();
+    let text = disasm_template(&heap, t);
+    let handlers = |name: &str| {
+        let body = text.split(&alloc::format!(" {name}: ")).nth(1).unwrap();
+        let body = body.split("\nfunction ").next().unwrap();
+        body.lines()
+            .filter(|l| l.trim_start().starts_with("handler"))
+            .count()
+    };
+    assert_eq!(handlers("f"), 1, "{text}");
+    assert_eq!(handlers("g"), 0, "{text}");
+    assert_eq!(handlers("k"), 0, "{text}");
+    run_cases(&[
+        (
+            "function f() { let [a = 1] = []; return a; let [b = 1] = []; } return f()",
+            "=> 1",
+        ),
+        ("return 2; let [a = 1] = [];", "=> 2"),
+        (
+            "function* g() { return 3; let [a = yield* g()] = []; } return g().next().value",
+            "=> 3",
+        ),
+    ]);
+}
+
 #[test]
 fn peepholes() {
     let cases: &[(&str, &[&str])] = &[

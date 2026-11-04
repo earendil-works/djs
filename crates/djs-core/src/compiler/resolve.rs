@@ -646,35 +646,105 @@ fn suspension_map(
 /// Handlers whose depth is relative to a label (`HandlerLabels::depth_from`) get their
 /// absolute depth from the final code. A region may sit in code that only another such
 /// handler reaches (a pattern in a catch block of a pattern default...), so this
-/// repeats until nothing changes.
+/// repeats until nothing changes. If some stay unknown, their anchors are dead code (a
+/// pattern after `return`, 0210): [`drop_dead_handlers`] sorts that out.
 fn resolve_relative_depths(
     f: &FuncState,
     code: &crate::bytecode::Code,
-    handlers: &mut [crate::bytecode::Handler],
+    handlers: &mut Vec<crate::bytecode::Handler>,
 ) -> PResult<()> {
     let mut pending: Vec<usize> = (0..handlers.len())
         .filter(|&i| f.handlers[i].depth_from.is_some())
         .collect();
     while !pending.is_empty() {
-        let depths = crate::bytecode::stack_depths(&code.code, handlers)
-            .map_err(|e| internal(&crate::detail::detail("stack depths", &e)))?;
+        let depths = stack_depths(code, handlers)?;
         let before = pending.len();
-        pending.retain(|&i| {
-            let h = &f.handlers[i];
-            let at = h.depth_from.and_then(|l| code.label_pos(l));
-            match at.map(|pc| depths.get(pc as usize).copied()) {
-                Some(Some(d)) if d != crate::bytecode::UNKNOWN_DEPTH => {
-                    handlers[i].depth = d + h.depth;
-                    false
-                }
-                _ => true,
+        pending.retain(|&i| match relative_depth(f, code, &depths, i) {
+            Some(d) => {
+                handlers[i].depth = d;
+                false
             }
+            None => true,
         });
         if pending.len() == before {
-            return Err(internal("unreachable relative handler depth"));
+            return drop_dead_handlers(f, code, handlers);
         }
     }
     Ok(())
+}
+
+/// Drops the handlers whose regions no execution reaches, after resolving the relative
+/// depths of the others. A dead handler can never fire, but its target is still an
+/// entry point for the stack checker, and a relative one has no depth to enter it at:
+/// its anchor is as dead as its region. Reachability is found from the entry alone,
+/// adding a handler (and the code its target reaches) once code in its region is
+/// reached: a handler in dead code would otherwise make more dead code look live
+/// (`yield`'s return path in a pattern default after `return` is the target of such
+/// a handler, inside the pattern's region).
+fn drop_dead_handlers(
+    f: &FuncState,
+    code: &crate::bytecode::Code,
+    handlers: &mut Vec<crate::bytecode::Handler>,
+) -> PResult<()> {
+    let unknown = crate::bytecode::UNKNOWN_DEPTH;
+    let mut live: Vec<crate::bytecode::Handler> = handlers
+        .iter()
+        .map(|h| crate::bytecode::Handler {
+            depth: unknown,
+            ..*h
+        })
+        .collect();
+    loop {
+        let depths = stack_depths(code, &live)?;
+        let mut changed = false;
+        for i in 0..live.len() {
+            let h = &live[i];
+            if h.depth != unknown
+                || depths[h.start as usize..h.end as usize]
+                    .iter()
+                    .all(|&d| d == unknown)
+            {
+                continue;
+            }
+            live[i].depth = if f.handlers[i].depth_from.is_some() {
+                // The anchor precedes the region in the same expression's code.
+                relative_depth(f, code, &depths, i)
+                    .ok_or_else(|| internal("unreachable relative handler depth"))?
+            } else {
+                handlers[i].depth
+            };
+            changed = true;
+        }
+        if !changed {
+            break;
+        }
+    }
+    live.retain(|h| h.depth != unknown);
+    *handlers = live;
+    Ok(())
+}
+
+/// The absolute depth of relative handler `i`, if its anchor is reached in `depths`.
+fn relative_depth(
+    f: &FuncState,
+    code: &crate::bytecode::Code,
+    depths: &[u32],
+    i: usize,
+) -> Option<u32> {
+    let h = &f.handlers[i];
+    let pc = code.label_pos(h.depth_from?)?;
+    match depths.get(pc as usize) {
+        Some(&d) if d != crate::bytecode::UNKNOWN_DEPTH => Some(d + h.depth),
+        _ => None,
+    }
+}
+
+fn stack_depths(
+    code: &crate::bytecode::Code,
+    handlers: &[crate::bytecode::Handler],
+) -> PResult<Vec<u32>> {
+    crate::bytecode::stack_depths(&code.code, handlers)
+        .map_err(|e| internal(&crate::detail::detail("stack depths", &e)))
 }
 
 /// Stores the value on top of the stack into a binding being initialized.

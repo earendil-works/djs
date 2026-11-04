@@ -9616,3 +9616,17 @@ private field still holds the literal its text initializes it with (`static #n =
 needs no patch, because the class's evaluation sets it. One that changed since is
 refused with a message that names the class and the field (only the class's code can set
 it, D2878); before, the message called the class an instance.
+## D2960: Exception handlers in unreachable code are dropped
+date: 2026-11-05 · by: pjk · issue: 0210
+An array pattern's close handler (and `yield*`'s throw handler, and the iterator closes
+of `return` inside a pattern) gets its stack depth relative to a label, read from the
+final code's stack walk. In code after `return`, `throw`, `break` and the like that
+label has no depth, so when the relative depths stop resolving, the compiler finds what
+is reachable from the function's entry alone, adding a handler only once code in its
+region is reached, and drops every handler that never was (absolute ones too). They can
+never fire, and keeping them would make the stack checker enter their targets at a
+made-up depth (a `yield*` throw path rejoins its loop and would underflow). Not chosen:
+skipping dead statements in the compiler (early errors and hoisting still need them
+parsed and the region bookkeeping is spread over many emitters), or giving dead
+handlers an arbitrary depth. Functions without dead relative handlers take the old path
+and walk their code as often as before.
