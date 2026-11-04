@@ -258,4 +258,8 @@ Decisions on this page:
 - D1792: The gate runs in one persistent gate worktree
 - D1793: Agents' runs are niced; the gate is not
 - D2032: `difftest: stacks` compares stack frames
+- D2661: Every build configuration builds at once in its own target directory
+- D2662: Gate legs are cached by input hash
+- D2663: Three input classes, guarded
+- D2664: `--full` and full-only legs; a full run daily
 <!-- /gen -->
