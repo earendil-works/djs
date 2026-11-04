@@ -53,6 +53,10 @@ compile, format 1, `DumpOptions::plain`, goldens → plain, core tests); M3 the
   any class with a static private member ("an instance of class … with private name #o",
   contradicting D2878), and a class in a factory scope that names itself in a method or
   constructor gives "plain dump: cyclic dependencies".
+- M1's first gate run failed on rustc incremental corruption that the gate's detector
+  (D2896) missed: the `_anon.*.llvm.*` symbol came ~50 lines after "Undefined symbols",
+  past its 40-line window. Widened to 400 lines in scripts/gate.py (outside touches, one
+  number).
 
 ## Follow-ups
 
