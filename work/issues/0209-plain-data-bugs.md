@@ -57,6 +57,21 @@ and rebase often. Decision IDs D2950–D2959.
   to any `.llvm.<n>` symbol (coordinator's OK). Next attempt: the new corpus case needed
   its pinned suspension map (tests/smap).
 - Coordinator added E (integer-like shorthand keys) and F (empty prototype reference).
+- E: `literal` wrote shorthand whenever the key text equalled the value text; now only
+  for keys that are names (`is_ident`, which excludes reserved words). Case
+  codemode/plain-literal-keys.js.
+- F and bug 1 share a cause: a patch that names a value whose location is known only
+  later (the class's prototype is located when the continuation's factory record is
+  finished; a closure made in K) got empty text from `expr`/`expr_or_loc`. `expr_or_loc`
+  now writes a reference (`\u{1}<node>\u{1}`) for a node without a location, and
+  `finish` resolves them in every line (and in the plain writer's output) once all
+  locations are known; one that never gets a location is refused ("internal: a value
+  the dump refers to but never makes"). Case codemode/plain-class-instances.js.
+- Owner's rule (batch merges, check locally first): before merging ran fmt, clippy
+  -p djs-core, vm::dump tests, e2e dump mode, the plain-dumps leg locally (difftest
+  --plain-out over the corpus, plain-node: 1228 links, 0 differ, 0 refused) and the
+  dump-size score: corpus_raw +21 KB from the three new cases' six links, so the score
+  was raised with `--update`. Pinned the new cases' suspension maps.
 
 ## Follow-ups
 
