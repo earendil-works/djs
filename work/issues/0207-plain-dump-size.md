@@ -192,6 +192,12 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   split_callback, Ctx::go(block)); the accessor pair after a site: `$djs.DD` defines a
   getter's or setter's descriptor without the other half, as the literal does.
 
+- pjz J: `for await` whose body always leaves the loop: the compiler leaves the dead
+  `for-await.next` out of the site's map, the scaffold now takes `undefined` for a missing
+  `next` (for-of too; `next_method`). Corpus case codemode/plain-fuzz/for-await-break.js
+  (also the async generator suspended at its await with a `break`, pjz's "'return' of
+  undefined", fixed by D2907).
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a

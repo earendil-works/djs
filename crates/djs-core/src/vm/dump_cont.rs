@@ -237,6 +237,17 @@ impl G<'_, '_> {
         }
     }
 
+    /// A loop's saved `next` method; `undefined` where the frame has none: the compiler
+    /// leaves out a `next` no later step calls (a body that always leaves the loop), and
+    /// the scaffold's helper then never calls it either.
+    fn next_method(&mut self, slot: &str) -> R<String> {
+        if self.has(slot) {
+            self.take(slot)
+        } else {
+            Ok(String::from("undefined"))
+        }
+    }
+
     /// A temporary of the site's statement: a literal in place, else a const declared
     /// right before the statement (the dump's values are reachable only while it loads).
     fn tmp(&mut self, construct: &str, off: u32) -> R<P> {
@@ -825,7 +836,7 @@ impl G<'_, '_> {
         let next = if n.kind == NodeKind::ForIn {
             String::from("null")
         } else {
-            self.take(&cat!(c, ".next@", n.start))?
+            self.next_method(&cat!(c, ".next@", n.start))?
         };
         let head = n
             .parts
@@ -920,7 +931,7 @@ impl G<'_, '_> {
         }
         // (A `var` head declares K's names again: harmless.)
         let it = self.take(&cat!("for-await.iterator@", fo))?;
-        let next = self.take(&cat!("for-await.next@", fo))?;
+        let next = self.next_method(&cat!("for-await.next@", fo))?;
         let ib = self.fresh(cat!("$djs_i", i));
         let nb = self.fresh(cat!("$djs_n", i));
         let rec = self.mark("for-await", fo);
