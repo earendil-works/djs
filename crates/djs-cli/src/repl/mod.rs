@@ -51,10 +51,9 @@ const HELP: &str = "\
 .time [on|off]        show the time and fuel each input takes
 .gc                   collect garbage, show the arena before and after
 .heap [sections]      what is in the heap: this session's cells apart from the base
-                      realm every VM starts with (`djs heap` sections, default
+                      realm every VM starts with (sections summary, kinds, diff, prefix,
+                      largest, strings, shapes, functions, session; default
                       summary,diff; `all` for every section)
-.image <file>         collect, then write the heap image (for `djs heap`; images are
-                      not a persistence format: .dump is)
 .dump <file> [names]  write the session's globals (or the named ones) as JavaScript,
                       with what is in flight (open calls, waiting inputs, format 2)
                       that recreates them: functions as their source, closures and
@@ -1061,7 +1060,6 @@ impl Repl {
             ".resolve" if !arg.is_empty() => self.settle(arg, true),
             ".reject" if !arg.is_empty() => self.settle(arg, false),
             ".bt" if !arg.is_empty() => self.backtrace_cmd(arg),
-            ".image" if !arg.is_empty() => self.write_image(arg),
             ".dump" if !arg.is_empty() => self.dump(arg),
             ".dump-every" => match on_off(arg, &mut self.dump_every) {
                 Ok(()) => println!(
@@ -1287,8 +1285,8 @@ impl Repl {
         None
     }
 
-    /// `.heap [sections]`: the analyzer of `djs heap` over the live VM's image, against
-    /// the base image, so the session's own cells show apart from the base realm (D2340).
+    /// `.heap [sections]`: the heap analyzer over the live VM's image, against the base
+    /// image, so the session's own cells show apart from the base realm (D2340).
     fn heap_report(&self, arg: &str) {
         let only = match arg {
             "" => Some(vec!["summary".into(), "diff".into()]),
@@ -1310,22 +1308,9 @@ impl Repl {
             heap.atom_count()
         );
         let image = self.vm.bytes();
-        match crate::heap::analyze_image(image, Some(("the base image", djs_prelude::BASE)), &o) {
+        match crate::heap::analyze(image, Some(("the base image", djs_prelude::BASE)), &o) {
             Ok(sections) => print!("{}", crate::heap::to_text(&sections)),
             Err(e) => println!("cannot analyze the heap: {e}"),
-        }
-    }
-
-    /// `.image <file>`: collects, then writes the heap image (D2340), for `djs heap`.
-    fn write_image(&mut self, path: &str) {
-        if let Err(e) = self.vm.collect() {
-            println!("collection failed: {e:?}");
-            return;
-        }
-        let image = self.vm.image();
-        match std::fs::write(path, image) {
-            Ok(()) => println!("wrote {} bytes to {path} (the heap image)", image.len()),
-            Err(e) => println!("cannot write {path}: {e}"),
         }
     }
 }

@@ -1,4 +1,5 @@
-//! A small JSON writer for `djs heap --json` (djs-cli has no serde).
+//! A small JSON value, parser and writer (djs-cli has no serde): the heap report's structured
+//! sections and the tools' answers.
 
 use std::fmt::Write;
 

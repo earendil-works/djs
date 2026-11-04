@@ -11,7 +11,6 @@ const USAGE: &str = "usage: djs <command> ...\n\
           [--tools answers.json] <file.js>\n\
   djs resume [--tools answers.json] <dump.js>\n\
   djs disasm [--body] <file.js>\n\
-  djs heap [--json] [--top N] [--reference FILE] [--diff FILE|base|none] <dump>\n\
   djs repl [--ts] [--gc-stress] [--no-history]\n\
   djs strip-types <file.ts>";
 
@@ -19,7 +18,6 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let code = match args.first().map(String::as_str) {
         Some("disasm") => disasm::main(&args[1..]),
-        Some("heap") => heap::main(&args[1..]),
         Some("run") => run::main(&args[1..]),
         Some("resume") => run::resume_main(&args[1..]),
         Some("repl") => repl::main(&args[1..]),

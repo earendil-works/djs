@@ -172,18 +172,14 @@ fn fuel_and_suspension() {
 }
 
 #[test]
-fn image_writes_the_heap_and_restore_reads_only_dumps() {
-    // Images are not a persistence format (D2700): `.image` writes one for `djs heap`,
-    // `.restore` reads dumps only.
+fn restore_reads_only_dumps() {
     let dir = env!("CARGO_TARGET_TMPDIR");
-    let img = format!("{dir}/repl-test-{}.img", std::process::id());
-    let out = repl(&format!("let r = 7\n.image {img}\n.restore {img}\nr\n"));
-    assert!(out.contains("(the heap image)"), "{out}");
+    let other = format!("{dir}/repl-test-{}.bin", std::process::id());
+    std::fs::write(&other, b"DJS\0 not a dump").unwrap();
+    let out = repl(&format!("let r = 7\n.restore {other}\nr\n"));
     assert!(out.contains("is not a djs dump"), "{out}");
     assert!(out.ends_with("\n7\n"), "{out}");
-    // The whole heap, base included (about 200 KB).
-    assert!(std::fs::metadata(&img).unwrap().len() > 150 * 1024);
-    std::fs::remove_file(&img).unwrap();
+    std::fs::remove_file(&other).unwrap();
     check(
         ".restore /nonexistent/x.js\n",
         "cannot read /nonexistent/x.js: No such file or directory (os error 2)\n",
@@ -206,7 +202,15 @@ fn meta_commands() {
         ".nope\n.exit\n1\n",
         "unknown command or missing argument: .nope (.help lists them)\n",
     );
-    assert!(repl(".help\n").contains(".image <file>"));
+    let help = repl(".help\n");
+    assert!(
+        help.contains(".heap [sections]") && !help.contains(".image"),
+        "{help}"
+    );
+    check(
+        ".image x.img\n",
+        "unknown command or missing argument: .image x.img (.help lists them)\n",
+    );
 }
 
 #[test]

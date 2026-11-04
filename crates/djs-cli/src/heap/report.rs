@@ -1,5 +1,5 @@
-//! The sections of `djs heap`'s report: each one computed once and rendered as text and
-//! as JSON.
+//! The sections of the `.heap` report: each one computed once, as text and as a JSON
+//! value (the structured form the tests check).
 
 use std::collections::HashMap;
 
@@ -15,16 +15,19 @@ use djs_core::heap::{CellKind, ObjectClass};
 use djs_core::interp::RunState;
 use djs_core::value::Value;
 
-use super::Input;
 use super::diff::{Diff, Status};
 use super::graph::Graph;
 use super::json::J;
 
-/// One section of the report: `key` names it in `--only` and the JSON output.
+/// One section of the report: `key` names it in `.heap`'s section list.
 pub struct Section {
+    // `key` and `json`, the section's structured form, are what the tests check; `.heap`
+    // prints the text (the command that printed the JSON is gone, D2269).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub key: String,
     pub title: String,
     pub text: String,
+    #[cfg_attr(not(test), allow(dead_code))]
     pub json: J,
 }
 
@@ -33,9 +36,6 @@ pub struct Options {
     pub top: usize,
     /// The sections to compute, by key; all when `None`.
     pub only: Option<Vec<String>>,
-    /// The strings, largest, shapes and functions sections over the whole image instead
-    /// of the session's own part (`--all`, D2432).
-    pub all: bool,
 }
 
 impl Options {
@@ -51,15 +51,14 @@ impl Default for Options {
         Options {
             top: 10,
             only: None,
-            all: false,
         }
     }
 }
 
 /// The cells the strings, largest, shapes and functions sections describe (D2432): the
 /// session's own part, the cells new or changed against the reference, or the whole
-/// image (`--all`, or no reference to compare with). The rest, the reference's part, is
-/// one line of totals.
+/// image without a reference to compare with. The rest, the reference's part, is one line
+/// of totals.
 pub struct Scope {
     /// Per cell index: in the session's part. `None` for the whole image.
     pub own: Option<Vec<bool>>,
@@ -87,7 +86,7 @@ impl Scope {
     fn intro(&self) -> String {
         if self.is_session() {
             format!(
-                "  the session's own part: cells new or changed against {} (--all for the whole image)\n",
+                "  the session's own part: cells new or changed against {}\n",
                 self.reference
             )
         } else {
@@ -228,31 +227,9 @@ impl Tally {
 
 // ---- Sections ---------------------------------------------------------------------------
 
-/// A descriptor component's JSON key (js/src/snapshot.ts `IMAGE_DEPS`).
-fn dep_key(d: djs_core::vm::ImageDep) -> &'static str {
-    use djs_core::vm::ImageDep::*;
-    match d {
-        Layout => "layout",
-        Features => "features",
-        Compat => "compat",
-        Ops => "ops",
-        Intrinsics => "intrinsics",
-        Records => "records",
-    }
-}
-
-pub fn overview(
-    input: &Input,
-    g: &Graph,
-    collected: Option<u32>,
-    prefix_words: Option<usize>,
-) -> Section {
-    let path = input.name;
+pub fn overview(g: &Graph, collected: Option<u32>, prefix_words: Option<usize>) -> Section {
     let a = g.heap.arena();
     let len = a.len() as u64;
-    // The image's dependency descriptor (D2265), against this djs's.
-    let deps = djs_core::vm::ImageDeps::of(a.bytes());
-    let differs = deps.and_then(|d| d.first_difference(&djs_core::vm::IMAGE_DEPS));
     let old_end: u32 = a.get(0, Roots::OLD_END);
     let live: u64 = g
         .cells
@@ -270,23 +247,9 @@ pub fn overview(
     }
     let mut t = String::new();
     t.push_str(&format!(
-        "  file: {path} ({} KB): {}\n",
-        kb(input.file_len),
-        input.format
-    ));
-    t.push_str(&format!(
-        "  image: {} KB in {} cells, {}\n",
+        "  image: {} KB in {} cells\n",
         kbu(len),
-        g.cells.len(),
-        match differs {
-            None => "dependencies as this djs's".to_string(),
-            Some((d, found, ours)) => format!(
-                "another {} than this djs ({}; this djs: {}): names of builtins may be off",
-                d.name(),
-                d.show(found),
-                d.show(ours)
-            ),
-        }
+        g.cells.len()
     ));
     t.push_str(&format!(
         "  live: {} KB ({}); garbage: {} KB{}\n",
@@ -311,24 +274,8 @@ pub fn overview(
         ));
     }
     let json = J::obj(vec![
-        ("file", path.into()),
-        ("format", input.format.clone().into()),
-        ("file_bytes", input.file_len.into()),
         ("image_bytes", len.into()),
         ("cells", g.cells.len().into()),
-        (
-            "deps",
-            match deps {
-                Some(d) => J::obj(
-                    djs_core::vm::ImageDep::ALL
-                        .iter()
-                        .map(|&k| (dep_key(k), format!("{:08x}", d.get(k)).into()))
-                        .collect(),
-                ),
-                None => J::Null,
-            },
-        ),
-        ("runs_here", differs.is_none().into()),
         ("live_bytes", live.into()),
         ("garbage_bytes", (len - live).into()),
         ("collected_bytes", collected.into()),

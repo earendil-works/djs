@@ -1,12 +1,12 @@
-//! `djs heap` over images made here: a sandbox-like VM, one holding data, one waiting on
-//! an async host call, and the same image read from a file.
+//! The `.heap` report over VMs made here: a sandbox-like VM, one holding data, one waiting
+//! on an async host call, a pi session.
 
 use djs_core::compiler::CompileOptions;
 use djs_core::value::Value;
 use djs_core::vm::{Status, Vm, VmOptions};
 
 use super::json::J;
-use super::{Options, Section, analyze_image};
+use super::{Options, Section, analyze};
 
 fn vm() -> Vm {
     djs_prelude::new_vm(VmOptions::default()).unwrap()
@@ -38,7 +38,7 @@ fn run_body(vm: &mut Vm, src: &str) -> Status {
 
 fn report(vm: &mut Vm) -> Vec<Section> {
     vm.collect().unwrap();
-    analyze_image(
+    analyze(
         vm.bytes(),
         Some(("the base image", djs_prelude::BASE)),
         &Options::default(),
@@ -71,6 +71,8 @@ fn a_sandbox_is_the_base_plus_its_console() {
     let base_own = d.at(&["in_place", "bytes"]).num() + d.at(&["moved", "bytes"]).num();
     assert!(base_own > 0.8 * s.at(&["image_bytes"]).num(), "{base_own}");
     assert_eq!(json(&r, "functions").at(&["host_functions"]).num(), 4.0);
+    // Nothing of the builtin prefix changed.
+    assert_eq!(json(&r, "prefix").at(&["words"]).num(), 0.0);
 }
 
 #[test]
@@ -130,29 +132,6 @@ fn a_waiting_vm_shows_its_suspended_function_and_pending_call() {
         s.at(&["activations", "0", "locals", "notes"]).str(),
         "Array"
     );
-}
-
-#[test]
-fn an_image_file_reads_like_the_image() {
-    let mut vm = sandbox();
-    vm.collect().unwrap();
-    let image = vm.bytes().to_vec();
-    let dir = std::env::temp_dir().join(format!("djs-heap-test-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("sandbox.img");
-    std::fs::write(&path, &image).unwrap();
-    let r = super::run(path.to_str().unwrap(), None, &Options::default()).unwrap();
-    std::fs::remove_dir_all(&dir).ok();
-    let s = json(&r, "summary");
-    assert_eq!(s.at(&["image_bytes"]).num(), image.len() as f64);
-    assert_eq!(
-        json(&r, "diff").at(&["new_subtrees", "0", "path"]).str(),
-        "globalThis.console"
-    );
-    let all = super::to_json(&r);
-    assert!(all.contains("\"summary\"") && all.contains("\"session\""));
-    // Nothing of the builtin prefix changed.
-    assert_eq!(json(&r, "prefix").at(&["words"]).num(), 0.0);
 }
 
 #[test]
@@ -223,7 +202,7 @@ fn a_pi_session_waiting_on_a_tool() {
     assert_eq!(s.ev.calls.len(), 1, "waiting on tools.ask");
     s.vm.collect().unwrap();
     let image = s.vm.bytes().to_vec();
-    let r = analyze_image(
+    let r = analyze(
         &image,
         Some(("pi's prelude image", &prelude)),
         &Options::default(),
@@ -276,9 +255,10 @@ fn a_pi_session_waiting_on_a_tool() {
 }
 
 /// D2432: the strings, largest, shapes and functions sections show the session's own
-/// part by default, with the reference's part as totals; `--all` the whole image.
+/// part against a reference, with the reference's part as totals; without one, the whole
+/// image.
 #[test]
-fn sections_show_the_session_part_unless_all() {
+fn sections_show_the_session_part_against_a_reference() {
     let mut vm = sandbox();
     let st = run_body(
         &mut vm,
@@ -287,16 +267,8 @@ fn sections_show_the_session_part_unless_all() {
     assert!(matches!(st, Status::Done(_)), "{st:?}");
     vm.collect().unwrap();
     let base = Some(("the base image", djs_prelude::BASE));
-    let own = analyze_image(vm.bytes(), base, &Options::default()).unwrap();
-    let all = analyze_image(
-        vm.bytes(),
-        base,
-        &Options {
-            all: true,
-            ..Options::default()
-        },
-    )
-    .unwrap();
+    let own = analyze(vm.bytes(), base, &Options::default()).unwrap();
+    let all = analyze(vm.bytes(), None, &Options::default()).unwrap();
     let (s, a) = (json(&own, "strings"), json(&all, "strings"));
     assert_eq!(s.at(&["scope"]).str(), "session");
     assert_eq!(a.at(&["scope"]).str(), "all");
