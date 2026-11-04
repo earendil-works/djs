@@ -309,8 +309,8 @@ host state, and the host keeps them beside the dump.
 dump is 6 KB of text at the median and 17 KB compressed at p99; with zstd at level 3,
 which hosts apply when they store it, the median is 1.7 KB, a third of what the image
 containers took (D2703). A session holding a 1.8 MB log dumps to 1.8 MB of text and
-394 KB compressed. Writing a dump takes about 3 ms at the median in wasm and loading one
-about 1 ms.
+394 KB compressed. Writing a dump takes about 0.7 ms at the median in wasm (9 ms at
+p99) and loading one about 1 ms.
 
 > **Trade-off.** Dumps over images for persistence. A dump survives every change to the
 > engine that keeps the meaning of the script's code, it is readable, and it is smaller
