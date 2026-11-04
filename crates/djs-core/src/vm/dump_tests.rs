@@ -513,10 +513,10 @@ fn closures_capturing_closures() {
 fn classes_with_statics_accessors_and_computed_keys() {
     closure_case(
         &[
-            "const log = ['init'];",
+            "const log = [];",
             "class Point { constructor(x, y) { this.x = x; this.y = y; } get len() { return Math.sqrt(this.x * this.x + this.y * this.y); }\n\
                static origin() { return new Point(0, 0); } [Symbol.toPrimitive]() { return this.len; }\n\
-               static count = 0; toString() { return `(${this.x}, ${this.y})`; } }",
+               static count = 0; static { log.push('init'); } toString() { return `(${this.x}, ${this.y})`; } }",
             "Point.count = 3;",
             "const p = new Point(3, 4);",
         ],
@@ -553,6 +553,15 @@ fn private_fields_methods_and_brands() {
             "const f = () => new Counter();",
         ],
         "[f().twice(), Counter.has(f()), Counter.has({})].join()",
+    );
+    // Static private fields, methods and accessors (D2883; a literal initializer stays
+    // in the class text, D2950).
+    closure_case(
+        &[
+            "class Counter { static #made = 2; static #fmt(v) { return '<' + v + '>'; } static get #twice() { return Counter.#made * 2; }\n\
+               static made() { return Counter.#made; } static show(v) { return Counter.#fmt(v) + Counter.#twice; } }",
+        ],
+        "[Counter.made(), Counter.show(1)].join()",
     );
     let r = refused(
         "class Counter { #n = 0; inc() { this.#n++; return this; } } const a = new Counter().inc();",
@@ -679,6 +688,13 @@ fn typescript_dumps_say_so_in_the_directive() {
             "\"djs-dump\";\n",
             "get()",
             "7",
+        ),
+        // A parameter property assigns `this.x`: not erasable (0209).
+        (
+            "class P { constructor(public x: number) {} } var p = new P(7);",
+            "\"djs-dump typescript\";\n",
+            "[p.x, new P(1).x].join()",
+            "7,1",
         ),
     ] {
         let mut a = new_vm();

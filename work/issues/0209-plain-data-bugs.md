@@ -121,6 +121,20 @@ and rebase often. Decision IDs D2950–D2959.
   codemode/plain-class-statics.js (2 links, djs and node) and
   codemode/plain-class-static-private.js (a refusal). Docs: plain-js-dumps.md §10.
 
+- Rebased onto 0205 (format 2 gone). Restored the tests 0205 changed to avoid my bugs:
+  dump_tests' static block in `classes_with_statics_accessors_and_computed_keys`, static
+  private fields/methods/accessors (a case of their own: instances with private names
+  stay refused, D2878), a parameter-property case in
+  `typescript_dumps_say_so_in_the_directive`; dump_resume_tests' TDZ closure made in a
+  callback.
+- Item 8 (0205's list: "a closure over a TDZ binding made in a callback is refused"):
+  cheap. dump_plain.rs `emit_list` refused a global `let`/class declaration that a
+  callback must write (its value is made in K). Like `var`, it is now declared at the top
+  and assigned in the callback (`let` and class bindings are mutable, and nothing reads
+  them before the callback runs); a global `const` there stays refused, with a clearer
+  message.
+- pjz's (0211) loop case: codemode/plain-class-static-loop.js (2 links, djs and node).
+
 ## Follow-ups
 - dump_resume_tests.rs `plain_dump_chains_continue_like_the_run` still discounts lines
   that copy the runtime's code (`runtime_bytes`); after D2951 the allowance should be

@@ -2127,11 +2127,27 @@ impl W<'_> {
                             }
                         }
                         IK::Decl(names) if depth > 0 => {
-                            let Some(rest) = text.strip_prefix("var ") else {
-                                return refuse("a global lexical declaration inside a callback");
-                            };
-                            hoisted.push_out(cat!("var ", names[0], ";"));
-                            lines.push_out(String::from(rest));
+                            // Declared at the top, assigned in the callback: a global
+                            // declaration cannot be in a block. `let` and a class's
+                            // binding are mutable like `var`, so this is exact (nothing
+                            // reads them before the callback runs); a `const` is not.
+                            if let Some(rest) = text.strip_prefix("var ") {
+                                hoisted.push_out(cat!("var ", names[0], ";"));
+                                lines.push_out(String::from(rest));
+                            } else if let Some(rest) = text.strip_prefix("let ") {
+                                hoisted.push_out(cat!("let ", names[0], ";"));
+                                lines.push_out(String::from(rest));
+                            } else if text.starts_with("class ") {
+                                hoisted.push_out(cat!("let ", names[0], ";"));
+                                lines.push_out(cat!(
+                                    names[0],
+                                    " = ",
+                                    text.trim_end_matches(';'),
+                                    ";"
+                                ));
+                            } else {
+                                return refuse("a global const declaration inside a callback");
+                            }
                         }
                         _ => lines.push_out(text),
                     }

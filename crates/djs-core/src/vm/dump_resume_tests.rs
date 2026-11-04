@@ -875,18 +875,14 @@ fn bindings_in_their_tdz_at_an_await() {
         "async function main() { try { const r = (await later(1)) + r; print(r); } catch (e) { print(e.name); } }\nmain();",
         "async function main() { for (let i = 0; i < 2; i++) { if (i) { try { print(r); } catch (e) { print(e.name); } } const r = await later(i); } }\nmain();",
         "async function main() { const r = await later(1); print(r); }\nmain();",
+        // A closure over the binding, made in K and held by a global `let`: declared at
+        // the top, assigned in the callback (0209).
+        "let get; later(2).then(() => print(get()));\nasync function main() { get = () => { try { return r; } catch (e) { return e.name; } }; const r = await later(1); print(r); }\nmain();",
     ] {
         let (got, text) = dump_at(src, 1).unwrap_or_else(|e| panic!("{src}: {e}"));
         assert_eq!(got, run_program(src).0, "{src}\n{text}");
         assert!(got[0] == "ReferenceError" || got[0] == "1", "{got:?}");
     }
-    // A closure over the binding, made in a callback: refused (0205 follow-up).
-    let src = "let get; later(2).then(() => print(get()));\nasync function main() { get = () => { try { return r; } catch (e) { return e.name; } }; const r = await later(1); print(r); }\nmain();";
-    let e = dump_at(src, 1).unwrap_err();
-    assert!(
-        e.contains("a global lexical declaration inside a callback"),
-        "{e}"
-    );
 }
 
 /// A class with instance fields declared in a waiting function: the frame's hidden
