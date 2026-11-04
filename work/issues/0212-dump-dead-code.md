@@ -1,7 +1,7 @@
 # 0212: Exporter cleanup after format 2: dead branches, chain-test allowances
 
-status: open
-agent: -
+status: in-progress
+agent: pjd
 branch: issue/0212-dump-dead-code
 depends-on: 0205, 0209
 guide: -
