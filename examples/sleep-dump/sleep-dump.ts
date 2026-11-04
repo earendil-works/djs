@@ -11,6 +11,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { Script } from "node:vm";
 import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { helpers } from "../../js/src/dump-runtime.js";
 import { type AsyncHostFunction, Sandbox, type SandboxOptions } from "../../js/src/sandbox.ts";
 
 export const SCRIPT = `
@@ -71,13 +72,15 @@ export async function resume(dump: string, opts = options()): Promise<unknown> {
 }
 
 /**
- * Continues the dump in node: the same host functions, as plain globals. `$djs.resume`
- * runs the open call's `resume` hook with its saved state; `$djs.seed` has nothing to set.
+ * Continues the dump in node: the same host functions, as plain globals, and `$djs`: the
+ * dump runtime's helpers (js/src/dump-runtime.js) with the hooks. `$djs.resume` runs the
+ * open call's `resume` hook with its saved state; `$djs.seed` has nothing to set.
  */
 export async function resumeInNode(dump: string): Promise<unknown> {
   const signal = new AbortController().signal;
   const g = globalThis as Record<string, unknown>;
   g.$djs = {
+    ...helpers,
     seed() {},
     resume: (_id: number, _name: string, args: unknown[], state: { due: number }) => sleep.resume(state, { args, signal } as never),
   };

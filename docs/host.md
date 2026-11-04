@@ -171,7 +171,8 @@ await again.result;
   (tasks', `Run.dump`, `dump`) as ordinary Scripts in which every suspended function is a
   continuation, the rest of its code from where it waits. This is the default;
   `plainDumps: false` writes format 2 until it is retired. `Sandbox.resume`, `loadRun` and `load`
-  take either and run a plain one with the global object `$djs` defined: the dump calls
+  take either and run a plain one with the global object `$djs` defined, which holds the
+  dump runtime's helpers (`vm_dump_runtime`, D2903) and the hooks: the dump calls
   `$djs.seed(lo, hi, next)` first (Math.random's state and the id of the next host call)
   and `$djs.resume(id, name, args, state)` for each open call, which opens call `id` of the
   host function `name` again under the same id (`vm_open_call`) and gives the dump its
@@ -396,6 +397,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_dump(vm, len) -> 0/1/2` | (feature `dump`) a dump of the idle VM in out. Staging, six lines: host globals and names to dump (comma-separated), the host's function names in id order, the values to name as `handle:name` (tab-separated; handle 0 names the entry call's outcome), the open calls' states as `call_id:byte_len` (tab-separated) and the options (comma-separated: `plain` for a plain dump, D2830; format 2 otherwise), then the states' JSON texts one after another (D2770). 1: refused, reasons in out; 2: no base image (D2631) |
 | `vm_load_dump(vm, names_len, len) -> 0/1` | (feature `dump`) loads the dump after `names_len` bytes of host function names (`\n`-separated, id order). 0: out = u32 `n_calls, n_handles, (call_id, fn_id, state_len)*, (handle, name_len)*`, then the handles' names, then the calls' states (JSON, `state_len` bytes; 0: none, D2770); 1: refused, the reason in out (D2631) |
 | `vm_open_call(vm, parked, fn_id) -> 0/-1` | while parked on the sync call `parked`, a plain dump's `$djs.resume(id, name, args, state)`: opens async call `id` of host function `fn_id` with `args`' elements under that id, and returns its promise from `parked` (`Vm::open_host_call`, D2890). The call is not reported by `vm_new_host_calls`; the next new call gets a higher id. -1: the reason in out (an open id, not an array), for the host to throw at the call |
+| `vm_dump_runtime(vm, len) -> h` | a new object holding the plain dump runtime's helpers (D2903), evaluated from staging[0..len], the runtime's Script (js/src/dump-runtime.js `script`; the module does not carry it): the host adds its hooks (`seed`, `resume`) and defines it as the global `$djs` before it runs a plain dump. Runs the VM, so call it while the VM is not running. 0: out of memory or not the runtime's text |
 | `vm_set_next_call_id(vm, id)` | the id the next host call gets: after a plain dump's load, its `$djs.seed`'s `next` or one past the highest reopened call, whichever is larger (`Vm::set_next_call_id`, D2897) |
 | `vm_host_call(vm) -> argc` | out = `[call_id, fn_id, this lo, hi, (arg lo, hi)*]` |
 | `vm_host_call_info(vm, call_id) -> argc` | `vm_host_call` for any pending call (async ones) |

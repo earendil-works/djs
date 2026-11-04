@@ -100,6 +100,47 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   (D2835) in the exporter, readers (CLI, sandbox.ts, difftest, plain-node.mjs), tests,
   docs; `djs resume --explain` says `format plain`.
 
+- (a) merged (01501401). (c) in progress (WIP commit): crates/djs-core/src/vm/dump_runtime.rs
+  holds HELPERS (moved out of dump_plain.rs; regexpIterator self-contained via a lexical
+  `matchAll`), `script_text()`, `module_text()` (→ js/src/dump-runtime.js, test
+  `dump_runtime_js_is_current`, needs RUST_KEEP in gate.py), `Vm::dump_runtime()`. Still
+  to do: exporter writes `$djs.H` in plain mode (shared writers dump.rs/dump_flight.rs need
+  a mode switch since format 2 still uses `$dump.H`; dump_cont.rs:1864 prologue), drop the
+  `globalThis.$dump = { helpers }` content, hosts (CLI dumps.rs, difftest djs.rs, core
+  tests plain_load, wasm export vm_dump_runtime, sandbox.ts loadPlain, pi vm.ts loadPlain,
+  plain-node.mjs, sleep-dump.ts resumeInNode, js tests), docs.
+- New scope from the coordinator (owner shocked by sleep-dump 2,751 B): target ≈ 700 B
+  hand-written version (work/research/0207/target-sleep.js), items: 1 temps only when an
+  operand is not pure to re-evaluate; 2 loop resumption without the L wrapper when no
+  break/continue targets the loop; 3 continuations as immediately called functions with
+  frame values as arguments; 4 records shrink to {f, at} if the exporter can regenerate K's
+  layout deterministically (investigate first, report). Add sleep-dump to the score.
+
+- Item 4 investigated and reported: records shrink to {f, at} only if K's text is
+  canonical (no values inside K: IIFE arguments, canonical scaffold names, closures that
+  capture none of K's bindings outside K); re-dump regenerates K from (f, at, K's
+  parameter names) and requires exact text equality, holes `{f, at, h}` where value text
+  must stay. Coordinator agreed; a mismatch is a clear refusal (no fallback, D024).
+  Layout fields are 7.4% of pi bytes (record 17.3%), v2 13.7% (19.7%), corpus 1.1% (2.1%).
+- Owner decision D2836: plain dumps only with frozen builtins; builtin operands are
+  written as their expression or path, no temps. Next slice after (c).
+- (c) done: helpers on `$djs` (D2903). dump_runtime.rs (HELPERS, script_text, module_text,
+  Vm::dump_runtime / dump_runtime_from); exporter writes `$djs.H` in plain mode
+  (`Dumper::rt()`, format 2 keeps `$dump.H`), K captures `$djs_R = $djs.R`; hosts: CLI,
+  difftest, core tests, wasm `vm_dump_runtime(vm, len)` with the text from
+  js/src/dump-runtime.js `script` (the text in the shipped module cost +2.3 KB gzip, over
+  the ceiling; passed from JS it is +414 B), Sandbox, pi adapter, plain-node.mjs (runtime
+  evaluated in each link's context), sleep-dump resumeInNode. The chain test's size check
+  counts lines copying the runtime's code out (a re-dump writes the JS `fromSync`
+  wrapper's closures where the run had the engine's record). Docs: plain-js-dumps.md §4
+  (members one by one), host.md, guide/snapshots.md, sleep-dump README (refreshed, 2285 B).
+  Score (after rebasing on 0203's iterator helpers, whose new helpers U M FM CC CI HD
+  moved to the runtime too): corpus 8,062,700 → 7,950,316 raw, 2,577,552 → 2,533,166
+  gzip; v2 652,232 → 578,286 raw, 234,344 → 206,934 gzip.
+
 ## Follow-ups
+- Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
+  handler) as their helper call again instead of the runtime's closures (chain dumps of a
+  `for await` over a sync iterator, ~1.6 KB each).
 
 ## Result

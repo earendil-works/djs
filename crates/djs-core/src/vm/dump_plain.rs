@@ -132,7 +132,7 @@ pub(super) struct Slot {
 
 // ---------------------------------------------------------------- references
 
-/// What a piece of the dump's text refers to: `$dump.X` (a location), `$dump.X.k` (a
+/// What a piece of the dump's text refers to: `$djs.X` (a location), `$djs.X.k` (a
 /// key of a factory's object, `key` set) and bare names (the dump's top-level
 /// declarations among them).
 #[derive(Default)]
@@ -1567,9 +1567,9 @@ impl W<'_> {
         for i in 0..self.items.len() {
             let t = self.items[i].text.clone();
             if let IK::Def(_) = self.items[i].kind
-                && let Some(at) = t.find("$dump.regexpIterator($dump.")
+                && let Some(at) = t.find("$djs.regexpIterator($dump.")
             {
-                let (re, _) = ident_at(&t, at + "$dump.regexpIterator($dump.".len());
+                let (re, _) = ident_at(&t, at + "$djs.regexpIterator($dump.".len());
                 let patch = cat!("$dump.", re, ".lastIndex = ");
                 if let Some(p) = self
                     .items
@@ -1765,141 +1765,6 @@ struct Sched {
 
 // ---------------------------------------------------------------- emission
 
-/// Helpers a plain dump defines on its `$dump` (D2830): plain functions, same names as
-/// the format 2 loader primitives where those have a plain encoding.
-const HELPERS: &[(&str, &str)] = &[
-    ("R", "Reflect.apply"),
-    ("G", "Reflect.get"),
-    ("C", "Reflect.construct"),
-    (
-        "D",
-        "(o, k, v) => Object.defineProperty(o, k, { value: v, writable: true, enumerable: true, configurable: true })",
-    ),
-    ("A", "Object.assign"),
-    // An iterable over a saved iterator record whose first step is a placeholder: the
-    // rest of the current iteration runs in it, the next ones take the iterator's steps.
-    (
-        "L",
-        "(it, next) => { let first = true; const r = { next() { if (first) { first = false; return { value: undefined, done: false }; } return Reflect.apply(next ?? it.next, it, []); }, get return() { const m = it.return; return m == null ? m : (...v) => Reflect.apply(m, it, v); }, [Symbol.iterator]() { return r; } }; return r; }",
-    ),
-    // The same without the placeholder (a pattern's element whose step is to come), and
-    // an iterable that is done (a pattern's iterator that was).
-    (
-        "I",
-        "(it, next) => { const r = { next() { return Reflect.apply(next, it, []); }, get return() { const m = it.return; return m == null ? m : (...v) => Reflect.apply(m, it, v); }, [Symbol.iterator]() { return r; } }; return r; }",
-    ),
-    (
-        "E",
-        "() => ({ [Symbol.iterator]() { return { next() { return { value: undefined, done: true }; } }; } })",
-    ),
-    // A `yield*`'s inner record (D2875): the first step is `first` if given, else a
-    // placeholder (the delegation's yield the original is suspended at); `throw` and
-    // `return` are the inner iterator's, looked up when the delegation uses them.
-    (
-        "Y",
-        "(it, next, a, ...first) => { let ph = !first.length; const m = (k) => { const f = it[k]; return f == null ? f : (...v) => Reflect.apply(f, it, v); }; const r = { next(...v) { if (first.length) return first.pop(); if (ph) { ph = false; return { value: undefined, done: false }; } return Reflect.apply(next, it, v); }, get throw() { return m('throw'); }, get return() { return m('return'); }, [a ? Symbol.asyncIterator : Symbol.iterator]() { return r; } }; return r; }",
-    ),
-    // A `using` resource added again (D2876): its saved dispose method called on its
-    // value; the exporter reads `$djs_v`/`$djs_m` back.
-    (
-        "U",
-        "($djs_v, $djs_m, k) => k === 4 ? { [Symbol.asyncDispose]: () => Reflect.apply($djs_m, $djs_v, []) } : { [Symbol.dispose]: () => Reflect.apply($djs_m, $djs_v, []) }",
-    ),
-    // Iterator helpers made again (D2877): a callback whose counter is shifted, a
-    // flatMap inside its inner iterator and a concat inside an item (made one step
-    // before, stepped over a placeholder), a completed helper, a concat item.
-    (
-        "M",
-        "($djs_f, $djs_k) => (x, i) => Reflect.apply($djs_f, undefined, [x, i + $djs_k])",
-    ),
-    (
-        "FM",
-        "(it, next, $djs_f, k, inner, innerNext) => { const $djs_k = k - 1, L = $dump.L, $djs_in = { [Symbol.iterator]: () => L(inner, innerNext) }; const h = Iterator.prototype.flatMap.call(L(it, next), (x, i) => i === 0 ? $djs_in : Reflect.apply($djs_f, undefined, [x, i + $djs_k])); h.next(); return h; }",
-    ),
-    (
-        "CC",
-        "(cur, curNext, items) => { const L = $dump.L, h = Iterator.concat({ [Symbol.iterator]: () => L(cur, curNext) }, ...items); h.next(); return h; }",
-    ),
-    (
-        "CI",
-        "($djs_m, $djs_o) => ({ [Symbol.iterator]: () => Reflect.apply($djs_m, $djs_o, []) })",
-    ),
-    (
-        "HD",
-        "() => { const h = Iterator.prototype.map.call({ next: () => ({ value: undefined, done: true }) }, (x) => x); h.next(); return h; }",
-    ),
-    // ToPropertyKey, as a computed key does it.
-    ("P", "(k) => Reflect.ownKeys({ [k]: 0 })[0]"),
-    // A pattern's rest property: CopyDataProperties without the keys taken.
-    (
-        "S",
-        "(o, ex) => { const r = {}, f = Object(o), ks = Reflect.ownKeys(f); for (let i = 0; i < ks.length; i++) { const k = ks[i]; let skip = false; for (let j = 0; j < ex.length; j++) if (ex[j] === k) skip = true; if (skip) continue; const d = Reflect.getOwnPropertyDescriptor(f, k); if (d && d.enumerable) Object.defineProperty(r, k, { value: f[k], writable: true, enumerable: true, configurable: true }); } return r; }",
-    ),
-    // An async iterator over a saved record for a `for await`: its first step `first`
-    // (the promise the loop was awaiting) if given. `return` is the iterator's own,
-    // looked up when the loop closes, so a missing one is not called.
-    (
-        "N",
-        "(it, next, ...first) => { const r = { next() { return first.length ? first.pop() : Reflect.apply(next, it, []); }, get return() { const m = it.return; return m == null ? m : (...v) => Reflect.apply(m, it, v); }, [Symbol.asyncIterator]() { return r; } }; return r; }",
-    ),
-    // AsyncIteratorClose of an exception: a promise to await that always fulfills.
-    (
-        "X",
-        "(it) => { let p; try { const m = it.return; if (m == null) return; p = Promise.resolve(Reflect.apply(m, it, [])); } catch { return; } return p.then(() => {}, () => {}); }",
-    ),
-    // The check of an iterator result.
-    (
-        "O",
-        "(r) => { if (Object(r) !== r) throw new TypeError('iterator must return an object'); }",
-    ),
-    // The async-from-sync iterator a `for await` over a sync iterable makes (never
-    // visible to user code): its `next` and `return` step as the language's do.
-    (
-        "fromSync",
-        "(it, next) => { const q = () => { try { const m = it.return; if (m != null) Reflect.apply(m, it, []); } catch {} }; const step = (f, close) => new Promise((res, rej) => { const r = f(); if (Object(r) !== r) throw new TypeError('iterator must return an object'); const done = !!r.done; let w; try { w = Promise.resolve(r.value); } catch (e) { if (!done && close) q(); throw e; } w.then((v) => res({ value: v, done }), !done && close ? (e) => { q(); rej(e); } : rej); }); return { next: (...a) => step(() => Reflect.apply(next, it, a), true), return: (...a) => { const m = it.return; return m == null ? Promise.resolve({ value: a[0], done: true }) : step(() => Reflect.apply(m, it, a), false); }, throw: (...a) => { const m = it.throw; if (m != null) return step(() => Reflect.apply(m, it, a), true); try { const c = it.return; if (c != null) { const r = Reflect.apply(c, it, []); if (Object(r) !== r) throw new TypeError('iterator must return an object'); } throw new TypeError('throw is not a method'); } catch (e) { return Promise.reject(e); } } }; }",
-    ),
-    (
-        "Q",
-        "(a, ...v) => { let n = a.length; for (const x of v) Object.defineProperty(a, n++, { value: x, writable: true, enumerable: true, configurable: true }); return a; }",
-    ),
-    (
-        "regexpIterator",
-        "(re, s, f) => { const it = $dump.MA.call(re, s); if (f & 4) while (!it.next().done); return it; }",
-    ),
-    ("MA", "RegExp.prototype[Symbol.matchAll]"),
-    // The async-from-sync wrapper's handler that closes the sync iterator when a step's
-    // value rejects (IteratorClose of a throw: its errors are ignored), and rethrows.
-    (
-        "closeThrow",
-        "(it) => (e) => { try { const m = it.return; if (m != null) Reflect.apply(m, it, []); } catch {} throw e; }",
-    ),
-    (
-        "forIn",
-        "(o, keys) => { let i = 0; const r = { next() { while (i < keys.length) { const k = keys[i++]; if (o == null || k in o) return { value: k, done: false }; } return { value: undefined, done: true }; }, [Symbol.iterator]() { return r; } }; return r; }",
-    ),
-    (
-        "advance",
-        "(it, n) => { const next = it.next; for (let i = 0; i < n; i++) Reflect.apply(next, it, []); return it; }",
-    ),
-    (
-        "fn",
-        "(o) => { const d = Object.getOwnPropertyDescriptor(o, Reflect.ownKeys(o)[0]); return 'value' in d ? d.value : d.get ?? d.set; }",
-    ),
-    (
-        "spent",
-        "(k) => { let f; new Promise((a, b) => { f = k ? b : a; a(); }); return f; }",
-    ),
-    (
-        "rejected",
-        "(e) => { const p = Promise.reject(e); p.then(undefined, () => {}); return p; }",
-    ),
-    ("bytes", "(b) => Uint8Array.fromBase64(b).buffer"),
-    (
-        "keep",
-        "(o, keys) => { for (const k of Reflect.ownKeys(o)) if (!['length', 'name', 'prototype', 'constructor'].includes(k) && !keys.includes(k) && !delete o[k]) throw new TypeError('keep'); }",
-    ),
-];
-
 /// Intrinsics without a global name, as plain expressions.
 const INTRINSICS: &[(&str, &str)] = &[
     (
@@ -2008,33 +1873,7 @@ impl W<'_> {
             ir.next_call,
             ");\n"
         );
-        // The helpers the text uses.
-        let mut text = join(&body, "\n");
-        for it in &self.items {
-            if it.kind == IK::FnDecl {
-                cat_to!(&mut text, "\n", it.text);
-            }
-        }
-        let used = refs(&text);
-        let mut helpers: Vec<String> = Vec::new();
-        for &(k, v) in HELPERS {
-            let mut uses = used.dump.iter().any(|(n, _)| n == k);
-            if k == "MA" {
-                uses |= used.dump.iter().any(|(n, _)| n == "regexpIterator");
-            }
-            if k == "L" {
-                uses |= used.dump.iter().any(|(n, _)| n == "FM" || n == "CC");
-            }
-            if uses {
-                helpers.push_out(cat!(k, ": ", v));
-            }
-        }
-        cat_to!(
-            &mut s,
-            "globalThis.$dump = { ",
-            join(&helpers, ",\n  "),
-            " };\n"
-        );
+        s.push_str("globalThis.$dump = {};\n");
         for (i, p) in ir.builtins.iter().enumerate() {
             cat_to!(&mut s, "$dump.b", i, " = ", builtin_expr(p)?, ";\n");
         }

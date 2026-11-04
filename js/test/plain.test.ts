@@ -1,7 +1,8 @@
 // Plain dumps (D2830, D2890): a dump is an ordinary Script; the sandbox loads it by
-// running it with the hooks `$djs.resume(id, name, args, state)` and `$djs.seed(lo, hi)`,
-// which reopen the dump's open calls under their ids and set Math.random's state. These
-// dumps are written by hand in the exporter's shape (docs/plain-js-dumps.md section 2).
+// running it with `$djs`: the dump runtime's helpers (D2903) and the hooks
+// `$djs.resume(id, name, args, state)` and `$djs.seed(lo, hi)`, which reopen the dump's
+// open calls under their ids and set Math.random's state. These dumps are written by hand
+// in the exporter's shape (docs/plain-js-dumps.md section 2).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -70,6 +71,20 @@ test("Sandbox.resume continues a plain dump through the hooks", async () => {
   sb.load(`"djs-dump";\n$djs.seed(5, 7);\nglobalThis.r = Math.random();\ndelete globalThis.$djs;\n`);
   assert.equal(String(sb.run(`return r`)), line.split(" ")[3]);
   task.sandbox.dispose();
+  sb.dispose();
+});
+
+test("$djs holds the dump runtime while a plain dump loads", async () => {
+  const module = await loadModule();
+  const sb = new Sandbox({ module });
+  // The helpers the dump calls (D2903): every one js/src/dump-runtime.js exports.
+  const { helpers } = await import("../src/dump-runtime.js");
+  sb.load(`"djs-dump";
+globalThis.r = [Object.getOwnPropertyNames($djs).sort().join(), $djs.R(Math.max, undefined, [1, 2]), $djs.advance([1, 2, 3].values(), 1).next().value];
+delete globalThis.$djs;
+`);
+  const want = [...Object.keys(helpers), "resume", "seed"].sort().join();
+  assert.deepEqual(sb.run(`return r`), [want, 2, 2]);
   sb.dispose();
 });
 

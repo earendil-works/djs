@@ -905,6 +905,23 @@ pub extern "C" fn vm_new_object(vm: u32) -> u32 {
     })
 }
 
+/// A handle to a new object holding the plain dump runtime's helpers (D2903), evaluated
+/// from staging[0..len], the runtime's Script (js/src/dump-runtime.js `script`; the module
+/// does not carry it), for the host to add its hooks to and define as `$djs` while a plain
+/// dump loads. 0 if it fails (out of memory, or not the runtime's text). Runs the VM: call
+/// it before the load.
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_dump_runtime(vm: u32, len: usize) -> u32 {
+    with(|s| {
+        let (slot, staging) = s.vm_and_staging(vm);
+        let text = staged_str(staging, 0, len).to_owned();
+        match slot.vm.dump_runtime_from(&text) {
+            Ok(o) => slot.handle(o),
+            Err(_) => 0,
+        }
+    })
+}
+
 /// A handle to a new host function `fn_id` named staging[0..name_len].
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_new_host_function(vm: u32, fn_id: u32, name_len: usize) -> u32 {

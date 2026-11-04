@@ -8,6 +8,7 @@ import { IN_PLACE_MIN, encode, stringInPlace } from "../src/wire.ts";
 import { readValue } from "../src/reader.ts";
 import { trapText } from "../src/trap.ts";
 import { provideBase, rememberBase } from "../src/base.ts";
+import { script as dumpRuntimeScript } from "../src/dump-runtime.js";
 
 export const STATUS_DONE = 0;
 export const STATUS_THREW = 1;
@@ -57,6 +58,8 @@ interface Exports {
   vm_set_next_call_id?(vm: number, id: number): void;
   vm_global(vm: number): number;
   vm_new_object(vm: number): number;
+  /** Since 0207 (D2903): the plain dump runtime, `$djs`'s helpers. */
+  vm_dump_runtime?(vm: number, len: number): number;
   vm_define(vm: number, obj: number, nameLen: number, value: number): number;
   vm_decode_wire(vm: number, len: number): number;
   /** Since 0162 (D2551); older modules lack it. */
@@ -338,6 +341,17 @@ export class Engine {
     this.stage(all);
     const h = this.trap(() => this.x.vm_compile_file(this.vm, goal, name.length, head.length, body.length));
     return h === 0 ? { error: outText(this.x) } : { handle: h };
+  }
+
+  /** A new object holding the plain dump runtime's helpers (D2903): `$djs` without the hooks. */
+  dumpRuntime(): number {
+    const f = this.x.vm_dump_runtime;
+    if (!f) throw new Error("The djs-wasm module cannot load plain dumps (no vm_dump_runtime)");
+    const bytes = textEncoder.encode(dumpRuntimeScript);
+    this.stage(bytes);
+    const h = this.trap(() => f(this.vm, bytes.length));
+    if (h === 0) throw new Error("Out of memory creating the dump runtime");
+    return h;
   }
 
   /** A new ordinary object's handle. */

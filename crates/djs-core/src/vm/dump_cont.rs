@@ -1903,7 +1903,7 @@ impl G<'_, '_> {
         if !names.is_empty() {
             let list: Vec<String> = names
                 .iter()
-                .map(|h| cat!("$djs_", *h, " = $dump.", *h))
+                .map(|h| cat!("$djs_", *h, " = $djs.", *h))
                 .collect();
             decl = cat!("const ", join(&list, ", "), ";\n");
         }

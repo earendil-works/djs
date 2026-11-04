@@ -6,8 +6,8 @@
 // djs run's whole transcript. Each dump runs as a Script in a fresh node context with
 // the difftest prelude's host: output(text), done(kind, text), later(v, rejected) (the
 // oldest open call is answered at each idle point, when the microtask queue is empty)
-// and the plain-dump hooks $djs.seed / $djs.resume. The transcript it produces, after
-// <k>.pre, must equal `transcript`.
+// and $djs: the dump runtime (js/src/dump-runtime.js) with the hooks seed and resume.
+// The transcript it produces, after <k>.pre, must equal `transcript`.
 //
 // A case whose dump the exporter refused has a `refused` file (the run went on without
 // dumps). With --refusals, FILE lists the cases that may refuse, one per line with the
@@ -40,6 +40,12 @@ const norm = (t) =>
     .filter((l) => !/^\s+at /.test(l))
     .map((l) => l.replace(/Cannot read properties of (undefined|null) \(reading '([^']*)'\)/g, "cannot read property '$2' of $1"))
     .join("\n");
+
+// The dump runtime (D2903), evaluated in each link's context so that its helpers are that
+// realm's: js/src/dump-runtime.js as a Script whose completion value is `helpers`.
+const RUNTIME = `(() => {\n${fs
+  .readFileSync(new URL("../js/src/dump-runtime.js", import.meta.url), "utf8")
+  .replace(/^export const /gm, "const ")}\nreturn helpers;\n})()`;
 
 async function runLink(file, now) {
   const text = fs.readFileSync(file, "utf8");
@@ -77,11 +83,11 @@ async function runLink(file, now) {
     Object.defineProperty(g, k, { value: f, writable: true, configurable: true, enumerable: false });
   }
   Object.defineProperty(g, "$djs", {
-    value: {
+    value: Object.assign(vm.runInContext(RUNTIME, ctx), {
       // node's Math.random cannot be seeded: cases that use it are not comparable.
       seed() {},
       resume: (id, name, args) => g.later(...args),
-    },
+    }),
     writable: true,
     configurable: true,
   });

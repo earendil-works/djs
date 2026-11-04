@@ -104,7 +104,7 @@ of the outer loop; [examples](../work/research/0199/examples/)):
 
 ```js
 $dump.Ka4 = async function () {
-const $djs_R = $dump.R, $djs_L = $dump.L;
+const $djs_R = $djs.R, $djs_L = $djs.L;
 let i = 0;
 { let $djs_f1 = true; while ($djs_f1 || (i < 2)) { if ($djs_f1) { $djs_f1 = false; {
 { let $djs_f3 = true; for (const $djs_v3 of $djs_L($dump.i2, $dump.b0)) { if ($djs_f3) { $djs_f3 = false; {
@@ -269,7 +269,7 @@ result, not the microseconds). Without pruning (§5) harvested dumps would be +1
 +31% zstd: the codemode body's text that already ran is what today's dumps carry and
 plain dumps do not.
 
-The small dumps pay a fixed price: the helper object (~700 bytes), an origin record per
+The small dumps pay a fixed price: the helper object (~700 bytes; since D2903 the host's), an origin record per
 activation, and a loop body written twice (the rest of the current iteration and the body
 for later ones). Codemode dumps are dominated by data and the body's text, where plain dumps
 win.
@@ -335,6 +335,52 @@ uninterrupted run's. Host functions the dump holds as values are written as the 
 name for them, an expression evaluated while the dump loads (`tools.read`; pi's
 `$djs.call`). The Script's completion value is what the host named: the value itself for
 one handle named `run`, else a null-prototype object of all of them by name.
+
+**The runtime (0207, D2903).** The format's fixed helpers are members of `$djs` too, next
+to the hooks: the host provides them, so a dump does not carry them (they were ~700 bytes of
+every small dump). They are the same code for every dump, the format's small standard
+library: `crates/djs-core/src/vm/dump_runtime.rs` defines them once; a djs host gets the
+object from `Vm::dump_runtime()` and adds its hooks; a host without djs imports
+`js/src/dump-runtime.js` (generated from the same table, one named export per helper and
+`helpers`, all of them) and sets `globalThis.$djs = { ...helpers, seed, resume }`. The
+Sandbox and pi's adapter pass that file's `script` (the same as a Script) to the wasm
+export `vm_dump_runtime`, so that the shipped module does not carry the text. A continuation captures the
+helpers it calls (`const $djs_R = $djs.R`), since `$djs` is gone once the dump has loaded.
+Each helper is a plain function that uses neither `this` nor another member, so that the
+names can become imports later. The members:
+
+| member | what it is |
+| --- | --- |
+| `seed(lo, hi, next)` | hook: `Math.random`'s state, the next call id (above) |
+| `resume(id, name, args, state)` | hook: an open host call (above) |
+| `R`, `G`, `C`, `A` | `Reflect.apply`, `Reflect.get`, `Reflect.construct`, `Object.assign`: a call, read or construction whose callee or receiver was evaluated before the site |
+| `D(o, k, v)` | defines a data property (an object literal's member written after the site) |
+| `P(k)` | ToPropertyKey, as a computed key does it |
+| `S(o, keys)` | a pattern's rest property: CopyDataProperties without `keys` |
+| `Q(a, ...v)` | appends elements to an array being built (an argument list or array literal with a spread, evaluated around the site) |
+| `L(it, next)` | an iterable over a saved iterator record whose first step is a placeholder: a loop's or pattern's rest of the current step runs in it |
+| `I(it, next)` | the same without the placeholder (a pattern element still to take) |
+| `E()` | an iterable that is done (a pattern's iterator that was) |
+| `Y(it, next, async, ...first)` | a `yield*`'s inner record; its first step is `first` if given, else a placeholder |
+| `U(value, method, kind)` | a `using` resource added again: an object whose dispose method calls the saved `method` on `value` (`kind` 4: async) |
+| `M(f, k)` | an iterator helper's callback whose counter already passed `k`: calls `f` with the counter shifted |
+| `FM(it, next, f, k, inner, innerNext)` | a `flatMap` helper stopped inside its inner iterator, made one step before and stepped over a placeholder |
+| `CC(cur, curNext, items)` | an `Iterator.concat` stopped inside an item, the same way |
+| `CI(m, o)` | a concat item: an iterable whose iterator is `m` called on `o` |
+| `HD()` | a completed iterator helper |
+| `N(it, next, ...first)` | the async iterator of a `for await` over a saved record; its first step is `first` if given |
+| `X(it)` | AsyncIteratorClose of a throw: a promise that always fulfills |
+| `O(r)` | the check that an iterator result is an object |
+| `fromSync(it, next)` | the async-from-sync iterator of a `for await` over a sync iterator |
+| `closeThrow(it)` | its handler that closes the sync iterator when a step's value rejects, and rethrows |
+| `forIn(o, keys)` | a `for-in`'s key iterator over the keys left, skipping deleted ones |
+| `advance(it, n)` | steps an iterator `n` times, returns it |
+| `regexpIterator(re, s, flags)` | a `matchAll` iterator over `re` and `s` (`flags & 4`: done) |
+| `fn(o)` | the method, getter or setter of a one-member object literal (methods keep their kind) |
+| `spent(k)` | a settled promise's resolve (`k` 0) or reject (`k` 1) function: calling it does nothing |
+| `rejected(e)` | a rejected promise that counts as handled |
+| `bytes(b64)` | an `ArrayBuffer` from base64 |
+| `keep(o, keys)` | deletes a class's own members other than `keys`: the ones the run deleted since its evaluation |
 
 ## 5. Pruning: why plain dumps are smaller
 

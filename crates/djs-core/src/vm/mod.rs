@@ -24,6 +24,7 @@ pub mod dump_load;
 mod dump_prims;
 #[cfg(feature = "dump")]
 mod dump_resume;
+pub mod dump_runtime;
 #[cfg(feature = "dump")]
 mod dump_state;
 mod format;

@@ -56,7 +56,8 @@ PRIMARY = _common_root()
 CACHE = Path(os.environ.get("DJS_GATE_CACHE", PRIMARY / "work/scratch/gate-cache"))
 DOCS = re.compile(r"^(docs/|work/|\.github/|[^/]+\.md$)")
 JS_ONLY = re.compile(r"^(js/|examples/)")
-RUST_KEEP = {"js/src/layout.generated.ts"}
+# Generated from Rust and checked by a Rust test: in the rust class.
+RUST_KEEP = {"js/src/layout.generated.ts", "js/src/dump-runtime.js"}
 
 
 def in_class(cls, path):
@@ -868,6 +869,7 @@ PATHS_ALLOWED = {
     ("crates/djs-bench/src/wasm.rs", "js/bench/wasm.bench.ts"),
     # In the rust class (RUST_KEEP).
     ("crates/djs-core/src/heap/layout.rs", "js/src/layout.generated.ts"),
+    ("crates/djs-core/src/vm/dump_runtime.rs", "js/src/dump-runtime.js"),
 }
 # A repository path in a string literal: at its start, or after `../` (relative to a crate).
 PATH_LITERAL = re.compile(r'(?:"|\.\./)((?:js|examples|docs|work|\.github)/[^"\s)]*|[A-Z][A-Za-z_-]*\.md(?="))')

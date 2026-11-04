@@ -796,6 +796,12 @@ struct Dumper<'a> {
 }
 
 impl<'a> Dumper<'a> {
+    /// What the format's helpers are members of: the host's `$djs` in a plain dump (the
+    /// dump runtime, D2903), the dump's own `$dump` in format 2.
+    pub(super) fn rt(&self) -> &'static str {
+        if self.pl.is_some() { "$djs." } else { "$dump." }
+    }
+
     fn new(vm: &'a Vm, opts: &DumpOptions<'a>) -> Result<Dumper<'a>, DumpError> {
         let h = &vm.heap;
         let refuse = |m: &str| DumpError(alloc::vec![String::from(m)]);
@@ -937,8 +943,8 @@ impl<'a> Dumper<'a> {
         if decl == Decl::Var && self.host_names.contains(&name.as_str()) {
             self.host_values(value, name, 0);
         } else if self.pl.is_some() && (name == "$dump" || name == "$djs") {
-            // A plain dump's own names: its helpers live in `$dump` during the load
-            // and the host's hooks in `$djs` (D2890).
+            // A plain dump's own names: its values live in `$dump` during the load
+            // and the host's runtime and hooks in `$djs` (D2890, D2903).
             self.refuse(name, "a global binding with a name plain dumps reserve");
         } else if name != "$dump" && self.global_atoms.get(key(k.id())).is_none() {
             // A lexical binding shadows a global object property of the same name.
@@ -3373,7 +3379,7 @@ impl<'a> Dumper<'a> {
                 cat_to!(&mut list, if j > 0 { ", " } else { "" }, ke);
             }
             self.patches
-                .push_out(cat!("$dump.keep(", holder, ", [", list, "]);"));
+                .push_out(cat!(self.rt(), "keep(", holder, ", [", list, "]);"));
         }
         // Static state and properties added since.
         for (holder_obj, holder) in [(Some(o), String::from(loc)), (proto_obj, proto_loc.clone())] {
@@ -3504,7 +3510,7 @@ impl<'a> Dumper<'a> {
         match self.fn_kind(n) {
             func_flags::KIND_METHOD | func_flags::KIND_GETTER | func_flags::KIND_SETTER => {
                 self.ns = true;
-                cat!("$dump.fn({ ", src, " })")
+                cat!(self.rt(), "fn({ ", src, " })")
             }
             _ => src.into(),
         }
@@ -3752,7 +3758,7 @@ impl<'a> Dumper<'a> {
                     cat!("Promise.resolve(", r, ")")
                 } else {
                     self.ns = true;
-                    cat!("$dump.rejected(", r, ")")
+                    cat!(self.rt(), "rejected(", r, ")")
                 }
             }
             ObjectClass::BoundFunction => {
@@ -3776,7 +3782,7 @@ impl<'a> Dumper<'a> {
             #[cfg(feature = "full")]
             ObjectClass::ArrayBuffer => {
                 self.ns = true;
-                cat!("$dump.bytes(\"", base64(h.buffer_data(o)), "\")")
+                cat!(self.rt(), "bytes(\"", base64(h.buffer_data(o)), "\")")
             }
             #[cfg(feature = "full")]
             ObjectClass::TypedArray | ObjectClass::DataView => {

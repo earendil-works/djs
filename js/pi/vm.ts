@@ -625,9 +625,9 @@ class Session implements VmSession {
 
   /**
    * Loads the plain dump `text` (D2830) into this session's VM, which ran the host globals
-   * and the prelude: runs it as a Script with `$djs` = {resume, seed, bridge, call} to its
-   * first stop that is not a sync call (the dump deletes `$djs` at its end, the adapter
-   * too). Each `$djs.resume` reopens a `call` under its engine id and takes pi's id from
+   * and the prelude: runs it as a Script with `$djs` = the dump runtime (D2903) and
+   * {resume, seed, bridge, call} to its first stop that is not a sync call (the dump
+   * deletes `$djs` at its end, the adapter too). Each `$djs.resume` reopens a `call` under its engine id and takes pi's id from
    * its state into the call table. Returns the run's promise (the Script's completion
    * value; the caller owns the handle). Throws when the dump does not load.
    */
@@ -635,7 +635,7 @@ class Session implements VmSession {
     const { engine } = this;
     const compiled = engine.compile(plainDump(text)!.typescript ? 2 : 0, "dump.js", [], text);
     if ("error" in compiled) throw new Error(`Cannot load the dump: ${compiled.error}`);
-    const hooks = engine.newObject();
+    const hooks = engine.dumpRuntime();
     const fns: [string, number][] = [
       ["resume", engine.hostFunction(HOOK_RESUME, "resume")],
       ["seed", engine.hostFunction(HOOK_SEED, "seed")],

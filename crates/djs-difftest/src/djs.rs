@@ -389,8 +389,8 @@ impl Session {
     }
 
     /// [`Session::dump_and_load`] with a plain dump: the fresh VM gets the host's
-    /// functions as globals (`output`, `done`, `later`, and `$djs` with `seed` and
-    /// `resume`, which issues the call again) and runs the dump as a Script, whose
+    /// functions as globals (`output`, `done`, `later`, and `$djs`: the dump runtime with
+    /// `seed` and `resume`, which issues the call again) and runs the dump as a Script, whose
     /// completion value is the api.
     #[cfg(feature = "dump")]
     fn plain_dump_and_load(&mut self, opts: VmOptions, now: f64) -> Result<(), Stop> {
@@ -453,7 +453,12 @@ impl Session {
             .map_err(err)?;
             vm.define_global(name, f).map_err(err)?;
         }
-        let hooks = vm.new_object().map_err(err)?;
+        // The dump runtime's helpers, with the hooks added (D2903).
+        let hooks = vm
+            .dump_runtime()
+            .map_err(Stop::Crash)?
+            .as_object()
+            .ok_or_else(|| Stop::Crash("the dump runtime is not an object".into()))?;
         let seed = vm.new_host_function(SEED, "seed").map_err(err)?;
         vm.define(hooks, "seed", seed).map_err(err)?;
         let resume = vm.new_host_function(RESUME, "resume").map_err(err)?;

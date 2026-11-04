@@ -5,6 +5,7 @@ import { IN_PLACE_MIN, encode, stringInPlace } from "./wire.ts";
 import { trapText } from "./trap.ts";
 import { Opaque, readValue } from "./reader.ts";
 import { provideBase, rememberBase } from "./base.ts";
+import { script as dumpRuntimeScript } from "./dump-runtime.js";
 
 /** A host function callable from the sandbox. Arguments and the result are host values. */
 export type HostFunction = (...args: unknown[]) => unknown;
@@ -298,6 +299,8 @@ interface Exports {
   vm_compile_file(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number): number;
   vm_global(vm: number): number;
   vm_new_object(vm: number): number;
+  /** Since 0207 (D2903): the plain dump runtime, `$djs`'s helpers. */
+  vm_dump_runtime?(vm: number, len: number): number;
   vm_new_host_function(vm: number, fnId: number, nameLen: number): number;
   vm_new_async_host_function(vm: number, fnId: number, nameLen: number): number;
   vm_define(vm: number, obj: number, nameLen: number, value: number): number;
@@ -1275,10 +1278,14 @@ export class Sandbox {
   private loadPlain(dump: string, typescript: boolean): { calls: OpenCall[]; handles: Map<string, number> } {
     const x = this.x;
     const vm = this.vm;
-    if (!x.vm_open_call) throw new SandboxError("misuse", "the djs-wasm module cannot load plain dumps (no vm_open_call): rebuild it");
+    if (!x.vm_open_call || !x.vm_dump_runtime) {
+      throw new SandboxError("misuse", "the djs-wasm module cannot load plain dumps (no vm_open_call or vm_dump_runtime): rebuild it");
+    }
+    const dumpRuntime = x.vm_dump_runtime;
     const calls: OpenCall[] = [];
     this.guard(() => {
-      const hooks = this.check(x.vm_new_object(vm), "memory");
+      // `$djs`: the dump runtime's helpers (D2903) with the hooks added.
+      const hooks = this.check(dumpRuntime(vm, this.stageText(dumpRuntimeScript)), "memory");
       for (const [name, id] of [["resume", HOOK_RESUME], ["seed", HOOK_SEED]] as const) {
         const f = this.check(x.vm_new_host_function(vm, id, this.stageText(name)), "memory");
         this.defineOn(hooks, name, f);

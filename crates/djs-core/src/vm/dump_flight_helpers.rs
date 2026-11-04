@@ -1,10 +1,10 @@
 //! Iterator helpers in plain dumps (D2877): made again by the public methods over the
-//! saved state. The underlying iterator record is `$dump.I(it, next)`, a callback
-//! that a counter already passed is `$dump.M(f, k)` (it calls `f` with the counter
+//! saved state. The underlying iterator record is `$djs.I(it, next)`, a callback
+//! that a counter already passed is `$djs.M(f, k)` (it calls `f` with the counter
 //! shifted by `k`), take's and drop's remaining counts are passed as limits, and helpers
 //! that stopped inside a flatMap's inner iterator or a concat's item are made one step
-//! before and stepped once while the dump loads (`$dump.FM`, `$dump.CC`: the step yields
-//! a placeholder; no user code runs). A completed helper is `$dump.HD()`. Re-dumps read
+//! before and stepped once while the dump loads (`$djs.FM`, `$djs.CC`: the step yields
+//! a placeholder; no user code runs). A completed helper is `$djs.HD()`. Re-dumps read
 //! these wrappers back, so the original's state is written again, not the wrappers.
 
 use alloc::string::String;
@@ -19,7 +19,7 @@ impl Dumper<'_> {
         let kind = slot(0).as_int().unwrap_or(-1);
         let state = slot(1).as_int().unwrap_or(-1);
         let e = if state == 3 && kind != 0 {
-            String::from("$dump.HD()")
+            String::from("$djs.HD()")
         } else {
             match self.plain_helper_text(kind, o) {
                 Some(e) => e,
@@ -52,14 +52,14 @@ impl Dumper<'_> {
         let callback = |d: &mut Self, f: Value, k: Value| -> Option<String> {
             let (f, k) = unwrap_callback(h, f, k)?;
             let fe = d.expr(f, None, None);
-            (!fe.is_empty()).then(|| cat!("$dump.M(", fe, ", ", k, ")"))
+            (!fe.is_empty()).then(|| cat!("$djs.M(", fe, ", ", k, ")"))
         };
         Some(match kind {
-            0 => cat!("Iterator.from($dump.I(", rec(self, slot(2), slot(3))?, "))"),
+            0 => cat!("Iterator.from($djs.I(", rec(self, slot(2), slot(3))?, "))"),
             1 | 2 => cat!(
                 "Iterator.prototype.",
                 if kind == 1 { "map" } else { "filter" },
-                ".call($dump.I(",
+                ".call($djs.I(",
                 rec(self, slot(2), slot(3))?,
                 "), ",
                 callback(self, slot(4), slot(5))?,
@@ -75,7 +75,7 @@ impl Dumper<'_> {
                 cat!(
                     "Iterator.prototype.",
                     if kind == 3 { "take" } else { "drop" },
-                    ".call($dump.I(",
+                    ".call($djs.I(",
                     rec(self, slot(2), slot(3))?,
                     "), ",
                     limit,
@@ -83,7 +83,7 @@ impl Dumper<'_> {
                 )
             }
             5 if slot(6).is_undefined() => cat!(
-                "Iterator.prototype.flatMap.call($dump.I(",
+                "Iterator.prototype.flatMap.call($djs.I(",
                 rec(self, slot(2), slot(3))?,
                 "), ",
                 callback(self, slot(4), slot(5))?,
@@ -94,7 +94,7 @@ impl Dumper<'_> {
                 let fe = self.expr(f, None, None);
                 let outer = rec(self, slot(2), slot(3))?;
                 let inner = rec(self, slot(6), slot(7))?;
-                cat!("$dump.FM(", outer, ", ", fe, ", ", k, ", ", inner, ")")
+                cat!("$djs.FM(", outer, ", ", fe, ", ", k, ", ", inner, ")")
             }
             6 => {
                 // The iterables not yet opened, from the index of the next one.
@@ -106,13 +106,13 @@ impl Dumper<'_> {
                     let (m, it) = unwrap_concat_item(h, *pair.first()?, *pair.get(1)?);
                     let me = self.expr(m, None, None);
                     let ie = self.expr(it, None, None);
-                    items.push_out(cat!("$dump.CI(", me, ", ", ie, ")"));
+                    items.push_out(cat!("$djs.CI(", me, ", ", ie, ")"));
                 }
                 if slot(2).is_undefined() {
                     cat!("Iterator.concat(", join(&items, ", "), ")")
                 } else {
                     let cur = rec(self, slot(2), slot(3))?;
-                    cat!("$dump.CC(", cur, ", [", join(&items, ", "), "])")
+                    cat!("$djs.CC(", cur, ", [", join(&items, ", "), "])")
                 }
             }
             _ => return None,
@@ -120,7 +120,7 @@ impl Dumper<'_> {
     }
 }
 
-/// An iterator record a plain dump wrapped (`$dump.I`/`$dump.L`: `next` closes over `it`
+/// An iterator record a plain dump wrapped (`$djs.I`/`$djs.L`: `next` closes over `it`
 /// and `next`), as the original's.
 fn unwrap_record(h: &Heap, it: Value, next: Value) -> (Value, Value) {
     let wrapped = it.as_object().is_some_and(|o| {
@@ -138,7 +138,7 @@ fn unwrap_record(h: &Heap, it: Value, next: Value) -> (Value, Value) {
     (it, next)
 }
 
-/// A helper's callback and counter, through a plain dump's `$dump.M(f, k)` (its arrow
+/// A helper's callback and counter, through a plain dump's `$djs.M(f, k)` (its arrow
 /// closes over `$djs_f` and `$djs_k`): the user's function and the counter it sees next.
 fn unwrap_callback(h: &Heap, f: Value, k: Value) -> Option<(Value, i64)> {
     let k = k.as_number().unwrap_or(0.0) as i64;
@@ -152,7 +152,7 @@ fn unwrap_callback(h: &Heap, f: Value, k: Value) -> Option<(Value, i64)> {
     Some((f, k))
 }
 
-/// A concat item's `[method, iterable]` through a plain dump's `$dump.CI(m, o)` (its
+/// A concat item's `[method, iterable]` through a plain dump's `$djs.CI(m, o)` (its
 /// method closes over `$djs_m` and `$djs_o`).
 fn unwrap_concat_item(h: &Heap, m: Value, it: Value) -> (Value, Value) {
     if let Some(fo) = m.as_object()

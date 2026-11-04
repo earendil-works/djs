@@ -312,7 +312,13 @@ held there declared at its top and the loops around the `await` written as real 
 over the saved iterators. The dump is then an ordinary Script, which any later djs, or
 node, runs given the host's functions; it calls `$djs.seed(...)` and one
 `$djs.resume(id, name, args, state)` per open call, functions the host provides for the
-load (D2890). Its completion value is the run's result promise. The Sandbox writes
+load (D2890). The small helpers its continuations call, such as `Reflect.apply` for a call
+whose callee was already evaluated or an iterator advanced past the steps it took, are
+members of `$djs` too: they are the same in every dump, so the host provides them as a
+fixed runtime instead of each dump carrying them (D2903); djs makes that object for its
+hosts, and a host without djs imports it from
+[js/src/dump-runtime.js](../../js/src/dump-runtime.js). Its completion value is the run's
+result promise. The Sandbox writes
 plain dumps by default (D2898); the CLI and the pi adapter still ask for them
 (`djs run --plain`, `plainDumps`) until format 2 is retired. Where the plain writer
 cannot write a run yet, the dump is refused with the reason.

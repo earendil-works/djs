@@ -9456,6 +9456,25 @@ would be named by the key, so the dump fixed its `name` back to `""` afterwards 
 is the empty string is now written `$f33: (0, (args) => …)`: not a direct function
 definition, so the key does not name it, and no fixup follows (−9% of the corpus's
 plain dump bytes, mostly the prelude's closures).
+## D2903: The plain dump runtime: the format's helpers are members of `$djs`
+date: 2026-11-04 · by: pjs · issue: 0207
+The helpers a plain dump calls (`R`, `L`, `advance`, `fromSync`, … ; the full list with
+their meaning is in docs/plain-js-dumps.md §4) are no longer written into each dump as
+`globalThis.$dump = { R: …, L: … }`: the host provides them as members of `$djs`, next to
+its hooks (D2834), and the dump calls `$djs.H(...)` (a continuation captures the ones it
+calls, `const $djs_R = $djs.R`, since `$djs` is deleted at the end of the load). They are
+the format's fixed standard library, not program content. One table,
+crates/djs-core/src/vm/dump_runtime.rs, defines them: `Vm::dump_runtime()` evaluates it in
+a VM (the CLI, the difftest), and js/src/dump-runtime.js, generated from it and kept current
+by a test, is the ES module for hosts without djs (one named export per helper, and
+`helpers`) and holds the same as a Script (`script`), which the Sandbox and pi's adapter
+pass to the wasm export `vm_dump_runtime(vm, len)` (`Vm::dump_runtime_from`): the shipped
+module does not carry the text (it would cost ~2 KB gzip of the size budget). Each helper
+is a plain function that uses neither `this` nor another member, and the names stay short
+and map 1:1 to named exports, so that `$djs` can become imports later. Format 2 keeps its
+own `$dump` helpers. Cost: a re-dump of a loaded dump writes objects the runtime made (a `for await`'s `fromSync`
+wrapper) with the runtime's code as closures, where the run had the engine's own record.
+
 ## D2875: `yield*` in plain continuations: a `yield*` over a wrapper of the inner record
 date: 2026-11-05 · by: pjr · issue: 0203
 At a `yield*` site, `K` delegates again with `yield* $dump.Y(it, next, async, ...first)`.

@@ -4,8 +4,9 @@
 //! A plain dump (`"djs-dump";`, D2830) is an ordinary Script: loading it is running it
 //! with the host hooks of D2832 in the global object `$djs` (D2890): `$djs.seed(lo, hi)`
 //! sets `Math.random`'s state, `$djs.resume(id, name, args, state)` opens the call `id`
-//! of the host function `name` again (the CLI answers it as any other call). The hooks
-//! are served while the Script is evaluated, and `$djs` is deleted after that.
+//! of the host function `name` again (the CLI answers it as any other call). `$djs` also
+//! holds the format's helpers, the dump runtime (D2903). The hooks are served while the
+//! Script is evaluated, and `$djs` is deleted after that.
 
 use djs_core::compiler::CompileOptions;
 use djs_core::heap::{Handle, ObjectClass};
@@ -50,13 +51,17 @@ pub struct PlainLoad {
     last: u32,
 }
 
-/// Starts loading the plain dump `text` into `vm` (a fresh one): defines `$djs` and calls
-/// the Script. The caller runs the VM, serving the hooks with [`serve_hook`], and calls
+/// Starts loading the plain dump `text` into `vm` (a fresh one): defines `$djs` (the dump
+/// runtime and the hooks) and calls the Script. The caller runs the VM, serving the hooks with [`serve_hook`], and calls
 /// [`end_load`] at the first stop that is not a sync host call.
 pub fn begin_plain(vm: &mut Vm, text: &str, filename: &str) -> Result<(), String> {
     let ts = plain_format(text).ok_or("not a plain dump (no \"djs-dump\"; header)")?;
     let oom = |_| String::from("out of memory");
-    let hooks = vm.new_object().map_err(oom)?;
+    // The dump runtime's helpers, with the hooks added (D2903).
+    let hooks = vm
+        .dump_runtime()?
+        .as_object()
+        .ok_or("the dump runtime is not an object")?;
     let resume = vm.new_host_function(RESUME, "resume").map_err(oom)?;
     vm.define(hooks, "resume", resume).map_err(oom)?;
     let seed = vm.new_host_function(SEED, "seed").map_err(oom)?;

@@ -1069,7 +1069,7 @@ impl Dumper<'_> {
         }
         let name = self.fresh("i");
         self.line(
-            cat!(name, " = $dump.fromSync(", it, ", ", next, ");"),
+            cat!(name, " = ", self.rt(), "fromSync(", it, ", ", next, ");"),
             before,
         );
         self.nodes[n].loc = name.clone();
@@ -1174,7 +1174,7 @@ impl Dumper<'_> {
         }
         if kind == FROM_SYNC_CLOSE {
             let it = self.expr(data, None, None);
-            return cat!("$dump.closeThrow(", it, ")");
+            return cat!(self.rt(), "closeThrow(", it, ")");
         }
         if kind == VALUE_THUNK || kind == THROWER {
             // A finally's value thunk or thrower, or the handler that makes an
@@ -1217,7 +1217,7 @@ impl Dumper<'_> {
             // The promise settled: calling them does nothing.
             None => {
                 self.ns = true;
-                cat!("$dump.spent(", kind, ")")
+                cat!(self.rt(), "spent(", kind, ")")
             }
         }
     }
@@ -1264,7 +1264,7 @@ impl Dumper<'_> {
         }
         let mut e = cat!(method, ".call(", t, ")");
         if steps > 0 {
-            e = cat!("$dump.advance(", e, ", ", steps, ")");
+            e = cat!(self.rt(), "advance(", e, ", ", steps, ")");
         }
         let name = self.fresh("i");
         self.line(cat!(name, " = ", e, ";"), before);
@@ -1330,7 +1330,9 @@ impl Dumper<'_> {
         self.line(
             cat!(
                 name,
-                " = $dump.regexpIterator(",
+                " = ",
+                self.rt(),
+                "regexpIterator(",
                 re,
                 ", ",
                 s,
@@ -1364,7 +1366,8 @@ impl Dumper<'_> {
         let e = match h.collection_iterator_position(o) {
             None => {
                 cat!(
-                    "$dump.advance(",
+                    self.rt(),
+                    "advance(",
                     class,
                     ".prototype.",
                     method,
@@ -1404,7 +1407,7 @@ impl Dumper<'_> {
                 }
                 let mut e = cat!(class, ".prototype.", method, ".call(", t, ")");
                 if live > 0 {
-                    e = cat!("$dump.advance(", e, ", ", live, ")");
+                    e = cat!(self.rt(), "advance(", e, ", ", live, ")");
                 }
                 e
             }
@@ -1682,7 +1685,7 @@ impl Dumper<'_> {
         let rejected = |d: &mut Self, e: Value| {
             d.ns = true;
             let r = d.expr(e, None, None);
-            cat!("$dump.rejected(", r, ")")
+            cat!(d.rt(), "rejected(", r, ")")
         };
         match kind {
             SETTLED_FULFILLED => {
@@ -1804,7 +1807,7 @@ impl Dumper<'_> {
                                 let t = self.expr(target, None, None);
                                 let ks: Vec<String> =
                                     keys.into_iter().map(|k| self.expr(k, None, None)).collect();
-                                cat!("$dump.forIn(", t, ", [", join(&ks, ", "), "])")
+                                cat!(self.rt(), "forIn(", t, ", [", join(&ks, ", "), "])")
                             }
                             // (Refused by the visit.)
                             None => "undefined".into(),
@@ -2134,7 +2137,7 @@ impl Dumper<'_> {
 }
 
 /// A `using` resource as the original added it: a continuation adds it again through
-/// `$dump.U(value, method)` (its dispose method a closure of those two), which is read
+/// `$djs.U(value, method)` (its dispose method a closure of those two), which is read
 /// back here so re-dumps add the original again.
 fn unwrap_using(h: &Heap, v: Value, m: Value) -> (Value, Value) {
     let wrapped = || {

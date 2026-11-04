@@ -10,6 +10,7 @@
     ".": "./src/sandbox.ts",
     "./wire": "./src/wire.ts",
     "./reader": "./src/reader.ts",
+    "./dump-runtime": "./src/dump-runtime.js",
     "./pi": "./pi/vm.ts"
   },
   "scripts": {
