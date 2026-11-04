@@ -456,6 +456,9 @@ mod cont;
 #[path = "dump_origin.rs"]
 mod origin;
 
+#[path = "dump_reread.rs"]
+mod reread;
+
 /// Brackets a node's index in a line written before the node had a location
 /// ([`Dumper::expr_or_loc`]); quoted strings never hold it (control characters are
 /// escaped).

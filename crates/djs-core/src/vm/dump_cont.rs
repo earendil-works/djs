@@ -1554,6 +1554,42 @@ impl G<'_, '_> {
                 return no("a super call around the site (0203)");
             }
         }
+        let args: Vec<usize> = (0..n.parts.len())
+            .filter(|&m| matches!(n.parts[m].role, Role::Arg | Role::Spread))
+            .collect();
+        let spread_before = args
+            .iter()
+            .any(|&m| m < k && n.parts[m].role == Role::Spread);
+        let construct = if new { "new.arg" } else { "call.arg" };
+        let (fc, ft) = (cat!("call.callee@", n.start), cat!("call.this@", n.start));
+        if !new && !spread_before && self.ctx.rereads(&fc) && self.ctx.rereads(&ft) {
+            // The call as written: its callee and `this` read again (D2836). Origin
+            // tracking maps K's call to the original's through the copied text.
+            self.consume(&fc);
+            self.consume(&ft);
+            let mut out = alloc::vec![self.rest(n.start, n.parts[args[0]].start)];
+            for (j, &m) in args.iter().enumerate() {
+                let p = n.parts[m];
+                if j > 0 {
+                    out.push_out(self.rest(n.parts[args[j - 1]].end, p.start));
+                }
+                let e = if m < k {
+                    self.operand(construct, n, m)?
+                } else if m == k {
+                    self.arg(i, n, m)?
+                } else {
+                    self.rest_part(n, m)
+                };
+                let copied = m > k || (m < k && self.ctx.rereads(&cat!(construct, "@", p.start)));
+                out.push_out(if copied {
+                    e
+                } else {
+                    self.as_kslot(cat!(construct, "@", p.start), construct, e)
+                });
+            }
+            out.push_out(self.rest(n.parts[*args.last().unwrap_or(&k)].end, n.end));
+            return Ok(P::L(out));
+        }
         let (ce, this) = if new {
             (self.tmp("new.callee", n.start)?, None)
         } else {
@@ -1562,12 +1598,6 @@ impl G<'_, '_> {
                 Some(self.tmp("call.this", n.start)?),
             )
         };
-        let args: Vec<usize> = (0..n.parts.len())
-            .filter(|&m| matches!(n.parts[m].role, Role::Arg | Role::Spread))
-            .collect();
-        let spread_before = args
-            .iter()
-            .any(|&m| m < k && n.parts[m].role == Role::Spread);
         let mut list: Vec<P> = Vec::new();
         let head = if new { "$djs_C(" } else { "$djs_R(" };
         // K's own call: its callee, `this` and arguments are rebuilt from the
@@ -1598,12 +1628,11 @@ impl G<'_, '_> {
             out.push_out(s("))"));
             return Ok(P::L(out));
         }
-        let construct = if new { "new.arg" } else { "call.arg" };
         let simple = !args.iter().any(|&m| n.parts[m].role == Role::Spread);
         for &m in &args {
             let p = n.parts[m];
             let e = if m < k {
-                self.tmp(construct, p.start)?
+                self.operand(construct, n, m)?
             } else if m == k {
                 self.arg(i, n, m)?
             } else {
@@ -1642,6 +1671,25 @@ impl G<'_, '_> {
         m
     }
 
+    /// Argument `m` of call `n`, evaluated before the site: its text again where it reads
+    /// the saved value (D2836), else its temporary.
+    fn operand(&mut self, construct: &str, n: &Node, m: usize) -> R<P> {
+        let p = n.parts[m];
+        let slot = cat!(construct, "@", p.start);
+        if self.ctx.rereads(&slot) {
+            self.consume(&slot);
+            return Ok(self.rest_part(n, m));
+        }
+        self.tmp(construct, p.start)
+    }
+
+    /// Marks slot `name` consumed without writing its value: K evaluates it again.
+    fn consume(&mut self, name: &str) {
+        if !self.used.iter().any(|u| u == name) {
+            self.used.push_out(String::from(name));
+        }
+    }
+
     /// A construct of K's own whose temporaries origin tracking rebuilds from the
     /// original's frame (K's `$djs_R(` call, its fixed arguments).
     fn kmark(&mut self) -> P {
@@ -1652,9 +1700,15 @@ impl G<'_, '_> {
     /// `fslot` (an argument or element evaluated at or after the site): recorded for
     /// origin tracking, should K stop again before the literal is complete.
     fn as_element(&mut self, fslot: String, p: P) -> P {
+        self.as_kslot(fslot, "array.element", p)
+    }
+
+    /// [`G::as_element`] for K's construct `kc` at the mark (an argument of K's call
+    /// written as the original's, `call.arg`).
+    fn as_kslot(&mut self, fslot: String, kc: &str, p: P) -> P {
         let m = self.mark("tmp", 0);
         if let P::Mark(x) = m {
-            self.scaf[x].3 = cat!(",", quote(&fslot), ",\"array.element\"");
+            self.scaf[x].3 = cat!(",", quote(&fslot), ",", quote(kc));
         }
         P::L(alloc::vec![m, p])
     }

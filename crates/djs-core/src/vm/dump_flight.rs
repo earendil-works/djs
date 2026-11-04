@@ -1919,7 +1919,18 @@ impl Dumper<'_> {
                     })
                 })
                 .collect();
+            let rereads = self.rereads(
+                fv(0).as_object(),
+                self.fl.acts[a]
+                    .syntax
+                    .as_deref()
+                    .unwrap_or(&Default::default()),
+                &ftext,
+                &named,
+                &|x| fv(index(x.place)),
+            );
             let act = plain::Act {
+                rereads,
                 usings,
                 peers,
                 proto,

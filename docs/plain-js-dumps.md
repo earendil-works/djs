@@ -85,9 +85,13 @@ For an activation of `f` stopped at site `s`, the dump writes a function `K` of 
   and the closures of the frame's scopes made in place (§2.2);
 - **the site's statement rewritten**: values evaluated before the site come from the dump,
   the site itself is `(await <the promise it waits on>)` (or a placeholder `(yield)`), the
-  rest of the statement is `f`'s text. A call keeps its evaluated callee and `this`:
-  `$djs_R(callee, self, [arg0, (await p), <rest>])` with `$djs_R` = `Reflect.apply`
-  captured while the dump loads;
+  rest of the statement is `f`'s text. An operand evaluated before the site is written
+  as `f`'s text again where that is pure and gives the saved value on the dumped state
+  (D2836, D2905): an identifier whose binding holds it, a callee `b.name` whose `b` holds
+  the saved `this` and whose `name` is found on a frozen builtin (`results.push((await
+  p))`). Otherwise the call keeps its evaluated callee and `this`: `$djs_R(callee, self,
+  [arg0, (await p), <rest>])` with `$djs_R` = `Reflect.apply` captured while the dump
+  loads;
 - **the loops around the site** as real loops over the saved iterator record: `for (const v
   of $djs_L(iterator, next))`, whose first step is a placeholder so the rest of the current
   iteration runs first, and whose later steps (and `break`, `return`, exceptions closing the

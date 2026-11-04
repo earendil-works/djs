@@ -9490,6 +9490,25 @@ only when the plain run passed an idle point: 24 corpus cases change builtins on
 dump, and their frozen output differs for that alone. The core plain-dump tests use frozen
 VMs (`plain_vm`).
 
+## D2905: A continuation reads an evaluated operand again where that is exact
+date: 2026-11-04 · by: pjs · issue: 0207
+The exporter's rule for D2836's builtin operands (dump_reread.rs). A call's callee and
+`this`, evaluated before the site, are written as the original text (`results.push((await
+p))`, no `$djs_R` and no temporaries) when the callee is an identifier holding the saved
+callee (and `this` was undefined), or `b.name` where `b` is an identifier holding the saved
+`this` and the lookup of `name` on it reaches the saved callee as a data property of a
+frozen object, through frozen objects only after the receiver, which must not have the
+property itself unless it is frozen. An identifier "holds" a value when its binding does
+now: the frame's binding of that name (only one of the name in scope at the site), else a
+variable the function captured, else the global lexical record's or the global object's
+data property. An argument evaluated before the site is its text again when it is such an
+identifier. Everything else keeps its temporary (a receiver reassigned after its read, an
+own method of a session object, a getter, a proxy, a spread before the site). The check
+runs on the dumped state, which is the state the continuation starts in, so no check is
+written into the dump. Origin tracking needs nothing new: K's call is a copy of the
+original's text, so K's own temporaries map to the original's through `segs`; K's own
+arguments (the site's, a kept temporary) are `tmp` scaffolds of construct `call.arg`.
+
 ## D2875: `yield*` in plain continuations: a `yield*` over a wrapper of the inner record
 date: 2026-11-05 · by: pjr · issue: 0203
 At a `yield*` site, `K` delegates again with `yield* $dump.Y(it, next, async, ...first)`.

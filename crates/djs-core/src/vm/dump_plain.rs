@@ -110,6 +110,9 @@ pub(super) struct Act {
     pub peers: Vec<String>,
     /// The `using` records of its frame.
     pub usings: Vec<Using>,
+    /// Its temporaries the continuation evaluates again from the original's text
+    /// (D2836, dump_reread.rs).
+    pub rereads: Vec<String>,
     /// A method that uses `super`: its home object's prototype (its continuation is a
     /// method of an object of that prototype).
     pub super_proto: Option<String>,
@@ -478,6 +481,8 @@ pub(super) trait Ctx {
     fn cell(&mut self, sname: &str) -> Option<Option<String>>;
     /// The binding's value exists only after the dump's callback ran.
     fn after_go(&self, sname: &str) -> bool;
+    /// The temporary is evaluated again from the original's text (D2836).
+    fn rereads(&self, slot: &str) -> bool;
     /// The code the dump puts in the continuation's block `index`.
     fn block(&mut self, index: usize, info: &[BDecl]) -> Result<String, String>;
     /// The call of the dump's callback, or "".
@@ -866,6 +871,10 @@ impl Ctx for C<'_, '_> {
 
     fn after_go(&self, sname: &str) -> bool {
         self.w.acts[self.a].after_go.iter().any(|n| n == sname)
+    }
+
+    fn rereads(&self, slot: &str) -> bool {
+        self.w.ir.acts[self.a].rereads.iter().any(|n| n == slot)
     }
 
     fn block(&mut self, index: usize, info: &[BDecl]) -> R<String> {

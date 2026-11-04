@@ -174,6 +174,13 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   the classes C/D (inner name binding no factory variable; a frame-shared class binding
   declared by the continuation). Corpus cases codemode/redump-operands.js,
   codemode/classes-in-body.js; test plain_redumps_inside_rewritten_statements.
+- Item 1 (D2905): dump_reread.rs decides per activation which call temporaries K reads
+  again (Act::rereads, Ctx::rereads); dump_cont `call` writes the original call text when
+  callee and `this` reread, `operand` for arguments. Test plain_dumps_read_operands_again.
+  Score: corpus 7,980,365 → 7,868,547 raw; v2 578,286 → 546,263; sleep 2,321 → 2,104.
+  Seen while writing the test (not from this change, not investigated): a getter of an
+  object literal that captures a variable (`{ get m() { n++; … } }`) makes the dump's check
+  fail with `get: ,` in the written text.
 
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
