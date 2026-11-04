@@ -8688,3 +8688,15 @@ builtins/array-from-arraylike.js built a 100000-element array, quadratic under G
 it builds 10000 now, through the same %EachDense path (mode 8, D2306, no length threshold),
 still under GC stress. That quadratic cost is what GC stress does, not an engine bug.
 vm::tests::hot_loop_is_invisible runs its 16 traces on threads (33 s → ~9 s).
+## D2269: No `djs heap` command and no `.image`; the REPL's `.heap` keeps the heap report
+date: 2026-11-04 · by: snapshot · issue: 0187
+Owner: "Remove `.image` and the `heap` command (but not `.heap`). We no longer need that."
+Since D2700 images are an in-process mechanism, so writing them to files (`.image`) and
+analyzing files (`djs heap <image>`, with `--diff FILE`, `--only`, `--all`, `--json`) had
+no remaining use. The analyzer (crates/djs-cli/src/heap/: graph, structural diff,
+sections, D2264, D2432) stays behind `.heap [sections]`, over the live VM against the base
+image; what only the command used goes: file reading, the options, the summary's file and
+dependency-descriptor lines (the live VM is always this build's), the whole-image `--all`
+view (the analyzer still describes the whole image when given no reference). The sections
+keep their JSON form, which the tests check; nothing prints it. Supersedes D2264's and
+D2340's command and `.image` parts.

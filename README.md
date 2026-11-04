@@ -102,7 +102,7 @@ cargo build                                  # the workspace
 cargo run -p djs-cli -- run file.js          # run a Script (prints console output)
 cargo run -p djs-cli -- run --body file.js   # run a codemode async function body
 cargo run -p djs-cli -- run --ts file.ts     # TypeScript
-cargo run -p djs-cli -- repl                 # REPL with fuel, suspension and image commands
+cargo run -p djs-cli -- repl                 # REPL with fuel, suspension and heap commands
 cargo run -p djs-cli -- disasm file.js       # bytecode listing
 cargo run -p djs-cli -- strip-types file.ts  # the source with its types blanked
 scripts/build-wasm.sh                        # target/wasm32-unknown-unknown/wasm/djs_wasm.wasm

@@ -5,7 +5,7 @@
 //! never renumbered or reused, and a builtin that goes away keeps its line as a tombstone.
 //! It names builtins across djs builds, where offsets, intrinsic ids and the base image's
 //! layout change: snapshot exports (docs/goldilocks-snapshots.md, tier 2) and tools such as
-//! `djs heap` name a builtin by its id or path.
+//! the REPL's `.heap` name a builtin by its id or path.
 //!
 //! **Paths.** A *value* entry is a path that leads from a root to an object or symbol of the
 //! base realm, the way the spec writes intrinsics without the `%`s:

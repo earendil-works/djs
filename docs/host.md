@@ -243,8 +243,9 @@ every VM is copied from, pi's prelude images (a start restores one instead of ru
 the prelude), the stress and determinism checks, and the image transport to and from the
 dump module. `vm_arena_ptr`/`vm_arena_len` read an image, `vm_from_bytes` and
 `vm_replace_image` load one. Snapshot containers, session images, reference compression,
-`Sandbox.bytes()`/`fromBytes()` and pi's `snapshot()`/`resumeVm()` were removed in 0177;
-the REPL's `.image` still writes a raw image for `djs heap`.
+`Sandbox.bytes()`/`fromBytes()` and pi's `snapshot()`/`resumeVm()` were removed in 0177,
+and the REPL's `.image` and the `djs heap` command that read its files in 0187 (D2269):
+the REPL's `.heap` reports on the live VM's heap.
 
 #### What an image depends on (D026, D2265)
 

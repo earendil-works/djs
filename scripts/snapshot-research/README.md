@@ -68,12 +68,8 @@ continues there, and also restores the same image from an uncompressed container
 It also writes the prelude image (`prelude.img`), each case's last image (for comparisons
 with other compressors; 0117 measured zstd-rs compiled to wasm on them), the snapshot
 containers of the first, the largest and the last idle point (`CASE-N.djsn`) and the
-cases' start data (`start.json`). `djs heap` explains a container's size (0133):
-
-```sh
-node scripts/heap/reference.ts pi-prelude --data OUT/start.json -o OUT/prelude.img   # or use OUT/prelude.img
-cargo run -q -p djs-cli -- heap --reference OUT/prelude.img --only diff,session OUT/ask-1.djsn
-```
+cases' start data (`start.json`). 0133 analyzed a container's size with `djs heap`, which is
+gone too (D2269).
 
 The search tool steps through the source files with a stride coprime with their count, so
 its hits are distinct files (with a fixed 7, every file came three times whenever djs-core

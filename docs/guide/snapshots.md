@@ -126,8 +126,8 @@ it. It changed in seven of ten merges to djs so far, the descriptor in half.
 After the descriptor, `from_bytes` **verifies** the image (D1056): it walks every cell,
 checks every traced field (a valid value pointing at the start of a cell of a fitting
 kind), the invariants of each kind, and that prototype chains and ropes are acyclic. The
-stress tests and `djs heap` load images that way, which makes every restore a check of
-the heap. The wasm module does not: the only images it loads were made in the same
+stress tests and the REPL's heap report load images that way, which makes every restore
+a check of the heap. The wasm module does not: the only images it loads were made in the same
 process (the transport to the dump module, pi's prelude images), so it checks the header
 and the descriptor and leaves the verifier out of the shipped code (D2700). A bad image
 could still only cause a panic (a trap) or a wrong result, never undefined behavior,
@@ -325,16 +325,16 @@ about 1 ms.
 
 ## Inspecting a heap
 
-What is in an image, and why is a heap as large as it is? `djs heap` answers both
-(D2264). It reads a raw image (what the REPL's `.image` writes) through the engine's own
-heap code, never its own parser: the image is verified as a restore would verify it, the
-walker and the layout table say which fields are references and what they are called,
-and liveness follows the collector's rules. From that it reports:
+What is in a VM's heap, and why is it as large as it is? The REPL's `.heap` answers both
+(D2264). It reads the live VM's image through the engine's own heap code, never its own
+parser: the image is verified as a restore would verify it, the walker and the layout
+table say which fields are references and what they are called, and liveness follows the
+collector's rules. From that it reports:
 
 - a summary: live and garbage bytes, the old region and the young one, and the VM's own
   part past the base;
 - cells and bytes per cell kind and per object class;
-- a diff against a reference image, by default this build's base;
+- a diff against the base image every VM starts from;
 - the builtins a script changed: the words of the builtin prefix that differ from this
   build's base, by cell, named by their builtin paths (`%Array.prototype%`, `%Math%`);
 - the largest cells, and the largest *retained* sizes: what a cell keeps alive on its
@@ -345,10 +345,9 @@ and liveness follows the collector's rules. From that it reports:
   async functions and generators with their locals by name.
 
 An almost empty session is still about 200 KB of image, nearly all of it the base. So
-when there is a reference to compare with, the largest cells, strings, shapes and
-functions describe only the session's own part: the cells that are new or changed
-against the reference (D2432). The reference's part is one line of totals, and `--all`
-lists the whole image.
+the largest cells, strings, shapes and functions describe only the session's own part:
+the cells that are new or changed against the base (D2432). The base's part is one line
+of totals.
 
 Every cell gets a path from the roots that reads like JavaScript where the heap allows,
 built from the shapes' keys, the elements' indexes, the templates' recorded names of
@@ -356,7 +355,7 @@ captured variables and locals, and the layout's field names for everything inter
 `globalThis.cache[3].body`, `handle[1]~pending`, `<atoms><entries>`.
 
 The diff explains what a session added. Cells have no identity but their offset, and a
-collection moves them, so the tool matches the two images structurally: a breadth-first
+collection moves them, so the report matches the two images structurally: a breadth-first
 walk from both roots pairs the targets of the same field. Immutable cells (strings,
 bytecode) pair only with the same content, and a shape's list of transitions pairs its
 children by the key they add, since one inserted transition shifts the rest. Then every
@@ -409,11 +408,12 @@ that made 50 small objects:
 - [`js/src/sandbox.ts`](../../js/src/sandbox.ts): `begin`, `Run.dump` and
   `Sandbox.resume`, and the dump module; [`js/pi/vm.ts`](../../js/pi/vm.ts): the
   adapter's prelude images and its dumps of pi sessions.
-- [`crates/djs-cli/src/heap/`](../../crates/djs-cli/src/heap/): `djs heap`, the analyzer.
+- [`crates/djs-cli/src/heap/`](../../crates/djs-cli/src/heap/): the heap report behind the
+  REPL's `.heap`.
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2063 D2067 D2043 D1091 D1890 D1725 D1052 D026 D2265 D2266 D2267 D2268 D1320 D1330 D1750 D1056 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2262 D2264 D2308 D2445 D2446 D2447 D2560 D2561 D2562 D2563 D2700 D2703 D2704 D2432 -->
+<!-- gen:decisions D2040 D2041 D2063 D2067 D2043 D1091 D1890 D1725 D1052 D026 D2265 D2266 D2267 D2268 D1320 D1330 D1750 D1056 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2262 D2264 D2308 D2445 D2446 D2447 D2560 D2561 D2562 D2563 D2700 D2703 D2704 D2432 D2340 D2269 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
 - D2063: The base image ends with a tail of per-VM cells; nothing writes below BASE_END

@@ -369,4 +369,5 @@ and compute-heavy enough that replay is too slow, and pinning to a build is unac
   pi's prelude images, the snapshots and the decompressed session image.
 - `djs heap --diff OUT/base-m.img OUT/base-n.img` and `djs heap --diff OUT/prelude-n.img
   --only diff,functions,session OUT/pi-n.img`: the base comparison and the session's
-  builtin closures above.
+  builtin closures above. (`djs heap` has since been removed, D2269: an older checkout
+  has it.)

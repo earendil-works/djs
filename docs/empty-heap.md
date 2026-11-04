@@ -391,3 +391,6 @@ node scripts/heap/reference.ts base -o base.img
 node scripts/heap/reference.ts pi-prelude --data start.json -o prelude.img
 cargo run --release -p djs-cli -- heap --only summary,kinds,diff --diff base.img prelude.img
 ```
+
+(`djs heap` and scripts/heap/ have since been removed (D2700, D2269): the last block runs
+on an older checkout.)

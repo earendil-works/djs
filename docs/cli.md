@@ -4,8 +4,6 @@
 cargo run -p djs-cli -- run [--body] [--ts] [--experimental-decorators] [--emit-decorator-metadata]
     [--gc-stress] [--suspend-every N] [--backend bytecode|native] [--tools answers.json] file.js
 cargo run -p djs-cli -- disasm [--body] file.js
-cargo run -p djs-cli -- heap [--json] [--top N] [--only SECTIONS] [--diff FILE|base|none]
-    [--reference FILE] [--all] dump
 cargo run -p djs-cli -- strip-types file.ts
 cargo run -p djs-cli -- resume [--explain] [--tools answers.json] [--gc-stress] [--suspend-every N] dump.js
 cargo run -p djs-cli -- repl [--ts] [--gc-stress] [--no-history] [--tools answers.json]
@@ -16,8 +14,7 @@ cargo run -p djs-cli -- repl [--ts] [--gc-stress] [--no-history] [--tools answer
 TypeScript's legacy decorators (D1651). `--backend` runs the `@native` builtins as their
 generated Rust state machines (`native`, the default) or as bytecode (D1635).
 `disasm` prints the bytecode. `strip-types` erases TypeScript types like ts-blank-space
-(TESTING.md). `heap` analyzes a heap dump (below). This file documents `heap`, the
-REPL and tools.
+(TESTING.md). This file documents the REPL (with its heap report, `.heap`) and tools.
 
 `run` defines three host globals (D2602): `tools` (also passed as `tools` to a
 `--body`), whose calls are async host calls (below); `later(v, rejected)`, an async host
@@ -71,34 +68,30 @@ A `--body` script suspended in its own top level dumps as the async function it 
 refused ("a codemode body whose frame at await#1 differs from the async function the dump
 writes for it"), reported to the exporter.
 
-## `djs heap`
+## The heap report (`.heap`)
 
-What is in a heap image (D2264): a raw image (the REPL's `.image FILE`, `Vm::bytes`).
-Images are an in-process mechanism, not a persistence format (D2700): this is a tool for
-looking at a VM's heap. Sections (`--only summary,kinds,...` picks some; `--json` prints one object with
-a key per section):
+The REPL's `.heap [sections]` shows what is in the live VM's heap (D2264, D2340): its image
+read through djs-core's heap code (verified, walked with the layout table), compared with
+the base image every VM starts from. `.heap kinds,largest` picks sections, `.heap all`
+shows every one; the default is `summary,diff`. (The `djs heap` command, which read image
+files, and the `.image` command that wrote them are gone, D2269.)
 
 | section | shows |
 | --- | --- |
-| `summary` | format, build, image size, live vs garbage (and what a collection leaves), old region (`OLD_END`) vs young, the VM's own part (past `BASE_END`) and how many builtin prefix words it changed |
+| `summary` | image size, live vs garbage (and what a collection leaves), old region (`OLD_END`) vs young, the VM's own part (past `BASE_END`) and how many builtin prefix words it changed |
 | `kinds` | cells and bytes per cell kind (garbage, old) and per object class |
 | `prefix` | the words of the builtin prefix that differ from this build's base, by cell and builtin path (`%Array.prototype%`): the builtins a script changed (D2066) |
-| `diff` | against the reference image: unchanged cells in place or moved, changed, new (grouped into subtrees with their path and the new bytes only they keep alive), gone; how much of the image sits at the reference's offsets. A changed cell counts its differing words; a regrown one compares over the words both have, plus its nonzero new words |
+| `diff` | against the base image: unchanged cells in place or moved, changed, new (grouped into subtrees with their path and the new bytes only they keep alive), gone; how much of the image sits at the base's offsets. A changed cell counts its differing words; a regrown one compares over the words both have, plus its nonzero new words |
 | `largest` | the largest cells and the largest retained sizes (dominator tree), with paths like `globalThis.cache[3].body`; in the session view, retained sizes count the session's cells only |
 | `strings` | flat strings and ropes, duplicated contents, the largest strings |
 | `shapes` | shapes, objects with a shape or in dictionary mode, the most common key lists |
 | `functions` | templates and bytecode per script, closures, builtin closures by intrinsic, boxes |
 | `session` | run state, queued jobs, the inbox, pending host calls, promises, suspended async functions and generators with their locals |
 
-`largest`, `strings`, `shapes` and `functions` describe the session's own part when there
-is a reference: the cells new or changed against it (D2432). Each starts with one line of
-the reference's totals (`unchanged from the reference: ...`); `--all` shows the whole
-image instead, as does `--diff none`. In the session view, a string the reference already
-holds counts whole as an extra copy. In JSON these sections carry `scope` (`session` or
-`all`) and, in the session view, `reference_part` with the totals.
-
-The diff compares with this build's base for an image of this build; `--diff FILE`
-picks another image, `--diff none` skips it.
+`largest`, `strings`, `shapes` and `functions` describe the session's own part: the cells
+new or changed against the base (D2432). Each starts with one line of the base's totals
+(`unchanged from the reference: ...`). A string the base already holds counts whole as an
+extra copy.
 
 Builtins are named by their registry paths (D2371, tests/builtins/registry.tsv):
 `%Array.prototype.map%`, `%get Map.prototype.size%`, `%ArrayIteratorPrototype%.next`;
@@ -110,7 +103,7 @@ and the layout's field names in brackets for internal cells (`<atoms><entries>`)
 ## `djs repl`
 
 An interactive REPL for debugging the engine and scripts (issue 0064), built only on the
-public `Vm` API. djs's own features are commands: fuel, suspension, heap images, bytecode
+public `Vm` API. djs's own features are commands: fuel, suspension, the heap report, bytecode
 and the GC.
 
 ```text
@@ -142,8 +135,7 @@ suspending every 300 fuel
 | `.complete <text>` | the Tab completions for `text` (what Tab offers in the editor) |
 | `.time [on\|off]` | after each input: wall time (compile and run) and fuel |
 | `.gc` | collect; the arena size before and after |
-| `.heap [sections]` | arena bytes used, allocated and the limit, handles, atoms; then `djs heap`'s sections over the live VM against the base image (default `summary,diff`: the session's own cells and the base cells it changed, apart from the base realm every VM starts with; `all`, or a list such as `kinds,largest`) (D2340) |
-| `.image <file>` | collect, then write the heap image (`vm.image()`, about 200 KB with the base), for `djs heap` |
+| `.heap [sections]` | arena bytes used, allocated and the limit, handles, atoms; then the heap report's sections over the live VM against the base image (above; default `summary,diff`: the session's own cells and the base cells it changed, apart from the base realm every VM starts with; `all`, or a list such as `kinds,largest`) (D2340) |
 | `.dump <file\|-> [names]` | write the session's globals (or the named ones, plus the globals their functions read) as a JavaScript dump (docs/functions-as-code.md): functions as their source text, closures that share variables made by one factory, data as literals and constructor calls, binary data as base64, builtins referenced by name and changed builtins as code. With something in flight it is format 2: open calls, suspended activations and pending promises, with the waiting inputs as handles (below). What a dump cannot write is refused with its path. `-` prints it |
 | `.restore <file>` | replace the VM with a fresh one that loaded a dump (a file starting with `"djs-dump ` for format 2 or `// djs-dump` for version 1; `Vm::load_dump`), from any build; a format 2 dump's waiting run and open calls come back (below). Images are not restored (D2700) |
 | `.dump-every [on\|off]` | at every idle point, dump the session and continue in a fresh VM that loaded the dump, printing `[dumped N bytes]`; a refused dump prints `[not dumped]` with the reasons and turns it off |
