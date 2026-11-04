@@ -1464,3 +1464,130 @@ fn a_frame_holds_an_array_with_named_properties() {
     let (got, _) = dump_at(src, 1).unwrap();
     assert_eq!(got, ["1 2"]);
 }
+
+/// Runs the VM to its next idle point (printing): `Some(oldest open call)`, or `None` at
+/// the end (with "threw ..." for an uncaught error).
+fn plain_step(vm: &mut Vm, lines: &mut Vec<String>) -> Option<u32> {
+    loop {
+        match vm.run(1_000_000_000) {
+            Status::HostCall { call_id, fn_id } => {
+                assert_eq!(fn_id, PRINT, "unexpected host call");
+                let args = vm.host_call(call_id).unwrap().args;
+                let parts: Vec<String> = args.iter().map(|&v| vm.display(v)).collect();
+                lines.push(parts.join(" "));
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+            }
+            Status::Idle | Status::Done(_) => return vm.pending_host_calls().iter().min().copied(),
+            Status::Threw(e) => {
+                let m = vm.display(e);
+                lines.push(alloc::format!("threw {m}"));
+                return None;
+            }
+            s => panic!("{s:?}"),
+        }
+    }
+}
+
+/// A plain dump (D2830) of the idle `vm`, or why it was refused.
+fn plain_dump(vm: &Vm) -> Result<String, String> {
+    let opts = super::dump::DumpOptions {
+        base: base(),
+        host: &["console", "tools", "print", "later"],
+        host_fn_name: &host_fn_name,
+        plain: true,
+        ..Default::default()
+    };
+    vm.dump(&opts, None).map_err(|e| e.message())
+}
+
+/// A fresh VM that ran plain dump `text` as a Script, with the host's hooks: `$djs.seed`
+/// a no-op (the fixtures draw no random numbers), `$djs.resume` making the call again.
+fn plain_load(text: &str) -> Result<Vm, String> {
+    let mut vm = new_vm();
+    run_value(
+        &mut vm,
+        "globalThis.$djs = { seed() {}, resume: (id, name, args) => later(...args) }; 0",
+    );
+    let f = vm
+        .compile(
+            text.as_bytes(),
+            &crate::compiler::CompileOptions::script("dump.js"),
+        )
+        .map_err(|e| alloc::format!("{} at {}:{}", e.message, e.line, e.col))?;
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).map_err(|e| alloc::format!("{e:?}"))?;
+    match vm.run(1_000_000_000) {
+        Status::Idle | Status::Done(_) => {}
+        Status::Threw(e) => return Err(alloc::format!("the load threw {}", vm.display(e))),
+        s => return Err(alloc::format!("the load stopped: {s:?}")),
+    }
+    if run_value(&mut vm, "typeof $dump + typeof $djs") != "undefinedundefined" {
+        return Err("the dump left $dump or $djs".into());
+    }
+    Ok(vm)
+}
+
+/// Every fixture program, plain-dumped at every idle point of a chain: the run dumped at
+/// its first idle point, the loaded dump at its first, and so on. The lines must be the
+/// uninterrupted run's; a refusal ends the chain (counted: the constructs 0203 adds).
+#[test]
+fn plain_dump_chains_continue_like_the_run() {
+    let (mut failed, mut links, mut refused) = (Vec::new(), 0, Vec::new());
+    for name in [
+        "plan",
+        "operands",
+        "generator",
+        "asyncgen",
+        "combinators",
+        "loops",
+        "cells",
+        "steps",
+        "reenact",
+        "cycles",
+    ] {
+        let src =
+            std::fs::read_to_string(fixture_dir().join(alloc::format!("{name}.src.js"))).unwrap();
+        let (want, _) = run_program(&src);
+        let mut vm = new_vm();
+        let f = vm
+            .compile(
+                src.as_bytes(),
+                &crate::compiler::CompileOptions::script("src.js"),
+            )
+            .unwrap();
+        let this = Value::object(vm.global());
+        vm.call(f, this, &[]).unwrap();
+        let mut lines = Vec::new();
+        let mut dumping = true;
+        while let Some(id) = plain_step(&mut vm, &mut lines) {
+            if dumping {
+                match plain_dump(&vm) {
+                    Ok(text) => match plain_load(&text) {
+                        Ok(v) => {
+                            links += 1;
+                            vm = v;
+                            let id = vm.pending_host_calls().iter().min().copied();
+                            settle(&mut vm, id.expect("the dump's open call"));
+                            continue;
+                        }
+                        Err(e) => {
+                            failed.push(alloc::format!("{name} link {}: {e}\n{text}", links + 1));
+                            break;
+                        }
+                    },
+                    Err(e) => {
+                        refused.push(alloc::format!("{name}: {e}"));
+                        dumping = false;
+                    }
+                }
+            }
+            settle(&mut vm, id);
+        }
+        if lines != want {
+            failed.push(alloc::format!("{name}: {lines:?}\n  want {want:?}"));
+        }
+    }
+    std::println!("plain dumps: {links} links, refused: {refused:#?}");
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(links >= 10, "{links} links");
+}

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // plain-node.mjs DIR [--list] [--refusals FILE [--update]]: runs the plain dumps `djs-difftest --plain-out DIR` wrote
-// in node and checks that each continues exactly like the uninterrupted djs run (D2864).
+// in node and checks that each continues exactly like the uninterrupted djs run (D2861).
 //
 // DIR/<case>/<k>.js is link k's dump, <k>.pre the output before it and `transcript` the
 // djs run's whole transcript. Each dump runs as a Script in a fresh node context with

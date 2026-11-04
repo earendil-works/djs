@@ -9234,3 +9234,44 @@ at 76 s from scratch (djs-core 49 s) against 20-34 s incremental; without increm
 caches every djs-core edit would pay close to the from-scratch djs-core time in each
 configuration, while the corruption is rare (twice) and costs one such rebuild of one
 target directory when it happens.
+
+## D2860: The plain exporter writes format 2's lines and an IR, and rewrites them
+date: 2026-11-05 · by: pjx · issue: 0201
+With `DumpOptions::plain` the exporter (dump.rs, dump_flight.rs) still writes format 2's
+lines, which its checker compiles, but in plain forms at the source (builtins as
+`$dump.bN` captured first, open calls as `$djs.resume(...)`, host functions inline as the
+host's expression for them, `$djs.seed` instead of `$dump.random`), and records an IR
+beside them: factories (scopes, variables, members and the variables each captures) and
+activations (function text, site, the site's syntax, slots and their cells). The writer
+(dump_plain.rs, a port of the 0199 prototype's placement and scheduling) and the
+continuation generator (dump_cont.rs, on the site syntax of D2850) turn that into the
+plain Script. Choices on the way: a closure of a group a frame shares that data refers to
+is an exporter patch after the continuation's call (the prototype's placeholders); the
+Script is strict ("use strict" after the header: the functions' texts are strict in
+codemode anyway, and the dump's own code needs no sloppy mode); a value a factory writes
+by a global's name (`done`) that a variable of the factory would shadow is read before
+the factory (`$dump.vN = done;`); dependencies between the dump's statements are what
+evaluating them reads, not the names inside function and class bodies (read when they
+run, after the load, and a continuation of an earlier dump names that dump's `$dump`);
+a continuation's member key is `$K<act>` unless a member has that name already, and a
+continuation of a continuation picks scaffold and temporary names its function's text
+does not hold. Until 0202 a continuation of a continuation carries the earlier ones as
+its `$djs.f`, so chains grow by a few kB per link; the checks cap them at 50 links.
+
+## D2861: Plain dumps are checked over every corpus idle point, in djs and in node
+date: 2026-11-05 · by: pjx · issue: 0201
+`djs-difftest --plain-dumps` dumps every case at each idle point as a plain dump and
+continues in a fresh VM that runs it as a Script, with `$djs.seed` and a `$djs.resume`
+that reopens the call under its id (`Vm::open_host_call`, as hosts do, D2890); at most 50
+links per case. A refused dump is no failure: the case's dumps end and the run goes on.
+`--plain-out DIR` writes every link's dump, the output before it and the uninterrupted
+run's transcript; scripts/plain-node.mjs runs every link in a fresh node context with the
+difftest prelude's host (output, done, later answered oldest first at each idle point)
+and requires the same transcript, with node's clock pinned to djs's, TZ=UTC and V8's
+wording of `cannot read property` mapped to djs's (the corpus's only engine-specific
+text); TypeScript dumps are not run in node until they are written as JavaScript. Cases
+that refuse are a ratchet, tests/plain-refusals.txt (`--update`): a new refusal fails,
+one that went away is reported stale. The gate leg "plain dumps (djs and node)" runs both
+over the whole corpus (about 1,190 links). The djs-core test
+`plain_dump_chains_continue_like_the_run` does the same in-process for the format 2
+fixtures (tests/dump/v2).

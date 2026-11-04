@@ -40,6 +40,8 @@ const DONE: u32 = 1;
 const LATER: u32 = 2;
 /// A plain dump's `$djs.seed(lo, hi)` (D2832).
 const SEED: u32 = 3;
+/// A plain dump's `$djs.resume(id, name, args)`: the open call, under its id (D2890).
+const RESUME: u32 = 4;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Djs {
@@ -448,19 +450,11 @@ impl Session {
         let hooks = vm.new_object().map_err(err)?;
         let seed = vm.new_host_function(SEED, "seed").map_err(err)?;
         vm.define(hooks, "seed", seed).map_err(err)?;
+        let resume = vm.new_host_function(RESUME, "resume").map_err(err)?;
+        vm.define(hooks, "resume", resume).map_err(err)?;
         vm.define_global("$djs", Value::object(hooks))
             .map_err(err)?;
         let old = std::mem::replace(&mut self.vm, vm);
-        let resume = self.eval("(id, name, args) => later(...args)", "hooks.js")?;
-        let key = self.vm.heap_mut().atom_str("$djs").map_err(err)?;
-        let hooks = self
-            .vm
-            .heap()
-            .find_property(self.vm.global(), key)
-            .and_then(|(_, p)| p.value())
-            .and_then(|v| v.as_object())
-            .ok_or("no $djs")?;
-        self.vm.define(hooks, "resume", resume).map_err(err)?;
         let api = match self.load_plain(&text) {
             Ok(api) => api,
             Err(e) => {
@@ -478,17 +472,6 @@ impl Session {
         let api = self.vm.heap_mut().new_handle(api).map_err(err)?;
         self.api = Some(api);
         Ok(())
-    }
-
-    /// Compiles and runs a small Script to its completion value (no idle point).
-    #[cfg(feature = "dump")]
-    fn eval(&mut self, src: &str, name: &str) -> Result<Value, Stop> {
-        let f = self
-            .vm
-            .compile(src.as_bytes(), &CompileOptions::script(name))
-            .map_err(|e| format!("{name}: {}", e.message))?;
-        let global = Value::object(self.vm.global());
-        self.call(f, global, &[], name)
     }
 
     /// Runs a plain dump to its first idle point: its completion value.
@@ -614,6 +597,17 @@ impl Session {
                 let half = |v: Value| v.as_number().unwrap_or(0.0) as i32 as u32 as u64;
                 let seed = (half(arg(1)) << 32) | half(arg(0));
                 self.vm.set_math_random_seed(seed);
+            }
+            RESUME => {
+                // Only `later` is async; the call returns the reopened call's promise.
+                let name = text(self, arg(1))?;
+                if name != "later" {
+                    return Err(Stop::Crash(format!("$djs.resume of `{name}`")));
+                }
+                return self
+                    .vm
+                    .open_host_call(call_id, LATER)
+                    .map_err(|e| Stop::Crash(format!("open_host_call: {e}")));
             }
             id => return Err(Stop::Crash(format!("unknown host function {id}"))),
         }

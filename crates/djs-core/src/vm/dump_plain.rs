@@ -1917,7 +1917,7 @@ impl W<'_> {
             cat_to!(&mut s, l, "\n");
         }
         // The completion value: nothing, the one handle named "run" (what Sandbox, pi
-        // and the CLI resume), else every handle by name (D2863).
+        // and the CLI resume), else every handle by name (D2895).
         let handle = match &ir.handles[..] {
             [] => String::from("undefined"),
             [(name, e)] if name == "run" => e.clone(),
@@ -1931,7 +1931,7 @@ impl W<'_> {
             "try { (",
             handle.as_str(),
             // The host's hooks go with the helpers: the Script's end is the moment
-            // the load is over, and hosts need no delete of their own (D2862).
+            // the load is over, and hosts need no delete of their own (D2890).
             "); } finally { delete globalThis.$dump; delete globalThis.$djs; }\n"
         );
         Ok(s)
