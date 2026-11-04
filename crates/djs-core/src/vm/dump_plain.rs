@@ -485,6 +485,8 @@ pub(super) trait Ctx {
     fn rereads(&self, slot: &str) -> bool;
     /// The value of slot `name` as an argument of the continuation's call (D2909).
     fn arg(&mut self, name: &str) -> Option<String>;
+    /// The part of the dump's callback that makes what `text` reads, if it does (D2907).
+    fn made_in(&self, text: &str) -> Option<usize>;
     /// The code the dump puts in the continuation's block `index`.
     fn block(&mut self, index: usize, info: &[BDecl]) -> Result<String, String>;
     /// The call of the part of the dump's callback that runs once block `block` of the
@@ -524,6 +526,9 @@ struct AState {
     /// The calls of its callback's parts, by the block of the continuation each runs at
     /// the end of (D2907).
     go: Vec<String>,
+    /// What its callback makes (`$dump.` names), by the part that makes it (D2907): a
+    /// binding or a loop of K reads it only once that part has run.
+    made: Vec<(String, usize)>,
     k: Option<KText>,
     blocks_done: bool,
 }
@@ -883,6 +888,18 @@ impl Ctx for C<'_, '_> {
 
     fn rereads(&self, slot: &str) -> bool {
         self.w.ir.acts[self.a].rereads.iter().any(|n| n == slot)
+    }
+
+    fn made_in(&self, text: &str) -> Option<usize> {
+        let made = &self.w.acts[self.a].made;
+        if made.is_empty() {
+            return None;
+        }
+        refs(text)
+            .dump
+            .iter()
+            .filter_map(|(n, _)| made.iter().find(|m| m.0 == *n).map(|m| m.1))
+            .max()
     }
 
     fn arg(&mut self, name: &str) -> Option<String> {
@@ -2204,6 +2221,19 @@ impl W<'_> {
                 }
             }
         }
+        let mut made = Vec::new();
+        for (its, &p) in items.iter().zip(&parts) {
+            for &i in its {
+                let name = match &self.items[i].kind {
+                    IK::Def(n) => n.clone(),
+                    IK::Factory(f) => self.ir.factories[*f].name.clone(),
+                    IK::Act(a2) => self.ir.acts[*a2].name.clone(),
+                    _ => continue,
+                };
+                made.push_out((name, p));
+            }
+        }
+        self.acts[a].made = made;
         let n = parts.iter().copied().max().map_or(0, |m| m + 1);
         let mut out: Vec<Vec<Plan>> = (0..n).map(|_| Vec::new()).collect();
         for (e, p) in cb.iter().zip(parts) {

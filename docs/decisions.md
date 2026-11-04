@@ -9570,6 +9570,21 @@ leaves out blank lines of its own and the braces of a block that declares nothin
 it stands among statements. Origin tracking reads parameters as K's bindings by name, as
 before.
 
+## D2910: A continuation reads a value of the callback only after the part that makes it
+date: 2026-11-04 · by: pjs · issue: 0207
+D2907 placed the callback's parts but not what K reads of them: a binding declared at its
+block's start could read a value a part made only at that block's end (an instance of a
+class of the block, `const o = $dump.n11`), and a loop scaffold's constants a value a part
+of a deeper block made (`const $djs_i1 = $dump.a15`, the generator's continuation made with
+a later activation, since calls keep their order). The writer now knows which part makes
+each value of a callback (`made`); a binding of block `b` whose value part `b` makes is
+declared after that part, one whose value a deeper part `p` makes is declared without a
+value and assigned right after part `p` runs (a constant becomes `let` only where the text
+cannot assign it), and so are a scaffold's constants; a parameter never takes a value of
+the callback. A for-of written as the placeholder scaffold, whose iterator the head must
+read, refuses such an iterator, and an assignment that a deeper block's binding of the
+same name would capture is refused.
+
 ## D2875: `yield*` in plain continuations: a `yield*` over a wrapper of the inner record
 date: 2026-11-05 · by: pjr · issue: 0203
 At a `yield*` site, `K` delegates again with `yield* $dump.Y(it, next, async, ...first)`.

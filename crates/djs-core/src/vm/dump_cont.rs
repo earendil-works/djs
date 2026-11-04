@@ -103,8 +103,12 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
         uses_arguments: false,
         arrow: act.fkind == crate::bytecode::template::func_flags::KIND_ARROW,
         params: Vec::new(),
+        deferred: Vec::new(),
     };
     let body = g.body()?;
+    if !g.deferred.is_empty() {
+        return no("a value the dump's callback makes in a block the continuation does not reach");
+    }
     // The body's `using` resources are disposed at its end: a site there.
     let close = if g
         .node(0)
@@ -274,6 +278,9 @@ struct G<'a, 'c> {
     arrow: bool,
     /// The body's bindings K takes as parameters: name, the argument (D2909).
     params: Vec<(String, String)>,
+    /// Assignments that wait for a part of the dump's callback (D2907): the part, the
+    /// statement.
+    deferred: Vec<(usize, Vec<String>, String)>,
 }
 
 impl G<'_, '_> {
@@ -333,6 +340,35 @@ impl G<'_, '_> {
                 Ok(v)
             }
             None => Err(cat!("plain dumps: missing slot ", name)),
+        }
+    }
+
+    /// Whether the dump's callback makes what `text` reads only in a part of a block
+    /// below the current one (D2907).
+    fn made_later(&self, text: &str) -> bool {
+        let cur = self.block_index.saturating_sub(1);
+        self.ctx.made_in(text).is_some_and(|p| p > cur)
+    }
+
+    /// A loop scaffold's constants, `const a = x, b = y;`: declared with `let` and
+    /// assigned once the part of the dump's callback that makes what they read has run,
+    /// where that is a block below the current one (D2907).
+    fn scaffold_consts(&mut self, pairs: &[(String, String)]) -> String {
+        let cur = self.block_index.saturating_sub(1);
+        let later = pairs
+            .iter()
+            .filter_map(|(_, v)| self.ctx.made_in(v))
+            .max()
+            .filter(|&p| p > cur);
+        let list: Vec<String> = pairs.iter().map(|(n, v)| cat!(n, " = ", v)).collect();
+        match later {
+            Some(p) => {
+                let names: Vec<String> = pairs.iter().map(|(n, _)| n.clone()).collect();
+                self.deferred
+                    .push_out((p, names.clone(), cat!(join(&list, ", "), ";")));
+                cat!("let ", join(&names, ", "), ";")
+            }
+            None => cat!("const ", join(&list, ", "), ";"),
         }
     }
 
@@ -444,6 +480,14 @@ impl G<'_, '_> {
         let mut after = Vec::new();
         let mut info = Vec::new();
         let block = self.block_index;
+        // (A waiting assignment must reach the binding it was made for.)
+        if self
+            .deferred
+            .iter()
+            .any(|(_, names, _)| decls.iter().any(|d| names.contains(&d.0)))
+        {
+            return no("a binding the dump assigns late, shadowed in a block below");
+        }
         for (name, kind, scope, live) in decls {
             let sname = self.binding_slot(name, *scope);
             info.push_out(BDecl {
@@ -457,7 +501,14 @@ impl G<'_, '_> {
             // blocks make (a cell), one taking what the dump makes later, a `using`
             // resource, or a constant the text may assign (which throws).
             let constant = matches!(kind, DeclKind::Const | DeclKind::FuncName);
+            let made = self
+                .ctx
+                .cell(&sname)
+                .flatten()
+                .or_else(|| self.ctx.arg(&sname))
+                .and_then(|v| self.ctx.made_in(&v));
             if block == 0
+                && made.is_none()
                 && name != "arguments"
                 && !matches!(kind, DeclKind::Using | DeclKind::AwaitUsing)
                 && !self.ctx.after_go(&sname)
@@ -505,7 +556,20 @@ impl G<'_, '_> {
                 name.as_str()
             };
             let line = cat!(kw, " ", target, " = ", value, ";");
-            if self.ctx.after_go(&sname) {
+            if let Some(p) = made.filter(|&p| p > block) {
+                // Made by a part of the dump's callback in a block below: declared now,
+                // assigned once that part ran (D2907).
+                if kw == "const" && may_assign(self.ftext(), name) {
+                    return no("a constant whose value the dump makes in a block below its own");
+                }
+                let kw = if kw == "const" { "let" } else { kw };
+                early.push_out(cat!(kw, " ", target, ";"));
+                self.deferred.push_out((
+                    p,
+                    alloc::vec![String::from(target)],
+                    cat!(target, " = ", value, ";"),
+                ));
+            } else if self.ctx.after_go(&sname) || made == Some(block) {
                 after.push_out(line);
             } else if has_factory_ref(&value) {
                 late.push_out(line);
@@ -525,6 +589,14 @@ impl G<'_, '_> {
         let go = self.ctx.go(block);
         if !go.is_empty() {
             lines.push_out(go);
+        }
+        // What waited for this part (scaffolds and bindings of the blocks above).
+        for (p, names, st) in core::mem::take(&mut self.deferred) {
+            if p == block {
+                lines.push_out(st);
+            } else {
+                self.deferred.push_out((p, names, st));
+            }
         }
         lines.extend(after);
         Ok(P::S(join(&lines, "\n")))
@@ -986,6 +1058,9 @@ impl G<'_, '_> {
         } else {
             self.next_method(&cat!(c, ".next@", n.start))?
         };
+        if self.made_later(&it) || self.made_later(&next) {
+            return no("a loop's iterator that the dump's callback makes inside the loop");
+        }
         let head = n
             .parts
             .iter()
@@ -1091,10 +1166,11 @@ impl G<'_, '_> {
                 None => cat!(",0,", quote(&ib)),
             };
         }
-        let consts = match &next {
-            Some(nx) => cat!("const ", ib, " = ", it, ", ", nb, " = ", nx, ";\n"),
-            None => cat!("const ", ib, " = ", it, ";\n"),
-        };
+        let mut pairs = alloc::vec![(ib.clone(), it.clone())];
+        if let Some(nx) = &next {
+            pairs.push_out((nb.clone(), nx.clone()));
+        }
+        let consts = cat!(self.scaffold_consts(&pairs), "\n");
         let decls: Vec<_> = n
             .decls
             .iter()
@@ -1163,7 +1239,11 @@ impl G<'_, '_> {
         if let P::Mark(x) = rec {
             self.scaf[x].3 = cat!(",0,", quote(&ib), ",", quote(&nb));
         }
-        let consts = P::S(cat!("{ const ", ib, " = ", it, ", ", nb, " = ", next, "; "));
+        let consts = P::S(cat!(
+            "{ ",
+            self.scaffold_consts(&[(ib.clone(), it.clone()), (nb.clone(), next.clone())]),
+            " "
+        ));
         // `for await (Head of <the record>) Body`, `first` the awaited promise of the
         // first step (a site at the loop's `next`).
         let lp = |first: &str| {

@@ -220,6 +220,10 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   4), `$dump.` names of single-use values (`$dump.n4`, `$dump.i5`, `$dump.p1`), dead
   bindings (`const label = "first"`, C).
 
+- pjz 0211 round 2 (D2910): values of the callback by part (`made`, Ctx::made_in);
+  bindings after their part or assigned after a deeper part, scaffold constants too.
+  Corpus cases plain-fuzz/instance-before-callback.js, for-await-promise-all-chain.js.
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a
