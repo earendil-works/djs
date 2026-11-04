@@ -294,8 +294,8 @@ pub enum Role {
     /// A declarator's target (a name or a pattern).
     Target,
     /// A call's or `new`'s callee (`super` for `super(...)`), the `(` of its arguments
-    /// (`?.(` for an optional call: the whole token), and each argument (`...x` is
-    /// `Spread`). An argument part starts where `call.arg@`/`new.arg@` name it; the
+    /// (an optional call's `?.` is between the callee and the `(`), and each argument
+    /// (`...x` is `Spread`). An argument part starts where `call.arg@`/`new.arg@` name it; the
     /// argument array of a call with spread is named by the `(`'s start.
     Callee,
     Open,
