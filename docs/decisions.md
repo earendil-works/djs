@@ -9728,3 +9728,37 @@ again. That kept such a class from a scope of its own, which neither format coul
 ("a class in a nested scope of shared variables"). A class whose outer binding a waiting
 frame shares is declared by the continuation as that variable ("a cell without its
 variable").
+
+## D2920: Format 2 is retired; plain dumps are the only format, and the goldens are plain dumps
+date: 2026-11-05 · by: pjf · issue: 0205
+D2830's last step. Deleted: `Vm::load_dump` and its options and results (vm/dump_load.rs;
+version 1 dumps too, tests/dump/v1.js), `$dump.resume` (vm/dump_resume.rs), the loader's
+primitives (vm/dump_prims.rs), the recording compile of a dump's text at load (D2735),
+`DumpOptions::plain` (every dump is plain; a VM without frozen builtins is refused with
+"dumps need frozen builtins", D2836), the format 2 text the exporter assembled before
+rewriting it, the hand-written format 2 fixtures (tests/dump/v2/*.dump.js) and the
+two-commit check (scripts/dumps-across-builds.sh, scripts/dumpx). The golden dumps of
+tests/dump/v2/golden/ were rewritten once, as plain dumps of the same programs at the
+same idle points (class-fields, whose one idle point is refused under D2878, has none and
+is listed in plain-refusals.txt); they are run, not loaded, so they hold the dump runtime
+and the engine to the format and no longer the exporter or the compiler. D2619 still
+applies: a golden dump changes only by a decision. The suspension maps stop being a
+format contract (D2563's pins stay, as the compiler's regression test). The hosts lost
+their format 2 paths in the same issue: the Sandbox's and pi's `plainDumps`, the CLI's
+`--plain` and `.plain` (`djs repl --frozen` makes the REPL's VMs dumpable; `run`'s dump
+flags and `resume` make frozen VMs), wasm's `vm_load_dump` and `vm_dump`'s options line
+(ABI 4), the difftest's format 2 `--dump-every-idle`. The e2e dump mode runs its cases with
+frozen builtins and compares only the dumps' round trips. Freed (gzip -9, `wasm` profile):
+the dump module 676,996 → 657,347 bytes (1,667,546 → 1,616,357 raw) over the issue, with
+0203/0207's merges in between; the shipped module 442,456 → 442,358, slim 378,026 →
+377,888 (the loader was never in them; the rest is D2921).
+
+## D2921: The `jump_if_loading` opcode is removed
+date: 2026-11-05 · by: pjf · issue: 0205
+D2580 made classes skip their static fields and blocks while `Vm::load_dump` ran a format
+2 dump, which restored their effects itself (`heap.loading_dump`, `jump_if_loading`
+around a class's static initializer). Nothing sets the flag once the loader is gone, so
+the opcode, the flag and the compiler's jump went with it; later opcodes are renumbered
+(images are keyed on the descriptor, D2265). A plain dump evaluates a class's text
+again, static blocks included: a class whose static block has side effects is a plain
+dump problem of its own (0205 follow-ups), as it is for node.

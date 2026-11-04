@@ -1,173 +1,161 @@
 # Continuation dumps: persisting a waiting session as code
 
-Status: plan, agreed with the owner (2026-11-03). Decisions D2560–D2565; issues 0169–0178.
-Builds on dumps (docs/functions-as-code.md, D2353) and on the portable-snapshot research
-(docs/portable-snapshots.md, 0141), and replaces heap images as the way a session is
-persisted.
+Status: as built. The format is the plain dump of docs/plain-js-dumps.md (D2830–D2836,
+issues 0199–0207); format 2, a Script that only `Vm::load_dump` could run with
+privileged `$dump` primitives (D2560–D2565, D2580, D2581, issues 0169–0178), was retired
+in 0205 (D2920). Builds on dumps of values (docs/functions-as-code.md, D2353) and
+replaces heap images as the way a session is persisted (D2700).
 
 ## The short answer
 
-- A waiting codemode session is written as a **format 2 dump**: a JavaScript Script, like
-  a version 1 dump, that recreates the session's data and functions *and* its suspended
-  activations, open host calls and in-flight promises. Any later djs either loads it and
-  continues the run, or refuses it with a reason (D2560).
+- A waiting codemode session is written as a **dump**: an ordinary JavaScript Script that
+  recreates the session's data and functions *and* its suspended activations, open host
+  calls and in-flight promises. Every suspended activation is a **continuation**, a
+  function of the same kind whose body is the rest of the original from where it waits
+  (D2830). The Script runs in djs and in node, given the host's functions and one host
+  object, `$djs` (D2834); no engine machinery runs it.
 - Dumps are taken only at **idle points**: no jobs, no frames on the stack, no parked sync
   call (D2561). The externally visible effects of a codemode run are its tool calls, and
   a run is idle while it waits on them; whatever happens in between reruns
   deterministically.
-- In-flight builtin state is written as the **public calls that recreate it** (re-enacted:
-  `Promise.all([1, p])`, an iterator advanced with `next()`), not described by engine
-  schemas (D2562). What plain JavaScript cannot express goes through a handful of
-  privileged loader primitives that exist only while a dump loads.
-- The compiler names each `await`/`yield` and describes what a suspended frame holds there
-  (its **suspension map**); a test pins the maps, so a lowering change at an await is a
-  visible decision (D2563).
-- **One dumper, in Rust** (D2564). The TypeScript dumper of D2354 is dropped. Whether wasm
-  hosts get it in the main module or in a second module of the same build is decided by
-  measurement after images are retired; the plan leans to the second module.
-- Heap images stay, but only **inside a process**: the base image (every VM starts from
-  it), pi's prelude image as a startup cache, the stress and determinism checks, and as
-  the transport between the two modules. Snapshot containers, session images, reference
-  compression, `.snapshot`, `Sandbox.bytes()`/`fromBytes()` and pi's
-  `snapshot()`/`resumeVm()` go once dumps cover the harvested corpus (0177).
-- pi's prelude keeps in-flight state of its own (the pending call table). djs builds the
-  **shape pi should move to** in its own adapter (D2565): tools as engine async host
-  calls, no in-flight state in the prelude. pi is not changed yet.
-- Classes and private fields are in scope (they are refused by version 1 dumps today).
+- In-flight builtin state is written as the **public calls that recreate it**
+  (`Promise.all([1, p])`, an iterator advanced past the steps it took), not described by
+  engine schemas (D2562). What needs a few lines of code is a helper of the **dump
+  runtime**, the members of `$djs` every dump shares (D2903).
+- Dumps are written only for VMs with **frozen builtins** (D2836): the exporter may then
+  write a builtin a frame already looked up as the expression that finds it again.
+- A dump of a run that resumed a dump writes the *original* functions again, not the
+  continuations (**origin tracking**, D2833, D2870): re-dumps stay the size of a dump of
+  the uninterrupted run.
+- **One dumper, in Rust** (D2564, D2831). Wasm hosts get it in a second module of the same
+  build (packaging B, D2704); loading a dump needs no dumper at all, since it is code.
+- Heap images stay, but only **inside a process**: the base image, pi's prelude image as a
+  startup cache, the stress and determinism checks, and the transport between the two
+  modules.
 
-## What a format 2 dump looks like
+## What a dump looks like
 
-Format 2 is defined as **a Script run by `Vm::load_dump` with the `$dump` the loader
-passes in** (D2581, 0170): every dump this build writes starts with the directive
-`"djs-dump 2";` (D2640; before 0180 the comment `// djs-dump 2`), also when it holds only
-values; activations are what continuation dumps add to it. The
-loader defines `$dump` as a global property (not writable, not enumerable) holding the
-primitives as host functions only its run loop serves, removes it when the load ends, and
-still runs version 1 dumps as plain Scripts.
-
-A codemode turn:
+A codemode turn (tests/dump/v2/plan.src.js, its tools answering through `later`):
 
 ```js
-const files = await tools.glob({ pattern: "src/*.ts" });
-const seen = new Map();
-async function todos(path) {
-  const body = await tools.read({ path });
-  const n = body.split("\n").filter((l) => l.includes("TODO")).length;
-  seen.set(path, n);
-  return n;
-}
-const report = [];
-for (const batch of [files.slice(0, 2), files.slice(2)]) {
-  report.push(await Promise.all(batch.map(todos)));
-}
-text(`${report.flat().reduce((a, b) => a + b, 0)} TODOs in ${seen.size} files`);
-```
-
-stopped in the second batch: `src/c.ts` was read and counted, the read of `src/d.ts`
-(host call 5) is open. Two activations are suspended (the run, inside `report.push(await
-…)`, and `todos("src/d.ts")`, inside `tools.read`), with a half-finished `Promise.all`
-between them. Its dump (tests/dump/v2/plan.dump.js loads a version of it):
-
-```js
-"djs-dump 2";
-$dump.random(1584364053, 1036713493);
-$dump.files = ["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"];
-$dump.report = [[2, 0]];
-$dump.batches = [["src/a.ts", "src/b.ts"], ["src/c.ts", "src/d.ts"]];
-$dump.s1 = (() => {
-  let seen = new Map([["src/a.ts", 2], ["src/b.ts", 0], ["src/c.ts", 1]]);
+async function main() {
+  const files = await tools.glob({ pattern: "src/*.ts" });
+  const seen = new Map();
   async function todos(path) {
     const body = await tools.read({ path });
     const n = body.split("\n").filter((l) => l.includes("TODO")).length;
     seen.set(path, n);
     return n;
   }
-  return { todos, $cells: { seen: $dump.cell(() => seen) } };
-})();
-$dump.f1 = async function () {
-  const files = await tools.glob({ pattern: "src/*.ts" });
-  const seen = new Map();
-  async function todos(path) { /* … verbatim … */ }
   const report = [];
   for (const batch of [files.slice(0, 2), files.slice(2)]) {
     report.push(await Promise.all(batch.map(todos)));
   }
-  text(`${report.flat().reduce((a, b) => a + b, 0)} TODOs in ${seen.size} files`);
-};
-$dump.it1 = $dump.batches[Symbol.iterator]();
-$dump.it1.next();
-$dump.it1.next();
-$dump.p5 = $dump.pending(5, "tools.read", [{ path: "src/d.ts" }]);
-$dump.a2 = $dump.resume($dump.s1.todos, {
-  at: "await#1",
-  awaiting: $dump.p5,
-  this: undefined,
-  args: ["src/d.ts", 1, $dump.batches[1]],
-  slots: { path: "src/d.ts", body: $dump.TDZ, n: $dump.TDZ },
-});
-$dump.p6 = Promise.all([1, $dump.a2]);
-$dump.run = $dump.resume($dump.f1, {
-  at: "await#2",
-  awaiting: $dump.p6,
-  this: undefined,
-  args: [],
-  slots: {
-    files: $dump.files,
-    seen: $dump.s1.$cells.seen,
-    todos: $dump.s1.todos,
-    report: $dump.report,
-    batch: $dump.batches[1],
-    "for-of.iterator@318": $dump.it1,
-    "for-of.next@318": $dump.builtin("%ArrayIteratorPrototype%.next"),
-    "call.callee@381": Array.prototype.push,
-    "call.this@381": $dump.report,
-  },
-});
-$dump.handle("run", $dump.run);
+  print(`${report.flat().reduce((a, b) => a + b, 0)} TODOs in ${seen.size} files`);
+  return report;
+}
+main().then((r) => print(JSON.stringify(r)));
 ```
 
-The dump has no comments (D2641; the `/* … */` are this page's shortening). Read top to
-bottom:
+stopped in the second batch: `src/c.ts` was read and counted, the read of `src/d.ts`
+(host call 5) is open. Two activations are suspended (`main`, inside `report.push(await
+…)`, and `todos("src/d.ts")`, inside `tools.read`), with a half-finished `Promise.all`
+between them. `djs run --dump-after 5 plan.js tests/dump/v2/plan.src.js` writes (the
+`contents`/`tools` lines of the program and `main`'s text shortened here):
 
-- The directive `"djs-dump 2";` names the format (D2640). `$dump` comes from the loader
-  with `resume`, `cell`, `pending`, `handle`, `private` and `TDZ`, which exist only while
-  the Script runs; everything else is plain JavaScript.
-- Data, then the closures: `todos` shares `seen` with the run's frame, so its factory
-  hands out the variable's cell too (`$cells.seen`), which the run's slots take, so
-  the frame and the closure share one variable again.
-- `$dump.f1` is the turn's script as the host compiled it: never called, it supplies the
-  code for the run's activation.
-- The for-of's iterator, past the first batch: advancing an array iterator runs no user
-  code, so doing it again gives exactly the same state.
-- Host call 5, issued before the dump. On load the host decides: deliver a recorded
-  result, issue it again, or reject it.
-- `todos("src/d.ts")`, called by `batch.map`, so with (element, index, array); its
-  `resume` returns the activation's result promise. `Promise.all` over the second batch
-  has element 0 (`src/c.ts`) resolved to 1: a plain 1 in its place gives the same record.
-- The run, in the second iteration of the for-of. `slots` names everything its frame
-  holds: the bindings, the loop's iterator record and the values evaluated before the
-  await, each a temporary named by its construct and where that starts in the
-  function's text ("Slot names" below); the loader writes each where this build's
-  compiler keeps that name. `$dump.handle` gives the host its handle on the run's result.
+```js
+"djs-dump";
+"use strict";
+$djs.seed(2135587861, -1640531527, 6);
+globalThis.$dump = {};
+$dump.b0 = Object.getPrototypeOf([][Symbol.iterator]())["next"];
+$dump.s2 = {};
+async function main() { /* … verbatim … */ }
+$dump.p1 = $djs.resume(5, "later", ["TODO four\nok\nTODO five"]);
+$dump.n3 = new Map([["src/a.ts", 2], ["src/b.ts", 0], ["src/c.ts", 1]]);
+$dump.n4 = ["src/c.ts", "src/d.ts"];
+$dump.n7 = [[2, 0]];
+$dump.i8 = $djs.advance(Array.prototype.values.call([["src/a.ts", "src/b.ts"], $dump.n4]), 2);
+$dump.ga9 = () => {
+Object.defineProperty($dump.s2.$Ka5, "$djs", { value: { f: $dump.s2.todos, segs: […], scaf: […] } });
+$dump.a5 = $dump.s2.$Ka5.call(undefined);
+$dump.p6 = Promise.all([1, $dump.a5]);
+};
+$dump.Ka9 = async function () {
+const $djs_L = $djs.L;
+const files = ["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"];
+const seen = $dump.n3;
+const report = $dump.n7;
+Object.assign($dump.s2, { todos: async function todos(path) { /* … verbatim … */ }, $Ka5: async function () {
+var path = "src/d.ts";
+const body = (await $dump.p1);
+const n = body.split("\n").filter((l) => l.includes("TODO")).length;
+seen.set(path, n);
+return n;
+} });
+var todos = $dump.s2.todos;
+$dump.ga9();
+{ let $djs_f1 = true; for (const $djs_v1 of $djs_L($dump.i8, $dump.b0)) { if ($djs_f1) { $djs_f1 = false; {
+const batch = $dump.n4;
+report.push((await $dump.p6));
+} } else { const batch = $djs_v1; {
+    report.push(await Promise.all(batch.map(todos)));
+  } } } }
+print(`${report.flat().reduce((a, b) => a + b, 0)} TODOs in ${seen.size} files`);
+return report;
+};
+Object.defineProperty($dump.Ka9, "$djs", { value: { f: main, at: "await#2", segs: […], scaf: […] } });
+$dump.a9 = $dump.Ka9.call(undefined);
+$dump.p10 = Promise.prototype.then.call($dump.a9, (r) => print(JSON.stringify(r)), undefined);
+try { ($dump.p10); } finally { delete globalThis.$dump; delete globalThis.$djs; }
+```
 
-Where each activation stopped is what `djs resume --explain` prints, for the file at
-hand (tests/dump/v2/plan.dump.js, this example with `later` as the tools' transport):
+The dump has no comments (D2641; the `/* … */` and `[…]` are this page's shortening).
+Read top to bottom:
+
+- The directive `"djs-dump";` names the format (D2835; `"djs-dump typescript";` when a
+  function's TypeScript is more than types, D2879). The Script is strict.
+- `$djs.seed(lo, hi, next)`: `Math.random`'s state and the id the dumped VM's next host
+  call gets (D2897). `$dump` is an ordinary global object the dump makes for its own
+  locations and deletes at the end, with `$djs`.
+- A builtin a frame looked up (the loop's `next`) is its expression, evaluated before user
+  code runs.
+- Host call 5, issued before the dump: `$djs.resume(id, name, args, state)` asks the host
+  to continue it, under the same id. What it means is the host's policy (deliver a
+  recorded result, issue it again, reject it); the hook returns the call's promise.
+- Data: the Map, the batches, the report; the for-of's iterator advanced past the first
+  batch (`$djs.advance` runs no user code).
+- `$dump.Ka9` is `main`'s continuation: its prefix declares the bindings live at the site
+  with their values, makes the closures of its frame's scopes where they are declared
+  (`todos` shares `seen` with the frame, so it is made inside the continuation), and the
+  loop around the site is a real loop over the saved iterator, whose first step is a
+  placeholder so the rest of the current iteration runs first. Its `$djs` record names
+  its origin (`f: main`, the site, the stretches copied from `main`), which a later dump
+  reads back (origin tracking).
+- `$dump.s2.$Ka5` is `todos("src/d.ts")`'s continuation. It is made by `Ka9`'s prefix
+  (it captures `seen`), so the part of the dump that needs it, starting the activation and
+  the `Promise.all` over it, is a callback `Ka9` calls right before its site (`$dump.ga9`).
+- The Script's completion value is what the host named, here the run's promise
+  (D2895).
+
+Where each activation stopped is what `djs resume --explain` prints:
 
 ```text
-tests/dump/v2/plan.dump.js: format 2; 1 open call, 2 suspended activations; handles: run
+plan.js: 1 open call, 2 suspended activations; handles: run
 #5 later("TODO four\nok\nTODO five")
-  async function todos at dump.js:19:18
-      const body = await tools.read({ path });
+  async function $Ka5 at plan.js:47:15
+      const body = (await $dump.p1);
+                    ^
+    path = 'src/d.ts', body = undefined, n = undefined
+  async function <anonymous> at plan.js:59:14
+      report.push((await $dump.p6));
                    ^
-    path = 'src/d.ts', body = <uninitialized>, n = <uninitialized>
-  async function main at dump.js:38:17 (run)
-      report.push(await Promise.all(batch.map(todos)));
-                  ^
-    files = [ 'src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts' ], seen = Map(3) { … }, todos = [AsyncFunction: todos], report = [ [ 2, 0 ] ], batch = [ 'src/c.ts', 'src/d.ts' ]
+    files = [ 'src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts' ], seen = Map(3) { … }, report = [ [ 2, 0 ] ], todos = [AsyncFunction: todos], batch = [ 'src/c.ts', 'src/d.ts' ]
 ```
 
-Loading runs it as a Script, drains the job queue (here the `Promise.all` job that fills
-element 0), and leaves the VM idle, waiting on call 5, where the original run was.
+Loading is running the Script with `$djs` defined, to its first stop that is not a sync
+host call: the `Promise.all` job fills element 0 and the VM is idle, waiting on call 5,
+where the original run was.
 
 ## Design
 
@@ -180,461 +168,163 @@ point, and otherwise kills it: the run since its last tool result reruns the sam
 which is what determinism (D1720) guarantees. Within a process, suspending anywhere (fuel
 slices) is unchanged.
 
-### The loader primitives (D2562)
+### `$djs`: the hooks and the dump runtime (D2834, D2890, D2903)
 
-Plain JavaScript writes the data, the closures (version 1's factories), classes,
-settled promises, re-enacted builtin state and promise reactions (`.then` calls in their
-original order). The loader adds:
+The host defines one global object while a dump loads, and the dump deletes it in the
+`finally` that ends its Script:
 
-| primitive | what |
-| --- | --- |
-| `$dump.resume(fn, {at, awaiting, this, args, slots, queue})` | builds a suspended activation of `fn` at the named site, subscribes it to `awaiting`, returns its result promise (async functions) or its generator object (generators: `yield#N`, no `awaiting`) |
-| `$dump.cell(() => x)` | the variable cell an arrow that captures exactly one variable closes over, so a frame and closures share it |
-| `$dump.pending(id, name, args, state?)` | an open host call with the host's id and the host's JSON state of it (D2770); its promise |
-| `$dump.handle(name, value)` | a named handle for the host (the run's promise, a REPL input) |
-| `$dump.private(obj, C, "#x", value)` | a private field (or brand) of the class `C` the dump recreated |
-| `$dump.private(C, "#x")` | the private name `#x` of class `C` itself, for a frame that holds it as a value (D2621) |
-| `$dump.TDZ` | a binding before its declaration ran |
-| `$dump.issued(n)` | the id of the host's next call (0171) |
-| `$dump.builtin(path)` | the base builtin at a registry path (D2371): `%ArrayIteratorPrototype%.next`, `get Map.prototype.size`; an unknown path is an error (D2622) |
-| `$dump.advance(it, n)` | a fresh array, string, Map or Set iterator stepped `n` times, running no user code |
-| `$dump.fromSync(it, next)`, `$dump.closeThrow(it)` | an async-from-sync iterator over `it` and its close-and-rethrow handler, the engine's own |
-| `$dump.spent(k)` | a resolve (0) or reject (1) function whose promise has settled |
-| `$dump.rejected(e)` | a promise rejected with `e`, already handled |
-| `$dump.bytes(base64)` | an ArrayBuffer |
-| `$dump.fn({ m() {} })` | the method, getter or setter of a one-member literal |
-| `$dump.keep(o, keys)` | deletes the members a class's evaluation made that the class no longer has; every key must be there |
-| `$dump.random(lo, hi)` | `Math.random`'s state (D2624) |
-| `$dump.using(resources, state)` | the resource Record of a statement list's `using` declarations: `[value, method, kind]` triples and the disposal's progress by name (D2628) |
-| `$dump.forIn(o, keys)` | a for-in loop's key iterator over `o` with the keys it has yet to visit, for its loop's `for-in.iterator@S` slot (D2628) |
-| `$dump.regexpIterator(re, s, flags)` | `matchAll`'s iterator over the regexp it made (D2628) |
-| `$dump.iteratorHelper(slots)` | an iterator helper (`map`, `take`, `Iterator.from`, `concat`, `zip`, …) with its state machine's slots (D2628) |
+- `seed(lo, hi, next)`, the dump's first call; a djs host sets `Math.random`'s state and,
+  once the Script has stopped, the id counter to `next` (or one past the highest reopened
+  id): the hooks are sync calls with ids of their own (D2897);
+- `resume(id, name, args, state)` per open call; a djs host reopens call `id` of its
+  function `name` under that id (`Vm::open_host_call`) and returns its promise. An unknown
+  name throws and the load fails;
+- the runtime: `R`, `L`, `advance`, `fromSync`, `keep`, … (docs/plain-js-dumps.md §4 has
+  the table), defined once in crates/djs-core/src/vm/dump_runtime.rs. A djs host gets the
+  object from `Vm::dump_runtime()`, a host without djs imports js/src/dump-runtime.js. A
+  continuation captures the helpers it calls (`const $djs_L = $djs.L`).
 
-Hosts store and send dump text compressed (zstd level 3, no dictionary: a third of an
-image container for typical pi sessions, about equal for data-heavy ones, 0184); the format
-itself stays a plain Script, uncompressed.
+Host functions the dump holds as values are written as the host's name for them, an
+expression evaluated while the dump loads (`tools.read`; pi's `$djs.call`, D2893). Hosts
+run dumps themselves (D2891): the CLI (crates/djs-cli/src/dumps.rs), the Sandbox
+(js/src/sandbox.ts `loadPlain`), pi's adapter (js/pi/vm.ts), the difftest. Sync host
+functions the dump's code calls while it loads are served as in a run.
 
-The primitives are read-only, and a dump defines nothing on `$dump` but the locations it
-fills (`$dump.p1`, `$dump.a3`): no helper code (D2622, the owner's call: the text holds
-the run's data, its functions and these calls).
+### The exporter (D2610–D2614, D2860, D2870)
 
-`resume` compiles nothing new: `fn` was made from its verbatim source by the dump. It
-compares the given slot names with this build's suspension map at `at` and refuses on
-any difference. The primitives are privileged builtins reachable only
-through the `$dump` the loader passes in; a dump run as an ordinary Script has none of
-them.
+`Vm::dump(&DumpOptions { base, host, host_fn_name, handles, call_states }, names)`
+writes the idle VM (else it refuses: D2561), and refuses a VM without frozen builtins
+(D2836). The host names its functions (`host_fn_name`), the globals it defines itself
+(`host`: re-bound by name, never written), the values it needs back (`handles`, the
+Script's completion value: the value itself for one named `run`, else a null-prototype
+object of all, D2895) and its state of each open call (`call_states`, JSON text written as
+`resume`'s fourth argument after a check that it is JSON data, D2770).
 
-As built (0171, D2583–D2585):
+The exporter reads the heap as format 2's did (vm/dump.rs, vm/dump_flight.rs) and writes
+its lines plus an IR of factories and activations, which the plain writer
+(vm/dump_plain.rs) and the continuation generator (vm/dump_cont*.rs) turn into the Script
+(D2860):
 
-- `resume(fn, {at, awaiting, this, args, slots, queue})` (D2731; before 0191 `slots`
-  was three keys, `bindings`, `operands` by role bottom first and `loops` outermost
-  first). `fn` must be made by the dump's own text: the loader compiles that text with
-  recording on (one compile that both runs the dump and gives the maps, D2735), so the
-  map's slots and resume pc are those of `fn`'s code. `slots`
-  names every slot of the frame at the site and nothing else ("Slot names"): every
-  binding in scope (`name`, or `name@scope` with the declaring scope's offset when two of
-  a name are in scope), the hidden locals the loader does not make itself (it makes
-  `<state>`, `this`, `new.target`, `<active>`, `<home>`; `arguments` is given), and the
-  temporaries of the constructs in flight (`call.callee@41`, `for-of.iterator@18`; a
-  for-in loop's key iterator is `$dump.forIn(…)`, a finally block's pending completion
-  `completion.kind`/`completion.value`). The loader writes each value into the frame index its own map
-  gives the name, so the keys' order means nothing. `queue` is an async generator's
-  requests `{type: "next"|"throw"|"return", value, promise}` with pending promises the
-  dump made. Unknown keys, a missing or extra slot or queue entry, a non-promise
-  `awaiting` at an await or any `awaiting` at a yield, and an unsupported site refuse the
-  load with the reason.
-- A captured binding gets a new Box, or the Box of a `$dump.cell(() => x)` (also in its
-  TDZ, when the cell is taken before the declaration runs); `$dump.TDZ` and cells are
-  values only `resume` takes.
-- `pending(id, name, args, state?)`: the host maps `name` to its function id
-  (`LoadOptions::host_fn`; an unknown name refuses); `state`, if given, goes back to the
-  host as JSON text (`OpenCall::state`; a value that is not JSON data refuses). `issued(n)`: the id the host's next
-  call gets (else one past the largest open id). `handle(name, v)`: a heap handle the host
-  gets back. `Vm::load_dump` returns the open calls and the handles; the VM is idle.
-
-### The exporter as built (0172, D2610–D2614)
-
-`Vm::dump(&DumpOptions { base, host, host_fn_name, handles }, names)` writes format 2 with
-whatever is in flight when the VM is idle (no frames, no jobs, no parked call, no result
-delivered and not applied yet; else it refuses: D2561). The host names its functions
-(`host_fn_name`, the inverse of the loader's `host_fn`) and the values it needs back
-(`handles`, written last as `$dump.handle(name, v)`; the exporter adds none itself: a host
-passes, say, its run's promise as "run").
-
-- **Roots:** the open async host calls (written first, in the host call table's order, as
-  `$dump.pending(id, name, args)`), the handles, the selected globals. Everything in
-  flight is found from them: a pending promise's reactions lead to the activations that
-  await it (and their frames), to `then` handlers and derived promises, to combinator and
-  resolving-function records.
+- **Roots:** the open async host calls (in the host call table's order), the handles, the
+  selected globals. Everything in flight is found from them: a pending promise's
+  reactions lead to the activations that await it (and their frames), to `then`
+  handlers and derived promises, to combinator and resolving-function records.
 - **Pending promises** are written by what made them: an open call, an activation (its
-  result promise is `$dump.resume`'s), reaction `j` of another promise (`then`, `catch`,
-  `finally` called again with the same handlers), a combinator (`Promise.all`/
-  `allSettled`/`any` called again with the settled elements' values, or rejected promises
-  for their reasons, in place), `new Promise((res, rej) => ...)` when resolving functions
-  are held (user code's, `race`'s, an async function that returned a promise), else
-  `new Promise(() => {})`. Each promise's reactions are added in their order; a dump
-  whose dependencies would add them in another order is refused. Data that holds such a
-  promise gets it by a patch at the end, so an activation can need that data first.
-- **Activations:** the suspension map comes from compiling the function's script again
-  with the options it was compiled with (Script cells keep them, `Script::OPTIONS` and
-  `Script::PARAMS`; D2610), into the dump's scratch copy of the base. The frame is read
-  by the map: parameters and bindings in scope by name (`name@scope` when shadowed), the
-  `arguments` object if the function has one, the temporaries by name (D2731), an async
-  generator's request queue. Bindings that closures share are
-  handed over as `$dump.cell`s from their factory (`$cN` keys). The dump's text has no
-  comments (the owner's call, D2641: `djs resume --explain` shows where each activation
-  stopped, in the dump); `Vm::dump_report` returns, per resumed activation, its location in the dump, the
-  function, the site, and the site's file, line, column and source line. Generators that
-  have not started are called again (their parameters must run no code); finished ones
-  are made finished.
-- **Re-enacted iterators:** array, string (by code points), Map and Set iterators are
-  made on their target and advanced (`$dump.advance`); a collection only an iterator
-  holds is made again with its entries. A `for await` over a sync iterable gets the
-  dump's own async-from-sync iterator (`$dump.fromSync`, which steps the same way: the
-  object is never visible to user code). Proxies are `new Proxy(target, handler)`.
-  `matchAll`'s iterators and iterator helpers are made from their state
-  (`$dump.regexpIterator`, `$dump.iteratorHelper`); a for-in loop's key iterator from its
-  object and the keys left (`$dump.forIn`: keys deleted meanwhile are still skipped).
-- **Statements in flight:** a case test keeps the discriminant (`switch.discriminant`,
-  twice: the second named by its `case`); a statement list with `using` declarations keeps its resource Record
-  (`using.record`, `$dump.using`); a destructuring pattern under way keeps its value or
-  iterator, the keys a rest property excludes and a computed key (`pattern.*`), an
-  assignment pattern also the assignment's value (`assign.value`).
-- **Completions:** a finally block, a `using` list's disposal and a for-await's close
-  when `break`, `continue` or `return` leaves the loop are entered with their completion
-  in two temporaries named by the statement: `completion.kind@S` (0 normal, 1 throw, 2
-  return, `3 + 2·o` a `break` to the statement at offset o, `4 + 2·o` a `continue` to it)
-  and `completion.value@S` (the exception or the return value), so a dump of a frame
-  inside one writes them like any value (`"completion.kind@23": 2, "completion.value@23":
-  1`) and the block's end goes on with the exit (D2733; before 0193 a return address, by
-  the index of its `gosub`, D2627).
-- **Still refused, with their path:** sites the maps call unsupported (inside a class
-  definition), a for-in
-  loop over a Proxy, revoked Proxies, weak collections, a generator object
-  with another prototype or own properties, keyed combinators (`allKeyed`), an async
-  generator awaiting a `return()` value, then-reactions on promises of other
-  constructors.
-- **Codemode bodies:** a run compiled as an async body (pi's Sandbox, `djs run --body`)
-  has no function text of its own; the dump writes it as the async function it runs as,
-  `async function (tools, console) {\n<body>\n}`, and resumes that. The exporter
-  compiles the wrapper's maps too and refuses a body whose frame differs there (code
-  that reads `arguments`, a global in a body); the report still points into the body
-  (D2617).
-- **Computed keys:** a class's member keys and an object literal method's key are part of
-  the text the dump writes, so they would be evaluated again where the dump writes it.
-  The exporter finds them in the suspension maps of the script (the keys each function
-  evaluates) and refuses them unless their value cannot differ: string and number
-  literals and well-known symbols (`[Symbol.iterator]`) pass (D2623).
-- **`Math.random`:** its state is written first (`$dump.random`), so a resumed run
-  continues the sequence; the loading VM keeps its own hash key (D2433), which nothing
-  observable depends on (D2624).
-- **Classes in a waiting frame:** the frame's hidden bindings of a class it declared
-  (`<fields N>`, `<key N>`, private methods' closures, decorator state) are dead after the
-  class statement and written as `undefined`; the class comes from its text. A private
-  name a frame holds (its `#x` binding, the key operand of `this.#x += await v`) is the
-  class's, `$dump.private(C, "#x")` (D2621).
-- **Host names:** a script's own global lexical binding with a host global's name
-  (`const tools = ...`) hides the host's property and is dumped like any binding; the
-  checker refuses a free name that would read the host's (or the base's) global after
-  the dump where it read a script binding before, and a captured variable read as a
-  host global unless it holds the host's current value (D2618).
-- **TypeScript:** a dump that writes a function of a TypeScript script says so in its
-  directive (`"djs-dump 2 typescript";`) and is compiled as TypeScript (D2615).
-- **Not carried:** the VM's clock and `Math.random`'s state are the host's to set again;
-  unhandled-rejection bookkeeping of promises the session has not looked at yet.
-
-### Re-enactment
-
-Builtin state in flight is written as the calls that make it, wherever the spec makes the
-result indistinguishable:
-
-- `Promise.all`/`allSettled`/`any`/`race` and `allKeyed`: called again with the settled
-  elements' values (or reasons, for allSettled/any) in place of their promises;
-- `then`/`catch`/`finally` reactions: added again in their order; resolving functions
-  through `new Promise((res, rej) => …)`;
-- array, Map, Set, string and regexp-string iterators: made and advanced with `next()`;
-  iterator helpers by their spec state where it is replayable;
-- async-from-sync iterators, `for await` state: by their underlying iterator;
-- generators and async generators: `$dump.resume` at a `yield` site, since advancing
-  one runs user code. Async generators also carry their request queue.
-
-Builtins the run patched are fetched as the originals through `$dump.builtin` (pi's
-lockdown freezes them anyway). Whatever has no re-enactment and no primitive is refused
-with its path, as in version 1.
+  continuation's result), reaction `j` of another promise (`then`, `catch`, `finally`
+  called again with the same handlers), a combinator called again with the settled
+  elements' values in place, `new Promise((res, rej) => …)` when resolving functions are
+  held, else `new Promise(() => {})`. Each promise's reactions are added in their order.
+- **Activations** are read by the function's suspension map (below), compiled again from
+  its script on demand, and written as continuations by the site's syntax path (D2850):
+  the prefix, the site's statement rewritten (values evaluated before the site come from
+  the dump, a call keeps its evaluated callee and `this`), the loops, `try`, `switch`,
+  labels and `using` scopes around it, and the rest of the function verbatim. Generators
+  are primed to a placeholder `yield`; an async generator's queued requests are made
+  again. Constructs with their own encodings: `for await` (D2872), destructuring (D2874),
+  `yield*` (D2875), `using` (D2876), iterator helpers (D2877), loop heads and `var`
+  (D2880), methods using `super` (D2871), classes a waiting frame shares (D2881).
+- **Origin tracking:** a continuation's frame is read as one of its origin (`K.$djs = {f,
+  at, segs, scaf, cmap}`), so the next continuation is written from the original's text
+  (D2833, D2870, D2873).
+- **Codemode bodies:** a run compiled as an async body has no function text of its own;
+  its continuation is `async function (tools, console) {…}` over the body's text, and
+  what only its activation holds is pruned (docs/plain-js-dumps.md §5).
+- **Refused, with their path:** instances that carry private names (D2878), sites the
+  maps call unsupported (inside a class definition), a for-in loop over a Proxy, revoked
+  Proxies, weak collections, keyed combinators, then-reactions on promises of other
+  constructors, computed keys the dump would evaluate again unless their value cannot
+  differ (D2623), a codemode body whose frame differs as a function (D2617).
+- **The checker** compiles the dump and compares every function it writes with the
+  original: a name the original captured must be captured in the dump too, a global it
+  read must stay a global (D2618).
 
 ### Suspension maps (D2563)
 
 Per `await`/`yield`, recorded by a compile with recording on (no cost at run time,
-nothing in the heap): the exporter compiles a function's script again on demand, the
-loader records them in the one compile of the dump's text (D2735; recording leaves the
-code as it is, which the pin test checks):
+nothing in the heap): the site (`await#N`/`yield#N`, compiler-made sites by kind), the
+bindings live there, the temporaries the frame keeps, each by slot name (`call.callee@41`,
+`for-of.iterator@18`, `completion.kind@23`: the construct and its offset in the
+function's text, D2721, D2730, D2731), and the syntax around the site (D2850–D2853). The
+pin test commits the maps of every await in the corpus (tests/smap).
 
-- the site: `await#N`/`yield#N` in the function's text order, compiler-made sites (`for
-  await`, async generator `yield`/`return`, `await using`) with a kind;
-- the bindings live at the site: name and declaring scope, hidden locals by stable name;
-- the temporaries the frame keeps there, by slot name (below): construct temporaries in
-  locals of their own (loop records, switch discriminants, `using` records,
-  destructuring state, pending completions, a `for await`'s exception) and the values an
-  expression keeps on the operand stack below the awaited value (`call.callee`,
-  `call.this`, `call.arg`, `binary.left`, `object.literal`, …), named by the compiler
-  where it emits the construct, not inferred.
+With format 2 the maps were a contract between builds: a dump named slots, and a later
+build loaded it only if its compiler kept the same slots at the same site. A plain dump
+names no slot, so the maps are only the exporter's way of reading a frame of this build;
+the pins are a regression test of the compiler, not a format promise.
 
-The maps began (0169, D2570) with operand *roles*, a vocabulary after
-docs/portable-snapshots.md §3.5 with indexes (`call.arg[2]`) and a `Role` enum in the
-compiler. Since 0194 (D2734) there is no role vocabulary: the parser pushes the slot
-names' constructs (`"call.arg"`) with the offsets that name them, the site keeps their
-names (`Site::stack`, bottom first), and a value's index in a list is its offset.
-Resolution still checks that the names count the operand stack's values at each site
-(a mismatch would be a compiler bug and makes the site unsupported, not misnamed). The
-one construct whose sites are refused on purpose is a class definition (its heritage,
-computed keys and decorators): its half-made class is no value a dump can write, since
-a dump writes classes by their text. Compiler-made sites are named `yield.await`,
-`yield.return`, `return.await`, `for-await.next`, `for-await.close`, `await-using` and
-`yield*`.
-
-The pin test commits the maps of every await in the corpus and the e2e async tests, like
-the bytecode snapshot tests. Accepting a diff means accepting that dumps stopped at those
-sites by an older build refuse (or adding a mapping).
-
-### Slot names (D2721, D2730)
-
-docs/suspension-design-review.md moves everything a suspended frame holds into named
-frame slots (D2720). The names are the contract between builds: a dump says which value
-is in which named slot, and a later build loads it if its compiler keeps the same named
-slots at the site, whatever its operand stack or local layout. The names:
-
-- **States** keep their site names: `await#N`, `yield#N` and the compiler-made kinds
-  (`for-await.next#N`, `yield*.await#N`, …), numbered per kind in the function's text
-  order.
-- **Bindings** are named by the source: `x`, or `x@S` where `S` is the offset of the
-  declaring scope when two `x` are in scope (as `bindings` keys are today); hidden locals
-  by their stable names (`<state>`, `this`, `new.target`, `<home>`, `arguments`).
-- **Temporaries** (what the compiler keeps across the site that is not a binding) are
-  named `construct@S`: the construct that keeps the value, and `S`, the source offset,
-  from the function's start (the first byte of its `toString` text), of:
-  - for an element of a list (a call's, `new`'s, `super(…)`'s or an intrinsic's
-    argument, an array literal's element, a template literal's part, a tagged
-    template's substitution), the element's own start, which stands for its index:
-    `call.arg@57`, `array.element@120`, `template.part@203`;
-  - for everything else, the start of the construct: the call's callee
-    (`call.callee@41`, `call.this@41`), the assignment's target (`assign.object@12`,
-    `assign.key@12`, `assign.old@12`), the binary expression (`binary.left@88`), the
-    object (`member.object@30`), `new`, `super` or `import` keyword, the `[`/`{` of an
-    array or object literal under construction or a destructuring pattern
-    (`array.literal@7`, `object.literal@19`, `pattern.iterator@25`), a computed key's
-    `[` (`object.key@44`, `pattern.key@44`), the `(` of a spread call's argument array
-    (`call.args@6`), the `for` of a loop and the `yield` of a `yield*`
-    (`for-of.iterator@18`, `for-of.next@18`, `yield*.next@38`), the `switch`
-    (`switch.discriminant@0`), the region's first bound name of `using` declarations
-    (`using.record@30`), the statement whose completion is pending (`try`, `for`, the
-    `using` list's first bound name: `completion.kind@23`, `completion.value@23`).
-  - The exception a `for await` rethrows after closing its iterator is
-    `for-await.exception`, named by the `for` (every construct has a `.` or a `-`, so no
-    temporary's name is a binding's `name@scope`, D2731). The value a `case` test compares with is the left
-    side of its `===`, named by the `case` (`binary.left@28`).
-
-No two slots of a site share a name: offsets of nested constructs differ, and two
-temporaries of one construct differ by construct name. The pin test checks this over the
-corpus. A name changes when the source text before the construct changes, which a dump
-never does: it carries the function's verbatim text. Spans are byte offsets of the
-compiled text, like a site's `@pos`.
-
-The suspension maps report each site's temporaries by name (`Site::temporaries`: those in
-locals, then those on the operand stack bottom first), and the pins list them per site
-(`await#2 @212 (4:13) pc 87: call.callee@205 call.this@205`), so a compiler change that
-keeps a different value across an await shows as a renamed or added slot. Until step 3
-of the migration (0191) the dump format wrote `operands` by role; since then it writes
-`slots` by these names (D2731).
-
-Since 0192 (D2732) the state a statement keeps while its body runs is in locals of its
-own, construct temporaries with the same names: a loop's iterator record
-(`for-of.iterator@S`, `for-of.next@S`, `for-in.iterator@S`, `for-await.*`, `yield*.*`), a
-`switch`'s discriminant (`switch.discriminant@S`), a `using` list's Record
-(`using.record@S`) and a destructuring pattern's state (`pattern.source@S`,
-`pattern.excluded@S`, `pattern.iterator@S`, `pattern.next@S`). A temporary is a slot of a
-state only where the code still reads it: the map finds that by a liveness pass over the
-function's code (a loop's iterator is not a slot at an await in the loop's right side,
-a pattern's source not after its last property was read), so a dump never carries a
-stale value. Expression temporaries stay on the operand stack. Since 0194 (D2734) so
-does a `for await`'s pending exception while its iterator's close is awaited
-(`for-await.exception@S`, a local), so statements keep nothing on the operand stack at
-any site.
-
-Where the values are in memory is this build's business: a suspended frame is one array
-(callee, `this`, arguments, header, locals, and the k values the code keeps past the
-locals at that site, the operand stack), and the map names every index of it. The
-compiler does not move the k temporaries into reserved locals before an await (the
-report's "spill"): the loader writes a name to its index in the stack part as it writes a
-binding to its local, and that is all a spill would change for the format (D2731).
-
-### Classes and private fields
+### Classes
 
 Classes are written as their verbatim source inside a factory (they capture like
-closures), followed by their static state. Methods using `super` keep their home object
-because the class or object literal is evaluated again. Instances are made with the
-class's prototype; subclasses of builtins through the builtin (`new Map(entries)`) and then
-the prototype. Private fields, private methods and brands go through `$dump.private` with
-the recreated class, whose private names are the new ones. This also applies to version 1
-dumps of values.
+closures), followed by the static state they changed (`$djs.keep` deletes members the
+class no longer has). Methods using `super` keep their home object because the class or
+object literal is evaluated again. Instances are made with the class's prototype;
+subclasses of builtins through the builtin. An object that carries a private field,
+method or accessor is refused: only the class's own construction can add a private name
+(D2878).
 
 ### Open host calls
 
-The dump lists every open call with the host's id, and with the host's own state of the
-call when the host gave one (D2770): JSON text the host passes at dump time
-(`DumpOptions::call_states`), written as is as the fourth argument of
-`$dump.pending`, after a check that it is JSON and reads the same as a JavaScript
-expression (no key `__proto__`). The engine keeps nothing of it between dumps. What
-happens on load is the host's policy, the dump only states the facts: deliver a recorded
-result, issue the call again (from its state), or reject it as interrupted. A tool with
-side effects should not be issued twice; pi's host keeps calls by id already. The
-Sandbox's tasks run that policy from hooks the host function declares (D2771, below).
+The dump lists every open call with the host's id and the host's state of it (D2770):
+`$djs.resume(id, name, args, state)`. The engine keeps nothing of the state between
+dumps. What happens on load is the host's policy: deliver a recorded result, issue the
+call again (from its state), or reject it as interrupted. The Sandbox's tasks run that
+policy from hooks the host function declares (D2771).
 
-### Compatibility (D2560)
+### Compatibility (D2560, D2920)
 
-Format 2 promises: every later djs loads the dump and continues, or refuses it with a
-reason. It never misreads. Data and functions are as durable as version 1. Activations
-depend on the suspension maps (D2563) and on the re-enactments staying exact. Golden
-format 2 fixtures are loaded by every gate run; a periodic check exports with an old
-commit and imports with the new one (0178).
+A dump is JavaScript that calls only `$djs`, so any later djs, or node, runs it; what it
+depends on is the dump runtime and the language, not the compiler. The golden dumps
+(tests/dump/v2/golden/, written once, run by every gate) hold the runtime and the engine
+to that (TESTING.md "Dumps across builds"); djs is unreleased, so the runtime may still
+change incompatibly by a decision (D024).
 
 ### One dumper; packaging B (D2564, D2704)
 
-The exporter and the loader are Rust in djs-core. A TypeScript copy would have to repeat
-every role, re-enactment and class case, kept byte-identical by a gate check, and would
-read the engine's generator frames, reaction lists, host call table and builtin closure
-kinds; the suspension maps would come from wasm anyway, and the CLI and REPL need Rust
-regardless. For wasm hosts two packagings use the same code:
+The exporter is Rust in djs-core (feature `dump`). Wasm hosts get it in a second module of
+the same build: `djs.wasm` without the dumper and `djs-dump.wasm` with it. To dump, the
+host takes the idle VM's image, loads it into the dump module and writes the dump there
+(images are the transport inside the process; the feature is image-neutral, D2352). To
+resume, the host runs the dump in the shipped module itself, which needs only
+`vm_open_call`, `vm_dump_runtime` and `vm_set_next_call_id` (D2892). Hosts store dumps
+zstd-compressed (D2703).
 
-- **A.** one module with the `dump` feature on (+32.4 KB gzip for version 1 today, plus
-  continuations and classes), raising the size ceiling, with what 0177 removes as offset;
-- **B.** two modules of one build: `djs.wasm` without the dumper and `djs-dump.wasm` with
-  it. Images are the transport inside the process: persist = take the idle VM's image,
-  load it into the dump module, write the dump; resume = load the dump in the dump module,
-  take its image, continue in the small module. The feature is image-neutral (D2352), so
-  both modules read each other's images. The main module grows by nothing.
+### pi's shape (D2565)
 
-0177 measured both after the image persistence code was gone and chose B (D2704): the
-shipped module has no dumper (1,029,026 bytes, 440.5 KB gzip), the dump module is
-1,332,899 bytes, 548.9 KB gzip, and with the dump-module VM kept between dumps (D2701) B
-dumps and resumes as fast as A (corpus p50 2.8 / 0.9 ms). Hosts store dumps zstd-compressed
-(D2703).
-
-Both are built and tested since 0175 (D2635): `scripts/build-wasm.sh --dump` writes
-`djs-dump.wasm`, and the Sandbox takes it as `dumpModule` beside a dumper-less `module`.
-Measured then (`wasm` profile): the module without the dumper is 1,038,040 bytes, 443.8 KB
-gzip; with it 1,312,145 bytes, 540.6 KB gzip (+274 KB raw, +96.8 KB gzip, +22%). B costs
-0–1 ms per dump or resume over A (the image copies), at 2.4–6.5 ms for a dump or resume of
-a run holding 10 to 1000 records (docs/host.md).
-
-### pi's future shape (D2565)
-
-pi's prelude (tests/pi/prelude-source.ts) keeps a `pending` Map of resolve/reject
-functions per call id, `nextId`, `finished`, the store's writes and the reactions of
-`run()` on the body's promise. All of that would have to travel in a dump as prelude
-state. The shape pi should move to, which djs builds in its own adapter first:
-
-- tools are engine async host functions (D1374), so an open call is `$dump.pending`;
-- the body's promise is a host handle; `finished` and the store's writes live in the
-  adapter;
-- the prelude then holds no in-flight state and is rerun on load (it is deterministic,
-  D2262); the dump names `tools`, `text`, `console` as host globals.
-
-`tests/pi/prelude-next.ts` is derived from pi's prelude with these changes listed at its
-top; `tests/pi/prelude-source.ts` stays a verbatim copy, and pi's suite runs against both.
+pi's prelude keeps in-flight state of its own (the pending call table, `finished`, the
+store's writes). The shape pi should move to, which djs's adapter builds with
+tests/pi/prelude-next.ts: tools are engine async host functions, so an open call is a
+`$djs.resume`; the body's promise is a host handle; `finished` and the store live in the
+adapter; the prelude holds no in-flight state and is rerun on load. docs/host.md
+"pi's next mode" has the API.
 
 ## Testing
 
-The invariant is the counterpart of `--suspend-every`: **at every idle point, dump, load
-into a fresh VM, continue; the transcript must equal the uninterrupted run's.** A
-difference is a hard failure, outside the ratchet.
-
-The corpus's fake tools resolve through promise jobs, so its runs have no idle points.
-0173 adds an async host function `host.later(v)`: the djs runner delivers it at the next
-idle point, under qjs it is `Promise.resolve(v)`. The corpus prelude's fakes and the
-harvest importer's in-script fakes return through it, so every tool call is an idle point
-and the oracle's `.expected` files stay as they are.
+The invariant is the counterpart of `--suspend-every`: **at every idle point, dump, run
+the dump in a fresh VM, continue; the transcript must equal the uninterrupted run's.** A
+difference is a hard failure, outside the ratchet. The corpus's tools answer through the
+async host function `host.later(v)` (0173), delivered at the next idle point, so every
+tool call is an idle point.
 
 | where | what |
 | --- | --- |
-| djs-core unit | suspension-map roles per construct and the pin test (0169); hand-written format 2 fixtures and refusals for the loader (0171); round trips per construct for the exporter (0172) |
-| e2e | `DJS_E2E_MODE=dump`: the async tests with a dump round trip at every idle point |
-| difftest | `--dump-every-idle` over `codemode` and `codemode-harvest`, in the gate next to `--suspend-every 97` |
-| coverage | `vm::dump_harvest` at every idle point of the harvested cases and the 2,627 private scripts, counted by refusal reason |
-| REPL | line-mode transcripts in `crates/djs-cli/tests/it/repl.rs` |
-| CLI | `djs run --dump-after K` / `djs resume` for every K of a few scripts |
-| Sandbox | `js/test/dumpresume.test.ts`: round trips at every idle point; refusals |
-| pi | `pi-vm.test.ts` through the adapter; `node js/pi/pi-tests.ts --dump-every-idle` with prelude-next, every wait resumed in a new module instance |
-| across builds | golden fixtures `tests/dump/v2/*.js`; the two-commit export/import check |
+| djs-core unit | the suspension-map pins (tests/smap); dumps of values and of waiting programs, the exporter's refusals and reports (vm/dump_tests.rs, vm/dump_resume_tests.rs); every idle point of the tests/dump/v2 programs plainly and in chains of re-dumps; the golden dumps |
+| e2e | `DJS_E2E_MODE=dump`: every case's final state dumped, run and dumped again |
+| difftest | `--plain-dumps` over the corpus, chains of at most 50 links, and each link run in node (`scripts/plain-node.mjs`); the gate leg "plain dumps (djs and node)", with the size score (D2901) |
+| REPL, CLI | line-mode transcripts in crates/djs-cli/tests/it/repl.rs; `djs run --dump-after K` / `djs resume` for every K of a few scripts |
+| Sandbox | js/test/dumpresume.test.ts and task.test.ts in both packagings; plain.test.ts |
+| pi | pi-vm.test.ts through the adapter; `node js/pi/pi-tests.ts --next --dump-every-idle` (a full-gate leg) |
 
-### REPL
+The REPL (`djs repl --frozen`: `.dump`, `.restore`, `.dump-every`, `.pending`, `.bt`) and
+the CLI (`run --dump-after`, `--dump-every-idle`, `resume`, `resume --explain`) are in
+docs/cli.md; the Sandbox's `begin`/`settle`/`advance`/`dump`/`loadRun` and tasks in
+docs/host.md.
 
-The REPL gets a host-provided `tools`: `tools.x(args)` is an async host call answered by
-hand. Inputs that wait do not block the prompt; an input's result prints when it settles.
+## History
 
-```
-> const r = await tools.read({ path: "a.ts" })
-[waiting] #1 tools.read({"path":"a.ts"})
-> .pending
-#1 tools.read({"path":"a.ts"})  input 1, at repl:1:17
-> .dump s.js
-wrote 1.4 KB to s.js (1 activation, 1 pending call)
-> .clear
-> .restore s.js
-loaded s.js into a fresh VM; waiting: #1 tools.read({"path":"a.ts"})
-> .resolve 1 "export const x = 1;"
-> r.length
-19
-```
-
-- `.pending`; `.resolve <id> <json>`, `.reject <id> <message>`; `.bt <id|all>` for the
-  suspended activations and their bindings;
-- `.dump-every [on|off]`: dump and reload at every idle point (as `.suspend-every` does
-  with images), printing `[dumped N bytes]`; `--tools answers.json` for scripted answers;
-- `.dump` writes format 2 when something is in flight; `.restore` restores waiting
-  inputs from their handles; `.snapshot` goes with 0177;
-- CLI: `djs run --tools answers.json --dump-after K out.js` and `djs resume out.js
-  --tools answers.json`; `djs run --dump-every-idle`.
-
-### Sandbox API
-
-`runAsync` awaits the host functions itself and cannot stop at an idle point, so it gets
-a lower layer:
-
-```ts
-const run = sandbox.begin(code, params);   // runs to the first idle point or the end
-run.state;     // "idle" | "done" | "threw"
-run.calls;     // [{ id, fn: "tools.read", args }] still open
-run.settle(id, { ok: true, value });       // delivers one result
-await run.advance();                       // to the next idle point
-const text = run.dump(states);             // only while idle: a format 2 dump, call states by id
-
-const r2 = (await Sandbox.create({ functions, asyncFunctions })).loadRun(text);
-r2.calls;      // the same open calls, with their states; the host settles or re-issues them
-```
-
-`runAsync` becomes `begin` + calling the async functions for `run.calls` + `advance` in a
-loop. Journals (D1730) stay available on top; persistence does not need them.
-
-On top of it, tasks (D2771) keep the bookkeeping in the Sandbox: an async host function
-declared `{ call, save, resume }` records its call's state, `task.suspend()` dumps at the
-next idle point with `save`'s states and stops, and `Sandbox.resume(text, opts)` loads
-and drives the run, continuing each open call by `resume(state, call)` (or `call` again
-without `resume`; a plain function's call is rejected). docs/host.md "Tasks" has the API,
-examples/sleep-dump a whole host in 40 lines.
-
-## Issues
-
-| issue | what | depends on |
-| --- | --- | --- |
-| 0169 | Suspension maps in the compiler, pin test | - |
-| 0170 | Classes and private fields in dumps; the loader's privileged `$dump` | - |
-| 0171 | Loader: `resume`, `cell`, `pending`, `handle`, `TDZ`; hand-written format 2 fixtures | 0169, 0170 |
-| 0172 | Exporter: activations, open calls, re-enactment; `--dump-every-idle`, e2e dump mode, coverage | 0171, 0173 |
-| 0173 | Idle points in the difftest corpus (`host.later`) | - |
-| 0174 | REPL and CLI: tools, pending calls, waiting inputs, format 2 `.dump`/`.restore`, `run --dump-after`/`resume` | 0171 (the tools and pending-call part can land first) |
-| 0175 | Sandbox run API (`begin`/`settle`/`advance`/`dump`/`resume`), wasm exports, both packagings built | 0172 |
-| 0176 | pi's future shape: prelude-next, adapter mode, `dumpSession`/`resumeFromDump`, pi's suite with `--dump-every-idle` | 0175 |
-| 0177 | Retire images as persistence; packaging decided by measurement; guide | 0176 |
-| 0178 | Across builds: golden format 2 fixtures, the two-commit check | 0172 |
-
-0169, 0170 and 0173 touch disjoint areas and run in parallel.
+| issues | what |
+| --- | --- |
+| 0169–0178 | format 2: suspension maps, classes, the loader and its primitives, the exporter, idle points in the corpus, REPL and CLI, the Sandbox run API and packagings, pi's next mode, images retired as persistence, golden dumps |
+| 0191–0196 | slot names, construct temporaries in locals, one compile per load |
+| 0199 | plain-JavaScript dumps: research and prototype (docs/plain-js-dumps.md) |
+| 0200–0207 | site syntax in the maps, the plain exporter, origin tracking, the remaining constructs, host hooks, the dump runtime and size |
+| 0205 | format 2 retired: the loader, `$dump.resume` and the primitives, the recording compile at load and the `jump_if_loading` opcode deleted; goldens rewritten as plain dumps (D2920) |

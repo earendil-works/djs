@@ -1,4 +1,4 @@
-// Host-driven runs (0179, the first piece of docs/continuation-dumps.md "Sandbox API"):
+// Host-driven runs (0179, docs/host.md "Host-driven runs"):
 // `begin` runs to an idle point, the host settles the open async calls itself, `advance`
 // continues; `Sandbox.resume` continues a run from a dump (a plain Script, D2830).
 

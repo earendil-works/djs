@@ -300,29 +300,34 @@ scripts, a dump at an idle point is 6 KB raw and under 2 KB compressed at the me
 a session holding a large log a few hundred KB. Any zstd reads it back, and any later
 djs loads it.
 
-The dumper is about 300 KB of code (108 KB compressed) that only hosts which persist runs
-need, so the
-shipped module leaves it out (D2704). Such a host loads a second module, the same build
-with the dumper, and passes it to the sandbox: dumping copies the VM's image into an
-instance of that module and writes the dump there; loading does the reverse, and the
-process keeps that instance, shared by its sandboxes, for the next dumps (D2701, D2802). The image never leaves the
-process, so neither module verifies it cell by cell, only that it was made by the same
-build's tables.
+Dumps are **plain JavaScript** (D2830): the sandbox writes each stopped function as a
+continuation, an ordinary function holding the rest of its code from the `await` it waits
+at, and the whole dump as a Script that needs nothing from djs. The Script reaches the
+host through one global object, `$djs`, which the loading host defines and the dump
+deletes when it is done (D2890): `$djs.seed(lo, hi, next)` hands over `Math.random`'s
+state and the id of the run's next host call, and `$djs.resume(id, name, args, state)`
+stands for each open call. The sandbox answers `resume` by opening the call again under
+the same id, with the same arguments and state, and continues it through the function's
+hooks as above; once the Script has stopped it sets the call counter from `next`, so the
+run's later calls get the ids an uninterrupted run gives them (D2897). The same object
+holds the small helpers continuations call, the dump runtime, which the host provides so
+that dumps do not carry them (D2903). A host other than djs defines `$djs` itself:
+[`examples/sleep-dump/`](../../examples/sleep-dump/) continues the same dump in node.
 
-Dumps are **plain JavaScript** (D2830, the sandbox's default, D2898): the sandbox
-writes each stopped function as a continuation, an ordinary function holding the rest of
-its code from the `await` it waits at, and the whole dump as a Script that needs nothing
-from djs. Loading one is running it, so the shipped module loads plain dumps without the
-dumper, and node runs them too. The Script reaches the host through one global object,
-`$djs`, which the loading host defines and the dump deletes when it is done (D2890):
-`$djs.seed(lo, hi, next)` hands over `Math.random`'s state and the id of the run's next
-host call, and `$djs.resume(id, name, args, state)` stands for each open call. The
-sandbox answers `resume` by opening the call again under the same id, with the same
-arguments and state, and continues it through the function's hooks as above; once the
-Script has stopped it sets the call counter from `next`, so the run's later calls get the
-ids an uninterrupted run gives them (D2897). A host other than djs defines `$djs` itself:
-[`examples/sleep-dump/`](../../examples/sleep-dump/) continues the same dump in node with
-a ten-line `$djs`.
+Only a sandbox made with frozen builtins can dump (D2836): the writer relies on no
+builtin changing between the moment the run read a value and the load. Without them,
+`dump`, `Run.dump` and a task's `suspend` and `checkpoint` throw a `misuse` error that
+says so. pi's sessions run with frozen builtins anyway. Loading a dump needs neither
+frozen builtins nor the dumper.
+
+The dumper is about 300 KB of code (108 KB compressed) that only hosts which persist runs
+need, so the shipped module leaves it out (D2704). Such a host loads a second module, the
+same build with the dumper, and passes it to the sandbox: dumping copies the VM's image
+into an instance of that module and writes the dump there, and the process keeps that
+instance, shared by its sandboxes, for the next dumps (D2701, D2802). The image never
+leaves the process, so neither module verifies it cell by cell, only that it was made by
+the same build's tables. Loading is running the dump, so the shipped module does it
+alone.
 
 ## Where to look
 
@@ -334,7 +339,7 @@ a ten-line `$djs`.
 
 Decisions on this page:
 
-<!-- gen:decisions D2060 D1180 D1210 D1321 D1370 D1374 D1383 D1495 D1660 D1670 D1680 D1690 D1730 D1740 D1890 D2262 D2265 D2541 D2543 D2630 D2650 D2651 D2652 D2700 D2701 D2703 D2704 D2770 D2771 -->
+<!-- gen:decisions D2060 D1180 D1210 D1321 D1370 D1374 D1383 D1495 D1660 D1670 D1680 D1690 D1730 D1740 D1890 D2262 D2265 D2541 D2543 D2630 D2650 D2651 D2652 D2700 D2701 D2703 D2704 D2770 D2771 D2830 D2836 D2890 D2897 D2903 -->
 - D2060: The base is decoded or injected straight into the first VM's arena
 - D1180: Inbound wire format, version 1
 - D1210: Exported heap layout drives the host-side reader
@@ -364,4 +369,9 @@ Decisions on this page:
 - D2704: Packaging B: the shipped module has no dumper, hosts that persist load the dump module
 - D2770: A call's state is JSON text, written verbatim as `$dump.pending`'s fourth argument
 - D2771: Tasks: the Sandbox drives the run and the open calls' hooks
+- D2830: Continuation dumps become plain JavaScript
+- D2836: Plain dumps are written only for VMs with frozen builtins
+- D2890: Plain dumps load as a Script with `$djs.resume`/`$djs.seed`; open calls keep their ids
+- D2897: `$djs.seed(lo, hi, next)`: call ids go on after a plain load as in the uninterrupted run
+- D2903: The plain dump runtime: the format's helpers are members of `$djs`
 <!-- /gen -->

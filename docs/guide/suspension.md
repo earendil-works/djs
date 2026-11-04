@@ -132,15 +132,16 @@ holds the engine's own numbering (cell layouts, opcodes, internal ids), so it re
 only into a djs that numbers everything the same way, and about half of the merges to djs
 so far changed some of that numbering ([images](snapshots.md#what-an-image-depends-on)). A run that waits
 minutes for a tool or a person must survive restarts and upgrades. So persistence is
-something else: a **continuation dump**, the run written out as a JavaScript program
-that recreates it, which any later djs either loads and continues or refuses with a
-reason (D2560).
+something else: a **continuation dump**, the run written out as an ordinary JavaScript
+program that recreates it, in which every suspended function is a continuation, the rest
+of its code from where it waits (D2560, D2830). Any later djs, or node, runs it.
 
 A dump is taken only at an **idle point** (D2561): when `run` returned `Idle`, waiting on
 async host calls with no jobs queued and no frame on the stack. There, every suspended
 piece of the run is an async function or generator stopped at an `await` or `yield`,
 which the compiler can describe by name (the bindings in scope, the values held for the
-expression under way, the loops around it). A run that is computing in the middle of an
+expression under way, the loops and statements around it), and which the dump writes as
+the rest of its source from there. A run that is computing in the middle of an
 instruction sequence has no such description; a host that must persist it gives it fuel
 to reach an idle point, or reruns it from its last tool result, which determinism makes
 safe. [Images and dumps](snapshots.md) shows what a dump holds.
@@ -256,12 +257,12 @@ bounded by their input and charge fuel for it.
 - [`crates/djs-core/src/vm/mod.rs`](../../crates/djs-core/src/vm/mod.rs): the embedder's
   API (`run`, `resolve_host_call`, images);
   [`vm/dump.rs`](../../crates/djs-core/src/vm/dump.rs) and
-  [`vm/dump_load.rs`](../../crates/djs-core/src/vm/dump_load.rs): writing and loading
-  continuation dumps.
+  [`vm/dump_cont.rs`](../../crates/djs-core/src/vm/dump_cont.rs): writing continuation
+  dumps (loading one is running it).
 
 Decisions on this page:
 
-<!-- gen:decisions D1151 D1152 D1690 D1711 D1633 D1740 D1712 D1492 D1710 D1720 D1374 D1670 D1370 D1375 D1083 D1631 D1632 D1332 D2560 D2561 -->
+<!-- gen:decisions D1151 D1152 D1690 D1711 D1633 D1740 D1712 D1492 D1710 D1720 D1374 D1670 D1370 D1375 D1083 D1631 D1632 D1332 D2560 D2561 D2830 -->
 - D1151: Interpreter state in the arena
 - D1152: Host call protocol and fuel semantics
 - D1690: Running out of host memory is not a JS out-of-memory error
@@ -282,4 +283,5 @@ Decisions on this page:
 - D1332: RegExp objects, suspendable matching and regex literals
 - D2560: A waiting session persists as a continuation dump; heap images stay inside a process
 - D2561: Dumps are taken only at idle points
+- D2830: Continuation dumps become plain JavaScript
 <!-- /gen -->

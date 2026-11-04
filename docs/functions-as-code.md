@@ -1,16 +1,21 @@
 # Functions as code: dumps
 
-Status: built (issues 0167, 0168, 0170). `Vm::dump` and `Vm::load_dump` in djs-core
-(feature `dump`), the REPL's `.dump` and `.restore`, djs-wasm exports (feature `dump`,
-off by default) behind `Sandbox.dump`/`Sandbox.load`. Decisions: D2352 (wasm size), D2353
-(version 1 and its promise), D2355 (the checker), D2580-D2582 (the loader, format 2,
-classes). The TypeScript prototype of 0167 was removed (D2564).
+Status: built (issues 0167, 0168, 0170); the format is now the plain dump (D2830, D2920).
+`Vm::dump` in djs-core (feature `dump`), the REPL's `.dump` and `.restore`, djs-wasm's
+`vm_dump` (feature `dump`, off by default) behind `Sandbox.dump`/`Sandbox.load`.
+Decisions: D2352 (wasm size), D2353 (version 1 and its promise), D2355 (the checker),
+D2580-D2582 (the loader, format 2, classes; retired by D2920). The TypeScript prototype of
+0167 was removed (D2564).
 
-Dumps are now **format 2**: a Script that `Vm::load_dump` runs with a `$dump` object the
-loader passes in (D2581). Version 1 dumps still load (as plain Scripts). Continuation dumps
-(docs/continuation-dumps.md) add suspended activations to format 2. Since 0180 a dump has
-no comments: its first statement is the directive `"djs-dump 2";` (D2640), and what the
-comments used to explain is `djs resume --explain`'s job (D2641).
+**Current state (D2920).** This page describes how dumps of values were designed and
+built, with format 1 and format 2. Both are retired: every dump is now a plain Script
+(`"djs-dump";`) that a host runs with its `$djs` object defined, and loading is running
+it (docs/continuation-dumps.md, docs/plain-js-dumps.md). What the page says about the
+data walk, factories, re-enactment, classes and the checker still holds; what it says
+about `Vm::load_dump`, the loader's `$dump` primitives (`$dump.builtin`, `$dump.bytes`,
+`$dump.private`, ...) and the format headers is history: their plain counterparts are
+builtin expressions, the dump runtime's helpers (`$djs.bytes`, ...) and, for private
+names on instances, a refusal (D2878). Dumps need frozen builtins (D2836).
 
 The owner's question: a harness builds functions in one session and wants them back later,
 "even after weeks, where heap snapshots are potentially no longer usable", with captured

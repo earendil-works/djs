@@ -1,6 +1,6 @@
 /**
  * prelude-next: pi's codemode prelude (prelude-source.ts, pi d65de9db942d, verbatim there)
- * in the shape pi should move to on djs (D2565, docs/continuation-dumps.md "pi's future
+ * in the shape pi should move to on djs (D2565, docs/continuation-dumps.md "pi's
  * shape"), for js/pi/vm.ts's `next` mode. Everything a waiting script has in flight is
  * then engine state (open host calls, suspended activations) or adapter state, never
  * prelude state, so a session persists as a continuation dump: the prelude is run again

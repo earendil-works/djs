@@ -194,8 +194,7 @@ await again.result;
 
 ### Host-driven runs (D2630, D2633–D2635)
 
-A host that wants to decide every call itself drives the run instead (the first piece of
-docs/continuation-dumps.md "Sandbox API"):
+A host that wants to decide every call itself drives the run instead:
 
 ```ts
 const run = sb.begin(code, params, { filename: "task.js" }); // to the first idle point

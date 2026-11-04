@@ -24,8 +24,8 @@ In priority order. Each design decision below should be traceable to one of thes
   binary should be small.
 - **G3. No AST.** A single-pass compiler goes from tokens to bytecode, like QuickJS.
 - **G4. Persistence.** A session waiting on host calls (its data, functions, suspended
-  activations, open calls) can be written as a continuation dump and continued by any later
-  build, or refused with a reason (D2560, D2561, docs/continuation-dumps.md). Inside a
+  activations, open calls) can be written as a continuation dump, a plain Script that any
+  later build (or node) runs to continue it (D2560, D2561, D2830, docs/continuation-dumps.md). Inside a
   process the whole VM is a heap image (startup from the base image, stress checks).
 - **G5. Suspend anywhere.** Execution can stop between any two bytecode instructions,
   including inside getters, `toString` calls, `Array.prototype.map` callbacks, promise jobs,
@@ -652,16 +652,18 @@ images are the in-process mechanism (D2700).
   is embedded in the wasm. `vm_new` copies it into the arena; that copy *is* startup
   (microseconds).
 - **Continuation dumps:** at an idle point (no frame, no job, only open host calls,
-  D2561) the exporter writes the run as a format 2 dump: a Script that recreates its
-  data, its functions stopped at their `await`s and `yield`s (checked against the
-  compiler's suspension maps, D2563), in-flight builtin state as the calls that make it
-  (D2562, D2610), the open calls and `Math.random`'s state (D2624). Any later build loads
-  it and continues, or refuses it with a reason; golden dumps hold that promise (D2619).
-  Hosts store dumps zstd-compressed; the format stays a plain Script (D2703).
+  D2561) the exporter writes the run as a plain dump (D2830): an ordinary Script that
+  recreates its data, each function stopped at an `await` or `yield` as a continuation
+  (the rest of its source from there, read by the compiler's suspension maps, D2563,
+  D2850), in-flight builtin state as the calls that make it (D2562, D2610), the open
+  calls through the host's `$djs.resume` and `Math.random`'s state through `$djs.seed`
+  (D2890); `$djs` also holds the dump runtime's helpers (D2903). Only VMs with frozen
+  builtins dump (D2836). Any later build, or node, runs it; golden dumps hold that
+  promise (D2619, D2920). Hosts store dumps zstd-compressed (D2703).
 - **Packaging:** the dumper is in a second module of the same build (packaging B,
   D2564, D2704): the shipped module has none, and a host that persists runs loads the
-  dump module and moves the VM's image there and back, keeping that instance between
-  dumps (D2701).
+  dump module and copies the VM's image there to dump, keeping that instance between
+  dumps (D2701). Loading a dump is running it, in the shipped module.
 - **Determinism:** the GC threshold is in the image (D1601) and collection points do not
   depend on fuel slices (D1710), so the same inputs give the same image; the gate
   compares images across schedules and between native and wasm (D1720, D1725).

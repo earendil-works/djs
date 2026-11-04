@@ -416,7 +416,7 @@ interface RunCore {
 type RunEnd = { state: "idle" } | { state: "done"; value: unknown } | { state: "threw"; error: SandboxError };
 
 /**
- * A run the host drives itself (docs/continuation-dumps.md "Sandbox API"; the part 0179
+ * A run the host drives itself (docs/host.md "Host-driven runs"; the part 0179
  * needs of 0175): `Sandbox.begin` runs a body to its first idle point, the host settles
  * the open async calls in any order and advances it, and while it is idle it can be
  * dumped (`dump()`) and continued elsewhere (`Sandbox.resume`). The async host functions

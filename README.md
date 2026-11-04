@@ -19,8 +19,8 @@ use (ARCH.md):
 - **Builtins in a strict TypeScript subset**, compiled to bytecode for the base snapshot
   and, for the hot ones, to resumable Rust state machines.
 - **Persistence as code**: a run waiting on its tools is written out as a continuation
-  dump, a JavaScript program that recreates it, which any later djs loads or refuses
-  with a reason (docs/continuation-dumps.md).
+  dump, a plain JavaScript program that recreates it, which any later djs (or node)
+  runs (docs/continuation-dumps.md).
 - **Deterministic by construction**: the clock, randomness and weak references come from
   the host, and the same inputs give byte-identical heap images, natively and in wasm.
 
@@ -119,11 +119,12 @@ import { loadModule, Sandbox } from "@djs/host";
 const sb = await Sandbox.create({
   asyncFunctions: { search: (q) => mySearch(q as string) },
   memoryLimit: 64 << 20,
+  frozenBuiltins: true,                           // dumps need them (D2836)
   dumpModule: await loadModule("djs-dump.wasm"),  // only to persist runs (scripts/build-wasm.sh --dump)
 });
 const result = await sb.runAsync("const hits = await search(q); return hits.length;", { q: "djs" });
 const run = sb.begin("return (await search(q)).length", { q: "djs" });  // a run the host drives
-const dump = run.dump();                     // while it waits: a format 2 dump, plain JavaScript
+const dump = run.dump();                     // while it waits: a dump, a plain JavaScript Script
 ```
 
 `js/pi/vm.ts` implements pi's codemode VM contract (`startVm`) on djs, running pi's

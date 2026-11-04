@@ -257,71 +257,86 @@ for (const path of ["a.md", "b.md"]) {
 return notes.join("\n");
 ```
 
-is this dump:
+is this dump (`djs run --body --dump-after 2`; the open call's state is the CLI's):
 
 ```js
-"djs-dump 2";
-$dump.random(225857282, 2061952981);
-$dump.p1 = $dump.pending(2, "tools.read", [{ path: "b.md" }]);
+"djs-dump";
+"use strict";
+$djs.seed(2135587861, -1640531527, 4);
+globalThis.$dump = {};
+$dump.b0 = Object.getPrototypeOf([][Symbol.iterator]())["next"];
+$dump.p1 = $djs.resume(3, "tools.read", [{ path: "b.md" }], {"made":["read"],"answered":{"read":1}});
 $dump.n2 = ["# A"];
-$dump.i3 = $dump.advance(Array.prototype.values.call(["a.md", "b.md"]), 2);
-$dump.a4 = $dump.resume(async function () {
-const notes = [];
-for (const path of ["a.md", "b.md"]) {
+$dump.i3 = $djs.advance(Array.prototype.values.call(["a.md", "b.md"]), 2);
+$dump.a4_0 = tools;
+$dump.a4_1 = console;
+$dump.Ka4 = async function () {
+const $djs_L = $djs.L;
+var tools = $dump.a4_0;
+var console = $dump.a4_1;
+const notes = $dump.n2;
+{ let $djs_f1 = true; for (const $djs_v1 of $djs_L($dump.i3, $dump.b0)) { if ($djs_f1) { $djs_f1 = false; {
+const path = "b.md";
+notes.push((await $dump.p1));
+} } else { const path = $djs_v1; {
   notes.push(await tools.read({ path }));
-}
+} } } }
 return notes.join("\n");
-}, { at: "await#1", awaiting: $dump.p1, slots: { notes: $dump.n2, path: "b.md", "for-of.iterator@38": $dump.i3, "for-of.next@38": $dump.builtin("%ArrayIteratorPrototype%.next"), "call.callee@79": Array.prototype.push, "call.this@79": $dump.n2 } });
-$dump.handle("run", $dump.a4);
+};
+$dump.Fa4 = async function (tools, console) { /* the script, verbatim */ };
+Object.defineProperty($dump.Ka4, "$djs", { value: { f: $dump.Fa4, segs: […], scaf: […] } });
+$dump.a4 = $dump.Ka4.call(globalThis);
+try { ($dump.a4); } finally { delete globalThis.$dump; delete globalThis.$djs; }
 ```
 
-It is a plain Script, run by the loader with a few privileged primitives on `$dump` that
-exist only while it loads (D2562):
+It is an ordinary Script (D2830): djs, or node, runs it given the host's functions and
+one object the host provides while it loads, `$djs` (D2834, D2890):
 
-- data is written as literals and the calls that make it; builtins are referred to by
-  name, never written;
-- `$dump.pending` recreates the open tool call with the id the host knows it by, the
-  host's name for the function and, when the host gave one, its own state of the call as
-  JSON (D2770);
-- `$dump.resume` builds the suspended activation of the script's function (its source,
-  verbatim) at its first `await`, with every slot of its frame by name: its bindings, the
-  loop around the `await` (`for-of.iterator@38`: the construct and where it starts in the
-  function's text) and the values computed before it (here the half-done `notes.push(`
-  call: its function and `this`, `call.callee@79` and `call.this@79`);
+- data is written as literals and the calls that make it; a builtin the run already
+  looked up (the loop's `next`) is the expression that finds it, never its contents;
+- `$djs.seed(...)` restores `Math.random`'s sequence and says which id the run's next
+  host call gets (D2897);
+- `$djs.resume(id, name, args, state)` stands for the open tool call: the host continues
+  call `id` of its function `name` under the same id and gives back its promise; the
+  last argument is the host's own state of the call, JSON it gave when it dumped (D2770);
+- `$dump.Ka4` is the suspended function as its **continuation**: a function of the same
+  kind whose body is the rest of the original from the `await` on. It declares the values
+  the frame held there (`notes`, `path`), and the loop around the `await` is a real loop
+  over the saved iterator, whose first step is a placeholder, so the rest of the current
+  iteration runs first and later iterations run the original's text;
 - the loop's iterator is made again and advanced with the same calls that put it there:
-  in-flight builtin state is re-enacted, not described by the engine's internal layout;
-- `$dump.random` restores `Math.random`'s sequence, and `$dump.handle` gives the host the
-  run's result promise back.
+  in-flight builtin state is re-enacted, not described by the engine's internal layout
+  (D2562). The small helpers that takes, here `$djs.advance` and the loop wrapper
+  `$djs.L`, are the same in every dump, so the host provides them as a fixed runtime
+  instead of each dump carrying them (D2903); djs makes that object for its hosts, and a
+  host without djs imports it from [js/src/dump-runtime.js](../../js/src/dump-runtime.js);
+- the continuation's `$djs` record names its origin, the script's function (`$dump.Fa4`,
+  never called) and which stretches of its text the continuation copied. A dump of a run
+  that resumed this one reads the continuation's frame as one of the original and writes
+  the original again (**origin tracking**, D2833), so a dump stays the same size however
+  many times a run is resumed and dumped;
+- the Script's completion value is what the host asked for, the run's result promise
+  (D2895), and its last statement deletes `$dump` and `$djs`.
 
-`resume` compares what the dump says with what this build's compiler records at that
-`await` (its **suspension map**: the names of the slots a frame holds there, D2563,
-D2721) and refuses on any difference. It writes each slot where its own compiler keeps
-that name, so nothing in the dump depends on how one build orders the values it holds
-(D2731). So a later djs either continues the
-run exactly or refuses it with a reason; it never misreads it (D2560). Golden dumps
-written by older builds are loaded by every gate run.
+To read a frame, the exporter uses what the compiler records at each `await` (its
+**suspension map**: the bindings and values a frame holds there by name, and the syntax
+around it, D2563, D2850). The dump itself names no slot of a frame, so it depends on no
+build's compiler: a later djs runs it as it runs any script. Golden dumps written once are
+run by every gate (D2920). Dumps are written only for VMs with frozen builtins, the mode
+pi's sessions run in: the writer may then assume that no builtin changes between the
+moment a value was read and the load, and write a builtin the run already looked up as
+the expression that finds it again (D2836). A sandbox without them cannot dump. What the
+writer cannot write, such as an object carrying a class's private field (only the class's
+own construction can add one, D2878), is refused with its path.
 
-What happens to the open calls is the host's decision, made after the load: deliver a
-result it recorded, issue the call again, or reject it. Timers and requests in flight are
-host state, and the host keeps them beside the dump.
+What happens to the open calls is the host's decision: deliver a result it recorded,
+issue the call again, or reject it. Timers and requests in flight are host state, and the
+host keeps them beside the dump.
 
-The format is being replaced by **plain dumps** (D2830), which need no loader at all. In
-a plain dump each suspended function is written as its continuation: a function of the
-same kind whose body is the rest of the original from the `await` on, with the values it
-held there declared at its top and the loops around the `await` written as real loops
-over the saved iterators. The dump is then an ordinary Script, which any later djs, or
-node, runs given the host's functions; it calls `$djs.seed(...)` and one `$djs.resume(id,
-name, args, state)` per open call, functions the host provides for the load (D2890). The
-small helpers its continuations call, such as `Reflect.apply` for a call whose callee was
-already evaluated or an iterator advanced past the steps it took, are members of `$djs`
-too: they are the same in every dump, so the host provides them as a fixed runtime
-instead of each dump carrying them (D2903); djs makes that object for its hosts, and a
-host without djs imports it from [js/src/dump-runtime.js](../../js/src/dump-runtime.js).
-Its completion value is the run's result promise. The Sandbox, the CLI and the pi
-adapter write only plain dumps. Plain dumps are written only for VMs with frozen builtins, the mode pi's sessions run in: the writer may then
-assume that no builtin changes between the moment a value was read and the load, and
-write a builtin the run already looked up as the expression that finds it again (D2836).
-Where the plain writer cannot write a run yet, the dump is refused with the reason.
+The first format of continuation dumps (format 2) was not plain JavaScript: a loader in
+the engine ran it with privileged primitives that built frames slot by slot, and it
+compiled the dump's own text to find where each slot went. Plain dumps replaced it, and
+the loader, its primitives and the engine's support for them were deleted (D2830, D2920).
 
 **What a dump costs.** Over 300 real codemode scripts and their 1,063 idle points, a
 dump is 6 KB of text at the median and 17 KB compressed at p99; with zstd at level 3,
@@ -339,10 +354,10 @@ p99) and resuming one, a new sandbox included, under a millisecond; a session ho
 > refuses what it cannot write (a weak collection, a revoked Proxy) with its path; and a
 > dump is code, so a host loads only dumps it wrote.
 
-> **Trade-off.** The dumper in a second module (D2704). Writing and loading dumps is
-> about 300 KB of code, a quarter of the module, that only hosts which persist runs
-> need. So the shipped module leaves it out, and such a host loads the dump module next
-> to it and moves the VM's image into it to dump, and back after a load. Keeping that
+> **Trade-off.** The dumper in a second module (D2704). Writing dumps is about 300 KB
+> of code, a quarter of the module, that only hosts which persist runs need. So the
+> shipped module leaves it out, and such a host loads the dump module next to it and
+> copies the VM's image into it to dump. Loading needs no dumper: a dump is a Script. Keeping that
 > instance between dumps makes both packagings equally fast; the cost is a second module
 > to ship and load, and a copy of the image per dump.
 
@@ -426,8 +441,10 @@ that made 50 small objects:
 - [`crates/djs-prelude/build.rs`](../../crates/djs-prelude/build.rs): how the base
   snapshot is made.
 - [`crates/djs-core/src/vm/dump.rs`](../../crates/djs-core/src/vm/dump.rs): the
-  exporter; [`vm/dump_load.rs`](../../crates/djs-core/src/vm/dump_load.rs): the loader
-  and its primitives; [`tests/dump/v2/`](../../tests/dump/v2/): golden dumps.
+  exporter; [`vm/dump_plain.rs`](../../crates/djs-core/src/vm/dump_plain.rs) and
+  [`vm/dump_cont.rs`](../../crates/djs-core/src/vm/dump_cont.rs): the plain Script and
+  the continuations; [`vm/dump_runtime.rs`](../../crates/djs-core/src/vm/dump_runtime.rs):
+  the dump runtime; [`tests/dump/v2/`](../../tests/dump/v2/): golden dumps.
 - [`js/src/sandbox.ts`](../../js/src/sandbox.ts): tasks (`start`, `suspend`,
   `Sandbox.resume`), `begin`, `Run.dump` and `loadRun`, and the dump module; [`js/pi/vm.ts`](../../js/pi/vm.ts): the
   adapter's prelude images and its dumps of pi sessions.
@@ -436,7 +453,7 @@ that made 50 small objects:
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D2041 D2063 D2067 D2043 D1091 D1890 D1725 D1052 D026 D2265 D2266 D2267 D2268 D1320 D1330 D1750 D1056 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2262 D2264 D2308 D2445 D2446 D2447 D2560 D2561 D2562 D2563 D2700 D2703 D2704 D2432 D2340 D2269 D2770 -->
+<!-- gen:decisions D2040 D2041 D2063 D2067 D2043 D1091 D1890 D1725 D1052 D026 D2265 D2266 D2267 D2268 D1320 D1330 D1750 D1056 D1321 D1431 D1340 D1430 D1433 D1831 D1990 D1495 D2260 D2262 D2264 D2308 D2445 D2446 D2447 D2560 D2561 D2562 D2563 D2700 D2703 D2704 D2432 D2340 D2269 D2770 D2830 D2833 D2834 D2836 D2850 D2878 D2890 D2895 D2897 D2903 D2920 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D2041: An old region that minor collections neither trace nor move
 - D2063: The base image ends with a tail of per-VM cells; nothing writes below BASE_END
@@ -481,4 +498,15 @@ Decisions on this page:
 - D2340: Heap views show the program's own cells apart from the base realm; REPL dumps are containers
 - D2269: No `djs heap` command and no `.image`; the REPL's `.heap` keeps the heap report
 - D2770: A call's state is JSON text, written verbatim as `$dump.pending`'s fourth argument
+- D2830: Continuation dumps become plain JavaScript
+- D2833: Re-dumps use origin tracking
+- D2834: Plain dumps are mostly self-contained: the code to continue is in the dump, the host provides `$djs`
+- D2836: Plain dumps are written only for VMs with frozen builtins
+- D2850: Suspension maps carry the syntax around each site
+- D2878: Plain dumps refuse instances that carry private names
+- D2890: Plain dumps load as a Script with `$djs.resume`/`$djs.seed`; open calls keep their ids
+- D2895: Several handles in a plain dump: a null-prototype object as the completion value
+- D2897: `$djs.seed(lo, hi, next)`: call ids go on after a plain load as in the uninterrupted run
+- D2903: The plain dump runtime: the format's helpers are members of `$djs`
+- D2920: Format 2 is retired; plain dumps are the only format, and the goldens are plain dumps
 <!-- /gen -->

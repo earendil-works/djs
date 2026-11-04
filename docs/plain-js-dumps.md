@@ -1,7 +1,10 @@
 # Plain-JavaScript dumps: continuations with origin tracking
 
-Status: research report (0199), 2026-11-04. Decisions D2830–D2833 (proposed with this
-report). Prototype: [work/research/0199](../work/research/0199/README.md).
+Status: research report (0199), 2026-11-04, and the plan it led to, carried out in
+0200–0207; format 2 was retired in 0205 (D2920), so plain dumps are the only format and
+"today" below means format 2 as it was. Decisions D2830–D2836. Prototype:
+[work/research/0199](../work/research/0199/README.md). The format as built:
+docs/continuation-dumps.md.
 
 ## The question
 
@@ -343,10 +346,10 @@ one handle named `run`, else a null-prototype object of all of them by name.
 **Frozen builtins (D2836).** Plain dumps are written only for VMs with frozen builtins
 (`VmOptions::frozen_builtins`, D2304; pi's `next` mode has them): the exporter refuses
 otherwise. It may then assume that no builtin changes between a value's evaluation and
-the load. The hosts follow: `djs run --plain` and `djs repl --plain` make frozen VMs, the
-Sandbox writes plain dumps by default when it has frozen builtins (format 2 otherwise,
-until 0205 retires it), and the difftest's plain-dump variant runs frozen and is compared
-only for cases with idle points (a case that changes builtins on purpose and takes no
+the load. The hosts follow: `djs run` with its dump flags, `djs resume` and `djs repl
+--frozen` make frozen VMs, a Sandbox or pi session without frozen builtins cannot dump
+(D2920), and the difftest's plain-dump variant runs frozen and is compared only for cases
+with idle points (a case that changes builtins on purpose and takes no
 dump would differ for that alone).
 
 **The runtime (0207, D2903).** The format's fixed helpers are members of `$djs` too, next
