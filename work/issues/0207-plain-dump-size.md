@@ -1,7 +1,7 @@
 # 0207: Make plain dumps small: measure where the bytes go, then cut them
 
-status: open
-agent: -
+status: in-progress
+agent: pjs
 branch: issue/0207-plain-dump-size
 depends-on: 0201, 0202 (on main)
 guide: snapshots.md (if the format's shape changes)
