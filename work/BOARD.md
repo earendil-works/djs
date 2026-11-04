@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0199 | Plain-JS dumps (R with origin tracking), prototype | plainjs | .worktrees/plainjs |
 | 0198 | Make dumping and loading fast | dumpperf | .worktrees/dumpperf |
 
 ## Open (ready)
@@ -87,6 +86,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
 | 0190-0196 | SM migration: slot names (D2730), named slots (D2731), construct temporaries + iter_next_loc (D2732), finally completions (D2733), roles deleted (D2734), one compile per load (D2735) | 9cc8741b (agent sm) |
+| 0199 | Plain-JS dumps prototype: continuations with origin tracking; 1,161/1,161 harvested identical in djs and node; bounded re-dumps; recommends switching (D2830-D2833 proposed) | cdd46c56 (agent plainjs) |
 | 0197 | Gate waits: bgen and doctests legs dropped, one test binary per package, targets guard (D2790-D2792) | 823103e5 (agent gate-speed; core change gate ~65-89 s) |
 | 0189 | Host calls as data: per-call state, {call, save, resume}, tasks; sleep example 77 lines (D2770, D2771) | 891fc12c (agent hostcalls) |
 | 0195 | pi adapter next mode: call ids as call states (D2772) | 6a8759bd (agent hostcalls) |
