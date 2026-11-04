@@ -371,7 +371,7 @@ v2	golden/role-assign	3328	1857
 v2	golden/role-binary	1355	797
 v2	golden/role-call	778	437
 v2	golden/role-call-spread	817	445
-v2	golden/role-member	559	353
+v2	golden/role-member	593	364
 v2	golden/role-nested	1007	566
 v2	golden/role-new	1891	1000
 v2	golden/role-object	1616	903
