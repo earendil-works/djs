@@ -83,11 +83,11 @@ function 0.3 deleg: params=1 locals=3 stack=3 captures=0
     4  call_intrinsic %GetIterator 1  ; 20:10
     9  dup
    10  get_field "next" ic0
-   17  put_loc2 (1)
-   18  put_loc1 (0)
+   17  put_loc2 (<temp>)
+   18  put_loc1 (<temp>)
    19  undefined
-   20  get_loc2 (1)
-   21  get_loc1 (0)
+   20  get_loc2 (<temp>)
+   21  get_loc1 (<temp>)
    22  rot3l
    23  call1
    24  iter_check_object
@@ -96,13 +96,13 @@ function 0.3 deleg: params=1 locals=3 stack=3 captures=0
    33  jump_if_true8 -> 112
    35  yield_star loc0 (<state>)
    38  jump_if_false8 -> 20
-   40  get_loc1 (0)
+   40  get_loc1 (<temp>)
    41  get_field "return" ic2
    48  dup
    49  is_nullish
    50  jump_if_true8 -> 76
    52  swap
-   53  get_loc1 (0)
+   53  get_loc1 (<temp>)
    54  swap
    55  call1
    56  iter_check_object
@@ -115,20 +115,20 @@ function 0.3 deleg: params=1 locals=3 stack=3 captures=0
    76  drop
    77  throw
    78  return
-   79  get_loc1 (0)
+   79  get_loc1 (<temp>)
    80  get_field "throw" ic5
    87  dup
    88  is_nullish
    89  jump_if_true8 -> 98
    91  swap
-   92  get_loc1 (0)
+   92  get_loc1 (<temp>)
    93  swap
    94  call1
    95  iter_check_object
    96  jump8 -> 25
    98  drop
    99  drop
-  100  get_loc1 (0)
+  100  get_loc1 (<temp>)
   101  call_intrinsic %IteratorClose 1
   106  drop
   107  push_const8 #0 ("iterator does not have a throw method")
@@ -144,10 +144,10 @@ function 0.4 agen: params=1 locals=4 stack=5 captures=0
     4  call_intrinsic %GetAsyncIterator 1  ; 24:3
     9  dup
    10  get_field "next" ic0
-   17  put_loc3 (1)
-   18  put_loc2 (0)
+   17  put_loc3 (<temp>)
+   18  put_loc2 (<temp>)
    19  jump8 -> 64
-   21  get_loc2 (0)
+   21  get_loc2 (<temp>)
    22  dup
    23  is_undefined
    24  jump_if_true8 -> 34
@@ -166,8 +166,8 @@ function 0.4 agen: params=1 locals=4 stack=5 captures=0
    57  gosub -> 84
    62  return
    63  drop
-   64  get_loc3 (1)  ; 24:3
-   65  get_loc2 (0)
+   64  get_loc3 (<temp>)  ; 24:3
+   65  get_loc2 (<temp>)
    66  call0
    67  await loc0 (<state>)
    70  iter_check_object
@@ -176,7 +176,7 @@ function 0.4 agen: params=1 locals=4 stack=5 captures=0
    79  jump_if_false8 -> 36
    81  drop
    82  jump8 -> 107
-   84  get_loc2 (0)
+   84  get_loc2 (<temp>)
    85  dup
    86  call_intrinsic %AsyncIteratorReturnMethod 1
    91  dup

@@ -13,9 +13,9 @@ function 0.0 f: params=1 locals=7 stack=3 captures=0
   handler [53, 115) -> 34 depth 0
   handler [6, 150) -> 159 depth 0
     0  call_intrinsic %UsingCreate 0
-    5  put_loc0 (0)
+    5  put_loc0 (<temp>)
     6  get_arg0  ; 4:13
-    7  get_loc0 (0)  ; 4:9
+    7  get_loc0 (<temp>)  ; 4:9
     8  swap
     9  call_intrinsic %UsingAdd 2
    14  put_loc1 (x)
@@ -23,10 +23,10 @@ function 0.0 f: params=1 locals=7 stack=3 captures=0
    16  call_intrinsic %GetIterator 1  ; 5:3
    21  dup
    22  get_field "next" ic0
-   29  put_loc8 loc4 (2)
-   31  put_loc3 (1)
+   29  put_loc8 loc4 (<temp>)
+   31  put_loc3 (<temp>)
    32  jump8 -> 115
-   34  get_loc3 (1)
+   34  get_loc3 (<temp>)
    35  dup
    36  is_undefined
    37  jump_if_true8 -> 44
@@ -36,9 +36,9 @@ function 0.0 f: params=1 locals=7 stack=3 captures=0
    46  get_field "value" ic1
    53  put_loc2 (y)  ; 5:14
    54  call_intrinsic %UsingCreate 0
-   59  put_loc8 loc5 (3)
+   59  put_loc8 loc5 (<temp>)
    61  get_loc2 (y)  ; 6:15
-   62  get_loc8 loc5 (3)  ; 6:11
+   62  get_loc8 loc5 (<temp>)  ; 6:11
    64  swap
    65  call_intrinsic %UsingAdd 2
    70  set_loc8 loc6 (z)  ; 7:9
@@ -51,23 +51,23 @@ function 0.0 f: params=1 locals=7 stack=3 captures=0
    84  gosub -> 106
    89  drop
    90  jump8 -> 115
-   92  get_loc8 loc5 (3)
+   92  get_loc8 loc5 (<temp>)
    94  swap
    95  call_intrinsic %UsingDisposeError 2
   100  gosub -> 106
   105  throw
-  106  get_loc8 loc5 (3)
+  106  get_loc8 loc5 (<temp>)
   108  call_intrinsic %UsingDispose 1
   113  drop
   114  ret
-  115  iter_next_loc loc3 (1) -> 53  ; 5:3
+  115  iter_next_loc loc3 (<temp>) -> 53  ; 5:3
   122  iter_check_object
   123  dup
   124  get_field "done" ic2
   131  jump_if_false8 -> 46
   133  drop
   134  jump8 -> 143
-  136  get_loc3 (1)
+  136  get_loc3 (<temp>)
   137  call_intrinsic %IteratorClose 1
   142  drop
   143  get_loc1 (x)  ; 9:10
@@ -77,12 +77,12 @@ function 0.0 f: params=1 locals=7 stack=3 captures=0
   151  gosub -> 172
   156  drop
   157  jump8 -> 180
-  159  get_loc0 (0)
+  159  get_loc0 (<temp>)
   160  swap
   161  call_intrinsic %UsingDisposeError 2
   166  gosub -> 172
   171  throw
-  172  get_loc0 (0)
+  172  get_loc0 (<temp>)
   173  call_intrinsic %UsingDispose 1
   178  drop
   179  ret
@@ -93,9 +93,9 @@ function 0.1 g: params=1 locals=3 stack=4 captures=0
   handler [3, 75) -> 75 depth 0
     0  async_start loc0 (<state>)
     3  call_intrinsic %UsingCreate 0
-    8  put_loc1 (0)
+    8  put_loc1 (<temp>)
     9  get_arg0  ; 12:19
-   10  get_loc1 (0)  ; 12:15
+   10  get_loc1 (<temp>)  ; 12:15
    11  swap
    12  call_intrinsic %AwaitUsingAdd 2
    17  put_loc2 (x)
@@ -103,20 +103,20 @@ function 0.1 g: params=1 locals=3 stack=4 captures=0
    19  gosub -> 40
    24  drop
    25  jump8 -> 71
-   27  get_loc1 (0)
+   27  get_loc1 (<temp>)
    28  swap
    29  call_intrinsic %UsingDisposeError 2
    34  gosub -> 40
    39  throw
-   40  get_loc1 (0)
+   40  get_loc1 (<temp>)
    41  call_intrinsic %UsingDisposeStep 1
    46  jump_if_false8 -> 70
-   48  get_loc1 (0)
+   48  get_loc1 (<temp>)
    49  call_intrinsic %UsingAwaitValue 1
    54  await loc0 (<state>)
    57  drop
    58  jump8 -> 40
-   60  get_loc1 (0)
+   60  get_loc1 (<temp>)
    61  swap
    62  call_intrinsic %UsingDisposeError 2
    67  drop

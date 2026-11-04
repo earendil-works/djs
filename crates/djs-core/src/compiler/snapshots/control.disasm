@@ -145,8 +145,8 @@ function 0 <anonymous>: params=0 locals=5 stack=2 captures=0
   322  undefined
   323  put_loc0 (<completion>)
   324  get_global "x" ic23  ; 12:9
-  331  put_loc3 (0)
-  332  get_loc3 (0)
+  331  put_loc3 (<temp>)
+  332  get_loc3 (<temp>)
   333  push1
   334  strict_eq
   335  jump_if_false8 -> 350
@@ -155,7 +155,7 @@ function 0 <anonymous>: params=0 locals=5 stack=2 captures=0
   340  put_global "x" ic24
   347  put_loc0 (<completion>)
   348  jump8 -> 355
-  350  get_loc3 (0)
+  350  get_loc3 (<temp>)
   351  push2
   352  strict_eq
   353  jump_if_false8 -> 381
@@ -169,7 +169,7 @@ function 0 <anonymous>: params=0 locals=5 stack=2 captures=0
   371  put_global "x" ic26
   378  put_loc0 (<completion>)
   379  jump8 -> 386
-  381  get_loc3 (0)
+  381  get_loc3 (<temp>)
   382  push3
   383  strict_eq
   384  jump_if_false8 -> 368
@@ -182,6 +182,6 @@ function 0 <anonymous>: params=0 locals=5 stack=2 captures=0
   401  undefined
   402  put_loc0 (<completion>)
   403  get_global "x" ic28  ; 18:9
-  410  put_loc8 loc4 (1)
+  410  put_loc8 loc4 (<temp>)
   412  get_global "x" ic29  ; 19:7
   419  throw  ; 19:1

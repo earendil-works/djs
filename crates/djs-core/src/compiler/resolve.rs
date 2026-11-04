@@ -189,9 +189,15 @@ pub(super) fn finish(
         .count();
     let builtins = u16::try_from(builtins).map_err(|_| internal("too many prelude functions"))?;
     let mut next_builtin = 0;
+    // The debug name of construct temporaries (D2732), which bind integer atoms.
+    let temp_name = if funcs.iter().any(|f| !f.temps.is_empty()) {
+        heap.atom_str("<temp>")?
+    } else {
+        Atom::NULL
+    };
     let storages: Vec<(Vec<Storage>, Vec<Atom>)> = funcs
         .iter()
-        .map(|f| assign_storage(f, &mut next_builtin, builtins))
+        .map(|f| assign_storage(f, &mut next_builtin, builtins, temp_name))
         .collect();
     for (s, _) in &storages {
         if s.len() > u16::MAX as usize {
@@ -460,6 +466,7 @@ fn assign_storage(
     f: &FuncState,
     next_builtin: &mut u16,
     builtins: u16,
+    temp_name: Atom,
 ) -> (Vec<Storage>, Vec<Atom>) {
     let mut storage = crate::buf::vec_with_capacity(f.vars.len());
     let mut names = Vec::new();
@@ -478,7 +485,11 @@ fn assign_storage(
         } else if v.kind == VarKind::Param && f.simple_params && !v.captured {
             Storage::Arg(v.param)
         } else {
-            names.push(v.name);
+            names.push(if v.kind == VarKind::Temp {
+                temp_name
+            } else {
+                v.name
+            });
             let slot = (names.len() - 1) as u16;
             if v.captured {
                 Storage::Box(slot)
