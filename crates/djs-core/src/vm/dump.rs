@@ -42,18 +42,21 @@ use crate::value::{Kind, Obj, Value};
 
 /// `crate::text::cat!`, with the string sized up front: dumps concatenate large pieces
 /// (a quoted megabyte string, a function's text), and growing by doubling copied them
-/// again and again (0198). Each piece is evaluated once.
+/// again and again (0198). Each piece is evaluated once; the work is out of line, so a
+/// site costs an array of pieces and a call.
 macro_rules! cat {
-    ($($piece:expr),+ $(,)?) => {{
-        let pieces = [$(&$piece as &dyn $crate::text::Piece),+];
-        let mut out = alloc::string::String::with_capacity(
-            pieces.iter().map(|p| p.size_hint()).sum(),
-        );
-        for p in pieces {
-            p.put(&mut out);
-        }
-        out
-    }};
+    ($($piece:expr),+ $(,)?) => {
+        $crate::vm::dump::cat_sized(&[$(&$piece as &dyn $crate::text::Piece),+])
+    };
+}
+
+#[inline(never)]
+pub(crate) fn cat_sized(pieces: &[&dyn crate::text::Piece]) -> String {
+    let mut out = String::with_capacity(pieces.iter().map(|p| p.size_hint()).sum());
+    for p in pieces {
+        p.put(&mut out);
+    }
+    out
 }
 
 /// The first line of every dump this build writes: format 2, a Script that
