@@ -306,6 +306,7 @@ corpus	codemode/plain-for-await-sync.js	47528	17176
 corpus	codemode/plain-fuzz/accessor-pair-after-site.js	3033	1207
 corpus	codemode/plain-fuzz/assign-member-nested-call.js	9917	3908
 corpus	codemode/plain-fuzz/async-generator-for-await.js	16436	6291
+corpus	codemode/plain-fuzz/async-method-of-temporary.js	3434	1345
 corpus	codemode/plain-fuzz/binary-three-awaits.js	8987	3592
 corpus	codemode/plain-fuzz/binary-two-awaits.js	12666	5030
 corpus	codemode/plain-fuzz/callee-and-argument-awaits.js	6238	2453
@@ -314,6 +315,7 @@ corpus	codemode/plain-fuzz/class-in-switch-block.js	3665	1369
 corpus	codemode/plain-fuzz/class-instance-in-idle-function.js	3173	1232
 corpus	codemode/plain-fuzz/class-instance-loop-closure.js	8138	3140
 corpus	codemode/plain-fuzz/class-static-in-promise-all.js	7066	2664
+corpus	codemode/plain-fuzz/class-with-async-method-in-loop.js	6666	2521
 corpus	codemode/plain-fuzz/finally-await-in-loop.js	6696	2626
 corpus	codemode/plain-fuzz/for-await-break.js	12346	4649
 corpus	codemode/plain-fuzz/for-await-promise-all-chain.js	13902	5098
@@ -322,6 +324,8 @@ corpus	codemode/plain-fuzz/generator-capturing-for-of.js	7423	2932
 corpus	codemode/plain-fuzz/getter-capturing-frame-variable.js	6468	2557
 corpus	codemode/plain-fuzz/instance-before-callback.js	3142	1232
 corpus	codemode/plain-fuzz/integer-key-equal-value.js	2664	1091
+corpus	codemode/plain-fuzz/static-field-reads-loop-variable.js	7108	2755
+corpus	codemode/plain-fuzz/template-plain-part-then-awaits.js	6169	2520
 corpus	codemode/plain-fuzz/template-two-awaits.js	5907	2388
 corpus	codemode/redump-loops.js	15745	5986
 corpus	codemode/redump-operands.js	52154	19154
@@ -336,6 +340,7 @@ corpus	language/plain-fuzz/await-using-redump.js	9770	3884
 corpus	language/redump-using.js	6820	2595
 corpus	ts/awaits-typed.ts	28147	9173
 corpus	ts/codemode-tools.ts	16117	5659
+corpus	ts/plain-fuzz-parameter-property.ts	2916	1148
 corpus	ts/plain-parameter-properties.ts	3149	1240
 v2	asyncgen	5659	2347
 v2	cells	781	443
