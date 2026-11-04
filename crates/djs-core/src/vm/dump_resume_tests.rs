@@ -1636,6 +1636,13 @@ fn plain_check_program(name: &str, src: &str) -> (Vec<String>, Vec<String>, usiz
         if std::env::var("DJS_PLAIN_SHOW").is_ok_and(|v| v == alloc::format!("{name}@{k}")) {
             std::println!("{text}");
         }
+        // `DJS_PLAIN_OUT=DIR`: every dump goes to DIR/<program>/<k>.js (0207's size
+        // measurement, scripts/dump-size).
+        if let Ok(dir) = std::env::var("DJS_PLAIN_OUT") {
+            let dir = std::path::Path::new(&dir).join(name);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join(alloc::format!("{k}.js")), &text).unwrap();
+        }
         let mut vm = match plain_load(&text) {
             Ok(vm) => vm,
             Err(e) => {

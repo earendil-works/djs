@@ -64,6 +64,19 @@ D2890–D2898, crates/djs-core/src/vm/dump_*.rs, scripts/dump-costs/ (0198, D280
 examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
 
 ## Log
+- Measurement tool: scripts/dump-size/dump-size.ts (structure scanner of the exporter's
+  output: categories, marginal gzip per category, line provenance, repeats by category,
+  `env.*` for the corpus prelude / harvest harness). Producers: difftest `--plain-out`
+  (1,197 corpus dumps), `DJS_PLAIN_OUT` in dump_resume_tests (146 v2/golden dumps),
+  sleep-dump, pi suite (147 dumps; a temporary uncommitted 2-line patch of js/pi/vm.ts).
+  Estimator for the ideas: work/research/0207/estimate.ts. Results: work/research/0207/
+  report.md, estimates.md; write-up README.md.
+- Finding: 64% of corpus bytes are the test environment (corpus prelude state, harvest
+  harness with its synthetic results), which pi's next mode never dumps; real-session
+  dumps are dominated by continuation + origin + record + fixed overhead.
+- Side note: the pi suite in --next --dump-every-idle --plain on a debug dump wasm had 7
+  new failures ("passes undefined arguments and results through", "exposes tools under
+  normalized identifiers"); not investigated (maybe debug-build only).
 
 ## Follow-ups
 
