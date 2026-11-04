@@ -88,6 +88,10 @@ pub(super) enum VarKind {
     /// key, the field initializer): written once while the class is defined, before
     /// anything can read it, so never TDZ-checked.
     Hidden,
+    /// A construct's state while it runs (a loop's iterator record, a switch's
+    /// discriminant, a pattern's source, D2732): named `construct@offset` like the
+    /// temporaries of suspension maps (D2721), written before anything reads it.
+    Temp,
 }
 
 impl VarKind {
@@ -315,6 +319,9 @@ pub(super) struct FuncState {
     pub var_scope: ScopeId,
     /// `(scope, name)` → binding, once the function has many (0092).
     pub index: VarIndex,
+    /// The construct temporaries (`VarKind::Temp`, compiler/temps.rs): the binding, the
+    /// construct and its source offset, which name its slot (D2721, D2732).
+    pub temps: Vec<(VarId, &'static str, u32)>,
     /// Recording for a suspension map (D2563, compiler/smap.rs), when requested.
     #[cfg(feature = "dump")]
     pub smap: Option<alloc::boxed::Box<super::smap::Recorder>>,
@@ -439,6 +446,7 @@ impl FuncState {
             ns: None,
             var_scope: BODY_SCOPE,
             index: VarIndex::default(),
+            temps: Vec::new(),
             #[cfg(feature = "dump")]
             smap: None,
         }

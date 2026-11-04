@@ -251,7 +251,9 @@ one in front of it:
   and a VM restored with warm caches behaves exactly like one with cold caches.
 - **Iteration without result objects.** `for-of` and array destructuring over arrays,
   strings, Maps and Sets step the iterator inside the interpreter when `next` is the
-  original builtin, without allocating `{value, done}` objects (`iter_next`, D1800).
+  original builtin, without allocating `{value, done}` objects (`iter_next`, D1800); a
+  loop keeps its iterator and `next` in two locals, which `iter_next_loc` reads in the
+  same instruction (D2732).
 
 Every one of these was measured, in wasm under V8, before it was kept: the register
 allocation of a dispatch loop is fragile, and an extra arm can make the hottest

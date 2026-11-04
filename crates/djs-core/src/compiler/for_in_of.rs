@@ -51,7 +51,7 @@ use super::func::{HandlerLabels, ScopeKind, VarKind};
 use super::parser::{BlockEnv, BlockKind, Checkpoint, OpenIter, Parser, syntax};
 use super::pattern::Binding;
 use super::scan::Follow;
-use super::smap::{Loop, Role, SiteKind};
+use super::smap::{Role, SiteKind};
 use crate::bytecode::Label;
 use crate::bytecode::intrinsics::intrinsic_id;
 use crate::heap::{Atom, atoms};
@@ -92,6 +92,9 @@ impl<'a> Parser<'a, '_> {
         let mut regions: Vec<(Label, Label)> = Vec::new();
         // `for (using x of xs)`: Some(is_await).
         let mut using_head = None;
+        // The loop's iterator and (for-of) `next` temporaries (D2732), once its kind is
+        // known.
+        let mut temps: Option<(Atom, Option<Atom>)> = None;
         let target = match self.tok.kind {
             TokenKind::Ident if self.at_using(true) || self.at_await_using() => {
                 let is_await = self.tok.kw == Kw::Await;
@@ -164,19 +167,23 @@ impl<'a> Parser<'a, '_> {
             }
             _ => {
                 let is_of = is_await || self.for_expr_head_is_of()?;
+                temps = Some(self.loop_temps(is_of, is_await, for_pos)?);
                 let l_rhs = self.new_label();
                 self.code().jump(l_rhs);
                 self.place(l_assign);
                 if is_of {
                     self.code().get_field(atoms::VALUE, 0);
                     self.place(l_value);
+                } else {
+                    // `it key` (for_in_next keeps the iterator): the key alone.
+                    self.code().nip();
                 }
                 let start = self.new_label();
                 let end = self.new_label();
                 self.place(start);
-                if is_of {
+                if let (true, Some((it, _))) = (is_of, temps) {
                     self.open_iters
-                        .push_out(OpenIter::ForOf(base + 2, is_await));
+                        .push_out(OpenIter::ForOf(base, is_await, it));
                 }
                 if self.starts_assignment_pattern(Follow::InOf) {
                     // `for ([a, b] of xs)`: the pattern takes the value.
@@ -232,6 +239,10 @@ impl<'a> Parser<'a, '_> {
                 "expected 'of' or 'in' in for control expression",
             );
         }
+        let (it, next_t) = match temps {
+            Some(t) => t,
+            None => self.loop_temps(is_of, is_await, for_pos)?,
+        };
         self.next()?;
         // The right side: for-of takes an AssignmentExpression, for-in an Expression.
         // Lexical bindings are in their TDZ here (`for (let x of x)`).
@@ -263,41 +274,44 @@ impl<'a> Parser<'a, '_> {
             self.code().call_intrinsic(get_iterator, 1);
             self.code().dup();
             self.code().get_field(atoms::NEXT, 0);
-            let kind = if is_await { Loop::Await } else { Loop::Of };
-            self.roles_push(for_pos, &[Role::LoopIterator(kind), Role::LoopNext(kind)]);
+            if let Some(n) = next_t {
+                self.temp_put(n);
+            }
+            self.temp_put(it);
         } else {
             self.code().for_in_start();
-            self.roles_push(for_pos, &[Role::LoopIterator(Loop::In)]);
+            self.temp_put(it);
         }
         let l_step = self.new_label();
         self.code().jump(l_step);
         let l_throw = self.new_label();
         if is_of {
-            // `it next exc` -> `exc`, after closing the iterator (errors from
-            // `return()` lose to the body's exception).
+            // `exc` -> `exc`, after closing the iterator (errors from `return()` lose to
+            // the body's exception), unless a generator's return closed it already
+            // (`undefined`).
             self.place(l_throw);
-            self.code().nip();
-            self.code().swap();
+            let l_closed = self.new_label();
+            self.temp_get(it);
+            self.code().dup();
+            self.code().is_undefined();
+            self.code().jump_if_true(l_closed);
             if is_await {
                 // A promise that always fulfills (errors from `return()` are dropped).
                 let close = intrinsic_id("AsyncIteratorCloseThrow").expect("intrinsic");
                 self.code().call_intrinsic(close, 1);
-                // In the close handler: the body's exception under the promise, the loop's
-                // `it next` consumed.
-                let kept = self.roles_take(2);
+                // In the close handler: the body's exception under the promise.
                 self.roles_push(for_pos, &[Role::Exception]);
                 self.site(SiteKind::ForAwaitClose, for_pos);
                 self.roles_pop(1);
-                self.roles_put(&kept);
                 self.code().await_(0);
             } else {
                 let close = intrinsic_id("IteratorCloseThrow").expect("%IteratorCloseThrow");
                 self.code().call_intrinsic(close, 1);
             }
+            self.place(l_closed);
             self.code().drop();
             self.code().throw();
         }
-        let state = if is_of { 2 } else { 1 };
         let mut using = None;
         match target {
             Target::Decl { name, pos, lexical } => {
@@ -305,15 +319,17 @@ impl<'a> Parser<'a, '_> {
                 if is_of {
                     self.code().get_field(atoms::VALUE, 0);
                     self.place(l_value);
+                } else {
+                    self.code().nip();
                 }
                 let start = self.new_label();
                 self.place(start);
                 if let Some(is_await) = using_head {
                     // Each iteration's resource is disposed at its end (compiler/using.rs).
-                    using = Some(self.using_region_start(base + state, is_await, pos));
-                    self.code().swap();
+                    let r = self.using_region_start(base, is_await, pos)?;
                     self.mark(pos);
-                    self.emit_using_add(is_await);
+                    self.emit_using_add(r.rec, is_await);
+                    using = Some(r);
                 }
                 if lexical {
                     // A fresh binding (Box) per iteration.
@@ -335,6 +351,8 @@ impl<'a> Parser<'a, '_> {
                 if is_of {
                     self.code().get_field(atoms::VALUE, 0);
                     self.place(l_value);
+                } else {
+                    self.code().nip();
                 }
                 let start = self.new_label();
                 self.place(start);
@@ -348,7 +366,7 @@ impl<'a> Parser<'a, '_> {
                 self.rewind(cp);
                 if is_of {
                     self.open_iters
-                        .push_out(OpenIter::ForOf(base + 2, is_await));
+                        .push_out(OpenIter::ForOf(base, is_await, it));
                 }
                 self.parse_pattern(b)?;
                 if is_of {
@@ -386,10 +404,10 @@ impl<'a> Parser<'a, '_> {
             kind: BlockKind::Loop,
             break_label: l_break,
             continue_label: Some(l_step),
-            depth: base + state,
+            depth: base,
             used: false,
         });
-        self.stmt_depth = base + state;
+        self.stmt_depth = base;
         if let Some(r) = &using {
             self.using_env(r);
         }
@@ -411,26 +429,27 @@ impl<'a> Parser<'a, '_> {
                     start,
                     end,
                     target: l_throw,
-                    depth: base + 2,
+                    depth: base,
                     depth_from: None,
                 });
             }
+            let next_t = next_t.expect("a for-of's next");
             self.mark(for_pos);
-            self.code().dup2();
             if is_await {
-                self.code().swap();
+                self.temp_get(next_t);
+                self.temp_get(it);
                 self.code().call(0);
                 self.site(SiteKind::ForAwaitNext, for_pos);
                 self.code().await_(0);
             } else {
+                self.temp_get(it);
+                self.temp_get(next_t);
                 self.code().iter_next(l_value);
             }
             self.code().iter_check_object();
             self.code().dup();
             self.code().get_field(atoms::DONE, 0);
             self.code().jump_if_false(l_assign);
-            self.code().drop();
-            self.code().drop();
             self.code().drop();
             let close_used = iter_env.is_some_and(|e| e.used);
             let l_end = self.new_label();
@@ -439,38 +458,33 @@ impl<'a> Parser<'a, '_> {
             }
             let close = intrinsic_id("IteratorClose").expect("%IteratorClose");
             if close_used {
-                // `v it next ret` -> `v x undefined` (a subroutine keeps the depth;
-                // the caller drops the two), after closing the iterator.
+                // `v ret` -> `v ret`, after closing the iterator.
                 let sub = self.subroutine(l_close);
                 self.place(l_close);
-                self.code().rot3r();
-                self.code().drop();
+                self.temp_get(it);
                 self.mark(for_pos);
                 if is_await {
-                    // `v ret it` -> `v ret undefined undefined`: only the subroutine's
-                    // value and return address stay below the close's await.
+                    // The subroutine's value and return address stay below the close's
+                    // await.
                     self.emit_async_close_normal(
                         (SiteKind::ForAwaitClose, for_pos),
-                        Some((2, &[Role::FinallyValue, Role::FinallyReturn(sub)])),
+                        Some((0, &[Role::FinallyValue, Role::FinallyReturn(sub)])),
                     );
-                    self.code().undefined();
-                    self.code().undefined();
                 } else {
-                    self.code().dup();
                     self.code().call_intrinsic(close, 1);
+                    self.code().drop();
                 }
-                self.code().rot3l();
                 self.code().ret();
             }
             if loop_env.used {
-                // `it next` -> ``, after closing the iterator.
+                // Closes the iterator.
                 self.place(l_break);
-                self.code().drop();
+                self.temp_get(it);
                 self.mark(for_pos);
                 if is_await {
                     self.emit_async_close_normal(
                         (SiteKind::ForAwaitClose, for_pos),
-                        Some((2, &[])),
+                        Some((0, &[])),
                     );
                 } else {
                     self.code().call_intrinsic(close, 1);
@@ -479,18 +493,40 @@ impl<'a> Parser<'a, '_> {
             }
             self.place(l_end);
         } else {
+            // `it key done`: `it key` to the store, which drops `it`.
+            self.temp_get(it);
             self.code().for_in_next();
             self.code().jump_if_false(l_assign);
             self.code().drop();
-            self.place(l_break);
             self.code().drop();
+            self.place(l_break);
         }
-        self.roles_pop(if is_of { 2 } else { 1 });
         if scoped {
             self.pop_scope();
         }
         debug_assert_eq!(self.scope, outer);
         Ok(())
+    }
+
+    /// The temporaries of a loop's iterator record (D2732): the iterator (for-in: the key
+    /// iterator) and, for for-of and for-await, its `next` method, named by the `for`.
+    fn loop_temps(
+        &mut self,
+        is_of: bool,
+        is_await: bool,
+        for_pos: u32,
+    ) -> PResult<(Atom, Option<Atom>)> {
+        Ok(match (is_of, is_await) {
+            (false, _) => (self.temp("for-in.iterator", for_pos)?, None),
+            (true, false) => (
+                self.temp("for-of.iterator", for_pos)?,
+                Some(self.temp("for-of.next", for_pos)?),
+            ),
+            (true, true) => (
+                self.temp("for-await.iterator", for_pos)?,
+                Some(self.temp("for-await.next", for_pos)?),
+            ),
+        })
     }
 
     /// A pattern in a declaration head (`for (const [k, v] of ...)`): skipped, as it

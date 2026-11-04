@@ -37,7 +37,6 @@ async function main() {
   seen.push(g.next("C").value);
   print("defaults", seen.join(" "));
 }
-$dump.n3 = {};
-$dump.n2 = { k: $dump.n3, extra: 1 };
-$dump.a4 = $dump.resume(objects, { at: "await#3", awaiting: $dump.p1, args: [$dump.n2], slots: { o: $dump.n2, a: "a", b: undefined, rest: undefined, "pattern.source@36": $dump.n2, "pattern.excluded@36": ["a", "k"], "pattern.key@60": "k", "pattern.source@80": $dump.n3 } });
-$dump.a5 = $dump.resume(main, { at: "await#1", awaiting: $dump.a4, slots: { g: undefined, seen: undefined, "call.callee@26": print, "call.this@26": undefined, "call.arg@32": "objects" } });
+$dump.n2 = { k: {}, extra: 1 };
+$dump.a3 = $dump.resume(objects, { at: "await#3", awaiting: $dump.p1, args: [$dump.n2], slots: { o: $dump.n2, "pattern.source@36": $dump.n2, "pattern.excluded@36": ["a", "k"], a: "a", b: undefined, rest: undefined, "pattern.key@60": "k" } });
+$dump.a4 = $dump.resume(main, { at: "await#1", awaiting: $dump.a3, slots: { g: undefined, seen: undefined, "call.callee@26": print, "call.this@26": undefined, "call.arg@32": "objects" } });

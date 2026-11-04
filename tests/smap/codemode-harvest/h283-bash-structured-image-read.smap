@@ -1,9 +1,9 @@
 function <anonymous> @1..4717
   arg0 tools@0, arg1 console@0
-  loc0 <state>, loc1 results@0, loc2 fake@0, loc5 fakeImage@0
-  await#1 @4362 (74:8) pc 369: -
+  loc0 <state>, loc1 results@0, loc2 fake@0, loc7 fakeImage@0
+  await#1 @4362 (74:8) pc 376: -
 function <anonymous> @4370..4695
   arg0 tools@0, arg1 image@0
-  loc0 <state>, loc1 dir@0, loc2 files@0, loc3 f@199, loc4 r@215
-  await#1 @99 (76:16) pc 43: - (out: loc3 loc4)
-  await#2 @225 (78:13) pc 139: for-of.iterator@188 for-of.next@188
+  loc0 <state>, loc1 dir@0, loc2 files@0, loc3 f@199, loc6 r@215
+  await#1 @99 (76:16) pc 43: - (out: loc3 loc6)
+  await#2 @225 (78:13) pc 147: for-of.iterator@188 for-of.next@188

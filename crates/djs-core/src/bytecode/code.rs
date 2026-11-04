@@ -146,9 +146,9 @@ pub struct CodeBuf<M: LabelMode = Final> {
     insns: Vec<P1>,
     /// Final: label positions (`UNPLACED` until placed). Phase 1: 0/1 placed flags.
     labels: Vec<u32>,
-    /// Positions of `Target` immediates, which hold the label id (until `finish` patches
-    /// them, in final mode).
-    fixups: Vec<u32>,
+    /// The start of each jump and the position of its `Target` immediate, which holds
+    /// the label id (until `finish` patches it, in final mode).
+    fixups: Vec<(u32, u32)>,
     /// Start of the last instruction, if nothing (a label) came after it.
     last: Option<u32>,
     error: Option<CodeError>,
@@ -278,7 +278,7 @@ impl<M: LabelMode> CodeBuf<M> {
             return Some(insn);
         }
         self.code.truncate(start as usize);
-        while self.fixups.last().is_some_and(|&f| f >= start) {
+        while self.fixups.last().is_some_and(|&f| f.0 >= start) {
             self.fixups.pop();
         }
         self.last = None;
@@ -344,7 +344,7 @@ impl<M: LabelMode> CodeBuf<M> {
                 if (v as usize) >= self.labels.len() {
                     self.fail(CodeError::UnknownLabel(Label(v)));
                 }
-                self.fixups.push(start + p as u32);
+                self.fixups.push((start, start + p as u32));
             }
             bytes[p..p + 4].copy_from_slice(&v.to_le_bytes());
             p += kind.width() as usize;
@@ -374,16 +374,18 @@ impl CodeBuf<Final> {
             ..
         } = self;
         // Each fixup: the instruction's start and the target's position, as emitted
-        // (a jump's target is its only immediate, after the opcode byte).
+        // (a jump's target is its last immediate, `iter_next_loc`'s after its local).
         let mut jumps = crate::buf::vec_with_capacity(fixups.len());
-        for &at in &fixups {
+        let mut target_at = crate::buf::vec_with_capacity(fixups.len());
+        for &(start, at) in &fixups {
             let at = at as usize;
             let id = u32::from_le_bytes(code[at..at + 4].try_into().unwrap_or([0; 4]));
             let target = labels[id as usize];
             if target == UNPLACED {
                 return Err(CodeError::UnplacedLabel(Label(id)));
             }
-            jumps.push((at as u32 - 1, target));
+            jumps.push((start, target));
+            target_at.push(at as u32);
         }
         // Start with every shortenable jump short and widen the ones whose offset
         // does not fit, until none changes: widening only moves targets further away,
@@ -419,8 +421,8 @@ impl CodeBuf<Final> {
         let mut out =
             crate::buf::vec_with_capacity(code.len() - JUMP_SAVING as usize * shortened.len());
         let mut from = 0usize;
-        for (&(start, target), &s) in jumps.iter().zip(&short) {
-            let start_us = start as usize;
+        for ((&(start, target), &s), &at) in jumps.iter().zip(&short).zip(&target_at) {
+            let (start_us, at_us) = (start as usize, at as usize);
             out.extend_from_slice(&code[from..start_us]);
             let new_target = map_pos(&shortened, target) as i64;
             let op = Op::from_u8(code[start_us]).unwrap_or(Op::Nop);
@@ -431,12 +433,14 @@ impl CodeBuf<Final> {
                     out.push(rel as i8 as u8);
                 }
                 _ => {
-                    let rel = new_target - (out.len() as i64 + 5);
-                    out.push(code[start_us]);
+                    // The opcode and the immediates before the target, then the offset
+                    // from the instruction's end.
+                    let rel = new_target - (out.len() as i64 + (at_us - start_us) as i64 + 4);
+                    out.extend_from_slice(&code[start_us..at_us]);
                     out.extend_from_slice(&(rel as i32).to_le_bytes());
                 }
             }
-            from = start_us + 5;
+            from = at_us + 4;
         }
         out.extend_from_slice(&code[from..]);
         for l in labels.iter_mut().filter(|l| **l != UNPLACED) {

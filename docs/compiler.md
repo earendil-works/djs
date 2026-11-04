@@ -557,19 +557,24 @@ reference, Get, default, store). With a rest property (found by a scan,
 `scan::object_has_rest`) an array of the keys seen sits above `v` and
 `%CopyDataPropertiesExcluding(v, keys)` builds the rest object.
 
-**Array patterns** keep `next it`. Each element evaluates its target references
-(0 to 2 values) and then steps the iterator, reaching under the references with
-`pick`:
+**Array patterns** keep the iterator and its `next` in two temporaries (`it`, `next`:
+`pattern.iterator@S`, `pattern.next@S`, D2732; before 0192 `next it` on the stack, reached
+with `pick`). Each element evaluates its target references (0 to 2 values) and then steps
+the iterator:
 
 ```
-first step:  pick r; pick r+2; iter_next L_value; ...
-later steps: pick r; dup; is_undefined; jump_if_true L_end; pick r+2
+first step:  iter_next_loc it L_value; ...           ; (get it; get next; iter_next)
+later steps: get it; dup; is_undefined; jump_if_true L_end; get next
              iter_next L_value; iter_check_object; dup; get_field done
              jump_if_true L_done; get_field value
 L_value:     jump L_end
-L_done:      drop; undefined; poke r; undefined      ; it := undefined (done)
+L_done:      drop; undefined; put it; undefined      ; it := undefined (done)
 L_end:       <default>; <store or nested pattern>
 ```
+
+Object patterns keep their value and the excluded keys of a rest property in
+temporaries too (`pattern.source@S`, `pattern.excluded@S`); a computed key stays on the
+stack while its target and default run.
 
 `iter_next L` (`it next -> r`) calls `next` like `call 0`, except that for the original
 `next` of an Array, String, Map or Set Iterator it produces the value itself and jumps to
@@ -839,6 +844,9 @@ reentrancy of `call` and `get_field`, so nothing in for-of needs a resume state.
 implemented now (0080, D1800) `swap; call 0` is `iter_next L_value`, which skips the
 result object for the original iterators of arrays, strings, Maps and Sets (the
 "array-iterator superinstruction" this note deferred); everything else is unchanged.
+Since 0192 (D2732) the iterator and `next` are construct temporaries (locals named
+`for-of.iterator@S`, `for-of.next@S`), and the step is `iter_next_loc it L_value`, which
+reads both from the locals (`next` in the one after `it`'s).
 
 P2 adds `await`, async function return/throw and promise ops. P5 adds `yield`,
 `yield_star`, `initial_yield`, `regexp`.
@@ -1354,18 +1362,18 @@ snapshot replaces compile-at-startup.
 - Iterator close on abrupt exit from for-of: `break`/`return` emit `iterator_close`
   before leaving; a throw goes through a handler entry around the loop body that
   calls `iterator_close` (ignoring errors from `return()` per spec) and rethrows.
-- As implemented (0029, D1292): the close is `call_intrinsic %IteratorClose` and the
-  handler calls `%IteratorCloseThrow` (`it next exc`: `nip; swap; call_intrinsic
-  %IteratorCloseThrow 1; drop; throw`). The handler covers the target store and the
+- As implemented (0029, D1292; temporaries since 0192, D2732): the close is
+  `call_intrinsic %IteratorClose` and the handler calls `%IteratorCloseThrow` (`exc`:
+  `get it; call_intrinsic %IteratorCloseThrow 1; drop; throw`, skipping the close when
+  `it` is `undefined`, closed already by a generator's return path). The handler covers the target store and the
   body, not the `next`/`done`/`value` steps. A `break` of the loop itself jumps to an
   inline close after the loop. Jumps that leave the loop (`break L`, `continue L`,
   `return`) cannot close inline: the close would sit inside the loop's own handler
   region, and a throwing `return()` would close the iterator again. They `gosub` a close
   subroutine placed after the loop instead, found on the `BlockEnv` stack as an `Iter`
   entry and run in innermost-first order together with the finally blocks. It is
-  entered on `v it next ret` (`v` the return value or `undefined`, as a finally block's
-  value slot) and, since `gosub` keeps the caller's depth, leaves `v it undefined` for
-  the caller to drop (`rot3r; drop; dup; call_intrinsic %IteratorClose 1; rot3l; ret`).
+  entered on `v ret` (`v` the return value or `undefined`, as a finally block's value
+  slot): `get it; call_intrinsic %IteratorClose 1; drop; ret`.
 - A handler entry may have a depth relative to a label (`depth_from`, array
   destructuring inside expressions, 3.10): resolution computes it from the final code
   with `bytecode::stack_depths`, repeating while a region sits in code that only
@@ -1518,7 +1526,9 @@ What the compiler emits:
   or AsyncIteratorClose for `for await`). These regions are inserted at the front of the
   handler list, as they are the innermost. Async generators `await` a `return(x)` value
   first.
-- **`yield*`** keeps `it next` on the stack: `received` → `next.call(it, received)` →
+- **`yield*`** keeps the inner iterator and its `next` in temporaries
+  (`yield*.iterator@S`, `yield*.next@S`; on the stack before 0192): `received` →
+  `next.call(it, received)` →
   (await) → `iter_check_object` → `done`? the `value` is the result : `yield_star` (sync)
   or `get_field value; yield` (async). A `return(x)` resumption calls `it.return`, a
   `throw(e)` (thrown at the yield, caught by a region around it whose depth is relative
@@ -1584,8 +1594,9 @@ What the compiler emits:
   (using of of xs)` iterates `using`); `await using x` only in async functions. Patterns
   and missing initializers are errors; the bindings are `const`.
 - **Code.** The region opens at the first declaration of the list:
-  `call_intrinsic %UsingCreate 0` pushes the resource Record, which stays on the operand
-  stack under the rest of the list (`stmt_depth` + 1). Each initializer is followed by
+  `call_intrinsic %UsingCreate 0` makes the resource Record. Since 0192 it is a
+  temporary (`using.record@S`, D2732) and compiler/using.rs has the code; before, it
+  stayed on the operand stack under the rest of the list (`stmt_depth` + 1), as follows. Each initializer is followed by
   `pick 1; swap; call_intrinsic %UsingAdd 2` (`%AwaitUsingAdd`) before the binding's
   `name_init`. At the end of the list, the region is a `try`/`finally` whose finally
   block is the disposal subroutine: a `BlockKind::Finally` env at depth base + 1 makes

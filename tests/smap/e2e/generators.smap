@@ -11,7 +11,7 @@ function inner @739..838
 function outer @839..945
   loc0 <state>, loc1 v@0
   yield*#1 @32 (36:13) pc 46: yield*.iterator@32 yield*.next@32
-  yield*#2 @73 (38:3) pc 198: yield*.iterator@73 yield*.next@73
+  yield*#2 @73 (38:3) pc 192: yield*.iterator@73 yield*.next@73
 function fin @1067..1162
   loc0 <state>
   yield*#1 @30 (48:5) pc 46: yield*.iterator@30 yield*.next@30
@@ -41,7 +41,7 @@ function cnt @2419..2531
   yield#1 @53 (100:28) pc 9: -
 function fo @2598..2652
   loc0 <state>, loc1 x@28
-  yield#1 @44 (109:45) pc 45: for-of.iterator@17 for-of.next@17
+  yield#1 @44 (109:45) pc 50: for-of.iterator@17 for-of.next@17
 function dstr @2919..2991
-  loc0 <state>, loc1 a@0
-  yield#1 @30 (117:31) pc 68: pattern.next@25 pattern.iterator@25
+  loc0 <state>, loc3 a@0
+  yield#1 @30 (117:31) pc 66: pattern.iterator@25

@@ -72,20 +72,21 @@ $dump.s2 = (() => {
 })();
 $dump.n3 = { [Symbol.asyncDispose]: $dump.s2.$f3 };
 $dump.a4 = $dump.resume($dump.s2.$f3, { at: "await#1", awaiting: $dump.p1, this: $dump.n3, slots: { v: undefined } });
-$dump.s6 = (() => {
+$dump.s7 = (() => {
   let name = "a";
   return { $f15: $dump.fn({ [Symbol.dispose]() {
       print("dispose", name);
     } }) };
 })();
-$dump.n5 = { [Symbol.dispose]: $dump.s6.$f15 };
-$dump.s8 = (() => {
+$dump.n6 = { [Symbol.dispose]: $dump.s7.$f15 };
+$dump.s9 = (() => {
   let name = "c";
   return { $f16: $dump.fn({ [Symbol.dispose]() {
       print("dispose", name);
     } }) };
 })();
-$dump.n7 = { [Symbol.dispose]: $dump.s8.$f16 };
-$dump.u9 = $dump.using([$dump.n5, $dump.s6.$f15, 0, $dump.n3, $dump.s2.$f3, 4, undefined, undefined, 3, $dump.n7, $dump.s8.$f16, 0], { needsAwait: true, hasAwaited: true, next: 0, value: $dump.a4 });
-$dump.a10 = $dump.resume(block, { at: "await-using#1", awaiting: $dump.a4, slots: { a: $dump.n5, b: $dump.n3, n: null, c: $dump.n7, "using.record@39": $dump.u9, "finally.value@200": undefined, "finally.return@200": 0, "using.record@200": $dump.u9 } });
-$dump.a11 = $dump.resume(main, { at: "await#1", awaiting: $dump.a10, slots: { it: undefined, seen: undefined } });
+$dump.n8 = { [Symbol.dispose]: $dump.s9.$f16 };
+$dump.n5 = [$dump.n6, $dump.s7.$f15, 0, $dump.n3, $dump.s2.$f3, 4, undefined, undefined, 3, $dump.n8, $dump.s9.$f16, 0];
+$dump.u10 = $dump.using($dump.n5, { needsAwait: true, hasAwaited: true, next: 0, value: $dump.a4 });
+$dump.a11 = $dump.resume(block, { at: "await-using#1", awaiting: $dump.a4, slots: { "using.record@39": $dump.u10, a: $dump.n6, b: $dump.n3, n: null, c: $dump.n8, "finally.value@200": undefined, "finally.return@200": 0 } });
+$dump.a12 = $dump.resume(main, { at: "await#1", awaiting: $dump.a11, slots: { it: undefined, seen: undefined } });

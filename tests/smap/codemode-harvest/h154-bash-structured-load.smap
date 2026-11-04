@@ -1,8 +1,8 @@
 function <anonymous> @1..21136
   arg0 tools@0, arg1 console@0
-  loc0 <state>, loc1 results@0, loc2 fake@0, loc5 stored@0, loc6 realLoad@0, loc7 fakeLoad@0
-  await#1 @19874 (600:8) pc 3811: -
+  loc0 <state>, loc1 results@0, loc2 fake@0, loc7 stored@0, loc8 realLoad@0, loc9 fakeLoad@0
+  await#1 @19874 (600:8) pc 3818: -
 function <anonymous> @19882..21115
   arg0 tools@0, arg1 load@0
   loc0 <state>, loc1 rows@0
-  await#1 @944 (613:6) pc 759: call.callee@939 call.this@939
+  await#1 @944 (613:6) pc 780: call.callee@939 call.this@939

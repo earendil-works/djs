@@ -8882,3 +8882,44 @@ the binaries. Measured on the same core change (lab, loaded machine): 77 and 85 
 88 and 100 s waiting, 105 and 105 s with no early runs at all. The four wasm clippy
 combinations (D2668) run as four legs in target directories of their own (124 s one after
 another, ~45 s side by side).
+## D2732: Construct temporaries: statement state in named locals, listed where live
+date: 2026-11-04 · by: sm · issue: 0192
+The state a construct keeps while its body runs moves from the operand stack into
+locals of its own (`VarKind::Temp`, compiler/temps.rs): a for-of/for-in/for-await loop's
+iterator and `next`, a `yield*`'s, a switch's discriminant, a `using` list's resource
+Record, an array pattern's iterator and `next`, an object pattern's value and excluded
+keys. Their slot names are the D2721/D2730 names (`for-of.iterator@18`), so dumps of loops
+keep their keys; their bindings have internal names `<tN>` (numbered per function, so a
+compile adds no atoms). A temporary is a slot of a state only where it is live: a
+backward liveness pass over the function's final phase-1 code (jumps, branches,
+exception edges from instructions that can throw inside a handler's region, `gosub`
+into its subroutine and each `ret` to the instructions after the `gosub`s to it) decides,
+so code order that differs from source order (a for-of's target runs after its right
+side) cannot make a map wrong, and a stale value from an earlier run of a loop is never
+dumped. The pass is conservative where the code is (an `async_return` may throw into a
+loop's close handler, so a for-await's iterator is listed at its close subroutine's
+await). Deletions: the `loops` handling in the exporter and loader (loop records are
+ordinary named slots), the doubled switch discriminant (the case test's copy is the left
+side of its `===`, `binary.left@C`), the Record's copy in an `await using` disposal, and
+the roles `LoopIterator`, `LoopNext`, `SwitchDiscriminant`, `UsingRecord`,
+`PatternSource`, `PatternExcluded`, `PatternNext`, `PatternIterator`.
+
+A for-of step read `it next` with `dup2` (two dispatches); from locals it would be three.
+A new op `iter_next_loc loc, target` reads the iterator from local `loc` and `next` from
+`loc + 1` (the two temporaries are declared together) and is emitted for `get it; get
+next; iter_next`: one dispatch. It is the one jump with an immediate before its target
+(`CodeBuf::finish` keeps the prefix; only plain jumps are shortened). A for-in key
+iterator's `for_in_next` keeps `it key done`, so the assignment starts with `nip`.
+Generators' return path marks a closed pattern or loop iterator `undefined` before
+calling `return()`, so the construct's own close handler, which covers that code, does
+not close it again when `return()` throws (13 test262 dstr tests showed it).
+
+Measured (instructions retired, native release; wasm in node, n=3-6), base 36a7f9ed:
+for-of loop -7.0% native, -3.6% wasm; forEach/for-of -3.3%/-2.0%; destructuring loop
+-7.8%/-7.4%; generators with yield* -3.7%/-1.0%; switch -1.8%/-0.7%; await-heavy for-of
+-1.2%/+0.1%; the other engine workloads within +-0.5% (props +0.45%, code layout).
+The op table changes, so images get a new descriptor; no COMPAT_VERSION bump. 14 of 130
+golden dumps refused (their states' slot sets changed: a pattern's source no longer live,
+a `case` copy, a Record copy) and are rewritten under this decision; the other 116 load
+unchanged, including those whose slot order changed. Pins rewritten (temporaries listed
+per state, summary counts constructs).

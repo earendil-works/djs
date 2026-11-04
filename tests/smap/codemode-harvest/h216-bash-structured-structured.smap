@@ -1,7 +1,7 @@
 function <anonymous> @1..3309
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
-  await#1 @2479 (81:8) pc 517: -
+  await#1 @2479 (81:8) pc 524: -
 function <anonymous> @2487..3298
   arg0 tools@0
   loc0 <state>, loc1 r@0, loc2 html@0, loc3 res@0, loc4 a@0

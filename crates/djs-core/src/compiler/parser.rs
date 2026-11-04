@@ -73,10 +73,12 @@ pub(super) struct Suspended {
 /// instead.
 #[derive(Clone, Copy)]
 pub(super) enum OpenIter {
-    /// An array pattern: `next it` on top at the label (`it` is `undefined` once done).
-    Pattern(Label),
-    /// A for-of loop: `it next` on top at this absolute depth; `true` for `for await`.
-    ForOf(u32, bool),
+    /// An array pattern: the depth at the label, and its iterator's temporary
+    /// (`undefined` once done, D2732).
+    Pattern(Label, crate::heap::Atom),
+    /// A for-of loop at this absolute depth, `true` for `for await`, and its iterator's
+    /// temporary (D2732).
+    ForOf(u32, bool, crate::heap::Atom),
 }
 
 pub(super) struct Parser<'a, 'h> {

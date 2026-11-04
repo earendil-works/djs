@@ -1,4 +1,4 @@
-function 0 <anonymous>: params=0 locals=3 stack=3 captures=0
+function 0 <anonymous>: params=0 locals=5 stack=2 captures=0
     0  global_decls #0 var "j" let "x"
     5  undefined
     6  put_loc0 (<completion>)
@@ -145,46 +145,43 @@ function 0 <anonymous>: params=0 locals=3 stack=3 captures=0
   322  undefined
   323  put_loc0 (<completion>)
   324  get_global "x" ic23  ; 12:9
-  331  dup
-  332  push1
-  333  strict_eq
-  334  jump_if_false8 -> 350
-  336  drop
+  331  put_loc3 (<t0>)
+  332  get_loc3 (<t0>)
+  333  push1
+  334  strict_eq
+  335  jump_if_false8 -> 350
   337  push_i8 10  ; 13:11
   339  dup
   340  put_global "x" ic24
   347  put_loc0 (<completion>)
-  348  jump8 -> 356
-  350  dup
+  348  jump8 -> 355
+  350  get_loc3 (<t0>)
   351  push2
   352  strict_eq
-  353  jump_if_false8 -> 382
-  355  drop
-  356  push_i8 20  ; 14:11
-  358  dup
-  359  put_global "x" ic25
-  366  put_loc0 (<completion>)
-  367  jump8 -> 404
-  369  push_i8 30  ; 15:12
-  371  dup
-  372  put_global "x" ic26
-  379  put_loc0 (<completion>)
-  380  jump8 -> 388
-  382  dup
-  383  push3
-  384  strict_eq
-  385  jump_if_false8 -> 401
-  387  drop
-  388  push_i8 40  ; 16:13
-  390  dup
-  391  put_global "x" ic27
-  398  put_loc0 (<completion>)
-  399  jump8 -> 404
-  401  drop
-  402  jump8 -> 369
-  404  undefined
-  405  put_loc0 (<completion>)
-  406  get_global "x" ic28  ; 18:9
-  413  drop
-  414  get_global "x" ic29  ; 19:7
-  421  throw  ; 19:1
+  353  jump_if_false8 -> 381
+  355  push_i8 20  ; 14:11
+  357  dup
+  358  put_global "x" ic25
+  365  put_loc0 (<completion>)
+  366  jump8 -> 401
+  368  push_i8 30  ; 15:12
+  370  dup
+  371  put_global "x" ic26
+  378  put_loc0 (<completion>)
+  379  jump8 -> 386
+  381  get_loc3 (<t0>)
+  382  push3
+  383  strict_eq
+  384  jump_if_false8 -> 368
+  386  push_i8 40  ; 16:13
+  388  dup
+  389  put_global "x" ic27
+  396  put_loc0 (<completion>)
+  397  jump8 -> 401
+  399  jump8 -> 368
+  401  undefined
+  402  put_loc0 (<completion>)
+  403  get_global "x" ic28  ; 18:9
+  410  put_loc8 loc4 (<t1>)
+  412  get_global "x" ic29  ; 19:7
+  419  throw  ; 19:1

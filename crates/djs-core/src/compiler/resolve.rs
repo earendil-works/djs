@@ -504,6 +504,8 @@ fn suspension_map(
     handlers: &[crate::bytecode::Handler],
     suspends: &[(u32, u32)],
     gosubs: &[u32],
+    all: &[crate::bytecode::Insn],
+    resolved: &[Resolved],
 ) -> PResult<super::smap::FunctionMap> {
     let decode = |pc: u32| {
         crate::bytecode::decode::decode(&code.code, pc)
@@ -557,6 +559,28 @@ fn suspension_map(
             _ => None,
         })
         .collect();
+    // Which construct temporaries hold a value at each site (D2732), from the phase-1
+    // code: the site's instruction is the suspending op with its phase-1 index.
+    let live = if f.temps.is_empty() {
+        alloc::vec![Vec::new(); rec.sites.len()]
+    } else {
+        let index: Vec<usize> = rec
+            .sites
+            .iter()
+            .map(|s| {
+                all.iter()
+                    .position(|i| {
+                        i.pc == s.p1 && matches!(i.op, Op::Await | Op::Yield | Op::YieldStar)
+                    })
+                    .unwrap_or(usize::MAX)
+            })
+            .collect();
+        let temp_of = |r: u32| match resolved.get(r as usize).map(|x| x.target) {
+            Some(Target::Var(v)) => f.temps.iter().position(|t| t.0 == v),
+            _ => None,
+        };
+        super::temps::live_at(all, &f.handlers, f.temps.len(), temp_of, &index)
+    };
     let params = (f.param_count - u16::from(f.rest.is_some())) as usize;
     Ok(super::smap::build(
         heap,
@@ -568,6 +592,7 @@ fn suspension_map(
         &at,
         &depth,
         &subs,
+        &live,
     ))
 }
 
@@ -767,6 +792,20 @@ fn emit_function(
             Op::NameGet | Op::NamePut | Op::NameSet | Op::NameInit | Op::NameTypeof => {
                 let r = insn.imm(0) as usize;
                 let atom = f.refs[r].atom;
+                // A loop's step on its temporaries (D2732): `get it; get next; iter_next`
+                // with `next` in the local after `it`'s is one `iter_next_loc`.
+                if insn.op == Op::NameGet
+                    && let [get, step, ..] = all[i..]
+                    && get.op == Op::NameGet
+                    && step.op == Op::IterNext
+                    && let Some(s) = unchecked_local(storage, resolved[r])
+                    && unchecked_local(storage, resolved[get.imm(0) as usize]) == Some(s + 1)
+                {
+                    flush(&out, &mut li, &mut lines, step.pc);
+                    out.iter_next_loc(s, Label(step.imm(0)));
+                    i += 2;
+                    continue;
+                }
                 // `i++;` / `++i;` on an unchecked local: `get_loc; inc; put_loc` in place.
                 if insn.op == Op::NameGet
                     && let [upd, put, ..] = all[i..]
@@ -1050,7 +1089,7 @@ fn emit_function(
     #[cfg(feature = "dump")]
     if let (Some(rec), Some(maps)) = (&f.smap, maps) {
         maps.push(suspension_map(
-            heap, f, rec, storage, names, &code, &handlers, &suspends, &gosubs,
+            heap, f, rec, storage, names, &code, &handlers, &suspends, &gosubs, &all, resolved,
         )?);
     }
 

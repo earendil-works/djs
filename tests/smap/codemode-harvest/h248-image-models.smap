@@ -1,12 +1,12 @@
 function <anonymous> @1..4014
   arg0 tools@0, arg1 console@0
-  loc0 <state>, loc1 results@0, loc2 fake@0, loc5 answer@0, loc6 modelsOfType@0, loc7 fakeModels@0, loc8 fakeImage@0
-  await#1 @2702 (65:8) pc 204: -
+  loc0 <state>, loc1 results@0, loc2 fake@0, loc7 answer@0, loc8 modelsOfType@0, loc9 fakeModels@0, loc10 fakeImage@0
+  await#1 @2702 (65:8) pc 211: -
 function <anonymous> @2710..3980
   arg0 tools@0, arg1 argument 1, arg2 image@0
   loc0 <state>, loc1 models@0, loc2 STYLE@0, loc3 subjects@0, loc4 model@0, loc5 out@0
   await#1 @927 (72:13) pc 107: -
 function <anonymous> @3684..3789
   arg0 argument 0
-  loc0 <state>, loc1 k@0, loc2 s@0
-  await#1 @22 (72:82) pc 154: array.element@19
+  loc0 <state>, loc3 k@0, loc4 s@0
+  await#1 @22 (72:82) pc 151: array.element@19

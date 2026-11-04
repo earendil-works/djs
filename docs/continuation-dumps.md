@@ -420,11 +420,10 @@ slots at the site, whatever its operand stack or local layout. The names:
   - The construct is the operand role without its index (`call.arg[2]` →
     `call.arg`); the exception a `for await` rethrows after closing its iterator is
     `for-await.exception` (every construct has a `.` or a `-`, so no temporary's name is
-    a binding's `name@scope`, D2731). Copies the compiler keeps of one value are named
-    apart until the steps that hold them once: the discriminant a `case` test compares is named by the
-    `case` (`switch.discriminant@28`), and the values of an `await using` disposal (the
-    subroutine's value and return address, the Record's copy) by the site, the end of
-    the statement list.
+    a binding's `name@scope`, D2731). The value a `case` test compares with is the left
+    side of its `===`, named by the `case` (`binary.left@28`), and the values of an
+    `await using` disposal (the subroutine's value and return address) by the site, the
+    end of the statement list.
 
 No two slots of a site share a name: offsets of nested constructs differ, and two
 temporaries of one construct differ by construct name. The pin test checks this over the
@@ -438,6 +437,17 @@ beside the roles in `Site::operands`), and the pins list them per site
 keeps a different value across an await shows as a renamed or added slot. Until step 3
 of the migration (0191) the dump format wrote `operands` by role; since then it writes
 `slots` by these names (D2731).
+
+Since 0192 (D2732) the state a statement keeps while its body runs is in locals of its
+own, construct temporaries with the same names: a loop's iterator record
+(`for-of.iterator@S`, `for-of.next@S`, `for-in.iterator@S`, `for-await.*`, `yield*.*`), a
+`switch`'s discriminant (`switch.discriminant@S`), a `using` list's Record
+(`using.record@S`) and a destructuring pattern's state (`pattern.source@S`,
+`pattern.excluded@S`, `pattern.iterator@S`, `pattern.next@S`). A temporary is a slot of a
+state only where the code still reads it: the map finds that by a liveness pass over the
+function's code (a loop's iterator is not a slot at an await in the loop's right side,
+a pattern's source not after its last property was read), so a dump never carries a
+stale value. Expression temporaries stay on the operand stack.
 
 Where the values are in memory is this build's business: a suspended frame is one array
 (callee, `this`, arguments, header, locals, and the k values the code keeps past the

@@ -716,6 +716,9 @@ ops! {
     /// original `next` of an Array or String Iterator and that step runs no user code,
     /// `r` is the next value itself and the instruction jumps (no result object, D1800).
     IterNext iter_next(target: Target) pop 2 push 1 cost Call flags THROWS | CALLS | ALLOC | BRANCH;
+    /// `-> r`: `iter_next` of the iterator in local `loc` and its `next` in `loc + 1` (a
+    /// loop's or pattern's temporaries, D2732): one instruction for for-of's step.
+    IterNextLoc iter_next_loc(loc: Loc, target: Target) pop 0 push 1 cost Call flags THROWS | CALLS | ALLOC | BRANCH;
     /// `v -> v`: TypeError if `v` is not an object (iterator results).
     IterCheckObject iter_check_object() pop 1 push 1 cost Basic flags THROWS;
     /// `iterator ->`: call `iterator.return()` if present.
@@ -916,9 +919,16 @@ const _: () = {
             j += 1;
         }
         let jumpy = info.flags & (flags::JUMP | flags::BRANCH | flags::GOSUB) != 0;
+        let n = info.imms.len();
         assert!(
-            !jumpy || (info.imms.len() == 1 && info.imms[0].is_target()),
-            "jumps have exactly one Target immediate"
+            !jumpy || (n >= 1 && info.imms[n - 1].is_target()),
+            "jumps have a Target as their last immediate"
+        );
+        // Only `iter_next_loc` has another immediate before it (`CodeBuf::finish`
+        // shortens only the plain jumps).
+        assert!(
+            !jumpy || n == 1 || i == Op::IterNextLoc as usize,
+            "only iter_next_loc has an immediate before its Target"
         );
         if let Some(k) = info.pop_imm {
             assert!((k as usize) < info.imms.len(), "pop_imm out of range");

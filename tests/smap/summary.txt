@@ -13,19 +13,19 @@ sites 1063
    11 yield.await
    11 yield.return
 
-## described, by operand roles
-  712 -
+## described, by temporaries (in locals, then the stack's roles)
+  716 -
   208 call.callee call.this
-   21 for-of.iterator for-of.next
-   21 yield*.iterator yield*.next
+   20 for-of.iterator for-of.next
    18 call.callee call.this object.literal
+   17 yield*.iterator yield*.next
    12 for-of.iterator for-of.next call.callee call.this
-   10 using.record finally.value finally.return using.record
+   10 using.record finally.value finally.return
     9 for-of.iterator for-of.next call.callee call.this object.literal
     8 exception
-    8 for-await.iterator for-await.next
     8 using.record
     7 call.callee call.this call.callee call.this
+    7 for-await.iterator for-await.next
     3 binary.left
     3 for-of.iterator for-of.next call.callee call.this binary.left
     2 array.element[0]
@@ -36,9 +36,11 @@ sites 1063
     1 call.callee call.this call.arg[0] call.callee call.this
     1 call.callee call.this call.arg[0] call.callee call.this call.arg[0]
     1 call.callee call.this template.part[0] template.part[1] template.part[2]
+    1 for-await.iterator
+    1 for-of.iterator
     1 for-of.iterator for-of.next assign.old
-    1 for-of.iterator for-of.next using.record finally.value finally.return using.record
+    1 for-of.iterator for-of.next using.record finally.value finally.return
     1 object.literal
-    1 pattern.next pattern.iterator
+    1 pattern.iterator
 
 ## unsupported

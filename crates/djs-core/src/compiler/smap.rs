@@ -18,30 +18,6 @@
 
 use core::fmt;
 
-/// The loop kinds whose iterator records stay on the operand stack.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Loop {
-    /// `for (… of …)`.
-    Of,
-    /// `for (… in …)`.
-    In,
-    /// `for await (… of …)`.
-    Await,
-    /// `yield* v`: the delegated iterator and its `next`, kept for the whole delegation.
-    Star,
-}
-
-impl Loop {
-    pub fn name(self) -> &'static str {
-        match self {
-            Loop::Of => "for-of",
-            Loop::In => "for-in",
-            Loop::Await => "for-await",
-            Loop::Star => "yield*",
-        }
-    }
-}
-
 /// What an operand below the awaited value is, named by the construct that keeps it
 /// (docs/portable-snapshots.md 3.5, extended where djs's lowering keeps more values).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -89,24 +65,9 @@ pub enum Role {
     ImportSpecifier,
     /// `%Name(…)` in privileged code: the arguments so far.
     IntrinsicArg(u16),
-    /// A loop's iterator record: the iterator (for-in: the key iterator) and, for for-of
-    /// and for-await, its `next` method.
-    LoopIterator(Loop),
-    LoopNext(Loop),
-    /// A destructuring pattern under way: an object pattern's value, the keys a rest
-    /// property excludes so far, a computed key while its target and default are
-    /// evaluated; an array pattern's iterator (`undefined` once done) and its `next`.
-    PatternSource,
-    PatternExcluded,
+    /// An object pattern's computed key while its target and default are evaluated (the
+    /// pattern's own state is in temporaries, D2732).
     PatternKey,
-    PatternNext,
-    PatternIterator,
-    /// A statement list's `using` declarations: the resource Record its disposal reads,
-    /// below its statements.
-    UsingRecord,
-    /// `switch (d) { case t: … }`: the discriminant, twice (kept and compared) while a
-    /// case test is evaluated.
-    SwitchDiscriminant,
     /// The exception a `for await` rethrows after closing its iterator (the loop's body
     /// threw).
     Exception,
@@ -150,15 +111,7 @@ impl fmt::Display for Role {
             Role::TemplatePart(i) => write!(f, "template.part[{i}]"),
             Role::ImportSpecifier => f.write_str("import.specifier"),
             Role::IntrinsicArg(i) => write!(f, "intrinsic.arg[{i}]"),
-            Role::LoopIterator(l) => write!(f, "{}.iterator", l.name()),
-            Role::LoopNext(l) => write!(f, "{}.next", l.name()),
-            Role::SwitchDiscriminant => f.write_str("switch.discriminant"),
-            Role::UsingRecord => f.write_str("using.record"),
-            Role::PatternSource => f.write_str("pattern.source"),
-            Role::PatternExcluded => f.write_str("pattern.excluded"),
             Role::PatternKey => f.write_str("pattern.key"),
-            Role::PatternNext => f.write_str("pattern.next"),
-            Role::PatternIterator => f.write_str("pattern.iterator"),
             Role::Exception => f.write_str("exception"),
             Role::FinallyValue => f.write_str("finally.value"),
             Role::FinallyReturn(_) => f.write_str("finally.return"),
@@ -198,21 +151,7 @@ impl Role {
             Role::TemplatePart(i) => ("template.part", Some(i)),
             Role::ImportSpecifier => ("import.specifier", None),
             Role::IntrinsicArg(i) => ("intrinsic.arg", Some(i)),
-            Role::LoopIterator(Loop::Of) => ("for-of.iterator", None),
-            Role::LoopIterator(Loop::In) => ("for-in.iterator", None),
-            Role::LoopIterator(Loop::Await) => ("for-await.iterator", None),
-            Role::LoopIterator(Loop::Star) => ("yield*.iterator", None),
-            Role::LoopNext(Loop::Of) => ("for-of.next", None),
-            Role::LoopNext(Loop::In) => ("for-in.next", None),
-            Role::LoopNext(Loop::Await) => ("for-await.next", None),
-            Role::LoopNext(Loop::Star) => ("yield*.next", None),
-            Role::SwitchDiscriminant => ("switch.discriminant", None),
-            Role::UsingRecord => ("using.record", None),
-            Role::PatternSource => ("pattern.source", None),
-            Role::PatternExcluded => ("pattern.excluded", None),
             Role::PatternKey => ("pattern.key", None),
-            Role::PatternNext => ("pattern.next", None),
-            Role::PatternIterator => ("pattern.iterator", None),
             Role::Exception => ("exception", None),
             Role::FinallyValue => ("finally.value", None),
             Role::FinallyReturn(_) => ("finally.return", None),
@@ -336,6 +275,8 @@ mod maps {
         Argument(u16),
         /// An operand, by role.
         Operand(Role),
+        /// A construct temporary that holds a value here, by its slot name (D2732).
+        Temp(String),
         /// Nothing at this site (a binding whose scope does not enclose it).
         Nothing,
     }
@@ -389,8 +330,9 @@ mod maps {
         Binding,
         /// A compiler-made local (`<state>`, `arguments`, `<fields 1>`, …).
         Hidden,
-        /// A temporary of a construct in flight, by role.
-        Temp(Role),
+        /// A temporary of a construct in flight: on the operand stack (by role) or in a
+        /// local of its own (D2732).
+        Temp(Option<Role>),
     }
 
     /// One slot of a suspended frame by name (D2721, D2731): a dump's `slots` key.
@@ -405,7 +347,38 @@ mod maps {
         pub boxed: bool,
     }
 
+    impl NamedSlot {
+        /// A temporary's construct (`for-of.iterator` of `for-of.iterator@18`), else
+        /// `""`.
+        pub fn construct(&self) -> &str {
+            match self.holds {
+                Holds::Temp(_) => self.name.split('@').next().unwrap_or(""),
+                _ => "",
+            }
+        }
+
+        /// A temporary's partner of the same construct: `for-of.iterator@18` for
+        /// `for-of.next@18` and `want` `"iterator"`.
+        pub fn partner(&self, want: &str) -> Option<String> {
+            let (construct, at) = self.name.split_once('@')?;
+            let (kind, _) = construct.rsplit_once('.')?;
+            Some(alloc::format!("{kind}.{want}@{at}"))
+        }
+    }
+
     impl Site {
+        /// The names of the construct temporaries at this site: those in locals of their
+        /// own (frame order), then those on the operand stack (bottom first).
+        pub fn temporaries(&self) -> Vec<&str> {
+            let locals = self.locals.iter().filter_map(|x| match x {
+                Slot::Temp(n) => Some(n.as_str()),
+                _ => None,
+            });
+            locals
+                .chain(self.slots.iter().map(String::as_str))
+                .collect()
+        }
+
         /// The frame's slots at this site by name, in frame order: the parameters'
         /// bindings, the locals in scope, the temporaries. Names are unique (the pin
         /// test checks the temporaries'; binding keys take their scope when shadowed;
@@ -427,6 +400,7 @@ mod maps {
                     }
                     Slot::Binding { name, .. } => Some((name.clone(), Holds::Binding)),
                     Slot::Hidden(name) => Some((name.clone(), Holds::Hidden)),
+                    Slot::Temp(name) => Some((name.clone(), Holds::Temp(None))),
                     _ => None,
                 }
             };
@@ -455,7 +429,7 @@ mod maps {
                 out.push(NamedSlot {
                     name: name.clone(),
                     place: Place::Temp(k as u16),
-                    holds: Holds::Temp(*role),
+                    holds: Holds::Temp(Some(*role)),
                     boxed: false,
                 });
             }
@@ -494,7 +468,11 @@ mod maps {
                     .map(|i| {
                         self.sites
                             .iter()
-                            .find_map(|s| pick(s).get(i).filter(|x| **x != Slot::Nothing))
+                            .find_map(|s| {
+                                pick(s)
+                                    .get(i)
+                                    .filter(|x| !matches!(x, Slot::Nothing | Slot::Temp(_)))
+                            })
                             .cloned()
                             .unwrap_or(Slot::Nothing)
                     })
@@ -511,7 +489,7 @@ mod maps {
                             Slot::Hidden(n) => n.clone(),
                             Slot::Argument(a) => alloc::format!("argument {a}"),
                             Slot::Operand(r) => alloc::format!("{r}"),
-                            Slot::Nothing => return None,
+                            Slot::Temp(_) | Slot::Nothing => return None,
                         };
                         Some(alloc::format!("{kind}{i} {text}"))
                     })
@@ -527,9 +505,12 @@ mod maps {
                     Some(u) => {
                         let _ = write!(out, " unsupported {u}");
                     }
-                    None if s.slots.is_empty() => out.push_str(" -"),
                     None => {
-                        for n in &s.slots {
+                        let temps = s.temporaries();
+                        if temps.is_empty() {
+                            out.push_str(" -");
+                        }
+                        for n in temps {
                             let _ = write!(out, " {n}");
                         }
                     }
@@ -537,7 +518,8 @@ mod maps {
                 let mut dead = Vec::new();
                 for (kind, slots, all) in [("arg", &s.args, &args), ("loc", &s.locals, &locals)] {
                     for (i, slot) in slots.iter().enumerate() {
-                        if *slot == Slot::Nothing && all.get(i).is_some_and(|x| *x != Slot::Nothing)
+                        if matches!(slot, Slot::Nothing | Slot::Temp(_))
+                            && all.get(i).is_some_and(|x| *x != Slot::Nothing)
                         {
                             dead.push(alloc::format!("{kind}{i}"));
                         }
@@ -570,7 +552,8 @@ mod maps {
     /// `Some((true, i, boxed))` local `i`, holding a Box if `boxed`; `n_locals` local slots; `params` argument slots;
     /// `at[k]` the final pc of site `k`'s instruction (`None`: not emitted, dead code);
     /// `depth[k]` the operand depth there, the suspended value included; `subs[i]` the
-    /// return addresses of subroutine `i` (`Recorder::subs`).
+    /// return addresses of subroutine `i` (`Recorder::subs`); `live[k][t]` whether
+    /// temporary `t` (`FuncState::temps`) holds a value at site `k`.
     #[allow(clippy::too_many_arguments)]
     pub(in crate::compiler) fn build(
         heap: &Heap,
@@ -582,6 +565,7 @@ mod maps {
         at: &[Option<(u32, u32)>],
         depth: &[Option<u32>],
         subs: &[Vec<u32>],
+        live: &[Vec<bool>],
     ) -> FunctionMap {
         let base = f.src_start;
         let scope_pos = |s: ScopeId| f.scopes[s as usize].pos.saturating_sub(base);
@@ -629,6 +613,13 @@ mod maps {
                 };
                 let name = heap.atom_name(var.name);
                 let slot = match var.kind {
+                    VarKind::Temp => match f.temps.iter().position(|t| t.0 as usize == v) {
+                        Some(t) if live[k].get(t).copied().unwrap_or(false) => {
+                            let (_, construct, at) = f.temps[t];
+                            Slot::Temp(alloc::format!("{construct}@{at}"))
+                        }
+                        _ => Slot::Nothing,
+                    },
                     VarKind::This
                     | VarKind::Arguments
                     | VarKind::NewTarget

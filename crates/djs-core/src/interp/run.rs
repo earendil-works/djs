@@ -125,6 +125,7 @@ mod fast {
     pub const DUP: u8 = Op::Dup as u8;
     pub const DUP2: u8 = Op::Dup2 as u8;
     pub const ITER_NEXT: u8 = Op::IterNext as u8;
+    pub const ITER_NEXT_LOC: u8 = Op::IterNextLoc as u8;
     pub const TO_NUMERIC: u8 = Op::ToNumeric as u8;
     pub const INC: u8 = Op::Inc as u8;
     pub const INC_LOC: u8 = Op::IncLoc as u8;
@@ -2515,6 +2516,34 @@ impl<'h> Exec<'h> {
                 let base = self.sp - 2;
                 self.set(base, f);
                 self.set(base + 1, it);
+                return self.call(base, 0, Continuation::PushResult, next);
+            }
+            Op::IterNextLoc => {
+                // `iter_next` on a loop's temporaries (D2732): the same steps, with the
+                // call's callee and `this` pushed for the slow path.
+                let loc = self.lp + self.imm_u16(1);
+                let (it, f) = (self.get(loc), self.get(loc + 1));
+                match self.iter_fast_next(it, f)? {
+                    iter::FastStep::Value(v) => {
+                        self.push(v);
+                        self.pc = (next as i64 + self.imm_i32(3) as i64) as u32;
+                        if self.pc < next {
+                            self.safepoint();
+                        }
+                        return Ok(None);
+                    }
+                    iter::FastStep::Done => {
+                        let r = self.done_result()?;
+                        self.push(r);
+                        self.pc = next;
+                        return Ok(None);
+                    }
+                    iter::FastStep::Slow => {}
+                }
+                let base = self.sp;
+                self.ensure(base + 2)?;
+                self.push(f);
+                self.push(it);
                 return self.call(base, 0, Continuation::PushResult, next);
             }
             Op::IterCheckObject => {

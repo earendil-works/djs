@@ -531,10 +531,10 @@ impl Parser<'_, '_> {
                 self.next()?;
                 self.push_scope(ScopeKind::For)?;
                 scoped = true;
-                let r = self.using_region_start(self.stmt_depth, is_await, self.tok.start);
+                let r = self.using_region_start(self.stmt_depth, is_await, self.tok.start)?;
                 self.using_env(&r);
                 using = Some(r);
-                self.parse_using_bindings(is_await, true)?;
+                self.parse_using_bindings(r.rec, is_await, true)?;
             }
             TokenKind::Var => {
                 self.next()?;
@@ -633,15 +633,10 @@ impl Parser<'_, '_> {
                 b.used = true;
             }
         }
-        for (kind, l_sub, base) in exits {
-            // A finally block runs at its try's base; an iterator closes with the
-            // iterator and `next` still on the stack.
-            let keep = if kind == BlockKind::Iter {
-                base + 2
-            } else {
-                base
-            };
-            while cur > keep {
+        for (_, l_sub, base) in exits {
+            // A finally block runs at its try's base, and so does an iterator's close
+            // (its iterator is in a temporary, D2732).
+            while cur > base {
                 if keep_value {
                     self.code().nip();
                 } else {
@@ -652,16 +647,7 @@ impl Parser<'_, '_> {
             if !keep_value {
                 self.code().undefined();
             }
-            if kind == BlockKind::Iter {
-                // `it next v` -> `v it next`, which the subroutine consumes.
-                self.code().rot3r();
-            }
             self.code().gosub(l_sub);
-            if kind == BlockKind::Iter {
-                // The subroutine leaves `v x undefined` (a `gosub` keeps the depth).
-                self.code().drop();
-                self.code().drop();
-            }
             if !keep_value {
                 self.code().drop();
             }
@@ -923,14 +909,17 @@ impl Parser<'_, '_> {
 
     /// `switch`: the discriminant stays on the stack during the case tests. Each test
     /// is placed right before its body in source order:
-    /// `L_test_i: dup; <case>; strict_eq; jump_if_false L_test_i+1; drop; L_body_i:
-    /// <body>; jump L_body_i+1`. When no case matches: `drop` and jump to `default` or
-    /// the end.
+    /// `L_test_i: get d; <case>; strict_eq; jump_if_false L_test_i+1; L_body_i: <body>;
+    /// jump L_body_i+1`, where `d` is the discriminant's temporary
+    /// (`switch.discriminant@S`, D2732). When no case matches: jump to `default` or the
+    /// end.
     fn parse_switch(&mut self, labels: Vec<Atom>) -> PResult<()> {
         let switch_pos = self.tok.start;
         self.next()?;
         self.reset_completion();
         self.parse_paren_expr()?;
+        let d = self.temp("switch.discriminant", switch_pos)?;
+        self.temp_put(d);
         self.expect(TokenKind::LBrace, "{")?;
         self.push_scope(ScopeKind::Switch)?;
         // Not in the statement lists of the clauses (a block in one is fine).
@@ -956,16 +945,13 @@ impl Parser<'_, '_> {
                     self.next()?;
                     self.place(next_test);
                     next_test = self.new_label();
-                    self.code().dup();
-                    // The kept discriminant is named by the `switch`, the copy the
-                    // test compares by its `case`.
-                    self.roles_push(switch_pos, &[Role::SwitchDiscriminant]);
-                    self.roles_push(case_pos, &[Role::SwitchDiscriminant]);
+                    self.temp_get(d);
+                    // The value the test compares is named by its `case`.
+                    self.roles_push(case_pos, &[Role::BinaryLeft]);
                     self.parse_expr(false)?;
-                    self.roles_pop(2);
+                    self.roles_pop(1);
                     self.code().strict_eq();
                     self.code().jump_if_false(next_test);
-                    self.code().drop();
                     self.ts_semi = true;
                     self.expect(TokenKind::Colon, ":")?;
                 }
@@ -998,7 +984,6 @@ impl Parser<'_, '_> {
         self.next()?;
         // No case matched.
         self.place(next_test);
-        self.code().drop();
         self.code().jump(default_body.unwrap_or(l_break));
         if let Some(nb) = next_body {
             self.place(nb);

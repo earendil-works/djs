@@ -27,7 +27,7 @@ use alloc::vec::Vec;
 use super::*;
 use crate::builtins::regexp;
 use crate::compiler::{
-    CompileOptions, FunctionMap, Holds, Loop, Place, Role, Site, SiteKind, Slot,
+    CompileOptions, FunctionMap, Holds, NamedSlot, Place, Role, Site, SiteKind, Slot,
 };
 use crate::heap::cells::{HostCall, Script};
 use crate::interp::run::{builtin_closure_kind, promise, suspend};
@@ -420,36 +420,39 @@ impl Dumper<'_> {
                     self.nodes[b].frame_box = true;
                 }
             }
-            for (k, role) in site.operands.iter().enumerate() {
-                let v = fp(lp + site.locals.len() + k);
-                if *role == Role::LoopIterator(Loop::In) {
-                    // The key iterator: its object (its keys are strings).
-                    match for_in_parts(h, v) {
-                        Some((target, _)) => {
-                            self.edge(n, target, || cat!(path, "<for-in.target>"));
+            // The construct temporaries, in locals of their own and on the stack.
+            let named = site.named_slots();
+            let at = |p: Place| match p {
+                Place::Arg(i) => 2 + usize::from(i),
+                Place::Local(i) => lp + usize::from(i),
+                Place::Temp(k) => lp + site.locals.len() + usize::from(k),
+            };
+            for slot in named.iter().filter(|x| matches!(x.holds, Holds::Temp(_))) {
+                let v = fp(at(slot.place));
+                match slot.construct() {
+                    "for-in.iterator" => {
+                        // The key iterator: its object (its keys are strings).
+                        match for_in_parts(h, v) {
+                            Some((target, _)) => {
+                                self.edge(n, target, || cat!(path, "<for-in.target>"));
+                            }
+                            None => self.refuse(path.clone(), "a for-in loop over a Proxy"),
                         }
-                        None => self.refuse(path.clone(), "a for-in loop over a Proxy"),
+                        continue;
                     }
-                    continue;
+                    "for-await.next" | "yield*.next"
+                        if from_sync_partner(&named, slot)
+                            .map(|p| fp(at(p)))
+                            .and_then(|v| v.as_object())
+                            .is_some_and(|o| self.is_from_sync(o)) =>
+                    {
+                        // The dump's own iterator brings its `next`.
+                        continue;
+                    }
+                    _ => {}
                 }
-                if matches!(role, Role::LoopNext(Loop::Await | Loop::Star))
-                    && k > 0
-                    && fp(lp + site.locals.len() + k - 1)
-                        .as_object()
-                        .is_some_and(|o| self.is_from_sync(o))
-                {
-                    // The dump's own iterator brings its `next`.
-                    continue;
-                }
-                let e = self.edge(n, v, || {
-                    cat!(
-                        path,
-                        "<",
-                        site.slots.get(k).map_or("?", |s| s.as_str()),
-                        ">"
-                    )
-                });
-                if *role == Role::UsingRecord
+                let e = self.edge(n, v, || cat!(path, "<", slot.name, ">"));
+                if slot.construct() == "using.record"
                     && let Some(e) = e
                 {
                     let ok = v.as_object().is_some_and(|o| {
@@ -615,6 +618,8 @@ impl Dumper<'_> {
                         name: name.clone(),
                         scope: 0,
                     },
+                    // (Offsets are from the function's start, which differs.)
+                    Slot::Temp(n) => Slot::Temp(n.split('@').next().unwrap_or("").into()),
                     s => s.clone(),
                 })
                 .collect()
@@ -1633,7 +1638,8 @@ impl Dumper<'_> {
         // The iterator below a loop's `next` (an async-from-sync one brings its own).
         let mut it = String::new();
         let mut rets = site.returns.iter();
-        for slot in site.named_slots() {
+        let named = site.named_slots();
+        for slot in named.iter().cloned() {
             let v = fv(index(slot.place));
             let key = match slot.holds {
                 Holds::Binding if is_ident(&slot.name) => slot.name.clone(),
@@ -1644,16 +1650,16 @@ impl Dumper<'_> {
                 Holds::Hidden if class_hidden(&slot.name) => ("binding", "undefined".into()),
                 Holds::Binding | Holds::Hidden => ("binding", self.slot_expr(v, slot.boxed)),
                 Holds::Temp(role) => {
-                    let e = match (role, slot.place) {
-                        (Role::LoopNext(Loop::Await | Loop::Star), Place::Temp(k))
-                            if k > 0
-                                && fv(index(Place::Temp(k - 1)))
-                                    .as_object()
-                                    .is_some_and(|o| self.is_from_sync(o)) =>
+                    let e = match slot.construct() {
+                        "for-await.next" | "yield*.next"
+                            if from_sync_partner(&named, &slot)
+                                .map(|p| fv(index(p)))
+                                .and_then(|v| v.as_object())
+                                .is_some_and(|o| self.is_from_sync(o)) =>
                         {
                             cat!(it, ".next")
                         }
-                        (Role::LoopIterator(Loop::In), _) => match for_in_parts(h, v) {
+                        "for-in.iterator" => match for_in_parts(h, v) {
                             Some((target, keys)) => {
                                 let t = self.expr(target, None, None);
                                 let ks: Vec<String> =
@@ -1663,7 +1669,7 @@ impl Dumper<'_> {
                             // (Refused by the visit.)
                             None => "undefined".into(),
                         },
-                        (Role::FinallyReturn(_), _) => {
+                        _ if matches!(role, Some(Role::FinallyReturn(_))) => {
                             // A return address: the index of its `gosub` (the loader's pc
                             // for it).
                             let j = rets
@@ -1683,7 +1689,7 @@ impl Dumper<'_> {
                         }
                         _ => self.expr(v, None, None),
                     };
-                    if let Role::LoopIterator(_) = role {
+                    if matches!(slot.construct(), "for-await.iterator" | "yield*.iterator") {
                         it = e.clone();
                     }
                     ("slot", e)
@@ -1949,6 +1955,13 @@ fn class_hidden(name: &str) -> bool {
     ]
     .iter()
     .any(|p| name.starts_with(p))
+}
+
+/// Where the iterator of a loop's or `yield*`'s `next` slot is (an async-from-sync
+/// iterator brings its own `next`).
+fn from_sync_partner(named: &[NamedSlot], next: &NamedSlot) -> Option<Place> {
+    let want = next.partner("iterator")?;
+    named.iter().find(|x| x.name == want).map(|x| x.place)
 }
 
 /// Hidden locals the loader makes itself.

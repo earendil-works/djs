@@ -294,13 +294,18 @@ impl<'a> Parser<'a, '_> {
         self.next()?;
         self.mark(open.start);
         self.code().require_object_coercible();
-        self.roles_push(open.start, &[Role::PatternSource]);
-        if rest {
-            // The keys of the properties before the rest, to exclude from it.
+        // The value and, with a rest property, the keys of the properties before it,
+        // to exclude from it (D2732).
+        let src = self.temp("pattern.source", open.start)?;
+        self.temp_put(src);
+        let excl = if rest {
+            let e = self.temp("pattern.excluded", open.start)?;
             self.code().array_from(0);
-            self.roles_push(open.start, &[Role::PatternExcluded]);
-        }
-        let s = u8::from(rest);
+            self.temp_put(e);
+            Some(e)
+        } else {
+            None
+        };
         while !self.is(TokenKind::RBrace) {
             if self.is(TokenKind::Ellipsis) {
                 let pos = self.tok.start;
@@ -315,10 +320,11 @@ impl<'a> Parser<'a, '_> {
                     }
                     self.parse_binding_target(b)?
                 };
-                let r = t.refs();
                 self.roles_push(t_at, t.roles());
-                self.code().pick(r + 1);
-                self.code().pick(r + 1);
+                self.temp_get(src);
+                if let Some(e) = excl {
+                    self.temp_get(e);
+                }
                 self.mark(pos);
                 self.code()
                     .call_intrinsic(intrinsic("CopyDataPropertiesExcluding"), 2);
@@ -339,9 +345,11 @@ impl<'a> Parser<'a, '_> {
             let mut t_at = key_tok.start;
             let (key, t) = if shorthand {
                 let a = self.ident_atom()?;
-                if rest {
+                if let Some(e) = excl {
+                    self.temp_get(e);
                     self.code().push_atom(a);
                     self.code().array_push();
+                    self.code().drop();
                 }
                 let t = if b == Binding::Assign {
                     let e = self.parse_lhs(false)?;
@@ -355,21 +363,25 @@ impl<'a> Parser<'a, '_> {
                 (Some(a), t)
             } else {
                 let key = self.parse_property_key()?;
-                match key {
-                    Some(a) if rest => {
+                match (key, excl) {
+                    (Some(a), Some(e)) => {
+                        self.temp_get(e);
                         self.code().push_atom(a);
                         self.code().array_push();
+                        self.code().drop();
                     }
-                    Some(_) => {}
-                    None => {
+                    (Some(_), None) => {}
+                    (None, _) => {
                         // Converted once, before the target is evaluated.
                         self.mark(key_tok.start);
                         self.code().call_intrinsic(intrinsic("ToPropertyKey"), 1);
-                        if rest {
-                            // `v excl k` -> `v excl k`, with k appended to excl.
-                            self.code().insert2();
-                            self.code().array_push();
+                        if let Some(e) = excl {
+                            // `k` -> `k`, with k appended to the excluded keys.
+                            self.code().dup();
+                            self.temp_get(e);
                             self.code().swap();
+                            self.code().array_push();
+                            self.code().drop();
                         }
                         self.roles_push(key_tok.start, &[Role::PatternKey]);
                     }
@@ -385,12 +397,12 @@ impl<'a> Parser<'a, '_> {
             self.roles_push(t_at, t.roles());
             match key {
                 Some(a) => {
-                    self.code().pick(s + r);
+                    self.temp_get(src);
                     self.mark(key_tok.start);
                     self.code().get_field(a, 0);
                 }
                 None => {
-                    self.code().pick(s + 1 + r);
+                    self.temp_get(src);
                     self.code().pick(r + 1);
                     self.mark(key_tok.start);
                     self.code().get_elem();
@@ -409,11 +421,6 @@ impl<'a> Parser<'a, '_> {
             }
         }
         self.expect(TokenKind::RBrace, "}")?;
-        if rest {
-            self.code().drop();
-        }
-        self.code().drop();
-        self.roles_pop(1 + usize::from(rest));
         Ok(())
     }
 
@@ -427,13 +434,16 @@ impl<'a> Parser<'a, '_> {
         self.code().call_intrinsic(intrinsic("GetIterator"), 1);
         self.code().dup();
         self.code().get_field(atoms::NEXT, 0);
-        self.code().swap();
-        self.roles_push(open.start, &[Role::PatternNext, Role::PatternIterator]);
-        // `next it`: the close handler's depth is the depth here.
+        // The iterator (`undefined` once done) and its `next` (D2732).
+        let it = self.temp("pattern.iterator", open.start)?;
+        let next = self.temp("pattern.next", open.start)?;
+        self.temp_put(next);
+        self.temp_put(it);
+        // The close handler's depth is the depth here.
         let l_base = self.new_label();
         self.place(l_base);
         self.open_iters
-            .push_out(super::parser::OpenIter::Pattern(l_base));
+            .push_out(super::parser::OpenIter::Pattern(l_base, it));
         let mut regions = Regions {
             list: Vec::new(),
             start: l_base,
@@ -450,7 +460,7 @@ impl<'a> Parser<'a, '_> {
                 TokenKind::Comma => {
                     // An elision: one step, value dropped.
                     self.region_end(&mut regions);
-                    self.emit_iter_step(0, first, open.start);
+                    self.emit_iter_step((it, next), first, open.start);
                     self.region_start(&mut regions);
                     self.code().drop();
                     first = false;
@@ -467,7 +477,7 @@ impl<'a> Parser<'a, '_> {
                     may_throw |= matches!(t, Target::Pattern(_));
                     self.roles_push(t_at, t.roles());
                     self.region_end(&mut regions);
-                    self.emit_iter_rest(t.refs(), first, open.start);
+                    self.emit_iter_rest((it, next), first, open.start);
                     self.region_start(&mut regions);
                     self.store_target(b, t)?;
                     self.roles_pop(t.roles().len());
@@ -479,7 +489,7 @@ impl<'a> Parser<'a, '_> {
                     may_throw |= matches!(t, Target::Pattern(_));
                     self.roles_push(t_at, t.roles());
                     self.region_end(&mut regions);
-                    self.emit_iter_step(t.refs(), first, open.start);
+                    self.emit_iter_step((it, next), first, open.start);
                     self.region_start(&mut regions);
                     let name = self.target_name(&t);
                     may_throw |= self.parse_pattern_default(name)?;
@@ -497,9 +507,9 @@ impl<'a> Parser<'a, '_> {
         self.expect(TokenKind::RBracket, "]")?;
         self.open_iters.pop();
         self.region_end(&mut regions);
-        // Close a not-done iterator: `next it` -> ``.
+        // Close a not-done iterator.
         let l_skip = self.new_label();
-        self.code().nip();
+        self.temp_get(it);
         self.code().dup();
         self.code().is_undefined();
         self.code().jump_if_true(l_skip);
@@ -507,15 +517,14 @@ impl<'a> Parser<'a, '_> {
         self.code().call_intrinsic(intrinsic("IteratorClose"), 1);
         self.place(l_skip);
         self.code().drop();
-        self.roles_pop(2);
         if may_throw && !regions.list.is_empty() {
-            // `next it exc`: close a not-done iterator, rethrow.
+            // `exc`: close a not-done iterator, rethrow.
             let l_after = self.new_label();
             let l_handler = self.new_label();
             let l_rethrow = self.new_label();
             self.code().jump(l_after);
             self.place(l_handler);
-            self.code().swap();
+            self.temp_get(it);
             self.code().dup();
             self.code().is_undefined();
             self.code().jump_if_true(l_rethrow);
@@ -552,21 +561,20 @@ impl<'a> Parser<'a, '_> {
         regions.start_pc = self.f.code.pos();
     }
 
-    /// `next it refs -> next it' refs v`: the next value, or `undefined` once done
-    /// (then `it'` is `undefined`). `refs` values sit on top of the iterator. `first`:
-    /// the iterator cannot be done yet.
-    fn emit_iter_step(&mut self, refs: u8, first: bool, pos: u32) {
+    /// `-> v`: the next value, or `undefined` once done (then the iterator's temporary
+    /// is `undefined`). `first`: the iterator cannot be done yet.
+    fn emit_iter_step(&mut self, (it, next): (Atom, Atom), first: bool, pos: u32) {
         let l_end = self.new_label();
         let l_done = self.new_label();
         // `it next`, for `iter_next` (D1800).
-        self.code().pick(refs);
+        self.temp_get(it);
         if !first {
             // A done iterator is `undefined`, which is also the value.
             self.code().dup();
             self.code().is_undefined();
             self.code().jump_if_true(l_end);
         }
-        self.code().pick(refs + 2);
+        self.temp_get(next);
         self.mark(pos);
         let l_value = self.new_label();
         self.code().iter_next(l_value);
@@ -580,26 +588,26 @@ impl<'a> Parser<'a, '_> {
         self.place(l_done);
         self.code().drop();
         self.code().undefined();
-        self.code().poke(refs);
+        self.temp_put(it);
         self.code().undefined();
         self.place(l_end);
     }
 
-    /// `next it refs -> next undefined refs arr`: the remaining values.
-    fn emit_iter_rest(&mut self, refs: u8, first: bool, pos: u32) {
+    /// `-> arr`: the remaining values; the iterator is done.
+    fn emit_iter_rest(&mut self, (it, next): (Atom, Atom), first: bool, pos: u32) {
         let l_end = self.new_label();
         let l_empty = self.new_label();
-        self.code().pick(refs);
+        self.temp_get(it);
         if !first {
             self.code().dup();
             self.code().is_undefined();
             self.code().jump_if_true(l_empty);
         }
-        self.code().pick(refs + 2);
+        self.temp_get(next);
         self.mark(pos);
         self.code().call_intrinsic(intrinsic("IteratorRest"), 2);
         self.code().undefined();
-        self.code().poke(refs + 1);
+        self.temp_put(it);
         if !first {
             self.code().jump(l_end);
             self.place(l_empty);

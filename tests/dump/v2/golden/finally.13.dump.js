@@ -78,6 +78,6 @@ async function main() {
   print("gen", seen.join(" "));
   print("cases", await cases("b"), await cases("c"));
 }
-$dump.a2 = $dump.resume(cases, { at: "await#2", awaiting: $dump.p1, args: ["b"], slots: { d: "b", "switch.discriminant@28": "b", "switch.discriminant@93": "b" } });
+$dump.a2 = $dump.resume(cases, { at: "await#2", awaiting: $dump.p1, args: ["b"], slots: { d: "b", "binary.left@93": "b" } });
 $dump.a3 = Object.setPrototypeOf(((g) => (g.return(), g))((function* () {})()), gen.prototype);
 $dump.a4 = $dump.resume(main, { at: "await#7", awaiting: $dump.a2, slots: { g: $dump.a3, seen: [1, "cleanup", "{\"value\":\"early\",\"done\":true}"], "call.callee@418": print, "call.this@418": undefined, "call.arg@424": "cases" } });

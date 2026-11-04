@@ -2,20 +2,20 @@
 //!
 //! A statement list (block, function body, catch block, codemode body) opens a
 //! disposal region at its first `using` declaration: `call_intrinsic %UsingCreate`
-//! pushes the resource Record (builtins/disposable.ts), which stays on the operand
-//! stack, under the statements, until the list ends. Each binding's value goes into it
-//! with `%UsingAdd`/`%AwaitUsingAdd`. The region is a `try`/`finally` whose finally
+//! makes the resource Record (builtins/disposable.ts), which a temporary `s`
+//! (`using.record@S`, D2732) holds until the list ends. Each binding's value goes into
+//! it with `%UsingAdd`/`%AwaitUsingAdd`. The region is a `try`/`finally` whose finally
 //! block is the disposal (a `BlockKind::Finally` env, so `break`, `continue`, `return`
-//! and generator returns run it with `gosub`), with `base` the depth under the Record:
+//! and generator returns run it with `gosub`), with `base` the depth of the list:
 //!
 //! ```text
-//!          call_intrinsic %UsingCreate 0
-//! L_try:   <statements>                     ; s
+//!          call_intrinsic %UsingCreate 0; put s
+//! L_try:   <statements>
 //! L_try_end:
-//!          undefined; gosub L_fin; drop; drop; jump L_end
-//! L_exc:   (handler for [L_try, L_try_end), depth base + 1: s exc)
-//!          pick 1; swap; call_intrinsic %UsingDisposeError 2; gosub L_fin; throw
-//! L_fin:   (s v ret) pick 2; call_intrinsic %UsingDispose 1; drop; ret
+//!          undefined; gosub L_fin; drop; jump L_end
+//! L_exc:   (handler for [L_try, L_try_end), depth base: exc)
+//!          get s; swap; call_intrinsic %UsingDisposeError 2; gosub L_fin; throw
+//! L_fin:   (v ret) get s; call_intrinsic %UsingDispose 1; drop; ret
 //! L_end:
 //! ```
 //!
@@ -23,14 +23,14 @@
 //! With an `await using` in the list, the subroutine awaits between disposals:
 //!
 //! ```text
-//! L_fin:   pick 2                            ; s v ret s
-//! L_loop:  dup; call_intrinsic %UsingDisposeStep 1; jump_if_false L_done
-//!          dup; call_intrinsic %UsingAwaitValue 1
+//! L_fin:                                     ; v ret
+//! L_loop:  get s; call_intrinsic %UsingDisposeStep 1; jump_if_false L_done
+//!          get s; call_intrinsic %UsingAwaitValue 1
 //! L_a:     await
 //! L_a_end: drop; jump L_loop
-//! L_rej:   (handler for [L_a, L_a_end): s v ret s exc)
-//!          pick 1; swap; call_intrinsic %UsingDisposeError 2; drop; jump L_loop
-//! L_done:  drop; ret
+//! L_rej:   (handler for [L_a, L_a_end): v ret exc)
+//!          get s; swap; call_intrinsic %UsingDisposeError 2; drop; jump L_loop
+//! L_done:  ret
 //! ```
 //!
 //! A for-of head (`for (using x of xs)`) opens a region per iteration around the
@@ -62,8 +62,10 @@ pub(super) enum UsingList {
 
 #[derive(Clone, Copy)]
 pub(super) struct UsingRegion {
-    /// The operand depth under the resource Record.
+    /// The operand depth of the statement list.
     base: u32,
+    /// The resource Record's temporary.
+    pub rec: crate::heap::Atom,
     l_try: Label,
     l_fin: Label,
     /// An `await using` is in the list: disposal awaits.
@@ -140,7 +142,10 @@ impl Parser<'_, '_> {
         self.next()?;
         // qjs reports a misplaced declaration at its first binding.
         self.open_using(self.tok.start, is_await)?;
-        self.parse_using_bindings(is_await, false)?;
+        let UsingList::Open(r) = self.using else {
+            return Err(super::resolve::internal("using without a region"));
+        };
+        self.parse_using_bindings(r.rec, is_await, false)?;
         self.expect_semicolon()
     }
 
@@ -160,7 +165,7 @@ impl Parser<'_, '_> {
                 Ok(())
             }
             UsingList::Allowed => {
-                let r = self.using_region_start(self.stmt_depth, is_await, pos);
+                let r = self.using_region_start(self.stmt_depth, is_await, pos)?;
                 self.using_env(&r);
                 self.using = UsingList::Open(r);
                 Ok(())
@@ -168,39 +173,50 @@ impl Parser<'_, '_> {
         }
     }
 
-    /// Pushes the Record (`base` is the operand depth under it) and starts the region.
-    /// `at`, the start of the region's first bound name, names the Record's slot.
-    pub(super) fn using_region_start(&mut self, base: u32, is_await: bool, at: u32) -> UsingRegion {
+    /// Makes the Record and starts the region (`base` is the operand depth). `at`, the
+    /// start of the region's first bound name, names the Record's temporary.
+    pub(super) fn using_region_start(
+        &mut self,
+        base: u32,
+        is_await: bool,
+        at: u32,
+    ) -> PResult<UsingRegion> {
         self.code().call_intrinsic(intrinsic("UsingCreate"), 0);
-        self.roles_push(at, &[Role::UsingRecord]);
+        let rec = self.temp("using.record", at)?;
+        self.temp_put(rec);
         let l_try = self.new_label();
         let l_fin = self.new_label();
         self.place(l_try);
-        UsingRegion {
+        Ok(UsingRegion {
             base,
+            rec,
             l_try,
             l_fin,
             is_async: is_await,
-        }
+        })
     }
 
-    /// The region's `Finally` env: jumps out of it dispose. Statements continue one
-    /// deeper.
+    /// The region's `Finally` env: jumps out of it dispose.
     pub(super) fn using_env(&mut self, r: &UsingRegion) {
         self.blocks.push_out(BlockEnv {
             labels: Vec::new(),
             kind: BlockKind::Finally,
             break_label: r.l_fin,
             continue_label: None,
-            depth: r.base + 1,
+            depth: r.base,
             used: false,
         });
-        self.stmt_depth = r.base + 1;
+        self.stmt_depth = r.base;
     }
 
     /// The bindings after `using`: identifiers with initializers (`no_in` in a `for`
-    /// head). The Record is right under each value.
-    pub(super) fn parse_using_bindings(&mut self, is_await: bool, no_in: bool) -> PResult<()> {
+    /// head), added to the Record in temporary `rec`.
+    pub(super) fn parse_using_bindings(
+        &mut self,
+        rec: crate::heap::Atom,
+        is_await: bool,
+        no_in: bool,
+    ) -> PResult<()> {
         // The slim build has no `using` (D2411).
         if !crate::FULL {
             return syntax(
@@ -225,7 +241,7 @@ impl Parser<'_, '_> {
             }
             self.parse_named(name, |p| p.parse_assign(no_in))?;
             self.mark(pos);
-            self.emit_using_add(is_await);
+            self.emit_using_add(rec, is_await);
             let r = self.init_ref(name, pos);
             self.code().name_init(r);
             self.f.vars[v as usize].init_end = self.prev_end;
@@ -235,9 +251,10 @@ impl Parser<'_, '_> {
         }
     }
 
-    /// `s v -> s v`: adds the value to the Record (AddDisposableResource).
-    pub(super) fn emit_using_add(&mut self, is_await: bool) {
-        self.code().pick(1);
+    /// `v -> v`: adds the value to the Record in temporary `rec`
+    /// (AddDisposableResource).
+    pub(super) fn emit_using_add(&mut self, rec: crate::heap::Atom, is_await: bool) {
+        self.temp_get(rec);
         self.code().swap();
         let add = if is_await {
             "AwaitUsingAdd"
@@ -261,17 +278,16 @@ impl Parser<'_, '_> {
         self.code().undefined();
         self.code().gosub(r.l_fin);
         self.code().drop();
-        self.code().drop();
         self.code().jump(l_end);
         self.f.handlers.push_out(HandlerLabels {
             start: r.l_try,
             end: l_try_end,
             target: l_exc,
-            depth: r.base + 1,
+            depth: r.base,
             depth_from: None,
         });
         self.place(l_exc);
-        self.code().pick(1);
+        self.temp_get(r.rec);
         self.code().swap();
         self.code()
             .call_intrinsic(intrinsic("UsingDisposeError"), 2);
@@ -279,24 +295,19 @@ impl Parser<'_, '_> {
         self.code().throw();
         let sub = self.subroutine(r.l_fin);
         self.place(r.l_fin);
-        self.code().pick(2);
         if r.is_async {
             let (l_loop, l_done) = (self.new_label(), self.new_label());
             let (l_a, l_a_end, l_rej) = (self.new_label(), self.new_label(), self.new_label());
             self.place(l_loop);
-            self.code().dup();
+            self.temp_get(r.rec);
             self.code().call_intrinsic(intrinsic("UsingDisposeStep"), 1);
             self.code().jump_if_false(l_done);
-            self.code().dup();
+            self.temp_get(r.rec);
             self.code().call_intrinsic(intrinsic("UsingAwaitValue"), 1);
             self.place(l_a);
-            // `s v ret s`: the subroutine's value and return address between. They and
-            // the Record's copy are named by the site (the list's end).
-            let rs = [
-                Role::FinallyValue,
-                Role::FinallyReturn(sub),
-                Role::UsingRecord,
-            ];
+            // `v ret`: the subroutine's value and return address, named by the site
+            // (the list's end).
+            let rs = [Role::FinallyValue, Role::FinallyReturn(sub)];
             self.roles_push(self.prev_end, &rs);
             self.site(SiteKind::AwaitUsing, self.prev_end);
             self.roles_pop(rs.len());
@@ -308,11 +319,11 @@ impl Parser<'_, '_> {
                 start: l_a,
                 end: l_a_end,
                 target: l_rej,
-                depth: r.base + 4,
+                depth: r.base + 2,
                 depth_from: None,
             });
             self.place(l_rej);
-            self.code().pick(1);
+            self.temp_get(r.rec);
             self.code().swap();
             self.code()
                 .call_intrinsic(intrinsic("UsingDisposeError"), 2);
@@ -320,12 +331,12 @@ impl Parser<'_, '_> {
             self.code().jump(l_loop);
             self.place(l_done);
         } else {
+            self.temp_get(r.rec);
             self.code().call_intrinsic(intrinsic("UsingDispose"), 1);
+            self.code().drop();
         }
-        self.code().drop();
         self.code().ret();
         self.place(l_end);
         self.stmt_depth = r.base;
-        self.roles_pop(1);
     }
 }

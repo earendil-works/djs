@@ -20,10 +20,22 @@ fn roles(src: &str) -> Vec<String> {
         for s in &m.sites {
             out.push(match &s.unsupported {
                 Some(u) => alloc::format!("{} !{u}", s.name),
-                None if s.operands.is_empty() => alloc::format!("{} -", s.name),
                 None => {
-                    let r: Vec<String> = s.operands.iter().map(|r| alloc::format!("{r}")).collect();
-                    alloc::format!("{} {}", s.name, r.join(" "))
+                    // Temporaries in locals by construct, then the stack's roles.
+                    let mut r: Vec<String> = s
+                        .locals
+                        .iter()
+                        .filter_map(|x| match x {
+                            super::Slot::Temp(n) => n.split('@').next().map(String::from),
+                            _ => None,
+                        })
+                        .collect();
+                    r.extend(s.operands.iter().map(|r| alloc::format!("{r}")));
+                    if r.is_empty() {
+                        alloc::format!("{} -", s.name)
+                    } else {
+                        alloc::format!("{} {}", s.name, r.join(" "))
+                    }
                 }
             });
         }
@@ -161,15 +173,15 @@ const LOOPS: &[(&str, &[&str])] = &[
     // Delegation: the inner iterator and its `next` below every suspension.
     (
         "function* h() { f(yield* xs); }",
-        &["yield*#1 call.callee call.this yield*.iterator yield*.next"],
+        &["yield*#1 yield*.iterator yield*.next call.callee call.this"],
     ),
     (
         "async function* h() { yield* xs; }",
         &[
             "yield*#1 yield*.iterator yield*.next",
             "yield*.await#1 yield*.iterator yield*.next",
-            "yield*.await#2 yield*.iterator yield*.next",
-            "yield*.await#3 yield*.iterator yield*.next",
+            "yield*.await#2 -",
+            "yield*.await#3 -",
             "yield*.await#4 -",
             "yield*.await#5 yield*.iterator yield*.next",
             "yield*.await#6 yield*.iterator yield*.next",
@@ -186,7 +198,7 @@ const LOOPS: &[(&str, &[&str])] = &[
 const STATEMENTS: &[(&str, &[&str])] = &[
     (
         "switch (a) { case await b: break; }",
-        &["await#1 switch.discriminant switch.discriminant"],
+        &["await#1 binary.left"],
     ),
     ("switch (a) { case 1: await b; }", &["await#1 -"]),
     (
@@ -216,7 +228,7 @@ const STATEMENTS: &[(&str, &[&str])] = &[
         &[
             "for-await.close#1 exception",
             "for-await.next#1 for-await.iterator for-await.next",
-            "for-await.close#2 finally.value finally.return",
+            "for-await.close#2 for-await.iterator finally.value finally.return",
         ],
     ),
 ];
@@ -227,55 +239,54 @@ const USING: &[(&str, &[&str])] = &[
         "{ await using r = open(); await r.x; }",
         &[
             "await#1 using.record",
-            "await-using#1 using.record finally.value finally.return using.record",
+            "await-using#1 using.record finally.value finally.return",
         ],
     ),
     (
         "for (await using r of rs) { f(await r); }",
         &[
             "await#1 for-of.iterator for-of.next using.record call.callee call.this",
-            "await-using#1 for-of.iterator for-of.next using.record finally.value finally.return using.record",
+            "await-using#1 for-of.iterator for-of.next using.record finally.value finally.return",
         ],
     ),
 ];
 
 /// Destructuring: the value or iterator under way, keys, assignment targets.
 const PATTERNS: &[(&str, &[&str])] = &[
-    ("const { a = await b } = o;", &["await#1 pattern.source"]),
+    // A pattern's state is listed while a later step reads it.
+    ("const { a = await b } = o;", &["await#1 -"]),
+    ("const { a = await b, c } = o;", &["await#1 pattern.source"]),
     ("const [x] = await y;", &["await#1 -"]),
     (
         "const { a, [await k]: { b = await c }, ...r } = o;",
         &[
             "await#1 pattern.source pattern.excluded",
-            "await#2 pattern.source pattern.excluded pattern.key pattern.source",
+            "await#2 pattern.source pattern.excluded pattern.key",
         ],
     ),
     (
         "const [x = await a, [y = await b] = []] = xs;",
         &[
-            "await#1 pattern.next pattern.iterator",
-            "await#2 pattern.next pattern.iterator pattern.next pattern.iterator",
+            "await#1 pattern.iterator pattern.next",
+            "await#2 pattern.iterator pattern.iterator",
         ],
     ),
     (
         "[o[await k], p.q = await d] = xs;",
         &[
-            "await#1 assign.value pattern.next pattern.iterator member.object",
-            "await#2 assign.value pattern.next pattern.iterator assign.object",
+            "await#1 pattern.iterator pattern.next assign.value member.object",
+            "await#2 pattern.iterator assign.value assign.object",
         ],
     ),
     (
         "({ x: o[k] = await d } = v);",
-        &["await#1 assign.value pattern.source assign.object assign.key"],
+        &["await#1 assign.value assign.object assign.key"],
     ),
     (
         "for (const { a = await d } of xs) f(a);",
-        &["await#1 for-of.iterator for-of.next pattern.source"],
+        &["await#1 for-of.iterator for-of.next"],
     ),
-    (
-        "try {} catch ({ e = await d }) {}",
-        &["await#1 pattern.source"],
-    ),
+    ("try {} catch ({ e = await d }) {}", &["await#1 -"]),
 ];
 
 /// Constructs whose operands are not described yet: never mislabeled.
@@ -330,7 +341,7 @@ fn names(src: &str) -> Vec<String> {
     let mut out = Vec::new();
     for m in &maps {
         for s in &m.sites {
-            out.push(alloc::format!("{} {}", s.name, s.slots.join(" ")));
+            out.push(alloc::format!("{} {}", s.name, s.temporaries().join(" ")));
         }
     }
     out
@@ -368,9 +379,15 @@ fn slot_names_per_construct() {
             "for (const x of xs) await x;",
             &["await#1 for-of.iterator@0 for-of.next@0"],
         ),
+        // The discriminant's temporary is read again only by a later test; the test
+        // under way keeps its copy (the left side of its `===`).
         (
             "switch (d) { case 1: break; case await t: }",
-            &["await#1 switch.discriminant@0 switch.discriminant@28"],
+            &["await#1 binary.left@28"],
+        ),
+        (
+            "switch (d) { case await t: break; case 2: }",
+            &["await#1 switch.discriminant@0 binary.left@13"],
         ),
     ];
     let mut bad = Vec::new();
@@ -555,8 +572,16 @@ fn pinned_maps() {
                     match &s.unsupported {
                         Some(u) => *unsupported.entry(u.clone()).or_default() += 1,
                         None => {
-                            let seq: Vec<String> =
-                                s.operands.iter().map(|r| alloc::format!("{r}")).collect();
+                            // Temporaries in locals by construct, then the stack's roles.
+                            let mut seq: Vec<String> = s
+                                .locals
+                                .iter()
+                                .filter_map(|x| match x {
+                                    super::Slot::Temp(n) => n.split('@').next().map(String::from),
+                                    _ => None,
+                                })
+                                .collect();
+                            seq.extend(s.operands.iter().map(|r| alloc::format!("{r}")));
                             let seq = if seq.is_empty() {
                                 String::from("-")
                             } else {
@@ -587,7 +612,7 @@ fn pinned_maps() {
     for (k, n) in &kinds {
         summary.push_str(&alloc::format!("{n:5} {k}\n"));
     }
-    summary.push_str("\n## described, by operand roles\n");
+    summary.push_str("\n## described, by temporaries (in locals, then the stack's roles)\n");
     let mut seqs: Vec<_> = sequences.iter().collect();
     seqs.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
     for (s, n) in seqs {

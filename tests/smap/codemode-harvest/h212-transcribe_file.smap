@@ -1,8 +1,8 @@
 function <anonymous> @1..2037
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
-  await#1 @1790 (35:8) pc 182: -
+  await#1 @1790 (35:8) pc 189: -
 function <anonymous> @1798..2026
   arg0 tools@0
   loc0 <state>, loc1 r@0, loc2 b@44
-  await#1 @87 (37:55) pc 92: for-of.iterator@33 for-of.next@33 call.callee@67 call.this@67 binary.left@74
+  await#1 @87 (37:55) pc 98: for-of.iterator@33 for-of.next@33 call.callee@67 call.this@67 binary.left@74

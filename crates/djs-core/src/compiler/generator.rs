@@ -11,7 +11,7 @@ use super::PResult;
 use super::expr::Expr;
 use super::func::HandlerLabels;
 use super::parser::{OpenIter, Parser, syntax};
-use super::smap::{Loop, Role, SiteKind};
+use super::smap::{Role, SiteKind};
 use crate::bytecode::intrinsics::intrinsic_id;
 use crate::heap::atoms;
 use crate::lexer::TokenKind;
@@ -90,8 +90,8 @@ impl Parser<'_, '_> {
             self.place(l_end);
             self.place(l_close);
             let (depth, depth_from) = match it {
-                OpenIter::Pattern(base) => (0, Some(base)),
-                OpenIter::ForOf(depth, _) => (depth, None),
+                OpenIter::Pattern(base, _) => (0, Some(base)),
+                OpenIter::ForOf(depth, _, _) => (depth, None),
             };
             self.f.handlers.insert(
                 0,
@@ -104,21 +104,27 @@ impl Parser<'_, '_> {
                 },
             );
             match it {
-                OpenIter::Pattern(_) => {
-                    // `next it x` -> `next x`, closing a not-done iterator.
+                OpenIter::Pattern(_, it) => {
+                    // `x` -> `x`, closing a not-done iterator. It is done first: the
+                    // pattern's close handler, which covers this code, must not close it
+                    // again if `return()` throws.
                     let l_skip = self.new_label();
-                    self.code().swap();
+                    self.temp_get(it);
                     self.code().dup();
                     self.code().is_undefined();
                     self.code().jump_if_true(l_skip);
+                    self.code().undefined();
+                    self.temp_put(it);
                     self.code().call_intrinsic(intrinsic("IteratorClose"), 1);
                     self.place(l_skip);
                     self.code().drop();
                 }
-                OpenIter::ForOf(_, is_await) => {
-                    // `it next x` -> `x`.
-                    self.code().rot3r();
-                    self.code().drop();
+                OpenIter::ForOf(_, is_await, it) => {
+                    // `x` -> `x`, closing the loop's iterator, after marking it closed
+                    // for the loop's close handler (`undefined`), as for a pattern.
+                    self.temp_get(it);
+                    self.code().undefined();
+                    self.temp_put(it);
                     if is_await {
                         self.emit_async_close_normal(
                             (SiteKind::ForAwaitClose, self.prev_end),
@@ -152,7 +158,8 @@ impl Parser<'_, '_> {
     }
 
     /// `yield* v` with `v` on the stack (ECMA-262 15.5.5): delegation to v's iterator,
-    /// forwarding `next`/`throw`/`return`. The loop keeps `it next` on the stack. Sync
+    /// forwarding `next`/`throw`/`return`. The inner iterator and its `next` are
+    /// temporaries (`yield*.iterator@S`, `yield*.next@S`, D2732). Sync
     /// generators pass the inner result objects through with `yield_star`; async ones
     /// await every inner result and yield its `value`.
     fn emit_yield_star(&mut self, pos: u32, is_async: bool) -> PResult<()> {
@@ -175,22 +182,21 @@ impl Parser<'_, '_> {
         self.code().call_intrinsic(intrinsic(get_iterator), 1);
         self.code().dup();
         self.code().get_field(atoms::NEXT, 0);
-        // `it next` stay below every suspension of the delegation.
-        self.roles_push(
-            pos,
-            &[Role::LoopIterator(Loop::Star), Role::LoopNext(Loop::Star)],
-        );
+        let it = self.temp("yield*.iterator", pos)?;
+        let next = self.temp("yield*.next", pos)?;
+        self.temp_put(next);
+        self.temp_put(it);
         self.place(l_base);
-        // `it next recv` -> `it next next it recv` -> call.
+        // `recv` -> `next it recv` -> call.
         self.code().undefined();
         self.place(l_loop);
-        self.code().pick(1);
-        self.code().pick(3);
+        self.temp_get(next);
+        self.temp_get(it);
         self.code().rot3l();
         self.code().call(1);
         self.emit_inner_result(is_async);
         self.place(l_check);
-        // `it next res`
+        // `res`
         self.code().dup();
         self.code().get_field(atoms::DONE, 0);
         self.code().jump_if_true(l_done);
@@ -207,7 +213,7 @@ impl Parser<'_, '_> {
             self.code().yield_star(0);
         }
         self.place(r_end);
-        // `it next recv isReturn`: the throw handler covers the yield.
+        // `recv isReturn`: the throw handler covers the yield.
         self.f.handlers.insert(
             0,
             HandlerLabels {
@@ -219,12 +225,12 @@ impl Parser<'_, '_> {
             },
         );
         self.code().jump_if_false(l_loop);
-        // return(x): `it next x`.
+        // return(x): `x`.
         if is_async {
             self.site(SiteKind::YieldStarAwait, pos);
             self.code().await_(0);
         }
-        self.emit_inner_method(atoms::RETURN, l_retnone);
+        self.emit_inner_method(it, atoms::RETURN, l_retnone);
         self.emit_inner_result(is_async);
         self.code().dup();
         self.code().get_field(atoms::DONE, 0);
@@ -234,32 +240,28 @@ impl Parser<'_, '_> {
             self.site(SiteKind::YieldStarAwait, pos);
             self.code().await_(0);
         }
-        self.code().nip();
-        self.code().nip();
         self.emit_return_from_expr();
-        // No `return` method: `it next x ret` -> return x.
+        // No `return` method: `x ret` -> return x.
         self.place(l_retnone);
         self.code().drop();
         if is_async {
             self.site(SiteKind::YieldStarAwait, pos);
             self.code().await_(0);
         }
-        self.code().nip();
-        self.code().nip();
         self.emit_return_from_expr();
-        // throw(e) at the yield: `it next e`.
+        // throw(e) at the yield: `e`.
         self.place(l_throw);
-        self.emit_inner_method(atoms::THROW, l_nothrow);
+        self.emit_inner_method(it, atoms::THROW, l_nothrow);
         self.emit_inner_result(is_async);
         self.code().jump(l_check);
         // No `throw` method: close the iterator, then a TypeError.
         self.place(l_nothrow);
         self.code().drop();
         self.code().drop();
-        self.code().drop();
+        self.temp_get(it);
         self.mark(pos);
         if is_async {
-            self.emit_async_close_normal((SiteKind::YieldStarAwait, pos), Some((2, &[])));
+            self.emit_async_close_normal((SiteKind::YieldStarAwait, pos), Some((0, &[])));
         } else {
             self.code().call_intrinsic(intrinsic("IteratorClose"), 1);
             self.code().drop();
@@ -275,25 +277,27 @@ impl Parser<'_, '_> {
         // Done: the result's value is the value of `yield*`.
         self.place(l_done);
         self.code().get_field(atoms::VALUE, 0);
-        self.code().nip();
-        self.code().nip();
         self.place(l_end);
-        self.roles_pop(2);
         Ok(())
     }
 
-    /// `it next v` -> `it next res` by calling the inner iterator's method `name`
+    /// `v` -> `res` by calling the inner iterator's (temporary `it`) method `name`
     /// (GetMethod: undefined or null means none) with `v`; without one, jumps to
-    /// `none` with `it next v m`.
-    fn emit_inner_method(&mut self, name: crate::heap::Atom, none: crate::bytecode::Label) {
-        self.code().pick(2);
+    /// `none` with `v m`.
+    fn emit_inner_method(
+        &mut self,
+        it: crate::heap::Atom,
+        name: crate::heap::Atom,
+        none: crate::bytecode::Label,
+    ) {
+        self.temp_get(it);
         self.code().get_field(name, 0);
         self.code().dup();
         self.code().is_nullish();
         self.code().jump_if_true(none);
-        // `it next v m` -> `it next m it v`
+        // `v m` -> `m it v`
         self.code().swap();
-        self.code().pick(3);
+        self.temp_get(it);
         self.code().swap();
         self.code().call(1);
     }

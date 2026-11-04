@@ -31,6 +31,7 @@ mod resolve;
 mod scan;
 mod smap;
 mod stmt;
+mod temps;
 mod ts;
 mod ts_decl;
 mod ts_meta;
@@ -315,7 +316,7 @@ fn suspension_maps_with(
 }
 
 #[cfg(feature = "dump")]
-pub use smap::{FunctionMap, Loop, Role, Site, SiteKind, Slot};
+pub use smap::{FunctionMap, Role, Site, SiteKind, Slot};
 #[cfg(feature = "dump")]
 pub use smap::{Holds, NamedSlot, Place};
 

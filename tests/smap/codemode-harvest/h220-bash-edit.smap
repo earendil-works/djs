@@ -1,9 +1,9 @@
 function <anonymous> @1..3034
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
-  await#1 @1675 (37:8) pc 192: -
+  await#1 @1675 (37:8) pc 199: -
 function <anonymous> @1683..3023
   arg0 tools@0
   loc0 <state>, loc1 item@29
-  await#1 @965 (41:8) pc 137: for-of.iterator@19 for-of.next@19 call.callee@960 call.this@960
-  await#2 @995 (42:6) pc 198: call.callee@990 call.this@990 (out: loc1)
+  await#1 @965 (41:8) pc 142: for-of.iterator@19 for-of.next@19 call.callee@960 call.this@960
+  await#2 @995 (42:6) pc 202: call.callee@990 call.this@990 (out: loc1)

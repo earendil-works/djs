@@ -33,7 +33,7 @@ use alloc::vec::Vec;
 use super::Vm;
 use super::dump_load::{Given as GivenValue, Load, array_arg, entries_arg, given, string_arg};
 use crate::bytecode::template::{debug_info, func_flags};
-use crate::compiler::{Holds, Loop, Place, Role, SiteKind};
+use crate::compiler::{Holds, Place, Role, SiteKind};
 use crate::heap::cells::{BoxCell, FuncTemplate};
 use crate::heap::{CellKind, Heap, HeapError, ObjectClass};
 use crate::interp::frame;
@@ -242,43 +242,34 @@ impl Vm {
                     ));
                 }
             };
-            let (index, v) = match slot.place {
-                Place::Arg(i) => (
-                    2 + usize::from(i),
-                    slot_value(&mut self.heap, v, false, &slot.name)?,
-                ),
-                Place::Local(i) => (
-                    lp + usize::from(i),
-                    slot_value(&mut self.heap, v, slot.boxed, &slot.name)?,
-                ),
-                Place::Temp(k) => {
-                    let Holds::Temp(role) = slot.holds else {
-                        unreachable!("a temporary holds a role")
-                    };
-                    let v = match role {
-                        Role::LoopIterator(Loop::In) => {
-                            super::dump_prims::for_in_iterator(&self.heap, v).ok_or_else(|| {
-                                cat!(
-                                    "$dump.resume: a for-in loop's iterator is made by $dump.forIn"
-                                )
-                            })?
-                        }
-                        // A return address, by the index of its `gosub` (D2627).
-                        Role::FinallyReturn(_) => {
-                            let pc = v
-                                .as_int()
-                                .and_then(|j| usize::try_from(j).ok())
-                                .zip(rets.next())
-                                .and_then(|(j, r)| r.get(j).copied())
-                                .ok_or_else(|| {
-                                    cat!("$dump.resume: ", at, " has no such ", slot.name)
-                                })?;
-                            Value::int(pc as i32)
-                        }
-                        _ => v,
-                    };
-                    (lp + n_locals + usize::from(k), v)
+            // A temporary's value as the frame holds it.
+            let v = match (slot.construct(), slot.holds) {
+                ("for-in.iterator", _) => super::dump_prims::for_in_iterator(&self.heap, v)
+                    .ok_or_else(|| {
+                        cat!("$dump.resume: a for-in loop's iterator is made by $dump.forIn")
+                    })?,
+                // A return address, by the index of its `gosub` (D2627).
+                (_, Holds::Temp(Some(Role::FinallyReturn(_)))) => {
+                    let pc = v
+                        .as_int()
+                        .and_then(|j| usize::try_from(j).ok())
+                        .zip(rets.next())
+                        .and_then(|(j, r)| r.get(j).copied())
+                        .ok_or_else(|| cat!("$dump.resume: ", at, " has no such ", slot.name))?;
+                    Value::int(pc as i32)
                 }
+                _ => v,
+            };
+            let index = match slot.place {
+                Place::Arg(i) => 2 + usize::from(i),
+                Place::Local(i) => lp + usize::from(i),
+                Place::Temp(k) => lp + n_locals + usize::from(k),
+            };
+            let v = match slot.holds {
+                Holds::Binding | Holds::Hidden => {
+                    slot_value(&mut self.heap, v, slot.boxed, &slot.name)?
+                }
+                Holds::Temp(_) => v,
             };
             frame[index] = v;
         }

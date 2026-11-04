@@ -1004,6 +1004,15 @@ impl Exec<'_> {
                             // spilled for every instruction, D2441.)
                             jump!(Op::IterNext, true, ld32(b, ip + 1) as i32)
                         }
+                        fast::ITER_NEXT_LOC => {
+                            let at = lp + imm16!();
+                            let (it, f) = (ld(b, slot!(at)), ld(b, slot!(at + 1)));
+                            let Some(v) = heap_call!(self.iter_next_hit(it, f)) else {
+                                break Exit::Decline(fast::ITER_NEXT_LOC);
+                            };
+                            push!(v);
+                            jump!(Op::IterNextLoc, true, ld32(b, ip + 3) as i32)
+                        }
                         fast::CALL_INTRINSIC | fast::CALL_INTRINSIC8 => {
                             // (One arm for both: two copies of `intrinsic_hit` are a
                             // longer V8 tier-up, D2443.)
