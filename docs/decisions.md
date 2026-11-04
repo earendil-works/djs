@@ -9039,3 +9039,15 @@ assignment instead of the destructuring target), so after a syntax error the sou
 parsed again with exact scans (`compiler::parse`), and errors stay what they were. Only
 the dump module has it (its loads are where the data is; the shipped modules keep their
 size, +470 B gzip otherwise). The records dump loads ~12% faster.
+
+## D2802: One dump-module sandbox per module and memory limit in the process
+date: 2026-11-05 · by: dumpperf · issue: 0198
+Refines D2701. Each Sandbox with `dumpModule` kept its own dump-module instance, so a
+`Sandbox.resume` in packaging B paid a second instance and its VM on top of the new
+sandbox (B's resume was ~0.36 ms over A's at the corpus median). The instances are now
+shared by every sandbox of the process with the same dump module and memory limit
+(`dumpers` in js/src/sandbox.ts): a dump or a load moves the sandbox's image into that VM
+and runs no host function there (the loader refuses host calls, the dumper runs no
+code), so the VM is the only state, and it is replaced by the next image. B's resume is
+now ~0.15 ms over A's at the median. A process keeps one dump instance per limit, sized by
+the largest image it took, instead of one per live sandbox.

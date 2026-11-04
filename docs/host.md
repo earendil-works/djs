@@ -219,9 +219,10 @@ const sb = await Sandbox.create({ module: await loadModule(), dumpModule: await 
 
 With `dumpModule`, `dump`, `load`, `Run.dump`, `loadRun`, the tasks' dumps and `Sandbox.resume` move the VM's image to
 an instance of the dump module and back (the feature leaves images alone, D2352, so
-either module reads the other's). The sandbox keeps that instance and its VM between
-dumps (`vm_replace_image` loads the next image into the same VM, D2701), so the instance
-and the dumper's per-VM work are paid once. Dumping copies the arena as it is (the main VM
+either module reads the other's). The process keeps that instance and its VM between
+dumps, one per dump module and memory limit, shared by the sandboxes (`vm_replace_image`
+loads the next image into the same VM, D2701, D2802), so the instance and the dumper's
+per-VM work are paid once. Dumping copies the arena as it is (the main VM
 is untouched); loading collects in the dump module and replaces the sandbox's VM by the
 result. Images move only inside the process, so `vm_from_bytes` and `vm_replace_image`
 check their header and dependency descriptor but do not verify every cell (D2700).

@@ -612,3 +612,6 @@ topics when the index is next reorganized.
 - D2733: Finally completions in temporaries; gosub/ret and return-address indexes gone
 - D2734: No role vocabulary: stack values are named by construct; class sites refused by a marker
 - D2735: One compile per load: the loader records the maps in the compile that runs the dump
+- D2800: String and number constants are not deduplicated per function while parsing
+- D2801: With the dumper, pattern scans stop at a literal element
+- D2802: One dump-module sandbox per module and memory limit in the process

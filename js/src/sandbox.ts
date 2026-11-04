@@ -319,6 +319,14 @@ const modules = new Map<string, Promise<WebAssembly.Module>>();
 /** The default module once loaded, for the synchronous constructor. */
 let loadedDefault: WebAssembly.Module | undefined;
 
+/**
+ * The dump module's sandboxes, one per module and memory limit in the process (D2802):
+ * every sandbox with that `dumpModule` moves its image into the same instance and VM for
+ * a dump or a load, which runs no host function (the loader refuses host calls), so the
+ * VM is the only state they share, and it is replaced each time.
+ */
+const dumpers = new WeakMap<WebAssembly.Module, Map<number, Sandbox>>();
+
 /** The default location of djs-wasm: `$DJS_WASM`, else the `wasm` profile build output. */
 export function defaultWasmPath(): string | URL {
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
@@ -548,8 +556,6 @@ export class Sandbox {
   private readonly namespaces = new Map<string, number>();
   /** The host-driven run in progress (`begin`, `resume`), until it ends. */
   private active: RunCore | null = null;
-  /** With `dumpModule`: the dump module's sandbox, kept between dumps (D2701). */
-  private dumper: Sandbox | null = null;
   /** The task in progress (`start`, `resume`): ends it when the sandbox is disposed. */
   private cancelTask: (() => void) | null = null;
 
@@ -1119,11 +1125,16 @@ export class Sandbox {
       clock: sb.clock,
       namespaces: [...sb.namespaces],
     });
-    // One dump-module sandbox per sandbox, kept between dumps (D2701): an instance costs a
-    // base, and its VM keeps what the dumper derives from the base on the first dump.
-    let d = this.dumper;
-    if (d === null || d.dead !== null) {
-      d = this.dumper = new Sandbox({ ...this.opts, module: dm, dumpModule: undefined }, raw(this));
+    // One dump-module sandbox per module and memory limit, kept between dumps (D2701,
+    // D2802): an instance costs a base, and its VM keeps what the dumper derives from the
+    // base on the first dump.
+    const limit = this.opts.memoryLimit ?? 0;
+    let byLimit = dumpers.get(dm);
+    if (byLimit === undefined) dumpers.set(dm, (byLimit = new Map()));
+    let d = byLimit.get(limit);
+    if (d === undefined || d.dead !== null) {
+      d = new Sandbox({ ...this.opts, module: dm, dumpModule: undefined }, raw(this));
+      byLimit.set(limit, d);
     } else d.takeImage(raw(this));
     const r = f(d);
     if (back) {
@@ -1372,8 +1383,6 @@ export class Sandbox {
   dispose(): void {
     this.cancelTask?.();
     this.active = null;
-    this.dumper?.dispose();
-    this.dumper = null;
     if (this.dead === null) {
       this.x.vm_free(this.vm);
       this.dead = "disposed";

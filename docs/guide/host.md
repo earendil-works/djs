@@ -305,7 +305,7 @@ need, so the
 shipped module leaves it out (D2704). Such a host loads a second module, the same build
 with the dumper, and passes it to the sandbox: dumping copies the VM's image into an
 instance of that module and writes the dump there; loading does the reverse, and the
-sandbox keeps that instance for its next dumps (D2701). The image never leaves the
+process keeps that instance, shared by its sandboxes, for the next dumps (D2701, D2802). The image never leaves the
 process, so neither module verifies it cell by cell, only that it was made by the same
 build's tables.
 

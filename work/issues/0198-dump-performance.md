@@ -107,5 +107,10 @@ dump-every-idle, idle-point counts at 100%).
   errors are unchanged. records load 10.0 -> 8.8 ms native. Gated on `dump` because it
   costs the slim module ~470 B gzip otherwise (and only the dump module loads dumps).
 - D2800 records win 6/8's constant changes, D2801 win 10.
+- Win 11 (packaging B, D2802): one dump-module sandbox per dump module and memory limit
+  in the process, not per sandbox, so `Sandbox.resume` no longer makes a second instance
+  (the dump module's VM runs no host function, so sharing is safe). Corpus B resume
+  minus A resume, totals: ~370 -> ~140 ms; p50 gap 0.36 -> ~0.16 ms (machine load ~10).
+  Docs: host.md, guide/host.md.
 
 ## Result
