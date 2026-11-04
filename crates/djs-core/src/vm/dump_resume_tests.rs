@@ -18,6 +18,8 @@ use super::*;
 
 const LATER: u32 = 1;
 const PRINT: u32 = 2;
+/// A plain dump's `$djs.seed`.
+const SEED: u32 = 3;
 
 fn base() -> &'static [u8] {
     static BASE: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
@@ -1470,6 +1472,12 @@ fn a_frame_holds_an_array_with_named_properties() {
 fn plain_step(vm: &mut Vm, lines: &mut Vec<String>) -> Option<u32> {
     loop {
         match vm.run(1_000_000_000) {
+            Status::HostCall { call_id, fn_id } if fn_id == SEED => {
+                let args = vm.host_call(call_id).unwrap().args;
+                let half = |v: Value| v.as_number().unwrap_or(0.0) as i32 as u32 as u64;
+                vm.set_math_random_seed((half(args[1]) << 32) | half(args[0]));
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+            }
             Status::HostCall { call_id, fn_id } => {
                 assert_eq!(fn_id, PRINT, "unexpected host call");
                 let args = vm.host_call(call_id).unwrap().args;
@@ -1524,9 +1532,11 @@ fn plain_dump_at(src: &str, k: usize) -> String {
 /// a no-op (the fixtures draw no random numbers), `$djs.resume` making the call again.
 fn plain_load(text: &str) -> Result<Vm, String> {
     let mut vm = new_vm();
+    let seed = vm.new_host_function(SEED, "seed").unwrap();
+    vm.define_global("$djs_seed", seed).unwrap();
     run_value(
         &mut vm,
-        "globalThis.$djs = { seed() {}, resume: (id, name, args) => later(...args) }; 0",
+        "globalThis.$djs = { seed: $djs_seed, resume: (id, name, args) => later(...args) }; delete globalThis.$djs_seed; 0",
     );
     let f = vm
         .compile(
@@ -1536,10 +1546,18 @@ fn plain_load(text: &str) -> Result<Vm, String> {
         .map_err(|e| alloc::format!("{} at {}:{}", e.message, e.line, e.col))?;
     let this = Value::object(vm.global());
     vm.call(f, this, &[]).map_err(|e| alloc::format!("{e:?}"))?;
-    match vm.run(1_000_000_000) {
-        Status::Idle | Status::Done(_) => {}
-        Status::Threw(e) => return Err(alloc::format!("the load threw {}", vm.display(e))),
-        s => return Err(alloc::format!("the load stopped: {s:?}")),
+    loop {
+        match vm.run(1_000_000_000) {
+            Status::Idle | Status::Done(_) => break,
+            Status::HostCall { call_id, fn_id } if fn_id == SEED => {
+                let args = vm.host_call(call_id).unwrap().args;
+                let half = |v: Value| v.as_number().unwrap_or(0.0) as i32 as u32 as u64;
+                vm.set_math_random_seed((half(args[1]) << 32) | half(args[0]));
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+            }
+            Status::Threw(e) => return Err(alloc::format!("the load threw {}", vm.display(e))),
+            s => return Err(alloc::format!("the load stopped: {s:?}")),
+        }
     }
     if run_value(&mut vm, "typeof $dump + typeof $djs") != "undefinedundefined" {
         return Err("the dump left $dump or $djs".into());
@@ -1550,9 +1568,9 @@ fn plain_load(text: &str) -> Result<Vm, String> {
 /// Every fixture program, plain-dumped at every idle point of a chain: the run dumped at
 /// its first idle point, the loaded dump at its first, and so on. The lines must be the
 /// uninterrupted run's; a refusal ends the chain (counted: the constructs 0203 adds).
-#[test]
-fn plain_dump_chains_continue_like_the_run() {
-    let (mut failed, mut links, mut refused) = (Vec::new(), 0, Vec::new());
+/// The programs plain dumps are checked on: the v2 fixtures and the golden programs.
+fn plain_programs() -> Vec<(String, String)> {
+    let mut out = Vec::new();
     for name in [
         "plan",
         "operands",
@@ -1567,6 +1585,108 @@ fn plain_dump_chains_continue_like_the_run() {
     ] {
         let src =
             std::fs::read_to_string(fixture_dir().join(alloc::format!("{name}.src.js"))).unwrap();
+        out.push((String::from(name), src));
+    }
+    for (name, body, src) in golden_programs() {
+        if !body {
+            out.push((alloc::format!("golden/{name}"), src));
+        }
+    }
+    out
+}
+
+/// The refusals plain dumps of the programs may give, `program@k: reason` (a ratchet:
+/// `DJS_UPDATE_PLAIN_REFUSALS=1` rewrites it).
+fn plain_refusals_file() -> std::path::PathBuf {
+    fixture_dir().join("plain-refusals.txt")
+}
+
+/// Every program dumped (plainly) at each of its idle points, the dump run in a fresh VM
+/// to the end: the lines before and after must be the uninterrupted run's. Refusals are
+/// checked against tests/dump/v2/plain-refusals.txt.
+#[test]
+fn plain_dumps_at_every_idle_point() {
+    let (mut failed, mut refused, mut ok) = (Vec::new(), Vec::new(), 0);
+    for (name, src) in plain_programs() {
+        let (want, marks) = run_program(&src);
+        for k in 1..=marks.len() {
+            let mut vm = new_vm();
+            let f = vm
+                .compile(
+                    src.as_bytes(),
+                    &crate::compiler::CompileOptions::script("src.js"),
+                )
+                .unwrap();
+            let this = Value::object(vm.global());
+            vm.call(f, this, &[]).unwrap();
+            let mut lines = Vec::new();
+            for _ in 1..k {
+                let id = plain_step(&mut vm, &mut lines).expect("an idle point");
+                settle(&mut vm, id);
+            }
+            plain_step(&mut vm, &mut lines).expect("an idle point");
+            let text = match plain_dump(&vm) {
+                Ok(t) => t,
+                Err(e) => {
+                    let why: Vec<&str> = e.lines().skip(1).map(str::trim).collect();
+                    refused.push(alloc::format!("{name}@{k}: {}", why.join(" | ")));
+                    continue;
+                }
+            };
+            if std::env::var("DJS_PLAIN_SHOW").is_ok_and(|v| v == alloc::format!("{name}@{k}")) {
+                std::println!("{text}");
+            }
+            let mut vm = match plain_load(&text) {
+                Ok(vm) => vm,
+                Err(e) => {
+                    failed.push(alloc::format!("{name}@{k}: {e}\n{text}"));
+                    continue;
+                }
+            };
+            while let Some(id) = plain_step(&mut vm, &mut lines) {
+                settle(&mut vm, id);
+            }
+            if lines != want {
+                failed.push(alloc::format!(
+                    "{name}@{k}: {lines:?}\n  want {want:?}\n{text}"
+                ));
+            } else {
+                ok += 1;
+            }
+        }
+    }
+    let path = plain_refusals_file();
+    if std::env::var("DJS_UPDATE_PLAIN_REFUSALS").is_ok() {
+        let mut t = String::from(
+            "# Idle points of tests/dump/v2 whose plain dump is refused (plain_dumps_at_every_idle_point).\n",
+        );
+        for r in &refused {
+            t.push_str(r);
+            t.push('\n');
+        }
+        std::fs::write(&path, t).unwrap();
+    }
+    let listed = std::fs::read_to_string(&path).unwrap_or_default();
+    let listed: Vec<&str> = listed.lines().filter(|l| !l.starts_with('#')).collect();
+    for r in &refused {
+        if !listed.contains(&r.as_str()) {
+            failed.push(alloc::format!("refused, not in plain-refusals.txt: {r}"));
+        }
+    }
+    for l in &listed {
+        if !refused.iter().any(|r| r == l) {
+            std::println!("stale in plain-refusals.txt: {l}");
+        }
+    }
+    std::println!("plain dumps: {ok} identical, {} refused", refused.len());
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+#[test]
+fn plain_dump_chains_continue_like_the_run() {
+    let (mut failed, mut links, mut refused) = (Vec::new(), 0, Vec::new());
+    for (name, src) in plain_programs() {
+        let name = name.as_str();
         let (want, _) = run_program(&src);
         let mut vm = new_vm();
         let f = vm
