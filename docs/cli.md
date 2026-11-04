@@ -6,7 +6,7 @@ cargo run -p djs-cli -- run [--body] [--ts] [--experimental-decorators] [--emit-
 cargo run -p djs-cli -- disasm [--body] file.js
 cargo run -p djs-cli -- strip-types file.ts
 cargo run -p djs-cli -- resume [--explain] [--tools answers.json] [--gc-stress] [--suspend-every N] dump.js
-cargo run -p djs-cli -- repl [--ts] [--gc-stress] [--no-history] [--tools answers.json]
+cargo run -p djs-cli -- repl [--ts] [--gc-stress] [--no-history] [--frozen] [--tools answers.json]
 ```
 
 `run` runs a Script (or, with `--body`, a codemode async body) and serves `console.log`;
@@ -25,26 +25,22 @@ continues: `later` calls always, tool calls from `--tools answers.json`. A call 
 answer ends the run with `djs: no answer for #4 tools.read({"path":"x"})` on stderr and
 exit code 1.
 
-`resume dump.js` (D2603) loads a dump (format 2, starting with `"djs-dump 2";`, or
-version 1, `// djs-dump 1`; `Vm::load_dump`) into a fresh VM with the same globals and
-runs it on to its end like `run`: the open calls the dump recreates keep their ids and
-are answered the same way. A dump that does not load is exit code 2 with the loader's
-reason. The loader's hand-written fixtures (tests/dump/v2/) resume to the rest of their
-programs' output.
-
-`--plain` (on `run`, and on `resume` for the dumps it writes) makes `--dump-after` and
-`--dump-every-idle` write plain dumps instead of format 2, and gives the VM frozen
-builtins, which plain dumps need (D2836).
-A plain dump (`"djs-dump";`, D2830) is a Script: `resume` runs it with the global
-object `$djs` (D2890), whose `seed(lo, hi, next)` sets `Math.random`'s state and the next
-call's id (D2897) and whose
+`resume dump.js` (D2603) runs a dump (`"djs-dump";`, D2830, D2835) in a fresh VM with the
+same globals and goes on to its end like `run`: the open calls the dump recreates keep
+their ids and are answered the same way. A dump is a Script: `resume` runs it with the
+global object `$djs` (D2890), the dump runtime's helpers (D2903) plus two hooks:
+`seed(lo, hi, next)` sets `Math.random`'s state and the next call's id (D2897), and
 `resume(id, name, args, state)` opens the dump's call `id` of `name` (`later`,
-`tools.read`, ...) again under that id; the CLI then answers it like any call and
-ignores its state. The dump deletes `$djs` at the end of its Script (the CLI also does,
-once the Script stops at an idle point or ends).
-A dump whose Script throws (a hook refused an unknown name, say) is exit code 2 with
-`djs: the dump did not load: Uncaught ...`. `--explain`, and the REPL's `.restore`,
-load plain dumps the same way; `--explain` lists each call's state.
+`tools.read`, ...) again under that id; the CLI then answers it like any call. The dump
+deletes `$djs` at the end of its Script (the CLI also does, once the Script stops at an
+idle point or ends). A file that is not a dump, or a dump whose Script throws (a hook
+refused an unknown name, say), is exit code 2 with `djs: cannot load ...` or `djs: the
+dump did not load: Uncaught ...`. `--explain`, and the REPL's `.restore`, load dumps the
+same way; `--explain` lists each call's state.
+
+Dumps need frozen builtins (D2836): `run` with `--dump-after` or `--dump-every-idle`, and
+every `resume` (the run goes on as the dumped one, which had them), make a VM with frozen
+builtins.
 
 The dumps the CLI writes give every open call a state (D2894, D2897): the REPL input
 that made it (`origin`), how many ordered answers each tool has taken from `--tools`
@@ -56,31 +52,32 @@ since a dump has no comments: the open calls, each with the activations waiting 
 then the other suspended activations (a generator at a `yield`, an async function
 waiting on another's result), each with where it stopped in the dump, the source line
 with a caret under the `await`/`yield`, and its bindings; handles name the activation
-whose promise they are. Positions are in the dump's own file. Nothing is answered, so
-open calls and held host functions of any name load (`sleep(100)`, not only `tools.*` and
-`later`), shown under the dump's names. Exit code 0, or 2 if it does not load. Loading
-runs the dump's code, as `resume` does. The REPL's `.pending` and `.bt` after `.restore
+whose promise they are. Positions are in the dump's own file, in the continuations it
+holds (a suspended activation is written as a function that runs the rest of the
+original from where it stopped). Nothing is answered; a dump that names a host function
+the CLI does not define does not load (its code calls the function while it loads).
+Exit code 0, or 2 if it does not load. Loading runs the dump's code, as `resume` does. The REPL's `.pending` and `.bt` after `.restore
 FILE` also show positions in `FILE` (until `.dump-every` reloads the VM).
 
 ```text
 $ djs resume --explain reads.dump.js
-reads.dump.js: format 2; 1 open call, 1 suspended activation; handles: run
-#2 tools.read({"path":"a"})
-  async function main at reads.dump.js:3:13 (run)
-      const a = await tools.read({ path: "a" });
-                ^
-    a = <uninitialized>, b = <uninitialized>
+reads.dump.js: 1 open call, 1 suspended activation; handles: run
+#2 tools.read({"path":"a"}), state {"at":"a"}
+  async function <anonymous> at reads.dump.js:13:12 (run)
+      const a = (await $dump.p2);
+                 ^
+    a = undefined, b = undefined
 ```
 
 Idle points are numbered from 1 (D2604): every stop with only host calls open, before the
-run answers one. `run --dump-after K OUT file.js` writes the run as a format 2 dump to
+run answers one. `run --dump-after K OUT file.js` writes the run as a dump to
 `OUT` at idle point K and stops (exit code 0, with what the run printed so far); `djs
 resume OUT` (with the same `--tools`) prints the rest, so the two together print what the
 uninterrupted run prints. A run that ends first says `djs: --dump-after K: the run ended
 after N idle points` on stderr; a dump the exporter refuses is exit code 1 with the
 refusal (`cannot dump:` and one `path: reason` line per value). `run --dump-every-idle`
-dumps at every idle point and continues in a fresh VM that loaded the dump. An async
-body's promise (`--body`) is the dump's handle `run`.
+dumps at every idle point and continues in a fresh VM that ran the dump. An async
+body's promise (`--body`) is the dump's handle `run`, its Script's completion value.
 
 A `--body` script suspended in its own top level dumps as the async function it runs as
 (D2617). Known gap: a body whose parameter (`tools`, `console`) a closure captures is
@@ -155,10 +152,9 @@ suspending every 300 fuel
 | `.time [on\|off]` | after each input: wall time (compile and run) and fuel |
 | `.gc` | collect; the arena size before and after |
 | `.heap [sections]` | arena bytes used, allocated and the limit, handles, atoms; then the heap report's sections over the live VM against the base image (above; default `summary,diff`: the session's own cells and the base cells it changed, apart from the base realm every VM starts with; `all`, or a list such as `kinds,largest`) (D2340) |
-| `.dump <file\|-> [names]` | write the session's globals (or the named ones, plus the globals their functions read) as a JavaScript dump (docs/functions-as-code.md): functions as their source text, closures that share variables made by one factory, data as literals and constructor calls, binary data as base64, builtins referenced by name and changed builtins as code. With something in flight it is format 2: open calls, suspended activations and pending promises, with the waiting inputs as handles (below). What a dump cannot write is refused with its path. `-` prints it |
-| `.restore <file>` | replace the VM with a fresh one that loaded a dump (a file starting with `"djs-dump ` for format 2 or a plain dump, run as a Script, or `// djs-dump` for version 1; `Vm::load_dump`), from any build; a plain dump's run becomes the waiting input `run`; a format 2 dump's waiting run and open calls come back (below). Images are not restored (D2700) |
-| `.plain [on\|off]` | `.dump` and `.dump-every` write plain dumps (`"djs-dump";`, D2830; `djs repl --plain` starts with it on); several waiting inputs become the properties of the dump's completion value (D2895) |
-| `.dump-every [on\|off]` | at every idle point, dump the session and continue in a fresh VM that loaded the dump, printing `[dumped N bytes]`; a refused dump prints `[not dumped]` with the reasons and turns it off |
+| `.dump <file\|-> [names]` | write the session's globals (or the named ones, plus the globals their functions read) as a JavaScript dump (docs/functions-as-code.md): functions as their source text, closures that share variables made by one factory, data as literals and constructor calls, binary data as base64, builtins referenced by name. With something in flight it also holds the open calls, the suspended activations (as continuations) and pending promises, with the waiting inputs as handles (below). Needs `djs repl --frozen` (D2836). What a dump cannot write is refused with its path. `-` prints it |
+| `.restore <file>` | replace the VM with a fresh one that ran a dump (a file starting with `"djs-dump";`, run as a Script), from any build; its waiting run and open calls come back (below): a dump's run becomes the waiting input `run`, several waiting inputs are the properties of the dump's completion value (D2895). Images are not restored (D2700) |
+| `.dump-every [on\|off]` | at every idle point, dump the session and continue in a fresh VM that ran the dump (needs `--frozen`), printing `[dumped N bytes]`; a refused dump prints `[not dumped]` with the reasons and turns it off |
 | `.clear` | a fresh VM |
 | `.pending` | the open tool calls: `#2 tools.read({"path":"a.ts"})  input 1, at repl:1:11`, with the input (or `.resolve`/answer) that made the call and where the innermost activation waiting on it stopped |
 | `.resolve <id> <json>` | answers call `#id` with a JSON value (`null` without one), then runs what that unblocks |
@@ -192,10 +188,11 @@ too. Answers are applied through the VM's inbox, one macrotask each, so the orde
 answers is what the script sees. With `--tools`, answered calls print as
 `[answered] #2 tools.read(...)`; `later(v)` calls are answered at once, quietly.
 `.clear` and `.restore` of an image forget the waiting inputs (the calls a restored image
-still has open are listed). `.restore` of a format 2 dump restores them (D2603): a fresh
-VM loads it, its open calls keep their ids (a tool named in the dump gets the id its
-function has afterwards), and the values it names for the host (`$dump.handle("run",
-p)`) become waiting inputs labelled by name, printed as `[run] value` when they settle:
+still has open are listed). `.restore` of a dump restores them (D2603): a fresh VM runs
+it, its open calls keep their ids (a tool named in the dump gets the id its function has
+afterwards), and the values it names for the host (its Script's completion value: the
+run's promise as `run`, or an object of several by name, D2895) become waiting inputs
+labelled by name, printed as `[run] value` when they settle:
 
 ```text
 > .restore reads.dump.js
@@ -203,15 +200,16 @@ loaded reads.dump.js into a fresh VM
 waiting: #2 tools.read({"path":"a"})
 > .bt 2
 #2 tools.read({"path":"a"})
-  async function main at reads.dump.js:3:13 (run)
-      const a = await tools.read({ path: "a" });
-                ^
-    a = <uninitialized>, b = <uninitialized>
+  async function <anonymous> at reads.dump.js:13:12 (run)
+      const a = (await $dump.p2);
+                 ^
+    a = undefined, b = undefined
 > .resolve 2 "AA"
 [waiting] #4 tools.read({"path":"b"})
 ```
 
-`.dump FILE` of a waiting session writes format 2 (D2604): the waiting inputs are its
+`.dump FILE` of a waiting session (in `djs repl --frozen`) writes what is in flight too
+(D2604): the waiting inputs are its
 handles, under their labels (`input 2`, or a restored dump's names), so `.restore` brings
 them back as waiting inputs, and it reports what is in flight:
 

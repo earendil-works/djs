@@ -1,7 +1,7 @@
 //! Continuation dumps in the CLI (0174, D2604): writing a waiting session as a dump and
 //! loading one, with the host's names for its functions from [`Tools`].
 //!
-//! A plain dump (`"djs-dump";`, D2830) is an ordinary Script: loading it is running it
+//! A dump (`"djs-dump";`, D2830, D2835) is an ordinary Script: loading it is running it
 //! with the host hooks of D2832 in the global object `$djs` (D2890): `$djs.seed(lo, hi)`
 //! sets `Math.random`'s state, `$djs.resume(id, name, args, state)` opens the call `id`
 //! of the host function `name` again (the CLI answers it as any other call). `$djs` also
@@ -12,7 +12,6 @@ use djs_core::compiler::CompileOptions;
 use djs_core::heap::{Handle, ObjectClass};
 use djs_core::value::Value;
 use djs_core::vm::dump::{DumpOptions, Dumped};
-use djs_core::vm::dump_load::{LoadOptions, Loaded, dump_format};
 use djs_core::vm::{ErrorKind, Status, Vm};
 
 use crate::tools::Tools;
@@ -55,7 +54,7 @@ pub struct PlainLoad {
 /// runtime and the hooks) and calls the Script. The caller runs the VM, serving the hooks with [`serve_hook`], and calls
 /// [`end_load`] at the first stop that is not a sync host call.
 pub fn begin_plain(vm: &mut Vm, text: &str, filename: &str) -> Result<(), String> {
-    let ts = plain_format(text).ok_or("not a plain dump (no \"djs-dump\"; header)")?;
+    let ts = plain_format(text).ok_or("not a djs dump (no \"djs-dump\"; header)")?;
     let oom = |_| String::from("out of memory");
     // The dump runtime's helpers, with the hooks added (D2903).
     let hooks = vm
@@ -238,21 +237,21 @@ fn vm_promise(heap: &djs_core::heap::Heap, v: Value) -> bool {
         .is_some_and(|o| heap.object_class(o) == ObjectClass::Promise)
 }
 
-/// The text is a dump (of any format): the loader's own test, not a prefix match.
+/// The text is a dump: it starts with the header `"djs-dump";` (D2835).
 pub fn is_dump(text: &[u8]) -> bool {
-    std::str::from_utf8(text).is_ok_and(|t| dump_format(t).is_some() || plain_format(t).is_some())
+    std::str::from_utf8(text).is_ok_and(|t| plain_format(t).is_some())
 }
 
-/// Dumps the idle VM with the host's `handles`; the refusal's message otherwise. Each
+/// Dumps the idle VM with the host's `handles`; the refusal's message otherwise (a VM
+/// without frozen builtins cannot dump, D2836). Each
 /// open call gets the CLI's state ([`Tools::call_state`], D2894), with its `origin`.
 pub fn dump(
     vm: &Vm,
     tools: &Tools,
     handles: &[(&str, Value)],
-    plain: bool,
     origin: &dyn Fn(u32) -> Option<String>,
 ) -> Result<Dumped, String> {
-    dump_names(vm, tools, handles, None, plain, origin)
+    dump_names(vm, tools, handles, None, origin)
 }
 
 /// [`dump`] of the named globals only (all of them with `None`).
@@ -261,7 +260,6 @@ pub fn dump_names(
     tools: &Tools,
     handles: &[(&str, Value)],
     names: Option<&[&str]>,
-    plain: bool,
     origin: &dyn Fn(u32) -> Option<String>,
 ) -> Result<Dumped, String> {
     let name = |id: u32| tools.call_name(id);
@@ -277,25 +275,9 @@ pub fn dump_names(
         host_fn_name: &name,
         handles,
         call_states: &states,
-        plain,
+        plain: true,
     };
     vm.dump_report(&opts, names).map_err(|e| e.message())
-}
-
-/// Loads a dump into `vm` (a fresh one), the tools named by the registry; takes the
-/// calls' states back ([`Tools::restore_state`]).
-pub fn load(vm: &mut Vm, tools: &mut Tools, text: &str) -> Result<Loaded, String> {
-    let host_fn = |name: &str| tools.id_for_call_name(name);
-    let opts = LoadOptions {
-        host_fn: &host_fn,
-        ..Default::default()
-    };
-    let loaded = vm.load_dump(text, &opts).map_err(|e| e.message())?;
-    for s in loaded.calls.iter().filter_map(|c| c.state.as_deref()) {
-        tools.restore_state(s);
-    }
-    tools.premake(vm);
-    Ok(loaded)
 }
 
 /// `(1 activation, 2 pending calls)`, or nothing when nothing is in flight.

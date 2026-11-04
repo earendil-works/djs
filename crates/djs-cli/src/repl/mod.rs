@@ -26,14 +26,13 @@ use crate::tools::{self, MAKE_TOOL, Tools};
 use input::SCRIPT_COMPLETION_VALUES;
 use term::{Input, Terminal};
 
-const USAGE: &str = "usage: djs repl [--ts] [--gc-stress] [--no-history] [--plain]\n\
+const USAGE: &str = "usage: djs repl [--ts] [--gc-stress] [--no-history] [--frozen]\n\
                 [--tools answers.json]\n\
   --ts            parse inputs as TypeScript (.ts toggles it)\n\
   --tools FILE    answer tools.x(...) calls from FILE (docs/cli.md); others wait for .resolve\n\
   --gc-stress     collect garbage at every safepoint\n\
   --no-history    do not read or write the history file ($DJS_HISTORY, ~/.djs_history)\n\
-  --plain         .dump and .dump-every write plain dumps (.plain toggles it); the VMs
-                  have frozen builtins, which plain dumps need (D2836)";
+  --frozen        the VMs have frozen builtins, which .dump and .dump-every need (D2836)";
 
 const HELP: &str = "\
 .help                 this text
@@ -58,9 +57,9 @@ const HELP: &str = "\
                       largest, strings, shapes, functions, session; default
                       summary,diff; `all` for every section)
 .dump <file> [names]  write the session's globals (or the named ones) as JavaScript,
-                      with what is in flight (open calls, waiting inputs, format 2)
-                      that recreates them: functions as their source, closures and
-                      data as code, builtins by name (`-` prints it)
+                      with what is in flight (open calls, waiting inputs): a Script
+                      that recreates them, functions as their source, closures and
+                      data as code, builtins by name (`-` prints it; needs --frozen)
 .restore <file>       replace the VM with a fresh one that ran a .dump file
 .clear                start over with a fresh VM
 
@@ -73,8 +72,8 @@ prompt and prints its value when it settles.
                       them), where they stopped and their bindings
 .restore <dump.js>    also restores a dump's waiting run and open calls
                       (`later(v)` calls are answered with v at once; print() prints)
-.dump-every [on|off]  dump and reload at every idle point ([dumped N bytes])
-.plain [on|off]       write plain dumps (\"djs-dump\";, a Script) instead of format 2
+.dump-every [on|off]  dump and reload at every idle point ([dumped N bytes]; needs
+                      --frozen)
 
 Ctrl-C cancels the line, or stops a running input between fuel slices.
 Input continues on the next line while it is incomplete (an unclosed bracket, string
@@ -86,12 +85,14 @@ const FILENAME: &str = "repl";
 /// The running input's result, as a handle of `.dump-every`'s dumps.
 const ENTRY: &str = "$entry";
 const HISTORY_MAX: usize = 1000;
+/// `.dump` and `.dump-every` in a REPL whose VMs have no frozen builtins.
+const NOT_FROZEN: &str = "dumps need frozen builtins (D2836): start the REPL with --frozen";
 
 pub fn main(args: &[String]) -> i32 {
     let mut typescript = false;
     let mut gc_stress = false;
     let mut history = true;
-    let mut plain = false;
+    let mut frozen = false;
     let mut answers = None;
     let mut it = args.iter();
     while let Some(a) = it.next() {
@@ -110,7 +111,7 @@ pub fn main(args: &[String]) -> i32 {
             "--ts" => typescript = true,
             "--gc-stress" => gc_stress = true,
             "--no-history" => history = false,
-            "--plain" => plain = true,
+            "--frozen" => frozen = true,
             "-h" | "--help" => {
                 println!("{USAGE}");
                 return 0;
@@ -126,9 +127,8 @@ pub fn main(args: &[String]) -> i32 {
     } else {
         None
     };
-    let mut repl = Repl::new(gc_stress, plain);
+    let mut repl = Repl::new(gc_stress, frozen);
     repl.typescript = typescript;
-    repl.plain = plain;
     repl.tools = Tools::with_answers(answers);
     match term {
         Some(t) => {
@@ -247,9 +247,7 @@ struct Repl {
     announced: bool,
     /// `.dump-every`.
     dump_every: bool,
-    /// `.plain`: dumps are plain (D2830).
-    plain: bool,
-    /// `--plain`: the VMs have frozen builtins, which plain dumps need (D2836).
+    /// `--frozen`: the VMs have frozen builtins, which dumps need (D2836).
     frozen: bool,
     /// The running input's result after `.dump-every` reloaded the VM.
     entry_override: Option<Handle>,
@@ -283,7 +281,6 @@ impl Repl {
             fresh: Vec::new(),
             announced: false,
             dump_every: false,
-            plain: false,
             entry_override: None,
             hold_vm: false,
             dump_file: None,
@@ -1074,14 +1071,11 @@ impl Repl {
             ".reject" if !arg.is_empty() => self.settle(arg, false),
             ".bt" if !arg.is_empty() => self.backtrace_cmd(arg),
             ".dump" if !arg.is_empty() => self.dump(arg),
-            ".plain" => match on_off(arg, &mut self.plain) {
-                Ok(()) if self.plain && !self.frozen => println!(
-                    "plain dumps: on, but they need frozen builtins (D2836): start the REPL with --plain"
-                ),
-                Ok(()) => println!("plain dumps: {}", if self.plain { "on" } else { "off" }),
-                Err(e) => println!("{e}"),
-            },
             ".dump-every" => match on_off(arg, &mut self.dump_every) {
+                Ok(()) if self.dump_every && !self.frozen => {
+                    self.dump_every = false;
+                    println!("{NOT_FROZEN}");
+                }
                 Ok(()) => println!(
                     "dumping at every idle point: {}",
                     if self.dump_every { "on" } else { "off" }
@@ -1106,9 +1100,13 @@ impl Repl {
         None
     }
 
-    /// `.dump <file> [names]`: the session as a dump (0167, 0174: format 2 with what is in
+    /// `.dump <file> [names]`: the session as a dump (0167, 0174, D2830: with what is in
     /// flight, the waiting inputs as handles).
     fn dump(&mut self, arg: &str) {
+        if !self.frozen {
+            println!("{NOT_FROZEN}");
+            return;
+        }
         let mut parts = arg.split_whitespace();
         let file = parts.next().unwrap_or("-");
         let names: Vec<&str> = parts.collect();
@@ -1116,7 +1114,7 @@ impl Repl {
         let handles = self.waiting_handles(None);
         let refs: Vec<(&str, Value)> = handles.iter().map(|(n, v)| (n.as_str(), *v)).collect();
         let origin = |id: u32| self.origins.get(&id).cloned();
-        match crate::dumps::dump_names(&self.vm, &self.tools, &refs, sel, self.plain, &origin) {
+        match crate::dumps::dump_names(&self.vm, &self.tools, &refs, sel, &origin) {
             Ok(d) if file == "-" => print!("{}", d.text),
             Ok(d) => match std::fs::write(file, &d.text) {
                 Ok(()) => println!(
@@ -1157,38 +1155,31 @@ impl Repl {
         let handles = self.waiting_handles(entry);
         let refs: Vec<(&str, Value)> = handles.iter().map(|(n, v)| (n.as_str(), *v)).collect();
         let origin = |id: u32| self.origins.get(&id).cloned();
-        let d = crate::dumps::dump(&self.vm, &self.tools, &refs, self.plain, &origin)?;
+        let d = crate::dumps::dump(&self.vm, &self.tools, &refs, &origin)?;
         let mut vm = new_vm(self.gc_stress, self.frozen);
-        let mut loaded = if self.plain {
-            // The fresh VM runs the dump; its prints are the run's (a reaction that ran).
-            let mut log = |vm: &Vm, args: &[Value]| {
-                let parts: Vec<String> = args
-                    .iter()
-                    .map(|&a| inspect::log_arg(vm.heap(), a))
-                    .collect();
-                println!("{}", parts.join(" "));
-            };
-            crate::dumps::run_plain(&mut vm, &mut self.tools, &d.text, "<dump>", &mut log)?;
-            djs_core::vm::dump_load::Loaded {
-                handles: crate::dumps::plain_handles(&mut vm),
-                ..Default::default()
-            }
-        } else {
-            crate::dumps::load(&mut vm, &mut self.tools, &d.text)?
+        // The fresh VM runs the dump; its prints are the run's (a reaction that ran).
+        let mut log = |vm: &Vm, args: &[Value]| {
+            let parts: Vec<String> = args
+                .iter()
+                .map(|&a| inspect::log_arg(vm.heap(), a))
+                .collect();
+            println!("{}", parts.join(" "));
         };
+        crate::dumps::run_plain(&mut vm, &mut self.tools, &d.text, "<dump>", &mut log)?;
+        let mut handles = crate::dumps::plain_handles(&mut vm);
         // The old VM's handles go with it; positions are now in this dump, which has no file.
         self.vm = vm;
         self.dump_file = None;
         let mut kept = Vec::new();
         for mut w in std::mem::take(&mut self.waiting) {
-            if let Some(h) = crate::dumps::take_handle(&mut loaded.handles, &w.handle_name()) {
+            if let Some(h) = crate::dumps::take_handle(&mut handles, &w.handle_name()) {
                 w.promise = h;
                 kept.push(w);
             }
         }
         self.waiting = kept;
-        self.entry_override = crate::dumps::take_handle(&mut loaded.handles, ENTRY);
-        for (_, h) in loaded.handles {
+        self.entry_override = crate::dumps::take_handle(&mut handles, ENTRY);
+        for (_, h) in handles {
             self.vm.heap_mut().drop_handle(h);
         }
         Ok(d.text.len())
@@ -1201,42 +1192,23 @@ impl Repl {
     /// function there yet.
     fn restore_dump(&mut self, arg: &str, src: &str) {
         self.replace_vm(new_vm(self.gc_stress, self.frozen));
+        // A dump (D2830) is a Script: the fresh VM runs it, printing as inputs do.
+        let mut log = |vm: &Vm, args: &[Value]| {
+            let parts: Vec<String> = args
+                .iter()
+                .map(|&a| inspect::log_arg(vm.heap(), a))
+                .collect();
+            println!("{}", parts.join(" "));
+        };
         // The values the dump names, and the open calls' states.
-        type Named = Vec<(String, Handle)>;
-        let (handles, states): (Named, Vec<(u32, String)>) =
-            if crate::dumps::plain_format(src).is_some() {
-                // A plain dump (D2830) is a Script: the fresh VM runs it, printing as inputs do.
-                let mut log = |vm: &Vm, args: &[Value]| {
-                    let parts: Vec<String> = args
-                        .iter()
-                        .map(|&a| inspect::log_arg(vm.heap(), a))
-                        .collect();
-                    println!("{}", parts.join(" "));
-                };
-                let r = crate::dumps::run_plain(&mut self.vm, &mut self.tools, src, arg, &mut log);
-                match r {
-                    Ok(l) => (crate::dumps::plain_handles(&mut self.vm), l.states),
-                    Err(e) => {
-                        println!("cannot load {arg}: {e}");
-                        return;
-                    }
-                }
-            } else {
-                match crate::dumps::load(&mut self.vm, &mut self.tools, src) {
-                    Ok(l) => {
-                        let states = l
-                            .calls
-                            .iter()
-                            .filter_map(|c| Some((c.id, c.state.clone()?)))
-                            .collect();
-                        (l.handles, states)
-                    }
-                    Err(e) => {
-                        println!("cannot load {arg}: {e}");
-                        return;
-                    }
-                }
-            };
+        let r = crate::dumps::run_plain(&mut self.vm, &mut self.tools, src, arg, &mut log);
+        let (handles, states) = match r {
+            Ok(l) => (crate::dumps::plain_handles(&mut self.vm), l.states),
+            Err(e) => {
+                println!("cannot load {arg}: {e}");
+                return;
+            }
+        };
         println!("loaded {arg} into a fresh VM");
         self.dump_file = Some(arg.to_string());
         // New inputs are numbered after the restored ones (`input 3`), so labels stay

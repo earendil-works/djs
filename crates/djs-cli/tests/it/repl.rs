@@ -38,6 +38,11 @@ fn repl(input: &str) -> String {
     repl_with(&[], input)
 }
 
+/// [`repl`] with frozen builtins, which dumps need (D2836).
+fn frozen(input: &str) -> String {
+    repl_with(&["--frozen"], input)
+}
+
 #[track_caller]
 fn check(input: &str, expected: &str) {
     assert_eq!(repl(input), expected, "input:\n{input}");
@@ -367,7 +372,7 @@ fn answers_file() {
 #[test]
 fn restore_a_waiting_dump() {
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/run");
-    // A hand-written format 2 dump: a run waiting on `tools.read`. Its handle `run`
+    // A hand-written dump: a run waiting on `tools.read`. Its run (the completion value)
     // becomes a waiting input; new calls of the same tool get the same function id.
     check(
         &format!(
@@ -376,16 +381,16 @@ fn restore_a_waiting_dump() {
         &format!(
             "loaded {dir}/reads.dump.js into a fresh VM\n\
              waiting: #2 tools.read({{\"path\":\"a\"}})\n\
-             #2 tools.read({{\"path\":\"a\"}})  the dump, at {dir}/reads.dump.js:3:13\n\
-             #2 tools.read({{\"path\":\"a\"}})\n  async function main at {dir}/reads.dump.js:3:13 (run)\n\
-             \x20     const a = await tools.read({{ path: \"a\" }});\n\
-             \x20               ^\n\
-             \x20   a = <uninitialized>, b = <uninitialized>\n\
+             #2 tools.read({{\"path\":\"a\"}})  the dump, at {dir}/reads.dump.js:13:12\n\
+             #2 tools.read({{\"path\":\"a\"}})\n  async function <anonymous> at {dir}/reads.dump.js:13:12 (run)\n\
+             \x20     const a = (await $dump.p2);\n\
+             \x20                ^\n\
+             \x20   a = undefined, b = undefined\n\
              [waiting] #3 tools.read({{\"path\":\"b\"}})\n\
-             \x20 async function main at {dir}/reads.dump.js:4:13 (run)\n\
+             \x20 async function <anonymous> at {dir}/reads.dump.js:14:11 (run)\n\
              \x20     const b = await tools.read({{ path: \"b\" }});\n\
              \x20               ^\n\
-             \x20   a = 'AA', b = <uninitialized>\n\
+             \x20   a = 'AA', b = undefined\n\
              AABBB\ntotal 5\n[run] 5\nno open calls\n"
         ),
     );
@@ -393,28 +398,37 @@ fn restore_a_waiting_dump() {
     // them (D2895), and the calls' states their origins (D2894).
     check(
         &format!(
-            ".restore {dir}/inputs.plain.js\n.pending\n.resolve 2 \"AAA\"\n.resolve 3 \"x\"\n.pending\n"
+            ".restore {dir}/inputs.dump.js\n.pending\n.resolve 2 \"AAA\"\n.resolve 3 \"x\"\n.pending\n"
         ),
         &format!(
-            "loaded {dir}/inputs.plain.js into a fresh VM\n[done] 5\n\
+            "loaded {dir}/inputs.dump.js into a fresh VM\n[done] 5\n\
              waiting: #2 tools.read({{\"path\":\"a\"}})\n\
              waiting: #3 tools.read({{\"path\":\"b\"}})\n\
-             #2 tools.read({{\"path\":\"a\"}})  input 1, at {dir}/inputs.plain.js:9:60\n\
-             #3 tools.read({{\"path\":\"b\"}})  input 2, at {dir}/inputs.plain.js:10:52\n\
+             #2 tools.read({{\"path\":\"a\"}})  input 1, at {dir}/inputs.dump.js:9:60\n\
+             #3 tools.read({{\"path\":\"b\"}})  input 2, at {dir}/inputs.dump.js:10:52\n\
              [input 1] 3\nno open calls\n"
         ),
     );
-    // `later(v)` calls are answered at once; the loader's fixtures run to their end.
-    let plan = concat!(
+    // `later(v)` calls are answered at once; a program of tests/dump/v2 runs to its end.
+    let tmp = env!("CARGO_TARGET_TMPDIR");
+    let plan = format!("{tmp}/repl-plan-{}.js", std::process::id());
+    let src = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/dump/v2/plan.dump.js"
+        "/../../tests/dump/v2/plan.src.js"
     );
-    check(
-        &format!(".restore {plan}\n"),
-        &format!(
+    let r = Command::new(env!("CARGO_BIN_EXE_djs"))
+        .args(["run", "--dump-after", "5", &plan, src])
+        .output()
+        .unwrap();
+    assert!(r.status.success(), "{r:?}");
+    let out = repl(&format!(".restore {plan}\n"));
+    std::fs::remove_file(&plan).unwrap();
+    assert_eq!(
+        out,
+        format!(
             "loaded {plan} into a fresh VM\nwaiting: #5 later(\"TODO four\\nok\\nTODO five\")\n\
-             5 TODOs in 4 files\n[[2,0],[1,2]]\n[run] [ [ 2, 0 ], [ 1, 2 ] ]\n"
-        ),
+             5 TODOs in 4 files\n[[2,0],[1,2]]\n[run] undefined\n"
+        )
     );
     check(
         ".restore /nonexistent.js\n",
@@ -426,7 +440,7 @@ fn restore_a_waiting_dump() {
 fn dump_a_waiting_session() {
     let dir = env!("CARGO_TARGET_TMPDIR");
     let dump = format!("{dir}/repl-wait-{}.js", std::process::id());
-    let out = repl(&format!(
+    let out = frozen(&format!(
         "async function get(p) {{ const v = await tools.read({{path: p}}); return v.toUpperCase() }}\n\
          let out = []; get('a').then(v => out.push(v)); 0\n\
          .dump {dump}\n.clear\n.restore {dump}\n.bt all\n.resolve 2 \"hello\"\nout\n\
@@ -455,9 +469,9 @@ fn dump_a_waiting_session() {
             "a fresh VM",
             &format!("loaded {dump} into a fresh VM"),
             "waiting: #2 tools.read({\"path\":\"a\"})",
-            &format!("  async function get at {dump}:5:35"),
-            "      async function get(p) { const v = await tools.read({path: p}); return v.toUpperCase() }",
-            "                                        ^",
+            &format!("  async function <anonymous> at {dump}:10:12"),
+            "      const v = (await $dump.p1);",
+            "                 ^",
             "    p = 'a', v = undefined",
             "[ 'HELLO' ]",
             "dumping at every idle point: on",
@@ -471,21 +485,22 @@ fn dump_a_waiting_session() {
         ]
     );
     // What cannot be dumped is refused with its path, and `.dump-every` turns itself off.
-    let out = repl(".dump-every on\nconst w = new WeakMap(); tools.x(w); 0\n");
+    let out = frozen(".dump-every on\nconst w = new WeakMap(); tools.x(w); 0\n");
     assert!(out.contains("[not dumped] cannot dump:\n"), "{out}");
     assert!(out.contains("a weak collection"), "{out}");
     assert!(out.contains("dumping at every idle point: off\n"), "{out}");
 }
 
-/// [`dump_waiting_await_inputs`] with plain dumps (D2830, `--plain`, whose VMs have the
-/// frozen builtins plain dumps need, D2836): the waiting inputs are the completion value's
-/// properties (D2895), the calls' origins their states.
+/// Inputs suspended in their own top-level `await` (async bodies, D2617) dump and
+/// restore; an expression input still prints its value when it settles, a statement does
+/// not, and new inputs are numbered after the restored ones. The waiting inputs are the
+/// dump's completion value's properties (D2895), the calls' origins their states (D2894).
 #[test]
-fn plain_dump_waiting_await_inputs() {
+fn dump_waiting_await_inputs() {
     let dir = env!("CARGO_TARGET_TMPDIR");
-    let dump = format!("{dir}/repl-await-plain-{}.js", std::process::id());
+    let dump = format!("{dir}/repl-await-{}.js", std::process::id());
     let out = repl_with(
-        &["--plain"],
+        &["--frozen"],
         &format!(
             "const r = await tools.read({{path: 'a'}})\nawait tools.read({{path: 'b'}})\n\
          .dump {dump}\n.clear\n.restore {dump}\nawait tools.read({{path: 'c'}})\n.pending\n\
@@ -529,59 +544,11 @@ fn plain_dump_waiting_await_inputs() {
         ]
     );
     assert!(out.matches("[dumped ").count() >= 2, "{out}");
-    // Without --plain the VM's builtins are not frozen: `.plain on` says so.
-    let out = repl(".plain on\n");
-    assert!(out.contains("they need frozen builtins"), "{out}");
-}
-
-#[test]
-fn dump_waiting_await_inputs() {
-    // Inputs suspended in their own top-level `await` (async bodies, D2617) dump and
-    // restore; an expression input still prints its value when it settles, a statement
-    // does not, and new inputs are numbered after the restored ones.
-    let dir = env!("CARGO_TARGET_TMPDIR");
-    let dump = format!("{dir}/repl-await-{}.js", std::process::id());
-    let out = repl(&format!(
-        "const r = await tools.read({{path: 'a'}})\nawait tools.read({{path: 'b'}})\n\
-         .dump {dump}\n.clear\n.restore {dump}\nawait tools.read({{path: 'c'}})\n.pending\n\
-         .resolve 3 \"bee\"\n.resolve 2 \"hello\"\nr\n.dump-every on\n\
-         const x = await tools.read({{path: 'd'}})\n.resolve 4 \"c!\"\n.resolve 5 \"dee\"\nx\n"
-    ));
-    std::fs::remove_file(&dump).unwrap();
-    let lines: Vec<&str> = out
-        .lines()
-        .filter(|l| !(l.starts_with("[dumped ") && l.ends_with(" bytes]")))
-        .collect();
+    // Without --frozen the VM's builtins are not frozen: dumps need them (D2836).
+    let out = repl(".dump -\n.dump-every on\n.dump-every\n");
     assert_eq!(
-        lines,
-        [
-            "[waiting] #2 tools.read({\"path\":\"a\"})",
-            "[waiting] #3 tools.read({\"path\":\"b\"})",
-            &format!(
-                "wrote {} bytes to {dump} (2 activations, 2 pending calls)",
-                out.split("wrote ")
-                    .nth(1)
-                    .unwrap()
-                    .split(' ')
-                    .next()
-                    .unwrap()
-            ),
-            "a fresh VM",
-            &format!("loaded {dump} into a fresh VM"),
-            "waiting: #2 tools.read({\"path\":\"a\"})",
-            "waiting: #3 tools.read({\"path\":\"b\"})",
-            "[waiting] #4 tools.read({\"path\":\"c\"})",
-            // The calls' origins came through the dump, as their states (D2894).
-            &format!("#2 tools.read({{\"path\":\"a\"}})  input 1, at {dump}:7:11"),
-            &format!("#3 tools.read({{\"path\":\"b\"}})  input 2, at {dump}:10:10"),
-            "#4 tools.read({\"path\":\"c\"})  input 3, at repl:1:10",
-            "[input 2] 'bee'",
-            "'hello'",
-            "dumping at every idle point: on",
-            "[waiting] #5 tools.read({\"path\":\"d\"})",
-            "[input 3] 'c!'",
-            "'dee'",
-        ]
+        out,
+        "dumps need frozen builtins (D2836): start the REPL with --frozen\n".repeat(2)
+            + "dumping at every idle point: off\n"
     );
-    assert!(out.matches("[dumped ").count() >= 2, "{out}");
 }

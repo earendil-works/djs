@@ -59,36 +59,8 @@ fn a_call_without_an_answer() {
     );
 }
 
-/// The format 2 fixtures of the loader (tests/dump/v2, 0171): each `NAME.dump.js` is
-/// `NAME.src.js` stopped at an idle point, so resuming it prints the rest of the run.
-#[test]
-fn resume_the_loader_fixtures() {
-    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/dump/v2");
-    let mut n = 0;
-    for e in std::fs::read_dir(dir).unwrap() {
-        let path = e.unwrap().path();
-        let p = path.to_str().unwrap();
-        let Some(stem) = p.strip_suffix(".dump.js") else {
-            continue;
-        };
-        n += 1;
-        let (code, full, err) = djs(&[&format!("{stem}.src.js")]);
-        assert_eq!((code, err.as_str()), (0, ""), "{stem}.src.js");
-        for extra in [&[][..], &["--suspend-every", "13", "--gc-stress"]] {
-            let mut args = vec!["resume"];
-            args.extend_from_slice(extra);
-            args.push(p);
-            let (code, rest, err) = djs_cmd(&args);
-            assert_eq!((code, err.as_str()), (0, ""), "{p} {extra:?}");
-            assert!(
-                !rest.is_empty() && full.ends_with(&rest),
-                "{p}:\n{full}---\n{rest}"
-            );
-        }
-    }
-    assert!(n >= 5, "{n} fixtures");
-}
-
+/// A dump (D2830) is a Script: `resume` runs it with the hooks `$djs.resume` and
+/// `$djs.seed` (D2890); its open call keeps its id and state.
 #[test]
 fn resume_with_tools() {
     let src = format!("{DIR}/reads.src.js");
@@ -96,31 +68,6 @@ fn resume_with_tools() {
     let answers = format!("{DIR}/reads.json");
     let expected = (0, "AABBB\ntotal 5\n".to_string(), String::new());
     assert_eq!(djs(&["--tools", &answers, &src]), expected);
-    assert_eq!(djs_cmd(&["resume", "--tools", &answers, &dump]), expected);
-    assert_eq!(
-        djs_cmd(&["resume", "--tools", &answers, "--suspend-every", "7", &dump]),
-        expected
-    );
-    assert_eq!(
-        djs_cmd(&["resume", &dump]),
-        (
-            1,
-            String::new(),
-            "djs: no answer for #2 tools.read({\"path\":\"a\"})\n".into()
-        )
-    );
-    let r = djs_cmd(&["resume", &src]);
-    assert_eq!(r.0, 2);
-    assert!(r.2.contains("not a djs dump"), "{}", r.2);
-}
-
-/// A plain dump (D2830) is a Script: `resume` runs it with the hooks `$djs.resume` and
-/// `$djs.seed` (D2890); its open call keeps its id and state.
-#[test]
-fn resume_a_plain_dump() {
-    let dump = format!("{DIR}/reads.plain.js");
-    let answers = format!("{DIR}/reads.json");
-    let expected = (0, "AABBB\ntotal 5\n".to_string(), String::new());
     for extra in [&[][..], &["--suspend-every", "7", "--gc-stress"]] {
         let mut args = vec!["resume", "--tools", &answers];
         args.extend_from_slice(extra);
@@ -135,15 +82,9 @@ fn resume_a_plain_dump() {
             "djs: no answer for #2 tools.read({\"path\":\"a\"})\n".into()
         )
     );
-    let (code, out, err) = djs_cmd(&["resume", "--explain", &dump]);
-    assert_eq!((code, err.as_str()), (0, ""));
-    assert!(
-        out.starts_with(&format!(
-            "{dump}: format plain; 1 open call, 1 suspended activation; handles: run\n\
-             #2 tools.read({{\"path\":\"a\"}}), state {{\"at\":\"a\"}}\n"
-        )),
-        "{out}"
-    );
+    let r = djs_cmd(&["resume", &src]);
+    assert_eq!(r.0, 2);
+    assert!(r.2.contains("not a djs dump"), "{}", r.2);
     // A hook that fails throws in the Script: the dump does not load.
     let dir = env!("CARGO_TARGET_TMPDIR");
     let bad = format!("{dir}/bad-plain-{}.js", std::process::id());
@@ -212,26 +153,30 @@ fn explain_a_dump() {
         (
             0,
             format!(
-                "{dump}: format 2; 1 open call, 1 suspended activation; handles: run\n\
-                 #2 tools.read({{\"path\":\"a\"}})\n\
-                 \x20 async function main at {dump}:3:13 (run)\n\
-                 \x20     const a = await tools.read({{ path: \"a\" }});\n\
-                 \x20               ^\n\
-                 \x20   a = <uninitialized>, b = <uninitialized>\n"
+                "{dump}: 1 open call, 1 suspended activation; handles: run\n\
+                 #2 tools.read({{\"path\":\"a\"}}), state {{\"at\":\"a\"}}\n\
+                 \x20 async function <anonymous> at {dump}:13:12 (run)\n\
+                 \x20     const a = (await $dump.p2);\n\
+                 \x20                ^\n\
+                 \x20   a = undefined, b = undefined\n"
             ),
             String::new()
         )
     );
-    let generator = concat!(
+    // A generator stopped at a yield waits on no call.
+    let dir = env!("CARGO_TARGET_TMPDIR");
+    let generator = format!("{dir}/explain-generator-{}.js", std::process::id());
+    let src = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/dump/v2/generator.dump.js"
+        "/../../tests/dump/v2/generator.src.js"
     );
-    let (code, out, err) = djs_cmd(&["resume", "--explain", generator]);
+    let r = djs(&["--dump-after", "1", &generator, src]);
+    assert_eq!((r.0, r.2.as_str()), (0, ""));
+    let (code, out, err) = djs_cmd(&["resume", "--explain", &generator]);
+    std::fs::remove_file(&generator).unwrap();
     assert_eq!((code, err.as_str()), (0, ""));
     assert!(
-        out.contains(&format!(
-            "not waiting on a call:\n  generator counter at {generator}:"
-        )),
+        out.contains("not waiting on a call:\n  generator "),
         "{out}"
     );
     let r = djs_cmd(&["resume", "--explain", &format!("{DIR}/reads.src.js")]);
@@ -245,8 +190,8 @@ fn every_idle_point(script: &str, args: &[&str]) -> u64 {
     every_idle_point_refused(script, args).0
 }
 
-/// [`every_idle_point`], also counting the idle points whose dump is refused (plain dumps
-/// refuse what they cannot write yet, 0203): (dumped, refused).
+/// [`every_idle_point`], also counting the idle points whose dump is refused (dumps
+/// refuse what they cannot write, D2878): (dumped, refused).
 fn every_idle_point_refused(script: &str, args: &[&str]) -> (u64, u64) {
     let mut refused = 0;
     let dir = env!("CARGO_TARGET_TMPDIR");
@@ -254,18 +199,13 @@ fn every_idle_point_refused(script: &str, args: &[&str]) -> (u64, u64) {
         "{dir}/dump-{}-{}{}.js",
         std::process::id(),
         script.rsplit('/').next().unwrap(),
-        // (The plain test runs the same scripts at the same time.)
-        if args.contains(&"--plain") {
-            "-plain"
-        } else {
-            ""
-        }
+        args.join("").len()
     );
-    let mut plain = args.to_vec();
-    plain.push(script);
-    let (code, full, err) = djs(&plain);
+    let mut whole = args.to_vec();
+    whole.push(script);
+    let (code, full, err) = djs(&whole);
     assert_eq!((code, err.as_str()), (0, ""), "{script}");
-    // Plain dumps: the hook calls of a dump resumed to its next idle point, which must be
+    // The hook calls of a dump resumed to its next idle point, which must be
     // the uninterrupted run's at that point: the same call ids, states, Math.random state
     // and next call id (D2897).
     let hooks = |text: &str| -> Vec<String> {
@@ -286,7 +226,6 @@ fn every_idle_point_refused(script: &str, args: &[&str]) -> (u64, u64) {
         a.extend_from_slice(&["--dump-after", &ks, &out, script]);
         let (code, head, err) = djs(&a);
         if !std::path::Path::new(&out).exists() && err.contains("cannot dump") {
-            assert!(args.contains(&"--plain"), "{script} k={k}: {err}");
             refused += 1;
             continue;
         }
@@ -319,18 +258,18 @@ fn every_idle_point_refused(script: &str, args: &[&str]) -> (u64, u64) {
         let (code, rest, err) = djs_cmd(&r);
         assert_eq!((code, err.as_str()), (0, ""), "{script} k={k} resume");
         assert_eq!(format!("{head}{rest}"), full, "{script} k={k}");
-        if args.contains(&"--plain") {
-            let _ = std::fs::remove_file(&chained);
-            let mut r = vec!["resume"];
-            r.extend(args.iter().filter(|&&a| a != "--body"));
-            r.extend_from_slice(&["--dump-after", "2", &chained, &out]);
-            djs_cmd(&r);
-            expected_hooks = std::fs::read_to_string(&chained).ok().map(|t| hooks(&t));
-        }
+        let _ = std::fs::remove_file(&chained);
+        let mut r = vec!["resume"];
+        r.extend(args.iter().filter(|&&a| a != "--body"));
+        r.extend_from_slice(&["--dump-after", "2", &chained, &out]);
+        djs_cmd(&r);
+        expected_hooks = std::fs::read_to_string(&chained).ok().map(|t| hooks(&t));
     }
     unreachable!()
 }
 
+/// `run --dump-after K` (and `--dump-every-idle`) then `resume`, so the CLI's loader
+/// runs the exporter's output.
 #[test]
 fn dump_after_every_idle_point() {
     let answers = format!("{DIR}/reads.json");
@@ -355,46 +294,16 @@ fn dump_after_every_idle_point() {
     let n = every_idle_point(&format!("{DIR}/todos.js"), &["--body", "--tools", &answers]);
     assert!(n >= 2, "{n} idle points");
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/dump/v2");
-    let mut total = 0;
-    for e in std::fs::read_dir(dir).unwrap() {
-        let path = e.unwrap().path();
-        let p = path.to_str().unwrap();
-        if !p.ends_with(".src.js") {
-            continue;
-        }
-        total += every_idle_point(p, &[]);
-    }
-    assert!(total >= 40, "{total} idle points");
-}
-
-/// [`dump_after_every_idle_point`] with plain dumps (D2830): `run --plain --dump-after K`
-/// (and `--dump-every-idle`) then `resume`, so the CLI's loader runs the exporter's output.
-#[test]
-fn plain_dump_after_every_idle_point() {
-    let answers = format!("{DIR}/reads.json");
-    let n = every_idle_point(
-        &format!("{DIR}/reads.src.js"),
-        &["--plain", "--tools", &answers],
-    );
-    assert_eq!(n, 2);
-    let answers = format!("{DIR}/todos.json");
-    let n = every_idle_point(
-        &format!("{DIR}/todos.js"),
-        &["--plain", "--body", "--tools", &answers],
-    );
-    assert!(n >= 2, "{n} idle points");
-    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/dump/v2");
     let (mut total, mut refused) = (0, 0);
     for e in std::fs::read_dir(dir).unwrap() {
         let path = e.unwrap().path();
         let p = path.to_str().unwrap();
         if p.ends_with(".src.js") {
-            let (n, r) = every_idle_point_refused(p, &["--plain"]);
+            let (n, r) = every_idle_point_refused(p, &[]);
             (total, refused) = (total + n, refused + r);
         }
     }
-    // 35 dumped and 30 refused (asyncgen, operands: 0203) at 0204.
-    assert!(total >= 35, "{total} idle points, {refused} refused");
+    assert!(total >= 40, "{total} idle points, {refused} refused");
 }
 
 /// Runs `djs args...`.
@@ -410,26 +319,14 @@ fn djs_cmd(args: &[&str]) -> (i32, String, String) {
     )
 }
 
-/// `--explain` answers nothing, so a dump naming host functions the CLI does not define
-/// loads; positions are in the dump's own file. Resuming it refuses.
+/// A dump naming a host function the CLI does not define does not load, not even for
+/// `--explain`: the dump's code calls it while it loads.
 #[test]
-fn explain_any_host_function() {
+fn an_unknown_host_function() {
     let dump = format!("{DIR}/sleep.dump.js");
-    assert_eq!(
-        djs_cmd(&["resume", "--explain", &dump]),
-        (
-            0,
-            format!(
-                "{dump}: format 2; 1 open call, 1 suspended activation; handles: run\n\
-                 #2 sleep(100)\n\
-                 \x20 async function main at {dump}:4:3 (run)\n\
-                 \x20     await sleep(100);\n\
-                 \x20     ^\n"
-            ),
-            String::new()
-        )
-    );
-    let (code, _, err) = djs_cmd(&["resume", &dump]);
-    assert_eq!(code, 2);
-    assert!(err.contains("unknown host function sleep"), "{err}");
+    for args in [&["resume", "--explain", &dump][..], &["resume", &dump]] {
+        let (code, _, err) = djs_cmd(args);
+        assert_eq!(code, 2);
+        assert!(err.contains("unknown host function sleep"), "{err}");
+    }
 }

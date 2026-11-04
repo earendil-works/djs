@@ -4,8 +4,8 @@
 //! `tools.x()` as async host calls (0174, D2602): `later` is answered with its argument,
 //! tools from `--tools answers.json`, one call at every idle point.
 //!
-//! `djs resume [same options] <dump.js>` loads a dump into a fresh VM and runs it on the
-//! same way (D2603).
+//! `djs resume [same options] <dump.js>` runs a dump (a plain Script, D2830) in a fresh
+//! VM and goes on the same way (D2603).
 //!
 //! Exit codes: 0 ok, 1 uncaught exception (printed as `Uncaught Name: message`) or a tool
 //! call the answers file has no answer for, 2 usage or compile error.
@@ -34,19 +34,17 @@ const USAGE: &str = "usage: djs run [--body] [--ts] [--experimental-decorators]\
   --backend B        run the @native builtins as `native` code (default) or `bytecode`\n\
   --tools FILE       answer `tools.x()` calls from FILE, one at a time whenever the\n\
                      run is idle (docs/cli.md)\n\
-  --dump-after K OUT write the run as a format 2 dump to OUT at idle point K (from 1)\n\
-                     and stop; `djs resume OUT` continues it\n\
+  --dump-after K OUT write the run as a dump (`\"djs-dump\";`, a Script, D2830) to OUT\n\
+                     at idle point K (from 1) and stop; `djs resume OUT` continues it\n\
   --dump-every-idle  at every idle point, dump the run and continue in a fresh VM that\n\
-                     loaded the dump\n\
-  --plain            write plain dumps (`\"djs-dump\";`, a Script, D2830) instead of\n\
-                     format 2; the VM has frozen builtins, which they need (D2836)";
+                     ran the dump\n\
+                     (with either, the VM has frozen builtins, which dumps need, D2836)";
 
 const RESUME_USAGE: &str = "usage: djs resume [--explain] [--tools answers.json] [--gc-stress]\n\
                 [--suspend-every N] [--backend B] <dump.js>\n\
-  loads a dump (plain, `\"djs-dump\";`, format 2, `\"djs-dump 2\";`, or version 1)\n\
-  into a fresh VM and runs it
-  to its end, answering open calls as `djs run` does (--dump-after, --dump-every-idle\n\
-  and --plain as for run)\n\
+  runs a dump (`\"djs-dump\";`, a Script) in a fresh VM with frozen builtins, to its\n\
+  end, answering open calls as `djs run` does (--dump-after and --dump-every-idle as\n\
+  for run)\n\
   --explain          only load it, print its open calls and suspended activations (where\n\
                      each stopped in the dump, with the source line), and exit";
 
@@ -58,8 +56,6 @@ pub struct Dumping {
     pub after: Option<(u64, String)>,
     /// `--dump-every-idle`.
     pub every_idle: bool,
-    /// `--plain`: plain dumps (D2830) instead of format 2.
-    pub plain: bool,
 }
 
 pub fn main(args: &[String]) -> i32 {
@@ -97,7 +93,6 @@ fn command(args: &[String], resume: bool) -> i32 {
                 }
             },
             "--dump-every-idle" => opts.dumping.every_idle = true,
-            "--plain" => opts.dumping.plain = true,
             "--tools" => match it.next().map(|p| crate::tools::read_answers(p)) {
                 Some(Ok(a)) => tools = Tools::with_answers(Some(a)),
                 Some(Err(e)) => {
@@ -149,6 +144,7 @@ fn command(args: &[String], resume: bool) -> i32 {
             return 2;
         }
     };
+    opts.resume = resume;
     let stdout = std::io::stdout();
     let stderr = std::io::stderr();
     if resume {
@@ -251,29 +247,13 @@ pub fn resume_dump(
     err: &mut impl Write,
 ) -> i32 {
     let mut vm = new_vm(opts);
-    if crate::dumps::plain_format(text).is_some() {
-        // A plain dump is a Script: run it, with the hooks served while it loads.
-        if let Err(e) = crate::dumps::begin_plain(&mut vm, text, filename) {
-            let _ = writeln!(err, "djs: cannot load {filename}: {e}");
-            return 2;
-        }
-        let load = Some(crate::dumps::PlainLoad::default());
-        return drive_from(vm, None, load, opts, tools, out, err);
+    // A dump is a Script: run it, with the hooks served while it loads.
+    if let Err(e) = crate::dumps::begin_plain(&mut vm, text, filename) {
+        let _ = writeln!(err, "djs: cannot load {filename}: {e}");
+        return 2;
     }
-    let mut loaded = match crate::dumps::load(&mut vm, tools, text) {
-        Ok(l) => l,
-        Err(e) => {
-            let _ = writeln!(err, "djs: cannot load {filename}: {e}");
-            return 2;
-        }
-    };
-    // The run's promise stays the handle `run` for later dumps; the others are dropped
-    // (the promises stay alive through what waits on them).
-    let run = crate::dumps::take_handle(&mut loaded.handles, "run");
-    for (_, h) in loaded.handles {
-        vm.heap_mut().drop_handle(h);
-    }
-    drive_from(vm, run, None, opts, tools, out, err)
+    let load = Some(crate::dumps::PlainLoad::default());
+    drive_from(vm, None, load, opts, tools, out, err)
 }
 
 /// `djs resume --explain` (D2641): what a dump holds in flight, for a reader, since the
@@ -291,87 +271,40 @@ pub fn explain_dump(
 ) -> i32 {
     use crate::repl::activations;
     let mut vm = new_vm(opts);
-    // The open calls (id, the dump's name, state), the values the dump names for the host,
-    // and its format.
-    let calls: Vec<(u32, String, Option<String>)>;
-    let handles: Vec<(Value, String)>;
-    let held: Vec<(String, Handle)>;
-    let format: String;
-    if let Some(ts) = crate::dumps::plain_format(text) {
-        // A plain dump runs to its first stop; nothing it prints is shown.
-        let loaded = crate::dumps::run_plain(&mut vm, tools, text, filename, &mut |_, _| {});
-        let loaded = match loaded {
-            Ok(l) => l,
-            Err(e) => {
-                let _ = writeln!(err, "djs: cannot load {filename}: {e}");
-                return 2;
-            }
-        };
-        let _ = vm.collect();
-        calls = vm
-            .pending_host_calls()
-            .into_iter()
-            .map(|id| {
-                let name = vm.host_call(id).map(|c| tools.name(c.fn_id));
-                let state = loaded.states.iter().find(|(i, _)| *i == id);
-                (id, name.unwrap_or_default(), state.map(|(_, s)| s.clone()))
-            })
-            .collect();
-        held = crate::dumps::plain_handles(&mut vm);
-        handles = held
-            .iter()
-            .map(|(n, h)| (vm.heap().get_handle(*h), n.clone()))
-            .collect();
-        format = format!("plain{}", if ts { ", TypeScript" } else { "" });
-    } else {
-        // `--explain` answers nothing, so any host function name loads: names the CLI does
-        // not define get ids of their own (from EXPLAIN_IDS), and calls show the dump's
-        // names.
-        let others = std::cell::RefCell::new(Vec::<String>::new());
-        let host_fn = |name: &str| {
-            tools.id_for_call_name(name).or_else(|| {
-                let mut o = others.borrow_mut();
-                let i = o.iter().position(|n| n == name).unwrap_or_else(|| {
-                    o.push(name.to_string());
-                    o.len() - 1
-                });
-                Some(EXPLAIN_IDS + i as u32)
-            })
-        };
-        let lopts = djs_core::vm::dump_load::LoadOptions {
-            host_fn: &host_fn,
-            ..Default::default()
-        };
-        let loaded = match vm.load_dump(text, &lopts) {
-            Ok(l) => l,
-            Err(e) => {
-                let _ = writeln!(err, "djs: cannot load {filename}: {}", e.message());
-                return 2;
-            }
-        };
-        // Dead activations would be listed too; the handles keep the host's values alive.
-        let _ = vm.collect();
-        let ts = if text.starts_with("\"djs-dump 2 typescript\";") {
-            ", TypeScript"
-        } else {
-            ""
-        };
-        format = format!(
-            "{}{ts}",
-            djs_core::vm::dump_load::dump_format(text).unwrap_or("?")
+    let Some(ts) = crate::dumps::plain_format(text) else {
+        let _ = writeln!(
+            err,
+            "djs: cannot load {filename}: not a djs dump (no \"djs-dump\"; header)"
         );
-        calls = loaded
-            .calls
-            .iter()
-            .map(|c| (c.id, c.name.clone(), c.state.clone()))
-            .collect();
-        handles = loaded
-            .handles
-            .iter()
-            .map(|(n, h)| (vm.heap().get_handle(*h), n.clone()))
-            .collect();
-        held = loaded.handles;
-    }
+        return 2;
+    };
+    // The dump runs to its first stop; nothing it prints is shown.
+    let loaded = crate::dumps::run_plain(&mut vm, tools, text, filename, &mut |_, _| {});
+    let loaded = match loaded {
+        Ok(l) => l,
+        Err(e) => {
+            let _ = writeln!(err, "djs: cannot load {filename}: {e}");
+            return 2;
+        }
+    };
+    // Dead activations would be listed too; the handles keep the host's values alive.
+    let _ = vm.collect();
+    // The open calls (id, the dump's name, state) and the values the dump names for the host.
+    let calls: Vec<(u32, String, Option<String>)> = vm
+        .pending_host_calls()
+        .into_iter()
+        .map(|id| {
+            let name = vm.host_call(id).map(|c| tools.name(c.fn_id));
+            let state = loaded.states.iter().find(|(i, _)| *i == id);
+            (id, name.unwrap_or_default(), state.map(|(_, s)| s.clone()))
+        })
+        .collect();
+    let held = crate::dumps::plain_handles(&mut vm);
+    let handles: Vec<(Value, String)> = held
+        .iter()
+        .map(|(n, h)| (vm.heap().get_handle(*h), n.clone()))
+        .collect();
+    let ts = if ts { " (TypeScript)" } else { "" };
     let all: Vec<activations::Activation> = activations::all(vm.heap())
         .into_iter()
         .map(|a| a.in_file(filename))
@@ -379,7 +312,7 @@ pub fn explain_dump(
     let plural =
         |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
     let mut s = format!(
-        "{filename}: format {format}; {}, {}",
+        "{filename}{ts}: {}, {}",
         plural(calls.len(), "open call", "open calls"),
         plural(all.len(), "suspended activation", "suspended activations"),
     );
@@ -437,9 +370,6 @@ pub fn explain_dump(
 /// Host function ids registered by `djs run`.
 pub const CONSOLE_LOG: u32 = 1;
 
-/// `resume --explain`: ids for host function names the CLI does not define.
-const EXPLAIN_IDS: u32 = 1 << 20;
-
 /// Options of `djs run`.
 #[derive(Clone, Debug, Default)]
 pub struct RunOptions {
@@ -459,6 +389,8 @@ pub struct RunOptions {
     pub emit_decorator_metadata: bool,
     /// Dumps at idle points.
     pub dumping: Dumping,
+    /// `djs resume`: the run goes on from a dump.
+    pub resume: bool,
 }
 
 impl RunOptions {
@@ -469,8 +401,9 @@ impl RunOptions {
                 native_builtins: !self.bytecode_builtins,
                 ..Default::default()
             },
-            // Plain dumps need frozen builtins (D2836).
-            frozen_builtins: self.dumping.plain,
+            // Dumps need frozen builtins (D2836), and a resumed run goes on as the dumped
+            // one, which had them.
+            frozen_builtins: self.resume || self.dumping.after.is_some() || self.dumping.every_idle,
             ..Default::default()
         }
     }
@@ -563,7 +496,7 @@ fn drive_from(
                     && *k == idle_points
                 {
                     let _ = out.flush();
-                    return match dump_run(&vm, run, tools, opts.dumping.plain) {
+                    return match dump_run(&vm, run, tools) {
                         Ok(d) => match std::fs::write(path, &d.text) {
                             Ok(()) => 0,
                             Err(e) => {
@@ -577,10 +510,10 @@ fn drive_from(
                         }
                     };
                 }
-                if opts.dumping.every_idle && opts.dumping.plain {
+                if opts.dumping.every_idle {
                     // The dump of this idle point, loaded in a fresh VM, which runs to the
                     // same idle point before the next answer.
-                    let fresh = dump_run(&vm, run, tools, true).and_then(|d| {
+                    let fresh = dump_run(&vm, run, tools).and_then(|d| {
                         let mut fresh = new_vm(opts);
                         crate::dumps::begin_plain(&mut fresh, &d.text, "<dump>")?;
                         Ok(fresh)
@@ -593,24 +526,6 @@ fn drive_from(
                             reloaded = true;
                             continue;
                         }
-                        Err(e) => {
-                            let _ = writeln!(err, "djs: at idle point {idle_points}: {e}");
-                            return 1;
-                        }
-                    }
-                }
-                if opts.dumping.every_idle {
-                    let reloaded = dump_run(&vm, run, tools, false).and_then(|d| {
-                        let mut fresh = new_vm(opts);
-                        let mut loaded = crate::dumps::load(&mut fresh, tools, &d.text)?;
-                        let run = crate::dumps::take_handle(&mut loaded.handles, "run");
-                        for (_, h) in loaded.handles {
-                            fresh.heap_mut().drop_handle(h);
-                        }
-                        Ok((fresh, run))
-                    });
-                    match reloaded {
-                        Ok((fresh, r)) => (vm, run) = (fresh, r),
                         Err(e) => {
                             let _ = writeln!(err, "djs: at idle point {idle_points}: {e}");
                             return 1;
@@ -703,13 +618,12 @@ fn answer_one(vm: &mut Vm, tools: &mut Tools, err: &mut impl Write) -> bool {
     }
 }
 
-/// Dumps the run at an idle point (`plain`: as a plain dump, D2830); its result promise
-/// (an async body's) is the handle `run`.
+/// Dumps the run at an idle point (D2830); its result promise (an async body's) is the
+/// handle `run`.
 fn dump_run(
     vm: &Vm,
     run: Option<Handle>,
     tools: &Tools,
-    plain: bool,
 ) -> Result<djs_core::vm::dump::Dumped, String> {
     let run = match (run, vm.outcome()) {
         (Some(h), _) => Some(vm.heap().get_handle(h)),
@@ -717,7 +631,7 @@ fn dump_run(
         _ => None,
     };
     let handles: Vec<(&str, Value)> = run.map(|v| ("run", v)).into_iter().collect();
-    crate::dumps::dump(vm, tools, &handles, plain, &|_| None)
+    crate::dumps::dump(vm, tools, &handles, &|_| None)
 }
 
 /// The system clock in ms since the epoch.
