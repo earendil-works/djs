@@ -133,9 +133,27 @@ fn ident_part(c: u8) -> bool {
 /// name after `.` is a property, not a reference. It errs on the side of too many
 /// names (an object literal's keys count), which only adds orderings that hold anyway.
 pub(super) fn refs(text: &str) -> Refs {
+    scan(text, false)
+}
+
+/// The references of `text` its evaluation makes: [`refs`] without those inside function
+/// bodies and class bodies (read when they run). A text of the dump, a value: a
+/// `{` after `)` or `=>` opens a function's body (no statements are scanned).
+fn eager_refs(text: &str) -> Refs {
+    scan(text, true)
+}
+
+fn scan(text: &str, skip_fns: bool) -> Refs {
     let b = text.as_bytes();
     let mut out = Refs::default();
     let mut i = 0;
+    // Brackets of every kind open, and with `skip_fns` the function body being skipped:
+    // its nesting, and whether it is an arrow's expression body.
+    let mut nest: u32 = 0;
+    let mut lazy: Option<(u32, bool)> = None;
+    let mut arrow = false;
+    let mut prev_close = false;
+    let mut class = false;
     // Template literal nesting: brace depth at each `${`.
     let mut tpl: Vec<u32> = Vec::new();
     let mut depth: u32 = 0;
@@ -144,11 +162,48 @@ pub(super) fn refs(text: &str) -> Refs {
     let mut after_dot = false;
     while i < b.len() {
         let c = b[i];
+        if matches!(c, b' ' | b'\t' | b'\n' | b'\r') {
+            i += 1;
+            continue;
+        }
+        if skip_fns && lazy.is_none() {
+            if c == b'{' && (arrow || prev_close || class) {
+                lazy = Some((nest, false));
+            } else if arrow {
+                lazy = Some((nest, true));
+            }
+        }
+        if let Some((n, true)) = lazy
+            && nest == n
+            && matches!(c, b',' | b';')
+        {
+            lazy = None;
+        }
+        arrow = false;
+        prev_close = c == b')';
+        if c != b'{' {
+            class = class && !matches!(c, b';' | b',' | b')' | b']' | b'}');
+        }
         match c {
-            b' ' | b'\t' | b'\n' | b'\r' => {
-                i += 1;
+            b'(' | b'[' => nest += 1,
+            b')' | b']' => {
+                nest = nest.saturating_sub(1);
+                if let Some((n, _)) = lazy
+                    && nest < n
+                {
+                    lazy = None;
+                }
+            }
+            b'=' if b.get(i + 1) == Some(&b'>') => {
+                i += 2;
+                arrow = true;
+                regex_ok = true;
+                after_dot = false;
                 continue;
             }
+            _ => {}
+        }
+        match c {
             b'"' | b'\'' => {
                 i += 1;
                 while i < b.len() && b[i] != c {
@@ -199,7 +254,11 @@ pub(super) fn refs(text: &str) -> Refs {
                 after_dot = false;
                 continue;
             }
-            b'{' => depth += 1,
+            b'{' => {
+                depth += 1;
+                nest += 1;
+                class = false;
+            }
             b'}' => {
                 if tpl.last() == Some(&depth) {
                     tpl.pop();
@@ -209,6 +268,14 @@ pub(super) fn refs(text: &str) -> Refs {
                     continue;
                 }
                 depth = depth.saturating_sub(1);
+                nest = nest.saturating_sub(1);
+                if let Some((n, concise)) = lazy
+                    && (nest < n || nest == n && !concise)
+                {
+                    lazy = None;
+                    // A function's body ends an expression (`() => {}` is no call).
+                    prev_close = false;
+                }
             }
             _ => {}
         }
@@ -218,7 +285,8 @@ pub(super) fn refs(text: &str) -> Refs {
                 i += 1;
             }
             let word = &text[s..i];
-            if !after_dot {
+            class = !after_dot && word == "class" && b.get(i) != Some(&b':') || class;
+            if !after_dot && lazy.is_none() {
                 if word == "$dump" && b.get(i) == Some(&b'.') {
                     let (name, j) = ident_at(text, i + 1);
                     if !name.is_empty() {
@@ -1160,7 +1228,7 @@ impl W<'_> {
     /// The keys of `text`; with `globals` false only its `$dump` references: the
     /// globals a function's text names are read when it runs, after the load.
     fn keys_in(&self, text: &str, globals: bool) -> Vec<Key> {
-        let r = refs(text);
+        let r = eager_refs(text);
         let mut out = Vec::new();
         for (name, key) in r.dump {
             let k = match (key, self.ir.factories.iter().position(|f| f.name == name)) {
@@ -2218,5 +2286,49 @@ impl W<'_> {
         }
         flush(&mut assign, &mut lines);
         Ok(lines)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dump_names(r: &Refs) -> Vec<&str> {
+        r.dump.iter().map(|(n, _)| n.as_str()).collect()
+    }
+
+    #[test]
+    fn refs_skip_strings_templates_and_properties() {
+        let r = refs("$dump.a.b + \"$dump.x\" + `t${$dump.c}` + o.name + /$dump.r/ + n");
+        assert_eq!(dump_names(&r), ["a", "c"]);
+        assert_eq!(r.dump[0].1.as_deref(), Some("b"));
+        assert_eq!(r.names, ["o", "n"]);
+    }
+
+    #[test]
+    fn eager_refs_skip_function_bodies() {
+        let t = "{ f: async () => { $dump.x; g; }, h: (a) => $dump.y + a, k: $dump.z, \
+                 m() { return $dump.w; }, n: function (q) { $dump.v }, c: class extends B { m() { $dump.u } } }";
+        let r = eager_refs(t);
+        assert_eq!(dump_names(&r), ["z"]);
+        assert!(r.names.contains(&String::from("B")));
+        assert!(!r.names.contains(&String::from("g")));
+        let all = refs(t);
+        assert_eq!(dump_names(&all), ["x", "y", "z", "w", "v", "u"]);
+        // An arrow's expression body ends at its list's comma or bracket.
+        let r = eager_refs("[(x) => x.$dump, $dump.a, [y => $dump.b], $dump.c]");
+        assert_eq!(dump_names(&r), ["a", "c"]);
+        // A call's parenthesized arguments are no function head.
+        let r = eager_refs("f($dump.a)({ k: $dump.b })");
+        assert_eq!(dump_names(&r), ["a", "b"]);
+    }
+
+    #[test]
+    fn function_texts() {
+        assert!(is_fn_text("async () => 1"));
+        assert!(is_fn_text("function* g() {}"));
+        assert!(is_fn_text("x => x"));
+        assert!(!is_fn_text("($dump.a)"));
+        assert!(!is_fn_text("$dump.a"));
     }
 }
