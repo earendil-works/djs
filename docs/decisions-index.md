@@ -625,3 +625,7 @@ topics when the index is next reorganized.
 - D2892: The size ceilings rise for plain-dump loading in the shipped module
 - D2851: Site syntax: member targets split, recording only in async functions and generators, pinned
 - D2893: pi's next mode names its host functions `$djs.bridge`/`$djs.call` in plain dumps
+- D2894: The CLI's open calls carry their origin and the answers file's counts as state
+- D2852: Destructuring patterns are site-syntax nodes
+- D2853: TypeScript expressions are transparent on site paths
+- D2895: Several handles in a plain dump: a null-prototype object as the completion value

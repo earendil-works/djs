@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0206 | Site records: pattern nodes, TS wrappers, ctor params | pjc | .worktrees/pjc |
 | 0201 | Plain-JS exporter in Rust (step 2), then 0202, 0203 | pjx | .worktrees/pjx |
 | 0204 | Host hooks for plain dumps (step 5) | pjh | .worktrees/pjh |
 
@@ -92,6 +91,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
 | 0190-0196 | SM migration: slot names (D2730), named slots (D2731), construct temporaries + iter_next_loc (D2732), finally completions (D2733), roles deleted (D2734), one compile per load (D2735) | 9cc8741b (agent sm) |
 | 0198 | Dump performance: corpus dump p50 1.42 -> 0.43 ms wasm, totals 3,243 -> 610 ms; data cases 2-6x (D2800-D2802) | 429184db (agent dumpperf) |
+| 0206 | Site records: pattern nodes (D2852), transparent TS (D2853), Decl.at, ctor params | 10eac128 (agent pjc; 1,063/1,063 complete paths) |
 | 0200 | Compiler site-structure records for plain dumps (D2850, D2851) | 0cd63ec1 (agent pjc; 1,062/1,063 sites with complete paths) |
 | 0199 | Plain-JS dumps prototype: continuations with origin tracking; 1,161/1,161 harvested identical in djs and node; bounded re-dumps; recommends switching (D2830-D2833 proposed) | cdd46c56 (agent plainjs) |
 | 0197 | Gate waits: bgen and doctests legs dropped, one test binary per package, targets guard (D2790-D2792) | 823103e5 (agent gate-speed; core change gate ~65-89 s) |
