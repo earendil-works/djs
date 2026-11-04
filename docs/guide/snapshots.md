@@ -455,4 +455,6 @@ Decisions on this page:
 - D2703: Hosts store dump text compressed with zstd; the format stays a plain Script
 - D2704: Packaging B: the shipped module has no dumper, hosts that persist load the dump module
 - D2432: `djs heap` shows the session's own part by default
+- D2340: Heap views show the program's own cells apart from the base realm; REPL dumps are containers
+- D2269: No `djs heap` command and no `.image`; the REPL's `.heap` keeps the heap report
 <!-- /gen -->

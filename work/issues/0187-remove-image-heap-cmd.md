@@ -1,6 +1,6 @@
 # 0187: Remove the REPL's `.image` and the `djs heap` command (keep `.heap`)
 
-status: in-progress
+status: done
 agent: snapshot
 branch: issue/0187-remove-heap-cmd
 depends-on: 0177
@@ -23,4 +23,30 @@ touches: crates/djs-cli/src/main.rs, crates/djs-cli/src/repl/, crates/djs-cli/sr
 
 ## Log
 
+- Removed `djs heap` (main.rs dispatch and usage; heap/mod.rs `main`, `run`, `to_json`,
+  file reading, `--diff/--only/--all/--json/--top` handling) and the REPL's `.image`
+  (command, help line, `write_image`). `analyze_image` is now `heap::analyze(image,
+  reference, opts)`; `.heap` calls it as before.
+- What only image files needed: the summary's `file:` line and the dependency-descriptor
+  line (and its `deps`/`runs_here`/`file*` JSON fields, `dep_key`), `Options::all` (the
+  `--all` whole-image view; without a reference the analyzer still covers the whole
+  image), the `(--all ...)` hint. `Section` keeps `key`/`json`: the heap tests check the
+  JSON form, nothing prints it (allowed as dead outside tests, with a comment). json.rs
+  stays (tools.rs uses it).
+- Tests: dropped `an_image_file_reads_like_the_image` (its prefix assertion moved to the
+  sandbox test); the session-part test compares with `analyze(.., None, ..)` instead of
+  `--all`; repl.rs: `.image` test became `restore_reads_only_dumps` (a non-dump file),
+  `.help` no longer lists `.image`, and `.image x` is an unknown command.
+- Docs: docs/cli.md (usage, "The heap report (`.heap`)" replaces "`djs heap`", REPL
+  table), guide snapshots.md ("Inspecting a heap" is about `.heap`; the stress-tests line;
+  where to look), docs/host.md, README (repl line), registry.rs doc comment, research
+  notes (scripts/snapshot-research/README.md, empty-heap.md and snapshot-versioning.md
+  reproduction commands marked as needing an older checkout). ARCH.md and TESTING.md had
+  no `djs heap` mention. Other research reports mention `djs heap` historically; left.
+- D2269.
+
 ## Result
+
+`djs heap` and the REPL's `.image` are gone; `.heap [sections]` keeps the analyzer
+(summary, kinds, prefix, diff, largest, strings, shapes, functions, session) over the live
+VM against the base image. D2269.
