@@ -764,6 +764,9 @@ struct Dumper<'a> {
     /// `literal_key` of string atoms, by atom id.
     literal_keys: Index,
     literal_key_texts: Vec<Rc<str>>,
+    /// `member_of`, by atom id.
+    members: Index,
+    member_texts: Vec<Rc<str>>,
     /// Objects being written as data (`render`): promises made by activations or
     /// reactions are patched into them instead (dump_flight.rs `make`).
     data_depth: u32,
@@ -815,6 +818,8 @@ impl<'a> Dumper<'a> {
             sources: Sources::default(),
             literal_keys: Index::default(),
             literal_key_texts: Vec::new(),
+            members: Index::default(),
+            member_texts: Vec::new(),
             data_depth: 0,
             ns: false,
             next: 0,
@@ -2260,6 +2265,21 @@ impl<'a> Dumper<'a> {
     }
 
     /// The key in an object literal: `name`, `"a b"`, `[Symbol.iterator]`.
+    /// [`Dumper::key_member`], kept per dump for string atoms.
+    fn member_of(&mut self, k: Atom) -> Rc<str> {
+        if self.h.atom_symbol(k).is_some() {
+            return Rc::from(self.key_member(k));
+        }
+        let id = u64::from(k.id()) + 1;
+        if let Some(i) = self.members.get(id) {
+            return self.member_texts[i as usize].clone();
+        }
+        let m: Rc<str> = Rc::from(self.key_member(k));
+        self.members.insert(id, self.member_texts.len() as u32);
+        self.member_texts.push_out(m.clone());
+        m
+    }
+
     fn literal_key(&mut self, k: Atom) -> Rc<str> {
         let h = self.h;
         match h.atom_symbol(k) {
@@ -3852,13 +3872,17 @@ impl<'a> Dumper<'a> {
                 Some(Property::Data { value, flags }) => {
                     // The name an anonymous function gets from the key; only functions
                     // need it.
-                    let name = if cell_of(value).is_some() {
+                    let name = if value
+                        .as_object()
+                        .is_some_and(|f| h.object_class(f) == ObjectClass::Function)
+                    {
                         atom_text(h, k)
                     } else {
                         String::new()
                     };
                     let at = if cell_of(value).is_some() {
-                        cat!(loc, self.key_member(k))
+                        let m = self.member_of(k);
+                        cat!(loc, &*m)
                     } else {
                         String::new()
                     };
