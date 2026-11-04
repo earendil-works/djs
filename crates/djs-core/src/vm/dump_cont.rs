@@ -623,9 +623,27 @@ impl G<'_, '_> {
                 let k = k.ok_or("plain dumps: a block at the site")?;
                 let decls = Self::block_decls(&n, k);
                 let l = self.list(&n, k, i + 1, &decls)?;
-                // The `}` copied: a `using` scope's disposal is a site there.
                 // After the `}`: a `using` scope's disposal is a site there.
                 let end = self.mark("site", n.end);
+                // A block that declares nothing and is no label's needs no braces where
+                // K writes it among statements (not a `try`'s or a `catch`'s).
+                let listed = i > 0
+                    && matches!(
+                        self.node(i - 1).kind,
+                        NodeKind::Body
+                            | NodeKind::Block
+                            | NodeKind::If
+                            | NodeKind::While
+                            | NodeKind::DoWhile
+                            | NodeKind::For
+                            | NodeKind::ForIn
+                            | NodeKind::ForOf
+                            | NodeKind::ForAwait
+                            | NodeKind::Switch
+                    );
+                if decls.is_empty() && label.is_none() && listed {
+                    return Ok(P::L(alloc::vec![l, end]));
+                }
                 Ok(P::L(alloc::vec![lbl(label), s("{\n"), l, s("\n}"), end]))
             }
             NodeKind::Expr => {
@@ -1088,13 +1106,19 @@ impl G<'_, '_> {
             Some(_) => cat!(ib, ", ", nb),
             None => ib.clone(),
         };
+        // (Braces only where the iteration declares something.)
+        let (open, close) = if decls.is_empty() {
+            ("", "\n")
+        } else {
+            ("{ ", "\n}\n")
+        };
         Ok(P::L(alloc::vec![
             P::S(consts),
-            P::S(String::from("{ ")),
+            s(open),
             d,
             s("\n"),
             first,
-            s("\n}\n"),
+            s(close),
             label.unwrap_or_else(|| s("")),
             rec,
             P::V(n.start, head.start),
@@ -2263,6 +2287,8 @@ struct Flat {
 impl Flat {
     fn walk(&mut self, p: &P, ftext: &str, scaf: &mut [(&'static str, u32, u32, String)]) {
         match p {
+            // (No blank lines of K's own.)
+            P::S(t) if self.text.ends_with('\n') => self.text.push_str(t.trim_start_matches('\n')),
             P::S(t) => self.text.push_str(t),
             P::V(a, b) => {
                 if b > a {
