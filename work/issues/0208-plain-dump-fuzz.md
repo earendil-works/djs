@@ -45,6 +45,14 @@ variable (`{ get m() { n++; … } }`) written as `get: ,`. Find these systematic
   template-two-awaits, function-declared-in-loop, await-using-redump (refusals, pjr),
   await-in-assignment-target / await-in-pattern-target (deliberate refusals), and
   language/unreachable-destructuring-default.js (compiler bug, ratchet, pjk/0210).
+- Batches 2 and 3 (reported, routed by the coordinator): accessor-pair-after-site,
+  class-instance-loop-closure, generator-capturing-for-of, class-instance-in-idle-function
+  (plain-xfail); callee-and-argument-awaits, assign-member-nested-call,
+  finally-await-in-loop, class-from-waiting-closure, class-static-in-promise-all,
+  integer-key-equal-value, language/plain-fuzz/await-using-hoisted-function (refusals).
+- `using` cases live in language/plain-fuzz/: the slim build (codemode corpus in the slim
+  gate leg) has no `using`.
+- 0210 fixed the compiler bug: language/unreachable-destructuring-default.js passes now.
 - Corpus dump-size score raised for the new cases' dumps (+25 KB raw).
 - Guide: none affected.
 
