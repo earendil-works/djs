@@ -78,6 +78,11 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   new failures ("passes undefined arguments and results through", "exposes tools under
   normalized identifiers"); not investigated (maybe debug-build only).
 
+- Write-up: work/research/0207/README.md with ranked proposals (A–D clear wins, E–L
+  trade-offs, score on corpus without env). Sent the summary to the coordinator; waiting
+  for the owner on E–I. Next: A (record defaults) and B (`(0, f)` members) as small
+  merges, C after checking with pjr.
+
 ## Follow-ups
 
 ## Result
