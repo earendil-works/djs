@@ -290,6 +290,19 @@ fn dump_after_every_idle_point() {
     let n = every_idle_point(&body, &["--body", "--tools", &answers]);
     std::fs::remove_file(&body).unwrap();
     assert_eq!(n, 5);
+    // Tools held as values across idle points: written as `$djs.host("tools.read")`,
+    // given back as the same functions (D2971).
+    let held = format!("{dir}/dump-held-{}.js", std::process::id());
+    std::fs::write(
+        &held,
+        "const read = tools.read, glob = tools.glob, t = tools;\n\
+         const files = await glob({});\n\
+         for (const f of files) console.log((await read({ path: f })).length, read === tools.read, t === tools);\n",
+    )
+    .unwrap();
+    let n = every_idle_point(&held, &["--body", "--tools", &answers]);
+    std::fs::remove_file(&held).unwrap();
+    assert_eq!(n, 5);
     // A codemode body whose helper closes over the `tools` parameter (D2620).
     let n = every_idle_point(&format!("{DIR}/todos.js"), &["--body", "--tools", &answers]);
     assert!(n >= 2, "{n} idle points");
