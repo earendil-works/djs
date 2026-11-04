@@ -1,7 +1,7 @@
 # 0203: Plain encodings for the remaining refusals (using, yield*, destructuring/assignment/case sites, finally by break, for-await close, iterator helpers, private fields path)
 
-status: open
-agent: -
+status: in-progress
+agent: pjr
 branch: issue/0203-plain-refusals
 depends-on: 0202
 guide: -
