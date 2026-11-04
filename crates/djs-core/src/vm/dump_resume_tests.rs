@@ -1924,3 +1924,43 @@ main();
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 6, "{ok}");
 }
+
+/// `yield*` stopped at its yield and at the awaits of inner results: `throw` and
+/// `return` forwarded after the dump, an inner iterator without `throw`, an async
+/// delegation to a sync iterable whose values are promises.
+#[test]
+fn plain_dumps_of_yield_star() {
+    let src = r#"
+function* inner() { try { yield 1; yield 2; } finally { print("inner closed"); } }
+function* outer() { const r = yield* inner(); yield* [3, 4]; return r; }
+async function* ainner() {
+  try { yield await later("a1"); yield await later("a2"); } catch (e) { print("ainner caught", e); yield "after"; }
+}
+async function* aouter() { yield* ainner(); yield* [later("s1"), "s2"]; }
+async function main() {
+  const g = outer();
+  print(g.next().value);
+  await later(0);
+  print(JSON.stringify(g.throw("boom")) === undefined);
+}
+async function main2() {
+  const g = outer();
+  g.next(); g.next(); g.next();
+  await later(1);
+  try { g.throw(new Error("no throw")); } catch (e) { print("caught", e.message); }
+  const a = aouter();
+  print((await a.next()).value);
+  await later(2);
+  print(JSON.stringify(await a.throw("t")));
+  for await (const v of a) print("v", v);
+}
+main().catch((e) => print("main", e)).then(main2);
+"#;
+    let (failed, refused, ok) = plain_check_program("yieldstar", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, _, refused) = plain_chain_program("yieldstar", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 5, "{ok}");
+}

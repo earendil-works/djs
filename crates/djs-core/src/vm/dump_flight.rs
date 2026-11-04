@@ -1844,12 +1844,19 @@ impl Dumper<'_> {
                 });
             let sp = self.fl.supers.iter().find(|x| x.0 == a).map(|x| x.1);
             let super_proto = sp.map(|p| self.expr(p, None, None));
-            let closes = match fv(0).as_object() {
-                Some(f) if site.kind == SiteKind::ForAwaitClose => self.close_sites(f, &site),
+            let peers = match fv(0).as_object() {
+                Some(f)
+                    if matches!(
+                        site.kind,
+                        SiteKind::ForAwaitClose | SiteKind::YieldStarAwait
+                    ) =>
+                {
+                    self.peer_sites(f, &site)
+                }
                 _ => Vec::new(),
             };
             let act = plain::Act {
-                closes,
+                peers,
                 proto,
                 super_proto,
                 name: String::from(name.strip_prefix("$dump.").unwrap_or(&name)),
@@ -2040,9 +2047,10 @@ impl Dumper<'_> {
 }
 
 impl Dumper<'_> {
-    /// The names of the `for-await.close` sites of `site`'s loop in `f`, in order (the
-    /// close of an exception, of a jump out, of a `break`; the last two where used).
-    fn close_sites(&mut self, f: Obj, site: &Site) -> Vec<String> {
+    /// The names of the sites of `site`'s kind at its offset in `f`, in order (a `for
+    /// await`'s closes: of an exception, of a jump out, of a `break`, the last two where
+    /// used; an async `yield*`'s awaits of the results of `next`, `return`, `throw`).
+    fn peer_sites(&mut self, f: Obj, site: &Site) -> Vec<String> {
         let h = self.h;
         let t = h.closure_template(f);
         let info = template::debug_info(h, t);
@@ -2057,7 +2065,7 @@ impl Dumper<'_> {
         };
         m.sites
             .iter()
-            .filter(|x| x.kind == SiteKind::ForAwaitClose && x.pos == site.pos)
+            .filter(|x| x.kind == site.kind && x.pos == site.pos)
             .map(|x| x.name.clone())
             .collect()
     }

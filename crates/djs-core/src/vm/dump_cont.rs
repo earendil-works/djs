@@ -22,6 +22,8 @@ use crate::interp::run::suspend;
 
 #[path = "dump_cont_pattern.rs"]
 mod pattern;
+#[path = "dump_cont_yield.rs"]
+mod yield_star;
 
 type R<T> = Result<T, String>;
 
@@ -62,6 +64,8 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
             | crate::compiler::SiteKind::AsyncYield
             | crate::compiler::SiteKind::ForAwaitNext
             | crate::compiler::SiteKind::ForAwaitClose
+            | crate::compiler::SiteKind::YieldStar
+            | crate::compiler::SiteKind::YieldStarAwait
     ) {
         return Err(cat!(
             "plain dumps: a site of kind ",
@@ -1011,7 +1015,7 @@ impl G<'_, '_> {
         let (kname, vname) = (cat!("completion.kind@", fo), cat!("completion.value@", fo));
         // Which close this is: the loop's close sites are the exception's, a jump out's
         // and a `break`'s (the last two where used).
-        let closes = &self.act.closes;
+        let closes = &self.act.peers;
         let nth = closes.iter().position(|c| *c == self.act.site.name);
         let jump = if self.has(&kname) || self.has(&vname) {
             true
@@ -1301,6 +1305,9 @@ impl G<'_, '_> {
 
     fn expr(&mut self, i: usize) -> R<P> {
         let n = self.node(i).clone();
+        if self.is_site(i) && n.kind == NodeKind::YieldStar {
+            return self.yield_star_site(&n);
+        }
         if self.is_site(i) {
             let m = self.mark("site", n.start);
             return Ok(match n.kind {
@@ -1621,7 +1628,17 @@ impl G<'_, '_> {
             }
         }
         let trailing_hole = n.parts.last().is_some_and(|p| p.role == Role::Hole);
-        let mut out = alloc::vec![s("[")];
+        // K's literal has the original's elements: once it appends (a spread, many
+        // elements), its array is the original's.
+        let m = self.mark("tmp", 0);
+        if let P::Mark(x) = m {
+            self.scaf[x].3 = cat!(
+                ",",
+                quote(&cat!("array.literal@", n.start)),
+                ",\"array.literal\""
+            );
+        }
+        let mut out = alloc::vec![m, s("[")];
         push_joined(&mut out, list);
         out.push_out(s(if trailing_hole { ",]" } else { "]" }));
         Ok(P::L(out))
@@ -1734,7 +1751,10 @@ impl G<'_, '_> {
                         self.rest(p.start + 3, p.end)
                     };
                     items.push_out(P::L(alloc::vec![
-                        P::S(cat!("$djs_A(", ot, ", ")),
+                        self.kmark(),
+                        s("$djs_A("),
+                        self.kmark(),
+                        P::S(cat!(ot, ", ")),
                         v,
                         s(")")
                     ]));
@@ -1760,15 +1780,34 @@ impl G<'_, '_> {
                         // Evaluated before the site, as a property key.
                         self.tmp("object.key", p.start)?
                     } else {
-                        self.rest(p.start + 1, p.end - 1)
+                        // Converted before the value, as the original does; the
+                        // original's converted key is this argument of K's call.
+                        let m = self.mark("tmp", 0);
+                        if let P::Mark(x) = m {
+                            self.scaf[x].3 =
+                                cat!(",", quote(&cat!("object.key@", p.start)), ",\"call.arg\"");
+                        }
+                        P::L(alloc::vec![
+                            m,
+                            self.kmark(),
+                            s("$djs_P("),
+                            self.rest(p.start + 1, p.end - 1),
+                            s(")")
+                        ])
                     };
                     let v = if vi == k {
                         self.expr(i + 1)?
                     } else {
                         self.rest_part(n, vi)
                     };
+                    // K's own call (origin tracking rebuilds its callee and
+                    // fixed arguments from the original's frame).
                     items.push_out(P::L(alloc::vec![
-                        P::S(cat!("$djs_D(", ot, ", ")),
+                        self.kmark(),
+                        s("$djs_D("),
+                        self.kmark(),
+                        P::S(cat!(ot, ", ")),
+                        self.kmark(),
                         key,
                         s(", "),
                         v,
@@ -1779,7 +1818,12 @@ impl G<'_, '_> {
                 Role::Shorthand => {
                     let t = String::from(self.text(p.start, p.end));
                     items.push_out(P::L(alloc::vec![
-                        P::S(cat!("$djs_D(", ot, ", ", quote(&t), ", ")),
+                        self.kmark(),
+                        s("$djs_D("),
+                        self.kmark(),
+                        P::S(cat!(ot, ", ")),
+                        self.kmark(),
+                        P::S(cat!(quote(&t), ", ")),
                         self.rest(p.start, p.end),
                         s(")"),
                     ]));
@@ -1805,7 +1849,7 @@ impl G<'_, '_> {
         let mut text = out.text;
         // K's helpers, captured where the marker is.
         let names: Vec<&str> = [
-            "R", "G", "C", "D", "A", "L", "N", "Q", "X", "O", "I", "E", "P", "S",
+            "R", "G", "C", "D", "A", "L", "N", "Q", "X", "O", "I", "E", "P", "S", "Y",
         ]
         .into_iter()
         .filter(|h| text.contains(&cat!("$djs_", *h, "(")))

@@ -9456,3 +9456,17 @@ would be named by the key, so the dump fixed its `name` back to `""` afterwards 
 is the empty string is now written `$f33: (0, (args) => …)`: not a direct function
 definition, so the key does not name it, and no fixup follows (−9% of the corpus's
 plain dump bytes, mostly the prelude's closures).
+## D2875: `yield*` in plain continuations: a `yield*` over a wrapper of the inner record
+date: 2026-11-05 · by: pjr · issue: 0203
+At a `yield*` site, `K` delegates again with `yield* $dump.Y(it, next, async, ...first)`.
+The wrapper's first step is the inner result the original waits for: the promise of
+the inner `next()` or `throw()` whose result an async generator awaits. Where the
+original is suspended at the delegation's yield, the first step is a placeholder `K` is
+primed to. Later steps call the saved `next`. `throw` and `return` are getters that look
+up the inner iterator's own when the delegation uses them, so a missing `throw` closes
+the iterator and throws as the original's delegation does. An async generator waiting
+on the inner `return()`'s result is refused, because the result decides between a return
+and a yield. The dump's async-from-sync iterator gained `throw`. Literals rewritten as
+`$dump.D` calls mark them for origin tracking, and their computed keys are converted
+first (`$dump.P`), as the original converts them before the value. An array literal of
+`K` that appends maps to the original's.

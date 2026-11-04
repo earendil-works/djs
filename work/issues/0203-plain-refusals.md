@@ -61,6 +61,12 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
   plain_dumps_of_patterns, plain_dumps_of_for_await_closes now also run chains
   (plain_chain_program). v2: 164 identical, 29 refused (using 11, yield-star 10,
   iterator-helpers 6, class-closure, class-fields); chain refusals 5.
+- pjr: D2875 yield* (all golden/yield-star points and chains), test plain_dumps_of_yield_star.
+  pi's re-dump refusal (await in an array in an object literal, from pjs) fixed: `$djs_D`
+  calls kmarked, computed keys via `$djs_P` with an object.key tmp record, array
+  literals map array.literal; new corpus case codemode/nested-literals.js (12 links).
+  v2: 174 identical, 19 refused (using 11, iterator-helpers 6, class-closure,
+  class-fields); chains: 4 refused. Corpus 1206 links, 0 differ, 0 refused.
 
 ## Follow-ups
 

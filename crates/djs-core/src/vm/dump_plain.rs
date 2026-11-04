@@ -103,9 +103,9 @@ pub(super) struct Act {
     pub kind: i32,
     /// A generator object's prototype (its continuation's `prototype`).
     pub proto: Option<String>,
-    /// At a `for-await.close` site: the names of its loop's close sites, in order
-    /// (empty if unknown).
-    pub closes: Vec<String>,
+    /// The names of the sites of its site's kind at its site's offset, in order (a `for
+    /// await`'s closes, an async `yield*`'s awaits of inner results; empty if unknown).
+    pub peers: Vec<String>,
     /// A method that uses `super`: its home object's prototype (its continuation is a
     /// method of an object of that prototype).
     pub super_proto: Option<String>,
@@ -1771,6 +1771,13 @@ const HELPERS: &[(&str, &str)] = &[
         "E",
         "() => ({ [Symbol.iterator]() { return { next() { return { value: undefined, done: true }; } }; } })",
     ),
+    // A `yield*`'s inner record (D2875): the first step is `first` if given, else a
+    // placeholder (the delegation's yield the original is suspended at); `throw` and
+    // `return` are the inner iterator's, looked up when the delegation uses them.
+    (
+        "Y",
+        "(it, next, a, ...first) => { let ph = !first.length; const m = (k) => { const f = it[k]; return f == null ? f : (...v) => Reflect.apply(f, it, v); }; const r = { next(...v) { if (first.length) return first.pop(); if (ph) { ph = false; return { value: undefined, done: false }; } return Reflect.apply(next, it, v); }, get throw() { return m('throw'); }, get return() { return m('return'); }, [a ? Symbol.asyncIterator : Symbol.iterator]() { return r; } }; return r; }",
+    ),
     // ToPropertyKey, as a computed key does it.
     ("P", "(k) => Reflect.ownKeys({ [k]: 0 })[0]"),
     // A pattern's rest property: CopyDataProperties without the keys taken.
@@ -1799,7 +1806,7 @@ const HELPERS: &[(&str, &str)] = &[
     // visible to user code): its `next` and `return` step as the language's do.
     (
         "fromSync",
-        "(it, next) => { const q = () => { try { const m = it.return; if (m != null) Reflect.apply(m, it, []); } catch {} }; const step = (f, close) => new Promise((res, rej) => { const r = f(); if (Object(r) !== r) throw new TypeError('iterator must return an object'); const done = !!r.done; let w; try { w = Promise.resolve(r.value); } catch (e) { if (!done && close) q(); throw e; } w.then((v) => res({ value: v, done }), !done && close ? (e) => { q(); rej(e); } : rej); }); return { next: (...a) => step(() => Reflect.apply(next, it, a), true), return: (...a) => { const m = it.return; return m == null ? Promise.resolve({ value: a[0], done: true }) : step(() => Reflect.apply(m, it, a), false); } }; }",
+        "(it, next) => { const q = () => { try { const m = it.return; if (m != null) Reflect.apply(m, it, []); } catch {} }; const step = (f, close) => new Promise((res, rej) => { const r = f(); if (Object(r) !== r) throw new TypeError('iterator must return an object'); const done = !!r.done; let w; try { w = Promise.resolve(r.value); } catch (e) { if (!done && close) q(); throw e; } w.then((v) => res({ value: v, done }), !done && close ? (e) => { q(); rej(e); } : rej); }); return { next: (...a) => step(() => Reflect.apply(next, it, a), true), return: (...a) => { const m = it.return; return m == null ? Promise.resolve({ value: a[0], done: true }) : step(() => Reflect.apply(m, it, a), false); }, throw: (...a) => { const m = it.throw; if (m != null) return step(() => Reflect.apply(m, it, a), true); try { const c = it.return; if (c != null) { const r = Reflect.apply(c, it, []); if (Object(r) !== r) throw new TypeError('iterator must return an object'); } throw new TypeError('throw is not a method'); } catch (e) { return Promise.reject(e); } } }; }",
     ),
     (
         "Q",
@@ -2137,7 +2144,7 @@ impl W<'_> {
         let me = cat!("$dump.", act.name);
         let generator = act.kind == crate::interp::run::suspend::GENERATOR
             || act.kind == crate::interp::run::suspend::ASYNC_GENERATOR;
-        let at_yield = act.site.name.starts_with("yield#");
+        let at_yield = act.site.name.starts_with("yield#") || act.site.name.starts_with("yield*#");
         if generator {
             if let Some(p) = &act.proto {
                 lines.push_out(cat!(kref, ".prototype = ", p, ";"));
