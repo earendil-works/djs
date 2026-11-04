@@ -33,6 +33,7 @@ use super::expr::{Expr, LValue};
 use super::func::{BODY_SCOPE, FuncKind, HandlerLabels, VarKind};
 use super::parser::{Checkpoint, Parser, syntax};
 use super::scan::Follow;
+use super::smap_syntax::{NodeKind, Role};
 use crate::bytecode::Label;
 use crate::bytecode::intrinsics::intrinsic_id;
 use crate::heap::{Atom, atoms};
@@ -290,6 +291,7 @@ impl<'a> Parser<'a, '_> {
     /// `{ a, b: c = 1, [k]: d, ...rest }`.
     fn parse_object_pattern(&mut self, b: Binding) -> PResult<()> {
         let open = self.tok;
+        self.syn_open(NodeKind::ObjectPattern, open.start);
         let rest = super::scan::object_has_rest(self.lx, open);
         self.next()?;
         self.mark(open.start);
@@ -329,6 +331,7 @@ impl<'a> Parser<'a, '_> {
                 self.code()
                     .call_intrinsic(intrinsic("CopyDataPropertiesExcluding"), 2);
                 self.store_target(b, t)?;
+                self.syn_part(Role::Rest, pos, self.prev_end);
                 self.names_pop(t.stack_names().len());
                 if !self.is(TokenKind::RBrace) {
                     return syntax(self.tok.start, "assignment rest property must be last");
@@ -343,6 +346,7 @@ impl<'a> Parser<'a, '_> {
                 );
             // Where the target starts: it names the slots of a reference target.
             let mut t_at = key_tok.start;
+            let mut t_mark = self.syn_mark();
             let (key, t) = if shorthand {
                 let a = self.ident_atom()?;
                 if let Some(e) = excl {
@@ -389,8 +393,15 @@ impl<'a> Parser<'a, '_> {
                 if !self.is(TokenKind::Colon) {
                     return syntax(self.tok.start, "expecting ':'");
                 }
+                let role = if key.is_some() {
+                    Role::Key
+                } else {
+                    Role::ComputedKey
+                };
+                self.syn_part(role, key_tok.start, self.prev_end);
                 self.next()?;
                 t_at = self.tok.start;
+                t_mark = self.syn_mark();
                 (key, self.parse_target(b)?)
             };
             let r = t.refs();
@@ -409,8 +420,16 @@ impl<'a> Parser<'a, '_> {
                 }
             }
             let name = self.target_name(&t);
+            let default = self.syn_default(t_at, t_mark);
             self.parse_pattern_default(name)?;
             self.store_target(b, t)?;
+            self.syn_default_end(default);
+            let role = if shorthand {
+                Role::Shorthand
+            } else {
+                Role::Value
+            };
+            self.syn_part(role, t_at, self.prev_end);
             self.names_pop(t.stack_names().len());
             if key.is_none() {
                 self.code().drop();
@@ -421,7 +440,27 @@ impl<'a> Parser<'a, '_> {
             }
         }
         self.expect(TokenKind::RBrace, "}")?;
+        self.syn_close();
         Ok(())
+    }
+
+    /// Before a target's `= default`, if there is one: the target from `t_at`
+    /// ([`Parser::syn_mark`] `mark` where it started) becomes a `Default` node's
+    /// `Target` (D2852). Returns where the default starts.
+    fn syn_default(&mut self, t_at: u32, mark: u32) -> Option<u32> {
+        if !self.is(TokenKind::Assign) || !self.syn_on() {
+            return None;
+        }
+        self.syn_open_late(NodeKind::Default, t_at, mark, Role::Target, self.prev_end);
+        Some(self.peek().start)
+    }
+
+    /// After the default and the store: the `Init` part, and the node ends.
+    fn syn_default_end(&mut self, init: Option<u32>) {
+        if let Some(init) = init {
+            self.syn_part(Role::Init, init, self.prev_end);
+            self.syn_close();
+        }
     }
 
     // ---- Array patterns --------------------------------------------------------------
@@ -429,6 +468,7 @@ impl<'a> Parser<'a, '_> {
     /// `[a, , b = 1, [c], ...d]`.
     fn parse_array_pattern(&mut self, b: Binding) -> PResult<()> {
         let open = self.tok;
+        self.syn_open(NodeKind::ArrayPattern, open.start);
         self.next()?;
         self.mark(open.start);
         self.code().call_intrinsic(intrinsic("GetIterator"), 1);
@@ -459,6 +499,7 @@ impl<'a> Parser<'a, '_> {
                 TokenKind::RBracket => break,
                 TokenKind::Comma => {
                     // An elision: one step, value dropped.
+                    self.syn_part(Role::Hole, self.tok.start, self.tok.start);
                     self.region_end(&mut regions);
                     self.emit_iter_step((it, next), first, open.start);
                     self.region_start(&mut regions);
@@ -468,6 +509,7 @@ impl<'a> Parser<'a, '_> {
                     continue;
                 }
                 TokenKind::Ellipsis => {
+                    let rest = self.tok.start;
                     self.next()?;
                     let t_at = self.tok.start;
                     let t = self.parse_target(b)?;
@@ -480,11 +522,13 @@ impl<'a> Parser<'a, '_> {
                     self.emit_iter_rest((it, next), first, open.start);
                     self.region_start(&mut regions);
                     self.store_target(b, t)?;
+                    self.syn_part(Role::Rest, rest, self.prev_end);
                     self.names_pop(t.stack_names().len());
                     break;
                 }
                 _ => {
                     let t_at = self.tok.start;
+                    let t_mark = self.syn_mark();
                     let t = self.parse_target(b)?;
                     may_throw |= matches!(t, Target::Pattern(_));
                     self.names_push(t_at, t.stack_names());
@@ -492,8 +536,11 @@ impl<'a> Parser<'a, '_> {
                     self.emit_iter_step((it, next), first, open.start);
                     self.region_start(&mut regions);
                     let name = self.target_name(&t);
+                    let default = self.syn_default(t_at, t_mark);
                     may_throw |= self.parse_pattern_default(name)?;
                     self.store_target(b, t)?;
+                    self.syn_default_end(default);
+                    self.syn_part(Role::Element, t_at, self.prev_end);
                     self.names_pop(t.stack_names().len());
                     first = false;
                 }
@@ -505,6 +552,7 @@ impl<'a> Parser<'a, '_> {
             }
         }
         self.expect(TokenKind::RBracket, "]")?;
+        self.syn_close();
         self.open_iters.pop();
         self.region_end(&mut regions);
         // Close a not-done iterator.

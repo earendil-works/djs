@@ -700,8 +700,13 @@ fn pinned_maps() {
 /// Each site's path (D2850) as `Kind.Role` steps, the last as its kind, with ` gap`
 /// when the path misses a construct.
 fn paths(src: &str) -> Vec<String> {
+    paths_as(src, false)
+}
+
+fn paths_as(src: &str, ts: bool) -> Vec<String> {
     let mut heap = Heap::new().unwrap();
-    let opts = CompileOptions::async_body("t.js", &[]);
+    let mut opts = CompileOptions::async_body("t.js", &[]);
+    opts.typescript = ts;
     let maps = suspension_maps(&mut heap, src.as_bytes(), &opts).unwrap();
     let mut out = Vec::new();
     for m in &maps {
@@ -841,10 +846,33 @@ const PATHS: &[(&str, &[&str])] = &[
             "await#3 Body.Stmt Return.Operand Await",
         ],
     ),
-    // Patterns are no nodes yet: a gap.
+    // Patterns (D2852).
     (
         "const {a = await b} = c;",
-        &["await#1 Body.Stmt Decl(Const).Target Await gap"],
+        &["await#1 Body.Stmt Decl(Const).Target ObjectPattern.Shorthand Default.Init Await"],
+    ),
+    (
+        "const [x, , [y = await z] = await w, ...r] = v;",
+        &[
+            "await#1 Body.Stmt Decl(Const).Target ArrayPattern.Element Default.Target \
+             ArrayPattern.Element Default.Init Await",
+            "await#2 Body.Stmt Decl(Const).Target ArrayPattern.Element Default.Init Await",
+        ],
+    ),
+    (
+        "({[await k]: a, b: o[await i] = 1, ...r} = v);",
+        &[
+            "await#1 Body.Stmt Expr.Operand Assign.Left ObjectPattern.ComputedKey Await",
+            "await#2 Body.Stmt Expr.Operand Assign.Left ObjectPattern.Value Default.Target \
+             Member[].Property Await",
+        ],
+    ),
+    (
+        "for (const [a = await d] of xs); try {} catch ({e = await f}) {}",
+        &[
+            "await#1 Body.Stmt ForOf.Head ArrayPattern.Element Default.Init Await",
+            "await#2 Body.Stmt Try.CatchParam ObjectPattern.Shorthand Default.Init Await",
+        ],
     ),
     (
         "async function* gen() { yield await 1; throw await 2; }",
@@ -863,6 +891,22 @@ fn site_paths() {
     for (src, want) in PATHS {
         assert_eq!(paths(src), *want, "{src}");
     }
+}
+
+/// TypeScript expressions are transparent (D2853): no node, no gap.
+#[test]
+fn site_paths_through_typescript() {
+    assert_eq!(
+        paths_as(
+            "const x: number = (await y) as T; f((await z)!, <U>await w satisfies V);",
+            true
+        ),
+        [
+            "await#1 Body.Stmt Decl(Const).Init Await",
+            "await#2 Body.Stmt Expr.Operand Call.Arg Await",
+            "await#3 Body.Stmt Expr.Operand Call.Arg Await",
+        ]
+    );
 }
 
 /// Declarations land on the node of their scope with the part that declares them;

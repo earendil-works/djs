@@ -1203,6 +1203,7 @@ impl Parser<'_, '_> {
             Vec::new()
         };
         self.begin_ctor(b, props)?;
+        let params = self.tok.start;
         self.expect(TokenKind::LParen, "(")?;
         if b.legacy {
             // Its parameter decorators and types belong to the class.
@@ -1213,6 +1214,7 @@ impl Parser<'_, '_> {
         } else {
             self.parse_params()?;
         }
+        self.syn_part(super::smap_syntax::Role::Params, params, self.prev_end);
         if !b.derived {
             // Parameter properties are assigned once the parameters are (a derived
             // constructor does it after `super()`).

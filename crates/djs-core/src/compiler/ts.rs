@@ -166,11 +166,11 @@ impl<'a> Parser<'a, '_> {
     }
 
     pub(super) fn ts_erase_kind(&mut self, start: u32, end: u32, kind: u8) {
-        if self.spec == 0
-            && start < end
-            && let Some(e) = &mut self.erased
-        {
-            e.push_out((start, end, kind));
+        if self.spec == 0 && start < end {
+            self.syn_erased(start, end);
+            if let Some(e) = &mut self.erased {
+                e.push_out((start, end, kind));
+            }
         }
     }
 

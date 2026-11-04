@@ -9179,3 +9179,30 @@ call, so every call carries the counts and the loading CLI takes the highest per
 resumed run's next call then gets the answer the uninterrupted run gets, where it used to
 start the list again. Read back from format 2's loaded calls and from the plain dump's
 `$djs.resume` states alike.
+## D2852: Destructuring patterns are site-syntax nodes
+date: 2026-11-05 · by: pjc · issue: 0206
+Extends D2850 so a site inside a destructuring pattern (a default, a computed key, a
+reference target of an assignment pattern) has a complete path. `ArrayPattern` has the
+parts `Element`, `Hole` (an empty span) and `Rest`; `ObjectPattern` has `Key Value`,
+`ComputedKey Value`, `Shorthand` and `Rest`; a target with a default is a `Default` node
+(`Target Init`, the name as `Target` in a shorthand) inside its part when a path goes
+through the default or a nested pattern under it. Pattern nodes nest as in the source,
+though djs evaluates a pattern after its value; bindings stay on the enclosing node's
+`decls`. The pattern's state keeps its existing temporaries, named by the pattern's start
+(`pattern.source`, `pattern.excluded`, `pattern.iterator`, `pattern.next`; the
+iterator is `undefined` once done) and `pattern.key` by a computed key's `[`. Agreed with
+the exporter (0203). pjx had first asked for per-element `PatProp`/`Elem` nodes and
+then accepted this shape, which carries the same spans with fewer nodes.
+
+## D2853: TypeScript expressions are transparent on site paths
+date: 2026-11-05 · by: pjc · issue: 0206
+`x as T`, `x satisfies T`, `x!`, `<T>x` and annotations are not nodes. Each function's
+TypeScript-only ranges are recorded (`Syntax::erased`, the ranges the parser already
+erases for `strip_types`) and the gap check counts them as blanks, so `(await x) as T`
+has a complete path. The exporter splices from `compiler::strip_types`'s text, which
+blanks exactly those ranges and keeps every offset, so every span stays valid and the
+spliced text is JavaScript. A wrapper node (`Operand` plus `Type`) was the alternative; it
+would make every consumer skip it and still leave the types in the spliced text.
+Class constructors and `Function`-constructor sources record a `Params` part as well
+(neither can have sites today), and a declaration carries `Decl::at`, an offset inside
+its declarator, so a statement's names can be told apart by declarator.

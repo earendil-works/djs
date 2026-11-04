@@ -24,9 +24,9 @@
 //!   part's `start` (see each [`NodeKind`]); so a temporary `c@o` of a site belongs to the
 //!   node on the site's path whose start or part start is `o`.
 //!
-//! Only these constructs are nodes; destructuring patterns, class bodies and TypeScript
-//! expressions (`x as T`, `x!`) are not (yet). A path that passes through one has a
-//! **gap**: the part that should hold the next node holds more than that node and
+//! Only these constructs are nodes; class bodies are not (a site there is unsupported
+//! anyway), and TypeScript expressions (`x as T`, `x!`) are transparent (see
+//! `Syntax::erased`). A path that passes through something else has a **gap**: the part that should hold the next node holds more than that node and
 //! parentheses. `Site::gap` reports it, and the exporter must refuse such a site rather
 //! than drop the construct.
 
@@ -52,6 +52,13 @@ pub struct Syntax {
     /// renames these to a binding of the saved value), and it has no `new.target` or
     /// home object. Source order.
     pub special: Vec<(Special, u32)>,
+    /// The TypeScript-only ranges of the function's own code (annotations, `as T`,
+    /// `satisfies T`, `x!`, `<T>x`, type arguments, type-only statements), in source
+    /// order, D2853. They are transparent: no node stands for a TypeScript expression,
+    /// and the gap check counts these ranges as blanks, so `(await x) as T` has a
+    /// complete path. Splice from `compiler::strip_types`'s text, which blanks exactly
+    /// these ranges and keeps every offset (and nested functions' types too).
+    pub erased: Vec<(u32, u32)>,
 }
 
 #[cfg(feature = "dump")]
@@ -78,6 +85,13 @@ impl Syntax {
                         None => out.push_str("#-"),
                     }
                 }
+            }
+            out.push('\n');
+        }
+        if !self.erased.is_empty() {
+            out.push_str("  erased");
+            for (s, e) in &self.erased {
+                let _ = write!(out, " {s}..{e}");
             }
             out.push('\n');
         }
@@ -130,6 +144,9 @@ impl NodeKind {
             NodeKind::TaggedTemplate => "TaggedTemplate",
             NodeKind::Array => "Array",
             NodeKind::Object => "Object",
+            NodeKind::ArrayPattern => "ArrayPattern",
+            NodeKind::ObjectPattern => "ObjectPattern",
+            NodeKind::Default => "Default",
         });
         match self {
             NodeKind::Decl(k) => {
@@ -324,6 +341,8 @@ pub enum Role {
     Subst,
     /// A tagged template's tag.
     Tag,
+    /// A rest element or property of a pattern, `...` included.
+    Rest,
     /// An object literal's property: a plain key (identifier, string, number), a
     /// computed key with its brackets (`object.key@` names it by the `[`), the value
     /// after the `:`, a shorthand property `x`, a method, getter or setter as a whole,
@@ -424,6 +443,30 @@ pub enum NodeKind {
     /// `{ (Key Value | ComputedKey Value | Shorthand | Method | Spread)* }`;
     /// `object.literal@` names it by its start (the `{`).
     Object,
+    // ---- patterns (D2852)
+    /// A destructuring pattern, wherever one stands: a declarator's `Target`, an
+    /// assignment's `Left`, a `for-in`/`for-of` `Head`, a parameter in `Params`, a
+    /// `CatchParam`, or nested in another pattern. djs evaluates a pattern after its
+    /// value, but its nodes nest as in the source. Bindings stay on the enclosing
+    /// node's `decls`. `[ (Element|Hole)* Rest? ]` (an `Element` part is the target
+    /// with its default, a `Hole` an empty span where the hole is). The iterator
+    /// record is `pattern.iterator@`/`pattern.next@` by the node's start; the iterator
+    /// is `undefined` once done (there is no separate done flag).
+    ArrayPattern,
+    /// `{ (Key Value | ComputedKey Value | Shorthand)* Rest? }`: a `Value` or
+    /// `Shorthand` part is the target with its default (`a: b = 1`, `a = 1`);
+    /// `ComputedKey` includes the brackets, and its converted key is `pattern.key@` by
+    /// the `[` while the target and default run. The value being destructured is
+    /// `pattern.source@` by the node's start, and with a rest property the keys taken
+    /// so far are `pattern.excluded@` (an array).
+    ObjectPattern,
+    /// A pattern target with a default, `t = d`: `Target Init` (`Init` without the
+    /// `=`); the node inside an `Element`, `Value` or `Shorthand` part when a path goes
+    /// through the default or through a nested pattern target. In a `Shorthand` the
+    /// `Target` is the name. A reference target of an assignment pattern
+    /// (`[o.x = 1] = v`) keeps its slot names (`assign.object@…`) at the target's
+    /// start, which is the node's.
+    Default,
 }
 
 // ---- Recording ------------------------------------------------------------------------
@@ -471,6 +514,8 @@ mod recording {
         /// Declarations: the binding, an offset inside the code that declares it, its kind.
         decls: Vec<(VarId, u32, DeclKind)>,
         special: Vec<(Special, u32)>,
+        /// TypeScript-only ranges (`Syntax::erased`), in source offsets.
+        erased: Vec<(u32, u32)>,
         /// The member node that closed last, if the last node to close was one: an
         /// assignment's or update's target (`Parser::syn_target`).
         last: Option<Last>,
@@ -502,16 +547,32 @@ mod recording {
         }
     }
 
-    /// `true` if `b` can be between a part's start and the node inside it (or after the
-    /// node): blanks, comments, parentheses and what `role` adds around its node.
-    fn filler(src: &[u8], from: usize, to: usize, role: Role) -> Option<usize> {
+    /// The first offset in `from..to` that cannot be between a part's start and the
+    /// node inside it (or after the node), if any: blanks, comments, parentheses,
+    /// TypeScript-only ranges and what `role` adds around its node can.
+    fn filler(
+        src: &[u8],
+        erased: &[(u32, u32)],
+        from: usize,
+        to: usize,
+        role: Role,
+    ) -> Option<usize> {
         let mut i = from;
         while i < to {
+            if let Some(&(_, e)) = erased
+                .iter()
+                .find(|r| r.0 as usize <= i && i < r.1 as usize)
+            {
+                i = e as usize;
+                continue;
+            }
             let c = src[i];
             match c {
                 b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c | b'(' | b')' => i += 1,
                 b'[' | b']' if matches!(role, Role::Property | Role::ComputedKey) => i += 1,
-                b'.' if role == Role::Spread => i += 1,
+                b'.' if matches!(role, Role::Spread | Role::Rest) => i += 1,
+                // A declaration head's keyword (`const [a] of …`, `await using x`).
+                b'a'..=b'z' if role == Role::Head => i += 1,
                 b'/' if src.get(i + 1) == Some(&b'/') => {
                     while i < to && src[i] != b'\n' {
                         i += 1;
@@ -655,8 +716,9 @@ mod recording {
                             Some(p) => {
                                 let p = node.parts[p];
                                 let at = |o: u32| (base + o) as usize;
-                                filler(src, at(p.start), at(inner.start), p.role)
-                                    .or_else(|| filler(src, at(inner.end), at(p.end), p.role))
+                                let er = &rec.erased;
+                                filler(src, er, at(p.start), at(inner.start), p.role)
+                                    .or_else(|| filler(src, er, at(inner.end), at(p.end), p.role))
                                     .map(|i| rel(i as u32))
                             }
                         };
@@ -672,7 +734,17 @@ mod recording {
         let mut special: Vec<(Special, u32)> =
             rec.special.iter().map(|&(s, p)| (s, rel(p))).collect();
         crate::sort::sort_by(&mut special, |a, b| a.1 < b.1);
-        (Syntax { nodes, special }, paths)
+        let mut erased: Vec<(u32, u32)> =
+            rec.erased.iter().map(|&(s, e)| (rel(s), rel(e))).collect();
+        crate::sort::sort_by(&mut erased, |a, b| a.0 < b.0);
+        (
+            Syntax {
+                nodes,
+                special,
+                erased,
+            },
+            paths,
+        )
     }
 
     // ---- The parser's hooks ------------------------------------------------------------
@@ -853,6 +925,14 @@ mod recording {
             }
         }
 
+        /// A TypeScript-only range of the current function's code.
+        #[inline]
+        pub(in crate::compiler) fn syn_erased(&mut self, start: u32, end: u32) {
+            if let Some(r) = self.syn() {
+                r.erased.push((start, end));
+            }
+        }
+
         /// A reference to `arguments`, `new.target` or `super` at `pos`, recorded in the
         /// function that owns it (the innermost non-arrow one).
         pub(in crate::compiler) fn syn_special(&mut self, s: Special, pos: u32) {
@@ -895,4 +975,6 @@ impl super::parser::Parser<'_, '_> {
     pub(super) fn syn_decl(&mut self, _v: VarId, _kind: DeclKind) {}
     #[inline(always)]
     pub(super) fn syn_special(&mut self, _s: Special, _pos: u32) {}
+    #[inline(always)]
+    pub(super) fn syn_erased(&mut self, _start: u32, _end: u32) {}
 }

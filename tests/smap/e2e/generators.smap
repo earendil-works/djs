@@ -129,6 +129,8 @@ function dstr @2919..2991
   loc0 <state>, loc3 a@0
   node 0 Body @0..72: Params 14..16 Stmt 19..60 Stmt 61..70 | Const a@0#1
   node 1 Decl(Const) @19..60: Target 25..49 Init 52..59
-  node 2 Yield @30..48: Operand 36..48
+  node 2 ArrayPattern @25..49: Element 26..48
+  node 3 Default @26..48: Target 26..27 Init 30..48
+  node 4 Yield @30..48: Operand 36..48
   yield#1 @30 (117:31) pc 66: pattern.iterator@25
-    path 0.1 1.0 2 gap @25
+    path 0.1 1.0 2.0 3.1 4

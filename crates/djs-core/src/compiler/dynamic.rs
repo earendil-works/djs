@@ -46,8 +46,10 @@ impl Parser<'_, '_> {
         self.start_flavor(flavor)?;
         self.f.name = name;
         self.f.src_start = start;
+        let params = self.tok.start;
         self.expect(TokenKind::LParen, "(")?;
         self.parse_params()?;
+        self.syn_part(super::smap_syntax::Role::Params, params, self.prev_end);
         let paren = self.prev_end - 1;
         // Parameters that end early are an error (spec), but qjs parses the wrapped
         // source as one function expression, so its message comes from what follows:
