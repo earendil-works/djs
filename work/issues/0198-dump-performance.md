@@ -57,5 +57,23 @@ dump-every-idle, idle-point counts at 100%).
   it. Output byte-identical over all corpus and case dumps. Native corpus dump total
   3,086 -> ~965 ms (p50 2.23 -> 0.64 ms, p99 13.6 -> 4.2). Wasm corpus dump p50/p99
   0.92/35.5 -> 0.61/8.5 ms (A), total 2,130 -> 988 ms; B 2,181 -> 1,087 ms.
+- Win 2: a per-VM cache of suspension maps (`dump::Cache` in `Vm::dump_cache`, 8 scripts,
+  keyed by source text, parameters and option bits; also the codemode wrapper's maps in
+  `body_site`). The maps are plain data and depend on nothing else, so they survive
+  collections, runs and `replace_image` (packaging B keeps the dump module's VM, D2701).
+  dump_perf restores the cache before each repetition, so each one is timed as the first
+  dump at its idle point. A cache of the checker's whole skeleton was tried and dropped:
+  ~0 hits (slot values and `$fN`/`$dump.nN` numbering change between idle points).
+- Win 3 (compiler, outside `touches:` but one struct): the unit constant pool rehashed
+  every shared constant at each table doubling, so a 3.7 MB string constant was hashed
+  ~7 times per compile (63% of loading the 5 MB-log dump). The table keeps the hashes.
+  Bytecode unchanged.
+- After wins 2+3, native: corpus dump total ~965 -> 782 ms (p50 0.53 ms), load 420 ms;
+  log-5mb dump/load 52.9/32.9 -> 31.6/15.0 ms. Wasm: corpus dump p50/p99 0.61/8.5 ->
+  0.43/6.4 ms (A), totals 988 -> 708 ms (A), 1,087 -> 747 (B); log-5mb 62/39 -> 42/19
+  ms (A); records 17.5/22 -> 16.7/20; resume corpus unchanged (0.43 A / 0.79 B).
+- Ranking now (native profile, corpus dump): the checker's compile of the skeleton ~50%
+  (the skeleton is 79% of the dump text: function texts), emit ~20%, visit ~15%.
+  Packaging B's resume pays ~0.36 ms over A at the median (image transport).
 
 ## Result

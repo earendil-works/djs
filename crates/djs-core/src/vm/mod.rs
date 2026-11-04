@@ -179,6 +179,9 @@ pub struct Vm {
     /// `dump` and kept, with the length of the base it was computed on (D2626).
     #[cfg(feature = "dump")]
     base_names: core::cell::OnceCell<(usize, Vec<(u32, String)>)>,
+    /// What dumps keep for the next dump: suspension maps and the checker's tables.
+    #[cfg(feature = "dump")]
+    dump_cache: core::cell::RefCell<dump::Cache>,
 }
 
 impl Vm {
@@ -192,6 +195,8 @@ impl Vm {
             opts,
             #[cfg(feature = "dump")]
             base_names: Default::default(),
+            #[cfg(feature = "dump")]
+            dump_cache: Default::default(),
         };
         crate::builtins::number::set_seed(&mut vm.heap, opts.random_seed);
         if opts.prelude {
@@ -404,6 +409,8 @@ impl Vm {
             opts,
             #[cfg(feature = "dump")]
             base_names: Default::default(),
+            #[cfg(feature = "dump")]
+            dump_cache: Default::default(),
         })
     }
 

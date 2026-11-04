@@ -37,9 +37,11 @@ use crate::value::Value;
 #[derive(Default)]
 struct UnitPool {
     values: Vec<Value>,
-    /// Open addressing over the shared constants' hashes: `index + 1`, 0 empty. (A
-    /// `BTreeMap` here cost 16 KB of wasm.)
-    table: Vec<u32>,
+    /// Open addressing over the shared constants' hashes: `(hash, index + 1)`, index 0
+    /// empty. The hash is kept so that growing the table hashes nothing again: a
+    /// megabyte string constant (a dump's data) was hashed again at every doubling
+    /// (0198). (A `BTreeMap` here cost 16 KB of wasm.)
+    table: Vec<(u32, u32)>,
     shared: u32,
 }
 
@@ -65,28 +67,31 @@ impl UnitPool {
     /// The index of a shared constant (a string or a number).
     fn intern(&mut self, heap: &Heap, v: Value) -> u32 {
         if 2 * (self.shared as usize + 1) > self.table.len() {
-            let mut bigger = vec![0u32; (self.table.len() * 2).max(64)];
-            for &e in self.table.iter().filter(|&&e| e != 0) {
+            let mut bigger = vec![(0u32, 0u32); (self.table.len() * 2).max(64)];
+            for &(h, e) in self.table.iter().filter(|e| e.1 != 0) {
                 let mask = bigger.len() - 1;
-                let mut b = Self::hash(heap, self.values[e as usize - 1]) as usize & mask;
-                while bigger[b] != 0 {
+                let mut b = h as usize & mask;
+                while bigger[b].1 != 0 {
                     b = (b + 1) & mask;
                 }
-                bigger[b] = e;
+                bigger[b] = (h, e);
             }
             self.table = bigger;
         }
         let mask = self.table.len() - 1;
-        let mut b = Self::hash(heap, v) as usize & mask;
+        let h = Self::hash(heap, v);
+        let mut b = h as usize & mask;
         loop {
             match self.table[b] {
-                0 => break,
-                e if Self::same(heap, self.values[e as usize - 1], v) => return e - 1,
+                (_, 0) => break,
+                (h2, e) if h2 == h && Self::same(heap, self.values[e as usize - 1], v) => {
+                    return e - 1;
+                }
                 _ => b = (b + 1) & mask,
             }
         }
         self.values.push(v);
-        self.table[b] = self.values.len() as u32;
+        self.table[b] = (h, self.values.len() as u32);
         self.shared += 1;
         self.values.len() as u32 - 1
     }

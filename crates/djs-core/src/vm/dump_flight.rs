@@ -26,7 +26,7 @@ use alloc::vec::Vec;
 
 use super::*;
 use crate::builtins::regexp;
-use crate::compiler::{CompileOptions, FunctionMap, Holds, NamedSlot, Place, Site, SiteKind, Slot};
+use crate::compiler::{FunctionMap, Holds, NamedSlot, Place, Site, SiteKind, Slot};
 use crate::heap::cells::{HostCall, Script};
 use crate::interp::run::{builtin_closure_kind, promise, suspend};
 use crate::vm::dump_prims::{USING_FIELDS, USING_SLOTS, helper_proto};
@@ -68,7 +68,7 @@ pub(super) struct Flight<'a> {
     combos: Vec<Combo>,
     clos: Vec<Clo>,
     /// Suspension maps by script cell.
-    maps: Vec<(u32, Option<Vec<FunctionMap>>)>,
+    maps: Vec<(u32, Option<alloc::rc::Rc<Vec<FunctionMap>>>)>,
     /// Promises in the order the dump made them: the end writes their other reactions.
     made: Vec<usize>,
     /// The activations written, where they stopped (`Vm::dump_report`).
@@ -294,34 +294,16 @@ impl Dumper<'_> {
             Some(i) => i,
             None => {
                 let a = h.arena();
-                let src = a
-                    .get::<Ref>(script, Script::SOURCE)
-                    .get()
-                    .map(|s| h.str_to_string(crate::value::Str(s)));
-                let name = a
-                    .get::<Ref>(script, Script::NAME)
-                    .get()
-                    .map(|s| h.str_to_string(crate::value::Str(s)))
-                    .unwrap_or_default();
-                let params = a
-                    .get::<Ref>(script, Script::PARAMS)
-                    .get()
-                    .map(|s| h.str_to_string(crate::value::Str(s)))
-                    .unwrap_or_default();
-                let params: Vec<&str> = params.split(',').filter(|p| !p.is_empty()).collect();
+                let text = |r: Ref| r.get().map(|s| h.str_to_string(crate::value::Str(s)));
+                let src = text(a.get::<Ref>(script, Script::SOURCE));
+                let params = text(a.get::<Ref>(script, Script::PARAMS)).unwrap_or_default();
                 let bits = a.get::<u32>(script, Script::OPTIONS);
-                let maps = match (src, self.scratch.as_mut()) {
-                    (Some(src), Some(scratch)) => {
-                        let opts = CompileOptions::from_bits(&name, &params, bits);
-                        crate::compiler::suspension_maps(scratch, src.as_bytes(), &opts).ok()
-                    }
-                    _ => None,
-                };
+                let maps = src.and_then(|src| self.maps_of(&src, &params, bits));
                 self.fl.maps.push_out((script, maps));
                 self.fl.maps.len() - 1
             }
         };
-        self.fl.maps[i].1.as_deref()
+        self.fl.maps[i].1.as_deref().map(Vec::as_slice)
     }
 
     pub(super) fn visit_activation(&mut self, n: usize, g: Obj) {
@@ -593,20 +575,16 @@ impl Dumper<'_> {
             .get()
             .map_or(0, |s| h.arena().get::<u32>(s, Script::OPTIONS));
         let text = self.sources.fn_text(h, f).map(|s| cat!("(", s, ")"));
-        let maps = match (text, self.scratch.as_mut()) {
-            (Some(text), Some(scratch)) => {
-                // The dump's goal (a Script) with the body's TypeScript options.
-                let opts = CompileOptions::from_bits("dump.js", &[], bits & !3);
-                crate::compiler::suspension_maps(scratch, text.as_bytes(), &opts)
-                    .ok()
-                    .map(|m| (m, text.len() as u32))
-            }
-            _ => None,
-        };
+        // The dump's goal (a Script) with the body's TypeScript options.
+        let maps = text.and_then(|text| {
+            let len = text.len() as u32;
+            self.maps_of(&text, "", bits & !3).map(|m| (m, len))
+        });
         let wrapped = maps.and_then(|(maps, len)| {
-            maps.into_iter()
+            maps.iter()
                 .find(|m| m.start == 1 && m.end == len - 1)
-                .and_then(|m| m.sites.into_iter().find(|s| s.name == site.name))
+                .and_then(|m| m.sites.iter().find(|s| s.name == site.name))
+                .cloned()
         });
         let names = |slots: &[Slot]| -> Vec<Slot> {
             slots

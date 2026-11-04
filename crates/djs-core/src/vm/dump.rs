@@ -27,12 +27,14 @@
 //! (D2339) and lookups go through one small hash index of cells and atoms: the dumper
 //! adds no ordered maps, sorts or `core::fmt` to the module.
 
+use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec::Vec;
 
 use super::Vm;
 use crate::buf::PushOut;
 use crate::bytecode::template::{self, func_flags};
+use crate::compiler::FunctionMap;
 use crate::heap::cells::{BoxCell, FuncTemplate, Object as ObjectCell, U32Array};
 use crate::heap::{Atom, Heap, ObjectClass, PropFlags, Property, Ref, atoms};
 use crate::interp::realm::{Intrinsic, intrinsic};
@@ -124,6 +126,18 @@ impl DumpError {
 }
 
 impl Vm {
+    /// What the VM's dumps keep for the next one, and putting it back: a benchmark times
+    /// each of its repetitions as the first dump at that point (dump_perf.rs).
+    #[cfg(test)]
+    pub(crate) fn dump_cache(&self) -> Cache {
+        self.dump_cache.borrow().clone()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_dump_cache(&self, c: Cache) {
+        *self.dump_cache.borrow_mut() = c;
+    }
+
     /// Dumps the global bindings `names` (all of the VM's own, if `None`: the global
     /// lexical record and the global object's properties the base does not have) and
     /// the user globals their functions read.
@@ -1997,58 +2011,10 @@ impl<'a> Dumper<'a> {
         if fns.is_empty() {
             return;
         }
-        let compiled = self.scratch.take().map(|mut scratch| {
-            let opts = super::dump_load::dump_options(self.ts.get());
-            let r = crate::compiler::compile(&mut scratch, text.as_bytes(), &opts);
-            (scratch, r)
-        });
-        let (scratch, t) = match compiled {
-            Some((scratch, Ok(t))) => match t.get() {
-                Some(t) => (scratch, t),
-                None => return self.refuse("the dump".into(), "does not compile"),
-            },
-            Some((_, Err(e))) => {
-                let why = cat!("does not compile: ", e.message, " at ", e.line, ":", e.col);
-                return self.refuse("the dump".into(), &why);
-            }
-            None => return self.refuse("the dump".into(), "no memory to check it"),
+        let (by_text, written) = match self.checked(text) {
+            Ok(t) => t,
+            Err(why) => return self.refuse("the dump".into(), &why),
         };
-        // Every function of the dump, by the hash of its text.
-        let mut by_text = Index::default();
-        let mut written: Vec<(u32, u32, FreeNames, u32)> = Vec::new();
-        let mut stack = alloc::vec![t];
-        while let Some(t) = stack.pop() {
-            let info = template::debug_info(&scratch, t);
-            let (a, b) = (info.src_start, info.src_end);
-            if let Some(src) = text.get(a as usize..b as usize) {
-                let key = hash_text(src);
-                let names = free_names(&scratch, t);
-                let first = by_text.get(key).unwrap_or(u32::MAX);
-                // One entry per text and free names: a thousand closures of one factory
-                // function are one entry.
-                let mut at = first;
-                let mut seen = false;
-                while let Some((a2, b2, n2, next)) = written.get(at as usize) {
-                    if n2.captures == names.captures
-                        && n2.globals == names.globals
-                        && text.get(*a2 as usize..*b2 as usize) == Some(src)
-                    {
-                        seen = true;
-                        break;
-                    }
-                    at = *next;
-                }
-                if !seen {
-                    by_text.insert(key, written.len() as u32);
-                    written.push_out((a, b, names, first));
-                }
-            }
-            for i in 0..template::child_count(&scratch, t) {
-                if let Some(c) = template::child(&scratch, t, i).and_then(|r| r.get()) {
-                    stack.push_out(c);
-                }
-            }
-        }
         for n in fns {
             let o = self.nodes[n].v.as_object().expect("a function");
             let Some(src) = self.fn_source(n) else {
@@ -2124,6 +2090,60 @@ impl<'a> Dumper<'a> {
             if !found {
                 self.refuse(path, "internal: the function's text is not in the dump");
             }
+        }
+    }
+
+    /// The suspension maps of `src` compiled with `params` and the options `bits`, from
+    /// the VM's `Cache` or compiled in the scratch heap (and kept there).
+    fn maps_of(&mut self, src: &str, params: &str, bits: u32) -> Option<Rc<Vec<FunctionMap>>> {
+        let mut cache = self.vm.dump_cache.borrow_mut();
+        if let Some(i) = cache
+            .maps
+            .iter()
+            .position(|m| m.0 == bits && m.1 == params && m.2 == src)
+        {
+            let m = cache.maps.remove(i);
+            let maps = m.3.clone();
+            cache.maps.push_out(m);
+            return maps;
+        }
+        drop(cache);
+        let scratch = self.scratch.as_mut()?;
+        let list: Vec<&str> = params.split(',').filter(|p| !p.is_empty()).collect();
+        let opts = crate::compiler::CompileOptions::from_bits("dump.js", &list, bits);
+        let maps = crate::compiler::suspension_maps(scratch, src.as_bytes(), &opts)
+            .ok()
+            .map(Rc::new);
+        let mut cache = self.vm.dump_cache.borrow_mut();
+        if cache.maps.len() >= MAPS_KEPT {
+            cache.maps.remove(0);
+        }
+        cache
+            .maps
+            .push_out((bits, String::from(params), String::from(src), maps.clone()));
+        maps
+    }
+
+    /// The checker's table of the skeleton `text`: every function it writes, by the hash
+    /// of its text, with its free names; or why it does not compile.
+    fn checked(&mut self, text: &str) -> Result<CheckTable, String> {
+        let Some(mut scratch) = self.scratch.take() else {
+            return Err(String::from("no memory to check it"));
+        };
+        let opts = super::dump_load::dump_options(self.ts.get());
+        match crate::compiler::compile(&mut scratch, text.as_bytes(), &opts) {
+            Ok(t) => match t.get() {
+                Some(t) => Ok(check_table(&scratch, t, text)),
+                None => Err(String::from("does not compile")),
+            },
+            Err(e) => Err(cat!(
+                "does not compile: ",
+                e.message,
+                " at ",
+                e.line,
+                ":",
+                e.col
+            )),
         }
     }
 
@@ -3914,6 +3934,65 @@ fn same_property(h: &Heap, p: &Property, base: &Heap, bp: &Property) -> bool {
 struct FreeNames {
     captures: Vec<String>,
     globals: Vec<String>,
+}
+
+/// The scripts whose suspension maps a VM's dumps keep for its next dumps.
+const MAPS_KEPT: usize = 8;
+
+/// What a VM's dumps keep between dumps (0198): the suspension maps of the scripts they
+/// compiled again, by their text and options. The maps depend on nothing else, and a run
+/// dumped at its idle points has the same scripts each time; so they stay valid across
+/// the VM's collections, its runs and image replacements (D2701).
+#[derive(Default, Clone)]
+pub(crate) struct Cache {
+    maps: Vec<CachedMaps>,
+}
+
+/// (options bits, parameters, source, maps): `None` if the text did not compile.
+type CachedMaps = (u32, String, String, Option<Rc<Vec<FunctionMap>>>);
+
+/// The functions of a dump by the hash of their text (`Index` into the list), each
+/// with its span, its free names and the next entry of the same hash.
+type CheckTable = (Index, Vec<(u32, u32, FreeNames, u32)>);
+
+/// The checker's table of the dump `text` compiled to template `t`.
+fn check_table(scratch: &Heap, t: u32, text: &str) -> CheckTable {
+    let mut by_text = Index::default();
+    let mut written: Vec<(u32, u32, FreeNames, u32)> = Vec::new();
+    let mut stack = alloc::vec![t];
+    while let Some(t) = stack.pop() {
+        let info = template::debug_info(scratch, t);
+        let (a, b) = (info.src_start, info.src_end);
+        if let Some(src) = text.get(a as usize..b as usize) {
+            let key = hash_text(src);
+            let names = free_names(scratch, t);
+            let first = by_text.get(key).unwrap_or(u32::MAX);
+            // One entry per text and free names: a thousand closures of one factory
+            // function are one entry.
+            let mut at = first;
+            let mut seen = false;
+            while let Some((a2, b2, n2, next)) = written.get(at as usize) {
+                if n2.captures == names.captures
+                    && n2.globals == names.globals
+                    && text.get(*a2 as usize..*b2 as usize) == Some(src)
+                {
+                    seen = true;
+                    break;
+                }
+                at = *next;
+            }
+            if !seen {
+                by_text.insert(key, written.len() as u32);
+                written.push_out((a, b, names, first));
+            }
+        }
+        for i in 0..template::child_count(scratch, t) {
+            if let Some(c) = template::child(scratch, t, i).and_then(|r| r.get()) {
+                stack.push_out(c);
+            }
+        }
+    }
+    (by_text, written)
 }
 
 fn free_names(h: &Heap, t: u32) -> FreeNames {

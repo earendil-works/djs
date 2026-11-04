@@ -50,7 +50,10 @@ fn measure(vm: &Vm, api: Value, name: &str, idle: usize, points: &mut Vec<Point>
         bytes: 0,
     };
     let mut text = String::new();
+    // Each repetition with what the VM's earlier dumps left it, as the first dump here.
+    let cache = vm.dump_cache();
     for _ in 0..reps() {
+        vm.set_dump_cache(cache.clone());
         let t = Instant::now();
         match vm.dump(&opts, None) {
             Ok(s) => text = s,
