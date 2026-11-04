@@ -84,6 +84,9 @@ use.
   (bgen, `scripts/gen-intrinsics.py`, and the layout test with `DJS_UPDATE_LAYOUT=1`), and
   merge-to-main commits the result as `NNNN: regenerate generated files after the rebase
   onto main`. A conflict in intrinsics.rs outside the table is left for you, as before.
+  `tests/smap/summary.txt` is such a generated file too (regen.sh rewrites it through
+  `pinned_maps`), and `tests/scores/dump-size.tsv` merges row by row (TESTING.md
+  "Derived files that merge by themselves", 0214).
 - The drivers are registered in the repository's git config by
   `scripts/setup-merge-drivers.sh` (merge-to-main runs it). Run it once before rebasing
   by hand; after a manual rebase, run `scripts/regen.sh` too.

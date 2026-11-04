@@ -561,7 +561,8 @@ the wire and reader cross-language checks; difftest on djs with the ratchet, sus
 GC stress, heap-image determinism and a dump at every idle point; difftest with the
 bytecode backend; the unsafe-heap build (verifier and e2e in debug, the stressed corpus
 in release); the test262 active group against its ratchet; the slim build's legs (below);
-the size budget (below); pi's tests on the slim module and in the adapter's next mode.
+the size budget (below); pi's tests on the slim module and in the adapter's next mode;
+the merge drivers of derived files (below).
 The `test` and `test262` legs print the slowest tests. The always-run `targets` leg
 keeps what the manifests leave out of `cargo test` empty (D2790): no library has doctests
 (`doctest = false` everywhere; a doctest fails the leg, so whoever adds one turns its
@@ -668,6 +669,27 @@ intrinsic a stable id, keyed by a spec-style path. Two checks keep it honest:
 The file merges with git's union driver; scripts/regen.sh (run by merge-to-main after the
 rebase) renumbers a merged tail after main's entries and runs the update, so two branches
 that both appended need no hand resolution.
+
+### Derived files that merge by themselves (D1791, 0214)
+
+Two derived files change with almost every corpus case, so two branches that add cases
+would conflict on them at every rebase. Both have merge drivers (`.gitattributes`,
+registered by `scripts/setup-merge-drivers.sh`, implemented in `scripts/merge-driver.py`):
+- `tests/smap/summary.txt`, the totals over the pinned suspension maps, is a generated
+  file (`djs-generated`): the merge keeps one side and `scripts/regen.sh` rewrites it with
+  `DJS_UPDATE_SMAP_SUMMARY=1 cargo test -p djs-core --lib compiler::smap_tests::pinned_maps`,
+  which writes only the summary and still checks the per-case pins (a changed pin stays
+  the gate's failure; `DJS_UPDATE_SMAPS=1` accepts pins and summary together).
+- `tests/scores/dump-size.tsv`, one `SUITE CASE RAW GZIP` row per case (D2906), merges
+  row by row (`djs-scores`): a row changed or added on one side takes that side's numbers;
+  a row changed on both takes the smaller number per column (it is a ratchet, and the gate
+  checks the merged score against the measured dumps); a row deleted on one side and
+  unchanged on the other is deleted, one deleted on one side and changed on the other stays
+  (the gate reports a line without a case). Suites keep their order, cases stay sorted. A
+  file that does not parse falls back to a line merge.
+
+`scripts/merge-driver-test.py` (the gate leg "merge drivers") runs scripted three-way
+merges through both drivers in a throwaway repository.
 
 ### The slim build (D2411, D2413)
 

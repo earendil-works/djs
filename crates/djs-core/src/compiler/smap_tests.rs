@@ -499,12 +499,15 @@ fn resume_pcs_follow_the_suspending_instruction() {
 /// The pinned maps (D2563): every await and yield of the codemode corpora and the e2e
 /// tests, as text next to the cases' names in tests/smap/. A change is a diff to accept
 /// deliberately (`DJS_UPDATE_SMAPS=1`): dumps stopped at a changed site by an older
-/// build would be refused. tests/smap/summary.txt counts the sites by role sequence.
+/// build would be refused. tests/smap/summary.txt counts the sites by role sequence: it is
+/// derived from the pins, so `DJS_UPDATE_SMAP_SUMMARY=1` rewrites only it and still checks
+/// the pins (scripts/regen.sh after a merge, which keeps one side of it: 0214).
 #[test]
 fn pinned_maps() {
     use std::path::{Path, PathBuf};
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let update = std::env::var_os("DJS_UPDATE_SMAPS").is_some();
+    let update_summary = update || std::env::var_os("DJS_UPDATE_SMAP_SUMMARY").is_some();
     // (directory, compiled as the difftest's codemode arrow?)
     let areas = [
         ("tests/corpus/codemode", "codemode", true),
@@ -676,7 +679,9 @@ fn pinned_maps() {
         }
         return;
     }
-    if std::fs::read_to_string(&summary_path).unwrap_or_default() != summary {
+    if update_summary {
+        std::fs::write(&summary_path, &summary).unwrap();
+    } else if std::fs::read_to_string(&summary_path).unwrap_or_default() != summary {
         failed.push(alloc::format!("{}", summary_path.display()));
     }
     for area in ["codemode", "codemode-harvest", "e2e"] {

@@ -7,3 +7,5 @@ git config merge.djs-generated.name "generated file: keep one side, scripts/rege
 git config merge.djs-generated.driver "python3 scripts/merge-driver.py generated %O %A %B %P"
 git config merge.djs-intrinsics.name "intrinsics.rs: table conflicts are regenerated"
 git config merge.djs-intrinsics.driver "python3 scripts/merge-driver.py intrinsics %O %A %B %P"
+git config merge.djs-scores.name "a per-case score: rows merged by key, both sides changed: the smaller"
+git config merge.djs-scores.driver "python3 scripts/merge-driver.py scores %O %A %B %P"

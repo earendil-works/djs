@@ -21,3 +21,7 @@ tests/corpus/expected-failures.txt merge=union
 # The builtin registry is append-only (D2371): both sides' appended lines are kept, and
 # scripts/regen.sh (`scripts/registry.py merge`) renumbers the merged tail.
 tests/builtins/registry.tsv merge=union
+# Derived files that every corpus change touches (0214): the suspension map summary is
+# rewritten by scripts/regen.sh after a merge; the dump-size score merges row by row.
+tests/smap/summary.txt merge=djs-generated
+tests/scores/dump-size.tsv merge=djs-scores

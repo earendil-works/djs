@@ -199,6 +199,8 @@ def jobs():
         J("registry", "python3 scripts/registry.py check main"),
         J("paths", "python3 scripts/gate.py paths"),
         J("targets", "python3 scripts/gate.py targets"),
+        # 0214: the merge drivers of derived files, through scripted three-way merges.
+        J("merge drivers", "python3 scripts/merge-driver-test.py", cls="nodocs"),
 
         # --- Host builds. Each cargo configuration (package and features) has its own target
         # directory, so that they build at once (cargo locks a target directory's profile).
