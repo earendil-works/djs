@@ -158,6 +158,8 @@ struct Act {
     node: usize,
     s: suspend::Suspended,
     site: Option<Site>,
+    /// The syntax around its function's sites (plain dumps).
+    syntax: Option<Rc<crate::compiler::Syntax>>,
     /// The awaited promise and the reaction's index there.
     awaiting: Option<(usize, usize)>,
     state: State,
@@ -311,9 +313,13 @@ impl Dumper<'_> {
         let path = self.nodes[n].path.clone();
         let s = suspend::read_activation(h, g);
         self.nodes[n].fl = self.fl.acts.len();
+        let mut syntax = None;
         let site = match s.state {
             suspend::AWAITING | suspend::SUSPENDED | suspend::SUSPENDED_RAW => {
-                self.activation_site(&path, &s)
+                self.activation_site(&path, &s).map(|(site, sx)| {
+                    syntax = Some(sx);
+                    site
+                })
             }
             suspend::COMPLETED => {
                 // A finished generator of the same kind and prototype.
@@ -466,6 +472,7 @@ impl Dumper<'_> {
             node: n,
             s,
             site,
+            syntax,
             awaiting: None,
             state: State::New,
         });
@@ -489,7 +496,11 @@ impl Dumper<'_> {
     }
 
     /// The site where activation `s` stopped, checked against its frame.
-    fn activation_site(&mut self, path: &str, s: &suspend::Suspended) -> Option<Site> {
+    fn activation_site(
+        &mut self,
+        path: &str,
+        s: &suspend::Suspended,
+    ) -> Option<(Site, Rc<crate::compiler::Syntax>)> {
         let h = self.h;
         let Some(f) = s.frame.first().and_then(|v| v.as_object()) else {
             self.refuse(path.into(), "an activation without its function");
@@ -506,12 +517,16 @@ impl Dumper<'_> {
             );
             return None;
         };
-        let site = maps
+        let found = maps
             .iter()
             .find(|m| m.start == a && m.end == b)
-            .and_then(|m| m.sites.iter().find(|st| st.resume_pc == s.pc))
-            .cloned();
-        let Some(site) = site else {
+            .and_then(|m| {
+                m.sites
+                    .iter()
+                    .find(|st| st.resume_pc == s.pc)
+                    .map(|st| (st.clone(), m.syntax.clone()))
+            });
+        let Some((site, syntax)) = found else {
             self.refuse(
                 path.into(),
                 "an activation stopped where its map has no site",
@@ -529,10 +544,10 @@ impl Dumper<'_> {
             return None;
         }
         let kind = func_flags::kind(u32::from(h.arena().get::<u16>(t, FuncTemplate::FLAGS)));
-        let site = if kind == func_flags::KIND_ASYNC_BODY {
+        let (site, syntax) = if kind == func_flags::KIND_ASYNC_BODY {
             self.body_site(path, f, site)?
         } else {
-            site
+            (site, syntax)
         };
         let at_yield = matches!(
             site.kind,
@@ -560,14 +575,19 @@ impl Dumper<'_> {
             );
             return None;
         }
-        Some(site)
+        Some((site, Rc::new(syntax)))
     }
 
     /// A codemode body's site as the loader sees it: the dump writes the body as an
     /// async function (`fn_text`), whose map must have the same site with the same
     /// slots. Its bindings' scopes are the function's (they are offsets
     /// from its start); its position stays the body's, for the report.
-    fn body_site(&mut self, path: &str, f: Obj, site: Site) -> Option<Site> {
+    fn body_site(
+        &mut self,
+        path: &str,
+        f: Obj,
+        site: Site,
+    ) -> Option<(Site, crate::compiler::Syntax)> {
         let h = self.h;
         let t = h.closure_template(f);
         let bits = template::debug_info(h, t)
@@ -583,8 +603,12 @@ impl Dumper<'_> {
         let wrapped = maps.and_then(|(maps, len)| {
             maps.iter()
                 .find(|m| m.start == 1 && m.end == len - 1)
-                .and_then(|m| m.sites.iter().find(|s| s.name == site.name))
-                .cloned()
+                .and_then(|m| {
+                    m.sites
+                        .iter()
+                        .find(|s| s.name == site.name)
+                        .map(|s| (s.clone(), m.syntax.clone()))
+                })
         });
         let names = |slots: &[Slot]| -> Vec<Slot> {
             slots
@@ -607,7 +631,7 @@ impl Dumper<'_> {
                 .collect()
         };
         match wrapped {
-            Some(w)
+            Some((w, syntax))
                 if w.kind == site.kind
                     && names(&w.args) == names(&site.args)
                     && names(&w.locals) == names(&site.locals)
@@ -615,7 +639,7 @@ impl Dumper<'_> {
                     && constructs(&w.stack) == constructs(&site.stack)
                     && w.unsupported.is_none() =>
             {
-                Some(Site { pos: site.pos, ..w })
+                Some((Site { pos: site.pos, ..w }, syntax))
             }
             _ => {
                 let why = cat!(
@@ -1752,8 +1776,14 @@ impl Dumper<'_> {
                 name: String::from(name.strip_prefix("$dump.").unwrap_or(&name)),
                 fnode,
                 fexpr: fe.clone(),
+                fkind: if fnode == usize::MAX {
+                    0
+                } else {
+                    self.fn_kind(fnode)
+                },
                 ftext,
                 site: site.clone(),
+                syntax: self.fl.acts[a].syntax.clone().unwrap_or_default(),
                 awaiting: awaited,
                 this: this.clone(),
                 args: args_text.clone(),
@@ -1764,7 +1794,7 @@ impl Dumper<'_> {
             let pl = self.pl.as_mut().expect("plain");
             pl.lines
                 .push_out((self.out.len(), plain::Rec::Act(pl.acts.len())));
-            pl.acts.push_out(act);
+            pl.acts.push(act);
         }
         self.line(
             cat!(

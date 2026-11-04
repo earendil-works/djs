@@ -450,6 +450,9 @@ mod flight;
 #[path = "dump_plain.rs"]
 mod plain;
 
+#[path = "dump_cont.rs"]
+mod cont;
+
 const RESERVED: &[&str] = &[
     "break",
     "case",
@@ -2112,6 +2115,14 @@ impl<'a> Dumper<'a> {
         if !self.refusals.is_empty() {
             return Err(DumpError(self.refusals));
         }
+        if let Some(ir) = self.pl.take() {
+            let mut lines = core::mem::take(&mut self.out);
+            lines.extend(builtin_lines);
+            lines.extend(core::mem::take(&mut self.patches));
+            lines.extend(core::mem::take(&mut self.finals));
+            s = plain::write(&ir, &lines, self.ts.get(), &cont::generate)
+                .map_err(|e| DumpError(alloc::vec![cat!("plain dump: ", e)]))?;
+        }
         let (open_calls, _, pending_promises) = self.fl.counts();
         Ok(Dumped {
             text: s,
@@ -2144,7 +2155,14 @@ impl<'a> Dumper<'a> {
         }
         let (by_text, written) = match self.checked(text) {
             Ok(t) => t,
-            Err(why) => return self.refuse("the dump".into(), &why),
+            Err(why) => {
+                if self.pl.is_some() {
+                    // (While plain dumps are being built: the text, for whoever debugs.)
+                    let why = cat!(why, "\n", text);
+                    return self.refuse("the dump".into(), &why);
+                }
+                return self.refuse("the dump".into(), &why);
+            }
         };
         for n in fns {
             let o = self.nodes[n].v.as_object().expect("a function");
@@ -2438,7 +2456,16 @@ impl<'a> Dumper<'a> {
     /// A frame shares variables of scope group `g`: a plain dump makes its closures in
     /// continuations.
     fn merged(&self, g: usize) -> bool {
-        self.groups[g].boxes.iter().any(|&b| self.nodes[b].frame_box)
+        self.groups[g]
+            .boxes
+            .iter()
+            .any(|&b| self.nodes[b].frame_box)
+    }
+
+    /// A closure a plain dump makes in a continuation: data gets it by a patch.
+    fn plain_patched(&self, n: usize) -> bool {
+        let g = self.nodes[n].group;
+        self.pl.is_some() && g != usize::MAX && self.nodes[n].member.is_none() && self.merged(g)
     }
 
     fn node_of(&self, v: Value) -> Option<usize> {
@@ -2520,12 +2547,7 @@ impl<'a> Dumper<'a> {
             return self.flight_expr(n);
         }
         let g = self.nodes[n].group;
-        if self.pl.is_some()
-            && self.data_depth > 0
-            && g != usize::MAX
-            && self.merged(g)
-            && self.nodes[n].member.is_none()
-        {
+        if self.data_depth > 0 && self.plain_patched(n) {
             // A plain dump makes it inside a continuation, which may need this data
             // first: the data gets it by a patch.
             self.emit_group(g);
@@ -2610,10 +2632,11 @@ impl<'a> Dumper<'a> {
                     attrs
                         && self.node_of(value).is_none_or(|c| {
                             let d = &self.nodes[c];
-                            d.state == State::Done
-                                || (d.refs == 1
-                                    && !d.cyclic
-                                    && self.simple(c, Some(&atom_text(h, k))))
+                            !self.plain_patched(c)
+                                && (d.state == State::Done
+                                    || (d.refs == 1
+                                        && !d.cyclic
+                                        && self.simple(c, Some(&atom_text(h, k)))))
                         })
                 }) && h
                     .get_prototype_of(o)
@@ -3118,8 +3141,9 @@ impl<'a> Dumper<'a> {
         text.push_str(&bodies[0]);
         text.push_str("})();");
         if let Some(pl) = &mut self.pl {
-            pl.lines.push_out((self.out.len(), plain::Rec::Factory(pl.factories.len())));
-            pl.factories.push_out(plain::Factory {
+            pl.lines
+                .push_out((self.out.len(), plain::Rec::Factory(pl.factories.len())));
+            pl.factories.push(plain::Factory {
                 name: String::from(loc.strip_prefix("$dump.").unwrap_or(&loc)),
                 group: g,
                 scopes: rec,

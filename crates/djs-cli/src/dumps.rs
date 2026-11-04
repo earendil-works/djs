@@ -245,8 +245,6 @@ pub fn dump_names(
     plain: bool,
     origin: &dyn Fn(u32) -> Option<String>,
 ) -> Result<Dumped, String> {
-    // Until the plain exporter lands (0201): DumpOptions::plain.
-    let _ = plain;
     let name = |id: u32| tools.call_name(id);
     let states: Vec<(u32, String)> = vm
         .pending_host_calls()
@@ -260,6 +258,7 @@ pub fn dump_names(
         host_fn_name: &name,
         handles,
         call_states: &states,
+        plain,
     };
     vm.dump_report(&opts, names).map_err(|e| e.message())
 }

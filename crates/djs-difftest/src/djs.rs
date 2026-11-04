@@ -38,6 +38,8 @@ const STRESS_SLICE: u64 = 20_000;
 const OUTPUT: u32 = 0;
 const DONE: u32 = 1;
 const LATER: u32 = 2;
+/// A plain dump's `$djs.seed(lo, hi)` (D2832).
+const SEED: u32 = 3;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Djs {
@@ -51,7 +53,14 @@ pub struct Djs {
     pub bytecode_builtins: bool,
     /// Dump at every idle point and continue in a fresh VM that loaded the dump.
     pub dump_every_idle: bool,
+    /// With `dump_every_idle`: plain dumps (format 3, D2830), run as a Script in the
+    /// fresh VM; a chain of at most `PLAIN_LINKS` dumps, then the run goes on.
+    pub plain: bool,
 }
+
+/// The longest chain of plain dumps a case runs through (later idle points are not
+/// dumped).
+pub const PLAIN_LINKS: u32 = 50;
 
 impl Djs {
     pub fn label(&self) -> String {
@@ -67,6 +76,9 @@ impl Djs {
         }
         if self.dump_every_idle {
             s += " --dump-every-idle";
+        }
+        if self.plain {
+            s += " --plain";
         }
         s
     }
@@ -158,6 +170,9 @@ struct Session {
     /// clock to set in it.
     #[cfg_attr(not(feature = "dump"), allow(dead_code))]
     dump: Option<(VmOptions, f64)>,
+    /// Plain dumps, and how many were taken.
+    plain: bool,
+    links: u32,
     /// The prelude's api object.
     api: Option<Handle>,
 }
@@ -206,6 +221,8 @@ impl Djs {
             timeout: job.timeout,
             suspend: self.suspend_every.is_some(),
             dump: self.dump_every_idle.then_some((opts, job.now)),
+            plain: self.plain,
+            links: 0,
             api: None,
         })
     }
@@ -304,6 +321,9 @@ impl Session {
         use djs_core::vm::dump::DumpOptions;
         use djs_core::vm::dump_load::LoadOptions;
         let (opts, now) = self.dump.ok_or("no dump options")?;
+        if self.plain {
+            return self.plain_dump_and_load(opts, now);
+        }
         let api = self.vm.heap().get_handle(self.api.ok_or("no api")?);
         let handles = [("api", api)];
         let text = self
@@ -350,6 +370,128 @@ impl Session {
         self.vm = vm;
         self.api = Some(api);
         Ok(())
+    }
+
+    /// [`Session::dump_and_load`] with a plain dump: the fresh VM gets the host's
+    /// functions as globals (`output`, `done`, `later`, and `$djs` with `seed` and
+    /// `resume`, which issues the call again) and runs the dump as a Script, whose
+    /// completion value is the api.
+    #[cfg(feature = "dump")]
+    fn plain_dump_and_load(&mut self, opts: VmOptions, now: f64) -> Result<(), Stop> {
+        use djs_core::vm::dump::DumpOptions;
+        if self.links >= PLAIN_LINKS {
+            return Ok(());
+        }
+        self.links += 1;
+        let api = self.vm.heap().get_handle(self.api.ok_or("no api")?);
+        let handles = [("api", api)];
+        let text = self
+            .vm
+            .dump(
+                &DumpOptions {
+                    base: djs_prelude::BASE,
+                    host_fn_name: &host_fn_name,
+                    handles: &handles,
+                    plain: true,
+                    ..DumpOptions::default()
+                },
+                None,
+            )
+            .map_err(|e| {
+                format!(
+                    "plain dump at idle point {}: {}",
+                    self.idle_points + 1,
+                    e.message()
+                )
+            })?;
+        let mut vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;
+        vm.set_now(now);
+        let err = |e: djs_core::heap::HeapError| Stop::Crash(format!("{e:?}"));
+        for (id, name) in [(OUTPUT, "output"), (DONE, "done"), (LATER, "later")] {
+            let f = if id == LATER {
+                vm.new_async_host_function(id, name)
+            } else {
+                vm.new_host_function(id, name)
+            }
+            .map_err(err)?;
+            vm.define_global(name, f).map_err(err)?;
+        }
+        let hooks = vm.new_object().map_err(err)?;
+        let seed = vm.new_host_function(SEED, "seed").map_err(err)?;
+        vm.define(hooks, "seed", seed).map_err(err)?;
+        vm.define_global("$djs", Value::object(hooks))
+            .map_err(err)?;
+        let old = std::mem::replace(&mut self.vm, vm);
+        let resume = self.eval("(id, name, args) => later(...args)", "hooks.js")?;
+        let key = self.vm.heap_mut().atom_str("$djs").map_err(err)?;
+        let hooks = self
+            .vm
+            .heap()
+            .find_property(self.vm.global(), key)
+            .and_then(|(_, p)| p.value())
+            .and_then(|v| v.as_object())
+            .ok_or("no $djs")?;
+        self.vm.define(hooks, "resume", resume).map_err(err)?;
+        let api = match self.load_plain(&text) {
+            Ok(api) => api,
+            Err(e) => {
+                self.vm = old;
+                let msg = match e {
+                    Stop::Crash(m) => m,
+                    Stop::Timeout => "timeout".into(),
+                };
+                return Err(Stop::Crash(format!(
+                    "plain load at idle point {}: {msg}\n{text}",
+                    self.idle_points + 1
+                )));
+            }
+        };
+        self.eval("delete globalThis.$djs", "hooks.js")?;
+        let api = self.vm.heap_mut().new_handle(api).map_err(err)?;
+        self.api = Some(api);
+        Ok(())
+    }
+
+    /// Compiles and runs a small Script to its completion value (no idle point).
+    #[cfg(feature = "dump")]
+    fn eval(&mut self, src: &str, name: &str) -> Result<Value, Stop> {
+        let f = self
+            .vm
+            .compile(src.as_bytes(), &CompileOptions::script(name))
+            .map_err(|e| format!("{name}: {}", e.message))?;
+        let global = Value::object(self.vm.global());
+        self.call(f, global, &[], name)
+    }
+
+    /// Runs a plain dump to its first idle point: its completion value.
+    #[cfg(feature = "dump")]
+    fn load_plain(&mut self, text: &str) -> Result<Value, Stop> {
+        let f = self
+            .vm
+            .compile(text.as_bytes(), &CompileOptions::script("dump.js"))
+            .map_err(|e| format!("compile: {} at {}:{}", e.message, e.line, e.col))?;
+        let global = Value::object(self.vm.global());
+        self.vm
+            .call(f, global, &[])
+            .map_err(|e| format!("Vm::call: {e:?}"))?;
+        loop {
+            match self.vm.run(self.slice) {
+                Status::Done(v) => return Ok(v),
+                Status::Idle => {
+                    return match self.vm.outcome() {
+                        Some(Ok(v)) => Ok(v),
+                        Some(Err(e)) => Err(Stop::Crash(format!("threw: {}", self.vm.display(e)))),
+                        None => Err("idle without an outcome".into()),
+                    };
+                }
+                Status::Threw(e) => {
+                    return Err(Stop::Crash(format!("threw: {}", self.vm.display(e))));
+                }
+                Status::HostOutOfMemory => return Err("out of host memory".into()),
+                Status::OutOfFuel => return Err(Stop::Timeout),
+                Status::HostCall { call_id, fn_id } => self.host_call(call_id, fn_id)?,
+            }
+        }
     }
 
     /// Calls `f` and runs until the call and every job it queued are done; the call's
@@ -405,37 +547,46 @@ impl Session {
                             .map_err(|e| format!("Vm::from_bytes: {e:?}"))?;
                     }
                 }
-                Status::HostCall { call_id, fn_id } => {
-                    let info = self.vm.host_call(call_id).ok_or("host call vanished")?;
-                    let arg = |i: usize| info.args.get(i).copied().unwrap_or(Value::UNDEFINED);
-                    let text = |s: &Session, v: Value| {
-                        v.as_string()
-                            .map(|t| s.vm.heap().str_to_string(t))
-                            .ok_or_else(|| Stop::Crash("host: expected a string".into()))
-                    };
-                    match fn_id {
-                        OUTPUT => {
-                            let t = text(self, arg(0))?;
-                            self.output.push(t);
-                        }
-                        DONE => {
-                            let kind = text(self, arg(0))?;
-                            let t = text(self, arg(1))?;
-                            self.done = Some(match kind.as_str() {
-                                "completed" => Done::Completed,
-                                "return" => Done::Return(t),
-                                "throw" => Done::Throw(t),
-                                k => return Err(Stop::Crash(format!("host.done: kind {k}"))),
-                            });
-                        }
-                        id => return Err(Stop::Crash(format!("unknown host function {id}"))),
-                    }
-                    self.vm
-                        .resolve_host_call(call_id, Ok(Value::UNDEFINED))
-                        .map_err(|e| format!("resolve_host_call: {e:?}"))?;
-                }
+                Status::HostCall { call_id, fn_id } => self.host_call(call_id, fn_id)?,
             }
         }
+    }
+
+    /// A sync host call: `host.output`, `host.done`, a plain dump's `$djs.seed`.
+    fn host_call(&mut self, call_id: u32, fn_id: u32) -> Result<(), Stop> {
+        let info = self.vm.host_call(call_id).ok_or("host call vanished")?;
+        let arg = |i: usize| info.args.get(i).copied().unwrap_or(Value::UNDEFINED);
+        let text = |s: &Session, v: Value| {
+            v.as_string()
+                .map(|t| s.vm.heap().str_to_string(t))
+                .ok_or_else(|| Stop::Crash("host: expected a string".into()))
+        };
+        match fn_id {
+            OUTPUT => {
+                let t = text(self, arg(0))?;
+                self.output.push(t);
+            }
+            DONE => {
+                let kind = text(self, arg(0))?;
+                let t = text(self, arg(1))?;
+                self.done = Some(match kind.as_str() {
+                    "completed" => Done::Completed,
+                    "return" => Done::Return(t),
+                    "throw" => Done::Throw(t),
+                    k => return Err(Stop::Crash(format!("host.done: kind {k}"))),
+                });
+            }
+            SEED => {
+                let half = |v: Value| v.as_number().unwrap_or(0.0) as i32 as u32 as u64;
+                let seed = (half(arg(1)) << 32) | half(arg(0));
+                self.vm.set_math_random_seed(seed);
+            }
+            id => return Err(Stop::Crash(format!("unknown host function {id}"))),
+        }
+        self.vm
+            .resolve_host_call(call_id, Ok(Value::UNDEFINED))
+            .map_err(|e| format!("resolve_host_call: {e:?}"))?;
+        Ok(())
     }
 }
 
