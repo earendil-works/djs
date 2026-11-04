@@ -33,6 +33,20 @@ variable (`{ get m() { n++; … } }`) written as `get: ,`. Find these systematic
    loops), documented in TESTING.md; not a gate leg unless it is fast and deterministic.
 
 ## Log
+- Tool: scripts/plain-fuzz/{gen,fuzz}.mjs (D2940); difftest `--plain-from K` (a chain
+  starting at idle point K, so sites are dumped from original functions too);
+  `// difftest: plain-xfail <reason>` (D2941) with stale reporting in the difftest and
+  plain-node.mjs. plain-node prints the reason line after an unexpected `=== throw/crash`.
+- First run: 300 programs (seeds 1..300), ~4,800 idle points, ~30 signatures. The two
+  known shapes: nested literals (fixed) do not show; `get: ,` does (~60 of 300 programs).
+- First batch reduced by hand into tests/corpus/codemode/plain-fuzz/ (reported to the
+  coordinator, routed): async-generator-for-await (plain-xfail, pjs), getter-capturing-
+  frame-variable (refusal, pjd/0209), binary-two-awaits, binary-three-awaits,
+  template-two-awaits, function-declared-in-loop, await-using-redump (refusals, pjr),
+  await-in-assignment-target / await-in-pattern-target (deliberate refusals), and
+  language/unreachable-destructuring-default.js (compiler bug, ratchet, pjk/0210).
+- Corpus dump-size score raised for the new cases' dumps (+25 KB raw).
+- Guide: none affected.
 
 ## Follow-ups
 

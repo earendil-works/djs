@@ -190,7 +190,11 @@ async function sigsOf(bin, work, text) {
   const c = corpusDir(work);
   fs.writeFileSync(path.join(c, "codemode/p.js"), text);
   const r = await check(bin, work, ["codemode/p.js"]);
-  return new Set(r.fails.map((f) => f.sig));
+  const sigs = new Set(r.fails.map((f) => f.sig));
+  // The uninterrupted run's end too, for a bug that needs no dump.
+  const m = /^=== (\w+)\n(.*)/m.exec(r.transcripts.get("codemode/p.js") ?? "");
+  if (m) sigs.add(`plain ${m[1]}: ${blank(m[2])}`);
+  return sigs;
 }
 
 // Parses as pi's case body (node's parser; djs's own errors would show as a crash).
@@ -201,6 +205,25 @@ function parses(text) {
   } catch {
     return false;
   }
+}
+
+// The index of the bracket closing the one at `i` (strings and templates skipped
+// roughly: good enough for generated code), or -1.
+function matching(text, i) {
+  const close = { "(": ")", "[": "]", "{": "}" };
+  const stack = [];
+  for (let j = i; j < text.length; j++) {
+    const c = text[j];
+    if (c === '"') {
+      j = text.indexOf('"', j + 1);
+      if (j < 0) return -1;
+    } else if (close[c]) stack.push(close[c]);
+    else if (c === ")" || c === "]" || c === "}") {
+      if (stack.pop() !== c) return -1;
+      if (!stack.length) return j;
+    }
+  }
+  return -1;
 }
 
 async function reduce(bin, file, sig, out, deadline) {
@@ -228,7 +251,24 @@ async function reduce(bin, file, sig, out, deadline) {
     }
     if (n === 1) break;
   }
-  // Simpler expressions: replace each `(await tools.echo(X))` whose X is a literal.
+  // Simpler expressions: each bracketed group, outermost first, becomes `1` (or `[]`,
+  // `{}`), as long as the program still fails the same way.
+  let text = lines.join("\n");
+  for (let i = 0; i < text.length && Date.now() < deadline; i++) {
+    const open = text[i];
+    if (!"([{".includes(open)) continue;
+    const end = matching(text, i);
+    if (end < 0) continue;
+    for (const by of open === "(" ? ["1"] : open === "[" ? ["[]", "1"] : ["{}"]) {
+      const cand = text.slice(0, i) + by + text.slice(end + 1);
+      if (cand !== text && (await fails(cand.split("\n")))) {
+        text = cand;
+        fs.writeFileSync(out, text);
+        break;
+      }
+    }
+  }
+  lines = text.split("\n");
   fs.writeFileSync(out, lines.join("\n").trimEnd() + "\n");
   console.log(`${out}: ${lines.length} lines`);
 }
@@ -254,7 +294,11 @@ async function fuzz(bin) {
     done += names.length;
     for (const n of names) {
       idlePoints += r.idle.get(n) ?? 0;
-      const end = (r.transcripts.get(n) ?? "=== (no transcript)").match(/^=== \w+.*$/m)?.[0] ?? "?";
+      // How the plain run ended (a throw with its message: a generator that writes
+      // programs which fail by themselves tests less).
+      const t = r.transcripts.get(n) ?? "=== (no transcript)\n";
+      const m = /^=== (\w+)\n(.*)/m.exec(t);
+      const end = !m ? "?" : m[1] === "throw" ? `throw (${blank(m[2])})` : m[1];
       ends.set(end, (ends.get(end) ?? 0) + 1);
     }
     for (const f of r.fails) {

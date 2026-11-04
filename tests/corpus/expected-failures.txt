@@ -6,3 +6,4 @@ codemode-harvest/h084-bash.js: line 1: expected `{"query":"label:I-unsound varia
 codemode-harvest/h124-bash.js: line 1: expected `{"q":"repo:dir1/dir2 is:issue label:I-unsound variance"}`, got `{"0":"{","1":"\n","2":" ","3":" ","4":"\"","5":"i","6":"t","7":"e","8":"m","9":"…`
 codemode-harvest/h150-bash.js: line 1: expected `{"command":"gh pr mifo 149389 --niza puv1/puv2 --qeta norem,dilu,fosomeAt,qig"}`, got `{"0":"{","1":"\n","2":" ","3":" ","4":"\"","5":"i","6":"t","7":"e","8":"m","9":"…`
 dquickts/builtin/test_immutable_array_buffer.js: throws Error: unexpected exception type
+language/unreachable-destructuring-default.js: throws SyntaxError: internal compiler error: unreachable relative handler depth

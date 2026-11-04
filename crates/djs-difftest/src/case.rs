@@ -14,6 +14,9 @@
 //! // difftest: djs-expect <a> => <b>  an expected difference: with djs, `.expected` lines
 //!                                     equal to `a` must read `b` (D013: stack overflow)
 //! // difftest: no-stress <reason>  skip the stress variants (--suspend-every, --gc-stress)
+//! // difftest: plain-xfail <reason>  the plain-dump variant (--plain-dumps, and node's run
+//!                                     of its dumps) is known to differ: not a failure,
+//!                                     reported as stale once it passes (D2941)
 //! // difftest: stacks              compare stack frame lines too (0105, D2032): frames in
 //!                                     the case show as `(case:line:col)`, `(native)`
 //!                                     frames stay, the harness's frames are dropped
@@ -38,6 +41,8 @@ pub struct Meta {
     pub djs_expect: Vec<(String, String)>,
     /// Why the stress variants do not run this case (D1530).
     pub no_stress: Option<String>,
+    /// Why the plain-dump variant is expected to differ (D2941).
+    pub plain_xfail: Option<String>,
     /// Compare stack frame lines (`engine::normalize`).
     pub stacks: bool,
 }
@@ -85,6 +90,8 @@ pub fn parse_meta(source: &str, is_ts_file: bool) -> Result<Meta, String> {
             "skip-djs" => return Err("`skip-djs` needs a reason".into()),
             "no-stress" if !rest.is_empty() => meta.no_stress = Some(rest.to_string()),
             "no-stress" => return Err("`no-stress` needs a reason".into()),
+            "plain-xfail" if !rest.is_empty() => meta.plain_xfail = Some(rest.to_string()),
+            "plain-xfail" => return Err("`plain-xfail` needs a reason".into()),
             "ts" if rest.is_empty() => meta.ts = true,
             "stacks" if rest.is_empty() => meta.stacks = true,
             "experimental-decorators" if rest.is_empty() => meta.legacy_decorators = true,
@@ -181,6 +188,16 @@ mod tests {
         let m = parse_meta(src, false).unwrap();
         assert_eq!(m.skip_djs.as_deref(), Some("needs eval"));
         assert_eq!(m.no_stress.as_deref(), Some("too slow"));
+        let x = parse_meta(
+            "// difftest: plain-xfail a getter written as `get: ,`\n",
+            false,
+        )
+        .unwrap();
+        assert_eq!(
+            x.plain_xfail.as_deref(),
+            Some("a getter written as `get: ,`")
+        );
+        assert!(parse_meta("// difftest: plain-xfail\n", false).is_err());
         assert_eq!(m.fuel, Some(1000));
         assert_eq!(m.timeout, Some(Duration::from_millis(2500)));
         // Directives after the first code line are ignored.

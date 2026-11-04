@@ -159,7 +159,7 @@ class Gen {
       [1, () => `[${sub()}, ${sub()}][${this.rand(2)}]`],
       [2, () => this.callNum(d)],
       [a ? 1 : 0, () => `(await (async () => (${sub()}))())`],
-      [a ? 1 : 0, () => `(await new Promise((res) => res(${sub()})))`],
+      [a ? 1 : 0, () => `(await new Promise((res) => res(${this.sync(sub)})))`],
     ]);
   }
   // A call of something in scope that gives a number.
@@ -211,7 +211,7 @@ class Gen {
       [1, () => `String(${this.num(d - 1)})`],
       [2, () => `${this.arr(d - 1)}.join("-")`],
       [1, () => `(${this.bool(d - 1)} ? ${this.str(d - 1)} : ${this.str(d - 1)})`],
-      [1, () => `typeof ${this.num(d - 1)}`],
+      [1, () => `(typeof ${this.num(d - 1)})`],
       [1, () => `Object.keys(${this.obj(d - 1)}).join("")`],
       [1, () => `JSON.stringify(${this.obj(d - 1)})`],
     ]);
@@ -269,9 +269,9 @@ class Gen {
     const muts = this.vars((v) => v.type === "num" && v.mut);
     const n = muts.length ? this.pick(muts).name : null;
     const sub = () => this.num(d - 1);
-    if (!n) return `{ a: ${sub()}, get b() { return this.a + 1; } }`;
+    if (!n) return `{ a: ${sub()}, get b() { return this.a + 1; }, set b(v) { this.a = v; } }`;
     return this.oneOf([
-      [2, () => `{ a: ${sub()}, get b() { ${n}++; return ${n}; } }`],
+      [2, () => `{ a: ${sub()}, get b() { ${n}++; return ${n}; }, set b(v) { ${n} = v; } }`],
       [1, () => `{ get a() { return ${n} + 1; }, set a(v) { ${n} = v; }, b: ${sub()} }`],
       [1, () => `{ a: ${sub()}, b: ${sub()}, get g() { return ${n} * 2; } }`],
     ]);

@@ -9645,3 +9645,29 @@ read like any copied text. A disposal continuation declares the scope's bindings
 so a function of the scope that shares a `let` has its variable. A continuation placed in
 an unmerged factory written inside another continuation's block waits for that
 activation (the callback), as one placed in the block does.
+## D2940: A seeded fuzzer of codemode-like programs checks plain dumps from every idle point
+date: 2026-11-05 · by: pjz · issue: 0208
+scripts/plain-fuzz/gen.mjs writes small async programs from a seed: tool calls awaited in
+literals, calls, member targets, destructuring, templates, conditionals and logical
+operators, every kind of loop, try/catch/finally, switch, labels, closures, classes,
+accessors capturing frame variables, generators, async generators, `Promise.all` over
+mapped async functions and `using`. Values stay small and typed, so a program runs
+without errors of its own and prints what it computes. scripts/plain-fuzz/fuzz.mjs runs
+each through the difftest's plain-dump variant and node (plain-node.mjs) with a chain of
+dumps starting at every idle point: the difftest's `--plain-from K` leaves the idle points
+before K undumped, so that each site is also dumped from its original function, not only
+from a continuation (a chain from idle point 1 writes every later site of the codemode
+body from `K`). Failures are grouped by signature (the reason, numbers blanked); `reduce`
+deletes lines and replaces bracketed groups while the signature stays. It is a tool with
+a seed and caps on programs and seconds, not a gate leg: its findings become corpus cases.
+
+## D2941: `difftest: plain-xfail <reason>` marks a known plain-dump bug in a corpus case
+date: 2026-11-05 · by: pjz · issue: 0208
+A corpus case that reproduces a plain-dump bug which is not fixed yet (a wrong result or
+a crash of a dump's continuation, in djs or node) carries the directive with a one-line
+reason. Its plain-dump variant still runs; a difference is not a failure but is counted,
+and once djs and node both continue identically the mark is reported as stale (the
+difftest without `--plain-out`, else plain-node.mjs, which learns the djs side from a
+`plain-xfail` file the difftest writes next to the transcript). Bad refusals go to
+tests/plain-refusals.txt instead, which already is a ratchet. A plain-xfail case still
+runs every other variant and its `.expected`.

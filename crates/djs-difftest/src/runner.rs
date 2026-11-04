@@ -55,6 +55,10 @@ pub enum Verdict {
 
 pub struct Outcome {
     pub verdict: Verdict,
+    /// A case marked `plain-xfail` (D2941): whether its plain-dump variant still differs
+    /// (`Some(false)`: it is identical now, the mark is stale). `None` for other cases
+    /// and runs without that variant.
+    pub plain_xfail: Option<bool>,
     /// The normalized transcript (empty for skipped cases).
     pub transcript: String,
     pub done: Option<Done>,
@@ -403,6 +407,7 @@ pub fn run_all(
             let Some(plain) = plain else {
                 let reason = case.meta.skip_djs.clone().unwrap_or_default();
                 return Outcome {
+                    plain_xfail: None,
                     verdict: Verdict::Skipped(reason),
                     transcript: String::new(),
                     done: None,
@@ -411,16 +416,9 @@ pub fn run_all(
                     idle_points: None,
                 };
             };
-            if let Some(dir) = crate::djs::PLAIN_OUT.get() {
-                // What every plain dump's continuation must end in (scripts/plain-node.mjs).
-                let d = dir.join(&case.name);
-                let t = crate::engine::transcript(&plain, None);
-                let _ = fs::create_dir_all(&d)
-                    .and_then(|_| fs::write(d.join("transcript"), t))
-                    .and_then(|_| fs::write(d.join("now"), format!("{now}")));
-            }
             let timeout = case.meta.timeout.unwrap_or(opts.timeout);
             let (verdict, actual) = verdict(case, &plain, opts, timeout);
+            let mut plain_xfail = None;
             let stress = variants
                 .iter()
                 .zip(&opts.stress)
@@ -429,17 +427,43 @@ pub fn run_all(
                     if engine.only_with_idle_points() && plain.idle_points == Some(0) {
                         return None;
                     }
-                    compare_stress(
+                    let m = compare_stress(
                         case,
                         label,
                         &plain,
                         &actual,
                         r,
                         timeout * STRESS_TIMEOUT_FACTOR,
-                    )
+                    );
+                    if engine.only_with_idle_points() && case.meta.plain_xfail.is_some() {
+                        // A known plain-dump bug (D2941): not a failure, but noted.
+                        plain_xfail = Some(m.is_some());
+                        return None;
+                    }
+                    m
                 })
                 .collect();
+            if let Some(dir) = crate::djs::PLAIN_OUT.get() {
+                // What every plain dump's continuation must end in (scripts/plain-node.mjs).
+                let d = dir.join(&case.name);
+                let t = crate::engine::transcript(&plain, None);
+                let _ = fs::create_dir_all(&d)
+                    .and_then(|_| fs::write(d.join("transcript"), t))
+                    .and_then(|_| fs::write(d.join("now"), format!("{now}")))
+                    .and_then(|_| match (&case.meta.plain_xfail, plain_xfail) {
+                        // For plain-node.mjs: the mark, and whether djs still differs.
+                        (Some(why), Some(fails)) => fs::write(
+                            d.join("plain-xfail"),
+                            format!(
+                                "{why}\ndjs: {}\n",
+                                if fails { "differs" } else { "identical" }
+                            ),
+                        ),
+                        _ => Ok(()),
+                    });
+            }
             Outcome {
+                plain_xfail,
                 verdict,
                 transcript: actual,
                 done: Some(plain.done),

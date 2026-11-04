@@ -14,6 +14,10 @@
 // reason after a tab (the ratchet): another case's refusal fails, entries that no longer
 // refuse are reported as stale; --update rewrites FILE.
 //
+// A case marked `// difftest: plain-xfail <reason>` (D2941) has a `plain-xfail` file: the
+// reason and whether the djs run of its dumps differs. Its links may differ; once neither
+// djs nor node differs, the mark is reported as stale (not a failure).
+//
 // Exit status 1 if any link differs or a case refuses that FILE does not list; one line
 // per problem, and a summary.
 import fs from "node:fs";
@@ -135,11 +139,15 @@ const walk = (d) => {
   return found;
 };
 const refused = new Map();
+const xfails = [];
 for (const c of walk(dir).sort()) {
   if (fs.existsSync(path.join(c, "refused"))) {
     refused.set(path.relative(dir, c), fs.readFileSync(path.join(c, "refused"), "utf8").split("\n")[0]);
   }
   const want = norm(fs.readFileSync(path.join(c, "transcript"), "utf8"));
+  const xf = path.join(c, "plain-xfail");
+  const xfail = fs.existsSync(xf) ? { differs: /^djs: differs$/m.test(fs.readFileSync(xf, "utf8")), node: false } : null;
+  if (xfail) xfails.push([path.relative(dir, c), xfail]);
   const ks = fs
     .readdirSync(c)
     .filter((f) => /^\d+\.js$/.test(f))
@@ -153,8 +161,11 @@ for (const c of walk(dir).sort()) {
     // Origin tracking (D2870): a continuation is written from its origin's text, never
     // from an earlier continuation's (whose scaffold names it would have to rename).
     if (/\$djs_[a-z]\d+_\d+\b/.test(text)) {
-      bad++;
-      console.log(`${path.relative(dir, c)} link ${k}: a continuation of a continuation`);
+      if (xfail) xfail.node = true;
+      else {
+        bad++;
+        console.log(`${path.relative(dir, c)} link ${k}: a continuation of a continuation`);
+      }
     }
     // TypeScript dumps are written as JavaScript (D2879); one whose TypeScript is more
     // than types (an enum, a namespace) stays TypeScript, which node cannot run.
@@ -166,7 +177,9 @@ for (const c of walk(dir).sort()) {
     const pre = fs.readFileSync(path.join(c, `${k}.pre`), "utf8");
     const now = fs.existsSync(path.join(c, "now")) ? Number(fs.readFileSync(path.join(c, "now"), "utf8")) : Date.now();
     const got = norm(pre + (await runLink(file, now)));
-    if (got !== want) {
+    if (got !== want && xfail) {
+      xfail.node = true;
+    } else if (got !== want) {
       bad++;
       const a = want.split("\n");
       const b = got.split("\n");
@@ -180,6 +193,9 @@ for (const c of walk(dir).sort()) {
       console.log(`${path.relative(dir, c)} link ${k}: ok`);
     }
   }
+}
+for (const [n, x] of xfails) {
+  if (!x.differs && !x.node) console.log(`${n}: stale plain-xfail (djs and node continue identically now)`);
 }
 let unlisted = 0;
 if (refusalsFile) {
@@ -205,5 +221,5 @@ if (refusalsFile) {
     for (const n of listed.keys()) if (!refused.has(n)) console.log(`${n}: stale entry in ${refusalsFile} (no longer refused)`);
   }
 }
-console.log(`plain-node: ${links} links in ${cases} cases, ${bad} differ; ${refused.size} cases refused${unlisted ? ` (${unlisted} not listed)` : ""}${tsLinks ? `; ${tsLinks} TypeScript links (not only types) not run` : ""}`);
+console.log(`plain-node: ${links} links in ${cases} cases, ${bad} differ; ${refused.size} cases refused${xfails.length ? `; ${xfails.filter(([, x]) => x.differs || x.node).length} of ${xfails.length} plain-xfail cases differ as marked` : ""}${unlisted ? ` (${unlisted} not listed)` : ""}${tsLinks ? `; ${tsLinks} TypeScript links (not only types) not run` : ""}`);
 process.exit(bad || unlisted ? 1 : 0);

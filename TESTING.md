@@ -287,6 +287,19 @@ transcript, and `scripts/plain-node.mjs DIR` runs each dump in node and requires
 transcript (node's clock pinned to djs's, its wording of the common TypeErrors mapped to
 djs's). Its `--refusals tests/plain-refusals.txt` is the ratchet of cases that may refuse
 (`--update` rewrites it). The gate leg "plain dumps (djs and node)" runs both.
+`--plain-from K` starts the chain at idle point K. A case marked `// difftest:
+plain-xfail <reason>` reproduces a known plain-dump bug: its differences (djs or node) are
+counted, not failures, and the mark is reported as stale once both continue identically
+(D2941).
+The plain-dump fuzzer (0208, D2940) finds such bugs: `node scripts/plain-fuzz/fuzz.mjs
+--seed S --cases N --time SECS` generates codemode-like programs from consecutive seeds
+(scripts/plain-fuzz/gen.mjs; `fuzz.mjs gen S` prints one) and runs each with a chain of
+plain dumps starting at every idle point, in djs and node, then lists the distinct
+failure signatures with the smallest program of each. `fuzz.mjs check FILE...` runs given
+programs (case bodies) the same way, and `fuzz.mjs reduce FILE --sig TEXT` shrinks one
+while its failure signature contains TEXT. It is not a gate leg; a finding becomes a
+corpus case (tests/corpus/codemode/plain-fuzz/), marked `plain-xfail` or listed in
+tests/plain-refusals.txt until it is fixed.
 `--determinism` adds a second suspension slice (1009) and requires the suspended runs to
 leave the same heap image as the plain run, both the raw image and its canonical hash
 (the graph alone, computed by a copying collection of a copy; D1720, D1725, D2040). The e2e

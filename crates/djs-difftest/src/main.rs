@@ -421,6 +421,28 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
             }
         }
     }
+    // Known plain-dump bugs (D2941): counted, and stale marks named (with --plain-out,
+    // plain-node.mjs decides, since node may still differ).
+    let xfail: Vec<(&Case, bool)> = cases
+        .iter()
+        .zip(&outcomes)
+        .filter_map(|(c, o)| Some((c, o.plain_xfail?)))
+        .collect();
+    if !xfail.is_empty() {
+        let differ = xfail.iter().filter(|x| x.1).count();
+        println!(
+            "\nplain-xfail: {differ} of {} marked cases differ as expected",
+            xfail.len()
+        );
+        if djs_difftest::djs::PLAIN_OUT.get().is_none() {
+            for (c, _) in xfail.iter().filter(|x| !x.1) {
+                println!(
+                    "  stale: {} (its plain dumps continue identically now)",
+                    c.name
+                );
+            }
+        }
+    }
     let stress_failed = !mismatches.is_empty();
 
     let Some(ratchet_file) = &args.ratchet else {
