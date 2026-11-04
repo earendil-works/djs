@@ -1,6 +1,6 @@
 # 0198: Make dumping and loading fast
 
-status: in-progress
+status: done
 agent: dumpperf
 branch: issue/0198-dump-perf
 depends-on: 0196
@@ -124,5 +124,73 @@ dump-every-idle, idle-point counts at 100%).
   per dump by atom; a key's name is made only for function values. Instructions:
   cases dump 4,933 -> 3,683 M (-25%), corpus dump 12,681 -> 12,254 M (the corpus dump
   is mostly the checker's compile).
+- Final cat!: the inlined sized form cost the dump module +81 KB raw / +12 KB gzip; now
+  the macro passes an array of `&dyn Piece` to one out-of-line `cat_sized` (+6 KB raw,
+  +0.9 KB gzip), same instruction savings.
+- Final wasm, baseline (e1aaf242, built from an archive into work/scratch/0198/base-src)
+  and this branch measured back to back (load ~5): see Result.
+- Guide: snapshots.md "What a dump costs" updated. Docs: host.md, guide/host.md (D2802).
+
+## Follow-ups
+- The checker's compile of the skeleton is ~60% of a corpus dump now; left alone because
+  plain-JS dumps (0199) would replace the checker and `$dump.resume` (coordinator).
+- Dropping executed body text: left to the new format, which prunes it (coordinator).
+- Skipping re-dumps of an unchanged run: a host can compare texts; the Sandbox would need
+  a mutation counter over every VM-changing call. Low value, not done.
+- String-literal lexing (`scan_string`), `bytecode::stack::walk` and the hash of strings
+  under 1 KB are the next load costs; compile profiles are flat otherwise.
+- The slim module is 376,652 B gzip of its 376,679 ceiling: the next core change that
+  adds code needs a trade.
 
 ## Result
+
+Dumps write 3-5x faster and data-heavy dumps load 2-6x faster, through 13 small wins.
+None of them changes the format: dumps are byte-identical to the baseline over the whole
+corpus and the cases at every step, and each gate stayed green (goldens, dump-every-idle,
+idle points 1164/1164).
+
+Wasm, packaging B (the shipped one), baseline -> now, measured back to back (machine load
+~5; absolute numbers are inflated about 1.5x against a quiet machine):
+
+| | dump ms | resume ms |
+| --- | --- | --- |
+| corpus p50 / p99 | 1.42 / 53.7 -> 0.43 / 3.3 | 1.18 / 4.9 -> 0.86 / 3.7 |
+| corpus total (1,063 idle points) | 3,243 -> 610 | 1,419 -> 1,040 |
+| records (1,500 records, 870 KB) | 26.6 -> 11.5 | 33.0 -> 26.0 |
+| log-5mb (3.7 MB) | 91.1 -> 29.0 | 57.5 -> 22.0 |
+| big-log (1.8 MB) | 39.0 -> 13.7 | 18.1 -> 11.7 |
+| binary (1 MB buffer + Float64Array) | 39.8 -> 15.0 | 87.4 -> 14.4 |
+
+Native release (dump_perf): corpus dump total 3,086 -> ~573 ms, load 441 -> ~403 ms;
+records 12.0/13.2 -> 6.5/8.7, log-5mb 52.9/32.9 -> 18.4/11.0, binary 15.6/28.8 -> 5.2/5.6
+ms (dump/load). Compiling ordinary code got faster too: compile/typescript.js 52.8 ->
+59.9 MB/s, prelude compile 6.4 -> 6.0 ms (D2800); no workload got slower.
+
+What landed, in order of effect:
+1. Script sources cached per dump (function texts were sliced from a fresh String of the
+   whole script each time: 75% of corpus dump time).
+2. Per-VM suspension-map cache (`Vm::dump_cache`), content-keyed, survives
+   `replace_image`.
+3. Compiler: the unit pool keeps hashes and samples long strings; string/number constants
+   by a hash index without per-function dedup (D2800; quadratic before; slim -140 B).
+4. Compiler, dump builds only: pattern scans stop at a literal element, with an exact
+   re-parse after a syntax error so errors are unchanged (D2801).
+5. `$dump.bytes` table decoder, chunked base64 encoder, no index keys for typed arrays.
+6. Dumper: ASCII strings and names in one copy, quoting by plain runs, sized
+   concatenations (`cat_sized`), arrays/literals written in place, keys and member paths
+   per dump, the builtin table once per VM, the checker's globals in one pass.
+7. Packaging B: one dump-module sandbox per module and memory limit in the process
+   (D2802); B's resume overhead over A at p50 0.36 -> ~0.15 ms.
+
+How to measure:
+- Native: `DJS_DUMP_PERF=all cargo test --release -p djs-core --lib vm::dump_perf --
+  --ignored --nocapture` (corpus + scripts/dump-costs/native cases; `_FILTER`, `_REPS`,
+  `_OUT` to write the dumps, `_SKIP=load|all`). Each repetition is timed as the first dump
+  at its idle point (the map cache is reset to what earlier dumps left).
+- Busy machine: `scripts/dump-costs/instructions.sh [corpus|cases] [filter]` counts
+  instructions retired (`/usr/bin/time -l`) for dumping and for loading separately; runs
+  agree within 0.2% where timings varied 50%.
+- Wasm: `node scripts/dump-costs/dump-costs.ts [OUT] [--no-corpus] [--no-cases]
+  [--reps=N] [--packaging=A|B]` (image columns dropped; corpus for both packagings).
+
+Known gaps: see Follow-ups (the checker and body text wait for the format decision).
