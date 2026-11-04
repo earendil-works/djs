@@ -91,5 +91,10 @@ dump-every-idle, idle-point counts at 100%).
   survive a format change, defer `$dump.resume`/recording-specific work.
 - After wins 4-6, wasm (machine load ~20, noisy): corpus dump p50 0.36 ms (A) / 0.39 (B),
   totals 509-522 / 542-581 ms; records dump 12.1 ms, log-5mb 24 ms, big-log 13 ms.
+- Win 7 (binary buffers): `$dump.bytes` decoded through UTF-16 units and the spec's
+  chunk loop (half the load); now a table decoder for the dumper's padded base64 (else
+  `atob`); the encoder writes bytes by 3-byte chunks; the dumper skipped a typed array's
+  element keys only after `own_keys` made a million index atoms. binary dump/load
+  15.6/28.8 -> 8.6/10.5 ms native.
 
 ## Result
