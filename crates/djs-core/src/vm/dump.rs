@@ -456,6 +456,11 @@ mod cont;
 #[path = "dump_origin.rs"]
 mod origin;
 
+/// Brackets a node's index in a line written before the node had a location
+/// ([`Dumper::expr_or_loc`]); quoted strings never hold it (control characters are
+/// escaped).
+const LATER: char = '\u{1}';
+
 const RESERVED: &[&str] = &[
     "break",
     "case",
@@ -2070,7 +2075,7 @@ impl<'a> Dumper<'a> {
         self.assign_members();
         self.resolve_privates();
         if !self.refusals.is_empty() {
-            return Err(DumpError(self.refusals));
+            return Err(self.refused());
         }
         self.analyze();
         self.flight_start();
@@ -2094,8 +2099,23 @@ impl<'a> Dumper<'a> {
                 }
             });
         }
+        // Every node has its location now: references written before it had one.
+        let mut out = core::mem::take(&mut self.out);
+        let mut patches = core::mem::take(&mut self.patches);
+        let mut finals = core::mem::take(&mut self.finals);
+        for l in out
+            .iter_mut()
+            .chain(&mut builtin_lines)
+            .chain(&mut patches)
+            .chain(&mut finals)
+        {
+            if l.contains(LATER) {
+                *l = self.resolve_later(l);
+            }
+        }
+        (self.out, self.patches, self.finals) = (out, patches, finals);
         if !self.refusals.is_empty() {
-            return Err(DumpError(self.refusals));
+            return Err(self.refused());
         }
         let mut s = String::from(if self.ts.get() { HEADER_TS } else { HEADER });
         s.push('\n');
@@ -2138,7 +2158,7 @@ impl<'a> Dumper<'a> {
         }
         self.check(&skeleton);
         if !self.refusals.is_empty() {
-            return Err(DumpError(self.refusals));
+            return Err(self.refused());
         }
         if let Some(ir) = self.pl.take() {
             let mut lines = core::mem::take(&mut self.out);
@@ -2147,6 +2167,13 @@ impl<'a> Dumper<'a> {
             lines.extend(core::mem::take(&mut self.finals));
             s = plain::write(&ir, &lines, false, &cont::generate)
                 .map_err(|e| DumpError(alloc::vec![cat!("plain dump: ", e)]))?;
+            if s.contains(LATER) {
+                // The IR's own copies of factory members and activations.
+                s = self.resolve_later(&s);
+                if !self.refusals.is_empty() {
+                    return Err(self.refused());
+                }
+            }
             if self.ts.get() {
                 // TypeScript functions are written as JavaScript: their types blanked
                 // (offsets kept, so origin records stay true; D2879). TypeScript that
@@ -4116,15 +4143,65 @@ impl<'a> Dumper<'a> {
         Some(e)
     }
 
+    /// The expression for `v` in a line that runs after every value is made (a patch):
+    /// where it is made if it cannot be written here. A node whose location is not known
+    /// yet (a class's prototype while the class is made in a continuation, a value on a
+    /// cycle through it) is written as a reference resolved when the dump is finished
+    /// (0209: an empty text here wrote `get: ,` and `Object.setPrototypeOf(o, )`).
     fn expr_or_loc(&mut self, v: Value) -> String {
         let e = self.expr(v, None, None);
-        if e.is_empty() {
-            self.node_of(v)
-                .map(|n| self.nodes[n].loc.clone())
-                .unwrap_or_default()
-        } else {
-            e
+        if !e.is_empty() {
+            return e;
         }
+        match self.node_of(v) {
+            Some(n) if self.nodes[n].loc.is_empty() => cat!(LATER, n, LATER),
+            Some(n) => self.nodes[n].loc.clone(),
+            None => e,
+        }
+    }
+
+    /// `line` with every reference of [`Dumper::expr_or_loc`] replaced by its node's
+    /// location; a node that never got one is refused.
+    fn resolve_later(&mut self, line: &str) -> String {
+        let mut out = String::with_capacity(line.len());
+        let mut parts = line.split(LATER);
+        out.push_str(parts.next().unwrap_or_default());
+        while let (Some(id), Some(rest)) = (parts.next(), parts.next()) {
+            match id.parse::<usize>().ok().filter(|&n| n < self.nodes.len()) {
+                Some(n) if !self.nodes[n].loc.is_empty() => out.push_str(&self.nodes[n].loc),
+                Some(n) => {
+                    let p = self.nodes[n].path.clone();
+                    self.refuse(p, "internal: a value the dump refers to but never makes");
+                }
+                None => self.refuse(String::from("the dump"), "internal: a bad reference"),
+            }
+            out.push_str(rest);
+        }
+        out
+    }
+
+    /// The refusals, with references resolved where they can be.
+    fn refused(&mut self) -> DumpError {
+        let mut r = core::mem::take(&mut self.refusals);
+        for l in &mut r {
+            if l.contains(LATER) {
+                let mut out = String::new();
+                for (i, part) in l.split(LATER).enumerate() {
+                    if i % 2 == 0 {
+                        out.push_str(part);
+                    } else {
+                        let loc = part
+                            .parse::<usize>()
+                            .ok()
+                            .and_then(|n| self.nodes.get(n))
+                            .map_or("", |d| d.loc.as_str());
+                        out.push_str(if loc.is_empty() { "?" } else { loc });
+                    }
+                }
+                *l = out;
+            }
+        }
+        DumpError(r)
     }
 
     /// What makes `o`'s attributes from writable ones: 2 `Object.freeze`, 1
@@ -4243,7 +4320,8 @@ impl<'a> Dumper<'a> {
                         self.patches.push_out(cat!(at, " = ", l, ";"));
                         item(&mut out);
                         cat_to!(&mut out, &*key, ": undefined");
-                    } else if *e == *key {
+                    } else if *e == *key && is_ident(&key) {
+                        // Shorthand only for a name: `{ 5: 5 }` is not `{ 5 }` (0209).
                         item(&mut out);
                         out.push_str(&e);
                     } else {

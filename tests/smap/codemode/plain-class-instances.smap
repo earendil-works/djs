@@ -1,0 +1,26 @@
+function <anonymous> @1..472
+  arg0 argument 0, arg1 console@0
+  loc0 <state>, loc1 tools@0, loc2 C@0, loc4 <fields 0>, loc5 o@0, loc6 f@0, loc7 r@0
+  node 0 Body @0..471: Params 6..22 Stmt 200..240 Stmt 241..259 FuncDecl 260..349 Stmt 350..380 Stmt 381..429 Stmt 430..440 Stmt 441..468 | Param tools@0#0 Param console@0#0 Class C@0#1 Const o@0#2 Function f@0#3 Const r@0#4
+  node 1 Decl(Const) @350..380: Target 356..357 Init 360..379
+  node 2 Await @360..379: Operand 366..379
+  node 3 Expr @430..440: Operand 430..439
+  node 4 Await @430..439: Operand 436..439
+  node 5 Return @441..468: Operand 448..467
+  node 6 Await @448..467: Operand 454..467
+  await#1 @360 (6:11) pc 69: -
+    path 0.4 1.1 2
+  await#2 @430 (8:1) pc 111: -
+    path 0.6 3.0 4
+  await#3 @448 (9:8) pc 127: -
+    path 0.7 5.0 6
+function f @261..350
+  loc0 <state>, loc1 i@30
+  node 0 Body @0..89: Params 16..18 Stmt 21..87
+  node 1 For @21..87: Init 26..35 Test 37..42 Update 44..47 Body 49..87 | Let i@30#0
+  node 2 Block @49..87: Stmt 51..85
+  node 3 Decl(Let) @51..85: Target 55..57 Init 60..84
+  node 4 Array @60..84: Element 61..80 Element 82..83
+  node 5 Await @61..80: Operand 67..80
+  await#1 @61 (5:62) pc 22: -
+    path 0.1 1.3 2.0 3.1 4.0 5
