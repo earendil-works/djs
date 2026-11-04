@@ -20,6 +20,17 @@ re-dumps stay bounded (cap chains at 50 links), and the existing gate checks sta
 djs is unreleased (D024): no compatibility code for format 2 once it is retired.
 
 ## Log
+- pjx (before handing over): cef48dc2, plain dumps of the v2 and golden programs at every
+  idle point with the ratchet tests/dump/v2/plain-refusals.txt
+  (`DJS_UPDATE_PLAIN_REFUSALS=1 cargo test -p djs-core --lib plain_dump`).
+- pjr: `super` and `new.target` in continuations. A continuation of a method that uses
+  `super` is a method of `{ __proto__: <home's prototype> }` (`Act::super_proto`); a site
+  inside `super[...]` writes `super[` again; the exporter refuses when a `super.base`/
+  `super.this` read before the site is not what K's `super`/`this` give (prototype changed
+  since). `new.target` is undefined in K as in the async function/generator (never
+  constructed); in an arrow it is refused. Also: a site in the value of a computed key
+  takes the key from `object.key@`. v2 refusals 88 -> 68; corpus plain-node unchanged
+  (1187 links, 0 differ).
 
 ## Follow-ups
 
