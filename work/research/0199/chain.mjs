@@ -55,7 +55,8 @@ await pool(
         if (norm(clean(out + n.out)) !== norm(full)) nodeBad++;
       }
       const next = path.join(w, `d${k + 1}.js`);
-      const r = await djs(["run", "--dump-after", "2", next, pk]);
+      // the last link runs to the end
+      const r = await djs(k === MAX ? ["run", pk] : ["run", "--dump-after", "2", next, pk]);
       out += r.out;
       if (!fs.existsSync(path.join(here, next))) {
         if (/cannot dump/.test(r.out)) status = `re-dump refused at link ${k}: ${r.out.split("\n").find((l) => /cannot dump|:/.test(l))}`;

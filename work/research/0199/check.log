@@ -1,0 +1,2 @@
+{"ok":1325,"okEnv":18,"diff":2,"nodeOk":1284,"nodeOkEnv":55,"nodeDiff":6} (1345 dumps; diffs in check.log)
+{"v2+golden":{"ok":128,"nodeOk":124,"nodeDiff":6,"diff":2},"harvested":{"ok":1143,"nodeOk":1106,"nodeOkEnv":55,"okEnv":18},"extra":{"ok":54,"nodeOk":54}}

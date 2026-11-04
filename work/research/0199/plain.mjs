@@ -248,6 +248,13 @@ export function gen(ctx) {
     // shadowed names: any name@S whose S lies in the scope node
     return null;
   }
+  // A live binding's value: the slot's, or the shared variable's (a cell of a merged factory).
+  const bindingValue = (sname) => {
+    used.add(sname);
+    const cell = ctx.cellOf(sname);
+    if (cell) return cell.init ?? refuse(`${sname} in its TDZ`);
+    return ctx.slot(sname);
+  };
   const kindOf = (k) => (k === "const" ? "const" : k === "var" || k === "param" || k === "fnvar" ? "var" : "let");
 
   // Declarations of a K block: decls [{name, kind, live}] in scope there; returns parts:
@@ -555,7 +562,7 @@ export function gen(ctx) {
           else
             patNames(d.id).forEach((m) => {
               const s = bindingSlot(m, n);
-              parts.push(`${m} = ${s ? take(s) : "undefined"}`);
+              parts.push(`${m} = ${s ? bindingValue(s) : "undefined"}`);
             });
         }
         if (n.kind === "var") refuse("site in a var declaration list");
@@ -587,7 +594,7 @@ export function gen(ctx) {
         if (n.init?.type === "VariableDeclaration") {
           if (n.init.kind === "var") refuse("for (var ...) around a site");
           decls = n.init.declarations.flatMap((d) => patNames(d.id)).map((name) => ({ name, kind: n.init.kind, live: true }));
-          init = `${n.init.kind} ${decls.map(({ name }) => `${name} = ${take(bindingSlot(name, n) ?? refuse(`no slot ${name}`))}`).join(", ")}`;
+          init = `${n.init.kind} ${decls.map(({ name }) => `${name} = ${bindingValue(bindingSlot(name, n) ?? refuse(`no slot ${name}`))}`).join(", ")}`;
         } else if (n.init) init = ""; // ran already
         // the per-iteration scope: its bindings are declared by the head, the code the dump
         // puts there runs in the first iteration
@@ -1096,6 +1103,7 @@ export function toPlain(text, opts = {}) {
         const varName = fr.F.cells.get(fr.key);
         const V = fr.F.vars.find((x) => x.name === varName) ?? refuse(`cell ${fr.key} without its variable`);
         A.cells.set(k, { F: fr.F, V });
+        if (V.tdz) stats.tdzCells = (stats.tdzCells ?? 0) + 1;
         V.owner = { A, sname: k };
         merged.add(fr.F);
       }
@@ -1461,6 +1469,18 @@ export function toPlain(text, opts = {}) {
       seen.add(item);
       return (item.deps ?? []).some((d) => needs(d, target, seen));
     }
+    // Data the frame needs that holds closures its own prefix makes: written first with
+    // placeholders, the closures patched in right after the continuation's call.
+    for (const it of items) {
+      if (it.kind !== "act") continue;
+      for (const d of items) {
+        if (d.kind !== "def" || !d.deps.includes(it) || !needs(it, d)) continue;
+        const patches = placeholderPatches(d, it.A);
+        if (!patches) continue;
+        d.deps = d.deps.filter((x) => x !== it);
+        (it.A.patches ??= []).push(...patches);
+      }
+    }
     for (const it of items) {
       if (it.kind !== "act") continue;
       const cyc = new Set(it.deps.filter((d) => needs(d, it)));
@@ -1541,6 +1561,50 @@ export function toPlain(text, opts = {}) {
     return top;
   }
 
+  // A definition `$dump.X = <literal>` whose literal holds keys activation A's prefix makes:
+  // those places become `undefined`, and patches `$dump.X<path> = <ref>` follow A's call.
+  // null when it is not a plain array/object literal around them.
+  function placeholderPatches(d, A) {
+    const root = d.node.expression.right;
+    const reps = [];
+    const patches = [];
+    let ok = true;
+    (function visit(n, pathText) {
+      const ch = n.type === "MemberExpression" ? memberChain(n) : null;
+      if (ch && ch.length === 2 && factories.has(ch[0]) && merged.has(factories.get(ch[0])) && creatorOf(ch[0], ch[1]) === A) {
+        if (pathText === null) ok = false;
+        else {
+          reps.push([n.start, n.end]);
+          patches.push(`$dump.${d.name}${pathText} = ${src(n)};`);
+        }
+        return;
+      }
+      if (n.type === "ArrayExpression") {
+        n.elements.forEach((e, i) => e && (e.type === "SpreadElement" ? visit(e, null) : visit(e, pathText === null ? null : `${pathText}[${i}]`)));
+        return;
+      }
+      if (n.type === "ObjectExpression") {
+        for (const p of n.properties) {
+          if (p.type !== "Property" || p.computed || p.kind !== "init" || p.method) {
+            visit(p, null);
+            continue;
+          }
+          const k = p.key.type === "Identifier" ? p.key.name : String(p.key.value);
+          if (k === "__proto__") {
+            visit(p.value, null);
+            continue;
+          }
+          visit(p.value, pathText === null ? null : `${pathText}[${JSON.stringify(k)}]`);
+        }
+        return;
+      }
+      for (const c of children(n)) visit(c, null);
+    })(root, "");
+    if (!ok || !reps.length) return null;
+    d.placeholders = reps;
+    return patches;
+  }
+
   // ---- emission -----------------------------------------------------------------------------
   function emit(plan) {
     const out = [];
@@ -1581,6 +1645,14 @@ export function toPlain(text, opts = {}) {
         if (it.kind === "stmt" && omittedTarget(it.node)) continue;
         if (it.kind === "def" && omittedDefs.has(it.name)) continue;
         if (it.skip) continue;
+        if (it.placeholders) {
+          let t = rw(it.node);
+          // (rw keeps offsets only when nothing in it was rewritten)
+          if (t !== src(it.node)) refuse("placeholders in a rewritten definition");
+          for (const [a, b] of [...it.placeholders].sort((x, y) => y[0] - x[0])) t = t.slice(0, a - it.node.start) + "undefined" + t.slice(b - it.node.start);
+          lines.push(t);
+          continue;
+        }
         lines.push(rw(it.node));
       }
       return lines;
@@ -1652,6 +1724,7 @@ export function toPlain(text, opts = {}) {
       });
     } else if (A.fkind === "arrow") lines.push(`$dump.${A.name} = (0, ${kref(A)})();`);
     else lines.push(`$dump.${A.name} = ${kref(A)}.call(${self});`);
+    lines.push(...(A.patches ?? []));
     return lines;
   }
   function ktext(A) {

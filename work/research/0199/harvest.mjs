@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { root, djs, pool, here } from "./lib.mjs";
 
-const MAX = 40;
+const MAX = Number(process.env.MAX ?? 40);
 const filter = process.argv[2] ?? "";
 fs.mkdirSync(path.join(here, "progs"), { recursive: true });
 fs.mkdirSync(path.join(here, "today"), { recursive: true });
@@ -24,6 +24,13 @@ for (const dir of ["tests/dump/v2", "tests/dump/v2/golden"]) {
     fs.copyFileSync(path.join(root, dir, f), path.join(here, "progs", name + ".js"));
     progs.push({ name, body: false });
   }
+}
+// Programs of this research (extra/): long chains.
+for (const f of fs.existsSync(path.join(here, "extra")) ? fs.readdirSync(path.join(here, "extra")).sort() : []) {
+  if (!f.endsWith(".js")) continue;
+  const name = f.replace(/\.js$/, "");
+  fs.copyFileSync(path.join(here, "extra", f), path.join(here, "progs", name + ".js"));
+  progs.push({ name, body: false });
 }
 const hdir = path.join(root, "tests/corpus/codemode-harvest");
 for (const f of fs.readdirSync(hdir).sort()) {

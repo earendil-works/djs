@@ -11,6 +11,13 @@ const filter = args.find((a) => !a.startsWith("--")) ?? "";
 const dir = process.env.PLAIN ?? "plain";
 const files = fs.readdirSync(path.join(here, dir)).filter((f) => f.endsWith(".dump.js") && f.includes(filter)).sort();
 const res = { ok: 0, okEnv: 0, diff: 0, nodeOk: 0, nodeOkEnv: 0, nodeDiff: 0 };
+const by = {}; // corpus -> counts
+const bump = (f, k) => {
+  const c = f.startsWith("h") ? "harvested" : f.startsWith("x-") ? "extra" : "v2+golden";
+  by[c] ??= {};
+  by[c][k] = (by[c][k] ?? 0) + 1;
+  res[k]++;
+};
 // What differs between runs for reasons outside the dump: the wall clock (Date.now() before
 // and after), and engine-specific error messages (djs vs V8).
 const norm = (s) =>
@@ -27,19 +34,19 @@ await pool(
     const p = path.join(dir, f);
     const r = await djs(["run", p]);
     const got = clean(pre + r.out);
-    if (got === full) res.ok++;
-    else if (norm(got) === norm(full)) res.okEnv++;
+    if (got === full) bump(f, "ok");
+    else if (norm(got) === norm(full)) bump(f, "okEnv");
     else {
-      res.diff++;
+      bump(f, "diff");
       diffs.push(`DIFF djs ${f}\n${firstDiff(full, got)}`);
     }
     if (useNode) {
       const n = await run("node", [path.join(here, "harness.mjs"), p]);
       const gotN = clean(pre + n.out);
-      if (gotN === full) res.nodeOk++;
-      else if (norm(gotN) === norm(full)) res.nodeOkEnv++;
+      if (gotN === full) bump(f, "nodeOk");
+      else if (norm(gotN) === norm(full)) bump(f, "nodeOkEnv");
       else {
-        res.nodeDiff++;
+        bump(f, "nodeDiff");
         diffs.push(`DIFF node ${f}\n${firstDiff(full, gotN)}`);
       }
     }
@@ -54,4 +61,6 @@ function firstDiff(a, b) {
   return "";
 }
 fs.writeFileSync(path.join(here, "check.log"), diffs.join("\n") + "\n");
+for (const k of Object.keys(res)) res[k] = Object.values(by).reduce((a, c) => a + (c[k] ?? 0), 0);
 console.log(JSON.stringify(res), `(${files.length} dumps; diffs in check.log)`);
+console.log(JSON.stringify(by));

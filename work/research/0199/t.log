@@ -1,0 +1,15 @@
+1345 harvested 1161/1161 {
+  '$dump.private': 1,
+  'site in a pattern': 6,
+  'site in an assignment target': 4,
+  'site in a case test': 4,
+  'finally entered by break or continue': 4,
+  'site for-await.close': 4,
+  '$dump.iteratorHelper': 6,
+  '$dump.closeThrow': 9,
+  'for await over an async iterator': 2,
+  '$dump.using': 11,
+  'site yield*': 8,
+  'site yield*.await': 2,
+  'missing slot for-await.iterator@N': 2
+}

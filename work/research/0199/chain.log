@@ -1,0 +1,12 @@
+{"programs":331,"same":317,"sameEnv":3,"diff":11,"refused":10,"links":1345,"nodeBad":6} largest link / first link: 1.87 ; (plain/today at the same state) max over links / first link: 1.21 g-then-chain
+g-class-fields refused at link 1: $dump.private DIFF
+g-destructuring refused at link 1: site in a pattern DIFF
+g-finally refused at link 4: finally entered by break or continue DIFF
+g-for-await-close refused at link 1: site for-await.close DIFF
+g-iterator-helpers refused at link 5: $dump.iteratorHelper DIFF
+g-loop-for-await refused at link 1: $dump.closeThrow DIFF
+g-random ok DIFF
+g-return-path refused at link 1: site for-await.close DIFF
+g-using refused at link 1: $dump.using DIFF
+g-yield-star refused at link 1: site yield* DIFF
+v2-reenact refused at link 1: $dump.closeThrow DIFF

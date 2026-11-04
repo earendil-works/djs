@@ -54,6 +54,26 @@ export function normalize(text) {
       if (p) return { text: p.method || p.kind !== "init" ? src(p) : fnText(p.value), node: p.value };
     }
     if (ch?.length === 1 && defs.has(ch[0])) return { text: fnText(defs.get(ch[0]).expression.right), node: defs.get(ch[0]).expression.right };
+    if (n.type === "MemberExpression" && !n.computed) {
+      // a class method `C.prototype.m` / `C.m` of a top-level class
+      let o = n.object;
+      let isStatic = true;
+      if (o.type === "MemberExpression" && !o.computed && o.property.name === "prototype") {
+        isStatic = false;
+        o = o.object;
+      }
+      if (o.type === "Identifier") {
+        let cls = null;
+        for (const st of ast.body) {
+          if (st.type === "ClassDeclaration" && st.id.name === o.name) cls = st;
+          if (st.type === "VariableDeclaration")
+            for (const d of st.declarations)
+              if (d.id.name === o.name && d.init) cls = d.init.type === "ClassExpression" ? d.init : d.init.callee?.body?.type === "ClassExpression" ? d.init.callee.body : cls;
+        }
+        const md = cls?.body.body.find((x) => x.type === "MethodDefinition" && !x.computed && x.key.name === n.property.name && !!x.static === isStatic);
+        if (md) return { text: src(md), node: md };
+      }
+    }
     if (n.type === "Identifier") {
       for (const st of ast.body) {
         if (st.type === "FunctionDeclaration" && st.id.name === n.name) return { text: src(st), node: st };
@@ -166,14 +186,15 @@ export function normalize(text) {
         continue;
       }
       if (scaf && /\.next$/.test(construct)) continue; // the wrapper's next
+      // K's own temporaries of the rewritten statement first (a K helper's argument can
+      // start where f's text is copied: `$djs_D(o, k, ...)`)
+      const c = o.cmap.filter((x) => x[1] === construct && x[2] === Number(off));
+      if (c.length) {
+        for (const [fName] of c) if (fName) out.push([fName, src(p.value)]);
+        continue;
+      }
       const f = toF(Number(off));
       if (f === null) {
-        // K's own temporaries of the rewritten statement
-        const c = o.cmap.filter((x) => x[1] === construct && x[2] === Number(off));
-        if (c.length) {
-          for (const [fName] of c) if (fName) out.push([fName, src(p.value)]);
-          continue;
-        }
         if (atSite) continue;
         refuse(`re-suspended inside the rewritten statement (${name})`);
       }

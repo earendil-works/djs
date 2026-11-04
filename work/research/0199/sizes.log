@@ -1,0 +1,2 @@
+harvested: 1161 dumps; raw today 15702084 -> plain 10648600 (-32.2%), unpruned 18408416 (17.2%); zstd 3389639 -> 3143196 (-7.3%), unpruned 4444449 (31.1%); per dump raw ratio median 0.79, zstd 0.99; transform median 1.2 ms
+v2/golden: 184 dumps; raw today 320930 -> plain 670821 (109.0%), unpruned 670821 (109.0%); zstd 134263 -> 245046 (82.5%), unpruned 245046 (82.5%); per dump raw ratio median 2.29, zstd 1.77; transform median 0.9 ms
