@@ -162,7 +162,7 @@ fn split(name: &str) -> Option<(&str, u32)> {
 }
 
 /// The `$dump.L` wrapper of a loop scaffold: the iterator record it continues.
-fn unwrap_loop(h: &Heap, r: Value) -> Option<(Value, Value)> {
+pub(super) fn unwrap_loop(h: &Heap, r: Value) -> Option<(Value, Value)> {
     let next = own(h, r.as_object()?, "next")?.as_object()?;
     if h.object_class(next) != ObjectClass::Function {
         return None;

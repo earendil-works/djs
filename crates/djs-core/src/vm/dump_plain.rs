@@ -1796,6 +1796,29 @@ const HELPERS: &[(&str, &str)] = &[
         "U",
         "($djs_v, $djs_m, k) => k === 4 ? { [Symbol.asyncDispose]: () => Reflect.apply($djs_m, $djs_v, []) } : { [Symbol.dispose]: () => Reflect.apply($djs_m, $djs_v, []) }",
     ),
+    // Iterator helpers made again (D2877): a callback whose counter is shifted, a
+    // flatMap inside its inner iterator and a concat inside an item (made one step
+    // before, stepped over a placeholder), a completed helper, a concat item.
+    (
+        "M",
+        "($djs_f, $djs_k) => (x, i) => Reflect.apply($djs_f, undefined, [x, i + $djs_k])",
+    ),
+    (
+        "FM",
+        "(it, next, $djs_f, k, inner, innerNext) => { const $djs_k = k - 1, L = $dump.L, $djs_in = { [Symbol.iterator]: () => L(inner, innerNext) }; const h = Iterator.prototype.flatMap.call(L(it, next), (x, i) => i === 0 ? $djs_in : Reflect.apply($djs_f, undefined, [x, i + $djs_k])); h.next(); return h; }",
+    ),
+    (
+        "CC",
+        "(cur, curNext, items) => { const L = $dump.L, h = Iterator.concat({ [Symbol.iterator]: () => L(cur, curNext) }, ...items); h.next(); return h; }",
+    ),
+    (
+        "CI",
+        "($djs_m, $djs_o) => ({ [Symbol.iterator]: () => Reflect.apply($djs_m, $djs_o, []) })",
+    ),
+    (
+        "HD",
+        "() => { const h = Iterator.prototype.map.call({ next: () => ({ value: undefined, done: true }) }, (x) => x); h.next(); return h; }",
+    ),
     // ToPropertyKey, as a computed key does it.
     ("P", "(k) => Reflect.ownKeys({ [k]: 0 })[0]"),
     // A pattern's rest property: CopyDataProperties without the keys taken.
@@ -1989,6 +2012,9 @@ impl W<'_> {
             let mut uses = used.dump.iter().any(|(n, _)| n == k);
             if k == "MA" {
                 uses |= used.dump.iter().any(|(n, _)| n == "regexpIterator");
+            }
+            if k == "L" {
+                uses |= used.dump.iter().any(|(n, _)| n == "FM" || n == "CC");
             }
             if uses {
                 helpers.push_out(cat!(k, ": ", v));

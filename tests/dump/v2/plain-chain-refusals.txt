@@ -1,4 +1,3 @@
 # Programs of tests/dump/v2 whose plain-dump chain is refused at some link (plain_dump_chains_continue_like_the_run).
 golden/class-closure: plain dump: an activation of a factory's cell
 golden/class-fields: <call 1><reaction 0>.onFulfilled<this>: plain dumps: a private field of an instance
-golden/iterator-helpers: <call 4><reaction 0>.onFulfilled.evens<slot 2><slot 2><slot 2>: plain dumps: an iterator helper in flight (0203) | <call 4><reaction 0>.onFulfilled.evens<slot 2><slot 2>: plain dumps: an iterator helper in flight (0203) | <call 4><reaction 0>.onFulfilled.evens<slot 2>: plain dumps: an iterator helper in flight (0203) | <call 4><reaction 0>.onFulfilled.evens: plain dumps: an iterator helper in flight (0203)

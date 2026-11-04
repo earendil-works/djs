@@ -2019,3 +2019,50 @@ main();
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 8, "{ok}");
 }
+
+/// Iterator helpers held across awaits at every state: a flatMap inside its inner
+/// iterator, a concat inside an item, take and drop counting down, a filter's and a
+/// map's counter, a helper closed by `return`, Iterator.from's wrapper, and chains of
+/// re-dumps through them.
+#[test]
+fn plain_dumps_of_iterator_helpers() {
+    let src = r#"
+function* nums() { try { let i = 0; while (true) yield i++; } finally { print("nums closed"); } }
+async function main() {
+  const fm = [[1, 2, 3], [4]].values().flatMap((a, i) => a.map((x) => x * 10 + i));
+  const a = [fm.next().value];
+  await later("fm1");
+  a.push(fm.next().value);
+  await later("fm2");
+  a.push(...fm);
+  print("flatMap", a.join());
+  const cat = Iterator.concat(["p", "q", "r"], new Set(["s"]), ["t"]);
+  const c = [cat.next().value];
+  await later("cat");
+  c.push(cat.next().value, cat.next().value, cat.next().value);
+  await later("cat2");
+  c.push(...cat);
+  print("concat", c.join());
+  const chain = nums().filter((n, i) => (n + i) % 4 === 0).map((n, i) => n + ":" + i).drop(1).take(3);
+  const d = [];
+  for (const v of chain) d.push(v, await later(v));
+  print("chain", d.join());
+  const closing = nums().map((n) => n * 2);
+  closing.next();
+  await later("close");
+  print("return", JSON.stringify(closing.return()), JSON.stringify(closing.next()));
+  const w = Iterator.from({ i: 0, next() { return { value: this.i++, done: this.i > 3 }; } });
+  w.next();
+  await later("from");
+  print("from", [...w].join());
+}
+main();
+"#;
+    let (failed, refused, ok) = plain_check_program("helpers", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, _, refused) = plain_chain_program("helpers", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 9, "{ok}");
+}

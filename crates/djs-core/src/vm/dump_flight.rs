@@ -31,6 +31,9 @@ use crate::heap::cells::{HostCall, Script};
 use crate::interp::run::{builtin_closure_kind, promise, suspend};
 use crate::vm::dump_prims::{USING_FIELDS, USING_SLOTS, helper_proto};
 
+#[path = "dump_flight_helpers.rs"]
+mod helpers;
+
 /// Builtin closure kinds (`NewBuiltinClosure`, interp/run/intrinsics.rs).
 const RESOLVE: usize = 0;
 const REJECT: usize = 1;
@@ -1283,16 +1286,15 @@ impl Dumper<'_> {
         self.nodes[n].state = State::Busy;
         let h = self.h;
         let before = self.fns_read.get();
+        if self.pl.is_some() {
+            return self.plain_helper_expr(n, o, before);
+        }
         let slots: Vec<String> = (0..h.object_slot_count(o))
             .map(|i| self.expr(h.object_slot(o, i), None, None))
             .collect();
         if slots.iter().any(String::is_empty) {
             let p = self.nodes[n].path.clone();
             self.refuse(p, "an iterator helper on a reference cycle");
-        }
-        if self.pl.is_some() {
-            let p = self.nodes[n].path.clone();
-            self.refuse(p, "plain dumps: an iterator helper in flight (0203)");
         }
         let name = self.fresh("i");
         self.line(

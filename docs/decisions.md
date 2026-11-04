@@ -9497,3 +9497,16 @@ scope record to the original's (`["using", fo, ko]`, at `K`'s first resource bin
 and reads `$dump.U`'s closures back (`$djs_v`, `$djs_m`). The disposal sites at a block's,
 an iteration's and the body's end are site records. A disposal waiting for a `null`
 resource's await with `needsAwait` set is refused.
+
+## D2877: Iterator helpers in plain dumps are made again by their public methods
+date: 2026-11-05 · by: pjr · issue: 0203
+A plain dump makes an iterator helper again with its public method over its saved state.
+The underlying record is `$dump.I(it, next)`. A callback that already saw `k` values is
+`$dump.M(f, k)`, which calls `f` with the counter shifted. take's and drop's remaining
+counts are their limits, Iterator.from's wrapper is `Iterator.from($dump.I(…))`, and a
+concat's unopened items are `$dump.CI(method, iterable)`. A flatMap inside its inner
+iterator and a concat inside an item are made one step before and stepped once while the
+dump loads (`$dump.FM`, `$dump.CC`). That step yields a placeholder, and no user code
+runs. A completed helper is `$dump.HD()`. The exporter reads these wrappers back
+(`next`'s captures, `$djs_f`/`$djs_k`, `$djs_m`/`$djs_o`), so re-dumps write the
+original's state again. chunks, windows and zip helpers in flight are refused.

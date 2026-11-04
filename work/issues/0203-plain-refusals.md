@@ -70,6 +70,9 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
 - pjr: D2876 using (all 11 golden/using points and the chain), test plain_dumps_of_using.
   v2: 185 identical, 8 refused (iterator-helpers 6, class-closure, class-fields); chains
   3 refused. Dump size score raised for the using dumps now covered (v2 +46 KB).
+- pjr: D2877 iterator helpers (all 6 golden points and the chain), test
+  plain_dumps_of_iterator_helpers. v2: 191 identical, 2 refused (class-closure,
+  class-fields). Score raised for the 6 new helper dumps (v2 +27 KB).
 
 ## Follow-ups
 

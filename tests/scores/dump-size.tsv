@@ -5,6 +5,6 @@
 # fails when a total grows; lower it with
 #   node scripts/dump-size/dump-size.ts --score tests/scores/dump-size.tsv --update corpus=DIR v2=DIR
 corpus_raw	8062700
-corpus_gzip	2577579
-v2_raw	624062
-v2_gzip	223879
+corpus_gzip	2577575
+v2_raw	650999
+v2_gzip	233731
