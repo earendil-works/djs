@@ -1,5 +1,5 @@
 //! The plain dump runtime (D2834, D2903): the format's fixed helpers, which every host
-//! provides as members of `$djs` next to its hooks (`seed`, `resume`, `source`), so that
+//! provides as members of `$djs` next to its hooks (`seed`, `resume`, `source`, `host`), so that
 //! a dump does not carry them. They are the same code in every dump: a small standard
 //! library of the format, not program content.
 //!
@@ -204,7 +204,7 @@ pub fn module_text() -> String {
     let mut s = String::from(
         "// The plain dump runtime (D2834, D2903): the helpers a plain dump calls as `$djs.NAME`.\n\
          // To run a dump outside djs, set `globalThis.$djs` to these and the host's hooks\n\
-         // (`seed`, `resume`; see docs/plain-js-dumps.md, \"The host interface\"), then run the\n\
+         // (`seed`, `resume`, `source`, `host`; see docs/plain-js-dumps.md, \"The host interface\"), then run the\n\
          // dump as a Script. Generated from crates/djs-core/src/vm/dump_runtime.rs:\n\
          //   DJS_UPDATE_DUMP_RUNTIME=1 cargo test -p djs-core dump_runtime\n\n",
     );

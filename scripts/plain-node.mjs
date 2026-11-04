@@ -6,7 +6,7 @@
 // djs run's whole transcript. Each dump runs as a Script in a fresh node context with
 // the difftest prelude's host: output(text), done(kind, text), later(v, rejected) (the
 // oldest open call is answered at each idle point, when the microtask queue is empty)
-// and $djs: the dump runtime (js/src/dump-runtime.js) with the hooks seed and resume.
+// and $djs: the dump runtime (js/src/dump-runtime.js) with the hooks seed, resume and host.
 // The transcript it produces, after <k>.pre, must equal `transcript`.
 //
 // A case whose dump the exporter refused has a `refused` file (the run went on without
@@ -94,6 +94,11 @@ async function runLink(file, now) {
       // The case's function the dump continues (D2882): node never dumps again, the one
       // thing that reads it, so any function stands for it.
       source: () => function source() {},
+      // A host value by name (D2971): the host's functions are these globals.
+      host: (name) => {
+        if (!Object.hasOwn(host, name)) throw new Error(`host: unknown host value ${name}`);
+        return g[name];
+      },
     }),
     writable: true,
     configurable: true,

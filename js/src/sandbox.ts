@@ -261,7 +261,7 @@ const STATUS_OUT_OF_FUEL = 2;
 const STATUS_HOST_CALL = 3;
 const STATUS_IDLE = 4;
 const STATUS_HOST_OUT_OF_MEMORY = 5;
-const ABI_VERSION = 4;
+const ABI_VERSION = 5;
 /** `vm_new_with`'s flag: frozen builtins (D2304). */
 const VM_FROZEN_BUILTINS = 1;
 const CONSOLE_METHODS = ["log", "info", "warn", "error"] as const;
@@ -274,6 +274,7 @@ const PLAIN_HOOKS = "$djs";
 const HOOK_RESUME = 0x7fff_fff0;
 const HOOK_SEED = 0x7fff_fff1;
 const HOOK_SOURCE = 0x7fff_fff2;
+const HOOK_HOST = 0x7fff_fff3;
 
 /**
  * The codemode bodies the sandboxes of this process ran, by name, newest first: what a
@@ -601,6 +602,7 @@ interface RawImage {
   functions: string[];
   clock?: number;
   namespaces: [string, number][];
+  fnHandles: [number, number][];
 }
 
 /** `drive`'s value at an idle point of a host-driven run. */
@@ -628,6 +630,9 @@ export class Sandbox {
   private journal: Journal | null = null;
   /** Namespace objects this sandbox made for dotted function names (`tools`), as handles. */
   private readonly namespaces = new Map<string, number>();
+  /** The host function objects by id, as handles: one per identity (D2970). */
+  private readonly fnHandles = new Map<number, number>();
+  private readonly fnAsync = new Map<number, boolean>();
   /** The host-driven run in progress (`begin`, `resume`), until it ends. */
   private active: RunCore | null = null;
   /** The task in progress (`start`, `resume`): ends it when the sandbox is disposed. */
@@ -718,6 +723,7 @@ export class Sandbox {
       restoredFns = raw.functions;
       if (opts.deterministic) this.clock = raw.clock ?? opts.deterministic.startedAt;
       for (const [ns, h] of raw.namespaces) this.namespaces.set(ns, h);
+      for (const [id, h] of raw.fnHandles) this.fnHandles.set(id, h);
       // May grow memory: take the buffer afterwards. The image's buffer becomes the arena,
       // so it is staged with the arena's capacity (D1942).
       const limit = opts.memoryLimit ?? 0;
@@ -746,16 +752,16 @@ export class Sandbox {
       });
     } else {
       this.guard(() => {
+        // A namespace object like `tools` (a host root of dumps, D2971).
         const console = this.check(x.vm_new_object(vm), "memory");
         for (const m of CONSOLE_METHODS) {
           const f = this.hostFunction(`console.${m}`, builtins[`console.${m}`]);
           this.defineOn(console, m, f);
-          x.vm_handle_free(vm, f);
         }
         const g = x.vm_global(vm);
         this.defineOn(g, "console", console);
         x.vm_handle_free(vm, g);
-        x.vm_handle_free(vm, console);
+        this.namespaces.set("console", console);
       });
       for (const [name, f] of Object.entries(opts.functions ?? {})) this.defineFunction(name, f);
       for (const [name, f] of Object.entries(opts.asyncFunctions ?? {})) this.defineAsyncFunction(name, f);
@@ -807,7 +813,6 @@ export class Sandbox {
         this.defineOn(g, name, h);
         x.vm_handle_free(this.vm, g);
       }
-      x.vm_handle_free(this.vm, h);
     });
   }
 
@@ -1176,7 +1181,8 @@ export class Sandbox {
    * `vm_dump`. staging: the globals the host defines and the names to dump (comma
    * separated, a line each), then this sandbox's host function names (tab separated, id
    * order: an open call or a host function held as a value is written by name), then
-   * the values to name for the host (`handle:name`, tab separated), then the open calls'
+   * the values to name for the host (`handle:name`, tab separated), then the host roots
+   * (the namespace objects, `handle:name`, written as `$djs.host(name)`, D2971), then the open calls'
    * states (`id:bytes`, tab separated) followed by their JSON texts (D2770).
    */
   private dumpText(names: string[], handles: [string, number][], states: [number, string][]): string {
@@ -1203,6 +1209,7 @@ export class Sandbox {
       functions: [...sb.fnNames],
       clock: sb.clock,
       namespaces: [...sb.namespaces],
+      fnHandles: [...sb.fnHandles],
     });
     // One dump-module sandbox per module and memory limit, kept between dumps (D2701,
     // D2802): an instance costs a base, and its VM keeps what the dumper derives from the
@@ -1224,6 +1231,8 @@ export class Sandbox {
     this.fnNames.splice(0, this.fnNames.length, ...raw.functions);
     this.namespaces.clear();
     for (const [ns, h] of raw.namespaces) this.namespaces.set(ns, h);
+    this.fnHandles.clear();
+    for (const [id, h] of raw.fnHandles) this.fnHandles.set(id, h);
     if (!x.vm_replace_image) {
       this.replaceVm(raw);
       return;
@@ -1302,6 +1311,18 @@ export class Sandbox {
     });
   }
 
+  /**
+   * A plain dump's `$djs.host(name)` (D2971): the object this sandbox made for host
+   * function `name` (its identity) or for the namespace `name` (`tools`, `console`).
+   */
+  private serveHost(callId: number, args: unknown[]): void {
+    const [name] = args;
+    const id = typeof name === "string" ? this.fnNames.indexOf(name) + 1 : 0;
+    const h = typeof name === "string" ? (this.namespaces.get(name) ?? this.fnHandles.get(id)) : undefined;
+    if (h === undefined) return void this.complete(callId, false, new Error(`host: unknown host value ${String(name)}`), false);
+    this.guard(() => this.x.vm_resolve_host_call(this.vm, callId, 1, h));
+  }
+
   /** `vm_dump` in this sandbox's own module. */
   private dumpHere(names: string[], handles: [string, number][], states: [number, string][], sourceRefs = true): string {
     const x = this.x;
@@ -1314,6 +1335,7 @@ export class Sandbox {
       names.join(","),
       this.fnNames.join("\t"),
       handles.map(([name, h]) => `${h}:${name}`).join("\t"),
+      [...this.namespaces].map(([name, h]) => `${h}:${name}`).join("\t"),
       states.map(([id, json]) => `${id}:${textEncoder.encode(json).length}`).join("\t"),
       states.map(([, json]) => json).join(""),
     ].join("\n");
@@ -1372,7 +1394,7 @@ export class Sandbox {
     this.guard(() => {
       // `$djs`: the dump runtime's helpers (D2903) with the hooks added.
       const hooks = this.check(dumpRuntime(vm, this.stageText(dumpRuntimeScript)), "memory");
-      for (const [name, id] of [["resume", HOOK_RESUME], ["seed", HOOK_SEED], ["source", HOOK_SOURCE]] as const) {
+      for (const [name, id] of [["resume", HOOK_RESUME], ["seed", HOOK_SEED], ["source", HOOK_SOURCE], ["host", HOOK_HOST]] as const) {
         const f = this.check(x.vm_new_host_function(vm, id, this.stageText(name)), "memory");
         this.defineOn(hooks, name, f);
         x.vm_handle_free(vm, f);
@@ -1421,6 +1443,10 @@ export class Sandbox {
       }
       if (fnId === HOOK_SOURCE) {
         this.serveSource(callId, args);
+        continue;
+      }
+      if (fnId === HOOK_HOST) {
+        this.serveHost(callId, args);
         continue;
       }
       let ok = true;
@@ -1640,12 +1666,17 @@ export class Sandbox {
       this.fns.set(id, f.call);
       this.hooks.set(id, f);
     }
+    // One function object per identity (D2970): a dump's `$djs.host(name)` gets the one
+    // the sandbox bound. A redefinition makes a new one only if its kind changes.
+    const old = this.fnHandles.get(id);
+    if (old !== undefined && this.fnAsync.get(id) === async) return old;
     const shortName = name.slice(name.lastIndexOf(".") + 1);
     const len = this.stageText(shortName);
-    const h = async
-      ? this.x.vm_new_async_host_function(this.vm, id, len)
-      : this.x.vm_new_host_function(this.vm, id, len);
-    return this.check(h, "memory");
+    const h = this.check(async ? this.x.vm_new_async_host_function(this.vm, id, len) : this.x.vm_new_host_function(this.vm, id, len), "memory");
+    if (old !== undefined) this.x.vm_handle_free(this.vm, old);
+    this.fnHandles.set(id, h);
+    this.fnAsync.set(id, async);
+    return h;
   }
 
   private defineOn(obj: number, name: string, value: number): void {

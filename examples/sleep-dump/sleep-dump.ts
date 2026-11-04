@@ -77,11 +77,12 @@ export async function resume(dump: string, opts = options()): Promise<unknown> {
  * Continues the dump in node: the same host functions, as plain globals, and `$djs`: the
  * dump runtime's helpers (js/src/dump-runtime.js) with the hooks. `$djs.resume` runs the
  * open call's `resume` hook with its saved state; `$djs.seed` has nothing to set,
- * `$djs.source` names the script the dump continues.
+ * `$djs.source` names the script the dump continues, `$djs.host` the host's values.
  */
 export async function resumeInNode(dump: string): Promise<unknown> {
   const signal = new AbortController().signal;
   const g = globalThis as Record<string, unknown>;
+  const tools = { sleep: (ms: number) => sleep.call.call({ signal } as never, ms) };
   g.$djs = {
     ...helpers,
     seed() {},
@@ -92,8 +93,14 @@ export async function resumeInNode(dump: string): Promise<unknown> {
       if (name !== "sleep.js") throw new Error(`source: no script ${name}`);
       return function sleepScript() {};
     },
+    // The host's values by name (D2971): the same objects the globals hold.
+    host: (name: string) => {
+      const values: Record<string, unknown> = { tools, "tools.sleep": tools.sleep, console };
+      if (!Object.hasOwn(values, name)) throw new Error(`host: unknown host value ${name}`);
+      return values[name];
+    },
   };
-  g.tools = { sleep: (ms: number) => sleep.call.call({ signal } as never, ms) };
+  g.tools = tools;
   return new Script(dump, { filename: "sleep.dump.js" }).runInThisContext();
 }
 
