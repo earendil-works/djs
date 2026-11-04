@@ -1,9 +1,22 @@
 function <anonymous> @1..3863
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..3862: Params 6..22 Stmt 468..2969 Stmt 2970..3003 Stmt 3004..3352 Stmt 3353..3859 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @3353..3859: Operand 3360..3858
+  node 2 Await @3360..3858: Operand 3366..3858
   await#1 @3360 (189:8) pc 841: -
+    path 0.4 1.0 2
 function <anonymous> @3368..3852
   arg0 tools@0
   loc0 <state>, loc1 fisi@0, loc2 list@0, loc3 out@0, loc4 o@166, loc9 p@181
+  node 0 Body @0..484: Params 6..13 Stmt 19..80 Stmt 81..138 Stmt 139..154 Stmt 155..420 Stmt 421..482 | Param tools@0#0 Const fisi@0#1 Const list@0#2 Const out@0#3
+  node 1 Decl(Const) @19..80: Target 25..29 Init 32..79
+  node 2 Await @32..79: Operand 38..79
+  node 3 ForOf @155..420: Head 160..167 Iterable 171..175 Body 177..420 | Const o@166#0
+  node 4 Block @177..420: Stmt 181..284 Stmt 287..418 | Const p@181#0
+  node 5 Decl(Const) @181..284: Target 187..188 Init 191..283
+  node 6 Await @191..283: Operand 197..283
   await#1 @32 (190:14) pc 16: - (out: loc4 loc9)
+    path 0.1 1.1 2
   await#2 @191 (194:13) pc 138: for-of.iterator@155 for-of.next@155
+    path 0.4 3.2 4.0 5.1 6

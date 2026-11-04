@@ -1,10 +1,26 @@
 function <anonymous> @1..4828
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0, loc9 answer@0, loc10 modelsOfType@0, loc11 fakeModels@0
+  node 0 Body @0..4827: Params 6..22 Stmt 468..894 Stmt 895..928 Stmt 929..1277 Stmt 1278..1390 Stmt 1391..1572 Stmt 1573..3055 Stmt 3056..4824 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2 Const answer@0#4 Const modelsOfType@0#5 Const fakeModels@0#6
+  node 1 Return @3056..4824: Operand 3063..4823
+  node 2 Await @3063..4823: Operand 3069..4823
   await#1 @3063 (75:8) pc 250: -
+    path 0.7 1.0 2
 function <anonymous> @3071..4805
   arg0 tools@0, arg1 models@0
   loc0 <state>, loc1 log@0, loc2 commits@0, loc3 model@0, loc4 criteria@0, loc5 results@0, loc6 commit@1099, loc11 result@1122
+  node 0 Body @0..1734: Params 6..21 Stmt 27..134 Stmt 135..342 Stmt 343..440 Stmt 441..509 Stmt 511..1067 Stmt 1068..1087 Stmt 1088..1701 Stmt 1702..1732 | Param tools@0#0 Param models@0#0 Const log@0#1 Const commits@0#2 Const model@0#3 Const criteria@0#5 Const results@0#6
+  node 1 Decl(Const) @27..134: Target 33..36 Init 39..133
+  node 2 Await @39..133: Operand 45..133
+  node 3 Decl(Const) @343..440: Target 349..354 Init 357..439
+  node 4 Await @357..439: Operand 363..439
+  node 5 ForOf @1088..1701: Head 1093..1105 Iterable 1109..1116 Body 1118..1701 | Const commit@1099#0
+  node 6 Block @1118..1701: Stmt 1122..1475 Stmt 1478..1699 | Const result@1122#0
+  node 7 Decl(Const) @1122..1475: Target 1128..1134 Init 1137..1474
+  node 8 Await @1137..1474: Operand 1143..1474
   await#1 @39 (76:13) pc 37: - (out: loc6 loc11)
+    path 0.1 1.1 2
   await#2 @357 (84:15) pc 110: - (out: loc6 loc11)
+    path 0.3 3.1 4
   await#3 @1137 (101:18) pc 303: for-of.iterator@1088 for-of.next@1088
+    path 0.7 5.2 6.0 7.1 8

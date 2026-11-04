@@ -1,63 +1,152 @@
 function g @1493..1564
   loc0 <state>, loc4 a@0
+  node 0 Body @0..71: Params 11..13 Stmt 20..41 Stmt 46..54 Stmt 59..67 | Using a@0#1
+  node 1 Expr @46..54: Operand 46..53
+  node 2 Yield @46..53: Operand 52..53
+  node 3 Expr @59..67: Operand 59..66
+  node 4 Yield @59..66: Operand 65..66
   yield#1 @46 (68:5) pc 33: using.record@26
+    path 0.2 1.0 2
   yield#2 @59 (69:5) pc 46: using.record@26
+    path 0.3 3.0 4
 function at @3109..3478
   arg0 name@0, arg1 f@0
   loc0 <state>, loc1 ticking@0, loc2 ticks@0, loc3 r@0
+  node 0 Body @0..369: Params 17..26 Stmt 31..47 Stmt 50..69 Stmt 72..86 Stmt 89..186 Stmt 189..195 Stmt 198..270 Stmt 273..289 Stmt 292..367 | Param name@0#0 Param f@0#0 Let ticking@0#2 Let ticks@0#3 Let r@0#5
+  node 1 Try @198..270: Block 202..226 CatchParam 234..235 CatchBody 237..270 | CatchParam e@233#1
+  node 2 Block @202..226: Stmt 208..222
+  node 3 Expr @208..222: Operand 208..221
+  node 4 Assign @208..221: Left 208..209 Op 210..211 Right 212..221
+  node 5 Await @212..221: Operand 218..221
   await#1 @212 (169:9) pc 48: -
+    path 0.6 1.0 2.0 3.0 4.2 5
 function <anonymous> @3199..3291
   loc0 <state>
+  node 0 Body @0..92: Params 6..8 Stmt 18..88
+  node 1 While @18..88: Test 25..46 Body 48..88
+  node 2 Block @48..88: Stmt 56..67 Stmt 74..82
+  node 3 Expr @56..67: Operand 56..66
+  node 4 Await @56..66: Operand 62..66
   await#1 @56 (163:7) pc 9: -
+    path 0.1 1.1 2.0 3.0 4
 function <anonymous> @3480..5137
   loc0 <state>
+  node 0 Body @0..1657: Params 6..8 Stmt 16..187 Stmt 190..362 Stmt 365..504 Stmt 507..620 Stmt 623..753 Stmt 756..1023 Stmt 1026..1231 Stmt 1234..1409 Stmt 1412..1655
+  node 1 Expr @16..187: Operand 16..186
+  node 2 Await @16..186: Operand 22..186
+  node 3 Expr @190..362: Operand 190..361
+  node 4 Await @190..361: Operand 196..361
+  node 5 Expr @365..504: Operand 365..503
+  node 6 Await @365..503: Operand 371..503
+  node 7 Expr @507..620: Operand 507..619
+  node 8 Await @507..619: Operand 513..619
+  node 9 Expr @623..753: Operand 623..752
+  node 10 Await @623..752: Operand 629..752
+  node 11 Expr @756..1023: Operand 756..1022
+  node 12 Await @756..1022: Operand 762..1022
+  node 13 Expr @1026..1231: Operand 1026..1230
+  node 14 Await @1026..1230: Operand 1032..1230
+  node 15 Expr @1234..1409: Operand 1234..1408
+  node 16 Await @1234..1408: Operand 1240..1408
+  node 17 Expr @1412..1655: Operand 1412..1654
+  node 18 Await @1412..1654: Operand 1418..1654
   await#1 @16 (177:3) pc 22: -
+    path 0.1 1.0 2
   await#2 @190 (184:3) pc 42: -
+    path 0.2 3.0 4
   await#3 @365 (190:3) pc 62: -
+    path 0.3 5.0 6
   await#4 @507 (197:3) pc 82: -
+    path 0.4 7.0 8
   await#5 @623 (202:3) pc 102: -
+    path 0.5 9.0 10
   await#6 @756 (208:3) pc 122: -
+    path 0.6 11.0 12
   await#7 @1026 (214:3) pc 142: -
+    path 0.7 13.0 14
   await#8 @1234 (222:3) pc 162: -
+    path 0.8 15.0 16
   await#9 @1412 (230:3) pc 182: -
+    path 0.9 17.0 18
 function <anonymous> @3514..3665
   loc0 <state>, loc4 a@0, loc5 b@0, loc6 c@0, loc7 n@0
+  node 0 Body @0..151: Params 6..8 Stmt 18..59 Stmt 64..84 Stmt 89..110 Stmt 115..133 Stmt 138..147 | AwaitUsing a@0#1 AwaitUsing b@0#1 Using c@0#2 AwaitUsing n@0#3
   await-using#1 @151 (183:4) pc 122: using.record@30 completion.kind@30 completion.value@30
+    path 0
 function <anonymous> @3689..3840
   loc0 <state>, loc4 a@0, loc5 b@0, loc6 c@0
+  node 0 Body @0..151: Params 6..8 Stmt 18..50 Stmt 55..87 Stmt 92..118 Stmt 123..147 | AwaitUsing a@0#1 AwaitUsing b@0#2 Using c@0#3
   await-using#1 @151 (189:4) pc 104: using.record@30 completion.kind@30 completion.value@30
+    path 0
 function <anonymous> @3867..3982
   loc0 <state>, loc4 n@26, loc5 u@26
+  node 0 Body @0..115: Params 6..8 Stmt 18..91 Stmt 96..111
+  node 1 Block @18..91: Stmt 26..62 Stmt 69..85 | AwaitUsing n@26#0 AwaitUsing u@26#0
   await-using#1 @91 (194:6) pc 66: using.record@38 completion.kind@38 completion.value@38
+    path 0.1 1
 function <anonymous> @4014..4098
   loc0 <state>, loc4 s@0, loc5 n@0
+  node 0 Body @0..84: Params 6..8 Stmt 18..38 Stmt 43..64 Stmt 69..80 | Using s@0#1 AwaitUsing n@0#2
   await-using#1 @84 (201:4) pc 65: using.record@24 completion.kind@24 completion.value@24
+    path 0
 function <anonymous> @4129..4231
   loc0 <state>, loc4 n@26
+  node 0 Body @0..102: Params 6..8 Stmt 18..98
+  node 1 Block @18..98: Stmt 26..64 Stmt 71..92 | AwaitUsing n@26#1
   await-using#1 @98 (206:6) pc 61: using.record@83 completion.kind@83 completion.value@83
+    path 0.1 1
 function <anonymous> @4258..4501
   loc0 <state>, loc1 x@35, loc9 y@110, loc21 h@167
+  node 0 Body @0..243: Params 6..8 Stmt 18..88 Stmt 93..145 Stmt 150..219 Stmt 224..239
+  node 1 ForOf @18..88: Head 23..36 Iterable 40..70 Body 72..88 | AwaitUsing x@35#0
+  node 2 ForAwait @93..145: Head 104..111 Iterable 115..126 Body 128..145 | Using y@110#0
+  node 3 For @150..219: Init 155..180 Test 182..197 Body 201..219 | AwaitUsing h@167#0
   await-using#1 @88 (209:75) pc 117: for-of.iterator@18 for-of.next@18 using.record@35 completion.kind@35 completion.value@35 (out: loc9 loc21)
+    path 0.1 1
   for-await.close#1 @93 (210:5) pc 220: for-await.exception@93 (out: loc1 loc21)
+    path 0.2 2
   for-await.next#1 @93 (210:5) pc 310: for-await.iterator@93 for-await.next@93 (out: loc1 loc21)
+    path 0.2 2
   await-using#2 @219 (211:74) pc 411: using.record@167 completion.kind@167 completion.value@167 (out: loc1 loc9)
+    path 0.3 3
 function <anonymous> @4527..4709
   loc0 <state>, loc4 x@0
+  node 0 Body @0..182: Params 6..8 Stmt 18..178 | AwaitUsing x@0#1
   await-using#1 @182 (221:4) pc 60: using.record@30 completion.kind@30 completion.value@30
+    path 0
 function <anonymous> @4738..4887
   loc0 <state>, loc4 x@0
+  node 0 Body @0..149: Params 6..8 Stmt 18..122 Stmt 127..145 | AwaitUsing x@0#1
   await-using#1 @149 (229:4) pc 78: using.record@30 completion.kind@30 completion.value@30
+    path 0
 function <anonymous> @4920..5133
   loc0 <state>, loc1 g@0, loc2 v@131
+  node 0 Body @0..213: Params 6..8 FuncDecl 18..109 Stmt 114..190 Stmt 195..209 | Function g@0#1
+  node 1 ForAwait @114..190: Head 125..132 Iterable 136..139 Body 141..190 | Const v@131#0
   for-await.close#1 @114 (236:5) pc 41: for-await.exception@114
+    path 0.2 1
   for-await.next#1 @114 (236:5) pc 82: for-await.iterator@114
+    path 0.2 1
   for-await.close#2 @114 (236:5) pc 112: -
+    path 0.2 1
 function g @4938..5029
   loc0 <state>, loc4 a@0
+  node 0 Body @0..91: Params 17..19 Stmt 28..55 Stmt 62..70 Stmt 77..85 | AwaitUsing a@0#1
+  node 1 Expr @62..70: Operand 62..69
+  node 2 Yield @62..69: Operand 68..69
+  node 3 Expr @77..85: Operand 77..84
+  node 4 Yield @77..84: Operand 83..84
   yield.await#1 @62 (233:7) pc 33: using.record@40
+    path 0.2 1.0 2
   yield#1 @62 (233:7) pc 36: using.record@40
+    path 0.2 1.0 2
   yield.return#1 @62 (233:7) pc 41: using.record@40
+    path 0.2 1.0 2
   yield.await#2 @77 (234:7) pc 52: using.record@40
+    path 0.3 3.0 4
   yield#2 @77 (234:7) pc 55: using.record@40
+    path 0.3 3.0 4
   yield.return#2 @77 (234:7) pc 60: using.record@40
+    path 0.3 3.0 4
   await-using#1 @91 (235:6) pc 86: using.record@40 completion.kind@40 completion.value@40
+    path 0

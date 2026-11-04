@@ -1,8 +1,18 @@
 function <anonymous> @1..1737
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0, loc9 fakeImage@0
+  node 0 Body @0..1736: Params 6..22 Stmt 468..1053 Stmt 1054..1087 Stmt 1088..1436 Stmt 1437..1482 Stmt 1483..1733 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2 Const fakeImage@0#4
+  node 1 Return @1483..1733: Operand 1490..1732
+  node 2 Await @1490..1732: Operand 1496..1732
   await#1 @1490 (32:8) pc 176: -
+    path 0.5 1.0 2
 function <anonymous> @1498..1715
   arg0 tools@0, arg1 image@0
   loc0 <state>, loc1 f@37, loc6 r@62
+  node 0 Body @0..217: Params 6..20 Stmt 26..215 | Param tools@0#0 Param image@0#0
+  node 1 ForOf @26..215: Head 31..38 Iterable 42..58 Body 60..215 | Const f@37#0
+  node 2 Block @60..215: Stmt 62..142 Stmt 143..151 Stmt 152..213 | Const r@62#0
+  node 3 Decl(Const) @62..142: Target 68..69 Init 72..141
+  node 4 Await @72..141: Operand 78..141
   await#1 @72 (33:47) pc 88: for-of.iterator@26 for-of.next@26
+    path 0.1 1.2 2.0 3.1 4

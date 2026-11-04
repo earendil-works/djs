@@ -1,11 +1,28 @@
 function <anonymous> @1..3088
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..3087: Params 6..22 Stmt 468..1925 Stmt 1926..1959 Stmt 1960..2308 Stmt 2309..3084 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @2309..3084: Operand 2316..3083
+  node 2 Await @2316..3083: Operand 2322..3083
   await#1 @2316 (70:8) pc 372: -
+    path 0.4 1.0 2
 function <anonymous> @2324..3077
   arg0 tools@0
   loc0 <state>, loc1 r@0, loc2 res@0, loc3 vab@0, loc6 meta@0, loc7 b64@0, loc8 qup@0, loc9 out@0
+  node 0 Body @0..753: Params 6..13 Stmt 19..213 Stmt 214..251 Stmt 252..278 Stmt 279..322 Stmt 323..386 Stmt 387..439 Stmt 440..505 Stmt 506..663 Stmt 664..751 | Param tools@0#0 Const r@0#1 Const res@0#2 Const vab@0#3 Const meta@0#4 Const b64@0#4 Const qup@0#5 Const out@0#8
+  node 1 Decl(Const) @19..213: Target 25..26 Init 29..212
+  node 2 Await @29..212: Operand 35..212
+  node 3 Expr @387..439: Operand 387..438
+  node 4 Await @387..438: Operand 393..438
+  node 5 Expr @440..505: Operand 440..504
+  node 6 Await @440..504: Operand 446..504
+  node 7 Decl(Const) @506..663: Target 512..515 Init 518..662
+  node 8 Await @518..662: Operand 524..662
   await#1 @29 (71:11) pc 33: -
+    path 0.1 1.1 2
   await#2 @387 (76:1) pc 234: -
+    path 0.6 3.0 4
   await#3 @440 (77:1) pc 266: -
+    path 0.7 5.0 6
   await#4 @518 (78:13) pc 300: -
+    path 0.8 7.1 8

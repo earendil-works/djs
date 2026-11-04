@@ -1,4 +1,10 @@
 function <anonymous> @0..1073
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 log@0, loc2 show@0, loc3 p@0
+  node 0 Body @0..1073: Stmt 204..219 Stmt 220..301 Stmt 302..334 Stmt 335..369 Stmt 370..414 Stmt 415..503 Stmt 504..564 Stmt 565..632 Stmt 633..708 Stmt 709..812 Stmt 813..889 Stmt 890..968 Stmt 969..1043 Stmt 1044..1072 | Const log@0#0 Const show@0#1 Const p@0#2
+  node 1 Try @969..1043: Block 973..997 CatchParam 1005..1006 CatchBody 1008..1043 | CatchParam e@1004#1
+  node 2 Block @973..997: Stmt 977..995
+  node 3 Expr @977..995: Operand 977..994
+  node 4 Await @977..994: Operand 983..994
   await#1 @977 (18:3) pc 302: -
+    path 0.12 1.0 2.0 3.0 4

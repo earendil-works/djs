@@ -1,15 +1,51 @@
 function <anonymous> @1..4683
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..4682: Params 6..22 Stmt 468..2811 Stmt 2812..2845 Stmt 2846..3194 Stmt 3195..4679 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @3195..4679: Operand 3202..4678
+  node 2 Await @3202..4678: Operand 3208..4678
   await#1 @3202 (69:8) pc 353: -
+    path 0.4 1.0 2
 function <anonymous> @3210..4672
   arg0 tools@0
   loc0 <state>, loc1 result@0
+  node 0 Body @0..1462: Params 6..13 Stmt 19..85 Stmt 86..155 Stmt 156..231 Stmt 232..306 Stmt 307..605 Stmt 606..678 Stmt 679..1203 Stmt 1204..1460 | Param tools@0#0 Const result@0#3
+  node 1 Expr @19..85: Operand 19..84
+  node 2 Call @19..84: Callee 19..23 Open 23..24 Arg 24..83
+  node 3 Await @24..83: Operand 30..83
+  node 4 Expr @86..155: Operand 86..154
+  node 5 Call @86..154: Callee 86..90 Open 90..91 Arg 91..153
+  node 6 Await @91..153: Operand 97..153
+  node 7 Decl(Const) @156..231: Target 162..168 Init 169..230
+  node 8 Await @169..230: Operand 175..230
+  node 9 Expr @232..306: Operand 232..305
+  node 10 Call @232..305: Callee 232..236 Open 236..237 Arg 237..304
+  node 11 Await @237..304: Operand 243..304
+  node 12 Expr @307..605: Operand 307..604
+  node 13 Call @307..604: Callee 307..311 Open 311..312 Arg 312..603
+  node 14 Await @312..603: Operand 318..603
+  node 15 Expr @606..678: Operand 606..677
+  node 16 Call @606..677: Callee 606..610 Open 610..611 Arg 611..676
+  node 17 Await @611..676: Operand 617..676
+  node 18 Expr @679..1203: Operand 679..1202
+  node 19 Call @679..1202: Callee 679..683 Open 683..684 Arg 684..1201
+  node 20 Await @684..1201: Operand 690..1201
+  node 21 Expr @1204..1460: Operand 1204..1459
+  node 22 Call @1204..1459: Callee 1204..1208 Open 1208..1209 Arg 1209..1458
+  node 23 Await @1209..1458: Operand 1215..1458
   await#1 @24 (70:6) pc 50: call.callee@19 call.this@19
+    path 0.1 1.0 2.2 3
   await#2 @91 (71:6) pc 99: call.callee@86 call.this@86
+    path 0.2 4.0 5.2 6
   await#3 @169 (72:14) pc 123: -
+    path 0.3 7.1 8
   await#4 @237 (73:6) pc 169: call.callee@232 call.this@232
+    path 0.4 9.0 10.2 11
   await#5 @312 (74:6) pc 249: call.callee@307 call.this@307
+    path 0.5 12.0 13.2 14
   await#6 @611 (78:6) pc 289: call.callee@606 call.this@606
+    path 0.6 15.0 16.2 17
   await#7 @684 (79:6) pc 369: call.callee@679 call.this@679
+    path 0.7 18.0 19.2 20
   await#8 @1209 (83:6) pc 449: call.callee@1204 call.this@1204
+    path 0.8 21.0 22.2 23

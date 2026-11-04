@@ -7,6 +7,7 @@ use super::parser::{Parser, syntax};
 use super::pattern::Binding;
 use super::scan::Follow;
 use super::smap::SiteKind;
+use super::smap_syntax::{NodeKind, Role};
 use crate::bytecode::{CodeBuf, Label, Phase1};
 use crate::heap::Atom;
 use crate::lexer::{Kw, TokenKind};
@@ -232,11 +233,18 @@ fn compound_op(kind: TokenKind) -> Option<fn(&mut CodeBuf<Phase1>)> {
 impl Parser<'_, '_> {
     /// Expression: comma lists.
     pub(super) fn parse_expr(&mut self, no_in: bool) -> PResult<Expr> {
+        let (start, mark) = (self.tok.start, self.syn_mark());
         let mut e = self.parse_assign(no_in)?;
-        while self.is(TokenKind::Comma) {
-            self.next()?;
-            self.code().drop();
-            self.parse_assign(no_in)?;
+        if self.is(TokenKind::Comma) {
+            self.syn_open_late(NodeKind::Sequence, start, mark, Role::Expr, self.prev_end);
+            while self.is(TokenKind::Comma) {
+                self.next()?;
+                self.code().drop();
+                let at = self.tok.start;
+                self.parse_assign(no_in)?;
+                self.syn_part(Role::Expr, at, self.prev_end);
+            }
+            self.syn_close();
             e = Expr::Value;
         }
         Ok(e)
@@ -260,15 +268,21 @@ impl Parser<'_, '_> {
         }
         // Where the assignment starts: it names the slots its target keeps.
         let start = self.tok.start;
+        let mark = self.syn_mark();
         if self.starts_assignment_pattern(Follow::Assign) {
             // `[a, b] = [b, a]`: the right side runs first; its value is the result.
             self.deferred_pattern(Binding::Assign, |p| {
+                p.syn_open_late(NodeKind::Assign, start, mark, Role::Left, p.prev_end);
+                p.syn_part(Role::Op, p.tok.start, p.tok.end);
                 p.next()?;
+                let right = p.tok.start;
                 p.parse_assign(no_in)?;
+                p.syn_part(Role::Right, right, p.prev_end);
                 p.code().dup();
                 p.names_push(start, &["assign.value"]);
                 Ok(())
             })?;
+            self.syn_close();
             self.names_pop(1);
             return Ok(Expr::Value);
         }
@@ -276,6 +290,37 @@ impl Parser<'_, '_> {
         let parenthesized = self.is(TokenKind::LParen);
         let lhs = self.parse_conditional(no_in, after_q)?;
         let op = self.tok;
+        let assigns = op.kind == TokenKind::Assign
+            || compound_op(op.kind).is_some()
+            || matches!(
+                op.kind,
+                TokenKind::AmpAmpAssign
+                    | TokenKind::PipePipeAssign
+                    | TokenKind::QuestionQuestionAssign
+            );
+        if !assigns {
+            return Ok(lhs);
+        }
+        self.syn_open_late(NodeKind::Assign, start, mark, Role::Left, self.prev_end);
+        self.syn_part(Role::Op, op.start, op.end);
+        let right = self.peek().start;
+        let r = self.parse_assign_rest(no_in, start, lhs, op, parenthesized);
+        if r.is_ok() {
+            self.syn_part(Role::Right, right, self.prev_end);
+            self.syn_close();
+        }
+        r
+    }
+
+    /// An assignment after its target `lhs`, at the operator `op`.
+    fn parse_assign_rest(
+        &mut self,
+        no_in: bool,
+        start: u32,
+        lhs: Expr,
+        op: crate::lexer::Token,
+        parenthesized: bool,
+    ) -> PResult<Expr> {
         if op.kind == TokenKind::Assign {
             let lv = self.lvalue(lhs, "invalid assignment left-hand side")?;
             self.names_push(start, lv.stack_names());
@@ -545,22 +590,35 @@ impl Parser<'_, '_> {
     /// `after_q`: the expression is itself the `b` of an enclosing `a ? b : c`, which the
     /// `c` here inherits (tsc's `allowReturnTypeInArrowFunction`, compiler/ts.rs).
     fn parse_conditional(&mut self, no_in: bool, after_q: bool) -> PResult<Expr> {
+        let (start, mark) = (self.tok.start, self.syn_mark());
         let (e, _) = self.parse_binary(1, no_in)?;
         if !self.is(TokenKind::Question) {
             return Ok(e);
         }
+        self.syn_open_late(
+            NodeKind::Conditional,
+            start,
+            mark,
+            Role::Test,
+            self.prev_end,
+        );
         self.next()?;
         let l_else = self.new_label();
         let l_end = self.new_label();
         self.code().jump_if_false(l_else);
         self.after_q = self.ts;
+        let then = self.tok.start;
         self.parse_assign(false)?;
+        self.syn_part(Role::Then, then, self.prev_end);
         self.expect(TokenKind::Colon, ":")?;
         self.code().jump(l_end);
         self.place(l_else);
         self.after_q = after_q;
+        let other = self.tok.start;
         self.parse_assign(no_in)?;
+        self.syn_part(Role::Else, other, self.prev_end);
         self.place(l_end);
+        self.syn_close();
         Ok(Expr::Value)
     }
 
@@ -569,6 +627,7 @@ impl Parser<'_, '_> {
     fn parse_binary(&mut self, min: u8, no_in: bool) -> PResult<(Expr, u8)> {
         // Where the left operand starts: it names its slot.
         let start = self.tok.start;
+        let mark = self.syn_mark();
         // `#x in obj`: a private name only as the left operand of a relational `in`.
         let (mut lhs, mut lhs_unary) = if self.is(TokenKind::PrivateName)
             && min <= 8
@@ -617,7 +676,16 @@ impl Parser<'_, '_> {
                     "unparenthesized unary expression can't appear on the left-hand side of '**'",
                 );
             }
+            let logical = matches!(op, BinOp::Nullish | BinOp::Or | BinOp::And);
+            let kind = if logical {
+                NodeKind::Logical
+            } else {
+                NodeKind::Binary
+            };
+            self.syn_open_late(kind, start, mark, Role::Left, self.prev_end);
+            self.syn_part(Role::Op, op_tok.start, op_tok.end);
             self.next()?;
+            let right = self.tok.start;
             let l_short = self.new_label();
             match op {
                 BinOp::Nullish => {
@@ -650,6 +718,7 @@ impl Parser<'_, '_> {
                 self.names_push(start, &["binary.left"]);
             }
             let (_, rmix) = self.parse_binary(next_min, no_in)?;
+            self.syn_part(Role::Right, right, self.prev_end);
             if keeps {
                 self.names_pop(1);
             }
@@ -684,6 +753,7 @@ impl Parser<'_, '_> {
                     emit(self.code());
                 }
             }
+            self.syn_close();
             lhs = Expr::Value;
             lhs_unary = false;
         }
@@ -694,9 +764,48 @@ impl Parser<'_, '_> {
     /// (for the `**` rule).
     fn parse_unary(&mut self) -> PResult<(Expr, bool)> {
         self.enter()?;
-        let r = self.parse_unary_inner();
+        // A prefix operator is a node (D2850): `Op Operand`, an update's target as
+        // `Parser::syn_target` makes it.
+        let tok = self.tok;
+        let kind = match tok.kind {
+            TokenKind::Delete
+            | TokenKind::Void
+            | TokenKind::Typeof
+            | TokenKind::Plus
+            | TokenKind::Minus
+            | TokenKind::Tilde
+            | TokenKind::Bang => Some(NodeKind::Unary),
+            TokenKind::PlusPlus | TokenKind::MinusMinus => Some(NodeKind::Update),
+            TokenKind::Ident if tok.is_contextual(Kw::Await) && self.f.is_async => {
+                Some(NodeKind::Await)
+            }
+            _ => None,
+        };
+        let r = match kind {
+            Some(kind) if self.syn_on() => {
+                self.syn_open(kind, tok.start);
+                if kind != NodeKind::Await {
+                    self.syn_part(Role::Op, tok.start, tok.end);
+                }
+                let r = self.parse_unary_inner();
+                if r.is_ok() {
+                    self.syn_close();
+                }
+                r
+            }
+            _ => self.parse_unary_inner(),
+        };
         self.leave();
         r
+    }
+
+    /// The operand of a prefix operator, from `start` to here.
+    fn syn_operand(&mut self, update: bool, start: u32) {
+        if update {
+            self.syn_target(start, self.prev_end, Role::Operand);
+        } else {
+            self.syn_part(Role::Operand, start, self.prev_end);
+        }
     }
 
     fn parse_unary_inner(&mut self) -> PResult<(Expr, bool)> {
@@ -707,7 +816,9 @@ impl Parser<'_, '_> {
             TokenKind::Delete => {
                 self.next()?;
                 self.delete_operand = true;
+                let operand = self.tok.start;
                 let (e, _) = self.parse_unary()?;
+                self.syn_operand(false, operand);
                 self.delete_operand = false;
                 match e {
                     Expr::Name { .. } => {
@@ -756,13 +867,17 @@ impl Parser<'_, '_> {
             }
             TokenKind::Void => {
                 self.next()?;
+                let operand = self.tok.start;
                 self.parse_unary()?;
+                self.syn_operand(false, operand);
                 self.code().drop();
                 self.code().undefined();
             }
             TokenKind::Typeof => {
                 self.next()?;
+                let operand = self.tok.start;
                 let (e, _) = self.parse_unary()?;
+                self.syn_operand(false, operand);
                 if let Expr::Name { r, pos, .. } = e {
                     self.truncate_last();
                     self.mark(pos);
@@ -772,7 +887,9 @@ impl Parser<'_, '_> {
             }
             TokenKind::Plus | TokenKind::Minus | TokenKind::Tilde | TokenKind::Bang => {
                 self.next()?;
+                let operand = self.tok.start;
                 self.parse_unary()?;
+                self.syn_operand(false, operand);
                 self.mark(tok.start);
                 match tok.kind {
                     TokenKind::Plus => self.code().plus(),
@@ -783,7 +900,9 @@ impl Parser<'_, '_> {
             }
             TokenKind::PlusPlus | TokenKind::MinusMinus => {
                 self.next()?;
+                let operand = self.tok.start;
                 let (e, _) = self.parse_unary()?;
+                self.syn_operand(true, operand);
                 let lv = self.lvalue(e, "invalid increment/decrement operand")?;
                 self.emit_load(lv);
                 self.mark(tok.start);
@@ -812,7 +931,9 @@ impl Parser<'_, '_> {
                     return syntax(tok.start, "await in default expression");
                 }
                 self.next()?;
+                let operand = self.tok.start;
                 self.parse_unary()?;
+                self.syn_operand(false, operand);
                 self.mark(tok.start);
                 self.site(SiteKind::Await, tok.start);
                 self.code().await_(0);
@@ -846,6 +967,7 @@ impl Parser<'_, '_> {
     }
 
     fn parse_postfix(&mut self, delete_operand: bool) -> PResult<Expr> {
+        let (start, mark) = (self.tok.start, self.syn_mark());
         let e = self.parse_lhs(delete_operand)?;
         let tok = self.tok;
         if !matches!(tok.kind, TokenKind::PlusPlus | TokenKind::MinusMinus) || tok.newline_before()
@@ -853,7 +975,10 @@ impl Parser<'_, '_> {
             return Ok(e);
         }
         let lv = self.lvalue(e, "invalid increment/decrement operand")?;
+        self.syn_open_late(NodeKind::Update, start, mark, Role::Operand, self.prev_end);
+        self.syn_part(Role::Op, tok.start, tok.end);
         self.next()?;
+        self.syn_close();
         // Leaves the old (numeric) value: `x++` is `old = +x; x = old + 1; old`.
         self.emit_load(lv);
         self.code().to_numeric();
@@ -874,6 +999,7 @@ impl Parser<'_, '_> {
         let whole = self.paren_inner == self.tok.start;
         // Where the chain starts: it names the slots of its calls and indexing.
         let start = self.tok.start;
+        let mark = self.syn_mark();
         let mut e = if self.is(TokenKind::New) {
             self.parse_new()?
         } else {
@@ -883,20 +1009,39 @@ impl Parser<'_, '_> {
         let mut pads: [Option<Label>; 2] = [None, None];
         loop {
             let tok = self.tok;
+            // Where the chain so far ends (D2850).
+            let before = self.prev_end;
             match tok.kind {
                 TokenKind::Dot => {
+                    let member = NodeKind::Member {
+                        computed: false,
+                        optional: false,
+                    };
+                    self.syn_open_late(member, start, mark, Role::Object, before);
                     self.next()?;
+                    let name = self.tok.start;
                     e = self.parse_dot_name(tok.start)?;
+                    self.syn_part(Role::Property, name, self.prev_end);
+                    self.syn_close();
                 }
                 TokenKind::LBracket => {
+                    let member = NodeKind::Member {
+                        computed: true,
+                        optional: false,
+                    };
+                    self.syn_open_late(member, start, mark, Role::Object, before);
                     self.next()?;
                     e = self.parse_index(tok.start, start)?;
+                    self.syn_part(Role::Property, tok.start, self.prev_end);
+                    self.syn_close();
                 }
                 TokenKind::LParen => {
                     // qjs compiles a call of the name `eval` to its own opcode, never
                     // a tail call.
                     let eval = matches!(e, Expr::Name { r, restricted: true, .. }
                         if self.heap.atom_name(self.f.refs[r as usize].atom) == "eval");
+                    let call = NodeKind::Call { optional: false };
+                    self.syn_open_late(call, start, mark, Role::Callee, before);
                     self.prepare_call(e, start);
                     let args = self.parse_args()?;
                     self.mark(tok.start);
@@ -904,12 +1049,15 @@ impl Parser<'_, '_> {
                         self.f.tail_call = Some(self.f.code.pos());
                     }
                     self.emit_call(args);
+                    self.syn_close();
                     e = Expr::Value;
                 }
                 TokenKind::QuestionDot => {
                     self.next()?;
                     match self.tok.kind {
                         TokenKind::LParen => {
+                            let call = NodeKind::Call { optional: true };
+                            self.syn_open_late(call, start, mark, Role::Callee, before);
                             // `f?.()` / `o.m?.()`: test the callee, keep `this`.
                             self.prepare_call(e, start);
                             let pad = *pads[1].get_or_insert_with(|| self.f.code.new_label());
@@ -922,13 +1070,20 @@ impl Parser<'_, '_> {
                             let args = self.parse_args()?;
                             self.mark(paren);
                             self.emit_call(args);
+                            self.syn_close();
                             e = Expr::Value;
                         }
                         _ => {
+                            let member = NodeKind::Member {
+                                computed: self.is(TokenKind::LBracket),
+                                optional: true,
+                            };
+                            self.syn_open_late(member, start, mark, Role::Object, before);
                             let pad = *pads[0].get_or_insert_with(|| self.f.code.new_label());
                             self.code().dup();
                             self.code().is_nullish();
                             self.code().jump_if_true(pad);
+                            let name = self.tok.start;
                             if self.is(TokenKind::LBracket) {
                                 let pos = self.tok.start;
                                 self.next()?;
@@ -936,6 +1091,8 @@ impl Parser<'_, '_> {
                             } else {
                                 e = self.parse_dot_name(tok.start)?;
                             }
+                            self.syn_part(Role::Property, name, self.prev_end);
+                            self.syn_close();
                         }
                     }
                 }
@@ -959,12 +1116,15 @@ impl Parser<'_, '_> {
                             "template literal cannot appear in an optional chain",
                         );
                     }
+                    let tagged = NodeKind::TaggedTemplate;
+                    self.syn_open_late(tagged, start, mark, Role::Tag, before);
                     self.prepare_call(e, start);
                     let argc = self.parse_tagged_template()?;
                     self.mark(tok.start);
                     self.f.tail_call = Some(self.f.code.pos());
                     self.names_pop(2);
                     self.code().call(argc);
+                    self.syn_close();
                     e = Expr::Value;
                 }
                 _ => break,
@@ -1148,6 +1308,7 @@ impl Parser<'_, '_> {
     pub(super) fn parse_args_as(&mut self, of: ArgsOf) -> PResult<Args> {
         // An argument's slot is named by its start, the array of a spread by the `(`.
         let paren = self.tok.start;
+        self.syn_part(Role::Open, paren, self.tok.end);
         self.expect(TokenKind::LParen, "(")?;
         let mut argc: u32 = 0;
         let mut array = false;
@@ -1158,12 +1319,15 @@ impl Parser<'_, '_> {
                     self.names_replace(argc as usize, paren, &[of.array()]);
                     array = true;
                 }
+                let spread = self.tok.start;
                 self.next()?;
                 self.parse_assign(false)?;
+                self.syn_part(Role::Spread, spread, self.prev_end);
                 self.code().array_spread();
             } else {
                 let arg = self.tok.start;
                 self.parse_assign(false)?;
+                self.syn_part(Role::Arg, arg, self.prev_end);
                 if array {
                     self.code().array_push();
                 } else {
@@ -1209,6 +1373,7 @@ impl Parser<'_, '_> {
             let Some(r) = self.new_target_ref(pos) else {
                 return syntax(pos, "new.target only allowed within functions");
             };
+            self.syn_special(super::smap_syntax::Special::NewTarget, pos);
             self.code().name_get(r);
             return Ok(Expr::Value);
         }
@@ -1216,7 +1381,9 @@ impl Parser<'_, '_> {
             return syntax(self.tok.start, "invalid use of 'import()'");
         }
         self.enter()?;
+        self.syn_open(NodeKind::New, pos);
         let start = self.tok.start;
+        let mark = self.syn_mark();
         let mut e = if self.is(TokenKind::New) {
             self.parse_new()?
         } else {
@@ -1226,14 +1393,30 @@ impl Parser<'_, '_> {
         // MemberExpression: no calls before the arguments of `new`.
         loop {
             let tok = self.tok;
+            let before = self.prev_end;
             match tok.kind {
                 TokenKind::Dot => {
+                    let member = NodeKind::Member {
+                        computed: false,
+                        optional: false,
+                    };
+                    self.syn_open_late(member, start, mark, Role::Object, before);
                     self.next()?;
+                    let name = self.tok.start;
                     e = self.parse_dot_name(tok.start)?;
+                    self.syn_part(Role::Property, name, self.prev_end);
+                    self.syn_close();
                 }
                 TokenKind::LBracket => {
+                    let member = NodeKind::Member {
+                        computed: true,
+                        optional: false,
+                    };
+                    self.syn_open_late(member, start, mark, Role::Object, before);
                     self.next()?;
                     e = self.parse_index(tok.start, start)?;
+                    self.syn_part(Role::Property, tok.start, self.prev_end);
+                    self.syn_close();
                 }
                 TokenKind::QuestionDot => {
                     return syntax(
@@ -1248,16 +1431,20 @@ impl Parser<'_, '_> {
                 }
                 TokenKind::NoSubstTemplate | TokenKind::TemplateHead => {
                     // `new tag`x`` constructs the result of the tagged call.
+                    let tagged = NodeKind::TaggedTemplate;
+                    self.syn_open_late(tagged, start, mark, Role::Tag, before);
                     self.prepare_call(e, start);
                     let argc = self.parse_tagged_template()?;
                     self.mark(tok.start);
                     self.names_pop(2);
                     self.code().call(argc);
+                    self.syn_close();
                     e = Expr::Value;
                 }
                 _ => break,
             }
         }
+        self.syn_part(Role::Callee, start, self.prev_end);
         // The position of `new` is the token after the constructor: its `(`, or what
         // follows `new X` (as in qjs).
         let at = self.tok.start;
@@ -1273,6 +1460,7 @@ impl Parser<'_, '_> {
             Args::Count(n) => self.code().construct(n),
             Args::Array => self.code().construct_spread(),
         }
+        self.syn_close();
         Ok(Expr::Value)
     }
 
@@ -1462,17 +1650,23 @@ impl Parser<'_, '_> {
             }
             return syntax(self.tok.start, "meta expected");
         }
+        self.syn_open(NodeKind::ImportCall, pos);
         self.expect(TokenKind::LParen, "(")?;
+        let arg = self.tok.start;
         self.parse_assign(false)?;
+        self.syn_part(Role::Arg, arg, self.prev_end);
         if self.eat(TokenKind::Comma)? && !self.is(TokenKind::RParen) {
             self.names_push(pos, &["import.specifier"]);
+            let arg = self.tok.start;
             self.parse_assign(false)?;
+            self.syn_part(Role::Arg, arg, self.prev_end);
             self.names_pop(1);
             self.eat(TokenKind::Comma)?;
         } else {
             self.code().undefined();
         }
         self.expect(TokenKind::RParen, ")")?;
+        self.syn_close();
         self.mark(pos);
         let id = crate::bytecode::intrinsics::intrinsic_id("DynamicImport").expect("intrinsic");
         self.code().call_intrinsic(id, 2);
@@ -1482,9 +1676,38 @@ impl Parser<'_, '_> {
     /// `super(args)`, `super.x`, `super[k]` (docs/compiler.md 7.9).
     fn parse_super(&mut self) -> PResult<Expr> {
         let pos = self.tok.start;
+        self.syn_special(super::smap_syntax::Special::Super, pos);
         self.next()?;
         let tok = self.tok;
         let kind = self.own_this_kind();
+        // `super` is the callee or object of the node it starts (D2850).
+        let node = match tok.kind {
+            TokenKind::LParen => NodeKind::Call { optional: false },
+            _ => NodeKind::Member {
+                computed: tok.kind == TokenKind::LBracket,
+                optional: false,
+            },
+        };
+        let role = if tok.kind == TokenKind::LParen {
+            Role::Callee
+        } else {
+            Role::Object
+        };
+        let mark = self.syn_mark();
+        self.syn_open_late(node, pos, mark, role, self.prev_end);
+        let r = self.parse_super_inner(pos, tok, kind);
+        if r.is_ok() {
+            self.syn_close();
+        }
+        r
+    }
+
+    fn parse_super_inner(
+        &mut self,
+        pos: u32,
+        tok: crate::lexer::Token,
+        kind: Option<FuncKind>,
+    ) -> PResult<Expr> {
         match tok.kind {
             TokenKind::LParen => {
                 if kind != Some(FuncKind::DerivedCtor) {
@@ -1517,7 +1740,9 @@ impl Parser<'_, '_> {
                         return syntax(self.tok.start, "expecting field name");
                     }
                     let atom = self.ident_atom()?;
+                    let name = self.tok.start;
                     self.next()?;
+                    self.syn_part(Role::Property, name, self.prev_end);
                     self.mark(tok.start);
                     self.code().get_super_field(atom);
                     Ok(Expr::SuperField {
@@ -1529,6 +1754,7 @@ impl Parser<'_, '_> {
                     self.parse_expr(false)?;
                     self.names_pop(2);
                     self.expect(TokenKind::RBracket, "]")?;
+                    self.syn_part(Role::Property, tok.start, self.prev_end);
                     self.mark(tok.start);
                     self.code().get_super_elem();
                     Ok(Expr::SuperElem { pos: tok.start })
@@ -1675,10 +1901,12 @@ impl Parser<'_, '_> {
     fn parse_template(&mut self) -> PResult<Expr> {
         // A part's slot is named by its start (a string's by its token's).
         let start = self.tok.start;
+        self.syn_open(NodeKind::Template, start);
         let mut parts: u32 = 0;
         let mut units = alloc::vec::Vec::new();
         loop {
             let tok = self.tok;
+            self.syn_part(Role::Quasi, tok.start, tok.end);
             units.clear();
             self.lx.cook_template(&tok, &mut units)?;
             if !units.is_empty() {
@@ -1697,6 +1925,7 @@ impl Parser<'_, '_> {
             self.next()?;
             let part = self.tok.start;
             self.parse_expr(false)?;
+            self.syn_part(Role::Subst, part, self.prev_end);
             self.mark(tok.end - 2);
             self.code().to_string();
             self.names_push(part, &["template.part"]);
@@ -1715,6 +1944,7 @@ impl Parser<'_, '_> {
             1 => {}
             n => self.code().concat(n as u16),
         }
+        self.syn_close();
         Ok(Expr::Value)
     }
 
@@ -1733,6 +1963,7 @@ impl Parser<'_, '_> {
         let mut argc: u32 = 1;
         loop {
             let tok = self.tok;
+            self.syn_part(Role::Quasi, tok.start, tok.end);
             units.clear();
             let c = match self.lx.cook_template(&tok, &mut units) {
                 Ok(_) => crate::value::Value::string(self.template_string(&units)?),
@@ -1752,6 +1983,7 @@ impl Parser<'_, '_> {
             self.next()?;
             let arg = self.tok.start;
             self.parse_expr(false)?;
+            self.syn_part(Role::Subst, arg, self.prev_end);
             self.names_push(arg, &["call.arg"]);
             argc += 1;
             if argc > u16::MAX as u32 {
@@ -1797,6 +2029,7 @@ impl Parser<'_, '_> {
         // An element's slot is named by its start, the array under construction's by
         // the `[`.
         let open = self.tok.start;
+        self.syn_open(NodeKind::Array, open);
         self.next()?;
         let mut on_stack: u16 = 0;
         let mut appending = false;
@@ -1804,20 +2037,24 @@ impl Parser<'_, '_> {
             match self.tok.kind {
                 TokenKind::RBracket => break,
                 TokenKind::Comma => {
+                    self.syn_part(Role::Hole, self.tok.start, self.tok.start);
                     self.start_appending(&mut appending, on_stack, open);
                     self.code().array_hole();
                     self.next()?;
                     continue;
                 }
                 TokenKind::Ellipsis => {
+                    let spread = self.tok.start;
                     self.start_appending(&mut appending, on_stack, open);
                     self.next()?;
                     self.parse_assign(false)?;
+                    self.syn_part(Role::Spread, spread, self.prev_end);
                     self.code().array_spread();
                 }
                 _ => {
                     let elem = self.tok.start;
                     self.parse_assign(false)?;
+                    self.syn_part(Role::Element, elem, self.prev_end);
                     if appending {
                         self.code().array_push();
                     } else {
@@ -1834,6 +2071,7 @@ impl Parser<'_, '_> {
             }
         }
         self.expect(TokenKind::RBracket, "]")?;
+        self.syn_close();
         if !appending {
             self.code().array_from(on_stack);
             self.names_pop(on_stack as usize);
@@ -1854,6 +2092,7 @@ impl Parser<'_, '_> {
     /// `{ a: 1, b, [k]: v, m() {}, get x() {}, set x(v) {}, __proto__: p, ...o }`.
     fn parse_object(&mut self) -> PResult<Expr> {
         let open = self.tok.start;
+        self.syn_open(NodeKind::Object, open);
         self.next()?;
         self.code().object();
         self.names_push(open, &["object.literal"]);
@@ -1863,6 +2102,7 @@ impl Parser<'_, '_> {
             if tok.kind == TokenKind::Ellipsis {
                 self.next()?;
                 self.parse_assign(false)?;
+                self.syn_part(Role::Spread, tok.start, self.prev_end);
                 self.code().copy_data_props(0);
             } else {
                 self.parse_property(tok, &mut seen_proto)?;
@@ -1872,6 +2112,7 @@ impl Parser<'_, '_> {
             }
         }
         self.expect(TokenKind::RBrace, "}")?;
+        self.syn_close();
         self.names_pop(1);
         Ok(Expr::ObjectLit)
     }
@@ -1962,6 +2203,7 @@ impl Parser<'_, '_> {
         }
         let key_tok = self.tok;
         let key = self.parse_property_key()?;
+        let key_end = self.prev_end;
         if let Some(p) = prefix {
             // An accessor.
             let (kind, prefix_id, word) = if p == Kw::Get {
@@ -1978,6 +2220,7 @@ impl Parser<'_, '_> {
                 None => Atom::NULL,
             };
             let child = self.parse_method_function(kind, name, tok.start, (false, false))?;
+            self.syn_part(Role::Method, tok.start, self.prev_end);
             self.code().fclosure(child);
             match (key, kind) {
                 (Some(a), FuncKind::Getter) => self.code().define_getter(a),
@@ -2009,6 +2252,7 @@ impl Parser<'_, '_> {
                     },
                     (is_async, is_gen),
                 )?;
+                self.syn_part(Role::Method, tok.start, self.prev_end);
                 self.code().fclosure(child);
                 match key {
                     Some(a) => self.code().define_method(a),
@@ -2019,7 +2263,14 @@ impl Parser<'_, '_> {
                 }
             }
             TokenKind::Colon => {
+                let key_role = if key.is_some() {
+                    Role::Key
+                } else {
+                    Role::ComputedKey
+                };
+                self.syn_part(key_role, key_tok.start, key_end);
                 self.next()?;
+                let value = self.tok.start;
                 // A literal `__proto__: v` sets the prototype (not for computed or
                 // shorthand keys).
                 let is_proto = key.is_some()
@@ -2027,6 +2278,7 @@ impl Parser<'_, '_> {
                     && self.lx_text_is(key_tok, "__proto__");
                 if is_proto {
                     self.parse_assign(false)?;
+                    self.syn_part(Role::Value, value, self.prev_end);
                     if *seen_proto {
                         // (Duplicates are fine in a destructuring pattern, which is
                         // parsed by compiler/pattern.rs instead.)
@@ -2048,6 +2300,7 @@ impl Parser<'_, '_> {
                         self.names_pop(1);
                     }
                 }
+                self.syn_part(Role::Value, value, self.prev_end);
                 match key {
                     Some(a) => self.code().define_field(a, 0),
                     None => {
@@ -2070,6 +2323,7 @@ impl Parser<'_, '_> {
                     return syntax(self.tok.start, "expecting ':'");
                 }
                 let a = key.unwrap_or(Atom::NULL);
+                self.syn_part(Role::Shorthand, key_tok.start, key_tok.end);
                 if key_tok.kw == Kw::Arguments {
                     self.note_arguments(key_tok.start)?;
                 }

@@ -1,5 +1,13 @@
 function <anonymous> @1..2809
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 comparable@0, loc2 guard@0, loc3 t@0, loc10 members@0, loc11 fs@0, loc15 read@0, loc16 rest@0, loc19 echo@0, loc20 others@0, loc21 results@0
+  node 0 Body @0..2808: Params 6..22 Stmt 395..521 FuncDecl 522..1564 Stmt 1565..1664 Stmt 1665..1719 Stmt 1720..1804 Stmt 1805..1945 Stmt 1946..2020 Stmt 2021..2057 Stmt 2058..2098 Stmt 2099..2170 Stmt 2171..2194 Stmt 2195..2249 Stmt 2250..2306 Stmt 2307..2372 Stmt 2373..2402 Stmt 2403..2447 Stmt 2448..2502 Stmt 2503..2533 Stmt 2534..2600 Stmt 2601..2620 Stmt 2621..2704 Stmt 2705..2805 | Param tools@0#0 Param console@0#0 Const comparable@0#1 Function guard@0#2 Const t@0#3 Const members@0#8 Const fs@0#12 Const read@0#15 Const rest@0#15 Const echo@0#18 Const others@0#18 Const results@0#21
+  node 1 Expr @1665..1719: Operand 1665..1718
+  node 2 Call @1665..1718: Callee 1665..1676 Open 1676..1677 Arg 1677..1683 Arg 1685..1717
+  node 3 Await @1685..1717: Operand 1691..1717
+  node 4 Decl(Const) @2621..2704: Target 2627..2634 Init 2637..2703
+  node 5 Await @2637..2703: Operand 2643..2703
   await#1 @1685 (26:21) pc 83: call.callee@1665 call.this@1665 call.arg@1677
+    path 0.4 1.0 2.3 3
   await#2 @2637 (53:17) pc 720: -
+    path 0.21 4.1 5

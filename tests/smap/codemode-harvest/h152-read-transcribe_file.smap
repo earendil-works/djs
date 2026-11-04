@@ -1,9 +1,23 @@
 function <anonymous> @1..11730
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..11729: Params 6..22 Stmt 468..10465 Stmt 10466..10499 Stmt 10500..10848 Stmt 10849..11726 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @10849..11726: Operand 10856..11725
+  node 2 Await @10856..11725: Operand 10862..11725
   await#1 @10856 (145:8) pc 681: -
+    path 0.4 1.0 2
 function <anonymous> @10864..11719
   arg0 tools@0
   loc0 <state>, loc1 s@0, loc2 norm@0, loc3 out@0, loc4 c@247, loc9 t@259, loc10 a@259, loc11 b@259, loc12 d@259, loc16 wer@259, loc17 errs@0
+  node 0 Body @0..855: Params 6..13 Stmt 19..119 Stmt 120..219 Stmt 220..235 Stmt 236..719 Stmt 720..763 Stmt 764..853 | Param tools@0#0 Const s@0#1 Const norm@0#2 Const out@0#3 Const errs@0#5
+  node 1 Decl(Const) @19..119: Target 25..26 Init 29..118
+  node 2 Call @29..118: Callee 29..39 Open 39..40 Arg 40..117
+  node 3 Await @40..117: Operand 46..117
+  node 4 ForOf @236..719: Head 241..248 Iterable 252..253 Body 255..719 | Const c@247#0
+  node 5 Block @255..719: Stmt 259..312 Stmt 315..351 Stmt 355..408 Stmt 411..451 Stmt 454..590 Stmt 593..636 Stmt 639..717 | Const t@259#0 Const a@259#1 Const b@259#1 Const d@259#2 Const wer@259#5
+  node 6 Decl(Const) @259..312: Target 265..266 Init 269..311
+  node 7 Await @269..311: Operand 275..311
   await#1 @40 (146:22) pc 55: call.callee@29 call.this@29 (out: loc4 loc9 loc10 loc11 loc12 loc16)
+    path 0.1 1.1 2.2 3
   await#2 @269 (150:13) pc 137: for-of.iterator@236 for-of.next@236
+    path 0.4 4.2 5.0 6.1 7

@@ -1,11 +1,31 @@
 function <anonymous> @1..3832
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0, loc9 stored@0, loc10 realLoad@0, loc11 fakeLoad@0
+  node 0 Body @0..3831: Params 6..22 Stmt 468..2138 Stmt 2139..2172 Stmt 2173..2521 Stmt 2522..3102 Stmt 3103..3125 Stmt 3126..3300 Stmt 3301..3828 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2 Const stored@0#4 Const realLoad@0#5 Const fakeLoad@0#6
+  node 1 Return @3301..3828: Operand 3308..3827
+  node 2 Await @3308..3827: Operand 3314..3827
   await#1 @3308 (78:8) pc 447: -
+    path 0.7 1.0 2
 function <anonymous> @3316..3811
   arg0 tools@0, arg1 load@0
   loc0 <state>, loc1 result@0, loc2 pid@0, loc3 viru@0
+  node 0 Body @0..495: Params 6..19 Stmt 25..108 Stmt 109..141 Stmt 142..195 Stmt 196..273 Stmt 274..391 Stmt 392..460 Stmt 461..493 | Param tools@0#0 Param load@0#0 Const result@0#1 Const pid@0#2 Const viru@0#4
+  node 1 Decl(Const) @25..108: Target 31..37 Init 38..107
+  node 2 Await @38..107: Operand 44..107
+  node 3 Decl(Const) @196..273: Target 202..206 Init 207..272
+  node 4 Await @207..272: Operand 213..272
+  node 5 If @274..391: Test 277..331 Then 332..391
+  node 6 Expr @332..391: Operand 332..390
+  node 7 Call @332..390: Callee 332..336 Open 336..337 Arg 337..389
+  node 8 Await @337..389: Operand 343..389
+  node 9 Expr @392..460: Operand 392..459
+  node 10 Call @392..459: Callee 392..396 Open 396..397 Arg 397..458
+  node 11 Await @397..458: Operand 403..458
   await#1 @38 (79:14) pc 41: -
+    path 0.1 1.1 2
   await#2 @207 (82:12) pc 134: -
+    path 0.4 3.1 4
   await#3 @337 (83:64) pc 198: call.callee@332 call.this@332
+    path 0.5 5.1 6.0 7.2 8
   await#4 @397 (84:6) pc 239: call.callee@392 call.this@392
+    path 0.6 9.0 10.2 11

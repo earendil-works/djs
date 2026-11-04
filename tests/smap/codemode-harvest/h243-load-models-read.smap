@@ -1,9 +1,22 @@
 function <anonymous> @1..12093
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0, loc9 answer@0, loc10 modelsOfType@0, loc11 fakeModels@0, loc12 stored@0, loc13 realLoad@0, loc14 fakeLoad@0
+  node 0 Body @0..12092: Params 6..22 Stmt 468..6676 Stmt 6677..6710 Stmt 6711..7059 Stmt 7060..7172 Stmt 7173..7354 Stmt 7355..8837 Stmt 8838..10158 Stmt 10159..10181 Stmt 10182..10356 Stmt 10357..12089 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2 Const answer@0#4 Const modelsOfType@0#5 Const fakeModels@0#6 Const stored@0#7 Const realLoad@0#8 Const fakeLoad@0#9
+  node 1 Return @10357..12089: Operand 10364..12088
+  node 2 Await @10364..12088: Operand 10370..12088
   await#1 @10364 (197:8) pc 829: -
+    path 0.10 1.0 2
 function <anonymous> @10372..12060
   arg0 tools@0, arg1 argument 1, arg2 load@0
   loc0 <state>, loc1 models@0, loc2 q@0, loc3 model@0, loc4 issues@0, loc5 off@1134, loc6 qap@1169, loc12 probe@0, loc13 pr@0
+  node 0 Body @0..1688: Params 6..27 Stmt 33..61 Stmt 62..530 Stmt 531..1025 Stmt 1026..1049 Stmt 1050..1105 Stmt 1106..1124 Stmt 1125..1337 Stmt 1339..1417 Stmt 1418..1550 Stmt 1551..1686 | Param tools@0#0 Param models@0#0 Param load@0#0 Const q@0#1 Const model@0#5 Const issues@0#6 Const probe@0#8 Const pr@0#9
+  node 1 For @1125..1337: Init 1130..1141 Test 1143..1153 Update 1155..1163 Body 1165..1337 | Let off@1134#0
+  node 2 Block @1165..1337: Stmt 1169..1249 Stmt 1252..1335 | Const qap@1169#0
+  node 3 Decl(Const) @1169..1249: Target 1175..1178 Init 1181..1248
+  node 4 Await @1181..1248: Operand 1187..1248
+  node 5 Decl(Const) @1418..1550: Target 1424..1426 Init 1429..1549
+  node 6 Await @1429..1549: Operand 1435..1549
   await#1 @1181 (215:15) pc 212: -
+    path 0.7 1.3 2.0 3.1 4
   await#2 @1429 (220:12) pc 394: - (out: loc5 loc6)
+    path 0.9 5.1 6

@@ -1,9 +1,22 @@
 function <anonymous> @1..12585
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0, loc9 answer@0, loc10 modelsOfType@0, loc11 fakeModels@0, loc12 stored@0, loc13 realLoad@0, loc14 fakeLoad@0
+  node 0 Body @0..12584: Params 6..22 Stmt 468..6811 Stmt 6812..6845 Stmt 6846..7194 Stmt 7195..7307 Stmt 7308..7489 Stmt 7490..8972 Stmt 8973..10719 Stmt 10720..10742 Stmt 10743..10917 Stmt 10918..12581 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2 Const answer@0#4 Const modelsOfType@0#5 Const fakeModels@0#6 Const stored@0#7 Const realLoad@0#8 Const fakeLoad@0#9
+  node 1 Return @10918..12581: Operand 10925..12580
+  node 2 Await @10925..12580: Operand 10931..12580
   await#1 @10925 (201:8) pc 837: -
+    path 0.10 1.0 2
 function <anonymous> @10933..12552
   arg0 tools@0, arg1 argument 1, arg2 load@0
   loc0 <state>, loc1 models@0, loc2 questions@0, loc3 model@0, loc4 issues@0, loc5 off@155, loc6 qon@190, loc12 res@0, loc13 rows@0, loc14 errs@0, loc15 counts@0, loc16 vozi@0, loc17 qid@0, loc18 sorted@0
+  node 0 Body @0..1619: Params 6..27 Stmt 33..70 Stmt 71..126 Stmt 127..145 Stmt 146..358 Stmt 359..460 Stmt 461..477 Stmt 478..494 Stmt 495..983 Stmt 984..1005 Stmt 1006..1024 Stmt 1025..1077 Stmt 1079..1184 Stmt 1185..1317 Stmt 1318..1376 Stmt 1377..1617 | Param tools@0#0 Param models@0#0 Param load@0#0 Const questions@0#1 Const model@0#2 Const issues@0#3 Const res@0#5 Const rows@0#6 Const errs@0#7 Const counts@0#10 Const vozi@0#12 Const qid@0#13 Const sorted@0#14
+  node 1 For @146..358: Init 151..162 Test 164..174 Update 176..184 Body 186..358 | Let off@155#0
+  node 2 Block @186..358: Stmt 190..270 Stmt 273..356 | Const qon@190#0
+  node 3 Decl(Const) @190..270: Target 196..199 Init 202..269
+  node 4 Await @202..269: Operand 208..269
+  node 5 Decl(Const) @359..460: Target 365..368 Init 371..459
+  node 6 Await @371..459: Operand 377..459
   await#1 @202 (206:15) pc 112: -
+    path 0.4 1.3 2.0 3.1 4
   await#2 @371 (209:13) pc 279: - (out: loc5 loc6)
+    path 0.5 5.1 6

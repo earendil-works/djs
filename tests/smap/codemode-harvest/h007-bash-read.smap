@@ -1,14 +1,34 @@
 function <anonymous> @1..14684
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..14683: Params 6..22 Stmt 468..13577 Stmt 13578..13611 Stmt 13612..13960 Stmt 13961..14680 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @13961..14680: Operand 13968..14679
+  node 2 Await @13968..14679: Operand 13974..14679
   await#1 @13968 (261:8) pc 1203: -
+    path 0.4 1.0 2
 function <anonymous> @13976..14673
   arg0 argument 0
   loc0 <state>, loc1 tools@0, loc2 result@0, loc3 files@0, loc4 originals@0, loc5 reads@0
+  node 0 Body @0..697: Params 6..13 Stmt 19..131 Stmt 132..191 Stmt 192..269 Stmt 270..291 Stmt 292..399 Stmt 400..463 Stmt 464..505 Stmt 506..539 Stmt 540..567 Stmt 568..695 | Param tools@0#0 Const result@0#1 Const files@0#3 Const originals@0#4 Const reads@0#5
+  node 1 Decl(Const) @19..131: Target 25..31 Init 34..130
+  node 2 Await @34..130: Operand 40..130
+  node 3 Decl(Const) @292..399: Target 298..303 Init 306..398
+  node 4 Await @306..398: Operand 312..398
+  node 5 Expr @568..695: Operand 568..694
+  node 6 Call @568..694: Callee 568..572 Open 572..573 Arg 573..693
+  node 7 Await @573..693: Operand 579..693
   await#1 @34 (262:16) pc 34: -
+    path 0.1 1.1 2
   await#2 @306 (266:15) pc 141: -
+    path 0.5 3.1 4
   await#3 @573 (271:6) pc 311: call.callee@568 call.this@568
+    path 0.10 5.0 6.2 7
 function <anonymous> @14317..14372
   arg0 path@0
   loc0 <state>
+  node 0 Body @0..55: Params 6..10 Stmt 13..54 | Param path@0#0
+  node 1 Expr @13..54: Operand 13..53
+  node 2 Assign @13..53: Object 13..22 Property 22..28 Op 28..29 Right 29..53
+  node 3 Await @29..53: Operand 35..53
   await#1 @29 (266:79) pc 30: assign.object@13 assign.key@13
+    path 0.1 1.0 2.3 3

@@ -1,9 +1,20 @@
 function <anonymous> @1..2978
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..2977: Params 6..22 Stmt 468..1966 Stmt 1967..2000 Stmt 2001..2349 Stmt 2350..2974 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @2350..2974: Operand 2357..2973
+  node 2 Await @2357..2973: Operand 2363..2973
   await#1 @2357 (53:8) pc 273: -
+    path 0.4 1.0 2
 function <anonymous> @2365..2967
   arg0 argument 0
   loc0 <state>, loc1 tools@0, loc2 base@0, loc3 files@0, loc4 r@0, loc5 g@0
+  node 0 Body @0..602: Params 6..13 Stmt 19..77 Stmt 78..189 Stmt 190..284 Stmt 285..532 Stmt 533..600 | Param tools@0#0 Const base@0#1 Const files@0#2 Const r@0#3 Const g@0#4
+  node 1 Decl(Const) @190..284: Target 196..197 Init 200..283
+  node 2 Await @200..283: Operand 206..283
+  node 3 Decl(Const) @285..532: Target 291..292 Init 295..531
+  node 4 Await @295..531: Operand 301..531
   await#1 @200 (56:11) pc 68: -
+    path 0.3 1.1 2
   await#2 @295 (57:11) pc 111: -
+    path 0.4 3.1 4

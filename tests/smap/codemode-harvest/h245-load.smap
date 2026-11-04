@@ -1,4 +1,8 @@
 function <anonymous> @1..4544
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0, loc9 stored@0, loc10 realLoad@0, loc11 fakeLoad@0
+  node 0 Body @0..4543: Params 6..22 Stmt 468..487 Stmt 488..521 Stmt 522..870 Stmt 871..3887 Stmt 3888..3910 Stmt 3911..4085 Stmt 4086..4540 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2 Const stored@0#4 Const realLoad@0#5 Const fakeLoad@0#6
+  node 1 Return @4086..4540: Operand 4093..4539
+  node 2 Await @4093..4539: Operand 4099..4539
   await#1 @4093 (144:8) pc 944: -
+    path 0.7 1.0 2

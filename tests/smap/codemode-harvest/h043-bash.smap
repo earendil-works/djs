@@ -1,12 +1,25 @@
 function <anonymous> @1..3294
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..3293: Params 6..22 Stmt 468..2186 Stmt 2187..2220 Stmt 2221..2569 Stmt 2570..3290 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @2570..3290: Operand 2577..3289
+  node 2 Await @2577..3289: Operand 2583..3289
   await#1 @2577 (39:8) pc 203: -
+    path 0.4 1.0 2
 function <anonymous> @2585..3283
   arg0 argument 0
   loc0 <state>, loc1 tools@0, loc2 cmds@0, loc3 res@0
+  node 0 Body @0..698: Params 6..13 Stmt 19..530 Stmt 531..673 Stmt 674..696 | Param tools@0#0 Const cmds@0#1 Const res@0#2
+  node 1 Decl(Const) @531..673: Target 537..540 Init 543..672
+  node 2 Await @543..672: Operand 549..672
   await#1 @543 (46:13) pc 92: -
+    path 0.2 1.1 2
 function <anonymous> @3171..3255
   arg0 argument 0
   loc0 <state>, loc3 k@0, loc4 c@0
+  node 0 Body @0..84: Params 6..14 Operand 18..84 | Param k@0#0 Param c@0#0
+  node 1 Binary @18..84: Left 18..29 Op 30..31 Right 32..84
+  node 2 Await @33..76: Operand 39..76
+  node 3 Member @32..84: Object 32..77 Property 78..84
   await#1 @33 (46:89) pc 141: binary.left@18
+    path 0.1 1.2 3.0 2

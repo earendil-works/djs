@@ -1,9 +1,24 @@
 function <anonymous> @1..3402
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0, loc9 answer@0, loc10 modelsOfType@0, loc11 fakeModels@0
+  node 0 Body @0..3401: Params 6..22 Stmt 468..740 Stmt 741..774 Stmt 775..1123 Stmt 1124..1236 Stmt 1237..1418 Stmt 1419..2901 Stmt 2902..3398 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2 Const answer@0#4 Const modelsOfType@0#5 Const fakeModels@0#6
+  node 1 Return @2902..3398: Operand 2909..3397
+  node 2 Await @2909..3397: Operand 2915..3397
   await#1 @2909 (75:8) pc 250: -
+    path 0.7 1.0 2
 function <anonymous> @2917..3379
   arg0 tools@0, arg1 models@0
   loc0 <state>, loc1 r@0, loc2 all@0, loc3 t@175, loc8 m@219
+  node 0 Body @0..462: Params 6..21 Stmt 27..147 Stmt 148..163 Stmt 164..427 Stmt 428..460 | Param tools@0#0 Param models@0#0 Const r@0#1 Const all@0#2
+  node 1 Decl(Const) @27..147: Target 33..34 Init 37..146
+  node 2 Await @37..146: Operand 43..146
+  node 3 ForOf @164..427: Head 169..176 Iterable 180..209 Body 211..427 | Const t@175#0
+  node 4 Block @211..427: Stmt 213..425
+  node 5 Try @213..425: Block 217..390 CatchParam 398..399 CatchBody 401..425 | CatchParam e@397#1
+  node 6 Block @217..390: Stmt 219..264 Stmt 265..388 | Const m@219#0
+  node 7 Decl(Const) @219..264: Target 225..226 Init 229..263
+  node 8 Await @229..263: Operand 235..263
   await#1 @37 (76:11) pc 34: - (out: loc3 loc8)
+    path 0.1 1.1 2
   await#2 @229 (78:66) pc 107: for-of.iterator@164 for-of.next@164
+    path 0.3 3.2 4.0 5.0 6.0 7.1 8

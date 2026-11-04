@@ -1,9 +1,24 @@
 function <anonymous> @1..2984
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..2983: Params 6..22 Stmt 468..2032 Stmt 2033..2066 Stmt 2067..2415 Stmt 2416..2980 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @2416..2980: Operand 2423..2979
+  node 2 Await @2423..2979: Operand 2429..2979
   await#1 @2423 (49:8) pc 249: -
+    path 0.4 1.0 2
 function <anonymous> @2431..2973
   arg0 tools@0
   loc0 <state>, loc1 path@30
+  node 0 Body @0..542: Params 6..13 Stmt 19..227 Stmt 228..540 | Param tools@0#0
+  node 1 ForOf @19..227: Head 24..34 Iterable 38..139 Body 141..227 | Const path@30#0
+  node 2 Expr @141..227: Operand 141..226
+  node 3 Call @141..226: Callee 141..145 Open 145..146 Arg 146..225
+  node 4 Object @146..225: Shorthand 147..151 Key 152..159 Value 160..224
+  node 5 Await @160..224: Operand 166..224
+  node 6 Expr @228..540: Operand 228..539
+  node 7 Call @228..539: Callee 228..232 Open 232..233 Arg 233..538
+  node 8 Await @233..538: Operand 239..538
   await#1 @160 (50:142) pc 119: for-of.iterator@19 for-of.next@19 call.callee@141 call.this@141 object.literal@146
+    path 0.1 1.2 2.0 3.2 4.2 5
   await#2 @233 (51:6) pc 177: call.callee@228 call.this@228 (out: loc1)
+    path 0.2 6.0 7.2 8

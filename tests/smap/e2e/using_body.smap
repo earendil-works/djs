@@ -1,4 +1,6 @@
 function <anonymous> @0..295
   arg0 tools@0, arg1 argument 1
   loc0 <state>, loc1 console@0, loc2 log@0, loc6 a@0, loc7 b@0
+  node 0 Body @0..295: Stmt 87..102 Stmt 103..178 Stmt 179..248 Stmt 249..266 Stmt 267..294 | Const log@0#0 Using a@0#1 AwaitUsing b@0#2
   await-using#1 @294 (7:28) pc 134: using.record@109 completion.kind@109 completion.value@109
+    path 0

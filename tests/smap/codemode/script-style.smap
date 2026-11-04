@@ -1,4 +1,8 @@
 function <anonymous> @1..819
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 raw@0, loc2 byFile@0, loc13 report@0, loc29 summary@0
+  node 0 Body @0..818: Params 6..22 Stmt 110..228 Stmt 229..247 Stmt 248..437 Stmt 438..454 Stmt 455..651 Stmt 652..675 Stmt 676..766 Stmt 767..799 Stmt 800..815 | Param tools@0#0 Param console@0#0 Const raw@0#1 Const byFile@0#2 Let report@0#4 Const summary@0#7
+  node 1 Decl(Const) @110..228: Target 116..119 Init 122..227
+  node 2 Await @122..227: Operand 128..227
   await#1 @122 (2:13) pc 25: -
+    path 0.1 1.1 2

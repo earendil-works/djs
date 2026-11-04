@@ -1,13 +1,30 @@
 function <anonymous> @1..2935
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..2934: Params 6..22 Stmt 468..2021 Stmt 2022..2055 Stmt 2056..2404 Stmt 2405..2931 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @2405..2931: Operand 2412..2930
+  node 2 Await @2412..2930: Operand 2418..2930
   await#1 @2412 (129:8) pc 580: -
+    path 0.4 1.0 2
 function <anonymous> @2420..2924
   arg0 argument 0
   loc0 <state>, loc1 tools@0, loc3 organizations@0, loc4 results@0
+  node 0 Body @0..504: Params 6..13 Stmt 19..93 Stmt 94..447 Stmt 448..502 | Param tools@0#0 Const organizations@0#1 Const results@0#2
+  node 1 Decl(Const) @19..93: Target 25..42 Init 45..92
+  node 2 Await @45..92: Operand 51..92
+  node 3 Decl(Const) @94..447: Target 100..107 Init 110..446
+  node 4 Await @110..446: Operand 116..446
   await#1 @45 (130:27) pc 22: -
+    path 0.1 1.1 2
   await#2 @110 (131:17) pc 64: -
+    path 0.2 3.1 4
 function <anonymous> @2566..2864
   arg0 o@0
   loc0 <state>, loc1 r@27
+  node 0 Body @0..298: Params 6..9 Stmt 17..296 | Param o@0#0
+  node 1 Try @17..296: Block 21..221 CatchParam 229..230 CatchBody 232..296 | CatchParam e@228#1
+  node 2 Block @21..221: Stmt 27..130 Stmt 135..217 | Const r@27#0
+  node 3 Decl(Const) @27..130: Target 33..34 Init 37..129
+  node 4 Await @37..129: Operand 43..129
   await#1 @37 (133:15) pc 48: -
+    path 0.1 1.0 2.0 3.1 4

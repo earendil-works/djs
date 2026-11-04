@@ -563,6 +563,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         self.f.vars[v as usize].param = self.f.param_count;
         self.f.params.push_out(v);
         self.f.param_count += 1;
+        self.syn_decl(v, super::smap_syntax::DeclKind::Param);
         Ok(v)
     }
 
@@ -1009,6 +1010,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         }
         let v = self.f.add_var(name, VarKind::Var, vs);
         self.f.vars[v as usize].global = self.f.kind == FuncKind::Script;
+        self.syn_decl(v, super::smap_syntax::DeclKind::Var);
         Ok(v)
     }
 
@@ -1044,6 +1046,12 @@ impl<'a, 'h> Parser<'a, 'h> {
         }
         let v = self.f.add_var(name, kind, scope);
         self.f.vars[v as usize].global = self.f.kind == FuncKind::Script && scope == BODY_SCOPE;
+        let dk = if kind == VarKind::Const {
+            super::smap_syntax::DeclKind::Const
+        } else {
+            super::smap_syntax::DeclKind::Let
+        };
+        self.syn_decl(v, dk);
         Ok(v)
     }
 
@@ -1099,6 +1107,9 @@ impl<'a, 'h> Parser<'a, 'h> {
         if var.kind == VarKind::Var {
             // `var f; function f() {}`: the function now initializes it.
             var.kind = VarKind::Func;
+        }
+        if var.kind == VarKind::Func {
+            self.syn_decl(v, super::smap_syntax::DeclKind::Function);
         }
         self.f.scopes[scope as usize].funcs.push_out((v, child));
         Ok(())
@@ -1243,6 +1254,7 @@ impl<'a, 'h> Parser<'a, 'h> {
     /// the binding. In top-level code `arguments` is an ordinary (global) name. Class
     /// field initializers and static blocks have none (an early error).
     pub fn note_arguments(&mut self, pos: u32) -> PResult<()> {
+        self.syn_special(super::smap_syntax::Special::Arguments, pos);
         if self.own_this_kind().is_some_and(FuncKind::is_class_init) {
             return syntax(
                 pos,

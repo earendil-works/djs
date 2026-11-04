@@ -52,6 +52,7 @@ use super::parser::{BlockKind, Checkpoint, Parser, syntax};
 use super::pattern::Binding;
 use super::scan::Follow;
 use super::smap::SiteKind;
+use super::smap_syntax::{DeclKind, NodeKind, Role};
 use crate::bytecode::Label;
 use crate::bytecode::intrinsics::intrinsic_id;
 use crate::heap::{Atom, atoms};
@@ -99,6 +100,7 @@ impl<'a> Parser<'a, '_> {
         // while the target is stored, where a generator's return can leave the loop too.
         let l_close = self.new_label();
         let mut iter_env = None;
+        let head = self.tok.start;
         let target = match self.tok.kind {
             TokenKind::Ident if self.at_using(true) || self.at_await_using() => {
                 let is_await = self.tok.kw == Kw::Await;
@@ -107,6 +109,7 @@ impl<'a> Parser<'a, '_> {
                 }
                 self.next()?;
                 self.push_scope(ScopeKind::For)?;
+                self.syn_scope();
                 scoped = true;
                 if matches!(self.tok.kind, TokenKind::LBrace | TokenKind::LBracket) {
                     return syntax(
@@ -116,7 +119,15 @@ impl<'a> Parser<'a, '_> {
                 }
                 using_head = Some(is_await);
                 let (name, pos) = self.for_binding()?;
-                self.declare_lexical(name, VarKind::Const, pos)?;
+                let v = self.declare_lexical(name, VarKind::Const, pos)?;
+                self.syn_decl(
+                    v,
+                    if is_await {
+                        DeclKind::AwaitUsing
+                    } else {
+                        DeclKind::Using
+                    },
+                );
                 Target::Decl {
                     name,
                     pos,
@@ -140,6 +151,7 @@ impl<'a> Parser<'a, '_> {
             TokenKind::Const => {
                 self.next()?;
                 self.push_scope(ScopeKind::For)?;
+                self.syn_scope();
                 scoped = true;
                 if let Some(t) = self.for_pattern(Binding::Lexical(VarKind::Const))? {
                     t
@@ -156,6 +168,7 @@ impl<'a> Parser<'a, '_> {
             TokenKind::Ident if self.tok.is_contextual(Kw::Let) => {
                 self.next()?;
                 self.push_scope(ScopeKind::For)?;
+                self.syn_scope();
                 scoped = true;
                 if let Some(t) = self.for_pattern(Binding::Lexical(VarKind::Let))? {
                     t
@@ -227,6 +240,12 @@ impl<'a> Parser<'a, '_> {
             return self.for_initializer_error();
         }
         let is_of = self.tok.is_contextual(Kw::Of);
+        self.syn_kind(match (is_await, is_of) {
+            (true, _) => NodeKind::ForAwait,
+            (false, true) => NodeKind::ForOf,
+            (false, false) => NodeKind::ForIn,
+        });
+        self.syn_part(Role::Head, head, self.prev_end);
         if using_head.is_some() && self.is(TokenKind::In) {
             return syntax(
                 self.tok.start,
@@ -249,11 +268,13 @@ impl<'a> Parser<'a, '_> {
         self.next()?;
         // The right side: for-of takes an AssignmentExpression, for-in an Expression.
         // Lexical bindings are in their TDZ here (`for (let x of x)`).
+        let iterable = self.tok.start;
         if is_of {
             self.parse_assign(false)?;
         } else {
             self.parse_expr(false)?;
         }
+        self.syn_part(Role::Iterable, iterable, self.prev_end);
         self.expect(TokenKind::RParen, ")")?;
         let head_end = self.prev_end;
         if let Target::Decl {
@@ -393,7 +414,9 @@ impl<'a> Parser<'a, '_> {
         self.ts_semi = true;
         // On an error the parser state is abandoned (a nested function's may not be
         // restored), so only pop on success.
+        let body = self.tok.start;
         self.parse_statement()?;
+        self.syn_part(Role::Body, body, self.prev_end);
         if let Some(r) = using {
             self.close_using(r);
         }

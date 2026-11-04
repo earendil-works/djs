@@ -1,13 +1,28 @@
 function <anonymous> @1..2663
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..2662: Params 6..22 Stmt 468..1849 Stmt 1850..1883 Stmt 1884..2232 Stmt 2233..2659 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @2233..2659: Operand 2240..2658
+  node 2 Await @2240..2658: Operand 2246..2658
   await#1 @2240 (121:8) pc 542: -
+    path 0.4 1.0 2
 function <anonymous> @2248..2652
   arg0 argument 0
   loc0 <state>, loc1 tools@0, loc2 fadu@0, loc3 t0@0, loc4 out@0
+  node 0 Body @0..404: Params 6..13 Stmt 19..80 Stmt 81..103 Stmt 104..365 Stmt 366..402 | Param tools@0#0 Const fadu@0#1 Const t0@0#2 Const out@0#3
+  node 1 Decl(Const) @19..80: Target 25..29 Init 32..79
+  node 2 Await @32..79: Operand 38..79
+  node 3 Decl(Const) @104..365: Target 110..113 Init 116..364
+  node 4 Await @116..364: Operand 122..364
   await#1 @32 (122:14) pc 22: -
+    path 0.1 1.1 2
   await#2 @116 (124:13) pc 78: -
+    path 0.3 3.1 4
 function <anonymous> @2405..2610
   arg0 o@0
   loc0 <state>, loc1 p@0
+  node 0 Body @0..205: Params 6..7 Stmt 15..118 Stmt 121..203 | Param o@0#0 Const p@0#1
+  node 1 Decl(Const) @15..118: Target 21..22 Init 25..117
+  node 2 Await @25..117: Operand 31..117
   await#1 @25 (125:13) pc 48: -
+    path 0.1 1.1 2

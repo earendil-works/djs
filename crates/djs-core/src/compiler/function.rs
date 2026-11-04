@@ -106,8 +106,10 @@ impl Parser<'_, '_> {
         self.f.name = name;
         self.f.src_start = start;
         self.ts_fn_type_params()?;
+        let params = self.tok.start;
         self.expect(TokenKind::LParen, "(")?;
         self.parse_params_dp(dp.as_deref_mut())?;
+        self.syn_part(super::smap_syntax::Role::Params, params, self.prev_end);
         // qjs reports a wrong accessor arity at the `)`.
         let paren = self.prev_end - 1;
         let ok = match kind {
@@ -157,10 +159,13 @@ impl Parser<'_, '_> {
             self.f.scopes[BODY_SCOPE as usize].parent = Some(s);
             let v = self.f.add_var(name, VarKind::FuncName, s);
             self.f.func_name_var = Some(v);
+            self.syn_decl(v, super::smap_syntax::DeclKind::FuncName);
         }
         self.ts_fn_type_params()?;
+        let params = self.tok.start;
         self.expect(TokenKind::LParen, "(")?;
         self.parse_params()?;
+        self.syn_part(super::smap_syntax::Role::Params, params, self.prev_end);
         self.ts_return_annotation()?;
         self.parse_function_body()?;
         self.f.src_end = self.prev_end;
@@ -529,6 +534,7 @@ impl Parser<'_, '_> {
         self.f.name = hint;
         self.f.src_start = start;
         self.ts_fn_type_params()?;
+        let params = self.tok.start;
         if self.is(TokenKind::Ident) {
             self.f.in_params = true;
             if self.tok.kw == Kw::Await && self.await_reserved() {
@@ -537,12 +543,14 @@ impl Parser<'_, '_> {
             self.f.in_params = false;
             let name = self.function_binding_name("invalid argument name in strict code")?;
             self.next()?;
+            self.syn_part(super::smap_syntax::Role::Params, params, self.prev_end);
             let v = self.declare_param(name, self.tok.start)?;
             self.f.vars[v as usize].init_end = self.prev_end;
             self.f.length = 1;
         } else {
             self.expect(TokenKind::LParen, "(")?;
             self.parse_params()?;
+            self.syn_part(super::smap_syntax::Role::Params, params, self.prev_end);
             self.ts_arrow_return_annotation()?;
         }
         if !self.is(TokenKind::Arrow) || self.tok.newline_before() {
@@ -554,7 +562,9 @@ impl Parser<'_, '_> {
         } else {
             self.code().enter_scope(BODY_SCOPE as u16);
             self.after_q = after_q;
+            let body = self.tok.start;
             self.parse_assign(no_in)?;
+            self.syn_part(super::smap_syntax::Role::Operand, body, self.prev_end);
             self.emit_return_value();
             self.code().leave_scope(BODY_SCOPE as u16);
         }

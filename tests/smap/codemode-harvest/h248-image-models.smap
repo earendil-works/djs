@@ -1,12 +1,24 @@
 function <anonymous> @1..4014
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0, loc9 answer@0, loc10 modelsOfType@0, loc11 fakeModels@0, loc12 fakeImage@0
+  node 0 Body @0..4013: Params 6..22 Stmt 468..487 Stmt 488..521 Stmt 522..870 Stmt 871..983 Stmt 984..1165 Stmt 1166..2648 Stmt 2649..2694 Stmt 2695..4010 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2 Const answer@0#4 Const modelsOfType@0#5 Const fakeModels@0#6 Const fakeImage@0#7
+  node 1 Return @2695..4010: Operand 2702..4009
+  node 2 Await @2702..4009: Operand 2708..4009
   await#1 @2702 (65:8) pc 207: -
+    path 0.8 1.0 2
 function <anonymous> @2710..3980
   arg0 tools@0, arg1 argument 1, arg2 image@0
   loc0 <state>, loc1 models@0, loc2 STYLE@0, loc3 subjects@0, loc4 model@0, loc5 out@0
+  node 0 Body @0..1270: Params 6..28 Stmt 34..517 Stmt 518..855 Stmt 856..914 Stmt 915..1082 Stmt 1083..1268 | Param tools@0#0 Param models@0#0 Param image@0#0 Const STYLE@0#1 Const subjects@0#2 Const model@0#3 Const out@0#4
+  node 1 Decl(Const) @915..1082: Target 921..924 Init 927..1081
+  node 2 Await @927..1081: Operand 933..1081
   await#1 @927 (72:13) pc 107: -
+    path 0.4 1.1 2
 function <anonymous> @3684..3789
   arg0 argument 0
   loc0 <state>, loc3 k@0, loc4 s@0
+  node 0 Body @0..105: Params 6..14 Operand 18..105 | Param k@0#0 Param s@0#0
+  node 1 Array @18..105: Element 19..20 Element 22..104
+  node 2 Await @22..104: Operand 28..104
   await#1 @22 (72:82) pc 151: array.element@19
+    path 0.1 1.1 2

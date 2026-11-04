@@ -30,8 +30,15 @@
 //! parentheses. `Site::gap` reports it, and the exporter must refuse such a site rather
 //! than drop the construct.
 
+#![cfg_attr(not(feature = "dump"), allow(dead_code))]
+
 use alloc::string::String;
 use alloc::vec::Vec;
+
+use super::func::VarId;
+
+#[cfg(feature = "dump")]
+pub(in crate::compiler) use recording::{SynRec, build_syntax};
 
 /// The syntax recorded for one function (`FunctionMap::syntax`).
 #[derive(Clone, Debug, Default)]
@@ -45,6 +52,102 @@ pub struct Syntax {
     /// renames these to a binding of the saved value), and it has no `new.target` or
     /// home object. Source order.
     pub special: Vec<(Special, u32)>,
+}
+
+#[cfg(feature = "dump")]
+impl Syntax {
+    /// The nodes and special references as text, for the pin test and for reading:
+    /// one line per node (`index kind @start..end`, its parts as `Role start..end`,
+    /// its declarations as `kind name@scope#part`).
+    pub fn text(&self) -> String {
+        use core::fmt::Write;
+        let mut out = String::new();
+        for (i, n) in self.nodes.iter().enumerate() {
+            let _ = write!(out, "  node {i} {} @{}..{}:", n.kind.name(), n.start, n.end);
+            for p in &n.parts {
+                let _ = write!(out, " {:?} {}..{}", p.role, p.start, p.end);
+            }
+            if !n.decls.is_empty() {
+                out.push_str(" |");
+                for d in &n.decls {
+                    let _ = write!(out, " {:?} {}@{}", d.kind, d.name, d.scope);
+                    match d.part {
+                        Some(p) => {
+                            let _ = write!(out, "#{p}");
+                        }
+                        None => out.push_str("#-"),
+                    }
+                }
+            }
+            out.push('\n');
+        }
+        if !self.special.is_empty() {
+            out.push_str("  special");
+            for (s, at) in &self.special {
+                let _ = write!(out, " {s:?}@{at}");
+            }
+            out.push('\n');
+        }
+        out
+    }
+}
+
+impl NodeKind {
+    /// A short name: the variant's, with `?` for optional and `[]` for computed.
+    pub fn name(self) -> String {
+        let mut s = String::from(match self {
+            NodeKind::Body => "Body",
+            NodeKind::Block => "Block",
+            NodeKind::Expr => "Expr",
+            NodeKind::Decl(_) => "Decl",
+            NodeKind::If => "If",
+            NodeKind::Label => "Label",
+            NodeKind::While => "While",
+            NodeKind::DoWhile => "DoWhile",
+            NodeKind::For => "For",
+            NodeKind::ForIn => "ForIn",
+            NodeKind::ForOf => "ForOf",
+            NodeKind::ForAwait => "ForAwait",
+            NodeKind::Try => "Try",
+            NodeKind::Switch => "Switch",
+            NodeKind::Return => "Return",
+            NodeKind::Throw => "Throw",
+            NodeKind::Await => "Await",
+            NodeKind::Yield => "Yield",
+            NodeKind::YieldStar => "YieldStar",
+            NodeKind::Call { .. } => "Call",
+            NodeKind::New => "New",
+            NodeKind::ImportCall => "ImportCall",
+            NodeKind::Member { .. } => "Member",
+            NodeKind::Binary => "Binary",
+            NodeKind::Logical => "Logical",
+            NodeKind::Assign => "Assign",
+            NodeKind::Unary => "Unary",
+            NodeKind::Update => "Update",
+            NodeKind::Conditional => "Conditional",
+            NodeKind::Sequence => "Sequence",
+            NodeKind::Template => "Template",
+            NodeKind::TaggedTemplate => "TaggedTemplate",
+            NodeKind::Array => "Array",
+            NodeKind::Object => "Object",
+        });
+        match self {
+            NodeKind::Decl(k) => {
+                let _ = core::fmt::Write::write_fmt(&mut s, format_args!("({k:?})"));
+            }
+            NodeKind::Call { optional: true } => s.push('?'),
+            NodeKind::Member { computed, optional } => {
+                if optional {
+                    s.push('?');
+                }
+                if computed {
+                    s.push_str("[]");
+                }
+            }
+            _ => {}
+        }
+        s
+    }
 }
 
 /// What a [`Syntax::special`] reference is.
@@ -315,4 +418,474 @@ pub enum NodeKind {
     /// `{ (Key Value | ComputedKey Value | Shorthand | Method | Spread)* }`;
     /// `object.literal@` names it by its start (the `{`).
     Object,
+}
+
+// ---- Recording ------------------------------------------------------------------------
+
+#[cfg(feature = "dump")]
+mod recording {
+
+    use super::*;
+    use crate::compiler::func::{BODY_SCOPE, FuncState, ScopeId};
+    use crate::heap::Heap;
+
+    /// A node being parsed.
+    struct Open {
+        kind: NodeKind,
+        start: u32,
+        /// Where its parts start in `SynRec::parts`.
+        mark: u32,
+        /// Its index in `SynRec::nodes`, once a site is known to be in it.
+        index: Option<u32>,
+        /// The scopes it opens.
+        scopes: [Option<ScopeId>; 2],
+    }
+
+    /// A node that encloses a site, in source offsets (not yet relative to the function).
+    struct Kept {
+        node: Node,
+        scopes: [Option<ScopeId>; 2],
+    }
+
+    /// The parser's record of the syntax around one function's sites (D2850). Only
+    /// async functions and generators record (only they have sites), so a function's
+    /// recording is on or off for its whole parse and opens and closes always pair.
+    #[derive(Default)]
+    pub(in crate::compiler) struct SynRec {
+        /// The nodes being parsed, outermost first. The function body is implicit: below
+        /// the first.
+        open: Vec<Open>,
+        /// The parts of the open nodes and of the body, each node's from its `mark` on
+        /// (nodes nest, so a node's parts are contiguous once its children closed).
+        parts: Vec<Part>,
+        /// Index 0 is the body once any node is kept.
+        nodes: Vec<Option<Kept>>,
+        /// Per site (`Recorder::sites`), its path of node indices.
+        pub paths: Vec<Vec<u32>>,
+        /// Declarations: the binding, an offset inside the code that declares it, its kind.
+        decls: Vec<(VarId, u32, DeclKind)>,
+        special: Vec<(Special, u32)>,
+        /// The member node that closed last, if the last node to close was one: an
+        /// assignment's or update's target (`Parser::syn_target`).
+        last: Option<Last>,
+    }
+
+    struct Last {
+        start: u32,
+        end: u32,
+        index: Option<u32>,
+        parts: [Part; 2],
+    }
+
+    impl SynRec {
+        /// A site: every open node (and the body) encloses it.
+        pub(in crate::compiler) fn site(&mut self) {
+            if self.nodes.is_empty() {
+                self.nodes.push(None);
+            }
+            let mut path = Vec::with_capacity(self.open.len() + 1);
+            path.push(0);
+            for o in &mut self.open {
+                let i = *o.index.get_or_insert_with(|| {
+                    self.nodes.push(None);
+                    (self.nodes.len() - 1) as u32
+                });
+                path.push(i);
+            }
+            self.paths.push(path);
+        }
+    }
+
+    /// `true` if `b` can be between a part's start and the node inside it (or after the
+    /// node): blanks, comments, parentheses and what `role` adds around its node.
+    fn filler(src: &[u8], from: usize, to: usize, role: Role) -> Option<usize> {
+        let mut i = from;
+        while i < to {
+            let c = src[i];
+            match c {
+                b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c | b'(' | b')' => i += 1,
+                b'[' | b']' if matches!(role, Role::Property | Role::ComputedKey) => i += 1,
+                b'.' if role == Role::Spread => i += 1,
+                b'/' if src.get(i + 1) == Some(&b'/') => {
+                    while i < to && src[i] != b'\n' {
+                        i += 1;
+                    }
+                }
+                b'/' if src.get(i + 1) == Some(&b'*') => {
+                    i += 2;
+                    while i + 1 < to && !(src[i] == b'*' && src[i + 1] == b'/') {
+                        i += 1;
+                    }
+                    i += 2;
+                }
+                // Non-ASCII blanks (NBSP, line separators, BOM, …) are rare enough to count
+                // as text: the exporter refuses rather than misreads.
+                _ => return Some(i),
+            }
+        }
+        None
+    }
+
+    /// A site's path and gap (`Site::path`, `Site::gap`).
+    pub(in crate::compiler) type SitePath = (Vec<Step>, Option<u32>);
+
+    /// The syntax of function `f` and the paths of its emitted sites (`order`: the
+    /// recorder's site indices in the map's order).
+    pub(in crate::compiler) fn build_syntax(
+        heap: &Heap,
+        f: &FuncState,
+        rec: &SynRec,
+        src: &[u8],
+        order: &[usize],
+    ) -> (Syntax, Vec<SitePath>) {
+        let base = f.src_start;
+        let rel = |p: u32| p.saturating_sub(base);
+        let mut nodes: Vec<Node> = Vec::with_capacity(rec.nodes.len());
+        let mut scopes: Vec<[Option<ScopeId>; 2]> = Vec::with_capacity(rec.nodes.len());
+        // Recorded index -> index in `nodes` (a member that became an assignment's
+        // target left no node).
+        let mut map: Vec<Option<u32>> = alloc::vec![None; rec.nodes.len()];
+        for (i, k) in rec.nodes.iter().enumerate() {
+            let (mut node, sc) = match k {
+                Some(k) => (k.node.clone(), k.scopes),
+                None if i == 0 => {
+                    // The body: the parts left over.
+                    let mut parts = rec.parts.clone();
+                    crate::sort::sort_by(&mut parts, |a, b| a.start < b.start);
+                    let node = Node {
+                        kind: NodeKind::Body,
+                        start: base,
+                        end: f.src_end,
+                        parts,
+                        decls: Vec::new(),
+                    };
+                    (node, [Some(BODY_SCOPE), Some(f.var_scope)])
+                }
+                // (Unclosed: a parse error ends the compile before maps are built.)
+                None => continue,
+            };
+            node.start = rel(node.start);
+            node.end = rel(node.end);
+            for p in &mut node.parts {
+                p.start = rel(p.start);
+                p.end = rel(p.end);
+            }
+            map[i] = Some(nodes.len() as u32);
+            nodes.push(node);
+            scopes.push(sc);
+        }
+        // Declarations: to the innermost node of their scope with a part around them.
+        let mut seen: Vec<VarId> = Vec::new();
+        for &(v, pos, kind) in &rec.decls {
+            if seen.contains(&v) {
+                continue;
+            }
+            seen.push(v);
+            let var = &f.vars[v as usize];
+            let pos = rel(pos);
+            let mut best: Option<(usize, Option<u16>)> = None;
+            for (n, node) in nodes.iter().enumerate() {
+                let own =
+                    scopes[n].contains(&Some(var.scope)) || (n == 0 && kind == DeclKind::FuncName);
+                if !own {
+                    continue;
+                }
+                let part = node
+                    .parts
+                    .iter()
+                    .position(|p| p.start <= pos && pos < p.end.max(p.start + 1))
+                    .map(|p| p as u16);
+                let better = match best {
+                    None => true,
+                    Some((b, bp)) => {
+                        (part.is_some() && bp.is_none())
+                            || (part.is_some() == bp.is_some()
+                                && node.end - node.start < nodes[b].end - nodes[b].start)
+                    }
+                };
+                if better {
+                    best = Some((n, part));
+                }
+            }
+            if let Some((n, part)) = best {
+                nodes[n].decls.push(Decl {
+                    name: heap.atom_name(var.name),
+                    kind,
+                    scope: f.scopes[var.scope as usize].pos.saturating_sub(base),
+                    part,
+                });
+            }
+        }
+        // Paths, with the part that holds each next step.
+        let paths = order
+            .iter()
+            .map(|&k| {
+                let Some(path) = rec.paths.get(k) else {
+                    return (Vec::new(), None);
+                };
+                let path: Vec<u32> = path
+                    .iter()
+                    .filter_map(|&n| map.get(n as usize).copied().flatten())
+                    .collect();
+                let mut steps = Vec::with_capacity(path.len());
+                let mut gap = None;
+                for (j, &n) in path.iter().enumerate() {
+                    let Some(&next) = path.get(j + 1) else {
+                        steps.push(Step {
+                            node: n,
+                            part: None,
+                        });
+                        break;
+                    };
+                    let (node, inner) = (&nodes[n as usize], &nodes[next as usize]);
+                    let part = node
+                        .parts
+                        .iter()
+                        .position(|p| p.start <= inner.start && inner.end <= p.end);
+                    if gap.is_none() {
+                        gap = match part {
+                            None => Some(inner.start),
+                            Some(p) => {
+                                let p = node.parts[p];
+                                let at = |o: u32| (base + o) as usize;
+                                filler(src, at(p.start), at(inner.start), p.role)
+                                    .or_else(|| filler(src, at(inner.end), at(p.end), p.role))
+                                    .map(|i| rel(i as u32))
+                            }
+                        };
+                    }
+                    steps.push(Step {
+                        node: n,
+                        part: part.map(|p| p as u16),
+                    });
+                }
+                (steps, gap)
+            })
+            .collect();
+        let mut special: Vec<(Special, u32)> =
+            rec.special.iter().map(|&(s, p)| (s, rel(p))).collect();
+        crate::sort::sort_by(&mut special, |a, b| a.1 < b.1);
+        (Syntax { nodes, special }, paths)
+    }
+
+    // ---- The parser's hooks ------------------------------------------------------------
+
+    impl crate::compiler::parser::Parser<'_, '_> {
+        /// The recording of the current function, if it records syntax.
+        #[inline]
+        fn syn(&mut self) -> Option<&mut SynRec> {
+            if !(self.f.is_async || self.f.is_generator) {
+                return None;
+            }
+            self.f.smap.as_mut().map(|r| &mut r.syn)
+        }
+
+        /// The current function records syntax.
+        #[inline]
+        pub(in crate::compiler) fn syn_on(&self) -> bool {
+            (self.f.is_async || self.f.is_generator) && self.f.smap.is_some()
+        }
+
+        /// The number of sites so far: what [`Parser::syn_open_late`] takes for a left
+        /// operand that starts here.
+        #[inline]
+        pub(in crate::compiler) fn syn_mark(&mut self) -> u32 {
+            self.syn().map_or(0, |r| r.paths.len() as u32)
+        }
+
+        /// A node starts at `start`.
+        #[inline]
+        pub(in crate::compiler) fn syn_open(&mut self, kind: NodeKind, start: u32) {
+            if let Some(r) = self.syn() {
+                let mark = r.parts.len() as u32;
+                r.open.push(Open {
+                    kind,
+                    start,
+                    mark,
+                    index: None,
+                    scopes: [None, None],
+                });
+            }
+        }
+
+        /// A node whose first part, `role` from `start` to `left_end`, was parsed already
+        /// (a binary operator's left operand, a call's callee): the sites since `mark`
+        /// ([`Parser::syn_mark`] where the operand started) are in it. For `Assign` and
+        /// `Update` the part is their target ([`Parser::syn_target`]).
+        pub(in crate::compiler) fn syn_open_late(
+            &mut self,
+            kind: NodeKind,
+            start: u32,
+            mark: u32,
+            role: Role,
+            left_end: u32,
+        ) {
+            let Some(r) = self.syn() else { return };
+            let depth = r.open.len() + 1;
+            let mut index = None;
+            if (mark as usize) < r.paths.len() {
+                r.nodes.push(None);
+                let i = (r.nodes.len() - 1) as u32;
+                for p in &mut r.paths[mark as usize..] {
+                    p.insert(depth.min(p.len()), i);
+                }
+                index = Some(i);
+            }
+            let pmark = r.parts.len() as u32;
+            r.open.push(Open {
+                kind,
+                start,
+                mark: pmark,
+                index,
+                scopes: [None, None],
+            });
+            if matches!(kind, NodeKind::Assign | NodeKind::Update) {
+                self.syn_target(start, left_end, role);
+            } else {
+                self.syn_part(role, start, left_end);
+            }
+        }
+
+        /// The target of an assignment or update, `start..end`: a member becomes the
+        /// parts `Object Property` (its node leaves the paths: the target's parts take
+        /// its place), anything else the part `role`.
+        pub(in crate::compiler) fn syn_target(&mut self, start: u32, end: u32, role: Role) {
+            let Some(r) = self.syn() else { return };
+            // The member is the last node that closed, inside the target (a target is a
+            // name, a member or a pattern; parentheses are no nodes).
+            match r.last.take() {
+                Some(m) if m.start >= start && m.end <= end => {
+                    if let Some(i) = m.index {
+                        for p in &mut r.paths {
+                            p.retain(|&n| n != i);
+                        }
+                        r.nodes[i as usize] = None;
+                    }
+                    r.parts.extend(m.parts);
+                }
+                _ => r.parts.push(Part { role, start, end }),
+            }
+        }
+
+        /// The innermost open node is a `kind` after all (`for (…` turns out a for-of).
+        #[inline]
+        pub(in crate::compiler) fn syn_kind(&mut self, kind: NodeKind) {
+            if let Some(o) = self.syn().and_then(|r| r.open.last_mut()) {
+                o.kind = kind;
+            }
+        }
+
+        /// The innermost open node opens the current scope.
+        #[inline]
+        pub(in crate::compiler) fn syn_scope(&mut self) {
+            let s = self.scope;
+            if let Some(o) = self.syn().and_then(|r| r.open.last_mut()) {
+                if o.scopes[0].is_none() {
+                    o.scopes[0] = Some(s);
+                } else {
+                    o.scopes[1] = Some(s);
+                }
+            }
+        }
+
+        /// A part of the innermost open node (of the body when none is open).
+        #[inline]
+        pub(in crate::compiler) fn syn_part(&mut self, role: Role, start: u32, end: u32) {
+            if let Some(r) = self.syn() {
+                r.parts.push(Part { role, start, end });
+            }
+        }
+
+        /// The innermost open node ends where the last token ended.
+        #[inline]
+        pub(in crate::compiler) fn syn_close(&mut self) {
+            let end = self.prev_end;
+            let Some(r) = self.syn() else { return };
+            let Some(o) = r.open.pop() else {
+                debug_assert!(false, "syntax node closed twice");
+                return;
+            };
+            let mark = o.mark as usize;
+            r.last = match o.kind {
+                NodeKind::Member { .. } if r.parts.len() == mark + 2 => Some(Last {
+                    start: o.start,
+                    end,
+                    index: o.index,
+                    parts: [r.parts[mark], r.parts[mark + 1]],
+                }),
+                _ => None,
+            };
+            if let Some(i) = o.index {
+                let mut parts = r.parts[mark..].to_vec();
+                crate::sort::sort_by(&mut parts, |a, b| a.start < b.start);
+                r.nodes[i as usize] = Some(Kept {
+                    node: Node {
+                        kind: o.kind,
+                        start: o.start,
+                        end,
+                        parts,
+                        decls: Vec::new(),
+                    },
+                    scopes: o.scopes,
+                });
+            }
+            r.parts.truncate(mark);
+        }
+
+        /// Binding `v` is declared by the code that just ended (its last token is the
+        /// declaring code's). Again for the same binding: it is a `kind` after all
+        /// (`using` declares a `const`, `var f; function f() {}`).
+        #[inline]
+        pub(in crate::compiler) fn syn_decl(&mut self, v: VarId, kind: DeclKind) {
+            let pos = self.prev_end.saturating_sub(1);
+            if let Some(r) = self.syn() {
+                match r.decls.iter_mut().find(|d| d.0 == v) {
+                    Some(d) => d.2 = kind,
+                    None => r.decls.push((v, pos, kind)),
+                }
+            }
+        }
+
+        /// A reference to `arguments`, `new.target` or `super` at `pos`, recorded in the
+        /// function that owns it (the innermost non-arrow one).
+        pub(in crate::compiler) fn syn_special(&mut self, s: Special, pos: u32) {
+            let rec = match self.own_this_function() {
+                Ok(None) | Err(()) => self.f.smap.as_mut(),
+                Ok(Some(i)) => self.stack[i].f.smap.as_mut(),
+            };
+            if let Some(r) = rec {
+                r.syn.special.push((s, pos));
+            }
+        }
+    }
+}
+
+#[cfg(not(feature = "dump"))]
+impl super::parser::Parser<'_, '_> {
+    #[inline(always)]
+    pub(super) fn syn_mark(&mut self) -> u32 {
+        0
+    }
+    #[inline(always)]
+    pub(super) fn syn_on(&self) -> bool {
+        false
+    }
+    #[inline(always)]
+    pub(super) fn syn_open(&mut self, _kind: NodeKind, _start: u32) {}
+    #[inline(always)]
+    pub(super) fn syn_open_late(&mut self, _k: NodeKind, _s: u32, _m: u32, _r: Role, _e: u32) {}
+    #[inline(always)]
+    pub(super) fn syn_kind(&mut self, _kind: NodeKind) {}
+    #[inline(always)]
+    pub(super) fn syn_scope(&mut self) {}
+    #[inline(always)]
+    pub(super) fn syn_part(&mut self, _role: Role, _start: u32, _end: u32) {}
+    #[inline(always)]
+    pub(super) fn syn_close(&mut self) {}
+    #[inline(always)]
+    pub(super) fn syn_target(&mut self, _start: u32, _end: u32, _role: Role) {}
+    #[inline(always)]
+    pub(super) fn syn_decl(&mut self, _v: VarId, _kind: DeclKind) {}
+    #[inline(always)]
+    pub(super) fn syn_special(&mut self, _s: Special, _pos: u32) {}
 }

@@ -31,7 +31,6 @@ mod peephole;
 mod resolve;
 mod scan;
 mod smap;
-#[cfg(feature = "dump")]
 mod smap_syntax;
 mod stmt;
 mod temps;

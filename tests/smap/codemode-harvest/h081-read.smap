@@ -1,8 +1,19 @@
 function <anonymous> @1..4304
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..4303: Params 6..22 Stmt 468..3464 Stmt 3465..3498 Stmt 3499..3847 Stmt 3848..4300 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @3848..4300: Operand 3855..4299
+  node 2 Await @3855..4299: Operand 3861..4299
   await#1 @3855 (79:8) pc 383: -
+    path 0.4 1.0 2
 function <anonymous> @3863..4293
   arg0 tools@0
   loc0 <state>, loc1 path@29
+  node 0 Body @0..430: Params 6..13 Stmt 19..428 | Param tools@0#0
+  node 1 ForOf @19..428: Head 23..33 Iterable 37..328 Body 330..428 | Const path@29#0
+  node 2 Block @330..428: Stmt 331..342 Stmt 343..427
+  node 3 Expr @343..427: Operand 343..426
+  node 4 Call @343..426: Callee 343..347 Open 347..348 Arg 348..425
+  node 5 Await @348..425: Operand 354..425
   await#1 @348 (80:330) pc 132: for-of.iterator@19 for-of.next@19 call.callee@343 call.this@343
+    path 0.1 1.2 2.1 3.0 4.2 5

@@ -1,9 +1,22 @@
 function <anonymous> @1..12593
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0, loc9 answer@0, loc10 modelsOfType@0, loc11 fakeModels@0, loc12 stored@0, loc13 realLoad@0, loc14 fakeLoad@0
+  node 0 Body @0..12592: Params 6..22 Stmt 468..7381 Stmt 7382..7415 Stmt 7416..7764 Stmt 7765..7877 Stmt 7878..8059 Stmt 8060..9542 Stmt 9543..10868 Stmt 10869..10891 Stmt 10892..11066 Stmt 11067..12589 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2 Const answer@0#4 Const modelsOfType@0#5 Const fakeModels@0#6 Const stored@0#7 Const realLoad@0#8 Const fakeLoad@0#9
+  node 1 Return @11067..12589: Operand 11074..12588
+  node 2 Await @11074..12588: Operand 11080..12588
   await#1 @11074 (197:8) pc 829: -
+    path 0.10 1.0 2
 function <anonymous> @11082..12560
   arg0 tools@0, arg1 argument 1, arg2 load@0
   loc0 <state>, loc1 models@0, loc2 questions@0, loc3 model@0, loc4 issues@0, loc5 off@154, loc6 qir@189, loc12 res@0, loc13 rows@0, loc14 errs@0, loc15 counts@0, loc16 pr@0, loc17 top@0, loc18 upset@0, loc19 uMax@0, loc20 imMax@0
+  node 0 Body @0..1478: Params 6..27 Stmt 33..69 Stmt 70..125 Stmt 126..144 Stmt 145..357 Stmt 358..459 Stmt 460..476 Stmt 477..493 Stmt 494..982 Stmt 983..1003 Stmt 1004..1022 Stmt 1023..1075 Stmt 1076..1125 Stmt 1126..1232 Stmt 1233..1305 Stmt 1306..1389 Stmt 1390..1476 | Param tools@0#0 Param models@0#0 Param load@0#0 Const questions@0#1 Const model@0#2 Const issues@0#3 Const res@0#5 Const rows@0#6 Const errs@0#7 Const counts@0#10 Const pr@0#12 Const top@0#13 Const upset@0#14 Const uMax@0#15 Const imMax@0#15
+  node 1 For @145..357: Init 150..161 Test 163..173 Update 175..183 Body 185..357 | Let off@154#0
+  node 2 Block @185..357: Stmt 189..269 Stmt 272..355 | Const qir@189#0
+  node 3 Decl(Const) @189..269: Target 195..198 Init 201..268
+  node 4 Await @201..268: Operand 207..268
+  node 5 Decl(Const) @358..459: Target 364..367 Init 370..458
+  node 6 Await @370..458: Operand 376..458
   await#1 @201 (202:15) pc 112: -
+    path 0.4 1.3 2.0 3.1 4
   await#2 @370 (205:13) pc 279: - (out: loc5 loc6)
+    path 0.5 5.1 6

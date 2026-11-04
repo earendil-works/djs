@@ -1,12 +1,26 @@
 function <anonymous> @1..3300
   arg0 tools@0, arg1 argument 1
   loc0 <state>, loc1 console@0, loc2 results@0, loc3 fake@0
+  node 0 Body @0..3299: Params 6..22 Stmt 468..1941 Stmt 1942..1975 Stmt 1976..2324 Stmt 2325..3296 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @2325..3296: Operand 2332..3295
+  node 2 Await @2332..3295: Operand 2338..3295
   await#1 @2332 (39:8) pc 210: -
+    path 0.4 1.0 2
 function <anonymous> @2340..3289
   arg0 argument 0
   loc0 <state>, loc1 tools@0, loc2 cmds@0, loc3 out@0
+  node 0 Body @0..949: Params 6..13 Stmt 19..746 Stmt 747..762 Stmt 763..891 Stmt 892..947 | Param tools@0#0 Const cmds@0#1 Const out@0#2
+  node 1 Expr @763..891: Operand 763..890
+  node 2 Await @763..890: Operand 769..890
   await#1 @763 (47:1) pc 99: -
+    path 0.3 1.0 2
 function <anonymous> @3146..3228
   arg0 argument 0
   loc0 <state>, loc3 k@0, loc4 c@0
+  node 0 Body @0..82: Params 6..13 Stmt 19..80 | Param k@0#0 Param c@0#0
+  node 1 Expr @19..80: Operand 19..79
+  node 2 Assign @19..79: Object 19..22 Property 22..25 Op 26..27 Right 28..79
+  node 3 Await @29..71: Operand 35..71
+  node 4 Member @28..79: Object 28..72 Property 73..79
   await#1 @29 (47:73) pc 136: assign.object@19 assign.key@19
+    path 0.1 1.0 2.3 4.0 3

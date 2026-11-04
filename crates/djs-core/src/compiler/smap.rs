@@ -92,6 +92,8 @@ mod maps {
         pub sites: Vec<SiteRec>,
         /// The computed property keys this function evaluates (`[` to `]`).
         pub computed_keys: Vec<(u32, u32)>,
+        /// The syntax around the sites (D2850).
+        pub syn: super::super::smap_syntax::SynRec,
     }
 
     /// A site as the parser saw it.
@@ -157,8 +159,10 @@ mod maps {
         /// construct: the `Await`/`Yield`/`YieldStar` node of an `await`, `yield`,
         /// `yield.await`, `yield.return`, `yield*` or `yield*.await` site; the
         /// `ForAwait` node of `for-await.next`/`for-await.close`; the `Return` node of
-        /// `return.await`; for `await-using` the statement list (`Block`, `Body` or
-        /// `Switch`) whose end disposes.
+        /// `return.await`; for `await-using` the node whose end disposes: the
+        /// statement list (`Block`, `Body` or `Switch`) or the loop (`For`, `ForOf`,
+        /// `ForAwait`) whose head declares the resource. A `yield*.await` site's `pos`
+        /// may be the end of its `YieldStar` node (the await of an inner result).
         pub path: Vec<super::Step>,
         /// The path misses a construct the recorder does not know (smap_syntax.rs): the
         /// offset of the first text in a step's part that is neither the next node nor
@@ -351,6 +355,7 @@ mod maps {
                     let _ = writeln!(out, "  {}", line.join(", "));
                 }
             }
+            out.push_str(&self.syntax.text());
             for s in &self.sites {
                 let line = line_of(src, self.start, s.pos);
                 let _ = write!(out, "  {} @{} ({line}) pc {}:", s.name, s.pos, s.resume_pc);
@@ -382,6 +387,23 @@ mod maps {
                     let _ = write!(out, " (out: {})", dead.join(" "));
                 }
                 out.push('\n');
+                if !s.path.is_empty() {
+                    out.push_str("    path");
+                    for st in &s.path {
+                        match st.part {
+                            Some(p) => {
+                                let _ = write!(out, " {}.{p}", st.node);
+                            }
+                            None => {
+                                let _ = write!(out, " {}", st.node);
+                            }
+                        }
+                    }
+                    if let Some(g) = s.gap {
+                        let _ = write!(out, " gap @{g}");
+                    }
+                    out.push('\n');
+                }
             }
             out
         }
@@ -409,6 +431,7 @@ mod maps {
     #[allow(clippy::too_many_arguments)]
     pub(in crate::compiler) fn build(
         heap: &Heap,
+        src: &[u8],
         f: &FuncState,
         rec: &Recorder,
         slots: &[Option<(bool, u16, bool)>],
@@ -441,8 +464,10 @@ mod maps {
             };
             number[k] = n;
         }
+        let (syntax, mut paths) =
+            super::super::smap_syntax::build_syntax(heap, f, &rec.syn, src, &order);
         let mut sites = Vec::new();
-        for &k in &order {
+        for (j, &k) in order.iter().enumerate() {
             let s = &rec.sites[k];
             let Some((_, resume)) = at[k] else { continue };
             // The scopes enclosing the site.
@@ -533,8 +558,8 @@ mod maps {
                         .collect()
                 },
                 unsupported,
-                path: Vec::new(),
-                gap: None,
+                path: core::mem::take(&mut paths[j].0),
+                gap: paths[j].1,
             });
         }
         let name = if f.name.is_null() {
@@ -548,7 +573,7 @@ mod maps {
             end: f.src_end,
             sites,
             computed_keys: rec.computed_keys.clone(),
-            syntax: super::Syntax::default(),
+            syntax,
         }
     }
 }
@@ -608,6 +633,7 @@ impl super::parser::Parser<'_, '_> {
         if let Some(r) = &mut self.f.smap {
             let names = r.names.clone();
             let unsupported = r.unsupported.last().copied();
+            r.syn.site();
             r.sites.push(maps::SiteRec {
                 kind,
                 pos,

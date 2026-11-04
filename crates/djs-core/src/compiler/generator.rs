@@ -29,12 +29,18 @@ impl Parser<'_, '_> {
         }
         self.next()?;
         let is_async = self.f.is_async;
+        use super::smap_syntax::{NodeKind, Role};
         if self.is(TokenKind::Star) && !self.tok.newline_before() {
+            self.syn_open(NodeKind::YieldStar, tok.start);
             self.next()?;
+            let operand = self.tok.start;
             self.parse_assign(no_in)?;
+            self.syn_part(Role::Operand, operand, self.prev_end);
             self.emit_yield_star(tok.start, is_async)?;
+            self.syn_close();
             return Ok(Expr::Value);
         }
+        self.syn_open(NodeKind::Yield, tok.start);
         // Without an operand: at the end of the expression or the line (qjs's set).
         let bare = self.tok.newline_before()
             || matches!(
@@ -50,7 +56,9 @@ impl Parser<'_, '_> {
         if bare {
             self.code().undefined();
         } else {
+            let operand = self.tok.start;
             self.parse_assign(no_in)?;
+            self.syn_part(Role::Operand, operand, self.prev_end);
         }
         self.mark(tok.start);
         if is_async {
@@ -70,6 +78,7 @@ impl Parser<'_, '_> {
         }
         self.emit_return_from_expr();
         self.place(l_next);
+        self.syn_close();
         Ok(Expr::Value)
     }
 

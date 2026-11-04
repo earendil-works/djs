@@ -1,8 +1,28 @@
 function <anonymous> @1..582
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 r@0, loc2 d@0
+  node 0 Body @0..581: Params 6..22 Stmt 92..183 Stmt 184..199 Stmt 200..247 Stmt 248..289 Stmt 290..340 Stmt 341..376 Stmt 377..429 Stmt 430..551 Stmt 552..578 | Param tools@0#0 Param console@0#0 Const r@0#1 Const d@0#5
+  node 1 Decl(Const) @92..183: Target 98..99 Init 102..182
+  node 2 Await @102..182: Operand 108..182
+  node 3 Expr @200..247: Operand 200..246
+  node 4 Call @200..246: Callee 200..211 Open 211..212 Arg 212..245
+  node 5 Await @212..245: Operand 218..245
+  node 6 Expr @248..289: Operand 248..288
+  node 7 Call @248..288: Callee 248..259 Open 259..260 Arg 260..287
+  node 8 Await @260..287: Operand 266..287
+  node 9 Decl(Const) @290..340: Target 296..297 Init 300..339
+  node 10 Await @300..339: Operand 306..339
+  node 11 Try @430..551: Block 434..488 CatchParam 496..497 CatchBody 499..551 | CatchParam e@495#1
+  node 12 Block @434..488: Stmt 438..486
+  node 13 Expr @438..486: Operand 438..485
+  node 14 Await @438..485: Operand 444..485
   await#1 @102 (2:11) pc 53: -
+    path 0.1 1.1 2
   await#2 @212 (4:13) pc 87: call.callee@200 call.this@200
+    path 0.3 3.0 4.2 5
   await#3 @260 (5:13) pc 110: call.callee@248 call.this@248
+    path 0.4 6.0 7.2 8
   await#4 @300 (6:11) pc 143: -
+    path 0.5 9.1 10
   await#5 @438 (10:3) pc 233: -
+    path 0.8 11.0 12.0 13.0 14

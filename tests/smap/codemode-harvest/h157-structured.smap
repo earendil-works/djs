@@ -1,8 +1,21 @@
 function <anonymous> @1..5809
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..5808: Params 6..22 Stmt 468..4877 Stmt 4878..4911 Stmt 4912..5260 Stmt 5261..5805 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @5261..5805: Operand 5268..5804
+  node 2 Await @5268..5804: Operand 5274..5804
   await#1 @5268 (204:8) pc 1369: -
+    path 0.4 1.0 2
 function <anonymous> @5276..5798
   arg0 tools@0
   loc0 <state>, loc1 all@0, loc2 view@53, loc7 cursor@99, loc8 s@122
+  node 0 Body @0..522: Params 6..13 Stmt 19..41 Stmt 42..331 Stmt 332..520 | Param tools@0#0 Const all@0#1
+  node 1 ForOf @42..331: Head 47..57 Iterable 61..93 Body 95..331 | Const view@53#0
+  node 2 Block @95..331: Stmt 99..110 Stmt 113..329 | Let cursor@99#0
+  node 3 DoWhile @113..329: Body 116..313 Test 321..327
+  node 4 Block @116..313: Stmt 122..230 Stmt 235..281 Stmt 286..309 | Const s@122#0
+  node 5 Decl(Const) @122..230: Target 128..129 Init 132..229
+  node 6 Await @133..210: Operand 139..210
+  node 7 Member @132..229: Object 132..211 Property 212..229
   await#1 @133 (209:16) pc 108: for-of.iterator@42 for-of.next@42
+    path 0.2 1.2 2.1 3.0 4.0 5.1 7.0 6

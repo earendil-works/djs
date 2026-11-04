@@ -1,12 +1,29 @@
 function gen @3662..3700
   loc0 <state>
+  node 0 Body @0..38: Params 4..6 Stmt 13..21 Stmt 26..34
+  node 1 Expr @13..21: Operand 13..20
+  node 2 Yield @13..20: Operand 19..20
+  node 3 Expr @26..34: Operand 26..33
+  node 4 Yield @26..33: Operand 32..33
   yield#1 @13 (157:5) pc 7: -
+    path 0.1 1.0 2
   yield#2 @26 (158:5) pc 16: -
+    path 0.2 3.0 4
 function <anonymous> @3710..3755
   loc0 <state>
+  node 0 Body @0..45: Params 18..20 Stmt 27..41
+  node 1 Expr @27..41: Operand 27..40
+  node 2 YieldStar @27..40: Operand 34..40
   yield*#1 @27 (161:5) pc 43: yield*.iterator@27 yield*.next@27
+    path 0.1 1.0 2
 function ag @3798..3828
   loc0 <state>
+  node 0 Body @0..30: Params 9..11 Stmt 18..26
+  node 1 Expr @18..26: Operand 18..25
+  node 2 Yield @18..25: Operand 24..25
   yield.await#1 @18 (167:5) pc 8: -
+    path 0.1 1.0 2
   yield#1 @18 (167:5) pc 11: -
+    path 0.1 1.0 2
   yield.return#1 @18 (167:5) pc 16: -
+    path 0.1 1.0 2

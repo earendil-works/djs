@@ -1,9 +1,21 @@
 function <anonymous> @1..2134
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..2133: Params 6..22 Stmt 468..1084 Stmt 1085..1118 Stmt 1119..1467 Stmt 1468..2130 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @1468..2130: Operand 1475..2129
+  node 2 Await @1475..2129: Operand 1481..2129
   await#1 @1475 (37:8) pc 195: -
+    path 0.4 1.0 2
 function <anonymous> @1483..2123
   arg0 tools@0
   loc0 <state>, loc1 path@0, loc2 parts@0, loc3 stripNote@0, loc4 source@0, loc5 shadow@0
+  node 0 Body @0..640: Params 6..13 Stmt 19..69 Stmt 70..182 Stmt 183..282 Stmt 283..328 Stmt 329..418 Stmt 419..574 Stmt 575..638 | Param tools@0#0 Const path@0#1 Const parts@0#2 Const stripNote@0#3 Const source@0#4 Const shadow@0#6
+  node 1 Decl(Const) @70..182: Target 76..81 Init 82..181
+  node 2 Await @82..181: Operand 88..181
+  node 3 Expr @575..638: Operand 575..637
+  node 4 Call @575..637: Callee 575..579 Open 579..580 Arg 580..636
+  node 5 Await @580..636: Operand 586..636
   await#1 @82 (39:13) pc 107: -
+    path 0.2 1.1 2
   await#2 @580 (44:6) pc 246: call.callee@575 call.this@575
+    path 0.7 3.0 4.2 5

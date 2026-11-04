@@ -1,9 +1,21 @@
 function <anonymous> @1..2262
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..2261: Params 6..22 Stmt 468..1397 Stmt 1398..1431 Stmt 1432..1780 Stmt 1781..2258 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @1781..2258: Operand 1788..2257
+  node 2 Await @1788..2257: Operand 1794..2257
   await#1 @1788 (41:8) pc 219: -
+    path 0.4 1.0 2
 function <anonymous> @1796..2251
   arg0 argument 0
   loc0 <state>, loc1 tools@0, loc2 f@0, loc3 o@0, loc4 qem@0
+  node 0 Body @0..455: Params 6..13 Stmt 19..63 Stmt 64..140 Stmt 141..374 Stmt 375..453 | Param tools@0#0 Const f@0#1 Const o@0#2 Const qem@0#3
+  node 1 Decl(Const) @64..140: Target 70..71 Init 72..139
+  node 2 Await @72..139: Operand 78..139
+  node 3 Decl(Const) @141..374: Target 147..150 Init 151..373
+  node 4 Await @152..365: Operand 158..365
+  node 5 Member @151..373: Object 151..366 Property 367..373
   await#1 @72 (43:9) pc 50: -
+    path 0.2 1.1 2
   await#2 @152 (44:12) pc 89: -
+    path 0.3 3.1 5.0 4

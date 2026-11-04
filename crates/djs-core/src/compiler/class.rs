@@ -178,7 +178,9 @@ impl Parser<'_, '_> {
             name = self.binding_name()?;
             self.next()?;
             if decl {
-                outer = Some(self.declare_lexical(name, VarKind::Let, tok.start)?);
+                let v = self.declare_lexical(name, VarKind::Let, tok.start)?;
+                self.syn_decl(v, super::smap_syntax::DeclKind::Class);
+                outer = Some(v);
             }
         } else if decl {
             return syntax(self.tok.start, "class statement requires a name");

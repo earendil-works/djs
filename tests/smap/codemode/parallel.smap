@@ -1,6 +1,16 @@
 function <anonymous> @1..694
   arg0 argument 0, arg1 console@0
   loc0 <state>, loc1 tools@0, loc2 files@0, loc3 results@0, loc4 total@0, loc10 settled@0, loc11 first@0
+  node 0 Body @0..693: Params 6..22 Stmt 82..121 Stmt 122..223 Stmt 224..283 Stmt 284..352 Stmt 353..443 Stmt 444..550 Stmt 551..629 Stmt 630..649 Stmt 650..690 | Param tools@0#0 Param console@0#0 Const files@0#1 Const results@0#2 Const total@0#3 Const settled@0#5 Const first@0#7
+  node 1 Decl(Const) @122..223: Target 128..135 Init 138..222
+  node 2 Await @138..222: Operand 144..222
+  node 3 Decl(Const) @353..443: Target 359..366 Init 369..442
+  node 4 Await @369..442: Operand 375..442
+  node 5 Decl(Const) @551..629: Target 557..562 Init 565..628
+  node 6 Await @565..628: Operand 571..628
   await#1 @138 (3:17) pc 49: -
+    path 0.2 1.1 2
   await#2 @369 (6:17) pc 214: -
+    path 0.5 3.1 4
   await#3 @565 (8:15) pc 290: -
+    path 0.7 5.1 6

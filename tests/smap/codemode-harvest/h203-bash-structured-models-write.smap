@@ -1,11 +1,30 @@
 function <anonymous> @1..5615
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0, loc9 answer@0, loc10 modelsOfType@0, loc11 fakeModels@0
+  node 0 Body @0..5614: Params 6..22 Stmt 468..1713 Stmt 1714..1747 Stmt 1748..2096 Stmt 2097..2209 Stmt 2210..2391 Stmt 2392..3874 Stmt 3875..5611 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2 Const answer@0#4 Const modelsOfType@0#5 Const fakeModels@0#6
+  node 1 Return @3875..5611: Operand 3882..5610
+  node 2 Await @3882..5610: Operand 3888..5610
   await#1 @3882 (89:8) pc 320: -
+    path 0.7 1.0 2
 function <anonymous> @3890..5592
   arg0 tools@0, arg1 argument 1
   loc0 <state>, loc1 models@0, loc2 r@0, loc3 qol@0, loc4 all@0, loc5 model@0, loc6 criteria@0, loc7 q@0, loc8 rows@0, loc9 t0@0, loc10 errs@0, loc11 i@1098, loc12 batch@1126, loc13 res@1126, loc14 counts@0
+  node 0 Body @0..1702: Params 6..21 Stmt 27..149 Stmt 150..212 Stmt 213..329 Stmt 330..390 Stmt 391..894 Stmt 895..1034 Stmt 1035..1051 Stmt 1052..1074 Stmt 1075..1088 Stmt 1089..1458 Stmt 1459..1554 Stmt 1555..1573 Stmt 1574..1629 Stmt 1630..1700 | Param tools@0#0 Param models@0#0 Const r@0#1 Const qol@0#2 Const all@0#3 Const model@0#4 Const criteria@0#5 Const q@0#6 Const rows@0#7 Const t0@0#8 Let errs@0#9 Const counts@0#12
+  node 1 Decl(Const) @27..149: Target 33..34 Init 37..148
+  node 2 Await @37..148: Operand 43..148
+  node 3 Decl(Const) @150..212: Target 156..159 Init 162..211
+  node 4 Await @162..211: Operand 168..211
+  node 5 For @1089..1458: Init 1094..1101 Test 1102..1114 Update 1115..1120 Body 1122..1458 | Let i@1098#0
+  node 6 Block @1122..1458: Stmt 1126..1158 Stmt 1161..1270 Stmt 1273..1456 | Const batch@1126#0 Const res@1126#1
+  node 7 Decl(Const) @1161..1270: Target 1167..1170 Init 1173..1269
+  node 8 Await @1173..1269: Operand 1179..1269
+  node 9 Expr @1459..1554: Operand 1459..1553
+  node 10 Await @1459..1553: Operand 1465..1553
   await#1 @37 (90:11) pc 41: - (out: loc11 loc12 loc13)
+    path 0.1 1.1 2
   await#2 @162 (91:13) pc 64: - (out: loc11 loc12 loc13)
+    path 0.2 3.1 4
   await#3 @1173 (106:15) pc 312: -
+    path 0.10 5.3 6.1 7.1 8
   await#4 @1459 (109:1) pc 407: - (out: loc11 loc12 loc13)
+    path 0.11 9.0 10

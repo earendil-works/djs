@@ -1,13 +1,30 @@
 function <anonymous> @1..2457
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..2456: Params 6..22 Stmt 468..1675 Stmt 1676..1709 Stmt 1710..2058 Stmt 2059..2453 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @2059..2453: Operand 2066..2452
+  node 2 Await @2066..2452: Operand 2072..2452
   await#1 @2066 (45:8) pc 231: -
+    path 0.4 1.0 2
 function <anonymous> @2074..2446
   arg0 argument 0
   loc0 <state>, loc1 tools@0
+  node 0 Body @0..372: Params 6..13 Stmt 19..217 Stmt 218..370 | Param tools@0#0
+  node 1 Expr @19..217: Operand 19..216
+  node 2 Await @19..216: Operand 25..216
+  node 3 Expr @218..370: Operand 218..369
+  node 4 Call @218..369: Callee 218..222 Open 222..223 Arg 223..368
+  node 5 Await @223..368: Operand 229..368
   await#1 @19 (46:1) pc 49: -
+    path 0.1 1.0 2
   await#2 @223 (47:6) pc 91: call.callee@218 call.this@218
+    path 0.2 3.0 4.2 5
 function <anonymous> @2224..2288
   arg0 path@0
   loc0 <state>
+  node 0 Body @0..64: Params 6..10 Operand 12..64 | Param path@0#0
+  node 1 Call @12..64: Callee 12..16 Open 16..17 Arg 17..63
+  node 2 Template @17..63: Quasi 17..24 Subst 24..28 Quasi 28..37 Subst 37..61 Quasi 61..63
+  node 3 Await @37..61: Operand 43..61
   await#1 @37 (46:169) pc 40: call.callee@12 call.this@12 template.part@17 template.part@24 template.part@28
+    path 0.1 1.2 2.3 3

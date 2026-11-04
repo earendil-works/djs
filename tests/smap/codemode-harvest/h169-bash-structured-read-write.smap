@@ -1,10 +1,25 @@
 function <anonymous> @1..3404
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..3403: Params 6..22 Stmt 468..1522 Stmt 1523..1556 Stmt 1557..1905 Stmt 1906..3400 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @1906..3400: Operand 1913..3399
+  node 2 Await @1913..3399: Operand 1919..3399
   await#1 @1913 (43:8) pc 229: -
+    path 0.4 1.0 2
 function <anonymous> @1921..3393
   arg0 tools@0
   loc0 <state>, loc1 s@0, loc2 old@0
+  node 0 Body @0..1472: Params 6..13 Stmt 19..101 Stmt 102..139 Stmt 140..1123 Stmt 1124..1244 Stmt 1245..1305 Stmt 1306..1470 | Param tools@0#0 Let s@0#1 Const old@0#2
+  node 1 Decl(Let) @19..101: Target 23..24 Init 27..100
+  node 2 Await @27..100: Operand 33..100
+  node 3 Expr @1245..1305: Operand 1245..1304
+  node 4 Await @1245..1304: Operand 1251..1304
+  node 5 Return @1306..1470: Operand 1313..1469
+  node 6 Await @1314..1461: Operand 1320..1461
+  node 7 Member @1313..1469: Object 1313..1462 Property 1463..1469
   await#1 @27 (44:9) pc 41: -
+    path 0.1 1.1 2
   await#2 @1245 (48:1) pc 121: -
+    path 0.5 3.0 4
   await#3 @1314 (49:9) pc 156: -
+    path 0.6 5.0 7.0 6

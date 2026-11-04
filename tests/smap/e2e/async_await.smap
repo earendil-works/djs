@@ -1,25 +1,74 @@
 function <anonymous> @0..2044
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 log@0, loc2 f@0, loc3 g@0, loc4 o@0, loc5 thrower@0, loc6 early@0, loc7 r@0, loc8 thenable@0, loc9 sum@0, loc10 p@1291, loc15 i@1349, loc19 plain@0
+  node 0 Body @0..2044: Stmt 147..162 FuncDecl 163..277 Stmt 278..318 Stmt 319..517 FuncDecl 518..590 FuncDecl 591..648 Stmt 649..687 Stmt 688..742 Stmt 743..774 Stmt 775..832 Stmt 833..878 Stmt 879..978 Stmt 979..996 Stmt 1055..1077 Stmt 1078..1109 Stmt 1185..1237 Stmt 1238..1266 Stmt 1267..1279 Stmt 1280..1339 Stmt 1340..1394 Stmt 1395..1457 Stmt 1526..1640 Stmt 1684..1785 Stmt 1786..1888 FuncDecl 1957..2006 Stmt 2007..2028 Stmt 2029..2043 | Const log@0#0 Function f@0#1 Const g@0#2 Const o@0#3 Function thrower@0#4 Function early@0#5 Const r@0#13 Const thenable@0#15 Let sum@0#17 Function plain@0#24
+  node 1 Decl(Const) @1055..1077: Target 1061..1062 Init 1065..1076
+  node 2 Await @1065..1076: Operand 1071..1076
+  node 3 Expr @1238..1266: Operand 1238..1265
+  node 4 Call @1238..1265: Callee 1238..1249 Open 1249..1250 Arg 1250..1264
+  node 5 Await @1250..1264: Operand 1256..1264
+  node 6 ForOf @1280..1339: Head 1285..1292 Iterable 1296..1322 Body 1324..1339 | Const p@1291#0
+  node 7 Expr @1324..1339: Operand 1324..1338
+  node 8 Assign @1324..1338: Left 1324..1327 Op 1328..1330 Right 1331..1338
+  node 9 Await @1331..1338: Operand 1337..1338
+  node 10 For @1340..1394: Init 1345..1354 Test 1356..1361 Update 1363..1366 Body 1368..1394 | Let i@1349#0
+  node 11 If @1368..1394: Test 1372..1377 Then 1379..1394
+  node 12 Expr @1379..1394: Operand 1379..1393
+  node 13 Assign @1379..1393: Left 1379..1382 Op 1383..1385 Right 1386..1393
+  node 14 Await @1386..1393: Operand 1392..1393
+  node 15 Expr @1395..1457: Operand 1395..1456
+  node 16 Call @1395..1456: Callee 1395..1406 Open 1406..1407 Arg 1407..1410 Arg 1412..1455
+  node 17 Call @1412..1455: Callee 1412..1420 Open 1420..1421 Arg 1421..1428 Arg 1430..1454
+  node 18 Await @1421..1428: Operand 1427..1428
+  node 19 Await @1430..1454: Operand 1436..1454
+  node 20 Try @1526..1640: Block 1530..1552 CatchParam 1560..1561 CatchBody 1563..1602 Finally 1611..1640 | CatchParam e@1559#1
+  node 21 Block @1530..1552: Stmt 1534..1550
+  node 22 Expr @1534..1550: Operand 1534..1549
+  node 23 Await @1534..1549: Operand 1540..1549
   await#1 @1065 (36:11) pc 255: - (out: loc10 loc15)
+    path 0.13 1.1 2
   await#2 @1250 (40:13) pc 308: call.callee@1238 call.this@1238 (out: loc10 loc15)
+    path 0.16 3.0 4.2 5
   await#3 @1331 (42:52) pc 378: for-of.iterator@1280 for-of.next@1280 assign.old@1324 (out: loc15)
+    path 0.18 6.2 7.0 8.2 9
   await#4 @1386 (43:47) pc 418: assign.old@1379 (out: loc10)
+    path 0.19 10.3 11.1 12.0 13.2 14
   await#5 @1421 (44:27) pc 459: call.callee@1395 call.this@1395 call.arg@1407 call.callee@1412 call.this@1412 (out: loc10 loc15)
+    path 0.20 15.0 16.3 17.2 18
   await#6 @1430 (44:36) pc 479: call.callee@1395 call.this@1395 call.arg@1407 call.callee@1412 call.this@1412 call.arg@1421 (out: loc10 loc15)
+    path 0.20 15.0 16.3 17.3 19
   await#7 @1534 (47:3) pc 489: - (out: loc10 loc15)
+    path 0.21 20.0 21.0 22.0 23
 function f @163..277
   arg0 x@0
   loc0 <state>, loc1 v@0
+  node 0 Body @0..114: Params 16..19 Stmt 24..49 Stmt 52..70 Stmt 73..96 Stmt 99..112 | Param x@0#0 Const v@0#2
+  node 1 Decl(Const) @52..70: Target 58..59 Init 62..69
+  node 2 Await @62..69: Operand 68..69
   await#1 @62 (7:13) pc 23: -
+    path 0.2 1.1 2
 function g @288..317
   arg0 x@0
   loc0 <state>
+  node 0 Body @0..29: Params 6..9 Operand 13..29 | Param x@0#0
+  node 1 Await @14..24: Operand 20..24
+  node 2 Binary @13..29: Left 13..25 Op 26..27 Right 28..29
   await#1 @14 (11:25) pc 12: -
+    path 0.1 2.0 1
 function m @333..513
   arg0 argument 0
   loc0 <state>, loc1 a@0
+  node 0 Body @0..180: Params 7..14 Stmt 21..176 | Param a@0#0
+  node 1 Try @21..176: Block 25..79 CatchParam 87..88 CatchBody 90..137 Finally 146..176 | CatchParam e@86#1
+  node 2 Block @25..79: Stmt 33..73
+  node 3 Expr @33..73: Operand 33..72
+  node 4 Await @33..72: Operand 39..72
   await#1 @33 (15:7) pc 41: -
+    path 0.1 1.0 2.0 3.0 4
 function thrower @518..590
   loc0 <state>
+  node 0 Body @0..72: Params 22..24 Stmt 29..40 Stmt 43..70
+  node 1 Expr @29..40: Operand 29..39
+  node 2 Await @29..39: Operand 35..39
   await#1 @29 (24:3) pc 7: -
+    path 0.1 1.0 2

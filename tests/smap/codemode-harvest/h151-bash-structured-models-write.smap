@@ -1,12 +1,51 @@
 function <anonymous> @1..17123
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0, loc9 answer@0, loc10 modelsOfType@0, loc11 fakeModels@0
+  node 0 Body @0..17122: Params 6..22 Stmt 468..13040 Stmt 13041..13074 Stmt 13075..13423 Stmt 13424..13536 Stmt 13537..13718 Stmt 13719..15201 Stmt 15202..17119 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2 Const answer@0#4 Const modelsOfType@0#5 Const fakeModels@0#6
+  node 1 Return @15202..17119: Operand 15209..17118
+  node 2 Await @15209..17118: Operand 15215..17118
   await#1 @15209 (301:8) pc 1382: -
+    path 0.7 1.0 2
 function <anonymous> @15217..17100
   arg0 tools@0, arg1 argument 1
   loc0 <state>, loc1 models@0, loc2 total@0, loc3 done@0, loc4 model@0, loc5 criteria@0, loc6 q@0, loc7 t0@0, loc8 errs@0, loc9 n@0, loc10 start@972, loc11 chunk@1016, loc12 all@1016, loc13 rows@1016, loc14 i@1288, loc15 batch@1318, loc16 res@1318
+  node 0 Body @0..1883: Params 6..21 Stmt 27..120 Stmt 121..213 Stmt 214..274 Stmt 275..778 Stmt 779..918 Stmt 919..941 Stmt 942..962 Stmt 963..1816 Stmt 1817..1881 | Param tools@0#0 Param models@0#0 Const total@0#1 Const done@0#2 Const model@0#3 Const criteria@0#4 Const q@0#5 Const t0@0#6 Let errs@0#7 Let n@0#7
+  node 1 Decl(Const) @27..120: Target 33..38 Init 41..119
+  node 2 Call @41..119: Callee 41..49 Open 49..50 Arg 50..118
+  node 3 Await @51..103: Operand 57..103
+  node 4 Member @50..111: Object 50..104 Property 105..111
+  node 5 Member @50..116: Object 50..111 Property 112..116
+  node 6 Call @50..118: Callee 50..116 Open 116..117
+  node 7 Decl(Const) @121..213: Target 127..131 Init 134..212
+  node 8 Call @134..212: Callee 134..142 Open 142..143 Arg 143..211
+  node 9 Await @144..196: Operand 150..196
+  node 10 Member @143..204: Object 143..197 Property 198..204
+  node 11 Member @143..209: Object 143..204 Property 205..209
+  node 12 Call @143..211: Callee 143..209 Open 209..210
+  node 13 For @963..1816: Init 968..984 Test 986..998 Update 1000..1010 Body 1012..1816 | Let start@972#0
+  node 14 Block @1012..1816: Stmt 1016..1162 Stmt 1165..1257 Stmt 1260..1276 Stmt 1279..1686 Stmt 1689..1794 Stmt 1797..1814 | Const chunk@1016#0 Const all@1016#1 Const rows@1016#2
+  node 15 Decl(Const) @1016..1162: Target 1022..1027 Init 1030..1161
+  node 16 Await @1031..1107: Operand 1037..1107
+  node 17 Member @1030..1115: Object 1030..1108 Property 1109..1115
+  node 18 Member @1030..1123: Object 1030..1115 Property 1116..1123
+  node 19 Call @1030..1133: Callee 1030..1123 Open 1123..1124 Arg 1124..1129 Arg 1130..1132
+  node 20 Member @1030..1139: Object 1030..1133 Property 1134..1139
+  node 21 Call @1030..1145: Callee 1030..1139 Open 1139..1140 Arg 1140..1144
+  node 22 Member @1030..1152: Object 1030..1145 Property 1146..1152
+  node 23 Call @1030..1161: Callee 1030..1152 Open 1152..1153 Arg 1153..1160
+  node 24 For @1279..1686: Init 1284..1291 Test 1292..1304 Update 1305..1310 Body 1312..1686 | Let i@1288#0
+  node 25 Block @1312..1686: Stmt 1318..1350 Stmt 1355..1464 Stmt 1469..1682 | Const batch@1318#0 Const res@1318#1
+  node 26 Decl(Const) @1355..1464: Target 1361..1364 Init 1367..1463
+  node 27 Await @1367..1463: Operand 1373..1463
+  node 28 Expr @1689..1794: Operand 1689..1793
+  node 29 Await @1689..1793: Operand 1695..1793
   await#1 @51 (302:25) pc 46: call.callee@41 call.this@41 (out: loc10 loc11 loc12 loc13 loc14 loc15 loc16)
+    path 0.1 1.1 2.2 6.0 5.0 4.0 3
   await#2 @144 (303:24) pc 93: call.callee@134 call.this@134 (out: loc10 loc11 loc12 loc13 loc14 loc15 loc16)
+    path 0.2 7.1 8.2 12.0 11.0 10.0 9
   await#3 @1031 (316:18) pc 306: - (out: loc14 loc15 loc16)
+    path 0.8 13.3 14.0 15.1 23.0 22.0 21.0 20.0 19.0 18.0 17.0 16
   await#4 @1367 (321:17) pc 444: -
+    path 0.8 13.3 14.3 24.3 25.1 26.1 27
   await#5 @1689 (324:3) pc 555: - (out: loc14 loc15 loc16)
+    path 0.8 13.3 14.4 28.0 29

@@ -1,12 +1,25 @@
 function <anonymous> @1..3191
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..3190: Params 6..22 Stmt 468..2418 Stmt 2419..2452 Stmt 2453..2801 Stmt 2802..3187 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @2802..3187: Operand 2809..3186
+  node 2 Await @2809..3186: Operand 2815..3186
   await#1 @2809 (51:8) pc 257: -
+    path 0.4 1.0 2
 function <anonymous> @2817..3180
   arg0 argument 0
   loc0 <state>, loc1 tools@0, loc2 paths@0
+  node 0 Body @0..363: Params 6..13 Stmt 19..202 Stmt 203..361 | Param tools@0#0 Const paths@0#1
+  node 1 Expr @203..361: Operand 203..360
+  node 2 Await @203..360: Operand 209..360
   await#1 @203 (53:1) pc 57: -
+    path 0.2 1.0 2
 function <anonymous> @3055..3175
   arg0 path@0
   loc0 <state>
+  node 0 Body @0..120: Params 6..10 Operand 14..120 | Param path@0#0
+  node 1 Call @14..120: Callee 14..18 Open 18..19 Arg 19..119
+  node 2 Object @19..119: Shorthand 20..24 Key 26..33 Value 34..118
+  node 3 Await @34..118: Operand 40..118
   await#1 @34 (53:70) pc 71: call.callee@14 call.this@14 object.literal@19
+    path 0.1 1.2 2.2 3

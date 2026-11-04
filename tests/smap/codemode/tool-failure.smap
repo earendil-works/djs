@@ -1,4 +1,8 @@
 function <anonymous> @1..152
   arg0 tools@0, arg1 console@0
   loc0 <state>
+  node 0 Body @0..151: Params 6..22 Stmt 73..96 Stmt 97..148 | Param tools@0#0 Param console@0#0
+  node 1 Expr @97..148: Operand 97..147
+  node 2 Await @97..147: Operand 103..147
   await#1 @97 (3:1) pc 37: -
+    path 0.2 1.0 2

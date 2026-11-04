@@ -1,12 +1,24 @@
 function <anonymous> @1..5774
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..5773: Params 6..22 Stmt 468..4784 Stmt 4785..4818 Stmt 4819..5167 Stmt 5168..5770 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @5168..5770: Operand 5175..5769
+  node 2 Await @5175..5769: Operand 5181..5769
   await#1 @5175 (55:8) pc 275: -
+    path 0.4 1.0 2
 function <anonymous> @5183..5763
   arg0 argument 0
   loc0 <state>, loc1 tools@0, loc2 issues@0
+  node 0 Body @0..580: Params 6..13 Stmt 19..163 Stmt 164..578 | Param tools@0#0 Const issues@0#1
+  node 1 Expr @164..578: Operand 164..577
+  node 2 Await @164..577: Operand 170..577
   await#1 @164 (57:1) pc 123: -
+    path 0.2 1.0 2
 function <anonymous> @5383..5758
   arg0 argument 0
   loc0 <state>, loc3 repo@0, loc4 n@0, loc5 r@20
+  node 0 Body @0..375: Params 6..16 Stmt 20..157 Stmt 158..373 | Param repo@0#0 Param n@0#0 Const r@20#1
+  node 1 Decl(Const) @20..157: Target 26..27 Init 28..156
+  node 2 Await @28..156: Operand 34..156
   await#1 @28 (58:9) pc 144: -
+    path 0.1 1.1 2

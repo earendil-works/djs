@@ -1,9 +1,25 @@
 function <anonymous> @1..1754
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..1753: Params 6..22 Stmt 468..989 Stmt 990..1023 Stmt 1024..1372 Stmt 1373..1750 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @1373..1750: Operand 1380..1749
+  node 2 Await @1380..1749: Operand 1386..1749
   await#1 @1380 (35:8) pc 185: -
+    path 0.4 1.0 2
 function <anonymous> @1388..1743
   arg0 argument 0
   loc0 <state>, loc1 tools@0, loc2 files@0, loc3 outs@0
+  node 0 Body @0..355: Params 6..13 Stmt 19..126 Stmt 127..310 Stmt 311..353 | Param tools@0#0 Const files@0#1 Const outs@0#2
+  node 1 Decl(Const) @19..126: Target 25..30 Init 33..125
+  node 2 Await @34..98: Operand 40..98
+  node 3 Member @33..106: Object 33..99 Property 100..106
+  node 4 Member @33..111: Object 33..106 Property 107..111
+  node 5 Call @33..113: Callee 33..111 Open 111..112
+  node 6 Member @33..119: Object 33..113 Property 114..119
+  node 7 Call @33..125: Callee 33..119 Open 119..120 Arg 120..124
+  node 8 Decl(Const) @127..310: Target 133..137 Init 140..309
+  node 9 Await @140..309: Operand 146..309
   await#1 @34 (36:16) pc 40: -
+    path 0.1 1.1 7.0 6.0 5.0 4.0 3.0 2
   await#2 @140 (37:14) pc 98: -
+    path 0.2 8.1 9

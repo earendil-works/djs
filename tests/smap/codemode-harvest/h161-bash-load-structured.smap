@@ -1,9 +1,21 @@
 function <anonymous> @1..4302
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0, loc9 stored@0, loc10 realLoad@0, loc11 fakeLoad@0
+  node 0 Body @0..4301: Params 6..22 Stmt 468..2006 Stmt 2007..2040 Stmt 2041..2389 Stmt 2390..3068 Stmt 3069..3091 Stmt 3092..3266 Stmt 3267..4298 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2 Const stored@0#4 Const realLoad@0#5 Const fakeLoad@0#6
+  node 1 Return @3267..4298: Operand 3274..4297
+  node 2 Await @3274..4297: Operand 3280..4297
   await#1 @3274 (94:8) pc 592: -
+    path 0.7 1.0 2
 function <anonymous> @3282..4281
   arg0 tools@0, arg1 load@0
   loc0 <state>, loc1 clean@0, loc2 html@0, loc3 r@0
+  node 0 Body @0..999: Params 6..19 Stmt 25..124 Stmt 125..234 Stmt 235..388 Stmt 389..414 Stmt 415..786 Stmt 787..816 Stmt 816..841 Stmt 842..997 | Param tools@0#0 Param load@0#0 Const clean@0#1 Const html@0#2 Const r@0#5
+  node 1 Decl(Const) @415..786: Target 421..422 Init 423..785
+  node 2 Await @423..785: Operand 429..785
+  node 3 Expr @842..997: Operand 842..996
+  node 4 Call @842..996: Callee 842..846 Open 846..847 Arg 847..995
+  node 5 Await @847..995: Operand 853..995
   await#1 @423 (99:9) pc 159: -
+    path 0.5 1.1 2
   await#2 @847 (101:6) pc 235: call.callee@842 call.this@842
+    path 0.8 3.0 4.2 5

@@ -522,6 +522,7 @@ fn assign_storage(
 #[allow(clippy::too_many_arguments)]
 fn suspension_map(
     heap: &Heap,
+    src: &[u8],
     f: &FuncState,
     rec: &super::smap::Recorder,
     storage: &[Storage],
@@ -534,7 +535,18 @@ fn suspension_map(
 ) -> PResult<super::smap::FunctionMap> {
     if rec.sites.is_empty() {
         // Only the computed keys: no stack or liveness analysis.
-        return Ok(super::smap::build(heap, f, rec, &[], 0, 0, &[], &[], &[]));
+        return Ok(super::smap::build(
+            heap,
+            src,
+            f,
+            rec,
+            &[],
+            0,
+            0,
+            &[],
+            &[],
+            &[],
+        ));
     }
     let decode = |pc: u32| {
         crate::bytecode::decode::decode(&code.code, pc)
@@ -619,6 +631,7 @@ fn suspension_map(
     let params = (f.param_count - u16::from(f.rest.is_some())) as usize;
     Ok(super::smap::build(
         heap,
+        src,
         f,
         rec,
         &slots,
@@ -1116,7 +1129,7 @@ fn emit_function(
     #[cfg(feature = "dump")]
     if let (Some(rec), Some(maps)) = (&f.smap, maps) {
         maps.push(suspension_map(
-            heap, f, rec, storage, names, &code, &handlers, &suspends, &all, resolved,
+            heap, src, f, rec, storage, names, &code, &handlers, &suspends, &all, resolved,
         )?);
     }
 

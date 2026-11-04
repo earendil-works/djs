@@ -1,9 +1,27 @@
 function <anonymous> @1..2237
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..2236: Params 6..22 Stmt 468..1447 Stmt 1448..1481 Stmt 1482..1830 Stmt 1831..2233 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @1831..2233: Operand 1838..2232
+  node 2 Await @1838..2232: Operand 1844..2232
   await#1 @1838 (37:8) pc 195: -
+    path 0.4 1.0 2
 function <anonymous> @1846..2226
   arg0 tools@0
   loc0 <state>, loc1 files@0, loc2 out@0, loc3 f@152, loc8 t@168, loc9 lines@168
+  node 0 Body @0..380: Params 6..13 Stmt 19..126 Stmt 127..140 Stmt 141..366 Stmt 367..378 | Param tools@0#0 Const files@0#1 Let out@0#2
+  node 1 Decl(Const) @19..126: Target 25..30 Init 33..125
+  node 2 Await @34..98: Operand 40..98
+  node 3 Member @33..106: Object 33..99 Property 100..106
+  node 4 Member @33..111: Object 33..106 Property 107..111
+  node 5 Call @33..113: Callee 33..111 Open 111..112
+  node 6 Member @33..119: Object 33..113 Property 114..119
+  node 7 Call @33..125: Callee 33..119 Open 119..120 Arg 120..124
+  node 8 ForOf @141..366: Head 146..153 Iterable 157..162 Body 164..366 | Const f@152#0
+  node 9 Block @164..366: Stmt 168..247 Stmt 250..313 Stmt 316..364 | Const t@168#0 Const lines@168#1
+  node 10 Decl(Const) @168..247: Target 174..175 Init 178..246
+  node 11 Await @178..246: Operand 184..246
   await#1 @34 (38:16) pc 34: - (out: loc3 loc8 loc9)
+    path 0.1 1.1 7.0 6.0 5.0 4.0 3.0 2
   await#2 @178 (41:13) pc 145: for-of.iterator@141 for-of.next@141
+    path 0.3 8.2 9.0 10.1 11

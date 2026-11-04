@@ -1,9 +1,22 @@
 function <anonymous> @1..2836
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..2835: Params 6..22 Stmt 468..1119 Stmt 1120..1153 Stmt 1154..1502 Stmt 1503..2832 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @1503..2832: Operand 1510..2831
+  node 2 Await @1510..2831: Operand 1516..2831
   await#1 @1510 (63:8) pc 317: -
+    path 0.4 1.0 2
 function <anonymous> @1518..2825
   arg0 tools@0
   loc0 <state>, loc1 r@0, loc2 render@1167
+  node 0 Body @0..1307: Params 6..13 Stmt 19..1094 Stmt 1094..1125 Stmt 1126..1305 | Param tools@0#0 Const r@0#1
+  node 1 Decl(Const) @19..1094: Target 25..26 Init 27..1093
+  node 2 Await @27..1093: Operand 33..1093
+  node 3 If @1126..1305: Test 1129..1163 Then 1165..1305
+  node 4 Block @1165..1305: Stmt 1167..1262 Stmt 1262..1303 | Const render@1167#0
+  node 5 Decl(Const) @1167..1262: Target 1173..1179 Init 1180..1261
+  node 6 Await @1180..1261: Operand 1186..1261
   await#1 @27 (64:9) pc 25: - (out: loc2)
+    path 0.1 1.1 2
   await#2 @1180 (66:14) pc 99: -
+    path 0.3 3.1 4.0 5.1 6

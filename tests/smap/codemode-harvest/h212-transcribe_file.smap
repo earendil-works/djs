@@ -1,8 +1,24 @@
 function <anonymous> @1..2037
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..2036: Params 6..22 Stmt 468..1399 Stmt 1400..1433 Stmt 1434..1782 Stmt 1783..2033 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @1783..2033: Operand 1790..2032
+  node 2 Await @1790..2032: Operand 1796..2032
   await#1 @1790 (35:8) pc 185: -
+    path 0.4 1.0 2
 function <anonymous> @1798..2026
   arg0 tools@0
   loc0 <state>, loc1 r@0, loc2 b@44
+  node 0 Body @0..228: Params 6..13 Stmt 19..32 Stmt 33..205 Stmt 206..226 | Param tools@0#0 Const r@0#1
+  node 1 ForOf @33..205: Head 38..45 Iterable 49..57 Body 59..205 | Const b@44#0
+  node 2 Block @59..205: Stmt 61..203
+  node 3 Try @61..203: Block 65..166 CatchParam 174..175 CatchBody 177..203 | CatchParam e@173#1
+  node 4 Block @65..166: Stmt 67..164
+  node 5 Expr @67..164: Operand 67..163
+  node 6 Call @67..163: Callee 67..73 Open 73..74 Arg 74..162
+  node 7 Binary @74..162: Left 74..83 Op 84..85 Right 86..162
+  node 8 Await @87..154: Operand 93..154
+  node 9 Member @86..160: Object 86..155 Property 156..160
+  node 10 Call @86..162: Callee 86..160 Open 160..161
   await#1 @87 (37:55) pc 94: for-of.iterator@33 for-of.next@33 call.callee@67 call.this@67 binary.left@74
+    path 0.2 1.2 2.0 3.0 4.0 5.0 6.2 7.2 10.0 9.0 8

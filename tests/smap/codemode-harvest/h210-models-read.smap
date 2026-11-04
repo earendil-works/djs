@@ -1,10 +1,26 @@
 function <anonymous> @1..5433
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0, loc9 answer@0, loc10 modelsOfType@0, loc11 fakeModels@0
+  node 0 Body @0..5432: Params 6..22 Stmt 468..1646 Stmt 1647..1680 Stmt 1681..2029 Stmt 2030..2142 Stmt 2143..2324 Stmt 2325..3807 Stmt 3808..5429 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2 Const answer@0#4 Const modelsOfType@0#5 Const fakeModels@0#6
+  node 1 Return @3808..5429: Operand 3815..5428
+  node 2 Await @3815..5428: Operand 3821..5428
   await#1 @3815 (83:8) pc 280: -
+    path 0.7 1.0 2
 function <anonymous> @3823..5410
   arg0 tools@0, arg1 argument 1
   loc0 <state>, loc1 models@0, loc2 lines@0, loc3 off@54, loc4 t@90, loc11 model@0, loc12 now@0, loc13 questions@0, loc14 results@0, loc15 scored@0, loc16 errs@0
+  node 0 Body @0..1587: Params 6..21 Stmt 27..44 Stmt 45..301 Stmt 302..384 Stmt 385..410 Stmt 411..810 Stmt 811..917 Stmt 918..1335 Stmt 1336..1375 Stmt 1376..1436 Stmt 1437..1585 | Param tools@0#0 Param models@0#0 Const lines@0#1 Const model@0#3 Const now@0#4 Const questions@0#5 Const results@0#6 Const scored@0#7 Const errs@0#8
+  node 1 For @45..301: Init 50..61 Test 63..73 Update 75..84 Body 86..301 | Let off@54#0
+  node 2 Block @86..301: Stmt 90..171 Stmt 174..299 | Const t@90#0
+  node 3 Decl(Const) @90..171: Target 96..97 Init 100..170
+  node 4 Await @100..170: Operand 106..170
+  node 5 Decl(Const) @302..384: Target 308..313 Init 316..383
+  node 6 Await @316..383: Operand 322..383
+  node 7 Decl(Const) @811..917: Target 817..824 Init 827..916
+  node 8 Await @827..916: Operand 833..916
   await#1 @100 (86:13) pc 66: -
+    path 0.2 1.3 2.0 3.1 4
   await#2 @316 (89:15) pc 224: - (out: loc3 loc4)
+    path 0.3 5.1 6
   await#3 @827 (94:17) pc 319: - (out: loc3 loc4)
+    path 0.6 7.1 8

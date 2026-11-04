@@ -176,6 +176,7 @@ impl<'a> Parser<'a, '_> {
                 }
                 let v = self.f.add_var(name, VarKind::Param, BODY_SCOPE);
                 self.f.params.push_out(v);
+                self.syn_decl(v, super::smap_syntax::DeclKind::Param);
                 v
             }
             Binding::Member => {

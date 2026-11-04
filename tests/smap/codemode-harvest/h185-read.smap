@@ -1,9 +1,21 @@
 function <anonymous> @1..3564
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0, loc9 answer@0, loc10 modelsOfType@0, loc11 fakeModels@0
+  node 0 Body @0..3563: Params 6..22 Stmt 468..1091 Stmt 1092..1125 Stmt 1126..1474 Stmt 1475..1587 Stmt 1588..1769 Stmt 1770..3252 Stmt 3253..3560 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2 Const answer@0#4 Const modelsOfType@0#5 Const fakeModels@0#6
+  node 1 Return @3253..3560: Operand 3260..3559
+  node 2 Await @3260..3559: Operand 3266..3559
   await#1 @3260 (71:8) pc 226: -
+    path 0.7 1.0 2
 function <anonymous> @3268..3541
   arg0 tools@0, arg1 models@0
   loc0 <state>, loc1 m@0, loc2 issues@0
+  node 0 Body @0..273: Params 6..21 Stmt 27..83 Stmt 84..199 Stmt 200..271 | Param tools@0#0 Param models@0#0 Const m@0#1 Const issues@0#2
+  node 1 Decl(Const) @27..83: Target 33..34 Init 37..82
+  node 2 Await @37..82: Operand 43..82
+  node 3 Decl(Const) @84..199: Target 90..96 Init 99..198
+  node 4 Call @99..198: Callee 99..109 Open 109..110 Arg 110..197
+  node 5 Await @110..197: Operand 116..197
   await#1 @37 (72:11) pc 17: -
+    path 0.1 1.1 2
   await#2 @110 (73:27) pc 83: call.callee@99 call.this@99
+    path 0.2 3.1 4.2 5

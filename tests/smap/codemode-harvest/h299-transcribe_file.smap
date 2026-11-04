@@ -1,8 +1,16 @@
 function <anonymous> @1..1857
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..1856: Params 6..22 Stmt 468..1214 Stmt 1215..1248 Stmt 1249..1597 Stmt 1598..1853 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @1598..1853: Operand 1605..1852
+  node 2 Await @1605..1852: Operand 1611..1852
   await#1 @1605 (35:8) pc 185: -
+    path 0.4 1.0 2
 function <anonymous> @1613..1846
   arg0 argument 0
   loc0 <state>, loc1 tools@0, loc2 v@0, loc3 o@0
+  node 0 Body @0..233: Params 6..13 Stmt 19..65 Stmt 66..165 Stmt 166..231 | Param tools@0#0 Const v@0#1 Const o@0#2
+  node 1 Decl(Const) @66..165: Target 72..73 Init 74..164
+  node 2 Await @74..164: Operand 80..164
   await#1 @74 (37:9) pc 52: -
+    path 0.2 1.1 2

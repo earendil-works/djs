@@ -1,8 +1,18 @@
 function <anonymous> @1..20733
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0, loc9 stored@0, loc10 realLoad@0, loc11 fakeLoad@0
+  node 0 Body @0..20732: Params 6..22 Stmt 468..956 Stmt 957..990 Stmt 991..1339 Stmt 1340..19495 Stmt 19496..19518 Stmt 19519..19693 Stmt 19694..20729 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2 Const stored@0#4 Const realLoad@0#5 Const fakeLoad@0#6
+  node 1 Return @19694..20729: Operand 19701..20728
+  node 2 Await @19701..20728: Operand 19707..20728
   await#1 @19701 (600:8) pc 3831: -
+    path 0.7 1.0 2
 function <anonymous> @19709..20712
   arg0 tools@0, arg1 load@0
   loc0 <state>, loc1 entries@0
+  node 0 Body @0..1003: Params 6..19 Stmt 25..373 Stmt 374..417 Stmt 418..909 Stmt 910..1001 | Param tools@0#0 Param load@0#0 Const entries@0#2
+  node 1 Expr @25..373: Operand 25..372
+  node 2 Call @25..372: Callee 25..29 Open 29..30 Arg 30..371
+  node 3 Await @31..363: Operand 37..363
+  node 4 Member @30..371: Object 30..364 Property 365..371
   await#1 @31 (601:7) pc 42: call.callee@25 call.this@25
+    path 0.1 1.0 2.2 4.0 3

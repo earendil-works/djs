@@ -1,13 +1,40 @@
 function <anonymous> @1..3788
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..3787: Params 6..22 Stmt 468..2272 Stmt 2273..2306 Stmt 2307..2655 Stmt 2656..3784 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @2656..3784: Operand 2663..3783
+  node 2 Await @2663..3783: Operand 2669..3783
   await#1 @2663 (61:8) pc 317: -
+    path 0.4 1.0 2
 function <anonymous> @2671..3777
   arg0 tools@0
   loc0 <state>, loc1 original@0, loc2 source@0, loc3 start@0, loc4 end@0, loc5 old@0, loc6 lines@0
+  node 0 Body @0..1106: Params 6..13 Stmt 19..96 Stmt 97..173 Stmt 174..232 Stmt 233..327 Stmt 328..394 Stmt 395..594 Stmt 595..778 Stmt 779..1104 | Param tools@0#0 Const original@0#1 Const source@0#3 Const start@0#4 Const end@0#4 Const old@0#5 Const lines@0#5
+  node 1 Decl(Const) @19..96: Target 25..33 Init 34..95
+  node 2 Await @34..95: Operand 40..95
+  node 3 Expr @97..173: Operand 97..172
+  node 4 Call @97..172: Callee 97..101 Open 101..102 Arg 102..171
+  node 5 Await @102..171: Operand 108..171
+  node 6 Decl(Const) @174..232: Target 180..186 Init 187..231
+  node 7 Await @187..231: Operand 193..231
+  node 8 Expr @395..594: Operand 395..593
+  node 9 Call @395..593: Callee 395..399 Open 399..400 Arg 400..592
+  node 10 Await @400..592: Operand 406..592
+  node 11 Expr @595..778: Operand 595..777
+  node 12 Call @595..777: Callee 595..599 Open 599..600 Arg 600..776
+  node 13 Await @600..776: Operand 606..776
+  node 14 Expr @779..1104: Operand 779..1103
+  node 15 Call @779..1103: Callee 779..783 Open 783..784 Arg 784..1102
+  node 16 Await @784..1102: Operand 790..1102
   await#1 @34 (62:16) pc 25: -
+    path 0.1 1.1 2
   await#2 @102 (63:6) pc 71: call.callee@97 call.this@97
+    path 0.2 3.0 4.2 5
   await#3 @187 (64:14) pc 95: -
+    path 0.3 6.1 7
   await#4 @400 (67:6) pc 259: call.callee@395 call.this@395
+    path 0.6 8.0 9.2 10
   await#5 @600 (71:6) pc 320: call.callee@595 call.this@595
+    path 0.7 11.0 12.2 13
   await#6 @784 (74:6) pc 361: call.callee@779 call.this@779
+    path 0.8 14.0 15.2 16

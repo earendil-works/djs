@@ -1,11 +1,28 @@
 function <anonymous> @1..4450
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..4449: Params 6..22 Stmt 468..2964 Stmt 2965..2998 Stmt 2999..3347 Stmt 3348..4446 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @3348..4446: Operand 3355..4445
+  node 2 Await @3355..4445: Operand 3361..4445
   await#1 @3355 (129:8) pc 790: -
+    path 0.4 1.0 2
 function <anonymous> @3363..4439
   arg0 tools@0
   loc0 <state>, loc1 slug@0, loc2 open@0, loc3 scratchId@0, loc4 put@0, loc5 p@0, loc6 zalo@0, loc7 r@0, loc8 c@0, loc9 a@0
+  node 0 Body @0..1076: Params 6..13 Stmt 19..61 Stmt 62..133 Stmt 134..186 Stmt 187..342 Stmt 343..375 Stmt 376..460 Stmt 461..630 Stmt 631..690 Stmt 691..974 Stmt 975..1014 Stmt 1015..1074 | Param tools@0#0 Const slug@0#1 Const open@0#2 Const scratchId@0#3 Const put@0#4 Const p@0#5 Const zalo@0#6 Const r@0#7 Const c@0#9 Const a@0#10
+  node 1 Decl(Const) @62..133: Target 68..72 Init 75..132
+  node 2 Await @75..132: Operand 81..132
+  node 3 Decl(Const) @187..342: Target 193..196 Init 199..341
+  node 4 Await @199..341: Operand 205..341
+  node 5 Decl(Const) @461..630: Target 467..468 Init 471..629
+  node 6 Await @471..629: Operand 477..629
+  node 7 Decl(Const) @691..974: Target 697..698 Init 701..973
+  node 8 Await @701..973: Operand 707..973
   await#1 @75 (131:14) pc 27: -
+    path 0.2 1.1 2
   await#2 @199 (133:13) pc 90: -
+    path 0.4 3.1 4
   await#3 @471 (136:11) pc 213: -
+    path 0.7 5.1 6
   await#4 @701 (138:11) pc 300: -
+    path 0.9 7.1 8

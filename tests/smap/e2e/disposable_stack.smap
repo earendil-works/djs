@@ -1,19 +1,61 @@
 function <anonymous> @1827..3285
   loc0 <state>, loc1 a@0, loc2 order@0, loc3 done@0, loc4 b@0, loc5 gen@0, loc6 g@0
+  node 0 Body @0..1458: Params 6..8 Stmt 16..53 Stmt 56..145 Stmt 148..176 Stmt 179..191 Stmt 194..269 Stmt 272..289 Stmt 292..357 Stmt 360..508 Stmt 511..522 Stmt 525..536 Stmt 539..550 Stmt 553..564 Stmt 567..620 Stmt 623..659 Stmt 662..699 Stmt 702..732 Stmt 735..790 Stmt 793..849 Stmt 852..1006 Stmt 1009..1036 Stmt 1039..1058 Stmt 1061..1105 Stmt 1108..1151 Stmt 1154..1250 FuncDecl 1253..1357 Stmt 1360..1376 Stmt 1379..1394 Stmt 1397..1456 | Const a@0#1 Const order@0#6 Const done@0#7 Const b@0#15 Function gen@0#25 Const g@0#26
+  node 1 Expr @511..522: Operand 511..521
+  node 2 Await @511..521: Operand 517..521
+  node 3 Expr @525..536: Operand 525..535
+  node 4 Await @525..535: Operand 531..535
+  node 5 Expr @539..550: Operand 539..549
+  node 6 Await @539..549: Operand 545..549
+  node 7 Expr @553..564: Operand 553..563
+  node 8 Await @553..563: Operand 559..563
+  node 9 Expr @623..659: Operand 623..658
+  node 10 Call @623..658: Callee 623..634 Open 634..635 Arg 635..657
+  node 11 Await @635..657: Operand 641..657
+  node 12 Expr @852..1006: Operand 852..1005
+  node 13 Await @852..1005: Operand 858..1005
+  node 14 Expr @1154..1250: Operand 1154..1249
+  node 15 Await @1154..1249: Operand 1160..1249
+  node 16 Expr @1379..1394: Operand 1379..1393
+  node 17 Await @1379..1393: Operand 1385..1393
+  node 18 Expr @1397..1456: Operand 1397..1455
+  node 19 Call @1397..1455: Callee 1397..1408 Open 1408..1409 Arg 1409..1439 Arg 1441..1454
+  node 20 Await @1409..1439: Operand 1415..1439
   await#1 @511 (71:3) pc 220: -
+    path 0.9 1.0 2
   await#2 @525 (72:3) pc 225: -
+    path 0.10 3.0 4
   await#3 @539 (73:3) pc 230: -
+    path 0.11 5.0 6
   await#4 @553 (74:3) pc 235: -
+    path 0.12 7.0 8
   await#5 @635 (76:15) pc 313: call.callee@623 call.this@623
+    path 0.14 9.0 10.2 11
   await#6 @852 (83:3) pc 413: -
+    path 0.19 12.0 13
   await#7 @1154 (88:3) pc 537: -
+    path 0.24 14.0 15
   await#8 @1379 (97:3) pc 555: -
+    path 0.27 16.0 17
   await#9 @1409 (98:15) pc 591: call.callee@1397 call.this@1397
+    path 0.28 18.0 19.2 20
 function <anonymous> @2029..2094
   loc0 <state>
+  node 0 Body @0..65: Params 6..8 Stmt 18..29 Stmt 34..61
+  node 1 Expr @18..29: Operand 18..28
+  node 2 Await @18..28: Operand 24..28
   await#1 @18 (65:5) pc 7: -
+    path 0.1 1.0 2
 function gen @3080..3184
   loc0 <state>
+  node 0 Body @0..104: Params 19..21 Stmt 28..100
+  node 1 Try @28..100: Block 32..54 Finally 63..100
+  node 2 Block @32..54: Stmt 40..48
+  node 3 Expr @40..48: Operand 40..47
+  node 4 Yield @40..47: Operand 46..47
   yield.await#1 @40 (91:7) pc 7: -
+    path 0.1 1.0 2.0 3.0 4
   yield#1 @40 (91:7) pc 10: -
+    path 0.1 1.0 2.0 3.0 4
   yield.return#1 @40 (91:7) pc 15: -
+    path 0.1 1.0 2.0 3.0 4

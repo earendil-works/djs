@@ -1,9 +1,20 @@
 function <anonymous> @1..4483
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0, loc9 answer@0, loc10 modelsOfType@0, loc11 fakeModels@0
+  node 0 Body @0..4482: Params 6..22 Stmt 468..676 Stmt 677..710 Stmt 711..1059 Stmt 1060..1172 Stmt 1173..1354 Stmt 1355..2837 Stmt 2838..4479 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2 Const answer@0#4 Const modelsOfType@0#5 Const fakeModels@0#6
+  node 1 Return @2838..4479: Operand 2845..4478
+  node 2 Await @2845..4478: Operand 2851..4478
   await#1 @2845 (75:8) pc 250: -
+    path 0.7 1.0 2
 function <anonymous> @2853..4460
   arg0 tools@0, arg1 argument 1
   loc0 <state>, loc1 models@0, loc2 r@0, loc3 lines@0, loc4 commits@0, loc11 clef@0, loc12 criteria@0, loc13 results@0, loc14 counts@0, loc15 out@0
+  node 0 Body @0..1607: Params 6..21 Stmt 27..135 Stmt 136..193 Stmt 194..213 Stmt 214..422 Stmt 423..496 Stmt 497..927 Stmt 928..1169 Stmt 1170..1188 Stmt 1189..1204 Stmt 1205..1514 Stmt 1515..1541 Stmt 1542..1605 | Param tools@0#0 Param models@0#0 Const r@0#1 Const lines@0#2 Const commits@0#3 Const clef@0#5 Const criteria@0#6 Const results@0#7 Const counts@0#8 Const out@0#9
+  node 1 Decl(Const) @27..135: Target 33..34 Init 37..134
+  node 2 Await @37..134: Operand 43..134
+  node 3 Decl(Const) @928..1169: Target 934..941 Init 944..1168
+  node 4 Await @944..1168: Operand 950..1168
   await#1 @37 (76:11) pc 53: -
+    path 0.1 1.1 2
   await#2 @944 (95:17) pc 402: -
+    path 0.7 3.1 4

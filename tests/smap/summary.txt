@@ -43,4 +43,10 @@ sites 1063
     1 object.literal
     1 pattern.iterator
 
+## paths (D2850)
+ 1062 complete
+
+## path gaps, by the part they are in
+    1 Decl(Const).Target
+
 ## unsupported

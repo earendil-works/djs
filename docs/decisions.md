@@ -9140,3 +9140,18 @@ hooks (D2890), so a host needs the dump module (548.9 KB gzip) only to write dum
 continue them. Kept small on purpose: no formatting, no iterator adapters, static error
 texts, and no export to delete `$djs` (the dump deletes it, D2890). Ceilings set by the
 ratchet's convention, the measured size plus 1 KB: 442,831 and 378,201.
+
+## D2851: Site syntax: member targets split, recording only in async functions and generators, pinned
+date: 2026-11-05 · by: pjc · issue: 0200
+Refines D2850 after the exporter's review. An assignment or update whose target is a member
+has the parts `Object Property` instead of `Left`/`Operand` (the exporter assigns through
+the saved object and key), and the member's own node leaves the paths. Recording runs only
+in async functions and generators (only they have sites), so a format 2 dump's data, the
+top level of a Script, costs nothing; parts are kept in one stack shared by the open nodes
+and copied out only for nodes that enclose a site. A left-first construct (binary
+operator, call, member, assignment, conditional, sequence, postfix update) opens after its
+left operand and is inserted into the paths of the sites recorded since that operand
+began. The pin test now prints the nodes and each site's path in tests/smap and checks
+that every path starts at the body, names the part of each step and ends at the site's own
+construct; tests/smap/summary.txt counts complete paths and gaps by the part they are in
+(1,062 of 1,063 corpus sites complete; the one gap is a destructuring default).

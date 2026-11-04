@@ -1,9 +1,21 @@
 function <anonymous> @1..2162
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
+  node 0 Body @0..2161: Params 6..22 Stmt 468..1254 Stmt 1255..1288 Stmt 1289..1637 Stmt 1638..2158 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2
+  node 1 Return @1638..2158: Operand 1645..2157
+  node 2 Await @1645..2157: Operand 1651..2157
   await#1 @1645 (33:8) pc 177: -
+    path 0.4 1.0 2
 function <anonymous> @1653..2151
   arg0 tools@0
   loc0 <state>, loc1 r@0, loc2 py@0
+  node 0 Body @0..498: Params 6..13 Stmt 19..30 Stmt 31..390 Stmt 391..463 Stmt 464..475 Stmt 476..496 | Param tools@0#0 Const r@0#1 Const py@0#3
+  node 1 Expr @31..390: Operand 31..389
+  node 2 Call @31..389: Callee 31..37 Open 37..38 Arg 38..388
+  node 3 Await @38..388: Operand 44..388
+  node 4 Decl(Const) @391..463: Target 397..399 Init 402..462
+  node 5 Await @402..462: Operand 408..462
   await#1 @38 (35:8) pc 65: call.callee@31 call.this@31
+    path 0.2 1.0 2.2 3
   await#2 @402 (37:12) pc 107: -
+    path 0.3 4.1 5

@@ -1,47 +1,134 @@
 function g @339..491
   arg0 a@0
   loc0 <state>, loc1 x@0
+  node 0 Body @0..152: Params 11..14 Stmt 19..37 Stmt 40..62 Stmt 65..138 Stmt 141..150 | Param a@0#0 Const x@0#1
+  node 1 Decl(Const) @19..37: Target 25..26 Init 29..36
+  node 2 Yield @29..36: Operand 35..36
+  node 3 Try @65..138: Block 69..100 Finally 109..138
+  node 4 Block @69..100: Stmt 75..83 Stmt 88..96
+  node 5 Expr @75..83: Operand 75..82
+  node 6 Yield @75..82: Operand 81..82
+  node 7 Expr @88..96: Operand 88..95
+  node 8 Yield @88..95: Operand 94..95
   yield#1 @29 (8:13) pc 7: -
+    path 0.1 1.1 2
   yield#2 @75 (11:5) pc 35: -
+    path 0.3 3.0 4.0 5.0 6
   yield#3 @88 (12:5) pc 48: -
+    path 0.3 3.0 4.1 7.0 8
 function inner @739..838
   loc0 <state>, loc1 r@0
+  node 0 Body @0..99: Params 15..17 Stmt 22..40 Stmt 43..71 Stmt 74..82 Stmt 85..97 | Const r@0#1
+  node 1 Decl(Const) @22..40: Target 28..29 Init 32..39
+  node 2 Yield @32..39: Operand 38..39
+  node 3 Expr @74..82: Operand 74..81
+  node 4 Yield @74..81: Operand 80..81
   yield#1 @32 (30:13) pc 7: -
+    path 0.1 1.1 2
   yield#2 @74 (32:3) pc 35: -
+    path 0.3 3.0 4
 function outer @839..945
   loc0 <state>, loc1 v@0
+  node 0 Body @0..106: Params 15..17 Stmt 22..47 Stmt 50..70 Stmt 73..87 Stmt 90..104 | Const v@0#1
+  node 1 Decl(Const) @22..47: Target 28..29 Init 32..46
+  node 2 YieldStar @32..46: Operand 39..46
+  node 3 Expr @73..87: Operand 73..86
+  node 4 YieldStar @73..86: Operand 80..86
   yield*#1 @32 (36:13) pc 46: yield*.iterator@32 yield*.next@32
+    path 0.1 1.1 2
   yield*#2 @73 (38:3) pc 192: yield*.iterator@73 yield*.next@73
+    path 0.3 3.0 4
 function fin @1067..1162
   loc0 <state>
+  node 0 Body @0..95: Params 13..15 Stmt 20..93
+  node 1 Try @20..93: Block 24..49 Finally 58..93
+  node 2 Block @24..49: Stmt 30..45
+  node 3 Expr @30..45: Operand 30..44
+  node 4 YieldStar @30..44: Operand 37..44
   yield*#1 @30 (48:5) pc 48: yield*.iterator@30 yield*.next@30
+    path 0.1 1.0 2.0 3.0 4
 function expr @1271..1365
   loc0 <state>, loc1 r@0
+  node 0 Body @0..94: Params 14..16 Stmt 21..80 Stmt 83..92 | Const r@0#1
+  node 1 Decl(Const) @21..80: Target 27..28 Init 31..79
+  node 2 Binary @31..49: Left 31..32 Op 33..34 Right 35..49
+  node 3 Yield @36..44: Operand 42..44
+  node 4 Binary @35..49: Left 35..45 Op 46..47 Right 48..49
+  node 5 Binary @31..79: Left 31..49 Op 50..51 Right 52..79
+  node 6 Array @52..72: Element 53..61 Element 63..71
+  node 7 Yield @53..61: Operand 59..61
+  node 8 Yield @63..71: Operand 69..71
+  node 9 Member @52..79: Object 52..72 Property 73..79
   yield#1 @36 (58:18) pc 9: binary.left@31
+    path 0.1 1.1 5.0 2.2 4.0 3
   yield#2 @53 (58:35) pc 21: binary.left@31
+    path 0.1 1.1 5.2 9.0 6.0 7
   yield#3 @63 (58:45) pc 30: binary.left@31 array.element@53
+    path 0.1 1.1 5.2 9.0 6.1 8
 function m @1520..1542
   loc0 <state>, loc1 this
+  node 0 Body @0..22: Params 2..4 Stmt 7..20
+  node 1 Expr @7..20: Operand 7..19
+  node 2 Yield @7..19: Operand 13..19
   yield#1 @7 (66:20) pc 17: -
+    path 0.1 1.0 2
 function pass @1863..1895
   loc0 <state>
+  node 0 Body @0..32: Params 14..16 Stmt 19..30
+  node 1 Expr @19..30: Operand 19..29
+  node 2 YieldStar @19..29: Operand 26..29
   yield*#1 @19 (71:20) pc 44: yield*.iterator@19 yield*.next@19
+    path 0.1 1.0 2
 function catcher @1935..2049
   loc0 <state>, loc1 e@53
+  node 0 Body @0..114: Params 17..19 Stmt 24..112
+  node 1 Try @24..112: Block 28..46 CatchParam 54..55 CatchBody 57..112 | CatchParam e@53#1
+  node 2 Block @28..46: Stmt 34..42
+  node 3 Expr @34..42: Operand 34..41
+  node 4 Yield @34..41: Operand 40..41
+  node 5 Block @57..112: Stmt 63..94 Stmt 99..108
+  node 6 Expr @99..108: Operand 99..107
+  node 7 Yield @99..107: Operand 105..107
   yield#1 @34 (75:5) pc 7: - (out: loc1)
+    path 0.1 1.0 2.0 3.0 4
   yield#2 @99 (78:5) pc 39: -
+    path 0.1 1.2 5.1 6.0 7
 function fw @2050..2086
   loc0 <state>
+  node 0 Body @0..36: Params 12..14 Stmt 17..34
+  node 1 Expr @17..34: Operand 17..33
+  node 2 YieldStar @17..33: Operand 24..33
   yield*#1 @17 (81:18) pc 46: yield*.iterator@17 yield*.next@17
+    path 0.1 1.0 2
 function nt @2299..2333
   loc0 <state>
+  node 0 Body @0..34: Params 12..14 Stmt 17..32
+  node 1 Expr @17..32: Operand 17..31
+  node 2 YieldStar @17..31: Operand 24..31
   yield*#1 @17 (90:18) pc 44: yield*.iterator@17 yield*.next@17
+    path 0.1 1.0 2
 function cnt @2419..2531
   loc0 <state>, loc3 i@39
+  node 0 Body @0..112: Params 13..15 Stmt 20..110
+  node 1 Try @20..110: Block 24..65 Finally 74..110
+  node 2 Block @24..65: Stmt 30..61
+  node 3 For @30..61: Init 35..44 Update 48..51 Body 53..61 | Let i@39#0
+  node 4 Expr @53..61: Operand 53..60
+  node 5 Yield @53..60: Operand 59..60
   yield#1 @53 (100:28) pc 9: -
+    path 0.1 1.0 2.0 3.2 4.0 5
 function fo @2598..2652
   loc0 <state>, loc1 x@28
+  node 0 Body @0..54: Params 12..14 Stmt 17..52
+  node 1 ForOf @17..52: Head 22..29 Iterable 33..42 Body 44..52 | Const x@28#0
+  node 2 Expr @44..52: Operand 44..51
+  node 3 Yield @44..51: Operand 50..51
   yield#1 @44 (109:45) pc 46: for-of.iterator@17 for-of.next@17
+    path 0.1 1.2 2.0 3
 function dstr @2919..2991
   loc0 <state>, loc3 a@0
+  node 0 Body @0..72: Params 14..16 Stmt 19..60 Stmt 61..70 | Const a@0#1
+  node 1 Decl(Const) @19..60: Target 25..49 Init 52..59
+  node 2 Yield @30..48: Operand 36..48
   yield#1 @30 (117:31) pc 66: pattern.iterator@25
+    path 0.1 1.0 2 gap @25

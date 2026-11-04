@@ -1,28 +1,92 @@
 function agen @167..305
   loc0 <state>
+  node 0 Body @0..138: Params 20..22 Stmt 27..136
+  node 1 Try @27..136: Block 31..92 Finally 101..136
+  node 2 Block @31..92: Stmt 37..45 Stmt 50..75 Stmt 80..88
+  node 3 Expr @37..45: Operand 37..44
+  node 4 Yield @37..44: Operand 43..44
+  node 5 Expr @50..75: Operand 50..74
+  node 6 Yield @50..74: Operand 56..74
+  node 7 Expr @80..88: Operand 80..87
+  node 8 Yield @80..87: Operand 86..87
   yield.await#1 @37 (6:5) pc 7: -
+    path 0.1 1.0 2.0 3.0 4
   yield#1 @37 (6:5) pc 10: -
+    path 0.1 1.0 2.0 3.0 4
   yield.return#1 @37 (6:5) pc 15: -
+    path 0.1 1.0 2.0 3.0 4
   yield.await#2 @50 (7:5) pc 41: -
+    path 0.1 1.0 2.1 5.0 6
   yield#2 @50 (7:5) pc 44: -
+    path 0.1 1.0 2.1 5.0 6
   yield.return#2 @50 (7:5) pc 49: -
+    path 0.1 1.0 2.1 5.0 6
   yield.await#3 @80 (8:5) pc 60: -
+    path 0.1 1.0 2.2 7.0 8
   yield#3 @80 (8:5) pc 63: -
+    path 0.1 1.0 2.2 7.0 8
   yield.return#3 @80 (8:5) pc 68: -
+    path 0.1 1.0 2.2 7.0 8
 function <anonymous> @769..2278
   loc0 <state>, loc1 C@0, loc3 <fields 0>, loc4 c@0, loc5 d@0, loc6 order@0, loc7 p@0
+  node 0 Body @0..1509: Params 6..8 Stmt 16..52 Stmt 55..150 Stmt 153..237 Stmt 240..306 Stmt 309..343 Stmt 346..428 Stmt 431..465 Stmt 468..580 Stmt 583..617 Stmt 620..689 Stmt 692..728 Stmt 731..765 Stmt 768..799 Stmt 802..884 Stmt 887..935 Stmt 938..1001 Stmt 1004..1096 Stmt 1099..1175 Stmt 1213..1230 Stmt 1233..1306 Stmt 1309..1439 Stmt 1442..1450 Stmt 1453..1464 Stmt 1467..1478 Stmt 1481..1507 | Class C@0#14 Const c@0#15 Const d@0#16 Const order@0#19 Const p@0#20
+  node 1 Expr @16..52: Operand 16..51
+  node 2 Await @16..51: Operand 22..51
+  node 3 Expr @55..150: Operand 55..149
+  node 4 Await @55..149: Operand 61..149
+  node 5 Expr @153..237: Operand 153..236
+  node 6 Await @153..236: Operand 159..236
+  node 7 Expr @240..306: Operand 240..305
+  node 8 Await @240..305: Operand 246..305
+  node 9 Expr @346..428: Operand 346..427
+  node 10 Await @346..427: Operand 352..427
+  node 11 Expr @468..580: Operand 468..579
+  node 12 Await @468..579: Operand 474..579
+  node 13 Expr @620..689: Operand 620..688
+  node 14 Await @620..688: Operand 626..688
+  node 15 Expr @692..728: Operand 692..727
+  node 16 Await @692..727: Operand 698..727
+  node 17 Expr @731..765: Operand 731..764
+  node 18 Await @731..764: Operand 737..764
+  node 19 Expr @768..799: Operand 768..798
+  node 20 Await @768..798: Operand 774..798
+  node 21 Decl(Const) @887..935: Target 893..894 Init 897..934
+  node 22 Await @897..934: Operand 903..934
+  node 23 Decl(Const) @938..1001: Target 944..945 Init 948..1000
+  node 24 Await @948..1000: Operand 954..1000
+  node 25 Expr @1442..1450: Operand 1442..1449
+  node 26 Await @1442..1449: Operand 1448..1449
+  node 27 Expr @1453..1464: Operand 1453..1463
+  node 28 Await @1453..1463: Operand 1459..1463
+  node 29 Expr @1467..1478: Operand 1467..1477
+  node 30 Await @1467..1477: Operand 1473..1477
   await#1 @16 (32:3) pc 42: -
+    path 0.1 1.0 2
   await#2 @55 (33:3) pc 111: -
+    path 0.2 3.0 4
   await#3 @153 (34:3) pc 190: -
+    path 0.3 5.0 6
   await#4 @240 (35:3) pc 237: -
+    path 0.4 7.0 8
   await#5 @346 (37:3) pc 324: -
+    path 0.6 9.0 10
   await#6 @468 (39:3) pc 406: -
+    path 0.8 11.0 12
   await#7 @620 (41:3) pc 504: -
+    path 0.10 13.0 14
   await#8 @692 (42:3) pc 538: -
+    path 0.11 15.0 16
   await#9 @731 (43:3) pc 567: -
+    path 0.12 17.0 18
   await#10 @768 (44:3) pc 597: -
+    path 0.13 19.0 20
   await#11 @897 (50:13) pc 649: -
+    path 0.15 21.1 22
   await#12 @948 (51:13) pc 695: -
+    path 0.16 23.1 24
   await#13 @1442 (58:3) pc 947: -
+    path 0.22 25.0 26
   await#14 @1453 (59:3) pc 952: -
+    path 0.23 27.0 28
   await#15 @1467 (60:3) pc 957: -
+    path 0.24 29.0 30

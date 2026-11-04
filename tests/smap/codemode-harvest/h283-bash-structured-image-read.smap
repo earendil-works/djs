@@ -1,9 +1,27 @@
 function <anonymous> @1..4717
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0, loc9 fakeImage@0
+  node 0 Body @0..4716: Params 6..22 Stmt 468..3925 Stmt 3926..3959 Stmt 3960..4308 Stmt 4309..4354 Stmt 4355..4713 | Param tools@0#0 Param console@0#0 Const results@0#1 Const fake@0#2 Const fakeImage@0#4
+  node 1 Return @4355..4713: Operand 4362..4712
+  node 2 Await @4362..4712: Operand 4368..4712
   await#1 @4362 (74:8) pc 372: -
+    path 0.5 1.0 2
 function <anonymous> @4370..4695
   arg0 tools@0, arg1 image@0
   loc0 <state>, loc1 dir@0, loc2 files@0, loc3 f@199, loc8 r@215
+  node 0 Body @0..325: Params 6..20 Stmt 26..83 Stmt 84..187 Stmt 188..323 | Param tools@0#0 Param image@0#0 Const dir@0#1 Const files@0#2
+  node 1 Decl(Const) @84..187: Target 90..95 Init 98..186
+  node 2 Await @99..159: Operand 105..159
+  node 3 Member @98..167: Object 98..160 Property 161..167
+  node 4 Member @98..172: Object 98..167 Property 168..172
+  node 5 Call @98..174: Callee 98..172 Open 172..173
+  node 6 Member @98..180: Object 98..174 Property 175..180
+  node 7 Call @98..186: Callee 98..180 Open 180..181 Arg 181..185
+  node 8 ForOf @188..323: Head 193..200 Iterable 204..209 Body 211..323 | Const f@199#0
+  node 9 Block @211..323: Stmt 215..282 Stmt 285..321 | Const r@215#0
+  node 10 Decl(Const) @215..282: Target 221..222 Init 225..281
+  node 11 Await @225..281: Operand 231..281
   await#1 @99 (76:16) pc 43: - (out: loc3 loc8)
+    path 0.2 1.1 7.0 6.0 5.0 4.0 3.0 2
   await#2 @225 (78:13) pc 143: for-of.iterator@188 for-of.next@188
+    path 0.3 8.2 9.0 10.1 11

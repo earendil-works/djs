@@ -449,7 +449,13 @@ fn slots_name_bindings_and_hidden_locals() {
     assert_eq!(
         maps[0].text(src.as_bytes()),
         "function f @0..76\n  arg0 a@0, arg1 b@0\n  loc0 <state>, loc1 x@0, loc2 y@42\n  \
-         await#1 @53 (3:16) pc 11: -\n  await#2 @66 (4:3) pc 16: - (out: loc2)\n"
+         node 0 Body @0..76: Params 16..22 Stmt 27..37 Stmt 40..63 Stmt 66..74 | \
+         Param a@0#0 Param b@0#0 Let x@0#1\n  \
+         node 1 Block @40..63: Stmt 42..52 Stmt 53..61 | Let y@42#0\n  \
+         node 2 Expr @53..61: Operand 53..60\n  node 3 Await @53..60: Operand 59..60\n  \
+         node 4 Expr @66..74: Operand 66..73\n  node 5 Await @66..73: Operand 72..73\n  \
+         await#1 @53 (3:16) pc 11: -\n    path 0.2 1.1 2.0 3\n  \
+         await#2 @66 (4:3) pc 16: - (out: loc2)\n    path 0.3 4.0 5\n"
     );
     let y = super::Slot::Binding {
         name: String::from("y"),
@@ -511,6 +517,9 @@ fn pinned_maps() {
     let mut unsupported: std::collections::BTreeMap<String, u32> = Default::default();
     let mut sequences: std::collections::BTreeMap<String, u32> = Default::default();
     let mut kinds: std::collections::BTreeMap<String, u32> = Default::default();
+    // Paths (D2850): complete ones, and gaps by the step whose part holds them.
+    let mut complete = 0u32;
+    let mut gaps: std::collections::BTreeMap<String, u32> = Default::default();
     for (dir, area, corpus) in areas {
         let mut files: Vec<PathBuf> = std::fs::read_dir(root.join(dir))
             .unwrap()
@@ -569,6 +578,26 @@ fn pinned_maps() {
                         }
                     }
                     *kinds.entry(String::from(s.kind.name())).or_default() += 1;
+                    if let Some(e) = path_error(m, s) {
+                        failed.push(alloc::format!("{name}: {} {e}", s.name));
+                    }
+                    match s.gap {
+                        None => complete += 1,
+                        Some(g) => {
+                            let at = s
+                                .path
+                                .iter()
+                                .rev()
+                                .find_map(|st| {
+                                    let n = &m.syntax.nodes[st.node as usize];
+                                    let p = n.parts.get(st.part? as usize)?;
+                                    (p.start <= g && g < p.end)
+                                        .then(|| alloc::format!("{}.{:?}", n.kind.name(), p.role))
+                                })
+                                .unwrap_or_else(|| String::from("?"));
+                            *gaps.entry(at).or_default() += 1;
+                        }
+                    }
                     match &s.unsupported {
                         Some(u) => *unsupported.entry(u.clone()).or_default() += 1,
                         None => {
@@ -623,6 +652,12 @@ fn pinned_maps() {
     for (s, n) in seqs {
         summary.push_str(&alloc::format!("{n:5} {s}\n"));
     }
+    summary.push_str(&alloc::format!(
+        "\n## paths (D2850)\n{complete:5} complete\n\n## path gaps, by the part they are in\n"
+    ));
+    for (g, n) in &gaps {
+        summary.push_str(&alloc::format!("{n:5} {g}\n"));
+    }
     summary.push_str("\n## unsupported\n");
     for (u, n) in &unsupported {
         summary.push_str(&alloc::format!("{n:5} {u}\n"));
@@ -660,4 +695,255 @@ fn pinned_maps() {
          changed site by an older build will be refused):\n{}",
         failed.join("\n")
     );
+}
+
+/// Each site's path (D2850) as `Kind.Role` steps, the last as its kind, with ` gap`
+/// when the path misses a construct.
+fn paths(src: &str) -> Vec<String> {
+    let mut heap = Heap::new().unwrap();
+    let opts = CompileOptions::async_body("t.js", &[]);
+    let maps = suspension_maps(&mut heap, src.as_bytes(), &opts).unwrap();
+    let mut out = Vec::new();
+    for m in &maps {
+        for s in &m.sites {
+            let mut steps = Vec::new();
+            for st in &s.path {
+                let n = &m.syntax.nodes[st.node as usize];
+                steps.push(match st.part {
+                    Some(p) => alloc::format!("{}.{:?}", n.kind.name(), n.parts[p as usize].role),
+                    None => n.kind.name(),
+                });
+            }
+            let mut line = alloc::format!("{} {}", s.name, steps.join(" "));
+            if s.gap.is_some() {
+                line.push_str(" gap");
+            }
+            out.push(line);
+        }
+    }
+    out
+}
+
+/// `(source, each site's path)`: the statements and expressions around sites.
+const PATHS: &[(&str, &[&str])] = &[
+    (
+        "f(a, await b);",
+        &["await#1 Body.Stmt Expr.Operand Call.Arg Await"],
+    ),
+    (
+        "o?.m?.(await x)[await y];",
+        &[
+            "await#1 Body.Stmt Expr.Operand Member[].Object Call?.Arg Await",
+            "await#2 Body.Stmt Expr.Operand Member[].Property Await",
+        ],
+    ),
+    (
+        "new C(...a, await b); tag`x${await c}`; import(await d);",
+        &[
+            "await#1 Body.Stmt Expr.Operand New.Arg Await",
+            "await#2 Body.Stmt Expr.Operand TaggedTemplate.Subst Await",
+            "await#3 Body.Stmt Expr.Operand ImportCall.Arg Await",
+        ],
+    ),
+    (
+        "const x = 1, y = await f(x); var z = await g; let w;",
+        &[
+            "await#1 Body.Stmt Decl(Const).Init Await",
+            "await#2 Body.Stmt Decl(Var).Init Await",
+        ],
+    ),
+    (
+        "for (const a of xs) { if (a) { o.m(await g(a)); } else h(); }",
+        &["await#1 Body.Stmt ForOf.Body Block.Stmt If.Then Block.Stmt Expr.Operand Call.Arg Await"],
+    ),
+    (
+        "if (a) b; else if (await c) d; else await e;",
+        &[
+            "await#1 Body.Stmt If.Else If.Test Await",
+            "await#2 Body.Stmt If.Else If.Else Expr.Operand Await",
+        ],
+    ),
+    (
+        "x.y = await z; ++o[await k]; (await p).q++; v += await w;",
+        &[
+            "await#1 Body.Stmt Expr.Operand Assign.Right Await",
+            "await#2 Body.Stmt Expr.Operand Update.Property Await",
+            "await#3 Body.Stmt Expr.Operand Update.Object Await",
+            "await#4 Body.Stmt Expr.Operand Assign.Right Await",
+        ],
+    ),
+    (
+        "await a + b * await c; d ?? await e; f ? await g : h; (i, await j); !await k;",
+        &[
+            "await#1 Body.Stmt Expr.Operand Binary.Left Await",
+            "await#2 Body.Stmt Expr.Operand Binary.Right Binary.Right Await",
+            "await#3 Body.Stmt Expr.Operand Logical.Right Await",
+            "await#4 Body.Stmt Expr.Operand Conditional.Then Await",
+            "await#5 Body.Stmt Expr.Operand Sequence.Expr Await",
+            "await#6 Body.Stmt Expr.Operand Unary.Operand Await",
+        ],
+    ),
+    (
+        "try { await a } catch (e) { let q = await e; } finally { await f }",
+        &[
+            "await#1 Body.Stmt Try.Block Block.Stmt Expr.Operand Await",
+            "await#2 Body.Stmt Try.CatchBody Block.Stmt Decl(Let).Init Await",
+            "await#3 Body.Stmt Try.Finally Block.Stmt Expr.Operand Await",
+        ],
+    ),
+    (
+        "switch (await x) { case await y: let z = 2; await z; default: }",
+        &[
+            "await#1 Body.Stmt Switch.Discriminant Await",
+            "await#2 Body.Stmt Switch.Case Await",
+            "await#3 Body.Stmt Switch.Stmt Expr.Operand Await",
+        ],
+    ),
+    (
+        "a: b: while (true) { do { `a${await b}c`; } while (await d) }",
+        &[
+            "await#1 Body.Stmt Label.Body Label.Body While.Body Block.Stmt DoWhile.Body \
+             Block.Stmt Expr.Operand Template.Subst Await",
+            "await#2 Body.Stmt Label.Body Label.Body While.Body Block.Stmt DoWhile.Test Await",
+        ],
+    ),
+    (
+        "for (let i = await n; i < await m; i += await k) [await x, , ...y];",
+        &[
+            "await#1 Body.Stmt For.Init Decl(Let).Init Await",
+            "await#2 Body.Stmt For.Test Binary.Right Await",
+            "await#3 Body.Stmt For.Update Assign.Right Await",
+            "await#4 Body.Stmt For.Body Expr.Operand Array.Element Await",
+        ],
+    ),
+    (
+        "({a: await b, [await k]: 1, ...await s});",
+        &[
+            "await#1 Body.Stmt Expr.Operand Object.Value Await",
+            "await#2 Body.Stmt Expr.Operand Object.ComputedKey Await",
+            "await#3 Body.Stmt Expr.Operand Object.Spread Await",
+        ],
+    ),
+    (
+        "for await (const v of await g()) { (async () => await 1)(); }",
+        &[
+            "for-await.close#1 Body.Stmt ForAwait",
+            "for-await.next#1 Body.Stmt ForAwait",
+            "await#1 Body.Stmt ForAwait.Iterable Await",
+            "await#1 Body.Operand Await",
+        ],
+    ),
+    (
+        "for (x in await o) await x; return await r;",
+        &[
+            "await#1 Body.Stmt ForIn.Iterable Await",
+            "await#2 Body.Stmt ForIn.Body Expr.Operand Await",
+            "await#3 Body.Stmt Return.Operand Await",
+        ],
+    ),
+    // Patterns are no nodes yet: a gap.
+    (
+        "const {a = await b} = c;",
+        &["await#1 Body.Stmt Decl(Const).Target Await gap"],
+    ),
+    (
+        "async function* gen() { yield await 1; throw await 2; }",
+        &[
+            "yield.await#1 Body.Stmt Expr.Operand Yield",
+            "yield#1 Body.Stmt Expr.Operand Yield",
+            "yield.return#1 Body.Stmt Expr.Operand Yield",
+            "await#1 Body.Stmt Expr.Operand Yield.Operand Await",
+            "await#2 Body.Stmt Throw.Operand Await",
+        ],
+    ),
+];
+
+#[test]
+fn site_paths() {
+    for (src, want) in PATHS {
+        assert_eq!(paths(src), *want, "{src}");
+    }
+}
+
+/// Declarations land on the node of their scope with the part that declares them;
+/// special references and spans are relative to the function.
+#[test]
+fn site_syntax_text() {
+    let src = "async function f(a, {b}) { var v; let w = 1; for (const [k, x] of a) \
+               { o.p = `${k}${await x}`; } try { } catch (e) { const q = 1; await q; } \
+               function g() {} return arguments.length + new.target; }";
+    let mut heap = Heap::new().unwrap();
+    let maps = suspension_maps(&mut heap, src.as_bytes(), &CompileOptions::script("t.js"));
+    let m = &maps.unwrap()[0];
+    let text = m.syntax.text();
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(
+        lines,
+        [
+            "  node 0 Body @0..196: Params 16..24 Stmt 27..33 Stmt 34..44 Stmt 45..96 \
+             Stmt 97..140 FuncDecl 141..156 Stmt 157..194 | Param a@0#0 Param b@0#0 \
+             Var v@27#1 Let w@27#2 Function g@27#5",
+            "  node 1 ForOf @45..96: Head 50..62 Iterable 66..67 Body 69..96 | \
+             Const k@56#0 Const x@56#0",
+            "  node 2 Block @69..96: Stmt 71..94",
+            "  node 3 Expr @71..94: Operand 71..93",
+            "  node 4 Assign @71..93: Object 71..72 Property 73..74 Op 75..76 Right 77..93",
+            "  node 5 Template @77..93: Quasi 77..80 Subst 80..81 Quasi 81..84 Subst 84..91 \
+             Quasi 91..93",
+            "  node 6 Await @84..91: Operand 90..91",
+            "  node 7 Try @97..140: Block 101..104 CatchParam 112..113 CatchBody 115..140 | \
+             CatchParam e@111#1",
+            "  node 8 Block @115..140: Stmt 117..129 Stmt 130..138 | Const q@111#0",
+            "  node 9 Expr @130..138: Operand 130..137",
+            "  node 10 Await @130..137: Operand 136..137",
+            "  special Arguments@164 NewTarget@183",
+        ]
+    );
+}
+
+/// What is wrong with a site's path (D2850), if anything: it must start at the body,
+/// name the part that holds each next step, and end at the site's own construct.
+fn path_error(m: &super::FunctionMap, s: &super::Site) -> Option<String> {
+    use super::{NodeKind, SiteKind};
+    let node = |i: u32| &m.syntax.nodes[i as usize];
+    let first = s.path.first()?;
+    if node(first.node).kind != NodeKind::Body {
+        return Some(String::from("path does not start at the body"));
+    }
+    let (last, inner) = s.path.split_last()?;
+    if last.part.is_some() || inner.iter().any(|st| st.part.is_none()) && s.gap.is_none() {
+        return Some(String::from("a step without its part"));
+    }
+    let n = node(last.node);
+    let want: &[NodeKind] = match s.kind {
+        SiteKind::Await => &[NodeKind::Await],
+        SiteKind::Yield
+        | SiteKind::AsyncYield
+        | SiteKind::AsyncYieldAwait
+        | SiteKind::AsyncYieldReturn => &[NodeKind::Yield],
+        SiteKind::YieldStar | SiteKind::YieldStarAwait => &[NodeKind::YieldStar],
+        SiteKind::ForAwaitNext | SiteKind::ForAwaitClose => &[NodeKind::ForAwait],
+        SiteKind::AsyncReturn => &[NodeKind::Return],
+        SiteKind::AwaitUsing => &[
+            NodeKind::Block,
+            NodeKind::Body,
+            NodeKind::Switch,
+            NodeKind::For,
+            NodeKind::ForOf,
+            NodeKind::ForAwait,
+        ],
+    };
+    if !want.contains(&n.kind) {
+        return Some(alloc::format!("path ends at {}", n.kind.name()));
+    }
+    let at = match s.kind {
+        SiteKind::AwaitUsing => true,
+        // (At the end of the `yield*` expression.)
+        SiteKind::YieldStarAwait => n.start <= s.pos && s.pos <= n.end,
+        _ => n.start == s.pos,
+    };
+    if !at {
+        return Some(alloc::format!("path ends at {}, not at the site", n.start));
+    }
+    None
 }

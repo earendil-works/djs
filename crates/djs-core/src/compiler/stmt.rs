@@ -9,6 +9,7 @@ use super::func::{FuncKind, HandlerLabels, ScopeKind, VarKind};
 use super::parser::{BlockKind, Parser, syntax};
 use super::pattern::Binding;
 use super::smap::SiteKind;
+use super::smap_syntax::{DeclKind, NodeKind, Role};
 use crate::heap::Atom;
 use crate::lexer::{Kw, TokenKind};
 
@@ -16,6 +17,19 @@ impl Parser<'_, '_> {
     /// StatementListItem: declarations are allowed here, not in single-statement
     /// positions.
     pub(super) fn parse_statement_list_item(&mut self) -> PResult<()> {
+        // A statement of the list (suspension maps, D2850).
+        let start = self.tok.start;
+        let role = if self.is(TokenKind::Function) || self.at_async_function() {
+            Role::FuncDecl
+        } else {
+            Role::Stmt
+        };
+        self.parse_statement_list_item_inner()?;
+        self.syn_part(role, start, self.prev_end);
+        Ok(())
+    }
+
+    fn parse_statement_list_item_inner(&mut self) -> PResult<()> {
         // Statements that cannot be declarations (TS ones included) go straight to
         // `parse_statement`: nested blocks recurse through here, and the declaration
         // parsers inlined below made this frame 368 bytes in wasm, 70% of a nesting level
@@ -95,9 +109,12 @@ impl Parser<'_, '_> {
             TokenKind::LBrace => self.parse_block(),
             TokenKind::Semicolon => self.next(),
             TokenKind::Var => {
+                self.syn_open(NodeKind::Decl(DeclKind::Var), tok.start);
                 self.next()?;
                 self.parse_var_declarations(false)?;
-                self.expect_semicolon()
+                self.expect_semicolon()?;
+                self.syn_close();
+                Ok(())
             }
             TokenKind::If => self.parse_if(),
             TokenKind::While => self.parse_while(Vec::new()),
@@ -118,15 +135,11 @@ impl Parser<'_, '_> {
                 if self.strip_at_module_item() {
                     return self.strip_module_item();
                 }
-                self.parse_expr(false)?;
-                self.emit_completion();
-                self.expect_semicolon()
+                self.parse_expression_statement()
             }
             // `import(...)` and `import.meta` start expression statements.
             TokenKind::Import if matches!(self.peek().kind, TokenKind::LParen | TokenKind::Dot) => {
-                self.parse_expr(false)?;
-                self.emit_completion();
-                self.expect_semicolon()
+                self.parse_expression_statement()
             }
             TokenKind::Import | TokenKind::Export | TokenKind::Enum => {
                 let text = self.tok_text();
@@ -162,12 +175,19 @@ impl Parser<'_, '_> {
             {
                 self.parse_labeled()
             }
-            _ => {
-                self.parse_expr(false)?;
-                self.emit_completion();
-                self.expect_semicolon()
-            }
+            _ => self.parse_expression_statement(),
         }
+    }
+
+    fn parse_expression_statement(&mut self) -> PResult<()> {
+        let start = self.tok.start;
+        self.syn_open(NodeKind::Expr, start);
+        self.parse_expr(false)?;
+        self.syn_part(Role::Operand, start, self.prev_end);
+        self.emit_completion();
+        self.expect_semicolon()?;
+        self.syn_close();
+        Ok(())
     }
 
     /// The completion value local, in the top-level code of a Script or eval (not in
@@ -203,8 +223,10 @@ impl Parser<'_, '_> {
     }
 
     fn parse_block(&mut self) -> PResult<()> {
+        self.syn_open(NodeKind::Block, self.tok.start);
         self.next()?;
         self.push_scope(ScopeKind::Block)?;
+        self.syn_scope();
         let using = self.begin_using_list(true);
         while !self.is(TokenKind::RBrace) {
             if self.is(TokenKind::Eof) {
@@ -216,15 +238,24 @@ impl Parser<'_, '_> {
         self.next()?;
         self.end_using_list(using);
         self.pop_scope();
+        self.syn_close();
         Ok(())
     }
 
     // ---- Declarations ---------------------------------------------------------------
 
     fn parse_lexical_declaration(&mut self, kind: VarKind) -> PResult<()> {
+        let dk = if kind == VarKind::Const {
+            DeclKind::Const
+        } else {
+            DeclKind::Let
+        };
+        self.syn_open(NodeKind::Decl(dk), self.tok.start);
         self.next()?;
         self.parse_lexical_bindings(kind, false)?;
-        self.expect_semicolon()
+        self.expect_semicolon()?;
+        self.syn_close();
+        Ok(())
     }
 
     /// `let`/`const` bindings after the keyword. In a `for` head, stops before `in`/`of`
@@ -241,11 +272,14 @@ impl Parser<'_, '_> {
             let pos = self.tok.start;
             let name = self.binding_name()?;
             self.next()?;
+            self.syn_part(Role::Target, pos, self.prev_end);
             self.ts_eat_marker(TokenKind::Bang)?;
             self.ts_annotation()?;
             let v = self.declare_lexical(name, kind, self.tok.start)?;
             if self.eat(TokenKind::Assign)? {
+                let init = self.tok.start;
                 self.parse_named(name, |p| p.parse_assign(in_for))?;
+                self.syn_part(Role::Init, init, self.prev_end);
             } else if in_for && (self.is(TokenKind::In) || self.tok.is_contextual(Kw::Of)) {
                 return Ok(());
             } else if kind == VarKind::Const {
@@ -275,11 +309,14 @@ impl Parser<'_, '_> {
             let pos = self.tok.start;
             let name = self.binding_name()?;
             self.next()?;
+            self.syn_part(Role::Target, pos, self.prev_end);
             self.ts_eat_marker(TokenKind::Bang)?;
             self.ts_annotation()?;
             self.declare_var(name, self.tok.start)?;
             if self.eat(TokenKind::Assign)? {
+                let init = self.tok.start;
                 self.parse_named(name, |p| p.parse_assign(in_for))?;
+                self.syn_part(Role::Init, init, self.prev_end);
                 let r = self.name_ref(name, pos);
                 self.mark(pos);
                 self.code().name_put(r);
@@ -295,6 +332,7 @@ impl Parser<'_, '_> {
         let mark = self.pattern_vars.len();
         let start = self.tok.start;
         self.deferred_pattern(b, |p| {
+            p.syn_part(Role::Target, start, p.prev_end);
             let typed = p.ts && p.is(TokenKind::Colon);
             p.ts_annotation()?;
             if typed && !p.is(TokenKind::Assign) {
@@ -307,7 +345,9 @@ impl Parser<'_, '_> {
                 return syntax(start, "variable name expected");
             }
             p.next()?;
+            let init = p.tok.start;
             p.parse_assign(in_for)?;
+            p.syn_part(Role::Init, init, p.prev_end);
             Ok(())
         })?;
         let end = self.prev_end;
@@ -317,55 +357,83 @@ impl Parser<'_, '_> {
 
     // ---- Control flow ---------------------------------------------------------------
 
-    fn parse_paren_expr(&mut self) -> PResult<()> {
+    /// `( expr )`: the expression is the innermost node's part `role`.
+    fn parse_paren_expr(&mut self, role: Role) -> PResult<()> {
         self.expect(TokenKind::LParen, "(")?;
+        let start = self.tok.start;
         self.parse_expr(false)?;
+        self.syn_part(role, start, self.prev_end);
         self.ts_semi = true;
         self.expect(TokenKind::RParen, ")")
     }
 
     fn parse_if(&mut self) -> PResult<()> {
+        self.syn_open(NodeKind::If, self.tok.start);
         self.next()?;
         self.reset_completion();
-        self.parse_paren_expr()?;
+        self.parse_paren_expr(Role::Test)?;
         let l_else = self.new_label();
         self.code().jump_if_false(l_else);
+        let then = self.tok.start;
         self.parse_statement()?;
+        self.syn_part(Role::Then, then, self.prev_end);
         if self.eat(TokenKind::Else)? {
             let l_end = self.new_label();
             self.code().jump(l_end);
             self.place(l_else);
+            let other = self.tok.start;
             // `else if` chains loop here instead of recursing (docs/compiler.md 2.4).
             if self.is(TokenKind::If) {
                 self.parse_if_chain(l_end)?;
             } else {
                 self.parse_statement()?;
             }
+            self.syn_part(Role::Else, other, self.prev_end);
             self.place(l_end);
         } else {
             self.place(l_else);
         }
+        self.syn_close();
         Ok(())
     }
 
     /// The `if` of an `else if`, sharing the chain's end label.
     fn parse_if_chain(&mut self, l_end: crate::bytecode::Label) -> PResult<()> {
+        // The `if`s of the chain, each the `else` of the one before (D2850).
+        let mut ifs: Vec<u32> = Vec::new();
         loop {
+            if self.syn_on() {
+                ifs.push(self.tok.start);
+            }
+            self.syn_open(NodeKind::If, self.tok.start);
             self.next()?;
-            self.parse_paren_expr()?;
+            self.parse_paren_expr(Role::Test)?;
             let l_else = self.new_label();
             self.code().jump_if_false(l_else);
+            let then = self.tok.start;
             self.parse_statement()?;
+            self.syn_part(Role::Then, then, self.prev_end);
             if !self.eat(TokenKind::Else)? {
                 self.place(l_else);
-                return Ok(());
+                break;
             }
             self.code().jump(l_end);
             self.place(l_else);
             if !self.is(TokenKind::If) {
-                return self.parse_statement();
+                let other = self.tok.start;
+                self.parse_statement()?;
+                self.syn_part(Role::Else, other, self.prev_end);
+                break;
             }
         }
+        // Inner `if`s end with the chain: each is its parent's `else`.
+        for k in (0..ifs.len()).rev() {
+            self.syn_close();
+            if k > 0 {
+                self.syn_part(Role::Else, ifs[k], self.prev_end);
+            }
+        }
+        Ok(())
     }
 
     fn push_loop(
@@ -381,6 +449,7 @@ impl Parser<'_, '_> {
 
     fn parse_while(&mut self, labels: Vec<Atom>) -> PResult<()> {
         let pos = self.tok.start;
+        self.syn_open(NodeKind::While, pos);
         self.next()?;
         self.reset_completion();
         let (l_break, l_cont) = self.push_loop(labels, pos);
@@ -391,34 +460,41 @@ impl Parser<'_, '_> {
         self.code().jump(l_cont);
         let t0 = self.f.code.pos();
         self.place(l_cont);
-        self.parse_paren_expr()?;
+        self.parse_paren_expr(Role::Test)?;
         let b0 = self.f.code.pos();
         self.place(l_body);
+        let body = self.tok.start;
         self.parse_statement()?;
+        self.syn_part(Role::Body, body, self.prev_end);
         let b1 = self.f.code.pos();
         self.rotate_code(t0, b0, b1);
         self.code().jump_if_true(l_body);
         self.place(l_break);
         self.pop_block();
+        self.syn_close();
         Ok(())
     }
 
     fn parse_do_while(&mut self, labels: Vec<Atom>) -> PResult<()> {
         let pos = self.tok.start;
+        self.syn_open(NodeKind::DoWhile, pos);
         self.next()?;
         self.reset_completion();
         let (l_break, l_cont) = self.push_loop(labels, pos);
         let l_top = self.new_label();
         self.place(l_top);
+        let body = self.tok.start;
         self.parse_statement()?;
+        self.syn_part(Role::Body, body, self.prev_end);
         self.expect(TokenKind::While, "while")?;
         self.place(l_cont);
-        self.parse_paren_expr()?;
+        self.parse_paren_expr(Role::Test)?;
         self.code().jump_if_true(l_top);
         self.place(l_break);
         self.pop_block();
         // `do ... while (x)` takes an optional `;` even without a newline.
         self.eat(TokenKind::Semicolon)?;
+        self.syn_close();
         Ok(())
     }
 
@@ -429,7 +505,11 @@ impl Parser<'_, '_> {
     /// front of the update and the test.
     fn parse_for(&mut self, labels: Vec<Atom>) -> PResult<()> {
         self.enter_n(super::parser::FOR_WEIGHT)?;
+        self.syn_open(NodeKind::For, self.tok.start);
         let r = self.parse_for_inner(labels);
+        if r.is_ok() {
+            self.syn_close();
+        }
         self.leave_n(super::parser::FOR_WEIGHT);
         r
     }
@@ -451,7 +531,11 @@ impl Parser<'_, '_> {
         }
         self.expect(TokenKind::LParen, "(")?;
         let outer = self.scope;
+        let init = self.tok.start;
         let (scoped, using) = self.parse_for_init()?;
+        if init != self.tok.start {
+            self.syn_part(Role::Init, init, self.prev_end);
+        }
         self.expect(TokenKind::Semicolon, ";")?;
         // Per-iteration copies of `let` bindings (CreatePerIterationEnvironment) only
         // matter for captured bindings, which need closures (P1-1: `rebox`).
@@ -475,7 +559,9 @@ impl Parser<'_, '_> {
         let t0 = self.f.code.pos();
         self.place(l_test);
         if has_test {
+            let test = self.tok.start;
             self.parse_expr(false)?;
+            self.syn_part(Role::Test, test, self.prev_end);
         }
         self.expect(TokenKind::Semicolon, ";")?;
         let u0 = self.f.code.pos();
@@ -484,14 +570,18 @@ impl Parser<'_, '_> {
             self.code().iter_scope(s);
         }
         if !self.is(TokenKind::RParen) {
+            let update = self.tok.start;
             self.parse_expr(false)?;
+            self.syn_part(Role::Update, update, self.prev_end);
             self.code().drop();
         }
         self.expect(TokenKind::RParen, ")")?;
         let b0 = self.f.code.pos();
         self.place(l_body);
         self.ts_semi = true;
+        let body = self.tok.start;
         self.parse_statement()?;
+        self.syn_part(Role::Body, body, self.prev_end);
         let b1 = self.f.code.pos();
         // [test][update][body] -> [update][body][test] -> [body][update][test]
         self.rotate_code(t0, u0, b1);
@@ -525,32 +615,51 @@ impl Parser<'_, '_> {
             TokenKind::Ident if self.at_using(false) || self.at_await_using() => {
                 // The resources are disposed when the whole loop ends.
                 let is_await = self.tok.kw == Kw::Await;
+                let start = self.tok.start;
                 if is_await {
                     self.next()?;
                 }
                 self.next()?;
                 self.push_scope(ScopeKind::For)?;
+                self.syn_scope();
+                let dk = if is_await {
+                    DeclKind::AwaitUsing
+                } else {
+                    DeclKind::Using
+                };
+                self.syn_open(NodeKind::Decl(dk), start);
                 scoped = true;
                 let r = self.using_region_start(is_await, self.tok.start);
                 self.using_env(&r);
                 using = Some(r);
                 self.parse_using_bindings(r.rec, is_await, true)?;
+                self.syn_close();
             }
             TokenKind::Var => {
+                self.syn_open(NodeKind::Decl(DeclKind::Var), self.tok.start);
                 self.next()?;
                 self.parse_var_declarations(true)?;
+                self.syn_close();
             }
             TokenKind::Const => {
+                let start = self.tok.start;
                 self.next()?;
                 self.push_scope(ScopeKind::For)?;
+                self.syn_scope();
+                self.syn_open(NodeKind::Decl(DeclKind::Const), start);
                 scoped = true;
                 self.parse_lexical_bindings(VarKind::Const, true)?;
+                self.syn_close();
             }
             TokenKind::Ident if self.tok.is_contextual(Kw::Let) => {
+                let start = self.tok.start;
                 self.next()?;
                 self.push_scope(ScopeKind::For)?;
+                self.syn_scope();
+                self.syn_open(NodeKind::Decl(DeclKind::Let), start);
                 scoped = true;
                 self.parse_lexical_bindings(VarKind::Let, true)?;
+                self.syn_close();
             }
             _ => {
                 self.parse_expr(true)?;
@@ -665,6 +774,7 @@ impl Parser<'_, '_> {
         if self.f.kind == FuncKind::StaticBlock {
             return syntax(pos, "return in a static initializer block");
         }
+        self.syn_open(NodeKind::Return, pos);
         self.next()?;
         let bare = self.is(TokenKind::Semicolon)
             || self.is(TokenKind::RBrace)
@@ -676,7 +786,9 @@ impl Parser<'_, '_> {
             if bare {
                 self.code().undefined();
             } else {
+                let operand = self.tok.start;
                 self.parse_expr(false)?;
+                self.syn_part(Role::Operand, operand, self.prev_end);
                 self.mark_tail_call(pos);
                 if self.f.is_async && self.f.is_generator {
                     // An async generator awaits the operand of `return`.
@@ -687,7 +799,9 @@ impl Parser<'_, '_> {
             }
             self.emit_unwind(0, Exit::Return);
         }
-        self.expect_semicolon()
+        self.expect_semicolon()?;
+        self.syn_close();
+        Ok(())
     }
 
     /// `try` (docs/compiler.md 7.4, D1084), with a finally block's completion in
@@ -709,6 +823,7 @@ impl Parser<'_, '_> {
     /// ```
     fn parse_try(&mut self) -> PResult<()> {
         let try_pos = self.tok.start;
+        self.syn_open(NodeKind::Try, try_pos);
         self.next()?;
         if !self.is(TokenKind::LBrace) {
             return syntax(self.tok.start, "expecting '{'");
@@ -725,7 +840,9 @@ impl Parser<'_, '_> {
         self.reset_completion();
         self.place(l_try);
         self.f.open_trys += 1;
+        let block = self.tok.start;
         self.parse_block()?;
+        self.syn_part(Role::Block, block, self.prev_end);
         self.f.open_trys -= 1;
         self.place(l_try_end);
         let has_catch = self.is(TokenKind::Catch);
@@ -750,13 +867,16 @@ impl Parser<'_, '_> {
                 depth_from: None,
             });
             self.push_scope(ScopeKind::Catch)?;
+            self.syn_scope();
             let mut body_scope = false;
             if self.eat(TokenKind::LParen)? {
+                let param = self.tok.start;
                 if matches!(self.tok.kind, TokenKind::LBrace | TokenKind::LBracket) {
                     body_scope = true;
                     // A pattern binds like `let` (in its TDZ until initialized).
                     let mark = self.pattern_vars.len();
                     self.parse_pattern(Binding::Lexical(VarKind::Let))?;
+                    self.syn_part(Role::CatchParam, param, self.prev_end);
                     self.ts_annotation()?;
                     let end = self.prev_end;
                     self.end_pattern_bindings(mark, end);
@@ -768,8 +888,10 @@ impl Parser<'_, '_> {
                     let pos = self.tok.start;
                     let name = self.binding_name()?;
                     self.next()?;
+                    self.syn_part(Role::CatchParam, param, self.prev_end);
+                    let v = self.f.add_var(name, VarKind::CatchParam, self.scope);
+                    self.syn_decl(v, DeclKind::CatchParam);
                     self.ts_annotation()?;
-                    self.f.add_var(name, VarKind::CatchParam, self.scope);
                     self.expect(TokenKind::RParen, ")")?;
                     let r = self.init_ref(name, pos);
                     self.code().name_init(r);
@@ -780,9 +902,14 @@ impl Parser<'_, '_> {
             // The catch block's declarations share the clause's scope, so they
             // conflict with the parameter (`catch (e) { let e }`); after a pattern they
             // get a scope of their own (`ScopeKind::CatchBody`).
+            let body = self.tok.start;
+            self.syn_open(NodeKind::Block, body);
+            // (Without a pattern the block's declarations are in the clause's scope.)
+            self.syn_scope();
             self.expect(TokenKind::LBrace, "{")?;
             if body_scope {
                 self.push_scope(ScopeKind::CatchBody)?;
+                self.syn_scope();
             }
             self.reset_completion();
             let using = self.begin_using_list(true);
@@ -797,6 +924,8 @@ impl Parser<'_, '_> {
             self.f.open_trys -= 1;
             self.next()?;
             self.end_using_list(using);
+            self.syn_close();
+            self.syn_part(Role::CatchBody, body, self.prev_end);
             if body_scope {
                 self.pop_scope();
             }
@@ -821,10 +950,13 @@ impl Parser<'_, '_> {
             self.expect(TokenKind::Finally, "finally")?;
             self.place(l_fin);
             self.save_completion_value(fin, try_pos);
+            let block = self.tok.start;
             self.parse_block()?;
+            self.syn_part(Role::Finally, block, self.prev_end);
             self.end_try_finally(l_fin, l_end, exc_region.0, exc_region.1);
         }
         self.place(l_end);
+        self.syn_close();
         Ok(())
     }
 
@@ -888,10 +1020,15 @@ impl Parser<'_, '_> {
         if self.tok.newline_before() {
             return syntax(self.tok.start, "line terminator not allowed after throw");
         }
+        self.syn_open(NodeKind::Throw, pos);
+        let operand = self.tok.start;
         self.parse_expr(false)?;
+        self.syn_part(Role::Operand, operand, self.prev_end);
         self.mark(pos);
         self.code().throw();
-        self.expect_semicolon()
+        self.expect_semicolon()?;
+        self.syn_close();
+        Ok(())
     }
 
     /// `switch`: the discriminant stays on the stack during the case tests. Each test
@@ -902,13 +1039,15 @@ impl Parser<'_, '_> {
     /// end.
     fn parse_switch(&mut self, mut labels: Vec<Atom>) -> PResult<()> {
         let switch_pos = self.tok.start;
+        self.syn_open(NodeKind::Switch, switch_pos);
         self.next()?;
         self.reset_completion();
-        self.parse_paren_expr()?;
+        self.parse_paren_expr(Role::Discriminant)?;
         let d = self.temp("switch.discriminant", switch_pos);
         self.temp_put(d);
         self.expect(TokenKind::LBrace, "{")?;
         self.push_scope(ScopeKind::Switch)?;
+        self.syn_scope();
         // Not in the statement lists of the clauses (a block in one is fine).
         let using = self.begin_using_list(false);
         let l_break = self.new_label();
@@ -928,7 +1067,9 @@ impl Parser<'_, '_> {
                     self.temp_get(d);
                     // The value the test compares is named by its `case`.
                     self.names_push(case_pos, &["binary.left"]);
+                    let test = self.tok.start;
                     self.parse_expr(false)?;
+                    self.syn_part(Role::Case, test, self.prev_end);
                     self.names_pop(1);
                     self.code().strict_eq();
                     self.code().jump_if_false(next_test);
@@ -939,6 +1080,7 @@ impl Parser<'_, '_> {
                     if default_body.is_some() {
                         return syntax(self.tok.start, "duplicate default");
                     }
+                    self.syn_part(Role::Default, self.tok.start, self.tok.end);
                     self.next()?;
                     self.expect(TokenKind::Colon, ":")?;
                     default_body = Some(body);
@@ -972,14 +1114,22 @@ impl Parser<'_, '_> {
         self.pop_block();
         self.end_using_list(using);
         self.pop_scope();
+        self.syn_close();
         Ok(())
     }
 
     fn parse_labeled(&mut self) -> PResult<()> {
         let pos = self.tok.start;
         let mut labels = Vec::new();
+        // The labels' starts (D2850): each label's body starts at the next one.
+        let mut starts: Vec<u32> = Vec::new();
         while self.is(TokenKind::Ident) && self.peek().kind == TokenKind::Colon {
             let tok = self.tok;
+            if self.syn_on() {
+                starts.push(tok.start);
+            }
+            self.syn_open(NodeKind::Label, tok.start);
+            self.syn_part(Role::Label, tok.start, tok.end);
             if tok.is_escaped_reserved() || tok.kw.is_strict_reserved() {
                 return self.unexpected();
             }
@@ -991,10 +1141,11 @@ impl Parser<'_, '_> {
             self.next()?;
             self.next()?;
         }
+        let body = self.tok.start;
         match self.tok.kind {
-            TokenKind::While => self.parse_while(labels),
-            TokenKind::Do => self.parse_do_while(labels),
-            TokenKind::For => self.parse_for(labels),
+            TokenKind::While => self.parse_while(labels)?,
+            TokenKind::Do => self.parse_do_while(labels)?,
+            TokenKind::For => self.parse_for(labels)?,
             _ => {
                 let l_break = self.new_label();
                 self.push_block(&mut labels, BlockKind::Labeled, l_break, None, pos);
@@ -1007,8 +1158,13 @@ impl Parser<'_, '_> {
                 self.parse_statement()?;
                 self.place(l_break);
                 self.pop_block();
-                Ok(())
             }
         }
+        for k in (0..starts.len()).rev() {
+            let from = starts.get(k + 1).copied().unwrap_or(body);
+            self.syn_part(Role::Body, from, self.prev_end);
+            self.syn_close();
+        }
+        Ok(())
     }
 }
