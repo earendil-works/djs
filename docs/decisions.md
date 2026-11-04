@@ -9013,3 +9013,29 @@ build (a per-function table in the heap for every compile, for a cost recording 
 nearly removes), or a per-script map cache across loads (a load is one compile now; the
 exporter's compiles at dump time are a separate matter). A test now checks that a loaded
 dump is its own fixed point: dumping right after the load writes the same text.
+
+## D2800: String and number constants are not deduplicated per function while parsing
+date: 2026-11-05 · by: dumpperf · issue: 0198
+The parser deduplicated a function's string and number constants, and the unit's heap
+strings, through sorted `Vec`s it inserted into: quadratic in distinct constants (a
+dump's data has thousands; 25% of loading a 1 MB records dump). Resolution already
+interns every `push_const` of the unit by value (D2446), so the per-function lists only
+kept the phase-1 constant list short; they are gone, and the unit's heap strings are
+found through an open-addressing index (a string over 256 units hashed by its length and
+256 sampled units, compared whole on a match). The bytecode is unchanged (the snapshots
+pin it), the slim module is ~140 B gzip smaller, and compile/typescript.js went from 52.8
+to 59.9 MB/s. The unit pool (`resolve::UnitPool`) keeps its constants' hashes and hashes
+a string over 1 KB by sampling too, for the same reason.
+
+## D2801: With the dumper, pattern scans stop at a literal element
+date: 2026-11-05 · by: dumpperf · issue: 0198
+The parser scans a `{`/`[` group to its closer to see whether it is an assignment
+pattern (docs/compiler.md 3.3), so a dump's data literals were lexed twice. In builds with
+the `dump` feature the scan stops, answering "no pattern", at a primitive literal that is
+a whole element or property value of a group where a nested pattern could be (`[1, …`,
+`{a: "x", …`): no pattern has one there. A valid program compiles to the same code
+either way; an invalid one could get another error (`({a: 1} = c)` would report the
+assignment instead of the destructuring target), so after a syntax error the source is
+parsed again with exact scans (`compiler::parse`), and errors stay what they were. Only
+the dump module has it (its loads are where the data is; the shipped modules keep their
+size, +470 B gzip otherwise). The records dump loads ~12% faster.
