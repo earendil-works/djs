@@ -516,7 +516,7 @@ fn classes_with_statics_accessors_and_computed_keys() {
             "const log = [];",
             "class Point { constructor(x, y) { this.x = x; this.y = y; } get len() { return Math.sqrt(this.x * this.x + this.y * this.y); }\n\
                static origin() { return new Point(0, 0); } [Symbol.toPrimitive]() { return this.len; }\n\
-               static count = 0; static { log.push('init'); } toString() { return `(${this.x}, ${this.y})`; } }",
+               static count = 0; static { log.push('init'); } kind = 'pt'; toString() { return `(${this.x}, ${this.y})`; } }",
             "Point.count = 3;",
             "const p = new Point(3, 4);",
         ],

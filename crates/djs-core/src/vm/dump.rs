@@ -782,8 +782,8 @@ struct Dumper<'a> {
     /// The base heap: the checker compiles the dump into it.
     scratch: Option<Heap>,
     /// Plain dumps: the text written for a class whose static code is blanked
-    /// (dump_statics.rs), by node.
-    class_texts: Vec<(usize, String)>,
+    /// (dump_statics.rs), by the class's text.
+    class_texts: Vec<(String, String)>,
     /// The classes of the factory being written, by their names inside it.
     class_locals: Vec<(usize, String)>,
     /// The private names of the dumped classes: symbol cell, class node, name, and
@@ -2619,10 +2619,12 @@ impl<'a> Dumper<'a> {
         {
             self.ts.set(true);
         }
-        if let Some((_, text)) = self.class_texts.iter().find(|c| c.0 == n) {
-            return Some(text.clone());
+        let text = self.sources.fn_text(self.h, f)?;
+        // (Also for the class's own internal functions, whose text is the class's.)
+        if let Some((_, blanked)) = self.class_texts.iter().find(|c| c.0 == text) {
+            return Some(blanked.clone());
         }
-        self.sources.fn_text(self.h, f)
+        Some(text)
     }
 
     /// The expression for a value, in a context that may give a name (`ctx_name`: the

@@ -135,6 +135,15 @@ and rebase often. Decision IDs D2950–D2959.
   message.
 - pjz's (0211) loop case: codemode/plain-class-static-loop.js (2 links, djs and node).
 
+- js tests found that a class's internal functions (`<fields 0>`) share the class's text:
+  `class_texts` is now keyed by the original text, so every function of that text reads
+  the blanked one (dump_tests' Point got an instance field to cover it).
+- Pre-merge checks for batch 2: fmt; clippy (djs-core, djs-cli, djs-difftest, slim lib);
+  djs-core lib and djs-cli tests; slim difftest; plain-dumps leg (1297 links, 0 differ,
+  refusals ratchet +plain-class-static-private); dump-size per case updated (new cases,
+  classes-self +19 B gzip from blanks, harvest noise ±5 B); size budget (442,468 /
+  378,032, under the ceilings); e2e plain and dump; js tests on the dev wasm (129 pass).
+
 ## Follow-ups
 - dump_resume_tests.rs `plain_dump_chains_continue_like_the_run` still discounts lines
   that copy the runtime's code (`runtime_bytes`); after D2951 the allowance should be

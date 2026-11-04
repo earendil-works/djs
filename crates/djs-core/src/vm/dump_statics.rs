@@ -77,8 +77,8 @@ impl Dumper<'_> {
                 }
             }
             out.push_str(&src[pos..]);
-            if out != src {
-                self.class_texts.push_out((n, out));
+            if out != src && !self.class_texts.iter().any(|c| c.0 == src) {
+                self.class_texts.push_out((src, out));
             }
         }
     }
