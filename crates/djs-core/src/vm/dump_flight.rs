@@ -1788,10 +1788,11 @@ impl Dumper<'_> {
                 queue: preqs,
                 kind,
             };
-            let pl = self.pl.as_mut().expect("plain");
-            pl.lines
-                .push_out((self.out.len(), plain::Rec::Act(pl.acts.len())));
-            pl.acts.push(act);
+            let at = self.out.len();
+            if let Some(pl) = self.pl.as_mut() {
+                pl.lines.push_out((at, plain::Rec::Act(pl.acts.len())));
+                pl.acts.push(act);
+            }
         }
         self.line(
             cat!(

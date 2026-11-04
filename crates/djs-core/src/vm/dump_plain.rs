@@ -419,6 +419,9 @@ enum Plan {
     Call(usize, Option<Vec<Plan>>),
 }
 
+/// The activation and slot name that own a factory variable.
+type Owner = (usize, String);
+
 struct W<'x> {
     ir: &'x Ir,
     items: Vec<Item>,
@@ -426,7 +429,7 @@ struct W<'x> {
     /// Per scope: whether a frame takes one of its variables.
     merged: Vec<Vec<bool>>,
     /// Per (factory, scope, var): the activation and slot that own it, and its block.
-    owner: Vec<Vec<Vec<Option<(usize, String)>>>>,
+    owner: Vec<Vec<Vec<Option<Owner>>>>,
     vblock: Vec<Vec<Vec<Option<Pl>>>>,
     /// Box node -> (scope, var).
     boxes: Vec<(usize, Sc, usize)>,
@@ -1039,7 +1042,7 @@ impl W<'_> {
 #[derive(Clone, PartialEq, Eq)]
 enum Key {
     Loc(String),
-    FKey(String, String),
+    Factory(String, String),
     Global(String),
 }
 
@@ -1049,7 +1052,7 @@ impl W<'_> {
         let mut out = Vec::new();
         for (name, key) in r.dump {
             let k = match (key, self.ir.factories.iter().position(|f| f.name == name)) {
-                (Some(key), Some(_)) => Key::FKey(name, key),
+                (Some(key), Some(_)) => Key::Factory(name, key),
                 _ => Key::Loc(name),
             };
             if !out.contains(&k) {
@@ -1116,7 +1119,7 @@ impl W<'_> {
         let mut out = Vec::new();
         for k in keys {
             let d = match k {
-                Key::FKey(n, key) => {
+                Key::Factory(n, key) => {
                     let merged_key = {
                         let f = self.ir.factories.iter().position(|x| x.name == *n);
                         f.is_some_and(|f| {

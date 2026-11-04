@@ -856,6 +856,7 @@ fn body_dump(src: &str, k: usize) -> (Vec<String>, Option<Result<super::dump::Du
         host_fn_name: &host_fn_name,
         handles: &handles,
         call_states: &[],
+        plain: false,
     };
     let d = vm.dump_report(&opts, None).map_err(|e| e.message());
     (lines, Some(d))
@@ -1195,6 +1196,7 @@ fn write_golden_dumps() {
                 host_fn_name: &host_fn_name,
                 handles: if body { &handles } else { &[] },
                 call_states: &[],
+                plain: false,
             };
             let text = vm
                 .dump(&opts, None)

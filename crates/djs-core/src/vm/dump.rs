@@ -933,6 +933,10 @@ impl<'a> Dumper<'a> {
         // name is the script's own and hides the host's property, so it is dumped.
         if decl == Decl::Var && self.host_names.contains(&name.as_str()) {
             self.host_values(value, name, 0);
+        } else if self.pl.is_some() && (name == "$dump" || name == "$djs") {
+            // A plain dump's own names: its helpers live in `$dump` during the load
+            // and the host's hooks in `$djs` (D2861).
+            self.refuse(name, "a global binding with a name plain dumps reserve");
         } else if name != "$dump" && self.global_atoms.get(key(k.id())).is_none() {
             // A lexical binding shadows a global object property of the same name.
             self.global_atoms
