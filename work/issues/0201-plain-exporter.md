@@ -38,6 +38,22 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
 - Testing: difftest `--dump-every-idle --plain` (in-process chains, cap 50 links), with
   `--plain-out DIR` for a node harness (scripts/plain-node.mjs) comparing transcripts.
 
-## Follow-ups
+### State (pjx, first session)
+- Exporter (`DumpOptions::plain`): IR recorded in dump.rs emit_group / dump_flight.rs
+  emit_act; plain forms at the source ($dump.bN builtins, $djs.resume, host fns by name,
+  refusals for privates/using/closeThrow/iterator helpers); closures of merged groups
+  inside data become exporter patches (`plain_patched`), which replaces the prototype's
+  placeholders.
+- vm/dump_plain.rs: refs scanner, writer (placement, scheduling with callbacks,
+  emission, helpers, `"djs-dump 3"`, `"use strict"`, `$djs.seed`, completion value =
+  handle). vm/dump_cont.rs: the generator against pjc's smap_syntax types (untested
+  until 0200's recording lands).
+- difftest `--plain-dumps` (chain cap 50, `$djs.seed` host fn, `$djs.resume` =
+  `(id, name, args) => later(...args)`); all codemode cases refuse with "no syntax
+  recorded at the site" until 0200 lands.
+- Interfaces agreed (coordinator, pjh): `$djs.seed(lo, hi)`, `$djs.resume(id, name,
+  args[, state])`, one handle, header `"djs-dump 3"` (`typescript` variant), host
+  functions written inline as their host_fn_name expression (evaluated during the load).
+
 
 ## Result

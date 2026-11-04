@@ -1645,7 +1645,6 @@ impl Dumper<'_> {
         if !args.is_empty() {
             fields.push_out(cat!("args: [", join(&args, ", "), "]"));
         }
-        let args_text = args.clone();
         parts.extend(args.into_iter().map(|a| ("argument", a)));
         // The frame's slots by name (D2731): bindings (`name@scope` where two of a name
         // are in scope), hidden locals, the temporaries of constructs in flight.
@@ -1774,7 +1773,6 @@ impl Dumper<'_> {
             };
             let act = plain::Act {
                 name: String::from(name.strip_prefix("$dump.").unwrap_or(&name)),
-                fnode,
                 fexpr: fe.clone(),
                 fkind: if fnode == usize::MAX {
                     0
@@ -1786,7 +1784,6 @@ impl Dumper<'_> {
                 syntax: self.fl.acts[a].syntax.clone().unwrap_or_default(),
                 awaiting: awaited,
                 this: this.clone(),
-                args: args_text.clone(),
                 slots: pslots,
                 queue: preqs,
                 kind,

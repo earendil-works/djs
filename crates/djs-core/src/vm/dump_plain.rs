@@ -49,7 +49,6 @@ pub(super) enum Rec {
 pub(super) struct Factory {
     /// `sN`.
     pub name: String,
-    pub group: usize,
     pub scopes: Vec<Scope>,
 }
 
@@ -72,8 +71,6 @@ pub(super) struct Var {
     pub tdz: bool,
     /// Its box's node.
     pub boxn: usize,
-    /// A frame shares it: the key of its cell (`$cB`).
-    pub cell: Option<String>,
 }
 
 /// A member of a scope's returned object.
@@ -88,8 +85,7 @@ pub(super) struct Prop {
 pub(super) struct Act {
     /// `aN`.
     pub name: String,
-    /// The function's node and the expression the dump reaches it by.
-    pub fnode: usize,
+    /// The expression the dump reaches the function by.
     pub fexpr: String,
     /// The function's text and its kind (`func_flags::KIND_*`).
     pub ftext: String,
@@ -98,7 +94,6 @@ pub(super) struct Act {
     pub syntax: alloc::rc::Rc<crate::compiler::Syntax>,
     pub awaiting: Option<String>,
     pub this: String,
-    pub args: Vec<String>,
     pub slots: Vec<Slot>,
     /// An async generator's requests: type, value, promise.
     pub queue: Vec<(&'static str, String, String)>,
@@ -367,10 +362,8 @@ struct Item {
 /// A binding a block of a continuation declares (the generator's dry run lists them).
 #[derive(Clone)]
 pub(super) struct BDecl {
-    pub name: String,
     /// Its slot name in the frame, if it has one.
     pub sname: Option<String>,
-    pub live: bool,
 }
 
 /// What the generator asks of the dump while it writes a continuation.

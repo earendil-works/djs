@@ -2992,7 +2992,6 @@ impl<'a> Dumper<'a> {
                 }
                 let name = &box_names[bi];
                 let inner = box_value(self, b);
-                let cell = self.nodes[b].frame_box.then(|| cat!("$c", b));
                 if inner.is_uninitialized() {
                     // In its TDZ: declared after the factory's `return`, so never
                     // initialized.
@@ -3003,7 +3002,6 @@ impl<'a> Dumper<'a> {
                         init: None,
                         tdz: true,
                         boxn: b,
-                        cell,
                     });
                     continue;
                 }
@@ -3062,7 +3060,6 @@ impl<'a> Dumper<'a> {
                     line: line.clone(),
                     tdz: false,
                     boxn: b,
-                    cell,
                 });
                 // Only the first line is indented: the rest belongs to a function's
                 // text, which must stay as it was.
@@ -3145,7 +3142,6 @@ impl<'a> Dumper<'a> {
                 .push_out((self.out.len(), plain::Rec::Factory(pl.factories.len())));
             pl.factories.push(plain::Factory {
                 name: String::from(loc.strip_prefix("$dump.").unwrap_or(&loc)),
-                group: g,
                 scopes: rec,
             });
         }
