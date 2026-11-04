@@ -7,7 +7,7 @@
 //
 //   node scripts/plain-fuzz/fuzz.mjs [--seed S] [--cases N] [--time SECS] [--batch B]
 //                                    [--jobs J] [--max-load L] [--from-max K] [--dir DIR]
-//                                    [--no-node] [--known FILE]
+//                                    [--no-node] [--known FILE] [--statics]
 //   node scripts/plain-fuzz/fuzz.mjs check FILE...      one program (a case body) each
 //   node scripts/plain-fuzz/fuzz.mjs reduce FILE --sig TEXT [--time SECS] [-o OUT]
 //
@@ -46,6 +46,8 @@ const jobs = Number(flag("--jobs", 4));
 const maxLoad = Number(flag("--max-load", 30));
 const fromMax = Number(flag("--from-max", 40));
 const noNode = has("--no-node");
+// --statics: classes with static fields and blocks (gen.mjs `statics`).
+const genOpts = has("--statics") ? { statics: true } : {};
 // --known FILE: signature substrings (one per line) of bugs already reported; matching
 // failures are counted on one line instead of listed.
 const knownFile = flag("--known", null);
@@ -314,7 +316,7 @@ async function fuzz(bin) {
     const c = corpusDir(work);
     const names = [];
     for (let k = s; k < Math.min(s + batch, seed0 + cases); k++) {
-      const o = seedOptions(k);
+      const o = seedOptions(k, genOpts);
       const name = `codemode/s${k}.${o.ts ? "ts" : "js"}`;
       fs.writeFileSync(path.join(c, name), generate(k, o));
       names.push(name);
@@ -332,7 +334,7 @@ async function fuzz(bin) {
     }
     for (const f of r.fails) {
       const seed = Number(/s(\d+)\.[jt]s/.exec(f.name)?.[1]);
-      const size = generate(seed, seedOptions(seed)).length;
+      const size = generate(seed, seedOptions(seed, genOpts)).length;
       const e = found.get(f.sig);
       if (!e) found.set(f.sig, { ...f, seed, size, count: 1, seeds: new Set([seed]) });
       else {
@@ -381,7 +383,7 @@ if (argv[0] === "check") {
   const deadline = Date.now() + Number(flag("--time", 600)) * 1000;
   await reduce(bin, argv[1], sig, out, deadline);
 } else if (argv[0] === "gen") {
-  process.stdout.write(generate(Number(argv[1]), seedOptions(Number(argv[1]))));
+  process.stdout.write(generate(Number(argv[1]), seedOptions(Number(argv[1]), genOpts)));
 } else {
   await fuzz(bin);
 }

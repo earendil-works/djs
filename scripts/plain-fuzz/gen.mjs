@@ -296,7 +296,7 @@ class Gen {
         return this.oneOf([
           [2, () => `new ${f.name}(${arg()}).twice`],
           [2, () => `${f.name}.make(${arg()}).get(${arg()})`],
-          [this.opts.wide ? 1 : 0, () => `(${f.name}.count++)`],
+          [this.opts.statics ? 1 : 0, () => `(${f.name}.count++)`],
         ]);
       case "gen":
         return this.oneOf([
@@ -732,9 +732,13 @@ class Gen {
       // Class accessors and a static field the program changes.
       this.line(`  get v() { return this.value; }`);
       this.line(`  set v(x) { this.value = x; }`);
-      this.line(`  static count = ${this.num(0)};`);
     }
-    if (this.opts.statics && caps.length) this.line(`  static { ${cap} += 1; }`);
+    if (this.opts.statics) {
+      // Static fields and blocks (0209 item 7 makes them plain): a field the program
+      // changes, a block with a side effect on the frame.
+      this.line(`  static count = ${this.num(0)};`);
+      if (caps.length) this.line(`  static { ${cap} += 1; }`);
+    }
     this.line(`  get(x) { return this.value + x + ${cap}; }`);
     this.line(`  async fetch(x) { return this.value + (await tools.echo(x)); }`);
     this.line(`  static make(v) { return new ${c}(v + 1); }`);
@@ -829,8 +833,8 @@ class Gen {
   }
 }
 
-// `wide` (0211): Map/Set/Date/RegExp/typed arrays/Errors, symbol keys, class accessors
-// and static fields, string-heavy data; `ts`: a TypeScript body; `statics`: static blocks
+// `wide` (0211): Map/Set/Date/RegExp/typed arrays/Errors, symbol keys, class accessors,
+// string-heavy data; `ts`: a TypeScript body; `statics`: static fields and static blocks
 // with side effects (after 0209 item 7).
 export const DEFAULTS = { statements: 8, depth: 3, budget: 30, using: true, wide: true, ts: false, statics: false };
 
