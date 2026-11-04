@@ -35,6 +35,10 @@ and rebase often. Decision IDs D2950–D2959.
   hole. `Dumper::descriptor` now reads every value with `expr_or_loc` (descriptors are
   only written in patches, after the values exist). Corpus case
   codemode/plain-accessors.js (djs and node, 2 links).
+- Item 2 (static private members) dropped by the coordinator: pjr fixed it in 657c5a5e
+  (D2883), with self-naming classes. Remaining: bug 1, then bug 3 (runtime-made objects).
+- First merge attempt: the gate's build:core-tests failed to link (undefined symbols in
+  compiler/resolve and regexp, untouched here): a stale incremental cache; retried.
 
 ## Follow-ups
 
