@@ -4,5 +4,5 @@ function <anonymous> @1..5809
   await#1 @5268 (204:8) pc 1369: -
 function <anonymous> @5276..5798
   arg0 tools@0
-  loc0 <state>, loc1 all@0, loc2 view@53, loc5 cursor@99, loc6 s@122
+  loc0 <state>, loc1 all@0, loc2 view@53, loc7 cursor@99, loc8 s@122
   await#1 @133 (209:16) pc 108: for-of.iterator@42 for-of.next@42

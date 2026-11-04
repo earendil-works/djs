@@ -4,5 +4,5 @@ function <anonymous> @1..2056
   await#1 @1784 (39:8) pc 203: -
 function <anonymous> @1792..2045
   arg0 tools@0
-  loc0 <state>, loc1 p@0, loc2 out@0, loc7 a@105, loc8 b@105
+  loc0 <state>, loc1 p@0, loc2 out@0, loc9 a@105, loc10 b@105
   await#1 @179 (42:86) pc 266: for-of.iterator@94 for-of.next@94 call.callee@157 call.this@157 binary.left@166

@@ -14,7 +14,7 @@ function outer @839..945
   yield*#2 @73 (38:3) pc 192: yield*.iterator@73 yield*.next@73
 function fin @1067..1162
   loc0 <state>
-  yield*#1 @30 (48:5) pc 46: yield*.iterator@30 yield*.next@30
+  yield*#1 @30 (48:5) pc 48: yield*.iterator@30 yield*.next@30
 function expr @1271..1365
   loc0 <state>, loc1 r@0
   yield#1 @36 (58:18) pc 9: binary.left@31
@@ -37,7 +37,7 @@ function nt @2299..2333
   loc0 <state>
   yield*#1 @17 (90:18) pc 44: yield*.iterator@17 yield*.next@17
 function cnt @2419..2531
-  loc0 <state>, loc1 i@39
+  loc0 <state>, loc3 i@39
   yield#1 @53 (100:28) pc 9: -
 function fo @2598..2652
   loc0 <state>, loc1 x@28

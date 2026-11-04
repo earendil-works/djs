@@ -2,10 +2,9 @@
 //!
 //! A `yield` sits anywhere in an expression, with operands of the enclosing expression
 //! on the stack, which the parser does not count. When `return(x)` resumes it, the
-//! function must return `x` through its finally blocks, which run at statement depth.
-//! So the return path throws `x` inside a one-instruction handler region whose handler
-//! (absolute depth: the statement depth) cuts the stack and then runs the ordinary
-//! return sequence. The region is the innermost one, so its handler goes first.
+//! function must return `x` through its finally blocks, which run with an empty operand
+//! stack. So the return path throws `x` inside a one-instruction handler region whose
+//! handler (absolute depth 0) cuts the stack and then runs the ordinary return sequence. The region is the innermost one, so its handler goes first.
 
 use super::PResult;
 use super::expr::Expr;
@@ -122,7 +121,7 @@ impl Parser<'_, '_> {
                 start: l_throw,
                 end: l_end,
                 target: l_ret,
-                depth: self.stmt_depth,
+                depth: 0,
                 depth_from: None,
             },
         );

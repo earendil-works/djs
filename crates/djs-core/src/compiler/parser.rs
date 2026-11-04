@@ -35,9 +35,6 @@ pub(super) struct BlockEnv {
     /// compiler/completion.rs).
     pub break_label: Label,
     pub continue_label: Option<Label>,
-    /// Operand stack depth at the statement: what a jump to this env's targets
-    /// unwinds to.
-    pub depth: u32,
     /// Whether a jump used `break_label`.
     pub used: bool,
     /// Source offset of the statement (its keyword; a labeled statement's first label):
@@ -68,7 +65,6 @@ pub(super) struct Suspended {
     pub f: FuncState,
     pub scope: ScopeId,
     pub blocks: Vec<BlockEnv>,
-    pub stmt_depth: u32,
     pub open_iters: Vec<OpenIter>,
     pub using: super::using::UsingList,
 }
@@ -101,8 +97,6 @@ pub(super) struct Parser<'a, 'h> {
     pub depth: u32,
     /// Break/continue targets of `f` (they never cross functions).
     pub blocks: Vec<BlockEnv>,
-    /// Operand stack depth at statement boundaries of `f`.
-    pub stmt_depth: u32,
     pub buf8: Vec<u8>,
     pub atom_undefined: Atom,
     pub atom_this: Atom,
@@ -307,7 +301,6 @@ impl<'a, 'h> Parser<'a, 'h> {
             scope: BODY_SCOPE,
             depth: 0,
             blocks: Vec::new(),
-            stmt_depth: 0,
             buf8: Vec::new(),
             atom_undefined,
             atom_this,
@@ -465,7 +458,6 @@ impl<'a, 'h> Parser<'a, 'h> {
             f: parent,
             scope: self.scope,
             blocks: core::mem::take(&mut self.blocks),
-            stmt_depth: core::mem::take(&mut self.stmt_depth),
             open_iters: core::mem::take(&mut self.open_iters),
             using: core::mem::take(&mut self.using),
         });
@@ -490,7 +482,6 @@ impl<'a, 'h> Parser<'a, 'h> {
         let child = core::mem::replace(&mut self.f, s.f);
         self.scope = s.scope;
         self.blocks = s.blocks;
-        self.stmt_depth = s.stmt_depth;
         self.open_iters = s.open_iters;
         self.using = s.using;
         let id = child.id;
@@ -514,7 +505,6 @@ impl<'a, 'h> Parser<'a, 'h> {
         let child = core::mem::replace(&mut self.f, s.f);
         self.scope = s.scope;
         self.blocks = s.blocks;
-        self.stmt_depth = s.stmt_depth;
         self.open_iters = s.open_iters;
         self.using = s.using;
         let id = child.id;
@@ -536,7 +526,6 @@ impl<'a, 'h> Parser<'a, 'h> {
             f: parent,
             scope: self.scope,
             blocks: core::mem::take(&mut self.blocks),
-            stmt_depth: core::mem::take(&mut self.stmt_depth),
             open_iters: core::mem::take(&mut self.open_iters),
             using: core::mem::take(&mut self.using),
         });
@@ -553,7 +542,6 @@ impl<'a, 'h> Parser<'a, 'h> {
         let f = core::mem::replace(&mut self.f, s.f);
         self.scope = s.scope;
         self.blocks = s.blocks;
-        self.stmt_depth = s.stmt_depth;
         self.open_iters = s.open_iters;
         self.using = s.using;
         Ok(f)

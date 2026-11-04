@@ -1,6 +1,6 @@
 function <anonymous> @1..4302
   arg0 tools@0, arg1 console@0
-  loc0 <state>, loc1 results@0, loc2 fake@0, loc7 stored@0, loc8 realLoad@0, loc9 fakeLoad@0
+  loc0 <state>, loc1 results@0, loc2 fake@0, loc9 stored@0, loc10 realLoad@0, loc11 fakeLoad@0
   await#1 @3274 (94:8) pc 592: -
 function <anonymous> @3282..4281
   arg0 tools@0, arg1 load@0

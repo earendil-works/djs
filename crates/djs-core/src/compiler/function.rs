@@ -455,23 +455,14 @@ impl Parser<'_, '_> {
         });
     }
 
-    /// Returns the value on top of the stack (after any finally blocks ran).
+    /// Returns the value on top of the stack (after any finally blocks ran; nothing is
+    /// under it at statement level).
     pub(super) fn emit_return_value(&mut self) {
-        let depth = self.stmt_depth;
-        self.emit_return_value_at(depth);
-    }
-
-    /// [`Parser::emit_return_value`] with `depth` values under the value (what
-    /// `emit_unwind` left).
-    pub(super) fn emit_return_value_at(&mut self, depth: u32) {
         if let Some((epilogue, ret)) = self.f.ctor_return {
             // A derived constructor's result is checked by [[Construct]], outside any
             // try statement of the body: the epilogue (`emit_ctor_epilogue`).
             let r = self.name_ref(ret, self.prev_end);
             self.code().name_put(r);
-            for _ in 0..depth {
-                self.code().drop();
-            }
             self.code().jump(epilogue);
             return;
         }

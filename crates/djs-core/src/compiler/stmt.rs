@@ -6,7 +6,7 @@ use alloc::vec::Vec;
 use super::PResult;
 use super::completion::Exit;
 use super::func::{FuncKind, HandlerLabels, ScopeKind, VarKind};
-use super::parser::{BlockEnv, BlockKind, Parser, syntax};
+use super::parser::{BlockKind, Parser, syntax};
 use super::pattern::Binding;
 use super::smap::{Role, SiteKind};
 use crate::heap::Atom;
@@ -375,16 +375,7 @@ impl Parser<'_, '_> {
     ) -> (crate::bytecode::Label, crate::bytecode::Label) {
         let l_break = self.new_label();
         let l_cont = self.new_label();
-        self.blocks.push_out(BlockEnv {
-            labels,
-            kind: BlockKind::Loop,
-            break_label: l_break,
-            continue_label: Some(l_cont),
-            depth: self.stmt_depth,
-            used: false,
-            pos,
-            completion: None,
-        });
+        self.push_block(labels, BlockKind::Loop, l_break, Some(l_cont), pos);
         (l_break, l_cont)
     }
 
@@ -540,7 +531,7 @@ impl Parser<'_, '_> {
                 self.next()?;
                 self.push_scope(ScopeKind::For)?;
                 scoped = true;
-                let r = self.using_region_start(self.stmt_depth, is_await, self.tok.start);
+                let r = self.using_region_start(is_await, self.tok.start);
                 self.using_env(&r);
                 using = Some(r);
                 self.parse_using_bindings(r.rec, is_await, true)?;
@@ -699,8 +690,8 @@ impl Parser<'_, '_> {
         self.expect_semicolon()
     }
 
-    /// `try` (docs/compiler.md 7.4, D1084). With `base` the operand depth here and a
-    /// finally block's completion in `kind`/`value` (compiler/completion.rs):
+    /// `try` (docs/compiler.md 7.4, D1084), with a finally block's completion in
+    /// `kind`/`value` (compiler/completion.rs):
     ///
     /// ```text
     /// L_try:   <try block>
@@ -722,23 +713,12 @@ impl Parser<'_, '_> {
         if !self.is(TokenKind::LBrace) {
             return syntax(self.tok.start, "expecting '{'");
         }
-        let base = self.stmt_depth;
         let has_finally = super::scan::try_has_finally(self.lx, self.tok);
         let l_fin = self.new_label();
         let l_end = self.new_label();
         let fin = self.blocks.len();
         if has_finally {
-            let completion = super::completion::Completion::new(self.scope, try_pos);
-            self.blocks.push_out(BlockEnv {
-                labels: Vec::new(),
-                kind: BlockKind::Finally,
-                break_label: l_fin,
-                continue_label: None,
-                depth: base,
-                used: false,
-                pos: try_pos,
-                completion: Some(completion),
-            });
+            self.push_block(Vec::new(), BlockKind::Finally, l_fin, None, try_pos);
         }
         // `last`: the finally block follows.
         let normal_exit = |p: &mut Self, last: bool| {
@@ -770,7 +750,7 @@ impl Parser<'_, '_> {
                 start: l_try,
                 end: l_try_end,
                 target: l_catch,
-                depth: base,
+                depth: 0,
                 depth_from: None,
             });
             self.push_scope(ScopeKind::Catch)?;
@@ -833,7 +813,7 @@ impl Parser<'_, '_> {
             return syntax(self.tok.start, "expecting catch or finally");
         }
         if has_finally {
-            let mut c = self
+            let c = self
                 .blocks
                 .pop()
                 .and_then(|e| e.completion)
@@ -842,31 +822,32 @@ impl Parser<'_, '_> {
             self.place(l_fin);
             // A normal finally block keeps the completion value of the try statement
             // (Script and eval code): it is saved meanwhile.
-            let saved = self.completion_local().map(|a| {
-                let saved = self.temp("completion.saved", try_pos);
+            let mut saved = None;
+            if let Some(a) = self.completion_local() {
+                let t = self.temp("completion.saved", try_pos);
                 let r = self.name_ref(a, self.prev_end);
                 self.code().name_get(r);
-                self.temp_put(saved);
+                self.temp_put(t);
                 self.reset_completion();
-                (a, saved)
-            });
+                saved = Some((a, t));
+            }
             self.parse_block()?;
-            if let Some((a, saved)) = saved {
-                self.temp_get(saved);
+            if let Some((a, t)) = saved {
+                self.temp_get(t);
                 let r = self.name_ref(a, self.prev_end);
                 self.code().name_put(r);
             }
-            self.end_completion(&mut c, Some(l_end), true);
+            self.end_completion(&c, Some(l_end), true);
             let l_exc = self.new_label();
             self.place(l_exc);
             self.f.handlers.push_out(HandlerLabels {
                 start: exc_region.0,
                 end: exc_region.1,
                 target: l_exc,
-                depth: base,
+                depth: 0,
                 depth_from: None,
             });
-            self.complete_throwing(&mut c, l_fin);
+            self.complete_throwing(&c, l_fin);
         }
         self.place(l_end);
         Ok(())
@@ -902,16 +883,7 @@ impl Parser<'_, '_> {
         // Not in the statement lists of the clauses (a block in one is fine).
         let using = self.begin_using_list(false);
         let l_break = self.new_label();
-        self.blocks.push_out(BlockEnv {
-            labels,
-            kind: BlockKind::Switch,
-            break_label: l_break,
-            continue_label: None,
-            depth: self.stmt_depth,
-            used: false,
-            pos: switch_pos,
-            completion: None,
-        });
+        self.push_block(labels, BlockKind::Switch, l_break, None, switch_pos);
         let mut next_test = self.new_label();
         let mut next_body: Option<crate::bytecode::Label> = None;
         let mut default_body = None;
@@ -996,16 +968,7 @@ impl Parser<'_, '_> {
             TokenKind::For => self.parse_for(labels),
             _ => {
                 let l_break = self.new_label();
-                self.blocks.push_out(BlockEnv {
-                    labels,
-                    kind: BlockKind::Labeled,
-                    break_label: l_break,
-                    continue_label: None,
-                    depth: self.stmt_depth,
-                    used: false,
-                    pos,
-                    completion: None,
-                });
+                self.push_block(labels, BlockKind::Labeled, l_break, None, pos);
                 if self.is(TokenKind::Function) {
                     return syntax(
                         self.tok.start,

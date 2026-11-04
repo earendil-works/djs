@@ -48,7 +48,7 @@ use alloc::vec::Vec;
 
 use super::PResult;
 use super::func::{HandlerLabels, ScopeKind, VarKind};
-use super::parser::{BlockEnv, BlockKind, Checkpoint, Parser, syntax};
+use super::parser::{BlockKind, Checkpoint, Parser, syntax};
 use super::pattern::Binding;
 use super::scan::Follow;
 use super::smap::{Role, SiteKind};
@@ -81,7 +81,6 @@ impl<'a> Parser<'a, '_> {
         for_pos: u32,
         is_await: bool,
     ) -> PResult<()> {
-        let base = self.stmt_depth;
         let outer = self.scope;
         let mut scoped = false;
         let l_assign = self.new_label();
@@ -187,8 +186,7 @@ impl<'a> Parser<'a, '_> {
                 let end = self.new_label();
                 self.place(start);
                 if is_of {
-                    let env = self.iter_env(l_close, base, for_pos);
-                    self.blocks.push_out(env);
+                    self.push_block(Vec::new(), BlockKind::Iter, l_close, None, for_pos);
                 }
                 if self.starts_assignment_pattern(Follow::InOf) {
                     // `for ([a, b] of xs)`: the pattern takes the value.
@@ -310,11 +308,10 @@ impl<'a> Parser<'a, '_> {
             }
             self.code().drop();
             self.code().throw();
-            let env = match iter_env.take() {
-                Some(env) => env,
-                None => self.iter_env(l_close, base, for_pos),
-            };
-            self.blocks.push_out(env);
+            match iter_env.take() {
+                Some(env) => self.blocks.push_out(env),
+                None => self.push_block(Vec::new(), BlockKind::Iter, l_close, None, for_pos),
+            }
         }
         let mut using = None;
         match target {
@@ -330,7 +327,7 @@ impl<'a> Parser<'a, '_> {
                 self.place(start);
                 if let Some(is_await) = using_head {
                     // Each iteration's resource is disposed at its end (compiler/using.rs).
-                    let r = self.using_region_start(base, is_await, pos);
+                    let r = self.using_region_start(is_await, pos);
                     self.mark(pos);
                     self.emit_using_add(r.rec, is_await);
                     using = Some(r);
@@ -385,17 +382,7 @@ impl<'a> Parser<'a, '_> {
 
         // The body.
         let l_break = self.new_label();
-        self.blocks.push_out(BlockEnv {
-            labels,
-            kind: BlockKind::Loop,
-            break_label: l_break,
-            continue_label: Some(l_step),
-            depth: base,
-            used: false,
-            pos: for_pos,
-            completion: None,
-        });
-        self.stmt_depth = base;
+        self.push_block(labels, BlockKind::Loop, l_break, Some(l_step), for_pos);
         if let Some(r) = &using {
             self.using_env(r);
         }
@@ -406,7 +393,6 @@ impl<'a> Parser<'a, '_> {
         if let Some(r) = using {
             self.close_using(r);
         }
-        self.stmt_depth = base;
         let loop_env = self.blocks.pop().expect("loop env");
         let iter_env = if is_of { self.blocks.pop() } else { None };
 
@@ -417,7 +403,7 @@ impl<'a> Parser<'a, '_> {
                     start,
                     end,
                     target: l_throw,
-                    depth: base,
+                    depth: 0,
                     depth_from: None,
                 });
             }
@@ -439,14 +425,14 @@ impl<'a> Parser<'a, '_> {
             self.code().get_field(atoms::DONE, 0);
             self.code().jump_if_false(l_assign);
             self.code().drop();
-            let mut close = iter_env.and_then(|e| e.completion);
+            let close = iter_env.and_then(|e| e.completion);
             let close_used = close.as_ref().is_some_and(|c| c.has_exits());
             let l_end = self.new_label();
             if close_used || loop_env.used {
                 self.code().jump(l_end);
             }
             let close_fn = intrinsic_id("IteratorClose").expect("%IteratorClose");
-            if let Some(c) = close.as_mut().filter(|c| c.has_exits()) {
+            if let Some(c) = close.as_ref().filter(|c| c.has_exits()) {
                 // Closes the iterator, then continues the exit.
                 self.place(l_close);
                 self.temp_get(it);
@@ -486,21 +472,6 @@ impl<'a> Parser<'a, '_> {
         }
         debug_assert_eq!(self.scope, outer);
         Ok(())
-    }
-
-    /// The env of a for-of's iterator (`BlockEnv` `Iter`): its close block is at
-    /// `l_close`, its completion named by the `for`.
-    fn iter_env(&mut self, l_close: Label, base: u32, for_pos: u32) -> BlockEnv {
-        BlockEnv {
-            labels: Vec::new(),
-            kind: BlockKind::Iter,
-            break_label: l_close,
-            continue_label: None,
-            depth: base,
-            used: false,
-            pos: for_pos,
-            completion: Some(super::completion::Completion::new(self.scope, for_pos)),
-        }
     }
 
     /// The temporaries of a loop's iterator record (D2732): the iterator (for-in: the key

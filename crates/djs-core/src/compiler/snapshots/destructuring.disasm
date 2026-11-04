@@ -1,4 +1,4 @@
-function 0 <anonymous>: params=2 locals=18 stack=4 captures=0
+function 0 <anonymous>: params=2 locals=20 stack=4 captures=0
   handler [104, 112) -> 150 depth 0
   handler [134, 136) -> 150 depth 0
   handler [240, 248) -> 307 depth 1
@@ -147,9 +147,9 @@ function 0 <anonymous>: params=2 locals=18 stack=4 captures=0
   366  call_intrinsic %GetIterator 1  ; 8:12
   371  dup
   372  get_field "next" ic18
-  379  put_loc8 loc15 (<temp>)
-  381  put_loc8 loc14 (<temp>)
-  383  iter_next_loc loc14 (<temp>) -> 408
+  379  put_loc8 loc17 (<temp>)
+  381  put_loc8 loc16 (<temp>)
+  383  iter_next_loc loc16 (<temp>) -> 408
   390  iter_check_object
   391  dup
   392  get_field "done" ic19
@@ -158,14 +158,14 @@ function 0 <anonymous>: params=2 locals=18 stack=4 captures=0
   408  jump8 -> 415
   410  drop
   411  undefined
-  412  put_loc8 loc14 (<temp>)
+  412  put_loc8 loc16 (<temp>)
   414  undefined
-  415  put_loc8 loc16 (key)  ; 8:13
-  417  get_loc8 loc14 (<temp>)
+  415  put_loc8 loc18 (key)  ; 8:13
+  417  get_loc8 loc16 (<temp>)
   419  dup
   420  is_undefined
   421  jump_if_true8 -> 455
-  423  get_loc8 loc15 (<temp>)
+  423  get_loc8 loc17 (<temp>)
   425  iter_next -> 448  ; 8:12
   430  iter_check_object
   431  dup
@@ -175,10 +175,10 @@ function 0 <anonymous>: params=2 locals=18 stack=4 captures=0
   448  jump8 -> 455
   450  drop
   451  undefined
-  452  put_loc8 loc14 (<temp>)
+  452  put_loc8 loc16 (<temp>)
   454  undefined
-  455  put_loc8 loc17 (value)  ; 8:18
-  457  get_loc8 loc14 (<temp>)
+  455  put_loc8 loc19 (value)  ; 8:18
+  457  get_loc8 loc16 (<temp>)
   459  dup
   460  is_undefined
   461  jump_if_true8 -> 468
@@ -186,8 +186,8 @@ function 0 <anonymous>: params=2 locals=18 stack=4 captures=0
   468  drop
   469  get_global "use" ic23  ; 8:37
   476  undefined
-  477  get_loc8 loc16 (key)  ; 8:41
-  479  get_loc8 loc17 (value)  ; 8:46
+  477  get_loc8 loc18 (key)  ; 8:41
+  479  get_loc8 loc19 (value)  ; 8:46
   481  call2  ; 8:40
   482  drop
   483  iter_next_loc loc12 (<temp>) -> 366  ; 8:1

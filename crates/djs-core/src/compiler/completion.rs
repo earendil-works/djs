@@ -20,13 +20,13 @@
 //!
 //! The kind is written last, after the value, and only abrupt completions with a value
 //! write the value: for the suspension maps' liveness, a write of the kind defines the
-//! value too (compiler/temps.rs), and the rethrow clears it.
+//! value too (compiler/temps.rs), and the rethrow clears it. (A for-of whose loop no jump
+//! leaves never uses its temporaries: they are dead everywhere.)
 use crate::PushOut;
 
 use alloc::vec::Vec;
 
-use super::func::ScopeId;
-use super::parser::{BlockKind, Parser};
+use super::parser::{BlockEnv, BlockKind, Parser};
 use crate::bytecode::Label;
 use crate::heap::Atom;
 
@@ -37,15 +37,11 @@ const RETURN: i32 = 2;
 
 /// The completion of a `Finally` or `Iter` block.
 pub(super) struct Completion {
-    /// The scope its temporaries are declared in and the offset that names them.
-    scope: ScopeId,
-    at: u32,
-    /// The temporaries, made on first use (an `Iter` block has none until a jump
-    /// leaves the loop, and a value only for a `return`).
-    kind: Option<Atom>,
-    value: Option<Atom>,
-    /// The exits that entered it, by kind code, in order of first use.
-    exits: Vec<(Exit, i32)>,
+    /// Its temporaries.
+    kind: Atom,
+    value: Atom,
+    /// The exits that entered it, in order of first use: [`Exit::encode`]d.
+    exits: Vec<u32>,
 }
 
 /// Where an abrupt completion goes once the blocks it leaves have run.
@@ -57,18 +53,26 @@ pub(super) enum Exit {
     Jump { block: usize, cont: bool },
 }
 
-impl Completion {
-    /// A completion whose temporaries are named by `at` (absolute), declared in `scope`.
-    pub fn new(scope: ScopeId, at: u32) -> Completion {
-        Completion {
-            scope,
-            at,
-            kind: None,
-            value: None,
-            exits: Vec::new(),
+impl Exit {
+    fn encode(self) -> u32 {
+        match self {
+            Exit::Return => u32::MAX,
+            Exit::Jump { block, cont } => (block as u32) << 1 | u32::from(cont),
         }
     }
 
+    fn decode(x: u32) -> Exit {
+        match x {
+            u32::MAX => Exit::Return,
+            x => Exit::Jump {
+                block: (x >> 1) as usize,
+                cont: x & 1 != 0,
+            },
+        }
+    }
+}
+
+impl Completion {
     /// Whether an exit entered the block.
     pub fn has_exits(&self) -> bool {
         !self.exits.is_empty()
@@ -76,24 +80,40 @@ impl Completion {
 }
 
 impl Parser<'_, '_> {
-    /// The kind temporary of `c` (and the value's with `value`), made on first use.
-    fn completion_temps(&mut self, c: &mut Completion, value: bool) -> (Atom, Option<Atom>) {
-        if c.kind.is_none() {
-            c.kind = Some(self.temp_in("completion.kind", c.at, c.scope));
-        }
-        if value && c.value.is_none() {
-            c.value = Some(self.temp_in("completion.value", c.at, c.scope));
-        }
-        (c.kind.expect("kind"), c.value)
+    /// Pushes a break/continue target of kind `kind`, the statement at `pos`. A
+    /// `Finally` or `Iter` block gets its completion, its temporaries named by `pos`.
+    #[inline(never)]
+    pub(super) fn push_block(
+        &mut self,
+        labels: Vec<Atom>,
+        kind: BlockKind,
+        break_label: Label,
+        continue_label: Option<Label>,
+        pos: u32,
+    ) {
+        let completion = matches!(kind, BlockKind::Finally | BlockKind::Iter).then(|| Completion {
+            kind: self.temp("completion.kind", pos),
+            value: self.temp("completion.value", pos),
+            exits: Vec::new(),
+        });
+        self.blocks.push_out(BlockEnv {
+            labels,
+            kind,
+            break_label,
+            continue_label,
+            used: false,
+            pos,
+            completion,
+        });
     }
 
-    /// Stores completion `code` in `c`; with `value` the value on top of the stack is
-    /// its value.
-    fn set_completion(&mut self, c: &mut Completion, code: i32, value: bool) {
-        let (kind, val) = self.completion_temps(c, value);
-        if value {
-            self.temp_put(val.expect("a value"));
-        }
+    /// The completion of `blocks[b]`.
+    fn completion_of(&self, b: usize) -> &Completion {
+        self.blocks[b].completion.as_ref().expect("a completion")
+    }
+
+    /// Stores completion `code` in `kind` (written last).
+    fn set_kind(&mut self, kind: Atom, code: i32) {
         self.emit_number(f64::from(code));
         self.temp_put(kind);
     }
@@ -101,23 +121,24 @@ impl Parser<'_, '_> {
     /// The normal completion of `blocks[b]` (a `Finally` block); its code follows or is
     /// jumped to.
     pub(super) fn complete_normally(&mut self, b: usize) {
-        let mut c = self.blocks[b].completion.take().expect("a completion");
-        self.set_completion(&mut c, NORMAL, false);
-        self.blocks[b].completion = Some(c);
+        let kind = self.completion_of(b).kind;
+        self.set_kind(kind, NORMAL);
     }
 
     /// An exception handler of a `Finally` block (its completion `c`, its code at
     /// `entry`), with the exception on the stack: enters the block with it.
-    pub(super) fn complete_throwing(&mut self, c: &mut Completion, entry: Label) {
-        self.set_completion(c, THROW, true);
+    pub(super) fn complete_throwing(&mut self, c: &Completion, entry: Label) {
+        self.temp_put(c.value);
+        self.set_kind(c.kind, THROW);
         self.code().jump(entry);
     }
 
     /// Leaves the finally blocks and for-of loops of `self.blocks[from..]` for `exit`,
-    /// innermost first. For [`Exit::Return`] the value is on top of the stack, above
-    /// `self.stmt_depth` values. Enters the innermost block with the completion, whose
+    /// innermost first. For [`Exit::Return`] the value is on top of the stack (and
+    /// nothing else: statements keep nothing there, D2732). Enters the innermost block with the completion, whose
     /// end continues the exit ([`Parser::end_completion`]); without one, it is taken
     /// here.
+    #[inline(never)]
     pub(super) fn emit_unwind(&mut self, from: usize, exit: Exit) {
         let inner = (from..self.blocks.len())
             .rev()
@@ -126,49 +147,44 @@ impl Parser<'_, '_> {
             self.take_exit(exit);
             return;
         };
-        let code = match exit {
+        let (kind, value) = (self.completion_of(b).kind, self.completion_of(b).value);
+        if exit == Exit::Return {
+            // The value goes into the completion before the stack is cut.
+            self.temp_put(value);
+        }
+        let code = self.exit_code(exit);
+        self.set_kind(kind, code);
+        let entry = self.blocks[b].break_label;
+        self.code().jump(entry);
+        let c = self.blocks[b].completion.as_mut().expect("a completion");
+        let x = exit.encode();
+        if !c.exits.contains(&x) {
+            c.exits.push_out(x);
+        }
+    }
+
+    /// The kind code of `exit` (see the module docs).
+    fn exit_code(&self, exit: Exit) -> i32 {
+        match exit {
             Exit::Return => RETURN,
             Exit::Jump { block, cont } => {
                 let off = self.blocks[block].pos.saturating_sub(self.f.src_start);
                 3 + 2 * off as i32 + i32::from(cont)
             }
-        };
-        let mut c = self.blocks[b].completion.take().expect("a completion");
-        if exit == Exit::Return {
-            // The value goes into the completion before the stack is cut.
-            let (_, val) = self.completion_temps(&mut c, true);
-            self.temp_put(val.expect("a value"));
         }
-        for _ in self.blocks[b].depth..self.stmt_depth {
-            self.code().drop();
-        }
-        self.set_completion(&mut c, code, false);
-        let entry = self.blocks[b].break_label;
-        self.code().jump(entry);
-        if !c.exits.iter().any(|e| e.1 == code) {
-            c.exits.push_out((exit, code));
-        }
-        self.blocks[b].completion = Some(c);
     }
 
-    /// `exit` once no block is left to run: the jump (cutting the stack to the target's
-    /// depth) or the return.
+    /// `exit` once no block is left to run: the jump or the return.
     fn take_exit(&mut self, exit: Exit) {
         match exit {
-            Exit::Return => {
-                let depth = self.stmt_depth;
-                self.emit_return_value_at(depth);
-            }
+            Exit::Return => self.emit_return_value(),
             Exit::Jump { block, cont } => {
                 let b = &self.blocks[block];
-                let (depth, target) = if cont {
-                    (b.depth, b.continue_label.expect("a continue target"))
+                let target = if cont {
+                    b.continue_label.expect("a continue target")
                 } else {
-                    (b.depth, b.break_label)
+                    b.break_label
                 };
-                for _ in depth..self.stmt_depth {
-                    self.code().drop();
-                }
                 self.code().jump(target);
             }
         }
@@ -176,36 +192,28 @@ impl Parser<'_, '_> {
 
     /// The end of the completion block of `c` (its env popped): dispatch on the kind. A
     /// normal completion goes to `normal` (`None`: the block has none); with `throws`
-    /// the block may have been entered by an exception, which is rethrown. The operand
-    /// depth is the block's.
-    pub(super) fn end_completion(
-        &mut self,
-        c: &mut Completion,
-        normal: Option<Label>,
-        throws: bool,
-    ) {
-        if c.kind.is_none() && !throws {
-            return;
-        }
-        let (kind, _) = self.completion_temps(c, throws);
+    /// the block may have been entered by an exception, which is rethrown.
+    #[inline(never)]
+    pub(super) fn end_completion(&mut self, c: &Completion, normal: Option<Label>, throws: bool) {
         if let Some(l) = normal {
-            self.temp_get(kind);
+            self.temp_get(c.kind);
             self.code().jump_if_false(l);
         }
-        let exits = core::mem::take(&mut c.exits);
-        let n = exits.len();
-        for (i, &(exit, code)) in exits.iter().enumerate() {
+        let n = c.exits.len();
+        for (i, &x) in c.exits.iter().enumerate() {
+            let exit = Exit::decode(x);
             // The last exit needs no test when nothing else can be left.
             let l_next = self.new_label();
             if throws || i + 1 < n {
-                self.temp_get(kind);
+                self.temp_get(c.kind);
+                let code = self.exit_code(exit);
                 self.emit_number(f64::from(code));
                 self.code().strict_eq();
                 self.code().jump_if_false(l_next);
             }
             let from = match exit {
                 Exit::Return => {
-                    self.temp_get(c.value.expect("a return value"));
+                    self.temp_get(c.value);
                     0
                 }
                 Exit::Jump { block, .. } => block + 1,
@@ -214,10 +222,9 @@ impl Parser<'_, '_> {
             self.place(l_next);
         }
         if throws {
-            let v = c.value.expect("a thrown value");
-            self.temp_get(v);
+            self.temp_get(c.value);
             self.code().undefined();
-            self.temp_put(v);
+            self.temp_put(c.value);
             self.code().throw();
         }
     }

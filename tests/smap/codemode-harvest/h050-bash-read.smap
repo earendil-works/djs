@@ -4,6 +4,6 @@ function <anonymous> @1..4163
   await#1 @3353 (69:8) pc 339: -
 function <anonymous> @3361..4152
   arg0 tools@0
-  loc0 <state>, loc5 path@30, loc6 offset@30, loc7 limit@30
-  await#1 @364 (74:23) pc 343: for-of.iterator@19 for-of.next@19 call.callee@345 call.this@345 object.literal@350
-  await#2 @410 (75:6) pc 404: call.callee@405 call.this@405 (out: loc5 loc6 loc7)
+  loc0 <state>, loc7 path@30, loc8 offset@30, loc9 limit@30
+  await#1 @364 (74:23) pc 350: for-of.iterator@19 for-of.next@19 call.callee@345 call.this@345 object.literal@350
+  await#2 @410 (75:6) pc 411: call.callee@405 call.this@405 (out: loc7 loc8 loc9)

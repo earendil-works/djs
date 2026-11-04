@@ -1,10 +1,10 @@
 function <anonymous> @1..4828
   arg0 tools@0, arg1 console@0
-  loc0 <state>, loc1 results@0, loc2 fake@0, loc7 answer@0, loc8 modelsOfType@0, loc9 fakeModels@0
+  loc0 <state>, loc1 results@0, loc2 fake@0, loc9 answer@0, loc10 modelsOfType@0, loc11 fakeModels@0
   await#1 @3063 (75:8) pc 250: -
 function <anonymous> @3071..4805
   arg0 tools@0, arg1 models@0
-  loc0 <state>, loc1 log@0, loc2 commits@0, loc3 model@0, loc4 criteria@0, loc5 results@0, loc6 commit@1099, loc9 result@1122
-  await#1 @39 (76:13) pc 37: - (out: loc6 loc9)
-  await#2 @357 (84:15) pc 110: - (out: loc6 loc9)
+  loc0 <state>, loc1 log@0, loc2 commits@0, loc3 model@0, loc4 criteria@0, loc5 results@0, loc6 commit@1099, loc11 result@1122
+  await#1 @39 (76:13) pc 37: - (out: loc6 loc11)
+  await#2 @357 (84:15) pc 110: - (out: loc6 loc11)
   await#3 @1137 (101:18) pc 303: for-of.iterator@1088 for-of.next@1088

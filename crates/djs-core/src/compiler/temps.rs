@@ -12,7 +12,7 @@
 //! computes that from the final phase-1 code, so a construct's code order (a for-of's
 //! target runs after its right side) cannot make the map wrong.
 
-use super::func::{ScopeId, VarKind};
+use super::func::VarKind;
 use super::parser::Parser;
 use crate::heap::Atom;
 
@@ -20,17 +20,12 @@ impl Parser<'_, '_> {
     /// A new temporary of `construct` (`"for-of.iterator"`) at source offset `at`
     /// (absolute; its name is relative to the function's start), declared in the
     /// current scope.
-    pub(super) fn temp(&mut self, construct: &'static str, at: u32) -> Atom {
-        self.temp_in(construct, at, self.scope)
-    }
-
-    /// [`Parser::temp`] declared in `scope` (an enclosing one).
     #[inline(never)]
-    pub(super) fn temp_in(&mut self, construct: &'static str, at: u32, scope: ScopeId) -> Atom {
+    pub(super) fn temp(&mut self, construct: &'static str, at: u32) -> Atom {
         // An integer atom: no source name is one, and it needs no interning.
         let n = self.f.temps.len() as u32;
         let atom = Atom::int(n).unwrap_or(Atom::NULL);
-        let v = self.f.add_var(atom, VarKind::Temp, scope);
+        let v = self.f.add_var(atom, VarKind::Temp, self.scope);
         self.f
             .temps
             .push((v, construct, at.saturating_sub(self.f.src_start)));

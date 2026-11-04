@@ -6,8 +6,7 @@
 //! (`using.record@S`, D2732) holds until the list ends. Each binding's value goes into
 //! it with `%UsingAdd`/`%AwaitUsingAdd`. The region is a `try`/`finally` whose finally
 //! block is the disposal (a `BlockKind::Finally` env, so `break`, `continue`, `return`
-//! and generator returns enter it with their completion, compiler/completion.rs), with
-//! `base` the depth of the list:
+//! and generator returns enter it with their completion, compiler/completion.rs):
 //!
 //! ```text
 //!          call_intrinsic %UsingCreate 0; put s
@@ -16,7 +15,7 @@
 //!          kind = 0
 //! L_fin:   get s; call_intrinsic %UsingDispose 1; drop
 //!          get kind; jump_if_false L_end; <exits>; get value; value = undefined; throw
-//! L_exc:   (handler for [L_try, L_try_end), depth base: exc)
+//! L_exc:   (handler for [L_try, L_try_end): exc)
 //!          get s; swap; call_intrinsic %UsingDisposeError 2; value = exc; kind = 1
 //!          jump L_fin
 //! L_end:
@@ -44,7 +43,7 @@ use alloc::vec::Vec;
 
 use super::PResult;
 use super::func::{HandlerLabels, VarKind};
-use super::parser::{BlockEnv, BlockKind, Parser, syntax};
+use super::parser::{BlockKind, Parser, syntax};
 use super::smap::SiteKind;
 use crate::bytecode::Label;
 use crate::bytecode::intrinsics::intrinsic_id;
@@ -65,8 +64,6 @@ pub(super) enum UsingList {
 
 #[derive(Clone, Copy)]
 pub(super) struct UsingRegion {
-    /// The operand depth of the statement list.
-    base: u32,
     /// The resource Record's temporary.
     pub rec: crate::heap::Atom,
     /// The start of the first bound name: names the Record's and the completion's
@@ -169,7 +166,7 @@ impl Parser<'_, '_> {
                 Ok(r.rec)
             }
             UsingList::Allowed => {
-                let r = self.using_region_start(self.stmt_depth, is_await, pos);
+                let r = self.using_region_start(is_await, pos);
                 self.using_env(&r);
                 self.using = UsingList::Open(r);
                 Ok(r.rec)
@@ -177,9 +174,9 @@ impl Parser<'_, '_> {
         }
     }
 
-    /// Makes the Record and starts the region (`base` is the operand depth). `at`, the
+    /// Makes the Record and starts the region. `at`, the
     /// start of the region's first bound name, names the Record's temporary.
-    pub(super) fn using_region_start(&mut self, base: u32, is_await: bool, at: u32) -> UsingRegion {
+    pub(super) fn using_region_start(&mut self, is_await: bool, at: u32) -> UsingRegion {
         self.code().call_intrinsic(intrinsic("UsingCreate"), 0);
         let rec = self.temp("using.record", at);
         self.temp_put(rec);
@@ -187,7 +184,6 @@ impl Parser<'_, '_> {
         let l_fin = self.new_label();
         self.place(l_try);
         UsingRegion {
-            base,
             rec,
             at,
             l_try,
@@ -198,17 +194,7 @@ impl Parser<'_, '_> {
 
     /// The region's `Finally` env: jumps out of it dispose.
     pub(super) fn using_env(&mut self, r: &UsingRegion) {
-        self.blocks.push_out(BlockEnv {
-            labels: Vec::new(),
-            kind: BlockKind::Finally,
-            break_label: r.l_fin,
-            continue_label: None,
-            depth: r.base,
-            used: false,
-            pos: r.at,
-            completion: Some(super::completion::Completion::new(self.scope, r.at)),
-        });
-        self.stmt_depth = r.base;
+        self.push_block(Vec::new(), BlockKind::Finally, r.l_fin, None, r.at);
     }
 
     /// The bindings after `using`: identifiers with initializers (`no_in` in a `for`
@@ -266,8 +252,7 @@ impl Parser<'_, '_> {
         self.code().call_intrinsic(intrinsic(add), 2);
     }
 
-    /// Ends a region: the normal exit, the disposal and the exception handler. The
-    /// operand depth is back at the list's.
+    /// Ends a region: the normal exit, the disposal and the exception handler.
     pub(super) fn close_using(&mut self, r: UsingRegion) {
         let fin = self.blocks.len() - 1;
         debug_assert!(
@@ -277,7 +262,7 @@ impl Parser<'_, '_> {
         let l_end = self.new_label();
         self.place(l_try_end);
         self.complete_normally(fin);
-        let mut c = self
+        let c = self
             .blocks
             .pop()
             .and_then(|e| e.completion)
@@ -303,7 +288,7 @@ impl Parser<'_, '_> {
                 start: l_a,
                 end: l_a_end,
                 target: l_rej,
-                depth: r.base,
+                depth: 0,
                 depth_from: None,
             });
             self.place(l_rej);
@@ -319,13 +304,13 @@ impl Parser<'_, '_> {
             self.code().call_intrinsic(intrinsic("UsingDispose"), 1);
             self.code().drop();
         }
-        self.end_completion(&mut c, Some(l_end), true);
+        self.end_completion(&c, Some(l_end), true);
         let l_exc = self.new_label();
         self.f.handlers.push_out(HandlerLabels {
             start: r.l_try,
             end: l_try_end,
             target: l_exc,
-            depth: r.base,
+            depth: 0,
             depth_from: None,
         });
         self.place(l_exc);
@@ -333,8 +318,7 @@ impl Parser<'_, '_> {
         self.code().swap();
         self.code()
             .call_intrinsic(intrinsic("UsingDisposeError"), 2);
-        self.complete_throwing(&mut c, r.l_fin);
+        self.complete_throwing(&c, r.l_fin);
         self.place(l_end);
-        self.stmt_depth = r.base;
     }
 }

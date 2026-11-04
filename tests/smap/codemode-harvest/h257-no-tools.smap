@@ -1,6 +1,6 @@
 function <anonymous> @1..2971
   arg0 tools@0, arg1 console@0
-  loc0 <state>, loc1 results@0, loc2 fake@0, loc7 answer@0, loc8 modelsOfType@0, loc9 fakeModels@0
+  loc0 <state>, loc1 results@0, loc2 fake@0, loc9 answer@0, loc10 modelsOfType@0, loc11 fakeModels@0
   await#1 @2656 (64:8) pc 198: -
 function <anonymous> @2664..2948
   arg0 tools@0, arg1 models@0
