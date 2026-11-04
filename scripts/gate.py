@@ -717,10 +717,14 @@ def cmd_stream(_args):
             continue
         # Test binaries list their tests; of the programs only those known to just print
         # their usage on --help (djs-bgen without arguments would rewrite files).
-        if m["profile"]["test"] or m["target"]["name"] in ("djs", "djs-difftest"):
+        warm_mode = os.environ.get("DJS_GATE_WARM", "nojoin")
+        if warm_mode != "off" and (m["profile"]["test"] or m["target"]["name"] in ("djs", "djs-difftest")):
             t = threading.Thread(target=warm, args=(m["executable"], m["profile"]["test"]), daemon=True)
             t.start()
             threads.append(t)
+    if os.environ.get("DJS_GATE_WARM") == "join":
+        for t in threads:
+            t.join()
     # The build is done: legs may start. Runs still waiting for their check go on (or are
     # dropped, if not started yet: the leg's own run waits for the check then), so the
     # checks overlap the legs instead of delaying them (0197).
