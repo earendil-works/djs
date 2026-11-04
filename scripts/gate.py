@@ -23,6 +23,7 @@ scripts/ is in every class, so a change to the gate reruns every leg. The `paths
 classes stay true.
 """
 
+import fcntl
 import hashlib
 import json
 import os
@@ -393,6 +394,21 @@ def run(argv):
         print("gate: the worktree has uncommitted changes: no cache (the keys are the commit's)")
         use_cache = False
     sha = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    # One gate at a time per worktree: a second waits here rather than sharing target/.
+    run_lock = open(Path(G, "run.lock"), "w")
+    try:
+        fcntl.flock(run_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        print("gate: another gate runs in this worktree; waiting for it", flush=True)
+        fcntl.flock(run_lock, fcntl.LOCK_EX)
+
+    def unchanged():
+        """The worktree is still the commit the gate started on (nothing checked out
+        another commit under it): only then may a pass be cached or reported."""
+        head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        return head == sha and (not clean or subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=normal"],
+            capture_output=True, text=True).stdout == "")
 
     # Which legs run: not cached, selected, full-only only in full runs.
     legs = [j for j in all_jobs if not j.build]
@@ -473,7 +489,7 @@ def run(argv):
     signal.signal(signal.SIGHUP, interrupted)
 
     try:
-        schedule(todo, by_name, ready, launch, running, lock, failed, clean, sha)
+        schedule(todo, by_name, ready, launch, running, lock, failed, clean, sha, unchanged)
     finally:
         for p in list(running.values()):
             try:
@@ -483,6 +499,10 @@ def run(argv):
 
     wall = time.time() - start
     write_steps(all_jobs, wall)
+    if not failed and not unchanged():
+        print(f"gate: FAILED: the worktree is no longer at {sha[:10]} (another commit was"
+              " checked out under the gate)")
+        return 1
     if failed:
         print(f"gate: FAILED: {', '.join(j.name for j in failed)} ({wall:.0f}s)")
         return 1
@@ -494,7 +514,7 @@ def run(argv):
     return 0
 
 
-def schedule(todo, by_name, ready, launch, running, lock, failed, clean, sha):
+def schedule(todo, by_name, ready, launch, running, lock, failed, clean, sha, unchanged):
     """Launches ready jobs until all are done or one failed (then stops the others)."""
     with lock:
         while True:
@@ -511,7 +531,7 @@ def schedule(todo, by_name, ready, launch, running, lock, failed, clean, sha):
                 report(j)
                 if j.state == "failed":
                     failed.append(j)
-                elif j.cls and clean:
+                elif j.cls and clean and unchanged():
                     cache_put(j.key(), j, sha)
             if failed:
                 # Fail fast: the first failure stops the rest.
