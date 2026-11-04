@@ -446,7 +446,6 @@ impl Session {
                 )));
             }
         };
-        self.eval("delete globalThis.$djs", "hooks.js")?;
         let api = self.vm.heap_mut().new_handle(api).map_err(err)?;
         self.api = Some(api);
         Ok(())

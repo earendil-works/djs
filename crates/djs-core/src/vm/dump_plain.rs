@@ -444,6 +444,48 @@ struct W<'x> {
 
 type R<T> = Result<T, String>;
 
+/// Whether `t` is a function expression (its body runs only when called).
+fn is_fn_text(t: &str) -> bool {
+    let t = t.trim_start();
+    let t = t.strip_prefix("async ").map_or(t, str::trim_start);
+    if t.starts_with("function") {
+        return true;
+    }
+    let b = t.as_bytes();
+    let rest = if b.first() == Some(&b'(') {
+        let mut depth = 0u32;
+        let mut end = None;
+        for (i, &c) in b.iter().enumerate() {
+            match c {
+                b'(' => depth += 1,
+                b')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = Some(i + 1);
+                        break;
+                    }
+                }
+                b'"' | b'\'' | b'`' => return false,
+                _ => {}
+            }
+        }
+        match end {
+            Some(e) => &t[e..],
+            None => return false,
+        }
+    } else {
+        let n = b
+            .iter()
+            .take_while(|c| c.is_ascii_alphanumeric() || **c == b'_' || **c == b'$')
+            .count();
+        if n == 0 {
+            return false;
+        }
+        &t[n..]
+    };
+    rest.trim_start().starts_with("=>")
+}
+
 fn refuse<T>(why: &str) -> R<T> {
     Err(String::from(why))
 }
@@ -506,7 +548,29 @@ pub(super) fn write(
     w.read_items(lines)?;
     w.activations()?;
     w.place_all()?;
-    let plan = w.schedule()?;
+    let plan = match w.schedule() {
+        Ok(p) => p,
+        Err(e) => {
+            // DEBUG(0201): the items and their dependencies.
+            let mut t = e;
+            for (i, it) in w.items.iter().enumerate() {
+                t.push_str(&alloc::format!(
+                    "\n  [{i}] {:?} deps {:?} start {:?} slots {:?}: {}",
+                    match it.kind {
+                        IK::Act(a) => alloc::format!("act{a}"),
+                        IK::Factory(f) => alloc::format!("fac{f}"),
+                        IK::Def(ref n) => alloc::format!("def {n}"),
+                        _ => String::from("other"),
+                    },
+                    it.deps,
+                    it.start_deps,
+                    it.slot_deps,
+                    it.text.chars().take(100).collect::<String>()
+                ));
+            }
+            return Err(t);
+        }
+    };
     w.emit(&plan, ts)
 }
 
@@ -1048,6 +1112,12 @@ enum Key {
 
 impl W<'_> {
     fn keys_of(&self, text: &str) -> Vec<Key> {
+        self.keys_in(text, true)
+    }
+
+    /// The keys of `text`; with `globals` false only its `$dump` references: the
+    /// globals a function's text names are read when it runs, after the load.
+    fn keys_in(&self, text: &str, globals: bool) -> Vec<Key> {
         let r = refs(text);
         let mut out = Vec::new();
         for (name, key) in r.dump {
@@ -1060,7 +1130,7 @@ impl W<'_> {
             }
         }
         for n in r.names {
-            if self.globals.contains(&n) {
+            if globals && self.globals.contains(&n) && !out.contains(&Key::Global(n.clone())) {
                 out.push_out(Key::Global(n));
             }
         }
@@ -1181,6 +1251,28 @@ impl W<'_> {
         }
     }
 
+    /// What a factory's text evaluates when it runs: its class statements and the
+    /// values of its variables that are not functions.
+    fn scope_eager(&self, sc: Sc, out: &mut String) {
+        for (k, s) in self.ir.factories[sc.0].scopes.iter().enumerate() {
+            if k != sc.1 && s.parent == sc.1 && !self.is_merged((sc.0, k)) {
+                self.scope_eager((sc.0, k), out);
+            }
+        }
+        let s = self.scope(sc);
+        for l in &s.other {
+            cat_to!(out, l, "\n");
+        }
+        for v in &s.vars {
+            if let Some(init) = &v.init
+                && !v.tdz
+                && !is_fn_text(init)
+            {
+                cat_to!(out, init, "\n");
+            }
+        }
+    }
+
     fn scope_text(&self, sc: Sc, out: &mut String) {
         for (k, s) in self.ir.factories[sc.0].scopes.iter().enumerate() {
             if k == sc.1 || s.parent == sc.1 && !self.is_merged((sc.0, k)) {
@@ -1253,16 +1345,25 @@ impl W<'_> {
                         }
                     }
                     cat_to!(&mut text, act.this, "\n");
+                    // Function texts: their globals are read when they run.
+                    let mut lazy = String::new();
                     for &(_, sc, v) in &self.acts[a].cells {
                         let var = &self.scope(sc).vars[v];
                         if !var.tdz {
-                            cat_to!(&mut text, var.init.as_deref().unwrap_or(""), "\n");
+                            let init = var.init.as_deref().unwrap_or("");
+                            let t = if is_fn_text(init) { &mut lazy } else { &mut text };
+                            cat_to!(t, init, "\n");
                         }
                     }
                     for b in 0..self.acts[a].blocks.len() {
-                        self.placed_text(Pl::Block(a, b), &mut text, 0);
+                        self.placed_text(Pl::Block(a, b), &mut lazy, 0);
                     }
-                    let keys = self.keys_of(&text);
+                    let mut keys = self.keys_of(&text);
+                    for k in self.keys_in(&lazy, false) {
+                        if !keys.contains(&k) {
+                            keys.push_out(k);
+                        }
+                    }
                     let mut deps = self.dep_items(&keys, i, &providers)?;
                     // Its continuation's definition.
                     match self.acts[a].place {
@@ -1317,7 +1418,14 @@ impl W<'_> {
                     } else {
                         let mut text = String::new();
                         self.scope_text((f, 0), &mut text);
-                        let k = self.keys_of(&text);
+                        let mut k = self.keys_in(&text, false);
+                        let mut eager = String::new();
+                        self.scope_eager((f, 0), &mut eager);
+                        for g in self.keys_of(&eager) {
+                            if !k.contains(&g) {
+                                k.push_out(g);
+                            }
+                        }
                         (self.dep_items(&k, i, &providers)?, Vec::new(), Vec::new())
                     }
                 }
@@ -1731,9 +1839,11 @@ impl W<'_> {
         let handle = ir.handles.first().map_or("undefined", |h| h.1.as_str());
         cat_to!(
             &mut s,
-            "try { ",
+            "try { (",
             handle,
-            " } finally { delete globalThis.$dump; }\n"
+            // The host's hooks go with the helpers: the Script's end is the moment
+            // the load is over, and hosts need no delete of their own (D2862).
+            "); } finally { delete globalThis.$dump; delete globalThis.$djs; }\n"
         );
         Ok(s)
     }
