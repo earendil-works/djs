@@ -1389,12 +1389,15 @@ impl G<'_, '_> {
                 let op = pt(Role::Op).ok_or("plain dumps: an operator without its token")?;
                 let opt = String::from(self.text(n.parts[op].start, n.parts[op].end));
                 if role == Role::Left {
+                    // K's own operator: its left operand is the original's (D2885).
+                    let m = self.ktemp(cat!("binary.left@", n.start), "binary.left");
                     let e = self.expr(i + 1)?;
                     let r = pt(Role::Right)
                         .map(|r| self.rest_part(&n, r))
                         .unwrap_or(s(""));
                     return Ok(P::L(alloc::vec![
                         s("("),
+                        m,
                         e,
                         P::S(cat!(" ", opt, " ")),
                         r,
@@ -1409,6 +1412,7 @@ impl G<'_, '_> {
                 let e = self.expr(i + 1)?;
                 Ok(P::L(alloc::vec![
                     s("("),
+                    self.kmark(),
                     l,
                     P::S(cat!(" ", opt, " ")),
                     e,
@@ -1467,6 +1471,8 @@ impl G<'_, '_> {
                             out.push_out(P::V(p.start, p.end));
                         }
                         Role::Subst if m == k => {
+                            // (The substitution's value is the original's part.)
+                            out.push_out(self.ktemp(cat!("template.part@", p.start), "template.part"));
                             out.push_out(self.expr(i + 1)?);
                             seen = true;
                         }
@@ -1533,9 +1539,12 @@ impl G<'_, '_> {
             if new {
                 return no("a site in a new's callee");
             }
+            // K's call: its callee and `this` are the original's.
+            let mc = self.ktemp(cat!("call.callee@", n.start), "call.callee");
+            let mt = self.ktemp(cat!("call.this@", n.start), "call.this");
             let e = self.expr(i + 1)?;
             let tail = self.rest(n.parts[k].end, n.end);
-            return Ok(P::L(alloc::vec![e, tail]));
+            return Ok(P::L(alloc::vec![mc, mt, e, tail]));
         }
         if let Some(c) = callee {
             let t = self.text(n.parts[c].start, n.parts[c].end);
@@ -1619,6 +1628,16 @@ impl G<'_, '_> {
         } else {
             e
         })
+    }
+
+    /// A mark where K's construct `kc` keeps what the original's temporary `fslot`
+    /// keeps (origin tracking, should K stop again inside its rewritten statement).
+    fn ktemp(&mut self, fslot: String, kc: &str) -> P {
+        let m = self.mark("tmp", 0);
+        if let P::Mark(x) = m {
+            self.scaf[x].3 = cat!(",", quote(&fslot), ",", quote(kc));
+        }
+        m
     }
 
     /// A construct of K's own whose temporaries origin tracking rebuilds from the
@@ -1751,12 +1770,15 @@ impl G<'_, '_> {
             }
         };
         let e = self.expr(i + 1)?;
+        // (K's own assignment and operator: rebuilt from the original's frame.)
+        let target = P::L(alloc::vec![self.kmark(), target]);
         Ok(if compound {
             let old = self.tmp("assign.old", n.start)?;
             P::L(alloc::vec![
                 s("("),
                 target,
                 s(" = "),
+                self.kmark(),
                 old,
                 P::S(cat!(" ", bin, " ")),
                 e,
