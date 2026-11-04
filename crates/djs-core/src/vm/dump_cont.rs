@@ -110,6 +110,7 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
         arrow: act.fkind == crate::bytecode::template::func_flags::KIND_ARROW,
         params: Vec::new(),
         deferred: Vec::new(),
+        marks: true,
     };
     let mut body = g.body()?;
     if !g.deferred.is_empty() {
@@ -299,6 +300,9 @@ struct G<'a, 'c> {
     arrow: bool,
     /// The body's bindings K takes as parameters: name, the argument (D2909).
     params: Vec<(String, String)>,
+    /// Whether K can stop again in the expression being written after its site: only then
+    /// does origin tracking need the records of K's own constructs (`k`, `tmp`).
+    marks: bool,
     /// Assignments that wait for a part of the dump's callback (D2907): the part, the
     /// statement.
     deferred: Vec<(usize, Vec<String>, P)>,
@@ -344,6 +348,10 @@ impl G<'_, '_> {
     }
 
     fn mark(&mut self, kind: &'static str, f: u32) -> P {
+        // A record of K's own construct only where K can stop again inside it.
+        if !self.marks && matches!(kind, "k" | "tmp") {
+            return s("");
+        }
         self.scaf.push_out((kind, f, 0, String::new()));
         P::Mark(self.scaf.len() - 1)
     }
@@ -749,7 +757,14 @@ impl G<'_, '_> {
                 let decls = Self::block_decls(&n, k);
                 let l = self.list(&n, k, i + 1, &decls)?;
                 // After the `}`: a `using` scope's disposal is a site there.
-                let end = self.mark("site", n.end);
+                let end = if decls
+                    .iter()
+                    .any(|d| matches!(d.1, DeclKind::Using | DeclKind::AwaitUsing))
+                {
+                    self.mark("site", n.end)
+                } else {
+                    s("")
+                };
                 // A block that declares nothing and is no label's needs no braces where
                 // K writes it among statements (not a `try`'s or a `catch`'s).
                 let listed = i > 0
@@ -1081,6 +1096,10 @@ impl G<'_, '_> {
     fn for_of(&mut self, i: usize, n: &Node, label: Option<P>) -> R<P> {
         // At the loop itself: its head's `using` resources disposed after an iteration.
         let disposing = self.is_site(i);
+        let using_head = n
+            .decls
+            .iter()
+            .any(|d| matches!(d.kind, DeclKind::Using | DeclKind::AwaitUsing));
         let k = match self.next_part(i) {
             Some(k) => k,
             None => n
@@ -1193,7 +1212,11 @@ impl G<'_, '_> {
             first,
             s("\n}"),
             // (The iteration's `using` scope ends here: its disposal is a site.)
-            self.mark("site", n.parts[k].end),
+            if using_head {
+                self.mark("site", n.parts[k].end)
+            } else {
+                s("")
+            },
             s(" } else { "),
             bind,
             s(" "),
@@ -1730,22 +1753,50 @@ impl G<'_, '_> {
         }
         if self.is_site(i) {
             let m = self.mark("site", n.start);
+            // Parentheses only where the site's place does not take it bare.
+            let (open, close) = if self.takes_bare(i) {
+                ("", "")
+            } else {
+                ("(", ")")
+            };
             return Ok(match n.kind {
                 NodeKind::Await => P::L(alloc::vec![
-                    s("("),
+                    s(open),
                     m,
                     s("await "),
                     P::S(self.ctx.awaiting()),
-                    s(")")
+                    s(close)
                 ]),
                 // A yield's operand was yielded before the dump.
-                NodeKind::Yield => P::L(alloc::vec![s("("), m, s("yield)")]),
+                NodeKind::Yield => P::L(alloc::vec![s(open), m, s("yield"), s(close)]),
                 _ => return Err(cat!("plain dumps: a site at ", kind_name(n.kind))),
             });
         }
         let k = self
             .next_part(i)
             .ok_or("plain dumps: a path that ends early")?;
+        // (Can K stop again in this expression after the site? Its text after the site
+        // has an `await` or a `yield`.)
+        let last = self.act.site.path.len() - 1;
+        let after = self.text(self.node(last).end.min(n.end), n.end);
+        // (Or an `await`/`yield` between it and the site, which waits once the site's
+        // operand is done.)
+        let between = (i + 1..last).any(|j| {
+            matches!(
+                self.node(j).kind,
+                NodeKind::Await | NodeKind::Yield | NodeKind::YieldStar
+            )
+        });
+        let saved = self.marks;
+        self.marks = between || has_ident(after, "await") || has_ident(after, "yield");
+        let r = self.expr_at(i, &n, k);
+        self.marks = saved;
+        r
+    }
+
+    /// [`G::expr`] of node `n` (path node `i`, the site in its part `k`).
+    fn expr_at(&mut self, i: usize, n: &Node, k: usize) -> R<P> {
+        let n = n.clone();
         let role = n.parts[k].role;
         let pt = |r: Role| n.parts.iter().position(|p| p.role == r);
         match n.kind {
@@ -2049,6 +2100,33 @@ impl G<'_, '_> {
             self.scaf[x].3 = cat!(",", quote(&fslot), ",", quote(kc));
         }
         m
+    }
+
+    /// Whether path node `i` (an `await` or `yield`) stands where an assignment
+    /// expression does: an argument, an element, a property's value, an initializer, an
+    /// expression statement, a `return`'s or `throw`'s operand, an assignment's right
+    /// side, a template's substitution.
+    fn takes_bare(&self, i: usize) -> bool {
+        if i == 0 {
+            return false;
+        }
+        let p = self.node(i - 1);
+        let Some(k) = self.next_part(i - 1) else {
+            return false;
+        };
+        matches!(
+            (p.kind, p.parts[k].role),
+            (NodeKind::Call { .. } | NodeKind::New, Role::Arg)
+                | (NodeKind::Array, Role::Element)
+                | (NodeKind::Object, Role::Value)
+                | (NodeKind::Decl(_), Role::Init)
+                | (
+                    NodeKind::Expr | NodeKind::Return | NodeKind::Throw,
+                    Role::Operand
+                )
+                | (NodeKind::Assign, Role::Right)
+                | (NodeKind::Template, Role::Subst)
+        )
     }
 
     /// Argument `m` of call `n`, evaluated before the site: its text again where it reads
@@ -2437,11 +2515,26 @@ struct Flat {
 impl Flat {
     fn walk(&mut self, p: &P, ftext: &str, scaf: &mut [(&'static str, u32, u32, String)]) {
         match p {
-            // (No blank lines of K's own.)
-            P::S(t) | P::Decl(_, t) if self.text.ends_with('\n') => {
-                self.text.push_str(t.trim_start_matches('\n'))
+            P::S(t) | P::Decl(_, t) => {
+                // (No blank lines of K's own.)
+                let t = if self.text.ends_with('\n') {
+                    t.trim_start_matches('\n')
+                } else {
+                    t.as_str()
+                };
+                // Text that goes on the original's right after a copied stretch is part
+                // of it (one segment, not two).
+                let at = self.text.len() as u32;
+                if let [.., ks, fs, len] = self.segs[..]
+                    && ks + len == at
+                    && !t.is_empty()
+                    && ftext.get((fs + len) as usize..(fs + len) as usize + t.len()) == Some(t)
+                {
+                    let n = self.segs.len();
+                    self.segs[n - 1] += t.len() as u32;
+                }
+                self.text.push_str(t)
             }
-            P::S(t) | P::Decl(_, t) => self.text.push_str(t),
             P::Scope(names, braced, q) => {
                 let braces = *braced && !names.is_empty();
                 if braces {
@@ -2453,7 +2546,18 @@ impl Flat {
                 }
             }
             P::V(a, b) => {
-                if b > a {
+                let at = self.text.len() as u32;
+                if b > a
+                    && let [.., ks, fs, len] = self.segs[..]
+                    && ks + len == at
+                    && fs + len == *a
+                {
+                    // (A copy that goes on the last one.)
+                    let n = self.segs.len();
+                    self.segs[n - 1] += b - a;
+                    self.text
+                        .push_str(ftext.get(*a as usize..*b as usize).unwrap_or(""));
+                } else if b > a {
                     self.segs.push_out(self.text.len() as u32);
                     self.segs.push_out(*a);
                     self.segs.push_out(b - a);

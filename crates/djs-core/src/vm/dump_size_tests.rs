@@ -228,9 +228,9 @@ main();
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 7, "{ok}");
     let at = |k: usize| plain_dump_at(src, k);
-    assert!(at(1).contains("a.push((await "), "{}", at(1));
-    assert!(at(2).contains("f(k, (await "), "{}", at(2));
-    assert!(at(3).contains("Math.max(1, (await "), "{}", at(3));
+    assert!(at(1).contains("a.push(await "), "{}", at(1));
+    assert!(at(2).contains("f(k, await "), "{}", at(2));
+    assert!(at(3).contains("Math.max(1, await "), "{}", at(3));
     for k in 4..=7 {
         assert!(at(k).contains("$djs_R("), "{k}: {}", at(k));
     }
