@@ -717,17 +717,14 @@ def cmd_stream(_args):
             continue
         # Test binaries list their tests; of the programs only those known to just print
         # their usage on --help (djs-bgen without arguments would rewrite files).
-        warm_mode = os.environ.get("DJS_GATE_WARM", "nojoin")
-        if warm_mode != "off" and (m["profile"]["test"] or m["target"]["name"] in ("djs", "djs-difftest")):
+        if m["profile"]["test"] or m["target"]["name"] in ("djs", "djs-difftest"):
             t = threading.Thread(target=warm, args=(m["executable"], m["profile"]["test"]), daemon=True)
             t.start()
             threads.append(t)
-    if os.environ.get("DJS_GATE_WARM") == "join":
-        for t in threads:
-            t.join()
     # The build is done: legs may start. Runs still waiting for their check go on (or are
     # dropped, if not started yet: the leg's own run waits for the check then), so the
-    # checks overlap the legs instead of delaying them (0197).
+    # checks overlap the legs instead of delaying them. Measured on a core change: 77/85 s
+    # this way, 88/100 s waiting for all of them, 105/105 s not running them (D2792).
     print(f"gate stream: cargo done; {len(threads)} new executables,"
           f" {sum(t.is_alive() for t in threads)} still waiting for their first run", file=sys.stderr)
     return 0

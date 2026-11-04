@@ -539,16 +539,23 @@ set of **legs**, the checks, and the **builds** they need (D2660). `scripts/gate
 --list` prints them. The legs: fmt; clippy (workspace, and wasm32 release for djs-core
 and djs-wasm), and on the other feature combinations that ship (D2668: djs-core slim,
 slim with `dump`, full without `dump`; the wasm modules in release: main, slim, dump, slim
-with dump); the workspace's unit and integration tests (djs-docs's apart) and its
-doctests; the no_std wasm32 build of djs-core; `scripts/bgen.sh --check`; the builtin
-registry's append-only check (`scripts/registry.py check main`); the guide (`djs-docs
+with dump); the workspace's unit and integration tests (djs-docs's apart; djs-bgen's
+`builtins_gen_is_fresh` is what `scripts/bgen.sh --check` checks); the no_std wasm32 build
+of djs-core; the builtin registry's append-only check (`scripts/registry.py check main`); the guide (`djs-docs
 check`); the JS host package's tests on the dev modules; native versus wasm heap images;
 the wire and reader cross-language checks; difftest on djs with the ratchet, suspension,
 GC stress, heap-image determinism and a dump at every idle point; difftest with the
 bytecode backend; the unsafe-heap build (verifier and e2e in debug, the stressed corpus
 in release); the test262 active group against its ratchet; the slim build's legs (below);
 the size budget (below); pi's tests on the slim module and in the adapter's next mode.
-The `test` and `test262` legs print the slowest tests. Issues that add a test suite add a
+The `test` and `test262` legs print the slowest tests. The always-run `targets` leg
+keeps what the manifests leave out of `cargo test` empty (D2790): no library has doctests
+(`doctest = false` everywhere; a doctest fails the leg, so whoever adds one turns its
+crate's doctests back on and gives the gate a doctest leg), and the programs with
+`test = false` have no unit tests. Each package's integration tests are one binary,
+`tests/it/main.rs` with a module per former file (djs-core's e2e stays its own:
+`cargo test -p djs-core --test e2e`; the others are `--test it`, filtered by module, e.g.
+`--test it slices::`), D2791. Issues that add a test suite add a
 leg (`jobs()` in scripts/gate.py: its command, the builds it needs, its input class);
 agents do not run the gate's steps by hand (AGENTS.md).
 
