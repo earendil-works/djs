@@ -1,7 +1,7 @@
 # 0200: Compiler: record each site's statement path, block declarations and expression constructs with spans
 
-status: open
-agent: -
+status: in-progress
+agent: pjc
 branch: issue/0200-site-structure
 depends-on: -
 guide: -
