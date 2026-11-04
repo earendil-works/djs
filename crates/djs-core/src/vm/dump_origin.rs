@@ -89,6 +89,12 @@ fn string(h: &Heap, v: Value) -> Option<String> {
     v.as_string().map(|s| text_of(h, s))
 }
 
+/// The array field `name` of record `r`; a missing field is empty (the writer leaves
+/// empty fields out, D2900).
+fn list(h: &Heap, r: Obj, name: &str) -> Option<Vec<Value>> {
+    own(h, r, name).map_or(Some(Vec::new()), |v| elements(h, v))
+}
+
 /// `K.$djs` of function `k`, if it is a continuation.
 fn record(h: &Heap, k: Obj) -> Option<Record> {
     let r = own(h, k, "$djs")?.as_object()?;
@@ -96,12 +102,12 @@ fn record(h: &Heap, k: Obj) -> Option<Record> {
     if h.object_class(f) != ObjectClass::Function {
         return None;
     }
-    let segs = elements(h, own(h, r, "segs")?)?
+    let segs = list(h, r, "segs")?
         .into_iter()
         .map(number)
         .collect::<Option<Vec<u32>>>()?;
     let mut scaf = Vec::new();
-    for e in elements(h, own(h, r, "scaf")?)? {
+    for e in list(h, r, "scaf")? {
         let e = elements(h, e)?;
         let kind = string(h, *e.first()?)?;
         let (fo, ko) = (number(*e.get(1)?)?, number(*e.get(2)?)?);
@@ -124,7 +130,7 @@ fn record(h: &Heap, k: Obj) -> Option<Record> {
         scaf.push((kind, fo, ko, fin, extra));
     }
     let mut cmap = Vec::new();
-    for e in elements(h, own(h, r, "cmap")?)? {
+    for e in list(h, r, "cmap")? {
         let e = elements(h, e)?;
         let slot = string(h, *e.first()?)?;
         let v = *e.get(2)?;

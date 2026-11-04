@@ -1,0 +1,6 @@
+# The plain dump size score (0207, D2901): total bytes of the plain dumps at every idle point
+# of the corpus (difftest --plain-out, without the corpus prelude and the harvest harness:
+# scripts/dump-size `env`) and of the v2/golden programs (plain_dumps_at_every_idle_point
+# with DJS_PLAIN_OUT), raw and gzip -9 per dump. The gate leg "plain dumps (djs and node)"
+# fails when a total grows; lower it with
+#   node scripts/dump-size/dump-size.ts --score tests/scores/dump-size.tsv --update corpus=DIR v2=DIR

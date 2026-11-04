@@ -2106,19 +2106,26 @@ impl W<'_> {
         let segs: Vec<String> = k.segs.iter().map(|x| cat!(*x)).collect();
         let (fref, fdef) = self.fref(a);
         lines.extend(fdef);
+        // Fields at their default are left out (0207, D2900): `at` (informative only)
+        // when it is the first await, empty `segs`, `scaf` and `cmap`.
+        let mut rec = cat!("f: ", fref);
+        if act.site.name != "await#1" {
+            rec = cat!(rec, ", at: ", quote(&act.site.name));
+        }
+        if !segs.is_empty() {
+            rec = cat!(rec, ", segs: [", join(&segs, ","), "]");
+        }
+        if k.scaf != "[]" {
+            rec = cat!(rec, ", scaf: ", k.scaf);
+        }
+        if k.cmap != "[]" {
+            rec = cat!(rec, ", cmap: ", k.cmap);
+        }
         lines.push_out(cat!(
             "Object.defineProperty(",
             kref,
-            ", \"$djs\", { value: { f: ",
-            fref,
-            ", at: ",
-            quote(&act.site.name),
-            ", segs: [",
-            join(&segs, ","),
-            "], scaf: ",
-            k.scaf,
-            ", cmap: ",
-            k.cmap,
+            ", \"$djs\", { value: { ",
+            rec,
             " } });"
         ));
         let me = cat!("$dump.", act.name);
