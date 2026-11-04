@@ -1,0 +1,22 @@
+function <anonymous> @1..350
+  arg0 argument 0, arg1 console@0
+  loc0 <state>, loc1 tools@0, loc2 C@0, loc4 <fields 0>, loc5 o@0
+  node 0 Body @0..349: Params 6..22 Stmt 199..259 Stmt 260..296 Stmt 297..315 Stmt 316..346 | Param tools@0#0 Param console@0#0 Class C@0#1 Const o@0#3
+  node 1 Expr @260..296: Operand 260..295
+  node 2 Call @260..295: Callee 260..271 Open 271..272 Arg 272..294
+  node 3 Await @272..294: Operand 278..294
+  node 4 Expr @316..346: Operand 316..345
+  node 5 Call @316..345: Callee 316..327 Open 327..328 Arg 328..344
+  node 6 Await @328..344: Operand 334..344
+  await#1 @272 (6:13) pc 62: call.callee@260 call.this@260
+    path 0.2 1.0 2.2 3
+  await#2 @328 (8:13) pc 92: call.callee@316 call.this@316
+    path 0.4 4.0 5.2 6
+function fetch @212..258
+  arg0 x@0
+  loc0 <state>
+  node 0 Body @0..46: Params 11..14 Stmt 17..44 | Param x@0#0
+  node 1 Return @17..44: Operand 24..43
+  node 2 Await @24..43: Operand 30..43
+  await#1 @24 (4:27) pc 18: -
+    path 0.1 1.0 2

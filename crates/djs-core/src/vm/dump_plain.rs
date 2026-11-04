@@ -1188,8 +1188,18 @@ impl W<'_> {
             None => Pl::Top,
             Some((sc, _)) if !self.is_merged(sc) => self.factory_place(sc)?,
             Some((sc, p)) => {
-                let caps = self.scope(sc).props[p].caps.clone();
-                self.code_place(Put::Prop(sc, p), &caps)?
+                // (Where its member was placed: a class's members go with the class.)
+                let placed = self.placed.iter().find_map(|x| match x.1 {
+                    Put::Prop(psc, pi) if psc == sc && pi == p => Some(x.0),
+                    _ => None,
+                });
+                match placed {
+                    Some(pl) => pl,
+                    None => {
+                        let caps = self.scope(sc).props[p].caps.clone();
+                        self.code_place(Put::Prop(sc, p), &caps)?
+                    }
+                }
             }
         };
         self.act_place[a] = Some(pl);
