@@ -54,6 +54,7 @@ interface Exports {
   vm_load_dump?(vm: number, namesLen: number, len: number): number;
   /** Since 0204 (D2890): loading plain dumps. */
   vm_open_call?(vm: number, parked: number, fnId: number): number;
+  vm_set_next_call_id?(vm: number, id: number): void;
   vm_global(vm: number): number;
   vm_new_object(vm: number): number;
   vm_define(vm: number, obj: number, nameLen: number, value: number): number;
@@ -367,6 +368,11 @@ export class Engine {
     const x = this.x;
     if (!x.vm_open_call) throw new Error("The djs-wasm module cannot load plain dumps (no vm_open_call)");
     return this.trap(() => x.vm_open_call!(this.vm, parked, fnId)) === 0 ? undefined : outText(x);
+  }
+
+  /** Sets the id the next host call gets (after a plain dump's load, D2896). */
+  setNextCallId(id: number): void {
+    if (this.x.vm_set_next_call_id) this.trap(() => this.x.vm_set_next_call_id!(this.vm, id));
   }
 
   /** Starts calling `f` with `thisArg` and argument handles (0 = undefined). */

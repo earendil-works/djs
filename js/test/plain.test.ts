@@ -133,3 +133,42 @@ test("a dump that does not load", async () => {
     sb.dispose();
   }
 });
+
+test("a task suspended into a plain dump (the exporter's) resumes through the hooks, ids and all", async () => {
+  const module = await loadModule();
+  const code = `const a = await sleep(1); log("a", a); const b = await sleep(2); log("b", b, Math.random() < 1); return a + b;`;
+  const pending: { n: number; resolve(v: number): void }[] = [];
+  const resumed: [unknown, HostCall][] = [];
+  const calls: HostCall[] = [];
+  const lines: string[] = [];
+  const sleep: AsyncHostFunction<{ n: number }> = {
+    call(n) {
+      calls.push(this);
+      this.state = { n: Number(n) };
+      return new Promise((resolve) => pending.push({ n: Number(n), resolve }));
+    },
+    resume(state, call) {
+      resumed.push([state, call]);
+      return Promise.resolve(state.n * 100);
+    },
+  };
+  const opts = { module, plainDumps: true, functions: { log: (...a: unknown[]) => void lines.push(a.join(" ")) }, asyncFunctions: { sleep } };
+  const task = new Sandbox(opts).start(code);
+  while (pending.length === 0) await new Promise((r) => setTimeout(r, 1));
+  const dump = await task.suspend();
+  await assert.rejects(task.result, (e: unknown) => e instanceof SandboxError && e.kind === "suspended");
+  task.sandbox.dispose();
+  assert.match(dump, /^"djs-dump 3";\n/);
+  assert.match(dump, /\$djs\.seed\(-?\d+, -?\d+, 2\);/);
+  assert.match(dump, /\$djs\.resume\(1, "sleep", \[1\], \{"n":1\}\)/);
+  const again = await Sandbox.resume(dump, opts);
+  while (pending.length === 1) await new Promise((r) => setTimeout(r, 1));
+  // The next call has the id the uninterrupted run gives it (D2896): `log("a")`, a sync
+  // call, takes 2.
+  assert.deepEqual(calls.map((c) => [c.id, c.args]), [[1, [1]], [3, [2]]]);
+  pending[1].resolve(20);
+  assert.equal(await again.result, 120);
+  assert.deepEqual(resumed.map(([s, c]) => [s, c.id]), [[{ n: 1 }, 1]]);
+  assert.deepEqual(lines, ["a 100", "b 20 true"]);
+  again.sandbox.dispose();
+});

@@ -327,6 +327,7 @@ interface Exports {
   vm_outcome(vm: number): number;
   /** Since 0204 (D2890): loading plain dumps. */
   vm_open_call?(vm: number, parked: number, fnId: number): number;
+  vm_set_next_call_id?(vm: number, id: number): void;
   vm_set_weak_refs(vm: number, mode: number): number;
   vm_resolve_host_call_at(vm: number, callId: number, ok: number, value: number, now: number): number;
   vm_canonical_hash(vm: number): number;
@@ -1265,7 +1266,8 @@ export class Sandbox {
    * meanwhile. The dump deletes `$djs` at the end of its Script.
    * `$djs.resume(id, name, args, state)` opens the dump's call `id` of host function
    * `name` again under its id (`vm_open_call`): one of the calls returned, with its state;
-   * `$djs.seed(lo, hi)` sets `Math.random`'s state. Other sync host functions are called
+   * `$djs.seed(lo, hi, next)` sets `Math.random`'s state and, once the dump has loaded,
+   * the id of the next call (D2896). Other sync host functions are called
    * (they must return synchronously); async calls the Script makes are new calls, which
    * the run that follows reports. The Script's completion value, when a promise, is the
    * handle "run". The dumper is not needed: a plain dump is code.
@@ -1288,6 +1290,8 @@ export class Sandbox {
       x.vm_handle_free(vm, hooks);
     });
     let st = STATUS_DONE;
+    // `$djs.seed`'s next call id: the counter goes on from the dumped VM's (D2896).
+    let next: number | undefined;
     this.enter(dump, {}, true, "dump.js", typescript);
     const slice = this.opts.fuelSlice ?? 1_000_000;
     const maxFuel = this.opts.maxFuel ?? Infinity;
@@ -1325,9 +1329,10 @@ export class Sandbox {
       let ok = true;
       let result: unknown;
       if (fnId === HOOK_SEED) {
-        const [lo, hi] = args;
+        const [lo, hi, n] = args;
         if (typeof lo === "number" && typeof hi === "number") this.guard(() => x.vm_set_math_random_seed(vm, lo >>> 0, hi >>> 0));
         else [ok, result] = [false, new TypeError("seed: not two int32 halves")];
+        if (typeof n === "number") next = n;
       } else {
         try {
           result = this.invoke(fnId, args);
@@ -1338,6 +1343,10 @@ export class Sandbox {
         }
       }
       this.complete(callId, ok, result, false);
+    }
+    if (next !== undefined && x.vm_set_next_call_id) {
+      const last = Math.max(0, ...calls.map((c) => c.id));
+      this.guard(() => x.vm_set_next_call_id!(vm, Math.max(next!, last + 1)));
     }
     return this.guard(() => {
       if (st === STATUS_THREW || st === STATUS_HOST_OUT_OF_MEMORY) {

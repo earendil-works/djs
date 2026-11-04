@@ -3,7 +3,7 @@
 // target/pi-codemode), swaps in two modules, and runs pi's installed vitest on the copy.
 //
 //   node js/pi/pi-tests.ts [--pi ~/Development/pi-private] [--out target/pi-codemode] [--no-run]
-//                          [--no-lockdown] [--next [--dump-every-idle]] [--expected FILE]
+//                          [--no-lockdown] [--next [--dump-every-idle [--plain]]] [--expected FILE]
 //
 // --no-lockdown runs pi's prelude with its `lockdown()` cut out, on frozen builtins (D2304):
 // what pi would run on djs, and what the slim module needs (its builtins don't include the
@@ -11,7 +11,8 @@
 // --next runs the adapter's `next` mode (D2650): tests/pi/prelude-next.ts instead of pi's
 // prelude (tools as engine async host calls, no in-flight state in the prelude, frozen
 // builtins instead of the lockdown). --dump-every-idle adds that at every idle point the
-// session dumps itself and goes on in a new instance resumed from the dump (D2651).
+// session dumps itself and goes on in a new instance resumed from the dump (D2651);
+// --plain makes those plain dumps (format 3, D2830), loaded with the hooks (D2890, D2893).
 // --expected FILE: the run passes when every failing test is listed in FILE (one full test
 // name per line, `#` comments); listed tests that pass are reported as stale.
 //
@@ -48,6 +49,8 @@ const noLockdown = process.argv.includes("--no-lockdown");
 const next = process.argv.includes("--next");
 const dumpEveryIdle = process.argv.includes("--dump-every-idle");
 if (dumpEveryIdle && !next) throw new Error("--dump-every-idle needs --next");
+const plain = process.argv.includes("--plain");
+if (plain && !dumpEveryIdle) throw new Error("--plain needs --dump-every-idle");
 if (next && noLockdown) throw new Error("--next has no lockdown already");
 const commit = spawnSync("git", ["-C", pi, "rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
 
@@ -85,7 +88,7 @@ import { PRELUDE_NEXT } from "${preludeNext}";
 /** djs's prelude-next in the adapter's next mode (D2650). */
 export function startVm(options: StartVmOptions): Promise<VmSession> {
 \tvoid PRELUDE_SOURCE;
-\treturn startDjsVm({ ...options, prelude: PRELUDE_NEXT, shape: "next"${dumpEveryIdle ? ", dumpEveryIdle: true" : ""} });
+\treturn startDjsVm({ ...options, prelude: PRELUDE_NEXT, shape: "next"${dumpEveryIdle ? ", dumpEveryIdle: true" : ""}${plain ? ", plainDumps: true" : ""} });
 }
 `
       : noLockdown

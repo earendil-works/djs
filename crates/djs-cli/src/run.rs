@@ -543,10 +543,8 @@ fn drive_from(
                     return 2;
                 }
                 _ => {
-                    crate::dumps::end_load(&mut vm);
-                    for (_, s) in load.take().map(|l| l.states).unwrap_or_default() {
-                        tools.restore_state(&s);
-                    }
+                    let l = load.take().unwrap_or_default();
+                    crate::dumps::end_load(&mut vm, tools, &l);
                 }
             }
         }

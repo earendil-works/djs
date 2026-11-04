@@ -2091,6 +2091,11 @@ impl<'a> Dumper<'a> {
         cat_to!(&mut s, "$dump.random(", lo, ", ", hi, ");\n");
         if let Some(pl) = &mut self.pl {
             pl.seed = (lo, hi);
+            let i = crate::interp::state::interp(self.h);
+            pl.next_call = self
+                .h
+                .arena()
+                .get(i, crate::heap::cells::Interp::NEXT_CALL_ID);
         }
         for l in &self.out {
             cat_to!(&mut s, l, '\n');

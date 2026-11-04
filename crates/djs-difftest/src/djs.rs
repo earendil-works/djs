@@ -186,6 +186,9 @@ struct Session {
     name: String,
     /// The prelude's api object.
     api: Option<Handle>,
+    /// A plain dump being loaded: `$djs.seed`'s next call id and the highest reopened id,
+    /// for the counter after the load (D2896).
+    plain_ids: (Option<u32>, u32),
 }
 
 /// The corpus areas whose cases never change builtins, run with the prefix write barrier
@@ -236,6 +239,7 @@ impl Djs {
             links: 0,
             name: job.name.to_string(),
             api: None,
+            plain_ids: (None, 0),
         })
     }
 }
@@ -493,8 +497,15 @@ impl Session {
         self.vm
             .call(f, global, &[])
             .map_err(|e| format!("Vm::call: {e:?}"))?;
+        self.plain_ids = (None, 0);
         loop {
-            match self.vm.run(self.slice) {
+            let st = self.vm.run(self.slice);
+            if matches!(st, Status::Done(_) | Status::Idle)
+                && let (Some(next), last) = self.plain_ids
+            {
+                self.vm.set_next_call_id(next.max(last + 1));
+            }
+            match st {
                 Status::Done(v) => return Ok(v),
                 Status::Idle => {
                     return match self.vm.outcome() {
@@ -599,6 +610,7 @@ impl Session {
                 let half = |v: Value| v.as_number().unwrap_or(0.0) as i32 as u32 as u64;
                 let seed = (half(arg(1)) << 32) | half(arg(0));
                 self.vm.set_math_random_seed(seed);
+                self.plain_ids.0 = arg(2).as_int().map(|n| n as u32);
             }
             RESUME => {
                 // Only `later` is async; the call returns the reopened call's promise.
@@ -606,6 +618,8 @@ impl Session {
                 if name != "later" {
                     return Err(Stop::Crash(format!("$djs.resume of `{name}`")));
                 }
+                let id = arg(0).as_int().unwrap_or(0) as u32;
+                self.plain_ids.1 = self.plain_ids.1.max(id);
                 return self
                     .vm
                     .open_host_call(call_id, LATER)

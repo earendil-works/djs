@@ -823,6 +823,16 @@ impl Vm {
         Ok(())
     }
 
+    /// Sets the id the next host call gets (a plain dump's `$djs.seed(lo, hi, next)`,
+    /// D2896): the host restores the dumped VM's counter once the dump has loaded, since
+    /// the hooks, sync calls, took ids of their own. 0 is never an id.
+    pub fn set_next_call_id(&mut self, id: u32) {
+        let i = state::interp(&self.heap);
+        self.heap
+            .arena_mut()
+            .set(i, Interp::NEXT_CALL_ID, id.max(1));
+    }
+
     /// Completes the host call `call_id` with a value (`Ok`) or an exception (`Err`).
     /// The call the VM is parked on returns or throws at the call; `run` continues
     /// afterwards. An async call (D1374) goes into the host inbox (D1670), in any VM

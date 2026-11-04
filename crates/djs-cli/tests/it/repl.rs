@@ -371,7 +371,7 @@ fn restore_a_waiting_dump() {
     // becomes a waiting input; new calls of the same tool get the same function id.
     check(
         &format!(
-            ".restore {dir}/reads.dump.js\n.pending\n.bt 2\n.resolve 2 \"AA\"\n.bt all\n.resolve 4 \"BBB\"\n.pending\n"
+            ".restore {dir}/reads.dump.js\n.pending\n.bt 2\n.resolve 2 \"AA\"\n.bt all\n.resolve 3 \"BBB\"\n.pending\n"
         ),
         &format!(
             "loaded {dir}/reads.dump.js into a fresh VM\n\
@@ -381,7 +381,7 @@ fn restore_a_waiting_dump() {
              \x20     const a = await tools.read({{ path: \"a\" }});\n\
              \x20               ^\n\
              \x20   a = <uninitialized>, b = <uninitialized>\n\
-             [waiting] #4 tools.read({{\"path\":\"b\"}})\n\
+             [waiting] #3 tools.read({{\"path\":\"b\"}})\n\
              \x20 async function main at {dir}/reads.dump.js:4:13 (run)\n\
              \x20     const b = await tools.read({{ path: \"b\" }});\n\
              \x20               ^\n\
@@ -431,7 +431,7 @@ fn dump_a_waiting_session() {
          let out = []; get('a').then(v => out.push(v)); 0\n\
          .dump {dump}\n.clear\n.restore {dump}\n.bt all\n.resolve 2 \"hello\"\nout\n\
          .dump-every on\nget('c').then(v => out.push(v)); get('d').then(v => out.push(v)); 0\n\
-         .resolve 4 \"c!\"\n.resolve 5 \"d!\"\nout\n.dump-every off\n"
+         .resolve 3 \"c!\"\n.resolve 4 \"d!\"\nout\n.dump-every off\n"
     ));
     std::fs::remove_file(&dump).unwrap();
     let mut lines = out.lines();
@@ -461,8 +461,10 @@ fn dump_a_waiting_session() {
             "    p = 'a', v = undefined",
             "[ 'HELLO' ]",
             "dumping at every idle point: on",
-            "[waiting] #4 tools.read({\"path\":\"c\"})",
-            "[waiting] #5 tools.read({\"path\":\"d\"})",
+            // The restored tools are made already (the calls' states, D2896): no `make`
+            // call takes an id, so the ids are the uninterrupted session's.
+            "[waiting] #3 tools.read({\"path\":\"c\"})",
+            "[waiting] #4 tools.read({\"path\":\"d\"})",
             "0",
             "[ 'HELLO', 'C!', 'D!' ]",
             "dumping at every idle point: off",
@@ -485,7 +487,7 @@ fn plain_dump_waiting_await_inputs() {
         ".plain on\nconst r = await tools.read({{path: 'a'}})\nawait tools.read({{path: 'b'}})\n\
          .dump {dump}\n.clear\n.restore {dump}\nawait tools.read({{path: 'c'}})\n.pending\n\
          .resolve 3 \"bee\"\n.resolve 2 \"hello\"\nr\n.dump-every on\n\
-         const x = await tools.read({{path: 'd'}})\n.resolve 5 \"c!\"\n.resolve 6 \"dee\"\nx\n"
+         const x = await tools.read({{path: 'd'}})\n.resolve 4 \"c!\"\n.resolve 5 \"dee\"\nx\n"
     ));
     let text = std::fs::read_to_string(&dump).unwrap();
     std::fs::remove_file(&dump).unwrap();
@@ -511,14 +513,14 @@ fn plain_dump_waiting_await_inputs() {
             &format!("loaded {dump} into a fresh VM"),
             "waiting: #2 tools.read({\"path\":\"a\"})",
             "waiting: #3 tools.read({\"path\":\"b\"})",
-            "[waiting] #5 tools.read({\"path\":\"c\"})",
+            "[waiting] #4 tools.read({\"path\":\"c\"})",
             "#2 tools.read({\"path\":\"a\"})  input 1",
             "#3 tools.read({\"path\":\"b\"})  input 2",
-            "#5 tools.read({\"path\":\"c\"})  input 3, at repl:1:10",
+            "#4 tools.read({\"path\":\"c\"})  input 3, at repl:1:10",
             "[input 2] 'bee'",
             "'hello'",
             "dumping at every idle point: on",
-            "[waiting] #6 tools.read({\"path\":\"d\"})",
+            "[waiting] #5 tools.read({\"path\":\"d\"})",
             "[input 3] 'c!'",
             "'dee'",
         ]
@@ -537,7 +539,7 @@ fn dump_waiting_await_inputs() {
         "const r = await tools.read({{path: 'a'}})\nawait tools.read({{path: 'b'}})\n\
          .dump {dump}\n.clear\n.restore {dump}\nawait tools.read({{path: 'c'}})\n.pending\n\
          .resolve 3 \"bee\"\n.resolve 2 \"hello\"\nr\n.dump-every on\n\
-         const x = await tools.read({{path: 'd'}})\n.resolve 5 \"c!\"\n.resolve 6 \"dee\"\nx\n"
+         const x = await tools.read({{path: 'd'}})\n.resolve 4 \"c!\"\n.resolve 5 \"dee\"\nx\n"
     ));
     std::fs::remove_file(&dump).unwrap();
     let lines: Vec<&str> = out
@@ -562,15 +564,15 @@ fn dump_waiting_await_inputs() {
             &format!("loaded {dump} into a fresh VM"),
             "waiting: #2 tools.read({\"path\":\"a\"})",
             "waiting: #3 tools.read({\"path\":\"b\"})",
-            "[waiting] #5 tools.read({\"path\":\"c\"})",
+            "[waiting] #4 tools.read({\"path\":\"c\"})",
             // The calls' origins came through the dump, as their states (D2894).
             &format!("#2 tools.read({{\"path\":\"a\"}})  input 1, at {dump}:7:11"),
             &format!("#3 tools.read({{\"path\":\"b\"}})  input 2, at {dump}:10:10"),
-            "#5 tools.read({\"path\":\"c\"})  input 3, at repl:1:10",
+            "#4 tools.read({\"path\":\"c\"})  input 3, at repl:1:10",
             "[input 2] 'bee'",
             "'hello'",
             "dumping at every idle point: on",
-            "[waiting] #6 tools.read({\"path\":\"d\"})",
+            "[waiting] #5 tools.read({\"path\":\"d\"})",
             "[input 3] 'c!'",
             "'dee'",
         ]

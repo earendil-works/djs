@@ -82,6 +82,8 @@ interface Transcript {
 interface Packaging {
   module: WebAssembly.Module;
   dumpModule?: WebAssembly.Module;
+  /** Plain dumps (format 3, D2830): the transcript, call ids included, must be the same. */
+  plainDumps?: boolean;
 }
 
 /** The packagings to test: A, B with one module, B with a real dumper-less main module. */
@@ -93,6 +95,7 @@ async function packagings(): Promise<[string, Packaging][]> {
   ];
   const nodump = process.env.DJS_WASM_NODUMP;
   if (nodump) out.push(["B (djs.wasm + djs-dump.wasm)", { module: await loadModule(nodump), dumpModule: module }]);
+  for (const [name, p] of [...out]) out.push([`${name}, plain`, { ...p, plainDumps: true }]);
   return out;
 }
 
@@ -120,11 +123,19 @@ async function drive(module: Packaging, code: string, dumpEvery: boolean): Promi
   while (run.state === "idle") {
     lines.push(`idle: ${run.calls.map((c) => `#${c.id} ${c.fn}(${JSON.stringify(c.args)})`).join(", ")}`);
     if (dumpEvery) {
-      const text = run.dump();
-      sb.dispose();
-      sb = new Sandbox(sandboxOptions(module, lines));
-      run = sb.loadRun(text);
-      dumps++;
+      let text: string | undefined;
+      try {
+        text = run.dump();
+      } catch (e) {
+        // What plain dumps cannot write yet (0203) is refused; the run goes on here.
+        if (!(module.plainDumps && e instanceof SandboxError && /plain dumps?: /.test(e.message))) throw e;
+      }
+      if (text !== undefined) {
+        sb.dispose();
+        sb = new Sandbox(sandboxOptions(module, lines));
+        run = sb.loadRun(text);
+        dumps++;
+      }
     }
     const c = run.calls[0];
     run.settle(c.id, answer(c));
@@ -141,7 +152,10 @@ for (const [name, code] of Object.entries(CASES)) {
       await t.test(pk, async () => {
         const plain = await drive(p, code, false);
         const dumped = await drive(p, code, true);
-        assert.ok(dumped.dumps >= 2, `${dumped.dumps} idle points`);
+        // Plain dumps refuse what they cannot write yet: `classes` at every idle point (an
+        // activation of a factory's cell, 0203).
+        const least = !p.plainDumps ? 2 : name === "classes" ? 0 : 1;
+        assert.ok(dumped.dumps >= least, `${dumped.dumps} idle points`);
         assert.deepEqual(dumped.lines, plain.lines);
         assert.deepEqual(dumped.result, plain.result);
       });
@@ -166,7 +180,8 @@ test("dump and resume at every idle point: class fields", async () => {
 });
 
 test("refusals are SandboxErrors", async (t) => {
-  for (const [pk, p] of await packagings()) await t.test(pk, () => refusals(p));
+  // Format 2's loader refusals (plain dumps: plain.test.ts).
+  for (const [pk, p] of await packagings()) if (!p.plainDumps) await t.test(pk, () => refusals(p));
 });
 
 async function refusals(p: Packaging): Promise<void> {

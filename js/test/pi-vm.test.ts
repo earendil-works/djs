@@ -483,7 +483,7 @@ function answerOf(m: Extract<WorkerToHostMessage, { type: "call" }>, seq: number
 }
 
 /** Runs DUMP_CODE; with `policy`, dumps at the first call and resumes, applying it. */
-async function dumpRun(policy?: "deliver" | "reissue" | "reject"): Promise<{ messages: WorkerToHostMessage[]; end: WorkerToHostMessage; dumped?: SessionDump }> {
+async function dumpRun(policy?: "deliver" | "reissue" | "reject", plainDumps = false): Promise<{ messages: WorkerToHostMessage[]; end: WorkerToHostMessage; dumped?: SessionDump }> {
   let seq = 0;
   let session!: VmSession;
   const deliver = (m: Extract<WorkerToHostMessage, { type: "call" }>) => session.deliver(answerOf(m, ++seq));
@@ -492,7 +492,7 @@ async function dumpRun(policy?: "deliver" | "reissue" | "reject"): Promise<{ mes
     if (policy !== undefined && held === undefined) held = m;
     else deliver(m);
   });
-  session = await startVm({ ...run.hooks, prelude: PRELUDE_NEXT, data: DUMP_DATA });
+  session = await startVm({ ...run.hooks, plainDumps, prelude: PRELUDE_NEXT, data: DUMP_DATA });
   if (policy === undefined) return { messages: run.messages, end: await run.ended };
   while (held === undefined) await later(1, null);
   // A restart: the dump (JSON, as a host would store it) is all that survives.
@@ -524,6 +524,14 @@ test("next: a session dumped while a call is open resumes from the dump in a new
     // The open call carries its pi id as its state (D2770); the adapter keeps no call table.
     assert.match(resumed.dumped!.dump, new RegExp(`\\$dump\\.pending\\(\\d+, "call", \\["call", "slow", "1"\\], \\{"id":${(resumed.messages.find((m) => m.type === "call") as { id: number }).id}\\}\\)`));
     assert.equal("ids" in resumed.dumped!.state.next, false);
+  }
+  // Plain dumps (D2830, D2893): the same messages, the call's pi id in `$djs.resume`.
+  for (const policy of ["deliver", "reissue"] as const) {
+    const resumed = await dumpRun(policy, true);
+    assert.deepEqual(resumed.messages, plain.messages, `plain ${policy}`);
+    assert.match(resumed.dumped!.dump, /^"djs-dump 3";/);
+    const id = (resumed.messages.find((m) => m.type === "call") as { id: number }).id;
+    assert.match(resumed.dumped!.dump, new RegExp(`\\$djs\\.resume\\(\\d+, "\\$djs\\.call", \\["call", "slow", "1"\\], \\{"id":${id}\\}\\)`));
   }
   const rejected = await dumpRun("reject");
   assert.equal(rejected.end.type, "done");

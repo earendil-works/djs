@@ -2,9 +2,13 @@
 // is open the host suspends the run into a dump and continues it from the dump in a new
 // sandbox, here or in another process. See README.md.
 //
-//   node examples/sleep-dump/sleep-dump.ts [both|start|resume] [ms]
+//   node examples/sleep-dump/sleep-dump.ts [both|start|resume|node] [ms]
+//
+// `node` continues out/sleep.dump.js in node itself, not in djs: a plain dump is a Script
+// that needs only the host's functions.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { Script } from "node:vm";
 import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type AsyncHostFunction, Sandbox, type SandboxOptions } from "../../js/src/sandbox.ts";
@@ -48,6 +52,8 @@ const sleep = {
 
 export const options = (log = (...a: unknown[]) => console.log("  [vm]", ...a)): SandboxOptions => ({
   asyncFunctions: { "tools.sleep": sleep },
+  // Plain dumps (D2830): the dump is a Script that runs given only the host's functions.
+  plainDumps: true,
   console: { log, info: log, warn: log, error: log },
 });
 
@@ -65,15 +71,31 @@ export async function resume(dump: string, opts = options()): Promise<unknown> {
   return task.result.finally(() => task.sandbox.dispose());
 }
 
+/**
+ * Continues the dump in node: the same host functions, as plain globals. `$djs.resume`
+ * runs the open call's `resume` hook with its saved state; `$djs.seed` has nothing to set.
+ */
+export async function resumeInNode(dump: string): Promise<unknown> {
+  const signal = new AbortController().signal;
+  const g = globalThis as Record<string, unknown>;
+  g.$djs = {
+    seed() {},
+    resume: (_id: number, _name: string, args: unknown[], state: { due: number }) => sleep.resume(state, { args, signal } as never),
+  };
+  g.tools = { sleep: (ms: number) => sleep.call.call({ signal } as never, ms) };
+  return new Script(dump, { filename: "sleep.dump.js" }).runInThisContext();
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const [mode = "both", ms = "5000"] = process.argv.slice(2);
   const file = fileURLToPath(new URL("out/sleep.dump.js", import.meta.url));
-  if (mode !== "resume") {
+  if (mode !== "resume" && mode !== "node") {
     const dump = await suspend(Number(ms));
     mkdirSync(new URL("out", import.meta.url), { recursive: true });
     writeFileSync(file, dump);
     console.log(`host: suspended the run into ${relative(".", file)} (${dump.length} bytes):`);
     console.log(dump.trimEnd().replace(/^/gm, "  | "));
   }
-  if (mode !== "start") console.log("host: the run returned", await resume(readFileSync(file, "utf8")));
+  if (mode === "node") console.log("node: the run returned", await resumeInNode(readFileSync(file, "utf8")));
+  else if (mode !== "start") console.log("host: the run returned", await resume(readFileSync(file, "utf8")));
 }

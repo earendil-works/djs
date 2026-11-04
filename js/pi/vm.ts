@@ -332,6 +332,8 @@ class Session implements VmSession {
   readonly shape: "pi" | "next";
   /** While a plain dump loads: its hooks are served (`loadPlain`). */
   private loading = false;
+  /** `$djs.seed`'s next call id and the highest reopened one, for the counter (D2896). */
+  private plainIds: [number | undefined, number] = [undefined, 0];
 
   constructor(engine: Engine, hooks: VmHooks, state: SessionState) {
     this.engine = engine;
@@ -647,6 +649,7 @@ class Session implements VmSession {
     engine.define(0, "$djs", hooks);
     engine.free(hooks);
     this.loading = true;
+    this.plainIds = [undefined, 0];
     let status: number;
     try {
       engine.call(compiled.handle, 0, []);
@@ -662,6 +665,8 @@ class Session implements VmSession {
       throw new Error(`Cannot load the dump: the dump threw: ${why}`);
     }
     const run = status === STATUS_DONE ? engine.result() : engine.outcome().handle;
+    const [next, last] = this.plainIds;
+    if (next !== undefined) engine.setNextCallId(Math.max(next, last + 1));
     // The backstop for a dump that leaves `$djs` (D2890): an undefined property is no
     // hook, and the next dump would refuse it, so take it out by running JS.
     const drop = engine.compile(0, "dump.js", [], "delete globalThis.$djs");
@@ -669,13 +674,14 @@ class Session implements VmSession {
     return run;
   }
 
-  /** Serves `$djs.resume(id, name, args, state)` and `$djs.seed(lo, hi)` while a dump loads. */
-  private serveHook(callId: number, fnId: number, [a, b, , d]: unknown[]): void {
+  /** Serves `$djs.resume(id, name, args, state)` and `$djs.seed(lo, hi, next)` while a dump loads. */
+  private serveHook(callId: number, fnId: number, [a, b, c, d]: unknown[]): void {
     const { engine } = this;
     let why: string | undefined;
     if (fnId === HOOK_SEED) {
       if (typeof a === "number" && typeof b === "number") engine.setMathRandomSeed(a >>> 0, b >>> 0);
       else why = "seed: not two int32 halves";
+      if (typeof c === "number") this.plainIds[0] = c;
     } else {
       const id = (d as Partial<CallState> | undefined)?.id;
       if (b !== "$djs.call" || typeof id !== "number") why = `resume: call ${String(a)} is not a tool call with a pi id`;
@@ -683,6 +689,7 @@ class Session implements VmSession {
         why = engine.openCall(callId, CALL_FN);
         if (why === undefined) {
           this.state.next!.ids.push([a as number, id]);
+          this.plainIds[1] = Math.max(this.plainIds[1], a as number);
           return;
         }
       }

@@ -1537,6 +1537,13 @@ pub extern "C" fn vm_open_call(vm: u32, parked: u32, fn_id: u32) -> i32 {
     })
 }
 
+/// Sets the id the next host call gets (`Vm::set_next_call_id`): after a plain dump's
+/// load, its `$djs.seed(lo, hi, next)`, or one past its highest reopened call (D2896).
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_set_next_call_id(vm: u32, id: u32) {
+    with(|s| s.slot(vm).vm.set_next_call_id(id))
+}
+
 fn resolve(vm: u32, call_id: u32, ok: u32, value: u32, now: Option<f64>) -> i32 {
     with(|s| {
         let slot = s.slot(vm);

@@ -191,7 +191,10 @@ main();
     let r = djs(&["--tools", &answers, "--dump-after", "2", &dump, &js]);
     assert_eq!(r, (0, "1\n".into(), String::new()));
     let text = std::fs::read_to_string(&dump).unwrap();
-    assert!(text.contains(r#", [], {"answered":{"n":1}});"#), "{text}");
+    assert!(
+        text.contains(r#", [], {"made":["n"],"answered":{"n":1}});"#),
+        "{text}"
+    );
     let r = djs_cmd(&["resume", "--tools", &answers, &dump]);
     for f in [&js, &answers, &dump] {
         std::fs::remove_file(f).unwrap();
@@ -262,6 +265,20 @@ fn every_idle_point_refused(script: &str, args: &[&str]) -> (u64, u64) {
     plain.push(script);
     let (code, full, err) = djs(&plain);
     assert_eq!((code, err.as_str()), (0, ""), "{script}");
+    // Plain dumps: the hook calls of a dump resumed to its next idle point, which must be
+    // the uninterrupted run's at that point: the same call ids, states, Math.random state
+    // and next call id (D2896).
+    let hooks = |text: &str| -> Vec<String> {
+        text.lines()
+            .filter_map(|l| {
+                l.find("$djs.seed(")
+                    .or_else(|| l.find("$djs.resume("))
+                    .map(|i| l[i..].to_string())
+            })
+            .collect()
+    };
+    let chained = format!("{out}.next.js");
+    let mut expected_hooks: Option<Vec<String>> = None;
     for k in 1.. {
         let _ = std::fs::remove_file(&out);
         let ks = k.to_string();
@@ -288,12 +305,28 @@ fn every_idle_point_refused(script: &str, args: &[&str]) -> (u64, u64) {
             return (k - 1 - refused, refused);
         }
         assert_eq!((code, err.as_str()), (0, ""), "{script} k={k}");
+        let text = std::fs::read_to_string(&out).unwrap();
+        if let Some(want) = expected_hooks.take() {
+            assert_eq!(
+                hooks(&text),
+                want,
+                "{script} k={k}: the resumed dump's next dump"
+            );
+        }
         let mut r = vec!["resume"];
         r.extend(args.iter().filter(|&&a| a != "--body"));
         r.push(&out);
         let (code, rest, err) = djs_cmd(&r);
         assert_eq!((code, err.as_str()), (0, ""), "{script} k={k} resume");
         assert_eq!(format!("{head}{rest}"), full, "{script} k={k}");
+        if args.contains(&"--plain") {
+            let _ = std::fs::remove_file(&chained);
+            let mut r = vec!["resume"];
+            r.extend(args.iter().filter(|&&a| a != "--body"));
+            r.extend_from_slice(&["--dump-after", "2", &chained, &out]);
+            djs_cmd(&r);
+            expected_hooks = std::fs::read_to_string(&chained).ok().map(|t| hooks(&t));
+        }
     }
     unreachable!()
 }

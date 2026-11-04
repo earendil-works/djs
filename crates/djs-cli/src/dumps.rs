@@ -39,10 +39,15 @@ pub fn plain_format(text: &str) -> Option<bool> {
     }
 }
 
-/// A plain dump being loaded: the states its `resume` calls gave, by call id.
+/// A plain dump being loaded: the states its `resume` calls gave, by call id, and what
+/// the id counter continues from (D2896).
 #[derive(Default)]
 pub struct PlainLoad {
     pub states: Vec<(u32, String)>,
+    /// `$djs.seed`'s third argument: the dumped VM's next call id.
+    next: Option<u32>,
+    /// The highest id `resume` reopened.
+    last: u32,
 }
 
 /// Starts loading the plain dump `text` into `vm` (a fresh one): defines `$djs` and calls
@@ -76,7 +81,7 @@ pub fn begin_plain(vm: &mut Vm, text: &str, filename: &str) -> Result<(), String
 /// false for another function.
 pub fn serve_hook(
     vm: &mut Vm,
-    tools: &Tools,
+    tools: &mut Tools,
     load: &mut PlainLoad,
     call_id: u32,
     fn_id: u32,
@@ -90,21 +95,28 @@ pub fn serve_hook(
         match (arg(0).as_int(), arg(1).as_int()) {
             (Some(lo), Some(hi)) => {
                 vm.set_math_random_seed(u64::from(lo as u32) | u64::from(hi as u32) << 32);
+                load.next = arg(2).as_int().map(|n| n as u32);
                 Ok(())
             }
             _ => Err(String::from("seed: not two int32 halves")),
         }
     } else {
         let name = arg(1).as_string().map(|s| vm.heap().str_to_string(s));
+        // The state first: its `made` lists the tools in the dumped run's order (D2896).
+        let state = (!arg(3).is_undefined()).then(|| crate::tools::to_json(vm, arg(3)));
+        if let Some(s) = &state {
+            tools.restore_state(s);
+        }
         match name.as_deref().map(|n| (n, tools.id_for_call_name(n))) {
             Some((_, Some(f))) => {
-                let state = (!arg(3).is_undefined()).then(|| crate::tools::to_json(vm, arg(3)));
                 let id = arg(0).as_int();
                 vm.open_host_call(call_id, f)
                     .map_err(String::from)
                     .map(|()| {
-                        if let (Some(id), Some(s)) = (id, state) {
-                            load.states.push((id as u32, s));
+                        let id = id.unwrap_or(0) as u32;
+                        load.last = load.last.max(id);
+                        if let Some(s) = state {
+                            load.states.push((id, s));
                         }
                     })
             }
@@ -128,8 +140,13 @@ pub fn serve_hook(
     true
 }
 
-/// The plain dump's Script was evaluated: its hooks go away.
-pub fn end_load(vm: &mut Vm) {
+/// The plain dump's Script was evaluated: its hooks go away, and the id counter goes on
+/// from the dumped VM's (the hooks took ids of their own, D2896).
+pub fn end_load(vm: &mut Vm, tools: &Tools, load: &PlainLoad) {
+    tools.premake(vm);
+    if let Some(next) = load.next {
+        vm.set_next_call_id(next.max(load.last + 1));
+    }
     let g = vm.global();
     if let Ok(k) = vm.heap_mut().atom_str(HOOKS) {
         let _ = vm.heap_mut().delete_own_property(g, k);
@@ -175,10 +192,7 @@ pub fn run_plain(
             _ => break,
         }
     }
-    end_load(vm);
-    for (_, s) in &load.states {
-        tools.restore_state(s);
-    }
+    end_load(vm, tools, &load);
     Ok(load)
 }
 
@@ -275,6 +289,7 @@ pub fn load(vm: &mut Vm, tools: &mut Tools, text: &str) -> Result<Loaded, String
     for s in loaded.calls.iter().filter_map(|c| c.state.as_deref()) {
         tools.restore_state(s);
     }
+    tools.premake(vm);
     Ok(loaded)
 }
 

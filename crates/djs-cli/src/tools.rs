@@ -222,6 +222,11 @@ impl Tools {
             .flat_map(|a| a.next.iter())
             .filter(|(_, n)| **n > 0)
             .collect();
+        let made = self.names.borrow();
+        if !made.is_empty() {
+            let names: Vec<String> = made.iter().map(|n| json_str(n)).collect();
+            fields.push(format!("\"made\":[{}]", names.join(",")));
+        }
         if !used.is_empty() {
             used.sort();
             let counts: Vec<String> = used
@@ -236,18 +241,64 @@ impl Tools {
     /// Takes a loaded call's state back (D2894): the answer counts (the highest of all the
     /// calls' counts per tool).
     pub fn restore_state(&mut self, json: &str) {
-        let (Ok(J::Obj(fields)), Some(a)) = (J::parse(json), self.answers.as_mut()) else {
+        let Ok(J::Obj(fields)) = J::parse(json) else {
             return;
         };
         for (k, v) in fields {
-            if let ("answered", J::Obj(counts)) = (k.as_str(), v) {
-                for (name, n) in counts {
-                    if let J::Num(n) = n {
-                        let e = a.next.entry(name).or_insert(0);
-                        *e = (*e).max(n as usize);
+            match (k.as_str(), v) {
+                ("answered", J::Obj(counts)) => {
+                    let Some(a) = self.answers.as_mut() else {
+                        continue;
+                    };
+                    for (name, n) in counts {
+                        if let J::Num(n) = n {
+                            let e = a.next.entry(name).or_insert(0);
+                            *e = (*e).max(n as usize);
+                        }
                     }
                 }
+                ("made", J::Arr(names)) => {
+                    for n in names {
+                        if let J::Str(n) = n {
+                            self.id_for(&n);
+                        }
+                    }
+                }
+                _ => {}
             }
+        }
+    }
+
+    /// Puts every tool the registry knows into the `tools` Proxy's table at once, under its
+    /// id, as the dumped run had made them (the state's `made`, D2896): reading
+    /// `tools.read` later then makes no `make` call, which would take a call id the
+    /// uninterrupted run did not.
+    pub fn premake(&self, vm: &mut Vm) {
+        let Ok(key) = vm.heap_mut().atom_str("tools") else {
+            return;
+        };
+        let heap = vm.heap();
+        let Some(made) = heap
+            .find_property(vm.global(), key)
+            .and_then(|(_, p)| p.value())
+            .and_then(|v| v.as_object())
+            .filter(|&o| heap.is_proxy(o))
+            .and_then(|p| heap.proxy_target(p))
+        else {
+            return;
+        };
+        for (i, name) in self.names.borrow().iter().enumerate() {
+            let Ok(k) = vm.heap_mut().atom_str(name) else {
+                return;
+            };
+            if vm.heap().get_own_property(made, k).is_some() {
+                continue;
+            }
+            let id = TOOL_BASE + i as u32;
+            let Ok(f) = vm.new_async_host_function(id, name) else {
+                return;
+            };
+            let _ = vm.define(made, name, f);
         }
     }
 

@@ -193,12 +193,21 @@ impl Activation {
                 out.push_str(&format!("      {caret}^\n"));
             }
         }
-        if !self.bindings.is_empty() {
-            let b: Vec<String> = self
-                .bindings
-                .iter()
-                .map(|(k, v)| format!("{k} = {v}"))
-                .collect();
+        // Without a plain dump's scaffolding (`$djs_*`, D2830), and a name once: a
+        // continuation declares a loop's binding for the current iteration and for the
+        // later ones, and the first is the one in scope at the site.
+        let mut seen: Vec<&str> = Vec::new();
+        let b: Vec<String> = self
+            .bindings
+            .iter()
+            .filter(|(k, _)| {
+                let fresh = !k.starts_with("$djs_") && !seen.contains(&k.as_str());
+                seen.push(k);
+                fresh
+            })
+            .map(|(k, v)| format!("{k} = {v}"))
+            .collect();
+        if !b.is_empty() {
             out.push_str(&format!("    {}\n", b.join(", ")));
         }
         out

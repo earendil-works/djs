@@ -34,6 +34,8 @@ pub(super) struct Ir {
     pub lines: Vec<(usize, Rec)>,
     /// `Math.random`'s state.
     pub seed: (i32, i32),
+    /// The id the VM's next host call gets: `$djs.seed`'s third argument (D2896).
+    pub next_call: u32,
     /// The handles, in the host's order: name, expression.
     pub handles: Vec<(String, String)>,
 }
@@ -1877,7 +1879,16 @@ impl W<'_> {
         });
         // djs runs all code strict (D015): so does node.
         s.push_str("\"use strict\";\n");
-        cat_to!(&mut s, "$djs.seed(", ir.seed.0, ", ", ir.seed.1, ");\n");
+        cat_to!(
+            &mut s,
+            "$djs.seed(",
+            ir.seed.0,
+            ", ",
+            ir.seed.1,
+            ", ",
+            ir.next_call,
+            ");\n"
+        );
         // The helpers the text uses.
         let mut text = join(&body, "\n");
         for it in &self.items {
