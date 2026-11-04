@@ -1,7 +1,7 @@
 # 0201: Exporter: plain-JS continuations in Rust (behind a flag), djs run of plain dumps, node harness and chain check in the gate
 
-status: open
-agent: -
+status: in-progress
+agent: pjx
 branch: issue/0201-plain-exporter
 depends-on: 0200 (interface first)
 guide: -
