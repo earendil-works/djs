@@ -1,7 +1,7 @@
 # 0205: Retire format 2: delete the loader, $dump.resume, primitives, recording compile; plain goldens; docs and guide
 
-status: open
-agent: -
+status: in-progress
+agent: pjf
 branch: issue/0205-retire-format2
 depends-on: 0203 (closing), 0204
 guide: docs/guide/snapshots.md, suspension.md, host.md
