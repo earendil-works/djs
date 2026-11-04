@@ -660,3 +660,6 @@ topics when the index is next reorganized.
 - D2940: A seeded fuzzer of codemode-like programs checks plain dumps from every idle point
 - D2941: `difftest: plain-xfail <reason>` marks a known plain-dump bug in a corpus case
 - D2885: Re-dumps inside K's own operators, templates, callees and assignments; helper classes in bodies
+- D2905: A continuation reads an evaluated operand again where that is exact
+- D2906: The dump size score is per case
+- D2907: A continuation's callback runs in parts, at the ends of the blocks it needs
