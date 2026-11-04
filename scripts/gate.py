@@ -550,12 +550,14 @@ def run(argv):
 
 
 # rustc's incremental cache can go bad so that a link fails on symbols no object defines
-# (`Undefined symbols ... _anon.<hash>.<n>.llvm.<n>`, seen twice in .worktrees/gate). Such
-# a failure says nothing about the commit: the gate clears the incremental directories of
-# the job's target directory and runs the job once more. (The `_anon` symbol can come ~50
-# lines after the first undefined one, behind `.llvm.<n>` symbols of the same kind: 0205.)
+# (D2896). The missing symbols carry LLVM's local suffix `.llvm.<n>` (`_anon.<hash>.<n>.llvm.<n>`,
+# or a mangled Rust name such as `drop_glue<regexp::parser::Node>.llvm.<n>`, 0209): they
+# are internal to a codegen unit and go missing only when the cache is bad. Such a failure
+# says nothing about the commit: the gate clears the incremental directories of the job's
+# target directory and runs the job once more. (The first such symbol can come many lines
+# after the first undefined one: 0205.)
 INCREMENTAL_CORRUPTION = re.compile(r"(Undefined symbols|undefined reference).*(?:\n.*){0,400}?"
-                                    r"\b_?anon\.[0-9a-f]+\.[0-9]+\.llvm\.[0-9]+")
+                                    r"\.llvm\.[0-9]+\b")
 
 
 def incremental_corruption(log):
