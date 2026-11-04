@@ -75,5 +75,21 @@ dump-every-idle, idle-point counts at 100%).
 - Ranking now (native profile, corpus dump): the checker's compile of the skeleton ~50%
   (the skeleton is 79% of the dump text: function texts), emit ~20%, visit ~15%.
   Packaging B's resume pays ~0.36 ms over A at the median (image transport).
+- Win 4: the dumper's own ASCII conversion of heap strings and atom names (`text_of`,
+  `atom_text`; core's `str_to_string` decodes unit by unit, and a fast path there costs
+  the slim module 179 B gzip, over its ceiling). Native corpus dump 782 -> 648 ms.
+- Win 5: strings quoted by runs of plain bytes (`quote_latin1`). log-5mb dump 32 -> 22 ms,
+  records 9.1 -> 7.0 ms native.
+- Win 6 (compiler): string constants were deduplicated through two sorted `Vec`s with
+  inserts (str_pool per unit, str_consts per function; numbers likewise): quadratic in
+  distinct constants, 25% of loading the records dump. Now one hash index for the unit's
+  heap strings (a long string hashed by its length and ~256 sampled units) and no
+  per-function dedup: resolution interns every PushConst by value (D2446), so the
+  bytecode is the same (snapshots unchanged). Slim module -140 B gzip. compile/typescript.js
+  52.8 -> 59.9 MB/s, prelude compile 6.4 -> 6.0 ms. records load 12.6 -> ~10.2 ms.
+- Coordinator (2026-11-05): plainjs (0199) prototypes a plain-JS format; prefer wins that
+  survive a format change, defer `$dump.resume`/recording-specific work.
+- After wins 4-6, wasm (machine load ~20, noisy): corpus dump p50 0.36 ms (A) / 0.39 (B),
+  totals 509-522 / 542-581 ms; records dump 12.1 ms, log-5mb 24 ms, big-log 13 ms.
 
 ## Result
