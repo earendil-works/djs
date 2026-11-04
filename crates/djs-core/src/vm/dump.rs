@@ -508,7 +508,54 @@ fn quote_units(units: impl Iterator<Item = u16>) -> String {
 }
 
 fn quote(s: &str) -> String {
+    if s.is_ascii() {
+        return quote_latin1(s.as_bytes());
+    }
     quote_units(s.encode_utf16())
+}
+
+/// Whether Latin-1 unit `b` is written as itself inside a quoted string.
+fn plain(b: u8) -> bool {
+    (0x20..0x7f).contains(&b) && b != b'"' && b != b'\\'
+}
+
+/// [`quote_units`] of one-byte units, copying runs of plain ASCII as they are: data
+/// dumps quote megabytes of strings (0198).
+fn quote_latin1(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() + bytes.len() / 16 + 2);
+    out.push_out('"');
+    let mut i = 0;
+    while i < bytes.len() {
+        let start = i;
+        while i < bytes.len() && plain(bytes[i]) {
+            i += 1;
+        }
+        if i > start {
+            // Plain bytes are ASCII.
+            out.push_str(core::str::from_utf8(&bytes[start..i]).unwrap_or_default());
+        }
+        let Some(&b) = bytes.get(i) else { break };
+        match b {
+            b'"' => out.push_str("\\\""),
+            b'\\' => out.push_str("\\\\"),
+            b'\n' => out.push_str("\\n"),
+            b'\r' => out.push_str("\\r"),
+            b'\t' => out.push_str("\\t"),
+            0..0x20 | 0x7f => cat_to!(&mut out, "\\x", crate::text::hex(u32::from(b), 2)),
+            b => out.push_out(char::from(b)),
+        }
+        i += 1;
+    }
+    out.push_out('"');
+    out
+}
+
+/// The quoted literal of heap string `s`.
+fn quote_str(h: &Heap, s: crate::value::Str) -> String {
+    match h.str_view(s) {
+        Some(crate::heap::StrView::Latin1(b)) => quote_latin1(b),
+        _ => quote_units(h.str_units(s)),
+    }
 }
 
 fn number(n: f64) -> String {
@@ -2330,7 +2377,7 @@ impl<'a> Dumper<'a> {
             Kind::Null => return "null".into(),
             Kind::Bool => return tf(v.as_bool().unwrap_or(false)).into(),
             Kind::Number => return number(v.as_number().unwrap_or(f64::NAN)),
-            Kind::String => return quote_units(self.h.str_units(v.as_string().expect("a string"))),
+            Kind::String => return quote_str(self.h, v.as_string().expect("a string")),
             Kind::BigInt => return cat!(self.h.bigint(v).to_string_radix(10), "n"),
             Kind::Hole => return String::new(),
             _ => {}
@@ -3214,7 +3261,7 @@ impl<'a> Dumper<'a> {
                 h.symbol_description(s).as_string(),
             ) {
                 (Some(k), _) => cat!("Symbol.for(", k, ")"),
-                (None, Some(d)) => cat!("Symbol(", quote_units(h.str_units(d)), ")"),
+                (None, Some(d)) => cat!("Symbol(", quote_str(h, d), ")"),
                 (None, None) => "Symbol()".into(),
             }
         } else {
