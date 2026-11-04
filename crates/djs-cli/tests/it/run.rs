@@ -267,7 +267,7 @@ fn every_idle_point_refused(script: &str, args: &[&str]) -> (u64, u64) {
     assert_eq!((code, err.as_str()), (0, ""), "{script}");
     // Plain dumps: the hook calls of a dump resumed to its next idle point, which must be
     // the uninterrupted run's at that point: the same call ids, states, Math.random state
-    // and next call id (D2896).
+    // and next call id (D2897).
     let hooks = |text: &str| -> Vec<String> {
         text.lines()
             .filter_map(|l| {

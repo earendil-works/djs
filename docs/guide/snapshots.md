@@ -305,6 +305,17 @@ What happens to the open calls is the host's decision, made after the load: deli
 result it recorded, issue the call again, or reject it. Timers and requests in flight are
 host state, and the host keeps them beside the dump.
 
+The format is being replaced by **plain dumps** (D2830), which need no loader at all. In
+a plain dump each suspended function is written as its continuation: a function of the
+same kind whose body is the rest of the original from the `await` on, with the values it
+held there declared at its top and the loops around the `await` written as real loops
+over the saved iterators. The dump is then an ordinary Script, which any later djs, or
+node, runs given the host's functions; it calls `$djs.seed(...)` and one
+`$djs.resume(id, name, args, state)` per open call, functions the host provides for the
+load (D2890). Its completion value is the run's result promise. Until the plain writer
+covers everything format 2 does, a host asks for it (`plainDumps`, `djs run --plain`)
+and gets a refusal with the reason where it cannot write a run yet.
+
 **What a dump costs.** Over 300 real codemode scripts and their 1,063 idle points, a
 dump is 6 KB of text at the median and 17 KB compressed at p99; with zstd at level 3,
 which hosts apply when they store it, the median is 1.7 KB, a third of what the image

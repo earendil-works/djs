@@ -370,7 +370,7 @@ export class Engine {
     return this.trap(() => x.vm_open_call!(this.vm, parked, fnId)) === 0 ? undefined : outText(x);
   }
 
-  /** Sets the id the next host call gets (after a plain dump's load, D2896). */
+  /** Sets the id the next host call gets (after a plain dump's load, D2897). */
   setNextCallId(id: number): void {
     if (this.x.vm_set_next_call_id) this.trap(() => this.x.vm_set_next_call_id!(this.vm, id));
   }

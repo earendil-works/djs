@@ -187,7 +187,7 @@ struct Session {
     /// The prelude's api object.
     api: Option<Handle>,
     /// A plain dump being loaded: `$djs.seed`'s next call id and the highest reopened id,
-    /// for the counter after the load (D2896).
+    /// for the counter after the load (D2897).
     plain_ids: (Option<u32>, u32),
 }
 

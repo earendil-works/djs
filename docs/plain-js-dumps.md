@@ -322,6 +322,20 @@ code, not engine machinery; the Sandbox's tasks (D2771) already have the hooks.
 implements and other hosts may ignore (D2832). Without it a resumed run's random numbers
 differ, in node anyway.
 
+**The interface as built (0204, D2890, D2895, D2897).** The hooks are the methods of one
+global object, `$djs`, that the loading host defines and the dump deletes in its final
+`finally` (with `$dump`): `$djs.seed(lo, hi, next)` is the dump's first call, with
+`Math.random`'s state and the id the dumped VM's next host call gets; `$djs.resume(id,
+name, args, state)` stands for each open call (`state` left out when the call has none).
+Both are called only while the Script itself is evaluated. A djs host reopens call `id`
+under that id (`Vm::open_host_call`) and, when the Script has stopped, sets the id counter
+to `next` (or one past the highest reopened id): the hooks are sync calls, which take ids
+of their own, so without `next` the resumed run's calls would get other ids than the
+uninterrupted run's. Host functions the dump holds as values are written as the host's
+name for them, an expression evaluated while the dump loads (`tools.read`; pi's
+`$djs.call`). The Script's completion value is what the host named: the value itself for
+one handle named `run`, else a null-prototype object of all of them by name.
+
 ## 5. Pruning: why plain dumps are smaller
 
 A function nothing but its activation holds (the codemode body; an inner callback the

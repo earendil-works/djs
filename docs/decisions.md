@@ -9301,3 +9301,21 @@ statement, a for-in scaffold, a codemode body held by reference. Measured over t
 a link is the size of a dump of the uninterrupted run at the same point (the djs-core
 chain test checks it within 512 bytes per link), and the corpus's plain dumps total 24.5
 MB instead of 36 MB.
+## D2897: `$djs.seed(lo, hi, next)`: call ids go on after a plain load as in the uninterrupted run
+date: 2026-11-04 · by: pjh · issue: 0204
+Refines D2890. The hooks are sync host calls, and sync calls take ids from the same counter
+as async ones, so after a plain load the run's next calls got ids one or two higher than
+the uninterrupted run's (format 2 restored the counter in its loader). Ids are host
+visible and journaled, so the dump now says where the counter stands: the exporter writes
+the dumped VM's next call id as `$djs.seed`'s third argument, and a djs host, once the
+Script has stopped (its first idle point, or the end), sets the counter to the larger of
+it and one past the highest id `$djs.resume` reopened (`Vm::set_next_call_id`,
+`vm_set_next_call_id`; the Sandbox, the pi adapter, the CLI and the difftest do). Non-djs
+hosts ignore it with the rest of `seed`. The CLI also had ids drift from its lazily made
+tools: `tools.read` read after a load called `make`, a sync call, where the uninterrupted
+run had made the tool before the dump; its call states (D2894) now list the tools made
+(`made`, in their id order), and a load puts them back into the `tools` Proxy's table
+without a call. Checked by the CLI's plain every-idle-point test, which compares the
+hook calls (ids, states, seed) of each resumed dump's next dump with the uninterrupted
+run's dump there, by js/test/dumpresume.test.ts's plain variants, whose transcripts list
+the ids, and by pi's adapter test, whose messages carry pi's `issued` counts.

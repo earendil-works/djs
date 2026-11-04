@@ -40,7 +40,7 @@ pub fn plain_format(text: &str) -> Option<bool> {
 }
 
 /// A plain dump being loaded: the states its `resume` calls gave, by call id, and what
-/// the id counter continues from (D2896).
+/// the id counter continues from (D2897).
 #[derive(Default)]
 pub struct PlainLoad {
     pub states: Vec<(u32, String)>,
@@ -102,7 +102,7 @@ pub fn serve_hook(
         }
     } else {
         let name = arg(1).as_string().map(|s| vm.heap().str_to_string(s));
-        // The state first: its `made` lists the tools in the dumped run's order (D2896).
+        // The state first: its `made` lists the tools in the dumped run's order (D2897).
         let state = (!arg(3).is_undefined()).then(|| crate::tools::to_json(vm, arg(3)));
         if let Some(s) = &state {
             tools.restore_state(s);
@@ -141,7 +141,7 @@ pub fn serve_hook(
 }
 
 /// The plain dump's Script was evaluated: its hooks go away, and the id counter goes on
-/// from the dumped VM's (the hooks took ids of their own, D2896).
+/// from the dumped VM's (the hooks took ids of their own, D2897).
 pub fn end_load(vm: &mut Vm, tools: &Tools, load: &PlainLoad) {
     tools.premake(vm);
     if let Some(next) = load.next {

@@ -332,7 +332,7 @@ class Session implements VmSession {
   readonly shape: "pi" | "next";
   /** While a plain dump loads: its hooks are served (`loadPlain`). */
   private loading = false;
-  /** `$djs.seed`'s next call id and the highest reopened one, for the counter (D2896). */
+  /** `$djs.seed`'s next call id and the highest reopened one, for the counter (D2897). */
   private plainIds: [number | undefined, number] = [undefined, 0];
 
   constructor(engine: Engine, hooks: VmHooks, state: SessionState) {

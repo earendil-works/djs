@@ -163,7 +163,7 @@ test("a task suspended into a plain dump (the exporter's) resumes through the ho
   assert.match(dump, /\$djs\.resume\(1, "sleep", \[1\], \{"n":1\}\)/);
   const again = await Sandbox.resume(dump, opts);
   while (pending.length === 1) await new Promise((r) => setTimeout(r, 1));
-  // The next call has the id the uninterrupted run gives it (D2896): `log("a")`, a sync
+  // The next call has the id the uninterrupted run gives it (D2897): `log("a")`, a sync
   // call, takes 2.
   assert.deepEqual(calls.map((c) => [c.id, c.args]), [[1, [1]], [3, [2]]]);
   pending[1].resolve(20);

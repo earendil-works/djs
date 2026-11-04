@@ -270,7 +270,7 @@ impl Tools {
     }
 
     /// Puts every tool the registry knows into the `tools` Proxy's table at once, under its
-    /// id, as the dumped run had made them (the state's `made`, D2896): reading
+    /// id, as the dumped run had made them (the state's `made`, D2897): reading
     /// `tools.read` later then makes no `make` call, which would take a call id the
     /// uninterrupted run did not.
     pub fn premake(&self, vm: &mut Vm) {

@@ -50,8 +50,34 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
   `&mut Tools`. Tests: run::dumps_carry_the_answer_counts; repl::dump_waiting_await_inputs
   now expects the restored origins.
 - Proposed several handles in plain dumps to the coordinator: one handle named `run` → the
-  value; otherwise a null-prototype object of all handles by name (waiting for pjx).
+  value; otherwise a null-prototype object of all handles by name (agreed, D2895). REPL
+  `.restore`/`--explain` unpack it (ee6b886f).
+- After 0201 landed: vm_dump's sixth staging line `plain`; `SandboxOptions.plainDumps`,
+  pi `VmHooks.plainDumps` (`PLAIN_FN_NAMES`), `djs run/resume --plain`, REPL `--plain`/
+  `.plain` (several handles). Real exporter output through every loader: CLI every idle
+  point of tests/dump/v2 and the CLI fixtures (run::plain_dump_after_every_idle_point),
+  REPL plain_dump_waiting_await_inputs, js dumpresume's every-idle-point cases in a plain
+  variant per packaging, plain.test.ts task test, pi-vm's dumped-session test, pi's whole
+  suite `--next --dump-every-idle --plain` (215/226, the same 11; added to the full-only
+  scripts/pi-dump-every-idle.sh). Remaining refusals are the exporter's (0203): for-await,
+  private fields, "an activation of a factory's cell" (dumpresume `classes`).
+- Found: call ids drift after a plain load (the hooks are sync calls taking ids). Fixed
+  with `$djs.seed(lo, hi, next)` (exporter: one argument; hosts set the counter once the
+  Script stopped; `Vm::set_next_call_id`/`vm_set_next_call_id`), D2897, also in the
+  difftest's host. The CLI had a second drift from its lazily made tools: call states
+  carry `made`, a load premakes them. Every-idle-point tests compare ids now.
+- examples/sleep-dump on plain dumps, with `node` mode / `run.sh --node` continuing the
+  dump in node itself; README rewritten. `--explain` hides `$djs_*` scaffolding.
+- Docs: docs/host.md (plain dumps, ABI rows, pi), docs/cli.md, docs/plain-js-dumps.md
+  (the interface as built). Guide: host.md (plain dumps paragraph), snapshots.md (the
+  plain format, short); suspension.md unchanged (0205 rewrites the dump chapters).
 
 ## Follow-ups
+
+- 0205: make plain the only format: drop `plainDumps`/`--plain`/`.plain`, vm_dump's
+  `plain` line, and rewrite the format-2 text assertions (dumpload, task, pi-vm, CLI
+  explain fixtures) for plain dumps.
+- `--explain` of a plain dump shows the continuation's line (`$djs_R(...)`); mapping it
+  back to the original line through `$djs.segs` would read better.
 
 ## Result

@@ -1267,7 +1267,7 @@ export class Sandbox {
    * `$djs.resume(id, name, args, state)` opens the dump's call `id` of host function
    * `name` again under its id (`vm_open_call`): one of the calls returned, with its state;
    * `$djs.seed(lo, hi, next)` sets `Math.random`'s state and, once the dump has loaded,
-   * the id of the next call (D2896). Other sync host functions are called
+   * the id of the next call (D2897). Other sync host functions are called
    * (they must return synchronously); async calls the Script makes are new calls, which
    * the run that follows reports. The Script's completion value, when a promise, is the
    * handle "run". The dumper is not needed: a plain dump is code.
@@ -1290,7 +1290,7 @@ export class Sandbox {
       x.vm_handle_free(vm, hooks);
     });
     let st = STATUS_DONE;
-    // `$djs.seed`'s next call id: the counter goes on from the dumped VM's (D2896).
+    // `$djs.seed`'s next call id: the counter goes on from the dumped VM's (D2897).
     let next: number | undefined;
     this.enter(dump, {}, true, "dump.js", typescript);
     const slice = this.opts.fuelSlice ?? 1_000_000;

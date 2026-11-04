@@ -824,7 +824,7 @@ impl Vm {
     }
 
     /// Sets the id the next host call gets (a plain dump's `$djs.seed(lo, hi, next)`,
-    /// D2896): the host restores the dumped VM's counter once the dump has loaded, since
+    /// D2897): the host restores the dumped VM's counter once the dump has loaded, since
     /// the hooks, sync calls, took ids of their own. 0 is never an id.
     pub fn set_next_call_id(&mut self, id: u32) {
         let i = state::interp(&self.heap);

@@ -309,6 +309,21 @@ process keeps that instance, shared by its sandboxes, for the next dumps (D2701,
 process, so neither module verifies it cell by cell, only that it was made by the same
 build's tables.
 
+Dumps are becoming **plain JavaScript** (D2830): with `plainDumps: true` the sandbox
+writes each stopped function as a continuation, an ordinary function holding the rest of
+its code from the `await` it waits at, and the whole dump as a Script that needs nothing
+from djs. Loading one is running it, so the shipped module loads plain dumps without the
+dumper, and node runs them too. The Script reaches the host through one global object,
+`$djs`, which the loading host defines and the dump deletes when it is done (D2890):
+`$djs.seed(lo, hi, next)` hands over `Math.random`'s state and the id of the run's next
+host call, and `$djs.resume(id, name, args, state)` stands for each open call. The
+sandbox answers `resume` by opening the call again under the same id, with the same
+arguments and state, and continues it through the function's hooks as above; once the
+Script has stopped it sets the call counter from `next`, so the run's later calls get the
+ids an uninterrupted run gives them (D2897). A host other than djs defines `$djs` itself:
+[`examples/sleep-dump/`](../../examples/sleep-dump/) continues the same dump in node with
+a ten-line `$djs`.
+
 ## Where to look
 
 - [`crates/djs-wasm/src/lib.rs`](../../crates/djs-wasm/src/lib.rs): the exports.

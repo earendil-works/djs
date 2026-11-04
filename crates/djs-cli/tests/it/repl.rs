@@ -461,7 +461,7 @@ fn dump_a_waiting_session() {
             "    p = 'a', v = undefined",
             "[ 'HELLO' ]",
             "dumping at every idle point: on",
-            // The restored tools are made already (the calls' states, D2896): no `make`
+            // The restored tools are made already (the calls' states, D2897): no `make`
             // call takes an id, so the ids are the uninterrupted session's.
             "[waiting] #3 tools.read({\"path\":\"c\"})",
             "[waiting] #4 tools.read({\"path\":\"d\"})",

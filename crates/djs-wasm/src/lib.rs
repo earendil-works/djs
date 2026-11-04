@@ -1538,7 +1538,7 @@ pub extern "C" fn vm_open_call(vm: u32, parked: u32, fn_id: u32) -> i32 {
 }
 
 /// Sets the id the next host call gets (`Vm::set_next_call_id`): after a plain dump's
-/// load, its `$djs.seed(lo, hi, next)`, or one past its highest reopened call (D2896).
+/// load, its `$djs.seed(lo, hi, next)`, or one past its highest reopened call (D2897).
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_set_next_call_id(vm: u32, id: u32) {
     with(|s| s.slot(vm).vm.set_next_call_id(id))

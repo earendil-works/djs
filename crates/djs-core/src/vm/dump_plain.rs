@@ -34,7 +34,7 @@ pub(super) struct Ir {
     pub lines: Vec<(usize, Rec)>,
     /// `Math.random`'s state.
     pub seed: (i32, i32),
-    /// The id the VM's next host call gets: `$djs.seed`'s third argument (D2896).
+    /// The id the VM's next host call gets: `$djs.seed`'s third argument (D2897).
     pub next_call: u32,
     /// The handles, in the host's order: name, expression.
     pub handles: Vec<(String, String)>,
