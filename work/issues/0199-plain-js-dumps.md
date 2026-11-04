@@ -1,7 +1,7 @@
 # 0199: Dumps that are plain executable JavaScript (R with origin tracking), prototype
 
-status: open
-agent: -
+status: in-progress
+agent: plainjs
 branch: issue/0199-plain-js-dumps
 depends-on: 0188, 0196
 guide: -
