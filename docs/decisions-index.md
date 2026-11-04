@@ -583,3 +583,14 @@ topics when the index is next reorganized.
 - D2703: Hosts store dump text compressed with zstd; the format stays a plain Script
 - D2704: Packaging B: the shipped module has no dumper, hosts that persist load the dump module
 - D2201: The guide's site follows Elanor d3184572: its retuned type scale
+- D2626: A dump's builtin names are walked once per VM, and walked faster
+- D2627: Subroutine return addresses in dumps are gosub indexes; case tests keep their discriminant
+- D2628: Dumps write using Records, destructuring, for-in and builtin iterators from their state
+- D2660: The gate is legs and builds in scripts/gate.py
+- D2661: Every build configuration builds at once in its own target directory
+- D2662: Gate legs are cached by input hash
+- D2663: Three input classes, guarded
+- D2664: `--full` and full-only legs; a full run daily
+- D2665: The gate runs new executables once while the build goes on
+- D2667: difftest runs stress variants as separate tasks, longest first
+- D2269: No `djs heap` command and no `.image`; the REPL's `.heap` keeps the heap report

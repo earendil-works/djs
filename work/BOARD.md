@@ -6,7 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0184 | Remaining dump refusals; dump size and load time vs images | portable | .worktrees/portable |
+| 0184b | clippy slim+dump fix | portable | .worktrees/portable |
 | 0183 | The gate in seconds | gate-speed | .worktrees/gate-speed |
 | 0187 | Remove .image and djs heap (keep .heap) | snapshot | .worktrees/snapshot |
 
@@ -82,6 +82,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0184 | Dump refusals closed (finally/switch D2627; using/destructuring/for-in/matchAll/helpers D2628); cached name table D2626; dump costs measured | fbb35ee1 (agent portable; 0 refusals at 1,063 idle points) |
 | 0186 | ARCH/TESTING: dumps persist, images in-process, packaging B | e6705afe (agent example) |
 | 0185 | Guide on Elanor d3184572: smaller type scale, inline code scale, tokens license (D2201) | e18ca671 (agent design) |
 | 0177 | Images in-process only; packaging B; dumps stored zstd; maxFuel fix (D2700-D2704) | 62413af5 (agent example; shipped 440.5 KB gz) |
