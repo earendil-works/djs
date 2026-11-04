@@ -641,3 +641,7 @@ topics when the index is next reorganized.
 - D2874: Destructuring around a continuation's site is written as a pattern again
 - D2834: Plain dumps are mostly self-contained: the code to continue is in the dump, the host provides `$djs`
 - D2835: The dump's first line is `"djs-dump";`
+- D2900: A plain dump's `$djs` record leaves default fields out
+- D2901: The plain dump size score
+- D2902: Anonymous closures in a scope factory are written as `key: (0, f)`
+- D2875: `yield*` in plain continuations: a `yield*` over a wrapper of the inner record
