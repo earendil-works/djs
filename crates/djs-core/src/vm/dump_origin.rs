@@ -331,6 +331,9 @@ impl Dumper<'_> {
                         .flatten()
                 }) {
                     Some(v) => v,
+                    // A class's hidden bindings (its field initializers, keys, private
+                    // methods): dead once its statement ran, which K's prefix holds.
+                    None if super::flight::class_hidden(&x.name) => Value::UNDEFINED,
                     None => {
                         return Err(cat!(
                             "a continuation of an earlier dump: no `",

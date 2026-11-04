@@ -2196,7 +2196,7 @@ fn simple_params(src: &str) -> bool {
 /// their capture of the box; the dump writes the class from its text, which makes its
 /// own. So after the statement the frame's slot is dead and is written as undefined
 /// (a statement run again, in a loop, writes it again).
-fn class_hidden(name: &str) -> bool {
+pub(super) fn class_hidden(name: &str) -> bool {
     [
         "<fields ",
         "<key ",

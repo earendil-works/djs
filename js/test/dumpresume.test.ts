@@ -153,9 +153,7 @@ for (const [name, code] of Object.entries(CASES)) {
       await t.test(pk, async () => {
         const plain = await drive(p, code, false);
         const dumped = await drive(p, code, true);
-        // Plain dumps refuse what they cannot write yet: `classes` at every idle point (an
-        // activation of a factory's cell, 0203).
-        const least = !p.plainDumps ? 2 : name === "classes" ? 0 : 1;
+        const least = !p.plainDumps ? 2 : 1;
         assert.ok(dumped.dumps >= least, `${dumped.dumps} idle points`);
         assert.deepEqual(dumped.lines, plain.lines);
         assert.deepEqual(dumped.result, plain.result);
