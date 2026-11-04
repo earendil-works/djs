@@ -655,3 +655,4 @@ topics when the index is next reorganized.
 - D2880: Sites in loop heads, `var` declarations, catch parameters and more literals
 - D2881: Classes in a scope a waiting frame shares go into the continuation's block
 - D2883: Classes that name themselves dump plainly; a class's own static private fields
+- D2960: Exception handlers in unreachable code are dropped
