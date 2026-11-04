@@ -1,7 +1,7 @@
 # 0209: Plain dump data bugs: accessors of factory closures, static private members, runtime-made objects
 
-status: open
-agent: -
+status: in-progress
+agent: pjd
 branch: issue/0209-plain-data-bugs
 depends-on: -
 guide: -
