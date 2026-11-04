@@ -7,6 +7,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0203 | Plain encodings for remaining refusals (step 4) | pjr (after pjx) | .worktrees/pjx |
+| 0207 | Make plain dumps small: measure, then cut (owner priority) | pjs | .worktrees/pjs |
 
 ## Open (ready)
 
