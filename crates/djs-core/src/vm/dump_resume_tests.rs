@@ -2104,3 +2104,55 @@ main();
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 9, "{ok}");
 }
+
+/// Sites in loop heads and tests, `var` declarations and `for (var ...)` loops, object
+/// literals (a computed key, methods and accessors after the site), a logical assignment
+/// to a member, a tagged template, an update of a member, a catch parameter (D2880).
+#[test]
+fn plain_dumps_of_heads_and_more() {
+    let src = r#"
+async function varDecl() { var v = await later(1); var w = v + (await later(2)); return v + w; }
+async function loopTest() { let n = 0; while (await later(n < 2)) n++; return n; }
+async function forHead() { let s = 0; for (let i = await later(0); i < 2; i++) s += i; return s; }
+async function forOfHead() { let s = ""; for (const x of await later(["a", "b"])) s += x; return s; }
+async function forVar() { let s = 0; for (var i = 0; i < 2; i++) s += await later(i); return s + i; }
+async function forVarOf() { let s = ""; for (var x of ["p", "q"]) s += await later(x); return s + x; }
+async function computedKey() { return JSON.stringify({ a: 1, [await later("k")]: 2 }); }
+async function methodAfter() { const o = { a: await later(1), m() { return 2; }, get g() { return 3; } }; return o.a + o.m() + o.g; }
+async function logicalMember() { const o = { p: null }; o.p ??= await later(4); return o.p; }
+async function tagged() { const t = (s, ...v) => s.raw.join("|") + v.join(); return t`a${await later(1)}b${2}`; }
+async function update() { const o = { k: 1 }; o[await later("k")]++; return o.k; }
+async function catchParam() { try { throw {}; } catch ({ m = await later("m") }) { return m; } }
+async function main() {
+  for (const f of [varDecl, loopTest, forHead, forOfHead, forVar, forVarOf, computedKey, methodAfter, logicalMember, tagged, update, catchParam]) {
+    print(f.name, await f());
+  }
+}
+main();
+"#;
+    let (failed, refused, ok) = plain_check_program("heads", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, _, refused) = plain_chain_program("heads", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 17, "{ok}");
+}
+
+/// A program read from `DJS_PROBE`, dumped at every idle point and chained: what is
+/// refused or differs (a tool for finding the constructs plain dumps miss).
+#[test]
+#[ignore]
+fn plain_dumps_probe() {
+    let src = std::fs::read_to_string(std::env::var("DJS_PROBE").unwrap()).unwrap();
+    let (failed, refused, ok) = plain_check_program("probe", &src);
+    std::println!(
+        "ok {ok}\nrefused {refused:#?}\nfailed {}",
+        failed.join("\n")
+    );
+    let (failed, links, refused) = plain_chain_program("probe", &src);
+    std::println!(
+        "chain links {links} refused {refused:#?}\nfailed {}",
+        failed.join("\n")
+    );
+}

@@ -20,6 +20,8 @@ use crate::buf::PushOut;
 use crate::compiler::{DeclKind, Node, NodeKind, Role, Special};
 use crate::interp::run::suspend;
 
+#[path = "dump_cont_heads.rs"]
+mod heads;
 #[path = "dump_cont_pattern.rs"]
 mod pattern;
 #[path = "dump_cont_using.rs"]
@@ -564,6 +566,9 @@ impl G<'_, '_> {
             }
             NodeKind::While | NodeKind::DoWhile => {
                 let k = k.unwrap_or(0);
+                if n.parts[k].role == Role::Test {
+                    return self.loop_test(i, &n, label);
+                }
                 if n.parts[k].role != Role::Body {
                     return no("a site in a loop's test (0203)");
                 }
@@ -624,10 +629,20 @@ impl G<'_, '_> {
     }
 
     fn decl_stmt(&mut self, i: usize, n: &Node, kind: DeclKind) -> R<P> {
+        let mut out = self.decl_list(i, n, kind)?;
+        out.push_out(s(";"));
+        Ok(self.with_go(P::L(out)))
+    }
+
+    /// Declaration path node `i` with the site in it, without its `;` (also a `for`'s
+    /// head). A `var`'s names are declared by K's prefix: it is assignments.
+    pub(super) fn decl_list(&mut self, i: usize, n: &Node, kind: DeclKind) -> R<Vec<P>> {
+        if kind == DeclKind::Var {
+            return self.var_list(i, n);
+        }
         let kw = match kind {
             DeclKind::Let => "let ",
             DeclKind::Const => "const ",
-            DeclKind::Var => return no("a site in a var declaration (0203)"),
             _ => return no("a site in a using declaration (0203)"),
         };
         let Some(k) = self.next_part(i) else {
@@ -685,14 +700,8 @@ impl G<'_, '_> {
             m = init.map_or(m + 1, |x| x + 1);
         }
         let mut out = alloc::vec![s(kw)];
-        for (x, it) in items.into_iter().enumerate() {
-            if x > 0 {
-                out.push_out(s(", "));
-            }
-            out.push_out(it);
-        }
-        out.push_out(s(";"));
-        Ok(self.with_go(P::L(out)))
+        push_joined(&mut out, items);
+        Ok(out)
     }
 
     /// The value of binding `name` of the site's declaration, initialized already.
@@ -728,7 +737,7 @@ impl G<'_, '_> {
     fn for_stmt(&mut self, i: usize, n: &Node, label: Option<P>) -> R<P> {
         let k = self.next_part(i).unwrap_or(0);
         if n.parts[k].role != Role::Body {
-            return no("a site in a for loop's head (0203)");
+            return self.for_head(i, n, k, label);
         }
         let f = self.fresh(cat!("$djs_f", i));
         let mut init: Vec<P> = Vec::new();
@@ -761,14 +770,7 @@ impl G<'_, '_> {
         {
             return no("a for loop's var declaration (0203)");
         }
-        let test = match n.parts.iter().position(|p| p.role == Role::Test) {
-            Some(t) => self.rest_part(n, t),
-            None => s("true"),
-        };
-        let update = match n.parts.iter().position(|p| p.role == Role::Update) {
-            Some(t) => self.rest_part(n, t),
-            None => s(""),
-        };
+        let (init, test, update) = self.for_parts(n, init);
         let body = self.rest_part(n, k);
         let m = self.mark("for", n.start);
         // The per-iteration scope: its bindings are declared by the head; the code the
@@ -786,7 +788,7 @@ impl G<'_, '_> {
             label.unwrap_or_else(|| s("")),
             m,
             s("for ("),
-            P::L(init),
+            init,
             P::S(cat!("; ", f, " || (")),
             test,
             s("); "),
@@ -815,6 +817,9 @@ impl G<'_, '_> {
                 .position(|p| p.role == Role::Body)
                 .ok_or("plain dumps: a loop without its body")?,
         };
+        if n.parts[k].role == Role::Iterable {
+            return self.loop_iterable(i, n, k, label);
+        }
         if n.parts[k].role != Role::Body {
             return no("a site in a loop's head (0203)");
         }
@@ -839,14 +844,9 @@ impl G<'_, '_> {
         let v = self.fresh(cat!("$djs_v", i));
         let head_text = String::from(self.text(head.start, head.end));
         let bind = if n.decls.is_empty() {
-            if head_text.trim_start().starts_with("var") {
-                return no("a for (var ... of) around the site (0203)");
-            }
-            P::L(alloc::vec![
-                s("("),
-                P::V(head.start, head.end),
-                P::S(cat!(" = ", v, ");"))
-            ])
+            // (A `var` head's names are K's: assigned.)
+            let target = self.var_head_target(head, &head_text);
+            P::L(alloc::vec![s("("), target, P::S(cat!(" = ", v, ");"))])
         } else {
             P::L(alloc::vec![
                 P::V(head.start, head.end),
@@ -920,14 +920,12 @@ impl G<'_, '_> {
             .iter()
             .position(|p| p.role == Role::Body)
             .ok_or("plain dumps: a loop without its body")?;
-        if n.decls.is_empty()
-            && self
-                .text(head.start, head.end)
-                .trim_start()
-                .starts_with("var")
+        if let Some(k) = self.next_part(i)
+            && n.parts[k].role == Role::Iterable
         {
-            return no("a for await (var ...) around the site (0203)");
+            return self.loop_iterable(i, n, k, Some(lbl));
         }
+        // (A `var` head declares K's names again: harmless.)
         let it = self.take(&cat!("for-await.iterator@", fo))?;
         let next = self.take(&cat!("for-await.next@", fo))?;
         let ib = self.fresh(cat!("$djs_i", i));
@@ -1221,7 +1219,8 @@ impl G<'_, '_> {
                     P::S(cat!(" ", done, " }")),
                 ]))
             }
-            _ => no("a site in a catch parameter (0203)"),
+            Role::CatchParam => self.catch_param(i, n),
+            _ => no("a site in a try statement the exporter does not know"),
         }
     }
 
@@ -1495,6 +1494,8 @@ impl G<'_, '_> {
                 Ok(P::L(alloc::vec![o, s("["), e, s("]")]))
             }
             NodeKind::Assign => self.assign(i, &n, k),
+            NodeKind::Update => self.update(i, &n, k),
+            NodeKind::TaggedTemplate => self.tagged(i, &n, k),
             NodeKind::Object => self.object(i, &n, k),
             _ => Err(cat!(
                 "plain dumps: an expression around the site: ",
@@ -1733,9 +1734,6 @@ impl G<'_, '_> {
             if self.text(n.parts[o].start, n.parts[o].end) == "super" {
                 return no("an assignment to super around the site (0203)");
             }
-            if logical {
-                return no("a logical assignment to a member around the site (0203)");
-            }
             let obj = self.tmp("assign.object", n.start)?;
             let p = n.parts[pr];
             if self.text(p.start, p.end).starts_with('[') {
@@ -1778,9 +1776,6 @@ impl G<'_, '_> {
         if n.parts[k].role == Role::Value && k > 0 {
             first = k - 1;
         }
-        if n.parts[k].role == Role::ComputedKey {
-            return no("a site in a computed key (0203)");
-        }
         let mut items: Vec<P> = Vec::new();
         let mut m = first;
         while m < n.parts.len() {
@@ -1821,6 +1816,10 @@ impl G<'_, '_> {
                     } else if m < k {
                         // Evaluated before the site, as a property key.
                         self.tmp("object.key", p.start)?
+                    } else if m == k {
+                        // The site in the key: converted as the original does.
+                        let e = self.expr(i + 1)?;
+                        P::L(alloc::vec![self.kmark(), s("$djs_P("), e, s(")")])
                     } else {
                         // Converted before the value, as the original does; the
                         // original's converted key is this argument of K's call.
@@ -1871,7 +1870,24 @@ impl G<'_, '_> {
                     ]));
                     m += 1;
                 }
-                _ => return no("a method or accessor after the site in an object literal (0203)"),
+                Role::Method => {
+                    // Defined as the literal would: its descriptor from a literal of its
+                    // own (a method, getter or setter, its key evaluated in order).
+                    items.push_out(P::L(alloc::vec![
+                        self.kmark(),
+                        s("$djs_DD("),
+                        self.kmark(),
+                        P::S(cat!(ot, ", { ")),
+                        P::V(p.start, p.end),
+                        s(" })"),
+                    ]));
+                    m += 1;
+                }
+                _ => {
+                    return no(
+                        "a property after the site in an object literal the exporter does not know",
+                    );
+                }
             }
         }
         let mut out = alloc::vec![s("(")];
@@ -1891,7 +1907,7 @@ impl G<'_, '_> {
         let mut text = out.text;
         // K's helpers, captured where the marker is.
         let names: Vec<&str> = [
-            "R", "G", "C", "D", "A", "L", "N", "Q", "X", "O", "I", "E", "P", "S", "Y", "U",
+            "R", "G", "C", "D", "A", "L", "N", "Q", "X", "O", "I", "E", "P", "S", "Y", "U", "DD",
         ]
         .into_iter()
         .filter(|h| text.contains(&cat!("$djs_", *h, "(")))

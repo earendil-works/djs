@@ -9572,3 +9572,21 @@ the dump keeps its TypeScript and the `"djs-dump typescript";` header. djs runs 
 dump, node does not, and scripts/plain-node.mjs counts it separately. This replaces
 D2861's "TypeScript dumps are not run in node". Origin tracking also gives a function's
 `this` local the continuation's `this`, because `K` is called with it.
+
+## D2880: Sites in loop heads, `var` declarations, catch parameters and more literals
+date: 2026-11-05 · by: pjr · issue: 0203
+More sites get plain continuations. A site in a `var` declaration is written as
+assignments, because `K`'s prefix declares the names. `for (var …)` heads are assignment
+targets. A site in a `while`/`do` test is `while (first ? (first = false, <rest of the
+test>) : <test>)`. A site in a `for` loop's test or update does the same in the loop's
+test position, with the loop's bindings from the frame. A site in a `for` loop's init
+writes the init with the site rewritten, and one in a `for-in`/`for-of`/`for await`
+iterable rewrites the iterable. In an object literal, a computed key holding the site is
+converted with `$djs.P`, and methods and accessors after the site are defined with their
+descriptors from a literal of their own (`$djs.DD`). A logical assignment to a member at
+its right side is the store. An update of a member whose object or key holds the site
+writes the reference again. A tagged template is the call `K` makes with the saved tag,
+`this`, template object and substitutions; the template object is the dumped copy, so it
+is not identical to the one the realm caches for that location. A site in a `catch`
+parameter's pattern declares the parameter in a block of `K` with the rest of the
+pattern, followed by the catch block.

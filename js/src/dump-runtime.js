@@ -14,6 +14,7 @@ export const L = (it, next) => { let first = true; const r = { next() { if (firs
 export const I = (it, next) => { const r = { next() { return Reflect.apply(next, it, []); }, get return() { const m = it.return; return m == null ? m : (...v) => Reflect.apply(m, it, v); }, [Symbol.iterator]() { return r; } }; return r; };
 export const E = () => ({ [Symbol.iterator]() { return { next() { return { value: undefined, done: true }; } }; } });
 export const Y = (it, next, a, ...first) => { let ph = !first.length; const m = (k) => { const f = it[k]; return f == null ? f : (...v) => Reflect.apply(f, it, v); }; const r = { next(...v) { if (first.length) return first.pop(); if (ph) { ph = false; return { value: undefined, done: false }; } return Reflect.apply(next, it, v); }, get throw() { return m('throw'); }, get return() { return m('return'); }, [a ? Symbol.asyncIterator : Symbol.iterator]() { return r; } }; return r; };
+export const DD = (o, src) => Object.defineProperties(o, Object.getOwnPropertyDescriptors(src));
 export const U = ($djs_v, $djs_m, k) => k === 4 ? { [Symbol.asyncDispose]: () => Reflect.apply($djs_m, $djs_v, []) } : { [Symbol.dispose]: () => Reflect.apply($djs_m, $djs_v, []) };
 export const M = ($djs_f, $djs_k) => (x, i) => Reflect.apply($djs_f, undefined, [x, i + $djs_k]);
 export const FM = (it, next, $djs_f, k, inner, innerNext) => { const $djs_k = k - 1, $djs_in = { [Symbol.iterator]: () => L(inner, innerNext) }; const h = Iterator.prototype.flatMap.call(L(it, next), (x, i) => i === 0 ? $djs_in : Reflect.apply($djs_f, undefined, [x, i + $djs_k])); h.next(); return h; };
@@ -38,7 +39,7 @@ export const bytes = (b) => Uint8Array.fromBase64(b).buffer;
 export const keep = (o, keys) => { for (const k of Reflect.ownKeys(o)) if (!['length', 'name', 'prototype', 'constructor'].includes(k) && !keys.includes(k) && !delete o[k]) throw new TypeError('keep'); };
 
 /** The helpers by name: `globalThis.$djs = { ...helpers, seed, resume }`. */
-export const helpers = { R, G, C, D, A, L, I, E, Y, U, M, FM, CC, CI, HD, P, S, N, X, O, fromSync, Q, regexpIterator, closeThrow, forIn, advance, fn, spent, rejected, bytes, keep };
+export const helpers = { R, G, C, D, A, L, I, E, Y, DD, U, M, FM, CC, CI, HD, P, S, N, X, O, fromSync, Q, regexpIterator, closeThrow, forIn, advance, fn, spent, rejected, bytes, keep };
 
 /** The same as a Script whose completion value is `helpers`, for a host that evaluates it in
  * a djs VM itself (`vm_dump_runtime`). */
@@ -54,6 +55,7 @@ const L = (it, next) => { let first = true; const r = { next() { if (first) { fi
 const I = (it, next) => { const r = { next() { return Reflect.apply(next, it, []); }, get return() { const m = it.return; return m == null ? m : (...v) => Reflect.apply(m, it, v); }, [Symbol.iterator]() { return r; } }; return r; };
 const E = () => ({ [Symbol.iterator]() { return { next() { return { value: undefined, done: true }; } }; } });
 const Y = (it, next, a, ...first) => { let ph = !first.length; const m = (k) => { const f = it[k]; return f == null ? f : (...v) => Reflect.apply(f, it, v); }; const r = { next(...v) { if (first.length) return first.pop(); if (ph) { ph = false; return { value: undefined, done: false }; } return Reflect.apply(next, it, v); }, get throw() { return m('throw'); }, get return() { return m('return'); }, [a ? Symbol.asyncIterator : Symbol.iterator]() { return r; } }; return r; };
+const DD = (o, src) => Object.defineProperties(o, Object.getOwnPropertyDescriptors(src));
 const U = ($djs_v, $djs_m, k) => k === 4 ? { [Symbol.asyncDispose]: () => Reflect.apply($djs_m, $djs_v, []) } : { [Symbol.dispose]: () => Reflect.apply($djs_m, $djs_v, []) };
 const M = ($djs_f, $djs_k) => (x, i) => Reflect.apply($djs_f, undefined, [x, i + $djs_k]);
 const FM = (it, next, $djs_f, k, inner, innerNext) => { const $djs_k = k - 1, $djs_in = { [Symbol.iterator]: () => L(inner, innerNext) }; const h = Iterator.prototype.flatMap.call(L(it, next), (x, i) => i === 0 ? $djs_in : Reflect.apply($djs_f, undefined, [x, i + $djs_k])); h.next(); return h; };
@@ -76,6 +78,6 @@ const spent = (k) => { let f; new Promise((a, b) => { f = k ? b : a; a(); }); re
 const rejected = (e) => { const p = Promise.reject(e); p.then(undefined, () => {}); return p; };
 const bytes = (b) => Uint8Array.fromBase64(b).buffer;
 const keep = (o, keys) => { for (const k of Reflect.ownKeys(o)) if (!['length', 'name', 'prototype', 'constructor'].includes(k) && !keys.includes(k) && !delete o[k]) throw new TypeError('keep'); };
-return { R, G, C, D, A, L, I, E, Y, U, M, FM, CC, CI, HD, P, S, N, X, O, fromSync, Q, regexpIterator, closeThrow, forIn, advance, fn, spent, rejected, bytes, keep };
+return { R, G, C, D, A, L, I, E, Y, DD, U, M, FM, CC, CI, HD, P, S, N, X, O, fromSync, Q, regexpIterator, closeThrow, forIn, advance, fn, spent, rejected, bytes, keep };
 })();
 `;

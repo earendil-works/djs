@@ -84,6 +84,11 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
   to a TS header when the TypeScript is more than types). New corpus case
   ts/awaits-typed.ts (5 links run in node). ts/codemode-tools.ts has an enum: it stays
   TypeScript (3 links, counted by plain-node as not run).
+- pjr: D2880, a probe of the remaining sites (loop tests/heads, var declarations,
+  for (var ...), computed keys and methods in object literals, logical member assignment,
+  tagged templates, member updates, catch parameters): all 17 idle points of the probe
+  continue identically, chains included (test plain_dumps_of_heads_and_more; the
+  ignored test plain_dumps_probe runs a program from DJS_PROBE).
 
 ## Follow-ups
 - Private names on instances (D2878) stay refused. If codemode ever needs them, the

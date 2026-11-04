@@ -59,6 +59,12 @@ pub(crate) const HELPERS: &[(&str, &str)] = &[
     ),
     // A `using` resource added again (D2876): its saved dispose method called on its
     // value; the exporter reads `$djs_v`/`$djs_m` back.
+    // An object literal's method, getter or setter after a continuation's site (D2880):
+    // defined on the object with its descriptor from a literal of its own.
+    (
+        "DD",
+        "(o, src) => Object.defineProperties(o, Object.getOwnPropertyDescriptors(src))",
+    ),
     (
         "U",
         "($djs_v, $djs_m, k) => k === 4 ? { [Symbol.asyncDispose]: () => Reflect.apply($djs_m, $djs_v, []) } : { [Symbol.dispose]: () => Reflect.apply($djs_m, $djs_v, []) }",
