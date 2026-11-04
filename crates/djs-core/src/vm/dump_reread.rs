@@ -66,6 +66,23 @@ impl Dumper<'_> {
         let text = |a: u32, b: u32| ftext.get(a as usize..b as usize).unwrap_or("");
         let mut out = Vec::new();
         for n in &syntax.nodes {
+            // A loop over a saved iterator: its `next` read again from the iterator, and
+            // whether it has no `return` (nothing closes it: the rest of the current
+            // iteration may run outside the loop, D2908).
+            if n.kind == NodeKind::ForIn {
+                out.push(cat!("for-in.closeless@", n.start));
+            }
+            if n.kind == NodeKind::ForOf
+                && let Some(itv) = slot(&cat!("for-of.iterator@", n.start))
+            {
+                let next = cat!("for-of.next@", n.start);
+                if slot(&next).is_some_and(|nv| self.frozen_lookup(itv, "next", nv)) {
+                    out.push(next);
+                }
+                if self.frozen_lookup(itv, "return", Value::UNDEFINED) {
+                    out.push(cat!("for-of.closeless@", n.start));
+                }
+            }
             let call = matches!(n.kind, NodeKind::Call { optional: false });
             if !call && n.kind != NodeKind::New {
                 continue;
@@ -160,7 +177,8 @@ impl Dumper<'_> {
     }
 
     /// Whether `recv.key` finds `want` on a frozen object through frozen objects only
-    /// (after `recv` itself, which may be the session's if it has no own `key`).
+    /// (after `recv` itself, which may be the session's if it has no own `key`); `want`
+    /// undefined: or finds nothing.
     fn frozen_lookup(&self, recv: Value, key: &str, want: Value) -> bool {
         let h = self.h;
         let Some(mut o) = recv.as_object() else {
@@ -183,7 +201,7 @@ impl Dumper<'_> {
             first = false;
             match h.get_prototype_of(o) {
                 Some(p) => o = p,
-                None => return false,
+                None => return want.is_undefined(),
             }
         }
     }

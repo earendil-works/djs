@@ -203,6 +203,14 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   (also the async generator suspended at its await with a `break`, pjz's "'return' of
   undefined", fixed by D2907).
 
+- Batch merged (d56f59f0). Item 2 (D2908): for-of/for-in whose body has no break/continue
+  and whose iterator has no `return`: `const $djs_i = it; { rest } for (Head of
+  $djs_I($djs_i)) Body`; `$djs.I` takes `it.next` when `next` is left out (re-read, D2905
+  rule in dump_reread); dump_origin reads the record's constants while K is in the rest.
+  Unused `$dump.bN` builtins are no longer written. Test
+  plain_dumps_continue_loops_after_the_rest. Sleep 2,104 → 1,962; corpus 8,154,483 →
+  8,132,481; v2 551,509 → 545,726.
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a

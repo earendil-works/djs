@@ -9533,6 +9533,22 @@ heads and bindings see what the callback made for their block. Statements and ca
 their order among themselves. A binding whose value only a deeper block's part makes is
 refused.
 
+## D2908: A for-of or for-in goes on after the rest of its iteration, where nothing tells
+date: 2026-11-04 · by: pjs · issue: 0207
+A continuation stopped inside a `for...of` or `for...in` wrote the loop as a placeholder
+scaffold (`{ let f = true; for (const v of $djs_L(it, next)) { if (f) { f = false; rest }
+else { const x = v; body } } }`), so that `break`, `continue` and the iterator's closing
+behave as in the original. Neither can tell the rest apart from an iteration when the body
+has no `break` or `continue` (a conservative scan of its text) and the iterator has no
+`return` (found by a lookup through frozen builtins, D2836: arrays', strings', maps' and
+sets' iterators, a for-in's keys): then the rest runs first, in a block that declares the
+iteration's bindings, and the loop goes on as written over the saved record, `for (const x
+of $djs_I(it)) body` (`$djs.I` takes the iterator's own `next` when the dump leaves it out,
+which it does where `it.next` reads the saved one). The record is bound to K's constants
+before the rest, which origin tracking reads back while K is in the rest (`["for-of", fo,
+ko, 0, it, next]`); inside the loop it unwraps `$djs.I` as it did `$djs.L`. A dump also
+writes only the builtins (`$dump.bN`) its text reads.
+
 ## D2875: `yield*` in plain continuations: a `yield*` over a wrapper of the inner record
 date: 2026-11-05 · by: pjr · issue: 0203
 At a `yield*` site, `K` delegates again with `yield* $dump.Y(it, next, async, ...first)`.

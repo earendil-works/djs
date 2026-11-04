@@ -40,11 +40,12 @@ pub(crate) const HELPERS: &[(&str, &str)] = &[
         "L",
         "(it, next) => { let first = true; const r = { next() { if (first) { first = false; return { value: undefined, done: false }; } return Reflect.apply(next ?? it.next, it, []); }, get return() { const m = it.return; return m == null ? m : (...v) => Reflect.apply(m, it, v); }, [Symbol.iterator]() { return r; } }; return r; }",
     ),
-    // The same without the placeholder (a pattern's element whose step is to come), and
+    // The same without the placeholder (a pattern's element whose step is to come, a loop
+    // going on after the rest of its iteration; `next` left out: the iterator's own), and
     // an iterable that is done (a pattern's iterator that was).
     (
         "I",
-        "(it, next) => { const r = { next() { return Reflect.apply(next, it, []); }, get return() { const m = it.return; return m == null ? m : (...v) => Reflect.apply(m, it, v); }, [Symbol.iterator]() { return r; } }; return r; }",
+        "(it, next) => { const r = { next() { return Reflect.apply(next ?? it.next, it, []); }, get return() { const m = it.return; return m == null ? m : (...v) => Reflect.apply(m, it, v); }, [Symbol.iterator]() { return r; } }; return r; }",
     ),
     (
         "E",

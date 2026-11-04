@@ -95,10 +95,13 @@ For an activation of `f` stopped at site `s`, the dump writes a function `K` of 
   p))`). Otherwise the call keeps its evaluated callee and `this`: `$djs_R(callee, self,
   [arg0, (await p), <rest>])` with `$djs_R` = `Reflect.apply` captured while the dump
   loads;
-- **the loops around the site** as real loops over the saved iterator record: `for (const v
-  of $djs_L(iterator, next))`, whose first step is a placeholder so the rest of the current
-  iteration runs first, and whose later steps (and `break`, `return`, exceptions closing the
-  iterator) are the original's;
+- **the loops around the site** as real loops over the saved iterator record. Where the
+  body cannot jump to the loop (no `break` or `continue` in it) and the iterator has no
+  `return` to close it, the rest of the current iteration comes first and the loop then
+  goes on as written over the record: `{ rest } for (const v of $djs_I(iterator))
+  body` (D2908). Otherwise `for (const v of $djs_L(iterator, next))`, whose first step is
+  a placeholder so the rest of the current iteration runs first inside the loop, and whose
+  later steps (and `break`, `return`, exceptions closing the iterator) are the original's;
 - `try`/`catch`/`finally`, `switch`, labels, `while`/`do`/`for` kept around the rest, a
   suspended `finally` written as its rest followed by the completion that entered it;
 - **the rest of `f`** verbatim.

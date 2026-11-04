@@ -1994,8 +1994,21 @@ impl W<'_> {
             ");\n"
         );
         s.push_str("globalThis.$dump = {};\n");
+        // The builtins the text reads (a value a continuation reads again from the
+        // original's text, D2905, leaves its builtin unread).
+        let mut text = join(&body, "\n");
+        for it in self.items.iter().filter(|it| it.kind == IK::FnDecl) {
+            cat_to!(&mut text, "\n", it.text);
+        }
+        for (_, e) in &ir.handles {
+            cat_to!(&mut text, "\n", e);
+        }
+        let used = refs(&text);
         for (i, p) in ir.builtins.iter().enumerate() {
-            cat_to!(&mut s, "$dump.b", i, " = ", builtin_expr(p)?, ";\n");
+            let name = cat!("b", i);
+            if used.dump.iter().any(|(n, _)| *n == name) {
+                cat_to!(&mut s, "$dump.", name, " = ", builtin_expr(p)?, ";\n");
+            }
         }
         for (f, fac) in ir.factories.iter().enumerate() {
             if self.is_merged((f, 0)) {

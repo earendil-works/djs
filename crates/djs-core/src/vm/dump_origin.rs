@@ -520,6 +520,20 @@ impl Dumper<'_> {
                         let (it, next) = unwrap_loop(h, w)?;
                         return Some(if c == "for-of.iterator" { it } else { next });
                     }
+                    // K in the rest of the iteration before its loop (D2908): the record's
+                    // constants (no `next`: the iterator's own).
+                    if let Some((_, ib)) = &r.3
+                        && let Some(it) = kslot(ib)
+                    {
+                        return Some(if c == "for-of.iterator" {
+                            it
+                        } else {
+                            r.4.next
+                                .as_ref()
+                                .and_then(|nb| kslot(nb))
+                                .unwrap_or(Value::UNDEFINED)
+                        });
+                    }
                 }
                 ("pattern", "pattern.iterator") | ("pattern", "pattern.next") => {
                     // K's array pattern over the record (`undefined` once done).
@@ -535,6 +549,12 @@ impl Dumper<'_> {
                     // The dump's key iterator (`$dump.forIn`), in K's loop over it.
                     if let Some(w) = kslot(&cat!("for-of.iterator@", r.2)) {
                         return unwrap_loop(h, w).map(|x| x.0);
+                    }
+                    // (Before the loop, D2908: K's constant.)
+                    if let Some((_, ib)) = &r.3
+                        && let Some(it) = kslot(ib)
+                    {
+                        return Some(it);
                     }
                 }
                 ("for-await", "for-await.iterator") | ("for-await", "for-await.next") => {

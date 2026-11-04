@@ -832,6 +832,18 @@ impl G<'_, '_> {
         } else {
             "for-of"
         };
+        if !disposing
+            && self.ctx.rereads(&cat!(c, ".closeless@", n.start))
+            && !n
+                .decls
+                .iter()
+                .any(|d| matches!(d.kind, DeclKind::Using | DeclKind::AwaitUsing))
+        {
+            let bt = self.text(n.parts[k].start, n.parts[k].end);
+            if !has_ident(bt, "break") && !has_ident(bt, "continue") {
+                return self.for_of_rest(i, n, k, c, label);
+            }
+        }
         let it = self.take(&cat!(c, ".iterator@", n.start))?;
         let next = if n.kind == NodeKind::ForIn {
             String::from("null")
@@ -900,6 +912,77 @@ impl G<'_, '_> {
             s(" "),
             body,
             s(" } } }"),
+        ]))
+    }
+
+    /// [`G::for_of`] where the rest of the current iteration can run before the loop
+    /// (D2908): nothing in the body jumps to the loop (no `break` or `continue` in its
+    /// text) and nothing closes the iterator (it has no `return`), so the rest, then
+    /// `for (Head of $djs_I(it, next)) Body` over the saved record, is the loop going on.
+    /// The record is bound to constants of K, which origin tracking reads back while K is
+    /// in the rest (`["for-of", fo, ko, 0, it, next]`, ko the loop's start).
+    fn for_of_rest(
+        &mut self,
+        i: usize,
+        n: &Node,
+        k: usize,
+        c: &'static str,
+        label: Option<P>,
+    ) -> R<P> {
+        let head = n
+            .parts
+            .iter()
+            .find(|p| p.role == Role::Head)
+            .copied()
+            .ok_or("plain dumps: a loop without its head")?;
+        let it = self.take(&cat!(c, ".iterator@", n.start))?;
+        let nslot = cat!(c, ".next@", n.start);
+        let next = if n.kind == NodeKind::ForIn || !self.has(&nslot) {
+            None
+        } else if self.ctx.rereads(&nslot) {
+            self.consume(&nslot);
+            None
+        } else {
+            Some(self.take(&nslot)?)
+        };
+        self.consume(&cat!(c, ".closeless@", n.start));
+        let ib = self.fresh(cat!("$djs_i", i));
+        let nb = self.fresh(cat!("$djs_n", i));
+        let rec = self.mark(c, n.start);
+        if let P::Mark(x) = rec {
+            self.scaf[x].3 = match &next {
+                Some(_) => cat!(",0,", quote(&ib), ",", quote(&nb)),
+                None => cat!(",0,", quote(&ib)),
+            };
+        }
+        let consts = match &next {
+            Some(nx) => cat!("const ", ib, " = ", it, ", ", nb, " = ", nx, ";\n"),
+            None => cat!("const ", ib, " = ", it, ";\n"),
+        };
+        let decls: Vec<_> = n
+            .decls
+            .iter()
+            .map(|d| (d.name.clone(), d.kind, d.scope, true))
+            .collect();
+        let d = self.declare(&decls)?;
+        let first = self.stmt(i + 1, None)?;
+        let args = match &next {
+            Some(_) => cat!(ib, ", ", nb),
+            None => ib.clone(),
+        };
+        Ok(P::L(alloc::vec![
+            P::S(consts),
+            P::S(String::from("{ ")),
+            d,
+            s("\n"),
+            first,
+            s("\n}\n"),
+            label.unwrap_or_else(|| s("")),
+            rec,
+            P::V(n.start, head.start),
+            P::V(head.start, head.end),
+            P::S(cat!(" of $djs_I(", args, ")) ")),
+            self.rest_part(n, k),
         ]))
     }
 

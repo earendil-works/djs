@@ -235,3 +235,33 @@ main();
         assert!(at(k).contains("$djs_R("), "{k}: {}", at(k));
     }
 }
+
+/// The rest of the current iteration before the loop, then the loop over the saved
+/// record (D2908): an array's iterator, a for-in's keys, a loop variable the rest reads,
+/// two awaits in one iteration (a re-dump inside the rest and inside the loop); kept as
+/// the placeholder scaffold where the body jumps (`break`, `continue`) or the iterator has
+/// a `return` (a generator).
+#[test]
+fn plain_dumps_continue_loops_after_the_rest() {
+    let src = r#"
+async function arr() { const out = []; for (const x of [1, 2, 3]) { out.push(await later(x)); out.push(x * 10); } return out.join(); }
+async function twice() { let s = ""; for (const x of ["a", "b"]) { s += await later(x); s += await later(x + "!"); } return s; }
+async function keys() { const o = { p: 1, q: 2 }; let s = ""; for (const k in o) s += k + (await later(o[k])); return s; }
+async function jumps() { let s = 0; for (const x of [1, 2, 3]) { if (x === 2) continue; s += await later(x); if (x === 3) break; } return s; }
+function* gen() { try { yield 1; yield 2; } finally { print("closed"); } }
+async function generator() { let s = 0; for (const x of gen()) s += await later(x); return s; }
+async function main() {
+  for (const f of [arr, twice, keys, jumps, generator]) print(f.name, await f());
+}
+main();
+"#;
+    let (failed, refused, ok) = plain_check_program("rest", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, _, refused) = plain_chain_program("rest", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 12, "{ok}");
+    let first = plain_dump_at(src, 1);
+    assert!(first.contains("of $djs_I($djs_i"), "{first}");
+}
