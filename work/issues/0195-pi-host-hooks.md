@@ -1,7 +1,7 @@
 # 0195: pi adapter: prelude-next and the adapter use host-call hooks for tool calls; pi suite with --dump-every-idle
 
-status: open
-agent: -
+status: in-progress
+agent: hostcalls
 branch: issue/0195-pi-host-hooks
 depends-on: 0189
 guide: -
