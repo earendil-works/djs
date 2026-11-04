@@ -496,7 +496,13 @@ impl Session {
     fn load_plain(&mut self, text: &str) -> Result<Value, Stop> {
         let f = self
             .vm
-            .compile(text.as_bytes(), &CompileOptions::script("dump.js"))
+            .compile(
+                text.as_bytes(),
+                &CompileOptions {
+                    typescript: text.starts_with("\"djs-dump 3 typescript\""),
+                    ..CompileOptions::script("dump.js")
+                },
+            )
             .map_err(|e| format!("compile: {} at {}:{}", e.message, e.line, e.col))?;
         let global = Value::object(self.vm.global());
         self.vm

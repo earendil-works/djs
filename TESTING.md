@@ -282,6 +282,14 @@ into a fresh VM and continues there; the transcript must equal the plain run's, 
 dump that is refused fails the case (a crash with the reason). Only `codemode` and
 `codemode-harvest` have idle points (1,194 at 0172); the leg costs about 15 CPU-s in a
 debug build.
+`--plain-dumps` (0201, D2830) does the same with plain dumps (format 3, run as a Script in
+the fresh VM, with the host's `$djs.seed`/`$djs.resume`), at most 50 links per case; a
+refused dump ends the case's dumps and the run goes on. `--plain-out DIR` also writes
+every link's dump, the output before it and the plain run's transcript, and
+`scripts/plain-node.mjs DIR` runs each dump in node and requires the same transcript
+(node's clock pinned to djs's, its wording of the common TypeErrors mapped to djs's).
+Its `--refusals tests/plain-refusals.txt` is the ratchet of cases that may refuse
+(`--update` rewrites it). The gate leg "plain dumps (djs and node)" runs both.
 `--determinism` adds a second suspension slice (1009) and requires the suspended runs to
 leave the same heap image as the plain run, both the raw image and its canonical hash
 (the graph alone, computed by a copying collection of a copy; D1720, D1725, D2040). The e2e

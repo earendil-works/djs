@@ -307,6 +307,12 @@ def jobs():
         J("difftest", f"{G}/bin/djs-difftest --engine djs --ratchet --suspend-every 97 --gc-stress"
           f" --determinism --dump-every-idle --quiet --no-diff --times {G}/times/difftest.tsv",
           cls="rust", needs=["build:difftest"], summary=r"^(stress|ratchet):"),
+        # 0201: plain dumps (D2830) at every idle point of the corpus (chains of at most 50),
+        # continued in djs and in node; refusals only as tests/plain-refusals.txt lists.
+        J("plain dumps (djs and node)", f'd=$(mktemp -d); {G}/bin/djs-difftest --engine djs --ratchet'
+          f' --quiet --no-diff --plain-out "$d" && node scripts/plain-node.mjs "$d"'
+          ' --refusals tests/plain-refusals.txt; rc=$?; rm -rf "$d"; exit $rc',
+          cls="rust", needs=["build:difftest"], summary=r"^(stress|ratchet|plain-node):"),
         J("difftest (bytecode backend)", f"{G}/bin/djs-difftest --engine djs --backend bytecode --ratchet"
           f" --quiet --no-diff --times {G}/times/difftest-bytecode.tsv",
           cls="rust", needs=["build:difftest"], summary=r"^ratchet:"),

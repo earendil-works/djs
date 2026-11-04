@@ -1438,5 +1438,8 @@ fn kind_name(k: NodeKind) -> &'static str {
         NodeKind::TaggedTemplate => "a tagged template (0203)",
         NodeKind::Array => "an array literal",
         NodeKind::Object => "an object literal",
+        NodeKind::ArrayPattern => "an array pattern (0203)",
+        NodeKind::ObjectPattern => "an object pattern (0203)",
+        NodeKind::Default => "a default value (0203)",
     }
 }
