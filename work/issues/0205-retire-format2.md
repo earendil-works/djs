@@ -19,6 +19,12 @@ continue identically to the uninterrupted run over every corpus idle point they 
 re-dumps stay bounded (cap chains at 50 links), and the existing gate checks stay green.
 djs is unreleased (D024): no compatibility code for format 2 once it is retired.
 
+Notes from 0207 (coordinator): plain dumps require frozen builtins (D2836, D2904); the
+Sandbox's `plainDumps` default follows the VM's mode, so once format 2 is gone a sandbox
+without frozen builtins cannot dump at all: make that a clear error (and say so in the
+host docs), and drop `plainDumps`/`--plain`/`.plain`. The header is `"djs-dump";` (D2835);
+`$djs` carries the runtime helpers and `source(ref)` (D2834, D2903).
+
 ## Log
 
 ## Follow-ups

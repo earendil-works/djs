@@ -650,3 +650,5 @@ topics when the index is next reorganized.
 - D2876: `using` in plain continuations: the resources added again, a disposal as a scope of K
 - D2877: Iterator helpers in plain dumps are made again by their public methods
 - D2878: Plain dumps refuse instances that carry private names
+- D2904: The hosts' plain-dump paths run with frozen builtins
+- D2879: TypeScript plain dumps are written as JavaScript where the TypeScript is only types
