@@ -18,7 +18,7 @@ test("examples/sleep-dump: suspend while the tool sleeps, resume, continue", asy
   const m = /\$djs\.resume\(\d+, "tools\.sleep", \[50\], \{"due":(\d+)\}\);/.exec(dump);
   assert.ok(m, dump);
   assert.ok(Number(m[1]) >= t0 + 50 && Number(m[1]) <= Date.now() + 50, dump);
-  assert.equal(dump.match(/^\$dump\.K\w+ = async function/gm)?.length, 2, dump);
+  assert.equal(dump.match(/\$djs\.k\(async function/g)?.length, 2, dump);
   assert.deepEqual(lines, ["first sleeps 50 ms"]);
   const result = await resume(dump, options(log));
   assert.deepEqual(result, ["first: slept 50 ms", "second: slept 50 ms"]);

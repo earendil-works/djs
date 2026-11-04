@@ -211,6 +211,15 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   plain_dumps_continue_loops_after_the_rest. Sleep 2,104 → 1,962; corpus 8,154,483 →
   8,132,481; v2 551,509 → 545,726.
 
+- Item 3 (D2909): the body's bindings are K's parameters, the values its call's arguments
+  (consts the text may assign stay declarations, `may_assign`); K written in place with
+  `$djs.k(K, record[, proto])(args)`; no blank lines and no braces for blocks that declare
+  nothing. Tests plain_dumps_take_the_frame_as_arguments. Score: corpus 8,132,481 →
+  7,741,422 raw; v2 545,726 → 497,622; sleep 1,962 → 1,751 (gzip 716; target 736/415).
+  Remaining sleep bytes: the origin text `$dump.Fa6` (437 B, (d) pjr), the records (item
+  4), `$dump.` names of single-use values (`$dump.n4`, `$dump.i5`, `$dump.p1`), dead
+  bindings (`const label = "first"`, C).
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a

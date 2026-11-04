@@ -9549,6 +9549,27 @@ before the rest, which origin tracking reads back while K is in the rest (`["for
 ko, 0, it, next]`); inside the loop it unwraps `$djs.I` as it did `$djs.L`. A dump also
 writes only the builtins (`$dump.bN`) its text reads.
 
+## D2909: A continuation is a function called with the frame's values
+date: 2026-11-04 · by: pjs · issue: 0207
+A continuation declared every live binding of the function's body with its value (`var
+ms = 5000; var step = $dump.n2;`), was stored (`$dump.Ka6 = async function () {…}`), given
+its origin record with `Object.defineProperty($dump.Ka6, "$djs", { value: {…} })` and
+called with `.call(undefined)`. Now the body's bindings are K's parameters and their
+values its call's arguments, and K is written where it is called: `$dump.a6 =
+$djs.k(async function (ms, step, t0, results) {…}, { f, segs, … })(5000, $dump.n2, …)`
+(`.call(this, …)` when `this` is not undefined; `$djs.k`, a runtime helper, sets the record
+and a generator continuation's prototype and returns K; a continuation a factory holds
+keeps its reference). A binding stays a declaration where a parameter would differ or
+cannot be: a variable shared with closures K's blocks make, one whose value the dump
+makes later (after its callback, or from a factory key), a `using` resource, `arguments`,
+and a constant the text may assign (a conservative scan: an assignment or update operator
+at an occurrence, an occurrence before `of`/`in` or in brackets an assignment follows),
+whose assignment must still throw. The arguments are evaluated where the call is, outside
+K, so the values that read names K shadows need no `$dump.aN_k` copies any more. K also
+leaves out blank lines of its own and the braces of a block that declares nothing where
+it stands among statements. Origin tracking reads parameters as K's bindings by name, as
+before.
+
 ## D2875: `yield*` in plain continuations: a `yield*` over a wrapper of the inner record
 date: 2026-11-05 · by: pjr · issue: 0203
 At a `yield*` site, `K` delegates again with `yield* $dump.Y(it, next, async, ...first)`.

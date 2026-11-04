@@ -161,6 +161,12 @@ pub(crate) const HELPERS: &[(&str, &str)] = &[
         "(e) => { const p = Promise.reject(e); p.then(undefined, () => {}); return p; }",
     ),
     ("bytes", "(b) => Uint8Array.fromBase64(b).buffer"),
+    // A continuation's origin record (D2833) and a generator continuation's prototype,
+    // given where the dump writes the continuation (D2909); returns it.
+    (
+        "k",
+        "(f, r, p) => { Object.defineProperty(f, '$djs', { value: r }); if (p !== undefined) f.prototype = p; return f; }",
+    ),
     (
         "keep",
         "(o, keys) => { for (const k of Reflect.ownKeys(o)) if (!['length', 'name', 'prototype', 'constructor'].includes(k) && !keys.includes(k) && !delete o[k]) throw new TypeError('keep'); }",

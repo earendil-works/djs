@@ -469,7 +469,7 @@ fn dump_a_waiting_session() {
             "a fresh VM",
             &format!("loaded {dump} into a fresh VM"),
             "waiting: #2 tools.read({\"path\":\"a\"})",
-            &format!("  async function <anonymous> at {dump}:10:12"),
+            &format!("  async function <anonymous> at {dump}:9:12"),
             "      const v = (await $dump.p1);",
             "                 ^",
             "    p = 'a', v = undefined",

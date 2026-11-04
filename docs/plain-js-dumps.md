@@ -379,7 +379,7 @@ names can become imports later. The members:
 | `S(o, keys)` | a pattern's rest property: CopyDataProperties without `keys` |
 | `Q(a, ...v)` | appends elements to an array being built (an argument list or array literal with a spread, evaluated around the site) |
 | `L(it, next)` | an iterable over a saved iterator record whose first step is a placeholder: a loop's or pattern's rest of the current step runs in it |
-| `I(it, next)` | the same without the placeholder (a pattern element still to take) |
+| `I(it, next)` | the same without the placeholder (a pattern element still to take, a loop going on after the rest of its iteration, D2908); without `next`, the iterator's own |
 | `E()` | an iterable that is done (a pattern's iterator that was) |
 | `Y(it, next, async, ...first)` | a `yield*`'s inner record; its first step is `first` if given, else a placeholder |
 | `U(value, method, kind)` | a `using` resource added again: an object whose dispose method calls the saved `method` on `value` (`kind` 4: async) |
@@ -400,6 +400,7 @@ names can become imports later. The members:
 | `spent(k)` | a settled promise's resolve (`k` 0) or reject (`k` 1) function: calling it does nothing |
 | `rejected(e)` | a rejected promise that counts as handled |
 | `bytes(b64)` | an `ArrayBuffer` from base64 |
+| `k(K, record, proto)` | gives continuation `K` its origin record (`K.$djs`) and a generator continuation its `prototype`, and returns `K`: the dump writes `$dump.aN = $djs.k(async function (…) {…}, {…})(args)` (D2909) |
 | `keep(o, keys)` | deletes a class's own members other than `keys`: the ones the run deleted since its evaluation |
 
 ## 5. Pruning: why plain dumps are smaller

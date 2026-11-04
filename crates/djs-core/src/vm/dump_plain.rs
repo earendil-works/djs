@@ -1727,6 +1727,7 @@ impl W<'_> {
                         "$djs.resume",
                         "(0, $dump.K",
                         "$dump.K",
+                        "$djs.k(",
                     ]
                     .iter()
                     .any(|p| t.contains(p))
@@ -2267,9 +2268,6 @@ impl W<'_> {
             lines.push_out(cat!(r, " = ", v, ";"));
         }
         let kref = self.kref(a);
-        if self.acts[a].home.is_none() {
-            lines.push_out(cat!(kref, " = ", k.text, ";"));
-        }
         let segs: Vec<String> = k.segs.iter().map(|x| cat!(*x)).collect();
         let (fref, fdef) = self.fref(a);
         lines.extend(fdef);
@@ -2288,16 +2286,22 @@ impl W<'_> {
         if k.cmap != "[]" {
             rec = cat!(rec, ", cmap: ", k.cmap);
         }
-        lines.push_out(cat!(
-            "Object.defineProperty(",
-            kref,
-            ", \"$djs\", { value: { ",
-            rec,
-            " } });"
-        ));
         let me = cat!("$dump.", act.name);
         let generator = act.kind == crate::interp::run::suspend::GENERATOR
             || act.kind == crate::interp::run::suspend::ASYNC_GENERATOR;
+        // `$djs.k(K, record[, prototype])` gives K its origin record (and a generator's
+        // prototype) and returns it (D2909): K written in place of its call, or, where a
+        // factory holds it, its reference.
+        let proto = match (&act.proto, generator) {
+            (Some(p), true) => cat!(", ", p),
+            _ => String::new(),
+        };
+        let kexpr = if self.acts[a].home.is_none() {
+            cat!("$djs.k(", k.text, ", { ", rec, " }", proto, ")")
+        } else {
+            lines.push_out(cat!("$djs.k(", kref, ", { ", rec, " }", proto, ");"));
+            kref.clone()
+        };
         let at_yield = act.site.name.starts_with("yield#") || act.site.name.starts_with("yield*#");
         // (The continuation's parameters, D2909.)
         let args = if k.args.is_empty() {
@@ -2305,11 +2309,13 @@ impl W<'_> {
         } else {
             cat!(", ", join(&k.args, ", "))
         };
+        let direct = self.acts[a].home.is_none() && (act.this == "undefined" || self.is_arrow(a));
         if generator {
-            if let Some(p) = &act.proto {
-                lines.push_out(cat!(kref, ".prototype = ", p, ";"));
+            if direct {
+                lines.push_out(cat!(me, " = ", kexpr, "(", join(&k.args, ", "), ");"));
+            } else {
+                lines.push_out(cat!(me, " = ", kexpr, ".call(", act.this, args, ");"));
             }
-            lines.push_out(cat!(me, " = ", kref, ".call(", act.this, args, ");"));
             if at_yield {
                 lines.push_out(cat!(me, ".next();"));
             } else if act.kind != crate::interp::run::suspend::ASYNC_GENERATOR
@@ -2324,10 +2330,12 @@ impl W<'_> {
                     lines.push_out(cat!(p, " = ", me, ".", *t, "(", v, ");"));
                 }
             }
+        } else if direct {
+            lines.push_out(cat!(me, " = ", kexpr, "(", join(&k.args, ", "), ");"));
         } else if self.is_arrow(a) {
-            lines.push_out(cat!(me, " = (0, ", kref, ")(", join(&k.args, ", "), ");"));
+            lines.push_out(cat!(me, " = (0, ", kexpr, ")(", join(&k.args, ", "), ");"));
         } else {
-            lines.push_out(cat!(me, " = ", kref, ".call(", act.this, args, ");"));
+            lines.push_out(cat!(me, " = ", kexpr, ".call(", act.this, args, ");"));
         }
         Ok(lines)
     }
