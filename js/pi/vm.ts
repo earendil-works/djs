@@ -39,6 +39,7 @@ import {
   STATUS_THREW,
 } from "./engine.ts";
 import type { HostToWorkerMessage, VmStartData, WorkerToHostMessage } from "./protocol.ts";
+import { plainDump } from "../src/sandbox.ts";
 
 export type { HostToWorkerMessage, VmStartData, WorkerToHostMessage } from "./protocol.ts";
 
@@ -133,6 +134,15 @@ const BRIDGE_FN = 1;
 const CALL_FN = 2;
 /** The host functions by id - 1, as dumps name them. */
 const FN_NAMES = ["bridge", "call"];
+/**
+ * The same in plain dumps (D2830): a held host function is written as its name, an
+ * expression the dump evaluates while it loads, and `bridge` and `call` are no globals
+ * (the prelude gets them as arguments), so they are properties of `$djs` meanwhile (D2893).
+ */
+export const PLAIN_FN_NAMES = ["$djs.bridge", "$djs.call"];
+/** A plain dump's hooks `$djs.resume` and `$djs.seed` (D2890). */
+const HOOK_RESUME = 0x7fff_fff0;
+const HOOK_SEED = 0x7fff_fff1;
 
 /** pi's limits (prelude-source.ts), which the adapter enforces in `next` mode. */
 const MAX_STORE_VALUE_CHARS = 256 * 1024;
@@ -314,6 +324,8 @@ class Session implements VmSession {
   resume: { prelude: string; data: VmStartData } | undefined;
   /** The prelude's shape (`VmHooks.shape`). */
   readonly shape: "pi" | "next";
+  /** While a plain dump loads: its hooks are served (`loadPlain`). */
+  private loading = false;
 
   constructor(engine: Engine, hooks: VmHooks, state: SessionState) {
     this.engine = engine;
@@ -572,6 +584,10 @@ class Session implements VmSession {
           continue;
         case STATUS_HOST_CALL: {
           const { callId, fnId, args: callArgs } = engine.hostCall();
+          if (this.loading && (fnId === HOOK_RESUME || fnId === HOOK_SEED)) {
+            this.serveHook(callId, fnId, callArgs);
+            continue;
+          }
           let answer = 0;
           try {
             if (fnId !== BRIDGE_FN) throw new Error(`Unknown host function ${fnId}`);
@@ -595,6 +611,80 @@ class Session implements VmSession {
         default:
           throw new Error(`Unexpected VM status ${status}`);
       }
+    }
+  }
+
+  /**
+   * Loads the plain dump `text` (D2830) into this session's VM, which ran the host globals
+   * and the prelude: runs it as a Script with `$djs` = {resume, seed, bridge, call} to its
+   * first stop that is not a sync call (the dump deletes `$djs` at its end, the adapter
+   * too). Each `$djs.resume` reopens a `call` under its engine id and takes pi's id from
+   * its state into the call table. Returns the run's promise (the Script's completion
+   * value; the caller owns the handle). Throws when the dump does not load.
+   */
+  loadPlain(text: string): number {
+    const { engine } = this;
+    const compiled = engine.compile(plainDump(text)!.typescript ? 2 : 0, "dump.js", [], text);
+    if ("error" in compiled) throw new Error(`Cannot load the dump: ${compiled.error}`);
+    const hooks = engine.newObject();
+    const fns: [string, number][] = [
+      ["resume", engine.hostFunction(HOOK_RESUME, "resume")],
+      ["seed", engine.hostFunction(HOOK_SEED, "seed")],
+      ["bridge", engine.hostFunction(BRIDGE_FN, "bridge")],
+      ["call", engine.asyncHostFunction(CALL_FN, "call")],
+    ];
+    for (const [name, h] of fns) {
+      engine.define(hooks, name, h);
+      engine.free(h);
+    }
+    engine.define(0, "$djs", hooks);
+    engine.free(hooks);
+    this.loading = true;
+    let status: number;
+    try {
+      engine.call(compiled.handle, 0, []);
+      engine.free(compiled.handle);
+      status = this.loop();
+    } finally {
+      this.loading = false;
+    }
+    if (status === STATUS_THREW) {
+      const h = engine.result();
+      const why = engine.display(h);
+      engine.free(h);
+      throw new Error(`Cannot load the dump: the dump threw: ${why}`);
+    }
+    const run = status === STATUS_DONE ? engine.result() : engine.outcome().handle;
+    // The backstop for a dump that leaves `$djs` (D2890): an undefined property is no
+    // hook, and the next dump would refuse it, so take it out by running JS.
+    const drop = engine.compile(0, "dump.js", [], "delete globalThis.$djs");
+    if (!("error" in drop)) this.invoke(drop.handle, 0, []);
+    return run;
+  }
+
+  /** Serves `$djs.resume(id, name, args, state)` and `$djs.seed(lo, hi)` while a dump loads. */
+  private serveHook(callId: number, fnId: number, [a, b, , d]: unknown[]): void {
+    const { engine } = this;
+    let why: string | undefined;
+    if (fnId === HOOK_SEED) {
+      if (typeof a === "number" && typeof b === "number") engine.setMathRandomSeed(a >>> 0, b >>> 0);
+      else why = "seed: not two int32 halves";
+    } else {
+      const id = (d as Partial<CallState> | undefined)?.id;
+      if (b !== "$djs.call" || typeof id !== "number") why = `resume: call ${String(a)} is not a tool call with a pi id`;
+      else {
+        why = engine.openCall(callId, CALL_FN);
+        if (why === undefined) {
+          this.state.next!.ids.push([a as number, id]);
+          return;
+        }
+      }
+    }
+    if (why === undefined) engine.resolveHostCall(callId, 0);
+    else {
+      const h = engine.value(why);
+      engine.settleHostCall(callId, false, h);
+      engine.free(h);
     }
   }
 
@@ -1018,6 +1108,15 @@ function resumeSession(dumped: SessionDump, options: VmHooks & { prelude: string
     const saved = structuredClone(dumped.state);
     setUp(session, cached, hooks, prelude, data, saved.next.origin);
     const prepared = state.next!.handles;
+    if (plainDump(dumped.dump)) {
+      // The adapter's state first: the dump's code runs while it loads (D2891).
+      Object.assign(state, { ...saved, api: state.api, settle: 0, stalled: 0, next: { ...saved.next, ids: [], handles: { ...prepared, body: 0 } } });
+      session.restoreEarly(saved.early);
+      const body = session.loadPlain(dumped.dump);
+      state.next!.ids.sort((a, b) => a[1] - b[1]);
+      state.next!.handles.body = body;
+      return session;
+    }
     const { calls, handles } = engine.loadDump(FN_NAMES, dumped.dump);
     const body = handles.get("run") ?? 0;
     for (const [name, h] of handles) if (name !== "run") engine.free(h);

@@ -52,6 +52,11 @@ interface Exports {
   /** With the `dump` feature (D2352): continuation dumps. */
   vm_dump?(vm: number, len: number): number;
   vm_load_dump?(vm: number, namesLen: number, len: number): number;
+  /** Since 0204 (D2890): loading plain dumps. */
+  vm_open_call?(vm: number, parked: number, fnId: number): number;
+  vm_global(vm: number): number;
+  vm_new_object(vm: number): number;
+  vm_define(vm: number, obj: number, nameLen: number, value: number): number;
   vm_decode_wire(vm: number, len: number): number;
   /** Since 0162 (D2551); older modules lack it. */
   vm_string_reserve?(vm: number, len: number): number;
@@ -317,10 +322,10 @@ export class Engine {
 
   /**
    * Compiles `src` named `file` in stack traces: goal 0 a Script, 1 an async function body
-   * with `params`. Returns the closure's handle, or the compile error's text
+   * with `params`, 2 a TypeScript Script. Returns the closure's handle, or the compile error's text
    * (`SyntaxError: message at line:col`).
    */
-  compile(goal: 0 | 1, file: string, params: string[], src: string): { handle: number } | { error: string } {
+  compile(goal: 0 | 1 | 2, file: string, params: string[], src: string): { handle: number } | { error: string } {
     const name = textEncoder.encode(file);
     const head = textEncoder.encode(params.join("\n"));
     const body = textEncoder.encode(src);
@@ -331,6 +336,36 @@ export class Engine {
     this.stage(all);
     const h = this.trap(() => this.x.vm_compile_file(this.vm, goal, name.length, head.length, body.length));
     return h === 0 ? { error: outText(this.x) } : { handle: h };
+  }
+
+  /** A new ordinary object's handle. */
+  newObject(): number {
+    const h = this.trap(() => this.x.vm_new_object(this.vm));
+    if (h === 0) throw new Error("Out of memory creating an object");
+    return h;
+  }
+
+  /**
+   * Defines property `name` of `obj` (0: the global object) as `value` (handles): writable,
+   * configurable, not enumerable.
+   */
+  define(obj: number, name: string, value: number): void {
+    const x = this.x;
+    const g = obj === 0 ? this.trap(() => x.vm_global(this.vm)) : obj;
+    const r = this.trap(() => x.vm_define(this.vm, g, this.stageText(name), value));
+    if (obj === 0) this.free(g);
+    if (r !== 0) throw new Error(`Cannot define ${name}`);
+  }
+
+  /**
+   * A plain dump's `$djs.resume(id, name, args, state)`, the parked call `parked` (D2890):
+   * opens the dump's call `id` of host function `fnId` again under that id and returns its
+   * promise from `parked`. The reason when it cannot (the host throws it at the call).
+   */
+  openCall(parked: number, fnId: number): string | undefined {
+    const x = this.x;
+    if (!x.vm_open_call) throw new Error("The djs-wasm module cannot load plain dumps (no vm_open_call)");
+    return this.trap(() => x.vm_open_call!(this.vm, parked, fnId)) === 0 ? undefined : outText(x);
   }
 
   /** Starts calling `f` with `thisArg` and argument handles (0 = undefined). */

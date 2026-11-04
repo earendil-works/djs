@@ -541,3 +541,44 @@ test("next: a dump keeps Math.random's sequence", async () => {
   const [a, b] = JSON.parse((end as { value: string }).value);
   assert.notEqual(a, b);
 });
+
+test("next: a plain dump (D2830) resumes with its call's pi id from the state", async () => {
+  const code = "const r = await tools.slow(1); text('r ' + r); return r * 2;";
+  const data: VmStartData = { ...DUMP_DATA, code, tools: [{ name: "slow", jsName: "slow", description: "" }] };
+  let held: Extract<WorkerToHostMessage, { type: "call" }> | undefined;
+  const first = nextSession(data, (m) => (held = m));
+  const session = await startVm({ ...first.hooks, prelude: PRELUDE_NEXT, data });
+  while (held === undefined) await later(1, null);
+  const { state } = session.dumpSession();
+  session.dispose();
+  // The plain dump of that state, by hand in the exporter's shape (PLAIN_FN_NAMES).
+  const dump = `"djs-dump 3";
+$djs.seed(268435466, 0);
+globalThis.$dump = {};
+try {
+$dump.p1 = $djs.resume(1, "$djs.call", ["call", "slow", "1"], {"id":${held.id}});
+$dump.Ka2 = async function (tools, console) {
+const p1 = $dump.p1;
+const r = (await p1);
+text('r ' + r); return r * 2;
+};
+$dump.Ka2.call(undefined, tools, console);
+} finally { delete globalThis.$dump; delete globalThis.$djs; }
+`;
+  const run = nextSession(data, () => {});
+  const resumed = resumeFromDump({ dump, state }, { ...run.hooks, prelude: PRELUDE_NEXT, data });
+  assert.deepEqual(resumed.openCalls(), [held]);
+  resumed.deliver(answerOf(held, 1));
+  const end = await run.ended;
+  assert.equal(end.type, "done", JSON.stringify(end));
+  assert.equal(JSON.parse((end as { value: string }).value), 20);
+  assert.deepEqual(
+    run.messages.filter((m) => m.type === "output").map((m) => JSON.stringify((m as { item: unknown }).item)),
+    [JSON.stringify({ type: "text", text: "r 10" })],
+  );
+  // A dump whose hook refuses (not a pi call) does not load.
+  assert.throws(
+    () => resumeFromDump({ dump: dump.replace(`"$djs.call"`, `"call"`), state }, { ...run.hooks, prelude: PRELUDE_NEXT, data }),
+    /Cannot load the dump: the dump threw: resume: call 1 is not a tool call with a pi id/,
+  );
+});

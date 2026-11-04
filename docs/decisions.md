@@ -9155,3 +9155,14 @@ began. The pin test now prints the nodes and each site's path in tests/smap and 
 that every path starts at the body, names the part of each step and ends at the site's own
 construct; tests/smap/summary.txt counts complete paths and gaps by the part they are in
 (1,062 of 1,063 corpus sites complete; the one gap is a destructuring default).
+## D2893: pi's next mode names its host functions `$djs.bridge`/`$djs.call` in plain dumps
+date: 2026-11-04 · by: pjh · issue: 0204
+A plain dump writes a host function it holds as the host's name for it, an expression
+evaluated while the dump loads (D2890). pi's `bridge` and `call` are no globals (the
+prelude gets them as arguments), so the adapter names them `$djs.bridge` and `$djs.call`
+for plain dumps and defines them in `$djs` beside the hooks while it loads; each is one
+property, so every occurrence is the same function. `$djs.resume(id, "$djs.call", args,
+{"id": n})` reopens the call under its engine id, and the adapter's call table takes pi's
+id from the state as before (D2772); a call without one fails the load. The adapter
+restores its own state (counters, store, clock) before the dump runs, since the dump's
+code runs while it loads, and deletes `$djs` itself afterwards as a backstop.
