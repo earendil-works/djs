@@ -1,4 +1,3 @@
-// difftest: plain-xfail K reads the generator's continuation before the callback that makes it: TypeError
 // Found by the plain-dump fuzzer (0208): `for of` over a generator that captures a
 // variable of the frame, with an await in the loop body.
 let n = 1;

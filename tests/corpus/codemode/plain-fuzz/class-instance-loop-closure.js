@@ -1,4 +1,3 @@
-// difftest: plain-xfail the callback that makes the instance runs before the loop block that makes the closure's continuation: TypeError
 // Found by the plain-dump fuzzer (0208): a class naming a variable of the codemode body,
 // an instance of it, and a closure of a loop iteration waiting on a tool.
 class C {
