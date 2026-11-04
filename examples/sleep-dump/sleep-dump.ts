@@ -1,24 +1,13 @@
-// A host tool that sleeps on the host side, and a script that waits on it. While the call
-// is open the host dumps the VM, throws it away, and continues the run from the dump in a
-// new sandbox (or a new process). See README.md.
+// A host tool that sleeps on the host side, and a script that waits on it. While the sleep
+// is open the host suspends the run into a dump and continues it from the dump in a new
+// sandbox, here or in another process. See README.md.
 //
-//   node examples/sleep-dump/sleep-dump.ts [--ms 5000]              in one process
-//   node examples/sleep-dump/sleep-dump.ts --restart [--ms 5000]    dump, exit, resume in a new process
-//   node examples/sleep-dump/sleep-dump.ts start  [--ms N] [--dir D]   (the two halves of --restart)
-//   node examples/sleep-dump/sleep-dump.ts resume [--dir D]
+//   node examples/sleep-dump/sleep-dump.ts [both|start|resume] [ms]
 
-import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type ConsoleLike, type OpenCall, type Run, Sandbox } from "../../js/src/sandbox.ts";
+import { type AsyncHostFunction, Sandbox, type SandboxOptions } from "../../js/src/sandbox.ts";
 
-/**
- * The script: a codemode body, `ms` its parameter. The dump is taken while the first
- * sleep is open, so it holds two suspended activations (`step("first", ms)` at its
- * `await`, and the body in the middle of `results.push(await step(...))` inside the
- * for-of loop), the open call, and the loop's iterator past its first element.
- */
 export const SCRIPT = `
 async function step(label, ms) {
   console.log(label, "sleeps", ms, "ms");
@@ -30,140 +19,59 @@ const results = [];
 for (const label of ["first", "second"]) {
   results.push(await step(label, ms));
 }
-console.log("done after at least", Date.now() - t0 >= 2 * ms ? 2 * ms : "(less than!)", "ms:", results.join(", "));
+console.log("done after", Date.now() - t0 >= 2 * ms ? "at least" : "less than", 2 * ms, "ms:", results.join(", "));
 return results;
 `;
 
-/**
- * The host's own state: when each open sleep is due. The VM knows the call (its id,
- * `sleep`, its arguments) and the dump keeps it; the timer is the host's, so the host
- * keeps its deadline and re-arms the timer from it after a restart.
- */
-export type HostState = Record<number, number>;
-
-/** The tool. The sandbox only needs its name: a host-driven run never calls it itself. */
-const sleep = (ms: unknown) => new Promise<string>((done) => setTimeout(() => done(`slept ${String(ms)} ms`), Number(ms)));
-
-export interface Options {
-  ms: number;
-  /** The sandbox's console and the host's own messages; default: the process's console. */
-  log?: (line: string) => void;
+/** Resolves at `due` (ms since the epoch), unless `signal` aborts first. */
+function until(due: number, signal: AbortSignal): Promise<void> {
+  return new Promise((done) => {
+    const timer = setTimeout(done, due - Date.now());
+    signal.addEventListener("abort", () => clearTimeout(timer));
+  });
 }
 
-function sandboxOptions(log: (line: string) => void) {
-  const say = (...a: unknown[]) => log(`  [vm] ${a.map(String).join(" ")}`);
-  const console: ConsoleLike = { log: say, info: say, warn: say, error: say };
-  return { asyncFunctions: { "tools.sleep": sleep }, console };
+/** `tools.sleep(ms)`: the call's state is its deadline, so a resumed call sleeps only the rest. */
+const sleep = {
+  async call(ms) {
+    const due = Date.now() + Number(ms);
+    this.state = { due };
+    await until(due, this.signal);
+    return `slept ${ms} ms`;
+  },
+  async resume({ due }, call) {
+    await until(due, call.signal);
+    return `slept ${call.args[0]} ms`;
+  },
+} satisfies AsyncHostFunction<{ due: number }>;
+
+export const options = (log = (...a: unknown[]) => console.log("  [vm]", ...a)): SandboxOptions => ({
+  asyncFunctions: { "tools.sleep": sleep },
+  console: { log, info: log, warn: log, error: log },
+});
+
+/** Starts the script and suspends it at its first idle point: the first sleep is open. */
+export async function suspend(ms: number, opts = options()): Promise<string> {
+  const sandbox = await Sandbox.create(opts);
+  const dump = await sandbox.start(SCRIPT, { ms }, { filename: "sleep.js" }).suspend();
+  sandbox.dispose();
+  return dump;
 }
 
-/** Starts the host's timer for every open call it has not started yet. */
-function arm(run: Run, due: HostState, timers: Map<number, NodeJS.Timeout>, wake: { now(): void }, log: (line: string) => void): void {
-  for (const call of run.calls) {
-    if (timers.has(call.id)) continue;
-    const ms = Number(call.args[0]);
-    // A new call is due `ms` from now; one that survived a restart when it was due then.
-    due[call.id] ??= Date.now() + ms;
-    const left = Math.max(0, due[call.id] - Date.now());
-    log(`host: call #${call.id} ${describe(call)}: timer armed, ${left} ms left`);
-    timers.set(
-      call.id,
-      setTimeout(() => {
-        delete due[call.id];
-        run.settle(call.id, { ok: true, value: `slept ${ms} ms` });
-        wake.now();
-      }, left),
-    );
+/** Continues the run from its dump in a new sandbox, to its end. */
+export async function resume(dump: string, opts = options()): Promise<unknown> {
+  const task = await Sandbox.resume(dump, opts);
+  return task.result.finally(() => task.sandbox.dispose());
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const [mode = "both", ms = "5000"] = process.argv.slice(2);
+  const file = fileURLToPath(new URL("out/sleep.dump.js", import.meta.url));
+  if (mode !== "resume") {
+    const dump = await suspend(Number(ms));
+    mkdirSync(new URL("out", import.meta.url), { recursive: true });
+    writeFileSync(file, dump);
+    console.log(`host: suspended the run into ${file} (${dump.length} bytes)`);
   }
+  if (mode !== "start") console.log("host: the run returned", await resume(readFileSync(file, "utf8")));
 }
-
-/** Runs `run` to its end: arms timers for its calls and advances when results came in. */
-async function finish(run: Run, due: HostState, log: (line: string) => void): Promise<unknown> {
-  const timers = new Map<number, NodeJS.Timeout>();
-  let settled = 0;
-  let woken = () => {};
-  const wake = { now: () => (settled++, woken()) };
-  while (run.state === "idle") {
-    arm(run, due, timers, wake, log);
-    if (settled === 0) await new Promise<void>((w) => (woken = w));
-    settled = 0;
-    await run.advance();
-  }
-  if (run.state === "threw") throw run.error;
-  return run.value;
-}
-
-function describe(c: OpenCall): string {
-  return `${c.fn}(${c.args.map((a) => JSON.stringify(a)).join(", ")})`;
-}
-
-/** The first half: begin the run, arm the timer, dump while the call is open. */
-async function start(opts: Options): Promise<{ dump: string; due: HostState }> {
-  const log = opts.log ?? console.log;
-  const sb = await Sandbox.create(sandboxOptions(log));
-  const run = sb.begin(SCRIPT, { ms: opts.ms }, { filename: "sleep.js" });
-  const due: HostState = {};
-  const timers = new Map<number, NodeJS.Timeout>();
-  arm(run, due, timers, { now: () => {} }, log);
-  log(`host: the VM is idle, waiting on ${run.calls.map(describe).join(", ")}; dumping it`);
-  const dump = run.dump();
-  // The restart: the timers and the sandbox go away. Only the dump and `due` survive.
-  for (const t of timers.values()) clearTimeout(t);
-  sb.dispose();
-  return { dump, due };
-}
-
-/** The second half: a new sandbox loads the dump, re-arms the timers, finishes. */
-async function resume(dump: string, due: HostState, opts: Omit<Options, "ms">): Promise<unknown> {
-  const log = opts.log ?? console.log;
-  const { sandbox, run } = await Sandbox.resume(dump, sandboxOptions(log));
-  log(`host: loaded the dump into a new sandbox; open calls: ${run.calls.map((c) => `#${c.id} ${describe(c)}`).join(", ")}`);
-  try {
-    const r = await finish(run, due, log);
-    log(`host: the run returned ${JSON.stringify(r)}`);
-    return r;
-  } finally {
-    sandbox.dispose();
-  }
-}
-
-/** In one process: start, dump, drop everything, resume from the dump text. */
-export async function inProcess(opts: Options): Promise<{ dump: string; result: unknown }> {
-  const log = opts.log ?? console.log;
-  const { dump, due } = await start(opts);
-  log(`host: the dump (${dump.length} bytes):\n${dump.replace(/^/gm, "  | ")}`);
-  const result = await resume(dump, due, opts);
-  return { dump, result };
-}
-
-function arg(name: string, fallback: string): string {
-  const i = process.argv.indexOf(name);
-  return i >= 0 ? process.argv[i + 1] : fallback;
-}
-
-async function main(): Promise<void> {
-  const ms = Number(arg("--ms", "5000"));
-  const dir = arg("--dir", join(fileURLToPath(new URL(".", import.meta.url)), "out"));
-  const mode = process.argv[2];
-  if (mode === "start") {
-    const { dump, due } = await start({ ms });
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, "sleep.dump.js"), dump);
-    writeFileSync(join(dir, "host.json"), JSON.stringify(due));
-    console.log(`host: wrote ${join(dir, "sleep.dump.js")} (${dump.length} bytes) and host.json; exiting`);
-  } else if (mode === "resume") {
-    const dump = readFileSync(join(dir, "sleep.dump.js"), "utf8");
-    const due = JSON.parse(readFileSync(join(dir, "host.json"), "utf8")) as HostState;
-    await resume(dump, due, {});
-  } else if (process.argv.includes("--restart")) {
-    const self = fileURLToPath(import.meta.url);
-    for (const half of ["start", "resume"]) {
-      console.log(`--- node sleep-dump.ts ${half} (process ${half === "start" ? 1 : 2})`);
-      const r = spawnSync(process.execPath, [self, half, "--ms", String(ms), "--dir", dir], { stdio: "inherit" });
-      if (r.status !== 0) process.exit(r.status ?? 1);
-    }
-  } else {
-    await inProcess({ ms });
-  }
-}
-
-if (process.argv[1] === fileURLToPath(import.meta.url)) await main();

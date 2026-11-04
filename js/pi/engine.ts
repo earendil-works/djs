@@ -16,7 +16,7 @@ export const STATUS_HOST_CALL = 3;
 export const STATUS_IDLE = 4;
 /** The host could not provide memory below the cap (D1690); the call is abandoned. */
 export const STATUS_HOST_OUT_OF_MEMORY = 5;
-const ABI_VERSION = 2;
+const ABI_VERSION = 3;
 /** `vm_new_with`'s flag: frozen builtins (D2304). */
 const VM_FROZEN_BUILTINS = 1;
 
@@ -256,12 +256,20 @@ export class Engine {
   /**
    * A format 2 dump of the idle VM (`vm_dump`): `host` are the globals the host defines
    * (written by name), `fnNames` the host functions by id - 1, `handles` the values to
-   * name for the host. Throws with the reasons when the VM cannot be dumped.
+   * name for the host, `states` the host's state of open calls as JSON text, by call id
+   * (D2770). Throws with the reasons when the VM cannot be dumped.
    */
-  dump(host: string[], fnNames: string[], handles: [string, number][]): string {
+  dump(host: string[], fnNames: string[], handles: [string, number][], states: [number, string][] = []): string {
     const x = this.x;
     if (!x.vm_dump) throw new Error("The djs-wasm module has no dumper (build it with the `dump` feature)");
-    const text = [host.join(","), "", fnNames.join("\t"), handles.map(([n, h]) => `${h}:${n}`).join("\t")].join("\n");
+    const text = [
+      host.join(","),
+      "",
+      fnNames.join("\t"),
+      handles.map(([n, h]) => `${h}:${n}`).join("\t"),
+      states.map(([id, json]) => `${id}:${textEncoder.encode(json).length}`).join("\t"),
+      states.map(([, json]) => json).join(""),
+    ].join("\n");
     let r = this.trap(() => x.vm_dump!(this.vm, this.stageText(text)));
     if (r === 2) {
       provideBase(this.module, x);
@@ -275,7 +283,7 @@ export class Engine {
    * Loads a dump into this VM (`vm_load_dump`): the open host calls it recreated (ids and
    * function ids, named by `fnNames`) and the handles it named (the caller frees them).
    */
-  loadDump(fnNames: string[], text: string): { calls: { id: number; fnId: number }[]; handles: Map<string, number> } {
+  loadDump(fnNames: string[], text: string): { calls: { id: number; fnId: number; state?: string }[]; handles: Map<string, number> } {
     const x = this.x;
     if (!x.vm_load_dump) throw new Error("The djs-wasm module has no dump loader (build it with the `dump` feature)");
     const names = textEncoder.encode(fnNames.join("\n"));
@@ -286,17 +294,24 @@ export class Engine {
     this.stage(all);
     const r = this.trap(() => x.vm_load_dump!(this.vm, names.length, body.length));
     if (r !== 0) throw new Error(`Cannot load the dump: ${outText(x)}`);
+    // Per call: id, function id and the byte length of its state (D2770), which follows
+    // the handles' names.
     const [nCalls, nHandles] = outWords(x, 2);
-    const w = outWords(x, 2 + 2 * nCalls + 2 * nHandles);
+    const w = outWords(x, 2 + 3 * nCalls + 2 * nHandles);
     const bytes = new Uint8Array(x.memory.buffer, x.djs_out_ptr(), x.djs_out_len());
     let at = 4 * w.length;
     const handles = new Map<string, number>();
     for (let i = 0; i < nHandles; i++) {
-      const [h, len] = [w[2 + 2 * nCalls + 2 * i], w[3 + 2 * nCalls + 2 * i]];
+      const [h, len] = [w[2 + 3 * nCalls + 2 * i], w[3 + 3 * nCalls + 2 * i]];
       handles.set(textDecoder.decode(bytes.subarray(at, at + len)), h);
       at += len;
     }
-    const calls = Array.from({ length: nCalls }, (_, i) => ({ id: w[2 + 2 * i], fnId: w[3 + 2 * i] }));
+    const calls = Array.from({ length: nCalls }, (_, i) => {
+      const len = w[4 + 3 * i];
+      const state = len > 0 ? textDecoder.decode(bytes.subarray(at, at + len)) : undefined;
+      at += len;
+      return { id: w[2 + 3 * i], fnId: w[3 + 3 * i], state };
+    });
     return { calls, handles };
   }
 
@@ -439,7 +454,7 @@ export class Engine {
 function instantiate(module: WebAssembly.Module): Exports {
   const x = new WebAssembly.Instance(module, {}).exports as unknown as Exports;
   if (typeof x.djs_abi_version !== "function" || x.djs_abi_version() !== ABI_VERSION) {
-    throw new Error("The module is not djs-wasm of ABI version 1");
+    throw new Error(`The module is not djs-wasm of ABI version ${ABI_VERSION}`);
   }
   if (typeof x.vm_compile_file !== "function" || typeof x.vm_set_weak_refs !== "function") {
     throw new Error("The djs-wasm module is too old for pi codemode (no vm_compile_file / vm_set_weak_refs)");

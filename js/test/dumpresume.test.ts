@@ -122,7 +122,8 @@ async function drive(module: Packaging, code: string, dumpEvery: boolean): Promi
     if (dumpEvery) {
       const text = run.dump();
       sb.dispose();
-      ({ sandbox: sb, run } = await Sandbox.resume(text, sandboxOptions(module, lines)));
+      sb = new Sandbox(sandboxOptions(module, lines));
+      run = sb.loadRun(text);
       dumps++;
     }
     const c = run.calls[0];

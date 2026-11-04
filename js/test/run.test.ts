@@ -71,7 +71,8 @@ $dump.handle("run", $dump.resume($dump.f1, {
 test("resume continues a dumped run with the same open calls", async () => {
   const module = await loadModule();
   const out = capture();
-  const { sandbox, run } = await Sandbox.resume(DUMP, { module, console: out.console, asyncFunctions: { sleep: () => 0 } });
+  const sandbox = new Sandbox({ module, console: out.console, asyncFunctions: { sleep: () => 0 } });
+  const run = sandbox.loadRun(DUMP);
   assert.equal(run.state, "idle");
   assert.deepEqual(run.calls, [{ id: 3, fn: "sleep", args: [5] }]);
   run.settle(3, { ok: true, value: 1 });
@@ -146,7 +147,7 @@ test("dumping a recorded run leaves its state alone: the journal still replays",
   assert.equal(run.value, 15);
   assert.equal(await new Sandbox(opts).replay(journal), 15);
   // And the dump continues elsewhere.
-  const { run: again } = await Sandbox.resume(text, opts);
+  const again = new Sandbox(opts).loadRun(text);
   again.settle(again.calls[0].id, { ok: true, value: 1 });
   await again.advance();
   again.settle(again.calls[0].id, { ok: true, value: 2 });
