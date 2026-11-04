@@ -734,7 +734,7 @@ class Gen {
       this.line(`  set v(x) { this.value = x; }`);
     }
     if (this.opts.statics) {
-      // Static fields and blocks (0209 item 7 makes them plain): a field the program
+      // Static fields and blocks (plain since 0209, D2950): a field the program
       // changes, a block with a side effect on the frame.
       this.line(`  static count = ${this.num(0)};`);
       if (caps.length) this.line(`  static { ${cap} += 1; }`);
@@ -835,8 +835,8 @@ class Gen {
 
 // `wide` (0211): Map/Set/Date/RegExp/typed arrays/Errors, symbol keys, class accessors,
 // string-heavy data; `ts`: a TypeScript body; `statics`: static fields and static blocks
-// with side effects (after 0209 item 7).
-export const DEFAULTS = { statements: 8, depth: 3, budget: 30, using: true, wide: true, ts: false, statics: false };
+// with side effects (plain since 0209, D2950).
+export const DEFAULTS = { statements: 8, depth: 3, budget: 30, using: true, wide: true, ts: false, statics: true };
 
 export function generate(seed, opts = {}) {
   return new Gen(seed, { ...DEFAULTS, ...opts }).program();

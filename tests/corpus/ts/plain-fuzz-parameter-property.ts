@@ -1,4 +1,3 @@
-// difftest: plain-xfail the class is written back as JavaScript without its parameter property's assignment: wrong result
 // Found by the plain-dump fuzzer (0211): a TypeScript class with a parameter property,
 // made again by a plain dump.
 class C {
