@@ -1,7 +1,7 @@
 # 0189: Host calls as data: per-call state, save/resume hooks, run.suspend, sleep example rewrite
 
-status: open
-agent: -
+status: in-progress
+agent: hostcalls
 branch: issue/0189-host-call-state
 depends-on: -
 guide: docs/guide/host.md, suspension.md
