@@ -1,7 +1,7 @@
 # 0204: Host hooks for plain dumps: resume(id, name, args, state), seed(lo, hi); Sandbox tasks, pi adapter, CLI/REPL
 
-status: open
-agent: -
+status: in-progress
+agent: pjh
 branch: issue/0204-host-hooks-plain
 depends-on: -
 guide: docs/guide/snapshots.md, suspension.md, host.md
