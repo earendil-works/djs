@@ -9134,7 +9134,7 @@ Script that throws (a refused hook) is a load error, not the run's.
 date: 2026-11-04 · by: pjh · issue: 0204
 A trade under D020: `Vm::open_host_call`, `vm_open_call` and `add_loaded_host_call` (no
 longer behind the `dump` feature) add 452 bytes gzip to the shipped module (441,355 →
-441,807; 1.3 KB raw) and 498 to the slim one (376,679 ceiling → 377,177). They buy resuming
+441,807; 1.3 KB raw); the slim module reaches 377,177, over its ceiling of 376,679. They buy resuming
 a dump with the shipped module alone: loading a plain dump is running a Script with the
 hooks (D2890), so a host needs the dump module (548.9 KB gzip) only to write dumps, not to
 continue them. Kept small on purpose: no formatting, no iterator adapters, static error
