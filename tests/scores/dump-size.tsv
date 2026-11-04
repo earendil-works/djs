@@ -200,7 +200,7 @@ corpus	codemode-harvest/h199-load-models-read.js	258898	72638
 corpus	codemode-harvest/h200-bash-read-structured.js	22832	8389
 corpus	codemode-harvest/h201-edit.js	9766	3848
 corpus	codemode-harvest/h202-bash-structured-models.js	8433	2735
-corpus	codemode-harvest/h203-bash-structured-models-write.js	112869	33402
+corpus	codemode-harvest/h203-bash-structured-models-write.js	112869	33395
 corpus	codemode-harvest/h204-image-models.js	13253	4237
 corpus	codemode-harvest/h205-read-write.js	8950	3167
 corpus	codemode-harvest/h206-structured.js	3909	1423
@@ -210,7 +210,7 @@ corpus	codemode-harvest/h209-bash-edit.js	15020	5547
 corpus	codemode-harvest/h210-models-read.js	43226	13755
 corpus	codemode-harvest/h211-structured.js	13502	4430
 corpus	codemode-harvest/h212-transcribe_file.js	13529	5232
-corpus	codemode-harvest/h213-bash-structured-models.js	54550	16770
+corpus	codemode-harvest/h213-bash-structured-models.js	54550	16771
 corpus	codemode-harvest/h214-bash-structured-read-write.js	16322	5590
 corpus	codemode-harvest/h215-structured.js	3934	1438
 corpus	codemode-harvest/h216-bash-structured-structured.js	4988	1777
@@ -228,7 +228,7 @@ corpus	codemode-harvest/h228-edit-read.js	8281	3156
 corpus	codemode-harvest/h229-structured.js	7522	2777
 corpus	codemode-harvest/h230-image-models.js	13480	4343
 corpus	codemode-harvest/h231-bash-structured-structured-write.js	143468	36805
-corpus	codemode-harvest/h232-bash-structured-models.js	144343	38994
+corpus	codemode-harvest/h232-bash-structured-models.js	144343	38987
 corpus	codemode-harvest/h233-bash-edit.js	23166	7929
 corpus	codemode-harvest/h234-bash-structured-read.js	29517	10550
 corpus	codemode-harvest/h235-bash-structured-edit-read-write.js	47930	15218
@@ -298,6 +298,7 @@ corpus	codemode/classes-in-body.js	11789	4271
 corpus	codemode/classes-self.js	9341	3216
 corpus	codemode/nested-literals.js	47849	17138
 corpus	codemode/parallel.js	23064	8280
+corpus	codemode/plain-accessors.js	7272	2719
 corpus	codemode/plain-fuzz/accessor-pair-after-site.js	3191	1249
 corpus	codemode/plain-fuzz/assign-member-nested-call.js	10356	3994
 corpus	codemode/plain-fuzz/async-generator-for-await.js	17164	6415
@@ -305,13 +306,15 @@ corpus	codemode/plain-fuzz/binary-three-awaits.js	9466	3704
 corpus	codemode/plain-fuzz/binary-two-awaits.js	13249	5163
 corpus	codemode/plain-fuzz/callee-and-argument-awaits.js	6622	2543
 corpus	codemode/plain-fuzz/class-from-waiting-closure.js	3653	1406
-corpus	codemode/plain-fuzz/class-instance-in-idle-function.js	3406	1329
+corpus	codemode/plain-fuzz/class-instance-in-idle-function.js	3299	1267
 corpus	codemode/plain-fuzz/class-instance-loop-closure.js	8412	3182
 corpus	codemode/plain-fuzz/class-static-in-promise-all.js	7425	2716
 corpus	codemode/plain-fuzz/finally-await-in-loop.js	7261	2863
 corpus	codemode/plain-fuzz/for-await-break.js	12878	4740
 corpus	codemode/plain-fuzz/function-declared-in-loop.js	8353	3140
 corpus	codemode/plain-fuzz/generator-capturing-for-of.js	7893	3046
+corpus	codemode/plain-fuzz/getter-capturing-frame-variable.js	6795	2648
+corpus	codemode/plain-fuzz/integer-key-equal-value.js	2849	1136
 corpus	codemode/plain-fuzz/template-two-awaits.js	6218	2468
 corpus	codemode/redump-loops.js	16888	6433
 corpus	codemode/redump-operands.js	54985	19965
