@@ -296,7 +296,7 @@ corpus	codemode-harvest/h300-edit.js	6866	2707
 corpus	codemode/async-helpers.js	85475	27864
 corpus	codemode/class-method-suspended.js	7138	2739
 corpus	codemode/classes-in-body.js	11281	4177
-corpus	codemode/classes-self.js	9024	3137
+corpus	codemode/classes-self.js	9024	3155
 corpus	codemode/nested-literals.js	45649	16542
 corpus	codemode/parallel.js	22026	8042
 corpus	codemode/plain-accessors.js	6956	2637
