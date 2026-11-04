@@ -53,6 +53,8 @@ variable (`{ get m() { n++; … } }`) written as `get: ,`. Find these systematic
 - `using` cases live in language/plain-fuzz/: the slim build (codemode corpus in the slim
   gate leg) has no `using`.
 - 0210 fixed the compiler bug: language/unreachable-destructuring-default.js passes now.
+- After rebasing onto 0203/0205/0207 work: function-declared-in-loop, finally-await-in-loop
+  and both await-using cases no longer refuse (refusals ratchet updated).
 - Corpus dump-size score raised for the new cases' dumps (+25 KB raw).
 - Guide: none affected.
 

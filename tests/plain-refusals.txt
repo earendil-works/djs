@@ -7,10 +7,6 @@ codemode/plain-fuzz/binary-two-awaits.js	idle point 2: cannot dump: <call 2><rea
 codemode/plain-fuzz/callee-and-argument-awaits.js	idle point 2: cannot dump: <call 2><reaction 0>.promise<reaction 0>.onFulfilled: a continuation of an earlier dump: its frame has no value for call.callee@195
 codemode/plain-fuzz/class-from-waiting-closure.js	idle point 1: cannot dump: plain dump: a cell without its variable
 codemode/plain-fuzz/class-static-in-promise-all.js	idle point 1: cannot dump: <call 1><reaction 0>.promise<reaction 0>.onFulfilled<function>~C.make: a class in a nested scope of shared variables
-codemode/plain-fuzz/finally-await-in-loop.js	idle point 2: cannot dump: <call 5><reaction 0>.promise<reaction 0>.onFulfilled: a continuation of an earlier dump: its frame has no value for completion.value@175
-codemode/plain-fuzz/function-declared-in-loop.js	idle point 2: cannot dump: <call 3><reaction 0>.promise<reaction 0>.onFulfilled<promise><reaction 0>.onFulfilled: a continuation of an earlier dump: its bindings `f` differ from its origin's
 codemode/plain-fuzz/getter-capturing-frame-variable.js	idle point 1: cannot dump: the dump: does not compile: unexpected token in expression: ',' at 211:45
 codemode/plain-fuzz/integer-key-equal-value.js	idle point 1: cannot dump: the dump: does not compile: expecting '}' at 196:112
 codemode/plain-fuzz/template-two-awaits.js	idle point 2: cannot dump: <call 2><reaction 0>.promise<reaction 0>.onFulfilled: a continuation of an earlier dump: its frame has no value for template.part@129
-language/plain-fuzz/await-using-hoisted-function.js	idle point 1: cannot dump: plain dump: no block of the continuation declares n
-language/plain-fuzz/await-using-redump.js	idle point 2: cannot dump: <call 3><reaction 0>.promise<reaction 0>.onFulfilled<promise><reaction 0>.onFulfilled: a continuation of an earlier dump: its site is not one of its origin's
