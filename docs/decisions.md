@@ -9095,3 +9095,36 @@ exporter refuses instead of silently dropping a construct. Types and roles are i
 compiler/smap_syntax.rs. Alternatives: a real AST for async functions (a second parser
 in all but name, and memory for every compile with recording), or re-parsing the
 function in the exporter (the dependency D2831 rejects).
+## D2890: Plain dumps load as a Script with `$djs.resume`/`$djs.seed`; open calls keep their ids
+date: 2026-11-04 · by: pjh · issue: 0204
+Makes D2832 exact (agreed with 0201's exporter). A plain dump (`"djs-dump 3";`, or
+`"djs-dump 3 typescript";`) is compiled as a Script and run with one reserved global, the
+object `$djs`: `$djs.seed(lo, hi)`, the dump's first statement, sets `Math.random`'s state
+(today's int32 halves; `Vm::set_math_random_seed`), and `$djs.resume(id, name, args,
+state?)`, in place of `$dump.pending`, continues the open call `id` of the host function
+the host calls `name`. Both are sync host functions, served only while the Script runs to
+its first stop that is not a sync host call (an idle point, or the end); then the host
+deletes `$djs` (`vm_delete`), so user code cannot forge a resumed call later and a re-dump
+never sees it. The exporter refuses runs with globals `$djs` or `$dump`. The host side of
+`resume` is an embedding call, not a dump primitive: `Vm::open_host_call(parked, fn_id)`
+(`vm_open_call`) reads `id` and `args` from the parked call, returns, opens async call
+`id` under that very id and gives its promise as `resume`'s value; the id counter moves
+past it (sync calls take ids from the same counter, so the parked call may hold `id`
+itself; it returns first). So ids and states survive any chain of dumps with no special
+case for `resume` in the exporter (the open call is one of `name`, as it was), and hosts
+keep D2771's "same calls, same ids". An unknown name or an id that is open throws at the
+call, and the load fails. The Script's completion value is the run's promise (the one
+handle, D2633's `run`). Loading needs no dumper: the shipped module without the `dump`
+feature loads plain dumps.
+
+## D2891: Hosts load plain dumps themselves; sync host functions run meanwhile
+date: 2026-11-04 · by: pjh · issue: 0204
+The Sandbox (`load`, `loadRun`, `resume`) and the CLI (`resume`, `--explain`, the
+REPL's `.restore`) detect the header and run the dump in their own VM, not through the
+dump module. A plain dump runs code (the loaded functions, reactions of settled promises)
+while it loads, so its sync host calls are served as in a run (the Sandbox requires them
+to return synchronously there, as `begin` does); async calls it makes are new calls the
+following run reports. The calls `resume` opened are the loaded calls: the Sandbox lists
+them as `OpenCall`s with their states (D2770) and a task continues them by its hooks
+(D2771); the CLI answers them like any call and shows their states in `--explain`. A
+Script that throws (a refused hook) is a load error, not the run's.

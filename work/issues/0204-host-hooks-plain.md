@@ -21,6 +21,27 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
 
 ## Log
 
+- Interface agreed with pjx through the coordinator: `$djs.seed(lo, hi)` first,
+  `$djs.resume(id, name, args[, state])` per open call, called only while the Script
+  evaluates; hosts define `$djs` and delete it after the load; the exporter refuses
+  globals `$djs`/`$dump`; completion value = the run's promise (one handle); header
+  `"djs-dump 3";` / `"djs-dump 3 typescript";`; `DumpOptions::plain` (0201) and a
+  `plain` flag in vm_dump. Host functions held as values are written by the host's name
+  as an expression: a host must make each name a global path during the load.
+- Step 1 (loading): `Vm::open_host_call(parked, fn_id)` (vm/mod.rs) opens the dump's call
+  under its id from the parked `resume` call; `add_loaded_host_call` (interp/run.rs) is
+  no longer dump-only and moves the counter past the id. Exports `vm_open_call`,
+  `vm_delete`. CLI: `resume`, `--explain`, REPL `.restore` run plain dumps
+  (dumps.rs: `begin_plain`, `serve_hook`, `end_load`, `run_plain`); `drive_from` serves
+  the hooks while loading and has the `--dump-every-idle` plain reload path ready
+  (unwired until 0201). Sandbox: `loadPlain` in the main module (no dump module needed).
+  Tests: vm::tests::open_host_call_keeps_the_dump_s_id, djs-cli run::resume_a_plain_dump
+  (tests/run/reads.plain.js, by hand), js/test/plain.test.ts. D2890, D2891. docs/host.md,
+  docs/cli.md updated; guide pages wait for plain dumps being written (step 2).
+- pi adapter: its host functions `bridge`/`call` are not globals; for plain dumps they
+  will be named `$djs.bridge`/`$djs.call` (defined in `$djs` while loading), so the
+  exporter's name expressions resolve during the load.
+
 ## Follow-ups
 
 ## Result
