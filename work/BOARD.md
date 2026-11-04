@@ -6,7 +6,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0188 | Suspension as state machines vs suspension maps (research; owner: migrate if directionally possible with fresh agents, concurrently where touches allow; then optimize dump speed) | critic | .worktrees/critic |
+| 0189 | Host calls as data (SM step 1) | hostcalls | .worktrees/hostcalls |
+| 0190 | Slot naming contract (SM step 2), then 0191-0194, 0196 in sequence | sm | .worktrees/sm |
 
 ## Open (ready)
 
@@ -17,6 +18,13 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
+| 0191 | Spill at suspend (SM step 3) | 0190 (agent sm) |
+| 0192 | Constructs into slots (SM step 4) | 0191 (agent sm) |
+| 0193 | finally completions in slots (SM step 5) | 0191 (agent sm) |
+| 0194 | Delete roles; final format (SM step 6) | 0192, 0193 (agent sm) |
+| 0195 | pi adapter host-call hooks (SM step 7) | 0189 (agent hostcalls) |
+| 0196 | One compile per load (SM step 8) | 0194 (agent sm) |
+| - | Dump performance optimization | after SM migration (owner) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
 | - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |
 | - | Vec push_out/with_capacity in bloat's files (~1 KB); scratch buffers for Vec drops (few KB) | 0151 L3 |
@@ -81,6 +89,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0188 | Suspension design review: switch to SM (state machines in the compiler); residualizer prototype | d7b62185 (agent critic) |
 | 0183 | Gate in seconds: gate.py legs + input-hash cache, merge lock only for ff, clippy combos, --full worktree (D2660-D2669) | 1638b342 (agent gate-speed; docs 249->8 s, js 252->12 s, core 407->127 s) |
 | 0187 | Removed djs heap and .image; .heap kept (D2269) | 6d857a55 (agent snapshot) |
 | 0184 | Dump refusals closed (finally/switch D2627; using/destructuring/for-in/matchAll/helpers D2628); cached name table D2626; dump costs measured | fbb35ee1 (agent portable; 0 refusals at 1,063 idle points) |

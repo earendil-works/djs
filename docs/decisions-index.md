@@ -597,3 +597,6 @@ topics when the index is next reorganized.
 - D2666: The gate runs outside the merge lock; only the fast-forward is inside
 - D2668: Clippy on every feature combination that ships
 - D2669: Full runs in their own worktree
+- D2720: Suspended frames become named-slot state machines in the compiler (SM)
+- D2721: Slot names are construct@span; states keep kind#N
+- D2722: Open host calls carry host JSON state; save/resume hooks; the Sandbox keeps the bookkeeping

@@ -8733,3 +8733,24 @@ date: 2026-11-04 · by: gate-speed · issue: 0183
 which moved the tree under the run (gate.py rejects that, D2666). Started in the primary
 checkout, `--full` now checks out main detached in `.worktrees/full` (created on first use,
 its target/ stays warm) and runs there.
+
+## D2720: Suspended frames become named-slot state machines in the compiler (SM)
+date: 2026-11-04 · by: owner · issue: 0188
+Accepted from docs/suspension-design-review.md: at every await/yield the compiler moves
+everything in flight into named frame slots, so a suspended frame is {fn text, at, slots};
+no generated code in dumps (variant R rejected: dumps of resumed continuations grow per
+generation); no source-level lowering of async code (variant A rejected: 2.4-5.4x slower).
+Migration in the report's eight steps (issues 0189-0196).
+
+## D2721: Slot names are construct@span; states keep kind#N
+date: 2026-11-04 · by: owner · issue: 0188
+A spilled slot is named by its construct and the source span of the value it holds,
+relative to the function's start (`call.this@41`, `iterator@312`, `completion.kind@S`);
+states keep their `await#N` names. The pins list the named slots per state.
+
+## D2722: Open host calls carry host JSON state; save/resume hooks; the Sandbox keeps the bookkeeping
+date: 2026-11-04 · by: owner · issue: 0188
+`$dump.pending(id, name, args, state)`; a host function may be declared as
+`{call, save, resume}`; the Sandbox tracks open calls, calls `save` at dump time, `resume`
+(or `call` again, or rejects) at load, and drives the run. Functions without hooks keep
+today's behaviour.
