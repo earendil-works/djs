@@ -112,5 +112,17 @@ dump-every-idle, idle-point counts at 100%).
   (the dump module's VM runs no host function, so sharing is safe). Corpus B resume
   minus A resume, totals: ~370 -> ~140 ms; p50 gap 0.36 -> ~0.16 ms (machine load ~10).
   Docs: host.md, guide/host.md.
+- The machine got too busy for timings (same build 50% slower between runs), so
+  scripts/dump-costs/instructions.sh counts instructions retired (`/usr/bin/time -l`) of
+  dumping and of loading at every idle point (dump_perf with `DJS_DUMP_PERF_SKIP`);
+  repeat runs agree within 0.2%.
+- Win 12: the dumper's builtin table (paths, `Named`, the cell index, the base globals)
+  is made once per VM (`BaseTable` in `Vm::base_names`); each dump copies the index.
+- Win 13 (emit allocation): the dumper's own `cat!` sizes its string up front (pieces
+  evaluated once, `Piece::size_hint` with the `dump` feature only), `join` too; arrays and
+  object literals are written in place; object literal keys and member paths are kept
+  per dump by atom; a key's name is made only for function values. Instructions:
+  cases dump 4,933 -> 3,683 M (-25%), corpus dump 12,681 -> 12,254 M (the corpus dump
+  is mostly the checker's compile).
 
 ## Result
