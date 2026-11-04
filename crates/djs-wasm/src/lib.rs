@@ -1043,7 +1043,6 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
                 host_fn_name: &host_fn_name,
                 handles: &handles,
                 call_states: &call_states,
-                plain: true,
             };
             Some(
                 slot.vm

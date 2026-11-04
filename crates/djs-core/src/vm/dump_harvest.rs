@@ -29,6 +29,14 @@ pub(super) fn base() -> &'static [u8] {
     })
 }
 
+/// The VMs' options: frozen builtins, which dumps need (D2836).
+fn frozen() -> VmOptions {
+    VmOptions {
+        frozen_builtins: true,
+        ..VmOptions::default()
+    }
+}
+
 const OUTPUT: u32 = 0;
 const DONE: u32 = 1;
 /// The globals the corpus prelude defines (pi's codemode globals).
@@ -166,7 +174,7 @@ fn run_case(prelude: &str, case: &str) -> Outcome {
         .collect();
     let wrap = |c: &str| format!("(async (tools, console) => {{{c}\n}})");
     let original = wrap(case);
-    let mut vm = Vm::from_base(base(), VmOptions::default()).unwrap();
+    let mut vm = Vm::from_base(base(), frozen()).unwrap();
     // The body's locals, from the compiled original.
     let offset = |src: &str| {
         let line_start: usize = src
@@ -275,7 +283,7 @@ fn run_case(prelude: &str, case: &str) -> Outcome {
             )
         }) {
             out.functions += 1;
-            if super::dump_load::is_class(vm.heap(), v.as_object().unwrap()) {
+            if super::dump_classes::is_class(vm.heap(), v.as_object().unwrap()) {
                 out.classes += 1;
             }
         }
@@ -303,16 +311,18 @@ fn run_case(prelude: &str, case: &str) -> Outcome {
             out.bytes = text.len();
             out.status = "dumped".into();
             // Loads in a fresh VM with stand-ins for the host's globals.
-            let mut b = Vm::from_base(base(), VmOptions::default()).unwrap();
+            let mut b = Vm::from_base(base(), frozen()).unwrap();
             let stubs = "globalThis.console = { log() {} }; globalThis.text = () => {}; \
                          globalThis.tools = {}; globalThis.store = () => {}; globalThis.load = () => {}; \
                          globalThis.exit = () => {}; globalThis.ALL_TOOLS = [];";
             out.loaded = true;
             for (i, s) in [stubs, text.as_str()].into_iter().enumerate() {
                 let r = if i == 1 {
-                    b.load_dump(s, &super::dump_load::LoadOptions::default())
-                        .map(|_| ())
-                        .map_err(|e| e.message())
+                    let none = |_: &str| None;
+                    let mut serve = |vm: &mut Vm, id: u32, _: u32| {
+                        vm.resolve_host_call(id, Ok(Value::UNDEFINED)).unwrap();
+                    };
+                    super::dump_tests::run_plain_dump(&mut b, s, &none, &mut serve).map(|_| ())
                 } else {
                     match b.compile(s.as_bytes(), &CompileOptions::script("dump.js")) {
                         Ok(f) => {
@@ -542,6 +552,19 @@ pub(super) fn host_fn_name(id: u32) -> Option<String> {
     }
 }
 
+/// A fresh VM to run a dump of the idle run in: the host's functions as globals, by the
+/// names the dump gives them (`host_fn_name`).
+pub(super) fn load_vm() -> Vm {
+    let mut b = Vm::from_base(base(), frozen()).unwrap();
+    for (id, name) in [(OUTPUT, "output"), (DONE, "done")] {
+        let f = b.new_host_function(id, name).unwrap();
+        b.define_global(name, f).unwrap();
+    }
+    let f = b.new_async_host_function(LATER, "later").unwrap();
+    b.define_global("later", f).unwrap();
+    b
+}
+
 pub(super) fn host_fn(name: &str) -> Option<u32> {
     match name {
         "output" => Some(OUTPUT),
@@ -611,7 +634,8 @@ fn idle_call(
                 if let Some(st) = dump.as_deref_mut() {
                     st.idle += 1;
                     let apiv = vm.heap().get_handle(*api);
-                    let handles = [("api", apiv)];
+                    // The api is the dump's completion value (D2895).
+                    let handles = [("run", apiv)];
                     let opts = DumpOptions {
                         base: base(),
                         host_fn_name: &host_fn_name,
@@ -627,19 +651,19 @@ fn idle_call(
                         }
                         Ok(text) => {
                             st.dumped += 1;
-                            let mut b = Vm::from_base(base(), VmOptions::default()).unwrap();
-                            let load = super::dump_load::LoadOptions {
-                                host_fn: &host_fn,
-                                ..Default::default()
+                            let mut b = load_vm();
+                            let mut serve = |vm: &mut Vm, id: u32, _: u32| {
+                                vm.resolve_host_call(id, Ok(Value::UNDEFINED)).unwrap();
                             };
-                            match b.load_dump(&text, &load) {
-                                Ok(l) => {
+                            match super::dump_tests::run_plain_dump(
+                                &mut b, &text, &host_fn, &mut serve,
+                            ) {
+                                Ok(v) => {
                                     st.loaded += 1;
-                                    *api = l.handles.iter().find(|h| h.0 == "api").unwrap().1;
+                                    *api = b.heap_mut().new_handle(v).unwrap();
                                     *vm = b;
                                 }
-                                Err(e) => {
-                                    let m = e.message();
+                                Err(m) => {
                                     let m =
                                         m.split([':', '\n']).take(2).collect::<Vec<_>>().join(":");
                                     *st.load_errors.entry(m).or_default() += 1;
@@ -683,7 +707,7 @@ pub(super) fn idle_run_with(
 }
 
 fn idle_run_hooked(prelude: &str, case: &str, at_idle: AtIdle<'_>) -> Result<Vec<String>, String> {
-    let mut vm = Vm::from_base(base(), VmOptions::default()).unwrap();
+    let mut vm = Vm::from_base(base(), frozen()).unwrap();
     let mut out = Vec::new();
     let p = vm
         .compile(prelude.as_bytes(), &CompileOptions::script("prelude.js"))

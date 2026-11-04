@@ -351,7 +351,7 @@ impl Parser<'_, '_> {
         let extras = if b.inst_extras { b.state } else { None };
         match b.inst.take() {
             Some(init) => {
-                let child = self.finish_init(init, &methods, extras, false)?;
+                let child = self.finish_init(init, &methods, extras)?;
                 self.code().fclosure(child);
                 self.code().set_home_object();
             }
@@ -375,7 +375,7 @@ impl Parser<'_, '_> {
         }
         let methods = core::mem::take(&mut b.stat_methods);
         if let Some(init) = b.stat.take() {
-            let child = self.finish_init(init, &methods, None, true)?;
+            let child = self.finish_init(init, &methods, None)?;
             if b.state.is_some() {
                 // `this` is the new class, the home object the class.
                 self.code().swap();
@@ -1111,13 +1111,10 @@ impl Parser<'_, '_> {
         init: Init,
         methods: &[Install],
         extras: Option<Atom>,
-        is_static: bool,
     ) -> PResult<u32> {
         let pos = self.prev_end;
         self.resume_function(*init.f);
         self.f.src_end = pos;
-        let done = self.new_label();
-        self.place(done);
         self.code().return_undef();
         self.place(init.methods);
         for m in methods {
@@ -1152,11 +1149,6 @@ impl Parser<'_, '_> {
         }
         if let Some(state) = extras {
             self.emit_instance_extras(state, pos);
-        }
-        if is_static {
-            // While a dump loads (D2580), the static private methods are installed but
-            // the static fields and blocks do not run: the dump restores their effects.
-            self.code().jump_if_loading(done);
         }
         self.code().jump(init.body);
         self.end_function()

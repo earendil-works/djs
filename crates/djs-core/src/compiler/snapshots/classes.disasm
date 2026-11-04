@@ -128,21 +128,19 @@ function 0.4 <anonymous>: params=0 locals=1 stack=3 captures=3
 function 0.5 <anonymous>: params=0 locals=1 stack=3 captures=0
     0  special_object 4
     2  put_loc0 (this)
-    3  jump8 -> 25
-    5  get_loc0 (this)  ; 6:12
-    6  push_atom "s"
-   11  push3
-   12  define_class_field
-   13  drop
-   14  get_loc0 (this)  ; 16:10
-   15  fclosure child0
-   20  set_home_object
-   21  swap
-   22  call0
-   23  drop
-   24  return_undef
-   25  jump_if_loading -> 24
-   30  jump8 -> 5
+    3  get_loc0 (this)  ; 6:12
+    4  push_atom "s"
+    9  push3
+   10  define_class_field
+   11  drop
+   12  get_loc0 (this)  ; 16:10
+   13  fclosure child0
+   18  set_home_object
+   19  swap
+   20  call0
+   21  drop
+   22  return_undef
+   23  jump8 -> 3
 function 0.5.0 <anonymous>: params=0 locals=1 stack=2 captures=0
     0  special_object 4
     2  put_loc0 (this)

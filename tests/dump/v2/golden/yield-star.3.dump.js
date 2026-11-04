@@ -1,28 +1,9 @@
-"djs-dump 2";
-$dump.random(2135587861, -1640531527);
-$dump.p1 = $dump.pending(3, "later", ["x1"]);
-var inner = function* inner(tag) {
-  const got = yield tag + "1";
-  yield tag + "2:" + got;
-  return tag + " done";
-};
-var ainner = async function* ainner() {
-  yield await later("x1");
-  try {
-    yield "x2";
-  } finally {
-    print("ainner closed");
-  }
-};
-var outer = function* outer() {
-  const r = yield* inner("i");
-  yield* ["a1", "a2"];
-  return r;
-};
-var aouter = async function* aouter() {
-  yield* ainner();
-  yield* ["s1", later("s2")];
-};
+"djs-dump";
+"use strict";
+$djs.seed(2135587861, -1640531527, 4);
+globalThis.$dump = {};
+$dump.b0 = Object.getPrototypeOf(async function* () {}).prototype;
+$dump.b1 = Object.getPrototypeOf(async function* () {}).prototype["next"];
 async function main() {
   const g = outer();
   const seen = [g.next().value];
@@ -48,9 +29,86 @@ async function main() {
   }
   print(seen.join(" "));
 }
-$dump.p2 = new Promise(() => {});
-$dump.a3 = $dump.resume(ainner, { at: "await#1", awaiting: $dump.p1, queue: [{ type: "next", value: undefined, promise: $dump.p2 }] });
-$dump.p4 = new Promise(() => {});
-$dump.a5 = $dump.resume(aouter, { at: "yield*.await#5", awaiting: $dump.p2, slots: { "yield*.iterator@29": $dump.a3, "yield*.next@29": $dump.builtin("%AsyncGeneratorPrototype%.next") }, queue: [{ type: "next", value: undefined, promise: $dump.p4 }] });
-$dump.a6 = Object.setPrototypeOf(((g) => (g.return(), g))((function* () {})()), outer.prototype);
-$dump.a7 = $dump.resume(main, { at: "for-await.next#1", awaiting: $dump.p4, slots: { g: $dump.a6, seen: ["i1", "i2:v", "a1", "a2", "{\"value\":\"i done\",\"done\":true}"], ag: $dump.a5, v: undefined, ag2: undefined, g2: undefined, "for-await.iterator@242": $dump.a5, "for-await.next@242": $dump.builtin("%AsyncGeneratorPrototype%.next") } });
+$dump.p1 = $djs.resume(3, "later", ["x1"]);
+var inner = function* inner(tag) {
+  const got = yield tag + "1";
+  yield tag + "2:" + got;
+  return tag + " done";
+};
+var ainner = async function* ainner() {
+  yield await later("x1");
+  try {
+    yield "x2";
+  } finally {
+    print("ainner closed");
+  }
+};
+var outer = function* outer() {
+  const r = yield* inner("i");
+  yield* ["a1", "a2"];
+  return r;
+};
+var aouter = async function* aouter() {
+  yield* ainner();
+  yield* ["s1", later("s2")];
+};
+$dump.n4 = { __proto__: $dump.b0 };
+$dump.ga3 = () => {
+
+};
+$dump.Ka3 = async function* () {
+
+$dump.ga3();
+(yield (await $dump.p1));
+try {
+    yield "x2";
+  } finally {
+    print("ainner closed");
+  }
+};
+Object.defineProperty($dump.Ka3, "$djs", { value: { f: ainner, segs: [36,29,5,61,56,67], scaf: [["site",35,43]] } });
+$dump.Ka3.prototype = $dump.n4;
+$dump.a3 = $dump.Ka3.call(undefined);
+$dump.p2 = $dump.a3.next();
+$dump.n7 = { __proto__: $dump.b0 };
+$dump.ga6 = () => {
+
+};
+$dump.Ka6 = async function* () {
+const $djs_Y = $djs.Y;
+
+$dump.ga6();
+const $djs_t0 = $dump.a3, $djs_t1 = $dump.b1;
+(yield* $djs_Y($djs_t0, $djs_t1, true, $dump.p2));
+yield* ["s1", later("s2")];
+};
+Object.defineProperty($dump.Ka6, "$djs", { value: { f: aouter, at: "yield*.await#5", segs: [105,29,6,155,48,27], scaf: [["site",29,105],["site",44,152]], cmap: [["yield*.iterator@29",0,"$djs_t0"],["yield*.next@29",0,"$djs_t1"]] } });
+$dump.Ka6.prototype = $dump.n7;
+$dump.a6 = $dump.Ka6.call(undefined);
+$dump.p5 = $dump.a6.next();
+$dump.a8 = Object.setPrototypeOf(((g) => (g.return(), g))((function* () {})()), outer.prototype);
+$dump.Ka9 = async function () {
+const $djs_N = $djs.N;
+const g = $dump.a8;
+const seen = ["i1", "i2:v", "a1", "a2", "{\"value\":\"i done\",\"done\":true}"];
+const ag = $dump.a6;
+{ const $djs_i1 = $dump.a6, $djs_n1 = $dump.b1; for await (const v of $djs_N($djs_i1, $djs_n1, $dump.p5)) {
+    seen.push(v);
+    await later(v);
+  } }
+const ag2 = aouter();
+seen.push((await ag2.next()).value, (await ag2.next()).value);
+await later(2);
+seen.push(JSON.stringify(await ag2.return("early")));
+const g2 = outer();
+g2.next();
+try {
+    g2.throw(new Error("boom"));
+  } catch (e) {
+    seen.push("caught " + e.message);
+  }
+print(seen.join(" "));
+};
+Object.defineProperty($dump.Ka9, "$djs", { value: { f: main, at: "for-await.next#1", segs: [213,242,11,224,253,7,271,268,43,317,314,21,339,338,62,402,403,15,418,421,53,472,477,19,492,499,10,503,512,96,600,611,22], scaf: [["for-await",242,213,0,"$djs_i1","$djs_n1"],["site",242,213]] } });
+$dump.a9 = $dump.Ka9.call(undefined);
+try { (undefined); } finally { delete globalThis.$dump; delete globalThis.$djs; }

@@ -1,4 +1,5 @@
-//! `Vm::dump` (0167): dumps round-trip through a fresh VM of the same base.
+//! `Vm::dump` (0167, D2830): dumps round-trip through a fresh VM of the same base, which
+//! runs them as Scripts. Dumps need frozen builtins (D2836): every VM here has them.
 
 extern crate std;
 
@@ -18,7 +19,95 @@ fn base() -> &'static [u8] {
 }
 
 fn new_vm() -> Vm {
-    Vm::from_base(base(), VmOptions::default()).unwrap()
+    Vm::from_base(
+        base(),
+        VmOptions {
+            frozen_builtins: true,
+            ..VmOptions::default()
+        },
+    )
+    .unwrap()
+}
+
+/// Host function ids of a dump's hooks in the tests: above every test's own.
+const HOOK_SEED: u32 = 0x7fff_fff0;
+const HOOK_RESUME: u32 = 0x7fff_fff1;
+
+/// Runs dump `text` in `vm`, a fresh VM, as a host does (D2890, D2903): `$djs` is the
+/// dump runtime with the hooks `seed` (`Math.random`'s state, the next call id, D2897)
+/// and `resume` (opens call `id` of the host function `host_fn` names again, under its
+/// id); the Script runs to its first stop that is not a hook call, `serve` answering the
+/// other sync host calls it makes meanwhile. The Script's completion value (what the dump
+/// names for the host, D2895), or why the dump did not load.
+pub(super) fn run_plain_dump(
+    vm: &mut Vm,
+    text: &str,
+    host_fn: &dyn Fn(&str) -> Option<u32>,
+    serve: &mut dyn FnMut(&mut Vm, u32, u32),
+) -> Result<Value, String> {
+    let ts = if text.starts_with("\"djs-dump\";") {
+        false
+    } else if text.starts_with("\"djs-dump typescript\";") {
+        true
+    } else {
+        return Err(String::from("not a djs dump"));
+    };
+    let hooks = vm.dump_runtime()?.as_object().ok_or("no dump runtime")?;
+    let seed = vm.new_host_function(HOOK_SEED, "seed").unwrap();
+    vm.define(hooks, "seed", seed).unwrap();
+    let resume = vm.new_host_function(HOOK_RESUME, "resume").unwrap();
+    vm.define(hooks, "resume", resume).unwrap();
+    vm.define_global("$djs", Value::object(hooks)).unwrap();
+    let opts = crate::compiler::CompileOptions {
+        typescript: ts,
+        ..crate::compiler::CompileOptions::script("dump.js")
+    };
+    let f = vm
+        .compile(text.as_bytes(), &opts)
+        .map_err(|e| alloc::format!("{} at {}:{}", e.message, e.line, e.col))?;
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).map_err(|e| alloc::format!("{e:?}"))?;
+    let (mut next, mut last) = (None, 0);
+    let done = loop {
+        match vm.run(10_000_000_000) {
+            Status::Done(v) => break v,
+            Status::Idle => match vm.outcome() {
+                Some(Ok(v)) => break v,
+                o => return Err(alloc::format!("the dump ended with {o:?}")),
+            },
+            Status::HostCall { call_id, fn_id } if fn_id == HOOK_SEED => {
+                let args = vm.host_call(call_id).unwrap().args;
+                let half = |i: usize| args.get(i).and_then(|v| v.as_int()).unwrap_or(0) as u32;
+                vm.set_math_random_seed(u64::from(half(0)) | (u64::from(half(1)) << 32));
+                next = args.get(2).and_then(|v| v.as_int()).map(|n| n as u32);
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+            }
+            Status::HostCall { call_id, fn_id } if fn_id == HOOK_RESUME => {
+                let args = vm.host_call(call_id).unwrap().args;
+                let id = args.first().and_then(|v| v.as_int()).unwrap_or(0) as u32;
+                let name = args.get(1).and_then(|v| v.as_string());
+                let name = name.map(|s| vm.heap().str_to_string(s)).unwrap_or_default();
+                let opened = match host_fn(&name) {
+                    Some(f) => vm.open_host_call(call_id, f).map_err(String::from),
+                    None => Err(alloc::format!("resume: unknown host function {name}")),
+                };
+                match opened {
+                    Ok(()) => last = last.max(id),
+                    Err(m) => {
+                        let e = vm.new_error(ErrorKind::Error, &m).unwrap();
+                        vm.resolve_host_call(call_id, Err(e)).unwrap();
+                    }
+                }
+            }
+            Status::HostCall { call_id, fn_id } => serve(vm, call_id, fn_id),
+            Status::Threw(e) => return Err(alloc::format!("the dump threw {}", vm.display(e))),
+            s => return Err(alloc::format!("the dump stopped: {s:?}")),
+        }
+    };
+    if let Some(n) = next {
+        vm.set_next_call_id(n.max(last + 1));
+    }
+    Ok(done)
 }
 
 /// Runs a Script; its completion value as `display` shows it, or `throw ...`.
@@ -40,11 +129,12 @@ fn run(vm: &mut Vm, src: &str) -> String {
     }
 }
 
-/// Loads a dump with `Vm::load_dump`: empty, or why it failed.
+/// Runs a dump that calls no host function: empty, or why it failed.
 fn load(vm: &mut Vm, text: &str) -> String {
-    match vm.load_dump(text, &super::dump_load::LoadOptions::default()) {
+    let none = |_: &str| None;
+    match run_plain_dump(vm, text, &none, &mut |_, _, f| panic!("host call {f}")) {
         Ok(_) => String::new(),
-        Err(e) => alloc::format!("throw {}", e.message()),
+        Err(e) => alloc::format!("throw {e}"),
     }
 }
 
@@ -84,7 +174,10 @@ fn round_trip(setup: &str, names: Option<&[&str]>, check: &str) -> String {
     );
     let got = run(&mut b, check);
     assert_eq!(got, want, "dump:\n{text}");
-    assert_eq!(run(&mut b, "typeof $dump"), "undefined");
+    assert_eq!(
+        run(&mut b, "typeof $dump + typeof $djs"),
+        "undefinedundefined"
+    );
     // A dump of the loaded VM is the same text.
     let again = dump(&b, names).unwrap_or_else(|e| panic!("{}", e.message()));
     let _ = again;
@@ -165,7 +258,7 @@ fn binary_buffers() {
         None,
         "sub[0] = 9; [bytes.join(), view.getUint16(0), floats.join(), w.push(8), view.buffer === bytes.buffer].join()",
     );
-    assert!(t.contains("$dump.bytes(\"AQID+g==\")"), "{t}");
+    assert!(t.contains("$djs.bytes(\"AQID+g==\")"), "{t}");
 }
 
 #[test]
@@ -180,17 +273,6 @@ fn builtins_by_name() {
           sizeGetter.call(new Map([[1, 1]])), o[tag], o[Symbol.for('app')], [...o].join(), tag.description].join()",
     );
     assert!(t.contains("const m = Math.max;"), "{t}");
-}
-
-#[test]
-fn patched_builtins_are_written_as_code() {
-    let t = round_trip(
-        "Array.prototype.sum = function () { return this.reduce((a, b) => a + b, 0); };\n\
-         delete Math.hypot; const x = 1;",
-        None,
-        "[[1, 2, 3].sum(), typeof Math.hypot, x].join()",
-    );
-    assert!(t.contains("Array.prototype.sum = "), "{t}");
 }
 
 #[test]
@@ -297,62 +379,6 @@ fn big_dump_timing() {
         text = dump(&a, None).unwrap();
     }
     std::println!("dump: {} bytes in {:?}", text.len(), t.elapsed());
-}
-
-/// The committed dump of [`FIXTURE_SETUP`] (tests/dump/v1.js): every later build must load
-/// it and give [`FIXTURE_CHECK`]'s answer (tests/dump/v1.expected). The format promise in
-/// docs/functions-as-code.md: a dump stays loadable by later builds.
-const FIXTURE_SETUP: &str = "\
-function makeCounter(start) { let n = start; return { inc: () => ++n, get: () => n }; }\n\
-const counter = makeCounter(40); counter.inc();\n\
-const bytes = new Uint8Array(100).map((_, i) => i * 3);\n\
-const small = new Int16Array([-1, 2, 300]);\n\
-const key = { k: 1 };\n\
-const index = new Map([[key, 'object key'], ['when', new Date(1700000000000)]]);\n\
-const graph = { name: 'root', children: [] }; graph.children.push({ parent: graph });\n\
-const frozen = Object.freeze({ list: [1, 2] });\n\
-const tag = Symbol.for('app.tag');\n\
-const re = /ab+c/gi;\n\
-const iterProto = Object.getPrototypeOf([][Symbol.iterator]());\n\
-var legacy = { [tag]: 'tagged', big: 12345678901234567890n };\n\
-Array.prototype.last = function () { return this[this.length - 1]; };";
-
-const FIXTURE_CHECK: &str = "\
-[counter.inc(), counter.get(), bytes.length, bytes[99], small.join(), index.get(key), \
-index.get('when').toISOString(), graph.children[0].parent === graph, Object.isFrozen(frozen), \
-frozen.list.last(), legacy[Symbol.for('app.tag')], String(legacy.big), re.flags, re.test('xabbbc'), \
-iterProto === Object.getPrototypeOf([].values())].join('|')";
-
-fn fixture_dir() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/dump")
-}
-
-/// Rewrites the fixture (`DJS_DUMP_FIXTURE=1 cargo test ... write_fixture -- --ignored`).
-/// Only when the format changes on purpose: a new version keeps the old file next to it.
-#[test]
-#[ignore]
-fn write_fixture() {
-    if std::env::var_os("DJS_DUMP_FIXTURE").is_none() {
-        return;
-    }
-    let mut a = new_vm();
-    run(&mut a, FIXTURE_SETUP);
-    let text = dump(&a, None).unwrap_or_else(|e| panic!("{}", e.message()));
-    let want = run(&mut a, FIXTURE_CHECK);
-    std::fs::create_dir_all(fixture_dir()).unwrap();
-    std::fs::write(fixture_dir().join("v1.js"), text).unwrap();
-    std::fs::write(fixture_dir().join("v1.expected"), want + "\n").unwrap();
-}
-
-#[test]
-fn committed_dumps_still_load() {
-    let text = std::fs::read_to_string(fixture_dir().join("v1.js")).unwrap();
-    let want = std::fs::read_to_string(fixture_dir().join("v1.expected")).unwrap();
-    assert!(text.starts_with("// djs-dump 1"));
-    let mut b = new_vm();
-    let loaded = load(&mut b, &text);
-    assert!(!loaded.starts_with("throw"), "{loaded}");
-    assert_eq!(run(&mut b, FIXTURE_CHECK), want.trim_end());
 }
 
 #[test]
@@ -487,10 +513,10 @@ fn closures_capturing_closures() {
 fn classes_with_statics_accessors_and_computed_keys() {
     closure_case(
         &[
-            "const log = [];",
+            "const log = ['init'];",
             "class Point { constructor(x, y) { this.x = x; this.y = y; } get len() { return Math.sqrt(this.x * this.x + this.y * this.y); }\n\
                static origin() { return new Point(0, 0); } [Symbol.toPrimitive]() { return this.len; }\n\
-               static count = 0; static { log.push('init'); } toString() { return `(${this.x}, ${this.y})`; } }",
+               static count = 0; toString() { return `(${this.x}, ${this.y})`; } }",
             "Point.count = 3;",
             "const p = new Point(3, 4);",
         ],
@@ -505,7 +531,7 @@ fn class_expressions_extends_and_super() {
         &[
             "function mk(tag) { return class Base { hi() { return 'hi ' + tag; } }; }",
             "const Base = mk('a');",
-            "class Child extends Base { hi() { return super.hi() + '!'; } static make() { return new Child(); } }",
+            "class Child extends Base { hi() { return super.hi() + '!'; } static make() { return new this(); } }",
             "const c = new Child();",
             "const Anon = class extends Child {};",
             "const base = { greet() { return 'base'; } };",
@@ -516,20 +542,25 @@ fn class_expressions_extends_and_super() {
     );
 }
 
+/// Private methods and accessors of a class round-trip; instances that carry private
+/// names are refused (only the class's construction can add them, D2878).
 #[test]
 fn private_fields_methods_and_brands() {
     closure_case(
         &[
-            "class Counter { #n = 0; static #made = 0; #step() { return 1; } get #twice() { return this.#n * 2; }\n\
-               constructor() { Counter.#made++; } inc() { this.#n += this.#step(); return this; } get value() { return this.#n; }\n\
-               get twice() { return this.#twice; } static made() { return Counter.#made; } static has(o) { return #n in o; }\n\
-               static #fmt(v) { return '<' + v + '>'; } static show(c) { return Counter.#fmt(c.value); } }",
-            "const a = new Counter().inc().inc();",
-            "const b = new Counter();",
+            "class Counter { #step() { return 1; } get #twice() { return 2; }\n\
+               twice() { return this.#twice + this.#step(); } static has(o) { return #step in o; } }",
+            "const f = () => new Counter();",
         ],
-        "[a.value, a.twice, b.value, Counter.made(), Counter.has(a), Counter.has({}), a.inc().value, new Counter().value,\n\
-          Counter.made(), Object.keys(a).length, Counter.show(a)].join()",
+        "[f().twice(), Counter.has(f()), Counter.has({})].join()",
     );
+    let r = refused(
+        "class Counter { #n = 0; inc() { this.#n++; return this; } } const a = new Counter().inc();",
+        None,
+    )
+    .join("\n");
+    assert!(r.contains("a: plain dumps: an instance of class"), "{r}");
+    assert!(r.contains("with private name #n"), "{r}");
 }
 
 #[test]
@@ -612,11 +643,10 @@ fn dumps_have_no_comments() {
          const counter = makeCounter(40);\n\
          const graph = { name: 'root', children: [] }; graph.children.push({ parent: graph });\n\
          const frozen = Object.freeze({ list: [1, 2] });\n\
-         Array.prototype.last = function () { return this[this.length - 1]; };\n\
          const iterProto = Object.getPrototypeOf([][Symbol.iterator]());",
     );
     let text = dump(&a, None).unwrap_or_else(|e| panic!("{}", e.message()));
-    assert!(text.starts_with("\"djs-dump 2\";\n"), "{text}");
+    assert!(text.starts_with("\"djs-dump\";\n"), "{text}");
     for l in text.lines() {
         let t = l.trim_start();
         assert!(
@@ -632,56 +662,50 @@ fn dumps_have_no_comments() {
     );
 }
 
-/// Functions of a TypeScript script make a TypeScript dump, which says so in its
-/// directive (D2615, D2640).
+/// Functions of a TypeScript script are written as JavaScript (D2879; an enum is data
+/// already). A dump whose TypeScript is more than types says so in its directive
+/// (`"djs-dump typescript";`, D2615, D2640).
 #[test]
 fn typescript_dumps_say_so_in_the_directive() {
-    let mut a = new_vm();
-    let f = a
-        .compile(
-            b"var add = (x: number, y: number): number => x + y;",
-            &crate::compiler::CompileOptions {
-                typescript: true,
-                ..crate::compiler::CompileOptions::script("t.ts")
-            },
-        )
-        .unwrap();
-    let this = Value::object(a.global());
-    a.call(f, this, &[]).unwrap();
-    assert!(matches!(a.run(u64::MAX), Status::Done(_)));
-    let text = dump(&a, None).unwrap_or_else(|e| panic!("{}", e.message()));
-    assert!(text.starts_with("\"djs-dump 2 typescript\";\n"), "{text}");
-    let mut b = new_vm();
-    assert_eq!(load(&mut b, &text), "");
-    assert_eq!(run(&mut b, "add(2, 3)"), "5");
+    for (src, header, check, want) in [
+        (
+            "var add = (x: number, y: number): number => x + y;",
+            "\"djs-dump\";\n",
+            "add(2, 3)",
+            "5",
+        ),
+        (
+            "enum E { A = 7 } var get = (): E => E.A;",
+            "\"djs-dump\";\n",
+            "get()",
+            "7",
+        ),
+    ] {
+        let mut a = new_vm();
+        let f = a
+            .compile(
+                src.as_bytes(),
+                &crate::compiler::CompileOptions {
+                    typescript: true,
+                    ..crate::compiler::CompileOptions::script("t.ts")
+                },
+            )
+            .unwrap();
+        let this = Value::object(a.global());
+        a.call(f, this, &[]).unwrap();
+        assert!(matches!(a.run(u64::MAX), Status::Done(_)));
+        let text = dump(&a, None).unwrap_or_else(|e| panic!("{}", e.message()));
+        assert!(text.starts_with(header), "{text}");
+        let mut b = new_vm();
+        assert_eq!(load(&mut b, &text), "", "{text}");
+        assert_eq!(run(&mut b, check), want, "{text}");
+    }
 }
 
-/// The loader reads the directive; of the comment headers only version 1's is a dump
-/// (D2353): format 2 had a comment header before it was promised across builds (D2640).
+/// A VM without frozen builtins cannot dump (D2836).
 #[test]
-fn the_loader_reads_the_directive() {
-    use super::dump_load::dump_format;
-    assert_eq!(dump_format("\"djs-dump 2\";\nlet x = 1;"), Some("2"));
-    assert_eq!(dump_format("\"djs-dump 2 typescript\";\n"), Some("2"));
-    assert_eq!(dump_format("\"djs-dump 9\";"), Some("9"));
-    assert_eq!(
-        dump_format("// djs-dump 1: 1 binding (x).\nlet x = 1;"),
-        Some("1")
-    );
-    assert_eq!(
-        dump_format("// djs-dump 2: 1 binding (x).\nlet x = 1;"),
-        None
-    );
-    assert_eq!(dump_format("// djs-dump 12\n"), None);
-    assert_eq!(dump_format("\"djs-dump 2\"\n;"), None);
-    assert_eq!(dump_format("\"use strict\";\n\"djs-dump 2\";"), None);
-    let mut b = new_vm();
-    let old = load(&mut b, "// djs-dump 2\nlet x = 1;");
-    assert!(old.contains("not a djs dump"), "{old}");
-    assert!(load(&mut b, "\"djs-dump 9\";\n").contains("format 9"));
-    // Run as a plain Script, the directive does nothing and the first `$dump` throws.
-    assert_eq!(
-        run(&mut new_vm(), "\"djs-dump 2\";\n$dump.x = 1;"),
-        "throw ReferenceError: '$dump' is not defined"
-    );
+fn dumps_need_frozen_builtins() {
+    let a = Vm::from_base(base(), VmOptions::default()).unwrap();
+    let e = dump(&a, None).unwrap_err().message();
+    assert!(e.contains("dumps need frozen builtins"), "{e}");
 }

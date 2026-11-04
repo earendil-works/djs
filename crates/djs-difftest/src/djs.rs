@@ -361,7 +361,6 @@ impl Session {
                 base: djs_prelude::BASE,
                 host_fn_name: &host_fn_name,
                 handles: &handles,
-                plain: true,
                 ..DumpOptions::default()
             },
             None,

@@ -1,6 +1,8 @@
-"djs-dump 2";
-$dump.random(2135587861, -1640531527);
-$dump.p1 = $dump.pending(20, "later", ["r2"]);
+"djs-dump";
+"use strict";
+$djs.seed(2135587861, -1640531527, 21);
+globalThis.$dump = {};
+$dump.b0 = Object.getPrototypeOf([][Symbol.iterator]())["next"];
 function resource(name) {
   return {
     [Symbol.dispose]() {
@@ -45,11 +47,6 @@ async function early() {
   await using e = asyncResource("e");
   return "early " + (await later("ret"));
 }
-var gen = function* gen() {
-  using g = resource("g");
-  yield 1;
-  yield 2;
-};
 async function main() {
   await block();
   await failing();
@@ -61,27 +58,68 @@ async function main() {
   seen.push(JSON.stringify(it.return("stop")));
   print("gen", seen.join(" "));
 }
+$dump.p1 = $djs.resume(20, "later", ["r2"]);
+var gen = function* gen() {
+  using g = resource("g");
+  yield 1;
+  yield 2;
+};
 $dump.s2 = (() => {
   let name = "r2";
   let fail = undefined;
-  return { $f3: $dump.fn({ async [Symbol.asyncDispose]() {
+  return { $f3: $djs.fn({ async [Symbol.asyncDispose]() {
       const v = await later(name);
       print("async dispose", v);
       if (fail) throw new Error("dispose " + name + " failed");
-    } }) };
+    } }), $Ka4: async function () {
+
+const v = (await $dump.p1);
+print("async dispose", v);
+if (fail) throw new Error("dispose " + name + " failed");
+} };
 })();
 $dump.n3 = { [Symbol.asyncDispose]: $dump.s2.$f3 };
-$dump.a4 = $dump.resume($dump.s2.$f3, { at: "await#1", awaiting: $dump.p1, this: $dump.n3, slots: { v: undefined } });
+Object.defineProperty($dump.s2.$Ka4, "$djs", { value: { f: $dump.s2.$f3, segs: [27,44,1,49,73,26,76,106,57], scaf: [["site",48,32]] } });
+$dump.a4 = $dump.s2.$Ka4.call($dump.n3);
 $dump.s5 = (() => {
   let name = "r1";
   let fail = undefined;
-  return { $f20: $dump.fn({ async [Symbol.asyncDispose]() {
+  return { $f20: $djs.fn({ async [Symbol.asyncDispose]() {
       const v = await later(name);
       print("async dispose", v);
       if (fail) throw new Error("dispose " + name + " failed");
     } }) };
 })();
-$dump.i6 = $dump.advance(Array.prototype.values.call([{ [Symbol.asyncDispose]: $dump.s5.$f20 }, $dump.n3]), 2);
-$dump.u7 = $dump.using([$dump.n3, $dump.s2.$f3, 4], { hasAwaited: true, next: -3, value: $dump.a4 });
-$dump.a8 = $dump.resume(loop, { at: "await-using#1", awaiting: $dump.a4, slots: { r: $dump.n3, "for-of.iterator@26": $dump.i6, "for-of.next@26": $dump.builtin("%ArrayIteratorPrototype%.next"), "using.record@43": $dump.u7, "completion.kind@43": 0, "completion.value@43": undefined } });
-$dump.a9 = $dump.resume(main, { at: "await#3", awaiting: $dump.a8, slots: { it: undefined, seen: undefined } });
+$dump.i6 = $djs.advance(Array.prototype.values.call([{ [Symbol.asyncDispose]: $dump.s5.$f20 }, $dump.n3]), 2);
+$dump.Ka7 = async function () {
+const $djs_L = $djs.L, $djs_U = $djs.U;
+
+{ let $djs_f1 = true; for (const $djs_v1 of $djs_L($dump.i6, $dump.b0)) { if ($djs_f1) { $djs_f1 = false; {
+
+{
+
+const $djs_t0 = $dump.a4;
+{
+await using $djs_t1 = $djs_U(undefined, () => $djs_t0, 4);
+
+}
+}
+} } else { await using r = $djs_v1; {
+    print("iteration", await later(1));
+  } } } }
+};
+Object.defineProperty($dump.Ka7, "$djs", { value: { f: loop, at: "await-using#1", segs: [276,31,13,301,92,45], scaf: [["for-of",26,83],["using",43,213],["site",137,262],["site",137,266]] } });
+$dump.a7 = $dump.Ka7.call(undefined);
+$dump.Ka8 = async function () {
+
+(await $dump.a7);
+print(await early());
+const it = gen();
+const seen = [it.next().value];
+await later("gen");
+seen.push(JSON.stringify(it.return("stop")));
+print("gen", seen.join(" "));
+};
+Object.defineProperty($dump.Ka8, "$djs", { value: { f: main, at: "await#3", segs: [39,78,21,61,102,17,79,122,31,111,156,19,131,178,45,177,226,29], scaf: [["site",62,22]] } });
+$dump.a8 = $dump.Ka8.call(undefined);
+try { (undefined); } finally { delete globalThis.$dump; delete globalThis.$djs; }

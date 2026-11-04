@@ -275,7 +275,6 @@ pub fn dump_names(
         host_fn_name: &name,
         handles,
         call_states: &states,
-        plain: true,
     };
     vm.dump_report(&opts, names).map_err(|e| e.message())
 }

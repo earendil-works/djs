@@ -109,7 +109,7 @@ mod proxy;
 mod stack;
 pub(crate) mod suspend;
 #[cfg(feature = "dump")]
-pub(crate) use intrinsics::{builtin_closure_kind, new_builtin_closure};
+pub(crate) use intrinsics::builtin_closure_kind;
 
 /// The opcodes `Exec::fast_step` handles, as bytes for its `match`.
 mod fast {
@@ -2843,14 +2843,6 @@ impl<'h> Exec<'h> {
                 } else {
                     self.pc = next;
                 }
-                return Ok(None);
-            }
-            Op::JumpIfLoading => {
-                self.pc = if self.heap.loading_dump {
-                    self.jump_target(next)
-                } else {
-                    next
-                };
                 return Ok(None);
             }
             Op::JumpIfFalse8 | Op::JumpIfTrue8 => {

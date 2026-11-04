@@ -652,9 +652,6 @@ ops! {
     JumpIfFalse jump_if_false(target: Target) pop 1 push 0 cost Basic flags BRANCH;
     /// `v ->`: jump if ToBoolean(v) is true.
     JumpIfTrue jump_if_true(target: Target) pop 1 push 0 cost Basic flags BRANCH;
-    /// Jump while a dump loads (`Vm::load_dump`, D2580): around a class's static
-    /// initializer, whose effects the dump restores instead of running them again.
-    JumpIfLoading jump_if_loading(target: Target) pop 0 push 0 cost Basic flags BRANCH;
     /// `v ->`: throw `v`.
     Throw throw() pop 1 push 0 cost Basic flags THROWS | TERM;
     /// `v ->`: return `v`.

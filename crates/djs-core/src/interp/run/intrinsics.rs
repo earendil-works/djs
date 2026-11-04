@@ -341,9 +341,8 @@ pub(crate) fn builtin_closure_kind(
 }
 
 /// `%NewBuiltinClosure(kind, data, length)`: a builtin closure of kind `kind` (its index
-/// in `BUILTIN_CLOSURES`) holding `data`; `None` for an unknown kind. Also the dump
-/// loader's (0182).
-pub(crate) fn new_builtin_closure(
+/// in `BUILTIN_CLOSURES`) holding `data`; `None` for an unknown kind.
+fn new_builtin_closure(
     heap: &mut crate::heap::Heap,
     kind: usize,
     data: Value,

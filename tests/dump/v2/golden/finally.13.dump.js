@@ -1,6 +1,7 @@
-"djs-dump 2";
-$dump.random(2135587861, -1640531527);
-$dump.p1 = $dump.pending(21, "later", ["b"]);
+"djs-dump";
+"use strict";
+$djs.seed(2135587861, -1640531527, 22);
+globalThis.$dump = {};
 async function normal(x) {
   try {
     x = x + 1;
@@ -42,14 +43,6 @@ async function nested() {
   }
   return out.join(", ");
 }
-var gen = function* gen() {
-  try {
-    yield 1;
-    yield 2;
-  } finally {
-    yield "cleanup";
-  }
-};
 async function cases(d) {
   switch (d) {
     case await later("a"):
@@ -78,6 +71,37 @@ async function main() {
   print("gen", seen.join(" "));
   print("cases", await cases("b"), await cases("c"));
 }
-$dump.a2 = $dump.resume(cases, { at: "await#2", awaiting: $dump.p1, args: ["b"], slots: { d: "b", "binary.left@93": "b" } });
+$dump.p1 = $djs.resume(21, "later", ["b"]);
+var gen = function* gen() {
+  try {
+    yield 1;
+    yield 2;
+  } finally {
+    yield "cleanup";
+  }
+};
+$dump.Ka2 = async function () {
+var d = "b";
+switch ("b") {
+case {}:
+return "is a";
+case (await $dump.p1):
+return "is b";
+default:
+return "neither";
+}
+};
+Object.defineProperty($dump.Ka2, "$djs", { value: { f: cases, at: "await#2", segs: [33,28,8,57,74,14,72,93,5,95,122,14,110,141,7,119,156,17], scaf: [["site",98,78],["switch",28,33]], cmap: [["binary.left@93",1,"b"]] } });
+$dump.a2 = $dump.Ka2.call(undefined);
 $dump.a3 = Object.setPrototypeOf(((g) => (g.return(), g))((function* () {})()), gen.prototype);
-$dump.a4 = $dump.resume(main, { at: "await#7", awaiting: $dump.a2, slots: { g: $dump.a3, seen: [1, "cleanup", "{\"value\":\"early\",\"done\":true}"], "call.callee@418": print, "call.this@418": undefined, "call.arg@424": "cases" } });
+$dump.a4_0 = print;
+$dump.Ka4 = async function () {
+const $djs_R = $djs.R;
+const g = $dump.a3;
+const seen = [1, "cleanup", "{\"value\":\"early\",\"done\":true}"];
+const $djs_t0 = $dump.a4_0;
+$djs_R($djs_t0, undefined, ["cases", (await $dump.a2), await cases("c")]);
+};
+Object.defineProperty($dump.Ka4, "$djs", { value: { f: main, at: "await#7", segs: [214,451,16], scaf: [["k",0,159],["k",0,166],["k",0,175],["tmp",0,187,"call.arg@424","array.element"],["site",433,197],["tmp",0,196,"call.arg@433","array.element"],["tmp",0,214,"call.arg@451","array.element"],["k",0,186]], cmap: [["call.callee@418",0,"$djs_t0"],["call.this@418",1,undefined],["call.arg@424",1,"cases"]] } });
+$dump.a4 = $dump.Ka4.call(undefined);
+try { (undefined); } finally { delete globalThis.$dump; delete globalThis.$djs; }

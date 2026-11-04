@@ -1,6 +1,7 @@
-"djs-dump 2";
-$dump.random(2135587861, -1640531527);
-$dump.p1 = $dump.pending(5, "later", ["0"]);
+"djs-dump";
+"use strict";
+$djs.seed(2135587861, -1640531527, 6);
+globalThis.$dump = {};
 async function keys() {
   const proto = { inherited: 1 };
   const o = Object.create(proto);
@@ -24,9 +25,6 @@ async function nested() {
   }
   return out.join(" ");
 }
-var walk = function* walk(o) {
-  for (const k in o) yield k;
-};
 async function main() {
   print("keys", await keys());
   print("nested", await nested());
@@ -36,6 +34,48 @@ async function main() {
   seen.push(g.next().value, g.next().value);
   print("walk", seen.join(" "));
 }
+$dump.p1 = $djs.resume(5, "later", ["0"]);
+var walk = function* walk(o) {
+  for (const k in o) yield k;
+};
 $dump.n2 = [];
-$dump.a3 = $dump.resume(nested, { at: "await#1", awaiting: $dump.p1, slots: { out: $dump.n2, i: "0", c: "0", "for-in.iterator@46": $dump.forIn([10, 20], ["1"]), "for-in.iterator@78": $dump.forIn(undefined, ["1"]), "call.callee@100": Array.prototype.push, "call.this@100": $dump.n2, "binary.left@109": "00" } });
-$dump.a4 = $dump.resume(main, { at: "await#2", awaiting: $dump.a3, slots: { g: undefined, seen: undefined, "call.callee@57": print, "call.this@57": undefined, "call.arg@63": "nested" } });
+$dump.a3_0 = $djs.forIn([10, 20], ["1"]);
+$dump.a3_1 = $djs.forIn(undefined, ["1"]);
+$dump.a3_2 = Array.prototype.push;
+$dump.Ka3 = async function () {
+const $djs_R = $djs.R, $djs_L = $djs.L;
+const out = $dump.n2;
+{ let $djs_f1 = true; for (const $djs_v1 of $djs_L($dump.a3_0, null)) { if ($djs_f1) { $djs_f1 = false; {
+const i = "0";
+
+{
+
+{ let $djs_f3 = true; for (const $djs_v3 of $djs_L($dump.a3_1, null)) { if ($djs_f3) { $djs_f3 = false; {
+const c = "0";
+
+const $djs_t0 = $dump.a3_2, $djs_t1 = $dump.n2;
+$djs_R($djs_t0, $djs_t1, [("00" + (await $dump.p1))]);
+} } else { const c = $djs_v3; out.push(i + c + (await later(c))); } } }
+}
+} } else { const i = $djs_v1; {
+    for (const c in "xy") out.push(i + c + (await later(c)));
+  } } } }
+return out.join(" ");
+};
+Object.defineProperty($dump.Ka3, "$djs", { value: { f: nested, segs: [443,83,7,462,100,35,517,51,7,536,72,67,610,142,21], scaf: [["for-in",46,104],["for-in",78,229],["k",0,377],["k",0,384],["k",0,393],["site",118,412],["tmp",0,403,"call.arg@109","array.element"],["k",0,402],["site",135,433],["site",139,505],["site",139,507]], cmap: [["call.callee@100",0,"$djs_t0"],["call.this@100",0,"$djs_t1"],["binary.left@109",1,"00"]] } });
+$dump.a3 = $dump.Ka3.call(undefined);
+$dump.a4_0 = print;
+$dump.Ka4 = async function () {
+const $djs_R = $djs.R;
+
+const $djs_t0 = $dump.a4_0;
+$djs_R($djs_t0, undefined, ["nested", (await $dump.a3)]);
+const g = walk({ p: 1, q: 2, r: 3 });
+const seen = [g.next().value];
+await later("g");
+seen.push(g.next().value, g.next().value);
+print("walk", seen.join(" "));
+};
+Object.defineProperty($dump.Ka4, "$djs", { value: { f: main, at: "await#2", segs: [130,92,37,168,132,30,199,165,17,217,185,42,260,230,30], scaf: [["k",0,72],["k",0,79],["k",0,88],["tmp",0,100,"call.arg@63","array.element"],["site",73,111],["tmp",0,110,"call.arg@73","array.element"],["k",0,99]], cmap: [["call.callee@57",0,"$djs_t0"],["call.this@57",1,undefined],["call.arg@63",1,"nested"]] } });
+$dump.a4 = $dump.Ka4.call(undefined);
+try { (undefined); } finally { delete globalThis.$dump; delete globalThis.$djs; }

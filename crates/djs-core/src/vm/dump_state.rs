@@ -246,7 +246,6 @@ mod round_trip {
     use crate::compiler::CompileOptions;
     use crate::value::Value;
     use crate::vm::dump::DumpOptions;
-    use crate::vm::dump_load::LoadOptions;
     use crate::vm::{Status, Vm, VmOptions};
 
     const LATER: u32 = 1;
@@ -261,7 +260,12 @@ mod round_trip {
     }
 
     fn vm() -> Vm {
-        let mut vm = Vm::from_base(base(), VmOptions::default()).unwrap();
+        // Dumps need frozen builtins (D2836).
+        let opts = VmOptions {
+            frozen_builtins: true,
+            ..VmOptions::default()
+        };
+        let mut vm = Vm::from_base(base(), opts).unwrap();
         let later = vm.new_async_host_function(LATER, "later").unwrap();
         vm.define_global("later", later).unwrap();
         vm
@@ -298,36 +302,38 @@ mod round_trip {
         vm.dump(&opts, None).map_err(|e| e.message())
     }
 
+    /// The value of Script `src` in `vm`, as `display` shows it.
+    fn eval(vm: &mut Vm, src: &str) -> String {
+        let f = vm
+            .compile(src.as_bytes(), &CompileOptions::script("e.js"))
+            .unwrap();
+        let this = Value::object(vm.global());
+        vm.call(f, this, &[]).unwrap();
+        match vm.run(1_000_000) {
+            Status::Done(v) => vm.display(v),
+            s => panic!("{s:?}"),
+        }
+    }
+
     #[test]
     fn the_state_goes_through_a_dump() {
         let (vm, id) = waiting();
         let json = "{ \"due\": 1767225600000, \"s\": \"a\\u2028\\\"\", \"l\": [1, null] }";
         let text = dump(&vm, &[(id, json)]).unwrap();
-        let line = alloc::format!("$dump.pending({id}, \"later\", [5, \"x\"], {json});");
-        assert!(text.contains(&line), "{text}");
+        // `$djs.resume`'s fourth argument (D2890), JSON data again.
+        let call = alloc::format!("$djs.resume({id}, \"later\", [5, \"x\"], ");
+        let at = text.find(&call).unwrap_or_else(|| panic!("{text}")) + call.len();
+        let end = at + text[at..].find(");").unwrap();
         let mut again = self::vm();
-        let host_fn = |n: &str| (n == "later").then_some(LATER);
-        let opts = LoadOptions {
-            host_fn: &host_fn,
-            ..Default::default()
-        };
-        let loaded = again.load_dump(&text, &opts).unwrap();
-        assert_eq!(loaded.calls.len(), 1);
+        let src = alloc::format!("JSON.stringify({})", &text[at..end]);
         assert_eq!(
-            loaded.calls[0].state.as_deref(),
-            Some("{\"due\":1767225600000,\"s\":\"a\u{2028}\\\"\",\"l\":[1,null]}")
+            eval(&mut again, &src),
+            "{\"due\":1767225600000,\"s\":\"a\u{2028}\\\"\",\"l\":[1,null]}"
         );
-        // Without a state: three arguments, and none comes back.
+        // Without a state: three arguments.
         let text = dump(&vm, &[]).unwrap();
-        assert!(text.contains("[5, \"x\"]);"), "{text}");
-        let mut again = self::vm();
-        let loaded = again.load_dump(&text, &opts).unwrap();
-        assert_eq!(loaded.calls[0].state, None);
-        // A dumped state that is not JSON data does not load.
-        let bad = text.replace("[5, \"x\"]);", "[5, \"x\"], () => 1);");
-        let mut again = self::vm();
-        let e = again.load_dump(&bad, &opts).unwrap_err().message();
-        assert!(e.contains("the call's state is not JSON data"), "{e}");
+        let call = alloc::format!("$djs.resume({id}, \"later\", [5, \"x\"]);");
+        assert!(text.contains(&call), "{text}");
     }
 
     #[test]

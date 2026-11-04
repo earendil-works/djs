@@ -59,13 +59,14 @@ pub(crate) fn cat_sized(pieces: &[&dyn crate::text::Piece]) -> String {
     out
 }
 
-/// The first line of every dump this build writes: format 2, a Script that
-/// `Vm::load_dump` runs with its `$dump` (D2581), marked by a directive prologue so the
-/// dump has no comments (D2640). Version 1 dumps (D2353), plain Scripts that make their
-/// own `$dump` and start with the comment `// djs-dump 1`, still load.
-pub const HEADER: &str = "\"djs-dump 2\";";
-/// [`HEADER`] of a dump that holds functions of TypeScript scripts (D2615).
-pub const HEADER_TS: &str = "\"djs-dump 2 typescript\";";
+/// How the checker compiles a dump: a Script, TypeScript when it holds functions of
+/// TypeScript scripts (D2615).
+fn dump_options(typescript: bool) -> crate::compiler::CompileOptions<'static> {
+    crate::compiler::CompileOptions {
+        typescript,
+        ..crate::compiler::CompileOptions::script("dump.js")
+    }
+}
 
 /// What [`Vm::dump`] needs besides the VM.
 #[derive(Clone, Copy)]
@@ -76,19 +77,16 @@ pub struct DumpOptions<'a> {
     /// reached from them are referenced by name (`tools.read`).
     pub host: &'a [&'a str],
     /// The host's name of its function `fn_id` (`tools.read`), for open calls and for
-    /// host functions held as values; the loader's `LoadOptions::host_fn` is the
-    /// inverse. `None` refuses.
+    /// host functions held as values (an expression the dump evaluates while it loads).
+    /// `None` refuses.
     pub host_fn_name: &'a dyn Fn(u32) -> Option<String>,
-    /// Values the host holds (a run's promise, a REPL input's): dumped as
-    /// `$dump.handle(name, v)`, so the loader gives them back.
+    /// Values the host holds (a run's promise, a REPL input's): the dump's completion
+    /// value (D2895), the value itself for one named `run`, else an object of all.
     pub handles: &'a [(&'a str, Value)],
     /// The host's state of its open calls, by call id, as JSON text (D2770): written as
-    /// the fourth argument of the call's `$dump.pending`, and given back by the loader
-    /// (`OpenCall::state`). A call without an entry is written without one.
+    /// the fourth argument of the call's `$djs.resume`. A call without an entry is
+    /// written without one.
     pub call_states: &'a [(u32, &'a str)],
-    /// Write a plain dump (format 3, D2830): every suspended activation a continuation
-    /// function, a Script that runs given only the host's functions (dump_plain.rs).
-    pub plain: bool,
 }
 
 fn no_host_fn_name(_: u32) -> Option<String> {
@@ -103,7 +101,6 @@ impl Default for DumpOptions<'_> {
             host_fn_name: &no_host_fn_name,
             handles: &[],
             call_states: &[],
-            plain: false,
         }
     }
 }
@@ -813,11 +810,11 @@ impl<'a> Dumper<'a> {
     fn new(vm: &'a Vm, opts: &DumpOptions<'a>) -> Result<Dumper<'a>, DumpError> {
         let h = &vm.heap;
         let refuse = |m: &str| DumpError(alloc::vec![String::from(m)]);
-        // A plain dump assumes that no builtin changes between a value's evaluation and
-        // the load (D2836): it writes a builtin an operand resolved to as its expression.
-        if opts.plain && !h.frozen_builtins() {
+        // A dump assumes that no builtin changes between a value's evaluation and the
+        // load (D2836): it writes a builtin an operand resolved to as its expression.
+        if !h.frozen_builtins() {
             return Err(refuse(
-                "plain dumps need frozen builtins (VmOptions::frozen_builtins, D2836)",
+                "dumps need frozen builtins (VmOptions::frozen_builtins, D2836)",
             ));
         }
         let base_end = h.base_end();
@@ -861,7 +858,7 @@ impl<'a> Dumper<'a> {
             member_texts: Vec::new(),
             data_depth: 0,
             ns: false,
-            pl: opts.plain.then(plain::Ir::default),
+            pl: Some(plain::Ir::default()),
             next: 0,
             depth: 0,
             visited: 0,
@@ -1720,7 +1717,7 @@ impl<'a> Dumper<'a> {
             let Some(co) = self.nodes[c].v.as_object() else {
                 continue;
             };
-            if !super::dump_load::is_class(h, co) {
+            if !super::dump_classes::is_class(h, co) {
                 continue;
             }
             let span = fn_span(h, co);
@@ -1745,7 +1742,7 @@ impl<'a> Dumper<'a> {
                 for k in h.own_keys(holder) {
                     let owned = |v: Value| {
                         v.as_object().is_some_and(|f| {
-                            is_method_of(h, f, span) && !super::dump_load::is_class(h, f)
+                            is_method_of(h, f, span) && !super::dump_classes::is_class(h, f)
                         })
                     };
                     match h.get_own_property(holder, k) {
@@ -1825,8 +1822,8 @@ impl<'a> Dumper<'a> {
             let Some(co) = self.nodes[c].v.as_object() else {
                 continue;
             };
-            if super::dump_load::is_class(h, co) {
-                for p in super::dump_load::class_privates(h, co) {
+            if super::dump_classes::is_class(h, co) {
+                for p in super::dump_classes::class_privates(h, co) {
                     self.private_names
                         .push_out((p.sym.offset(), c, p.name, p.ambiguous));
                 }
@@ -2120,11 +2117,9 @@ impl<'a> Dumper<'a> {
         if !self.refusals.is_empty() {
             return Err(self.refused());
         }
-        let mut s = String::from(if self.ts.get() { HEADER_TS } else { HEADER });
-        s.push('\n');
-        // `Math.random`'s state: the resumed run continues the sequence (D2624).
+        // `Math.random`'s state and the next call id: the resumed run continues the
+        // sequence and the ids (D2624, D2897).
         let (lo, hi) = crate::builtins::number::random_state(self.h);
-        cat_to!(&mut s, "$dump.random(", lo, ", ", hi, ");\n");
         if let Some(pl) = &mut self.pl {
             pl.seed = (lo, hi);
             let i = crate::interp::state::interp(self.h);
@@ -2132,19 +2127,6 @@ impl<'a> Dumper<'a> {
                 .h
                 .arena()
                 .get(i, crate::heap::cells::Interp::NEXT_CALL_ID);
-        }
-        for l in &self.out {
-            cat_to!(&mut s, l, '\n');
-        }
-        if !builtin_lines.is_empty() {
-            for l in &builtin_lines {
-                cat_to!(&mut s, l, '\n');
-            }
-        }
-        if !self.patches.is_empty() || !self.finals.is_empty() {
-            for l in self.patches.iter().chain(&self.finals) {
-                cat_to!(&mut s, l, '\n');
-            }
         }
         // The checker compiles the dump with the lines that write no function cut down to
         // the names they declare: their data cannot change what a name resolves to.
@@ -2163,29 +2145,28 @@ impl<'a> Dumper<'a> {
         if !self.refusals.is_empty() {
             return Err(self.refused());
         }
-        if let Some(ir) = self.pl.take() {
-            let mut lines = core::mem::take(&mut self.out);
-            lines.extend(builtin_lines);
-            lines.extend(core::mem::take(&mut self.patches));
-            lines.extend(core::mem::take(&mut self.finals));
-            s = plain::write(&ir, &lines, false, &cont::generate)
-                .map_err(|e| DumpError(alloc::vec![cat!("plain dump: ", e)]))?;
-            if s.contains(LATER) {
-                // The IR's own copies of factory members and activations.
-                s = self.resolve_later(&s);
-                if !self.refusals.is_empty() {
-                    return Err(self.refused());
-                }
+        let ir = self.pl.take().unwrap_or_default();
+        let mut lines = core::mem::take(&mut self.out);
+        lines.extend(builtin_lines);
+        lines.extend(core::mem::take(&mut self.patches));
+        lines.extend(core::mem::take(&mut self.finals));
+        let mut s = plain::write(&ir, &lines, false, &cont::generate)
+            .map_err(|e| DumpError(alloc::vec![cat!("plain dump: ", e)]))?;
+        if s.contains(LATER) {
+            // The IR's own copies of factory members and activations.
+            s = self.resolve_later(&s);
+            if !self.refusals.is_empty() {
+                return Err(self.refused());
             }
-            if self.ts.get() {
-                // TypeScript functions are written as JavaScript: their types blanked
-                // (offsets kept, so origin records stay true; D2879). TypeScript that
-                // is not only types (an enum, a namespace) stays: a TypeScript dump.
-                s = match self.strip_types(&s)? {
-                    Some(js) => js,
-                    None => s.replacen("\"djs-dump\";", "\"djs-dump typescript\";", 1),
-                };
-            }
+        }
+        if self.ts.get() {
+            // TypeScript functions are written as JavaScript: their types blanked (offsets
+            // kept, so origin records stay true; D2879). TypeScript that is not only types
+            // (an enum, a namespace) stays: a TypeScript dump.
+            s = match self.strip_types(&s)? {
+                Some(js) => js,
+                None => s.replacen("\"djs-dump\";", "\"djs-dump typescript\";", 1),
+            };
         }
         let (open_calls, _, pending_promises) = self.fl.counts();
         Ok(Dumped {
@@ -2205,16 +2186,11 @@ impl<'a> Dumper<'a> {
             Some(h) => h,
             None => Heap::new().map_err(|_| fail("no memory to write TypeScript as JavaScript"))?,
         };
-        let opts = super::dump_load::dump_options(true);
+        let opts = dump_options(true);
         let out = crate::compiler::strip_types(&mut heap, text.as_bytes(), &opts);
         let out = out.map_err(|e| fail(&cat!("its TypeScript does not compile: ", e.message)))?;
         let js = String::from_utf8(out).map_err(|_| fail("its TypeScript is not UTF-8"))?;
-        let ok = crate::compiler::compile(
-            &mut heap,
-            js.as_bytes(),
-            &super::dump_load::dump_options(false),
-        )
-        .is_ok();
+        let ok = crate::compiler::compile(&mut heap, js.as_bytes(), &dump_options(false)).is_ok();
         Ok(ok.then_some(js))
     }
 
@@ -2358,7 +2334,7 @@ impl<'a> Dumper<'a> {
         let Some(mut scratch) = self.scratch.take() else {
             return Err(String::from("no memory to check it"));
         };
-        let opts = super::dump_load::dump_options(self.ts.get());
+        let opts = dump_options(self.ts.get());
         match crate::compiler::compile(&mut scratch, text.as_bytes(), &opts) {
             Ok(t) => match t.get() {
                 Some(t) => Ok(check_table(&scratch, t, text)),
@@ -3354,7 +3330,7 @@ impl<'a> Dumper<'a> {
         self.nodes[n]
             .v
             .as_object()
-            .is_some_and(|o| super::dump_load::is_class(self.h, o))
+            .is_some_and(|o| super::dump_classes::is_class(self.h, o))
     }
 
     /// The node of a class's parent (its `[[Prototype]]`), if it is one.
@@ -4899,7 +4875,12 @@ mod check_tests {
 
     /// The refusals of checking `text` as the dump of `names` after `setup`.
     fn check(setup: &str, names: &[&str], drop_roots: &[&str], text: &str) -> Vec<String> {
-        let mut vm = Vm::from_base(base(), VmOptions::default()).unwrap();
+        // Dumps need frozen builtins (D2836).
+        let opts = VmOptions {
+            frozen_builtins: true,
+            ..VmOptions::default()
+        };
+        let mut vm = Vm::from_base(base(), opts).unwrap();
         let f = vm
             .compile(
                 setup.as_bytes(),

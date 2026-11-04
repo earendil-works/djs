@@ -1,6 +1,8 @@
-"djs-dump 2";
-$dump.random(2135587861, -1640531527);
-$dump.p1 = $dump.pending(26, "later", ["gen"]);
+"djs-dump";
+"use strict";
+$djs.seed(2135587861, -1640531527, 27);
+globalThis.$dump = {};
+$dump.b0 = Object.getPrototypeOf(function* () {}).prototype;
 function resource(name) {
   return {
     [Symbol.dispose]() {
@@ -36,11 +38,6 @@ async function early() {
   await using e = asyncResource("e");
   return "early " + (await later("ret"));
 }
-var gen = function* gen() {
-  using g = resource("g");
-  yield 1;
-  yield 2;
-};
 function asyncResource(name, fail) {
   return {
     async [Symbol.asyncDispose]() {
@@ -61,13 +58,38 @@ async function main() {
   seen.push(JSON.stringify(it.return("stop")));
   print("gen", seen.join(" "));
 }
+$dump.p1 = $djs.resume(26, "later", ["gen"]);
+var gen = function* gen() {
+  using g = resource("g");
+  yield 1;
+  yield 2;
+};
 $dump.s3 = (() => {
   let name = "g";
-  return { $f15: $dump.fn({ [Symbol.dispose]() {
+  return { $f16: $djs.fn({ [Symbol.dispose]() {
       print("dispose", name);
     } }) };
 })();
-$dump.n2 = { [Symbol.dispose]: $dump.s3.$f15 };
-$dump.u4 = $dump.using([$dump.n2, $dump.s3.$f15, 0]);
-$dump.a5 = $dump.resume(gen, { at: "yield#1", slots: { g: $dump.n2, "using.record@26": $dump.u4 } });
-$dump.a6 = $dump.resume(main, { at: "await#5", awaiting: $dump.p1, slots: { it: $dump.a5, seen: [1] } });
+$dump.n2 = { [Symbol.dispose]: $dump.s3.$f16 };
+$dump.n5 = { __proto__: $dump.b0 };
+$dump.Ka4 = function* () {
+const $djs_U = $djs.U;
+const g = $dump.n2;
+using $djs_t0 = $djs_U($dump.n2, $dump.s3.$f16, 0);
+(yield);
+yield 2;
+};
+Object.defineProperty($dump.Ka4, "$djs", { value: { f: gen, at: "yield#1", segs: [119,58,8], scaf: [["using",26,64],["site",47,111],["site",68,129]] } });
+$dump.Ka4.prototype = $dump.n5;
+$dump.a4 = $dump.Ka4.call(undefined);
+$dump.a4.next();
+$dump.Ka6 = async function () {
+const it = $dump.a4;
+const seen = [1];
+(await $dump.p1);
+seen.push(JSON.stringify(it.return("stop")));
+print("gen", seen.join(" "));
+};
+Object.defineProperty($dump.Ka6, "$djs", { value: { f: main, at: "await#5", segs: [77,178,45,123,226,29], scaf: [["site",156,60]] } });
+$dump.a6 = $dump.Ka6.call(undefined);
+try { (undefined); } finally { delete globalThis.$dump; delete globalThis.$djs; }

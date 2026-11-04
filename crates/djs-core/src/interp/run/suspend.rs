@@ -183,60 +183,6 @@ pub(crate) fn read_activation(heap: &Heap, g: Obj) -> Suspended {
     }
 }
 
-/// A new activation of closure `f` for the dump loader (0171): a Generator object of
-/// `kind` as `generator_start`/`async_start` make it (an async function's with its result
-/// promise), still EXECUTING; [`set_suspended`] gives it its frame.
-#[cfg(feature = "dump")]
-pub(crate) fn new_activation(heap: &mut Heap, f: Obj, kind: i32) -> Result<Obj, HeapError> {
-    if kind == ASYNC {
-        let a = alloc(heap, None, ASYNC)?;
-        let proto = intrinsic_obj(heap, Intrinsic::PromiseProto);
-        let p = promise::alloc(heap, Some(proto))?;
-        heap.set_object_slot(a, PROMISE, Value::object(p));
-        return Ok(a);
-    }
-    let fallback = if kind == ASYNC_GENERATOR {
-        Intrinsic::AsyncGeneratorProto
-    } else {
-        Intrinsic::GeneratorProto
-    };
-    let proto = heap
-        .get_own_property(f, crate::heap::atoms::PROTOTYPE)
-        .and_then(|p| p.value())
-        .and_then(|v| v.as_object())
-        .unwrap_or_else(|| intrinsic_obj(heap, fallback));
-    alloc(heap, Some(proto), kind)
-}
-
-/// Suspends activation `g` with the frame `frame` (what `suspend_frame` saves: callee,
-/// `this`, arguments, header at `hp_off`, locals, operands), to resume at `pc` in
-/// `state` (SUSPENDED at a yield, AWAITING at an await).
-#[cfg(feature = "dump")]
-pub(crate) fn set_suspended(
-    heap: &mut Heap,
-    g: Obj,
-    frame: &[Value],
-    hp_off: u32,
-    pc: u32,
-    state: i32,
-) -> Result<(), HeapError> {
-    let len = frame.len() as u32;
-    let arr = heap.alloc_value_array(len)?;
-    for (i, &v) in frame.iter().enumerate() {
-        heap.value_array_set(arr, i as u32, v);
-    }
-    heap.arena_mut().set(arr, ValueArray::LEN, len);
-    for (slot, v) in [
-        (STATE, Value::int(state)),
-        (FRAME, Value::internal(arr)),
-        (PC, Value::int(pc as i32)),
-        (HP, Value::int(hp_off as i32)),
-    ] {
-        heap.set_object_slot(g, slot, v);
-    }
-    Ok(())
-}
-
 impl Exec<'_> {
     /// The Generator object in local `loc` of the current frame.
     fn local_generator(&self, loc: u32, kinds: &[i32]) -> Result<Obj, Fault> {

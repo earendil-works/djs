@@ -19,11 +19,7 @@ pub mod compat;
 #[cfg(feature = "dump")]
 pub mod dump;
 #[cfg(feature = "dump")]
-pub mod dump_load;
-#[cfg(feature = "dump")]
-mod dump_prims;
-#[cfg(feature = "dump")]
-mod dump_resume;
+mod dump_classes;
 pub mod dump_runtime;
 #[cfg(feature = "dump")]
 mod dump_state;

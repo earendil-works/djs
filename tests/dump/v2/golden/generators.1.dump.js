@@ -1,9 +1,9 @@
-"djs-dump 2";
-$dump.random(2135587861, -1640531527);
-$dump.p1 = $dump.pending(1, "later", ["q1"]);
-$dump.p2 = $dump.pending(2, "later", [0]);
-var g = function* g(a) { const x = yield a; yield x + 1; };
-var ag = async function* ag() { yield await later("q1"); yield "q2"; };
+"djs-dump";
+"use strict";
+$djs.seed(2135587861, -1640531527, 3);
+globalThis.$dump = {};
+$dump.b0 = Object.getPrototypeOf(async function* () {}).prototype;
+$dump.b1 = Object.getPrototypeOf(function* () {}).prototype;
 async function main() {
   const mid = g(1); mid.next();
   const fresh = g(5);
@@ -14,10 +14,48 @@ async function main() {
   print(mid.next(10).value, fresh.next().value, done.next().done);
   print((await r1).value, (await r2).value);
 }
-$dump.p3 = new Promise(() => {});
-$dump.p4 = new Promise(() => {});
-$dump.a5 = $dump.resume(ag, { at: "await#1", awaiting: $dump.p1, queue: [{ type: "next", value: undefined, promise: $dump.p3 }, { type: "next", value: undefined, promise: $dump.p4 }] });
-$dump.a6 = $dump.resume(g, { at: "yield#1", args: [1], slots: { a: 1, x: undefined } });
-$dump.a7 = Reflect.apply(g, undefined, [5]);
-$dump.a8 = Object.setPrototypeOf(((g) => (g.return(), g))((function* () {})()), g.prototype);
-$dump.a9 = $dump.resume(main, { at: "await#1", awaiting: $dump.p2, slots: { mid: $dump.a6, fresh: $dump.a7, done: $dump.a8, it: $dump.a5, r1: $dump.p3, r2: $dump.p4 } });
+$dump.p1 = $djs.resume(1, "later", ["q1"]);
+$dump.p2 = $djs.resume(2, "later", [0]);
+var g = function* g(a) { const x = yield a; yield x + 1; };
+var ag = async function* ag() { yield await later("q1"); yield "q2"; };
+$dump.n6 = { __proto__: $dump.b0 };
+$dump.ga5 = () => {
+
+};
+$dump.Ka5 = async function* () {
+
+$dump.ga5();
+(yield (await $dump.p1));
+yield "q2";
+};
+Object.defineProperty($dump.Ka5, "$djs", { value: { f: ag, segs: [36,23,5,61,48,11], scaf: [["site",29,43]] } });
+$dump.Ka5.prototype = $dump.n6;
+$dump.a5 = $dump.Ka5.call(undefined);
+$dump.p3 = $dump.a5.next();
+$dump.p4 = $dump.a5.next(undefined);
+$dump.n8 = { __proto__: $dump.b1 };
+$dump.Ka7 = function* () {
+var a = 1;
+const x = (yield);
+yield x + 1;
+};
+Object.defineProperty($dump.Ka7, "$djs", { value: { f: g, at: "yield#1", segs: [32,23,1,45,36,12], scaf: [["site",27,37]] } });
+$dump.Ka7.prototype = $dump.n8;
+$dump.a7 = $dump.Ka7.call(undefined);
+$dump.a7.next();
+$dump.a9 = Reflect.apply(g, undefined, [5]);
+$dump.a10 = Object.setPrototypeOf(((g) => (g.return(), g))((function* () {})()), g.prototype);
+$dump.Ka11 = async function () {
+const mid = $dump.a7;
+const fresh = $dump.a9;
+const done = $dump.a10;
+const it = $dump.a5;
+const r1 = $dump.p3;
+const r2 = $dump.p4;
+(await $dump.p2);
+print(mid.next(10).value, fresh.next().value, done.next().done);
+print((await r1).value, (await r2).value);
+};
+Object.defineProperty($dump.Ka11, "$djs", { value: { f: main, segs: [171,217,64,236,284,42], scaf: [["site",199,154]] } });
+$dump.a11 = $dump.Ka11.call(undefined);
+try { (undefined); } finally { delete globalThis.$dump; delete globalThis.$djs; }

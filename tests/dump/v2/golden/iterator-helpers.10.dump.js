@@ -1,10 +1,8 @@
-"djs-dump 2";
-$dump.random(2135587861, -1640531527);
-$dump.p1 = $dump.pending(16, "later", ["concat"]);
-var numbers = function* numbers() {
-  let i = 0;
-  while (true) yield i++;
-};
+"djs-dump";
+"use strict";
+$djs.seed(2135587861, -1640531527, 17);
+globalThis.$dump = {};
+$dump.b0 = Object.getPrototypeOf([][Symbol.iterator]())["next"];
 async function main() {
   const matches = "a1 b22 c333".matchAll(/[a-z](\d+)/g);
   const found = [];
@@ -38,20 +36,39 @@ async function main() {
   c.push(...cat);
   print("concat", c.join(" "));
 }
-$dump.i2 = $dump.regexpIterator(/[a-z](\d+)/g, "a1 b22 c333", 5);
-$dump.i3 = $dump.regexpIterator(/\d/g, "x9y8", 5);
-$dump.a4 = Object.setPrototypeOf(((g) => (g.return(), g))((function* () {})()), numbers.prototype);
-$dump.i5 = $dump.iteratorHelper([2, 3, $dump.a4, $dump.builtin("%GeneratorPrototype%.next"), (n) => n % 2 === 0, 7, undefined, undefined]);
-$dump.i6 = $dump.iteratorHelper([1, 3, $dump.i5, $dump.builtin("%IteratorHelperPrototype%.next"), (n) => n * 10, 4, undefined, undefined]);
-$dump.i7 = $dump.iteratorHelper([4, 3, $dump.i6, $dump.builtin("%IteratorHelperPrototype%.next"), 0, 0, undefined, undefined]);
-$dump.i8 = $dump.iteratorHelper([3, 3, $dump.i7, $dump.builtin("%IteratorHelperPrototype%.next"), 0, 0, undefined, undefined]);
-$dump.i9 = $dump.advance(Array.prototype.values.call([]), 1);
-$dump.i10 = $dump.iteratorHelper([5, 3, $dump.i9, $dump.builtin("%ArrayIteratorPrototype%.next"), (a) => a, 2, undefined, undefined]);
-$dump.n12 = $dump.fn({ next() { return { value: this.i++, done: this.i > 3 }; } });
-$dump.n11 = { i: 2, next: $dump.n12 };
-$dump.i13 = $dump.iteratorHelper([0, 0, $dump.n11, $dump.n12, undefined, undefined, undefined, undefined]);
-$dump.n14 = ["p", "q"];
-$dump.i15 = $dump.advance(Array.prototype.values.call($dump.n14), 1);
-$dump.n16 = [[Array.prototype.values, $dump.n14], [Set.prototype.keys, new Set(["r"])]];
-$dump.i17 = $dump.iteratorHelper([6, 1, $dump.i15, $dump.builtin("%ArrayIteratorPrototype%.next"), $dump.n16, 1, undefined, undefined]);
-$dump.a18 = $dump.resume(main, { at: "await#6", awaiting: $dump.p1, slots: { matches: $dump.i2, found: ["1@0", "22@3", "333@7"], it: $dump.i3, evens: $dump.i8, got: [20, 40, 60], flat: $dump.i10, seen: [1, 2, 3, true], wrapped: $dump.i13, w: [0, 1], cat: $dump.i17, c: ["p"] } });
+$dump.p1 = $djs.resume(16, "later", ["concat"]);
+var numbers = function* numbers() {
+  let i = 0;
+  while (true) yield i++;
+};
+$dump.i2 = $djs.regexpIterator(/[a-z](\d+)/g, "a1 b22 c333", 5);
+$dump.i3 = $djs.regexpIterator(/\d/g, "x9y8", 5);
+$dump.i4 = $djs.HD();
+$dump.i5 = $djs.HD();
+$dump.n7 = $djs.fn({ next() { return { value: this.i++, done: this.i > 3 }; } });
+$dump.n6 = { i: 2, next: $dump.n7 };
+$dump.i8 = Iterator.from($djs.I($dump.n6, $dump.n7));
+$dump.n9 = new Set(["r"]);
+$dump.n10 = ["p", "q"];
+$dump.i11 = $djs.advance(Array.prototype.values.call($dump.n10), 1);
+$dump.i12 = $djs.CC($dump.i11, $dump.b0, [$djs.CI(Set.prototype.keys, $dump.n9)]);
+$dump.Ka13 = async function () {
+const matches = $dump.i2;
+const found = ["1@0", "22@3", "333@7"];
+const it = $dump.i3;
+const evens = $dump.i4;
+const got = [20, 40, 60];
+const flat = $dump.i5;
+const seen = [1, 2, 3, true];
+const wrapped = $dump.i8;
+const w = [0, 1];
+const cat = $dump.i12;
+const c = ["p"];
+(await $dump.p1);
+c.push(...cat);
+print("concat", c.join(" "));
+};
+Object.defineProperty($dump.Ka13, "$djs", { value: { f: main, at: "await#6", segs: [312,1152,15,328,1170,29], scaf: [["site",1127,295]] } });
+$dump.a13 = $dump.Ka13.call(undefined);
+$dump.a14 = Object.setPrototypeOf(((g) => (g.return(), g))((function* () {})()), numbers.prototype);
+try { (undefined); } finally { delete globalThis.$dump; delete globalThis.$djs; }

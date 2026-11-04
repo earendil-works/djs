@@ -18,12 +18,13 @@
 //! Cases run in parallel (`DJS_JOBS` threads, else one per CPU). Each run has a fuel
 //! budget and a time limit: a case that loops forever fails its plain run within seconds
 //! (and then skips the stress modes) instead of hanging the test.
-//! 4. dump (0172): the plain run, then a format 2 dump of the
-//!    finished VM (its globals and whatever is still in flight), loaded into a fresh VM
-//!    and dumped again: the second dump must be the first. The cases have no idle points
-//!    before their end (their awaits settle through jobs), so this checks the exporter
-//!    and the loader on every construct the cases leave behind. Refusals are counted, not
-//!    failures.
+//! 4. dump (0172, D2830): the run with frozen builtins, which dumps need (D2836), then a
+//!    dump of the finished VM (its globals and whatever is still in flight), run as a
+//!    Script in a fresh VM and dumped again, twice: the third dump must be the second.
+//!    The cases have no idle points before their end (their awaits settle through jobs),
+//!    so this checks the exporter on every construct the cases leave behind. Its output is
+//!    not compared (cases that change builtins fail there on purpose); refusals are
+//!    counted, not failures.
 //!
 //! `DJS_E2E_MODE=plain|suspend|gc|dump` runs one mode, `DJS_E2E_CASE=<substring>` only
 //! the matching cases.
@@ -74,23 +75,75 @@ enum Mode {
     Dump,
 }
 
-/// Dumps a finished VM and loads the dump into a fresh VM, twice: a failure if a load
-/// fails or the second round does not give the same text again (the first may order the
-/// global bindings differently: a loaded dump declares them in its own order). Refusals
-/// are counted in `DUMP_REFUSED`.
+/// The options of a dump mode VM: frozen builtins, which dumps need (D2836).
+fn frozen() -> VmOptions {
+    VmOptions {
+        frozen_builtins: true,
+        ..VmOptions::default()
+    }
+}
+
+/// A VM of the dump mode with `console.log`, and its console object.
+fn dump_vm() -> (Vm, djs_core::value::Obj) {
+    let mut vm = djs_prelude::new_vm(frozen()).unwrap();
+    let console = vm.new_object().unwrap();
+    let log = vm.new_host_function(LOG, "log").unwrap();
+    vm.define(console, "log", log).unwrap();
+    vm.define_global("console", Value::object(console)).unwrap();
+    (vm, console)
+}
+
+/// A dump's hooks (D2890), above every case's host function id.
+const SEED: u32 = 0x7fff_fff0;
+const RESUME: u32 = 0x7fff_fff1;
+
+/// Runs dump `text` in `vm`, a fresh one, as a host does: `$djs` is the dump runtime with
+/// the hooks `seed` and `resume` (a finished VM has no open call to resume), and the
+/// Script runs to its end. Why it failed, if it did.
+fn run_dump(vm: &mut Vm, text: &str) -> Result<(), String> {
+    let hooks = vm.dump_runtime()?.as_object().ok_or("no dump runtime")?;
+    let seed = vm.new_host_function(SEED, "seed").unwrap();
+    vm.define(hooks, "seed", seed).unwrap();
+    let resume = vm.new_host_function(RESUME, "resume").unwrap();
+    vm.define(hooks, "resume", resume).unwrap();
+    vm.define_global("$djs", Value::object(hooks)).unwrap();
+    let f = vm
+        .compile(text.as_bytes(), &CompileOptions::script("dump.js"))
+        .map_err(|e| format!("{} at {}:{}", e.message, e.line, e.col))?;
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).map_err(|e| format!("{e:?}"))?;
+    loop {
+        match vm.run(FUEL_BUDGET) {
+            Status::Done(_) | Status::Idle => return Ok(()),
+            Status::HostCall { call_id, fn_id } if fn_id == SEED => {
+                let args = vm.host_call(call_id).unwrap().args;
+                let half = |i: usize| args.get(i).and_then(|v| v.as_int()).unwrap_or(0) as u32;
+                vm.set_math_random_seed(u64::from(half(0)) | (u64::from(half(1)) << 32));
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+            }
+            Status::HostCall { call_id, .. } => {
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+            }
+            Status::Threw(e) => return Err(format!("threw {}", vm.display(e))),
+            s => return Err(format!("{s:?}")),
+        }
+    }
+}
+
+/// Dumps a finished VM and runs the dump in a fresh VM, twice: a failure if a run fails
+/// or the second round does not give the same text again (the first may order the global
+/// bindings differently: a loaded dump declares them in its own order). Refusals are
+/// counted in `DUMP_REFUSED`.
 fn dump_round_trip(vm: &Vm) -> Option<String> {
     use djs_core::vm::dump::DumpOptions;
-    use djs_core::vm::dump_load::LoadOptions;
     let name = |id: u32| (id == LOG).then(|| String::from("log"));
+    // `console` is the host's: re-bound by name, its `log` written as `console.log`.
+    let name = |id: u32| name(id).map(|n| format!("console.{n}"));
     let opts = DumpOptions {
         base: djs_prelude::BASE,
+        host: &["console"],
         host_fn_name: &name,
         ..DumpOptions::default()
-    };
-    let id = |n: &str| (n == "log").then_some(LOG);
-    let load = LoadOptions {
-        host_fn: &id,
-        ..LoadOptions::default()
     };
     let first = match vm.dump(&opts, None) {
         Ok(t) => t,
@@ -105,12 +158,11 @@ fn dump_round_trip(vm: &Vm) -> Option<String> {
     let mut texts = vec![first];
     for round in 0..2 {
         let text = texts.last().unwrap();
-        let mut b = djs_prelude::new_vm(VmOptions::default()).unwrap();
-        if let Err(e) = b.load_dump(text, &load) {
+        let (mut b, _) = dump_vm();
+        if let Err(e) = run_dump(&mut b, text) {
             return Some(format!(
-                "<e2e: dump {} does not load: {}>\n{text}\n",
-                round + 1,
-                e.message()
+                "<e2e: dump {} does not run: {e}>\n{text}\n",
+                round + 1
             ));
         }
         match b.dump(&opts, None) {
@@ -168,7 +220,11 @@ fn run_case(src: &str, name: &str, mode: Mode) -> (String, Option<Images>) {
     // Every case starts from one base image (prelude + console), as a base snapshot
     // would: building the prelude per case dominated the run time.
     let (image, console) = base();
-    let mut vm = Vm::from_bytes(image.clone(), opts).unwrap();
+    let (mut vm, console) = if matches!(mode, Mode::Dump) {
+        dump_vm()
+    } else {
+        (Vm::from_bytes(image.clone(), opts).unwrap(), *console)
+    };
     let body = src.starts_with("// mode: body");
     let params = ["tools", "console"];
     let copts = if body {
@@ -185,7 +241,7 @@ fn run_case(src: &str, name: &str, mode: Mode) -> (String, Option<Images>) {
         }
     };
     let args = if body {
-        vec![Value::UNDEFINED, Value::object(*console)]
+        vec![Value::UNDEFINED, Value::object(console)]
     } else {
         vec![]
     };
@@ -392,7 +448,11 @@ fn check_case(path: &Path, mode: Mode) -> (Option<String>, Option<Images>) {
                 .unwrap_or_default();
             (format!("<e2e: panicked: {msg}>\n"), None)
         });
-    let failure =
-        (got != want).then(|| format!("{name} ({mode:?}):\n--- want\n{want}--- got\n{got}"));
+    // The dump mode runs with frozen builtins: only its round trips count.
+    let failed = match mode {
+        Mode::Dump => got.contains("<e2e: "),
+        _ => got != want,
+    };
+    let failure = failed.then(|| format!("{name} ({mode:?}):\n--- want\n{want}--- got\n{got}"));
     (failure, image)
 }

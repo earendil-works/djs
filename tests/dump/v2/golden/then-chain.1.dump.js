@@ -1,8 +1,10 @@
-"djs-dump 2";
-$dump.random(2135587861, -1640531527);
-$dump.p1 = $dump.pending(1, "later", [1]);
+"djs-dump";
+"use strict";
+$djs.seed(2135587861, -1640531527, 3);
+globalThis.$dump = {};
+$dump.p1 = $djs.resume(1, "later", [1]);
 $dump.n2 = new Error("boom");
-$dump.p3 = $dump.pending(2, "later", [$dump.n2, true]);
+$dump.p3 = $djs.resume(2, "later", [$dump.n2, true]);
 const log = [];
 const p = $dump.p1;
 $dump.p4 = Promise.prototype.then.call($dump.p1, (v) => v + 1, undefined);
@@ -16,3 +18,4 @@ const c = $dump.p8;
 $dump.p9 = Promise.all([$dump.p6, $dump.p7, $dump.p8]);
 $dump.p10 = Promise.prototype.then.call($dump.p9, (r) => print(r.join(), log.join()), undefined);
 Object.defineProperty($dump.n2, "stack", { value: "    at <eval> (src.js:6:26)\n", writable: true, configurable: true });
+try { (undefined); } finally { delete globalThis.$dump; delete globalThis.$djs; }

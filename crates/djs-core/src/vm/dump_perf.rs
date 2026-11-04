@@ -20,7 +20,7 @@ use alloc::vec::Vec;
 use std::time::{Duration, Instant};
 
 use super::dump::DumpOptions;
-use super::dump_harvest::{base, host_fn, host_fn_name, idle_run_with};
+use super::dump_harvest::{base, host_fn, host_fn_name, idle_run_with, load_vm};
 use super::*;
 
 #[derive(Default)]
@@ -40,7 +40,8 @@ fn reps() -> usize {
 
 /// Dumps `vm` and loads the dump into fresh VMs `reps` times; the best of each.
 fn measure(vm: &Vm, api: Value, name: &str, idle: usize, points: &mut Vec<Point>) {
-    let handles = [("api", api)];
+    // The api is the dump's completion value (D2895).
+    let handles = [("run", api)];
     let opts = DumpOptions {
         base: base(),
         host_fn_name: &host_fn_name,
@@ -77,14 +78,13 @@ fn measure(vm: &Vm, api: Value, name: &str, idle: usize, points: &mut Vec<Point>
         points.push(p);
         return;
     }
-    let load = super::dump_load::LoadOptions {
-        host_fn: &host_fn,
-        ..Default::default()
+    let mut serve = |vm: &mut Vm, id: u32, _: u32| {
+        vm.resolve_host_call(id, Ok(Value::UNDEFINED)).unwrap();
     };
     for _ in 0..reps() {
-        let mut b = Vm::from_base(base(), VmOptions::default()).unwrap();
+        let mut b = load_vm();
         let t = Instant::now();
-        if b.load_dump(&text, &load).is_err() {
+        if super::dump_tests::run_plain_dump(&mut b, &text, &host_fn, &mut serve).is_err() {
             return;
         }
         p.load = p.load.min(t.elapsed());

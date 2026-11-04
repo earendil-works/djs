@@ -1,6 +1,8 @@
-"djs-dump 2";
-$dump.random(2135587861, -1640531527);
-$dump.p1 = $dump.pending(18, "later", ["g2"]);
+"djs-dump";
+"use strict";
+$djs.seed(2135587861, -1640531527, 19);
+globalThis.$dump = {};
+$dump.b0 = Object.getPrototypeOf(function* () {}).prototype;
 async function normal(x) {
   try {
     x = x + 1;
@@ -42,14 +44,6 @@ async function nested() {
   }
   return out.join(", ");
 }
-var gen = function* gen() {
-  try {
-    yield 1;
-    yield 2;
-  } finally {
-    yield "cleanup";
-  }
-};
 async function cases(d) {
   switch (d) {
     case await later("a"):
@@ -78,5 +72,35 @@ async function main() {
   print("gen", seen.join(" "));
   print("cases", await cases("b"), await cases("c"));
 }
-$dump.a2 = $dump.resume(gen, { at: "yield#3", slots: { "completion.kind@20": 2, "completion.value@20": "early" } });
-$dump.a3 = $dump.resume(main, { at: "await#6", awaiting: $dump.p1, slots: { g: $dump.a2, seen: [1, "cleanup"] } });
+$dump.p1 = $djs.resume(18, "later", ["g2"]);
+var gen = function* gen() {
+  try {
+    yield 1;
+    yield 2;
+  } finally {
+    yield "cleanup";
+  }
+};
+$dump.n3 = { __proto__: $dump.b0 };
+$dump.Ka2 = function* () {
+
+{ const $djs_c1 = "early"; {
+
+(yield);
+} return $djs_c1; }
+};
+Object.defineProperty($dump.Ka2, "$djs", { value: { f: gen, at: "yield#3", scaf: [["finally",20,16,2,"$djs_c1"],["site",70,47],["site",90,56]] } });
+$dump.Ka2.prototype = $dump.n3;
+$dump.a2 = $dump.Ka2.call(undefined);
+$dump.a2.next();
+$dump.Ka4 = async function () {
+const g = $dump.a2;
+const seen = [1, "cleanup"];
+(await $dump.p1);
+seen.push(JSON.stringify(g.next()));
+print("gen", seen.join(" "));
+print("cases", await cases("b"), await cases("c"));
+};
+Object.defineProperty($dump.Ka4, "$djs", { value: { f: main, at: "await#6", segs: [87,347,36,124,386,29,154,418,51], scaf: [["site",326,70]] } });
+$dump.a4 = $dump.Ka4.call(undefined);
+try { (undefined); } finally { delete globalThis.$dump; delete globalThis.$djs; }

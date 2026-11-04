@@ -1,7 +1,9 @@
-"djs-dump 2";
-$dump.random(2135587861, -1640531527);
+"djs-dump";
+"use strict";
+$djs.seed(2135587861, -1640531527, 3);
+globalThis.$dump = {};
 $dump.n1 = new Error("boom");
-$dump.p2 = $dump.pending(2, "later", [$dump.n1, true]);
+$dump.p2 = $djs.resume(2, "later", [$dump.n1, true]);
 const log = ["fin"];
 const p = Promise.resolve(1);
 const a = Promise.resolve(2);
@@ -11,3 +13,4 @@ const c = $dump.p3;
 $dump.p4 = Promise.all([2, 10, $dump.p3]);
 $dump.p5 = Promise.prototype.then.call($dump.p4, (r) => print(r.join(), log.join()), undefined);
 Object.defineProperty($dump.n1, "stack", { value: "    at <eval> (src.js:6:26)\n", writable: true, configurable: true });
+try { (undefined); } finally { delete globalThis.$dump; delete globalThis.$djs; }

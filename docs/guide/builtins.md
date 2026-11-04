@@ -129,7 +129,7 @@ mode*, the only mode in which `%Name(...)` compiles: to the `call_intrinsic` opc
 <!-- gen:ops call_intrinsic -->
 | opcode | byte | immediates | size | pop → push | cost | description |
 | --- | ---: | --- | ---: | --- | --- | --- |
-| `call_intrinsic` | 158 | Intrinsic, Argc | 5 | imm1 → 1 | Call | `a1 .. an -> r`: privileged code only. |
+| `call_intrinsic` | 157 | Intrinsic, Argc | 5 | imm1 → 1 | Call | `a1 .. an -> r`: privileged code only. |
 <!-- /gen -->
 
 The prelude runs once, when the base snapshot is built (D1321). Every VM starts as a

@@ -28,11 +28,36 @@ use super::*;
 use crate::builtins::regexp;
 use crate::compiler::{FunctionMap, Holds, NamedSlot, Place, Site, SiteKind, Slot};
 use crate::heap::cells::{HostCall, Script};
+use crate::interp::realm::{Intrinsic, intrinsic_obj};
 use crate::interp::run::{builtin_closure_kind, promise, suspend};
-use crate::vm::dump_prims::{USING_FIELDS, USING_SLOTS, helper_proto};
 
 #[path = "dump_flight_helpers.rs"]
 mod helpers;
+
+/// The resource Record of `using` declarations (builtins/disposable.ts `UsingCreate`):
+/// its slot count, and its slots by name (slot 2 is the resources, an Array of `[value,
+/// method, kind]` triples).
+const USING_SLOTS: u32 = 11;
+const USING_FIELDS: [(&str, u32); 8] = [
+    ("error", 3),
+    ("hasError", 4),
+    ("needsAwait", 5),
+    ("hasAwaited", 6),
+    ("next", 7),
+    ("value", 8),
+    ("pending", 9),
+    ("hasPending", 10),
+];
+
+/// The prototype an iterator helper is made with: %WrapForValidIteratorPrototype% for
+/// `Iterator.from`'s wrapper (kind 0), else %IteratorHelperPrototype%.
+fn helper_proto(h: &crate::heap::Heap, o: Obj) -> Value {
+    if h.object_slot(o, 0).as_int() == Some(0) {
+        Value::object(intrinsic_obj(h, Intrinsic::WrapForValidIteratorProto))
+    } else {
+        Value::object(intrinsic_obj(h, Intrinsic::IteratorHelperProto))
+    }
+}
 
 /// Builtin closure kinds (`NewBuiltinClosure`, interp/run/intrinsics.rs).
 const RESOLVE: usize = 0;

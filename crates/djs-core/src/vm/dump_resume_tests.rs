@@ -1,19 +1,18 @@
-//! The format 2 loader (0171): hand-written dumps in tests/dump/v2/ and refusals.
+//! Dumps (D2830) of programs that wait: tests/dump/v2/ (programs `NAME.src.js` and the
+//! golden programs with their dumps, golden/), the exporter's refusals and reports, and
+//! plain dumps run as Scripts at every idle point and in chains.
 //!
-//! A fixture is a program `NAME.src.js` and a dump of it `NAME.dump.js`, written by hand
-//! at idle point K (the test names K; the program's header comment says what the dump
-//! holds there, since dumps have no comments, D2641). The program prints through
-//! the sync host function `print` and waits through the async host function `later(v,
-//! rejected)`, which the driver settles at idle points, oldest call first, with `v` (a
-//! rejection if `rejected`). The program's output up to idle point K followed by the
-//! loaded dump's output must equal the uninterrupted run's.
+//! The programs print through the sync host function `print` and wait through the async
+//! host function `later(v, rejected)`, which the driver settles at idle points, oldest
+//! call first, with `v` (a rejection if `rejected`). A program's output up to idle point K
+//! followed by the output of its dump's run must equal the uninterrupted run's. Dumps need
+//! frozen builtins (D2836): the VMs that dump have them.
 
 extern crate std;
 
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use super::dump_load::{LoadOptions, Loaded};
 use super::*;
 
 const LATER: u32 = 1;
@@ -139,14 +138,6 @@ fn run_program(src: &str) -> (Vec<String>, Vec<usize>) {
     (lines, marks)
 }
 
-fn load(vm: &mut Vm, text: &str) -> Result<Loaded, String> {
-    let opts = LoadOptions {
-        host_fn: &host_fn,
-        ..LoadOptions::default()
-    };
-    vm.load_dump(text, &opts).map_err(|e| e.message())
-}
-
 /// Runs a Script in an idle VM: its completion value.
 fn run_value(vm: &mut Vm, src: &str) -> String {
     let f = vm
@@ -168,318 +159,14 @@ fn run_value(vm: &mut Vm, src: &str) -> String {
     }
 }
 
-/// Loads `dump` and runs it to the end: the lines it prints. `stress`: collecting at every
-/// safepoint, in slices of 97 fuel.
-fn continue_dump(text: &str, stress: bool) -> (Loaded, Vec<String>) {
-    let mut vm = new_vm_with(stress);
-    let loaded = load(&mut vm, text).unwrap_or_else(|e| panic!("{e}"));
-    // Idle, waiting on the dump's calls, which the host knows already.
-    assert!(vm.new_host_calls().is_empty());
-    let mut open = vm.pending_host_calls();
-    open.sort_unstable();
-    let ids: Vec<u32> = loaded.calls.iter().map(|c| c.id).collect();
-    assert_eq!(open, ids);
-    assert_eq!(run_value(&mut vm, "typeof $dump"), "undefined");
-    let (mut lines, mut marks) = (Vec::new(), Vec::new());
-    drive(&mut vm, &mut lines, &mut marks, stress.then_some(97));
-    for (_, h) in &loaded.handles {
-        vm.heap_mut().drop_handle(*h);
-    }
-    (loaded, lines)
-}
-
 fn fixture_dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/dump/v2")
 }
 
-/// Checks fixture `name`, a dump of its program at idle point `k`; returns what the load
-/// reported.
-fn fixture(name: &str, k: usize) -> Loaded {
-    let dir = fixture_dir();
-    let src = std::fs::read_to_string(dir.join(alloc::format!("{name}.src.js"))).unwrap();
-    let dump = std::fs::read_to_string(dir.join(alloc::format!("{name}.dump.js"))).unwrap();
-    assert!(dump.starts_with("\"djs-dump 2\";\n"), "{name}: header");
-    let (want, marks) = run_program(&src);
-    assert!(
-        k >= 1 && k <= marks.len(),
-        "{name}: {} idle points",
-        marks.len()
-    );
-    let (loaded, after) = continue_dump(&dump, false);
-    let mut got: Vec<String> = want[..marks[k - 1]].to_vec();
-    got.extend(after);
-    assert_eq!(got, want, "{name}");
-    let (_, stressed) = continue_dump(&dump, true);
-    assert_eq!(stressed, got[marks[k - 1]..], "{name} under stress");
-    if std::env::var_os("DJS_DUMP_SHOW").is_some() {
-        std::println!(
-            "{name}: idle point {k} of {}, {} lines after it:",
-            marks.len(),
-            want.len() - marks[k - 1]
-        );
-        for l in &want {
-            std::println!("  {l}");
-        }
-    }
-    loaded
-}
-
-#[test]
-fn plan_example() {
-    let l = fixture("plan", 5);
-    assert_eq!(
-        l.calls,
-        [super::dump_load::OpenCall {
-            id: 5,
-            fn_id: LATER,
-            name: "later".into(),
-            state: None,
-        }]
-    );
-    assert_eq!(l.handles.len(), 1);
-}
-
-#[test]
-fn every_operand_construct() {
-    let l = fixture("operands", 1);
-    assert_eq!(l.calls.len(), 17);
-}
-
-#[test]
-fn generator_at_a_yield() {
-    fixture("generator", 2);
-}
-
-#[test]
-fn async_generators() {
-    fixture("asyncgen", 2);
-}
-
-#[test]
-fn combinators_and_rejections() {
-    let l = fixture("combinators", 6);
-    let ids: Vec<u32> = l.calls.iter().map(|c| c.id).collect();
-    assert_eq!(ids, [6, 7, 8, 9, 10, 11, 12, 13]);
-}
-
-#[test]
-fn nested_loops() {
-    fixture("loops", 3);
-}
-
-/// steps.dump.js was written by the exporter at idle point 1 and is kept as a golden
-/// fixture.
-#[test]
-fn an_exported_dump_stays_loadable() {
-    fixture("steps", 1);
-}
-
-#[test]
-fn cells_in_their_tdz() {
-    fixture("cells", 1);
-}
-
-/// Loads a format 2 dump made of a few functions and `tail`; the reason it is refused.
-fn refusal(tail: &str) -> String {
-    let text = alloc::format!(
-        "\"djs-dump 2\";\n\
-         async function f(a) {{ const b = a + 1; return o.m(b, await later(b)); }}\n\
-         function* gen() {{ yield 1; }}\n\
-         async function fin() {{ try {{ return 1; }} finally {{ await later(2); }} }}\n\
-         async function cls() {{ class C {{ [await later(2)]() {{}} }} }}\n\
-         async function keys(o) {{ for (const k in o) await later(k); }}\n\
-         const o = {{ m: (x, y) => x + y }};\n\
-         $dump.p = $dump.pending(1, 'later', [2]);\n\
-         {tail}"
-    );
-    let mut vm = new_vm();
-    match load(&mut vm, &text) {
-        Ok(_) => panic!("loaded: {tail}"),
-        Err(e) => e,
-    }
-}
-
-/// The slots of `f` at its await.
-const F_SLOTS: &str = "a: 1, b: 2, 'call.callee@46': o.m, 'call.this@46': o, 'call.arg@50': 2";
-
-/// A description of `f` at its await, with `extra` keys (overriding).
-fn describe(extra: &str) -> String {
-    alloc::format!(
-        "$dump.resume(f, {{ at: 'await#1', awaiting: $dump.p, args: [1], \
-         slots: {{ {F_SLOTS} }}, {extra} }});"
-    )
-}
-
-/// `describe` with the slots `slots`.
-fn describe_slots(slots: &str) -> String {
-    describe(&alloc::format!("slots: {{ {slots} }}"))
-}
-
-#[test]
-fn resume_refuses_what_the_map_does_not_have() {
-    // The description as such loads.
-    let mut vm = new_vm();
-    let ok = alloc::format!(
-        "\"djs-dump 2\";\nasync function f(a) {{ const b = a + 1; return o.m(b, await later(b)); }}\n\
-         const o = {{ m: (x, y) => x + y }};\n$dump.p = $dump.pending(1, 'later', [2]);\n\
-         $dump.handle('r', {});",
-        describe("").trim_end_matches(';')
-    );
-    load(&mut vm, &ok).unwrap_or_else(|e| panic!("{e}"));
-
-    let cases: &[(&str, &str)] = &[
-        (&describe("at: 'await#2'"), "f has no site await#2"),
-        (&describe("at: 'yield#1'"), "f has no site yield#1"),
-        (
-            &describe_slots("a: 1, 'call.callee@46': o.m, 'call.this@46': o, 'call.arg@50': 2"),
-            "await#1 has a slot b: give it",
-        ),
-        (
-            &describe_slots(&alloc::format!("{F_SLOTS}, c: 3")),
-            "await#1 has no slot c",
-        ),
-        // A binding's key has its scope only when two of the name are in scope.
-        (
-            &describe_slots(
-                "a: 1, 'b@0': 2, 'call.callee@46': o.m, 'call.this@46': o, 'call.arg@50': 2",
-            ),
-            "await#1 has a slot b: give it",
-        ),
-        // By name: any order loads.
-        (
-            &describe_slots(
-                "'call.arg@50': 2, 'call.this@46': o, b: 2, 'call.callee@46': o.m, a: 1",
-            ),
-            "",
-        ),
-        (
-            &describe_slots("a: 1, b: 2, 'call.callee@46': o.m, 'call.this@46': o"),
-            "await#1 has a slot call.arg@50: give it",
-        ),
-        // A temporary of another construct or offset (another build's slot set).
-        (
-            &describe_slots(
-                "a: 1, b: 2, 'call.callee@46': o.m, 'call.this@46': o, 'call.arg@51': 2",
-            ),
-            "await#1 has a slot call.arg@50: give it",
-        ),
-        (
-            &describe_slots(&alloc::format!("{F_SLOTS}, 'binary.left@1': 1")),
-            "await#1 has no slot binary.left@1",
-        ),
-        (&describe("operands: []"), "unknown key operands"),
-        (&describe("bindings: {}"), "unknown key bindings"),
-        (&describe("loops: []"), "unknown key loops"),
-        (
-            &describe("awaiting: 1"),
-            "await#1 awaits a promise: give it",
-        ),
-        (
-            &describe("awaiting: undefined"),
-            "await#1 awaits a promise: give it",
-        ),
-        (&describe("wait: 1"), "unknown key wait"),
-        (&describe("args: [1, , 2]"), "an array with holes"),
-        (
-            &describe_slots(
-                "a: (() => { let z = 1; return $dump.cell(() => z); })(), b: 2, \
-                 'call.callee@46': o.m, 'call.this@46': o, 'call.arg@50': 2",
-            ),
-            "a is not captured",
-        ),
-        (
-            &describe("queue: [{ type: 'next', promise: new Promise(() => {}) }]"),
-            "only async generators have a request queue",
-        ),
-        (
-            "$dump.resume(gen, { at: 'yield#1', awaiting: $dump.p });",
-            "yield#1 is a yield",
-        ),
-        (
-            "$dump.resume(o.m, { at: 'await#1' });",
-            "not an async function or a generator",
-        ),
-        (
-            "$dump.resume(cls, { at: 'await#1', awaiting: $dump.p });",
-            "cannot be resumed: class",
-        ),
-        (
-            "$dump.resume(fin, { at: 'await#1', awaiting: $dump.p, slots: { 'completion.kind@23': 2, 'completion.value@23': 1, 'finally.return@41': 7 } });",
-            "await#1 has no slot finally.return@41",
-        ),
-        (
-            "$dump.resume(fin, { at: 'await#1', awaiting: $dump.p, slots: { 'completion.kind@23': 2 } });",
-            "await#1 has a slot completion.value@23: give it",
-        ),
-        (
-            "$dump.resume(keys, { at: 'await#1', awaiting: $dump.p, args: [{}], slots: { o: {}, k: 'a', 'for-in.iterator@25': 1 } });",
-            "a for-in loop's iterator is made by $dump.forIn",
-        ),
-        (
-            "$dump.resume((async function () {}).constructor('await 1'), { at: 'await#1', awaiting: $dump.p });",
-            "not made by the dump's text",
-        ),
-        (
-            "(() => { let x, y; $dump.cell(() => [x, y]); })();",
-            "capture exactly one variable",
-        ),
-        (
-            "$dump.iteratorHelper([1, 0]);",
-            "not the slots of an iterator helper",
-        ),
-        (
-            "$dump.iteratorHelper([12, 0, 0, 0, 0, 0, 0, 0]);",
-            "not the slots of an iterator helper",
-        ),
-        (
-            "$dump.regexpIterator(/a/g, 1, 0);",
-            "not (an object, a string, flags 0-7)",
-        ),
-        (
-            "$dump.regexpIterator(/a/g, 'a', 9);",
-            "not (an object, a string, flags 0-7)",
-        ),
-        ("$dump.forIn(1, []);", "not an object or undefined"),
-        ("$dump.forIn(undefined, [1]);", "a key that is not a string"),
-        ("$dump.using({});", "the resources are not an array"),
-        (
-            "$dump.using([1, 2, 7]);",
-            "not [value, method, kind] triples",
-        ),
-        ("$dump.using([], { next: 1 });", "a bad next"),
-        ("$dump.using([], { hasError: 1 });", "a bad hasError"),
-        ("$dump.using([], { other: 1 });", "unknown key other"),
-        ("$dump.using([1, 2, 0], { next: 0, hasError: false });", ""),
-        ("$dump.pending(1, 'later', []);", "call 1 is open already"),
-        (
-            "$dump.pending(2, 'tools.read', []);",
-            "unknown host function tools.read",
-        ),
-        ("$dump.pending(-1, 'later', []);", "not a call id"),
-        (
-            "$dump.handle('x', 1); $dump.handle('x', 2);",
-            "two handles named x",
-        ),
-    ];
-    for (tail, want) in cases {
-        if want.is_empty() {
-            let mut vm = new_vm();
-            let text = alloc::format!(
-                "\"djs-dump 2\";\nasync function f(a) {{ const b = a + 1; return o.m(b, await later(b)); }}\n\
-                 const o = {{ m: (x, y) => x + y }};\n$dump.p = $dump.pending(1, 'later', [2]);\n{tail}"
-            );
-            load(&mut vm, &text).unwrap_or_else(|e| panic!("{tail}: {e}"));
-            continue;
-        }
-        let got = refusal(tail);
-        assert!(got.contains(want), "{tail}\n  got: {got}\n  want: {want}");
-    }
-}
-
-/// Runs `src` to idle point `k`, dumps it, loads the dump into a fresh VM and runs that
-/// to the end: the lines before the dump and after, or why the dump was refused.
+/// Runs `src` to idle point `k`, dumps it, runs the dump in a fresh VM to the end: the
+/// lines before the dump and after, or why the dump was refused.
 fn dump_at(src: &str, k: usize) -> Result<(Vec<String>, String), String> {
-    let mut vm = new_vm();
+    let mut vm = plain_vm();
     let f = vm
         .compile(
             src.as_bytes(),
@@ -489,136 +176,42 @@ fn dump_at(src: &str, k: usize) -> Result<(Vec<String>, String), String> {
     let this = Value::object(vm.global());
     vm.call(f, this, &[]).unwrap();
     let mut lines = Vec::new();
-    let mut seen = 0;
-    loop {
-        match vm.run(1_000_000_000) {
-            Status::HostCall { call_id, .. } => {
-                let args = vm.host_call(call_id).unwrap().args;
-                let parts: Vec<String> = args.iter().map(|&v| vm.display(v)).collect();
-                lines.push(parts.join(" "));
-                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
-            }
-            Status::Idle | Status::Done(_) => {
-                let Some(&id) = vm.pending_host_calls().iter().min() else {
-                    panic!("ended before idle point {k}");
-                };
-                seen += 1;
-                if seen == k {
-                    break;
-                }
-                settle(&mut vm, id);
-            }
-            s => panic!("{s:?}"),
-        }
+    for _ in 1..k {
+        let id = plain_step(&mut vm, &mut lines).expect("an idle point");
+        settle(&mut vm, id);
     }
-    // `later` and `print` are host globals, as for `djs resume` (0174); `console` and
-    // `tools` too, as for a codemode host: plan.src.js's own `const tools` shadows it.
-    let opts = super::dump::DumpOptions {
-        base: base(),
-        host: &["console", "tools", "print", "later"],
-        host_fn_name: &host_fn_name,
-        ..Default::default()
-    };
-    let text = vm.dump(&opts, None).map_err(|e| e.message())?;
+    plain_step(&mut vm, &mut lines).expect("an idle point");
+    let text = plain_dump(&vm)?;
     if std::env::var("DJS_DUMP_SHOW").is_ok_and(|v| v == "all") {
         std::println!("{text}");
     }
-    let (_, after) = continue_dump(&text, false);
-    lines.extend(after);
+    let mut vm = plain_load(&text)?;
+    while let Some(id) = plain_step(&mut vm, &mut lines) {
+        settle(&mut vm, id);
+    }
     Ok((lines, text))
 }
 
-#[test]
-fn exporter_round_trips_at_every_idle_point() {
-    let mut failed = Vec::new();
-    for name in [
-        "plan",
-        "operands",
-        "generator",
-        "asyncgen",
-        "combinators",
-        "loops",
-        "cells",
-        "steps",
-        "reenact",
-        "cycles",
-    ] {
-        let src =
-            std::fs::read_to_string(fixture_dir().join(alloc::format!("{name}.src.js"))).unwrap();
-        let (want, marks) = run_program(&src);
-        for k in 1..=marks.len() {
-            match dump_at(&src, k) {
-                Ok((got, text)) => {
-                    if std::env::var("DJS_DUMP_SHOW")
-                        .is_ok_and(|v| v == alloc::format!("{name}@{k}"))
-                    {
-                        std::println!("{text}");
-                    }
-                    if got != want {
-                        failed.push(alloc::format!(
-                            "{name} @{k}: {got:?}\n  want {want:?}\n{text}"
-                        ));
-                    }
-                }
-                Err(e) => failed.push(alloc::format!("{name} @{k}: {e}")),
-            }
-        }
-    }
-    assert!(failed.is_empty(), "{}", failed.join("\n"));
-}
-
-/// A loaded dump is its own fixed point: dumping the VM right after the load (the loaded
-/// state, the next idle point) writes the same text (docs/suspension-design-review.md
-/// section 7: hosts can skip re-dumping an unchanged run).
-#[test]
-fn dumping_a_loaded_dump_writes_the_same_text() {
-    // (`dump_at`'s.)
-    let opts = super::dump::DumpOptions {
-        base: base(),
-        host: &["console", "tools", "print", "later"],
-        host_fn_name: &host_fn_name,
-        ..Default::default()
+/// Runs dump `text` in `vm` (a fresh one, with the host's globals), the open calls
+/// reopened under their ids (D2890), what it prints meanwhile in `lines`: the handle of
+/// its completion value, the run's promise (D2895).
+fn plain_run(
+    vm: &mut Vm,
+    text: &str,
+    lines: &mut Vec<String>,
+) -> Result<crate::heap::Handle, String> {
+    let mut print = |vm: &mut Vm, call_id: u32, fn_id: u32| {
+        assert_eq!(fn_id, PRINT, "unexpected host call");
+        let args = vm.host_call(call_id).unwrap().args;
+        let parts: Vec<String> = args.iter().map(|&v| vm.display(v)).collect();
+        lines.push(parts.join(" "));
+        vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
     };
-    let mut failed = Vec::new();
-    for name in [
-        "plan",
-        "operands",
-        "generator",
-        "asyncgen",
-        "combinators",
-        "loops",
-        "cells",
-        "steps",
-        "reenact",
-        "cycles",
-    ] {
-        let src =
-            std::fs::read_to_string(fixture_dir().join(alloc::format!("{name}.src.js"))).unwrap();
-        let (_, marks) = run_program(&src);
-        for k in 1..=marks.len() {
-            let text = match dump_at(&src, k) {
-                Ok((_, text)) => text,
-                Err(e) => {
-                    failed.push(alloc::format!("{name} @{k}: {e}"));
-                    continue;
-                }
-            };
-            let mut vm = new_vm();
-            if let Err(e) = load(&mut vm, &text) {
-                failed.push(alloc::format!("{name} @{k}: {e}"));
-                continue;
-            }
-            match vm.dump(&opts, None) {
-                Ok(again) if again == text => {}
-                Ok(again) => failed.push(alloc::format!("{name} @{k}:\n{text}\nagain:\n{again}")),
-                Err(e) => failed.push(alloc::format!("{name} @{k}: {}", e.message())),
-            }
-        }
-    }
-    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    let v = super::dump_tests::run_plain_dump(vm, text, &host_fn, &mut print)?;
+    Ok(vm.heap_mut().new_handle(v).unwrap())
 }
 
-/// Prints the suspension maps of a file, for writing fixtures by hand:
+/// Prints the suspension maps of a file, for reading what the exporter reads:
 /// `DJS_SMAP=tests/dump/v2/x.src.js cargo test -p djs-core --lib show_maps -- --ignored --nocapture`.
 #[test]
 #[ignore]
@@ -654,7 +247,7 @@ fn dumps_need_an_idle_vm() {
         Err(e) => e.message(),
     };
     // Parked on a sync host call.
-    let mut vm = new_vm();
+    let mut vm = plain_vm();
     let f = vm
         .compile(
             b"print(1);",
@@ -666,7 +259,7 @@ fn dumps_need_an_idle_vm() {
     assert!(matches!(vm.run(1_000_000), Status::HostCall { .. }));
     assert!(reason(&vm).contains("is not idle"), "{}", reason(&vm));
     // Out of fuel in the middle of a call.
-    let mut vm = new_vm();
+    let mut vm = plain_vm();
     let f = vm
         .compile(
             b"for (let i = 0; i < 1e6; i++);",
@@ -678,7 +271,7 @@ fn dumps_need_an_idle_vm() {
     assert!(matches!(vm.run(100), Status::OutOfFuel));
     assert!(reason(&vm).contains("is not idle"), "{}", reason(&vm));
     // A host result delivered and not applied yet.
-    let mut vm = new_vm();
+    let mut vm = plain_vm();
     let f = vm
         .compile(
             b"globalThis.p = later(1);",
@@ -692,7 +285,7 @@ fn dumps_need_an_idle_vm() {
     vm.resolve_host_call(id, Ok(Value::int(1))).unwrap();
     assert!(reason(&vm).contains("not applied yet"), "{}", reason(&vm));
     // A call of a host function the host does not name.
-    let mut vm = new_vm();
+    let mut vm = plain_vm();
     let anon = vm.new_async_host_function(9, "anon").unwrap();
     vm.define_global("anon", anon).unwrap();
     let f = vm
@@ -717,7 +310,7 @@ fn dumps_need_an_idle_vm() {
 #[test]
 fn the_report_names_where_activations_stopped() {
     let src = std::fs::read_to_string(fixture_dir().join("steps.src.js")).unwrap();
-    let mut vm = new_vm();
+    let mut vm = plain_vm();
     let f = vm
         .compile(
             src.as_bytes(),
@@ -773,10 +366,6 @@ fn the_report_names_where_activations_stopped() {
         (d.open_calls, d.activations[0].file.as_str()),
         (1, "steps.js")
     );
-    assert!(
-        d.text
-            .contains(&cat!(d.activations[1].loc, " = $dump.resume(main"))
-    );
     assert!(!d.text.contains("^\n"), "{}", d.text);
 }
 
@@ -793,7 +382,14 @@ fn body_host_vm() -> Vm {
 
 /// ... collecting at every safepoint with `stress`.
 fn body_host_vm_with(stress: bool) -> Vm {
-    let mut vm = new_vm_with(stress);
+    let mut vm = vm_with(VmOptions {
+        frozen_builtins: true,
+        exec: ExecOptions {
+            gc_stress: stress,
+            ..ExecOptions::default()
+        },
+        ..VmOptions::default()
+    });
     run_value(
         &mut vm,
         "globalThis.tools = { list: () => later([\"a\", \"b\"]), read: (f) => later(f + f) };\n\
@@ -870,14 +466,13 @@ fn body_dump(src: &str, k: usize) -> (Vec<String>, Option<Result<super::dump::Du
         host_fn_name: &host_fn_name,
         handles: &handles,
         call_states: &[],
-        plain: false,
     };
     let d = vm.dump_report(&opts, None).map_err(|e| e.message());
     (lines, Some(d))
 }
 
-/// The run's own activation is written as `async function (tools, console) {...}` and
-/// resumed at every idle point; the report points into the body.
+/// The run's own activation is written as a continuation `async function (tools,
+/// console) {...}` at every idle point; the report points into the body.
 #[test]
 fn a_codemode_body_run_round_trips() {
     let (want, _) = body_at(usize::MAX);
@@ -889,17 +484,17 @@ fn a_codemode_body_run_round_trips() {
             std::println!("{}", d.text);
         }
         assert!(
-            d.text
-                .contains("$dump.resume(async function (tools, console) {\nconsole.log("),
+            d.text.contains("async function (tools, console) {"),
             "{}",
             d.text
         );
         let mut vm = body_host_vm();
-        let loaded = load(&mut vm, &d.text).unwrap_or_else(|e| panic!("@{k}: {e}\n{}", d.text));
+        let run = plain_run(&mut vm, &d.text, &mut lines)
+            .unwrap_or_else(|e| panic!("@{k}: {e}\n{}", d.text));
         let (mut after, mut marks) = (Vec::new(), Vec::new());
         drive(&mut vm, &mut after, &mut marks, None);
         lines.extend(after);
-        let run = vm.heap().get_handle(loaded.handles[0].1);
+        let run = vm.heap().get_handle(run);
         let r = vm
             .promise_state(run)
             .flatten()
@@ -948,7 +543,7 @@ fn a_codemode_body_that_differs_as_a_function_is_refused() {
     let (mut lines, d) = body_dump(src, 1);
     let d = d.unwrap().unwrap();
     let mut vm = body_host_vm();
-    load(&mut vm, &d.text).unwrap();
+    plain_run(&mut vm, &d.text, &mut lines).unwrap();
     drive(&mut vm, &mut lines, &mut Vec::new(), None);
     assert_eq!(lines, want[..want.len() - 1]);
     assert_eq!(want, ["true", "run Some(Ok(\"5\"))"]);
@@ -958,9 +553,10 @@ fn a_codemode_body_that_differs_as_a_function_is_refused() {
 //
 // tests/dump/v2/golden/: small programs (`NAME.src.js` Scripts, `NAME.body.js` codemode
 // bodies) and the dumps the exporter wrote of them, `NAME.K.dump.js` at idle point K.
-// Every later build must load them and finish the run as the program does (D2560); a
-// golden dump changes only with a decision (D2642). The host is `body_host_vm`'s: `later`,
-// `print`, `tools`, `console`. Write the dumps of a new program (never over existing
+// Every later build must run them and finish the run as the program does (D2560, D2920):
+// they are JavaScript that calls the dump runtime, so this holds the runtime and the
+// engine to the format, not the exporter. A golden dump changes only with a decision
+// (D2642). The host is `body_host_vm`'s: `later`, `print`, `tools`, `console`. Write the dumps of a new program (never over existing
 // ones) with `DJS_GOLDEN_WRITE=1 cargo test -p djs-core --lib write_golden_dumps --
 // --ignored`.
 
@@ -1103,16 +699,11 @@ fn golden_run(src: &str, body: bool) -> (Vec<String>, Vec<usize>) {
     (lines, marks)
 }
 
-/// Loads golden dump `text` and finishes the run: the lines it prints.
+/// Runs golden dump `text` and finishes the run: the lines it prints.
 fn golden_continue(text: &str, stress: bool) -> Result<Vec<String>, String> {
     let mut vm = body_host_vm_with(stress);
-    let loaded = load(&mut vm, text)?;
-    let mut run = loaded
-        .handles
-        .iter()
-        .find(|(n, _)| n == "run")
-        .map(|(_, h)| *h);
     let (mut lines, mut marks) = (Vec::new(), Vec::new());
+    let mut run = Some(plain_run(&mut vm, text, &mut lines)?);
     golden_drive(
         &mut vm,
         usize::MAX,
@@ -1132,8 +723,12 @@ fn golden_dumps_load_and_finish() {
     let programs = golden_programs();
     let dumps = golden_dumps();
     let mut failed = Vec::new();
+    // A program whose idle points are all refused (D2878) has none: it is listed in
+    // plain-refusals.txt.
+    let refusals = std::fs::read_to_string(plain_refusals_file()).unwrap_or_default();
     for (name, _, _) in &programs {
-        if !dumps.iter().any(|d| d.0 == *name) {
+        let listed = refusals.contains(&alloc::format!("golden/{name}@"));
+        if !dumps.iter().any(|d| d.0 == *name) && !listed {
             failed.push(alloc::format!("{name}: no dump"));
         }
     }
@@ -1147,8 +742,8 @@ fn golden_dumps_load_and_finish() {
         if *k == 1 && std::env::var("DJS_DUMP_SHOW").is_ok_and(|v| v == "golden") {
             std::println!("{name}: {} idle points, {want:?}", marks.len());
         }
-        if !text.starts_with("\"djs-dump 2\";\n") {
-            failed.push(alloc::format!("{file}: not a format 2 dump"));
+        if !text.starts_with("\"djs-dump\";\n") {
+            failed.push(alloc::format!("{file}: not a dump"));
             continue;
         }
         if *k == 0 || *k > marks.len() {
@@ -1210,11 +805,14 @@ fn write_golden_dumps() {
                 host_fn_name: &host_fn_name,
                 handles: if body { &handles } else { &[] },
                 call_states: &[],
-                plain: false,
             };
-            let text = vm
-                .dump(&opts, None)
-                .unwrap_or_else(|e| panic!("{name} @{k}: {}", e.message()));
+            let text = match vm.dump(&opts, None) {
+                Ok(t) => t,
+                Err(e) => {
+                    std::println!("refused {name} @{k}: {}", e.message());
+                    continue;
+                }
+            };
             let file = golden_dir().join(alloc::format!("{name}.{k}.dump.js"));
             std::fs::write(&file, text).unwrap();
             std::println!("wrote {}", file.display());
@@ -1254,9 +852,9 @@ fn a_codemode_body_whose_parameter_a_closure_captures() {
         let (mut lines, d) = body_dump(src, k);
         let d = d.unwrap().unwrap_or_else(|e| panic!("@{k}: {e}"));
         let mut vm = body_host_vm();
-        let loaded = load(&mut vm, &d.text).unwrap();
+        let run = plain_run(&mut vm, &d.text, &mut lines).unwrap();
         drive(&mut vm, &mut lines, &mut Vec::new(), None);
-        let run = vm.heap().get_handle(loaded.handles[0].1);
+        let run = vm.heap().get_handle(run);
         let r = vm
             .promise_state(run)
             .flatten()
@@ -1266,49 +864,38 @@ fn a_codemode_body_whose_parameter_a_closure_captures() {
     }
 }
 
-/// `const r = await ...` while the await is pending: a slot the compiler keeps in its
-/// TDZ (code reads it before the declaration) is `$dump.TDZ`, a captured one a cell in
-/// its TDZ; a slot it does not (no read can come first) holds undefined, which nothing
-/// can observe. 0179's question; the TDZ slot was refused as "an internal value".
+/// `const r = await ...` while the await is pending: a binding in its TDZ (code reads it
+/// before the declaration), captured or not, is a declaration of the continuation that
+/// has not run yet; one no read can come first holds undefined (0179's question).
 #[test]
 fn bindings_in_their_tdz_at_an_await() {
-    for (src, want) in [
-        (
-            "async function main() { try { const r = (await later(1)) + r; print(r); } catch (e) { print(e.name); } }\nmain();",
-            "slots: { r: $dump.TDZ }",
-        ),
-        (
-            "let get; later(2).then(() => print(get()));\nasync function main() { get = () => { try { return r; } catch (e) { return e.name; } }; const r = await later(1); print(r); }\nmain();",
-            "r: $dump.s",
-        ),
-        (
-            "async function main() { for (let i = 0; i < 2; i++) { if (i) { try { print(r); } catch (e) { print(e.name); } } const r = await later(i); } }\nmain();",
-            "slots: { i: 0, r: $dump.TDZ }",
-        ),
-        (
-            "async function main() { const r = await later(1); print(r); }\nmain();",
-            "slots: { r: undefined }",
-        ),
+    for src in [
+        "async function main() { try { const r = (await later(1)) + r; print(r); } catch (e) { print(e.name); } }\nmain();",
+        "async function main() { for (let i = 0; i < 2; i++) { if (i) { try { print(r); } catch (e) { print(e.name); } } const r = await later(i); } }\nmain();",
+        "async function main() { const r = await later(1); print(r); }\nmain();",
     ] {
         let (got, text) = dump_at(src, 1).unwrap_or_else(|e| panic!("{src}: {e}"));
-        assert_eq!(got, run_program(src).0, "{src}");
+        assert_eq!(got, run_program(src).0, "{src}\n{text}");
         assert!(got[0] == "ReferenceError" || got[0] == "1", "{got:?}");
-        assert!(text.contains(want), "{src}\n{text}");
     }
+    // A closure over the binding, made in a callback: refused (0205 follow-up).
+    let src = "let get; later(2).then(() => print(get()));\nasync function main() { get = () => { try { return r; } catch (e) { return e.name; } }; const r = await later(1); print(r); }\nmain();";
+    let e = dump_at(src, 1).unwrap_err();
+    assert!(
+        e.contains("a global lexical declaration inside a callback"),
+        "{e}"
+    );
 }
 
-/// A class with instance fields or private members declared in a
-/// waiting function: the frame's hidden bindings of the class are dead after its
-/// statement and written as undefined; the class comes from its text (0175's repro).
+/// A class with instance fields declared in a waiting function: the frame's hidden
+/// bindings of the class are dead after its statement; the class comes from its text
+/// (0175's repro). Instances with private names are refused (D2878).
 #[test]
 fn classes_with_fields_in_a_waiting_frame() {
     for src in [
         "class C { x = 1; } const c = new C(); await later(1); return c.x;",
-        "class C { #n = 0; inc() { return ++this.#n; } } const c = new C(); await later(1); return c.inc();",
-        "class C { static s = 1; kk = 2; #m() { return 3; } get m() { return this.#m(); } }\n\
+        "class C { static s = 1; kk = 2; get m() { return 3; } }\n\
          const c = new C(); await later(1); return c.kk + c.m + C.s;",
-        "class P { #n = 0; x = 1; async add() { this.#n += String(await later(1)).length; return this.#n + this.x; } }\n\
-         const p = new P(); return [await p.add(), await p.add()].join();",
         "const out = []; for (const v of [1, 2]) { class C { y = v; } out.push(new C().y + (await later(v))); } return out.join();",
     ] {
         let (want, _) = body_dump(src, usize::MAX);
@@ -1317,9 +904,10 @@ fn classes_with_fields_in_a_waiting_frame() {
             let (mut lines, d) = body_dump(src, k);
             let d = d.unwrap().unwrap_or_else(|e| panic!("{src} @{k}: {e}"));
             let mut vm = body_host_vm();
-            let loaded = load(&mut vm, &d.text).unwrap_or_else(|e| panic!("{src} @{k}: {e}"));
+            let run = plain_run(&mut vm, &d.text, &mut lines)
+                .unwrap_or_else(|e| panic!("{src} @{k}: {e}"));
             drive(&mut vm, &mut lines, &mut Vec::new(), None);
-            let run = vm.heap().get_handle(loaded.handles[0].1);
+            let run = vm.heap().get_handle(run);
             let r = vm
                 .promise_state(run)
                 .flatten()
@@ -1328,17 +916,9 @@ fn classes_with_fields_in_a_waiting_frame() {
             assert_eq!(lines, want, "{src} @{k}\n{}", d.text);
         }
     }
-}
-
-/// A private name in a frame (the key operand of `this.#n += await v`) is its class's
-/// (`$dump.private(C, "#n")`), not a symbol of the same description.
-#[test]
-fn a_private_name_operand_is_the_class_s() {
-    let src = "class P { #n = 1; async add() { this.#n += await later(2); return this.#n; } }\n\
-               const p = new P(); p.add().then(print);";
-    let (got, text) = dump_at(src, 1).unwrap();
-    assert_eq!(got, ["3"]);
-    assert!(text.contains("= $dump.private(P, \"#n\");"), "{text}");
+    let src = "class C { #n = 0; inc() { return ++this.#n; } } const c = new C(); await later(1); return c.inc();";
+    let e = body_dump(src, 1).1.unwrap().unwrap_err();
+    assert!(e.contains("with private name #n"), "{e}");
 }
 
 /// The number of idle points of body `src`.
@@ -1375,10 +955,10 @@ fn computed_keys_evaluated_again_are_refused() {
     assert_eq!(dump_at(src, 1).unwrap().0, ["1 3 {\"q\":1} 1"]);
 }
 
-/// The run of `src` dumped at every idle point and continued in a fresh VM that loaded
-/// the dump, dump after dump (as `--dump-every-idle`): its lines.
+/// The run of `src` dumped at every idle point and continued in a fresh VM that ran the
+/// dump, dump after dump (as `--plain-dumps`): its lines.
 fn chained(src: &str) -> Vec<String> {
-    let mut vm = new_vm();
+    let mut vm = plain_vm();
     let f = vm
         .compile(
             src.as_bytes(),
@@ -1389,42 +969,19 @@ fn chained(src: &str) -> Vec<String> {
     vm.call(f, this, &[]).unwrap();
     let mut lines = Vec::new();
     for _ in 0..1000 {
-        match vm.run(1_000_000_000) {
-            Status::HostCall { call_id, .. } => {
-                let args = vm.host_call(call_id).unwrap().args;
-                let parts: Vec<String> = args.iter().map(|&v| vm.display(v)).collect();
-                lines.push(parts.join(" "));
-                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
-            }
-            Status::Idle | Status::Done(_) => {
-                if vm.pending_host_calls().is_empty() {
-                    return lines;
-                }
-                let opts = super::dump::DumpOptions {
-                    base: base(),
-                    host: &["console", "tools", "print", "later"],
-                    host_fn_name: &host_fn_name,
-                    ..Default::default()
-                };
-                let text = vm
-                    .dump(&opts, None)
-                    .unwrap_or_else(|e| panic!("{}", e.message()));
-                vm = new_vm();
-                let loaded = load(&mut vm, &text).unwrap_or_else(|e| panic!("{e}\n{text}"));
-                for (_, h) in &loaded.handles {
-                    vm.heap_mut().drop_handle(*h);
-                }
-                let id = *vm.pending_host_calls().iter().min().unwrap();
-                settle(&mut vm, id);
-            }
-            s => panic!("{s:?}"),
+        if plain_step(&mut vm, &mut lines).is_none() {
+            return lines;
         }
+        let text = plain_dump(&vm).unwrap_or_else(|e| panic!("{e}"));
+        vm = plain_load(&text).unwrap_or_else(|e| panic!("{e}\n{text}"));
+        let id = plain_step(&mut vm, &mut lines).expect("an idle point");
+        settle(&mut vm, id);
     }
     panic!("runaway: {lines:?}");
 }
 
 /// `Math.random`'s state goes with the dump: a resumed run continues the sequence
-/// (0176's repro, D2624); iterators stepped by `$dump.advance` dump again as they were
+/// (0176's repro, D2624); iterators stepped by `$djs.advance` dump again as they were
 /// (two awaits per iteration: dumped again before the loop steps them).
 #[test]
 fn dumps_carry_the_random_state_and_iterators_again() {
@@ -1443,30 +1000,6 @@ fn a_for_in_over_a_proxy_is_refused() {
     let src = "async function main() { for (const k in new Proxy({ a: 1 }, {})) print(k, await later(k)); }\nmain();";
     let e = dump_at(src, 1).unwrap_err();
     assert!(e.contains("a for-in loop over a Proxy"), "{e}");
-}
-
-/// The new golden programs' every idle point, dumped once and dumped in a chain.
-#[test]
-fn delegation_round_trips() {
-    for name in [
-        "yield-star",
-        "for-await-close",
-        "finally",
-        "using",
-        "destructuring",
-        "for-in",
-        "iterator-helpers",
-    ] {
-        let src =
-            std::fs::read_to_string(golden_dir().join(alloc::format!("{name}.src.js"))).unwrap();
-        let (want, marks) = run_program(&src);
-        assert!(!marks.is_empty());
-        for k in 1..=marks.len() {
-            let (got, text) = dump_at(&src, k).unwrap_or_else(|e| panic!("{name} @{k}: {e}"));
-            assert_eq!(got, want, "{name} @{k}\n{text}");
-        }
-        assert_eq!(chained(&src), want, "{name} chained");
-    }
 }
 
 /// An array with named properties is not a literal alone: it gets a location for its
@@ -1514,7 +1047,6 @@ fn plain_dump(vm: &Vm) -> Result<String, String> {
         base: base(),
         host: &["console", "tools", "print", "later"],
         host_fn_name: &host_fn_name,
-        plain: true,
         ..Default::default()
     };
     vm.dump(&opts, None).map_err(|e| e.message())
