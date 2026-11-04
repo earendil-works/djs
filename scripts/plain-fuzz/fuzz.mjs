@@ -7,7 +7,7 @@
 //
 //   node scripts/plain-fuzz/fuzz.mjs [--seed S] [--cases N] [--time SECS] [--batch B]
 //                                    [--jobs J] [--max-load L] [--from-max K] [--dir DIR]
-//                                    [--no-node]
+//                                    [--no-node] [--known FILE]
 //   node scripts/plain-fuzz/fuzz.mjs check FILE...      one program (a case body) each
 //   node scripts/plain-fuzz/fuzz.mjs reduce FILE --sig TEXT [--time SECS] [-o OUT]
 //
@@ -45,6 +45,10 @@ const jobs = Number(flag("--jobs", 4));
 const maxLoad = Number(flag("--max-load", 30));
 const fromMax = Number(flag("--from-max", 40));
 const noNode = has("--no-node");
+// --known FILE: signature substrings (one per line) of bugs already reported; matching
+// failures are counted on one line instead of listed.
+const knownFile = flag("--known", null);
+const known = knownFile ? fs.readFileSync(knownFile, "utf8").split("\n").filter((l) => l.trim() && !l.startsWith("#")) : [];
 const dir = path.resolve(flag("--dir", path.join(ROOT, "work/scratch/0208/fuzz")));
 
 function difftestBin() {
@@ -329,7 +333,10 @@ async function fuzz(bin) {
   process.stderr.write("\n");
   console.log(`plain-fuzz: seeds ${seed0}..${seed0 + done - 1}, ${done} programs, ${idlePoints} idle points`);
   console.log(`plain runs end: ${[...ends].map(([e, n]) => `${n} ${e}`).join(", ")}`);
-  for (const [sig, e] of [...found].sort((a, b) => b[1].seeds.size - a[1].seeds.size)) {
+  const isKnown = (sig) => known.some((k) => sig.includes(k));
+  const old = [...found.keys()].filter(isKnown);
+  if (old.length) console.log(`known: ${old.length} signatures (${knownFile})`);
+  for (const [sig, e] of [...found].filter(([k]) => !isKnown(k)).sort((a, b) => b[1].seeds.size - a[1].seeds.size)) {
     console.log(`${String(e.seeds.size).padStart(4)} programs  ${sig}\n        smallest: seed ${e.seed} (${e.size} bytes), chain from idle point ${e.from}`);
   }
   process.exit(found.size ? 1 : 0);
