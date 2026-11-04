@@ -8771,3 +8771,34 @@ report the names per site (`Site::slots`), and the pins (tests/smap) list them i
 of the role sequence, which is the role order bottom first; summary.txt still counts
 role sequences. Pins rewritten under this decision (D2619); no dump or behaviour
 change.
+## D2770: A call's state is JSON text, written verbatim as `$dump.pending`'s fourth argument
+date: 2026-11-04 · by: hostcalls · issue: 0189
+The engine keeps no host state: the host passes each open call's state as JSON text when
+it dumps (`DumpOptions::call_states`; `vm_dump`'s fifth staging line `id:bytes` and the
+texts after it), the dumper writes it as is (`$dump.pending(2, "tools.sleep", [5000],
+{"due":1793776092499})`) and the loader stringifies the value back (`OpenCall::state`;
+`vm_load_dump` gives a byte length per call and the texts after the handles' names; ABI
+version 3). Readable in the dump, and no wire format in the format. The dumper checks the
+text first (vm/dump_state.rs): JSON only, so the host's text cannot inject code, and no
+key `__proto__`, which an object literal reads as its prototype where `JSON.parse` makes a
+property. A state for a call that is not open is refused too. Rejected: the state as a
+heap value the dumper writes like data (needs a mutable VM or a parse at dump time, and
+the host's state would get `$dump.nN` names), and a JSON string literal (unreadable).
+
+## D2771: Tasks: the Sandbox drives the run and the open calls' hooks
+date: 2026-11-04 · by: hostcalls · issue: 0189
+`sandbox.start(code, params)` returns a `Task`: the sandbox calls the async host
+functions as `runAsync` does and `task.result` is the outcome. `task.suspend()` waits for
+the next idle point with nothing left to deliver, takes each open call's state (its
+function's `save(call)`, default `call.state`), dumps and stops: the calls' `signal`s
+abort, late results are dropped, `result` rejects with kind `suspended` (marked handled,
+so an unawaited result is no unhandled rejection). A failed dump rejects only the
+`suspend` and the task goes on; `checkpoint()` dumps without stopping. `Sandbox.resume(dump,
+opts)` (and `sandbox.resume(dump)`) loads and drives: each open call goes to its
+function's `resume(state, call)`, or to `call` again when there is no `resume`, and a
+plain function's call is rejected, because the sandbox cannot know whether calling it
+again is safe. The hooks get a `HostCall` `{id, fn, args, startedAt, state, signal}`,
+also `this` of `call`, so a call can record its state when it starts and a resumed call
+keeps its state for the next dump. The host-driven API stays: `begin`/`settle`/`advance`,
+`Run.dump(states)`, and `sandbox.loadRun(dump)` (what `Sandbox.resume` returned before),
+whose calls carry their loaded `state`.
