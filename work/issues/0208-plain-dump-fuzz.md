@@ -1,7 +1,7 @@
 # 0208: Fuzz plain dumps: generated codemode-like programs, every idle point, djs and node
 
-status: open
-agent: -
+status: in-progress
+agent: pjz
 branch: issue/0208-plain-dump-fuzz
 depends-on: 0201, 0202 (on main)
 guide: -
