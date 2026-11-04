@@ -46,6 +46,8 @@ const RESUME: u32 = 4;
 /// A plain dump's `$djs.source(name, hash, params, 1)` (D2882): the case's function, its
 /// wrapper Script evaluated again.
 const SOURCE: u32 = 5;
+/// A plain dump's `$djs.host(name)`: the host function of that name (D2971).
+const HOST: u32 = 6;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Djs {
@@ -430,6 +432,8 @@ impl Session {
         vm.define(hooks, "resume", resume).map_err(err)?;
         let source = vm.new_host_function(SOURCE, "source").map_err(err)?;
         vm.define(hooks, "source", source).map_err(err)?;
+        let host = vm.new_host_function(HOST, "host").map_err(err)?;
+        vm.define(hooks, "host", host).map_err(err)?;
         vm.define_global("$djs", Value::object(hooks))
             .map_err(err)?;
         // The case's function, made again by its wrapper (which runs none of its code),
@@ -628,6 +632,18 @@ impl Session {
                     .vm
                     .open_host_call(call_id, LATER)
                     .map_err(|e| Stop::Crash(format!("open_host_call: {e}")));
+            }
+            HOST => {
+                // The prelude's host functions are the globals of their names.
+                let name = text(self, arg(0))?;
+                let v = self
+                    .vm
+                    .global_path(&name)
+                    .ok_or_else(|| Stop::Crash(format!("$djs.host of `{name}`")))?;
+                return self
+                    .vm
+                    .resolve_host_call(call_id, Ok(v))
+                    .map_err(|e| Stop::Crash(format!("resolve_host_call: {e:?}")));
             }
             id => return Err(Stop::Crash(format!("unknown host function {id}"))),
         }

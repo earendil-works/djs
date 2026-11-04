@@ -42,7 +42,7 @@ use djs_core::vm::{Status, Vm, VmOptions};
 use djs_core::wire::{self, DecodeOptions};
 
 /// The ABI version, bumped on any incompatible change to the exports.
-pub const ABI_VERSION: u32 = 4;
+pub const ABI_VERSION: u32 = 5;
 
 /// `vm_run` results.
 pub mod status {
@@ -984,12 +984,14 @@ pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32) -> i
 /// Writes the idle VM as a dump (`Vm::dump`, 0167, 0172, a plain Script, D2830;
 /// docs/plain-js-dumps.md) to the out buffer: its global bindings, and what is in flight
 /// (suspended activations, open host calls, pending promises). The VM needs frozen
-/// builtins (D2836). staging[0..len] is UTF-8, five lines (0179): the globals the host defines (re-bound by name, never
+/// builtins (D2836). staging[0..len] is UTF-8, six lines (0179, 0213): the globals the host defines (re-bound by name, never
 /// written) and the names to dump (none: all of the VM's own), each comma-separated; the
 /// host's function names in id order, tab-separated (`DumpOptions::host_fn_name`: open
 /// calls and host functions held as values are written by name); the values to name for
 /// the host, `handle:name`, tab-separated (`DumpOptions::handles`, the dump's completion
 /// value, D2895; handle 0: the entry call's outcome, `Vm::outcome`, D2633); the host's
+/// roots, `handle:name`, tab-separated (`DumpOptions::host_roots`, written as
+/// `$djs.host(name)`, D2971); the host's
 /// states of open calls (D2770), `call_id:byte_len`, tab-separated; and after that line's
 /// newline the states' JSON texts one after another (`DumpOptions::call_states`, written as
 /// `$djs.resume`'s fourth argument). 0: the dump is in out; 1: refused, the reasons in out
@@ -1003,8 +1005,8 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
         let text = staged_str(staging, 0, len).to_owned();
-        // Five lines, then the states' text, which may hold newlines of its own.
-        let mut lines = text.splitn(6, '\n');
+        // Six lines, then the states' text, which may hold newlines of its own.
+        let mut lines = text.splitn(7, '\n');
         let mut line = || lines.next().unwrap_or("");
         let host: Vec<&str> = line().split(',').filter(|n| !n.is_empty()).collect();
         let names: Vec<&str> = line().split(',').filter(|n| !n.is_empty()).collect();
@@ -1025,6 +1027,13 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
                     h => slot.value(h),
                 };
                 Some((name, v))
+            })
+            .collect();
+        let roots: Vec<(&str, Value)> = line()
+            .split('\t')
+            .filter_map(|e| {
+                let (h, name) = e.split_once(':')?;
+                Some((name, slot.value(h.parse().ok()?)))
             })
             .collect();
         let state_lens = line();
@@ -1052,6 +1061,7 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
             let opts = djs_core::vm::dump::DumpOptions {
                 base,
                 host: &host,
+                host_roots: &roots,
                 host_fn_name: &host_fn_name,
                 handles: &handles,
                 call_states: &call_states,

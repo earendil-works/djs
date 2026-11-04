@@ -269,6 +269,25 @@ impl Tools {
         }
     }
 
+    /// A dump's `$djs.host(name)` (D2971): the tool `tools.<n>` from the Proxy's table
+    /// (made there now if the run had not read it yet, so that the script's later
+    /// `tools.<n>` is the same function), any other name the global of its path
+    /// (`tools`, `console`, `print`, `later`).
+    pub fn host_value(&self, vm: &mut Vm, name: &str) -> Option<Value> {
+        let Some(tool) = name.strip_prefix("tools.").filter(|n| !n.is_empty()) else {
+            return vm.global_path(name);
+        };
+        let tools = vm.global_path("tools")?.as_object()?;
+        let made = vm.heap().proxy_target(tools)?;
+        let k = vm.heap_mut().atom_str(tool).ok()?;
+        if let Some(v) = vm.heap().get_own_property(made, k).and_then(|p| p.value()) {
+            return Some(v);
+        }
+        let f = vm.new_async_host_function(self.id_for(tool), tool).ok()?;
+        vm.define(made, tool, f).ok()?;
+        Some(f)
+    }
+
     /// Puts every tool the registry knows into the `tools` Proxy's table at once, under its
     /// id, as the dumped run had made them (the state's `made`, D2897): reading
     /// `tools.read` later then makes no `make` call, which would take a call id the

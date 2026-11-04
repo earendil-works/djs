@@ -463,6 +463,7 @@ fn body_dump(src: &str, k: usize) -> (Vec<String>, Option<Result<super::dump::Du
     let opts = super::dump::DumpOptions {
         base: base(),
         host: &["console", "tools", "print", "later"],
+        host_roots: &[],
         host_fn_name: &host_fn_name,
         handles: &handles,
         call_states: &[],
@@ -803,6 +804,7 @@ fn write_golden_dumps() {
             let opts = super::dump::DumpOptions {
                 base: base(),
                 host: GOLDEN_HOST,
+                host_roots: &[],
                 host_fn_name: &host_fn_name,
                 handles: if body { &handles } else { &[] },
                 call_states: &[],

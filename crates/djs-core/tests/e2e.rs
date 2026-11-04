@@ -96,9 +96,11 @@ fn dump_vm() -> (Vm, djs_core::value::Obj) {
 /// A dump's hooks (D2890), above every case's host function id.
 const SEED: u32 = 0x7fff_fff0;
 const RESUME: u32 = 0x7fff_fff1;
+const HOST: u32 = 0x7fff_fff2;
 
 /// Runs dump `text` in `vm`, a fresh one, as a host does: `$djs` is the dump runtime with
-/// the hooks `seed` and `resume` (a finished VM has no open call to resume), and the
+/// the hooks `seed`, `resume` (a finished VM has no open call to resume) and `host` (the
+/// host's values are the globals of their names, D2971), and the
 /// Script runs to its end. Why it failed, if it did.
 fn run_dump(vm: &mut Vm, text: &str) -> Result<(), String> {
     let hooks = vm.dump_runtime()?.as_object().ok_or("no dump runtime")?;
@@ -106,6 +108,8 @@ fn run_dump(vm: &mut Vm, text: &str) -> Result<(), String> {
     vm.define(hooks, "seed", seed).unwrap();
     let resume = vm.new_host_function(RESUME, "resume").unwrap();
     vm.define(hooks, "resume", resume).unwrap();
+    let host = vm.new_host_function(HOST, "host").unwrap();
+    vm.define(hooks, "host", host).unwrap();
     vm.define_global("$djs", Value::object(hooks)).unwrap();
     let f = vm
         .compile(text.as_bytes(), &CompileOptions::script("dump.js"))
@@ -120,6 +124,15 @@ fn run_dump(vm: &mut Vm, text: &str) -> Result<(), String> {
                 let half = |i: usize| args.get(i).and_then(|v| v.as_int()).unwrap_or(0) as u32;
                 vm.set_math_random_seed(u64::from(half(0)) | (u64::from(half(1)) << 32));
                 vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+            }
+            Status::HostCall { call_id, fn_id } if fn_id == HOST => {
+                let args = vm.host_call(call_id).unwrap().args;
+                let name = args.first().and_then(|v| v.as_string());
+                let name = name.map(|s| vm.heap().str_to_string(s)).unwrap_or_default();
+                let v = vm
+                    .global_path(&name)
+                    .ok_or(format!("host: unknown {name}"))?;
+                vm.resolve_host_call(call_id, Ok(v)).unwrap();
             }
             Status::HostCall { call_id, .. } => {
                 vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();

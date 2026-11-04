@@ -401,8 +401,9 @@ fn big_dump_timing() {
 }
 
 #[test]
-fn captured_host_values_read_the_global() {
-    // A body's closure that captures its `tools` parameter: the host re-binds `tools`.
+fn captured_host_values_are_the_host_s() {
+    // A body's closure that captures its `tools` parameter: the variable holds the host's
+    // value by name (D2971), whatever the loading host binds as the global.
     let mut a = new_vm();
     run(
         &mut a,
@@ -419,11 +420,86 @@ fn captured_host_values_read_the_global() {
             Some(&["lib"]),
         )
         .unwrap_or_else(|e| panic!("{}", e.message()));
-    assert!(!text.contains("let tools"), "{text}");
+    assert!(text.contains("let tools = $djs.host(\"tools\");"), "{text}");
     let mut b = new_vm();
     run(&mut b, "globalThis.tools = { read: (p) => 'host ' + p };");
     assert_eq!(load(&mut b, &text), "", "{text}");
     assert_eq!(run(&mut b, "lib.go('x')"), "host x", "{text}");
+}
+
+/// Ids of the host functions in the binding tests.
+const MY_TOOL: u32 = 7;
+const SDK_FETCH: u32 = 8;
+
+fn binding_name(id: u32) -> Option<String> {
+    match id {
+        MY_TOOL => Some("@sdk/our-stuff#myTool".into()),
+        SDK_FETCH => Some("sdk.fetch".into()),
+        _ => None,
+    }
+}
+
+#[test]
+fn host_functions_are_written_by_identity_not_binding() {
+    // A host function bound nowhere but as a closure's parameter (an import's stand-in,
+    // D2972), and a namespace object that is no global: the dump names both (D2970,
+    // D2971), so the loading host may bind them anywhere.
+    let mut a = new_vm();
+    let my_tool = a.new_async_host_function(MY_TOOL, "myTool").unwrap();
+    let sdk = a.new_object().unwrap();
+    let fetch = a.new_async_host_function(SDK_FETCH, "fetch").unwrap();
+    a.define(sdk, "fetch", fetch).unwrap();
+    a.define(sdk, "version", Value::int(3)).unwrap();
+    let helper = a.new_object().unwrap();
+    a.define(sdk, "helper", Value::object(helper)).unwrap();
+    a.define_global("$t", my_tool).unwrap();
+    a.define_global("$s", Value::object(sdk)).unwrap();
+    run(
+        &mut a,
+        "var lib = ((myTool, sdk) => ({ tool: () => myTool, sdk: () => sdk, helper: sdk.helper, \
+         fetch: sdk.fetch }))($t, $s);\n\
+         delete globalThis.$t; delete globalThis.$s;",
+    );
+    let text = a
+        .dump(
+            &DumpOptions {
+                base: base(),
+                host_roots: &[("sdk", Value::object(sdk))],
+                host_fn_name: &binding_name,
+                ..Default::default()
+            },
+            Some(&["lib"]),
+        )
+        .unwrap_or_else(|e| panic!("{}", e.message()));
+    assert!(
+        text.contains("$djs.host(\"@sdk/our-stuff#myTool\")"),
+        "{text}"
+    );
+    assert!(text.contains("$djs.host(\"sdk\")"), "{text}");
+    assert!(text.contains("$djs.host(\"sdk\").helper"), "{text}");
+    // A host function reachable from a root is still written by its identity.
+    assert!(text.contains("$djs.host(\"sdk.fetch\")"), "{text}");
+    // The loading host binds them elsewhere: names the script never sees, which the
+    // tests' `host` hook resolves as global paths.
+    let mut b = new_vm();
+    let my_tool = b.new_async_host_function(MY_TOOL, "myTool").unwrap();
+    let sdk = b.new_object().unwrap();
+    let fetch = b.new_async_host_function(SDK_FETCH, "fetch").unwrap();
+    b.define(sdk, "fetch", fetch).unwrap();
+    let helper = b.new_object().unwrap();
+    b.define(sdk, "helper", Value::object(helper)).unwrap();
+    b.define_global("@sdk/our-stuff#myTool", my_tool).unwrap();
+    b.define_global("sdk", Value::object(sdk)).unwrap();
+    assert_eq!(load(&mut b, &text), "", "{text}");
+    assert_eq!(
+        run(
+            &mut b,
+            "[lib.tool() === globalThis['@sdk/our-stuff#myTool'], lib.sdk() === sdk, \
+             lib.helper === sdk.helper, lib.fetch === sdk.fetch].join()"
+        ),
+        "true,true,true,true",
+        "{text}"
+    );
 }
 
 /// Runs `lines` one Script each (as the REPL does) or all as one Script, dumps every

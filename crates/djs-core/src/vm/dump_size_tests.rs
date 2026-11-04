@@ -67,6 +67,7 @@ fn the_sleep_example_dumps() {
     let opts = super::dump::DumpOptions {
         base: base(),
         host: &["console", "tools"],
+        host_roots: &[],
         host_fn_name: &name,
         handles: &[("run", run)],
         call_states: &[(call, "{\"due\":1793822825106}")],

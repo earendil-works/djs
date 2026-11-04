@@ -28,6 +28,9 @@ pub const SEED: u32 = 5;
 /// `$djs.source(name, hash, params)` (D2882): the codemode body the dump continues, the
 /// file `name` compiled again.
 pub const SOURCE: u32 = 6;
+/// `$djs.host(name)` (D2971): a host value by name, the same object the CLI binds (a tool
+/// in the `tools` Proxy's table, else the global of the name's path).
+pub const HOST: u32 = 7;
 
 /// A plain dump's header: `Some(typescript)` for `"djs-dump";` or
 /// `"djs-dump typescript";`.
@@ -70,6 +73,8 @@ pub fn begin_plain(vm: &mut Vm, text: &str, filename: &str) -> Result<(), String
     vm.define(hooks, "seed", seed).map_err(oom)?;
     let source = vm.new_host_function(SOURCE, "source").map_err(oom)?;
     vm.define(hooks, "source", source).map_err(oom)?;
+    let host = vm.new_host_function(HOST, "host").map_err(oom)?;
+    vm.define(hooks, "host", host).map_err(oom)?;
     vm.define_global(HOOKS, Value::object(hooks)).map_err(oom)?;
     let copts = CompileOptions {
         typescript: ts,
@@ -95,11 +100,23 @@ pub fn serve_hook(
     call_id: u32,
     fn_id: u32,
 ) -> bool {
-    if fn_id != RESUME && fn_id != SEED && fn_id != SOURCE {
+    if fn_id != RESUME && fn_id != SEED && fn_id != SOURCE && fn_id != HOST {
         return false;
     }
     let args = vm.host_call(call_id).expect("parked call").args;
     let arg = |i: usize| args.get(i).copied().unwrap_or(Value::UNDEFINED);
+    if fn_id == HOST {
+        let name = arg(0).as_string().map(|s| vm.heap().str_to_string(s));
+        let r = match name {
+            Some(n) => tools
+                .host_value(vm, &n)
+                .ok_or_else(|| format!("host: unknown host value {n}")),
+            None => Err(String::from("host: not a name")),
+        };
+        let r = r.map_err(|msg| vm.new_error(ErrorKind::Error, &msg).expect("oom"));
+        let _ = vm.resolve_host_call(call_id, r);
+        return true;
+    }
     if fn_id == SOURCE {
         let text = |v: Value| v.as_string().map(|s| vm.heap().str_to_string(s));
         let r = match (text(arg(0)), text(arg(1))) {
@@ -321,6 +338,7 @@ pub fn dump_names(
     let opts = DumpOptions {
         base: djs_prelude::BASE,
         host: HOST_GLOBALS,
+        host_roots: &[],
         host_fn_name: &name,
         handles,
         call_states: &states,
