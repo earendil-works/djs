@@ -70,7 +70,6 @@ fn the_sleep_example_dumps() {
         host_fn_name: &name,
         handles: &[("run", run)],
         call_states: &[(call, "{\"due\":1793822825106}")],
-        plain: true,
     };
     let text = vm.dump(&opts, None).map_err(|e| e.message()).unwrap();
     assert!(
