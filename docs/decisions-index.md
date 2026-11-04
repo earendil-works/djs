@@ -608,3 +608,7 @@ topics when the index is next reorganized.
 - D2790: No doctests, no empty test binaries, no bgen program in the gate; guarded
 - D2791: One integration-test binary per package
 - D2792: Builds end when cargo does; first runs overlap the legs
+- D2732: Construct temporaries: statement state in named locals, listed where live
+- D2733: Finally completions in temporaries; gosub/ret and return-address indexes gone
+- D2734: No role vocabulary: stack values are named by construct; class sites refused by a marker
+- D2735: One compile per load: the loader records the maps in the compile that runs the dump

@@ -6,7 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0190 | Slot naming contract (SM step 2), then 0191-0194, 0196 in sequence | sm | .worktrees/sm |
+| 0198 | Make dumping and loading fast | dumpperf | .worktrees/dumpperf |
 
 ## Open (ready)
 
@@ -19,14 +19,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- |
 | - | Gate: rustc incremental corruption in .worktrees/gate (linker Undefined _anon.*.llvm.*): auto-clear incremental dirs and retry once, or CARGO_INCREMENTAL=0 for gate builds (measure) | - |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
-| 0191 | Spill at suspend (SM step 3) | 0190 (agent sm) |
-| 0192 | Constructs into slots (SM step 4) | 0191 (agent sm) |
-| 0193 | finally completions in slots (SM step 5) | 0191 (agent sm) |
-| 0194 | Delete roles; final format (SM step 6) | 0192, 0193 (agent sm) |
 | - | djs-wasm base_equals_a_compiled_realm fails (--features compiled-prelude, no gate leg) | - |
 | - | CLI/REPL dumps write no host-call states | - |
-| 0196 | One compile per load (SM step 8) | 0194 (agent sm) |
-| - | Dump performance optimization | after SM migration (owner) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
 | - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |
 | - | Vec push_out/with_capacity in bloat's files (~1 KB); scratch buffers for Vec drops (few KB) | 0151 L3 |
@@ -91,6 +85,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0190-0196 | SM migration: slot names (D2730), named slots (D2731), construct temporaries + iter_next_loc (D2732), finally completions (D2733), roles deleted (D2734), one compile per load (D2735) | 9cc8741b (agent sm) |
 | 0197 | Gate waits: bgen and doctests legs dropped, one test binary per package, targets guard (D2790-D2792) | 823103e5 (agent gate-speed; core change gate ~65-89 s) |
 | 0189 | Host calls as data: per-call state, {call, save, resume}, tasks; sleep example 77 lines (D2770, D2771) | 891fc12c (agent hostcalls) |
 | 0195 | pi adapter next mode: call ids as call states (D2772) | 6a8759bd (agent hostcalls) |
