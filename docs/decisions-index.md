@@ -633,3 +633,5 @@ topics when the index is next reorganized.
 - D2860: The plain exporter writes format 2's lines and an IR, and rewrites them
 - D2861: Plain dumps are checked over every corpus idle point, in djs and in node
 - D2870: Origin tracking reads a continuation's frame as its origin's
+- D2897: `$djs.seed(lo, hi, next)`: call ids go on after a plain load as in the uninterrupted run
+- D2898: The Sandbox writes plain dumps by default
