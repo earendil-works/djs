@@ -1,7 +1,7 @@
 # 0188: Is our continuation-dump suspension optimal? State machines vs suspension maps (research)
 
-status: open
-agent: -
+status: in-progress
+agent: critic
 branch: issue/0188-state-machines
 depends-on: 0169, 0171, 0172, 0184
 guide: -
