@@ -100,5 +100,12 @@ dump-every-idle, idle-point counts at 100%).
   ~256 sampled units, not SipHash of every unit (equal strings still hash equal; a match
   is compared whole). log-5mb load 15 -> 10.8 ms, binary 10.5 -> 6.0 ms. Slim module now
   376,652 B gzip of 376,679 (win 6 paid for it).
+- Win 9: the checker reads each template's globals once, children first (it walked the
+  subtree of every template), and compares opcodes, not names (~10% of the check).
+- Win 10 (compiler, dump builds only, D2801): pattern scans stop at a literal element or
+  property value; after a syntax error the source is parsed again with exact scans so
+  errors are unchanged. records load 10.0 -> 8.8 ms native. Gated on `dump` because it
+  costs the slim module ~470 B gzip otherwise (and only the dump module loads dumps).
+- D2800 records win 6/8's constant changes, D2801 win 10.
 
 ## Result
