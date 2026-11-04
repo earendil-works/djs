@@ -1,7 +1,7 @@
 # 0213: Generic host bindings: `tools.foo` stops being special
 
-status: open
-agent: -
+status: in-progress
+agent: hb
 branch: issue/0213-generic-host-bindings
 depends-on: -
 guide: host.md (and wherever `tools` is described as special)
