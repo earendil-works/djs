@@ -47,4 +47,33 @@ Record each choice as a decision; document the new gate in TESTING.md; keep `scr
 
 ## Log
 
+- Baseline, the old gate in a lab worktree (`.worktrees/gate-lab`, a clone of the gate's
+  target; one trivial commit per category, `nice 5`, machine load 10–16 from other agents):
+  docs-only 249 s, js-only 252 s, a core change (comment in compiler/mod.rs) 407 s, a heap
+  change (comment in heap/cells.rs) 581 s. Real gates on Nov 3: 239–573 s.
+- Where the time went: everything serial; `cargo test` ran its ~40 binaries one by one
+  (djs_core's lib alone ≥33 s: `vm::tests::hot_loop_is_invisible` ran 16 traces in a row);
+  the difftest leg was one case (array-from-arraylike under GC stress, 77 s); every `-p`
+  cargo invocation rebuilt djs-core in another feature set, one after another.
+- difftest: stress variants are tasks of their own, longest first by `--times` (D2667);
+  array-from-arraylike builds 10000 elements (the 100k build is quadratic under GC stress,
+  which copies the growing array at every collection: expected for GC stress, not an
+  engine bug); hot_loop_is_invisible on threads (33 s → ~9 s). The main difftest leg is
+  now ~5–20 s.
+- scripts/gate.py (D2660–D2664): legs and builds, a target directory per cargo
+  configuration (all build at once), legs run binaries directly, test binaries in
+  parallel, fail fast; each leg cached by its input class's tree hash plus outside inputs;
+  `paths` guard; `--full` with full-only legs (example's pi-dump-every-idle.sh).
+  Measured (lab, load 10–20): docs-only 7–8 s, js-only 12 s, core 149–163 s, heap 137–211 s.
+- macOS: every new executable's first exec waits for syspolicyd (an online notarization
+  check per binary, ~180 ms each, serialized: 351 in 10 minutes during these runs; test
+  binaries sat in state S for 30–80 s). Running each new binary once while the build goes
+  on (D2665) took the test leg from 84–125 s to 13 s, but the build waits instead; under
+  a bad syspolicyd spell a single doctest exec waited minutes. Owner action proposed:
+  Developer Tools permission for the app running agents and the gate.
+- Builds off the longest path (all but the workspace test build) run at nice 4.
+- Guide: docs/guide/testing.md's gate section rewritten (legs, parallel builds, cache,
+  classes, full run). TESTING.md "The gate" rewritten; AGENTS.md: the cache note under
+  "Testing while iterating", the coordinator's daily full run.
+
 ## Result
