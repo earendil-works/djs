@@ -33,7 +33,7 @@ use super::decorators::{
     LegacyElem, Synth, Thunk,
 };
 use super::func::{FuncKind, FuncState, ScopeId, VarId, VarKind};
-use super::parser::{Parser, syntax};
+use super::parser::{ClassSpan, ClassSpanKind, Parser, syntax};
 use super::ts_meta::TsMeta;
 use crate::bytecode::Label;
 use crate::heap::Atom;
@@ -150,7 +150,9 @@ impl Parser<'_, '_> {
         // What a class definition keeps on the stack (heritage, constructor, prototype,
         // computed keys) is not described in suspension maps yet (D2563).
         self.unsupported_begin("class");
+        self.class_depth += 1;
         let r = self.parse_class_inner(decl, hint);
+        self.class_depth -= 1;
         self.unsupported_end();
         self.leave_n(super::parser::CLASS_WEIGHT);
         r
@@ -1003,6 +1005,7 @@ impl Parser<'_, '_> {
                 self.code().name_get(r);
             }
         }
+        let eq = self.tok.start;
         if self.eat(TokenKind::Assign)? {
             let value_start = self.tok.start;
             match key {
@@ -1018,6 +1021,14 @@ impl Parser<'_, '_> {
                 && self.last_anon_fn == Some((value_start, self.prev_end))
             {
                 self.code().set_function_name(0);
+            }
+            if is_static {
+                let kind = if storage.is_some() || matches!(key, Key::Private(_)) {
+                    ClassSpanKind::StaticPrivateInit
+                } else {
+                    ClassSpanKind::StaticInit
+                };
+                self.class_span(eq, self.prev_end, kind);
             }
         } else {
             self.code().undefined();
@@ -1154,6 +1165,17 @@ impl Parser<'_, '_> {
         self.end_function()
     }
 
+    /// Records a span of the outermost class's code that its evaluation runs
+    /// (`compiler::class_spans`).
+    fn class_span(&mut self, start: u32, end: u32, kind: ClassSpanKind) {
+        if self.class_depth == 1
+            && start < end
+            && let Some(spans) = &mut self.class_spans
+        {
+            spans.push_out(ClassSpan { start, end, kind });
+        }
+    }
+
     /// `static { ... }` after `static`: a function called by the static initializer
     /// with `this` = the class.
     fn parse_static_block(&mut self, b: &mut ClassBuild) -> PResult<()> {
@@ -1169,6 +1191,7 @@ impl Parser<'_, '_> {
         self.f.src_start = start;
         self.parse_function_body()?;
         self.f.src_end = self.prev_end;
+        self.class_span(start + 1, self.prev_end - 1, ClassSpanKind::StaticBlock);
         let child = self.end_function()?;
         self.leave();
         self.code().fclosure(child);

@@ -110,6 +110,17 @@ and rebase often. Decision IDs D2950–D2959.
   Case codemode/plain-for-await-sync.js (10 links, djs and node, none holds runtime
   code); a re-dump of such a loop is −1.7 KB.
 
+- Item 7 (static code runs again, D2950, approach agreed with the coordinator): the
+  compiler records the spans of the outermost class's static block bodies and static
+  field initializers (`compiler::class_spans`, a `class_spans` recorder in parser.rs and
+  class.rs: outside my touches, approved); dump_statics.rs blanks them in the text a
+  plain dump writes for a class (`class_texts`, which `fn_source` returns, so the writer
+  and the checker see the same text). A literal static private initializer stays; any
+  other is refused. Computed keys turned out to be refused already unless stable
+  (`computed_keys`/`stable_key`: literals and well-known symbols), so no new rule. Cases
+  codemode/plain-class-statics.js (2 links, djs and node) and
+  codemode/plain-class-static-private.js (a refusal). Docs: plain-js-dumps.md §10.
+
 ## Follow-ups
 - dump_resume_tests.rs `plain_dump_chains_continue_like_the_run` still discounts lines
   that copy the runtime's code (`runtime_bytes`); after D2951 the allowance should be

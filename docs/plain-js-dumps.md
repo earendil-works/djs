@@ -519,6 +519,23 @@ for one, which plain dumps refuse:
   codemode; tests/dump/v2/plain-refusals.txt lists the one fixture
   (golden/class-fields).
 
+**Class text without its static code (0209, D2950).** A plain dump makes a class by
+evaluating its text, and that would run its static blocks and static field initializers
+again (format 2's loader skipped them; a plain dump has no loader). Their effects are
+already in the dumped heap and the dump writes them after the class: static values as
+patches, members deleted since as `$djs.keep`. So the class text is written with that
+code blanked by spaces, newlines and offsets kept: `static { log.push(1) }` becomes
+`static {             }`, `static n = f();` becomes `static n       ;`. A static private
+field or auto-accessor keeps a literal initializer (`static #c = 0`), since only the
+class's code can set it; one with any other initializer is refused. The visible cost:
+after a load, `Function.prototype.toString` of such a class shows the blanks. Computed
+keys run at evaluation too; the exporter already refuses any that is neither a literal
+nor a well-known symbol.
+
+**TypeScript parameter properties (0209).** `constructor(public x: number)` also assigns
+`this.x`, so it is not erasable: the dump keeps its TypeScript (`"djs-dump typescript";`),
+as for an enum (D2879).
+
 ## Decisions
 
 Proposals for the coordinator, not added to docs/decisions.md by this report.

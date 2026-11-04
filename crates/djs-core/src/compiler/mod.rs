@@ -318,6 +318,19 @@ pub fn compile(
     result.map(|(t, ..)| t).map_err(|e| error_at(src, e))
 }
 
+/// The spans of the code that the outermost class of `src` (a class's text) runs when
+/// it is evaluated: static blocks' bodies and static fields' initializers, in source
+/// order. Plain dumps blank the static code, whose effects the dump
+/// restores (0209, D2950).
+#[cfg(feature = "dump")]
+pub fn class_spans(
+    heap: &mut Heap,
+    src: &[u8],
+    opts: &CompileOptions<'_>,
+) -> Result<Vec<ClassSpan>, CompileError> {
+    parse(heap, src, opts, |p| p.compile_class_spans()).map_err(|e| error_at(src, e))
+}
+
 /// The suspension maps (D2563, compiler/smap.rs) of every function of `src` that has an
 /// `await` or `yield` or evaluates a computed property key (D2623), in source order: compiles `src` again with recording on (into
 /// `heap`; the templates are garbage). The maps describe frames of this build's code for
@@ -367,6 +380,7 @@ fn suspension_maps_with(
     result.map_err(|e| error_at(src, e))
 }
 
+pub use parser::{ClassSpan, ClassSpanKind};
 #[cfg(feature = "dump")]
 pub use smap::{Decl, DeclKind, Node, NodeKind, Part, Role, Special, Step, Syntax};
 #[cfg(feature = "dump")]

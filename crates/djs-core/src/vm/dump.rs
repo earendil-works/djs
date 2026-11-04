@@ -456,6 +456,9 @@ mod plain;
 #[path = "dump_cont.rs"]
 mod cont;
 
+#[path = "dump_statics.rs"]
+mod statics;
+
 #[path = "dump_origin.rs"]
 mod origin;
 
@@ -778,6 +781,9 @@ struct Dumper<'a> {
     ts: core::cell::Cell<bool>,
     /// The base heap: the checker compiles the dump into it.
     scratch: Option<Heap>,
+    /// Plain dumps: the text written for a class whose static code is blanked
+    /// (dump_statics.rs), by node.
+    class_texts: Vec<(usize, String)>,
     /// The classes of the factory being written, by their names inside it.
     class_locals: Vec<(usize, String)>,
     /// The private names of the dumped classes: symbol cell, class node, name, and
@@ -854,6 +860,7 @@ impl<'a> Dumper<'a> {
             fns_read: core::cell::Cell::new(0),
             ts: core::cell::Cell::new(false),
             scratch: None,
+            class_texts: Vec::new(),
             class_locals: Vec::new(),
             private_names: Vec::new(),
             patches: Vec::new(),
@@ -2089,6 +2096,7 @@ impl<'a> Dumper<'a> {
             return Err(self.refused());
         }
         self.analyze();
+        self.blank_class_statics();
         self.flight_start();
         for r in 0..self.roots.len() {
             self.emit_root(r);
@@ -2610,6 +2618,9 @@ impl<'a> Dumper<'a> {
                 != 0
         {
             self.ts.set(true);
+        }
+        if let Some((_, text)) = self.class_texts.iter().find(|c| c.0 == n) {
+            return Some(text.clone());
         }
         self.sources.fn_text(self.h, f)
     }

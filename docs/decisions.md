@@ -9847,3 +9847,24 @@ derived promise of the runtime's own `then` is dropped: nothing else holds it). 
 of such a loop is the size of the first dump again (−1.7 KB per link). A user function
 with the runtime's exact text and captures would be read the same way; that is the
 price of recognizing by text, and such a function would behave the same.
+
+## D2950: Plain dumps write class text with its static code blanked
+date: 2026-11-05 · by: pjd · issue: 0209
+A plain dump makes a class by evaluating its text, which ran the class's static blocks
+and static field initializers a second time while the dump loaded ("log is not
+initialized", or a push done twice); format 2 skipped them in its loader (D2580), which
+0205 deletes. Their effects are in the dumped heap, and the exporter writes them after
+the class anyway (static values as patches in key order, members deleted since by
+`$djs.keep`). So the class text a plain dump writes has the bodies of its static blocks
+and the ` = initializer` of its static fields replaced by spaces, newlines and offsets
+kept, like the TypeScript blanking of D2879: a simple, written-down rule, no rewriting of
+class text into something else. The compiler records the spans while parsing the class's
+text (`compiler::class_spans`); only the outermost class's, since a nested class's static
+code runs when its own text runs. A static private field or auto-accessor keeps a literal
+initializer (only the class's code can set it, D2883); with any other initializer the
+class is refused. Cost: `Function.prototype.toString` of such a class after a load shows
+the blanks. Rejected: deleting the members from the text (offsets move and the text
+differs more), `static n = $dump.vN` (the values must exist before the class, which fails
+on cycles and for classes placed in a continuation), refusing classes with static code.
+Computed keys, which also run at evaluation, are refused unless literal or a well-known
+symbol, as before.

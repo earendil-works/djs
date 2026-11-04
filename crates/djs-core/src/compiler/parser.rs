@@ -145,6 +145,10 @@ pub(super) struct Parser<'a, 'h> {
     pub spec: u32,
     /// The erased type ranges, for `strip_types` (`None`: not recorded).
     pub erased: Option<Erased>,
+    /// The spans of the outermost class's code that runs when the class is evaluated,
+    /// for `class_spans` (`None`: not recorded), and the class nesting depth.
+    pub class_spans: Option<Vec<ClassSpan>>,
+    pub class_depth: u32,
     /// When set, `finish_unit` fills it with the names of the prelude function table's
     /// slots, in slot order (privileged code, D2440).
     pub builtin_names: Option<Vec<crate::heap::Atom>>,
@@ -239,6 +243,24 @@ impl IdentAtoms {
     }
 }
 
+/// A span of class code that runs when the class is evaluated (`compiler::class_spans`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ClassSpan {
+    pub start: u32,
+    pub end: u32,
+    pub kind: ClassSpanKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ClassSpanKind {
+    /// A static block's body, between its braces.
+    StaticBlock,
+    /// A static field's ` = initializer`, from the `=`.
+    StaticInit,
+    /// The same of a static private field or auto-accessor (only class code sets it).
+    StaticPrivateInit,
+}
+
 /// Erased TypeScript ranges: `start..end` byte offsets and the kind (`ts::ER_*`).
 pub(super) type Erased = Vec<(u32, u32, u8)>;
 
@@ -326,6 +348,8 @@ impl<'a, 'h> Parser<'a, 'h> {
             ts: opts.typescript,
             spec: 0,
             erased: None,
+            class_spans: None,
+            class_depth: 0,
             builtin_names: None,
             after_q: false,
             ts_decls: Vec::new(),
@@ -368,6 +392,15 @@ impl<'a, 'h> Parser<'a, 'h> {
     pub fn compile(mut self) -> PResult<(Ref, Option<Erased>, Option<Vec<crate::heap::Atom>>)> {
         self.parse_top()?;
         self.finish_unit()
+    }
+
+    /// Parses the whole source and returns the class spans it recorded
+    /// (`compiler::class_spans`); the templates are not built.
+    #[cfg(feature = "dump")]
+    pub fn compile_class_spans(mut self) -> PResult<Vec<ClassSpan>> {
+        self.class_spans = Some(Vec::new());
+        self.parse_top()?;
+        Ok(self.class_spans.take().unwrap_or_default())
     }
 
     /// Parses the whole source and returns the suspension maps of its functions
