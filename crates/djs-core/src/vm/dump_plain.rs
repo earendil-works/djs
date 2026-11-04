@@ -132,7 +132,7 @@ pub(super) struct Slot {
 
 // ---------------------------------------------------------------- references
 
-/// What a piece of the dump's text refers to: `$djs.X` (a location), `$djs.X.k` (a
+/// What a piece of the dump's text refers to: `$dump.X` (a location), `$dump.X.k` (a
 /// key of a factory's object, `key` set) and bare names (the dump's top-level
 /// declarations among them).
 #[derive(Default)]

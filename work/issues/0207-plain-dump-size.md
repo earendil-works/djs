@@ -146,6 +146,12 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   and sleep-dump with `frozenBuiltins: true`. No host or test that dumps plain had to be
   dropped. Sizes unchanged.
 
+- D2836 slice merged (cdb30b72). Sleep-dump in the score: core test
+  `the_sleep_example_dumps` dumps the example's SCRIPT as the Sandbox does (codemode body
+  with `ms`, console.log and async tools.sleep host functions, fixed deadline) and writes it
+  to DJS_SLEEP_OUT; the gate leg scores it as `sleep_*` (2,321 B raw, 938 gzip; target
+  ≈700). Items 1–3: asked pjr how to sequence them with 0203's dump_cont.rs work.
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a
