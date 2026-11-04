@@ -639,3 +639,5 @@ topics when the index is next reorganized.
 - D2872: `for await` in plain continuations: a loop over the saved record, the iteration in flight before it
 - D2873: Origin tracking inside a continuation's rewritten statement, case tests, finally by jumps
 - D2874: Destructuring around a continuation's site is written as a pattern again
+- D2834: Plain dumps are mostly self-contained: the code to continue is in the dump, the host provides `$djs`
+- D2835: The dump's first line is `"djs-dump";`

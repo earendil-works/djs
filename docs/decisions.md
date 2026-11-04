@@ -9408,3 +9408,22 @@ Constants that K's closures capture are unboxed. Several sites of one kind at on
 construct (a `for await`'s closes) are matched by their place among K's. Scaffold marks
 of `for`/`while` loops now sit at the keyword, after a label, because a jump's completion
 names the loop by its keyword.
+
+## D2834: Plain dumps are mostly self-contained: the code to continue is in the dump, the host provides `$djs`
+date: 2026-11-04 · by: owner · issue: 0207
+A dump carries everything needed to continue the run: data, closures, continuations, open
+calls. The host provides one documented object, `$djs`: `seed` and `resume`, the format's
+fixed helpers (today written into every dump as `$dump.R/L/advance`; they are the same code
+in every dump, a small standard library of the format, not program content), and
+`source(ref)`, which returns the text of a top-level script the host ran. A dump refers to
+that script's origin by reference instead of writing it a second time; only dumping again
+needs it, and a host that cannot supply it gets a clear refusal (a host that wants
+standalone dumps asks for the text inline). No magic: the interface is small, written down,
+and the same for djs hosts and node (which loads a shipped runtime file). `$djs` is a global
+for now; it is meant to become imports later, so its members are plain functions that do not
+depend on `this` or on each other through the object.
+
+## D2835: The dump's first line is `"djs-dump";`
+date: 2026-11-04 · by: owner · issue: 0207
+djs has never been released, so the format carries no version number (D024); the TypeScript
+variant is `"djs-dump typescript";` while function texts can still be TypeScript.
