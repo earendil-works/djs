@@ -9762,3 +9762,22 @@ the opcode, the flag and the compiler's jump went with it; later opcodes are ren
 (images are keyed on the descriptor, D2265). A plain dump evaluates a class's text
 again, static blocks included: a class whose static block has side effects is a plain
 dump problem of its own (0205 follow-ups), as it is for node.
+## D2882: `$djs.source(name, hash, params)`: a dump names the codemode body it continues
+date: 2026-11-05 · by: pjr · issue: 0207
+D2834's `source(ref)`. A continuation of a codemode body names its origin as
+`$djs.source(name, hash, params)` instead of a second copy of the body's text. `name` is
+the script's file name. `hash` is FNV-1a over its text, parameter names and compile
+options (`vm::script_hash`). `params` are the body's parameter names. A djs host compiles
+the script `name` it ran, as it ran it, and `Vm::source_function` checks the hash; the
+result is the body function, which origin tracking reads as it read the original (a
+codemode body's map is its wrapper's, as for its frames). The Sandbox computes the same
+hash in JavaScript (`scriptHash`) and compiles with `vm_compile_file`, so the shipped
+modules carry no code for it. A host without the script gets
+a clear error when the dump loads. The Sandbox knows the scripts its process ran and
+takes others from its `sources` option; the CLI reads the file at that path again. node
+returns any function, since only dumping again reads the origin. `DumpOptions::source_refs`
+(wasm `vm_set_dump_source_refs`, the Sandbox's `inlineSources`) writes the text instead;
+the CLI's REPL does so, because its inputs are gone in another process. Only codemode
+bodies are named this way: a function inside a script (pi's and the difftest's
+`async (tools, console) => …` in a Script) is still written from its text. The sleep
+example's dump loses its second copy of the script (2,321 → ~1.9 KB).

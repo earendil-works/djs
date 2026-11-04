@@ -305,8 +305,11 @@ continuation, an ordinary function holding the rest of its code from the `await`
 at, and the whole dump as a Script that needs nothing from djs. The Script reaches the
 host through one global object, `$djs`, which the loading host defines and the dump
 deletes when it is done (D2890): `$djs.seed(lo, hi, next)` hands over `Math.random`'s
-state and the id of the run's next host call, and `$djs.resume(id, name, args, state)`
-stands for each open call. The sandbox answers `resume` by opening the call again under
+state and the id of the run's next host call, `$djs.resume(id, name, args, state)`
+stands for each open call, and `$djs.source(name, hash, params)` names the script the run
+was started with, which the dump refers to instead of carrying its text a second time:
+the sandbox compiles that script again and checks it is the same one (D2882). The
+sandbox answers `resume` by opening the call again under
 the same id, with the same arguments and state, and continues it through the function's
 hooks as above; once the Script has stopped it sets the call counter from `next`, so the
 run's later calls get the ids an uninterrupted run gives them (D2897). The same object

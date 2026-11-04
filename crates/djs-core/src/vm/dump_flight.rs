@@ -1761,7 +1761,11 @@ impl Dumper<'_> {
         let mut fields: Vec<String> = alloc::vec![cat!("at: ", quote(&site.name))];
         let awaiting = self.fl.acts[a].awaiting;
         let mut parts: Vec<(&str, String)> = Vec::new();
-        let fe = self.expr(fv(0), None, None);
+        // A codemode body: the host's script by reference (D2882), else its text.
+        let fe = match fv(0).as_object().and_then(|f| self.source_ref(f)) {
+            Some(r) => r,
+            None => self.expr(fv(0), None, None),
+        };
         parts.push_out(("function", fe.clone()));
         let mut awaited = None;
         if let Some((q, _)) = awaiting {

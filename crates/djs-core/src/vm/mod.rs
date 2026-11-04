@@ -1189,6 +1189,29 @@ fn tidy_stack(heap: &mut Heap, shrink: bool) {
     let _ = state::move_stack(heap, sp, cap);
 }
 
+/// The `hash` of a script's `$djs.source(name, hash)` (D2882): FNV-1a of its source text,
+/// its parameter names and its compile options, 16 hex digits. The host's script must
+/// have the same, or `Vm::source_function` refuses it.
+pub fn script_hash(source: &str, params: &str, bits: u32) -> String {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    let bits = cat!(bits);
+    for b in params
+        .bytes()
+        .chain([0])
+        .chain(bits.bytes())
+        .chain([0])
+        .chain(source.bytes())
+    {
+        h = (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
+    }
+    let mut s = String::new();
+    for i in (0..16).rev() {
+        let d = ((h >> (i * 4)) & 0xf) as u32;
+        s.push(char::from_digit(d, 16).unwrap_or('0'));
+    }
+    s
+}
+
 /// FNV-1a, 64 bits.
 fn fnv64(bytes: &[u8]) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
@@ -1214,3 +1237,41 @@ mod frozen_tests;
 mod slim_tests;
 #[cfg(test)]
 mod tests;
+
+impl Vm {
+    /// A plain dump's `$djs.source(name, hash)` (D2882): the host's script `name`, `src`
+    /// compiled with the options it ran with, as the codemode body function the dump's
+    /// continuations name as their origin. Refused (for the host to throw) when it is not
+    /// the script the dump refers to: another text, parameters or options.
+    pub fn source_function(
+        &mut self,
+        src: &[u8],
+        opts: &crate::compiler::CompileOptions<'_>,
+        hash: &str,
+    ) -> Result<Value, String> {
+        let f = self
+            .compile(src, opts)
+            .map_err(|e| cat!("source: the script does not compile: ", e.message))?;
+        let h = &self.heap;
+        let t = f.as_object().map(|o| h.closure_template(o));
+        let script = t.and_then(|t| crate::bytecode::template::debug_info(h, t).script.get());
+        let Some(script) = script else {
+            return Err(String::from("source: not a script"));
+        };
+        let a = h.arena();
+        let text = |r: Ref| {
+            r.get()
+                .map(|s| h.str_to_string(crate::value::Str(s)))
+                .unwrap_or_default()
+        };
+        let source = text(a.get::<Ref>(script, crate::heap::cells::Script::SOURCE));
+        let params = text(a.get::<Ref>(script, crate::heap::cells::Script::PARAMS));
+        let bits = a.get::<u32>(script, crate::heap::cells::Script::OPTIONS);
+        if script_hash(&source, &params, bits) != hash {
+            return Err(String::from(
+                "source: the host's script is not the one the dump refers to (another text, parameters or options)",
+            ));
+        }
+        Ok(f)
+    }
+}

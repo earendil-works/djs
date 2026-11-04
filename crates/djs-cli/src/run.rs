@@ -631,7 +631,7 @@ fn dump_run(
         _ => None,
     };
     let handles: Vec<(&str, Value)> = run.map(|v| ("run", v)).into_iter().collect();
-    crate::dumps::dump(vm, tools, &handles, &|_| None)
+    crate::dumps::dump(vm, tools, &handles, &|_| None, true)
 }
 
 /// The system clock in ms since the epoch.

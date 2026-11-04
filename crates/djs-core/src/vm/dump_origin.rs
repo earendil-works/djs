@@ -212,11 +212,8 @@ impl Dumper<'_> {
         let t = h.closure_template(f);
         let info = template::debug_info(h, t);
         let (a, b) = (info.src_start, info.src_end);
-        let params = usize::from(h.arena().get::<u16>(t, FuncTemplate::PARAMS));
+        let mut params = usize::from(h.arena().get::<u16>(t, FuncTemplate::PARAMS));
         let kind = func_flags::kind(u32::from(h.arena().get::<u16>(t, FuncTemplate::FLAGS)));
-        if kind == func_flags::KIND_ASYNC_BODY {
-            return no("its origin is a codemode body (0203)");
-        }
         // Several sites of a kind at one construct (a `for await`'s closes): the one
         // with K's place among K's at its copy.
         let nth = if site_name.is_none() {
@@ -224,11 +221,31 @@ impl Dumper<'_> {
         } else {
             0
         };
-        let Some(maps) = self.script_maps(t) else {
-            return no("its origin's script cannot be compiled again");
-        };
-        let Some(m) = maps.iter().find(|m| m.start == a && m.end == b) else {
-            return no("its origin has no suspension map");
+        let m = if kind == func_flags::KIND_ASYNC_BODY {
+            // A codemode body (the host's script, D2882): K was written from the async
+            // function the dump writes it as, whose map this is (as for its frames).
+            let bits = info.script.get().map_or(0, |s| {
+                h.arena().get::<u32>(s, crate::heap::cells::Script::OPTIONS)
+            });
+            let Some(text) = self.sources.fn_text(h, f).map(|s| cat!("(", s, ")")) else {
+                return no("its origin's text is gone");
+            };
+            let len = text.len() as u32;
+            let Some(maps) = self.maps_of(&text, "", bits & !3) else {
+                return no("its origin's script cannot be compiled again");
+            };
+            let Some(m) = maps.iter().find(|m| m.start == 1 && m.end == len - 1) else {
+                return no("its origin has no suspension map");
+            };
+            m.clone()
+        } else {
+            let Some(maps) = self.script_maps(t) else {
+                return no("its origin's script cannot be compiled again");
+            };
+            let Some(m) = maps.iter().find(|m| m.start == a && m.end == b) else {
+                return no("its origin has no suspension map");
+            };
+            m.clone()
         };
         let fsite = m
             .sites
@@ -243,6 +260,9 @@ impl Dumper<'_> {
         let Some(mut fsite) = fsite else {
             return no("its origin has no site there");
         };
+        if kind == func_flags::KIND_ASYNC_BODY {
+            params = fsite.args.len();
+        }
         if let Some(u) = &fsite.unsupported {
             return Err(cat!(
                 "an activation at ",

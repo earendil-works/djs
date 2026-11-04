@@ -87,7 +87,12 @@ pub struct DumpOptions<'a> {
     /// the fourth argument of the call's `$djs.resume`. A call without an entry is
     /// written without one.
     pub call_states: &'a [(u32, &'a str)],
+    /// Write a codemode body's origin as `$djs.source(name, hash, params)`, a reference
+    /// the host resolves to the script it ran (D2882), instead of its text.
+    pub source_refs: bool,
 }
+
+pub use super::script_hash;
 
 fn no_host_fn_name(_: u32) -> Option<String> {
     None
@@ -101,6 +106,7 @@ impl Default for DumpOptions<'_> {
             host_fn_name: &no_host_fn_name,
             handles: &[],
             call_states: &[],
+            source_refs: false,
         }
     }
 }
@@ -795,6 +801,8 @@ struct Dumper<'a> {
     ns: bool,
     /// Writing a plain dump: what the plain writer needs besides the lines.
     pl: Option<plain::Ir>,
+    /// `DumpOptions::source_refs`.
+    source_refs: bool,
     next: u32,
     depth: u32,
     visited: usize,
@@ -859,6 +867,7 @@ impl<'a> Dumper<'a> {
             data_depth: 0,
             ns: false,
             pl: Some(plain::Ir::default()),
+            source_refs: opts.source_refs,
             next: 0,
             depth: 0,
             visited: 0,
@@ -2192,6 +2201,42 @@ impl<'a> Dumper<'a> {
         let js = String::from_utf8(out).map_err(|_| fail("its TypeScript is not UTF-8"))?;
         let ok = crate::compiler::compile(&mut heap, js.as_bytes(), &dump_options(false)).is_ok();
         Ok(ok.then_some(js))
+    }
+
+    /// `$djs.source(name, hash, params)` for codemode body `f` (D2882), when the dump refers to
+    /// the scripts the host ran instead of writing their text.
+    pub(super) fn source_ref(&self, f: Obj) -> Option<String> {
+        if !self.source_refs {
+            return None;
+        }
+        let h = self.h;
+        let t = h.closure_template(f);
+        let kind = func_flags::kind(u32::from(h.arena().get::<u16>(t, FuncTemplate::FLAGS)));
+        if kind != func_flags::KIND_ASYNC_BODY {
+            return None;
+        }
+        let script = template::debug_info(h, t).script.get()?;
+        let a = h.arena();
+        let text = |r: Ref| r.get().map(|s| text_of(h, crate::value::Str(s)));
+        let source = text(a.get::<Ref>(script, crate::heap::cells::Script::SOURCE))?;
+        let params =
+            text(a.get::<Ref>(script, crate::heap::cells::Script::PARAMS)).unwrap_or_default();
+        let name = text(a.get::<Ref>(script, crate::heap::cells::Script::NAME)).unwrap_or_default();
+        let bits = a.get::<u32>(script, crate::heap::cells::Script::OPTIONS);
+        // (Its parameter names too: the host compiles the body with them.)
+        let ps = if params.is_empty() {
+            String::new()
+        } else {
+            cat!(", ", quote(&params))
+        };
+        Some(cat!(
+            "$djs.source(",
+            quote(&name),
+            ", ",
+            quote(&script_hash(&source, &params, bits)),
+            ps,
+            ")"
+        ))
     }
 
     /// The checker (0168): compiles the finished dump and compares every function it

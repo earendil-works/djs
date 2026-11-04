@@ -70,16 +70,134 @@ fn the_sleep_example_dumps() {
         host_fn_name: &name,
         handles: &[("run", run)],
         call_states: &[(call, "{\"due\":1793822825106}")],
+        source_refs: true,
     };
     let text = vm.dump(&opts, None).map_err(|e| e.message()).unwrap();
     assert!(
         text.contains("$djs.resume(2, \"tools.sleep\", [5000], {\"due\":1793822825106})"),
         "{text}"
     );
+    // The body by reference (D2882), not its text again.
+    let hash = super::dump::script_hash(SCRIPT, "ms", {
+        let opts = crate::compiler::CompileOptions {
+            goal: crate::compiler::Goal::AsyncBody,
+            params: &["ms"],
+            ..crate::compiler::CompileOptions::script("sleep.js")
+        };
+        opts.bits()
+    });
+    assert!(
+        text.contains(&alloc::format!(
+            "$djs.source(\"sleep.js\", \"{hash}\", \"ms\")"
+        )),
+        "{text}"
+    );
+    assert_eq!(text.matches("results.join").count(), 1, "{text}");
     if let Ok(dir) = std::env::var("DJS_SLEEP_OUT") {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(std::path::Path::new(&dir).join("sleep.dump.js"), &text).unwrap();
     }
+    // A host that has the script loads it, continues and dumps again by reference.
+    const SOURCE: u32 = 9;
+    const RESUME: u32 = 10;
+    const SEED_HOOK: u32 = 11;
+    let mut vm = Vm::from_base(
+        base(),
+        VmOptions {
+            frozen_builtins: true,
+            ..VmOptions::default()
+        },
+    )
+    .unwrap();
+    vm.set_now(1_793_822_820_106.0);
+    let console = vm.new_object().unwrap();
+    let log = vm.new_host_function(LOG, "log").unwrap();
+    vm.define(console, "log", log).unwrap();
+    vm.define_global("console", Value::object(console)).unwrap();
+    let tools = vm.new_object().unwrap();
+    let sleep = vm.new_async_host_function(SLEEP, "sleep").unwrap();
+    vm.define(tools, "sleep", sleep).unwrap();
+    vm.define_global("tools", Value::object(tools)).unwrap();
+    let rt = vm.dump_runtime().unwrap().as_object().unwrap();
+    let source = vm.new_host_function(SOURCE, "source").unwrap();
+    vm.define(rt, "source", source).unwrap();
+    let resume = vm.new_host_function(RESUME, "resume").unwrap();
+    vm.define(rt, "resume", resume).unwrap();
+    let seed = vm.new_host_function(SEED_HOOK, "seed").unwrap();
+    vm.define(rt, "seed", seed).unwrap();
+    vm.define_global("$djs", Value::object(rt)).unwrap();
+    let f = vm
+        .compile(
+            text.as_bytes(),
+            &crate::compiler::CompileOptions::script("dump.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    let mut lines = Vec::new();
+    let mut slept = 0;
+    let mut dumped = None;
+    loop {
+        match vm.run(1_000_000_000) {
+            Status::HostCall { call_id, fn_id } if fn_id == SOURCE => {
+                let args = vm.host_call(call_id).unwrap().args;
+                let h = vm.display(args[1]);
+                let opts = crate::compiler::CompileOptions {
+                    goal: crate::compiler::Goal::AsyncBody,
+                    params: &["ms"],
+                    ..crate::compiler::CompileOptions::script("sleep.js")
+                };
+                let r = vm.source_function(SCRIPT.as_bytes(), &opts, &h);
+                vm.resolve_host_call(call_id, Ok(r.unwrap())).unwrap();
+            }
+            Status::HostCall { call_id, fn_id } if fn_id == RESUME => {
+                vm.open_host_call(call_id, SLEEP).unwrap();
+            }
+            Status::HostCall { call_id, fn_id } if fn_id == SEED_HOOK => {
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+            }
+            Status::HostCall { call_id, fn_id } if fn_id == LOG => {
+                let args = vm.host_call(call_id).unwrap().args;
+                let parts: Vec<String> = args.iter().map(|&v| vm.display(v)).collect();
+                lines.push(parts.join(" "));
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+            }
+            Status::Idle => {
+                let Some(&id) = vm.pending_host_calls().first() else {
+                    break;
+                };
+                slept += 1;
+                if slept == 2 && dumped.is_none() {
+                    let opts = super::dump::DumpOptions {
+                        base: base(),
+                        host: &["console", "tools"],
+                        host_fn_name: &name,
+                        source_refs: true,
+                        ..Default::default()
+                    };
+                    dumped = Some(vm.dump(&opts, None).map_err(|e| e.message()).unwrap());
+                }
+                vm.resolve_host_call(id, Ok(Value::int(1))).unwrap();
+            }
+            Status::Done(_) => break,
+            s => panic!("{s:?}"),
+        }
+    }
+    assert_eq!(
+        lines,
+        [
+            "second sleeps 5000 ms",
+            "done after less than 10000 ms: first: 1, second: 1"
+        ]
+    );
+    let again = dumped.expect("a second dump");
+    assert!(
+        again.contains(&alloc::format!(
+            "$djs.source(\"sleep.js\", \"{hash}\", \"ms\")"
+        )),
+        "{again}"
+    );
+    assert_eq!(again.matches("results.join").count(), 1, "{again}");
 }
 
 /// Operands evaluated before the site are read again where that gives the saved value

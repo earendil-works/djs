@@ -145,6 +145,20 @@ export interface SandboxOptions {
    */
   frozenBuiltins?: boolean;
   /**
+   * The scripts a loaded dump may refer to (D2834, D2882): a dump names the codemode body
+   * it continues by `$djs.source(name, hash)` instead of carrying its text a second time,
+   * and loading it needs that script again. The scripts this sandbox ran are known; for a
+   * dump from another process, return the code the script `name` (`BeginOptions.filename`,
+   * default `"sandbox.js"`) had. A script that is not the one the dump refers to (another
+   * text, parameters or options) is refused.
+   */
+  sources?: (name: string) => string | undefined;
+  /**
+   * Dumps write the codemode body's text instead of `$djs.source(name, hash)`: a dump
+   * that loads without the script (larger). Default false.
+   */
+  inlineSources?: boolean;
+  /**
    * Run deterministically (D1680): with the same code, parameters and results in the same
    * order, a run does the same thing every time. `Math.random` is seeded from `seed`, the
    * time zone is UTC, weak references are strong (unless `weakRefs` says otherwise), and
@@ -259,6 +273,40 @@ const CONSOLE_METHODS = ["log", "info", "warn", "error"] as const;
 const PLAIN_HOOKS = "$djs";
 const HOOK_RESUME = 0x7fff_fff0;
 const HOOK_SEED = 0x7fff_fff1;
+const HOOK_SOURCE = 0x7fff_fff2;
+
+/**
+ * The codemode bodies the sandboxes of this process ran, by name, newest first: what a
+ * dump's `$djs.source(name, hash)` refers to (D2882). A sandbox in another process gets
+ * them from the `sources` option. A few per name are kept.
+ */
+const ranScripts = new Map<string, string[]>();
+const SCRIPTS_KEPT = 16;
+
+/**
+ * The hash of `$djs.source(name, hash, params)` (D2882, `vm::script_hash`): FNV-1a 64 of
+ * the UTF-8 of the parameter names (`,`-joined), the compile option bits in decimal and
+ * the source, `\0`-separated, as 16 hex digits.
+ */
+export function scriptHash(source: string, params: string, bits: number): string {
+  let h = 0xcbf29ce484222325n;
+  const step = (bytes: Uint8Array) => {
+    for (const b of bytes) h = BigInt.asUintN(64, (h ^ BigInt(b)) * 0x100000001b3n);
+  };
+  step(textEncoder.encode(params));
+  step(new Uint8Array([0]));
+  step(textEncoder.encode(String(bits)));
+  step(new Uint8Array([0]));
+  step(textEncoder.encode(source));
+  return h.toString(16).padStart(16, "0");
+}
+
+function rememberScript(name: string, code: string): void {
+  const list = (ranScripts.get(name) ?? []).filter((c) => c !== code);
+  list.unshift(code);
+  if (list.length > SCRIPTS_KEPT) list.length = SCRIPTS_KEPT;
+  ranScripts.set(name, list);
+}
 
 /** A plain dump (D2830): `"djs-dump";`, and whether its text is TypeScript. */
 export function plainDump(text: string): { typescript: boolean } | undefined {
@@ -283,6 +331,8 @@ interface Exports {
   vm_new_with?(memoryLimit: number, live: number, flags: number): number;
   vm_frozen_builtins?(vm: number): number;
   vm_dump?(vm: number, len: number): number;
+  /** Since 0207 (D2882): whether dumps refer to the scripts the host ran (`$djs.source`). */
+  vm_set_dump_source_refs?(vm: number, on: number): void;
   vm_from_bytes(len: number, memoryLimit: number): number;
   /** Since 0177 (D2701). */
   vm_replace_image?(vm: number, len: number): number;
@@ -564,6 +614,7 @@ export class Sandbox {
   private readonly opts: SandboxOptions;
   /** Host function names by id - 1. */
   private readonly fnNames: string[] = [];
+
   private readonly fns = new Map<number, HostFunction>();
   /** Async host functions with hooks (D2771), by id. */
   private readonly hooks = new Map<number, AsyncHostFunction>();
@@ -1134,7 +1185,8 @@ export class Sandbox {
     if (this.x.vm_frozen_builtins?.(this.vm) !== 1) {
       throw new SandboxError("misuse", "cannot dump: dumps need frozen builtins (SandboxOptions.frozenBuiltins, D2836)");
     }
-    return this.viaDumper((sb) => sb.dumpHere(names, handles, states));
+    const refs = !this.opts.inlineSources;
+    return this.viaDumper((sb) => sb.dumpHere(names, handles, states, refs));
   }
 
   /**
@@ -1207,9 +1259,53 @@ export class Sandbox {
     this.atomCache.length = 0;
   }
 
-  /** `vm_dump` in this sandbox's own module. */
-  private dumpHere(names: string[], handles: [string, number][], states: [number, string][]): string {
+  /**
+   * A plain dump's `$djs.source(name, hash, params)` (D2882): the codemode body `name`
+   * compiled again as this sandbox runs bodies, the one whose hash is the dump's (the
+   * `sources` option's code first, then the scripts this process ran, newest first).
+   */
+  private serveSource(callId: number, args: unknown[]): void {
     const x = this.x;
+    const vm = this.vm;
+    const [name, hash, params] = args;
+    const fail = (why: string) => this.complete(callId, false, new Error(`source: ${why}`), false);
+    if (typeof name !== "string" || typeof hash !== "string") return void fail("not a name and a hash");
+    const candidates: string[] = [];
+    const given = this.opts.sources?.(name);
+    if (given !== undefined) candidates.push(given);
+    for (const code of ranScripts.get(name) ?? []) if (code !== given) candidates.push(code);
+    if (candidates.length === 0) {
+      return void fail(`the dump continues the script ${JSON.stringify(name)}, which this host does not have (pass the sandbox option \`sources\`, or dump with \`inlineSources\`)`);
+    }
+    const o = this.opts;
+    const goal = 1 | (o.typescript ? 2 : 0) | (o.experimentalDecorators || o.emitDecoratorMetadata ? 4 : 0) | (o.emitDecoratorMetadata ? 8 : 0);
+    // The script's compile options as the dump's hash counts them (`CompileOptions::bits`).
+    const bits = 1 | (goal & 2 ? 4 : 0) | (goal & 12 ? 8 : 0) | (goal & 8 ? 16 : 0);
+    const ps = typeof params === "string" ? params : "";
+    const code = candidates.find((c) => scriptHash(c, ps, bits) === hash);
+    if (code === undefined) return void fail(`the host's script ${JSON.stringify(name)} is not the one the dump refers to (another text, parameters or options)`);
+    const n = textEncoder.encode(name);
+    const head = textEncoder.encode(ps.split(",").filter((p) => p !== "").join("\n"));
+    const src = textEncoder.encode(code);
+    const all = new Uint8Array(n.length + head.length + src.length);
+    all.set(n);
+    all.set(head, n.length);
+    all.set(src, n.length + head.length);
+    const f = this.guard(() => {
+      this.stage(all);
+      return x.vm_compile_file(vm, goal, n.length, head.length, src.length);
+    });
+    if (f === 0) return void fail(outText(x));
+    this.guard(() => {
+      x.vm_resolve_host_call(vm, callId, 1, f);
+      x.vm_handle_free(vm, f);
+    });
+  }
+
+  /** `vm_dump` in this sandbox's own module. */
+  private dumpHere(names: string[], handles: [string, number][], states: [number, string][], sourceRefs = true): string {
+    const x = this.x;
+    x.vm_set_dump_source_refs?.(this.vm, sourceRefs ? 1 : 0);
     if (!x.vm_dump) throw new SandboxError("misuse", "the djs-wasm module has no dump (vm_dump): build it with the `dump` feature, or pass `dumpModule`");
     const host = new Set(["console"]);
     for (const n of this.fnNames) host.add(n.split(".")[0]);
@@ -1276,7 +1372,7 @@ export class Sandbox {
     this.guard(() => {
       // `$djs`: the dump runtime's helpers (D2903) with the hooks added.
       const hooks = this.check(dumpRuntime(vm, this.stageText(dumpRuntimeScript)), "memory");
-      for (const [name, id] of [["resume", HOOK_RESUME], ["seed", HOOK_SEED]] as const) {
+      for (const [name, id] of [["resume", HOOK_RESUME], ["seed", HOOK_SEED], ["source", HOOK_SOURCE]] as const) {
         const f = this.check(x.vm_new_host_function(vm, id, this.stageText(name)), "memory");
         this.defineOn(hooks, name, f);
         x.vm_handle_free(vm, f);
@@ -1321,6 +1417,10 @@ export class Sandbox {
         const call: OpenCall = { id: id as number, fn: name as string, args: Array.isArray(callArgs) ? callArgs : [] };
         if (state !== undefined) call.state = state;
         calls.push(call);
+        continue;
+      }
+      if (fnId === HOOK_SOURCE) {
+        this.serveSource(callId, args);
         continue;
       }
       let ok = true;
@@ -1610,6 +1710,7 @@ export class Sandbox {
         (o.experimentalDecorators || o.emitDecoratorMetadata ? 4 : 0) |
         (o.emitDecoratorMetadata ? 8 : 0);
       const f = x.vm_compile_file(vm, goal, name.length, head.length, src.length);
+      if (f !== 0 && !script) rememberScript(filename || "sandbox.js", code);
       if (f === 0) {
         const msg = outText(x);
         for (const h of handles) if (h !== 0) x.vm_handle_free(vm, h);

@@ -76,7 +76,8 @@ export async function resume(dump: string, opts = options()): Promise<unknown> {
 /**
  * Continues the dump in node: the same host functions, as plain globals, and `$djs`: the
  * dump runtime's helpers (js/src/dump-runtime.js) with the hooks. `$djs.resume` runs the
- * open call's `resume` hook with its saved state; `$djs.seed` has nothing to set.
+ * open call's `resume` hook with its saved state; `$djs.seed` has nothing to set,
+ * `$djs.source` names the script the dump continues.
  */
 export async function resumeInNode(dump: string): Promise<unknown> {
   const signal = new AbortController().signal;
@@ -85,6 +86,12 @@ export async function resumeInNode(dump: string): Promise<unknown> {
     ...helpers,
     seed() {},
     resume: (_id: number, _name: string, args: unknown[], state: { due: number }) => sleep.resume(state, { args, signal } as never),
+    // The script the dump continues (D2882): node never dumps again, the one thing that
+    // reads it, so any function stands for it.
+    source: (name: string) => {
+      if (name !== "sleep.js") throw new Error(`source: no script ${name}`);
+      return function sleepScript() {};
+    },
   };
   g.tools = { sleep: (ms: number) => sleep.call.call({ signal } as never, ms) };
   return new Script(dump, { filename: "sleep.dump.js" }).runInThisContext();

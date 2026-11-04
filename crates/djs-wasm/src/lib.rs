@@ -64,6 +64,9 @@ struct Slot {
     call_id: u32,
     /// The fuel the last `vm_run` used (`vm_fuel_used`).
     fuel_used: u64,
+    /// `vm_set_dump_source_refs` (D2882).
+    #[cfg_attr(not(feature = "dump"), allow(dead_code))]
+    source_refs: bool,
 }
 
 #[derive(Default)]
@@ -316,6 +319,7 @@ impl State {
             result: 0,
             call_id: 0,
             fuel_used: 0,
+            source_refs: true,
         };
         match self.vms.iter().position(Option::is_none) {
             Some(i) => {
@@ -794,6 +798,14 @@ pub extern "C" fn vm_compile_file(
     compile(vm, goal, name_len, params_len, src_len)
 }
 
+/// Whether `vm_dump` refers to the codemode bodies the host ran by
+/// `$djs.source(name, hash)` (1, the default, D2882) or writes their text (0).
+#[cfg(feature = "dump")]
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_set_dump_source_refs(vm: u32, on: u32) {
+    with(|s| s.slot(vm).source_refs = on != 0);
+}
+
 fn compile(vm: u32, goal: u32, name_len: usize, params_len: usize, src_len: usize) -> u32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
@@ -1043,6 +1055,7 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
                 host_fn_name: &host_fn_name,
                 handles: &handles,
                 call_states: &call_states,
+                source_refs: slot.source_refs,
             };
             Some(
                 slot.vm

@@ -25,6 +25,9 @@ pub const HOOKS: &str = "$djs";
 pub const RESUME: u32 = 4;
 /// `$djs.seed(lo, hi)`.
 pub const SEED: u32 = 5;
+/// `$djs.source(name, hash, params)` (D2882): the codemode body the dump continues, the
+/// file `name` compiled again.
+pub const SOURCE: u32 = 6;
 
 /// A plain dump's header: `Some(typescript)` for `"djs-dump";` or
 /// `"djs-dump typescript";`.
@@ -65,6 +68,8 @@ pub fn begin_plain(vm: &mut Vm, text: &str, filename: &str) -> Result<(), String
     vm.define(hooks, "resume", resume).map_err(oom)?;
     let seed = vm.new_host_function(SEED, "seed").map_err(oom)?;
     vm.define(hooks, "seed", seed).map_err(oom)?;
+    let source = vm.new_host_function(SOURCE, "source").map_err(oom)?;
+    vm.define(hooks, "source", source).map_err(oom)?;
     vm.define_global(HOOKS, Value::object(hooks)).map_err(oom)?;
     let copts = CompileOptions {
         typescript: ts,
@@ -90,11 +95,24 @@ pub fn serve_hook(
     call_id: u32,
     fn_id: u32,
 ) -> bool {
-    if fn_id != RESUME && fn_id != SEED {
+    if fn_id != RESUME && fn_id != SEED && fn_id != SOURCE {
         return false;
     }
     let args = vm.host_call(call_id).expect("parked call").args;
     let arg = |i: usize| args.get(i).copied().unwrap_or(Value::UNDEFINED);
+    if fn_id == SOURCE {
+        let text = |v: Value| v.as_string().map(|s| vm.heap().str_to_string(s));
+        let r = match (text(arg(0)), text(arg(1))) {
+            (Some(name), Some(hash)) => {
+                let params = text(arg(2)).unwrap_or_default();
+                source_function(vm, &name, &hash, &params)
+            }
+            _ => Err(String::from("source: not a name and a hash")),
+        };
+        let r = r.map_err(|msg| vm.new_error(ErrorKind::Error, &msg).expect("oom"));
+        let _ = vm.resolve_host_call(call_id, r);
+        return true;
+    }
     let r = if fn_id == SEED {
         match (arg(0).as_int(), arg(1).as_int()) {
             (Some(lo), Some(hi)) => {
@@ -142,6 +160,35 @@ pub fn serve_hook(
         }
     }
     true
+}
+
+/// `$djs.source(name, hash, params)`: the file `name` (the path the run was given), as
+/// the codemode body it ran as (TypeScript and decorator options tried until one is the
+/// script the dump refers to).
+fn source_function(vm: &mut Vm, name: &str, hash: &str, params: &str) -> Result<Value, String> {
+    let src = std::fs::read(name).map_err(|e| {
+        format!("source: the dump continues the script {name}, which cannot be read ({e})")
+    })?;
+    let params: Vec<&str> = params.split(',').filter(|p| !p.is_empty()).collect();
+    let mut why = String::new();
+    for (typescript, legacy, meta) in [
+        (false, false, false),
+        (true, false, false),
+        (true, true, false),
+        (true, true, true),
+    ] {
+        let opts = CompileOptions {
+            typescript,
+            experimental_decorators: legacy,
+            emit_decorator_metadata: meta,
+            ..CompileOptions::async_body(name, &params)
+        };
+        match vm.source_function(&src, &opts, hash) {
+            Ok(f) => return Ok(f),
+            Err(e) => why = e,
+        }
+    }
+    Err(why)
 }
 
 /// The plain dump's Script was evaluated: its hooks go away, and the id counter goes on
@@ -250,8 +297,9 @@ pub fn dump(
     tools: &Tools,
     handles: &[(&str, Value)],
     origin: &dyn Fn(u32) -> Option<String>,
+    source_refs: bool,
 ) -> Result<Dumped, String> {
-    dump_names(vm, tools, handles, None, origin)
+    dump_names(vm, tools, handles, None, origin, source_refs)
 }
 
 /// [`dump`] of the named globals only (all of them with `None`).
@@ -261,6 +309,7 @@ pub fn dump_names(
     handles: &[(&str, Value)],
     names: Option<&[&str]>,
     origin: &dyn Fn(u32) -> Option<String>,
+    source_refs: bool,
 ) -> Result<Dumped, String> {
     let name = |id: u32| tools.call_name(id);
     let states: Vec<(u32, String)> = vm
@@ -275,6 +324,9 @@ pub fn dump_names(
         host_fn_name: &name,
         handles,
         call_states: &states,
+        // `djs run`: the body by reference, `djs resume` reads it from its path again
+        // (D2882); the REPL writes its inputs' text (a dump that stands alone).
+        source_refs,
     };
     vm.dump_report(&opts, names).map_err(|e| e.message())
 }

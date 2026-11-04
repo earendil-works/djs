@@ -159,9 +159,14 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   static private field at its initial literal needs no patch (else a refusal that names
   class and field). Corpus case codemode/classes-self.js, test
   plain_dumps_of_self_naming_classes.
-- WIP on branch issue/0207-source-ref (not merged): `$djs.source(name, hash)` for codemode
-  bodies (DumpOptions::source_refs, script_hash, Vm::source_function, origin of
-  KIND_ASYNC_BODY via the wrapper's map); hosts not done yet.
+- D2882 `$djs.source(name, hash, params)` (slice d): codemode bodies' origin by reference.
+  Core: DumpOptions::source_refs, vm::script_hash, Vm::source_function, origin of
+  KIND_ASYNC_BODY through the wrapper's map. Hosts: CLI (`djs run` refers, `djs resume`
+  reads the file at that path; the REPL writes text), Sandbox (this process's scripts or
+  the `sources` option, `inlineSources`; hash checked in JS, `scriptHash`, so the shipped
+  modules grow by 5/13 bytes), wasm `vm_set_dump_source_refs`, sleep example in node.
+  pi and the difftest are unaffected: their codemode function is an arrow in a Script, not
+  a body. Sleep example dump 2,104 → 1,730 B.
 - D2884: pjz's re-dump items 6 (functions/generators declared in loop bodies), 7 (`await
   using` disposal after copied text), G (await in `finally` in a loop on a chain), H
   (disposal block with a function sharing a `let`); continuation in an unmerged factory

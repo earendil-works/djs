@@ -1114,7 +1114,7 @@ impl Repl {
         let handles = self.waiting_handles(None);
         let refs: Vec<(&str, Value)> = handles.iter().map(|(n, v)| (n.as_str(), *v)).collect();
         let origin = |id: u32| self.origins.get(&id).cloned();
-        match crate::dumps::dump_names(&self.vm, &self.tools, &refs, sel, &origin) {
+        match crate::dumps::dump_names(&self.vm, &self.tools, &refs, sel, &origin, false) {
             Ok(d) if file == "-" => print!("{}", d.text),
             Ok(d) => match std::fs::write(file, &d.text) {
                 Ok(()) => println!(
@@ -1155,7 +1155,7 @@ impl Repl {
         let handles = self.waiting_handles(entry);
         let refs: Vec<(&str, Value)> = handles.iter().map(|(n, v)| (n.as_str(), *v)).collect();
         let origin = |id: u32| self.origins.get(&id).cloned();
-        let d = crate::dumps::dump(&self.vm, &self.tools, &refs, &origin)?;
+        let d = crate::dumps::dump(&self.vm, &self.tools, &refs, &origin, false)?;
         let mut vm = new_vm(self.gc_stress, self.frozen);
         // The fresh VM runs the dump; its prints are the run's (a reaction that ran).
         let mut log = |vm: &Vm, args: &[Value]| {
