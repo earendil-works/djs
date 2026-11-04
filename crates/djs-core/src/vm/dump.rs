@@ -3462,11 +3462,21 @@ impl<'a> Dumper<'a> {
                 // A class's static private methods: its evaluation installs them.
                 continue;
             }
-            if self.pl.is_some() {
-                let path = self.nodes[n].path.clone();
-                self.refuse(path, "plain dumps: a private field of an instance");
-            }
             let ce = self.expr_or_loc(self.nodes[c].v);
+            if self.pl.is_some() {
+                // Only the class's own construction adds a private name to an object;
+                // plain dumps do not rewrite class text to do it (D2878).
+                let path = self.nodes[n].path.clone();
+                let why = cat!(
+                    "plain dumps: an instance of class ",
+                    ce,
+                    " with private name ",
+                    name,
+                    " (only the class's construction can add it to an object, D2878)"
+                );
+                self.refuse(path, &why);
+                continue;
+            }
             let line = match p {
                 Property::Data { value, .. } if !self.is_brand(*k) => {
                     let ve = self.expr_or_loc(*value);

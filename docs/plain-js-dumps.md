@@ -438,6 +438,20 @@ Risks:
   `}`), not by the part's first character (docs/continuation-dumps.md "Slot names" says
   "the element's own start").
 
+## 10. Refusals that remain (0203)
+
+The constructs of section 4 have plain encodings in the exporter (D2871–D2877), except
+for one, which plain dumps refuse:
+
+- **Private names on instances** (D2878): an object that carries a class's private field,
+  method or accessor (`#n`, `#bump`). Only that class's own construction can add a private
+  name to an object, and the dump does not rewrite class text (no-op initializers,
+  injected static methods) to make that possible. The refusal names the class and the
+  private name. Classes with static private members, and private methods called on the
+  class, are not affected. Instances like this that are live across an await are rare in
+  codemode; tests/dump/v2/plain-refusals.txt lists the one fixture
+  (golden/class-fields).
+
 ## Decisions
 
 Proposals for the coordinator, not added to docs/decisions.md by this report.

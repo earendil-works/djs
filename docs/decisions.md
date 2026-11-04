@@ -9510,3 +9510,17 @@ dump loads (`$dump.FM`, `$dump.CC`). That step yields a placeholder, and no user
 runs. A completed helper is `$dump.HD()`. The exporter reads these wrappers back
 (`next`'s captures, `$djs_f`/`$djs_k`, `$djs_m`/`$djs_o`), so re-dumps write the
 original's state again. chunks, windows and zip helpers in flight are refused.
+
+## D2878: Plain dumps refuse instances that carry private names
+date: 2026-11-05 · by: pjr · issue: 0203
+An object with a class's private field, method or accessor cannot be written as plain
+JavaScript: only the class's own construction adds a private name to an object. Making
+that possible would mean rewriting the class's text in the dump (initializers and
+constructor bodies that do nothing while the dump loads, static methods injected to set
+the values and deleted afterwards). That is the machinery plain dumps exist to avoid, and
+it would show in `Function.prototype.toString`. Such instances that are live across an
+await are rare in codemode, so the exporter refuses them with a message that names the
+class and the private name. A class's static private members, which its evaluation
+installs, are unaffected. In the same change, the continuation of a method of a class
+that a factory makes (`$dump.s2.Tagged.prototype.tag`) is placed in the factory, next to
+the class, so it sees the same variables.

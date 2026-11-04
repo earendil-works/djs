@@ -1,3 +1,2 @@
 # Idle points of tests/dump/v2 whose plain dump is refused (plain_dumps_at_every_idle_point).
-golden/class-closure@1: plain dump: an activation of a factory's cell
-golden/class-fields@1: <call 1><reaction 0>.onFulfilled<this>: plain dumps: a private field of an instance
+golden/class-fields@1: <call 1><reaction 0>.onFulfilled<this>: plain dumps: an instance of class Counter with private name #bump (only the class's construction can add it to an object, D2878) | <call 1><reaction 0>.onFulfilled<this>: plain dumps: an instance of class Counter with private name #n (only the class's construction can add it to an object, D2878)

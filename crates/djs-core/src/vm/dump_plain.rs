@@ -735,16 +735,25 @@ impl W<'_> {
                 && let Some((top, key)) = rest.split_once('.')
                 && let Some(f) = ir.factories.iter().position(|f| f.name == top)
             {
-                let found = ir.factories[f]
-                    .scopes
-                    .iter()
-                    .enumerate()
-                    .find_map(|(s, sc)| {
-                        sc.props
-                            .iter()
-                            .position(|p| p.key == key)
-                            .map(|p| ((f, s), p))
-                    });
+                // (A method of a class the factory makes, `Tagged.prototype.tag`: its
+                // continuation lives where the class does, seeing the same variables.)
+                let find = |key: &str| {
+                    ir.factories[f]
+                        .scopes
+                        .iter()
+                        .enumerate()
+                        .find_map(|(s, sc)| {
+                            sc.props
+                                .iter()
+                                .position(|p| p.key == key)
+                                .map(|p| ((f, s), p))
+                        })
+                };
+                let found = find(key).or_else(|| {
+                    key.split_once('.')
+                        .filter(|(_, rest)| rest.starts_with("prototype.") || !rest.contains('.'))
+                        .and_then(|(class, _)| find(class))
+                });
                 match found {
                     Some(h) => self.acts[a].home = Some(h),
                     None => return refuse("an activation of a factory's cell"),

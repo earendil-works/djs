@@ -73,7 +73,14 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
 - pjr: D2877 iterator helpers (all 6 golden points and the chain), test
   plain_dumps_of_iterator_helpers. v2: 191 identical, 2 refused (class-closure,
   class-fields). Score raised for the 6 new helper dumps (v2 +27 KB).
+- pjr: class-closure fixed: a continuation of a class method made by a factory goes into
+  that factory, next to the class. Private names on instances are a documented refusal
+  (D2878, coordinator's call: no class-text rewriting), with a message that names the
+  class and the private name; docs/plain-js-dumps.md section 10. v2: 192 identical,
+  1 refused (golden/class-fields).
 
 ## Follow-ups
+- Private names on instances (D2878) stay refused. If codemode ever needs them, the
+  only encoding is rewriting class text in the dump, which the owner rejects.
 
 ## Result
