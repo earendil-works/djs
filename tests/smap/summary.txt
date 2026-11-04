@@ -1,8 +1,8 @@
 # Suspension map coverage (compiler/smap_tests.rs)
-sites 1063
+sites 1075
 
 ## by kind
-  957 await
+  969 await
    11 await-using
    10 for-await.close
     8 for-await.next
@@ -26,11 +26,15 @@ sites 1063
     8 using.record
     7 call.callee call.this call.callee call.this
     7 for-await.iterator for-await.next
+    5 object.literal
     3 binary.left
     3 for-of.iterator for-of.next call.callee call.this binary.left
+    3 object.literal array.element
     2 array.element
     2 assign.object assign.key
     2 call.callee call.this call.arg
+    2 object.literal object.literal array.element object.literal
+    1 array.literal
     1 assign.old
     1 binary.left array.element
     1 call.callee call.this call.arg call.callee call.this
@@ -40,11 +44,12 @@ sites 1063
     1 for-of.iterator
     1 for-of.iterator for-of.next assign.old
     1 for-of.iterator for-of.next using.record completion.kind completion.value
-    1 object.literal
+    1 object.literal array.element array.element
+    1 object.literal object.key
     1 pattern.iterator
 
 ## paths (D2850)
- 1063 complete
+ 1075 complete
 
 ## path gaps, by the part they are in
 
