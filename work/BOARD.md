@@ -6,6 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0199 | Plain-JS dumps (R with origin tracking), prototype | plainjs | .worktrees/plainjs |
 | 0198 | Make dumping and loading fast | dumpperf | .worktrees/dumpperf |
 
 ## Open (ready)
