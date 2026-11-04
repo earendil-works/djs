@@ -14,6 +14,8 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 
+process.env.TZ = "UTC"; // as the difftest runs djs and qjs
+
 const dir = process.argv[2];
 const list = process.argv.includes("--list");
 if (!dir) {
@@ -21,14 +23,16 @@ if (!dir) {
   process.exit(2);
 }
 
-// Stack frame lines are not compared (the difftest's normalize drops them too).
+// Stack frame lines are not compared (the difftest's normalize drops them too), and
+// node's wording of the common TypeErrors reads as djs's.
 const norm = (t) =>
   t
     .split("\n")
     .filter((l) => !/^\s+at /.test(l))
+    .map((l) => l.replace(/Cannot read properties of (undefined|null) \(reading '([^']*)'\)/g, "cannot read property '$2' of $1"))
     .join("\n");
 
-async function runLink(file) {
+async function runLink(file, now) {
   const text = fs.readFileSync(file, "utf8");
   const out = [];
   let result = null;
@@ -37,6 +41,16 @@ async function runLink(file) {
   const ctx = vm.createContext({});
   // djs's `stack` holds only the frames (node's starts with the message line).
   vm.runInContext('Error.prepareStackTrace = (e, frames) => frames.map((f) => "    at " + f).join("\\n");', ctx);
+  // djs's clock stands still at the case's start (the difftest sets it once).
+  vm.runInContext(
+    `{ const D = Date, now = ${now};
+       globalThis.Date = new Proxy(D, {
+         construct: (t, a, nt) => Reflect.construct(D, a.length ? a : [now], nt),
+         apply: (t, self, a) => new D(now).toString(),
+       });
+       D.now = () => now; }`,
+    ctx,
+  );
   const g = vm.runInContext("globalThis", ctx);
   const host = {
     output: (t) => {
@@ -66,8 +80,10 @@ async function runLink(file) {
   try {
     api = new vm.Script(text, { filename: file }).runInContext(ctx);
   } catch (e) {
-    return `=== crash\nload threw: ${e && e.stack ? e.stack.split("\n")[0] : e}\n`;
+    if (process.env.PLAIN_NODE_DEBUG) console.log(e);
+    return `=== crash\nload threw: ${e}\n`;
   }
+  if (process.env.PLAIN_NODE_DEBUG) console.log(out, result);
   if ("$djs" in g || "$dump" in g) return "=== crash\nthe dump left $djs or $dump\n";
   for (let n = 0; n < 1_000_000 && result === null; n++) {
     await new Promise((r) => setImmediate(r));
@@ -117,7 +133,8 @@ for (const c of walk(dir).sort()) {
     if (head.startsWith('"djs-dump 3 typescript"')) continue;
     links++;
     const pre = fs.readFileSync(path.join(c, `${k}.pre`), "utf8");
-    const got = norm(pre + (await runLink(file)));
+    const now = fs.existsSync(path.join(c, "now")) ? Number(fs.readFileSync(path.join(c, "now"), "utf8")) : Date.now();
+    const got = norm(pre + (await runLink(file, now)));
     if (got !== want) {
       bad++;
       const a = want.split("\n");

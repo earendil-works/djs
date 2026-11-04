@@ -437,6 +437,7 @@ struct W<'x> {
     act_place: Vec<Option<Pl>>,
     group_place: Vec<(Sc, Pl)>,
     in_progress: Vec<Sc>,
+    kkeys: Vec<String>,
     /// The dump's top-level names (roots, functions, classes).
     globals: Vec<String>,
     write_k: &'x dyn Fn(&Act, &mut dyn Ctx) -> Result<KText, String>,
@@ -533,6 +534,23 @@ pub(super) fn write(
         group_place: Vec::new(),
         in_progress: Vec::new(),
         globals: Vec::new(),
+        // A continuation's key in its factory: `$K<act>`, unless a member has that name
+        // already (a continuation of an earlier dump, named by its key there).
+        kkeys: ir
+            .acts
+            .iter()
+            .map(|a| {
+                let mut k = cat!("$K", a.name);
+                while ir
+                    .factories
+                    .iter()
+                    .any(|f| f.scopes.iter().any(|s| s.props.iter().any(|p| p.key == k)))
+                {
+                    k.push('_');
+                }
+                k
+            })
+            .collect(),
         write_k,
     };
     for (f, fac) in ir.factories.iter().enumerate() {
@@ -1180,8 +1198,7 @@ impl W<'_> {
             }
         }
         if pl.is_none()
-            && let Some(an) = key.strip_prefix("$K")
-            && let Some(a) = ir.acts.iter().position(|a| a.name == an)
+            && let Some(a) = self.kkeys.iter().position(|k| k == key)
         {
             pl = self.acts[a].place;
         }
@@ -1953,7 +1970,7 @@ impl W<'_> {
     fn kref(&self, a: usize) -> String {
         let act = &self.ir.acts[a];
         match self.acts[a].home {
-            Some((sc, _)) => cat!("$dump.", self.ir.factories[sc.0].name, ".$K", act.name),
+            Some((sc, _)) => cat!("$dump.", self.ir.factories[sc.0].name, ".", self.kkeys[a]),
             None => cat!("$dump.K", act.name),
         }
     }
@@ -2094,7 +2111,7 @@ impl W<'_> {
         for a in 0..ir.acts.len() {
             if self.acts[a].place == Some(Pl::Fac(sc)) {
                 let k = self.ktext(a)?;
-                props.push_out(cat!("$K", ir.acts[a].name, ": ", k.text));
+                props.push_out(cat!(self.kkeys[a], ": ", k.text));
             }
         }
         lines.push_out(cat!("  return { ", join(&props, ", "), " };"));
@@ -2144,7 +2161,7 @@ impl W<'_> {
                             let k = self.ktext(a)?;
                             (
                                 ir.factories[hsc.0].name.clone(),
-                                cat!("$K", ir.acts[a].name, ": ", k.text),
+                                cat!(self.kkeys[a], ": ", k.text),
                             )
                         }
                         _ => unreachable!(),
