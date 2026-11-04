@@ -41,5 +41,5 @@ async function main() {
 $dump.i2 = $dump.regexpIterator(/[a-z](\d+)/g, "a1 b22 c333", 5);
 $dump.n3 = /\d/g;
 $dump.i4 = $dump.regexpIterator($dump.n3, "x9y8", 1);
-$dump.a5 = $dump.resume(main, { at: "await#2", awaiting: $dump.p1, bindings: { matches: $dump.i2, found: ["1@0", "22@3", "333@7"], it: $dump.i4, evens: undefined, got: undefined, flat: undefined, seen: undefined, wrapped: undefined, w: undefined, cat: undefined, c: undefined } });
+$dump.a5 = $dump.resume(main, { at: "await#2", awaiting: $dump.p1, slots: { matches: $dump.i2, found: ["1@0", "22@3", "333@7"], it: $dump.i4, evens: undefined, got: undefined, flat: undefined, seen: undefined, wrapped: undefined, w: undefined, cat: undefined, c: undefined } });
 $dump.n3.lastIndex = 2;

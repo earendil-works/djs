@@ -13,4 +13,4 @@ async function main() {
 }
 $dump.n2 = ["s1", "s2", "a1!"];
 $dump.a3 = $dump.resume(agen, { at: "yield#2" });
-$dump.a4 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, bindings: { out: $dump.n2, x: "a2" }, operands: [["call.callee", Array.prototype.push], ["call.this", $dump.n2]], loops: [{ kind: "for-await", iterator: $dump.a3, next: $dump.builtin("%AsyncGeneratorPrototype%.next") }] });
+$dump.a4 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, slots: { out: $dump.n2, x: "a2", "for-await.iterator@102": $dump.a3, "for-await.next@102": $dump.builtin("%AsyncGeneratorPrototype%.next"), "call.callee@132": Array.prototype.push, "call.this@132": $dump.n2 } });

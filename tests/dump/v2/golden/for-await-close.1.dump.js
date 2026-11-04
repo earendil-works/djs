@@ -31,5 +31,5 @@ async function main() {
   print("end");
 }
 $dump.p2 = new Promise(() => {});
-$dump.a3 = $dump.resume(source, { at: "await#1", awaiting: $dump.p1, args: ["a"], bindings: { tag: "a" }, operands: [["finally.value", undefined], ["finally.return", 0], ["call.callee", print], ["call.this", undefined], ["call.arg[0]", "a"], ["call.arg[1]", "closing"]], queue: [{ type: "return", value: undefined, promise: $dump.p2 }] });
-$dump.a4 = $dump.resume(main, { at: "for-await.close#2", awaiting: $dump.p2, bindings: { v: "a1" } });
+$dump.a3 = $dump.resume(source, { at: "await#1", awaiting: $dump.p1, args: ["a"], slots: { tag: "a", "finally.value@84": undefined, "finally.return@84": 0, "call.callee@98": print, "call.this@98": undefined, "call.arg@104": "a", "call.arg@109": "closing" }, queue: [{ type: "return", value: undefined, promise: $dump.p2 }] });
+$dump.a4 = $dump.resume(main, { at: "for-await.close#2", awaiting: $dump.p2, slots: { v: "a1" } });

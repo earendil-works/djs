@@ -86,5 +86,5 @@ $dump.s7 = (() => {
 })();
 $dump.n6 = { [Symbol.dispose]: $dump.s7.$f12 };
 $dump.u8 = $dump.using([$dump.n2, $dump.s3.$f10, 0, $dump.n4, $dump.s5.$f11, 4, undefined, undefined, 3, $dump.n6, $dump.s7.$f12, 0]);
-$dump.a9 = $dump.resume(block, { at: "await#1", awaiting: $dump.p1, bindings: { a: $dump.n2, b: $dump.n4, n: null, c: $dump.n6 }, operands: [["using.record", $dump.u8], ["call.callee", print], ["call.this", undefined], ["call.arg[0]", "in block"]] });
-$dump.a10 = $dump.resume(main, { at: "await#1", awaiting: $dump.a9, bindings: { it: undefined, seen: undefined } });
+$dump.a9 = $dump.resume(block, { at: "await#1", awaiting: $dump.p1, slots: { a: $dump.n2, b: $dump.n4, n: null, c: $dump.n6, "using.record@39": $dump.u8, "call.callee@157": print, "call.this@157": undefined, "call.arg@163": "in block" } });
+$dump.a10 = $dump.resume(main, { at: "await#1", awaiting: $dump.a9, slots: { it: undefined, seen: undefined } });

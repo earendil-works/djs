@@ -14,5 +14,5 @@ $dump.n5 = Promise.resolve([1, 2, 3]);
 $dump.n7 = [{ status: "rejected", reason: new Error("e") }, { status: "fulfilled", value: 4 }];
 $dump.n6 = Promise.resolve($dump.n7);
 $dump.n8 = Promise.resolve("ok");
-$dump.a9 = $dump.resume(main, { at: "await#4", awaiting: $dump.p2, bindings: { all: $dump.n5, settled: $dump.n6, any: $dump.n8, race: $dump.p2 }, operands: [["call.callee", print], ["call.this", undefined], ["call.arg[0]", "[1,2,3]"], ["call.arg[1]", "[{\"status\":\"rejected\",\"reason\":{}},{\"status\":\"fulfilled\",\"value\":4}]"], ["call.arg[2]", "ok"]] });
+$dump.a9 = $dump.resume(main, { at: "await#4", awaiting: $dump.p2, slots: { all: $dump.n5, settled: $dump.n6, any: $dump.n8, race: $dump.p2, "call.callee@297": print, "call.this@297": undefined, "call.arg@303": "[1,2,3]", "call.arg@330": "[{\"status\":\"rejected\",\"reason\":{}},{\"status\":\"fulfilled\",\"value\":4}]", "call.arg@361": "ok" } });
 Object.defineProperty($dump.n7[0].reason, "stack", { value: "    at main (src.js:4:54)\n    at <eval> (src.js:9:5)\n", writable: true, configurable: true });

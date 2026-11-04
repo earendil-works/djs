@@ -37,5 +37,5 @@ async function main() {
   print("walk", seen.join(" "));
 }
 $dump.n2 = ["000", "011"];
-$dump.a3 = $dump.resume(nested, { at: "await#1", awaiting: $dump.p1, bindings: { out: $dump.n2, i: "1", c: "0" }, operands: [["call.callee", Array.prototype.push], ["call.this", $dump.n2], ["binary.left", "10"]], loops: [{ kind: "for-in", iterator: $dump.forIn([10, 20], []) }, { kind: "for-in", iterator: $dump.forIn(undefined, ["1"]) }] });
-$dump.a4 = $dump.resume(main, { at: "await#2", awaiting: $dump.a3, bindings: { g: undefined, seen: undefined }, operands: [["call.callee", print], ["call.this", undefined], ["call.arg[0]", "nested"]] });
+$dump.a3 = $dump.resume(nested, { at: "await#1", awaiting: $dump.p1, slots: { out: $dump.n2, i: "1", c: "0", "for-in.iterator@46": $dump.forIn([10, 20], []), "for-in.iterator@78": $dump.forIn(undefined, ["1"]), "call.callee@100": Array.prototype.push, "call.this@100": $dump.n2, "binary.left@109": "10" } });
+$dump.a4 = $dump.resume(main, { at: "await#2", awaiting: $dump.a3, slots: { g: undefined, seen: undefined, "call.callee@57": print, "call.this@57": undefined, "call.arg@63": "nested" } });

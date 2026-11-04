@@ -48,6 +48,6 @@ async function main() {
   }
   print(seen.join(" "));
 }
-$dump.a2 = $dump.resume(inner, { at: "yield#1", args: ["i"], bindings: { tag: "i", got: undefined } });
-$dump.a3 = $dump.resume(outer, { at: "yield*#1", bindings: { r: undefined }, loops: [{ kind: "yield*", iterator: $dump.a2, next: $dump.builtin("%GeneratorPrototype%.next") }] });
-$dump.a4 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, bindings: { g: $dump.a3, seen: ["i1"], ag: undefined, ag2: undefined, g2: undefined } });
+$dump.a2 = $dump.resume(inner, { at: "yield#1", args: ["i"], slots: { tag: "i", got: undefined } });
+$dump.a3 = $dump.resume(outer, { at: "yield*#1", slots: { r: undefined, "yield*.iterator@32": $dump.a2, "yield*.next@32": $dump.builtin("%GeneratorPrototype%.next") } });
+$dump.a4 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, slots: { g: $dump.a3, seen: ["i1"], ag: undefined, ag2: undefined, g2: undefined } });

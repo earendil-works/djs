@@ -49,5 +49,5 @@ async function main() {
   print(seen.join(" "));
 }
 $dump.i2 = $dump.advance(Array.prototype.values.call(["a1", "a2"]), 1);
-$dump.a3 = $dump.resume(outer, { at: "yield*#2", bindings: { r: "i done" }, loops: [{ kind: "yield*", iterator: $dump.i2, next: $dump.builtin("%ArrayIteratorPrototype%.next") }] });
-$dump.a4 = $dump.resume(main, { at: "await#2", awaiting: $dump.p1, bindings: { g: $dump.a3, seen: ["i1", "i2:v", "a1"], ag: undefined, ag2: undefined, g2: undefined } });
+$dump.a3 = $dump.resume(outer, { at: "yield*#2", slots: { r: "i done", "yield*.iterator@53": $dump.i2, "yield*.next@53": $dump.builtin("%ArrayIteratorPrototype%.next") } });
+$dump.a4 = $dump.resume(main, { at: "await#2", awaiting: $dump.p1, slots: { g: $dump.a3, seen: ["i1", "i2:v", "a1"], ag: undefined, ag2: undefined, g2: undefined } });

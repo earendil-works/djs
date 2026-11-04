@@ -50,4 +50,4 @@ $dump.n9 = [$dump.n10, [3]];
 $dump.i11 = $dump.advance(Array.prototype.values.call($dump.n9), 1);
 $dump.i12 = $dump.advance(Array.prototype.values.call($dump.n10), 1);
 $dump.i13 = $dump.iteratorHelper([5, 1, $dump.i11, $dump.builtin("%ArrayIteratorPrototype%.next"), (a) => a, 1, $dump.i12, $dump.builtin("%ArrayIteratorPrototype%.next")]);
-$dump.a14 = $dump.resume(main, { at: "await#4", awaiting: $dump.p1, bindings: { matches: $dump.i2, found: ["1@0", "22@3", "333@7"], it: $dump.i3, evens: $dump.i8, got: [20, 40, 60], flat: $dump.i13, seen: [1], wrapped: undefined, w: undefined, cat: undefined, c: undefined } });
+$dump.a14 = $dump.resume(main, { at: "await#4", awaiting: $dump.p1, slots: { matches: $dump.i2, found: ["1@0", "22@3", "333@7"], it: $dump.i3, evens: $dump.i8, got: [20, 40, 60], flat: $dump.i13, seen: [1], wrapped: undefined, w: undefined, cat: undefined, c: undefined } });

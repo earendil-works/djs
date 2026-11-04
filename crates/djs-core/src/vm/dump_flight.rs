@@ -16,16 +16,19 @@
 //!   again, a combinator element the combinator called again with the elements that
 //!   settled in place. A dump whose dependencies would add them in another order is
 //!   refused.
-//! - An activation is `$dump.resume(fn, {...})` with the bindings, operands and loops its
-//!   function's suspension map names at the site where it stopped; the map comes from
-//!   compiling the function's script again, with the options it was compiled with.
+//! - An activation is `$dump.resume(fn, {...})` with the slots its function's suspension
+//!   map names at the site where it stopped (bindings, hidden locals, temporaries of the
+//!   constructs in flight, D2731); the map comes from compiling the function's script
+//!   again, with the options it was compiled with.
 
 use alloc::string::String;
 use alloc::vec::Vec;
 
 use super::*;
 use crate::builtins::regexp;
-use crate::compiler::{CompileOptions, FunctionMap, Loop, Role, Site, SiteKind, Slot};
+use crate::compiler::{
+    CompileOptions, FunctionMap, Holds, Loop, Place, Role, Site, SiteKind, Slot,
+};
 use crate::heap::cells::{HostCall, Script};
 use crate::interp::run::{builtin_closure_kind, promise, suspend};
 use crate::vm::dump_prims::{USING_FIELDS, USING_SLOTS, helper_proto};
@@ -439,7 +442,12 @@ impl Dumper<'_> {
                     continue;
                 }
                 let e = self.edge(n, v, || {
-                    cat!(path, "<", super::super::dump_resume::role_name(*role), ">")
+                    cat!(
+                        path,
+                        "<",
+                        site.slots.get(k).map_or("?", |s| s.as_str()),
+                        ">"
+                    )
                 });
                 if *role == Role::UsingRecord
                     && let Some(e) = e
@@ -1613,128 +1621,79 @@ impl Dumper<'_> {
             fields.push_out(cat!("args: [", join(&args, ", "), "]"));
         }
         parts.extend(args.into_iter().map(|a| ("argument", a)));
-        // Bindings: by name, or `name@scope` where two of a name are in scope.
-        let names: Vec<&str> = site
-            .args
-            .iter()
-            .chain(&site.locals)
-            .filter_map(|s| match s {
-                Slot::Binding { name, .. } => Some(name.as_str()),
-                _ => None,
-            })
-            .collect();
-        let mut bindings: Vec<String> = Vec::new();
-        let slots: Vec<(usize, &Slot, bool)> = site
-            .args
-            .iter()
-            .enumerate()
-            .map(|(i, s)| (2 + i, s, false))
-            .chain(
-                site.locals
-                    .iter()
-                    .enumerate()
-                    .map(|(i, s)| (lp + i, s, site.boxed.get(i).copied().unwrap_or(false))),
-            )
-            .collect();
-        for (at, slot, boxed) in slots {
-            let key = match slot {
-                Slot::Binding { name, scope } => {
-                    if names.iter().filter(|x| **x == name.as_str()).count() > 1 {
-                        quote(&cat!(name, "@", *scope))
-                    } else if is_ident(name) {
-                        name.clone()
-                    } else {
-                        quote(name)
-                    }
-                }
-                Slot::Hidden(name) if !computed_hidden(name) => quote(name),
-                _ => continue,
-            };
-            let e = match slot {
-                Slot::Hidden(name) if class_hidden(name) => "undefined".into(),
-                _ => self.slot_expr(fv(at), boxed),
-            };
-            parts.push_out(("binding", e.clone()));
-            bindings.push_out(cat!(key, ": ", e));
-        }
-        if !bindings.is_empty() {
-            fields.push_out(cat!("bindings: { ", join(&bindings, ", "), " }"));
-        }
-        let mut ops: Vec<String> = Vec::new();
-        let mut loops: Vec<String> = Vec::new();
+        // The frame's slots by name (D2731): bindings (`name@scope` where two of a name
+        // are in scope), hidden locals, the temporaries of constructs in flight.
+        let mut slots: Vec<String> = Vec::new();
+        let n_locals = site.locals.len();
+        let index = |p: Place| match p {
+            Place::Arg(i) => 2 + usize::from(i),
+            Place::Local(i) => lp + usize::from(i),
+            Place::Temp(k) => lp + n_locals + usize::from(k),
+        };
+        // The iterator below a loop's `next` (an async-from-sync one brings its own).
         let mut it = String::new();
         let mut rets = site.returns.iter();
-        for (k, role) in site.operands.iter().enumerate() {
-            let from_sync = matches!(role, Role::LoopNext(Loop::Await | Loop::Star))
-                && k > 0
-                && fv(lp + site.locals.len() + k - 1)
-                    .as_object()
-                    .is_some_and(|o| self.is_from_sync(o));
-            let e = if from_sync {
-                cat!(it, ".next")
-            } else if *role == Role::LoopIterator(Loop::In) {
-                let v = fv(lp + site.locals.len() + k);
-                match for_in_parts(h, v) {
-                    Some((target, keys)) => {
-                        let t = self.expr(target, None, None);
-                        let ks: Vec<String> =
-                            keys.into_iter().map(|k| self.expr(k, None, None)).collect();
-                        cat!("$dump.forIn(", t, ", [", join(&ks, ", "), "])")
-                    }
-                    // (Refused by the visit.)
-                    None => "undefined".into(),
-                }
-            } else if let Role::FinallyReturn(_) = role {
-                // A return address: the index of its `gosub` (the loader's pc for it).
-                let pc = fv(lp + site.locals.len() + k).as_int();
-                let j = rets
-                    .next()
-                    .zip(pc)
-                    .and_then(|(r, pc)| r.iter().position(|&x| x as i32 == pc));
-                match j {
-                    Some(j) => cat!(j),
-                    None => {
-                        self.refuse(
-                            path.clone(),
-                            "a subroutine's return address its map does not know",
-                        );
-                        "undefined".into()
-                    }
-                }
-            } else {
-                self.expr(fv(lp + site.locals.len() + k), None, None)
+        for slot in site.named_slots() {
+            let v = fv(index(slot.place));
+            let key = match slot.holds {
+                Holds::Binding if is_ident(&slot.name) => slot.name.clone(),
+                Holds::Hidden if computed_hidden(&slot.name) => continue,
+                _ => quote(&slot.name),
             };
-            parts.push_out(("operand", e.clone()));
-            match role {
-                Role::LoopIterator(Loop::In) => {
-                    loops.push_out(cat!("{ kind: \"for-in\", iterator: ", e, " }"));
+            let (what, e) = match slot.holds {
+                Holds::Hidden if class_hidden(&slot.name) => ("binding", "undefined".into()),
+                Holds::Binding | Holds::Hidden => ("binding", self.slot_expr(v, slot.boxed)),
+                Holds::Temp(role) => {
+                    let e = match (role, slot.place) {
+                        (Role::LoopNext(Loop::Await | Loop::Star), Place::Temp(k))
+                            if k > 0
+                                && fv(index(Place::Temp(k - 1)))
+                                    .as_object()
+                                    .is_some_and(|o| self.is_from_sync(o)) =>
+                        {
+                            cat!(it, ".next")
+                        }
+                        (Role::LoopIterator(Loop::In), _) => match for_in_parts(h, v) {
+                            Some((target, keys)) => {
+                                let t = self.expr(target, None, None);
+                                let ks: Vec<String> =
+                                    keys.into_iter().map(|k| self.expr(k, None, None)).collect();
+                                cat!("$dump.forIn(", t, ", [", join(&ks, ", "), "])")
+                            }
+                            // (Refused by the visit.)
+                            None => "undefined".into(),
+                        },
+                        (Role::FinallyReturn(_), _) => {
+                            // A return address: the index of its `gosub` (the loader's pc
+                            // for it).
+                            let j = rets
+                                .next()
+                                .zip(v.as_int())
+                                .and_then(|(r, pc)| r.iter().position(|&x| x as i32 == pc));
+                            match j {
+                                Some(j) => cat!(j),
+                                None => {
+                                    self.refuse(
+                                        path.clone(),
+                                        "a subroutine's return address its map does not know",
+                                    );
+                                    "undefined".into()
+                                }
+                            }
+                        }
+                        _ => self.expr(v, None, None),
+                    };
+                    if let Role::LoopIterator(_) = role {
+                        it = e.clone();
+                    }
+                    ("slot", e)
                 }
-                Role::LoopIterator(_) => it = e,
-                Role::LoopNext(l) => {
-                    loops.push_out(cat!(
-                        "{ kind: \"",
-                        l.name(),
-                        "\", iterator: ",
-                        it,
-                        ", next: ",
-                        e,
-                        " }"
-                    ));
-                }
-                r => ops.push_out(cat!(
-                    "[",
-                    quote(&super::super::dump_resume::role_name(*r)),
-                    ", ",
-                    e,
-                    "]"
-                )),
-            }
+            };
+            parts.push_out((what, e.clone()));
+            slots.push_out(cat!(key, ": ", e));
         }
-        if !ops.is_empty() {
-            fields.push_out(cat!("operands: [", join(&ops, ", "), "]"));
-        }
-        if !loops.is_empty() {
-            fields.push_out(cat!("loops: [", join(&loops, ", "), "]"));
+        if !slots.is_empty() {
+            fields.push_out(cat!("slots: { ", join(&slots, ", "), " }"));
         }
         let mut reqs: Vec<String> = Vec::new();
         for r in queue {

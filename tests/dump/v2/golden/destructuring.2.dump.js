@@ -38,5 +38,5 @@ async function main() {
   print("defaults", seen.join(" "));
 }
 $dump.n2 = { k: {}, extra: 1 };
-$dump.a3 = $dump.resume(objects, { at: "await#2", awaiting: $dump.p1, args: [$dump.n2], bindings: { o: $dump.n2, a: "a", b: undefined, rest: undefined }, operands: [["pattern.source", $dump.n2], ["pattern.excluded", ["a"]]] });
-$dump.a4 = $dump.resume(main, { at: "await#1", awaiting: $dump.a3, bindings: { g: undefined, seen: undefined }, operands: [["call.callee", print], ["call.this", undefined], ["call.arg[0]", "objects"]] });
+$dump.a3 = $dump.resume(objects, { at: "await#2", awaiting: $dump.p1, args: [$dump.n2], slots: { o: $dump.n2, a: "a", b: undefined, rest: undefined, "pattern.source@36": $dump.n2, "pattern.excluded@36": ["a"] } });
+$dump.a4 = $dump.resume(main, { at: "await#1", awaiting: $dump.a3, slots: { g: undefined, seen: undefined, "call.callee@26": print, "call.this@26": undefined, "call.arg@32": "objects" } });

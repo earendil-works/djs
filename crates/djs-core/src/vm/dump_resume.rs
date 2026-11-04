@@ -7,44 +7,41 @@
 //!   at: "await#2",              // the site, by kind and number in fn's text
 //!   awaiting: p,                // an await's promise; none at a yield
 //!   this: o, args: [...],       // the call's `this` and arguments
-//!   bindings: { x: 1, "y@40": $dump.TDZ, seen: $dump.cell(() => seen) },
-//!   operands: [["call.callee", f], ["call.this", o]],   // bottom first
-//!   loops: [{ kind: "for-of", iterator: it, next: nextFn }],   // outermost first
+//!   slots: {                    // the frame's slots by name (D2721, D2731)
+//!     x: 1, "y@40": $dump.TDZ, seen: $dump.cell(() => seen),
+//!     "call.callee@41": f, "call.this@41": o,
+//!     "for-of.iterator@18": it, "for-of.next@18": nextFn,
+//!   },
 //!   queue: [{ type: "next", value: v, promise: q }],   // an async generator's requests
 //! })
 //! ```
 //!
 //! `fn` must be made by the dump's own text: its map comes from compiling that text
 //! again with recording on, so the slots and the resume pc are those of `fn`'s code.
-//! Everything the map has at the site must be given and nothing else: the bindings in
-//! scope by name (`name@scope` where two of a name are in scope), the operands by role,
-//! the loops by kind. Hidden locals are made by the loader (`<state>`, `this`,
-//! `new.target`, `<active>`, `<home>`) or given in `bindings` (`arguments`). A captured
+//! Every slot the map names at the site must be given and nothing else
+//! ([`crate::compiler::Site::named_slots`]): the bindings in scope by name (`name@scope`
+//! where two of a name are in scope), the temporaries of the constructs in flight by
+//! `construct@offset`. Each is written into the frame index this build's map gives its
+//! name, so nothing depends on the order of the keys or on where this build keeps the
+//! value (D2731). Hidden locals are made by the loader (`<state>`, `this`,
+//! `new.target`, `<active>`, `<home>`) or given in `slots` (`arguments`). A captured
 //! binding gets a new Box, or the one a `$dump.cell` names.
 
 use alloc::string::String;
 use alloc::vec::Vec;
 
 use super::Vm;
-use super::dump_load::{Given, Load, array_arg, entries_arg, given, string_arg};
+use super::dump_load::{Given as GivenValue, Load, array_arg, entries_arg, given, string_arg};
 use crate::bytecode::template::{debug_info, func_flags};
-use crate::compiler::{Loop, Role, Site, SiteKind, Slot};
+use crate::compiler::{Holds, Loop, Place, Role, SiteKind};
 use crate::heap::cells::{BoxCell, FuncTemplate};
 use crate::heap::{CellKind, Heap, HeapError, ObjectClass};
 use crate::interp::frame;
 use crate::interp::run::{promise, suspend};
 use crate::value::{Obj, Value};
 
-/// `role` as the map names it: `call.arg[2]`.
-pub(super) fn role_name(role: Role) -> String {
-    match role.parts() {
-        (n, Some(i)) => cat!(n, "[", i, "]"),
-        (n, None) => String::from(n),
-    }
-}
-
-/// A binding given by the dump, until `resume` uses it.
-struct Binding {
+/// A slot given by the dump, until `resume` uses it.
+struct Given {
     key: String,
     value: Value,
     used: bool,
@@ -58,16 +55,16 @@ fn oom(e: HeapError) -> String {
 /// for a captured binding (`boxed`) a Box: a new one, or the one `$dump.cell` named.
 fn slot_value(heap: &mut Heap, v: Value, boxed: bool, name: &str) -> Result<Value, String> {
     let v = match (given(heap, v), boxed) {
-        (Given::Cell(b), true) => return Ok(Value::internal(b)),
-        (Given::Cell(_), false) => {
+        (GivenValue::Cell(b), true) => return Ok(Value::internal(b)),
+        (GivenValue::Cell(_), false) => {
             return Err(cat!(
                 "$dump.resume: ",
                 name,
                 " is not captured by a closure: give its value, not a cell"
             ));
         }
-        (Given::Tdz, _) => Value::UNINITIALIZED,
-        (Given::Value(v), _) => v,
+        (GivenValue::Tdz, _) => Value::UNINITIALIZED,
+        (GivenValue::Value(v), _) => v,
     };
     if !boxed {
         return Ok(v);
@@ -81,11 +78,9 @@ fn slot_value(heap: &mut Heap, v: Value, boxed: bool, name: &str) -> Result<Valu
 
 impl Vm {
     /// The description's keys, checked: unknown ones refuse.
-    fn resume_desc(&self, d: Value) -> Result<[Value; 8], String> {
-        const KEYS: [&str; 8] = [
-            "at", "awaiting", "this", "args", "bindings", "operands", "loops", "queue",
-        ];
-        let mut out = [Value::UNDEFINED; 8];
+    fn resume_desc(&self, d: Value) -> Result<[Value; 6], String> {
+        const KEYS: [&str; 6] = ["at", "awaiting", "this", "args", "slots", "queue"];
+        let mut out = [Value::UNDEFINED; 6];
         for (k, v) in entries_arg(&self.heap, d, "$dump.resume")? {
             let i = KEYS
                 .iter()
@@ -160,16 +155,8 @@ impl Vm {
             (true, true) => suspend::ASYNC_GENERATOR,
             _ => return Err("$dump.resume: not an async function or a generator".into()),
         };
-        let [
-            at,
-            awaiting,
-            this,
-            call_args,
-            bindings,
-            operands,
-            loops,
-            queue,
-        ] = self.resume_desc(args.get(1).copied().unwrap_or(Value::UNDEFINED))?;
+        let [at, awaiting, this, call_args, slots, queue] =
+            self.resume_desc(args.get(1).copied().unwrap_or(Value::UNDEFINED))?;
         let at = string_arg(&self.heap, at, "$dump.resume: at")?;
         let (mi, si) = self.resume_site(f, &at, load)?;
         let site = &load.maps.as_deref().unwrap_or_default()[mi].sites[si];
@@ -199,93 +186,106 @@ impl Vm {
             _ => {}
         }
         let call_args = array_arg(&self.heap, call_args, "$dump.resume: args")?;
-        let mut given_bindings: Vec<Binding> =
-            entries_arg(&self.heap, bindings, "$dump.resume: bindings")?
-                .into_iter()
-                .map(|(key, value)| Binding {
-                    key,
-                    value,
-                    used: false,
-                })
-                .collect();
-        let mut lookup = |name: &str, scope: Option<u32>| -> Option<Value> {
-            let b = given_bindings.iter_mut().find(|b| {
-                b.key == name
-                    || scope.is_some_and(|s| {
-                        b.key.strip_prefix(name).and_then(|r| r.strip_prefix('@'))
-                            == Some(cat!(s).as_str())
-                    })
-            })?;
-            b.used = true;
-            Some(b.value)
-        };
+        let mut given: Vec<Given> = entries_arg(&self.heap, slots, "$dump.resume: slots")?
+            .into_iter()
+            .map(|(key, value)| Given {
+                key,
+                value,
+                used: false,
+            })
+            .collect();
 
         let g = suspend::new_activation(&mut self.heap, f, kind).map_err(oom)?;
         let argc = call_args.len();
         let nargs = argc.max(params);
-        let mut frame = Vec::with_capacity(2 + nargs + frame::HEADER as usize + n_locals);
-        frame.push(Value::object(f));
-        frame.push(this);
-        for i in 0..nargs {
-            let v = match site.args.get(i) {
-                Some(Slot::Binding { name, scope }) => {
-                    let v = lookup(name, Some(*scope))
-                        .ok_or_else(|| cat!("$dump.resume: no value for binding ", name))?;
-                    slot_value(&mut self.heap, v, false, name)?
-                }
-                _ => call_args.get(i).copied().unwrap_or(Value::UNDEFINED),
-            };
-            frame.push(v);
+        let n_temps = site.operands.len();
+        // The frame, written by place: callee, `this`, the arguments, the header, the
+        // locals, the temporaries. What no slot names keeps its default: the call's
+        // arguments, `undefined`.
+        let hp_off = 2 + nargs;
+        let lp = hp_off + frame::HEADER as usize;
+        let mut frame = alloc::vec![Value::UNDEFINED; lp + n_locals + n_temps];
+        frame[0] = Value::object(f);
+        frame[1] = this;
+        for (i, v) in frame[2..hp_off].iter_mut().enumerate() {
+            *v = call_args.get(i).copied().unwrap_or(Value::UNDEFINED);
         }
-        let hp_off = frame.len() as u32;
         let mut header = [Value::int(0); frame::HEADER as usize];
         header[frame::ARGC as usize] = Value::int(argc as i32);
         header[frame::NEW_TARGET as usize] = Value::UNDEFINED;
-        frame.extend_from_slice(&header);
-        for (i, slot) in site.locals.iter().enumerate() {
-            let boxed = site.boxed.get(i).copied().unwrap_or(false);
-            let (name, v) = match slot {
-                Slot::Binding { name, scope } => (
-                    name,
-                    lookup(name, Some(*scope))
-                        .ok_or_else(|| cat!("$dump.resume: no value for binding ", name))?,
-                ),
-                Slot::Hidden(name) => {
-                    let v = match name.as_str() {
-                        "<state>" => Value::object(g),
-                        "this" => this,
-                        n => match lookup(n, None) {
-                            Some(v) => v,
-                            None => match n {
-                                "new.target" => Value::UNDEFINED,
-                                "<active>" => Value::object(f),
-                                "<home>" if flags & func_flags::HOME != 0 => {
-                                    self.heap.object_slot(f, captures)
-                                }
-                                _ => {
-                                    return Err(cat!(
-                                        "$dump.resume: give the hidden local ",
-                                        n,
-                                        " in bindings"
-                                    ));
-                                }
-                            },
-                        },
-                    };
-                    (name, v)
-                }
-                _ => {
-                    frame.push(Value::UNDEFINED);
-                    continue;
+        frame[hp_off..lp].copy_from_slice(&header);
+        let mut rets = site.returns.iter();
+        for slot in site.named_slots() {
+            let found = given.iter_mut().find(|b| b.key == slot.name).map(|b| {
+                b.used = true;
+                b.value
+            });
+            let v = match (slot.holds, found) {
+                (Holds::Hidden, _) if slot.name == "<state>" => Value::object(g),
+                (Holds::Hidden, _) if slot.name == "this" => this,
+                (_, Some(v)) => v,
+                (Holds::Hidden, None) => match slot.name.as_str() {
+                    "new.target" => Value::UNDEFINED,
+                    "<active>" => Value::object(f),
+                    "<home>" if flags & func_flags::HOME != 0 => self.heap.object_slot(f, captures),
+                    n => {
+                        return Err(cat!("$dump.resume: give the hidden local ", n, " in slots"));
+                    }
+                },
+                (_, None) => {
+                    return Err(cat!(
+                        "$dump.resume: ",
+                        at,
+                        " has a slot ",
+                        slot.name,
+                        ": give it"
+                    ));
                 }
             };
-            let v = slot_value(&mut self.heap, v, boxed, name)?;
-            frame.push(v);
+            let (index, v) = match slot.place {
+                Place::Arg(i) => (
+                    2 + usize::from(i),
+                    slot_value(&mut self.heap, v, false, &slot.name)?,
+                ),
+                Place::Local(i) => (
+                    lp + usize::from(i),
+                    slot_value(&mut self.heap, v, slot.boxed, &slot.name)?,
+                ),
+                Place::Temp(k) => {
+                    let Holds::Temp(role) = slot.holds else {
+                        unreachable!("a temporary holds a role")
+                    };
+                    let v = match role {
+                        Role::LoopIterator(Loop::In) => {
+                            super::dump_prims::for_in_iterator(&self.heap, v).ok_or_else(|| {
+                                cat!(
+                                    "$dump.resume: a for-in loop's iterator is made by $dump.forIn"
+                                )
+                            })?
+                        }
+                        // A return address, by the index of its `gosub` (D2627).
+                        Role::FinallyReturn(_) => {
+                            let pc = v
+                                .as_int()
+                                .and_then(|j| usize::try_from(j).ok())
+                                .zip(rets.next())
+                                .and_then(|(j, r)| r.get(j).copied())
+                                .ok_or_else(|| {
+                                    cat!("$dump.resume: ", at, " has no such ", slot.name)
+                                })?;
+                            Value::int(pc as i32)
+                        }
+                        _ => v,
+                    };
+                    (lp + n_locals + usize::from(k), v)
+                }
+            };
+            frame[index] = v;
         }
-        if let Some(b) = given_bindings.iter().find(|b| !b.used) {
-            return Err(cat!("$dump.resume: ", at, " has no binding ", b.key));
+        if let Some(b) = given.iter().find(|b| !b.used) {
+            return Err(cat!("$dump.resume: ", at, " has no slot ", b.key));
         }
-        self.resume_operands(site, operands, loops, &mut frame)?;
+        let hp_off = hp_off as u32;
         let state = if at_yield && kind == suspend::GENERATOR && site.kind == SiteKind::YieldStar {
             // A sync generator's `yield_star` passes the inner result through.
             suspend::SUSPENDED_RAW
@@ -313,118 +313,6 @@ impl Vm {
         } else {
             Value::object(g)
         })
-    }
-
-    /// Pushes the operands of `site`, bottom first: loop records from `loops`, the other
-    /// roles from `operands`, each checked against the map.
-    fn resume_operands(
-        &self,
-        site: &Site,
-        operands: Value,
-        loops: Value,
-        frame: &mut Vec<Value>,
-    ) -> Result<(), String> {
-        let h = &self.heap;
-        let ops = array_arg(h, operands, "$dump.resume: operands")?;
-        let loops = array_arg(h, loops, "$dump.resume: loops")?;
-        let (mut oi, mut li) = (0, 0);
-        let mut rets = site.returns.iter();
-        for &role in &site.operands {
-            let v = match role {
-                Role::LoopIterator(l) | Role::LoopNext(l) => {
-                    let lp = loops
-                        .get(li)
-                        .copied()
-                        .ok_or_else(|| cat!("$dump.resume: ", site.name, " is in more loops"))?;
-                    let mut kind = None;
-                    let mut pick = Value::UNDEFINED;
-                    // (A for-in loop has only its key iterator.)
-                    let want = if matches!(role, Role::LoopNext(_)) || l == Loop::In {
-                        li += 1;
-                        if l == Loop::In { "iterator" } else { "next" }
-                    } else {
-                        "iterator"
-                    };
-                    for (k, v) in entries_arg(h, lp, "$dump.resume: loop")? {
-                        match k.as_str() {
-                            "kind" => kind = Some(string_arg(h, v, "$dump.resume: loop kind")?),
-                            "iterator" | "next" if !(l == Loop::In && k == "next") => {
-                                if k == want {
-                                    pick = v;
-                                }
-                            }
-                            _ => return Err(cat!("$dump.resume: unknown loop key ", k)),
-                        }
-                    }
-                    if kind.as_deref() != Some(l.name()) {
-                        return Err(cat!(
-                            "$dump.resume: loop ",
-                            li,
-                            " of ",
-                            site.name,
-                            " is a ",
-                            l.name()
-                        ));
-                    }
-                    if l == Loop::In {
-                        super::dump_prims::for_in_iterator(h, pick).ok_or_else(|| {
-                            cat!("$dump.resume: a for-in loop's iterator is made by $dump.forIn")
-                        })?
-                    } else {
-                        pick
-                    }
-                }
-                _ => {
-                    let want = role_name(role);
-                    let pair = ops
-                        .get(oi)
-                        .map(|&p| array_arg(h, p, "$dump.resume: operand"))
-                        .transpose()?
-                        .ok_or_else(|| cat!("$dump.resume: ", site.name, " needs ", want))?;
-                    oi += 1;
-                    let (Some(&name), Some(&v), 2) = (pair.first(), pair.get(1), pair.len()) else {
-                        return Err("$dump.resume: an operand is a [role, value] pair".into());
-                    };
-                    let name = string_arg(h, name, "$dump.resume: operand role")?;
-                    if name != want {
-                        return Err(cat!(
-                            "$dump.resume: operand ",
-                            oi - 1,
-                            " of ",
-                            site.name,
-                            " is ",
-                            want,
-                            ", not ",
-                            name
-                        ));
-                    }
-                    match role {
-                        // A return address, by the index of its `gosub`.
-                        Role::FinallyReturn(_) => {
-                            let pc = v
-                                .as_int()
-                                .and_then(|j| usize::try_from(j).ok())
-                                .zip(rets.next())
-                                .and_then(|(j, r)| r.get(j).copied())
-                                .ok_or_else(|| {
-                                    cat!("$dump.resume: ", site.name, " has no such ", want)
-                                })?;
-                            Value::int(pc as i32)
-                        }
-                        _ => v,
-                    }
-                }
-            };
-            frame.push(v);
-        }
-        if oi != ops.len() || li != loops.len() {
-            return Err(cat!(
-                "$dump.resume: ",
-                site.name,
-                " has fewer operands or loops than given"
-            ));
-        }
-        Ok(())
     }
 
     /// An async generator's requests (D1421): `[{type, value, promise}]`, oldest first,

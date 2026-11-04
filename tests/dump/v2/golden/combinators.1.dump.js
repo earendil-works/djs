@@ -21,6 +21,6 @@ $dump.p11 = Promise.allSettled([$dump.p4, $dump.p5]);
 $dump.p12 = Promise.any([$dump.p7, $dump.p8]);
 $dump.p13 = new Promise((res, rej) => { $dump.r14 = [res, rej]; });
 $dump.p15 = Promise.prototype.then.call($dump.p9, $dump.r14[0], $dump.r14[1]);
-$dump.a16 = $dump.resume(main, { at: "await#1", awaiting: $dump.p10, bindings: { all: $dump.p10, settled: $dump.p11, any: $dump.p12, race: $dump.p13 }, operands: [["call.callee", print], ["call.this", undefined], ["call.callee", JSON.stringify], ["call.this", JSON]] });
+$dump.a16 = $dump.resume(main, { at: "await#1", awaiting: $dump.p10, slots: { all: $dump.p10, settled: $dump.p11, any: $dump.p12, race: $dump.p13, "call.callee@297": print, "call.this@297": undefined, "call.callee@303": JSON.stringify, "call.this@303": JSON } });
 Object.defineProperty($dump.n3, "stack", { value: "    at main (src.js:4:54)\n    at <eval> (src.js:9:5)\n", writable: true, configurable: true });
 Object.defineProperty($dump.n6, "stack", { value: "    at main (src.js:5:43)\n    at <eval> (src.js:9:5)\n", writable: true, configurable: true });

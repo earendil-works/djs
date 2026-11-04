@@ -17,7 +17,7 @@ function make(prefix) {
     async tag() { return prefix + (await later(this.v)); }
   };
 }
-$dump.a3 = $dump.resume($dump.s2.Tagged.prototype.tag, { at: "await#1", awaiting: $dump.p1, this: t, operands: [["binary.left", "#"]] });
+$dump.a3 = $dump.resume($dump.s2.Tagged.prototype.tag, { at: "await#1", awaiting: $dump.p1, this: t, slots: { "binary.left@21": "#" } });
 $dump.p4 = Promise.prototype.then.call($dump.a3, print, undefined);
 $dump.keep($dump.s2.Tagged, []);
 $dump.keep($dump.s2.Tagged.prototype, ["tag"]);

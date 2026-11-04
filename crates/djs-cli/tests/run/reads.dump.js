@@ -11,7 +11,7 @@ $dump.run = $dump.resume(main, {
   awaiting: $dump.p2,
   this: undefined,
   args: [],
-  bindings: { a: $dump.TDZ, b: $dump.TDZ },
+  slots: { a: $dump.TDZ, b: $dump.TDZ },
 });
 $dump.run.then((n) => print("total", n));
 $dump.handle("run", $dump.run);

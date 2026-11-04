@@ -79,4 +79,4 @@ async function main() {
   print("cases", await cases("b"), await cases("c"));
 }
 $dump.a2 = $dump.resume(gen, { at: "yield#1" });
-$dump.a3 = $dump.resume(main, { at: "await#5", awaiting: $dump.p1, bindings: { g: $dump.a2, seen: [1] } });
+$dump.a3 = $dump.resume(main, { at: "await#5", awaiting: $dump.p1, slots: { g: $dump.a2, seen: [1] } });

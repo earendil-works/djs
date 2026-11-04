@@ -64,7 +64,7 @@ $dump.handle("run", $dump.resume($dump.f1, {
   awaiting: $dump.pending(3, "sleep", [5]),
   this: undefined,
   args: [5],
-  bindings: { ms: 5, r: $dump.TDZ },
+  slots: { ms: 5, r: $dump.TDZ },
 }));
 `;
 

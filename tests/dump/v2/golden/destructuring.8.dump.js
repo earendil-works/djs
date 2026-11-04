@@ -39,5 +39,5 @@ async function main() {
 }
 $dump.n2 = { list: ["d"], p: 1 };
 $dump.n3 = {};
-$dump.a4 = $dump.resume(assigns, { at: "await#4", awaiting: $dump.p1, bindings: { t: $dump.n2, n: 1, r: [1] }, operands: [["assign.value", $dump.n3], ["pattern.source", $dump.n3], ["assign.object", $dump.n2], ["assign.key", "q2"]] });
-$dump.a5 = $dump.resume(main, { at: "await#3", awaiting: $dump.a4, bindings: { g: undefined, seen: undefined }, operands: [["call.callee", print], ["call.this", undefined], ["call.arg[0]", "assigns"]] });
+$dump.a4 = $dump.resume(assigns, { at: "await#4", awaiting: $dump.p1, slots: { t: $dump.n2, n: 1, r: [1], "assign.value@142": $dump.n3, "pattern.source@142": $dump.n3, "assign.object@147": $dump.n2, "assign.key@147": "q2" } });
+$dump.a5 = $dump.resume(main, { at: "await#3", awaiting: $dump.a4, slots: { g: undefined, seen: undefined, "call.callee@117": print, "call.this@117": undefined, "call.arg@123": "assigns" } });

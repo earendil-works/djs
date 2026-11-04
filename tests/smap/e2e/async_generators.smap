@@ -26,11 +26,11 @@ function deleg @394..521
   return.await#1 @116 (22:3) pc 392: -
 function main @522..1409
   loc0 <state>, loc1 x@43, loc2 x@93, loc3 x@161, loc4 it@0, loc5 it2@0, loc6 thrower@0, loc7 x@651, loc9 o@0, loc10 x@839
-  for-await.close#1 @26 (25:3) pc 45: exception@26 (out: loc2 loc3 loc7 loc10)
+  for-await.close#1 @26 (25:3) pc 45: for-await.exception@26 (out: loc2 loc3 loc7 loc10)
   for-await.next#1 @26 (25:3) pc 81: for-await.iterator@26 for-await.next@26 (out: loc2 loc3 loc7 loc10)
-  for-await.close#2 @76 (26:3) pc 140: exception@76 (out: loc1 loc3 loc7 loc10)
+  for-await.close#2 @76 (26:3) pc 140: for-await.exception@76 (out: loc1 loc3 loc7 loc10)
   for-await.next#2 @76 (26:3) pc 176: for-await.iterator@76 for-await.next@76 (out: loc1 loc3 loc7 loc10)
-  for-await.close#3 @144 (27:3) pc 226: exception@144 (out: loc1 loc2 loc7 loc10)
+  for-await.close#3 @144 (27:3) pc 226: for-await.exception@144 (out: loc1 loc2 loc7 loc10)
   for-await.next#3 @144 (27:3) pc 267: for-await.iterator@144 for-await.next@144 (out: loc1 loc2 loc7 loc10)
   for-await.close#4 @144 (27:3) pc 299: - (out: loc1 loc2 loc7 loc10)
   await#1 @261 (32:14) pc 351: call.callee@250 call.this@250 call.callee@259 call.this@259 (out: loc1 loc2 loc3 loc7 loc10)
@@ -41,9 +41,9 @@ function main @522..1409
   await#6 @427 (37:14) pc 545: call.callee@416 call.this@416 call.callee@425 call.this@425 (out: loc1 loc2 loc3 loc7 loc10)
   await#7 @469 (39:3) pc 572: - (out: loc1 loc2 loc3 loc7 loc10)
   await#8 @500 (40:14) pc 625: call.callee@489 call.this@489 call.callee@498 call.this@498 (out: loc1 loc2 loc3 loc7 loc10)
-  for-await.close#5 @634 (46:5) pc 657: exception@634 (out: loc1 loc2 loc3 loc10)
+  for-await.close#5 @634 (46:5) pc 657: for-await.exception@634 (out: loc1 loc2 loc3 loc10)
   for-await.next#4 @634 (46:5) pc 695: for-await.iterator@634 for-await.next@634 (out: loc1 loc2 loc3 loc10)
-  for-await.close#6 @822 (51:3) pc 798: exception@822 (out: loc1 loc2 loc3 loc7)
+  for-await.close#6 @822 (51:3) pc 798: for-await.exception@822 (out: loc1 loc2 loc3 loc7)
   for-await.next#5 @822 (51:3) pc 833: for-await.iterator@822 for-await.next@822 (out: loc1 loc2 loc3 loc7)
 function thrower @1067..1143
   loc0 <state>

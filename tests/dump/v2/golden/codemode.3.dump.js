@@ -16,5 +16,5 @@ await later(0);
 console.log("total", total());
 return n;
 
-}, { at: "await#2", awaiting: $dump.p1, this: globalThis, args: [tools, console], bindings: { tools: tools, console: console, n: 2, f: "b", body: "aa", total: undefined }, loops: [{ kind: "for-of", iterator: $dump.i2, next: $dump.builtin("%ArrayIteratorPrototype%.next") }] });
+}, { at: "await#2", awaiting: $dump.p1, this: globalThis, args: [tools, console], slots: { tools: tools, console: console, n: 2, f: "b", body: "aa", total: undefined, "for-of.iterator@140": $dump.i2, "for-of.next@140": $dump.builtin("%ArrayIteratorPrototype%.next") } });
 $dump.handle("run", $dump.a3);

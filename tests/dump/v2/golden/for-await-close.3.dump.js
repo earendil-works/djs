@@ -31,6 +31,6 @@ async function main() {
   print("end");
 }
 $dump.p2 = new Promise(() => {});
-$dump.a3 = $dump.resume(source, { at: "await#1", awaiting: $dump.p1, args: ["c"], bindings: { tag: "c" }, operands: [["finally.value", undefined], ["finally.return", 0], ["call.callee", print], ["call.this", undefined], ["call.arg[0]", "c"], ["call.arg[1]", "closing"]], queue: [{ type: "return", value: undefined, promise: $dump.p2 }] });
-$dump.a4 = $dump.resume(firstOf, { at: "for-await.close#2", awaiting: $dump.p2, args: ["c"], bindings: { tag: "c", v: "c1" }, operands: [["finally.value", "first c1"], ["finally.return", 0]] });
-$dump.a5 = $dump.resume(main, { at: "await#1", awaiting: $dump.a4, operands: [["call.callee", print], ["call.this", undefined]] });
+$dump.a3 = $dump.resume(source, { at: "await#1", awaiting: $dump.p1, args: ["c"], slots: { tag: "c", "finally.value@84": undefined, "finally.return@84": 0, "call.callee@98": print, "call.this@98": undefined, "call.arg@104": "c", "call.arg@109": "closing" }, queue: [{ type: "return", value: undefined, promise: $dump.p2 }] });
+$dump.a4 = $dump.resume(firstOf, { at: "for-await.close#2", awaiting: $dump.p2, args: ["c"], slots: { tag: "c", v: "c1", "finally.value@32": "first c1", "finally.return@32": 0 } });
+$dump.a5 = $dump.resume(main, { at: "await#1", awaiting: $dump.a4, slots: { "call.callee@277": print, "call.this@277": undefined } });

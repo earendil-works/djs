@@ -11,4 +11,4 @@ async function main() {
 }
 $dump.n2 = [1, 2, "a1"];
 $dump.i3 = $dump.advance(Map.prototype.entries.call(new Map([["a", 1], ["b", 2]])), 2);
-$dump.a4 = $dump.resume(main, { at: "await#2", awaiting: $dump.p1, bindings: { out: $dump.n2, k: "b", v: 2 }, operands: [["call.callee", Array.prototype.push], ["call.this", $dump.n2], ["binary.left", "b"]], loops: [{ kind: "for-of", iterator: $dump.i3, next: $dump.builtin("%MapIteratorPrototype%.next") }] });
+$dump.a4 = $dump.resume(main, { at: "await#2", awaiting: $dump.p1, slots: { out: $dump.n2, k: "b", v: 2, "for-of.iterator@96": $dump.i3, "for-of.next@96": $dump.builtin("%MapIteratorPrototype%.next"), "call.callee@148": Array.prototype.push, "call.this@148": $dump.n2, "binary.left@157": "b" } });

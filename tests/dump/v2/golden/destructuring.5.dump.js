@@ -41,5 +41,5 @@ $dump.n3 = [];
 $dump.n2 = { list: $dump.n3, p: 1 };
 $dump.n4 = [1];
 $dump.i5 = $dump.advance(Array.prototype.values.call($dump.n4), 1);
-$dump.a6 = $dump.resume(assigns, { at: "await#1", awaiting: $dump.p1, bindings: { t: $dump.n2, n: undefined, r: undefined }, operands: [["assign.value", $dump.n4], ["pattern.next", $dump.builtin("%ArrayIteratorPrototype%.next")], ["pattern.iterator", $dump.i5], ["member.object", $dump.n3]] });
-$dump.a7 = $dump.resume(main, { at: "await#3", awaiting: $dump.a6, bindings: { g: undefined, seen: undefined }, operands: [["call.callee", print], ["call.this", undefined], ["call.arg[0]", "assigns"]] });
+$dump.a6 = $dump.resume(assigns, { at: "await#1", awaiting: $dump.p1, slots: { t: $dump.n2, n: undefined, r: undefined, "assign.value@75": $dump.n4, "pattern.next@75": $dump.builtin("%ArrayIteratorPrototype%.next"), "pattern.iterator@75": $dump.i5, "member.object@81": $dump.n3 } });
+$dump.a7 = $dump.resume(main, { at: "await#3", awaiting: $dump.a6, slots: { g: undefined, seen: undefined, "call.callee@117": print, "call.this@117": undefined, "call.arg@123": "assigns" } });

@@ -39,5 +39,5 @@ async function main() {
 }
 $dump.n3 = [];
 $dump.n2 = { list: $dump.n3, p: 1 };
-$dump.a4 = $dump.resume(assigns, { at: "await#2", awaiting: $dump.p1, bindings: { t: $dump.n2, n: undefined, r: undefined }, operands: [["assign.value", [1]], ["pattern.next", $dump.builtin("%ArrayIteratorPrototype%.next")], ["pattern.iterator", undefined], ["assign.object", $dump.n3], ["assign.key", 0]] });
-$dump.a5 = $dump.resume(main, { at: "await#3", awaiting: $dump.a4, bindings: { g: undefined, seen: undefined }, operands: [["call.callee", print], ["call.this", undefined], ["call.arg[0]", "assigns"]] });
+$dump.a4 = $dump.resume(assigns, { at: "await#2", awaiting: $dump.p1, slots: { t: $dump.n2, n: undefined, r: undefined, "assign.value@75": [1], "pattern.next@75": $dump.builtin("%ArrayIteratorPrototype%.next"), "pattern.iterator@75": undefined, "assign.object@81": $dump.n3, "assign.key@81": 0 } });
+$dump.a5 = $dump.resume(main, { at: "await#3", awaiting: $dump.a4, slots: { g: undefined, seen: undefined, "call.callee@117": print, "call.this@117": undefined, "call.arg@123": "assigns" } });

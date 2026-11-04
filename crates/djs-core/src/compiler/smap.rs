@@ -228,7 +228,12 @@ impl Role {
     /// assignment, the `for`, the `switch`, …). See docs/continuation-dumps.md "Slot
     /// names".
     pub fn slot_name(self, at: u32) -> alloc::string::String {
-        alloc::format!("{}@{at}", self.parts().0)
+        // Every construct has a `.` or `-`, so no slot name is a binding's `name@scope`.
+        let construct = match self {
+            Role::Exception => "for-await.exception",
+            r => r.parts().0,
+        };
+        alloc::format!("{construct}@{at}")
     }
 }
 
@@ -366,6 +371,96 @@ mod maps {
         pub returns: Vec<Vec<u32>>,
         /// Why the frame cannot be described here: the construct, or `None`.
         pub unsupported: Option<String>,
+    }
+
+    /// Where a named slot is in a suspended frame: argument `i`, local `i`, or the
+    /// `i`-th value the frame keeps past its locals (bottom first).
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    pub enum Place {
+        Arg(u16),
+        Local(u16),
+        Temp(u16),
+    }
+
+    /// What a named slot holds.
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    pub enum Holds {
+        /// A binding of the source.
+        Binding,
+        /// A compiler-made local (`<state>`, `arguments`, `<fields 1>`, …).
+        Hidden,
+        /// A temporary of a construct in flight, by role.
+        Temp(Role),
+    }
+
+    /// One slot of a suspended frame by name (D2721, D2731): a dump's `slots` key.
+    #[derive(Clone, Debug)]
+    pub struct NamedSlot {
+        /// The key: a binding's name, or `name@scope` when two of the name are in scope
+        /// at the site; a hidden local's name; a temporary's `construct@offset`.
+        pub name: String,
+        pub place: Place,
+        pub holds: Holds,
+        /// The local holds a Box (a binding a closure captures).
+        pub boxed: bool,
+    }
+
+    impl Site {
+        /// The frame's slots at this site by name, in frame order: the parameters'
+        /// bindings, the locals in scope, the temporaries. Names are unique (the pin
+        /// test checks the temporaries'; binding keys take their scope when shadowed;
+        /// the three kinds of keys cannot meet: identifiers have no `@`, hidden names
+        /// no `@`, a temporary's construct always has a `.`).
+        pub fn named_slots(&self) -> Vec<NamedSlot> {
+            let shadowed = |name: &str| {
+                self.args
+                    .iter()
+                    .chain(&self.locals)
+                    .filter(|s| matches!(s, Slot::Binding { name: n, .. } if n == name))
+                    .count()
+                    > 1
+            };
+            let key = |slot: &Slot| -> Option<(String, Holds)> {
+                match slot {
+                    Slot::Binding { name, scope } if shadowed(name) => {
+                        Some((alloc::format!("{name}@{scope}"), Holds::Binding))
+                    }
+                    Slot::Binding { name, .. } => Some((name.clone(), Holds::Binding)),
+                    Slot::Hidden(name) => Some((name.clone(), Holds::Hidden)),
+                    _ => None,
+                }
+            };
+            let mut out = Vec::new();
+            for (i, slot) in self.args.iter().enumerate() {
+                if let Some((name, holds)) = key(slot) {
+                    out.push(NamedSlot {
+                        name,
+                        place: Place::Arg(i as u16),
+                        holds,
+                        boxed: false,
+                    });
+                }
+            }
+            for (i, slot) in self.locals.iter().enumerate() {
+                if let Some((name, holds)) = key(slot) {
+                    out.push(NamedSlot {
+                        name,
+                        place: Place::Local(i as u16),
+                        holds,
+                        boxed: self.boxed.get(i).copied().unwrap_or(false),
+                    });
+                }
+            }
+            for (k, (name, role)) in self.slots.iter().zip(&self.operands).enumerate() {
+                out.push(NamedSlot {
+                    name: name.clone(),
+                    place: Place::Temp(k as u16),
+                    holds: Holds::Temp(*role),
+                    boxed: false,
+                });
+            }
+            out
+        }
     }
 
     /// The sites of one function.

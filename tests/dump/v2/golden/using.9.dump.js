@@ -72,5 +72,5 @@ $dump.s3 = (() => {
 })();
 $dump.n2 = { [Symbol.asyncDispose]: $dump.s3.$f8 };
 $dump.u4 = $dump.using([$dump.n2, $dump.s3.$f8, 4]);
-$dump.a5 = $dump.resume(early, { at: "await#1", awaiting: $dump.p1, bindings: { e: $dump.n2 }, operands: [["using.record", $dump.u4], ["binary.left", "early "]] });
-$dump.a6 = $dump.resume(main, { at: "await#4", awaiting: $dump.a5, bindings: { it: undefined, seen: undefined }, operands: [["call.callee", print], ["call.this", undefined]] });
+$dump.a5 = $dump.resume(early, { at: "await#1", awaiting: $dump.p1, slots: { e: $dump.n2, "using.record@39": $dump.u4, "binary.left@72": "early " } });
+$dump.a6 = $dump.resume(main, { at: "await#4", awaiting: $dump.a5, slots: { it: undefined, seen: undefined, "call.callee@78": print, "call.this@78": undefined } });

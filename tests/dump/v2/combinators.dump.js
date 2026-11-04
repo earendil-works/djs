@@ -41,12 +41,12 @@ $dump.rj = $dump.resume(rejecting, {
   at: "await#1",
   awaiting: P(13, new Error("inner"), true),
   args: ["inner"],
-  bindings: { tag: "inner", v: $dump.TDZ },
+  slots: { tag: "inner", v: $dump.TDZ },
 });
 $dump.handle("main", $dump.resume(main, {
   at: "await#2",
   awaiting: $dump.s,
-  bindings: {
+  slots: {
     a: Promise.resolve([1, 2, 3]),
     s: $dump.s,
     y: $dump.y,
@@ -54,12 +54,10 @@ $dump.handle("main", $dump.resume(main, {
     g: $dump.g,
     rj: $dump.rj,
     all: $dump.TDZ,
+    "call.callee@345": print,
+    "call.this@345": undefined,
+    "call.callee@351": JSON.stringify,
+    "call.this@351": JSON,
   },
-  operands: [
-    ["call.callee", print],
-    ["call.this", undefined],
-    ["call.callee", JSON.stringify],
-    ["call.this", JSON],
-  ],
 }));
 $dump.issued(14);

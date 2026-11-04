@@ -17,7 +17,7 @@ async function main() {
 $dump.p3 = new Promise(() => {});
 $dump.p4 = new Promise(() => {});
 $dump.a5 = $dump.resume(ag, { at: "await#1", awaiting: $dump.p1, queue: [{ type: "next", value: undefined, promise: $dump.p3 }, { type: "next", value: undefined, promise: $dump.p4 }] });
-$dump.a6 = $dump.resume(g, { at: "yield#1", args: [1], bindings: { a: 1, x: undefined } });
+$dump.a6 = $dump.resume(g, { at: "yield#1", args: [1], slots: { a: 1, x: undefined } });
 $dump.a7 = Reflect.apply(g, undefined, [5]);
 $dump.a8 = Object.setPrototypeOf(((g) => (g.return(), g))((function* () {})()), g.prototype);
-$dump.a9 = $dump.resume(main, { at: "await#1", awaiting: $dump.p2, bindings: { mid: $dump.a6, fresh: $dump.a7, done: $dump.a8, it: $dump.a5, r1: $dump.p3, r2: $dump.p4 } });
+$dump.a9 = $dump.resume(main, { at: "await#1", awaiting: $dump.p2, slots: { mid: $dump.a6, fresh: $dump.a7, done: $dump.a8, it: $dump.a5, r1: $dump.p3, r2: $dump.p4 } });

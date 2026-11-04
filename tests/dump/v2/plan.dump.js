@@ -52,7 +52,7 @@ $dump.a2 = $dump.resume($dump.s1.todos, {
   awaiting: $dump.p5,
   this: undefined,
   args: ["src/d.ts", 1, $dump.batches[1]],
-  bindings: { path: "src/d.ts", body: $dump.TDZ, n: $dump.TDZ },
+  slots: { path: "src/d.ts", body: $dump.TDZ, n: $dump.TDZ },
 });
 
 $dump.p6 = Promise.all([1, $dump.a2]);
@@ -62,15 +62,17 @@ $dump.run = $dump.resume(main, {
   awaiting: $dump.p6,
   this: undefined,
   args: [],
-  bindings: {
+  slots: {
     files: $dump.files,
     seen: $dump.s1.$cells.seen,
     todos: $dump.s1.todos,
     report: $dump.report,
     batch: $dump.batches[1],
+    "for-of.iterator@322": $dump.it1,
+    "for-of.next@322": Object.getPrototypeOf($dump.it1).next,
+    "call.callee@385": Array.prototype.push,
+    "call.this@385": $dump.report,
   },
-  operands: [["call.callee", Array.prototype.push], ["call.this", $dump.report]],
-  loops: [{ kind: "for-of", iterator: $dump.it1, next: Object.getPrototypeOf($dump.it1).next }],
 });
 $dump.run.then((r) => print(JSON.stringify(r)));
 

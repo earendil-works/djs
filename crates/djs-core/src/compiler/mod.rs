@@ -316,6 +316,8 @@ fn suspension_maps_with(
 
 #[cfg(feature = "dump")]
 pub use smap::{FunctionMap, Loop, Role, Site, SiteKind, Slot};
+#[cfg(feature = "dump")]
+pub use smap::{Holds, NamedSlot, Place};
 
 /// The names of the prelude function table's slots (D2440), in slot order, for
 /// privileged source `src`: the prelude functions that others refer to. The registry

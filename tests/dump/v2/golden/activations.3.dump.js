@@ -15,5 +15,5 @@ $dump.s2 = (() => {
   let n = 1;
   return { inc: () => ++n, $c4: $dump.cell(() => n) };
 })();
-$dump.a3 = $dump.resume(shared, { at: "await#1", awaiting: $dump.p1, bindings: { n: $dump.s2.$c4, inc: $dump.s2.inc } });
-$dump.a4 = $dump.resume(main, { at: "await#3", awaiting: $dump.a3, operands: [["call.callee", print], ["call.this", undefined], ["call.arg[0]", 42], ["call.arg[1]", "a/b"]] });
+$dump.a3 = $dump.resume(shared, { at: "await#1", awaiting: $dump.p1, slots: { n: $dump.s2.$c4, inc: $dump.s2.inc } });
+$dump.a4 = $dump.resume(main, { at: "await#3", awaiting: $dump.a3, slots: { "call.callee@24": print, "call.this@24": undefined, "call.arg@30": 42, "call.arg@47": "a/b" } });

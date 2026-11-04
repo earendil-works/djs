@@ -103,7 +103,7 @@ $dump.a2 = $dump.resume($dump.s1.todos, {
   awaiting: $dump.p5,
   this: undefined,
   args: ["src/d.ts", 1, $dump.batches[1]],
-  bindings: { path: "src/d.ts", body: $dump.TDZ, n: $dump.TDZ },
+  slots: { path: "src/d.ts", body: $dump.TDZ, n: $dump.TDZ },
 });
 $dump.p6 = Promise.all([1, $dump.a2]);
 $dump.run = $dump.resume($dump.f1, {
@@ -111,16 +111,17 @@ $dump.run = $dump.resume($dump.f1, {
   awaiting: $dump.p6,
   this: undefined,
   args: [],
-  bindings: {
+  slots: {
     files: $dump.files,
     seen: $dump.s1.$cells.seen,
     todos: $dump.s1.todos,
     report: $dump.report,
     batch: $dump.batches[1],
+    "for-of.iterator@318": $dump.it1,
+    "for-of.next@318": $dump.builtin("%ArrayIteratorPrototype%.next"),
+    "call.callee@381": Array.prototype.push,
+    "call.this@381": $dump.report,
   },
-  operands: [["call.callee", Array.prototype.push], ["call.this", $dump.report]],
-  loops: [{ kind: "for-of", iterator: $dump.it1,
-            next: $dump.builtin("%ArrayIteratorPrototype%.next") }],
 });
 $dump.handle("run", $dump.run);
 ```
@@ -132,7 +133,7 @@ bottom:
   with `resume`, `cell`, `pending`, `handle`, `private` and `TDZ`, which exist only while
   the Script runs; everything else is plain JavaScript.
 - Data, then the closures: `todos` shares `seen` with the run's frame, so its factory
-  hands out the variable's cell too (`$cells.seen`), which the run's bindings take, so
+  hands out the variable's cell too (`$cells.seen`), which the run's slots take, so
   the frame and the closure share one variable again.
 - `$dump.f1` is the turn's script as the host compiled it: never called, it supplies the
   code for the run's activation.
@@ -143,9 +144,11 @@ bottom:
 - `todos("src/d.ts")`, called by `batch.map`, so with (element, index, array); its
   `resume` returns the activation's result promise. `Promise.all` over the second batch
   has element 0 (`src/c.ts`) resolved to 1: a plain 1 in its place gives the same record.
-- The run, in the second iteration of the for-of. `operands` are the values evaluated
-  before the await, named by role, bottom first; the loader puts them where this build's
-  compiler keeps them. `$dump.handle` gives the host its handle on the run's result.
+- The run, in the second iteration of the for-of. `slots` names everything its frame
+  holds: the bindings, the loop's iterator record and the values evaluated before the
+  await, each a temporary named by its construct and where that starts in the
+  function's text ("Slot names" below); the loader writes each where this build's
+  compiler keeps that name. `$dump.handle` gives the host its handle on the run's result.
 
 Where each activation stopped is what `djs resume --explain` prints, for the file at
 hand (tests/dump/v2/plan.dump.js, this example with `later` as the tools' transport):
@@ -185,7 +188,7 @@ original order). The loader adds:
 
 | primitive | what |
 | --- | --- |
-| `$dump.resume(fn, {at, awaiting, this, args, bindings, operands, loops, …})` | builds a suspended activation of `fn` at the named site, subscribes it to `awaiting`, returns its result promise (async functions) or its generator object (generators: `yield#N`, no `awaiting`) |
+| `$dump.resume(fn, {at, awaiting, this, args, slots, queue})` | builds a suspended activation of `fn` at the named site, subscribes it to `awaiting`, returns its result promise (async functions) or its generator object (generators: `yield#N`, no `awaiting`) |
 | `$dump.cell(() => x)` | the variable cell an arrow that captures exactly one variable closes over, so a frame and closures share it |
 | `$dump.pending(id, name, args, state?)` | an open host call with the host's id and the host's JSON state of it (D2770); its promise |
 | `$dump.handle(name, value)` | a named handle for the host (the run's promise, a REPL input) |
@@ -203,7 +206,7 @@ original order). The loader adds:
 | `$dump.keep(o, keys)` | deletes the members a class's evaluation made that the class no longer has; every key must be there |
 | `$dump.random(lo, hi)` | `Math.random`'s state (D2624) |
 | `$dump.using(resources, state)` | the resource Record of a statement list's `using` declarations: `[value, method, kind]` triples and the disposal's progress by name (D2628) |
-| `$dump.forIn(o, keys)` | a for-in loop's key iterator over `o` with the keys it has yet to visit, for `loops` (D2628) |
+| `$dump.forIn(o, keys)` | a for-in loop's key iterator over `o` with the keys it has yet to visit, for its loop's `for-in.iterator@S` slot (D2628) |
 | `$dump.regexpIterator(re, s, flags)` | `matchAll`'s iterator over the regexp it made (D2628) |
 | `$dump.iteratorHelper(slots)` | an iterator helper (`map`, `take`, `Iterator.from`, `concat`, `zip`, …) with its state machine's slots (D2628) |
 
@@ -216,26 +219,29 @@ fills (`$dump.p1`, `$dump.a3`): no helper code (D2622, the owner's call: the tex
 the run's data, its functions and these calls).
 
 `resume` compiles nothing new: `fn` was made from its verbatim source by the dump. It
-compares the given bindings, operand roles and loops with this build's suspension map at
-`at` and refuses on any difference. The primitives are privileged builtins reachable only
+compares the given slot names with this build's suspension map at `at` and refuses on
+any difference. The primitives are privileged builtins reachable only
 through the `$dump` the loader passes in; a dump run as an ordinary Script has none of
 them.
 
 As built (0171, D2583–D2585):
 
-- `resume(fn, {at, awaiting, this, args, bindings, operands, loops, queue})`. `fn` must
-  be made by the dump's own text: the loader compiles that text again with recording on,
-  so the map's slots and resume pc are those of `fn`'s code. `bindings` names every
-  binding in scope at the site (`name`, or `name@scope` with the declaring scope's
-  offset when two of a name are in scope) and nothing else; hidden locals are made by the
-  loader (`<state>`, `this`, `new.target`, `<active>`, `<home>`) or given in `bindings`
-  (`arguments`). `operands` is a list of `[role, value]` pairs bottom first (roles
-  repeat: nested calls), `loops` a list of `{kind, iterator, next}` outermost first
-  (for-in loops are refused for now: their iterator is internal), `queue` an async
-  generator's requests `{type: "next"|"throw"|"return", value, promise}` with pending
-  promises the dump made. Unknown keys, a missing or extra binding, operand, loop or
-  queue entry, a non-promise `awaiting` at an await or any `awaiting` at a yield, and an
-  unsupported site refuse the load with the reason.
+- `resume(fn, {at, awaiting, this, args, slots, queue})` (D2731; before 0191 `slots`
+  was three keys, `bindings`, `operands` by role bottom first and `loops` outermost
+  first). `fn` must be made by the dump's own text: the loader compiles that text again
+  with recording on, so the map's slots and resume pc are those of `fn`'s code. `slots`
+  names every slot of the frame at the site and nothing else ("Slot names"): every
+  binding in scope (`name`, or `name@scope` with the declaring scope's offset when two of
+  a name are in scope), the hidden locals the loader does not make itself (it makes
+  `<state>`, `this`, `new.target`, `<active>`, `<home>`; `arguments` is given), and the
+  temporaries of the constructs in flight (`call.callee@41`, `for-of.iterator@18`; a
+  for-in loop's key iterator is `$dump.forIn(…)`, a subroutine's return address the
+  index of its `gosub`). The loader writes each value into the frame index its own map
+  gives the name, so the keys' order means nothing. `queue` is an async generator's
+  requests `{type: "next"|"throw"|"return", value, promise}` with pending promises the
+  dump made. Unknown keys, a missing or extra slot or queue entry, a non-promise
+  `awaiting` at an await or any `awaiting` at a yield, and an unsupported site refuse the
+  load with the reason.
 - A captured binding gets a new Box, or the Box of a `$dump.cell(() => x)` (also in its
   TDZ, when the cell is taken before the declaration runs); `$dump.TDZ` and cells are
   values only `resume` takes.
@@ -272,8 +278,8 @@ passes, say, its run's promise as "run").
   with the options it was compiled with (Script cells keep them, `Script::OPTIONS` and
   `Script::PARAMS`; D2610), into the dump's scratch copy of the base. The frame is read
   by the map: parameters and bindings in scope by name (`name@scope` when shadowed), the
-  `arguments` object if the function has one, operands by role, loops as `{kind,
-  iterator, next}`, an async generator's request queue. Bindings that closures share are
+  `arguments` object if the function has one, the temporaries by name (D2731), an async
+  generator's request queue. Bindings that closures share are
   handed over as `$dump.cell`s from their factory (`$cN` keys). The dump's text has no
   comments (the owner's call, D2641: `djs resume --explain` shows where each activation
   stopped, in the dump); `Vm::dump_report` returns, per resumed activation, its location in the dump, the
@@ -289,14 +295,14 @@ passes, say, its run's promise as "run").
   (`$dump.regexpIterator`, `$dump.iteratorHelper`); a for-in loop's key iterator from its
   object and the keys left (`$dump.forIn`: keys deleted meanwhile are still skipped).
 - **Statements in flight:** a case test keeps the discriminant (`switch.discriminant`,
-  twice); a statement list with `using` declarations keeps its resource Record
+  twice: the second named by its `case`); a statement list with `using` declarations keeps its resource Record
   (`using.record`, `$dump.using`); a destructuring pattern under way keeps its value or
   iterator, the keys a rest property excludes and a computed key (`pattern.*`), an
   assignment pattern also the assignment's value (`assign.value`).
 - **Subroutines:** a finally block (and a for-await's close when `break`, `continue` or
   `return` leaves the loop) runs as a subroutine whose stack holds the value it carries
   and a return address; the dump writes the address as the index of the `gosub` that
-  entered it (`["finally.return", 2]`), which the loader maps to its own pc (D2627).
+  entered it (`"finally.return@151": 2`), which the loader maps to its own pc (D2627).
 - **Still refused, with their path:** sites the maps call unsupported (inside a class
   definition, closing a for-await's iterator on a generator's `return(v)` path), a for-in
   loop over a Proxy, revoked Proxies, weak collections, a generator object
@@ -411,9 +417,11 @@ slots at the site, whatever its operand stack or local layout. The names:
     (`for-of.iterator@18`, `for-of.next@18`, `yield*.next@38`), the `switch`
     (`switch.discriminant@0`), the region's first bound name of `using` declarations
     (`using.record@30`), the `finally` keyword (`finally.value@151`).
-  - The construct is today's operand role without its index (`call.arg[2]` →
-    `call.arg`). Copies the compiler keeps of one value are named apart until the
-    steps that hold them once: the discriminant a `case` test compares is named by the
+  - The construct is the operand role without its index (`call.arg[2]` →
+    `call.arg`); the exception a `for await` rethrows after closing its iterator is
+    `for-await.exception` (every construct has a `.` or a `-`, so no temporary's name is
+    a binding's `name@scope`, D2731). Copies the compiler keeps of one value are named
+    apart until the steps that hold them once: the discriminant a `case` test compares is named by the
     `case` (`switch.discriminant@28`), and the values of an `await using` disposal (the
     subroutine's value and return address, the Record's copy) by the site, the end of
     the statement list.
@@ -428,8 +436,15 @@ The suspension maps report each site's temporaries by name (`Site::slots`, botto
 beside the roles in `Site::operands`), and the pins list them per site
 (`await#2 @212 (4:13) pc 87: call.callee@205 call.this@205`), so a compiler change that
 keeps a different value across an await shows as a renamed or added slot. Until step 3
-of the migration (0191) the dump format still writes `operands` by role; from then on
-it writes `slots` by these names.
+of the migration (0191) the dump format wrote `operands` by role; since then it writes
+`slots` by these names (D2731).
+
+Where the values are in memory is this build's business: a suspended frame is one array
+(callee, `this`, arguments, header, locals, and the k values the code keeps past the
+locals at that site, the operand stack), and the map names every index of it. The
+compiler does not move the k temporaries into reserved locals before an await (the
+report's "spill"): the loader writes a name to its index in the stack part as it writes a
+binding to its local, and that is all a spill would change for the format (D2731).
 
 ### Classes and private fields
 

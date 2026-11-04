@@ -38,7 +38,7 @@ function <anonymous> @4129..4231
 function <anonymous> @4258..4501
   loc0 <state>, loc1 x@35, loc2 y@110, loc3 h@167
   await-using#1 @88 (209:75) pc 136: for-of.iterator@18 for-of.next@18 using.record@35 finally.value@88 finally.return@88 using.record@88 (out: loc2 loc3)
-  for-await.close#1 @93 (210:5) pc 211: exception@93 (out: loc1 loc3)
+  for-await.close#1 @93 (210:5) pc 211: for-await.exception@93 (out: loc1 loc3)
   for-await.next#1 @93 (210:5) pc 292: for-await.iterator@93 for-await.next@93 (out: loc1 loc3)
   await-using#2 @219 (211:74) pc 413: using.record@167 finally.value@219 finally.return@219 using.record@219 (out: loc1 loc2)
 function <anonymous> @4527..4709
@@ -49,7 +49,7 @@ function <anonymous> @4738..4887
   await-using#1 @149 (229:4) pc 101: using.record@30 finally.value@149 finally.return@149 using.record@149
 function <anonymous> @4920..5133
   loc0 <state>, loc1 g@0, loc2 v@131
-  for-await.close#1 @114 (236:5) pc 37: exception@114
+  for-await.close#1 @114 (236:5) pc 37: for-await.exception@114
   for-await.next#1 @114 (236:5) pc 75: for-await.iterator@114 for-await.next@114
   for-await.close#2 @114 (236:5) pc 107: -
 function g @4938..5029

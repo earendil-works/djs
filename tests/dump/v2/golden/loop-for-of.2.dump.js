@@ -11,4 +11,4 @@ async function main() {
 }
 $dump.n2 = [1];
 $dump.i3 = $dump.advance(Array.prototype.values.call([1, 2]), 2);
-$dump.a4 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, bindings: { out: $dump.n2, x: 2 }, operands: [["call.callee", Array.prototype.push], ["call.this", $dump.n2]], loops: [{ kind: "for-of", iterator: $dump.i3, next: $dump.builtin("%ArrayIteratorPrototype%.next") }] });
+$dump.a4 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, slots: { out: $dump.n2, x: 2, "for-of.iterator@44": $dump.i3, "for-of.next@44": $dump.builtin("%ArrayIteratorPrototype%.next"), "call.callee@68": Array.prototype.push, "call.this@68": $dump.n2 } });

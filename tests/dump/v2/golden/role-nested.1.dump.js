@@ -7,5 +7,5 @@ async function main() {
   const p = "x";
   return o.f(p + "!", [1, { k: `v${2}w${await later(3)}` }]);
 }
-$dump.a3 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, bindings: { p: "x" }, operands: [["call.callee", $dump.n2], ["call.this", o], ["call.arg[0]", "x!"], ["array.element[0]", 1], ["object.literal", {}], ["template.part[0]", "v"], ["template.part[1]", "2"], ["template.part[2]", "w"]] });
+$dump.a3 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, slots: { p: "x", "call.callee@50": $dump.n2, "call.this@50": o, "call.arg@54": "x!", "array.element@64": 1, "object.literal@67": {}, "template.part@72": "v", "template.part@76": "2", "template.part@77": "w" } });
 $dump.p4 = Promise.prototype.then.call($dump.a3, print, undefined);

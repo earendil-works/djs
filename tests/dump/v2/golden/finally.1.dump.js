@@ -78,5 +78,5 @@ async function main() {
   print("gen", seen.join(" "));
   print("cases", await cases("b"), await cases("c"));
 }
-$dump.a2 = $dump.resume(normal, { at: "await#1", awaiting: $dump.p1, args: [2], bindings: { x: 2 }, operands: [["finally.value", undefined], ["finally.return", 0], ["call.callee", print], ["call.this", undefined], ["call.arg[0]", "normal finally"]] });
-$dump.a3 = $dump.resume(main, { at: "await#1", awaiting: $dump.a2, bindings: { g: undefined, seen: undefined }, operands: [["call.callee", print], ["call.this", undefined], ["call.arg[0]", "normal"]] });
+$dump.a2 = $dump.resume(normal, { at: "await#1", awaiting: $dump.p1, args: [2], slots: { x: 2, "finally.value@54": undefined, "finally.return@54": 0, "call.callee@68": print, "call.this@68": undefined, "call.arg@74": "normal finally" } });
+$dump.a3 = $dump.resume(main, { at: "await#1", awaiting: $dump.a2, slots: { g: undefined, seen: undefined, "call.callee@26": print, "call.this@26": undefined, "call.arg@32": "normal" } });

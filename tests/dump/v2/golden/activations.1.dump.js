@@ -13,4 +13,4 @@ async function shared() {
 async function main() { print(await twice(21), await args("a", "b"), await shared()); }
 $dump.p2 = new Promise((res, rej) => { $dump.r3 = [res, rej]; });
 $dump.p4 = Promise.prototype.then.call($dump.p1, $dump.r3[0], $dump.r3[1]);
-$dump.a5 = $dump.resume(main, { at: "await#1", awaiting: $dump.p2, operands: [["call.callee", print], ["call.this", undefined]] });
+$dump.a5 = $dump.resume(main, { at: "await#1", awaiting: $dump.p2, slots: { "call.callee@24": print, "call.this@24": undefined } });

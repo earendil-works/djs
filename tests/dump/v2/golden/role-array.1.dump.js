@@ -6,5 +6,5 @@ async function main() {
   const b = [1, , await later(3)];
   return a.join() + " " + b.length;
 }
-$dump.a2 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, bindings: { a: undefined, b: undefined }, operands: [["array.element[0]", 1], ["array.element[1]", 2]] });
+$dump.a2 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, slots: { a: undefined, b: undefined, "array.element@37": 1, "array.element@40": 2 } });
 $dump.p3 = Promise.prototype.then.call($dump.a2, print, undefined);

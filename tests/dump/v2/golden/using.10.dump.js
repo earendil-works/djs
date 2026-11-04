@@ -71,7 +71,7 @@ $dump.s2 = (() => {
     } }) };
 })();
 $dump.n3 = { [Symbol.asyncDispose]: $dump.s2.$f3 };
-$dump.a4 = $dump.resume($dump.s2.$f3, { at: "await#1", awaiting: $dump.p1, this: $dump.n3, bindings: { v: undefined } });
+$dump.a4 = $dump.resume($dump.s2.$f3, { at: "await#1", awaiting: $dump.p1, this: $dump.n3, slots: { v: undefined } });
 $dump.u5 = $dump.using([$dump.n3, $dump.s2.$f3, 4], { hasAwaited: true, next: -3, value: $dump.a4 });
-$dump.a6 = $dump.resume(early, { at: "await-using#1", awaiting: $dump.a4, bindings: { e: $dump.n3 }, operands: [["using.record", $dump.u5], ["finally.value", "early ret"], ["finally.return", 0], ["using.record", $dump.u5]] });
-$dump.a7 = $dump.resume(main, { at: "await#4", awaiting: $dump.a6, bindings: { it: undefined, seen: undefined }, operands: [["call.callee", print], ["call.this", undefined]] });
+$dump.a6 = $dump.resume(early, { at: "await-using#1", awaiting: $dump.a4, slots: { e: $dump.n3, "using.record@39": $dump.u5, "finally.value@106": "early ret", "finally.return@106": 0, "using.record@106": $dump.u5 } });
+$dump.a7 = $dump.resume(main, { at: "await#4", awaiting: $dump.a6, slots: { it: undefined, seen: undefined, "call.callee@78": print, "call.this@78": undefined } });

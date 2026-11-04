@@ -12,5 +12,5 @@ async function shared() {
 }
 async function main() { print(await twice(21), await args("a", "b"), await shared()); }
 $dump.n2 = (function () { "use strict"; return arguments; })("a", "b");
-$dump.a3 = $dump.resume(args, { at: "await#1", awaiting: $dump.p1, args: ["a", "b"], bindings: { "arguments": $dump.n2 } });
-$dump.a4 = $dump.resume(main, { at: "await#2", awaiting: $dump.a3, operands: [["call.callee", print], ["call.this", undefined], ["call.arg[0]", 42]] });
+$dump.a3 = $dump.resume(args, { at: "await#1", awaiting: $dump.p1, args: ["a", "b"], slots: { "arguments": $dump.n2 } });
+$dump.a4 = $dump.resume(main, { at: "await#2", awaiting: $dump.a3, slots: { "call.callee@24": print, "call.this@24": undefined, "call.arg@30": 42 } });

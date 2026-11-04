@@ -47,44 +47,46 @@ $dump.t3 = {};
 $dump.t4 = { r: 1 };
 $dump.child = new Child();
 $dump.all = [
-  r(call3, "await#1", L(1, 2), { operands: [["call.callee", o.f], ["call.this", o], ["call.arg[0]", 1]] }),
-  r(spread, "await#1", L(2, 2), { operands: [["call.callee", o.f], ["call.this", o], ["call.args", [1]]] }),
-  r(plain, "await#1", L(3, 5), { operands: [["call.callee", Math.max], ["call.this", Math], ["call.arg[0]", 1]] }),
-  r(newer, "await#1", L(4, 2), { operands: [["new.callee", Thing], ["new.arg[0]", 1]] }),
-  r(newSpread, "await#1", L(5, 2), { operands: [["new.callee", Thing], ["new.args", [1]]] }),
-  r(member, "await#1", L(6, "x"), { bindings: { t: $dump.t1 }, operands: [["member.object", $dump.t1]] }),
+  r(call3, "await#1", L(1, 2), { slots: { "call.callee@32": o.f, "call.this@32": o, "call.arg@36": 1 } }),
+  r(spread, "await#1", L(2, 2), { slots: { "call.callee@33": o.f, "call.this@33": o, "call.args@36": [1] } }),
+  r(plain, "await#1", L(3, 5), { slots: { "call.callee@32": Math.max, "call.this@32": Math, "call.arg@41": 1 } }),
+  r(newer, "await#1", L(4, 2), { slots: { "new.callee@32": Thing, "new.arg@42": 1 } }),
+  r(newSpread, "await#1", L(5, 2), { slots: { "new.callee@36": Thing, "new.args@45": [1] } }),
+  r(member, "await#1", L(6, "x"), { slots: { t: $dump.t1, "member.object@53": $dump.t1 } }),
   r(key, "await#1", L(7, 2), {
-    bindings: { k: "z" },
-    operands: [["call.callee", JSON.stringify], ["call.this", JSON], ["object.literal", { a: 1 }], ["object.key", "z"]],
+    slots: {
+      k: "z",
+      "call.callee@45": JSON.stringify,
+      "call.this@45": JSON,
+      "object.literal@60": { a: 1 },
+      "object.key@68": "z",
+    },
   }),
   r(value, "await#1", L(8, 3), {
-    operands: [["call.callee", JSON.stringify], ["call.this", JSON], ["object.literal", { a: 1 }]],
+    slots: { "call.callee@32": JSON.stringify, "call.this@32": JSON, "object.literal@47": { a: 1 } },
   }),
-  r(elements, "await#1", L(9, 3), { operands: [["array.element[0]", 1], ["array.element[1]", 2]] }),
-  r(hole, "await#1", L(10, 3), { operands: [["array.literal", [1, ,]]] }),
-  r(left, "await#1", L(11, 6), { bindings: { a: 5 }, operands: [["binary.left", 5]] }),
-  r(prop, "await#1", L(12, 1), { bindings: { t: $dump.t2 }, operands: [["assign.object", $dump.t2]] }),
+  r(elements, "await#1", L(9, 3), { slots: { "array.element@36": 1, "array.element@39": 2 } }),
+  r(hole, "await#1", L(10, 3), { slots: { "array.literal@31": [1, ,] } }),
+  r(left, "await#1", L(11, 6), { slots: { a: 5, "binary.left@44": 5 } }),
+  r(prop, "await#1", L(12, 1), { slots: { t: $dump.t2, "assign.object@38": $dump.t2 } }),
   r(index, "await#1", L(13, 2), {
-    bindings: { t: $dump.t3, k: "q" },
-    operands: [["assign.object", $dump.t3], ["assign.key", "q"]],
+    slots: { t: $dump.t3, k: "q", "assign.object@48": $dump.t3, "assign.key@48": "q" },
   }),
-  r(compound, "await#1", L(14, 4), { bindings: { n: 1 }, operands: [["assign.old", 1]] }),
+  r(compound, "await#1", L(14, 4), { slots: { n: 1, "assign.old@39": 1 } }),
   r(compoundProp, "await#1", L(15, 2), {
-    bindings: { t: $dump.t4 },
-    operands: [["assign.object", $dump.t4], ["assign.old", 1]],
+    slots: { t: $dump.t4, "assign.object@52": $dump.t4, "assign.old@52": 1 },
   }),
   r(template, "await#1", L(16, 2), {
-    operands: [["template.part[0]", "a"], ["template.part[1]", "1"], ["template.part[2]", "b"]],
+    slots: { "template.part@35": "a", "template.part@39": "1", "template.part@40": "b" },
   }),
   r(Child.prototype.m, "await#1", L(17, "m"), {
     this: $dump.child,
     args: [7],
-    bindings: { x: 7 },
-    operands: [["super.this", $dump.child], ["super.base", Base.prototype]],
+    slots: { x: 7, "super.this@24": $dump.child, "super.base@24": Base.prototype },
   }),
 ];
 $dump.handle("main", $dump.resume(main, {
   at: "await#1",
   awaiting: Promise.all($dump.all),
-  bindings: { rs: $dump.TDZ },
+  slots: { rs: $dump.TDZ },
 }));

@@ -82,5 +82,5 @@ $dump.s4 = (() => {
 })();
 $dump.i5 = $dump.advance(Array.prototype.values.call([$dump.n2, { [Symbol.asyncDispose]: $dump.s4.$f18 }]), 1);
 $dump.u6 = $dump.using([$dump.n2, $dump.s3.$f9, 4]);
-$dump.a7 = $dump.resume(loop, { at: "await#1", awaiting: $dump.p1, bindings: { r: $dump.n2 }, operands: [["using.record", $dump.u6], ["call.callee", print], ["call.this", undefined], ["call.arg[0]", "iteration"]], loops: [{ kind: "for-of", iterator: $dump.i5, next: $dump.builtin("%ArrayIteratorPrototype%.next") }] });
-$dump.a8 = $dump.resume(main, { at: "await#3", awaiting: $dump.a7, bindings: { it: undefined, seen: undefined } });
+$dump.a7 = $dump.resume(loop, { at: "await#1", awaiting: $dump.p1, slots: { r: $dump.n2, "for-of.iterator@26": $dump.i5, "for-of.next@26": $dump.builtin("%ArrayIteratorPrototype%.next"), "using.record@43": $dump.u6, "call.callee@98": print, "call.this@98": undefined, "call.arg@104": "iteration" } });
+$dump.a8 = $dump.resume(main, { at: "await#3", awaiting: $dump.a7, slots: { it: undefined, seen: undefined } });

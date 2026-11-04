@@ -11,7 +11,7 @@ class Counter {
   async add(by) { const v = await later(by); this.#bump(v); return this.n; }
 }
 const c = { __proto__: Counter.prototype, label: "c" };
-$dump.a2 = $dump.resume(Counter.prototype.add, { at: "await#1", awaiting: $dump.p1, this: c, args: [3], bindings: { by: 3, v: undefined } });
+$dump.a2 = $dump.resume(Counter.prototype.add, { at: "await#1", awaiting: $dump.p1, this: c, args: [3], slots: { by: 3, v: undefined } });
 $dump.p3 = Promise.prototype.then.call($dump.a2, (n) => print(c.label, n, Counter.made, Counter.kind), undefined);
 $dump.keep(Counter, []);
 $dump.keep(Counter.prototype, ["add", "n"]);

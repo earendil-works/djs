@@ -10,6 +10,6 @@ $dump.run = $dump.resume(main, {
   awaiting: $dump.p2,
   this: undefined,
   args: [],
-  bindings: {},
+  slots: {},
 });
 $dump.handle("run", $dump.run);

@@ -50,5 +50,5 @@ async function main() {
 }
 $dump.a2 = Object.setPrototypeOf(((g) => (g.return(), g))((function* () {})()), outer.prototype);
 $dump.a3 = $dump.resume(ainner, { at: "yield#1" });
-$dump.a4 = $dump.resume(aouter, { at: "yield*#1", loops: [{ kind: "yield*", iterator: $dump.a3, next: $dump.builtin("%AsyncGeneratorPrototype%.next") }] });
-$dump.a5 = $dump.resume(main, { at: "await#3", awaiting: $dump.p1, bindings: { g: $dump.a2, seen: ["i1", "i2:v", "a1", "a2", "{\"value\":\"i done\",\"done\":true}", "x1"], ag: $dump.a4, v: "x1", ag2: undefined, g2: undefined }, loops: [{ kind: "for-await", iterator: $dump.a4, next: $dump.builtin("%AsyncGeneratorPrototype%.next") }] });
+$dump.a4 = $dump.resume(aouter, { at: "yield*#1", slots: { "yield*.iterator@29": $dump.a3, "yield*.next@29": $dump.builtin("%AsyncGeneratorPrototype%.next") } });
+$dump.a5 = $dump.resume(main, { at: "await#3", awaiting: $dump.p1, slots: { g: $dump.a2, seen: ["i1", "i2:v", "a1", "a2", "{\"value\":\"i done\",\"done\":true}", "x1"], ag: $dump.a4, v: "x1", ag2: undefined, g2: undefined, "for-await.iterator@242": $dump.a4, "for-await.next@242": $dump.builtin("%AsyncGeneratorPrototype%.next") } });

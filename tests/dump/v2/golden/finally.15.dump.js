@@ -78,6 +78,6 @@ async function main() {
   print("gen", seen.join(" "));
   print("cases", await cases("b"), await cases("c"));
 }
-$dump.a2 = $dump.resume(cases, { at: "await#2", awaiting: $dump.p1, args: ["c"], bindings: { d: "c" }, operands: [["switch.discriminant", "c"], ["switch.discriminant", "c"]] });
+$dump.a2 = $dump.resume(cases, { at: "await#2", awaiting: $dump.p1, args: ["c"], slots: { d: "c", "switch.discriminant@28": "c", "switch.discriminant@93": "c" } });
 $dump.a3 = Object.setPrototypeOf(((g) => (g.return(), g))((function* () {})()), gen.prototype);
-$dump.a4 = $dump.resume(main, { at: "await#8", awaiting: $dump.a2, bindings: { g: $dump.a3, seen: [1, "cleanup", "{\"value\":\"early\",\"done\":true}"] }, operands: [["call.callee", print], ["call.this", undefined], ["call.arg[0]", "cases"], ["call.arg[1]", "is b"]] });
+$dump.a4 = $dump.resume(main, { at: "await#8", awaiting: $dump.a2, slots: { g: $dump.a3, seen: [1, "cleanup", "{\"value\":\"early\",\"done\":true}"], "call.callee@418": print, "call.this@418": undefined, "call.arg@424": "cases", "call.arg@433": "is b" } });

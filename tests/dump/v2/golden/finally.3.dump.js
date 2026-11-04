@@ -79,5 +79,5 @@ async function main() {
   print("cases", await cases("b"), await cases("c"));
 }
 $dump.n2 = [];
-$dump.a3 = $dump.resume(returned, { at: "await#1", awaiting: $dump.p1, bindings: { log: $dump.n2 }, operands: [["finally.value", "ret"], ["finally.return", 0], ["call.callee", Array.prototype.push], ["call.this", $dump.n2]] });
-$dump.a4 = $dump.resume(main, { at: "await#3", awaiting: $dump.a3, bindings: { g: undefined, seen: undefined }, operands: [["call.callee", print], ["call.this", undefined], ["call.arg[0]", "returned"]] });
+$dump.a3 = $dump.resume(returned, { at: "await#1", awaiting: $dump.p1, slots: { log: $dump.n2, "finally.value@76": "ret", "finally.return@76": 0, "call.callee@90": Array.prototype.push, "call.this@90": $dump.n2 } });
+$dump.a4 = $dump.resume(main, { at: "await#3", awaiting: $dump.a3, slots: { g: undefined, seen: undefined, "call.callee@142": print, "call.this@142": undefined, "call.arg@148": "returned" } });

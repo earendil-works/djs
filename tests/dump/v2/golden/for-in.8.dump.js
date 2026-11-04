@@ -37,5 +37,5 @@ async function main() {
   print("walk", seen.join(" "));
 }
 $dump.n2 = { p: 1, q: 2, r: 3 };
-$dump.a3 = $dump.resume(walk, { at: "yield#1", args: [$dump.n2], bindings: { o: $dump.n2, k: "p" }, loops: [{ kind: "for-in", iterator: $dump.forIn($dump.n2, ["q", "r"]) }] });
-$dump.a4 = $dump.resume(main, { at: "await#3", awaiting: $dump.p1, bindings: { g: $dump.a3, seen: ["p"] } });
+$dump.a3 = $dump.resume(walk, { at: "yield#1", args: [$dump.n2], slots: { o: $dump.n2, k: "p", "for-in.iterator@22": $dump.forIn($dump.n2, ["q", "r"]) } });
+$dump.a4 = $dump.resume(main, { at: "await#3", awaiting: $dump.p1, slots: { g: $dump.a3, seen: ["p"] } });

@@ -69,5 +69,5 @@ $dump.s3 = (() => {
 })();
 $dump.n2 = { [Symbol.dispose]: $dump.s3.$f15 };
 $dump.u4 = $dump.using([$dump.n2, $dump.s3.$f15, 0]);
-$dump.a5 = $dump.resume(gen, { at: "yield#1", bindings: { g: $dump.n2 }, operands: [["using.record", $dump.u4]] });
-$dump.a6 = $dump.resume(main, { at: "await#5", awaiting: $dump.p1, bindings: { it: $dump.a5, seen: [1] } });
+$dump.a5 = $dump.resume(gen, { at: "yield#1", slots: { g: $dump.n2, "using.record@26": $dump.u4 } });
+$dump.a6 = $dump.resume(main, { at: "await#5", awaiting: $dump.p1, slots: { it: $dump.a5, seen: [1] } });

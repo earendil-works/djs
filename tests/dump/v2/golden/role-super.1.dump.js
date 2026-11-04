@@ -6,7 +6,7 @@ let Child = ((Base) => class Child extends Base {
   async m(x) { return super[await later("m")](x); }
 })(Base);
 $dump.n2 = { __proto__: Child.prototype };
-$dump.a3 = $dump.resume(Child.prototype.m, { at: "await#1", awaiting: $dump.p1, this: $dump.n2, args: [7], bindings: { x: 7 }, operands: [["super.this", $dump.n2], ["super.base", Base.prototype]] });
+$dump.a3 = $dump.resume(Child.prototype.m, { at: "await#1", awaiting: $dump.p1, this: $dump.n2, args: [7], slots: { x: 7, "super.this@20": $dump.n2, "super.base@20": Base.prototype } });
 $dump.p4 = Promise.prototype.then.call($dump.a3, print, undefined);
 $dump.keep(Base, []);
 $dump.keep(Base.prototype, ["m"]);

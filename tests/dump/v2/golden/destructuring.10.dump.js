@@ -38,5 +38,5 @@ async function main() {
   print("defaults", seen.join(" "));
 }
 $dump.n2 = {};
-$dump.a3 = $dump.resume(defaults, { at: "yield#2", args: [$dump.n2], bindings: { v: $dump.n2, a: "A", c: undefined }, operands: [["pattern.source", $dump.n2], ["pattern.next", $dump.builtin("%ArrayIteratorPrototype%.next")], ["pattern.iterator", undefined]] });
-$dump.a4 = $dump.resume(main, { at: "await#5", awaiting: $dump.p1, bindings: { g: $dump.a3, seen: ["need a", "need c"] } });
+$dump.a3 = $dump.resume(defaults, { at: "yield#2", args: [$dump.n2], slots: { v: $dump.n2, a: "A", c: undefined, "pattern.source@32": $dump.n2, "pattern.next@57": $dump.builtin("%ArrayIteratorPrototype%.next"), "pattern.iterator@57": undefined } });
+$dump.a4 = $dump.resume(main, { at: "await#5", awaiting: $dump.p1, slots: { g: $dump.a3, seen: ["need a", "need c"] } });

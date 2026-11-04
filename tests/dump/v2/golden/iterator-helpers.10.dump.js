@@ -54,4 +54,4 @@ $dump.n14 = ["p", "q"];
 $dump.i15 = $dump.advance(Array.prototype.values.call($dump.n14), 1);
 $dump.n16 = [[Array.prototype.values, $dump.n14], [Set.prototype.keys, new Set(["r"])]];
 $dump.i17 = $dump.iteratorHelper([6, 1, $dump.i15, $dump.builtin("%ArrayIteratorPrototype%.next"), $dump.n16, 1, undefined, undefined]);
-$dump.a18 = $dump.resume(main, { at: "await#6", awaiting: $dump.p1, bindings: { matches: $dump.i2, found: ["1@0", "22@3", "333@7"], it: $dump.i3, evens: $dump.i8, got: [20, 40, 60], flat: $dump.i10, seen: [1, 2, 3, true], wrapped: $dump.i13, w: [0, 1], cat: $dump.i17, c: ["p"] } });
+$dump.a18 = $dump.resume(main, { at: "await#6", awaiting: $dump.p1, slots: { matches: $dump.i2, found: ["1@0", "22@3", "333@7"], it: $dump.i3, evens: $dump.i8, got: [20, 40, 60], flat: $dump.i10, seen: [1, 2, 3, true], wrapped: $dump.i13, w: [0, 1], cat: $dump.i17, c: ["p"] } });

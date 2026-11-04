@@ -15,4 +15,4 @@ $dump.n2 = ["s1", $dump.p1];
 $dump.i3 = $dump.advance(Array.prototype.values.call($dump.n2), 2);
 $dump.p4 = Promise.prototype.then.call($dump.p1, (v) => ({ value: v, done: false }), $dump.closeThrow($dump.i3));
 $dump.i5 = $dump.fromSync($dump.i3, $dump.builtin("%ArrayIteratorPrototype%.next"));
-$dump.a6 = $dump.resume(main, { at: "for-await.next#1", awaiting: $dump.p4, bindings: { out: ["s1"], x: "s1" }, loops: [{ kind: "for-await", iterator: $dump.i5, next: $dump.i5.next }] });
+$dump.a6 = $dump.resume(main, { at: "for-await.next#1", awaiting: $dump.p4, slots: { out: ["s1"], x: "s1", "for-await.iterator@44": $dump.i5, "for-await.next@44": $dump.i5.next } });

@@ -10,5 +10,5 @@ async function main() {
   t.r += await later(2);
   return JSON.stringify(t) + " " + n;
 }
-$dump.a2 = $dump.resume(main, { at: "await#3", awaiting: $dump.p1, bindings: { t: { r: 1, p: 1, q: 2 }, k: "q", n: 1 }, operands: [["assign.old", 1]] });
+$dump.a2 = $dump.resume(main, { at: "await#3", awaiting: $dump.p1, slots: { t: { r: 1, p: 1, q: 2 }, k: "q", n: 1, "assign.old@119": 1 } });
 $dump.p3 = Promise.prototype.then.call($dump.a2, print, undefined);

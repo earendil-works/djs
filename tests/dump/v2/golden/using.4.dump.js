@@ -71,7 +71,7 @@ $dump.s2 = (() => {
     } }) };
 })();
 $dump.n3 = { [Symbol.asyncDispose]: $dump.s2.$f3 };
-$dump.a4 = $dump.resume($dump.s2.$f3, { at: "await#1", awaiting: $dump.p1, this: $dump.n3, bindings: { v: undefined } });
+$dump.a4 = $dump.resume($dump.s2.$f3, { at: "await#1", awaiting: $dump.p1, this: $dump.n3, slots: { v: undefined } });
 $dump.s6 = (() => {
   let name = "y";
   let fail = true;
@@ -84,6 +84,6 @@ $dump.s6 = (() => {
 $dump.n5 = { [Symbol.asyncDispose]: $dump.s6.$f14 };
 $dump.n7 = new Error("dispose y failed");
 $dump.u8 = $dump.using([$dump.n3, $dump.s2.$f3, 4, $dump.n5, $dump.s6.$f14, 4], { error: $dump.n7, hasError: true, hasAwaited: true, next: -3, value: $dump.a4 });
-$dump.a9 = $dump.resume(failing, { at: "await-using#1", awaiting: $dump.a4, bindings: { x: $dump.n3, y: $dump.n5 }, operands: [["using.record", $dump.u8], ["finally.value", undefined], ["finally.return", 0], ["using.record", $dump.u8]] });
-$dump.a10 = $dump.resume(main, { at: "await#2", awaiting: $dump.a9, bindings: { it: undefined, seen: undefined } });
+$dump.a9 = $dump.resume(failing, { at: "await-using#1", awaiting: $dump.a4, slots: { x: $dump.n3, y: $dump.n5, "using.record@51": $dump.u8, "finally.value@157": undefined, "finally.return@157": 0, "using.record@157": $dump.u8 } });
+$dump.a10 = $dump.resume(main, { at: "await#2", awaiting: $dump.a9, slots: { it: undefined, seen: undefined } });
 Object.defineProperty($dump.n7, "stack", { value: "    at <anonymous> (src.js:17:32)\n", writable: true, configurable: true });

@@ -9,5 +9,5 @@ async function main() {
   keep.res(v + " resolved");
   print(await held);
 }
-$dump.a4 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, bindings: { v: undefined } });
+$dump.a4 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, slots: { v: undefined } });
 $dump.p5 = Promise.prototype.then.call($dump.p2, (v) => print("then", v), undefined);

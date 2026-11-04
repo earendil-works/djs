@@ -39,5 +39,5 @@ async function main() {
 $dump.n2 = { inherited: 1 };
 $dump.n3 = { __proto__: $dump.n2, a: 1, c: 3, d: 4 };
 $dump.n4 = ["a=1", "c=3"];
-$dump.a5 = $dump.resume(keys, { at: "await#1", awaiting: $dump.p1, bindings: { proto: $dump.n2, o: $dump.n3, seen: $dump.n4, k: "inherited" }, operands: [["call.callee", Array.prototype.push], ["call.this", $dump.n4], ["binary.left", "inherited="]], loops: [{ kind: "for-in", iterator: $dump.forIn($dump.n3, []) }] });
-$dump.a6 = $dump.resume(main, { at: "await#1", awaiting: $dump.a5, bindings: { g: undefined, seen: undefined }, operands: [["call.callee", print], ["call.this", undefined], ["call.arg[0]", "keys"]] });
+$dump.a5 = $dump.resume(keys, { at: "await#1", awaiting: $dump.p1, slots: { proto: $dump.n2, o: $dump.n3, seen: $dump.n4, k: "inherited", "for-in.iterator@146": $dump.forIn($dump.n3, []), "call.callee@171": Array.prototype.push, "call.this@171": $dump.n4, "binary.left@181": "inherited=" } });
+$dump.a6 = $dump.resume(main, { at: "await#1", awaiting: $dump.a5, slots: { g: undefined, seen: undefined, "call.callee@26": print, "call.this@26": undefined, "call.arg@32": "keys" } });

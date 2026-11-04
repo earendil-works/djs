@@ -271,7 +271,7 @@ for (const path of ["a.md", "b.md"]) {
   notes.push(await tools.read({ path }));
 }
 return notes.join("\n");
-}, { at: "await#1", awaiting: $dump.p1, bindings: { notes: $dump.n2, path: "b.md" }, operands: [["call.callee", Array.prototype.push], ["call.this", $dump.n2]], loops: [{ kind: "for-of", iterator: $dump.i3, next: $dump.builtin("%ArrayIteratorPrototype%.next") }] });
+}, { at: "await#1", awaiting: $dump.p1, slots: { notes: $dump.n2, path: "b.md", "for-of.iterator@38": $dump.i3, "for-of.next@38": $dump.builtin("%ArrayIteratorPrototype%.next"), "call.callee@79": Array.prototype.push, "call.this@79": $dump.n2 } });
 $dump.handle("run", $dump.a4);
 ```
 
@@ -284,17 +284,20 @@ exist only while it loads (D2562):
   host's name for the function and, when the host gave one, its own state of the call as
   JSON (D2770);
 - `$dump.resume` builds the suspended activation of the script's function (its source,
-  verbatim) at its first `await`, with its bindings, the values computed before the
-  `await` (here the half-done `notes.push(` call: its function and `this`) and the loop
-  around it;
+  verbatim) at its first `await`, with every slot of its frame by name: its bindings, the
+  loop around the `await` (`for-of.iterator@38`: the construct and where it starts in the
+  function's text) and the values computed before it (here the half-done `notes.push(`
+  call: its function and `this`, `call.callee@79` and `call.this@79`);
 - the loop's iterator is made again and advanced with the same calls that put it there:
   in-flight builtin state is re-enacted, not described by the engine's internal layout;
 - `$dump.random` restores `Math.random`'s sequence, and `$dump.handle` gives the host the
   run's result promise back.
 
 `resume` compares what the dump says with what this build's compiler records at that
-`await` (its **suspension map**: which bindings are live, which values are held, which
-loops are open, D2563) and refuses on any difference. So a later djs either continues the
+`await` (its **suspension map**: the names of the slots a frame holds there, D2563,
+D2721) and refuses on any difference. It writes each slot where its own compiler keeps
+that name, so nothing in the dump depends on how one build orders the values it holds
+(D2731). So a later djs either continues the
 run exactly or refuses it with a reason; it never misreads it (D2560). Golden dumps
 written by older builds are loaded by every gate run.
 

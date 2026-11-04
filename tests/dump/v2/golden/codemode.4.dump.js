@@ -19,5 +19,5 @@ await later(0);
 console.log("total", total());
 return n;
 
-}, { at: "await#3", awaiting: $dump.p1, this: globalThis, args: [tools, console], bindings: { tools: tools, console: console, n: $dump.s2.$c4, total: $dump.s2.total } });
+}, { at: "await#3", awaiting: $dump.p1, this: globalThis, args: [tools, console], slots: { tools: tools, console: console, n: $dump.s2.$c4, total: $dump.s2.total } });
 $dump.handle("run", $dump.a3);

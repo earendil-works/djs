@@ -7,5 +7,5 @@ async function main() {
   const b = { a: 1, c: await later(3) };
   return JSON.stringify([a, b]);
 }
-$dump.a2 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, bindings: { k: "z", a: undefined, b: undefined }, operands: [["object.literal", { a: 1 }], ["object.key", "z"]] });
+$dump.a2 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, slots: { k: "z", a: undefined, b: undefined, "object.literal@53": { a: 1 }, "object.key@61": "z" } });
 $dump.p3 = Promise.prototype.then.call($dump.a2, print, undefined);

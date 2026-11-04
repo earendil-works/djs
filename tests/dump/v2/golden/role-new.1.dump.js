@@ -7,7 +7,7 @@ async function main() {
   const y = new Thing(...[1], await later(2), 3).a.join();
   return x + " " + y;
 }
-$dump.a2 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, bindings: { x: undefined, y: undefined }, operands: [["new.callee", Thing], ["new.arg[0]", 1]] });
+$dump.a2 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, slots: { x: undefined, y: undefined, "new.callee@36": Thing, "new.arg@46": 1 } });
 $dump.p3 = Promise.prototype.then.call($dump.a2, print, undefined);
 $dump.keep(Thing, []);
 $dump.keep(Thing.prototype, []);

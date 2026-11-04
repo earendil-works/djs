@@ -20,16 +20,20 @@ $dump.inner = $dump.resume(letters, { at: "yield#1" });
 $dump.handle("main", $dump.resume(main, {
   at: "await#1",
   awaiting: $dump.pending(3, "later", ["ya"]),
-  bindings: { m: $dump.m, k: "y", v: 2, l: "a" },
-  loops: [
-    { kind: "for-of", iterator: $dump.outer, next: $dump.outer.next },
-    { kind: "for-of", iterator: $dump.inner, next: $dump.inner.next },
-  ],
-  operands: [
-    ["call.callee", print],
-    ["call.this", undefined],
-    ["call.arg[0]", "y"],
-    ["call.arg[1]", 2],
-    ["call.arg[2]", "a"],
-  ],
+  // In another order than the frame's: the loader writes each slot by its name.
+  slots: {
+    "call.arg@146": "a",
+    "call.arg@140": "y",
+    "call.arg@143": 2,
+    "call.callee@134": print,
+    "call.this@134": undefined,
+    "for-of.iterator@99": $dump.inner,
+    "for-of.next@99": $dump.inner.next,
+    "for-of.next@69": $dump.outer.next,
+    "for-of.iterator@69": $dump.outer,
+    l: "a",
+    v: 2,
+    k: "y",
+    m: $dump.m,
+  },
 }));

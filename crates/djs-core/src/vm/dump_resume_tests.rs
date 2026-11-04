@@ -265,22 +265,6 @@ fn cells_in_their_tdz() {
     fixture("cells", 1);
 }
 
-#[test]
-fn role_names_are_the_maps() {
-    use crate::compiler::{Loop, Role};
-    for r in [
-        Role::CallCallee,
-        Role::CallArg(3),
-        Role::ArrayElement(0),
-        Role::TemplatePart(12),
-        Role::LoopIterator(Loop::Await),
-        Role::LoopNext(Loop::Of),
-        Role::SuperBase,
-    ] {
-        assert_eq!(super::dump_resume::role_name(r), alloc::format!("{r}"));
-    }
-}
-
 /// Loads a format 2 dump made of a few functions and `tail`; the reason it is refused.
 fn refusal(tail: &str) -> String {
     let text = alloc::format!(
@@ -301,13 +285,20 @@ fn refusal(tail: &str) -> String {
     }
 }
 
+/// The slots of `f` at its await.
+const F_SLOTS: &str = "a: 1, b: 2, 'call.callee@46': o.m, 'call.this@46': o, 'call.arg@50': 2";
+
 /// A description of `f` at its await, with `extra` keys (overriding).
 fn describe(extra: &str) -> String {
     alloc::format!(
         "$dump.resume(f, {{ at: 'await#1', awaiting: $dump.p, args: [1], \
-         bindings: {{ a: 1, b: 2 }}, \
-         operands: [['call.callee', o.m], ['call.this', o], ['call.arg[0]', 2]], {extra} }});"
+         slots: {{ {F_SLOTS} }}, {extra} }});"
     )
+}
+
+/// `describe` with the slots `slots`.
+fn describe_slots(slots: &str) -> String {
+    describe(&alloc::format!("slots: {{ {slots} }}"))
 }
 
 #[test]
@@ -325,38 +316,46 @@ fn resume_refuses_what_the_map_does_not_have() {
     let cases: &[(&str, &str)] = &[
         (&describe("at: 'await#2'"), "f has no site await#2"),
         (&describe("at: 'yield#1'"), "f has no site yield#1"),
-        (&describe("bindings: { a: 1 }"), "no value for binding b"),
         (
-            &describe("bindings: { a: 1, b: 2, c: 3 }"),
-            "await#1 has no binding c",
-        ),
-        (&describe("bindings: { a: 1, 'b@0': 2 }"), ""),
-        (
-            &describe("bindings: { a: 1, 'b@7': 2 }"),
-            "no value for binding b",
+            &describe_slots("a: 1, 'call.callee@46': o.m, 'call.this@46': o, 'call.arg@50': 2"),
+            "await#1 has a slot b: give it",
         ),
         (
-            &describe("operands: [['call.callee', o.m], ['call.arg[0]', 2], ['call.this', o]]"),
-            "operand 1 of await#1 is call.this, not call.arg[0]",
+            &describe_slots(&alloc::format!("{F_SLOTS}, c: 3")),
+            "await#1 has no slot c",
         ),
+        // A binding's key has its scope only when two of the name are in scope.
         (
-            &describe("operands: [['call.callee', o.m], ['call.this', o]]"),
-            "await#1 needs call.arg[0]",
-        ),
-        (
-            &describe(
-                "operands: [['call.callee', o.m], ['call.this', o], ['call.arg[0]', 2], ['binary.left', 1]]",
+            &describe_slots(
+                "a: 1, 'b@0': 2, 'call.callee@46': o.m, 'call.this@46': o, 'call.arg@50': 2",
             ),
-            "fewer operands or loops than given",
+            "await#1 has a slot b: give it",
+        ),
+        // By name: any order loads.
+        (
+            &describe_slots(
+                "'call.arg@50': 2, 'call.this@46': o, b: 2, 'call.callee@46': o.m, a: 1",
+            ),
+            "",
         ),
         (
-            &describe("loops: [{ kind: 'for-of', iterator: [].values(), next: [].values().next }]"),
-            "fewer operands or loops than given",
+            &describe_slots("a: 1, b: 2, 'call.callee@46': o.m, 'call.this@46': o"),
+            "await#1 has a slot call.arg@50: give it",
+        ),
+        // A temporary of another construct or offset (another build's slot set).
+        (
+            &describe_slots(
+                "a: 1, b: 2, 'call.callee@46': o.m, 'call.this@46': o, 'call.arg@51': 2",
+            ),
+            "await#1 has a slot call.arg@50: give it",
         ),
         (
-            &describe("operands: [['call.callee', o.m, 1]]"),
-            "a [role, value] pair",
+            &describe_slots(&alloc::format!("{F_SLOTS}, 'binary.left@1': 1")),
+            "await#1 has no slot binary.left@1",
         ),
+        (&describe("operands: []"), "unknown key operands"),
+        (&describe("bindings: {}"), "unknown key bindings"),
+        (&describe("loops: []"), "unknown key loops"),
         (
             &describe("awaiting: 1"),
             "await#1 awaits a promise: give it",
@@ -368,8 +367,9 @@ fn resume_refuses_what_the_map_does_not_have() {
         (&describe("wait: 1"), "unknown key wait"),
         (&describe("args: [1, , 2]"), "an array with holes"),
         (
-            &describe(
-                "bindings: { a: (() => { let z = 1; return $dump.cell(() => z); })(), b: 2 }",
+            &describe_slots(
+                "a: (() => { let z = 1; return $dump.cell(() => z); })(), b: 2, \
+                 'call.callee@46': o.m, 'call.this@46': o, 'call.arg@50': 2",
             ),
             "a is not captured",
         ),
@@ -390,15 +390,15 @@ fn resume_refuses_what_the_map_does_not_have() {
             "cannot be resumed: class",
         ),
         (
-            "$dump.resume(fin, { at: 'await#1', awaiting: $dump.p, operands: [['finally.value', 1], ['finally.return', 7]] });",
-            "await#1 has no such finally.return",
+            "$dump.resume(fin, { at: 'await#1', awaiting: $dump.p, slots: { 'finally.value@41': 1, 'finally.return@41': 7 } });",
+            "await#1 has no such finally.return@41",
         ),
         (
-            "$dump.resume(fin, { at: 'await#1', awaiting: $dump.p, operands: [['finally.value', 1], ['finally.return', 0.5]] });",
-            "await#1 has no such finally.return",
+            "$dump.resume(fin, { at: 'await#1', awaiting: $dump.p, slots: { 'finally.value@41': 1, 'finally.return@41': 0.5 } });",
+            "await#1 has no such finally.return@41",
         ),
         (
-            "$dump.resume(keys, { at: 'await#1', awaiting: $dump.p, args: [{}], bindings: { o: {}, k: 'a' }, loops: [{ kind: 'for-in', iterator: 1 }] });",
+            "$dump.resume(keys, { at: 'await#1', awaiting: $dump.p, args: [{}], slots: { o: {}, k: 'a', 'for-in.iterator@25': 1 } });",
             "a for-in loop's iterator is made by $dump.forIn",
         ),
         (
@@ -1208,7 +1208,7 @@ fn bindings_in_their_tdz_at_an_await() {
     for (src, want) in [
         (
             "async function main() { try { const r = (await later(1)) + r; print(r); } catch (e) { print(e.name); } }\nmain();",
-            "bindings: { r: $dump.TDZ }",
+            "slots: { r: $dump.TDZ }",
         ),
         (
             "let get; later(2).then(() => print(get()));\nasync function main() { get = () => { try { return r; } catch (e) { return e.name; } }; const r = await later(1); print(r); }\nmain();",
@@ -1216,11 +1216,11 @@ fn bindings_in_their_tdz_at_an_await() {
         ),
         (
             "async function main() { for (let i = 0; i < 2; i++) { if (i) { try { print(r); } catch (e) { print(e.name); } } const r = await later(i); } }\nmain();",
-            "bindings: { i: 0, r: $dump.TDZ }",
+            "slots: { i: 0, r: $dump.TDZ }",
         ),
         (
             "async function main() { const r = await later(1); print(r); }\nmain();",
-            "bindings: { r: undefined }",
+            "slots: { r: undefined }",
         ),
     ] {
         let (got, text) = dump_at(src, 1).unwrap_or_else(|e| panic!("{src}: {e}"));

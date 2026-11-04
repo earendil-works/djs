@@ -11,5 +11,5 @@ async function main() {
   return JSON.stringify(t) + " " + n;
 }
 $dump.n2 = { r: 1, p: 1 };
-$dump.a3 = $dump.resume(main, { at: "await#2", awaiting: $dump.p1, bindings: { t: $dump.n2, k: "q", n: 1 }, operands: [["assign.object", $dump.n2], ["assign.key", "q"]] });
+$dump.a3 = $dump.resume(main, { at: "await#2", awaiting: $dump.p1, slots: { t: $dump.n2, k: "q", n: 1, "assign.object@94": $dump.n2, "assign.key@94": "q" } });
 $dump.p4 = Promise.prototype.then.call($dump.a3, print, undefined);

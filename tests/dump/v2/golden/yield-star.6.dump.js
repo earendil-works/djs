@@ -52,5 +52,5 @@ async function main() {
 $dump.a3 = Object.setPrototypeOf(((g) => (g.return(), g))((function* () {})()), outer.prototype);
 $dump.i4 = $dump.advance(Array.prototype.values.call(["s1", $dump.p1]), 1);
 $dump.i5 = $dump.fromSync($dump.i4, $dump.builtin("%ArrayIteratorPrototype%.next"));
-$dump.a6 = $dump.resume(aouter, { at: "yield*#2", loops: [{ kind: "yield*", iterator: $dump.i5, next: $dump.i5.next }] });
-$dump.a7 = $dump.resume(main, { at: "await#3", awaiting: $dump.p2, bindings: { g: $dump.a3, seen: ["i1", "i2:v", "a1", "a2", "{\"value\":\"i done\",\"done\":true}", "x1", "x2", "s1"], ag: $dump.a6, v: "s1", ag2: undefined, g2: undefined }, loops: [{ kind: "for-await", iterator: $dump.a6, next: $dump.builtin("%AsyncGeneratorPrototype%.next") }] });
+$dump.a6 = $dump.resume(aouter, { at: "yield*#2", slots: { "yield*.iterator@48": $dump.i5, "yield*.next@48": $dump.i5.next } });
+$dump.a7 = $dump.resume(main, { at: "await#3", awaiting: $dump.p2, slots: { g: $dump.a3, seen: ["i1", "i2:v", "a1", "a2", "{\"value\":\"i done\",\"done\":true}", "x1", "x2", "s1"], ag: $dump.a6, v: "s1", ag2: undefined, g2: undefined, "for-await.iterator@242": $dump.a6, "for-await.next@242": $dump.builtin("%AsyncGeneratorPrototype%.next") } });

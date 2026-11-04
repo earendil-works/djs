@@ -9,4 +9,4 @@ async function main() {
   await later(0);
   print(new Uint8Array(buf).join(), view.getUint8(1), Array.from(u).join());
 }
-$dump.a2 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, bindings: { u: new Uint16Array([0, 513, 0, 0]) } });
+$dump.a2 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, slots: { u: new Uint16Array([0, 513, 0, 0]) } });

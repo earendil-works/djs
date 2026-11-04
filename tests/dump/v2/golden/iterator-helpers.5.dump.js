@@ -40,10 +40,10 @@ async function main() {
 }
 $dump.i2 = $dump.regexpIterator(/[a-z](\d+)/g, "a1 b22 c333", 5);
 $dump.i3 = $dump.regexpIterator(/\d/g, "x9y8", 5);
-$dump.a4 = $dump.resume(numbers, { at: "yield#1", bindings: { i: 3 } });
+$dump.a4 = $dump.resume(numbers, { at: "yield#1", slots: { i: 3 } });
 $dump.i5 = $dump.iteratorHelper([2, 1, $dump.a4, $dump.builtin("%GeneratorPrototype%.next"), (n) => n % 2 === 0, 3, undefined, undefined]);
 $dump.i6 = $dump.iteratorHelper([1, 1, $dump.i5, $dump.builtin("%IteratorHelperPrototype%.next"), (n) => n * 10, 2, undefined, undefined]);
 $dump.i7 = $dump.iteratorHelper([4, 1, $dump.i6, $dump.builtin("%IteratorHelperPrototype%.next"), 0, 0, undefined, undefined]);
 $dump.i8 = $dump.iteratorHelper([3, 1, $dump.i7, $dump.builtin("%IteratorHelperPrototype%.next"), 2, 0, undefined, undefined]);
 $dump.n9 = [];
-$dump.a10 = $dump.resume(main, { at: "await#3", awaiting: $dump.p1, bindings: { matches: $dump.i2, found: ["1@0", "22@3", "333@7"], it: $dump.i3, evens: $dump.i8, got: $dump.n9, v: 20, flat: undefined, seen: undefined, wrapped: undefined, w: undefined, cat: undefined, c: undefined }, operands: [["call.callee", Array.prototype.push], ["call.this", $dump.n9]], loops: [{ kind: "for-of", iterator: $dump.i8, next: $dump.builtin("%IteratorHelperPrototype%.next") }] });
+$dump.a10 = $dump.resume(main, { at: "await#3", awaiting: $dump.p1, slots: { matches: $dump.i2, found: ["1@0", "22@3", "333@7"], it: $dump.i3, evens: $dump.i8, got: $dump.n9, v: 20, flat: undefined, seen: undefined, wrapped: undefined, w: undefined, cat: undefined, c: undefined, "for-of.iterator@504": $dump.i8, "for-of.next@504": $dump.builtin("%IteratorHelperPrototype%.next"), "call.callee@527": Array.prototype.push, "call.this@527": $dump.n9 } });

@@ -12,4 +12,4 @@ async function main() {
 }
 $dump.i2 = $dump.advance(Array.prototype.values.call(["x", "y"]), 1);
 $dump.i3 = $dump.advance(String.prototype[Symbol.iterator].call("pq"), 1);
-$dump.a4 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, bindings: { i: 0, a: "x", b: "p" }, operands: [["call.callee", print], ["call.this", undefined], ["call.arg[0]", 0], ["call.arg[1]", "x"], ["call.arg[2]", "p"]], loops: [{ kind: "for-of", iterator: $dump.i2, next: $dump.builtin("%ArrayIteratorPrototype%.next") }, { kind: "for-of", iterator: $dump.i3, next: $dump.builtin("%StringIteratorPrototype%.next") }] });
+$dump.a4 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, slots: { i: 0, a: "x", b: "p", "for-of.iterator@59": $dump.i2, "for-of.next@59": $dump.builtin("%ArrayIteratorPrototype%.next"), "for-of.iterator@95": $dump.i3, "for-of.next@95": $dump.builtin("%StringIteratorPrototype%.next"), "call.callee@117": print, "call.this@117": undefined, "call.arg@123": 0, "call.arg@126": "x", "call.arg@129": "p" } });

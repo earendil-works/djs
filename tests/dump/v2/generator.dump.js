@@ -20,10 +20,10 @@ async function main() {
 $dump.g = $dump.resume(counter, {
   at: "yield#1",
   args: [4],
-  bindings: { limit: 4, total: 0, i: 1, got: $dump.TDZ },
+  slots: { limit: 4, total: 0, i: 1, got: $dump.TDZ },
 });
 $dump.handle("main", $dump.resume(main, {
   at: "await#1",
   awaiting: $dump.pending(2, "later", [10]),
-  bindings: { g: $dump.g, r: { value: 1, done: false }, v: $dump.TDZ },
+  slots: { g: $dump.g, r: { value: 1, done: false }, v: $dump.TDZ },
 }));

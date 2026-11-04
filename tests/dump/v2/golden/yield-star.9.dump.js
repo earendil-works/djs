@@ -51,8 +51,8 @@ async function main() {
 $dump.p2 = new Promise(() => {});
 $dump.a3 = $dump.resume(ainner, { at: "await#1", awaiting: $dump.p1, queue: [{ type: "next", value: undefined, promise: $dump.p2 }] });
 $dump.p4 = new Promise(() => {});
-$dump.a5 = $dump.resume(aouter, { at: "yield*.await#5", awaiting: $dump.p2, loops: [{ kind: "yield*", iterator: $dump.a3, next: $dump.builtin("%AsyncGeneratorPrototype%.next") }], queue: [{ type: "next", value: undefined, promise: $dump.p4 }] });
+$dump.a5 = $dump.resume(aouter, { at: "yield*.await#5", awaiting: $dump.p2, slots: { "yield*.iterator@29": $dump.a3, "yield*.next@29": $dump.builtin("%AsyncGeneratorPrototype%.next") }, queue: [{ type: "next", value: undefined, promise: $dump.p4 }] });
 $dump.a6 = Object.setPrototypeOf(((g) => (g.return(), g))((function* () {})()), outer.prototype);
 $dump.n7 = ["i1", "i2:v", "a1", "a2", "{\"value\":\"i done\",\"done\":true}", "x1", "x2", "s1", "s2"];
 $dump.a8 = Object.setPrototypeOf(((g) => (g.return(), g))((async function* () {})()), aouter.prototype);
-$dump.a9 = $dump.resume(main, { at: "await#4", awaiting: $dump.p4, bindings: { g: $dump.a6, seen: $dump.n7, ag: $dump.a8, ag2: $dump.a5, g2: undefined }, operands: [["call.callee", Array.prototype.push], ["call.this", $dump.n7]] });
+$dump.a9 = $dump.resume(main, { at: "await#4", awaiting: $dump.p4, slots: { g: $dump.a6, seen: $dump.n7, ag: $dump.a8, ag2: $dump.a5, g2: undefined, "call.callee@338": Array.prototype.push, "call.this@338": $dump.n7 } });

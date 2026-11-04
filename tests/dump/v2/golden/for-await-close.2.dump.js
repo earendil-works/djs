@@ -31,8 +31,8 @@ async function main() {
   print("end");
 }
 $dump.p2 = new Promise(() => {});
-$dump.a3 = $dump.resume(source, { at: "await#1", awaiting: $dump.p1, args: ["b"], bindings: { tag: "b" }, operands: [["finally.value", undefined], ["finally.return", 0], ["call.callee", print], ["call.this", undefined], ["call.arg[0]", "b"], ["call.arg[1]", "closing"]], queue: [{ type: "return", value: undefined, promise: $dump.p2 }] });
+$dump.a3 = $dump.resume(source, { at: "await#1", awaiting: $dump.p1, args: ["b"], slots: { tag: "b", "finally.value@84": undefined, "finally.return@84": 0, "call.callee@98": print, "call.this@98": undefined, "call.arg@104": "b", "call.arg@109": "closing" }, queue: [{ type: "return", value: undefined, promise: $dump.p2 }] });
 $dump.p4 = Promise.prototype.then.call($dump.p2, () => (undefined), () => (undefined));
 $dump.n5 = new Error("body failed on b1");
-$dump.a6 = $dump.resume(main, { at: "for-await.close#3", awaiting: $dump.p4, bindings: { v: "b1" }, operands: [["exception", $dump.n5]] });
+$dump.a6 = $dump.resume(main, { at: "for-await.close#3", awaiting: $dump.p4, slots: { v: "b1", "for-await.exception@111": $dump.n5 } });
 Object.defineProperty($dump.n5, "stack", { value: "    at main (src.js:25:22)\n", writable: true, configurable: true });

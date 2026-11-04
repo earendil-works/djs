@@ -8,4 +8,4 @@ async function main() {
   await later(1);
   print(a, b, Math.random());
 }
-$dump.a2 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, bindings: { a: 0.05279087335850807, b: undefined } });
+$dump.a2 = $dump.resume(main, { at: "await#1", awaiting: $dump.p1, slots: { a: 0.05279087335850807, b: undefined } });

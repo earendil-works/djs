@@ -20,6 +20,6 @@ $dump.s1 = (() => {
 $dump.h = $dump.resume(h, {
   at: "await#1",
   awaiting: $dump.pending(1, "later", [1]),
-  bindings: { get: $dump.s1.get, early: "ReferenceError", v: $dump.TDZ, late: $dump.s1.cell },
+  slots: { get: $dump.s1.get, early: "ReferenceError", v: $dump.TDZ, late: $dump.s1.cell },
 });
 $dump.h.then(print);

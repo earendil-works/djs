@@ -71,7 +71,7 @@ $dump.s2 = (() => {
     } }) };
 })();
 $dump.n3 = { [Symbol.asyncDispose]: $dump.s2.$f3 };
-$dump.a4 = $dump.resume($dump.s2.$f3, { at: "await#1", awaiting: $dump.p1, this: $dump.n3, bindings: { v: undefined } });
+$dump.a4 = $dump.resume($dump.s2.$f3, { at: "await#1", awaiting: $dump.p1, this: $dump.n3, slots: { v: undefined } });
 $dump.s5 = (() => {
   let name = "r2";
   let fail = undefined;
@@ -83,5 +83,5 @@ $dump.s5 = (() => {
 })();
 $dump.i6 = $dump.advance(Array.prototype.values.call([$dump.n3, { [Symbol.asyncDispose]: $dump.s5.$f20 }]), 1);
 $dump.u7 = $dump.using([$dump.n3, $dump.s2.$f3, 4], { hasAwaited: true, next: -3, value: $dump.a4 });
-$dump.a8 = $dump.resume(loop, { at: "await-using#1", awaiting: $dump.a4, bindings: { r: $dump.n3 }, operands: [["using.record", $dump.u7], ["finally.value", undefined], ["finally.return", 0], ["using.record", $dump.u7]], loops: [{ kind: "for-of", iterator: $dump.i6, next: $dump.builtin("%ArrayIteratorPrototype%.next") }] });
-$dump.a9 = $dump.resume(main, { at: "await#3", awaiting: $dump.a8, bindings: { it: undefined, seen: undefined } });
+$dump.a8 = $dump.resume(loop, { at: "await-using#1", awaiting: $dump.a4, slots: { r: $dump.n3, "for-of.iterator@26": $dump.i6, "for-of.next@26": $dump.builtin("%ArrayIteratorPrototype%.next"), "using.record@43": $dump.u7, "finally.value@137": undefined, "finally.return@137": 0, "using.record@137": $dump.u7 } });
+$dump.a9 = $dump.resume(main, { at: "await#3", awaiting: $dump.a8, slots: { it: undefined, seen: undefined } });
