@@ -6,8 +6,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0203 | Plain encodings for remaining refusals (step 4) | pjx | .worktrees/pjx |
-| 0204 | Host hooks for plain dumps (step 5) | pjh | .worktrees/pjh |
+| 0203 | Plain encodings for remaining refusals (step 4) | pjr (after pjx) | .worktrees/pjx |
+| 0204 | Host hooks for plain dumps (step 5); sleep-dump on plain first (owner) | pjm (after pjh) | .worktrees/pjh |
 
 ## Open (ready)
 
