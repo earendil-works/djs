@@ -581,22 +581,28 @@ fn member(key: &str) -> String {
 
 /// (Only ArrayBuffers, which the slim build does not have, are written as base64.)
 #[cfg(feature = "full")]
-fn base64(bytes: &[u8]) -> String {
+pub(super) fn base64(bytes: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::new();
-    for c in bytes.chunks(3) {
-        let n = (c[0] as u32) << 16
-            | (*c.get(1).unwrap_or(&0) as u32) << 8
-            | *c.get(2).unwrap_or(&0) as u32;
-        for i in 0..4 {
-            if i <= c.len() {
-                out.push_out(T[(n >> (18 - 6 * i) & 63) as usize] as char);
-            } else {
-                out.push_out('=');
-            }
-        }
+    // Into bytes, three at a time (0198: a megabyte buffer pushed char by char was most
+    // of its dump).
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len().div_ceil(3) * 4);
+    let (whole, rest) = bytes.as_chunks::<3>();
+    for c in whole {
+        let n = u32::from(c[0]) << 16 | u32::from(c[1]) << 8 | u32::from(c[2]);
+        out.extend_from_slice(&[
+            T[(n >> 18) as usize],
+            T[(n >> 12 & 63) as usize],
+            T[(n >> 6 & 63) as usize],
+            T[(n & 63) as usize],
+        ]);
     }
-    out
+    if !rest.is_empty() {
+        let n = u32::from(rest[0]) << 16 | u32::from(*rest.get(1).unwrap_or(&0)) << 8;
+        out.extend_from_slice(&[T[(n >> 18) as usize], T[(n >> 12 & 63) as usize]]);
+        out.push_out(if rest.len() == 2 { T[(n >> 6 & 63) as usize] } else { b'=' });
+        out.push_out(b'=');
+    }
+    String::from_utf8(out).unwrap_or_default()
 }
 
 /// Whether the source of a function gets its name from where it is defined (an arrow

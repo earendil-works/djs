@@ -382,12 +382,23 @@ impl Vm {
 
     #[cfg(feature = "full")]
     pub(super) fn primitive_bytes(&mut self, args: &[Value]) -> Result<Value, String> {
-        let units: Vec<u16> = args
+        let s = args
             .first()
             .and_then(|v| v.as_string())
-            .map(|s| self.heap.str_units(s).collect())
             .ok_or("$dump.bytes: not a string")?;
-        let bytes = crate::builtins::dom::atob(&units).ok_or("$dump.bytes: not base64")?;
+        // The dumper's padded base64 in one piece decodes directly; anything else as
+        // `atob` does (0198: decoding through UTF-16 units was half of a buffer's load).
+        let fast = match self.heap.str_view(s) {
+            Some(crate::heap::StrView::Latin1(b)) => decode_base64(b),
+            _ => None,
+        };
+        let bytes = match fast {
+            Some(b) => b,
+            None => {
+                let units: Vec<u16> = self.heap.str_units(s).collect();
+                crate::builtins::dom::atob(&units).ok_or("$dump.bytes: not base64")?
+            }
+        };
         let bp = intrinsic_obj(&self.heap, Intrinsic::ArrayBufferProto);
         let tp = intrinsic_obj(&self.heap, Intrinsic::Uint8ArrayProto);
         let view = self
@@ -468,5 +479,67 @@ impl Vm {
             }
         }
         Ok(Value::UNDEFINED)
+    }
+}
+
+/// Padded base64 without whitespace (what the dumper writes), or `None`.
+#[cfg(feature = "full")]
+fn decode_base64(b: &[u8]) -> Option<Vec<u8>> {
+    let v = |c: u8| -> Option<u32> {
+        Some(u32::from(match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => return None,
+        }))
+    };
+    let (chunks, rest) = b.as_chunks::<4>();
+    if !rest.is_empty() {
+        return None;
+    }
+    let mut out = Vec::with_capacity(chunks.len() * 3);
+    let last = chunks.len().checked_sub(1)?;
+    for (i, c) in chunks.iter().enumerate() {
+        let pad = if i == last {
+            usize::from(c[3] == b'=') + usize::from(c[2] == b'=' && c[3] == b'=')
+        } else {
+            0
+        };
+        let n = (v(c[0])? << 18)
+            | (v(c[1])? << 12)
+            | (if pad >= 2 { 0 } else { v(c[2])? } << 6)
+            | if pad >= 1 { 0 } else { v(c[3])? };
+        let bytes = [(n >> 16) as u8, (n >> 8) as u8, n as u8];
+        // Nonzero bits under the padding are not canonical: `atob` decides.
+        if pad >= 1 && bytes[3 - pad] != 0 {
+            return None;
+        }
+        out.extend_from_slice(&bytes[..3 - pad]);
+    }
+    Some(out)
+}
+
+#[cfg(all(test, feature = "full"))]
+mod tests {
+    use alloc::vec::Vec;
+
+    /// The dumper's base64 decodes directly to the bytes `atob` gives, for every tail
+    /// length; text that is not canonical is left to `atob`.
+    #[test]
+    fn the_dumpers_base64_decodes_as_atob() {
+        for len in 0..40usize {
+            let bytes: Vec<u8> = (0..len).map(|i| (i * 37 + len) as u8).collect();
+            let text = super::super::dump::base64(&bytes);
+            let units: Vec<u16> = text.encode_utf16().collect();
+            assert_eq!(crate::builtins::dom::atob(&units).as_deref(), Some(&bytes[..]));
+            if len > 0 {
+                assert_eq!(super::decode_base64(text.as_bytes()), Some(bytes));
+            }
+        }
+        for bad in ["QQ", "QR==", "Q===", "QUJD RA==", "QU*D"] {
+            assert_eq!(super::decode_base64(bad.as_bytes()), None, "{bad}");
+        }
     }
 }
