@@ -573,7 +573,11 @@ binaries (hard links in `target/gate/bin/`) instead of `cargo run`, and the test
 of a `cargo test --no-run` in parallel, each the way `cargo test` runs it (in its
 package's directory, through scripts/test-runner.sh). A leg starts when its builds are
 done. The first failure stops the gate and prints that leg's output; every leg's output
-is in `target/gate/log/`, the step times in `target/gate-steps.tsv`.
+is in `target/gate/log/`, the step times in `target/gate-steps.tsv`. One failure is not
+the commit's: rustc's incremental cache going bad, so that a link fails on undefined
+`_anon.*.llvm.*` symbols. A job that fails that way gets its target directory's
+`incremental/` caches cleared and runs once more (D2896); the gate prints that, and the
+failed run's log stays as `<leg>.log.corrupt`.
 
 macOS scans every new executable on its first run (syspolicyd and XProtect, one at a time,
 ~0.1–2 s per binary); a gate after a Rust change links ~60 of them. The gate runs each new

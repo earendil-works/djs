@@ -9216,3 +9216,19 @@ name in the host's order. By name, not by count: the loading host (the REPL's `.
 of a file) need not know how many the dump holds, and a single value may be an object
 itself. Loading, the CLI takes a promise as `run` and a null-prototype object's own
 properties as the handles (`dumps::plain_handles`); the Sandbox and pi only name `run`.
+
+## D2896: The gate clears a corrupt incremental cache and runs the job once more
+date: 2026-11-04 · by: pjh · issue: -
+rustc's incremental cache in .worktrees/gate went bad twice: a link failed on symbols no
+object defines (`Undefined symbols ... "_anon.<hash>.<n>.llvm.<n>"` in djs_core), which
+clearing the incremental directories fixed. scripts/gate.py now recognizes that failure in
+a job's log (the linker's undefined-symbols error with an `_anon.*.llvm.*` symbol within
+the next 40 lines), removes the `incremental/` directories of the job's target directory
+(its group: at the top and one or two levels down, never inside another job's group or a
+nested target directory; nothing else builds there meanwhile), keeps the failed log as
+`<leg>.log.corrupt`, prints what it did and runs the job once more; a second failure is
+reported as usual, and nothing is retried once another job failed. Preferred over
+`CARGO_INCREMENTAL=0` for the gate's builds: every Rust change rebuilds djs-core in about
+nine configurations, where incremental compilation is what keeps a gate at a minute or
+two, while the corruption is rare and costs one non-incremental rebuild of that target
+directory when it happens.

@@ -534,6 +534,40 @@ def run(argv):
     return 0
 
 
+# rustc's incremental cache can go bad so that a link fails on symbols no object defines
+# (`Undefined symbols ... _anon.<hash>.<n>.llvm.<n>`, seen twice in .worktrees/gate). Such
+# a failure says nothing about the commit: the gate clears the incremental directories of
+# the job's target directory and runs the job once more.
+INCREMENTAL_CORRUPTION = re.compile(r"(Undefined symbols|undefined reference).*(?:\n.*){0,40}?"
+                                    r"\b_?anon\.[0-9a-f]+\.[0-9]+\.llvm\.[0-9]+")
+
+
+def incremental_corruption(log):
+    try:
+        text = Path(log).read_text(errors="replace")[-200000:]
+    except OSError:
+        return False
+    return INCREMENTAL_CORRUPTION.search(text) is not None
+
+
+def incremental_dirs(group, groups):
+    """The incremental caches in target directory `group`: `incremental/` at its top and one
+    or two levels down (profile, triple/profile), not inside another job's group or another
+    target directory (marked by cargo's CACHEDIR.TAG)."""
+    root = Path(group)
+    others = [Path(g) for g in groups if g and Path(g) != root]
+    out = []
+    for d in [root / "incremental", *root.glob("*/incremental"), *root.glob("*/*/incremental")]:
+        if not d.is_dir():
+            continue
+        inside = d.relative_to(root).parts[:-1]
+        nested = any((root.joinpath(*inside[:k]) / "CACHEDIR.TAG").exists() for k in range(1, len(inside) + 1))
+        if nested or any(o == d or o in d.parents for o in others if root in o.parents):
+            continue
+        out.append(d)
+    return out
+
+
 def schedule(todo, by_name, ready, launch, running, lock, failed, clean, sha, unchanged):
     """Launches ready jobs until all are done or one failed (then stops the others)."""
     with lock:
@@ -543,7 +577,21 @@ def schedule(todo, by_name, ready, launch, running, lock, failed, clean, sha, un
                     print(f"-> {j.name}", flush=True)
                     launch(j)
             done_now = [j for j in todo if j.state in ("ok", "failed") and not getattr(j, "reported", False)]
+            again = False
             for j in done_now:
+                if (j.state == "failed" and not failed and j.group and not getattr(j, "retried", False)
+                        and not getattr(j, "stopped", False) and incremental_corruption(j.log)):
+                    # Nothing else builds in the group's directory now (`ready`).
+                    dirs = incremental_dirs(j.group, {x.group for x in by_name.values()})
+                    for d in dirs:
+                        shutil.rmtree(d, ignore_errors=True)
+                    shutil.copyfile(j.log, j.log + ".corrupt")
+                    print(f"!! {j.name}: rustc incremental corruption (link: undefined _anon.*.llvm.*);"
+                          f" cleared {', '.join(map(str, dirs)) or 'nothing'}, running it again"
+                          f" (the failed run's log: {j.log}.corrupt)", flush=True)
+                    j.retried, j.state = True, "pending"
+                    again = True
+                    continue
                 j.reported = True
                 if getattr(j, "stopped", False):
                     print(f"-- {j.name}: stopped")
@@ -553,6 +601,8 @@ def schedule(todo, by_name, ready, launch, running, lock, failed, clean, sha, un
                     failed.append(j)
                 elif j.cls and clean and unchanged():
                     cache_put(j.key(), j, sha)
+            if again and not failed:
+                continue  # launch the retried job
             if failed:
                 # Fail fast: the first failure stops the rest.
                 for name, p in list(running.items()):
