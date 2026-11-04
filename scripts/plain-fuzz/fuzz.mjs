@@ -6,7 +6,8 @@
 // wrong, numbers blanked); the report lists the distinct ones with their smallest program.
 //
 //   node scripts/plain-fuzz/fuzz.mjs [--seed S] [--cases N] [--time SECS] [--batch B]
-//                                    [--jobs J] [--from-max K] [--dir DIR] [--no-node]
+//                                    [--jobs J] [--max-load L] [--from-max K] [--dir DIR]
+//                                    [--no-node]
 //   node scripts/plain-fuzz/fuzz.mjs check FILE...      one program (a case body) each
 //   node scripts/plain-fuzz/fuzz.mjs reduce FILE --sig TEXT [--time SECS] [-o OUT]
 //
@@ -18,6 +19,7 @@
 // to OUT (default FILE.min.js). Exit status 1 if any program failed.
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import vm from "node:vm";
 import { generate } from "./gen.mjs";
@@ -37,7 +39,10 @@ const has = (name) => {
   return i >= 0;
 };
 
-const jobs = Number(flag("--jobs", 6));
+// Polite by default (owner's rule): 4 processes, niced, none started while the
+// machine's one-minute load is above --max-load (the gate goes first).
+const jobs = Number(flag("--jobs", 4));
+const maxLoad = Number(flag("--max-load", 30));
 const fromMax = Number(flag("--from-max", 40));
 const noNode = has("--no-node");
 const dir = path.resolve(flag("--dir", path.join(ROOT, "work/scratch/0208/fuzz")));
@@ -59,7 +64,14 @@ function run(cmd, args, opts = {}) {
   return new Promise((resolve) => {
     const start = () => {
       running++;
-      const p = spawn(cmd, args, { cwd: opts.cwd ?? ROOT });
+      launch();
+    };
+    const launch = () => {
+      if (os.loadavg()[0] > maxLoad) {
+        setTimeout(launch, 10_000);
+        return;
+      }
+      const p = spawn("nice", ["-n", "10", cmd, ...args], { cwd: opts.cwd ?? ROOT });
       let out = "";
       p.stdout.on("data", (d) => (out += d));
       p.stderr.on("data", (d) => (out += d));
@@ -332,7 +344,14 @@ if (argv[0] === "check") {
     return `codemode/c${i}.js`;
   });
   const r = await check(bin, work, names);
-  for (const f of r.fails) console.log(`${argv[1 + Number(/c(\d+)/.exec(f.name)[1])]} (chain from ${f.from}): ${f.sig}\n    ${f.detail}`);
+  // One line per program and signature, with the idle points whose chains show it.
+  const seen = new Map();
+  for (const f of r.fails) {
+    const key = `${argv[1 + Number(/c(\d+)/.exec(f.name)[1])]}: ${f.sig}`;
+    if (!seen.has(key)) seen.set(key, { from: [], detail: f.detail });
+    seen.get(key).from.push(f.from);
+  }
+  for (const [k, v] of seen) console.log(`${k}\n    chains from ${[...new Set(v.from)].sort((a, b) => a - b).join(",")}: ${v.detail}`);
   console.log(`check: ${names.length} programs, ${[...r.idle.values()].reduce((a, b) => a + b, 0)} idle points, ${r.fails.length} failures`);
   process.exit(r.fails.length ? 1 : 0);
 } else if (argv[0] === "reduce") {

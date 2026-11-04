@@ -297,7 +297,8 @@ The plain-dump fuzzer (0208, D2940) finds such bugs: `node scripts/plain-fuzz/fu
 plain dumps starting at every idle point, in djs and node, then lists the distinct
 failure signatures with the smallest program of each. `fuzz.mjs check FILE...` runs given
 programs (case bodies) the same way, and `fuzz.mjs reduce FILE --sig TEXT` shrinks one
-while its failure signature contains TEXT. It is not a gate leg; a finding becomes a
+while its failure signature contains TEXT. It runs at most 4 niced processes (`--jobs`) and
+starts none while the load is above 30 (`--max-load`). It is not a gate leg; a finding becomes a
 corpus case (tests/corpus/codemode/plain-fuzz/), marked `plain-xfail` or listed in
 tests/plain-refusals.txt until it is fixed.
 `--determinism` adds a second suspension slice (1009) and requires the suspended runs to
