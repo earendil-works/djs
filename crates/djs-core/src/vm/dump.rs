@@ -331,14 +331,13 @@ struct Group {
 enum Named {
     /// By its path, an expression on the globals (`Array.prototype.map`).
     Path,
-    /// Through `$dump.builtin(path)`.
+    /// Captured at the top of the dump (`$dump.bN`).
     Loader,
     /// Not at all: an internal value of a builtin (refused).
     Internal,
 }
 
 struct Builtin {
-    cell: u32,
     path: String,
     named: Named,
 }
@@ -360,7 +359,6 @@ impl BaseTable {
             if cell < base_end {
                 t.cells.insert(key(cell), BUILTIN | t.list.len() as u32);
                 t.list.push_out(Builtin {
-                    cell,
                     named: named(&path),
                     path,
                 });
@@ -767,8 +765,6 @@ struct Dumper<'a> {
     nodes: Vec<Node>,
     groups: Vec<Group>,
     refusals: Vec<String>,
-    /// Builtin properties the session changed: (holder expression, key, new property).
-    builtin_patches: Vec<(String, Atom, Option<Property>)>,
     out: Vec<String>,
     /// Per line of `out`, what the checker compiles instead when the line writes no
     /// function: `let name;` for a root, nothing for a `$dump` object (`None`: the line).
@@ -803,10 +799,8 @@ struct Dumper<'a> {
     /// Objects being written as data (`render`): promises made by activations or
     /// reactions are patched into them instead (dump_flight.rs `make`).
     data_depth: u32,
-    /// Whether the text uses the `$dump` namespace.
-    ns: bool,
-    /// Writing a plain dump: what the plain writer needs besides the lines.
-    pl: Option<plain::Ir>,
+    /// What the plain writer needs besides the lines.
+    pl: plain::Ir,
     /// `DumpOptions::source_refs`.
     source_refs: bool,
     next: u32,
@@ -815,10 +809,10 @@ struct Dumper<'a> {
 }
 
 impl<'a> Dumper<'a> {
-    /// What the format's helpers are members of: the host's `$djs` in a plain dump (the
-    /// dump runtime, D2903), the dump's own `$dump` in format 2.
+    /// What the format's helpers are members of: the host's `$djs` (the dump runtime,
+    /// D2903).
     pub(super) fn rt(&self) -> &'static str {
-        if self.pl.is_some() { "$djs." } else { "$dump." }
+        "$djs."
     }
 
     fn new(vm: &'a Vm, opts: &DumpOptions<'a>) -> Result<Dumper<'a>, DumpError> {
@@ -854,7 +848,6 @@ impl<'a> Dumper<'a> {
             nodes: Vec::new(),
             groups: Vec::new(),
             refusals: Vec::new(),
-            builtin_patches: Vec::new(),
             out: Vec::new(),
             skeleton: Vec::new(),
             fns_read: core::cell::Cell::new(0),
@@ -872,8 +865,7 @@ impl<'a> Dumper<'a> {
             members: Index::default(),
             member_texts: Vec::new(),
             data_depth: 0,
-            ns: false,
-            pl: Some(plain::Ir::default()),
+            pl: plain::Ir::default(),
             source_refs: opts.source_refs,
             next: 0,
             depth: 0,
@@ -896,7 +888,6 @@ impl<'a> Dumper<'a> {
         d.cells = table.cells.clone();
         d.base_globals = table.globals.clone();
         d.read_globals(&base);
-        d.read_patches(&base);
         d.scratch = Some(base);
         Ok(d)
     }
@@ -970,11 +961,11 @@ impl<'a> Dumper<'a> {
         // name is the script's own and hides the host's property, so it is dumped.
         if decl == Decl::Var && self.host_names.contains(&name.as_str()) {
             self.host_values(value, name, 0);
-        } else if self.pl.is_some() && (name == "$dump" || name == "$djs") {
+        } else if name == "$dump" || name == "$djs" {
             // A plain dump's own names: its values live in `$dump` during the load
             // and the host's runtime and hooks in `$djs` (D2890, D2903).
             self.refuse(name, "a global binding with a name plain dumps reserve");
-        } else if name != "$dump" && self.global_atoms.get(key(k.id())).is_none() {
+        } else if self.global_atoms.get(key(k.id())).is_none() {
             // A lexical binding shadows a global object property of the same name.
             self.global_atoms
                 .insert(key(k.id()), self.globals.len() as u32);
@@ -1022,101 +1013,23 @@ impl<'a> Dumper<'a> {
         }
     }
 
-    /// Builtin properties the session changed (none with frozen builtins): compared
-    /// with the base, object by object, when any word of the prefix differs.
-    fn read_patches(&mut self, base: &Heap) {
-        let h = self.h;
-        if h.frozen_builtins() {
-            return;
-        }
-        let start = h.cell_size(0) as usize;
-        let end = self.base_end as usize;
-        if h.bytes()[start..end] == base.bytes()[start..end] {
-            return;
-        }
-        // In naming order, so that the patches come out in a stable order.
-        for i in 0..self.builtins.list.len() {
-            let cell = self.builtins.list[i].cell;
-            if base.cell_kind(cell) != crate::heap::CellKind::Object {
-                continue;
-            }
-            let o = Obj(cell);
-            let path = self.builtins.list[i].path.clone();
-            if h.get_prototype_of(o).map(|p| p.offset())
-                != base.get_prototype_of(o).map(|p| p.offset())
-            {
-                self.refuse(path.clone(), "a builtin whose prototype was changed");
-            }
-            let keys = h.own_keys(o);
-            let bkeys = base.own_keys(o);
-            let mut expr = None;
-            if h.is_extensible(o) != base.is_extensible(o) {
-                let e = self.builtin_expr(i);
-                self.finals
-                    .push_out(cat!("Object.preventExtensions(", e, ");"));
-            }
-            for k in &bkeys {
-                let patch = match keys.iter().find(|k2| *k2 == k) {
-                    None => Some((*k, None)),
-                    Some(k2) => {
-                        let (Some(p), Some(bp)) =
-                            (h.get_own_property(o, *k2), base.get_own_property(o, *k))
-                        else {
-                            continue;
-                        };
-                        (!same_property(h, &p, base, &bp)).then_some((*k2, Some(p)))
-                    }
-                };
-                if let Some((k, p)) = patch {
-                    let e = expr.get_or_insert_with(|| self.builtin_expr(i)).clone();
-                    self.builtin_patches.push_out((e, k, p));
-                }
-            }
-            for k in keys {
-                if !bkeys.contains(&k) {
-                    let p = h.get_own_property(o, k);
-                    let e = expr.get_or_insert_with(|| self.builtin_expr(i)).clone();
-                    self.builtin_patches.push_out((e, k, p));
-                }
-            }
-        }
-        let patches = core::mem::take(&mut self.builtin_patches);
-        for (expr, k, p) in &patches {
-            let path = cat!(expr, self.key_path(*k));
-            match p {
-                Some(Property::Data { value, .. }) => {
-                    self.note(*value, || path.clone());
-                }
-                Some(Property::Accessor { getter, setter, .. }) => {
-                    self.note(*getter, || cat!("get ", path));
-                    self.note(*setter, || cat!("set ", path));
-                }
-                None => {}
-            }
-        }
-        self.builtin_patches = patches;
-    }
-
-    /// The expression for builtin `i`: its path, or `$dump.builtin(path)`.
+    /// The expression for builtin `i`: its path, or `$dump.bN`, captured at the top of
+    /// the dump before user code runs.
     fn builtin_expr(&mut self, i: usize) -> String {
         let b = &self.builtins.list[i];
         if b.named == Named::Path {
             return b.path.clone();
         }
-        self.ns = true;
-        if let Some(pl) = &mut self.pl {
-            // Captured at the top of a plain dump, before user code runs.
-            let path = b.path.clone();
-            let k = match pl.builtins.iter().position(|p| *p == path) {
-                Some(k) => k,
-                None => {
-                    pl.builtins.push_out(path);
-                    pl.builtins.len() - 1
-                }
-            };
-            return cat!("$dump.b", k);
-        }
-        cat!("$dump.builtin(", quote(&b.path), ")")
+        let path = b.path.clone();
+        let pl = &mut self.pl;
+        let k = match pl.builtins.iter().position(|p| *p == path) {
+            Some(k) => k,
+            None => {
+                pl.builtins.push_out(path);
+                pl.builtins.len() - 1
+            }
+        };
+        cat!("$dump.b", k)
     }
 
     // ---------------------------------------------------------------- discovery
@@ -2102,32 +2015,11 @@ impl<'a> Dumper<'a> {
             self.emit_root(r);
         }
         self.flight_finish();
-        let patches = core::mem::take(&mut self.builtin_patches);
-        let mut builtin_lines = Vec::new();
-        for (expr, k, p) in patches {
-            let target = cat!(expr, self.key_member(k));
-            builtin_lines.push_out(match p {
-                None => cat!("delete ", target, ";"),
-                Some(Property::Data { value, flags }) if flags == PropFlags::ALL => {
-                    cat!(target, " = ", self.expr(value, None, None), ";")
-                }
-                Some(p) => {
-                    let key = self.key_expr(k);
-                    let d = self.descriptor(&p);
-                    cat!("Object.defineProperty(", expr, ", ", key, ", ", d, ");")
-                }
-            });
-        }
         // Every node has its location now: references written before it had one.
         let mut out = core::mem::take(&mut self.out);
         let mut patches = core::mem::take(&mut self.patches);
         let mut finals = core::mem::take(&mut self.finals);
-        for l in out
-            .iter_mut()
-            .chain(&mut builtin_lines)
-            .chain(&mut patches)
-            .chain(&mut finals)
-        {
+        for l in out.iter_mut().chain(&mut patches).chain(&mut finals) {
             if l.contains(LATER) {
                 *l = self.resolve_later(l);
             }
@@ -2139,34 +2031,27 @@ impl<'a> Dumper<'a> {
         // `Math.random`'s state and the next call id: the resumed run continues the
         // sequence and the ids (D2624, D2897).
         let (lo, hi) = crate::builtins::number::random_state(self.h);
-        if let Some(pl) = &mut self.pl {
-            pl.seed = (lo, hi);
-            let i = crate::interp::state::interp(self.h);
-            pl.next_call = self
-                .h
-                .arena()
-                .get(i, crate::heap::cells::Interp::NEXT_CALL_ID);
-        }
+        self.pl.seed = (lo, hi);
+        let i = crate::interp::state::interp(self.h);
+        self.pl.next_call = self
+            .h
+            .arena()
+            .get(i, crate::heap::cells::Interp::NEXT_CALL_ID);
         // The checker compiles the dump with the lines that write no function cut down to
         // the names they declare: their data cannot change what a name resolves to.
         let mut skeleton = String::new();
         for (l, sk) in self.out.iter().zip(&self.skeleton) {
             cat_to!(&mut skeleton, sk.as_deref().unwrap_or(l), '\n');
         }
-        for l in builtin_lines
-            .iter()
-            .chain(&self.patches)
-            .chain(&self.finals)
-        {
+        for l in self.patches.iter().chain(&self.finals) {
             cat_to!(&mut skeleton, l, '\n');
         }
         self.check(&skeleton);
         if !self.refusals.is_empty() {
             return Err(self.refused());
         }
-        let ir = self.pl.take().unwrap_or_default();
+        let ir = core::mem::take(&mut self.pl);
         let mut lines = core::mem::take(&mut self.out);
-        lines.extend(builtin_lines);
         lines.extend(core::mem::take(&mut self.patches));
         lines.extend(core::mem::take(&mut self.finals));
         let mut s = plain::write(&ir, &lines, false, &cont::generate)
@@ -2410,7 +2295,6 @@ impl<'a> Dumper<'a> {
 
     fn fresh(&mut self, prefix: &str) -> String {
         self.next += 1;
-        self.ns = true;
         cat!("$dump.", prefix, self.next)
     }
 
@@ -2580,7 +2464,7 @@ impl<'a> Dumper<'a> {
     /// A closure a plain dump makes in a continuation: data gets it by a patch.
     fn plain_patched(&self, n: usize) -> bool {
         let g = self.nodes[n].group;
-        self.pl.is_some() && g != usize::MAX && self.nodes[n].member.is_none() && self.merged(g)
+        g != usize::MAX && self.nodes[n].member.is_none() && self.merged(g)
     }
 
     fn node_of(&self, v: Value) -> Option<usize> {
@@ -3350,14 +3234,13 @@ impl<'a> Dumper<'a> {
         }
         text.push_str(&bodies[0]);
         text.push_str("})();");
-        if let Some(pl) = &mut self.pl {
-            pl.lines
-                .push_out((self.out.len(), plain::Rec::Factory(pl.factories.len())));
-            pl.factories.push(plain::Factory {
-                name: String::from(loc.strip_prefix("$dump.").unwrap_or(&loc)),
-                scopes: rec,
-            });
-        }
+        let pl = &mut self.pl;
+        pl.lines
+            .push_out((self.out.len(), plain::Rec::Factory(pl.factories.len())));
+        pl.factories.push(plain::Factory {
+            name: String::from(loc.strip_prefix("$dump.").unwrap_or(&loc)),
+            scopes: rec,
+        });
         self.out.push_out(text);
         self.skeleton.push_out(None);
         self.class_locals.clear();
@@ -3600,19 +3483,20 @@ impl<'a> Dumper<'a> {
                 self.patches
                     .push_out(cat!("Object.setPrototypeOf(", proto_loc, ", ", e, ");"));
             }
-            self.private_patches_of(po, &proto_loc);
+            self.private_patches_of(po);
             if !h.is_extensible(po) {
                 self.finals.push_out(self.freeze_line(po, &proto_loc));
             }
         }
-        self.private_patches_of(o, loc);
+        self.private_patches_of(o);
         if !h.is_extensible(o) {
             self.finals.push_out(self.freeze_line(o, loc));
         }
     }
 
-    /// `$dump.private(...)` for the private fields and brands of object `o` at `loc`.
-    fn private_patches_of(&mut self, o: Obj, loc: &str) {
+    /// The private fields and brands of object `o`: refused, but a class's own static
+    /// ones its evaluation makes (D2878).
+    fn private_patches_of(&mut self, o: Obj) {
         let Some(n) = self.node_of(Value::object(o)) else {
             return;
         };
@@ -3634,57 +3518,36 @@ impl<'a> Dumper<'a> {
                 continue;
             }
             let ce = self.expr_or_loc(self.nodes[c].v);
-            if self.pl.is_some() {
-                // Only the class's own code adds a private name to an object or sets one;
-                // plain dumps do not rewrite class text to do it (D2878). A class's own
-                // static field still at the literal its evaluation gives it is written
-                // by that evaluation.
-                let path = self.nodes[n].path.clone();
-                if c == n {
-                    if let Property::Data { value, .. } = p
-                        && let Some(init) = self.static_private_literal(c, &name)
-                        && self.expr_or_loc(*value) == init
-                    {
-                        continue;
-                    }
-                    let why = cat!(
-                        "plain dumps: class ",
-                        ce,
-                        "'s static private field ",
-                        name,
-                        " changed since the class was made (only the class's code can set it, D2878)"
-                    );
-                    self.refuse(path, &why);
+            // Only the class's own code adds a private name to an object or sets one;
+            // plain dumps do not rewrite class text to do it (D2878). A class's own
+            // static field still at the literal its evaluation gives it is written by
+            // that evaluation.
+            let path = self.nodes[n].path.clone();
+            if c == n {
+                if let Property::Data { value, .. } = p
+                    && let Some(init) = self.static_private_literal(c, &name)
+                    && self.expr_or_loc(*value) == init
+                {
                     continue;
                 }
                 let why = cat!(
-                    "plain dumps: an instance of class ",
+                    "plain dumps: class ",
                     ce,
-                    " with private name ",
+                    "'s static private field ",
                     name,
-                    " (only the class's construction can add it to an object, D2878)"
+                    " changed since the class was made (only the class's code can set it, D2878)"
                 );
                 self.refuse(path, &why);
                 continue;
             }
-            let line = match p {
-                Property::Data { value, .. } if !self.is_brand(*k) => {
-                    let ve = self.expr_or_loc(*value);
-                    cat!(
-                        "$dump.private(",
-                        loc,
-                        ", ",
-                        ce,
-                        ", ",
-                        quote(&name),
-                        ", ",
-                        ve,
-                        ");"
-                    )
-                }
-                _ => cat!("$dump.private(", loc, ", ", ce, ", ", quote(&name), ");"),
-            };
-            self.patches.push_out(line);
+            let why = cat!(
+                "plain dumps: an instance of class ",
+                ce,
+                " with private name ",
+                name,
+                " (only the class's construction can add it to an object, D2878)"
+            );
+            self.refuse(path, &why);
         }
         self.nodes[n].privates = privates;
     }
@@ -3711,7 +3574,6 @@ impl<'a> Dumper<'a> {
     fn fn_expr(&mut self, n: usize, src: &str) -> String {
         match self.fn_kind(n) {
             func_flags::KIND_METHOD | func_flags::KIND_GETTER | func_flags::KIND_SETTER => {
-                self.ns = true;
                 cat!(self.rt(), "fn({ ", src, " })")
             }
             _ => src.into(),
@@ -3728,7 +3590,7 @@ impl<'a> Dumper<'a> {
         let e = if let Some(s) = v.as_symbol()
             && h.symbol_private_flags(s) & crate::heap::cells::flags::SYM_PRIVATE != 0
         {
-            self.private_name_expr(n, s)
+            self.private_name_expr(n)
         } else if let Some(s) = v.as_symbol() {
             match (
                 self.registered(Value::symbol(s)),
@@ -3744,7 +3606,7 @@ impl<'a> Dumper<'a> {
             let e = self.render_object(n, o, &loc, ctx_name);
             self.data_depth -= 1;
             if !self.is_class_node(n) {
-                self.private_patches_of(o, &loc);
+                self.private_patches_of(o);
             }
             e
         };
@@ -3752,37 +3614,12 @@ impl<'a> Dumper<'a> {
         e
     }
 
-    /// A private name held as a value (a frame's binding or operand): its class's,
-    /// `$dump.private(C, "#x")`.
-    fn private_name_expr(&mut self, n: usize, s: crate::value::Sym) -> String {
-        if self.pl.is_some() {
-            let p = self.nodes[n].path.clone();
-            self.refuse(p, "plain dumps: a private name as a value (0203)");
-        }
-        let path = self.nodes[n].path.clone();
-        match self
-            .private_names
-            .iter()
-            .find(|p| p.0 == s.offset())
-            .cloned()
-        {
-            Some((_, c, name, false)) => {
-                self.ns = true;
-                let ce = self.expr_or_loc(self.nodes[c].v);
-                cat!("$dump.private(", ce, ", ", quote(&name), ")")
-            }
-            Some(_) => {
-                self.refuse(
-                    path,
-                    "a private name the class has twice (a nested class's)",
-                );
-                "undefined".into()
-            }
-            None => {
-                self.refuse(path, "a private name of a class the dump does not hold");
-                "undefined".into()
-            }
-        }
+    /// A private name held as a value (a frame's binding or operand): plain JavaScript
+    /// has no expression for it.
+    fn private_name_expr(&mut self, n: usize) -> String {
+        let p = self.nodes[n].path.clone();
+        self.refuse(p, "plain dumps: a private name as a value (0203)");
+        "undefined".into()
     }
 
     /// Whether closure `n` has a home object (a method that uses `super`).
@@ -3940,18 +3777,12 @@ impl<'a> Dumper<'a> {
             ObjectClass::HostFunction => {
                 let id = h.object_slot(o, 0).as_int().unwrap_or(-1) as u32;
                 let name = (self.fl.host_fn_name)(id).unwrap_or_default();
-                let flags = h.cell_flags(o.offset());
-                let asynch = flags & crate::heap::cells::flags::OBJ_HOST_ASYNC != 0;
-                self.ns = true;
-                if self.pl.is_some() {
-                    // The host defines its functions as globals by these names.
-                    if name.is_empty() || !name.split('.').all(is_ident) {
-                        let p = self.nodes[n].path.clone();
-                        self.refuse(p, "a host function without a global name");
-                    }
-                    return name;
+                // The host defines its functions as globals by these names.
+                if name.is_empty() || !name.split('.').all(is_ident) {
+                    let p = self.nodes[n].path.clone();
+                    self.refuse(p, "a host function without a global name");
                 }
-                return cat!("$dump.host(", quote(&name), ", ", tf(asynch), ")");
+                return name;
             }
             ObjectClass::Promise => {
                 let state = h.object_slot(o, 0).as_int().unwrap_or(0);
@@ -3959,7 +3790,6 @@ impl<'a> Dumper<'a> {
                 if state == crate::interp::run::promise::FULFILLED {
                     cat!("Promise.resolve(", r, ")")
                 } else {
-                    self.ns = true;
                     cat!(self.rt(), "rejected(", r, ")")
                 }
             }
@@ -3983,7 +3813,6 @@ impl<'a> Dumper<'a> {
             }
             #[cfg(feature = "full")]
             ObjectClass::ArrayBuffer => {
-                self.ns = true;
                 cat!(self.rt(), "bytes(\"", base64(h.buffer_data(o)), "\")")
             }
             #[cfg(feature = "full")]
@@ -4501,34 +4330,6 @@ fn array_element(h: &Heap, o: Obj, el: Ref, i: u32) -> Value {
             .and_then(|k| h.get_own_property(o, k))
             .and_then(|p| p.value())
             .unwrap_or(Value::HOLE),
-    }
-}
-
-fn same_property(h: &Heap, p: &Property, base: &Heap, bp: &Property) -> bool {
-    let same = |a: Value, b: Value| {
-        a.to_bits() == b.to_bits()
-            || match (a.as_string(), b.as_string()) {
-                (Some(x), Some(y)) => text_of(h, x) == text_of(base, y),
-                _ => false,
-            }
-    };
-    match (p, bp) {
-        (Property::Data { value: a, flags: f }, Property::Data { value: b, flags: g }) => {
-            f == g && same(*a, *b)
-        }
-        (
-            Property::Accessor {
-                getter: a,
-                setter: b,
-                flags: f,
-            },
-            Property::Accessor {
-                getter: c,
-                setter: d,
-                flags: g,
-            },
-        ) => f == g && same(*a, *c) && same(*b, *d),
-        _ => false,
     }
 }
 

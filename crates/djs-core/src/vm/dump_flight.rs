@@ -385,7 +385,7 @@ impl Dumper<'_> {
         let site = match s.state {
             suspend::AWAITING | suspend::SUSPENDED | suspend::SUSPENDED_RAW => {
                 match self.activation_site(&path, &s) {
-                    Some((site, sx)) if self.pl.is_some() => match self.origin_frame(&s, &site) {
+                    Some((site, sx)) => match self.origin_frame(&s, &site) {
                         Ok(Some((fs, fsite, fsx))) => {
                             s = fs;
                             syntax = Some(fsx);
@@ -400,10 +400,6 @@ impl Dumper<'_> {
                             None
                         }
                     },
-                    Some((site, sx)) => {
-                        syntax = Some(sx);
-                        Some(site)
-                    }
                     None => None,
                 }
             }
@@ -448,11 +444,9 @@ impl Dumper<'_> {
         };
         if site.is_some() && s.kind != suspend::ASYNC {
             self.check_generator_proto(&path, g, runs);
-            if self.pl.is_some() {
-                // Its prototype is its continuation's (`Act::proto`).
-                let proto = h.get_prototype_of(g).map_or(Value::NULL, Value::object);
-                self.edge(n, proto, || cat!(path, ".[[Prototype]]"));
-            }
+            // Its prototype is its continuation's (`Act::proto`).
+            let proto = h.get_prototype_of(g).map_or(Value::NULL, Value::object);
+            self.edge(n, proto, || cat!(path, ".[[Prototype]]"));
         }
         // What `super[...]` read before the site: its continuation reads `super` again.
         let mut super_read: Vec<(bool, Value, Value)> = Vec::new();
@@ -564,14 +558,12 @@ impl Dumper<'_> {
             }
         }
         // A method's `super`: its home object's prototype, which its continuation's
-        // home object gets (plain dumps).
-        if self.pl.is_some()
-            && syntax.as_ref().is_some_and(|sx| {
-                sx.special
-                    .iter()
-                    .any(|x| x.0 == crate::compiler::Special::Super)
-            })
-            && let Some(rf) = runs.as_object()
+        // home object gets.
+        if syntax.as_ref().is_some_and(|sx| {
+            sx.special
+                .iter()
+                .any(|x| x.0 == crate::compiler::Special::Super)
+        }) && let Some(rf) = runs.as_object()
             && let Some(home) = home_object(h, rf)
         {
             let p = h.get_prototype_of(home).map_or(Value::NULL, Value::object);
@@ -1080,16 +1072,13 @@ impl Dumper<'_> {
         for (name, v) in handles {
             let before = self.fns_read.get();
             let e = self.expr(v, None, None);
-            if let Some(pl) = &mut self.pl {
-                pl.handles.push_out((name.clone(), e.clone()));
-            }
+            self.pl.handles.push_out((name.clone(), e.clone()));
             self.line(cat!("$dump.handle(", quote(&name), ", ", e, ");"), before);
         }
     }
 
     /// Pushes a line that writes no binding.
     fn line(&mut self, text: String, fns_before: u32) {
-        self.ns = true;
         self.out.push_out(text);
         self.skeleton
             .push_out((self.fns_read.get() == fns_before).then(String::new));
@@ -1184,15 +1173,9 @@ impl Dumper<'_> {
         }
         self.nodes[n].state = State::Busy;
         let h = self.h;
-        let before = self.fns_read.get();
-        // (Plain dumps write the resources themselves, not their array.)
-        let res = if self.pl.is_some() {
-            String::from("[]")
-        } else {
-            self.expr(h.object_slot(o, 2), None, None)
-        };
+        // (The resources themselves are written by the continuation, not their array.)
         let mut fields = Vec::new();
-        let mut cycle = res.is_empty();
+        let mut cycle = false;
         for (k, slot) in USING_FIELDS {
             let v = h.object_slot(o, slot);
             if v.is_undefined() {
@@ -1206,59 +1189,47 @@ impl Dumper<'_> {
             let p = self.nodes[n].path.clone();
             self.refuse(p, "a using declaration's record on a reference cycle");
         }
-        if self.pl.is_some() {
-            // Plain dumps: no object; the continuation adds the resources again
-            // (`Act::usings`). The text names what it needs.
-            let Some(items) = super::origin::elements(h, h.object_slot(o, 2)) else {
-                let p = self.nodes[n].path.clone();
-                self.refuse(p, "a using declaration's record of another shape");
-                return String::from("undefined");
-            };
-            let mut triples = Vec::new();
-            for t in items.chunks(3) {
-                let [v, m, k] = t else { continue };
-                let (v, m) = unwrap_using(h, *v, *m);
-                let ve = self.expr(v, None, None);
-                let me = self.expr(m, None, None);
-                triples.push_out((ve, me, k.as_int().unwrap_or(-1)));
-            }
-            let mut state = Vec::new();
-            for f in fields {
-                if let Some((k, e)) = f.split_once(": ") {
-                    state.push_out((String::from(k), String::from(e)));
-                }
-            }
-            let parts: Vec<String> = triples
-                .iter()
-                .map(|(v, m, k)| cat!(v, ", ", m, ", ", *k))
-                .collect();
-            let fields: Vec<String> = state.iter().map(|(k, e)| cat!(k, ": ", e)).collect();
-            let text = cat!(
-                "$dump.using([",
-                join(&parts, ", "),
-                "], { ",
-                join(&fields, ", "),
-                " })"
-            );
-            self.fl.usings.push(plain::Using {
-                slot: text.clone(),
-                triples,
-                state,
-            });
-            self.nodes[n].loc = text.clone();
-            self.nodes[n].state = State::Done;
-            return text;
-        }
-        let name = self.fresh("u");
-        let state = if fields.is_empty() {
-            String::new()
-        } else {
-            cat!(", { ", join(&fields, ", "), " }")
+        // Plain dumps: no object; the continuation adds the resources again
+        // (`Act::usings`). The text names what it needs.
+        let Some(items) = super::origin::elements(h, h.object_slot(o, 2)) else {
+            let p = self.nodes[n].path.clone();
+            self.refuse(p, "a using declaration's record of another shape");
+            return String::from("undefined");
         };
-        self.line(cat!(name, " = $dump.using(", res, state, ");"), before);
-        self.nodes[n].loc = name.clone();
+        let mut triples = Vec::new();
+        for t in items.chunks(3) {
+            let [v, m, k] = t else { continue };
+            let (v, m) = unwrap_using(h, *v, *m);
+            let ve = self.expr(v, None, None);
+            let me = self.expr(m, None, None);
+            triples.push_out((ve, me, k.as_int().unwrap_or(-1)));
+        }
+        let mut state = Vec::new();
+        for f in fields {
+            if let Some((k, e)) = f.split_once(": ") {
+                state.push_out((String::from(k), String::from(e)));
+            }
+        }
+        let parts: Vec<String> = triples
+            .iter()
+            .map(|(v, m, k)| cat!(v, ", ", m, ", ", *k))
+            .collect();
+        let fields: Vec<String> = state.iter().map(|(k, e)| cat!(k, ": ", e)).collect();
+        let text = cat!(
+            "$dump.using([",
+            join(&parts, ", "),
+            "], { ",
+            join(&fields, ", "),
+            " })"
+        );
+        self.fl.usings.push(plain::Using {
+            slot: text.clone(),
+            triples,
+            state,
+        });
+        self.nodes[n].loc = text.clone();
         self.nodes[n].state = State::Done;
-        name
+        text
     }
 
     fn closure_expr(&mut self, k: usize) -> String {
@@ -1312,7 +1283,6 @@ impl Dumper<'_> {
             }
             // The promise settled: calling them does nothing.
             None => {
-                self.ns = true;
                 cat!(self.rt(), "spent(", kind, ")")
             }
         }
@@ -1380,26 +1350,8 @@ impl Dumper<'_> {
             return String::new();
         }
         self.nodes[n].state = State::Busy;
-        let h = self.h;
         let before = self.fns_read.get();
-        if self.pl.is_some() {
-            return self.plain_helper_expr(n, o, before);
-        }
-        let slots: Vec<String> = (0..h.object_slot_count(o))
-            .map(|i| self.expr(h.object_slot(o, i), None, None))
-            .collect();
-        if slots.iter().any(String::is_empty) {
-            let p = self.nodes[n].path.clone();
-            self.refuse(p, "an iterator helper on a reference cycle");
-        }
-        let name = self.fresh("i");
-        self.line(
-            cat!(name, " = $dump.iteratorHelper([", join(&slots, ", "), "]);"),
-            before,
-        );
-        self.nodes[n].loc = name.clone();
-        self.nodes[n].state = State::Done;
-        name
+        self.plain_helper_expr(n, o, before)
     }
 
     /// A RegExp String Iterator (`matchAll`): `$dump.regexpIterator(re, s, flags)` over
@@ -1556,14 +1508,9 @@ impl Dumper<'_> {
                 } = &self.fl.calls[c];
                 let state = state.as_deref().map_or(String::new(), |s| cat!(", ", s));
                 // A plain dump asks the host for the call (D2832).
-                let call = if self.pl.is_some() {
-                    " = $djs.resume("
-                } else {
-                    " = $dump.pending("
-                };
                 let l = cat!(
                     name,
-                    call,
+                    " = $djs.resume(",
                     *id,
                     ", ",
                     quote(f),
@@ -1779,7 +1726,6 @@ impl Dumper<'_> {
                 .and_then(|p| p.value())
         };
         let rejected = |d: &mut Self, e: Value| {
-            d.ns = true;
             let r = d.expr(e, None, None);
             cat!(d.rt(), "rejected(", r, ")")
         };
@@ -1883,7 +1829,7 @@ impl Dumper<'_> {
             let mut cell = None;
             let (what, e) = match slot.holds {
                 Holds::Hidden if class_hidden(&slot.name) => ("binding", "undefined".into()),
-                Holds::Binding | Holds::Hidden if self.pl.is_some() && slot.boxed => {
+                Holds::Binding | Holds::Hidden if slot.boxed => {
                     let e = self.slot_expr(v, slot.boxed);
                     // A variable closures share: the factory's cell.
                     cell = self
@@ -1921,13 +1867,11 @@ impl Dumper<'_> {
                 }
             };
             parts.push_out((what, e.clone()));
-            if self.pl.is_some() {
-                pslots.push_out(plain::Slot {
-                    name: slot.name.clone(),
-                    value: e.clone(),
-                    cell,
-                });
-            }
+            pslots.push_out(plain::Slot {
+                name: slot.name.clone(),
+                value: e.clone(),
+                cell,
+            });
             slots.push_out(cat!(key, ": ", e));
         }
         if !slots.is_empty() {
@@ -1978,85 +1922,82 @@ impl Dumper<'_> {
             let info = self.site_info(f, &site, &name);
             self.fl.sites.push(info);
         }
-        if self.pl.is_some() {
-            let fnode = self.node_of(fv(0)).unwrap_or(usize::MAX);
-            let ftext = if fnode == usize::MAX {
-                String::new()
-            } else {
-                self.fn_source(fnode).unwrap_or_default()
-            };
-            // A generator's prototype: its continuation's (the origin's function made
-            // from its text has a `prototype` of its own).
-            let proto = (kind != suspend::ASYNC)
-                .then(|| self.nodes[n].v.as_object())
-                .flatten()
-                .map(|g| {
-                    let p = h.get_prototype_of(g).map_or(Value::NULL, Value::object);
-                    self.expr(p, None, None)
-                });
-            let sp = self.fl.supers.iter().find(|x| x.0 == a).map(|x| x.1);
-            let super_proto = sp.map(|p| self.expr(p, None, None));
-            let peers = match fv(0).as_object() {
-                Some(f)
-                    if matches!(
-                        site.kind,
-                        SiteKind::ForAwaitClose | SiteKind::YieldStarAwait
-                    ) =>
-                {
-                    self.peer_sites(f, &site)
-                }
-                _ => Vec::new(),
-            };
-            let usings = pslots
-                .iter()
-                .filter(|s| s.name.starts_with("using.record@"))
-                .filter_map(|s| {
-                    let u = self.fl.usings.iter().find(|u| u.slot == s.value)?;
-                    Some(plain::Using {
-                        slot: s.name.clone(),
-                        triples: u.triples.clone(),
-                        state: u.state.clone(),
-                    })
-                })
-                .collect();
-            let rereads = self.rereads(
-                fv(0).as_object(),
-                self.fl.acts[a]
-                    .syntax
-                    .as_deref()
-                    .unwrap_or(&Default::default()),
-                &ftext,
-                &named,
-                &|x| fv(index(x.place)),
-            );
-            let act = plain::Act {
-                rereads,
-                usings,
-                peers,
-                proto,
-                super_proto,
-                name: String::from(name.strip_prefix("$dump.").unwrap_or(&name)),
-                fexpr: fe.clone(),
-                fkind: if fnode == usize::MAX {
-                    0
-                } else {
-                    self.fn_kind(fnode)
-                },
-                ftext,
-                site: site.clone(),
-                syntax: self.fl.acts[a].syntax.clone().unwrap_or_default(),
-                awaiting: awaited,
-                this: this.clone(),
-                slots: pslots,
-                queue: preqs,
-                kind,
-            };
-            let at = self.out.len();
-            if let Some(pl) = self.pl.as_mut() {
-                pl.lines.push_out((at, plain::Rec::Act(pl.acts.len())));
-                pl.acts.push(act);
+        let fnode = self.node_of(fv(0)).unwrap_or(usize::MAX);
+        let ftext = if fnode == usize::MAX {
+            String::new()
+        } else {
+            self.fn_source(fnode).unwrap_or_default()
+        };
+        // A generator's prototype: its continuation's (the origin's function made
+        // from its text has a `prototype` of its own).
+        let proto = (kind != suspend::ASYNC)
+            .then(|| self.nodes[n].v.as_object())
+            .flatten()
+            .map(|g| {
+                let p = h.get_prototype_of(g).map_or(Value::NULL, Value::object);
+                self.expr(p, None, None)
+            });
+        let sp = self.fl.supers.iter().find(|x| x.0 == a).map(|x| x.1);
+        let super_proto = sp.map(|p| self.expr(p, None, None));
+        let peers = match fv(0).as_object() {
+            Some(f)
+                if matches!(
+                    site.kind,
+                    SiteKind::ForAwaitClose | SiteKind::YieldStarAwait
+                ) =>
+            {
+                self.peer_sites(f, &site)
             }
-        }
+            _ => Vec::new(),
+        };
+        let usings = pslots
+            .iter()
+            .filter(|s| s.name.starts_with("using.record@"))
+            .filter_map(|s| {
+                let u = self.fl.usings.iter().find(|u| u.slot == s.value)?;
+                Some(plain::Using {
+                    slot: s.name.clone(),
+                    triples: u.triples.clone(),
+                    state: u.state.clone(),
+                })
+            })
+            .collect();
+        let rereads = self.rereads(
+            fv(0).as_object(),
+            self.fl.acts[a]
+                .syntax
+                .as_deref()
+                .unwrap_or(&Default::default()),
+            &ftext,
+            &named,
+            &|x| fv(index(x.place)),
+        );
+        let act = plain::Act {
+            rereads,
+            usings,
+            peers,
+            proto,
+            super_proto,
+            name: String::from(name.strip_prefix("$dump.").unwrap_or(&name)),
+            fexpr: fe.clone(),
+            fkind: if fnode == usize::MAX {
+                0
+            } else {
+                self.fn_kind(fnode)
+            },
+            ftext,
+            site: site.clone(),
+            syntax: self.fl.acts[a].syntax.clone().unwrap_or_default(),
+            awaiting: awaited,
+            this: this.clone(),
+            slots: pslots,
+            queue: preqs,
+            kind,
+        };
+        let at = self.out.len();
+        let pl = &mut self.pl;
+        pl.lines.push_out((at, plain::Rec::Act(pl.acts.len())));
+        pl.acts.push(act);
         self.line(
             cat!(
                 name,

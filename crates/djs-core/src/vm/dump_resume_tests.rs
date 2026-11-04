@@ -1263,7 +1263,6 @@ fn plain_chain_program(name: &str, src: &str) -> (Vec<String>, usize, Vec<String
     let mut dumping = true;
     let show = std::env::var("DJS_PLAIN_SHOW").is_ok_and(|v| v == name);
     let mut sizes = Vec::new();
-    let mut texts = Vec::new();
     while let Some(id) = plain_step(&mut vm, &mut lines) {
         if dumping {
             match plain_dump(&vm) {
@@ -1278,7 +1277,6 @@ fn plain_chain_program(name: &str, src: &str) -> (Vec<String>, usize, Vec<String
                     Ok(v) => {
                         links += 1;
                         sizes.push(text.len());
-                        texts.push(text.clone());
                         vm = v;
                         let id = vm.pending_host_calls().iter().min().copied();
                         settle(&mut vm, id.expect("the dump's open call"));
@@ -1304,16 +1302,13 @@ fn plain_chain_program(name: &str, src: &str) -> (Vec<String>, usize, Vec<String
     // Origin tracking keeps a chain's dumps the size of their state (D2870): a
     // continuation of a continuation is written from the original's text, so link k
     // is about as long as a dump of the uninterrupted run at idle point k.
-    // A link may also hold objects the dump runtime made for the previous load (a
-    // `for await`'s `$djs.fromSync` wrapper, where the run has the engine's own record),
-    // written with the runtime's code as their closures' text: that text does not count.
-    let runtime = super::dump_runtime::script_text();
+    // Objects the dump runtime made for the previous load are written as its helper
+    // calls again (D2951): no link carries the runtime's code.
     for (k, &len) in sizes.iter().enumerate() {
         let fresh = plain_dump_at(src, k + 1).len();
-        let own = len - runtime_bytes(&texts[k], &runtime);
         // (A link may be smaller: a binding its continuation leaves out as dead, D2911,
         // keeps no data in the next dump.)
-        if len > fresh + 512 && own > fresh + 512 {
+        if len > fresh + 512 {
             failed.push(alloc::format!(
                 "{name}: link {} is {len} bytes, a dump of the run there {fresh}",
                 k + 1
@@ -1321,22 +1316,6 @@ fn plain_chain_program(name: &str, src: &str) -> (Vec<String>, usize, Vec<String
         }
     }
     (failed, links, refused)
-}
-
-/// The bytes of `text`'s lines that copy the dump runtime's code (a 48-byte stretch of it).
-fn runtime_bytes(text: &str, runtime: &str) -> usize {
-    text.lines()
-        .filter(|l| {
-            let b = l.as_bytes();
-            b.len() >= 48
-                && (0..=b.len() - 48).any(|i| {
-                    l.is_char_boundary(i)
-                        && l.is_char_boundary(i + 48)
-                        && runtime.contains(&l[i..i + 48])
-                })
-        })
-        .map(|l| l.len() + 1)
-        .sum()
 }
 
 #[test]

@@ -19,9 +19,6 @@ impl Dumper<'_> {
     /// Computes the text a plain dump writes for every class it holds that has static
     /// code ([`Dumper::fn_source`] returns it).
     pub(super) fn blank_class_statics(&mut self) {
-        if self.pl.is_none() {
-            return;
-        }
         let h = self.h;
         for n in 0..self.nodes.len() {
             if !self.is_class_node(n) {
