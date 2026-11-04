@@ -290,7 +290,7 @@ pub fn explain_dump(
     // and its format.
     let calls: Vec<(u32, String, Option<String>)>;
     let handles: Vec<(Value, String)>;
-    let mut held = Vec::new();
+    let held: Vec<(String, Handle)>;
     let format: String;
     if let Some(ts) = crate::dumps::plain_format(text) {
         // A plain dump runs to its first stop; nothing it prints is shown.
@@ -312,10 +312,11 @@ pub fn explain_dump(
                 (id, name.unwrap_or_default(), state.map(|(_, s)| s.clone()))
             })
             .collect();
-        handles = match vm.outcome() {
-            Some(Ok(v)) if vm.promise_state(v).is_some() => vec![(v, String::from("run"))],
-            _ => Vec::new(),
-        };
+        held = crate::dumps::plain_handles(&mut vm);
+        handles = held
+            .iter()
+            .map(|(n, h)| (vm.heap().get_handle(*h), n.clone()))
+            .collect();
         format = format!("3{}", if ts { ", TypeScript" } else { "" });
     } else {
         // `--explain` answers nothing, so any host function name loads: names the CLI does

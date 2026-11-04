@@ -8,7 +8,7 @@
 //! are served while the Script is evaluated, and `$djs` is deleted after that.
 
 use djs_core::compiler::CompileOptions;
-use djs_core::heap::Handle;
+use djs_core::heap::{Handle, ObjectClass};
 use djs_core::value::Value;
 use djs_core::vm::dump::{DumpOptions, Dumped};
 use djs_core::vm::dump_load::{LoadOptions, Loaded, dump_format};
@@ -180,6 +180,43 @@ pub fn run_plain(
         tools.restore_state(s);
     }
     Ok(load)
+}
+
+/// The values a loaded plain dump names for the host (D2895), from its Script's
+/// completion value: a promise is the run (`run`); a null-prototype object holds several
+/// by name (the REPL's waiting inputs). Handles the caller drops.
+pub fn plain_handles(vm: &mut Vm) -> Vec<(String, Handle)> {
+    let Some(Ok(v)) = vm.outcome() else {
+        return Vec::new();
+    };
+    let heap = vm.heap_mut();
+    if vm_promise(heap, v) {
+        return heap
+            .new_handle(v)
+            .map(|h| vec![(String::from("run"), h)])
+            .unwrap_or_default();
+    }
+    let Some(o) = v.as_object().filter(|&o| {
+        heap.object_class(o) == ObjectClass::Ordinary && heap.get_prototype_of(o).is_none()
+    }) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for k in heap.own_keys(o) {
+        let Some(v) = heap.get_own_property(o, k).and_then(|p| p.value()) else {
+            continue;
+        };
+        let name = heap.atom_name(k);
+        if let Ok(h) = heap.new_handle(v) {
+            out.push((name, h));
+        }
+    }
+    out
+}
+
+fn vm_promise(heap: &djs_core::heap::Heap, v: Value) -> bool {
+    v.as_object()
+        .is_some_and(|o| heap.object_class(o) == ObjectClass::Promise)
 }
 
 /// The text is a dump (of any format): the loader's own test, not a prefix match.

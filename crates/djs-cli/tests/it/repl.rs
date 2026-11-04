@@ -389,6 +389,21 @@ fn restore_a_waiting_dump() {
              AABBB\ntotal 5\n[run] 5\nno open calls\n"
         ),
     );
+    // A plain dump (D2830) of two waiting inputs and a value: its completion value names
+    // them (D2895), and the calls' states their origins (D2894).
+    check(
+        &format!(
+            ".restore {dir}/inputs.plain.js\n.pending\n.resolve 2 \"AAA\"\n.resolve 3 \"x\"\n.pending\n"
+        ),
+        &format!(
+            "loaded {dir}/inputs.plain.js into a fresh VM\n[done] 5\n\
+             waiting: #2 tools.read({{\"path\":\"a\"}})\n\
+             waiting: #3 tools.read({{\"path\":\"b\"}})\n\
+             #2 tools.read({{\"path\":\"a\"}})  input 1, at {dir}/inputs.plain.js:9:60\n\
+             #3 tools.read({{\"path\":\"b\"}})  input 2, at {dir}/inputs.plain.js:10:52\n\
+             [input 1] 3\nno open calls\n"
+        ),
+    );
     // `later(v)` calls are answered at once; the loader's fixtures run to their end.
     let plan = concat!(
         env!("CARGO_MANIFEST_DIR"),

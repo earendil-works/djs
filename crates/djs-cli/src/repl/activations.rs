@@ -304,8 +304,10 @@ pub fn call_promise(heap: &Heap, call_id: u32) -> Option<Obj> {
     let a = heap.arena();
     heap.cells()
         .filter(|c| c.kind == CellKind::HostCall)
-        .find(|c| a.get::<u32>(c.offset, HostCall::ID) == call_id)
-        .and_then(|c| a.get::<Value>(c.offset, HostCall::PROMISE).as_object())
+        .filter(|c| a.get::<u32>(c.offset, HostCall::ID) == call_id)
+        // (Dead cells of finished calls may hold the id too: a plain dump's parked
+        // `$djs.resume` call has the id of the call it opens, D2890.)
+        .find_map(|c| a.get::<Value>(c.offset, HostCall::PROMISE).as_object())
 }
 
 /// The activations waiting on `p`, directly or through other activations and promise

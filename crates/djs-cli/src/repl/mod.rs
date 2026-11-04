@@ -1165,22 +1165,47 @@ impl Repl {
     /// function there yet.
     fn restore_dump(&mut self, arg: &str, src: &str) {
         self.replace_vm(new_vm(self.gc_stress));
-        if crate::dumps::plain_format(src).is_some() {
-            return self.restore_plain(arg, src);
-        }
-        let loaded = match crate::dumps::load(&mut self.vm, &mut self.tools, src) {
-            Ok(l) => l,
-            Err(e) => {
-                println!("cannot load {arg}: {e}");
-                return;
-            }
-        };
+        // The values the dump names, and the open calls' states.
+        type Named = Vec<(String, Handle)>;
+        let (handles, states): (Named, Vec<(u32, String)>) =
+            if crate::dumps::plain_format(src).is_some() {
+                // A plain dump (D2830) is a Script: the fresh VM runs it, printing as inputs do.
+                let mut log = |vm: &Vm, args: &[Value]| {
+                    let parts: Vec<String> = args
+                        .iter()
+                        .map(|&a| inspect::log_arg(vm.heap(), a))
+                        .collect();
+                    println!("{}", parts.join(" "));
+                };
+                let r = crate::dumps::run_plain(&mut self.vm, &mut self.tools, src, arg, &mut log);
+                match r {
+                    Ok(l) => (crate::dumps::plain_handles(&mut self.vm), l.states),
+                    Err(e) => {
+                        println!("cannot load {arg}: {e}");
+                        return;
+                    }
+                }
+            } else {
+                match crate::dumps::load(&mut self.vm, &mut self.tools, src) {
+                    Ok(l) => {
+                        let states = l
+                            .calls
+                            .iter()
+                            .filter_map(|c| Some((c.id, c.state.clone()?)))
+                            .collect();
+                        (l.handles, states)
+                    }
+                    Err(e) => {
+                        println!("cannot load {arg}: {e}");
+                        return;
+                    }
+                }
+            };
         println!("loaded {arg} into a fresh VM");
         self.dump_file = Some(arg.to_string());
         // New inputs are numbered after the restored ones (`input 3`), so labels stay
         // unique handle names for later dumps.
-        self.inputs = loaded
-            .handles
+        self.inputs = handles
             .iter()
             .filter_map(|(n, _)| {
                 let n = n.strip_prefix("input ")?;
@@ -1188,12 +1213,13 @@ impl Repl {
             })
             .max()
             .unwrap_or(0);
-        for c in &loaded.calls {
-            let o = c.state.as_deref().and_then(Tools::state_origin);
+        for id in self.vm.pending_host_calls() {
+            let state = states.iter().find(|(i, _)| *i == id);
+            let o = state.and_then(|(_, s)| Tools::state_origin(s));
             self.origins
-                .insert(c.id, o.unwrap_or_else(|| String::from("the dump")));
+                .insert(id, o.unwrap_or_else(|| String::from("the dump")));
         }
-        for (name, h) in loaded.handles {
+        for (name, h) in handles {
             let v = self.vm.heap().get_handle(h);
             match self.vm.promise_state(v) {
                 Some(None) => {
@@ -1208,50 +1234,6 @@ impl Repl {
         }
         self.pending_after_restore();
         // An idle point: `later` calls (and scripted answers) are answered at once.
-        self.current = String::from("the dump");
-        if let Outcome::Stopped(why) = self.pump(false) {
-            println!("{why}");
-        }
-        self.check_waiting();
-        self.report_rejections();
-    }
-
-    /// `.restore` of a plain dump (D2830): the fresh VM runs it as a Script. Its run's
-    /// promise (the completion value) becomes the waiting input `run`.
-    fn restore_plain(&mut self, arg: &str, src: &str) {
-        let mut log = |vm: &Vm, args: &[Value]| {
-            let parts: Vec<String> = args
-                .iter()
-                .map(|&a| inspect::log_arg(vm.heap(), a))
-                .collect();
-            println!("{}", parts.join(" "));
-        };
-        let loaded =
-            match crate::dumps::run_plain(&mut self.vm, &mut self.tools, src, arg, &mut log) {
-                Ok(l) => l,
-                Err(e) => {
-                    println!("cannot load {arg}: {e}");
-                    return;
-                }
-            };
-        println!("loaded {arg} into a fresh VM");
-        self.dump_file = Some(arg.to_string());
-        self.inputs = 0;
-        for id in self.vm.pending_host_calls() {
-            let o = loaded.states.iter().find(|(i, _)| *i == id);
-            let o = o.and_then(|(_, s)| Tools::state_origin(s));
-            self.origins
-                .insert(id, o.unwrap_or_else(|| String::from("the dump")));
-        }
-        if let Some(Ok(v)) = self.vm.outcome()
-            && self.vm.promise_state(v) == Some(None)
-        {
-            self.vm.mark_promise_handled(v);
-            let h = self.vm.heap_mut().new_handle(v).expect("oom");
-            self.waiting
-                .push(Waiting::from_handle_name(String::from("run"), h));
-        }
-        self.pending_after_restore();
         self.current = String::from("the dump");
         if let Outcome::Stopped(why) = self.pump(false) {
             println!("{why}");

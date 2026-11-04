@@ -9206,3 +9206,13 @@ would make every consumer skip it and still leave the types in the spliced text.
 Class constructors and `Function`-constructor sources record a `Params` part as well
 (neither can have sites today), and a declaration carries `Decl::at`, an offset inside
 its declarator, so a statement's names can be told apart by declarator.
+
+## D2895: Several handles in a plain dump: a null-prototype object as the completion value
+date: 2026-11-04 · by: pjh · issue: 0204
+Agreed with 0201's exporter. A plain dump's Script completes with what the host named:
+nothing (no handles), the value itself when the one handle is named `run` (the Sandbox,
+pi, `djs run`), else `({ __proto__: null, "input 2": …, "$entry": … })`, every handle by
+name in the host's order. By name, not by count: the loading host (the REPL's `.restore`
+of a file) need not know how many the dump holds, and a single value may be an object
+itself. Loading, the CLI takes a promise as `run` and a null-prototype object's own
+properties as the handles (`dumps::plain_handles`); the Sandbox and pi only name `run`.
