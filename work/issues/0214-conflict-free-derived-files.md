@@ -1,7 +1,7 @@
 # 0214: Conflict-free derived files: smap summary and the dump-size score
 
-status: open
-agent: -
+status: in-progress
+agent: pjd
 branch: issue/0214-conflict-free-derived-files
 depends-on: -
 guide: -
