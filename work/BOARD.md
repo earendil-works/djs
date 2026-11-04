@@ -17,6 +17,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
+| - | Gate: rustc incremental corruption in .worktrees/gate (linker Undefined _anon.*.llvm.*): auto-clear incremental dirs and retry once, or CARGO_INCREMENTAL=0 for gate builds (measure) | - |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | 0191 | Spill at suspend (SM step 3) | 0190 (agent sm) |
 | 0192 | Constructs into slots (SM step 4) | 0191 (agent sm) |
