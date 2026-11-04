@@ -309,10 +309,16 @@ def jobs():
           cls="rust", needs=["build:difftest"], summary=r"^(stress|ratchet):"),
         # 0201: plain dumps (D2830) at every idle point of the corpus (chains of at most 50),
         # continued in djs and in node; refusals only as tests/plain-refusals.txt lists.
-        J("plain dumps (djs and node)", f'd=$(mktemp -d); {G}/bin/djs-difftest --engine djs --ratchet'
+        # 0207: and their size, against tests/scores/dump-size.tsv (D2901), with the v2
+        # programs' dumps (plain_dumps_at_every_idle_point writes them to DJS_PLAIN_OUT).
+        J("plain dumps (djs and node)", f'd=$(mktemp -d); v=$(mktemp -d); {G}/bin/djs-difftest --engine djs --ratchet'
           f' --quiet --no-diff --plain-out "$d" && node scripts/plain-node.mjs "$d"'
-          ' --refusals tests/plain-refusals.txt; rc=$?; rm -rf "$d"; exit $rc',
-          cls="rust", needs=["build:difftest"], summary=r"^(stress|ratchet|plain-node):"),
+          ' --refusals tests/plain-refusals.txt'
+          f' && DJS_PLAIN_OUT="$v" {tests} {G}/core-tests.json -- plain_dumps_at_every_idle_point'
+          ' && node scripts/dump-size/dump-size.ts --score tests/scores/dump-size.tsv corpus="$d" v2="$v";'
+          ' rc=$?; rm -rf "$d" "$v"; exit $rc',
+          cls="rust", needs=["build:difftest", "build:core-tests"],
+          summary=r"^(stress|ratchet|plain-node|dump-size):"),
         J("difftest (bytecode backend)", f"{G}/bin/djs-difftest --engine djs --backend bytecode --ratchet"
           f" --quiet --no-diff --times {G}/times/difftest-bytecode.tsv",
           cls="rust", needs=["build:difftest"], summary=r"^ratchet:"),

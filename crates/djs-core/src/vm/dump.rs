@@ -2682,6 +2682,16 @@ impl<'a> Dumper<'a> {
             .unwrap_or_default()
     }
 
+    /// Whether function `n` has its own `name` and it is the empty string.
+    fn fn_name_is_empty(&self, n: usize) -> bool {
+        let h = self.h;
+        let o = self.nodes[n].v.as_object().expect("a function");
+        matches!(
+            h.get_own_property(o, atoms::NAME),
+            Some(Property::Data { value, .. }) if value.as_string().is_some_and(|s| text_of(h, s).is_empty())
+        )
+    }
+
     fn fn_name_matches(&self, n: usize, ctx_name: Option<&str>) -> bool {
         let Some(src) = self.fn_source(n) else {
             return false;
@@ -2928,6 +2938,9 @@ impl<'a> Dumper<'a> {
             classes.push_out(pending.remove(ready));
         }
         let mut locals: Vec<String> = alloc::vec![String::new(); closures.len()];
+        // The name each closure's text gives it where it is written: its key, unless
+        // written as `(0, f)`.
+        let mut given: Vec<String> = keys.clone();
         // What a plain dump needs of the factory, by scope.
         let mut rec: Vec<plain::Scope> = parent
             .iter()
@@ -3116,7 +3129,14 @@ impl<'a> Dumper<'a> {
                         (src, caps_of(self, c))
                     } else {
                         let e = self.fn_expr(c, &src);
-                        (cat!(key, ": ", e), caps_of(self, c))
+                        if anonymous_form(self.fn_kind(c), &src) && self.fn_name_is_empty(c) {
+                            // `(0, f)`: not named by the key, so no `name` fixup
+                            // after the factory (0207, D2902).
+                            given[j] = String::new();
+                            (cat!(key, ": (0, ", e, ")"), caps_of(self, c))
+                        } else {
+                            (cat!(key, ": ", e), caps_of(self, c))
+                        }
                     }
                 };
                 rec[s].props.push_out(plain::Prop {
@@ -3182,7 +3202,7 @@ impl<'a> Dumper<'a> {
                 let l = self.nodes[c].loc.clone();
                 self.class_done(c, &l, Some(&locals[j]));
             } else {
-                self.fn_patches(c, Some(&keys[j]));
+                self.fn_patches(c, Some(&given[j]));
             }
         }
         self.groups[g].state = State::Done;

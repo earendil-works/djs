@@ -83,6 +83,19 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   for the owner on E–I. Next: A (record defaults) and B (`(0, f)` members) as small
   merges, C after checking with pjr.
 
+- Owner/coordinator decisions: A, B, score approved; C approved (after pjr's slice, keep
+  bindings named by scaf/cmap and bindings closures in K may capture); E–J replaced by
+  D2834/D2835 ($djs host object with helpers and `source(ref)`, header `"djs-dump";`).
+  Order: (a) header rename, (b) A+B+score, (c) helpers on $djs + js/src/dump-runtime.js,
+  (d) $djs.source, (e) C.
+- pi failures (release plain): 3x "exposes tools under normalized identifiers" = refusal
+  "stopped again inside its rewritten statement" for `return { calls: [await a(), await
+  a(), await a()] }` (dump_origin, 0203's open work); reported to the coordinator.
+- Slice (b): A = D2900 (record defaults), B = D2902 (`key: (0, f)`), score = D2901
+  (tests/scores/dump-size.tsv, in the gate leg "plain dumps (djs and node)").
+  Before → after: corpus w/o env 8,827,779 → 7,996,238 raw (−9.4%), 2,623,606 →
+  2,555,267 gzip (−2.6%); v2 533,139 → 526,329 raw (−1.3%), 191,848 → 190,536 gzip.
+
 ## Follow-ups
 
 ## Result

@@ -9427,3 +9427,32 @@ depend on `this` or on each other through the object.
 date: 2026-11-04 · by: owner · issue: 0207
 djs has never been released, so the format carries no version number (D024); the TypeScript
 variant is `"djs-dump typescript";` while function texts can still be TypeScript.
+
+## D2900: A plain dump's `$djs` record leaves default fields out
+date: 2026-11-04 · by: pjs · issue: 0207
+`Object.defineProperty(K, "$djs", { value: { f, at, segs, scaf, cmap } })` is written
+with only the fields that differ from their default: `at` (informative, read by no one)
+when the site is not `await#1`, `segs`, `scaf` and `cmap` when they are not empty. The
+reader (origin tracking) takes a missing array as empty. Records are the part of a dump
+that gzip helps least (numbers); this saves ~3% of a pi session's dump.
+
+## D2901: The plain dump size score
+date: 2026-11-04 · by: pjs · issue: 0207
+tests/scores/dump-size.tsv holds the total raw and gzip -9 bytes of the plain dumps at
+every idle point of the corpus (difftest `--plain-out`) and of the v2/golden programs
+(`plain_dumps_at_every_idle_point` with `DJS_PLAIN_OUT`), measured by
+`scripts/dump-size/dump-size.ts --score`. The corpus counts without its test environment
+(`env`: the difftest prelude's state and the codemode-harvest harness with its synthetic
+tool results, 64% of the corpus's bytes), which a pi session never dumps. The gate leg
+"plain dumps (djs and node)" fails when a total grows beyond a small tolerance (the wall
+clock's digits in the dumps, zlib versions); a total well below its line asks for
+`--update`, so the score is a ratchet.
+
+## D2902: Anonymous closures in a scope factory are written as `key: (0, f)`
+date: 2026-11-04 · by: pjs · issue: 0207
+A closure that is a member of its scope factory's returned object (`$f33: (args) => …`)
+would be named by the key, so the dump fixed its `name` back to `""` afterwards with
+`Object.defineProperty(f, "name", { value: "" })`. An anonymous function whose own `name`
+is the empty string is now written `$f33: (0, (args) => …)`: not a direct function
+definition, so the key does not name it, and no fixup follows (−9% of the corpus's
+plain dump bytes, mostly the prelude's closures).

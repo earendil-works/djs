@@ -528,6 +528,12 @@ type R<T> = Result<T, String>;
 /// Whether `t` is a function expression (its body runs only when called).
 fn is_fn_text(t: &str) -> bool {
     let t = t.trim_start();
+    // `(0, f)`: an anonymous function kept anonymous (D2902).
+    if let Some(inner) = t.strip_prefix("(0, ").and_then(|t| t.strip_suffix(')'))
+        && is_fn_text(inner)
+    {
+        return true;
+    }
     let t = t.strip_prefix("async ").map_or(t, str::trim_start);
     if t.starts_with("function") {
         return true;
