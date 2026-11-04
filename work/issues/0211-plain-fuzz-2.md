@@ -18,6 +18,19 @@ corpus cases (plain-xfail for wrong results until fixed). Same throttling as 020
 jobs, wait while load > 30) and gate rules (batch merges, check slim/test262-slim locally).
 
 ## Log
+- gen.mjs widened (D2942): Map/Set/Date/RegExp/typed arrays/Errors, symbol keys, tricky
+  strings, JSON round trips, class accessors, static fields/blocks (default on since
+  0209's D2950; `--no-statics`), TypeScript bodies for seeds divisible by 3. fuzz.mjs: .ts
+  cases, `--known`, reduce keeps the extension and parse-checks TS with node's stripper.
+- Seeds 2001–3600 (~22k idle points), every plain run ends normally. Batch 1 (instance
+  before its callback, for-await + Promise.all, async method of a temporary, template with a
+  plain first part, static field reading a loop variable, class with an async method in a
+  loop, TS parameter property): all fixed on main by the time of the rebase. Batch 2:
+  sync generator + Promise.all body (refused, pjs).
+- Cases: codemode/plain-fuzz/{async-method-of-temporary, static-field-reads-loop-variable,
+  template-plain-part-then-awaits, class-with-async-method-in-loop,
+  generator-promise-all-body}, ts/plain-fuzz-parameter-property.ts. Mine for instance-
+  before-callback and for-await + Promise.all were dropped for main's own versions.
 
 ## Follow-ups
 

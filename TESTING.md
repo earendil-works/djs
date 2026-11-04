@@ -293,7 +293,9 @@ counted, not failures, and the mark is reported as stale once both continue iden
 (D2941).
 The plain-dump fuzzer (0208, D2940) finds such bugs: `node scripts/plain-fuzz/fuzz.mjs
 --seed S --cases N --time SECS` generates codemode-like programs from consecutive seeds
-(scripts/plain-fuzz/gen.mjs; `fuzz.mjs gen S` prints one) and runs each with a chain of
+(scripts/plain-fuzz/gen.mjs, D2942: JSON data, Maps, Sets, Dates, RegExps, typed arrays,
+Errors, symbol keys, classes with accessors and static members; every third seed a
+TypeScript body; `fuzz.mjs gen S` prints one) and runs each with a chain of
 plain dumps starting at every idle point, in djs and node, then lists the distinct
 failure signatures with the smallest program of each. `fuzz.mjs check FILE...` runs given
 programs (case bodies) the same way, and `fuzz.mjs reduce FILE --sig TEXT` shrinks one

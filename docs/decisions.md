@@ -9883,3 +9883,14 @@ differs more), `static n = $dump.vN` (the values must exist before the class, wh
 on cycles and for classes placed in a continuation), refusing classes with static code.
 Computed keys, which also run at evaluation, are refused unless literal or a well-known
 symbol, as before.
+
+## D2942: The plain-dump fuzzer's second round generates wider values and TypeScript bodies
+date: 2026-11-05 · by: pjz · issue: 0211
+gen.mjs's programs now also hold Maps, Sets, Dates, RegExps (with `lastIndex` state),
+typed arrays (views on part of a buffer), Errors with `cause` and own properties, symbol
+keys, strings with escapes, line separators and astral characters, JSON round trips, class
+accessors, static fields and static blocks with side effects; every third seed is a
+TypeScript body (annotations, interfaces, generics, `as`/`satisfies`/`!`, parameter
+properties, sometimes an enum). What a program returns shows those values' state (a Map's
+entries, a RegExp's `lastIndex`). `--no-statics` leaves the static members out; `--known
+FILE` folds reported signatures into one line. Round-1 seeds give other programs now.
