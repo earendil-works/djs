@@ -102,6 +102,7 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
         block_index: 0,
         uses_arguments: false,
         arrow: act.fkind == crate::bytecode::template::func_flags::KIND_ARROW,
+        params: Vec::new(),
     };
     let body = g.body()?;
     // The body's `using` resources are disposed at its end: a site there.
@@ -116,29 +117,125 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
     } else {
         s("\n}")
     };
+    // The frame's values the body declares are K's parameters, its call's arguments
+    // (D2909).
+    let names: Vec<String> = g.params.iter().map(|p| p.0.clone()).collect();
+    let ps = join(&names, ", ");
     let head = match (g.arrow, act.kind) {
-        (true, suspend::ASYNC) => "async () => {\n",
-        (true, _) => "() => {\n",
-        (false, suspend::ASYNC) => "async function () {\n",
-        (false, suspend::GENERATOR) => "function* () {\n",
-        (false, _) => "async function* () {\n",
+        (true, suspend::ASYNC) => cat!("async (", ps, ") => {\n"),
+        (true, _) => cat!("(", ps, ") => {\n"),
+        (false, suspend::ASYNC) => cat!("async function (", ps, ") {\n"),
+        (false, suspend::GENERATOR) => cat!("function* (", ps, ") {\n"),
+        (false, _) => cat!("async function* (", ps, ") {\n"),
     };
+    let args: Vec<String> = g.params.iter().map(|p| p.1.clone()).collect();
     match &act.super_proto {
         // A method of an object whose prototype is the original's home object's: its
         // `super` reads what the original's does. Offsets (`segs`, `scaf`) are in the
         // method's own text, which is what origin tracking reads back.
         Some(p) => {
             let m = match act.kind {
-                suspend::ASYNC => "async K() {\n",
-                suspend::GENERATOR => "*K() {\n",
-                _ => "async *K() {\n",
+                suspend::ASYNC => cat!("async K(", ps, ") {\n"),
+                suspend::GENERATOR => cat!("*K(", ps, ") {\n"),
+                _ => cat!("async *K(", ps, ") {\n"),
             };
-            let mut k = g.flatten(P::L(alloc::vec![s(m), P::Helpers, body, close]));
+            let mut k = g.flatten(P::L(alloc::vec![P::S(m), P::Helpers, body, close]));
             k.text = cat!("({ __proto__: ", p, ", ", k.text, " }).K");
+            k.args = args;
             Ok(k)
         }
-        None => Ok(g.flatten(P::L(alloc::vec![s(head), P::Helpers, body, close]))),
+        None => {
+            let mut k = g.flatten(P::L(alloc::vec![P::S(head), P::Helpers, body, close]));
+            k.args = args;
+            Ok(k)
+        }
     }
+}
+
+/// Whether `text` may assign the binding `name` (conservatively: an assignment or update
+/// operator after or an update operator before an occurrence, an occurrence before `of`
+/// or `in`, or inside brackets an assignment follows, a destructuring target).
+fn may_assign(text: &str, name: &str) -> bool {
+    let ident = |c: u8| c.is_ascii_alphanumeric() || c == b'_' || c == b'$';
+    let b = text.as_bytes();
+    let skip = |mut j: usize| {
+        while j < b.len() && b[j].is_ascii_whitespace() {
+            j += 1;
+        }
+        j
+    };
+    // An `=` that assigns: not `==`, `===` or `=>`.
+    let assigns_at =
+        |j: usize| b.get(j) == Some(&b'=') && !matches!(b.get(j + 1), Some(b'=') | Some(b'>'));
+    let mut from = 0;
+    while let Some(at) = text.get(from..).and_then(|t| t.find(name)) {
+        let (s, e) = (from + at, from + at + name.len());
+        from = s + 1;
+        if (s > 0 && ident(b[s - 1])) || (e < b.len() && ident(b[e])) {
+            continue;
+        }
+        let mut p = s;
+        while p > 0 && b[p - 1].is_ascii_whitespace() {
+            p -= 1;
+        }
+        if p >= 2 && (&b[p - 2..p] == b"++" || &b[p - 2..p] == b"--") {
+            return true;
+        }
+        // (A declaration's own initializer is no assignment.)
+        let before = &text[..p];
+        if ["const", "let", "var"].iter().any(|kw| {
+            before.ends_with(kw)
+                && !before[..before.len() - kw.len()]
+                    .ends_with(|c: char| c.is_ascii_alphanumeric() || c == '_' || c == '$')
+        }) {
+            continue;
+        }
+        let j = skip(e);
+        let rest = &b[j..];
+        if assigns_at(j)
+            || rest.starts_with(b"++")
+            || rest.starts_with(b"--")
+            || rest.starts_with(b"of")
+            || rest.starts_with(b"in")
+        {
+            return true;
+        }
+        for op in [
+            "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>=", ">>>=", "**=", "&&=",
+            "||=", "??=",
+        ] {
+            if rest.starts_with(op.as_bytes()) {
+                return true;
+            }
+        }
+        // Out of the brackets around it: an assignment after one is a pattern's.
+        let mut depth = 0i32;
+        let mut k = j;
+        while k < b.len() && k < j + 4000 {
+            match b[k] {
+                b'(' | b'[' | b'{' => depth += 1,
+                b')' | b']' | b'}' => {
+                    depth -= 1;
+                    if depth < 0 {
+                        let n = skip(k + 1);
+                        if assigns_at(n) {
+                            return true;
+                        }
+                        if !matches!(b.get(n), Some(b',') | Some(b']') | Some(b'}') | Some(b')')) {
+                            break;
+                        }
+                        depth = 0;
+                        k = n;
+                        continue;
+                    }
+                }
+                b';' if depth == 0 => break,
+                _ => {}
+            }
+            k += 1;
+        }
+    }
+    false
 }
 
 /// Whether `text` holds the identifier `name` (not as part of a longer one).
@@ -175,6 +272,8 @@ struct G<'a, 'c> {
     block_index: usize,
     uses_arguments: bool,
     arrow: bool,
+    /// The body's bindings K takes as parameters: name, the argument (D2909).
+    params: Vec<(String, String)>,
 }
 
 impl G<'_, '_> {
@@ -344,6 +443,7 @@ impl G<'_, '_> {
         let mut late = Vec::new();
         let mut after = Vec::new();
         let mut info = Vec::new();
+        let block = self.block_index;
         for (name, kind, scope, live) in decls {
             let sname = self.binding_slot(name, *scope);
             info.push_out(BDecl {
@@ -352,6 +452,25 @@ impl G<'_, '_> {
             let (true, Some(sname)) = (*live, sname) else {
                 continue;
             };
+            // A binding of the function's body with its value at hand: a parameter of K,
+            // its value the call's argument (D2909). Not one shared with closures K's
+            // blocks make (a cell), one taking what the dump makes later, a `using`
+            // resource, or a constant the text may assign (which throws).
+            let constant = matches!(kind, DeclKind::Const | DeclKind::FuncName);
+            if block == 0
+                && name != "arguments"
+                && !matches!(kind, DeclKind::Using | DeclKind::AwaitUsing)
+                && !self.ctx.after_go(&sname)
+                && self.ctx.cell(&sname).is_none()
+                && !(constant && may_assign(self.ftext(), name))
+                && let Some(v) = self.ctx.arg(&sname)
+                && v != "$dump.TDZ"
+                && !has_factory_ref(&v)
+            {
+                self.used.push_out(sname);
+                self.params.push_out((name.clone(), v));
+                continue;
+            }
             let value = match self.ctx.cell(&sname) {
                 Some(None) => {
                     self.used.push_out(sname);
@@ -394,7 +513,6 @@ impl G<'_, '_> {
                 early.push_out(line);
             }
         }
-        let block = self.block_index;
         let content = self.ctx.block(block, &info)?;
         self.block_index += 1;
         let mut lines = early;
@@ -2126,6 +2244,7 @@ impl G<'_, '_> {
             scaf: cat!("[", join(&scaf, ","), "]"),
             cmap: cat!("[", join(&cmap, ","), "]"),
             used: self.used,
+            args: Vec::new(),
         }
     }
 

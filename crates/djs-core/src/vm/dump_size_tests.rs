@@ -265,3 +265,38 @@ main();
     let first = plain_dump_at(src, 1);
     assert!(first.contains("of $djs_I($djs_i"), "{first}");
 }
+
+/// The body's bindings are the continuation's parameters, their values its call's
+/// arguments (D2909); a constant the text may assign stays a constant (the assignment
+/// throws), as does one the text destructures into; `arguments` stays K's own binding.
+#[test]
+fn plain_dumps_take_the_frame_as_arguments() {
+    let src = r#"
+async function f(a, b) {
+  let n = a + 1;
+  const c = [b];
+  const k = 3;
+  const d = 4;
+  await later(1);
+  n += k;
+  c.push(arguments.length);
+  try { d = 5; } catch (e) { print(e.name); }
+  try { [k] = [7]; } catch (e) { print(e.name); }
+  print(n, c.join(), k, d);
+}
+f(1, 2);
+"#;
+    let (failed, refused, ok) = plain_check_program("params", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, _, refused) = plain_chain_program("params", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 1, "{ok}");
+    let d = plain_dump_at(src, 1);
+    assert!(d.contains("async function (a, b, n, c) {"), "{d}");
+    assert!(
+        d.contains("const k = 3;") && d.contains("const d = 4;"),
+        "{d}"
+    );
+}

@@ -483,6 +483,8 @@ pub(super) trait Ctx {
     fn after_go(&self, sname: &str) -> bool;
     /// The temporary is evaluated again from the original's text (D2836).
     fn rereads(&self, slot: &str) -> bool;
+    /// The value of slot `name` as an argument of the continuation's call (D2909).
+    fn arg(&mut self, name: &str) -> Option<String>;
     /// The code the dump puts in the continuation's block `index`.
     fn block(&mut self, index: usize, info: &[BDecl]) -> Result<String, String>;
     /// The call of the part of the dump's callback that runs once block `block` of the
@@ -502,6 +504,8 @@ pub(super) struct KText {
     pub cmap: String,
     /// The slots it consumed.
     pub used: Vec<String>,
+    /// Its call's arguments, for its parameters (D2909).
+    pub args: Vec<String>,
 }
 
 #[derive(Default)]
@@ -879,6 +883,14 @@ impl Ctx for C<'_, '_> {
 
     fn rereads(&self, slot: &str) -> bool {
         self.w.ir.acts[self.a].rereads.iter().any(|n| n == slot)
+    }
+
+    fn arg(&mut self, name: &str) -> Option<String> {
+        let sl = self.w.ir.acts[self.a]
+            .slots
+            .iter()
+            .find(|s| s.name == name)?;
+        Some(sl.value.clone())
     }
 
     fn block(&mut self, index: usize, info: &[BDecl]) -> R<String> {
@@ -2287,11 +2299,17 @@ impl W<'_> {
         let generator = act.kind == crate::interp::run::suspend::GENERATOR
             || act.kind == crate::interp::run::suspend::ASYNC_GENERATOR;
         let at_yield = act.site.name.starts_with("yield#") || act.site.name.starts_with("yield*#");
+        // (The continuation's parameters, D2909.)
+        let args = if k.args.is_empty() {
+            String::new()
+        } else {
+            cat!(", ", join(&k.args, ", "))
+        };
         if generator {
             if let Some(p) = &act.proto {
                 lines.push_out(cat!(kref, ".prototype = ", p, ";"));
             }
-            lines.push_out(cat!(me, " = ", kref, ".call(", act.this, ");"));
+            lines.push_out(cat!(me, " = ", kref, ".call(", act.this, args, ");"));
             if at_yield {
                 lines.push_out(cat!(me, ".next();"));
             } else if act.kind != crate::interp::run::suspend::ASYNC_GENERATOR
@@ -2307,9 +2325,9 @@ impl W<'_> {
                 }
             }
         } else if self.is_arrow(a) {
-            lines.push_out(cat!(me, " = (0, ", kref, ")();"));
+            lines.push_out(cat!(me, " = (0, ", kref, ")(", join(&k.args, ", "), ");"));
         } else {
-            lines.push_out(cat!(me, " = ", kref, ".call(", act.this, ");"));
+            lines.push_out(cat!(me, " = ", kref, ".call(", act.this, args, ");"));
         }
         Ok(lines)
     }
