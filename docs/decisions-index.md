@@ -605,3 +605,6 @@ topics when the index is next reorganized.
 - D2771: Tasks: the Sandbox drives the run and the open calls' hooks
 - D2731: Slots name every frame index; the operand stack stays in memory (refines D2720)
 - D2772: The pi adapter's open calls carry their pi ids as call states
+- D2790: No doctests, no empty test binaries, no bgen program in the gate; guarded
+- D2791: One integration-test binary per package
+- D2792: Builds end when cargo does; first runs overlap the legs

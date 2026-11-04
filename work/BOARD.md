@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0197 | Gate waits (doctests, bgen, fresh executables) | gate-speed | .worktrees/gate-speed |
 | 0190 | Slot naming contract (SM step 2), then 0191-0194, 0196 in sequence | sm | .worktrees/sm |
 
 ## Open (ready)
@@ -18,6 +17,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
+| - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | 0191 | Spill at suspend (SM step 3) | 0190 (agent sm) |
 | 0192 | Constructs into slots (SM step 4) | 0191 (agent sm) |
 | 0193 | finally completions in slots (SM step 5) | 0191 (agent sm) |
@@ -90,6 +90,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0055 | Determinism investigation | b30f154 (agent determinism; native/wasm images already identical; issues 0066-0075) |
 | 0079 | Integration efficiency | 6ec6e37 (agent devflow, archived; lock 89% -> 47%; merge-stats.sh; slow-test report) |
 | 0053 | Dev-flow test fixes | e1f4d63 (agent devflow) |
+| 0197 | Gate waits: bgen and doctests legs dropped, one test binary per package, targets guard (D2790-D2792) | 823103e5 (agent gate-speed; core change gate ~65-89 s) |
 | 0189 | Host calls as data: per-call state, {call, save, resume}, tasks; sleep example 77 lines (D2770, D2771) | 891fc12c (agent hostcalls) |
 | 0195 | pi adapter next mode: call ids as call states (D2772) | 6a8759bd (agent hostcalls) |
 | 0188 | Suspension design review: switch to SM (state machines in the compiler); residualizer prototype | d7b62185 (agent critic) |
