@@ -9166,3 +9166,16 @@ property, so every occurrence is the same function. `$djs.resume(id, "$djs.call"
 id from the state as before (D2772); a call without one fails the load. The adapter
 restores its own state (counters, store, clock) before the dump runs, since the dump's
 code runs while it loads, and deletes `$djs` itself afterwards as a backstop.
+
+## D2894: The CLI's open calls carry their origin and the answers file's counts as state
+date: 2026-11-04 · by: pjh · issue: 0204
+`djs run --dump-after`, `--dump-every-idle` and the REPL's `.dump`/`.dump-every` give each
+open call a state (D2770): `{"origin": "input 2", "answered": {"read": 2}}`, each field
+left out when empty, no state when both are. `origin` is the REPL's label of the input
+that made the call, so `.pending` after a `.restore` names it instead of "the dump".
+`answered` counts the answers each tool took from the ordered (argument-less) entries of
+`--tools answers.json`: run state, not the call's, but an idle point always has an open
+call, so every call carries the counts and the loading CLI takes the highest per tool; a
+resumed run's next call then gets the answer the uninterrupted run gets, where it used to
+start the list again. Read back from format 2's loaded calls and from the plain dump's
+`$djs.resume` states alike.

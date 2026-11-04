@@ -497,8 +497,9 @@ fn dump_waiting_await_inputs() {
             "waiting: #2 tools.read({\"path\":\"a\"})",
             "waiting: #3 tools.read({\"path\":\"b\"})",
             "[waiting] #5 tools.read({\"path\":\"c\"})",
-            &format!("#2 tools.read({{\"path\":\"a\"}})  the dump, at {dump}:7:11"),
-            &format!("#3 tools.read({{\"path\":\"b\"}})  the dump, at {dump}:10:10"),
+            // The calls' origins came through the dump, as their states (D2894).
+            &format!("#2 tools.read({{\"path\":\"a\"}})  input 1, at {dump}:7:11"),
+            &format!("#3 tools.read({{\"path\":\"b\"}})  input 2, at {dump}:10:10"),
             "#5 tools.read({\"path\":\"c\"})  input 3, at repl:1:10",
             "[input 2] 'bee'",
             "'hello'",

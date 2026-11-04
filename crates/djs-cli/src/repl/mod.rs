@@ -1095,7 +1095,8 @@ impl Repl {
         let sel = (!names.is_empty()).then_some(names.as_slice());
         let handles = self.waiting_handles(None);
         let refs: Vec<(&str, Value)> = handles.iter().map(|(n, v)| (n.as_str(), *v)).collect();
-        match crate::dumps::dump_names(&self.vm, &self.tools, &refs, sel, false) {
+        let origin = |id: u32| self.origins.get(&id).cloned();
+        match crate::dumps::dump_names(&self.vm, &self.tools, &refs, sel, false, &origin) {
             Ok(d) if file == "-" => print!("{}", d.text),
             Ok(d) => match std::fs::write(file, &d.text) {
                 Ok(()) => println!(
@@ -1135,9 +1136,10 @@ impl Repl {
         };
         let handles = self.waiting_handles(entry);
         let refs: Vec<(&str, Value)> = handles.iter().map(|(n, v)| (n.as_str(), *v)).collect();
-        let d = crate::dumps::dump(&self.vm, &self.tools, &refs, false)?;
+        let origin = |id: u32| self.origins.get(&id).cloned();
+        let d = crate::dumps::dump(&self.vm, &self.tools, &refs, false, &origin)?;
         let mut vm = new_vm(self.gc_stress);
-        let mut loaded = crate::dumps::load(&mut vm, &self.tools, &d.text)?;
+        let mut loaded = crate::dumps::load(&mut vm, &mut self.tools, &d.text)?;
         // The old VM's handles go with it; positions are now in this dump, which has no file.
         self.vm = vm;
         self.dump_file = None;
@@ -1166,7 +1168,7 @@ impl Repl {
         if crate::dumps::plain_format(src).is_some() {
             return self.restore_plain(arg, src);
         }
-        let loaded = match crate::dumps::load(&mut self.vm, &self.tools, src) {
+        let loaded = match crate::dumps::load(&mut self.vm, &mut self.tools, src) {
             Ok(l) => l,
             Err(e) => {
                 println!("cannot load {arg}: {e}");
@@ -1187,7 +1189,9 @@ impl Repl {
             .max()
             .unwrap_or(0);
         for c in &loaded.calls {
-            self.origins.insert(c.id, String::from("the dump"));
+            let o = c.state.as_deref().and_then(Tools::state_origin);
+            self.origins
+                .insert(c.id, o.unwrap_or_else(|| String::from("the dump")));
         }
         for (name, h) in loaded.handles {
             let v = self.vm.heap().get_handle(h);
@@ -1222,15 +1226,22 @@ impl Repl {
                 .collect();
             println!("{}", parts.join(" "));
         };
-        if let Err(e) = crate::dumps::run_plain(&mut self.vm, &mut self.tools, src, arg, &mut log) {
-            println!("cannot load {arg}: {e}");
-            return;
-        }
+        let loaded =
+            match crate::dumps::run_plain(&mut self.vm, &mut self.tools, src, arg, &mut log) {
+                Ok(l) => l,
+                Err(e) => {
+                    println!("cannot load {arg}: {e}");
+                    return;
+                }
+            };
         println!("loaded {arg} into a fresh VM");
         self.dump_file = Some(arg.to_string());
         self.inputs = 0;
         for id in self.vm.pending_host_calls() {
-            self.origins.insert(id, String::from("the dump"));
+            let o = loaded.states.iter().find(|(i, _)| *i == id);
+            let o = o.and_then(|(_, s)| Tools::state_origin(s));
+            self.origins
+                .insert(id, o.unwrap_or_else(|| String::from("the dump")));
         }
         if let Some(Ok(v)) = self.vm.outcome()
             && self.vm.promise_state(v) == Some(None)

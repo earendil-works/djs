@@ -161,6 +161,44 @@ fn resume_a_plain_dump() {
     );
 }
 
+/// The CLI's call states (D2894): each open call carries how many ordered answers each
+/// tool used, so a resumed run's next call gets the answer the uninterrupted run gets.
+#[test]
+fn dumps_carry_the_answer_counts() {
+    let dir = env!("CARGO_TARGET_TMPDIR");
+    let id = std::process::id();
+    let (js, answers, dump) = (
+        format!("{dir}/counts-{id}.js"),
+        format!("{dir}/counts-{id}.json"),
+        format!("{dir}/counts-{id}.dump.js"),
+    );
+    std::fs::write(
+        &js,
+        "async function main() { for (let i = 0; i < 3; i++) print(await tools.n()); }
+main();
+",
+    )
+    .unwrap();
+    std::fs::write(
+        &answers,
+        r#"{"n": [{"value": 1}, {"value": 2}, {"value": 3}]}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        djs(&["--tools", &answers, &js]),
+        (0, "1\n2\n3\n".into(), String::new())
+    );
+    let r = djs(&["--tools", &answers, "--dump-after", "2", &dump, &js]);
+    assert_eq!(r, (0, "1\n".into(), String::new()));
+    let text = std::fs::read_to_string(&dump).unwrap();
+    assert!(text.contains(r#", [], {"answered":{"n":1}});"#), "{text}");
+    let r = djs_cmd(&["resume", "--tools", &answers, &dump]);
+    for f in [&js, &answers, &dump] {
+        std::fs::remove_file(f).unwrap();
+    }
+    assert_eq!(r, (0, "2\n3\n".into(), String::new()));
+}
+
 /// `djs resume --explain` (D2641): where a dump's activations stopped, in the dump, since
 /// the dump has no comments; it answers nothing.
 #[test]

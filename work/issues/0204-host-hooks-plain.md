@@ -41,6 +41,16 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
 - pi adapter: its host functions `bridge`/`call` are not globals; for plain dumps they
   will be named `$djs.bridge`/`$djs.call` (defined in `$djs` while loading), so the
   exporter's name expressions resolve during the load.
+- Step 1 merged (f5d33fa4), with the size trade D2892 (the gate failed on the budget first:
+  open_host_call slimmed to 874 B, `vm_delete` dropped; the dump deletes `$djs` in its
+  final block, pjx's D2862). Step 2 merged (9656d97e): pi's `resumeFromDump` loads plain
+  dumps (D2893), tested with a hand-made dump in pi-vm.test.ts.
+- CLI call states (0189 follow-up, D2894): `Tools::call_state`/`restore_state`/
+  `state_origin`; `dumps::dump`/`dump_names` take an origin callback; `dumps::load` takes
+  `&mut Tools`. Tests: run::dumps_carry_the_answer_counts; repl::dump_waiting_await_inputs
+  now expects the restored origins.
+- Proposed several handles in plain dumps to the coordinator: one handle named `run` → the
+  value; otherwise a null-prototype object of all handles by name (waiting for pjx).
 
 ## Follow-ups
 

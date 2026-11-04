@@ -206,6 +206,62 @@ impl Tools {
         format!("{name}({})", args.join(", "))
     }
 
+    /// The state the CLI gives each open call of a dump (D2894), JSON: where the call came
+    /// from (`origin`, the REPL's input label) and how many ordered answers each tool has
+    /// used (`answered`). That count is the run's state, not the call's, but an idle point
+    /// always has an open call, so every call carries it and a resumed run's next call gets
+    /// the answer the uninterrupted run would have. `None` when there is nothing to keep.
+    pub fn call_state(&self, origin: Option<&str>) -> Option<String> {
+        let mut fields = Vec::new();
+        if let Some(o) = origin {
+            fields.push(format!("\"origin\":{}", json_str(o)));
+        }
+        let mut used: Vec<(&String, &usize)> = self
+            .answers
+            .iter()
+            .flat_map(|a| a.next.iter())
+            .filter(|(_, n)| **n > 0)
+            .collect();
+        if !used.is_empty() {
+            used.sort();
+            let counts: Vec<String> = used
+                .iter()
+                .map(|(k, n)| format!("{}:{n}", json_str(k)))
+                .collect();
+            fields.push(format!("\"answered\":{{{}}}", counts.join(",")));
+        }
+        (!fields.is_empty()).then(|| format!("{{{}}}", fields.join(",")))
+    }
+
+    /// Takes a loaded call's state back (D2894): the answer counts (the highest of all the
+    /// calls' counts per tool).
+    pub fn restore_state(&mut self, json: &str) {
+        let (Ok(J::Obj(fields)), Some(a)) = (J::parse(json), self.answers.as_mut()) else {
+            return;
+        };
+        for (k, v) in fields {
+            if let ("answered", J::Obj(counts)) = (k.as_str(), v) {
+                for (name, n) in counts {
+                    if let J::Num(n) = n {
+                        let e = a.next.entry(name).or_insert(0);
+                        *e = (*e).max(n as usize);
+                    }
+                }
+            }
+        }
+    }
+
+    /// A loaded call's `origin`, from its state ([`Tools::call_state`]).
+    pub fn state_origin(json: &str) -> Option<String> {
+        let J::Obj(fields) = J::parse(json).ok()? else {
+            return None;
+        };
+        fields.into_iter().find_map(|(k, v)| match (k.as_str(), v) {
+            ("origin", J::Str(o)) => Some(o),
+            _ => None,
+        })
+    }
+
     /// The scripted answer for the pending call `call_id`, if the answers file has one.
     pub fn answer(&mut self, vm: &mut Vm, call_id: u32) -> Option<Result<Value, Value>> {
         let info = vm.host_call(call_id)?;
@@ -226,6 +282,11 @@ impl Tools {
             Err(msg) => Err(vm.new_error(ErrorKind::Error, &msg).expect("oom")),
         })
     }
+}
+
+/// A JSON string literal.
+fn json_str(s: &str) -> String {
+    J::Str(s.to_string()).render().trim_end().to_string()
 }
 
 /// JSON text parsed into a VM value (`JSON.parse`).

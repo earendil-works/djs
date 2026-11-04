@@ -538,7 +538,9 @@ fn drive_from(
                 }
                 _ => {
                     crate::dumps::end_load(&mut vm);
-                    load = None;
+                    for (_, s) in load.take().map(|l| l.states).unwrap_or_default() {
+                        tools.restore_state(&s);
+                    }
                 }
             }
         }
@@ -709,7 +711,7 @@ fn dump_run(
         _ => None,
     };
     let handles: Vec<(&str, Value)> = run.map(|v| ("run", v)).into_iter().collect();
-    crate::dumps::dump(vm, tools, &handles, plain)
+    crate::dumps::dump(vm, tools, &handles, plain, &|_| None)
 }
 
 /// The system clock in ms since the epoch.

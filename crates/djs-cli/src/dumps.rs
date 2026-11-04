@@ -176,6 +176,9 @@ pub fn run_plain(
         }
     }
     end_load(vm);
+    for (_, s) in &load.states {
+        tools.restore_state(s);
+    }
     Ok(load)
 }
 
@@ -184,14 +187,16 @@ pub fn is_dump(text: &[u8]) -> bool {
     std::str::from_utf8(text).is_ok_and(|t| dump_format(t).is_some() || plain_format(t).is_some())
 }
 
-/// Dumps the idle VM with the host's `handles`; the refusal's message otherwise.
+/// Dumps the idle VM with the host's `handles`; the refusal's message otherwise. Each
+/// open call gets the CLI's state ([`Tools::call_state`], D2894), with its `origin`.
 pub fn dump(
     vm: &Vm,
     tools: &Tools,
     handles: &[(&str, Value)],
     plain: bool,
+    origin: &dyn Fn(u32) -> Option<String>,
 ) -> Result<Dumped, String> {
-    dump_names(vm, tools, handles, None, plain)
+    dump_names(vm, tools, handles, None, plain, origin)
 }
 
 /// [`dump`] of the named globals only (all of them with `None`).
@@ -201,28 +206,40 @@ pub fn dump_names(
     handles: &[(&str, Value)],
     names: Option<&[&str]>,
     plain: bool,
+    origin: &dyn Fn(u32) -> Option<String>,
 ) -> Result<Dumped, String> {
     // Until the plain exporter lands (0201): DumpOptions::plain.
     let _ = plain;
     let name = |id: u32| tools.call_name(id);
+    let states: Vec<(u32, String)> = vm
+        .pending_host_calls()
+        .into_iter()
+        .filter_map(|id| Some((id, tools.call_state(origin(id).as_deref())?)))
+        .collect();
+    let states: Vec<(u32, &str)> = states.iter().map(|(id, s)| (*id, s.as_str())).collect();
     let opts = DumpOptions {
         base: djs_prelude::BASE,
         host: HOST_GLOBALS,
         host_fn_name: &name,
         handles,
-        call_states: &[],
+        call_states: &states,
     };
     vm.dump_report(&opts, names).map_err(|e| e.message())
 }
 
-/// Loads a dump into `vm` (a fresh one), the tools named by the registry.
-pub fn load(vm: &mut Vm, tools: &Tools, text: &str) -> Result<Loaded, String> {
+/// Loads a dump into `vm` (a fresh one), the tools named by the registry; takes the
+/// calls' states back ([`Tools::restore_state`]).
+pub fn load(vm: &mut Vm, tools: &mut Tools, text: &str) -> Result<Loaded, String> {
     let host_fn = |name: &str| tools.id_for_call_name(name);
     let opts = LoadOptions {
         host_fn: &host_fn,
         ..Default::default()
     };
-    vm.load_dump(text, &opts).map_err(|e| e.message())
+    let loaded = vm.load_dump(text, &opts).map_err(|e| e.message())?;
+    for s in loaded.calls.iter().filter_map(|c| c.state.as_deref()) {
+        tools.restore_state(s);
+    }
+    Ok(loaded)
 }
 
 /// `(1 activation, 2 pending calls)`, or nothing when nothing is in flight.
