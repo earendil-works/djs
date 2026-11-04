@@ -14,6 +14,7 @@ pub(crate) trait Piece {
     fn put(&self, out: &mut String);
     /// How many bytes `put` appends, when known cheaply (the dumper's `cat!` sizes its
     /// string with it).
+    #[cfg(feature = "dump")]
     fn size_hint(&self) -> usize {
         0
     }
@@ -23,6 +24,7 @@ impl Piece for str {
     fn put(&self, out: &mut String) {
         out.push_str(self);
     }
+    #[cfg(feature = "dump")]
     fn size_hint(&self) -> usize {
         self.len()
     }
@@ -32,6 +34,7 @@ impl Piece for String {
     fn put(&self, out: &mut String) {
         out.push_str(self);
     }
+    #[cfg(feature = "dump")]
     fn size_hint(&self) -> usize {
         self.len()
     }
@@ -47,12 +50,14 @@ impl<T: Piece + ?Sized> Piece for &T {
     fn put(&self, out: &mut String) {
         (**self).put(out);
     }
+    #[cfg(feature = "dump")]
     fn size_hint(&self) -> usize {
         (**self).size_hint()
     }
 }
 
 impl<T: Piece + ?Sized> Piece for &mut T {
+    #[cfg(feature = "dump")]
     fn size_hint(&self) -> usize {
         (**self).size_hint()
     }
