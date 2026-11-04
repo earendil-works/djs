@@ -97,11 +97,40 @@ docs/host.md).
 
 ## What the output looks like
 
-In one process (`run.sh`); `[vm]` lines are the script's `console.log`:
+In one process (`run.sh`); `[vm]` lines are the script's `console.log`, and the `|` lines
+are the dump, which the host prints as it writes it (explained [below](#the-dump)):
 
 ```
   [vm] first sleeps 5000 ms
-host: suspended the run into examples/sleep-dump/out/sleep.dump.js (1313 bytes)
+host: suspended the run into examples/sleep-dump/out/sleep.dump.js (1312 bytes):
+  | "djs-dump 2";
+  | $dump.random(826914974, -908098377);
+  | $dump.p1 = $dump.pending(2, "tools.sleep", [5000], {"due":1793797586410});
+  | $dump.n2 = async function step(label, ms) {
+  |   console.log(label, "sleeps", ms, "ms");
+  |   const r = await tools.sleep(ms);
+  |   return label + ": " + r;
+  | };
+  | $dump.a3 = $dump.resume($dump.n2, { at: "await#1", awaiting: $dump.p1, args: ["first", 5000], slots: { label: "first", ms: 5000, r: undefined } });
+  | $dump.n4 = [];
+  | $dump.i5 = $dump.advance(Array.prototype.values.call(["first", "second"]), 1);
+  | $dump.a6 = $dump.resume(async function (ms) {
+  | 
+  | async function step(label, ms) {
+  |   console.log(label, "sleeps", ms, "ms");
+  |   const r = await tools.sleep(ms);
+  |   return label + ": " + r;
+  | }
+  | const t0 = Date.now();
+  | const results = [];
+  | for (const label of ["first", "second"]) {
+  |   results.push(await step(label, ms));
+  | }
+  | console.log("done after", Date.now() - t0 >= 2 * ms ? "at least" : "less than", 2 * ms, "ms:", results.join(", "));
+  | return results;
+  | 
+  | }, { at: "await#1", awaiting: $dump.a3, args: [5000], slots: { ms: 5000, step: $dump.n2, t0: 1793797581397, results: $dump.n4, label: "first", "for-of.iterator@205": $dump.i5, "for-of.next@205": $dump.builtin("%ArrayIteratorPrototype%.next"), "call.callee@250": Array.prototype.push, "call.this@250": $dump.n4 } });
+  | $dump.handle("run", $dump.a6);
   [vm] second sleeps 5000 ms
   [vm] done after at least 10000 ms: first: slept 5000 ms, second: slept 5000 ms
 host: the run returned [ 'first: slept 5000 ms', 'second: slept 5000 ms' ]
@@ -116,7 +145,10 @@ With `--restart` the halves are two node processes, and the dump travels as a fi
 ```
 --- node sleep-dump.ts start (process 1)
   [vm] first sleeps 5000 ms
-host: suspended the run into examples/sleep-dump/out/sleep.dump.js (1313 bytes)
+host: suspended the run into examples/sleep-dump/out/sleep.dump.js (1313 bytes):
+  | "djs-dump 2";
+  | ... (the same dump as above)
+  | $dump.handle("run", $dump.a6);
 --- node sleep-dump.ts resume (process 2)
   [vm] second sleeps 5000 ms
   [vm] done after at least 10000 ms: first: slept 5000 ms, second: slept 5000 ms

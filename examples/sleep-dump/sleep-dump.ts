@@ -72,7 +72,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const dump = await suspend(Number(ms));
     mkdirSync(new URL("out", import.meta.url), { recursive: true });
     writeFileSync(file, dump);
-    console.log(`host: suspended the run into ${relative(".", file)} (${dump.length} bytes)`);
+    console.log(`host: suspended the run into ${relative(".", file)} (${dump.length} bytes):`);
+    console.log(dump.trimEnd().replace(/^/gm, "  | "));
   }
   if (mode !== "start") console.log("host: the run returned", await resume(readFileSync(file, "utf8")));
 }
