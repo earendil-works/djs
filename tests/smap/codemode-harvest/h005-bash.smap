@@ -9,4 +9,4 @@ function <anonymous> @2340..3289
 function <anonymous> @3146..3228
   arg0 argument 0
   loc0 <state>, loc1 k@0, loc2 c@0
-  await#1 @29 (47:73) pc 139: assign.object assign.key
+  await#1 @29 (47:73) pc 139: assign.object@19 assign.key@19

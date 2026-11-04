@@ -12,4 +12,4 @@ function <anonymous> @5691..7145
 function <anonymous> @6121..6229
   arg0 p@0
   loc0 <state>
-  await#1 @33 (123:76) pc 51: object.literal
+  await#1 @33 (123:76) pc 51: object.literal@12

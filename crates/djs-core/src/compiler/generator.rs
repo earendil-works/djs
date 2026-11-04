@@ -79,7 +79,7 @@ impl Parser<'_, '_> {
     pub(super) fn emit_return_from_expr(&mut self) {
         // The handlers below cut the stack: suspensions on this path (closing for-await
         // iterators) do not have the enclosing expression's operands.
-        self.roles_push(&[Role::Unsupported("return from a generator")]);
+        self.roles_push(0, &[Role::Unsupported("return from a generator")]);
         // Close the open iterators, innermost first: each throws `x` to a handler that
         // cuts the stack down to its iterator.
         let open: alloc::vec::Vec<OpenIter> = self.open_iters.iter().rev().copied().collect();
@@ -176,7 +176,10 @@ impl Parser<'_, '_> {
         self.code().dup();
         self.code().get_field(atoms::NEXT, 0);
         // `it next` stay below every suspension of the delegation.
-        self.roles_push(&[Role::LoopIterator(Loop::Star), Role::LoopNext(Loop::Star)]);
+        self.roles_push(
+            pos,
+            &[Role::LoopIterator(Loop::Star), Role::LoopNext(Loop::Star)],
+        );
         self.place(l_base);
         // `it next recv` -> `it next next it recv` -> call.
         self.code().undefined();
@@ -306,8 +309,9 @@ impl Parser<'_, '_> {
 
     /// AsyncIteratorClose with a normal completion: `it` -> ``. With `describe` `(n, rs)`,
     /// the top `n` roles are values the closing consumed (the loop's `it next`) and `rs`
-    /// the values on the stack in their place (a subroutine's value and return address):
-    /// at the await, the roles below them and `rs` are on the stack. `None`: not
+    /// the values on the stack in their place (a subroutine's value and return address,
+    /// named by the site's offset): at the await, the roles below them and `rs` are on
+    /// the stack. `None`: not
     /// described (a stack cut by a handler).
     pub(super) fn emit_async_close_normal(
         &mut self,
@@ -328,13 +332,13 @@ impl Parser<'_, '_> {
         match describe {
             Some((n, rs)) => {
                 let kept = self.roles_take(n);
-                self.roles_push(rs);
+                self.roles_push(site.1, rs);
                 self.site(site.0, site.1);
                 self.roles_pop(rs.len());
-                self.roles_push(&kept);
+                self.roles_put(&kept);
             }
             None => {
-                self.roles_push(&[Role::Unsupported("closing an async iterator")]);
+                self.roles_push(0, &[Role::Unsupported("closing an async iterator")]);
                 self.site(site.0, site.1);
                 self.roles_pop(1);
             }

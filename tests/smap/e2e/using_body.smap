@@ -1,4 +1,4 @@
 function <anonymous> @0..295
   arg0 tools@0, arg1 argument 1
   loc0 <state>, loc1 console@0, loc2 log@0, loc3 a@0, loc4 b@0
-  await-using#1 @294 (7:28) pc 157: using.record finally.value finally.return using.record
+  await-using#1 @294 (7:28) pc 157: using.record@109 finally.value@294 finally.return@294 using.record@294

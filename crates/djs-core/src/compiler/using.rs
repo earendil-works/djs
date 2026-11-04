@@ -160,7 +160,7 @@ impl Parser<'_, '_> {
                 Ok(())
             }
             UsingList::Allowed => {
-                let r = self.using_region_start(self.stmt_depth, is_await);
+                let r = self.using_region_start(self.stmt_depth, is_await, pos);
                 self.using_env(&r);
                 self.using = UsingList::Open(r);
                 Ok(())
@@ -169,9 +169,10 @@ impl Parser<'_, '_> {
     }
 
     /// Pushes the Record (`base` is the operand depth under it) and starts the region.
-    pub(super) fn using_region_start(&mut self, base: u32, is_await: bool) -> UsingRegion {
+    /// `at`, the start of the region's first bound name, names the Record's slot.
+    pub(super) fn using_region_start(&mut self, base: u32, is_await: bool, at: u32) -> UsingRegion {
         self.code().call_intrinsic(intrinsic("UsingCreate"), 0);
-        self.roles_push(&[Role::UsingRecord]);
+        self.roles_push(at, &[Role::UsingRecord]);
         let l_try = self.new_label();
         let l_fin = self.new_label();
         self.place(l_try);
@@ -289,13 +290,14 @@ impl Parser<'_, '_> {
             self.code().dup();
             self.code().call_intrinsic(intrinsic("UsingAwaitValue"), 1);
             self.place(l_a);
-            // `s v ret s`: the subroutine's value and return address between.
+            // `s v ret s`: the subroutine's value and return address between. They and
+            // the Record's copy are named by the site (the list's end).
             let rs = [
                 Role::FinallyValue,
                 Role::FinallyReturn(sub),
                 Role::UsingRecord,
             ];
-            self.roles_push(&rs);
+            self.roles_push(self.prev_end, &rs);
             self.site(SiteKind::AwaitUsing, self.prev_end);
             self.roles_pop(rs.len());
             self.code().await_(0);

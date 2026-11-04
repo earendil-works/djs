@@ -2,7 +2,7 @@ function <anonymous> @1..582
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 r@0, loc2 d@0
   await#1 @102 (2:11) pc 53: -
-  await#2 @212 (4:13) pc 87: call.callee call.this
-  await#3 @260 (5:13) pc 110: call.callee call.this
+  await#2 @212 (4:13) pc 87: call.callee@200 call.this@200
+  await#3 @260 (5:13) pc 110: call.callee@248 call.this@248
   await#4 @300 (6:11) pc 143: -
   await#5 @438 (10:3) pc 233: -

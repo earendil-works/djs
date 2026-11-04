@@ -7,5 +7,5 @@ function <anonymous> @3316..3811
   loc0 <state>, loc1 result@0, loc2 pid@0, loc3 viru@0
   await#1 @38 (79:14) pc 41: -
   await#2 @207 (82:12) pc 134: -
-  await#3 @337 (83:64) pc 198: call.callee call.this
-  await#4 @397 (84:6) pc 239: call.callee call.this
+  await#3 @337 (83:64) pc 198: call.callee@332 call.this@332
+  await#4 @397 (84:6) pc 239: call.callee@392 call.this@392

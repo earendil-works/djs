@@ -5,5 +5,5 @@ function <anonymous> @1..2162
 function <anonymous> @1653..2151
   arg0 tools@0
   loc0 <state>, loc1 r@0, loc2 py@0
-  await#1 @38 (35:8) pc 65: call.callee call.this
+  await#1 @38 (35:8) pc 65: call.callee@31 call.this@31
   await#2 @402 (37:12) pc 107: -

@@ -8754,3 +8754,20 @@ date: 2026-11-04 · by: owner · issue: 0188
 `{call, save, resume}`; the Sandbox tracks open calls, calls `save` at dump time, `resume`
 (or `call` again, or rejects) at load, and drives the run. Functions without hooks keep
 today's behaviour.
+
+## D2730: Slot names: offsets from the function's start of the element or the construct; pins list them
+date: 2026-11-04 · by: sm · issue: 0190
+Makes D2721 exact (docs/continuation-dumps.md "Slot names"). A temporary's name is its
+construct (today's operand role without the index) and a byte offset from the function's
+start: a list element's own start (arguments, array elements, template parts), which
+replaces the index, else the construct's start (the callee for `call.callee`/`call.this`,
+the target for `assign.*`, the binary expression, the `for`, the `switch`, the pattern's
+`[`/`{`, the `finally` keyword, the first bound name of a `using` region). Start
+offsets, not start..end spans: the start alone is unique per site once the construct
+name is part of the key, and ends add nothing a later compiler could keep stabler. Copies
+of one value (a `case` test's discriminant, an `await using` disposal's values) are
+named by the `case` and by the site until 0192/0193 hold them once. The suspension maps
+report the names per site (`Site::slots`), and the pins (tests/smap) list them in place
+of the role sequence, which is the role order bottom first; summary.txt still counts
+role sequences. Pins rewritten under this decision (D2619); no dump or behaviour
+change.

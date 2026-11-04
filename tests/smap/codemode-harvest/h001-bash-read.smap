@@ -5,5 +5,5 @@ function <anonymous> @1..3998
 function <anonymous> @2871..3987
   arg0 tools@0
   loc0 <state>, loc1 path@29
-  await#1 @233 (58:215) pc 92: for-of.iterator for-of.next call.callee call.this
-  await#2 @266 (59:6) pc 153: call.callee call.this (out: loc1)
+  await#1 @233 (58:215) pc 92: for-of.iterator@19 for-of.next@19 call.callee@228 call.this@228
+  await#2 @266 (59:6) pc 153: call.callee@261 call.this@261 (out: loc1)

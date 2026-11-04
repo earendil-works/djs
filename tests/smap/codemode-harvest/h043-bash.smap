@@ -9,4 +9,4 @@ function <anonymous> @2585..3283
 function <anonymous> @3171..3255
   arg0 argument 0
   loc0 <state>, loc1 k@0, loc2 c@0
-  await#1 @33 (46:89) pc 144: binary.left
+  await#1 @33 (46:89) pc 144: binary.left@18

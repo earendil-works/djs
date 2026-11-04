@@ -5,11 +5,11 @@ function <anonymous> @1..4683
 function <anonymous> @3210..4672
   arg0 tools@0
   loc0 <state>, loc1 result@0
-  await#1 @24 (70:6) pc 50: call.callee call.this
-  await#2 @91 (71:6) pc 99: call.callee call.this
+  await#1 @24 (70:6) pc 50: call.callee@19 call.this@19
+  await#2 @91 (71:6) pc 99: call.callee@86 call.this@86
   await#3 @169 (72:14) pc 123: -
-  await#4 @237 (73:6) pc 169: call.callee call.this
-  await#5 @312 (74:6) pc 249: call.callee call.this
-  await#6 @611 (78:6) pc 289: call.callee call.this
-  await#7 @684 (79:6) pc 369: call.callee call.this
-  await#8 @1209 (83:6) pc 449: call.callee call.this
+  await#4 @237 (73:6) pc 169: call.callee@232 call.this@232
+  await#5 @312 (74:6) pc 249: call.callee@307 call.this@307
+  await#6 @611 (78:6) pc 289: call.callee@606 call.this@606
+  await#7 @684 (79:6) pc 369: call.callee@679 call.this@679
+  await#8 @1209 (83:6) pc 449: call.callee@1204 call.this@1204

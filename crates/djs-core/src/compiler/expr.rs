@@ -258,13 +258,15 @@ impl Parser<'_, '_> {
         if let Some(arrow) = self.try_arrow(no_in, after_q)? {
             return Ok(arrow);
         }
+        // Where the assignment starts: it names the slots its target keeps.
+        let start = self.tok.start;
         if self.starts_assignment_pattern(Follow::Assign) {
             // `[a, b] = [b, a]`: the right side runs first; its value is the result.
             self.deferred_pattern(Binding::Assign, |p| {
                 p.next()?;
                 p.parse_assign(no_in)?;
                 p.code().dup();
-                p.roles_push(&[Role::AssignValue]);
+                p.roles_push(start, &[Role::AssignValue]);
                 Ok(())
             })?;
             self.roles_pop(1);
@@ -276,7 +278,7 @@ impl Parser<'_, '_> {
         let op = self.tok;
         if op.kind == TokenKind::Assign {
             let lv = self.lvalue(lhs, "invalid assignment left-hand side")?;
-            self.roles_push(lv.roles());
+            self.roles_push(start, lv.roles());
             self.next()?;
             if let LValue::Name { r, .. } = lv
                 && !parenthesized
@@ -293,9 +295,9 @@ impl Parser<'_, '_> {
         }
         if let Some(emit_op) = compound_op(op.kind) {
             let lv = self.lvalue(lhs, "invalid assignment left-hand side")?;
-            self.roles_push(lv.roles());
+            self.roles_push(start, lv.roles());
             self.emit_load(lv);
-            self.roles_push(&[Role::AssignOld]);
+            self.roles_push(start, &[Role::AssignOld]);
             self.next()?;
             self.parse_assign(no_in)?;
             self.roles_pop(lv.roles().len() + 1);
@@ -324,7 +326,7 @@ impl Parser<'_, '_> {
                 }
             }
             self.code().drop();
-            self.roles_push(lv.roles());
+            self.roles_push(start, lv.roles());
             if let LValue::Name { r, .. } = lv
                 && !parenthesized
             {
@@ -565,6 +567,8 @@ impl Parser<'_, '_> {
     /// Precedence climbing over the binary operators (docs/compiler.md 2.3). Returns
     /// the expression and which logical operators its unparenthesized chain contains.
     fn parse_binary(&mut self, min: u8, no_in: bool) -> PResult<(Expr, u8)> {
+        // Where the left operand starts: it names its slot.
+        let start = self.tok.start;
         // `#x in obj`: a private name only as the left operand of a relational `in`.
         let (mut lhs, mut lhs_unary) = if self.is(TokenKind::PrivateName)
             && min <= 8
@@ -643,7 +647,7 @@ impl Parser<'_, '_> {
             // A logical operator dropped its left operand on this path.
             let keeps = !matches!(op, BinOp::Nullish | BinOp::Or | BinOp::And);
             if keeps {
-                self.roles_push(&[Role::BinaryLeft]);
+                self.roles_push(start, &[Role::BinaryLeft]);
             }
             let (_, rmix) = self.parse_binary(next_min, no_in)?;
             if keeps {
@@ -868,6 +872,8 @@ impl Parser<'_, '_> {
     pub(super) fn parse_lhs(&mut self, delete_operand: bool) -> PResult<Expr> {
         // The whole content of parentheses (`(a?.b)()` keeps the reference).
         let whole = self.paren_inner == self.tok.start;
+        // Where the chain starts: it names the slots of its calls and indexing.
+        let start = self.tok.start;
         let mut e = if self.is(TokenKind::New) {
             self.parse_new()?
         } else {
@@ -884,14 +890,14 @@ impl Parser<'_, '_> {
                 }
                 TokenKind::LBracket => {
                     self.next()?;
-                    e = self.parse_index(tok.start)?;
+                    e = self.parse_index(tok.start, start)?;
                 }
                 TokenKind::LParen => {
                     // qjs compiles a call of the name `eval` to its own opcode, never
                     // a tail call.
                     let eval = matches!(e, Expr::Name { r, restricted: true, .. }
                         if self.heap.atom_name(self.f.refs[r as usize].atom) == "eval");
-                    self.prepare_call(e);
+                    self.prepare_call(e, start);
                     let args = self.parse_args()?;
                     self.mark(tok.start);
                     if matches!(args, Args::Count(_)) && !eval {
@@ -905,7 +911,7 @@ impl Parser<'_, '_> {
                     match self.tok.kind {
                         TokenKind::LParen => {
                             // `f?.()` / `o.m?.()`: test the callee, keep `this`.
-                            self.prepare_call(e);
+                            self.prepare_call(e, start);
                             let pad = *pads[1].get_or_insert_with(|| self.f.code.new_label());
                             self.code().swap();
                             self.code().dup();
@@ -926,7 +932,7 @@ impl Parser<'_, '_> {
                             if self.is(TokenKind::LBracket) {
                                 let pos = self.tok.start;
                                 self.next()?;
-                                e = self.parse_index(pos)?;
+                                e = self.parse_index(pos, start)?;
                             } else {
                                 e = self.parse_dot_name(tok.start)?;
                             }
@@ -953,7 +959,7 @@ impl Parser<'_, '_> {
                             "template literal cannot appear in an optional chain",
                         );
                     }
-                    self.prepare_call(e);
+                    self.prepare_call(e, start);
                     let argc = self.parse_tagged_template()?;
                     self.mark(tok.start);
                     self.f.tail_call = Some(self.f.code.pos());
@@ -972,7 +978,7 @@ impl Parser<'_, '_> {
                     || (t1.kind == TokenKind::QuestionDot && t2.kind == TokenKind::LParen)
             };
             if callee {
-                self.prepare_call(e);
+                self.prepare_call(e, start);
                 // The call follows the parentheses, past the chain's pads.
                 self.roles_pop(2);
             }
@@ -1031,20 +1037,21 @@ impl Parser<'_, '_> {
     }
 
     /// Before the arguments of a call: the callee and `this` on the stack.
-    /// The call's roles (`call.callee call.this`) stay until `emit_call`.
-    pub(super) fn prepare_call(&mut self, e: Expr) {
+    /// The call's roles (`call.callee call.this`, named by `at`, where the callee
+    /// starts) stay until `emit_call`.
+    pub(super) fn prepare_call(&mut self, e: Expr, at: u32) {
         match e {
             Expr::Field { atom, pos } => {
                 self.truncate_last();
                 self.mark(pos);
                 self.code().get_method(atom, 0);
-                self.roles_push(&[Role::CallCallee, Role::CallThis]);
+                self.roles_push(at, &[Role::CallCallee, Role::CallThis]);
             }
             Expr::Elem { pos } => {
                 self.truncate_last();
                 self.mark(pos);
                 self.code().get_elem_method();
-                self.roles_push(&[Role::CallCallee, Role::CallThis]);
+                self.roles_push(at, &[Role::CallCallee, Role::CallThis]);
             }
             Expr::Private { pos } => {
                 // `obj sym` -> `f obj`.
@@ -1054,24 +1061,24 @@ impl Parser<'_, '_> {
                 self.mark(pos);
                 self.code().get_private_field();
                 self.code().swap();
-                self.roles_push(&[Role::CallCallee, Role::CallThis]);
+                self.roles_push(at, &[Role::CallCallee, Role::CallThis]);
             }
             // `super.m()` calls with `this` (read again: nothing can change it).
             Expr::SuperField { pos, .. } | Expr::SuperElem { pos } => {
-                self.roles_push(&[Role::CallCallee]);
+                self.roles_push(at, &[Role::CallCallee]);
                 self.emit_this(pos);
-                self.roles_push(&[Role::CallThis]);
+                self.roles_push(at, &[Role::CallThis]);
             }
             // `(a?.b)()`: the chain left both.
-            Expr::Callee => self.roles_push(&[Role::CallCallee, Role::CallThis]),
+            Expr::Callee => self.roles_push(at, &[Role::CallCallee, Role::CallThis]),
             _ => {
-                self.roles_push(&[Role::CallCallee]);
+                self.roles_push(at, &[Role::CallCallee]);
                 self.code().undefined();
-                self.roles_push(&[Role::CallThis]);
+                self.roles_push(at, &[Role::CallThis]);
                 #[cfg(test)]
                 if self.test_swap_call {
                     self.code().swap();
-                    self.roles_replace(2, &[Role::CallThis, Role::CallCallee]);
+                    self.roles_replace(2, at, &[Role::CallThis, Role::CallCallee]);
                 }
             }
         }
@@ -1098,9 +1105,10 @@ impl Parser<'_, '_> {
         Ok(Expr::Field { atom, pos })
     }
 
-    /// `[expr]` after the `[`. A string literal key becomes a `get_field`.
-    fn parse_index(&mut self, pos: u32) -> PResult<Expr> {
-        self.roles_push(&[Role::MemberObject]);
+    /// `[expr]` after the `[`. A string literal key becomes a `get_field`. `at`, where
+    /// the object starts, names its slot.
+    fn parse_index(&mut self, pos: u32, at: u32) -> PResult<Expr> {
+        self.roles_push(at, &[Role::MemberObject]);
         let key = self.parse_expr(false)?;
         self.roles_pop(1);
         self.expect(TokenKind::RBracket, "]")?;
@@ -1138,6 +1146,8 @@ impl Parser<'_, '_> {
 
     /// [`Parser::parse_args`] with the arguments' roles (suspension maps).
     pub(super) fn parse_args_as(&mut self, of: ArgsOf) -> PResult<Args> {
+        // An argument's slot is named by its start, the array of a spread by the `(`.
+        let paren = self.tok.start;
         self.expect(TokenKind::LParen, "(")?;
         let mut argc: u32 = 0;
         let mut array = false;
@@ -1145,18 +1155,19 @@ impl Parser<'_, '_> {
             if self.is(TokenKind::Ellipsis) {
                 if !array {
                     self.code().array_from(argc as u16);
-                    self.roles_replace(argc as usize, &[of.array()]);
+                    self.roles_replace(argc as usize, paren, &[of.array()]);
                     array = true;
                 }
                 self.next()?;
                 self.parse_assign(false)?;
                 self.code().array_spread();
             } else {
+                let arg = self.tok.start;
                 self.parse_assign(false)?;
                 if array {
                     self.code().array_push();
                 } else {
-                    self.roles_push(&[of.arg(argc as u16)]);
+                    self.roles_push(arg, &[of.arg(argc as u16)]);
                     argc += 1;
                     if argc > u16::MAX as u32 {
                         return syntax(self.tok.start, "Too many call arguments");
@@ -1205,6 +1216,7 @@ impl Parser<'_, '_> {
             return syntax(self.tok.start, "invalid use of 'import()'");
         }
         self.enter()?;
+        let start = self.tok.start;
         let mut e = if self.is(TokenKind::New) {
             self.parse_new()?
         } else {
@@ -1221,7 +1233,7 @@ impl Parser<'_, '_> {
                 }
                 TokenKind::LBracket => {
                     self.next()?;
-                    e = self.parse_index(tok.start)?;
+                    e = self.parse_index(tok.start, start)?;
                 }
                 TokenKind::QuestionDot => {
                     return syntax(
@@ -1236,7 +1248,7 @@ impl Parser<'_, '_> {
                 }
                 TokenKind::NoSubstTemplate | TokenKind::TemplateHead => {
                     // `new tag`x`` constructs the result of the tagged call.
-                    self.prepare_call(e);
+                    self.prepare_call(e, start);
                     let argc = self.parse_tagged_template()?;
                     self.mark(tok.start);
                     self.roles_pop(2);
@@ -1249,7 +1261,7 @@ impl Parser<'_, '_> {
         // The position of `new` is the token after the constructor: its `(`, or what
         // follows `new X` (as in qjs).
         let at = self.tok.start;
-        self.roles_push(&[Role::NewCallee]);
+        self.roles_push(pos, &[Role::NewCallee]);
         let args = if self.is(TokenKind::LParen) {
             self.parse_args_as(ArgsOf::New)?
         } else {
@@ -1418,15 +1430,15 @@ impl Parser<'_, '_> {
                     self.next()?;
                     self.code().undefined();
                     if self.is(TokenKind::LParen) {
-                        self.roles_push(&[Role::CallCallee]);
+                        self.roles_push(tok.start, &[Role::CallCallee]);
                         self.code().undefined();
-                        self.roles_push(&[Role::CallThis]);
+                        self.roles_push(tok.start, &[Role::CallThis]);
                         let args = self.parse_args()?;
                         self.emit_call(args);
                     }
                 } else {
                     self.code().undefined();
-                    self.prepare_call(Expr::Value);
+                    self.prepare_call(Expr::Value, tok.start);
                     let args = self.parse_args()?;
                     self.emit_call(args);
                 }
@@ -1453,7 +1465,7 @@ impl Parser<'_, '_> {
         self.expect(TokenKind::LParen, "(")?;
         self.parse_assign(false)?;
         if self.eat(TokenKind::Comma)? && !self.is(TokenKind::RParen) {
-            self.roles_push(&[Role::ImportSpecifier]);
+            self.roles_push(pos, &[Role::ImportSpecifier]);
             self.parse_assign(false)?;
             self.roles_pop(1);
             self.eat(TokenKind::Comma)?;
@@ -1513,7 +1525,7 @@ impl Parser<'_, '_> {
                         pos: tok.start,
                     })
                 } else {
-                    self.roles_push(&[Role::SuperThis, Role::SuperBase]);
+                    self.roles_push(pos, &[Role::SuperThis, Role::SuperBase]);
                     self.parse_expr(false)?;
                     self.roles_pop(2);
                     self.expect(TokenKind::RBracket, "]")?;
@@ -1536,7 +1548,7 @@ impl Parser<'_, '_> {
         let r = self.name_ref(active, pos);
         self.code().name_get(r);
         self.code().get_super();
-        self.roles_push(&[Role::SuperCallee]);
+        self.roles_push(pos, &[Role::SuperCallee]);
         let paren = self.tok.start;
         let args = self.parse_args_as(ArgsOf::Super)?;
         self.roles_pop(1);
@@ -1661,6 +1673,8 @@ impl Parser<'_, '_> {
     /// An untagged template literal: the cooked parts and `to_string` of each
     /// substitution, joined by one `concat`.
     fn parse_template(&mut self) -> PResult<Expr> {
+        // A part's slot is named by its start (a string's by its token's).
+        let start = self.tok.start;
         let mut parts: u32 = 0;
         let mut units = alloc::vec::Vec::new();
         loop {
@@ -1670,8 +1684,8 @@ impl Parser<'_, '_> {
             if !units.is_empty() {
                 let idx = self.string_const(&units)?;
                 self.code().push_const(idx);
-                self.roles_push(&[Role::TemplatePart(parts as u16)]);
-                parts = self.template_part(parts);
+                self.roles_push(tok.start, &[Role::TemplatePart(parts as u16)]);
+                parts = self.template_part(parts, start);
             }
             if matches!(
                 tok.kind,
@@ -1681,11 +1695,12 @@ impl Parser<'_, '_> {
                 break;
             }
             self.next()?;
+            let part = self.tok.start;
             self.parse_expr(false)?;
             self.mark(tok.end - 2);
             self.code().to_string();
-            self.roles_push(&[Role::TemplatePart(parts as u16)]);
-            parts = self.template_part(parts);
+            self.roles_push(part, &[Role::TemplatePart(parts as u16)]);
+            parts = self.template_part(parts, start);
             if !self.is(TokenKind::RBrace) {
                 return syntax(self.tok.start, "expected '}' after template expression");
             }
@@ -1710,7 +1725,8 @@ impl Parser<'_, '_> {
     fn parse_tagged_template(&mut self) -> PResult<u16> {
         let site = self.add_const(crate::value::Value::UNDEFINED);
         self.code().get_template_object(site);
-        self.roles_push(&[Role::CallArg(0)]);
+        // The template object is named by the template, a substitution by its start.
+        self.roles_push(self.tok.start, &[Role::CallArg(0)]);
         let mut cooked: alloc::vec::Vec<crate::value::Value> = alloc::vec::Vec::new();
         let mut raw: alloc::vec::Vec<crate::value::Value> = alloc::vec::Vec::new();
         let mut units = alloc::vec::Vec::new();
@@ -1734,8 +1750,9 @@ impl Parser<'_, '_> {
                 break;
             }
             self.next()?;
+            let arg = self.tok.start;
             self.parse_expr(false)?;
-            self.roles_push(&[Role::CallArg(argc as u16)]);
+            self.roles_push(arg, &[Role::CallArg(argc as u16)]);
             argc += 1;
             if argc > u16::MAX as u32 {
                 return syntax(self.tok.start, "Too many call arguments");
@@ -1761,12 +1778,13 @@ impl Parser<'_, '_> {
         self.alloc_units(units)
     }
 
-    /// Counts a pushed template part, joining early when the count would not fit.
-    fn template_part(&mut self, parts: u32) -> u32 {
+    /// Counts a pushed template part, joining early when the count would not fit (the
+    /// joined part is named by the template's `start`).
+    fn template_part(&mut self, parts: u32, start: u32) -> u32 {
         let parts = parts + 1;
         if parts == u16::MAX as u32 {
             self.code().concat(u16::MAX);
-            self.roles_replace(parts as usize, &[Role::TemplatePart(0)]);
+            self.roles_replace(parts as usize, start, &[Role::TemplatePart(0)]);
             return 1;
         }
         parts
@@ -1776,6 +1794,9 @@ impl Parser<'_, '_> {
     /// `array_from`; holes, spreads and the rest are appended one by one.
     fn parse_array(&mut self) -> PResult<Expr> {
         const STACK_ELEMS: u16 = 256;
+        // An element's slot is named by its start, the array under construction's by
+        // the `[`.
+        let open = self.tok.start;
         self.next()?;
         let mut on_stack: u16 = 0;
         let mut appending = false;
@@ -1783,26 +1804,27 @@ impl Parser<'_, '_> {
             match self.tok.kind {
                 TokenKind::RBracket => break,
                 TokenKind::Comma => {
-                    self.start_appending(&mut appending, on_stack);
+                    self.start_appending(&mut appending, on_stack, open);
                     self.code().array_hole();
                     self.next()?;
                     continue;
                 }
                 TokenKind::Ellipsis => {
-                    self.start_appending(&mut appending, on_stack);
+                    self.start_appending(&mut appending, on_stack, open);
                     self.next()?;
                     self.parse_assign(false)?;
                     self.code().array_spread();
                 }
                 _ => {
+                    let elem = self.tok.start;
                     self.parse_assign(false)?;
                     if appending {
                         self.code().array_push();
                     } else {
-                        self.roles_push(&[Role::ArrayElement(on_stack)]);
+                        self.roles_push(elem, &[Role::ArrayElement(on_stack)]);
                         on_stack += 1;
                         if on_stack == STACK_ELEMS {
-                            self.start_appending(&mut appending, on_stack);
+                            self.start_appending(&mut appending, on_stack, open);
                         }
                     }
                 }
@@ -1821,19 +1843,20 @@ impl Parser<'_, '_> {
         Ok(Expr::ArrayLit)
     }
 
-    fn start_appending(&mut self, appending: &mut bool, on_stack: u16) {
+    fn start_appending(&mut self, appending: &mut bool, on_stack: u16, open: u32) {
         if !*appending {
             self.code().array_from(on_stack);
-            self.roles_replace(on_stack as usize, &[Role::ArrayLiteral]);
+            self.roles_replace(on_stack as usize, open, &[Role::ArrayLiteral]);
             *appending = true;
         }
     }
 
     /// `{ a: 1, b, [k]: v, m() {}, get x() {}, set x(v) {}, __proto__: p, ...o }`.
     fn parse_object(&mut self) -> PResult<Expr> {
+        let open = self.tok.start;
         self.next()?;
         self.code().object();
-        self.roles_push(&[Role::ObjectLiteral]);
+        self.roles_push(open, &[Role::ObjectLiteral]);
         let mut seen_proto = false;
         while !self.is(TokenKind::RBrace) {
             let tok = self.tok;
@@ -2020,7 +2043,7 @@ impl Parser<'_, '_> {
                     }
                     None => {
                         self.code().to_propkey();
-                        self.roles_push(&[Role::ObjectKey]);
+                        self.roles_push(key_tok.start, &[Role::ObjectKey]);
                         self.parse_assign(false)?;
                         self.roles_pop(1);
                     }

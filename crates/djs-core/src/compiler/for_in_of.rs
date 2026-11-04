@@ -264,10 +264,10 @@ impl<'a> Parser<'a, '_> {
             self.code().dup();
             self.code().get_field(atoms::NEXT, 0);
             let kind = if is_await { Loop::Await } else { Loop::Of };
-            self.roles_push(&[Role::LoopIterator(kind), Role::LoopNext(kind)]);
+            self.roles_push(for_pos, &[Role::LoopIterator(kind), Role::LoopNext(kind)]);
         } else {
             self.code().for_in_start();
-            self.roles_push(&[Role::LoopIterator(Loop::In)]);
+            self.roles_push(for_pos, &[Role::LoopIterator(Loop::In)]);
         }
         let l_step = self.new_label();
         self.code().jump(l_step);
@@ -285,10 +285,10 @@ impl<'a> Parser<'a, '_> {
                 // In the close handler: the body's exception under the promise, the loop's
                 // `it next` consumed.
                 let kept = self.roles_take(2);
-                self.roles_push(&[Role::Exception]);
+                self.roles_push(for_pos, &[Role::Exception]);
                 self.site(SiteKind::ForAwaitClose, for_pos);
                 self.roles_pop(1);
-                self.roles_push(&kept);
+                self.roles_put(&kept);
                 self.code().await_(0);
             } else {
                 let close = intrinsic_id("IteratorCloseThrow").expect("%IteratorCloseThrow");
@@ -310,7 +310,7 @@ impl<'a> Parser<'a, '_> {
                 self.place(start);
                 if let Some(is_await) = using_head {
                     // Each iteration's resource is disposed at its end (compiler/using.rs).
-                    using = Some(self.using_region_start(base + state, is_await));
+                    using = Some(self.using_region_start(base + state, is_await, pos));
                     self.code().swap();
                     self.mark(pos);
                     self.emit_using_add(is_await);

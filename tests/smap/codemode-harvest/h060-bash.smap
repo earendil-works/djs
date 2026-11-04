@@ -8,10 +8,10 @@ function <anonymous> @1880..2373
   await#1 @19 (36:1) pc 49: -
 function <anonymous> @1927..2114
   loc0 <state>
-  await#1 @14 (37:16) pc 44: call.callee call.this
+  await#1 @14 (37:16) pc 44: call.callee@9 call.this@9
 function <anonymous> @2120..2242
   loc0 <state>
-  await#1 @14 (38:16) pc 44: call.callee call.this
+  await#1 @14 (38:16) pc 44: call.callee@9 call.this@9
 function <anonymous> @2248..2364
   loc0 <state>
-  await#1 @14 (39:16) pc 44: call.callee call.this
+  await#1 @14 (39:16) pc 44: call.callee@9 call.this@9

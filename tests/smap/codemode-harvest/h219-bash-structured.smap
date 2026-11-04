@@ -6,4 +6,4 @@ function <anonymous> @2917..3379
   arg0 tools@0, arg1 models@0
   loc0 <state>, loc1 r@0, loc2 all@0, loc3 t@175, loc4 m@219
   await#1 @37 (76:11) pc 34: - (out: loc3 loc4)
-  await#2 @229 (78:66) pc 103: for-of.iterator for-of.next
+  await#2 @229 (78:66) pc 103: for-of.iterator@164 for-of.next@164

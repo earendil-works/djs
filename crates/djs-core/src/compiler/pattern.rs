@@ -294,17 +294,18 @@ impl<'a> Parser<'a, '_> {
         self.next()?;
         self.mark(open.start);
         self.code().require_object_coercible();
-        self.roles_push(&[Role::PatternSource]);
+        self.roles_push(open.start, &[Role::PatternSource]);
         if rest {
             // The keys of the properties before the rest, to exclude from it.
             self.code().array_from(0);
-            self.roles_push(&[Role::PatternExcluded]);
+            self.roles_push(open.start, &[Role::PatternExcluded]);
         }
         let s = u8::from(rest);
         while !self.is(TokenKind::RBrace) {
             if self.is(TokenKind::Ellipsis) {
                 let pos = self.tok.start;
                 self.next()?;
+                let t_at = self.tok.start;
                 let t = if b == Binding::Assign {
                     let e = self.parse_lhs(false)?;
                     Target::Ref(self.pattern_lvalue(e, false)?)
@@ -315,7 +316,7 @@ impl<'a> Parser<'a, '_> {
                     self.parse_binding_target(b)?
                 };
                 let r = t.refs();
-                self.roles_push(t.roles());
+                self.roles_push(t_at, t.roles());
                 self.code().pick(r + 1);
                 self.code().pick(r + 1);
                 self.mark(pos);
@@ -334,6 +335,8 @@ impl<'a> Parser<'a, '_> {
                     self.peek().kind,
                     TokenKind::Comma | TokenKind::RBrace | TokenKind::Assign
                 );
+            // Where the target starts: it names the slots of a reference target.
+            let mut t_at = key_tok.start;
             let (key, t) = if shorthand {
                 let a = self.ident_atom()?;
                 if rest {
@@ -368,17 +371,18 @@ impl<'a> Parser<'a, '_> {
                             self.code().array_push();
                             self.code().swap();
                         }
-                        self.roles_push(&[Role::PatternKey]);
+                        self.roles_push(key_tok.start, &[Role::PatternKey]);
                     }
                 }
                 if !self.is(TokenKind::Colon) {
                     return syntax(self.tok.start, "expecting ':'");
                 }
                 self.next()?;
+                t_at = self.tok.start;
                 (key, self.parse_target(b)?)
             };
             let r = t.refs();
-            self.roles_push(t.roles());
+            self.roles_push(t_at, t.roles());
             match key {
                 Some(a) => {
                     self.code().pick(s + r);
@@ -424,7 +428,7 @@ impl<'a> Parser<'a, '_> {
         self.code().dup();
         self.code().get_field(atoms::NEXT, 0);
         self.code().swap();
-        self.roles_push(&[Role::PatternNext, Role::PatternIterator]);
+        self.roles_push(open.start, &[Role::PatternNext, Role::PatternIterator]);
         // `next it`: the close handler's depth is the depth here.
         let l_base = self.new_label();
         self.place(l_base);
@@ -455,12 +459,13 @@ impl<'a> Parser<'a, '_> {
                 }
                 TokenKind::Ellipsis => {
                     self.next()?;
+                    let t_at = self.tok.start;
                     let t = self.parse_target(b)?;
                     if !self.is(TokenKind::RBracket) {
                         return syntax(self.tok.start, "rest element must be the last one");
                     }
                     may_throw |= matches!(t, Target::Pattern(_));
-                    self.roles_push(t.roles());
+                    self.roles_push(t_at, t.roles());
                     self.region_end(&mut regions);
                     self.emit_iter_rest(t.refs(), first, open.start);
                     self.region_start(&mut regions);
@@ -469,9 +474,10 @@ impl<'a> Parser<'a, '_> {
                     break;
                 }
                 _ => {
+                    let t_at = self.tok.start;
                     let t = self.parse_target(b)?;
                     may_throw |= matches!(t, Target::Pattern(_));
-                    self.roles_push(t.roles());
+                    self.roles_push(t_at, t.roles());
                     self.region_end(&mut regions);
                     self.emit_iter_step(t.refs(), first, open.start);
                     self.region_start(&mut regions);

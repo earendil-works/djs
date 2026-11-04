@@ -4,13 +4,13 @@ function <anonymous> @1..1424
   await#1 @578 (23:15) pc 56: - (out: loc11)
   await#2 @689 (25:12) pc 107: - (out: loc11)
   await#3 @814 (28:3) pc 136: - (out: loc11)
-  for-await.close#1 @1193 (41:1) pc 208: exception
-  for-await.next#1 @1193 (41:1) pc 248: for-await.iterator for-await.next
+  for-await.close#1 @1193 (41:1) pc 208: exception@1193
+  for-await.next#1 @1193 (41:1) pc 248: for-await.iterator@1193 for-await.next@1193
   await#4 @1308 (43:17) pc 331: - (out: loc11)
 function fetchAll @141..319
   arg0 paths@0
   loc0 <state>, loc1 out@0, loc2 path@64, loc3 r@85
-  await#1 @95 (6:15) pc 78: for-of.iterator for-of.next
+  await#1 @95 (6:15) pc 78: for-of.iterator@53 for-of.next@53
 function withRetry @338..563
   arg0 argument 0, arg1 argument 1
   loc0 <state>, loc1 fn@0, loc2 tries@0, loc3 last@29, loc4 i@50
@@ -22,7 +22,7 @@ function chunks @930..1030
 function results @1031..1176
   arg0 list@0
   loc0 <state>, loc1 chunk@45
-  yield.await#1 @77 (37:5) pc 77: for-of.iterator for-of.next
-  yield#1 @77 (37:5) pc 80: for-of.iterator for-of.next
-  yield.return#1 @77 (37:5) pc 85: for-of.iterator for-of.next
-  await#1 @83 (37:11) pc 74: for-of.iterator for-of.next
+  yield.await#1 @77 (37:5) pc 77: for-of.iterator@34 for-of.next@34
+  yield#1 @77 (37:5) pc 80: for-of.iterator@34 for-of.next@34
+  yield.return#1 @77 (37:5) pc 85: for-of.iterator@34 for-of.next@34
+  await#1 @83 (37:11) pc 74: for-of.iterator@34 for-of.next@34

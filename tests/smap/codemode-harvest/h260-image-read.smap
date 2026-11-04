@@ -5,4 +5,4 @@ function <anonymous> @1..2162
 function <anonymous> @1944..2140
   arg0 tools@0, arg1 image@0
   loc0 <state>, loc1 i@37, loc2 r@53
-  await#1 @63 (37:38) pc 86: for-of.iterator for-of.next
+  await#1 @63 (37:38) pc 86: for-of.iterator@26 for-of.next@26

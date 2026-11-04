@@ -6,4 +6,4 @@ function <anonymous> @3022..4246
   arg0 tools@0, arg1 models@0
   loc0 <state>, loc1 r@0, loc2 lines@0, loc3 model@0, loc4 criteria@0, loc5 t0@0, loc6 out@0, loc7 c@822, loc8 res@838
   await#1 @37 (76:11) pc 25: - (out: loc7 loc8)
-  await#2 @850 (90:15) pc 282: for-of.iterator for-of.next
+  await#2 @850 (90:15) pc 282: for-of.iterator@811 for-of.next@811

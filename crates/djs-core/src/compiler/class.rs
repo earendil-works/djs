@@ -149,7 +149,7 @@ impl Parser<'_, '_> {
         self.enter_n(super::parser::CLASS_WEIGHT)?;
         // What a class definition keeps on the stack (heritage, constructor, prototype,
         // computed keys) is not described in suspension maps yet (D2563).
-        self.roles_push(&[super::smap::Role::Unsupported("class")]);
+        self.roles_push(0, &[super::smap::Role::Unsupported("class")]);
         let r = self.parse_class_inner(decl, hint);
         self.roles_pop(1);
         self.leave_n(super::parser::CLASS_WEIGHT);

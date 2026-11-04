@@ -6,8 +6,8 @@ function <anonymous> @2511..2947
   arg0 argument 0
   loc0 <state>, loc1 tools@0
   await#1 @19 (65:1) pc 51: -
-  await#2 @257 (66:6) pc 84: call.callee call.this
+  await#2 @257 (66:6) pc 84: call.callee@252 call.this@252
 function <anonymous> @2651..2759
   arg0 path@0
   loc0 <state>
-  await#1 @33 (65:155) pc 79: call.callee call.this object.literal
+  await#1 @33 (65:155) pc 79: call.callee@14 call.this@14 object.literal@19

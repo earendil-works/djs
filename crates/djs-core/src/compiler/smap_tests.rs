@@ -322,6 +322,86 @@ fn unsupported_constructs() {
     check(UNSUPPORTED);
 }
 
+/// The slot names of each site (D2721), as one line per site.
+fn names(src: &str) -> Vec<String> {
+    let mut heap = Heap::new().unwrap();
+    let opts = CompileOptions::async_body("t.js", &[]);
+    let maps = suspension_maps(&mut heap, src.as_bytes(), &opts).unwrap();
+    let mut out = Vec::new();
+    for m in &maps {
+        for s in &m.sites {
+            out.push(alloc::format!("{} {}", s.name, s.slots.join(" ")));
+        }
+    }
+    out
+}
+
+/// Slots are named by construct and the offset of what keeps the value, from the
+/// function's start (the async body's wrapper adds none: its text starts at the
+/// source's first byte, here `0`).
+#[test]
+fn slot_names_per_construct() {
+    let table: &[(&str, &[&str])] = &[
+        // callee and `this` by the call's start, arguments by their own.
+        (
+            "o.m(a, await b);",
+            &["await#1 call.callee@0 call.this@0 call.arg@4"],
+        ),
+        (
+            "f(...xs, await y);",
+            &["await#1 call.callee@0 call.this@0 call.args@1"],
+        ),
+        (
+            "x = [1, f(await y)];",
+            &["await#1 array.element@5 call.callee@8 call.this@8"],
+        ),
+        ("a + await b;", &["await#1 binary.left@0"]),
+        (
+            "o[k] += await v;",
+            &["await#1 assign.object@0 assign.key@0 assign.old@0"],
+        ),
+        (
+            "x = `a${b}${await c}`;",
+            &["await#1 template.part@4 template.part@8"],
+        ),
+        (
+            "for (const x of xs) await x;",
+            &["await#1 for-of.iterator@0 for-of.next@0"],
+        ),
+        (
+            "switch (d) { case 1: break; case await t: }",
+            &["await#1 switch.discriminant@0 switch.discriminant@28"],
+        ),
+    ];
+    let mut bad = Vec::new();
+    for (src, want) in table {
+        let got = names(src);
+        if got.iter().map(String::as_str).collect::<Vec<_>>() != *want {
+            bad.push(alloc::format!("{src}\n  want {want:?}\n  got  {got:?}"));
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// No two operands of a site share a name, in every construct the tables cover.
+#[test]
+fn slot_names_are_unique_per_site() {
+    for table in [CONSTRUCTS, LOOPS, STATEMENTS, USING, PATTERNS] {
+        for (src, _) in table {
+            let mut heap = Heap::new().unwrap();
+            let opts = CompileOptions::async_body("t.js", &[]);
+            for m in suspension_maps(&mut heap, src.as_bytes(), &opts).unwrap() {
+                for s in &m.sites {
+                    assert_eq!(s.slots.len(), s.operands.len());
+                    for (i, n) in s.slots.iter().enumerate() {
+                        assert!(!s.slots[..i].contains(n), "{src}: {} {n} twice", s.name);
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// The roles come from where the compiler emits the construct: a lowering that pushed
 /// `this` under the callee gives another map, which the pin test would show.
 #[test]
@@ -466,6 +546,11 @@ fn pinned_maps() {
                 out.push_str(&m.text(src.as_bytes()));
                 for s in &m.sites {
                     sites += 1;
+                    for (i, n) in s.slots.iter().enumerate() {
+                        if s.slots[..i].contains(n) {
+                            failed.push(alloc::format!("{name}: {} names {n} twice", s.name));
+                        }
+                    }
                     *kinds.entry(String::from(s.kind.name())).or_default() += 1;
                     match &s.unsupported {
                         Some(u) => *unsupported.entry(u.clone()).or_default() += 1,

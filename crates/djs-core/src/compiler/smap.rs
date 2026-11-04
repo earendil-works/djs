@@ -219,6 +219,17 @@ impl Role {
             Role::Unsupported(_) => ("unsupported", None),
         }
     }
+
+    /// The name of the slot that holds this operand (D2721): the construct (the role's
+    /// name without its index) and `at`, the source offset from the function's start
+    /// of what keeps the value. For a list's element (an argument, an array element, a
+    /// template part) that is the element's own start, which stands for the index;
+    /// for everything else the start of the construct that keeps it (the call, the
+    /// assignment, the `for`, the `switch`, …). See docs/continuation-dumps.md "Slot
+    /// names".
+    pub fn slot_name(self, at: u32) -> alloc::string::String {
+        alloc::format!("{}@{at}", self.parts().0)
+    }
 }
 
 /// What kind of suspension point a site is.
@@ -284,7 +295,8 @@ mod maps {
     /// The parser's record of one function: the role stack and the sites so far.
     #[derive(Default)]
     pub(in crate::compiler) struct Recorder {
-        pub roles: Vec<Role>,
+        /// The roles with the source offset that names their slot (D2721).
+        pub roles: Vec<(Role, u32)>,
         pub sites: Vec<SiteRec>,
         /// The computed property keys this function evaluates (`[` to `]`).
         pub computed_keys: Vec<(u32, u32)>,
@@ -302,8 +314,9 @@ mod maps {
         pub p1: u32,
         /// The innermost scope at the site.
         pub scope: ScopeId,
-        /// The role stack at the site: the operands below the awaited value.
-        pub roles: Vec<Role>,
+        /// The role stack at the site: the operands below the awaited value, each
+        /// with the source offset its slot is named by.
+        pub roles: Vec<(Role, u32)>,
     }
 
     /// What a frame slot holds at a site.
@@ -343,6 +356,10 @@ mod maps {
         pub boxed: Vec<bool>,
         /// The operands below the awaited value, bottom first.
         pub operands: Vec<Role>,
+        /// The operands' slot names, bottom first (D2721): the construct and the
+        /// source offset, from the function's start, of what keeps the value
+        /// (`call.callee@41`); see [`Role::slot_name`].
+        pub slots: Vec<String>,
         /// For each `Role::FinallyReturn` operand, bottom first: the return addresses
         /// (pcs after each `gosub` to its subroutine, in emission order) a dump names by
         /// index.
@@ -369,8 +386,9 @@ mod maps {
 
     impl FunctionMap {
         /// The map as text, for the pin test and for reading: a header with every slot
-        /// that holds something at some site, then one line per site with its operands
-        /// and the slots that hold nothing there (`out`).
+        /// that holds something at some site, then one line per site with its operands'
+        /// slot names, bottom first (D2721), and the slots that hold nothing there
+        /// (`out`).
         pub fn text(&self, src: &[u8]) -> String {
             let mut out = String::new();
             let _ = writeln!(out, "function {} @{}..{}", self.name, self.start, self.end);
@@ -414,10 +432,10 @@ mod maps {
                     Some(u) => {
                         let _ = write!(out, " unsupported {u}");
                     }
-                    None if s.operands.is_empty() => out.push_str(" -"),
+                    None if s.slots.is_empty() => out.push_str(" -"),
                     None => {
-                        for r in &s.operands {
-                            let _ = write!(out, " {r}");
+                        for n in &s.slots {
+                            let _ = write!(out, " {n}");
                         }
                     }
                 }
@@ -545,8 +563,8 @@ mod maps {
                     *a = Some(slot);
                 }
             }
-            let unsupported = match s.roles.iter().find_map(|r| match r {
-                Role::Unsupported(c) => Some(*c),
+            let unsupported = match s.roles.iter().find_map(|r| match r.0 {
+                Role::Unsupported(c) => Some(c),
                 _ => None,
             }) {
                 Some(c) => Some(String::from(c)),
@@ -576,9 +594,9 @@ mod maps {
                     None => s
                         .roles
                         .iter()
-                        .filter_map(|r| match r {
+                        .filter_map(|r| match r.0 {
                             Role::FinallyReturn(i) => {
-                                Some(subs.get(*i as usize).cloned().unwrap_or_default())
+                                Some(subs.get(i as usize).cloned().unwrap_or_default())
                             }
                             _ => None,
                         })
@@ -587,7 +605,15 @@ mod maps {
                 operands: if unsupported.is_some() {
                     Vec::new()
                 } else {
-                    s.roles.clone()
+                    s.roles.iter().map(|r| r.0).collect()
+                },
+                slots: if unsupported.is_some() {
+                    Vec::new()
+                } else {
+                    s.roles
+                        .iter()
+                        .map(|&(r, at)| r.slot_name(at.saturating_sub(base)))
+                        .collect()
                 },
                 unsupported,
             });
@@ -611,9 +637,18 @@ mod maps {
 
 #[cfg(feature = "dump")]
 impl super::parser::Parser<'_, '_> {
-    /// The construct keeps values with roles `rs` on the stack (pushed in this order).
+    /// The construct keeps values with roles `rs` on the stack (pushed in this order);
+    /// `at` is the source offset that names their slots (D2721, [`Role::slot_name`]).
     #[inline]
-    pub(super) fn roles_push(&mut self, rs: &[Role]) {
+    pub(super) fn roles_push(&mut self, at: u32, rs: &[Role]) {
+        if let Some(r) = &mut self.f.smap {
+            r.roles.extend(rs.iter().map(|&x| (x, at)));
+        }
+    }
+
+    /// Puts back roles [`Parser::roles_take`] took off.
+    #[inline]
+    pub(super) fn roles_put(&mut self, rs: &[(Role, u32)]) {
         if let Some(r) = &mut self.f.smap {
             r.roles.extend_from_slice(rs);
         }
@@ -629,9 +664,9 @@ impl super::parser::Parser<'_, '_> {
     }
 
     /// Takes the top `n` roles off (values the code consumed for a while), for
-    /// `roles_push` to put back.
+    /// `roles_put` to put back.
     #[inline]
-    pub(super) fn roles_take(&mut self, n: usize) -> alloc::vec::Vec<Role> {
+    pub(super) fn roles_take(&mut self, n: usize) -> alloc::vec::Vec<(Role, u32)> {
         match &mut self.f.smap {
             Some(r) => {
                 let at = r.roles.len().saturating_sub(n);
@@ -643,9 +678,9 @@ impl super::parser::Parser<'_, '_> {
 
     /// Replaces the top `n` roles by `rs` (an `array_from` collapsing its elements).
     #[inline]
-    pub(super) fn roles_replace(&mut self, n: usize, rs: &[Role]) {
+    pub(super) fn roles_replace(&mut self, n: usize, at: u32, rs: &[Role]) {
         self.roles_pop(n);
-        self.roles_push(rs);
+        self.roles_push(at, rs);
     }
 
     /// A subroutine starts at `l` (placed next): its index for `Role::FinallyReturn`.
@@ -681,13 +716,15 @@ impl super::parser::Parser<'_, '_> {
 #[cfg(not(feature = "dump"))]
 impl super::parser::Parser<'_, '_> {
     #[inline(always)]
-    pub(super) fn roles_push(&mut self, _rs: &[Role]) {}
+    pub(super) fn roles_push(&mut self, _at: u32, _rs: &[Role]) {}
+    #[inline(always)]
+    pub(super) fn roles_put(&mut self, _rs: &[(Role, u32)]) {}
     #[inline(always)]
     pub(super) fn roles_pop(&mut self, _n: usize) {}
     #[inline(always)]
-    pub(super) fn roles_replace(&mut self, _n: usize, _rs: &[Role]) {}
+    pub(super) fn roles_replace(&mut self, _n: usize, _at: u32, _rs: &[Role]) {}
     #[inline(always)]
-    pub(super) fn roles_take(&mut self, _n: usize) -> alloc::vec::Vec<Role> {
+    pub(super) fn roles_take(&mut self, _n: usize) -> alloc::vec::Vec<(Role, u32)> {
         alloc::vec::Vec::new()
     }
     #[inline(always)]

@@ -5,5 +5,5 @@ function <anonymous> @1..1736
 function <anonymous> @1449..1725
   arg0 tools@0
   loc0 <state>
-  await#1 @24 (34:6) pc 42: call.callee call.this
-  await#2 @195 (35:6) pc 74: call.callee call.this
+  await#1 @24 (34:6) pc 42: call.callee@19 call.this@19
+  await#2 @195 (35:6) pc 74: call.callee@190 call.this@190

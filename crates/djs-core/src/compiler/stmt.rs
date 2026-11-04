@@ -531,7 +531,7 @@ impl Parser<'_, '_> {
                 self.next()?;
                 self.push_scope(ScopeKind::For)?;
                 scoped = true;
-                let r = self.using_region_start(self.stmt_depth, is_await);
+                let r = self.using_region_start(self.stmt_depth, is_await, self.tok.start);
                 self.using_env(&r);
                 using = Some(r);
                 self.parse_using_bindings(is_await, true)?;
@@ -879,11 +879,12 @@ impl Parser<'_, '_> {
             });
             self.code().gosub(l_fin);
             self.code().throw();
+            let fin_pos = self.tok.start;
             self.expect(TokenKind::Finally, "finally")?;
             let sub = self.subroutine(l_fin);
             self.place(l_fin);
             self.stmt_depth = base + 2;
-            self.roles_push(&[Role::FinallyValue, Role::FinallyReturn(sub)]);
+            self.roles_push(fin_pos, &[Role::FinallyValue, Role::FinallyReturn(sub)]);
             // A normal finally block keeps the completion value of the try statement:
             // it is saved on the stack (a jump out of the block drops it).
             let completion = self.completion_local();
@@ -893,7 +894,7 @@ impl Parser<'_, '_> {
                 self.stmt_depth += 1;
                 self.reset_completion();
                 // (Script and eval code, which never suspends.)
-                self.roles_push(&[Role::Unsupported("a completion value")]);
+                self.roles_push(fin_pos, &[Role::Unsupported("a completion value")]);
             }
             self.parse_block()?;
             if let Some(a) = completion {
@@ -926,6 +927,7 @@ impl Parser<'_, '_> {
     /// <body>; jump L_body_i+1`. When no case matches: `drop` and jump to `default` or
     /// the end.
     fn parse_switch(&mut self, labels: Vec<Atom>) -> PResult<()> {
+        let switch_pos = self.tok.start;
         self.next()?;
         self.reset_completion();
         self.parse_paren_expr()?;
@@ -950,11 +952,15 @@ impl Parser<'_, '_> {
             let body = next_body.take().unwrap_or_else(|| self.new_label());
             match self.tok.kind {
                 TokenKind::Case => {
+                    let case_pos = self.tok.start;
                     self.next()?;
                     self.place(next_test);
                     next_test = self.new_label();
                     self.code().dup();
-                    self.roles_push(&[Role::SwitchDiscriminant, Role::SwitchDiscriminant]);
+                    // The kept discriminant is named by the `switch`, the copy the
+                    // test compares by its `case`.
+                    self.roles_push(switch_pos, &[Role::SwitchDiscriminant]);
+                    self.roles_push(case_pos, &[Role::SwitchDiscriminant]);
                     self.parse_expr(false)?;
                     self.roles_pop(2);
                     self.code().strict_eq();

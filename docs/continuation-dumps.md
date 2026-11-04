@@ -379,6 +379,57 @@ The pin test commits the maps of every await in the corpus and the e2e async tes
 the bytecode snapshot tests. Accepting a diff means accepting that dumps stopped at those
 sites by an older build refuse (or adding a mapping).
 
+### Slot names (D2721, D2730)
+
+docs/suspension-design-review.md moves everything a suspended frame holds into named
+frame slots (D2720). The names are the contract between builds: a dump says which value
+is in which named slot, and a later build loads it if its compiler keeps the same named
+slots at the site, whatever its operand stack or local layout. The names:
+
+- **States** keep their site names: `await#N`, `yield#N` and the compiler-made kinds
+  (`for-await.next#N`, `yield*.await#N`, …), numbered per kind in the function's text
+  order.
+- **Bindings** are named by the source: `x`, or `x@S` where `S` is the offset of the
+  declaring scope when two `x` are in scope (as `bindings` keys are today); hidden locals
+  by their stable names (`<state>`, `this`, `new.target`, `<home>`, `arguments`).
+- **Temporaries** (what the compiler keeps across the site that is not a binding) are
+  named `construct@S`: the construct that keeps the value, and `S`, the source offset,
+  from the function's start (the first byte of its `toString` text), of:
+  - for an element of a list (a call's, `new`'s, `super(…)`'s or an intrinsic's
+    argument, an array literal's element, a template literal's part, a tagged
+    template's substitution), the element's own start, which stands for its index:
+    `call.arg@57`, `array.element@120`, `template.part@203`;
+  - for everything else, the start of the construct: the call's callee
+    (`call.callee@41`, `call.this@41`), the assignment's target (`assign.object@12`,
+    `assign.key@12`, `assign.old@12`), the binary expression (`binary.left@88`), the
+    object (`member.object@30`), `new`, `super` or `import` keyword, the `[`/`{` of an
+    array or object literal under construction or a destructuring pattern
+    (`array.literal@7`, `object.literal@19`, `pattern.iterator@25`), a computed key's
+    `[` (`object.key@44`, `pattern.key@44`), the `(` of a spread call's argument array
+    (`call.args@6`), the `for` of a loop and the `yield` of a `yield*`
+    (`for-of.iterator@18`, `for-of.next@18`, `yield*.next@38`), the `switch`
+    (`switch.discriminant@0`), the region's first bound name of `using` declarations
+    (`using.record@30`), the `finally` keyword (`finally.value@151`).
+  - The construct is today's operand role without its index (`call.arg[2]` →
+    `call.arg`). Copies the compiler keeps of one value are named apart until the
+    steps that hold them once: the discriminant a `case` test compares is named by the
+    `case` (`switch.discriminant@28`), and the values of an `await using` disposal (the
+    subroutine's value and return address, the Record's copy) by the site, the end of
+    the statement list.
+
+No two slots of a site share a name: offsets of nested constructs differ, and two
+temporaries of one construct differ by construct name. The pin test checks this over the
+corpus. A name changes when the source text before the construct changes, which a dump
+never does: it carries the function's verbatim text. Spans are byte offsets of the
+compiled text, like a site's `@pos`.
+
+The suspension maps report each site's temporaries by name (`Site::slots`, bottom first,
+beside the roles in `Site::operands`), and the pins list them per site
+(`await#2 @212 (4:13) pc 87: call.callee@205 call.this@205`), so a compiler change that
+keeps a different value across an await shows as a renamed or added slot. Until step 3
+of the migration (0191) the dump format still writes `operands` by role; from then on
+it writes `slots` by these names.
+
 ### Classes and private fields
 
 Classes are written as their verbatim source inside a factory (they capture like

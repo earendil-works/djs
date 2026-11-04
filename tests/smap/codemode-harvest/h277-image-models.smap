@@ -9,4 +9,4 @@ function <anonymous> @2710..4269
 function <anonymous> @3973..4078
   arg0 argument 0
   loc0 <state>, loc1 k@0, loc2 s@0
-  await#1 @22 (73:82) pc 154: array.element[0]
+  await#1 @22 (73:82) pc 154: array.element@19

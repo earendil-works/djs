@@ -9,4 +9,4 @@ function <anonymous> @1596..1853
 function <anonymous> @1737..1848
   arg0 path@0
   loc0 <state>
-  await#1 @31 (40:154) pc 79: call.callee call.this object.literal
+  await#1 @31 (40:154) pc 79: call.callee@12 call.this@12 object.literal@17
