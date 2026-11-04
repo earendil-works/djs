@@ -718,14 +718,14 @@ def cmd_stream(_args):
         # Test binaries list their tests; of the programs only those known to just print
         # their usage on --help (djs-bgen without arguments would rewrite files).
         if m["profile"]["test"] or m["target"]["name"] in ("djs", "djs-difftest"):
-            t = threading.Thread(target=warm, args=(m["executable"], m["profile"]["test"]))
+            t = threading.Thread(target=warm, args=(m["executable"], m["profile"]["test"]), daemon=True)
             t.start()
             threads.append(t)
-    built = time.time()
-    for t in threads:
-        t.join()
-    print(f"gate stream: cargo done; {len(threads)} new executables run once, the last"
-          f" {time.time() - built:.1f}s after", file=sys.stderr)
+    # The build is done: legs may start. Runs still waiting for their check go on (or are
+    # dropped, if not started yet: the leg's own run waits for the check then), so the
+    # checks overlap the legs instead of delaying them (0197).
+    print(f"gate stream: cargo done; {len(threads)} new executables,"
+          f" {sum(t.is_alive() for t in threads)} still waiting for their first run", file=sys.stderr)
     return 0
 
 
