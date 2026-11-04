@@ -97,16 +97,6 @@ pub fn labels_at(heap: &Heap, t: &TemplateInfo, at: u32) -> Option<Vec<String>> 
                 return Some(s);
             }
             let mut succ = vec![];
-            if info.has(flags::GOSUB) {
-                let mut s2 = st.clone();
-                s2.push("finally.return-address".into());
-                if let Some(tg) = insn.jump_target() {
-                    reach(&mut state, &mut work, tg, s2);
-                }
-                let before = state[&pc].clone();
-                reach(&mut state, &mut work, insn.next_pc(), before);
-                continue;
-            }
             if (info.has(flags::JUMP) || info.has(flags::BRANCH))
                 && let Some(tg) = insn.jump_target()
             {

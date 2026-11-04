@@ -8928,3 +8928,47 @@ golden dumps refused (their states' slot sets changed: a pattern's source no lon
 a `case` copy, a Record copy) and are rewritten under this decision; the other 116 load
 unchanged, including those whose slot order changed. Pins rewritten (temporaries listed
 per state, summary counts constructs).
+
+## D2733: Finally completions in temporaries; gosub/ret and return-address indexes gone
+date: 2026-11-04 · by: sm · issue: 0193
+A finally block, a `using` list's disposal and a for-of's close on a jump out are code of
+their own entered with a jump, after the completion is stored in two construct
+temporaries (D2732) named by the statement: `completion.kind@S` and
+`completion.value@S` (S: the `try` keyword, the `for`, the list's first bound name).
+The kind is an int: 0 normal, 1 throw, 2 return, `3 + 2·o` a `break` to the statement
+at offset o from the function's start (a loop's or switch's keyword, a labeled
+statement's first label), `4 + 2·o` a `continue` to it, so a dump names the pending
+exit by its target, not by an emission index. The block's end dispatches: `get kind;
+jump_if_false L_end` for a normal completion, a compare per exit that entered the block
+(none for the last when nothing else can arrive), and the rethrow of the value (cleared
+first). An exit that crosses several blocks enters the next one out from the dispatch
+of the one before, with the same kind; a return copies its value along. Compiled code
+and compiler: compiler/completion.rs; docs/compiler.md 7.4.
+
+All functions use it, not only those that can suspend (the review's option): one lowering
+keeps the compiler simple and lets gosub/ret go entirely. Deleted: the `gosub`/`ret` ops,
+the `GOSUB` flag and the stack checker's and liveness pass's subroutine handling, the
+roles `finally.value`/`finally.return`, `Recorder::subs`, `Site::returns` and the
+exporter's and loader's return-address index mapping (D2627's mechanism; its case-test
+part stands), `OpenIter::ForOf` (a generator's return from a for-of head's target now
+leaves the loop through its close block: the env is pushed while the target is stored),
+the inline for-await close on a generator's return path and with it the refusals
+"closing a for-await's iterator on a generator's return(v) path" and "a finally's saved
+completion value" (Script and eval code save it in `completion.saved@S`). Statements
+keep nothing on the operand stack any more, so `stmt_depth`, `BlockEnv::depth` and the
+stack cuts before jumps and returns are gone too.
+
+Liveness: only completions with a value write it, and the kind is written after the
+value, so a write of `completion.kind@S` defines `completion.value@S` for the liveness
+pass. A value is then listed only inside its block (where the dispatch may read it); a
+normal completion there shows `undefined` (the rethrow clears it).
+
+Measured (instructions retired, native release; wasm in node n=4), base f7bd3f3d: a
+try/finally, return-through-finally, for-of exit loop -4.5% native, -3.8% wasm; the
+engine workloads within -1.7%..+0.5% native and -0.1%..+0.6% wasm. Size: -156 B gzip
+(main), -113 B (slim). Frames of functions with for-of loops get two more locals
+(slots of disjoint scopes are shared). Pins and snapshots rewritten (the new slots, pcs);
+19 of 130 golden dumps (finally, for-await-close, using: states inside a finally block,
+a disposal or a close) are rewritten under this decision, the other 111 load unchanged; a
+new golden program (return-path, 2 dumps) dumps the formerly refused for-await close. The op table
+changes, so images get a new descriptor.

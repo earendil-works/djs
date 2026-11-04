@@ -322,8 +322,8 @@ loop {
   template, and prototype caches validated by an epoch (D1620, D1621). for-of and
   array destructuring step Array, String, Map and Set iterators without result objects
   while `next` is the original (`iter_next`, D1800).
-- **Exceptions:** per-function handler tables map pc ranges to handlers. `finally` uses
-  `gosub`/`ret` at a fixed stack depth (D1084, D1250). Unwinding walks frames in the arena.
+- **Exceptions:** per-function handler tables map pc ranges to handlers. `finally` is
+  entered with a jump, its completion (kind and value) in two locals (D1084, D2733). Unwinding walks frames in the arena.
   Stack overflow is a RangeError (D013, D1540); errors carry qjs-style stack traces
   (D1282).
 - **Generators and async functions:** on `yield`/`await`, the frame's slice of the value

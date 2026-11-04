@@ -235,8 +235,8 @@ As built (0171, D2583–D2585):
   a name are in scope), the hidden locals the loader does not make itself (it makes
   `<state>`, `this`, `new.target`, `<active>`, `<home>`; `arguments` is given), and the
   temporaries of the constructs in flight (`call.callee@41`, `for-of.iterator@18`; a
-  for-in loop's key iterator is `$dump.forIn(…)`, a subroutine's return address the
-  index of its `gosub`). The loader writes each value into the frame index its own map
+  for-in loop's key iterator is `$dump.forIn(…)`, a finally block's pending completion
+  `completion.kind`/`completion.value`). The loader writes each value into the frame index its own map
   gives the name, so the keys' order means nothing. `queue` is an async generator's
   requests `{type: "next"|"throw"|"return", value, promise}` with pending promises the
   dump made. Unknown keys, a missing or extra slot or queue entry, a non-promise
@@ -299,12 +299,16 @@ passes, say, its run's promise as "run").
   (`using.record`, `$dump.using`); a destructuring pattern under way keeps its value or
   iterator, the keys a rest property excludes and a computed key (`pattern.*`), an
   assignment pattern also the assignment's value (`assign.value`).
-- **Subroutines:** a finally block (and a for-await's close when `break`, `continue` or
-  `return` leaves the loop) runs as a subroutine whose stack holds the value it carries
-  and a return address; the dump writes the address as the index of the `gosub` that
-  entered it (`"finally.return@151": 2`), which the loader maps to its own pc (D2627).
+- **Completions:** a finally block, a `using` list's disposal and a for-await's close
+  when `break`, `continue` or `return` leaves the loop are entered with their completion
+  in two temporaries named by the statement: `completion.kind@S` (0 normal, 1 throw, 2
+  return, `3 + 2·o` a `break` to the statement at offset o, `4 + 2·o` a `continue` to it)
+  and `completion.value@S` (the exception or the return value), so a dump of a frame
+  inside one writes them like any value (`"completion.kind@23": 2, "completion.value@23":
+  1`) and the block's end goes on with the exit (D2733; before 0193 a return address, by
+  the index of its `gosub`, D2627).
 - **Still refused, with their path:** sites the maps call unsupported (inside a class
-  definition, closing a for-await's iterator on a generator's `return(v)` path), a for-in
+  definition), a for-in
   loop over a Proxy, revoked Proxies, weak collections, a generator object
   with another prototype or own properties, keyed combinators (`allKeyed`), an async
   generator awaiting a `return()` value, then-reactions on promises of other
@@ -416,14 +420,13 @@ slots at the site, whatever its operand stack or local layout. The names:
     (`call.args@6`), the `for` of a loop and the `yield` of a `yield*`
     (`for-of.iterator@18`, `for-of.next@18`, `yield*.next@38`), the `switch`
     (`switch.discriminant@0`), the region's first bound name of `using` declarations
-    (`using.record@30`), the `finally` keyword (`finally.value@151`).
+    (`using.record@30`), the statement whose completion is pending (`try`, `for`, the
+    `using` list's first bound name: `completion.kind@23`, `completion.value@23`).
   - The construct is the operand role without its index (`call.arg[2]` →
     `call.arg`); the exception a `for await` rethrows after closing its iterator is
     `for-await.exception` (every construct has a `.` or a `-`, so no temporary's name is
     a binding's `name@scope`, D2731). The value a `case` test compares with is the left
-    side of its `===`, named by the `case` (`binary.left@28`), and the values of an
-    `await using` disposal (the subroutine's value and return address) by the site, the
-    end of the statement list.
+    side of its `===`, named by the `case` (`binary.left@28`).
 
 No two slots of a site share a name: offsets of nested constructs differ, and two
 temporaries of one construct differ by construct name. The pin test checks this over the

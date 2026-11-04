@@ -674,7 +674,7 @@ check.
 
 Flags: `PHASE1` (only in phase-1 code; the interpreter treats it as corrupt
 bytecode), `JUMP` (unconditional, no fallthrough), `BRANCH` (conditional), `TERM`
-(no fallthrough: `return`, `throw`, `throw_*`), `GOSUB`, `CALL` (may push a frame),
+(no fallthrough: `return`, `throw`, `throw_*`), `CALL` (may push a frame),
 `REENTRANT` (may call user code through a continuation, 7.3).
 
 ### 4.3 Labels and fixups
@@ -694,15 +694,15 @@ bytecode), `JUMP` (unconditional, no fallthrough), `BRANCH` (conditional), `TERM
   expressed with labels or phase-1 positions and are remapped the same way.
 - Break/continue: the parser keeps a stack of `BlockEnv { label_name: Option<Atom>,
   break: LabelId, cont: Option<LabelId>, kind, finally: Option<LabelId>, iterator:
-  bool }` (QuickJS's `BlockEnv`). `break`/`continue` walk it outward, emitting a
-  `gosub` for every enclosing `finally` and an iterator close for every enclosing
-  for-of they leave (7.4), and then the jump.
+  bool }` (QuickJS's `BlockEnv`). `break`/`continue` walk it outward: leaving a
+  `finally` or a for-of enters its block with the completion (7.4), whose end goes on
+  with the jump.
 
 ### 4.4 Stack depth
 
 After the fixups, a worklist pass over the final code computes the operand stack depth
-at every reachable instruction from `OPS` (pop/push, jump targets, `gosub` pushing a
-return address, handler entry points starting at `handler.depth + 1`). It checks that
+at every reachable instruction from `OPS` (pop/push, jump targets, handler entry points
+starting at `handler.depth + 1`). It checks that
 join points agree, which catches compiler bugs, and records the maximum in the
 template (`STACK`). The interpreter reserves `locals + STACK` slots at frame entry, so
 pushes inside a frame never grow the stack (7.1). This is QuickJS's
@@ -817,8 +817,6 @@ Control flow:
 | --- | --- | --- | --- |
 | `jump` | `label` | | JUMP, P0 |
 | `jump_if_false` / `jump_if_true` | `label` | v → | ToBoolean, BRANCH, P0 |
-| `gosub` | `label` | → ret | push the return pc (an int32 Value) and jump, P1 |
-| `ret` | | ret → | jump to the popped pc, JUMP, P1 |
 | `throw` | | v → | TERM, P1 (P0 needs only runtime errors) |
 | `return` / `return_undef` | | v → / | TERM, P0 |
 | `call` | `u16` argc | f this a1..an → r | CALL, P0 |
@@ -1336,26 +1334,31 @@ snapshot replaces compile-at-startup.
   the caller with key `ret_pc - 1` (a byte inside the call instruction, so the covering
   region is the one around the call). The `Entry` frame with no handler: `run` returns
   `Threw(value)`.
-- `finally` uses `gosub`/`ret` (QuickJS). The finally block is compiled once and is
-  always entered at the same operand depth: the try's base depth plus **one value
-  slot**, plus the return address. So the stack checker sees one depth at its entry:
-  - normal exit: `undefined; gosub L_finally; drop`;
-  - `return v`: unwind the operand stack to the try's base keeping `v` on top (close
-    and `nip` any for-of iterators in between), then `gosub` each enclosing finally,
-    innermost first, re-basing between levels the same way, then `return`;
-  - `break`/`continue` leaving it: unwind to the base, `undefined; gosub; drop` for
-    each finally left, then `jump`;
-  - exception: the handler entry for the try (and catch) region has depth = base, so
-    the exception is the value slot: `gosub L_finally; throw`.
+- `finally` (since 0193, D2733; compiler/completion.rs): the finally block is compiled
+  once and entered with a jump after the completion is stored in two temporaries,
+  `completion.kind@S` and `completion.value@S` (S the `try`): kind 0 normal, 1 throw, 2
+  return, `3 + 2·o` a `break` to the statement at offset o of the function, `4 + 2·o` a
+  `continue` to it. Nothing is on the operand stack at statement level, so every entry
+  is at depth 0:
+  - normal exit: `kind = 0`, then the finally block (fallthrough or a jump);
+  - `return v`: `value = v; kind = 2; jump L_fin`;
+  - `break`/`continue` leaving it: `kind = 3 + 2·o (+1); jump L_fin`;
+  - exception: the handler for the try (and catch) region (depth 0): `value = exc; kind
+    = 1; jump L_fin`.
 
-  The return address is an int32 Value on the operand stack, so it suspends and
-  snapshots like any value.
+  The block's end dispatches: `get kind; jump_if_false L_end`, then per exit that
+  entered it a test of the kind and the exit (the last without a test when no exception
+  can arrive), then `get value; value = undefined; throw`. An exit that leaves several
+  blocks enters the next one out from there with the same kind (a return copies the
+  value): innermost first, finally blocks and for-of closes alike. A suspended finally
+  block holds its completion in named slots like any temporary (D2720). (Before 0193,
+  QuickJS's `gosub`/`ret`: a value slot and a return address on the stack, D1084.)
 - As implemented (0025): whether a `try` has a `finally` is found by a token scan
   before the try block is parsed (`scan::try_has_finally`), because `break`, `continue`
-  and `return` inside it must emit the `gosub`s (D1080). A `Finally` entry on the
-  `BlockEnv` stack records the finally label and the try's base depth. The parser
-  tracks the operand depth at statement boundaries (`stmt_depth`, 2 inside a finally
-  block), and jumps out of a finally block drop the value slot and the return address.
+  and `return` inside it must enter it (D1080). A `Finally` entry on the `BlockEnv`
+  stack records the finally label and the completion; each exit that enters it is
+  recorded there for the dispatch. Script and eval code keep their completion value
+  across the finally block in a temporary (`completion.saved@S`).
   The catch parameter and the catch block's declarations share one `Catch` scope, so
   `catch (e) { let e }` is a redefinition. A `var e` there is allowed (as in qjs, Annex
   B.3.4 behavior) and assigns the parameter.
@@ -1364,16 +1367,17 @@ snapshot replaces compile-at-startup.
   calls `iterator_close` (ignoring errors from `return()` per spec) and rethrows.
 - As implemented (0029, D1292; temporaries since 0192, D2732): the close is
   `call_intrinsic %IteratorClose` and the handler calls `%IteratorCloseThrow` (`exc`:
-  `get it; call_intrinsic %IteratorCloseThrow 1; drop; throw`, skipping the close when
-  `it` is `undefined`, closed already by a generator's return path). The handler covers the target store and the
+  `get it; call_intrinsic %IteratorCloseThrow 1; drop; throw`). The handler covers the target store and the
   body, not the `next`/`done`/`value` steps. A `break` of the loop itself jumps to an
   inline close after the loop. Jumps that leave the loop (`break L`, `continue L`,
   `return`) cannot close inline: the close would sit inside the loop's own handler
-  region, and a throwing `return()` would close the iterator again. They `gosub` a close
-  subroutine placed after the loop instead, found on the `BlockEnv` stack as an `Iter`
-  entry and run in innermost-first order together with the finally blocks. It is
-  entered on `v ret` (`v` the return value or `undefined`, as a finally block's value
-  slot): `get it; call_intrinsic %IteratorClose 1; drop; ret`.
+  region, and a throwing `return()` would close the iterator again. They enter a close
+  block placed after the loop instead, found on the `BlockEnv` stack as an `Iter` entry
+  and left in innermost-first order together with the finally blocks: like a finally
+  block, with the completion in `completion.kind@S`/`completion.value@S` (S the `for`):
+  `get it; call_intrinsic %IteratorClose 1; drop; <dispatch>`. The `Iter` entry is on
+  the stack while the target is stored too, so a generator's return from a `yield` in
+  the target closes the loop the same way.
 - A handler entry may have a depth relative to a label (`depth_from`, array
   destructuring inside expressions, 3.10): resolution computes it from the final code
   with `bytecode::stack_depths`, repeating while a region sits in code that only
@@ -1441,7 +1445,7 @@ What the compiler emits:
   <v> yield %gen                ; yield v
   jump_if_true L_ret            ; return(x) was called: x is on the stack
   ...                           ; the received value is the yield expression's value
-  L_ret: <return the value: the ordinary `return` sequence with its finally gosubs>
+  L_ret: <return the value: the ordinary `return` sequence through its finally blocks>
   ```
   `return v` in a generator is the ordinary `return`; the value becomes `{value: v, done:
   true}` (the builtins tell a yield from a return by the generator's state). An
@@ -1452,7 +1456,7 @@ What the compiler emits:
   ```
   async_start %async
   L_s: ... <v> await %async ...      ; await v
-       <v> async_return %async       ; every return (after its finally gosubs), and
+       <v> async_return %async       ; every return (after its finally blocks), and
                                      ; `undefined; async_return` at the end
   L_e:
   L_h: async_reject %async           ; handler (L_s, L_e, L_h, depth 0)
@@ -1596,17 +1600,17 @@ What the compiler emits:
 - **Code.** The region opens at the first declaration of the list:
   `call_intrinsic %UsingCreate 0` makes the resource Record. Since 0192 it is a
   temporary (`using.record@S`, D2732) and compiler/using.rs has the code; before, it
-  stayed on the operand stack under the rest of the list (`stmt_depth` + 1), as follows. Each initializer is followed by
-  `pick 1; swap; call_intrinsic %UsingAdd 2` (`%AwaitUsingAdd`) before the binding's
+  stayed on the operand stack under the rest of the list. Each initializer is followed
+  by `get s; swap; call_intrinsic %UsingAdd 2` (`%AwaitUsingAdd`) before the binding's
   `name_init`. At the end of the list, the region is a `try`/`finally` whose finally
-  block is the disposal subroutine: a `BlockKind::Finally` env at depth base + 1 makes
-  jumps out of it `gosub` the subroutine (7.4), the normal exit is `undefined; gosub;
-  drop; drop`, and the handler records the exception (`%UsingDisposeError`) and then
-  `gosub`s, so the subroutine throws the final error. The subroutine (`s v ret`) is
-  `pick 2; call_intrinsic %UsingDispose 1; drop; ret`, or with an `await using` in the
-  list a loop of `%UsingDisposeStep` (one step per Await: returns whether to await
+  block is the disposal: a `BlockKind::Finally` env makes jumps out of it enter the
+  disposal with their completion (7.4), the normal exit is `kind = 0` and falls into
+  it, and the handler records the exception (`%UsingDisposeError`) and enters it with a
+  throw completion, so the disposal throws the final error. The disposal is `get s;
+  call_intrinsic %UsingDispose 1; drop`, or with an `await using` in the list a loop of
+  `%UsingDisposeStep` (one step per Await: returns whether to await
   `%UsingAwaitValue`) around a real `await`, whose rejection goes to
-  `%UsingDisposeError` (a handler at depth base + 4).
+  `%UsingDisposeError` (a handler at depth 0), then the dispatch.
 - **For heads.** `for (using x = ...; ...)` opens a region (env below the loop's) around
   the whole loop. `for (using x of xs)` opens one per iteration: at `L_assign`,
   `%UsingCreate; swap; <add>; <binding>`, the env above the loop's (so `continue`
@@ -1824,17 +1828,25 @@ function f() { try { return g(); } finally { h(); } }
 
 ```
 L_try:                              handlers: [L_try, L_try_end) → L_exc, depth 0
-  get_global g; undefined; call 0   ; [v]       v is the value slot
-  gosub L_fin                       ; [v ret] → [v]
-  return
+  get_global g; undefined; call 0   ; [v]
+  put value; push2; put kind        ; a return completion
+  jump L_fin
 L_try_end:                          ; (no normal exit: the block always returns)
-L_exc:                              ; [exc]     the exception is the value slot
-  gosub L_fin
-  throw
-L_fin:                              ; [x ret]   depth 2 on every path
+  push0; put kind
+L_fin:                              ; depth 0 on every path
   get_global h; undefined; call 0; drop
-  ret
+  get kind; jump_if_false L_end     ; normal: after the try
+  get kind; push2; strict_eq; jump_if_false L_throw
+  get value; return
+L_throw:
+  get value; undefined; put value; throw
+L_exc:                              ; [exc]
+  put value; push1; put kind; jump L_fin
+L_end:
 ```
+
+(Before 0193 the finally block was a `gosub` subroutine with a value slot and a return
+address on the stack, D1084, D2733.)
 
 ## 10. Suggested issue split for P0 and P1
 

@@ -152,10 +152,13 @@ to the handler. If not, the frame is popped and the search continues in the call
 the call instruction. An `Entry` frame without a handler makes `run` return
 `Threw(value)`.
 
-`finally` blocks are compiled once and entered with `gosub`, which pushes a return
-address, and left with `ret` (D1084, D1250). Normal exit, `return`, `break` and a thrown
-exception all reach the same code, each with one value slot holding what to do
-afterwards:
+`finally` blocks are compiled once and entered with a plain jump (D2733). Normal exit,
+`return`, `break`, `continue` and a thrown exception all reach the same code after storing
+their **completion** in two hidden locals: a kind (0 normal, 1 throw, 2 return, or a
+number naming the statement a `break` or `continue` goes to) and a value (the exception
+or the return value). The end of the block looks at the kind and goes on: past the
+`try`, rethrowing, returning, or jumping, through the next finally block out if there is
+one:
 
 ```js
 let log = [];
@@ -169,9 +172,9 @@ return log;
 
 <!-- gen:disasm -->
 ```text
-function 0 <anonymous>: params=2 locals=2 stack=5 captures=0
-  handler [7, 19) -> 28 depth 0
-  handler [3, 51) -> 51 depth 0
+function 0 <anonymous>: params=2 locals=4 stack=3 captures=0
+  handler [7, 19) -> 40 depth 0
+  handler [3, 49) -> 49 depth 0
     0  async_start loc0 (<state>)
     3  array_from 0
     6  put_loc1 (log)
@@ -180,26 +183,33 @@ function 0 <anonymous>: params=2 locals=2 stack=5 captures=0
    15  push_const8 #0 ("try")
    17  call1  ; 3:11
    18  drop
-   19  undefined
-   20  gosub -> 34
-   25  drop
-   26  jump8 -> 47
-   28  gosub -> 34
-   33  throw
-   34  get_loc1 (log)  ; 5:3
-   35  get_method "push" ic1  ; 5:6
-   42  push_const8 #1 ("finally")
-   44  call1  ; 5:11
-   45  drop
-   46  ret
-   47  get_loc1 (log)  ; 7:8
-   48  async_return loc0 (<state>)
-   51  async_reject loc0 (<state>)
+   19  push0
+   20  put_loc2 (<temp>)
+   21  get_loc1 (log)  ; 5:3
+   22  get_method "push" ic1  ; 5:6
+   29  push_const8 #1 ("finally")
+   31  call1  ; 5:11
+   32  drop
+   33  get_loc2 (<temp>)
+   34  jump_if_false8 -> 45
+   36  get_loc3 (<temp>)
+   37  undefined
+   38  put_loc3 (<temp>)
+   39  throw
+   40  put_loc3 (<temp>)
+   41  push1
+   42  put_loc2 (<temp>)
+   43  jump8 -> 21
+   45  get_loc1 (log)  ; 7:8
+   46  async_return loc0 (<state>)
+   49  async_reject loc0 (<state>)
 ```
 <!-- /gen -->
 
-The return address is an int32 value on the operand stack, so a VM suspended inside a
-`finally` block snapshots like any other.
+The completion is in locals, not on the operand stack, so a function suspended inside a
+`finally` block holds nothing a snapshot or a dump has to interpret: the kind is a
+number that means the same in any build. Closing a `for-of` loop's iterator when a jump
+or a `return` leaves the loop works the same way.
 
 > **Trade-off.** Handler tables over a stack of catch offsets. QuickJS pushes catch
 > offsets onto the value stack and scans for them while unwinding. A table keeps the
