@@ -32,7 +32,8 @@ const USAGE: &str = "usage: djs repl [--ts] [--gc-stress] [--no-history] [--plai
   --tools FILE    answer tools.x(...) calls from FILE (docs/cli.md); others wait for .resolve\n\
   --gc-stress     collect garbage at every safepoint\n\
   --no-history    do not read or write the history file ($DJS_HISTORY, ~/.djs_history)\n\
-  --plain         .dump and .dump-every write plain dumps (.plain toggles it)";
+  --plain         .dump and .dump-every write plain dumps (.plain toggles it); the VMs
+                  have frozen builtins, which plain dumps need (D2836)";
 
 const HELP: &str = "\
 .help                 this text
@@ -125,7 +126,7 @@ pub fn main(args: &[String]) -> i32 {
     } else {
         None
     };
-    let mut repl = Repl::new(gc_stress);
+    let mut repl = Repl::new(gc_stress, plain);
     repl.typescript = typescript;
     repl.plain = plain;
     repl.tools = Tools::with_answers(answers);
@@ -248,6 +249,8 @@ struct Repl {
     dump_every: bool,
     /// `.plain`: dumps are plain (D2830).
     plain: bool,
+    /// `--plain`: the VMs have frozen builtins, which plain dumps need (D2836).
+    frozen: bool,
     /// The running input's result after `.dump-every` reloaded the VM.
     entry_override: Option<Handle>,
     /// A handle outside the waiting inputs is held: `.dump-every` must not replace the VM.
@@ -257,9 +260,10 @@ struct Repl {
 }
 
 impl Repl {
-    fn new(gc_stress: bool) -> Repl {
+    fn new(gc_stress: bool, frozen: bool) -> Repl {
         Repl {
-            vm: new_vm(gc_stress),
+            vm: new_vm(gc_stress, frozen),
+            frozen,
             gc_stress,
             typescript: false,
             fuel_limit: None,
@@ -1071,6 +1075,9 @@ impl Repl {
             ".bt" if !arg.is_empty() => self.backtrace_cmd(arg),
             ".dump" if !arg.is_empty() => self.dump(arg),
             ".plain" => match on_off(arg, &mut self.plain) {
+                Ok(()) if self.plain && !self.frozen => println!(
+                    "plain dumps: on, but they need frozen builtins (D2836): start the REPL with --plain"
+                ),
                 Ok(()) => println!("plain dumps: {}", if self.plain { "on" } else { "off" }),
                 Err(e) => println!("{e}"),
             },
@@ -1090,7 +1097,7 @@ impl Repl {
                 Err(e) => println!("cannot read {arg}: {e}"),
             },
             ".clear" => {
-                self.replace_vm(new_vm(self.gc_stress));
+                self.replace_vm(new_vm(self.gc_stress, self.frozen));
                 println!("a fresh VM");
             }
             ".disasm" if !arg.is_empty() => self.disasm(arg),
@@ -1151,7 +1158,7 @@ impl Repl {
         let refs: Vec<(&str, Value)> = handles.iter().map(|(n, v)| (n.as_str(), *v)).collect();
         let origin = |id: u32| self.origins.get(&id).cloned();
         let d = crate::dumps::dump(&self.vm, &self.tools, &refs, self.plain, &origin)?;
-        let mut vm = new_vm(self.gc_stress);
+        let mut vm = new_vm(self.gc_stress, self.frozen);
         let mut loaded = if self.plain {
             // The fresh VM runs the dump; its prints are the run's (a reaction that ran).
             let mut log = |vm: &Vm, args: &[Value]| {
@@ -1193,7 +1200,7 @@ impl Repl {
     /// are not read back from the heap afterwards: an open call's tool may have no
     /// function there yet.
     fn restore_dump(&mut self, arg: &str, src: &str) {
-        self.replace_vm(new_vm(self.gc_stress));
+        self.replace_vm(new_vm(self.gc_stress, self.frozen));
         // The values the dump names, and the open calls' states.
         type Named = Vec<(String, Handle)>;
         let (handles, states): (Named, Vec<(u32, String)>) =
@@ -1432,12 +1439,13 @@ fn load_history(path: Option<&std::path::Path>) -> Vec<String> {
 
 /// The REPL's VM: the base snapshot, the wall clock, and `console.log` (`info`, `warn`,
 /// `error`, `debug` too) as a host function printing with the REPL's printer.
-fn new_vm(gc_stress: bool) -> Vm {
+fn new_vm(gc_stress: bool, frozen_builtins: bool) -> Vm {
     let opts = VmOptions {
         exec: ExecOptions {
             gc_stress,
             ..Default::default()
         },
+        frozen_builtins,
         ..Default::default()
     };
     let mut vm = djs_prelude::new_vm(opts).expect("out of memory creating the VM");

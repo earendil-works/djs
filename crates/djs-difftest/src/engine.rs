@@ -58,6 +58,12 @@ pub struct RunResult {
 pub trait Engine: Sync {
     fn name(&self) -> &str;
     fn run(&self, job: &Job<'_>) -> RunResult;
+    /// A stress variant that is compared only for cases whose plain run passes an idle
+    /// point: the plain-dump variant, which runs with frozen builtins (D2836), so a case
+    /// that changes builtins on purpose and takes no dump would differ for that alone.
+    fn only_with_idle_points(&self) -> bool {
+        false
+    }
 }
 
 /// Renders a result as the transcript stored in `.expected`: the output items, then a

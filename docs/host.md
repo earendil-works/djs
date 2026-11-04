@@ -169,8 +169,10 @@ await again.result;
   function), since the sandbox cannot know whether calling it again is safe.
 - **Plain dumps** (`"djs-dump";`, D2830, D2890, D2898): the sandbox writes its dumps
   (tasks', `Run.dump`, `dump`) as ordinary Scripts in which every suspended function is a
-  continuation, the rest of its code from where it waits. This is the default;
-  `plainDumps: false` writes format 2 until it is retired. `Sandbox.resume`, `loadRun` and `load`
+  continuation, the rest of its code from where it waits. Plain dumps need frozen
+  builtins (`frozenBuiltins`, D2836): a sandbox that has them writes plain dumps by
+  default, one without them format 2 until it is retired (`plainDumps` overrides the
+  default; plain without frozen builtins refuses every dump). `Sandbox.resume`, `loadRun` and `load`
   take either and run a plain one with the global object `$djs` defined, which holds the
   dump runtime's helpers (`vm_dump_runtime`, D2903) and the hooks: the dump calls
   `$djs.seed(lo, hi, next)` first (Math.random's state and the id of the next host call)
@@ -210,7 +212,7 @@ again.calls;                                // [{ id, fn: "sleep", args: [5000],
 - A host-driven run never calls async host functions: it lists them in `run.calls`, and
   the host answers with `settle`, in any order (results are still macrotasks, D1670).
   Sync host functions are called as in `run`. The sandbox runs nothing else meanwhile.
-- `dump(states)` writes the idle VM as a dump (plain unless `plainDumps: false`): its data, the suspended
+- `dump(states)` writes the idle VM as a dump (plain with frozen builtins, see above): its data, the suspended
   activations, the open calls (by the host's function names, with the states given for
   them, JSON data by call id) and the run's result promise, named `run`. `loadRun` loads
   the dump into a fresh sandbox made with the same host functions, by name, and

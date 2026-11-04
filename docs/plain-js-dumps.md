@@ -336,6 +336,15 @@ name for them, an expression evaluated while the dump loads (`tools.read`; pi's
 `$djs.call`). The Script's completion value is what the host named: the value itself for
 one handle named `run`, else a null-prototype object of all of them by name.
 
+**Frozen builtins (D2836).** Plain dumps are written only for VMs with frozen builtins
+(`VmOptions::frozen_builtins`, D2304; pi's `next` mode has them): the exporter refuses
+otherwise. It may then assume that no builtin changes between a value's evaluation and
+the load. The hosts follow: `djs run --plain` and `djs repl --plain` make frozen VMs, the
+Sandbox writes plain dumps by default when it has frozen builtins (format 2 otherwise,
+until 0205 retires it), and the difftest's plain-dump variant runs frozen and is compared
+only for cases with idle points (a case that changes builtins on purpose and takes no
+dump would differ for that alone).
+
 **The runtime (0207, D2903).** The format's fixed helpers are members of `$djs` too, next
 to the hooks: the host provides them, so a dump does not carry them (they were ~700 bytes of
 every small dump). They are the same code for every dump, the format's small standard

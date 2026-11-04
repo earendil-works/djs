@@ -52,7 +52,9 @@ const sleep = {
 } satisfies AsyncHostFunction<{ due: number }>;
 
 export const options = (log = (...a: unknown[]) => console.log("  [vm]", ...a)): SandboxOptions => ({
-  // Dumps are plain (D2830, the default): a Script that runs given only the host's functions.
+  // Dumps are plain (D2830): a Script that runs given only the host's functions. They need
+  // frozen builtins (D2836), with which they are the default.
+  frozenBuiltins: true,
   asyncFunctions: { "tools.sleep": sleep },
   console: { log, info: log, warn: log, error: log },
 });

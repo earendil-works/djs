@@ -424,8 +424,11 @@ pub fn run_all(
             let stress = variants
                 .iter()
                 .zip(&opts.stress)
-                .filter_map(|(r, (label, _))| {
+                .filter_map(|(r, (label, engine))| {
                     let r = r.as_ref()?;
+                    if engine.only_with_idle_points() && plain.idle_points == Some(0) {
+                        return None;
+                    }
                     compare_stress(
                         case,
                         label,

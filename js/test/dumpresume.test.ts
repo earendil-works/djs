@@ -84,6 +84,7 @@ interface Packaging {
   dumpModule?: WebAssembly.Module;
   /** Plain dumps (format 3, D2830): the transcript, call ids included, must be the same. */
   plainDumps?: boolean;
+  frozenBuiltins?: boolean;
 }
 
 /** The packagings to test: A, B with one module, B with a real dumper-less main module. */
@@ -96,7 +97,8 @@ async function packagings(): Promise<[string, Packaging][]> {
   ];
   const nodump = process.env.DJS_WASM_NODUMP;
   if (nodump) out.push(["B (djs.wasm + djs-dump.wasm)", { module: await loadModule(nodump), dumpModule: module, plainDumps: false }]);
-  for (const [name, p] of [...out]) out.push([`${name}, plain`, { ...p, plainDumps: true }]);
+  // Plain dumps need frozen builtins (D2836).
+  for (const [name, p] of [...out]) out.push([`${name}, plain`, { ...p, plainDumps: true, frozenBuiltins: true }]);
   return out;
 }
 

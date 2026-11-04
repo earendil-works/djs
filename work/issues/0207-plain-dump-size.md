@@ -138,6 +138,14 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   moved to the runtime too): corpus 8,062,700 → 7,950,316 raw, 2,577,552 → 2,533,166
   gzip; v2 652,232 → 578,286 raw, 234,344 → 206,934 gzip.
 
+- (c) merged (d0fb2682). D2836 slice: the exporter refuses plain dumps without frozen
+  builtins; hosts (D2904): CLI `run/resume --plain` and `repl --plain` make frozen VMs
+  (`.plain on` without warns), Sandbox `plainDumps` default follows `vm_frozen_builtins`,
+  difftest plain variant frozen and compared only for cases with idle points (24 corpus
+  cases change builtins on purpose, none dumps), core plain tests `plain_vm()`, js tests
+  and sleep-dump with `frozenBuiltins: true`. No host or test that dumps plain had to be
+  dropped. Sizes unchanged.
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a

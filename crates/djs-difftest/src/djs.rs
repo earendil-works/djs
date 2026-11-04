@@ -95,6 +95,10 @@ impl Engine for Djs {
         "djs"
     }
 
+    fn only_with_idle_points(&self) -> bool {
+        self.plain
+    }
+
     fn run(&self, job: &Job<'_>) -> RunResult {
         let mut s = match self.session(job) {
             Ok(s) => s,
@@ -209,6 +213,9 @@ impl Djs {
                 ..ExecOptions::default()
             },
             prefix_barrier: ARMED_AREAS.iter().any(|a| job.name.starts_with(a)),
+            // Plain dumps are written only with frozen builtins (D2836), as pi's next
+            // mode runs.
+            frozen_builtins: self.plain,
             ..VmOptions::default()
         };
         let mut vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;

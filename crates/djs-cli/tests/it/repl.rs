@@ -477,18 +477,22 @@ fn dump_a_waiting_session() {
     assert!(out.contains("dumping at every idle point: off\n"), "{out}");
 }
 
-/// [`dump_waiting_await_inputs`] with plain dumps (D2830, `.plain on`): the waiting inputs
-/// are the completion value's properties (D2895), the calls' origins their states.
+/// [`dump_waiting_await_inputs`] with plain dumps (D2830, `--plain`, whose VMs have the
+/// frozen builtins plain dumps need, D2836): the waiting inputs are the completion value's
+/// properties (D2895), the calls' origins their states.
 #[test]
 fn plain_dump_waiting_await_inputs() {
     let dir = env!("CARGO_TARGET_TMPDIR");
     let dump = format!("{dir}/repl-await-plain-{}.js", std::process::id());
-    let out = repl(&format!(
-        ".plain on\nconst r = await tools.read({{path: 'a'}})\nawait tools.read({{path: 'b'}})\n\
+    let out = repl_with(
+        &["--plain"],
+        &format!(
+            "const r = await tools.read({{path: 'a'}})\nawait tools.read({{path: 'b'}})\n\
          .dump {dump}\n.clear\n.restore {dump}\nawait tools.read({{path: 'c'}})\n.pending\n\
          .resolve 3 \"bee\"\n.resolve 2 \"hello\"\nr\n.dump-every on\n\
          const x = await tools.read({{path: 'd'}})\n.resolve 4 \"c!\"\n.resolve 5 \"dee\"\nx\n"
-    ));
+        ),
+    );
     let text = std::fs::read_to_string(&dump).unwrap();
     std::fs::remove_file(&dump).unwrap();
     assert!(text.starts_with("\"djs-dump\";"), "{text}");
@@ -506,7 +510,6 @@ fn plain_dump_waiting_await_inputs() {
     assert_eq!(
         lines,
         [
-            "plain dumps: on",
             "[waiting] #2 tools.read({\"path\":\"a\"})",
             "[waiting] #3 tools.read({\"path\":\"b\"})",
             "a fresh VM",
@@ -526,6 +529,9 @@ fn plain_dump_waiting_await_inputs() {
         ]
     );
     assert!(out.matches("[dumped ").count() >= 2, "{out}");
+    // Without --plain the VM's builtins are not frozen: `.plain on` says so.
+    let out = repl(".plain on\n");
+    assert!(out.contains("they need frozen builtins"), "{out}");
 }
 
 #[test]

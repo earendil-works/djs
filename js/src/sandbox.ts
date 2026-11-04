@@ -73,8 +73,10 @@ export interface SandboxOptions {
   dumpModule?: WebAssembly.Module;
   /**
    * Write plain dumps (format 3, D2830): Scripts that run given only the host's functions,
-   * which `load`/`resume` run with the hooks of D2890. Default true; `false` writes format 2
-   * until it is retired (0205). Loading takes either.
+   * which `load`/`resume` run with the hooks of D2890. They need `frozenBuiltins` (D2836):
+   * the default is true with frozen builtins, else `false`, which writes format 2 until it
+   * is retired (0205); `true` without frozen builtins refuses every dump. Loading takes
+   * either.
    */
   plainDumps?: boolean;
   /** Heap cap in bytes; default: the engine's (4 GiB). */
@@ -286,6 +288,7 @@ interface Exports {
   vm_new(memoryLimit: number): number;
   /** Since 0146 (D2304); older modules lack it. */
   vm_new_with?(memoryLimit: number, live: number, flags: number): number;
+  vm_frozen_builtins?(vm: number): number;
   vm_dump?(vm: number, len: number): number;
   vm_load_dump?(vm: number, namesLen: number, len: number): number;
   vm_from_bytes(len: number, memoryLimit: number): number;
@@ -1134,7 +1137,9 @@ export class Sandbox {
    * states (`id:bytes`, tab separated) followed by their JSON texts (D2770).
    */
   private dumpText(names: string[], handles: [string, number][], states: [number, string][]): string {
-    const plain = this.opts.plainDumps !== false;
+    // Plain dumps need frozen builtins (D2836): the default follows the VM's mode, which
+    // a restored sandbox keeps from its image.
+    const plain = this.opts.plainDumps ?? this.x.vm_frozen_builtins?.(this.vm) === 1;
     return this.viaDumper((sb) => sb.dumpHere(names, handles, states, plain), false);
   }
 

@@ -805,6 +805,13 @@ impl<'a> Dumper<'a> {
     fn new(vm: &'a Vm, opts: &DumpOptions<'a>) -> Result<Dumper<'a>, DumpError> {
         let h = &vm.heap;
         let refuse = |m: &str| DumpError(alloc::vec![String::from(m)]);
+        // A plain dump assumes that no builtin changes between a value's evaluation and
+        // the load (D2836): it writes a builtin an operand resolved to as its expression.
+        if opts.plain && !h.frozen_builtins() {
+            return Err(refuse(
+                "plain dumps need frozen builtins (VmOptions::frozen_builtins, D2836)",
+            ));
+        }
         let base_end = h.base_end();
         if base_end == 0 || opts.base.len() < base_end as usize {
             return Err(refuse("the VM was not made from this base image"));

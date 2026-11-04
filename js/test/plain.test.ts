@@ -167,7 +167,7 @@ test("a task suspended into a plain dump (the exporter's) resumes through the ho
       return Promise.resolve(state.n * 100);
     },
   };
-  const opts = { module, plainDumps: true, functions: { log: (...a: unknown[]) => void lines.push(a.join(" ")) }, asyncFunctions: { sleep } };
+  const opts = { module, frozenBuiltins: true, functions: { log: (...a: unknown[]) => void lines.push(a.join(" ")) }, asyncFunctions: { sleep } };
   const task = new Sandbox(opts).start(code);
   while (pending.length === 0) await new Promise((r) => setTimeout(r, 1));
   const dump = await task.suspend();

@@ -310,18 +310,20 @@ a plain dump each suspended function is written as its continuation: a function 
 same kind whose body is the rest of the original from the `await` on, with the values it
 held there declared at its top and the loops around the `await` written as real loops
 over the saved iterators. The dump is then an ordinary Script, which any later djs, or
-node, runs given the host's functions; it calls `$djs.seed(...)` and one
-`$djs.resume(id, name, args, state)` per open call, functions the host provides for the
-load (D2890). The small helpers its continuations call, such as `Reflect.apply` for a call
-whose callee was already evaluated or an iterator advanced past the steps it took, are
-members of `$djs` too: they are the same in every dump, so the host provides them as a
-fixed runtime instead of each dump carrying them (D2903); djs makes that object for its
-hosts, and a host without djs imports it from
-[js/src/dump-runtime.js](../../js/src/dump-runtime.js). Its completion value is the run's
-result promise. The Sandbox writes
-plain dumps by default (D2898); the CLI and the pi adapter still ask for them
-(`djs run --plain`, `plainDumps`) until format 2 is retired. Where the plain writer
-cannot write a run yet, the dump is refused with the reason.
+node, runs given the host's functions; it calls `$djs.seed(...)` and one `$djs.resume(id,
+name, args, state)` per open call, functions the host provides for the load (D2890). The
+small helpers its continuations call, such as `Reflect.apply` for a call whose callee was
+already evaluated or an iterator advanced past the steps it took, are members of `$djs`
+too: they are the same in every dump, so the host provides them as a fixed runtime
+instead of each dump carrying them (D2903); djs makes that object for its hosts, and a
+host without djs imports it from [js/src/dump-runtime.js](../../js/src/dump-runtime.js).
+Its completion value is the run's result promise. The Sandbox writes plain dumps by
+default (D2898) when its builtins are frozen; the CLI and the pi adapter still ask for
+them (`djs run --plain`, `plainDumps`) until format 2 is retired. Plain dumps are written
+only for VMs with frozen builtins, the mode pi's sessions run in: the writer may then
+assume that no builtin changes between the moment a value was read and the load, and
+write a builtin the run already looked up as the expression that finds it again (D2836).
+Where the plain writer cannot write a run yet, the dump is refused with the reason.
 
 **What a dump costs.** Over 300 real codemode scripts and their 1,063 idle points, a
 dump is 6 KB of text at the median and 17 KB compressed at p99; with zstd at level 3,

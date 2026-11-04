@@ -33,7 +33,8 @@ reason. The loader's hand-written fixtures (tests/dump/v2/) resume to the rest o
 programs' output.
 
 `--plain` (on `run`, and on `resume` for the dumps it writes) makes `--dump-after` and
-`--dump-every-idle` write plain dumps instead of format 2.
+`--dump-every-idle` write plain dumps instead of format 2, and gives the VM frozen
+builtins, which plain dumps need (D2836).
 A plain dump (`"djs-dump";`, D2830) is a Script: `resume` runs it with the global
 object `$djs` (D2890), whose `seed(lo, hi, next)` sets `Math.random`'s state and the next
 call's id (D2897) and whose

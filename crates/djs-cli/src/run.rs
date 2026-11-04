@@ -39,7 +39,7 @@ const USAGE: &str = "usage: djs run [--body] [--ts] [--experimental-decorators]\
   --dump-every-idle  at every idle point, dump the run and continue in a fresh VM that\n\
                      loaded the dump\n\
   --plain            write plain dumps (`\"djs-dump\";`, a Script, D2830) instead of\n\
-                     format 2";
+                     format 2; the VM has frozen builtins, which they need (D2836)";
 
 const RESUME_USAGE: &str = "usage: djs resume [--explain] [--tools answers.json] [--gc-stress]\n\
                 [--suspend-every N] [--backend B] <dump.js>\n\
@@ -469,6 +469,8 @@ impl RunOptions {
                 native_builtins: !self.bytecode_builtins,
                 ..Default::default()
             },
+            // Plain dumps need frozen builtins (D2836).
+            frozen_builtins: self.dumping.plain,
             ..Default::default()
         }
     }

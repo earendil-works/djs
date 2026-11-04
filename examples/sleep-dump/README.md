@@ -68,7 +68,8 @@ const sleep = {
     return `slept ${call.args[0]} ms`;
   },
 } satisfies AsyncHostFunction<{ due: number }>;
-const options = { asyncFunctions: { "tools.sleep": sleep } };
+// Plain dumps need frozen builtins (pi's sessions run with them).
+const options = { frozenBuiltins: true, asyncFunctions: { "tools.sleep": sleep } };
 
 // Process 1: start the script, suspend it at its first idle point.
 const sandbox = await Sandbox.create(options);

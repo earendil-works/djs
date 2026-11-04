@@ -39,6 +39,18 @@ fn new_vm() -> Vm {
 fn new_vm_with(stress: bool) -> Vm {
     let mut opts = VmOptions::default();
     opts.exec.gc_stress = stress;
+    vm_with(opts)
+}
+
+/// A VM for plain dumps: frozen builtins, which the plain exporter requires (D2836).
+fn plain_vm() -> Vm {
+    vm_with(VmOptions {
+        frozen_builtins: true,
+        ..VmOptions::default()
+    })
+}
+
+fn vm_with(opts: VmOptions) -> Vm {
     let mut vm = Vm::from_base(base(), opts).unwrap();
     let later = vm.new_async_host_function(LATER, "later").unwrap();
     vm.define_global("later", later).unwrap();
@@ -1510,7 +1522,7 @@ fn plain_dump(vm: &Vm) -> Result<String, String> {
 
 /// The plain dump of program `src` run to idle point `k`.
 fn plain_dump_at(src: &str, k: usize) -> String {
-    let mut vm = new_vm();
+    let mut vm = plain_vm();
     let f = vm
         .compile(
             src.as_bytes(),
@@ -1532,7 +1544,7 @@ fn plain_dump_at(src: &str, k: usize) -> String {
 /// hooks on `$djs` (D2903): `$djs.seed` a no-op (the fixtures draw no random numbers),
 /// `$djs.resume` making the call again.
 fn plain_load(text: &str) -> Result<Vm, String> {
-    let mut vm = new_vm();
+    let mut vm = plain_vm();
     let seed = vm.new_host_function(SEED, "seed").unwrap();
     vm.define_global("$djs_seed", seed).unwrap();
     let rt = vm.dump_runtime().unwrap();
@@ -1613,7 +1625,7 @@ fn plain_check_program(name: &str, src: &str) -> (Vec<String>, Vec<String>, usiz
     let (mut failed, mut refused, mut ok) = (Vec::new(), Vec::new(), 0);
     let (want, marks) = run_program(src);
     for k in 1..=marks.len() {
-        let mut vm = new_vm();
+        let mut vm = plain_vm();
         let f = vm
             .compile(
                 src.as_bytes(),
@@ -1708,7 +1720,7 @@ fn plain_dumps_at_every_idle_point() {
 fn plain_chain_program(name: &str, src: &str) -> (Vec<String>, usize, Vec<String>) {
     let (mut failed, mut links, mut refused) = (Vec::new(), 0, Vec::new());
     let (want, _) = run_program(src);
-    let mut vm = new_vm();
+    let mut vm = plain_vm();
     let f = vm
         .compile(
             src.as_bytes(),
@@ -1846,7 +1858,7 @@ fn a_super_base_changed_since_it_was_read_is_refused() {
     let src = "class A { m(x) { return 'a' + x; } }\nclass B { m(x) { return 'b' + x; } }\n\
                class C extends A { async m() { return super[await later('m')](1); } }\n\
                new C().m().then(print);\nObject.setPrototypeOf(C.prototype, B.prototype);";
-    let mut vm = new_vm();
+    let mut vm = plain_vm();
     let f = vm
         .compile(
             src.as_bytes(),

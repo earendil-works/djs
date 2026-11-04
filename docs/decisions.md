@@ -9475,6 +9475,21 @@ and map 1:1 to named exports, so that `$djs` can become imports later. Format 2 
 own `$dump` helpers. Cost: a re-dump of a loaded dump writes objects the runtime made (a `for await`'s `fromSync`
 wrapper) with the runtime's code as closures, where the run had the engine's own record.
 
+## D2904: The hosts' plain-dump paths run with frozen builtins
+date: 2026-11-04 · by: pjs · issue: 0207
+How D2836 (plain dumps only with frozen builtins) reaches the hosts. The exporter refuses
+a plain dump of a VM without them. `djs run --plain` (and `resume --plain`) and `djs
+repl --plain` make their VMs frozen; `.plain on` in a REPL started without it says that
+its dumps will be refused. The Sandbox's `plainDumps` default follows the VM's mode
+(`vm_frozen_builtins`, so a restored sandbox keeps it): plain with frozen builtins, format
+2 without, until 0205 retires format 2 (after which a sandbox without frozen builtins
+cannot dump). pi writes plain dumps only in its `next` mode, which is frozen. The
+difftest's plain-dump variant runs every case frozen and compares it with the plain run
+only when the plain run passed an idle point: 24 corpus cases change builtins on purpose
+(builtins/, language/, errors/, the legacy decorator cases of ts/), none of them takes a
+dump, and their frozen output differs for that alone. The core plain-dump tests use frozen
+VMs (`plain_vm`).
+
 ## D2875: `yield*` in plain continuations: a `yield*` over a wrapper of the inner record
 date: 2026-11-05 · by: pjr · issue: 0203
 At a `yield*` site, `K` delegates again with `yield* $dump.Y(it, next, async, ...first)`.
