@@ -106,9 +106,21 @@ pub(super) struct Act {
     /// The names of the sites of its site's kind at its site's offset, in order (a `for
     /// await`'s closes, an async `yield*`'s awaits of inner results; empty if unknown).
     pub peers: Vec<String>,
+    /// The `using` records of its frame.
+    pub usings: Vec<Using>,
     /// A method that uses `super`: its home object's prototype (its continuation is a
     /// method of an object of that prototype).
     pub super_proto: Option<String>,
+}
+
+/// The `using` resources of a scope in flight (D2876): `[value, method, kind]` and the
+/// disposal's state, by field name (`hasAwaited`, `next`, `value`, …).
+#[derive(Clone)]
+pub(super) struct Using {
+    /// The record's slot (`using.record@39`); while the exporter writes, its text.
+    pub slot: String,
+    pub triples: Vec<(String, String, i32)>,
+    pub state: Vec<(String, String)>,
 }
 
 pub(super) struct Slot {
@@ -1777,6 +1789,12 @@ const HELPERS: &[(&str, &str)] = &[
     (
         "Y",
         "(it, next, a, ...first) => { let ph = !first.length; const m = (k) => { const f = it[k]; return f == null ? f : (...v) => Reflect.apply(f, it, v); }; const r = { next(...v) { if (first.length) return first.pop(); if (ph) { ph = false; return { value: undefined, done: false }; } return Reflect.apply(next, it, v); }, get throw() { return m('throw'); }, get return() { return m('return'); }, [a ? Symbol.asyncIterator : Symbol.iterator]() { return r; } }; return r; }",
+    ),
+    // A `using` resource added again (D2876): its saved dispose method called on its
+    // value; the exporter reads `$djs_v`/`$djs_m` back.
+    (
+        "U",
+        "($djs_v, $djs_m, k) => k === 4 ? { [Symbol.asyncDispose]: () => Reflect.apply($djs_m, $djs_v, []) } : { [Symbol.dispose]: () => Reflect.apply($djs_m, $djs_v, []) }",
     ),
     // ToPropertyKey, as a computed key does it.
     ("P", "(k) => Reflect.ownKeys({ [k]: 0 })[0]"),

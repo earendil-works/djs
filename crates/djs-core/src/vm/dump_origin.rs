@@ -512,6 +512,14 @@ impl Dumper<'_> {
                         return Some(v);
                     }
                 }
+                ("using", "using.record")
+                | ("using", "completion.kind")
+                | ("using", "completion.value") => {
+                    // K's scope that adds the original's resources again (D2876).
+                    if let Some(v) = kslot(&cat!(c, "@", r.2)) {
+                        return Some(v);
+                    }
+                }
                 ("try", "completion.kind") | ("try", "completion.value") => {
                     // A try statement K wrote around the site: its finally's completion.
                     if let Some(v) = kslot(&cat!(c, "@", r.2)) {

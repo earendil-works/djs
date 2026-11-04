@@ -22,6 +22,8 @@ use crate::interp::run::suspend;
 
 #[path = "dump_cont_pattern.rs"]
 mod pattern;
+#[path = "dump_cont_using.rs"]
+mod using;
 #[path = "dump_cont_yield.rs"]
 mod yield_star;
 
@@ -66,6 +68,7 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
             | crate::compiler::SiteKind::ForAwaitClose
             | crate::compiler::SiteKind::YieldStar
             | crate::compiler::SiteKind::YieldStarAwait
+            | crate::compiler::SiteKind::AwaitUsing
     ) {
         return Err(cat!(
             "plain dumps: a site of kind ",
@@ -100,6 +103,18 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
         arrow: act.fkind == crate::bytecode::template::func_flags::KIND_ARROW,
     };
     let body = g.body()?;
+    // The body's `using` resources are disposed at its end: a site there.
+    let close = if g
+        .node(0)
+        .decls
+        .iter()
+        .any(|d| matches!(d.kind, DeclKind::Using | DeclKind::AwaitUsing))
+    {
+        let end = act.ftext.len() as u32;
+        P::L(alloc::vec![s("\n}"), g.mark("site", end)])
+    } else {
+        s("\n}")
+    };
     let head = match (g.arrow, act.kind) {
         (true, suspend::ASYNC) => "async () => {\n",
         (true, _) => "() => {\n",
@@ -117,11 +132,11 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
                 suspend::GENERATOR => "*K() {\n",
                 _ => "async *K() {\n",
             };
-            let mut k = g.flatten(P::L(alloc::vec![s(m), P::Helpers, body, s("\n}")]));
+            let mut k = g.flatten(P::L(alloc::vec![s(m), P::Helpers, body, close]));
             k.text = cat!("({ __proto__: ", p, ", ", k.text, " }).K");
             Ok(k)
         }
-        None => Ok(g.flatten(P::L(alloc::vec![s(head), P::Helpers, body, s("\n}")]))),
+        None => Ok(g.flatten(P::L(alloc::vec![s(head), P::Helpers, body, close]))),
     }
 }
 
@@ -350,11 +365,11 @@ impl G<'_, '_> {
                 },
             };
             self.used.push_out(sname.clone());
-            if matches!(kind, DeclKind::Using | DeclKind::AwaitUsing) {
-                return no("a using declaration in scope (0203)");
-            }
+            // (A `using` binding's resource is added again by the scope, D2876.)
             let kw = match kind {
-                DeclKind::Const | DeclKind::FuncName => "const",
+                DeclKind::Const | DeclKind::FuncName | DeclKind::Using | DeclKind::AwaitUsing => {
+                    "const"
+                }
                 DeclKind::Var | DeclKind::Param | DeclKind::Function => "var",
                 _ => "let",
             };
@@ -427,7 +442,8 @@ impl G<'_, '_> {
     fn body(&mut self) -> R<P> {
         let n = self.node(0).clone();
         let Some(k) = self.next_part(0) else {
-            return no("a site that is its function");
+            // The body's `using` resources being disposed.
+            return self.using_disposal(0);
         };
         if n.parts[k].role == Role::Operand {
             // An arrow's concise body.
@@ -450,8 +466,9 @@ impl G<'_, '_> {
         decls: &[(String, DeclKind, u32, bool)],
     ) -> R<P> {
         let d = self.declare(decls)?;
+        let u = self.using_readd(i - 1)?;
         let st = self.stmt(i, None)?;
-        let mut out = alloc::vec![d, s("\n"), st];
+        let mut out = alloc::vec![d, s("\n"), u, st];
         for m in k + 1..n.parts.len() {
             match n.parts[m].role {
                 Role::Stmt => {
@@ -473,11 +490,19 @@ impl G<'_, '_> {
         let k = self.next_part(i);
         let lbl = |l: Option<P>| l.unwrap_or_else(|| s(""));
         match n.kind {
+            NodeKind::Block if self.is_site(i) => {
+                // Its `using` resources being disposed.
+                let d = self.using_disposal(i)?;
+                Ok(P::L(alloc::vec![lbl(label), d]))
+            }
             NodeKind::Block => {
                 let k = k.ok_or("plain dumps: a block at the site")?;
                 let decls = Self::block_decls(&n, k);
                 let l = self.list(&n, k, i + 1, &decls)?;
-                Ok(P::L(alloc::vec![lbl(label), s("{\n"), l, s("\n}")]))
+                // The `}` copied: a `using` scope's disposal is a site there.
+                // After the `}`: a `using` scope's disposal is a site there.
+                let end = self.mark("site", n.end);
+                Ok(P::L(alloc::vec![lbl(label), s("{\n"), l, s("\n}"), end]))
             }
             NodeKind::Expr => {
                 let e = self.expr(i + 1)?;
@@ -780,7 +805,16 @@ impl G<'_, '_> {
     /// the loop goes on over the saved iterator record as a real loop (`break`,
     /// `return` and exceptions close the iterator as the original's do).
     fn for_of(&mut self, i: usize, n: &Node, label: Option<P>) -> R<P> {
-        let k = self.next_part(i).unwrap_or(0);
+        // At the loop itself: its head's `using` resources disposed after an iteration.
+        let disposing = self.is_site(i);
+        let k = match self.next_part(i) {
+            Some(k) => k,
+            None => n
+                .parts
+                .iter()
+                .position(|p| p.role == Role::Body)
+                .ok_or("plain dumps: a loop without its body")?,
+        };
         if n.parts[k].role != Role::Body {
             return no("a site in a loop's head (0203)");
         }
@@ -826,8 +860,13 @@ impl G<'_, '_> {
             .collect();
         let body = self.rest_part(n, k);
         let m = self.mark(c, n.start);
-        let d = self.declare(&decls)?;
-        let first = self.stmt(i + 1, None)?;
+        let (d, first) = if disposing {
+            (s(""), self.using_disposal(i)?)
+        } else {
+            let d = self.declare(&decls)?;
+            let u = self.using_readd(i)?;
+            (P::L(alloc::vec![d, s("\n"), u]), self.stmt(i + 1, None)?)
+        };
         Ok(P::L(alloc::vec![
             P::S(cat!("{ let ", f, " = true; ")),
             label.unwrap_or_else(|| s("")),
@@ -849,7 +888,10 @@ impl G<'_, '_> {
             d,
             s("\n"),
             first,
-            s("\n} } else { "),
+            s("\n}"),
+            // (The iteration's `using` scope ends here: its disposal is a site.)
+            self.mark("site", n.parts[k].end),
+            s(" } else { "),
             bind,
             s(" "),
             body,
@@ -1849,7 +1891,7 @@ impl G<'_, '_> {
         let mut text = out.text;
         // K's helpers, captured where the marker is.
         let names: Vec<&str> = [
-            "R", "G", "C", "D", "A", "L", "N", "Q", "X", "O", "I", "E", "P", "S", "Y",
+            "R", "G", "C", "D", "A", "L", "N", "Q", "X", "O", "I", "E", "P", "S", "Y", "U",
         ]
         .into_iter()
         .filter(|h| text.contains(&cat!("$djs_", *h, "(")))

@@ -1964,3 +1964,58 @@ main().catch((e) => print("main", e)).then(main2);
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 5, "{ok}");
 }
+
+/// `using` scopes stopped in their code and in their disposal: a labelled jump out of a
+/// scope whose async disposal awaits, disposals that throw (suppressed errors), a sync
+/// `using` per iteration, a `null` resource before a sync one.
+#[test]
+fn plain_dumps_of_using() {
+    let src = r#"
+const res = (name, fail) => ({
+  async [Symbol.asyncDispose]() {
+    print("disposing", name, await later(name));
+    if (fail) throw new Error(name);
+  },
+});
+const sync = (name) => ({ [Symbol.dispose]() { print("dispose", name); } });
+async function jumps() {
+  outer: for (const i of [1, 2]) {
+    {
+      await using a = res("a" + i);
+      using s = sync("s" + i);
+      await later("in" + i);
+      if (i === 1) continue outer;
+      break outer;
+    }
+  }
+  return "jumps";
+}
+async function errors() {
+  try {
+    await using x = res("x", true);
+    await using y = res("y", true);
+    throw new Error("body");
+  } catch (e) {
+    return [e.message, e.error && e.error.message, e.suppressed && e.suppressed.message].join();
+  }
+}
+async function iter() {
+  for (using r of [sync("r1"), sync("r2")]) print(await later("it"));
+  {
+    await using n = null;
+    using t = sync("t");
+    await later("t");
+  }
+  return "iter";
+}
+async function main() { print(await jumps()); print(await errors()); print(await iter()); }
+main();
+"#;
+    let (failed, refused, ok) = plain_check_program("using", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, _, refused) = plain_chain_program("using", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 8, "{ok}");
+}

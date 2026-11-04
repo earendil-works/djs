@@ -85,6 +85,8 @@ pub(super) struct Flight<'a> {
     sites: Vec<ResumedSite>,
     /// Activations whose function uses `super`: the prototype of its home object.
     supers: Vec<(usize, Value)>,
+    /// Plain dumps: the `using` records written, by their text (`Act::usings`).
+    usings: Vec<plain::Using>,
 }
 
 impl<'a> Flight<'a> {
@@ -101,6 +103,7 @@ impl<'a> Flight<'a> {
             made: Vec::new(),
             sites: Vec::new(),
             supers: Vec::new(),
+            usings: Vec::new(),
         }
     }
 
@@ -1083,7 +1086,12 @@ impl Dumper<'_> {
         self.nodes[n].state = State::Busy;
         let h = self.h;
         let before = self.fns_read.get();
-        let res = self.expr(h.object_slot(o, 2), None, None);
+        // (Plain dumps write the resources themselves, not their array.)
+        let res = if self.pl.is_some() {
+            String::from("[]")
+        } else {
+            self.expr(h.object_slot(o, 2), None, None)
+        };
         let mut fields = Vec::new();
         let mut cycle = res.is_empty();
         for (k, slot) in USING_FIELDS {
@@ -1100,8 +1108,47 @@ impl Dumper<'_> {
             self.refuse(p, "a using declaration's record on a reference cycle");
         }
         if self.pl.is_some() {
-            let p = self.nodes[n].path.clone();
-            self.refuse(p, "plain dumps: a using declaration's record (0203)");
+            // Plain dumps: no object; the continuation adds the resources again
+            // (`Act::usings`). The text names what it needs.
+            let Some(items) = super::origin::elements(h, h.object_slot(o, 2)) else {
+                let p = self.nodes[n].path.clone();
+                self.refuse(p, "a using declaration's record of another shape");
+                return String::from("undefined");
+            };
+            let mut triples = Vec::new();
+            for t in items.chunks(3) {
+                let [v, m, k] = t else { continue };
+                let (v, m) = unwrap_using(h, *v, *m);
+                let ve = self.expr(v, None, None);
+                let me = self.expr(m, None, None);
+                triples.push_out((ve, me, k.as_int().unwrap_or(-1)));
+            }
+            let mut state = Vec::new();
+            for f in fields {
+                if let Some((k, e)) = f.split_once(": ") {
+                    state.push_out((String::from(k), String::from(e)));
+                }
+            }
+            let parts: Vec<String> = triples
+                .iter()
+                .map(|(v, m, k)| cat!(v, ", ", m, ", ", *k))
+                .collect();
+            let fields: Vec<String> = state.iter().map(|(k, e)| cat!(k, ": ", e)).collect();
+            let text = cat!(
+                "$dump.using([",
+                join(&parts, ", "),
+                "], { ",
+                join(&fields, ", "),
+                " })"
+            );
+            self.fl.usings.push(plain::Using {
+                slot: text.clone(),
+                triples,
+                state,
+            });
+            self.nodes[n].loc = text.clone();
+            self.nodes[n].state = State::Done;
+            return text;
         }
         let name = self.fresh("u");
         let state = if fields.is_empty() {
@@ -1855,7 +1902,20 @@ impl Dumper<'_> {
                 }
                 _ => Vec::new(),
             };
+            let usings = pslots
+                .iter()
+                .filter(|s| s.name.starts_with("using.record@"))
+                .filter_map(|s| {
+                    let u = self.fl.usings.iter().find(|u| u.slot == s.value)?;
+                    Some(plain::Using {
+                        slot: s.name.clone(),
+                        triples: u.triples.clone(),
+                        state: u.state.clone(),
+                    })
+                })
+                .collect();
             let act = plain::Act {
+                usings,
                 peers,
                 proto,
                 super_proto,
@@ -2069,6 +2129,22 @@ impl Dumper<'_> {
             .map(|x| x.name.clone())
             .collect()
     }
+}
+
+/// A `using` resource as the original added it: a continuation adds it again through
+/// `$dump.U(value, method)` (its dispose method a closure of those two), which is read
+/// back here so re-dumps add the original again.
+fn unwrap_using(h: &Heap, v: Value, m: Value) -> (Value, Value) {
+    let wrapped = || {
+        let f = m.as_object()?;
+        if h.object_class(f) != ObjectClass::Function {
+            return None;
+        }
+        let ov = captured_value(h, f, "$djs_v")?;
+        let om = captured_value(h, f, "$djs_m")?;
+        Some((ov, om))
+    };
+    wrapped().unwrap_or((v, m))
 }
 
 /// The home object of method `f` (one that uses `super`).
