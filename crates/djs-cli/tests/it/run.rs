@@ -114,6 +114,53 @@ fn resume_with_tools() {
     assert!(r.2.contains("not a djs dump"), "{}", r.2);
 }
 
+/// A plain dump (D2830) is a Script: `resume` runs it with the hooks `$djs.resume` and
+/// `$djs.seed` (D2890); its open call keeps its id and state.
+#[test]
+fn resume_a_plain_dump() {
+    let dump = format!("{DIR}/reads.plain.js");
+    let answers = format!("{DIR}/reads.json");
+    let expected = (0, "AABBB\ntotal 5\n".to_string(), String::new());
+    for extra in [&[][..], &["--suspend-every", "7", "--gc-stress"]] {
+        let mut args = vec!["resume", "--tools", &answers];
+        args.extend_from_slice(extra);
+        args.push(&dump);
+        assert_eq!(djs_cmd(&args), expected, "{extra:?}");
+    }
+    assert_eq!(
+        djs_cmd(&["resume", &dump]),
+        (
+            1,
+            String::new(),
+            "djs: no answer for #2 tools.read({\"path\":\"a\"})\n".into()
+        )
+    );
+    let (code, out, err) = djs_cmd(&["resume", "--explain", &dump]);
+    assert_eq!((code, err.as_str()), (0, ""));
+    assert!(
+        out.starts_with(&format!(
+            "{dump}: format 3; 1 open call, 1 suspended activation; handles: run\n\
+             #2 tools.read({{\"path\":\"a\"}}), state {{\"at\":\"a\"}}\n"
+        )),
+        "{out}"
+    );
+    // A hook that fails throws in the Script: the dump does not load.
+    let dir = env!("CARGO_TARGET_TMPDIR");
+    let bad = format!("{dir}/bad-plain-{}.js", std::process::id());
+    std::fs::write(&bad, "\"djs-dump 3\";\n$djs.resume(1, \"nope\", []);\n").unwrap();
+    let r = djs_cmd(&["resume", &bad]);
+    std::fs::remove_file(&bad).unwrap();
+    assert_eq!(
+        r,
+        (
+            2,
+            String::new(),
+            "djs: the dump did not load: Uncaught Error: resume: unknown host function nope\n"
+                .into()
+        )
+    );
+}
+
 /// `djs resume --explain` (D2641): where a dump's activations stopped, in the dump, since
 /// the dump has no comments; it answers nothing.
 #[test]

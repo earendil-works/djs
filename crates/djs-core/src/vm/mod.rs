@@ -758,6 +758,74 @@ impl Vm {
         })
     }
 
+    /// Continues an open call of a plain dump (D2890): while parked on the sync host call
+    /// `parked`, a `resume(id, name, args, state)` hook the dump calls, opens async host
+    /// call `id` of host function `fn_id` (the host's for `name`) with the elements of
+    /// `args`, and returns its promise from the parked call. The call keeps its id, so a
+    /// later dump writes it as it was; the next new call gets a higher one. It is not
+    /// reported by [`Vm::new_host_calls`]: the host has it already. `Err`: the reason, for
+    /// the host to throw at the parked call (only out of memory comes after the parked
+    /// call returned).
+    pub fn open_host_call(&mut self, parked: u32, fn_id: u32) -> Result<(), String> {
+        let i = state::interp(&self.heap);
+        let info = self
+            .host_call(parked)
+            .filter(|c| {
+                !c.is_async
+                    && self.state() == RunState::HostCall
+                    && self.heap.arena().get(i, Interp::HOST_CALL) == parked
+            })
+            .ok_or("not parked on that call")?;
+        let arg = |n: usize| info.args.get(n).copied().unwrap_or(Value::UNDEFINED);
+        let id = arg(0)
+            .as_int()
+            .filter(|&n| n > 0)
+            .ok_or("resume: not a call id")? as u32;
+        // (Sync calls take ids from the same counter: `parked` itself may have `id`.)
+        if id != parked && run::host_call_cell(&self.heap, id).is_some() {
+            return Err(alloc::format!("resume: call {id} is open already"));
+        }
+        let values: Vec<Value> = match arg(2) {
+            v if v.is_undefined() => Vec::new(),
+            v => {
+                let a = v
+                    .as_object()
+                    .filter(|&o| self.heap.object_class(o) == crate::heap::ObjectClass::Array)
+                    .ok_or("resume: the arguments are not an array")?;
+                (0..self.heap.array_length(a))
+                    .map(|k| self.heap.get_element_fast(a, k))
+                    .collect::<Option<_>>()
+                    .ok_or("resume: the arguments are an array with holes")?
+            }
+        };
+        let oom = |e: HeapError| String::from(e.as_str());
+        let arr = self
+            .heap
+            .alloc_value_array(values.len() as u32)
+            .map_err(oom)?;
+        for (k, &v) in values.iter().enumerate() {
+            self.heap.value_array_set(arr, k as u32, v);
+        }
+        self.heap
+            .arena_mut()
+            .set(arr, ValueArray::LEN, values.len() as u32);
+        let proto = intrinsic_obj(&self.heap, Intrinsic::PromiseProto);
+        let p = run::promise::alloc(&mut self.heap, Some(proto)).map_err(oom)?;
+        // The parked call returns first, so that its id is free again.
+        self.resolve_host_call(parked, Ok(Value::object(p)))
+            .map_err(|_| String::from("not parked on that call"))?;
+        // Out of memory here leaves the call's promise pending forever, with the parked
+        // call returned: the host gives up the load.
+        run::add_loaded_host_call(&mut self.heap, id, fn_id, arr, Value::object(p)).map_err(oom)?;
+        if let Some(c) = run::host_call_cell(&self.heap, id) {
+            let flags = self.heap.arena().get(c, HostCall::FLAGS);
+            self.heap
+                .arena_mut()
+                .set(c, HostCall::FLAGS, flags | HOST_CALL_REPORTED);
+        }
+        Ok(())
+    }
+
     /// Completes the host call `call_id` with a value (`Ok`) or an exception (`Err`).
     /// The call the VM is parked on returns or throws at the call; `run` continues
     /// afterwards. An async call (D1374) goes into the host inbox (D1670), in any VM

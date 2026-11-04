@@ -4365,8 +4365,7 @@ fn add_host_call(
 }
 
 /// Adds an async host call with the embedder's `id` and `promise` (an open call of a
-/// dump, 0171). The id counter stays as it is.
-#[cfg(feature = "dump")]
+/// dump, 0171, D2890). The id counter stays as it is, or moves past `id`.
 pub(crate) fn add_loaded_host_call(
     heap: &mut Heap,
     id: u32,
@@ -4379,6 +4378,11 @@ pub(crate) fn add_loaded_host_call(
     heap.arena_mut().set(i, Interp::NEXT_CALL_ID, id);
     let r = add_host_call(heap, fn_id, args, Value::UNDEFINED, promise);
     let i = state::interp(heap);
+    let next = if next > id {
+        next
+    } else {
+        id.wrapping_add(1).max(1)
+    };
     heap.arena_mut().set(i, Interp::NEXT_CALL_ID, next);
     r.map(|_| ())
 }

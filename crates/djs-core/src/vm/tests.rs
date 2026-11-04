@@ -4114,3 +4114,69 @@ fn outcome_while_idle() {
     assert_eq!(vm.run(u64::MAX), Status::Threw(Value::int(7)));
     assert_eq!(vm.outcome(), Some(Err(Value::int(7))));
 }
+
+/// `Vm::open_host_call` (D2890): a plain dump's `resume(id, name, args)` hook opens the
+/// call under the dump's id, returns its promise, and moves the id counter past it.
+#[test]
+fn open_host_call_keeps_the_dump_s_id() {
+    const RESUME: u32 = 21;
+    let mut vm = vm_with(VmOptions::default());
+    let tool = vm.new_async_host_function(TOOL, "tool").unwrap();
+    vm.define_global("tool", tool).unwrap();
+    let resume = vm.new_host_function(RESUME, "resume").unwrap();
+    vm.define_global("resume", resume).unwrap();
+    let src = "const p = resume(2, 'tool', ['a', 1]); const q = resume(7, 'tool');\n\
+               let bad; try { resume(7, 'tool', []); } catch (e) { bad = e.message; }\n\
+               const r = tool('new');\n\
+               globalThis.out = []; p.then(v => out.push(v)); q.then(v => out.push(v));\n\
+               bad";
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &crate::compiler::CompileOptions::script("t.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    let status = loop {
+        match vm.run(u64::MAX) {
+            Status::HostCall { call_id, fn_id } => {
+                assert_eq!(fn_id, RESUME);
+                if let Err(m) = vm.open_host_call(call_id, TOOL) {
+                    let e = vm.new_error(ErrorKind::Error, &m).unwrap();
+                    vm.resolve_host_call(call_id, Err(e)).unwrap();
+                }
+            }
+            s => break s,
+        }
+    };
+    assert_eq!(status, Status::Idle);
+    assert_eq!(
+        vm.display(vm.outcome().unwrap().unwrap()),
+        "resume: call 7 is open already"
+    );
+    // The opened calls are the host's already; the new one comes after them (the
+    // failed resume, a sync call, took 8).
+    assert_eq!(vm.new_host_calls(), [9]);
+    assert_eq!(vm.pending_host_calls(), [2, 7, 9]);
+    let info = vm.host_call(2).unwrap();
+    assert!(info.is_async && info.fn_id == TOOL);
+    let args: Vec<String> = info.args.iter().map(|&a| vm.display(a)).collect();
+    assert_eq!(args, ["a", "1"]);
+    assert!(vm.host_call(7).unwrap().args.is_empty());
+    let s = vm.heap_mut().alloc_str("A").unwrap();
+    vm.resolve_host_call(2, Ok(Value::string(s))).unwrap();
+    vm.resolve_host_call(7, Ok(Value::ZERO)).unwrap();
+    assert_eq!(vm.run(u64::MAX), Status::Idle);
+    // (Call 9 stays open: the VM is idle, and the Script's outcome is its value.)
+    let f = vm
+        .compile(
+            b"out.join()",
+            &crate::compiler::CompileOptions::script("u.js"),
+        )
+        .unwrap();
+    vm.call(f, this, &[]).unwrap();
+    assert_eq!(vm.run(u64::MAX), Status::Idle);
+    assert_eq!(vm.display(vm.outcome().unwrap().unwrap()), "A,0");
+    vm.heap().verify().unwrap();
+}

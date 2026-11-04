@@ -1,25 +1,195 @@
-//! Continuation dumps in the CLI (0174, D2604): writing a waiting session as a format 2
-//! dump and loading one, with the host's names for its functions from [`Tools`].
+//! Continuation dumps in the CLI (0174, D2604): writing a waiting session as a dump and
+//! loading one, with the host's names for its functions from [`Tools`].
+//!
+//! A plain dump (`"djs-dump 3";`, D2830) is an ordinary Script: loading it is running it
+//! with the host hooks of D2832 in the global object `$djs` (D2890): `$djs.seed(lo, hi)`
+//! sets `Math.random`'s state, `$djs.resume(id, name, args, state)` opens the call `id`
+//! of the host function `name` again (the CLI answers it as any other call). The hooks
+//! are served while the Script is evaluated, and `$djs` is deleted after that.
 
+use djs_core::compiler::CompileOptions;
 use djs_core::heap::Handle;
 use djs_core::value::Value;
-use djs_core::vm::Vm;
 use djs_core::vm::dump::{DumpOptions, Dumped};
 use djs_core::vm::dump_load::{LoadOptions, Loaded, dump_format};
+use djs_core::vm::{ErrorKind, Status, Vm};
 
 use crate::tools::Tools;
 
 /// The globals the CLI defines in every VM: never dumped, referenced by name.
 pub const HOST_GLOBALS: &[&str] = &["console", "tools", "print", "later"];
 
+/// The global object of the plain dump's host hooks (D2890).
+pub const HOOKS: &str = "$djs";
+/// `$djs.resume(id, name, args, state)`.
+pub const RESUME: u32 = 4;
+/// `$djs.seed(lo, hi)`.
+pub const SEED: u32 = 5;
+
+/// A plain dump's header: `Some(typescript)` for `"djs-dump 3";` or
+/// `"djs-dump 3 typescript";`.
+pub fn plain_format(text: &str) -> Option<bool> {
+    let t = text.trim_start();
+    if t.starts_with("\"djs-dump 3\";") {
+        Some(false)
+    } else if t.starts_with("\"djs-dump 3 typescript\";") {
+        Some(true)
+    } else {
+        None
+    }
+}
+
+/// A plain dump being loaded: the states its `resume` calls gave, by call id.
+#[derive(Default)]
+pub struct PlainLoad {
+    pub states: Vec<(u32, String)>,
+}
+
+/// Starts loading the plain dump `text` into `vm` (a fresh one): defines `$djs` and calls
+/// the Script. The caller runs the VM, serving the hooks with [`serve_hook`], and calls
+/// [`end_load`] at the first stop that is not a sync host call.
+pub fn begin_plain(vm: &mut Vm, text: &str, filename: &str) -> Result<(), String> {
+    let ts = plain_format(text).ok_or("not a plain dump (no \"djs-dump 3\"; header)")?;
+    let oom = |_| String::from("out of memory");
+    let hooks = vm.new_object().map_err(oom)?;
+    let resume = vm.new_host_function(RESUME, "resume").map_err(oom)?;
+    vm.define(hooks, "resume", resume).map_err(oom)?;
+    let seed = vm.new_host_function(SEED, "seed").map_err(oom)?;
+    vm.define(hooks, "seed", seed).map_err(oom)?;
+    vm.define_global(HOOKS, Value::object(hooks)).map_err(oom)?;
+    let copts = CompileOptions {
+        typescript: ts,
+        ..CompileOptions::script(filename)
+    };
+    let f = vm.compile(text.as_bytes(), &copts).map_err(|e| {
+        format!(
+            "SyntaxError: {} at {filename}:{}:{}",
+            e.message, e.line, e.col
+        )
+    })?;
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[])
+        .map_err(|_| String::from("the VM is busy"))
+}
+
+/// Serves `$djs.resume` and `$djs.seed`, the parked sync call `call_id` of `fn_id`;
+/// false for another function.
+pub fn serve_hook(
+    vm: &mut Vm,
+    tools: &Tools,
+    load: &mut PlainLoad,
+    call_id: u32,
+    fn_id: u32,
+) -> bool {
+    if fn_id != RESUME && fn_id != SEED {
+        return false;
+    }
+    let args = vm.host_call(call_id).expect("parked call").args;
+    let arg = |i: usize| args.get(i).copied().unwrap_or(Value::UNDEFINED);
+    let r = if fn_id == SEED {
+        match (arg(0).as_int(), arg(1).as_int()) {
+            (Some(lo), Some(hi)) => {
+                vm.set_math_random_seed(u64::from(lo as u32) | u64::from(hi as u32) << 32);
+                Ok(())
+            }
+            _ => Err(String::from("seed: not two int32 halves")),
+        }
+    } else {
+        let name = arg(1).as_string().map(|s| vm.heap().str_to_string(s));
+        match name.as_deref().map(|n| (n, tools.id_for_call_name(n))) {
+            Some((_, Some(f))) => {
+                let state = (!arg(3).is_undefined()).then(|| crate::tools::to_json(vm, arg(3)));
+                let id = arg(0).as_int();
+                vm.open_host_call(call_id, f).map(|()| {
+                    if let (Some(id), Some(s)) = (id, state) {
+                        load.states.push((id as u32, s));
+                    }
+                })
+            }
+            Some((n, None)) => Err(format!("resume: unknown host function {n}")),
+            None => Err(String::from("resume: not a function name")),
+        }
+    };
+    match r {
+        Ok(()) => {
+            if fn_id == SEED {
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED))
+                    .expect("parked on this call");
+            }
+        }
+        Err(msg) => {
+            // (Not parked any more only when out of memory: the load fails anyway.)
+            let e = vm.new_error(ErrorKind::Error, &msg).expect("oom");
+            let _ = vm.resolve_host_call(call_id, Err(e));
+        }
+    }
+    true
+}
+
+/// The plain dump's Script was evaluated: its hooks go away.
+pub fn end_load(vm: &mut Vm) {
+    let g = vm.global();
+    if let Ok(k) = vm.heap_mut().atom_str(HOOKS) {
+        let _ = vm.heap_mut().delete_own_property(g, k);
+    }
+}
+
+/// Loads the plain dump `text` into `vm` (a fresh one) and runs it until it stops at
+/// something other than a sync host call (idle, done): serves the hooks, `make` and the
+/// printing function (`log`, with the call's arguments); other sync calls throw. Its
+/// run's promise is the VM's outcome (the Script's completion value). Err: the dump does
+/// not compile, or its Script threw.
+pub fn run_plain(
+    vm: &mut Vm,
+    tools: &mut Tools,
+    text: &str,
+    filename: &str,
+    log: &mut dyn FnMut(&Vm, &[Value]),
+) -> Result<PlainLoad, String> {
+    begin_plain(vm, text, filename)?;
+    let mut load = PlainLoad::default();
+    loop {
+        match vm.run(u64::MAX) {
+            Status::HostCall { call_id, fn_id } => {
+                if serve_hook(vm, tools, &mut load, call_id, fn_id) {
+                    continue;
+                }
+                if fn_id == crate::tools::MAKE_TOOL {
+                    tools.make(vm, call_id);
+                    continue;
+                }
+                let r = if fn_id == crate::run::CONSOLE_LOG {
+                    let args = vm.host_call(call_id).expect("parked call").args;
+                    log(vm, &args);
+                    Ok(Value::UNDEFINED)
+                } else {
+                    Err(Value::UNDEFINED)
+                };
+                vm.resolve_host_call(call_id, r)
+                    .expect("parked on this call");
+            }
+            Status::Threw(e) => return Err(format!("the dump threw: {}", vm.display(e))),
+            Status::HostOutOfMemory => return Err(String::from("out of host memory")),
+            _ => break,
+        }
+    }
+    end_load(vm);
+    Ok(load)
+}
+
 /// The text is a dump (of any format): the loader's own test, not a prefix match.
 pub fn is_dump(text: &[u8]) -> bool {
-    std::str::from_utf8(text).is_ok_and(|t| dump_format(t).is_some())
+    std::str::from_utf8(text).is_ok_and(|t| dump_format(t).is_some() || plain_format(t).is_some())
 }
 
 /// Dumps the idle VM with the host's `handles`; the refusal's message otherwise.
-pub fn dump(vm: &Vm, tools: &Tools, handles: &[(&str, Value)]) -> Result<Dumped, String> {
-    dump_names(vm, tools, handles, None)
+pub fn dump(
+    vm: &Vm,
+    tools: &Tools,
+    handles: &[(&str, Value)],
+    plain: bool,
+) -> Result<Dumped, String> {
+    dump_names(vm, tools, handles, None, plain)
 }
 
 /// [`dump`] of the named globals only (all of them with `None`).
@@ -28,7 +198,10 @@ pub fn dump_names(
     tools: &Tools,
     handles: &[(&str, Value)],
     names: Option<&[&str]>,
+    plain: bool,
 ) -> Result<Dumped, String> {
+    // Until the plain exporter lands (0201): DumpOptions::plain.
+    let _ = plain;
     let name = |id: u32| tools.call_name(id);
     let opts = DumpOptions {
         base: djs_prelude::BASE,

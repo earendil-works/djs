@@ -1095,7 +1095,7 @@ impl Repl {
         let sel = (!names.is_empty()).then_some(names.as_slice());
         let handles = self.waiting_handles(None);
         let refs: Vec<(&str, Value)> = handles.iter().map(|(n, v)| (n.as_str(), *v)).collect();
-        match crate::dumps::dump_names(&self.vm, &self.tools, &refs, sel) {
+        match crate::dumps::dump_names(&self.vm, &self.tools, &refs, sel, false) {
             Ok(d) if file == "-" => print!("{}", d.text),
             Ok(d) => match std::fs::write(file, &d.text) {
                 Ok(()) => println!(
@@ -1135,7 +1135,7 @@ impl Repl {
         };
         let handles = self.waiting_handles(entry);
         let refs: Vec<(&str, Value)> = handles.iter().map(|(n, v)| (n.as_str(), *v)).collect();
-        let d = crate::dumps::dump(&self.vm, &self.tools, &refs)?;
+        let d = crate::dumps::dump(&self.vm, &self.tools, &refs, false)?;
         let mut vm = new_vm(self.gc_stress);
         let mut loaded = crate::dumps::load(&mut vm, &self.tools, &d.text)?;
         // The old VM's handles go with it; positions are now in this dump, which has no file.
@@ -1163,6 +1163,9 @@ impl Repl {
     /// function there yet.
     fn restore_dump(&mut self, arg: &str, src: &str) {
         self.replace_vm(new_vm(self.gc_stress));
+        if crate::dumps::plain_format(src).is_some() {
+            return self.restore_plain(arg, src);
+        }
         let loaded = match crate::dumps::load(&mut self.vm, &self.tools, src) {
             Ok(l) => l,
             Err(e) => {
@@ -1201,6 +1204,43 @@ impl Repl {
         }
         self.pending_after_restore();
         // An idle point: `later` calls (and scripted answers) are answered at once.
+        self.current = String::from("the dump");
+        if let Outcome::Stopped(why) = self.pump(false) {
+            println!("{why}");
+        }
+        self.check_waiting();
+        self.report_rejections();
+    }
+
+    /// `.restore` of a plain dump (D2830): the fresh VM runs it as a Script. Its run's
+    /// promise (the completion value) becomes the waiting input `run`.
+    fn restore_plain(&mut self, arg: &str, src: &str) {
+        let mut log = |vm: &Vm, args: &[Value]| {
+            let parts: Vec<String> = args
+                .iter()
+                .map(|&a| inspect::log_arg(vm.heap(), a))
+                .collect();
+            println!("{}", parts.join(" "));
+        };
+        if let Err(e) = crate::dumps::run_plain(&mut self.vm, &mut self.tools, src, arg, &mut log) {
+            println!("cannot load {arg}: {e}");
+            return;
+        }
+        println!("loaded {arg} into a fresh VM");
+        self.dump_file = Some(arg.to_string());
+        self.inputs = 0;
+        for id in self.vm.pending_host_calls() {
+            self.origins.insert(id, String::from("the dump"));
+        }
+        if let Some(Ok(v)) = self.vm.outcome()
+            && self.vm.promise_state(v) == Some(None)
+        {
+            self.vm.mark_promise_handled(v);
+            let h = self.vm.heap_mut().new_handle(v).expect("oom");
+            self.waiting
+                .push(Waiting::from_handle_name(String::from("run"), h));
+        }
+        self.pending_after_restore();
         self.current = String::from("the dump");
         if let Outcome::Stopped(why) = self.pump(false) {
             println!("{why}");

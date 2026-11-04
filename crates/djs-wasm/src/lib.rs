@@ -1518,6 +1518,21 @@ pub extern "C" fn vm_resolve_host_call_at(
     resolve(vm, call_id, ok, value, Some(now))
 }
 
+/// A plain dump's `$djs.resume(id, name, args, state)` (D2890): while parked on that sync
+/// call `parked`, opens async call `id` of host function `fn_id` (the host's for `name`)
+/// with `args`' elements, under the dump's id, and returns its promise from the parked
+/// call (`Vm::open_host_call`). 0, or -1 with the reason in out, for the host to throw.
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_open_call(vm: u32, parked: u32, fn_id: u32) -> i32 {
+    with(|s| match s.slot(vm).vm.open_host_call(parked, fn_id) {
+        Ok(()) => 0,
+        Err(e) => {
+            s.set_out(e.as_bytes());
+            -1
+        }
+    })
+}
+
 fn resolve(vm: u32, call_id: u32, ok: u32, value: u32, now: Option<f64>) -> i32 {
     with(|s| {
         let slot = s.slot(vm);
