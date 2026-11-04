@@ -1,7 +1,7 @@
 # 0194: Delete the role vocabulary, operand placement and gosub mapping; format {at, awaiting, this, args, slots, queue}
 
-status: open
-agent: -
+status: in-progress
+agent: sm
 branch: issue/0194-delete-roles
 depends-on: 0192, 0193
 guide: -
