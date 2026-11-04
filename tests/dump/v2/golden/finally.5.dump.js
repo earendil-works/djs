@@ -80,5 +80,5 @@ async function main() {
 }
 $dump.n2 = ["inner 1 1"];
 $dump.i3 = $dump.advance(Array.prototype.values.call([1, 2, 3]), 1);
-$dump.a4 = $dump.resume(nested, { at: "await#2", awaiting: $dump.p1, slots: { out: $dump.n2, i: 1, "for-of.iterator@46": $dump.i3, "for-of.next@46": $dump.builtin("%ArrayIteratorPrototype%.next"), "finally.value@276": undefined, "finally.return@276": 0, "call.callee@292": Array.prototype.push, "call.this@292": $dump.n2, "binary.left@301": "outer 1 " } });
+$dump.a4 = $dump.resume(nested, { at: "await#2", awaiting: $dump.p1, slots: { out: $dump.n2, i: 1, "for-of.iterator@46": $dump.i3, "for-of.next@46": $dump.builtin("%ArrayIteratorPrototype%.next"), "completion.kind@79": 96, "completion.value@79": undefined, "call.callee@292": Array.prototype.push, "call.this@292": $dump.n2, "binary.left@301": "outer 1 " } });
 $dump.a5 = $dump.resume(main, { at: "await#4", awaiting: $dump.a4, slots: { g: undefined, seen: undefined, "call.callee@181": print, "call.this@181": undefined, "call.arg@187": "nested" } });

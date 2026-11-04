@@ -2,5 +2,5 @@ function <anonymous> @1..694
   arg0 argument 0, arg1 console@0
   loc0 <state>, loc1 tools@0, loc2 files@0, loc3 results@0, loc4 total@0, loc8 settled@0, loc9 first@0
   await#1 @138 (3:17) pc 49: -
-  await#2 @369 (6:17) pc 218: -
-  await#3 @565 (8:15) pc 294: -
+  await#2 @369 (6:17) pc 214: -
+  await#3 @565 (8:15) pc 290: -

@@ -1,11 +1,11 @@
 function <anonymous> @1..5835
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
-  await#1 @4595 (194:8) pc 1220: -
+  await#1 @4595 (194:8) pc 1216: -
 function <anonymous> @4603..5824
   arg0 tools@0
   loc0 <state>, loc1 created@0, loc2 art@0, loc3 scratchId@0, loc4 slug@0, loc9 path@280, loc10 file@280, loc11 ct@280, loc12 put@441, loc13 digu@441, loc14 r@441, loc15 c@0, loc16 a@0
   await#1 @35 (195:17) pc 33: - (out: loc9 loc10 loc11 loc12 loc13 loc14)
-  await#2 @454 (199:16) pc 329: for-of.iterator@269 for-of.next@269
-  await#3 @697 (201:13) pc 459: for-of.iterator@269 for-of.next@269
-  await#4 @888 (204:11) pc 558: - (out: loc9 loc10 loc11 loc12 loc13 loc14)
+  await#2 @454 (199:16) pc 325: for-of.iterator@269 for-of.next@269
+  await#3 @697 (201:13) pc 455: for-of.iterator@269 for-of.next@269
+  await#4 @888 (204:11) pc 554: - (out: loc9 loc10 loc11 loc12 loc13 loc14)

@@ -71,14 +71,6 @@ pub enum Role {
     /// The exception a `for await` rethrows after closing its iterator (the loop's body
     /// threw).
     Exception,
-    /// A subroutine entered with `gosub` (a finally block, a `using` disposal, a loop's
-    /// iterator close): the value it carries (`undefined`, the exception or the return
-    /// value) and the return address, an int pc of this build. A dump writes the
-    /// return address as the index of its `gosub` among those to the subroutine, in
-    /// emission order (`Site::returns`). The subroutine is the function's `i`-th
-    /// (recorder order), which is not part of the role's name.
-    FinallyValue,
-    FinallyReturn(u16),
     /// Values of a construct that is not described yet (class definitions): the site is unsupported.
     Unsupported(&'static str),
 }
@@ -113,8 +105,6 @@ impl fmt::Display for Role {
             Role::IntrinsicArg(i) => write!(f, "intrinsic.arg[{i}]"),
             Role::PatternKey => f.write_str("pattern.key"),
             Role::Exception => f.write_str("exception"),
-            Role::FinallyValue => f.write_str("finally.value"),
-            Role::FinallyReturn(_) => f.write_str("finally.return"),
             Role::Unsupported(c) => write!(f, "unsupported:{c}"),
         }
     }
@@ -153,8 +143,6 @@ impl Role {
             Role::IntrinsicArg(i) => ("intrinsic.arg", Some(i)),
             Role::PatternKey => ("pattern.key", None),
             Role::Exception => ("exception", None),
-            Role::FinallyValue => ("finally.value", None),
-            Role::FinallyReturn(_) => ("finally.return", None),
             Role::Unsupported(_) => ("unsupported", None),
         }
     }
@@ -244,8 +232,6 @@ mod maps {
         pub sites: Vec<SiteRec>,
         /// The computed property keys this function evaluates (`[` to `]`).
         pub computed_keys: Vec<(u32, u32)>,
-        /// The entry labels of its subroutines (`Role::FinallyReturn`'s index).
-        pub subs: Vec<crate::bytecode::Label>,
     }
 
     /// A site as the parser saw it.
@@ -306,10 +292,6 @@ mod maps {
         /// source offset, from the function's start, of what keeps the value
         /// (`call.callee@41`); see [`Role::slot_name`].
         pub slots: Vec<String>,
-        /// For each `Role::FinallyReturn` operand, bottom first: the return addresses
-        /// (pcs after each `gosub` to its subroutine, in emission order) a dump names by
-        /// index.
-        pub returns: Vec<Vec<u32>>,
         /// Why the frame cannot be described here: the construct, or `None`.
         pub unsupported: Option<String>,
     }
@@ -551,8 +533,7 @@ mod maps {
     /// `slots[v]` is where binding `v` lives: `Some((false, i, _))` argument `i`,
     /// `Some((true, i, boxed))` local `i`, holding a Box if `boxed`; `n_locals` local slots; `params` argument slots;
     /// `at[k]` the final pc of site `k`'s instruction (`None`: not emitted, dead code);
-    /// `depth[k]` the operand depth there, the suspended value included; `subs[i]` the
-    /// return addresses of subroutine `i` (`Recorder::subs`); `live[k][t]` whether
+    /// `depth[k]` the operand depth there, the suspended value included; `live[k][t]` whether
     /// temporary `t` (`FuncState::temps`) holds a value at site `k`.
     #[allow(clippy::too_many_arguments)]
     pub(in crate::compiler) fn build(
@@ -564,7 +545,6 @@ mod maps {
         params: usize,
         at: &[Option<(u32, u32)>],
         depth: &[Option<u32>],
-        subs: &[Vec<u32>],
         live: &[Vec<bool>],
     ) -> FunctionMap {
         let base = f.src_start;
@@ -675,19 +655,6 @@ mod maps {
                     .collect(),
                 locals,
                 boxed,
-                returns: match unsupported {
-                    Some(_) => Vec::new(),
-                    None => s
-                        .roles
-                        .iter()
-                        .filter_map(|r| match r.0 {
-                            Role::FinallyReturn(i) => {
-                                Some(subs.get(i as usize).cloned().unwrap_or_default())
-                            }
-                            _ => None,
-                        })
-                        .collect(),
-                },
                 operands: if unsupported.is_some() {
                     Vec::new()
                 } else {
@@ -732,14 +699,6 @@ impl super::parser::Parser<'_, '_> {
         }
     }
 
-    /// Puts back roles [`Parser::roles_take`] took off.
-    #[inline]
-    pub(super) fn roles_put(&mut self, rs: &[(Role, u32)]) {
-        if let Some(r) = &mut self.f.smap {
-            r.roles.extend_from_slice(rs);
-        }
-    }
-
     /// The construct consumed the top `n` values it kept.
     #[inline]
     pub(super) fn roles_pop(&mut self, n: usize) {
@@ -749,36 +708,11 @@ impl super::parser::Parser<'_, '_> {
         }
     }
 
-    /// Takes the top `n` roles off (values the code consumed for a while), for
-    /// `roles_put` to put back.
-    #[inline]
-    pub(super) fn roles_take(&mut self, n: usize) -> alloc::vec::Vec<(Role, u32)> {
-        match &mut self.f.smap {
-            Some(r) => {
-                let at = r.roles.len().saturating_sub(n);
-                r.roles.split_off(at)
-            }
-            None => alloc::vec::Vec::new(),
-        }
-    }
-
     /// Replaces the top `n` roles by `rs` (an `array_from` collapsing its elements).
     #[inline]
     pub(super) fn roles_replace(&mut self, n: usize, at: u32, rs: &[Role]) {
         self.roles_pop(n);
         self.roles_push(at, rs);
-    }
-
-    /// A subroutine starts at `l` (placed next): its index for `Role::FinallyReturn`.
-    #[inline]
-    pub(super) fn subroutine(&mut self, l: crate::bytecode::Label) -> u16 {
-        match &mut self.f.smap {
-            Some(r) => {
-                r.subs.push(l);
-                (r.subs.len() - 1) as u16
-            }
-            None => 0,
-        }
     }
 
     /// A suspension point: the `await`/`yield` instruction is emitted next.
@@ -804,19 +738,9 @@ impl super::parser::Parser<'_, '_> {
     #[inline(always)]
     pub(super) fn roles_push(&mut self, _at: u32, _rs: &[Role]) {}
     #[inline(always)]
-    pub(super) fn roles_put(&mut self, _rs: &[(Role, u32)]) {}
-    #[inline(always)]
     pub(super) fn roles_pop(&mut self, _n: usize) {}
     #[inline(always)]
     pub(super) fn roles_replace(&mut self, _n: usize, _at: u32, _rs: &[Role]) {}
-    #[inline(always)]
-    pub(super) fn roles_take(&mut self, _n: usize) -> alloc::vec::Vec<(Role, u32)> {
-        alloc::vec::Vec::new()
-    }
-    #[inline(always)]
-    pub(super) fn subroutine(&mut self, _l: crate::bytecode::Label) -> u16 {
-        0
-    }
     #[inline(always)]
     pub(super) fn site(&mut self, _kind: SiteKind, _pos: u32) {}
 }

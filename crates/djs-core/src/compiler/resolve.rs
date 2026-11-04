@@ -514,7 +514,6 @@ fn suspension_map(
     code: &crate::bytecode::Code,
     handlers: &[crate::bytecode::Handler],
     suspends: &[(u32, u32)],
-    gosubs: &[u32],
     all: &[crate::bytecode::Insn],
     resolved: &[Resolved],
 ) -> PResult<super::smap::FunctionMap> {
@@ -522,19 +521,6 @@ fn suspension_map(
         crate::bytecode::decode::decode(&code.code, pc)
             .map_err(|e| internal(&crate::detail::detail("decode", &e)))
     };
-    // Each subroutine's return addresses: after the gosubs that enter it, in order.
-    let mut subs: Vec<Vec<u32>> = Vec::with_capacity(rec.subs.len());
-    for &l in &rec.subs {
-        let entry = code.label_pos(l);
-        let mut rets = Vec::new();
-        for &g in gosubs {
-            let insn = decode(code.map_pos(g))?;
-            if entry.is_some() && insn.jump_target() == entry {
-                rets.push(insn.next_pc());
-            }
-        }
-        subs.push(rets);
-    }
     let depths = crate::bytecode::stack_depths(&code.code, handlers)
         .map_err(|e| internal(&crate::detail::detail("stack depths", &e)))?;
     let mut at = Vec::with_capacity(rec.sites.len());
@@ -590,7 +576,20 @@ fn suspension_map(
             Some(Target::Var(v)) => f.temps.iter().position(|t| t.0 == v),
             _ => None,
         };
-        super::temps::live_at(all, &f.handlers, f.temps.len(), temp_of, &index)
+        // A completion's kind is written after its value, or alone when the value is
+        // dead (compiler/completion.rs): the write defines the value too.
+        let also: Vec<Option<usize>> = f
+            .temps
+            .iter()
+            .map(|&(_, c, at)| {
+                (c == "completion.kind").then(|| {
+                    f.temps
+                        .iter()
+                        .position(|t| t.1 == "completion.value" && t.2 == at)
+                })?
+            })
+            .collect();
+        super::temps::live_at(all, &f.handlers, &also, temp_of, &index)
     };
     let params = (f.param_count - u16::from(f.rest.is_some())) as usize;
     Ok(super::smap::build(
@@ -602,7 +601,6 @@ fn suspension_map(
         params,
         &at,
         &depth,
-        &subs,
         &live,
     ))
 }
@@ -677,9 +675,6 @@ fn emit_function(
     // shortening of each emitted `await`/`yield`.
     #[cfg(feature = "dump")]
     let mut suspends: Vec<(u32, u32)> = Vec::new();
-    // And the position of each `gosub` (subroutine return addresses).
-    #[cfg(feature = "dump")]
-    let mut gosubs: Vec<u32> = Vec::new();
     let mut needs_uninit = vec![false; f.vars.len()];
     for r in resolved {
         if let (Target::Var(v), true) = (r.target, r.check) {
@@ -794,10 +789,6 @@ fn emit_function(
         #[cfg(feature = "dump")]
         if f.smap.is_some() && matches!(insn.op, Op::Await | Op::Yield | Op::YieldStar) {
             suspends.push((insn.pc, out.pos()));
-        }
-        #[cfg(feature = "dump")]
-        if f.smap.is_some() && insn.op == Op::Gosub {
-            gosubs.push(out.pos());
         }
         match insn.op {
             Op::NameGet | Op::NamePut | Op::NameSet | Op::NameInit | Op::NameTypeof => {
@@ -1100,7 +1091,7 @@ fn emit_function(
     #[cfg(feature = "dump")]
     if let (Some(rec), Some(maps)) = (&f.smap, maps) {
         maps.push(suspension_map(
-            heap, f, rec, storage, names, &code, &handlers, &suspends, &gosubs, &all, resolved,
+            heap, f, rec, storage, names, &code, &handlers, &suspends, &all, resolved,
         )?);
     }
 

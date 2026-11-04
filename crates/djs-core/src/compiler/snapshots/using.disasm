@@ -8,10 +8,10 @@ function 0 <anonymous>: params=0 locals=1 stack=1 captures=0
    30  put_loc0 (<completion>)
    31  get_loc0 (<completion>)
    32  return
-function 0.0 f: params=1 locals=7 stack=3 captures=0
-  handler [61, 83) -> 92 depth 0
-  handler [53, 115) -> 34 depth 0
-  handler [6, 150) -> 159 depth 0
+function 0.0 f: params=1 locals=11 stack=2 captures=0
+  handler [57, 76) -> 104 depth 0
+  handler [49, 119) -> 34 depth 0
+  handler [6, 155) -> 184 depth 0
     0  call_intrinsic %UsingCreate 0
     5  put_loc0 (<temp>)
     6  get_arg0  ; 4:13
@@ -25,72 +25,90 @@ function 0.0 f: params=1 locals=7 stack=3 captures=0
    22  get_field "next" ic0
    29  put_loc8 loc4 (<temp>)
    31  put_loc3 (<temp>)
-   32  jump8 -> 115
+   32  jump8 -> 119
    34  get_loc3 (<temp>)
-   35  dup
-   36  is_undefined
-   37  jump_if_true8 -> 44
-   39  call_intrinsic %IteratorCloseThrow 1
-   44  drop
-   45  throw
-   46  get_field "value" ic1
-   53  put_loc2 (y)  ; 5:14
-   54  call_intrinsic %UsingCreate 0
-   59  put_loc8 loc5 (<temp>)
-   61  get_loc2 (y)  ; 6:15
-   62  get_loc8 loc5 (<temp>)  ; 6:11
-   64  swap
-   65  call_intrinsic %UsingAdd 2
-   70  set_loc8 loc6 (z)  ; 7:9
-   72  jump_if_false8 -> 83
-   74  undefined
-   75  gosub -> 106
-   80  drop
-   81  jump8 -> 136
-   83  undefined
-   84  gosub -> 106
-   89  drop
-   90  jump8 -> 115
-   92  get_loc8 loc5 (<temp>)
-   94  swap
-   95  call_intrinsic %UsingDisposeError 2
-  100  gosub -> 106
-  105  throw
-  106  get_loc8 loc5 (<temp>)
-  108  call_intrinsic %UsingDispose 1
-  113  drop
-  114  ret
-  115  iter_next_loc loc3 (<temp>) -> 53  ; 5:3
-  122  iter_check_object
-  123  dup
-  124  get_field "done" ic2
-  131  jump_if_false8 -> 46
-  133  drop
-  134  jump8 -> 143
-  136  get_loc3 (<temp>)
-  137  call_intrinsic %IteratorClose 1
-  142  drop
-  143  get_loc1 (x)  ; 9:10
-  144  gosub -> 172
-  149  return
-  150  undefined
-  151  gosub -> 172
-  156  drop
-  157  jump8 -> 180
-  159  get_loc0 (<temp>)
-  160  swap
-  161  call_intrinsic %UsingDisposeError 2
-  166  gosub -> 172
-  171  throw
-  172  get_loc0 (<temp>)
-  173  call_intrinsic %UsingDispose 1
-  178  drop
-  179  ret
-  180  return_undef
-function 0.1 g: params=1 locals=3 stack=4 captures=0
-  handler [9, 18) -> 27 depth 0
-  handler [54, 57) -> 60 depth 2
-  handler [3, 75) -> 75 depth 0
+   35  call_intrinsic %IteratorCloseThrow 1
+   40  drop
+   41  throw
+   42  get_field "value" ic1
+   49  put_loc2 (y)  ; 5:14
+   50  call_intrinsic %UsingCreate 0
+   55  put_loc8 loc5 (<temp>)
+   57  get_loc2 (y)  ; 6:15
+   58  get_loc8 loc5 (<temp>)  ; 6:11
+   60  swap
+   61  call_intrinsic %UsingAdd 2
+   66  set_loc8 loc6 (z)  ; 7:9
+   68  jump_if_false8 -> 76
+   70  push_i8 69
+   72  put_loc8 loc7 (<temp>)
+   74  jump8 -> 79
+   76  push0
+   77  put_loc8 loc7 (<temp>)
+   79  get_loc8 loc5 (<temp>)
+   81  call_intrinsic %UsingDispose 1
+   86  drop
+   87  get_loc8 loc7 (<temp>)
+   89  jump_if_false8 -> 119
+   91  get_loc8 loc7 (<temp>)
+   93  push_i8 69
+   95  strict_eq
+   96  jump_if_true8 -> 140
+   98  get_loc8 loc8 (<temp>)
+  100  undefined
+  101  put_loc8 loc8 (<temp>)
+  103  throw
+  104  get_loc8 loc5 (<temp>)
+  106  swap
+  107  call_intrinsic %UsingDisposeError 2
+  112  put_loc8 loc8 (<temp>)
+  114  push1
+  115  put_loc8 loc7 (<temp>)
+  117  jump8 -> 79
+  119  iter_next_loc loc3 (<temp>) -> 49  ; 5:3
+  126  iter_check_object
+  127  dup
+  128  get_field "done" ic2
+  135  jump_if_false8 -> 42
+  137  drop
+  138  jump8 -> 147
+  140  get_loc3 (<temp>)
+  141  call_intrinsic %IteratorClose 1
+  146  drop
+  147  get_loc1 (x)  ; 9:10
+  148  put_loc8 loc10 (<temp>)
+  150  push2
+  151  put_loc8 loc9 (<temp>)
+  153  jump8 -> 158
+  155  push0
+  156  put_loc8 loc9 (<temp>)
+  158  get_loc0 (<temp>)
+  159  call_intrinsic %UsingDispose 1
+  164  drop
+  165  get_loc8 loc9 (<temp>)
+  167  jump_if_false8 -> 198
+  169  get_loc8 loc9 (<temp>)
+  171  push2
+  172  strict_eq
+  173  jump_if_false8 -> 178
+  175  get_loc8 loc10 (<temp>)
+  177  return
+  178  get_loc8 loc10 (<temp>)
+  180  undefined
+  181  put_loc8 loc10 (<temp>)
+  183  throw
+  184  get_loc0 (<temp>)
+  185  swap
+  186  call_intrinsic %UsingDisposeError 2
+  191  put_loc8 loc10 (<temp>)
+  193  push1
+  194  put_loc8 loc9 (<temp>)
+  196  jump8 -> 158
+  198  return_undef
+function 0.1 g: params=1 locals=5 stack=2 captures=0
+  handler [34, 37) -> 40 depth 0
+  handler [9, 18) -> 59 depth 0
+  handler [3, 76) -> 76 depth 0
     0  async_start loc0 (<state>)
     3  call_intrinsic %UsingCreate 0
     8  put_loc1 (<temp>)
@@ -99,29 +117,34 @@ function 0.1 g: params=1 locals=3 stack=4 captures=0
    11  swap
    12  call_intrinsic %AwaitUsingAdd 2
    17  put_loc2 (x)
-   18  undefined
-   19  gosub -> 40
-   24  drop
-   25  jump8 -> 71
-   27  get_loc1 (<temp>)
-   28  swap
-   29  call_intrinsic %UsingDisposeError 2
-   34  gosub -> 40
-   39  throw
+   18  push0
+   19  put_loc3 (<temp>)
+   20  get_loc1 (<temp>)
+   21  call_intrinsic %UsingDisposeStep 1
+   26  jump_if_false8 -> 50
+   28  get_loc1 (<temp>)
+   29  call_intrinsic %UsingAwaitValue 1
+   34  await loc0 (<state>)
+   37  drop
+   38  jump8 -> 20
    40  get_loc1 (<temp>)
-   41  call_intrinsic %UsingDisposeStep 1
-   46  jump_if_false8 -> 70
-   48  get_loc1 (<temp>)
-   49  call_intrinsic %UsingAwaitValue 1
-   54  await loc0 (<state>)
-   57  drop
-   58  jump8 -> 40
-   60  get_loc1 (<temp>)
-   61  swap
-   62  call_intrinsic %UsingDisposeError 2
-   67  drop
-   68  jump8 -> 40
-   70  ret
-   71  undefined
-   72  async_return loc0 (<state>)
-   75  async_reject loc0 (<state>)
+   41  swap
+   42  call_intrinsic %UsingDisposeError 2
+   47  drop
+   48  jump8 -> 20
+   50  get_loc3 (<temp>)
+   51  jump_if_false8 -> 72
+   53  get_loc8 loc4 (<temp>)
+   55  undefined
+   56  put_loc8 loc4 (<temp>)
+   58  throw
+   59  get_loc1 (<temp>)
+   60  swap
+   61  call_intrinsic %UsingDisposeError 2
+   66  put_loc8 loc4 (<temp>)
+   68  push1
+   69  put_loc3 (<temp>)
+   70  jump8 -> 20
+   72  undefined
+   73  async_return loc0 (<state>)
+   76  async_reject loc0 (<state>)

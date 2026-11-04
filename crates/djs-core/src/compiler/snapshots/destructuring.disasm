@@ -3,8 +3,8 @@ function 0 <anonymous>: params=2 locals=18 stack=4 captures=0
   handler [134, 136) -> 150 depth 0
   handler [240, 248) -> 307 depth 1
   handler [286, 293) -> 307 depth 1
-  handler [370, 487) -> 350 depth 0
-  handler [3, 529) -> 529 depth 0
+  handler [366, 483) -> 350 depth 0
+  handler [3, 525) -> 525 depth 0
     0  async_start loc0 (<state>)
     3  fclosure child0
     8  put_loc8 loc11 (f)
@@ -138,76 +138,73 @@ function 0 <anonymous>: params=2 locals=18 stack=4 captures=0
   334  get_field "next" ic16
   341  put_loc8 loc13 (<temp>)
   343  put_loc8 loc12 (<temp>)
-  345  jump -> 487
+  345  jump -> 483
   350  get_loc8 loc12 (<temp>)
-  352  dup
-  353  is_undefined
-  354  jump_if_true8 -> 361
-  356  call_intrinsic %IteratorCloseThrow 1
-  361  drop
-  362  throw
-  363  get_field "value" ic17
-  370  call_intrinsic %GetIterator 1  ; 8:12
-  375  dup
-  376  get_field "next" ic18
-  383  put_loc8 loc15 (<temp>)
-  385  put_loc8 loc14 (<temp>)
-  387  iter_next_loc loc14 (<temp>) -> 412
-  394  iter_check_object
-  395  dup
-  396  get_field "done" ic19
-  403  jump_if_true8 -> 414
-  405  get_field "value" ic20
-  412  jump8 -> 419
-  414  drop
-  415  undefined
-  416  put_loc8 loc14 (<temp>)
-  418  undefined
-  419  put_loc8 loc16 (key)  ; 8:13
-  421  get_loc8 loc14 (<temp>)
-  423  dup
-  424  is_undefined
-  425  jump_if_true8 -> 459
-  427  get_loc8 loc15 (<temp>)
-  429  iter_next -> 452  ; 8:12
-  434  iter_check_object
-  435  dup
-  436  get_field "done" ic21
-  443  jump_if_true8 -> 454
-  445  get_field "value" ic22
-  452  jump8 -> 459
-  454  drop
-  455  undefined
-  456  put_loc8 loc14 (<temp>)
-  458  undefined
-  459  put_loc8 loc17 (value)  ; 8:18
-  461  get_loc8 loc14 (<temp>)
-  463  dup
-  464  is_undefined
-  465  jump_if_true8 -> 472
-  467  call_intrinsic %IteratorClose 1  ; 8:12
-  472  drop
-  473  get_global "use" ic23  ; 8:37
-  480  undefined
-  481  get_loc8 loc16 (key)  ; 8:41
-  483  get_loc8 loc17 (value)  ; 8:46
-  485  call2  ; 8:40
-  486  drop
-  487  iter_next_loc loc12 (<temp>) -> 370  ; 8:1
-  494  iter_check_object
-  495  dup
-  496  get_field "done" ic24
-  503  jump_if_false -> 363
-  508  drop
-  509  get_global "tag" ic25  ; 9:1
-  516  undefined
-  517  get_template_object #5 (0)
-  522  get_loc3 (a)  ; 9:10
-  523  call2  ; 9:4
-  524  drop
-  525  undefined
-  526  async_return loc0 (<state>)
-  529  async_reject loc0 (<state>)
+  352  call_intrinsic %IteratorCloseThrow 1
+  357  drop
+  358  throw
+  359  get_field "value" ic17
+  366  call_intrinsic %GetIterator 1  ; 8:12
+  371  dup
+  372  get_field "next" ic18
+  379  put_loc8 loc15 (<temp>)
+  381  put_loc8 loc14 (<temp>)
+  383  iter_next_loc loc14 (<temp>) -> 408
+  390  iter_check_object
+  391  dup
+  392  get_field "done" ic19
+  399  jump_if_true8 -> 410
+  401  get_field "value" ic20
+  408  jump8 -> 415
+  410  drop
+  411  undefined
+  412  put_loc8 loc14 (<temp>)
+  414  undefined
+  415  put_loc8 loc16 (key)  ; 8:13
+  417  get_loc8 loc14 (<temp>)
+  419  dup
+  420  is_undefined
+  421  jump_if_true8 -> 455
+  423  get_loc8 loc15 (<temp>)
+  425  iter_next -> 448  ; 8:12
+  430  iter_check_object
+  431  dup
+  432  get_field "done" ic21
+  439  jump_if_true8 -> 450
+  441  get_field "value" ic22
+  448  jump8 -> 455
+  450  drop
+  451  undefined
+  452  put_loc8 loc14 (<temp>)
+  454  undefined
+  455  put_loc8 loc17 (value)  ; 8:18
+  457  get_loc8 loc14 (<temp>)
+  459  dup
+  460  is_undefined
+  461  jump_if_true8 -> 468
+  463  call_intrinsic %IteratorClose 1  ; 8:12
+  468  drop
+  469  get_global "use" ic23  ; 8:37
+  476  undefined
+  477  get_loc8 loc16 (key)  ; 8:41
+  479  get_loc8 loc17 (value)  ; 8:46
+  481  call2  ; 8:40
+  482  drop
+  483  iter_next_loc loc12 (<temp>) -> 366  ; 8:1
+  490  iter_check_object
+  491  dup
+  492  get_field "done" ic24
+  499  jump_if_false -> 359
+  504  drop
+  505  get_global "tag" ic25  ; 9:1
+  512  undefined
+  513  get_template_object #5 (0)
+  518  get_loc3 (a)  ; 9:10
+  519  call2  ; 9:4
+  520  drop
+  521  undefined
+  522  async_return loc0 (<state>)
+  525  async_reject loc0 (<state>)
 function 0.0 f: params=2 locals=5 stack=2 captures=0
     0  get_arg0
     1  require_object_coercible  ; 7:12

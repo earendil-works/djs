@@ -1,12 +1,12 @@
 function <anonymous> @1..5261
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
-  await#1 @3606 (63:8) pc 317: -
+  await#1 @3606 (63:8) pc 313: -
 function <anonymous> @3614..5250
   arg0 tools@0
   loc0 <state>, loc1 offset@29, loc4 path@61, loc5 content@61, loc6 path@374
-  await#1 @118 (66:16) pc 108: for-of.iterator@19 for-of.next@19 (out: loc6)
-  await#2 @489 (70:126) pc 337: for-of.iterator@364 for-of.next@364 call.callee@470 call.this@470 object.literal@475 (out: loc1 loc4 loc5)
-  await#3 @541 (71:6) pc 424: call.callee@536 call.this@536 (out: loc1 loc4 loc5 loc6)
-  await#4 @696 (72:6) pc 485: call.callee@691 call.this@691 (out: loc1 loc4 loc5 loc6)
-  await#5 @1239 (73:6) pc 529: call.callee@1234 call.this@1234 (out: loc1 loc4 loc5 loc6)
+  await#1 @118 (66:16) pc 104: for-of.iterator@19 for-of.next@19 (out: loc6)
+  await#2 @489 (70:126) pc 329: for-of.iterator@364 for-of.next@364 call.callee@470 call.this@470 object.literal@475 (out: loc1 loc4 loc5)
+  await#3 @541 (71:6) pc 416: call.callee@536 call.this@536 (out: loc1 loc4 loc5 loc6)
+  await#4 @696 (72:6) pc 477: call.callee@691 call.this@691 (out: loc1 loc4 loc5 loc6)
+  await#5 @1239 (73:6) pc 521: call.callee@1234 call.this@1234 (out: loc1 loc4 loc5 loc6)

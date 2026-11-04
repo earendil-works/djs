@@ -4,6 +4,7 @@ use crate::PushOut;
 use alloc::vec::Vec;
 
 use super::PResult;
+use super::completion::Exit;
 use super::func::{FuncKind, HandlerLabels, ScopeKind, VarKind};
 use super::parser::{BlockEnv, BlockKind, Parser, syntax};
 use super::pattern::Binding;
@@ -367,7 +368,11 @@ impl Parser<'_, '_> {
         }
     }
 
-    fn push_loop(&mut self, labels: Vec<Atom>) -> (crate::bytecode::Label, crate::bytecode::Label) {
+    fn push_loop(
+        &mut self,
+        labels: Vec<Atom>,
+        pos: u32,
+    ) -> (crate::bytecode::Label, crate::bytecode::Label) {
         let l_break = self.new_label();
         let l_cont = self.new_label();
         self.blocks.push_out(BlockEnv {
@@ -377,14 +382,17 @@ impl Parser<'_, '_> {
             continue_label: Some(l_cont),
             depth: self.stmt_depth,
             used: false,
+            pos,
+            completion: None,
         });
         (l_break, l_cont)
     }
 
     fn parse_while(&mut self, labels: Vec<Atom>) -> PResult<()> {
+        let pos = self.tok.start;
         self.next()?;
         self.reset_completion();
-        let (l_break, l_cont) = self.push_loop(labels);
+        let (l_break, l_cont) = self.push_loop(labels, pos);
         // Rotated (0086): `jump L_cont; L_body: body; L_cont: test; jump_if_true
         // L_body; L_break:`, one jump per iteration. Emitted in source order, then the
         // body is moved in front of the test.
@@ -405,9 +413,10 @@ impl Parser<'_, '_> {
     }
 
     fn parse_do_while(&mut self, labels: Vec<Atom>) -> PResult<()> {
+        let pos = self.tok.start;
         self.next()?;
         self.reset_completion();
-        let (l_break, l_cont) = self.push_loop(labels);
+        let (l_break, l_cont) = self.push_loop(labels, pos);
         let l_top = self.new_label();
         self.place(l_top);
         self.parse_statement()?;
@@ -455,7 +464,7 @@ impl Parser<'_, '_> {
         self.expect(TokenKind::Semicolon, ";")?;
         // Per-iteration copies of `let` bindings (CreatePerIterationEnvironment) only
         // matter for captured bindings, which need closures (P1-1: `rebox`).
-        let (l_break, l_cont) = self.push_loop(labels);
+        let (l_break, l_cont) = self.push_loop(labels, for_pos);
         let l_test = self.new_label();
         let l_body = self.new_label();
         // Per-iteration copies of captured `let` bindings (docs/compiler.md 5.9):
@@ -590,10 +599,10 @@ impl Parser<'_, '_> {
                 None if !is_break && b.kind == BlockKind::Loop => b.continue_label,
                 None => continue,
             };
-            found = target.map(|t| (i, t, b.depth));
+            found = target.map(|_| i);
             break;
         }
-        let Some((index, target, depth)) = found else {
+        let Some(index) = found else {
             let msg = match (label, is_break) {
                 (Some(_), _) => "break/continue label not found",
                 (None, true) => "break must be inside loop or switch",
@@ -606,54 +615,14 @@ impl Parser<'_, '_> {
         }
         // Run the finally blocks and close the iterators being left, innermost first
         // (docs/compiler.md 7.4).
-        let mut cur = self.emit_unwind(index + 1, false);
-        while cur > depth {
-            self.code().drop();
-            cur -= 1;
-        }
-        self.code().jump(target);
+        self.emit_unwind(
+            index + 1,
+            Exit::Jump {
+                block: index,
+                cont: !is_break,
+            },
+        );
         self.expect_semicolon()
-    }
-
-    /// Leaves the finally blocks and for-of loops of `self.blocks[from..]`, innermost
-    /// first: each finally block runs (`gosub`) and each iterator is closed (`gosub`
-    /// to its close subroutine). With `keep_value` the value on top of the stack (a
-    /// `return` value) stays on top and is the finally blocks' value slot; otherwise
-    /// `undefined` is. Returns the operand depth left, not counting a kept value.
-    pub(super) fn emit_unwind(&mut self, from: usize, keep_value: bool) -> u32 {
-        let mut cur = self.stmt_depth;
-        let exits: Vec<(BlockKind, crate::bytecode::Label, u32)> = self.blocks[from..]
-            .iter()
-            .rev()
-            .filter(|b| matches!(b.kind, BlockKind::Finally | BlockKind::Iter))
-            .map(|b| (b.kind, b.break_label, b.depth))
-            .collect();
-        for b in &mut self.blocks[from..] {
-            if b.kind == BlockKind::Iter {
-                b.used = true;
-            }
-        }
-        for (_, l_sub, base) in exits {
-            // A finally block runs at its try's base, and so does an iterator's close
-            // (its iterator is in a temporary, D2732).
-            while cur > base {
-                if keep_value {
-                    self.code().nip();
-                } else {
-                    self.code().drop();
-                }
-                cur -= 1;
-            }
-            if !keep_value {
-                self.code().undefined();
-            }
-            self.code().gosub(l_sub);
-            if !keep_value {
-                self.code().drop();
-            }
-            cur = base;
-        }
-        cur
     }
 
     /// `async function` (no line break after `async`).
@@ -725,27 +694,30 @@ impl Parser<'_, '_> {
                     self.code().await_(0);
                 }
             }
-            let depth = self.emit_unwind(0, true);
-            self.emit_return_value_at(depth);
+            self.emit_unwind(0, Exit::Return);
         }
         self.expect_semicolon()
     }
 
-    /// `try` (docs/compiler.md 7.4, D1084). With `base` the operand depth here:
+    /// `try` (docs/compiler.md 7.4, D1084). With `base` the operand depth here and a
+    /// finally block's completion in `kind`/`value` (compiler/completion.rs):
     ///
     /// ```text
     /// L_try:   <try block>
     /// L_try_end:
-    ///          [undefined; gosub L_fin; drop]; jump L_end
+    ///          finally: kind = 0 [; jump L_fin if a catch follows]
+    ///          no finally: jump L_end
     /// L_catch: (handler for [L_try, L_try_end), stack: exc) <bind or drop>; <catch block>
     /// L_catch_end:
-    ///          [undefined; gosub L_fin; drop]; jump L_end
-    /// L_exc:   (handler for the try or catch region, if there is a finally)
-    ///          gosub L_fin; throw
-    /// L_fin:   (stack: value slot, return address) <finally block>; ret
+    ///          finally: kind = 0; no finally: jump L_end
+    /// L_fin:   <finally block>
+    ///          get kind; jump_if_false L_end; <the exits that entered it>
+    ///          get value; value = undefined; throw
+    /// L_exc:   (handler for the try or catch region) value = exc; kind = 1; jump L_fin
     /// L_end:
     /// ```
     fn parse_try(&mut self) -> PResult<()> {
+        let try_pos = self.tok.start;
         self.next()?;
         if !self.is(TokenKind::LBrace) {
             return syntax(self.tok.start, "expecting '{'");
@@ -754,7 +726,9 @@ impl Parser<'_, '_> {
         let has_finally = super::scan::try_has_finally(self.lx, self.tok);
         let l_fin = self.new_label();
         let l_end = self.new_label();
+        let fin = self.blocks.len();
         if has_finally {
+            let completion = super::completion::Completion::new(self.scope, try_pos);
             self.blocks.push_out(BlockEnv {
                 labels: Vec::new(),
                 kind: BlockKind::Finally,
@@ -762,15 +736,20 @@ impl Parser<'_, '_> {
                 continue_label: None,
                 depth: base,
                 used: false,
+                pos: try_pos,
+                completion: Some(completion),
             });
         }
-        let normal_exit = |p: &mut Self| {
+        // `last`: the finally block follows.
+        let normal_exit = |p: &mut Self, last: bool| {
             if has_finally {
-                p.code().undefined();
-                p.code().gosub(l_fin);
-                p.code().drop();
+                p.complete_normally(fin);
+                if !last {
+                    p.code().jump(l_fin);
+                }
+            } else {
+                p.code().jump(l_end);
             }
-            p.code().jump(l_end);
         };
         let l_try = self.new_label();
         let l_try_end = self.new_label();
@@ -780,9 +759,10 @@ impl Parser<'_, '_> {
         self.parse_block()?;
         self.f.open_trys -= 1;
         self.place(l_try_end);
-        normal_exit(self);
+        let has_catch = self.is(TokenKind::Catch);
+        normal_exit(self, !has_catch);
         let mut exc_region = (l_try, l_try_end);
-        if self.is(TokenKind::Catch) {
+        if has_catch {
             self.next()?;
             let l_catch = self.new_label();
             self.place(l_catch);
@@ -847,13 +827,36 @@ impl Parser<'_, '_> {
             self.pop_scope();
             let l_catch_end = self.new_label();
             self.place(l_catch_end);
-            normal_exit(self);
+            normal_exit(self, true);
             exc_region = (l_catch, l_catch_end);
         } else if !has_finally {
             return syntax(self.tok.start, "expecting catch or finally");
         }
         if has_finally {
-            self.blocks.pop();
+            let mut c = self
+                .blocks
+                .pop()
+                .and_then(|e| e.completion)
+                .expect("the finally env");
+            self.expect(TokenKind::Finally, "finally")?;
+            self.place(l_fin);
+            // A normal finally block keeps the completion value of the try statement
+            // (Script and eval code): it is saved meanwhile.
+            let saved = self.completion_local().map(|a| {
+                let saved = self.temp("completion.saved", try_pos);
+                let r = self.name_ref(a, self.prev_end);
+                self.code().name_get(r);
+                self.temp_put(saved);
+                self.reset_completion();
+                (a, saved)
+            });
+            self.parse_block()?;
+            if let Some((a, saved)) = saved {
+                self.temp_get(saved);
+                let r = self.name_ref(a, self.prev_end);
+                self.code().name_put(r);
+            }
+            self.end_completion(&mut c, Some(l_end), true);
             let l_exc = self.new_label();
             self.place(l_exc);
             self.f.handlers.push_out(HandlerLabels {
@@ -863,33 +866,7 @@ impl Parser<'_, '_> {
                 depth: base,
                 depth_from: None,
             });
-            self.code().gosub(l_fin);
-            self.code().throw();
-            let fin_pos = self.tok.start;
-            self.expect(TokenKind::Finally, "finally")?;
-            let sub = self.subroutine(l_fin);
-            self.place(l_fin);
-            self.stmt_depth = base + 2;
-            self.roles_push(fin_pos, &[Role::FinallyValue, Role::FinallyReturn(sub)]);
-            // A normal finally block keeps the completion value of the try statement:
-            // it is saved on the stack (a jump out of the block drops it).
-            let completion = self.completion_local();
-            if let Some(a) = completion {
-                let r = self.name_ref(a, self.prev_end);
-                self.code().name_get(r);
-                self.stmt_depth += 1;
-                self.reset_completion();
-                // (Script and eval code, which never suspends.)
-                self.roles_push(fin_pos, &[Role::Unsupported("a completion value")]);
-            }
-            self.parse_block()?;
-            if let Some(a) = completion {
-                let r = self.name_ref(a, self.prev_end);
-                self.code().name_put(r);
-            }
-            self.stmt_depth = base;
-            self.roles_pop(2 + usize::from(completion.is_some()));
-            self.code().ret();
+            self.complete_throwing(&mut c, l_fin);
         }
         self.place(l_end);
         Ok(())
@@ -932,6 +909,8 @@ impl Parser<'_, '_> {
             continue_label: None,
             depth: self.stmt_depth,
             used: false,
+            pos: switch_pos,
+            completion: None,
         });
         let mut next_test = self.new_label();
         let mut next_body: Option<crate::bytecode::Label> = None;
@@ -996,6 +975,7 @@ impl Parser<'_, '_> {
     }
 
     fn parse_labeled(&mut self) -> PResult<()> {
+        let pos = self.tok.start;
         let mut labels = Vec::new();
         while self.is(TokenKind::Ident) && self.peek().kind == TokenKind::Colon {
             let tok = self.tok;
@@ -1023,6 +1003,8 @@ impl Parser<'_, '_> {
                     continue_label: None,
                     depth: self.stmt_depth,
                     used: false,
+                    pos,
+                    completion: None,
                 });
                 if self.is(TokenKind::Function) {
                     return syntax(

@@ -6,31 +6,34 @@
 //! (`using.record@S`, D2732) holds until the list ends. Each binding's value goes into
 //! it with `%UsingAdd`/`%AwaitUsingAdd`. The region is a `try`/`finally` whose finally
 //! block is the disposal (a `BlockKind::Finally` env, so `break`, `continue`, `return`
-//! and generator returns run it with `gosub`), with `base` the depth of the list:
+//! and generator returns enter it with their completion, compiler/completion.rs), with
+//! `base` the depth of the list:
 //!
 //! ```text
 //!          call_intrinsic %UsingCreate 0; put s
 //! L_try:   <statements>
 //! L_try_end:
-//!          undefined; gosub L_fin; drop; jump L_end
+//!          kind = 0
+//! L_fin:   get s; call_intrinsic %UsingDispose 1; drop
+//!          get kind; jump_if_false L_end; <exits>; get value; value = undefined; throw
 //! L_exc:   (handler for [L_try, L_try_end), depth base: exc)
-//!          get s; swap; call_intrinsic %UsingDisposeError 2; gosub L_fin; throw
-//! L_fin:   (v ret) get s; call_intrinsic %UsingDispose 1; drop; ret
+//!          get s; swap; call_intrinsic %UsingDisposeError 2; value = exc; kind = 1
+//!          jump L_fin
 //! L_end:
 //! ```
 //!
-//! An exception is recorded in the Record first, so the subroutine always throws then.
-//! With an `await using` in the list, the subroutine awaits between disposals:
+//! An exception is recorded in the Record first, so the disposal always throws then.
+//! With an `await using` in the list, the disposal awaits between disposals:
 //!
 //! ```text
-//! L_fin:                                     ; v ret
+//! L_fin:
 //! L_loop:  get s; call_intrinsic %UsingDisposeStep 1; jump_if_false L_done
 //!          get s; call_intrinsic %UsingAwaitValue 1
 //! L_a:     await
 //! L_a_end: drop; jump L_loop
-//! L_rej:   (handler for [L_a, L_a_end): v ret exc)
+//! L_rej:   (handler for [L_a, L_a_end): exc)
 //!          get s; swap; call_intrinsic %UsingDisposeError 2; drop; jump L_loop
-//! L_done:  ret
+//! L_done:  <dispatch>
 //! ```
 //!
 //! A for-of head (`for (using x of xs)`) opens a region per iteration around the
@@ -42,7 +45,7 @@ use alloc::vec::Vec;
 use super::PResult;
 use super::func::{HandlerLabels, VarKind};
 use super::parser::{BlockEnv, BlockKind, Parser, syntax};
-use super::smap::{Role, SiteKind};
+use super::smap::SiteKind;
 use crate::bytecode::Label;
 use crate::bytecode::intrinsics::intrinsic_id;
 use crate::lexer::{Kw, TokenKind};
@@ -66,6 +69,9 @@ pub(super) struct UsingRegion {
     base: u32,
     /// The resource Record's temporary.
     pub rec: crate::heap::Atom,
+    /// The start of the first bound name: names the Record's and the completion's
+    /// temporaries.
+    at: u32,
     l_try: Label,
     l_fin: Label,
     /// An `await using` is in the list: disposal awaits.
@@ -183,6 +189,7 @@ impl Parser<'_, '_> {
         UsingRegion {
             base,
             rec,
+            at,
             l_try,
             l_fin,
             is_async: is_await,
@@ -198,6 +205,8 @@ impl Parser<'_, '_> {
             continue_label: None,
             depth: r.base,
             used: false,
+            pos: r.at,
+            completion: Some(super::completion::Completion::new(self.scope, r.at)),
         });
         self.stmt_depth = r.base;
     }
@@ -257,36 +266,22 @@ impl Parser<'_, '_> {
         self.code().call_intrinsic(intrinsic(add), 2);
     }
 
-    /// Ends a region: the normal exit, the exception handler and the disposal
-    /// subroutine. The operand depth is back under the Record.
+    /// Ends a region: the normal exit, the disposal and the exception handler. The
+    /// operand depth is back at the list's.
     pub(super) fn close_using(&mut self, r: UsingRegion) {
-        let env = self.blocks.pop();
+        let fin = self.blocks.len() - 1;
         debug_assert!(
-            env.is_some_and(|e| e.kind == BlockKind::Finally && e.break_label == r.l_fin)
+            self.blocks[fin].kind == BlockKind::Finally && self.blocks[fin].break_label == r.l_fin
         );
         let l_try_end = self.new_label();
-        let l_exc = self.new_label();
         let l_end = self.new_label();
         self.place(l_try_end);
-        self.code().undefined();
-        self.code().gosub(r.l_fin);
-        self.code().drop();
-        self.code().jump(l_end);
-        self.f.handlers.push_out(HandlerLabels {
-            start: r.l_try,
-            end: l_try_end,
-            target: l_exc,
-            depth: r.base,
-            depth_from: None,
-        });
-        self.place(l_exc);
-        self.temp_get(r.rec);
-        self.code().swap();
-        self.code()
-            .call_intrinsic(intrinsic("UsingDisposeError"), 2);
-        self.code().gosub(r.l_fin);
-        self.code().throw();
-        let sub = self.subroutine(r.l_fin);
+        self.complete_normally(fin);
+        let mut c = self
+            .blocks
+            .pop()
+            .and_then(|e| e.completion)
+            .expect("the using env");
         self.place(r.l_fin);
         if r.is_async {
             let (l_loop, l_done) = (self.new_label(), self.new_label());
@@ -298,12 +293,8 @@ impl Parser<'_, '_> {
             self.temp_get(r.rec);
             self.code().call_intrinsic(intrinsic("UsingAwaitValue"), 1);
             self.place(l_a);
-            // `v ret`: the subroutine's value and return address, named by the site
-            // (the list's end).
-            let rs = [Role::FinallyValue, Role::FinallyReturn(sub)];
-            self.roles_push(self.prev_end, &rs);
+            // Named by the list's end.
             self.site(SiteKind::AwaitUsing, self.prev_end);
-            self.roles_pop(rs.len());
             self.code().await_(0);
             self.place(l_a_end);
             self.code().drop();
@@ -312,7 +303,7 @@ impl Parser<'_, '_> {
                 start: l_a,
                 end: l_a_end,
                 target: l_rej,
-                depth: r.base + 2,
+                depth: r.base,
                 depth_from: None,
             });
             self.place(l_rej);
@@ -328,7 +319,21 @@ impl Parser<'_, '_> {
             self.code().call_intrinsic(intrinsic("UsingDispose"), 1);
             self.code().drop();
         }
-        self.code().ret();
+        self.end_completion(&mut c, Some(l_end), true);
+        let l_exc = self.new_label();
+        self.f.handlers.push_out(HandlerLabels {
+            start: r.l_try,
+            end: l_try_end,
+            target: l_exc,
+            depth: r.base,
+            depth_from: None,
+        });
+        self.place(l_exc);
+        self.temp_get(r.rec);
+        self.code().swap();
+        self.code()
+            .call_intrinsic(intrinsic("UsingDisposeError"), 2);
+        self.complete_throwing(&mut c, r.l_fin);
         self.place(l_end);
         self.stmt_depth = r.base;
     }

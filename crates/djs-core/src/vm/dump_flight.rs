@@ -26,9 +26,7 @@ use alloc::vec::Vec;
 
 use super::*;
 use crate::builtins::regexp;
-use crate::compiler::{
-    CompileOptions, FunctionMap, Holds, NamedSlot, Place, Role, Site, SiteKind, Slot,
-};
+use crate::compiler::{CompileOptions, FunctionMap, Holds, NamedSlot, Place, Site, SiteKind, Slot};
 use crate::heap::cells::{HostCall, Script};
 use crate::interp::run::{builtin_closure_kind, promise, suspend};
 use crate::vm::dump_prims::{USING_FIELDS, USING_SLOTS, helper_proto};
@@ -631,19 +629,9 @@ impl Dumper<'_> {
                     && names(&w.locals) == names(&site.locals)
                     && w.boxed == site.boxed
                     && w.operands == site.operands
-                    && w.unsupported.is_none()
-                    && w.returns
-                        .iter()
-                        .map(Vec::len)
-                        .eq(site.returns.iter().map(Vec::len)) =>
+                    && w.unsupported.is_none() =>
             {
-                // The return addresses in the frame are the body's: the dump names them
-                // by index, the same in both.
-                Some(Site {
-                    pos: site.pos,
-                    returns: site.returns,
-                    ..w
-                })
+                Some(Site { pos: site.pos, ..w })
             }
             _ => {
                 let why = cat!(
@@ -1637,7 +1625,6 @@ impl Dumper<'_> {
         };
         // The iterator below a loop's `next` (an async-from-sync one brings its own).
         let mut it = String::new();
-        let mut rets = site.returns.iter();
         let named = site.named_slots();
         for slot in named.iter().cloned() {
             let v = fv(index(slot.place));
@@ -1649,7 +1636,7 @@ impl Dumper<'_> {
             let (what, e) = match slot.holds {
                 Holds::Hidden if class_hidden(&slot.name) => ("binding", "undefined".into()),
                 Holds::Binding | Holds::Hidden => ("binding", self.slot_expr(v, slot.boxed)),
-                Holds::Temp(role) => {
+                Holds::Temp(_) => {
                     let e = match slot.construct() {
                         "for-await.next" | "yield*.next"
                             if from_sync_partner(&named, &slot)
@@ -1669,24 +1656,6 @@ impl Dumper<'_> {
                             // (Refused by the visit.)
                             None => "undefined".into(),
                         },
-                        _ if matches!(role, Some(Role::FinallyReturn(_))) => {
-                            // A return address: the index of its `gosub` (the loader's pc
-                            // for it).
-                            let j = rets
-                                .next()
-                                .zip(v.as_int())
-                                .and_then(|(r, pc)| r.iter().position(|&x| x as i32 == pc));
-                            match j {
-                                Some(j) => cat!(j),
-                                None => {
-                                    self.refuse(
-                                        path.clone(),
-                                        "a subroutine's return address its map does not know",
-                                    );
-                                    "undefined".into()
-                                }
-                            }
-                        }
                         _ => self.expr(v, None, None),
                     };
                     if matches!(slot.construct(), "for-await.iterator" | "yield*.iterator") {

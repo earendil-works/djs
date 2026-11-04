@@ -31,15 +31,20 @@ pub(super) const PATTERN_WEIGHT: u32 = 1;
 pub(super) struct BlockEnv {
     pub labels: Vec<Atom>,
     pub kind: BlockKind,
-    /// The break target (for `Finally`: the finally block, entered with `gosub`).
+    /// The break target (for `Finally` and `Iter`: the block a completion enters,
+    /// compiler/completion.rs).
     pub break_label: Label,
     pub continue_label: Option<Label>,
     /// Operand stack depth at the statement: what a jump to this env's targets
-    /// unwinds to (for `Finally`: the try statement's base depth; for `Iter`: the
-    /// depth under the iterator and its `next`).
+    /// unwinds to.
     pub depth: u32,
-    /// Whether a jump used `break_label`: for-of emits its close code only then.
+    /// Whether a jump used `break_label`.
     pub used: bool,
+    /// Source offset of the statement (its keyword; a labeled statement's first label):
+    /// it names the jumps to its targets in a completion kind.
+    pub pos: u32,
+    /// `Finally` and `Iter`: the completion that enters the block.
+    pub completion: Option<super::completion::Completion>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -48,12 +53,13 @@ pub(super) enum BlockKind {
     Switch,
     /// A labeled statement that is not a loop: only `break label` targets it.
     Labeled,
-    /// A `try` with a `finally` block: `break`, `continue` and `return` that leave it
-    /// run the finally block first (docs/compiler.md 7.4).
+    /// A `try` with a `finally` block (or a `using` list's disposal): `break`,
+    /// `continue` and `return` that leave it run the finally block first, entering it
+    /// with their completion (compiler/completion.rs, docs/compiler.md 7.4).
     Finally,
     /// The iterator of a for-of: `break`, `continue` and `return` that leave the loop
-    /// close it first, through the subroutine at `break_label` (entered with `gosub`
-    /// on `value iterator next`, see compiler/for_in_of.rs).
+    /// close it first, in the block at `break_label` (entered with a completion like a
+    /// finally block, see compiler/for_in_of.rs).
     Iter,
 }
 
@@ -68,17 +74,13 @@ pub(super) struct Suspended {
 }
 
 /// An iterator that a `return` from inside an expression must close (a resumed
-/// `yield`, compiler/generator.rs): one being destructured, or a for-of iterator while
-/// its head's target is stored. Breaks and returns at statement level use `BlockEnv`
-/// instead.
+/// `yield`, compiler/generator.rs): an array pattern's being destructured, with the
+/// depth at `base` and its iterator's temporary (`undefined` once done, D2732). For-of
+/// iterators and finally blocks are left through `BlockEnv`s instead.
 #[derive(Clone, Copy)]
-pub(super) enum OpenIter {
-    /// An array pattern: the depth at the label, and its iterator's temporary
-    /// (`undefined` once done, D2732).
-    Pattern(Label, crate::heap::Atom),
-    /// A for-of loop at this absolute depth, `true` for `for await`, and its iterator's
-    /// temporary (D2732).
-    ForOf(u32, bool, crate::heap::Atom),
+pub(super) struct OpenIter {
+    pub base: Label,
+    pub it: crate::heap::Atom,
 }
 
 pub(super) struct Parser<'a, 'h> {
@@ -99,8 +101,7 @@ pub(super) struct Parser<'a, 'h> {
     pub depth: u32,
     /// Break/continue targets of `f` (they never cross functions).
     pub blocks: Vec<BlockEnv>,
-    /// Operand stack depth at statement boundaries of `f` (2 inside a finally block:
-    /// the value slot and the return address).
+    /// Operand stack depth at statement boundaries of `f`.
     pub stmt_depth: u32,
     pub buf8: Vec<u8>,
     pub atom_undefined: Atom,

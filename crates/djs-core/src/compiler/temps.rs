@@ -12,7 +12,7 @@
 //! computes that from the final phase-1 code, so a construct's code order (a for-of's
 //! target runs after its right side) cannot make the map wrong.
 
-use super::func::VarKind;
+use super::func::{ScopeId, VarKind};
 use super::parser::Parser;
 use crate::heap::Atom;
 
@@ -20,12 +20,17 @@ impl Parser<'_, '_> {
     /// A new temporary of `construct` (`"for-of.iterator"`) at source offset `at`
     /// (absolute; its name is relative to the function's start), declared in the
     /// current scope.
-    #[inline(never)]
     pub(super) fn temp(&mut self, construct: &'static str, at: u32) -> Atom {
+        self.temp_in(construct, at, self.scope)
+    }
+
+    /// [`Parser::temp`] declared in `scope` (an enclosing one).
+    #[inline(never)]
+    pub(super) fn temp_in(&mut self, construct: &'static str, at: u32, scope: ScopeId) -> Atom {
         // An integer atom: no source name is one, and it needs no interning.
         let n = self.f.temps.len() as u32;
         let atom = Atom::int(n).unwrap_or(Atom::NULL);
-        let v = self.f.add_var(atom, VarKind::Temp, self.scope);
+        let v = self.f.add_var(atom, VarKind::Temp, scope);
         self.f
             .temps
             .push((v, construct, at.saturating_sub(self.f.src_start)));
@@ -67,18 +72,19 @@ mod live {
     use super::super::func::HandlerLabels;
 
     /// For each instruction index `k` of `sites` in `all` (phase-1 code after the
-    /// peephole pass), which of `n` temporaries hold a value some path from there reads
-    /// before writing it (live after the instruction, the exception edges of the
-    /// handlers included: from each instruction that can throw in a handler's region). `temp_of(r)` is the temporary name reference `r` reaches.
-    /// A `gosub` continues into its subroutine, and each `ret` at the instructions after
-    /// the `gosub`s to the subroutines it ends.
+    /// peephole pass), which temporaries hold a value some path from there reads before
+    /// writing it (live after the instruction, the exception edges of the handlers
+    /// included: from each instruction that can throw in a handler's region).
+    /// `temp_of(r)` is the temporary name reference `r` reaches; `also[t]` a temporary a
+    /// write of `t` defines too (one per temporary).
     pub fn live_at(
         all: &[Insn],
         handlers: &[HandlerLabels],
-        n: usize,
+        also: &[Option<usize>],
         temp_of: impl Fn(u32) -> Option<usize>,
         sites: &[usize],
     ) -> Vec<Vec<bool>> {
+        let n = also.len();
         let words = n.div_ceil(64).max(1);
         let len = all.len();
         // Label id -> instruction index.
@@ -104,60 +110,17 @@ mod live {
                 _ => None,
             }
         };
-        // Each subroutine's `ret`s: the ones reachable from its entry without entering a
-        // nested subroutine or a handler. A `ret` returns after every `gosub` to them.
-        let mut ret_to: Vec<Vec<usize>> = vec![Vec::new(); len];
-        let gosubs: Vec<(usize, usize)> = all
-            .iter()
-            .enumerate()
-            .filter(|(_, i)| i.info().has(flags::GOSUB))
-            .filter_map(|(k, i)| target(i).map(|t| (k, t)))
-            .collect();
-        let mut entries: Vec<usize> = gosubs.iter().map(|g| g.1).collect();
-        entries.sort_unstable();
-        entries.dedup();
-        let mut seen = vec![false; len];
-        for &e in &entries {
-            seen.iter_mut().for_each(|x| *x = false);
-            let mut work = vec![e];
-            while let Some(k) = work.pop() {
-                if k >= len || seen[k] {
-                    continue;
-                }
-                seen[k] = true;
-                let i = &all[k];
-                let info = i.info();
-                if i.op == Op::Ret {
-                    for &(g, t) in &gosubs {
-                        if t == e {
-                            ret_to[k].push(g + 1);
-                        }
-                    }
-                    continue;
-                }
-                if info.has(flags::JUMP) {
-                    work.extend(target(i));
-                } else if info.has(flags::BRANCH) {
-                    work.extend(target(i));
-                    work.push(k + 1);
-                } else if !info.has(flags::TERM) {
-                    work.push(k + 1);
-                }
-            }
-        }
         let mut succ: Vec<Vec<usize>> = Vec::with_capacity(len);
         let mut uses = vec![0u64; len * words];
         let mut defs = vec![0u64; len * words];
         for (k, i) in all.iter().enumerate() {
             let info = i.info();
             let mut s = Vec::new();
-            if info.has(flags::JUMP) || info.has(flags::GOSUB) {
+            if info.has(flags::JUMP) {
                 s.extend(target(i));
             } else if info.has(flags::BRANCH) {
                 s.extend(target(i));
                 s.push(k + 1);
-            } else if i.op == Op::Ret {
-                s.extend_from_slice(&ret_to[k]);
             } else if !info.has(flags::TERM) {
                 s.push(k + 1);
             }
@@ -179,8 +142,9 @@ mod live {
                     }
                 }
                 Op::NamePut | Op::NameSet | Op::NameInit => {
-                    if let Some((w, b)) = bit(i.imm(0)) {
-                        defs[w] |= b;
+                    let t = temp_of(i.imm(0));
+                    for t in [t, t.and_then(|t| also[t])].into_iter().flatten() {
+                        defs[k * words + t / 64] |= 1u64 << (t % 64);
                     }
                 }
                 _ => {}

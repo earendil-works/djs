@@ -84,5 +84,5 @@ $dump.s7 = (() => {
 $dump.n6 = { [Symbol.asyncDispose]: $dump.s7.$f14 };
 $dump.n5 = [$dump.n6, $dump.s7.$f14, 4, $dump.n3, $dump.s2.$f3, 4];
 $dump.u8 = $dump.using($dump.n5, { hasAwaited: true, next: 0, value: $dump.a4 });
-$dump.a9 = $dump.resume(failing, { at: "await-using#1", awaiting: $dump.a4, slots: { "using.record@51": $dump.u8, x: $dump.n6, y: $dump.n3, "finally.value@157": undefined, "finally.return@157": 0 } });
+$dump.a9 = $dump.resume(failing, { at: "await-using#1", awaiting: $dump.a4, slots: { "using.record@51": $dump.u8, x: $dump.n6, y: $dump.n3, "completion.kind@51": 0, "completion.value@51": undefined } });
 $dump.a10 = $dump.resume(main, { at: "await#2", awaiting: $dump.a9, slots: { it: undefined, seen: undefined } });

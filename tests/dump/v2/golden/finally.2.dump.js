@@ -79,6 +79,6 @@ async function main() {
   print("cases", await cases("b"), await cases("c"));
 }
 $dump.n2 = new Error("thrown");
-$dump.a3 = $dump.resume(thrown, { at: "await#1", awaiting: $dump.p1, slots: { "finally.value@69": $dump.n2, "finally.return@69": 1, "call.callee@83": print, "call.this@83": undefined, "call.arg@89": "thrown finally" } });
+$dump.a3 = $dump.resume(thrown, { at: "await#1", awaiting: $dump.p1, slots: { "completion.kind@28": 1, "completion.value@28": $dump.n2, "call.callee@83": print, "call.this@83": undefined, "call.arg@89": "thrown finally" } });
 $dump.a4 = $dump.resume(main, { at: "await#2", awaiting: $dump.a3, slots: { g: undefined, seen: undefined } });
 Object.defineProperty($dump.n2, "stack", { value: "    at thrown (src.js:14:20)\n    at main (src.js:66:17)\n", writable: true, configurable: true });

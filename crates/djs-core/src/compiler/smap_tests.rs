@@ -194,7 +194,8 @@ const LOOPS: &[(&str, &[&str])] = &[
     ),
 ];
 
-/// Case tests and subroutines (finally blocks, a for-await's close on a jump out).
+/// Case tests, finally blocks and a for-await's close on a jump out (their completions
+/// in temporaries, D2733).
 const STATEMENTS: &[(&str, &[&str])] = &[
     (
         "switch (a) { case await b: break; }",
@@ -203,7 +204,7 @@ const STATEMENTS: &[(&str, &[&str])] = &[
     ("switch (a) { case 1: await b; }", &["await#1 -"]),
     (
         "try { a } finally { await b }",
-        &["await#1 finally.value finally.return"],
+        &["await#1 completion.kind completion.value"],
     ),
     (
         "try { await a } catch (e) { await e }",
@@ -213,14 +214,14 @@ const STATEMENTS: &[(&str, &[&str])] = &[
         "for (const x of xs) { try { await x } finally { f(await y) } }",
         &[
             "await#1 for-of.iterator for-of.next",
-            "await#2 for-of.iterator for-of.next finally.value finally.return call.callee call.this",
+            "await#2 for-of.iterator for-of.next completion.kind completion.value call.callee call.this",
         ],
     ),
     (
         "try { try {} finally { await a } } finally { await b }",
         &[
-            "await#1 finally.value finally.return",
-            "await#2 finally.value finally.return",
+            "await#1 completion.kind completion.value",
+            "await#2 completion.kind completion.value",
         ],
     ),
     (
@@ -228,25 +229,25 @@ const STATEMENTS: &[(&str, &[&str])] = &[
         &[
             "for-await.close#1 exception",
             "for-await.next#1 for-await.iterator for-await.next",
-            "for-await.close#2 for-await.iterator finally.value finally.return",
+            "for-await.close#2 completion.value",
         ],
     ),
 ];
 
-/// `using` keeps its resource Record below the statements; the disposal is a subroutine.
+/// `using` keeps its resource Record in a temporary; the disposal is a finally block.
 const USING: &[(&str, &[&str])] = &[
     (
         "{ await using r = open(); await r.x; }",
         &[
             "await#1 using.record",
-            "await-using#1 using.record finally.value finally.return",
+            "await-using#1 using.record completion.kind completion.value",
         ],
     ),
     (
         "for (await using r of rs) { f(await r); }",
         &[
             "await#1 for-of.iterator for-of.next using.record call.callee call.this",
-            "await-using#1 for-of.iterator for-of.next using.record finally.value finally.return",
+            "await-using#1 for-of.iterator for-of.next using.record completion.kind completion.value",
         ],
     ),
 ];

@@ -33,7 +33,7 @@ use alloc::vec::Vec;
 use super::Vm;
 use super::dump_load::{Given as GivenValue, Load, array_arg, entries_arg, given, string_arg};
 use crate::bytecode::template::{debug_info, func_flags};
-use crate::compiler::{Holds, Place, Role, SiteKind};
+use crate::compiler::{Holds, Place, SiteKind};
 use crate::heap::cells::{BoxCell, FuncTemplate};
 use crate::heap::{CellKind, Heap, HeapError, ObjectClass};
 use crate::interp::frame;
@@ -214,7 +214,6 @@ impl Vm {
         header[frame::ARGC as usize] = Value::int(argc as i32);
         header[frame::NEW_TARGET as usize] = Value::UNDEFINED;
         frame[hp_off..lp].copy_from_slice(&header);
-        let mut rets = site.returns.iter();
         for slot in site.named_slots() {
             let found = given.iter_mut().find(|b| b.key == slot.name).map(|b| {
                 b.used = true;
@@ -248,16 +247,6 @@ impl Vm {
                     .ok_or_else(|| {
                         cat!("$dump.resume: a for-in loop's iterator is made by $dump.forIn")
                     })?,
-                // A return address, by the index of its `gosub` (D2627).
-                (_, Holds::Temp(Some(Role::FinallyReturn(_)))) => {
-                    let pc = v
-                        .as_int()
-                        .and_then(|j| usize::try_from(j).ok())
-                        .zip(rets.next())
-                        .and_then(|(j, r)| r.get(j).copied())
-                        .ok_or_else(|| cat!("$dump.resume: ", at, " has no such ", slot.name))?;
-                    Value::int(pc as i32)
-                }
                 _ => v,
             };
             let index = match slot.place {

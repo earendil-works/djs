@@ -390,12 +390,12 @@ fn resume_refuses_what_the_map_does_not_have() {
             "cannot be resumed: class",
         ),
         (
-            "$dump.resume(fin, { at: 'await#1', awaiting: $dump.p, slots: { 'finally.value@41': 1, 'finally.return@41': 7 } });",
-            "await#1 has no such finally.return@41",
+            "$dump.resume(fin, { at: 'await#1', awaiting: $dump.p, slots: { 'completion.kind@23': 2, 'completion.value@23': 1, 'finally.return@41': 7 } });",
+            "await#1 has no slot finally.return@41",
         ),
         (
-            "$dump.resume(fin, { at: 'await#1', awaiting: $dump.p, slots: { 'finally.value@41': 1, 'finally.return@41': 0.5 } });",
-            "await#1 has no such finally.return@41",
+            "$dump.resume(fin, { at: 'await#1', awaiting: $dump.p, slots: { 'completion.kind@23': 2 } });",
+            "await#1 has a slot completion.value@23: give it",
         ),
         (
             "$dump.resume(keys, { at: 'await#1', awaiting: $dump.p, args: [{}], slots: { o: {}, k: 'a', 'for-in.iterator@25': 1 } });",

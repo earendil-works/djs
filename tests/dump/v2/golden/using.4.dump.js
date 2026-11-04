@@ -85,6 +85,6 @@ $dump.n6 = { [Symbol.asyncDispose]: $dump.s7.$f14 };
 $dump.n5 = [$dump.n3, $dump.s2.$f3, 4, $dump.n6, $dump.s7.$f14, 4];
 $dump.n8 = new Error("dispose y failed");
 $dump.u9 = $dump.using($dump.n5, { error: $dump.n8, hasError: true, hasAwaited: true, next: -3, value: $dump.a4 });
-$dump.a10 = $dump.resume(failing, { at: "await-using#1", awaiting: $dump.a4, slots: { "using.record@51": $dump.u9, x: $dump.n3, y: $dump.n6, "finally.value@157": undefined, "finally.return@157": 0 } });
+$dump.a10 = $dump.resume(failing, { at: "await-using#1", awaiting: $dump.a4, slots: { "using.record@51": $dump.u9, x: $dump.n3, y: $dump.n6, "completion.kind@51": 0, "completion.value@51": undefined } });
 $dump.a11 = $dump.resume(main, { at: "await#2", awaiting: $dump.a10, slots: { it: undefined, seen: undefined } });
 Object.defineProperty($dump.n8, "stack", { value: "    at <anonymous> (src.js:17:32)\n", writable: true, configurable: true });

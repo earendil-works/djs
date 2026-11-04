@@ -1,13 +1,13 @@
 function <anonymous> @1..16497
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 results@0, loc2 fake@0
-  await#1 @15839 (265:8) pc 1225: -
+  await#1 @15839 (265:8) pc 1221: -
 function <anonymous> @15847..16486
   arg0 argument 0
   loc0 <state>, loc1 tools@0, loc2 result@0, loc3 files@0, loc4 reads@0
   await#1 @34 (266:16) pc 31: -
   await#2 @280 (269:13) pc 134: -
-  await#3 @515 (273:6) pc 293: call.callee@510 call.this@510
+  await#3 @515 (273:6) pc 289: call.callee@510 call.this@510
 function <anonymous> @16162..16227
   arg0 path@0
   loc0 <state>

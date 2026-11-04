@@ -37,11 +37,8 @@ pub mod flags {
     pub const JUMP: u16 = 1 << 3;
     /// Conditional jump to its `Target` immediate, or fall through.
     pub const BRANCH: u16 = 1 << 4;
-    /// No fallthrough and no static successor (`return`, `throw`, `ret`).
+    /// No fallthrough and no static successor (`return`, `throw`).
     pub const TERM: u16 = 1 << 5;
-    /// `gosub`: pushes a return address and jumps; `ret` comes back to the next
-    /// instruction.
-    pub const GOSUB: u16 = 1 << 6;
     /// Allocates (may fail with out of memory).
     pub const ALLOC: u16 = 1 << 7;
 }
@@ -658,10 +655,6 @@ ops! {
     /// Jump while a dump loads (`Vm::load_dump`, D2580): around a class's static
     /// initializer, whose effects the dump restores instead of running them again.
     JumpIfLoading jump_if_loading(target: Target) pop 0 push 0 cost Basic flags BRANCH;
-    /// `-> ret`: push the return address (an int32) and jump (enter a `finally`).
-    Gosub gosub(target: Target) pop 0 push 1 cost Basic flags GOSUB;
-    /// `ret ->`: jump to the popped return address.
-    Ret ret() pop 1 push 0 cost Basic flags TERM;
     /// `v ->`: throw `v`.
     Throw throw() pop 1 push 0 cost Basic flags THROWS | TERM;
     /// `v ->`: return `v`.
@@ -912,13 +905,13 @@ const _: () = {
                     "Target must be the last immediate"
                 );
                 assert!(
-                    info.flags & (flags::JUMP | flags::BRANCH | flags::GOSUB) != 0,
+                    info.flags & (flags::JUMP | flags::BRANCH) != 0,
                     "only jumps have a Target"
                 );
             }
             j += 1;
         }
-        let jumpy = info.flags & (flags::JUMP | flags::BRANCH | flags::GOSUB) != 0;
+        let jumpy = info.flags & (flags::JUMP | flags::BRANCH) != 0;
         let n = info.imms.len();
         assert!(
             !jumpy || (n >= 1 && info.imms[n - 1].is_target()),

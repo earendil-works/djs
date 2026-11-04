@@ -443,7 +443,7 @@ impl<'a> Parser<'a, '_> {
         let l_base = self.new_label();
         self.place(l_base);
         self.open_iters
-            .push_out(super::parser::OpenIter::Pattern(l_base, it));
+            .push_out(super::parser::OpenIter { base: l_base, it });
         let mut regions = Regions {
             list: Vec::new(),
             start: l_base,

@@ -20,7 +20,7 @@ sites 1063
    18 call.callee call.this object.literal
    17 yield*.iterator yield*.next
    12 for-of.iterator for-of.next call.callee call.this
-   10 using.record finally.value finally.return
+   10 using.record completion.kind completion.value
     9 for-of.iterator for-of.next call.callee call.this object.literal
     8 exception
     8 using.record
@@ -39,7 +39,7 @@ sites 1063
     1 for-await.iterator
     1 for-of.iterator
     1 for-of.iterator for-of.next assign.old
-    1 for-of.iterator for-of.next using.record finally.value finally.return
+    1 for-of.iterator for-of.next using.record completion.kind completion.value
     1 object.literal
     1 pattern.iterator
 

@@ -1,13 +1,13 @@
 function <anonymous> @0..2044
   arg0 tools@0, arg1 console@0
-  loc0 <state>, loc1 log@0, loc2 f@0, loc3 g@0, loc4 o@0, loc5 thrower@0, loc6 early@0, loc7 r@0, loc8 thenable@0, loc9 sum@0, loc10 p@1291, loc13 i@1349, loc15 plain@0
+  loc0 <state>, loc1 log@0, loc2 f@0, loc3 g@0, loc4 o@0, loc5 thrower@0, loc6 early@0, loc7 r@0, loc8 thenable@0, loc9 sum@0, loc10 p@1291, loc13 i@1349, loc17 plain@0
   await#1 @1065 (36:11) pc 255: - (out: loc10 loc13)
   await#2 @1250 (40:13) pc 308: call.callee@1238 call.this@1238 (out: loc10 loc13)
-  await#3 @1331 (42:52) pc 382: for-of.iterator@1280 for-of.next@1280 assign.old@1324 (out: loc13)
-  await#4 @1386 (43:47) pc 422: assign.old@1379 (out: loc10)
-  await#5 @1421 (44:27) pc 463: call.callee@1395 call.this@1395 call.arg@1407 call.callee@1412 call.this@1412 (out: loc10 loc13)
-  await#6 @1430 (44:36) pc 483: call.callee@1395 call.this@1395 call.arg@1407 call.callee@1412 call.this@1412 call.arg@1421 (out: loc10 loc13)
-  await#7 @1534 (47:3) pc 493: - (out: loc10 loc13)
+  await#3 @1331 (42:52) pc 378: for-of.iterator@1280 for-of.next@1280 assign.old@1324 (out: loc13)
+  await#4 @1386 (43:47) pc 418: assign.old@1379 (out: loc10)
+  await#5 @1421 (44:27) pc 459: call.callee@1395 call.this@1395 call.arg@1407 call.callee@1412 call.this@1412 (out: loc10 loc13)
+  await#6 @1430 (44:36) pc 479: call.callee@1395 call.this@1395 call.arg@1407 call.callee@1412 call.this@1412 call.arg@1421 (out: loc10 loc13)
+  await#7 @1534 (47:3) pc 489: - (out: loc10 loc13)
 function f @163..277
   arg0 x@0
   loc0 <state>, loc1 v@0

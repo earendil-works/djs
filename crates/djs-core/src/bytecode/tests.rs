@@ -513,27 +513,37 @@ fn stack_good() {
 
 #[test]
 fn stack_try_finally() {
-    // docs/compiler.md 9.3: try { return g() } finally { h() }
+    // docs/compiler.md 7.4: try { g() } finally { h() }, the completion's kind in local
+    // 0 and its value in local 1.
     let mut b = CodeBuf::new();
     let l_fin = b.new_label();
     let l_exc = b.new_label();
     let l_try_end = b.new_label();
+    let l_end = b.new_label();
     let start = b.pos();
     b.get_global(Atom::from_id(1), 0);
     b.undefined();
     b.call(0);
-    b.gosub(l_fin);
-    b.return_();
+    b.drop();
     b.place_label(l_try_end);
-    b.place_label(l_exc);
-    b.gosub(l_fin);
-    b.throw();
+    b.push_i8(0);
+    b.put_loc(0);
     b.place_label(l_fin);
     b.get_global(Atom::from_id(2), 0);
     b.undefined();
     b.call(0);
     b.drop();
-    b.ret();
+    b.get_loc(0);
+    b.jump_if_false(l_end);
+    b.get_loc(1);
+    b.throw();
+    b.place_label(l_exc);
+    b.put_loc(1);
+    b.push_i8(1);
+    b.put_loc(0);
+    b.jump(l_fin);
+    b.place_label(l_end);
+    b.return_undef();
     let code = b.finish().unwrap();
     let h = Handler {
         start,
@@ -541,35 +551,8 @@ fn stack_try_finally() {
         target: code.label_pos(l_exc).unwrap(),
         depth: 0,
     };
-    // The finally runs at depth 2 (value slot + return address) and calls at 4.
-    assert_eq!(check_stack(&code.code, &[h]), Ok(4));
-
-    // Entering the finally with different value-slot depths is a mismatch.
-    let mut b = CodeBuf::new();
-    let l_fin = b.new_label();
-    b.undefined();
-    b.gosub(l_fin);
-    b.gosub(l_fin); // back at depth 1, so this entry is at depth 2 again
-    b.drop();
-    b.return_undef();
-    b.place_label(l_fin);
-    b.ret();
-    let code = b.finish().unwrap();
-    assert_eq!(check_stack(&code.code, &[]), Ok(2));
-    let mut b = CodeBuf::new();
-    let l_fin = b.new_label();
-    b.undefined();
-    b.gosub(l_fin);
-    b.undefined();
-    b.gosub(l_fin);
-    b.return_undef();
-    b.place_label(l_fin);
-    b.ret();
-    let code = b.finish().unwrap();
-    assert!(matches!(
-        check_stack(&code.code, &[]),
-        Err(StackError::Mismatch { .. })
-    ));
+    // Every entry reaches the finally block at depth 0: nothing is on the stack.
+    assert_eq!(check_stack(&code.code, &[h]), Ok(2));
 }
 
 #[test]

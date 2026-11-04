@@ -3,12 +3,12 @@ function agen @167..305
   yield.await#1 @37 (6:5) pc 7: -
   yield#1 @37 (6:5) pc 10: -
   yield.return#1 @37 (6:5) pc 15: -
-  yield.await#2 @50 (7:5) pc 42: -
-  yield#2 @50 (7:5) pc 45: -
-  yield.return#2 @50 (7:5) pc 50: -
-  yield.await#3 @80 (8:5) pc 62: -
-  yield#3 @80 (8:5) pc 65: -
-  yield.return#3 @80 (8:5) pc 70: -
+  yield.await#2 @50 (7:5) pc 41: -
+  yield#2 @50 (7:5) pc 44: -
+  yield.return#2 @50 (7:5) pc 49: -
+  yield.await#3 @80 (8:5) pc 60: -
+  yield#3 @80 (8:5) pc 63: -
+  yield.return#3 @80 (8:5) pc 68: -
 function <anonymous> @769..2278
   loc0 <state>, loc1 C@0, loc3 <fields 0>, loc4 c@0, loc5 d@0, loc6 order@0, loc7 p@0
   await#1 @16 (32:3) pc 42: -

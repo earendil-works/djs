@@ -78,5 +78,5 @@ async function main() {
   print("gen", seen.join(" "));
   print("cases", await cases("b"), await cases("c"));
 }
-$dump.a2 = $dump.resume(gen, { at: "yield#3", slots: { "finally.value@56": "early", "finally.return@56": 0 } });
+$dump.a2 = $dump.resume(gen, { at: "yield#3", slots: { "completion.kind@20": 2, "completion.value@20": "early" } });
 $dump.a3 = $dump.resume(main, { at: "await#6", awaiting: $dump.p1, slots: { g: $dump.a2, seen: [1, "cleanup"] } });

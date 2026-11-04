@@ -702,31 +702,6 @@ fn exceptions_unwind_frames() {
 }
 
 #[test]
-fn finally_with_gosub() {
-    // try { return 1 } finally { log("fin") }
-    let out = run_main(|vm| {
-        let mut f = F::new();
-        let console = vm.heap_mut().atom_str("console").unwrap();
-        let log = vm.heap_mut().atom_str("log").unwrap();
-        let fin_s = f.string(vm, "fin");
-        let fin = f.b.new_label();
-        f.b.push_i8(1);
-        f.b.gosub(fin);
-        f.b.return_();
-        f.b.place_label(fin);
-        f.b.get_global(console, 0);
-        f.b.get_method(log, 0);
-        f.b.push_const(fin_s);
-        f.b.call(1);
-        f.b.drop();
-        f.b.ret();
-        f.build(vm)
-    });
-    assert_eq!(out.log, ["fin"]);
-    assert_eq!(out.result, "1");
-}
-
-#[test]
 fn stack_overflow() {
     let mut vm = vm_with(VmOptions {
         exec: ExecOptions {

@@ -1739,8 +1739,7 @@ impl<'h> Exec<'h> {
                 + info.pop_imm.map_or(0, imm)
                 + info.pop_arity.map_or(0, |k| arity(imm(k)));
             let pushes = info.push as u32 + info.push_imm.map_or(0, imm);
-            if info.flags & (opflags::JUMP | opflags::BRANCH | opflags::TERM | opflags::GOSUB) == 0
-            {
+            if info.flags & (opflags::JUMP | opflags::BRANCH | opflags::TERM) == 0 {
                 debug_assert_eq!(
                     self.pc, next,
                     "{} did not advance pc by its size",
@@ -2865,16 +2864,6 @@ impl<'h> Exec<'h> {
                         self.safepoint();
                     }
                 }
-                return Ok(None);
-            }
-            Op::Gosub => {
-                self.push(Value::int(next as i32));
-                self.pc = self.jump_target(next);
-                return Ok(None);
-            }
-            Op::Ret => {
-                let r = self.pop();
-                self.pc = r.as_int().expect("gosub return address") as u32;
                 return Ok(None);
             }
             Op::Throw => {

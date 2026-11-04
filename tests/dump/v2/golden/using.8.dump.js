@@ -83,5 +83,5 @@ $dump.s5 = (() => {
 })();
 $dump.i6 = $dump.advance(Array.prototype.values.call([{ [Symbol.asyncDispose]: $dump.s5.$f20 }, $dump.n3]), 2);
 $dump.u7 = $dump.using([$dump.n3, $dump.s2.$f3, 4], { hasAwaited: true, next: -3, value: $dump.a4 });
-$dump.a8 = $dump.resume(loop, { at: "await-using#1", awaiting: $dump.a4, slots: { r: $dump.n3, "for-of.iterator@26": $dump.i6, "for-of.next@26": $dump.builtin("%ArrayIteratorPrototype%.next"), "using.record@43": $dump.u7, "finally.value@137": undefined, "finally.return@137": 0 } });
+$dump.a8 = $dump.resume(loop, { at: "await-using#1", awaiting: $dump.a4, slots: { r: $dump.n3, "for-of.iterator@26": $dump.i6, "for-of.next@26": $dump.builtin("%ArrayIteratorPrototype%.next"), "using.record@43": $dump.u7, "completion.kind@43": 0, "completion.value@43": undefined } });
 $dump.a9 = $dump.resume(main, { at: "await#3", awaiting: $dump.a8, slots: { it: undefined, seen: undefined } });

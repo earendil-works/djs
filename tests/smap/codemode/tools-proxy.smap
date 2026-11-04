@@ -2,4 +2,4 @@ function <anonymous> @1..2809
   arg0 tools@0, arg1 console@0
   loc0 <state>, loc1 comparable@0, loc2 guard@0, loc3 t@0, loc8 members@0, loc9 fs@0, loc13 read@0, loc14 rest@0, loc17 echo@0, loc18 others@0, loc19 results@0
   await#1 @1685 (26:21) pc 83: call.callee@1665 call.this@1665 call.arg@1677
-  await#2 @2637 (53:17) pc 724: -
+  await#2 @2637 (53:17) pc 720: -

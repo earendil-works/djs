@@ -1,7 +1,7 @@
 # 0193: finally completions in slots (functions that can suspend); gosub index mapping and return-path refusals gone
 
-status: open
-agent: -
+status: in-progress
+agent: sm
 branch: issue/0193-finally-completions
 depends-on: 0191
 guide: -

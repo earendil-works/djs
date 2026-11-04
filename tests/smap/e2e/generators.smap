@@ -3,7 +3,7 @@ function g @339..491
   loc0 <state>, loc1 x@0
   yield#1 @29 (8:13) pc 7: -
   yield#2 @75 (11:5) pc 35: -
-  yield#3 @88 (12:5) pc 49: -
+  yield#3 @88 (12:5) pc 48: -
 function inner @739..838
   loc0 <state>, loc1 r@0
   yield#1 @32 (30:13) pc 7: -
@@ -41,7 +41,7 @@ function cnt @2419..2531
   yield#1 @53 (100:28) pc 9: -
 function fo @2598..2652
   loc0 <state>, loc1 x@28
-  yield#1 @44 (109:45) pc 50: for-of.iterator@17 for-of.next@17
+  yield#1 @44 (109:45) pc 46: for-of.iterator@17 for-of.next@17
 function dstr @2919..2991
   loc0 <state>, loc3 a@0
   yield#1 @30 (117:31) pc 66: pattern.iterator@25

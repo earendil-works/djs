@@ -26,29 +26,29 @@
 //! before the right side, so the store moves next to the body and the extra jump goes:
 //! `<rhs>; <setup>; jump L_step; [L_throw]; L_assign: <store>; <body>; L_step: ...`.
 //!
-//! for-of keeps `it next` on the stack. Setup is `call_intrinsic %GetIterator 1; dup;
-//! get_field next`, the step is `dup2; iter_next L_value; iter_check_object; dup;
-//! get_field done` (D1290; for-await: `dup2; swap; call 0; await; ...`). `iter_next`
-//! jumps to `L_value`, right after `get_field value`, with the value itself when it
-//! needs no result object (D1800). The lhs store and the body are covered by a handler (`L_throw`) that
-//! closes the iterator with `%IteratorCloseThrow` and rethrows; errors from the
-//! iterator itself (`next`, `done`, `value`) are not covered, so they do not close it.
-//! `break`, `continue` and `return` leaving the loop close it through the `L_close`
-//! subroutine (`BlockKind::Iter`), which sits outside the handler so that an error
-//! from `return()` propagates instead of closing twice. It is entered on
-//! `v it next ret` (`v` a return value or `undefined`) and, as `gosub` keeps the
-//! depth, leaves `v x undefined` for the caller to drop. A `break` of the loop itself
-//! goes to `L_break`, which closes inline (it is outside the handler too).
+//! for-of keeps `it next` in temporaries (`for-of.iterator@S`, `for-of.next@S`, D2732).
+//! Setup is `call_intrinsic %GetIterator 1; dup; get_field next; put next; put it`, the
+//! step is `get it; get next; iter_next L_value; iter_check_object; dup; get_field done`
+//! (D1290; for-await: `get next; get it; call 0; await; ...`). `iter_next` jumps to
+//! `L_value`, right after `get_field value`, with the value itself when it needs no
+//! result object (D1800). The lhs store and the body are covered by a handler
+//! (`L_throw`) that closes the iterator with `%IteratorCloseThrow` and rethrows; errors
+//! from the iterator itself (`next`, `done`, `value`) are not covered, so they do not
+//! close it. `break`, `continue` and `return` leaving the loop (and a generator's return
+//! from the store) close it in the `L_close` block (`BlockKind::Iter`), entered with
+//! their completion (compiler/completion.rs), which sits outside the handler so that an
+//! error from `return()` propagates instead of closing twice. A `break` of the loop
+//! itself goes to `L_break`, which closes inline (it is outside the handler too).
 //!
-//! for-in keeps the key iterator of `for_in_start` on the stack; its step is
-//! `for_in_next` and leaving the loop just drops it.
+//! for-in keeps the key iterator of `for_in_start` in a temporary; its step is
+//! `for_in_next` and leaving the loop just leaves it.
 use crate::PushOut;
 
 use alloc::vec::Vec;
 
 use super::PResult;
 use super::func::{HandlerLabels, ScopeKind, VarKind};
-use super::parser::{BlockEnv, BlockKind, Checkpoint, OpenIter, Parser, syntax};
+use super::parser::{BlockEnv, BlockKind, Checkpoint, Parser, syntax};
 use super::pattern::Binding;
 use super::scan::Follow;
 use super::smap::{Role, SiteKind};
@@ -95,6 +95,11 @@ impl<'a> Parser<'a, '_> {
         // The loop's iterator and (for-of) `next` temporaries (D2732), once its kind is
         // known.
         let mut temps: Option<(Atom, Option<Atom>)> = None;
+        // for-of: the block that closes the iterator when a jump or a return leaves the
+        // loop, entered with a completion (compiler/completion.rs). Its env is pushed
+        // while the target is stored, where a generator's return can leave the loop too.
+        let l_close = self.new_label();
+        let mut iter_env = None;
         let target = match self.tok.kind {
             TokenKind::Ident if self.at_using(true) || self.at_await_using() => {
                 let is_await = self.tok.kw == Kw::Await;
@@ -181,9 +186,9 @@ impl<'a> Parser<'a, '_> {
                 let start = self.new_label();
                 let end = self.new_label();
                 self.place(start);
-                if let (true, Some((it, _))) = (is_of, temps) {
-                    self.open_iters
-                        .push_out(OpenIter::ForOf(base, is_await, it));
+                if is_of {
+                    let env = self.iter_env(l_close, base, for_pos);
+                    self.blocks.push_out(env);
                 }
                 if self.starts_assignment_pattern(Follow::InOf) {
                     // `for ([a, b] of xs)`: the pattern takes the value.
@@ -209,7 +214,7 @@ impl<'a> Parser<'a, '_> {
                     }
                 }
                 if is_of {
-                    self.open_iters.pop();
+                    iter_env = self.blocks.pop();
                 }
                 self.place(end);
                 regions.push_out((start, end));
@@ -287,14 +292,9 @@ impl<'a> Parser<'a, '_> {
         let l_throw = self.new_label();
         if is_of {
             // `exc` -> `exc`, after closing the iterator (errors from `return()` lose to
-            // the body's exception), unless a generator's return closed it already
-            // (`undefined`).
+            // the body's exception).
             self.place(l_throw);
-            let l_closed = self.new_label();
             self.temp_get(it);
-            self.code().dup();
-            self.code().is_undefined();
-            self.code().jump_if_true(l_closed);
             if is_await {
                 // A promise that always fulfills (errors from `return()` are dropped).
                 let close = intrinsic_id("AsyncIteratorCloseThrow").expect("intrinsic");
@@ -308,9 +308,13 @@ impl<'a> Parser<'a, '_> {
                 let close = intrinsic_id("IteratorCloseThrow").expect("%IteratorCloseThrow");
                 self.code().call_intrinsic(close, 1);
             }
-            self.place(l_closed);
             self.code().drop();
             self.code().throw();
+            let env = match iter_env.take() {
+                Some(env) => env,
+                None => self.iter_env(l_close, base, for_pos),
+            };
+            self.blocks.push_out(env);
         }
         let mut using = None;
         match target {
@@ -364,14 +368,7 @@ impl<'a> Parser<'a, '_> {
                 let mark = self.pattern_vars.len();
                 let end = self.checkpoint();
                 self.rewind(cp);
-                if is_of {
-                    self.open_iters
-                        .push_out(OpenIter::ForOf(base, is_await, it));
-                }
                 self.parse_pattern(b)?;
-                if is_of {
-                    self.open_iters.pop();
-                }
                 self.rewind(end);
                 // Initialized per iteration before the body runs.
                 self.end_pattern_bindings(mark, head_end);
@@ -387,18 +384,7 @@ impl<'a> Parser<'a, '_> {
         }
 
         // The body.
-        let l_close = self.new_label();
         let l_break = self.new_label();
-        if is_of {
-            self.blocks.push_out(BlockEnv {
-                labels: Vec::new(),
-                kind: BlockKind::Iter,
-                break_label: l_close,
-                continue_label: None,
-                depth: base,
-                used: false,
-            });
-        }
         self.blocks.push_out(BlockEnv {
             labels,
             kind: BlockKind::Loop,
@@ -406,6 +392,8 @@ impl<'a> Parser<'a, '_> {
             continue_label: Some(l_step),
             depth: base,
             used: false,
+            pos: for_pos,
+            completion: None,
         });
         self.stmt_depth = base;
         if let Some(r) = &using {
@@ -451,30 +439,25 @@ impl<'a> Parser<'a, '_> {
             self.code().get_field(atoms::DONE, 0);
             self.code().jump_if_false(l_assign);
             self.code().drop();
-            let close_used = iter_env.is_some_and(|e| e.used);
+            let mut close = iter_env.and_then(|e| e.completion);
+            let close_used = close.as_ref().is_some_and(|c| c.has_exits());
             let l_end = self.new_label();
             if close_used || loop_env.used {
                 self.code().jump(l_end);
             }
-            let close = intrinsic_id("IteratorClose").expect("%IteratorClose");
-            if close_used {
-                // `v ret` -> `v ret`, after closing the iterator.
-                let sub = self.subroutine(l_close);
+            let close_fn = intrinsic_id("IteratorClose").expect("%IteratorClose");
+            if let Some(c) = close.as_mut().filter(|c| c.has_exits()) {
+                // Closes the iterator, then continues the exit.
                 self.place(l_close);
                 self.temp_get(it);
                 self.mark(for_pos);
                 if is_await {
-                    // The subroutine's value and return address stay below the close's
-                    // await.
-                    self.emit_async_close_normal(
-                        (SiteKind::ForAwaitClose, for_pos),
-                        Some((0, &[Role::FinallyValue, Role::FinallyReturn(sub)])),
-                    );
+                    self.emit_async_close_normal((SiteKind::ForAwaitClose, for_pos));
                 } else {
-                    self.code().call_intrinsic(close, 1);
+                    self.code().call_intrinsic(close_fn, 1);
                     self.code().drop();
                 }
-                self.code().ret();
+                self.end_completion(c, None, false);
             }
             if loop_env.used {
                 // Closes the iterator.
@@ -482,12 +465,9 @@ impl<'a> Parser<'a, '_> {
                 self.temp_get(it);
                 self.mark(for_pos);
                 if is_await {
-                    self.emit_async_close_normal(
-                        (SiteKind::ForAwaitClose, for_pos),
-                        Some((0, &[])),
-                    );
+                    self.emit_async_close_normal((SiteKind::ForAwaitClose, for_pos));
                 } else {
-                    self.code().call_intrinsic(close, 1);
+                    self.code().call_intrinsic(close_fn, 1);
                     self.code().drop();
                 }
             }
@@ -506,6 +486,21 @@ impl<'a> Parser<'a, '_> {
         }
         debug_assert_eq!(self.scope, outer);
         Ok(())
+    }
+
+    /// The env of a for-of's iterator (`BlockEnv` `Iter`): its close block is at
+    /// `l_close`, its completion named by the `for`.
+    fn iter_env(&mut self, l_close: Label, base: u32, for_pos: u32) -> BlockEnv {
+        BlockEnv {
+            labels: Vec::new(),
+            kind: BlockKind::Iter,
+            break_label: l_close,
+            continue_label: None,
+            depth: base,
+            used: false,
+            pos: for_pos,
+            completion: Some(super::completion::Completion::new(self.scope, for_pos)),
+        }
     }
 
     /// The temporaries of a loop's iterator record (D2732): the iterator (for-in: the key

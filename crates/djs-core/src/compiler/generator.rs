@@ -11,7 +11,7 @@ use super::PResult;
 use super::expr::Expr;
 use super::func::HandlerLabels;
 use super::parser::{OpenIter, Parser, syntax};
-use super::smap::{Role, SiteKind};
+use super::smap::SiteKind;
 use crate::bytecode::intrinsics::intrinsic_id;
 use crate::heap::atoms;
 use crate::lexer::TokenKind;
@@ -77,65 +77,39 @@ impl Parser<'_, '_> {
     /// Returns the value on top of the stack from inside an expression: see the module
     /// docs.
     pub(super) fn emit_return_from_expr(&mut self) {
-        // The handlers below cut the stack: suspensions on this path (closing for-await
-        // iterators) do not have the enclosing expression's operands.
-        self.roles_push(0, &[Role::Unsupported("return from a generator")]);
-        // Close the open iterators, innermost first: each throws `x` to a handler that
-        // cuts the stack down to its iterator.
+        // Close the open pattern iterators, innermost first: each throws `x` to a handler
+        // that cuts the stack down to its iterator. (No suspension is on this path: the
+        // role stack still describes the enclosing expression's operands.)
         let open: alloc::vec::Vec<OpenIter> = self.open_iters.iter().rev().copied().collect();
-        for it in open {
+        for OpenIter { base, it } in open {
             let (l_throw, l_end, l_close) = (self.new_label(), self.new_label(), self.new_label());
             self.place(l_throw);
             self.code().throw();
             self.place(l_end);
             self.place(l_close);
-            let (depth, depth_from) = match it {
-                OpenIter::Pattern(base, _) => (0, Some(base)),
-                OpenIter::ForOf(depth, _, _) => (depth, None),
-            };
             self.f.handlers.insert(
                 0,
                 HandlerLabels {
                     start: l_throw,
                     end: l_end,
                     target: l_close,
-                    depth,
-                    depth_from,
+                    depth: 0,
+                    depth_from: Some(base),
                 },
             );
-            match it {
-                OpenIter::Pattern(_, it) => {
-                    // `x` -> `x`, closing a not-done iterator. It is done first: the
-                    // pattern's close handler, which covers this code, must not close it
-                    // again if `return()` throws.
-                    let l_skip = self.new_label();
-                    self.temp_get(it);
-                    self.code().dup();
-                    self.code().is_undefined();
-                    self.code().jump_if_true(l_skip);
-                    self.code().undefined();
-                    self.temp_put(it);
-                    self.code().call_intrinsic(intrinsic("IteratorClose"), 1);
-                    self.place(l_skip);
-                    self.code().drop();
-                }
-                OpenIter::ForOf(_, is_await, it) => {
-                    // `x` -> `x`, closing the loop's iterator, after marking it closed
-                    // for the loop's close handler (`undefined`), as for a pattern.
-                    self.temp_get(it);
-                    self.code().undefined();
-                    self.temp_put(it);
-                    if is_await {
-                        self.emit_async_close_normal(
-                            (SiteKind::ForAwaitClose, self.prev_end),
-                            None,
-                        );
-                    } else {
-                        self.code().call_intrinsic(intrinsic("IteratorClose"), 1);
-                        self.code().drop();
-                    }
-                }
-            }
+            // `x` -> `x`, closing a not-done iterator. It is done first: the pattern's
+            // close handler, which covers this code, must not close it again if
+            // `return()` throws.
+            let l_skip = self.new_label();
+            self.temp_get(it);
+            self.code().dup();
+            self.code().is_undefined();
+            self.code().jump_if_true(l_skip);
+            self.code().undefined();
+            self.temp_put(it);
+            self.code().call_intrinsic(intrinsic("IteratorClose"), 1);
+            self.place(l_skip);
+            self.code().drop();
         }
         let (l_throw, l_end, l_ret) = (self.new_label(), self.new_label(), self.new_label());
         self.place(l_throw);
@@ -152,9 +126,9 @@ impl Parser<'_, '_> {
                 depth_from: None,
             },
         );
-        self.emit_unwind(0, true);
-        self.emit_return_value();
-        self.roles_pop(1);
+        // Finally blocks and for-of loops (a for-of whose target is being stored
+        // included) are left with a return completion.
+        self.emit_unwind(0, super::completion::Exit::Return);
     }
 
     /// `yield* v` with `v` on the stack (ECMA-262 15.5.5): delegation to v's iterator,
@@ -261,7 +235,7 @@ impl Parser<'_, '_> {
         self.temp_get(it);
         self.mark(pos);
         if is_async {
-            self.emit_async_close_normal((SiteKind::YieldStarAwait, pos), Some((0, &[])));
+            self.emit_async_close_normal((SiteKind::YieldStarAwait, pos));
         } else {
             self.code().call_intrinsic(intrinsic("IteratorClose"), 1);
             self.code().drop();
@@ -311,17 +285,8 @@ impl Parser<'_, '_> {
         self.code().iter_check_object();
     }
 
-    /// AsyncIteratorClose with a normal completion: `it` -> ``. With `describe` `(n, rs)`,
-    /// the top `n` roles are values the closing consumed (the loop's `it next`) and `rs`
-    /// the values on the stack in their place (a subroutine's value and return address,
-    /// named by the site's offset): at the await, the roles below them and `rs` are on
-    /// the stack. `None`: not
-    /// described (a stack cut by a handler).
-    pub(super) fn emit_async_close_normal(
-        &mut self,
-        site: (SiteKind, u32),
-        describe: Option<(usize, &[Role])>,
-    ) {
+    /// AsyncIteratorClose with a normal completion: `it` -> ``, awaiting at `site`.
+    pub(super) fn emit_async_close_normal(&mut self, site: (SiteKind, u32)) {
         let l_skip = self.new_label();
         let l_closed = self.new_label();
         self.code().dup();
@@ -333,20 +298,7 @@ impl Parser<'_, '_> {
         self.code().jump_if_true(l_skip);
         self.code().swap();
         self.code().call(0);
-        match describe {
-            Some((n, rs)) => {
-                let kept = self.roles_take(n);
-                self.roles_push(site.1, rs);
-                self.site(site.0, site.1);
-                self.roles_pop(rs.len());
-                self.roles_put(&kept);
-            }
-            None => {
-                self.roles_push(0, &[Role::Unsupported("closing an async iterator")]);
-                self.site(site.0, site.1);
-                self.roles_pop(1);
-            }
-        }
+        self.site(site.0, site.1);
         self.code().await_(0);
         self.code().iter_check_object();
         self.code().drop();

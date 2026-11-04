@@ -212,13 +212,6 @@ fn walk(
         if max > u16::MAX as u32 {
             return Err(StackError::TooDeep { pc });
         }
-        if info.has(flags::GOSUB) {
-            let target = insn.jump_target().unwrap_or(len);
-            reach(depth, work, pc, target, after)?;
-            // `ret` resumes here with the return address popped.
-            reach(depth, work, pc, insn.next_pc(), d)?;
-            continue;
-        }
         if info.has(flags::JUMP) || info.has(flags::BRANCH) {
             let target = insn.jump_target().unwrap_or(len);
             reach(depth, work, pc, target, after)?;

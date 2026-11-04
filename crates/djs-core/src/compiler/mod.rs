@@ -16,6 +16,7 @@
 //! the parameters.
 
 mod class;
+mod completion;
 mod decorators;
 mod dynamic;
 mod expr;
