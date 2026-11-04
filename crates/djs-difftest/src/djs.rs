@@ -62,6 +62,10 @@ pub struct Djs {
 /// dumped).
 pub const PLAIN_LINKS: u32 = 50;
 
+/// `--plain-out DIR`: every plain dump goes to `DIR/<case>/<link>.js`, with the output
+/// lines before it in `<link>.pre` (for the node check, scripts/plain-node.mjs).
+pub static PLAIN_OUT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
 impl Djs {
     pub fn label(&self) -> String {
         let mut s = String::from("djs");
@@ -173,6 +177,9 @@ struct Session {
     /// Plain dumps, and how many were taken.
     plain: bool,
     links: u32,
+    /// The case's name (for `--plain-out`).
+    #[cfg_attr(not(feature = "dump"), allow(dead_code))]
+    name: String,
     /// The prelude's api object.
     api: Option<Handle>,
 }
@@ -223,6 +230,7 @@ impl Djs {
             dump: self.dump_every_idle.then_some((opts, job.now)),
             plain: self.plain,
             links: 0,
+            name: job.name.to_string(),
             api: None,
         })
     }
@@ -404,6 +412,19 @@ impl Session {
                     e.message()
                 )
             })?;
+        if let Some(dir) = PLAIN_OUT.get() {
+            let d = dir.join(&self.name);
+            let w = std::fs::create_dir_all(&d)
+                .and_then(|_| std::fs::write(d.join(format!("{}.js", self.links)), &text))
+                .and_then(|_| {
+                    let mut pre = self.output.join("\n");
+                    if !pre.is_empty() {
+                        pre.push('\n');
+                    }
+                    std::fs::write(d.join(format!("{}.pre", self.links)), pre)
+                });
+            w.map_err(|e| format!("--plain-out: {e}"))?;
+        }
         let mut vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;
         vm.set_now(now);
         let err = |e: djs_core::heap::HeapError| Stop::Crash(format!("{e:?}"));

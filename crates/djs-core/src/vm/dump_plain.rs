@@ -1351,7 +1351,11 @@ impl W<'_> {
                         let var = &self.scope(sc).vars[v];
                         if !var.tdz {
                             let init = var.init.as_deref().unwrap_or("");
-                            let t = if is_fn_text(init) { &mut lazy } else { &mut text };
+                            let t = if is_fn_text(init) {
+                                &mut lazy
+                            } else {
+                                &mut text
+                            };
                             cat_to!(t, init, "\n");
                         }
                     }

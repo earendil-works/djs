@@ -31,6 +31,8 @@ options:
   --plain-dumps       djs only: also run every case writing a plain dump (format 3,
                       D2830) at each of its first 50 idle points and continuing in a
                       fresh VM that runs it as a Script (hard failure)
+  --plain-out DIR     --plain-dumps, writing each dump to DIR/<case>/<link>.js and the
+                      output before it to <link>.pre (scripts/plain-node.mjs runs them)
   --determinism       djs only: also run every case suspending every 1009 fuel (and 97
                       without --suspend-every) through heap images, and require the
                       suspended runs to leave the same heap image as the plain run, raw
@@ -185,6 +187,10 @@ fn parse_args() -> Result<Args, String> {
             "--gc-stress" => args.gc_stress = true,
             "--dump-every-idle" => args.dump_every_idle = true,
             "--plain-dumps" => args.plain_dumps = true,
+            "--plain-out" => {
+                args.plain_dumps = true;
+                let _ = djs_difftest::djs::PLAIN_OUT.set(value(&a)?.into());
+            }
             "--determinism" => args.determinism = true,
             "--backend" => match value("--backend")?.as_str() {
                 "native" => args.bytecode_builtins = false,

@@ -92,6 +92,21 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
     Ok(g.flatten(parts))
 }
 
+/// Whether `text` holds the identifier `name` (not as part of a longer one).
+fn has_ident(text: &str, name: &str) -> bool {
+    let ident = |c: u8| c.is_ascii_alphanumeric() || c == b'_' || c == b'$';
+    let b = text.as_bytes();
+    let mut from = 0;
+    while let Some(at) = text[from..].find(name) {
+        let (s, e) = (from + at, from + at + name.len());
+        if (s == 0 || !ident(b[s - 1])) && (e == b.len() || !ident(b[e])) {
+            return true;
+        }
+        from = s + 1;
+    }
+    false
+}
+
 struct G<'a, 'c> {
     act: &'a Act,
     ctx: &'c mut dyn Ctx,
@@ -110,6 +125,22 @@ struct G<'a, 'c> {
 impl G<'_, '_> {
     fn ftext(&self) -> &str {
         &self.act.ftext
+    }
+
+    /// `base`, or `base_k` if the function's text names it already (a continuation
+    /// of a continuation has the first one's scaffold names).
+    fn fresh(&self, base: String) -> String {
+        if !has_ident(self.ftext(), &base) {
+            return base;
+        }
+        let mut k = 1;
+        loop {
+            let n = cat!(base, "_", k);
+            if !has_ident(self.ftext(), &n) {
+                return n;
+            }
+            k += 1;
+        }
     }
 
     fn node(&self, i: usize) -> &Node {
@@ -158,8 +189,14 @@ impl G<'_, '_> {
         if literal(&v) {
             return Ok(P::S(v));
         }
-        let name = cat!("$djs_t", self.ntemps);
+        let mut name = cat!("$djs_t", self.ntemps);
         self.ntemps += 1;
+        while has_ident(self.ftext(), &name)
+            || self.temps.iter().any(|t| t.starts_with(&cat!(name, " ")))
+        {
+            name = cat!("$djs_t", self.ntemps);
+            self.ntemps += 1;
+        }
         self.temps.push_out(cat!(name, " = ", v));
         Ok(P::S(name))
     }
@@ -449,7 +486,7 @@ impl G<'_, '_> {
                 if n.parts[k].role != Role::Body {
                     return no("a site in a loop's test (0203)");
                 }
-                let f = cat!("$djs_f", i);
+                let f = self.fresh(cat!("$djs_f", i));
                 let test = n.parts.iter().position(|p| p.role == Role::Test);
                 let test = match test {
                     Some(t) => self.rest_part(&n, t),
@@ -586,7 +623,7 @@ impl G<'_, '_> {
         if n.parts[k].role != Role::Body {
             return no("a site in a for loop's head (0203)");
         }
-        let f = cat!("$djs_f", i);
+        let f = self.fresh(cat!("$djs_f", i));
         let mut init: Vec<P> = Vec::new();
         if !n.decls.is_empty() {
             let kw = match n.decls[0].kind {
@@ -681,8 +718,8 @@ impl G<'_, '_> {
             .find(|p| p.role == Role::Head)
             .copied()
             .ok_or("plain dumps: a loop without its head")?;
-        let f = cat!("$djs_f", i);
-        let v = cat!("$djs_v", i);
+        let f = self.fresh(cat!("$djs_f", i));
+        let v = self.fresh(cat!("$djs_v", i));
         let head_text = String::from(self.text(head.start, head.end));
         let bind = if n.decls.is_empty() {
             if head_text.trim_start().starts_with("var") {
@@ -785,7 +822,7 @@ impl G<'_, '_> {
                 // The rest of the finally block, then the completion that entered it.
                 let kind = self.take(&cat!("completion.kind@", n.start))?;
                 let v = self.take(&cat!("completion.value@", n.start))?;
-                let cv = cat!("$djs_c", i);
+                let cv = self.fresh(cat!("$djs_c", i));
                 let done = match kind.as_str() {
                     "0" => String::new(),
                     "1" => cat!("throw ", cv, ";"),
@@ -1253,6 +1290,9 @@ impl G<'_, '_> {
         let names: Vec<&str> = ["R", "G", "C", "D", "A", "L", "N", "Q"]
             .into_iter()
             .filter(|h| text.contains(&cat!("$djs_", *h, "(")))
+            // A continuation of a continuation declares them already (its own
+            // first line, restored from its slot).
+            .filter(|h| !act.slots.iter().any(|s| s.name == cat!("$djs_", *h)))
             .collect();
         let mut decl = String::new();
         if !names.is_empty() {
