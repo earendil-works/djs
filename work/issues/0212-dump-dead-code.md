@@ -33,6 +33,11 @@ work nearby: one small merge, rebase right before it.
   identical in raw size, 1,033,002 and 905,887), so nothing is freed there and the
   ceilings stay; the change only shrinks the dump-feature builds.
 - tests/smap/summary.txt: see the proposal below (not built).
+- Live docs fix (coordinator, branch issue/0212-docs-live-fix): the site's sandbox.js
+  imports ./dump-runtime.js, which crates/djs-docs/assets/strip.mjs never copied (it took
+  only `*.ts`). It now copies js/src's `.js` files as they are, and fails `djs-docs build`
+  when a relative import of the copied package names no file in the output (checked:
+  without dump-runtime.js it reports `sandbox.js: ./dump-runtime.js`).
 
 ## Follow-ups
 - Proposal (needs the coordinator's OK): tests/smap/summary.txt is derived output, the
