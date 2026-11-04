@@ -1,6 +1,6 @@
 # 0203: Plain encodings for the remaining refusals (using, yield*, destructuring/assignment/case sites, finally by break, for-await close, iterator helpers, private fields path)
 
-status: in-progress
+status: done
 agent: pjr
 branch: issue/0203-plain-refusals
 depends-on: 0202
@@ -102,5 +102,38 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
   only encoding is rewriting class text in the dump, which the owner rejects.
 - TypeScript dumps with enums or namespaces stay TypeScript (D2879). Lowering those to
   JavaScript in the dump would let node run them too.
+- Three small sites still refused, all in dump_cont.rs (to do in 0205 once 0207's
+  dump_cont.rs items have landed): a site in a `using` declaration (`await using r =
+  await x`: decl_list needs the `using`/`await using` keyword), a site in an assignment's
+  member target (`o[await k] = v`: the object from `member.object@`/`assign.object@`,
+  then `(T[e] OP right)`), and an async generator's `return()` forwarded through `yield*`
+  while the inner `return()`'s result is awaited (`yield*.await` after `return`; the
+  other `yield*.await` kinds before the inner call, #1–#4, are refused too).
+- The exporter generally refuses an arrow that captures `this`/`super` of a method frame
+  alive across an await ("a captured `this`"); not a plain-dump construct, found by the
+  probe.
+- Re-dumps of a continuation stopped inside its own rewritten statement are covered for
+  calls, arrays, object literals, patterns and tagged templates (`tmp`/`k` records); other
+  rewritten constructs (`$djs_Q` spreads, `$djs_A` spreads) still refuse at the re-dump.
 
 ## Result
+Plain dumps cover every construct of the 0199 report's refusal table except private
+names on instances, which are refused by design (D2878). Decisions D2871–D2881:
+super/new.target (D2871), for await with closes and async-from-sync (D2872), finally
+entered by jumps, case tests and origin tracking inside rewritten statements (D2873),
+destructuring (D2874), yield* (D2875), using (D2876), iterator helpers (D2877), private
+names (D2878, a documented refusal), TypeScript dumps written as JavaScript (D2879),
+loop heads/tests, var, catch parameters, more literal and update sites (D2880), and
+classes in shared scopes (D2881).
+
+Numbers: tests/dump/v2 + golden programs, 192 of 193 idle points continue identically
+(golden/class-fields refused, D2878); chains: 1 refusal (the same program). Corpus: 0
+plain-dump refusals, 1211 links continue identically in djs and node. 3 TypeScript links
+of ts/codemode-tools.ts (an enum) stay TypeScript and are not run in node. New ratchets:
+tests/dump/v2/plain-chain-refusals.txt (chains). New tests: plain_dumps_of_for_await_closes,
+_patterns, _yield_star, _using, _iterator_helpers, _heads_and_more, _shared_classes, and
+the ignored plain_dumps_probe (`DJS_PROBE=file`), which reports what a program's plain
+dumps refuse. New corpus cases: codemode/nested-literals.js (pi's re-dump refusal),
+ts/awaits-typed.ts. The js dumpresume `classes` case dumps now.
+
+Known gaps: see Follow-ups.
