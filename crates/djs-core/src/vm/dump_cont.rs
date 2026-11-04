@@ -1480,7 +1480,11 @@ impl G<'_, '_> {
                             seen = true;
                         }
                         Role::Subst if seen => out.push_out(self.rest_part(&n, m)),
-                        Role::Subst => out.push_out(self.tmp("template.part", p.start)?),
+                        // (K's part there is rebuilt from the original's frame.)
+                        Role::Subst => {
+                            out.push_out(self.kmark());
+                            out.push_out(self.tmp("template.part", p.start)?);
+                        }
                         _ => {}
                     }
                 }
