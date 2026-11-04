@@ -637,3 +637,5 @@ topics when the index is next reorganized.
 - D2898: The Sandbox writes plain dumps by default
 - D2871: Plain continuations of methods that use `super` are methods of the home's prototype
 - D2872: `for await` in plain continuations: a loop over the saved record, the iteration in flight before it
+- D2873: Origin tracking inside a continuation's rewritten statement, case tests, finally by jumps
+- D2874: Destructuring around a continuation's site is written as a pattern again
