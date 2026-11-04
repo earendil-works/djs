@@ -435,7 +435,10 @@ def run(argv):
         j.state = "running"
         j.t0 = time.time()
         log = open(j.log, "w")
-        p = subprocess.Popen(["bash", "-o", "pipefail", "-ec", j.cmd], stdout=log, stderr=subprocess.STDOUT,
+        # The workspace's test build and its tests are the gate's longest path; the other
+        # builds yield to them a little.
+        prio = [] if not j.build or j.name == "build:tests" else ["nice", "-n", "4"]
+        p = subprocess.Popen([*prio, "bash", "-o", "pipefail", "-ec", j.cmd], stdout=log, stderr=subprocess.STDOUT,
                              stdin=subprocess.DEVNULL, env=env, start_new_session=True)
         running[j.name] = p
 
