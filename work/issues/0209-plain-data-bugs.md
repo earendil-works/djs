@@ -30,6 +30,11 @@ dump_origin.rs; pjs is changing dump_cont.rs; pjf is deleting format 2. Keep mer
 and rebase often. Decision IDs D2950–D2959.
 
 ## Log
+- Bug 1 (`get: ,`): the accessor's getter is a closure a plain dump makes in the
+  continuation (`plain_patched`), so `expr` returns empty and the descriptor patch had a
+  hole. `Dumper::descriptor` now reads every value with `expr_or_loc` (descriptors are
+  only written in patches, after the values exist). Corpus case
+  codemode/plain-accessors.js (djs and node, 2 links).
 
 ## Follow-ups
 

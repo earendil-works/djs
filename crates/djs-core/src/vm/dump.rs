@@ -2401,9 +2401,12 @@ impl<'a> Dumper<'a> {
 
     fn descriptor(&mut self, p: &Property) -> String {
         match *p {
+            // Descriptors are written in patches, after every value is made: a value
+            // made later (a cycle, a closure a plain dump makes in a continuation) is
+            // read from where it is made.
             Property::Data { value, flags } => cat!(
                 "{ value: ",
-                self.expr(value, None, None),
+                self.expr_or_loc(value),
                 ", writable: ",
                 tf(flags.writable()),
                 ", enumerable: ",
@@ -2417,12 +2420,12 @@ impl<'a> Dumper<'a> {
                 setter,
                 flags,
             } => {
-                let g = self.expr(getter, None, None);
+                let g = self.expr_or_loc(getter);
                 cat!(
                     "{ get: ",
                     g,
                     ", set: ",
-                    self.expr(setter, None, None),
+                    self.expr_or_loc(setter),
                     ", enumerable: ",
                     tf(flags.enumerable()),
                     ", configurable: ",
