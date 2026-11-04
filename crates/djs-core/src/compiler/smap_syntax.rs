@@ -76,9 +76,21 @@ pub struct Node {
     pub start: u32,
     pub end: u32,
     pub parts: Vec<Part>,
-    /// The bindings of the scopes this node opens, in declaration order: a block's or
-    /// case block's lexical declarations, a function body's parameters, `var`s,
-    /// body-level declarations and own name, a `for` head's, a `catch` parameter's.
+    /// The bindings of the scopes this node opens, in declaration order. Where each
+    /// kind of binding is listed:
+    ///
+    /// - `Body`: the parameters, the `var`s (wherever they are in the function), the
+    ///   body-level declarations, a named function expression's own name;
+    /// - `Block` (including the blocks of `try`, `catch` and `finally`) and `Switch`
+    ///   (all case clauses share one scope): their lexical declarations;
+    /// - `For`: the `let`/`const` of its init (`var`s are the `Body`'s);
+    /// - `ForIn`/`ForOf`/`ForAwait`: the `let`/`const`/`using` names of the head, so
+    ///   the head's kind is their `kind`; empty decls mean the head is an assignment
+    ///   target (or a `var`, whose names are the `Body`'s);
+    /// - `Try`: the `catch` parameter's names (`CatchParam` for a name, `Let` for the
+    ///   names of a pattern), with `part` the `CatchParam` part; the catch block's own
+    ///   declarations are its `Block`'s.
+    ///
     /// Empty for nodes that open no scope.
     pub decls: Vec<Decl>,
 }
@@ -171,8 +183,9 @@ pub enum Role {
     Operand,
     /// An operator token (binary, logical, assignment, unary, update).
     Op,
-    /// The operands of a binary, logical or assignment operator (`Left` is the target of
-    /// an assignment).
+    /// The operands of a binary, logical or assignment operator. An assignment to a
+    /// name or a pattern has its target as `Left`; one to a member has `Object` and
+    /// `Property` instead (see `Assign`).
     Left,
     Right,
     /// A declarator's target (a name or a pattern).
@@ -186,8 +199,9 @@ pub enum Role {
     Arg,
     Spread,
     /// A member expression's object (`super` for `super.x`) and its property: the
-    /// name of `.x` (or `?.x`), or for a computed member the whole `[key]`, brackets
-    /// included.
+    /// bare name of `.x` (or `?.x`; the exporter writes the `.`/`?.`), or for a
+    /// computed member the whole `[key]`, brackets included. Also the parts of a member
+    /// target of `Assign` and `Update`.
     Object,
     Property,
     /// An array literal's element (`...x` is `Spread`), or a hole (an empty span where
@@ -274,14 +288,19 @@ pub enum NodeKind {
         computed: bool,
         optional: bool,
     },
-    /// `Left Op Right`: binary operators (`binary.left@` by its start), `&&`/`||`/`??`,
-    /// assignments (`assign.*@` by its start).
+    /// `Left Op Right`: binary operators (`binary.left@` by its start) and
+    /// `&&`/`||`/`??`.
     Binary,
     Logical,
+    /// An assignment (`assign.*@` by its start): `Left Op Right` for a name or pattern
+    /// target (a pattern is not a node: a site in it is a gap), `Object Property Op
+    /// Right` for a member target (`Object` is `super` for `super.x = …`; `Property`
+    /// as in `Member`).
     Assign,
     /// `Op Operand` (`typeof`, `!`, `-`, `delete`, …).
     Unary,
-    /// `Op Operand` or `Operand Op` (`++`/`--`).
+    /// `++`/`--`: `Op Operand` or `Operand Op` for a name target, `Op Object Property`
+    /// or `Object Property Op` for a member target.
     Update,
     /// `Test ? Then : Else`.
     Conditional,
