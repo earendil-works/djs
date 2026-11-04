@@ -1,0 +1,6 @@
+{
+  "name": "djs-0188-residualize",
+  "private": true,
+  "description": "0188 research prototype: dump-time residual continuations (docs/suspension-design-review.md)",
+  "dependencies": { "acorn": "8.19.0", "typescript": "5.9.3" }
+}

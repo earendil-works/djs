@@ -1,11 +1,11 @@
 # 0188: Is our continuation-dump suspension optimal? State machines vs suspension maps (research)
 
-status: in-progress
+status: done
 agent: critic
 branch: issue/0188-state-machines
 depends-on: 0169, 0171, 0172, 0184
 guide: -
-touches: docs/suspension-design-review.md (report), work/scratch/0188/ (prototypes); no engine changes on main
+touches: docs/suspension-design-review.md (report), work/scratch/0188/ (prototypes), work/research/0188/ (prototype kept for reproducibility); no engine changes on main
 
 ## Owner
 "Investigate if the way we suspend for a continuation dump is optimal. Would it not be saner
@@ -54,5 +54,31 @@ frame is plain data `{state, vars...}` and resuming is calling the machine.
 docs/suspension-design-review.md.
 
 ## Log
+- Read continuation-dumps.md, D2560–D2628, D1632, the smap pins and today's exporter/loader.
+- Prototyped variant R (dump-time residual continuations) as an acorn rewriter of today's
+  dumps (work/research/0188/residualize.mjs). Harvested idle points: 993/1063 identical,
+  0 different, 70 refused (factory placement). v2 programs: 95/177, 0 different.
+  Harvested dumps −42% raw / −18% zstd, load 0.48×.
+- Chained R (dump a resumed residual again): size doubles per generation (2.3 → 257 KB in
+  8 links). R rejected as a format; SM (spill at suspend, named slots) recommended.
+- Incident: chain.sh dumped resumed runs at idle point 1, which is the loaded state; the
+  exporter writes the identical dump there (fixed point), so the uncapped loop ran 5 h and
+  wrote 880,944 files until the coordinator killed it. Now dumps at idle point 2, capped
+  at 50 links, wrapped in timeout.sh. Recorded as a finding (idempotence is correct).
+- Measured TypeScript down-levelling under djs: 2.4× (es2015) and 5.4× (es5) slower on an
+  await-heavy loop; same job order.
+- Guide: none affected.
 
 ## Result
+docs/suspension-design-review.md: switch to **SM**, named-slot suspension states in the
+bytecode compiler (spill at suspend; finally completions, iterator records, using,
+switch and pattern state in slots named construct@span); no generated code in dumps;
+open host calls carry host state with save/resume hooks (build first). It includes an
+8-step migration plan, risks and performance opportunities. Proposed decisions
+D2720–D2722 are in the report, not yet appended to decisions.md (coordinator's call).
+
+## Follow-ups
+- Steps 1–8 of the report's migration plan.
+- Anonymous functions written as factory properties get stack name `$fN` after a resume:
+  write them as `(0, async () => …)`.
+- Unit test: dump → load → dump at the loaded state is byte-identical.
