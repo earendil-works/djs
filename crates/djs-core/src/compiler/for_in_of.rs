@@ -77,7 +77,7 @@ impl<'a> Parser<'a, '_> {
     #[inline(never)]
     pub(super) fn parse_for_in_of(
         &mut self,
-        labels: Vec<Atom>,
+        mut labels: Vec<Atom>,
         for_pos: u32,
         is_await: bool,
     ) -> PResult<()> {
@@ -186,7 +186,7 @@ impl<'a> Parser<'a, '_> {
                 let end = self.new_label();
                 self.place(start);
                 if is_of {
-                    self.push_block(Vec::new(), BlockKind::Iter, l_close, None, for_pos);
+                    self.push_completion_block(BlockKind::Iter, l_close, for_pos);
                 }
                 if self.starts_assignment_pattern(Follow::InOf) {
                     // `for ([a, b] of xs)`: the pattern takes the value.
@@ -310,7 +310,7 @@ impl<'a> Parser<'a, '_> {
             self.code().throw();
             match iter_env.take() {
                 Some(env) => self.blocks.push_out(env),
-                None => self.push_block(Vec::new(), BlockKind::Iter, l_close, None, for_pos),
+                None => self.push_completion_block(BlockKind::Iter, l_close, for_pos),
             }
         }
         let mut using = None;
@@ -382,7 +382,7 @@ impl<'a> Parser<'a, '_> {
 
         // The body.
         let l_break = self.new_label();
-        self.push_block(labels, BlockKind::Loop, l_break, Some(l_step), for_pos);
+        self.push_block(&mut labels, BlockKind::Loop, l_break, Some(l_step), for_pos);
         if let Some(r) = &using {
             self.using_env(r);
         }
@@ -393,7 +393,7 @@ impl<'a> Parser<'a, '_> {
         if let Some(r) = using {
             self.close_using(r);
         }
-        let loop_env = self.blocks.pop().expect("loop env");
+        let loop_used = self.pop_block();
         let iter_env = if is_of { self.blocks.pop() } else { None };
 
         self.place(l_step);
@@ -428,7 +428,7 @@ impl<'a> Parser<'a, '_> {
             let close = iter_env.and_then(|e| e.completion);
             let close_used = close.as_ref().is_some_and(|c| c.has_exits());
             let l_end = self.new_label();
-            if close_used || loop_env.used {
+            if close_used || loop_used {
                 self.code().jump(l_end);
             }
             let close_fn = intrinsic_id("IteratorClose").expect("%IteratorClose");
@@ -445,7 +445,7 @@ impl<'a> Parser<'a, '_> {
                 }
                 self.end_completion(c, None, false);
             }
-            if loop_env.used {
+            if loop_used {
                 // Closes the iterator.
                 self.place(l_break);
                 self.temp_get(it);

@@ -39,8 +39,6 @@
 //! binding and the body; a `for (using x = ...; ...)` head one around the whole loop.
 use crate::PushOut;
 
-use alloc::vec::Vec;
-
 use super::PResult;
 use super::func::{HandlerLabels, VarKind};
 use super::parser::{BlockKind, Parser, syntax};
@@ -194,7 +192,7 @@ impl Parser<'_, '_> {
 
     /// The region's `Finally` env: jumps out of it dispose.
     pub(super) fn using_env(&mut self, r: &UsingRegion) {
-        self.push_block(Vec::new(), BlockKind::Finally, r.l_fin, None, r.at);
+        self.push_completion_block(BlockKind::Finally, r.l_fin, r.at);
     }
 
     /// The bindings after `using`: identifiers with initializers (`no_in` in a `for`

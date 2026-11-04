@@ -59,6 +59,16 @@ where the report says so. Each step merges green on its own.
   (loop +0.54%, tight +0.30%, empty +0.31%). wasm (wmeasure n=4): fin -3.8%; others
   -0.1%..+0.6% (prop1 +0.54%, asyncloop +0.52% spread 1.5%, call1 +0.39%).
 - Size: main 441,240 (base 441,396), slim 376,525 (base 376,638) gzip.
+- First merge attempt: the gate's js nesting test trapped (`while` nested 500 deep in
+  wasm): BlockEnv grew (pos + completion, 32 -> 56 bytes) and every `self.blocks.pop()`
+  in a recursive statement parser took a slot for the popped value; parse_try's new
+  locals (inlined into parse_statement) too. Fixed: `pop_block()` truncates in place,
+  `push_block(&mut labels)`, the finally tail (`end_try_finally`) and the Script
+  completion save out of line, the normal-exit closure inlined by hand, the completion
+  stays in the env (kind `Labeled`, unlabeled: inert) while the finally block is
+  parsed. wasm frames now: parse_statement 112 (base 128), parse_while/do_while 32 (48),
+  parse_labeled 32 (64); every construct reaches its SyntaxError at 550 in the release
+  and dev modules.
 - Docs: decisions D2733; continuation-dumps.md (completions, refusals, slot names);
   compiler.md 4.2/4.3/4.4/7.4/7.7/7.10/9.3; ARCH.md exceptions line; guide
   interpreter.md prose (finally) + regen.

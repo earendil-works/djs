@@ -370,12 +370,12 @@ impl Parser<'_, '_> {
 
     fn push_loop(
         &mut self,
-        labels: Vec<Atom>,
+        mut labels: Vec<Atom>,
         pos: u32,
     ) -> (crate::bytecode::Label, crate::bytecode::Label) {
         let l_break = self.new_label();
         let l_cont = self.new_label();
-        self.push_block(labels, BlockKind::Loop, l_break, Some(l_cont), pos);
+        self.push_block(&mut labels, BlockKind::Loop, l_break, Some(l_cont), pos);
         (l_break, l_cont)
     }
 
@@ -399,7 +399,7 @@ impl Parser<'_, '_> {
         self.rotate_code(t0, b0, b1);
         self.code().jump_if_true(l_body);
         self.place(l_break);
-        self.blocks.pop();
+        self.pop_block();
         Ok(())
     }
 
@@ -416,7 +416,7 @@ impl Parser<'_, '_> {
         self.parse_paren_expr()?;
         self.code().jump_if_true(l_top);
         self.place(l_break);
-        self.blocks.pop();
+        self.pop_block();
         // `do ... while (x)` takes an optional `;` even without a newline.
         self.eat(TokenKind::Semicolon)?;
         Ok(())
@@ -502,7 +502,7 @@ impl Parser<'_, '_> {
             self.code().jump(l_body);
         }
         self.place(l_break);
-        self.blocks.pop();
+        self.pop_block();
         if let Some(r) = using {
             self.close_using(r);
         }
@@ -718,19 +718,8 @@ impl Parser<'_, '_> {
         let l_end = self.new_label();
         let fin = self.blocks.len();
         if has_finally {
-            self.push_block(Vec::new(), BlockKind::Finally, l_fin, None, try_pos);
+            self.push_completion_block(BlockKind::Finally, l_fin, try_pos);
         }
-        // `last`: the finally block follows.
-        let normal_exit = |p: &mut Self, last: bool| {
-            if has_finally {
-                p.complete_normally(fin);
-                if !last {
-                    p.code().jump(l_fin);
-                }
-            } else {
-                p.code().jump(l_end);
-            }
-        };
         let l_try = self.new_label();
         let l_try_end = self.new_label();
         self.reset_completion();
@@ -740,7 +729,14 @@ impl Parser<'_, '_> {
         self.f.open_trys -= 1;
         self.place(l_try_end);
         let has_catch = self.is(TokenKind::Catch);
-        normal_exit(self, !has_catch);
+        if has_finally {
+            self.complete_normally(fin);
+            if has_catch {
+                self.code().jump(l_fin);
+            }
+        } else {
+            self.code().jump(l_end);
+        }
         let mut exc_region = (l_try, l_try_end);
         if has_catch {
             self.next()?;
@@ -807,50 +803,83 @@ impl Parser<'_, '_> {
             self.pop_scope();
             let l_catch_end = self.new_label();
             self.place(l_catch_end);
-            normal_exit(self, true);
+            // (The finally block follows.)
+            if has_finally {
+                self.complete_normally(fin);
+            } else {
+                self.code().jump(l_end);
+            }
             exc_region = (l_catch, l_catch_end);
         } else if !has_finally {
             return syntax(self.tok.start, "expecting catch or finally");
         }
         if has_finally {
-            let c = self
-                .blocks
-                .pop()
-                .and_then(|e| e.completion)
-                .expect("the finally env");
+            // The env stays while the finally block is parsed (its completion is not
+            // kept in this frame, which every nested statement has, D1941), unlabeled,
+            // so nothing targets or leaves it there.
+            self.blocks[fin].kind = BlockKind::Labeled;
             self.expect(TokenKind::Finally, "finally")?;
             self.place(l_fin);
-            // A normal finally block keeps the completion value of the try statement
-            // (Script and eval code): it is saved meanwhile.
-            let mut saved = None;
-            if let Some(a) = self.completion_local() {
-                let t = self.temp("completion.saved", try_pos);
-                let r = self.name_ref(a, self.prev_end);
-                self.code().name_get(r);
-                self.temp_put(t);
-                self.reset_completion();
-                saved = Some((a, t));
-            }
+            self.save_completion_value(fin, try_pos);
             self.parse_block()?;
-            if let Some((a, t)) = saved {
-                self.temp_get(t);
-                let r = self.name_ref(a, self.prev_end);
-                self.code().name_put(r);
-            }
-            self.end_completion(&c, Some(l_end), true);
-            let l_exc = self.new_label();
-            self.place(l_exc);
-            self.f.handlers.push_out(HandlerLabels {
-                start: exc_region.0,
-                end: exc_region.1,
-                target: l_exc,
-                depth: 0,
-                depth_from: None,
-            });
-            self.complete_throwing(&c, l_fin);
+            self.end_try_finally(l_fin, l_end, exc_region.0, exc_region.1);
         }
         self.place(l_end);
         Ok(())
+    }
+
+    /// A finally block keeps the completion value of a normal try statement in Script
+    /// and eval code: saved in a temporary of the try's completion (`blocks[fin]`) while
+    /// it runs. (Out of line, as [`Parser::end_try_finally`]: this frame is in every
+    /// nested statement's, D1941.)
+    #[inline(never)]
+    fn save_completion_value(&mut self, fin: usize, try_pos: u32) {
+        let Some(a) = self.completion_local() else {
+            return;
+        };
+        let t = self.temp("completion.saved", try_pos);
+        let r = self.name_ref(a, self.prev_end);
+        self.code().name_get(r);
+        self.temp_put(t);
+        self.reset_completion();
+        self.blocks[fin]
+            .completion
+            .as_mut()
+            .expect("a completion")
+            .saved = t;
+    }
+
+    /// After a finally block: the completion value back, the dispatch, and the
+    /// exception handler of the try (and catch) region `[start, end)`.
+    #[inline(never)]
+    fn end_try_finally(
+        &mut self,
+        l_fin: crate::bytecode::Label,
+        l_end: crate::bytecode::Label,
+        start: crate::bytecode::Label,
+        end: crate::bytecode::Label,
+    ) {
+        let c = self
+            .blocks
+            .pop()
+            .and_then(|e| e.completion)
+            .expect("the finally env");
+        if let Some(a) = self.completion_local().filter(|_| !c.saved.is_null()) {
+            self.temp_get(c.saved);
+            let r = self.name_ref(a, self.prev_end);
+            self.code().name_put(r);
+        }
+        self.end_completion(&c, Some(l_end), true);
+        let l_exc = self.new_label();
+        self.place(l_exc);
+        self.f.handlers.push_out(HandlerLabels {
+            start,
+            end,
+            target: l_exc,
+            depth: 0,
+            depth_from: None,
+        });
+        self.complete_throwing(&c, l_fin);
     }
 
     fn parse_throw(&mut self) -> PResult<()> {
@@ -871,7 +900,7 @@ impl Parser<'_, '_> {
     /// jump L_body_i+1`, where `d` is the discriminant's temporary
     /// (`switch.discriminant@S`, D2732). When no case matches: jump to `default` or the
     /// end.
-    fn parse_switch(&mut self, labels: Vec<Atom>) -> PResult<()> {
+    fn parse_switch(&mut self, mut labels: Vec<Atom>) -> PResult<()> {
         let switch_pos = self.tok.start;
         self.next()?;
         self.reset_completion();
@@ -883,7 +912,7 @@ impl Parser<'_, '_> {
         // Not in the statement lists of the clauses (a block in one is fine).
         let using = self.begin_using_list(false);
         let l_break = self.new_label();
-        self.push_block(labels, BlockKind::Switch, l_break, None, switch_pos);
+        self.push_block(&mut labels, BlockKind::Switch, l_break, None, switch_pos);
         let mut next_test = self.new_label();
         let mut next_body: Option<crate::bytecode::Label> = None;
         let mut default_body = None;
@@ -940,7 +969,7 @@ impl Parser<'_, '_> {
             self.place(nb);
         }
         self.place(l_break);
-        self.blocks.pop();
+        self.pop_block();
         self.end_using_list(using);
         self.pop_scope();
         Ok(())
@@ -968,7 +997,7 @@ impl Parser<'_, '_> {
             TokenKind::For => self.parse_for(labels),
             _ => {
                 let l_break = self.new_label();
-                self.push_block(labels, BlockKind::Labeled, l_break, None, pos);
+                self.push_block(&mut labels, BlockKind::Labeled, l_break, None, pos);
                 if self.is(TokenKind::Function) {
                     return syntax(
                         self.tok.start,
@@ -977,7 +1006,7 @@ impl Parser<'_, '_> {
                 }
                 self.parse_statement()?;
                 self.place(l_break);
-                self.blocks.pop();
+                self.pop_block();
                 Ok(())
             }
         }

@@ -40,6 +40,9 @@ pub(super) struct Completion {
     /// Its temporaries.
     kind: Atom,
     value: Atom,
+    /// Script and eval code: the try statement's completion value while its finally
+    /// block runs (`Atom::NULL`: none).
+    pub saved: Atom,
     /// The exits that entered it, in order of first use: [`Exit::encode`]d.
     exits: Vec<u32>,
 }
@@ -82,10 +85,12 @@ impl Completion {
 impl Parser<'_, '_> {
     /// Pushes a break/continue target of kind `kind`, the statement at `pos`. A
     /// `Finally` or `Iter` block gets its completion, its temporaries named by `pos`.
+    /// (`labels` by reference, taken: a copy of a `Vec` argument would be in the frame
+    /// of the recursive statement parser calling this, D1941.)
     #[inline(never)]
     pub(super) fn push_block(
         &mut self,
-        labels: Vec<Atom>,
+        labels: &mut Vec<Atom>,
         kind: BlockKind,
         break_label: Label,
         continue_label: Option<Label>,
@@ -94,10 +99,11 @@ impl Parser<'_, '_> {
         let completion = matches!(kind, BlockKind::Finally | BlockKind::Iter).then(|| Completion {
             kind: self.temp("completion.kind", pos),
             value: self.temp("completion.value", pos),
+            saved: Atom::NULL,
             exits: Vec::new(),
         });
         self.blocks.push_out(BlockEnv {
-            labels,
+            labels: core::mem::take(labels),
             kind,
             break_label,
             continue_label,
@@ -105,6 +111,23 @@ impl Parser<'_, '_> {
             pos,
             completion,
         });
+    }
+
+    /// Pops the innermost block: whether a jump used its break target. (In place: a
+    /// popped `BlockEnv` would take a slot in the frame of the recursive statement
+    /// parser calling this, D1941.)
+    #[inline(never)]
+    pub(super) fn pop_block(&mut self) -> bool {
+        let n = self.blocks.len() - 1;
+        let used = self.blocks[n].used;
+        self.blocks.truncate(n);
+        used
+    }
+
+    /// Pushes a `Finally` or `Iter` block entered at `entry`, the statement at `pos`.
+    #[inline(never)]
+    pub(super) fn push_completion_block(&mut self, kind: BlockKind, entry: Label, pos: u32) {
+        self.push_block(&mut Vec::new(), kind, entry, None, pos);
     }
 
     /// The completion of `blocks[b]`.
