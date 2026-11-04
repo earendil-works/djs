@@ -10,6 +10,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0211 | Plain dump fuzzing round 2 (wider generator, new seeds) | pjz | .worktrees/pjz |
 | 0207+ | pjr: class self-reference cycles, origin/re-dump bugs from 0208, $djs.source(ref), 0203 follow-ups | pjr | .worktrees/pjx |
 | 0212 | Exporter cleanup after format 2 (dead branches, chain-test allowances) | pjd | .worktrees/pjd |
+| 0213 | Generic host bindings: `tools.foo` stops being special (owner; DSH imports later) | hb | .worktrees/hb |
 
 ## Open (ready)
 
