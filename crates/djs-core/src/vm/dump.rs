@@ -599,7 +599,11 @@ pub(super) fn base64(bytes: &[u8]) -> String {
     if !rest.is_empty() {
         let n = u32::from(rest[0]) << 16 | u32::from(*rest.get(1).unwrap_or(&0)) << 8;
         out.extend_from_slice(&[T[(n >> 18) as usize], T[(n >> 12 & 63) as usize]]);
-        out.push_out(if rest.len() == 2 { T[(n >> 6 & 63) as usize] } else { b'=' });
+        out.push_out(if rest.len() == 2 {
+            T[(n >> 6 & 63) as usize]
+        } else {
+            b'='
+        });
         out.push_out(b'=');
     }
     String::from_utf8(out).unwrap_or_default()
@@ -1171,7 +1175,7 @@ impl<'a> Dumper<'a> {
     /// index) and of a prototype its literal or constructor would not give it.
     fn props(&mut self, n: usize, o: Obj, skip: &dyn Fn(Atom, Option<u32>) -> bool) {
         let h = self.h;
-        for k in h.own_keys(o) {
+        for k in keys_but_elements(h, o) {
             if h.is_private_atom(k) {
                 let p = self.nodes[n].path.clone();
                 self.refuse(p, "an object with private fields");
@@ -3743,7 +3747,7 @@ impl<'a> Dumper<'a> {
     /// Properties of a non-literal object (a Map's, a regexp's) as patches.
     fn other_props(&mut self, o: Obj, loc: &str, skip: &dyn Fn(Atom, Option<u32>) -> bool) {
         let h = self.h;
-        for k in h.own_keys(o) {
+        for k in keys_but_elements(h, o) {
             if h.atom_symbol(k).is_none() && skip(k, h.atom_array_index(k)) {
                 continue;
             }
@@ -4104,6 +4108,16 @@ pub(super) fn template_names(h: &Heap, t: u32) -> Vec<String> {
                 .collect()
         }
         None => Vec::new(),
+    }
+}
+
+/// `o`'s own keys, without a typed array's element indexes, which the dump writes as its
+/// buffer (and every caller skips): a megabyte array made a million index atoms (0198).
+fn keys_but_elements(h: &Heap, o: Obj) -> Vec<Atom> {
+    if h.object_class(o) == ObjectClass::TypedArray {
+        h.ordinary_own_keys(o)
+    } else {
+        h.own_keys(o)
     }
 }
 

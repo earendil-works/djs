@@ -2613,7 +2613,7 @@ impl Heap {
         out
     }
 
-    fn ordinary_own_keys(&self, o: Obj) -> Vec<Atom> {
+    pub(crate) fn ordinary_own_keys(&self, o: Obj) -> Vec<Atom> {
         let mut indexes: Vec<(u32, Atom)> = Vec::new();
         let mut strings = Vec::new();
         let mut symbols = Vec::new();

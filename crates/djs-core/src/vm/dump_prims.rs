@@ -485,15 +485,20 @@ impl Vm {
 /// Padded base64 without whitespace (what the dumper writes), or `None`.
 #[cfg(feature = "full")]
 fn decode_base64(b: &[u8]) -> Option<Vec<u8>> {
+    // 0xFF: not in the alphabet.
+    const V: [u8; 256] = {
+        let mut t = [0xFFu8; 256];
+        let a = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut i = 0;
+        while i < 64 {
+            t[a[i] as usize] = i as u8;
+            i += 1;
+        }
+        t
+    };
     let v = |c: u8| -> Option<u32> {
-        Some(u32::from(match c {
-            b'A'..=b'Z' => c - b'A',
-            b'a'..=b'z' => c - b'a' + 26,
-            b'0'..=b'9' => c - b'0' + 52,
-            b'+' => 62,
-            b'/' => 63,
-            _ => return None,
-        }))
+        let x = V[c as usize];
+        (x != 0xFF).then_some(u32::from(x))
     };
     let (chunks, rest) = b.as_chunks::<4>();
     if !rest.is_empty() {
@@ -533,7 +538,10 @@ mod tests {
             let bytes: Vec<u8> = (0..len).map(|i| (i * 37 + len) as u8).collect();
             let text = super::super::dump::base64(&bytes);
             let units: Vec<u16> = text.encode_utf16().collect();
-            assert_eq!(crate::builtins::dom::atob(&units).as_deref(), Some(&bytes[..]));
+            assert_eq!(
+                crate::builtins::dom::atob(&units).as_deref(),
+                Some(&bytes[..])
+            );
             if len > 0 {
                 assert_eq!(super::decode_base64(text.as_bytes()), Some(bytes));
             }
