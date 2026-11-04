@@ -32,6 +32,8 @@ run(16, function () { return 16; try { let [a = 1] = []; } catch { let [b = 1] =
 run(17, function () { return 17; try { let [a = 1] = []; } finally { let [b = 1] = []; } });
 run(18, function () { l: { break l; let [a = 1] = []; } return 18; });
 run(19, function () { if (log) return 19; else return 0; let [a = 1] = []; });
+run(31, function () { switch (1) { case 1: break; const [a = 1, ...b] = []; case 2: return 0; } return 31; });
+run(32, function () { switch (log.length) { case 0: { break; let [a = 1] = []; } default: const [c = 3, ...d] = it([]); return c; } return 32; });
 // Live patterns next to dead ones: the live close handlers stay and still close.
 run(20, function () { let [a = 1] = it([undefined, 2]); return a; let [b = 1] = []; });
 run(21, function () {

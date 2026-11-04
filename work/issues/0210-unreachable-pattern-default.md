@@ -27,7 +27,7 @@ break/continue/throw, inside try/finally), and add tests. Decision IDs D2960–D
 - First fix (drop stalled handlers whose regions the walk never reaches) failed for
   `yield` in a dead pattern default: the yield's return path is the target of an
   absolute handler in the same dead code, which the walk seeds, so the pattern region
-  looked reached. Final fix: on a stall, `drop_dead_handlers` recomputes reachability
+  looked reached. Fix: on a stall, recompute reachability
   from the entry alone, activating a handler (resolving its relative depth) once code in
   its region is reached, and drops all handlers never activated. Fast path unchanged.
   D2960.
@@ -36,6 +36,11 @@ break/continue/throw, inside try/finally), and add tests. Decision IDs D2960–D
   has relative handlers, all handlers start inactive and are activated as their regions
   are reached; the loop stops once all are active, so live code still takes one walk in
   the common case. Slim module now 377,925 (main 378,039).
+- Second attempt failed the plain dump size score (D2901): it totals the corpus's dumps,
+  and the new case adds 3 idle points (+25 KB raw, 68 KB of dumps on disk); no other
+  case's dumps changed. Recorded the new corpus totals in tests/scores/dump-size.tsv
+  (measured with `--plain-out` + `dump-size.ts --score`). Also added pjz's switch/case
+  shape (`const [a = 1, ...b]` after `break` in a case) as runs 31/32.
 - Tests: `compiler::tests::dead_pattern_handlers_dropped` (handler counts + runs),
   corpus case `language/dead-code-patterns.js` (34 shapes, live patterns beside dead
   ones, idle points); passes plain, --suspend-every 1/97, --gc-stress, --determinism,
