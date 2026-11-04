@@ -761,6 +761,9 @@ struct Dumper<'a> {
     /// What is in flight: open calls, pending promises, activations (dump_flight.rs).
     fl: flight::Flight<'a>,
     sources: Sources,
+    /// `literal_key` of string atoms, by atom id.
+    literal_keys: Index,
+    literal_key_texts: Vec<Rc<str>>,
     /// Objects being written as data (`render`): promises made by activations or
     /// reactions are patched into them instead (dump_flight.rs `make`).
     data_depth: u32,
@@ -810,6 +813,8 @@ impl<'a> Dumper<'a> {
             finals: Vec::new(),
             fl: flight::Flight::new(opts.host_fn_name),
             sources: Sources::default(),
+            literal_keys: Index::default(),
+            literal_key_texts: Vec::new(),
             data_depth: 0,
             ns: false,
             next: 0,
@@ -2255,19 +2260,27 @@ impl<'a> Dumper<'a> {
     }
 
     /// The key in an object literal: `name`, `"a b"`, `[Symbol.iterator]`.
-    fn literal_key(&mut self, k: Atom) -> String {
+    fn literal_key(&mut self, k: Atom) -> Rc<str> {
         let h = self.h;
         match h.atom_symbol(k) {
-            Some(s) => cat!("[", self.expr(Value::symbol(s), None, None), "]"),
+            Some(s) => Rc::from(cat!("[", self.expr(Value::symbol(s), None, None), "]")),
             None => {
-                let name = atom_text(h, k);
-                if name == "__proto__" {
-                    cat!("[", quote(&name), "]")
-                } else if is_ident(&name) || h.atom_array_index(k).is_some() {
-                    name
-                } else {
-                    quote(&name)
+                // Kept per dump: data repeats its keys in every record (0198).
+                if let Some(i) = self.literal_keys.get(u64::from(k.id()) + 1) {
+                    return self.literal_key_texts[i as usize].clone();
                 }
+                let name = atom_text(h, k);
+                let text: Rc<str> = if name == "__proto__" {
+                    Rc::from(cat!("[", quote(&name), "]"))
+                } else if is_ident(&name) || h.atom_array_index(k).is_some() {
+                    Rc::from(name)
+                } else {
+                    Rc::from(quote(&name))
+                };
+                self.literal_keys
+                    .insert(u64::from(k.id()) + 1, self.literal_key_texts.len() as u32);
+                self.literal_key_texts.push_out(text.clone());
+                text
             }
         }
     }
@@ -3867,13 +3880,13 @@ impl<'a> Dumper<'a> {
                         let l = self.expr_or_loc(value);
                         self.patches.push_out(cat!(at, " = ", l, ";"));
                         item(&mut out);
-                        cat_to!(&mut out, key, ": undefined");
-                    } else if e == key {
+                        cat_to!(&mut out, &*key, ": undefined");
+                    } else if *e == *key {
                         item(&mut out);
                         out.push_str(&e);
                     } else {
                         item(&mut out);
-                        cat_to!(&mut out, key, ": ", e);
+                        cat_to!(&mut out, &*key, ": ", e);
                     }
                     // `Object.freeze`/`seal` at the end set these attributes.
                     let implied = match freeze {
@@ -3927,7 +3940,7 @@ impl<'a> Dumper<'a> {
                         }
                     } else {
                         item(&mut out);
-                        cat_to!(&mut out, key, ": undefined");
+                        cat_to!(&mut out, &*key, ": undefined");
                         let d = self.descriptor(&Property::Accessor {
                             getter,
                             setter,
