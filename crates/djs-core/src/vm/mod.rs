@@ -175,11 +175,11 @@ enum Collection {
 pub struct Vm {
     heap: Heap,
     opts: VmOptions,
-    /// The base image's builtins by canonical path, for dumps: computed by the first
-    /// `dump` and kept, with the length of the base it was computed on (D2626).
+    /// The base image's builtins as dumps name them (`dump::BaseTable`): made by the
+    /// first `dump` and kept, with the length of the base it was made from (D2626).
     #[cfg(feature = "dump")]
-    base_names: core::cell::OnceCell<(usize, Vec<(u32, String)>)>,
-    /// What dumps keep for the next dump: suspension maps and the checker's tables.
+    base_names: core::cell::OnceCell<(usize, alloc::rc::Rc<dump::BaseTable>)>,
+    /// What dumps keep for the next dump: the suspension maps of their scripts.
     #[cfg(feature = "dump")]
     dump_cache: core::cell::RefCell<dump::Cache>,
 }

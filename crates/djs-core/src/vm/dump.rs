@@ -317,6 +317,40 @@ struct Builtin {
     named: Named,
 }
 
+/// The base's builtins as the dumper names them, made once per VM (`Vm::base_names`):
+/// by canonical path (D2371), indexed by cell, and the base's global names.
+#[derive(Default)]
+pub(crate) struct BaseTable {
+    list: Vec<Builtin>,
+    /// `list` by cell offset (`BUILTIN | index`): each dump's `cells` starts as a copy.
+    cells: Index,
+    globals: Vec<String>,
+}
+
+impl BaseTable {
+    fn new(base: &Heap, base_end: u32) -> BaseTable {
+        let mut t = BaseTable::default();
+        for (cell, path) in super::registry::reachable_names(base) {
+            if cell < base_end {
+                t.cells.insert(key(cell), BUILTIN | t.list.len() as u32);
+                t.list.push_out(Builtin {
+                    cell,
+                    named: named(&path),
+                    path,
+                });
+            }
+        }
+        if let Some(bg) = intrinsic(base, Intrinsic::Global).as_object() {
+            t.globals = base
+                .own_keys(bg)
+                .into_iter()
+                .map(|k| atom_text(base, k))
+                .collect();
+        }
+        t
+    }
+}
+
 /// What a cell in [`Dumper::cells`] is: the tag in the top two bits, an index below.
 const BUILTIN: u32 = 0;
 const HOST: u32 = 1 << 30;
@@ -331,7 +365,7 @@ fn key(n: u32) -> u64 {
 
 /// A hash index from nonzero keys to `u32`s: open addressing, linear probing, a
 /// power-of-two table at most half full.
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Index {
     slots: Vec<(u64, u32)>,
     len: usize,
@@ -671,7 +705,7 @@ struct Dumper<'a> {
     base_end: u32,
     /// Builtin cells (below `BASE_END`), host values, nodes and root boxes by cell offset.
     cells: Index,
-    builtins: Vec<Builtin>,
+    builtins: Rc<BaseTable>,
     host_exprs: Vec<String>,
     host_names: Vec<&'a str>,
     /// The global object's properties on the base: the builtin globals.
@@ -735,7 +769,7 @@ impl<'a> Dumper<'a> {
             h,
             base_end,
             cells: Index::default(),
-            builtins: Vec::new(),
+            builtins: Rc::default(),
             host_exprs: Vec::new(),
             host_names: opts.host.to_vec(),
             base_globals: Vec::new(),
@@ -764,37 +798,22 @@ impl<'a> Dumper<'a> {
             depth: 0,
             visited: 0,
         };
-        // Once per VM: the walk is most of a small dump's cost (D2626).
+        // Once per VM: the walk is most of a small dump's cost (D2626), and the table
+        // made from it (0198).
         let fresh;
-        let names: &[(u32, String)] = match vm
+        let table: &Rc<BaseTable> = match vm
             .base_names
-            .get_or_init(|| (opts.base.len(), super::registry::reachable_names(&base)))
+            .get_or_init(|| (opts.base.len(), Rc::new(BaseTable::new(&base, base_end))))
         {
-            (len, names) if *len == opts.base.len() => names,
+            (len, t) if *len == opts.base.len() => t,
             _ => {
-                fresh = super::registry::reachable_names(&base);
+                fresh = Rc::new(BaseTable::new(&base, base_end));
                 &fresh
             }
         };
-        for (cell, path) in names {
-            let cell = *cell;
-            if cell < base_end {
-                let named = named(path);
-                d.cells.insert(key(cell), BUILTIN | d.builtins.len() as u32);
-                d.builtins.push_out(Builtin {
-                    cell,
-                    path: path.clone(),
-                    named,
-                });
-            }
-        }
-        if let Some(bg) = intrinsic(&base, Intrinsic::Global).as_object() {
-            d.base_globals = base
-                .own_keys(bg)
-                .into_iter()
-                .map(|k| atom_text(&base, k))
-                .collect();
-        }
+        d.builtins = table.clone();
+        d.cells = table.cells.clone();
+        d.base_globals = table.globals.clone();
         d.read_globals(&base);
         d.read_patches(&base);
         d.scratch = Some(base);
@@ -816,7 +835,7 @@ impl<'a> Dumper<'a> {
 
     fn builtin(&self, cell: u32) -> Option<&Builtin> {
         match self.cell(cell)? {
-            (BUILTIN, i) => Some(&self.builtins[i]),
+            (BUILTIN, i) => Some(&self.builtins.list[i]),
             _ => None,
         }
     }
@@ -931,13 +950,13 @@ impl<'a> Dumper<'a> {
             return;
         }
         // In naming order, so that the patches come out in a stable order.
-        for i in 0..self.builtins.len() {
-            let cell = self.builtins[i].cell;
+        for i in 0..self.builtins.list.len() {
+            let cell = self.builtins.list[i].cell;
             if base.cell_kind(cell) != crate::heap::CellKind::Object {
                 continue;
             }
             let o = Obj(cell);
-            let path = self.builtins[i].path.clone();
+            let path = self.builtins.list[i].path.clone();
             if h.get_prototype_of(o).map(|p| p.offset())
                 != base.get_prototype_of(o).map(|p| p.offset())
             {
@@ -995,7 +1014,7 @@ impl<'a> Dumper<'a> {
 
     /// The expression for builtin `i`: its path, or `$dump.builtin(path)`.
     fn builtin_expr(&mut self, i: usize) -> String {
-        let b = &self.builtins[i];
+        let b = &self.builtins.list[i];
         if b.named == Named::Path {
             return b.path.clone();
         }
@@ -1084,7 +1103,7 @@ impl<'a> Dumper<'a> {
         let c = cell_of(v)?;
         match self.cell(c) {
             Some((BUILTIN, i)) => {
-                let b = &self.builtins[i];
+                let b = &self.builtins.list[i];
                 let why = match b.named {
                     Named::Path | Named::Loader => return None,
                     Named::Internal => "a builtin's internal value (",
