@@ -594,3 +594,6 @@ topics when the index is next reorganized.
 - D2665: The gate runs new executables once while the build goes on
 - D2667: difftest runs stress variants as separate tasks, longest first
 - D2269: No `djs heap` command and no `.image`; the REPL's `.heap` keeps the heap report
+- D2666: The gate runs outside the merge lock; only the fast-forward is inside
+- D2668: Clippy on every feature combination that ships
+- D2669: Full runs in their own worktree
