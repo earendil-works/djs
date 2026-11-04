@@ -214,6 +214,12 @@ pub struct Decl {
     /// The offset that names the declaring scope in suspension maps (`Slot::Binding`'s
     /// `scope`, the `S` of a shadowed binding's key `name@S`).
     pub scope: u32,
+    /// An offset inside the code that declares it: in JavaScript inside the
+    /// declarator's `Target` (the name's last character, or within the pattern), so a
+    /// declaration statement's names can be told apart by declarator; inside the
+    /// parameter list for a parameter, the `catch` parameter for one, the function
+    /// for a function declaration.
+    pub at: u32,
     /// The part of the node whose code declares it (a statement of a statement list,
     /// a `for` head, the parameter list, a `catch` parameter); `None` for a named
     /// function expression's own name. A binding declared by a statement before the
@@ -612,6 +618,7 @@ mod recording {
                     name: heap.atom_name(var.name),
                     kind,
                     scope: f.scopes[var.scope as usize].pos.saturating_sub(base),
+                    at: pos,
                     part,
                 });
             }

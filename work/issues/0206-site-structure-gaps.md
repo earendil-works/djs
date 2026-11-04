@@ -1,7 +1,7 @@
 # 0206: Site-structure records: pattern nodes, TS wrappers, constructor params
 
-status: open
-agent: -
+status: in-progress
+agent: pjc
 branch: issue/0206-site-structure-gaps
 depends-on: 0200
 guide: -
