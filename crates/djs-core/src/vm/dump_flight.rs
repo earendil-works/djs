@@ -423,9 +423,9 @@ impl Dumper<'_> {
             let at = |p: Place| match p {
                 Place::Arg(i) => 2 + usize::from(i),
                 Place::Local(i) => lp + usize::from(i),
-                Place::Temp(k) => lp + site.locals.len() + usize::from(k),
+                Place::Stack(k) => lp + site.locals.len() + usize::from(k),
             };
-            for slot in named.iter().filter(|x| matches!(x.holds, Holds::Temp(_))) {
+            for slot in named.iter().filter(|x| matches!(x.holds, Holds::Temp)) {
                 let v = fp(at(slot.place));
                 match slot.construct() {
                     "for-in.iterator" => {
@@ -569,7 +569,7 @@ impl Dumper<'_> {
                 == hp
                     + crate::interp::frame::HEADER as usize
                     + site.locals.len()
-                    + site.operands.len()
+                    + site.stack.len()
             && at_yield == matches!(s.state, suspend::SUSPENDED | suspend::SUSPENDED_RAW);
         if !fits {
             self.refuse(
@@ -583,7 +583,7 @@ impl Dumper<'_> {
 
     /// A codemode body's site as the loader sees it: the dump writes the body as an
     /// async function (`fn_text`), whose map must have the same site with the same
-    /// slots and operands. Its bindings' scopes are the function's (they are offsets
+    /// slots. Its bindings' scopes are the function's (they are offsets
     /// from its start); its position stays the body's, for the report.
     fn body_site(&mut self, path: &str, f: Obj, site: Site) -> Option<Site> {
         let h = self.h;
@@ -622,13 +622,19 @@ impl Dumper<'_> {
                 })
                 .collect()
         };
+        let constructs = |stack: &[String]| -> Vec<String> {
+            stack
+                .iter()
+                .map(|n| n.split('@').next().unwrap_or("").into())
+                .collect()
+        };
         match wrapped {
             Some(w)
                 if w.kind == site.kind
                     && names(&w.args) == names(&site.args)
                     && names(&w.locals) == names(&site.locals)
                     && w.boxed == site.boxed
-                    && w.operands == site.operands
+                    && constructs(&w.stack) == constructs(&site.stack)
                     && w.unsupported.is_none() =>
             {
                 Some(Site { pos: site.pos, ..w })
@@ -1621,7 +1627,7 @@ impl Dumper<'_> {
         let index = |p: Place| match p {
             Place::Arg(i) => 2 + usize::from(i),
             Place::Local(i) => lp + usize::from(i),
-            Place::Temp(k) => lp + n_locals + usize::from(k),
+            Place::Stack(k) => lp + n_locals + usize::from(k),
         };
         // The iterator below a loop's `next` (an async-from-sync one brings its own).
         let mut it = String::new();
@@ -1636,7 +1642,7 @@ impl Dumper<'_> {
             let (what, e) = match slot.holds {
                 Holds::Hidden if class_hidden(&slot.name) => ("binding", "undefined".into()),
                 Holds::Binding | Holds::Hidden => ("binding", self.slot_expr(v, slot.boxed)),
-                Holds::Temp(_) => {
+                Holds::Temp => {
                     let e = match slot.construct() {
                         "for-await.next" | "yield*.next"
                             if from_sync_partner(&named, &slot)

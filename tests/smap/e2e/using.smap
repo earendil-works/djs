@@ -36,11 +36,11 @@ function <anonymous> @4129..4231
   loc0 <state>, loc4 n@26
   await-using#1 @98 (206:6) pc 61: using.record@83 completion.kind@83 completion.value@83
 function <anonymous> @4258..4501
-  loc0 <state>, loc1 x@35, loc9 y@110, loc20 h@167
-  await-using#1 @88 (209:75) pc 117: for-of.iterator@18 for-of.next@18 using.record@35 completion.kind@35 completion.value@35 (out: loc9 loc20)
-  for-await.close#1 @93 (210:5) pc 218: for-await.exception@93 (out: loc1 loc20)
-  for-await.next#1 @93 (210:5) pc 306: for-await.iterator@93 for-await.next@93 (out: loc1 loc20)
-  await-using#2 @219 (211:74) pc 407: using.record@167 completion.kind@167 completion.value@167 (out: loc1 loc9)
+  loc0 <state>, loc1 x@35, loc9 y@110, loc21 h@167
+  await-using#1 @88 (209:75) pc 117: for-of.iterator@18 for-of.next@18 using.record@35 completion.kind@35 completion.value@35 (out: loc9 loc21)
+  for-await.close#1 @93 (210:5) pc 220: for-await.exception@93 (out: loc1 loc21)
+  for-await.next#1 @93 (210:5) pc 310: for-await.iterator@93 for-await.next@93 (out: loc1 loc21)
+  await-using#2 @219 (211:74) pc 411: using.record@167 completion.kind@167 completion.value@167 (out: loc1 loc9)
 function <anonymous> @4527..4709
   loc0 <state>, loc4 x@0
   await-using#1 @182 (221:4) pc 60: using.record@30 completion.kind@30 completion.value@30
@@ -49,9 +49,9 @@ function <anonymous> @4738..4887
   await-using#1 @149 (229:4) pc 78: using.record@30 completion.kind@30 completion.value@30
 function <anonymous> @4920..5133
   loc0 <state>, loc1 g@0, loc2 v@131
-  for-await.close#1 @114 (236:5) pc 39: for-await.exception@114
-  for-await.next#1 @114 (236:5) pc 78: for-await.iterator@114
-  for-await.close#2 @114 (236:5) pc 108: -
+  for-await.close#1 @114 (236:5) pc 41: for-await.exception@114
+  for-await.next#1 @114 (236:5) pc 82: for-await.iterator@114
+  for-await.close#2 @114 (236:5) pc 112: -
 function g @4938..5029
   loc0 <state>, loc4 a@0
   yield.await#1 @62 (233:7) pc 33: using.record@40

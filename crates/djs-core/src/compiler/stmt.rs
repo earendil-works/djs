@@ -8,7 +8,7 @@ use super::completion::Exit;
 use super::func::{FuncKind, HandlerLabels, ScopeKind, VarKind};
 use super::parser::{BlockKind, Parser, syntax};
 use super::pattern::Binding;
-use super::smap::{Role, SiteKind};
+use super::smap::SiteKind;
 use crate::heap::Atom;
 use crate::lexer::{Kw, TokenKind};
 
@@ -927,9 +927,9 @@ impl Parser<'_, '_> {
                     next_test = self.new_label();
                     self.temp_get(d);
                     // The value the test compares is named by its `case`.
-                    self.roles_push(case_pos, &[Role::BinaryLeft]);
+                    self.names_push(case_pos, &["binary.left"]);
                     self.parse_expr(false)?;
-                    self.roles_pop(1);
+                    self.names_pop(1);
                     self.code().strict_eq();
                     self.code().jump_if_false(next_test);
                     self.ts_semi = true;

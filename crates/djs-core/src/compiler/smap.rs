@@ -1,168 +1,22 @@
 //! Suspension maps (D2563, docs/continuation-dumps.md "Suspension maps"): for every
 //! `await` and `yield` of a function, what a frame suspended there holds, described by
-//! source names and roles rather than by this build's slots and pcs, so that a later
+//! source names rather than by this build's slots and pcs, so that a later
 //! build can rebuild the frame from a dump and an exporter can name what it finds.
 //!
 //! Computed on demand by compiling again with recording on
 //! ([`suspension_maps`]); nothing is stored in templates and a normal compile records
 //! nothing. Without the `dump` feature the parser's hooks compile to nothing.
 //!
-//! The operand roles come from the constructs that leave values on the operand stack
-//! while a nested expression is parsed (a call's callee and `this`, a binary operator's
-//! left operand, a loop's iterator record): each pushes the roles of the values it keeps
-//! when it emits them and pops them when it consumes them. At a site the role stack is
-//! the operand stack below the awaited value. Resolution checks its length against the
-//! stack depth of the final code: a mismatch, or a construct that marked its values as
-//! not described yet ([`Role::Unsupported`]), makes the site unsupported instead of
-//! mislabeled.
-
-use core::fmt;
-
-/// What an operand below the awaited value is, named by the construct that keeps it
-/// (docs/portable-snapshots.md 3.5, extended where djs's lowering keeps more values).
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Role {
-    /// `f(…)`, `o.m(…)`: the function, `this` (undefined for a plain call), the
-    /// arguments evaluated so far.
-    CallCallee,
-    CallThis,
-    CallArg(u16),
-    /// The argument array of a call with a spread, so far.
-    CallArgs,
-    /// `new X(…)`: the constructor and the arguments so far.
-    NewCallee,
-    NewArg(u16),
-    NewArgs,
-    /// `super(…)`: the parent constructor and the arguments so far.
-    SuperCallee,
-    SuperArg(u16),
-    SuperArgs,
-    /// `o[k]`: the object while the key is evaluated.
-    MemberObject,
-    /// `super[k]`: `this` and the home object's prototype while the key is evaluated.
-    SuperThis,
-    SuperBase,
-    /// An object literal under construction, and its computed key while the value is
-    /// evaluated.
-    ObjectLiteral,
-    ObjectKey,
-    /// An array literal's leading elements, kept on the stack for one `array_from`;
-    /// after a hole, a spread or 256 elements the array under construction.
-    ArrayElement(u16),
-    ArrayLiteral,
-    /// `a + b`, `a < b`, `a in b`, …: the left operand while the right one is evaluated.
-    BinaryLeft,
-    /// `o.p = v`, `o[k] = v`, `o.#x = v` (and compound forms): the object, the key (a
-    /// private name's symbol), the old value of a compound assignment.
-    AssignObject,
-    AssignKey,
-    AssignOld,
-    /// `[a, b] = v`: the value (the expression's result) while the pattern runs.
-    AssignValue,
-    /// The parts of a template literal so far (strings, joined at the end).
-    TemplatePart(u16),
-    /// `import(s, o)`: the specifier while the options are evaluated.
-    ImportSpecifier,
-    /// `%Name(…)` in privileged code: the arguments so far.
-    IntrinsicArg(u16),
-    /// An object pattern's computed key while its target and default are evaluated (the
-    /// pattern's own state is in temporaries, D2732).
-    PatternKey,
-    /// The exception a `for await` rethrows after closing its iterator (the loop's body
-    /// threw).
-    Exception,
-    /// Values of a construct that is not described yet (class definitions): the site is unsupported.
-    Unsupported(&'static str),
-}
-
-impl fmt::Display for Role {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            Role::CallCallee => f.write_str("call.callee"),
-            Role::CallThis => f.write_str("call.this"),
-            Role::CallArg(i) => write!(f, "call.arg[{i}]"),
-            Role::CallArgs => f.write_str("call.args"),
-            Role::NewCallee => f.write_str("new.callee"),
-            Role::NewArg(i) => write!(f, "new.arg[{i}]"),
-            Role::NewArgs => f.write_str("new.args"),
-            Role::SuperCallee => f.write_str("super.callee"),
-            Role::SuperArg(i) => write!(f, "super.arg[{i}]"),
-            Role::SuperArgs => f.write_str("super.args"),
-            Role::MemberObject => f.write_str("member.object"),
-            Role::SuperThis => f.write_str("super.this"),
-            Role::SuperBase => f.write_str("super.base"),
-            Role::ObjectLiteral => f.write_str("object.literal"),
-            Role::ObjectKey => f.write_str("object.key"),
-            Role::ArrayElement(i) => write!(f, "array.element[{i}]"),
-            Role::ArrayLiteral => f.write_str("array.literal"),
-            Role::BinaryLeft => f.write_str("binary.left"),
-            Role::AssignObject => f.write_str("assign.object"),
-            Role::AssignKey => f.write_str("assign.key"),
-            Role::AssignOld => f.write_str("assign.old"),
-            Role::AssignValue => f.write_str("assign.value"),
-            Role::TemplatePart(i) => write!(f, "template.part[{i}]"),
-            Role::ImportSpecifier => f.write_str("import.specifier"),
-            Role::IntrinsicArg(i) => write!(f, "intrinsic.arg[{i}]"),
-            Role::PatternKey => f.write_str("pattern.key"),
-            Role::Exception => f.write_str("exception"),
-            Role::Unsupported(c) => write!(f, "unsupported:{c}"),
-        }
-    }
-}
-
-#[cfg(feature = "dump")]
-impl Role {
-    /// The role's name and its index, as `Display` writes them: `("call.arg", Some(2))`
-    /// for `call.arg[2]`, `("unsupported", None)` for any unsupported construct.
-    pub fn parts(self) -> (&'static str, Option<u16>) {
-        match self {
-            Role::CallCallee => ("call.callee", None),
-            Role::CallThis => ("call.this", None),
-            Role::CallArg(i) => ("call.arg", Some(i)),
-            Role::CallArgs => ("call.args", None),
-            Role::NewCallee => ("new.callee", None),
-            Role::NewArg(i) => ("new.arg", Some(i)),
-            Role::NewArgs => ("new.args", None),
-            Role::SuperCallee => ("super.callee", None),
-            Role::SuperArg(i) => ("super.arg", Some(i)),
-            Role::SuperArgs => ("super.args", None),
-            Role::MemberObject => ("member.object", None),
-            Role::SuperThis => ("super.this", None),
-            Role::SuperBase => ("super.base", None),
-            Role::ObjectLiteral => ("object.literal", None),
-            Role::ObjectKey => ("object.key", None),
-            Role::ArrayElement(i) => ("array.element", Some(i)),
-            Role::ArrayLiteral => ("array.literal", None),
-            Role::BinaryLeft => ("binary.left", None),
-            Role::AssignObject => ("assign.object", None),
-            Role::AssignKey => ("assign.key", None),
-            Role::AssignOld => ("assign.old", None),
-            Role::AssignValue => ("assign.value", None),
-            Role::TemplatePart(i) => ("template.part", Some(i)),
-            Role::ImportSpecifier => ("import.specifier", None),
-            Role::IntrinsicArg(i) => ("intrinsic.arg", Some(i)),
-            Role::PatternKey => ("pattern.key", None),
-            Role::Exception => ("exception", None),
-            Role::Unsupported(_) => ("unsupported", None),
-        }
-    }
-
-    /// The name of the slot that holds this operand (D2721): the construct (the role's
-    /// name without its index) and `at`, the source offset from the function's start
-    /// of what keeps the value. For a list's element (an argument, an array element, a
-    /// template part) that is the element's own start, which stands for the index;
-    /// for everything else the start of the construct that keeps it (the call, the
-    /// assignment, the `for`, the `switch`, …). See docs/continuation-dumps.md "Slot
-    /// names".
-    pub fn slot_name(self, at: u32) -> alloc::string::String {
-        // Every construct has a `.` or `-`, so no slot name is a binding's `name@scope`.
-        let construct = match self {
-            Role::Exception => "for-await.exception",
-            r => r.parts().0,
-        };
-        alloc::format!("{construct}@{at}")
-    }
-}
+//! The values a construct keeps on the operand stack while a nested expression is
+//! parsed (a call's callee and `this`, a binary operator's left operand) are named by
+//! the construct and the source offset of what keeps them (`call.callee@41`, D2721):
+//! the parser pushes their names when it emits them and pops them when it consumes
+//! them, so at a site the name stack is the operand stack below the awaited value.
+//! Statement-level state lives in temporaries (locals of its own, D2732, D2733), so
+//! only expressions keep values there. Resolution checks the names' count against the
+//! stack depth of the final code: a mismatch (a compiler bug), or a suspension inside a
+//! class definition (whose half-made class no dump can write), makes the site
+//! unsupported instead of misnamed.
 
 /// What kind of suspension point a site is.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -221,14 +75,18 @@ mod maps {
     use core::fmt::Write;
 
     use super::super::func::{FuncState, ScopeId, VarKind};
-    use super::{Role, SiteKind};
+    use super::SiteKind;
     use crate::heap::Heap;
 
-    /// The parser's record of one function: the role stack and the sites so far.
+    /// The parser's record of one function: the name stack and the sites so far.
     #[derive(Default)]
     pub(in crate::compiler) struct Recorder {
-        /// The roles with the source offset that names their slot (D2721).
-        pub roles: Vec<(Role, u32)>,
+        /// The names of the values kept on the operand stack (their constructs), with
+        /// the source offset that names their slot (D2721), bottom first.
+        pub names: Vec<(&'static str, u32)>,
+        /// The constructs being parsed whose suspensions are refused (class
+        /// definitions), innermost last.
+        pub unsupported: Vec<&'static str>,
         pub sites: Vec<SiteRec>,
         /// The computed property keys this function evaluates (`[` to `]`).
         pub computed_keys: Vec<(u32, u32)>,
@@ -244,9 +102,11 @@ mod maps {
         pub p1: u32,
         /// The innermost scope at the site.
         pub scope: ScopeId,
-        /// The role stack at the site: the operands below the awaited value, each
-        /// with the source offset its slot is named by.
-        pub roles: Vec<(Role, u32)>,
+        /// The name stack at the site: the values below the awaited value, each with
+        /// the source offset its slot is named by.
+        pub names: Vec<(&'static str, u32)>,
+        /// The innermost construct whose suspensions are refused, if any.
+        pub unsupported: Option<&'static str>,
     }
 
     /// What a frame slot holds at a site.
@@ -259,8 +119,6 @@ mod maps {
         Hidden(String),
         /// An argument slot that no binding lives in (the call's argument `i`).
         Argument(u16),
-        /// An operand, by role.
-        Operand(Role),
         /// A construct temporary that holds a value here, by its slot name (D2732).
         Temp(String),
         /// Nothing at this site (a binding whose scope does not enclose it).
@@ -286,12 +144,10 @@ mod maps {
         /// Which local slots hold a Box at this site (a binding a closure captures): the
         /// loader puts the value in a Box there.
         pub boxed: Vec<bool>,
-        /// The operands below the awaited value, bottom first.
-        pub operands: Vec<Role>,
-        /// The operands' slot names, bottom first (D2721): the construct and the
-        /// source offset, from the function's start, of what keeps the value
-        /// (`call.callee@41`); see [`Role::slot_name`].
-        pub slots: Vec<String>,
+        /// The slot names of the values below the awaited value on the operand stack,
+        /// bottom first (D2721): the construct and the source offset, from the
+        /// function's start, of what keeps the value (`call.callee@41`).
+        pub stack: Vec<String>,
         /// Why the frame cannot be described here: the construct, or `None`.
         pub unsupported: Option<String>,
     }
@@ -302,7 +158,7 @@ mod maps {
     pub enum Place {
         Arg(u16),
         Local(u16),
-        Temp(u16),
+        Stack(u16),
     }
 
     /// What a named slot holds.
@@ -312,9 +168,9 @@ mod maps {
         Binding,
         /// A compiler-made local (`<state>`, `arguments`, `<fields 1>`, …).
         Hidden,
-        /// A temporary of a construct in flight: on the operand stack (by role) or in a
-        /// local of its own (D2732).
-        Temp(Option<Role>),
+        /// A temporary of a construct in flight: in a local of its own (D2732) or on
+        /// the operand stack.
+        Temp,
     }
 
     /// One slot of a suspended frame by name (D2721, D2731): a dump's `slots` key.
@@ -334,7 +190,7 @@ mod maps {
         /// `""`.
         pub fn construct(&self) -> &str {
             match self.holds {
-                Holds::Temp(_) => self.name.split('@').next().unwrap_or(""),
+                Holds::Temp => self.name.split('@').next().unwrap_or(""),
                 _ => "",
             }
         }
@@ -357,7 +213,7 @@ mod maps {
                 _ => None,
             });
             locals
-                .chain(self.slots.iter().map(String::as_str))
+                .chain(self.stack.iter().map(String::as_str))
                 .collect()
         }
 
@@ -382,7 +238,7 @@ mod maps {
                     }
                     Slot::Binding { name, .. } => Some((name.clone(), Holds::Binding)),
                     Slot::Hidden(name) => Some((name.clone(), Holds::Hidden)),
-                    Slot::Temp(name) => Some((name.clone(), Holds::Temp(None))),
+                    Slot::Temp(name) => Some((name.clone(), Holds::Temp)),
                     _ => None,
                 }
             };
@@ -407,11 +263,11 @@ mod maps {
                     });
                 }
             }
-            for (k, (name, role)) in self.slots.iter().zip(&self.operands).enumerate() {
+            for (k, name) in self.stack.iter().enumerate() {
                 out.push(NamedSlot {
                     name: name.clone(),
-                    place: Place::Temp(k as u16),
-                    holds: Holds::Temp(Some(*role)),
+                    place: Place::Stack(k as u16),
+                    holds: Holds::Temp,
                     boxed: false,
                 });
             }
@@ -437,8 +293,8 @@ mod maps {
 
     impl FunctionMap {
         /// The map as text, for the pin test and for reading: a header with every slot
-        /// that holds something at some site, then one line per site with its operands'
-        /// slot names, bottom first (D2721), and the slots that hold nothing there
+        /// that holds something at some site, then one line per site with its temporaries'
+        /// names (in locals, then on the stack bottom first, D2721), and the slots that hold nothing there
         /// (`out`).
         pub fn text(&self, src: &[u8]) -> String {
             let mut out = String::new();
@@ -470,7 +326,6 @@ mod maps {
                             Slot::Binding { name, scope } => alloc::format!("{name}@{scope}"),
                             Slot::Hidden(n) => n.clone(),
                             Slot::Argument(a) => alloc::format!("argument {a}"),
-                            Slot::Operand(r) => alloc::format!("{r}"),
                             Slot::Temp(_) | Slot::Nothing => return None,
                         };
                         Some(alloc::format!("{kind}{i} {text}"))
@@ -629,17 +484,15 @@ mod maps {
                     *a = Some(slot);
                 }
             }
-            let unsupported = match s.roles.iter().find_map(|r| match r.0 {
-                Role::Unsupported(c) => Some(c),
-                _ => None,
-            }) {
+            let unsupported = match s.unsupported {
                 Some(c) => Some(String::from(c)),
+                // (A compiler bug: a construct that keeps a value without naming it.)
                 None => match depth[k] {
-                    Some(d) if d as usize == s.roles.len() + 1 => None,
+                    Some(d) if d as usize == s.names.len() + 1 => None,
                     Some(d) => Some(alloc::format!(
-                        "{} operands, {} described",
+                        "{} operands, {} named",
                         d.saturating_sub(1),
-                        s.roles.len()
+                        s.names.len()
                     )),
                     None => Some(String::from("unknown operand depth")),
                 },
@@ -655,17 +508,12 @@ mod maps {
                     .collect(),
                 locals,
                 boxed,
-                operands: if unsupported.is_some() {
+                stack: if unsupported.is_some() {
                     Vec::new()
                 } else {
-                    s.roles.iter().map(|r| r.0).collect()
-                },
-                slots: if unsupported.is_some() {
-                    Vec::new()
-                } else {
-                    s.roles
+                    s.names
                         .iter()
-                        .map(|&(r, at)| r.slot_name(at.saturating_sub(base)))
+                        .map(|&(c, at)| alloc::format!("{c}@{}", at.saturating_sub(base)))
                         .collect()
                 },
                 unsupported,
@@ -690,29 +538,47 @@ mod maps {
 
 #[cfg(feature = "dump")]
 impl super::parser::Parser<'_, '_> {
-    /// The construct keeps values with roles `rs` on the stack (pushed in this order);
-    /// `at` is the source offset that names their slots (D2721, [`Role::slot_name`]).
+    /// The construct keeps values named `cs` on the stack (pushed in this order; every
+    /// construct has a `.`, so no name is a binding's `name@scope`); `at` is the source
+    /// offset that names their slots (D2721): for a list's element (an argument, an
+    /// array element, a template part) the element's own start, which stands for its
+    /// index, else the start of the construct that keeps it.
     #[inline]
-    pub(super) fn roles_push(&mut self, at: u32, rs: &[Role]) {
+    pub(super) fn names_push(&mut self, at: u32, cs: &[&'static str]) {
         if let Some(r) = &mut self.f.smap {
-            r.roles.extend(rs.iter().map(|&x| (x, at)));
+            r.names.extend(cs.iter().map(|&c| (c, at)));
         }
     }
 
     /// The construct consumed the top `n` values it kept.
     #[inline]
-    pub(super) fn roles_pop(&mut self, n: usize) {
+    pub(super) fn names_pop(&mut self, n: usize) {
         if let Some(r) = &mut self.f.smap {
-            let len = r.roles.len().saturating_sub(n);
-            r.roles.truncate(len);
+            let len = r.names.len().saturating_sub(n);
+            r.names.truncate(len);
         }
     }
 
-    /// Replaces the top `n` roles by `rs` (an `array_from` collapsing its elements).
+    /// Replaces the top `n` names by `cs` (an `array_from` collapsing its elements).
     #[inline]
-    pub(super) fn roles_replace(&mut self, n: usize, at: u32, rs: &[Role]) {
-        self.roles_pop(n);
-        self.roles_push(at, rs);
+    pub(super) fn names_replace(&mut self, n: usize, at: u32, cs: &[&'static str]) {
+        self.names_pop(n);
+        self.names_push(at, cs);
+    }
+
+    /// Suspensions are refused until `unsupported_end`: inside `construct`.
+    #[inline]
+    pub(super) fn unsupported_begin(&mut self, construct: &'static str) {
+        if let Some(r) = &mut self.f.smap {
+            r.unsupported.push(construct);
+        }
+    }
+
+    #[inline]
+    pub(super) fn unsupported_end(&mut self) {
+        if let Some(r) = &mut self.f.smap {
+            r.unsupported.pop();
+        }
     }
 
     /// A suspension point: the `await`/`yield` instruction is emitted next.
@@ -721,13 +587,15 @@ impl super::parser::Parser<'_, '_> {
         let p1 = self.f.code.pos();
         let scope = self.scope;
         if let Some(r) = &mut self.f.smap {
-            let roles = r.roles.clone();
+            let names = r.names.clone();
+            let unsupported = r.unsupported.last().copied();
             r.sites.push(maps::SiteRec {
                 kind,
                 pos,
                 p1,
                 scope,
-                roles,
+                names,
+                unsupported,
             });
         }
     }
@@ -736,11 +604,15 @@ impl super::parser::Parser<'_, '_> {
 #[cfg(not(feature = "dump"))]
 impl super::parser::Parser<'_, '_> {
     #[inline(always)]
-    pub(super) fn roles_push(&mut self, _at: u32, _rs: &[Role]) {}
+    pub(super) fn names_push(&mut self, _at: u32, _cs: &[&'static str]) {}
     #[inline(always)]
-    pub(super) fn roles_pop(&mut self, _n: usize) {}
+    pub(super) fn names_pop(&mut self, _n: usize) {}
     #[inline(always)]
-    pub(super) fn roles_replace(&mut self, _n: usize, _at: u32, _rs: &[Role]) {}
+    pub(super) fn names_replace(&mut self, _n: usize, _at: u32, _cs: &[&'static str]) {}
+    #[inline(always)]
+    pub(super) fn unsupported_begin(&mut self, _construct: &'static str) {}
+    #[inline(always)]
+    pub(super) fn unsupported_end(&mut self) {}
     #[inline(always)]
     pub(super) fn site(&mut self, _kind: SiteKind, _pos: u32) {}
 }

@@ -1,4 +1,4 @@
-//! Suspension maps (compiler/smap.rs, D2563): roles per construct.
+//! Suspension maps (compiler/smap.rs, D2563): the temporaries per construct.
 
 extern crate std;
 
@@ -9,9 +9,9 @@ use super::{CompileOptions, suspension_maps};
 use crate::bytecode::template::disasm_template;
 use crate::heap::Heap;
 
-/// The operand roles of each site of the first function with sites, as one line per
+/// The temporaries of each site by construct, as one line per
 /// site (`-` for none, `!construct` for an unsupported site).
-fn roles(src: &str) -> Vec<String> {
+fn constructs(src: &str) -> Vec<String> {
     let mut heap = Heap::new().unwrap();
     let opts = CompileOptions::async_body("t.js", &[]);
     let maps = suspension_maps(&mut heap, src.as_bytes(), &opts).unwrap();
@@ -21,7 +21,7 @@ fn roles(src: &str) -> Vec<String> {
             out.push(match &s.unsupported {
                 Some(u) => alloc::format!("{} !{u}", s.name),
                 None => {
-                    // Temporaries in locals by construct, then the stack's roles.
+                    // Temporaries in locals, then on the stack, by construct.
                     let mut r: Vec<String> = s
                         .locals
                         .iter()
@@ -30,7 +30,12 @@ fn roles(src: &str) -> Vec<String> {
                             _ => None,
                         })
                         .collect();
-                    r.extend(s.operands.iter().map(|r| alloc::format!("{r}")));
+                    r.extend(
+                        s.stack
+                            .iter()
+                            .filter_map(|n| n.split('@').next())
+                            .map(String::from),
+                    );
                     if r.is_empty() {
                         alloc::format!("{} -", s.name)
                     } else {
@@ -43,20 +48,20 @@ fn roles(src: &str) -> Vec<String> {
     out
 }
 
-/// `(source, the roles of each site)` for each construct that keeps operands.
+/// `(source, the temporaries of each site)` for each construct that keeps values.
 const CONSTRUCTS: &[(&str, &[&str])] = &[
     // Calls: callee and `this`, then the arguments so far.
     (
         "f(await a, await b);",
         &[
             "await#1 call.callee call.this",
-            "await#2 call.callee call.this call.arg[0]",
+            "await#2 call.callee call.this call.arg",
         ],
     ),
     (
         "o.m(a, await b).n(await c);",
         &[
-            "await#1 call.callee call.this call.arg[0]",
+            "await#1 call.callee call.this call.arg",
             "await#2 call.callee call.this",
         ],
     ),
@@ -69,7 +74,7 @@ const CONSTRUCTS: &[(&str, &[&str])] = &[
     ("(a?.b)(await x);", &["await#1 call.callee call.this"]),
     (
         "tag`a${x}b${await c}`;",
-        &["await#1 call.callee call.this call.arg[0] call.arg[1]"],
+        &["await#1 call.callee call.this call.arg call.arg"],
     ),
     (
         "await f(await g(await h()));",
@@ -79,7 +84,7 @@ const CONSTRUCTS: &[(&str, &[&str])] = &[
             "await#3 call.callee call.this call.callee call.this",
         ],
     ),
-    ("new X(a, await b);", &["await#1 new.callee new.arg[0]"]),
+    ("new X(a, await b);", &["await#1 new.callee new.arg"]),
     ("new X(...(await xs));", &["await#1 new.callee new.args"]),
     ("new (await X)();", &["await#1 -"]),
     ("import(a, await b);", &["await#1 import.specifier"]),
@@ -108,7 +113,7 @@ const CONSTRUCTS: &[(&str, &[&str])] = &[
     ("c ? await a : b;", &["await#1 -"]),
     ("(await a, await b);", &["await#1 -", "await#2 -"]),
     // Literals.
-    ("[a, await b];", &["await#1 array.element[0]"]),
+    ("[a, await b];", &["await#1 array.element"]),
     ("[, await b];", &["await#1 array.literal"]),
     ("[...xs, await y];", &["await#1 array.literal"]),
     (
@@ -119,17 +124,17 @@ const CONSTRUCTS: &[(&str, &[&str])] = &[
     ("({ a, ...(await o) });", &["await#1 object.literal"]),
     (
         "x = { y: [1, await z] };",
-        &["await#1 object.literal array.element[0]"],
+        &["await#1 object.literal array.element"],
     ),
     (
         "`${a}: ${await b}`;",
-        &["await#1 template.part[0] template.part[1]"],
+        &["await#1 template.part template.part"],
     ),
     ("`${await a}`;", &["await#1 -"]),
     // Generators.
     (
         "function* h() { const v = yield 1; yield [v, yield 2]; }",
-        &["yield#1 -", "yield#2 -", "yield#3 array.element[0]"],
+        &["yield#1 -", "yield#2 -", "yield#3 array.element"],
     ),
     (
         "async function* g() { f(yield x); }",
@@ -145,7 +150,7 @@ const CONSTRUCTS: &[(&str, &[&str])] = &[
     ),
 ];
 
-/// The loops whose iterator records stay on the stack.
+/// The loops' iterator records.
 const LOOPS: &[(&str, &[&str])] = &[
     (
         "for (const x of xs) await x;",
@@ -155,7 +160,7 @@ const LOOPS: &[(&str, &[&str])] = &[
     (
         "for await (const x of xs) await x;",
         &[
-            "for-await.close#1 exception",
+            "for-await.close#1 for-await.exception",
             "for-await.next#1 for-await.iterator for-await.next",
             "await#1 for-await.iterator for-await.next",
         ],
@@ -227,7 +232,7 @@ const STATEMENTS: &[(&str, &[&str])] = &[
     (
         "for await (const x of xs) { if (x) return 1; }",
         &[
-            "for-await.close#1 exception",
+            "for-await.close#1 for-await.exception",
             "for-await.next#1 for-await.iterator for-await.next",
             "for-await.close#2 completion.value",
         ],
@@ -296,7 +301,7 @@ const UNSUPPORTED: &[(&str, &[&str])] = &[("class C { [await k]() {} }", &["awai
 fn check(table: &[(&str, &[&str])]) {
     let mut bad = Vec::new();
     for (src, want) in table {
-        let got = roles(src);
+        let got = constructs(src);
         if got.iter().map(String::as_str).collect::<Vec<_>>() != *want {
             bad.push(alloc::format!("{src}\n  want {want:?}\n  got  {got:?}"));
         }
@@ -305,7 +310,7 @@ fn check(table: &[(&str, &[&str])]) {
 }
 
 #[test]
-fn operand_roles_per_construct() {
+fn temporaries_per_construct() {
     check(CONSTRUCTS);
 }
 
@@ -410,9 +415,8 @@ fn slot_names_are_unique_per_site() {
             let opts = CompileOptions::async_body("t.js", &[]);
             for m in suspension_maps(&mut heap, src.as_bytes(), &opts).unwrap() {
                 for s in &m.sites {
-                    assert_eq!(s.slots.len(), s.operands.len());
-                    for (i, n) in s.slots.iter().enumerate() {
-                        assert!(!s.slots[..i].contains(n), "{src}: {} {n} twice", s.name);
+                    for (i, n) in s.stack.iter().enumerate() {
+                        assert!(!s.stack[..i].contains(n), "{src}: {} {n} twice", s.name);
                     }
                 }
             }
@@ -420,24 +424,19 @@ fn slot_names_are_unique_per_site() {
     }
 }
 
-/// The roles come from where the compiler emits the construct: a lowering that pushed
-/// `this` under the callee gives another map, which the pin test would show.
+/// The stack's names come from where the compiler emits the construct: a lowering that
+/// pushed `this` under the callee gives another map, which the pin test would show.
 #[test]
 fn a_callee_this_swap_changes_the_map() {
     let src = "f(await x);";
-    assert_eq!(roles(src), ["await#1 call.callee call.this"]);
+    assert_eq!(constructs(src), ["await#1 call.callee call.this"]);
     let mut heap = Heap::new().unwrap();
     let opts = CompileOptions::async_body("t.js", &[]);
     let (_, maps) = super::suspension_maps_with(&mut heap, src.as_bytes(), &opts, |p| {
         p.test_swap_call = true;
     })
     .unwrap();
-    let ops: Vec<String> = maps[0].sites[0]
-        .operands
-        .iter()
-        .map(|r| alloc::format!("{r}"))
-        .collect();
-    assert_eq!(ops, ["call.this", "call.callee"]);
+    assert_eq!(maps[0].sites[0].stack, ["call.this@0", "call.callee@0"]);
 }
 
 /// Every slot: bindings by name and declaring scope (nothing outside it), hidden
@@ -564,8 +563,8 @@ fn pinned_maps() {
                 out.push_str(&m.text(src.as_bytes()));
                 for s in &m.sites {
                     sites += 1;
-                    for (i, n) in s.slots.iter().enumerate() {
-                        if s.slots[..i].contains(n) {
+                    for (i, n) in s.stack.iter().enumerate() {
+                        if s.stack[..i].contains(n) {
                             failed.push(alloc::format!("{name}: {} names {n} twice", s.name));
                         }
                     }
@@ -573,7 +572,7 @@ fn pinned_maps() {
                     match &s.unsupported {
                         Some(u) => *unsupported.entry(u.clone()).or_default() += 1,
                         None => {
-                            // Temporaries in locals by construct, then the stack's roles.
+                            // Temporaries in locals, then on the stack, by construct.
                             let mut seq: Vec<String> = s
                                 .locals
                                 .iter()
@@ -582,7 +581,12 @@ fn pinned_maps() {
                                     _ => None,
                                 })
                                 .collect();
-                            seq.extend(s.operands.iter().map(|r| alloc::format!("{r}")));
+                            seq.extend(
+                                s.stack
+                                    .iter()
+                                    .filter_map(|n| n.split('@').next())
+                                    .map(String::from),
+                            );
                             let seq = if seq.is_empty() {
                                 String::from("-")
                             } else {
@@ -613,7 +617,7 @@ fn pinned_maps() {
     for (k, n) in &kinds {
         summary.push_str(&alloc::format!("{n:5} {k}\n"));
     }
-    summary.push_str("\n## described, by temporaries (in locals, then the stack's roles)\n");
+    summary.push_str("\n## described, by temporaries (in locals, then on the stack)\n");
     let mut seqs: Vec<_> = sequences.iter().collect();
     seqs.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
     for (s, n) in seqs {

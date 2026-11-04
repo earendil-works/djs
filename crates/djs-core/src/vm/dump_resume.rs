@@ -198,13 +198,13 @@ impl Vm {
         let g = suspend::new_activation(&mut self.heap, f, kind).map_err(oom)?;
         let argc = call_args.len();
         let nargs = argc.max(params);
-        let n_temps = site.operands.len();
+        let n_stack = site.stack.len();
         // The frame, written by place: callee, `this`, the arguments, the header, the
         // locals, the temporaries. What no slot names keeps its default: the call's
         // arguments, `undefined`.
         let hp_off = 2 + nargs;
         let lp = hp_off + frame::HEADER as usize;
-        let mut frame = alloc::vec![Value::UNDEFINED; lp + n_locals + n_temps];
+        let mut frame = alloc::vec![Value::UNDEFINED; lp + n_locals + n_stack];
         frame[0] = Value::object(f);
         frame[1] = this;
         for (i, v) in frame[2..hp_off].iter_mut().enumerate() {
@@ -252,13 +252,13 @@ impl Vm {
             let index = match slot.place {
                 Place::Arg(i) => 2 + usize::from(i),
                 Place::Local(i) => lp + usize::from(i),
-                Place::Temp(k) => lp + n_locals + usize::from(k),
+                Place::Stack(k) => lp + n_locals + usize::from(k),
             };
             let v = match slot.holds {
                 Holds::Binding | Holds::Hidden => {
                     slot_value(&mut self.heap, v, slot.boxed, &slot.name)?
                 }
-                Holds::Temp(_) => v,
+                Holds::Temp => v,
             };
             frame[index] = v;
         }

@@ -226,8 +226,8 @@ fn plan_example() {
 }
 
 #[test]
-fn every_operand_role() {
-    let l = fixture("roles", 1);
+fn every_operand_construct() {
+    let l = fixture("operands", 1);
     assert_eq!(l.calls.len(), 17);
 }
 
@@ -519,7 +519,7 @@ fn exporter_round_trips_at_every_idle_point() {
     let mut failed = Vec::new();
     for name in [
         "plan",
-        "roles",
+        "operands",
         "generator",
         "asyncgen",
         "combinators",

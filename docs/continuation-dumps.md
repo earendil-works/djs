@@ -369,22 +369,25 @@ time, nothing in the heap):
 - the site: `await#N`/`yield#N` in the function's text order, compiler-made sites (`for
   await`, async generator `yield`/`return`, `await using`) with a kind;
 - the bindings live at the site: name and declaring scope, hidden locals by stable name;
-- the operand roles below the awaited value, from the vocabulary of
-  docs/portable-snapshots.md §3.5 (`call.callee`, `call.this`, `call.arg[i]`,
-  `object.literal`, `object.key`, `binary.left`, `assign.*`, `array.literal`,
-  `template.prefix`, `new.callee`), produced by the compiler where it emits the
-  construct, not inferred;
-- the enclosing loops and their iterator records; `switch` discriminants, a `finally`'s
-  pending completion, destructuring under way, `using` stacks, `yield*` delegation as
-  they are added.
+- the temporaries the frame keeps there, by slot name (below): construct temporaries in
+  locals of their own (loop records, switch discriminants, `using` records,
+  destructuring state, pending completions, a `for await`'s exception) and the values an
+  expression keeps on the operand stack below the awaited value (`call.callee`,
+  `call.this`, `call.arg`, `binary.left`, `object.literal`, …), named by the compiler
+  where it emits the construct, not inferred.
 
-As built (0169, D2570), djs's lowering keeps a few values the vocabulary above does not
-name: template literal parts until they are joined (`template.part[i]`, no
-`template.prefix`), up to 256 leading array elements (`array.element[i]`, then
-`array.literal`), the object of `o[await k]` (`member.object`), and the arguments of `new`,
-`super(…)` and spreads (`new.arg[i]`, `super.arg[i]`, `call.args`). Compiler-made sites are
-named `yield.await`, `yield.return`, `return.await`, `for-await.next`, `for-await.close`,
-`await-using` and `yield*`.
+The maps began (0169, D2570) with operand *roles*, a vocabulary after
+docs/portable-snapshots.md §3.5 with indexes (`call.arg[2]`) and a `Role` enum in the
+compiler. Since 0194 (D2734) there is no role vocabulary: the parser pushes the slot
+names' constructs (`"call.arg"`) with the offsets that name them, the site keeps their
+names (`Site::stack`, bottom first), and a value's index in a list is its offset.
+Resolution still checks that the names count the operand stack's values at each site
+(a mismatch would be a compiler bug and makes the site unsupported, not misnamed). The
+one construct whose sites are refused on purpose is a class definition (its heritage,
+computed keys and decorators): its half-made class is no value a dump can write, since
+a dump writes classes by their text. Compiler-made sites are named `yield.await`,
+`yield.return`, `return.await`, `for-await.next`, `for-await.close`, `await-using` and
+`yield*`.
 
 The pin test commits the maps of every await in the corpus and the e2e async tests, like
 the bytecode snapshot tests. Accepting a diff means accepting that dumps stopped at those
@@ -422,10 +425,9 @@ slots at the site, whatever its operand stack or local layout. The names:
     (`switch.discriminant@0`), the region's first bound name of `using` declarations
     (`using.record@30`), the statement whose completion is pending (`try`, `for`, the
     `using` list's first bound name: `completion.kind@23`, `completion.value@23`).
-  - The construct is the operand role without its index (`call.arg[2]` →
-    `call.arg`); the exception a `for await` rethrows after closing its iterator is
-    `for-await.exception` (every construct has a `.` or a `-`, so no temporary's name is
-    a binding's `name@scope`, D2731). The value a `case` test compares with is the left
+  - The exception a `for await` rethrows after closing its iterator is
+    `for-await.exception`, named by the `for` (every construct has a `.` or a `-`, so no
+    temporary's name is a binding's `name@scope`, D2731). The value a `case` test compares with is the left
     side of its `===`, named by the `case` (`binary.left@28`).
 
 No two slots of a site share a name: offsets of nested constructs differ, and two
@@ -434,8 +436,8 @@ corpus. A name changes when the source text before the construct changes, which 
 never does: it carries the function's verbatim text. Spans are byte offsets of the
 compiled text, like a site's `@pos`.
 
-The suspension maps report each site's temporaries by name (`Site::slots`, bottom first,
-beside the roles in `Site::operands`), and the pins list them per site
+The suspension maps report each site's temporaries by name (`Site::temporaries`: those in
+locals, then those on the operand stack bottom first), and the pins list them per site
 (`await#2 @212 (4:13) pc 87: call.callee@205 call.this@205`), so a compiler change that
 keeps a different value across an await shows as a renamed or added slot. Until step 3
 of the migration (0191) the dump format wrote `operands` by role; since then it writes
@@ -450,7 +452,10 @@ own, construct temporaries with the same names: a loop's iterator record
 state only where the code still reads it: the map finds that by a liveness pass over the
 function's code (a loop's iterator is not a slot at an await in the loop's right side,
 a pattern's source not after its last property was read), so a dump never carries a
-stale value. Expression temporaries stay on the operand stack.
+stale value. Expression temporaries stay on the operand stack. Since 0194 (D2734) so
+does a `for await`'s pending exception while its iterator's close is awaited
+(`for-await.exception@S`, a local), so statements keep nothing on the operand stack at
+any site.
 
 Where the values are in memory is this build's business: a suspended frame is one array
 (callee, `this`, arguments, header, locals, and the k values the code keeps past the

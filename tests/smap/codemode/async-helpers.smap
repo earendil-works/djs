@@ -1,12 +1,12 @@
 function <anonymous> @1..1424
   arg0 argument 0, arg1 argument 1
-  loc0 <state>, loc1 tools@0, loc2 console@0, loc3 fetchAll@0, loc4 withRetry@0, loc5 files@0, loc6 ok@0, loc8 chunks@0, loc9 results@0, loc10 seen@0, loc11 batch@1210, loc16 settled@0
+  loc0 <state>, loc1 tools@0, loc2 console@0, loc3 fetchAll@0, loc4 withRetry@0, loc5 files@0, loc6 ok@0, loc8 chunks@0, loc9 results@0, loc10 seen@0, loc11 batch@1210, loc17 settled@0
   await#1 @578 (23:15) pc 56: - (out: loc11)
   await#2 @689 (25:12) pc 107: - (out: loc11)
   await#3 @814 (28:3) pc 136: - (out: loc11)
-  for-await.close#1 @1193 (41:1) pc 212: for-await.exception@1193
-  for-await.next#1 @1193 (41:1) pc 254: for-await.iterator@1193 for-await.next@1193
-  await#4 @1308 (43:17) pc 335: - (out: loc11)
+  for-await.close#1 @1193 (41:1) pc 214: for-await.exception@1193
+  for-await.next#1 @1193 (41:1) pc 258: for-await.iterator@1193 for-await.next@1193
+  await#4 @1308 (43:17) pc 339: - (out: loc11)
 function fetchAll @141..319
   arg0 paths@0
   loc0 <state>, loc1 out@0, loc2 path@64, loc7 r@85

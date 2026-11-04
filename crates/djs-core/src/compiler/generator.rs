@@ -78,7 +78,7 @@ impl Parser<'_, '_> {
     pub(super) fn emit_return_from_expr(&mut self) {
         // Close the open pattern iterators, innermost first: each throws `x` to a handler
         // that cuts the stack down to its iterator. (No suspension is on this path: the
-        // role stack still describes the enclosing expression's operands.)
+        // name stack still describes the enclosing expression's operands.)
         let open: alloc::vec::Vec<OpenIter> = self.open_iters.iter().rev().copied().collect();
         for OpenIter { base, it } in open {
             let (l_throw, l_end, l_close) = (self.new_label(), self.new_label(), self.new_label());

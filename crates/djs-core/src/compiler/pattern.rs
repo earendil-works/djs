@@ -33,7 +33,6 @@ use super::expr::{Expr, LValue};
 use super::func::{BODY_SCOPE, FuncKind, HandlerLabels, VarKind};
 use super::parser::{Checkpoint, Parser, syntax};
 use super::scan::Follow;
-use super::smap::Role;
 use crate::bytecode::Label;
 use crate::bytecode::intrinsics::intrinsic_id;
 use crate::heap::{Atom, atoms};
@@ -75,10 +74,10 @@ impl Target<'_> {
         }
     }
 
-    /// Their roles (suspension maps).
-    fn roles(&self) -> &'static [Role] {
+    /// Their slot names' constructs (suspension maps).
+    fn stack_names(&self) -> &'static [&'static str] {
         match self {
-            Target::Ref(lv) => lv.roles(),
+            Target::Ref(lv) => lv.stack_names(),
             _ => &[],
         }
     }
@@ -152,7 +151,7 @@ impl<'a> Parser<'a, '_> {
     pub(super) fn parse_pattern(&mut self, b: Binding) -> PResult<()> {
         let w = 1 + super::parser::PATTERN_WEIGHT;
         self.enter_n(w)?;
-        // (Each kind pops the roles it pushed; an error ends the compile.)
+        // (Each kind pops the names it pushed; an error ends the compile.)
         let r = if self.is(TokenKind::LBrace) {
             self.parse_object_pattern(b)
         } else {
@@ -320,7 +319,7 @@ impl<'a> Parser<'a, '_> {
                     }
                     self.parse_binding_target(b)?
                 };
-                self.roles_push(t_at, t.roles());
+                self.names_push(t_at, t.stack_names());
                 self.temp_get(src);
                 if let Some(e) = excl {
                     self.temp_get(e);
@@ -329,7 +328,7 @@ impl<'a> Parser<'a, '_> {
                 self.code()
                     .call_intrinsic(intrinsic("CopyDataPropertiesExcluding"), 2);
                 self.store_target(b, t)?;
-                self.roles_pop(t.roles().len());
+                self.names_pop(t.stack_names().len());
                 if !self.is(TokenKind::RBrace) {
                     return syntax(self.tok.start, "assignment rest property must be last");
                 }
@@ -383,7 +382,7 @@ impl<'a> Parser<'a, '_> {
                             self.code().array_push();
                             self.code().drop();
                         }
-                        self.roles_push(key_tok.start, &[Role::PatternKey]);
+                        self.names_push(key_tok.start, &["pattern.key"]);
                     }
                 }
                 if !self.is(TokenKind::Colon) {
@@ -394,7 +393,7 @@ impl<'a> Parser<'a, '_> {
                 (key, self.parse_target(b)?)
             };
             let r = t.refs();
-            self.roles_push(t_at, t.roles());
+            self.names_push(t_at, t.stack_names());
             match key {
                 Some(a) => {
                     self.temp_get(src);
@@ -411,10 +410,10 @@ impl<'a> Parser<'a, '_> {
             let name = self.target_name(&t);
             self.parse_pattern_default(name)?;
             self.store_target(b, t)?;
-            self.roles_pop(t.roles().len());
+            self.names_pop(t.stack_names().len());
             if key.is_none() {
                 self.code().drop();
-                self.roles_pop(1);
+                self.names_pop(1);
             }
             if !self.eat(TokenKind::Comma)? {
                 break;
@@ -475,26 +474,26 @@ impl<'a> Parser<'a, '_> {
                         return syntax(self.tok.start, "rest element must be the last one");
                     }
                     may_throw |= matches!(t, Target::Pattern(_));
-                    self.roles_push(t_at, t.roles());
+                    self.names_push(t_at, t.stack_names());
                     self.region_end(&mut regions);
                     self.emit_iter_rest((it, next), first, open.start);
                     self.region_start(&mut regions);
                     self.store_target(b, t)?;
-                    self.roles_pop(t.roles().len());
+                    self.names_pop(t.stack_names().len());
                     break;
                 }
                 _ => {
                     let t_at = self.tok.start;
                     let t = self.parse_target(b)?;
                     may_throw |= matches!(t, Target::Pattern(_));
-                    self.roles_push(t_at, t.roles());
+                    self.names_push(t_at, t.stack_names());
                     self.region_end(&mut regions);
                     self.emit_iter_step((it, next), first, open.start);
                     self.region_start(&mut regions);
                     let name = self.target_name(&t);
                     may_throw |= self.parse_pattern_default(name)?;
                     self.store_target(b, t)?;
-                    self.roles_pop(t.roles().len());
+                    self.names_pop(t.stack_names().len());
                     first = false;
                 }
             }

@@ -51,7 +51,7 @@ use super::func::{HandlerLabels, ScopeKind, VarKind};
 use super::parser::{BlockKind, Checkpoint, Parser, syntax};
 use super::pattern::Binding;
 use super::scan::Follow;
-use super::smap::{Role, SiteKind};
+use super::smap::SiteKind;
 use crate::bytecode::Label;
 use crate::bytecode::intrinsics::intrinsic_id;
 use crate::heap::{Atom, atoms};
@@ -292,21 +292,25 @@ impl<'a> Parser<'a, '_> {
             // `exc` -> `exc`, after closing the iterator (errors from `return()` lose to
             // the body's exception).
             self.place(l_throw);
-            self.temp_get(it);
             if is_await {
+                // The body's exception waits in a temporary of its own while the close
+                // is awaited, so the suspended frame keeps nothing on its stack.
+                let exc = self.temp("for-await.exception", for_pos);
+                self.temp_put(exc);
+                self.temp_get(it);
                 // A promise that always fulfills (errors from `return()` are dropped).
                 let close = intrinsic_id("AsyncIteratorCloseThrow").expect("intrinsic");
                 self.code().call_intrinsic(close, 1);
-                // In the close handler: the body's exception under the promise.
-                self.roles_push(for_pos, &[Role::Exception]);
                 self.site(SiteKind::ForAwaitClose, for_pos);
-                self.roles_pop(1);
                 self.code().await_(0);
+                self.code().drop();
+                self.temp_get(exc);
             } else {
+                self.temp_get(it);
                 let close = intrinsic_id("IteratorCloseThrow").expect("%IteratorCloseThrow");
                 self.code().call_intrinsic(close, 1);
+                self.code().drop();
             }
-            self.code().drop();
             self.code().throw();
             match iter_env.take() {
                 Some(env) => self.blocks.push_out(env),
