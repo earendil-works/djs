@@ -1,8 +1,8 @@
 # Suspension map coverage (compiler/smap_tests.rs)
-sites 1081
+sites 1099
 
 ## by kind
-  974 await
+  992 await
    11 await-using
    10 for-await.close
     8 for-await.next
@@ -14,35 +14,41 @@ sites 1081
    11 yield.return
 
 ## described, by temporaries (in locals, then on the stack)
-  720 -
-  208 call.callee call.this
+  724 -
+  210 call.callee call.this
    20 for-of.iterator for-of.next
    18 call.callee call.this object.literal
    17 yield*.iterator yield*.next
    13 for-of.iterator for-of.next call.callee call.this
    10 using.record completion.kind completion.value
     9 for-of.iterator for-of.next call.callee call.this object.literal
+    8 call.callee call.this call.callee call.this
     8 for-await.exception
     8 using.record
-    7 call.callee call.this call.callee call.this
     7 for-await.iterator for-await.next
     5 object.literal
-    3 binary.left
+    4 binary.left
+    3 call.callee call.this call.arg call.arg binary.left
     3 for-of.iterator for-of.next call.callee call.this binary.left
     3 object.literal array.element
     2 array.element
+    2 assign.object
     2 assign.object assign.key
     2 call.callee call.this call.arg
+    2 for-of.iterator for-of.next assign.old
     2 object.literal object.literal array.element object.literal
     1 array.literal
+    1 assign.object binary.left
+    1 assign.object call.callee call.this
     1 assign.old
     1 binary.left array.element
     1 call.callee call.this call.arg call.callee call.this
     1 call.callee call.this call.arg call.callee call.this call.arg
+    1 call.callee call.this member.object
+    1 call.callee call.this template.part template.part
     1 call.callee call.this template.part template.part template.part
     1 for-await.iterator
     1 for-of.iterator
-    1 for-of.iterator for-of.next assign.old
     1 for-of.iterator for-of.next completion.kind completion.value call.callee call.this call.arg
     1 for-of.iterator for-of.next using.record completion.kind completion.value
     1 object.literal array.element array.element
@@ -50,7 +56,7 @@ sites 1081
     1 pattern.iterator
 
 ## paths (D2850)
- 1081 complete
+ 1099 complete
 
 ## path gaps, by the part they are in
 

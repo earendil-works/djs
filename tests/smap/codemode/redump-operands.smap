@@ -1,0 +1,73 @@
+function <anonymous> @1..726
+  arg0 argument 0, arg1 console@0
+  loc0 <state>, loc1 tools@0, loc2 x@0, loc3 o@0, loc4 fs@0, loc5 f@0
+  node 0 Body @0..725: Params 6..22 Stmt 189..245 Stmt 246..259 Stmt 260..312 Stmt 313..408 Stmt 409..474 Stmt 475..503 Stmt 504..562 Stmt 563..665 Stmt 666..704 Stmt 705..722 | Param tools@0#0 Param console@0#0 Const x@0#1 Const o@0#2 Const fs@0#6 Const f@0#8
+  node 1 Decl(Const) @189..245: Target 195..196 Init 199..244
+  node 2 Await @200..219: Operand 206..219
+  node 3 Binary @199..244: Left 199..220 Op 221..222 Right 223..244
+  node 4 Await @224..243: Operand 230..243
+  node 5 Expr @260..312: Operand 260..311
+  node 6 Assign @260..311: Object 260..261 Property 262..263 Op 264..265 Right 266..311
+  node 7 Await @267..286: Operand 273..286
+  node 8 Binary @266..311: Left 266..287 Op 288..289 Right 290..311
+  node 9 Await @291..310: Operand 297..310
+  node 10 Expr @313..408: Operand 313..407
+  node 11 Call @313..407: Callee 313..324 Open 324..325 Arg 325..326 Arg 328..331 Arg 333..406
+  node 12 Binary @333..358: Left 333..334 Op 335..336 Right 337..358
+  node 13 Await @338..357: Operand 344..357
+  node 14 Binary @333..382: Left 333..358 Op 359..360 Right 361..382
+  node 15 Await @362..381: Operand 368..381
+  node 16 Binary @333..406: Left 333..382 Op 383..384 Right 385..406
+  node 17 Await @386..405: Operand 392..405
+  node 18 Expr @409..474: Operand 409..473
+  node 19 Call @409..473: Callee 409..420 Open 420..421 Arg 421..472
+  node 20 Template @421..472: Quasi 421..424 Subst 424..445 Quasi 445..449 Subst 449..470 Quasi 470..472
+  node 21 Await @424..445: Operand 430..445
+  node 22 Await @449..470: Operand 455..470
+  node 23 Expr @504..562: Operand 504..561
+  node 24 Call @504..561: Callee 504..515 Open 515..516 Arg 516..560
+  node 25 Member[] @516..539: Object 516..518 Property 518..539
+  node 26 Await @519..538: Operand 525..538
+  node 27 Call @516..560: Callee 516..539 Open 539..540 Arg 540..559
+  node 28 Await @540..559: Operand 546..559
+  node 29 Expr @666..704: Operand 666..703
+  node 30 Assign @666..703: Object 666..667 Property 667..672 Op 673..674 Right 675..703
+  node 31 Await @675..703: Operand 681..703
+  node 32 Call @681..703: Callee 681..682 Open 682..683 Arg 683..702
+  node 33 Await @683..702: Operand 689..702
+  await#1 @200 (3:12) pc 22: -
+    path 0.1 1.1 3.0 2
+  await#2 @224 (3:36) pc 37: binary.left@199
+    path 0.1 1.1 3.2 4
+  await#3 @267 (5:8) pc 56: assign.object@260
+    path 0.3 5.0 6.3 8.0 7
+  await#4 @291 (5:32) pc 72: assign.object@260 binary.left@266
+    path 0.3 5.0 6.3 8.2 9
+  await#5 @338 (6:26) pc 113: call.callee@313 call.this@313 call.arg@325 call.arg@328 binary.left@333
+    path 0.4 10.0 11.4 16.0 14.0 12.2 13
+  await#6 @362 (6:50) pc 129: call.callee@313 call.this@313 call.arg@325 call.arg@328 binary.left@333
+    path 0.4 10.0 11.4 16.0 14.2 15
+  await#7 @386 (6:74) pc 145: call.callee@313 call.this@313 call.arg@325 call.arg@328 binary.left@333
+    path 0.4 10.0 11.4 16.2 17
+  await#8 @424 (7:16) pc 172: call.callee@409 call.this@409
+    path 0.5 18.0 19.2 20.1 21
+  await#9 @449 (7:41) pc 191: call.callee@409 call.this@409 template.part@424 template.part@445
+    path 0.5 18.0 19.2 20.3 22
+  await#10 @519 (9:16) pc 232: call.callee@504 call.this@504 member.object@516
+    path 0.7 23.0 24.2 27.0 25.1 26
+  await#11 @540 (9:37) pc 248: call.callee@504 call.this@504 call.callee@516 call.this@516
+    path 0.7 23.0 24.2 27.2 28
+  await#12 @675 (11:10) pc 281: assign.object@666
+    path 0.9 29.0 30.3 31
+  await#13 @683 (11:18) pc 277: assign.object@666 call.callee@681 call.this@681
+    path 0.9 29.0 30.3 31.0 32.2 33
+function f @574..665
+  arg0 v@0
+  loc0 <state>, loc1 s@0, loc2 i@37
+  node 0 Body @0..91: Params 6..9 Stmt 15..25 Stmt 26..75 Stmt 76..89 | Param v@0#0 Let s@0#1
+  node 1 ForOf @26..75: Head 31..38 Iterable 42..48 Body 50..75 | Const i@37#0
+  node 2 Expr @50..75: Operand 50..74
+  node 3 Assign @50..74: Left 50..51 Op 52..54 Right 55..74
+  node 4 Await @55..74: Operand 61..74
+  await#1 @55 (10:66) pc 60: for-of.iterator@26 for-of.next@26 assign.old@50
+    path 0.2 1.2 2.0 3.2 4
