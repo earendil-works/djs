@@ -86,6 +86,9 @@ pub struct DumpOptions<'a> {
     /// the fourth argument of the call's `$dump.pending`, and given back by the loader
     /// (`OpenCall::state`). A call without an entry is written without one.
     pub call_states: &'a [(u32, &'a str)],
+    /// Write a plain dump (format 3, D2830): every suspended activation a continuation
+    /// function, a Script that runs given only the host's functions (dump_plain.rs).
+    pub plain: bool,
 }
 
 fn no_host_fn_name(_: u32) -> Option<String> {
@@ -100,6 +103,7 @@ impl Default for DumpOptions<'_> {
             host_fn_name: &no_host_fn_name,
             handles: &[],
             call_states: &[],
+            plain: false,
         }
     }
 }
@@ -443,6 +447,9 @@ const NO_FLIGHT: usize = usize::MAX;
 #[path = "dump_flight.rs"]
 mod flight;
 
+#[path = "dump_plain.rs"]
+mod plain;
+
 const RESERVED: &[&str] = &[
     "break",
     "case",
@@ -775,6 +782,8 @@ struct Dumper<'a> {
     data_depth: u32,
     /// Whether the text uses the `$dump` namespace.
     ns: bool,
+    /// Writing a plain dump: what the plain writer needs besides the lines.
+    pl: Option<plain::Ir>,
     next: u32,
     depth: u32,
     visited: usize,
@@ -825,6 +834,7 @@ impl<'a> Dumper<'a> {
             member_texts: Vec::new(),
             data_depth: 0,
             ns: false,
+            pl: opts.plain.then(plain::Ir::default),
             next: 0,
             depth: 0,
             visited: 0,
@@ -1049,9 +1059,20 @@ impl<'a> Dumper<'a> {
         if b.named == Named::Path {
             return b.path.clone();
         }
-        let e = cat!("$dump.builtin(", quote(&b.path), ")");
         self.ns = true;
-        e
+        if let Some(pl) = &mut self.pl {
+            // Captured at the top of a plain dump, before user code runs.
+            let path = b.path.clone();
+            let k = match pl.builtins.iter().position(|p| *p == path) {
+                Some(k) => k,
+                None => {
+                    pl.builtins.push_out(path);
+                    pl.builtins.len() - 1
+                }
+            };
+            return cat!("$dump.b", k);
+        }
+        cat!("$dump.builtin(", quote(&b.path), ")")
     }
 
     // ---------------------------------------------------------------- discovery
@@ -2058,6 +2079,9 @@ impl<'a> Dumper<'a> {
         // `Math.random`'s state: the resumed run continues the sequence (D2624).
         let (lo, hi) = crate::builtins::number::random_state(self.h);
         cat_to!(&mut s, "$dump.random(", lo, ", ", hi, ");\n");
+        if let Some(pl) = &mut self.pl {
+            pl.seed = (lo, hi);
+        }
         for l in &self.out {
             cat_to!(&mut s, l, '\n');
         }
@@ -2411,6 +2435,12 @@ impl<'a> Dumper<'a> {
         self.roots[r].state = State::Done;
     }
 
+    /// A frame shares variables of scope group `g`: a plain dump makes its closures in
+    /// continuations.
+    fn merged(&self, g: usize) -> bool {
+        self.groups[g].boxes.iter().any(|&b| self.nodes[b].frame_box)
+    }
+
     fn node_of(&self, v: Value) -> Option<usize> {
         match self.cell(cell_of(v)?)? {
             (NODE, n) => Some(n),
@@ -2488,6 +2518,18 @@ impl<'a> Dumper<'a> {
         }
         if self.nodes[n].fl != NO_FLIGHT {
             return self.flight_expr(n);
+        }
+        let g = self.nodes[n].group;
+        if self.pl.is_some()
+            && self.data_depth > 0
+            && g != usize::MAX
+            && self.merged(g)
+            && self.nodes[n].member.is_none()
+        {
+            // A plain dump makes it inside a continuation, which may need this data
+            // first: the data gets it by a patch.
+            self.emit_group(g);
+            return String::new();
         }
         match self.nodes[n].state {
             State::Done => return self.nodes[n].loc.clone(),
@@ -2858,6 +2900,23 @@ impl<'a> Dumper<'a> {
             classes.push_out(pending.remove(ready));
         }
         let mut locals: Vec<String> = alloc::vec![String::new(); closures.len()];
+        // What a plain dump needs of the factory, by scope.
+        let mut rec: Vec<plain::Scope> = parent
+            .iter()
+            .map(|&p| plain::Scope {
+                parent: p,
+                other: Vec::new(),
+                vars: Vec::new(),
+                props: Vec::new(),
+            })
+            .collect();
+        let caps_of = |d: &Self, c: usize| -> Vec<usize> {
+            boxes
+                .iter()
+                .copied()
+                .filter(|b| d.nodes[c].edges.contains(b))
+                .collect()
+        };
         for &j in &classes {
             let c = closures[j];
             if fn_scope[j] != 0 {
@@ -2877,6 +2936,7 @@ impl<'a> Dumper<'a> {
                 }
             };
             self.class_locals.push_out((c, locals[j].clone()));
+            rec[0].other.push_out(line.clone());
             // Only the first line is indented: the rest belongs to a function's text,
             // which must stay as it was.
             cat_to!(&mut text, "  ", line, '\n');
@@ -2909,10 +2969,19 @@ impl<'a> Dumper<'a> {
                 }
                 let name = &box_names[bi];
                 let inner = box_value(self, b);
+                let cell = self.nodes[b].frame_box.then(|| cat!("$c", b));
                 if inner.is_uninitialized() {
                     // In its TDZ: declared after the factory's `return`, so never
                     // initialized.
                     tdz.push_out(cat!("let ", name, ";"));
+                    rec[s].vars.push_out(plain::Var {
+                        name: name.clone(),
+                        line: String::new(),
+                        init: None,
+                        tdz: true,
+                        boxn: b,
+                        cell,
+                    });
                     continue;
                 }
                 let c = self.node_of(inner);
@@ -2954,6 +3023,24 @@ impl<'a> Dumper<'a> {
                         }
                     }
                 };
+                rec[s].vars.push_out(plain::Var {
+                    name: name.clone(),
+                    init: Some(match line.strip_prefix("let ") {
+                        Some(rest) if rest.starts_with(name.as_str()) => {
+                            let e = &rest[name.len()..];
+                            match e.strip_prefix(" = ") {
+                                Some(e) => String::from(e.strip_suffix(';').unwrap_or(e)),
+                                None => String::from("undefined"),
+                            }
+                        }
+                        // `function name() {...}`: the declaration as an expression.
+                        _ => line.clone(),
+                    }),
+                    line: line.clone(),
+                    tdz: false,
+                    boxn: b,
+                    cell,
+                });
                 // Only the first line is indented: the rest belongs to a function's
                 // text, which must stay as it was.
                 cat_to!(&mut body, "  ", line, '\n');
@@ -2972,23 +3059,30 @@ impl<'a> Dumper<'a> {
                     continue;
                 }
                 let key = &keys[j];
-                if let Some(bi) = home[j] {
-                    if *key == box_names[bi] {
-                        ret.push_out(key.clone());
+                let (text, caps) = if let Some(bi) = home[j] {
+                    let t = if *key == box_names[bi] {
+                        key.clone()
                     } else {
-                        ret.push_out(cat!(key, ": ", box_names[bi]));
-                    }
+                        cat!(key, ": ", box_names[bi])
+                    };
+                    (t, alloc::vec![boxes[bi]])
                 } else if self.is_class_node(c) {
-                    ret.push_out(cat!(key, ": ", locals[j]));
+                    (cat!(key, ": ", locals[j]), caps_of(self, c))
                 } else {
                     let src = self.fn_source(c).unwrap_or_default();
                     if self.method_text(c, key, func_flags::KIND_METHOD) {
-                        ret.push_out(src);
+                        (src, caps_of(self, c))
                     } else {
                         let e = self.fn_expr(c, &src);
-                        ret.push_out(cat!(key, ": ", e));
+                        (cat!(key, ": ", e), caps_of(self, c))
                     }
-                }
+                };
+                rec[s].props.push_out(plain::Prop {
+                    key: key.clone(),
+                    text: text.clone(),
+                    caps,
+                });
+                ret.push_out(text);
             }
             // The cells of the variables an activation's frame shares with the closures.
             for (bi, &b) in boxes.iter().enumerate() {
@@ -3007,6 +3101,11 @@ impl<'a> Dumper<'a> {
                     cat_to!(&mut t, if i > 0 { ", " } else { "" }, box_names[*bi]);
                 }
                 t.push_str(" } = v); }");
+                rec[s].props.push_out(plain::Prop {
+                    key: f.clone(),
+                    text: t.clone(),
+                    caps: sets_here.iter().map(|&(bi, _)| boxes[bi]).collect(),
+                });
                 ret.push_out(t);
                 set_fns.push_out((f, sets_here));
             }
@@ -3018,6 +3117,14 @@ impl<'a> Dumper<'a> {
         }
         text.push_str(&bodies[0]);
         text.push_str("})();");
+        if let Some(pl) = &mut self.pl {
+            pl.lines.push_out((self.out.len(), plain::Rec::Factory(pl.factories.len())));
+            pl.factories.push_out(plain::Factory {
+                name: String::from(loc.strip_prefix("$dump.").unwrap_or(&loc)),
+                group: g,
+                scopes: rec,
+            });
+        }
         self.out.push_out(text);
         self.skeleton.push_out(None);
         self.class_locals.clear();
@@ -3293,6 +3400,10 @@ impl<'a> Dumper<'a> {
                 // A class's static private methods: its evaluation installs them.
                 continue;
             }
+            if self.pl.is_some() {
+                let path = self.nodes[n].path.clone();
+                self.refuse(path, "plain dumps: a private field of an instance");
+            }
             let ce = self.expr_or_loc(self.nodes[c].v);
             let line = match p {
                 Property::Data { value, .. } if !self.is_brand(*k) => {
@@ -3364,6 +3475,10 @@ impl<'a> Dumper<'a> {
     /// A private name held as a value (a frame's binding or operand): its class's,
     /// `$dump.private(C, "#x")`.
     fn private_name_expr(&mut self, n: usize, s: crate::value::Sym) -> String {
+        if self.pl.is_some() {
+            let p = self.nodes[n].path.clone();
+            self.refuse(p, "plain dumps: a private name as a value (0203)");
+        }
         let path = self.nodes[n].path.clone();
         match self
             .private_names
@@ -3548,6 +3663,14 @@ impl<'a> Dumper<'a> {
                 let flags = h.cell_flags(o.offset());
                 let asynch = flags & crate::heap::cells::flags::OBJ_HOST_ASYNC != 0;
                 self.ns = true;
+                if self.pl.is_some() {
+                    // The host defines its functions as globals by these names.
+                    if name.is_empty() || !name.split('.').all(is_ident) {
+                        let p = self.nodes[n].path.clone();
+                        self.refuse(p, "a host function without a global name");
+                    }
+                    return name;
+                }
                 return cat!("$dump.host(", quote(&name), ", ", tf(asynch), ")");
             }
             ObjectClass::Promise => {

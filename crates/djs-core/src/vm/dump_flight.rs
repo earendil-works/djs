@@ -902,6 +902,9 @@ impl Dumper<'_> {
         for (name, v) in handles {
             let before = self.fns_read.get();
             let e = self.expr(v, None, None);
+            if let Some(pl) = &mut self.pl {
+                pl.handles.push_out((name.clone(), e.clone()));
+            }
             self.line(cat!("$dump.handle(", quote(&name), ", ", e, ");"), before);
         }
     }
@@ -1006,6 +1009,10 @@ impl Dumper<'_> {
             let p = self.nodes[n].path.clone();
             self.refuse(p, "a using declaration's record on a reference cycle");
         }
+        if self.pl.is_some() {
+            let p = self.nodes[n].path.clone();
+            self.refuse(p, "plain dumps: a using declaration's record (0203)");
+        }
         let name = self.fresh("u");
         let state = if fields.is_empty() {
             String::new()
@@ -1026,6 +1033,10 @@ impl Dumper<'_> {
             return cat!("(v) => ({ value: v, done: ", tf(data == Value::TRUE), " })");
         }
         if kind == FROM_SYNC_CLOSE {
+            if self.pl.is_some() {
+                let p = self.nodes[node].path.clone();
+                self.refuse(p, "plain dumps: an async-from-sync close (0203)");
+            }
             let it = self.expr(data, None, None);
             return cat!("$dump.closeThrow(", it, ")");
         }
@@ -1145,6 +1156,10 @@ impl Dumper<'_> {
         if slots.iter().any(String::is_empty) {
             let p = self.nodes[n].path.clone();
             self.refuse(p, "an iterator helper on a reference cycle");
+        }
+        if self.pl.is_some() {
+            let p = self.nodes[n].path.clone();
+            self.refuse(p, "plain dumps: an iterator helper in flight (0203)");
         }
         let name = self.fresh("i");
         self.line(
@@ -1306,9 +1321,15 @@ impl Dumper<'_> {
                     id, name: f, state, ..
                 } = &self.fl.calls[c];
                 let state = state.as_deref().map_or(String::new(), |s| cat!(", ", s));
+                // A plain dump asks the host for the call (D2832).
+                let call = if self.pl.is_some() {
+                    " = $djs.resume("
+                } else {
+                    " = $dump.pending("
+                };
                 let l = cat!(
                     name,
-                    " = $dump.pending(",
+                    call,
                     *id,
                     ", ",
                     quote(f),
@@ -1579,12 +1600,15 @@ impl Dumper<'_> {
         let mut parts: Vec<(&str, String)> = Vec::new();
         let fe = self.expr(fv(0), None, None);
         parts.push_out(("function", fe.clone()));
+        let mut awaited = None;
         if let Some((q, _)) = awaiting {
             let ql = self.make(q);
             parts.push_out(("awaited promise", ql.clone()));
             fields.push_out(cat!("awaiting: ", ql));
+            awaited = Some(ql);
         } else if s_state_awaiting(&self.fl.acts[a].s) {
             fields.push_out("awaiting: new Promise(() => {})".into());
+            awaited = Some("new Promise(() => {})".into());
         }
         let this = self.expr(fv(1), None, None);
         parts.push_out(("this", this.clone()));
@@ -1597,10 +1621,12 @@ impl Dumper<'_> {
         if !args.is_empty() {
             fields.push_out(cat!("args: [", join(&args, ", "), "]"));
         }
+        let args_text = args.clone();
         parts.extend(args.into_iter().map(|a| ("argument", a)));
         // The frame's slots by name (D2731): bindings (`name@scope` where two of a name
         // are in scope), hidden locals, the temporaries of constructs in flight.
         let mut slots: Vec<String> = Vec::new();
+        let mut pslots: Vec<plain::Slot> = Vec::new();
         let n_locals = site.locals.len();
         let index = |p: Place| match p {
             Place::Arg(i) => 2 + usize::from(i),
@@ -1617,8 +1643,17 @@ impl Dumper<'_> {
                 Holds::Hidden if computed_hidden(&slot.name) => continue,
                 _ => quote(&slot.name),
             };
+            let mut cell = None;
             let (what, e) = match slot.holds {
                 Holds::Hidden if class_hidden(&slot.name) => ("binding", "undefined".into()),
+                Holds::Binding | Holds::Hidden if self.pl.is_some() && slot.boxed => {
+                    let e = self.slot_expr(v, slot.boxed);
+                    // A variable closures share: the factory's cell.
+                    cell = self
+                        .node_of(v)
+                        .filter(|&bn| !e.is_empty() && self.nodes[bn].loc == e);
+                    ("binding", e)
+                }
                 Holds::Binding | Holds::Hidden => ("binding", self.slot_expr(v, slot.boxed)),
                 Holds::Temp => {
                     let e = match slot.construct() {
@@ -1649,12 +1684,20 @@ impl Dumper<'_> {
                 }
             };
             parts.push_out((what, e.clone()));
+            if self.pl.is_some() {
+                pslots.push_out(plain::Slot {
+                    name: slot.name.clone(),
+                    value: e.clone(),
+                    cell,
+                });
+            }
             slots.push_out(cat!(key, ": ", e));
         }
         if !slots.is_empty() {
             fields.push_out(cat!("slots: { ", join(&slots, ", "), " }"));
         }
         let mut reqs: Vec<String> = Vec::new();
+        let mut preqs: Vec<(&'static str, String, String)> = Vec::new();
         for r in queue {
             let Some(r) = r.as_object() else { continue };
             let t = match h.object_slot(r, 0).as_number().map(|t| t as i32) {
@@ -1669,6 +1712,7 @@ impl Dumper<'_> {
             };
             parts.push_out(("queue", v.clone()));
             parts.push_out(("queue", p.clone()));
+            preqs.push_out((t, v.clone(), p.clone()));
             reqs.push_out(cat!(
                 "{ type: \"",
                 t,
@@ -1696,6 +1740,31 @@ impl Dumper<'_> {
         if let Some(f) = fv(0).as_object() {
             let info = self.site_info(f, &site, &name);
             self.fl.sites.push(info);
+        }
+        if self.pl.is_some() {
+            let fnode = self.node_of(fv(0)).unwrap_or(usize::MAX);
+            let ftext = if fnode == usize::MAX {
+                String::new()
+            } else {
+                self.fn_source(fnode).unwrap_or_default()
+            };
+            let act = plain::Act {
+                name: String::from(name.strip_prefix("$dump.").unwrap_or(&name)),
+                fnode,
+                fexpr: fe.clone(),
+                ftext,
+                site: site.clone(),
+                awaiting: awaited,
+                this: this.clone(),
+                args: args_text.clone(),
+                slots: pslots,
+                queue: preqs,
+                kind,
+            };
+            let pl = self.pl.as_mut().expect("plain");
+            pl.lines
+                .push_out((self.out.len(), plain::Rec::Act(pl.acts.len())));
+            pl.acts.push_out(act);
         }
         self.line(
             cat!(
