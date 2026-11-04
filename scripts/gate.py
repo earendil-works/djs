@@ -225,9 +225,25 @@ def jobs():
         # appear there fail too; with djs-wasm's docs feature for the docs site's module).
         J("clippy", "CARGO_TARGET_DIR=target/clippy cargo clippy --workspace --all-targets --quiet -- -D warnings",
           cls="rust", group="target/clippy"),
-        J("clippy (wasm32, release)", "CARGO_TARGET_DIR=target/clippy cargo clippy -p djs-core -p djs-wasm"
+        J("clippy (wasm32 release)", "CARGO_TARGET_DIR=target/clippy cargo clippy -p djs-core -p djs-wasm"
           " --features djs-wasm/docs --target wasm32-unknown-unknown --release --quiet -- -D warnings",
           cls="rust", group="target/clippy"),
+
+        # --- Clippy on the other feature combinations that ship (D2668): djs-core natively
+        # without `full`/`unicode` (slim), slim with the dumper, full without it; and the
+        # wasm modules in release: main, slim, dump, slim with dump. Libraries only: the
+        # tests build in the default combination (and slim's in its own legs).
+        J("clippy (djs-core feature combinations)", "for f in '--no-default-features'"
+          " '--no-default-features --features dump' '--no-default-features --features full,unicode';"
+          " do CARGO_TARGET_DIR=target/clippy-combos cargo clippy -p djs-core $f --lib --quiet -- -D warnings"
+          " || { echo \"in: cargo clippy -p djs-core $f\"; exit 1; }; done",
+          cls="rust", group="target/clippy-combos"),
+        J("clippy (wasm modules in release)", "for f in '' '--no-default-features' '--features dump'"
+          " '--no-default-features --features dump';"
+          " do CARGO_TARGET_DIR=target/clippy-wasm-combos cargo clippy -p djs-wasm --target wasm32-unknown-unknown"
+          " --release $f --quiet -- -D warnings"
+          " || { echo \"in: cargo clippy -p djs-wasm --target wasm32-unknown-unknown --release $f\"; exit 1; }; done",
+          cls="rust", group="target/clippy-wasm-combos"),
 
         # --- wasm32 dev builds: djs-core no_std, and the modules the js tests load (0023),
         # with and without the dumper (0175, D2635).
@@ -320,7 +336,7 @@ def jobs():
         # without pi's lockdown (D2411), and in the adapter's next mode (0176, D2650).
         J("size budget", f"python3 scripts/size/budget.py {size_mod} && python3 scripts/size/budget.py"
           f" {slim_mod} --slim", cls="rust", needs=["build:size", "build:size-slim"]),
-        J("pi tests (slim, no lockdown)", f"DJS_WASM=$PWD/{slim_mod} node js/pi/pi-tests.ts --no-lockdown"
+        J("pi tests (slim without lockdown)", f"DJS_WASM=$PWD/{slim_mod} node js/pi/pi-tests.ts --no-lockdown"
           " --out target/pi-codemode-slim --expected tests/pi/slim-expected-failures.txt",
           cls="nodocs", ext=("base", "pi"), needs=["build:size-slim"], summary=r"^pi tests:"),
         J("pi tests (next mode)", f"DJS_WASM=$PWD/{size_mod} node js/pi/pi-tests.ts --next"
@@ -329,7 +345,7 @@ def jobs():
 
         # --- Full runs only (D2664): pi's tests in the next mode with a dump and a resume at
         # every idle point, on the release dump module (its own LTO build, 0176).
-        J("pi tests (next mode, dump at every idle point)", "scripts/pi-dump-every-idle.sh",
+        J("pi tests (next mode with a dump at every idle point)", "scripts/pi-dump-every-idle.sh",
           cls="nodocs", ext=("base", "pi"), group="target/dump-wasm", full_only=True,
           summary=r"^pi tests:"),
     ]
@@ -380,6 +396,8 @@ def run(argv):
         only = set(argv[argv.index("--only") + 1].split(","))
     all_jobs = jobs()
     by_name = {j.name: j for j in all_jobs}
+    # `--only` takes a comma-separated list.
+    assert not [j.name for j in all_jobs if "," in j.name], "a leg's name has a comma"
     if "--list" in argv:
         for j in all_jobs:
             kind = "build" if j.build else ("full-only" if j.full_only else (j.cls or "always"))
@@ -826,6 +844,16 @@ def main(argv):
         return cmd_tests(argv[1:])
     if argv[:1] == ["paths"]:
         return cmd_paths(argv[1:])
+    if "--full" in argv and Path(".").resolve() == PRIMARY.resolve():
+        # merge-to-main fast-forwards main in the primary checkout, which would move the
+        # tree under a long run: full runs go in their own detached worktree (D2664).
+        full_wt = PRIMARY / ".worktrees/full"
+        if not (full_wt / ".git").exists():
+            subprocess.run(["git", "worktree", "add", "-q", "--detach", str(full_wt), "main"], check=True)
+        subprocess.run(["git", "-C", str(full_wt), "checkout", "-q", "--detach", "--force", "main"], check=True)
+        subprocess.run(["git", "-C", str(full_wt), "clean", "-fdq"], check=True)
+        print(f"gate: a full run of main ({subprocess.run(['git', 'rev-parse', '--short', 'main'], capture_output=True, text=True).stdout.strip()}) in {full_wt}", flush=True)
+        os.execvp("bash", ["bash", str(full_wt / "scripts/gate.sh"), *argv])
     if "--clear-cache" in argv:
         shutil.rmtree(CACHE, ignore_errors=True)
         print(f"gate: cleared {CACHE}")

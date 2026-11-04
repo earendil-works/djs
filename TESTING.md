@@ -537,7 +537,9 @@ to a commit that passed it, rebasing and gating again when `main` moved meanwhil
 D2666). It runs `scripts/gate.py`: a
 set of **legs**, the checks, and the **builds** they need (D2660). `scripts/gate.sh
 --list` prints them. The legs: fmt; clippy (workspace, and wasm32 release for djs-core
-and djs-wasm); the workspace's unit and integration tests (djs-docs's apart) and its
+and djs-wasm), and on the other feature combinations that ship (D2668: djs-core slim,
+slim with `dump`, full without `dump`; the wasm modules in release: main, slim, dump, slim
+with dump); the workspace's unit and integration tests (djs-docs's apart) and its
 doctests; the no_std wasm32 build of djs-core; `scripts/bgen.sh --check`; the builtin
 registry's append-only check (`scripts/registry.py check main`); the guide (`djs-docs
 check`); the JS host package's tests on the dev modules; native versus wasm heap images;
@@ -614,7 +616,10 @@ leg", and entries unused for 14 days are pruned on every run. `scripts/gate.sh
 `scripts/gate.sh --full` reads no cache and also runs the **full-only** legs, checks too
 slow for every merge: pi's tests in the next mode with a dump and a resume at every idle
 point (`scripts/pi-dump-every-idle.sh`, its own LTO build). It must run on main at least
-daily (the coordinator) and before a release; passes are recorded in
+daily (the coordinator) and before a release, in a worktree of its own: merge-to-main
+fast-forwards main in the primary checkout, which would move the tree under the run, so
+`scripts/gate.sh --full` started there runs in `.worktrees/full` (created on first use,
+checked out at main; D2669); passes are recorded in
 `work/scratch/gate-cache/full-passes.tsv`, and every other gate run reminds when the last
 one is older than 24 hours. A full run also catches what the cache cannot see: a flaky test,
 and a leg that reads a path outside its class without the `paths` leg noticing (a path

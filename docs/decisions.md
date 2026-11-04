@@ -8717,3 +8717,19 @@ worktree, and gate.py refuses to count a run whose worktree another checkout mov
 (flock per worktree, HEAD checked before caching and at the end), so a mixed pair fails
 safely. One gate worktree still serializes gates; a second is the next lever if the gate
 lock becomes the queue.
+
+## D2668: Clippy on every feature combination that ships
+date: 2026-11-04 · by: gate-speed · issue: 0183
+Clippy ran on the default features only, so a warning in the slim build with the dumper
+(`--no-default-features --features dump`) reached main unnoticed. Two cheap legs now run
+clippy, with `-D warnings`, on djs-core's library natively for slim, slim with `dump` and
+full without `dump`, and on djs-wasm in wasm32 release for the main module (no dumper),
+slim, dump and slim with dump. Libraries only: the tests build in the default combination,
+and the slim tests in their own legs.
+
+## D2669: Full runs in their own worktree
+date: 2026-11-04 · by: gate-speed · issue: 0183
+`scripts/gate.sh --full` in the primary checkout failed: merges fast-forward main there,
+which moved the tree under the run (gate.py rejects that, D2666). Started in the primary
+checkout, `--full` now checks out main detached in `.worktrees/full` (created on first use,
+its target/ stays warm) and runs there.
