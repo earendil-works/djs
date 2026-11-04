@@ -6,6 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0197 | Gate waits (doctests, bgen, fresh executables) | gate-speed | .worktrees/gate-speed |
 | 0190 | Slot naming contract (SM step 2), then 0191-0194, 0196 in sequence | sm | .worktrees/sm |
 
 ## Open (ready)
