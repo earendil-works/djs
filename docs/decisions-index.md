@@ -665,3 +665,7 @@ topics when the index is next reorganized.
 - D2907: A continuation's callback runs in parts, at the ends of the blocks it needs
 - D2920: Format 2 is retired; plain dumps are the only format, and the goldens are plain dumps
 - D2921: The `jump_if_loading` opcode is removed
+- D2908: A for-of or for-in goes on after the rest of its iteration, where nothing tells
+- D2909: A continuation is a function called with the frame's values
+- D2910: A continuation reads a value of the callback only after the part that makes it
+- D2882: `$djs.source(name, hash, params)`: a dump names the codemode body it continues
