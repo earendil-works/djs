@@ -58,6 +58,10 @@ pub struct Djs {
     /// the dump as a Script; a chain of at most `PLAIN_LINKS` dumps, then the run goes on.
     /// The VMs have frozen builtins, which dumps need (D2836).
     pub dump_every_idle: bool,
+    /// With `dump_every_idle`: the first idle point that is dumped (0 or 1: every one). The plain
+    /// fuzzer (scripts/plain-fuzz) starts a chain at every idle point, so that each site
+    /// is also dumped from its original function, not only from a continuation (D2940).
+    pub plain_from: u32,
 }
 
 /// The longest chain of plain dumps a case runs through (later idle points are not
@@ -82,6 +86,9 @@ impl Djs {
         }
         if self.dump_every_idle {
             s += " --plain-dumps";
+        }
+        if self.plain_from > 1 {
+            s += &format!(" --plain-from {}", self.plain_from);
         }
         s
     }
@@ -180,6 +187,9 @@ struct Session {
     /// How many dumps were taken.
     #[cfg_attr(not(feature = "dump"), allow(dead_code))]
     links: u32,
+    /// [`Djs::plain_from`].
+    #[cfg_attr(not(feature = "dump"), allow(dead_code))]
+    plain_from: u32,
     /// The case's name (for `--plain-out`).
     #[cfg_attr(not(feature = "dump"), allow(dead_code))]
     name: String,
@@ -237,6 +247,7 @@ impl Djs {
             suspend: self.suspend_every.is_some(),
             dump: self.dump_every_idle.then_some((opts, job.now)),
             links: 0,
+            plain_from: self.plain_from,
             name: job.name.to_string(),
             api: None,
             plain_ids: (None, 0),
@@ -339,7 +350,7 @@ impl Session {
     fn dump_and_load(&mut self) -> Result<(), Stop> {
         let (opts, now) = self.dump.ok_or("no dump options")?;
         use djs_core::vm::dump::DumpOptions;
-        if self.links >= PLAIN_LINKS {
+        if self.links >= PLAIN_LINKS || self.idle_points + 1 < self.plain_from {
             return Ok(());
         }
         self.links += 1;

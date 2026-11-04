@@ -32,6 +32,8 @@ options:
                       (D2836), compared only for cases with idle points
   --plain-out DIR     --plain-dumps, writing each dump to DIR/<case>/<link>.js and the
                       output before it to <link>.pre (scripts/plain-node.mjs runs them)
+  --plain-from K      with --plain-dumps: the chain starts at idle point K (the
+                      earlier ones are not dumped)
   --determinism       djs only: also run every case suspending every 1009 fuel (and 97
                       without --suspend-every) through heap images, and require the
                       suspended runs to leave the same heap image as the plain run, raw
@@ -81,6 +83,7 @@ struct Args {
     suspend_every: Option<u64>,
     gc_stress: bool,
     plain_dumps: bool,
+    plain_from: u32,
     determinism: bool,
     bytecode_builtins: bool,
     clusters: bool,
@@ -124,6 +127,7 @@ fn parse_args() -> Result<Args, String> {
         suspend_every: None,
         gc_stress: false,
         plain_dumps: false,
+        plain_from: 0,
         determinism: false,
         bytecode_builtins: false,
         clusters: false,
@@ -186,6 +190,12 @@ fn parse_args() -> Result<Args, String> {
             "--plain-out" => {
                 args.plain_dumps = true;
                 let _ = djs_difftest::djs::PLAIN_OUT.set(value(&a)?.into());
+            }
+            "--plain-from" => {
+                let v = value(&a)?;
+                args.plain_from = v
+                    .parse()
+                    .map_err(|_| format!("--plain-from: bad number `{v}`"))?;
             }
             "--determinism" => args.determinism = true,
             "--backend" => match value("--backend")?.as_str() {
@@ -596,6 +606,7 @@ fn stress_variants(args: &Args) -> Vec<(String, Box<dyn Engine>)> {
             image: args.determinism,
             bytecode_builtins: args.bytecode_builtins,
             dump_every_idle: false,
+            plain_from: 0,
         };
         v.push((e.label(), Box::new(e)));
     }
@@ -606,12 +617,14 @@ fn stress_variants(args: &Args) -> Vec<(String, Box<dyn Engine>)> {
             image: false,
             bytecode_builtins: args.bytecode_builtins,
             dump_every_idle: false,
+            plain_from: 0,
         };
         v.push((e.label(), Box::new(e)));
     }
     if args.plain_dumps {
         let e = Djs {
             dump_every_idle: true,
+            plain_from: args.plain_from,
             bytecode_builtins: args.bytecode_builtins,
             ..Djs::default()
         };

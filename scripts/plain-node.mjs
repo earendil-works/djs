@@ -173,7 +173,9 @@ for (const c of walk(dir).sort()) {
       let i = 0;
       while (i < a.length && a[i] === b[i]) i++;
       const name = path.relative(dir, c);
-      console.log(`${name} link ${k}: line ${i + 1}: expected ${JSON.stringify(a[i] ?? "")}, got ${JSON.stringify(b[i] ?? "")}`);
+      // An end the run did not have (`=== crash`, `=== throw`) says why on its next line.
+      const why = /^=== /.test(b[i] ?? "") && a[i] !== b[i] ? ` ${JSON.stringify(b[i + 1] ?? "")}` : "";
+      console.log(`${name} link ${k}: line ${i + 1}: expected ${JSON.stringify(a[i] ?? "")}, got ${JSON.stringify(b[i] ?? "")}${why}`);
     } else if (list) {
       console.log(`${path.relative(dir, c)} link ${k}: ok`);
     }
