@@ -3600,8 +3600,12 @@ impl<'a> Dumper<'a> {
         let h = self.h;
         let len = h.array_length(o);
         let el: Ref = h.arena().get(o.offset(), ObjectCell::ELEMENTS);
-        let mut items = Vec::new();
+        // Written in place, not joined: data arrays are long (0198).
+        let mut out = String::from("[");
         for i in 0..len {
+            if i > 0 {
+                out.push_str(", ");
+            }
             let v = array_element(h, o, el, i);
             let at = if cell_of(v).is_some() {
                 cat!(loc, "[", i, "]")
@@ -3612,13 +3616,13 @@ impl<'a> Dumper<'a> {
             if e.is_empty() && !v.is_hole() {
                 let l = self.expr_or_loc(v);
                 self.patches.push_out(cat!(at, " = ", l, ";"));
-                items.push_out("undefined".into());
+                out.push_str("undefined");
             } else {
-                items.push_out(e);
+                out.push_str(&e);
             }
         }
         if len > 0 && array_element(h, o, el, len - 1).is_hole() {
-            items.push_out(String::new());
+            out.push_str(", ");
         }
         let dense = el.get().map_or(0, |el| h.value_array_len(el));
         self.other_props(o, loc, &|k, i| {
@@ -3633,7 +3637,8 @@ impl<'a> Dumper<'a> {
         if !h.is_extensible(o) {
             self.finals.push_out(self.freeze_line(o, loc));
         }
-        cat!("[", join(&items, ", "), "]")
+        out.push_out(']');
+        out
     }
 
     fn collection(&mut self, o: Obj, loc: &str) -> String {
@@ -3798,11 +3803,17 @@ impl<'a> Dumper<'a> {
     /// that close cycles are patched (a placeholder keeps the key order).
     fn literal(&mut self, o: Obj, loc: &str) -> String {
         let h = self.h;
-        let mut items: Vec<String> = Vec::new();
+        // Written in place, not joined: data objects are many (0198). `{ ` and the
+        // separators go in before each member.
+        let mut out = String::new();
+        let item = |out: &mut String| out.push_str(if out.is_empty() { "{ " } else { ", " });
         let p = h.get_prototype_of(o);
         if !self.default_proto(o, p) {
             match p {
-                None => items.push_out("__proto__: null".into()),
+                None => {
+                    item(&mut out);
+                    out.push_str("__proto__: null");
+                }
                 Some(p) => {
                     let e = self.expr(Value::object(p), None, None);
                     if e.is_empty() {
@@ -3810,7 +3821,8 @@ impl<'a> Dumper<'a> {
                         self.patches
                             .push_out(cat!("Object.setPrototypeOf(", loc, ", ", l, ");"));
                     } else {
-                        items.push_out(cat!("__proto__: ", e));
+                        item(&mut out);
+                        cat_to!(&mut out, "__proto__: ", e);
                     }
                 }
             }
@@ -3846,18 +3858,22 @@ impl<'a> Dumper<'a> {
                         self.nodes[c].loc = at;
                         self.nodes[c].state = State::Done;
                         self.fn_patches(c, Some(&name));
-                        items.push_out(src);
+                        item(&mut out);
+                        out.push_str(&src);
                         continue;
                     }
                     let e = self.expr(value, Some(&at), Some(&name));
                     if e.is_empty() {
                         let l = self.expr_or_loc(value);
                         self.patches.push_out(cat!(at, " = ", l, ";"));
-                        items.push_out(cat!(key, ": undefined"));
+                        item(&mut out);
+                        cat_to!(&mut out, key, ": undefined");
                     } else if e == key {
-                        items.push_out(e);
+                        item(&mut out);
+                        out.push_str(&e);
                     } else {
-                        items.push_out(cat!(key, ": ", e));
+                        item(&mut out);
+                        cat_to!(&mut out, key, ": ", e);
                     }
                     // `Object.freeze`/`seal` at the end set these attributes.
                     let implied = match freeze {
@@ -3906,10 +3922,12 @@ impl<'a> Dumper<'a> {
                             self.nodes[c].loc =
                                 cat!("Object.getOwnPropertyDescriptor(", loc, ", ", ke, which);
                             self.nodes[c].state = State::Done;
-                            items.push_out(src);
+                            item(&mut out);
+                            out.push_str(&src);
                         }
                     } else {
-                        items.push_out(cat!(key, ": undefined"));
+                        item(&mut out);
+                        cat_to!(&mut out, key, ": undefined");
                         let d = self.descriptor(&Property::Accessor {
                             getter,
                             setter,
@@ -3933,10 +3951,11 @@ impl<'a> Dumper<'a> {
         if !h.is_extensible(o) {
             self.finals.push_out(self.freeze_line(o, loc));
         }
-        if items.is_empty() {
+        if out.is_empty() {
             "{}".into()
         } else {
-            cat!("{ ", join(&items, ", "), " }")
+            out.push_str(" }");
+            out
         }
     }
 
