@@ -97,6 +97,12 @@ export interface VmHooks {
    * in a new instance of the module, resumed from the dump, as a restarted host would.
    */
   dumpEveryIdle?: boolean;
+  /**
+   * `next` mode: `dumpSession()` writes plain dumps (format 3, D2830), whose host functions
+   * are `$djs.bridge`/`$djs.call` (D2893). Default false (format 2) until format 2 is
+   * retired; `resumeFromDump` loads either.
+   */
+  plainDumps?: boolean;
   post(message: WorkerToHostMessage): void;
   shouldInterrupt(): boolean;
 }
@@ -385,7 +391,8 @@ class Session implements VmSession {
     const host = this.resume ? hostGlobals(this.resume.data) : [];
     const handles: [string, number][] = next.handles.body !== 0 ? [["run", next.handles.body]] : [];
     const states = next.ids.map(([callId, id]): [number, string] => [callId, JSON.stringify({ id } satisfies CallState)]);
-    const dump = this.engine.dump(host, FN_NAMES, handles, states);
+    const plain = this.hooks.plainDumps === true;
+    const dump = this.engine.dump(host, plain ? PLAIN_FN_NAMES : FN_NAMES, handles, states, plain);
     const { handles: _, ids: _i, ...rest } = next;
     const { api: _a, settle: _s, stalled: _t, next: _n, ...state } = this.state;
     return { dump, state: structuredClone({ ...state, early: [...this.early], next: rest }) };

@@ -37,12 +37,16 @@ const USAGE: &str = "usage: djs run [--body] [--ts] [--experimental-decorators]\
   --dump-after K OUT write the run as a format 2 dump to OUT at idle point K (from 1)\n\
                      and stop; `djs resume OUT` continues it\n\
   --dump-every-idle  at every idle point, dump the run and continue in a fresh VM that\n\
-                     loaded the dump";
+                     loaded the dump\n\
+  --plain            write plain dumps (`\"djs-dump 3\";`, a Script, D2830) instead of\n\
+                     format 2";
 
 const RESUME_USAGE: &str = "usage: djs resume [--explain] [--tools answers.json] [--gc-stress]\n\
                 [--suspend-every N] [--backend B] <dump.js>\n\
-  loads a dump (format 2, `\"djs-dump 2\";`, or version 1) into a fresh VM and runs it\n\
-  to its end, answering open calls as `djs run` does\n\
+  loads a dump (plain, `\"djs-dump 3\";`, format 2, `\"djs-dump 2\";`, or version 1)\n\
+  into a fresh VM and runs it
+  to its end, answering open calls as `djs run` does (--dump-after, --dump-every-idle\n\
+  and --plain as for run)\n\
   --explain          only load it, print its open calls and suspended activations (where\n\
                      each stopped in the dump, with the source line), and exit";
 
@@ -54,7 +58,7 @@ pub struct Dumping {
     pub after: Option<(u64, String)>,
     /// `--dump-every-idle`.
     pub every_idle: bool,
-    /// Plain dumps (D2830) instead of format 2 (a flag once the plain exporter lands).
+    /// `--plain`: plain dumps (D2830) instead of format 2.
     pub plain: bool,
 }
 
@@ -93,6 +97,7 @@ fn command(args: &[String], resume: bool) -> i32 {
                 }
             },
             "--dump-every-idle" => opts.dumping.every_idle = true,
+            "--plain" => opts.dumping.plain = true,
             "--tools" => match it.next().map(|p| crate::tools::read_answers(p)) {
                 Some(Ok(a)) => tools = Tools::with_answers(Some(a)),
                 Some(Err(e)) => {

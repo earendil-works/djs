@@ -264,7 +264,7 @@ export class Engine {
    * name for the host, `states` the host's state of open calls as JSON text, by call id
    * (D2770). Throws with the reasons when the VM cannot be dumped.
    */
-  dump(host: string[], fnNames: string[], handles: [string, number][], states: [number, string][] = []): string {
+  dump(host: string[], fnNames: string[], handles: [string, number][], states: [number, string][] = [], plain = false): string {
     const x = this.x;
     if (!x.vm_dump) throw new Error("The djs-wasm module has no dumper (build it with the `dump` feature)");
     const text = [
@@ -273,6 +273,7 @@ export class Engine {
       fnNames.join("\t"),
       handles.map(([n, h]) => `${h}:${n}`).join("\t"),
       states.map(([id, json]) => `${id}:${textEncoder.encode(json).length}`).join("\t"),
+      plain ? "plain" : "",
       states.map(([, json]) => json).join(""),
     ].join("\n");
     let r = this.trap(() => x.vm_dump!(this.vm, this.stageText(text)));

@@ -70,6 +70,12 @@ export interface SandboxOptions {
    * `module` has the dumper itself.
    */
   dumpModule?: WebAssembly.Module;
+  /**
+   * Write plain dumps (format 3, D2830): Scripts that run given only the host's functions,
+   * which `load`/`resume` run with the hooks of D2890. Default false (format 2) until format
+   * 2 is retired; loading takes either.
+   */
+  plainDumps?: boolean;
   /** Heap cap in bytes; default: the engine's (4 GiB). */
   memoryLimit?: number;
   /** Fuel per `vm_run` call: how often the host gets control back. Default 1,000,000. */
@@ -1124,7 +1130,8 @@ export class Sandbox {
    * states (`id:bytes`, tab separated) followed by their JSON texts (D2770).
    */
   private dumpText(names: string[], handles: [string, number][], states: [number, string][]): string {
-    return this.viaDumper((sb) => sb.dumpHere(names, handles, states), false);
+    const plain = this.opts.plainDumps === true;
+    return this.viaDumper((sb) => sb.dumpHere(names, handles, states, plain), false);
   }
 
   /**
@@ -1205,7 +1212,7 @@ export class Sandbox {
   }
 
   /** `vm_dump` in this sandbox's own module. */
-  private dumpHere(names: string[], handles: [string, number][], states: [number, string][]): string {
+  private dumpHere(names: string[], handles: [string, number][], states: [number, string][], plain: boolean): string {
     const x = this.x;
     if (!x.vm_dump) throw new SandboxError("misuse", "the djs-wasm module has no dump (vm_dump): build it with the `dump` feature, or pass `dumpModule`");
     const host = new Set(["console"]);
@@ -1216,6 +1223,7 @@ export class Sandbox {
       this.fnNames.join("\t"),
       handles.map(([name, h]) => `${h}:${name}`).join("\t"),
       states.map(([id, json]) => `${id}:${textEncoder.encode(json).length}`).join("\t"),
+      plain ? "plain" : "",
       states.map(([, json]) => json).join(""),
     ].join("\n");
     let r = this.guard(() => x.vm_dump!(this.vm, this.stageText(text)));

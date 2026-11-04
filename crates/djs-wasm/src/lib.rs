@@ -961,10 +961,12 @@ pub extern "C" fn vm_define(vm: u32, obj: u32, name_len: usize, value: u32) -> i
 /// calls and host functions held as values are written by name); the values to name for
 /// the host, `handle:name`, tab-separated (`DumpOptions::handles`, written as
 /// `$dump.handle(name, v)`; handle 0: the entry call's outcome, `Vm::outcome`, D2633);
-/// the host's states of open calls (D2770), `call_id:byte_len`, tab-separated, and after
-/// that line's newline the states' JSON texts one after another (`DumpOptions::call_states`,
-/// written as `$dump.pending`'s fourth argument). 0: the dump is in out; 1: refused, the
-/// reasons in out (one per line); 2: no base image (inject it first).
+/// the host's states of open calls (D2770), `call_id:byte_len`, tab-separated; the
+/// options, comma-separated (`plain`: a plain dump, format 3, D2830, `DumpOptions::plain`;
+/// this line goes when format 2 does); and after that line's newline the states' JSON
+/// texts one after another (`DumpOptions::call_states`, written as `$dump.pending`'s or
+/// `$djs.resume`'s fourth argument). 0: the dump is in out; 1: refused, the reasons in out
+/// (one per line); 2: no base image (inject it first).
 #[cfg(feature = "dump")]
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
@@ -974,8 +976,8 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
         let text = staged_str(staging, 0, len).to_owned();
-        // Five lines, then the states' text, which may hold newlines of its own.
-        let mut lines = text.splitn(6, '\n');
+        // Six lines, then the states' text, which may hold newlines of its own.
+        let mut lines = text.splitn(7, '\n');
         let mut line = || lines.next().unwrap_or("");
         let host: Vec<&str> = line().split(',').filter(|n| !n.is_empty()).collect();
         let names: Vec<&str> = line().split(',').filter(|n| !n.is_empty()).collect();
@@ -999,6 +1001,7 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
             })
             .collect();
         let state_lens = line();
+        let plain = line().split(',').any(|f| f == "plain");
         let state_text = line();
         let mut call_states: Vec<(u32, &str)> = Vec::new();
         let mut at = 0;
@@ -1026,7 +1029,7 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
                 host_fn_name: &host_fn_name,
                 handles: &handles,
                 call_states: &call_states,
-                ..Default::default()
+                plain,
             };
             Some(
                 slot.vm

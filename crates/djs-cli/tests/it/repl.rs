@@ -475,6 +475,57 @@ fn dump_a_waiting_session() {
     assert!(out.contains("dumping at every idle point: off\n"), "{out}");
 }
 
+/// [`dump_waiting_await_inputs`] with plain dumps (D2830, `.plain on`): the waiting inputs
+/// are the completion value's properties (D2895), the calls' origins their states.
+#[test]
+fn plain_dump_waiting_await_inputs() {
+    let dir = env!("CARGO_TARGET_TMPDIR");
+    let dump = format!("{dir}/repl-await-plain-{}.js", std::process::id());
+    let out = repl(&format!(
+        ".plain on\nconst r = await tools.read({{path: 'a'}})\nawait tools.read({{path: 'b'}})\n\
+         .dump {dump}\n.clear\n.restore {dump}\nawait tools.read({{path: 'c'}})\n.pending\n\
+         .resolve 3 \"bee\"\n.resolve 2 \"hello\"\nr\n.dump-every on\n\
+         const x = await tools.read({{path: 'd'}})\n.resolve 5 \"c!\"\n.resolve 6 \"dee\"\nx\n"
+    ));
+    let text = std::fs::read_to_string(&dump).unwrap();
+    std::fs::remove_file(&dump).unwrap();
+    assert!(text.starts_with("\"djs-dump 3\";"), "{text}");
+    let lines: Vec<String> = out
+        .lines()
+        .filter(|l| !(l.starts_with("[dumped ") || l.starts_with("wrote ")))
+        // Positions are in the dump, whose layout is the exporter's.
+        .map(|l| {
+            l.split(&format!(", at {dump}:"))
+                .next()
+                .unwrap()
+                .to_string()
+        })
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            "plain dumps: on",
+            "[waiting] #2 tools.read({\"path\":\"a\"})",
+            "[waiting] #3 tools.read({\"path\":\"b\"})",
+            "a fresh VM",
+            &format!("loaded {dump} into a fresh VM"),
+            "waiting: #2 tools.read({\"path\":\"a\"})",
+            "waiting: #3 tools.read({\"path\":\"b\"})",
+            "[waiting] #5 tools.read({\"path\":\"c\"})",
+            "#2 tools.read({\"path\":\"a\"})  input 1",
+            "#3 tools.read({\"path\":\"b\"})  input 2",
+            "#5 tools.read({\"path\":\"c\"})  input 3, at repl:1:10",
+            "[input 2] 'bee'",
+            "'hello'",
+            "dumping at every idle point: on",
+            "[waiting] #6 tools.read({\"path\":\"d\"})",
+            "[input 3] 'c!'",
+            "'dee'",
+        ]
+    );
+    assert!(out.matches("[dumped ").count() >= 2, "{out}");
+}
+
 #[test]
 fn dump_waiting_await_inputs() {
     // Inputs suspended in their own top-level `await` (async bodies, D2617) dump and

@@ -239,11 +239,24 @@ fn explain_a_dump() {
 /// `run --dump-after K` then `resume`, for every idle point K of a script, prints what
 /// the uninterrupted run prints; so does `--dump-every-idle`. The number of idle points.
 fn every_idle_point(script: &str, args: &[&str]) -> u64 {
+    every_idle_point_refused(script, args).0
+}
+
+/// [`every_idle_point`], also counting the idle points whose dump is refused (plain dumps
+/// refuse what they cannot write yet, 0203): (dumped, refused).
+fn every_idle_point_refused(script: &str, args: &[&str]) -> (u64, u64) {
+    let mut refused = 0;
     let dir = env!("CARGO_TARGET_TMPDIR");
     let out = format!(
-        "{dir}/dump-{}-{}.js",
+        "{dir}/dump-{}-{}{}.js",
         std::process::id(),
-        script.rsplit('/').next().unwrap()
+        script.rsplit('/').next().unwrap(),
+        // (The plain test runs the same scripts at the same time.)
+        if args.contains(&"--plain") {
+            "-plain"
+        } else {
+            ""
+        }
     );
     let mut plain = args.to_vec();
     plain.push(script);
@@ -255,17 +268,24 @@ fn every_idle_point(script: &str, args: &[&str]) -> u64 {
         let mut a = args.to_vec();
         a.extend_from_slice(&["--dump-after", &ks, &out, script]);
         let (code, head, err) = djs(&a);
+        if !std::path::Path::new(&out).exists() && err.contains("cannot dump") {
+            assert!(args.contains(&"--plain"), "{script} k={k}: {err}");
+            refused += 1;
+            continue;
+        }
         if !std::path::Path::new(&out).exists() {
             assert_eq!(head, full, "{script}: no dump at {k}");
             assert!(err.contains("the run ended after"), "{script} k={k}: {err}");
-            let mut e = args.to_vec();
-            e.extend_from_slice(&["--dump-every-idle", script]);
-            assert_eq!(
-                djs(&e),
-                (0, full, String::new()),
-                "{script} --dump-every-idle"
-            );
-            return k - 1;
+            if refused == 0 {
+                let mut e = args.to_vec();
+                e.extend_from_slice(&["--dump-every-idle", script]);
+                assert_eq!(
+                    djs(&e),
+                    (0, full, String::new()),
+                    "{script} --dump-every-idle"
+                );
+            }
+            return (k - 1 - refused, refused);
         }
         assert_eq!((code, err.as_str()), (0, ""), "{script} k={k}");
         let mut r = vec!["resume"];
@@ -312,6 +332,36 @@ fn dump_after_every_idle_point() {
         total += every_idle_point(p, &[]);
     }
     assert!(total >= 40, "{total} idle points");
+}
+
+/// [`dump_after_every_idle_point`] with plain dumps (D2830): `run --plain --dump-after K`
+/// (and `--dump-every-idle`) then `resume`, so the CLI's loader runs the exporter's output.
+#[test]
+fn plain_dump_after_every_idle_point() {
+    let answers = format!("{DIR}/reads.json");
+    let n = every_idle_point(
+        &format!("{DIR}/reads.src.js"),
+        &["--plain", "--tools", &answers],
+    );
+    assert_eq!(n, 2);
+    let answers = format!("{DIR}/todos.json");
+    let n = every_idle_point(
+        &format!("{DIR}/todos.js"),
+        &["--plain", "--body", "--tools", &answers],
+    );
+    assert!(n >= 2, "{n} idle points");
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/dump/v2");
+    let (mut total, mut refused) = (0, 0);
+    for e in std::fs::read_dir(dir).unwrap() {
+        let path = e.unwrap().path();
+        let p = path.to_str().unwrap();
+        if p.ends_with(".src.js") {
+            let (n, r) = every_idle_point_refused(p, &["--plain"]);
+            (total, refused) = (total + n, refused + r);
+        }
+    }
+    // 35 dumped and 30 refused (asyncgen, operands: 0203) at 0204.
+    assert!(total >= 35, "{total} idle points, {refused} refused");
 }
 
 /// Runs `djs args...`.
