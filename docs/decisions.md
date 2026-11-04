@@ -9509,6 +9509,14 @@ written into the dump. Origin tracking needs nothing new: K's call is a copy of 
 original's text, so K's own temporaries map to the original's through `segs`; K's own
 arguments (the site's, a kept temporary) are `tmp` scaffolds of construct `call.arg`.
 
+## D2906: The dump size score is per case
+date: 2026-11-04 · by: pjs · issue: 0207
+D2901's score recorded one total per suite, so every new corpus case raised the totals and
+hid real growth elsewhere. tests/scores/dump-size.tsv now has a line per case (`SUITE CASE
+RAW GZIP`; a case is the directory of its dumps). A case that grows past its line (by more
+than 8 bytes and 0.1% raw or 0.5% gzip) fails the gate leg; a new case, a removed one, or
+one that shrank only asks for `--update`, which rewrites the suites' lines.
+
 ## D2875: `yield*` in plain continuations: a `yield*` over a wrapper of the inner record
 date: 2026-11-05 · by: pjr · issue: 0203
 At a `yield*` site, `K` delegates again with `yield* $dump.Y(it, next, async, ...first)`.

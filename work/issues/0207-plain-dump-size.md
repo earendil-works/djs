@@ -182,6 +182,11 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   object literal that captures a variable (`{ get m() { n++; … } }`) makes the dump's check
   fail with `get: ,` in the written text.
 
+- Item 1 merged? (pending merge, rebased). Score per case (D2906): tests/scores/dump-size.tsv
+  has `SUITE CASE RAW GZIP` lines; growth of a case fails, new/removed cases ask for
+  --update. My tests moved to dump_size_tests.rs (a submodule of dump_resume_tests) to stop
+  the end-of-file conflicts with 0203.
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a

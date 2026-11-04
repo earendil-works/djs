@@ -310,7 +310,7 @@ def jobs():
           cls="rust", needs=["build:difftest"], summary=r"^(stress|ratchet):"),
         # 0201: plain dumps (D2830) at every idle point of the corpus (chains of at most 50),
         # continued in djs and in node; refusals only as tests/plain-refusals.txt lists.
-        # 0207: and their size, against tests/scores/dump-size.tsv (D2901), with the v2
+        # 0207: and their size, against tests/scores/dump-size.tsv (D2901, per case: D2906), with the v2
         # programs' dumps (plain_dumps_at_every_idle_point writes them to DJS_PLAIN_OUT)
         # and the sleep-dump example's (the_sleep_example_dumps, DJS_SLEEP_OUT).
         J("plain dumps (djs and node)", f'd=$(mktemp -d); v=$(mktemp -d); s=$(mktemp -d); {G}/bin/djs-difftest'

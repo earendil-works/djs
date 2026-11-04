@@ -18,8 +18,8 @@
 //   pi:     work/research/0207/README.md says how (a two-line patch of js/pi/vm.ts)
 //
 //   node scripts/dump-size/dump-size.ts --show FILE    the spans of one dump
-//   node scripts/dump-size/dump-size.ts --score tests/scores/dump-size.tsv [--update] corpus=DIR v2=DIR
-//                                                       the gate's size score (D2901)
+//   node scripts/dump-size/dump-size.ts --score tests/scores/dump-size.tsv [--update] corpus=DIR v2=DIR sleep=DIR
+//                                                       the gate's size score, per case (D2901, D2906)
 
 import { readdirSync, readFileSync, statSync, writeFileSync, existsSync } from "node:fs";
 import { join, relative, dirname } from "node:path";
@@ -540,65 +540,81 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 }
 
 /**
- * The size score (0207, D2901): `--score FILE [--update] SUITE=DIR ...` totals each suite's
- * dumps without their `env.*` bytes (the corpus prelude and the harvest harness, which a
- * pi session does not dump), raw and gzip -9 per dump, and compares them with FILE's
- * `SUITE_raw` / `SUITE_gzip` lines: a total above its line fails (beyond a tolerance for
- * the wall clock's digits in the dumps and zlib versions); one well below it asks for
- * `--update`, which rewrites the lines, so that the score is a ratchet.
+ * The size score (0207, D2901, D2906): `--score FILE [--update] SUITE=DIR ...` totals each
+ * case's dumps (the files under one directory of DIR) without their `env.*` bytes (the
+ * corpus prelude and the harvest harness, which a pi session does not dump), raw and gzip
+ * -9 per dump, and compares them with FILE's line `SUITE  CASE  RAW  GZIP`. A case above
+ * its line fails (beyond a few bytes or a tolerance for the wall clock's digits and zlib
+ * versions); a case without a line, or a line without a case, only asks for `--update`, so
+ * a new case adds its own line instead of raising a total; a case well below its line asks
+ * for `--update` too, which rewrites the suites' lines, so that the score is a ratchet.
  */
 function score(argv: string[]) {
   const file = argv[0];
   const update = argv.includes("--update");
-  const totals: [string, number][] = [];
+  // suite -> case -> [raw, gzip]
+  const measured = new Map<string, Map<string, [number, number]>>();
   for (const spec of argv.slice(1).filter((a) => a.includes("="))) {
     const [name, dir] = spec.split("=");
-    let raw = 0;
-    let g = 0;
-    let n = 0;
+    const cases = new Map<string, [number, number]>();
     for (const f of walk(dir)) {
       const t = readFileSync(f, "utf8");
       const kept = envSpans(t, partition(t, bodySpans(t, 0, t.length)))
         .filter(([c]) => !c.startsWith("env"))
         .map(([, s, e]) => t.slice(s, e))
         .join("");
-      raw += kept.length;
-      g += gz(kept);
-      n++;
+      const rel = relative(dir, f);
+      const c = dirname(rel) === "." ? rel : dirname(rel);
+      const v = cases.get(c) ?? [0, 0];
+      cases.set(c, [v[0] + kept.length, v[1] + gz(kept)]);
     }
-    if (n === 0) throw new Error(`dump-size: no dumps in ${dir}`);
-    totals.push([`${name}_raw`, raw], [`${name}_gzip`, g]);
+    if (cases.size === 0) throw new Error(`dump-size: no dumps in ${dir}`);
+    measured.set(name, cases);
   }
   const text = existsSync(file) ? readFileSync(file, "utf8") : "";
-  const recorded = new Map(
-    text
-      .split("\n")
-      .filter((l) => l && !l.startsWith("#"))
-      .map((l) => l.split("\t"))
-      .map(([k, v]) => [k, Number(v)] as const),
-  );
-  let failed = false;
-  let stale = false;
-  for (const [k, v] of totals) {
-    const r = recorded.get(k);
-    const tol = k.endsWith("_gzip") ? 0.005 : 0.001;
-    const note = r === undefined ? "new" : v > r * (1 + tol) ? "ABOVE the score" : v < r * (1 - tol) ? "below the score: --update" : "ok";
-    if (r !== undefined && v > r * (1 + tol)) failed = true;
-    if (r === undefined || v < r * (1 - tol)) stale = true;
-    console.log(`dump-size: ${k} ${v} (score ${r ?? "-"}): ${note}`);
+  const recorded = new Map<string, [number, number]>();
+  for (const l of text.split("\n").filter((l) => l && !l.startsWith("#"))) {
+    const [suite, c, raw, g] = l.split("\t");
+    recorded.set(`${suite}\t${c}`, [Number(raw), Number(g)]);
+  }
+  const over = (v: number, r: number, tol: number) => v > r + Math.max(8, r * tol);
+  const under = (v: number, r: number, tol: number) => v < r - Math.max(8, r * tol);
+  const grew: string[] = [];
+  let stale = 0;
+  for (const [suite, cases] of measured) {
+    let [raw, g, rraw, rg] = [0, 0, 0, 0];
+    for (const [c, [vr, vg]] of cases) {
+      raw += vr;
+      g += vg;
+      const r = recorded.get(`${suite}\t${c}`);
+      if (r === undefined) {
+        stale++;
+        continue;
+      }
+      rraw += r[0];
+      rg += r[1];
+      if (over(vr, r[0], 0.001) || over(vg, r[1], 0.005)) grew.push(`${suite} ${c}: ${vr} raw, ${vg} gzip (score ${r[0]}, ${r[1]})`);
+      else if (under(vr, r[0], 0.001) || under(vg, r[1], 0.005)) stale++;
+    }
+    const gone = [...recorded.keys()].filter((k) => k.startsWith(`${suite}\t`) && !cases.has(k.slice(suite.length + 1)));
+    stale += gone.length;
+    console.log(`dump-size: ${suite}: ${cases.size} cases, ${raw} raw, ${g} gzip (the recorded cases: ${rraw}, ${rg} scored)`);
   }
   if (update) {
     const head = text.split("\n").filter((l) => l.startsWith("#"));
-    const keep = [...recorded].filter(([k]) => !totals.some(([t]) => t === k));
-    writeFileSync(file, [...head, ...[...keep, ...totals].map(([k, v]) => `${k}\t${v}`)].join("\n") + "\n");
+    const keep = [...recorded].filter(([k]) => !measured.has(k.split("\t")[0]));
+    const rows = [...keep.map(([k, [r, g]]) => `${k}\t${r}\t${g}`)];
+    for (const [suite, cases] of measured) for (const [c, [r, g]] of [...cases].sort()) rows.push(`${suite}\t${c}\t${r}\t${g}`);
+    writeFileSync(file, [...head, ...rows].join("\n") + "\n");
     console.log(`dump-size: wrote ${file}`);
     return;
   }
-  if (failed) {
+  if (grew.length) {
+    for (const l of grew) console.log(`dump-size: grew: ${l}`);
     console.log("dump-size: plain dumps grew; see work/research/0207 and scripts/dump-size");
     process.exit(1);
   }
-  if (stale) console.log("dump-size: the score is stale; lower it with --update");
+  if (stale) console.log(`dump-size: ${stale} cases new, gone or smaller; rewrite the score with --update`);
 }
 
 function main() {
