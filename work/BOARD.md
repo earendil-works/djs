@@ -6,7 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0202 | Origin tracking (step 3), then 0203 | pjx | .worktrees/pjx |
+| 0203 | Plain encodings for remaining refusals (step 4) | pjx | .worktrees/pjx |
 | 0204 | Host hooks for plain dumps (step 5) | pjh | .worktrees/pjh |
 
 ## Open (ready)
@@ -18,7 +18,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0203 | Plain encodings for remaining refusals (step 4): for-await, new.target/super in operands, patterns/defaults on paths, async-from-sync close, reenact of promises reacted to before the dump, TS dumps as plain JS | 0202 (agent pjx) |
 | 0205 | Retire format 2 (step 6) | 0203, 0204 |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
@@ -88,6 +87,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0190-0196 | SM migration: slot names (D2730), named slots (D2731), construct temporaries + iter_next_loc (D2732), finally completions (D2733), roles deleted (D2734), one compile per load (D2735) | 9cc8741b (agent sm) |
 | 0198 | Dump performance: corpus dump p50 1.42 -> 0.43 ms wasm, totals 3,243 -> 610 ms; data cases 2-6x (D2800-D2802) | 429184db (agent dumpperf) |
 | - | base_equals_a_compiled_realm test fixed (8f0fdd72); gate recovers from incremental corruption (D2896, b55180dd); CLI/REPL call states (D2894) | agent pjh |
+| 0202 | Origin tracking (D2870): continuations dumped as activations of their origin | 2cca1e52 (agent pjx; chain links within 512 B of an uninterrupted dump; corpus plain text 36.0 to 24.5 MB) |
 | 0201 | Plain-JS exporter (format 3, DumpOptions::plain; D2860, D2861) | e0057402 (agent pjx; 1,197/1,197 idle points continue in djs, 1,187 links in node; 1 refusal ratcheted in tests/plain-refusals.txt) |
 | 0206 | Site records: pattern nodes (D2852), transparent TS (D2853), Decl.at, ctor params | 10eac128 (agent pjc; 1,063/1,063 complete paths) |
 | 0200 | Compiler site-structure records for plain dumps (D2850, D2851) | 0cd63ec1 (agent pjc; 1,062/1,063 sites with complete paths) |
