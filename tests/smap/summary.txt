@@ -1,8 +1,8 @@
 # Suspension map coverage (compiler/smap_tests.rs)
-sites 1104
+sites 1106
 
 ## by kind
-  997 await
+  999 await
    11 await-using
    10 for-await.close
     8 for-await.next
@@ -35,6 +35,7 @@ sites 1104
     2 assign.object
     2 assign.object assign.key
     2 call.callee call.this call.arg
+    2 call.callee call.this template.part template.part
     2 for-of.iterator for-of.next assign.old
     2 object.literal object.literal array.element object.literal
     1 array.literal
@@ -45,8 +46,8 @@ sites 1104
     1 call.callee call.this call.arg call.callee call.this
     1 call.callee call.this call.arg call.callee call.this call.arg
     1 call.callee call.this member.object
-    1 call.callee call.this template.part template.part
     1 call.callee call.this template.part template.part template.part
+    1 call.callee call.this template.part template.part template.part template.part
     1 for-await.iterator
     1 for-of.iterator
     1 for-of.iterator for-of.next completion.kind completion.value call.callee call.this call.arg
@@ -56,7 +57,7 @@ sites 1104
     1 pattern.iterator
 
 ## paths (D2850)
- 1104 complete
+ 1106 complete
 
 ## path gaps, by the part they are in
 

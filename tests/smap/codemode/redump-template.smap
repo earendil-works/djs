@@ -1,0 +1,13 @@
+function <anonymous> @1..235
+  arg0 tools@0, arg1 console@0
+  loc0 <state>, loc1 n@0
+  node 0 Body @0..234: Params 6..22 Stmt 146..156 Stmt 157..231 | Param tools@0#0 Param console@0#0 Let n@0#1
+  node 1 Expr @157..231: Operand 157..230
+  node 2 Call @157..230: Callee 157..168 Open 168..169 Arg 169..229
+  node 3 Template @169..229: Quasi 169..172 Subst 172..179 Quasi 179..183 Subst 183..202 Quasi 202..206 Subst 206..227 Quasi 227..229
+  node 4 Await @183..202: Operand 189..202
+  node 5 Await @206..227: Operand 212..227
+  await#1 @183 (4:27) pc 33: call.callee@157 call.this@157 template.part@172 template.part@179
+    path 0.2 1.0 2.2 3.3 4
+  await#2 @206 (4:50) pc 50: call.callee@157 call.this@157 template.part@172 template.part@179 template.part@183 template.part@202
+    path 0.2 1.0 2.2 3.5 5
