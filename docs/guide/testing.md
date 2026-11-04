@@ -195,12 +195,13 @@ again with the bytecode backend and on the unchecked-heap build, the active test
 against its ratchet, the slim build's tests and corpora, the size budget, and pi's own
 tests on the shipped modules.
 
-Nothing reaches `main` without passing it. `scripts/merge-to-main.sh` takes a lock,
-rebases the branch onto `main`, regenerates the generated files from the merged sources
-(D1791), runs the gate on exactly that commit in a dedicated worktree (D1792), and
-fast-forwards `main` only if it passes. Merges are serial, so `main` always passes the
-gate, and the gate runs at full priority while everything else on the machine runs niced
-(D1793).
+Nothing reaches `main` without passing it. `scripts/merge-to-main.sh` rebases the branch
+onto `main`, regenerates the generated files from the merged sources (D1791), runs the
+gate on exactly that commit in a dedicated worktree (D1792), and fast-forwards `main` to
+it only if it passes and `main` has not moved since; otherwise it rebases and gates again
+(D2666). The lock that orders changes to `main` is held only for the fast-forward. So
+`main` only ever points at commits that passed the gate, and the gate runs at full
+priority while everything else on the machine runs niced (D1793).
 
 Three things keep it fast without checking less. Every build the legs need gets its own
 cargo target directory, so they all build at once, and each leg starts as soon as its
@@ -238,7 +239,7 @@ runs daily and before releases (D2664).
 
 Decisions on this page:
 
-<!-- gen:decisions D2040 D008 D012 D1022 D1023 D1100 D1102 D1161 D1440 D1530 D1540 D1635 D1720 D1725 D1790 D1791 D1792 D1793 D2032 D2661 D2662 D2663 D2664 -->
+<!-- gen:decisions D2040 D008 D012 D1022 D1023 D1100 D1102 D1161 D1440 D1530 D1540 D1635 D1720 D1725 D1790 D1791 D1792 D1793 D2032 D2661 D2662 D2663 D2664 D2666 -->
 - D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
 - D008: Codemode top level is a function body
 - D012: Development flow: per-agent job caps, iteration habits, worktree slots
@@ -262,4 +263,5 @@ Decisions on this page:
 - D2662: Gate legs are cached by input hash
 - D2663: Three input classes, guarded
 - D2664: `--full` and full-only legs; a full run daily
+- D2666: The gate runs outside the merge lock; only the fast-forward is inside
 <!-- /gen -->

@@ -72,6 +72,16 @@ Record each choice as a decision; document the new gate in TESTING.md; keep `scr
   a bad syspolicyd spell a single doctest exec waited minutes. Owner action proposed:
   Developer Tools permission for the app running agents and the gate.
 - Builds off the longest path (all but the workspace test build) run at nice 4.
+- Part 1 merged (fbb35ee1..ce8a6148); its own gate, with every new target directory
+  cold: 223 s.
+- Part 2, the protocol (D2666): merge-to-main gates under a gate lock and takes the merge
+  lock only to fast-forward; main moved → rebase and gate again (cached); third attempt
+  holds the merge lock throughout; locks always gate-first. It runs a copy of itself (the
+  rebases can rewrite the file bash is reading). Tested in a scratch repo
+  (/tmp/mtm-test): three concurrent merges plus coordinator commits, and a main that moves
+  every 1.5 s (third attempt locked, merged). gate.py: flock per worktree, and a pass
+  counts only if HEAD stayed put, so an old-protocol merge-to-main that checks out under a
+  new gate (or the reverse) fails safely.
 - Guide: docs/guide/testing.md's gate section rewritten (legs, parallel builds, cache,
   classes, full run). TESTING.md "The gate" rewritten; AGENTS.md: the cache note under
   "Testing while iterating", the coordinator's daily full run.

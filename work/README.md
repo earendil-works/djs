@@ -7,7 +7,8 @@ All work is tracked in files in this directory, committed to git.
 - `issues/NNNN-slug.md`: one file per issue. The assigned agent updates its status, log
   and result.
 - `scratch/`: gitignored scratch space, one subdirectory per issue (`scratch/0002/`).
-  Also holds `scratch/merge.lock` while a merge is in progress.
+  Also holds `scratch/merge.lock` while main moves and `scratch/gate.lock` while a gate
+  runs.
 
 ## Issue file format
 
@@ -59,11 +60,17 @@ on unmerged work of the other. When in doubt, run them one after another.
 
 ## Merging and generated files
 
-`scripts/merge-to-main.sh` takes the merge lock, rebases the branch onto `main`,
-regenerates the generated files (D1791), runs the gate on the resulting commit in the
-shared gate worktree `.worktrees/gate` and fast-forwards `main` to that commit (D1792).
-The gate worktree is detached, belongs to merge-to-main (never work in it, never remove
-it: its warm `target/` is the point), and is created on first use.
+`scripts/merge-to-main.sh` rebases the branch onto `main` and regenerates the generated
+files (D1791), runs the gate on the resulting commit in the shared gate worktree
+`.worktrees/gate` (D1792) under the gate lock (`work/scratch/gate.lock`), then takes the
+merge lock (`work/scratch/merge.lock`) only to fast-forward `main` to that commit (D2666).
+If `main` moved while it gated, it rebases and gates again; legs the move did not touch
+come from the gate's cache (D2662), so a moved-by-docs `main` costs seconds. The third
+attempt holds the merge lock throughout, so no branch starves. It says what it is doing:
+"waiting for the gate worktree", "gating", "main moved while gating; rebasing and gating
+again", "fast-forwarding". The gate worktree is detached, belongs to merge-to-main (never
+work in it, never remove it: its warm `target/` is the point), and is created on first
+use.
 
 - `docs/decisions.md`, `builtins/intrinsics.d.ts` and the two ratchet files
   (`tests/test262/expected-failures.txt`, `tests/corpus/expected-failures.txt`) merge
@@ -90,8 +97,8 @@ it: its warm `target/` is the point), and is created on first use.
   resolving by hand: resolve, `git rebase --continue`, run merge-to-main again.
 - merge-to-main fails right away if the primary checkout has uncommitted changes (the
   coordinator edits there only under the lock).
-- Every attempt is logged in `work/scratch/` of the primary checkout: `merge-log.tsv`
-  (lock wait, rebase, gate, outcome), `gate-steps.tsv` (each gate step's wall and CPU
+- Every merge is logged in `work/scratch/` of the primary checkout: `merge-log.tsv`
+  (lock waits, rebase, gate, total, outcome, merge lock held, attempts), `gate-steps.tsv` (each gate step's wall and CPU
   seconds) and `slow-tests.tsv` (the gate's 10 slowest unit tests and test262 tests).
   `scripts/merge-stats.sh [HOURS]` summarizes them per hour. The gate prints its slowest
   tests too (via `scripts/test-runner.sh`), so a slow new test shows in its own merge.

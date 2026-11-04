@@ -70,10 +70,11 @@ the branch `issue/NNNN-slug`. The coordinator creates the worktree for you.
      tests/test262/expected-failures.txt --update`. The gate reports stale entries but
      does not fail on them, and a stale ratchet hides later regressions of those tests,
    - commit,
-   - run `scripts/merge-to-main.sh` from your worktree. It takes the merge lock, rebases
-     onto `main`, runs `scripts/gate.sh` and fast-forwards `main`. If the rebase conflicts,
-     resolve it and run the script again. If the gate fails, fix the failure; never weaken
-     the gate to get green.
+   - run `scripts/merge-to-main.sh` from your worktree. It rebases onto `main`, runs
+     `scripts/gate.sh` in the gate worktree and fast-forwards `main` under the merge lock,
+     rebasing and gating again (mostly from the cache) if `main` moved meanwhile (D2666).
+     If the rebase conflicts, resolve it and run the script again. If the gate fails, fix
+     the failure; never weaken the gate to get green.
 7. Report back to the coordinator with a short summary: what landed, the commit range,
    follow-ups, anything surprising.
 
@@ -162,6 +163,7 @@ merge the coordinator checks that those pages still read true and turns larger g
 updates into issues of their own. It works
 directly on `main` only for coordination files (issues, board, docs) and commits right
 away, so `main` is never left dirty. It commits through `scripts/with-merge-lock.sh`, so
-that main never moves while an agent is between rebase and fast-forward. It runs the
+that main never moves under an agent's fast-forward (which then rebases and gates again).
+It runs the
 full gate (`scripts/gate.sh --full`, no cache, plus the full-only legs) on main at least
 daily and before a release (D2664).

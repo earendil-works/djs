@@ -532,7 +532,9 @@ is worse than main if its distribution is, not if one run is.
 ## The gate
 
 `scripts/gate.sh` must pass before anything merges into `main` (`scripts/merge-to-main.sh`
-runs it in the shared gate worktree after rebasing, D1792). It runs `scripts/gate.py`: a
+runs it in the shared gate worktree after rebasing, D1792, and fast-forwards `main` only
+to a commit that passed it, rebasing and gating again when `main` moved meanwhile,
+D2666). It runs `scripts/gate.py`: a
 set of **legs**, the checks, and the **builds** they need (D2660). `scripts/gate.sh
 --list` prints them. The legs: fmt; clippy (workspace, and wasm32 release for djs-core
 and djs-wasm); the workspace's unit and integration tests (djs-docs's apart) and its

@@ -2,7 +2,8 @@
 # Summarizes the merge log (0079): scripts/merge-stats.sh [HOURS]  (default 24)
 #
 # From work/scratch/ of the primary checkout, written by merge-to-main.sh:
-#   merge-log.tsv    one line per merge attempt (lock wait, rebase, gate, total, outcome)
+#   merge-log.tsv    one line per merge (lock waits, rebase, gate, total, outcome, merge
+#                    lock held, attempts)
 #   gate-steps.tsv   the gate's per-step wall and CPU seconds
 #   slow-tests.tsv   the gate's 10 slowest unit tests and test262 tests per merge
 # Prints merges, failures, lock waits and gate times per hour, the median time of each
@@ -52,7 +53,9 @@ if merges:
               f"{fails['failed-rebase']:3}/{fails['failed-gate']}/{fails['failed-ff']}"
               f"{'':12}{med(wait):>5}/{max(wait):<5}     {med(gate):>4}/{max(gate) if gate else '-':<5}"
               f"  {med([int(m[5]) for m in ms]):>5}")
-    held = sum(int(m[3]) + int(m[4]) for m in merges)
+    # The merge lock's hold time: its own column since D2666 (the gate runs outside it),
+    # rebase plus gate before.
+    held = sum(int(m[7]) if len(m) > 7 else int(m[3]) + int(m[4]) for m in merges)
     span = (dt.datetime.now() - min(m[0] for m in merges)).total_seconds()
     print(f"\nlock held ~{100 * held / max(span, 1):.0f}% of the time since the first attempt")
     failed = sorted((m for m in merges if m[6] != "merged"), key=lambda m: m[0])

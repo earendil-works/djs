@@ -8700,3 +8700,20 @@ dependency-descriptor lines (the live VM is always this build's), the whole-imag
 view (the analyzer still describes the whole image when given no reference). The sections
 keep their JSON form, which the tests check; nothing prints it. Supersedes D2264's and
 D2340's command and `.image` parts.
+
+## D2666: The gate runs outside the merge lock; only the fast-forward is inside
+date: 2026-11-04 · by: gate-speed · issue: 0183
+merge-to-main rebases and regenerates without a lock, gates under a gate lock (guarding the
+one gate worktree), then takes the merge lock only to fast-forward main, and only if main is
+still the commit it rebased onto. If main moved, it rebases and gates again; the cache
+(D2662) makes that cost what the move can affect (a coordinator's docs commit: the guide
+leg). The third attempt holds the merge lock from rebase to fast-forward, so a branch
+cannot starve. Locks are always taken gate lock first, so merges never wait on each other in
+a cycle. The guarantee is D1792's: main only ever fast-forwards to a commit that itself
+passed the gate. The coordinator's commits (with-merge-lock.sh) wait for a fast-forward,
+not for a gate. Older merge-to-main copies (branches not rebased since) gate under the
+merge lock alone; the new one waits for the merge lock once before taking the gate
+worktree, and gate.py refuses to count a run whose worktree another checkout moved
+(flock per worktree, HEAD checked before caching and at the end), so a mixed pair fails
+safely. One gate worktree still serializes gates; a second is the next lever if the gate
+lock becomes the queue.

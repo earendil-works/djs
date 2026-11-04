@@ -8,13 +8,13 @@ take_merge_lock() {
   until mkdir "$lock" 2>/dev/null; do
     pid=$(sed -n 's/.*pid=\([0-9]*\).*/\1/p' "$lock/owner" 2>/dev/null)
     if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
-      echo "merge lock: removing a stale lock ($(cat "$lock/owner" 2>/dev/null)): pid $pid is gone" >&2
+      echo "lock: removing a stale lock ($(cat "$lock/owner" 2>/dev/null)): pid $pid is gone" >&2
       rm -rf "$lock"
       continue
     fi
-    if [ $waited -eq 0 ]; then echo "waiting for merge lock ($lock): $(cat "$lock/owner" 2>/dev/null)" >&2; fi
+    if [ $waited -eq 0 ]; then echo "waiting for the lock $lock, held by: $(cat "$lock/owner" 2>/dev/null)" >&2; fi
     waited=$((waited + 1))
-    if [ $waited -gt "$max" ]; then echo "merge lock held for $((max * 5 / 60))+ minutes by $(cat "$lock/owner" 2>/dev/null); ask the coordinator" >&2; return 1; fi
+    if [ $waited -gt "$max" ]; then echo "lock $lock held for $((max * 5 / 60))+ minutes by $(cat "$lock/owner" 2>/dev/null); ask the coordinator" >&2; return 1; fi
     sleep 5
   done
   echo "$who $(date) pid=$$" > "$lock/owner"
