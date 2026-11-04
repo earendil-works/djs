@@ -31,6 +31,8 @@ mod peephole;
 mod resolve;
 mod scan;
 mod smap;
+#[cfg(feature = "dump")]
+mod smap_syntax;
 mod stmt;
 mod temps;
 mod ts;
@@ -370,6 +372,8 @@ fn suspension_maps_with(
 pub use smap::{FunctionMap, Site, SiteKind, Slot};
 #[cfg(feature = "dump")]
 pub use smap::{Holds, NamedSlot, Place};
+#[cfg(feature = "dump")]
+pub use smap::{Decl, DeclKind, Node, NodeKind, Part, Role, Special, Step, Syntax};
 
 /// The names of the prelude function table's slots (D2440), in slot order, for
 /// privileged source `src`: the prelude functions that others refer to. The registry

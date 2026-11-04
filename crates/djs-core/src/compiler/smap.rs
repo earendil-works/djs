@@ -67,6 +67,8 @@ impl SiteKind {
 
 #[cfg(feature = "dump")]
 pub use maps::*;
+#[cfg(feature = "dump")]
+pub use super::smap_syntax::*;
 
 #[cfg(feature = "dump")]
 mod maps {
@@ -150,6 +152,18 @@ mod maps {
         pub stack: Vec<String>,
         /// Why the frame cannot be described here: the construct, or `None`.
         pub unsupported: Option<String>,
+        /// The syntax nodes around the site (D2850, `FunctionMap::syntax`), from the
+        /// function's body (`path[0]`, a `NodeKind::Body`) down to the site's own
+        /// construct: the `Await`/`Yield`/`YieldStar` node of an `await`, `yield`,
+        /// `yield.await`, `yield.return`, `yield*` or `yield*.await` site; the
+        /// `ForAwait` node of `for-await.next`/`for-await.close`; the `Return` node of
+        /// `return.await`; for `await-using` the statement list (`Block`, `Body` or
+        /// `Switch`) whose end disposes.
+        pub path: Vec<super::Step>,
+        /// The path misses a construct the recorder does not know (smap_syntax.rs): the
+        /// offset of the first text in a step's part that is neither the next node nor
+        /// parentheses. A continuation cannot be written from such a path.
+        pub gap: Option<u32>,
     }
 
     /// Where a named slot is in a suspended frame: argument `i`, local `i`, or the
@@ -289,6 +303,8 @@ mod maps {
         /// destructuring patterns. A dump that writes a class or method by its text
         /// evaluates such a key again (D2623).
         pub computed_keys: Vec<(u32, u32)>,
+        /// The syntax nodes around the sites (D2850, compiler/smap_syntax.rs).
+        pub syntax: super::Syntax,
     }
 
     impl FunctionMap {
@@ -517,6 +533,8 @@ mod maps {
                         .collect()
                 },
                 unsupported,
+                path: Vec::new(),
+                gap: None,
             });
         }
         let name = if f.name.is_null() {
@@ -530,6 +548,7 @@ mod maps {
             end: f.src_end,
             sites,
             computed_keys: rec.computed_keys.clone(),
+            syntax: super::Syntax::default(),
         }
     }
 }

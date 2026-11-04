@@ -9078,3 +9078,20 @@ A continuation carries `$djs = {f, at, segs, scaf, cmap}`; the exporter writes t
 of a continuation as an activation of its origin, so a dump always carries the original
 code (pruned of what cannot run again) and its size stays bounded over any number of
 re-dumps.
+
+## D2850: Suspension maps carry the syntax around each site
+date: 2026-11-05 · by: pjc · issue: 0200
+The plain-dump exporter (D2831) writes a continuation by splicing the original text, so
+it needs the structure around each site, which the single-pass compiler never builds as
+a tree. While recording suspension maps the parser keeps every syntax node that encloses
+a site (statements and expressions of the function's own code), with the roles and spans
+of its parts and the bindings of the scopes it opens (`FunctionMap::syntax`), and each
+site gets its path of nodes from the function body down (`Site::path`), with the part
+that holds the next step. Offsets are from the function's start like every other offset
+of a map; temporaries `c@o` are found on the path by `o`. Constructs that are not nodes
+yet (destructuring patterns, class bodies, TypeScript expressions) leave a *gap* that
+`Site::gap` reports (the part holds more than the next node and parentheses), so the
+exporter refuses instead of silently dropping a construct. Types and roles are in
+compiler/smap_syntax.rs. Alternatives: a real AST for async functions (a second parser
+in all but name, and memory for every compile with recording), or re-parsing the
+function in the exporter (the dependency D2831 rejects).
