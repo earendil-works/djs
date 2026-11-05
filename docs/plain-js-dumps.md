@@ -196,16 +196,25 @@ Two orderings follow from this, both plain code:
 
 ### 2.3 Origin tracking
 
-Each continuation carries its origin as a plain property, `K.$djs = {f, at, segs, scaf,
-cmap}`:
+Each continuation carries its origin as a plain property. Origin tracking reads `K`
+through its layout: `segs`, `[kStart, fStart, length]` for every stretch of `K`'s text
+copied from `f`; `scaf`, the constructs `K` made itself (the loop scaffolds, the site's own
+`await`) with the offsets of the originals; `cmap`, the temporaries of `K`'s rewritten site
+statement and the slots of `f` they stand for (`$djs_R(callee, …)`'s first argument is
+`f`'s `call.callee@41`). The record does not hold the layout but what makes it again from
+`f` (D2913), `K.$djs = {f, at, h, r}`:
 
 - `f`: the original function (a reference when the run holds it, else its text, §5);
-- `at`: the site of `f` that `K` stands for;
-- `segs`: `[kStart, fStart, length]` for every stretch of `K`'s text copied from `f`;
-- `scaf`: the constructs `K` made itself (the loop scaffolds, the site's own `await`) with
-  the offsets of the originals;
-- `cmap`: the temporaries of `K`'s rewritten site statement and the slots of `f` they stand
-  for (`$djs_R(callee, …)`'s first argument is `f`'s `call.callee@41`).
+- `at`: the site of `f` that `K` stands for (left out for `await#1`);
+- `r`: the tape, the decisions the writer took on values that shape `K` (whether it reads
+  an operand again, writes a temporary's literal in place, a completion's kind, …), in
+  order; a number whose bits they are when all are yes/no;
+- `h`: `[piece, length, …]`, the generated stretches of `K` whose text the canonical `K`
+  (written from `f`'s site with every value a placeholder) does not give, not even with a
+  name, reference or literal for each placeholder.
+
+The exporter writes `K` twice, as it is and canonically with the tape, and refuses a dump
+where the two differ in more than those texts.
 
 A dump of a run that resumed continuations (today's exporter, reading `K`'s frames with
 `K`'s suspension maps) is first **normalized**: every activation of a continuation becomes
@@ -558,6 +567,6 @@ Proposals for the coordinator, not added to docs/decisions.md by this report.
   functions the dump calls (`resume(id, name, args, state)`, `seed(lo, hi)`), not through
   engine primitives.
 - **D2833**: Re-dumps use origin tracking: a continuation carries `$djs = {f, at, segs,
-  scaf, cmap}`, and the exporter writes the frame of a continuation as an activation of its
+  scaf, cmap}` (since D2913 `{f, at, h, r}`, which make that layout again), and the exporter writes the frame of a continuation as an activation of its
   origin, so a dump always carries the original code (pruned of what cannot run again) and
   its size stays bounded over any number of re-dumps.

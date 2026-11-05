@@ -248,6 +248,10 @@ pub(super) fn layout(
 /// it again (D2913).
 pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
     let mut w = run(act, ctx, None)?;
+    // (Replayed, the tape reads 0 past its end.)
+    while w.tape.last() == Some(&0) {
+        w.tape.pop();
+    }
     let c = canonical(
         &act.site,
         act.syntax.clone(),
@@ -264,7 +268,7 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
         )
     };
     let r = run(&c, &mut Canon { act: &c }, Some(&w.tape)).map_err(again)?;
-    let h = holes(&w, &r).map_err(again)?;
+    let h = holes(&w, &r, &act.ftext).map_err(again)?;
     let (text, _) = layout(&w.pieces, &act.ftext, &mut w.scaf, &mut w.cmap);
     let text = match &w.wrap {
         Some(p) => cat!("({ __proto__: ", p, ", ", text, " }).K"),
@@ -280,25 +284,37 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
 }
 
 /// Where `w`'s pieces differ from `r`'s, which has the same shape: `[piece, length]` of
-/// each run or literal whose text differs.
-fn holes(w: &Out, r: &Out) -> R<Vec<u32>> {
+/// each run or literal whose text differs, unless it reads as `r`'s with a token (a
+/// name, a reference, a literal) for each placeholder ([`scan`]).
+fn holes(w: &Out, r: &Out, ftext: &str) -> R<Vec<u32>> {
     if w.pieces.len() != r.pieces.len() {
         return Err(cat!(w.pieces.len(), " pieces, ", r.pieces.len(), " again"));
+    }
+    let mut text = String::new();
+    let mut starts = Vec::new();
+    for p in &w.pieces {
+        starts.push_out(text.len());
+        match p {
+            Piece::Run(t) | Piece::Lit(_, t) => text.push_str(t),
+            Piece::Copy(a, b) => text.push_str(ftext.get(*a as usize..*b as usize).unwrap_or("")),
+            Piece::Mark(_) => {}
+        }
     }
     let mut h = Vec::new();
     let mut lits = Vec::new();
     for (i, (a, b)) in w.pieces.iter().zip(&r.pieces).enumerate() {
-        let differs = |x: &String, y: &String, h: &mut Vec<u32>| {
-            if x != y {
+        let same = |at: usize, t: &str| text.as_bytes().get(at..at + t.len()) == Some(t.as_bytes());
+        let mut differs = |x: &String, y: &String| {
+            if x != y && scan(y, starts[i], &same, &text) != Some(x.len()) {
                 h.push_out(i as u32);
                 h.push_out(x.len() as u32);
             }
         };
         match (a, b) {
-            (Piece::Run(x), Piece::Run(y)) => differs(x, y, &mut h),
-            (Piece::Lit(i, x), Piece::Lit(j, y)) if i == j => {
-                lits.push_out(*i);
-                differs(x, y, &mut h)
+            (Piece::Run(x), Piece::Run(y)) => differs(x, y),
+            (Piece::Lit(j, x), Piece::Lit(k, y)) if j == k => {
+                lits.push_out(*j);
+                differs(x, y)
             }
             (Piece::Copy(..), Piece::Copy(..)) | (Piece::Mark(_), Piece::Mark(_)) if a == b => {}
             _ => return Err(cat!("piece ", i, " differs")),
@@ -322,6 +338,48 @@ fn holes(w: &Out, r: &Out) -> R<Vec<u32>> {
         return Err(String::from("its temporaries differ"));
     }
     Ok(h)
+}
+
+/// The length of the text at `at` of `k` that reads as `pattern` with a token for each
+/// placeholder: fixed parts as `same` compares them.
+fn scan(pattern: &str, at: usize, same: &dyn Fn(usize, &str) -> bool, k: &str) -> Option<usize> {
+    let mut cur = at;
+    for (n, part) in pattern.split(PH).enumerate() {
+        if n > 0 {
+            let t = token_len(k.get(cur..)?);
+            if t == 0 {
+                return None;
+            }
+            cur += t;
+        }
+        if !same(cur, part) {
+            return None;
+        }
+        cur += part.len();
+    }
+    Some(cur - at)
+}
+
+/// The length of the token `t` starts with: a string without escapes, a number, a name
+/// or a reference (`$dump.s3.f`), `undefined`, `true`, …
+fn token_len(t: &str) -> usize {
+    let b = t.as_bytes();
+    if b.first() == Some(&b'"') {
+        return match t[1..].find(['"', '\\', '\n']) {
+            Some(e) if b[1 + e] == b'"' => e + 2,
+            _ => 0,
+        };
+    }
+    let mut i = usize::from(b.first() == Some(&b'-'));
+    while let Some(&c) = b.get(i) {
+        let exp_sign = i > 0 && (c == b'+' || c == b'-') && matches!(b[i - 1], b'e' | b'E');
+        if c.is_ascii_alphanumeric() || c == b'.' || c == b'_' || c == b'$' || exp_sign {
+            i += 1;
+        } else {
+            break;
+        }
+    }
+    i
 }
 
 /// The layout of a continuation `ktext` of the original `act` stands for (canonical),
@@ -363,6 +421,13 @@ pub(in super::super) fn layout_of(
                 Some(len as usize)
             }
             _ => None,
+        };
+        // (Without a hole, a placeholder is the token there.)
+        let hole = match p {
+            Piece::Run(t) | Piece::Lit(_, t) if hole.is_none() && t.contains(PH) => {
+                Some(scan(t, at, &starts, ktext).ok_or_else(differs)?)
+            }
+            _ => hole,
         };
         match p {
             Piece::Run(t) | Piece::Lit(_, t) => match hole {

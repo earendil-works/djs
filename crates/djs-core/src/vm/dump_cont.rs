@@ -171,7 +171,7 @@ fn run(act: &Act, ctx: &mut dyn Ctx, replay: Option<&[u32]>) -> R<Out> {
     };
     let args: Vec<String> = g.params.iter().map(|p| p.1.clone()).collect();
     if let Some((tape, at)) = &g.replay
-        && *at != tape.len()
+        && *at < tape.len()
     {
         return Err(cat!(
             "a tape of ",
@@ -388,12 +388,12 @@ impl G<'_, '_> {
     }
 
     /// Decision `v`, taken on a value, that shapes K: recorded on the tape, or, writing
-    /// again, the recorded one (D2913). Past the tape's end: `u32::MAX`, which no
-    /// decision takes, so the shapes differ.
+    /// again, the recorded one (D2913). Past the tape's end: 0 (the record leaves out
+    /// the tape's trailing zeros).
     fn steer(&mut self, v: u32) -> u32 {
         match &mut self.replay {
             Some((tape, at)) => {
-                let v = tape.get(*at).copied().unwrap_or(u32::MAX);
+                let v = tape.get(*at).copied().unwrap_or(0);
                 *at += 1;
                 v
             }

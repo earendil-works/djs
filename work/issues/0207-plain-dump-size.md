@@ -273,6 +273,24 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   - Later: the awaited promise and scaffold constants as K parameters (no hole at all).
   Estimate: ~75 % of the record bytes (v2 ~ -40 KB, sleep ~ -130 B, corpus ~ -130 KB).
 
+- Item 4 (D2913): records are `{ f, at, h, r }`. dump_cont_canon.rs (new): K as pieces
+  (runs, copies, marks, in-place literals), `G::steer` tape for every value-dependent
+  shape decision (rereads, closeless, literal temporaries, pattern done, completion kinds,
+  using records/triples/state), the canonical activation and Ctx, holes (runs whose text
+  differs and does not read as the canonical one with a token per placeholder),
+  `layout_of` for re-dumps (TypeScript: K's blanked types are spaces). dump_origin
+  `record()` replaced: f's map and site `at`, the canonical K, the layout. String
+  temporaries are constants now (re-dumps make no strings). Tape: trailing zeros dropped,
+  a number of bits when all are yes/no. Test plain_records_make_the_layout_again.
+  Score: v2 471,916 → 424,241 raw (gzip 177,258 → 153,023; records 59 → 10.6 KB); sleep
+  1,247 → 1,093 (648 → 563; records `{ f: $dump.n2 }` and `{ f: $dump.Fa6, r: 54 }`);
+  corpus 7,286,070 → 7,108,975. Dump time (corpus first dumps, release): ~5-10 % more
+  (the second generation; the generator's liveness `render` is its largest part).
+  Docs: plain-js-dumps.md §2.3, continuation-dumps.md, guide snapshots.md (example from a
+  real run), examples/sleep-dump/README.md.
+- 0207 stays open (owner): after item 4, fluff's (0216) ranked queue. pjr (0215) makes
+  dump_plain's schedule/keys_in/dep_items/creator_block indexed after this merge.
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a

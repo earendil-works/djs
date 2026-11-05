@@ -2328,7 +2328,14 @@ impl W<'_> {
         if !k.holes.is_empty() {
             rec = cat!(rec, ", h: [", list(&k.holes), "]");
         }
-        if !k.tape.is_empty() {
+        // A tape of yes/no decisions is a number, its bits the decisions (the first the
+        // lowest; a tape leaves out its trailing zeros).
+        if k.tape.iter().all(|&x| x <= 1) && k.tape.len() <= 53 {
+            let bits = k.tape.iter().rev().fold(0u64, |n, &x| n * 2 + u64::from(x));
+            if bits != 0 {
+                rec = cat!(rec, ", r: ", bits);
+            }
+        } else {
             rec = cat!(rec, ", r: [", list(&k.tape), "]");
         }
         let me = cat!("$dump.", act.name);

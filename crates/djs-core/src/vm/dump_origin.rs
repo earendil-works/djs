@@ -2,18 +2,19 @@
 //! continuation `K` is read as an activation of the function `K` stands for.
 //!
 //! A plain dump writes every suspended activation as a continuation `K` with its origin
-//! `K.$djs = { f, at, segs, scaf, cmap }`. Once the dump is loaded and runs, the frames
-//! are `K`'s. Dumped again as they are, the next continuation would be written from `K`'s
-//! text, which holds the previous dump's prefix: chains would grow with every link. So
-//! the exporter reads such a frame as one of `f` at the site `K`'s site stands for: `K`'s
-//! site maps to `f`'s through the stretches `K` copied from `f` (`segs`) or `K`'s own
-//! constructs (`scaf`: the site itself, loop scaffolds, a finally's rest); `K`'s
-//! bindings are `f`'s by name (`K` declares them as `f` does, nested the same way), the
-//! temporaries of `f`'s rewritten statement are `K`'s constants or literals (`cmap`), a
-//! loop scaffold's iterable is the saved iterator record again, and `K`'s own `$djs_*`
-//! locals are dropped, and with them what only they held. The frame is rebuilt in `f`'s
-//! layout, so the rest of the exporter sees an activation of `f`, generated from `f`'s
-//! text again.
+//! `K.$djs = { f, at, h, r }`. Once the dump is loaded and runs, the frames are `K`'s.
+//! Dumped again as they are, the next continuation would be written from `K`'s text,
+//! which holds the previous dump's prefix: chains would grow with every link. So the
+//! exporter reads such a frame as one of `f` at the site `K`'s site stands for, through
+//! `K`'s layout, which it makes again from `f`'s site `at`, the tape `r` and the holes `h`
+//! (D2913, dump_cont_canon.rs): `K`'s site maps to `f`'s through the stretches `K` copied
+//! from `f` (`segs`) or `K`'s own constructs (`scaf`: the site itself, loop scaffolds, a
+//! finally's rest); `K`'s bindings are `f`'s by name (`K` declares them as `f` does,
+//! nested the same way), the temporaries of `f`'s rewritten statement are `K`'s
+//! constants or literals (`cmap`), a loop scaffold's iterable is the saved iterator
+//! record again, and `K`'s own `$djs_*` locals are dropped, and with them what only they
+//! held. The frame is rebuilt in `f`'s layout, so the rest of the exporter sees an
+//! activation of `f`, generated from `f`'s text again.
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -22,7 +23,7 @@ use super::*;
 use crate::compiler::{Holds, NamedSlot, Place, Site, SiteKind, Syntax};
 use crate::interp::run::suspend;
 
-/// What `K.$djs` holds.
+/// `K`'s layout, made again from its record.
 struct Record {
     segs: Vec<u32>,
     scaf: Vec<Scaffold>,
@@ -226,7 +227,20 @@ impl Dumper<'_> {
             return Ok(None);
         };
         let field = |name: &str| own(h, r, name).map_or(Some(Vec::new()), |v| numbers(h, v));
-        let (Some(holes), Some(tape)) = (field("h"), field("r")) else {
+        // (A tape of yes/no decisions is a number, its bits the decisions.)
+        let tape = match own(h, r, "r").and_then(|v| v.as_number()) {
+            Some(n) if (0.0..9007199254740992.0).contains(&n) && (n as u64) as f64 == n => {
+                let mut n = n as u64;
+                let mut v = Vec::new();
+                while n != 0 {
+                    v.push_out((n & 1) as u32);
+                    n >>= 1;
+                }
+                Some(v)
+            }
+            _ => field("r"),
+        };
+        let (Some(holes), Some(tape)) = (field("h"), tape) else {
             return no("its record is not one");
         };
         let at = own(h, r, "at").map_or(Some(String::from("await#1")), |v| string(h, v));

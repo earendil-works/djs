@@ -10002,3 +10002,30 @@ have no parameters. Imports later are one more binding: a host resolver maps (sp
 export) to an identity, by default `specifier#export`, and the import binding holds that
 identity's object; dumps already name it by identity (D2971). Per-run bindings are left
 out until a host needs them.
+## D2913: A continuation's record makes its layout again: `{f, at, h, r}`
+date: 2026-11-05 · by: pjs · issue: 0207
+A continuation `K`'s origin record no longer holds its layout (`segs`, `scaf`, `cmap`: 12.5 %
+of the v2 dumps' bytes). Origin tracking needs only where `K` copies `f`'s text, where `K`'s
+own constructs are and what stands for `f`'s temporaries; generated text in between only
+shifts offsets. So the record holds what makes the layout again from `f`: the site `at`; the
+tape `r`, every decision the writer took on a value that shapes `K` (an operand or loop
+`next` read again, a loop without `return`, a temporary's literal written in place, a
+pattern's iterator done, a completion's kind, a `using` scope's resources and state), in
+order, without trailing zeros, a number whose bits they are when all are yes/no; and the
+holes `h`, `[piece, length, ...]`. `K` is written as pieces (generated runs, copies of `f`,
+marks, in-place literals, a run between any two others). The writer writes `K`, then again
+from the canonical activation (the site's slot names, every value a placeholder, a dump
+that makes nothing later) replaying the tape: the pieces must be the same but for the texts
+of runs and literals, else the dump is refused (a decision not on the tape: a bug, no
+fallback). A differing text needs a hole unless it reads as the canonical one with a token
+(a name, a reference, a number, a string without escapes) for each placeholder. A re-dump
+compiles `f`'s script again (as before), writes the canonical `K` with the tape, checks
+its fixed text and copies against `K`'s own text (a TypeScript original's types are spaces
+there, D2879), takes the holes' and tokens' texts from it and so has the writer's pieces,
+whose layout it computes as the writer did. String temporaries are constants of `K`, not
+literals (a re-dump reads literals back as values and makes no strings); a run of `K`'s
+text that goes on as `f`'s after a copy extends the copy by the longest common prefix.
+Score: v2 471,916 → 424,241 raw (gzip 177,258 → 153,023), records 59 → 10.6 KB; sleep
+1,247 → 1,093 (648 → 563); corpus 7,286,070 → 7,108,975. Cost: the writer generates each
+continuation twice (the corpus's first dumps: about 5-10 % more dump time, mostly the
+generator's liveness rendering), each re-dump once per continuation activation.

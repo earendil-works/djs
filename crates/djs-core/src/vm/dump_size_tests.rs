@@ -309,3 +309,39 @@ f(1, 2);
         "{d}"
     );
 }
+
+/// A continuation's record holds what makes its layout again (D2913): its origin, its
+/// site, the decisions taken on values (`r`) and its holes (`h`), no layout. A dump of the
+/// loaded dump writes the original again; one whose continuation's text is not the one its
+/// origin makes (an edit in the copied text) is refused.
+#[test]
+fn plain_records_make_the_layout_again() {
+    let src = r#"
+async function f(xs) {
+  const a = [await later(1)];
+  for (const x of xs) a.push(await later(x));
+  return a.join();
+}
+f([2, 3]).then(print);
+"#;
+    let d = plain_dump_at(src, 2);
+    assert!(!d.contains("segs:") && !d.contains("scaf:"), "{d}");
+    assert!(d.contains("{ f: f, at: \"await#2\""), "{d}");
+    let again = |text: &str| -> Result<String, String> {
+        let mut vm = plain_load(text)?;
+        let mut lines = Vec::new();
+        let id = plain_step(&mut vm, &mut lines).expect("an idle point");
+        settle(&mut vm, id);
+        plain_step(&mut vm, &mut lines).expect("an idle point");
+        plain_dump(&vm)
+    };
+    let next = again(&d).unwrap();
+    assert_eq!(next.matches("return a.join();").count(), 2, "{next}");
+    let edited = d.replacen("return a.join();\n}, {", "return  a.join();\n}, {", 1);
+    assert_ne!(edited, d);
+    let e = again(&edited).unwrap_err();
+    assert!(
+        e.contains("its text is not the one its origin makes"),
+        "{e}"
+    );
+}

@@ -276,7 +276,7 @@ for (const path of $djs_I($djs_i1)) {
   notes.push(await tools.read({ path }));
 }
 return notes.join("\n");
-}, { f: $dump.Fa4, segs: […], scaf: […] }).call(globalThis, $djs.host("tools"), $dump.n2);
+}, { f: $dump.Fa4, r: 54 }).call(globalThis, $djs.host("tools"), $dump.n2);
 try { ($dump.a4); } finally { delete globalThis.$dump; delete globalThis.$djs; }
 ```
 
@@ -309,10 +309,14 @@ one object the host provides while it loads, `$djs` (D2834, D2890):
   [js/src/dump-runtime.js](../../js/src/dump-runtime.js);
 - the continuation's `$djs` record names its origin, the script's function (`$dump.Fa4`,
   which the host makes again from the script it ran, named by its file and hash, and never
-  calls) and which stretches of its text the continuation copied. A dump of a run
-  that resumed this one reads the continuation's frame as one of the original and writes
-  the original again (**origin tracking**, D2833), so a dump stays the same size however
-  many times a run is resumed and dumped;
+  calls), and the few decisions the writer took on the run's values that shaped the
+  continuation's text (`r`, as bits: whether it reads `notes.push` or the loop's `next`
+  again instead of keeping what the run looked up, …). A dump of a
+  run that resumed this one writes the continuation again from the original and those
+  decisions, finds out that way which stretches of the continuation's text are copies of
+  the original's, reads the continuation's frame as one of the original and writes the
+  original again (**origin tracking**, D2833, D2913), so a dump stays the same size
+  however many times a run is resumed and dumped;
 - the Script's completion value is what the host asked for, the run's result promise
   (D2895), and its last statement deletes `$dump` and `$djs`.
 
