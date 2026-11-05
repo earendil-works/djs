@@ -11123,3 +11123,57 @@ wmicro.py, main → 0230): Math.max(i, 3) 8,838 → 1,206; Math.floor 3,531 → 
 lastIndexOf 9,571 → 6,029; replace 18,589 → 14,926; parseInt 4,899 → 3,835; Array.isArray
 1,819 → 1,347; String(i) 6,440 → 5,979. Plain calls, push/pop, slice, charAt and Object.keys
 are unchanged (±2%).
+## D3135: The RegExp search is the matcher's; programs are read in place; one exec state serves many matches
+date: 2026-11-06 · by: pre · issue: 0233
+The search around a pattern is no longer bytecode (`SPLIT_GOTO; SKIP; ANY; GOTO` and `SCAN`,
+both opcodes gone): the matcher's `PC_FIND` state looks for the next start and runs each
+attempt on an empty backtrack stack, so slot writes outside any frame are not logged (the
+captures are cleared before the next attempt). The header (`H_LEN` 7) has the first set (ranges
+plus a bitmap of its Latin-1 characters, `H_SEARCH`), the mode (`M_ANCHOR`: a non-multiline `^`
+on every alternative means one attempt where the exec starts, a multiline one means attempts
+only at line starts, found by skipping to the next line terminator; `M_SKIP`, `M_NAMES`) and the
+leading STAR's skip register. A STAR followed by the end of the pattern (`F_LAST`) pushes no
+frame. Fuel stays additive: passing a position costs one unit and is paid before moving on.
+`exec_in`/`resume_in` take a `Prog` (the RegExp's U32Array cell read as byte quads, no copy)
+and an `ExecState` the caller keeps (slots, generations and stack in one Vec): replace runs all
+its matches in one state and one borrow of the program and string, and builds its output one
+byte per unit when the string and the template are one-byte, sized to the input. The program
+encoding and the saved state changed: COMPAT_VERSION 5. Per exec 5 allocations became 1, per
+match in a replace 0.
+
+## D3136: RegExpCreate shares a RegExp's program; pristine RegExps skip the flag getters and matchAll's Construct
+date: 2026-11-06 · by: pre · issue: 0233
+`%RegExpCreate(proto, pattern, flags)` accepts a RegExp object as the pattern: with equal flags
+the new RegExp shares its program cell (programs are immutable), else it compiles its source.
+RegExpConstructor uses it for a RegExp pattern (after every observable step), and its first
+lines take `RegExp(string[, string])` with new.target undefined or %RegExp% straight to
+RegExpCreate (IsRegExp of a string, %RegExp%'s fixed `prototype` and ToString of strings
+observe nothing). `get flags` returns [[OriginalFlags]] when IsPristineRegExp holds (the eight
+getters are then the originals), and RegExp.prototype[@@matchAll] on a pristine RegExp skips
+SpeciesConstructor, the flags Get and Construct. EscapeRegExpPattern returns the source itself
+when nothing needs escaping.
+
+## D3137: %RegExpExecOwn: RegExpExec without its lookups when they read only data
+date: 2026-11-06 · by: pre · issue: 0233
+`%RegExpExecOwn(r, s, test, state)` runs RegExpBuiltinExec when r is a RegExp without an own
+`exec`, its prototype is %RegExp.prototype% whose `exec` is the original data property, and its
+own lastIndex is a Number; otherwise it returns undefined and has done nothing, and the caller
+takes the spec steps. exec, test and RegExpExec (match, matchAll's next, the slow replace and
+split) call it first. Suspendable like RegExpExecRaw; a resumed call skips the checks (they held,
+and nothing ran since). New intrinsic: INTRINSICS_HASH changes.
+
+## D3138: A RegExp compile cache of 8 entries in a realm slot
+date: 2026-11-06 · by: pre · issue: 0233 · approved: coordinator
+`Intrinsic::RegExpCache` (realm.rs, the last entry; RECORDS_HASH changes through the enum) is
+undefined or an internal ValueArray of 8 `[source, flags, program cell]` triples, most recently
+used first, keyed on exact string equality of the flat source and flags (length first). A
+RegExpCreate that would compile looks there first; a miss compiles and inserts at the front,
+except sources over 256 code units and programs over 1024 words. Only RegExpCreate reads it: no
+property or user code reaches it, the registry and the dump tables do not name it (like
+KeptObjects), and the plain-dump fuzzer's regress passes with and without --lazy (its one
+--lazy finding, seed 342347, fails the same on main). It keeps at most about 36 KiB alive,
+typically 3-4 KiB (programs of the bench patterns are 130-600 bytes). Being in the arena, it is
+part of images, and runs stay deterministic (difftest --determinism passes).
+
+## D3139: Size of 0233; the size ceiling rises by what it measured
+date: 2026-11-06 · by: pre · issue: 0233 · approved: coordinator
