@@ -14,8 +14,9 @@
 //! - *schedules* the lines: a continuation is called where its activation was, unless
 //!   code written before needs what its prefix makes; then it is called there and what
 //!   lies between goes into a callback its prefix calls right before the site;
-//! - writes the helpers the dump uses on a plain global `$dump`, deleted at the end, and
-//!   the run's handle as the Script's completion value.
+//! - writes a value used once where it is used (D3001, dump_plain_inline.rs), the others
+//!   on a plain global `$dump` (which the host deletes after the load, D2916), and the
+//!   run's handle as the Script's completion value.
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -1001,10 +1002,11 @@ impl Ctx for C<'_, '_> {
             return Ok(String::new());
         }
         let lines = self.w.emit_place(Pl::Block(self.a, index))?;
-        if !lines.is_empty() {
+        let content = join(&lines, "\n");
+        if !content.trim().is_empty() {
             self.w.k_effects = true;
         }
-        Ok(join(&lines, "\n"))
+        Ok(content)
     }
 
     fn go(&self, block: usize) -> String {
@@ -2468,11 +2470,9 @@ impl W<'_> {
         }
     }
 
-    /// The function a continuation stands for, as its origin record names it: the
-    /// dump's reference, or its text.
-    /// The origin's function for `K.$djs.f`: the run's own when the dump reaches it by
-    /// a name, else made from its text (`$dump.F<act>`, written first): a function either
-    /// way, whose template the next dump reads the site maps of (origin tracking, D2870).
+    /// The origin's function for `K.$djs`: the run's own when the dump reaches it by a
+    /// name, else made from its text in place (D3001): a function either way, whose
+    /// template the next dump reads the site maps of (origin tracking, D2870).
     fn fref(&self, a: usize) -> (String, Option<String>) {
         let act = &self.ir.acts[a];
         let e = act.fexpr.as_str();

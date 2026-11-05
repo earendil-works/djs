@@ -313,7 +313,8 @@ impl W<'_> {
                 !matches!(n.as_str(), "this" | "arguments" | "super" | "new")
                     && (PURE_NAMES.contains(&n.as_str())
                         || pd.bound.contains(n)
-                        || !scope.contains(n))
+                        || !scope.contains(n)
+                        || only_keys(&pd.rhs, n))
             });
             if !reads_ok || !self.may_inline(p, where_, &text[..s]) {
                 continue;
@@ -436,6 +437,29 @@ impl W<'_> {
         }
         Ok(())
     }
+}
+
+/// Whether `text` names `name` only as an object literal's key (`{ path: "b.md" }`): the
+/// references `refs` finds err on the side of keys.
+fn only_keys(text: &str, name: &str) -> bool {
+    let b = text.as_bytes();
+    let mut any = false;
+    for (at, _) in text.match_indices(name) {
+        let end = at + name.len();
+        if at > 0 && ident_part(b[at - 1]) || b.get(end).is_some_and(|&c| ident_part(c)) {
+            continue;
+        }
+        any = true;
+        let before = text[..at].trim_end();
+        let after = text[end..].trim_start();
+        let key = (before.ends_with('{') || before.ends_with(','))
+            && after.starts_with(':')
+            && !after.starts_with("::");
+        if !key {
+            return false;
+        }
+    }
+    any
 }
 
 /// The value of a `$dump.X = value;` line.

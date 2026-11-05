@@ -194,6 +194,17 @@ Two orderings follow from this, both plain code:
   `log` array holding `() => i + j` from the current iteration). The data is written with
   `undefined` there and patched right after the continuation's call (202 harvested dumps).
 
+**Values used once** (D3001). A value the dump names once is written where that name was
+read, its own line left out: a data literal as a continuation's argument, the reopened
+host call as the operand of the `await` that waits for it, an inner continuation's call as
+the site operand of the outer one, the run's last reaction as the Script's last statement.
+Only where that keeps the order of what the load does: a pure value (a literal, a
+function, a builtin iterator, a host value) may go to any later point, an effectful one
+(a host call, an activation, a reaction) only to the first thing its use's line evaluates,
+with nothing effectful since its own line; in a continuation's text it may read no name
+the continuation binds there. What is left on `$dump` is what the dump reads more than
+once; a dump with nothing left has no `$dump` at all.
+
 ### 2.3 Origin tracking
 
 Each continuation carries its origin as a plain property. Origin tracking reads `K`

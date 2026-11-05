@@ -263,19 +263,13 @@ is this dump (`djs run --body --dump-after 2`; the open call's state is the CLI'
 "djs-dump";
 "use strict";
 $djs.seed(2135587861, -1640531527, 4);
-globalThis.$dump = {};
-$dump.p1 = $djs.resume(3, "tools.read", [{ path: "b.md" }], {"made":["tools.read"],"answered":{"tools.read":1}});
-$dump.n2 = ["# A"];
-$dump.i3 = [].values();
-$dump.Fa4 = $djs.source("notes.js", "3753c3a1172c33f7", "tools,console");
-$dump.a4 = $djs.k(async function (tools, notes, $djs_i1) {
-notes.push(await $dump.p1);
+$djs.k(async function (tools, notes, $djs_i1) {
+notes.push(await $djs.resume(3, "tools.read", [{ path: "b.md" }], {"made":["tools.read"],"answered":{"tools.read":1}}));
 for (const path of $djs_i1) {
   notes.push(await tools.read({ path }));
 }
 return notes.join("\n");
-}, $dump.Fa4, 1, 118).call(globalThis, $djs.host("tools"), $dump.n2, $dump.i3);
-$dump.a4;
+}, $djs.source("notes.js", "3753c3a1172c33f7", "tools,console"), 1, 118, [4,107]).call(globalThis, $djs.host("tools"), ["# A"], [].values());
 ```
 
 It is an ordinary Script (D2830): djs, or node, runs it given the host's functions and
@@ -287,11 +281,14 @@ one object the host provides while it loads, `$djs` (D2834, D2890):
   host call gets (D2897);
 - `$djs.resume(id, name, args, state)` stands for the open tool call: the host continues
   call `id` of its function `name` under the same id and gives back its promise; the
-  last argument is the host's own state of the call, JSON it gave when it dumped (D2770);
+  last argument is the host's own state of the call, JSON it gave when it dumped (D2770).
+  It is written where the run waits for it, inside the continuation (below): a value the
+  dump uses once is written where it is used, when that keeps the order in which the
+  load does things (D3001);
 - `$djs.host("tools")` is the host's `tools` object, named by the name the host gave it
   rather than by where the script found it (here a parameter); the host returns the very
   object it bound under that name (D2970, D2971);
-- `$dump.a4` is what the suspended function's **continuation** returned: a function of
+- the last statement calls the suspended function's **continuation**: a function of
   the same kind whose body is the rest of the original from the `await` on, written where
   it is called. Its parameters are the values the frame held there that the rest still
   reads (`tools`, `notes`; the dead `path` and `console` are left out) and the loop's
@@ -308,19 +305,21 @@ one object the host provides while it loads, `$djs` (D2834, D2890):
   (D2903); djs makes that object for its hosts, and a host without djs imports it from
   [js/src/dump-runtime.js](../../js/src/dump-runtime.js);
 - the continuation's origin record, the arguments of `$djs.k` after it, names its origin,
-  the script's function (`$dump.Fa4`, which the host makes again from the script it ran,
-  named by its file and hash, and never calls), the await it stands for (`1`, the
-  first) and the few decisions the writer took on the run's values that shaped the
+  the script's function (`$djs.source(…)`, which the host makes again from the script it
+  ran, named by its file and hash, and never calls), the await it stands for (`1`, the
+  first), the few decisions the writer took on the run's values that shaped the
   continuation's text (`118`, as bits: whether it reads `notes.push` or the loop's `next`
-  again instead of keeping what the run looked up, …). A dump of a
+  again instead of keeping what the run looked up, …) and where its text holds a value of
+  the dump (`[4,107]`, the host call). A dump of a
   run that resumed this one writes the continuation again from the original and those
   decisions, finds out that way which stretches of the continuation's text are copies of
   the original's, reads the continuation's frame as one of the original and writes the
   original again (**origin tracking**, D2833, D2913), so a dump stays the same size
   however many times a run is resumed and dumped;
 - the Script's completion value is what the host asked for, the run's result promise
-  (D2895), its last statement; the host deletes `$djs` and `$dump` once the Script has
-  run (D2916).
+  (D2895), its last statement; the host deletes `$djs` (and `$dump`, the global object a
+  dump keeps the values it uses more than once in, which this one needs none of) once the
+  Script has run (D2916).
 
 To read a frame, the exporter uses what the compiler records at each `await` (its
 **suspension map**: the bindings and values a frame holds there by name, and the syntax

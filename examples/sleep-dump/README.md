@@ -113,33 +113,27 @@ are the dump, which the host prints as it writes it (explained [below](#the-dump
 
 ```
   [vm] first sleeps 5000 ms
-host: suspended the run into examples/sleep-dump/out/sleep.dump.js (924 bytes):
+host: suspended the run into examples/sleep-dump/out/sleep.dump.js (818 bytes):
   | "djs-dump";
   | "use strict";
-  | $djs.seed(2103673206, -269411197, 3);
+  | $djs.seed(-320224586, 499821443, 3);
   | globalThis.$dump = {};
-  | $dump.p1 = $djs.resume(2, "tools.sleep", [5000], {"due":1793843738576});
   | $dump.n2 = async function step(label, ms) {
   |   console.log(label, "sleeps", ms, "ms");
   |   const r = await tools.sleep(ms);
   |   return label + ": " + r;
   | };
-  | $dump.a3 = $djs.k(async function (label) {
-  | const r = await $dump.p1;
+  | $djs.k(async function (ms, step, t0, results, $djs_i1) {
+  | results.push(await $djs.k(async function (label) {
+  | const r = await $djs.resume(2, "tools.sleep", [5000], {"due":1793848928790});
   | return label + ": " + r;
-  | }, $dump.n2)("first");
-  | $dump.n4 = [];
-  | $dump.i5 = ["second"].values();
-  | $dump.Fa6 = $djs.source("sleep.js", "b48bd687f864a8d6", "ms");
-  | $dump.a6 = $djs.k(async function (ms, step, t0, results, $djs_i1) {
-  | results.push(await $dump.a3);
+  | }, $dump.n2, 1, 0, [4,68])("first"));
   | for (const label of $djs_i1) {
   |   results.push(await step(label, ms));
   | }
   | console.log("done after", Date.now() - t0 >= 2 * ms ? "at least" : "less than", 2 * ms, "ms:", results.join(", "));
   | return results;
-  | }, $dump.Fa6, 1, 118)(5000, $dump.n2, 1793843733566, $dump.n4, $dump.i5);
-  | $dump.a6;
+  | }, $djs.source("sleep.js", "b48bd687f864a8d6", "ms"), 1, 118, [4,176])(5000, $dump.n2, 1793848923755, [], ["second"].values());
   [vm] second sleeps 5000 ms
   [vm] done after at least 10000 ms: first: slept 5000 ms, second: slept 5000 ms
 host: the run returned [ 'first: slept 5000 ms', 'second: slept 5000 ms' ]
@@ -158,7 +152,7 @@ and a `tools.sleep`):
 ```
 --- node sleep-dump.ts start (process 1)
   [vm] first sleeps 5000 ms
-host: suspended the run into examples/sleep-dump/out/sleep.dump.js (1246 bytes):
+host: suspended the run into examples/sleep-dump/out/sleep.dump.js (818 bytes):
   | "djs-dump";
   | ... (the same dump as above)
 --- node sleep-dump.ts node (process 2, no djs)
@@ -169,42 +163,42 @@ node: the run returned [ 'first: slept 5000 ms', 'second: slept 5000 ms' ]
 
 ### The dump
 
-Read it from the bottom. The completion value of the Script, `$dump.a6`, is the run's
-result promise, which the host takes as the run. `a6` is what the **continuation** of the
-codemode body returned: an async function of its own, written from the body's first
-`await` on, given to `$djs.k` and called at once. Its parameters are what the body held
-there (`ms`, `step`, `t0`, the `results` array `n4` and the loop's iterator `i5`), passed
-as the call's arguments.
-Its first statement is the rest of the loop iteration it stopped in: the half-done
-`results.push(await step(label, ms))`, whose `await` is now on `a3`, and whose callee and
-`this` (`results.push`) it reads again, which gives what the run had read (the builtins are
-frozen). `label` is not declared: nothing in the rest of the iteration reads it any more.
-Then the loop goes on as written, over the array iterator `i5` itself, made again as an
-iterator over what was left of its array (`["second"].values()`: nothing else holds the
-array), and the rest of the body follows verbatim.
-
-`a3` is the continuation of `step("first", 5000)`, stopped at its own first `await`: it
-takes `label` (`ms` is dead there) and awaits `p1`, the open host call: call 2 (call 1
-was the first `console.log`), `$djs.resume(2, "tools.sleep", [5000], {"due": ...})`, by
-the host's name for the function, with its arguments and the state the call recorded,
-JSON written as is. `$djs.seed` on the third line gives the sandbox `Math.random`'s state
-and the next call id, 3, so the resumed run's calls get the ids the uninterrupted run
-gives them.
+Read it from the bottom. The Script's last statement, whose value is the run's result
+promise (which the host takes as the run), calls the **continuation** of the codemode
+body: an async function of its own, written from the body's first `await` on, given to
+`$djs.k` and called at once. Its parameters are what the body held there (`ms`, `step`,
+`t0`, the `results` array and the loop's iterator), passed as the call's arguments: values
+the dump uses once are written where they are used (`[]`, `["second"].values()`, the array
+iterator made again over what was left of its array, which nothing else holds). Its first
+statement is the rest of the loop iteration it stopped in: the half-done
+`results.push(await step(label, ms))`, whose callee and `this` (`results.push`) it reads
+again, which gives what the run had read (the builtins are frozen); `label` is not
+declared, since nothing in the rest of the iteration reads it any more. What it awaits is
+the continuation of `step("first", 5000)`, written in place: it runs as the outer one's
+first statement does, at the same moment of the load as on a line of its own. It takes
+`label` (`ms` is dead there) and awaits the open host call: call 2 (call 1 was the first
+`console.log`), `$djs.resume(2, "tools.sleep", [5000], {"due": ...})`, by the host's name
+for the function, with its arguments and the state the call recorded, JSON written as is.
+Then the loop goes on as written, over the iterator itself, and the rest of the body
+follows verbatim. `$djs.seed` on the third line gives the sandbox `Math.random`'s state and
+the next call id, 3, so the resumed run's calls get the ids the uninterrupted run gives
+them.
 
 The rest is plain JavaScript too: `$dump` is an ordinary object holding the values the
-dump shares between statements, which the host deletes once the Script has run. The small
-helpers the dump calls (here only `$djs.k`) are not in the dump: they are the dump runtime, the same
-for every dump, which the host defines as members of `$djs` next to its hooks
-([js/src/dump-runtime.js](../../js/src/dump-runtime.js)). The arguments of `$djs.k` after
-the continuation are its origin record: the original function (`step` for `a3`; for the
-body, `Fa6`, the script by its name and hash, `$djs.source("sleep.js", …)`, which the host
-gives back from the script it ran), the await it stands for (`1`, the first, left out for
-`a3`) and the decisions the writer took on the run's values that shaped the continuation
-(whether it reads `results.push` or the loop's `next` again instead of keeping what the run
-had looked up, …), as bits (`118`). A dump of a resumed run writes the continuation
-again from those, which tells it which stretches of the continuation's text came from
-where, so that it can be written from the original code again instead of from the
-continuation.
+dump uses more than once (here the function `step`, `$dump.n2`), which the host deletes once the Script has
+run. The small helpers the dump calls (here only `$djs.k`) are not in the dump: they are
+the dump runtime, the same for every dump, which the host defines as members of `$djs`
+next to its hooks ([js/src/dump-runtime.js](../../js/src/dump-runtime.js)). The arguments
+of `$djs.k` after a continuation are its origin record: the original function (`step`,
+`n2`, for the inner one; for the body, the script by its name and hash,
+`$djs.source("sleep.js", …)`, which the host gives back from the script it ran), the await
+it stands for (`1`, the first), the decisions the writer took on the run's values that
+shaped the continuation (whether it reads `results.push` or the loop's `next` again
+instead of keeping what the run had looked up, …), as bits (`118`), and where its text
+holds values of the dump (`[4,176]`: the inner continuation written in place). A dump of a
+resumed run writes the continuation again from those, which tells it which stretches of
+the continuation's text came from where, so that it can be written from the original code
+again instead of from the continuation.
 
 ### What the dump holds, explained
 
@@ -217,15 +211,15 @@ names, so run it beside `sleep.js`, which `sleep-dump.ts start` writes next to t
 ```
 $ cd examples/sleep-dump/out && djs resume --explain sleep.dump.js
 sleep.dump.js: 1 open call, 2 suspended activations; handles: run
-#2 tools.sleep(5000), state {"due":1793843738576}
+#2 tools.sleep(5000), state {"due":1793848928790}
   async function <anonymous> at sleep.dump.js:12:11
-      const r = await $dump.p1;
+      const r = await $djs.resume(2, "tools.sleep", [5000], {"due":1793848928790});
                 ^
     label = 'first', r = undefined
-  async function <anonymous> at sleep.dump.js:19:14 (run)
-      results.push(await $dump.a3);
+  async function <anonymous> at sleep.dump.js:11:14 (run)
+      results.push(await $djs.k(async function (label) {
                    ^
-    ms = 5000, step = [AsyncFunction: step], t0 = 1793843733566, results = [], label = undefined
+    ms = 5000, step = [AsyncFunction: step], t0 = 1793848923755, results = [], label = undefined
 ```
 
 (`label = undefined`: the continuation left the dead binding out.)
