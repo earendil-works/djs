@@ -9,7 +9,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0207 | Make plain dumps small (owner: not done until no fluff is left): header "djs-dump", helpers and source(ref) on host-provided $djs (D2834, D2835), record cuts, liveness pruning | pjs | .worktrees/pjs |
 | 0211 | Plain dump fuzzing round 2 (wider generator, new seeds) | pjz | .worktrees/pjz |
 | 0215 | Plain dump performance (Result written; pjr paused, resumes on new hot spots) | pjr | .worktrees/pjx |
-| 0220 | Rewrite the guide: behavior + architecture, no history/decisions, JS interface page, live dumps, debugger suspend (owner) | guide | .worktrees/docs |
 
 ## Open (ready)
 
@@ -20,6 +19,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
+| - | Guide figures not re-measured (heap, arena, compiler, gc, builtins): re-measure or make them gen:status numbers; run.rs module comment lists a safepoint the code lacks (0220 follow-ups) | ready |
+| - | Stale entry in tests/pi/expected-failures.txt (next mode): update the ratchet | ready |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
 | - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |
@@ -88,6 +89,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0190-0196 | SM migration: slot names (D2730), named slots (D2731), construct temporaries + iter_next_loc (D2732), finally completions (D2733), roles deleted (D2734), one compile per load (D2735) | 9cc8741b (agent sm) |
 | 0198 | Dump performance: corpus dump p50 1.42 -> 0.43 ms wasm, totals 3,243 -> 610 ms; data cases 2-6x (D2800-D2802) | 429184db (agent dumpperf) |
 | - | base_equals_a_compiled_realm test fixed (8f0fdd72); gate recovers from incremental corruption (D2896, b55180dd); CLI/REPL call states (D2894) | agent pjh |
+| 0220 | Guide rewrite: Using djs / How it works / Reference, JS API, dumps, CLI, pi page; live Run/Continue with debugger pauses at exact positions (D3050-D3054) | 13002add (agent guide) |
 | 0222 | sleep-dump example instant (release dump module, compile cache), output before sleeps, 1 s; --restart fixed | fde5b7f4 (agent sleepy) |
 | 0221 | `debugger;` pauses in the CLI: REPL .c/.abort, run/resume --debugger (D3060) | 00cd7d63 (agent dbg) |
 | 0219 | Compile cache across VMs + suspension maps carried between dumps (D3040, D3041; dump module only) | d92b15f4 (agent lazy; pi -6% instructions per session) |

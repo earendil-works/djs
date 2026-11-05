@@ -723,3 +723,4 @@ topics when the index is next reorganized.
 - D3026: Late bindings and subclasses wait for the block's own declarations; keys keep lone surrogates
 - D3052: goals.md holds every goal; links to a page's section must exist
 - D3053: live examples pause at `debugger;` in their normal Run
+- D3054: where a run waits: `Vm::call_site`, `vm_call_site`, `Sandbox.callSite`
