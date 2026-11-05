@@ -307,9 +307,10 @@ corpus	codemode/plain-for-await-sync.js	32595	12857
 corpus	codemode/plain-fuzz/accessor-pair-after-site.js	2302	961
 corpus	codemode/plain-fuzz/array-from-async.js	5739	2284
 corpus	codemode/plain-fuzz/array-index-getter.js	2264	949
-corpus	codemode/plain-fuzz/arrow-arguments-in-async.js	2760	1089
+corpus	codemode/plain-fuzz/arrow-arguments-in-async.js	2764	1089
 corpus	codemode/plain-fuzz/assign-member-nested-call.js	7474	3051
 corpus	codemode/plain-fuzz/async-generator-for-await.js	12262	4865
+corpus	codemode/plain-fuzz/async-method-arrow-this.js	6040	2355
 corpus	codemode/plain-fuzz/async-method-of-temporary.js	2716	1099
 corpus	codemode/plain-fuzz/await-in-assignment-target.js	9260	3746
 corpus	codemode/plain-fuzz/await-in-pattern-target.js	4673	1887
