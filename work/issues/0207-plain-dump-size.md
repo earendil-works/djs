@@ -353,6 +353,13 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   interned atom; not index strings), number template substitutions reread. D3000 (IDs now
   D3000–D3019): a placeholder loop's first iteration prunes its own bindings. v2 392,780.
 
+- fluff item 2 (D3001): single-use values in place (dump_plain_inline.rs: use counts,
+  pure/effectful rules, pending values per line list, `inline_site` with K's scope).
+  sleep 925 → 820 (465 gzip; fluff's minimal 716), v2 392,780 → 387,945, corpus
+  7,216,263 → 7,097,412. Hosts: hook failures fail the load (Sandbox/pi/CLI); the CLI's
+  `host` knows its answers' tools. Tests adjusted (dump_state, CLI repl/run, js task/
+  dumpresume).
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a

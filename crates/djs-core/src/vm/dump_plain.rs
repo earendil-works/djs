@@ -23,6 +23,9 @@ use alloc::vec::Vec;
 use super::*;
 use crate::compiler::Site;
 
+#[path = "dump_plain_inline.rs"]
+mod inline;
+
 /// What the plain writer needs besides the format 2 lines.
 #[derive(Default)]
 pub(super) struct Ir {
@@ -160,7 +163,15 @@ fn ident_part(c: u8) -> bool {
 /// name after `.` is a property, not a reference. It errs on the side of too many
 /// names (an object literal's keys count), which only adds orderings that hold anyway.
 pub(super) fn refs(text: &str) -> Refs {
-    scan(text, false, &|_| true)
+    scan(text, false, &|_| true, &mut |_, _| {})
+}
+
+/// Where `text` reads `$dump.X` (as [`refs`] finds them): `[start, end)` of each, the
+/// name's end (not a key after it).
+pub(super) fn scan_spans(text: &str) -> Vec<(usize, usize)> {
+    let mut out = Vec::new();
+    scan(text, false, &|_| false, &mut |s, e| out.push_out((s, e)));
+    out
 }
 
 /// The references of `text` its evaluation makes: [`refs`] without those inside function
@@ -168,12 +179,17 @@ pub(super) fn refs(text: &str) -> Refs {
 /// `{` after `)` or `=>` opens a function's body (no statements are scanned).
 #[cfg(test)]
 fn eager_refs(text: &str) -> Refs {
-    scan(text, true, &|_| true)
+    scan(text, true, &|_| true, &mut |_, _| {})
 }
 
 /// [`refs`]'s or [`eager_refs`]'s with only the names `keep` takes (a data literal's
 /// keys are names: most texts' names are wanted by no one, 0215).
-fn scan(text: &str, skip_fns: bool, keep: &dyn Fn(&str) -> bool) -> Refs {
+fn scan(
+    text: &str,
+    skip_fns: bool,
+    keep: &dyn Fn(&str) -> bool,
+    span: &mut dyn FnMut(usize, usize),
+) -> Refs {
     let b = text.as_bytes();
     let mut out = Refs::default();
     // What `out` holds, for deduplication: a dump's data names thousands (0215: the
@@ -330,6 +346,7 @@ fn scan(text: &str, skip_fns: bool, keep: &dyn Fn(&str) -> bool) -> Refs {
                 if word == "$dump" && b.get(i) == Some(&b'.') {
                     let (name, j) = ident_at(text, i + 1);
                     if !name.is_empty() {
+                        span(s, j);
                         let (key, k) = if b.get(j) == Some(&b'.') {
                             ident_at(text, j + 1)
                         } else {
@@ -499,7 +516,8 @@ pub(super) trait Ctx {
     /// The call of the part of the dump's callback that runs once block `block` of the
     /// continuation has its code, or "" (D2907).
     fn go(&self, block: usize) -> String;
-    fn awaiting(&self) -> String;
+    /// `scope`: the names K may bind where the operand stands.
+    fn awaiting(&mut self, scope: &[String]) -> String;
 }
 
 /// A continuation's text and its origin record (D2833).
@@ -513,6 +531,9 @@ pub(super) struct KText {
     /// Its record's holes and tape (D2913).
     pub holes: Vec<u32>,
     pub tape: Vec<u32>,
+    /// The names it binds in its own scope (its parameters and body's declarations):
+    /// what its text reads of them is its own (D3001).
+    pub top: Vec<String>,
 }
 
 #[derive(Default)]
@@ -575,6 +596,14 @@ struct W<'x> {
     fac_by_name: alloc::collections::BTreeMap<String, usize>,
     act_items: Vec<usize>,
     write_k: &'x dyn Fn(&Act, &mut dyn Ctx) -> Result<KText, String>,
+    /// Single-use values written in place (D3001).
+    inl: inline::Inline,
+    /// The activation whose line is being written (its continuation's site may take an
+    /// effectful value), and whether its prefix does something before the site.
+    kline: Option<usize>,
+    k_effects: bool,
+    /// Slot values of continuations with values written in place, by activation and slot.
+    vcache: alloc::collections::BTreeMap<(usize, String), String>,
 }
 
 type R<T> = Result<T, String>;
@@ -702,6 +731,10 @@ pub(super) fn write(
             })
             .collect(),
         write_k,
+        inl: Default::default(),
+        kline: None,
+        k_effects: false,
+        vcache: Default::default(),
     };
     for (f, fac) in ir.factories.iter().enumerate() {
         for (s, sc) in fac.scopes.iter().enumerate() {
@@ -714,6 +747,7 @@ pub(super) fn write(
     w.activations()?;
     w.place_all()?;
     let plan = w.schedule()?;
+    w.count_uses();
     w.emit(&plan, ts)
 }
 
@@ -874,9 +908,19 @@ impl W<'_> {
 
     /// A slot's value as continuation text: one that reads a name is evaluated before
     /// the continuation (its own declarations could shadow the name).
-    fn slot_value(&mut self, a: usize, name: &str) -> Option<String> {
+    fn slot_value(&mut self, a: usize, name: &str, inline: bool) -> Option<String> {
         let act = &self.ir.acts[a];
         let sl = act.slots.iter().find(|s| s.name == name)?;
+        let value = if inline {
+            self.inlined_slot(a, name, &sl.value)
+        } else {
+            sl.value.clone()
+        };
+        let sl = Slot {
+            name: sl.name.clone(),
+            value,
+            cell: sl.cell,
+        };
         let r = refs(&sl.value);
         let reads = r
             .names
@@ -904,7 +948,7 @@ struct C<'w, 'x> {
 
 impl Ctx for C<'_, '_> {
     fn slot(&mut self, name: &str) -> Option<String> {
-        self.w.slot_value(self.a, name)
+        self.w.slot_value(self.a, name, !self.dry)
     }
 
     fn cell(&mut self, sname: &str) -> Option<Option<String>> {
@@ -942,7 +986,11 @@ impl Ctx for C<'_, '_> {
             .slots
             .iter()
             .find(|s| s.name == name)?;
-        Some(sl.value.clone())
+        if self.dry {
+            return Some(sl.value.clone());
+        }
+        let v = sl.value.clone();
+        Some(self.w.inlined_slot(self.a, name, &v))
     }
 
     fn block(&mut self, index: usize, info: &[BDecl]) -> R<String> {
@@ -953,6 +1001,9 @@ impl Ctx for C<'_, '_> {
             return Ok(String::new());
         }
         let lines = self.w.emit_place(Pl::Block(self.a, index))?;
+        if !lines.is_empty() {
+            self.w.k_effects = true;
+        }
         Ok(join(&lines, "\n"))
     }
 
@@ -968,11 +1019,29 @@ impl Ctx for C<'_, '_> {
         }
     }
 
-    fn awaiting(&self) -> String {
-        self.w.ir.acts[self.a]
-            .awaiting
-            .clone()
-            .unwrap_or_else(|| "undefined".into())
+    fn awaiting(&mut self, scope: &[String]) -> String {
+        let act = &self.w.ir.acts[self.a];
+        let aw = act.awaiting.clone().unwrap_or_else(|| "undefined".into());
+        if self.dry {
+            return aw;
+        }
+        if let Some(v) = self.w.vcache.get(&(self.a, String::from("<awaiting>"))) {
+            return v.clone();
+        }
+        // The site's operand is the first thing K's line evaluates where K is called on
+        // its line and does nothing before its site (D3001).
+        let a = self.a;
+        let first = (act.kind == crate::interp::run::suspend::ASYNC
+            && self.w.acts[a].home.is_none()
+            && self.w.kline == Some(a)
+            && !self.w.k_effects
+            && self.w.acts[a].go.iter().all(String::is_empty))
+        .then_some(0);
+        let v = self.w.inline_site(&aw, first, scope);
+        self.w
+            .vcache
+            .insert((a, String::from("<awaiting>")), v.clone());
+        v
     }
 }
 
@@ -1364,7 +1433,12 @@ impl W<'_> {
     /// The keys of `text`; with `globals` false only its `$dump` references: the
     /// globals a function's text names are read when it runs, after the load.
     fn keys_in(&self, text: &str, globals: bool) -> Vec<Key> {
-        let r = scan(text, true, &|n| globals && self.global_set.contains(n));
+        let r = scan(
+            text,
+            true,
+            &|n| globals && self.global_set.contains(n),
+            &mut |_, _| {},
+        );
         let mut out = Vec::new();
         let mut seen: alloc::collections::BTreeSet<Key> = Default::default();
         for (name, key) in r.dump {
@@ -2035,8 +2109,19 @@ fn builtin_expr(path: &str) -> R<String> {
 impl W<'_> {
     fn emit(&mut self, plan: &[Plan], ts: bool) -> R<String> {
         let mut hoisted: Vec<String> = Vec::new();
-        let body = self.emit_list(plan, 0, &mut hoisted)?;
+        self.open_list();
+        self.emit_items(plan, 0, &mut hoisted)?;
         let ir = self.ir;
+        // The handles, the Script's last evaluation: a value right before them goes there.
+        let handles: Vec<(String, String)> = ir
+            .handles
+            .iter()
+            .map(|(n, e)| {
+                let first = (ir.handles.len() == 1).then_some(0);
+                (n.clone(), self.inline_refs(e, first, false))
+            })
+            .collect();
+        let body = self.close_list();
         let mut s = String::from(if ts {
             "\"djs-dump typescript\";\n"
         } else {
@@ -2054,6 +2139,9 @@ impl W<'_> {
             ir.next_call,
             ");\n"
         );
+        // (The holder, where anything is left in it: single values go where they are
+        // used, D3001.)
+        let holder = s.len();
         s.push_str("globalThis.$dump = {};\n");
         // The builtins the text reads (a value a continuation reads again from the
         // original's text, D2905, leaves its builtin unread).
@@ -2061,7 +2149,7 @@ impl W<'_> {
         for it in self.items.iter().filter(|it| it.kind == IK::FnDecl) {
             cat_to!(&mut text, "\n", it.text);
         }
-        for (_, e) in &ir.handles {
+        for (_, e) in &handles {
             cat_to!(&mut text, "\n", e);
         }
         // (By substring, not `scan`: the text is the whole dump, data included, 0215. A
@@ -2103,13 +2191,15 @@ impl W<'_> {
         // statement before), the one handle named "run" (what Sandbox, pi and the CLI
         // resume), else every handle by name (D2895). The host deletes `$djs` and `$dump`
         // once the Script ran (D2916).
-        match &ir.handles[..] {
+        match &handles[..] {
             [] => s.push_str("void 0;\n"),
             // (In parentheses unless a reference: an object literal or a function is no
             // expression statement.)
             [(name, e)] if name == "run" => {
-                let reference = e.split('.').all(|p| !p.is_empty() && is_ident(p));
-                if reference {
+                let statement = ["{", "function", "class", "async", "let"]
+                    .iter()
+                    .any(|k| e.starts_with(k));
+                if !statement {
                     cat_to!(&mut s, e, ";\n");
                 } else {
                     cat_to!(&mut s, "(", e, ");\n");
@@ -2125,6 +2215,10 @@ impl W<'_> {
                 );
             }
         }
+        if scan_spans(&s[holder..]).is_empty() && !s[holder + 23..].contains("$dump") {
+            s.replace_range(holder..holder + "globalThis.$dump = {};\n".len(), "");
+        }
+        self.check_inlined(&s)?;
         Ok(s)
     }
 
@@ -2134,8 +2228,15 @@ impl W<'_> {
         depth: u32,
         hoisted: &mut Vec<String>,
     ) -> R<Vec<String>> {
+        self.open_list();
+        self.emit_items(list, depth, hoisted)?;
+        Ok(self.close_list())
+    }
+
+    /// [`W::emit_list`] into the list being written (D3001: a value may go where its one
+    /// use is, its own line left out).
+    fn emit_items(&mut self, list: &[Plan], depth: u32, hoisted: &mut Vec<String>) -> R<()> {
         let ir = self.ir;
-        let mut lines = Vec::new();
         for p in list {
             match p {
                 Plan::Call(a, cb) => {
@@ -2154,11 +2255,34 @@ impl W<'_> {
                             };
                             go.push_out(cat!(name, "();"));
                             let inner = self.emit_list(part, depth + 1, hoisted)?;
-                            lines.push_out(cat!(name, " = () => {\n", join(&inner, "\n"), "\n};"));
+                            let l = cat!(name, " = () => {\n", join(&inner, "\n"), "\n};");
+                            self.put_line(l, false, None);
                         }
                         self.acts[*a].go = go;
                     }
-                    lines.extend(self.call_text(*a)?);
+                    let lines = self.call_text(*a)?;
+                    let n = lines.len();
+                    let me = cat!("$dump.", ir.acts[*a].name);
+                    for (i, l) in lines.into_iter().enumerate() {
+                        // The activation's call: effectful, and where it is called on
+                        // its own line, a candidate for its one use.
+                        let last = i + 1 == n;
+                        let def = (last && self.single(&ir.acts[*a].name, false))
+                            .then(|| {
+                                inline::def_rhs(&l).filter(|_| l.starts_with(&cat!(me, " = ")))
+                            })
+                            .flatten()
+                            .map(|r| (ir.acts[*a].name.clone(), String::from(r), true));
+                        let effect = last
+                            || !l.starts_with("$dump.")
+                            || inline::def_rhs(&l).is_some_and(|r| !inline::shape(r));
+                        let bound = self.acts[*a]
+                            .k
+                            .as_ref()
+                            .map(|k| k.top.clone())
+                            .unwrap_or_default();
+                        self.put_line_binding(l, effect, def, bound);
+                    }
                 }
                 Plan::Item(i) => {
                     let kind = self.items[*i].kind.clone();
@@ -2168,13 +2292,8 @@ impl W<'_> {
                         IK::Factory(f) => {
                             if !self.is_merged((*f, 0)) {
                                 let t = self.factory_text((*f, 0))?;
-                                lines.push_out(cat!(
-                                    "$dump.",
-                                    ir.factories[*f].name,
-                                    " = ",
-                                    t,
-                                    ";"
-                                ));
+                                let l = cat!("$dump.", ir.factories[*f].name, " = ", t, ";");
+                                self.put_line(l, false, None);
                             }
                         }
                         IK::Decl(names) if depth > 0 => {
@@ -2182,30 +2301,46 @@ impl W<'_> {
                             // declaration cannot be in a block. `let` and a class's
                             // binding are mutable like `var`, so this is exact (nothing
                             // reads them before the callback runs); a `const` is not.
+                            let text = self.inline_refs(&text, None, false);
+                            let effect = Self::effectful(&kind, &text);
                             if let Some(rest) = text.strip_prefix("var ") {
                                 hoisted.push_out(cat!("var ", names[0], ";"));
-                                lines.push_out(String::from(rest));
+                                self.put_line(String::from(rest), effect, None);
                             } else if let Some(rest) = text.strip_prefix("let ") {
                                 hoisted.push_out(cat!("let ", names[0], ";"));
-                                lines.push_out(String::from(rest));
+                                self.put_line(String::from(rest), effect, None);
                             } else if text.starts_with("class ") {
                                 hoisted.push_out(cat!("let ", names[0], ";"));
-                                lines.push_out(cat!(
-                                    names[0],
-                                    " = ",
-                                    text.trim_end_matches(';'),
-                                    ";"
-                                ));
+                                let l = cat!(names[0], " = ", text.trim_end_matches(';'), ";");
+                                self.put_line(l, effect, None);
                             } else {
                                 return refuse("a global const declaration inside a callback");
                             }
                         }
-                        _ => lines.push_out(text),
+                        IK::Def(name) => {
+                            let first = inline::first_eval(&text);
+                            let text = self.inline_refs(&text, first, false);
+                            let effect = Self::effectful(&kind, &text);
+                            let def = self
+                                .single(name, true)
+                                .then(|| inline::def_rhs(&text).map(String::from))
+                                .flatten()
+                                .map(|r| {
+                                    let movable = inline::pure(&r);
+                                    (name.clone(), r, !movable)
+                                });
+                            self.put_line(text, effect, def);
+                        }
+                        _ => {
+                            let text = self.inline_refs(&text, None, false);
+                            let effect = Self::effectful(&kind, &text);
+                            self.put_line(text, effect, None);
+                        }
                     }
                 }
             }
         }
-        Ok(lines)
+        Ok(())
     }
 
     /// Activation `a`'s callback split by the block of its continuation each entry
@@ -2345,27 +2480,33 @@ impl W<'_> {
         if reference {
             (String::from(e), None)
         } else {
-            let name = cat!("$dump.F", act.name);
-            let def = cat!(name, " = ", e, ";");
-            (name, Some(def))
+            // (Written in place: the record is its one use, D3001.)
+            (inline::operand(e), None)
         }
     }
 
     fn call_text(&mut self, a: usize) -> R<Vec<String>> {
         let ir = self.ir;
         let act = &ir.acts[a];
-        let k = self.ktext(a)?;
+        // (Its site may take an effectful value written in place, D3001.)
+        self.kline = Some(a);
+        self.k_effects = false;
+        let k = self.ktext(a);
+        self.kline = None;
+        let k = k?;
         let mut lines = Vec::new();
-        for (name, r) in &self.acts[a].pre {
+        for (name, r) in self.acts[a].pre.clone() {
             let v = act
                 .slots
                 .iter()
-                .find(|s| s.name == *name)
+                .find(|s| s.name == name)
                 .map_or("undefined", |s| s.value.as_str());
+            let v = self.inlined_slot(a, &name, v);
             lines.push_out(cat!(r, " = ", v, ";"));
         }
         let kref = self.kref(a);
         let (fref, fdef) = self.fref(a);
+        let fref = self.inline_refs(&fref, None, false);
         lines.extend(fdef);
         // The origin, the site, the holes and the tape a re-dump makes K's layout again
         // from (D2913); fields at their default are left out (D2900): `at` when it is the
@@ -2395,11 +2536,12 @@ impl W<'_> {
             list(&k.tape)
         });
         rec.push_out(list(&k.holes));
-        let fproto = cat!(fref, ".prototype");
-        rec.push_out(match &act.proto {
-            Some(p) if generator && *p != fproto => p.clone(),
+        let fproto = cat!(act.fexpr, ".prototype");
+        let proto = match &act.proto {
+            Some(p) if generator && *p != fproto => self.inline_refs(p, None, false),
             _ => String::new(),
-        });
+        };
+        rec.push_out(proto);
         let defaults = ["", "1", "0", "[]", ""];
         while rec.len() > 1 && rec.last().map(String::as_str) == Some(defaults[rec.len() - 1]) {
             rec.pop();
@@ -2424,11 +2566,12 @@ impl W<'_> {
             cat!(", ", join(&k.args, ", "))
         };
         let direct = self.acts[a].home.is_none() && (act.this == "undefined" || self.is_arrow(a));
+        let this = self.inline_refs(&act.this, None, false);
         if generator {
             if direct {
                 lines.push_out(cat!(me, " = ", kexpr, "(", join(&k.args, ", "), ");"));
             } else {
-                lines.push_out(cat!(me, " = ", kexpr, ".call(", act.this, args, ");"));
+                lines.push_out(cat!(me, " = ", kexpr, ".call(", this, args, ");"));
             }
             if at_yield {
                 lines.push_out(cat!(me, ".next();"));
@@ -2449,7 +2592,7 @@ impl W<'_> {
         } else if self.is_arrow(a) {
             lines.push_out(cat!(me, " = (0, ", kexpr, ")(", join(&k.args, ", "), ");"));
         } else {
-            lines.push_out(cat!(me, " = ", kexpr, ".call(", act.this, args, ");"));
+            lines.push_out(cat!(me, " = ", kexpr, ".call(", this, args, ");"));
         }
         Ok(lines)
     }

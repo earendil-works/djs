@@ -323,7 +323,8 @@ mod round_trip {
         // `$djs.resume`'s fourth argument (D2890), JSON data again.
         let call = alloc::format!("$djs.resume({id}, \"later\", [5, \"x\"], ");
         let at = text.find(&call).unwrap_or_else(|| panic!("{text}")) + call.len();
-        let end = at + text[at..].find(");").unwrap();
+        // (The call may be written where its promise is used, D3001: up to its `)`.)
+        let end = at + text[at..].find("})").unwrap() + 1;
         let mut again = self::vm();
         let src = alloc::format!("JSON.stringify({})", &text[at..end]);
         assert_eq!(
@@ -332,7 +333,7 @@ mod round_trip {
         );
         // Without a state: three arguments.
         let text = dump(&vm, &[]).unwrap();
-        let call = alloc::format!("$djs.resume({id}, \"later\", [5, \"x\"]);");
+        let call = alloc::format!("$djs.resume({id}, \"later\", [5, \"x\"])");
         assert!(text.contains(&call), "{text}");
     }
 

@@ -50,6 +50,8 @@ pub(super) struct Out {
     pub cmap: Vec<(String, String, bool)>,
     pub used: Vec<String>,
     pub args: Vec<String>,
+    /// The names K binds at its top (D3001).
+    pub top: Vec<String>,
     pub tape: Vec<u32>,
     /// Temporaries whose literal is another's: `(cmap index, the other's)`.
     pub aliases: Vec<(usize, usize)>,
@@ -69,6 +71,8 @@ impl G<'_, '_> {
             helpers: None,
         };
         r.walk(&parts);
+        let mut vals = Vec::new();
+        vals_of(&parts, &mut vals);
         let tail = core::mem::take(&mut r.run);
         r.pieces.push_out(Piece::Run(tail));
         let mut text = String::new();
@@ -87,7 +91,13 @@ impl G<'_, '_> {
             "R", "G", "C", "D", "A", "L", "N", "Q", "X", "O", "I", "E", "P", "S", "Y", "U", "DD",
         ]
         .into_iter()
-        .filter(|h| text.contains(&cat!("$djs_", *h, "(")))
+        // (Not those of a value written in K's text: a continuation written in place
+        // captures its own, D3001.)
+        .filter(|h| {
+            let pat = cat!("$djs_", *h, "(");
+            let inner: usize = vals.iter().map(|v| v.matches(pat.as_str()).count()).sum();
+            text.matches(pat.as_str()).count() > inner
+        })
         // A continuation of a continuation declares them already (its own
         // first line, restored from its slot).
         .filter(|h| !act.slots.iter().any(|s| s.name == cat!("$djs_", *h)))
@@ -115,10 +125,25 @@ impl G<'_, '_> {
             cmap: self.cmap,
             used: self.used,
             args: Vec::new(),
+            top: Vec::new(),
             tape: self.tape,
             aliases: self.aliases,
             wrap: None,
         }
+    }
+}
+
+/// The values `p` writes in K's text ([`P::Val`]).
+fn vals_of<'p>(p: &'p P, out: &mut Vec<&'p str>) {
+    match p {
+        P::Val(t) => out.push_out(t.as_str()),
+        P::L(list) => {
+            for q in list {
+                vals_of(q, out);
+            }
+        }
+        P::Scope(_, _, q) => vals_of(q, out),
+        _ => {}
     }
 }
 
@@ -156,7 +181,7 @@ impl Render<'_> {
 
     fn walk(&mut self, p: &P) {
         match p {
-            P::S(t) | P::Decl(_, t) => self.text(t),
+            P::S(t) | P::Decl(_, t) | P::Val(t) => self.text(t),
             P::Scope(names, braced, q) => {
                 let braces = *braced && !names.is_empty();
                 if braces {
@@ -291,6 +316,7 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
         args: w.args,
         holes: h,
         tape: w.tape,
+        top: w.top,
     })
 }
 
@@ -566,7 +592,7 @@ impl Ctx for Canon<'_> {
     fn go(&self, _: usize) -> String {
         String::new()
     }
-    fn awaiting(&self) -> String {
+    fn awaiting(&mut self, _: &[String]) -> String {
         String::from(PH)
     }
 }

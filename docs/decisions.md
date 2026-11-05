@@ -10212,3 +10212,30 @@ is the same text as of an eager one (the corpus's plain dumps differ only in the
 The gate's plain dumps leg runs `--lazy`, like the stressed difftest and test262 (with an
 eager test262 run beside it). A plain dump's own load stays eager (`compile_with_maps`)
 until 0218's batch 3.
+## D3001: Values used once are written where they are used
+date: 2026-11-05 · by: pjs · issue: 0207
+0216's queue item 2 (rules 3–4). The writer counts the `$dump.X` references of everything
+it writes from (the lines but an activation's and a factory's format 2 line, the
+activations' fields and slots but the temporaries K reads again, the factories, the
+handles); a value named once besides its own line is written in place of that reference
+and its line left out, where that keeps the dump's order:
+- a pure value (a literal, a function, a builtin iterator, `$djs.host`/`source`/`bytes`/
+  `advance`, `new Map/Set/Date`, reading no name but builtins) may go to any later point of
+  the load: a top-level line, a continuation's text, a callback; an anonymous function not
+  where a name would be inferred (an initializer, a property's value);
+- an effectful one (a reopened host call, an activation, a reaction, …) only to the first
+  thing its use's line evaluates with nothing effectful since its own line: a
+  continuation's site operand where K is called on its line, is async and does nothing
+  before its site (no code of the dump's in its blocks, no callback), the first argument of
+  a builtin's call (`Promise.prototype.then.call($dump.a3, …)`), the Script's completion
+  value. Host hooks (`$djs.host`, `source`) count as pure: hosts must not make one depend
+  on another's order (the CLI's `host` now knows the tools of its answers file).
+In a continuation's text a value may read no name K binds there (its parameters and the
+declarations on the site's path), except names its own text binds (a continuation written
+in place: its top-level names); `this`, `arguments` never. A slot value that would read a
+name keeps its reference (it would be read before K, `pre`). Liveness and K's helper
+captures do not look into the site operand (`P::Val`). The origin's function of a record is
+written in place (no `$dump.FaN`); the holder `globalThis.$dump = {}` is left out where
+nothing reads it. A hook the dump calls inside a continuation throws into that activation,
+not the Script: hosts fail the load on a hook they could not serve (Sandbox, pi's adapter,
+the CLI). A value read again by name after it was written in place is a refusal (a bug).

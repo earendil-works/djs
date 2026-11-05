@@ -57,6 +57,9 @@ enum P {
     /// A temporary's literal written in place (`cmap[.0]`): a piece of its own, so that a
     /// re-dump reads the literal back from K's text (D2913).
     Lit(usize, String),
+    /// A value of the dump written in K's text (the awaited operand): it reads none of K's
+    /// bindings (D3001), so liveness does not look into it.
+    Val(String),
 }
 
 fn s(t: &str) -> P {
@@ -171,6 +174,8 @@ fn run(act: &Act, ctx: &mut dyn Ctx, replay: Option<&[u32]>) -> R<Out> {
         (false, _) => cat!("async function* (", ps, ") {\n"),
     };
     let args: Vec<String> = g.params.iter().map(|p| p.1.clone()).collect();
+    let mut top = names.clone();
+    top.extend(g.node(0).decls.iter().map(|d| d.name.clone()));
     if let Some((tape, at)) = &g.replay
         && *at < tape.len()
     {
@@ -195,11 +200,13 @@ fn run(act: &Act, ctx: &mut dyn Ctx, replay: Option<&[u32]>) -> R<Out> {
             let mut k = g.flatten(P::L(alloc::vec![P::S(m), P::Helpers, body, close]));
             k.wrap = Some(String::from(p));
             k.args = args;
+            k.top = top;
             Ok(k)
         }
         None => {
             let mut k = g.flatten(P::L(alloc::vec![P::S(head), P::Helpers, body, close]));
             k.args = args;
+            k.top = top;
             Ok(k)
         }
     }
@@ -405,6 +412,22 @@ impl G<'_, '_> {
                 v
             }
         }
+    }
+
+    /// The site's awaited operand; the names K may bind where it stands go with the
+    /// question (a value written there in place must not read them, D3001).
+    fn awaiting(&mut self) -> String {
+        let mut scope: Vec<String> = self.params.iter().map(|p| p.0.clone()).collect();
+        for st in &self.act.site.path {
+            for d in &self.act.syntax.nodes[st.node as usize].decls {
+                scope.push_out(d.name.clone());
+            }
+        }
+        for s in &self.act.slots {
+            scope.push_out(String::from(s.name.split('@').next().unwrap_or(&s.name)));
+        }
+        scope.push_out(String::from("arguments"));
+        self.ctx.awaiting(&scope)
     }
 
     /// A completion's kind (a number, D2733), a decision on the tape.
@@ -1543,7 +1566,7 @@ impl G<'_, '_> {
         if self.is_site(i) {
             // At the loop's `next`: its first step is the awaited promise.
             let site = self.mark("site", fo);
-            let p = cat!(", ", self.ctx.awaiting());
+            let p = cat!(", ", self.awaiting());
             let l = lp(&p);
             return Ok(self.with_go(P::L(alloc::vec![consts, rec, lbl, site, l, s(" }")])));
         }
@@ -1638,7 +1661,7 @@ impl G<'_, '_> {
         if let P::Mark(x) = site {
             self.scaf[x].3 = cat!(",", quote(&self.act.site.name));
         }
-        let p = self.ctx.awaiting();
+        let p = self.awaiting();
         let awaited = P::L(alloc::vec![s("("), site, P::S(cat!("await ", p)), s(")")]);
         let exc = cat!("for-await.exception@", fo);
         if self.has(&exc) {
@@ -1986,7 +2009,7 @@ impl G<'_, '_> {
                     s(open),
                     m,
                     s("await "),
-                    P::S(self.ctx.awaiting()),
+                    P::Val(self.awaiting()),
                     s(close)
                 ]),
                 // A yield's operand was yielded before the dump.
@@ -2813,6 +2836,8 @@ fn render(p: &P, ftext: &str, skip: &str, out: &mut String) {
             }
         }
         P::Lit(_, t) => out.push_str(t),
+        // (A space: what it stands between stays apart.)
+        P::Val(_) => out.push(' '),
         P::V(a, b) => out.push_str(ftext.get(*a as usize..*b as usize).unwrap_or("")),
         P::Mark(_) | P::Helpers => {}
         P::L(list) => {

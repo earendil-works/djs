@@ -16,7 +16,7 @@ impl G<'_, '_> {
             SiteKind::YieldStar => None,
             // Awaiting the inner result of a `next`, `return` or `throw` (the inner-result
             // awaits at the node's end): the delegation's loop goes on from it.
-            SiteKind::YieldStarAwait if site.pos == n.end => Some(self.ctx.awaiting()),
+            SiteKind::YieldStarAwait if site.pos == n.end => Some(self.awaiting()),
             _ => return Err(cat!("plain dumps: a site of kind ", site.name, " (0203)")),
         };
         let asynch = self.act.kind == suspend::ASYNC_GENERATOR;

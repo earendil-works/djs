@@ -134,7 +134,13 @@ impl Tools {
             | "console.debug" => return Some(crate::run::CONSOLE_LOG),
             _ => {}
         }
-        let known = self.names.borrow().iter().any(|n| n == call_name);
+        // (A tool the answers file answers is one too, whether or not a call to it was
+        // reopened yet: a dump may name it by `$djs.host` first, D3001.)
+        let known = self.names.borrow().iter().any(|n| n == call_name)
+            || self
+                .answers
+                .as_ref()
+                .is_some_and(|a| a.tools.iter().any(|(n, _)| n == call_name));
         let tool = call_name
             .strip_prefix("tools.")
             .is_some_and(|n| !n.is_empty());

@@ -648,6 +648,8 @@ export class Sandbox {
   private clock: number | undefined;
   /** The journal of the current run, being recorded or replayed (D1730). */
   private journal: Journal | null = null;
+  /** The first hook a dump's load could not serve (D3001). */
+  private hookError: Error | undefined = undefined;
   /** Namespace objects this sandbox made for dotted function names (`tools`), as handles. */
   private readonly namespaces = new Map<string, number>();
   /** The host function objects by id, as handles: one per identity (D2970). */
@@ -1327,7 +1329,7 @@ export class Sandbox {
     const x = this.x;
     const vm = this.vm;
     const [name, hash, params] = args;
-    const fail = (why: string) => this.complete(callId, false, new Error(`source: ${why}`), false);
+    const fail = (why: string) => this.failHook(callId, new Error(`source: ${why}`));
     if (typeof name !== "string" || typeof hash !== "string") return void fail("not a name and a hash");
     const candidates: string[] = [];
     const given = this.opts.sources?.(name);
@@ -1368,8 +1370,18 @@ export class Sandbox {
   private serveHost(callId: number, args: unknown[]): void {
     const [name] = args;
     const h = typeof name === "string" ? this.hostValue(name) : undefined;
-    if (h === undefined) return void this.complete(callId, false, new Error(`host: unknown host value ${String(name)}`), false);
+    if (h === undefined) return void this.failHook(callId, new Error(`host: unknown host value ${String(name)}`));
     this.guard(() => this.x.vm_resolve_host_call(this.vm, callId, 1, h));
+  }
+
+  /**
+   * A hook that cannot be served: its call throws, and the load fails once the Script ran
+   * (a hook the dump calls inside a continuation, D3001, throws into its activation, not
+   * the Script).
+   */
+  private failHook(callId: number, e: Error): void {
+    this.hookError ??= e;
+    this.complete(callId, false, e, false);
   }
 
   /** `vm_dump` in this sandbox's own module. */
@@ -1453,6 +1465,7 @@ export class Sandbox {
       x.vm_handle_free(vm, hooks);
     });
     let st = STATUS_DONE;
+    this.hookError = undefined;
     // `$djs.seed`'s next call id: the counter goes on from the dumped VM's (D2897).
     let next: number | undefined;
     this.enter(dump, {}, true, "dump.js", typescript);
@@ -1476,7 +1489,7 @@ export class Sandbox {
         const [id, name, callArgs, state] = args;
         const f = typeof name === "string" ? this.fnNames.indexOf(name) + 1 : 0;
         if (f === 0) {
-          this.complete(callId, false, new Error(`resume: unknown host function ${String(name)}`), false);
+          this.failHook(callId, new Error(`resume: unknown host function ${String(name)}`));
           continue;
         }
         if (this.guard(() => x.vm_open_call!(vm, callId, f)) !== 0) {
@@ -1519,6 +1532,8 @@ export class Sandbox {
       const last = Math.max(0, ...calls.map((c) => c.id));
       this.guard(() => x.vm_set_next_call_id!(vm, Math.max(next!, last + 1)));
     }
+    const hookError = this.hookError;
+    this.hookError = undefined;
     return this.guard(() => {
       if (st === STATUS_THREW || st === STATUS_HOST_OUT_OF_MEMORY) {
         const h = x.vm_result(vm);
@@ -1526,6 +1541,7 @@ export class Sandbox {
         x.vm_handle_free(vm, h);
         throw new SandboxError("misuse", `cannot load the dump: ${why}`);
       }
+      if (hookError !== undefined) throw new SandboxError("misuse", `cannot load the dump: ${hookError.message}`);
       // The completion value: vm_result once done, else (idle) the entry call's outcome.
       const h = st === STATUS_DONE ? x.vm_result(vm) : x.vm_outcome(vm);
       const handles = new Map<string, number>();

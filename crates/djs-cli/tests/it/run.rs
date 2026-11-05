@@ -133,7 +133,7 @@ main();
     assert_eq!(r, (0, "1\n".into(), String::new()));
     let text = std::fs::read_to_string(&dump).unwrap();
     assert!(
-        text.contains(r#", [], {"made":["tools.n"],"answered":{"tools.n":1}});"#),
+        text.contains(r#", [], {"made":["tools.n"],"answered":{"tools.n":1}})"#),
         "{text}"
     );
     let r = djs_cmd(&["resume", "--tools", &answers, &dump]);

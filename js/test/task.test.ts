@@ -120,9 +120,9 @@ test("suspend dumps the call states; resume continues every call by its hooks", 
       const sb = new Sandbox(h.opts);
       const task = sb.start(CODE, { n: 1 });
       const dump = await task.suspend();
-      assert.match(dump, /\$djs\.resume\(\d+, "tools\.job", \[1\], \{"n":1,"step":"started, saved"\}\);/);
+      assert.match(dump, /\$djs\.resume\(\d+, "tools\.job", \[1\], \{"n":1,"step":"started, saved"\}\)/);
       assert.match(dump, /\$djs\.resume\(\d+, "tools\.again", \["x"\]\);/);
-      assert.match(dump, /\$djs\.resume\(\d+, "tools\.plain", \["y"\]\);/);
+      assert.match(dump, /\$djs\.resume\(\d+, "tools\.plain", \["y"\]\)/);
       await assert.rejects(task.result, (e: unknown) => e instanceof SandboxError && e.kind === "suspended");
       assert.ok(h.seen.calls[0].signal.aborted, "the suspended task stops waiting for its calls");
       assert.equal(h.seen.saved.length, 1);
@@ -142,7 +142,7 @@ test("suspend dumps the call states; resume continues every call by its hooks", 
       await h.answer("again x", "B2");
       // Dumped again while waiting on job(2): a fresh call's state, saved.
       const second = await again.suspend();
-      assert.match(second, /\$djs\.resume\(\d+, "tools\.job", \[2\], \{"n":2,"step":"started, saved"\}\);/);
+      assert.match(second, /\$djs\.resume\(\d+, "tools\.job", \[2\], \{"n":2,"step":"started, saved"\}\)/);
       again.sandbox.dispose();
       const third = await Sandbox.resume(second, h.opts);
       await h.answer("resumed 2", "D3");
@@ -233,7 +233,7 @@ test("host-driven runs dump states and load them back", async () => {
   const run = sb.begin("return await tools.sleep(5) + await tools.sleep(6);");
   const id = run.calls[0].id;
   const text = run.dump({ [id]: { due: 123, note: "é\n\u2028" } });
-  assert.match(text, new RegExp(`\\$djs\\.resume\\(${id}, "tools\\.sleep", \\[5\\], \\{"due":123,"note":"é\\\\n\u2028"\\}\\);`));
+  assert.match(text, new RegExp(`\\$djs\\.resume\\(${id}, "tools\\.sleep", \\[5\\], \\{"due":123,"note":"é\\\\n\u2028"\\}\\)`));
   assert.throws(() => run.dump({ [id + 1]: 1 }), /a state for a call that is not open/);
   assert.throws(() => run.dump({ [id]: { __proto__: null, ["__proto__"]: 1 } }), /__proto__/);
   const again = new Sandbox(opts).loadRun(text);

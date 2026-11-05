@@ -673,6 +673,7 @@ class Session implements VmSession {
     engine.free(hooks);
     this.loading = true;
     this.plainIds = [undefined, 0];
+    this.hookError = undefined;
     let status: number;
     try {
       engine.call(compiled.handle, 0, []);
@@ -691,6 +692,9 @@ class Session implements VmSession {
       engine.free(h);
       throw new Error(`Cannot load the dump: the dump threw: ${why}`);
     }
+    // A hook the dump calls inside a continuation (D3001) throws into its activation, not
+    // the Script: the load fails all the same.
+    if (this.hookError !== undefined) throw new Error(`Cannot load the dump: ${this.hookError}`);
     const run = status === STATUS_DONE ? engine.result() : engine.outcome().handle;
     const [next, last] = this.plainIds;
     if (next !== undefined) engine.setNextCallId(Math.max(next, last + 1));
@@ -702,6 +706,9 @@ class Session implements VmSession {
   }
 
   /** Serves `$djs.resume(id, name, args, state)`, `$djs.seed(lo, hi, next)`, `$djs.source` and `$djs.host` while a dump loads. */
+  /** The first hook a dump's load could not serve (D3001). */
+  private hookError: string | undefined = undefined;
+
   private serveHook(callId: number, fnId: number, [a, b, c, d]: unknown[]): void {
     const { engine } = this;
     let why: string | undefined;
@@ -736,6 +743,7 @@ class Session implements VmSession {
     }
     if (why === undefined) engine.resolveHostCall(callId, 0);
     else {
+      this.hookError ??= why;
       const h = engine.value(why);
       engine.settleHostCall(callId, false, h);
       engine.free(h);

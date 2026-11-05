@@ -54,6 +54,9 @@ pub struct PlainLoad {
     next: Option<u32>,
     /// The highest id `resume` reopened.
     last: u32,
+    /// The first hook call it could not serve: the load fails (a hook called inside a
+    /// continuation throws into its activation, not the Script, D3001).
+    pub hook_error: Option<String>,
 }
 
 /// Starts loading the plain dump `text` into `vm` (a fresh one): defines `$djs` (the dump
@@ -113,7 +116,10 @@ pub fn serve_hook(
                 .ok_or_else(|| format!("host: unknown host value {n}")),
             None => Err(String::from("host: not a name")),
         };
-        let r = r.map_err(|msg| vm.new_error(ErrorKind::Error, &msg).expect("oom"));
+        let r = r.map_err(|msg| {
+            load.hook_error.get_or_insert_with(|| msg.clone());
+            vm.new_error(ErrorKind::Error, &msg).expect("oom")
+        });
         let _ = vm.resolve_host_call(call_id, r);
         return true;
     }
@@ -126,7 +132,10 @@ pub fn serve_hook(
             }
             _ => Err(String::from("source: not a name and a hash")),
         };
-        let r = r.map_err(|msg| vm.new_error(ErrorKind::Error, &msg).expect("oom"));
+        let r = r.map_err(|msg| {
+            load.hook_error.get_or_insert_with(|| msg.clone());
+            vm.new_error(ErrorKind::Error, &msg).expect("oom")
+        });
         let _ = vm.resolve_host_call(call_id, r);
         return true;
     }
@@ -172,6 +181,7 @@ pub fn serve_hook(
         }
         Err(msg) => {
             // (Not parked any more only when out of memory: the load fails anyway.)
+            load.hook_error.get_or_insert_with(|| msg.clone());
             let e = vm.new_error(ErrorKind::Error, &msg).expect("oom");
             let _ = vm.resolve_host_call(call_id, Err(e));
         }
@@ -258,6 +268,9 @@ pub fn run_plain(
         }
     }
     end_load(vm, tools, &load);
+    if let Some(e) = &load.hook_error {
+        return Err(e.clone());
+    }
     Ok(load)
 }
 

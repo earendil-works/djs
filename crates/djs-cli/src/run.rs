@@ -505,6 +505,10 @@ fn drive_from(
                 _ => {
                     let l = load.take().unwrap_or_default();
                     crate::dumps::end_load(&mut vm, tools, &l);
+                    if let Some(e) = &l.hook_error {
+                        let _ = writeln!(err, "djs: the dump did not load: {e}");
+                        return 2;
+                    }
                 }
             }
         }
