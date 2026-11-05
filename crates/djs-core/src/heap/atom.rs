@@ -752,6 +752,24 @@ impl Heap {
         self.find_string_atom(hash, Needle::Str(s))
     }
 
+    /// The string atom of `t` where it is interned already (not an index), without
+    /// allocating.
+    #[cfg(feature = "dump")]
+    pub(crate) fn find_atom_str(&self, t: &str) -> Option<Atom> {
+        if parse_array_index(t.bytes().map(u16::from)).is_some() {
+            return None;
+        }
+        let units: alloc::vec::Vec<u16>;
+        let (hash, key) = if super::string::is_ascii(t.as_bytes()) {
+            let b = t.as_bytes();
+            (self.keyed_hash_latin1(b), Needle::Latin1(b))
+        } else {
+            units = t.encode_utf16().collect();
+            (self.keyed_hash_units(&units), Needle::Units(&units))
+        };
+        self.find_string_atom(hash, key)
+    }
+
     /// Interns a Rust string; allocates only if it is not interned yet.
     pub fn atom_str(&mut self, t: &str) -> Result<Atom, HeapError> {
         if let Some(i) = parse_array_index(t.bytes().map(u16::from))

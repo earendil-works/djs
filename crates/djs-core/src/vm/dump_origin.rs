@@ -136,7 +136,21 @@ fn literal_value(t: &str) -> Option<Value> {
 }
 
 /// The layout of a continuation made again (D2913), as origin tracking reads it.
-fn record_of(l: cont::canon::Layout) -> Option<Record> {
+fn record_of(h: &Heap, k: Obj, l: cont::canon::Layout) -> Option<Record> {
+    // A string literal is one of K's constants, or an atom where K uses it as a key
+    // (its text has no escapes, `literal`).
+    let consts = template::consts(h, h.closure_template(k));
+    let string = |t: &str| {
+        let t = t.strip_prefix('"')?.strip_suffix('"')?;
+        consts
+            .iter()
+            .copied()
+            .find(|v| v.as_string().is_some_and(|s| text_of(h, s) == t))
+            .or_else(|| {
+                let a = h.find_atom_str(t)?;
+                h.atom_str_value(a).map(Value::string)
+            })
+    };
     let mut scaf = Vec::new();
     for (kind, fo, ko, json) in l.scaf {
         let e = items(&json)?;
@@ -165,7 +179,7 @@ fn record_of(l: cont::canon::Layout) -> Option<Record> {
     let mut cmap = Vec::new();
     for (slot, v, lit) in l.cmap {
         let c = if lit {
-            CVal::Literal(literal_value(&v)?)
+            CVal::Literal(literal_value(&v).or_else(|| string(&v))?)
         } else {
             CVal::Binding(v)
         };
@@ -323,7 +337,7 @@ impl Dumper<'_> {
                 != 0
         });
         let rec = match cont::canon::layout_of(&act, &tape, &holes, &ktext, ts) {
-            Ok(l) => record_of(l),
+            Ok(l) => record_of(h, k, l),
             Err(e) => return Err(cat!("a continuation of an earlier dump: ", e)),
         };
         let Some(rec) = rec else {

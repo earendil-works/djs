@@ -492,12 +492,14 @@ impl G<'_, '_> {
 
     /// A temporary of the site's statement: a literal in place, else a const declared
     /// right before the statement (the dump's values are reachable only while it loads).
-    /// (A string is no literal here: a re-dump reads literals back from K's text as
-    /// values, D2913, and makes no strings.)
+    /// (A re-dump reads a literal back from K's text, D2913: a string from K's
+    /// constants.)
     fn tmp(&mut self, construct: &str, off: u32) -> R<P> {
         let slot = cat!(construct, "@", off);
         let v = self.take(&slot)?;
-        let lit = literal(&v) && !v.starts_with('"');
+        // (Not an index's string: K may use it as an integer key, no string of its own.)
+        let index = v.len() > 2 && v[1..v.len() - 1].bytes().all(|b| b.is_ascii_digit());
+        let lit = literal(&v) && !(v.starts_with('"') && index);
         if self.steer(u32::from(lit)) == 1 {
             self.cmap.push_out((slot, v.clone(), true));
             return Ok(P::Lit(self.cmap.len() - 1, v));

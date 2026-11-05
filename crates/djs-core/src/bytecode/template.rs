@@ -384,6 +384,11 @@ pub fn bytes_of(heap: &Heap, r: Ref) -> &[u8] {
     }
 }
 
+/// Template `t`'s constants.
+pub fn consts(heap: &Heap, t: u32) -> Vec<Value> {
+    value_array(heap, heap.arena().get(t, FuncTemplate::CONSTS))
+}
+
 fn value_array(heap: &Heap, r: Ref) -> Vec<Value> {
     let Some(off) = r.get() else {
         return Vec::new();

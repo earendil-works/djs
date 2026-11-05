@@ -131,11 +131,20 @@ impl Dumper<'_> {
             }
             // A binary operator's left operand; a template's substitution before the site
             // (its string: a name that holds that string now).
+            // (A substitution's saved string: a string, or a number whose string it is.)
+            let saved_text = |v: Value| v.as_string().map(|s| text_of(self.h, s));
+            let as_part = |now: Value, saved: Value| match (now.as_string(), now.as_number()) {
+                (Some(_), _) => same(self.h, now, saved),
+                (None, Some(n)) => {
+                    saved_text(saved).is_some_and(|t| crate::num::to_string(n).as_str() == t)
+                }
+                _ => false,
+            };
             let simple = |t: &str, saved: Value, string: bool| {
                 (!string && is_literal(t))
                     || matches!(parse(t), Some(Read::Ident(id)) if self
                         .read_name(f, named, val, id)
-                        .is_some_and(|now| (!string || now.as_string().is_some()) && same(self.h, now, saved)))
+                        .is_some_and(|now| if string { as_part(now, saved) } else { same(self.h, now, saved) }))
             };
             // (Nested operators start where their left operands do: the slot is that of
             // the one whose right operand holds the site.)

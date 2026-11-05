@@ -10136,3 +10136,13 @@ compound assignment's old value where the target holds it now (a name's binding,
 object's own data property). Then K writes the assignment's text (`s += await …`,
 `o.p = await …`, `o[k] = await …`, `o.r += await …`) instead of `($djs_t0.r = 1 + await
 …)` over constants. Logical assignments and `super` targets keep their form.
+
+## D2919: String temporaries are literals again; a number substitution is read again
+date: 2026-11-05 · by: pjs · issue: 0207
+D2913 made string temporaries constants of K (a re-dump read literals back as values and
+made no strings). A re-dump now finds a string literal of K's text as one of K's own
+template constants, or, where K uses it as a key, as the interned atom (without
+allocating); so a string temporary is a literal in place again, except an index's string
+(`"0"`, an integer key with no string of its own). A template's substitution before the
+site whose name now holds a number whose string is the saved part is read again too
+(D2914).
