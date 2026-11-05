@@ -2695,17 +2695,63 @@ fn prune(p: &mut P, ftext: &str) {
         P::Scope(_, _, q) => decl_names(q, &mut names),
         _ => decl_names(p, &mut names),
     }
-    for n in names {
+    if !names.is_empty() {
+        // One rendering: a name is read where it occurs outside its own lines and those
+        // of the names left out before it (in order, as if each were rendered without
+        // them).
         let mut text = String::new();
-        render(p, ftext, &n, &mut text);
-        if !has_ident(&text, &n) {
-            drop_decls(p, &n);
+        let mut lines = Vec::new();
+        render_lines(p, ftext, &mut text, &mut lines);
+        let mut dropped: Vec<&str> = Vec::new();
+        for n in &names {
+            let inside = |at: usize| {
+                lines.iter().any(|(a, b, m)| {
+                    *a <= at && at < *b && (m == n || dropped.contains(&m.as_str()))
+                })
+            };
+            if !ident_at(&text, n).any(|at| !inside(at)) {
+                dropped.push_out(n.as_str());
+            }
+        }
+        for n in dropped {
+            drop_decls(p, n);
         }
     }
     match p {
         P::Scope(_, _, q) => prune_nested(q, ftext),
         _ => prune_nested(p, ftext),
     }
+}
+
+/// [`render`] of all of `p`, with where each binding's line is: `[start, end, name]`.
+fn render_lines(p: &P, ftext: &str, out: &mut String, lines: &mut Vec<(usize, usize, String)>) {
+    match p {
+        P::Decl(n, t) => {
+            lines.push_out((out.len(), out.len() + t.len(), n.clone()));
+            out.push_str(t)
+        }
+        P::L(list) => {
+            for q in list {
+                render_lines(q, ftext, out, lines);
+            }
+        }
+        P::Scope(_, _, q) => {
+            out.push(' ');
+            render_lines(q, ftext, out, lines);
+            out.push(' ');
+        }
+        _ => render(p, ftext, "", out),
+    }
+}
+
+/// Where the identifier `name` occurs in `text` (not as part of a longer one).
+fn ident_at<'t>(text: &'t str, name: &'t str) -> impl Iterator<Item = usize> + 't {
+    let ident = |c: u8| c.is_ascii_alphanumeric() || c == b'_' || c == b'$';
+    let b = text.as_bytes();
+    text.match_indices(name).map(|(s, _)| s).filter(move |&s| {
+        let e = s + name.len();
+        (s == 0 || !ident(b[s - 1])) && (e == b.len() || !ident(b[e]))
+    })
 }
 
 /// [`prune`] for the scopes in `p`.
