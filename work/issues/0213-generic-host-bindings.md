@@ -1,6 +1,6 @@
 # 0213: Generic host bindings: `tools.foo` stops being special
 
-status: in-progress
+status: done
 agent: hb
 branch: issue/0213-generic-host-bindings
 depends-on: -
@@ -83,9 +83,33 @@ D2970-D2989.
   +0.7% raw, +0.5% gzip (updated). Decisions D2970, D2971, D2973. Docs: host.md,
   plain-js-dumps.md, continuation-dumps.md, guide host.md. pi --next --dump-every-idle on a debug
   module: 2 timing failures (a 5 s timeout, debug speed), not dump-related.
-- Batch 2 (next): Sandbox `globals`/`bindings` options (D2972), CLI `--bind` and answers by
-  full name, docs runner without body params, remaining docs.
+- Batch 1 merged (main 1537eda6) after a rebase that needed the dump-size score regenerated.
+- Batch 2 (with what was batch 3's CLI part; pi was done in batch 1): Sandbox `globals` and
+  `bindings` (identity-keyed functions; `ns.member` makes namespace `ns`; the written default rule;
+  misuse for unknown identities or a parameter/binding clash; one handle per identity carried through
+  the dump module's image), js/test/bindings.test.ts (explicit globals, the default rule, a bare
+  `myTool` + `sdk` namespace as body bindings dumped at every idle point and loaded, a suspended task
+  resumed in a sandbox and in node with identity kept). CLI: identities everywhere (`tools` table
+  keyed by identity, Proxy maps `k` to `tools.k`, `has` trap), `--bind NAME=ID`, answers keyed by
+  identity (fixtures and docs/cli.md updated), `BODY_PARAMS` shared by run/disasm/strip, a CLI test
+  of a bound `myTool` at every idle point. djs-docs runner: bodies without parameters (guide
+  disassembly regenerated; compiler.md's sentence on `console` rewritten). D2972. Guide pages
+  updated: host.md (host calls, dumps), snapshots.md (the example dump), compiler.md.
 
 ## Follow-ups
 
 ## Result
+Host functions are no longer special as `tools.foo`:
+- **Identity** (D2970): a host-chosen string; one function object per identity per VM.
+- **Dumps** (D2971): host values are `$djs.host(name)` (functions by identity, roots such as
+  namespaces and pi's `tools` Proxy by name, their members as reads on the root); `DumpOptions::host_roots`,
+  `vm_dump`'s roots line, ABI 5; every loader (Sandbox, pi, CLI, difftest, node scripts, tests) serves
+  the hook. pi's functions are `bridge`/`call` (D2973, supersedes D2893).
+- **Bindings** (D2972): Sandbox `globals` and `bindings` (body parameters, the stand-in for imports;
+  namespaces bindable too), the dotted-name rule documented as the default; CLI `--bind NAME=ID`,
+  answers by identity; the docs runner has no body parameters.
+- Imports later: a resolver (specifier, export) → identity (default `specifier#export`), the binding
+  holds that identity's object; dumps need nothing new.
+Known gaps: per-run bindings (left out until needed); the CLI's `print` and `console.log` share one
+id, so a held `console.log` comes back as `print`'s object after a load (as before); pi's own prelude
+still binds `tools`/`console` (pi's choice).
