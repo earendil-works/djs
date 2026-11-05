@@ -1,6 +1,6 @@
 # 0216: Dump fluff audit: the byte-minimal dump, and every byte between it and ours
 
-status: in-progress
+status: done
 agent: fluff
 branch: issue/0216-dump-fluff-audit
 depends-on: -
@@ -34,7 +34,40 @@ Output: work/research/0216/README.md with the minimal dumps, the per-byte accoun
 Send the coordinator a short summary. Do not edit exporter code (pjs owns it for 0207).
 
 ## Log
+- Producers on main 65309049: difftest --plain-out (1,342 corpus dumps), core tests with
+  DJS_PLAIN_OUT/DJS_SLEEP_OUT (192 v2, sleep), pi suite next mode with dumps at every idle point
+  on the release dump module (106 dumps; temporary uncommitted write in js/pi/vm.ts afterIdle,
+  reverted; all pi tests pass). Scratch in work/scratch/0216.
+- Tools in work/research/0216: scan.mjs (lexer), rules.mjs (mechanical minimal rules),
+  suite.mjs (per-rule totals over suites), account.mjs (hand cases as categorized steps from
+  main's dump to minimal.js: the per-byte accounting), estimate.mjs, owner.mjs, check.mjs
+  (node, generic host), plain-node-min.mjs (corpus), check-djs.sh (djs resume), check-sandbox.ts
+  (Sandbox), instr.sh (load instructions).
+- 8 hand-written minimal dumps (sleep, 3 pi, 3 v2, 1 corpus generator): 23,927 → 15,420 raw
+  (−36%), 8,226 → 5,390 gzip (−34%); all continue identically in node; sleep, v2-plan,
+  v2-operands, v2-generator also in djs. Re-dump of minimal dumps needs 0207 item 4; analysed
+  field by field (README "Records").
+- Mechanical rules over suites, checked: pi 106/106 node, v2 190/192 node (2 Math.random) and
+  192/192 djs, corpus 1,337/1,337 node.
+- pjr's constraint (load time): nothing proposed decodes data in JS; load measured −26%/−37%
+  instructions on two cases, −12% over the v2 suite with the mechanical rules only.
+- Found: resumed generators get a prototype object that is not their function's `prototype`
+  (bug in main, reproduced with djs run --dump-after); no-op `$djs.keep`; an unread operand
+  `$dump.a40_0`; `var g = function* g` for global generators; dead placeholder head binding.
+- Guide: no pages affected (research only).
 
 ## Follow-ups
+- The queue in work/research/0216/README.md ("The queue"), items 1–13; item 1 is 0207 item 4
+  (pjs), with `h`/`r` derived instead of recorded.
+- Owner decisions listed there: seed only when Math.random was used, source by hash alone,
+  no "use strict", pi call state = id (pi adapter), short generated names, whitespace.
+- Bug: a resumed generator's prototype is not its function's `prototype` (README "Findings").
 
 ## Result
+work/research/0216/README.md: the minimal format's rules, 8 hand-written minimal dumps
+(cases/*/minimal.js) with exact per-step accounting (account.md), mechanical rules measured
+over the pi, v2 and corpus suites (suites.md), the records' fields challenged, the ranked
+exporter queue and the owner/host items separately, load-time measurements.
+Totals: cases −36% raw / −34% gzip; pi suite ≈ −48% / −36% (−63% / −51% with the owner
+items); v2 ≈ −40% / −40%; sleep 1,247 → 716 B (gzip 648 → 411). Known gap: re-dumps of the
+minimal form are not run (they need 0207 item 4).
