@@ -40,6 +40,12 @@ Measure where plain dumps stand now and fix what regressed:
   cost (D2888); `DumpOptions::check` (default on): corpus dump 16.2k -> 8.6k M without
   it, re-dump 22.3k -> 14.8k M.
 
+- Batch 3: the builtins a dump reads by substring; the check's names from parse and
+  resolution alone (D2889; validated equal to the compiled code's on the corpus): corpus
+  dump 16,282 -> 13,123 M, re-dump 22,292 -> 19,229 M; records dump 4,131 -> 4,045 M.
+  BaseTable per fresh VM (~4% of a re-dump): skipped, wasm hosts cannot carry the cache
+  across VMs. Load-side maps recording: kept (11% of a load saves 27% of the re-dump).
+
 ## Follow-ups
 
 ## Result

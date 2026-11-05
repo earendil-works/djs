@@ -10082,3 +10082,16 @@ plain text does not contain is one the writer left out, which no live binding re
 (D2911), or one it names by reference (D2882): it is not checked. `DumpOptions::check`
 (default true everywhere) turns the check off. Whether production hosts do is the
 owner's call.
+
+## D2889: The dump's check resolves names without generating code
+date: 2026-11-06 · by: pjr · issue: 0215
+The check (D2888) needs only every function's free names: what it captures and the
+globals it, or a function inside it, reads or writes. `compiler::free_names` parses the
+text and runs the first step of resolution, the classification of every name reference.
+It skips storage assignment, the second emit and the templates, which made up half of
+the full compile. Over the corpus and the dump tests its names are identical to those
+read from the compiled code. One difference: a class's text also counts the globals of
+its field initializers, which compile to functions beside its constructor. That can only
+accept a captured variable that a root of the same name holds, which the class's own
+code would read in the same way. Corpus dump 16.3k -> 13.1k M instructions, re-dump
+22.3k -> 19.2k M. The check is now ~35% of a dump, nearly all of it parsing.
