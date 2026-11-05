@@ -20,6 +20,32 @@ Constraints: exact semantics (test262 and the difftest stay green); measure in w
 
 ## Log
 
+### Research (scratch: work/scratch/0234/: mem.ts, trace.ts, grow.ts, atrace.ts, cpu.ts, nat.sh, nat2.sh)
+
+Measured with the benchpage harness (js/bench/engines, copied untracked) in node 26. Linear
+memory of a djs instance, idle (640 KiB): 128 KiB shadow stack; 97 KiB static data + bss,
+padded to the 4 initial pages (256 KiB); 128 KiB dlmalloc first segment (PRIME, ~45 KiB
+used); the arena at 384 KiB with 256 KiB reserved for 187 KiB used (base 182 KiB + sandbox
+setup; image + one page of slack). QuickJS (wasi-sdk): 64 KiB stack, ~100 KiB data, ~130 KiB
+malloc'd realm = 320 KiB.
+
+After a run, memory = 384 KiB + arena capacity + holes where the arena moved:
+- below the GC threshold the arena's capacity doubles (sequential: 276 KiB used, 512 KiB
+  reserved); wasm grows it in place, so doubling only reserves untouched pages;
+- the GC threshold is live + young live + 288 KiB (BASE_ALLOWANCE): ~2x live. heavy: the
+  first collection comes at 2.4 MiB (JSON.parse of the 930 KB `__DATA` has no safepoint),
+  2.2 MiB survive, 1.8 MiB of them the data strings (`__DATA` and the parsed answers), next
+  threshold 4.4 MiB, arena capacity 4.4 MiB;
+- fanout: its 151 KB non-Latin-1 data goes through the staging buffer (vm_decode_wire); the
+  staging buffer is a page run right after the arena and stays at its high-water size, so
+  the arena moves past it and leaves a 640 KiB hole;
+- a full GC's 64 KiB mark stack reservation does not fit dlmalloc's segment: one more page
+  at memory's end;
+- minor collections keep every slice parent: heavy's `first` snippets keep each 10 KB file
+  text until a full collection (~500 KiB).
+Native instruction counts (djs run --body, data inlined) for the CPU side; wasm counts in
+node are within V8 tier-up noise (±5%).
+
 ## Follow-ups
 
 ## Result
