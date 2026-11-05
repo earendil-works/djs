@@ -720,3 +720,6 @@ topics when the index is next reorganized.
 - D3051: The guide cites no decisions, tells no history and names pi on one page
 - D3025: A block's placed code waits for the late binding it reads; a re-dumped method's home is its function's
 - D3060: `debugger;` pauses in the CLI: `djs repl --frozen` and `--debugger OUT`
+- D3026: Late bindings and subclasses wait for the block's own declarations; keys keep lone surrogates
+- D3052: goals.md holds every goal; links to a page's section must exist
+- D3053: live examples pause at `debugger;` in their normal Run
