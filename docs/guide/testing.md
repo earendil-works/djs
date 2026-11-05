@@ -299,8 +299,8 @@ Three things keep it fast without checking less:
   files a leg can read is one of three classes: everything (the guide), everything but
   the documentation (the JavaScript legs), and that minus the JavaScript package (the
   Rust legs). An always-run check fails when Rust code starts naming a file outside its
-  class. So a documentation change gates in seconds, a change to the host package in
-  about ten, and a change to the engine reruns every Rust leg.
+  class. So a documentation change gates in seconds, a change to the host package reruns
+  only the JavaScript legs, and a change to the engine reruns every Rust leg.
 - **Slow checks apart.** `scripts/gate.sh --full` ignores the cache and adds checks too
   slow for every merge, such as the agent host's tests with a dump and a resume at every
   idle point. It runs daily and before releases.
@@ -330,8 +330,8 @@ machine fails at random:
   recorded when it is quiet. The gate runs the same scenarios once, untimed, so the
   harness keeps working.
 - **Size.** The size-budget leg builds the shipped modules and compares their gzip size
-  with a ceiling in [`tests/scores/size.tsv`](../../tests/scores/size.tsv) that may only
-  go down; a change that makes the module larger has to be a deliberate trade.
+  with a ceiling in [`tests/scores/size.tsv`](../../tests/scores/size.tsv); a change
+  that would cross it has to make room elsewhere, or raise it as a deliberate trade.
 
 ## Where to look
 

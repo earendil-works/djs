@@ -123,7 +123,7 @@ once: it goes into an **inbox** in the heap, and the run loop takes it from ther
 when the job queue is empty, as the next section describes.
 
 Both kinds are heap state, so a VM that waits for ten tools is as complete a description
-of the run as any other stop. [The host interface](host.md#host-calls) has the protocol
+of the run as any other stop. [The wasm boundary](host.md#host-calls) has the protocol
 from the host's side, and [the JavaScript interface](js-api.md#host-functions) how a
 `Sandbox` defines both kinds.
 
@@ -265,8 +265,8 @@ A dump is taken only at an **idle point**: `run` returned `Idle`, no job is queu
 no frame is on the stack. There, every suspended piece of the run is an async function or
 generator stopped at an `await` or `yield`, which the compiler can describe by name.
 A run in the middle of a computation has no such description; [idle
-points](dumps.md#idle-points) says what a host does about that, and [images and
-continuation dumps](snapshots.md#continuation-dumps) how the description is made.
+points](dumps.md#idle-points) says what a host does about that, and [how continuation
+dumps are written](continuations.md) how the description is made.
 
 On the docs site, a `debugger;` statement in a live example makes such an idle point:
 the page binds an async host function `debugger` that the statement awaits, so the run

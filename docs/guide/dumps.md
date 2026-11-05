@@ -264,8 +264,9 @@ already read (`pages.push` above) as a second read of it. Without frozen builtin
 writing a dump throws a `misuse` error that says so. The live examples with `debugger;`
 run with frozen builtins for this reason.
 
-**The dumper.** Writing dumps is about 300 KB of engine code that only hosts which
-persist runs need, so the module djs ships leaves it out. Such a host loads the same
+**The dumper.** The code that writes dumps nearly doubles the module (about 340 KB more
+with gzip), and only hosts which persist runs need it, so the module djs ships leaves it
+out. Such a host loads the same
 build with the dumper as a second module and passes it as `dumpModule`: to dump, the
 sandbox copies the VM's memory into an instance of that module and writes the dump
 there, and the process keeps that instance for the next dumps. **Loading** a dump needs
@@ -318,6 +319,6 @@ later idle point where the value is gone.
 - [`examples/sleep-dump/`](../../examples/sleep-dump/): a host with a tool that sleeps,
   suspended in one process and continued in another, or in node.
 - [`crates/djs-core/src/vm/dump.rs`](../../crates/djs-core/src/vm/dump.rs): the writer;
-  [How it works: images and dumps](snapshots.md#continuation-dumps) explains how it reads
-  frames and writes continuations.
+  [how continuation dumps are written](continuations.md) explains how it reads frames
+  and writes continuations.
 - [`tests/dump/`](../../tests/dump/): golden dumps that every later djs must still load.

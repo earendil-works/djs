@@ -359,6 +359,10 @@ async function runPausing(ex, l, id) {
     const site = a.dataset.line ? { line: Number(a.dataset.line), column: Number(a.dataset.col) } : null;
     showDump(Number(a.dataset.dump), site);
     box.open = true;
+    // The marked statement in view inside the dump's own scroll box.
+    const pre = box.querySelector("pre");
+    const lh = parseFloat(getComputedStyle(pre).lineHeight) || 20;
+    pre.scrollTop = site ? Math.max(0, (site.line - 1) * lh - pre.clientHeight / 3) : 0;
     box.scrollIntoView({ block: "nearest" });
   };
   const dumpLink = (i, site) =>
