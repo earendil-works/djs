@@ -6,6 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0230 | Math.max/min (and other tiny hot builtins) fast in codemode | mathfast | .worktrees/mathfast |
 | 0229 | Benchmarks page: djs vs QuickJS versions and monty on codemode workloads; dumps, size, memory (owner) | benchpage | .worktrees/benchpage |
 
 ## Open (ready)
