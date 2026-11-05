@@ -1638,3 +1638,4 @@
 1633	intrinsic	IteratorFastDrain
 1634	intrinsic	ArgumentCount
 1635	intrinsic	Throw
+1636	intrinsic	RegExpExecOwn
