@@ -10515,3 +10515,20 @@ date: 2026-11-06 · by: pjs · issue: 0207
 - Without `"use strict"` the dump's first line is `"djs-dump";`. The node harnesses
   (plain-node.mjs, the sleep example, js tests) prepend `"use strict"; ` on that line, so
   line numbers stay the dump's.
+## D3050: `debugger;` can be a pause: an await of the host's `debugger`, in dump builds only
+date: 2026-11-06 · by: guide · issue: 0220
+With the compile option `debugger_awaits` (bit 6 of `CompileOptions::bits`, `vm_compile`'s
+`| 16`, the Sandbox option `debugger`), `debugger;` in an async function compiles as the
+statement `await debugger();`, `debugger` being the global a host binds (identity
+`"debugger"`), and the suspension map records it as that statement with its Await node
+over the keyword. A run is then idle at the statement, and the exporter writes the pause as
+any open host call (`await $djs.resume(id, "debugger", [])`), with no case of its own; a
+later `debugger;` in a continuation's text is copied as written and pauses again when the
+dump is loaded with the option. Outside async functions, and without the option, the
+statement does nothing. The option is a field of `dump` builds only (cfg-gated, like the
+parser branch), so the shipped and slim modules keep their size (only the source hash
+constant changes); the Sandbox refuses it for a module without the dumper, since a dump
+compiles the script again with the same options. It exists for the docs site, whose live
+examples show the dump a run writes at a `debugger;`. Alternatives: rewriting the source
+in the page (columns move, the dump shows the rewrite) or a new opcode or intrinsic (the
+image descriptor of the dump module would then differ from the shipped one's).
