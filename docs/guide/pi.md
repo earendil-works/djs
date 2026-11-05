@@ -112,7 +112,7 @@ the default mode, in the next mode, and with a dump and a resume at every idle p
   messages, TypeScript, dquickts' own tests): **621 of 632** cases match qjs; 6 known
   failures (`tests/corpus/expected-failures.txt`) and 5 skipped as non-goals.
 - pi's codemode test suite on djs: 221 of 226 tests pass in the default mode, in the
-  next mode and with a dump at every idle point (measured at 80f9c059ef, 2026-11-05).
+  next mode and with a dump at every idle point (measured at 7167411f0f, 2026-11-05).
 <!-- /gen -->
 
 The tests that fail come from djs being always strict, from a test that expects
@@ -139,7 +139,7 @@ script):
 | forEach | 5.4G | 5.8G | 0.93 |
 | map/filter/reduce (higher-order) | 7.8G | 4.5G | 1.73 |
 
-Machine instructions per workload (`scripts/perf/w/`), measured at 12f469900e,
+Machine instructions per workload (`scripts/perf/w/`), measured at 7167411f0f,
 2026-11-05; lower is better.
 <!-- /gen -->
 
@@ -154,23 +154,23 @@ The measurements behind this section, from `tests/scores/status.tsv`
 <!-- gen:status recorded -->
 | measurement | value | measured at |
 | --- | ---: | --- |
-| `pi/bench/polls/djs` | 76782 | 80f9c059ef, 2026-11-05 |
-| `pi/bench/polls/djs-prelude` | 74205 | 80f9c059ef, 2026-11-05 |
-| `pi/bench/polls/qjs` | 60652 | 80f9c059ef, 2026-11-05 |
-| `pi/bench/start/djs` | 0.14 | 80f9c059ef, 2026-11-05 |
-| `pi/bench/start/djs-prelude` | 4.87 | 80f9c059ef, 2026-11-05 |
-| `pi/bench/start/qjs` | 2.9 | 80f9c059ef, 2026-11-05 |
-| `pi/bench/tool-heavy/djs` | 2.43 | 80f9c059ef, 2026-11-05 |
-| `pi/bench/tool-heavy/djs-prelude` | 6.82 | 80f9c059ef, 2026-11-05 |
-| `pi/bench/tool-heavy/qjs` | 4.45 | 80f9c059ef, 2026-11-05 |
-| `pi/dump/passed` | 221 | 80f9c059ef, 2026-11-05 |
-| `pi/dump/total` | 226 | 80f9c059ef, 2026-11-05 |
-| `pi/next/passed` | 221 | 80f9c059ef, 2026-11-05 |
-| `pi/next/total` | 226 | 80f9c059ef, 2026-11-05 |
-| `pi/passed` | 221 | 80f9c059ef, 2026-11-05 |
-| `pi/total` | 226 | 80f9c059ef, 2026-11-05 |
-| `speed/pi-like/djs-wasm` | 5765.9 | 12f469900e, 2026-11-05 |
-| `speed/pi-like/qjs-wasi` | 6870.7 | 12f469900e, 2026-11-05 |
+| `pi/bench/polls/djs` | 76782 | 7167411f0f, 2026-11-05 |
+| `pi/bench/polls/djs-prelude` | 74205 | 7167411f0f, 2026-11-05 |
+| `pi/bench/polls/qjs` | 60652 | 7167411f0f, 2026-11-05 |
+| `pi/bench/start/djs` | 0.14 | 7167411f0f, 2026-11-05 |
+| `pi/bench/start/djs-prelude` | 4.87 | 7167411f0f, 2026-11-05 |
+| `pi/bench/start/qjs` | 2.9 | 7167411f0f, 2026-11-05 |
+| `pi/bench/tool-heavy/djs` | 2.43 | 7167411f0f, 2026-11-05 |
+| `pi/bench/tool-heavy/djs-prelude` | 6.82 | 7167411f0f, 2026-11-05 |
+| `pi/bench/tool-heavy/qjs` | 4.45 | 7167411f0f, 2026-11-05 |
+| `pi/dump/passed` | 221 | 7167411f0f, 2026-11-05 |
+| `pi/dump/total` | 226 | 7167411f0f, 2026-11-05 |
+| `pi/next/passed` | 221 | 7167411f0f, 2026-11-05 |
+| `pi/next/total` | 226 | 7167411f0f, 2026-11-05 |
+| `pi/passed` | 221 | 7167411f0f, 2026-11-05 |
+| `pi/total` | 226 | 7167411f0f, 2026-11-05 |
+| `speed/pi-like/djs-wasm` | 5765.9 | 7167411f0f, 2026-11-05 |
+| `speed/pi-like/qjs-wasi` | 6870.7 | 7167411f0f, 2026-11-05 |
 <!-- /gen -->
 
 ## Wiring up another agent host

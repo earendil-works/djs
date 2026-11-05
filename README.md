@@ -45,7 +45,7 @@ measured at. TESTING.md and docs/host.md have the details.
   messages, TypeScript, dquickts' own tests): **621 of 632** cases match qjs; 6 known
   failures (`tests/corpus/expected-failures.txt`) and 5 skipped as non-goals.
 - pi's codemode test suite on djs: 221 of 226 tests pass in the default mode, in the
-  next mode and with a dump at every idle point (measured at 80f9c059ef, 2026-11-05).
+  next mode and with a dump at every idle point (measured at 7167411f0f, 2026-11-05).
 <!-- /gen -->
 
 Skipped by design: Intl, Temporal, SharedArrayBuffer/Atomics, Annex B, sloppy mode,
@@ -72,7 +72,7 @@ fingerprint.
 | forEach | 5.4G | 5.8G | 0.93 |
 | map/filter/reduce (higher-order) | 7.8G | 4.5G | 1.73 |
 
-Machine instructions per workload (`scripts/perf/w/`), measured at 12f469900e,
+Machine instructions per workload (`scripts/perf/w/`), measured at 7167411f0f,
 2026-11-05; lower is better.
 <!-- /gen -->
 
@@ -89,7 +89,7 @@ when it runs the prelude). Callback-heavy builtin code is the main remaining gap
 data, and the base snapshot (the initialized realm with all builtins, 186 KB) coded to
 46 KB in a custom section. The slim build is 906 KB (378 KB gzip); the dump module, the
 shipped build with the dumper, 1,966 KB (785 KB gzip). Module sizes measured at
-86b0e17f6f, 2026-11-05.
+7167411f0f, 2026-11-05.
 <!-- /gen -->
 
 Creating a VM copies the base snapshot: about <!--n startup/vm-new-us .1-->2.5<!--/n--> µs in wasm (D1990). A `Sandbox`
