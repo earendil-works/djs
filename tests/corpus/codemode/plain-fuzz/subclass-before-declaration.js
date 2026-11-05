@@ -1,4 +1,3 @@
-// difftest: plain-xfail a subclass in K is published (`Object.assign($dump.sN, { D3 })`) before its declaration and into a factory the dump never makes: the load throws
 // Found by the plain-dump fuzzer (0211): a subclass with an async method calling `super`,
 // named by an async function that has not run yet, dumped inside a `new Map([...])`.
 let n1 = 0;
