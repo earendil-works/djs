@@ -189,7 +189,12 @@ Two orderings follow from this, both plain code:
   The outer prefix calls a callback the dump defines (`$dump.ga13()`) right before its
   site's statement; the callback runs the part of the dump that needs the new closures
   (starting the inner activation, the `Promise.all`). 866 of the 1,161 harvested dumps use
-  one; 824 nest continuations.
+  one; 824 nest continuations. Since D3002 the callback's lines are written in the
+  continuation itself where they read no name it binds (most do), and what its last part
+  makes for the site alone is made at the site (`report.push(await Promise.all([1,
+  $djs.k(…)("src/d.ts")]))`); the closures and inner continuations its blocks make for one
+  use there are written at that use, a closure a binding holds as the binding's value, and
+  a member a binding holds is named by the binding (D3003).
 - **Placeholders.** Data a frame needs can hold a closure that frame's prefix makes (a
   `log` array holding `() => i + j` from the current iteration). The data is written with
   `undefined` there and patched right after the continuation's call (202 harvested dumps).
@@ -202,8 +207,11 @@ Only where that keeps the order of what the load does: a pure value (a literal, 
 function, a builtin iterator, a host value) may go to any later point, an effectful one
 (a host call, an activation, a reaction) only to the first thing its use's line evaluates,
 with nothing effectful since its own line; in a continuation's text it may read no name
-the continuation binds there. What is left on `$dump` is what the dump reads more than
-once; a dump with nothing left has no `$dump` at all.
+the continuation binds there. Effectful values may also go to a line's leading operands
+evaluated one after another (`Promise.all([$dump.p4, $dump.p5])`), all or none, where their
+lines are the last effects in that order (D3002). A value nothing reads is written as a
+statement, or not at all where it only makes a value. What is left on `$dump` is what the
+dump reads more than once; a dump with nothing left has no `$dump` at all.
 
 ### 2.3 Origin tracking
 
