@@ -975,9 +975,11 @@ declare function IsRegExpObject(v: Value): boolean;
 /**
  * RegExpAlloc + RegExpInitialize after the ToStrings: a new RegExp with prototype proto
  * (%RegExp.prototype% for undefined) and lastIndex 0. qjs's SyntaxError for a bad
- * pattern or flags. Regex literals compile to this. @leaf
+ * pattern or flags. Regex literals compile to this. The pattern may be a RegExp object
+ * instead of its source: with the same flags the new one shares its program (D3136).
+ * @leaf
  */
-declare function RegExpCreate(proto: Value, pattern: Str, flags: Str): Obj;
+declare function RegExpCreate(proto: Value, pattern: Value, flags: Str): Obj;
 /** [[OriginalSource]] of a RegExp object. @leaf */
 declare function RegExpSource(r: Obj): Str;
 /** [[OriginalFlags]] of a RegExp object, in canonical order. @leaf */

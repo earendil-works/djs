@@ -35,6 +35,10 @@ function RegExpConstructor(pattern: Value, flags: Value): Value {
   const proto: Obj = GetPrototypeFromConstructor(newTarget, "RegExpPrototype");
   const pStr: Str = p === undefined ? "" : ToString(p);
   const fStr: Str = f === undefined ? "" : ToString(f);
+  if (IsRegExpObject(pattern)) {
+    // Its source is pStr: with the same flags, the new one shares its program.
+    return RegExpCreate(proto, pattern, fStr);
+  }
   return RegExpCreate(proto, pStr, fStr);
 }
 
@@ -159,6 +163,10 @@ function RegExpPrototypeSticky(this: Value): Value {
  */
 function RegExpPrototypeFlags(this: Value): Str {
   const r: Obj = ThisRegExpObject(this);
+  if (IsPristineRegExp(r)) {
+    // The getters below are the originals: they read [[OriginalFlags]] (D3136).
+    return RegExpFlags(r);
+  }
   let result: Str = "";
   if (ToBoolean(Get(r, "hasIndices"))) {
     result += "d";
@@ -341,6 +349,19 @@ function RegExpPrototypeMatch(this: Value, string: Value): Value {
 function RegExpPrototypeMatchAll(this: Value, string: Value): Obj {
   const r: Obj = ThisRegExpObject(this);
   const s: Str = ToString(string);
+  if (IsPristineRegExp(r)) {
+    // SpeciesConstructor is %RegExp%, the flags and lastIndex are data: the steps
+    // below without their lookups, and the matcher shares r's program (D3136).
+    const flags0: Str = RegExpFlags(r);
+    const matcher0: Obj = RegExpCreate(undefined, r, flags0);
+    Set(matcher0, "lastIndex", ToLength(Get(r, "lastIndex")));
+    return CreateRegExpStringIterator(
+      matcher0,
+      s,
+      RegExpHasFlag(r, "g"),
+      RegExpHasFlag(r, "u") || RegExpHasFlag(r, "v"),
+    );
+  }
   const c: Value = SpeciesConstructor(r, RealmConstructor("RegExp"));
   const flags: Str = ToString(Get(r, "flags"));
   const matcher: Obj = Construct(c, r, flags);

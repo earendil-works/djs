@@ -144,11 +144,18 @@ impl Exec<'_> {
             REGEXP_CREATE => {
                 // The first argument is a prototype, or a literal's compiled program.
                 let (proto, cell) = (a0.as_object(), a0.as_internal());
-                let (Some(p), Some(f)) = (arg(self, 1).as_string(), arg(self, 2).as_string())
-                else {
+                let Some(f) = arg(self, 2).as_string() else {
                     return bad_argument(id);
                 };
-                Value::object(re::create(self.heap, proto, p, f, cell)?)
+                let pattern = arg(self, 1);
+                if let Some(like) = re::as_regexp(self.heap, pattern) {
+                    Value::object(re::create_like(self.heap, proto, like, f)?)
+                } else {
+                    let Some(p) = pattern.as_string() else {
+                        return bad_argument(id);
+                    };
+                    Value::object(re::create(self.heap, proto, p, f, cell)?)
+                }
             }
             REGEXP_SOURCE | REGEXP_FLAGS | REGEXP_HAS_FLAG | REGEXP_ESCAPED_SOURCE => {
                 let Some(r) = re::as_regexp(self.heap, a0) else {

@@ -341,6 +341,17 @@ impl Parser<'_> {
             .count();
         let mut terms = crate::buf::vec_with_capacity(room);
         while !self.at_end() && self.cur() != '|' as u32 && self.cur() != ')' as u32 {
+            // A literal ASCII character that no quantifier follows: what `term` would
+            // make of it, without its dispatch (literal runs dominate most patterns).
+            let c = self.cur();
+            if c < 0x80
+                && !b"^$\\.*+?()[]{}|".contains(&(c as u8))
+                && !b"*+?{".contains(&(self.at(self.pos + 1) as u8))
+            {
+                self.pos += 1;
+                terms.push_out(self.char_node(c));
+                continue;
+            }
             if let Some(t) = self.term(backward)? {
                 terms.push_out(t);
             }

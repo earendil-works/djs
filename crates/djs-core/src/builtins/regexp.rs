@@ -82,8 +82,8 @@ pub(crate) fn create(
     let cell = match cell {
         Some(c) => c,
         None => {
-            let p = heap.str_to_utf16(pattern);
-            let f = heap.str_to_utf16(flags);
+            let p = units(heap, pattern)?;
+            let f = units(heap, flags)?;
             let prog = match compile(&p, &f) {
                 Ok(prog) => prog,
                 Err(e) => return syntax_error(e.message()),
@@ -102,6 +102,39 @@ pub(crate) fn create(
     let d = PropertyDescriptor::data(Value::int(0), PropFlags::WRITABLE);
     heap.define_own_property(o, key, &d)?;
     Ok(o)
+}
+
+/// RegExpCreate of the source of the RegExp `like` with `flags`: with its flags, the
+/// new RegExp shares its program (programs are immutable), else it compiles.
+pub(crate) fn create_like(
+    heap: &mut Heap,
+    proto: Option<Obj>,
+    like: Obj,
+    flags: Str,
+) -> Result<Obj, Fault> {
+    let pattern = source(heap, like);
+    let same = Flags::parse(&units(heap, flags)?).is_ok_and(|f| f == self::flags(heap, like));
+    let cell = same.then(|| {
+        heap.object_slot(like, SLOT_PROGRAM)
+            .as_internal()
+            .expect("RegExp program")
+    });
+    create(heap, proto, pattern, flags, cell)
+}
+
+/// The code units of `s`, read from its flat form (a rope's units one by one cost more
+/// than compiling a short pattern).
+fn units(heap: &mut Heap, s: Str) -> Result<Vec<u16>, HeapError> {
+    let flat = heap.contiguous(s)?;
+    Ok(match heap.str_view(flat).expect("flat string") {
+        StrView::Latin1(b) => b.iter().map(|&c| c as u16).collect(),
+        StrView::Utf16(b) => b
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|c| u16::from_le_bytes(*c))
+            .collect(),
+    })
 }
 
 /// The compiled program of a RegExp object, read in place from its cell (D3135).
