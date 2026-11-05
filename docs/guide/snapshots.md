@@ -119,8 +119,10 @@ invariants of each kind, and that prototype chains and ropes are acyclic. The st
 tests and the REPL's heap report load images that way, which makes every restore a check
 of the heap. The wasm module does not: the only images it loads were made in the same
 process, so it checks the header and the descriptor and leaves the verifier out of the
-shipped code. A bad image could still only cause a panic (a trap) or a wrong result,
-never undefined behavior, because every access is bounds checked.
+shipped code. A bad image could still only cause a panic (a trap) or a wrong result
+inside that one instance: the shipped modules leave heap bounds checks to wasm, which
+confines every access to the instance's memory, and every other build checks each
+access.
 
 > **Trade-off.** Raw images over a serialization format, inside a process. Images cost no
 > code to write or read, restore in a copy, and capture everything, including frames in

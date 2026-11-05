@@ -374,6 +374,8 @@ listed at the end. Search the log for the ID (`## D1234:`) to read a decision.
   and D1831 (shapes).
 - D1783 appears twice in the log with two titles (fast paths for appends, strict equality
   and insert2/3; `put_elem` appends): both are the same decision.
+- D2520 (`unsafe-heap` optional, not shipped) is amended by D3100 (the shipped and slim
+  wasm modules build with it; native, dump and test builds keep the checks).
 
 ## Not yet sorted by topic
 
@@ -503,6 +505,7 @@ topics when the index is next reorganized.
 - D025: The slim build's feature is `full`
 - D026: Image compatibility keyed on what an image depends on
 - D2520: Arena access: one u64 compare by default, an optional unchecked `unsafe-heap` build
+- D3100: The shipped and slim wasm modules read the arena unchecked (amends D2520)
 - D2550: Fuel stays per instruction; charging only at safepoints measured, not adopted
 - D2551: Large ASCII host strings are copied straight into a reserved heap string
 - D2411: The slim build: the `full` and `unicode` features, cut by a constant

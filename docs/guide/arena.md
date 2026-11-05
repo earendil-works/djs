@@ -12,7 +12,7 @@ that make up JavaScript's strings and objects.
 > offsets: objects, strings, bytecode, the value stack, frames, the job queue, pending
 > host calls. Memory is handed out by bumping an offset, and allocation never collects.
 > Because there are no pointers in the bytes, a copy of the arena is a complete image of
-> the VM, the host can read it, and a bad offset traps instead of corrupting memory.
+> the VM, the host can read it, and a bad offset cannot reach memory outside the VM.
 
 ## Everything, in one place
 
@@ -184,9 +184,12 @@ the payload, in a `Ref` field the whole word. This one rule buys four things:
 2. **The host can read values in place.** A tool result that the script turned into an
    array of objects is read by walking cells in wasm memory, with a reader generated
    from the same layout table ([the reader](host.md#values-out-the-reader)).
-3. **Bugs trap instead of corrupting memory.** Every access is bounds-checked, with no
-   `unsafe`. A bad offset from a VM bug or a corrupt image is a panic (a wasm trap) or a
-   corrupt JavaScript heap, never undefined behavior in the host.
+3. **A bug stays inside the VM.** An offset can only name a byte of the arena, so a bad
+   one from a VM bug or a corrupt image cannot reach anything outside it. Native builds
+   bounds-check every access, with no `unsafe`: a bad offset is a panic or a corrupt
+   JavaScript heap. The shipped wasm modules skip that check, because wasm already
+   confines every load and store to the instance's own memory: there a bad offset can
+   corrupt that VM, but never the host.
 4. **The heap can move.** The collector compacts the arena by sliding live cells down,
    and the arena can be reallocated, without any reference outside it going stale: the
    embedder holds values through handles, slot numbers in a table inside the arena,
@@ -202,17 +205,22 @@ the payload, in a `Ref` field the whole word. This one rule buys four things:
 > wrong field of the wrong cell is a logic bug for the verifier and the stress tests to
 > catch, not the compiler.
 
-> **Trade-off.** Bounds checks on every access, although wasm already checks every load
-> against linear memory. Each check is one compare, `offset + size <= length`, done in
-> 64-bit arithmetic so that it cannot wrap, which lets the compiler drop the slice's own
-> checks behind it. Release builds keep the checks but leave the offsets out of the panic
-> message, which keeps the many inlined access sites small. The cost: about
-> <!--n bounds/gzip kb-->8 KB<!--/n--> of the gzipped module and <!--n bounds/instructions-median-pct .0-->11<!--/n-->% of the executed instructions on a typical
-> workload, up to <!--n bounds/instructions-max-pct .0-->17<!--/n-->%. An optional build, the `unsafe-heap` cargo feature (off by default), skips
-> the checks. It is safe only for images the engine made itself, because the verifier
-> guarantees an image's structure but not every invariant whose violation the checked
-> build turns into a trap. All of its `unsafe` sits in one small module, and the merge
-> checks test it next to the default build.
+> **Trade-off.** No arena bounds checks in the shipped wasm modules. Wasm already checks
+> every load against the instance's linear memory, so an arena check only turns a bug
+> that stays inside the instance into a clean trap instead of a corrupt VM. It costs
+> about <!--n bounds/gzip kb-->8 KB<!--/n--> of the gzipped module and <!--n bounds/instructions-median-pct .0-->11<!--/n-->% of the executed instructions on a typical
+> workload, up to <!--n bounds/instructions-max-pct .0-->17<!--/n-->%, so the shipped modules build with the `unsafe-heap`
+> cargo feature, which reads and writes without it. That is sound only for heaps the
+> engine laid out itself, and those are the only ones such a module sees: it restores
+> images made in its own process, and its persistent state is JavaScript source that it
+> compiles like any script. Every other build keeps the check: native builds, which have
+> no sandbox around them, the dump module, and every test build, whose debug assertions
+> check the unchecked accessors too. A check is one compare, `offset + size <= length`,
+> in 64-bit arithmetic so that it cannot wrap, which lets the compiler drop the slice's
+> own checks behind it; release builds leave the offsets out of the panic message, which
+> keeps the many inlined access sites small. All of the `unsafe` sits in one small
+> module, and the merge checks run the unchecked build under suspension and collection
+> stress as well as the shipped modules themselves.
 
 > **Trade-off.** `u32` offsets limit an arena to 4 GiB. That is the whole wasm32 address
 > space anyway ([wasm32 first](goals.md#wasm32-first)), and a codemode VM is capped far
@@ -224,7 +232,7 @@ the payload, in a `Ref` field the whole word. This one rule buys four things:
   byte buffer, the zeroed frontier, growth and the cap.
 - [`crates/djs-core/src/heap/layout/access.rs`](../../crates/djs-core/src/heap/layout/access.rs):
   the one place every field read and write goes through, checked or (with
-  `unsafe-heap`) not.
+  `unsafe-heap`, in the shipped modules) not.
 - [`crates/djs-core/src/heap/mod.rs`](../../crates/djs-core/src/heap/mod.rs): `Heap`,
   allocation, the out-of-memory reserve, the conventions every heap function follows.
 - [`crates/djs-core/src/heap/cells.rs`](../../crates/djs-core/src/heap/cells.rs): the

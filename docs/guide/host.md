@@ -27,8 +27,10 @@ environment for comes in as data instead. The clock is set before each slice
 (`vm_set_now`), the random seed and the time zone are set explicitly, and there are no
 files or network.
 
-A panic in the engine (a bug, never something a script can cause: the heap is bounds
-checked and every limit is a thrown error) traps, and the host discards the instance. A
+A panic in the engine (a bug, never something a script can cause: every limit is a
+thrown error) traps, and the host discards the instance. The shipped modules leave heap
+bounds checks to wasm, so a bug there may also corrupt that VM rather than trap; it never
+reaches beyond the instance. A
 debug build records the panic's message first, for the host to read (`djs_panic_ptr`,
 `djs_panic_len`). The shipped module carries no panic messages, panic locations or
 formatting code, to stay small: its standard library is built so that a panic is a bare

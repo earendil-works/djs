@@ -74,10 +74,11 @@ Accessing the heap through bounds-checked offsets also hardens the sandbox: a VM
 corrupted image can corrupt the JS heap or cause a panic (a wasm trap), but it cannot
 cause Rust UB. The tools and stress modes verify every image they load (D1056); the wasm
 module loads only images made in its own process and checks their header and dependency
-descriptor (D2700). In wasm every access is
-bounds-checked against linear memory as well, so the arena checks are a second check
-(D016); hoisting them to one check per cell or frame is an open performance item (0081),
-and unchecked access would need its own decision.
+descriptor (D2700). In wasm every access is bounds-checked against linear memory as well,
+so the arena checks are a second check (D016). The shipped and slim wasm modules
+therefore leave them out (`unsafe-heap`, D2520, D3100): there an engine bug is UB confined
+to the instance's linear memory, which may corrupt that VM instead of trapping but cannot
+reach the host. Native builds, the dump module and all test builds keep the checks.
 
 ### Relationship to piccolo
 

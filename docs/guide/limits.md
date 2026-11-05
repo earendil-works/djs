@@ -129,9 +129,12 @@ or models write is far from the limit; it exists for generated or hostile input.
 ## When the engine itself fails
 
 None of the limits above can stop the host: they end a run with an error, and the
-sandbox goes on. What remains is a bug in djs. Every heap access is bounds checked, so a
-bug cannot corrupt the host's memory; it stops the engine with a wasm trap, which the
-`Sandbox` reports as a `trap` error with the engine's message. The sandbox is unusable
+sandbox goes on. What remains is a bug in djs. Every access the engine makes stays
+inside its own wasm instance, so a bug cannot corrupt the host's memory. Most stop the
+engine with a wasm trap, which the `Sandbox` reports as a `trap` error with the engine's
+message. The shipped modules do not bounds-check heap accesses themselves (wasm confines
+them to the instance), so a bug can also leave that VM's state wrong instead of
+trapping; native and debug builds check every access and panic. The sandbox is unusable
 afterwards and should be discarded; every sandbox has its own instance, so no other is
 affected. Should anything still exhaust the engine's 128 KiB wasm stack, the sandbox
 reports `stack overflow: the engine's wasm stack is exhausted` rather than a bare memory

@@ -118,9 +118,12 @@ inside the host's process.
 
 **How:** the engine does no I/O at all: the clock, the random seed and every tool are
 inputs from the host ([the language](language.md#what-is-left-out-and-why)). It runs in
-its own wasm instance with no imports, every heap access is bounds checked, and fuel,
-a memory cap and a stack limit bound a run ([limits](limits.md)). An engine bug traps
-the instance instead of corrupting the host.
+its own wasm instance with no imports, and fuel, a memory cap and a stack limit bound a
+run ([limits](limits.md)). The instance is the boundary: an engine bug can at worst
+corrupt that one VM, never the host. Native builds, which have no such boundary, also
+bounds-check every heap access, so there a bug is a panic; the shipped wasm modules leave
+those checks to wasm, where every load is already confined to the instance's memory
+([offsets, not pointers](arena.md#offsets-not-pointers)).
 
 **The cost:** everything a script may do outside its memory is a host function the host
 has to write; and the engine has no timers or event loop of its own.

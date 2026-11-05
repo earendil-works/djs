@@ -54,7 +54,14 @@ pub fn wasm(r: &mut Runner) {
     let shipped = Command::new(env!("CARGO"))
         .current_dir(&root)
         .envs(crate::size::shipped_env())
-        .args(["build", "--quiet", "-p", "djs-wasm", "--features", "unsafe-heap"])
+        .args([
+            "build",
+            "--quiet",
+            "-p",
+            "djs-wasm",
+            "--features",
+            "unsafe-heap",
+        ])
         .args(["--target", "wasm32-unknown-unknown", "--profile", "wasm"])
         .arg("--target-dir")
         .arg(&size_dir)

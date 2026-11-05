@@ -568,9 +568,10 @@ of djs-core; the builtin registry's append-only check (`scripts/registry.py chec
 check`); the JS host package's tests on the dev modules; native versus wasm heap images;
 the wire and reader cross-language checks; difftest on djs with the ratchet, suspension,
 GC stress, heap-image determinism and a dump at every idle point; difftest with the
-bytecode backend; the unsafe-heap build (verifier and e2e in debug, the stressed corpus
-in release); the test262 active group against its ratchet; the slim build's legs (below);
-the size budget (below); pi's tests on the slim module and in the adapter's next mode;
+bytecode backend; the unsafe-heap build, which the shipped and slim modules use (D3100;
+verifier and e2e in debug, the stressed corpus in release); the test262 active group against its ratchet; the slim build's legs (below);
+the size budget (below); pi's tests on the slim module and in the adapter's next mode
+(both on the shipped, unchecked builds);
 the merge drivers of derived files (below).
 The `test` and `test262` legs print the slowest tests. The always-run `targets` leg
 keeps what the manifests leave out of `cargo test` empty (D2790): no library has doctests

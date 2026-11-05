@@ -10842,3 +10842,38 @@ and the builtins; a count above it is a regression unless that growth explains i
 raising it takes the numbers. D3091's name lookup measured 198M against 136M. Only macOS
 reports the counter; elsewhere the test says so and passes. Further ceilings of this kind
 go in the same file.
+
+## D3100: The shipped and slim wasm modules read the arena unchecked (amends D2520)
+date: 2026-11-06 · by: heapx (owner's decision) · issue: 0226
+`scripts/build-wasm.sh` (default, `--keep-names`, `--slim`) builds djs-wasm with
+`unsafe-heap`; so do the gate's `build:size`/`build:size-slim` and their release clippy
+legs, djs-bench's size and wasm groups, scripts/perf/setup.sh and scripts/size/variant.sh,
+so every shipped-module measurement is of the module that ships. Everything else keeps
+the checks: native builds (no sandbox: unchecked access would be memory unsafety in the
+host's process), the dump and docs modules (the dump module walks the heap the most), and
+every test, difftest, fuzz, e2e and gate build except the legs on the shipped modules
+(size budget, pi's tests on slim and in next mode). D2520's condition for the feature,
+"trusted image storage", now always holds: heap images never leave the process (D2560),
+and persistence is JavaScript dumps that are compiled like any script. In wasm the
+instance's linear memory confines an engine bug to that instance; the checks only turned
+in-instance corruption into a clean trap, so with them off a bug may instead leave that
+VM's state wrong, never the host's. The unchecked build stays covered by the gate's
+unsafe-heap legs (verifier fuzz and e2e with the debug assertions; the corpus in release
+with suspension and GC stress, where nothing checks and a silent corruption shows as an
+output difference) and now by pi's tests on both shipped modules. Running
+native-vs-wasm on the shipped module was not cheap: its images differ from the native
+driver's default-feature build, so it would need a driver built to match.
+D2520 saw +2-3% instructions on tight and call-heavy loops; this measured tight +4.3%,
+loop +4.4%, calls +3.5%, call1 +2.8%. The cause: `interp/run/hot.rs` read and wrote frame
+slots with its own slice checks (`b.get(o..o + 8)`), so the tier-0 loop's hottest
+accesses stayed checked while the unchecked inlined heap code changed V8's register
+allocation of `run_hot`. Its `ld`/`st`/`ld32`/`window` now go through `access.rs` (the
+module's own doc already said the tier-0 loop's slice does), unchecked with the feature
+and one u64 compare without. Against main (wmeasure, n=5), the shipped module: tight
+−4.5%, loop −4.7%, calls −9.6%, call1 −7.7%, prop1 −9.3%, pi-like −8.1%, json −10.4%,
+arrays −17.1%, pushpop −20.4%, indexof −30.0%, all 21 workloads −4.5 to −30%; the
+checked build gains too (tight −4.8%, calls −6.3%, json ±0.2%); slim (n=3): tight −4.9%,
+loop −4.4%, calls −10.0%, call1 −7.6%, pi-like −8.0%, arrays −17.3%. Size gzip −9: shipped
+422,453 → 414,390 (−8.1 KB), slim 357,078 → 348,676 (−8.4 KB); ceilings lowered.
+`status.py bounds` now builds the checked module and reports what its checks would cost
+against the shipped one.

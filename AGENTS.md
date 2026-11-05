@@ -38,7 +38,10 @@ meant to replace QuickJS in pi's codemode. Read these before you start any work:
   Std tool crates (`djs-cli`, `djs-test262`, `djs-bgen`) may use small, well-known crates
   where they save real work, but still keep them minimal. Dev-dependencies for tests are
   fine.
-- No `unsafe` in `djs-core` unless a decision records why. Heap access is bounds checked.
+- No `unsafe` in `djs-core` unless a decision records why. Heap access is bounds checked,
+  except in the shipped and slim wasm modules, which build with `unsafe-heap` (D3100): the
+  wasm instance is their sandbox, and heap/layout/access.rs is the only `unsafe`. Native
+  builds, the dump module and every test build keep the checks.
 - Prefer plain, direct code. Comments explain *why*. Keep modules focused; no speculative
   abstraction.
 - djs is unreleased (D024): change formats and ABI in place; don't keep readers or

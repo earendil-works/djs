@@ -42,6 +42,37 @@ Work:
    AGENTS.md's "Heap access is bounds checked" line.
 
 ## Log
+- Build: scripts/build-wasm.sh passes `--features unsafe-heap` for the default (and
+  --keep-names) and --slim builds; --dump/--docs unchanged. Same for gate.py build:size,
+  build:size-slim and their release clippy legs (main, slim), djs-bench size/wasm groups,
+  perf/setup.sh, size/variant.sh, and the doc'd commands in vec-sites.py,
+  wasm-dwarf-lines.py, size/README.md. A feature, not wasm-build-env.sh: cargo features
+  can't come from the environment, and --dump/--docs use that env too.
+- First measurement (wmeasure n=5, checked vs unchecked shipped): −5..−27% on most, but
+  tight +4.3%, loop +4.4%, calls +3.5%, call1 +2.8%. Cause: interp/run/hot.rs had its own
+  `ld`/`st`/`ld32`/`window` with slice checks, so the tier-0 loop's slot accesses stayed
+  checked under unsafe-heap and only run_hot's register allocation changed (V8 TurboFan
+  dispatch head identical; the inlined heap helpers differ). Routed them through
+  access.rs (`heap::layout::{arena_read, arena_write}`); outside `touches:` but minimal
+  (hot.rs: 4 helpers + an import; layout.rs: a re-export). `word`, `fill`,
+  `write_frame`, `write_values` keep their slice checks (Option / block checks).
+- Final, against main 2bf9a5fe (wmeasure n=5, 21 workloads): shipped −4.5% (tight) to
+  −30% (indexof); tight −4.5, loop −4.7, calls −9.6, call1 −7.7, pi-like −8.1, json
+  −10.4, arrays −17.1. The checked build gains too (tight −4.8, calls −6.3). Slim (n=3):
+  tight −4.9, loop −4.4, calls −10.0, pi-like −8.0. Size gzip: shipped 422,453 →
+  414,390, slim 357,078 → 348,676. Ceilings lowered (budget.py --update).
+- Stress leg on the unchecked wasm: native-vs-wasm on the size module isn't cheap (its
+  images and build hash differ from the default-feature native driver's), so not added.
+  Covered by the existing unsafe-heap difftest (release, suspend 97 + gc-stress) and
+  pi's tests (next mode, slim) which now run the unchecked modules. Both pi runs pass
+  locally (221/226, 213/226, no new failures).
+- status.py bounds now builds the checked module and compares it to the shipped one
+  (same keys, same sign: what the checks would cost).
+- instructions.rs (D3084, dev profile, checked): 135.7M, unchanged.
+- Docs: D3100 (amends D2520) + index; AGENTS.md bounds line; ARCH.md heap paragraph
+  (minimal, proposed edit of the design text); TESTING.md gate list; access.rs and
+  djs-wasm Cargo.toml comments. Guide: goals.md Isolation, arena.md (in short, point 3,
+  the trade-off, where to look), limits.md, snapshots.md, host.md, testing.md.
 
 ## Follow-ups
 

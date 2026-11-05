@@ -180,9 +180,10 @@ stops happen everywhere:
 - **Both builtin backends**: the corpus runs again with the builtins as bytecode instead
   of generated Rust and without the `@fast` entries ([builtins](builtins.md)), so both
   implementations of a builtin stay equal.
-- **The unchecked heap**: a build whose arena accessors skip their bounds checks runs the
-  stressed corpus in release, after its accessors' assertions have run the end-to-end
-  tests in debug.
+- **The unchecked heap**: the shipped modules' arena accessors skip their bounds checks,
+  so that build runs the stressed corpus in release, after its accessors' assertions
+  have run the end-to-end tests in debug, and a host's codemode tests run on the shipped
+  modules themselves.
 
 In every mode the transcript must equal the plain run's: a difference is a failure on
 its own, separate from the comparison with QuickJS, and a stressed run must pass the
