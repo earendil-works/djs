@@ -258,6 +258,23 @@ fn scan(
             i += 1;
             continue;
         }
+        // (Most of a data literal: what the general steps below do for these, 0215. An
+        // arrow's concise body a `,` would start it ends at once.)
+        if c == b',' || c == b':' && !arrow {
+            if let Some((n, true)) = lazy
+                && nest == n
+                && c == b','
+            {
+                lazy = None;
+            }
+            arrow = false;
+            prev_close = false;
+            class = class && c == b':';
+            after_dot = false;
+            regex_ok = true;
+            i += 1;
+            continue;
+        }
         if skip_fns && lazy.is_none() {
             if c == b'{' && (arrow || prev_close || class) {
                 lazy = Some((nest, false));
@@ -376,12 +393,12 @@ fn scan(
             let word = &text[s..i];
             // A class's own name (`class A`) binds, it reads nothing.
             let class_name = core::mem::take(&mut after_class) && word != "extends";
-            if !after_dot && word == "class" && b.get(i) != Some(&b':') {
+            if c == b'c' && !after_dot && word == "class" && b.get(i) != Some(&b':') {
                 after_class = true;
+                class = true;
             }
-            class = !after_dot && word == "class" && b.get(i) != Some(&b':') || class;
             if !after_dot && lazy.is_none() && !class_name {
-                if word == "$dump" && b.get(i) == Some(&b'.') {
+                if c == b'$' && word == "$dump" && b.get(i) == Some(&b'.') {
                     let (name, j) = ident_at(text, i + 1);
                     if !name.is_empty() {
                         span(s, j);
@@ -424,23 +441,28 @@ fn scan(
                 }
             }
             // After a keyword an expression starts (`return /x/`).
-            regex_ok = matches!(
-                word,
-                "return"
-                    | "typeof"
-                    | "instanceof"
-                    | "in"
-                    | "of"
-                    | "new"
-                    | "delete"
-                    | "void"
-                    | "throw"
-                    | "case"
-                    | "do"
-                    | "else"
-                    | "yield"
-                    | "await"
-            );
+            regex_ok = word.len() <= 10
+                && matches!(
+                    c,
+                    b'r' | b't' | b'i' | b'o' | b'n' | b'd' | b'v' | b'c' | b'e' | b'y' | b'a'
+                )
+                && matches!(
+                    word,
+                    "return"
+                        | "typeof"
+                        | "instanceof"
+                        | "in"
+                        | "of"
+                        | "new"
+                        | "delete"
+                        | "void"
+                        | "throw"
+                        | "case"
+                        | "do"
+                        | "else"
+                        | "yield"
+                        | "await"
+                );
             after_dot = false;
             continue;
         }
@@ -536,10 +558,10 @@ pub(super) fn split_def(text: &str) -> Option<(&str, &str)> {
 /// overlaps another: none has a `$` after its first byte.)
 pub(super) fn dollar_indices<'t>(text: &'t str, pat: &'t str) -> impl Iterator<Item = usize> + 't {
     let mut at = 0;
+    let b = text.as_bytes();
     core::iter::from_fn(move || {
-        while let Some(k) = text.get(at..)?.find('$') {
-            let i = at + k;
-            if text[i..].starts_with(pat) {
+        while let Some(i) = find_byte(b, at, b'$') {
+            if b[i..].starts_with(pat.as_bytes()) {
                 at = i + pat.len();
                 return Some(i);
             }
@@ -561,7 +583,13 @@ fn find_dollar(text: &str, pat: &str) -> Option<usize> {
 
 fn effect_marker(t: &str) -> bool {
     let b = t.as_bytes();
-    t.match_indices('.').any(|(at, _)| {
+    let mut from = 0;
+    let mut dots = core::iter::from_fn(|| {
+        let at = find_byte(b, from, b'.')?;
+        from = at + 1;
+        Some(at)
+    });
+    dots.any(|at| {
         let before = &t[..at];
         let after = &b[at + 1..];
         let ends = |p: &str| before.ends_with(p);
@@ -575,17 +603,15 @@ fn effect_marker(t: &str) -> bool {
 }
 
 /// Where the string literal whose text starts at `i` ends (after its closing `q`): by
-/// `find`, which searches fast, not byte by byte (0215: a data-heavy dump is mostly
-/// strings).
+/// [`find_byte`], not byte by byte (0215: a data-heavy dump is mostly strings).
 fn string_end(text: &str, i: usize, q: char) -> usize {
     let b = text.as_bytes();
     let mut from = i;
     loop {
-        // (`q` is ASCII: `find` searches its byte, and `from` stays on a char boundary.)
-        let Some(k) = text.get(from..).and_then(|t| t.find(q)) else {
+        // (`q` is ASCII: its byte is the char.)
+        let Some(at) = find_byte(b, from, q as u8) else {
             return b.len() + 1;
         };
-        let at = from + k;
         // Escaped where an odd number of backslashes (of the string's) stands before it.
         let slashes = b[i..at].iter().rev().take_while(|&&c| c == b'\\').count();
         if slashes % 2 == 0 {
@@ -593,6 +619,27 @@ fn string_end(text: &str, i: usize, q: char) -> usize {
         }
         from = at + 1;
     }
+}
+
+/// The first byte `x` of `b` at or after `from`: eight bytes at a time (0215: a data
+/// dump is mostly strings, and a searcher set up per string cost more than the search).
+pub(super) fn find_byte(b: &[u8], from: usize, x: u8) -> Option<usize> {
+    const ONES: u64 = 0x0101_0101_0101_0101;
+    const HIGH: u64 = 0x8080_8080_8080_8080;
+    let pat = ONES * u64::from(x);
+    let mut i = from;
+    while i + 8 <= b.len() {
+        let mut w = [0u8; 8];
+        w.copy_from_slice(&b[i..i + 8]);
+        let v = u64::from_le_bytes(w) ^ pat;
+        // (A zero byte of `v` is an `x`; the lowest flag is the first one exactly.)
+        let z = v.wrapping_sub(ONES) & !v & HIGH;
+        if z != 0 {
+            return Some(i + (z.trailing_zeros() / 8) as usize);
+        }
+        i += 8;
+    }
+    b.get(i..)?.iter().position(|&c| c == x).map(|k| i + k)
 }
 
 /// Skips a template literal's text from `i` to its end or its next `${`.

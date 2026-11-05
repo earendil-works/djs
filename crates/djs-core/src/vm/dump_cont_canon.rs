@@ -93,7 +93,7 @@ impl G<'_, '_> {
         // The calls `$djs_H(` of each helper, in the text and in its values: one pass each
         // (0215: a search per helper and value was most of this function).
         let calls = |t: &str, counts: &mut [usize; 17]| {
-            for (at, _) in t.match_indices("$djs_") {
+            for at in super::super::plain::dollar_indices(t, "$djs_") {
                 let rest = &t.as_bytes()[at + 5..];
                 // (Helper names are one or two letters.)
                 let end = rest.iter().take(3).position(|&c| c == b'(');

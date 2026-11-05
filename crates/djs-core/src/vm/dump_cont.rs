@@ -313,10 +313,11 @@ fn has_ident(text: &str, name: &str) -> bool {
     // and a searcher's setup was most of the time, 0215.)
     let mut from = 0;
     while from + n.len() <= b.len() {
-        let Some(at) = b[from..=b.len() - n.len()].iter().position(|&c| c == first) else {
+        let Some(s) = super::plain::find_byte(b, from, first).filter(|&s| s + n.len() <= b.len())
+        else {
             return false;
         };
-        let (s, e) = (from + at, from + at + n.len());
+        let e = s + n.len();
         if &b[s..e] == n && (s == 0 || !ident(b[s - 1])) && (e == b.len() || !ident(b[e])) {
             return true;
         }
