@@ -16,7 +16,9 @@ test = false
 path = "src/main.rs"
 
 [dependencies]
-djs-core = { path = "../djs-core" }
+# `lazy`: the compiler group compiles typescript.js with lazy functions too (djs-difftest
+# enables it anyway).
+djs-core = { path = "../djs-core", features = ["lazy"] }
 # The startup group compares VMs from the base snapshot with compiling the prelude.
 djs-prelude = { path = "../djs-prelude" }
 # The engine track runs cases in difftest's codemode model through its Engine trait (D1191).

@@ -59,11 +59,13 @@ pub fn lexer(r: &mut Runner) {
 // ---- compiler ---------------------------------------------------------------------------
 
 /// Compile throughput (0092): the synthetic lexer input as a Script, and typescript.js
-/// (9 MB, one huge closure). Each compile gets a fresh heap, created untimed.
+/// (9 MB, one huge closure), also with lazy functions (D2990: a function that does not run
+/// at once is compiled at its first call, so the load compiles only the top level). Each
+/// compile gets a fresh heap, created untimed.
 pub fn compiler(r: &mut Runner) {
-    use djs_core::compiler::{CompileOptions, compile};
+    use djs_core::compiler::{CompileOptions, compile, compile_lazy_unit};
     use std::cell::RefCell;
-    let run = |r: &mut Runner, name: &str, src: &[u8]| {
+    let run = |r: &mut Runner, name: &str, src: &[u8], lazy: bool| {
         let heap = RefCell::new(Heap::new().unwrap());
         let opts = CompileOptions::script("bench.js");
         r.bytes_with_setup(
@@ -71,7 +73,12 @@ pub fn compiler(r: &mut Runner) {
             src.len(),
             || *heap.borrow_mut() = Heap::new().unwrap(),
             || {
-                black_box(compile(&mut heap.borrow_mut(), src, &opts).unwrap());
+                let heap = &mut heap.borrow_mut();
+                black_box(if lazy {
+                    compile_lazy_unit(heap, src, &opts).unwrap()
+                } else {
+                    compile(heap, src, &opts).unwrap()
+                });
             },
         );
     };
@@ -79,18 +86,22 @@ pub fn compiler(r: &mut Runner) {
     let synthetic = String::from_utf8(synthetic_js(r.scale(1_000_000, 20_000)))
         .unwrap()
         .replace("export ", "");
-    run(r, "compile/synthetic", synthetic.as_bytes());
-    let name = "compile/typescript.js";
-    if !r.wants(name) {
-        return;
-    }
-    match vendor_dir().and_then(|d| std::fs::read(d.join(TYPESCRIPT_JS)).ok()) {
-        Some(src) if !r.config.quick => run(r, name, &src),
-        Some(_) => r.skip(name, "not in quick mode"),
-        None => r.skip(
-            name,
-            format!("{TYPESCRIPT_JS} not in vendor/bench (run scripts/bench.sh)"),
-        ),
+    run(r, "compile/synthetic", synthetic.as_bytes(), false);
+    for (name, lazy) in [
+        ("compile/typescript.js", false),
+        ("compile/typescript.js lazy", true),
+    ] {
+        if !r.wants(name) {
+            continue;
+        }
+        match vendor_dir().and_then(|d| std::fs::read(d.join(TYPESCRIPT_JS)).ok()) {
+            Some(src) if !r.config.quick => run(r, name, &src, lazy),
+            Some(_) => r.skip(name, "not in quick mode"),
+            None => r.skip(
+                name,
+                format!("{TYPESCRIPT_JS} not in vendor/bench (run scripts/bench.sh)"),
+            ),
+        }
     }
 }
 
