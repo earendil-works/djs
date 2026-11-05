@@ -344,7 +344,7 @@ impl Dumper<'_> {
                 {
                     // The dump runtime's `fromAsync` in flight: as the engine's.
                     let i = Value::int(self.fl.from_async.len() as i32);
-                    self.fl.from_async.push_out(state);
+                    self.fl.from_async.push(state);
                     self.fl.runtime.push_out((cell(f), FROM_ASYNC_FULFILLED, i));
                     self.fl.runtime.push_out((cell(rj), FROM_ASYNC_REJECTED, i));
                 } else if let Some(step) = self.runtime_step(f, rj)
@@ -1878,11 +1878,11 @@ impl Dumper<'_> {
             cap = st[0];
             let mut args = alloc::vec![ql.clone()];
             let from_sync = st[3].as_object().is_some_and(|it| self.is_from_sync(it));
-            for i in 1..FROM_ASYNC_SLOTS as usize {
+            for (i, &v) in st.iter().enumerate().skip(1) {
                 let e = if i == 4 && from_sync {
                     cat!(args[3], ".next")
                 } else {
-                    self.expr(st[i], None, None)
+                    self.expr(v, None, None)
                 };
                 if e.is_empty() {
                     let path = self.nodes[self.fl.pends[q].node].path.clone();
