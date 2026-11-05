@@ -2,7 +2,8 @@
 //! repository are computed here (test262 groups and ratchets, corpus cases, the base
 //! snapshot, builtin tags, engine tables); numbers that need a build or a benchmark are
 //! read from `tests/scores/status.tsv`, which `scripts/status.py` writes. Nothing here
-//! measures, so `check` gives the same answer on every machine.
+//! measures, so `check` gives the same answer on every machine. Besides the regions,
+//! prose can carry single numbers inline (`<!--n KEY FMT-->...<!--/n-->`, [`value`]).
 
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -248,6 +249,111 @@ fn provenance(st: &Status, keys: &[&str]) -> String {
     format!("measured at {}", at.join("; "))
 }
 
+/// Why an inline number has no value.
+pub enum Missing {
+    /// It is a test262 count and there is no checkout at the pinned commit.
+    Test262(String),
+    Key(String),
+}
+
+/// The numbers computed from the repository, by inline key.
+fn computed(st: &Status, key: &str) -> Option<Result<f64, Missing>> {
+    let t = || st.test262.as_ref().map_err(|e| Missing::Test262(e.clone()));
+    let run = st.corpus_cases - st.corpus_skipped;
+    let n = |v: usize| Some(Ok(v as f64));
+    match key {
+        "test262/active" => Some(t().map(|t| t.active as f64)),
+        "test262/total" => Some(t().map(|t| t.total as f64)),
+        "test262/passed" => Some(t().map(|t| t.active.saturating_sub(st.ratchet262) as f64)),
+        "test262/known-failures" => n(st.ratchet262),
+        "test262/oracle-failures" => n(st.oracle262),
+        "corpus/cases" => n(st.corpus_cases),
+        "corpus/passed" => n(run.saturating_sub(st.corpus_ratchet)),
+        "corpus/known-failures" => n(st.corpus_ratchet),
+        "corpus/skipped" => n(st.corpus_skipped),
+        "base/bytes" => n(st.base_bytes),
+        "builtins/all" => n(st.builtins),
+        "builtins/native" => n(st.native),
+        "builtins/fast" => n(st.fast),
+        _ => None,
+    }
+}
+
+/// The text of an inline number in prose, `<!--n KEY FMT-->TEXT<!--/n-->`: KEY is a
+/// count computed from the repository ([`computed`]) or a key of
+/// `tests/scores/status.tsv`. FMT: none (an integer with thousands separators, else
+/// the recorded text), `.N` (N decimals), `~K` (rounded to a multiple of K), `kb` or
+/// `mb` (bytes in KB or MB, 1000-based; `kb.N`, `mb.N` with N decimals, `mb` has one
+/// by default).
+pub fn value(st: &Status, key: &str, fmt: &str) -> Result<String, Missing> {
+    let (v, text) = match computed(st, key) {
+        Some(v) => {
+            let v = v?;
+            (v, v.to_string())
+        }
+        None => {
+            let (text, _, _) = st.get(key).ok_or_else(|| {
+                Missing::Key(format!(
+                    "inline number {key}: no such count and no {key} in tests/scores/status.tsv (scripts/status.py)"
+                ))
+            })?;
+            let v = text.parse::<f64>().map_err(|_| {
+                Missing::Key(format!("inline number {key}: {text:?} is not a number"))
+            })?;
+            (v, text.clone())
+        }
+    };
+    let bad = || Missing::Key(format!("inline number {key}: unknown format {fmt:?}"));
+    let decimals = |d: &str, default: usize| -> Result<usize, Missing> {
+        match d {
+            "" => Ok(default),
+            _ => d
+                .strip_prefix('.')
+                .and_then(|d| d.parse().ok())
+                .ok_or_else(bad),
+        }
+    };
+    let fixed = |v: f64, d: usize| {
+        if d == 0 {
+            thousands(v.round() as usize)
+        } else {
+            let s = format!("{v:.d$}");
+            let (int, frac) = s.split_once('.').unwrap_or((&s, ""));
+            format!("{}.{frac}", thousands(int.parse().unwrap_or(0)))
+        }
+    };
+    Ok(if fmt.is_empty() {
+        if v.fract() == 0.0 && v >= 0.0 {
+            thousands(v as usize)
+        } else {
+            text
+        }
+    } else if let Some(d) = fmt.strip_prefix("kb") {
+        fixed(v / 1000.0, decimals(d, 0)?) + " KB"
+    } else if let Some(d) = fmt.strip_prefix("mb") {
+        fixed(v / 1e6, decimals(d, 1)?) + " MB"
+    } else if let Some(k) = fmt.strip_prefix('~') {
+        let k: f64 = k.parse().map_err(|_| bad())?;
+        thousands(((v / k).round() * k) as usize)
+    } else {
+        fixed(v, decimals(fmt, 0)?)
+    })
+}
+
+/// `gen:status recorded`: every recorded measurement with where it was taken.
+fn recorded(st: &Status) -> String {
+    let mut s = String::from("| measurement | value | measured at |\n| --- | ---: | --- |\n");
+    for (k, (v, c, d)) in &st.recorded {
+        let at = if c.len() == 4 && c.bytes().all(|b| b.is_ascii_digit()) {
+            d.clone()
+        } else {
+            format!("{c}, {d}")
+        };
+        let _ = writeln!(s, "| `{k}` | {v} | {at} |");
+    }
+    s
+}
+
 /// The text of `gen:status WHAT`, or an error.
 /// `pi`: the region may name pi (README.md and the guide's pi page): its test suite, its
 /// workload by name. Elsewhere the guide names no host.
@@ -257,8 +363,9 @@ pub fn generate(st: &Status, what: &str, pi: bool) -> Result<String, String> {
         "speed" => speed(st, pi),
         "size" => size(st),
         "inventory" => Ok(inventory(st)),
+        "recorded" => Ok(recorded(st)),
         _ => Err(format!(
-            "gen:status {what}: expected conformance, speed, size or inventory"
+            "gen:status {what}: expected conformance, speed, size, inventory or recorded"
         )),
     }
 }
@@ -372,6 +479,11 @@ fn size(st: &Status) -> Result<String, String> {
         "wasm/brotli",
         "wasm/code",
         "wasm/data",
+        "wasm/base-coded",
+        "slim/bytes",
+        "slim/gzip",
+        "dump/bytes",
+        "dump/gzip",
     ];
     let v: Vec<f64> = keys
         .iter()
@@ -385,15 +497,21 @@ fn size(st: &Status) -> Result<String, String> {
         .collect::<Result<_, _>>()?;
     Ok(wrap(
         &format!(
-            "`djs_wasm.wasm` is {} ({} gzip, {} brotli): {} of code and {} of data, of which \
-             {} is the base snapshot (the initialized realm with all builtins). Module sizes \
-             {}.",
+            "`djs_wasm.wasm` is {} ({} gzip, {} brotli): {} of code, {} of data, and the base \
+             snapshot (the initialized realm with all builtins, {}) coded to {} in a custom \
+             section. The slim build is {} ({} gzip); the dump module, the shipped build with \
+             the dumper, {} ({} gzip). Module sizes {}.",
             kb(v[0]),
             kb(v[1]),
             kb(v[2]),
             kb(v[3]),
             kb(v[4]),
             kb(st.base_bytes as f64),
+            kb(v[5]),
+            kb(v[6]),
+            kb(v[7]),
+            kb(v[8]),
+            kb(v[9]),
             provenance(st, &keys)
         ),
         "",
@@ -442,5 +560,42 @@ mod tests {
         assert_eq!(ratchet_entries("# c\n\na: x\nb: y\n"), 2);
         let r = parse_recorded("# c\nkey\tvalue\tcommit\tdate\nwasm/bytes\t12\tabc\t2026-11-01\n");
         assert_eq!(r["wasm/bytes"].0, "12");
+    }
+
+    #[test]
+    fn inline_values() {
+        let recorded = parse_recorded(
+            "a/bytes\t1033538\tabc\t2026-11-05\nb/ratio\t1.456\tabc\t2026-11-05\nc/n\t38109\tabc\t2026-11-05\n",
+        );
+        let st = Status {
+            test262: Err("no checkout".into()),
+            ratchet262: 40,
+            oracle262: 4,
+            corpus_cases: 10,
+            corpus_skipped: 1,
+            corpus_ratchet: 2,
+            base_bytes: 186_376,
+            builtins: 0,
+            native: 0,
+            fast: 0,
+            recorded,
+        };
+        let v = |k: &str, f: &str| value(&st, k, f).ok().unwrap();
+        assert_eq!(v("a/bytes", ""), "1,033,538");
+        assert_eq!(v("a/bytes", "kb"), "1,034 KB");
+        assert_eq!(v("a/bytes", "mb"), "1.0 MB");
+        assert_eq!(v("a/bytes", "mb.2"), "1.03 MB");
+        assert_eq!(v("b/ratio", ""), "1.456");
+        assert_eq!(v("b/ratio", ".1"), "1.5");
+        assert_eq!(v("c/n", "~1000"), "38,000");
+        assert_eq!(v("c/n", ".1"), "38,109.0");
+        assert_eq!(v("corpus/passed", ""), "7");
+        assert_eq!(v("base/bytes", "kb"), "186 KB");
+        assert!(matches!(
+            value(&st, "test262/active", ""),
+            Err(Missing::Test262(_))
+        ));
+        assert!(matches!(value(&st, "nope", ""), Err(Missing::Key(_))));
+        assert!(matches!(value(&st, "a/bytes", "zz"), Err(Missing::Key(_))));
     }
 }

@@ -8,8 +8,10 @@ Counts that follow from the repository (test262 groups, ratchets, corpus cases, 
 snapshot) are computed by djs-docs itself and need no recording.
 
 usage:
-  scripts/status.py size              build djs-wasm (scripts/build-wasm.sh) and record its
-                                      size: bytes, gzip -9, brotli -q 11, code and data
+  scripts/status.py size              build the shipped, slim and dump modules
+                                      (scripts/build-wasm.sh) and record their sizes: bytes,
+                                      gzip -9, brotli -q 11, code and data of the shipped one,
+                                      its coded base section and the decoded base of slim
   scripts/status.py speed [-n N]      scripts/perf/wmeasure.py on the README workloads:
                                       instructions of djs-wasm and quickjs-wasi (needs
                                       scripts/perf/setup.sh; takes minutes)
@@ -30,6 +32,8 @@ import sys
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FILE = os.path.join(ROOT, "tests/scores/status.tsv")
 WASM = os.path.join(ROOT, "target/wasm32-unknown-unknown/wasm/djs_wasm.wasm")
+SLIM = os.path.join(ROOT, "target/djs-slim.wasm")
+DUMP = os.path.join(ROOT, "target/djs-dump.wasm")
 HEADER = [
     "# Measured status numbers (D2101): `scripts/status.py` writes this file, and the",
     "# `gen:status` regions of README.md and docs/guide read it. Do not edit by hand.",
@@ -92,19 +96,51 @@ def section_sizes(b):
     return out.get(10, 0), out.get(11, 0)
 
 
+# The base snapshot of a module: decoded (an instance's `djs_base_len`) and coded (the
+# `djs_base` custom section), as `decoded coded`.
+BASE_JS = """
+const fs = require("fs");
+const m = new WebAssembly.Module(fs.readFileSync(process.argv[1]));
+const x = new WebAssembly.Instance(m, {}).exports;
+x.djs_base_ptr();
+console.log(x.djs_base_len(), WebAssembly.Module.customSections(m, "djs_base")[0].byteLength);
+"""
+
+
+def base(path):
+    out = subprocess.run(["node", "-e", BASE_JS, path], capture_output=True, text=True, check=True)
+    decoded, coded = out.stdout.split()
+    return int(decoded), int(coded)
+
+
+def build(*flags):
+    subprocess.run(["nice", "-n", "10", os.path.join(ROOT, "scripts/build-wasm.sh"), *flags], check=True)
+
+
 def size():
-    subprocess.run(["nice", "-n", "10", os.path.join(ROOT, "scripts/build-wasm.sh")], check=True)
+    build()
+    build("--slim")
+    build("--dump")
     b = open(WASM, "rb").read()
     code, data = section_sizes(b)
+    _, coded = base(WASM)
     new = {
         "wasm/bytes": len(b),
         "wasm/gzip": len(gzip.compress(b, compresslevel=9, mtime=0)),
         "wasm/code": code,
         "wasm/data": data,
+        "wasm/base-coded": coded,
     }
     if shutil.which("brotli"):
         r = subprocess.run(["brotli", "-c", "-q", "11"], input=b, capture_output=True, check=True)
         new["wasm/brotli"] = len(r.stdout)
+    for name, path in (("slim", SLIM), ("dump", DUMP)):
+        m = open(path, "rb").read()
+        new[f"{name}/bytes"] = len(m)
+        new[f"{name}/gzip"] = len(gzip.compress(m, compresslevel=9, mtime=0))
+    new["slim/base"], _ = base(SLIM)
+    # What the dumper adds to the shipped module (the dump module is the same build with it).
+    new["dump/extra-gzip"] = new["dump/gzip"] - new["wasm/gzip"]
     return new
 
 

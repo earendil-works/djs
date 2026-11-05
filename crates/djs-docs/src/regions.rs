@@ -159,7 +159,11 @@ pub fn regen(page: &str, md: &str, cx: &mut Ctx) -> String {
     let mut last_js: Option<(String, bool)> = None;
     let mut fence: Option<(String, String)> = None; // (info, body)
     while let Some(line) = lines.next() {
-        out.push_str(line);
+        if fence.is_none() && line.contains(NUM_OPEN) {
+            out.push_str(&inline_numbers(page, line, cx));
+        } else {
+            out.push_str(line);
+        }
         out.push('\n');
         if let Some((info, body)) = &mut fence {
             if line.trim_start().starts_with("```") {
@@ -216,6 +220,63 @@ pub fn regen(page: &str, md: &str, cx: &mut Ctx) -> String {
         out.push_str(&body);
         out.push_str("<!-- /gen -->\n");
     }
+    out
+}
+
+/// Opens an inline status number in prose: `<!--n KEY [FMT]-->1,234<!--/n-->`.
+const NUM_OPEN: &str = "<!--n ";
+const NUM_CLOSE: &str = "<!--/n-->";
+
+/// A prose line with its inline status numbers rewritten from the status values
+/// ([`crate::status::value`]); a number whose key has no value is an error, one that
+/// needs the test262 checkout keeps its text when there is none.
+fn inline_numbers(page: &str, line: &str, cx: &mut Ctx) -> String {
+    let st = cx
+        .status
+        .take()
+        .unwrap_or_else(|| crate::status::Status::compute(&crate::repo()));
+    let mut out = String::new();
+    let mut rest = line;
+    while let Some(open) = rest.find(NUM_OPEN) {
+        let after = &rest[open + NUM_OPEN.len()..];
+        let (Some(end), Some(close)) = (after.find("-->"), after.find(NUM_CLOSE)) else {
+            cx.errors.push(format!(
+                "{page}: {NUM_OPEN}...--> without {NUM_CLOSE} on the same line"
+            ));
+            break;
+        };
+        if close < end {
+            cx.errors
+                .push(format!("{page}: malformed inline number in: {line}"));
+            break;
+        }
+        let spec = after[..end].trim();
+        let old = &after[end + 3..close];
+        let mut words = spec.split_whitespace();
+        let key = words.next().unwrap_or("");
+        let fmt = words.next().unwrap_or("");
+        let new = match crate::status::value(&st, key, fmt) {
+            Ok(v) => v,
+            Err(crate::status::Missing::Test262(e)) => {
+                cx.warnings
+                    .push(format!("{page}: inline number {key} kept as it was: {e}"));
+                old.to_string()
+            }
+            Err(crate::status::Missing::Key(e)) => {
+                cx.errors.push(format!("{page}: {e}"));
+                old.to_string()
+            }
+        };
+        out.push_str(&rest[..open]);
+        out.push_str(NUM_OPEN);
+        out.push_str(spec);
+        out.push_str("-->");
+        out.push_str(&new);
+        out.push_str(NUM_CLOSE);
+        rest = &after[close + NUM_CLOSE.len()..];
+    }
+    out.push_str(rest);
+    cx.status = Some(st);
     out
 }
 
@@ -623,6 +684,37 @@ mod tests {
         assert_eq!(c.op_docs["in"], "");
         assert_eq!(c.intrinsic_docs["IsArray"], "IsArray ( argument ), 7.2.2.");
         assert_eq!(c.intrinsic_docs["Call"], "Two lines.");
+    }
+
+    #[test]
+    fn inline_numbers_are_replaced_outside_code() {
+        let mut c = cx();
+        c.status = Some(crate::status::Status {
+            test262: Err("none".into()),
+            ratchet262: 0,
+            oracle262: 0,
+            corpus_cases: 632,
+            corpus_skipped: 0,
+            corpus_ratchet: 0,
+            base_bytes: 0,
+            builtins: 0,
+            native: 0,
+            fast: 0,
+            recorded: Default::default(),
+        });
+        let md = "a <!--n corpus/cases-->1<!--/n--> b <!--n corpus/cases ~100-->2<!--/n-->.\n```text\n<!--n corpus/cases-->1<!--/n-->\n```\n";
+        let out = regen("p.md", md, &mut c);
+        assert_eq!(
+            out,
+            "a <!--n corpus/cases-->632<!--/n--> b <!--n corpus/cases ~100-->600<!--/n-->.\n```text\n<!--n corpus/cases-->1<!--/n-->\n```\n"
+        );
+        assert!(c.errors.is_empty(), "{:?}", c.errors);
+        regen(
+            "p.md",
+            "<!--n nope-->1<!--/n--> <!--n corpus/cases-->\n",
+            &mut c,
+        );
+        assert_eq!(c.errors.len(), 2, "{:?}", c.errors);
     }
 
     #[test]
