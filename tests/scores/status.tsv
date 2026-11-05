@@ -1,8 +1,14 @@
 # Measured status numbers (D2101): `scripts/status.py` writes this file, and the
 # `gen:status` regions of README.md and docs/guide read it. Do not edit by hand.
 key	value	commit	date
+dump/bytes	1966073	1389e5d611	2026-11-05
+dump/extra-gzip	342133	1389e5d611	2026-11-05
+dump/gzip	784722	1389e5d611	2026-11-05
 pi/passed	221	0066	2026-11-01
 pi/total	226	0066	2026-11-01
+slim/base	135056	1389e5d611	2026-11-05
+slim/bytes	906238	1389e5d611	2026-11-05
+slim/gzip	378178	1389e5d611	2026-11-05
 speed/arrays/djs-wasm	10766.1	d780463b0d	2026-11-01
 speed/arrays/qjs-wasi	16845.3	d780463b0d	2026-11-01
 speed/calls/djs-wasm	3261.4	d780463b0d	2026-11-01
@@ -27,8 +33,9 @@ speed/strings/djs-wasm	3062.7	d780463b0d	2026-11-01
 speed/strings/qjs-wasi	5985.2	d780463b0d	2026-11-01
 speed/tight/djs-wasm	6568.5	d780463b0d	2026-11-01
 speed/tight/qjs-wasi	15655.2	d780463b0d	2026-11-01
-wasm/brotli	422673	d780463b0d	2026-11-01
-wasm/bytes	1471134	d780463b0d	2026-11-01
-wasm/code	901278	d780463b0d	2026-11-01
-wasm/data	565561	d780463b0d	2026-11-01
-wasm/gzip	524884	d780463b0d	2026-11-01
+wasm/base-coded	45685	1389e5d611	2026-11-05
+wasm/brotli	371761	1389e5d611	2026-11-05
+wasm/bytes	1033538	1389e5d611	2026-11-05
+wasm/code	867720	1389e5d611	2026-11-05
+wasm/data	115665	1389e5d611	2026-11-05
+wasm/gzip	442589	1389e5d611	2026-11-05
