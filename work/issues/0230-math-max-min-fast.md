@@ -1,7 +1,7 @@
 # 0230: Math.max / Math.min fast enough for codemode (2 numeric args)
 
-status: open
-agent: -
+status: in-progress
+agent: mathfast
 branch: issue/0230-math-max-min-fast
 depends-on: -
 guide: builtins.md if the fast-path story changes
