@@ -50,3 +50,36 @@ dispatch, `fault_value`) reads `heap.pending` instead.
   sites with `Fault` still boxed (no gain expected there; it measures the XOR cost),
   then (2) in one module (conv.rs + intrinsics) behind the token to measure bytes per
   site, then the whole change.
+
+## Prototype measurements (2026-11-05, on 21f1740c: 428,507 gzip)
+
+A scratch copy (work/scratch/0225/niche/, never merged):
+
+- **Value niche:** `Value(NonZeroU64)` in register form `raw ^ TAG_PREFIX`; memory stays
+  raw (zero-filled memory is still +0), so images do not change. Tag tests fold into
+  constants; f64 boxing and unboxing and every arena load and store of a value gain an
+  XOR, and a safe construction also needs a zero check (`NonZeroU64::new(..)`
+  with a fallback).
+- **Zero-sized Fault:** `Fault(Pend)`, with the `FaultKind` in a global cell (prototype
+  only: `unsafe`, single-threaded). That measures the code shape a VM-held pending
+  error would give.
+
+| variant | module gzip | Δ |
+| --- | ---: | ---: |
+| baseline | 428,507 | |
+| Value niche, checked construction | 433,069 | +4.6 KB |
+| + zero-sized Fault (checked) | 432,457 | +4.0 KB |
+| + zero-sized Fault, unchecked construction (`new_unchecked`, the lower bound) | 431,090 | +2.6 KB |
+| zero-sized Fault alone | 428,318 | −0.2 KB |
+
+Wasm instructions, the checked niche plus zero-sized Fault vs the baseline (n = 2):
+tight +7.9%, prop1 +5.7%, arrays +2.9%, json +0.9%, calls +8.0%, pi-like +0.6%.
+
+So the estimate was wrong. The extra XOR (and the zero check) on every value that
+crosses the arena costs more code than the register returns save, and returning 16-byte
+results through memory turns out to be cheap in gzip terms: the sequences are uniform.
+The zero-sized `Fault` alone saves 0.2 KB, which doesn't pay for the API change (every
+fault constructor needs the VM). **Recommendation: don't build #2.** What does remain
+is the `Result` plumbing of the *error* side (`from_residual` moves), but that would need
+a different error model (a flag in the VM and plain return values), which is a
+redesign, not a size fix.
