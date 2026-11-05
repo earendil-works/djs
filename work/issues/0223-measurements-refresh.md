@@ -1,7 +1,7 @@
 # 0223: Refresh every benchmark, table and published measurement
 
-status: open
-agent: -
+status: in-progress
+agent: meas
 branch: issue/0223-measurements-refresh
 depends-on: -
 guide: README.md and docs/guide pages with numbers (status.md, introduction, goals, arena, heap, compiler, gc, builtins, dumps, limits, pi, js-api, testing)
