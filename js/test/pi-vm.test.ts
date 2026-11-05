@@ -521,10 +521,11 @@ test("next: a session dumped while a call is open resumes from the dump in a new
     // The same messages as without the restart: output, calls, store writes, result.
     assert.deepEqual(resumed.messages, straight.messages, policy);
     assert.match(resumed.dumped!.dump, /^"djs-dump";/);
-    // The open call carries its pi id as its state (D2770, D2893), in `$djs.resume`; the
-    // adapter keeps no call table.
+    // The open call carries its pi id as its state (D2770, D2893), in `$djs.resume`, left
+    // out where it equals the call id (D2838); the adapter keeps no call table.
     const id = (resumed.messages.find((m) => m.type === "call") as { id: number }).id;
-    assert.match(resumed.dumped!.dump, new RegExp(`\\$djs\\.resume\\(\\d+, "call", \\["call", "slow", "1"\\], \\{"id":${id}\\}\\)`));
+    const state = id === 1 ? "" : `, \\{"id":${id}\\}`;
+    assert.match(resumed.dumped!.dump, new RegExp(`\\$djs\\.resume\\(1, "call", \\["call", "slow", "1"\\]${state}\\)`));
     assert.equal("ids" in resumed.dumped!.state.next, false);
   }
   const rejected = await dumpRun("reject");

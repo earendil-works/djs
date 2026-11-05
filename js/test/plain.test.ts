@@ -174,7 +174,9 @@ test("a task suspended into a plain dump (the exporter's) resumes through the ho
   await assert.rejects(task.result, (e: unknown) => e instanceof SandboxError && e.kind === "suspended");
   task.sandbox.dispose();
   assert.match(dump, /^"djs-dump";\n/);
-  assert.match(dump, /\$djs\.seed\(-?\d+, -?\d+, 2\);/);
+  // (No `$djs.seed`: Math.random ran after the dump, and the next id is one past the
+  // reopened call's, D2837.)
+  assert.doesNotMatch(dump, /\$djs\.seed\(/);
   assert.match(dump, /\$djs\.resume\(1, "sleep", \[1\], \{"n":1\}\)/);
   const again = await Sandbox.resume(dump, opts);
   while (pending.length === 1) await new Promise((r) => setTimeout(r, 1));
@@ -202,7 +204,7 @@ test("a dump names its script by $djs.source; the host compiles it again", async
   const dump = await task.suspend();
   await assert.rejects(task.result);
   task.sandbox.dispose();
-  assert.match(dump, /\$djs\.source\("job-7\.js", "[0-9a-f]{16}"\)/);
+  assert.match(dump, /\$djs\.source\("job-7\.js", "[0-9a-f]{8}"\)/);
   assert.equal(dump.split("log(\"got\", a)").length, 2, dump);
   // This process ran it: it loads.
   const again = await Sandbox.resume(dump, opts);
