@@ -8,8 +8,17 @@
  * @length 2
  */
 function RegExpConstructor(pattern: Value, flags: Value): Value {
-  const patternIsRegExp: boolean = IsRegExp(pattern);
   let newTarget: Value = new.target;
+  if (
+    IsString(pattern) &&
+    (flags === undefined || IsString(flags)) &&
+    (newTarget === undefined || newTarget === RealmConstructor("RegExp"))
+  ) {
+    // The common case, without the steps that cannot observe anything here: IsRegExp of
+    // a string, the prototype of %RegExp% (a fixed property), ToString of strings.
+    return RegExpCreate(undefined, AsStr(pattern), flags === undefined ? "" : AsStr(flags));
+  }
+  const patternIsRegExp: boolean = IsRegExp(pattern);
   if (newTarget === undefined) {
     newTarget = RealmConstructor("RegExp");
     if (patternIsRegExp && flags === undefined) {
