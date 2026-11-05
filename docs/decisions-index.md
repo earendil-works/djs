@@ -684,3 +684,6 @@ topics when the index is next reorganized.
 - D2914: Literal operands, object literals, left operands and substitutions are read again
 - D2915: Positional origin records; a generator's prototype is its function's
 - D2888: The dump's check compiles the plain text a host loads; `DumpOptions::check`
+- D2889: The dump's check resolves names without generating code
+- D2916: The host deletes `$djs` and `$dump`; the completion value is the last statement
+- D2917: Loops go on as written: builtin iterators as they are, `while` and `for` after the rest
