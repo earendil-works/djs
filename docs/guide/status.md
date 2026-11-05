@@ -71,7 +71,7 @@ Module sizes measured at d780463b0d, 2026-11-01.
 | of them `@native` (also compiled to Rust) | 8 |
 | of them `@fast` (a Rust leaf entry) | 18 |
 | difftest corpus cases | 624 |
-| base snapshot, bytes | 186,360 |
+| base snapshot, bytes | 186,368 |
 <!-- /gen -->
 
 Decisions on this page:
