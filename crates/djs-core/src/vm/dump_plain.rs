@@ -2064,11 +2064,23 @@ impl W<'_> {
         for (_, e) in &ir.handles {
             cat_to!(&mut text, "\n", e);
         }
-        let used = scan(&text, false, &|_| false);
+        // (By substring, not `scan`: the text is the whole dump, data included, 0215. A
+        // `$dump.bN` in a string would only define a builtin no one reads.)
+        let mut used = alloc::vec![false; ir.builtins.len()];
+        for (at, _) in text.match_indices("$dump.b") {
+            let rest = &text.as_bytes()[at + 7..];
+            let n = rest.iter().take_while(|c| c.is_ascii_digit()).count();
+            if n > 0
+                && !rest.get(n).is_some_and(|&c| ident_part(c))
+                && let Ok(i) = text[at + 7..at + 7 + n].parse::<usize>()
+                && i < used.len()
+            {
+                used[i] = true;
+            }
+        }
         for (i, p) in ir.builtins.iter().enumerate() {
-            let name = cat!("b", i);
-            if used.dump.iter().any(|(n, _)| *n == name) {
-                cat_to!(&mut s, "$dump.", name, " = ", builtin_expr(p)?, ";\n");
+            if used[i] {
+                cat_to!(&mut s, "$dump.b", i, " = ", builtin_expr(p)?, ";\n");
             }
         }
         for (f, fac) in ir.factories.iter().enumerate() {
