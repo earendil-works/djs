@@ -1,44 +1,49 @@
 # The garbage collector
 
-Everything a djs VM keeps is in the arena, and the arena only grows by bumping.
-Something has to give the memory of dead objects back, and in djs that same thing
-decides what a snapshot contains and whether two runs of a program leave identical
-images. This chapter explains the collector, when it runs, what happens when memory runs
-out, and what it costs.
+Everything a djs VM keeps is in the arena, and the arena only grows by bumping
+([one arena](arena.md)). Something has to give the memory of dead objects back, and in
+djs that same thing decides what an image contains and whether two runs of a program
+leave identical heaps. This chapter explains what the collector traces, how it moves
+cells, when it runs, and what happens when memory runs out.
 
-> **In short.** djs has two collectors over one trace. A VM's own collections are
-> **in place** (mark-compact): they mark everything reachable from the roots, then slide
-> the survivors down over the garbage, keeping their order. No second arena is needed,
-> so a collection costs no more memory than the heap itself. Most of them are **minor**:
-> the heap's prefix that holds the realm and the prelude, the **old region**, is taken as
-> live and left where it is, and only what the program allocated since is traced and
-> moved. A **copying** (Cheney)
-> collector lays a heap out breadth-first from the roots, a function of the object graph
-> alone; it makes the canonical hash and the base image. Collections happen only at
-> safepoints, when allocation has crossed a threshold that is itself part of the heap, so
-> collection points depend on the program and never on how it was sliced. Running into
-> the memory cap is a catchable error, with a collect-and-retry before it.
+> **In short.** A VM's collections are mark-compact **in place**: they mark what is
+> reachable from one roots cell and slide the survivors down over the garbage in their
+> allocation order, so no second arena is needed. Most of them are **minor**: the heap's
+> prefix that holds the realm and whatever the host sealed, the **old region**, is taken
+> as live and stays where it is, and only what the program allocated since is traced and
+> moved; a separate **copying** collector lays a heap out breadth-first for canonical
+> hashes and the base image. Collections run only at safepoints, when allocation has
+> crossed a threshold that is itself stored in the heap, so where they happen depends on
+> the program and never on how it was sliced.
 
-## What is traced
+## Roots, handles and what is traced
+
+All roots are in one place: the `Roots` cell at offset 0. Its fields point at the atom
+table, the realm, the value stack, the interpreter's registers, the job queue, the host
+call table and the **handle table**. A handle is how Rust code or an embedder holds a
+value across a collection: an index into that table, whose slots the collector traces
+and rewrites when cells move. A raw value held outside the heap is an arena offset and
+is stale after a collection, which is why collections happen only where no Rust code
+holds one ([safepoints](suspension.md#safepoints)).
 
 What counts as a traced field comes from the layout table alone: a field declared as
-`Value` or `Ref` in `cells!` is traced, nothing else is. There is no per-kind
-tracing code to forget when a cell kind is added, and both collectors use the same
-description. A few kinds get extra treatment:
+`Value` or `Ref` in the cell declarations is traced, nothing else is ([cells, strings
+and objects](heap.md)). There is no per-kind tracing code to forget when a cell kind is
+added, and both collectors use the same description. The frames of running functions
+are plain values on the value stack, so the collector traces the stack without knowing
+about frames. A few kinds get extra treatment:
 
 - a reference to a **flattened rope** is redirected to its flat string, so the rope
   dies;
 - **Map and Set** tables, whose object keys hash by offset, are rehashed in place after
   the cells have moved;
-- **ephemeron tables** (WeakMap, WeakSet, WeakRef, FinalizationRegistry) are not traced
-  like other cells. Once everything else reachable is found, every pair whose key is
-  reachable gets its value traced too, and this repeats until nothing changes; pairs
-  with dead keys are then cleared;
+- **ephemeron tables**, the storage of the weak collections, are not traced like other
+  cells ([below](#weak-references-and-finalization));
 - inline cache slots that hold arena offsets are emptied.
 
 ## Sliding in place
 
-A VM's collection runs in four passes over the arena:
+A full collection runs four passes over the arena:
 
 1. **Mark.** Starting at the `Roots` cell, every reachable cell gets a mark bit in its
    header, and its words are set in a **live bitmap**, one bit per 8 bytes. The marker
@@ -62,99 +67,71 @@ heap unchanged.
 
 Because cells keep their order, the heap after a collection is the live cells in the
 order they were allocated. Collecting along the way and collecting once at the end leave
-the same bytes for the same allocations. That is what the [determinism
-checks](determinism.md) build on, together with collection points that don't depend on
-slicing. Collecting a collected heap changes nothing.
+the same bytes for the same allocations, and collecting a collected heap changes
+nothing. That is what the [determinism checks](determinism.md#the-same-program-the-same-heap)
+build on, together with collection points that don't depend on slicing.
 
 > **Trade-off.** In-place over copying for a VM's own collections. A copying
 > collector needs the old and the new arena at once, about twice the live data, plus
 > what the host allocator fragments when the arena moves. In wasm, memory never shrinks,
-> so that peak is what every run costs. Sliding in place has no second arena: peak
-> memory dropped by 3–52% on allocation-heavy workloads, and by 1 MiB for a pi session
-> with tool calls. The price is two traversals instead of one, plus the bitmap work:
-> collections take 1.1–1.6 times as long, programs 0–5.5% more instructions, and the
-> second collector adds 6 KB of code.
+> so that peak is what every run costs; sliding in place has no second arena and cuts
+> the peak of allocation-heavy runs by up to half. The cost: two traversals instead of
+> one, plus the bitmap work, so a collection takes 1.1 to 1.6 times as long, and the
+> engine carries two collectors.
 
 ## The old region
 
-Most of a fresh VM's heap is the base image: the realm, the compiled builtins and the
-prelude, about 400 KB, nearly all of it live for the VM's whole life. A program that
-allocates a lot of short-lived data collects every few hundred kilobytes, and a full
-collection traces that whole base every time again. On a property-heavy benchmark that
-was most of the collector's work.
+Most of a fresh VM's heap is the base image: the realm and the compiled builtins, nearly
+all of it live for the VM's whole life ([the base snapshot](snapshots.md#the-base-snapshot)).
+A program that allocates a lot of short-lived data collects every few hundred kilobytes,
+and a full collection would trace that whole base every time.
 
-So the arena has an **old region**: a prefix `[0, B)`, with B stored in the `Roots` cell
-. A **minor** collection treats every old cell as live. It does not mark them and
-does not move them; it marks and slides only the **young** cells above B. What it needs to
-know is which young cells the old ones keep alive, and the old cells are mutable:
-scripts add globals, patch prototypes, fill caches and grow the realm's tables. Rather
-than track every write, a minor collection reads the whole old region once:
+So the arena has an **old region**: a prefix `[0, B)`, with B stored in the `Roots` cell.
+A **minor** collection treats every old cell as live. It does not mark them and does not
+move them; it marks and slides only the **young** cells above B. What it needs to know
+is which young cells the old ones keep alive, and the old cells are mutable: scripts add
+globals, patch prototypes, fill caches and grow the realm's tables. Rather than track
+every write, a minor collection reads the whole old region once:
 
-1. **Walk.** It visits the old cells in address order, and every traced field that points
-   at or above B is a root for the young cells. The marker treats it like the `Roots`
-   cell's fields. The field's address goes on a short list.
-2. **Mark, count, update, slide** as before, but only over the young cells: the bitmap and
-   the table start at B, and survivors slide down to B. Of the old cells, only the fields
-   on the list are rewritten (if the list fills up, the update walks the old region
-   again).
+1. **Walk.** It visits the old cells in address order, and every traced field that
+   points at or above B is a root for the young cells. The field's address goes on a
+   short list.
+2. **Mark, count, update, slide** as before, but only over the young cells: the bitmap
+   and the table start at B, and survivors slide down to B. Of the old cells, only the
+   fields on the list are rewritten (if the list fills up, the update walks the old
+   region again).
 
-A few old cells need more than their fields read:
-- an old **WeakMap**'s pairs with young keys join the ephemeron rounds, and are cleared if
-  the key dies;
-- an old Map or Set with young object keys is rehashed, since those keys move;
-- old function templates get their offset caches emptied, like young ones.
+A few old cells need more than their fields read: an old WeakMap's pairs with young keys
+join the ephemeron rounds and are cleared if the key dies, an old Map or Set with young
+object keys is rehashed, and old function templates get their offset caches emptied.
 
-Reading a field is about four times cheaper than tracing it: on a heap holding just the
-base, a minor collection takes 0.08 ms where a full one takes 0.18 ms. The walk does not
-go through the general cell walker. For each cell kind, a small table worked out at
-compile time from the layout lists where its `Value` and `Ref` fields are. The walk loads
-each of them and compares it against B, and only a young target leads to a call.
-That made the walk about four times cheaper again: a property-heavy benchmark and a
-pi-like one each run 3.3% fewer instructions.
+The walk does not go through the general cell walker. For each cell kind, a table worked
+out at compile time from the layouts lists where its `Value` and `Ref` fields are; the
+walk loads each, compares it with B, and only a young target leads to a call. Reading a
+field this way is several times cheaper than tracing it, so a minor collection over a
+heap that holds just the base costs less than half of a full one.
 
-**Where B comes from.** A VM created from the base image starts with B at the image's
-end: the base is made by the copying collector, which seals what it leaves. An embedder
-can seal a heap itself with `Vm::seal` (`vm_seal` in wasm): a full collection, after which
-everything live is old. pi does that after running its own prelude, so its lockdown and
-helpers become old too. Nothing else moves B up. Before that collection, `seal` copies the
-cells a session replaces first to the end of the heap: Map and Set tables, the root shape's
-transitions, the global object's property table and the atom table. Their dead copies
-then drop out at the end of the old region instead of shifting it.
+**Where B comes from.** A VM made from the base image starts with B at the image's end.
+An embedder can **seal** a heap with `Vm::seal` (`vm_seal` in wasm): a full collection,
+after which everything live is old. A host that runs a prelude of its own (a lockdown,
+helpers its scripts use) seals after it, so that prelude becomes old too. Nothing else
+moves B up. Before that collection, `seal` copies the cells a session replaces first to
+the end of the heap (Map and Set tables, the root shape's transitions, the global
+object's property table, the atom table), so that their dead copies drop out at the end
+of the old region instead of shifting it.
 
-**The builtin prefix** sits below B and below anything an embedder seals. It is the
-part of the base image that holds the builtins, and no collection moves or frees
-it. A full collection walks it the way a minor one walks the old region, since
-its fields can point at newer cells: the walk counts them as roots, and the prefix's
-cells themselves are not marked and never slide. So every VM keeps the builtins at the
-offsets the base gave them, and its images share those bytes with the base. In debug
-builds a write barrier can check that nothing writes there: every arena write below the
-prefix's end panics, and after every run and collection the prefix is compared with a
-copy. The gate arms it for the codemode corpora, where no script has a reason to
-change a builtin.
-
-> **Trade-off.** Never freeing the prefix. A script that reshapes a builtin (adds a
-> property to `Array.prototype`, redefines one with `defineProperty`) gives it new
-> storage, and the old storage stays in the prefix, dead, for the VM's life. pi's
-> lockdown, which redefines about 500 builtins, leaves 16.5 KB that way in every session.
-> In return a full collection does not mark and slide the base (1.5% fewer instructions
-> on a pi-like workload), and the prefix's bytes stay those of the base. With frozen
-> builtins nothing in the prefix can change, so nothing is left behind.
-
-**Full collections** still trace everything above the prefix. They run every 16th time, when a minor
-collection left more than half the memory cap in use, whenever the embedder asks
-(`Vm::collect`), and with no old region at all (B = 0). The first collection of a VM
-made from the base image is full too. The VM's setup kills some base cells
-right away; the list of the VM's own atoms, for one, is replaced once a script adds more
-atoms than the base left room for. If those dead cells stayed for sixteen collections, they would shift every later
-threshold. A full collection keeps the old
-region's live cells and drops its dead ones: B shrinks to the live bytes below it, but it
-never grows.
+**Full collections** trace everything above the builtin prefix (next section). They run
+every 16th collection, after a minor one that left more than half the memory cap in use,
+whenever the embedder asks (`Vm::collect`), and whenever there is no old region (B = 0).
+The first collection of a VM made from the base image is full too: setting up the VM
+kills some base cells right away, and if they stayed for sixteen collections they would
+shift every later threshold. A full collection keeps the old region's live cells and
+drops its dead ones: B shrinks to the live bytes below it, but never grows.
 
 **What it retains.** Between full collections, an old cell that died still holds its
 fields, so the young cells only it reaches survive too: say, an old object's property
 table after the object grew. In practice that is a few kilobytes, and the next full
-collection frees it. Few kilobytes could still move peak memory by megabytes, through
-where the growing arena landed (see below).
+collection frees it.
 
 **Determinism.** B and the count of minor collections since the last full one are in the
 `Roots` cell, like the threshold. Whether a collection is minor or full is decided from
@@ -166,68 +143,60 @@ collections ran before it or not.
 > stores into old cells (a card table) would let a minor collection read only the cells
 > written since the last one. But it costs a compare on every traced store in the
 > interpreter's hottest paths, and it has to be complete, raw stack writes included: a
-> forgotten store frees a live cell. The walk has nothing to forget. Since the per-kind
-> slot tables it costs about 1% of the workloads that collect most often, so the barrier
-> is not built.
+> forgotten store frees a live cell. The walk has nothing to forget, and with the
+> per-kind tables it costs about 1% of the runs that collect most often.
 
-> **Trade-off.** No promotion. A generational collector moves long-lived young cells into
-> the old region, so later collections stop tracing them. djs tried this twice.
-> - Making every full collection's survivors old. Data that died after its
->   promotion stayed until the next full collection, and thresholds were computed over
->   it: peak memory rose by up to 76%.
-> - Promoting the cells that survived two collections, tracked by region: the survivors
->   of one collection sit in a known range just above the old region.
->   Collections got 7–20% faster, about 1% of the run, but peak memory still rose by up
->   to 2 MiB on a pi-like workload and far more on one that grows a long string. Cells
->   that live through two collections still die soon: per-task data, or a string's
->   buffer that is replaced as it grows.
->
-> The old region is the state of a setup phase, sealed on purpose. A program with a large
-> long-lived young heap gains little: its minor collections still trace that data.
+> **Trade-off.** A sealed setup phase over promotion. A generational collector moves
+> long-lived young cells into the old region, so later collections stop tracing them.
+> In codemode, cells that survive one or two collections still tend to die soon:
+> per-task data, a growing string's buffer that is replaced as it grows. Promoted, they
+> would stay until the next full collection, and thresholds computed over them would
+> raise peak memory. So the old region holds only what is old on purpose: the base and
+> what the host sealed. The cost: a program with a large long-lived young heap traces
+> it again at every minor collection.
 
-### Peak memory and the host allocator
+## The builtin prefix
 
-In wasm the arena is one block of the module's memory, and memory never shrinks. A
-general-purpose allocator grows such a block by copying it when it cannot extend it in
-place. The old and the new block then exist at the same time, and a run's peak was most
-often exactly such a moment. Whether a growth could stay in place depended on the exact
-sizes involved: a few kilobytes more or less in the live heap could move a run's peak by
-3–6 MiB, up or down. Policies such as reserving the capacity right after a collection,
-or growing by smaller steps, moved some workloads one way and others the other.
+The **builtin prefix** sits below B and below anything an embedder seals. It is the
+part of the base image that holds the builtins, and no collection moves or frees it. A
+full collection walks it the way a minor one walks the old region, since its fields can
+point at newer cells: the walk counts them as roots, and the prefix's cells themselves
+are not marked and never slide. So every VM keeps the builtins at the offsets the base
+gave them, and its images share those bytes with the base. In debug builds a check can
+make sure nothing writes there: every arena write below the prefix's end panics, and
+after every run and collection the prefix is compared with a copy.
 
-So the wasm module has its own allocator for big blocks
-([`crates/djs-wasm/src/allocator.rs`](../../crates/djs-wasm/src/allocator.rs)). It
-manages the memory in 64 KiB pages. A block of 256 KiB or more, the arena among them,
-is a run of pages of its own, and it grows in place whenever the pages after it are free
-or it ends where memory ends: memory then grows by just the difference. Smaller
-allocations stay with the general allocator, which takes its pages from the same pool.
-Peaks of allocation-heavy runs halved, to about the arena's size plus the rest of the
-heap.
+> **Trade-off.** Never freeing the prefix. A script that reshapes a builtin (adds a
+> property to `Array.prototype`, redefines one with `defineProperty`) gives it new
+> storage, and the old storage stays in the prefix, dead, for the VM's life; a lockdown
+> that redefines hundreds of builtins leaves some kilobytes that way. In return a full
+> collection neither marks nor slides the base, and the prefix's bytes stay those of
+> the base. With [frozen builtins](builtins.md#frozen-builtins) nothing in the prefix can
+> change, so nothing is left behind.
 
-What blocks the arena is whatever lands right after it at the end of memory. The general
-allocator never gives pages back, so one of its segments there blocked the arena for
-good, and the arena's next growth moved it and left its old pages behind. The
-allocator now keeps the arena at the end: the general allocator's first two
-pages come before it, a collection's side tables (16–256 KiB, they scale with the heap)
-get pages of their own when the general allocator has no room, which go back to the
-pool after the collection and let the arena grow over them, and a buffer that grows into
-pages of its own right behind the arena starts its own size further on, so that the
-arena can still take the buffer's copy in place. That let a VM start with just its
-image plus a page instead of room up to its first threshold.
+## Weak references and finalization
 
-> **Trade-off.** Small starts over reserved room. A fresh sandbox is 11 pages instead of
-> 18, pi-like peaks at 1.6 MiB instead of 2.4, and growing runs are 0.3–0.9 MiB lower.
-> The cost was a large `JSON.stringify` result built in a Rust buffer that sat behind
-> the arena while the arena grew to take the copy: json-date peaked at 5.2 MiB instead
-> of 4.3. `JSON.stringify` now moves its output into the result string every 4 KB, so
-> the result is built in the arena, at its end, and the buffer stays small: json-date
-> peaks at 3.5 MiB, and one 8 MB result at 26 MiB instead of 34.
+WeakMap, WeakSet, WeakRef and FinalizationRegistry keep their weak entries in
+**ephemeron tables**: arrays of key–value pairs that the marker does not trace like other
+cells. Once everything else reachable is found, every pair whose key is reachable gets
+its value traced too, which may make more keys reachable, and this repeats until nothing
+changes. Pairs whose keys stayed unreachable are then cleared. That is all the weakness
+these objects need:
 
-A run's peak still depends a little on placement, so a memory claim about the collector
-compares distributions over many slightly perturbed runs, never one run per build
-.
+- a **WeakRef** holds its target as the key of a one-pair table; `deref` finds the
+  cleared key once the target died. A target that `deref` returned is kept until the
+  current job ends, as the language requires;
+- a **FinalizationRegistry** keeps its targets in such a table and its held values in an
+  ordinary array. After a collection, the interpreter queues a cleanup job for every
+  registry with a target that died (an embedder can choose to schedule these itself).
 
-### Slices and the strings they keep
+The tables are processed in a fixed order, so which pairs die depends only on the object
+graph. But weak references make *when* collections run observable to a script, so a
+host can make them strong (the tables become ordinary arrays, and nothing they hold ever
+dies) or absent ([determinism](determinism.md), the `weakRefs` option in [the JavaScript
+interface](js-api.md#creating-a-sandbox)).
+
+## Slices and the strings they keep
 
 A [slice](heap.md#strings) reads its units from its parent string, so it keeps the
 parent alive. That is what makes it cheap, and also its risk: 100 snippets of 60
@@ -241,23 +210,22 @@ slice's reference to its parent as weak while it marks:
    still kept for this collection, since its slices read it, but each of its slices is
    flagged. Every other parent is marked and stays.
 4. Right after the collection, each flagged slice gets a copy of its units and becomes a
-   flattened rope in place, and a second pass of the collector drops the parents. A
-   snapshot taken right after a collection does not carry them.
+   flattened rope in place, and a second pass of the collector drops the parents. An
+   image taken right after a collection does not carry them.
 
 The rule depends only on the heap at the collection, so it is as deterministic as the
 collection points. Minor collections keep every parent.
 
 > **Trade-off.** Up to three quarters of a parent stay alive for the slices that cover
-> the rest. A lower share would copy more and keep less: with "half", a snapshot of two
-> logs each cut into pieces dropped from 5.0 to 1.9 MiB, but the peak during the copy
-> rose from 11.1 to 21.3 MiB. The quarter is a first setting, a constant in the
-> collector.
+> the rest. A higher share would copy more and keep less, but the copies are made all
+> at once, right after a collection, while the parents still exist: with a half instead
+> of a quarter, an image of two logs cut into pieces shrinks to less than half, and the
+> peak during the copy doubles. The share is a constant in the collector.
 
 ## Copying, for canonical layouts
 
 The copying collector reserves a new arena as large as the old one's used part, copies
-the `Roots` cell to offset 0, and then scans the new arena from the start, cell by cell
-:
+the `Roots` cell to offset 0, and then scans the new arena from the start, cell by cell:
 
 ![A Cheney collection: live cells are copied from the old arena into a new one, which is scanned from offset 0 until the scan catches up with the copy point](img/cheney.svg)
 
@@ -266,73 +234,48 @@ arena unless it already was, and the field is rewritten with the new offset. A c
 cell gets the `FORWARDED` bit in its old header and its new offset in its old first
 payload word, which is why every cell kind has at least one. When the scan catches up
 with the copy point, everything reachable has been copied, and the old arena is dropped.
-
 A heap with a builtin prefix keeps it: the copy starts with the prefix's bytes as they
-are, and the cells above it are copied as described, with the prefix's fields rewritten
-like those of any copied cell.
+are, and the prefix's fields are rewritten like those of any copied cell.
 
-The order is breadth-first from the roots, in field order, so the layout depends only
-on the object graph, not on the order in which cells were allocated. djs uses it where
-that matters:
+The order is breadth-first from the roots, in field order, so the layout depends only on
+the object graph, not on the order in which cells were allocated. djs uses it where that
+matters:
+
 - the **canonical hash** collects a copy of the heap this way and hashes the result, so
   two VMs with the same graph have the same hash whatever their history. A slice comes
   out as the flat string it reads, so the hash does not depend on which strings are
-  slices either;
+  slices either ([canonical hashes](determinism.md#canonical-hashes-and-journals));
 - the **base image** is made this way, so it doesn't depend on how the prelude
   allocated.
 
 ## When it runs
 
-Allocation never collects (see [the arena](arena.md)). It sets `gc_pending` once the
-arena crosses the **GC threshold**, and the collection runs at the next safepoint: a
-call, a return, a backward jump, a state transition of a native builtin
-([suspension](suspension.md)). After a collection the next threshold is set from the
-live size:
+Allocation never collects. It sets `gc_pending` once the arena crosses the **GC
+threshold**, and the collection runs at the next [safepoint](suspension.md#safepoints): a
+frame entry, a return, a backward jump, a loop back-edge of a native builtin. After a
+collection, `next_threshold` sets the next threshold from the live size:
 
-```rust
-pub fn next_threshold(live: u32, base: u32, limit: u32) -> u32 {
-    let headroom = limit.saturating_sub(live);
-    let counted = if base > 0 {
-        live.saturating_sub(base) + BASE_ALLOWANCE
-    } else {
-        live
-    };
-    let growth = counted.max(MIN_GROWTH);
-    if growth > headroom / 2 {
-        return live + headroom / 2;
-    }
-    // Whole 64 KiB wasm pages counted from the prefix's end, when that stays within
-    // the headroom rule (D1870, D2544).
-    let base = u64::from(base.min(live));
-    let t = base + (u64::from(live) - base + u64::from(growth)).next_multiple_of(PAGE);
-    if t <= live as u64 + headroom as u64 / 2 {
-        t as u32
-    } else {
-        live + growth
-    }
-}
-```
+- let the heap grow by as much as is live (at least 256 KiB), so it can reach twice its
+  live size;
+- round the threshold up to whole 64 KiB wasm pages, counted from the end of the builtin
+  prefix;
+- but never grow by more than half of what is left below the cap, so that collections
+  come more often as memory gets tight.
 
-That is: let the heap grow to twice its live size (at least 256 KiB more), rounded up to
-whole wasm pages, but never by more than half of what is left below the cap, so that
-collections come more often as memory gets tight. The builtin prefix, which is never
-collected, counts as a fixed allowance (`BASE_ALLOWANCE`, the size it had when the rule
-came in) instead of its real size: making the base smaller should not make collections
-more frequent. For the same reason the pages are counted from the prefix's end,
-not from offset 0: a base a few KB smaller moves every threshold by exactly that much, so
-collections still come after the same allocations. The arena's backing store
-stops growing at the threshold, rounded up to whole pages of memory, since wasm memory
-never shrinks and the peak is what a run costs.
+The builtin prefix, which is never collected, counts toward the live size as a fixed
+allowance instead of its real size, and pages are counted from its end: a base a few KB
+smaller or larger then moves every threshold by exactly that much, so collections still
+come after the same allocations. The arena's backing store stops growing at the
+threshold ([growing, and the cap](arena.md#growing-and-the-cap)), since wasm memory never
+shrinks and the peak is what a run costs.
 
-> **Trade-off.** Twice the live size, not more. Since minor collections skip the old
-> region, a collection's cost is mostly the young data that survives it, and letting the
-> heap grow by the young survivors once more (capped at 256 KiB) means fewer
-> collections. It saved 2–4% of the instructions of pi-like and JSON-heavy runs, but
-> raised their peak memory by 0.3–0.9 MiB, up to 17%. djs keeps the plain rule.
+> **Trade-off.** Twice the live size, not more. Minor collections skip the old region,
+> so a collection's cost is mostly the young data that survives it, and a larger growth
+> factor would mean fewer collections and a few percent fewer instructions in
+> collection-heavy runs. It would also raise their peak memory by up to a sixth, and in
+> wasm the peak is what a run costs, so djs takes the smaller peak.
 
-Which collections are minor and which are full is a function of the program in the same
-way (see [the old region](#the-old-region)). Three rules make the collection points a
-function of the program alone:
+Three rules make the collection points a function of the program alone:
 
 - the threshold is stored in the `Roots` cell, so a VM restored from an image collects
   where the original would have;
@@ -341,9 +284,8 @@ function of the program alone:
 - `run` does not collect when it starts, and nothing a stop does allocates in a way that
   counts.
 
-So a program run in one go, in slices of 97 fuel, or with a snapshot and restore at
-every slice collects at the same instructions and leaves the same bytes. The gate checks
-exactly that.
+So a program run in one go, in slices of 97 fuel, or with an image saved and restored at
+every slice collects at the same instructions and leaves the same bytes.
 
 ```js live
 let kept = [];
@@ -361,24 +303,23 @@ console.log(kept.length, kept[49].label, kept[49].round);
 <!-- /gen -->
 
 On the docs site, the *Heap* tab shows the cells this example allocated, by kind, apart
-from the base realm every VM starts with,
-and its *Collect now* button runs a collection in the page: most of the ten thousand
-objects disappear, and the fifty kept ones are packed in with the rest of the live heap.
+from the base realm every VM starts with, and its *Collect now* button runs a collection
+in the page: most of the ten thousand objects disappear, and the fifty kept ones are
+packed in with the rest of the live heap.
 
 ## Out of memory
 
-The embedder gives each VM a memory cap. Running into it must be a JavaScript error the
-script can catch, as in QuickJS, and it must happen at the same point in every run.
-Since allocation never collects, the heap at the moment of failure may be mostly
-garbage, so djs does three things:
+The embedder gives each VM a memory cap, and running into it is a JavaScript error the
+script can catch, at the same point in every run ([limits](limits.md#memory) shows what
+a script sees). Since allocation never collects, the heap at the moment of failure may be
+mostly garbage, so djs does three things:
 
 1. **Collect and retry.** Before an out-of-memory error reaches JavaScript, the failing
    step collects and runs once more. For bytecode, the step is the instruction:
    instructions that allocate before they change anything (`put_field`, `add`, `object`,
    a few intrinsic calls) have their operands put back on the stack, the heap collects,
-   and the instruction runs again. Native builtins do the same at the points
-   where their generated code holds no heap value outside the frame, and `@fast`
-   entries decline, so the builtin's own path retries.
+   and the instruction runs again. Native builtins do the same at the points where their
+   generated code holds no heap value outside the frame.
 2. **A preallocated error.** If the retry fails too, the realm's one
    `InternalError: out of memory` object is thrown. It is never allocated at the throw.
 3. **A reserve.** The arena's limit is the cap minus `min(cap / 32, 1 MiB)`. Throwing
@@ -386,8 +327,8 @@ garbage, so djs does three things:
    that formats the error and reports it has room to run.
 
 A refusal by the *host* allocator below the cap (the backing store cannot grow, the
-collector's side tables cannot be allocated) is different: it is not a function of the program, so it is
-not catchable. The run stops with `HostOutOfMemory` and the VM stays usable.
+collector's side tables cannot be allocated) is not a function of the program, so it is
+not catchable: the run stops with `HostOutOfMemory`, and the VM stays usable.
 
 > **Trade-off.** Retry at instruction granularity over collecting inside allocation.
 > Collecting on an allocation failure would rescue every allocation site, but every Rust
@@ -396,21 +337,29 @@ not catchable. The run stops with `HostOutOfMemory` and the VM stays usable.
 > that may retry and nothing else, at the price of an instruction that runs twice when
 > memory is tight.
 
-> **Trade-off.** Strong shapes and atoms that never die. Two kinds of heap data are
-> never collected: shapes, because weak transitions would make the shape tree depend on
-> collection points, and atoms, because atom collection is not built yet
->. Both are bounded in practice; a script that makes millions of distinct keys
-> keeps their atoms until the VM is dropped.
+## What is never collected
+
+Two kinds of heap data live as long as the VM: **shapes**, because weak transitions
+would make the shape tree depend on collection points ([shapes](heap.md#shapes)), and
+**atoms**, the interned property keys ([atoms](heap.md#atoms-property-keys-as-integers)).
+Both are bounded in practice; a script that makes millions of distinct keys keeps their
+atoms until the VM is dropped.
 
 ## Where to look
 
 - [`crates/djs-core/src/heap/compactor.rs`](../../crates/djs-core/src/heap/compactor.rs):
-  the in-place collector, full and minor;
-  [`crates/djs-core/src/heap/gc.rs`](../../crates/djs-core/src/heap/gc.rs): the copying
+  the in-place collector, full and minor, the per-kind field tables and the slice rule.
+- [`crates/djs-core/src/heap/gc.rs`](../../crates/djs-core/src/heap/gc.rs): the copying
   collector, the collection schedule (`collect_auto`), `seal` and `next_threshold`;
-  [`gc_tests.rs`](../../crates/djs-core/src/heap/gc_tests.rs): its tests, including
-  "collecting twice gives identical bytes".
+  [`crates/djs-core/src/heap/gc_tests.rs`](../../crates/djs-core/src/heap/gc_tests.rs):
+  its tests, among them that collecting a collected heap changes nothing.
 - [`crates/djs-core/src/heap/walk.rs`](../../crates/djs-core/src/heap/walk.rs): tracing
   from the layout table, and the verifier.
+- [`crates/djs-core/src/heap/handle.rs`](../../crates/djs-core/src/heap/handle.rs): the
+  handle table.
+- [`crates/djs-core/src/heap/weakref.rs`](../../crates/djs-core/src/heap/weakref.rs):
+  WeakRef and FinalizationRegistry on ephemeron tables.
+- [`crates/djs-core/src/heap/compact.rs`](../../crates/djs-core/src/heap/compact.rs):
+  the cells `seal` moves to the end of the heap.
 - [`crates/djs-core/src/interp/run.rs`](../../crates/djs-core/src/interp/run.rs):
   safepoints and the collect-and-retry of a failing allocation.

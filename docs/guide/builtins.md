@@ -1,16 +1,20 @@
 # Builtins: the TypeScript subset and the leaf rule
 
 `Array.prototype.map`, `JSON.stringify`, `Promise.all`, `Object.defineProperty`: a
-JavaScript engine is mostly its standard library, and most of a codemode script's time
-is spent in it. This page explains how djs writes its builtins, why almost none of them
-are hand-written Rust, and how the hot ones still run as compiled Rust.
+JavaScript engine is mostly its standard library, and a codemode script spends most of
+its time in it. This page explains how djs writes its builtins, why almost none of them
+are hand-written Rust, how the hot ones still run as compiled Rust, and how the finished
+builtins reach every VM. [The language](language.md#the-builtins) lists what a script
+can use.
 
-> **In short.** Hand-written Rust never calls back into JavaScript. It only provides
+> **In short.** Hand-written Rust never calls back into JavaScript: it only provides
 > *leaf intrinsics*, operations that cannot run user code. Every builtin that might run
-> user code is written in a strict subset of TypeScript and compiled by djs-bgen to
-> bytecode that ships in the base snapshot, and, for the hot ones, also to resumable
-> Rust state machines (`@native`). Everyday calls with plain arguments skip both through
-> `@fast` leaf entries.
+> user code is written in a strict subset of TypeScript, compiled by djs-bgen to bytecode
+> that runs once at build time to make the base snapshot, and, for a few hot ones, also
+> to resumable Rust state machines (`@native`) or backed by a Rust entry for everyday
+> arguments (`@fast`). Because the builtins live at fixed offsets in every VM, a VM can
+> treat them as frozen without changing a byte of them, which is what continuation dumps
+> rely on.
 
 ## Why builtins cannot be ordinary Rust
 
@@ -25,22 +29,24 @@ interpreter recursively whenever it reaches user code. djs cannot do that. A cod
 script must be stoppable after any instruction, including the instructions of a `map`
 callback (the goal to [suspend anywhere](goals.md#suspend-anywhere)). When the
 interpreter stops, everything it was doing must be in the arena, so that the VM can be
-copied into an image and resumed elsewhere. A Rust function halfway through its loop has
-state on the Rust stack, and that state cannot be saved.
+copied into an image and resumed elsewhere ([persistence](goals.md#persistence)). A Rust
+function halfway through its loop has state on the Rust stack, and that state cannot be
+saved.
 
 So djs has one rule:
 
-> **The leaf rule.** Hand-written Rust never calls back into JS. Hand-written Rust is
-> limited to leaf intrinsics (`%ArrayPush`, `%StringIndexOf`,
-> `%DefineOwnPropertyFromRecord`, ...), which never run user code. Every builtin that
-> may run user code is written in the builtin language.
+> **The leaf rule.** Hand-written Rust never calls back into JS. It is limited to leaf
+> intrinsics (`%ArrayPush`, `%StringIndexOf`, `%DefineOwnPropertyFromRecord`, ...),
+> which never run user code. Every builtin that may run user code is written in the
+> builtin language.
 
 ## The builtin language
 
-Builtins live in `builtins/*.ts`, about a thousand functions in a strict subset of
-TypeScript. A builtin does the conversions and checks in spec order, where user code can
-run, and hands the actual work to leaf intrinsics. Here is `Array.prototype.includes`
-from `builtins/array.ts`:
+The builtins live in `builtins/*.ts`: about a thousand functions in a strict subset of
+TypeScript, of which about 450 are installed as builtins and the rest are the spec's
+abstract operations and helpers. A builtin does the conversions and checks in spec order,
+where user code can run, and hands the actual work to leaf intrinsics. Here is
+`Array.prototype.includes` from [`builtins/array.ts`](../../builtins/array.ts):
 
 ```ts
 /**
@@ -75,10 +81,10 @@ function ArrayPrototypeIncludes(this: Value, searchElement: Value, fromIndex?: V
 ```
 
 It reads like the spec, step by step. `LengthOfArrayLike`, `ToIntegerOrInfinity` and
-`Get` may run user code. `ArraySearchDense` is a leaf: it searches the array's
-dense storage in Rust in one go when every element it looks at is a plain data element,
-and returns `-2` when it cannot answer (a hole, an accessor, an object that is not an
-Array), so the loop below it handles the general case.
+`Get` may run user code. `ArraySearchDense` is a leaf: it searches the array's dense
+storage in Rust in one go when every element it looks at is a plain data element, and
+returns `-2` when it cannot answer (a hole, an accessor, an object that is not an Array),
+so the loop below it handles the general case.
 
 The subset is small on purpose:
 
@@ -91,17 +97,17 @@ The subset is small on purpose:
   intrinsic.
 - Conditions are booleans: there is no truthiness.
 
-Intrinsics are declared in `builtins/intrinsics.d.ts`, each tagged `@leaf` (never runs
-user code) or `@reentrant` (may call exactly one user function, whose result completes
-the operation, such as `Get` calling a getter). Today about 280 are leaves and about 30
-are reentrant. Builtins tagged `@intrinsic` join them, so that the interpreter's slow
-paths and other builtins can call them as `%Name(...)`. They are all numbered in one
-table; the [intrinsics reference](ref-intrinsics.md) lists them.
+Intrinsics are declared in [`builtins/intrinsics.d.ts`](../../builtins/intrinsics.d.ts),
+each tagged `@leaf` (never runs user code) or `@reentrant` (may call exactly one user
+function, whose result completes the operation, such as `Get` calling a getter). About
+280 are leaves and 30 are reentrant. Builtins tagged `@intrinsic` join them, so that the
+interpreter's slow paths and other builtins can call them as `%Name(...)`. They are all
+numbered in one table; the [intrinsics reference](ref-intrinsics.md) lists them.
 
-A call to a reentrant intrinsic or another reentrant builtin is a **resume point**: the
-builtin may stop there and resume later. djs-bgen finds every resume point and lists
-them in `builtins/gen/resume-points.txt`, which is checked in, so a review shows when a
-builtin starts calling user code.
+A call to a reentrant intrinsic or to another reentrant builtin is a **resume point**:
+the builtin may stop there and resume later. djs-bgen finds every resume point and lists
+them in [`builtins/gen/resume-points.txt`](../../builtins/gen/resume-points.txt), which is
+checked in, so a review shows when a builtin starts calling user code.
 
 > **Trade-off.** A subset of TypeScript over hand-written Rust builtins. The subset
 > keeps every builtin resumable: its state lives in frames in the arena, never on the
@@ -110,20 +116,25 @@ builtin starts calling user code.
 > property syntax or closures, and builtins that run as interpreted bytecode unless they
 > get one of the faster paths below.
 
-> **Trade-off.** Our own parser for the subset over the TypeScript compiler or oxc
->. djs-bgen is a dependency-free Rust crate with a hand-written parser and type
-> checker, so regenerating needs only cargo, and accepting only the subset is most of
-> the checking. The cost: its own parser and messages to maintain, and no full-TS
-> tooling inside bgen.
+> **Trade-off.** Its own parser for the subset over the TypeScript compiler or another
+> full TypeScript front end. djs-bgen is a dependency-free Rust crate with a hand-written
+> parser and type checker, so regenerating the builtins needs only cargo, and accepting
+> only the subset is most of the checking. The cost: a parser and its error messages to
+> maintain, and no full TypeScript tooling inside bgen.
 
 ## Two backends from one source
 
-djs-bgen compiles every builtin twice.
+djs-bgen compiles every builtin to bytecode, and the few tagged `@native` also to Rust.
+Both come from the same TypeScript source and must behave the same.
 
-**The bytecode backend** covers every builtin. bgen erases the types and writes
-`builtins/gen/prelude.js`: plain JavaScript with `%Name(...)` intrinsic calls, an
-installation call per builtin (`%InstallMethod`, `%InstallConstructor`, ...), and the list of `@native` and `@fast` builtins. djs compiles it in *privileged
-mode*, the only mode in which `%Name(...)` compiles: to the `call_intrinsic` opcode.
+### Bytecode: the prelude and the base snapshot
+
+For the bytecode backend, djs-bgen erases the types and writes
+[`builtins/gen/prelude.js`](../../builtins/gen/prelude.js): plain JavaScript with
+`%Name(...)` intrinsic calls, an installation call per builtin (`%InstallMethod`,
+`%InstallConstructor`, ...), and the list of `@native` and `@fast` builtins. djs compiles
+it in *privileged mode*, the only mode in which `%Name(...)` compiles: to the
+`call_intrinsic` opcode.
 
 <!-- gen:ops call_intrinsic -->
 | opcode | byte | immediates | size | pop → push | cost | description |
@@ -131,29 +142,32 @@ mode*, the only mode in which `%Name(...)` compiles: to the `call_intrinsic` opc
 | `call_intrinsic` | 157 | Intrinsic, Argc | 5 | imm1 → 1 | Call | `a1 .. an -> r`: privileged code only. |
 <!-- /gen -->
 
-The prelude runs once, when the base snapshot is built. Every VM starts as a
-copy of that image, with all builtins installed and compiled, so no VM ever compiles the
-prelude. Privileged templates keep no line tables or local names, which saves space in
-that image.
-
 The prelude is one wrapper function that declares every builtin as a function inside
-it. A builtin that calls another one, such as a helper like `LengthOfArrayLike`, would
+it. A builtin that calls another one, such as the helper `LengthOfArrayLike`, would
 normally capture that name the way any closure captures a variable of its enclosing
 function: a Box cell per captured function, a capture descriptor per caller and a slot
-per capture in every caller's function object. Privileged code does without them
-. The compiler gives each top-level prelude function that another one refers to
-a slot in one table of the realm, and references compile to `get_builtin` (read the
-slot) instead of `get_cap`; the wrapper fills the table once with `put_builtin`. That
-took 27 KB off every VM, about a twelfth of the base image. User code never sees the
-table, and its closures work as before.
+per capture in every caller's function object. Privileged code does without them. The
+compiler gives each prelude function that another one refers to a slot in one table of
+the realm, references compile to `get_builtin` (read the slot) instead of `get_cap`, and
+the wrapper fills the table once with `put_builtin`. User code never sees the table, and
+its closures capture as usual.
 
-**The Rust backend** is opt-in. A builtin tagged `@native` (eight of them: `push`, `sort`
-and its merge, and `JSON.stringify`'s slow path) is also
-compiled to a Rust state machine in
-`crates/djs-core/src/builtins/gen/natives.rs`. bgen splits the function into
-basic blocks, and each block becomes one arm of a `match` on the state. A resume point
-ends a block. Here is the loop of `Array.prototype.push` for several items, excerpted
-from the generated file. The source is the plain loop
+The prelude runs once, at build time, when the base snapshot is made: the realm with
+every builtin installed and compiled, collected, compacted and embedded in the engine
+([the base snapshot](snapshots.md#the-base-snapshot)). Every VM starts as a copy of that
+image, so no VM ever compiles the prelude, and creating one is a copy of bytes
+([fast startup in wasm](goals.md#fast-startup-in-wasm)). Privileged templates keep no
+line tables or local names, which keeps that image small.
+
+### Rust: `@native` state machines
+
+A builtin tagged `@native` is also compiled to a Rust state machine in
+[`crates/djs-core/src/builtins/gen/natives.rs`](../../crates/djs-core/src/builtins/gen/natives.rs).
+There are eight: `Array.prototype.push`, `sort` and its merge step, and the five
+functions of `JSON.stringify`'s serializer. bgen splits the function into basic blocks,
+and each block becomes one arm of a `match` on the state. A resume point ends a block.
+Here is the loop of `Array.prototype.push` for several items, excerpted from the
+generated file. The source is the plain loop
 `for (let i = 0; i < argCount; i++) { Set(o, len, Get(items, i)); len++; }`:
 
 <!-- gen:excerpt crates/djs-core/src/builtins/gen/natives.rs "fn native_ArrayPrototypePush(" "7 => {" 18 -->
@@ -183,56 +197,42 @@ from the generated file. The source is the plain loop
 
 A native builtin runs in a **native frame**: an ordinary frame record in the arena with
 a header bit set, its state in place of the program counter and its locals in the
-frame's slots. A typed local such as the counter `i` (`l4f` above) also lives in
-a Rust variable, but every write goes to the slot too, so the frame always holds
-the whole state. The common case stays in the same Rust loop. State 8's `Set` is a
-resume point: on an Array it completes inline (`Flow::Inline`) and the loop goes on to
-state 11. When a call needs a JavaScript frame (a setter, a proxy trap), the native
-writes the callee's frame and returns to the interpreter (`Flow::Leave`), which runs it
-and later re-enters the state machine at the resume state. A loop back-edge
-(`n_backedge`) charges fuel and is a safepoint, so a native loop over a million elements
-can stop and be saved in the middle, like bytecode.
-
-The callback loops of `forEach`, `map`, `filter`, `some`, `every`, `find`, `findIndex`
-and `reduce` are bytecode builtins. Their dense part is one intrinsic, `%EachDense`
-. It enters the callback's frame once and, on each return, completes the step
-(store, test, accumulate) and enters the same frame again for the next element. No
-native state machine runs per element, and the builtin's own spec loop takes over at the
-first hole, proxy or other array. That made these builtins about twice as fast per
-element as their native versions, and dropping them from the Rust backend left the
-module smaller. `Array.from(arrayLike, f)` uses the same loop, reading each element of
-the array-like where that reads only data properties. Calls on short arrays pay
-mostly fixed costs: an empty array skips the intrinsic, and the intrinsic starts without
-the interpreter's general instruction path. `reduce` keeps its running
-accumulator in the loop's own state rather than in an array, and learns whether
-`initialValue` was passed from its frame's argument count (`%ArgumentCount`) instead of
-a rest parameter, so a call allocates nothing for an empty array and runs in one frame
-.
+frame's slots. A typed local such as the counter `i` (`l4f` above) also lives in a Rust
+variable, but every write goes to the slot too, so the frame always holds the whole
+state. The common case stays in the same Rust loop. State 8's `Set` is a resume point:
+on an Array it completes inline (`Flow::Inline`) and the loop goes on to state 11. When a
+call needs a JavaScript frame (a setter, a proxy trap), the native writes the callee's
+frame and returns to the interpreter (`Flow::Leave`), which runs it and later re-enters
+the state machine at the resume state. A loop back-edge (`n_backedge`) charges fuel and
+is a safepoint, so a native loop over a million elements can stop and be saved in the
+middle, like bytecode.
 
 Two rules keep this safe:
 
 - **No collection inside a state arm.** An allocation never collects; it only sets a
   pending flag. The collector runs at state transitions (back-edges, and calls that
   return to the interpreter), where every value the builtin holds is in a frame slot.
-  The one exception is collect-and-retry at the heap cap: a native operation
-  that hits the cap collects and runs again, but only at points where bgen knows that
-  the generated code holds no other heap value in a Rust local.
-- **Fuel per transition.** A native frame charges 4 fuel per back-edge and 2 per call. Bytecode charges per instruction, so the fuel a run uses depends on the
-  backend. Results do not.
+  The one exception is collect-and-retry at the heap cap: a native operation that hits
+  the cap collects and runs again, but only at points where bgen knows that the
+  generated code holds no other heap value in a Rust local.
+- **Fuel per transition.** A native frame charges 4 fuel per back-edge and 2 per call,
+  where bytecode charges per instruction, so the fuel a run uses depends on the backend
+  ([fuel](limits.md#fuel)). Results do not.
 
 Both backends must behave the same, and they are tested against each other: `djs run`,
 the difftest runner and the test262 runner take `--backend bytecode|native`, and the
-gate runs the corpus with both ([How djs is tested](testing.md)).
+gate runs the corpus with both ([how djs is tested](testing.md#stress-modes-the-same-answer-under-any-schedule)).
 
-> **Trade-off.** An opt-in Rust backend over making every builtin native. Generated Rust
-> runs much faster than the same builtin as bytecode (when it landed, 3.4 times for
-> `map` and 5.3 times on the higher-order benchmark), but every native function adds
-> wasm code, and wasm size is part of startup ([fast startup in
-> wasm](goals.md#fast-startup-in-wasm)). The native API is kept out of line in wasm to
-> limit that cost, and `scripts/native-sizes.sh` prints the size per function. A
-> builtin becomes `@native` only when a benchmark shows that it is hot. The cost of
-> having the option: two implementations of every native builtin's semantics to keep
-> equal, which is why both are tested in the gate.
+The callback loops of `forEach`, `map`, `filter`, `some`, `every`, `find`, `findIndex`
+and `reduce`, and `Array.from(arrayLike, f)`, are bytecode builtins without a native
+twin. Their dense part is one intrinsic, `%EachDense`: it enters the callback's frame
+once and, on each return, completes the step (store, test, accumulate) and enters the
+same frame again for the next element. No builtin frame runs per element, which is
+faster than a native state machine that calls the callback each time, and the builtin's
+own spec loop takes over at the first hole, proxy or other kind of object. `reduce`
+keeps its accumulator in the loop's own state and learns whether `initialValue` was
+passed from its frame's argument count (`%ArgumentCount`) rather than from a rest
+parameter, so a call on an empty array allocates nothing.
 
 ## `@fast`: leaf entries for everyday calls
 
@@ -240,21 +240,21 @@ Many hot builtins rarely meet user code: `"a,b".split(",")`, `s.includes("x")`,
 `xs.indexOf(3)`, `xs.push(v)`. Even as native code, entering a frame and running
 `ToObject` and `LengthOfArrayLike` costs more than the work itself. A builtin tagged
 `@fast` has a hand-written Rust entry of the same name in
-`crates/djs-core/src/builtins/fast.rs`. With the native backend, a call first
-runs the entry, which either returns the builtin's result or *declines*, and then the
-builtin runs as usual. 18 builtins have one.
+[`crates/djs-core/src/builtins/fast.rs`](../../crates/djs-core/src/builtins/fast.rs).
+With the native backend, a call first runs the entry, which either returns the builtin's
+result or *declines*, and then the builtin runs as usual. 18 builtins have one.
 
-An entry is allowed to answer only when nothing observable can happen: primitive
-arguments, dense arrays whose elements are plain data, no proxies. Every case that would
-throw declines, so errors and their stack traces always come from the builtin itself. An
-entry that reaches the heap cap declines too, so that the builtin's own
-allocations collect and retry. A builtin is `@fast` or `@native`, not both, except
-`Array.prototype.push`: the leaf covers the common case, and the bytecode
-version handles the rest.
+An entry may answer only when nothing observable can happen: primitive arguments, dense
+arrays whose elements are plain data, no proxies. Every case that would throw declines,
+so errors and their stack traces always come from the builtin itself. An entry that
+reaches the heap cap declines too, so that the builtin's own allocations collect and
+retry. Only `Array.prototype.push` is both `@fast` and `@native`: the entry covers the
+common case, and the state machine handles the rest.
 
-Here is the slow path at work. The array has a getter at index 1, so `includes` cannot
-use its fast entry or its dense leaf and runs the getter from its loop. The `map`
-callback runs inside the native `map`, and its stack trace shows the native frame:
+Here is the slow path at work. The array has a getter at index 1, so `includes` can use
+neither its fast entry nor its dense leaf and runs the getter from its spec loop. The
+`map` callback's stack trace shows the builtin's frame as `(native)`, as QuickJS prints
+it:
 
 ```js live
 const arr = [1, 2, 3];
@@ -280,28 +280,41 @@ true
 > **Trade-off.** Hand-written fast entries over making the generic path faster. An entry
 > does in a few Rust instructions what the builtin does in dozens of steps, for the
 > calls codemode scripts make most. The cost: each entry duplicates its builtin's logic
-> for the cases it accepts, and nothing but tests keeps them in sync. The corpus checks
-> the entries against QuickJS, including every case where they must decline, and the
-> gate's bytecode-backend run, which never takes them, keeps testing the TypeScript
-> path.
+> for the cases it accepts, and only tests keep the two in step. The corpus checks the
+> entries against QuickJS, including every case where they must decline, and the gate's
+> bytecode-backend run, which never takes them, keeps testing the TypeScript path.
 
-Each twin, an `@native` state machine or an `@fast` entry, is code in every module, so
-each must pay for its bytes. A twin stays only where turning it off makes pi-like
-codemode work (the pi-like workload, the pi bench) at least 1% slower in wasm
-instructions, or makes some workload slower by at least 10% for each kilobyte (gzipped)
-of the twin's code. The measurement kept 18 `@fast` entries (`split`,
-`includes`, `push` and `pop`, the dense array searches and slices, `String.fromCharCode`,
-the conversion helpers the builtins call most) and 8 `@native` builtins (`push`, `sort`
-and the `JSON.stringify` serializer). The other 56 came out: they saved under 1%
-anywhere, and some were slower than their bytecode builtins.
+## Which builtins get a twin
+
+Each twin, an `@native` state machine or an `@fast` entry, is a second implementation
+in every wasm module, and module size is part of startup
+([fast startup in wasm](goals.md#fast-startup-in-wasm)). So a twin must pay for its
+bytes. It stays only where turning it off makes typical codemode work at least 1% slower
+in wasm instructions, or makes some benchmark workload slower by at least 10% for each
+kilobyte (gzipped) of the twin's code. Twins that call each other are judged together,
+such as `sort` and its merge step, or the serializer functions of `JSON.stringify`.
+`scripts/native-sizes.sh` prints the wasm size of each native function.
+
+By that rule the twins are the 18 `@fast` entries (`split`, `includes`, `indexOf` and
+`slice` on strings and arrays, `charAt` and `charCodeAt`, `push`, `pop` and `join`,
+`String.fromCharCode`, `Number`, `ArraySpeciesCreate` and the conversion helpers the
+builtins call most) and the 8
+`@native` functions above. A builtin without a twin is not slow by default: its loops
+over dense arrays already run in leaf intrinsics.
+
+> **Trade-off.** Opt-in twins over making every builtin native. Generated Rust runs
+> several times faster than the same builtin as bytecode, but most builtins are called
+> too rarely for that to show, and each one would add wasm code that every host loads.
+> The cost of having the option: two implementations of each twin's semantics to keep
+> equal, which is why the gate tests both backends.
 
 ## Names that outlive a build: the builtin registry
 
 Offsets, intrinsic ids and the base image's layout change from build to build: a new
 builtin shifts every cell after it. Something that must name a builtin across builds
 (a snapshot exported by meaning, a heap dump read by a newer tool) names it by its
-*registry* entry instead. Every builtin object, function and symbol of the base
-realm, and every intrinsic, has a stable id there, keyed by a path in the spec's style:
+*registry* entry instead. Every builtin object, function and symbol of the base realm,
+and every intrinsic, has a stable id there, keyed by a path in the spec's style:
 
 ```text
 0     value      globalThis
@@ -322,82 +335,81 @@ the first path a breadth-first walk finds, so the paths read like the spec where
 spec has a name.
 
 The table is a committed file,
-[tests/builtins/registry.tsv](../../tests/builtins/registry.tsv), and it only grows:
+[`tests/builtins/registry.tsv`](../../tests/builtins/registry.tsv), and it only grows:
+
 - an id is never renumbered or reused;
 - a builtin that goes away keeps its line, marked removed: a tombstone;
 - a builtin reached by a second path keeps its first id (the paths are aliases).
 
 `scripts/registry-update.sh` appends new builtins and tombstones removed ones. Tests fail
-when a builtin has no entry or an entry no longer resolves, and the gate fails when a line
+when a builtin has no entry or an entry does not resolve, and the gate fails when a line
 of main's table is renumbered or dropped. At build time the base image gets a table from
 ids to cell offsets
-([crates/djs-prelude/src/registry.rs](../../crates/djs-prelude/src/registry.rs)), and
-for any other heap the paths are resolved on that heap
-([crates/djs-core/src/vm/registry.rs](../../crates/djs-core/src/vm/registry.rs)): the
+([`crates/djs-prelude/src/registry.rs`](../../crates/djs-prelude/src/registry.rs)); for
+any other heap the paths are resolved on that heap
+([`crates/djs-core/src/vm/registry.rs`](../../crates/djs-core/src/vm/registry.rs)). The
 heap analyzer prints builtins by their registry paths (`%Array.prototype.map%`).
 
-> **Trade-off.** Paths rather than generated names: a path is what a reader recognizes and
+> **Trade-off.** Paths over generated names. A path is what a reader recognizes and
 > what the spec prints, and it is checked by resolving it. Helpers that no property
 > reaches are named by their source name in the prelude (`%prelude:Name%`), which stays
-> the same while the helper keeps its name. They used to be named by the capture that
-> reached them, a path that changed with the calling builtin's code; those entries are
-> tombstones now.
+> the same as long as the helper keeps its name, whatever the builtins that call it do.
+> The cost: a rename of a helper is a new entry and a tombstone.
 
 ## Frozen builtins
 
 Codemode hosts usually want builtins that a script cannot change: a script that patches
-`Array.prototype.map` would change what every later call means, and in a VM that lives
-across snapshots the patch would live on too. The usual answer is a lockdown at startup,
-in the style of SES: walk every builtin, `Object.freeze` it, and replace the commonly
+`Array.prototype.map` changes what every later call means, and in a VM that lives
+across snapshots the patch lives on too. The usual answer is a lockdown at startup, in
+the style of SES: walk every builtin, `Object.freeze` it, and replace the commonly
 overridden properties with accessor pairs. In djs that walk turns hundreds of compact
-objects into property dictionaries and adds hundreds of accessor closures, and pi's
-prelude spent most of its 3 ms startup doing it.
+objects into property dictionaries, adds hundreds of accessor closures, and takes
+milliseconds per VM, where a start without it takes tens of microseconds.
 
 djs offers the same result as an option at VM creation: `frozen_builtins` in
-[`VmOptions`](../../crates/djs-core/src/vm/mod.rs), `frozenBuiltins` in the Sandbox and
-the pi adapter, flag 1 of `vm_new_with` in wasm. Nothing is frozen. Every VM's
-arena starts with a copy of the base image, so the builtins sit below a known offset,
-the end of that prefix. With the option on, the property operations treat every object
-below it as frozen: it is not extensible, its properties read as non-writable and
-non-configurable, and every write, addition, deletion or redefinition fails, with a
-`TypeError` in strict code and `false` from `Reflect`. `Object.isFrozen(Array.prototype)`
-is true. The global object stays ordinary, so scripts can still define globals.
+[`VmOptions`](../../crates/djs-core/src/vm/mod.rs), `frozenBuiltins` in the
+[Sandbox](js-api.md#creating-a-sandbox), flag 1 of `vm_new_with` in wasm. Nothing is
+frozen. Every VM's arena starts with a copy of the base image, so the builtins sit below
+a known offset, the end of the builtin prefix. With the option on, the property
+operations treat every object below it as frozen: it is not extensible, its properties
+read as non-writable and non-configurable, and every write, addition, deletion or
+redefinition fails, with a `TypeError` in strict code and `false` from `Reflect`.
+`Object.isFrozen(Array.prototype)` is true. The global object lives above the prefix and
+stays ordinary, so scripts can still define globals. [The
+language](language.md#frozen-builtins) shows what a script sees.
 
-```js
-"use strict";
-class NotFound extends Error {
-  constructor(m) { super(m); this.name = "NotFound"; }  // an own property
-}
-const o = {};
-o.toString = () => "own";                               // an own property
-Array.prototype.extra = 1;                              // TypeError: not extensible
-```
+A frozen prototype chain has the *override mistake*: the spec lets an inherited
+read-only property stop an assignment to a different object, so under `Object.freeze`
+`this.name = "NotFound"` in an `Error` subclass, or `o.toString = f` on a plain object,
+would throw. The option fixes that the way SES and Node's `--frozen-intrinsics` do: when
+the read-only property belongs to a frozen builtin that is not the receiver, the
+assignment defines an own property on the receiver instead. The builtin's properties
+stay data properties; no accessors appear in their descriptors.
 
-The first two assignments show the *override mistake* of a frozen prototype chain. The
-spec lets an inherited read-only property stop an assignment to a different object, so
-under `Object.freeze` both lines would throw. The option fixes that the way SES and Node's
-`--frozen-intrinsics` do: when the read-only property belongs to a frozen builtin that is
-not the receiver, the assignment defines an own property on the receiver instead. The
-builtin's properties stay data properties; no accessors appear in their descriptors.
+The check compares the object's offset with the prefix end, which is 0 with the option
+off, so the default costs one compare per property write and stays spec-conformant.
+Engine-internal state in those objects (internal slots, header bits) is written as
+before; only the JavaScript-visible property operations look at the check. The mode is
+part of the image: a restored VM keeps it. Fast paths lean on it too: `map`, `filter` and
+the other methods that create their result through the array's constructor normally
+check that `Array.prototype.constructor` and `Array[Symbol.species]` are still the
+originals; when both objects are frozen builtins, that check is the offset compare.
 
-The check is a compare of the object's offset against the prefix end, which is 0 with
-the option off, so the default costs one compare on each property write and stays
-spec-conformant. Engine-internal state in those objects (internal slots, header bits) is
-written as before; only the JavaScript-visible property operations look at the check.
-The mode is part of the image: a restored VM keeps it. Fast paths can lean on it too:
-`map`, `filter` and the other methods that create their result through the array's
-constructor normally check that `Array.prototype.constructor` and `Array[Symbol.species]`
-are still the originals; when both objects are frozen builtins that check is the region
-compare.
+**Why dumps need it.** A [continuation dump](dumps.md) is a JavaScript program that
+rebuilds a run, and it does not copy the builtins: it writes a builtin the run looked up
+as the expression that finds it again in the loading VM, and a method a half-done call
+had already read as a second read of it. That is only right if no builtin can change
+between the moment the run read it and the load. Frozen builtins guarantee it, so only a
+VM with frozen builtins can write a dump ([what a dump needs](dumps.md#what-a-dump-needs)).
 
 > **Trade-off.** A region check over freezing the objects. Freezing at startup costs
 > time and memory in every VM and rewrites the base; marking frozen objects in their
 > headers would need a different base image per mode. The region check keeps one base for
 > both modes and freezes nothing. The cost: the override fix is a deliberate deviation
 > from the spec (test262 expects the `TypeError`), so the mode is opt-in, and a builtin is
-> frozen by where it lives, which only works because the prefix never moves: collections
-> leave every cell below its end in place, and the per-VM objects that must stay
-> writable, such as the global object, live above it.
+> frozen by where it lives, which works only because the prefix never moves: collections
+> leave every cell below its end in place ([the garbage collector](gc.md)), and the
+> per-VM objects that must stay writable, such as the global object, live above it.
 
 ## Two builds: full and slim
 
@@ -405,74 +417,78 @@ djs builds in two variants from one source. The default build has every builtin 
 The *slim* build leaves out the families that codemode scripts never use and that cost
 real size: typed arrays with ArrayBuffer and DataView, BigInt, the Iterator helpers and
 the `Iterator` global, WeakRef and FinalizationRegistry, DisposableStack with
-SuppressedError and the `using` declarations, and decorators. A count over thousands of
-real codemode scripts found none of them. The slim module is about 57 KB smaller in
-gzip (the full one is 455 KB). Its base image is a quarter smaller, which every VM copies.
+SuppressedError and the `using` declarations, and decorators. None of thousands of real
+codemode scripts uses any of them. Leaving them out makes the wasm module tens of
+kilobytes smaller in gzip and the base image, which every VM copies, about a quarter
+smaller. [The language](language.md#the-slim-build) shows what a script sees in it.
 
 The variants are cargo features, and features may only add things. So the default build
 turns on a feature called `full`, which carries those families, and a second one,
 `unicode`, which carries the Unicode property tables of `\p{…}` in regular expressions
-and full normalization. Building without the default features gives the slim build
-.
+and full normalization. Building without the default features gives the slim build.
 
 Three mechanisms take a family out:
+
 - **Builtins.** A builtin file can be marked as left out of the slim build, and so can a
   single builtin (SuppressedError lives with the other errors). The builtin compiler then
-  writes a second prelude without them, and the slim build compiles that one into its base
-  image. Installs that a kept builtin makes onto an object of a left-out family, such as
-  `%TypedArray%.prototype.toString`, which is Array's `toString`, go too.
+  writes a second prelude without them,
+  [`builtins/gen/prelude-slim.js`](../../builtins/gen/prelude-slim.js), and the slim
+  build makes its base image from that one. Installs that a kept builtin makes onto an
+  object of a left-out family, such as `%TypedArray%.prototype.toString`, which is
+  Array's `toString`, go too.
 - **Rust.** Code is cut with a constant (`FULL` in
-  [crates/djs-core/src/lib.rs](../../crates/djs-core/src/lib.rs)) rather than with
-  conditional compilation, so both builds type-check the same code and the optimizer drops
-  what the slim one can't reach:
-  - the leaf intrinsics of the left-out families have a `FULL` guard on their dispatch
-    arms;
-  - `Value` never reports a BigInt in the slim build, so the BigInt arithmetic behind
-    every numeric operator falls away.
+  [`crates/djs-core/src/lib.rs`](../../crates/djs-core/src/lib.rs)) rather than with
+  conditional compilation, so both builds type-check the same code and the optimizer
+  drops what the slim one can't reach. The leaf intrinsics of the left-out families have
+  a `FULL` guard on their dispatch arms, and `Value` never reports a BigInt in the slim
+  build, so the BigInt arithmetic behind every numeric operator falls away.
 - **Syntax.** BigInt literals, decorators and `using` are a SyntaxError that names the
   build.
 
-What a script sees in the slim build:
-
-```js
-new Uint8Array(4);   // ReferenceError: 'Uint8Array' is not available in this build
-typeof BigInt;       // "undefined": feature tests keep working
-[].values().map;     // undefined: the Iterator helpers are gone
-10n;                 // SyntaxError: BigInt literals are not available in this build
-```
-
-The builtin registry stays one table. Next to it a committed list names the entries the
-slim build doesn't have, and the slim build's tests check that exactly those don't
-resolve. The prototype of an absent constructor that the engine still has
+The builtin registry stays one table. Next to it a committed list,
+[`tests/builtins/registry-slim.txt`](../../tests/builtins/registry-slim.txt), names the
+entries the slim build doesn't have, and the slim build's tests check that exactly those
+don't resolve. The prototype of an absent constructor that the engine still has
 (`Iterator.prototype`, which every iterator inherits from) keeps its id. An export from a
 slim VM therefore names its builtins with the same ids as a full one.
 
-> **Trade-off.** One feature for the whole cut, not one per family. Each extra
+> **Trade-off.** One feature for the whole cut over one per family. Each extra
 > combination would need its own base image, test runs and size budget, and the families
-> were chosen together from the same evidence. The slim build can't run all of test262
-> or the differential corpus, so it is tested on its own terms:
-> - its codemode corpora, with the stress modes;
-> - test262 with the tests of the left-out families skipped, against its own list of
->   expected failures;
-> - pi's own codemode tests, with pi's prelude run on frozen builtins instead of its
->   lockdown, which walks the typed arrays;
-> - its own size ceiling.
+> were chosen together from the same evidence. The cost: the slim build can't run all of
+> test262 or the differential corpus, so it is tested on its own terms: its codemode
+> corpora with the stress modes, test262 without the left-out families against its own
+> list of expected failures, an [agent host's](pi.md) own codemode tests on frozen
+> builtins, and its own size ceiling.
 
 ## Where to look
 
-- [`crates/djs-core/src/heap/frozen.rs`](../../crates/djs-core/src/heap/frozen.rs): the
-  frozen-builtins check; its gates are in `heap/object.rs`, the override fix in
-  `ordinary_set` (`interp/run/intrinsics.rs`).
-- `builtins/*.ts` and [builtins/intrinsics.d.ts](../../builtins/intrinsics.d.ts): the
-  sources and the intrinsic declarations ([reference](ref-intrinsics.md)).
+- [`builtins/`](../../builtins/): the builtins in the TypeScript subset;
+  [`builtins/intrinsics.d.ts`](../../builtins/intrinsics.d.ts): the intrinsic
+  declarations ([reference](ref-intrinsics.md)).
 - [`crates/djs-bgen/`](../../crates/djs-bgen/): the parser, checker, resume-point
-  analysis (`analysis.rs`) and the two emitters (`emit_js.rs`, `emit_rust.rs`).
-- [`builtins/gen/`](../../builtins/gen/): the generated prelude and resume-point report;
+  analysis ([`crates/djs-bgen/src/analysis.rs`](../../crates/djs-bgen/src/analysis.rs))
+  and the two emitters
+  ([`crates/djs-bgen/src/emit_js.rs`](../../crates/djs-bgen/src/emit_js.rs),
+  [`crates/djs-bgen/src/emit_rust.rs`](../../crates/djs-bgen/src/emit_rust.rs)).
+- [`builtins/gen/`](../../builtins/gen/): the generated preludes (full and slim) and the
+  resume-point report;
   [`crates/djs-core/src/builtins/gen/natives.rs`](../../crates/djs-core/src/builtins/gen/natives.rs):
   the generated state machines.
+- [`crates/djs-prelude/build.rs`](../../crates/djs-prelude/build.rs): runs the prelude
+  and writes the base snapshot.
 - [`crates/djs-core/src/interp/run/native.rs`](../../crates/djs-core/src/interp/run/native.rs):
-  native frames;
-  [`crates/djs-core/src/builtins/fast.rs`](../../crates/djs-core/src/builtins/fast.rs)
-  and `builtins/dense.rs`: the `@fast` entries and dense leaves.
+  native frames, their fuel and their safepoints.
+- [`crates/djs-core/src/builtins/fast.rs`](../../crates/djs-core/src/builtins/fast.rs):
+  the `@fast` entries;
+  [`crates/djs-core/src/builtins/dense.rs`](../../crates/djs-core/src/builtins/dense.rs):
+  the dense leaves;
+  [`crates/djs-core/src/interp/run/each.rs`](../../crates/djs-core/src/interp/run/each.rs):
+  `%EachDense`.
+- [`crates/djs-core/src/heap/frozen.rs`](../../crates/djs-core/src/heap/frozen.rs): the
+  frozen-builtins check; its gates are in
+  [`crates/djs-core/src/heap/object.rs`](../../crates/djs-core/src/heap/object.rs), the
+  override fix in `ordinary_set`
+  ([`crates/djs-core/src/interp/run/intrinsics.rs`](../../crates/djs-core/src/interp/run/intrinsics.rs)).
 - [`crates/djs-core/src/vm/registry.rs`](../../crates/djs-core/src/vm/registry.rs) and
-  [tests/builtins/registry.tsv](../../tests/builtins/registry.tsv): the builtin registry.
+  [`tests/builtins/registry.tsv`](../../tests/builtins/registry.tsv): the builtin
+  registry.

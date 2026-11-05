@@ -1,32 +1,24 @@
-# Images and continuation dumps
+# Images and the base snapshot
 
-A codemode script that waits for a tool may wait for minutes, or for a human. Keeping a
-VM in memory all that time is wasteful, and a process restart or an upgrade of djs would
-lose it. The goal of [persistence](goals.md#persistence) is that such a run can be
-written out while it waits and continued later, in another process and on a later djs.
-djs has two ways to capture a VM. An **image** is the arena's bytes: exact, instant, and
-tied to the numbering of the engine that made it, so djs uses images only inside a
-process. A **continuation dump** is the run written as a JavaScript program that
-recreates it: taken only while the run waits for its tools, and readable by any later
-djs. This chapter covers both: what an image is and how it is checked, the one image
-every VM starts from, why images stopped being the way runs are persisted, and what a
-dump holds and costs.
+A host needs to capture a whole VM and bring it back: to stop a run between two fuel
+slices and continue it in a fresh VM, to start every script from a ready realm, to move a
+VM into a second wasm module. djs does all of this with one mechanism, the **image**: the
+arena's bytes, taken as they are. This chapter shows what an image is, what it depends on,
+the one image every VM starts from, and how to look inside one.
 
-> **In short.** An image is the arena's bytes. Taking one is a copy; restoring one is a
-> check and a copy, with no fixups. An image loads into any build of djs that numbers
-> things the way the image does: its roots carry a hash of every table whose numbers it
-> holds. Every VM starts as a copy of the **base snapshot**, an image of the initialized
-> realm with all builtins compiled, made at build time, which is why creating a VM takes
-> microseconds. Images also carry pi's prelude between starts, the stress tests' stops
-> and a VM between two wasm modules, all inside one process. To persist a run, djs
-> writes a **continuation dump** at an idle point: a Script that rebuilds the run's data,
-> its functions stopped at their `await`s and its open tool calls, which every later djs
-> loads or refuses with a reason. Compressed, a waiting run's dump is a couple of KB.
+> **In short.** An image is the arena from offset 0 to its end. Taking one is a copy;
+> restoring one is a check of the header and a copy, with no fixups, because every
+> reference is an offset into the same bytes. An image loads into any build of djs that
+> numbers things the way the image does: its roots carry a **dependency descriptor**, a
+> hash of every table whose numbers it holds. Every VM starts as a copy of the **base
+> snapshot**, an image of the initialized realm made at build time, which is why creating
+> a VM takes microseconds. Images stay inside a process; a run that must outlive it is
+> written as a [continuation dump](dumps.md) instead.
 
 ## An image is the arena
 
-`Vm::image()` (in wasm `vm_arena_ptr` and `vm_arena_len`, read after a collection) is the
-image: the arena from offset 0 to its end. It can be taken whenever `run` has returned: after `Done`, while
+`Vm::image()` (in wasm, `vm_arena_ptr` and `vm_arena_len`) is the image: the arena from
+offset 0 to its end. It can be taken whenever `run` has returned: after `Done`, while
 `OutOfFuel` in the middle of a loop, while parked on a host call, while idle with ten
 tools pending. Nothing is serialized, because nothing needs to be:
 
@@ -35,12 +27,13 @@ tools pending. Nothing is serialized, because nothing needs to be:
   interpreter](interpreter.md));
 - pending host calls, queued jobs, the inbox of tool results and the fuel debt are heap
   state ([suspension](suspension.md));
-- native code is referred to by index (builtins) or by host-assigned id (host
+- native code is referred to by index (builtins) or by a host-assigned id (host
   functions), and the embedder's handles are slots in a table in the arena.
 
-Restoring is `Vm::from_bytes`: check the header, verify the cells (in the tools and the
-stress tests; see below), copy the bytes into a fresh arena, and continue. The host registers its host functions again under the same
-ids, and its handles are still valid, because they were slot numbers all along.
+Restoring is `Vm::from_bytes`: check the header and the dependency descriptor, verify the
+cells where the caller asks for it (below), take the bytes as the new arena, and continue.
+The host registers its host functions again under the same ids, and its handles are
+still valid, because they were slot numbers all along.
 
 ```js live
 // At every stop of this example (every 50 fuel), the VM below was saved to an image and
@@ -61,25 +54,21 @@ console.log(tagged.join(" "), [...seen.values()].join(""));
 
 Taking an image right after a full collection makes it small: no garbage, the live cells
 packed in their allocation order ([the garbage collector](gc.md)). Embedders collect
-before they keep an image. The stress tests also compare raw images taken at
-arbitrary stops, which must be identical too.
+before they keep an image.
 
-An image holds nothing a run merely left behind. The interpreter leaves popped
-values in the value stack's slots above the stack pointer and overwrites them later;
-`Vm::image()` zeroes them, and so does every collection before it traces the stack. A
-stack left behind when the interpreter grows it gets its dead slots zeroed too. So two
-runs with the same history give the same image bytes whether or not, and wherever, they
-were stopped and restored. A collection the embedder asks for also shrinks a stack that
-grew for a deep recursion back to what it holds: after 2,000 nested calls a pi
-session's stack had 32K slots (256 KB) that every later image of it carried. The base image is made with the
-copying collector instead, so its layout depends only on the object graph, not on how the
-prelude allocated.
+An image holds nothing a run merely left behind. The interpreter leaves popped values in
+the value stack's slots above the stack pointer and overwrites them later; `Vm::image()`
+zeroes them, and so does every collection before it traces the stack. A stack left behind
+when the interpreter grows it gets its dead slots zeroed too. So two runs with the same
+history give the same image bytes whether, and wherever, they were stopped and restored;
+the stress tests compare images taken at arbitrary stops byte for byte
+([determinism](determinism.md)). A collection the embedder asks for also shrinks a stack
+that grew for a deep recursion back to what it holds: 2,000 nested calls leave a stack of
+32K slots (256 KB) that every later image would otherwise carry.
 
 An image also holds the collector's state: the next collection threshold, where the
 [old region](gc.md#the-old-region) ends and how many minor collections ran since the last
-full one. A restored VM goes on collecting exactly as the original would have. The old
-region is part of the image like any other bytes; it is a collector feature, not a
-separate layer of the format.
+full one. A restored VM goes on collecting exactly as the original would have.
 
 ## What an image depends on
 
@@ -87,289 +76,160 @@ An image contains bytecode, intrinsic ids, object class numbers, slot meanings a
 layouts. A build of djs that numbers any of those differently would misread it. Most
 changes to the engine number nothing differently, though: a faster interpreter loop, a
 fixed builtin, a better collector. So an image is keyed on what it depends on, not on the
-build that wrote it. The roots cell carries a **dependency descriptor**,
-one 32-bit word per component:
+build that wrote it. The roots cell carries a **dependency descriptor**, one 32-bit word
+per component:
 
-- `VERSION`, the **layout hash**: the cell layouts and the well-known atom names. The host's reader checks this one too, since the layouts are all it reads.
+- `VERSION`, the **layout hash**: the cell layouts and the well-known atom names. The
+  host's reader checks this one too, since the layouts are all it reads.
 - `FEATURES`, the **feature set**: the cargo features that change images, one bit each:
-  whether the build has the full builtin set or is the slim one, and the Unicode tables. Every feature of djs-core is classified as changing images or not; one that is
-  in neither list fails the build.
-- `COMPAT`, the **compatibility version**: a number bumped by hand for a change of
-  meaning that none of the hashes can see, such as what an existing slot of an internal
-  record holds, or how a suspended generator's frame is laid out.
+  whether the build has the full builtin set or is the slim one, and the Unicode tables.
+  Every feature of djs-core is classified as changing images or not; one that is in
+  neither list fails the build.
+- `COMPAT`, the **compatibility version**: a number bumped by hand for a change of meaning
+  that none of the hashes can see, such as what an existing slot of an internal record
+  holds, or how a suspended generator's frame is laid out.
 - `OPS`, the **opcode table** hash: names, immediates, stack effects and numbering of the
   instructions, in which every function's bytecode is written.
 - `INTRINSICS`, the **intrinsic table** hash: the ids the builtins call the engine by.
 - `RECORDS`, the **internal id tables** hash: the build script reads the sources that
-  number things images store, with comments and whitespace removed, and hashes them. They are the object classes, realm slots, run states, header and template
-  flags, value tags and frame continuations, the fast and native builtin tables, and
-  every top-level constant of the heap, interpreter, builtin and RegExp modules, which is
-  where the slots of internal records are named. Editing a comment keeps the hash;
-  renumbering, adding an entry or moving a slot changes it.
+  number things images store, with comments and whitespace removed, and hashes them. They
+  are the object classes, realm slots, run states, header and template flags, value tags
+  and frame continuations, the fast and native builtin tables, and every top-level
+  constant of the heap, interpreter, builtin and RegExp modules, which is where the slots
+  of internal records are named. Editing a comment keeps the hash; renumbering, adding an
+  entry or moving a slot changes it.
 
 Loading compares the layout first, since the other words are read at the offsets it
-gives, and then the others in that order. A mismatch is a `LoadError::Incompatible` that
-names the first component that differs: "the image is from a djs with another opcode
-table (image: 1a2b3c4d; this build: 5e6f7a8b)". The feature set shows by name, so a slim
-image in a full build reads as just that. Tests that the gate runs flip one entry of each
-table and expect its hash to change, so a hash cannot quietly stop seeing its table.
+gives, then the feature set, then the others in that order. A mismatch is a
+`LoadError::Incompatible` that names the first component that differs: "the image is from
+a djs with another opcode table (image: 1a2b3c4d; this build: 5e6f7a8b)". The feature set
+shows by name, so a slim image in a full build reads as just that. Tests flip one entry of
+each table and expect its hash to change, so a hash cannot quietly stop seeing its table.
 
-The engine's **build hash**, of everything that can change behavior (the layout, opcode
-and intrinsic tables, djs-core's sources and generated prelude, the enabled features and
-the `libm` version), still exists. It identifies the exact build,
-which is what a run journal needs to replay step by step, but images are not keyed on
-it. It changed in seven of ten merges to djs so far, the descriptor in half.
+The engine's **build hash** (`djs_build_hash` in wasm) covers everything that can change
+behavior: the tables above, djs-core's sources and generated prelude, the enabled features
+and the `libm` version. It identifies the exact build, which is what a run journal needs
+to replay step by step ([determinism](determinism.md)), but images are not keyed on it:
+nearly every change to the engine changes the build hash, and far fewer change the
+descriptor.
 
-After the descriptor, `from_bytes` **verifies** the image: it walks every cell,
-checks every traced field (a valid value pointing at the start of a cell of a fitting
-kind), the invariants of each kind, and that prototype chains and ropes are acyclic. The
-stress tests and the REPL's heap report load images that way, which makes every restore
-a check of the heap. The wasm module does not: the only images it loads were made in the same
-process (the transport to the dump module, pi's prelude images), so it checks the header
-and the descriptor and leaves the verifier out of the shipped code. A bad image
-could still only cause a panic (a trap) or a wrong result, never undefined behavior,
-because every access is bounds-checked.
+After the descriptor, `from_bytes` **verifies** the image: it walks every cell, checks
+every traced field (a valid value pointing at the start of a cell of a fitting kind), the
+invariants of each kind, and that prototype chains and ropes are acyclic. The stress
+tests and the REPL's heap report load images that way, which makes every restore a check
+of the heap. The wasm module does not: the only images it loads were made in the same
+process, so it checks the header and the descriptor and leaves the verifier out of the
+shipped code. A bad image could still only cause a panic (a trap) or a wrong result,
+never undefined behavior, because every access is bounds checked.
 
 > **Trade-off.** Raw images over a serialization format, inside a process. Images cost no
-> code to write or read and restore in a copy, and they capture everything, including
-> frames in the middle of a builtin, which is exactly what the base, pi's prelude images
-> and the stress tests need. The descriptor lets them survive the many engine changes
-> that number nothing differently, but what it guards is the numbering, not the meaning:
-> a change that keeps every table but reads a slot differently needs the hand-bumped
-> version. For a run that has to outlive the engine build, that is not enough, and
-> images are not used for it (below).
+> code to write or read, restore in a copy, and capture everything, including frames in
+> the middle of a builtin, which is what the base snapshot, the stress tests and a stop
+> between fuel slices need. The descriptor lets them survive the many engine changes that
+> number nothing differently, but what it guards is the numbering, not the meaning: a
+> change that keeps every table but reads a slot differently needs the hand-bumped
+> version. A run that has to outlive the engine build needs something that states its
+> meaning instead, which is what a dump is ([below](#continuation-dumps)).
 
 ## The base snapshot
 
 Creating a realm means building a few thousand objects: the global object, every
 constructor and prototype, a thousand builtins compiled from the prelude. Doing that per
 VM would cost milliseconds, and codemode creates a VM per script. So it is done once, at
-build time. `crates/djs-prelude` has a build script that creates a VM with a host build
-of djs-core, runs the prelude that bgen generated ([builtins](builtins.md)), compacts
-and collects the heap, verifies the result, and writes it out; the library embeds it as
-`djs_prelude::BASE`. The wasm module carries it in its data section.
+build time. [`crates/djs-prelude/build.rs`](../../crates/djs-prelude/build.rs) creates a
+VM with a native build of djs-core, runs the prelude that bgen generated
+([builtins](builtins.md)), compacts and collects the heap, verifies the result, and
+writes it out; the library embeds it, and the wasm module carries it coded in a custom
+section ([the wasm boundary](host.md#the-base-in-the-module)).
 
-`vm_new` copies the base into a fresh arena (`Vm::from_base`, which checks the header
-and the dependency descriptor but skips the full walk, since the base was verified when it was
-built). That copy **is** startup: about 40 µs in wasm, most of it the copy of
-the base's bytes. The whole base is the new VM's old region, so the collections while a
+A new VM is a copy of the base (`Vm::from_base`), which checks the header and the
+dependency descriptor but skips the full walk, since the base was verified when it was
+built. That copy **is** startup: once a wasm instance has its base, `vm_new` takes a few
+microseconds. The whole base is the new VM's old region, so the collections while a
 script runs don't trace it again.
 
-The base ends with a **tail**: the cells every VM writes, put last on purpose.
-They are the realm record, `Math.random`'s state, the global object, the global lexical
-scope, `Symbol.for`'s registry, Map and Set tables, the atom table's cell with room for
-the atoms the VM adds, the host call table, the interpreter state and the value stack,
-the queues for promise jobs, host results and unhandled rejections, and the VM's own
-shape tree, already holding the shapes of the objects builtins create, about
-8 KB. Everything before the tail is
-the **builtin prefix**, which no VM writes to while builtins are merely used. The
-builtins' objects are marked as prototypes when the base is built, not when a cache
-first goes through them. Strings in the prefix don't cache their hashes. Each VM grows
-its own tree of shapes, so its objects never add transitions to a builtin's shape. No
-collection moves or frees the prefix ([the garbage collector](gc.md)), so the same bytes
-stay at the same offsets in every VM of the build.
+The base ends with a **tail**: the cells every VM writes, put last on purpose. They are
+the realm record, `Math.random`'s state, the global object, the global lexical scope,
+`Symbol.for`'s registry, Map and Set tables, the atom table's cell with room for the
+atoms the VM adds, the host call table, the interpreter state and the value stack, the
+queues for promise jobs, host results and unhandled rejections, and the VM's own shape
+tree, already holding the shapes of the objects builtins create; about 8 KB in all.
+Everything before the tail is the **builtin prefix**, which no VM writes to while
+builtins are merely used. The builtins' objects are marked as prototypes when the base is
+built, not when a cache first goes through them. Strings in the prefix don't cache their
+hashes. Each VM grows its own tree of shapes, so its objects never add transitions to a
+builtin's shape. No collection moves or frees the prefix ([the garbage collector](gc.md)),
+so the same bytes stay at the same offsets in every VM of the build.
 
-Because it ships in every wasm module and is copied into every VM, the base has been put
-on a diet:
+Every VM's memory holds the base, so it is built to be small:
 
 - property tables, the atom table and the value stack are shrunk to their used size
   before the final collection;
 - equal strings are stored once: a builtin's `name`, a constant in a function's pool and
-  the atom table often held the same string in separate cells, and strings can't be told
-  apart by where they live, so the base keeps the atom table's copy and points the
-  others at it;
-- the prelude keeps no source text, no line tables or local names, and
-  its internal helper closures get no `length`, `name` or `prototype`, and the
-  installed builtins keep their `length` and `name` in their templates rather than as
-  properties;
-- shapes replaced private property tables for small objects;
+  the atom table often hold the same string, and strings can't be told apart by where
+  they live, so the base keeps the atom table's copy and points the others at it;
+- the prelude keeps no source text, no line tables or local names, its internal helper
+  closures get no `length`, `name` or `prototype`, and the installed builtins keep their
+  `length` and `name` in their templates rather than as properties;
+- small objects share shapes instead of carrying a property table each;
 - the functions of the prelude share one constant pool, without the entries only its
   set-up code used;
-- the atoms of names the base no longer needs are dropped and the remaining ones
-  renumbered to close the gaps, rewriting every atom id in the heap: property tables,
-  shapes, symbols, templates and the atom operands of the code.
+- atoms that only the prelude's set-up code used are dropped and the rest renumbered to
+  close the gaps, rewriting every atom id in the heap: property tables, shapes, symbols,
+  templates and the atom operands of the code;
+- the final collection is a copying one, so the layout depends only on the object graph,
+  not on how the prelude allocated.
 
-It is about 196 KB today. Building it twice gives the same bytes, and the base built
-natively is byte for byte the realm that djs-wasm builds inside wasm32, which a test
-checks, so nothing in it depends on the platform.
+The base is about 182 KB in the full build and 132 KB in the
+[slim one](builtins.md#two-builds-full-and-slim). Building it twice gives the same bytes,
+and the base built natively is byte for byte the realm that djs-wasm builds inside
+wasm32, which a test checks, so nothing in it depends on the platform.
 
-> **Trade-off.** A prebuilt realm over initializing at startup. Startup becomes a
-> `memcpy`, and the builtins' bytecode is never compiled at run time. The cost is size:
-> the base is about a quarter of the wasm module, and every builtin, prototype and
-> helper adds to it, which is why the prelude is written to be small and the base is
-> compacted.
+> **Trade-off.** A prebuilt realm over initializing at startup. Startup becomes a copy,
+> and the builtins' bytecode is never compiled at run time. The cost is memory and size:
+> every VM carries the whole base, and every builtin, prototype and helper adds to it,
+> which is why the prelude is written to be small and the base is compacted.
 
-## Images in practice
+## Images in use
 
-Images stay the engine's in-process mechanism:
+Images are the engine's in-process mechanism:
 
 - **The base** is copied into every new VM (above).
-- **pi's prelude image.** pi runs its own prelude (helpers, a lockdown that freezes
-  about 700 objects) before every script. The adapter seals the heap right after it (a
-  full collection that makes everything live old) and keeps the image, keyed by
-  everything the prelude saw. It restores the image for the next script
-  with the same inputs; a start then takes about a millisecond instead of several. The
-  prelude runs with the clock at zero in UTC, so the image is a function of its inputs
-  alone.
-  - A start that does run the prelude creates its VM with room for the heap size the
-    last sealed prelude left. Growing the arena while the prelude runs would move
-    it, and in wasm its old block stays behind as a hole: the hint lowers such a start's
-    peak memory from 3.0 to 2.25 MiB.
+- **A host's own setup.** A host that runs setup code of its own before every script
+  (helpers, a frozen realm) can seal the heap after it (`vm_seal`: a full collection that
+  makes everything live old) and keep that image, then start each later script from a
+  copy instead of running the setup again ([how an agent host does it](pi.md)). The image
+  is a function of the setup's inputs only if the setup is deterministic, so such a host
+  runs it with a fixed clock and seed. A start that does run the setup can create its VM
+  with room for the heap it will reach (`vm_new_reserved`), because growing the arena
+  while the setup runs would move it, and in wasm its old block stays behind as a hole.
 - **The stress tests and the determinism checks** stop a run every few instructions,
-  restore it from its image and compare images byte for byte ([determinism](determinism.md)).
+  restore it from its image and compare images byte for byte
+  ([determinism](determinism.md)).
 - **The dump module.** A host that persists runs keeps the dumper in a second wasm
-  module (below); the VM's image is what travels between the two instances.
-
-## Why images are not the persistence format
-
-For a while, images were also how a waiting run was saved. A collected image of a pi
-session waiting on a tool is about 490 KB, nearly all of it the base realm and pi's
-prelude, so a saved run was compressed with zstd against an image both sides could
-rebuild (the base, or pi's prelude image). Because collections slide cells down in their
-allocation order, 99% of such a session's words sat at the same offset as in that
-reference, and a waiting session took 2 to 8 KB.
-
-What sank it was durability, not size. An image restores only into a djs whose layouts,
-opcodes, intrinsics and internal ids number everything as the image does, and about half
-of the merges to djs changed one of them. A run saved before an upgrade could not
-resume after it, unless the host kept the old engine around. A dump says what the run
-*means* instead of how one build laid it out, and that survives. So containers,
-session images and reference compression were removed, and the 2 to 8 KB turned
-out not to be the best one could do: a compressed dump of the same waiting session is
-smaller still.
+  module; the VM's image is what travels between the two instances ([the module
+  builds](host.md#the-module-builds)).
 
 ## Continuation dumps
 
-A dump is taken at an **idle point** only: `run` returned `Idle`, no frame is on the
-stack and no job is queued, and the run waits for its tool calls. There, every
-piece of the run in progress is a function stopped at an `await` or `yield`, which the
-compiler can describe by name. A run of this script, stopped while its second read is
-open:
-
-```js
-const notes = [];
-for (const path of ["a.md", "b.md"]) {
-  notes.push(await tools.read({ path }));
-}
-return notes.join("\n");
-```
-
-is this dump (`djs run --body --dump-after 2`; the open call's state is the CLI's):
-
-```js
-"djs-dump";
-$djs.k(async function (tools, notes, $djs_i1) {
-notes.push(await $djs.resume(3, "tools.read", [{ path: "b.md" }], {"made":["tools.read"],"answered":{"tools.read":1}}));
-for (const path of $djs_i1) {
-  notes.push(await tools.read({ path }));
-}
-return notes.join("\n");
-}, $djs.source("notes.js", "207ff056", "tools,console"), 1, 118).call(globalThis, $djs.host("tools"), ["# A"], [].values());
-```
-
-It is an ordinary Script: djs, or node, runs it given the host's functions and
-one object the host provides while it loads, `$djs`. It is strict code
-without saying so: djs compiles everything strict, and a harness that runs a dump in node
-puts `"use strict"` in front itself.
-
-- data is written as literals and the calls that make it; a builtin is the expression
-  that finds it, never its contents;
-- this run never called `Math.random`, so the dump does not say where its sequence
-  stood: an unobserved state is any seed's, and the loading host's own seed goes on. A
-  run that drew random numbers starts with `$djs.seed(lo, hi)`, which restores the
-  sequence; the id the run's next host call gets is written there too where it is not one
-  past the reopened call's, the one hosts take without being told;
-- `$djs.resume(id, name, args, state)` stands for the open tool call: the host continues
-  call `id` of its function `name` under the same id and gives back its promise; the
-  last argument is the host's own state of the call, JSON it gave when it dumped.
-  It is written where the run waits for it, inside the continuation (below): a value the
-  dump uses once is written where it is used, when that keeps the order in which the
-  load does things;
-- `$djs.host("tools")` is the host's `tools` object, named by the name the host gave it
-  rather than by where the script found it (here a parameter); the host returns the very
-  object it bound under that name;
-- the last statement calls the suspended function's **continuation**: a function of
-  the same kind whose body is the rest of the original from the `await` on, written where
-  it is called. Its parameters are the values the frame held there that the rest still
-  reads (`tools`, `notes`; the dead `path` and `console` are left out) and the loop's
-  iterator, passed as the call's arguments. The rest of the current loop iteration comes
-  first, `notes.push(await …)` reading `notes.push` again, which gives what the run had
-  looked up, since builtins cannot change. Then the loop goes on as written over
-  the saved iterator itself;
-- the loop's iterator is made again as a builtin iterator over what was left of its
-  array (`[].values()`: nothing, the second path was the last), since nothing else holds the
-  array; in-flight builtin state is otherwise re-enacted with the calls that put it there,
-  not described by the engine's internal layout. The small helpers that
-  takes, here `$djs.k`, which gives the continuation its origin record, are the same in every
-  dump, so the host provides them as a fixed runtime instead of each dump carrying them; djs makes that object for its hosts, and a host without djs imports it from
-  [js/src/dump-runtime.js](../../js/src/dump-runtime.js);
-- the continuation's origin record, the arguments of `$djs.k` after it, names its origin,
-  the script's function (`$djs.source(…)`, which the host makes again from the script it
-  ran, named by its file and a 32-bit hash of its text, and never calls), the await it stands for (`1`, the
-  first), the few decisions the writer took on the run's values that shaped the
-  continuation's text (`118`, as bits: whether it reads `notes.push` or the loop's `next`
-  again instead of keeping what the run looked up, …) and, where reading K's text cannot
-  find them, the places its text holds a value of the dump (none here: the host call is
-  read as the expression it is). A dump of a
-  run that resumed this one writes the continuation again from the original and those
-  decisions, finds out that way which stretches of the continuation's text are copies of
-  the original's, reads the continuation's frame as one of the original and writes the
-  original again (**origin tracking**), so a dump stays the same size
-  however many times a run is resumed and dumped;
-- the Script's completion value is what the host asked for, the run's result promise, its last statement; the host deletes `$djs` (and `$dump`, the global object a
-  dump keeps the values it uses more than once in, which this one needs none of) once the
-  Script has run.
-
-To read a frame, the exporter uses what the compiler records at each `await` (its
-**suspension map**: the bindings and values a frame holds there by name, and the syntax
-around it). The dump itself names no slot of a frame, so it depends on no
-build's compiler: a later djs runs it as it runs any script. Golden dumps written once are
-run by every gate. Dumps are written only for VMs with frozen builtins, the mode
-pi's sessions run in: the writer may then assume that no builtin changes between the
-moment a value was read and the load, and write a builtin the run already looked up as
-the expression that finds it again. A sandbox without them cannot dump. What the
-writer cannot write, such as an object carrying a class's private field (only the class's
-own construction can add one), is refused with its path.
-
-What happens to the open calls is the host's decision: deliver a result it recorded,
-issue the call again, or reject it. Timers and requests in flight are host state, and the
-host keeps them beside the dump.
-
-The first format of continuation dumps (format 2) was not plain JavaScript: a loader in
-the engine ran it with privileged primitives that built frames slot by slot, and it
-compiled the dump's own text to find where each slot went. Plain dumps replaced it, and
-the loader, its primitives and the engine's support for them were deleted.
-
-**What a dump costs.** Over 300 real codemode scripts and their 1,063 idle points, a
-dump is 6 KB of text at the median and 17 KB compressed at p99; with zstd at level 3,
-which hosts apply when they store it, the median is 1.7 KB, a third of what the image
-containers took. A session holding a 1.8 MB log dumps to 1.8 MB of text and
-394 KB compressed. Writing a dump takes about 0.4 ms at the median in wasm (3 ms at
-p99) and resuming one, a new sandbox included, under a millisecond; a session holding
-1,500 records dumps in about 11 ms, one holding a 3.7 MB log in about 30 ms.
-
-> **Trade-off.** Dumps over images for persistence. A dump survives every change to the
-> engine that keeps the meaning of the script's code, it is readable, and it is smaller
-> once compressed. The costs: it exists only at idle points, so a run that is computing
-> cannot be persisted (it reaches an idle point or reruns, which determinism makes safe);
-> the exporter has to know how to re-enact every kind of in-flight builtin state, and
-> refuses what it cannot write (a weak collection, a revoked Proxy) with its path; and a
-> dump is code, so a host loads only dumps it wrote.
-
-> **Trade-off.** The dumper in a second module. Writing dumps is about 300 KB
-> of code, a quarter of the module, that only hosts which persist runs need. So the
-> shipped module leaves it out, and such a host loads the dump module next to it and
-> copies the VM's image into it to dump. Loading needs no dumper: a dump is a Script. Keeping that
-> instance between dumps makes both packagings equally fast; the cost is a second module
-> to ship and load, and a copy of the image per dump.
+An image restores only into a djs whose layouts, opcodes, intrinsics and internal ids
+number everything as the image does, and those change often as the engine develops. A run
+that waits minutes for a tool or a person must survive a restart and an upgrade of djs
+([persistence](goals.md#persistence)). So runs are persisted as **continuation dumps**: a
+JavaScript program that recreates the run, taken while it waits for its tools. A dump
+says what the run *means* rather than how one build laid it out, so any later djs loads
+it. [Continuation dumps](dumps.md) shows what a dump contains and how a host uses one;
+[how continuation dumps are written](continuations.md) explains how the writer gets there
+from the heap. Inside a process, the writer itself works on an image: the host copies the
+VM's image into the module that has the dumper.
 
 ## Inspecting a heap
 
 What is in a VM's heap, and why is it as large as it is? The REPL's `.heap` answers both
-. It reads the live VM's image through the engine's own heap code, never its own
-parser: the image is verified as a restore would verify it, the walker and the layout
-table say which fields are references and what they are called, and liveness follows the
-collector's rules. From that it reports:
+([the command line](cli.md#the-heap-report)). It reads the live VM's image through the
+engine's own heap code, never its own parser: the image is verified as a restore would
+verify it, the walker and the layout table say which fields are references and what they
+are called, and liveness follows the collector's rules. From that it reports:
 
 - a summary: live and garbage bytes, the old region and the young one, and the VM's own
   part past the base;
@@ -384,10 +244,9 @@ collector's rules. From that it reports:
 - what a waiting VM holds: queued jobs, pending host calls, promises, and the suspended
   async functions and generators with their locals by name.
 
-An almost empty session is still about 200 KB of image, nearly all of it the base. So
-the largest cells, strings, shapes and functions describe only the session's own part:
-the cells that are new or changed against the base. The base's part is one line
-of totals.
+An almost empty session is still about 190 KB of image, nearly all of it the base. So the
+largest cells, strings, shapes and functions describe only the session's own part: the
+cells that are new or changed against the base. The base's part is one line of totals.
 
 Every cell gets a path from the roots that reads like JavaScript where the heap allows,
 built from the shapes' keys, the elements' indexes, the templates' recorded names of
@@ -424,31 +283,26 @@ that made 50 small objects:
 ```
 
 > **Trade-off.** Structural matching over offsets. Comparing the two images offset by
-> offset would be simpler, but it would call every cell after the first one that moved
-> a change, which is exactly the case a size question is about. Matching through the
-> object graph names what moved and what it cost; it can pair the wrong cells where two
-> siblings are equally plausible, which shows up as a changed cell where there was a
-> new one.
+> offset would be simpler, but it would call every cell after the first one that moved a
+> change, which is exactly the case a size question is about. Matching through the object
+> graph names what moved and what it cost; it can pair the wrong cells where two siblings
+> are equally plausible, which shows up as a changed cell where there was a new one.
 
 ## Where to look
 
-- [`crates/djs-core/src/vm/mod.rs`](../../crates/djs-core/src/vm/mod.rs): `bytes`,
-  `from_bytes`, `from_base`, the build hash;
-  [`vm/compat.rs`](../../crates/djs-core/src/vm/compat.rs): the dependency descriptor and
-  the compatibility version; [`compat_inputs.rs`](../../crates/djs-core/compat_inputs.rs):
-  the source regions of the internal id tables hash and the feature classification.
+- [`crates/djs-core/src/vm/mod.rs`](../../crates/djs-core/src/vm/mod.rs): `image`,
+  `from_bytes`, `from_bytes_trusted`, `from_base`, `seal`, `prepare_base_image` and the
+  build hash.
+- [`crates/djs-core/src/vm/compat.rs`](../../crates/djs-core/src/vm/compat.rs): the
+  dependency descriptor and the compatibility version;
+  [`crates/djs-core/compat_inputs.rs`](../../crates/djs-core/compat_inputs.rs): the source
+  regions of the internal id tables hash and the feature classification.
 - [`crates/djs-core/src/heap/walk.rs`](../../crates/djs-core/src/heap/walk.rs): the
-  verifier; [`heap/compact.rs`](../../crates/djs-core/src/heap/compact.rs): compaction
-  for the base image.
+  verifier; [`crates/djs-core/src/heap/compact.rs`](../../crates/djs-core/src/heap/compact.rs):
+  compaction for the base image; [`crates/djs-core/src/vm/image.rs`](../../crates/djs-core/src/vm/image.rs):
+  what the base keeps and drops.
 - [`crates/djs-prelude/build.rs`](../../crates/djs-prelude/build.rs): how the base
-  snapshot is made.
-- [`crates/djs-core/src/vm/dump.rs`](../../crates/djs-core/src/vm/dump.rs): the
-  exporter; [`vm/dump_plain.rs`](../../crates/djs-core/src/vm/dump_plain.rs) and
-  [`vm/dump_cont.rs`](../../crates/djs-core/src/vm/dump_cont.rs): the plain Script and
-  the continuations; [`vm/dump_runtime.rs`](../../crates/djs-core/src/vm/dump_runtime.rs):
-  the dump runtime; [`tests/dump/v2/`](../../tests/dump/v2/): golden dumps.
-- [`js/src/sandbox.ts`](../../js/src/sandbox.ts): tasks (`start`, `suspend`,
-  `Sandbox.resume`), `begin`, `Run.dump` and `loadRun`, and the dump module; [`js/pi/vm.ts`](../../js/pi/vm.ts): the
-  adapter's prelude images and its dumps of pi sessions.
-- [`crates/djs-cli/src/heap/`](../../crates/djs-cli/src/heap/): the heap report behind the
-  REPL's `.heap`.
+  snapshot is made; [`crates/djs-prelude/src/lib.rs`](../../crates/djs-prelude/src/lib.rs):
+  how a VM is made from it.
+- [`crates/djs-cli/src/heap/`](../../crates/djs-cli/src/heap/): the heap report behind
+  the REPL's `.heap`.
