@@ -82,20 +82,36 @@ export interface SandboxOptions {
    */
   maxFuel?: number;
   /**
-   * Global host functions, by name. A call parks the VM until the function returns. A
-   * dotted name (`tools.read`) is a property of a global object (`tools`) the sandbox
-   * makes for its first such name; the host function's name is the last part (`read`).
-   * Dumps name host functions by these names.
+   * Host functions, by identity (D2970): any string (`tools.read`, `@sdk/our-stuff#myTool`),
+   * which calls, journals and dumps name the function by. A call parks the VM until the
+   * function returns. An identity `ns.member` of two identifiers makes the function member
+   * `member` of the namespace object `ns`, which the sandbox makes for its first member.
+   * Where scripts find functions and namespaces is `globals` and `bindings`.
    */
   functions?: Record<string, HostFunction>;
   /**
-   * Global async host functions, by name (D1374): a call returns a promise in the VM at
+   * Async host functions, by identity (D1374): a call returns a promise in the VM at
    * once and the script goes on, so several calls can be outstanding (`Promise.all`
-   * over tools). The function may return a value or a promise. Names as in `functions`.
+   * over tools). The function may return a value or a promise. Identities as in `functions`.
    * An `AsyncHostFunction` (`{ call, save, resume }`) adds the hooks that let a task
    * suspended into a dump continue its open calls after a load.
    */
   asyncFunctions?: Record<string, HostFunction | AsyncHostFunction>;
+  /**
+   * The global bindings of host functions and namespaces: global name -> identity of a
+   * function or namespace (`{ tools: "tools", console: "console", myTool:
+   * "@sdk/our-stuff#myTool" }`, D2972). Without it, the one written rule: `console`, every
+   * namespace and every function whose identity is an identifier are globals of their
+   * own names (`tools.read` makes the global `tools`).
+   */
+  globals?: Record<string, string>;
+  /**
+   * The bindings every codemode body gets as parameters, after the run's `params`:
+   * parameter name -> identity of a function or namespace (`{ myTool:
+   * "@sdk/our-stuff#myTool", tools: "tools" }`, D2972). A stand-in for imports: a script
+   * that calls `myTool("x")` finds it there. Default: none.
+   */
+  bindings?: Record<string, string>;
   /** Receives `console.*` calls from the sandbox; default: the host's `console`. */
   console?: ConsoleLike;
   /**
@@ -275,6 +291,9 @@ const HOOK_RESUME = 0x7fff_fff0;
 const HOOK_SEED = 0x7fff_fff1;
 const HOOK_SOURCE = 0x7fff_fff2;
 const HOOK_HOST = 0x7fff_fff3;
+/** An identity `ns.member` of two identifiers: member `member` of the namespace `ns` (D2632). */
+const NAMESPACE_MEMBER = /^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/;
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 
 /**
  * The codemode bodies the sandboxes of this process ran, by name, newest first: what a
@@ -603,6 +622,7 @@ interface RawImage {
   clock?: number;
   namespaces: [string, number][];
   fnHandles: [number, number][];
+  globals: string[];
 }
 
 /** `drive`'s value at an idle point of a host-driven run. */
@@ -633,6 +653,8 @@ export class Sandbox {
   /** The host function objects by id, as handles: one per identity (D2970). */
   private readonly fnHandles = new Map<number, number>();
   private readonly fnAsync = new Map<number, boolean>();
+  /** The globals the sandbox bound to host functions and namespaces (a dump's host globals). */
+  private readonly globalNames = new Set<string>();
   /** The host-driven run in progress (`begin`, `resume`), until it ends. */
   private active: RunCore | null = null;
   /** The task in progress (`start`, `resume`): ends it when the sandbox is disposed. */
@@ -724,6 +746,7 @@ export class Sandbox {
       if (opts.deterministic) this.clock = raw.clock ?? opts.deterministic.startedAt;
       for (const [ns, h] of raw.namespaces) this.namespaces.set(ns, h);
       for (const [id, h] of raw.fnHandles) this.fnHandles.set(id, h);
+      for (const g of raw.globals) this.globalNames.add(g);
       // May grow memory: take the buffer afterwards. The image's buffer becomes the arena,
       // so it is staged with the arena's capacity (D1942).
       const limit = opts.memoryLimit ?? 0;
@@ -751,20 +774,11 @@ export class Sandbox {
         if (typeof a === "object") this.hooks.set(i + 1, a);
       });
     } else {
-      this.guard(() => {
-        // A namespace object like `tools` (a host root of dumps, D2971).
-        const console = this.check(x.vm_new_object(vm), "memory");
-        for (const m of CONSOLE_METHODS) {
-          const f = this.hostFunction(`console.${m}`, builtins[`console.${m}`]);
-          this.defineOn(console, m, f);
-        }
-        const g = x.vm_global(vm);
-        this.defineOn(g, "console", console);
-        x.vm_handle_free(vm, g);
-        this.namespaces.set("console", console);
-      });
-      for (const [name, f] of Object.entries(opts.functions ?? {})) this.defineFunction(name, f);
-      for (const [name, f] of Object.entries(opts.asyncFunctions ?? {})) this.defineAsyncFunction(name, f);
+      // `console` is a namespace like `tools` (a host root of dumps, D2971).
+      for (const m of CONSOLE_METHODS) this.addFunction(`console.${m}`, builtins[`console.${m}`], false);
+      for (const [name, f] of Object.entries(opts.functions ?? {})) this.addFunction(name, f, false);
+      for (const [name, f] of Object.entries(opts.asyncFunctions ?? {})) this.addFunction(name, f, true);
+      for (const [name, identity] of Object.entries(opts.globals ?? this.defaultGlobals())) this.bindGlobal(name, identity);
       // What a new VM starts with; an image keeps its own (D1680).
       const det = opts.deterministic;
       const [lo, hi] = det ? seedWords(det.seed) : opts.randomSeed !== undefined ? seedWords(opts.randomSeed) : entropy();
@@ -781,39 +795,72 @@ export class Sandbox {
     }
   }
 
-  /** Defines a global host function. */
+  /**
+   * Defines a host function with identity `name` and binds it as a global by the written
+   * rule (`SandboxOptions.globals`): `tools.read` as member `read` of the global namespace
+   * `tools`, an identifier as the global of that name, anything else nowhere.
+   */
   defineFunction(name: string, f: HostFunction): void {
-    this.defineGlobalFunction(name, f, false);
+    this.addFunction(name, f, false);
+    this.bindDefault(name);
   }
 
-  /** Defines a global async host function (see `SandboxOptions.asyncFunctions`). */
+  /** Defines an async host function (see `SandboxOptions.asyncFunctions`), bound as `defineFunction` does. */
   defineAsyncFunction(name: string, f: HostFunction | AsyncHostFunction): void {
-    this.defineGlobalFunction(name, f, true);
+    this.addFunction(name, f, true);
+    this.bindDefault(name);
   }
 
-  private defineGlobalFunction(name: string, f: HostFunction | AsyncHostFunction, async: boolean): void {
+  /** Makes host function `name` and, for `ns.member`, adds it to the namespace `ns`. */
+  private addFunction(name: string, f: HostFunction | AsyncHostFunction, async: boolean): void {
     this.guard(() => {
-      const x = this.x;
       const h = this.hostFunction(name, f, async);
-      const dot = name.indexOf(".");
-      if (dot > 0) {
-        // `tools.read`: a property of the namespace object `tools`, made on first use.
-        const ns = name.slice(0, dot);
-        let o = this.namespaces.get(ns);
-        if (o === undefined) {
-          o = this.check(x.vm_new_object(this.vm), "memory");
-          const g = x.vm_global(this.vm);
-          this.defineOn(g, ns, o);
-          x.vm_handle_free(this.vm, g);
-          this.namespaces.set(ns, o);
-        }
-        this.defineOn(o, name.slice(dot + 1), h);
-      } else {
-        const g = x.vm_global(this.vm);
-        this.defineOn(g, name, h);
-        x.vm_handle_free(this.vm, g);
-      }
+      const m = NAMESPACE_MEMBER.exec(name);
+      if (m) this.defineOn(this.namespace(m[1]), m[2], h);
     });
+  }
+
+  /** The namespace object `ns`, made on first use (D2632); bound nowhere by itself. */
+  private namespace(ns: string): number {
+    let o = this.namespaces.get(ns);
+    if (o === undefined) {
+      o = this.check(this.x.vm_new_object(this.vm), "memory");
+      this.namespaces.set(ns, o);
+    }
+    return o;
+  }
+
+  /** The written rule: the globals the sandbox binds without `SandboxOptions.globals`. */
+  private defaultGlobals(): Record<string, string> {
+    const globals: Record<string, string> = {};
+    for (const name of this.fnNames) {
+      const m = NAMESPACE_MEMBER.exec(name);
+      if (m) globals[m[1]] = m[1];
+      else if (IDENTIFIER.test(name)) globals[name] = name;
+    }
+    return globals;
+  }
+
+  private bindDefault(name: string): void {
+    const m = NAMESPACE_MEMBER.exec(name);
+    if (m) this.bindGlobal(m[1], m[1]);
+    else if (IDENTIFIER.test(name)) this.bindGlobal(name, name);
+  }
+
+  /** The object of a namespace or host function by identity (D2970), as a handle the sandbox owns. */
+  private hostValue(identity: string): number | undefined {
+    return this.namespaces.get(identity) ?? this.fnHandles.get(this.fnNames.indexOf(identity) + 1);
+  }
+
+  private bindGlobal(name: string, identity: string): void {
+    const h = this.hostValue(identity);
+    if (h === undefined) throw new SandboxError("misuse", `global ${name}: no host function or namespace ${identity}`);
+    this.guard(() => {
+      const g = this.x.vm_global(this.vm);
+      this.defineOn(g, name, h);
+      this.x.vm_handle_free(this.vm, g);
+    });
+    this.globalNames.add(name);
   }
 
   /** Defines a global variable holding a copy of `value` (sent through the wire format). */
@@ -1210,6 +1257,7 @@ export class Sandbox {
       clock: sb.clock,
       namespaces: [...sb.namespaces],
       fnHandles: [...sb.fnHandles],
+      globals: [...sb.globalNames],
     });
     // One dump-module sandbox per module and memory limit, kept between dumps (D2701,
     // D2802): an instance costs a base, and its VM keeps what the dumper derives from the
@@ -1233,6 +1281,8 @@ export class Sandbox {
     for (const [ns, h] of raw.namespaces) this.namespaces.set(ns, h);
     this.fnHandles.clear();
     for (const [id, h] of raw.fnHandles) this.fnHandles.set(id, h);
+    this.globalNames.clear();
+    for (const g of raw.globals) this.globalNames.add(g);
     if (!x.vm_replace_image) {
       this.replaceVm(raw);
       return;
@@ -1317,8 +1367,7 @@ export class Sandbox {
    */
   private serveHost(callId: number, args: unknown[]): void {
     const [name] = args;
-    const id = typeof name === "string" ? this.fnNames.indexOf(name) + 1 : 0;
-    const h = typeof name === "string" ? (this.namespaces.get(name) ?? this.fnHandles.get(id)) : undefined;
+    const h = typeof name === "string" ? this.hostValue(name) : undefined;
     if (h === undefined) return void this.complete(callId, false, new Error(`host: unknown host value ${String(name)}`), false);
     this.guard(() => this.x.vm_resolve_host_call(this.vm, callId, 1, h));
   }
@@ -1328,8 +1377,7 @@ export class Sandbox {
     const x = this.x;
     x.vm_set_dump_source_refs?.(this.vm, sourceRefs ? 1 : 0);
     if (!x.vm_dump) throw new SandboxError("misuse", "the djs-wasm module has no dump (vm_dump): build it with the `dump` feature, or pass `dumpModule`");
-    const host = new Set(["console"]);
-    for (const n of this.fnNames) host.add(n.split(".")[0]);
+    const host = this.globalNames;
     const text = [
       [...host].join(","),
       names.join(","),
@@ -1723,7 +1771,16 @@ export class Sandbox {
     this.guard(() => {
       const x = this.x;
       const vm = this.vm;
-      const names = Object.keys(params);
+      // A body's parameters: the run's data, then the sandbox's bindings (D2972), whose
+      // objects the sandbox owns.
+      const bound = script ? [] : Object.entries(this.opts.bindings ?? {});
+      const boundHandles = bound.map(([p, identity]) => {
+        if (Object.hasOwn(params, p)) throw new SandboxError("misuse", `parameter ${p} is both a run parameter and a binding`);
+        const h = this.hostValue(identity);
+        if (h === undefined) throw new SandboxError("misuse", `binding ${p}: no host function or namespace ${identity}`);
+        return h;
+      });
+      const names = [...Object.keys(params), ...bound.map(([p]) => p)];
       const handles = Object.values(params).map((v) => this.toHandle(v));
       const name = textEncoder.encode(filename ?? "");
       const head = textEncoder.encode(names.join("\n"));
@@ -1747,11 +1804,12 @@ export class Sandbox {
         for (const h of handles) if (h !== 0) x.vm_handle_free(vm, h);
         throw new SandboxError(msg.startsWith("SyntaxError") ? "syntax" : "memory", msg);
       }
-      const args = new Uint8Array(4 * handles.length);
+      const argv = [...handles, ...boundHandles];
+      const args = new Uint8Array(4 * argv.length);
       const dv = new DataView(args.buffer);
-      handles.forEach((h, i) => dv.setUint32(4 * i, h, true));
+      argv.forEach((h, i) => dv.setUint32(4 * i, h, true));
       this.stage(args);
-      const r = x.vm_call(vm, f, 0, handles.length);
+      const r = x.vm_call(vm, f, 0, argv.length);
       x.vm_handle_free(vm, f);
       for (const h of handles) if (h !== 0) x.vm_handle_free(vm, h);
       if (r !== 0) throw new SandboxError("misuse", "a call is already in progress");
