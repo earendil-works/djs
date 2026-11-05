@@ -330,6 +330,7 @@ corpus	codemode/plain-fuzz/integer-key-equal-value.js	2473	999
 corpus	codemode/plain-fuzz/static-field-reads-loop-variable.js	6142	2394
 corpus	codemode/plain-fuzz/template-plain-part-then-awaits.js	5222	2064
 corpus	codemode/plain-fuzz/template-two-awaits.js	5146	2035
+corpus	codemode/redump-copied-loops.js	96311	36884
 corpus	codemode/redump-loops.js	12314	4723
 corpus	codemode/redump-operands.js	39136	15375
 corpus	codemode/redump-template.js	5138	2019

@@ -596,14 +596,18 @@ impl Dumper<'_> {
     ) -> Option<Value> {
         let h = self.h;
         let (c, foff) = split(&x.name)?;
-        // K stopped in text it copied whole from its construct's start on (a later
-        // iteration of an outer loop runs an inner loop as the original's text): the
-        // construct is that copy, not K's scaffold, whose constants are stale (0215).
-        let in_copy = rec.segs.chunks(3).any(|s| {
-            s.len() == 3
-                && (s[0]..s[0] + s[2]).contains(&kpos)
-                && (s[1]..s[1] + s[2]).contains(&foff)
-        });
+        // K stopped in text it copied whole from its construct's start on, a copy other
+        // than the scaffold at K offset `k` (a later iteration of an outer loop runs an
+        // inner loop as the original's text): the construct is that copy, and the
+        // scaffold's constants are stale (0215).
+        let in_copy = |k: u32| {
+            rec.segs.chunks(3).any(|s| {
+                s.len() == 3
+                    && (s[0]..s[0] + s[2]).contains(&kpos)
+                    && (s[1]..s[1] + s[2]).contains(&foff)
+                    && s[0] + (foff - s[1]) != k
+            })
+        };
         let kslot = |name: &str| knamed.iter().find(|y| y.name == name).map(|y| kv(y.place));
         // A temporary of the rewritten statement evaluated before the site: K's constant.
         let from_cmap = || {
@@ -621,7 +625,7 @@ impl Dumper<'_> {
             return Some(v);
         }
         // A scaffold's: the loop's saved iterator record, a finally's completion.
-        for r in rec.scaf.iter().filter(|r| r.1 == foff && !in_copy) {
+        for r in rec.scaf.iter().filter(|r| r.1 == foff && !in_copy(r.2)) {
             match (r.0.as_str(), c) {
                 ("for-of", "for-of.iterator") | ("for-of", "for-of.next") => {
                     // (Only while K is inside its scaffold: a later iteration of an
