@@ -172,7 +172,7 @@ pub(super) fn refs(text: &str) -> Refs {
 /// name's end (not a key after it).
 pub(super) fn scan_spans(text: &str) -> Vec<(usize, usize)> {
     let mut out = Vec::new();
-    if !text.contains("$dump.") {
+    if !has_dollar(text, "$dump.") {
         return out;
     }
     scan(
@@ -190,7 +190,7 @@ pub(super) fn scan_spans(text: &str) -> Vec<(usize, usize)> {
 /// evaluation makes (a continuation's text inside it has its layout already, D3003).
 pub(super) fn eager_spans(text: &str) -> Vec<(usize, usize)> {
     let mut out = Vec::new();
-    if !text.contains("$dump.") {
+    if !has_dollar(text, "$dump.") {
         return out;
     }
     scan(
@@ -470,6 +470,48 @@ pub(super) fn reads_other(text: &str, allowed: &[&str]) -> bool {
 /// Whether item text `t` names what makes a value with effects: `Promise.all/any/race`,
 /// `.then`, `.next()`, `$djs.resume`, `$djs.k(`, a continuation `$dump.K…`. (One pass by
 /// the dots, 0215: a data line is long.)
+/// `text.split_once(" = ")`, at once for a line `$dump.X = …` (0215: a substring search
+/// sets up a searcher per text).
+pub(super) fn split_def(text: &str) -> Option<(&str, &str)> {
+    if let Some(rest) = text.strip_prefix("$dump.") {
+        let (name, at) = ident_at(rest, 0);
+        if !name.is_empty() && rest[at..].starts_with(" = ") {
+            let e = "$dump.".len() + at;
+            return Some((&text[..e], &text[e + 3..]));
+        }
+    }
+    text.split_once(" = ")
+}
+
+/// `text.match_indices(pat)`'s offsets for a `pat` that starts with `$`: by the `$`s,
+/// which `find(char)` searches fast (0215: a substring search sets up a searcher per
+/// text, most of the cost for the many short items of a data dump). (No match of `pat`
+/// overlaps another: none has a `$` after its first byte.)
+pub(super) fn dollar_indices<'t>(text: &'t str, pat: &'t str) -> impl Iterator<Item = usize> + 't {
+    let mut at = 0;
+    core::iter::from_fn(move || {
+        while let Some(k) = text.get(at..)?.find('$') {
+            let i = at + k;
+            if text[i..].starts_with(pat) {
+                at = i + pat.len();
+                return Some(i);
+            }
+            at = i + 1;
+        }
+        at = text.len() + 1;
+        None
+    })
+}
+
+/// `text.contains(pat)` for a `pat` that starts with `$` ([`dollar_indices`]).
+pub(super) fn has_dollar(text: &str, pat: &str) -> bool {
+    dollar_indices(text, pat).next().is_some()
+}
+
+fn find_dollar(text: &str, pat: &str) -> Option<usize> {
+    dollar_indices(text, pat).next()
+}
+
 fn effect_marker(t: &str) -> bool {
     let b = t.as_bytes();
     t.match_indices('.').any(|(at, _)| {
@@ -1608,11 +1650,15 @@ impl W<'_> {
     /// The keys of `text`; with `globals` false only its `$dump` references: the
     /// globals a function's text names are read when it runs, after the load.
     fn keys_in(&self, text: &str, globals: bool) -> Vec<Key> {
-        if !globals && !text.contains("$dump.") {
+        if !globals && !has_dollar(text, "$dump.") {
             return Vec::new();
         }
         // (A word's first byte and length filter before the set: most words of a data
         // literal are its keys, 0215.)
+        // (The references as `scan` meets them, repeated ones too: their users take the
+        // first of each, which a set per text cost more than, 0215.)
+        let mut out = Vec::new();
+        let b = text.as_bytes();
         let r = scan(
             text,
             true,
@@ -1624,28 +1670,25 @@ impl W<'_> {
                         != 0
                     && self.global_set.contains(n)
             },
-            &mut |_, _| {},
-            true,
+            &mut |s, e| {
+                let name = &text[s + 6..e];
+                let key = if b.get(e) == Some(&b'.') {
+                    ident_at(text, e + 1).0
+                } else {
+                    ""
+                };
+                out.push_out(if !key.is_empty() && self.fac_by_name.contains_key(name) {
+                    Key::Factory(String::from(name), String::from(key))
+                } else {
+                    Key::Loc(String::from(name))
+                });
+            },
+            false,
             false,
         );
-        // (`scan` gives each `(name, key)` once; a location named with two keys, once.)
-        let mut out = Vec::with_capacity(r.dump.len() + r.names.len());
-        let mut locs: alloc::collections::BTreeSet<&str> = Default::default();
-        for (name, key) in &r.dump {
-            match key {
-                Some(key) if self.fac_by_name.contains_key(name) => {
-                    out.push_out(Key::Factory(name.clone(), key.clone()));
-                }
-                _ => {
-                    if locs.insert(name) {
-                        out.push_out(Key::Loc(name.clone()));
-                    }
-                }
-            }
-        }
         // (`scan` gives each global once.)
-        for n in &r.names {
-            out.push_out(Key::Global(n.clone()));
+        for n in r.names {
+            out.push_out(Key::Global(n));
         }
         out
     }
@@ -2002,10 +2045,7 @@ impl W<'_> {
                     }
                 }
                 IK::Def(_)
-                    if self.items[i]
-                        .text
-                        .split_once(" = ")
-                        .is_some_and(|(_, rhs)| is_fn_text(rhs)) =>
+                    if split_def(&self.items[i].text).is_some_and(|(_, rhs)| is_fn_text(rhs)) =>
                 {
                     // A function's text: what it names is read when it runs. (A
                     // continuation of an earlier dump names that dump's `$dump`.)
@@ -2026,7 +2066,7 @@ impl W<'_> {
         for i in 0..self.items.len() {
             let t = &self.items[i].text;
             if let IK::Def(_) = self.items[i].kind
-                && let Some(at) = t.find("$djs.regexpIterator($dump.")
+                && let Some(at) = find_dollar(t, "$djs.regexpIterator($dump.")
             {
                 let (re, _) = ident_at(t, at + "$djs.regexpIterator($dump.".len());
                 let patch = cat!("$dump.", re, ".lastIndex = ");

@@ -813,7 +813,7 @@ impl W<'_> {
     fn part_reads(&self, part: &[super::Plan], name: &str) -> bool {
         let r = cat!("$dump.", name);
         let has = |t: &str| {
-            t.match_indices(r.as_str()).any(|(at, _)| {
+            super::dollar_indices(t, r.as_str()).any(|at| {
                 !t.as_bytes()
                     .get(at + r.len())
                     .is_some_and(|&c| ident_part(c))
@@ -847,12 +847,12 @@ impl W<'_> {
         if self.inl.hooks.is_empty() {
             return;
         }
-        if !text.contains("$dump.") {
+        if !super::has_dollar(text, "$dump.") {
             return;
         }
         // (One pass over the text's `$dump.` names, 0215.)
         let mut last = None;
-        for (at, _) in text.match_indices("$dump.") {
+        for at in super::dollar_indices(text, "$dump.") {
             let (n, _) = super::ident_at(text, at + 6);
             if self.inl.hook_names.contains(n)
                 && let Some(i) = self.inl.hooks.iter().position(|h| h.1 == n)
@@ -997,7 +997,7 @@ impl W<'_> {
         // values (none: no scan, 0215).
         let mut last_hook = None;
         let mut named = false;
-        for (at, _) in text.match_indices("$dump.") {
+        for at in super::dollar_indices(text, "$dump.") {
             let (n, _) = super::ident_at(text, at + 6);
             named |= self.inl.pend_names.contains(n);
             if self.inl.hook_names.contains(n)
@@ -1267,7 +1267,7 @@ pub(super) fn name_hash(n: &str) -> u64 {
 /// [`dump_refs`]).
 pub(super) fn for_dump_refs<'t>(text: &'t str, mut f: impl FnMut(&'t str)) {
     let b = text.as_bytes();
-    for (at, _) in text.match_indices("$dump.") {
+    for at in super::dollar_indices(text, "$dump.") {
         if at > 0 && (ident_part(b[at - 1]) || b[at - 1] == b'.') {
             continue;
         }
@@ -1282,9 +1282,9 @@ pub(super) fn for_dump_refs<'t>(text: &'t str, mut f: impl FnMut(&'t str)) {
 /// one [`scan_spans`] finds, and those in strings and comments too.
 pub(super) fn dump_refs(text: &str) -> Vec<(usize, usize)> {
     let b = text.as_bytes();
-    text.match_indices("$dump.")
-        .filter(|(at, _)| !(*at > 0 && (ident_part(b[at - 1]) || b[at - 1] == b'.')))
-        .filter_map(|(at, _)| {
+    super::dollar_indices(text, "$dump.")
+        .filter(|&at| !(at > 0 && (ident_part(b[at - 1]) || b[at - 1] == b'.')))
+        .filter_map(|at| {
             let (n, e) = super::ident_at(text, at + 6);
             (!n.is_empty()).then_some((at, e))
         })
@@ -1330,8 +1330,8 @@ pub(super) fn statement(rhs: &str) -> String {
 
 /// The value of a `$dump.X = value;` line.
 pub(super) fn def_rhs(text: &str) -> Option<&str> {
-    let rest = text.strip_prefix("$dump.")?;
-    let (_, v) = rest.split_once(" = ")?;
+    text.strip_prefix("$dump.")?;
+    let (_, v) = super::split_def(text)?;
     Some(v.strip_suffix(';').unwrap_or(v))
 }
 
@@ -1340,7 +1340,10 @@ pub(super) fn def_rhs(text: &str) -> Option<&str> {
 pub(super) fn first_eval(text: &str) -> Option<usize> {
     let v = match text.strip_prefix("void ") {
         Some(v) => v,
-        None => text.strip_prefix("$dump.")?.split_once(" = ")?.1,
+        None => {
+            text.strip_prefix("$dump.")?;
+            super::split_def(text)?.1
+        }
     };
     Some(text.len() - v.len())
 }
