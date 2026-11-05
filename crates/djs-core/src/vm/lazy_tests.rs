@@ -313,3 +313,30 @@ fn lazy_maps_are_eager_maps() {
     }
     assert!(n > 300, "{n} maps compared");
 }
+
+#[test]
+#[ignore]
+fn probe_compile_cells() {
+    extern crate std;
+    let mut vm = vm(false);
+    let src = std::fs::read_to_string(std::env::var("PROBE").unwrap()).unwrap();
+    let before = vm.heap.arena().len();
+    let f = vm
+        .compile(
+            src.as_bytes(),
+            &CompileOptions::async_body("codemode.js", &["tools"]),
+        )
+        .unwrap();
+    let after = vm.heap.arena().len();
+    let mut by: std::collections::BTreeMap<String, (u32, u32)> = Default::default();
+    for c in vm.heap.cells().filter(|c| c.offset >= before) {
+        let e = by.entry(alloc::format!("{:?}", c.kind)).or_default();
+        e.0 += 1;
+        e.1 += vm.heap.cell_size(c.offset);
+    }
+    std::println!("src {} bytes, arena +{} ", src.len(), after - before);
+    for (k, (n, b)) in by {
+        std::println!("{k}: {n} cells {b} bytes");
+    }
+    let _ = f;
+}

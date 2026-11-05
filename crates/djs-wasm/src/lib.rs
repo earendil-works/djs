@@ -809,7 +809,36 @@ pub extern "C" fn vm_set_dump_source_refs(vm: u32, on: u32) {
     with(|s| s.slot(vm).source_refs = on != 0);
 }
 
+/// `vm_compile_file` through the compile cache (D3040, the dump module): staging holds
+/// the name, the parameter names and the source as for `vm_compile_file`, then a blob of an
+/// earlier compile of the same text and options (`blob_len` bytes, 0 for none). Returns the
+/// closure's handle; the out buffer then holds this compile's blob for the host to keep
+/// (empty when the blob was taken, or for a plain dump), or the error as for `vm_compile`.
+#[cfg(feature = "dump")]
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_compile_cached(
+    vm: u32,
+    goal: u32,
+    name_len: usize,
+    params_len: usize,
+    src_len: usize,
+    blob_len: usize,
+) -> u32 {
+    compile_with(vm, goal, name_len, params_len, src_len, Some(blob_len))
+}
+
 fn compile(vm: u32, goal: u32, name_len: usize, params_len: usize, src_len: usize) -> u32 {
+    compile_with(vm, goal, name_len, params_len, src_len, None)
+}
+
+fn compile_with(
+    vm: u32,
+    goal: u32,
+    name_len: usize,
+    params_len: usize,
+    src_len: usize,
+    #[cfg_attr(not(feature = "dump"), allow(unused_variables))] blob_len: Option<usize>,
+) -> u32 {
     with(|s| {
         let (slot, staging) = s.vm_and_staging(vm);
         let name = if name_len == 0 {
@@ -833,12 +862,34 @@ fn compile(vm: u32, goal: u32, name_len: usize, params_len: usize, src_len: usiz
             experimental_decorators: goal & 12 != 0,
             emit_decorator_metadata: goal & 8 != 0,
         };
-        let result = slot.vm.compile(&src, &opts).map_err(|e| e.text());
+        #[cfg(feature = "dump")]
+        let result = match blob_len {
+            Some(n) => {
+                let at = name_len + params_len + src_len;
+                let blob = (n > 0).then(|| staged(staging, at, n).to_vec());
+                slot.vm
+                    .compile_cached(&src, &opts, blob.as_deref())
+                    .map_err(|e| e.text())
+            }
+            None => slot
+                .vm
+                .compile(&src, &opts)
+                .map(|f| (f, None))
+                .map_err(|e| e.text()),
+        };
+        #[cfg(not(feature = "dump"))]
+        let result = slot
+            .vm
+            .compile(&src, &opts)
+            .map(|f| (f, None::<Vec<u8>>))
+            .map_err(|e| e.text());
         match result {
-            Ok(f) => {
+            Ok((f, blob)) => {
                 let h = slot.handle(f);
                 if h == 0 {
                     s.set_out(b"out of memory");
+                } else {
+                    s.set_out(blob.as_deref().unwrap_or_default());
                 }
                 h
             }

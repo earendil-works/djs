@@ -16,6 +16,8 @@
 //! [`Handle`](crate::heap::Handle) to hold them longer.
 
 pub mod compat;
+#[cfg(feature = "compile-cache")]
+pub(crate) mod compile_cache;
 #[cfg(feature = "dump")]
 pub mod dump;
 #[cfg(feature = "dump")]

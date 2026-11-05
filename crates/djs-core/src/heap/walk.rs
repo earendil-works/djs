@@ -89,6 +89,15 @@ impl Heap {
         Cells { heap: self, pos: 0 }
     }
 
+    /// The cells from the one at `start` (a cell's offset) on.
+    #[cfg(feature = "compile-cache")]
+    pub(crate) fn cells_from(&self, start: u32) -> Cells<'_> {
+        Cells {
+            heap: self,
+            pos: start,
+        }
+    }
+
     /// Visits every traced slot of the cell at `cell` (whether or not it currently holds
     /// a reference).
     pub fn trace_cell(&self, cell: u32, f: impl FnMut(Slot)) {

@@ -708,6 +708,31 @@ impl Heap {
 
     /// Interns a heap string. Canonical array indexes below 2^31 become integer atoms.
     pub fn intern(&mut self, s: Str) -> Result<Atom, HeapError> {
+        #[cfg(feature = "compile-cache")]
+        if self.intern_log.is_some() {
+            let before = self.arena().len();
+            let a = self.intern_inner(s)?;
+            self.log_intern(a, before, crate::vm::compile_cache::Source::Str(s.0));
+            return Ok(a);
+        }
+        self.intern_inner(s)
+    }
+
+    /// Records interning `a` (the compile cache, D3040): the arena was `before` long.
+    #[cfg(feature = "compile-cache")]
+    fn log_intern(&mut self, a: Atom, before: u32, source: crate::vm::compile_cache::Source) {
+        let after = self.arena().len();
+        if let Some(log) = self.intern_log.as_mut() {
+            log.push(crate::vm::compile_cache::Intern {
+                atom: a,
+                before,
+                after,
+                source,
+            });
+        }
+    }
+
+    fn intern_inner(&mut self, s: Str) -> Result<Atom, HeapError> {
         if let Some(i) = self.str_array_index(s)
             && let Some(a) = Atom::int(i)
         {
@@ -772,6 +797,17 @@ impl Heap {
 
     /// Interns a Rust string; allocates only if it is not interned yet.
     pub fn atom_str(&mut self, t: &str) -> Result<Atom, HeapError> {
+        #[cfg(feature = "compile-cache")]
+        if self.intern_log.is_some() {
+            let before = self.arena().len();
+            let a = self.atom_str_inner(t)?;
+            self.log_intern(a, before, crate::vm::compile_cache::Source::Text);
+            return Ok(a);
+        }
+        self.atom_str_inner(t)
+    }
+
+    fn atom_str_inner(&mut self, t: &str) -> Result<Atom, HeapError> {
         if let Some(i) = parse_array_index(t.bytes().map(u16::from))
             && let Some(a) = Atom::int(i)
         {
@@ -796,6 +832,17 @@ impl Heap {
     /// Interns a string given as UTF-16 code units; allocates only if it is not interned
     /// yet.
     pub fn atom_utf16(&mut self, units: &[u16]) -> Result<Atom, HeapError> {
+        #[cfg(feature = "compile-cache")]
+        if self.intern_log.is_some() {
+            let before = self.arena().len();
+            let a = self.atom_utf16_inner(units)?;
+            self.log_intern(a, before, crate::vm::compile_cache::Source::Text);
+            return Ok(a);
+        }
+        self.atom_utf16_inner(units)
+    }
+
+    fn atom_utf16_inner(&mut self, units: &[u16]) -> Result<Atom, HeapError> {
         if let Some(i) = parse_array_index(units.iter().copied())
             && let Some(a) = Atom::int(i)
         {
