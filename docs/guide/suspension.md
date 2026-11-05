@@ -197,12 +197,17 @@ function 0.0 twice: params=1 locals=2 stack=2 captures=0
 <!-- /gen -->
 
 In `twice`, `async_start` creates the async state object in a hidden local (`<state>`).
-`await` saves the frame into it and replaces itself with a call of the builtin
-`%AsyncAwait`, a tail call that subscribes the state to the promise and returns the
+`await` saves the frame into it, subscribes the state to the promise and returns the
 function's result promise to whoever ran the frame: the caller the first time, a job
-later. When the promise settles, a promise job resumes the state, and `await` pushes
-the value. Closures capture boxes and never point into frames, so nothing else has to
-change when a frame moves.
+later. When the promise settles, a promise job resumes the state as the job's own
+bottom frame, and `await` pushes the value. The common cases need no builtin call: a
+promise made by `Promise` itself, or a value with no callable `then`, is subscribed by
+the instruction directly, and `async_return` of such a value settles the result promise
+in place. Only where the spec's steps could run user code, a `then` method or getter, a
+patched `constructor`, a Proxy, does `await` hand the value to the builtin `%AsyncAwait`
+in a tail call (and `async_return` to `%AsyncFunctionReturn`), so the order of jobs is
+the spec's in every case. Closures capture boxes and never point into frames, so
+nothing else has to change when a frame moves.
 
 ```js live
 function* counter() {

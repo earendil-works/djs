@@ -11209,3 +11209,43 @@ and ToLength was measured and dropped. Before the entries it bought substring 11
 them it bought nothing measurable (a.at, a.lastIndexOf, substr ±1-5%) for 330 B gz.
 Inlining ToString, which loses its fast entry, made trim, repeat and toLowerCase 3% slower:
 two pure leaves cost more than the `@fast` exit.
+## D3130: await and async return subscribe and settle in the op where no user code runs
+date: 2026-11-06 · by: pasync · issue: 0232
+`await v` subscribes the async state in the op itself (perform_then on `v`, or a reaction job
+with `v` for a value that fulfills a new promise) when Await's steps cannot run user code: `v` is
+a Promise whose `constructor`, found as a data property without a getter or Proxy on the way, is
+%Promise% (PromiseResolve returns it), or `v` is no object or has no callable data `then`
+(`promise::plain_promise`, `plain_fulfillment`). The intermediate promise of the spec is left out:
+nothing else can reach it. `async_return` of such a value and `async_reject` settle the result
+promise in the op (%AsyncFunctionThrow is gone); anything else still tail-calls %AsyncAwait /
+%AsyncFunctionReturn, so the order of jobs is the spec's. `next_job` runs a PromiseReactionJob
+whose handler is an async function state by resuming the state as the job's bottom frame
+(`generator_resume` with `Continuation::Job`) instead of entering the builtin. The heap after
+each fast path is what the builtins would leave, so dumps (taken at idle points, where no frame
+is live) are unchanged. Measured (scratch amicro.py, node --no-liftoff, machine instructions per
+op): await 1 47 k → 23 k (qjs-2026 9 k), async f() + await 42 k → 26 k; ops.ts ratios djs/best
+QuickJS: await value 2.3 → 0.19, async call + await 1.84 → 0.83.
+
+## D3131: Promise combinators do plain elements in Rust
+date: 2026-11-06 · by: pasync · issue: 0232
+`%PromiseCombinatorRun(fixed, kind, index, it, next)` takes the elements an Array values
+iterator gives without user code (`iter_plan`) and does each element's loop body of
+PerformPromiseCombinator (values slot, element Record, resolve/reject element functions,
+Promise.resolve and `then` with its derived promise) in Rust while none of it could run user
+code: C is %Promise% with the original `resolve` (both kept in the `fixed` Record), the element
+is a `plain_promise` or a `plain_fulfillment` value, and `then`, `constructor` and
+%Promise%[@@species] are the originals (or the builtins are frozen and the element has no own
+`then`/`constructor`). It stops at the first other element, which the TS loop does the slow way,
+then calls it again. `next_job` settles a Promise.all resolve element's reaction job (SettleElement
+plus resolving the derived promise) in `promise::all_element_job` when both capabilities are
+%Promise% promises and the last element's values array has no callable `then`. The heap is
+exactly what the builtins leave (the dumper reads combinators from it). allSettled/any elements
+and their jobs, and the keyed combinators, keep the TS path for their jobs. Measured: Promise.all
+over 20 resolved promises 1 340 k → 331 k instructions (qjs 310 k); ops.ts Promise.all 3.8 →
+about 1.1-1.3 under load 105.
+
+## D3132: %RealmIntrinsic reads its name in place
+date: 2026-11-06 · by: pasync · issue: 0232
+The argument is a Latin-1 literal of the builtins; it is read through `str_view` instead of
+`str_to_string`, which allocated a Rust String per call (5-7% of an await before D3130, and
+every builtin that makes an object with `RealmIntrinsic("…Prototype")`).
