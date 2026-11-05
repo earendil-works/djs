@@ -131,10 +131,21 @@ impl Exec<'_> {
                 {
                     Some(String::from("<eval>"))
                 } else {
-                    let name = Atom::from_id(a.get(t, FuncTemplate::NAME));
-                    (!name.is_null())
-                        .then(|| self.heap.atom_name(name))
-                        .filter(|s| !s.is_empty())
+                    // The function's own `name` when it is a data property holding a
+                    // string (as V8 reads it; read without running code), so a
+                    // renamed function and a dump's continuation (`$djs.k`) show the name
+                    // the program knows; else the name it was compiled with.
+                    let own = self
+                        .heap
+                        .get_own_property(f, crate::heap::atoms::NAME)
+                        .and_then(|p| p.value())
+                        .and_then(|v| v.as_string())
+                        .map(|s| self.heap.str_to_string(s));
+                    own.or_else(|| {
+                        let name = Atom::from_id(a.get(t, FuncTemplate::NAME));
+                        (!name.is_null()).then(|| self.heap.atom_name(name))
+                    })
+                    .filter(|s| !s.is_empty())
                 };
                 let file = script
                     .get()

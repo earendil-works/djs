@@ -963,6 +963,28 @@ fn error_stack_traces() {
 }
 
 #[test]
+fn error_stack_traces_use_a_functions_own_name() {
+    // An own `name` data property holding a string names the frame, as in V8; a getter
+    // is not run, and the compiled name stands.
+    let out = run_js(
+        "function f() { return null.x; }\n\
+         Object.defineProperty(f, 'name', { value: 'renamed' });\n\
+         try { f(); } catch (e) { console.log(e.stack); }\n\
+         function g() { return null.x; }\n\
+         Object.defineProperty(g, 'name', { get() { throw 1; } });\n\
+         try { g(); } catch (e) { console.log(e.stack); }\n",
+    );
+    assert_eq!(
+        out.log[0],
+        "    at renamed (t.js:1:27)\n    at <eval> (t.js:3:8)\n"
+    );
+    assert_eq!(
+        out.log[1],
+        "    at g (t.js:4:27)\n    at <eval> (t.js:6:8)\n"
+    );
+}
+
+#[test]
 fn iterator_helpers_follow_the_spec_where_qjs_differs() {
     // qjs closes the iterator before reduce's "empty iterator" TypeError and closes an
     // exhausted inner iterator of flatMap; the spec (and node) do neither (0051).

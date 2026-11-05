@@ -885,6 +885,23 @@ fn bindings_in_their_tdz_at_an_await() {
     }
 }
 
+/// A stack trace taken after a load names a continuation's frames as the uninterrupted
+/// run does: `$djs.k` gives the continuation its origin's name, which traces read.
+#[test]
+fn traces_after_a_load_name_the_original_functions() {
+    let src = "function check(v) { if (v === 2) throw new Error('x'); return v; }\n\
+        async function main() { for (let n = 1; n <= 2; n++) { const v = await later(n); try { print(check(v)); } catch (e) { print(e.stack.split('\\n').filter(Boolean).map((l) => l.trim().split(' ')[1]).join()); } } }\n\
+        main();";
+    assert_eq!(run_program(src).0, ["1", "check,main"]);
+    let text = plain_dump_at(src, 1);
+    let mut vm = plain_load(&text).unwrap();
+    let mut lines = Vec::new();
+    while let Some(id) = plain_step(&mut vm, &mut lines) {
+        settle(&mut vm, id);
+    }
+    assert_eq!(lines, ["1", "check,main"], "{text}");
+}
+
 /// A class with instance fields declared in a waiting function: the frame's hidden
 /// bindings of the class are dead after its statement; the class comes from its text
 /// (0175's repro). Instances with private names are refused (D2878).
