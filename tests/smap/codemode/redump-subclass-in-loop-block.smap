@@ -1,0 +1,153 @@
+function <anonymous> @1..3223
+  arg0 argument 0, arg1 argument 1
+  loc0 <state>, loc1 tools@0, loc2 console@0, loc3 n1@0, loc4 sym2@0, loc7 v3@0, loc8 v4@0, loc9 i6@423, loc10 v7@449, loc13 v9@710, loc19 r14@1078, loc20 v16@1078, loc21 x17@1359, loc26 x18@1469, loc31 x20@1668, loc37 ag22@0, loc38 x23@1968, loc44 n24@1988, loc45 f25@1988, loc46 C27@1988, loc48 <fields 0>, loc49 D28@1988, loc51 <fields 0>, loc52 o29@1988
+  node 0 Body @0..3222: Params 6..22 Stmt 290..301 Stmt 302..327 Stmt 328..413 Stmt 414..580 Stmt 581..701 Stmt 702..1073 Stmt 1074..1235 Stmt 1236..1656 Stmt 1657..1851 FuncDecl 1852..1950 Stmt 1951..2917 Stmt 2918..3219 | Param tools@0#0 Param console@0#0 Let n1@0#1 Const sym2@0#2 Let v3@0#3 Let v4@0#3 Function ag22@0#10
+  node 1 For @414..580: Init 419..429 Test 431..437 Update 439..443 Body 445..580 | Let i6@423#0
+  node 2 Block @445..580: Stmt 449..518 Stmt 521..578 | Let v7@449#1
+  node 3 Decl(Let) @521..578: Target 525..527 Init 530..577
+  node 4 Await @531..576: Operand 537..576
+  node 5 Call @537..576: Callee 537..547 Open 547..548 Arg 548..575
+  node 6 Await @549..574: Operand 555..574
+  node 7 Expr @581..701: Operand 581..700
+  node 8 Call @581..700: Callee 581..592 Open 592..593 Arg 593..597 Arg 599..699
+  node 9 Call @599..699: Callee 599..613 Open 613..614 Arg 614..698
+  node 10 Object @614..698: Key 616..617 Value 619..650 Key 652..653 Value 655..668 Method 670..696
+  node 11 Await @620..646: Operand 626..646
+  node 12 Member[] @619..650: Object 619..647 Property 647..650
+  node 13 Try @702..1073: Block 706..919 CatchParam 927..930 CatchBody 932..970 Finally 979..1073 | CatchParam e11@926#1
+  node 14 Block @706..919: Stmt 710..751 Stmt 754..870 Stmt 873..917 | Const v9@710#1
+  node 15 Expr @710..751: Operand 710..750
+  node 16 Await @710..750: Operand 716..750
+  node 17 Block @1074..1235: Stmt 1078..1179 Stmt 1182..1233 | AwaitUsing r14@1078#0 Let v16@1078#1
+  node 18 If @1236..1656: Test 1240..1261 Then 1263..1338 Else 1344..1656
+  node 19 Block @1344..1656: Stmt 1348..1654
+  node 20 ForOf @1348..1654: Head 1353..1362 Iterable 1366..1450 Body 1452..1654 | Const x17@1359#0
+  node 21 Array @1366..1450: Element 1367..1411 Element 1413..1449
+  node 22 Call? @1368..1405: Callee 1368..1377 Open 1379..1380 Arg 1380..1382 Arg 1384..1404
+  node 23 Await @1384..1404: Operand 1390..1404
+  node 24 Logical @1368..1410: Left 1368..1405 Op 1406..1408 Right 1409..1410
+  node 25 Await @1414..1448: Operand 1420..1448
+  node 26 Block @1452..1654: Stmt 1458..1551 Stmt 1556..1650
+  node 27 ForOf @1458..1551: Head 1463..1472 Iterable 1476..1525 Body 1527..1551 | Const x18@1469#0
+  node 28 Array @1476..1525: Element 1477..1499 Element 1501..1524
+  node 29 Await @1478..1498: Operand 1484..1498
+  node 30 Await @1502..1523: Operand 1508..1523
+  node 31 Expr @1556..1650: Operand 1556..1649
+  node 32 Call @1556..1649: Callee 1556..1567 Open 1567..1568 Arg 1568..1573 Arg 1575..1648
+  node 33 Call @1575..1648: Callee 1575..1589 Open 1589..1590 Arg 1590..1647
+  node 34 Await @1591..1646: Operand 1597..1646
+  node 35 ForOf @1657..1851: Head 1662..1671 Iterable 1675..1702 Body 1704..1851 | Const x20@1668#0
+  node 36 Await @1676..1701: Operand 1682..1701
+  node 37 ForAwait @1951..2917: Head 1962..1971 Iterable 1975..1982 Body 1984..2917 | Const x23@1968#0
+  node 38 Block @1984..2917: Stmt 1988..2021 FuncDecl 2024..2063 Stmt 2066..2111 Stmt 2114..2571 Stmt 2574..2801 Stmt 2804..2915 | Let n24@1988#0 Function f25@1988#1 Class C27@1988#3 Class D28@1988#4 Const o29@1988#5
+  node 39 Decl(Let) @1988..2021: Target 1992..1995 Init 1998..2020
+  node 40 Await @1999..2019: Operand 2005..2019
+  node 41 Decl(Const) @2804..2915: Target 2810..2813 Init 2816..2914
+  node 42 New @2816..2914: Callee 2820..2823 Open 2823..2824 Arg 2824..2913
+  node 43 Await @2825..2909: Operand 2831..2909
+  node 44 Call @2831..2909: Callee 2831..2841 Open 2841..2842 Arg 2842..2908
+  node 45 Array @2842..2908: Element 2843..2870 Element 2872..2907
+  node 46 Await @2844..2869: Operand 2850..2869
+  node 47 Member[] @2824..2913: Object 2824..2910 Property 2910..2913
+  node 48 Return @2918..3219: Operand 2925..3218
+  node 49 Object @2925..3218: Key 2927..2928 Value 2930..2932 Key 2934..2938 Value 2940..2952 Key 2954..2959 Value 2961..3020 Key 3022..3023 Value 3025..3104 Key 3106..3110 Value 3112..3216
+  node 50 New @3025..3104: Callee 3029..3034 Open 3034..3035 Arg 3035..3099 Arg 3101..3103
+  node 51 Object @3035..3099: Key 3037..3038 Value 3040..3062 Key 3064..3065 Value 3067..3097
+  node 52 Await @3041..3061: Operand 3047..3061
+  node 53 Await @3068..3094: Operand 3074..3094
+  node 54 Member @3067..3097: Object 3067..3095 Property 3096..3097
+  node 55 Await @3112..3216: Operand 3118..3216
+  await#1 @531 (9:13) pc 343: - (out: loc13 loc19 loc20 loc21 loc26 loc31 loc38 loc44 loc45 loc46 loc49 loc52)
+    path 0.4 1.3 2.1 3.1 4
+  await#2 @549 (9:31) pc 339: call.callee@537 call.this@537 (out: loc13 loc19 loc20 loc21 loc26 loc31 loc38 loc44 loc45 loc46 loc49 loc52)
+    path 0.4 1.3 2.1 3.1 4.0 5.2 6
+  await#3 @620 (11:40) pc 404: call.callee@581 call.this@581 call.arg@593 call.callee@599 call.this@599 object.literal@614 (out: loc9 loc10 loc13 loc19 loc20 loc21 loc26 loc31 loc38 loc44 loc45 loc46 loc49 loc52)
+    path 0.5 7.0 8.3 9.2 10.1 12.0 11
+  await#4 @710 (13:3) pc 470: - (out: loc9 loc10 loc19 loc20 loc21 loc26 loc31 loc38 loc44 loc45 loc46 loc49 loc52)
+    path 0.6 13.0 14.0 15.0 16
+  await-using#1 @1235 (24:2) pc 829: using.record@1090 completion.kind@1090 completion.value@1090 (out: loc9 loc10 loc13 loc21 loc26 loc31 loc38 loc44 loc45 loc46 loc49 loc52)
+    path 0.7 17
+  await#5 @1384 (29:39) pc 996: call.callee@1368 call.this@1368 call.arg@1380 (out: loc9 loc10 loc13 loc19 loc20 loc26 loc31 loc38 loc44 loc45 loc46 loc49 loc52)
+    path 0.8 18.2 19.0 20.1 21.0 24.0 22.3 23
+  await#6 @1414 (29:69) pc 1026: array.element@1367 (out: loc9 loc10 loc13 loc19 loc20 loc26 loc31 loc38 loc44 loc45 loc46 loc49 loc52)
+    path 0.8 18.2 19.0 20.1 21.1 25
+  await#7 @1478 (30:25) pc 1085: for-of.iterator@1348 for-of.next@1348 (out: loc9 loc10 loc13 loc19 loc20 loc31 loc38 loc44 loc45 loc46 loc49 loc52)
+    path 0.8 18.2 19.0 20.2 26.0 27.1 28.0 29
+  await#8 @1502 (30:49) pc 1101: for-of.iterator@1348 for-of.next@1348 array.element@1477 (out: loc9 loc10 loc13 loc19 loc20 loc31 loc38 loc44 loc45 loc46 loc49 loc52)
+    path 0.8 18.2 19.0 20.2 26.0 27.1 28.1 30
+  await#9 @1591 (33:40) pc 1227: for-of.iterator@1348 for-of.next@1348 call.callee@1556 call.this@1556 call.arg@1568 call.callee@1575 call.this@1575 (out: loc9 loc10 loc13 loc19 loc20 loc26 loc31 loc38 loc44 loc45 loc46 loc49 loc52)
+    path 0.8 18.2 19.0 20.2 26.1 31.0 32.3 33.2 34
+  await#10 @1676 (36:20) pc 1274: - (out: loc9 loc10 loc13 loc19 loc20 loc21 loc26 loc38 loc44 loc45 loc46 loc49 loc52)
+    path 0.9 35.1 36
+  for-await.close#1 @1951 (47:1) pc 1475: for-await.exception@1951 (out: loc9 loc10 loc13 loc19 loc20 loc21 loc26 loc31 loc44 loc45 loc46 loc49 loc52)
+    path 0.11 37
+  for-await.next#1 @1951 (47:1) pc 1784: for-await.iterator@1951 for-await.next@1951 (out: loc9 loc10 loc13 loc19 loc20 loc21 loc26 loc31 loc44 loc45 loc46 loc49 loc52)
+    path 0.11 37
+  await#11 @1999 (48:14) pc 1515: for-await.iterator@1951 for-await.next@1951 (out: loc9 loc10 loc13 loc19 loc20 loc21 loc26 loc31)
+    path 0.11 37.2 38.0 39.1 40
+  await#12 @2825 (68:24) pc 1769: for-await.iterator@1951 for-await.next@1951 new.callee@2816 (out: loc9 loc10 loc13 loc19 loc20 loc21 loc26 loc31)
+    path 0.11 37.2 38.5 41.1 42.2 47.0 43
+  await#13 @2844 (68:43) pc 1738: for-await.iterator@1951 for-await.next@1951 new.callee@2816 call.callee@2831 call.this@2831 (out: loc9 loc10 loc13 loc19 loc20 loc21 loc26 loc31)
+    path 0.11 37.2 38.5 41.1 42.2 47.0 43.0 44.2 45.0 46
+  await#14 @3041 (70:124) pc 1912: object.literal@2925 new.callee@3025 object.literal@3035 (out: loc9 loc10 loc13 loc19 loc20 loc21 loc26 loc31 loc38 loc44 loc45 loc46 loc49 loc52)
+    path 0.12 48.0 49.7 50.2 51.1 52
+  await#15 @3068 (70:151) pc 1942: object.literal@2925 new.callee@3025 object.literal@3035 (out: loc9 loc10 loc13 loc19 loc20 loc21 loc26 loc31 loc38 loc44 loc45 loc46 loc49 loc52)
+    path 0.12 48.0 49.7 50.2 51.3 54.0 53
+  await#16 @3112 (70:195) pc 2026: object.literal@2925 (out: loc9 loc10 loc13 loc19 loc20 loc21 loc26 loc31 loc38 loc44 loc45 loc46 loc49 loc52)
+    path 0.12 48.0 49.9 55
+function <anonymous> @1099..1177
+  loc0 <state>
+  node 0 Body @0..78: Params 27..29 Stmt 32..76
+  node 1 Expr @32..76: Operand 32..75
+  node 2 Call @32..75: Callee 32..43 Open 43..44 Arg 44..49 Arg 51..74
+  node 3 Await @51..74: Operand 57..74
+  await#1 @51 (22:74) pc 31: call.callee@32 call.this@32 call.arg@44
+    path 0.1 1.0 2.3 3
+function ag22 @1853..1951
+  arg0 k@0
+  loc0 <state>, loc1 i@37
+  node 0 Body @0..98: Params 20..23 Stmt 28..96 | Param k@0#0
+  node 1 For @28..96: Init 33..42 Test 44..49 Update 51..54 Body 56..96 | Let i@37#0
+  node 2 Block @56..96: Stmt 62..92
+  node 3 Expr @62..92: Operand 62..91
+  node 4 Yield @62..91: Operand 68..91
+  node 5 Await @68..91: Operand 74..91
+  yield.await#1 @62 (44:5) pc 27: -
+    path 0.1 1.3 2.0 3.0 4
+  yield#1 @62 (44:5) pc 30: -
+    path 0.1 1.3 2.0 3.0 4
+  yield.return#1 @62 (44:5) pc 35: -
+    path 0.1 1.3 2.0 3.0 4
+  await#1 @68 (44:11) pc 24: -
+    path 0.1 1.3 2.0 3.0 4.0 5
+function fetch @2373..2434
+  arg0 x@0
+  loc0 <state>, loc1 this
+  node 0 Body @0..61: Params 11..14 Stmt 17..59 | Param x@0#0
+  node 1 Return @17..59: Operand 24..58
+  node 2 Binary @24..58: Left 24..34 Op 35..36 Right 37..58
+  node 3 Await @38..57: Operand 44..57
+  await#1 @38 (59:43) pc 29: binary.left@24
+    path 0.1 1.0 2.2 3
+function later @2439..2522
+  arg0 argument 0
+  loc0 <state>, loc1 x@0, loc2 f@0, loc3 this
+  node 0 Body @0..83: Params 11..14 Stmt 17..48 Stmt 49..69 Stmt 70..81 | Param x@0#0 Const f@0#1
+  node 1 Expr @49..69: Operand 49..68
+  node 2 Await @49..68: Operand 55..68
+  await#1 @49 (60:54) pc 35: -
+    path 0.2 1.0 2
+function fetch @2705..2798
+  arg0 x@0
+  loc0 <state>, loc1 a@0, loc2 this, loc3 <home>
+  node 0 Body @0..93: Params 11..14 Stmt 17..48 Stmt 49..91 | Param x@0#0 Const a@0#1
+  node 1 Decl(Const) @17..48: Target 23..24 Init 27..47
+  node 2 Await @27..47: Operand 33..47
+  node 3 Return @49..91: Operand 56..90
+  node 4 Binary @56..90: Left 56..57 Op 58..59 Right 60..90
+  node 5 Await @61..89: Operand 67..89
+  special Super@33
+  await#1 @27 (66:32) pc 23: -
+    path 0.1 1.1 2
+  await#2 @61 (66:66) pc 46: binary.left@56
+    path 0.2 3.0 4.2 5

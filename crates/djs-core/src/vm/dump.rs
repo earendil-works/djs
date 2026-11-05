@@ -772,6 +772,15 @@ fn quote_latin1(bytes: &[u8]) -> String {
     out
 }
 
+/// The quoted literal of string key `k`: from its heap string, so that a lone surrogate
+/// stays one (its text would be U+FFFD, 0215).
+fn quote_atom(h: &Heap, k: Atom) -> String {
+    match h.atom_string_of(k) {
+        Some(s) => quote_str(h, s),
+        None => quote(&h.atom_name(k)),
+    }
+}
+
 /// The quoted literal of heap string `s`.
 fn quote_str(h: &Heap, s: crate::value::Str) -> String {
     match h.str_view(s) {
@@ -1402,7 +1411,14 @@ impl<'a> Dumper<'a> {
     fn key_member(&mut self, k: Atom) -> String {
         match self.h.atom_symbol(k) {
             Some(s) => cat!("[", self.expr(Value::symbol(s), None, None), "]"),
-            None => member(&atom_text(self.h, k)),
+            None => {
+                let name = atom_text(self.h, k);
+                if is_ident(&name) {
+                    cat!(".", name)
+                } else {
+                    cat!("[", quote_atom(self.h, k), "]")
+                }
+            }
         }
     }
 
@@ -2761,7 +2777,7 @@ impl<'a> Dumper<'a> {
     fn key_expr(&mut self, k: Atom) -> String {
         match self.h.atom_symbol(k) {
             Some(s) => self.expr(Value::symbol(s), None, None),
-            None => quote(&atom_text(self.h, k)),
+            None => quote_atom(self.h, k),
         }
     }
 
@@ -2796,7 +2812,7 @@ impl<'a> Dumper<'a> {
                 } else if is_ident(&name) || h.atom_array_index(k).is_some() {
                     Rc::from(name)
                 } else {
-                    Rc::from(quote(&name))
+                    Rc::from(quote_atom(h, k))
                 };
                 self.literal_keys
                     .insert(u64::from(k.id()) + 1, self.literal_key_texts.len() as u32);
@@ -4169,7 +4185,7 @@ impl<'a> Dumper<'a> {
         let reg = intrinsic(h, Intrinsic::SymbolRegistry).as_object()?;
         for k in h.own_keys(reg) {
             if h.get_own_property(reg, k).and_then(|p| p.value()) == Some(s) {
-                return Some(quote(&atom_text(h, k)));
+                return Some(quote_atom(h, k));
             }
         }
         None

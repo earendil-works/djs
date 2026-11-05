@@ -10413,6 +10413,30 @@ tracking found no `<home>` in K's frame for the method's own, and no super proto
 regenerated K. Both now come from the origin function's home object (the value its
 `<home>` local holds, D2871's form gives the new K that home's prototype).
 
+## D3026: Late bindings and subclasses wait for the block's own declarations; keys keep lone surrogates
+date: 2026-11-07 · by: pjr · issue: 0215
+Found by the fuzz regress after D3025 (pjz's s14-s11245 program, and fresh seeds 82489,
+832780 and 668041). First: a binding of K whose value reads a name that the block's placed code
+declares (a base class's local, `((C2) => class D3 extends C2 {…})($c30)` after `let $c30 =
+class C2 {…}`) was early, so it ran before that declaration. Now such a binding is late,
+among the late ones in declaration order. Second: D3025's check of whether a late binding
+waits for a placed line was per factory, which kept `Object.assign($dump.s8, { D3 })` ahead
+of `D3` whenever another late binding read any member of `s8`. It's per member now: a value
+waits for a line that fills `F` only if it reads `$dump.F` itself or a member `K` the line
+names. A placed line also moves no further than the lines before it unless that check holds
+there too; the function's own name in `{ ag7: async function* ag7() {…} }` had moved it
+behind the binding that reads what it makes. Only dumps that failed at load change, plus two
+corpus cases where a placed line now follows a binding it doesn't need (both run the same).
+Third (seed 668041, also on main): a class statement of a shared scope went where the
+variables it reads are declared, but a subclass reads its base's local
+(`((C27) => class D28 extends C27 {…})($c25)`), so it could land in a block above the base
+(K's top while the base, reading a loop body's binding, was in the loop's block). A class
+statement that reads another one's local now goes no higher than that one (the innermost of
+their places, to a fixed point). Fourth: an object key with a lone surrogate ("\ud800" + "9") was quoted from its text, where
+it is U+FFFD. Quoted keys (literals, members, `Object.defineProperty`, `Symbol.for` keys)
+now come from the heap string itself, as values always did; well-formed keys quote byte for
+byte as before.
+
 ## D3041: Suspension maps travel from one VM's dump to the next VM
 date: 2026-11-06 · by: lazy · issue: 0219
 A dump compiles the suspension maps of the scripts its activations run in (pjr: ~30% of a

@@ -100,6 +100,18 @@ Measure where plain dumps stand now and fix what regressed:
   codemode/redump-super-late-class.js. Fuzz regress both modes: only s13-s10173's crossing
   callbacks, as on main.
 
+- Writer pass done: records dump 4.14k -> ~3.98k M (target <= 4.0k), byte-identical on
+  the corpus and every dump_perf dump: scan's `,`/`:` and keyword fast paths, strings and
+  `$`/`.` searches eight bytes at a time (`find_byte`), pending/hook names, factory member
+  counts and the global filter by hash first, count_uses without a list per text, `$`
+  searches in `has_ident` and canon's helper count.
+- Fuzz regress after D3025 found three more (D3026): pjz's s14-s11245 program still
+  crashed (a late binding reading the block's class local; the per-factory guard), a guard
+  gap in the monotone move (seed 832780), lone-surrogate keys (seed 82489, also on main) and
+  a subclass placed above its base's block (seed 668041, --lazy, also on main). Corpus cases
+  codemode/redump-subclass-class-local.js, redump-placed-function-name.js,
+  redump-lone-surrogate-key.js, redump-subclass-in-loop-block.js.
+
 ## Follow-ups
 - An object literal's async method using `super` after an await is refused ("a method that
   uses super outside its object literal"), e.g. `{ __proto__: base, async m(n) { await x;

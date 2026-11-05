@@ -1,0 +1,15 @@
+c6 ok
+p13 5
+p19 "-0,NaN,Infinity,Infinity"
+p19 "-0,NaN,Infinity,Infinity"
+p13 5
+p20 1
+p28 2
+p29 "b-3:"
+p28 2
+p29 "b-3:"
+p28 2
+p29 "b-3:"
+p31 {"a":9,"b":6}
+=== return
+{"n":6,"vars":[6,{"a":9,"b":7}],"calls":[6,2,2],"o":{"a":6,"b":0},"last":"x"}

@@ -1,0 +1,8 @@
+function <anonymous> @1..561
+  arg0 tools@0, arg1 console@0
+  loc0 <state>, loc1 o@0, loc2 s@0, loc3 m@0
+  node 0 Body @0..560: Params 6..22 Stmt 202..221 Stmt 222..244 Stmt 245..278 Stmt 279..311 Stmt 312..347 Stmt 348..368 Stmt 369..451 Stmt 452..557 | Param tools@0#0 Param console@0#0 Const o@0#1 Const s@0#4 Const m@0#5
+  node 1 Expr @348..368: Operand 348..367
+  node 2 Await @348..367: Operand 354..367
+  await#1 @348 (8:1) pc 89: -
+    path 0.6 1.0 2

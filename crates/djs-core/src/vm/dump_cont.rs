@@ -649,8 +649,12 @@ impl G<'_, '_> {
     fn declare(&mut self, decls: &[(String, DeclKind, u32, bool)]) -> R<P> {
         let mut early: Vec<P> = Vec::new();
         let mut late: Vec<P> = Vec::new();
-        // (The names `late` binds and their values, by line.)
+        // (The names `late` binds and their values, by line; the place of each line of
+        // `late` and of the bindings of `early` among the declarations.)
         let mut late_names: Vec<(String, String)> = Vec::new();
+        let mut late_seq: Vec<usize> = Vec::new();
+        let mut early_info: Vec<Option<(usize, String, String)>> = Vec::new();
+        let mut seq = 0;
         let mut after: Vec<P> = Vec::new();
         let mut info = Vec::new();
         let block = self.block_index;
@@ -663,6 +667,7 @@ impl G<'_, '_> {
             return no("a binding the dump assigns late, shadowed in a block below");
         }
         for (name, kind, scope, live) in decls {
+            seq += 1;
             let sname = self.binding_slot(name, *scope);
             info.push_out(BDecl {
                 name: name.clone(),
@@ -745,6 +750,7 @@ impl G<'_, '_> {
                 }
                 let kw = if kw == "const" { "let" } else { kw };
                 early.push_out(self.decl_line(target, cat!(kw, " ", target, ";")));
+                early_info.push_out(None);
                 let assign = self.decl_line(target, cat!(target, " = ", value, ";"));
                 self.deferred
                     .push_out((p, alloc::vec![String::from(target)], assign));
@@ -753,12 +759,47 @@ impl G<'_, '_> {
             } else if has_factory_ref(&value) {
                 late.push_out(line);
                 late_names.push_out((String::from(target), value.clone()));
+                late_seq.push_out(seq);
             } else {
                 early.push_out(line);
+                early_info.push_out(Some((seq, String::from(target), value)));
             }
         }
         let content = self.ctx.block(block, &info)?;
         self.block_index += 1;
+        // A binding whose value reads a name the dump's code here declares (a class's
+        // local, `$c30`, in `((C2) => class D3 extends C2 {…})($c30)`) is late too: after
+        // that code, among the late ones in its order (0215).
+        let declared = declared_names(&content);
+        if !declared.is_empty() && early_info.iter().any(Option::is_some) {
+            let mut kept = Vec::new();
+            let mut all: Vec<(usize, P, (String, String))> = late
+                .into_iter()
+                .zip(late_seq)
+                .zip(late_names)
+                .map(|((p, s), n)| (s, p, n))
+                .collect();
+            for (p, i) in early.into_iter().zip(early_info) {
+                match i {
+                    Some((s, target, value))
+                        if super::plain::eager_names(&value)
+                            .iter()
+                            .any(|n| declared.contains(&n.as_str())) =>
+                    {
+                        all.push_out((s, p, (target, value)));
+                    }
+                    _ => kept.push_out(p),
+                }
+            }
+            crate::sort::sort_by(&mut all, |a, b| a.0 < b.0);
+            early = kept;
+            late = Vec::new();
+            late_names = Vec::new();
+            for (_, p, n) in all {
+                late.push_out(p);
+                late_names.push_out(n);
+            }
+        }
         let mut lines = early;
         // The dump's code before the late bindings, but a line whose evaluation reads one (a member
         // of a scope the frame shares: `Object.assign($dump.s8, { D3 })` of a class K
@@ -772,10 +813,9 @@ impl G<'_, '_> {
                 let names = super::plain::eager_names(l);
                 let last = late_names.iter().rposition(|n| names.contains(&n.0));
                 if let Some(last) = last {
-                    let filled = filled_factories(&content[k..]);
                     let waits = late_names[..=last]
                         .iter()
-                        .any(|(_, v)| filled.iter().any(|f| v.contains(&cat!("$dump.", f, "."))));
+                        .any(|(_, v)| waits_for(v, &content[k..]));
                     if !waits {
                         need = Some(last);
                     }
@@ -783,15 +823,17 @@ impl G<'_, '_> {
             } else if let Some(n) = need
                 && !late_names.is_empty()
             {
+                // (Further than the lines before it only where nothing it would follow
+                // waits for it; at `n` the first line's check holds for it.)
                 let names = super::plain::eager_names(l);
-                need = Some(
-                    n.max(
-                        late_names
-                            .iter()
-                            .rposition(|x| names.contains(&x.0))
-                            .unwrap_or(n),
-                    ),
-                );
+                if let Some(last) = late_names.iter().rposition(|x| names.contains(&x.0))
+                    && last > n
+                    && !late_names[..=last]
+                        .iter()
+                        .any(|(_, v)| waits_for(v, &content[k..]))
+                {
+                    need = Some(last);
+                }
             }
             after_late.push_out(need);
         }
@@ -3130,18 +3172,43 @@ fn kind_name(k: NodeKind) -> &'static str {
     }
 }
 
-/// The factories (`$dump.F`) the dump's code `lines` assigns members to.
-fn filled_factories(lines: &[String]) -> Vec<&str> {
+/// The names the dump's code `lines` declares (`let x = …`, `class C …`).
+fn declared_names(lines: &[String]) -> Vec<&str> {
     let mut out = Vec::new();
     for l in lines {
-        for (at, _) in l.match_indices("Object.assign($dump.") {
+        for kw in ["let ", "const ", "var ", "class ", "function "] {
+            if let Some(r) = l.strip_prefix(kw) {
+                let n = r
+                    .bytes()
+                    .take_while(|c| c.is_ascii_alphanumeric() || *c == b'_' || *c == b'$')
+                    .count();
+                if n > 0 {
+                    out.push_out(&r[..n]);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Whether value `v` reads a member the dump's code `lines` makes: `$dump.F.K` (or `$dump.F`
+/// itself) where a line assigns members to `F` and names `K` (by its text: a member it
+/// does not make only keeps the order as it was).
+fn waits_for(v: &str, lines: &[String]) -> bool {
+    let refs = super::plain::refs(v).dump;
+    if refs.is_empty() {
+        return false;
+    }
+    lines.iter().any(|l| {
+        l.match_indices("Object.assign($dump.").any(|(at, _)| {
             let r = &l[at + "Object.assign($dump.".len()..];
             let n = r
                 .bytes()
                 .take_while(|c| c.is_ascii_alphanumeric() || *c == b'_')
                 .count();
-            out.push_out(&r[..n]);
-        }
-    }
-    out
+            let f = &r[..n];
+            refs.iter()
+                .any(|(name, key)| name == f && key.as_deref().is_none_or(|k| has_ident(l, k)))
+        })
+    })
 }

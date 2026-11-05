@@ -1674,7 +1674,8 @@ impl W<'_> {
                 // A class statement goes where the variables its methods read are
                 // declared (as a closure does), and the members that name it with it.
                 let others = self.scope(sc).other.clone();
-                for (i, l) in others.iter().enumerate() {
+                let mut lines: Vec<(String, Vec<String>, Pl)> = Vec::new();
+                for l in &others {
                     let name = l
                         .strip_prefix("let ")
                         .and_then(|r| r.split_once(" = "))
@@ -1701,6 +1702,49 @@ impl W<'_> {
                             "plain dumps: a class in a scope a frame shares that reads none of its variables",
                         );
                     }
+                    lines.push_out((name, names, pl));
+                }
+                // And no higher than a class statement whose local it reads (a subclass's
+                // base, `$c25` in `((C27) => class D28 extends C27 {…})($c25)`), 0215.
+                let by_name: alloc::collections::BTreeMap<&str, usize> = lines
+                    .iter()
+                    .enumerate()
+                    .map(|(b, x)| (x.0.as_str(), b))
+                    .collect();
+                let reads: Vec<Vec<usize>> = lines
+                    .iter()
+                    .enumerate()
+                    .map(|(a, x)| {
+                        x.1.iter()
+                            .filter_map(|n| by_name.get(n.as_str()).copied())
+                            .filter(|&b| b != a)
+                            .collect()
+                    })
+                    .collect();
+                drop(by_name);
+                if reads.iter().any(|r| !r.is_empty()) {
+                    for _ in 0..lines.len() {
+                        let mut changed = false;
+                        for a in 0..lines.len() {
+                            if reads[a].is_empty() {
+                                continue;
+                            }
+                            let mut pls = alloc::vec![lines[a].2];
+                            pls.extend(reads[a].iter().map(|&b| lines[b].2));
+                            if let Some(pl) = self.innermost(&pls, "plain dumps: a subclass")?
+                                && pl != lines[a].2
+                            {
+                                lines[a].2 = pl;
+                                changed = true;
+                            }
+                        }
+                        if !changed {
+                            break;
+                        }
+                    }
+                }
+                for (i, (name, _, pl)) in lines.into_iter().enumerate() {
+                    let l = &others[i];
                     for x in 0..self.placed.len() {
                         if let Put::Prop(psc, pi) = self.placed[x].1
                             && psc == sc
