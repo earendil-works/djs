@@ -10761,3 +10761,45 @@ unknown name fails the build. Run-time lookups by name remain where the name is 
 privileged `%Name` calls and `%InstallIntrinsic`. typescript.js compiles in 6.2% fewer
 wasm instructions (4,204 → 3,944 M), codemode bodies 0.2–2.5% fewer; module −0.8 KB gzip
 (429,322 → 428,507).
+## D3080: Arena::truncate moves the zeroed frontier back
+date: 2026-11-05 · by: perfreg · issue: 0224
+Freeing the end of the arena (the compactor's last step) truncates the backing Vec instead
+of zero-filling the freed bytes; the capacity stays. The arena's invariant (bytes past
+`len` up to the Vec's length are zero) holds either way, and the next allocations re-zero
+16 KiB ahead as before. Zero-filling cost every collection a memset of its garbage and
+left the frontier far ahead, so all later allocations went through the in-place path,
+which for converted string data (`alloc_from_iter`) is a byte loop: `JSON.stringify` of
+10k objects was 1.5x slower after the in-place collector (ddd792d6f2). Guard:
+`arena::tests::truncate_moves_the_frontier_back`.
+
+## D3081: Regexp follow sets only where a STAR uses them; allocation ceilings
+date: 2026-11-05 · by: perfreg · issue: 0224
+The compiler computes a concatenation's follow sets (D1501, D1563) only from its first
+element that can hand one to a `STAR` loop (`wants_follow`), moves the accumulated set
+instead of cloning it, and tests disjointness without building sets. The bytecode is
+unchanged (5,033 patterns compared). Computing them for every element had doubled the
+compile time of short patterns. crates/djs-core/tests/allocs.rs fixes ceilings on the
+allocations per compile of djs-bench's patterns (a counting global allocator): a
+deterministic guard where compile timings are noise in the gate. Lower counts lower the
+ceilings; a higher one needs a reason and benchmark numbers.
+
+## D3082: Slot plans drive tracing; the compactor updates and slides in one walk
+date: 2026-11-05 · by: perfreg · issue: 0224
+`walk::for_each_slot` follows per-kind `SlotPlan`s (the traced fixed fields and tail
+fields, built at compile time from the layout table; checked against the layout walk by
+`slot_plans_match_the_layouts`) instead of matching every field per cell. The compactor's
+passes 3 and 4 are one walk over the runs of live cells: update each cell's slots, then
+move the run, since forwarding needs only the bitmap and the block table. A template's
+inline-cache offsets (D1621) are emptied when the marker traces it, because the walk may
+have moved the cache cell already. Cells, sizes and order are unchanged (no image
+change). Instructions per full collection of 200k records 350M → 238M (Cheney before
+0101: 296M), a 500k-node list 724M → 593M (571M).
+
+## D3083: Benchmarks compare per collection, and the shipped module's instantiation
+date: 2026-11-05 · by: perfreg · issue: 0224
+`gc/<workload> collection` (ms for a fixed workload) is the GC number to compare across
+versions; `per MiB live` comes from the same samples and rises whenever cells get smaller
+(the 200k records went from 60 to 34 MiB, so ms/MiB rose 60% while collections got
+faster). `wasm/instantiate` measures the `compiled-prelude` build, dominated by its 515 KB
+data segment; `wasm/instantiate shipped` is the module hosts load. `engine/djs/empty` is a
+VM plus the shared prelude since 0044, not a bare VM.
