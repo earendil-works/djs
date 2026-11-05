@@ -9924,3 +9924,50 @@ types (D2879): a dump that names a script holds only part of it, and an enum out
 part still changes what the part means. pi suite (next mode, a dump at every idle point,
 106 dumps): median 824 → 782 B raw, largest 1,253 → 1,095 B, total 91.1 → 81.4 KB; gzip
 median 450 → 448 B, total 47.4 → 47.0 KB.
+
+## D2970: A host function is identified by a host-chosen string, one object per identity
+date: 2026-11-05 · by: hb · issue: 0213
+What identifies a host function is a string its host chooses (`tools.read`, `console.log`,
+`@sdk/our-stuff#myTool`, pi's `call`), not where scripts find it: `DumpOptions::host_fn_name`
+returns it, open calls (`$djs.resume(id, name, ...)`), `run.calls`, journals and `HostCall`
+carry it. The engine treats it as opaque text; the documented convention is
+`specifier#export` for functions that imports will provide and dotted names for
+namespace members. A host makes one function object per identity per VM and binds that
+object wherever it appears (a global, a namespace member, a body parameter, later an
+import), so `===` holds between bindings and across a dump and load (the Sandbox keeps a
+handle per id; the CLI's tools live in its `tools` Proxy's table). Bindings refer to
+identities; none is privileged: `tools` and `console` are bindings some hosts choose.
+Rejected: identities as global paths (what dumps assumed until now), which tied a host
+function to a global binding and ruled out a bare `myTool` or an import.
+
+## D2971: Dumps refer to host values by `$djs.host(name)`, never by where they are bound
+date: 2026-11-05 · by: hb · issue: 0213
+A plain dump wrote a host function it held as its name *as an expression* (`tools.read`,
+evaluated while the dump loads), and a host global's value and its members as their
+global paths (`tools`, `$dump.a3_0 = tools;` for a body's parameter): so a dump only
+loaded where those globals existed, pi had to smuggle its `bridge`/`call` into `$djs`
+(D2893), and a captured `tools` holding the host's global was left to the global (D2618's
+special case: `let tools = tools` would be a TDZ error). Now `$djs.host(name)` is a hook
+beside `seed`, `resume` and `source` (a plain function, D2834) that returns the host value
+`name`: a host function is written as `$djs.host(identity)` wherever it is reached; a
+*host root* (a value the host made and names: namespace objects, pi's `tools` Proxy) as
+`$djs.host(name)`, and its own data properties two levels deep as reads on it
+(`$djs.host("tools").list`), so the host resolves root names only. Roots are
+`DumpOptions::host_roots` (wasm: a sixth staging line of `vm_dump`, ABI 5) and, as
+before, the globals the host lists in `DumpOptions::host`, each named by its global's
+name; those globals are still never dumped (D2618's shadowing rule stands). The
+identifier check on host function names and its refusal are gone, and so is the special
+case for captured host globals: such a variable is `let tools = $djs.host("tools")`. A
+djs host answers with the object it bound (the Sandbox: its namespace objects and
+function handles; the CLI: its tools table, else the global of the path; pi: the
+prelude's `bridge`/`call` and its globals read before the dump runs); node loaders add
+`host` to `$djs`. Cost: +0.7% raw, +0.5% gzip over the dump-size corpus (a reference is
+`$djs.host("print")` instead of `print`).
+
+## D2973: pi's next mode names its host functions `bridge` and `call`
+date: 2026-11-05 · by: hb · issue: 0213
+Supersedes D2893. With `$djs.host` (D2971) a host function need not be a global, so the
+adapter's identities are plainly `bridge` and `call` (`$djs.resume(id, "call", args,
+{"id": n})`), and `$djs.host("call")` returns the very function the prelude was given
+(the adapter keeps both handles in `next` mode), where D2893's `$djs.call` was a second
+function object. `$djs` no longer carries them while a dump loads.

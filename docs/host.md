@@ -99,8 +99,10 @@ sb.dispose();
 - A promise as the result is unwrapped: its value, or `threw` with its reason; a promise
   that can never settle is a `threw` error.
 - `defineFunction(name, f)`, `defineAsyncFunction(name, f)` and `setGlobal(name, value)`
-  add globals between runs. A dotted function name (`tools.read`) is a property of a
-  global object (`tools`) the sandbox makes for its first such name (D2632).
+  add globals between runs. A function's name is its identity (D2970): what calls,
+  journals and dumps name it by, and the sandbox makes one function object per name. A
+  dotted name (`tools.read`) is a property of a global namespace object (`tools`) the
+  sandbox makes for its first such name (D2632).
 - Errors are `SandboxError` with a `kind`:
   - `threw`: an uncaught exception in the VM. `message` is the display form (`TypeError: x`);
     `value` is the value as read.
@@ -177,7 +179,10 @@ await again.result;
   `$djs.seed(lo, hi, next)` first (Math.random's state and the id of the next host call)
   and `$djs.resume(id, name, args, state)` for each open call, which opens call `id` of the
   host function `name` again under the same id (`vm_open_call`) and gives the dump its
-  promise. The calls opened that way are the loaded calls above, with their states, and
+  promise. A host value the dump holds (a host function, a namespace object such as
+  `tools` or `console`) is written as `$djs.host(name)`, by its identity rather than by
+  where it is bound (D2971), and the sandbox answers with the object it made for that
+  name, so `===` holds across the load. The calls opened that way are the loaded calls above, with their states, and
   go to the hooks as described. The hooks are served only while the Script runs to its
   first stop (an idle point, or the end); then the sandbox sets the id counter from
   `next` (`vm_set_next_call_id`), so the run's later calls get the ids the uninterrupted
@@ -190,7 +195,8 @@ await again.result;
   functions the dump's code calls meanwhile are called (they must return
   synchronously). The Script's completion value is the run's promise. Loading a dump
   needs no dumper (`dumpModule`) and no frozen builtins: it is code, and node runs it
-  too, given the same host functions as globals (examples/sleep-dump: `run.sh --node`).
+  too, given the same host functions and a `host` hook that returns them
+  (examples/sleep-dump: `run.sh --node`).
 - The hooks see a `HostCall`: `id`, `fn`, `args`, `startedAt` (this sandbox's
   `Date.now()` when it started or resumed the call), `state` (set it any time; a resumed
   call starts with its saved state, so it is saved again by default) and `signal`
@@ -344,7 +350,7 @@ replay only on it, and pi's fingerprint names it.
 
 Exports take and return only `i32`s, except the `f64` clock of `vm_set_now` and `vm_resolve_host_call_at`. There are no imports: the module needs nothing from
 the host, so `WebAssembly.instantiate(module, {})` works anywhere. `djs_abi_version()`
-returns `4` (since 0205: `vm_dump` without its options line, `vm_load_dump` gone) and is bumped on any incompatible change. The Sandbox checks it.
+returns `5` (since 0213: `vm_dump`'s host roots line; 4 since 0205: `vm_dump` without its options line, `vm_load_dump` gone) and is bumped on any incompatible change. The Sandbox checks it.
 
 **Buffers.** Data crosses the boundary through two buffers in linear memory.
 - `djs_staging(len) -> ptr` makes the *staging* buffer at least `len` bytes. The host writes
@@ -399,7 +405,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_abort(vm)` | abandon the current call (out of fuel or parked): the VM is idle and usable again |
 | `vm_result(vm) -> h` | the DONE/THREW value, once |
 | `vm_outcome(vm) -> h` | the entry call's outcome while no frame is active, also at IDLE (a function the host called while async calls are pending); any number of times; out[0] = 1 if it threw; 0 if none (D2650) |
-| `vm_dump(vm, len) -> 0/1/2` | (feature `dump`) a dump (a plain Script, D2830) of the idle VM in out; the VM needs frozen builtins (D2836). Staging, five lines: host globals and names to dump (comma-separated), the host's function names in id order, the values to name as `handle:name` (tab-separated; handle 0 names the entry call's outcome) and the open calls' states as `call_id:byte_len` (tab-separated), then the states' JSON texts one after another (D2770). 1: refused, reasons in out; 2: no base image (D2631). Loading a dump is running it as a Script: no export (D2890) |
+| `vm_dump(vm, len) -> 0/1/2` | (feature `dump`) a dump (a plain Script, D2830) of the idle VM in out; the VM needs frozen builtins (D2836). Staging, six lines: host globals and names to dump (comma-separated), the host's function identities in id order, the values to name as `handle:name` (tab-separated; handle 0 names the entry call's outcome), the host roots as `handle:name` (tab-separated; written as `$djs.host(name)`, D2971) and the open calls' states as `call_id:byte_len` (tab-separated), then the states' JSON texts one after another (D2770). 1: refused, reasons in out; 2: no base image (D2631). Loading a dump is running it as a Script: no export (D2890) |
 | `vm_open_call(vm, parked, fn_id) -> 0/-1` | while parked on the sync call `parked`, a plain dump's `$djs.resume(id, name, args, state)`: opens async call `id` of host function `fn_id` with `args`' elements under that id, and returns its promise from `parked` (`Vm::open_host_call`, D2890). The call is not reported by `vm_new_host_calls`; the next new call gets a higher id. -1: the reason in out (an open id, not an array), for the host to throw at the call |
 | `vm_dump_runtime(vm, len) -> h` | a new object holding the plain dump runtime's helpers (D2903), evaluated from staging[0..len], the runtime's Script (js/src/dump-runtime.js `script`; the module does not carry it): the host adds its hooks (`seed`, `resume`) and defines it as the global `$djs` before it runs a plain dump. Runs the VM, so call it while the VM is not running. 0: out of memory or not the runtime's text |
 | `vm_set_dump_source_refs(vm, on)` | whether `vm_dump` names codemode bodies by `$djs.source` (1, the default) or writes their text (0) (D2882) |
@@ -710,10 +716,11 @@ resumed.deliver({ type: "result", id, ok: true, payload, seq, now });
 data, suspended activations as continuations, and open calls; the prelude's globals are
 host globals, written by name) and the adapter's state beside it (`finished`, the store,
 the output counters, the deterministic clock and sequence numbers). Each open call's pi
-id is in the dump, as its state: `$djs.resume(4, "$djs.call", ["call", "slow", "1"],
-{"id": 2})`. pi's `bridge` and `call` are not globals, so the dump names them
-`$djs.bridge` and `$djs.call`, which the adapter defines in `$djs` while the dump loads
-(D2893). `resumeFromDump` runs the host globals and prelude-next again (deterministic,
+id is in the dump, as its state: `$djs.resume(4, "call", ["call", "slow", "1"],
+{"id": 2})`. The adapter's host functions are named `bridge` and `call` (D2973); a dump
+that holds one, or a prelude global such as `tools`, writes it as `$djs.host(name)`, and
+the adapter answers with the prelude's own `bridge`/`call` or the global's value
+(D2971). `resumeFromDump` runs the host globals and prelude-next again (deterministic,
 D2262; or restores the prelude image), restores the adapter's state first (the dump's code
 runs while it loads), runs the dump and rebuilds the call table from the resumed calls'
 states. The open calls are not posted again: the host delivers a recorded result, issues

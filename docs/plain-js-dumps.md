@@ -341,9 +341,14 @@ Both are called only while the Script itself is evaluated. A djs host reopens ca
 under that id (`Vm::open_host_call`) and, when the Script has stopped, sets the id counter
 to `next` (or one past the highest reopened id): the hooks are sync calls, which take ids
 of their own, so without `next` the resumed run's calls would get other ids than the
-uninterrupted run's. Host functions the dump holds as values are written as the host's
-name for them, an expression evaluated while the dump loads (`tools.read`; pi's
-`$djs.call`). The Script's completion value is what the host named: the value itself for
+uninterrupted run's. Host values the dump holds are written as `$djs.host(name)`, by
+name rather than by where they are bound (0213, D2970, D2971): a host function by its
+identity (`$djs.host("tools.read")`, pi's `$djs.host("call")`), a value the host made and
+names, a *root* (a namespace object, pi's `tools` Proxy), by that name, and a root's own
+data properties as reads on it (`$djs.host("tools").list`). The host answers with the
+object it bound, so `===` holds across the load. (Until 0213 they were names *as
+expressions* evaluated while the dump loads, `tools.read`, which tied them to globals.)
+The Script's completion value is what the host named: the value itself for
 one handle named `run`, else a null-prototype object of all of them by name.
 
 **Frozen builtins (D2836).** Plain dumps are written only for VMs with frozen builtins
@@ -372,6 +377,7 @@ names can become imports later. The members:
 | --- | --- |
 | `seed(lo, hi, next)` | hook: `Math.random`'s state, the next call id (above) |
 | `resume(id, name, args, state)` | hook: an open host call (above) |
+| `host(name)` | hook: a host value by name, a host function by its identity or a root the host names (above, D2971) |
 | `source(name, hash, params[, 1])` | hook: the codemode body `name` the host ran, or with `1` the one function its wrapper script makes (pi's, the difftest's), which the continuations name as their origin instead of a second copy of its text (D2882, D2886); djs hosts compile it again (and evaluate the wrapper) and check the hash, node returns any function (it never dumps again) |
 | `R`, `G`, `C`, `A` | `Reflect.apply`, `Reflect.get`, `Reflect.construct`, `Object.assign`: a call, read or construction whose callee or receiver was evaluated before the site |
 | `D(o, k, v)` | defines a data property (an object literal's member written after the site) |

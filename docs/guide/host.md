@@ -308,7 +308,12 @@ deletes when it is done (D2890): `$djs.seed(lo, hi, next)` hands over `Math.rand
 state and the id of the run's next host call, `$djs.resume(id, name, args, state)`
 stands for each open call, and `$djs.source(name, hash, params)` names the script the run
 was started with, which the dump refers to instead of carrying its text a second time:
-the sandbox compiles that script again and checks it is the same one (D2882). The
+the sandbox compiles that script again and checks it is the same one (D2882).
+`$djs.host(name)` stands for a host value the run holds, such as a tool function it put
+in a variable or the `tools` object itself: the dump names it by the name the host gave
+it, never by where the script found it, and the host hands back the very object it bound
+under that name, so a dump does not depend on a host function being a global (D2970,
+D2971). The
 sandbox answers `resume` by opening the call again under
 the same id, with the same arguments and state, and continues it through the function's
 hooks as above; once the Script has stopped it sets the call counter from `next`, so the

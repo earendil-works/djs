@@ -188,18 +188,24 @@ The host defines one global object while a dump loads, and the dump deletes it i
   object from `Vm::dump_runtime()`, a host without djs imports js/src/dump-runtime.js. A
   continuation captures the helpers it calls (`const $djs_L = $djs.L`).
 
-Host functions the dump holds as values are written as the host's name for them, an
-expression evaluated while the dump loads (`tools.read`; pi's `$djs.call`, D2893). Hosts
+- `host(name)`: a host value by name (D2971). A host function the dump holds is written
+  as `$djs.host(identity)` (`$djs.host("tools.read")`, D2970), a value the host made and
+  names (a root: `DumpOptions::host_roots`, and the globals in `DumpOptions::host` by
+  their names) as `$djs.host(name)`, its own data properties as reads on it
+  (`$djs.host("tools").list`). The host returns the object it bound under that name.
+
+Hosts
 run dumps themselves (D2891): the CLI (crates/djs-cli/src/dumps.rs), the Sandbox
 (js/src/sandbox.ts `loadPlain`), pi's adapter (js/pi/vm.ts), the difftest. Sync host
 functions the dump's code calls while it loads are served as in a run.
 
 ### The exporter (D2610–D2614, D2860, D2870)
 
-`Vm::dump(&DumpOptions { base, host, host_fn_name, handles, call_states }, names)`
-writes the idle VM (else it refuses: D2561), and refuses a VM without frozen builtins
-(D2836). The host names its functions (`host_fn_name`), the globals it defines itself
-(`host`: re-bound by name, never written), the values it needs back (`handles`, the
+`Vm::dump(&DumpOptions { base, host, host_roots, host_fn_name, handles, call_states },
+names)` writes the idle VM (else it refuses: D2561), and refuses a VM without frozen
+builtins (D2836). The host names its functions (`host_fn_name`: their identities), the
+globals it defines itself (`host`: re-bound by name, never written; each one's value a
+root by its name), other values it made (`host_roots`), the values it needs back (`handles`, the
 Script's completion value: the value itself for one named `run`, else a null-prototype
 object of all, D2895) and its state of each open call (`call_states`, JSON text written as
 `resume`'s fourth argument after a check that it is JSON data, D2770).
