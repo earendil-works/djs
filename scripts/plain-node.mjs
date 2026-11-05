@@ -43,6 +43,7 @@ const norm = (t) =>
     .split("\n")
     .filter((l) => !/^\s+at /.test(l))
     .map((l) => l.replace(/Cannot read properties of (undefined|null) \(reading '([^']*)'\)/g, "cannot read property '$2' of $1"))
+    .map((l) => l.replace(/Cannot convert \S+ to a BigInt/g, "cannot convert to BigInt"))
     .join("\n");
 
 // The dump runtime (D2903), evaluated in each link's context so that its helpers are that

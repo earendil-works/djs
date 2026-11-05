@@ -195,7 +195,7 @@ class Gen {
       case "big":
         return this.oneOf([
           [2, () => `${this.rand(100)}n`],
-          [2, () => `BigInt(${n()})`],
+          [2, () => `BigInt(${n()} | 0)`],
           [1, () => `(2n ** ${40 + this.rand(40)}n + ${this.rand(9)}n)`],
           [v ? 2 : 0, () => `(${v} * 3n + 1n)`],
         ]);
@@ -503,7 +503,7 @@ class Gen {
       re: [`${x}.lastIndex = ${n()} % 3;`, `${x}.exec("abab xx1 l");`],
       bytes: [`${x}[${n()} % 2] = ${n()};`],
       err: [`${x}.extra = ${n()};`],
-      big: [`${x} = ${x} * 2n + BigInt(${n()});`, `${x} += ${this.wide("big", 1)};`],
+      big: [`${x} = ${x} * 2n + BigInt(${n()} | 0);`, `${x} += ${this.wide("big", 1)};`],
     };
     this.line(this.pick(lines[v.type]));
     if (this.chance(0.4)) this.print(this.show(v));
