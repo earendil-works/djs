@@ -632,3 +632,6 @@ date	commit	machine	benchmark	value	unit
 2026-11-05T12:30:32Z	314504b486	Mac17,7-aarch64-18cpu	wasm/encode image 1mib base64	0.029	ms
 2026-11-05T12:30:32Z	314504b486	Mac17,7-aarch64-18cpu	wasm/decode image 1mib base64	0.039	ms
 2026-11-05T12:30:32Z	314504b486	Mac17,7-aarch64-18cpu	wasm/readValue image 1mib base64	0.019	ms
+2026-11-05T12:39:55Z	fb9223c8c4	Mac17,7-aarch64-18cpu	compile/synthetic	36.05	MB/s
+2026-11-05T12:39:55Z	fb9223c8c4	Mac17,7-aarch64-18cpu	compile/typescript.js	55.08	MB/s
+2026-11-05T12:39:55Z	fb9223c8c4	Mac17,7-aarch64-18cpu	compile/typescript.js lazy	97.80	MB/s
