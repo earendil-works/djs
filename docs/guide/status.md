@@ -56,11 +56,11 @@ Machine instructions per workload (`scripts/perf/w/`), measured at 7167411f0f,
 ## Size
 
 <!-- gen:status size -->
-`djs_wasm.wasm` is 986 KB (429 KB gzip, 362 KB brotli): 833 KB of code, 104 KB of data,
+`djs_wasm.wasm` is 984 KB (429 KB gzip, 361 KB brotli): 831 KB of code, 103 KB of data,
 and the base snapshot (the initialized realm with all builtins, 186 KB) coded to 46 KB
-in a custom section. The slim build is 860 KB (364 KB gzip); the dump module, the
-shipped build with the dumper, 1,852 KB (761 KB gzip). Module sizes measured at
-76959c01ed-dirty, 2026-11-05.
+in a custom section. The slim build is 858 KB (363 KB gzip); the dump module, the
+shipped build with the dumper, 1,850 KB (760 KB gzip). Module sizes measured at
+1aa9b06215-dirty, 2026-11-05.
 <!-- /gen -->
 
 ## The engine in numbers
@@ -93,9 +93,9 @@ instructions.
 | `bounds/instructions-max-pct` | 16.8 | 7167411f0f, 2026-11-05 |
 | `bounds/instructions-median-pct` | 10.9 | 7167411f0f, 2026-11-05 |
 | `compile/typescript-lazy-time-pct` | 56 | 7167411f0f, 2026-11-05 |
-| `dump/bytes` | 1852289 | 76959c01ed-dirty, 2026-11-05 |
-| `dump/extra-gzip` | 331563 | 76959c01ed-dirty, 2026-11-05 |
-| `dump/gzip` | 760897 | 76959c01ed-dirty, 2026-11-05 |
+| `dump/bytes` | 1850293 | 1aa9b06215-dirty, 2026-11-05 |
+| `dump/extra-gzip` | 331439 | 1aa9b06215-dirty, 2026-11-05 |
+| `dump/gzip` | 759958 | 1aa9b06215-dirty, 2026-11-05 |
 | `dumps/corpus-cases` | 300 | 7167411f0f, 2026-11-05 |
 | `dumps/idle-points` | 1063 | 7167411f0f, 2026-11-05 |
 | `dumps/log-raw` | 1758604 | 7167411f0f, 2026-11-05 |
@@ -120,9 +120,9 @@ instructions.
 | `heap/string-10mib-staged-memory` | 35127296 | 7167411f0f, 2026-11-05 |
 | `native/arrays-x` | 3.97 | 7167411f0f, 2026-11-05 |
 | `native/foreach-x` | 2.0 | 7167411f0f, 2026-11-05 |
-| `slim/base` | 135056 | 76959c01ed-dirty, 2026-11-05 |
-| `slim/bytes` | 860367 | 76959c01ed-dirty, 2026-11-05 |
-| `slim/gzip` | 363857 | 76959c01ed-dirty, 2026-11-05 |
+| `slim/base` | 135056 | 1aa9b06215-dirty, 2026-11-05 |
+| `slim/bytes` | 858438 | 1aa9b06215-dirty, 2026-11-05 |
+| `slim/gzip` | 363064 | 1aa9b06215-dirty, 2026-11-05 |
 | `speed/arrays/djs-wasm` | 9518.0 | 7167411f0f, 2026-11-05 |
 | `speed/arrays/qjs-wasi` | 16337.5 | 7167411f0f, 2026-11-05 |
 | `speed/calls/djs-wasm` | 2915.0 | 7167411f0f, 2026-11-05 |
@@ -149,13 +149,13 @@ instructions.
 | `startup/sandbox-run-us` | 141.8 | 7167411f0f, 2026-11-05 |
 | `startup/sandbox-us` | 112.7 | 7167411f0f, 2026-11-05 |
 | `startup/vm-new-us` | 2.5 | 7167411f0f, 2026-11-05 |
-| `wasm/base-coded` | 45685 | 76959c01ed-dirty, 2026-11-05 |
-| `wasm/brotli` | 361559 | 76959c01ed-dirty, 2026-11-05 |
-| `wasm/bytes` | 985986 | 76959c01ed-dirty, 2026-11-05 |
-| `wasm/code` | 832608 | 76959c01ed-dirty, 2026-11-05 |
-| `wasm/data` | 103693 | 76959c01ed-dirty, 2026-11-05 |
-| `wasm/exports` | 63 | 76959c01ed-dirty, 2026-11-05 |
-| `wasm/gzip` | 429334 | 76959c01ed-dirty, 2026-11-05 |
+| `wasm/base-coded` | 45685 | 1aa9b06215-dirty, 2026-11-05 |
+| `wasm/brotli` | 361247 | 1aa9b06215-dirty, 2026-11-05 |
+| `wasm/bytes` | 984008 | 1aa9b06215-dirty, 2026-11-05 |
+| `wasm/code` | 831030 | 1aa9b06215-dirty, 2026-11-05 |
+| `wasm/data` | 103293 | 1aa9b06215-dirty, 2026-11-05 |
+| `wasm/exports` | 63 | 1aa9b06215-dirty, 2026-11-05 |
+| `wasm/gzip` | 428519 | 1aa9b06215-dirty, 2026-11-05 |
 | `wire/decode-vs-json-objects` | 1.89 | 7167411f0f, 2026-11-05 |
 | `wire/decode-vs-json-string` | 16.24 | 7167411f0f, 2026-11-05 |
 | `wire/read-vs-json-objects` | 1.93 | 7167411f0f, 2026-11-05 |

@@ -87,11 +87,11 @@ when it runs the prelude). Callback-heavy builtin code is the main remaining gap
 **Size and startup.**
 
 <!-- gen:status size -->
-`djs_wasm.wasm` is 986 KB (429 KB gzip, 362 KB brotli): 833 KB of code, 104 KB of data,
+`djs_wasm.wasm` is 984 KB (429 KB gzip, 361 KB brotli): 831 KB of code, 103 KB of data,
 and the base snapshot (the initialized realm with all builtins, 186 KB) coded to 46 KB
-in a custom section. The slim build is 860 KB (364 KB gzip); the dump module, the
-shipped build with the dumper, 1,852 KB (761 KB gzip). Module sizes measured at
-76959c01ed-dirty, 2026-11-05.
+in a custom section. The slim build is 858 KB (363 KB gzip); the dump module, the
+shipped build with the dumper, 1,850 KB (760 KB gzip). Module sizes measured at
+1aa9b06215-dirty, 2026-11-05.
 <!-- /gen -->
 
 Creating a VM copies the base snapshot: about <!--n startup/vm-new-us .1-->2.5<!--/n--> µs in wasm (D1990). A `Sandbox`

@@ -57,6 +57,14 @@ numbers and the coordinator's OK (wasm instruction counts per workload as in 022
   little), `-Zmerge-functions=trampolines` (+41), `-Zinline-mir=no` (0),
   `-Zmir-opt-level=1` (+353). Cell layout names: −1.3 KB measured (variant), but
   for_each_slot (GC) reads those tables: deferred while 0224 bisects GC.
+- Batch 3: D3093 (about 40 compiler intrinsic lookups by name → `intrinsic_id_of!`,
+  const): typescript.js compile −6.2% instructions, bodies −0.2..−2.5%, −0.8 KB gz;
+  shipped 428,507.
+- #2 prototyped (work/research/0225/niche.md): Value niche + zero-sized Fault is +2.6 KB
+  (unchecked, lower bound) to +4.0 KB (checked) and +0.6..+8.0% instructions; the
+  zero-sized Fault alone −0.2 KB. Recommendation: don't build it.
+- Open: cell layout names (−1.3 KB measured) after perfreg's GC batch; unsafe-heap with
+  the owner; #4 shelved.
 
 ## Follow-ups
 
