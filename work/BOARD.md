@@ -31,6 +31,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | - | Date regexp {n} analysis (~6% more compile instructions than 2026-11-01) (0224) | ready |
 | - | djs-bench size probe (tests/bench/size) fails in the shipped build env (E0152 duplicate lang item, likely build-std D3090): fix or drop; stress leg on the unchecked wasm module would need a matching native driver (0226) | ready |
 | - | First npm publish: confirm MIT copyright holder and homepage, create the `npm` GitHub environment with reviewers, trusted publishing or NPM_TOKEN, push tag v0.1.0 | owner |
+| - | pi slim/next 'exits promptly' timing tests (elapsed < 1000 ms) fail under very high load (~180): make them load-independent like 0211 did for the lifetime tests | ready |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
 | - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |

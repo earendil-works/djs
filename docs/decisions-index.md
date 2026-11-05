@@ -747,3 +747,8 @@ topics when the index is next reorganized.
 - D3108: The publish workflow tests the one packed tarball everywhere, then publishes on a tag
 - D3109: The gate packs the package and runs its smoke test in node
 - D2843: The MIT copyright holder is Earendil Inc.; npm releases use trusted publishing
+- D3110: The engine comparison runs every engine in wasm in one node process, a fresh VM per run
+- D3111: The QuickJS releases are built with wasi-sdk by one script, as a minimal reactor
+- D3112: monty runs as its wasm component, instantiated on the calling thread
+- D3113: The codemode workload set is synthetic; the sessions it was derived from stay private
+- D3114: The benchmarks page's tables are generated from `engines/*` status keys
