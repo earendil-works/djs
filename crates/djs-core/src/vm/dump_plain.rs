@@ -173,6 +173,10 @@ fn eager_refs(text: &str) -> Refs {
 fn scan(text: &str, skip_fns: bool) -> Refs {
     let b = text.as_bytes();
     let mut out = Refs::default();
+    // What `out` holds, for deduplication: a dump's data names thousands (0215: the
+    // linear searches were most of writing a data-heavy dump).
+    let mut seen_dump: alloc::collections::BTreeSet<(&str, &str)> = Default::default();
+    let mut seen_names: alloc::collections::BTreeSet<&str> = Default::default();
     let mut i = 0;
     // Brackets of every kind open, and with `skip_fns` the function body being skipped:
     // its nesting, and whether it is an arrow's expression body.
@@ -328,8 +332,8 @@ fn scan(text: &str, skip_fns: bool) -> Refs {
                         } else {
                             ("", j)
                         };
-                        let key = (!key.is_empty()).then(|| String::from(key));
-                        if !out.dump.iter().any(|(n, k)| n == name && *k == key) {
+                        if seen_dump.insert((name, key)) {
+                            let key = (!key.is_empty()).then(|| String::from(key));
                             out.dump.push_out((String::from(name), key));
                         }
                         i = k;
@@ -337,7 +341,7 @@ fn scan(text: &str, skip_fns: bool) -> Refs {
                         after_dot = false;
                         continue;
                     }
-                } else if !out.names.iter().any(|n| n == word) {
+                } else if seen_names.insert(word) {
                     out.names.push_out(String::from(word));
                 }
             }
@@ -560,8 +564,13 @@ struct W<'x> {
     class_exprs: Vec<(Sc, String, String)>,
     in_progress: Vec<Sc>,
     kkeys: Vec<String>,
-    /// The dump's top-level names (roots, functions, classes).
+    /// The dump's top-level names (roots, functions, classes), and as a set.
     globals: Vec<String>,
+    global_set: alloc::collections::BTreeSet<String>,
+    /// Factories by name, and the item of each activation (0215: linear searches made
+    /// writing a data-heavy dump quadratic).
+    fac_by_name: alloc::collections::BTreeMap<String, usize>,
+    act_items: Vec<usize>,
     write_k: &'x dyn Fn(&Act, &mut dyn Ctx) -> Result<KText, String>,
 }
 
@@ -663,6 +672,15 @@ pub(super) fn write(
         class_exprs: Vec::new(),
         in_progress: Vec::new(),
         globals: Vec::new(),
+        global_set: Default::default(),
+        fac_by_name: ir
+            .factories
+            .iter()
+            .enumerate()
+            .rev()
+            .map(|(i, f)| (f.name.clone(), i))
+            .collect(),
+        act_items: Vec::new(),
         // A continuation's key in its factory: `$K<act>`, unless a member has that name
         // already (a continuation of an earlier dump, named by its key there).
         kkeys: ir
@@ -720,8 +738,12 @@ impl W<'_> {
     // ------------------------------------------------------------ items
 
     fn read_items(&mut self, lines: &[String]) -> R<()> {
+        let mut recs: alloc::collections::BTreeMap<usize, Rec> = Default::default();
+        for x in self.ir.lines.iter().rev() {
+            recs.insert(x.0, x.1);
+        }
         for (i, l) in lines.iter().enumerate() {
-            let rec = self.ir.lines.iter().find(|x| x.0 == i).map(|x| x.1);
+            let rec = recs.get(&i).copied();
             let kind = match rec {
                 Some(Rec::Factory(f)) => IK::Factory(f),
                 Some(Rec::Act(a)) => IK::Act(a),
@@ -733,10 +755,22 @@ impl W<'_> {
                 }
             };
             match &kind {
-                IK::Decl(names) => self.globals.extend(names.iter().cloned()),
+                IK::Decl(names) => {
+                    self.globals.extend(names.iter().cloned());
+                    self.global_set.extend(names.iter().cloned());
+                }
                 IK::FnDecl => {
                     if let Some(n) = declared_fn_name(l) {
+                        self.global_set.insert(n.clone());
                         self.globals.push_out(n);
+                    }
+                }
+                IK::Act(a) => {
+                    if self.act_items.len() <= *a {
+                        self.act_items.resize(*a + 1, usize::MAX);
+                    }
+                    if self.act_items[*a] == usize::MAX {
+                        self.act_items[*a] = self.items.len();
                     }
                 }
                 _ => {}
@@ -1308,8 +1342,11 @@ impl W<'_> {
 
 // ---------------------------------------------------------------- scheduling
 
+/// The item that provides each key (the first one listed).
+type Providers = alloc::collections::BTreeMap<Key, usize>;
+
 /// A dependency key: `$dump.name`, a key of a merged factory (`name.key`), a global.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum Key {
     Loc(String),
     Factory(String, String),
@@ -1326,18 +1363,22 @@ impl W<'_> {
     fn keys_in(&self, text: &str, globals: bool) -> Vec<Key> {
         let r = eager_refs(text);
         let mut out = Vec::new();
+        let mut seen: alloc::collections::BTreeSet<Key> = Default::default();
         for (name, key) in r.dump {
-            let k = match (key, self.ir.factories.iter().position(|f| f.name == name)) {
-                (Some(key), Some(_)) => Key::Factory(name, key),
+            let k = match key {
+                Some(key) if self.fac_by_name.contains_key(&name) => Key::Factory(name, key),
                 _ => Key::Loc(name),
             };
-            if !out.contains(&k) {
+            if seen.insert(k.clone()) {
                 out.push_out(k);
             }
         }
-        for n in r.names {
-            if globals && self.globals.contains(&n) && !out.contains(&Key::Global(n.clone())) {
-                out.push_out(Key::Global(n));
+        // (`scan` gives each name once.)
+        if globals {
+            for n in r.names {
+                if self.global_set.contains(&n) {
+                    out.push_out(Key::Global(n));
+                }
             }
         }
         out
@@ -1352,7 +1393,7 @@ impl W<'_> {
     /// [`W::creator_of`] and the block of its continuation the key is made in.
     fn creator_block(&mut self, name: &str, key: &str) -> R<Option<(usize, usize)>> {
         let ir = self.ir;
-        let Some(f) = ir.factories.iter().position(|x| x.name == name) else {
+        let Some(&f) = self.fac_by_name.get(name) else {
             return Ok(None);
         };
         let mut pl = None;
@@ -1396,44 +1437,34 @@ impl W<'_> {
     }
 
     fn act_item(&self, a: usize) -> usize {
-        self.items
-            .iter()
-            .position(|it| it.kind == IK::Act(a))
-            .unwrap_or(usize::MAX)
+        self.act_items.get(a).copied().unwrap_or(usize::MAX)
     }
 
-    fn dep_items(&mut self, keys: &[Key], me: usize, providers: &[(Key, usize)]) -> R<Vec<usize>> {
+    fn dep_items(&mut self, keys: &[Key], me: usize, providers: &Providers) -> R<Vec<usize>> {
         let mut out = Vec::new();
+        let mut seen: alloc::collections::BTreeSet<usize> = Default::default();
         for k in keys {
             let d = match k {
                 Key::Factory(n, key) => {
-                    let merged_key = {
-                        let f = self.ir.factories.iter().position(|x| x.name == *n);
-                        f.is_some_and(|f| {
-                            (0..self.ir.factories[f].scopes.len()).any(|s| self.is_merged((f, s)))
-                        })
-                    };
+                    let merged_key = self.fac_by_name.get(n).is_some_and(|&f| {
+                        (0..self.ir.factories[f].scopes.len()).any(|s| self.is_merged((f, s)))
+                    });
+                    let loc = || providers.get(&Key::Loc(n.clone())).copied();
                     if merged_key {
                         match self.creator_of(n, key)? {
                             Some(a) => Some(self.act_item(a)),
-                            None => providers
-                                .iter()
-                                .find(|p| p.0 == Key::Loc(n.clone()))
-                                .map(|p| p.1),
+                            None => loc(),
                         }
                     } else {
-                        providers
-                            .iter()
-                            .find(|p| p.0 == Key::Loc(n.clone()))
-                            .map(|p| p.1)
+                        loc()
                     }
                 }
-                k => providers.iter().find(|p| p.0 == *k).map(|p| p.1),
+                k => providers.get(k).copied(),
             };
             if let Some(d) = d
                 && d != me
                 && d != usize::MAX
-                && !out.contains(&d)
+                && seen.insert(d)
             {
                 out.push_out(d);
             }
@@ -1526,19 +1557,23 @@ impl W<'_> {
 
     fn schedule(&mut self) -> R<Vec<Plan>> {
         let ir = self.ir;
-        let mut providers: Vec<(Key, usize)> = Vec::new();
+        let mut list: Vec<(Key, usize)> = Vec::new();
         for (i, it) in self.items.iter().enumerate() {
             match &it.kind {
-                IK::Def(n) => providers.push_out((Key::Loc(n.clone()), i)),
-                IK::Factory(f) => providers.push_out((Key::Loc(ir.factories[*f].name.clone()), i)),
-                IK::Act(a) => providers.push_out((Key::Loc(ir.acts[*a].name.clone()), i)),
+                IK::Def(n) => list.push_out((Key::Loc(n.clone()), i)),
+                IK::Factory(f) => list.push_out((Key::Loc(ir.factories[*f].name.clone()), i)),
+                IK::Act(a) => list.push_out((Key::Loc(ir.acts[*a].name.clone()), i)),
                 IK::Decl(names) => {
                     for n in names {
-                        providers.push_out((Key::Global(n.clone()), i));
+                        list.push_out((Key::Global(n.clone()), i));
                     }
                 }
                 IK::FnDecl | IK::Stmt => {}
             }
+        }
+        let mut providers: Providers = Default::default();
+        for (k, i) in list {
+            providers.entry(k).or_insert(i);
         }
         // An async generator's queued requests are made again on its continuation:
         // their promises come from the activation, not their placeholder definitions.
@@ -1549,17 +1584,17 @@ impl W<'_> {
                 let Some(name) = p.strip_prefix("$dump.") else {
                     return refuse("a queued request's promise");
                 };
-                if let Some(d) = providers.iter().position(|x| x.0 == Key::Loc(name.into())) {
-                    let di = providers[d].1;
+                if let Some(d) = providers.get_mut(&Key::Loc(name.into())) {
+                    let di = *d;
                     if let IK::Def(_) = self.items[di].kind {
                         if !self.items[di].text.ends_with("= new Promise(() => {});") {
                             return refuse("a queued request's promise is not a placeholder");
                         }
                         skip.push_out(di);
                     }
-                    providers[d].1 = ai;
+                    *d = ai;
                 } else {
-                    providers.push_out((Key::Loc(name.into()), ai));
+                    providers.insert(Key::Loc(name.into()), ai);
                 }
             }
         }
@@ -1643,11 +1678,10 @@ impl W<'_> {
                                 if let Some(c) = found {
                                     deps.push_out(self.act_item(c));
                                 }
-                            } else if let Some(p) = providers
-                                .iter()
-                                .find(|p| p.0 == Key::Loc(ir.factories[sc.0].name.clone()))
+                            } else if let Some(&p) =
+                                providers.get(&Key::Loc(ir.factories[sc.0].name.clone()))
                             {
-                                deps.push_out(p.1);
+                                deps.push_out(p);
                             }
                         }
                         Some(pl) if pl != Pl::Top => {
