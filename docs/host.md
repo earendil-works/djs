@@ -672,6 +672,12 @@ and on Bun, with the process exiting right after, as the tests require. These si
 known and explained, not regressions; they pass again if pi's fixture uses a workload
 that is slow on every engine.
 
+**Since 0211:** js/pi/pi-tests.ts gives the copy of that fixture such a workload,
+`while (true) {}`, so the six run what they are about (prompt cancellation and prompt
+process exit) and pass on any machine. Before, one of them passed now and then on a
+loaded machine, where the search had not finished at the cancel. They are no longer in
+tests/pi's expected failures.
+
 ### What differs for scripts
 
 Besides the failures above:

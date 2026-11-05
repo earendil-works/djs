@@ -19,7 +19,8 @@
 // The swapped modules:
 // - src/runtime/vm.ts: `startVm` from js/pi/vm.ts with pi's own PRELUDE_SOURCE,
 // - src/wasm.ts: `loadQuickJSWasm()` loads djs-wasm ($DJS_WASM, else the `wasm` profile build).
-// Everything else (launchers, host, prelude, tests) is pi's, unchanged. The copy gets a
+// Everything else (launchers, host, prelude, tests) is pi's, unchanged, but for one test
+// fixture's workload (see below). The copy gets a
 // node_modules of symlinks to pi-private's installed packages, and vitest's cache goes into
 // the copy, so nothing is written under pi-private. Results: <out>/results.json (vitest's JSON
 // reporter) and <out>/report.md (pass/fail per test, failure messages).
@@ -56,6 +57,20 @@ rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 for (const entry of ["src", "test", "package.json", "tsconfig.build.json"]) {
   cpSync(join(pkg, entry), join(out, entry), { recursive: true });
+}
+
+// One test fixture is changed: the process-lifetime tests' workload. pi's is a slow
+// built-in for QuickJS (a naive `indexOf` over 300,000 characters) that must still be
+// running when the test cancels it 100-300 ms later; djs's `indexOf` finishes it in a few
+// milliseconds, so the test passed or failed with the machine's load. An endless loop is
+// still running at the cancel on any machine: the tests then check what they are about,
+// prompt cancellation and prompt process exit, every time.
+{
+  const fixture = join(out, "test/fixtures/worker-process-exit.ts");
+  const text = readFileSync(fixture, "utf8");
+  const workload = "return 'a'.repeat(300000).indexOf('a'.repeat(10000) + 'b')";
+  if (!text.includes(workload)) throw new Error(`${fixture}: pi's workload changed; update js/pi/pi-tests.ts`);
+  writeFileSync(fixture, text.replace(workload, "while (true) {}"));
 }
 
 // node_modules: symlinks to pi-private's installed packages (resolution only; the cache

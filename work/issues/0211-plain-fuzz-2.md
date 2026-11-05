@@ -79,10 +79,14 @@ jobs, wait while load > 30) and gate rules (batch merges, check slim/test262-sli
   and pjr's D3026 seeds 668041, 82489).
 - Housekeeping: dropped the stale refusal entry codemode/plain-class-static-private.js
   (fixed by D2883/D2950). The gate's stale entry in tests/pi/expected-failures.txt was
-  "'Node' process lifetime exits promptly after timeout with a real worker"; three local
-  runs of `pi-tests.ts --next` on a quiet machine (load ~5) fail it every time as listed,
-  so it passed only under the gate's load (timing): left listed, since dropping it would
-  fail the gate whenever it fails again.
+  "'Node' process lifetime exits promptly after timeout with a real worker": the six
+  process-lifetime tests cancel a workload djs's indexOf finishes in milliseconds, so they
+  failed on a quiet machine (3 of 3 local runs) and passed now and then under load. Fix
+  (coordinator's call): js/pi/pi-tests.ts gives the copied fixture an endless loop
+  (failing loudly if pi's workload text changes); all six pass, the entries are gone from
+  both pi ratchets (next mode, slim). Checked: next mode twice and slim six times, four of
+  them with 6–8 busy processes; one early slim run under load reported one new failure
+  that the output did not keep and five more runs did not repeat. docs/host.md updated.
 
 ## Follow-ups
 

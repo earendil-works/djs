@@ -5,12 +5,6 @@
 #   error details), or a lockdown-only property;
 # - slim only: the test uses what the slim build leaves out (a BigInt literal, Int8Array,
 #   WeakRef in a non-deterministic run).
-'Bun' process lifetime settles abort promptly with a real worker
-'Bun' process lifetime settles close promptly with a real worker
-'Bun' process lifetime settles timeout promptly with a real worker
-'Node' process lifetime exits promptly after abort with a real worker
-'Node' process lifetime exits promptly after close with a real worker
-'Node' process lifetime exits promptly after timeout with a real worker
 deterministic runs (remote) reports the fingerprint before any call and the calls issued after each result
 deterministic runs (remote) runs in UTC whatever the host's timezone, and without WeakRef or FinalizationRegistry
 deterministic runs (worker) reports the fingerprint before any call and the calls issued after each result
