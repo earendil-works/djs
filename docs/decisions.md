@@ -11188,3 +11188,24 @@ intrinsic dispatcher -500), `create_like` +336, `groups_object` +654 (was inline
 `Units` +466 and `units` +374, `first_into` +1,003 for `first_chars` -1,264, the parser's
 literal fast path +389, the rest under ±300 each. Trimmed before measuring: one search loop for
 one-byte input and one for the rest, generic two-byte conversions (both off the hot paths).
+
+## D3124: @fast entries for the string builtins still over 2x QuickJS after D3120/D3121
+date: 2026-11-06 · by: mathfast · issue: 0230
+After the general fixes, substring, at, repeat, padStart/padEnd, String(i),
+Number.isInteger and toFixed still cost 2-6x quickjs-wasi in wasm instructions. Each now has
+a `@fast` entry in fast.rs: primitive arguments only, and every case that would throw
+declines, as the D1351 rule asks. `pad` also declines for pads over 64 Ki units and for
+two-byte fillers; those go through the builtin's StrRepeat. It writes the run of fillers
+into one buffer, then joins it with the string. String() runs through the entry only when
+called: a construct never takes a fast entry. Its builtin reads `%ArgumentCount` instead
+of a rest array, as reduce does. Wasm instructions (wmicro, before → after, quickjs-wasi in
+brackets): substring 8,186 → 2,085 (1,925); at 5,821 → 2,270 (1,608); repeat 6,428 → 2,884
+(2,103); padStart(8, '0') 12,505 → 3,719 (2,392); padEnd(20) 14,435 → 3,686 (2,458);
+String(i) 6,001 → 1,898 (1,598); Number.isInteger 3,683 → 1,006 (1,236); toFixed 5,496 →
+3,391 (2,566). Plain calls are unchanged within the ±5% noise of wmicro. Size: +1,302 B gz
+shipped, +1,309 slim (420,061 and 353,804 against main's 418,759 and 352,495); the ceilings
+rise by those amounts. Opt-in inlining (an `@inline` tag) of ClampPosition, RelativeIndex
+and ToLength was measured and dropped. Before the entries it bought substring 11%. After
+them it bought nothing measurable (a.at, a.lastIndexOf, substr ±1-5%) for 330 B gz.
+Inlining ToString, which loses its fast entry, made trim, repeat and toLowerCase 3% slower:
+two pure leaves cost more than the `@fast` exit.

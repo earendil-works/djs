@@ -62,13 +62,20 @@ the coordinator.
 - Note: my old stash entry ("WIP on issue/0230 ... aa88ab07") is still in the shared stash
   list; its content is applied and committed. pmem's stash was popped into this tree by
   mistake and reverted (pmem restored it).
+- 0230b (branch issue/0230b-builtins-fast, the follow-ups): @fast entries for substring, at,
+  repeat, padStart/padEnd, String(), Number.isInteger and toFixed (D3124). String() reads
+  %ArgumentCount instead of a rest array. Corpus case builtins/fast-entries-string (every
+  decline path, both backends, stress modes). An `@inline` tag for ClampPosition,
+  RelativeIndex and ToLength was tried: substring -11% before the entries, nothing after
+  them, for 330 B gz, so it was dropped. Inlining ToString (no fast entry) made trim, repeat
+  and toLowerCase 3% slower. pad first used join over N filler pieces (padEnd(20) 7.4k
+  instructions), now a one-buffer run (3.7k). Size +1.3 KB gz on both modules; ceilings
+  raised by that.
 
 ## Follow-ups
-- Per-builtin @fast entries for the ops that are still >2x qjs after the general fix: substring
-  (~8.2k instr), padStart/padEnd (~12.5k), at (~5.9k), String(i) (~6k: a rest array; could use
-  %ArgumentCount like reduce), Number.isInteger, repeat. Each ~150-300 B gz.
-- Raising INLINE_TEXT selectively (e.g. ClampPosition, RelativeIndex) gets substring/at more,
-  at ~1.4 KB gz for 260 chars across the board; a per-helper opt-in tag would be cheaper.
+- (done in 0230b) per-builtin @fast entries; opt-in inlining measured and dropped (D3124).
+- Still ~1.9x qjs-wasi: trim, toLowerCase (one leaf each; the remaining cost is the
+  builtin frame plus the ToString fast exit).
 - ops.ts ratios need a quiet machine; redo the before/after table there.
 
 ## Result
