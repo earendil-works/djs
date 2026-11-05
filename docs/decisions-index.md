@@ -692,3 +692,6 @@ topics when the index is next reorganized.
 - D3000: A placeholder loop's first iteration is a scope of its own for liveness
 - D2990: Lazy function compilation, a `lazy` feature on in native and dump builds
 - D2991: Eager and lazy compiles give a function the same code
+- D2992: A Script keeps its source as UTF-8 bytes
+- D2993: The dump module compiles lazily; the dumper reads lazy templates
+- D3001: Values used once are written where they are used
