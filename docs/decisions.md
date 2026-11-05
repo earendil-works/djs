@@ -10950,3 +10950,11 @@ dumper standing in for the dump module, then the smoke test in node on the tarba
 on top of builds the gate makes anyway, and it catches a package that no longer builds (tsc type
 errors included), packs, resolves or runs. TypeScript comes from the npm cache after the first
 `npm ci` in a worktree (js/node_modules stays: the gate's clean keeps ignored files).
+
+## D2843: The MIT copyright holder is Earendil Inc.; npm releases use trusted publishing
+date: 2026-11-06 · by: owner · issue: 0228
+LICENSE-MIT names Earendil Inc. (amends D3105's "Earendil Works Co."). The package's homepage is
+https://earendil-works.github.io/djs/. Releases publish from `.github/workflows/publish.yml` on a
+`v*` tag through npm trusted publishing (GitHub OIDC, provenance), gated by the `npm` GitHub
+environment (required reviewer, `v*` tags only); a repository ruleset lets only admins create,
+move or delete `v*` tags.

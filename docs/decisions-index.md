@@ -746,3 +746,4 @@ topics when the index is next reorganized.
 - D3107: What the package exports and ships
 - D3108: The publish workflow tests the one packed tarball everywhere, then publishes on a tag
 - D3109: The gate packs the package and runs its smoke test in node
+- D2843: The MIT copyright holder is Earendil Inc.; npm releases use trusted publishing
