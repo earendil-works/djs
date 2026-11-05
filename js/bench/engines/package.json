@@ -1,0 +1,13 @@
+{
+  "name": "djs-bench-engines",
+  "private": true,
+  "type": "module",
+  "description": "The engines scripts/bench-engines.sh compares djs with, pinned by package-lock.json; installed into vendor/engines/npm of the primary checkout.",
+  "dependencies": {
+    "quickjs-wasi": "3.6.2",
+    "quickjs-emscripten-core": "0.32.0",
+    "@jitl/quickjs-wasmfile-release-sync": "0.32.0",
+    "@jitl/quickjs-ng-wasmfile-release-sync": "0.32.0",
+    "@pydantic/monty": "1.3.0"
+  }
+}
