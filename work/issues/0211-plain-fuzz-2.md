@@ -36,6 +36,12 @@ jobs, wait while load > 30) and gate rules (batch merges, check slim/test262-sli
   finally-dead-end covers it, mine dropped). Batch 4: parser bug, a 2+ character regex
   literal after a block inside `try` (pjp/0217 adds the case with its fix, mine dropped).
   Seeds 4401–4800: only the nested for-in shape again.
+- Seeds 4801–6200 (+ 200 `--big`): batch 5, an await in a case test then one in a later
+  case body (refused "its temporaries differ", pjs) and `await using` + `continue` after a
+  try/catch in a for-await body (completion.kind, pjr), both fixed on main before this
+  merge (plain cases); batch 6, a class with an async method in a nested loop's body
+  (refused "class in a nested scope", pjr; refusals ratchet). `fuzz.mjs --big` for longer
+  programs.
 
 ## Follow-ups
 

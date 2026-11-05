@@ -330,6 +330,7 @@ corpus	codemode/plain-fuzz/instance-before-callback.js	2824	1124
 corpus	codemode/plain-fuzz/integer-key-equal-value.js	2397	968
 corpus	codemode/plain-fuzz/nested-for-in-redump.js	10713	4233
 corpus	codemode/plain-fuzz/static-field-reads-loop-variable.js	5819	2271
+corpus	codemode/plain-fuzz/switch-case-test-await.js	4935	1963
 corpus	codemode/plain-fuzz/template-plain-part-then-awaits.js	5031	1996
 corpus	codemode/plain-fuzz/template-two-awaits.js	4967	1966
 corpus	codemode/redump-copied-loops.js	84650	31861
@@ -344,6 +345,7 @@ corpus	codemode/tools.js	12948	5157
 corpus	codemode/yield-star-return.js	30492	10603
 corpus	language/dead-code-patterns.js	10790	4182
 corpus	language/generator-prototype.js	3690	1320
+corpus	language/plain-fuzz/await-using-continue-after-catch.js	11481	4306
 corpus	language/plain-fuzz/await-using-hoisted-function.js	3238	1245
 corpus	language/plain-fuzz/await-using-redump.js	7976	3116
 corpus	language/redump-using-jumps.js	72572	26973
