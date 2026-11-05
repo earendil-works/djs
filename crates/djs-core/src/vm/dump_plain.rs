@@ -1040,15 +1040,13 @@ impl Ctx for C<'_, '_> {
     }
 
     fn arg(&mut self, name: &str) -> Option<String> {
+        // (As listed: the call's arguments get their values in place when it is written,
+        // outside K, where K's bindings do not matter, D3003.)
         let sl = self.w.ir.acts[self.a]
             .slots
             .iter()
             .find(|s| s.name == name)?;
-        if self.dry {
-            return Some(sl.value.clone());
-        }
-        let v = sl.value.clone();
-        Some(self.w.inlined_slot(self.a, name, &v))
+        Some(sl.value.clone())
     }
 
     fn block(&mut self, index: usize, info: &[BDecl]) -> R<String> {
@@ -2193,7 +2191,9 @@ impl W<'_> {
                 (n.clone(), self.inline_refs(e, first, false))
             })
             .collect();
-        let body = self.close_list();
+        let mut body = self.close_list();
+        self.drop_unread(&mut body, &handles);
+        body.retain(|l| !l.is_empty());
         let mut s = String::from(if ts {
             "\"djs-dump typescript\";\n"
         } else {
@@ -2333,7 +2333,7 @@ impl W<'_> {
                             // there they may name K's bindings and closures, D3003.)
                             if self.callback_in_k(*a, &inner) {
                                 let text = join(&inner, "\n");
-                                let (text, _) = self.bindings_in_k(*a, b, &text);
+                                let (text, _) = self.bindings_in_k(*a, b, &text, false);
                                 let text = self.props_in_place(*a, b, &text);
                                 go.push_out(text);
                                 continue;
@@ -2610,6 +2610,7 @@ impl W<'_> {
         let ir = self.ir;
         let act = &ir.acts[a];
         // (Its site may take an effectful value written in place, D3001.)
+        self.site_first(a);
         self.kline = Some(a);
         self.k_effects = false;
         let k = self.ktext(a);
@@ -2681,7 +2682,12 @@ impl W<'_> {
             || act.site.name.starts_with("yield*#")
             || (act.site.kind == crate::compiler::SiteKind::YieldStarAwait
                 && act.peers.get(1) == Some(&act.site.name));
-        // (The continuation's parameters, D2909.)
+        // (The continuation's parameters, D2909, their values in place: evaluated before
+        // K runs, outside it.)
+        let mut k = k;
+        for x in &mut k.args {
+            *x = self.inline_refs(x, None, false);
+        }
         let args = if k.args.is_empty() {
             String::new()
         } else {

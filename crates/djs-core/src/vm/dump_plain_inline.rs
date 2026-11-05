@@ -91,6 +91,11 @@ const PURE_NAMES: &[&str] = &[
 /// Whether evaluating value text `rhs` later during the load gives the same value and does
 /// nothing else.
 pub(super) fn pure(rhs: &str) -> bool {
+    // (A function's creation reads nothing: its names are read when it runs, from where
+    // it is written; `reads` checks those where that matters.)
+    if super::is_fn_text(rhs) {
+        return true;
+    }
     // (A literal's other reads: values the dump wrote, builtins.)
     shape(rhs)
         && super::refs(rhs.trim())
@@ -433,6 +438,7 @@ impl W<'_> {
         a: usize,
         block: usize,
         text: &str,
+        at_site: bool,
     ) -> (String, Vec<String>) {
         if !text.contains("$dump.") {
             return (String::from(text), Vec::new());
@@ -458,13 +464,25 @@ impl W<'_> {
                         None => continue,
                     },
                 };
-                let is_member = v.strip_prefix("$dump.").is_some_and(|r| {
+                // (A member of a factory, or a value on `$dump`.)
+                let held_value = v.strip_prefix("$dump.").is_some_and(|r| {
                     let mut ps = r.split('.');
                     ps.next().is_some_and(super::is_ident)
-                        && ps.next().is_some_and(super::is_ident)
+                        && ps.next().is_none_or(super::is_ident)
                         && ps.next().is_none()
                 });
-                if is_member {
+                // (Not, in a part of the callback, a value it makes there or below: the
+                // binding takes it after that part ran. Not a binding the rest of the
+                // original does not read: naming it would keep it.)
+                let made = !at_site
+                    && v.strip_prefix("$dump.").is_some_and(|r| {
+                        let n = r.split('.').next().unwrap_or("");
+                        self.acts[a].made.iter().any(|m| m.0 == n && m.1 >= block)
+                    });
+                // (A closure a member holds is kept named, D3003: its binding is
+                // usually read.)
+                let member = v.matches('.').count() == 2;
+                if held_value && !made && (member || self.read_after_site(a, &d.name)) {
                     held.push_out((d.name.clone(), v, bi));
                 }
             }
@@ -477,14 +495,24 @@ impl W<'_> {
         let mut out = String::new();
         let mut at = 0;
         for (s, e) in super::eager_spans(text) {
-            if b.get(e) != Some(&b'.') {
-                continue;
-            }
-            let (key, end) = super::ident_at(text, e + 1);
-            let r = &text[s..end];
-            let Some((name, _, bb)) = held.iter().find(|h| h.1 == r) else {
+            let (key, end) = if b.get(e) == Some(&b'.') {
+                super::ident_at(text, e + 1)
+            } else {
+                ("", e)
+            };
+            let found = held
+                .iter()
+                .find(|h| !key.is_empty() && h.1 == text[s..end])
+                .map(|h| (h, key, end))
+                .or_else(|| held.iter().find(|h| h.1 == text[s..e]).map(|h| (h, "", e)));
+            let Some(((name, _, bb), key, end)) = found else {
                 continue;
             };
+            // (A value's own line, `$dump.X = …`, defines it.)
+            let after = text[end..].trim_start();
+            if after.starts_with('=') && !after.starts_with("==") {
+                continue;
+            }
             // (One binding of the name: no block between declares it again, and the
             // reference is no property key.)
             if self.declared_between(a, *bb, block, core::slice::from_ref(name))
@@ -497,12 +525,132 @@ impl W<'_> {
             out.push_str(name);
             named.push_out(name.clone());
             at = end;
-            if let Some(n) = self.inl.key_uses.get_mut(&(fac, String::from(key))) {
+            if key.is_empty() {
+                if let Some(n) = self.inl.uses.get_mut(&fac) {
+                    *n -= 1;
+                }
+                self.repend(&fac);
+            } else if let Some(n) = self.inl.key_uses.get_mut(&(fac, String::from(key))) {
                 *n -= 1;
             }
         }
         out.push_str(&text[at..]);
         (out, named)
+    }
+
+    /// Whether the original's text after activation `a`'s site names `name` (a binding
+    /// K is likely to keep): after the site's construct, or in a loop around it (K copies
+    /// the loop again, its operand too); not in the site's operand otherwise.
+    fn read_after_site(&self, a: usize, name: &str) -> bool {
+        use crate::compiler::NodeKind;
+        let act = &self.ir.acts[a];
+        let site = act
+            .site
+            .path
+            .last()
+            .and_then(|st| act.syntax.nodes.get(st.node as usize))
+            .map_or((act.site.pos, act.site.pos), |n| (n.start, n.end));
+        let mut ranges = alloc::vec![(site.1, act.ftext.len() as u32)];
+        for st in &act.site.path {
+            if let Some(n) = act.syntax.nodes.get(st.node as usize)
+                && matches!(
+                    n.kind,
+                    NodeKind::While
+                        | NodeKind::DoWhile
+                        | NodeKind::For
+                        | NodeKind::ForIn
+                        | NodeKind::ForOf
+                        | NodeKind::ForAwait
+                )
+            {
+                ranges.push_out((n.start, n.end));
+            }
+        }
+        let b = act.ftext.as_bytes();
+        act.ftext.match_indices(name).any(|(at, _)| {
+            let end = at + name.len();
+            ranges
+                .iter()
+                .any(|r| (r.0 as usize..r.1 as usize).contains(&at))
+                && !(at > 0 && (ident_part(b[at - 1]) || b[at - 1] == b'.'))
+                && !b.get(end).is_some_and(|&c| ident_part(c))
+        })
+    }
+
+    /// Makes `$dump.name`'s line a candidate for its one use again, now that a reference
+    /// to it was written as a binding's name (D3003).
+    fn repend(&mut self, name: &str) {
+        if !self.single(name, true) || self.inl.pend.iter().any(|p| p.name == name) {
+            return;
+        }
+        let head = cat!("$dump.", name, " = ");
+        for depth in (0..self.inl.stack.len()).rev() {
+            let Some(idx) = self.inl.stack[depth]
+                .iter()
+                .position(|l| l.starts_with(&head))
+            else {
+                continue;
+            };
+            let Some(rhs) = def_rhs(&self.inl.stack[depth][idx]).map(String::from) else {
+                return;
+            };
+            let effect = !pure(&rhs);
+            self.inl.pend.push_out(Pend {
+                name: String::from(name),
+                rhs,
+                depth,
+                idx,
+                effect,
+                bound: Vec::new(),
+            });
+            return;
+        }
+    }
+
+    /// The top-level lines `$dump.X = value;` whose value nothing reads in the end (a
+    /// parameter liveness left out held it, a reference became a binding's name): the
+    /// value's effect alone, or nothing (D3003).
+    pub(super) fn drop_unread(&self, body: &mut [String], handles: &[(String, String)]) {
+        loop {
+            let mut uses: BTreeMap<&str, u32> = BTreeMap::new();
+            let fns = self
+                .items
+                .iter()
+                .filter(|it| it.kind == IK::FnDecl)
+                .map(|it| it.text.as_str());
+            for t in body
+                .iter()
+                .map(String::as_str)
+                .chain(fns)
+                .chain(handles.iter().map(|h| h.1.as_str()))
+            {
+                for (s, e) in scan_spans(t) {
+                    *uses.entry(&t[s + 6..e]).or_insert(0) += 1;
+                }
+            }
+            let mut changed = Vec::new();
+            for (i, l) in body.iter().enumerate() {
+                let Some(rest) = l.strip_prefix("$dump.") else {
+                    continue;
+                };
+                let (name, _) = super::ident_at(rest, 0);
+                if name.is_empty() || uses.get(name).copied() != Some(1) {
+                    continue;
+                }
+                let Some(rhs) = def_rhs(l).filter(|_| rest[name.len()..].starts_with(" = ")) else {
+                    continue;
+                };
+                // (A factory makes its scope's closures and nothing else.)
+                let drop = shape(rhs) || rhs.starts_with("(() => {");
+                changed.push_out((i, if drop { String::new() } else { statement(rhs) }));
+            }
+            if changed.is_empty() {
+                return;
+            }
+            for (i, l) in changed {
+                body[i] = l;
+            }
+        }
     }
 
     /// Starts a list of lines (a callback's, or the top level).
@@ -775,9 +923,44 @@ impl W<'_> {
         if v != aw {
             // (K's deepest block holds the site.)
             let last = self.acts[a].blocks.len().saturating_sub(1);
-            let (v, reads) = self.bindings_in_k(a, last, &v);
+            let (v, reads) = self.bindings_in_k(a, last, &v, true);
             self.acts[a].site_reads = reads;
             let v = self.props_in_place(a, last, &v);
+            self.acts[a].site_val = Some(v);
+        }
+    }
+
+    /// Activation `a`'s site operand worked out before its continuation is written, where
+    /// K is async, called on its own line and does nothing before its site (no code of the
+    /// dump's in its blocks, no callback): the operand is then the line's first
+    /// evaluation (D3001), and K's bindings it names are known before K's arguments are
+    /// (D3003: a function both K's parameter and named in the operand is written once).
+    pub(super) fn site_first(&mut self, a: usize) {
+        let ir = self.ir;
+        let act = &ir.acts[a];
+        let Some(aw) = act.awaiting.as_deref() else {
+            return;
+        };
+        if self.acts[a].site_val.is_some()
+            || act.kind != crate::interp::run::suspend::ASYNC
+            || self.acts[a].home.is_some()
+            || !self.acts[a].go.iter().all(String::is_empty)
+            || self
+                .placed
+                .iter()
+                .any(|x| matches!(x.0, super::Pl::Block(a2, _) if a2 == a))
+            || !aw.contains("$dump.")
+        {
+            return;
+        }
+        let scope = self.kscopes[a].clone();
+        let bound = |n: &str| scope.contains(n);
+        let v = self.inline_with(aw, Some(0), Reads::Scope(&bound));
+        let last = self.acts[a].blocks.len().saturating_sub(1);
+        let (v, reads) = self.bindings_in_k(a, last, &v, true);
+        let v = self.props_in_place(a, last, &v);
+        if v != aw {
+            self.acts[a].site_reads = reads;
             self.acts[a].site_val = Some(v);
         }
     }

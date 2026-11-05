@@ -10431,3 +10431,22 @@ expressions, its spaces only before a name or a bracket (`await $djs.resume(2, "
 where this reading gives the value's length in its own text, so a reader scanning the same
 text finds the same; anything else keeps its hole. Records with holes: 2,552 → 736 of the
 corpus and v2's.
+
+## D3006: Arguments in place outside K, functions movable, values nothing reads dropped
+date: 2026-11-06 · by: pjs · issue: 0207
+- A continuation's call arguments get the values written in place when its call is
+  written (they are evaluated outside K, where K's bindings do not matter); K's generator
+  decides on the values as listed.
+- A function's text counts as a pure value (its creation reads nothing; where a name it
+  reads would be another binding, the reads checks keep it out).
+- Where K is async, unhomed and does nothing before its site (no code of the dump's in
+  its blocks, no callback), its site operand is worked out before K is written, so that
+  the values its K's bindings name there (`$djs.k(…, step)("first")` for a function both
+  K's parameter `step` and the inner record's origin) are known to be read once when K's
+  arguments are written: the sleep dump 797 → 751 bytes. A value on `$dump` is named by a
+  binding only where the original reads the binding after the site or in a loop around it
+  (naming it would keep a dead binding); a member of a factory always.
+- Before the Script is put together, a top-level `$dump.X = value;` nothing reads any more
+  (a parameter liveness left out held it, a reference became a binding's name) is left out
+  where it only makes a value (a factory too) and written as a statement otherwise, until
+  none is left.
