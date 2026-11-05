@@ -69,7 +69,9 @@ Measure where plain dumps stand now and fix what regressed:
   sitting): the dump runtime with its hooks and the host globals' values made with the
   prelude, in its image: runtime+hosts 118-140 -> 5 µs, load 580-700 -> 370-390 µs; a
   pool of up to two instances whose VM was disposed: new instance 103 -> 11 µs, load ->
-  ~230 µs. Left: the `$djs.source` wrapper's compile (33-58 µs; per code, not per start,
+  ~230 µs; made as new before reuse (memory restored and zeroed, D3023): ~17 µs per
+  1.4 MB instance, new instance ~32 µs. Gate: D3022 (clean djs-core/djs-prelude after
+  incremental corruption). Left: the `$djs.source` wrapper's compile (33-58 µs; per code, not per start,
   so not in the prelude image), setUp (~42 µs), the dump's compile (lazy, 0218).
 
 ## Follow-ups

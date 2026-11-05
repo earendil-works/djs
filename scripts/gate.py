@@ -564,8 +564,9 @@ def run(argv):
 # or a mangled Rust name such as `drop_glue<regexp::parser::Node>.llvm.<n>`, 0209): they
 # are internal to a codegen unit and go missing only when the cache is bad. Such a failure
 # says nothing about the commit: the gate clears the incremental directories of the job's
-# target directory and runs the job once more. (The first such symbol can come many lines
-# after the first undefined one: 0205.)
+# target directory, cleans djs-core and djs-prelude there (D3022: a corrupt rlib stays
+# fingerprinted as fresh) and runs the job once more. (The first such symbol can come many
+# lines after the first undefined one: 0205.)
 INCREMENTAL_CORRUPTION = re.compile(r"(Undefined symbols|undefined reference).*(?:\n.*){0,400}?"
                                     r"\.llvm\.[0-9]+\b")
 
@@ -596,6 +597,23 @@ def incremental_dirs(group, groups):
     return out
 
 
+def clean_corrupt_rlibs(group):
+    """`cargo clean -p djs-core -p djs-prelude` in target directory `group` (D3022): a crate
+    built from a bad incremental cache stays fingerprinted as fresh, so clearing
+    `incremental/` alone left the same link failing on every run (0215). The host's
+    artifacts (build scripts, native jobs) and the wasm target's, where the group has
+    them."""
+    root = Path(group)
+    if not root.is_dir():
+        return
+    base = ["cargo", "clean", "-q", "-p", "djs-core", "-p", "djs-prelude", "--target-dir", str(root)]
+    # (A target triple's directory: `wasm32-unknown-unknown/`.)
+    targets = [[]] + [["--target", t.name] for t in root.iterdir()
+                      if t.is_dir() and t.name.count("-") >= 2]
+    for extra in targets:
+        subprocess.run(base + extra, cwd=ROOT, capture_output=True)
+
+
 def schedule(todo, by_name, ready, launch, running, lock, failed, clean, sha, unchanged):
     """Launches ready jobs until all are done or one failed (then stops the others)."""
     with lock:
@@ -613,6 +631,7 @@ def schedule(todo, by_name, ready, launch, running, lock, failed, clean, sha, un
                     dirs = incremental_dirs(j.group, {x.group for x in by_name.values()})
                     for d in dirs:
                         shutil.rmtree(d, ignore_errors=True)
+                    clean_corrupt_rlibs(j.group)
                     shutil.copyfile(j.log, j.log + ".corrupt")
                     print(f"!! {j.name}: rustc incremental corruption (link: undefined _anon.*.llvm.*);"
                           f" cleared {', '.join(map(str, dirs)) or 'nothing'}, running it again"

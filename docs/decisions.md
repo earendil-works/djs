@@ -10300,3 +10300,25 @@ order. It recognizes the runtime's own handlers by their text and reads the stat
 their captures, so a re-dump writes the call again (as for `fromSync`, D2951). An
 async-from-sync iterator brings its own `next`. Errors the engine raises, such as "Array
 too long" and "iterator must return an object", keep their type and message.
+
+## D3022: Amends D2896: the gate also cleans djs-core and djs-prelude after incremental corruption
+date: 2026-11-06 · by: pjr · issue: 0215
+D2896's retry cleared the `incremental/` directories of the failing job's target
+directory and ran the job again. A crate already built from the bad cache stays
+fingerprinted as fresh, so the same link failed on every later run. In 0215 the djs-prelude
+build script failed against a corrupt `libdjs_core-*.rlib` in the gate's
+`target/wasm-nodump` until the coordinator cleaned it by hand; pjs had hit the same before.
+The retry now also runs `cargo clean -p djs-core -p djs-prelude` in that target directory,
+for the host and for each target triple it holds (`clean_corrupt_rlibs` in scripts/gate.py).
+
+## D3023: pi's adapter reuses disposed wasm instances, made as new before reuse
+date: 2026-11-06 · by: pjr · issue: 0215
+Creating an instance was most of a session's start from a cached prelude image (~100 µs:
+V8 reserving and mapping its memory). That cost was paid at every load in a dump at every
+idle point, and at every start. js/pi/engine.ts keeps up to two instances whose VM was
+disposed, each with at most 64 MB of memory, and hands them to the next VM. Before reuse,
+an instance is made as new: its memory up to the initial size is copied back from the
+module's first instance as it was before any call (static data, the allocator's state, the
+stack) and the rest is zeroed. Nothing of the earlier session is left in it, whoever runs
+next. The allocator starts again and takes the grown memory as free pages. Renewing a
+1.4 MB instance costs ~17 µs. A new instance in pi-sessions: ~103 -> ~32 µs at the median.

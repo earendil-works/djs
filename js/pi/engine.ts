@@ -478,23 +478,35 @@ export class Engine {
 /**
  * Instances whose VM was disposed, per module, for the next VM (0215): a new instance is
  * most of a session's start once its prelude image is cached (V8 reserves and maps its
- * memory). A pooled instance holds no VM: its allocator has every block back, and a new
- * VM reads only its own arena. Small ones only, a few: their memory never shrinks.
+ * memory). A pooled instance is made as new before it is handed out: its memory up to its
+ * initial size is copied back from the module's first instance as it was before any call
+ * (the static data, the allocator's state, the stack), and the rest is zeroed, so nothing
+ * of the session before is left in it. Small ones only, a few: memory never shrinks.
  */
-const pools = new WeakMap<WebAssembly.Module, Exports[]>();
+const pools = new WeakMap<WebAssembly.Module, { fresh: Uint8Array; free: Exports[] }>();
 const POOLED_INSTANCES = 2;
 const POOLED_MEMORY = 64 * 1024 * 1024;
 
 function release(module: WebAssembly.Module, x: Exports): void {
-  let pool = pools.get(module);
-  if (!pool) pools.set(module, (pool = []));
-  if (pool.length < POOLED_INSTANCES && x.memory.buffer.byteLength <= POOLED_MEMORY) pool.push(x);
+  const pool = pools.get(module);
+  if (pool && pool.free.length < POOLED_INSTANCES && x.memory.buffer.byteLength <= POOLED_MEMORY) pool.free.push(x);
+}
+
+/** A pooled instance as new: its memory as a new instance's. */
+function renew(fresh: Uint8Array, x: Exports): Exports {
+  const m = new Uint8Array(x.memory.buffer);
+  m.set(fresh, 0);
+  m.fill(0, fresh.length);
+  return x;
 }
 
 function instantiate(module: WebAssembly.Module): Exports {
-  const pooled = pools.get(module)?.pop();
-  if (pooled) return pooled;
+  const pool = pools.get(module);
+  const pooled = pool?.free.pop();
+  if (pool && pooled) return renew(pool.fresh, pooled);
   const x = new WebAssembly.Instance(module, {}).exports as unknown as Exports;
+  // (Its memory before any call: what a pooled instance is made as again.)
+  if (!pool) pools.set(module, { fresh: new Uint8Array(x.memory.buffer).slice(), free: [] });
   if (typeof x.djs_abi_version !== "function" || x.djs_abi_version() !== ABI_VERSION) {
     throw new Error(`The module is not djs-wasm of ABI version ${ABI_VERSION}`);
   }
