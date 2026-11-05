@@ -229,6 +229,13 @@ interface NextHandles {
   describe: number;
   /** The body's promise; 0 before the script starts or when `run` threw. */
   body: number;
+  /**
+   * A module that loads dumps: `$djs`, the dump runtime with its hooks, and the host
+   * globals' values `$djs.host` answers with, made with the prelude (in its image), so that
+   * a load compiles and reads none of them (0215).
+   */
+  runtime?: number;
+  hosts?: [string, number][];
 }
 
 /** What the adapter keeps in `next` mode, which pi's prelude keeps itself (D2565). */
@@ -337,6 +344,8 @@ class Session implements VmSession {
   private plainIds: [number | undefined, number] = [undefined, 0];
   /** While a plain dump loads: `$djs.host`'s values by name, as handles (D2971). */
   private hostValues = new Map<string, number>();
+  /** `hostValues` are the start's (`NextHandles.hosts`): not freed after a load. */
+  private keptHosts = false;
 
   constructor(engine: Engine, hooks: VmHooks, state: SessionState) {
     this.engine = engine;
@@ -651,30 +660,39 @@ class Session implements VmSession {
     // globals' values, read now (the hook cannot run JS while the dump waits on it).
     const fns0 = this.state.next!.handles;
     const values = new Map<string, number>([["bridge", fns0.bridge], ["call", fns0.call]]);
-    // (Only the ones the dump names, `$djs.host("tools")`, `$djs.host("tools.read")`: each
-    // read is a call into the VM.)
-    const named = (this.resume ? hostGlobals(this.resume.data) : []).filter((name) => text.includes(`$djs.host("${name}`));
-    const read = named.length > 0 ? compileOrThrow(engine, "dump.js", ["k"], "return globalThis[k]") : 0;
-    for (const name of named) {
-      const k = engine.value(name);
-      values.set(name, evaluate(this, engine, read, [k]));
-      engine.free(k);
+    if (fns0.runtime !== undefined) {
+      // Made with the prelude (`dumpLoading`): kept, not freed after the load.
+      for (const [name, h] of fns0.hosts ?? []) values.set(name, h);
+      this.hostValues = values;
+      this.keptHosts = true;
+      engine.define(0, "$djs", fns0.runtime);
+    } else {
+      // (Only the ones the dump names, `$djs.host("tools")`, `$djs.host("tools.read")`:
+      // each read is a call into the VM.)
+      const named = (this.resume ? hostGlobals(this.resume.data) : []).filter((name) => text.includes(`$djs.host("${name}`));
+      const read = named.length > 0 ? compileOrThrow(engine, "dump.js", ["k"], "return globalThis[k]") : 0;
+      for (const name of named) {
+        const k = engine.value(name);
+        values.set(name, evaluate(this, engine, read, [k]));
+        engine.free(k);
+      }
+      if (read !== 0) engine.free(read);
+      this.hostValues = values;
+      this.keptHosts = false;
+      const hooks = engine.dumpRuntime(text);
+      const fns: [string, number][] = [
+        ["resume", engine.hostFunction(HOOK_RESUME, "resume")],
+        ["seed", engine.hostFunction(HOOK_SEED, "seed")],
+        ["source", engine.hostFunction(HOOK_SOURCE, "source")],
+        ["host", engine.hostFunction(HOOK_HOST, "host")],
+      ];
+      for (const [name, h] of fns) {
+        engine.define(hooks, name, h);
+        engine.free(h);
+      }
+      engine.define(0, "$djs", hooks);
+      engine.free(hooks);
     }
-    if (read !== 0) engine.free(read);
-    this.hostValues = values;
-    const hooks = engine.dumpRuntime(text);
-    const fns: [string, number][] = [
-      ["resume", engine.hostFunction(HOOK_RESUME, "resume")],
-      ["seed", engine.hostFunction(HOOK_SEED, "seed")],
-      ["source", engine.hostFunction(HOOK_SOURCE, "source")],
-      ["host", engine.hostFunction(HOOK_HOST, "host")],
-    ];
-    for (const [name, h] of fns) {
-      engine.define(hooks, name, h);
-      engine.free(h);
-    }
-    engine.define(0, "$djs", hooks);
-    engine.free(hooks);
     this.loading = true;
     this.plainIds = [undefined, 0];
     this.hookError = undefined;
@@ -687,7 +705,7 @@ class Session implements VmSession {
       this.loading = false;
       if (this.source) engine.free(this.source.handle);
       this.source = undefined;
-      for (const [name, h] of this.hostValues) if (name !== "bridge" && name !== "call") engine.free(h);
+      if (!this.keptHosts) for (const [name, h] of this.hostValues) if (name !== "bridge" && name !== "call") engine.free(h);
       this.hostValues = new Map();
     }
     if (status === STATUS_THREW) {
@@ -1027,11 +1045,35 @@ function prepareUnpolled(session: Session, engine: Engine, prelude: string, data
           stalled: 0,
           run: member("run"),
           setOrigin,
-          next: { api, bridge, call, decode: member("decode"), failure: member("failure"), encode: member("encode"), describe: member("describe") },
+          next: { api, bridge, call, decode: member("decode"), failure: member("failure"), encode: member("encode"), describe: member("describe"), ...dumpLoading(session, engine, data) },
         }
       : { api, settle: member("settle"), stalled: member("stalled"), run: member("run"), setOrigin };
   engine.free(getter);
   return prepared;
+}
+
+/**
+ * What loading a dump needs that is the same for every load of the start (`NextHandles`'s
+ * `runtime` and `hosts`): made once, with the prelude, and kept in its image. The hooks
+ * answer only while a dump loads.
+ */
+function dumpLoading(session: Session, engine: Engine, data: VmStartData): Pick<NextHandles, "runtime" | "hosts"> {
+  if (!engine.loadsDumps) return {};
+  const runtime = engine.dumpRuntime();
+  for (const [name, id] of [["resume", HOOK_RESUME], ["seed", HOOK_SEED], ["source", HOOK_SOURCE], ["host", HOOK_HOST]] as const) {
+    const h = engine.hostFunction(id, name);
+    engine.define(runtime, name, h);
+    engine.free(h);
+  }
+  const read = compileOrThrow(engine, "codemode-prelude.js", ["k"], "return globalThis[k]");
+  const hosts: [string, number][] = hostGlobals(data).map((name) => {
+    const k = engine.value(name);
+    const v = evaluate(session, engine, read, [k]);
+    engine.free(k);
+    return [name, v];
+  });
+  engine.free(read);
+  return { runtime, hosts };
 }
 
 /**

@@ -63,6 +63,15 @@ Measure where plain dumps stand now and fix what regressed:
   per start data, `$djs.source`'s wrapper and host globals read only when the dump names
   them.
 
+- Array.fromAsync in flight (pjz, D3021): the dump runtime's `fromAsync` resumes the
+  machine; corpus codemode/redump-from-async.js.
+- pi loads (scripts/dump-costs/pi-sessions.ts, N=300, medians, same machine, A/B in one
+  sitting): the dump runtime with its hooks and the host globals' values made with the
+  prelude, in its image: runtime+hosts 118-140 -> 5 µs, load 580-700 -> 370-390 µs; a
+  pool of up to two instances whose VM was disposed: new instance 103 -> 11 µs, load ->
+  ~230 µs. Left: the `$djs.source` wrapper's compile (33-58 µs; per code, not per start,
+  so not in the prelude image), setUp (~42 µs), the dump's compile (lazy, 0218).
+
 ## Follow-ups
 
 ## Result

@@ -8,7 +8,7 @@ import { IN_PLACE_MIN, encode, stringInPlace } from "../src/wire.ts";
 import { readValue } from "../src/reader.ts";
 import { trapText } from "../src/trap.ts";
 import { provideBase, rememberBase } from "../src/base.ts";
-import { scriptFor as dumpRuntimeFor } from "../src/dump-runtime.js";
+import { script as dumpRuntimeScript, scriptFor as dumpRuntimeFor } from "../src/dump-runtime.js";
 
 export const STATUS_DONE = 0;
 export const STATUS_THREW = 1;
@@ -305,14 +305,19 @@ export class Engine {
   }
 
   /** A new object holding the plain dump runtime's helpers that dump `text` names (D2903): `$djs` without the hooks. */
-  dumpRuntime(text: string): number {
+  dumpRuntime(text?: string): number {
     const f = this.x.vm_dump_runtime;
     if (!f) throw new Error("The djs-wasm module cannot load plain dumps (no vm_dump_runtime)");
-    const bytes = textEncoder.encode(dumpRuntimeFor(text));
+    const bytes = textEncoder.encode(text === undefined ? dumpRuntimeScript : dumpRuntimeFor(text));
     this.stage(bytes);
     const h = this.trap(() => f(this.vm, bytes.length));
     if (h === 0) throw new Error("Out of memory creating the dump runtime");
     return h;
+  }
+
+  /** Whether this module loads plain dumps (it has the dump runtime's export). */
+  get loadsDumps(): boolean {
+    return this.x.vm_dump_runtime !== undefined;
   }
 
   /** A new ordinary object's handle. */
@@ -435,7 +440,9 @@ export class Engine {
 
   dispose(): void {
     // A trapped instance is not called again (a stack overflow would trap once more).
-    if (!this.trapped) this.x.vm_free(this.vm);
+    if (this.trapped) return;
+    this.x.vm_free(this.vm);
+    release(this.module, this.x);
   }
 
   private arena(): Uint8Array {
@@ -468,7 +475,25 @@ export class Engine {
   }
 }
 
+/**
+ * Instances whose VM was disposed, per module, for the next VM (0215): a new instance is
+ * most of a session's start once its prelude image is cached (V8 reserves and maps its
+ * memory). A pooled instance holds no VM: its allocator has every block back, and a new
+ * VM reads only its own arena. Small ones only, a few: their memory never shrinks.
+ */
+const pools = new WeakMap<WebAssembly.Module, Exports[]>();
+const POOLED_INSTANCES = 2;
+const POOLED_MEMORY = 64 * 1024 * 1024;
+
+function release(module: WebAssembly.Module, x: Exports): void {
+  let pool = pools.get(module);
+  if (!pool) pools.set(module, (pool = []));
+  if (pool.length < POOLED_INSTANCES && x.memory.buffer.byteLength <= POOLED_MEMORY) pool.push(x);
+}
+
 function instantiate(module: WebAssembly.Module): Exports {
+  const pooled = pools.get(module)?.pop();
+  if (pooled) return pooled;
   const x = new WebAssembly.Instance(module, {}).exports as unknown as Exports;
   if (typeof x.djs_abi_version !== "function" || x.djs_abi_version() !== ABI_VERSION) {
     throw new Error(`The module is not djs-wasm of ABI version ${ABI_VERSION}`);

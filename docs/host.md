@@ -748,7 +748,11 @@ pi's suite passes the same in all three modes (`node js/pi/pi-tests.ts`, `--next
 plain dumps, the same 11 failures as above), and js/test/pi-vm.test.ts runs every adapter
 test in each and the open-call policies through a real dump. A dump carries
 `Math.random`'s state (`$djs.seed`, D2897), so a resumed deterministic run continues its
-sequence.
+sequence. What every load needs and is the same for the start is made with the prelude,
+in its image: the dump runtime with the hooks, and the host globals' values (0215). The
+adapter keeps up to two instances whose VM was disposed and gives the next VM one of them
+(creating an instance was most of a start from a cached image). A load in pi's
+adapter costs ~0.23 ms at the median for small dumps; a dump costs ~0.3 ms.
 
 What pi would change to adopt it: take prelude-next's changes into its prelude (they are
 small and engine-neutral except the async host function), let the engine own call ids
