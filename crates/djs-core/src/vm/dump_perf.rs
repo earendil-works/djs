@@ -8,9 +8,13 @@
 //!   matching files;
 //! - `DJS_DUMP_PERF_REPS=n`: dumps and loads per idle point, the best counts (default 3);
 //! - `DJS_DUMP_PERF_OUT=dir`: writes every dump there (`<case>.<idle>.js`) for profiling;
-//! - `DJS_DUMP_PERF_SKIP=load`: dumps only, `=all`: neither (for counting the
-//!   instructions of each side with `/usr/bin/time -l` when the machine is too busy for
-//!   timings: scripts/dump-costs/instructions.sh).
+//! - `DJS_DUMP_PERF_SKIP=load`: dumps only, `=redump`: dumps and loads, `=all`: none (for
+//!   counting the instructions of each side with `/usr/bin/time -l` when the machine is
+//!   too busy for timings: scripts/dump-costs/instructions.sh).
+//!
+//! A re-dump (0215) dumps the loaded VM again, its first dump: what a host pays that
+//! loads a dump and dumps the run at its next idle point (origin tracking reads the
+//! continuations' records).
 
 extern crate std;
 
@@ -27,8 +31,23 @@ use super::*;
 struct Point {
     dump: Duration,
     load: Duration,
+    redump: Duration,
     bytes: usize,
 }
+
+/// Idle points whose dump, load or re-dump failed (a refusal), counted per side.
+#[derive(Default)]
+struct Failed {
+    dump: usize,
+    load: usize,
+    redump: usize,
+}
+
+static FAILED: std::sync::Mutex<Failed> = std::sync::Mutex::new(Failed {
+    dump: 0,
+    load: 0,
+    redump: 0,
+});
 
 fn reps() -> usize {
     std::env::var("DJS_DUMP_PERF_REPS")
@@ -55,6 +74,7 @@ fn measure(vm: &Vm, api: Value, name: &str, idle: usize, points: &mut Vec<Point>
     let mut p = Point {
         dump: Duration::MAX,
         load: Duration::MAX,
+        redump: Duration::ZERO,
         bytes: 0,
     };
     let mut text = String::new();
@@ -65,7 +85,13 @@ fn measure(vm: &Vm, api: Value, name: &str, idle: usize, points: &mut Vec<Point>
         let t = Instant::now();
         match vm.dump(&opts, None) {
             Ok(s) => text = s,
-            Err(_) => return,
+            Err(e) => {
+                if FAILED.lock().unwrap().dump == 0 {
+                    std::println!("{name}@{idle}: {}", e.message());
+                }
+                FAILED.lock().unwrap().dump += 1;
+                return;
+            }
         }
         p.dump = p.dump.min(t.elapsed());
     }
@@ -81,13 +107,47 @@ fn measure(vm: &Vm, api: Value, name: &str, idle: usize, points: &mut Vec<Point>
     let mut serve = |vm: &mut Vm, id: u32, _: u32| {
         vm.resolve_host_call(id, Ok(Value::UNDEFINED)).unwrap();
     };
+    let mut loaded = None;
     for _ in 0..reps() {
         let mut b = load_vm();
         let t = Instant::now();
-        if super::dump_tests::run_plain_dump(&mut b, &text, &host_fn, &mut serve).is_err() {
+        let api = match super::dump_tests::run_plain_dump(&mut b, &text, &host_fn, &mut serve) {
+            Ok(api) => api,
+            Err(e) => {
+                if FAILED.lock().unwrap().load == 0 {
+                    std::println!("{name}@{idle}: load: {e}");
+                }
+                FAILED.lock().unwrap().load += 1;
+                return;
+            }
+        };
+        p.load = p.load.min(t.elapsed());
+        loaded = Some((b, api));
+    }
+    if skip == "redump" {
+        points.push(p);
+        return;
+    }
+    // The loaded VM's first dump, again for each repetition (a fresh cache each time).
+    let Some((b, api)) = loaded else { return };
+    let handles = [("run", api)];
+    let opts = DumpOptions {
+        handles: &handles,
+        ..opts
+    };
+    let cache = b.dump_cache();
+    p.redump = Duration::MAX;
+    for _ in 0..reps() {
+        b.set_dump_cache(cache.clone());
+        let t = Instant::now();
+        if let Err(e) = b.dump(&opts, None) {
+            if FAILED.lock().unwrap().redump == 0 {
+                std::println!("{name}@{idle}: re-dump: {}", e.message());
+            }
+            FAILED.lock().unwrap().redump += 1;
             return;
         }
-        p.load = p.load.min(t.elapsed());
+        p.redump = p.redump.min(t.elapsed());
     }
     points.push(p);
 }
@@ -100,11 +160,18 @@ fn pct(xs: &mut [Duration], p: usize) -> f64 {
 
 fn summary(label: &str, ps: &[Point]) {
     if ps.is_empty() {
-        std::println!("{label}: no idle points");
+        let f = core::mem::take(&mut *FAILED.lock().unwrap());
+        std::println!(
+            "{label}: no idle points measured; failed: {} dumps, {} loads, {} re-dumps",
+            f.dump,
+            f.load,
+            f.redump
+        );
         return;
     }
     let mut d: Vec<Duration> = ps.iter().map(|p| p.dump).collect();
     let mut l: Vec<Duration> = ps.iter().map(|p| p.load).collect();
+    let mut r: Vec<Duration> = ps.iter().map(|p| p.redump).collect();
     let total = |xs: &[Duration]| xs.iter().map(|d| d.as_secs_f64()).sum::<f64>() * 1e3;
     let bytes: usize = ps.iter().map(|p| p.bytes).sum();
     std::println!(
@@ -121,6 +188,18 @@ fn summary(label: &str, ps: &[Point]) {
         pct(&mut l, 90),
         pct(&mut l, 99),
         pct(&mut l, 100),
+    );
+    let f = core::mem::take(&mut *FAILED.lock().unwrap());
+    std::println!(
+        "{label}: re-dump total {:.0} ms, p50/p90/p99/max {:.3}/{:.3}/{:.3}/{:.3} ms; failed: {} dumps, {} loads, {} re-dumps",
+        total(&r),
+        pct(&mut r, 50),
+        pct(&mut r, 90),
+        pct(&mut r, 99),
+        pct(&mut r, 100),
+        f.dump,
+        f.load,
+        f.redump,
     );
 }
 

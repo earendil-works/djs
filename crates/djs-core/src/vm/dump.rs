@@ -3159,7 +3159,16 @@ impl<'a> Dumper<'a> {
                         cat!("let ", name, ";")
                     }
                     _ => {
-                        let e = self.expr(inner, None, Some(name));
+                        let mut e = self.expr(inner, None, Some(name));
+                        // Inside data, a function the plain writer makes in a continuation
+                        // is left to a patch (`expr` gives nothing): a variable reads it
+                        // where its group put it (0215).
+                        if e.is_empty()
+                            && let Some(c) = c
+                            && self.nodes[c].state == State::Done
+                        {
+                            e = self.nodes[c].loc.clone();
+                        }
                         // The value named by a global (`done`) that a variable of the
                         // factory shadows: read before the factory.
                         // (Not a function's text: what it names is its own business,

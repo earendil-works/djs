@@ -1875,3 +1875,30 @@ main();
 // 0207's tests (plain dump size), in a file of their own.
 #[path = "dump_size_tests.rs"]
 mod size;
+
+/// Closures of a suspended frame that data reaches (a tools object holding one) and that
+/// read each other: the variables read them where their scope objects put them, not
+/// nothing (0215; found by the dump benchmark's fake tools).
+#[test]
+fn plain_dumps_of_frame_closures_reached_by_data() {
+    let src = r#"
+async function main() {
+  let seed = 5;
+  const rnd = (n) => { seed ^= seed << 3; seed >>>= 0; return seed % n; };
+  const sentence = (n) => [rnd(n), rnd(n)].join(" ");
+  const tools = { a: () => later(sentence(5)) };
+  return await (async (tools) => {
+    print(await tools.a());
+    print(await tools.a());
+  })(tools);
+}
+main();
+"#;
+    let (failed, refused, ok) = plain_check_program("frame-closures", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, _, refused) = plain_chain_program("frame-closures", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 2, "{ok}");
+}

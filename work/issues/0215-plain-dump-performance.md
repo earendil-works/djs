@@ -1,7 +1,7 @@
 # 0215: Plain dump performance: export and load times against format 2's
 
-status: open
-agent: -
+status: in-progress
+agent: pjr
 branch: issue/0215-plain-dump-performance
 depends-on: 0205
 guide: -
