@@ -544,7 +544,7 @@ Risks:
 ## 10. Refusals that remain (0203)
 
 The constructs of section 4 have plain encodings in the exporter (D2871–D2877), except
-for one, which plain dumps refuse:
+these, which plain dumps refuse:
 
 - **Private names on instances** (D2878): an object that carries a class's private field,
   method or accessor (`#n`, `#bump`). Only that class's own construction can add a private
@@ -554,6 +554,10 @@ for one, which plain dumps refuse:
   class, are not affected. Instances like this that are live across an await are rare in
   codemode; tests/dump/v2/plain-refusals.txt lists the one fixture
   (golden/class-fields).
+- **A `for in` loop over a Proxy** (0211): the loop's remaining keys come from the
+  Proxy's `ownKeys` and `getOwnPropertyDescriptor` traps, so writing them again would make
+  the traps' calls and their order visible to the host. Rare in codemode; the corpus case
+  codemode/plain-fuzz/for-in-over-proxy.js is in tests/plain-refusals.txt.
 
 **Class text without its static code (0209, D2950).** A plain dump makes a class by
 evaluating its text, and that would run its static blocks and static field initializers
