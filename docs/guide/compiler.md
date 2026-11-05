@@ -322,7 +322,8 @@ paths cut the instructions executed by the tightest benchmark loops by 35 to 38%
 ## Lazy functions
 
 In builds with the `lazy` feature (natively and in the dump module, not in the shipped
-main and slim modules), a VM can compile function bodies at their first call (D2990).
+main and slim modules), a VM can compile function bodies at their first call (D2990);
+the dump module does so for every VM (D2993).
 The unit is still parsed whole: every early error is reported when the script loads,
 and name resolution still sees every function, so it knows which bindings inner
 functions capture and the enclosing code is unchanged. Only the second half, the re-emit
@@ -383,7 +384,7 @@ REPL (D004, D1581).
 
 Decisions on this page:
 
-<!-- gen:decisions D1080 D1360 D1081 D1083 D1082 D1130 D1131 D1860 D1620 D1480 D1481 D1482 D008 D1582 D2443 D2444 D2446 D2990 D2991 -->
+<!-- gen:decisions D1080 D1360 D1081 D1083 D1082 D1130 D1131 D1860 D1620 D1480 D1481 D1482 D008 D1582 D2443 D2444 D2446 D2990 D2991 D2993 -->
 - D1080: Speculative parsing never emits bytecode
 - D1360: destructuring patterns are parsed after their value (deferred patterns)
 - D1081: Name resolution runs once per compilation unit, children first
@@ -403,4 +404,5 @@ Decisions on this page:
 - D2446: One constant pool per compilation unit
 - D2990: Lazy function compilation, a `lazy` feature on in native and dump builds
 - D2991: Eager and lazy compiles give a function the same code
+- D2993: The dump module compiles lazily; the dumper reads lazy templates
 <!-- /gen -->
