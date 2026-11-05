@@ -10,7 +10,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0211 | Plain dump fuzzing round 2 (wider generator, new seeds) | pjz | .worktrees/pjz |
 | 0215 | Plain dump performance (Result written; pjr paused, resumes on new hot spots) | pjr | .worktrees/pjx |
 | 0220 | Rewrite the guide: behavior + architecture, no history/decisions, JS interface page, live dumps, debugger suspend (owner) | guide | .worktrees/docs |
-| 0222 | sleep-dump example: instant apart from sleeps, output before sleeps, 1 s (owner) | sleepy | .worktrees/sleepy |
 
 ## Open (ready)
 
@@ -89,6 +88,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0190-0196 | SM migration: slot names (D2730), named slots (D2731), construct temporaries + iter_next_loc (D2732), finally completions (D2733), roles deleted (D2734), one compile per load (D2735) | 9cc8741b (agent sm) |
 | 0198 | Dump performance: corpus dump p50 1.42 -> 0.43 ms wasm, totals 3,243 -> 610 ms; data cases 2-6x (D2800-D2802) | 429184db (agent dumpperf) |
 | - | base_equals_a_compiled_realm test fixed (8f0fdd72); gate recovers from incremental corruption (D2896, b55180dd); CLI/REPL call states (D2894) | agent pjh |
+| 0222 | sleep-dump example instant (release dump module, compile cache), output before sleeps, 1 s; --restart fixed | fde5b7f4 (agent sleepy) |
 | 0221 | `debugger;` pauses in the CLI: REPL .c/.abort, run/resume --debugger (D3060) | 00cd7d63 (agent dbg) |
 | 0219 | Compile cache across VMs + suspension maps carried between dumps (D3040, D3041; dump module only) | d92b15f4 (agent lazy; pi -6% instructions per session) |
 | 0218 | Lazy function compilation (D2990-D2995; native + dump module) | 2a4b23a8 (agent lazy; big scripts ~2x faster compile, pi dumps -3..5%) |
