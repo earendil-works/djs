@@ -1,7 +1,7 @@
 # 0219: A compile cache across VMs: import a function's compiled cells instead of compiling again
 
-status: open
-agent: -
+status: in-progress
+agent: lazy
 branch: issue/0219-compile-cache
 depends-on: 0218
 guide: compiler.md or host.md (when compiled code is reused)
