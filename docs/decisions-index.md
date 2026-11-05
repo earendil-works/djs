@@ -715,3 +715,4 @@ topics when the index is next reorganized.
 - D2840: Dumps carry no "use strict"; hosts compile them strict
 - D2841: Settled by the owner on 0216's review
 - D3007: Host calls go into the callback part that reads them all; a factory's continuation takes its site's value
+- D3008: How D2837–D2840 are carried out
