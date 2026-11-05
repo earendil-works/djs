@@ -32,7 +32,9 @@ messages.
 The numbers below are generated (`djs-docs regen`, D2101): counts from the repository
 (test262 grouping and ratchets, the corpus) on every merge, measurements from
 `tests/scores/status.tsv`, which `scripts/status.py` records with the commit they were
-measured at. TESTING.md and docs/host.md have the details.
+measured at (`scripts/status.py` without arguments lists what it measures and how; the
+guide's status page lists every record). Figures inside sentences are generated too
+(inline `n` markers, D3070).
 
 **Conformance.**
 
