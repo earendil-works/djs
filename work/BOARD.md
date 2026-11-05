@@ -6,6 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0227 | REPL `.dump` with no argument prints to stdout (owner) | repld | .worktrees/repld |
 | 0226 | Ship wasm modules with unchecked heap access, checks elsewhere (owner) | heapx | .worktrees/heapx |
 | 0224 | Investigate and fix native perf regressions since 2026-11-01 (owner) | perfreg | .worktrees/perfreg |
 
