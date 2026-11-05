@@ -836,6 +836,9 @@ struct W<'x> {
     /// The globals' first bytes (a bit each) and longest length: a filter before the set.
     global_first: [u64; 4],
     global_max: usize,
+    /// The hashes of `global_set`'s names: most words a filter above lets through are no
+    /// global (0215).
+    global_hashes: inline::Counts,
     /// Factories by name, and the item of each activation (0215: linear searches made
     /// writing a data-heavy dump quadratic).
     fac_by_name: alloc::collections::BTreeMap<String, usize>,
@@ -961,6 +964,7 @@ pub(super) fn write(
         global_set: Default::default(),
         global_first: [0; 4],
         global_max: 0,
+        global_hashes: Default::default(),
         fac_by_name: ir
             .factories
             .iter()
@@ -1022,6 +1026,7 @@ pub(super) fn write(
         if let Some(&c) = n.as_bytes().first() {
             w.global_first[usize::from(c >> 6)] |= 1u64 << (c & 63);
             w.global_max = w.global_max.max(n.len());
+            w.global_hashes.add(inline::name_hash(n));
         }
     }
     w.activations()?;
@@ -1883,6 +1888,7 @@ impl W<'_> {
                     && self.global_first[usize::from(n.as_bytes()[0] >> 6)]
                         & (1u64 << (n.as_bytes()[0] & 63))
                         != 0
+                    && self.global_hashes.contains_key(&inline::name_hash(n))
                     && self.global_set.contains(n)
             },
             &mut |s, e| {

@@ -17,7 +17,7 @@
 //! handles) before it writes: a value counted more often than it is written stays named,
 //! and a value read again after it was written in place is a refusal (a bug).
 
-use alloc::collections::{BTreeMap, BTreeSet};
+use alloc::collections::BTreeSet;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -52,7 +52,8 @@ pub(super) struct Inline {
     /// (By the names' hashes, `name_hash`, 0215: a collision only adds uses.)
     pub uses: Counts,
     /// `$dump.F.key` references (a factory's members), by factory and key.
-    pub key_uses: BTreeMap<(String, String), u32>,
+    /// (By [`key_hash`], 0215.)
+    pub key_uses: Counts,
     pub pend: Vec<Pend>,
     /// The lines of each list being written (a callback's inside the top level's).
     pub stack: Vec<Vec<String>>,
@@ -61,12 +62,12 @@ pub(super) struct Inline {
     /// The values written in place.
     pub done: BTreeSet<String>,
     /// The names of `pend` (0215: a data-heavy dump has thousands).
-    pub pend_names: BTreeSet<String>,
+    pub pend_names: NameSet,
     /// Reopened host calls used once whose lines wait for the line that reads them, in
     /// their order (D3004): list depth, name, line, value.
     pub hooks: Vec<(usize, String, String, String)>,
     /// The names of `hooks`.
-    pub hook_names: BTreeSet<String>,
+    pub hook_names: NameSet,
     /// The names of K's the closures and continuations written in place read (liveness
     /// must see them in a site's operand, D3003).
     pub placed_reads: Vec<String>,
@@ -261,18 +262,17 @@ impl W<'_> {
         texts.extend(ir.handles.iter().map(|h| h.1.as_str()));
         // (About one name per item: no growing, 0215.)
         let mut uses = Counts::with_capacity(self.items.len());
-        let mut key_uses: BTreeMap<(String, String), u32> = BTreeMap::new();
+        let mut key_uses = Counts::default();
         // (By substring, not `scan`, 0215: one in a string counts too, which only keeps a
         // value named.)
         for t in texts {
-            for (s, e) in dump_refs(t) {
-                uses.add(name_hash(&t[s + 6..e]));
+            for (s, e) in dump_ref_spans(t) {
+                let name = &t[s + 6..e];
+                uses.add(name_hash(name));
                 if t.as_bytes().get(e) == Some(&b'.') {
                     let (key, _) = super::ident_at(t, e + 1);
                     if !key.is_empty() {
-                        *key_uses
-                            .entry((String::from(&t[s + 6..e]), String::from(key)))
-                            .or_insert(0) += 1;
+                        key_uses.add(key_hash(name, key));
                     }
                 }
             }
@@ -289,11 +289,7 @@ impl W<'_> {
 
     /// Whether `$dump.F.key` (a factory's member) is read once.
     fn single_key(&self, fac: &str, key: &str) -> bool {
-        self.inl
-            .key_uses
-            .get(&(String::from(fac), String::from(key)))
-            .copied()
-            == Some(1)
+        self.inl.key_uses.get(&key_hash(fac, key)).copied() == Some(1)
     }
 
     /// Member `key` of factory `fac` where it is a closure of a merged scope placed in a
@@ -448,11 +444,7 @@ impl W<'_> {
             out.push_str(&expr);
             at = end;
             self.taken.push_out((sc, i));
-            if let Some(n) = self
-                .inl
-                .key_uses
-                .get_mut(&(String::from(fac), String::from(key)))
-            {
+            if let Some(n) = self.inl.key_uses.get_mut(&key_hash(fac, key)) {
                 *n -= 1;
             }
         }
@@ -607,7 +599,7 @@ impl W<'_> {
                     *n -= 1;
                 }
                 self.repend(&fac);
-            } else if let Some(n) = self.inl.key_uses.get_mut(&(fac, String::from(key))) {
+            } else if let Some(n) = self.inl.key_uses.get_mut(&key_hash(&fac, key)) {
                 *n -= 1;
             }
         }
@@ -1316,6 +1308,38 @@ impl Counts {
     }
 }
 
+/// A set of names with their hashes counted beside it: a lookup of a name not in it (most
+/// references, whose values are not waiting) is one probe, not a search of the tree, 0215.
+/// (One count per name in the set: exact, a hash two of them share only goes to the tree.)
+#[derive(Default)]
+pub(super) struct NameSet {
+    set: BTreeSet<String>,
+    hashes: Counts,
+}
+
+impl NameSet {
+    pub(super) fn insert(&mut self, name: String) -> bool {
+        let h = name_hash(&name);
+        let new = self.set.insert(name);
+        if new {
+            self.hashes.add(h);
+        }
+        new
+    }
+
+    pub(super) fn remove(&mut self, name: &str) -> bool {
+        let gone = self.set.remove(name);
+        if gone && let Some(c) = self.hashes.get_mut(&name_hash(name)) {
+            *c -= 1;
+        }
+        gone
+    }
+
+    pub(super) fn contains(&self, name: &str) -> bool {
+        self.hashes.contains(&name_hash(name)) && self.set.contains(name)
+    }
+}
+
 /// A name's hash (FNV-1a), a map key cheaper than the name.
 pub(super) fn name_hash(n: &str) -> u64 {
     n.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| {
@@ -1341,14 +1365,24 @@ pub(super) fn for_dump_refs<'t>(text: &'t str, mut f: impl FnMut(&'t str)) {
 /// The `$dump.X` references of `text` by substring (`[start, end)`, the name's end): every
 /// one [`scan_spans`] finds, and those in strings and comments too.
 pub(super) fn dump_refs(text: &str) -> Vec<(usize, usize)> {
+    dump_ref_spans(text).collect()
+}
+
+/// [`dump_refs`] one by one.
+fn dump_ref_spans(text: &str) -> impl Iterator<Item = (usize, usize)> + '_ {
     let b = text.as_bytes();
     super::dollar_indices(text, "$dump.")
-        .filter(|&at| !(at > 0 && (ident_part(b[at - 1]) || b[at - 1] == b'.')))
-        .filter_map(|at| {
+        .filter(move |&at| !(at > 0 && (ident_part(b[at - 1]) || b[at - 1] == b'.')))
+        .filter_map(move |at| {
             let (n, e) = super::ident_at(text, at + 6);
             (!n.is_empty()).then_some((at, e))
         })
-        .collect()
+}
+
+/// A factory member's hash (`$dump.F.key`), for [`Inline::key_uses`]: a collision only
+/// adds uses, as with names.
+pub(super) fn key_hash(fac: &str, key: &str) -> u64 {
+    name_hash(fac).rotate_left(17) ^ name_hash(key) ^ 0x2545_F491_4F6C_DD1D
 }
 
 /// Whether `text` names `name` only as an object literal's key (`{ path: "b.md" }`): the
