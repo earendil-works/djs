@@ -365,9 +365,8 @@ the function and its parent's text, which a compile of the function alone sees t
 **Where it is on.** Lazy compilation is a build feature and a per-VM option, off by
 default. Native builds have the feature, so an embedder can turn it on per VM; the wasm
 module with the dumper has it and turns it on for every VM; the shipped codemode modules
-leave it out. An image that a
-host seals as a prelude, to start many runs from, compiles all its lazy functions first,
-so no run pays for them.
+leave it out. An image that a host seals as a prelude, to start many runs from,
+compiles all its lazy functions first, so no run pays for them.
 
 > **Trade-off.** Parse twice over keeping a tree. Keeping the first parse's state for
 > later would need a second code format in the heap, which images would then have to
@@ -375,9 +374,9 @@ so no run pays for them.
 > and stack traces. The cost: a function that runs is parsed twice, so its compile costs
 > about one and a half times an eager one, while a function that never runs costs about
 > 40% of one. Lazy compilation wins where most functions never run (dumps, libraries:
-> TypeScript's own compiler, a single 9 MB file, compiles in about half the time) and loses on codemode
-> scripts, whose callbacks nearly all run, which is why the codemode modules leave it
-> out.
+> TypeScript's own compiler, a single 9 MB file, compiles in about half the time) and
+> loses on codemode scripts, whose callbacks nearly all run, which is why the codemode
+> modules leave it out.
 
 ## What the missing tree costs
 

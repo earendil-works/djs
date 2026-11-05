@@ -1,6 +1,6 @@
 # 0220: Rewrite the guide: behavior and architecture, no history, a JS interface page, live dumps
 
-status: in-progress
+status: done
 agent: guide
 branch: issue/0220-docs-rewrite
 depends-on: -
@@ -124,6 +124,46 @@ boundary"), testing. Reference: opcodes, cells, intrinsics, status. Batches: 1 t
   dumps.html. Size: shipped 1,033,538 B and slim 906,238 B before and after (5 bytes:
   source hash). Guide: dumps.md, js-api.md, README.md.
 
+### Batch 3 (How it works)
+- Rewritten (five parallel sub-agents, one per chapter group, then reviewed): arena.md,
+  values.md, heap.md (strings split into flat/ropes/slices, symbols and BigInts), compiler.md
+  (two phases, lazy functions, "What the missing tree costs"), interpreter.md (what a call
+  does per callee kind), suspension.md (fuel mechanism only, limits.md for the user view;
+  the job queue; safepoints per the code), gc.md (roots/handles, weak refs, builtin
+  prefix), snapshots.md → "Images and the base snapshot", NEW continuations.md "How
+  continuation dumps are written" (maps, continuations, re-enactment, origin tracking,
+  sources by reference, dump runtime, refusals, the dumper's caches; live example with a
+  `Promise.all` + array iterator pause), host.md → "The wasm boundary" (every export by
+  area, dump-build exports incl. `vm_call_site`, run loop, host-call protocol, base in the
+  module, wire, reader, module builds), builtins.md, testing.md (dumps, benchmarks, gate).
+- Each page: In short, Trade-offs, Where to look; no pi (generic hosts, links to pi.md),
+  no history, goals linked by section. `NOT_YET_REWRITTEN` and README's paragraph on it
+  gone; README "Checks" brought up to date; SUMMARY titles.
+- Facts fixed on the way: dumps.md's dumper size (the dump module is 1.95 MB / 780 KB
+  gzip vs 1.03 MB / 443 KB shipped); cross-links into continuations.md.
+- Checked: `djs-docs check`, `cargo test -p djs-docs`, docs module + site build, every
+  live example of the "How it works" pages run in headless Chrome (steps6.mjs), the
+  continuations example continued to the end (steps7.mjs), screenshot of the pause links.
+- Unverified figures carried over from the old pages (sub-agents flagged them): heap.md's
+  shape vs dictionary bytes per object, append-buffer and slice memory numbers; arena.md's
+  bounds-check cost (7 KB gzip, 15%); compiler.md's lazy costs (1.45x / 0.4x); gc.md's
+  in-place collection ratios; builtins.md's "@native several times faster".
+
 ## Follow-ups
+- Re-measure the figures listed at the end of batch 3 (or turn the stable ones into
+  `gen:status` numbers) so the pages do not drift.
+- The module comment of crates/djs-core/src/interp/run.rs lists "the start of `run`" as a
+  safepoint; the run loop has none there (suspension.md follows the code).
 
 ## Result
+The guide is rewritten: "Using djs" (introduction, goals, language, typescript, js-api,
+dumps, limits, determinism, cli, pi) and "How it works" (arena, values, heap, compiler,
+interpreter, suspension, gc, images and the base snapshot, how continuation dumps are
+written, builtins, the wasm boundary, testing) describe djs as it is, with the why and the
+trade-offs, no history, no decision IDs, pi only on pi.md. `djs-docs check` enforces the
+rules on every page (no exemption list left), including links to missing sections. Live
+examples pause at `debugger;` (D3050, D3053): each pause line gives the exact line and
+column (D3054: `Vm::call_site`, `vm_call_site` in dump builds, `Sandbox.callSite`), in
+the example or in the dump a later part continued from, with links that show any of the
+run's dumps marked at the statement. Known gaps: the figures listed under Follow-ups are
+carried over, not re-measured.
