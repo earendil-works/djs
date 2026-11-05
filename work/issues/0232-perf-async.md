@@ -1,7 +1,7 @@
 # 0232: Performance: Promise.all, await, async calls
 
-status: open
-agent: -
+status: in-progress
+agent: pasync
 branch: issue/0232-perf-async
 depends-on: -
 guide: suspension.md / interpreter.md if the async story changes
