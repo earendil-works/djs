@@ -7,7 +7,7 @@
 //
 //   node scripts/plain-fuzz/fuzz.mjs [--seed S] [--cases N] [--time SECS] [--batch B]
 //                                    [--jobs J] [--max-load L] [--from-max K] [--dir DIR]
-//                                    [--no-node] [--known FILE] [--no-statics] [--big]
+//                                    [--no-node] [--known FILE] [--no-statics] [--big] [--lazy]
 //   node scripts/plain-fuzz/fuzz.mjs check FILE...      one program (a case body) each
 //   node scripts/plain-fuzz/fuzz.mjs regress [--cases N] [--seed S]   regress/ and N seeds
 //   node scripts/plain-fuzz/fuzz.mjs reduce FILE --sig TEXT [--time SECS] [-o OUT]
@@ -47,6 +47,9 @@ const jobs = Number(flag("--jobs", 4));
 const maxLoad = Number(flag("--max-load", 30));
 const fromMax = Number(flag("--from-max", 40));
 const noNode = has("--no-node");
+// --lazy: djs compiles functions at their first call (difftest --lazy, D2990), as the
+// dump module does by default.
+const lazy = has("--lazy");
 // --no-statics: classes without static fields and blocks (gen.mjs `statics`).
 const genOpts = has("--no-statics") ? { statics: false } : {};
 // --big: longer, deeper programs with more awaits (more state live at each idle point).
@@ -162,7 +165,7 @@ async function check(bin, work, names) {
   fs.rmSync(path.join(work, "out"), { recursive: true, force: true });
   const unit = async (k, part, cases) => {
     const out = path.join(work, "out", `from-${k}${part}`);
-    const args = ["--engine", "djs", "--corpus", corpus, "--no-diff", "-q", "-j", "1", "--plain-out", out, "--plain-from", String(k)];
+    const args = ["--engine", "djs", "--corpus", corpus, "--no-diff", "-q", "-j", "1", "--plain-out", out, "--plain-from", String(k), ...(lazy ? ["--lazy"] : [])];
     const text = await run(bin, [...args, ...(k === 1 ? ["--idle-points"] : []), ...cases]);
     const fails = parseDifftest(text).map((f) => ({ ...f, from: k }));
     if (!noNode && fs.existsSync(out)) {
