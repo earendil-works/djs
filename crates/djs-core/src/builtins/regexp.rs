@@ -79,6 +79,12 @@ pub(crate) fn create(
     flags: Str,
     cell: Option<u32>,
 ) -> Result<Obj, Fault> {
+    // Flat strings: the cache compares them by their bytes, and the source slot keeps the
+    // flat one.
+    let (pattern, flags) = match cell {
+        Some(_) => (pattern, flags),
+        None => (heap.contiguous(pattern)?, heap.contiguous(flags)?),
+    };
     let cell = match cell {
         Some(c) => c,
         None => match cached(heap, pattern, flags) {
@@ -118,13 +124,15 @@ const CACHE_MAX_LEN: u32 = 256;
 /// it is there.
 fn cached(heap: &mut Heap, pattern: Str, flags: Str) -> Option<u32> {
     let t = realm::intrinsic(heap, Intrinsic::RegExpCache).as_internal()?;
+    let len = heap.str_len(pattern);
     let hit = (0..CACHE_ENTRIES).find(|&i| {
-        let (p, f) = (
-            heap.value_array_get(t, 3 * i),
-            heap.value_array_get(t, 3 * i + 1),
-        );
-        p.as_string().is_some_and(|p| heap.str_eq(p, pattern))
-            && f.as_string().is_some_and(|f| heap.str_eq(f, flags))
+        heap.value_array_get(t, 3 * i)
+            .as_string()
+            .is_some_and(|p| heap.str_len(p) == len && heap.str_eq(p, pattern))
+            && heap
+                .value_array_get(t, 3 * i + 1)
+                .as_string()
+                .is_some_and(|f| heap.str_eq(f, flags))
     })?;
     let cell = heap.value_array_get(t, 3 * hit + 2);
     let entry = [
@@ -141,10 +149,10 @@ fn cached(heap: &mut Heap, pattern: Str, flags: Str) -> Option<u32> {
 
 /// Entries `0..to` one place down (entry `to` is overwritten).
 fn shift_down(heap: &mut Heap, t: u32, to: u32) {
-    for k in (0..3 * to).rev() {
-        let v = heap.value_array_get(t, k);
-        heap.value_array_set(t, k + 3, v);
-    }
+    use crate::heap::cells::ValueArray;
+    let at = ValueArray::VALUES.at(t, 0);
+    heap.arena_mut()
+        .copy_within(at, 3 * to * 8, ValueArray::VALUES.at(t, 3));
 }
 
 /// Puts a just compiled program at the front of the compile cache.
