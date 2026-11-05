@@ -109,7 +109,7 @@ the default mode, in the next mode, and with a dump and a resume at every idle p
   failures are listed with reasons in `tests/test262/expected-failures.txt`; dquickts'
   qjs fails 4 active tests under the same runner.
 - The differential corpus (codemode scripts, console and result formatting, error
-  messages, TypeScript, dquickts' own tests): **616 of 627** cases match qjs; 6 known
+  messages, TypeScript, dquickts' own tests): **620 of 631** cases match qjs; 6 known
   failures (`tests/corpus/expected-failures.txt`) and 5 skipped as non-goals.
 - pi's codemode test suite on djs: 221 of 226 tests pass (measured at 2026-11-01).
 <!-- /gen -->
