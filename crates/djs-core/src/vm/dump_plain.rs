@@ -228,8 +228,9 @@ fn scan(
     let mut out = Refs::default();
     // What `out` holds, for deduplication: a dump's data names thousands (0215: the
     // linear searches were most of writing a data-heavy dump).
-    let mut seen_dump: alloc::collections::BTreeSet<(&str, &str)> = Default::default();
-    let mut seen_names: alloc::collections::BTreeSet<&str> = Default::default();
+    // (By hash, checked against `out`: a hash two of them share searches it, 0215.)
+    let mut seen_dump = super::Index::default();
+    let mut seen_names = super::Index::default();
     let mut i = 0;
     // Brackets of every kind open, and with `skip_fns` the function body being skipped:
     // its nesting, and whether it is an arrow's expression body.
@@ -383,7 +384,18 @@ fn scan(
                         } else {
                             ("", j)
                         };
-                        if collect && seen_dump.insert((name, key)) {
+                        let same = |d: &(String, Option<String>)| {
+                            d.0 == name && d.1.as_deref().unwrap_or("") == key
+                        };
+                        if collect
+                            && first_seen(
+                                &mut seen_dump,
+                                inline::name_hash(name).rotate_left(17) ^ inline::name_hash(key),
+                                out.dump.len(),
+                                &out.dump,
+                                same,
+                            )
+                        {
                             let key = (!key.is_empty()).then(|| String::from(key));
                             out.dump.push_out((String::from(name), key));
                         }
@@ -392,7 +404,16 @@ fn scan(
                         after_dot = false;
                         continue;
                     }
-                } else if !(skip_keys && key_at(b, s, i)) && keep(word) && seen_names.insert(word) {
+                } else if !(skip_keys && key_at(b, s, i))
+                    && keep(word)
+                    && first_seen(
+                        &mut seen_names,
+                        inline::name_hash(word),
+                        out.names.len(),
+                        &out.names,
+                        |n: &String| n == word,
+                    )
+                {
                     out.names.push_out(String::from(word));
                 }
             }
@@ -436,6 +457,26 @@ fn scan(
         i += 1;
     }
     out
+}
+
+/// Whether the entry of hash `h` that would go at `next` of `list` is not in `list` yet:
+/// `seen` holds a hash's first entry; where another one shares it, `list` is searched.
+fn first_seen<T>(
+    seen: &mut super::Index,
+    h: u64,
+    next: usize,
+    list: &[T],
+    same: impl Fn(&T) -> bool,
+) -> bool {
+    let h = h.max(1);
+    match seen.get(h) {
+        None => {
+            seen.insert(h, next as u32);
+            true
+        }
+        Some(e) if same(&list[e as usize]) => false,
+        Some(_) => !list.iter().any(same),
+    }
 }
 
 /// Whether the word `b[s..e]` is an object literal's key (`{ key: …`, `, key: …`).
@@ -755,6 +796,9 @@ struct W<'x> {
     k_effects: bool,
     /// Slot values of continuations with values written in place, by activation and slot.
     vcache: alloc::collections::BTreeMap<(usize, String), String>,
+    /// [`W::dep_items`]'s marks: the call that last listed each item.
+    dep_mark: Vec<u32>,
+    dep_stamp: u32,
     /// Members of merged scopes written where they are used instead (D3003).
     taken: Vec<(Sc, usize)>,
     /// Continuations of merged scopes written where they are called instead (D3003).
@@ -894,6 +938,8 @@ pub(super) fn write(
         kline: None,
         k_effects: false,
         vcache: Default::default(),
+        dep_mark: Vec::new(),
+        dep_stamp: 0,
         taken: Vec::new(),
         taken_k: Vec::new(),
         kscopes: ir
@@ -1631,8 +1677,125 @@ impl W<'_> {
 
 // ---------------------------------------------------------------- scheduling
 
-/// The item that provides each key (the first one listed).
-type Providers = alloc::collections::BTreeMap<Key, usize>;
+/// Whether items need one target (through dependencies), for many items: the items walks from them visited without
+/// reaching it are left out of the later walks (the dependencies do not change meanwhile).
+struct Walk {
+    /// Per item: 1 known not to reach the target, 2 visited by the current walk.
+    mark: Vec<u8>,
+    seen: Vec<usize>,
+    stack: Vec<usize>,
+}
+
+impl Walk {
+    fn new(n: usize) -> Self {
+        Walk {
+            mark: alloc::vec![0; n],
+            seen: Vec::new(),
+            stack: Vec::new(),
+        }
+    }
+
+    fn needs(&mut self, items: &[Item], from: usize, target: usize) -> bool {
+        self.stack.clear();
+        self.stack.push(from);
+        let mut found = false;
+        while let Some(x) = self.stack.pop() {
+            if x == target {
+                found = true;
+                break;
+            }
+            if x >= self.mark.len() || self.mark[x] != 0 {
+                continue;
+            }
+            self.mark[x] = 2;
+            self.seen.push(x);
+            self.stack.extend(items[x].deps.iter().copied());
+        }
+        let v = if found { 0 } else { 1 };
+        for &x in &self.seen {
+            self.mark[x] = v;
+        }
+        self.seen.clear();
+        found
+    }
+}
+
+/// The item that provides each key (the first one listed): by the key's hash, exact (the
+/// keys of a hash are chained and compared), 0215: a tree of thousands of string keys
+/// was most of looking up a data dump's dependencies.
+#[derive(Default)]
+struct Providers {
+    /// Hash -> the last entry of that hash.
+    index: super::Index,
+    /// Key, item, the entry before it of the same hash (`u32::MAX`: none).
+    entries: Vec<(Key, usize, u32)>,
+}
+
+impl Providers {
+    fn hash(k: &Key) -> u64 {
+        let h = match k {
+            Key::Loc(n) => inline::name_hash(n),
+            Key::Global(n) => inline::name_hash(n) ^ 0x9E37_79B9_7F4A_7C15,
+            Key::Factory(n, key) => {
+                inline::name_hash(n).rotate_left(17)
+                    ^ inline::name_hash(key)
+                    ^ 0x2545_F491_4F6C_DD1D
+            }
+        };
+        h.max(1)
+    }
+
+    fn find_by(&self, h: u64, same: impl Fn(&Key) -> bool) -> Option<usize> {
+        let mut e = self.index.get(h.max(1))?;
+        while e != u32::MAX {
+            let x = &self.entries[e as usize];
+            if same(&x.0) {
+                return Some(e as usize);
+            }
+            e = x.2;
+        }
+        None
+    }
+
+    fn find(&self, k: &Key) -> Option<usize> {
+        self.find_by(Self::hash(k), |x| x == k)
+    }
+
+    fn get(&self, k: &Key) -> Option<&usize> {
+        self.find(k).map(|e| &self.entries[e].1)
+    }
+
+    /// [`Providers::get`] of `Key::Loc(name)`, without making the key.
+    fn get_loc(&self, name: &str) -> Option<usize> {
+        self.find_by(
+            inline::name_hash(name),
+            |x| matches!(x, Key::Loc(n) if n == name),
+        )
+        .map(|e| self.entries[e].1)
+    }
+
+    fn get_mut(&mut self, k: &Key) -> Option<&mut usize> {
+        self.find(k).map(|e| &mut self.entries[e].1)
+    }
+
+    /// Adds `k`'s item unless it has one.
+    fn or_insert(&mut self, k: Key, item: usize) {
+        if self.find(&k).is_some() {
+            return;
+        }
+        let h = Self::hash(&k);
+        let prev = self.index.get(h).unwrap_or(u32::MAX);
+        self.index.insert(h, self.entries.len() as u32);
+        self.entries.push_out((k, item, prev));
+    }
+
+    fn insert(&mut self, k: Key, item: usize) {
+        match self.get_mut(&k) {
+            Some(d) => *d = item,
+            None => self.or_insert(k, item),
+        }
+    }
+}
 
 /// A dependency key: `$dump.name`, a key of a merged factory (`name.key`), a global.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -1751,14 +1914,19 @@ impl W<'_> {
 
     fn dep_items(&mut self, keys: &[Key], me: usize, providers: &Providers) -> R<Vec<usize>> {
         let mut out = Vec::new();
-        let mut seen: alloc::collections::BTreeSet<usize> = Default::default();
+        // (Each item once: marked with this call's stamp, 0215.)
+        self.dep_stamp += 1;
+        let stamp = self.dep_stamp;
+        if self.dep_mark.len() < self.items.len() {
+            self.dep_mark.resize(self.items.len(), 0);
+        }
         for k in keys {
             let d = match k {
                 Key::Factory(n, key) => {
                     let merged_key = self.fac_by_name.get(n).is_some_and(|&f| {
                         (0..self.ir.factories[f].scopes.len()).any(|s| self.is_merged((f, s)))
                     });
-                    let loc = || providers.get(&Key::Loc(n.clone())).copied();
+                    let loc = || providers.get_loc(n);
                     if merged_key {
                         match self.creator_of(n, key)? {
                             Some(a) => Some(self.act_item(a)),
@@ -1773,8 +1941,9 @@ impl W<'_> {
             if let Some(d) = d
                 && d != me
                 && d != usize::MAX
-                && seen.insert(d)
+                && self.dep_mark[d] != stamp
             {
+                self.dep_mark[d] = stamp;
                 out.push_out(d);
             }
         }
@@ -1882,7 +2051,7 @@ impl W<'_> {
         }
         let mut providers: Providers = Default::default();
         for (k, i) in list {
-            providers.entry(k).or_insert(i);
+            providers.or_insert(k, i);
         }
         // An async generator's queued requests are made again on its continuation:
         // their promises come from the activation, not their placeholder definitions.
@@ -2001,9 +2170,7 @@ impl W<'_> {
                                 if let Some(c) = found {
                                     deps.push_out(self.act_item(c));
                                 }
-                            } else if let Some(&p) =
-                                providers.get(&Key::Loc(ir.factories[sc.0].name.clone()))
-                            {
+                            } else if let Some(p) = providers.get_loc(&ir.factories[sc.0].name) {
                                 deps.push_out(p);
                             }
                         }
@@ -2097,10 +2264,13 @@ impl W<'_> {
             };
             let deps = self.items[i].deps.clone();
             let defs = self.items[i].def_deps.clone();
+            // (The walks of one activation share what they found: an item a walk that
+            // did not reach it visited does not reach it, 0215.)
+            let mut walk = Walk::new(self.items.len());
             let cyc: Vec<usize> = deps
                 .iter()
                 .copied()
-                .filter(|&d| !defs.contains(&d) && self.needs(d, i))
+                .filter(|&d| !defs.contains(&d) && walk.needs(&self.items, d, i))
                 .collect();
             if cyc.is_empty() {
                 continue;
@@ -2108,30 +2278,16 @@ impl W<'_> {
             self.items[i].deps.retain(|d| !cyc.contains(d));
             let slots = self.items[i].slot_deps.clone();
             for (k, ds) in slots {
-                if ds.iter().any(|&d| cyc.contains(&d) || self.needs(d, i)) {
+                if ds
+                    .iter()
+                    .any(|&d| cyc.contains(&d) || walk.needs(&self.items, d, i))
+                {
                     self.acts[a].after_go.push_out(k);
                 }
             }
             self.acts[a].needs_go = true;
         }
         self.pull(&skip)
-    }
-
-    /// Whether item `from` needs item `target` (through dependencies).
-    fn needs(&self, from: usize, target: usize) -> bool {
-        let mut seen = alloc::vec![false; self.items.len()];
-        let mut stack = alloc::vec![from];
-        while let Some(x) = stack.pop() {
-            if x == target {
-                return true;
-            }
-            if x >= seen.len() || seen[x] {
-                continue;
-            }
-            seen[x] = true;
-            stack.extend(self.items[x].deps.iter().copied());
-        }
-        false
     }
 
     /// Pull scheduling: items in the dump's order, each after what it needs; an

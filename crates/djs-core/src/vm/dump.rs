@@ -514,6 +514,45 @@ impl Index {
         }
     }
 
+    /// A table for about `n` keys: no growing up to them.
+    fn with_capacity(n: usize) -> Self {
+        Index {
+            slots: alloc::vec![(0, 0); (n * 2).next_power_of_two().max(64)],
+            len: 0,
+        }
+    }
+
+    /// Where `key`'s value is.
+    fn find(&self, key: u64) -> Option<usize> {
+        if self.slots.is_empty() {
+            return None;
+        }
+        let mut i = self.slot(key);
+        loop {
+            let k = self.slots[i].0;
+            if k == key {
+                return Some(i);
+            }
+            if k == 0 {
+                return None;
+            }
+            i = (i + 1) & (self.slots.len() - 1);
+        }
+    }
+
+    /// The keys and values, in no particular order.
+    fn entries(&self) -> impl Iterator<Item = (u64, u32)> + '_ {
+        self.slots.iter().copied().filter(|e| e.0 != 0)
+    }
+
+    fn get_ref(&self, key: u64) -> Option<&u32> {
+        self.find(key).map(|i| &self.slots[i].1)
+    }
+
+    fn get_mut(&mut self, key: u64) -> Option<&mut u32> {
+        self.find(key).map(|i| &mut self.slots[i].1)
+    }
+
     /// Sets the value of `key`, replacing an earlier one.
     fn insert(&mut self, key: u64, v: u32) {
         if (self.len + 1) * 2 > self.slots.len() {

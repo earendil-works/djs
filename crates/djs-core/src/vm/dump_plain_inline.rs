@@ -50,7 +50,7 @@ pub(super) struct Inline {
     /// `$dump.X` references over the writer's input, by name (a value's own `$dump.X = `
     /// among them).
     /// (By the names' hashes, `name_hash`, 0215: a collision only adds uses.)
-    pub uses: BTreeMap<u64, u32>,
+    pub uses: Counts,
     /// `$dump.F.key` references (a factory's members), by factory and key.
     pub key_uses: BTreeMap<(String, String), u32>,
     pub pend: Vec<Pend>,
@@ -259,13 +259,14 @@ impl W<'_> {
             }
         }
         texts.extend(ir.handles.iter().map(|h| h.1.as_str()));
-        let mut uses: BTreeMap<u64, u32> = BTreeMap::new();
+        // (About one name per item: no growing, 0215.)
+        let mut uses = Counts::with_capacity(self.items.len());
         let mut key_uses: BTreeMap<(String, String), u32> = BTreeMap::new();
         // (By substring, not `scan`, 0215: one in a string counts too, which only keeps a
         // value named.)
         for t in texts {
             for (s, e) in dump_refs(t) {
-                *uses.entry(name_hash(&t[s + 6..e])).or_insert(0) += 1;
+                uses.add(name_hash(&t[s + 6..e]));
                 if t.as_bytes().get(e) == Some(&b'.') {
                     let (key, _) = super::ident_at(t, e + 1);
                     if !key.is_empty() {
@@ -472,7 +473,7 @@ impl W<'_> {
         };
         for (s, e) in dump_refs(&sl.value) {
             let n = &sl.value[s + 6..e];
-            *self.inl.uses.entry(name_hash(n)).or_insert(0) += 1;
+            self.inl.uses.add(name_hash(n));
             if let Some(p) = self.inl.pend.iter().position(|p| p.name == n) {
                 self.inl.pend.remove(p);
                 self.inl.pend_names.remove(n);
@@ -692,22 +693,25 @@ impl W<'_> {
         &self,
         body: &mut [String],
         handles: &[(String, String)],
-    ) -> Result<BTreeSet<u64>, String> {
+    ) -> Result<Counts, String> {
         // (By the names' hashes, 0215: integer keys. A collision only adds uses, which
         // keeps a line; a name in place seen where it is not only asks `scan` again.)
-        let done: BTreeSet<u64> = self.inl.done.iter().map(|n| name_hash(n)).collect();
-        // The definitions by name, and the lines to look at.
-        let mut defs: BTreeMap<u64, usize> = BTreeMap::new();
+        let mut done = Counts::with_capacity(self.inl.done.len());
+        for n in &self.inl.done {
+            done.add(name_hash(n));
+        }
+        // The definitions by name (the line's index), and the lines to look at.
+        let mut defs = Counts::with_capacity(body.len());
         for (i, l) in body.iter().enumerate() {
             if let Some(rest) = l.strip_prefix("$dump.") {
                 let (name, _) = super::ident_at(rest, 0);
                 if !name.is_empty() && rest[name.len()..].starts_with(" = ") {
-                    defs.insert(name_hash(name), i);
+                    defs.set(name_hash(name), i as u32);
                 }
             }
         }
         // Every name's uses.
-        let mut uses: BTreeMap<u64, u32> = BTreeMap::new();
+        let mut uses = Counts::with_capacity(body.len());
         let fns = self
             .items
             .iter()
@@ -722,8 +726,8 @@ impl W<'_> {
             let mut seen_done = false;
             for_dump_refs(t, |name| {
                 let h = name_hash(name);
-                seen_done |= done.contains(&h);
-                *uses.entry(h).or_insert(0) += 1;
+                seen_done |= done.contains_key(&h);
+                uses.add(h);
             });
             // (Checked by `scan`, which skips strings, only where it may be so.)
             if seen_done
@@ -739,13 +743,16 @@ impl W<'_> {
                 ));
             }
         }
+        // (In the hashes' order, as a sorted map gave them: the lines dropped do not
+        // depend on it, the statements' order is the body's.)
         let mut work: Vec<u64> = defs
             .keys()
             .filter(|h| uses.get(h).copied() == Some(1))
-            .copied()
             .collect();
+        crate::sort::sort_by(&mut work, |a, b| a < b);
         while let Some(h) = work.pop() {
             let Some(&i) = defs.get(&h) else { continue };
+            let i = i as usize;
             if uses.get(&h).copied() != Some(1) {
                 continue;
             }
@@ -778,11 +785,7 @@ impl W<'_> {
                 });
             }
         }
-        Ok(uses
-            .into_iter()
-            .filter(|(_, c)| *c > 0)
-            .map(|(h, _)| h)
-            .collect())
+        Ok(uses)
     }
 
     /// Starts a list of lines (a callback's, or the top level).
@@ -1253,6 +1256,63 @@ impl W<'_> {
         let s = self.inline_with(v, None, Reads::Scope(&bound));
         self.vcache.insert(key, s.clone());
         s
+    }
+}
+
+/// Counts by name hash ([`name_hash`]): an open-addressing table, not a tree (0215: a
+/// data-heavy dump counts thousands of names, a lookup per reference). Hash 0 counts as 1
+/// (the table's empty key): a collision only adds uses, as any other.
+#[derive(Default)]
+pub(super) struct Counts(super::super::Index);
+
+impl Counts {
+    fn key(h: u64) -> u64 {
+        h.max(1)
+    }
+
+    /// Counts for about `n` names.
+    pub(super) fn with_capacity(n: usize) -> Self {
+        Counts(super::super::Index::with_capacity(n))
+    }
+
+    pub(super) fn get(&self, h: &u64) -> Option<&u32> {
+        self.0.get_ref(Self::key(*h)).filter(|&&c| c != u32::MAX)
+    }
+
+    pub(super) fn get_mut(&mut self, h: &u64) -> Option<&mut u32> {
+        self.0.get_mut(Self::key(*h)).filter(|c| **c != u32::MAX)
+    }
+
+    pub(super) fn contains_key(&self, h: &u64) -> bool {
+        self.get(h).is_some()
+    }
+
+    /// Whether `h` is counted more than zero times.
+    pub(super) fn contains(&self, h: &u64) -> bool {
+        self.get(h).is_some_and(|&c| c > 0)
+    }
+
+    pub(super) fn add(&mut self, h: u64) {
+        match self.get_mut(&h) {
+            Some(c) => *c += 1,
+            None => self.0.insert(Self::key(h), 1),
+        }
+    }
+
+    pub(super) fn set(&mut self, h: u64, v: u32) {
+        self.0.insert(Self::key(h), v);
+    }
+
+    /// Removes `h` (its value: `u32::MAX`, which no count reaches).
+    pub(super) fn remove(&mut self, h: &u64) {
+        if let Some(c) = self.get_mut(h) {
+            *c = u32::MAX;
+        }
+    }
+
+    /// The hashes present (not removed), in no particular order.
+    pub(super) fn keys(&self) -> impl Iterator<Item = u64> + '_ {
+        self.0.entries().filter(|e| e.1 != u32::MAX).map(|e| e.0)
     }
 }
 
