@@ -385,7 +385,6 @@ fn legacy_opts(metadata: bool) -> CompileOptions<'static> {
     CompileOptions {
         experimental_decorators: true,
         emit_decorator_metadata: metadata,
-        debugger_awaits: false,
         ..CompileOptions::async_body("t.ts", &["console"]).ts()
     }
 }

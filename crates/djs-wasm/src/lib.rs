@@ -875,6 +875,8 @@ fn compile_with(
         let params_text = staged_str(staging, name_len, params_len).to_owned();
         let src = staged(staging, name_len + params_len, src_len).to_vec();
         let params: Vec<&str> = params_text.split('\n').filter(|p| !p.is_empty()).collect();
+        // (`..`: the dump build's fields.)
+        #[allow(clippy::needless_update)]
         let opts = CompileOptions {
             goal: if goal & 1 == 0 {
                 Goal::Script
@@ -888,7 +890,9 @@ fn compile_with(
             experimental_decorators: goal & 12 != 0,
             emit_decorator_metadata: goal & 8 != 0,
             // Only the dump module compiles `debugger;` as a pause (D3050).
-            debugger_awaits: cfg!(feature = "dump") && goal & 16 != 0,
+            #[cfg(feature = "dump")]
+            debugger_awaits: goal & 16 != 0,
+            ..CompileOptions::script("")
         };
         #[cfg(feature = "dump")]
         let result = match blob_len {
@@ -942,6 +946,8 @@ pub extern "C" fn djs_disasm(goal: u32, params_len: usize, src_len: usize) -> u3
         let params_text = staged_str(&s.staging, 0, params_len).to_owned();
         let src = staged(&s.staging, params_len, src_len).to_vec();
         let params: Vec<&str> = params_text.split('\n').filter(|p| !p.is_empty()).collect();
+        // (`..`: the dump build's fields.)
+        #[allow(clippy::needless_update)]
         let opts = CompileOptions {
             goal: if goal & 1 == 0 {
                 Goal::Script
@@ -955,7 +961,9 @@ pub extern "C" fn djs_disasm(goal: u32, params_len: usize, src_len: usize) -> u3
             experimental_decorators: goal & 12 != 0,
             emit_decorator_metadata: goal & 8 != 0,
             // Only the dump module compiles `debugger;` as a pause (D3050).
-            debugger_awaits: cfg!(feature = "dump") && goal & 16 != 0,
+            #[cfg(feature = "dump")]
+            debugger_awaits: goal & 16 != 0,
+            ..CompileOptions::script("")
         };
         let listing = djs_core::heap::Heap::new()
             .map_err(|e| String::from(e.as_str()))

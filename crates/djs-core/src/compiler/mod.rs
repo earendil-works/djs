@@ -100,7 +100,9 @@ pub struct CompileOptions<'a> {
     /// `debugger;` in an async function awaits a call of the global `debugger` (D3050):
     /// a host that binds an async function there makes the statement a suspension point,
     /// where the run can be dumped. Only builds with the `dump` feature compile it so;
-    /// elsewhere, and outside async functions, `debugger` does nothing.
+    /// elsewhere, and outside async functions, `debugger` does nothing. (A field of dump
+    /// builds only, so that the shipped module stays byte for byte the same.)
+    #[cfg(feature = "dump")]
     pub debugger_awaits: bool,
 }
 
@@ -114,6 +116,7 @@ impl<'a> CompileOptions<'a> {
             typescript: false,
             experimental_decorators: false,
             emit_decorator_metadata: false,
+            #[cfg(feature = "dump")]
             debugger_awaits: false,
         }
     }
@@ -135,6 +138,7 @@ impl<'a> CompileOptions<'a> {
             typescript: false,
             experimental_decorators: false,
             emit_decorator_metadata: false,
+            #[cfg(feature = "dump")]
             debugger_awaits: false,
         }
     }
@@ -146,17 +150,21 @@ impl<'a> CompileOptions<'a> {
     /// The options that decide the code, as a Script cell keeps them (`Script::OPTIONS`):
     /// the goal in the low two bits, then TypeScript, legacy decorators, metadata (also
     /// what a dump's `$djs.source` hash counts, D2882).
+    #[allow(clippy::let_and_return)]
     pub fn bits(&self) -> u32 {
         let goal = match self.goal {
             Goal::Script => 0,
             Goal::AsyncBody => 1,
             Goal::Eval => 2,
         };
-        goal | u32::from(self.typescript) << 2
+        let bits = goal
+            | u32::from(self.typescript) << 2
             | u32::from(self.experimental_decorators) << 3
             | u32::from(self.emit_decorator_metadata) << 4
-            | u32::from(self.privileged) << 5
-            | u32::from(self.debugger_awaits) << 6
+            | u32::from(self.privileged) << 5;
+        #[cfg(feature = "dump")]
+        let bits = bits | u32::from(self.debugger_awaits) << 6;
+        bits
     }
 
     /// `script` with the options of [`CompileOptions::bits`] `bits` (privileged code
@@ -175,6 +183,7 @@ impl<'a> CompileOptions<'a> {
             typescript: bits & 1 << 2 != 0,
             experimental_decorators: bits & 1 << 3 != 0,
             emit_decorator_metadata: bits & 1 << 4 != 0,
+            #[cfg(feature = "dump")]
             debugger_awaits: bits & 1 << 6 != 0,
         }
     }

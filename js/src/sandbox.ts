@@ -194,6 +194,16 @@ export interface SandboxOptions {
    * `Reflect.metadata`); implies `experimentalDecorators`. Default false.
    */
   emitDecoratorMetadata?: boolean;
+  /**
+   * Makes `debugger;` a pause (D3050): in an async function, the statement awaits a call
+   * of this function, bound as the global `debugger` with the identity `"debugger"`. While
+   * it is open, the run is idle at the statement and can be dumped there (a task's
+   * `suspend`, `Run.dump`); a dump writes the pause as any open call, and a sandbox with
+   * this option that loads it pauses again at the next `debugger;`. Outside async
+   * functions the statement does nothing, as without the option. Needs a `module` with the
+   * dumper (the dump module), since a dump compiles the script again with the same options.
+   */
+  debugger?: HostFunction | AsyncHostFunction;
 }
 
 export type SandboxErrorKind = "threw" | "syntax" | "fuel" | "trap" | "memory" | "misuse" | "diverged" | "suspended";
@@ -769,7 +779,7 @@ export class Sandbox {
     if (raw !== undefined) {
       // The VM already has its host functions; bind the ids to the given implementations.
       restoredFns.forEach((name, i) => {
-        const a = opts.asyncFunctions?.[name];
+        const a = name === "debugger" && opts.debugger !== undefined ? opts.debugger : opts.asyncFunctions?.[name];
         const f = builtins[name] ?? opts.functions?.[name] ?? (typeof a === "object" ? a.call : a);
         if (f === undefined) throw new SandboxError("misuse", `the image needs host function ${name}`);
         this.fnNames.push(name);
@@ -781,7 +791,13 @@ export class Sandbox {
       for (const m of CONSOLE_METHODS) this.addFunction(`console.${m}`, builtins[`console.${m}`], false);
       for (const [name, f] of Object.entries(opts.functions ?? {})) this.addFunction(name, f, false);
       for (const [name, f] of Object.entries(opts.asyncFunctions ?? {})) this.addFunction(name, f, true);
-      for (const [name, identity] of Object.entries(opts.globals ?? this.defaultGlobals())) this.bindGlobal(name, identity);
+      if (opts.debugger !== undefined) {
+        if (!x.vm_dump) throw new SandboxError("misuse", "the debugger option needs a djs-wasm module with the dumper (the `dump` feature)");
+        this.addFunction("debugger", opts.debugger, true);
+      }
+      const globals = { ...(opts.globals ?? this.defaultGlobals()) };
+      if (opts.debugger !== undefined) globals.debugger = "debugger";
+      for (const [name, identity] of Object.entries(globals)) this.bindGlobal(name, identity);
       // What a new VM starts with; an image keeps its own (D1680).
       const det = opts.deterministic;
       const [lo, hi] = det ? seedWords(det.seed) : opts.randomSeed !== undefined ? seedWords(opts.randomSeed) : entropy();
@@ -1340,9 +1356,9 @@ export class Sandbox {
       return void fail(`the dump continues the script ${JSON.stringify(name)}, which this host does not have (pass the sandbox option \`sources\`, or dump with \`inlineSources\`)`);
     }
     const o = this.opts;
-    const goal = 1 | (o.typescript ? 2 : 0) | (o.experimentalDecorators || o.emitDecoratorMetadata ? 4 : 0) | (o.emitDecoratorMetadata ? 8 : 0);
+    const goal = 1 | (o.typescript ? 2 : 0) | (o.experimentalDecorators || o.emitDecoratorMetadata ? 4 : 0) | (o.emitDecoratorMetadata ? 8 : 0) | (o.debugger ? 16 : 0);
     // The script's compile options as the dump's hash counts them (`CompileOptions::bits`).
-    const bits = 1 | (goal & 2 ? 4 : 0) | (goal & 12 ? 8 : 0) | (goal & 8 ? 16 : 0);
+    const bits = 1 | (goal & 2 ? 4 : 0) | (goal & 12 ? 8 : 0) | (goal & 8 ? 16 : 0) | (goal & 16 ? 64 : 0);
     const ps = typeof params === "string" ? params : "";
     const code = candidates.find((c) => scriptHash(c, ps, bits) === hash);
     if (code === undefined) return void fail(`the host's script ${JSON.stringify(name)} is not the one the dump refers to (another text, parameters or options)`);
@@ -1819,12 +1835,13 @@ export class Sandbox {
       all.set(src, name.length + head.length);
       this.stage(all);
       const o = this.opts;
-      const goal = script
-        ? typescript ? 2 : 0
-        : 1 |
-        (o.typescript ? 2 : 0) |
-        (o.experimentalDecorators || o.emitDecoratorMetadata ? 4 : 0) |
-        (o.emitDecoratorMetadata ? 8 : 0);
+      const goal = (o.debugger ? 16 : 0) |
+        (script
+          ? typescript ? 2 : 0
+          : 1 |
+            (o.typescript ? 2 : 0) |
+            (o.experimentalDecorators || o.emitDecoratorMetadata ? 4 : 0) |
+            (o.emitDecoratorMetadata ? 8 : 0));
       const f = x.vm_compile_file(vm, goal, name.length, head.length, src.length);
       if (f !== 0 && !script) rememberScript(filename || "sandbox.js", code);
       if (f === 0) {
