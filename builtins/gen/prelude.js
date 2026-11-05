@@ -6036,7 +6036,7 @@ function CoerceNumbers(args) {
   return n;
 }
 
-// builtins/math.ts:393 Math.max
+// builtins/math.ts:394 Math.max
 function MathMax(...args) {
   const n = CoerceNumbers(args);
   let highest = -1 / 0;
@@ -6052,7 +6052,7 @@ function MathMax(...args) {
   return highest;
 }
 
-// builtins/math.ts:414 Math.min
+// builtins/math.ts:416 Math.min
 function MathMin(...args) {
   const n = CoerceNumbers(args);
   let lowest = 1 / 0;
@@ -6068,7 +6068,7 @@ function MathMin(...args) {
   return lowest;
 }
 
-// builtins/math.ts:435 Math.hypot
+// builtins/math.ts:437 Math.hypot
 function MathHypot(...args) {
   const n = CoerceNumbers(args);
   let r = 0;
@@ -6078,7 +6078,7 @@ function MathHypot(...args) {
   return r;
 }
 
-// builtins/math.ts:448 Math.random
+// builtins/math.ts:450 Math.random
 function MathRandomBuiltin() {
   return %MathRandom();
 }
@@ -12285,6 +12285,8 @@ function GlobalAtob(...args) {
 %MarkFast(ToString);
 %MarkFast(LengthOfArrayLike);
 %MarkFast(ToPropertyKey);
+%MarkFast(MathMax);
+%MarkFast(MathMin);
 %MarkFast(NumberConstructor);
 %MarkFast(StringPrototypeSplit);
 %MarkFast(StringPrototypeCharAt);

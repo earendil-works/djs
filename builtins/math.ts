@@ -389,6 +389,7 @@ function CoerceNumbers(args: Obj): f64 {
  * Math.max ( ...args ), 21.3.2.24.
  * @builtin Math.max
  * @length 2
+ * @fast
  */
 function MathMax(...args: Value[]): f64 {
   const n: f64 = CoerceNumbers(args);
@@ -410,6 +411,7 @@ function MathMax(...args: Value[]): f64 {
  * Math.min ( ...args ), 21.3.2.25.
  * @builtin Math.min
  * @length 2
+ * @fast
  */
 function MathMin(...args: Value[]): f64 {
   const n: f64 = CoerceNumbers(args);

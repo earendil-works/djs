@@ -2101,16 +2101,16 @@ CoerceNumbers: reentrant
   builtins/math.ts:382:7  CreateDataPropertyOrThrow (intrinsic)
 
 MathMax: reentrant (Math.max)
-  builtins/math.ts:394:18  CoerceNumbers (builtin)
-  builtins/math.ts:397:29  Get (intrinsic)
+  builtins/math.ts:395:18  CoerceNumbers (builtin)
+  builtins/math.ts:398:29  Get (intrinsic)
 
 MathMin: reentrant (Math.min)
-  builtins/math.ts:415:18  CoerceNumbers (builtin)
-  builtins/math.ts:418:29  Get (intrinsic)
+  builtins/math.ts:417:18  CoerceNumbers (builtin)
+  builtins/math.ts:420:29  Get (intrinsic)
 
 MathHypot: reentrant (Math.hypot)
-  builtins/math.ts:436:18  CoerceNumbers (builtin)
-  builtins/math.ts:439:30  Get (intrinsic)
+  builtins/math.ts:438:18  CoerceNumbers (builtin)
+  builtins/math.ts:441:30  Get (intrinsic)
 
 MathRandomBuiltin: leaf (Math.random)
 

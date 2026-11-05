@@ -75,6 +75,9 @@ pub(crate) static FAST: &[FastFn] = &[
     f("StringPrototypeSplit", split),
     // ---- Number ----
     f("NumberConstructor", number_constructor),
+    // ---- Math (0230: `Math.max(m, x)` in reduce callbacks) ----
+    f("MathMax", math_max),
+    f("MathMin", math_min),
     // ---- Array ----
     f("ArraySpeciesCreate", array_species_create),
     // ---- Array element loops over dense arrays (0091, builtins/dense.rs) ----
@@ -389,6 +392,38 @@ fn number_constructor(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
 }
 
 // ---- Math ----------------------------------------------------------------------------
+
+/// Math.max (`max`) or Math.min of primitives whose ToNumber is pure. Every argument is
+/// converted before the result is known (a NaN does not end the loop), so an object or
+/// a symbol after a NaN still declines to the builtin, which runs or throws.
+fn extremum(heap: &mut Heap, args: &[Value], max: bool) -> Fast {
+    let mut r = if max { f64::NEG_INFINITY } else { f64::INFINITY };
+    let mut nan = false;
+    for &v in args {
+        let Some(x) = num(heap, v)? else {
+            return Ok(None);
+        };
+        nan |= x.is_nan();
+        // +0 is larger than -0.
+        let pick = if max {
+            x > r || (x == 0.0 && r == 0.0 && x.is_sign_positive())
+        } else {
+            x < r || (x == 0.0 && r == 0.0 && x.is_sign_negative())
+        };
+        if pick {
+            r = x;
+        }
+    }
+    Ok(Some(if nan { Value::NAN } else { conv::number(r) }))
+}
+
+fn math_max(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
+    extremum(heap, args, true)
+}
+
+fn math_min(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
+    extremum(heap, args, false)
+}
 
 // ---- Object / Array ------------------------------------------------------------------
 
