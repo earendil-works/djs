@@ -267,6 +267,35 @@ fn a_growing_buffer_behind_the_arena_leaves_it_room() {
     unsafe { a.dealloc(b, bl) };
 }
 
+#[test]
+fn a_staged_block_leaves_the_arena_room() {
+    // A big staging buffer (D3142): allocated fresh with room behind the arena, so that the
+    // arena grows by twice its size while it is alive, in place.
+    let (a, mut arena, mut l) = with_arena(3);
+    let sl = Layout::from_size_align(3 * PAGE - 100, 1).unwrap();
+    let old = a.leave_top_room(2 * sl.size());
+    // SAFETY: a non-zero size.
+    let s = unsafe { a.alloc(sl) };
+    a.restore_keep(old);
+    assert!(s > arena);
+    assert!(grow_arena(a, &mut arena, &mut l, 6), "the arena moved");
+    // SAFETY: live, with its layout.
+    unsafe { a.dealloc(s, sl) };
+    // Freed, it no longer blocks the arena.
+    assert!(grow_arena(a, &mut arena, &mut l, 8), "the arena moved");
+}
+
+#[test]
+fn a_block_below_huge_grows_into_one_in_place() {
+    // A VM's arena starts at the base image in whole pages (D3141), above HUGE: a page run
+    // and the top block, which grows in place.
+    let a = page_alloc(1024);
+    let mut l = Layout::from_size_align(HUGE + 100, 8).unwrap();
+    // SAFETY: a non-zero size.
+    let mut arena = unsafe { a.alloc(l) };
+    assert!(grow_arena(a, &mut arena, &mut l, 1), "the arena moved");
+}
+
 /// A block of the stress test: its address, layout and fill byte.
 struct Block {
     p: *mut u8,
