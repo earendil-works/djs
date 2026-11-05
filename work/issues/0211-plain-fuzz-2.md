@@ -77,8 +77,10 @@ jobs, wait while load > 30) and gate rules (batch merges, check slim/test262-sli
 - plain-node maps node's "Cannot assign to read only property 'x' of …" to djs's "'x' is
   read-only" (false alarms at seeds 184922, 4586, from pjr). regress/ gains s15-* (those
   and pjr's D3026 seeds 668041, 82489).
-- Housekeeping: dropped the stale refusal entry codemode/plain-class-static-private.js
-  (fixed by D2883/D2950). The gate's stale entry in tests/pi/expected-failures.txt was
+- Housekeeping: the refusal entry codemode/plain-class-static-private.js stays: it looked
+  stale with a binary older than main, but on main it refuses (a static private field
+  with a non-literal initializer, deliberate per D2950); the first merge attempt failed the
+  gate on it and the entry is back. The gate's stale entry in tests/pi/expected-failures.txt was
   "'Node' process lifetime exits promptly after timeout with a real worker": the six
   process-lifetime tests cancel a workload djs's indexOf finishes in milliseconds, so they
   failed on a quiet machine (3 of 3 local runs) and passed now and then under load. Fix
