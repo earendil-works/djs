@@ -428,6 +428,14 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   pjr's 4.0k: the writer's schedule (keys_in over every item, ~40%) and emit (~27%).
   Next on the list.
 
+- Records regression, part 2: 5.7k → 4.81k M (merged at 4.8k by the coordinator's call;
+  pjr takes the writer pass merge in schedule/keys_in/count_uses/drop_unread). Changes:
+  counts by FNV name hashes (collisions only overcount), no allocation per reference,
+  effect markers in one pass, no clones of item texts, one pass for host calls and
+  pending names, data literals pure (keys are no reads, `reads_other`), and a temporary K
+  writes after all counts as a use (`kept_temp`, which was latent: an object literal went
+  in place twice).
+
 ## Follow-ups
 - "missing slot for-in.iterator@N" refusal, seed 778696 (also on main).
 - "crossing callbacks" refusal, pjz seed 10173 (iterator helpers in an async function).
