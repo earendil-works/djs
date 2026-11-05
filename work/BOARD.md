@@ -6,6 +6,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0224 | Investigate and fix native perf regressions since 2026-11-01 (owner) | perf | .worktrees/perfreg |
+| 0225 | Binary bloat: account for every byte, win them back (owner) | bloat | .worktrees/bloat |
 
 ## Open (ready)
 
@@ -19,7 +21,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | - | Stale entry in tests/pi/expected-failures.txt (next mode): update the ratchet | ready |
 | - | Paused, agents archived (owner): 0207 dump size (fluff queue items 8, 9, 11; crossing-callbacks and for-in.iterator refusals), 0211 fuzzing, 0215 performance (Result written) | restart on request |
 | - | fuzz.mjs reduce left an orphaned djs-difftest at 100% CPU for 15 h (likely a reduced candidate with an endless loop, run without a timeout): wrap reduce's runs in scripts/timeout.sh / a fuel cap; check whether it was an engine hang instead | ready |
-| - | Native regressions since 2026-11-01 (0223): regexp/compile +26-83%, gc per MiB +60-66%, wire/stringify 10k-objects +48% (confirmed); UTF-16 literal regexp scans, wasm/instantiate, engine/djs/empty (one run) | ready |
 | - | status.py should record the commit of the measured engine sources, not HEAD (0223) | ready |
 | - | pi adapter fuel slice ~12,700 for QuickJS-equivalent interrupt budgets (0223; pi-side) | owner |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
