@@ -5,9 +5,10 @@
 # shipped module loads plain dumps itself; lowered by 0177, D2704: images are no persistence
 # format, so the shipped module verifies none; lowered by 0225, D3090: core and alloc built for the module,
 # panics abort without a message; lowered by 0226, D3100: the shipped and slim modules read the
-# arena unchecked; raised by 0230, D3123: builtins' helpers inlined, pure leaves in the hot loop).
+# arena unchecked; raised by 0230, D3123: builtins' helpers inlined, pure leaves in the hot loop; raised by 0232,
+# D3133: await, async return and Promise combinators without builtin calls).
 # quickjs_wasi_gzip: quickjs-wasi 3.6.2 quickjs.wasm (pi's engine), gzip -9.
 quickjs_wasi_gzip	286655
-ceiling_gzip	420571
+ceiling_gzip	422892
 # slim_ceiling_gzip: the slim module (scripts/build-wasm.sh --slim, D2411), its own ratchet.
-slim_ceiling_gzip	354341
+slim_ceiling_gzip	356596

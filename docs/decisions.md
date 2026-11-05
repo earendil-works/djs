@@ -11249,3 +11249,16 @@ date: 2026-11-06 · by: pasync · issue: 0232
 The argument is a Latin-1 literal of the builtins; it is read through `str_view` instead of
 `str_to_string`, which allocated a Rust String per call (5-7% of an await before D3130, and
 every builtin that makes an object with `RealmIntrinsic("…Prototype")`).
+
+## D3133: Size of 0232; the size ceiling rises by what it measured
+date: 2026-11-06 · by: pasync · issue: 0232 · approved: coordinator
+Measured at the merge (main 3714daaf vs the branch, same build environment): shipped module
+418,773 -> 421,094 gzip (+2,321; 959,766 -> 965,300 raw, +5,534), slim 352,509 -> 354,764
+(+2,255). On top of 0230b's ceilings (D3124): ceiling_gzip 420,571 -> 422,892 and
+slim_ceiling_gzip 354,341 -> 356,596: the ratchet rises by exactly that (~1.475x quickjs-wasi,
+under the 1.5x budget). Code bytes (perf build with
+names): the combinator step with its run loop (D3131) ~2.1 KB, next_job's fast paths (await
+resumption, Promise.all element jobs) ~1 KB, the await/return op paths ~0.6 KB, the plain-lookup
+helpers ~0.6 KB. It buys await 26.2 k -> 3.8 k instructions (quickjs 9.3 k), async call + await
+20.5 k -> 7.2 k (10.1 k), Promise.all of 20 resolved promises 1,323 k -> 220 k (257 k). The
+Promise.all element-job path (~0.4 KB gzip) stays: fan-out over tools is a core codemode shape.
