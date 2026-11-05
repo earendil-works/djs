@@ -709,3 +709,8 @@ topics when the index is next reorganized.
 - D3004: A reopened host call read once waits for its reader
 - D3005: A hole the reader finds by reading the value is left out of the record
 - D3006: Arguments in place outside K, functions movable, values nothing reads dropped
+- D2837: The seed is written only when the run used Math.random before the dump
+- D2838: pi leaves out a reopened call's state when it equals the call id
+- D2839: Source references keep the script's name and use a 32-bit hash
+- D2840: Dumps carry no "use strict"; hosts compile them strict
+- D2841: Settled by the owner on 0216's review

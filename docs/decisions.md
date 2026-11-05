@@ -10450,3 +10450,35 @@ date: 2026-11-06 · by: pjs · issue: 0207
   (a parameter liveness left out held it, a reference became a binding's name) is left out
   where it only makes a value (a factory too) and written as a statement otherwise, until
   none is left.
+
+## D2837: The seed is written only when the run used Math.random before the dump
+date: 2026-11-05 · by: owner · issue: 0207
+`$djs.seed` appears in a dump only if `Math.random` was called before it: an unobserved
+generator state is consistent with any seed. The call-id part of the seed line (D2897) stays
+wherever ids need it. Tests that compare a resumed run with the uninterrupted one seed
+deterministically.
+
+## D2838: pi leaves out a reopened call's state when it equals the call id
+date: 2026-11-05 · by: owner · issue: 0207
+`$djs.resume(id, name, args)` without the fourth argument means "state = id" in pi's adapter
+(114 of 121 calls in the pi suite).
+
+## D2839: Source references keep the script's name and use a 32-bit hash
+date: 2026-11-05 · by: owner · issue: 0207
+`$djs.source(name, hash, params)`: the name stays (readability; the CLI finds the script by
+it), the hash shrinks to 8 hex digits, enough to tell a host's scripts apart.
+
+## D2840: Dumps carry no "use strict"; hosts compile them strict
+date: 2026-11-05 · by: owner · issue: 0207
+Dumps are loaded by djs hosts only, which compile them as strict code. Test harnesses that run
+dumps in node (scripts/plain-node.mjs) prepend the directive themselves.
+
+## D2841: Settled by the owner on 0216's review
+date: 2026-11-05 · by: owner · issue: 0216
+Generated names and whitespace stay readable (short names save under 0.5% gzip). The dump-time
+check stays on in every host (about 0% of a pi dump). Lazy compilation stays out of the shipped
+main and slim modules; no per-seed prelude images for deterministic loads. Confirmed: static
+code blanked in dumped class text (D2950), host bindings and identities (D2970-D2973), the
+deliberate refusals (instances with private fields, for-in over a Proxy, an await after another
+resource in a `for (using …)` head). The size ceilings stay ratchets: room is made by shrinking
+something else.
