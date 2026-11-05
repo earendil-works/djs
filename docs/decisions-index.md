@@ -683,3 +683,4 @@ topics when the index is next reorganized.
 - D2913: A continuation's record makes its layout again: `{f, at, h, r}`
 - D2914: Literal operands, object literals, left operands and substitutions are read again
 - D2915: Positional origin records; a generator's prototype is its function's
+- D2888: The dump's check compiles the plain text a host loads; `DumpOptions::check`
