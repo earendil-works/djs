@@ -436,6 +436,22 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   writes after all counts as a use (`kept_temp`, which was latent: an object literal went
   in place twice).
 
+- Owner decisions D2837–D2840 (D3008 records how):
+  - seed only where Math.random ran (the state record gains a "used" flag, COMPAT_VERSION
+    4; `Vm::restore_math_random`/`vm_restore_math_random` restore as used);
+  - `$djs.seed(next)` form, with `next` only where it is not one past the last reopened
+    id; every host sets `max(next ?? 0, last + 1)`;
+  - pi leaves out `{id}` when it equals the call id;
+  - 32-bit source hash (FNV-1a folded);
+  - no "use strict" (node harnesses prepend it on line 1).
+  Hosts updated: CLI, difftest, Sandbox, pi, the core test hosts, plain-node, the sleep
+  example, js tests.
+  Score: v2 362,617 → 352,620 (gzip 134,447 → 126,981); corpus 6,887,144 → 6,798,913;
+  sleep 749 → 688 (gzip 383; fluff's minimal was 716).
+  Docs: plain-js-dumps, continuation-dumps (example + explain), host.md (+ the
+  vm_restore_math_random row), guide host/snapshots, sleep README (transcript, explain).
+  Records 4.81k M (unchanged); wasm 442,635.
+
 ## Follow-ups
 - "missing slot for-in.iterator@N" refusal, seed 778696 (also on main).
 - "crossing callbacks" refusal, pjz seed 10173 (iterator helpers in an async function).
