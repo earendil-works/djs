@@ -121,7 +121,10 @@ fn run_dump(vm: &mut Vm, text: &str) -> Result<(), String> {
     vm.call(f, this, &[]).map_err(|e| format!("{e:?}"))?;
     loop {
         match vm.run(FUEL_BUDGET) {
-            Status::Done(_) | Status::Idle => return Ok(()),
+            // (The host deletes `$djs` and `$dump` once the Script ran, D2916.)
+            Status::Done(_) | Status::Idle => {
+                return vm.end_dump_load().map_err(|e| format!("{e:?}"));
+            }
             Status::HostCall { call_id, fn_id } if fn_id == SEED => {
                 let args = vm.host_call(call_id).unwrap().args;
                 let half = |i: usize| args.get(i).and_then(|v| v.as_int()).unwrap_or(0) as u32;
