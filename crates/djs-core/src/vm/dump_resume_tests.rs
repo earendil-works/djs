@@ -1970,3 +1970,36 @@ main();
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 18 && links >= 18, "{ok} {links}");
 }
+
+/// Bindings not declared yet in a later loop iteration, whose locals still hold the
+/// earlier iteration's values: written as in their TDZ, their old values left out
+/// (0215); a declaration whose pattern holds the site keeps what it has bound.
+#[test]
+fn plain_dumps_leave_out_stale_locals() {
+    let src = r#"
+async function main() {
+  for (const i of [0, 1]) for (let j = 0; j < 1; j++) {
+    let n = i;
+    class C { get(x) { return x + n; } async fetch(x) { return await later(x); } }
+    const o = new C(i > 0 ? await later(4) : 4); print(o.get(1));
+    const p = { v: i }, q = i > 0 ? await later(p.v) : 0, { r } = { r: i > 0 ? await later(5) : 5 };
+    print(p.v, q, r);
+    let late = { i };
+    print(late.i);
+  }
+  for (const k of [0, 1, 2]) {
+    if (k > 0) print("before", await later(k));
+    const obj = { k, f() { return k; } };
+    print(obj.f());
+  }
+}
+main();
+"#;
+    let (failed, refused, ok) = plain_check_program("stale", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, links, refused) = plain_chain_program("stale", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 5 && links >= 5, "{ok} {links}");
+}

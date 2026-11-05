@@ -1,8 +1,8 @@
 # Suspension map coverage (compiler/smap_tests.rs)
-sites 1157
+sites 1162
 
 ## by kind
- 1019 await
+ 1024 await
    11 await-using
    14 for-await.close
    12 for-await.next
@@ -14,10 +14,10 @@ sites 1157
    14 yield.return
 
 ## described, by temporaries (in locals, then on the stack)
-  748 -
+  749 -
   212 call.callee call.this
    22 yield*.iterator yield*.next
-   20 for-of.iterator for-of.next
+   21 for-of.iterator for-of.next
    18 call.callee call.this object.literal
    15 for-of.iterator for-of.next call.callee call.this
    13 call.callee call.this call.callee call.this
@@ -55,12 +55,15 @@ sites 1157
     1 for-await.iterator for-await.next call.callee call.this
     1 for-of.iterator
     1 for-of.iterator for-await.exception
+    1 for-of.iterator for-of.next call.callee call.this call.arg
     1 for-of.iterator for-of.next call.callee call.this call.callee call.this
     1 for-of.iterator for-of.next for-await.iterator for-await.next
     1 for-of.iterator for-of.next for-await.iterator for-await.next call.callee call.this call.arg
     1 for-of.iterator for-of.next for-in.iterator call.callee call.this
     1 for-of.iterator for-of.next for-of.iterator for-of.next call.callee call.this call.arg
     1 for-of.iterator for-of.next for-of.iterator for-of.next call.callee call.this call.arg call.arg
+    1 for-of.iterator for-of.next new.callee
+    1 for-of.iterator for-of.next object.literal
     1 for-of.iterator for-of.next pattern.iterator
     1 for-of.iterator for-of.next using.record completion.kind completion.value
     1 object.literal array.element array.element
@@ -68,7 +71,7 @@ sites 1157
     1 pattern.iterator
 
 ## paths (D2850)
- 1157 complete
+ 1162 complete
 
 ## path gaps, by the part they are in
 

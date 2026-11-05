@@ -1,0 +1,39 @@
+function <anonymous> @1..827
+  arg0 argument 0, arg1 console@0
+  loc0 <state>, loc1 tools@0, loc2 i@318, loc7 j@340, loc8 n@363, loc9 C@363, loc11 <fields 0>, loc12 o@363, loc13 p@363, loc14 q@363, loc16 r@363, loc17 k@683, loc22 obj@703
+  node 0 Body @0..826: Params 6..22 Stmt 307..671 Stmt 672..823 | Param tools@0#0 Param console@0#0
+  node 1 ForOf @307..671: Head 312..319 Iterable 323..329 Body 331..671 | Const i@318#0
+  node 2 For @331..671: Init 336..345 Test 347..352 Update 354..357 Body 359..671 | Let j@340#0
+  node 3 Block @359..671: Stmt 363..373 Stmt 376..459 Stmt 462..511 Stmt 512..534 Stmt 537..643 Stmt 646..669 | Let n@363#0 Class C@363#1 Const o@363#2 Const p@363#4 Const q@363#4 Const r@363#4
+  node 4 Decl(Const) @462..511: Target 468..469 Init 472..510
+  node 5 New @472..510: Callee 476..477 Open 477..478 Arg 478..509
+  node 6 Conditional @478..509: Test 478..483 Then 486..505 Else 508..509
+  node 7 Await @486..505: Operand 492..505
+  node 8 Decl(Const) @537..643: Target 543..544 Init 547..555 Target 557..558 Init 561..594 Target 596..601 Init 604..642
+  node 9 Conditional @561..594: Test 561..566 Then 569..590 Else 593..594
+  node 10 Await @569..590: Operand 575..590
+  node 11 Object @604..642: Key 606..607 Value 609..640
+  node 12 Conditional @609..640: Test 609..614 Then 617..636 Else 639..640
+  node 13 Await @617..636: Operand 623..636
+  node 14 ForOf @672..823: Head 677..684 Iterable 688..697 Body 699..823 | Const k@683#0
+  node 15 Block @699..823: Stmt 703..757 Stmt 760..797 Stmt 800..821 | Const obj@703#1
+  node 16 If @703..757: Test 707..712 Then 714..757
+  node 17 Expr @714..757: Operand 714..756
+  node 18 Call @714..756: Callee 714..725 Open 725..726 Arg 726..734 Arg 736..755
+  node 19 Await @736..755: Operand 742..755
+  await#1 @486 (8:27) pc 129: for-of.iterator@307 for-of.next@307 new.callee@472 (out: loc17 loc22)
+    path 0.1 1.2 2.3 3.2 4.1 5.2 6.1 7
+  await#2 @569 (9:35) pc 198: for-of.iterator@307 for-of.next@307 (out: loc17 loc22)
+    path 0.1 1.2 2.3 3.4 8.3 9.1 10
+  await#3 @617 (9:83) pc 225: for-of.iterator@307 for-of.next@307 object.literal@604 (out: loc17 loc22)
+    path 0.1 1.2 2.3 3.4 8.5 11.1 12.1 13
+  await#4 @736 (13:36) pc 389: for-of.iterator@672 for-of.next@672 call.callee@714 call.this@714 call.arg@726 (out: loc2 loc7 loc8 loc9 loc12 loc13 loc14 loc16)
+    path 0.2 14.2 15.0 16.1 17.0 18.3 19
+function fetch @412..458
+  arg0 x@0
+  loc0 <state>
+  node 0 Body @0..46: Params 11..14 Stmt 17..44 | Param x@0#0
+  node 1 Return @17..44: Operand 24..43
+  node 2 Await @24..43: Operand 30..43
+  await#1 @24 (7:62) pc 18: -
+    path 0.1 1.0 2

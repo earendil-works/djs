@@ -480,7 +480,11 @@ impl Dumper<'_> {
                     _ => continue,
                 };
                 let v = fp(lp + i);
-                if v.is_uninitialized() {
+                if v.is_uninitialized()
+                    || syntax
+                        .as_deref()
+                        .is_some_and(|sx| undeclared_at(sx, site, slot, v))
+                {
                     // A binding in its TDZ: written as `$dump.TDZ` (`slot_expr`).
                     continue;
                 }
@@ -1875,6 +1879,16 @@ impl Dumper<'_> {
                         .filter(|&bn| !e.is_empty() && self.nodes[bn].loc == e);
                     ("binding", e)
                 }
+                Holds::Binding
+                    if let Place::Local(i) = slot.place
+                        && let Some(sx) = self.fl.acts[a].syntax.clone()
+                        && site
+                            .locals
+                            .get(usize::from(i))
+                            .is_some_and(|l| undeclared_at(&sx, &site, l, v)) =>
+                {
+                    ("binding", String::from("$dump.TDZ"))
+                }
                 Holds::Binding | Holds::Hidden => ("binding", self.slot_expr(v, slot.boxed)),
                 Holds::Temp => {
                     let e = match slot.construct() {
@@ -2335,4 +2349,66 @@ pub(super) fn computed_hidden(name: &str) -> bool {
         name,
         "<state>" | "this" | "new.target" | "<active>" | "<home>"
     )
+}
+
+/// Whether lexical binding `slot` of `site`'s frame has not been declared in its scope's
+/// current entry: its declarator holds the site or comes after it. Its local can still
+/// hold what an earlier entry left there (a loop's earlier iteration) when the compiler
+/// saw no read that needs the TDZ marker: that value is not the binding's (0215, a
+/// first iteration's object made its class's scope ambiguous).
+fn undeclared_at(sx: &crate::compiler::Syntax, site: &Site, slot: &Slot, v: Value) -> bool {
+    let Slot::Binding { name, scope } = slot else {
+        return false;
+    };
+    // (A boxed binding's box is made at its scope's entry: uninitialized until then.)
+    if v.as_internal().is_some() {
+        return false;
+    }
+    use crate::compiler::{DeclKind as K, NodeKind, Role};
+    for (i, step) in site.path.iter().enumerate() {
+        let Some(nd) = sx.nodes.get(step.node as usize) else {
+            continue;
+        };
+        let Some(d) = nd
+            .decls
+            .iter()
+            .find(|d| d.name == *name && d.scope == *scope)
+        else {
+            continue;
+        };
+        if !matches!(
+            d.kind,
+            K::Let | K::Const | K::Class | K::Using | K::AwaitUsing
+        ) {
+            return false;
+        }
+        let (Some(dp), Some(sp)) = (d.part, step.part) else {
+            return false;
+        };
+        if dp != sp {
+            return dp > sp;
+        }
+        // Declared by the statement that holds the site: by a later declarator, or by
+        // the one whose initializer holds it. (A pattern the site is in has run part of
+        // its declarator: its bindings are left as they are.)
+        let Some(next) = site.path.get(i + 1) else {
+            return false;
+        };
+        let Some(decl) = sx.nodes.get(next.node as usize) else {
+            return false;
+        };
+        let (NodeKind::Decl(_), Some(k)) = (decl.kind, next.part) else {
+            return false;
+        };
+        let k = usize::from(k);
+        let Some(tp) = decl
+            .parts
+            .iter()
+            .position(|p| p.role == Role::Target && p.start <= d.at && d.at < p.end)
+        else {
+            return false;
+        };
+        return tp > k || (tp + 1 == k && decl.parts.get(k).is_some_and(|p| p.role == Role::Init));
+    }
+    false
 }
