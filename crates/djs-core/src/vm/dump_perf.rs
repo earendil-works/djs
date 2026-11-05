@@ -7,6 +7,7 @@
 //! - `DJS_DUMP_PERF=corpus|cases|all` (default all); `DJS_DUMP_PERF_FILTER=substr` runs only
 //!   matching files;
 //! - `DJS_DUMP_PERF_REPS=n`: dumps and loads per idle point, the best counts (default 3);
+//!   `DJS_DUMP_PERF_ONLY=dump|load|redump` repeats only that side (profiling);
 //! - `DJS_DUMP_PERF_OUT=dir`: writes every dump there (`<case>.<idle>.js`) for profiling;
 //! - `DJS_DUMP_PERF_SKIP=load`: dumps only, `=redump`: dumps and loads, `=all`: none (for
 //!   counting the instructions of each side with `/usr/bin/time -l` when the machine is
@@ -57,6 +58,15 @@ fn reps() -> usize {
         .max(1)
 }
 
+/// The repetitions of side `side`: with `DJS_DUMP_PERF_ONLY=side`, the others run once
+/// (for profiling one side with a sampler).
+fn reps_of(side: &str) -> usize {
+    match std::env::var("DJS_DUMP_PERF_ONLY") {
+        Ok(s) if s != side => 1,
+        _ => reps(),
+    }
+}
+
 /// Dumps `vm` and loads the dump into fresh VMs `reps` times; the best of each.
 fn measure(vm: &Vm, api: Value, name: &str, idle: usize, points: &mut Vec<Point>) {
     // The api is the dump's completion value (D2895).
@@ -80,7 +90,7 @@ fn measure(vm: &Vm, api: Value, name: &str, idle: usize, points: &mut Vec<Point>
     let mut text = String::new();
     // Each repetition with what the VM's earlier dumps left it, as the first dump here.
     let cache = vm.dump_cache();
-    for _ in 0..reps() {
+    for _ in 0..reps_of("dump") {
         vm.set_dump_cache(cache.clone());
         let t = Instant::now();
         match vm.dump(&opts, None) {
@@ -108,7 +118,7 @@ fn measure(vm: &Vm, api: Value, name: &str, idle: usize, points: &mut Vec<Point>
         vm.resolve_host_call(id, Ok(Value::UNDEFINED)).unwrap();
     };
     let mut loaded = None;
-    for _ in 0..reps() {
+    for _ in 0..reps_of("load") {
         let mut b = load_vm();
         let t = Instant::now();
         let api = match super::dump_tests::run_plain_dump(&mut b, &text, &host_fn, &mut serve) {
@@ -137,7 +147,7 @@ fn measure(vm: &Vm, api: Value, name: &str, idle: usize, points: &mut Vec<Point>
     };
     let cache = b.dump_cache();
     p.redump = Duration::MAX;
-    for _ in 0..reps() {
+    for _ in 0..reps_of("redump") {
         b.set_dump_cache(cache.clone());
         let t = Instant::now();
         if let Err(e) = b.dump(&opts, None) {
