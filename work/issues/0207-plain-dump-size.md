@@ -247,6 +247,32 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   (gzip 648); v2 494,430 → 471,916. Not done from the review: the records' always-zero
   fields (records go with item 4), inlining single-use values (`$dump.n4 = []`).
 
+- Item 4 plan (investigation). Records now: v2 59,198 B of 471,916 raw (12.5 %, gzip 15.6 %:
+  segs 21 K, scaf 17 K, cmap 12 K), sleep 192 of 1,247 (15 %), corpus 180 K of 7.29 M (2.5 %).
+  K's text depends on values in two ways: value texts inside it (the awaited promise,
+  block code, scaffold constants, go calls, temporaries, the head's parameters) and
+  decisions taken on values that change which of `f`'s text K copies and where its own
+  constructs are (rereads, closeless loops, a pattern's done iterator, completion kinds,
+  `using` triples). Only the second kind matters for origin tracking: the layout (segs,
+  scaf, cmap) is where copied spans (`P::V`) and marks are, and generated text in between
+  only shifts offsets. Plan:
+  - dump_cont: every value-dependent decision that changes the shape (the sequence of
+    copied spans, marks, literal temporaries) goes through `G::steer(n)`, which records `n`
+    on a tape when writing and replays it when regenerating. A literal temporary written
+    in place becomes a node of its own (its text is read back from K for cmap: numbers,
+    booleans, null, undefined; string temporaries become constants).
+  - Writing: generate K as now, then again from a canonical `Act` (the site, the slot
+    names; every value a placeholder; a Ctx that answers placeholders) with the tape. The
+    two piece lists must have the same shape (else refusal: a bug, never a fallback); the
+    generated runs between structural pieces whose texts differ are the holes. Record:
+    `{ f, at: "await#2", h: [run, len, ...], r: [tape] }` (empty fields left out).
+  - Re-dump (dump_origin record()): f's map, its site `at`, the canonical Act, regenerate
+    with `r`; walk the pieces against K's own text: fixed runs and copied spans must equal
+    it, holes take their lengths; with the holes' texts put back the layout pass gives the
+    write's segs/scaf/cmap exactly. Mismatch: refusal.
+  - Later: the awaited promise and scaffold constants as K parameters (no hole at all).
+  Estimate: ~75 % of the record bytes (v2 ~ -40 KB, sleep ~ -130 B, corpus ~ -130 KB).
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a
