@@ -1,0 +1,95 @@
+function <anonymous> @1..1295
+  arg0 argument 0, arg1 argument 1
+  loc0 <state>, loc1 tools@0, loc2 console@0, loc3 g@0, loc5 List@0, loc7 <fields 0>, loc8 l@0
+  node 0 Body @0..1294: Params 6..22 FuncDecl 335..480 Stmt 481..538 Stmt 539..646 Stmt 647..761 Stmt 762..885 Stmt 886..971 Stmt 972..1159 Stmt 1160..1187 Stmt 1188..1225 Stmt 1226..1291 | Param tools@0#0 Param console@0#0 Function g@0#1 Class List@0#8 Const l@0#9
+  node 1 Expr @481..538: Operand 481..537
+  node 2 Call @481..537: Callee 481..492 Open 492..493 Arg 493..536
+  node 3 Call @493..536: Callee 493..507 Open 507..508 Arg 508..535
+  node 4 Await @508..535: Operand 514..535
+  node 5 Expr @539..646: Operand 539..645
+  node 6 Call @539..645: Callee 539..550 Open 550..551 Arg 551..644
+  node 7 Call @551..644: Callee 551..565 Open 565..566 Arg 566..643
+  node 8 Await @566..643: Operand 572..643
+  node 9 Expr @647..761: Operand 647..760
+  node 10 Call @647..760: Callee 647..658 Open 658..659 Arg 659..759
+  node 11 Call @659..759: Callee 659..673 Open 673..674 Arg 674..758
+  node 12 Await @674..758: Operand 680..758
+  node 13 Expr @762..885: Operand 762..884
+  node 14 Call @762..884: Callee 762..773 Open 773..774 Arg 774..883
+  node 15 Call @774..883: Callee 774..788 Open 788..789 Arg 789..882
+  node 16 Await @789..882: Operand 795..882
+  node 17 Expr @886..971: Operand 886..970
+  node 18 Call @886..970: Callee 886..897 Open 897..898 Arg 898..969
+  node 19 Call @898..969: Callee 898..912 Open 912..913 Arg 913..968
+  node 20 Await @913..968: Operand 919..968
+  node 21 Try @972..1159: Block 976..1103 CatchParam 1111..1112 CatchBody 1114..1159 | CatchParam e@1110#1
+  node 22 Block @976..1103: Stmt 980..1101
+  node 23 Expr @980..1101: Operand 980..1100
+  node 24 Await @980..1100: Operand 986..1100
+  node 25 Decl(Const) @1188..1225: Target 1194..1195 Init 1198..1224
+  node 26 Await @1198..1224: Operand 1204..1224
+  await#1 @508 (6:28) pc 63: call.callee@481 call.this@481 call.callee@493 call.this@493
+    path 0.2 1.0 2.2 3.2 4
+  await#2 @566 (7:28) pc 117: call.callee@539 call.this@539 call.callee@551 call.this@551
+    path 0.3 5.0 6.2 7.2 8
+  await#3 @674 (8:28) pc 220: call.callee@647 call.this@647 call.callee@659 call.this@659
+    path 0.4 9.0 10.2 11.2 12
+  await#4 @789 (9:28) pc 297: call.callee@762 call.this@762 call.callee@774 call.this@774
+    path 0.5 13.0 14.2 15.2 16
+  await#5 @913 (10:28) pc 365: call.callee@886 call.this@886 call.callee@898 call.this@898
+    path 0.6 17.0 18.2 19.2 20
+  await#6 @980 (12:3) pc 395: -
+    path 0.7 21.0 22.0 23.0 24
+  await#7 @1198 (15:11) pc 480: -
+    path 0.9 25.1 26
+function g @336..481
+  arg0 n@0
+  loc0 <state>, loc3 i@38
+  node 0 Body @0..145: Params 17..20 Stmt 23..143 | Param n@0#0
+  node 1 Try @23..143: Block 27..85 Finally 94..143
+  node 2 Block @27..85: Stmt 29..83
+  node 3 For @29..83: Init 34..43 Test 45..50 Update 52..55 Body 57..83 | Let i@38#0
+  node 4 Expr @57..83: Operand 57..82
+  node 5 Yield @57..82: Operand 63..82
+  node 6 Await @63..82: Operand 69..82
+  node 7 Block @94..143: Stmt 96..141
+  node 8 Expr @96..141: Operand 96..140
+  node 9 Call @96..140: Callee 96..107 Open 107..108 Arg 108..116 Arg 118..139
+  node 10 Await @118..139: Operand 124..139
+  yield.await#1 @57 (5:58) pc 25: -
+    path 0.1 1.0 2.0 3.3 4.0 5
+  yield#1 @57 (5:58) pc 28: -
+    path 0.1 1.0 2.0 3.3 4.0 5
+  yield.return#1 @57 (5:58) pc 33: -
+    path 0.1 1.0 2.0 3.3 4.0 5
+  await#1 @63 (5:64) pc 22: -
+    path 0.1 1.0 2.0 3.3 4.0 5.0 6
+  await#2 @118 (5:119) pc 78: completion.kind@23 completion.value@23 call.callee@96 call.this@96 call.arg@108 (out: loc3)
+    path 0.1 1.1 7.0 8.0 9.3 10
+function <anonymous> @595..643
+  arg0 x@0, arg1 i@0
+  loc0 <state>
+  node 0 Body @0..48: Params 6..12 Operand 16..48 | Param x@0#0 Param i@0#0
+  node 1 Binary @16..48: Left 16..26 Op 27..28 Right 29..48
+  node 2 Await @29..48: Operand 35..48
+  await#1 @29 (7:85) pc 24: binary.left@16
+    path 0.1 1.2 2
+function <anonymous> @843..882
+  arg0 v@0, arg1 i@0
+  loc0 <state>
+  node 0 Body @0..39: Params 6..12 Operand 16..39 | Param v@0#0 Param i@0#0
+  node 1 Binary @16..39: Left 16..17 Op 18..19 Right 20..39
+  node 2 Await @20..39: Operand 26..39
+  await#1 @20 (9:101) pc 19: binary.left@16
+    path 0.1 1.2 2
+function <anonymous> @1009..1100
+  arg0 x@0
+  loc0 <state>
+  node 0 Body @0..91: Params 6..9 Stmt 15..79 Stmt 80..89 | Param x@0#0
+  node 1 If @15..79: Test 19..26 Then 28..79
+  node 2 Throw @28..79: Operand 34..78
+  node 3 New @34..78: Callee 38..48 Open 48..49 Arg 49..77
+  node 4 Binary @49..77: Left 49..55 Op 56..57 Right 58..77
+  node 5 Await @58..77: Operand 64..77
+  await#1 @58 (12:89) pc 32: new.callee@34 binary.left@49
+    path 0.1 1.1 2.0 3.2 4.2 5

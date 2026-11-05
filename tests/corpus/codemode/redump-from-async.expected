@@ -1,0 +1,12 @@
+closed c
+[0,1]
+closed c
+[1,12,23]
+["a","b","c"]
+["x0","y1"]
+[6,7]
+closed c
+caught RangeError map 1
+closed c
+true 2 [0,1]
+=== completed

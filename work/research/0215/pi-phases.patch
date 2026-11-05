@@ -1,36 +1,5 @@
-diff --git a/js/pi/engine.ts b/js/pi/engine.ts
-index b6eeb998..24e93174 100644
---- a/js/pi/engine.ts
-+++ b/js/pi/engine.ts
-@@ -281,13 +281,24 @@ export class Engine {
-       states.map(([id, json]) => `${id}:${textEncoder.encode(json).length}`).join("\t"),
-       states.map(([, json]) => json).join(""),
-     ].join("\n");
--    let r = this.trap(() => x.vm_dump!(this.vm, this.stageText(text)));
-+    const P = (globalThis as any).__piProf; const T = (k: string, t0: number) => (P[k] ??= []).push(performance.now() - t0);
-+    let t0 = performance.now();
-+    const staged = this.stageText(text);
-+    T("d.stage", t0); t0 = performance.now();
-+    let r = this.trap(() => x.vm_dump!(this.vm, staged));
-+    T("d.vm_dump", t0);
-     if (r === 2) {
-+      t0 = performance.now();
-       provideBase(this.module, x);
-+      T("d.provideBase", t0); t0 = performance.now();
-       r = this.trap(() => x.vm_dump!(this.vm, this.stageText(text)));
-+      T("d.vm_dump2", t0);
-     }
-     if (r !== 0) throw new Error(r === 1 ? `Cannot dump the session:\n${outText(x)}` : "No base image to dump against");
--    return outText(x);
-+    t0 = performance.now();
-+    const out = outText(x);
-+    T("d.outText", t0);
-+    return out;
-   }
- 
-   /**
 diff --git a/js/pi/vm.ts b/js/pi/vm.ts
-index d8127d6d..61b25adc 100644
+index 133ecaca..5ef3831e 100644
 --- a/js/pi/vm.ts
 +++ b/js/pi/vm.ts
 @@ -141,6 +141,7 @@ export const FN_NAMES = ["bridge", "call"];
@@ -57,10 +26,10 @@ index d8127d6d..61b25adc 100644
      if (!next || !this.hooks.dumpEveryIdle || next.finished || next.ids.length === 0 || !this.resume) return;
 +    let t0 = performance.now();
      const dumped = this.dumpSession();
-+    __t("dumpSession", t0); (__P["dumpBytes"] ??= []).push(dumped.dump.length);
++    __t("dump", t0); (__P["dumpBytes"] ??= []).push(dumped.dump.length);
 +    t0 = performance.now();
      const fresh = resumeSession(dumped, { ...this.hooks, ...this.resume });
-+    __t("resumeSession", t0);
++    __t("resume", t0);
 +    t0 = performance.now();
      this.engine.dispose();
 +    __t("dispose", t0);
@@ -78,9 +47,9 @@ index d8127d6d..61b25adc 100644
      if ("error" in compiled) throw new Error(`Cannot load the dump: ${compiled.error}`);
      // `$djs.source`'s answer (D2882): the codemode function, made again by its wrapper,
      // which runs none of the script's code.
-@@ -658,7 +670,9 @@ class Session implements VmSession {
+@@ -662,7 +674,9 @@ class Session implements VmSession {
      }
-     engine.free(read);
+     if (read !== 0) engine.free(read);
      this.hostValues = values;
 +    __t("l.sourceAndHost", t0); t0 = performance.now();
      const hooks = engine.dumpRuntime(text);
@@ -88,8 +57,8 @@ index d8127d6d..61b25adc 100644
      const fns: [string, number][] = [
        ["resume", engine.hostFunction(HOOK_RESUME, "resume")],
        ["seed", engine.hostFunction(HOOK_SEED, "seed")],
-@@ -675,9 +689,11 @@ class Session implements VmSession {
-     this.plainIds = [undefined, 0];
+@@ -680,9 +694,11 @@ class Session implements VmSession {
+     this.hookError = undefined;
      let status: number;
      try {
 +      __t("l.hooks", t0); t0 = performance.now();
@@ -100,7 +69,7 @@ index d8127d6d..61b25adc 100644
      } finally {
        this.loading = false;
        if (this.source) engine.free(this.source.handle);
-@@ -1157,17 +1173,23 @@ export function resumeFromDump(dumped: SessionDump, options: ResumeOptions): VmS
+@@ -1181,17 +1197,23 @@ export function resumeFromDump(dumped: SessionDump, options: ResumeOptions): VmS
  function resumeSession(dumped: SessionDump, options: VmHooks & { prelude: string; data: VmStartData }): Session {
    const hooks = { ...options, shape: "next" as const };
    const { prelude, data } = options;
@@ -124,10 +93,10 @@ index d8127d6d..61b25adc 100644
      state.next!.ids.sort((a, b) => a[1] - b[1]);
      state.next!.handles.body = body;
      return session;
-@@ -1182,3 +1204,6 @@ function compileOrThrow(engine: Engine, file: string, params: string[], src: str
+@@ -1206,3 +1228,6 @@ function compileOrThrow(engine: Engine, file: string, params: string[], src: str
    if ("error" in compiled) throw new Error(`${file}: ${compiled.error}`);
    return compiled.handle;
  }
 +
 +import { appendFileSync as __append } from "node:fs";
-+function __flush() { if (!process.env.PI_PROF_OUT) return; const p = (globalThis as any).__piProf; if (!p) return; __append(process.env.PI_PROF_OUT, JSON.stringify(p) + "\n"); for (const k of Object.keys(__P)) delete __P[k]; }
++function __flush() { if (!process.env.PI_PROF_OUT) return; __append(process.env.PI_PROF_OUT, JSON.stringify(__P) + "\n"); for (const k of Object.keys(__P)) delete __P[k]; }

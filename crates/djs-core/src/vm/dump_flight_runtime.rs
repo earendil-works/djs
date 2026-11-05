@@ -23,6 +23,10 @@ use crate::interp::run::{builtin_closure_kind, promise};
 pub(super) const FROM_SYNC_NEXT: &str = "(...a) => step(() => Reflect.apply(next, it, a), true)";
 pub(super) const STEP_FULFILLED: &str = "(v) => res({ value: v, done })";
 pub(super) const STEP_CLOSE: &str = "(e) => { q(); rej(e); }";
+/// `fromAsync`'s handlers of its await (dump_runtime.rs).
+pub(super) const FROM_ASYNC_OK: &str = "(v) => { if (phase === 1) result(v); else if (phase === 2) store(v); else if (phase === 3) reject(error); else value(v); }";
+pub(super) const FROM_ASYNC_BAD: &str =
+    "(e) => { if (phase === 2) close(e); else if (phase === 3) reject(error); else reject(e); }";
 pub(super) const CLOSE_THROW: &str = "(e) => { try { const m = it.return; if (m != null) Reflect.apply(m, it, []); } catch {} throw e; }";
 
 /// A step of `fromSync` in flight, read from the reaction on the awaited value.
@@ -85,6 +89,45 @@ impl Dumper<'_> {
             }
         }
         Some((it, captured_value(h, next, "next")?))
+    }
+
+    /// A reaction `(f, r)` that is the runtime's `fromAsync` waiting: its state in the
+    /// slots of the engine's Record (the promise first, which its `resolve` settles).
+    pub(super) fn runtime_from_async(&self, f: Value, r: Value) -> Option<[Value; 11]> {
+        let h = self.h;
+        let ok = self.runtime_closure(f, FROM_ASYNC_OK)?;
+        let bad = self.runtime_closure(r, FROM_ASYNC_BAD)?;
+        let phase = captured_value(h, ok, "phase")?;
+        if captured_value(h, bad, "phase") != Some(phase) {
+            return None;
+        }
+        // The helper's variables, each read from a closure of its that captures it.
+        let fun = |o: Obj, name: &str| captured_value(h, o, name)?.as_object();
+        let result = fun(ok, "result")?;
+        let store = fun(ok, "store")?;
+        let step = fun(store, "step")?;
+        let value = fun(ok, "value")?;
+        let element = fun(value, "element")?;
+        let close = fun(store, "close")?;
+        let var = |name: &str| {
+            [ok, result, store, step, value, element, close]
+                .iter()
+                .find_map(|&o| captured_value(h, o, name))
+        };
+        let promise = self.resolving(var("resolve")?, 0)?;
+        Some([
+            promise,
+            var("mapfn")?,
+            var("thisArg")?,
+            var("it")?,
+            var("next")?,
+            var("A")?,
+            var("k")?,
+            phase,
+            var("items")?,
+            var("len")?,
+            var("error")?,
+        ])
     }
 
     /// `closeThrow`'s handler: its sync iterator.
@@ -154,5 +197,8 @@ mod tests {
             assert!(helper("fromSync").contains(t), "{t}");
         }
         assert!(helper("closeThrow").contains(CLOSE_THROW));
+        for t in [FROM_ASYNC_OK, FROM_ASYNC_BAD] {
+            assert!(helper("fromAsync").contains(t), "{t}");
+        }
     }
 }

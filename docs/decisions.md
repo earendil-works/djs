@@ -10287,3 +10287,16 @@ only (D2991). The dump runtime compiles eagerly in a lazy VM: a host passes the 
 dump names, and the load calls them. With these the corpus's codemode runs cost 4% more
 instructions lazily than eagerly (42% without the argument rule), and typescript.js still
 compiles in about half the time.
+## D3021: Array.fromAsync in flight is written as the runtime's `fromAsync`
+date: 2026-11-06 · by: pjr · issue: 0215
+Array.fromAsync runs as a state machine over a Record (builtins/fromasync.ts). Two builtin
+closures resume it from whatever its await settles. Plain dumps refused them ("an
+internal function of a builtin"). The dump runtime now has `fromAsync(p, mapfn, thisArg,
+it, next, A, k, phase, items, len, error)`: the same machine in JavaScript, resumed in
+the phase it waits in. It attaches its handlers to `p` as the engine's reaction was
+attached and returns the result promise. The exporter writes the reaction on the awaited
+promise as that call (its promise is the call's result), so the reactions keep their
+order. It recognizes the runtime's own handlers by their text and reads the state from
+their captures, so a re-dump writes the call again (as for `fromSync`, D2951). An
+async-from-sync iterator brings its own `next`. Errors the engine raises, such as "Array
+too long" and "iterator must return an object", keep their type and message.

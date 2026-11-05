@@ -1,33 +1,33 @@
 # Suspension map coverage (compiler/smap_tests.rs)
-sites 1162
+sites 1177
 
 ## by kind
- 1024 await
+ 1036 await
    11 await-using
    14 for-await.close
    12 for-await.next
     3 return.await
-   39 yield
+   40 yield
    10 yield*
    21 yield*.await
-   14 yield.await
-   14 yield.return
+   15 yield.await
+   15 yield.return
 
 ## described, by temporaries (in locals, then on the stack)
-  749 -
+  755 -
   212 call.callee call.this
    22 yield*.iterator yield*.next
    21 for-of.iterator for-of.next
+   18 call.callee call.this call.callee call.this
    18 call.callee call.this object.literal
    15 for-of.iterator for-of.next call.callee call.this
-   13 call.callee call.this call.callee call.this
    11 for-await.exception
    10 for-await.iterator for-await.next
    10 using.record completion.kind completion.value
     9 for-of.iterator for-of.next call.callee call.this object.literal
     8 using.record
+    6 binary.left
     5 object.literal
-    4 binary.left
     3 call.callee call.this call.arg call.arg binary.left
     3 for-of.iterator for-of.next call.callee call.this binary.left
     3 object.literal array.element
@@ -36,6 +36,7 @@ sites 1162
     2 assign.object assign.key
     2 call.callee call.this call.arg
     2 call.callee call.this template.part template.part
+    2 completion.kind completion.value call.callee call.this call.arg
     2 for-of.iterator for-of.next assign.old
     2 for-of.iterator for-of.next completion.kind completion.value call.callee call.this call.arg
     2 object.literal object.literal array.element object.literal
@@ -49,7 +50,6 @@ sites 1162
     1 call.callee call.this member.object
     1 call.callee call.this template.part template.part template.part
     1 call.callee call.this template.part template.part template.part template.part
-    1 completion.kind completion.value call.callee call.this call.arg
     1 completion.kind completion.value call.callee call.this call.arg call.arg
     1 for-await.iterator
     1 for-await.iterator for-await.next call.callee call.this
@@ -66,12 +66,13 @@ sites 1162
     1 for-of.iterator for-of.next object.literal
     1 for-of.iterator for-of.next pattern.iterator
     1 for-of.iterator for-of.next using.record completion.kind completion.value
+    1 new.callee binary.left
     1 object.literal array.element array.element
     1 object.literal object.key
     1 pattern.iterator
 
 ## paths (D2850)
- 1162 complete
+ 1177 complete
 
 ## path gaps, by the part they are in
 

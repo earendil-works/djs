@@ -74,6 +74,12 @@ const VALUE_THUNK: usize = 9;
 const THROWER: usize = 10;
 const FROM_SYNC_UNWRAP: usize = 13;
 const FROM_SYNC_CLOSE: usize = 14;
+/// Array.fromAsync's closure resumed after an await (builtins/fromasync.ts): its Record is
+/// `[promise, mapfn, thisArg, iterator, next, A, k, phase, arrayLike, len, error]`.
+const FROM_ASYNC_FULFILLED: usize = 16;
+const FROM_ASYNC_REJECTED: usize = 17;
+/// The slots of Array.fromAsync's Record.
+const FROM_ASYNC_SLOTS: u32 = 11;
 
 /// A for-in loop's key iterator (interp/run.rs `for_in_start`): its object (`undefined`
 /// for a string's or a primitive's) and the keys it has yet to visit. `None`: a Proxy's
@@ -133,6 +139,9 @@ pub(super) struct Flight<'a> {
     /// Closures of the dump runtime written as the engine's builtin closures
     /// (dump_flight_runtime.rs): their cell, the closure kind and its data.
     runtime: Vec<(u32, usize, Value)>,
+    /// The states of Array.fromAsync's in flight that the dump runtime's `fromAsync`
+    /// holds (its closures' data is the index here): the Record's slots.
+    from_async: Vec<[Value; FROM_ASYNC_SLOTS as usize]>,
 }
 
 impl<'a> Flight<'a> {
@@ -153,6 +162,7 @@ impl<'a> Flight<'a> {
             supers: Vec::new(),
             usings: Vec::new(),
             runtime: Vec::new(),
+            from_async: Vec::new(),
         }
     }
 
@@ -195,6 +205,8 @@ enum Consumer {
     Dead,
     Await(usize),
     Finally,
+    /// Array.fromAsync's await: written as `$djs.fromAsync(…)`, which makes its promise.
+    FromAsync,
     Element(usize),
 }
 
@@ -325,14 +337,23 @@ impl Dumper<'_> {
             for j in 0..h.value_array_len(r) / 3 {
                 let get = |k| h.value_array_get(r, 3 * j + k);
                 let (mut cap, f, mut rj) = (get(0), get(1), get(2));
-                if let Some(step) = self.runtime_step(f, rj)
+                let cell = |v: Value| v.as_object().map_or(u32::MAX, |o| o.offset());
+                if let Some(state) = self.runtime_from_async(f, rj)
+                    && self.node_of(f).is_none()
+                    && self.node_of(rj).is_none()
+                {
+                    // The dump runtime's `fromAsync` in flight: as the engine's.
+                    let i = Value::int(self.fl.from_async.len() as i32);
+                    self.fl.from_async.push_out(state);
+                    self.fl.runtime.push_out((cell(f), FROM_ASYNC_FULFILLED, i));
+                    self.fl.runtime.push_out((cell(rj), FROM_ASYNC_REJECTED, i));
+                } else if let Some(step) = self.runtime_step(f, rj)
                     && self.node_of(f).is_none()
                     && self.node_of(rj).is_none()
                 {
                     // A step of the dump runtime's `fromSync` in flight: the step's
                     // promise, made by a `then` with the engine's handlers.
                     cap = step.promise;
-                    let cell = |v: Value| v.as_object().map_or(u32::MAX, |o| o.offset());
                     self.fl
                         .runtime
                         .push_out((cell(f), FROM_SYNC_UNWRAP, step.done));
@@ -904,7 +925,16 @@ impl Dumper<'_> {
                     None => return false,
                 },
             };
-            self.edge(n, clo.1, || cat!(path, "<data>"));
+            if matches!(clo.0, FROM_ASYNC_FULFILLED | FROM_ASYNC_REJECTED) {
+                for v in self
+                    .from_async_state(clo.1)
+                    .unwrap_or([Value::UNDEFINED; FROM_ASYNC_SLOTS as usize])
+                {
+                    self.edge(n, v, || cat!(path, "<fromAsync>"));
+                }
+            } else {
+                self.edge(n, clo.1, || cat!(path, "<data>"));
+            }
             self.nodes[n].fl = self.fl.clos.len();
             self.fl.clos.push_out(Clo {
                 node: n,
@@ -933,6 +963,23 @@ impl Dumper<'_> {
             | FROM_SYNC_CLOSE => {
                 self.edge(n, data, || cat!(path, "<data>"));
             }
+            // Array.fromAsync waiting: its state, which `$djs.fromAsync` takes (0215).
+            FROM_ASYNC_FULFILLED | FROM_ASYNC_REJECTED => match data.as_object() {
+                Some(s) if h.object_class(s) == ObjectClass::Record => {
+                    let st = self
+                        .from_async_state(data)
+                        .unwrap_or([Value::UNDEFINED; FROM_ASYNC_SLOTS as usize]);
+                    // (An async-from-sync iterator brings its own `next`.)
+                    let from_sync = st[3].as_object().is_some_and(|it| self.is_from_sync(it));
+                    for (i, &v) in st.iter().enumerate() {
+                        if i == 4 && from_sync {
+                            continue;
+                        }
+                        self.edge(n, v, || cat!(path, "<fromAsync ", i, ">"));
+                    }
+                }
+                _ => self.refuse(path, "an internal function of a builtin"),
+            },
             _ => self.refuse(path, "an internal function of a builtin"),
         }
         self.nodes[n].fl = self.fl.clos.len();
@@ -986,6 +1033,20 @@ impl Dumper<'_> {
         let o = self.nodes[n].v.as_object()?;
         (self.h.object_class(o) == ObjectClass::Promise && self.nodes[n].fl != NO_FLIGHT)
             .then_some(self.nodes[n].fl)
+    }
+
+    /// Array.fromAsync's state from its closures' data: the engine's Record, or the
+    /// index of the state the dump runtime's `fromAsync` holds.
+    fn from_async_state(&self, data: Value) -> Option<[Value; FROM_ASYNC_SLOTS as usize]> {
+        if let Some(i) = data.as_int() {
+            return self.fl.from_async.get(i as usize).copied();
+        }
+        let s = data.as_object()?;
+        let mut out = [Value::UNDEFINED; FROM_ASYNC_SLOTS as usize];
+        for (i, v) in out.iter_mut().enumerate() {
+            *v = self.h.object_slot(s, i as u32);
+        }
+        Some(out)
     }
 
     fn clo_of(&self, v: Value) -> Option<&Clo> {
@@ -1052,6 +1113,17 @@ impl Dumper<'_> {
                     && kind(self, r).map(|c| c.0) == Some(CATCH_FINALLY)
                 {
                     Consumer::Finally
+                } else if let (Some((FROM_ASYNC_FULFILLED, s)), Some((FROM_ASYNC_REJECTED, s2))) =
+                    (kind(self, f), kind(self, r))
+                    && s == s2
+                {
+                    // Its promise is made by the reaction: `$djs.fromAsync` again.
+                    if let Some(d) = self.from_async_state(s).and_then(|st| self.pend_of(st[0]))
+                        && self.fl.pends[d].creator == Creator::Unknown
+                    {
+                        self.fl.pends[d].creator = Creator::Then(p, j);
+                    }
+                    Consumer::FromAsync
                 } else {
                     for v in [f, r] {
                         if let Some((k, _)) = kind(self, v)
@@ -1761,7 +1833,9 @@ impl Dumper<'_> {
                 Consumer::Await(a) => {
                     self.emit_act(a);
                 }
-                Consumer::Then | Consumer::Finally | Consumer::Dead => self.emit_then(q, j),
+                Consumer::Then | Consumer::Finally | Consumer::Dead | Consumer::FromAsync => {
+                    self.emit_then(q, j)
+                }
                 Consumer::Element(c) => self.emit_combo(c),
             }
             self.fl.pends[q].reactions[j].busy = false;
@@ -1794,7 +1868,33 @@ impl Dumper<'_> {
             ..
         } = self.fl.pends[q].reactions[j];
         let ql = self.make(q);
-        let call = if consumer == Consumer::Dead {
+        // (Array.fromAsync's promise is the one its call makes.)
+        let mut cap = cap;
+        let call = if consumer == Consumer::FromAsync {
+            let st = self
+                .clo_of(f)
+                .and_then(|c| self.from_async_state(c.data))
+                .expect("Array.fromAsync's state");
+            cap = st[0];
+            let mut args = alloc::vec![ql.clone()];
+            let from_sync = st[3].as_object().is_some_and(|it| self.is_from_sync(it));
+            for i in 1..FROM_ASYNC_SLOTS as usize {
+                let e = if i == 4 && from_sync {
+                    cat!(args[3], ".next")
+                } else {
+                    self.expr(st[i], None, None)
+                };
+                if e.is_empty() {
+                    let path = self.nodes[self.fl.pends[q].node].path.clone();
+                    self.refuse(
+                        path,
+                        "an Array.fromAsync whose state is on a reference cycle",
+                    );
+                }
+                args.push_out(e);
+            }
+            cat!(self.rt(), "fromAsync(", join(&args, ", "), ")")
+        } else if consumer == Consumer::Dead {
             cat!("Promise.prototype.then.call(", ql, ", () => {}, () => {})")
         } else if consumer == Consumer::Finally {
             let on = self

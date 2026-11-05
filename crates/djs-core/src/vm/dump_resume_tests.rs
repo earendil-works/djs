@@ -2007,3 +2007,26 @@ main();
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 5 && links >= 5, "{ok} {links}");
 }
+
+/// Array.fromAsync waiting on an await (an async iterator's step, a mapped value, an
+/// array-like's element), dumped as the runtime's `fromAsync` and re-dumped from it
+/// (0215, pjz: "an internal function of a builtin").
+#[test]
+fn plain_dumps_of_array_from_async() {
+    let src = r#"
+async function* g(n) { for (let i = 0; i < n; i++) yield await later(i); }
+async function main() {
+  print(JSON.stringify(await Array.fromAsync(g(2))));
+  print(JSON.stringify(await Array.fromAsync([later("a"), "b"], async (x, i) => x + i + await later(i))));
+  print(JSON.stringify(await Array.fromAsync({ length: 2, 0: later("x"), 1: "y" })));
+}
+main();
+"#;
+    let (failed, refused, ok) = plain_check_program("from-async", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, links, refused) = plain_chain_program("from-async", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 6 && links >= 6, "{ok} {links}");
+}

@@ -165,6 +165,12 @@ pub(crate) const HELPERS: &[(&str, &str)] = &[
         "rejected",
         "(e) => { const p = Promise.reject(e); p.then(undefined, () => {}); return p; }",
     ),
+    // Array.fromAsync waiting on an await (0215): its closure again over its state, from
+    // the phase it waits in (builtins/fromasync.ts); its promise is the one returned.
+    (
+        "fromAsync",
+        "(p, mapfn, thisArg, it, next, A, k, phase, items, len, error) => new Promise((resolve, reject) => { const put = (v) => { if (!Reflect.defineProperty(A, k, { value: v, writable: true, enumerable: true, configurable: true })) throw new TypeError('cannot define the element'); }; const wait = (v, ph) => { phase = ph; Promise.prototype.then.call(Promise.resolve(v), ok, bad); }; const close = (e) => { error = e; try { const m = it.return; if (m == null) { reject(e); return; } wait(Reflect.apply(m, it, []), 3); } catch { reject(error); } }; const step = () => { try { if (k >= 9007199254740991) { close(new TypeError('Array too long')); return; } wait(Reflect.apply(next, it, []), 1); } catch (e) { reject(e); } }; const store = (v) => { try { put(v); } catch (e) { close(e); return; } k++; step(); }; const result = (r) => { let v; try { if (Object(r) !== r) throw new TypeError('iterator must return an object'); if (r.done) { A.length = k; resolve(A); return; } v = r.value; } catch (e) { reject(e); return; } if (mapfn === undefined) { store(v); return; } try { wait(Reflect.apply(mapfn, thisArg, [v, k]), 2); } catch (e) { close(e); } }; const element = () => { try { if (k < len) { wait(items[k], 4); return; } A.length = len; resolve(A); } catch (e) { reject(e); } }; const value = (v) => { try { if (phase === 4 && mapfn !== undefined) { wait(Reflect.apply(mapfn, thisArg, [v, k]), 5); return; } put(v); k++; } catch (e) { reject(e); return; } element(); }; const ok = (v) => { if (phase === 1) result(v); else if (phase === 2) store(v); else if (phase === 3) reject(error); else value(v); }; const bad = (e) => { if (phase === 2) close(e); else if (phase === 3) reject(error); else reject(e); }; Promise.prototype.then.call(p, ok, bad); })",
+    ),
     ("bytes", "(b) => Uint8Array.fromBase64(b).buffer"),
     // A continuation's origin record (D2833, D2913: its origin, site, tape and holes) and a
     // generator continuation's prototype, its origin's where not given (D2915), given
