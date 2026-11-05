@@ -701,3 +701,7 @@ topics when the index is next reorganized.
 - D3021: Array.fromAsync in flight is written as the runtime's `fromAsync`
 - D3022: Amends D2896: the gate also cleans djs-core and djs-prelude after incremental corruption
 - D3023: pi's adapter reuses disposed wasm instances, made as new before reuse
+- D3002: A continuation's site takes its value from its callback; effectful values in a run
+- D3003: Closures and continuations a continuation's blocks make are written where they are used
+- D3040: A compile cache across VMs that replays the compile
+- D3041: Suspension maps travel from one VM's dump to the next VM
