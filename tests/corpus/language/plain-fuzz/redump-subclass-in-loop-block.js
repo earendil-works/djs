@@ -1,3 +1,4 @@
+// In language/, not codemode/: the slim build has no BigInt or `using` (D2411).
 // A subclass whose base class is placed in a deeper block of K (it reads a binding of
 // the loop's body): the subclass's statement reads the base's local, so it goes no higher
 // than the base (0215; plain-dump fuzzer seed 668041, --lazy; also on main before).

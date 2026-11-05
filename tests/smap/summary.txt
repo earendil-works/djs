@@ -1,70 +1,61 @@
 # Suspension map coverage (compiler/smap_tests.rs)
-sites 1276
+sites 1201
 
 ## by kind
- 1120 await
-   13 await-using
-   16 for-await.close
-   14 for-await.next
+ 1059 await
+   11 await-using
+   14 for-await.close
+   12 for-await.next
     3 return.await
-   45 yield
+   41 yield
    10 yield*
    21 yield*.await
-   17 yield.await
-   17 yield.return
+   15 yield.await
+   15 yield.return
 
 ## described, by temporaries (in locals, then on the stack)
-  794 -
-  220 call.callee call.this
-   22 for-of.iterator for-of.next
+  768 -
+  219 call.callee call.this
    22 yield*.iterator yield*.next
-   20 call.callee call.this object.literal
+   21 for-of.iterator for-of.next
    18 call.callee call.this call.callee call.this
-   15 binary.left
+   18 call.callee call.this object.literal
    15 for-of.iterator for-of.next call.callee call.this
-   14 for-await.iterator for-await.next
-   13 for-await.exception
-   12 using.record completion.kind completion.value
+   11 for-await.exception
+   10 for-await.iterator for-await.next
+   10 using.record completion.kind completion.value
     9 for-of.iterator for-of.next call.callee call.this object.literal
-    9 object.literal
     8 using.record
-    6 call.callee call.this call.arg
-    4 call.callee call.this call.arg call.callee call.this
-    3 array.element
+    7 binary.left
+    5 object.literal
+    3 call.callee call.this call.arg
     3 call.callee call.this call.arg call.arg binary.left
     3 for-of.iterator for-of.next call.callee call.this binary.left
-    3 new.callee
     3 object.literal array.element
+    2 array.element
     2 assign.object
     2 assign.object assign.key
     2 call.callee call.this template.part template.part
     2 completion.kind completion.value call.callee call.this call.arg
     2 for-of.iterator for-of.next assign.old
     2 for-of.iterator for-of.next completion.kind completion.value call.callee call.this call.arg
-    2 object.literal new.callee object.literal
     2 object.literal object.literal array.element object.literal
     1 array.literal
     1 assign.object binary.left
     1 assign.object call.callee call.this
     1 assign.old
     1 binary.left array.element
+    1 call.callee call.this call.arg call.callee call.this
     1 call.callee call.this call.arg call.callee call.this call.arg
-    1 call.callee call.this call.arg call.callee call.this object.literal
     1 call.callee call.this member.object
     1 call.callee call.this template.part template.part template.part
     1 call.callee call.this template.part template.part template.part template.part
     1 completion.kind completion.value call.callee call.this call.arg call.arg
     1 for-await.iterator
     1 for-await.iterator for-await.next call.callee call.this
-    1 for-await.iterator for-await.next call.callee call.this call.arg call.callee call.this
-    1 for-await.iterator for-await.next new.callee
-    1 for-await.iterator for-await.next new.callee call.callee call.this
-    1 for-await.iterator for-await.next pattern.iterator
     1 for-of.iterator
     1 for-of.iterator for-await.exception
-    1 for-of.iterator for-of.next array.element
     1 for-of.iterator for-of.next call.callee call.this call.arg
-    1 for-of.iterator for-of.next call.callee call.this call.arg call.callee call.this
     1 for-of.iterator for-of.next call.callee call.this call.callee call.this
     1 for-of.iterator for-of.next completion.kind completion.value call.callee call.this
     1 for-of.iterator for-of.next for-await.iterator for-await.next
@@ -77,19 +68,13 @@ sites 1276
     1 for-of.iterator for-of.next object.literal
     1 for-of.iterator for-of.next pattern.iterator
     1 for-of.iterator for-of.next using.record completion.kind completion.value
-    1 new.callee array.element
-    1 new.callee array.element array.element
     1 new.callee binary.left
     1 object.literal array.element array.element
-    1 object.literal call.callee call.this
     1 object.literal object.key
-    1 object.literal object.literal
     1 pattern.iterator
-    1 using.record assign.old call.callee call.this
-    1 using.record assign.old call.callee call.this call.arg
 
 ## paths (D2850)
- 1276 complete
+ 1201 complete
 
 ## path gaps, by the part they are in
 

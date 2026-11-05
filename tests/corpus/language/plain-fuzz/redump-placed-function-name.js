@@ -1,3 +1,4 @@
+// In language/, not codemode/: the slim build has no BigInt or `using` (D2411).
 // Placed code K writes after a late binding it reads must not move behind one that
 // reads what it makes: `Object.assign($dump.sN, { ag7: async function* ag7() {…} })`
 // names ag7 itself, and `var ag7 = $dump.sN.ag7` reads it (0215; plain-dump fuzzer seed 832780).

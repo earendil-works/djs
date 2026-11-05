@@ -1,3 +1,4 @@
+// In language/, not codemode/: the slim build has no BigInt or `using` (D2411).
 // A subclass whose binding in K reads its base class's local (`let $c30 = class C2`) of
 // the code the dump writes in K's block: declared after that code, and the member that
 // publishes it after the binding (0215; plain-dump fuzzer, regress s14-s11245).
