@@ -9,7 +9,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0207 | Make plain dumps small (owner: not done until no fluff is left): header "djs-dump", helpers and source(ref) on host-provided $djs (D2834, D2835), record cuts, liveness pruning | pjs | .worktrees/pjs |
 | 0211 | Plain dump fuzzing round 2 (wider generator, new seeds) | pjz | .worktrees/pjz |
 | 0215 | Plain dump performance: export/load times vs format 2 | pjr | .worktrees/pjx |
-| 0217 | Parser: regex literal after a block statement inside try | pjp | .worktrees/pjp |
 
 ## Open (ready)
 
@@ -88,6 +87,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0190-0196 | SM migration: slot names (D2730), named slots (D2731), construct temporaries + iter_next_loc (D2732), finally completions (D2733), roles deleted (D2734), one compile per load (D2735) | 9cc8741b (agent sm) |
 | 0198 | Dump performance: corpus dump p50 1.42 -> 0.43 ms wasm, totals 3,243 -> 610 ms; data cases 2-6x (D2800-D2802) | 429184db (agent dumpperf) |
 | - | base_equals_a_compiled_realm test fixed (8f0fdd72); gate recovers from incremental corruption (D2896, b55180dd); CLI/REPL call states (D2894) | agent pjh |
+| 0217 | Lookahead scanner: regex after a block statement (try/finally lookahead) | fc9b1171 (agent pjp) |
 | 0216 | Dump fluff audit: byte-minimal dumps (sleep 716 B, pi ~-48% raw), ranked queue for 0207 | c7031439 (agent fluff) |
 | 0213 | Generic host bindings: $djs.host(name), host identities, Sandbox globals/bindings, CLI --bind (D2970-D2973) | a5695fbd (agent hb; ABI 5; per-run bindings left out) |
 | 0214 | Conflict-free derived files: smap summary regenerated, dump-size merge driver by case | ba956eb9 (agent pjd) |
