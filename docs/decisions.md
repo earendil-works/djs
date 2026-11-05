@@ -11177,3 +11177,14 @@ part of images, and runs stay deterministic (difftest --determinism passes).
 
 ## D3139: Size of 0233; the size ceiling rises by what it measured
 date: 2026-11-06 · by: pre · issue: 0233 · approved: coordinator
+Measured at the merge (main 373e9422 vs the branch, scripts/size/budget.py): shipped module
+416,548 -> 418,758 gzip (+2,210; 955,480 -> 959,766 raw, +4,286), slim 350,367 -> 352,495
+(+2,128). ceiling_gzip 417,059 -> 419,269 and slim_ceiling_gzip 350,904 -> 353,032: the
+ratchet rises by exactly that (1.461x quickjs-wasi, the budget 1.5x has ~11 KB left). Code
+bytes by function (perf build with names, merge-base vs branch, +4,088 in all): the matcher
+(`resume_in` with the search loops +785 over `resume`, `exec_in` +350 over `exec_at`), the
+RegExpExecOwn leaf +752, `create` with the compile cache +1,752 (it was inlined before; the
+intrinsic dispatcher -500), `create_like` +336, `groups_object` +654 (was inlined), replace's
+`Units` +466 and `units` +374, `first_into` +1,003 for `first_chars` -1,264, the parser's
+literal fast path +389, the rest under ±300 each. Trimmed before measuring: one search loop for
+one-byte input and one for the rest, generic two-byte conversions (both off the hot paths).
