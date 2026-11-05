@@ -1932,3 +1932,39 @@ main();
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 26 && links >= 26, "{ok} {links}");
 }
+
+/// A `continue` or `break` of a `for await` pending in an `await using` scope's disposal
+/// in the rest of the iteration K runs in its loop-once scaffold: re-dumps name the
+/// original's loop (pjz, 0211: "no value for completion.kind").
+#[test]
+fn plain_dumps_of_jumps_pending_in_disposals_of_for_await() {
+    let src = r#"
+async function* g(k) { for (let i = 0; i < k; i++) yield await later(i); }
+const res = (n) => ({ async [Symbol.asyncDispose]() { print("bye", n, await later(n)); } });
+async function main() {
+  for await (const x of g(2)) {
+    try { await later("x"); throw new Error("ko"); } catch (e) { print(e.message); }
+    { await using r = res("c" + x); if (true) continue; }
+  }
+  for await (const x of g(3)) {
+    await later(x);
+    { await using r = res("b" + x); if (x === 1) break; }
+  }
+  outer: for (const a of [1, 2]) {
+    for await (const x of g(2)) {
+      await later(x);
+      { await using r = res("o" + a + x); if (x === 0) continue outer; }
+    }
+  }
+  print("end");
+}
+main();
+"#;
+    let (failed, refused, ok) = plain_check_program("jump-disposal", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, links, refused) = plain_chain_program("jump-disposal", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 18 && links >= 18, "{ok} {links}");
+}

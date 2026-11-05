@@ -1490,9 +1490,14 @@ impl G<'_, '_> {
         let d = self.declare(&decls)?;
         let first = self.stmt(i + 1, None)?;
         let rest = lp("");
+        // The loop that runs the rest of this iteration stands for the original's loop:
+        // a `continue` or `break` pending in K's code (a `using` scope's disposal) names
+        // it (origin tracking, D2733).
+        let once_loop = self.mark("loop", fo);
         Ok(P::L(alloc::vec![
             consts,
             P::S(cat!("let ", st, " = 2;\ntry { ")),
+            once_loop,
             lbl.clone(),
             P::S(cat!(
                 "for (let ",
