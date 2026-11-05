@@ -285,11 +285,7 @@ fn scan(
         }
         match c {
             b'"' | b'\'' => {
-                i += 1;
-                while i < b.len() && b[i] != c {
-                    i += if b[i] == b'\\' { 2 } else { 1 };
-                }
-                i += 1;
+                i = string_end(text, i + 1, c as char);
                 regex_ok = false;
                 after_dot = false;
                 continue;
@@ -435,6 +431,27 @@ fn scan(
         i += 1;
     }
     out
+}
+
+/// Where the string literal whose text starts at `i` ends (after its closing `q`): by
+/// `find`, which searches fast, not byte by byte (0215: a data-heavy dump is mostly
+/// strings).
+fn string_end(text: &str, i: usize, q: char) -> usize {
+    let b = text.as_bytes();
+    let mut from = i;
+    loop {
+        // (`q` is ASCII: `find` searches its byte, and `from` stays on a char boundary.)
+        let Some(k) = text.get(from..).and_then(|t| t.find(q)) else {
+            return b.len() + 1;
+        };
+        let at = from + k;
+        // Escaped where an odd number of backslashes (of the string's) stands before it.
+        let slashes = b[i..at].iter().rev().take_while(|&&c| c == b'\\').count();
+        if slashes % 2 == 0 {
+            return at + 1;
+        }
+        from = at + 1;
+    }
 }
 
 /// Skips a template literal's text from `i` to its end or its next `${`.
@@ -628,6 +645,9 @@ struct W<'x> {
     /// The dump's top-level names (roots, functions, classes), and as a set.
     globals: Vec<String>,
     global_set: alloc::collections::BTreeSet<String>,
+    /// The globals' first bytes (a bit each) and longest length: a filter before the set.
+    global_first: [u64; 4],
+    global_max: usize,
     /// Factories by name, and the item of each activation (0215: linear searches made
     /// writing a data-heavy dump quadratic).
     fac_by_name: alloc::collections::BTreeMap<String, usize>,
@@ -748,6 +768,8 @@ pub(super) fn write(
         in_progress: Vec::new(),
         globals: Vec::new(),
         global_set: Default::default(),
+        global_first: [0; 4],
+        global_max: 0,
         fac_by_name: ir
             .factories
             .iter()
@@ -803,6 +825,12 @@ pub(super) fn write(
         }
     }
     w.read_items(lines)?;
+    for n in &w.global_set {
+        if let Some(&c) = n.as_bytes().first() {
+            w.global_first[usize::from(c >> 6)] |= 1u64 << (c & 63);
+            w.global_max = w.global_max.max(n.len());
+        }
+    }
     w.activations()?;
     w.place_all()?;
     let plan = w.schedule()?;
@@ -1528,10 +1556,19 @@ impl W<'_> {
         if !globals && !text.contains("$dump.") {
             return Vec::new();
         }
+        // (A word's first byte and length filter before the set: most words of a data
+        // literal are its keys, 0215.)
         let r = scan(
             text,
             true,
-            &|n| globals && self.global_set.contains(n),
+            &|n| {
+                globals
+                    && n.len() <= self.global_max
+                    && self.global_first[usize::from(n.as_bytes()[0] >> 6)]
+                        & (1u64 << (n.as_bytes()[0] & 63))
+                        != 0
+                    && self.global_set.contains(n)
+            },
             &mut |_, _| {},
             true,
         );
