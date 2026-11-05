@@ -42,10 +42,6 @@ code is held to the word rules):
   path text names another file than it links are errors. A `gen:excerpt` region starts
   with a link to the quoted lines.
 
-(While the rewrite of the guide is under way, the pages it has not reached yet are listed in
-`NOT_YET_REWRITTEN` in `crates/djs-docs/src/render.rs`: they are exempt from the pi and
-history rules until it does.)
-
 `SUMMARY.md` lists the pages in reading order (mdBook's format). A `- [Title]()` entry
 is a chapter not written yet.
 
@@ -133,11 +129,10 @@ a change to one needs the same change in the other.
 
 ## Checks
 
-`check` also renders every page, so it catches: a link to a page or repository file that
-does not exist (relative links are resolved from `docs/guide/`; links to
-`../decisions.md` go to the site's copy of the log), a decision ID in prose that
-is not in the log, an unknown opcode, cell kind or generator, a missing diagram, a
-diagram in `gen/` that nothing generates.
+`check` also renders every page, so it catches: a link to a page, a section or a
+repository file that does not exist (relative links are resolved from `docs/guide/`), a
+decision ID or a link to the decision log, an unknown opcode, cell kind or generator, a
+missing diagram, a diagram in `gen/` that nothing generates.
 
 ## How a page is written
 

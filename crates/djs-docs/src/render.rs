@@ -429,22 +429,6 @@ pub fn source_url(rel: &str, dir: bool, frag: &str, rev: &str) -> String {
 /// describes hosts in general.
 const PI_PAGE: &str = "pi.md";
 
-/// Pages not yet rewritten to the pi and history rules: the guide's rewrite takes them in
-/// batches, and each batch takes its pages off this list (empty at its end).
-const NOT_YET_REWRITTEN: &[&str] = &[
-    "arena.md",
-    "builtins.md",
-    "compiler.md",
-    "gc.md",
-    "heap.md",
-    "host.md",
-    "interpreter.md",
-    "snapshots.md",
-    "suspension.md",
-    "testing.md",
-    "values.md",
-];
-
 /// Phrases that tell history (what djs used to do, what replaced what). The guide
 /// describes djs as it is; the history is in the repository.
 const HISTORY: &[&str] = &[
@@ -468,9 +452,6 @@ const HISTORY: &[&str] = &[
 /// decisions (`D1050`), names pi on its own page only, and tells no history.
 fn check_prose(text: &str, page: &str, env: &mut Env) {
     check_code(text, page, env);
-    if NOT_YET_REWRITTEN.contains(&page) {
-        return;
-    }
     let lower = text.to_lowercase();
     for h in HISTORY {
         if lower.contains(h) {
@@ -513,7 +494,6 @@ fn check_code(text: &str, page: &str, env: &mut Env) {
     }
     // pi by name (`pi`, `pi's`, `js/pi/vm.ts`): whole words, so neither `π` nor `pipeline`.
     if page != PI_PAGE
-        && !NOT_YET_REWRITTEN.contains(&page)
         && text
             .split(|c: char| !c.is_ascii_alphanumeric())
             .any(|w| w == "pi" || w == "Pi")

@@ -20,9 +20,10 @@
 - [The interpreter: frames in the heap](interpreter.md)
 - [Suspending anywhere: fuel and host calls](suspension.md)
 - [The garbage collector](gc.md)
-- [Images and continuation dumps](snapshots.md)
+- [Images and the base snapshot](snapshots.md)
+- [How continuation dumps are written](continuations.md)
 - [Builtins: the TypeScript subset and the leaf rule](builtins.md)
-- [The host interface: wire in, reader out](host.md)
+- [The wasm boundary](host.md)
 - [How djs is tested](testing.md)
 
 # Reference
