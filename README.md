@@ -88,7 +88,7 @@ when it runs the prelude). Callback-heavy builtin code is the main remaining gap
 
 <!-- gen:status size -->
 `djs_wasm.wasm` is 953 KB (414 KB gzip, 350 KB brotli): 806 KB of code, 98 KB of data,
-and the base snapshot (the initialized realm with all builtins, 186 KB) coded to 46 KB
+and the base snapshot (the initialized realm with all builtins, 188 KB) coded to 46 KB
 in a custom section. The slim build is 825 KB (349 KB gzip); the dump module, the
 shipped build with the dumper, 1,835 KB (754 KB gzip). Module sizes measured at
 31c4587e31, 2026-11-05.

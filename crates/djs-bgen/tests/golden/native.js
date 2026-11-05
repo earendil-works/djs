@@ -16,7 +16,7 @@ function NativeLoops(f, ...rest) {
     }
     i = i * 2 + 1;
     u = u - 1 + 2;
-    sum += ($1 = (((%Leaf(v)) ? (1) : (%LengthOfArrayLike(%User(v))))), ($1 * 2)) + (i < 3 ? 1 : 0);
+    sum += ($1 = ((%Leaf(v)) ? 1 : %LengthOfArrayLike(%User(v))), $1 * 2) + (i < 3 ? 1 : 0);
     while (%Leaf(%User(f, k)) || i > 100) {
       i--;
       if (i < 0) {
@@ -46,6 +46,19 @@ function NativeTry(f, ...rest) {
     }
   }
   return r;
+}
+
+// golden/native.ts:59
+function Inlined(v) {
+  if (%Leaf(v)) {
+    return 1;
+  }
+  return %LengthOfArrayLike(%User(v));
+}
+
+// golden/native.ts:67
+function Twice(x) {
+  return x * 2;
 }
 
 // golden/native.ts:76 %Count

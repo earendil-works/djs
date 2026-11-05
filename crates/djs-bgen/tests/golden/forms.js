@@ -49,7 +49,7 @@ function AllForms(a, b) {
   } catch (e) {
     throw e;
   } finally {
-    ((z === u));
+    (z === u);
   }
   try {
     %Leaf(null);
@@ -65,6 +65,11 @@ function AllForms(a, b) {
   return neg === 0 ? %Make() : s;
 }
 
+// golden/forms.ts:67
+function Helper(a, b) {
+  return a === b;
+}
+
 // golden/forms.ts:75 %Callback
 function Callback(f) {
   return %User(f);
@@ -73,9 +78,30 @@ function Callback(f) {
 // golden/forms.ts:84 Example.inlining
 function Inlining(x, n) {
   let $1, $2, $3, $4, $5, $6;
-  const a = ($1 = (((%Leaf(x)) ? %Throw(%NewError("object")) : (1))), $2 = n + 1, ($3 = 0, ($3 = $3 + 1, ($4 = $1 * 2, (($4 < $3) ? ($3) : (($4 > $2) ? ($2) : ($4)))))));
+  const a = ($1 = ((%Leaf(x)) ? %Throw(%NewError("object")) : 1), $2 = n + 1, ($3 = 0, ($3 = $3 + 1, ($4 = $1 * 2, ($4 < $3) ? $3 : ($4 > $2) ? $2 : $4))));
   const b = Looping(a);
-  return Big(a, b) + (($5 = 0, ($5 = $5 + 1, ($6 = b * 2, (($6 < $5) ? ($5) : (($6 > n) ? (n) : ($6)))))));
+  return Big(a, b) + (($5 = 0, ($5 = $5 + 1, ($6 = b * 2, ($6 < $5) ? $5 : ($6 > n) ? n : $6))));
+}
+
+// golden/forms.ts:91
+function Checked(v) {
+  if (%Leaf(v)) {
+    throw %NewError("object");
+  }
+  return 1;
+}
+
+// golden/forms.ts:99
+function Clamp(v, hi) {
+  let lo = 0;
+  lo = lo + 1;
+  const p = v * 2;
+  if (p < lo) {
+    return lo;
+  } else if (p > hi) {
+    return hi;
+  }
+  return p;
 }
 
 // golden/forms.ts:111

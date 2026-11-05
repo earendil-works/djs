@@ -942,6 +942,18 @@ mod tests {
     /// GC stress, agree. A sample of the modes (about a second): the exhaustive
     /// version is `backends_agree_in_every_mode`, run it before merging backend
     /// changes (`cargo test -p djs-core --lib backends_agree -- --ignored`).
+    /// `PURE_LEAVES` (the hot loop's filter) is exactly what `pure_leaf` runs.
+    #[test]
+    fn pure_leaves_match_pure_leaf() {
+        let mut vm = start("console.log(1);", PLAIN);
+        let mut ex = Exec::new(vm.heap_mut(), ExecOptions::default());
+        for (k, info) in crate::bytecode::intrinsics::INTRINSICS.iter().enumerate() {
+            let id = k as u16;
+            let ran = !matches!(ex.pure_leaf(id, [Value::UNDEFINED; 3]), Ok(None));
+            assert_eq!(ran, super::super::hot::is_pure_leaf(id), "{}", info.name);
+        }
+    }
+
     #[test]
     fn backends_agree() {
         check_modes(&[

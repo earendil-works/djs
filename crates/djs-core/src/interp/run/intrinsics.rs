@@ -543,18 +543,6 @@ impl Exec<'_> {
             }
             return self.call_installed(id, base, argc, next);
         }
-        if argc <= 3 {
-            let mut a = [Value::UNDEFINED; 3];
-            for (k, x) in a.iter_mut().enumerate().take(argc as usize) {
-                *x = self.get(base + k as u32);
-            }
-            if let Some(v) = self.pure_leaf(id, a)? {
-                self.sp = base;
-                self.push(v);
-                self.pc = next;
-                return Ok(None);
-            }
-        }
         if let Some(step) = self.proxy_intrinsic(id, base, argc, next) {
             return step;
         }
@@ -2051,6 +2039,13 @@ impl Exec<'_> {
                 conv::number(crate::builtins::math::sum_precise(values))
             }
             _ if let Some(r) = self.proxy_leaf(id, a0, arg(self, 1)) => r?,
+            // The pure leaves (the hot loop runs them itself; here after a fault, or
+            // with the hot loop off).
+            _ if argc <= 3
+                && let Some(v) = self.pure_leaf(id, [a0, arg(self, 1), arg(self, 2)])? =>
+            {
+                v
+            }
             _ => return self.json_regexp_intrinsic(id, base, argc, next),
         };
         self.sp = base;

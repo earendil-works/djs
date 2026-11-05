@@ -407,7 +407,8 @@ impl<'a> Emitter<'a> {
             v
         };
         Some(match first {
-            Stmt::Return { value: Some(v), .. } => format!("({})", self.expr(v)),
+            // Bare: the whole is parenthesized once, and a branch of `?:` needs none.
+            Stmt::Return { value: Some(v), .. } => self.expr(v),
             Stmt::Return { value: None, .. } => "undefined".into(),
             Stmt::Throw { value, .. } => format!("%Throw({})", self.expr(value)),
             Stmt::Decl { name, init, .. } => {
@@ -437,7 +438,7 @@ impl<'a> Emitter<'a> {
                     Some(e) => self.tail(&then_rest(e))?,
                     None => self.tail(rest)?,
                 };
-                format!("(({c}) ? {a} : {b})")
+                format!("({c}) ? {a} : {b}")
             }
             _ => return None,
         })

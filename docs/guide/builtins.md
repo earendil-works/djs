@@ -100,7 +100,7 @@ The subset is small on purpose:
 Intrinsics are declared in [`builtins/intrinsics.d.ts`](../../builtins/intrinsics.d.ts),
 each tagged `@leaf` (never runs user code) or `@reentrant` (may call exactly one user
 function, whose result completes the operation, such as `Get` calling a getter).
-<!--n intrinsics/leaf-->281<!--/n--> are leaves and <!--n intrinsics/reentrant-->29<!--/n--> are reentrant. Builtins tagged `@intrinsic` join them, so that the
+<!--n intrinsics/leaf-->282<!--/n--> are leaves and <!--n intrinsics/reentrant-->29<!--/n--> are reentrant. Builtins tagged `@intrinsic` join them, so that the
 interpreter's slow paths and other builtins can call them as `%Name(...)`. They are all
 numbered in one table; the [intrinsics reference](ref-intrinsics.md) lists them.
 
@@ -151,6 +151,38 @@ compiler gives each prelude function that another one refers to a slot in one ta
 the realm, references compile to `get_builtin` (read the slot) instead of `get_cap`, and
 the wrapper fills the table once with `put_builtin`. User code never sees the table, and
 its closures capture as usual.
+
+Builtins are written as many small helpers (`ToNumber`, `ToIntegerOrInfinity`,
+`ThisToString`, `ClampPosition`), as the spec is, and a call of one costs a frame and a
+handful of instructions, often more than the helper's own work: `"abc".substring(1, 2)`
+called eight of them. So djs-bgen inlines a small helper into its callers in the
+prelude: when the helper's body can be written as one expression (declarations, `if`
+with `return`, `throw` as the `%Throw(v)` intrinsic) and that expression stays short,
+the call becomes the expression. The arguments go into temporaries of the caller first,
+in order, so they are evaluated exactly once and in the same order as before. Only
+internal helpers are inlined: they never show in stack traces, so nothing observable
+changes. A helper whose frame the engine looks for on the stack is tagged `@frame` and
+keeps it. Here is `substring` as the prelude has it:
+
+<!-- gen:excerpt builtins/gen/prelude.js "String.prototype.substring" "function StringPrototypeSubstring(" 8 -->
+[`builtins/gen/prelude.js`](../../builtins/gen/prelude.js#L9658-L9665), lines 9658–9665:
+
+```js
+function StringPrototypeSubstring(start, end) {
+  const s = ((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this));
+  const len = (%StrLength(s));
+  const a = ClampPosition(start, len);
+  const b = end === undefined ? len : ClampPosition(end, len);
+  return a < b ? %StrSubstring(s, a, b) : %StrSubstring(s, b, a);
+}
+```
+<!-- /gen -->
+
+> **Trade-off.** Inlining at the source over cheaper helper calls. A frame for a
+> builtin's helper is already about as cheap as a call of a user function; what costs
+> is the number of them. The cost: every inlined call site is a copy of the helper's
+> body in the base image, so only short bodies are inlined, and the prelude reads less
+> like the TypeScript it comes from.
 
 The prelude runs once, at build time, when the base snapshot is made: the realm with
 every builtin installed and compiled, collected, compacted and embedded in the engine
@@ -242,7 +274,7 @@ Many hot builtins rarely meet user code: `"a,b".split(",")`, `s.includes("x")`,
 `@fast` has a hand-written Rust entry of the same name in
 [`crates/djs-core/src/builtins/fast.rs`](../../crates/djs-core/src/builtins/fast.rs).
 With the native backend, a call first runs the entry, which either returns the builtin's
-result or *declines*, and then the builtin runs as usual. <!--n builtins/fast-->18<!--/n--> builtins have one.
+result or *declines*, and then the builtin runs as usual. <!--n builtins/fast-->20<!--/n--> builtins have one.
 
 An entry may answer only when nothing observable can happen: primitive arguments, dense
 arrays whose elements are plain data, no proxies. Every case that would throw declines,
@@ -295,7 +327,7 @@ kilobyte (gzipped) of the twin's code. Twins that call each other are judged tog
 such as `sort` and its merge step, or the serializer functions of `JSON.stringify`.
 `scripts/native-sizes.sh` prints the wasm size of each native function.
 
-By that rule the twins are the <!--n builtins/fast-->18<!--/n--> `@fast` entries (`split`, `includes`, `indexOf` and
+By that rule the twins are the <!--n builtins/fast-->20<!--/n--> `@fast` entries (`split`, `includes`, `indexOf` and
 `slice` on strings and arrays, `charAt` and `charCodeAt`, `push`, `pop` and `join`,
 `String.fromCharCode`, `Number`, `ArraySpeciesCreate` and the conversion helpers the
 builtins call most) and the <!--n builtins/native-->8<!--/n-->

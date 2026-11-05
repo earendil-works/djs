@@ -60,6 +60,103 @@ const PUT_GLOBAL: u8 = Op::PutGlobal as u8;
 const PUSH_RESULT: i32 = Continuation::PushResult.to_flags();
 const EACH: i32 = Continuation::Each.to_flags();
 
+/// The intrinsics `Exec::pure_leaf` runs, by name. The hot loop calls it only for these,
+/// so the others decline without a call (a test checks the list against `pure_leaf`).
+pub(super) const PURE_LEAVES: &[&str] = &[
+    "IsObject",
+    "IsCallable",
+    "IsConstructor",
+    "IsArray",
+    "IsString",
+    "IsNumber",
+    "IsSymbol",
+    "IsBoolean",
+    "AsObj",
+    "AsFn",
+    "AsStr",
+    "AsNumber",
+    "AsSym",
+    "AsBool",
+    "ToBoolean",
+    "ToNumberPrimitive",
+    "ToStringPrimitive",
+    "ToObject",
+    "ToIntegerOrInfinityNumber",
+    "F64ToU32",
+    "F64ToI32",
+    "StrLength",
+    "SameValue",
+    "PrimitiveValue",
+    "NumberToString",
+    "NumberToFixed",
+    "NumberToExponential",
+    "NumberToPrecision",
+    "StringParseFloat",
+    "StringParseInt",
+    "StrCharCodeAt",
+    "StrCodePointAt",
+    "StrSubstring",
+    "StrIndexOf",
+    "StrLastIndexOf",
+    "StrToCase",
+    "StrTrim",
+    "StrIsWellFormed",
+    "StrToWellFormed",
+    "StrRepeat",
+    "StrNormalize",
+    "F64Abs",
+    "F64Acos",
+    "F64Acosh",
+    "F64Asin",
+    "F64Asinh",
+    "F64Atan",
+    "F64Atanh",
+    "F64Atan2",
+    "F64Cbrt",
+    "F64Hypot",
+    "F64Ceil",
+    "F64Clz32",
+    "F64Cos",
+    "F64Cosh",
+    "F64Exp",
+    "F64Expm1",
+    "F64Floor",
+    "F64Fround",
+    "F64F16round",
+    "F64Imul",
+    "F64Log",
+    "F64Log1p",
+    "F64Log10",
+    "F64Log2",
+    "F64Round",
+    "F64Sign",
+    "F64Sin",
+    "F64Sinh",
+    "F64Sqrt",
+    "F64Tan",
+    "F64Tanh",
+    "F64Trunc",
+];
+
+const PURE_WORDS: usize = crate::bytecode::intrinsics::INTRINSICS.len().div_ceil(64);
+
+/// [`PURE_LEAVES`] as a bit per intrinsic id.
+static PURE: [u64; PURE_WORDS] = {
+    let mut bits = [0u64; PURE_WORDS];
+    let mut k = 0;
+    while k < PURE_LEAVES.len() {
+        let i = super::intrinsics::id(PURE_LEAVES[k]) as usize;
+        bits[i / 64] |= 1 << (i % 64);
+        k += 1;
+    }
+    bits
+};
+
+pub(super) fn is_pure_leaf(id: u16) -> bool {
+    PURE.get(id as usize / 64)
+        .is_some_and(|w| w >> (id % 64) & 1 != 0)
+}
+
 #[cold]
 #[inline(never)]
 fn out_of_bounds() -> ! {
@@ -310,7 +407,8 @@ impl Exec<'_> {
                 }
                 Value::UNDEFINED
             }
-            _ => return self.pure_leaf_hit(id, argc, a),
+            _ if is_pure_leaf(id) => return self.pure_leaf_hit(id, argc, a),
+            _ => return None,
         })
     }
 

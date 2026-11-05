@@ -284,7 +284,11 @@ faster loop in front of it:
 - **The tier-0 loop** (`run_hot`) is the main loop. It keeps `pc`, `sp`, the fuel and
   the current frame's data in Rust locals and handles the hottest cases itself: locals,
   constants, int32 and float arithmetic, comparisons, jumps, calls of plain closures and
-  returns, inline-cache hits, dense array elements and `@fast` builtin calls. Anything
+  returns, inline-cache hits, dense array elements, `@fast` builtin calls and the
+  builtins' pure leaf intrinsics: type tests, conversions of primitives, the string and
+  `Math` leaves. A leaf that throws is declined and runs again on the general path,
+  which throws from there; leaves change nothing before they fail, so the second run
+  sees what the first one saw. Anything
   else, and any case it declines (an int overflow, an object operand), goes to the
   general path (`step_once`), which runs that one instruction after the locals have been
   written back. Nothing the tier-0 loop does itself can collect or run user code, which
