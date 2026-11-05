@@ -8,6 +8,7 @@
 //!   matching files;
 //! - `DJS_DUMP_PERF_REPS=n`: dumps and loads per idle point, the best counts (default 3);
 //!   `DJS_DUMP_PERF_ONLY=dump|load|redump` repeats only that side (profiling);
+//! - `DJS_DUMP_PERF_CHECK=0`: dumps without the check (`DumpOptions::check`);
 //! - `DJS_DUMP_PERF_OUT=dir`: writes every dump there (`<case>.<idle>.js`) for profiling;
 //! - `DJS_DUMP_PERF_SKIP=load`: dumps only, `=redump`: dumps and loads, `=all`: none (for
 //!   counting the instructions of each side with `/usr/bin/time -l` when the machine is
@@ -75,6 +76,7 @@ fn measure(vm: &Vm, api: Value, name: &str, idle: usize, points: &mut Vec<Point>
         base: base(),
         host_fn_name: &host_fn_name,
         handles: &handles,
+        check: std::env::var("DJS_DUMP_PERF_CHECK").map_or(true, |v| v != "0"),
         ..Default::default()
     };
     let skip = std::env::var("DJS_DUMP_PERF_SKIP").unwrap_or_default();

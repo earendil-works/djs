@@ -72,6 +72,7 @@ fn the_sleep_example_dumps() {
         handles: &[("run", run)],
         call_states: &[(call, "{\"due\":1793822825106}")],
         source_refs: true,
+        check: true,
     };
     let text = vm.dump(&opts, None).map_err(|e| e.message()).unwrap();
     assert!(

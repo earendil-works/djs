@@ -1066,6 +1066,7 @@ pub extern "C" fn vm_dump(vm: u32, len: usize) -> i32 {
                 handles: &handles,
                 call_states: &call_states,
                 source_refs: slot.source_refs,
+                check: true,
             };
             Some(
                 slot.vm

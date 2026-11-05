@@ -10068,3 +10068,17 @@ default one (a `prototype` replaced or changed, which the dump sets after the fu
 made with `Object.setPrototypeOf(Reflect.apply(f, …), proto)`. The golden dumps keep their
 object records: they still run (the record is not read on a load), D2619. Corpus case
 language/generator-prototype.js.
+## D2888: The dump's check compiles the plain text a host loads; `DumpOptions::check`
+date: 2026-11-06 · by: pjr · issue: 0215
+The checker (0168) compares every function the dump writes with the original. A captured
+name must still be captured where the dump writes the function, and a global it reads
+must stay a global that exists after the load. It compiled a skeleton of the exporter's
+intermediate lines, which are format 2's shape and which no host loads. The plain writer
+then moved those functions around (merged scopes, continuation blocks, liveness), so
+the check verified the writer's input, not its result. It now compiles the plain text
+itself, with the lines that write only data left out as before. The cost is the same
+(~47% of a corpus dump, ~34% of a re-dump) and it checks what loads. A function the
+plain text does not contain is one the writer left out, which no live binding reads
+(D2911), or one it names by reference (D2882): it is not checked. `DumpOptions::check`
+(default true everywhere) turns the check off. Whether production hosts do is the
+owner's call.

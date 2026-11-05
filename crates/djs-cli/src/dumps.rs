@@ -345,6 +345,7 @@ pub fn dump_names(
         // `djs run`: the body by reference, `djs resume` reads it from its path again
         // (D2882); the REPL writes its inputs' text (a dump that stands alone).
         source_refs,
+        check: true,
     };
     vm.dump_report(&opts, names).map_err(|e| e.message())
 }

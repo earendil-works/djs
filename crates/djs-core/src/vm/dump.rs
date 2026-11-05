@@ -96,6 +96,10 @@ pub struct DumpOptions<'a> {
     /// Write a codemode body's origin as `$djs.source(name, hash, params)`, a reference
     /// the host resolves to the script it ran (D2882), instead of its text.
     pub source_refs: bool,
+    /// Check the dump before returning it (D2888): compile the written text and refuse a
+    /// function whose names would resolve to other bindings after the load. On by default;
+    /// a host may turn it off to save its cost (~40% of a dump).
+    pub check: bool,
 }
 
 pub use super::script_hash;
@@ -114,6 +118,7 @@ impl Default for DumpOptions<'_> {
             handles: &[],
             call_states: &[],
             source_refs: false,
+            check: true,
         }
     }
 }
@@ -824,6 +829,8 @@ struct Dumper<'a> {
     pl: plain::Ir,
     /// `DumpOptions::source_refs`.
     source_refs: bool,
+    /// `DumpOptions::check`.
+    check_on: bool,
     next: u32,
     depth: u32,
     visited: usize,
@@ -890,6 +897,7 @@ impl<'a> Dumper<'a> {
             data_depth: 0,
             pl: plain::Ir::default(),
             source_refs: opts.source_refs,
+            check_on: opts.check,
             next: 0,
             depth: 0,
             visited: 0,
@@ -2081,19 +2089,18 @@ impl<'a> Dumper<'a> {
             .h
             .arena()
             .get(i, crate::heap::cells::Interp::NEXT_CALL_ID);
-        // The checker compiles the dump with the lines that write no function cut down to
-        // the names they declare: their data cannot change what a name resolves to.
-        let mut skeleton = String::new();
-        for (l, sk) in self.out.iter().zip(&self.skeleton) {
-            cat_to!(&mut skeleton, sk.as_deref().unwrap_or(l), '\n');
-        }
-        for l in self.patches.iter().chain(&self.finals) {
-            cat_to!(&mut skeleton, l, '\n');
-        }
-        self.check(&skeleton);
-        if !self.refusals.is_empty() {
-            return Err(self.refused());
-        }
+        // The lines that write no function: the checker leaves them out of the text it
+        // compiles (their data cannot change what a name resolves to).
+        let data_lines: alloc::collections::BTreeSet<String> = if self.check_on {
+            self.out
+                .iter()
+                .zip(&self.skeleton)
+                .filter(|(l, sk)| sk.is_some() && !l.contains('\n'))
+                .map(|(l, _)| l.clone())
+                .collect()
+        } else {
+            Default::default()
+        };
         let ir = core::mem::take(&mut self.pl);
         let mut lines = core::mem::take(&mut self.out);
         lines.extend(core::mem::take(&mut self.patches));
@@ -2103,6 +2110,21 @@ impl<'a> Dumper<'a> {
         if s.contains(LATER) {
             // The IR's own copies of factory members and activations.
             s = self.resolve_later(&s);
+            if !self.refusals.is_empty() {
+                return Err(self.refused());
+            }
+        }
+        if self.check_on {
+            // The text the host loads, its data lines left out (0215: the checker compiled
+            // the intermediate format-2-shaped lines before, which no host loads).
+            let mut text = String::with_capacity(s.len() / 2);
+            for l in s.split('\n') {
+                if !data_lines.contains(l) {
+                    cat_to!(&mut text, l);
+                }
+                text.push('\n');
+            }
+            self.check(&text);
             if !self.refusals.is_empty() {
                 return Err(self.refused());
             }
@@ -2264,14 +2286,12 @@ impl<'a> Dumper<'a> {
             let mut at = by_text.get(hash_text(&src)).unwrap_or(u32::MAX);
             // Functions of the same text (a class's constructor and field initializer
             // share the class's): one of them must keep every name.
-            let mut found = false;
             let mut first: Option<Vec<String>> = None;
             while let Some(&(a, b, ref new, next)) = written.get(at as usize) {
                 at = next;
                 if text.get(a as usize..b as usize) != Some(src.as_str()) {
                     continue;
                 }
-                found = true;
                 let mut why: Vec<String> = Vec::new();
                 for c in &orig.captures {
                     // Or read as a global: a root holding the variable's box, or a root
@@ -2325,9 +2345,8 @@ impl<'a> Dumper<'a> {
             for w in first.unwrap_or_default() {
                 self.refuse(path.clone(), &w);
             }
-            if !found {
-                self.refuse(path, "internal: the function's text is not in the dump");
-            }
+            // (A function not in the text at all is one the plain writer left out, which no
+            // live binding reads after the load (D2911), or names by reference.)
         }
     }
 
