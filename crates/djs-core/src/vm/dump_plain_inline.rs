@@ -488,12 +488,10 @@ impl W<'_> {
         if let Some(s) = self.vcache.get(&key) {
             return s.clone();
         }
-        // (A value that reads a name would be read before the continuation, `pre`.)
-        let s = self.inline_with(
-            v,
-            None,
-            Reads::Only(&["undefined", "true", "false", "null"]),
-        );
+        // (A value that reads a name K binds would be read before the continuation,
+        // `pre`.)
+        let scope = self.k_scope(a);
+        let s = self.inline_with(v, None, Reads::Scope(&scope));
         self.vcache.insert(key, s.clone());
         s
     }
@@ -519,7 +517,7 @@ impl W<'_> {
 
 /// Whether `text` names `name` only as an object literal's key (`{ path: "b.md" }`): the
 /// references `refs` finds err on the side of keys.
-fn only_keys(text: &str, name: &str) -> bool {
+pub(super) fn only_keys(text: &str, name: &str) -> bool {
     let b = text.as_bytes();
     let mut any = false;
     for (at, _) in text.match_indices(name) {

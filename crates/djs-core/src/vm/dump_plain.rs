@@ -924,11 +924,14 @@ impl W<'_> {
             value,
             cell: sl.cell,
         };
+        // (A name K binds nowhere is the same inside it: a global, a builtin.)
+        let scope = self.k_scope(a);
         let r = refs(&sl.value);
-        let reads = r
-            .names
-            .iter()
-            .any(|n| n != "undefined" && n != "true" && n != "false" && n != "null");
+        let reads = r.names.iter().any(|n| {
+            matches!(n.as_str(), "this" | "arguments" | "super" | "new")
+                || n.starts_with("$djs_")
+                || scope.contains(n) && !inline::only_keys(&sl.value, n)
+        });
         let st = &mut self.acts[a];
         if !reads || st.after_go.iter().any(|n| n == name) {
             return Some(sl.value.clone());
