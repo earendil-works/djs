@@ -927,11 +927,12 @@ impl W<'_> {
         // (A name K binds nowhere is the same inside it: a global, a builtin.)
         let scope = self.k_scope(a);
         let r = refs(&sl.value);
-        let reads = r.names.iter().any(|n| {
-            matches!(n.as_str(), "this" | "arguments" | "super" | "new")
-                || n.starts_with("$djs_")
-                || scope.contains(n) && !inline::only_keys(&sl.value, n)
-        });
+        let reads = sl.value.contains("new.target")
+            || r.names.iter().any(|n| {
+                matches!(n.as_str(), "this" | "arguments" | "super")
+                    || n.starts_with("$djs_")
+                    || scope.contains(n) && !inline::only_keys(&sl.value, n)
+            });
         let st = &mut self.acts[a];
         if !reads || st.after_go.iter().any(|n| n == name) {
             return Some(sl.value.clone());
@@ -960,11 +961,16 @@ impl Ctx for C<'_, '_> {
     fn cell(&mut self, sname: &str) -> Option<Option<String>> {
         let &(_, sc, v) = self.w.acts[self.a].cells.iter().find(|c| c.0 == sname)?;
         let var = &self.w.scope(sc).vars[v];
-        Some(if var.tdz {
-            None
-        } else {
-            Some(var.init.clone().unwrap_or_else(|| "undefined".into()))
-        })
+        if var.tdz {
+            return Some(None);
+        }
+        let init = var.init.clone().unwrap_or_else(|| "undefined".into());
+        if self.dry {
+            return Some(Some(init));
+        }
+        // (Its value written in place, as a slot's, D3001.)
+        let key = cat!("<cell>", sname);
+        Some(Some(self.w.inlined_slot(self.a, &key, &init)))
     }
 
     fn after_go(&self, sname: &str) -> bool {

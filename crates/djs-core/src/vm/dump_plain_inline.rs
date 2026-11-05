@@ -79,6 +79,8 @@ const PURE_NAMES: &[&str] = &[
     "TypeError",
     "RangeError",
     "$djs",
+    // (`new Map(…)`: `shape` admits only builtins after it.)
+    "new",
 ];
 
 /// Whether evaluating value text `rhs` later during the load gives the same value and does
@@ -173,17 +175,21 @@ impl W<'_> {
                 .filter(|it| !matches!(it.kind, IK::Act(_) | IK::Factory(_)))
                 .map(|it| it.text.as_str()),
         );
-        for a in &ir.acts {
+        for (ai, a) in ir.acts.iter().enumerate() {
+            let cells = &self.acts[ai].cells;
             texts.push_out(a.fexpr.as_str());
             texts.push_out(a.this.as_str());
             texts.extend(a.awaiting.as_deref());
             texts.extend(a.proto.as_deref());
             texts.extend(a.super_proto.as_deref());
-            // (A temporary K evaluates again is not written, D2836.)
+            // (A temporary K evaluates again is not written, D2836; a variable shared
+            // with closures is written from its factory's.)
             texts.extend(
                 a.slots
                     .iter()
-                    .filter(|s| !a.rereads.contains(&s.name))
+                    .filter(|s| {
+                        !a.rereads.contains(&s.name) && !cells.iter().any(|c| c.0 == s.name)
+                    })
                     .map(|s| s.value.as_str()),
             );
             for (_, v, p) in &a.queue {
@@ -195,12 +201,17 @@ impl W<'_> {
                 texts.extend(u.state.iter().map(|s| s.1.as_str()));
             }
         }
-        for f in &ir.factories {
-            for sc in &f.scopes {
+        for (fi, f) in ir.factories.iter().enumerate() {
+            for (si, sc) in f.scopes.iter().enumerate() {
                 texts.extend(sc.other.iter().map(String::as_str));
-                for v in &sc.vars {
-                    texts.push_out(v.line.as_str());
-                    texts.extend(v.init.as_deref());
+                for (vi, v) in sc.vars.iter().enumerate() {
+                    // (A variable a frame takes is its continuation's binding, of its
+                    // value; the others are their factory's lines.)
+                    if self.is_merged((fi, si)) && !self.dead((fi, si), vi) {
+                        texts.extend(v.init.as_deref());
+                    } else {
+                        texts.push_out(v.line.as_str());
+                    }
                 }
                 texts.extend(sc.props.iter().map(|p| p.text.as_str()));
             }
@@ -321,14 +332,17 @@ impl W<'_> {
             let reads_ok = match reads {
                 Reads::Any => true,
                 Reads::Only(only) => names.iter().all(|n| only.contains(&n.as_str())),
-                Reads::Scope(scope) => names.iter().all(|n| {
-                    !matches!(n.as_str(), "this" | "arguments" | "super" | "new")
-                        && !n.starts_with("$djs_")
-                        && (PURE_NAMES.contains(&n.as_str())
-                            || pd.bound.contains(n)
-                            || !scope.contains(n)
-                            || only_keys(&pd.rhs, n))
-                }),
+                Reads::Scope(scope) => {
+                    !pd.rhs.contains("new.target")
+                        && names.iter().all(|n| {
+                            !matches!(n.as_str(), "this" | "arguments" | "super")
+                                && !n.starts_with("$djs_")
+                                && (PURE_NAMES.contains(&n.as_str())
+                                    || pd.bound.contains(n)
+                                    || !scope.contains(n)
+                                    || only_keys(&pd.rhs, n))
+                        })
+                }
             };
             let ok = reads_ok
                 && if pd.effect {
