@@ -194,6 +194,10 @@ struct Session {
     /// clock to set in it.
     #[cfg_attr(not(feature = "dump"), allow(dead_code))]
     dump: Option<(VmOptions, f64)>,
+    /// `--determinism`: the case compiles through the compile cache (D3040), its blob
+    /// from a copy of the VM, and both heaps must then be the same (`Some`: the options).
+    #[cfg_attr(not(feature = "compile-cache"), allow(dead_code))]
+    cache_check: Option<VmOptions>,
     /// How many dumps were taken.
     #[cfg_attr(not(feature = "dump"), allow(dead_code))]
     links: u32,
@@ -262,6 +266,7 @@ impl Djs {
             timeout: job.timeout,
             suspend: self.suspend_every.is_some(),
             dump: self.dump_every_idle.then_some((opts, job.now)),
+            cache_check: (self.image && self.suspend_every.is_none()).then_some(opts),
             links: 0,
             plain_from: self.plain_from,
             name: job.name.to_string(),
@@ -318,7 +323,7 @@ impl Session {
             ..CompileOptions::script(name)
         };
         self.case = Some((src.clone(), copts));
-        match self.vm.compile(src.as_bytes(), &copts) {
+        match self.compile_case(&src, &copts)? {
             Ok(script) => {
                 // (Read again: the global object moves when the heap is collected.)
                 let global = Value::object(self.vm.global());
@@ -338,6 +343,36 @@ impl Session {
             self.call_api("stalled", &[])?;
         }
         Ok(())
+    }
+
+    /// Compiles the case, with `cache_check` through the compile cache: a copy of the VM
+    /// compiles it and exports the blob, this VM imports it, and the two heaps must be
+    /// the same bytes (D3040).
+    fn compile_case(
+        &mut self,
+        src: &str,
+        copts: &CompileOptions<'_>,
+    ) -> Result<Result<Value, djs_core::compiler::CompileError>, Stop> {
+        #[cfg(feature = "compile-cache")]
+        if let Some(opts) = self.cache_check {
+            let mut twin = Vm::from_bytes(self.vm.bytes().to_vec(), opts)
+                .map_err(|e| format!("compile cache: copy: {e:?}"))?;
+            let blob = match twin.compile_cached(src.as_bytes(), copts, None) {
+                Ok((_, blob)) => blob,
+                Err(e) => return Ok(Err(e)),
+            };
+            let (f, again) = match self.vm.compile_cached(src.as_bytes(), copts, blob.as_deref()) {
+                Ok(r) => r,
+                Err(e) => return Ok(Err(e)),
+            };
+            if blob.is_some() && (again.is_some() || twin.bytes() != self.vm.bytes()) {
+                return Err(Stop::Crash(String::from(
+                    "compile cache: the import did not leave the heap the compile left",
+                )));
+            }
+            return Ok(Ok(f));
+        }
+        Ok(self.vm.compile(src.as_bytes(), copts))
     }
 
     /// Calls the method `name` of the prelude's api object to completion.

@@ -24,12 +24,14 @@ test = false
 path = "src/bin/djs-abidrive.rs"
 
 [features]
-default = ["full", "unicode", "dump", "lazy"]
+default = ["full", "unicode", "dump", "lazy", "compile-cache"]
 # `--plain-dumps` (0172, 0201): djs-core's dumper.
 # (djs-wasm's too: djs-abidrive drives the exports as the dump module has them.)
 dump = ["djs-core/dump", "djs-wasm/dump", "djs-prelude/names"]
 # `--lazy`: lazy functions (D2990).
 lazy = ["djs-core/lazy", "djs-test262/lazy"]
+# `--determinism` checks cache hits (0219, D3040).
+compile-cache = ["djs-core/compile-cache"]
 # djs-core's features (D2411): `--no-default-features` builds against the slim engine.
 full = ["djs-prelude/full", "djs-wasm/full", "djs-test262/full"]
 unicode = ["djs-prelude/unicode", "djs-wasm/unicode", "djs-test262/unicode"]

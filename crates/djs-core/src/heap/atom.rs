@@ -732,6 +732,7 @@ impl Heap {
         }
     }
 
+    #[inline(always)]
     fn intern_inner(&mut self, s: Str) -> Result<Atom, HeapError> {
         if let Some(i) = self.str_array_index(s)
             && let Some(a) = Atom::int(i)
@@ -807,6 +808,7 @@ impl Heap {
         self.atom_str_inner(t)
     }
 
+    #[inline(always)]
     fn atom_str_inner(&mut self, t: &str) -> Result<Atom, HeapError> {
         if let Some(i) = parse_array_index(t.bytes().map(u16::from))
             && let Some(a) = Atom::int(i)
@@ -842,6 +844,7 @@ impl Heap {
         self.atom_utf16_inner(units)
     }
 
+    #[inline(always)]
     fn atom_utf16_inner(&mut self, units: &[u16]) -> Result<Atom, HeapError> {
         if let Some(i) = parse_array_index(units.iter().copied())
             && let Some(a) = Atom::int(i)
