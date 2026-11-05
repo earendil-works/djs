@@ -716,3 +716,5 @@ topics when the index is next reorganized.
 - D2841: Settled by the owner on 0216's review
 - D3007: Host calls go into the callback part that reads them all; a factory's continuation takes its site's value
 - D3008: How D2837–D2840 are carried out
+- D3050: `debugger;` can be a pause: an await of the host's `debugger`, in dump builds only
+- D3051: The guide cites no decisions, tells no history and names pi on one page
