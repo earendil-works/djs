@@ -94,7 +94,7 @@ in, so the Markdown reads the same on GitHub. Never edit it by hand.
 | `status conformance\|speed\|size\|inventory` | status numbers: counted from the repository, or read from `tests/scores/status.tsv` (`scripts/status.py`); also used in README.md |
 | `disasm` | the bytecode of the closest `js` or `ts` block above |
 | `run` | the output of the closest `js` or `ts` block above, as this build prints it |
-| `dump [N]` | the continuation dump the closest `js` or `ts` block above writes at its Nth `debugger;` pause (default 1), as the live examples' Dump tab writes it |
+| `dump [N]` | the continuation dump the closest `js` or `ts` block above writes at its Nth `debugger;` pause (default 1), as a live example writes it at that pause |
 
 Examples (`js` blocks, and `ts` blocks, which compile as TypeScript) are codemode async
 function bodies: `await` and `return` work at the top level and `console.log` prints. `run` executes them in a VM from the base
@@ -109,7 +109,16 @@ djs-wasm in the browser, with its bytecode, a walk over the VM's heap, and its f
 and snapshot. Put its `gen:run` region right after it; the site shows that output inside
 the widget until the reader runs the code, and without JavaScript.
 
-How the editor behaves: Run or Ctrl/Cmd-Enter runs the code, and it also runs by itself
+A `debugger;` in a live example (with the docs module, which has the dumper) pauses the
+run there: the page suspends it into a continuation dump, disposes of its sandbox, and
+Run becomes Continue, which resumes the run from the dump in a fresh sandbox, on to the
+next pause or the end. The output reads as one transcript with a line at each pause, and
+the current dump, with its raw and gzip size, is one click away under it (for readers
+without JavaScript, the dump at the first pause, made at build time). A run the dumper
+refuses shows why and continues in the same sandbox. Such runs have frozen builtins,
+which dumps need. An info tip next to Run explains the pause and links the dumps page.
+
+How the editor behaves: Run or Ctrl/Cmd-Enter runs the code (or continues a paused run), and it also runs by itself
 600 ms after the last edit. Tab and Shift-Tab indent and dedent (two spaces, also a
 selection of lines), Enter keeps the line's indentation, Escape leaves the editor so that
 Tab moves on through the page, and Reset (shown once the code differs) brings back the

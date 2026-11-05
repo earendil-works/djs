@@ -148,8 +148,9 @@ safe. [Images and dumps](snapshots.md) shows what a dump holds.
 
 On the docs site, a `debugger;` statement in a live example makes such an idle point: the
 page binds a host function `debugger` that the statement awaits, so the run stops there
-and waits for it. The page then writes the run out, shows the dump in the *Dump* tab, and
-resumes it from the dump in a fresh sandbox when asked:
+and waits for it. The page then writes the run out, shows the dump under the output, and
+resumes it from the dump in a fresh sandbox on Continue ([continuation dumps](dumps.md)
+has more):
 
 ```js live
 let total = 0;

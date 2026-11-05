@@ -88,6 +88,28 @@ boundary"), testing. Reference: opcodes, cells, intrinsics, status. Batches: 1 t
   example with a `gen:dump`. README.md (writing rules) and AGENTS.md's guide section
   rewritten.
 
+### Batch 2 (Using djs)
+- SUMMARY.md: parts "Using djs" (introduction, goals, language, typescript, js-api, dumps,
+  limits, determinism, cli, pi), "How it works", "Reference"; the chapters of batch 3 keep
+  their titles until rewritten.
+- New pages: language.md, typescript.md, js-api.md, dumps.md, limits.md, cli.md (with
+  dbg's `debugger;` support: `--debugger OUT`, `.c`/`.continue`, `.abort`, pauses in
+  `--frozen`), pi.md (the adapter, prelude images, 10,000 fuel per poll, the next mode,
+  pi's tests via `gen:status conformance`/`speed`, wiring another agent host).
+  Rewritten: introduction.md, goals.md (owner: every goal the guide relies on, each with
+  what it means, why, the cost; five ranked + isolation, determinism, wasm32 first,
+  QuickJS's behavior; D3052), determinism.md (pi removed). host.md lost "The pi adapter"
+  (now pi.md); suspension.md's demo text follows the new live UI. These three, and the
+  other "How it works" pages, are batch 3.
+- Tooling: `ts` blocks (static and live) run as TypeScript; `check` fails on links to a
+  section a page lacks (any page; D3052); status.rs "an agent-like script"; live examples
+  pause at `debugger;` in their normal Run (owner's design, D3053): Continue resumes from
+  the dump in a fresh sandbox, one transcript with pause lines, the dump in a `<details>`
+  under the output, refusals shown and continued in place, an info tip linking dumps.md.
+  Checked in headless Chrome (work/scratch/0220/steps4.mjs, steps5.mjs, shot.mjs):
+  3 pauses + end on suspension.html and dumps.html, a WeakMap refusal, the tip.
+- NOT_YET_REWRITTEN now lists only the batch-3 pages.
+
 ## Follow-ups
 
 ## Result
