@@ -29,6 +29,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
+          # The module builds core and alloc from source (scripts/wasm-build-env.sh, D3090).
+          components: rust-src
       - uses: Swatinem/rust-cache@v2
       # strip.mjs needs node:module's stripTypeScriptTypes (node >= 22.13).
       - uses: actions/setup-node@v4

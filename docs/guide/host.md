@@ -28,11 +28,12 @@ environment for comes in as data instead. The clock is set before each slice
 files or network.
 
 A panic in the engine (a bug, never something a script can cause: the heap is bounds
-checked and every limit is a thrown error) records a message and traps. The host reads
-the message (`djs_panic_ptr`, `djs_panic_len`) and discards the instance. The shipped
-module records a fixed message: it carries no panic messages, panic locations or
-formatting code, to stay small; a debug or native build of the engine reproduces the real
-one. Every sandbox gets its own instance, so one trap cannot affect another.
+checked and every limit is a thrown error) traps, and the host discards the instance. A
+debug build records the panic's message first, for the host to read (`djs_panic_ptr`,
+`djs_panic_len`). The shipped module carries no panic messages, panic locations or
+formatting code, to stay small: its standard library is built so that a panic is a bare
+`unreachable` trap, and the `Sandbox` reports such a trap as an engine panic. A debug or
+native build of the engine reproduces the real message. Every sandbox gets its own instance, so one trap cannot affect another.
 
 One trap is not a bug. The parser's nesting limits keep its recursion within the
 module's 128 KiB stack, but should some path still exhaust it, the stack pointer wraps

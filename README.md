@@ -100,7 +100,8 @@ Creating a VM copies the base snapshot: about <!--n startup/vm-new-us .1-->2.5<!
 
 ## Building and running
 
-Requirements: stable Rust (edition 2024) with the `wasm32-unknown-unknown` target, node
+Requirements: stable Rust (edition 2024) with the `wasm32-unknown-unknown` target and the
+`rust-src` component (the wasm module builds core and alloc from source), node
 22.6 or newer for the JS host package (it runs TypeScript directly), and, for the
 oracle-based tests, dquickts' `qjs` at `~/Development/dquickts/qjs` (or `$DJS_QJS`).
 

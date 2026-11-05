@@ -3,9 +3,10 @@
 # scripts/size/budget.py; until the module is within 1.5x, `ceiling_gzip` is a ratchet
 # (lowered with --update, raised only by a recorded decision; last raised: D2892, 0204: the
 # shipped module loads plain dumps itself; lowered by 0177, D2704: images are no persistence
-# format, so the shipped module verifies none).
+# format, so the shipped module verifies none; lowered by 0225, D3090: core and alloc built for the module,
+# panics abort without a message).
 # quickjs_wasi_gzip: quickjs-wasi 3.6.2 quickjs.wasm (pi's engine), gzip -9.
 quickjs_wasi_gzip	286655
-ceiling_gzip	442831
+ceiling_gzip	432798
 # slim_ceiling_gzip: the slim module (scripts/build-wasm.sh --slim, D2411), its own ratchet.
-slim_ceiling_gzip	378201
+slim_ceiling_gzip	367150

@@ -10,9 +10,19 @@
 #   rustc applies the last matching remap, so the catch-all for $HOME comes first; the
 #   rust-src path maps to /rustc/<commit>, as the precompiled std's own paths are.
 # - `-Cllvm-args=-inline-threshold=40` (D2255): less inlining, for size.
-# - `-Zlocation-detail=none` with RUSTC_BOOTSTRAP=1 (D2333): the one place where djs
-#   uses an unstable rustc flag. It drops the file/line/column of panic locations from the
-#   module. DJS_STABLE_ONLY=1 turns it off; the module then builds on plain stable.
+# - With RUSTC_BOOTSTRAP=1, the one place where djs uses unstable rustc and cargo flags
+#   (DJS_STABLE_ONLY=1 turns them all off; the module then builds on plain stable):
+#   - `-Zlocation-detail=none` (D2333): no file/line/column of panic locations.
+#   - core and alloc built from source (`CARGO_UNSTABLE_BUILD_STD`, cargo's
+#     `-Zbuild-std`) with `-Cpanic=immediate-abort` (D3090): a panic is a bare
+#     `unreachable` trap, without the panic call sites' arguments, messages and core's
+#     panic machinery (−10.8 KB gzip). Release modules recorded no panic message anyway
+#     (D2332); js/src/trap.ts names such a trap an engine panic. Needs the toolchain's
+#     rust-src component (checked below).
+#   - `-Zshare-generics=no` (D3090): at opt-level s rustc shares generic instances with
+#     upstream crates, and with core built at s that made djs-core call core's
+#     out-of-line `copy_from_slice_impl` from the arena accessors (+40% instructions in
+#     loops); without sharing, every crate instantiates its own and inlines it.
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 sysroot=$(rustc --print sysroot)
@@ -28,8 +38,15 @@ flags=(
   "-Cllvm-args=-inline-threshold=40"
 )
 if [ "${DJS_STABLE_ONLY:-}" != 1 ]; then
-  flags+=("-Zlocation-detail=none")
+  if [ ! -f "$sysroot/lib/rustlib/src/rust/library/core/Cargo.toml" ]; then
+    echo "wasm-build-env.sh: the shipped module builds core and alloc from source and needs" \
+      "the rust-src component: rustup component add rust-src (or DJS_STABLE_ONLY=1 for a" \
+      "plain stable build)" >&2
+    exit 1
+  fi
+  flags+=("-Zlocation-detail=none" "-Zunstable-options" "-Cpanic=immediate-abort" "-Zshare-generics=no")
   echo "RUSTC_BOOTSTRAP=1"
+  echo "CARGO_UNSTABLE_BUILD_STD=core,alloc"
 fi
 if [ -n "${RUSTFLAGS:-}" ]; then
   read -r -a extra <<< "$RUSTFLAGS"

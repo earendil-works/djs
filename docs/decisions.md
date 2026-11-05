@@ -10690,3 +10690,37 @@ Figures nothing could re-measure were removed from the prose (gc.md's collection
 peak ratios, compiler.md's per-function lazy costs). Numbers measured on a branch whose
 engine sources equal its base are recorded at the base commit, which survives the rebase
 (0223).
+
+## D3090: The shipped module builds core and alloc itself, with panics as bare traps
+date: 2026-11-05 · by: bytes · issue: 0225
+scripts/wasm-build-env.sh (every build of the shipped, slim, dump and docs modules) adds,
+under D2333's RUSTC_BOOTSTRAP=1 and only there: `CARGO_UNSTABLE_BUILD_STD=core,alloc`
+(cargo's `-Zbuild-std`), `-Zunstable-options -Cpanic=immediate-abort` and
+`-Zshare-generics=no`. With immediate-abort every panic is an `unreachable` instruction:
+the call sites lose their arguments (index and length, message pointers) and core's
+panic functions, messages and formatting code go away. The release module recorded no
+message anyway (D2332, a fixed text), so nothing is lost; js/src/trap.ts reports an
+`unreachable` trap without a recorded message as "engine panic (...)". Debug builds and
+native builds keep the messages.
+
+`-Zshare-generics=no` is part of it: at opt-level s rustc shares generic instances with
+upstream crates, and with core built at s (instead of the precompiled O3 one) djs-core
+called core's out-of-line `copy_from_slice_impl::<MaybeUninit<u8>>` 67 times from
+`run_hot` (the arena accessors): +40% wasm instructions on tight, arrays and forof.
+Building only core at opt-level 3 did not fix it; core+alloc+compiler_builtins at 3 did
+but saved only 6.9 KB.
+
+Measured (shipped module, gzip -9): 442,576 → 431,762 (−10.8 KB; code −8.6, data −2.2);
+slim 366,126 (ceiling was 378,201). Wasm instructions per workload (scripts/perf/wmeasure.py -n 3,
+work/scratch/0225/wm-iasg.txt): tight +1.9%, prop1 +1.6, strings −1.4, arrays +0.4, json
+−0.6, json-date +2.3, forof −1.1, calls +0.9, push-pop −1.8, pi-like −3.1, foreach −0.7,
+higher-order −2.4. Without build-std the flag cannot be used (the precompiled core has
+the unwinding panic paths). Rejected on the way: wasm-opt -Oz/-Os/-O2/-O3 (raw −6%, gzip
++1.1 to +3.5 KB), `-Zfmt-debug=none` (−0.1 KB), core's `optimize_for_size` (−0.06 KB).
+
+Cost: the toolchain needs the rust-src component (wasm-build-env.sh fails with a message
+when it is missing; the docs workflow installs it), and a clean module build compiles core
+and alloc (a few seconds). DJS_STABLE_ONLY=1 drops all of it and builds today's module on
+plain stable (450.5 KB without D2333 too). Exit plan: if cargo or rustc change the
+flags, drop the lines in wasm-build-env.sh and raise the ceiling by the recorded 10.8 KB
+under this decision.

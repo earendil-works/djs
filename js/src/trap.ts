@@ -25,5 +25,9 @@ export function trapText(x: TrapExports, e: Error): string {
     return `stack overflow: the engine's wasm stack is exhausted (${e.message})`;
   }
   const msg = textDecoder.decode(new Uint8Array(x.memory.buffer, x.djs_panic_ptr(), x.djs_panic_len()));
-  return msg || e.message;
+  if (msg) return msg;
+  if (/unreachable/.test(e.message)) {
+    return `engine panic (an engine bug; the release module has no panic messages, a debug or native build has them): ${e.message}`;
+  }
+  return e.message;
 }
