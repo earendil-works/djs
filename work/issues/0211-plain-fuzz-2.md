@@ -57,6 +57,12 @@ jobs, wait while load > 30) and gate rules (batch merges, check slim/test262-sli
   (wrong result, plain-xfail) and one capturing `this` in a waiting method (refused);
   batch 9, an array's accessor element before a data element written as a hole
   (plain-xfail) and `continue` out of a try whose finally awaits, re-dumped (refused).
+- Regress after 0207's batch (bdd7871b), seeds 9801–10100: three regressions, bisected to
+  b4ce8159 (D3003: Promise.all closure calling a body function refused, case
+  promise-all-calls-body-function in the refusals ratchet), 356b7194 (D3006: wrong
+  results, seeds 9922/9828) and 05e7a4ad (D3005: re-dump text refusal, seed 10014). Their
+  programs are in regress/ (s12-*). `regress` now takes its fresh seeds from a random,
+  printed start.
 
 ## Follow-ups
 

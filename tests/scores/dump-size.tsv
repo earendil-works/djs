@@ -336,6 +336,7 @@ corpus	codemode/plain-fuzz/getter-capturing-frame-variable.js	5274	2142
 corpus	codemode/plain-fuzz/instance-before-callback.js	2575	1059
 corpus	codemode/plain-fuzz/integer-key-equal-value.js	2241	932
 corpus	codemode/plain-fuzz/nested-for-in-redump.js	9929	4040
+corpus	codemode/plain-fuzz/promise-all-calls-body-function.js	2773	1094
 corpus	codemode/plain-fuzz/static-field-reads-loop-variable.js	5459	2172
 corpus	codemode/plain-fuzz/switch-case-test-await.js	4623	1887
 corpus	codemode/plain-fuzz/template-plain-part-then-awaits.js	4719	1920
