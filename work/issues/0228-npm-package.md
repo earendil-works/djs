@@ -1,7 +1,7 @@
 # 0228: Publish the host package to npm as @earendil-works/djs 0.1.0
 
-status: open
-agent: -
+status: in-progress
+agent: npm
 branch: issue/0228-npm-package
 depends-on: -
 guide: js-api.md (installing and loading), introduction, cli? (no), the wasm boundary (module loading)
