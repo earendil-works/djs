@@ -705,3 +705,7 @@ topics when the index is next reorganized.
 - D3003: Closures and continuations a continuation's blocks make are written where they are used
 - D3040: A compile cache across VMs that replays the compile
 - D3041: Suspension maps travel from one VM's dump to the next VM
+- D3024: A waiting frame's `this`, `arguments` and `new.target` that its arrows share are K's
+- D3004: A reopened host call read once waits for its reader
+- D3005: A hole the reader finds by reading the value is left out of the record
+- D3006: Arguments in place outside K, functions movable, values nothing reads dropped
