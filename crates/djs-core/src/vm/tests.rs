@@ -3103,9 +3103,9 @@ fn a_template_above_its_moving_cache_still_has_it_emptied() {
                for (let i = 0; i < 3; i++) f(o);\n\
                junk = null;\n";
     let (mut vm, _) = run_script(vm(), src);
+    let key = vm.heap_mut().atom_str("f").unwrap();
     let template_of = |vm: &Vm| {
         let h = vm.heap();
-        let key = h.find_atom_str("f").unwrap();
         let f = h.get_own_property(vm.global(), key).unwrap().value();
         let f = f.and_then(|v| v.as_object()).unwrap().offset();
         (f, h.arena().get::<Ref>(f, Object::ELEMENTS).get().unwrap())
