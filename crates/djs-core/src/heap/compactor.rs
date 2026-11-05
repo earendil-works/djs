@@ -83,100 +83,6 @@ fn remembered_cap() -> usize {
     REMEMBERED_CAP
 }
 
-/// The traced slots of a cell kind, precomputed from its layout for the old-region walk:
-/// the fixed `Value`/`Ref` fields (offset, is a `Ref`) in offset order, and those of the
-/// tail's element.
-///
-/// Offsets are bytes from the cell (fixed fields) or the element (tail); bit `i` of a
-/// mask is set when slot `i` is a `Ref`.
-#[derive(Clone, Copy)]
-struct SlotPlan {
-    fixed: [u8; 12],
-    fixed_refs: u16,
-    n_fixed: u8,
-    n_tail: u8,
-    tail: [u8; 2],
-    tail_refs: u8,
-    tail_offset: u16,
-    elem_size: u16,
-}
-
-/// One more than the largest kind byte.
-const KINDS: usize = max_kind() + 1;
-
-const fn max_kind() -> usize {
-    let (l, mut i, mut m) = (super::cells::LAYOUTS, 0, 0);
-    while i < l.len() {
-        if l[i].kind as usize > m {
-            m = l[i].kind as usize;
-        }
-        i += 1;
-    }
-    m
-}
-
-/// [`SlotPlan`]s by kind byte (empty for unused kinds).
-static PLANS: [SlotPlan; KINDS] = plans();
-
-const fn plans() -> [SlotPlan; KINDS] {
-    use super::layout::FieldTy;
-    let empty = SlotPlan {
-        fixed: [0; 12],
-        fixed_refs: 0,
-        n_fixed: 0,
-        n_tail: 0,
-        tail: [0; 2],
-        tail_refs: 0,
-        tail_offset: 0,
-        elem_size: 0,
-    };
-    let mut out = [empty; KINDS];
-    let layouts = super::cells::LAYOUTS;
-    let mut k = 0;
-    while k < layouts.len() {
-        let l = &layouts[k];
-        let mut p = empty;
-        let mut i = 0;
-        while i < l.fields.len() {
-            let f = &l.fields[i];
-            let r = matches!(f.ty, FieldTy::Ref);
-            if r || matches!(f.ty, FieldTy::Value) {
-                assert!(
-                    i == 0 || l.fields[i - 1].offset < f.offset,
-                    "fields in offset order"
-                );
-                assert!(f.offset < 256);
-                p.fixed[p.n_fixed as usize] = f.offset as u8;
-                if r {
-                    p.fixed_refs |= 1 << p.n_fixed;
-                }
-                p.n_fixed += 1;
-            }
-            i += 1;
-        }
-        if let Some(t) = &l.tail {
-            p.tail_offset = t.offset as u16;
-            p.elem_size = t.elem.size as u16;
-            let mut i = 0;
-            while i < t.elem.fields.len() {
-                let f = &t.elem.fields[i];
-                let r = matches!(f.ty, FieldTy::Ref);
-                if r || matches!(f.ty, FieldTy::Value) {
-                    p.tail[p.n_tail as usize] = f.offset as u8;
-                    if r {
-                        p.tail_refs |= 1 << p.n_tail;
-                    }
-                    p.n_tail += 1;
-                }
-                i += 1;
-            }
-        }
-        out[l.kind as usize] = p;
-        k += 1;
-    }
-    out
-}
-
 /// Bytes per block of the forwarding table: one `u64` of the bitmap.
 const BLOCK: u32 = 512;
 
@@ -292,7 +198,8 @@ impl Marker<'_> {
             self.overflow_from = self.overflow_from.min(off);
             return off;
         }
-        self.stack.push_out(off);
+        // Room was checked above: a plain push, inline (`push_out` is a call per cell).
+        self.stack.push(off);
         off
     }
 
@@ -440,11 +347,11 @@ impl Marker<'_> {
     }
 
     /// Marks the young targets of the old cell `c` (kind byte `kb`, not a leaf), from its
-    /// precomputed [`SlotPlan`]: a slot costs a load and two compares unless it points
+    /// precomputed [`walk::SlotPlan`]: a slot costs a load and two compares unless it points
     /// at a young cell (rare), which `old_hit` handles out of line.
     #[inline]
     fn scan_old(&mut self, kb: u8, c: u32, size: u32) {
-        let plan = &PLANS[kb as usize];
+        let plan = &walk::PLANS[kb as usize];
         let old = self.old;
         for i in 0..plan.n_fixed as usize {
             let off = plan.fixed[i] as u32;
@@ -957,9 +864,9 @@ impl Heap {
 mod tests {
     use super::*;
 
-    /// The slots a [`SlotPlan`] visits, in the order `scan_old` visits them.
+    /// The slots a [`walk::SlotPlan`] visits, in the order `scan_old` visits them.
     fn plan_slots(kb: u8, c: u32, size: u32) -> Vec<Slot> {
-        let p = &PLANS[kb as usize];
+        let p = &walk::PLANS[kb as usize];
         let mut out = Vec::new();
         let slot = |s: u32, r: bool| if r { Slot::Ref(s) } else { Slot::Value(s) };
         for i in 0..p.n_fixed as usize {
@@ -990,8 +897,11 @@ mod tests {
             let mut size = l.min_size;
             for _ in 0..6 {
                 let mut want = Vec::new();
-                walk::for_each_slot(kind, 64, size, |s| want.push_out(s));
+                walk::for_each_slot_by_layout(kind, 64, size, |s| want.push_out(s));
                 assert_eq!(plan_slots(l.kind, 64, size), want, "{} size {size}", l.name);
+                let mut got = Vec::new();
+                walk::for_each_slot(kind, 64, size, |s| got.push_out(s));
+                assert_eq!(got, want, "for_each_slot: {} size {size}", l.name);
                 size += step;
             }
         }

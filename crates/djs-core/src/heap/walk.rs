@@ -545,6 +545,41 @@ impl Heap {
 /// table alone. It does not touch the arena, so the caller may mutate it in `f` (the GC
 /// does).
 pub fn for_each_slot(kind: CellKind, cell: u32, size: u32, mut f: impl FnMut(Slot)) {
+    let p = &PLANS[kind as usize];
+    let slot = |s: u32, is_ref: bool| if is_ref { Slot::Ref(s) } else { Slot::Value(s) };
+    // Every cell is at least its layout's minimum size, which covers the fixed fields.
+    for i in 0..p.n_fixed as usize {
+        f(slot(cell + p.fixed[i] as u32, p.fixed_refs & (1 << i) != 0));
+    }
+    if p.n_tail == 0 {
+        return;
+    }
+    let (elem, end) = (p.elem_size as u32, cell + size);
+    let mut e = cell + p.tail_offset as u32;
+    if p.n_tail == 1 && p.tail[0] == 0 && p.tail_refs == 0 && elem == 8 {
+        // Arrays of values (ValueArray, PropValues, object slots): one word each.
+        while e + 8 <= end {
+            f(Slot::Value(e));
+            e += 8;
+        }
+        return;
+    }
+    while e + elem <= end {
+        for i in 0..p.n_tail as usize {
+            f(slot(e + p.tail[i] as u32, p.tail_refs & (1 << i) != 0));
+        }
+        e += elem;
+    }
+}
+
+/// [`for_each_slot`] straight from the layout table, for checking the plans.
+#[cfg(test)]
+pub(super) fn for_each_slot_by_layout(
+    kind: CellKind,
+    cell: u32,
+    size: u32,
+    mut f: impl FnMut(Slot),
+) {
     let layout = kind.layout();
     for field in layout.fields {
         visit(field.ty, cell + field.offset, &mut f);
@@ -563,6 +598,101 @@ pub fn for_each_slot(kind: CellKind, cell: u32, size: u32, mut f: impl FnMut(Slo
     }
 }
 
+/// The traced slots of a cell kind, precomputed from its layout: the fixed `Value`/`Ref`
+/// fields (offset, is a `Ref`) in offset order, and those of the tail's element. What
+/// [`for_each_slot`] and the compactor's old-region walk follow, instead of matching on
+/// every field of the layout per cell (0224: a quarter of a collection's time).
+///
+/// Offsets are bytes from the cell (fixed fields) or the element (tail); bit `i` of a
+/// mask is set when slot `i` is a `Ref`.
+#[derive(Clone, Copy)]
+pub(super) struct SlotPlan {
+    pub(super) fixed: [u8; 12],
+    pub(super) fixed_refs: u16,
+    pub(super) n_fixed: u8,
+    pub(super) n_tail: u8,
+    pub(super) tail: [u8; 2],
+    pub(super) tail_refs: u8,
+    pub(super) tail_offset: u16,
+    pub(super) elem_size: u16,
+}
+
+/// One more than the largest kind byte.
+const KINDS: usize = max_kind() + 1;
+
+const fn max_kind() -> usize {
+    let (l, mut i, mut m) = (super::cells::LAYOUTS, 0, 0);
+    while i < l.len() {
+        if l[i].kind as usize > m {
+            m = l[i].kind as usize;
+        }
+        i += 1;
+    }
+    m
+}
+
+/// [`SlotPlan`]s by kind byte (empty for unused kinds).
+pub(super) static PLANS: [SlotPlan; KINDS] = plans();
+
+const fn plans() -> [SlotPlan; KINDS] {
+    let empty = SlotPlan {
+        fixed: [0; 12],
+        fixed_refs: 0,
+        n_fixed: 0,
+        n_tail: 0,
+        tail: [0; 2],
+        tail_refs: 0,
+        tail_offset: 0,
+        elem_size: 0,
+    };
+    let mut out = [empty; KINDS];
+    let layouts = super::cells::LAYOUTS;
+    let mut k = 0;
+    while k < layouts.len() {
+        let l = &layouts[k];
+        let mut p = empty;
+        let mut i = 0;
+        while i < l.fields.len() {
+            let f = &l.fields[i];
+            let r = matches!(f.ty, FieldTy::Ref);
+            if r || matches!(f.ty, FieldTy::Value) {
+                assert!(
+                    i == 0 || l.fields[i - 1].offset < f.offset,
+                    "fields in offset order"
+                );
+                assert!(f.offset < 256);
+                p.fixed[p.n_fixed as usize] = f.offset as u8;
+                if r {
+                    p.fixed_refs |= 1 << p.n_fixed;
+                }
+                p.n_fixed += 1;
+            }
+            i += 1;
+        }
+        if let Some(t) = &l.tail {
+            p.tail_offset = t.offset as u16;
+            p.elem_size = t.elem.size as u16;
+            let mut i = 0;
+            while i < t.elem.fields.len() {
+                let f = &t.elem.fields[i];
+                let r = matches!(f.ty, FieldTy::Ref);
+                if r || matches!(f.ty, FieldTy::Value) {
+                    p.tail[p.n_tail as usize] = f.offset as u8;
+                    if r {
+                        p.tail_refs |= 1 << p.n_tail;
+                    }
+                    p.n_tail += 1;
+                }
+                i += 1;
+            }
+        }
+        out[l.kind as usize] = p;
+        k += 1;
+    }
+    out
+}
+
+#[cfg(test)]
 #[inline]
 fn visit(ty: FieldTy, off: u32, f: &mut impl FnMut(Slot)) {
     match ty {
