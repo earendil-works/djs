@@ -381,6 +381,10 @@ impl Session {
                 handles: &handles,
                 // The case's function by reference (D2882): the corpus measures it.
                 source_refs: true,
+                base_names: Some(djs_core::vm::dump::BaseNames {
+                    builtins: djs_prelude::BASE_NAMES,
+                    globals: djs_prelude::BASE_GLOBALS,
+                }),
                 ..DumpOptions::default()
             },
             None,

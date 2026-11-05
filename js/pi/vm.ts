@@ -639,7 +639,8 @@ class Session implements VmSession {
     if ("error" in compiled) throw new Error(`Cannot load the dump: ${compiled.error}`);
     // `$djs.source`'s answer (D2882): the codemode function, made again by its wrapper,
     // which runs none of the script's code.
-    if (code !== undefined) {
+    // (Only for a dump that names it.)
+    if (code !== undefined && text.includes("$djs.source(")) {
       const wrapper = `${SCRIPT_PREFIX}${code}\n})`;
       const w = compileOrThrow(engine, "codemode.js", [], wrapper);
       const f = evaluate(this, engine, w);
@@ -650,13 +651,16 @@ class Session implements VmSession {
     // globals' values, read now (the hook cannot run JS while the dump waits on it).
     const fns0 = this.state.next!.handles;
     const values = new Map<string, number>([["bridge", fns0.bridge], ["call", fns0.call]]);
-    const read = compileOrThrow(engine, "dump.js", ["k"], "return globalThis[k]");
-    for (const name of this.resume ? hostGlobals(this.resume.data) : []) {
+    // (Only the ones the dump names, `$djs.host("tools")`, `$djs.host("tools.read")`: each
+    // read is a call into the VM.)
+    const named = (this.resume ? hostGlobals(this.resume.data) : []).filter((name) => text.includes(`$djs.host("${name}`));
+    const read = named.length > 0 ? compileOrThrow(engine, "dump.js", ["k"], "return globalThis[k]") : 0;
+    for (const name of named) {
       const k = engine.value(name);
       values.set(name, evaluate(this, engine, read, [k]));
       engine.free(k);
     }
-    engine.free(read);
+    if (read !== 0) engine.free(read);
     this.hostValues = values;
     const hooks = engine.dumpRuntime(text);
     const fns: [string, number][] = [
@@ -936,8 +940,20 @@ interface PreludeImage {
   prepared: Prepared;
 }
 
+/** The keys made for a start's data, kept: a session moved to a new instance at every
+ * idle point (D2651) would make the same long key twice each time (0215). */
+const preludeKeys = new WeakMap<VmStartData, { prelude: string; frozen: boolean; key: string }>();
+
 /** Everything the prelude image depends on, besides the engine build. */
 function preludeKey(prelude: string, data: VmStartData, frozenBuiltins = false): string {
+  const kept = preludeKeys.get(data);
+  if (kept && kept.prelude === prelude && kept.frozen === frozenBuiltins) return kept.key;
+  const key = preludeKeyOf(prelude, data, frozenBuiltins);
+  preludeKeys.set(data, { prelude, frozen: frozenBuiltins, key });
+  return key;
+}
+
+function preludeKeyOf(prelude: string, data: VmStartData, frozenBuiltins: boolean): string {
   return JSON.stringify([
     prelude,
     data.tools,

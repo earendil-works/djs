@@ -10239,3 +10239,20 @@ written in place (no `$dump.FaN`); the holder `globalThis.$dump = {}` is left ou
 nothing reads it. A hook the dump calls inside a continuation throws into that activation,
 not the Script: hosts fail the load on a hook they could not serve (Sandbox, pi's adapter,
 the CLI). A value read again by name after it was written in place is a refusal (a bug).
+## D3020: Dumps take the base's builtin names from the build, not from a walk of the base
+date: 2026-11-06 · by: pjr · issue: 0215
+A dump writes a builtin by its path (`Array.prototype.push`) and leaves out a global the base
+already has. For that it walked the whole base image (`registry::reachable_names`, every
+builtin object's properties) and copied the base into a heap to compare the global object
+with. This happened once per VM, at its first dump. A host that dumps each VM once pays it
+every time: pi with a dump at every idle point loads every dump into a new instance and
+dumps that once. The walk was ~40% of a small dump natively. In wasm the host also had to
+hand the base over first (`vm_dump` returned 2), and the instance checked it by hashing.
+djs-prelude's `names` feature now emits the walk's result when it builds the base:
+`BASE_NAMES` (cell, path) and `BASE_GLOBALS` (the global object's properties as value bits
+and flags). Hosts that dump pass them as `DumpOptions::base_names`, which makes `base`
+unnecessary. The checker's scratch heap is then a fresh one (compiling needs only atoms).
+The dump module carries the tables (+26 KB raw, about 1,600 builtins) and no longer asks
+the host for the base, so `vm_dump` returns only 0 or 1. The output is byte-identical over
+the corpus. Corpus re-dump (a loaded VM's first dump) 19.2k -> 11.6k M instructions. In
+wasm, in pi's adapter, a dump is ~1.24 -> ~0.3 ms at the median.

@@ -281,12 +281,8 @@ export class Engine {
       states.map(([id, json]) => `${id}:${textEncoder.encode(json).length}`).join("\t"),
       states.map(([, json]) => json).join(""),
     ].join("\n");
-    let r = this.trap(() => x.vm_dump!(this.vm, this.stageText(text)));
-    if (r === 2) {
-      provideBase(this.module, x);
-      r = this.trap(() => x.vm_dump!(this.vm, this.stageText(text)));
-    }
-    if (r !== 0) throw new Error(r === 1 ? `Cannot dump the session:\n${outText(x)}` : "No base image to dump against");
+    const r = this.trap(() => x.vm_dump!(this.vm, this.stageText(text)));
+    if (r !== 0) throw new Error(`Cannot dump the session:\n${outText(x)}`);
     return outText(x);
   }
 

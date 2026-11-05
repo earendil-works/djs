@@ -468,6 +468,7 @@ fn body_dump(src: &str, k: usize) -> (Vec<String>, Option<Result<super::dump::Du
         handles: &handles,
         call_states: &[],
         source_refs: false,
+        base_names: None,
         check: true,
     };
     let d = vm.dump_report(&opts, None).map_err(|e| e.message());
@@ -810,6 +811,7 @@ fn write_golden_dumps() {
                 handles: if body { &handles } else { &[] },
                 call_states: &[],
                 source_refs: false,
+                base_names: None,
                 check: true,
             };
             let text = match vm.dump(&opts, None) {
@@ -1045,10 +1047,12 @@ fn plain_step(vm: &mut Vm, lines: &mut Vec<String>) -> Option<u32> {
 
 /// A plain dump (D2830) of the idle `vm`, or why it was refused.
 fn plain_dump(vm: &Vm) -> Result<String, String> {
+    // (The base's names as hosts that dump have them, D3020: the base is not read.)
     let opts = super::dump::DumpOptions {
-        base: base(),
+        base: &[],
         host: &["console", "tools", "print", "later"],
         host_fn_name: &host_fn_name,
+        base_names: Some(super::dump_harvest::base_names()),
         ..Default::default()
     };
     vm.dump(&opts, None).map_err(|e| e.message())

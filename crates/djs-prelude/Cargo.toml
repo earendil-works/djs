@@ -27,6 +27,9 @@ packed = ["dep:djs-lzrc"]
 # The builtin registry (D2371, tests/builtins/registry.tsv) with this build's base offsets:
 # tools and native hosts. Off in djs-wasm, whose size counts.
 registry = []
+# `BASE_NAMES`, the base's builtins with their paths (`DumpOptions::base_names`): hosts
+# that dump, so that a VM's first dump does not walk the base for them (0215).
+names = []
 
 [dependencies]
 djs-core = { path = "../djs-core", default-features = false }

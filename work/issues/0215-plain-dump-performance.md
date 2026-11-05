@@ -54,6 +54,15 @@ Measure where plain dumps stand now and fix what regressed:
   TDZ (corpus codemode/redump-stale-locals.js). pjz's await-using-continue-after-catch
   (batch 3b, "loop" scaffold record).
 
+- pi end to end (wasm, next mode, a dump at every idle point; phase timings with
+  work/research/0215/pi-phases.patch, scripts/dump-costs/pi-sessions.ts for profiles):
+  per idle point a dump in a fresh instance's first `vm_dump` ~1.24 ms median, mostly
+  the base walk (`BaseTable`), plus `provideBase` hashing the base per instance; the
+  very first dump of a process ~5-10 ms (wasm tier-up, not djs). Fixed: D3020 (base
+  names from the build; no base needed): vm_dump ~0.3 ms. Host: prelude image keys kept
+  per start data, `$djs.source`'s wrapper and host globals read only when the dump names
+  them.
+
 ## Follow-ups
 
 ## Result

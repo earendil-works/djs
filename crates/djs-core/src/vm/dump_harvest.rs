@@ -29,8 +29,34 @@ pub(super) fn base() -> &'static [u8] {
     })
 }
 
+/// The base's builtins and paths, as djs-prelude's `BASE_NAMES` has them for its base
+/// (`DumpOptions::base_names`): made once.
+pub(super) fn base_names() -> super::dump::BaseNames<'static> {
+    type Names = (Vec<(u32, &'static str)>, Vec<(&'static str, u64, u8)>);
+    static NAMES: std::sync::OnceLock<Names> = std::sync::OnceLock::new();
+    let leak = |s: String| &*alloc::boxed::Box::leak(s.into_boxed_str());
+    let (b, g) = NAMES.get_or_init(|| {
+        let h = crate::heap::Heap::from_bytes_trusted(base().to_vec(), usize::MAX).unwrap();
+        let end = h.base_end();
+        let builtins = super::registry::reachable_names(&h)
+            .into_iter()
+            .filter(|(c, _)| *c < end)
+            .map(|(c, p)| (c, leak(p)))
+            .collect();
+        let globals = super::registry::base_globals(&h)
+            .into_iter()
+            .map(|(n, b, f)| (leak(n), b, f))
+            .collect();
+        (builtins, globals)
+    });
+    super::dump::BaseNames {
+        builtins: b,
+        globals: g,
+    }
+}
+
 /// The VMs' options: frozen builtins, which dumps need (D2836).
-fn frozen() -> VmOptions {
+pub(super) fn frozen() -> VmOptions {
     VmOptions {
         frozen_builtins: true,
         ..VmOptions::default()

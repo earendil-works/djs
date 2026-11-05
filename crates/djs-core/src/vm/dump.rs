@@ -96,6 +96,11 @@ pub struct DumpOptions<'a> {
     /// Write a codemode body's origin as `$djs.source(name, hash, params)`, a reference
     /// the host resolves to the script it ran (D2882), instead of its text.
     pub source_refs: bool,
+    /// What a dump needs of the base, made when the base image was built (djs-prelude's
+    /// `BASE_NAMES` and `BASE_GLOBALS` for its `BASE`): with them `base` may be empty. Without
+    /// them the dump reads `base`, a copy of it and a walk for its builtins' paths: most
+    /// of a small dump's cost in a host that dumps each VM once (pi, 0215).
+    pub base_names: Option<BaseNames<'a>>,
     /// Check the dump before returning it (D2888): compile the written text and refuse a
     /// function whose names would resolve to other bindings after the load. On by default;
     /// a host may turn it off to save its cost (~40% of a dump).
@@ -103,6 +108,15 @@ pub struct DumpOptions<'a> {
 }
 
 pub use super::script_hash;
+
+/// A base image's builtins and globals as a dump needs them ([`DumpOptions::base_names`]).
+#[derive(Clone, Copy)]
+pub struct BaseNames<'a> {
+    /// Every builtin [`super::registry::reachable_names`] finds in the base, with its path.
+    pub builtins: &'a [(u32, &'a str)],
+    /// The base global object's own properties ([`super::registry::base_globals`]).
+    pub globals: &'a [(&'a str, u64, u8)],
+}
 
 fn no_host_fn_name(_: u32) -> Option<String> {
     None
@@ -118,6 +132,7 @@ impl Default for DumpOptions<'_> {
             handles: &[],
             call_states: &[],
             source_refs: false,
+            base_names: None,
             check: true,
         }
     }
@@ -365,9 +380,11 @@ pub(crate) struct BaseTable {
 }
 
 impl BaseTable {
-    fn new(base: &Heap, base_end: u32) -> BaseTable {
+    /// The table of `base`, from `names` (`DumpOptions::base_names`: its
+    /// [`super::registry::reachable_names`], made when the base was built) or a walk.
+    fn new(base: Option<&Heap>, base_end: u32, names: Option<BaseNames<'_>>) -> BaseTable {
         let mut t = BaseTable::default();
-        for (cell, path) in super::registry::reachable_names(base) {
+        let mut add = |cell: u32, path: String| {
             if cell < base_end {
                 t.cells.insert(key(cell), BUILTIN | t.list.len() as u32);
                 t.list.push_out(Builtin {
@@ -375,13 +392,27 @@ impl BaseTable {
                     path,
                 });
             }
-        }
-        if let Some(bg) = intrinsic(base, Intrinsic::Global).as_object() {
-            t.globals = base
-                .own_keys(bg)
-                .into_iter()
-                .map(|k| atom_text(base, k))
-                .collect();
+        };
+        match (names, base) {
+            (Some(n), _) => {
+                for &(cell, path) in n.builtins {
+                    add(cell, String::from(path));
+                }
+                t.globals = n.globals.iter().map(|g| String::from(g.0)).collect();
+            }
+            (None, Some(base)) => {
+                for (cell, path) in super::registry::reachable_names(base) {
+                    add(cell, path);
+                }
+                if let Some(bg) = intrinsic(base, Intrinsic::Global).as_object() {
+                    t.globals = base
+                        .own_keys(bg)
+                        .into_iter()
+                        .map(|k| atom_text(base, k))
+                        .collect();
+                }
+            }
+            (None, None) => {}
         }
         t
     }
@@ -858,12 +889,19 @@ impl<'a> Dumper<'a> {
             ));
         }
         let base_end = h.base_end();
-        if base_end == 0 || opts.base.len() < base_end as usize {
+        let names = opts.base_names;
+        if base_end == 0 || names.is_none() && opts.base.len() < base_end as usize {
             return Err(refuse("the VM was not made from this base image"));
         }
-        // A private copy, kept for the checker to compile the dump into.
-        let base = Heap::from_bytes_trusted(opts.base.to_vec(), crate::heap::DEFAULT_LIMIT)
-            .map_err(|_| refuse("the base image does not load"))?;
+        // Without the base's names, a copy of the base to read them from (and for the
+        // checker to compile the dump into).
+        let base = match names {
+            Some(_) => None,
+            None => Some(
+                Heap::from_bytes_trusted(opts.base.to_vec(), crate::heap::DEFAULT_LIMIT)
+                    .map_err(|_| refuse("the base image does not load"))?,
+            ),
+        };
         let mut d = Dumper {
             vm,
             h,
@@ -910,13 +948,15 @@ impl<'a> Dumper<'a> {
         // Once per VM: the walk is most of a small dump's cost (D2626), and the table
         // made from it (0198).
         let fresh;
+        // (Kept by the base's length; names given count as their own.)
+        let key = names.map_or(opts.base.len(), |n| usize::MAX - n.builtins.len());
         let table: &Rc<BaseTable> = match vm
             .base_names
-            .get_or_init(|| (opts.base.len(), Rc::new(BaseTable::new(&base, base_end))))
+            .get_or_init(|| (key, Rc::new(BaseTable::new(base.as_ref(), base_end, names))))
         {
-            (len, t) if *len == opts.base.len() => t,
+            (k, t) if *k == key => t,
             _ => {
-                fresh = Rc::new(BaseTable::new(&base, base_end));
+                fresh = Rc::new(BaseTable::new(base.as_ref(), base_end, names));
                 &fresh
             }
         };
@@ -926,9 +966,18 @@ impl<'a> Dumper<'a> {
         for &(name, v) in opts.host_roots {
             d.host_values(v, host_ref(name), 0);
         }
-        d.read_globals(&base);
-        d.scratch = Some(base);
+        d.read_globals(base.as_ref(), names.map_or(&[][..], |n| n.globals));
+        d.scratch = base;
         Ok(d)
+    }
+
+    /// The heap the dump compiles texts into: the base's copy, or a fresh one when the
+    /// base was not copied (compiling needs only its atoms, D3020).
+    pub(super) fn scratch_heap(&mut self) -> Option<&mut Heap> {
+        if self.scratch.is_none() {
+            self.scratch = Heap::new().ok();
+        }
+        self.scratch.as_mut()
     }
 
     fn refuse(&mut self, path: String, why: &str) {
@@ -952,10 +1001,10 @@ impl<'a> Dumper<'a> {
     }
 
     /// The user's globals (what the base does not have), and the host's values by name.
-    fn read_globals(&mut self, base: &Heap) {
+    fn read_globals(&mut self, base: Option<&Heap>, base_globals: &[(&str, u64, u8)]) {
         let h = self.h;
         let g = self.vm.global();
-        let bg = intrinsic(base, Intrinsic::Global).as_object();
+        let bg = base.and_then(|b| intrinsic(b, Intrinsic::Global).as_object());
         let lex = self.vm.global_lexical();
         for k in h.own_keys(lex) {
             if let Some(Property::Data { value, flags }) = h.get_own_property(lex, k) {
@@ -967,7 +1016,10 @@ impl<'a> Dumper<'a> {
                 self.global_binding(k, value, decl);
             }
         }
-        let bkeys = bg.map(|bg| base.own_keys(bg)).unwrap_or_default();
+        let bkeys = match (base, bg) {
+            (Some(b), Some(bg)) => b.own_keys(bg),
+            _ => Vec::new(),
+        };
         for k in h.own_keys(g) {
             if h.atom_symbol(k).is_some() {
                 continue;
@@ -977,9 +1029,21 @@ impl<'a> Dumper<'a> {
                 continue;
             };
             // The VM's atom table starts with the base's: the same keys, the same atoms.
-            let same = bg
-                .filter(|_| bkeys.contains(&k))
-                .and_then(|bg| Some(base.get_own_property(bg, k)? == p));
+            let same = match (base, bg) {
+                (Some(base), Some(bg)) => bkeys
+                    .contains(&k)
+                    .then(|| base.get_own_property(bg, k))
+                    .flatten()
+                    .map(|bp| bp == p),
+                // The base's properties as they were built: a value by its bits.
+                _ => base_globals
+                    .iter()
+                    .find(|x| x.0 == name)
+                    .map(|&(_, bits, fl)| {
+                        matches!(p, Property::Data { value, flags }
+                        if value.to_bits() == bits && flags.bits() == fl)
+                    }),
+            };
             if same == Some(true) {
                 continue;
             }
@@ -2453,7 +2517,7 @@ impl<'a> Dumper<'a> {
             return maps;
         }
         drop(cache);
-        let scratch = self.scratch.as_mut()?;
+        let scratch = self.scratch_heap()?;
         let list: Vec<&str> = params.split(',').filter(|p| !p.is_empty()).collect();
         let opts = crate::compiler::CompileOptions::from_bits("dump.js", &list, bits);
         let maps = crate::compiler::suspension_maps(scratch, src.as_bytes(), &opts)
@@ -2472,7 +2536,7 @@ impl<'a> Dumper<'a> {
     /// The checker's table of the skeleton `text`: every function it writes, by the hash
     /// of its text, with its free names; or why it does not compile.
     fn checked(&mut self, text: &str) -> Result<CheckTable, String> {
-        let Some(mut scratch) = self.scratch.take() else {
+        let Some(mut scratch) = self.scratch.take().or_else(|| Heap::new().ok()) else {
             return Err(String::from("no memory to check it"));
         };
         let opts = dump_options(self.ts.get());

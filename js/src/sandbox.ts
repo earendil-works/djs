@@ -1399,12 +1399,8 @@ export class Sandbox {
       states.map(([id, json]) => `${id}:${textEncoder.encode(json).length}`).join("\t"),
       states.map(([, json]) => json).join(""),
     ].join("\n");
-    let r = this.guard(() => x.vm_dump!(this.vm, this.stageText(text)));
-    if (r === 2) {
-      provideBase(this.module, x);
-      r = this.guard(() => x.vm_dump!(this.vm, this.stageText(text)));
-    }
-    if (r !== 0) throw new SandboxError("misuse", r === 1 ? `cannot dump:\n${outText(x)}` : "no base image");
+    const r = this.guard(() => x.vm_dump!(this.vm, this.stageText(text)));
+    if (r !== 0) throw new SandboxError("misuse", `cannot dump:\n${outText(x)}`);
     return outText(x);
   }
 

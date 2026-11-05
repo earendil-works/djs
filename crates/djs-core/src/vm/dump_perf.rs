@@ -77,6 +77,8 @@ fn measure(vm: &Vm, api: Value, name: &str, idle: usize, points: &mut Vec<Point>
         host_fn_name: &host_fn_name,
         handles: &handles,
         check: std::env::var("DJS_DUMP_PERF_CHECK").map_or(true, |v| v != "0"),
+        // As the hosts that dump have it (djs-prelude's `BASE_NAMES`).
+        base_names: Some(super::dump_harvest::base_names()),
         ..Default::default()
     };
     let skip = std::env::var("DJS_DUMP_PERF_SKIP").unwrap_or_default();
@@ -150,9 +152,13 @@ fn measure(vm: &Vm, api: Value, name: &str, idle: usize, points: &mut Vec<Point>
     let cache = b.dump_cache();
     p.redump = Duration::MAX;
     for _ in 0..reps_of("redump") {
-        b.set_dump_cache(cache.clone());
+        // Each repetition a first dump of a VM, as a host that loads a dump and dumps
+        // again pays it (pi): a copy of the loaded VM, its cache the load's.
+        let c = Vm::from_bytes_trusted(b.bytes().to_vec(), super::dump_harvest::frozen())
+            .expect("a copy of the loaded VM");
+        c.set_dump_cache(cache.clone());
         let t = Instant::now();
-        if let Err(e) = b.dump(&opts, None) {
+        if let Err(e) = c.dump(&opts, None) {
             if FAILED.lock().unwrap().redump == 0 {
                 std::println!("{name}@{idle}: re-dump: {}", e.message());
             }

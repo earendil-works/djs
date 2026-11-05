@@ -82,7 +82,7 @@ impl Dumper<'_> {
 
     /// The spans of `src`'s static code, in its offsets.
     fn class_spans(&mut self, src: &str, bits: u32) -> Option<Vec<ClassSpan>> {
-        let scratch = self.scratch.as_mut()?;
+        let scratch = self.scratch_heap()?;
         // An anonymous class's text is an expression only.
         let text = cat!("(", src, ")");
         let opts = crate::compiler::CompileOptions::from_bits("dump.js", &[], bits);

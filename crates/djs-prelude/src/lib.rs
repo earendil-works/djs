@@ -30,6 +30,10 @@ const _: () = assert!(
     "the base image was built with other djs-core features than this build: enable them through djs-prelude's features"
 );
 
+// `BASE_NAMES`: the base's builtins and their paths for dumps (`DumpOptions::base_names`).
+#[cfg(feature = "names")]
+include!(concat!(env!("OUT_DIR"), "/base_names.rs"));
+
 /// The base image (`Vm::bytes` of a fresh, collected VM of this build).
 #[cfg(feature = "raw")]
 pub static BASE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/base.img"));
