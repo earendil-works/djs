@@ -8,7 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0207 | Make plain dumps small (owner priority): header "djs-dump", helpers and source(ref) on host-provided $djs (D2834, D2835), record cuts, liveness pruning | pjs | .worktrees/pjs |
 | 0211 | Plain dump fuzzing round 2 (wider generator, new seeds) | pjz | .worktrees/pjz |
-| 0207+ | pjr: class self-reference cycles, origin/re-dump bugs from 0208, $djs.source(ref), 0203 follow-ups | pjr | .worktrees/pjx |
+| 0215 | Plain dump performance: export/load times vs format 2 | pjr | .worktrees/pjx |
 | 0213 | Generic host bindings: `tools.foo` stops being special (owner; DSH imports later) | hb | .worktrees/hb |
 
 ## Open (ready)
