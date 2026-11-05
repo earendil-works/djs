@@ -624,6 +624,8 @@ struct W<'x> {
     taken: Vec<(Sc, usize)>,
     /// Continuations of merged scopes written where they are called instead (D3003).
     taken_k: Vec<usize>,
+    /// Per activation, the names its continuation may bind ([`W::k_scope`]).
+    kscopes: Vec<alloc::rc::Rc<alloc::collections::BTreeSet<String>>>,
 }
 
 type R<T> = Result<T, String>;
@@ -757,6 +759,20 @@ pub(super) fn write(
         vcache: Default::default(),
         taken: Vec::new(),
         taken_k: Vec::new(),
+        kscopes: ir
+            .acts
+            .iter()
+            .map(|act| {
+                let mut scope = alloc::collections::BTreeSet::new();
+                for nd in &act.syntax.nodes {
+                    scope.extend(nd.decls.iter().map(|d| d.name.clone()));
+                }
+                for sl in &act.slots {
+                    scope.insert(String::from(sl.name.split('@').next().unwrap_or(&sl.name)));
+                }
+                alloc::rc::Rc::new(scope)
+            })
+            .collect(),
     };
     for (f, fac) in ir.factories.iter().enumerate() {
         for (s, sc) in fac.scopes.iter().enumerate() {
@@ -950,7 +966,7 @@ impl W<'_> {
             cell: sl.cell,
         };
         // (A name K binds nowhere is the same inside it: a global, a builtin.)
-        let scope = self.k_scope(a);
+        let scope = self.kscopes[a].clone();
         let r = refs(&sl.value);
         let reads = sl.value.contains("new.target")
             || r.names.iter().any(|n| {

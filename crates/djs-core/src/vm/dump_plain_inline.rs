@@ -17,7 +17,7 @@
 //! handles) before it writes: a value counted more often than it is written stays named,
 //! and a value read again after it was written in place is a refusal (a bug).
 
-use alloc::collections::BTreeMap;
+use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -42,7 +42,7 @@ enum Reads<'a> {
     Any,
     Only(&'a [&'a str]),
     /// None that a continuation binds where the reference is (`scope`).
-    Scope(&'a [String]),
+    Scope(&'a dyn Fn(&str) -> bool),
 }
 
 #[derive(Default)]
@@ -578,7 +578,8 @@ impl W<'_> {
         first: Option<usize>,
         scope: &[String],
     ) -> String {
-        self.inline_with(text, first, Reads::Scope(scope))
+        let bound = |n: &str| scope.iter().any(|x| x == n);
+        self.inline_with(text, first, Reads::Scope(&bound))
     }
 
     fn inline_with(&mut self, text: &str, first: Option<usize>, reads: Reads) -> String {
@@ -609,7 +610,7 @@ impl W<'_> {
                                 && !n.starts_with("$djs_")
                                 && (PURE_NAMES.contains(&n.as_str())
                                     || pd.bound.contains(n)
-                                    || !scope.contains(n)
+                                    || !scope(n)
                                     || only_keys(&pd.rhs, n))
                         })
                 }
@@ -712,8 +713,9 @@ impl W<'_> {
         if !self.inl.pend.iter().any(|p| p.name == name) {
             return;
         }
-        let scope = self.k_scope(a);
-        let v = self.inline_site(aw, Some(0), &scope);
+        let scope = self.kscopes[a].clone();
+        let bound = |n: &str| scope.contains(n);
+        let v = self.inline_with(aw, Some(0), Reads::Scope(&bound));
         if v != aw {
             // (K's deepest block holds the site.)
             let last = self.acts[a].blocks.len().saturating_sub(1);
@@ -726,16 +728,8 @@ impl W<'_> {
 
     /// The names activation `a`'s continuation may bind anywhere: any declaration of its
     /// function, any slot's name (and its own `$djs_` helpers).
-    pub(super) fn k_scope(&self, a: usize) -> Vec<String> {
-        let act = &self.ir.acts[a];
-        let mut scope: Vec<String> = Vec::new();
-        for nd in &act.syntax.nodes {
-            scope.extend(nd.decls.iter().map(|d| d.name.clone()));
-        }
-        for sl in &act.slots {
-            scope.push_out(String::from(sl.name.split('@').next().unwrap_or(&sl.name)));
-        }
-        scope
+    pub(super) fn k_scope(&self, a: usize) -> &BTreeSet<String> {
+        &self.kscopes[a]
     }
 
     /// Whether the lines of a part of activation `a`'s callback may be written in its
@@ -779,8 +773,9 @@ impl W<'_> {
         }
         // (A value that reads a name K binds would be read before the continuation,
         // `pre`.)
-        let scope = self.k_scope(a);
-        let s = self.inline_with(v, None, Reads::Scope(&scope));
+        let scope = self.kscopes[a].clone();
+        let bound = |n: &str| scope.contains(n);
+        let s = self.inline_with(v, None, Reads::Scope(&bound));
         self.vcache.insert(key, s.clone());
         s
     }
