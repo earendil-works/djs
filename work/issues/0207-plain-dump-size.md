@@ -400,7 +400,37 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   (fluff's minimal 716). Docs: sleep README transcript/explain/prose, plan example,
   guide snapshots (no holes in the notes record).
 
+- Regressions (pjz's bisect) fixed:
+  (1) D3003: closures/continuations written in place in a site operand read K's bindings
+  that liveness pruned (P::Val only listed `site_reads`): `placed_reads` now lists what
+  they read. Case codemode/plain-fuzz/map-closure-captures-function.js; seeds 9999,
+  10070 pass.
+  (2) D3006 (wrong results, seeds 9922/9828): two causes. The old drop_unread counted refs
+  with `scan`, which misread a regexp in a template substitution (`${/a(b)?/g.source}`) as
+  a division and lost the rest of the text. So a line still read became a statement and
+  the load read `undefined`. Fixed in scan (regex_ok after `${`). Counts are now by
+  substring (`dump_refs`, an overcount is safe). The host-call order fix (D3004) fixed
+  9922. Case codemode/plain-fuzz/regexp-in-template-substitution.js (fails at 87adc8bc,
+  passes now).
+  (3) D3005 (seed 10014): a value scanned back stopped at a TypeScript original's blanked
+  types (several spaces). token_len now looks past a run of spaces. Case
+  ts/blanked-function-value-redump.ts.
+  Older (seed 276): a re-dump's canonical from the blanked origin ends a copy before the
+  blank (`n1!]`). layout_of extends a copy over blanks K has. Case
+  ts/non-null-element-redump.ts.
+  fuzz: regress (both modes) and seeds 9801..10100 show only the deliberate Proxy
+  refusals, plus one pre-existing refusal also on main ("missing slot for-in.iterator",
+  seed 778696, with and without --lazy).
+- Records regression (scripts/dump-costs records): 10.2k → 5.7k M (add3b075 was 6.7k):
+  counts are kept, not recounted (drop_unread incremental, pending/hook name sets,
+  factory holders in one pass), scan spans without refs, keys_in returns early without
+  `$dump.`, string search in scan, shadow checks by the declared names. Still above
+  pjr's 4.0k: the writer's schedule (keys_in over every item, ~40%) and emit (~27%).
+  Next on the list.
+
 ## Follow-ups
+- "missing slot for-in.iterator@N" refusal, seed 778696 (also on main).
+- "crossing callbacks" refusal, pjz seed 10173 (iterator helpers in an async function).
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a
   `for await` over a sync iterator, ~1.6 KB each).
