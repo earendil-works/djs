@@ -164,7 +164,7 @@ fn ident_part(c: u8) -> bool {
 /// name after `.` is a property, not a reference. It errs on the side of too many
 /// names (an object literal's keys count), which only adds orderings that hold anyway.
 pub(super) fn refs(text: &str) -> Refs {
-    scan(text, false, &|_, _| true, &mut |_, _| {}, true)
+    scan(text, false, &|_| true, &mut |_, _| {}, true, false)
 }
 
 /// Where `text` reads `$dump.X` (as [`refs`] finds them): `[start, end)` of each, the
@@ -177,8 +177,9 @@ pub(super) fn scan_spans(text: &str) -> Vec<(usize, usize)> {
     scan(
         text,
         false,
-        &|_, _| false,
+        &|_| false,
         &mut |s, e| out.push_out((s, e)),
+        false,
         false,
     );
     out
@@ -194,8 +195,9 @@ pub(super) fn eager_spans(text: &str) -> Vec<(usize, usize)> {
     scan(
         text,
         true,
-        &|_, _| false,
+        &|_| false,
         &mut |s, e| out.push_out((s, e)),
+        false,
         false,
     );
     out
@@ -206,7 +208,7 @@ pub(super) fn eager_spans(text: &str) -> Vec<(usize, usize)> {
 /// `{` after `)` or `=>` opens a function's body (no statements are scanned).
 #[cfg(test)]
 fn eager_refs(text: &str) -> Refs {
-    scan(text, true, &|_, _| true, &mut |_, _| {}, true)
+    scan(text, true, &|_| true, &mut |_, _| {}, true, false)
 }
 
 /// [`refs`]'s or [`eager_refs`]'s with only the names `keep` takes (a data literal's
@@ -214,11 +216,12 @@ fn eager_refs(text: &str) -> Refs {
 fn scan(
     text: &str,
     skip_fns: bool,
-    // (The word, and whether it is an object literal's key.)
-    keep: &dyn Fn(&str, bool) -> bool,
+    keep: &dyn Fn(&str) -> bool,
     span: &mut dyn FnMut(usize, usize),
     // (Whether `Refs::dump` is wanted: the span callers want only the spans.)
     collect: bool,
+    // (Whether object literals' keys are left out of the names.)
+    skip_keys: bool,
 ) -> Refs {
     let b = text.as_bytes();
     let mut out = Refs::default();
@@ -388,7 +391,7 @@ fn scan(
                         after_dot = false;
                         continue;
                     }
-                } else if keep(word, key_at(b, s, i)) && seen_names.insert(word) {
+                } else if !(skip_keys && key_at(b, s, i)) && keep(word) && seen_names.insert(word) {
                     out.names.push_out(String::from(word));
                 }
             }
@@ -454,9 +457,10 @@ pub(super) fn reads_other(text: &str, allowed: &[&str]) -> bool {
     !scan(
         text,
         false,
-        &|w, key| !key && !allowed.contains(&w),
+        &|w| !allowed.contains(&w),
         &mut |_, _| {},
         false,
+        true,
     )
     .names
     .is_empty()
@@ -1611,7 +1615,7 @@ impl W<'_> {
         let r = scan(
             text,
             true,
-            &|n, _| {
+            &|n| {
                 globals
                     && n.len() <= self.global_max
                     && self.global_first[usize::from(n.as_bytes()[0] >> 6)]
@@ -1621,6 +1625,7 @@ impl W<'_> {
             },
             &mut |_, _| {},
             true,
+            false,
         );
         // (`scan` gives each `(name, key)` once; a location named with two keys, once.)
         let mut out = Vec::with_capacity(r.dump.len() + r.names.len());
