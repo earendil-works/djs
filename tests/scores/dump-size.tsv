@@ -173,7 +173,7 @@ corpus	codemode-harvest/h171-load-structured.js	3588	1376
 corpus	codemode-harvest/h172-bash-structured-structured.js	34041	11251
 corpus	codemode-harvest/h173-structured.js	18392	5888
 corpus	codemode-harvest/h174-structured.js	18871	6414
-corpus	codemode-harvest/h175-models.js	11332	3990
+corpus	codemode-harvest/h175-models.js	11332	3991
 corpus	codemode-harvest/h176-bash-structured-edit-read-write.js	27848	9960
 corpus	codemode-harvest/h177-edit-read.js	19442	6169
 corpus	codemode-harvest/h178-transcribe_file.js	14754	5701
@@ -208,7 +208,7 @@ corpus	codemode-harvest/h207-bash-structured-image-read.js	7237	2796
 corpus	codemode-harvest/h208-edit.js	16499	5644
 corpus	codemode-harvest/h209-bash-edit.js	13771	5183
 corpus	codemode-harvest/h210-models-read.js	40673	12895
-corpus	codemode-harvest/h211-structured.js	11689	4061
+corpus	codemode-harvest/h211-structured.js	11689	4062
 corpus	codemode-harvest/h212-transcribe_file.js	11226	4321
 corpus	codemode-harvest/h213-bash-structured-models.js	47830	15128
 corpus	codemode-harvest/h214-bash-structured-read-write.js	14573	5135
@@ -264,7 +264,7 @@ corpus	codemode-harvest/h266-structured.js	3271	1328
 corpus	codemode-harvest/h268-bash-structured-image-read.js	40383	15796
 corpus	codemode-harvest/h269-bash.js	3585	1550
 corpus	codemode-harvest/h270-bash-structured.js	6993	2817
-corpus	codemode-harvest/h271-bash-structured-models.js	79868	26499
+corpus	codemode-harvest/h271-bash-structured-models.js	79868	26504
 corpus	codemode-harvest/h272-bash-structured-read-write.js	11671	4523
 corpus	codemode-harvest/h273-image-read.js	7351	2798
 corpus	codemode-harvest/h274-bash-write.js	10723	4180
@@ -331,7 +331,7 @@ corpus	codemode/plain-fuzz/integer-key-equal-value.js	2466	992
 corpus	codemode/plain-fuzz/static-field-reads-loop-variable.js	6128	2383
 corpus	codemode/plain-fuzz/template-plain-part-then-awaits.js	5196	2050
 corpus	codemode/plain-fuzz/template-two-awaits.js	5120	2021
-corpus	codemode/redump-copied-loops.js	90295	33642
+corpus	codemode/redump-copied-loops.js	89147	33204
 corpus	codemode/redump-loops.js	12236	4678
 corpus	codemode/redump-operands.js	38847	15220
 corpus	codemode/redump-template.js	5112	2005
