@@ -205,12 +205,7 @@ fn units(heap: &mut Heap, s: Str) -> Result<Vec<u16>, HeapError> {
     let flat = heap.contiguous(s)?;
     Ok(match heap.str_view(flat).expect("flat string") {
         StrView::Latin1(b) => b.iter().map(|&c| c as u16).collect(),
-        StrView::Utf16(b) => b
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .map(|c| u16::from_le_bytes(*c))
-            .collect(),
+        _ => heap.str_to_utf16(flat),
     })
 }
 
@@ -650,17 +645,9 @@ impl Units {
     pub(crate) fn range(&mut self, s: StrView<'_>, a: usize, b: usize) {
         match (self, s) {
             (Units::Narrow(v), StrView::Latin1(bytes)) => v.extend_from_slice(&bytes[a..b]),
+            // (A narrow buffer only ever gets one-byte strings.)
             (Units::Narrow(v), s) => v.extend((a..b).map(|i| s.get(i) as u8)),
-            (Units::Wide(v), StrView::Latin1(bytes)) => {
-                v.extend(bytes[a..b].iter().map(|&c| c as u16))
-            }
-            (Units::Wide(v), StrView::Utf16(bytes)) => v.extend(
-                bytes[2 * a..2 * b]
-                    .as_chunks::<2>()
-                    .0
-                    .iter()
-                    .map(|c| u16::from_le_bytes(*c)),
-            ),
+            (Units::Wide(v), s) => v.extend((a..b).map(|i| s.get(i))),
         }
     }
 

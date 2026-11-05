@@ -161,8 +161,3 @@ pub fn compile(pattern: &[u16], flags: Flags) -> Result<Program, SyntaxError> {
     let parsed = parser::parse(pattern, flags)?;
     Ok(compiler::compile(&parsed, flags))
 }
-
-#[doc(hidden)]
-pub fn parse_only(pattern: &[u16], flags: Flags) -> bool {
-    parser::parse(pattern, flags).is_ok()
-}

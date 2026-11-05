@@ -688,12 +688,10 @@ impl Machine<'_, '_> {
         let passes = usize::try_from((*fuel).max(0)).unwrap_or(usize::MAX);
         let len = self.input.len();
         let end = len.min(p.saturating_add(passes).saturating_add(1));
+        // One-byte strings are the common input: their loop on its own.
         let found = match self.input {
             Input::Latin1(b) => (p..end).find(|&i| self.in_first(first, b[i] as u32)),
-            Input::Utf16(u) => (p..end).find(|&i| self.in_first(first, u[i] as u32)),
-            Input::Utf16Le(b) => (p..end).find(|&i| {
-                self.in_first(first, u16::from_le_bytes([b[2 * i], b[2 * i + 1]]) as u32)
-            }),
+            input => (p..end).find(|&i| self.in_first(first, input.unit(i))),
         };
         match found {
             Some(i) => {

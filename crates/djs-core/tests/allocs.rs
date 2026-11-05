@@ -56,12 +56,12 @@ fn u16s(s: &str) -> Vec<u16> {
 fn regexp_compile_allocations() {
     // The patterns of djs-bench's regexp/compile group, with their ceilings.
     let cases = [
-        (r"\d+", "", 8),
-        (r"[\w.+-]+@[\w-]+\.[\w.]+", "", 25),
-        (r"https?://([^/\s]+)(/[^\s?#]*)?", "", 36),
-        (r"(?<y>\d{4})-(?<m>\d{2})-(?<d>\d{2})", "", 38),
-        (r"\bfox\b", "i", 10),
-        (r"^\s+|\s+$", "g", 20),
+        (r"\d+", "", 7),
+        (r"[\w.+-]+@[\w-]+\.[\w.]+", "", 22),
+        (r"https?://([^/\s]+)(/[^\s?#]*)?", "", 30),
+        (r"(?<y>\d{4})-(?<m>\d{2})-(?<d>\d{2})", "", 32),
+        (r"\bfox\b", "i", 5),
+        (r"^\s+|\s+$", "g", 15),
     ];
     let mut over = Vec::new();
     for (pattern, flags, ceiling) in cases {
@@ -78,34 +78,4 @@ fn regexp_compile_allocations() {
         "regexp compile allocates more:\n{}",
         over.join("\n")
     );
-}
-
-#[test]
-fn tmp_print_allocs() {
-    for (pattern, flags) in [
-        ("report|metric123", "i"),
-        ("report|metric123", ""),
-        (r"\s+", "g"),
-        (r"^([^:]+):(\d+):(.*)$", ""),
-        (r"\b(TODO|FIXME)\b", ""),
-        (r"^export (?:async )?function (\w+)\((\w+)", "gm"),
-    ] {
-        let (p, f) = (u16s(pattern), Flags::parse(&u16s(flags)).unwrap());
-        let n = allocations(|| drop(compile(&p, f).unwrap()));
-        let parse = allocations(|| drop(djs_core::regexp::parse_only(&p, f)));
-        println!("/{pattern}/{flags}: {n} (parse {parse})");
-    }
-}
-
-#[test]
-#[ignore]
-fn tmp_compile_loop() {
-    let n: usize = std::env::var("N").map(|s| s.parse().unwrap()).unwrap_or(0);
-    let pats: Vec<Vec<u16>> = (0..1000)
-        .map(|i| u16s(&format!("report|metric{i}")))
-        .collect();
-    let f = Flags::parse(&u16s(&std::env::var("F").unwrap_or_default())).unwrap();
-    for i in 0..n {
-        std::hint::black_box(compile(&pats[i % 1000], f).unwrap());
-    }
 }
