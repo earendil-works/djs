@@ -2222,7 +2222,16 @@ impl W<'_> {
             }
         }
         for (f, fac) in ir.factories.iter().enumerate() {
-            if self.is_merged((f, 0)) {
+            // (Where a member is still written on it: closures may all be in place, D3003.)
+            let named = |t: &str| {
+                let r = cat!("$dump.", fac.name);
+                t.match_indices(r.as_str()).any(|(at, _)| {
+                    !t.as_bytes()
+                        .get(at + r.len())
+                        .is_some_and(|&c| ident_part(c))
+                })
+            };
+            if self.is_merged((f, 0)) && named(&text) {
                 cat_to!(&mut s, "$dump.", fac.name, " = {};\n");
             }
         }
