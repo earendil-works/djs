@@ -29,7 +29,8 @@ use crate::bytecode::{OPS, Op};
 use crate::heap::cells::{FuncTemplate, Header, Object, Realm, Roots, ValueArray};
 use crate::heap::layout::{arena_read, arena_write};
 use crate::heap::{Atom, ObjectClass, atoms};
-use crate::interp::conv;
+use crate::heap::HeapError;
+use crate::interp::conv::{self, FaultKind};
 use crate::interp::frame::{self, Continuation, HEADER};
 use crate::interp::realm::Intrinsic;
 use crate::value::Value;
@@ -309,8 +310,26 @@ impl Exec<'_> {
                 }
                 Value::UNDEFINED
             }
-            _ => return None,
+            _ => return self.pure_leaf_hit(id, argc, a),
         })
+    }
+
+    /// `pure_leaf` for the hot loop: a fault declines (`call_intrinsic` runs the leaf
+    /// again and throws), except a host refusal, which stops the run (D1690).
+    #[inline(never)]
+    fn pure_leaf_hit(&mut self, id: u16, argc: u32, a: [Value; 3]) -> Option<Value> {
+        if argc > 3 {
+            return None;
+        }
+        match self.pure_leaf(id, a) {
+            Ok(v) => v,
+            Err(f) => {
+                if matches!(&*f.0, FaultKind::Heap(HeapError::HostOutOfMemory)) {
+                    self.host_out_of_memory();
+                }
+                None
+            }
+        }
     }
 
     /// Runs instructions from `pc`, `step` included, until fuel runs out (`None`, the run
@@ -1022,6 +1041,10 @@ impl Exec<'_> {
                                     *x = ld(b, slot!(base + k as u32));
                                 }
                                 let Some(v) = heap_call_op!(self.intrinsic_hit(id, argc, a)) else {
+                                    // A host refusal (`pure_leaf_hit`) stops the run here.
+                                    if self.host_oom {
+                                        fuel = 0;
+                                    }
                                     break Exit::Decline(op);
                                 };
                                 sp = base;

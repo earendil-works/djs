@@ -542,6 +542,18 @@ impl Exec<'_> {
             }
             return self.call_installed(id, base, argc, next);
         }
+        if argc <= 3 {
+            let mut a = [Value::UNDEFINED; 3];
+            for (k, x) in a.iter_mut().enumerate().take(argc as usize) {
+                *x = self.get(base + k as u32);
+            }
+            if let Some(v) = self.pure_leaf(id, a)? {
+                self.sp = base;
+                self.push(v);
+                self.pc = next;
+                return Ok(None);
+            }
+        }
         if let Some(step) = self.proxy_intrinsic(id, base, argc, next) {
             return step;
         }
@@ -563,73 +575,7 @@ impl Exec<'_> {
                     crate::text::cat!("%", intrinsic_name(id), " is not in this build"),
                 ));
             }
-            IS_OBJECT => Value::bool(a0.as_object().is_some()),
-            IS_CALLABLE => Value::bool(self.is_callable(a0)),
-            IS_CONSTRUCTOR => Value::bool(a0.as_object().is_some_and(|o| self.is_constructor(o))),
-            IS_ARRAY => match a0.as_object().map(|o| self.heap.is_array(o)) {
-                None => Value::FALSE,
-                Some(Some(b)) => Value::bool(b),
-                Some(None) => return type_error("revoked proxy"),
-            },
-            IS_STRING => Value::bool(a0.as_string().is_some()),
-            IS_NUMBER => Value::bool(a0.is_number()),
-            IS_SYMBOL => Value::bool(a0.as_symbol().is_some()),
-            IS_BOOLEAN => Value::bool(a0.as_bool().is_some()),
             ARGUMENT_COUNT => Value::int(self.header_int(frame::ARGC) as i32),
-            AS_OBJ if a0.as_object().is_some() => a0,
-            AS_FN if self.is_callable(a0) => a0,
-            AS_STR if a0.as_string().is_some() => a0,
-            AS_NUMBER if a0.is_number() => a0,
-            AS_SYM if a0.as_symbol().is_some() => a0,
-            AS_BOOL if a0.as_bool().is_some() => a0,
-            AS_OBJ | AS_FN | AS_STR | AS_NUMBER | AS_SYM | AS_BOOL => {
-                return bad_argument(id);
-            }
-            TO_BOOLEAN => Value::bool(conv::to_boolean(self.heap, a0)),
-            TO_NUMBER_PRIMITIVE => {
-                if a0.as_object().is_some() {
-                    return bad_argument(id);
-                }
-                conv::number(conv::to_number(self.heap, a0)?)
-            }
-            TO_STRING_PRIMITIVE => {
-                if a0.as_object().is_some() {
-                    return bad_argument(id);
-                }
-                Value::string(conv::to_string(self.heap, a0)?)
-            }
-            TO_OBJECT => {
-                if a0.as_object().is_some() {
-                    a0
-                } else {
-                    match realm::wrap_primitive(self.heap, a0, None)? {
-                        Some(o) => Value::object(o),
-                        None => return type_error("cannot convert to object"),
-                    }
-                }
-            }
-            TO_INTEGER_OR_INFINITY_NUMBER => {
-                let n = a0.as_number().unwrap_or(f64::NAN);
-                let t = if n.is_nan() { 0.0 } else { libm::trunc(n) };
-                // -0 becomes +0.
-                conv::number(t + 0.0)
-            }
-            F64_TO_U32 | F64_TO_I32 => {
-                let n = a0.as_number().unwrap_or(f64::NAN);
-                let ok = if id == F64_TO_U32 {
-                    (n as u32) as f64 == n
-                } else {
-                    (n as i32) as f64 == n
-                };
-                if !ok {
-                    return bad_argument(id);
-                }
-                conv::number(n)
-            }
-            STR_LENGTH => match a0.as_string() {
-                Some(s) => Value::int(self.heap.str_len(s) as i32),
-                None => return bad_argument(id),
-            },
             GET | GET_V => {
                 // Dense elements first: builtins read arrays element by element.
                 if let (Some(o), Some(i)) = (a0.as_object(), index_key(arg(self, 1)))
@@ -840,7 +786,6 @@ impl Exec<'_> {
                     object::test_integrity_level(self.heap, o, frozen)
                 })
             }
-            SAME_VALUE => Value::bool(self.heap.same_value(a0, arg(self, 1))),
             WRAP_PRIMITIVE => {
                 let proto = arg(self, 1).as_object();
                 match realm::wrap_primitive(self.heap, a0, proto)? {
@@ -848,17 +793,6 @@ impl Exec<'_> {
                     _ => return bad_argument(id),
                 }
             }
-            PRIMITIVE_VALUE => match a0.as_object() {
-                None => a0,
-                Some(o) => match self.heap.object_class(o) {
-                    ObjectClass::Boolean
-                    | ObjectClass::Number
-                    | ObjectClass::String
-                    | ObjectClass::Symbol
-                    | ObjectClass::BigInt => self.heap.object_slot(o, 0),
-                    _ => Value::UNDEFINED,
-                },
-            },
             BOUND_TARGET_FUNCTION => match a0.as_object() {
                 Some(o) if self.heap.object_class(o) == ObjectClass::BoundFunction => {
                     self.heap.object_slot(o, 0)
@@ -916,23 +850,6 @@ impl Exec<'_> {
                     }
                     None => Value::UNDEFINED,
                 }
-            }
-            NUMBER_TO_STRING | NUMBER_TO_FIXED | NUMBER_TO_EXPONENTIAL | NUMBER_TO_PRECISION => {
-                let x = a0.as_number().unwrap_or(f64::NAN);
-                let op = match id {
-                    NUMBER_TO_STRING => 0,
-                    NUMBER_TO_FIXED => 1,
-                    NUMBER_TO_EXPONENTIAL => 2,
-                    _ => 3,
-                };
-                Value::string(number::format(self.heap, op, x, arg(self, 1))?)
-            }
-            STRING_PARSE_FLOAT | STRING_PARSE_INT => {
-                let Some(s) = a0.as_string() else {
-                    return bad_argument(id);
-                };
-                let radix = (id == STRING_PARSE_INT).then(|| arg(self, 1).as_int().unwrap_or(0));
-                conv::number(number::parse(self.heap, s, radix)?)
             }
             COMPILE_EVAL | COMPILE_FUNCTION => {
                 let (src, kind, body) = if id == COMPILE_EVAL {
@@ -1209,67 +1126,6 @@ impl Exec<'_> {
                         Value::bool(self.heap.array_splice_dense(o, s, d, i)?)
                     }
                     _ => Value::FALSE,
-                }
-            }
-            STR_CHAR_CODE_AT | STR_CODE_POINT_AT | STR_SUBSTRING | STR_INDEX_OF
-            | STR_LAST_INDEX_OF | STR_TO_CASE | STR_TRIM | STR_IS_WELL_FORMED
-            | STR_TO_WELL_FORMED | STR_REPEAT | STR_NORMALIZE => {
-                let Some(s) = a0.as_string() else {
-                    return bad_argument(id);
-                };
-                // A rope is flattened once (the result is cached in the rope), so a loop
-                // of charCodeAt over a built-up string is not quadratic in its depth.
-                let s = self.heap.contiguous(s)?;
-                // Integral, non-negative Number arguments (the builtins clamp them).
-                let idx = |v: Value| {
-                    v.as_number()
-                        .filter(|n| *n >= 0.0)
-                        .map_or(0, |n| n.min(u32::MAX as f64) as u32)
-                };
-                let a1 = arg(self, 1);
-                match id {
-                    STR_CHAR_CODE_AT => match a1.as_number() {
-                        Some(n) if n >= 0.0 && n < self.heap.str_len(s) as f64 => {
-                            Value::int(self.heap.char_code_at(s, n as u32).unwrap_or(0) as i32)
-                        }
-                        _ => Value::NAN,
-                    },
-                    STR_CODE_POINT_AT => match a1.as_number() {
-                        Some(n) if n >= 0.0 && n < self.heap.str_len(s) as f64 => {
-                            string::code_point_at(self.heap, s, n as u32)
-                                .map_or(Value::UNDEFINED, conv::number)
-                        }
-                        _ => Value::UNDEFINED,
-                    },
-                    STR_SUBSTRING => {
-                        Value::string(string::substring(self.heap, s, idx(a1), idx(arg(self, 2)))?)
-                    }
-                    STR_INDEX_OF | STR_LAST_INDEX_OF => {
-                        let Some(search) = a1.as_string() else {
-                            return bad_argument(id);
-                        };
-                        let from = idx(arg(self, 2));
-                        conv::number(string::index_of(
-                            self.heap,
-                            s,
-                            search,
-                            from,
-                            id == STR_LAST_INDEX_OF,
-                        )?)
-                    }
-                    STR_TO_CASE => {
-                        Value::string(string::to_case(self.heap, s, a1.as_bool() == Some(true))?)
-                    }
-                    STR_TRIM => {
-                        Value::string(string::trim(self.heap, s, a1.as_int().unwrap_or(0))?)
-                    }
-                    STR_IS_WELL_FORMED => string::well_formed(self.heap, s, false)?,
-                    STR_TO_WELL_FORMED => string::well_formed(self.heap, s, true)?,
-                    STR_REPEAT => Value::string(string::repeat(self.heap, s, idx(a1))?),
-                    _ => match string::normalize(self.heap, s, a1.as_int().unwrap_or(0) as u8)? {
-                        Some(r) => Value::string(r),
-                        None => Value::UNDEFINED,
-                    },
                 }
             }
             STR_LOCALE_COMPARE => match (a0.as_string(), arg(self, 1).as_string()) {
@@ -2193,19 +2049,189 @@ impl Exec<'_> {
                 conv::number(crate::builtins::math::sum_precise(values))
             }
             _ if let Some(r) = self.proxy_leaf(id, a0, arg(self, 1)) => r?,
-            _ => match math_leaf(
-                id,
-                a0.as_number().unwrap_or(f64::NAN),
-                arg(self, 1).as_number().unwrap_or(f64::NAN),
-            ) {
-                Some(r) => conv::number(r),
-                None => return self.json_regexp_intrinsic(id, base, argc, next),
-            },
+            _ => return self.json_regexp_intrinsic(id, base, argc, next),
         };
         self.sp = base;
         self.push(v);
         self.pc = next;
         Ok(None)
+    }
+
+    /// The pure leaf intrinsics (0230): a result from at most three arguments, with no
+    /// effect on the frames, the stack or the fuel and none before a fault, so the hot
+    /// loop runs them in place and, on a fault, `call_intrinsic` runs them again and
+    /// throws (a dispatch through `step` costs ~550 wasm instructions, more than most of
+    /// these). `None`: not a pure leaf.
+    #[inline(never)]
+    pub(super) fn pure_leaf(&mut self, id: u16, a: [Value; 3]) -> Result<Option<Value>, Fault> {
+        let a0 = a[0];
+        let arg = |i: usize| a[i];
+        Ok(Some(match id {
+            IS_OBJECT => Value::bool(a0.as_object().is_some()),
+            IS_CALLABLE => Value::bool(self.is_callable(a0)),
+            IS_CONSTRUCTOR => Value::bool(a0.as_object().is_some_and(|o| self.is_constructor(o))),
+            IS_ARRAY => match a0.as_object().map(|o| self.heap.is_array(o)) {
+                None => Value::FALSE,
+                Some(Some(b)) => Value::bool(b),
+                Some(None) => return type_error("revoked proxy"),
+            },
+            IS_STRING => Value::bool(a0.as_string().is_some()),
+            IS_NUMBER => Value::bool(a0.is_number()),
+            IS_SYMBOL => Value::bool(a0.as_symbol().is_some()),
+            IS_BOOLEAN => Value::bool(a0.as_bool().is_some()),
+            AS_OBJ if a0.as_object().is_some() => a0,
+            AS_FN if self.is_callable(a0) => a0,
+            AS_STR if a0.as_string().is_some() => a0,
+            AS_NUMBER if a0.is_number() => a0,
+            AS_SYM if a0.as_symbol().is_some() => a0,
+            AS_BOOL if a0.as_bool().is_some() => a0,
+            AS_OBJ | AS_FN | AS_STR | AS_NUMBER | AS_SYM | AS_BOOL => {
+                return bad_argument(id);
+            }
+            TO_BOOLEAN => Value::bool(conv::to_boolean(self.heap, a0)),
+            TO_NUMBER_PRIMITIVE => {
+                if a0.as_object().is_some() {
+                    return bad_argument(id);
+                }
+                conv::number(conv::to_number(self.heap, a0)?)
+            }
+            TO_STRING_PRIMITIVE => {
+                if a0.as_object().is_some() {
+                    return bad_argument(id);
+                }
+                Value::string(conv::to_string(self.heap, a0)?)
+            }
+            TO_OBJECT => {
+                if a0.as_object().is_some() {
+                    a0
+                } else {
+                    match realm::wrap_primitive(self.heap, a0, None)? {
+                        Some(o) => Value::object(o),
+                        None => return type_error("cannot convert to object"),
+                    }
+                }
+            }
+            TO_INTEGER_OR_INFINITY_NUMBER => {
+                let n = a0.as_number().unwrap_or(f64::NAN);
+                let t = if n.is_nan() { 0.0 } else { libm::trunc(n) };
+                // -0 becomes +0.
+                conv::number(t + 0.0)
+            }
+            F64_TO_U32 | F64_TO_I32 => {
+                let n = a0.as_number().unwrap_or(f64::NAN);
+                let ok = if id == F64_TO_U32 {
+                    (n as u32) as f64 == n
+                } else {
+                    (n as i32) as f64 == n
+                };
+                if !ok {
+                    return bad_argument(id);
+                }
+                conv::number(n)
+            }
+            STR_LENGTH => match a0.as_string() {
+                Some(s) => Value::int(self.heap.str_len(s) as i32),
+                None => return bad_argument(id),
+            },
+            SAME_VALUE => Value::bool(self.heap.same_value(a0, arg(1))),
+            PRIMITIVE_VALUE => match a0.as_object() {
+                None => a0,
+                Some(o) => match self.heap.object_class(o) {
+                    ObjectClass::Boolean
+                    | ObjectClass::Number
+                    | ObjectClass::String
+                    | ObjectClass::Symbol
+                    | ObjectClass::BigInt => self.heap.object_slot(o, 0),
+                    _ => Value::UNDEFINED,
+                },
+            },
+            NUMBER_TO_STRING | NUMBER_TO_FIXED | NUMBER_TO_EXPONENTIAL | NUMBER_TO_PRECISION => {
+                let x = a0.as_number().unwrap_or(f64::NAN);
+                let op = match id {
+                    NUMBER_TO_STRING => 0,
+                    NUMBER_TO_FIXED => 1,
+                    NUMBER_TO_EXPONENTIAL => 2,
+                    _ => 3,
+                };
+                Value::string(number::format(self.heap, op, x, arg(1))?)
+            }
+            STRING_PARSE_FLOAT | STRING_PARSE_INT => {
+                let Some(s) = a0.as_string() else {
+                    return bad_argument(id);
+                };
+                let radix = (id == STRING_PARSE_INT).then(|| arg(1).as_int().unwrap_or(0));
+                conv::number(number::parse(self.heap, s, radix)?)
+            }
+            STR_CHAR_CODE_AT | STR_CODE_POINT_AT | STR_SUBSTRING | STR_INDEX_OF
+            | STR_LAST_INDEX_OF | STR_TO_CASE | STR_TRIM | STR_IS_WELL_FORMED
+            | STR_TO_WELL_FORMED | STR_REPEAT | STR_NORMALIZE => {
+                let Some(s) = a0.as_string() else {
+                    return bad_argument(id);
+                };
+                // A rope is flattened once (the result is cached in the rope), so a loop
+                // of charCodeAt over a built-up string is not quadratic in its depth.
+                let s = self.heap.contiguous(s)?;
+                // Integral, non-negative Number arguments (the builtins clamp them).
+                let idx = |v: Value| {
+                    v.as_number()
+                        .filter(|n| *n >= 0.0)
+                        .map_or(0, |n| n.min(u32::MAX as f64) as u32)
+                };
+                let a1 = arg(1);
+                match id {
+                    STR_CHAR_CODE_AT => match a1.as_number() {
+                        Some(n) if n >= 0.0 && n < self.heap.str_len(s) as f64 => {
+                            Value::int(self.heap.char_code_at(s, n as u32).unwrap_or(0) as i32)
+                        }
+                        _ => Value::NAN,
+                    },
+                    STR_CODE_POINT_AT => match a1.as_number() {
+                        Some(n) if n >= 0.0 && n < self.heap.str_len(s) as f64 => {
+                            string::code_point_at(self.heap, s, n as u32)
+                                .map_or(Value::UNDEFINED, conv::number)
+                        }
+                        _ => Value::UNDEFINED,
+                    },
+                    STR_SUBSTRING => {
+                        Value::string(string::substring(self.heap, s, idx(a1), idx(arg(2)))?)
+                    }
+                    STR_INDEX_OF | STR_LAST_INDEX_OF => {
+                        let Some(search) = a1.as_string() else {
+                            return bad_argument(id);
+                        };
+                        let from = idx(arg(2));
+                        conv::number(string::index_of(
+                            self.heap,
+                            s,
+                            search,
+                            from,
+                            id == STR_LAST_INDEX_OF,
+                        )?)
+                    }
+                    STR_TO_CASE => {
+                        Value::string(string::to_case(self.heap, s, a1.as_bool() == Some(true))?)
+                    }
+                    STR_TRIM => {
+                        Value::string(string::trim(self.heap, s, a1.as_int().unwrap_or(0))?)
+                    }
+                    STR_IS_WELL_FORMED => string::well_formed(self.heap, s, false)?,
+                    STR_TO_WELL_FORMED => string::well_formed(self.heap, s, true)?,
+                    STR_REPEAT => Value::string(string::repeat(self.heap, s, idx(a1))?),
+                    _ => match string::normalize(self.heap, s, a1.as_int().unwrap_or(0) as u8)? {
+                        Some(r) => Value::string(r),
+                        None => Value::UNDEFINED,
+                    },
+                }
+            }
+            _ => match math_leaf(
+                id,
+                a0.as_number().unwrap_or(f64::NAN),
+                a[1].as_number().unwrap_or(f64::NAN),
+            ) {
+                Some(r) => conv::number(r),
+                None => return Ok(None),
+            },
+        }))
     }
 
     pub(super) fn is_callable(&self, v: Value) -> bool {
