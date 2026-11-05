@@ -1,6 +1,6 @@
 # 0226: Ship the wasm modules with unchecked heap access (unsafe-heap), keep checks elsewhere
 
-status: in-progress
+status: done
 agent: heapx
 branch: issue/0226-unchecked-heap-in-wasm
 depends-on: 0225
@@ -69,11 +69,31 @@ Work:
 - status.py bounds now builds the checked module and compares it to the shipped one
   (same keys, same sign: what the checks would cost).
 - instructions.rs (D3084, dev profile, checked): 135.7M, unchanged.
+- Recorded: status.py size, bounds (checked vs shipped: 7.6 KB gz, median 12.1%, max
+  19.6%), speed; bench.sh --record wasm/ size/ at load ~4 (wasm/interp loop −7.2%, decode
+  10k −9.9%, json_stringify 10k −6.4%; json_stringify 1mib-string 0.143→0.148-0.166 ms is
+  run-to-run noise); status.py bench; djs-docs regen.
+- size/wasm (tests/bench/size probe) fails to build in the shipped env (E0152, duplicate
+  lang item with build-std); already absent from the 35ed5ab789 record, not from this
+  change.
 - Docs: D3100 (amends D2520) + index; AGENTS.md bounds line; ARCH.md heap paragraph
   (minimal, proposed edit of the design text); TESTING.md gate list; access.rs and
   djs-wasm Cargo.toml comments. Guide: goals.md Isolation, arena.md (in short, point 3,
   the trade-off, where to look), limits.md, snapshots.md, host.md, testing.md.
 
 ## Follow-ups
+- djs-bench's size probe (`size/wasm`, tests/bench/size) no longer builds under the shipped
+  build env since D3090's build-std (E0152); fix or drop the probe.
+- Optional: a stress leg on the unchecked *wasm* module (native-vs-wasm needs a native
+  driver built with the shipped module's features to compare images).
 
 ## Result
+- The shipped and slim wasm modules build with `unsafe-heap` (scripts/build-wasm.sh and
+  every shipped-module build: gate size legs and their clippy, djs-bench, perf/setup.sh,
+  size/variant.sh). Dump/docs modules, native, and all test builds stay checked.
+- interp/run/hot.rs's slot accessors now go through heap/layout/access.rs, which removed
+  the tight/call-loop regression and speeds up the checked build too.
+- Against main: gzip shipped −8.1 KB (414,390), slim −8.4 KB (348,676); wasm instructions
+  −4.5% (tight) to −30% (indexof) on all 21 workloads, none worse. Ceilings lowered.
+- D3100 amends D2520; AGENTS.md, ARCH.md, TESTING.md, guide (goals, arena, limits,
+  snapshots, host, testing) updated; status.tsv, bench.tsv re-recorded.
