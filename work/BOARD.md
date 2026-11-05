@@ -6,9 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0207 | Make plain dumps small (owner: not done until no fluff is left): header "djs-dump", helpers and source(ref) on host-provided $djs (D2834, D2835), record cuts, liveness pruning | pjs | .worktrees/pjs |
-| 0211 | Plain dump fuzzing round 2 (wider generator, new seeds) | pjz | .worktrees/pjz |
-| 0215 | Plain dump performance (Result written; pjr paused, resumes on new hot spots) | pjr | .worktrees/pjx |
+| 0223 | Refresh every benchmark, table and published measurement (owner) | meas | .worktrees/meas |
 
 ## Open (ready)
 
@@ -19,8 +17,9 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| - | Guide figures not re-measured (heap, arena, compiler, gc, builtins): re-measure or make them gen:status numbers; run.rs module comment lists a safepoint the code lacks (0220 follow-ups) | ready |
+| - | (in 0223) Guide figures not re-measured (heap, arena, compiler, gc, builtins): re-measure or make them gen:status numbers; run.rs module comment lists a safepoint the code lacks (0220 follow-ups) | ready |
 | - | Stale entry in tests/pi/expected-failures.txt (next mode): update the ratchet | ready |
+| - | Paused, agents archived (owner): 0207 dump size (fluff queue items 8, 9, 11; crossing-callbacks and for-in.iterator refusals), 0211 fuzzing, 0215 performance (Result written) | restart on request |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
 | - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |
