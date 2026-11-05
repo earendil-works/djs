@@ -33,6 +33,13 @@ Measure where plain dumps stand now and fix what regressed:
   iterator; dump_origin `origin_temp_k`, not `record()`). Native instructions, corpus:
   load 13,348 -> 9,621 M, re-dump 29,117 -> 21,120 M; binary load 390 -> 165 M.
 
+- Batch 2: plain::write's scheduling by index (scan dedups by set and keeps only
+  wanted names; providers, factories, activation items and line records by map; output
+  byte-identical): records dump 10,130 -> 4,394 M, re-dump 14,749 -> 6,106 M. The check
+  compiles the plain text (data lines left out) instead of the format-2 skeleton, same
+  cost (D2888); `DumpOptions::check` (default on): corpus dump 16.2k -> 8.6k M without
+  it, re-dump 22.3k -> 14.8k M.
+
 ## Follow-ups
 
 ## Result
