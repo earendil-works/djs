@@ -68,11 +68,20 @@ net. Coordinate with pjr (0215) who measures load, and pjs (0207) who changes du
   compile (O(script) per first call); the dumper does not read lazy templates yet, so
   `lazy_functions` stays off by default.
 
+- 2026-11-06 (lazy): batch 1 merged (main efe2316c). Batch 2: the test262 leg also runs
+  eager, in parallel; Script source as UTF-8 bytes (D2992, COMPAT_VERSION 3; lazy compiles
+  copy only the span, toString converts only the function); the dumper reads lazy
+  templates (compiled ones through `IC`, unrun ones through the script's `free_names`,
+  D2993); djs-wasm's `dump` sets `lazy_functions` (djs-difftest's `dump` now turns on
+  djs-wasm's too, so djs-abidrive matches the dev dump module); the plain dumps leg runs
+  `--lazy`. Checked: corpus plain dumps lazy = eager (only clock values differ), plain-node
+  on the lazy dumps, native-vs-wasm images, js tests, `scripts/pi-dump-every-idle.sh` on
+  the release dump module (0 new failures), test262 both modes.
+
 ## Follow-ups
 
-- Batch 2: Script source as UTF-8 (O(span) lazy compiles, toString); the dumper reads lazy
-  templates through scratch compiles (`global_refs`, `code_globals`, harvest); lazy on by
-  default in lazy builds; eval and `new Function` lazily.
+- Eval code and `new Function` still compile eagerly (builtins/eval.rs has only the heap;
+  it would need the VM's option).
 - Batch 3 (with pjr, pjs, through the coordinator): lazy plain-dump loads, maps on demand.
 - Batch 4: small-function threshold, `fclosure` taking the compiled template, phase-1
   emission off inside lazy subtrees.
