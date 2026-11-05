@@ -642,3 +642,118 @@ fn star_retries_do_not_grow_the_stack() {
         }
     }
 }
+
+/// D3135: the search runs attempts without a frame; a pattern anchored with `^` is tried
+/// only where it can start; a loop at the end of the pattern leaves no frame.
+#[test]
+fn searches_need_no_stack() {
+    let limits = ExecLimits { max_stack: 0 };
+    for (p, f, text, want) in [
+        ("\\s+", "", "abc  \t def", Some((3, 7))),
+        ("^([^:]+):(\\d+):(.*)$", "", "src/a.ts:12: x", Some((0, 14))),
+        ("^([^:]+):(\\d+):(.*)$", "", "no colon here", None),
+        ("\\bfoo\\b", "", "a food, a foo.", Some((10, 13))),
+        ("^b", "m", "a\nb", Some((2, 3))),
+        ("^xz", "m", "az\nxz", Some((3, 5))),
+        ("a*$", "", "baa", Some((1, 3))),
+        ("[\\u{1F600}]x", "u", "ab😀x", Some((2, 5))),
+    ] {
+        let prog = re(p, f);
+        let input = u16s(text);
+        let mut fuel = i64::MAX;
+        let got = match exec(&prog, Input::Utf16(&input), 0, &mut fuel, limits) {
+            ExecResult::Match(c) => c.get(0),
+            ExecResult::NoMatch => None,
+            _ => panic!("/{p}/{f}: stack overflow or out of fuel"),
+        };
+        assert_eq!(got, want, "/{p}/{f} on {text:?}");
+    }
+}
+
+#[test]
+fn anchored_patterns_start_where_they_can() {
+    let prog = re("^ab", "g");
+    let input = u16s("abab\nab");
+    let mut fuel = i64::MAX;
+    let at = |start: usize, fuel: &mut i64| match exec(
+        &prog,
+        Input::Utf16(&input),
+        start,
+        fuel,
+        ExecLimits::default(),
+    ) {
+        ExecResult::Match(c) => c.get(0),
+        _ => None,
+    };
+    assert_eq!(at(0, &mut fuel), Some((0, 2)));
+    assert_eq!(at(1, &mut fuel), None);
+    assert_eq!(at(2, &mut fuel), None);
+    let prog = re("^ab", "gm");
+    let at = |start: usize, fuel: &mut i64| match exec(
+        &prog,
+        Input::Utf16(&input),
+        start,
+        fuel,
+        ExecLimits::default(),
+    ) {
+        ExecResult::Match(c) => c.get(0),
+        _ => None,
+    };
+    assert_eq!(at(1, &mut fuel), Some((5, 7)));
+    assert_eq!(at(5, &mut fuel), Some((5, 7)));
+    assert_eq!(at(6, &mut fuel), None);
+    // Line terminators are \n, \r, U+2028 and U+2029; an empty match at the end of a
+    // final empty line.
+    let prog = re("^", "gm");
+    let input = u16s("a\r\u{2028}");
+    let mut fuel = i64::MAX;
+    match exec(
+        &prog,
+        Input::Utf16(&input),
+        3,
+        &mut fuel,
+        ExecLimits::default(),
+    ) {
+        ExecResult::Match(c) => assert_eq!(c.get(0), Some((3, 3))),
+        _ => panic!(),
+    }
+}
+
+/// The searches' fuel is additive like the rest (D1711): line starts, first sets over
+/// Latin-1 and UTF-16, code points, the leading loop's skip.
+#[test]
+fn search_fuel_is_additive() {
+    let lines = "one two\nthree four\nexport function x(a)\nfive\n".repeat(5);
+    let cases: [(&str, &str, &str); 7] = [
+        ("^export function (\\w+)\\((\\w+)", "m", &lines),
+        ("^f", "m", &lines),
+        ("x\\(", "", &lines),
+        ("\\bfive\\b", "", &lines),
+        ("😀x", "u", "a😀b😀😀x"),
+        ("\\d+x", "", "12 345 6x"),
+        ("zzz", "", &lines),
+    ];
+    for (pat, flags, text) in cases {
+        let prog = re(pat, flags);
+        let input: Vec<u16> = text.encode_utf16().collect();
+        let ((want_r, _), want) =
+            exec_chunked_metered(&prog, Input::Utf16(&input), 0, i64::MAX / 2);
+        let latin1: Option<Vec<u8>> = input.iter().map(|&u| u8::try_from(u).ok()).collect();
+        for chunk in [1, 2, 3, 7, 50] {
+            let ((r, _), used) = exec_chunked_metered(&prog, Input::Utf16(&input), 0, chunk);
+            assert!(
+                same_result(&r, &want_r),
+                "/{pat}/{flags} in chunks of {chunk}"
+            );
+            assert_eq!(used, want, "/{pat}/{flags} in chunks of {chunk}");
+            if let Some(l) = &latin1 {
+                let ((r, _), used) = exec_chunked_metered(&prog, Input::Latin1(l), 0, chunk);
+                assert!(
+                    same_result(&r, &want_r),
+                    "/{pat}/{flags} latin1, chunks of {chunk}"
+                );
+                assert_eq!(used, want, "/{pat}/{flags} latin1, chunks of {chunk}");
+            }
+        }
+    }
+}

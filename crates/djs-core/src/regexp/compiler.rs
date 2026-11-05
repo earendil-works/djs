@@ -115,6 +115,10 @@ pub(crate) const F_END: u32 = 1 << 16;
 /// continuation, so giving characters back can never help (D1563).
 pub(crate) const F_DISJOINT: u32 = 1 << 17;
 
+/// On a `STAR`: the end of the pattern follows, which cannot fail, so the loop never
+/// needs a backtrack frame.
+pub(crate) const F_LAST: u32 = 1 << 18;
+
 /// Quantifier infinity.
 const INF: u32 = u32::MAX;
 
@@ -139,8 +143,11 @@ struct Compiler {
     /// direction), if that cannot match empty: `STAR` uses it to skip hopeless positions.
     follow: Option<Follow>,
     unicode: bool,
-    /// The skip register while the leading `STAR` (see `SKIP`) is still to be compiled.
+    /// The skip register while the leading `STAR` (see `F_LEAD`) is still to be compiled.
     lead: Option<u32>,
+    /// The node being compiled is followed by the end of the pattern (forward): what
+    /// follows it cannot fail.
+    last: bool,
 }
 
 pub(crate) fn compile(parsed: &Parsed, flags: Flags) -> super::Program {
@@ -166,6 +173,7 @@ pub(crate) fn compile(parsed: &Parsed, flags: Flags) -> super::Program {
         follow: None,
         unicode: flags.unicode_mode(),
         lead: None,
+        last: false,
     };
     // A pattern that starts with a greedy unbounded loop over one character: when an
     // attempt fails, every start inside the run that loop consumed fails too, so the
@@ -204,6 +212,7 @@ pub(crate) fn compile(parsed: &Parsed, flags: Flags) -> super::Program {
     }
     c.code[H_ANCHORED] = c.here();
     c.emit2(SAVE, 0);
+    c.last = true;
     c.node(&parsed.node, false);
     c.emit2(SAVE, 1);
     c.emit(MATCH);
@@ -497,6 +506,7 @@ impl Compiler {
 
     fn node(&mut self, node: &Node, back: bool) {
         let follow = self.follow.take();
+        let last = core::mem::take(&mut self.last) && !back;
         let dir = if back { F_BACK } else { 0 };
         let icase = |i: bool| if i { F_ICASE } else { 0 };
         match node {
@@ -538,6 +548,7 @@ impl Compiler {
                 let (first, second) = if back { (1, 0) } else { (0, 1) };
                 self.emit2(SAVE, 2 * index + first);
                 self.follow = follow;
+                self.last = last;
                 self.node(body, back);
                 self.emit2(SAVE, 2 * index + second);
             }
@@ -559,23 +570,28 @@ impl Compiler {
                 self.emit2(BACKREF | dir | icase(*i), groups.len() as u32);
                 self.code.extend_from_slice(groups);
             }
-            Node::Repeat { .. } => self.repeat(node, back, follow),
+            Node::Repeat { .. } => self.repeat(node, back, follow, last),
             Node::Concat(v) => {
                 if back {
                     v.iter().rev().for_each(|n| self.node(n, back));
                 } else if !v.iter().any(wants_follow) {
                     // No STAR to give a follow set to: skip computing them (they cost
                     // more than the rest of compiling a short pattern).
-                    v.iter().for_each(|n| self.node(n, back));
+                    for (i, n) in v.iter().enumerate() {
+                        self.last = last && i + 1 == v.len();
+                        self.node(n, back);
+                    }
                 } else {
                     let follows = self.concat_follows(v, follow);
-                    for (n, f) in v.iter().zip(follows) {
+                    let k = v.len();
+                    for (i, (n, f)) in v.iter().zip(follows).enumerate() {
                         self.follow = f;
+                        self.last = last && i + 1 == k;
                         self.node(n, back);
                     }
                 }
             }
-            Node::Alt(v) => self.alternatives(v.iter(), back, follow),
+            Node::Alt(v) => self.alternatives(v.iter(), back, follow, last),
         }
     }
 
@@ -627,11 +643,13 @@ impl Compiler {
         alts: impl ExactSizeIterator<Item = &'a Node>,
         back: bool,
         follow: Option<Follow>,
+        last: bool,
     ) {
         let n = alts.len();
         let mut gotos = Vec::new();
         for (i, alt) in alts.enumerate() {
             self.follow = follow.clone();
+            self.last = last;
             if i + 1 < n {
                 let split = self.emit2(SPLIT_NEXT, 0);
                 self.node(alt, back);
@@ -673,7 +691,7 @@ impl Compiler {
         if strings.iter().any(|s| s.is_empty()) {
             alts.push_out(Node::Empty);
         }
-        self.alternatives(alts.iter(), back, None);
+        self.alternatives(alts.iter(), back, None, false);
     }
 
     /// Whether no character the one-character `body` matches is in `set` (without
@@ -691,7 +709,7 @@ impl Compiler {
     }
 
     /// A `Node::Repeat`.
-    fn repeat(&mut self, node: &Node, back: bool, follow: Option<Follow>) {
+    fn repeat(&mut self, node: &Node, back: bool, follow: Option<Follow>, last: bool) {
         let Node::Repeat {
             min,
             max,
@@ -728,7 +746,8 @@ impl Compiler {
             let flags = if back { F_BACK } else { 0 }
                 | if greedy { F_GREEDY } else { 0 }
                 | check
-                | if lead.is_some() { F_LEAD } else { 0 };
+                | if lead.is_some() { F_LEAD } else { 0 }
+                | if last { F_LAST } else { 0 };
             self.emit2(STAR | flags, r);
             self.code.push_out(min);
             self.code.push_out(max);

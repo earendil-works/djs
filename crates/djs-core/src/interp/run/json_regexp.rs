@@ -644,10 +644,16 @@ impl Exec<'_> {
             None => (alloc::vec::Vec::new(), 0, 0, false),
         };
         self.release_progress(state_slot, self.progress(state, 3));
+        // Room for an output as long as the input: most replacements are about as long
+        // as what they replace.
         let mut out = if narrow {
-            re::Units::Narrow(acc.iter().map(|&u| u as u8).collect())
+            let mut v = crate::buf::vec_with_capacity(size.max(acc.len()));
+            v.extend(acc.iter().map(|&u| u as u8));
+            re::Units::Narrow(v)
         } else {
-            re::Units::Wide(acc)
+            let mut v = crate::buf::vec_with_capacity(size.max(acc.len()));
+            v.extend_from_slice(&acc);
+            re::Units::Wide(v)
         };
         // Every match in one borrow of the program and the string: nothing in the loop
         // allocates on the heap.

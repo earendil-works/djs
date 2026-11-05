@@ -1155,11 +1155,12 @@ impl Machine<'_, '_> {
                 let Some(n) = self.star_settle(pc, n) else {
                     return fail;
                 };
-                let more = if greedy {
-                    n > min && word & F_DISJOINT == 0
-                } else {
-                    n < max
-                };
+                let more = word & F_LAST == 0
+                    && if greedy {
+                        n > min && word & F_DISJOINT == 0
+                    } else {
+                        n < max
+                    };
                 if more {
                     self.push_frame(pc as u32, K_STAR)?;
                 }
