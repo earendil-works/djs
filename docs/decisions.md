@@ -10408,3 +10408,14 @@ same text either way. Measured on pi's sessions (wasm, `pi-sessions.ts`, instruc
 the whole process over 300 sessions): -4.0% with both caches (-2.7% from the maps alone,
 -0.9% from compiles alone), -6% of the instructions per session; timings on a quiet
 machine: dumpSession 143 -> 128 µs, resumeSession 121 -> 116 µs (median).
+
+## D3004: A reopened host call read once waits for its reader
+date: 2026-11-06 · by: pjs · issue: 0207
+A `$djs.resume(…)` line whose value the dump reads once is not written where the exporter
+listed it but right before the first line that reads it (with the deferred calls before
+it, in their order): there it is the last effect, so it goes in place (D3001), typically
+into the continuation that awaits it (`await $djs.resume(5, "later", [2])` in each element
+of a `Promise.all`). Host calls keep their order among themselves (the host's order); what
+they move past is the dump's own code, which hands them nothing and makes no host call.
+Each is written into the list it was listed in (a callback's lines run after the lines
+that follow it outside), at the latest when that list ends.

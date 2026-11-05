@@ -59,6 +59,9 @@ pub(super) struct Inline {
     pub effects: Vec<Vec<usize>>,
     /// The values written in place.
     pub done: Vec<String>,
+    /// Reopened host calls used once whose lines wait for the line that reads them, in
+    /// their order (D3004): list depth, name, line, value.
+    pub hooks: Vec<(usize, String, String, String)>,
 }
 
 /// Builtins a pure value may name (frozen builtins: nothing replaces them).
@@ -508,9 +511,48 @@ impl W<'_> {
         self.inl.effects.push(Vec::new());
     }
 
+    /// Defers line `text` of reopened host call `name` (value `rhs`, read once) until the
+    /// line that reads it (D3004).
+    pub(super) fn defer_hook(&mut self, name: String, text: String, rhs: String) {
+        let depth = self.inl.stack.len() - 1;
+        self.inl.hooks.push_out((depth, name, text, rhs));
+    }
+
+    /// Writes the deferred host calls `text` reads, and those before them (their order is
+    /// the host's).
+    fn flush_hooks(&mut self, text: &str) {
+        if self.inl.hooks.is_empty() || !text.contains("$dump.") {
+            return;
+        }
+        let mut last = None;
+        for (s, e) in scan_spans(text) {
+            let name = &text[s + 6..e];
+            if let Some(i) = self.inl.hooks.iter().position(|h| h.1 == name) {
+                last = last.max(Some(i));
+            }
+        }
+        if let Some(i) = last {
+            self.flush_upto(i);
+        }
+    }
+
+    /// (Each into its own list: a callback's lines run after the lines of the list
+    /// around it that follow it, so a host call written there would come after the
+    /// later ones written outside.)
+    fn flush_upto(&mut self, i: usize) {
+        let hooks: Vec<_> = self.inl.hooks.drain(..=i).collect();
+        for (depth, name, text, rhs) in hooks {
+            self.put_line_at(depth, text, true, Some((name, rhs, true)), Vec::new());
+        }
+    }
+
     /// Ends the current list: its lines (those written in place left out).
     pub(super) fn close_list(&mut self) -> Vec<String> {
         let depth = self.inl.stack.len() - 1;
+        // (A deferred host call of this list, and those before it, are written in it.)
+        if let Some(i) = self.inl.hooks.iter().rposition(|h| h.0 == depth) {
+            self.flush_upto(i);
+        }
         self.inl.pend.retain(|p| p.depth != depth);
         self.inl.effects.pop();
         let lines = self.inl.stack.pop().unwrap_or_default();
@@ -536,7 +578,20 @@ impl W<'_> {
         def: Option<(String, String, bool)>,
         bound: Vec<String>,
     ) {
+        self.flush_hooks(&text);
         let depth = self.inl.stack.len() - 1;
+        self.put_line_at(depth, text, effect, def, bound);
+    }
+
+    /// [`W::put_line_binding`] into the list at `depth`.
+    fn put_line_at(
+        &mut self,
+        depth: usize,
+        text: String,
+        effect: bool,
+        def: Option<(String, String, bool)>,
+        bound: Vec<String>,
+    ) {
         let idx = self.inl.stack[depth].len();
         self.inl.stack[depth].push_out(text);
         if effect {
@@ -583,6 +638,7 @@ impl W<'_> {
     }
 
     fn inline_with(&mut self, text: &str, first: Option<usize>, reads: Reads) -> String {
+        self.flush_hooks(text);
         if self.inl.pend.is_empty() || !text.contains("$dump.") {
             return String::from(text);
         }

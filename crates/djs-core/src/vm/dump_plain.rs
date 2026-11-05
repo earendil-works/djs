@@ -2431,6 +2431,16 @@ impl W<'_> {
                                 }
                                 continue;
                             }
+                            // (A reopened host call read once waits for its reader,
+                            // D3004.)
+                            if let Some(r) = inline::def_rhs(&text)
+                                && r.starts_with("$djs.resume(")
+                                && self.single(name, true)
+                            {
+                                let r = String::from(r);
+                                self.defer_hook(name.clone(), text, r);
+                                continue;
+                            }
                             let def = self
                                 .single(name, true)
                                 .then(|| inline::def_rhs(&text).map(String::from))
