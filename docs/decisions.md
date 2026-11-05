@@ -10356,3 +10356,37 @@ references outside function bodies are rewritten: a continuation's text inside h
 layout (holes) already. A merged factory's holder object is written only where a member is
 still written on it. Values and activations nothing names are written as statements, or
 left out where they only make a value.
+## D3040: A compile cache across VMs that replays the compile
+date: 2026-11-06 · by: lazy · issue: 0219
+pi loads its session's script (for `$djs.source`) and small fixed snippets again at
+every idle point, in a new instance. `Vm::compile_cached` (feature `compile-cache`, on in
+djs-core natively and through djs-wasm's `dump`, so only the dump module carries it)
+records a compile: a compile only appends cells (allocation never collects) and interns
+atoms, so while it runs the heap logs every interning with the arena length before and
+after (`Heap::intern_log`), and the blob is the appended cells in order with the
+internings between them. An import (another VM of the build, the blob's key: text, file
+name, parameters, options, lazy or not) replays it: it copies the cells, interns the same
+texts at the same points (the interning's own cells, an atom's string or table growth,
+come from the replay), rebases references inside the blob, and renumbers atom ids in the
+templates (names, local names, atom immediates, global declaration lists) if this VM
+numbered them otherwise. Because the internings happen in the compile's order, the
+importing VM ends up byte for byte as if it had compiled the text, also from another
+state; string hashes made under another hash key are cleared. A blob that does not fit
+compiles over. Tests: `vm::compile_cache::tests` compares heaps over the corpus, from the
+same and from another state, before and after running; the difftest's `--determinism`
+compiles each case through a blob from a copy of the VM and requires the same heap.
+pi's `Engine.compile` keeps blobs per module (64 entries, 8 MB). Import costs about a
+quarter of a compile (a 2.6 KB codemode script: 8 µs for 32 µs native).
+
+## D3041: Suspension maps travel from one VM's dump to the next VM
+date: 2026-11-06 · by: lazy · issue: 0219
+A dump compiles the suspension maps of the scripts its activations run in (pjr: ~30% of a
+pi `vm_dump`), and pi's next dump runs in a new instance that would compile them again.
+The dump cache's entries for texts that are not plain dumps are exported as bytes after a
+dump that compiled maps (`Vm::export_dump_maps`, `vm_dump_maps_export`; `compiler::
+smap_codec` encodes the maps) and imported into the next VM before its dump
+(`vm_dump_maps_import`); the maps are pure data of the text and options, so a dump is the
+same text either way. Measured on pi's sessions (wasm, `pi-sessions.ts`, instructions of
+the whole process over 300 sessions): -4.0% with both caches (-2.7% from the maps alone,
+-0.9% from compiles alone), -6% of the instructions per session; timings on a quiet
+machine: dumpSession 143 -> 128 µs, resumeSession 121 -> 116 µs (median).

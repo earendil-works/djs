@@ -343,6 +343,20 @@ leaves the process, so neither module verifies it cell by cell, only that it was
 the same build's tables. Loading is running the dump, so the shipped module does it
 alone.
 
+pi loads the same texts again at every idle point, each time in a new instance: the
+script the run started with (the answer to `$djs.source`) and small fixed snippets, and a
+dump needs the suspension maps of that same script. The dump module therefore keeps a
+**compile cache** across VMs (D3040, D3041). A compile done through `vm_compile_cached`
+records what it did: the cells it appended to the arena and every atom it interned, in
+order; the host keeps that record per module, keyed by the text, its file name, parameters
+and options. The next VM imports the record instead of compiling: it copies the cells,
+rebases their references, and interns the same names at the same points, so it ends up as
+if it had compiled the text itself, byte for byte (the difftest's determinism check
+compares the two heaps for every case). Suspension maps travel the same way, as bytes
+from one VM's dump to the next VM (`vm_dump_maps_export`, `vm_dump_maps_import`). In pi's
+sessions this saves about 6% of the instructions per session; the import costs about a
+quarter of a compile.
+
 ## Where to look
 
 - [`crates/djs-wasm/src/lib.rs`](../../crates/djs-wasm/src/lib.rs): the exports.
