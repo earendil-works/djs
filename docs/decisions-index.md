@@ -730,3 +730,7 @@ topics when the index is next reorganized.
 - D3054: where a run waits: `Vm::call_site`, `vm_call_site`, `Sandbox.callSite`
 - D3027: An object literal's method that uses `super` is made where its home is
 - D3070: Measured figures in prose are inline status numbers
+- D3080: Arena::truncate moves the zeroed frontier back
+- D3081: Regexp follow sets only where a STAR uses them; allocation ceilings
+- D3082: Slot plans drive tracing; the compactor updates and slides in one walk
+- D3083: Benchmarks compare per collection, and the shipped module's instantiation
