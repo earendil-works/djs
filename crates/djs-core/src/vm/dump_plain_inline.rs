@@ -58,10 +58,14 @@ pub(super) struct Inline {
     /// Per list, the indexes of its effectful lines (those written in place left out).
     pub effects: Vec<Vec<usize>>,
     /// The values written in place.
-    pub done: Vec<String>,
+    pub done: BTreeSet<String>,
+    /// The names of `pend` (0215: a data-heavy dump has thousands).
+    pub pend_names: BTreeSet<String>,
     /// Reopened host calls used once whose lines wait for the line that reads them, in
     /// their order (D3004): list depth, name, line, value.
     pub hooks: Vec<(usize, String, String, String)>,
+    /// The names of `hooks`.
+    pub hook_names: BTreeSet<String>,
     /// Per list, whether deferred host calls are written into it (D3004).
     pub pull: Vec<bool>,
 }
@@ -256,8 +260,10 @@ impl W<'_> {
         texts.extend(ir.handles.iter().map(|h| h.1.as_str()));
         let mut uses: BTreeMap<String, u32> = BTreeMap::new();
         let mut key_uses: BTreeMap<(String, String), u32> = BTreeMap::new();
+        // (By substring, not `scan`, 0215: one in a string counts too, which only keeps a
+        // value named.)
         for t in texts {
-            for (s, e) in scan_spans(t) {
+            for (s, e) in dump_refs(t) {
                 *uses.entry(String::from(&t[s + 6..e])).or_insert(0) += 1;
                 if t.as_bytes().get(e) == Some(&b'.') {
                     let (key, _) = super::ident_at(t, e + 1);
@@ -323,9 +329,7 @@ impl W<'_> {
             (super::Pl::Block(a3, b), super::Put::K(k)) if a3 == a && k == a2 => Some(b),
             _ => None,
         })?;
-        let mut names = super::refs(&kt.text).names;
-        names.retain(|n| !only_keys(&kt.text, n));
-        (pb <= block && !self.declared_between(a, pb, block, &names)).then_some(a2)
+        (pb <= block && !self.shadowed(a, pb, block, &kt.text)).then_some(a2)
     }
 
     /// Whether a block of activation `a`'s continuation in `(from, to]` declares one of
@@ -336,6 +340,25 @@ impl W<'_> {
             blocks
                 .get(b)
                 .is_some_and(|ds| ds.iter().any(|d| names.contains(&d.name)))
+        })
+    }
+
+    /// Whether a block of activation `a`'s continuation in `(from, to]` declares a name
+    /// `text` reads (not only as an object literal's key): written there, `text` would
+    /// see that binding instead. (By the few names declared, not a scan of `text`, 0215.)
+    fn shadowed(&self, a: usize, from: usize, to: usize, text: &str) -> bool {
+        let blocks = &self.acts[a].blocks;
+        let b = text.as_bytes();
+        (from + 1..=to).any(|i| {
+            blocks.get(i).is_some_and(|ds| {
+                ds.iter().any(|d| {
+                    let n = d.name.as_str();
+                    text.match_indices(n).any(|(at, _)| {
+                        !(at > 0 && (ident_part(b[at - 1]) || b[at - 1] == b'.'))
+                            && !b.get(at + n.len()).is_some_and(|&c| ident_part(c))
+                    }) && !only_keys(text, n)
+                })
+            })
         })
     }
 
@@ -401,9 +424,7 @@ impl W<'_> {
             if !super::is_fn_text(expr) {
                 continue;
             }
-            let mut names = super::refs(expr).names;
-            names.retain(|n| !only_keys(expr, n));
-            if self.declared_between(a, pb, block, &names) {
+            if self.shadowed(a, pb, block, expr) {
                 continue;
             }
             // (`(0, f)` keeps it anonymous where a name would be inferred.)
@@ -616,6 +637,7 @@ impl W<'_> {
                 return;
             };
             let effect = !pure(&rhs);
+            self.inl.pend_names.insert(String::from(name));
             self.inl.pend.push_out(Pend {
                 name: String::from(name),
                 rhs,
@@ -630,48 +652,90 @@ impl W<'_> {
 
     /// The top-level lines `$dump.X = value;` whose value nothing reads in the end (a
     /// parameter liveness left out held it, a reference became a binding's name): the
-    /// value's effect alone, or nothing (D3003).
-    pub(super) fn drop_unread(&self, body: &mut [String], handles: &[(String, String)]) {
-        loop {
-            let mut uses: BTreeMap<&str, u32> = BTreeMap::new();
-            let fns = self
-                .items
-                .iter()
-                .filter(|it| it.kind == IK::FnDecl)
-                .map(|it| it.text.as_str());
-            for t in body
-                .iter()
-                .map(String::as_str)
-                .chain(fns)
-                .chain(handles.iter().map(|h| h.1.as_str()))
+    /// value's effect alone, or nothing (D3003). Fails where a value written in place is
+    /// still read by name (a bug). One count, kept as lines go (0215).
+    pub(super) fn drop_unread(
+        &self,
+        body: &mut [String],
+        handles: &[(String, String)],
+    ) -> Result<(), String> {
+        let mut uses: BTreeMap<String, u32> = BTreeMap::new();
+        let fns = self
+            .items
+            .iter()
+            .filter(|it| it.kind == IK::FnDecl)
+            .map(|it| it.text.as_str());
+        for t in body
+            .iter()
+            .map(String::as_str)
+            .chain(fns)
+            .chain(handles.iter().map(|h| h.1.as_str()))
+        {
+            let mut done = false;
+            for (s, e) in dump_refs(t) {
+                let name = &t[s + 6..e];
+                done |= self.inl.done.contains(name);
+                *uses.entry(String::from(name)).or_insert(0) += 1;
+            }
+            // (Checked by `scan`, which skips strings, only where it may be so.)
+            if done
+                && let Some(name) = scan_spans(t)
+                    .into_iter()
+                    .map(|(s, e)| &t[s + 6..e])
+                    .find(|n| self.inl.done.contains(*n))
             {
-                for (s, e) in scan_spans(t) {
-                    *uses.entry(&t[s + 6..e]).or_insert(0) += 1;
-                }
-            }
-            let mut changed = Vec::new();
-            for (i, l) in body.iter().enumerate() {
-                let Some(rest) = l.strip_prefix("$dump.") else {
-                    continue;
-                };
-                let (name, _) = super::ident_at(rest, 0);
-                if name.is_empty() || uses.get(name).copied() != Some(1) {
-                    continue;
-                }
-                let Some(rhs) = def_rhs(l).filter(|_| rest[name.len()..].starts_with(" = ")) else {
-                    continue;
-                };
-                // (A factory makes its scope's closures and nothing else.)
-                let drop = shape(rhs) || rhs.starts_with("(() => {");
-                changed.push_out((i, if drop { String::new() } else { statement(rhs) }));
-            }
-            if changed.is_empty() {
-                return;
-            }
-            for (i, l) in changed {
-                body[i] = l;
+                return Err(cat!(
+                    "plain dumps: $dump.",
+                    name,
+                    " is written in place and read again (a bug)"
+                ));
             }
         }
+        // The definitions by name, and the lines to look at.
+        let mut defs: BTreeMap<String, usize> = BTreeMap::new();
+        for (i, l) in body.iter().enumerate() {
+            if let Some(rest) = l.strip_prefix("$dump.") {
+                let (name, _) = super::ident_at(rest, 0);
+                if !name.is_empty() && rest[name.len()..].starts_with(" = ") {
+                    defs.insert(String::from(name), i);
+                }
+            }
+        }
+        let mut work: Vec<String> = defs
+            .keys()
+            .filter(|n| uses.get(n.as_str()).copied() == Some(1))
+            .cloned()
+            .collect();
+        while let Some(name) = work.pop() {
+            let Some(&i) = defs.get(&name) else { continue };
+            if uses.get(&name).copied() != Some(1) {
+                continue;
+            }
+            let Some(rhs) = def_rhs(&body[i]) else {
+                continue;
+            };
+            // (A factory makes its scope's closures and nothing else.)
+            let drop = shape(rhs) || rhs.starts_with("(() => {");
+            let new = if drop { String::new() } else { statement(rhs) };
+            // What the line read is read once less.
+            let old = core::mem::replace(&mut body[i], new);
+            defs.remove(&name);
+            uses.remove(&name);
+            if drop {
+                for (s, e) in dump_refs(&old) {
+                    let n = &old[s + 6..e];
+                    if let Some(c) = uses.get_mut(n)
+                        && n != name
+                    {
+                        *c -= 1;
+                        if *c == 1 && defs.contains_key(n) {
+                            work.push_out(String::from(n));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Starts a list of lines (a callback's, or the top level).
@@ -702,8 +766,11 @@ impl W<'_> {
     fn part_reads(&self, part: &[super::Plan], name: &str) -> bool {
         let r = cat!("$dump.", name);
         let has = |t: &str| {
-            t.match_indices(r.as_str())
-                .any(|(at, _)| !t.as_bytes().get(at + r.len()).is_some_and(|&c| ident_part(c)))
+            t.match_indices(r.as_str()).any(|(at, _)| {
+                !t.as_bytes()
+                    .get(at + r.len())
+                    .is_some_and(|&c| ident_part(c))
+            })
         };
         part.iter().any(|e| match e {
             super::Plan::Item(i) => has(&self.items[*i].text),
@@ -723,6 +790,7 @@ impl W<'_> {
     /// line that reads it (D3004).
     pub(super) fn defer_hook(&mut self, name: String, text: String, rhs: String) {
         let depth = self.inl.stack.len() - 1;
+        self.inl.hook_names.insert(name.clone());
         self.inl.hooks.push_out((depth, name, text, rhs));
     }
 
@@ -735,10 +803,13 @@ impl W<'_> {
         if !text.contains("$dump.") {
             return;
         }
+        // (One pass over the text's `$dump.` names, 0215.)
         let mut last = None;
-        for (s, e) in scan_spans(text) {
-            let name = &text[s + 6..e];
-            if let Some(i) = self.inl.hooks.iter().position(|h| h.1 == name) {
+        for (at, _) in text.match_indices("$dump.") {
+            let (n, _) = super::ident_at(text, at + 6);
+            if self.inl.hook_names.contains(n)
+                && let Some(i) = self.inl.hooks.iter().position(|h| h.1 == n)
+            {
                 last = last.max(Some(i));
             }
         }
@@ -760,6 +831,9 @@ impl W<'_> {
     /// later ones written outside.)
     fn flush_upto(&mut self, i: usize) {
         let hooks: Vec<_> = self.inl.hooks.drain(..=i).collect();
+        for h in &hooks {
+            self.inl.hook_names.remove(&h.1);
+        }
         let here = self.inl.stack.len() - 1;
         let pull = self.inl.pull.last() == Some(&true);
         for (depth, name, text, rhs) in hooks {
@@ -775,7 +849,13 @@ impl W<'_> {
         if let Some(i) = self.inl.hooks.iter().rposition(|h| h.0 == depth) {
             self.flush_upto(i);
         }
-        self.inl.pend.retain(|p| p.depth != depth);
+        let names = &mut self.inl.pend_names;
+        self.inl.pend.retain(|p| {
+            if p.depth == depth {
+                names.remove(&p.name);
+            }
+            p.depth != depth
+        });
         self.inl.effects.pop();
         self.inl.pull.pop();
         let lines = self.inl.stack.pop().unwrap_or_default();
@@ -821,6 +901,7 @@ impl W<'_> {
             self.inl.effects[depth].push_out(idx);
         }
         if let Some((name, rhs, eff)) = def {
+            self.inl.pend_names.insert(name.clone());
             self.inl.pend.push_out(Pend {
                 name,
                 rhs,
@@ -865,6 +946,14 @@ impl W<'_> {
         if self.inl.pend.is_empty() || !text.contains("$dump.") {
             return String::from(text);
         }
+        // (No pending value named: no scan, 0215.)
+        let named = text.match_indices("$dump.").any(|(at, _)| {
+            let (n, _) = super::ident_at(text, at + 6);
+            self.inl.pend_names.contains(n)
+        });
+        if !named {
+            return String::from(text);
+        }
         let spans = scan_spans(text);
         let run = first.map_or_else(Vec::new, |f| first_run(text, f, &spans));
         let depth = self.inl.stack.len() - 1;
@@ -873,18 +962,24 @@ impl W<'_> {
         for &(s, e) in &spans {
             // (`$dump.X.key`: a factory's member, never a candidate.)
             let name = &text[s + 6..e];
-            let Some(p) = self.inl.pend.iter().position(|p| p.name == name) else {
+            if !self.inl.pend_names.contains(name) {
+                take.push_out(None);
+                continue;
+            }
+            let Some(p) = self.inl.pend.iter().rposition(|p| p.name == name) else {
                 take.push_out(None);
                 continue;
             };
             let pd = &self.inl.pend[p];
-            let names = super::refs(&pd.rhs).names;
             let reads_ok = match reads {
                 Reads::Any => true,
-                Reads::Only(only) => names.iter().all(|n| only.contains(&n.as_str())),
+                Reads::Only(only) => super::refs(&pd.rhs)
+                    .names
+                    .iter()
+                    .all(|n| only.contains(&n.as_str())),
                 Reads::Scope(scope) => {
                     !pd.rhs.contains("new.target")
-                        && names.iter().all(|n| {
+                        && super::refs(&pd.rhs).names.iter().all(|n| {
                             !matches!(n.as_str(), "this" | "arguments" | "super")
                                 && !n.starts_with("$djs_")
                                 && (PURE_NAMES.contains(&n.as_str())
@@ -959,7 +1054,8 @@ impl W<'_> {
             out.push_str(&text[at..s]);
             out.push_str(&operand_at(text, s, e, &p.rhs));
             at = e;
-            self.inl.done.push_out(p.name);
+            self.inl.pend_names.remove(&p.name);
+            self.inl.done.insert(p.name);
         }
         out.push_str(&text[at..]);
         out
@@ -1095,24 +1191,19 @@ impl W<'_> {
         self.vcache.insert(key, s.clone());
         s
     }
+}
 
-    /// Fails where a value written in place is still read by name.
-    pub(super) fn check_inlined(&self, text: &str) -> Result<(), String> {
-        if self.inl.done.is_empty() {
-            return Ok(());
-        }
-        for (s, e) in scan_spans(text) {
-            let name = &text[s + 6..e];
-            if self.inl.done.iter().any(|d| d == name) {
-                return Err(cat!(
-                    "plain dumps: $dump.",
-                    name,
-                    " is written in place and read again (a bug)"
-                ));
-            }
-        }
-        Ok(())
-    }
+/// The `$dump.X` references of `text` by substring (`[start, end)`, the name's end): every
+/// one [`scan_spans`] finds, and those in strings and comments too.
+pub(super) fn dump_refs(text: &str) -> Vec<(usize, usize)> {
+    let b = text.as_bytes();
+    text.match_indices("$dump.")
+        .filter(|(at, _)| !(*at > 0 && (ident_part(b[at - 1]) || b[at - 1] == b'.')))
+        .filter_map(|(at, _)| {
+            let (n, e) = super::ident_at(text, at + 6);
+            (!n.is_empty()).then_some((at, e))
+        })
+        .collect()
 }
 
 /// Whether `text` names `name` only as an object literal's key (`{ path: "b.md" }`): the

@@ -164,14 +164,23 @@ fn ident_part(c: u8) -> bool {
 /// name after `.` is a property, not a reference. It errs on the side of too many
 /// names (an object literal's keys count), which only adds orderings that hold anyway.
 pub(super) fn refs(text: &str) -> Refs {
-    scan(text, false, &|_| true, &mut |_, _| {})
+    scan(text, false, &|_| true, &mut |_, _| {}, true)
 }
 
 /// Where `text` reads `$dump.X` (as [`refs`] finds them): `[start, end)` of each, the
 /// name's end (not a key after it).
 pub(super) fn scan_spans(text: &str) -> Vec<(usize, usize)> {
     let mut out = Vec::new();
-    scan(text, false, &|_| false, &mut |s, e| out.push_out((s, e)));
+    if !text.contains("$dump.") {
+        return out;
+    }
+    scan(
+        text,
+        false,
+        &|_| false,
+        &mut |s, e| out.push_out((s, e)),
+        false,
+    );
     out
 }
 
@@ -179,7 +188,16 @@ pub(super) fn scan_spans(text: &str) -> Vec<(usize, usize)> {
 /// evaluation makes (a continuation's text inside it has its layout already, D3003).
 pub(super) fn eager_spans(text: &str) -> Vec<(usize, usize)> {
     let mut out = Vec::new();
-    scan(text, true, &|_| false, &mut |s, e| out.push_out((s, e)));
+    if !text.contains("$dump.") {
+        return out;
+    }
+    scan(
+        text,
+        true,
+        &|_| false,
+        &mut |s, e| out.push_out((s, e)),
+        false,
+    );
     out
 }
 
@@ -188,7 +206,7 @@ pub(super) fn eager_spans(text: &str) -> Vec<(usize, usize)> {
 /// `{` after `)` or `=>` opens a function's body (no statements are scanned).
 #[cfg(test)]
 fn eager_refs(text: &str) -> Refs {
-    scan(text, true, &|_| true, &mut |_, _| {})
+    scan(text, true, &|_| true, &mut |_, _| {}, true)
 }
 
 /// [`refs`]'s or [`eager_refs`]'s with only the names `keep` takes (a data literal's
@@ -198,6 +216,8 @@ fn scan(
     skip_fns: bool,
     keep: &dyn Fn(&str) -> bool,
     span: &mut dyn FnMut(usize, usize),
+    // (Whether `Refs::dump` is wanted: the span callers want only the spans.)
+    collect: bool,
 ) -> Refs {
     let b = text.as_bytes();
     let mut out = Refs::default();
@@ -361,7 +381,7 @@ fn scan(
                         } else {
                             ("", j)
                         };
-                        if seen_dump.insert((name, key)) {
+                        if collect && seen_dump.insert((name, key)) {
                             let key = (!key.is_empty()).then(|| String::from(key));
                             out.dump.push_out((String::from(name), key));
                         }
@@ -1504,11 +1524,15 @@ impl W<'_> {
     /// The keys of `text`; with `globals` false only its `$dump` references: the
     /// globals a function's text names are read when it runs, after the load.
     fn keys_in(&self, text: &str, globals: bool) -> Vec<Key> {
+        if !globals && !text.contains("$dump.") {
+            return Vec::new();
+        }
         let r = scan(
             text,
             true,
             &|n| globals && self.global_set.contains(n),
             &mut |_, _| {},
+            true,
         );
         let mut out = Vec::new();
         let mut seen: alloc::collections::BTreeSet<Key> = Default::default();
@@ -1748,12 +1772,15 @@ impl W<'_> {
             let (deps, start, slots) = match kind {
                 IK::Act(a) => {
                     let act = &ir.acts[a];
+                    // (Each slot's value scanned once: its keys are its own deps too, 0215.)
+                    let slot_keys: Vec<(usize, Vec<Key>)> = act
+                        .slots
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, sl)| sl.cell.is_none())
+                        .map(|(j, sl)| (j, self.keys_of(&sl.value)))
+                        .collect();
                     let mut text = String::new();
-                    for sl in &act.slots {
-                        if sl.cell.is_none() {
-                            cat_to!(&mut text, sl.value, "\n");
-                        }
-                    }
                     cat_to!(&mut text, act.this, "\n");
                     // Its origin's function (`K.$djs.f`) and the generator's prototype.
                     cat_to!(&mut text, act.fexpr, "\n");
@@ -1776,9 +1803,20 @@ impl W<'_> {
                     for b in 0..self.acts[a].blocks.len() {
                         self.placed_text(Pl::Block(a, b), &mut lazy, 0);
                     }
-                    let mut keys = self.keys_of(&text);
+                    // (As one scan of the slots' values and `text` lists them: references
+                    // in order, then globals.)
+                    let rest = self.keys_of(&text);
+                    let mut keys: Vec<Key> = Vec::new();
+                    let mut seen: alloc::collections::BTreeSet<Key> = Default::default();
+                    for global in [false, true] {
+                        for k in slot_keys.iter().flat_map(|x| x.1.iter()).chain(&rest) {
+                            if matches!(k, Key::Global(_)) == global && seen.insert(k.clone()) {
+                                keys.push_out(k.clone());
+                            }
+                        }
+                    }
                     for k in self.keys_in(&lazy, false) {
-                        if !keys.contains(&k) {
+                        if seen.insert(k.clone()) {
                             keys.push_out(k);
                         }
                     }
@@ -1849,11 +1887,9 @@ impl W<'_> {
                         None => Vec::new(),
                     };
                     let mut slots = Vec::new();
-                    for sl in &act.slots {
-                        if sl.cell.is_none() {
-                            let k = self.keys_of(&sl.value);
-                            slots.push_out((sl.name.clone(), self.dep_items(&k, i, &providers)?));
-                        }
+                    for (j, k) in &slot_keys {
+                        let name = act.slots[*j].name.clone();
+                        slots.push_out((name, self.dep_items(k, i, &providers)?));
                     }
                     (deps, start, slots)
                 }
@@ -2193,7 +2229,7 @@ impl W<'_> {
             })
             .collect();
         let mut body = self.close_list();
-        self.drop_unread(&mut body, &handles);
+        self.drop_unread(&mut body, &handles)?;
         body.retain(|l| !l.is_empty());
         let mut s = String::from(if ts {
             "\"djs-dump typescript\";\n"
@@ -2244,17 +2280,14 @@ impl W<'_> {
                 cat_to!(&mut s, "$dump.b", i, " = ", builtin_expr(p)?, ";\n");
             }
         }
+        // (Where a member is still written on it: closures may all be in place, D3003.
+        // The names on `$dump` the text reads, in one pass, 0215.)
+        let named: alloc::collections::BTreeSet<&str> = inline::dump_refs(&text)
+            .into_iter()
+            .map(|(s, e)| &text[s + 6..e])
+            .collect();
         for (f, fac) in ir.factories.iter().enumerate() {
-            // (Where a member is still written on it: closures may all be in place, D3003.)
-            let named = |t: &str| {
-                let r = cat!("$dump.", fac.name);
-                t.match_indices(r.as_str()).any(|(at, _)| {
-                    !t.as_bytes()
-                        .get(at + r.len())
-                        .is_some_and(|&c| ident_part(c))
-                })
-            };
-            if self.is_merged((f, 0)) && named(&text) {
+            if self.is_merged((f, 0)) && named.contains(fac.name.as_str()) {
                 cat_to!(&mut s, "$dump.", fac.name, " = {};\n");
             }
         }
@@ -2297,10 +2330,9 @@ impl W<'_> {
                 );
             }
         }
-        if scan_spans(&s[holder..]).is_empty() && !s[holder + 23..].contains("$dump") {
+        if !s[holder + 23..].contains("$dump") {
             s.replace_range(holder..holder + "globalThis.$dump = {};\n".len(), "");
         }
-        self.check_inlined(&s)?;
         Ok(s)
     }
 
