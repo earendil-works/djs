@@ -485,12 +485,24 @@ impl Vm {
     ) -> Result<Value, crate::compiler::CompileError> {
         // A plain dump (it starts with its directive) is compiled with its suspension
         // maps, kept for this VM's next dump: its continuations are suspended in it, and
-        // compiling all of it again there was a third of a re-dump (0215).
+        // compiling all of it again there was a third of a re-dump (0215). Lazily, the
+        // maps of what the load compiles; a dump asks for the others (D2994).
         #[cfg(feature = "dump")]
         let template = if src.starts_with(b"\"djs-dump") && opts.params.is_empty() {
-            let (t, maps) = crate::compiler::compile_with_maps(&mut self.heap, src, opts)?;
+            #[cfg(feature = "lazy")]
+            let lazy = self.opts.lazy_functions;
+            #[cfg(not(feature = "lazy"))]
+            let lazy = false;
+            let (t, maps, globals) = self.compile_with_maps(src, opts, lazy)?;
             if let Ok(text) = core::str::from_utf8(src) {
-                self.dump_cache.borrow_mut().keep(opts.bits(), text, maps);
+                let h = &self.heap;
+                let globals = globals
+                    .into_iter()
+                    .map(|(a, b, g)| (a, b, g.into_iter().map(|g| h.atom_name(g)).collect()))
+                    .collect();
+                self.dump_cache
+                    .borrow_mut()
+                    .keep(opts.bits(), text, maps, lazy, globals);
             }
             t
         } else {
@@ -548,6 +560,31 @@ impl Vm {
                 self.heap.arena_mut().set(t, FuncTemplate::IC, c);
             }
         }
+    }
+
+    /// A plain dump's compile with its suspension maps, all of them or (`lazy`) those of
+    /// the functions the load compiles (D2994).
+    #[cfg(feature = "dump")]
+    fn compile_with_maps(
+        &mut self,
+        src: &[u8],
+        opts: &crate::compiler::CompileOptions<'_>,
+        lazy: bool,
+    ) -> Result<
+        (
+            Ref,
+            Vec<crate::compiler::FunctionMap>,
+            Vec<crate::compiler::LazyGlobals>,
+        ),
+        crate::compiler::CompileError,
+    > {
+        #[cfg(feature = "lazy")]
+        if lazy {
+            return crate::compiler::compile_lazy_with_maps(&mut self.heap, src, opts);
+        }
+        let _ = lazy;
+        crate::compiler::compile_with_maps(&mut self.heap, src, opts)
+            .map(|(t, m)| (t, m, Vec::new()))
     }
 
     /// Compiles `src`, lazily with `VmOptions::lazy_functions` (D2990).

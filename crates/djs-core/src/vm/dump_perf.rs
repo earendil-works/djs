@@ -9,6 +9,7 @@
 //! - `DJS_DUMP_PERF_REPS=n`: dumps and loads per idle point, the best counts (default 3);
 //!   `DJS_DUMP_PERF_ONLY=dump|load|redump` repeats only that side (profiling);
 //! - `DJS_DUMP_PERF_CHECK=0`: dumps without the check (`DumpOptions::check`);
+//! - `DJS_LAZY=1`: the VMs compile functions lazily (D2990), as the dump module's do;
 //! - `DJS_DUMP_PERF_OUT=dir`: writes every dump there (`<case>.<idle>.js`) for profiling;
 //! - `DJS_DUMP_PERF_SKIP=load`: dumps only, `=redump`: dumps and loads, `=all`: none (for
 //!   counting the instructions of each side with `/usr/bin/time -l` when the machine is

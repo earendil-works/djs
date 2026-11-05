@@ -239,3 +239,77 @@ fn seal_compiles_lazy_templates() {
     let r = eval_with(&mut vm, "later(4)", &CompileOptions::script("u.js"));
     assert_eq!(r, "17");
 }
+
+/// The maps of a lazy load (the top unit's) and of each lazy function on demand equal
+/// the eager compile's maps of the same functions (D2994).
+#[cfg(feature = "dump")]
+fn check_maps(src: &str, opts: &CompileOptions<'_>) -> usize {
+    use crate::heap::Heap;
+    let mut eh = Heap::new().unwrap();
+    let Ok(eager) = crate::compiler::suspension_maps(&mut eh, src.as_bytes(), opts) else {
+        return 0;
+    };
+    let mut lh = Heap::new().unwrap();
+    let (_, mut maps, _) =
+        crate::compiler::compile_lazy_with_maps(&mut lh, src.as_bytes(), opts).unwrap();
+    // Every lazy template, nested ones too: compile each on its own (as `Vm` would at a
+    // first call) and collect its maps.
+    let mut done = Vec::new();
+    loop {
+        let todo: Vec<u32> = lh
+            .cells()
+            .filter(|c| c.kind == CellKind::FuncTemplate)
+            .map(|c| c.offset)
+            .filter(|&t| code(&lh, t) == [crate::bytecode::Op::Lazy as u8] && !done.contains(&t))
+            .collect();
+        if todo.is_empty() {
+            break;
+        }
+        for t in todo {
+            done.push(t);
+            let mut scratch = Heap::new().unwrap();
+            maps.extend(crate::compiler::lazy_function_maps(&lh, Ref(t), &mut scratch).unwrap());
+            // And compile it here, so that its lazy children appear.
+            let c = crate::compiler::compile_lazy(&mut lh, Ref(t)).unwrap();
+            lh.arena_mut().set(t, FuncTemplate::IC, c);
+        }
+    }
+    let mut n = 0;
+    for e in &eager {
+        let Some(m) = maps.iter().find(|m| m.start == e.start && m.end == e.end) else {
+            panic!("no lazy map for {}..{}", e.start, e.end);
+        };
+        assert_eq!(m.text(src.as_bytes()), e.text(src.as_bytes()));
+        n += 1;
+    }
+    n
+}
+
+#[cfg(feature = "dump")]
+#[test]
+fn lazy_maps_are_eager_maps() {
+    extern crate std;
+    let mut n = 0;
+    for area in ["codemode", "codemode-harvest", "language"] {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/corpus")
+            .join(area);
+        for e in std::fs::read_dir(dir).unwrap() {
+            let p = e.unwrap().path();
+            if p.extension().is_some_and(|x| x == "js") {
+                let src = std::fs::read_to_string(&p).unwrap();
+                n += check_maps(&src, &CompileOptions::async_body("t.js", &[]));
+            }
+        }
+    }
+    let golden =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/dump/v2/golden");
+    for e in std::fs::read_dir(golden).unwrap() {
+        let p = e.unwrap().path();
+        if p.to_string_lossy().ends_with(".dump.js") {
+            let src = std::fs::read_to_string(&p).unwrap();
+            n += check_maps(&src, &CompileOptions::script("dump.js"));
+        }
+    }
+    assert!(n > 300, "{n} maps compared");
+}

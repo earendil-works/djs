@@ -11,6 +11,7 @@
 //! start (`Unit::base`): only its text is copied, so a first call costs its size, not the
 //! script's.
 
+use alloc::string::String;
 use alloc::vec::Vec;
 
 use super::func::{BODY_SCOPE, Capture, FuncKind, FuncState, VarKind};
@@ -43,90 +44,183 @@ const KINDS: [FuncKind; 13] = [
 
 /// Compiles lazy template `t` and returns its compiled template.
 pub fn compile_lazy(heap: &mut Heap, t: Ref) -> Result<Ref, CompileError> {
-    let a = heap.arena();
-    let flags = u32::from(a.get::<u16>(t.0, FuncTemplate::FLAGS));
-    let name = Atom::from_id(a.get(t.0, FuncTemplate::NAME));
-    let n_caps = u32::from(a.get::<u16>(t.0, FuncTemplate::CAPTURES));
-    let code_len: u32 = a.get(t.0, FuncTemplate::CODE_LEN);
-    let words: Vec<u32> = (0..n_caps)
-        .map(|i| a.read(FuncTemplate::DATA.at(t.0, code_len + 4 * i)))
-        .collect();
-    let info = debug_info(heap, t.0);
-    let names: Vec<Atom> = match info.names.get() {
-        Some(n) => (0..n_caps)
-            .map(|i| Atom::from_id(a.read(U32Array::DATA.at(n, i))))
-            .collect(),
-        None => Vec::new(),
-    };
-    let mut record = [(1, 1); 3];
-    for (i, e) in line_entries(bytes_of(heap, info.lines)).take(3).enumerate() {
-        record[i] = (e.line, e.col);
-    }
-    let [(line, col), (_, head), (_, ctx)] = record;
-    let script = info.script;
-    let text = |r: Ref| {
-        r.get()
-            .map(|s| heap.str_to_string(Str(s)))
-            .unwrap_or_default()
-    };
-    let (span, filename, params, bits) = match script.get() {
-        Some(s) => (
-            // Only the function's text is copied (the source is UTF-8, D2992).
-            script_source(heap, s)
-                .and_then(|b| b.get(info.src_start as usize..info.src_end as usize))
-                .map(<[u8]>::to_vec)
-                .unwrap_or_default(),
-            text(a.get(s, Script::NAME)),
-            text(a.get(s, Script::PARAMS)),
-            a.get::<u32>(s, Script::OPTIONS),
-        ),
-        None => Default::default(),
-    };
-    let span = &span[..];
-    let params: Vec<&str> = if params.is_empty() {
-        Vec::new()
-    } else {
-        params.split(',').collect()
-    };
-    let opts = CompileOptions::from_bits(&filename, &params, bits);
-    let unit = Unit {
-        lazy: true,
-        root: true,
-        script,
-        base: info.src_start,
-        line,
-        col,
-    };
-    let lazy = Lazy {
-        flags,
-        name,
-        names: &names,
-        words: &words,
-        head,
-        ctx,
-    };
-    let compiled = Parser::new(heap, span, &opts)
-        .and_then(|p| lazy.compile(p, unit))
-        .map_err(|e| error_at(span, e))?;
+    let f = LazyFn::read(heap, t);
+    let compiled = f.compile(heap, f.script, true, None)?;
     // The capture descriptors say where closures of `t` take their Boxes from, which
-    // only the enclosing unit knew; the name may come from the enclosing context too.
+    // only the enclosing unit knew.
     let a = heap.arena_mut();
     let n = u32::from(a.get::<u16>(compiled.0, FuncTemplate::CAPTURES));
-    if n != n_caps {
+    if n as usize != f.words.len() {
         return Err(error_at(
-            span,
+            &f.span,
             super::resolve::internal("lazy captures differ"),
         ));
     }
     let code_len: u32 = a.get(compiled.0, FuncTemplate::CODE_LEN);
-    for (i, &w) in words.iter().enumerate() {
+    for (i, &w) in f.words.iter().enumerate() {
         a.write(
             FuncTemplate::DATA.at(compiled.0, code_len + 4 * i as u32),
             w,
         );
     }
-    a.set(compiled.0, FuncTemplate::NAME, name.id());
     Ok(compiled)
+}
+
+/// The suspension maps of lazy template `t` of `from` and of the functions inside it
+/// (D2563, D2994), compiled into `into` with every function eager: what an eager compile
+/// of the whole script records for them (D2991). The maps of functions without sites
+/// are kept too, so that a span that has none is known to have none.
+#[cfg(feature = "dump")]
+pub fn lazy_function_maps(
+    from: &Heap,
+    t: Ref,
+    into: &mut Heap,
+) -> Result<Vec<super::smap::FunctionMap>, CompileError> {
+    let f = LazyFn::read(from, t);
+    let mut maps = Vec::new();
+    f.compile(into, Ref::NULL, false, Some(&mut maps))?;
+    Ok(maps)
+}
+
+/// Lazy template `t` of `from` compiled into `into` with every function inside it
+/// eager: the code it would have, for a dump to read (D2993).
+#[cfg(feature = "dump")]
+pub fn lazy_function_code(from: &Heap, t: Ref, into: &mut Heap) -> Result<Ref, CompileError> {
+    LazyFn::read(from, t).compile(into, Ref::NULL, false, None)
+}
+
+/// A lazy template's function as its compile needs it, read from the heap that holds it
+/// (names as text: the compile may go into another heap).
+struct LazyFn {
+    flags: u32,
+    name: String,
+    names: Vec<String>,
+    words: Vec<u32>,
+    /// The parameters' offset from the function's start, the context bits.
+    head: u32,
+    ctx: u32,
+    /// The function's start in its script, and its line and column there.
+    base: u32,
+    line: u32,
+    col: u32,
+    /// The function's text.
+    span: Vec<u8>,
+    script: Ref,
+    filename: String,
+    params: String,
+    bits: u32,
+}
+
+impl LazyFn {
+    fn read(heap: &Heap, t: Ref) -> LazyFn {
+        let a = heap.arena();
+        let atom = |id: u32| heap.atom_name(Atom::from_id(id));
+        let n_caps = u32::from(a.get::<u16>(t.0, FuncTemplate::CAPTURES));
+        let code_len: u32 = a.get(t.0, FuncTemplate::CODE_LEN);
+        let info = debug_info(heap, t.0);
+        let mut record = [(1, 1); 3];
+        for (i, e) in line_entries(bytes_of(heap, info.lines)).take(3).enumerate() {
+            record[i] = (e.line, e.col);
+        }
+        let [(line, col), (_, head), (_, ctx)] = record;
+        let text = |r: Ref| {
+            r.get()
+                .map(|s| heap.str_to_string(Str(s)))
+                .unwrap_or_default()
+        };
+        let script = info.script;
+        let (span, filename, params, bits) = match script.get() {
+            Some(s) => (
+                // Only the function's text is copied (the source is UTF-8, D2992).
+                script_source(heap, s)
+                    .and_then(|b| b.get(info.src_start as usize..info.src_end as usize))
+                    .map(<[u8]>::to_vec)
+                    .unwrap_or_default(),
+                text(a.get(s, Script::NAME)),
+                text(a.get(s, Script::PARAMS)),
+                a.get::<u32>(s, Script::OPTIONS),
+            ),
+            None => Default::default(),
+        };
+        LazyFn {
+            flags: u32::from(a.get::<u16>(t.0, FuncTemplate::FLAGS)),
+            name: match a.get::<u32>(t.0, FuncTemplate::NAME) {
+                0 => String::new(),
+                id => atom(id),
+            },
+            names: match info.names.get() {
+                Some(n) => (0..n_caps)
+                    .map(|i| atom(a.read(U32Array::DATA.at(n, i))))
+                    .collect(),
+                None => Vec::new(),
+            },
+            words: (0..n_caps)
+                .map(|i| a.read(FuncTemplate::DATA.at(t.0, code_len + 4 * i)))
+                .collect(),
+            head,
+            ctx,
+            base: info.src_start,
+            line,
+            col,
+            span,
+            script,
+            filename,
+            params,
+            bits,
+        }
+    }
+
+    /// Compiles the function into `heap`, its templates naming Script `script`, the
+    /// functions inside it lazy or not, with recording into `maps`.
+    fn compile(
+        &self,
+        heap: &mut Heap,
+        script: Ref,
+        lazy: bool,
+        #[cfg(feature = "dump")] maps: Option<&mut Vec<super::smap::FunctionMap>>,
+        #[cfg(not(feature = "dump"))] maps: Option<&mut Vec<()>>,
+    ) -> Result<Ref, CompileError> {
+        let params: Vec<&str> = if self.params.is_empty() {
+            Vec::new()
+        } else {
+            self.params.split(',').collect()
+        };
+        let opts = CompileOptions::from_bits(&self.filename, &params, self.bits);
+        let unit = Unit {
+            lazy,
+            root: true,
+            script,
+            base: self.base,
+            line: self.line,
+            col: self.col,
+        };
+        let name = if self.name.is_empty() {
+            Atom::NULL
+        } else {
+            heap.atom_str(&self.name)
+                .map_err(|e| error_at(&self.span, e.into()))?
+        };
+        let mut names = Vec::with_capacity(self.names.len());
+        for n in &self.names {
+            names.push(
+                heap.atom_str(n)
+                    .map_err(|e| error_at(&self.span, e.into()))?,
+            );
+        }
+        let lazy = Lazy {
+            flags: self.flags,
+            name,
+            names: &names,
+            words: &self.words,
+            head: self.head,
+            ctx: self.ctx,
+        };
+        let span = &self.span[..];
+        let base = self.base;
+        Parser::new(heap, span, &opts)
+            .and_then(|p| lazy.compile(p, unit, maps.map(|m| (m, base))))
+            .map_err(|e| error_at(span, e))
+    }
 }
 
 /// What a lazy compile reads from the template.
@@ -140,7 +234,17 @@ struct Lazy<'a> {
 }
 
 impl Lazy<'_> {
-    fn compile(&self, mut p: Parser<'_, '_>, unit: Unit) -> PResult<Ref> {
+    fn compile(
+        &self,
+        mut p: Parser<'_, '_>,
+        unit: Unit,
+        #[cfg(feature = "dump")] maps: Option<(&mut Vec<super::smap::FunctionMap>, u32)>,
+        #[cfg(not(feature = "dump"))] maps: Option<(&mut Vec<()>, u32)>,
+    ) -> PResult<Ref> {
+        #[cfg(feature = "dump")]
+        if maps.is_some() {
+            p.smaps = true;
+        }
         let kind = func_flags::kind(self.flags);
         // The stand-in for the enclosing function: for an arrow, the kind of the function
         // that owns its `this` (`super`, `arguments`, `new.target` resolve as there).
@@ -206,11 +310,30 @@ impl Lazy<'_> {
                 p.parse_method_function(kind, self.name, 0, flavor)?;
             }
         }
-        // The function's capture slots are the stand-in's variables, in order.
+        // The function's capture slots are the stand-in's variables, in order; its name
+        // may come from the enclosing context.
         if let Some(Some(f)) = p.done.get_mut(1) {
             f.captures = (0..self.names.len() as u32).map(Capture::Local).collect();
             f.capture_names = self.names.to_vec();
+            f.name = self.name;
         }
+        #[cfg(feature = "dump")]
+        if let Some((maps, base)) = maps {
+            let (t, ..) = p.finish_unit_with(Some(&mut *maps), None)?;
+            // Spans in the script, as an eager compile has them (the rest of a map is
+            // relative to its function).
+            for m in maps.iter_mut() {
+                m.start += base;
+                m.end += base;
+                for k in &mut m.computed_keys {
+                    k.0 += base;
+                    k.1 += base;
+                }
+            }
+            return Ok(t);
+        }
+        #[cfg(not(feature = "dump"))]
+        let _ = maps;
         let (t, ..) = p.finish_unit()?;
         Ok(t)
     }

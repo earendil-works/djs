@@ -830,10 +830,10 @@ struct Dumper<'a> {
     ts_scripts: core::cell::RefCell<Vec<u32>>,
     /// The base heap: the checker compiles the dump into it.
     scratch: Option<Heap>,
-    /// The globals of each function of a script with lazy templates that never ran
-    /// (D2990): `(script, [(start, end, globals of it and the functions inside it)])`.
-    #[allow(clippy::type_complexity)]
-    lazy_names: Vec<(u32, Vec<(u32, u32, Vec<String>)>)>,
+    /// Lazy templates that never ran (D2993): the globals of each, and the heap they
+    /// compile into.
+    lazy_globals: alloc::collections::BTreeMap<u32, Rc<Vec<String>>>,
+    lazy_heap: Option<Heap>,
     /// Plain dumps: the text written for a class whose static code is blanked
     /// (dump_statics.rs), by the class's text.
     class_texts: Vec<(String, String)>,
@@ -924,7 +924,8 @@ impl<'a> Dumper<'a> {
             ts: core::cell::Cell::new(false),
             ts_scripts: core::cell::RefCell::new(Vec::new()),
             scratch: None,
-            lazy_names: Vec::new(),
+            lazy_globals: Default::default(),
+            lazy_heap: None,
             class_texts: Vec::new(),
             fn_protos: Index::default(),
             class_locals: Vec::new(),
@@ -1673,6 +1674,8 @@ impl<'a> Dumper<'a> {
             return;
         };
         let symbol_shadowed = self.globals.iter().any(|g| g.name == "Symbol");
+        // The keys are in the map of the function that made it (D2994).
+        self.creator_maps(t);
         let Some(maps) = self.script_maps(t) else {
             return self.refuse(
                 path.into(),
@@ -1948,8 +1951,8 @@ impl<'a> Dumper<'a> {
         let h = self.h;
         let t = compiled(h, t);
         if unrun(h, t) {
-            for name in self.lazy_globals(t) {
-                if let Some(g) = self.globals.iter().position(|g| g.name == name) {
+            for name in self.lazy_globals(t).iter() {
+                if let Some(g) = self.globals.iter().position(|g| &g.name == name) {
                     self.global_root(g);
                 }
             }
@@ -1985,50 +1988,59 @@ impl<'a> Dumper<'a> {
     }
 
     /// The globals that lazy template `t`, which never ran, or a function inside it reads
-    /// or writes (D2990): its script's free names (`compiler::free_names`, the names
-    /// its code would have), parsed once per script in a heap of their own.
-    fn lazy_globals(&mut self, t: u32) -> Vec<String> {
-        let h = self.h;
-        let info = template::debug_info(h, t);
-        let Some(script) = info.script.get() else {
-            return Vec::new();
-        };
-        let i = match self.lazy_names.iter().position(|m| m.0 == script) {
-            Some(i) => i,
-            None => {
-                let names = (|| {
-                    let src = template::script_text(h, script)?;
-                    let a = h.arena();
-                    let params: Ref = a.get(script, crate::heap::cells::Script::PARAMS);
-                    let params = params
-                        .get()
-                        .map(|s| text_of(h, crate::value::Str(s)))
-                        .unwrap_or_default();
-                    let bits = a.get::<u32>(script, crate::heap::cells::Script::OPTIONS);
-                    let list: Vec<&str> = params.split(',').filter(|p| !p.is_empty()).collect();
-                    let opts = crate::compiler::CompileOptions::from_bits("dump.js", &list, bits);
-                    let mut heap = Heap::new().ok()?;
-                    let fns = crate::compiler::free_names(&mut heap, src.as_bytes(), &opts).ok()?;
-                    Some(
-                        fns.iter()
-                            .map(|f| {
-                                let g = f.globals.iter().map(|&g| atom_text(&heap, g)).collect();
-                                (f.start, f.end, g)
-                            })
-                            .collect(),
-                    )
-                })()
-                .unwrap_or_default();
-                self.lazy_names.push_out((script, names));
-                self.lazy_names.len() - 1
+    /// or writes, in the order its code would (D2993): it compiled on its own, with the
+    /// functions inside it, in a heap of its own.
+    fn lazy_globals(&mut self, t: u32) -> Rc<Vec<String>> {
+        if let Some(g) = self.lazy_globals.get(&t) {
+            return g.clone();
+        }
+        let g = Rc::new(self.lazy_globals_of(t));
+        self.lazy_globals.insert(t, g.clone());
+        g
+    }
+
+    fn lazy_globals_of(&mut self, t: u32) -> Vec<String> {
+        #[cfg(feature = "lazy")]
+        {
+            let h = self.h;
+            // Recorded by a lazy load.
+            let info = template::debug_info(h, t);
+            if let Some(script) = info.script.get()
+                && let Some(g) = self.recorded_globals(script, info.src_start, info.src_end)
+            {
+                return g;
             }
-        };
-        self.lazy_names[i]
-            .1
-            .iter()
-            .find(|f| f.0 == info.src_start && f.1 == info.src_end)
-            .map(|f| f.2.clone())
-            .unwrap_or_default()
+            if self.lazy_heap.is_none() {
+                self.lazy_heap = Heap::new().ok();
+            }
+            let Some(heap) = self.lazy_heap.as_mut() else {
+                return Vec::new();
+            };
+            let Ok(c) = crate::compiler::lazy_function_code(h, Ref(t), heap) else {
+                return Vec::new();
+            };
+            let heap = &*heap;
+            let mut out = Vec::new();
+            let mut stack = alloc::vec![c.0];
+            // Preorder, children in order, as `global_refs` walks the code.
+            while let Some(t) = stack.pop() {
+                for g in code_globals(heap, t) {
+                    out.push_out(atom_text(heap, g));
+                }
+                let n = template::child_count(heap, t);
+                for i in (0..n).rev() {
+                    if let Some(c) = template::child(heap, t, i).and_then(|r| r.get()) {
+                        stack.push_out(c);
+                    }
+                }
+            }
+            out
+        }
+        #[cfg(not(feature = "lazy"))]
+        {
+            let _ = t;
+            Vec::new()
+        }
     }
 
     /// The free names of template `t` (a closure's): its captures, and the globals it or
@@ -2040,7 +2052,7 @@ impl<'a> Dumper<'a> {
         while let Some(t) = stack.pop() {
             let t = compiled(h, t);
             let own: Vec<String> = if unrun(h, t) {
-                self.lazy_globals(t)
+                self.lazy_globals(t).to_vec()
             } else {
                 code_globals(h, t).map(|g| atom_text(h, g)).collect()
             };
@@ -2505,6 +2517,17 @@ impl<'a> Dumper<'a> {
     /// The suspension maps of `src` compiled with `params` and the options `bits`, from
     /// the VM's `Cache` or compiled in the scratch heap (and kept there).
     fn maps_of(&mut self, src: &str, params: &str, bits: u32) -> Option<Rc<Vec<FunctionMap>>> {
+        self.maps_entry(src, params, bits).0
+    }
+
+    /// [`Dumper::maps_of`], whether they are partial (D2994), and the lazy functions'
+    /// globals (D2993).
+    pub(super) fn maps_entry(
+        &mut self,
+        src: &str,
+        params: &str,
+        bits: u32,
+    ) -> (Option<Rc<Vec<FunctionMap>>>, bool, ScriptGlobals) {
         let mut cache = self.vm.dump_cache.borrow_mut();
         if let Some(i) = cache
             .maps
@@ -2512,25 +2535,61 @@ impl<'a> Dumper<'a> {
             .position(|m| m.0 == bits && m.1 == params && m.2 == src)
         {
             let m = cache.maps.remove(i);
-            let maps = m.3.clone();
+            let maps = (m.3.clone(), m.4, m.5.clone());
             cache.maps.push_out(m);
             return maps;
         }
         drop(cache);
+        (self.compile_maps(src, params, bits), false, Rc::default())
+    }
+
+    /// The complete maps of `src` (an eager compile in the scratch heap), kept in the
+    /// VM's cache in place of what it had.
+    pub(super) fn compile_maps(
+        &mut self,
+        src: &str,
+        params: &str,
+        bits: u32,
+    ) -> Option<Rc<Vec<FunctionMap>>> {
         let scratch = self.scratch_heap()?;
         let list: Vec<&str> = params.split(',').filter(|p| !p.is_empty()).collect();
         let opts = crate::compiler::CompileOptions::from_bits("dump.js", &list, bits);
         let maps = crate::compiler::suspension_maps(scratch, src.as_bytes(), &opts)
             .ok()
             .map(Rc::new);
+        self.set_maps(src, params, bits, maps.clone(), false, Rc::default());
+        maps
+    }
+
+    /// Keeps `maps` of `src` in the VM's cache (replacing an entry for the same text).
+    pub(super) fn set_maps(
+        &mut self,
+        src: &str,
+        params: &str,
+        bits: u32,
+        maps: Option<Rc<Vec<FunctionMap>>>,
+        partial: bool,
+        globals: ScriptGlobals,
+    ) {
         let mut cache = self.vm.dump_cache.borrow_mut();
+        if let Some(i) = cache
+            .maps
+            .iter()
+            .position(|m| m.0 == bits && m.1 == params && m.2 == src)
+        {
+            cache.maps.remove(i);
+        }
         if cache.maps.len() >= MAPS_KEPT {
             cache.maps.remove(0);
         }
-        cache
-            .maps
-            .push_out((bits, String::from(params), String::from(src), maps.clone()));
-        maps
+        cache.maps.push_out((
+            bits,
+            String::from(params),
+            String::from(src),
+            maps,
+            partial,
+            globals,
+        ));
     }
 
     /// The checker's table of the skeleton `text`: every function it writes, by the hash
@@ -4647,13 +4706,20 @@ const MAPS_KEPT: usize = 8;
 /// the VM's collections, its runs and image replacements (D2701).
 #[derive(Default, Clone)]
 pub(crate) struct Cache {
-    maps: Vec<CachedMaps>,
+    pub(super) maps: Vec<CachedMaps>,
 }
 
 impl Cache {
     /// The maps of a script the VM compiled itself (a plain dump it loads, 0215), in
     /// [`Dumper::maps_of`]'s order: the most recent last.
-    pub(super) fn keep(&mut self, bits: u32, src: &str, maps: Vec<FunctionMap>) {
+    pub(super) fn keep(
+        &mut self,
+        bits: u32,
+        src: &str,
+        maps: Vec<FunctionMap>,
+        partial: bool,
+        globals: Vec<(u32, u32, Vec<String>)>,
+    ) {
         if let Some(i) = self
             .maps
             .iter()
@@ -4664,13 +4730,33 @@ impl Cache {
         if self.maps.len() >= MAPS_KEPT {
             self.maps.remove(0);
         }
-        self.maps
-            .push_out((bits, String::new(), String::from(src), Some(Rc::new(maps))));
+        self.maps.push_out((
+            bits,
+            String::new(),
+            String::from(src),
+            Some(Rc::new(maps)),
+            partial,
+            Rc::new(globals),
+        ));
     }
 }
 
-/// (options bits, parameters, source, maps): `None` if the text did not compile.
-type CachedMaps = (u32, String, String, Option<Rc<Vec<FunctionMap>>>);
+/// (options bits, parameters, source, maps, partial, globals): `None` if the text did
+/// not compile.
+/// With `partial` (a plain dump the VM loaded lazily, D2994): the maps of the functions
+/// it compiled at load; the others are added when a dump needs them.
+type CachedMaps = (
+    u32,
+    String,
+    String,
+    Option<Rc<Vec<FunctionMap>>>,
+    bool,
+    ScriptGlobals,
+);
+
+/// The globals of the lazy functions a lazy load wrote (`compiler::LazyGlobals`, D2993),
+/// as text.
+pub(super) type ScriptGlobals = Rc<Vec<(u32, u32, Vec<String>)>>;
 
 /// The functions of a dump by the hash of their text (`Index` into the list), each
 /// with its span, its free names and the next entry of the same hash.

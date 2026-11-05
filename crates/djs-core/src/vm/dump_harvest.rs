@@ -56,9 +56,13 @@ pub(super) fn base_names() -> super::dump::BaseNames<'static> {
 }
 
 /// The VMs' options: frozen builtins, which dumps need (D2836).
+/// The VMs' options; with `DJS_LAZY=1` lazy functions (D2990), as the dump module runs.
 pub(super) fn frozen() -> VmOptions {
+    extern crate std;
     VmOptions {
         frozen_builtins: true,
+        #[cfg(feature = "lazy")]
+        lazy_functions: std::env::var("DJS_LAZY").is_ok_and(|v| v == "1"),
         ..VmOptions::default()
     }
 }

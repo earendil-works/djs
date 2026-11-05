@@ -403,6 +403,42 @@ impl Plan {
     }
 }
 
+/// A lazy function's span and the globals it and the functions inside it read or write,
+/// first use first, the function before those inside it (D2993).
+#[cfg(feature = "dump")]
+pub type LazyGlobals = (u32, u32, Vec<Atom>);
+
+/// The [`LazyGlobals`] of every function `plan` writes as a lazy template.
+#[cfg(all(feature = "dump", feature = "lazy"))]
+fn lazy_globals(
+    funcs: &[FuncState],
+    resolved: &[Vec<Resolved>],
+    plan: &Plan,
+    atom_undefined: Atom,
+    out: &mut Vec<LazyGlobals>,
+) {
+    for (id, f) in funcs.iter().enumerate() {
+        if plan.emit[id] != 1 {
+            continue;
+        }
+        let mut globals: Vec<Atom> = Vec::new();
+        let mut stack = vec![id];
+        while let Some(i) = stack.pop() {
+            for (r, res) in resolved[i].iter().enumerate() {
+                let a = funcs[i].refs[r].atom;
+                if matches!(res.target, Target::Global)
+                    && a != atom_undefined
+                    && !globals.contains(&a)
+                {
+                    globals.push(a);
+                }
+            }
+            stack.extend(funcs[i].children.iter().rev().map(|&c| c as usize));
+        }
+        out.push((f.src_start, f.src_end, globals));
+    }
+}
+
 /// Without lazy functions: every function emitted, the top level in pool 0, the rest in
 /// pool 1.
 #[cfg(not(feature = "lazy"))]
@@ -436,6 +472,7 @@ pub(super) fn finish(
     decls: &[TsDecl],
     builtin_names: Option<&mut Vec<Atom>>,
     #[cfg(feature = "dump")] mut maps: Option<&mut Vec<super::smap::FunctionMap>>,
+    #[cfg(feature = "dump")] globals: Option<&mut Vec<LazyGlobals>>,
 ) -> PResult<Ref> {
     // 1. Classify references, children first. (Member references add a reference to
     // their namespace parameter, classified in turn.)
@@ -518,6 +555,12 @@ pub(super) fn finish(
     };
     let line_table = LineTable::new(src);
     let plan = Plan::new(&funcs, &resolved, unit, opts.privileged);
+    #[cfg(all(feature = "dump", feature = "lazy"))]
+    if let Some(out) = globals {
+        lazy_globals(&funcs, &resolved, &plan, atom_undefined, out);
+    }
+    #[cfg(all(feature = "dump", not(feature = "lazy")))]
+    let _ = globals;
     let mut pools = plan.pools();
     let mut templates: Vec<Ref> = vec![Ref::NULL; funcs.len()];
     let mut scratch = Scratch::default();

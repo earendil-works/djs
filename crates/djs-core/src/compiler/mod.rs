@@ -409,6 +409,21 @@ pub fn compile_with_maps(
         .map_err(|e| error_at(src, e))
 }
 
+/// [`compile_lazy_unit`] and the suspension maps of the functions it compiles (D2994):
+/// lazy functions get theirs when asked for ([`lazy_function_maps`]). Unlike
+/// [`compile_with_maps`] the maps of functions without sites are kept, so that a span
+/// that is covered is known. Also the globals each lazy function reads or writes, for a
+/// dump (D2993).
+#[cfg(all(feature = "dump", feature = "lazy"))]
+pub fn compile_lazy_with_maps(
+    heap: &mut Heap,
+    src: &[u8],
+    opts: &CompileOptions<'_>,
+) -> Result<(Ref, Vec<smap::FunctionMap>, Vec<LazyGlobals>), CompileError> {
+    let result = parse(heap, src, opts, |p| p.compile_lazy_maps());
+    result.map_err(|e| error_at(src, e))
+}
+
 /// [`suspension_maps`] with the template, and a hook on the parser (tests).
 #[cfg(all(test, feature = "dump"))]
 fn suspension_maps_with(
@@ -426,7 +441,11 @@ fn suspension_maps_with(
 
 #[cfg(feature = "lazy")]
 pub use lazy::compile_lazy;
+#[cfg(all(feature = "dump", feature = "lazy"))]
+pub use lazy::{lazy_function_code, lazy_function_maps};
 pub use parser::{ClassSpan, ClassSpanKind};
+#[cfg(feature = "dump")]
+pub use resolve::LazyGlobals;
 #[cfg(feature = "dump")]
 pub use smap::{Decl, DeclKind, Node, NodeKind, Part, Role, Special, Step, Syntax};
 #[cfg(feature = "dump")]

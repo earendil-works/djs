@@ -108,7 +108,19 @@ pub(super) struct Flight<'a> {
     combos: Vec<Combo>,
     clos: Vec<Clo>,
     /// Suspension maps by script cell.
-    maps: Vec<(u32, Option<alloc::rc::Rc<Vec<FunctionMap>>>)>,
+    /// `(script, maps, partial)` (`Dumper::maps_entry`).
+    #[allow(clippy::type_complexity)]
+    maps: Vec<(
+        u32,
+        Option<alloc::rc::Rc<Vec<FunctionMap>>>,
+        bool,
+        super::ScriptGlobals,
+    )>,
+    /// The templates of lazy functions, for the maps a lazy load did not record (D2994):
+    /// built at the first need.
+    lazy: Option<LazyIndex>,
+    /// Scripts the VM's cache has no entry for (`recorded_globals`).
+    uncached: Vec<u32>,
     /// Promises in the order the dump made them: the end writes their other reactions.
     made: Vec<usize>,
     /// The activations written, where they stopped (`Vm::dump_report`).
@@ -133,6 +145,8 @@ impl<'a> Flight<'a> {
             combos: Vec::new(),
             clos: Vec::new(),
             maps: Vec::new(),
+            lazy: None,
+            uncached: Vec::new(),
             made: Vec::new(),
             sites: Vec::new(),
             supers: Vec::new(),
@@ -355,23 +369,126 @@ impl Dumper<'_> {
 
     /// The suspension maps of the script of template `t`, compiled again in the scratch
     /// heap with the options it was compiled with.
+    /// With a partial set (a plain dump loaded lazily, D2994) the map of `t`'s function
+    /// is added if it is missing.
     pub(super) fn script_maps(&mut self, t: u32) -> Option<&[FunctionMap]> {
         let h = self.h;
-        let script = template::debug_info(h, t).script.get()?;
+        let info = template::debug_info(h, t);
+        let script = info.script.get()?;
         let i = match self.fl.maps.iter().position(|m| m.0 == script) {
             Some(i) => i,
             None => {
-                let a = h.arena();
-                let text = |r: Ref| r.get().map(|s| super::text_of(h, crate::value::Str(s)));
-                let src = template::script_text(h, script);
-                let params = text(a.get::<Ref>(script, Script::PARAMS)).unwrap_or_default();
-                let bits = a.get::<u32>(script, Script::OPTIONS);
-                let maps = src.and_then(|src| self.maps_of(&src, &params, bits));
-                self.fl.maps.push_out((script, maps));
+                let (src, params, bits) = script_inputs(h, script);
+                let (maps, partial, globals) = match src {
+                    Some(src) => self.maps_entry(&src, &params, bits),
+                    None => (None, false, Default::default()),
+                };
+                self.fl.maps.push_out((script, maps, partial, globals));
                 self.fl.maps.len() - 1
             }
         };
+        let (a, b) = (info.src_start, info.src_end);
+        if self.fl.maps[i].2
+            && !self.fl.maps[i]
+                .1
+                .as_ref()
+                .is_some_and(|m| m.iter().any(|m| m.start == a && m.end == b))
+        {
+            self.complete_maps(i, a, b);
+        }
         self.fl.maps[i].1.as_deref().map(Vec::as_slice)
+    }
+
+    /// Adds the maps of the function at `a..b` to the partial set `fl.maps[i]`: of the
+    /// lazy template whose compile made its code (the innermost one around it) and of the
+    /// functions inside it, compiled again on their own (D2994). Without one, all of the
+    /// script's maps from an eager compile.
+    fn complete_maps(&mut self, i: usize, a: u32, b: u32) {
+        let h = self.h;
+        let script = self.fl.maps[i].0;
+        let (src, params, bits) = script_inputs(h, script);
+        let Some(src) = src else { return };
+        let root = self.lazy_index().root(script, a, b);
+        let more = root.and_then(|t| {
+            let heap = self.scratch_heap()?;
+            crate::compiler::lazy_function_maps(h, Ref(t), heap).ok()
+        });
+        let (maps, partial) = match more {
+            Some(more) => {
+                let mut all: Vec<FunctionMap> =
+                    self.fl.maps[i].1.as_deref().cloned().unwrap_or_default();
+                for m in more {
+                    if !all.iter().any(|x| x.start == m.start && x.end == m.end) {
+                        all.push(m);
+                    }
+                }
+                (Some(alloc::rc::Rc::new(all)), true)
+            }
+            None => (self.compile_maps(&src, &params, bits), false),
+        };
+        self.fl.maps[i].1 = maps.clone();
+        self.fl.maps[i].2 = partial;
+        let globals = self.fl.maps[i].3.clone();
+        self.set_maps(&src, &params, bits, maps, partial, globals);
+    }
+
+    /// Makes sure the maps of the function that made closure template `t` (the one whose
+    /// code evaluates its computed keys) are there, for a partial set.
+    pub(super) fn creator_maps(&mut self, t: u32) {
+        let h = self.h;
+        let Some(script) = template::debug_info(h, t).script.get() else {
+            return;
+        };
+        if !self
+            .fl
+            .maps
+            .iter()
+            .find(|m| m.0 == script)
+            .is_none_or(|m| m.2)
+        {
+            return;
+        }
+        if let Some(p) = self.lazy_index().parent(t) {
+            self.script_maps(p);
+        }
+    }
+
+    /// The globals a lazy load recorded for the lazy function at `a..b` of `script`
+    /// (D2993), if the VM's cache has that script's entry (looked up once per script).
+    pub(super) fn recorded_globals(&mut self, script: u32, a: u32, b: u32) -> Option<Vec<String>> {
+        let i = match self.fl.maps.iter().position(|m| m.0 == script) {
+            Some(i) => i,
+            None => {
+                if self.fl.uncached.contains(&script) {
+                    return None;
+                }
+                let (src, params, bits) = script_inputs(self.h, script);
+                let found = src.and_then(|src| {
+                    let cache = self.vm.dump_cache.borrow();
+                    cache
+                        .maps
+                        .iter()
+                        .find(|m| m.0 == bits && m.1 == params && m.2 == src)
+                        .map(|m| (m.3.clone(), m.4, m.5.clone()))
+                });
+                let Some((maps, partial, globals)) = found else {
+                    self.fl.uncached.push_out(script);
+                    return None;
+                };
+                self.fl.maps.push_out((script, maps, partial, globals));
+                self.fl.maps.len() - 1
+            }
+        };
+        self.fl.maps[i]
+            .3
+            .iter()
+            .find(|g| g.0 == a && g.1 == b)
+            .map(|g| g.2.clone())
+    }
+
+    fn lazy_index(&mut self) -> &LazyIndex {
+        let h = self.h;
+        self.fl.lazy.get_or_insert_with(|| LazyIndex::new(h))
     }
 
     pub(super) fn visit_activation(&mut self, n: usize, g: Obj) {
@@ -2411,4 +2528,82 @@ fn undeclared_at(sx: &crate::compiler::Syntax, site: &Site, slot: &Slot, v: Valu
         return tp > k || (tp + 1 == k && decl.parts.get(k).is_some_and(|p| p.role == Role::Init));
     }
     false
+}
+
+/// The source, parameters and option bits of Script `script`.
+fn script_inputs(h: &Heap, script: u32) -> (Option<String>, String, u32) {
+    let a = h.arena();
+    let params: Ref = a.get(script, Script::PARAMS);
+    let params = params
+        .get()
+        .map(|s| super::text_of(h, crate::value::Str(s)))
+        .unwrap_or_default();
+    (
+        template::script_text(h, script),
+        params,
+        a.get::<u32>(script, Script::OPTIONS),
+    )
+}
+
+/// The heap's lazy templates and who made each template (D2994), from one walk.
+pub(super) struct LazyIndex {
+    /// `(script, start, end, template)` of every lazy template.
+    lazy: Vec<(u32, u32, u32, u32)>,
+    /// `(child, parent)`, by child: the template whose children list holds it, or for a
+    /// lazily compiled template, its lazy template's.
+    parents: Vec<(u32, u32)>,
+}
+
+impl LazyIndex {
+    fn new(h: &Heap) -> LazyIndex {
+        use crate::heap::CellKind;
+        use crate::heap::cells::FuncTemplate;
+        let lazy_code = [crate::bytecode::Op::Lazy as u8];
+        let mut lazy = Vec::new();
+        let mut parents = Vec::new();
+        let mut compiled = Vec::new();
+        for c in h.cells().filter(|c| c.kind == CellKind::FuncTemplate) {
+            let t = c.offset;
+            let info = template::debug_info(h, t);
+            if template::code(h, t) == lazy_code {
+                if let Some(s) = info.script.get() {
+                    lazy.push_out((s, info.src_start, info.src_end, t));
+                }
+                if let Some(x) = h.arena().get::<Ref>(t, FuncTemplate::IC).get() {
+                    compiled.push_out((x, t));
+                }
+            }
+            for k in 0..template::child_count(h, t) {
+                if let Some(ch) = template::child(h, t, k).and_then(|r| r.get()) {
+                    parents.push_out((ch, t));
+                }
+            }
+        }
+        crate::sort::sort_by(&mut parents, |a, b| a.0 < b.0);
+        let mut index = LazyIndex { lazy, parents };
+        // A compiled template's parent is its lazy template's.
+        let more: Vec<(u32, u32)> = compiled
+            .iter()
+            .filter_map(|&(x, t)| index.parent(t).map(|p| (x, p)))
+            .collect();
+        if !more.is_empty() {
+            index.parents.extend(more);
+            crate::sort::sort_by(&mut index.parents, |a, b| a.0 < b.0);
+        }
+        index
+    }
+
+    /// The innermost lazy template of `script` whose span holds `a..b`.
+    fn root(&self, script: u32, a: u32, b: u32) -> Option<u32> {
+        self.lazy
+            .iter()
+            .filter(|l| l.0 == script && l.1 <= a && b <= l.2)
+            .min_by_key(|l| l.2 - l.1)
+            .map(|l| l.3)
+    }
+
+    fn parent(&self, t: u32) -> Option<u32> {
+        let i = self.parents.partition_point(|e| e.0 < t);
+        self.parents.get(i).filter(|e| e.0 == t).map(|e| e.1)
+    }
 }

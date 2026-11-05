@@ -435,9 +435,29 @@ impl<'a, 'h> Parser<'a, 'h> {
         self.f.smap = Some(Default::default());
         self.parse_top()?;
         let mut maps = Vec::new();
-        let (t, ..) = self.finish_unit_with(Some(&mut maps))?;
+        let (t, ..) = self.finish_unit_with(Some(&mut maps), None)?;
         crate::sort::sort_by(&mut maps, |a, b| (a.start, a.end) < (b.start, b.end));
         Ok((t, maps))
+    }
+
+    /// [`Parser::compile_maps`] of a lazy unit (D2994), with the globals of each of its
+    /// lazy functions.
+    #[cfg(all(feature = "dump", feature = "lazy"))]
+    pub fn compile_lazy_maps(
+        mut self,
+    ) -> PResult<(
+        Ref,
+        Vec<super::smap::FunctionMap>,
+        Vec<super::resolve::LazyGlobals>,
+    )> {
+        self.unit.lazy = true;
+        self.smaps = true;
+        self.f.smap = Some(Default::default());
+        self.parse_top()?;
+        let (mut maps, mut globals) = (Vec::new(), Vec::new());
+        let (t, ..) = self.finish_unit_with(Some(&mut maps), Some(&mut globals))?;
+        crate::sort::sort_by(&mut maps, |a, b| (a.start, a.end) < (b.start, b.end));
+        Ok((t, maps, globals))
     }
 
     /// The top-level code, up to its return.
@@ -470,13 +490,17 @@ impl<'a, 'h> Parser<'a, 'h> {
         self.finish_unit_with(
             #[cfg(feature = "dump")]
             None,
+            #[cfg(feature = "dump")]
+            None,
         )
     }
 
-    /// [`Parser::finish_unit`], filling `maps` with the suspension maps when recorded.
-    fn finish_unit_with(
+    /// [`Parser::finish_unit`], filling `maps` with the suspension maps when recorded,
+    /// and `globals` with the globals of each lazy function (`resolve::LazyGlobals`).
+    pub(super) fn finish_unit_with(
         mut self,
         #[cfg(feature = "dump")] maps: Option<&mut Vec<super::smap::FunctionMap>>,
+        #[cfg(feature = "dump")] globals: Option<&mut Vec<super::resolve::LazyGlobals>>,
     ) -> PResult<(Ref, Option<Erased>, Option<Vec<crate::heap::Atom>>)> {
         self.end_async_region();
         let top = core::mem::replace(&mut self.f, FuncState::new(0, FuncKind::Script, None));
@@ -501,6 +525,8 @@ impl<'a, 'h> Parser<'a, 'h> {
             names.as_mut(),
             #[cfg(feature = "dump")]
             maps,
+            #[cfg(feature = "dump")]
+            globals,
         )?;
         Ok((t, erased, names))
     }
