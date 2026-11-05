@@ -148,6 +148,13 @@ impl Dumper<'_> {
             {
                 out.push(cat!("binary.left@", n.start));
             }
+            // An assignment with the site on its right: its target read again (a name; a
+            // member whose object is a name holding the saved object, its key a literal
+            // or a name holding the saved primitive), and a compound one's old value where
+            // the target holds it now (D2914).
+            if n.kind == NodeKind::Assign && right_holds() {
+                self.assign_rereads(f, named, val, ftext, n, &slot, &mut out);
+            }
             if n.kind == NodeKind::Template {
                 for p in n.parts.iter().filter(|p| p.role == Role::Subst) {
                     let name = cat!("template.part@", p.start);
@@ -212,6 +219,96 @@ impl Dumper<'_> {
             }
         }
         out
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn assign_rereads(
+        &self,
+        f: Option<Obj>,
+        named: &[NamedSlot],
+        val: &dyn Fn(&NamedSlot) -> Value,
+        ftext: &str,
+        n: &crate::compiler::Node,
+        slot: &dyn Fn(&str) -> Option<Value>,
+        out: &mut Vec<String>,
+    ) {
+        let h = self.h;
+        let text = |p: &crate::compiler::Part| {
+            ftext
+                .get(p.start as usize..p.end as usize)
+                .unwrap_or("")
+                .trim()
+        };
+        let part = |r: Role| n.parts.iter().find(|p| p.role == r);
+        let name = |s: &str| cat!(s, "@", n.start);
+        let old = slot(&name("assign.old"));
+        let now = |id: &str| self.read_name(f, named, val, id);
+        if let Some(l) = part(Role::Left) {
+            // A name: only its old value is a temporary.
+            if let (Some(ov), true) = (old, is_ident(text(l)))
+                && now(text(l)).is_some_and(|v| same(h, v, ov))
+            {
+                out.push(name("assign.old"));
+            }
+            return;
+        }
+        let (Some(o), Some(pr), Some(ov)) = (
+            part(Role::Object),
+            part(Role::Property),
+            slot(&name("assign.object")),
+        ) else {
+            return;
+        };
+        let Some(Read::Ident(oid)) = parse(text(o)) else {
+            return;
+        };
+        let Some(obj) = now(oid)
+            .filter(|&v| same(h, v, ov))
+            .and_then(|v| v.as_object())
+        else {
+            return;
+        };
+        if h.object_class(obj) == ObjectClass::Proxy {
+            return;
+        }
+        let pt = text(pr);
+        let key = match pt.strip_prefix('[').and_then(|k| k.strip_suffix(']')) {
+            Some(k) => {
+                let Some(kv) = slot(&name("assign.key")) else {
+                    return;
+                };
+                let k = k.trim();
+                let ok = if is_literal(k) {
+                    true
+                } else if let Some(Read::Ident(id)) = parse(k) {
+                    now(id).is_some_and(|v| {
+                        (v.as_string().is_some() || v.as_number().is_some()) && same(h, v, kv)
+                    })
+                } else {
+                    false
+                };
+                if !ok {
+                    return;
+                }
+                kv.as_string().map(|s| text_of(h, s))
+            }
+            None => Some(String::from(pt.trim_start_matches('.').trim())),
+        };
+        if let Some(ov) = old {
+            // (Its own data property holds the old value now.)
+            let holds = key
+                .as_deref()
+                .and_then(|k| super::origin::own(h, obj, k))
+                .is_some_and(|v| same(h, v, ov));
+            if !holds {
+                return;
+            }
+            out.push(name("assign.old"));
+        }
+        out.push(name("assign.object"));
+        if pt.starts_with('[') {
+            out.push(name("assign.key"));
+        }
     }
 
     /// Whether object literal `n` (the object made so far `ov`, the site in part `k`) can

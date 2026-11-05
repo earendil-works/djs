@@ -346,6 +346,9 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   corpus+v2, ~3.5 KB); compound/member targets, numbers in template parts, user objects'
   data properties (fluff's "objects the dump has finished writing").
 
+- D2918: assignments with the site on the right written as the original's (names, members,
+  computed keys, compound old values where the target holds them now). v2 395,119 → 393,692.
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a

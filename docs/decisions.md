@@ -10126,3 +10126,13 @@ A `while`, `do`-`while` or C-style `for` around the site whose body has no `brea
 `{ let i = v; rest; for (update; test; update) body }`), where for a `for` with `let` no
 closure in the loop's text may capture the binding (one binding then stands for every
 later iteration's); otherwise the placeholder scaffold stays.
+
+## D2918: Assignments around the site are written as the original's
+date: 2026-11-05 · by: pjs · issue: 0207
+D2914 for assignments with the site on their right side: the target is read again where
+it is a name, or a member whose object is a name holding the saved object (not a proxy)
+and whose computed key is a literal or a name holding the saved string or number; a
+compound assignment's old value where the target holds it now (a name's binding, the
+object's own data property). Then K writes the assignment's text (`s += await …`,
+`o.p = await …`, `o[k] = await …`, `o.r += await …`) instead of `($djs_t0.r = 1 + await
+…)` over constants. Logical assignments and `super` targets keep their form.

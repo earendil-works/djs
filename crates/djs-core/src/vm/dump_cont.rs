@@ -2495,6 +2495,41 @@ impl G<'_, '_> {
         let opt = String::from(self.text(n.parts[op].start, n.parts[op].end));
         let logical = matches!(opt.as_str(), "&&=" | "||=" | "??=");
         let compound = opt != "=" && !logical;
+        // The assignment as written where its target and old value read again (D2914).
+        let member = n.parts.iter().any(|p| p.role == Role::Object);
+        let computed = member
+            && n.parts
+                .iter()
+                .find(|p| p.role == Role::Property)
+                .is_some_and(|p| self.text(p.start, p.end).starts_with('['));
+        let slot = |c: &str| cat!(c, "@", n.start);
+        let wanted: Vec<String> = [
+            (compound, "assign.old"),
+            (member, "assign.object"),
+            (computed && self.has(&slot("assign.key")), "assign.key"),
+        ]
+        .iter()
+        .filter(|(on, c)| *on && self.has(&slot(c)))
+        .map(|(_, c)| slot(c))
+        .collect();
+        let plain = !member
+            || n.parts
+                .iter()
+                .any(|p| p.role == Role::Object && self.text(p.start, p.end) != "super");
+        if plain && !logical && !wanted.is_empty() && wanted.iter().all(|w| self.rereads(w)) {
+            for w in &wanted {
+                self.consume(w);
+            }
+            let r = n.parts[k];
+            let e = self.expr(i + 1)?;
+            return Ok(P::L(alloc::vec![
+                s("("),
+                self.rest(n.start, r.start),
+                e,
+                self.rest(r.end, n.end),
+                s(")")
+            ]));
+        }
         let bin = String::from(opt.strip_suffix('=').unwrap_or(&opt));
         let target: P = if let Some(l) = n.parts.iter().position(|p| p.role == Role::Left) {
             let t = self.text(n.parts[l].start, n.parts[l].end).trim();

@@ -232,8 +232,10 @@ let calls = 0;
 function self(x) { calls++; return self; }
 async function nested() { self(1)(await later(8)); return calls; }
 async function left() { const a = "x"; return a + (await later(9)) + `${a}:${await later(10)}`; }
+async function assigns() { let s = "a"; s += await later("b"); const o = { r: 1 }, k = "q"; o.p = await later(2); o[k] = await later(3); o.r += await later(4); return s + JSON.stringify(o); }
+async function changed() { const o = { r: 1 }; later(0).then(() => { o.r = 10; }); o.r += await later(5); return o.r; }
 async function main() {
-  for (const f of [builtin, binding, global, reassigned, shadowed, userMethod, getter, nested, left]) print(f.name, await f());
+  for (const f of [builtin, binding, global, reassigned, shadowed, userMethod, getter, nested, left, assigns, changed]) print(f.name, await f());
 }
 main();
 "#;
@@ -253,6 +255,13 @@ main();
     }
     assert!(at(9).contains("(a + (await "), "{}", at(9));
     assert!(at(10).contains("${a}:${await "), "{}", at(10));
+    // Assignments as written (D2914): a name's compound one, members, a computed key, a
+    // member's compound one; not where the old value changed since it was read.
+    assert!(at(11).contains("(s += await "), "{}", at(11));
+    assert!(at(12).contains("(o.p = await "), "{}", at(12));
+    assert!(at(13).contains("(o[k] = await "), "{}", at(13));
+    assert!(at(14).contains("(o.r += await "), "{}", at(14));
+    assert!(!at(16).contains("(o.r += await "), "{}", at(16));
 }
 
 /// The rest of the current iteration before the loop, then the loop over the saved
