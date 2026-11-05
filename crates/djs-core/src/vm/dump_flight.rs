@@ -927,7 +927,7 @@ impl Dumper<'_> {
             };
             if matches!(clo.0, FROM_ASYNC_FULFILLED | FROM_ASYNC_REJECTED) {
                 for v in self
-                    .from_async_state(clo.1)
+                    .async_from_state(clo.1)
                     .unwrap_or([Value::UNDEFINED; FROM_ASYNC_SLOTS as usize])
                 {
                     self.edge(n, v, || cat!(path, "<fromAsync>"));
@@ -967,7 +967,7 @@ impl Dumper<'_> {
             FROM_ASYNC_FULFILLED | FROM_ASYNC_REJECTED => match data.as_object() {
                 Some(s) if h.object_class(s) == ObjectClass::Record => {
                     let st = self
-                        .from_async_state(data)
+                        .async_from_state(data)
                         .unwrap_or([Value::UNDEFINED; FROM_ASYNC_SLOTS as usize]);
                     // (An async-from-sync iterator brings its own `next`.)
                     let from_sync = st[3].as_object().is_some_and(|it| self.is_from_sync(it));
@@ -1037,7 +1037,7 @@ impl Dumper<'_> {
 
     /// Array.fromAsync's state from its closures' data: the engine's Record, or the
     /// index of the state the dump runtime's `fromAsync` holds.
-    fn from_async_state(&self, data: Value) -> Option<[Value; FROM_ASYNC_SLOTS as usize]> {
+    fn async_from_state(&self, data: Value) -> Option<[Value; FROM_ASYNC_SLOTS as usize]> {
         if let Some(i) = data.as_int() {
             return self.fl.from_async.get(i as usize).copied();
         }
@@ -1118,7 +1118,7 @@ impl Dumper<'_> {
                     && s == s2
                 {
                     // Its promise is made by the reaction: `$djs.fromAsync` again.
-                    if let Some(d) = self.from_async_state(s).and_then(|st| self.pend_of(st[0]))
+                    if let Some(d) = self.async_from_state(s).and_then(|st| self.pend_of(st[0]))
                         && self.fl.pends[d].creator == Creator::Unknown
                     {
                         self.fl.pends[d].creator = Creator::Then(p, j);
@@ -1873,7 +1873,7 @@ impl Dumper<'_> {
         let call = if consumer == Consumer::FromAsync {
             let st = self
                 .clo_of(f)
-                .and_then(|c| self.from_async_state(c.data))
+                .and_then(|c| self.async_from_state(c.data))
                 .expect("Array.fromAsync's state");
             cap = st[0];
             let mut args = alloc::vec![ql.clone()];
