@@ -1,7 +1,7 @@
 # 0225: Binary bloat: where the shipped module's bytes go and how to win them back
 
-status: open
-agent: -
+status: in-progress
+agent: bytes
 branch: issue/0225-binary-bloat
 depends-on: 0223
 guide: pages quoting sizes (generated via status.tsv)
