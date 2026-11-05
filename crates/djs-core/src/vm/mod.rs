@@ -762,13 +762,18 @@ impl Vm {
     /// Reseeds `Math.random` alone, keeping the hash key: for an embedder that keyed the
     /// VM once (pi keys its prelude image and reseeds every session from it, D2433).
     pub fn set_math_random_seed(&mut self, seed: u64) {
-        crate::builtins::number::set_math_seed(&mut self.heap, seed);
+        self.set_math_random(seed, false);
     }
 
     /// Restores a dumped run's `Math.random` state (a plain dump's `$djs.seed(lo, hi)`):
     /// as a state that ran, which the next dump writes again (D2837).
     pub fn restore_math_random(&mut self, state: u64) {
-        crate::builtins::number::restore_state(&mut self.heap, state);
+        self.set_math_random(state, true);
+    }
+
+    /// [`Vm::set_math_random_seed`], or with `restore` [`Vm::restore_math_random`].
+    pub fn set_math_random(&mut self, s: u64, restore: bool) {
+        crate::builtins::number::set_math_state(&mut self.heap, s, restore);
     }
 
     pub fn new_error(&mut self, kind: ErrorKind, message: &str) -> Result<Value, HeapError> {

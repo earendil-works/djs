@@ -92,37 +92,21 @@ pub const DEFAULT_RANDOM_SEED: u64 = 0x9E37_79B9_7F4A_7C15;
 /// string hash from it (D2433): a host that seeds from entropy gets a secret key, one in
 /// deterministic mode the same layout for the same seed.
 pub(crate) fn set_seed(heap: &mut Heap, seed: u64) {
-    let seed = if seed == 0 { DEFAULT_RANDOM_SEED } else { seed };
-    store_state(heap, seed);
-    set_used(heap, false);
+    let seed = set_math_state(heap, seed, false);
     heap.set_hash_key(crate::heap::string::hash_key_for_seed(seed));
 }
 
 /// Stores a seed for `Math.random` alone; the hash key stays (`Vm::set_math_random_seed`).
-pub(crate) fn set_math_seed(heap: &mut Heap, seed: u64) {
-    store_state(heap, if seed == 0 { DEFAULT_RANDOM_SEED } else { seed });
-    set_used(heap, false);
-}
-
-/// Restores a dumped run's `Math.random` state (`$djs.seed`): one that ran, so that the
-/// next dump writes it again (D2837).
-pub(crate) fn restore_state(heap: &mut Heap, state: u64) {
-    store_state(
-        heap,
-        if state == 0 {
-            DEFAULT_RANDOM_SEED
-        } else {
-            state
-        },
-    );
-    set_used(heap, true);
-}
-
-fn set_used(heap: &mut Heap, used: bool) {
-    let a = realm::intrinsic(heap, Intrinsic::RandomState)
-        .as_internal()
-        .expect("random state");
-    heap.value_array_set(a, 2, Value::bool(used));
+/// With `restore`, a dumped run's state (`$djs.seed`, `Vm::restore_math_random`): one
+/// that ran, so that the next dump writes it again, its seed recorded as another value
+/// (D2837). Beside the state the record holds the seed it is taken to start from:
+/// `Math.random` ran where they differ (xorshift never returns to its seed in practice).
+/// The state stored.
+pub(crate) fn set_math_state(heap: &mut Heap, s: u64, restore: bool) -> u64 {
+    let s = if s == 0 { DEFAULT_RANDOM_SEED } else { s };
+    store_state(heap, s, 0);
+    store_state(heap, if restore { !s } else { s }, 2);
+    s
 }
 
 /// The `Math.random` state as its two int32 halves (low, high), for dumps (D2624), and
@@ -133,17 +117,17 @@ pub(crate) fn random_state(heap: &Heap) -> (i32, i32, bool) {
         .as_internal()
         .expect("random state");
     let half = |i| heap.value_array_get(a, i).as_int().unwrap_or(0);
-    (half(0), half(1), heap.value_array_get(a, 2) == Value::TRUE)
+    (half(0), half(1), (half(0), half(1)) != (half(2), half(3)))
 }
 
-fn store_state(heap: &mut Heap, s: u64) {
-    // The state is two int32 halves in an internal array: heap data, so it survives
-    // snapshots and is the same in every copy.
+fn store_state(heap: &mut Heap, s: u64, at: u32) {
+    // Two int32 halves in an internal array: heap data, so it survives snapshots and is
+    // the same in every copy.
     let a = realm::intrinsic(heap, Intrinsic::RandomState)
         .as_internal()
         .expect("random state");
-    heap.value_array_set(a, 0, Value::int(s as u32 as i32));
-    heap.value_array_set(a, 1, Value::int((s >> 32) as u32 as i32));
+    heap.value_array_set(a, at, Value::int(s as u32 as i32));
+    heap.value_array_set(a, at + 1, Value::int((s >> 32) as u32 as i32));
 }
 
 /// The next `Math.random()` value: xorshift64* (as QuickJS), 52 random mantissa bits
@@ -161,8 +145,7 @@ pub(crate) fn random(heap: &mut Heap) -> f64 {
     x ^= x >> 12;
     x ^= x << 25;
     x ^= x >> 27;
-    store_state(heap, x);
-    set_used(heap, true);
+    store_state(heap, x, 0);
     let v = x.wrapping_mul(0x2545_F491_4F6C_DD1D);
     f64::from_bits((0x3ffu64 << 52) | (v >> 12)) - 1.0
 }

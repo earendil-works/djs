@@ -529,11 +529,11 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     let registry = heap.new_object(None)?;
     heap.make_dictionary(registry)?;
     set(heap, Intrinsic::SymbolRegistry, Value::object(registry));
-    // (The state's two int32 halves, and whether `Math.random` ran since the VM was
-    // seeded: a dump writes the state only then, D2837.)
-    let random = heap.alloc_value_array(3)?;
+    // (The state's two int32 halves, and its seed's: `Math.random` ran where they
+    // differ, and only then does a dump write the state, D2837.)
+    let random = heap.alloc_value_array(4)?;
     heap.arena_mut()
-        .set(random, crate::heap::cells::ValueArray::LEN, 3);
+        .set(random, crate::heap::cells::ValueArray::LEN, 4);
     set(heap, Intrinsic::RandomState, Value::internal(random));
     crate::builtins::number::set_seed(heap, crate::builtins::number::DEFAULT_RANDOM_SEED);
     let global = heap.new_object(Some(object_proto))?;

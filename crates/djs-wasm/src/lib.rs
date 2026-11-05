@@ -1448,10 +1448,15 @@ pub extern "C" fn vm_set_random_seed(vm: u32, lo: u32, hi: u32) {
 /// (`Vm::set_math_random_seed`, D2433).
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_set_math_random_seed(vm: u32, lo: u32, hi: u32) {
+    math_random(vm, lo, hi, false)
+}
+
+/// `Math.random`'s state: a seed, or a dumped run's state (one that ran, D2837).
+fn math_random(vm: u32, lo: u32, hi: u32, restore: bool) {
     with(|s| {
         s.slot(vm)
             .vm
-            .set_math_random_seed((u64::from(hi) << 32) | u64::from(lo))
+            .set_math_random((u64::from(hi) << 32) | u64::from(lo), restore)
     })
 }
 
@@ -1610,11 +1615,7 @@ pub extern "C" fn vm_open_call(vm: u32, parked: u32, fn_id: u32) -> i32 {
 /// dump writes again (D2837).
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_restore_math_random(vm: u32, lo: u32, hi: u32) {
-    with(|s| {
-        s.slot(vm)
-            .vm
-            .restore_math_random((u64::from(hi) << 32) | u64::from(lo))
-    })
+    math_random(vm, lo, hi, true)
 }
 
 /// Sets the id the next host call gets (`Vm::set_next_call_id`): after a plain dump's

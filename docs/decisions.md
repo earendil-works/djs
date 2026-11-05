@@ -10496,11 +10496,14 @@ continuation from being written below a block that declares it.
 
 ## D3008: How D2837–D2840 are carried out
 date: 2026-11-06 · by: pjs · issue: 0207
-- `Math.random`'s state record holds a third element, whether `Math.random` ran since the
-  VM was seeded (`set_random_seed`/`set_math_random_seed` clear it, a draw sets it;
-  `COMPAT_VERSION` 4). A dump writes the state only where it is set. A host restores a
-  dump's state with `Vm::restore_math_random` (wasm `vm_restore_math_random`), which sets
-  it: a re-dump of a loaded run that drew numbers writes the state again.
+- `Math.random`'s state record holds the seed's halves too (elements 2–3, set with the
+  state by `set_random_seed`/`set_math_random_seed`; `COMPAT_VERSION` 4): `Math.random`
+  ran where the state differs from it, and only then does a dump write the state (a draw
+  costs nothing more). A host restores a dump's state with `Vm::restore_math_random`
+  (wasm `vm_restore_math_random`; one code path with `set_math_random_seed`,
+  `Vm::set_math_random`, for the slim module's ceiling), which records the seed as another
+  value: a re-dump of a
+  loaded run that drew numbers writes the state again.
 - `$djs.seed` has three forms: `(lo, hi, next)`, `(lo, hi)` and `(next)` (a second
   argument `undefined`), or is left out. `next` is written only where it is not one past
   the highest reopened call's id; every host now sets the id counter after a load to
