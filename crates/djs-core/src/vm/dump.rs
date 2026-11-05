@@ -180,6 +180,21 @@ impl DumpError {
 }
 
 impl Vm {
+    /// The suspension maps this VM compiled for its dumps, of texts that are not plain
+    /// dumps, as bytes another VM of this build imports instead of compiling them again
+    /// (D3041): the compile cache's half for dumps.
+    #[cfg(feature = "compile-cache")]
+    pub fn export_dump_maps(&self) -> Vec<u8> {
+        self.dump_cache.borrow().export()
+    }
+
+    /// Takes the maps of [`Vm::export_dump_maps`]'s bytes that this VM has not; false if
+    /// they are not of this build.
+    #[cfg(feature = "compile-cache")]
+    pub fn import_dump_maps(&self, bytes: &[u8]) -> bool {
+        self.dump_cache.borrow_mut().import(bytes)
+    }
+
     /// What the VM's dumps keep for the next one, and putting it back: a benchmark times
     /// each of its repetitions as the first dump at that point (dump_perf.rs).
     #[cfg(test)]
@@ -4743,6 +4758,83 @@ const MAPS_KEPT: usize = 8;
 pub(crate) struct Cache {
     pub(super) maps: Vec<CachedMaps>,
 }
+
+#[cfg(feature = "compile-cache")]
+impl Cache {
+    /// The entries of texts that are not plain dumps (a plain dump's text is new at every
+    /// idle point), as bytes for another VM of this build (D3041).
+    pub(super) fn export(&self) -> Vec<u8> {
+        use crate::compiler::smap_codec::Code;
+        let mut out = Vec::new();
+        MAPS_MAGIC.put(&mut out);
+        super::BUILD_HASH.put(&mut out);
+        let entries: Vec<&CachedMaps> = self
+            .maps
+            .iter()
+            .filter(|m| !m.2.starts_with("\"djs-dump"))
+            .collect();
+        (entries.len() as u32).put(&mut out);
+        for m in entries {
+            m.0.put(&mut out);
+            m.1.put(&mut out);
+            m.2.put(&mut out);
+            m.3.as_ref().map(|m| m.to_vec()).put(&mut out);
+            m.4.put(&mut out);
+            (m.5.len() as u32).put(&mut out);
+            for (a, b, g) in m.5.iter() {
+                a.put(&mut out);
+                b.put(&mut out);
+                g.put(&mut out);
+            }
+        }
+        out
+    }
+
+    /// Adds the entries of [`Cache::export`]'s `bytes` this cache has no entry for; false
+    /// if they are not of this build or malformed (then nothing is added).
+    pub(super) fn import(&mut self, bytes: &[u8]) -> bool {
+        use crate::compiler::smap_codec::{Code, Reader};
+        let mut r = Reader { b: bytes, at: 0 };
+        let read = |r: &mut Reader<'_>| -> Option<Vec<CachedMaps>> {
+            if u32::get(r)? != MAPS_MAGIC || u32::get(r)? != super::BUILD_HASH {
+                return None;
+            }
+            let n = u32::get(r)?;
+            let mut out = Vec::new();
+            for _ in 0..n {
+                let bits = u32::get(r)?;
+                let params = String::get(r)?;
+                let src = String::get(r)?;
+                let maps = Option::<Vec<FunctionMap>>::get(r)?.map(Rc::new);
+                let partial = bool::get(r)?;
+                let k = u32::get(r)?;
+                let mut globals = Vec::new();
+                for _ in 0..k {
+                    globals.push((u32::get(r)?, u32::get(r)?, Vec::<String>::get(r)?));
+                }
+                out.push((bits, params, src, maps, partial, Rc::new(globals)));
+            }
+            (r.at == r.b.len()).then_some(out)
+        };
+        let Some(entries) = read(&mut r) else {
+            return false;
+        };
+        for e in entries {
+            if self.maps.iter().any(|m| m.0 == e.0 && m.1 == e.1 && m.2 == e.2) {
+                continue;
+            }
+            if self.maps.len() >= MAPS_KEPT {
+                self.maps.remove(0);
+            }
+            self.maps.push(e);
+        }
+        true
+    }
+}
+
+/// [`Cache::export`]'s first word.
+#[cfg(feature = "compile-cache")]
+const MAPS_MAGIC: u32 = u32::from_le_bytes(*b"DJSM");
 
 impl Cache {
     /// The maps of a script the VM compiled itself (a plain dump it loads, 0215), in

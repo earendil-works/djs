@@ -204,3 +204,37 @@ fn probe_import_cost() {
         );
     }
 }
+
+/// Suspension maps through bytes are the maps (D3041).
+#[cfg(feature = "dump")]
+#[test]
+fn dump_maps_round_trip() {
+    extern crate std;
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/codemode-harvest");
+    let mut n = 0;
+    for e in std::fs::read_dir(dir).unwrap() {
+        let p = e.unwrap().path();
+        if p.extension().is_none_or(|x| x != "js") {
+            continue;
+        }
+        let src = std::fs::read_to_string(&p).unwrap();
+        let opts = CompileOptions::async_body("t.js", &[]);
+        let a = vm(false);
+        let mut h = crate::heap::Heap::new().unwrap();
+        let Ok(maps) = crate::compiler::suspension_maps(&mut h, src.as_bytes(), &opts) else {
+            continue;
+        };
+        let want: Vec<String> = maps.iter().map(|m| m.text(src.as_bytes())).collect();
+        a.dump_cache
+            .borrow_mut()
+            .keep(opts.bits(), &src, maps, false, Vec::new());
+        let bytes = a.export_dump_maps();
+        let b = vm(false);
+        assert!(b.import_dump_maps(&bytes));
+        let c = b.dump_cache.borrow();
+        let got: Vec<String> = c.maps[0].3.as_ref().unwrap().iter().map(|m| m.text(src.as_bytes())).collect();
+        assert_eq!(got, want);
+        n += want.len();
+    }
+    assert!(n > 50, "{n} maps");
+}

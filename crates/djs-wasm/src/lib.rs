@@ -809,6 +809,31 @@ pub extern "C" fn vm_set_dump_source_refs(vm: u32, on: u32) {
     with(|s| s.slot(vm).source_refs = on != 0);
 }
 
+/// The suspension maps `vm` compiled for its dumps (D3041), as bytes in the out buffer for
+/// the host to give the next VM of this module (`vm_dump_maps_import`). Returns their
+/// length.
+#[cfg(feature = "dump")]
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_dump_maps_export(vm: u32) -> usize {
+    with(|s| {
+        let bytes = s.slot(vm).vm.export_dump_maps();
+        s.set_out(&bytes);
+        bytes.len()
+    })
+}
+
+/// Gives `vm` the suspension maps of `vm_dump_maps_export` in staging (`len` bytes): its
+/// dumps take them instead of compiling those scripts again. 1, or 0 for bytes of another
+/// build.
+#[cfg(feature = "dump")]
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_dump_maps_import(vm: u32, len: usize) -> u32 {
+    with(|s| {
+        let (slot, staging) = s.vm_and_staging(vm);
+        u32::from(slot.vm.import_dump_maps(staged(staging, 0, len)))
+    })
+}
+
 /// `vm_compile_file` through the compile cache (D3040, the dump module): staging holds
 /// the name, the parameter names and the source as for `vm_compile_file`, then a blob of an
 /// earlier compile of the same text and options (`blob_len` bytes, 0 for none). Returns the
