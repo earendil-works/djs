@@ -72,3 +72,21 @@ Step 1 touches dump_plain.rs's schedule and read side (mine since 0215), dump.rs
 `expr` and line emission, and the IR structs pjs's continuation code reads (`Var`,
 `Prop`, `Act` gain a key list; nothing changes for dump_cont except the added fields).
 It can go in between pjs's items once item 4's record work has settled.
+
+## Result of step 1 (measured, not merged)
+
+Built and validated: the Dumper noted the locations each data line was written with
+(`expr`, an `unnoted` guard for expressions made for their effect, a filter by the
+`$dump.` references the text holds), and plain::write took a data line's keys from them
+plus a lexer for the dump's names that knows data lines hold only double-quoted
+strings. Keys identical to the scan's over the corpus and the dump tests (a debug
+assertion compared them line by line).
+
+It saves nothing: on records (18 MB of data lines scanned per dump), instructions went
+4,045 -> 4,166 M and time 203 -> ~235 ms. Skipping the data lines' keys altogether (the
+upper bound) gives 3,698 M: the scan of data lines is ~9% of a data-heavy dump, not
+the ~25% the time samples suggested, and noting references while rendering plus the
+name lexer cost more than that. The corpus has little data: ~0%. Dropped; step 2 is not
+worth it for speed either. What a data-heavy dump spends now: rendering the data
+(`render`/`expr`, ~25%), the heap walk (`visit`, ~13%), plain::write's other work, the
+check (~7%).
