@@ -32,7 +32,7 @@ jobs, wait while load > 30) and gate rules (batch merges, check slim/test262-sli
   generator-promise-all-body}, ts/plain-fuzz-parameter-property.ts. Mine for instance-
   before-callback and for-await + Promise.all were dropped for main's own versions.
 - Seeds 3601–4800 (~23k idle points). Batch 3: nested for-in re-dump loses iterations
-  (plain-xfail, pjr), finally that awaits then always `continue`s (refused; pjs's
+  (pjr fixed it; plain case), finally that awaits then always `continue`s (refused; pjs's
   finally-dead-end covers it, mine dropped). Batch 4: parser bug, a 2+ character regex
   literal after a block inside `try` (pjp/0217 adds the case with its fix, mine dropped).
   Seeds 4401–4800: only the nested for-in shape again.
