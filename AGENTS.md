@@ -87,6 +87,9 @@ Rules:
 
 - Never commit directly on `main` and never push anywhere. `main` must always pass the
   gate.
+- Never use `git stash`: the stash is shared by every worktree, and stashes of agents
+  working in parallel get mixed up. Set work aside as a WIP commit on your branch or a patch
+  file in `work/scratch/<issue-id>/`.
 - Do not edit `work/BOARD.md` (the coordinator owns it) or other agents' issue files.
 - Put scratch files, logs and large outputs in `work/scratch/<issue-id>/`, which is
   gitignored. External checkouts such as test262 go in `vendor/` **of the primary checkout** (the
