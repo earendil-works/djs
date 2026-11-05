@@ -223,6 +223,8 @@ def pi():
     for k, xs in runs.items():
         v = median(xs)
         new[k] = round(v) if k.startswith("pibench/polls") else v
+    # The time of one 10,000-fuel slice (the adapter's poll interval) in a tight loop.
+    new["fuel/slice-us"] = round(1e6 / new["pibench/polls/djs"], 1)
     return new
 
 
@@ -323,28 +325,35 @@ def heap():
     return new
 
 
-# What the guide quotes from tests/scores/bench.tsv: status key -> benchmark.
+# What the guide quotes from tests/scores/bench.tsv. Ratios of two benchmarks of one run:
+# status key -> (numerator, denominator); the time of the first over that of the second, or
+# for throughputs (MB/s) the second's over the first's.
 BENCH = {
-    "compile/typescript-eager-mbs": "compile/typescript.js",
-    "compile/typescript-lazy-mbs": "compile/typescript.js lazy",
+    "compile/typescript-lazy-time-pct": ("compile/typescript.js lazy", "compile/typescript.js"),
+    "wire/decode-vs-json-objects": ("wasm/parse_json 10k-objects", "wasm/decode 10k-objects"),
+    "wire/decode-vs-json-string": ("wasm/parse_json 1mib-string", "wasm/decode 1mib-string"),
+    "wire/read-vs-json-objects": ("wasm/json_stringify 10k-objects", "wasm/readValue 10k-objects"),
+    "wire/read-vs-json-text": ("wasm/json_stringify 1mib-text-unicode", "wasm/readValue 1mib-text-unicode"),
 }
 
 
 def bench():
+    """[(values, commit)]: the latest run of each quoted benchmark pair, by commit."""
     latest = {}
     for line in open(os.path.join(ROOT, "tests/scores/bench.tsv"), encoding="utf-8"):
         f = line.rstrip("\n").split("\t")
         if len(f) == 6 and f[0] != "date":
-            latest[f[3]] = (f[4], f[1])
-    new, at = {}, set()
-    for k, b in BENCH.items():
-        if b not in latest:
-            sys.exit(f"status.py: no {b} in tests/scores/bench.tsv (scripts/bench.sh --record)")
-        new[k] = latest[b][0]
-        at.add(latest[b][1])
-    if len(at) != 1:
-        sys.exit(f"status.py: the quoted benchmarks come from different runs: {sorted(at)}")
-    return new, at.pop()
+            latest[f[3]] = (float(f[4]), f[5], f[1])
+    groups = {}
+    for k, (a, b) in BENCH.items():
+        if a not in latest or b not in latest:
+            sys.exit(f"status.py: no {a} or {b} in tests/scores/bench.tsv (scripts/bench.sh --record)")
+        (va, unit, ca), (vb, _, cb) = latest[a], latest[b]
+        if ca != cb:
+            sys.exit(f"status.py: {a} and {b} come from different runs ({ca}, {cb}): record them together")
+        ratio = vb / va if unit == "MB/s" else va / vb
+        groups.setdefault(ca, {})[k] = round(100 * ratio) if k.endswith("-pct") else round(ratio, 2)
+    return list(groups.items())
 
 
 def main():
@@ -376,8 +385,8 @@ def main():
         build()
         save(rows, heap())
     elif args[0] == "bench":
-        new, at = bench()
-        save(rows, new, at)
+        for at, new in bench():
+            save(rows, new, at)
     elif args[0] == "all":
         save(rows, size())
         save(rows, speed(3))
@@ -386,8 +395,8 @@ def main():
         save(rows, dumps())
         save(rows, bounds())
         save(rows, heap())
-        new, at = bench()
-        save(rows, new, at)
+        for at, new in bench():
+            save(rows, new, at)
     elif args[0] == "set":
         at = None
         if len(args) > 2 and args[1] == "--at":
