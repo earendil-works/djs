@@ -173,7 +173,7 @@ corpus	codemode-harvest/h171-load-structured.js	3519	1350
 corpus	codemode-harvest/h172-bash-structured-structured.js	33016	10988
 corpus	codemode-harvest/h173-structured.js	18116	5783
 corpus	codemode-harvest/h174-structured.js	18664	6333
-corpus	codemode-harvest/h175-models.js	11194	3944
+corpus	codemode-harvest/h175-models.js	11194	3945
 corpus	codemode-harvest/h176-bash-structured-edit-read-write.js	27434	9794
 corpus	codemode-harvest/h177-edit-read.js	19166	6065
 corpus	codemode-harvest/h178-transcribe_file.js	14186	5447
@@ -200,7 +200,7 @@ corpus	codemode-harvest/h199-load-models-read.js	241203	66358
 corpus	codemode-harvest/h200-bash-read-structured.js	20011	7611
 corpus	codemode-harvest/h201-edit.js	8833	3611
 corpus	codemode-harvest/h202-bash-structured-models.js	7907	2555
-corpus	codemode-harvest/h203-bash-structured-models-write.js	102262	30995
+corpus	codemode-harvest/h203-bash-structured-models-write.js	102262	30992
 corpus	codemode-harvest/h204-image-models.js	12455	4019
 corpus	codemode-harvest/h205-read-write.js	8005	2899
 corpus	codemode-harvest/h206-structured.js	3448	1288
@@ -208,9 +208,9 @@ corpus	codemode-harvest/h207-bash-structured-image-read.js	7099	2745
 corpus	codemode-harvest/h208-edit.js	16292	5572
 corpus	codemode-harvest/h209-bash-edit.js	13564	5105
 corpus	codemode-harvest/h210-models-read.js	40060	12636
-corpus	codemode-harvest/h211-structured.js	11482	3981
+corpus	codemode-harvest/h211-structured.js	11482	3982
 corpus	codemode-harvest/h212-transcribe_file.js	10642	4114
-corpus	codemode-harvest/h213-bash-structured-models.js	47416	14984
+corpus	codemode-harvest/h213-bash-structured-models.js	47416	14979
 corpus	codemode-harvest/h214-bash-structured-read-write.js	14366	5053
 corpus	codemode-harvest/h215-structured.js	3504	1329
 corpus	codemode-harvest/h216-bash-structured-structured.js	4516	1628
@@ -228,7 +228,7 @@ corpus	codemode-harvest/h228-edit-read.js	7321	2883
 corpus	codemode-harvest/h229-structured.js	6456	2514
 corpus	codemode-harvest/h230-image-models.js	12682	4120
 corpus	codemode-harvest/h231-bash-structured-structured-write.js	106321	32496
-corpus	codemode-harvest/h232-bash-structured-models.js	113504	32700
+corpus	codemode-harvest/h232-bash-structured-models.js	113504	32694
 corpus	codemode-harvest/h233-bash-edit.js	21171	7311
 corpus	codemode-harvest/h234-bash-structured-read.js	26708	9939
 corpus	codemode-harvest/h235-bash-structured-edit-read-write.js	41347	13007
@@ -255,7 +255,7 @@ corpus	codemode-harvest/h257-no-tools.js	10712	3462
 corpus	codemode-harvest/h258-bash-structured-image-read.js	20056	7999
 corpus	codemode-harvest/h259-edit.js	3851	1513
 corpus	codemode-harvest/h260-image-read.js	9926	3832
-corpus	codemode-harvest/h261-bash-structured-models.js	64704	20004
+corpus	codemode-harvest/h261-bash-structured-models.js	64704	19990
 corpus	codemode-harvest/h262-structured.js	12079	4053
 corpus	codemode-harvest/h263-transcribe_file.js	11217	4383
 corpus	codemode-harvest/h264-structured.js	8001	3217
@@ -264,7 +264,7 @@ corpus	codemode-harvest/h266-structured.js	3202	1302
 corpus	codemode-harvest/h268-bash-structured-image-read.js	36220	14227
 corpus	codemode-harvest/h269-bash.js	3516	1525
 corpus	codemode-harvest/h270-bash-structured.js	6855	2765
-corpus	codemode-harvest/h271-bash-structured-models.js	76077	25599
+corpus	codemode-harvest/h271-bash-structured-models.js	76077	25597
 corpus	codemode-harvest/h272-bash-structured-read-write.js	11464	4446
 corpus	codemode-harvest/h273-image-read.js	7028	2679
 corpus	codemode-harvest/h274-bash-write.js	10516	4102
@@ -335,6 +335,7 @@ corpus	codemode/plain-fuzz/template-two-awaits.js	4967	1966
 corpus	codemode/redump-copied-loops.js	84650	31861
 corpus	codemode/redump-loops.js	11582	4470
 corpus	codemode/redump-operands.js	37567	14782
+corpus	codemode/redump-stale-locals.js	16704	6053
 corpus	codemode/redump-template.js	4947	1953
 corpus	codemode/script-style.js	2992	1244
 corpus	codemode/tool-failure.js	2327	926

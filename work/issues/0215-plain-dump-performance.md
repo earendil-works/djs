@@ -46,6 +46,14 @@ Measure where plain dumps stand now and fix what regressed:
   BaseTable per fresh VM (~4% of a re-dump): skipped, wasm hosts cannot carry the cache
   across VMs. Load-side maps recording: kept (11% of a load saves 27% of the re-dump).
 
+- Batch 4: writing plain directly, step 1: built, validated, measured as a loss (records
+  4,045 -> 4,166 M; the data lines' scan is ~9% of a data-heavy dump at most), dropped;
+  notes in work/research/0215/direct-plain.md. pjz's class-with-async-method refusal:
+  a later loop iteration's not-yet-declared bindings held the earlier iteration's
+  values (no TDZ marker needed by the code) and were visited; now written as in their
+  TDZ (corpus codemode/redump-stale-locals.js). pjz's await-using-continue-after-catch
+  (batch 3b, "loop" scaffold record).
+
 ## Follow-ups
 
 ## Result
