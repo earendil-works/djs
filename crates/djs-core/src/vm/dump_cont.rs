@@ -637,6 +637,7 @@ impl G<'_, '_> {
         for (name, kind, scope, live) in decls {
             let sname = self.binding_slot(name, *scope);
             info.push_out(BDecl {
+                name: name.clone(),
                 sname: sname.clone(),
             });
             let (true, Some(sname)) = (*live, sname) else {

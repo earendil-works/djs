@@ -493,6 +493,7 @@ struct Item {
 /// A binding a block of a continuation declares (the generator's dry run lists them).
 #[derive(Clone)]
 pub(super) struct BDecl {
+    pub name: String,
     /// Its slot name in the frame, if it has one.
     pub sname: Option<String>,
 }
@@ -607,6 +608,8 @@ struct W<'x> {
     k_effects: bool,
     /// Slot values of continuations with values written in place, by activation and slot.
     vcache: alloc::collections::BTreeMap<(usize, String), String>,
+    /// Members of merged scopes written where they are used instead (D3003).
+    taken: Vec<(Sc, usize)>,
 }
 
 type R<T> = Result<T, String>;
@@ -738,6 +741,7 @@ pub(super) fn write(
         kline: None,
         k_effects: false,
         vcache: Default::default(),
+        taken: Vec::new(),
     };
     for (f, fac) in ir.factories.iter().enumerate() {
         for (s, sc) in fac.scopes.iter().enumerate() {
@@ -935,7 +939,11 @@ impl W<'_> {
             });
         let st = &mut self.acts[a];
         if !reads || st.after_go.iter().any(|n| n == name) {
-            return Some(sl.value.clone());
+            if !inline {
+                return Some(sl.value);
+            }
+            // (Inside K: closures its blocks make may be written here, D3003.)
+            return Some(self.props_in_binding(a, name, &sl.value));
         }
         if let Some(p) = st.pre.iter().find(|p| p.0 == name) {
             return Some(p.1.clone());
@@ -968,9 +976,10 @@ impl Ctx for C<'_, '_> {
         if self.dry {
             return Some(Some(init));
         }
-        // (Its value written in place, as a slot's, D3001.)
+        // (Its value written in place, as a slot's, D3001, D3003.)
         let key = cat!("<cell>", sname);
-        Some(Some(self.w.inlined_slot(self.a, &key, &init)))
+        let v = self.w.inlined_slot(self.a, &key, &init);
+        Some(Some(self.w.props_in_binding(self.a, &key, &v)))
     }
 
     fn after_go(&self, sname: &str) -> bool {
@@ -2267,9 +2276,13 @@ impl W<'_> {
                                 go.push_out(String::new());
                                 continue;
                             }
-                            // (Its lines in K where they read nothing K binds, D3002.)
+                            // (Its lines in K where they read nothing K binds, D3002;
+                            // there they may name K's bindings and closures, D3003.)
                             if self.callback_in_k(*a, &inner) {
-                                go.push_out(join(&inner, "\n"));
+                                let text = join(&inner, "\n");
+                                let text = self.bindings_in_k(*a, b, &text);
+                                let text = self.props_in_place(*a, b, &text);
+                                go.push_out(text);
                                 continue;
                             }
                             let name = if b == 0 {
@@ -2767,6 +2780,7 @@ impl W<'_> {
                             && psc == sc
                             && refs(&self.scope(sc).props[pi].text).names.contains(&named)
                             && !done.contains(&(psc, pi))
+                            && !self.taken.contains(&(psc, pi))
                         {
                             let text = self.prop_text(psc, pi);
                             lines.push_out(cat!(
@@ -2783,7 +2797,7 @@ impl W<'_> {
                 Put::Prop(..) | Put::K(_) => {
                     let (top, text) = match put {
                         Put::Prop(sc2, i2) => {
-                            if done.contains(&(sc2, i2)) {
+                            if done.contains(&(sc2, i2)) || self.taken.contains(&(sc2, i2)) {
                                 continue;
                             }
                             (ir.factories[sc2.0].name.clone(), self.prop_text(sc2, i2))

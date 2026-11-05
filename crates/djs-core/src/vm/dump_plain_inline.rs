@@ -50,6 +50,8 @@ pub(super) struct Inline {
     /// `$dump.X` references over the writer's input, by name (a value's own `$dump.X = `
     /// among them).
     pub uses: BTreeMap<String, u32>,
+    /// `$dump.F.key` references (a factory's members), by factory and key.
+    pub key_uses: BTreeMap<(String, String), u32>,
     pub pend: Vec<Pend>,
     /// The lines of each list being written (a callback's inside the top level's).
     pub stack: Vec<Vec<String>>,
@@ -155,7 +157,15 @@ pub(super) fn operand(rhs: &str) -> String {
     ]
     .iter()
     .any(|k| t.starts_with(k) && !t.as_bytes().get(k.len()).is_some_and(|&c| ident_part(c)));
-    if call_or_literal && !keyword && !super::is_fn_text(t) {
+    // (`new C(…)` is a member expression already: `new C(…).then`, `new C(…)(x)`.)
+    let new_call = t.strip_prefix("new ").is_some_and(|r| {
+        let n = r
+            .bytes()
+            .take_while(|&c| ident_part(c) || c == b'.')
+            .count();
+        n > 0 && r.as_bytes().get(n) == Some(&b'(') && r.ends_with(')')
+    });
+    if new_call || call_or_literal && !keyword && !super::is_fn_text(t) {
         String::from(t)
     } else {
         cat!("(", t, ")")
@@ -218,18 +228,233 @@ impl W<'_> {
         }
         texts.extend(ir.handles.iter().map(|h| h.1.as_str()));
         let mut uses: BTreeMap<String, u32> = BTreeMap::new();
+        let mut key_uses: BTreeMap<(String, String), u32> = BTreeMap::new();
         for t in texts {
             for (s, e) in scan_spans(t) {
                 *uses.entry(String::from(&t[s + 6..e])).or_insert(0) += 1;
+                if t.as_bytes().get(e) == Some(&b'.') {
+                    let (key, _) = super::ident_at(t, e + 1);
+                    if !key.is_empty() {
+                        *key_uses
+                            .entry((String::from(&t[s + 6..e]), String::from(key)))
+                            .or_insert(0) += 1;
+                    }
+                }
             }
         }
         self.inl.uses = uses;
+        self.inl.key_uses = key_uses;
     }
 
     /// Whether `$dump.name` is read once besides its own line (`own`: whether its line is
     /// among the counted texts).
     pub(super) fn single(&self, name: &str, own: bool) -> bool {
         self.inl.uses.get(name).copied() == Some(1 + u32::from(own))
+    }
+
+    /// Whether `$dump.F.key` (a factory's member) is read once.
+    fn single_key(&self, fac: &str, key: &str) -> bool {
+        self.inl
+            .key_uses
+            .get(&(String::from(fac), String::from(key)))
+            .copied()
+            == Some(1)
+    }
+
+    /// Member `key` of factory `fac` where it is a closure of a merged scope placed in a
+    /// block of activation `a`'s continuation: its scope, index and the block.
+    fn block_prop(&self, a: usize, fac: &str, key: &str) -> Option<(super::Sc, usize, usize)> {
+        let &f = self.fac_by_name.get(fac)?;
+        for (si, sc) in self.ir.factories[f].scopes.iter().enumerate() {
+            let Some(i) = sc.props.iter().position(|p| p.key == key) else {
+                continue;
+            };
+            let pl = self
+                .placed
+                .iter()
+                .find(|x| x.1 == super::Put::Prop((f, si), i))?
+                .0;
+            return match pl {
+                super::Pl::Block(a2, b) if a2 == a => Some(((f, si), i, b)),
+                _ => None,
+            };
+        }
+        None
+    }
+
+    /// Whether a block of activation `a`'s continuation in `(from, to]` declares one of
+    /// `names` (a closure written there would see that binding instead).
+    fn declared_between(&self, a: usize, from: usize, to: usize, names: &[String]) -> bool {
+        let blocks = &self.acts[a].blocks;
+        (from + 1..=to).any(|b| {
+            blocks
+                .get(b)
+                .is_some_and(|ds| ds.iter().any(|d| names.contains(&d.name)))
+        })
+    }
+
+    /// The block of activation `a`'s continuation that declares slot `sname`.
+    fn block_of(&self, a: usize, sname: &str) -> Option<usize> {
+        self.acts[a]
+            .blocks
+            .iter()
+            .position(|ds| ds.iter().any(|d| d.sname.as_deref() == Some(sname)))
+    }
+
+    /// `text`, a part of activation `a`'s continuation in its block `block`, with the
+    /// closures that block or one above makes for this one use written here (D3003):
+    /// `$dump.s2.todos` → `async function todos(path) {…}`, the member left out of its
+    /// block's `Object.assign`. A function's creation evaluates nothing, so it may be
+    /// later; the names it reads must be the same bindings here.
+    pub(super) fn props_in_place(&mut self, a: usize, block: usize, text: &str) -> String {
+        if !text.contains("$dump.") {
+            return String::from(text);
+        }
+        let b = text.as_bytes();
+        let mut out = String::new();
+        let mut at = 0;
+        for (s, e) in scan_spans(text) {
+            if b.get(e) != Some(&b'.') {
+                continue;
+            }
+            let fac = &text[s + 6..e];
+            let (key, end) = super::ident_at(text, e + 1);
+            if key.is_empty() || !self.single_key(fac, key) {
+                continue;
+            }
+            let Some((sc, i, pb)) = self.block_prop(a, fac, key) else {
+                continue;
+            };
+            if pb > block || self.taken.contains(&(sc, i)) {
+                continue;
+            }
+            let ptext = &self.scope(sc).props[i].text;
+            let Some(expr) = ptext.strip_prefix(key).and_then(|r| r.strip_prefix(": ")) else {
+                continue;
+            };
+            if !super::is_fn_text(expr) {
+                continue;
+            }
+            let names = super::refs(expr).names;
+            if self.declared_between(a, pb, block, &names) {
+                continue;
+            }
+            // (`(0, f)` keeps it anonymous where a name would be inferred.)
+            let prev = text[..s].trim_end();
+            let infers = (prev.ends_with('=') && !prev.ends_with("==") && !prev.ends_with("=>"))
+                || prev.ends_with(':');
+            let expr = match expr.strip_prefix("(0, ").and_then(|r| r.strip_suffix(')')) {
+                Some(inner) if !infers && super::is_fn_text(inner) => inner,
+                _ => expr,
+            };
+            let expr = if matches!(b.get(end), Some(b'.' | b'(' | b'[' | b'`')) {
+                operand(expr)
+            } else {
+                String::from(expr)
+            };
+            out.push_str(&text[at..s]);
+            out.push_str(&expr);
+            at = end;
+            self.taken.push_out((sc, i));
+            if let Some(n) = self
+                .inl
+                .key_uses
+                .get_mut(&(String::from(fac), String::from(key)))
+            {
+                *n -= 1;
+            }
+        }
+        out.push_str(&text[at..]);
+        out
+    }
+
+    /// The value `v` of binding slot `sname` (`<cell>sname` for a shared one) of activation
+    /// `a`'s continuation, with closures written in place ([`W::props_in_place`]), once.
+    pub(super) fn props_in_binding(&mut self, a: usize, sname: &str, v: &str) -> String {
+        let key = (a, cat!("<k>", sname));
+        if let Some(s) = self.vcache.get(&key) {
+            return s.clone();
+        }
+        let slot = sname.strip_prefix("<cell>").unwrap_or(sname);
+        let s = match self.block_of(a, slot) {
+            Some(block) => self.props_in_place(a, block, v),
+            None => String::from(v),
+        };
+        self.vcache.insert(key, s.clone());
+        s
+    }
+
+    /// `text`, a part of activation `a`'s continuation in its block `block`, with the
+    /// members of merged scopes that a binding of K declared at or above `block` holds
+    /// named by that binding (D3003): `$dump.s2.todos` → `todos`.
+    pub(super) fn bindings_in_k(&mut self, a: usize, block: usize, text: &str) -> String {
+        if !text.contains("$dump.") {
+            return String::from(text);
+        }
+        // The bindings whose value is a member: name, value, block.
+        let mut held: Vec<(String, String, usize)> = Vec::new();
+        for (bi, ds) in self.acts[a].blocks.iter().enumerate().take(block + 1) {
+            for d in ds {
+                let Some(sname) = &d.sname else { continue };
+                if self.acts[a].after_go.contains(sname) {
+                    continue;
+                }
+                let v = match self.acts[a].cells.iter().find(|c| c.0 == *sname) {
+                    Some(&(_, sc, v)) => {
+                        let var = &self.scope(sc).vars[v];
+                        if var.tdz {
+                            continue;
+                        }
+                        var.init.clone().unwrap_or_default()
+                    }
+                    None => match self.ir.acts[a].slots.iter().find(|s| s.name == *sname) {
+                        Some(sl) => sl.value.clone(),
+                        None => continue,
+                    },
+                };
+                let is_member = v.strip_prefix("$dump.").is_some_and(|r| {
+                    let mut ps = r.split('.');
+                    ps.next().is_some_and(super::is_ident)
+                        && ps.next().is_some_and(super::is_ident)
+                        && ps.next().is_none()
+                });
+                if is_member {
+                    held.push_out((d.name.clone(), v, bi));
+                }
+            }
+        }
+        if held.is_empty() {
+            return String::from(text);
+        }
+        let b = text.as_bytes();
+        let mut out = String::new();
+        let mut at = 0;
+        for (s, e) in scan_spans(text) {
+            if b.get(e) != Some(&b'.') {
+                continue;
+            }
+            let (key, end) = super::ident_at(text, e + 1);
+            let r = &text[s..end];
+            let Some((name, _, bb)) = held.iter().find(|h| h.1 == r) else {
+                continue;
+            };
+            // (One binding of the name: no block between declares it again, and the
+            // reference is no property key.)
+            if self.declared_between(a, *bb, block, core::slice::from_ref(name))
+                || held.iter().filter(|h| h.0 == *name).count() > 1
+            {
+                continue;
+            }
+            let fac = String::from(&text[s + 6..e]);
+            out.push_str(&text[at..s]);
+            out.push_str(name);
+            at = end;
+            if let Some(n) = self.inl.key_uses.get_mut(&(fac, String::from(key))) {
+                *n -= 1;
+            }
+        }
+        out.push_str(&text[at..]);
+        out
     }
 
     /// Starts a list of lines (a callback's, or the top level).
@@ -445,6 +670,10 @@ impl W<'_> {
         let scope = self.k_scope(a);
         let v = self.inline_site(aw, Some(0), &scope);
         if v != aw {
+            // (K's deepest block holds the site. Not K's bindings: liveness does not look
+            // into the site's operand.)
+            let last = self.acts[a].blocks.len().saturating_sub(1);
+            let v = self.props_in_place(a, last, &v);
             self.acts[a].site_val = Some(v);
         }
     }
