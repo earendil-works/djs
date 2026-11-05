@@ -229,7 +229,7 @@ Any other string goes through the wire, so text with a single non-ASCII characte
 nothing for the attempt.
 
 > **Trade-off.** A binary format over JSON. Measured in wasm, the VM decodes it
-> <!--n wire/decode-vs-json-objects .1-->1.9<!--/n--> times as fast as it parses the same objects as JSON, and <!--n wire/decode-vs-json-string .0-->16<!--/n--> times as fast for one
+> <!--n wire/decode-vs-json-objects .1-->2.0<!--/n--> times as fast as it parses the same objects as JSON, and <!--n wire/decode-vs-json-string .0-->16<!--/n--> times as fast for one
 > large string, which becomes a memory copy instead of an escaping serializer and a
 > parser. The one place it loses is the encoder on many small objects, where V8's
 > native `JSON.stringify` is faster than the JavaScript encoder; the decoder more than
@@ -259,7 +259,7 @@ string-keyed data properties, arrays with their holes, typed arrays as copies, B
 
 > **Trade-off.** Reading the arena directly over serializing in the VM. Reading a value
 > takes less time than the VM alone needs to turn it into JSON, before the host has
-> parsed anything: <!--n wire/read-vs-json-objects .1-->1.9<!--/n--> times less for many small objects, <!--n wire/read-vs-json-text .0-->10<!--/n--> times less for text with
+> parsed anything: <!--n wire/read-vs-json-objects .1-->1.7<!--/n--> times less for many small objects, <!--n wire/read-vs-json-text .0-->6<!--/n--> times less for text with
 > non-ASCII characters, and a 1 MiB string reads at memory-copy speed. The cost: the reader depends on the heap
 > layout (made safe by generating it from the engine's own table), the VM must not run
 > while a read is in progress (a collection moves cells), and sharing is not preserved,

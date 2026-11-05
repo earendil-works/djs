@@ -304,7 +304,7 @@ over dense arrays already run in leaf intrinsics.
 
 > **Trade-off.** Opt-in twins over making every builtin native. Generated Rust runs
 > several times faster than the same builtin as bytecode (on the benchmark workloads,
-> forEach callbacks run <!--n native/foreach-x .1-->2.0<!--/n--> and array methods <!--n native/arrays-x .1-->4.0<!--/n--> times as fast), but most builtins are called
+> forEach callbacks run <!--n native/foreach-x .1-->2.1<!--/n--> and array methods <!--n native/arrays-x .1-->3.7<!--/n--> times as fast), but most builtins are called
 > too rarely for that to show, and each one would add wasm code that every host loads.
 > The cost of having the option: two implementations of each twin's semantics to keep
 > equal, which is why the gate tests both backends.

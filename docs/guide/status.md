@@ -92,7 +92,7 @@ instructions.
 | `bounds/gzip` | 7895 | 7167411f0f, 2026-11-05 |
 | `bounds/instructions-max-pct` | 16.8 | 7167411f0f, 2026-11-05 |
 | `bounds/instructions-median-pct` | 10.9 | 7167411f0f, 2026-11-05 |
-| `compile/typescript-lazy-time-pct` | 56 | 7167411f0f, 2026-11-05 |
+| `compile/typescript-lazy-time-pct` | 56 | 1d4008576c, 2026-11-05 |
 | `dump/bytes` | 1835917 | 035457334f-dirty, 2026-11-05 |
 | `dump/extra-gzip` | 331830 | 035457334f-dirty, 2026-11-05 |
 | `dump/gzip` | 754146 | 035457334f-dirty, 2026-11-05 |
@@ -118,8 +118,8 @@ instructions.
 | `heap/sandbox-memory` | 655360 | 7167411f0f, 2026-11-05 |
 | `heap/string-10mib-memory` | 14024704 | 7167411f0f, 2026-11-05 |
 | `heap/string-10mib-staged-memory` | 35127296 | 7167411f0f, 2026-11-05 |
-| `native/arrays-x` | 3.97 | 7167411f0f, 2026-11-05 |
-| `native/foreach-x` | 2.0 | 7167411f0f, 2026-11-05 |
+| `native/arrays-x` | 3.74 | 1d4008576c, 2026-11-05 |
+| `native/foreach-x` | 2.1 | 1d4008576c, 2026-11-05 |
 | `slim/base` | 135056 | 035457334f-dirty, 2026-11-05 |
 | `slim/bytes` | 842966 | 035457334f-dirty, 2026-11-05 |
 | `slim/gzip` | 356917 | 035457334f-dirty, 2026-11-05 |
@@ -156,8 +156,8 @@ instructions.
 | `wasm/data` | 97917 | 035457334f-dirty, 2026-11-05 |
 | `wasm/exports` | 63 | 035457334f-dirty, 2026-11-05 |
 | `wasm/gzip` | 422316 | 035457334f-dirty, 2026-11-05 |
-| `wire/decode-vs-json-objects` | 1.89 | 7167411f0f, 2026-11-05 |
-| `wire/decode-vs-json-string` | 16.24 | 7167411f0f, 2026-11-05 |
-| `wire/read-vs-json-objects` | 1.93 | 7167411f0f, 2026-11-05 |
-| `wire/read-vs-json-text` | 10.27 | 7167411f0f, 2026-11-05 |
+| `wire/decode-vs-json-objects` | 1.98 | 1d4008576c, 2026-11-05 |
+| `wire/decode-vs-json-string` | 16.0 | 1d4008576c, 2026-11-05 |
+| `wire/read-vs-json-objects` | 1.71 | 1d4008576c, 2026-11-05 |
+| `wire/read-vs-json-text` | 5.63 | 1d4008576c, 2026-11-05 |
 <!-- /gen -->

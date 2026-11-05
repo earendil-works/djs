@@ -1,6 +1,6 @@
 # 0224: Investigate and fix the native performance regressions since 2026-11-01
 
-status: in-progress
+status: done
 agent: perfreg
 branch: issue/0224-perf-regressions
 depends-on: 0223
@@ -56,6 +56,35 @@ before restructuring code it may also touch. Batched merges, gate checks locally
 - Guide: gc.md "Sliding in place" (three passes, update and slide in one walk).
   docs/mark-compact.md got a note. Decisions D3080–D3083.
 
+- Merged the first batch (8193f2a6). Re-recording on main found two more: wire/stringify
+  still +7% (bisected with the arena fix patched in: 5c73183db7, keys not cached in
+  two-byte output; fixed, test) and startup/vm_new compiling the prelude 5.8 → 9.4 ms
+  (e3093e0c6b, 0225's intrinsic_id via a UTF-8 check per name; fixed). Recorded the
+  whole bench at 1d4008576c (load 3.0–4.1), status.py bench, regen.
+
 ## Follow-ups
+- regexp compile of `/(?<y>\d{4})-.../` is still +6% instructions over 2026-11-01: the start
+  sets of the counted `\d{4}` STARs. A `{n}` loop gives nothing back, so its follow
+  check buys little; dropping it would change bytecode and scans, measure first.
+- `wasm/instantiate` is mostly memory setup and data-segment copying: the shipped
+  module's data (98 KB now) is the lever, in size work.
+- No gate guard for prelude compile time (the intrinsic_id regression showed only in a
+  bench record); a fixed-work instruction count of `vm_new compiling the prelude` would
+  catch the next one if the gate grows a perf leg.
 
 ## Result
+All six 0223 findings resolved (work/research/0224/README.md has the bisections and numbers):
+- regexp/compile: follow sets only where a STAR uses them, fewer allocations; 0.44–0.71x
+  0223's time, at or below 2026-11-01. Guard: crates/djs-core/tests/allocs.rs.
+- wire/stringify: `Arena::truncate` moves the zeroed frontier back (mark-compact
+  regression), one-byte keys cached in two-byte output; 10k-objects 3.38 → 2.37 ms. Guards:
+  arena and stringify unit tests.
+- gc: per MiB was mostly the metric (denser objects); per collection now 238M instructions
+  (HEAD 350M, Cheney 296M) via slot plans and a fused update+slide pass. Bench reports
+  `gc/<w> collection`.
+- UTF-16 scans: no regression (instruction counts).
+- wasm/instantiate: the bench module's data segment; `wasm/instantiate shipped` added.
+- engine/djs/empty: measures the prelude since 0044; documented.
+- Also fixed: 0225's intrinsic_id slowdown of prelude compilation (9.4 → 5.9 ms).
+Shipped wasm: regexp-compile −13%, json-objects −25% instructions, the rest equal or
+better. Decisions D3080–D3083. Bench re-recorded at 1d4008576c.

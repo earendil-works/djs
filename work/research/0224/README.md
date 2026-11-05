@@ -77,15 +77,22 @@ Fix: `truncate` truncates the Vec (capacity kept). The arena re-zeroes 16 KiB ah
 allocates, so nothing reads stale bytes, and every collection saves a memset of all its
 garbage.
 
-| (native, ms) | 2026-11-01 | HEAD | branch |
+That left 10k-objects 7% above the 2026-11-01 record (2.52 vs 2.35 ms for 50fdc8e369's
+binary in the same quiet minute). A second bisect, with the arena fix patched into every
+step, found 5c73183db7 (0116, D2250): the key cache was filled and read only while the
+output buffer was one-byte, so once a two-byte string (the dataset's 日本) widened the
+output, every key of every object was quoted again. One-byte keys are now quoted into the
+cache and copied from there whatever the output's width.
+
+| (native, ms, recorded) | 2026-11-01 | 0223 (7167411f0f) | 0224 (1d4008576c) |
 | --- | ---: | ---: | ---: |
-| stringify 10k-objects | 2.29 | 3.38 | 2.54 |
-| stringify 1mib-text-unicode | 0.93–1.95 | 1.21 | 0.75 |
-| stringify tool-results | 0.69–0.94 | 0.93 | 0.66 |
+| stringify 10k-objects | 2.29 | 3.38 | 2.37 |
+| stringify 1mib-text-unicode | 0.93–1.95 | 1.21 | 0.73 |
+| stringify tool-results | 0.69–0.94 | 0.93 | 0.67 |
 
-(Branch values from a run at load ~6. The final records are in tests/scores/bench.tsv.)
-
-Guard: `arena::tests::truncate_moves_the_frontier_back`.
+Guards: `arena::tests::truncate_moves_the_frontier_back`;
+`json::stringify::tests::keys_come_from_the_cache_in_two_byte_output` (counts the key
+quotes of 100 objects after a two-byte string: 2).
 
 ### gc
 
@@ -143,6 +150,29 @@ of data and 58 µs with 515 KB. The shipped module (116 KB of data) instantiates
 Since 681e323c36 (0044), djs-difftest's djs engine runs the shared prelude in every job,
 so `empty` is a VM plus the prelude: 0.148 ms there, 0.131 ms now. The 0.005 ms records
 were a VM without the prelude. Documented in crates/djs-bench/src/engine.rs.
+
+### Found while re-recording: startup/vm_new compiling the prelude
+
+The first re-recording (on main after 0225) showed `startup/vm_new compiling the prelude`
+at 9.1–9.4 ms (0223: 5.8 ms; wasm 12.9 → 15.8 ms). Bisected to e3093e0c6b (0225, D3091,
+the compact intrinsic name tables): `intrinsic_id` searched the names through
+`intrinsic_name`, a UTF-8 check per name, and the compiler looks up every `@intrinsic`
+reference of the builtins' and the prelude's source. It compares the name bytes in place
+now: 5.9 ms native, 11.7 ms wasm, no size cost. Only the paths that build a realm from
+source pay this (the base image is built that way at build time; `vm_new` from the base
+does not compile).
+
+## Final records (1d4008576c, load 3.0–4.1)
+
+Against 0223's record (7167411f0f): regexp/compile 0.44–0.71x the time, gc per MiB 0.62x
+(records) and 0.77x (list), `gc/records collection` 7.3 ms and `gc/linked list
+collection` 16.7 ms (new), wire/stringify 0.61–0.72x, startup/vm_new compiling the
+prelude 5.87 ms (5.76), wasm/instantiate shipped 34.8 µs (new; the compiled-prelude
+module 63.7 µs). Rows more than 8% worse than 0223's: `regexp/scan` lazy dog and fox
+latin1 (instructions 2–3% lower than 23b0a946's; timings bimodal), `wire/parse_utf8
+1mib-string` and `engine/djs-bytecode/loop` (equal to 23b0a946's binary on rerun),
+`wasm/readValue 1mib-text-unicode` (one sample; 0.116 ms in the run before). None is a
+change of this issue.
 
 ## The shipped module (wasm, what pi runs)
 

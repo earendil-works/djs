@@ -147,7 +147,7 @@ it: `Object.fromEntries(map)`, `date.toISOString()`.
 
 > **Trade-off.** Reading the VM's memory over serializing in the VM. Reading a value
 > takes less time than the VM alone needs to turn it into JSON, before the host has
-> parsed anything: <!--n wire/read-vs-json-objects .1-->1.9<!--/n--> times less for many small objects, <!--n wire/read-vs-json-text .0-->10<!--/n--> times less for text with
+> parsed anything: <!--n wire/read-vs-json-objects .1-->1.7<!--/n--> times less for many small objects, <!--n wire/read-vs-json-text .0-->6<!--/n--> times less for text with
 > non-ASCII characters, and a 1 MiB string reads at memory-copy speed. The cost: no sharing or identity crosses
 > the boundary, and what crosses is data, not live objects.
 
