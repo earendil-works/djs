@@ -649,7 +649,19 @@ pub(crate) use intrinsic_id_of;
 
 /// The id of the intrinsic `name`.
 pub fn intrinsic_id(name: &str) -> Option<u16> {
-    (0..COUNT as u16).find(|&i| intrinsic_name(i) == name)
+    // Compares the bytes of each name in place: going through `intrinsic_name` (a UTF-8
+    // check per name) made compiling the builtins' and the prelude's source 1.6x slower
+    // (0224; the compiler looks every intrinsic reference up here).
+    let name = name.as_bytes();
+    let mut start = 0;
+    for (i, &end) in NAME_ENDS.iter().enumerate() {
+        let end = end as usize;
+        if end - start == name.len() && NAMES[start..end] == *name {
+            return Some(i as u16);
+        }
+        start = end;
+    }
+    None
 }
 
 /// FNV-1a over the table (names, kinds, arities, order).
