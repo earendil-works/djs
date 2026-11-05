@@ -113,6 +113,17 @@ impl Dumper<'_> {
                 let next = cat!("for-of.next@", n.start);
                 if slot(&next).is_some_and(|nv| self.frozen_lookup(itv, "next", nv)) {
                     out.push(next);
+                    // An iterator that is its own iterable (a builtin's): the loop goes on
+                    // over it as it is.
+                    let own = intrinsic(self.h, Intrinsic::IteratorProto)
+                        .as_object()
+                        .and_then(|p| self.h.get_own_property(p, crate::heap::atoms::SYM_ITERATOR))
+                        .and_then(|p| p.value());
+                    if own.is_some_and(|f| {
+                        self.frozen_get(itv, crate::heap::atoms::SYM_ITERATOR) == Some(f)
+                    }) {
+                        out.push(cat!("for-of.direct@", n.start));
+                    }
                 }
                 if self.frozen_lookup(itv, "return", Value::UNDEFINED) {
                     out.push(cat!("for-of.closeless@", n.start));
@@ -319,6 +330,27 @@ impl Dumper<'_> {
             return Some(v);
         }
         super::origin::own(h, self.vm.global(), name)
+    }
+
+    /// What `recv[key]` finds, where it finds a data property on a frozen object through
+    /// frozen objects only (after `recv` itself, which has no own `key`).
+    fn frozen_get(&self, recv: Value, key: crate::heap::Atom) -> Option<Value> {
+        let h = self.h;
+        let mut o = recv.as_object()?;
+        let mut first = true;
+        loop {
+            if h.object_class(o) == ObjectClass::Proxy || (!first && !h.frozen(o)) {
+                return None;
+            }
+            if h.own_keys(o).contains(&key) {
+                return match h.get_own_property(o, key) {
+                    Some(Property::Data { value, .. }) if !first && h.frozen(o) => Some(value),
+                    _ => None,
+                };
+            }
+            first = false;
+            o = h.get_prototype_of(o)?;
+        }
     }
 
     /// Whether `recv.key` finds `want` on a frozen object through frozen objects only

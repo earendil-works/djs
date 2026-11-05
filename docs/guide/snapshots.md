@@ -266,17 +266,15 @@ $djs.seed(2135587861, -1640531527, 4);
 globalThis.$dump = {};
 $dump.p1 = $djs.resume(3, "tools.read", [{ path: "b.md" }], {"made":["tools.read"],"answered":{"tools.read":1}});
 $dump.n2 = ["# A"];
-$dump.i3 = $djs.advance(Array.prototype.values.call(["a.md", "b.md"]), 2);
+$dump.i3 = [].values();
 $dump.Fa4 = $djs.source("notes.js", "3753c3a1172c33f7", "tools,console");
-$dump.a4 = $djs.k(async function (tools, notes) {
-const $djs_I = $djs.I;
-const $djs_i1 = $dump.i3;
+$dump.a4 = $djs.k(async function (tools, notes, $djs_i1) {
 notes.push(await $dump.p1);
-for (const path of $djs_I($djs_i1)) {
+for (const path of $djs_i1) {
   notes.push(await tools.read({ path }));
 }
 return notes.join("\n");
-}, $dump.Fa4, 1, 54).call(globalThis, $djs.host("tools"), $dump.n2);
+}, $dump.Fa4, 1, 118).call(globalThis, $djs.host("tools"), $dump.n2, $dump.i3);
 $dump.a4;
 ```
 
@@ -296,14 +294,16 @@ one object the host provides while it loads, `$djs` (D2834, D2890):
 - `$dump.a4` is what the suspended function's **continuation** returned: a function of
   the same kind whose body is the rest of the original from the `await` on, written where
   it is called. Its parameters are the values the frame held there that the rest still
-  reads (`tools`, `notes`; the dead `path` and `console` are left out), passed as the
-  call's arguments. The rest of the current loop iteration comes first, `notes.push(await
-  …)` reading `notes.push` again, which gives what the run had looked up, since builtins
-  cannot change (D2836). Then the loop goes on as written over the saved iterator;
-- the loop's iterator is made again and advanced with the same calls that put it there:
-  in-flight builtin state is re-enacted, not described by the engine's internal layout
-  (D2562). The small helpers that takes, here `$djs.advance`, the loop wrapper `$djs.I`
-  and `$djs.k`, which gives the continuation its origin record, are the same in every
+  reads (`tools`, `notes`; the dead `path` and `console` are left out) and the loop's
+  iterator, passed as the call's arguments. The rest of the current loop iteration comes
+  first, `notes.push(await …)` reading `notes.push` again, which gives what the run had
+  looked up, since builtins cannot change (D2836). Then the loop goes on as written over
+  the saved iterator itself;
+- the loop's iterator is made again as a builtin iterator over what was left of its
+  array (`[].values()`: nothing, the second path was the last), since nothing else holds the
+  array; in-flight builtin state is otherwise re-enacted with the calls that put it there,
+  not described by the engine's internal layout (D2562, D2917). The small helpers that
+  takes, here `$djs.k`, which gives the continuation its origin record, are the same in every
   dump, so the host provides them as a fixed runtime instead of each dump carrying them
   (D2903); djs makes that object for its hosts, and a host without djs imports it from
   [js/src/dump-runtime.js](../../js/src/dump-runtime.js);
@@ -311,7 +311,7 @@ one object the host provides while it loads, `$djs` (D2834, D2890):
   the script's function (`$dump.Fa4`, which the host makes again from the script it ran,
   named by its file and hash, and never calls), the await it stands for (`1`, the
   first) and the few decisions the writer took on the run's values that shaped the
-  continuation's text (`54`, as bits: whether it reads `notes.push` or the loop's `next`
+  continuation's text (`118`, as bits: whether it reads `notes.push` or the loop's `next`
   again instead of keeping what the run looked up, …). A dump of a
   run that resumed this one writes the continuation again from the original and those
   decisions, finds out that way which stretches of the continuation's text are copies of

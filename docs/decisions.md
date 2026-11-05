@@ -10109,3 +10109,20 @@ globalThis.$dump` (the module has no delete export, and the size budget no room 
 node hosts (scripts/plain-node.mjs, the sleep-dump example, js tests) delete them
 themselves. `$dump` is the dump's own holder until single-use values go where they are
 used (0216's rule 3); the host deleting it is the one interface change that needs.
+
+## D2917: Loops go on as written: builtin iterators as they are, `while` and `for` after the rest
+date: 2026-11-05 · by: pjs · issue: 0207
+0216's queue item 5, extending D2908. An array iterator ("values") over an array nothing
+else holds (dense, ordinary, no other properties) is written as a new one over the elements
+left, `["second"].values()`, instead of `$djs.advance(Array.prototype.values.call([…]),
+n)`. A loop over a saved iterator whose `next` is read again and whose `[Symbol.iterator]`
+is %IteratorPrototype%'s (through frozen objects: a builtin iterator, its own iterable) goes
+on over the iterator itself, `for (const x of $djs_i1)`, without `$djs.I` (a decision on the
+tape, `for-of.direct@N`); origin tracking reads such a loop's iterator and `next` from K's
+own loop. A loop scaffold's constants whose values the dump has before K runs (none the
+callback makes, no factory reference) are parameters of K, as the body's bindings (D2909).
+A `while`, `do`-`while` or C-style `for` around the site whose body has no `break` or
+`continue` is the rest of the iteration, then the loop as written (`while (test) body`;
+`{ let i = v; rest; for (update; test; update) body }`), where for a `for` with `let` no
+closure in the loop's text may capture the binding (one binding then stands for every
+later iteration's); otherwise the placeholder scaffold stays.

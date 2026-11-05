@@ -269,8 +269,12 @@ async function keys() { const o = { p: 1, q: 2 }; let s = ""; for (const k in o)
 async function jumps() { let s = 0; for (const x of [1, 2, 3]) { if (x === 2) continue; s += await later(x); if (x === 3) break; } return s; }
 function* gen() { try { yield 1; yield 2; } finally { print("closed"); } }
 async function generator() { let s = 0; for (const x of gen()) s += await later(x); return s; }
+async function wh() { let i = 0, s = ""; while (i < 3) { s += await later(i); i++; } return s; }
+async function dw() { let i = 0, s = ""; do { s += await later(i); i++; } while (i < 2); return s; }
+async function cfor() { let s = ""; for (let i = 0; i < 3; i++) s += await later(i); return s; }
+async function captured() { const fs = []; for (let i = 0; i < 2; i++) { await later(i); fs.push(() => i); } return fs.map((f) => f()).join(); }
 async function main() {
-  for (const f of [arr, twice, keys, jumps, generator]) print(f.name, await f());
+  for (const f of [arr, twice, keys, jumps, generator, wh, dw, cfor, captured]) print(f.name, await f());
 }
 main();
 "#;
@@ -280,9 +284,31 @@ main();
     let (failed, _, refused) = plain_chain_program("rest", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    assert!(ok >= 12, "{ok}");
+    assert!(ok >= 20, "{ok}");
     let first = plain_dump_at(src, 1);
-    assert!(first.contains("of $djs_I($djs_i"), "{first}");
+    // (An array's iterator: the loop goes on over it as it is, a parameter of K, D2917.)
+    assert!(first.contains("of $djs_i1)"), "{first}");
+    // `while`, `do`-`while` and `for` likewise (D2917); a `for` whose `let` a closure may
+    // capture keeps its scaffold (one binding per iteration).
+    let (wh, dw, cfor, captured) = (
+        plain_dump_at(src, 14),
+        plain_dump_at(src, 17),
+        plain_dump_at(src, 19),
+        plain_dump_at(src, 22),
+    );
+    assert!(
+        wh.contains("while (i < 3) {") && !wh.contains("$djs_f"),
+        "{wh}"
+    );
+    assert!(
+        dw.contains("while (i < 2) {") && !dw.contains("$djs_f"),
+        "{dw}"
+    );
+    assert!(
+        cfor.contains("for (i++; i < 3; i++)") && !cfor.contains("$djs_f"),
+        "{cfor}"
+    );
+    assert!(captured.contains("$djs_f"), "{captured}");
 }
 
 /// The body's bindings are the continuation's parameters, their values its call's

@@ -1308,6 +1308,21 @@ impl Dumper<'_> {
             Some(3) => "String.prototype[Symbol.iterator]",
             _ => "Array.prototype.values",
         };
+        // An array iterator over an array only it holds: a new one over what is left
+        // (0216's rule 7), `["second"].values()` for `advance(…values.call(["first",
+        // "second"]), 1)`.
+        if kind.is_none_or(|k| k == 1)
+            && let Some(rest) = self.lone_array_rest(target, index)
+        {
+            let els: Vec<String> = rest.into_iter().map(|v| self.expr(v, None, None)).collect();
+            if !els.iter().any(String::is_empty) {
+                let name = self.fresh("i");
+                self.line(cat!(name, " = [", join(&els, ", "), "].values();"), before);
+                self.nodes[n].loc = name.clone();
+                self.nodes[n].state = State::Done;
+                return name;
+            }
+        }
         let (t, steps) = if target.is_undefined() {
             (String::from(if kind == Some(3) { "\"\"" } else { "[]" }), 1)
         } else if kind == Some(3) {
@@ -1337,6 +1352,29 @@ impl Dumper<'_> {
         self.nodes[n].loc = name.clone();
         self.nodes[n].state = State::Done;
         name
+    }
+
+    /// The elements from `index` on of `target`, where it is an array nothing but its
+    /// iterator holds: dense, ordinary (its prototype `Array.prototype`, extensible, no
+    /// properties but its elements and `length`).
+    fn lone_array_rest(&self, target: Value, index: i32) -> Option<Vec<Value>> {
+        let h = self.h;
+        let o = target.as_object()?;
+        let tn = self.node_of(target)?;
+        if self.nodes[tn].refs != 1
+            || self.nodes[tn].cyclic
+            || self.nodes[tn].root.is_some()
+            || !h.is_extensible(o)
+            || h.get_prototype_of(o).map(Value::object) != Some(intrinsic(h, Intrinsic::ArrayProto))
+        {
+            return None;
+        }
+        let els = super::origin::elements(h, target)?;
+        let index = usize::try_from(index).ok()?;
+        if els.iter().any(|v| v.is_hole()) || h.own_keys(o).len() != els.len() + 1 {
+            return None;
+        }
+        Some(els.get(index..).map(<[Value]>::to_vec).unwrap_or_default())
     }
 
     /// An iterator helper (`map`, `take`, `Iterator.from`'s wrapper, `concat`, `zip`, …):

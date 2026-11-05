@@ -461,6 +461,17 @@ impl G<'_, '_> {
                     .push_out((p, names.clone(), P::S(cat!(join(&list, ", "), ";"))));
                 cat!("let ", join(&names, ", "), ";")
             }
+            // Values the dump has before K runs: parameters of K, its call's arguments
+            // (D2917, as the body's bindings, D2909).
+            None if pairs
+                .iter()
+                .all(|(_, v)| self.ctx.made_in(v).is_none() && !has_factory_ref(v)) =>
+            {
+                for (n, v) in pairs {
+                    self.params.push_out((n.clone(), v.clone()));
+                }
+                String::new()
+            }
             None => cat!("const ", join(&list, ", "), ";"),
         }
     }
@@ -937,6 +948,24 @@ impl G<'_, '_> {
                 if n.parts[k].role != Role::Body {
                     return no("a site in a loop's test (0203)");
                 }
+                // The rest of the iteration, then the loop as written, where nothing in the
+                // body jumps to the loop (D2917, as D2908 for for-of).
+                let bt = self.text(n.parts[k].start, n.parts[k].end);
+                if !has_ident(bt, "break") && !has_ident(bt, "continue") {
+                    let first = self.stmt(i + 1, None)?;
+                    let test = n.parts.iter().position(|p| p.role == Role::Test);
+                    let lp = match (n.kind, test) {
+                        (NodeKind::While, _) => self.rest(n.start, n.end),
+                        (_, Some(t)) => P::L(alloc::vec![
+                            s("while ("),
+                            self.rest_part(&n, t),
+                            s(") "),
+                            self.rest_part(&n, k)
+                        ]),
+                        (_, None) => return no("a do-while without its test"),
+                    };
+                    return Ok(P::L(alloc::vec![first, s("\n"), lbl(label), lp]));
+                }
                 let f = self.fresh(cat!("$djs_f", i));
                 let test = n.parts.iter().position(|p| p.role == Role::Test);
                 let test = match test {
@@ -1163,6 +1192,44 @@ impl G<'_, '_> {
         }
         let (init, test, update) = self.for_parts(n, init);
         let body = self.rest_part(n, k);
+        // The rest of the iteration, then the loop going on with its update, where nothing
+        // in the body jumps to the loop and no closure may capture a `let` of the head
+        // (one binding then stands for each iteration's) (D2917).
+        let bt = self.text(n.parts[k].start, n.parts[k].end);
+        let lt = self.text(n.start, n.end);
+        let closures = lt.contains("=>") || has_ident(lt, "function") || has_ident(lt, "class");
+        let lets = n.decls.iter().any(|d| d.kind == DeclKind::Let);
+        if !has_ident(bt, "break") && !has_ident(bt, "continue") && !(lets && closures) {
+            let own: Vec<_> = n
+                .decls
+                .iter()
+                .map(|d| (d.name.clone(), d.kind, d.scope, false))
+                .collect();
+            let own = self.declare(&own)?;
+            let first = self.stmt(i + 1, None)?;
+            let open = if n.decls.is_empty() {
+                s("{\n")
+            } else {
+                P::L(alloc::vec![s("{ "), init, s(";\n")])
+            };
+            return Ok(P::L(alloc::vec![
+                open,
+                own,
+                s("\n"),
+                first,
+                s("\n"),
+                label.unwrap_or_else(|| s("")),
+                s("for ("),
+                update.clone(),
+                s("; "),
+                test,
+                s("; "),
+                update,
+                s(") "),
+                body,
+                s(" }"),
+            ]));
+        }
         let m = self.mark("for", n.start);
         // The per-iteration scope: its bindings are declared by the head; the code the
         // dump puts there runs in the first iteration.
@@ -1373,7 +1440,12 @@ impl G<'_, '_> {
         if let Some(nx) = &next {
             pairs.push_out((nb.clone(), nx.clone()));
         }
-        let consts = cat!(self.scaffold_consts(&pairs), "\n");
+        let consts = self.scaffold_consts(&pairs);
+        let consts = if consts.is_empty() {
+            consts
+        } else {
+            cat!(consts, "\n")
+        };
         let decls: Vec<_> = n
             .decls
             .iter()
@@ -1381,9 +1453,18 @@ impl G<'_, '_> {
             .collect();
         let d = self.declare(&decls)?;
         let first = self.stmt(i + 1, None)?;
+        // (An iterator that is its own iterable, a builtin's, as it is, D2917.)
+        let direct = n.kind == NodeKind::ForOf
+            && next.is_none()
+            && self.rereads(&cat!("for-of.direct@", n.start));
         let args = match &next {
             Some(_) => cat!(ib, ", ", nb),
             None => ib.clone(),
+        };
+        let of = if direct {
+            cat!(" of ", ib, ") ")
+        } else {
+            cat!(" of $djs_I(", args, ")) ")
         };
         // (Braces only where the iteration declares something live, D2911.)
         let names = decls.iter().map(|d| d.0.clone()).collect();
@@ -1396,7 +1477,7 @@ impl G<'_, '_> {
             rec,
             P::V(n.start, head.start),
             P::V(head.start, head.end),
-            P::S(cat!(" of $djs_I(", args, ")) ")),
+            P::S(of),
             self.rest_part(n, k),
         ]))
     }

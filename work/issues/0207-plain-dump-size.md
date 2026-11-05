@@ -335,6 +335,17 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   module): one new failure, the worker backend's output-limit test, also without dumps
   (debug module speed, not this change).
 
+- 5 (D2917): array iterators over a lone array as `[rest].values()`; loops over builtin
+  iterators iterate them directly (tape `for-of.direct@N`; dump_origin's for-of reads K's
+  own loop's iterator/next when it is no `$djs.L` wrapper); scaffold constants as K
+  parameters; `while`/`do`/`for` rest-then-loop (no break/continue; `for` with `let` and a
+  closure in the loop keeps the scaffold). Score: v2 400,554 → 395,149; sleep 1,008 → 925
+  (gzip 489); corpus 7,181,966 → 7,134,411. Docs: sleep README transcript and explain,
+  continuation-dumps example, guide snapshots example (real outputs).
+- Left from item 4 (operands): string temporaries are constants since D2913 (139 in
+  corpus+v2, ~3.5 KB); compound/member targets, numbers in template parts, user objects'
+  data properties (fluff's "objects the dump has finished writing").
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a

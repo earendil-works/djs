@@ -644,7 +644,13 @@ impl Dumper<'_> {
                     // (Only while K is inside its scaffold: a later iteration of an
                     // outer loop runs the loop as copied text.)
                     if let Some(w) = kslot(&cat!("for-of.iterator@", r.2)) {
-                        let (it, next) = unwrap_loop(h, w)?;
+                        // (Over the saved iterator itself, D2917: K's loop's own `next`.)
+                        let (it, next) = unwrap_loop(h, w).unwrap_or_else(|| {
+                            (
+                                w,
+                                kslot(&cat!("for-of.next@", r.2)).unwrap_or(Value::UNDEFINED),
+                            )
+                        });
                         return Some(if c == "for-of.iterator" { it } else { next });
                     }
                     // K in the rest of the iteration before its loop (D2908): the record's
