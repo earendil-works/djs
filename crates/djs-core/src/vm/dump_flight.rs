@@ -2275,7 +2275,7 @@ fn from_sync_partner(named: &[NamedSlot], next: &NamedSlot) -> Option<Place> {
 }
 
 /// Hidden locals the loader makes itself.
-fn computed_hidden(name: &str) -> bool {
+pub(super) fn computed_hidden(name: &str) -> bool {
     matches!(
         name,
         "<state>" | "this" | "new.target" | "<active>" | "<home>"

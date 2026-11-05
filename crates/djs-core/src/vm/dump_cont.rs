@@ -19,7 +19,10 @@ use super::{is_ident, join, quote};
 use crate::buf::PushOut;
 use crate::compiler::{DeclKind, Node, NodeKind, Role, Special};
 use crate::interp::run::suspend;
+use canon::Out;
 
+#[path = "dump_cont_canon.rs"]
+pub(super) mod canon;
 #[path = "dump_cont_heads.rs"]
 mod heads;
 #[path = "dump_cont_pattern.rs"]
@@ -51,14 +54,24 @@ enum P {
     /// A block of K: the names it declares, whether it is written in braces when one of
     /// them is left, its content.
     Scope(Vec<String>, bool, alloc::boxed::Box<P>),
+    /// A temporary's literal written in place (`cmap[.0]`): a piece of its own, so that a
+    /// re-dump reads the literal back from K's text (D2913).
+    Lit(usize, String),
 }
 
 fn s(t: &str) -> P {
     P::S(String::from(t))
 }
 
-/// Writes activation `act`'s continuation.
+/// Writes activation `act`'s continuation, with what a re-dump needs to make its layout
+/// again (D2913, dump_cont_canon.rs).
 pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
+    canon::generate(act, ctx)
+}
+
+/// A continuation as pieces: generated text, copies of the original, marks. `replay`:
+/// the tape of a first run, to write the same shape again.
+fn run(act: &Act, ctx: &mut dyn Ctx, replay: Option<&[u32]>) -> R<Out> {
     if act.site.gap.is_some() {
         return no(
             "a site inside a construct the compiler does not record (a pattern, a class body)",
@@ -111,6 +124,8 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
         params: Vec::new(),
         deferred: Vec::new(),
         marks: true,
+        tape: Vec::new(),
+        replay: replay.map(|r| (r.to_vec(), 0)),
     };
     let mut body = g.body()?;
     if !g.deferred.is_empty() {
@@ -155,6 +170,17 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
         (false, _) => cat!("async function* (", ps, ") {\n"),
     };
     let args: Vec<String> = g.params.iter().map(|p| p.1.clone()).collect();
+    if let Some((tape, at)) = &g.replay
+        && *at != tape.len()
+    {
+        return Err(cat!(
+            "a tape of ",
+            tape.len(),
+            " decisions, ",
+            *at,
+            " taken"
+        ));
+    }
     match &act.super_proto {
         // A method of an object whose prototype is the original's home object's: its
         // `super` reads what the original's does. Offsets (`segs`, `scaf`) are in the
@@ -166,7 +192,7 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
                 _ => cat!("async *K(", ps, ") {\n"),
             };
             let mut k = g.flatten(P::L(alloc::vec![P::S(m), P::Helpers, body, close]));
-            k.text = cat!("({ __proto__: ", p, ", ", k.text, " }).K");
+            k.wrap = Some(String::from(p));
             k.args = args;
             Ok(k)
         }
@@ -306,6 +332,11 @@ struct G<'a, 'c> {
     /// Assignments that wait for a part of the dump's callback (D2907): the part, the
     /// statement.
     deferred: Vec<(usize, Vec<String>, P)>,
+    /// The decisions taken on values that shape K (D2913), in order: what a re-dump
+    /// replays to write the same pieces again.
+    tape: Vec<u32>,
+    /// Writing again from a tape: it, and how far it was read.
+    replay: Option<(Vec<u32>, usize)>,
 }
 
 impl G<'_, '_> {
@@ -354,6 +385,39 @@ impl G<'_, '_> {
         }
         self.scaf.push_out((kind, f, 0, String::new()));
         P::Mark(self.scaf.len() - 1)
+    }
+
+    /// Decision `v`, taken on a value, that shapes K: recorded on the tape, or, writing
+    /// again, the recorded one (D2913). Past the tape's end: `u32::MAX`, which no
+    /// decision takes, so the shapes differ.
+    fn steer(&mut self, v: u32) -> u32 {
+        match &mut self.replay {
+            Some((tape, at)) => {
+                let v = tape.get(*at).copied().unwrap_or(u32::MAX);
+                *at += 1;
+                v
+            }
+            None => {
+                self.tape.push_out(v);
+                v
+            }
+        }
+    }
+
+    /// A completion's kind (a number, D2733), a decision on the tape.
+    fn steer_kind(&mut self, kind: &str) -> R<String> {
+        let k = match kind.parse::<u32>() {
+            Ok(k) if self.replay.is_none() => k,
+            _ if self.replay.is_some() => 0,
+            _ => return Err(cat!("plain dumps: a completion of kind ", kind)),
+        };
+        Ok(cat!(self.steer(k)))
+    }
+
+    /// Whether K evaluates temporary `slot` again (D2836), a decision on the tape.
+    fn rereads(&mut self, slot: &str) -> bool {
+        let v = self.replay.is_none() && self.ctx.rereads(slot);
+        self.steer(u32::from(v)) == 1
     }
 
     fn has(&mut self, name: &str) -> bool {
@@ -414,17 +478,31 @@ impl G<'_, '_> {
 
     /// A temporary of the site's statement: a literal in place, else a const declared
     /// right before the statement (the dump's values are reachable only while it loads).
+    /// (A string is no literal here: a re-dump reads literals back from K's text as
+    /// values, D2913, and makes no strings.)
     fn tmp(&mut self, construct: &str, off: u32) -> R<P> {
         let slot = cat!(construct, "@", off);
         let v = self.take(&slot)?;
-        if literal(&v) {
+        let lit = literal(&v) && !v.starts_with('"');
+        if self.steer(u32::from(lit)) == 1 {
             self.cmap.push_out((slot, v.clone(), true));
-            return Ok(P::S(v));
+            return Ok(P::Lit(self.cmap.len() - 1, v));
         }
+        Ok(P::S(self.temp_of(slot, v)))
+    }
+
+    /// [`G::tmp`] as text, which K uses inside text of its own: always a constant.
+    fn tmp_text(&mut self, construct: &str, off: u32) -> R<String> {
+        let slot = cat!(construct, "@", off);
+        let v = self.take(&slot)?;
+        Ok(self.temp_of(slot, v))
+    }
+
+    fn temp_of(&mut self, slot: String, v: String) -> String {
         let name = self.new_temp();
         self.temps.push_out(cat!(name, " = ", v));
         self.cmap.push_out((slot, name.clone(), false));
-        Ok(P::S(name))
+        name
     }
 
     /// A fresh name for a temporary of the site's statement.
@@ -1146,7 +1224,7 @@ impl G<'_, '_> {
             "for-of"
         };
         if !disposing
-            && self.ctx.rereads(&cat!(c, ".closeless@", n.start))
+            && self.rereads(&cat!(c, ".closeless@", n.start))
             && !n
                 .decls
                 .iter()
@@ -1275,7 +1353,7 @@ impl G<'_, '_> {
         let nslot = cat!(c, ".next@", n.start);
         let next = if n.kind == NodeKind::ForIn || !self.has(&nslot) {
             None
-        } else if self.ctx.rereads(&nslot) {
+        } else if self.rereads(&nslot) {
             self.consume(&nslot);
             None
         } else {
@@ -1512,6 +1590,7 @@ impl G<'_, '_> {
             s("")
         } else if self.has(&kname) {
             let k = self.take(&kname)?;
+            let k = self.steer_kind(&k)?;
             // (The original's at this site, should K stop here again.)
             self.cmap.push_out((kname.clone(), k.clone(), true));
             match k.parse::<i32>() {
@@ -1624,6 +1703,7 @@ impl G<'_, '_> {
             Role::Finally => {
                 // The rest of the finally block, then the completion that entered it.
                 let kind = self.take(&cat!("completion.kind@", n.start))?;
+                let kind = self.steer_kind(&kind)?;
                 let v = self.take(&cat!("completion.value@", n.start))?;
                 let cv = self.fresh(cat!("$djs_c", i));
                 let done = match kind.as_str() {
@@ -2019,7 +2099,7 @@ impl G<'_, '_> {
             .any(|&m| m < k && n.parts[m].role == Role::Spread);
         let construct = if new { "new.arg" } else { "call.arg" };
         let (fc, ft) = (cat!("call.callee@", n.start), cat!("call.this@", n.start));
-        if !new && !spread_before && self.ctx.rereads(&fc) && self.ctx.rereads(&ft) {
+        if !new && !spread_before && self.rereads(&fc) && self.rereads(&ft) {
             // The call as written: its callee and `this` read again (D2836). Origin
             // tracking maps K's call to the original's through the copied text.
             self.consume(&fc);
@@ -2037,7 +2117,7 @@ impl G<'_, '_> {
                 } else {
                     self.rest_part(n, m)
                 };
-                let copied = m > k || (m < k && self.ctx.rereads(&cat!(construct, "@", p.start)));
+                let copied = m > k || (m < k && self.rereads(&cat!(construct, "@", p.start)));
                 out.push_out(if copied {
                     e
                 } else {
@@ -2160,7 +2240,7 @@ impl G<'_, '_> {
     fn operand(&mut self, construct: &str, n: &Node, m: usize) -> R<P> {
         let p = n.parts[m];
         let slot = cat!(construct, "@", p.start);
-        if self.ctx.rereads(&slot) {
+        if self.rereads(&slot) {
             self.consume(&slot);
             return Ok(self.rest_part(n, m));
         }
@@ -2405,11 +2485,7 @@ impl G<'_, '_> {
 
     fn object(&mut self, i: usize, n: &Node, k: usize) -> R<P> {
         // The object made so far; the rest of the literal is defined on it in order.
-        let o = self.tmp("object.literal", n.start)?;
-        let ot = match &o {
-            P::S(t) => t.clone(),
-            _ => String::new(),
-        };
+        let ot = self.tmp_text("object.literal", n.start)?;
         // The first part of the property holding the site.
         let mut first = k;
         if n.parts[k].role == Role::Value && k > 0 {
@@ -2534,150 +2610,6 @@ impl G<'_, '_> {
         out.push_out(P::S(cat!(", ", ot, ")")));
         Ok(P::L(out))
     }
-
-    // ---------------------------------------------------------------- text
-
-    /// The continuation's text, its segments (where it copied the original) and its
-    /// scaffold records.
-    fn flatten(mut self, parts: P) -> KText {
-        let mut out = Flat::default();
-        let act = self.act;
-        out.walk(&parts, &act.ftext, &mut self.scaf);
-        let mut text = out.text;
-        // K's helpers, captured where the marker is.
-        let names: Vec<&str> = [
-            "R", "G", "C", "D", "A", "L", "N", "Q", "X", "O", "I", "E", "P", "S", "Y", "U", "DD",
-        ]
-        .into_iter()
-        .filter(|h| text.contains(&cat!("$djs_", *h, "(")))
-        // A continuation of a continuation declares them already (its own
-        // first line, restored from its slot).
-        .filter(|h| !act.slots.iter().any(|s| s.name == cat!("$djs_", *h)))
-        .collect();
-        let mut decl = String::new();
-        if !names.is_empty() {
-            let list: Vec<String> = names
-                .iter()
-                .map(|h| cat!("$djs_", *h, " = $djs.", *h))
-                .collect();
-            decl = cat!("const ", join(&list, ", "), ";\n");
-        }
-        if self.uses_arguments && !self.declares_arguments(&text) {
-            decl.push_str("const $djs_arguments = undefined;\n");
-        }
-        let at = out.helpers.unwrap_or(0);
-        text.insert_str(at, &decl);
-        let shift = decl.len() as u32;
-        let mut segs = out.segs;
-        for x in segs.chunks_mut(3) {
-            if x[0] as usize >= at {
-                x[0] += shift;
-            }
-        }
-        let mut scaf = Vec::new();
-        for (k, f, ko, extra) in &self.scaf {
-            let ko = if *ko as usize >= at { ko + shift } else { *ko };
-            scaf.push_out(cat!("[", quote(k), ",", *f, ",", ko, extra, "]"));
-        }
-        let cmap: Vec<String> = self
-            .cmap
-            .iter()
-            .map(|(slot, v, lit)| {
-                if *lit {
-                    cat!("[", quote(slot), ",1,", v, "]")
-                } else {
-                    cat!("[", quote(slot), ",0,", quote(v), "]")
-                }
-            })
-            .collect();
-        KText {
-            text,
-            segs,
-            scaf: cat!("[", join(&scaf, ","), "]"),
-            cmap: cat!("[", join(&cmap, ","), "]"),
-            used: self.used,
-            args: Vec::new(),
-        }
-    }
-
-    fn declares_arguments(&self, text: &str) -> bool {
-        text.contains("var $djs_arguments = ")
-    }
-}
-
-#[derive(Default)]
-struct Flat {
-    text: String,
-    segs: Vec<u32>,
-    helpers: Option<usize>,
-}
-
-impl Flat {
-    fn walk(&mut self, p: &P, ftext: &str, scaf: &mut [(&'static str, u32, u32, String)]) {
-        match p {
-            P::S(t) | P::Decl(_, t) => {
-                // (No blank lines of K's own.)
-                let t = if self.text.ends_with('\n') {
-                    t.trim_start_matches('\n')
-                } else {
-                    t.as_str()
-                };
-                // Text that goes on the original's right after a copied stretch is part
-                // of it (one segment, not two).
-                let at = self.text.len() as u32;
-                if let [.., ks, fs, len] = self.segs[..]
-                    && ks + len == at
-                    && !t.is_empty()
-                    && ftext.get((fs + len) as usize..(fs + len) as usize + t.len()) == Some(t)
-                {
-                    let n = self.segs.len();
-                    self.segs[n - 1] += t.len() as u32;
-                }
-                self.text.push_str(t)
-            }
-            P::Scope(names, braced, q) => {
-                let braces = *braced && !names.is_empty();
-                if braces {
-                    self.walk(&s("{\n"), ftext, scaf);
-                }
-                self.walk(q, ftext, scaf);
-                if braces {
-                    self.walk(&s("\n}\n"), ftext, scaf);
-                }
-            }
-            P::V(a, b) => {
-                let at = self.text.len() as u32;
-                if b > a
-                    && let [.., ks, fs, len] = self.segs[..]
-                    && ks + len == at
-                    && fs + len == *a
-                {
-                    // (A copy that goes on the last one.)
-                    let n = self.segs.len();
-                    self.segs[n - 1] += b - a;
-                    self.text
-                        .push_str(ftext.get(*a as usize..*b as usize).unwrap_or(""));
-                } else if b > a {
-                    self.segs.push_out(self.text.len() as u32);
-                    self.segs.push_out(*a);
-                    self.segs.push_out(b - a);
-                    self.text
-                        .push_str(ftext.get(*a as usize..*b as usize).unwrap_or(""));
-                }
-            }
-            P::Mark(i) => {
-                if let Some(r) = scaf.get_mut(*i) {
-                    r.2 = self.text.len() as u32;
-                }
-            }
-            P::Helpers => self.helpers = Some(self.text.len()),
-            P::L(list) => {
-                for q in list {
-                    self.walk(q, ftext, scaf);
-                }
-            }
-        }
-    }
 }
 
 /// `p` as text, without the lines of binding `skip` (for liveness, D2911).
@@ -2689,6 +2621,7 @@ fn render(p: &P, ftext: &str, skip: &str, out: &mut String) {
                 out.push_str(t)
             }
         }
+        P::Lit(_, t) => out.push_str(t),
         P::V(a, b) => out.push_str(ftext.get(*a as usize..*b as usize).unwrap_or("")),
         P::Mark(_) | P::Helpers => {}
         P::L(list) => {

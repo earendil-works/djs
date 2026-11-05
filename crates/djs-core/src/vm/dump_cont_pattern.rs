@@ -126,6 +126,7 @@ impl G<'_, '_> {
         }
         let iname = cat!("pattern.iterator@", n.start);
         let done = self.ctx.slot(&iname).is_none_or(|v| v == "undefined");
+        let done = self.steer(u32::from(done)) == 1;
         let rec = if done {
             if self.has(&iname) {
                 self.take(&iname)?;
@@ -180,18 +181,12 @@ impl G<'_, '_> {
             .ok_or("plain dumps: a pattern at the site")?;
         // (Dead once the last property read it: then nothing reads it again.)
         let src = if self.has(&cat!("pattern.source@", n.start)) {
-            match self.tmp("pattern.source", n.start)? {
-                P::S(t) => t,
-                _ => return no("a pattern's source"),
-            }
+            self.tmp_text("pattern.source", n.start)?
         } else {
             String::from("undefined")
         };
         let excl = if self.has(&cat!("pattern.excluded@", n.start)) {
-            match self.tmp("pattern.excluded", n.start)? {
-                P::S(t) => Some(t),
-                _ => None,
-            }
+            Some(self.tmp_text("pattern.excluded", n.start)?)
         } else {
             None
         };
@@ -240,10 +235,7 @@ impl G<'_, '_> {
                         .map(|x| n.parts[x])
                         .ok_or("plain dumps: a property without its key")?;
                     if kp.role == Role::ComputedKey {
-                        match self.tmp("pattern.key", kp.start)? {
-                            P::S(t) => t,
-                            _ => return no("a pattern's key"),
-                        }
+                        self.tmp_text("pattern.key", kp.start)?
                     } else {
                         self.key_expr(kp)?
                     }

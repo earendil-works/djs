@@ -24,7 +24,6 @@ use crate::interp::run::suspend;
 
 /// What `K.$djs` holds.
 struct Record {
-    f: Obj,
     segs: Vec<u32>,
     scaf: Vec<Scaffold>,
     /// A temporary of `f`'s rewritten statement: `K`'s binding or a literal.
@@ -89,60 +88,90 @@ fn string(h: &Heap, v: Value) -> Option<String> {
     v.as_string().map(|s| text_of(h, s))
 }
 
-/// The array field `name` of record `r`; a missing field is empty (the writer leaves
-/// empty fields out, D2900).
-fn list(h: &Heap, r: Obj, name: &str) -> Option<Vec<Value>> {
-    own(h, r, name).map_or(Some(Vec::new()), |v| elements(h, v))
+/// A list of numbers.
+fn numbers(h: &Heap, v: Value) -> Option<Vec<u32>> {
+    elements(h, v)?.into_iter().map(number).collect()
 }
 
-/// `K.$djs` of function `k`, if it is a continuation.
-fn record(h: &Heap, k: Obj) -> Option<Record> {
-    let r = own(h, k, "$djs")?.as_object()?;
-    let f = own(h, r, "f")?.as_object()?;
-    if h.object_class(f) != ObjectClass::Function {
-        return None;
+/// An item of a scaffold record's JSON: a number or a string (names without quotes,
+/// commas or escapes, D2913).
+enum J {
+    N(f64),
+    S(String),
+}
+
+fn items(json: &str) -> Option<Vec<J>> {
+    let json = json.strip_prefix(',').unwrap_or(json);
+    if json.is_empty() {
+        return Some(Vec::new());
     }
-    let segs = list(h, r, "segs")?
-        .into_iter()
-        .map(number)
-        .collect::<Option<Vec<u32>>>()?;
+    json.split(',')
+        .map(
+            |x| match x.strip_prefix('"').and_then(|x| x.strip_suffix('"')) {
+                Some(s) => Some(J::S(String::from(s))),
+                None => x.parse().ok().map(J::N),
+            },
+        )
+        .collect()
+}
+
+/// The value of a literal a continuation wrote in place of a temporary (D2913).
+fn literal_value(t: &str) -> Option<Value> {
+    Some(match t {
+        "undefined" => Value::UNDEFINED,
+        "null" => Value::NULL,
+        "true" => Value::TRUE,
+        "false" => Value::FALSE,
+        _ => {
+            let n: f64 = t.parse().ok()?;
+            let i = n as i32;
+            if f64::from(i) == n && !(n == 0.0 && n.is_sign_negative()) {
+                Value::int(i)
+            } else {
+                Value::number(n)
+            }
+        }
+    })
+}
+
+/// The layout of a continuation made again (D2913), as origin tracking reads it.
+fn record_of(l: cont::canon::Layout) -> Option<Record> {
     let mut scaf = Vec::new();
-    for e in list(h, r, "scaf")? {
-        let e = elements(h, e)?;
-        let kind = string(h, *e.first()?)?;
-        let (fo, ko) = (number(*e.get(1)?)?, number(*e.get(2)?)?);
+    for (kind, fo, ko, json) in l.scaf {
+        let e = items(&json)?;
+        let s = |j: &J| match j {
+            J::S(s) => Some(s.clone()),
+            J::N(_) => None,
+        };
         let mut extra = Extra::default();
-        let fin = match (kind.as_str(), e.get(3), e.get(4)) {
+        let fin = match (kind, e.first(), e.get(1)) {
             ("tmp", Some(f), Some(k)) => {
-                extra.tmp = Some((string(h, *f)?, string(h, *k)?));
+                extra.tmp = Some((s(f)?, s(k)?));
                 None
             }
             ("site", Some(n), None) => {
-                extra.site = Some(string(h, *n)?);
+                extra.site = Some(s(n)?);
                 None
             }
-            (_, Some(k), Some(b)) => Some((k.as_number()? as i32, string(h, *b)?)),
+            (_, Some(J::N(k)), Some(b)) => Some((*k as i32, s(b)?)),
             _ => None,
         };
-        if let Some(n) = e.get(5) {
-            extra.next = Some(string(h, *n)?);
+        if let Some(n) = e.get(2) {
+            extra.next = Some(s(n)?);
         }
-        scaf.push((kind, fo, ko, fin, extra));
+        scaf.push((String::from(kind), fo, ko, fin, extra));
     }
     let mut cmap = Vec::new();
-    for e in list(h, r, "cmap")? {
-        let e = elements(h, e)?;
-        let slot = string(h, *e.first()?)?;
-        let v = *e.get(2)?;
-        let c = match number(*e.get(1)?)? {
-            0 => CVal::Binding(string(h, v)?),
-            _ => CVal::Literal(v),
+    for (slot, v, lit) in l.cmap {
+        let c = if lit {
+            CVal::Literal(literal_value(&v)?)
+        } else {
+            CVal::Binding(v)
         };
         cmap.push_out((slot, c));
     }
     Some(Record {
-        f,
-        segs,
+        segs: l.segs,
         scaf,
         cmap,
     })
@@ -185,10 +214,94 @@ impl Dumper<'_> {
         let Some(k) = s.frame.first().and_then(|v| v.as_object()) else {
             return Ok(None);
         };
-        let Some(rec) = record(h, k) else {
+        let no = |why: &str| Err(cat!("a continuation of an earlier dump: ", why));
+        // `K.$djs`: its origin, the site and what makes K's layout again (D2913).
+        let Some(r) = own(h, k, "$djs").and_then(|r| r.as_object()) else {
             return Ok(None);
         };
-        let no = |why: &str| Err(cat!("a continuation of an earlier dump: ", why));
+        let Some(f) = own(h, r, "f")
+            .and_then(|f| f.as_object())
+            .filter(|&f| h.object_class(f) == ObjectClass::Function)
+        else {
+            return Ok(None);
+        };
+        let field = |name: &str| own(h, r, name).map_or(Some(Vec::new()), |v| numbers(h, v));
+        let (Some(holes), Some(tape)) = (field("h"), field("r")) else {
+            return no("its record is not one");
+        };
+        let at = own(h, r, "at").map_or(Some(String::from("await#1")), |v| string(h, v));
+        let Some(at) = at else {
+            return no("its record is not one");
+        };
+        let t = h.closure_template(f);
+        let info = template::debug_info(h, t);
+        let (a, b) = (info.src_start, info.src_end);
+        let mut params = usize::from(h.arena().get::<u16>(t, FuncTemplate::PARAMS));
+        let fkind = func_flags::kind(u32::from(h.arena().get::<u16>(t, FuncTemplate::FLAGS)));
+        let Some(ftext) = self.sources.fn_text(h, f) else {
+            return no("its origin's text is gone");
+        };
+        // f's maps: its template's script compiled again.
+        let m = if fkind == func_flags::KIND_ASYNC_BODY {
+            // A codemode body (the host's script, D2882): K was written from the async
+            // function the dump writes it as, whose map this is (as for its frames).
+            let bits = info.script.get().map_or(0, |s| {
+                h.arena().get::<u32>(s, crate::heap::cells::Script::OPTIONS)
+            });
+            let text = cat!("(", ftext, ")");
+            let len = text.len() as u32;
+            let Some(maps) = self.maps_of(&text, "", bits & !3) else {
+                return no("its origin's script cannot be compiled again");
+            };
+            let Some(m) = maps.iter().find(|m| m.start == 1 && m.end == len - 1) else {
+                return no("its origin has no suspension map");
+            };
+            m.clone()
+        } else {
+            let Some(maps) = self.script_maps(t) else {
+                return no("its origin's script cannot be compiled again");
+            };
+            let Some(m) = maps.iter().find(|m| m.start == a && m.end == b) else {
+                return no("its origin has no suspension map");
+            };
+            m.clone()
+        };
+        let syntax = Rc::new(m.syntax.clone());
+        // K's layout, made again from f at the site K was written for.
+        let Some(site) = m.sites.iter().find(|x| x.name == at) else {
+            return no("its origin has no site of its record");
+        };
+        let peers = match site.kind {
+            SiteKind::ForAwaitClose | SiteKind::YieldStarAwait => m
+                .sites
+                .iter()
+                .filter(|x| x.kind == site.kind && x.pos == site.pos)
+                .map(|x| x.name.clone())
+                .collect(),
+            _ => Vec::new(),
+        };
+        // (The text K was written from: a class's own functions have the class's text
+        // with the other members blanked, as the dump writes them.)
+        let otext = match self.class_texts.iter().find(|c| c.0 == ftext) {
+            Some((_, blanked)) => blanked.clone(),
+            None => ftext.clone(),
+        };
+        let act = cont::canon::canonical(site, syntax.clone(), otext, fkind, s.kind, peers);
+        let Some(ktext) = self.sources.fn_text(h, k) else {
+            return no("its text is gone");
+        };
+        let ts = info.script.get().is_some_and(|s| {
+            h.arena().get::<u32>(s, crate::heap::cells::Script::OPTIONS)
+                & crate::compiler::CompileOptions::TYPESCRIPT_BIT
+                != 0
+        });
+        let rec = match cont::canon::layout_of(&act, &tape, &holes, &ktext, ts) {
+            Ok(l) => record_of(l),
+            Err(e) => return Err(cat!("a continuation of an earlier dump: ", e)),
+        };
+        let Some(rec) = rec else {
+            return no("its layout is not one");
+        };
         // K's site in f's text: K's own (the site it was written for) or a copied one.
         let site_rec = rec.scaf.iter().find(|r| r.0 == "site" && r.2 == ksite.pos);
         let at_site = site_rec.map(|r| r.1);
@@ -207,45 +320,13 @@ impl Dumper<'_> {
         else {
             return no("its site is not one of its origin's");
         };
-        // f's maps: its template's script compiled again.
-        let f = rec.f;
-        let t = h.closure_template(f);
-        let info = template::debug_info(h, t);
-        let (a, b) = (info.src_start, info.src_end);
-        let mut params = usize::from(h.arena().get::<u16>(t, FuncTemplate::PARAMS));
-        let kind = func_flags::kind(u32::from(h.arena().get::<u16>(t, FuncTemplate::FLAGS)));
+        let kind = fkind;
         // Several sites of a kind at one construct (a `for await`'s closes): the one
         // with K's place among K's at its copy.
         let nth = if site_name.is_none() {
             self.nth_site_at(k, ksite)
         } else {
             0
-        };
-        let m = if kind == func_flags::KIND_ASYNC_BODY {
-            // A codemode body (the host's script, D2882): K was written from the async
-            // function the dump writes it as, whose map this is (as for its frames).
-            let bits = info.script.get().map_or(0, |s| {
-                h.arena().get::<u32>(s, crate::heap::cells::Script::OPTIONS)
-            });
-            let Some(text) = self.sources.fn_text(h, f).map(|s| cat!("(", s, ")")) else {
-                return no("its origin's text is gone");
-            };
-            let len = text.len() as u32;
-            let Some(maps) = self.maps_of(&text, "", bits & !3) else {
-                return no("its origin's script cannot be compiled again");
-            };
-            let Some(m) = maps.iter().find(|m| m.start == 1 && m.end == len - 1) else {
-                return no("its origin has no suspension map");
-            };
-            m.clone()
-        } else {
-            let Some(maps) = self.script_maps(t) else {
-                return no("its origin's script cannot be compiled again");
-            };
-            let Some(m) = maps.iter().find(|m| m.start == a && m.end == b) else {
-                return no("its origin has no suspension map");
-            };
-            m.clone()
         };
         let fsite = m
             .sites
@@ -256,7 +337,6 @@ impl Dumper<'_> {
             })
             .nth(nth)
             .cloned();
-        let syntax = Rc::new(m.syntax.clone());
         let Some(mut fsite) = fsite else {
             return no("its origin has no site there");
         };

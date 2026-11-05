@@ -33,6 +33,17 @@ impl G<'_, '_> {
         })
     }
 
+    /// [`G::using_record`], whether there is one a decision on the tape (the canonical
+    /// activation has a record for each slot, the frame only for those in flight; D2913).
+    fn steer_using(&mut self, i: usize) -> R<Option<usize>> {
+        let u = self.using_record(i);
+        match (self.steer(u32::from(u.is_some())), u) {
+            (0, _) => Ok(None),
+            (1, Some(u)) => Ok(Some(u)),
+            _ => no("a using record of the tape not in the frame"),
+        }
+    }
+
     /// The declarations that add resources `triples` again. K's scope record stands
     /// for the original's at offset `fpos` (a `using` record, named by its first
     /// binding).
@@ -58,7 +69,7 @@ impl G<'_, '_> {
     /// The resources of the scope path node `i` opens, added again at its start in K
     /// (the site in the scope's code, no disposal begun).
     pub(super) fn using_readd(&mut self, i: usize) -> R<P> {
-        let Some(u) = self.using_record(i) else {
+        let Some(u) = self.steer_using(i)? else {
             return Ok(s(""));
         };
         let u = self.act.usings[u].clone();
@@ -69,14 +80,26 @@ impl G<'_, '_> {
         if !u.state.is_empty() {
             return no("a using scope's disposal state at a site in its code");
         }
-        self.using_decls(&u.triples, slot_pos(&u.slot))
+        let triples = self.steer_triples(&u.triples);
+        self.using_decls(&triples, slot_pos(&u.slot))
+    }
+
+    /// Resources `t`, their number a decision on the tape (D2913): written again, each
+    /// one's value, method and kind are placeholders.
+    fn steer_triples(&mut self, t: &[(String, String, i32)]) -> Vec<(String, String, i32)> {
+        let n = self.steer(t.len() as u32) as usize;
+        if self.replay.is_none() {
+            return t.to_vec();
+        }
+        let ph = || String::from(canon::PH);
+        (0..n.min(1 << 16)).map(|_| (ph(), ph(), 0)).collect()
     }
 
     /// The rest of the disposal of the scope path node `i` opens (the site is its
     /// disposal's await), and the completion that entered it.
     pub(super) fn using_disposal(&mut self, i: usize) -> R<P> {
         let u = self
-            .using_record(i)
+            .steer_using(i)?
             .ok_or("plain dumps: a disposal without its using record")?;
         let u = self.act.usings[u].clone();
         // (Its value is the resources this writes: nothing to read.)
@@ -84,19 +107,26 @@ impl G<'_, '_> {
             self.used.push_out(u.slot.clone());
         }
         let field = |k: &str| u.state.iter().find(|x| x.0 == k).map(|x| x.1.clone());
-        let next = field("next").and_then(|v| v.parse::<i64>().ok());
-        let Some(next) = next else {
-            return no("a using disposal without its place");
+        // (The disposal's state decides K's shape: decisions on the tape, D2913.)
+        let flag = |g: &mut Self, k: &str| {
+            let v = field(k).is_some_and(|v| v == "true");
+            g.steer(u32::from(v)) == 1
         };
-        // The resources not yet disposed (the one at `next` on).
-        let left = usize::try_from(next / 3 + 1)
-            .unwrap_or(0)
-            .min(u.triples.len());
+        let next = field("next").and_then(|v| v.parse::<i64>().ok());
+        let left = match next {
+            // The resources not yet disposed (the one at `next` on).
+            Some(next) => usize::try_from(next / 3 + 1)
+                .unwrap_or(0)
+                .min(u.triples.len()),
+            None if self.replay.is_some() => 0,
+            None => return no("a using disposal without its place"),
+        };
+        let mut triples = self.steer_triples(&u.triples[..left]);
         // The one awaited now, disposed first: its value awaited again, a `null` one's
         // await, or a sync disposal's (kind 2) exception thrown after the await.
-        let awaited = field("hasAwaited").is_some_and(|v| v == "true");
-        let mut triples = u.triples[..left].to_vec();
-        if field("hasPending").is_some_and(|v| v == "true") {
+        let pending = flag(self, "hasPending");
+        let awaited = flag(self, "hasAwaited");
+        if pending {
             let e = field("pending").unwrap_or_else(|| String::from("undefined"));
             let c = self.new_temp();
             self.temps.push_out(cat!(c, " = ", e));
@@ -120,7 +150,7 @@ impl G<'_, '_> {
         }
         // The completion: the exception the disposal carries, else the scope's own.
         let pos = slot_pos(&u.slot);
-        let exit = if field("hasError").is_some_and(|v| v == "true") {
+        let exit = if flag(self, "hasError") {
             let e = field("error").unwrap_or_else(|| String::from("undefined"));
             let c = self.new_temp();
             self.temps.push_out(cat!(c, " = ", e));
@@ -134,7 +164,8 @@ impl G<'_, '_> {
         } else {
             let kname = cat!("completion.kind@", pos);
             let kind = if self.has(&kname) {
-                self.take(&kname)?
+                let k = self.take(&kname)?;
+                self.steer_kind(&k)?
             } else {
                 String::from("0")
             };
@@ -144,10 +175,7 @@ impl G<'_, '_> {
             }
             match kind.parse::<i32>() {
                 Ok(0) => String::new(),
-                Ok(2) => match self.tmp("completion.value", pos)? {
-                    P::S(v) => cat!("return ", v, ";"),
-                    _ => return no("a using scope's return value"),
-                },
+                Ok(2) => cat!("return ", self.tmp_text("completion.value", pos)?, ";"),
                 Ok(c) if c >= 3 => {
                     let n = cat!("completion.value@", pos);
                     if self.has(&n) {

@@ -499,15 +499,13 @@ pub(super) trait Ctx {
 #[derive(Clone, Default)]
 pub(super) struct KText {
     pub text: String,
-    /// `[kStart, fStart, len]` triples.
-    pub segs: Vec<u32>,
-    /// The scaffold constructs and the temporaries' origins, as JSON.
-    pub scaf: String,
-    pub cmap: String,
     /// The slots it consumed.
     pub used: Vec<String>,
     /// Its call's arguments, for its parameters (D2909).
     pub args: Vec<String>,
+    /// Its record's holes and tape (D2913).
+    pub holes: Vec<u32>,
+    pub tape: Vec<u32>,
 }
 
 #[derive(Default)]
@@ -2314,23 +2312,24 @@ impl W<'_> {
             lines.push_out(cat!(r, " = ", v, ";"));
         }
         let kref = self.kref(a);
-        let segs: Vec<String> = k.segs.iter().map(|x| cat!(*x)).collect();
         let (fref, fdef) = self.fref(a);
         lines.extend(fdef);
-        // Fields at their default are left out (0207, D2900): `at` (informative only)
-        // when it is the first await, empty `segs`, `scaf` and `cmap`.
+        // The origin, the site, the holes and the tape a re-dump makes K's layout again
+        // from (D2913); fields at their default are left out (D2900): `at` when it is the
+        // first await, empty `h` and `r`.
         let mut rec = cat!("f: ", fref);
         if act.site.name != "await#1" {
             rec = cat!(rec, ", at: ", quote(&act.site.name));
         }
-        if !segs.is_empty() {
-            rec = cat!(rec, ", segs: [", join(&segs, ","), "]");
+        let list = |v: &[u32]| -> String {
+            let v: Vec<String> = v.iter().map(|x| cat!(*x)).collect();
+            join(&v, ",")
+        };
+        if !k.holes.is_empty() {
+            rec = cat!(rec, ", h: [", list(&k.holes), "]");
         }
-        if k.scaf != "[]" {
-            rec = cat!(rec, ", scaf: ", k.scaf);
-        }
-        if k.cmap != "[]" {
-            rec = cat!(rec, ", cmap: ", k.cmap);
+        if !k.tape.is_empty() {
+            rec = cat!(rec, ", r: [", list(&k.tape), "]");
         }
         let me = cat!("$dump.", act.name);
         let generator = act.kind == crate::interp::run::suspend::GENERATOR
