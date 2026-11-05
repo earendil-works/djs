@@ -11049,3 +11049,17 @@ date: 2026-11-05 · by: pmem · issue: 0234
 grows on demand to `max(len/64, STACK_CAP)` entries. The 64 KiB reserve did not fit dlmalloc's
 first segment next to the other side tables, so it became a page run at memory's end, one more
 page for every run that collected.
+
+## D3144: Large live leaf cells count for 40% of the next collection's growth
+date: 2026-11-05 · by: pmem · issue: 0234
+`next_threshold_cheap`: the mark sums the live leaf cells (Str8, Str16, Bytes, U32Array, BigInt)
+of at least `CHEAP_LEAF` = 16 KiB above the old region, and the growth after the collection
+leaves out `CHEAP_DISCOUNT` = 60% of them. They cost a collection a mark bit and their bitmap
+words, so growth proportional to them bought headroom no collection needed; codemode runs hold
+tool output as big strings. heavy 4864 → 4480 KiB; native strbuild +1.6% instructions,
+json-indent ~+1.5%, everything else ±0. Chosen within a 2% CPU budget (coordinator): 75% of
+leaves ≥ 1 KiB gave heavy 3584 KiB but json-objects +5.6% (JSON.stringify's transient 8–16 KiB
+output pieces were discounted: 18 collections instead of 13); 75% at 16 KiB, strbuild +2.2%.
+The discount cannot tell long-lived from transient big strings; that would need a survivor mark
+in the image (follow-up). Minor collections applying the slice-detach rule (D2542) were
+measured and dropped: no gain on the benchmark workloads, pi-like +0.9%.

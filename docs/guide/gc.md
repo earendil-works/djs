@@ -255,7 +255,10 @@ frame entry, a return, a backward jump, a loop back-edge of a native builtin. Af
 collection, `next_threshold` sets the next threshold from the live size:
 
 - let the heap grow by as much as is live (at least 256 KiB), so it can reach twice its
-  live size;
+  live size. Large strings and byte buffers (16 KiB and up) count for only two fifths of
+  their size: the collector marks them with one bit and traces nothing inside them, so
+  they make the next collection hardly more expensive, and a run that holds megabytes of
+  tool output as text should not get as much again in headroom;
 - round the threshold up to whole 64 KiB wasm pages, counted from the end of the builtin
   prefix;
 - but never grow by more than half of what is left below the cap, so that collections

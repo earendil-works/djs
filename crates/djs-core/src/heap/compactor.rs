@@ -128,6 +128,21 @@ struct Marker<'a> {
     /// rehash ([`REMEMBER_REHASH`]). Valid only while `remembered_ok`.
     remembered: Vec<u32>,
     remembered_ok: bool,
+    /// Bytes of marked leaf cells of at least [`super::gc::CHEAP_LEAF`] (D3144).
+    cheap: u32,
+}
+
+/// What [`Heap::mark_compact`] did.
+pub(super) struct Compacted {
+    /// The arena's size before and after.
+    pub before: u32,
+    pub after: u32,
+    /// Where the old region ends now: the live bytes below its old end.
+    pub old_end: u32,
+    /// Slices flagged for a copy of their units (`resolve_slices`).
+    pub detach: Vec<u32>,
+    /// Live bytes in large leaf cells the collection marked (D3144).
+    pub cheap: u32,
 }
 
 /// A remembered `Ref` slot (slots are 4-aligned, so the low bits are free).
@@ -194,6 +209,10 @@ impl Marker<'_> {
         }
         if is_leaf(kind) {
             // No traced slots: nothing to push.
+            let size = (h >> 32) as u32;
+            if size >= super::gc::CHEAP_LEAF {
+                self.cheap = self.cheap.saturating_add(size);
+            }
             return off;
         }
         // The stack grows on demand (a refusal is only an overflow, handled by a rescan).
@@ -656,11 +675,7 @@ impl Heap {
     ///
     /// Returns the arena sizes before and after, and where the old region ends now: the
     /// live bytes below its old end (in a minor collection, its end).
-    pub(super) fn mark_compact(
-        &mut self,
-        old: u32,
-        full: bool,
-    ) -> Result<(u32, u32, u32, Vec<u32>), HeapError> {
+    pub(super) fn mark_compact(&mut self, old: u32, full: bool) -> Result<Compacted, HeapError> {
         let before = self.arena.len();
         let old_end = self.arena.get(0, super::cells::Roots::OLD_END);
         let base_end = self.arena.get(0, super::cells::Roots::BASE_END);
@@ -697,6 +712,7 @@ impl Heap {
             slices: 0,
             remembered,
             remembered_ok: true,
+            cheap: 0,
         };
         if old == 0 {
             m.mark(0);
@@ -713,8 +729,13 @@ impl Heap {
         } else {
             Vec::new()
         };
-        let (live, remembered, remembered_ok, old_ephemerons) =
-            (m.live, m.remembered, m.remembered_ok, m.old_ephemerons);
+        let (live, remembered, remembered_ok, old_ephemerons, cheap) = (
+            m.live,
+            m.remembered,
+            m.remembered_ok,
+            m.old_ephemerons,
+            m.cheap,
+        );
         // Reused to remember the Map/Set objects (new offsets) for the rehash.
         let mut collections = m.stack;
         let mut all_collections = true;
@@ -873,7 +894,13 @@ impl Heap {
             }
         }
         self.arena.set(0, super::cells::Roots::BASE_END, base_end);
-        Ok((before, after, old_end, detach))
+        Ok(Compacted {
+            before,
+            after,
+            old_end,
+            detach,
+            cheap,
+        })
     }
 }
 

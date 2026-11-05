@@ -397,6 +397,30 @@ fn collection_points_do_not_change_compacted_images() {
 // ------------------------------------------------------------------ focused tests
 
 #[test]
+fn large_live_strings_raise_the_threshold_less() {
+    // D3144: the same live size, once as one large string and once as many small ones;
+    // the large string counts for less of the next collection's growth.
+    let threshold = |big: bool| {
+        let mut h = Heap::new().unwrap();
+        h.collect().unwrap();
+        let parts = if big { 1 } else { 2000 };
+        for _ in 0..parts {
+            let s = h.alloc_str(&"x".repeat(1_000_000 / parts)).unwrap();
+            h.new_handle(Value::string(s)).unwrap();
+        }
+        let st = h.collect().unwrap();
+        (st.after, h.gc_threshold())
+    };
+    let (small_live, small_t) = threshold(false);
+    let (big_live, big_t) = threshold(true);
+    assert!(small_live > big_live, "{small_live} {big_live}");
+    assert!(
+        small_t - small_live > big_t - big_live + 500_000,
+        "{small_t} {small_live} {big_t} {big_live}"
+    );
+}
+
+#[test]
 fn garbage_is_freed() {
     let mut h = Heap::new().unwrap();
     let base = h.collect().unwrap().after;

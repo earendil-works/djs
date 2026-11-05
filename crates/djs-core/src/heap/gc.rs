@@ -88,11 +88,28 @@ pub const BASE_ALLOWANCE: u32 = 288_160;
 /// Close to the cap, collections get more frequent instead of running into
 /// `OutOfMemory`.
 pub fn next_threshold(live: u32, base: u32, limit: u32) -> u32 {
+    next_threshold_cheap(live, base, limit, 0)
+}
+
+/// Leaf cells (strings, byte buffers) at least this large count as cheap for
+/// [`next_threshold_cheap`] (D3144).
+pub const CHEAP_LEAF: u32 = 16 << 10;
+
+/// The share of the cheap bytes [`next_threshold_cheap`] does not count, in percent.
+pub const CHEAP_DISCOUNT: u32 = 60;
+
+/// [`next_threshold`] after a collection that found `cheap` live bytes in large leaf
+/// cells above the old region (D3144): those cost a collection next to nothing (a mark
+/// bit and their bitmap words, no fields to trace), so most of them do not count toward
+/// the growth that pays for the next collection. A run that holds a few MB of tool output
+/// as strings would otherwise let its heap grow by that much again before collecting.
+pub fn next_threshold_cheap(live: u32, base: u32, limit: u32, cheap: u32) -> u32 {
     let headroom = limit.saturating_sub(live);
+    let discount = (u64::from(cheap) * u64::from(CHEAP_DISCOUNT) / 100) as u32;
     let counted = if base > 0 {
-        live.saturating_sub(base) + BASE_ALLOWANCE
+        live.saturating_sub(base).saturating_sub(discount) + BASE_ALLOWANCE
     } else {
-        live
+        live.saturating_sub(discount)
     };
     let growth = counted.max(MIN_GROWTH);
     if growth > headroom / 2 {
@@ -235,27 +252,22 @@ impl Heap {
             return Err(HeapError::HostOutOfMemory);
         }
         let base = self.base_end();
-        let (before, mut after, old, detach) =
-            self.without_barrier(|h| h.mark_compact(base, true))?;
-        self.set_old_region(old, 0);
-        self.after_collect(after);
+        let c = self.without_barrier(|h| h.mark_compact(base, true))?;
+        let (before, mut after) = (c.before, c.after);
+        self.set_old_region(c.old_end, 0);
+        self.after_collect(after, c.cheap);
+        let detach = c.detach;
         if detach.is_empty() {
             return Ok(GcStats { before, after });
         }
         // Slices whose parent only they kept get their own units now (D2542), and a second
         // pass drops the parents: a snapshot right after a collection should not carry
         // them. Without room a slice stays as it is.
-        for s in detach {
-            let s = crate::value::Str(s);
-            if self.flatten(s).is_err() {
-                let f = self.cell_flags(s.0);
-                self.set_cell_flags(s.0, f & !flags::SLICE_DETACH);
-            }
-        }
-        if let Ok((_, a, old, _)) = self.without_barrier(|h| h.mark_compact(base, true)) {
-            after = a;
-            self.set_old_region(old, 0);
-            self.after_collect(after);
+        self.detach_slices(detach);
+        if let Ok(c) = self.without_barrier(|h| h.mark_compact(base, true)) {
+            after = c.after;
+            self.set_old_region(c.old_end, 0);
+            self.after_collect(after, c.cheap);
         }
         Ok(GcStats { before, after })
     }
@@ -297,11 +309,26 @@ impl Heap {
             return Err(HeapError::HostOutOfMemory);
         }
         let old = self.old_end();
-        let (before, after, _, _) = self.without_barrier(|h| h.mark_compact(old, false))?;
+        let c = self.without_barrier(|h| h.mark_compact(old, false))?;
         let minors = self.arena.get(0, Roots::MINORS);
         self.set_old_region(old, minors + 1);
-        self.after_collect(after);
-        Ok(GcStats { before, after })
+        self.after_collect(c.after, c.cheap);
+        Ok(GcStats {
+            before: c.before,
+            after: c.after,
+        })
+    }
+
+    /// Gives each flagged slice (`SLICE_DETACH`) its own units (D2542): it becomes a
+    /// flattened rope, and its parent dies. Without room a slice stays as it is.
+    fn detach_slices(&mut self, detach: Vec<u32>) {
+        for s in detach {
+            let s = crate::value::Str(s);
+            if self.flatten(s).is_err() {
+                let f = self.cell_flags(s.0);
+                self.set_cell_flags(s.0, f & !flags::SLICE_DETACH);
+            }
+        }
     }
 
     /// The end of the builtin prefix (`Roots::BASE_END`, D022): 0 without one.
@@ -324,9 +351,10 @@ impl Heap {
     }
 
     /// The threshold, the pending flag, the reserve and the capacity after a collection.
-    fn after_collect(&mut self, after: u32) {
+    fn after_collect(&mut self, after: u32, cheap: u32) {
         self.refresh_frozen();
-        self.set_gc_threshold(next_threshold(after, self.base_end(), self.arena.limit()));
+        let t = next_threshold_cheap(after, self.base_end(), self.arena.limit(), cheap);
+        self.set_gc_threshold(t);
         self.gc_pending = false;
         self.maybe_close_reserve();
         // A to-space sized for a mostly-garbage heap gives the excess back (in wasm to the
@@ -456,7 +484,7 @@ impl Heap {
         // The prefix is where it was (a heap without one gets one from
         // `prepare_base_image`).
         self.arena.set(0, Roots::BASE_END, base);
-        self.after_collect(after);
+        self.after_collect(after, 0);
         for o in collections {
             self.collection_rehash(crate::value::Obj(o));
         }
@@ -498,5 +526,22 @@ mod tests {
         }
         let small = next_threshold(100_000 + 100_000, 100_000, big);
         assert!(small >= 200_000 + a + 100_000, "{small}");
+    }
+
+    #[test]
+    fn cheap_leaves_count_in_part() {
+        // D3144: 4 MB live above the prefix, 3 MB of them large strings.
+        let (big, base, live) = (arena::MAX_ARENA, 200_000, 200_000 + (4 << 20));
+        let full = next_threshold(live, base, big);
+        let cheap = next_threshold_cheap(live, base, big, 3 << 20);
+        // Growth shrinks by the discounted share of the cheap bytes, up to the page rounding.
+        let less = (3 << 20) * CHEAP_DISCOUNT / 100;
+        assert!(
+            (full - cheap).abs_diff(less) < PAGE as u32,
+            "{full} {cheap} {less}"
+        );
+        // Never below the minimum growth, and no effect without cheap bytes.
+        assert!(next_threshold_cheap(live, base, big, live) >= live + MIN_GROWTH);
+        assert_eq!(next_threshold_cheap(live, base, big, 0), full);
     }
 }
