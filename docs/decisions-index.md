@@ -687,3 +687,8 @@ topics when the index is next reorganized.
 - D2889: The dump's check resolves names without generating code
 - D2916: The host deletes `$djs` and `$dump`; the completion value is the last statement
 - D2917: Loops go on as written: builtin iterators as they are, `while` and `for` after the rest
+- D2918: Assignments around the site are written as the original's
+- D2919: String temporaries are literals again; a number substitution is read again
+- D3000: A placeholder loop's first iteration is a scope of its own for liveness
+- D2990: Lazy function compilation, a `lazy` feature on in native and dump builds
+- D2991: Eager and lazy compiles give a function the same code
