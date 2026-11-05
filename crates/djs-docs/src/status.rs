@@ -369,7 +369,8 @@ pub fn value(st: &Status, key: &str, fmt: &str) -> Result<String, Missing> {
     })
 }
 
-/// `gen:status recorded`: the recorded measurements with where they were taken. Only
+/// `gen:status recorded`: the recorded measurements with where they were taken (but the
+/// engine comparison's, which the benchmarks page shows). Only
 /// a page that may name pi lists those whose key names pi (its tests, its benchmark,
 /// the pi-like workload), and it lists only those.
 fn recorded(st: &Status, pi: bool) -> String {
@@ -378,7 +379,9 @@ fn recorded(st: &Status, pi: bool) -> String {
             .any(|w| w == "pi")
     };
     let mut s = String::from("| measurement | value | measured at |\n| --- | ---: | --- |\n");
-    for (k, (v, c, d)) in st.recorded.iter().filter(|(k, _)| names_pi(k) == pi) {
+    // The engine comparison's keys (a few hundred) are the benchmarks page's tables.
+    let listed = |k: &str| names_pi(k) == pi && !k.starts_with("engines/");
+    for (k, (v, c, d)) in st.recorded.iter().filter(|(k, _)| listed(k)) {
         let at = if c.len() == 4 && c.bytes().all(|b| b.is_ascii_digit()) {
             d.clone()
         } else {
@@ -399,8 +402,12 @@ pub fn generate(st: &Status, what: &str, pi: bool) -> Result<String, String> {
         "size" => size(st),
         "inventory" => Ok(inventory(st)),
         "recorded" => Ok(recorded(st, pi)),
+        "engines-size" | "engines-startup" | "engines-run" | "engines-memory" | "engines-dumps" => {
+            engines(st, what)
+        }
         _ => Err(format!(
-            "gen:status {what}: expected conformance, speed, size, inventory or recorded"
+            "gen:status {what}: expected conformance, speed, size, inventory, recorded or \
+             engines-size|startup|run|memory|dumps"
         )),
     }
 }
@@ -584,6 +591,175 @@ fn size(st: &Status) -> Result<String, String> {
     ))
 }
 
+/// The engines of the benchmarks page (js/bench/engines, `scripts/status.py engines`): key,
+/// column label.
+const ENGINES: [(&str, &str); 7] = [
+    ("djs", "djs"),
+    ("quickjs-wasi", "quickjs-wasi"),
+    ("quickjs", "QuickJS"),
+    ("quickjs-ng", "QuickJS-NG"),
+    ("quickjs-emscripten", "quickjs-emscripten"),
+    ("quickjs-emscripten-ng", "quickjs-emscripten (NG)"),
+    ("monty", "monty"),
+];
+/// The codemode workload set (tests/bench/codemode), in the page's order.
+const WORKLOADS: [&str; 9] = [
+    "sequential",
+    "fanout",
+    "media",
+    "inspect",
+    "loop",
+    "text",
+    "json",
+    "ts",
+    "heavy",
+];
+
+/// `gen:status engines-*`: the benchmarks page's tables.
+fn engines(st: &Status, what: &str) -> Result<String, String> {
+    let mut keys: Vec<String> = vec!["engines/load".into()];
+    let mut get = |k: String| -> Result<f64, String> {
+        let v = st.num(&k).ok_or_else(|| {
+            format!(
+                "gen:status {what}: no {k} in tests/scores/status.tsv (scripts/status.py engines)"
+            )
+        })?;
+        keys.push(k);
+        Ok(v)
+    };
+    let ms = |v: f64| {
+        if v < 10.0 {
+            format!("{v:.2}")
+        } else {
+            format!("{v:.1}")
+        }
+    };
+    let mib = |v: f64| format!("{:.1}", v / 1048576.0);
+    let kib = |v: f64| format!("{:.1}", v / 1024.0);
+    let header = |first: &str| {
+        let mut s = format!("| {first} |");
+        for (_, label) in ENGINES {
+            let _ = write!(s, " {label} |");
+        }
+        s.push_str("\n| --- |");
+        s.push_str(&" ---: |".repeat(ENGINES.len()));
+        s.push('\n');
+        s
+    };
+    let (mut s, note) = match what {
+        "engines-size" => {
+            let mut s = String::from(
+                "| engine | wasm | gzip | brotli | JS glue, gzip |\n| --- | ---: | ---: | ---: | ---: |\n",
+            );
+            for (e, label) in ENGINES {
+                let k = |m: &str| format!("engines/{e}/{m}");
+                let glue = get(k("glue-gzip"))?;
+                let _ = writeln!(
+                    s,
+                    "| {label} | {} | {} | {} | {} |",
+                    kb(get(k("wasm-bytes"))?),
+                    kb(get(k("wasm-gzip"))?),
+                    kb(get(k("wasm-brotli"))?),
+                    if glue == 0.0 {
+                        "none".to_string()
+                    } else {
+                        kb(glue)
+                    }
+                );
+            }
+            (s, "Module bytes as shipped; gzip -9, brotli quality 11")
+        }
+        "engines-startup" => {
+            let mut s = String::from(
+                "| engine | compile, ms | new VM, ms | idle VM memory, MiB |\n| --- | ---: | ---: | ---: |\n",
+            );
+            for (e, label) in ENGINES {
+                let k = |m: &str| format!("engines/{e}/{m}");
+                let _ = writeln!(
+                    s,
+                    "| {label} | {} | {} | {} |",
+                    ms(get(k("compile-ms"))?),
+                    ms(get(k("startup-ms"))?),
+                    mib(get(k("idle-memory"))?)
+                );
+            }
+            (
+                s,
+                "Compile: the module, once per process. New VM: a new instance and VM, ready to evaluate (median). Memory: linear memory",
+            )
+        }
+        "engines-run" | "engines-memory" => {
+            let run = what == "engines-run";
+            let mut s = header("workload");
+            let mut logs = [0.0f64; ENGINES.len()];
+            for w in WORKLOADS {
+                let _ = write!(s, "| {w} |");
+                let mut row = [0.0f64; ENGINES.len()];
+                for (i, (e, _)) in ENGINES.iter().enumerate() {
+                    row[i] = get(format!(
+                        "engines/{e}/{w}/{}",
+                        if run { "run-ms" } else { "memory" }
+                    ))?;
+                    let _ = write!(s, " {} |", if run { ms(row[i]) } else { mib(row[i]) });
+                }
+                for i in 0..ENGINES.len() {
+                    logs[i] += (row[i] / row[0]).ln();
+                }
+                s.push('\n');
+            }
+            s.push_str("| relative to djs |");
+            for l in logs {
+                let _ = write!(s, " {:.2}× |", (l / WORKLOADS.len() as f64).exp());
+            }
+            s.push('\n');
+            (
+                s,
+                if run {
+                    "Milliseconds per run (median), in a warm process; the last row is the geometric mean of each engine's time over djs's"
+                } else {
+                    "Linear memory after the run, MiB; the last row is the geometric mean of each engine's over djs's"
+                },
+            )
+        }
+        _ => {
+            let mut s = String::from(
+                "| workload | idle points | dump, KiB (max) | gzip, KiB (max) | write, ms | load, ms |\n| --- | ---: | ---: | ---: | ---: | ---: |\n",
+            );
+            for w in WORKLOADS {
+                let k = |m: &str| format!("engines/djs/{w}/dump-{m}");
+                if st.num(&k("points")).is_none() {
+                    let _ = writeln!(s, "| {w} | 0 | | | | |");
+                    continue;
+                }
+                let _ = writeln!(
+                    s,
+                    "| {w} | {} | {} ({}) | {} ({}) | {} | {} |",
+                    get(k("points"))?,
+                    kib(get(k("raw-p50"))?),
+                    kib(get(k("raw-max"))?),
+                    kib(get(k("gzip-p50"))?),
+                    kib(get(k("gzip-max"))?),
+                    ms(get(k("ms"))?),
+                    ms(get(k("load-ms"))?)
+                );
+            }
+            (
+                s,
+                "Medians over a workload's idle points; load: a new sandbox with the run loaded",
+            )
+        }
+    };
+    let load = st.num("engines/load").unwrap_or(f64::NAN);
+    let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
+    s.push('\n');
+    s += &wrap(
+        &format!("{note}; {}, load {load:.1}.", provenance(st, &keys)),
+        "",
+        "",
+    );
+    Ok(s)
+}
+
 fn inventory(st: &Status) -> String {
     let mut s = String::from("| | count |\n| --- | ---: |\n");
     let rows = [
@@ -625,6 +801,75 @@ mod tests {
         assert_eq!(ratchet_entries("# c\n\na: x\nb: y\n"), 2);
         let r = parse_recorded("# c\nkey\tvalue\tcommit\tdate\nwasm/bytes\t12\tabc\t2026-11-01\n");
         assert_eq!(r["wasm/bytes"].0, "12");
+    }
+
+    #[test]
+    fn engine_tables() {
+        let mut rec = String::from("engines/load\t2.5\tabc\t2026-11-06\n");
+        for (e, _) in ENGINES {
+            for m in [
+                "wasm-bytes",
+                "wasm-gzip",
+                "wasm-brotli",
+                "glue-gzip",
+                "compile-ms",
+                "startup-ms",
+                "idle-memory",
+            ] {
+                rec += &format!("engines/{e}/{m}\t1000\tabc\t2026-11-06\n");
+            }
+            for w in WORKLOADS {
+                rec += &format!(
+                    "engines/{e}/{w}/run-ms\t2\tabc\t2026-11-06\nengines/{e}/{w}/memory\t1048576\tabc\t2026-11-06\n"
+                );
+            }
+        }
+        for w in WORKLOADS.iter().filter(|w| **w != "inspect") {
+            for m in [
+                "points", "raw-p50", "raw-max", "gzip-p50", "gzip-max", "ms", "load-ms",
+            ] {
+                rec += &format!("engines/djs/{w}/dump-{m}\t3\tabc\t2026-11-06\n");
+            }
+        }
+        let st = Status {
+            test262: Err("no checkout".into()),
+            ratchet262: 0,
+            oracle262: 0,
+            corpus_cases: 0,
+            corpus_skipped: 0,
+            corpus_ratchet: 0,
+            harvest: 0,
+            base_bytes: 0,
+            base_tail: 0,
+            builtins: 0,
+            native: 0,
+            fast: 0,
+            recorded: parse_recorded(&rec),
+        };
+        let run = generate(&st, "engines-run", false).unwrap();
+        assert!(run.contains("| heavy | 2.00 |"), "{run}");
+        assert!(run.contains("| relative to djs | 1.00× |"), "{run}");
+        assert!(
+            run.contains("measured at abc, 2026-11-06, load 2.5."),
+            "{run}"
+        );
+        assert!(
+            generate(&st, "engines-dumps", false)
+                .unwrap()
+                .contains("| inspect | 0 |")
+        );
+        assert!(
+            generate(&st, "engines-size", false)
+                .unwrap()
+                .contains("| djs | 1 KB |")
+        );
+        let mut st = st;
+        st.recorded.remove("engines/monty/heavy/memory");
+        assert!(
+            generate(&st, "engines-memory", false)
+                .unwrap_err()
+                .contains("engines/monty/heavy/memory")
+        );
     }
 
     #[test]

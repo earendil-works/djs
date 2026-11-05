@@ -56,6 +56,8 @@ const gz = (b: Uint8Array) => gzipSync(b, { level: 9 }).length;
 const br = (b: Uint8Array) => brotliCompressSync(b, { params: { [Z.BROTLI_PARAM_QUALITY]: 11 } }).length;
 const size = (files: string[]) => {
   const bs = files.map((f) => readFileSync(f));
+  // --quick (the gate's smoke run, on debug modules of 30 MB): no compression.
+  if (quick) return { bytes: bs.reduce((s, b) => s + b.length, 0), gzip: 0, brotli: 0 };
   return { bytes: bs.reduce((s, b) => s + b.length, 0), gzip: bs.reduce((s, b) => s + gz(b), 0), brotli: bs.reduce((s, b) => s + br(b), 0) };
 };
 
@@ -157,7 +159,7 @@ const dumps: Record<string, DumpResult> = {};
 if (engines.some((e) => e.name === "djs")) {
   const mainPath = djs().files[0];
   const main = await WebAssembly.compile(readFileSync(mainPath));
-  const dumper = await WebAssembly.compile(readFileSync(join(root, "target/djs-dump.wasm")));
+  const dumper = await WebAssembly.compile(readFileSync(process.env.DJS_DUMP_WASM ?? join(root, "target/djs-dump.wasm")));
   const tools = ["read", "bash", "edit", "write", "web_search", "query_rows", "render_view", "read_image"];
   const time = (f: () => void) => {
     const t0 = now();

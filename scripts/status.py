@@ -33,7 +33,12 @@ usage:
                                       10 MiB string parameter
   scripts/status.py bench             copy what the guide quotes from the latest run in
                                       tests/scores/bench.tsv (scripts/bench.sh --record)
-  scripts/status.py all               size, speed, pi, startup, dumps, bounds, heap, bench
+  scripts/status.py engines           the benchmarks page's engine comparison: scripts/bench-engines.sh
+                                      (fetches and builds the engines into vendor/engines) three
+                                      times over the codemode workload set; per engine module
+                                      sizes, compile time, idle memory and startup, per workload
+                                      run time and memory, djs's dumps (medians of the 3 runs)
+  scripts/status.py all               size, speed, pi, startup, dumps, bounds, heap, engines, bench
   scripts/status.py set [--at WHEN] KEY VALUE...
                                       record values measured elsewhere, for example
                                       `set pi/passed 221 pi/total 226` after
@@ -397,6 +402,53 @@ def bench():
     return list(groups.items())
 
 
+def engines():
+    """`engines/...` keys from three runs of js/bench/engines/run.ts (medians)."""
+    import json
+    subprocess.run([os.path.join(ROOT, "scripts/bench-engines.sh"), "--setup"], cwd=ROOT, check=True)
+    out = os.path.join(ROOT, "work/scratch/status-engines")
+    os.makedirs(out, exist_ok=True)
+    runs = []
+    for i in range(3):
+        f = os.path.join(out, f"run{i}.json")
+        r = subprocess.run(["node", "js/bench/engines/run.ts", "--json", f], cwd=ROOT, capture_output=True, text=True)
+        # Exit 1: an engine's result differs from node's: a broken comparison, not a number.
+        if r.returncode != 0:
+            sys.exit(f"status.py: js/bench/engines/run.ts failed:\n{r.stdout[-3000:]}\n{r.stderr[-3000:]}")
+        print(r.stdout.splitlines()[0])
+        runs.append(json.load(open(f)))
+    vals = {}
+
+    def put(k, v):
+        vals.setdefault(k, []).append(v)
+    slug = lambda name: re.sub(r"-$", "", re.sub(r"[^a-z0-9]+", "-", name.lower()))
+    for run in runs:
+        put("engines/load", run["load"][0])
+        for e in run["engines"]:
+            k = f"engines/{slug(e['name'])}"
+            for part in ("wasm", "glue"):
+                for m in ("bytes", "gzip", "brotli"):
+                    put(f"{k}/{part}-{m}", e[part][m])
+            put(f"{k}/compile-ms", e["compileMs"])
+            put(f"{k}/idle-memory", e["idleMemory"])
+            put(f"{k}/startup-ms", e["startupMs"])
+            for w, x in e["workloads"].items():
+                put(f"{k}/{w}/run-ms", x["runMs"])
+                put(f"{k}/{w}/memory", x["memory"])
+        for w, d in run["dumps"].items():
+            k = f"engines/djs/{w}/dump"
+            put(f"{k}-points", d["points"])
+            for m, src in (("raw-p50", "rawP50"), ("raw-max", "rawMax"), ("gzip-p50", "gzipP50"), ("gzip-max", "gzipMax")):
+                put(f"{k}-{m}", d[src])
+            put(f"{k}-ms", d["dumpMsP50"])
+            put(f"{k}-load-ms", d["resumeMsP50"])
+    new = {}
+    for k, xs in vals.items():
+        v = median(xs)
+        new[k] = round(v, 1) if k == "engines/load" else round(v, 3) if k.endswith("-ms") else int(v)
+    return new
+
+
 def main():
     args = sys.argv[1:]
     if not args:
@@ -428,6 +480,8 @@ def main():
     elif args[0] == "bench":
         for at, new in bench():
             save(rows, new, at)
+    elif args[0] == "engines":
+        save(rows, engines())
     elif args[0] == "all":
         save(rows, size())
         save(rows, speed(3))
@@ -436,6 +490,7 @@ def main():
         save(rows, dumps())
         save(rows, bounds())
         save(rows, heap())
+        save(rows, engines())
         for at, new in bench():
             save(rows, new, at)
     elif args[0] == "set":

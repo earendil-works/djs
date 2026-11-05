@@ -300,6 +300,11 @@ def jobs():
         # --- The host-side JS package (0018), on the dev modules.
         J("js tests", f"DJS_WASM=$PWD/{wasm} DJS_WASM_NODUMP=$PWD/{nodump} node --test js/test/*.test.ts",
           cls="nodocs", needs=["build:wasm", "build:wasm-nodump"]),
+        # 0229: the codemode workload set of the benchmarks page runs on djs and gives node's
+        # results, with a dump and a load at every idle point (D3113): about 2 s.
+        J("codemode workloads", f"DJS_WASM=$PWD/{nodump} DJS_DUMP_WASM=$PWD/{wasm}"
+          " node js/bench/engines/run.ts --quick --engines djs",
+          cls="nodocs", needs=["build:wasm", "build:wasm-nodump"]),
         # 0228: the npm package stays publishable (D3109): it builds (tsc, with the
         # declarations), packs, and the packed tarball's smoke test runs in node. The gate's
         # builds stand in for the release ones: the main and slim modules as they ship, the

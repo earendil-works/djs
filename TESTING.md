@@ -565,8 +565,8 @@ slim with `dump`, full without `dump`; the wasm modules in release: main, slim, 
 with dump); the workspace's unit and integration tests (djs-docs's apart; djs-bgen's
 `builtins_gen_is_fresh` is what `scripts/bgen.sh --check` checks); the no_std wasm32 build
 of djs-core; the builtin registry's append-only check (`scripts/registry.py check main`); the guide (`djs-docs
-check`); the JS host package's tests on the dev modules; the npm package (below); native
-versus wasm heap images;
+check`); the JS host package's tests on the dev modules; the npm package (below); the
+codemode workloads on djs (below); native versus wasm heap images;
 the wire and reader cross-language checks; difftest on djs with the ratchet, suspension,
 GC stress, heap-image determinism and a dump at every idle point; difftest with the
 bytecode backend; the unsafe-heap build, which the shipped and slim modules use (D3100;
@@ -623,7 +623,7 @@ all of them:
 | class | leaves out | legs |
 |---|---|---|
 | `all` | nothing | the guide, djs-docs's tests |
-| `nodocs` | `docs/`, `work/`, `.github/`, the top-level `*.md` | js tests, the npm package, wire/reader cross-language, native vs wasm, pi's tests |
+| `nodocs` | `docs/`, `work/`, `.github/`, the top-level `*.md` | js tests, the npm package, the codemode workloads, wire/reader cross-language, native vs wasm, pi's tests |
 | `rust` | `nodocs`'s, and `js/` (but `js/src/layout.generated.ts`) and `examples/` | everything else |
 
 `scripts/` is in every class, so a change to the gate reruns every leg. Outside the
@@ -740,6 +740,18 @@ native modules and bundled by Vite and webpack. The gate's `npm package` leg pac
 the gate's builds and runs the smoke test in node, so main stays publishable;
 .github/workflows/publish.yml runs everything on the release modules (node 20, 22 and 24,
 Bun, Deno, Chromium) before it publishes.
+
+### The engine comparison (D3110–D3114)
+
+docs/guide/benchmarks.md compares djs with QuickJS builds and monty, all in wasm, on the
+codemode workload set (tests/bench/codemode: nine synthetic bodies, one per cluster of real
+codemode use, work/research/0229). `scripts/bench-engines.sh` fetches and builds the engines
+(pinned by sha256 and js/bench/engines/package-lock.json) into vendor/engines of the primary
+checkout and runs js/bench/engines/run.ts; `scripts/status.py engines` records the median of
+three runs as `engines/*` keys, which the page's `gen:status engines-*` tables read. Every
+engine's result must equal node's. The gate's `codemode workloads` leg runs the set once on
+djs's dev modules (`run.ts --quick --engines djs`), dumps and loads included, so a workload
+that stops working fails the gate, not the next recording.
 
 ### Size budget (D020)
 

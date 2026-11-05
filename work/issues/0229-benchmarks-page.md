@@ -44,6 +44,29 @@ A guide page with benchmarks a reader can trust and we can re-run:
 
 ## Log
 
+- 2026-11-06 (benchpage): sessions sampled with capped scripts (work/research/0229/extract.py,
+  cluster.py; output to gitignored scratch only): 2,945 codemode bodies from 377 session files,
+  8 clusters + a tail case; README there has counts/distributions only. Workload set
+  tests/bench/codemode: 9 bodies (JS, ts.ts, Python translations), stub tools in tools.ts.
+- Engines (js/bench/engines/engines.ts): djs, quickjs-wasi 3.6.2, QuickJS 2026-06-04 and
+  QuickJS-NG 0.18.0 built with wasi-sdk 34 (-O2, driver.c reactor), quickjs-emscripten 0.32.0
+  (Bellard 2025-09-13, NG 0.12.1), monty 1.3.0 (wasm component on the calling thread).
+  scripts/bench-engines.sh fetches/builds (sha256 + package-lock). All 7 engines give node's
+  result string on all 9 workloads (monty's Python included).
+- First numbers (load ~3, not recorded): djs fastest new VM (0.12 ms vs 0.25-0.39), wins
+  fanout/media/JSON; slower on loop (1.7x, regex) and heavy (Math.max). Per-op list of >1.5x
+  gaps sent to the coordinator (builtin call overhead, sort comparator, Promise.all, Map/Set
+  string keys, regex exec/replace/compile, join, memory 2x via base image + GC threshold); fixes
+  run as 0230-0234. Page numbers wait for them.
+- Tooling: `scripts/status.py engines` (median of 3 runs -> `engines/*` keys), djs-docs
+  `gen:status engines-*` tables (+ unit test), `recorded` skips `engines/*`; gate leg
+  `codemode workloads` (djs dev modules, --quick, ~2 s). Outside `touches:` (kept minimal):
+  crates/djs-docs/src/status.rs, scripts/gate.py, TESTING.md (leg list + a section),
+  docs/guide/README.md (region table). Decisions D3110-D3114.
+- Batch 1 (workloads, harness, engines, tooling) merged; page + recorded numbers are batch 2.
+
 ## Follow-ups
+
+- Per-op djs-vs-QuickJS gaps (sent 2026-11-06): being fixed in 0230-0234.
 
 ## Result

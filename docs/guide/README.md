@@ -88,6 +88,7 @@ in, so the Markdown reads the same on GitHub. Never edit it by hand.
 | `intrinsics-all` | every intrinsic, descriptions from builtins/intrinsics.d.ts |
 | `excerpt PATH "ANCHOR" "START" N` | N lines of a repository file: from the first line containing START after the line containing ANCHOR (quoted code that cannot drift) |
 | `status conformance\|speed\|size\|inventory\|recorded` | status numbers: counted from the repository, or read from `tests/scores/status.tsv` (`scripts/status.py`); also used in README.md. `recorded` lists the recorded measurements (on pi.md those that name pi, elsewhere the others) |
+| `status engines-size\|engines-startup\|engines-run\|engines-memory\|engines-dumps` | the benchmarks page's tables, from the `engines/*` keys of `tests/scores/status.tsv` (`scripts/status.py engines`) |
 | `disasm` | the bytecode of the closest `js` or `ts` block above |
 | `run` | the output of the closest `js` or `ts` block above, as this build prints it |
 | `dump [N]` | the continuation dump the closest `js` or `ts` block above writes at its Nth `debugger;` pause (default 1), as a live example writes it at that pause |

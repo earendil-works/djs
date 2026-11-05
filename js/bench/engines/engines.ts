@@ -51,10 +51,11 @@ const scriptProgram = (body: string) =>
   `(async () => {\n${bodyProgram(body)}\n})().then((v) => { globalThis.__result = v; }, (e) => { globalThis.__result = "ERROR " + ((e && e.stack) || e); });`;
 
 const compile = (path: string) => WebAssembly.compile(readFileSync(path));
+const pkgVersion = (dir: string) => JSON.parse(readFileSync(join(dir, "package.json"), "utf8")).version as string;
 
 // ---- djs ---------------------------------------------------------------------------------
 
-export function djs(wasm = join(root, "target/wasm32-unknown-unknown/wasm/djs_wasm.wasm")): Engine {
+export function djs(wasm = process.env.DJS_WASM ?? join(root, "target/wasm32-unknown-unknown/wasm/djs_wasm.wasm")): Engine {
   let module: WebAssembly.Module;
   return {
     name: "djs",
@@ -85,10 +86,11 @@ export function quickjsWasi(): Engine {
   const pkg = join(NPM, "quickjs-wasi");
   let QuickJS: any;
   let module: WebAssembly.Module;
-  const version = JSON.parse(readFileSync(join(pkg, "package.json"), "utf8")).version;
   return {
     name: "quickjs-wasi",
-    version: `quickjs-wasi ${version} (npm; QuickJS-NG for WASI)`,
+    get version() {
+      return `quickjs-wasi ${pkgVersion(pkg)} (npm; QuickJS-NG for WASI)`;
+    },
     language: "js",
     typescript: false,
     files: [join(pkg, "quickjs.wasm")],
@@ -127,13 +129,14 @@ export function quickjsEmscripten(flavor: "bellard" | "ng"): Engine {
   const name = flavor === "ng" ? "@jitl/quickjs-ng-wasmfile-release-sync" : "@jitl/quickjs-wasmfile-release-sync";
   const pkg = join(NPM, name);
   const core = join(NPM, "quickjs-emscripten-core");
-  const version = JSON.parse(readFileSync(join(pkg, "package.json"), "utf8")).version;
   const wasm = join(pkg, "dist/emscripten-module.wasm");
   let variant: unknown;
   let api: any;
   return {
     name: flavor === "ng" ? "quickjs-emscripten (ng)" : "quickjs-emscripten",
-    version: `quickjs-emscripten ${version}, ${flavor === "ng" ? "QuickJS-NG 0.12.1" : "QuickJS 2025-09-13"} (npm ${name})`,
+    get version() {
+      return `quickjs-emscripten ${pkgVersion(pkg)}, ${flavor === "ng" ? "QuickJS-NG 0.12.1" : "QuickJS 2025-09-13"} (npm ${name})`;
+    },
     language: "js",
     typescript: false,
     files: [wasm],
@@ -188,13 +191,14 @@ export function quickjsEmscripten(flavor: "bellard" | "ng"): Engine {
 export function quickjsBuilt(flavor: "bellard" | "ng"): Engine {
   const dir = join(VENDOR, "build");
   const wasm = join(dir, flavor === "ng" ? "quickjs-ng.wasm" : "quickjs.wasm");
-  const info = existsSync(wasm + ".version") ? readFileSync(wasm + ".version", "utf8").trim() : "?";
   let module: WebAssembly.Module;
   const enc = new TextEncoder();
   const dec = new TextDecoder();
   return {
     name: flavor === "ng" ? "quickjs-ng" : "quickjs",
-    version: info,
+    get version() {
+      return existsSync(wasm + ".version") ? readFileSync(wasm + ".version", "utf8").trim() : "?";
+    },
     language: "js",
     typescript: false,
     files: [wasm],
@@ -247,14 +251,15 @@ export function quickjsBuilt(flavor: "bellard" | "ng"): Engine {
 export function monty(): Engine {
   const pkg = join(NPM, "@pydantic/monty");
   const dir = join(pkg, "dist/worker/component");
-  const version = JSON.parse(readFileSync(join(pkg, "package.json"), "utf8")).version;
   let modules: Record<string, WebAssembly.Module>;
   let instantiate: any;
   let WASIShim: any;
   let names: string[];
   return {
     name: "monty",
-    version: `monty ${version} (npm @pydantic/monty, its wasm component)`,
+    get version() {
+      return `monty ${pkgVersion(pkg)} (npm @pydantic/monty, its wasm component)`;
+    },
     language: "python",
     typescript: false,
     get files() {

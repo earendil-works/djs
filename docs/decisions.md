@@ -10958,3 +10958,61 @@ https://earendil-works.github.io/djs/. Releases publish from `.github/workflows/
 `v*` tag through npm trusted publishing (GitHub OIDC, provenance), gated by the `npm` GitHub
 environment (required reviewer, `v*` tags only); a repository ruleset lets only admins create,
 move or delete `v*` tags.
+
+## D3110: The engine comparison runs every engine in wasm in one node process, a fresh VM per run
+date: 2026-11-06 · by: benchpage · issue: 0229
+js/bench/engines/run.ts compares engines as an embedder runs them: each engine's wasm module is
+compiled once per process (timed apart), every run gets a new instance and VM (isolated, its
+linear memory measured alone), and the times are medians of 25 runs after 3 warm-up runs, so V8
+has tiered the code up (a long-lived host). The tool answers are recorded in node first
+(tests/bench/codemode/tools.ts) and given to every engine as one JSON string `__DATA`; the stub
+tools in the engine stringify their arguments and parse their answer's JSON text, the work a host
+bridge does, identically for all engines (a bridge through each engine's own host API would
+measure the APIs, not the engines; js/bench/pi.bench.ts compares the host bridges). Every
+engine's result must be the string node computes, or the run fails. Measured: module bytes (raw,
+gzip -9, brotli 11; JS glue apart), compile time, idle VM memory, new-VM time, run time and
+memory after the run per workload, and for djs the dumps at every idle point through the Sandbox
+with async host tools (shipped module plus dump module): write time, raw and gzip size, the time
+of a new sandbox with the run loaded. Wall-clock medians, not instruction counts: the
+comparison spans engines and hosts whose instructions do not compare, and the load is recorded
+(`engines/load`; record below ~4).
+
+## D3111: The QuickJS releases are built with wasi-sdk by one script, as a minimal reactor
+date: 2026-11-06 · by: benchpage · issue: 0229
+Engines: djs (shipped module), quickjs-wasi 3.6.2 and quickjs-emscripten 0.32.0's two
+release-sync variants (Bellard 2025-09-13, QuickJS-NG 0.12.1) from npm (package-lock.json pins
+them with integrity hashes), and the latest releases, QuickJS 2026-06-04 (bellard.org tarball)
+and QuickJS-NG 0.18.0 (its release amalgamation), built by scripts/bench-engines.sh with wasi-sdk
+34 (sha256-pinned per platform), `-O2`, as WASI reactors around js/bench/engines/driver.c (one
+runtime and context, a global string, eval, drain the jobs, read `__result`): the same compiler
+and embedding for both, nothing of quickjs-libc. Bellard's sources need three edits for WASI (no
+Atomics without threads, no malloc_usable_size, an unused setjmp.h), applied by sed; QuickJS-NG
+builds as released. Everything lands in vendor/engines of the primary checkout.
+
+## D3112: monty runs as its wasm component, instantiated on the calling thread
+date: 2026-11-06 · by: benchpage · issue: 0229
+@pydantic/monty 1.3.0's wasm build is a component (jco) that the package runs only in worker
+threads. The harness instantiates the same component modules on the calling thread with the same
+capabilities (no preopens, environment or network; exit denied) and drives its `dispatch`
+(`configure`, one `feed` per run), so its times have no thread hop the JS engines do not pay.
+The workloads' Python translations (tests/bench/codemode/*.py, by hand) must return the same
+string as the JavaScript, like every other engine.
+
+## D3113: The codemode workload set is synthetic; the sessions it was derived from stay private
+date: 2026-11-06 · by: benchpage · issue: 0229
+tests/bench/codemode holds nine invented bodies, one per cluster of the codemode bodies found in
+the owner's agent sessions (work/research/0229: counts and size distributions only), with stub
+tools whose data comes from fixed word lists and a seeded generator. Nothing from the sessions
+(bodies, paths, contents, prompts, outputs, tool or server names) is committed; the extraction
+writes only to gitignored scratch. The gate's `codemode workloads` leg runs the set on djs's dev
+modules once (about 2 s), with a dump and a load at every idle point, so the page's workloads keep
+working.
+
+## D3114: The benchmarks page's tables are generated from `engines/*` status keys
+date: 2026-11-06 · by: benchpage · issue: 0229
+`scripts/status.py engines` runs bench-engines.sh's setup and run.ts three times and records the
+medians as `engines/<engine>/...`, `engines/<engine>/<workload>/{run-ms,memory}` and
+`engines/djs/<workload>/dump-*` keys plus `engines/load`; djs-docs renders them in `gen:status
+engines-size|engines-startup|engines-run|engines-memory|engines-dumps` (the engine and workload
+lists are constants in crates/djs-docs/src/status.rs), with the commit, date and load. The
+`recorded` region leaves these keys out: they are the page's tables.
