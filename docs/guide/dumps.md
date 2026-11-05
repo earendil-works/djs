@@ -87,9 +87,9 @@ the open call of the pause. Then the loop goes on as written. Edit the example a
 it again to see how the dump follows: add a variable, a `Map`, a nested call.
 
 Each Continue resumes from the dump alone; nothing else of the run survives between the
-parts. The dumps of the later pauses are no larger than the first: a dump of a resumed
-run writes its continuations again from the original code, not from the continuations
-of the previous dump, however often a run is suspended and resumed.
+parts. The later dumps grow only with the run's data (one more page each), not with the
+number of times the run was resumed: a dump of a resumed run writes its continuations
+again from the original code, not from the continuations of the previous dump.
 
 ## Idle points
 

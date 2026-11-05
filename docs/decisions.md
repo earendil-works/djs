@@ -10584,3 +10584,28 @@ run answers the pause its dump reopened at once, and without the flag every late
 always binds `debugger`, since a `--body` dump compiles the file again with the options
 its hash names, and `$djs.source` tries `debugger_awaits` among them). Without these modes
 `debugger;` does nothing.
+## D3052: goals.md holds every goal; links to a page's section must exist
+date: 2026-11-06 · by: guide · issue: 0220
+Owner's rule: every goal the guide refers to or relies on is a section of goals.md, which
+says what it means for a user, why djs chose it, and what it costs or rules out. Five are
+ranked (cheap data passing, fast startup in wasm, no syntax tree, persistence, suspend
+anywhere); four hold under all of them (isolation, determinism, wasm32 first, QuickJS's
+behavior). Minor aims are folded in (a small module and heap under fast startup,
+TypeScript under no syntax tree) or said in plain words, never called goals. `djs-docs
+check` fails on any link to a section a page does not have (`page.md#id` and `#id`,
+against the ids `render` gives headings, `render::heading_ids`), on every page.
+
+## D3053: live examples pause at `debugger;` in their normal Run
+date: 2026-11-06 · by: guide · issue: 0220
+Owner's design for the docs site, replacing the Dump tab of D3050's demo: an example whose
+code has a `debugger` keyword runs, when the site's module has the dumper, as a task with
+the Sandbox's `debugger` option and frozen builtins (dumps need them; examples without
+`debugger;` run as before). At each pause the page suspends the task into a dump and
+disposes of the sandbox; Run becomes Continue, which resumes from the dump in a fresh
+sandbox (`Sandbox.resume`) to the next pause or the end. The output is one transcript
+with a line at each pause (its line when the code has one `debugger;`, the dump's size);
+the current dump, with raw and gzip size, is a `<details>` under the output, which the
+build fills with the first pause's dump for readers without JavaScript. A dump the writer
+refuses is shown with its reasons, and Continue goes on in the same sandbox. An info tip
+left of Run explains the pause and links dumps.md. `ts` blocks (static and live) compile
+as TypeScript, in `gen:run`/`gen:disasm`/`gen:dump` and in the browser.
