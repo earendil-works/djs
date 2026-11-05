@@ -371,6 +371,21 @@ figure.diagram figcaption { margin-block-start: var(--semantic-dimension-space-g
   background: var(--semantic-color-text-negative); content: "";
 }
 .live-error { color: var(--semantic-color-text-negative); }
+/* A pause at `debugger;` in the output, the dump under it, and the tip on what it is. */
+.live-pause { color: var(--semantic-color-text-secondary); font-style: italic; }
+.live-dump-box { border-block-start: var(--semantic-dimension-border-width-small) solid var(--semantic-color-border-secondary); }
+.live-dump-box > summary { cursor: pointer; padding: var(--semantic-dimension-space-padding-small) var(--semantic-dimension-space-padding-x-large); color: var(--semantic-color-text-secondary); }
+.live-dump-box pre { max-block-size: 22rem; overflow: auto; }
+.live button.live-run.is-paused { background: var(--semantic-color-background-fill-primary-positive); }
+.live-info { position: relative; color: var(--semantic-color-text-secondary); text-decoration: none; cursor: help; padding-inline: var(--semantic-dimension-space-control-gap-small); }
+.live-info::after {
+  content: attr(data-tip); position: absolute; inset-block-start: calc(100% + 0.4rem); inset-inline-end: 0; z-index: 2;
+  inline-size: max-content; max-inline-size: 22rem; padding: var(--semantic-dimension-space-padding-small);
+  background: var(--semantic-color-background-canvas); color: var(--semantic-color-text-primary);
+  border: var(--semantic-dimension-border-width-small) solid var(--semantic-color-border-secondary); border-radius: var(--semantic-dimension-radius-default);
+  font-style: normal; white-space: normal; visibility: hidden; opacity: 0;
+}
+.live-info:hover::after, .live-info:focus-visible::after { visibility: visible; opacity: 1; }
 div.live-pane { padding: var(--semantic-dimension-space-padding-small) var(--semantic-dimension-space-padding-x-large); overflow-x: auto; }
 div.live-pane p { margin-block: var(--semantic-dimension-space-flow-x-small); }
 /* Output and bytecode on the canvas, set apart from the source above. */

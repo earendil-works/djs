@@ -341,7 +341,7 @@ fn speed(st: &Status, pi: bool) -> Result<String, String> {
         let label = if pi {
             label.to_string()
         } else {
-            label.replace("pi-like", "agent-like")
+            label.replace("a pi-like", "an agent-like")
         };
         let _ = writeln!(
             s,

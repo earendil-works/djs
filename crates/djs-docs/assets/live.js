@@ -1,7 +1,7 @@
 // Live examples: every ```js live block of the guide is an editor whose code runs in
 // djs-wasm in the page (D2103). A `debugger;` in the code pauses the run there (D3050):
-// the page writes it out as a continuation dump, shows it in the Dump tab and can resume
-// the run from it, in a fresh sandbox. The editor is a textarea with transparent text over the
+// the page writes it out as a continuation dump, shows it under the output, and Continue
+// resumes the run from it in a fresh sandbox. The editor is a textarea with transparent text over the
 // highlighted `pre` the page already has (render.rs live_block): the textarea does the
 // editing (caret, selection, undo, input methods, screen readers) and highlight.js
 // repaints the `pre` under it on every input. Without JavaScript (or from file://) the
@@ -266,7 +266,8 @@ function onKey(ev, ex) {
   const [s, e] = [ta.selectionStart, ta.selectionEnd];
   if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) {
     ev.preventDefault();
-    run(ex);
+    if (ex.cont) ex.cont();
+    else run(ex);
   } else if (ev.key === "Escape") {
     // Tab indents in the editor; Escape gives the keyboard back to the page, on the
     // result tabs right after the editor, so that Tab goes on from there.
@@ -317,29 +318,47 @@ async function gzipSize(text) {
   return (await new Response(stream).arrayBuffer()).byteLength;
 }
 
+/** The line of the code's only `debugger` keyword (from 1), or 0 when it has several. */
+function debuggerLine(src) {
+  let at = 0;
+  let line = 0;
+  for (const [role, s] of tokens(src)) {
+    if (role === "keyword" && s === "debugger") {
+      if (line) return 0;
+      line = src.slice(0, at).split("\n").length;
+    }
+    at += s.length;
+  }
+  return line;
+}
+
 /**
- * A run with `debugger;` pauses (D3050): a task whose `debugger` host function suspends it
- * into a dump. Each pause shows the dump; Resume loads it into a fresh sandbox, which runs
- * on to the next pause or the end. The output of all of them goes to one pane.
+ * A run with `debugger;` pauses (D3050) as part of the normal Run: a task whose `debugger`
+ * host function makes the run idle at the statement, so the page suspends it into a dump
+ * there. Run turns into Continue, which resumes the run from that dump in a fresh
+ * sandbox, on to the next pause or the end. The output of all of them is one transcript,
+ * with a line at each pause; the current dump is one click away below it. A run that
+ * cannot be dumped (a value the dumper refuses) says why and continues in the same
+ * sandbox. Dumps need frozen builtins, so these runs have them.
  */
 async function runPausing(ex, l, id) {
   const { el } = ex;
   const pane = (n) => el.querySelector(`[data-pane="${n}"]`);
   const setStatus = (t) => (el.querySelector(".live-status").textContent = t);
+  const box = el.querySelector(".live-dump-box");
   const { Sandbox, module } = l;
-  if (!l.dumps) {
-    pane("dump").innerHTML = `<p class="muted">This build of the site has no dumper (the docs module is built with it), so <code>debugger;</code> does nothing.</p>`;
-    return false;
-  }
+  const src = ex.ta.value;
+  const at = debuggerLine(src);
+  const where = at ? `line ${at}` : "debugger;";
   const lines = [];
   const out = (...a) => lines.push(esc(a.map(show).join(" ")));
-  const showOut = (extra = "") =>
-    (pane("out").innerHTML = lines.length
-      ? lines.join("\n") + extra
-      : extra.replace(/^\n/, "") || `<span class="muted">(no output)</span>`);
+  const marker = (t) => lines.push(`<span class="live-pause">${esc(t)}</span>`);
+  const showOut = () => (pane("out").innerHTML = lines.join("\n") || `<span class="muted">(no output)</span>`);
   // The pause may come while `start` or `resume` still runs, before `step` waits for it.
   let paused = false;
   let wake = null;
+  // Continues a pause in the same sandbox (after a refused dump).
+  let release = null;
   const opts = {
     module,
     frozenBuiltins: true,
@@ -353,13 +372,18 @@ async function runPausing(ex, l, id) {
       call() {
         paused = true;
         wake?.();
-        return new Promise(() => {});
+        return new Promise((r) => (release = r));
       },
       // Continued from a dump: the run goes on at once.
       resume() {},
     },
   };
+  let pauses = 0;
   let resumes = 0;
+  const done = () => {
+    ex.cont = null;
+    setRunLabel(ex, false);
+  };
   const step = async (task) => {
     const atPause = paused ? Promise.resolve() : new Promise((r) => (wake = r));
     const end = task.result.then(
@@ -370,51 +394,78 @@ async function runPausing(ex, l, id) {
     if (id !== ex.runs) return task.sandbox.dispose();
     if (first.done) {
       task.sandbox.dispose();
-      const failure = first.e ? describe(first.e, ex.ta.value, false) : null;
-      showOut(failure ? `\n<span class="live-error">${esc(failure.text)}</span>` : "");
-      setStatus(failure ? "threw" : resumes ? `ran to the end, resumed ${resumes}× from a dump` : "ran without pausing");
-      const last = pane("dump").querySelector(".live-dump");
-      pane("dump").innerHTML = resumes && last
-        ? `<p class="muted">The run went on from this dump to its end.</p>${last.outerHTML}`
-        : `<p class="muted">The run ended without reaching a <code>debugger;</code> in an async function.</p>`;
+      const failure = first.e ? describe(first.e, src, false) : null;
+      if (failure) lines.push(`<span class="live-error">${esc(failure.text)}</span>`);
+      showOut();
+      setStatus(failure ? "threw" : resumes ? `ran to the end, continued ${resumes}× from a dump` : "ran to the end");
+      if (resumes) box.querySelector("summary").textContent = `The last dump the run continued from (${ex.dumpSize})`;
+      done();
       return;
     }
     paused = false;
     wake = null;
+    pauses++;
     let dump;
     try {
       dump = await task.suspend();
     } catch (e) {
-      task.sandbox.dispose();
-      showOut(`\n<span class="live-error">${esc(String(e?.message ?? e))}</span>`);
-      setStatus("could not dump");
-      pane("dump").innerHTML = `<p class="live-error">${esc(String(e?.message ?? e))}</p>`;
+      if (id !== ex.runs) return task.sandbox.dispose();
+      // Not dumpable here: say why, and let Continue go on in this sandbox.
+      marker(`⏸ paused at ${where}, but the run cannot be dumped here:`);
+      lines.push(`<span class="live-error">${esc(String(e?.message ?? e).replace(/^cannot dump:\s*/, "").trimEnd())}</span>`);
+      showOut();
+      box.hidden = true;
+      setStatus(`paused (pause ${pauses}), not dumpable`);
+      ex.cont = () => {
+        ex.cont = null;
+        lines.push(`<span class="live-pause">▶ continued in the same sandbox</span>`);
+        showOut();
+        setRunLabel(ex, false);
+        const r = release;
+        release = null;
+        r?.();
+        step(task);
+      };
+      setRunLabel(ex, true);
       return;
     }
     task.sandbox.dispose();
-    showOut(`\n<span class="muted">(paused at debugger)</span>`);
-    setStatus(`paused at debugger${resumes ? ` (after ${resumes} resume${resumes > 1 ? "s" : ""})` : ""}`);
+    if (id !== ex.runs) return;
     const gz = await gzipSize(dump);
     const bytes = new TextEncoder().encode(dump).length;
-    pane("dump").innerHTML =
-      `<p>The run is idle at <code>debugger;</code>: it waits for the host's <code>debugger</code> call, so the page wrote it out as a continuation dump, ` +
-      `<b>${size(bytes)}</b>${gz === null ? "" : ` (${size(gz)} gzipped)`}. The sandbox that ran it is gone; the dump is all that is left of the run. ` +
-      `<button class="live-resume">Resume from the dump</button></p>` +
-      `<pre class="code live-dump"><code class="lang-js">${paint(dump, null)}</code></pre>`;
-    pane("dump").querySelector(".live-resume").onclick = async () => {
-      if (id !== ex.runs) return;
+    ex.dumpSize = `${size(bytes)}${gz === null ? "" : `, ${size(gz)} gzipped`}`;
+    marker(`⏸ paused at ${where}: the run is now a ${size(bytes)} dump, and its sandbox is gone`);
+    showOut();
+    box.hidden = false;
+    box.querySelector("summary").textContent = `The continuation dump at this pause (${ex.dumpSize})`;
+    box.querySelector("code").innerHTML = paint(dump, null);
+    setStatus(`paused at ${where} (pause ${pauses})`);
+    ex.cont = async () => {
+      ex.cont = null;
+      setRunLabel(ex, false);
       resumes++;
-      setStatus("resuming…");
+      lines[lines.length - 1] = `<span class="live-pause">${esc(`⏸ paused at ${where}, continued from the ${size(bytes)} dump in a fresh sandbox`)}</span>`;
+      showOut();
+      setStatus("continuing…");
       try {
         await step(await Sandbox.resume(dump, opts));
       } catch (e) {
-        setStatus(`could not resume: ${e.message}`);
+        setStatus(`could not continue: ${e.message}`);
+        done();
       }
     };
-    select(ex, "dump");
+    setRunLabel(ex, true);
   };
-  await step(new Sandbox(opts).start(ex.ta.value, {}, { filename: "example.js" }));
-  return true;
+  box.hidden = true;
+  showOut();
+  await step(new Sandbox(opts).start(src, {}, { filename: "example.js" }));
+}
+
+/** The Run button: "Continue" while a run is paused at `debugger;`. */
+function setRunLabel(ex, paused) {
+  const b = ex.el.querySelector(".live-run");
+  b.innerHTML = `${paused ? "Continue" : "Run"} <kbd>${RUN_KEYS}</kbd>`;
+  b.classList.toggle("is-paused", paused);
 }
 
 async function run(ex) {
@@ -429,14 +480,19 @@ async function run(ex) {
   try {
     const l = await lib();
     const { Sandbox, module } = l;
-    if (hasDebugger(src)) {
-      pane("bytecode").textContent = disasm(module, src, ex.ts) ?? ex.listing;
-      pane("heap").innerHTML = `<p class="muted">A run that pauses at <code>debugger;</code> ends in a dump; its heap is gone.</p>`;
-      pane("suspend").innerHTML = `<p class="muted">See the Dump tab: this run is suspended into a dump at its <code>debugger;</code>.</p>`;
-      if (await runPausing(ex, l, id)) return;
-    } else if (pane("dump").querySelector(".live-dump")) {
-      pane("dump").innerHTML = DUMP_HINT;
+    if (ex.cont) {
+      ex.cont = null;
+      setRunLabel(ex, false);
     }
+    if (l.dumps && hasDebugger(src)) {
+      pane("bytecode").textContent = disasm(module, src, ex.ts) ?? ex.listing;
+      pane("heap").innerHTML = `<p class="muted">This run pauses at <code>debugger;</code>: each part of it runs in a sandbox of its own, which is gone once the run is a dump.</p>`;
+      pane("suspend").innerHTML = `<p class="muted">At each <code>debugger;</code> the run is suspended into a continuation dump; see the Output tab.</p>`;
+      select(ex, "out");
+      await runPausing(ex, l, id);
+      return;
+    }
+    el.querySelector(".live-dump-box").hidden = true;
     let lines = [];
     const out = (...a) => lines.push(esc(a.map(show).join(" ")));
     let slices = 0;
@@ -509,8 +565,6 @@ async function run(ex) {
   }
 }
 
-const DUMP_HINT = `<p class="muted">Put <code>debugger;</code> in the code, at the top level or in any async function: the run then pauses there, and the page writes it out as a continuation dump, shows it, and can resume the run from it.</p>`;
-
 /** Shows the result tab `name`. */
 function select(ex, name) {
   ex.select?.(ex.el.querySelector(`[role="tab"][data-tab="${name}"]`));
@@ -537,6 +591,9 @@ function setup(el, n) {
     runs: 0,
     timer: 0,
     sandbox: null,
+    // While a run is paused at `debugger;`: what Continue does.
+    cont: null,
+    dumpSize: "",
   };
   const hint = document.createElement("span");
   hint.className = "live-keys";
@@ -558,11 +615,12 @@ function setup(el, n) {
   repaint(ex);
   el.classList.add("is-live");
 
+  el.querySelector(".live-info").hidden = false;
   const runBtn = el.querySelector(".live-run");
   runBtn.innerHTML = `Run <kbd>${RUN_KEYS}</kbd>`;
   runBtn.setAttribute("aria-keyshortcuts", MAC ? "Meta+Enter" : "Control+Enter");
   runBtn.hidden = false;
-  runBtn.onclick = () => run(ex);
+  runBtn.onclick = () => (ex.cont ? ex.cont() : run(ex));
   const reset = el.querySelector(".live-reset");
   reset.onclick = () => {
     // Through the editing commands, so that undo brings the edits back.

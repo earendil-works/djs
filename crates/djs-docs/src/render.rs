@@ -267,16 +267,17 @@ fn live_block(n: usize, lang: &str, hl: &str, code: &str) -> String {
     let ts = lang == "ts";
     let out_text = crate::run::run(code, ts);
     let disasm = crate::run::disasm(code, ts);
-    // An example with a `debugger;` shows the dump it writes there (D3050): built here,
-    // so that the page shows it without JavaScript too; live.js makes it live.
+    // An example with a `debugger;` shows the dump it writes at its first pause (D3050):
+    // built here, so that the page shows it without JavaScript too; live.js replaces it
+    // with the dump of each pause.
     let dump = if has_debugger(code) {
         format!(
-            "<p class=\"muted\">The run paused at its first <code>debugger;</code> and was dumped there:</p>\
-             <pre class=\"code live-dump\"><code class=\"lang-js\">{}</code></pre>",
+            "<details class=\"live-dump-box\"><summary>The continuation dump at the first \
+             <code>debugger;</code></summary><pre class=\"code live-dump\"><code class=\"lang-js\">{}</code></pre></details>\n",
             crate::highlight::highlight("js", &crate::run::dump(code, 1, ts))
         )
     } else {
-        DUMP_HINT.to_string()
+        "<details class=\"live-dump-box\" hidden><summary></summary><pre class=\"code live-dump\"><code class=\"lang-js\"></code></pre></details>\n".to_string()
     };
     let tab = |id: &str, label: &str, selected: bool| {
         format!(
@@ -298,17 +299,17 @@ fn live_block(n: usize, lang: &str, hl: &str, code: &str) -> String {
         "<div class=\"live\" id=\"live-{n}\">\n\
          <div class=\"live-bar\"><span class=\"live-badge\">live</span>\
          <span class=\"live-note\">output from the build</span>\
+         <a class=\"live-info\" href=\"dumps.html\" hidden aria-label=\"{INFO}\" data-tip=\"{INFO}\">ⓘ</a>\
          <button class=\"live-reset\" hidden>Reset</button>\
          <button class=\"live-run\" hidden>Run</button></div>\n\
          <div class=\"live-editor\"><pre class=\"code\"><code class=\"lang-{lang}\">{hl}</code></pre></div>\n\
-         <div class=\"live-tabs\" role=\"tablist\" aria-label=\"Results\">{}{}{}{}{}\
+         <div class=\"live-tabs\" role=\"tablist\" aria-label=\"Results\">{}{}{}{}\
          <span class=\"live-status\" role=\"status\"></span></div>\n\
-         {}{}{}{}{}</div>\n",
+         {}{}{}{}{dump}</div>\n",
         tab("out", "Output", true),
         tab("bytecode", "Bytecode", false),
         tab("heap", "Heap", false),
         tab("suspend", "Suspend", false),
-        tab("dump", "Dump", false),
         pane("pre", "out", false, &esc(&out_text)),
         pane("pre", "bytecode", true, &esc(&disasm)),
         pane(
@@ -323,14 +324,13 @@ fn live_block(n: usize, lang: &str, hl: &str, code: &str) -> String {
             true,
             "<p class=\"muted\">Run the example to see it suspend.</p>"
         ),
-        pane("div", "dump", true, &dump),
     )
 }
 
-/// The Dump tab of an example without `debugger;`.
-const DUMP_HINT: &str = "<p class=\"muted\">Put <code>debugger;</code> in the code, at the top \
-     level or in any async function: the run then pauses there, and the page writes it out as \
-     a continuation dump, shows it, and can resume the run from it.</p>";
+/// The live examples' info tip (next to Run), on what `debugger;` does there.
+const INFO: &str = "A debugger; statement suspends the run into a continuation dump, \
+     JavaScript that recreates it. Continue resumes the run from that dump in a fresh \
+     engine. The icon links to the page on continuation dumps.";
 
 /// The code has a `debugger` statement (the keyword as a token, not in a string or a
 /// comment).
