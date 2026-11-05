@@ -10336,3 +10336,23 @@ between (`Promise.all([$dump.p4, $dump.p5])`), all or none, where their lines ar
 effects of the list, in that order. A reaction on a promise of the builtin prototype
 without own `then`/`finally` is written as the method call (`p.then(f)`, trailing
 `undefined` left out): while the dump loads, builtins are the realm's own.
+
+## D3003: Closures and continuations a continuation's blocks make are written where they are used
+date: 2026-11-06 · by: pjs · issue: 0207
+0216's queue item 6, second part (factory plumbing). A closure of a merged scope placed in
+a block of continuation K (written there as `Object.assign($dump.sN, { key: … })` and read
+back as `$dump.sN.key`) whose one use is in K at or below that block (a binding's value,
+the callback lines K now holds, the site's operand taken from the callback) is written at
+that use instead, the member left out of the block: `var todos = async function todos(path)
+{…};`. Only a member written as `key: <function>` (a method keeps its home object), only
+where no block between declares a name the function reads; `(0, f)` loses its parentheses
+where no name is inferred. A function's creation evaluates nothing, so it may come later
+than its block's code. A continuation of a merged scope is called on `$djs.k`'s result
+(`$djs.k($dump.sN.$Ka5, f)(…)`, `$djs.k` returns K) and written there where that call is in
+K below its block (`$djs.k(async function (path) {…}, todos)("src/d.ts")`). In those texts a
+member a binding of K declared at or above holds is named by the binding (`todos`), and
+liveness sees the bindings the dump names in the site's operand (`P::Val`'s names). Only
+references outside function bodies are rewritten: a continuation's text inside has its
+layout (holes) already. A merged factory's holder object is written only where a member is
+still written on it. Values and activations nothing names are written as statements, or
+left out where they only make a value.
