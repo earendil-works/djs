@@ -494,7 +494,7 @@ class Gen {
       [this.fn.loops.length ? 1 : 0, () => this.jumpStmt()],
       [this.vars((v) => WIDE.includes(v.type) && (v.type !== "big" || v.mut)).length ? 3 : 0, () => this.wideStmt()],
       [this.opts.wide && d > 0 ? 1 : 0, () => this.labeledBlock(d)],
-      [this.opts.wide && this.varOf("obj") ? 1 : 0, () => this.line(`delete ${this.varOf("obj")}.${this.pick(["a", "b", "c"])};`)],
+      [this.opts.wide && this.varOf("obj") ? 1 : 0, () => this.line(`Reflect.deleteProperty(${this.varOf("obj")}, ${JSON.stringify(this.pick(["a", "b", "c"]))});`)],
     ]);
   }
   declStmt() {

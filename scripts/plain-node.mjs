@@ -38,8 +38,11 @@ if (!dir || (ri > 0 && !refusalsFile)) {
 
 // Stack frame lines are not compared (the difftest's normalize drops them too), and
 // node's wording of the common TypeErrors reads as djs's.
+// A lone surrogate reads as U+FFFD in djs's transcript (written as UTF-8); node's output
+// string still holds it.
 const norm = (t) =>
   t
+    .toWellFormed()
     .split("\n")
     .filter((l) => !/^\s+at /.test(l))
     .map((l) => l.replace(/Cannot read properties of (undefined|null) \(reading '([^']*)'\)/g, "cannot read property '$2' of $1"))
