@@ -20,6 +20,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | - | (in 0223) Guide figures not re-measured (heap, arena, compiler, gc, builtins): re-measure or make them gen:status numbers; run.rs module comment lists a safepoint the code lacks (0220 follow-ups) | ready |
 | - | Stale entry in tests/pi/expected-failures.txt (next mode): update the ratchet | ready |
 | - | Paused, agents archived (owner): 0207 dump size (fluff queue items 8, 9, 11; crossing-callbacks and for-in.iterator refusals), 0211 fuzzing, 0215 performance (Result written) | restart on request |
+| - | fuzz.mjs reduce left an orphaned djs-difftest at 100% CPU for 15 h (likely a reduced candidate with an endless loop, run without a timeout): wrap reduce's runs in scripts/timeout.sh / a fuel cap; check whether it was an engine hang instead | ready |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
 | - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |
