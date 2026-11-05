@@ -1,6 +1,6 @@
 # 0232: Performance: Promise.all, await, async calls
 
-status: in-progress
+status: done
 agent: pasync
 branch: issue/0232-perf-async
 depends-on: -
@@ -37,6 +37,12 @@ Constraints: exact semantics (test262 and the difftest stay green); measure in w
   getters, Proxy, own constructor, patched then/resolve/species, Array.prototype.then, subclass,
   job order). test262 active group, difftest (plain, stress --lazy --suspend-every 97 --gc-stress
   --determinism), plain dumps in djs and node, fuzz regress with and without --lazy: see Result.
+- Verification: test262 active group (ratchet OK), difftest plain and stress (--lazy
+  --suspend-every 97 --gc-stress --determinism) OK, plain dumps leg (1521 links, node 0 differ)
+  OK. fuzz regress: regress/ check 17 failures, the same on main (cf826382); fresh seeds found
+  seed 344676 ("cannot read property 'prototype' of undefined" at plain load) and with --lazy seed
+  208872 ("not an object" at plain load), both failing identically with main's difftest binary:
+  pre-existing dumper bugs, not this change (reported to the coordinator).
 - Guide: suspension.md (await without %AsyncAwait in the common cases). interpreter.md unaffected.
 - Outside touches: interp/run.rs next_job (job loop, now a loop with `job_failed`), the
   REALM_INTRINSIC arm in intrinsics.rs, iter.rs `iter_next_peek`, vm/tests.rs
