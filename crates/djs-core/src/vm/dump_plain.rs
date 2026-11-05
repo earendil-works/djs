@@ -164,7 +164,7 @@ fn ident_part(c: u8) -> bool {
 /// name after `.` is a property, not a reference. It errs on the side of too many
 /// names (an object literal's keys count), which only adds orderings that hold anyway.
 pub(super) fn refs(text: &str) -> Refs {
-    scan(text, false, &|_| true, &mut |_, _| {}, true)
+    scan(text, false, &|_, _| true, &mut |_, _| {}, true)
 }
 
 /// Where `text` reads `$dump.X` (as [`refs`] finds them): `[start, end)` of each, the
@@ -177,7 +177,7 @@ pub(super) fn scan_spans(text: &str) -> Vec<(usize, usize)> {
     scan(
         text,
         false,
-        &|_| false,
+        &|_, _| false,
         &mut |s, e| out.push_out((s, e)),
         false,
     );
@@ -194,7 +194,7 @@ pub(super) fn eager_spans(text: &str) -> Vec<(usize, usize)> {
     scan(
         text,
         true,
-        &|_| false,
+        &|_, _| false,
         &mut |s, e| out.push_out((s, e)),
         false,
     );
@@ -206,7 +206,7 @@ pub(super) fn eager_spans(text: &str) -> Vec<(usize, usize)> {
 /// `{` after `)` or `=>` opens a function's body (no statements are scanned).
 #[cfg(test)]
 fn eager_refs(text: &str) -> Refs {
-    scan(text, true, &|_| true, &mut |_, _| {}, true)
+    scan(text, true, &|_, _| true, &mut |_, _| {}, true)
 }
 
 /// [`refs`]'s or [`eager_refs`]'s with only the names `keep` takes (a data literal's
@@ -214,7 +214,8 @@ fn eager_refs(text: &str) -> Refs {
 fn scan(
     text: &str,
     skip_fns: bool,
-    keep: &dyn Fn(&str) -> bool,
+    // (The word, and whether it is an object literal's key.)
+    keep: &dyn Fn(&str, bool) -> bool,
     span: &mut dyn FnMut(usize, usize),
     // (Whether `Refs::dump` is wanted: the span callers want only the spans.)
     collect: bool,
@@ -387,7 +388,7 @@ fn scan(
                         after_dot = false;
                         continue;
                     }
-                } else if keep(word) && seen_names.insert(word) {
+                } else if keep(word, key_at(b, s, i)) && seen_names.insert(word) {
                     out.names.push_out(String::from(word));
                 }
             }
@@ -431,6 +432,31 @@ fn scan(
         i += 1;
     }
     out
+}
+
+/// Whether the word `b[s..e]` is an object literal's key (`{ key: …`, `, key: …`).
+fn key_at(b: &[u8], s: usize, e: usize) -> bool {
+    let next = b[e..].iter().position(|c| !c.is_ascii_whitespace()).map(|k| e + k);
+    next.is_some_and(|k| b[k] == b':' && b.get(k + 1) != Some(&b':'))
+        && b[..s]
+            .iter()
+            .rev()
+            .find(|c| !c.is_ascii_whitespace())
+            .is_some_and(|&c| c == b'{' || c == b',')
+}
+
+/// Whether `text` reads a name `allowed` does not hold (object literals' keys are no
+/// reads), 0215: by `scan` without collecting names.
+pub(super) fn reads_other(text: &str, allowed: &[&str]) -> bool {
+    !scan(
+        text,
+        false,
+        &|w, key| !key && !allowed.contains(&w),
+        &mut |_, _| {},
+        false,
+    )
+    .names
+    .is_empty()
 }
 
 /// Where the string literal whose text starts at `i` ends (after its closing `q`): by
@@ -1049,6 +1075,9 @@ struct C<'w, 'x> {
 
 impl Ctx for C<'_, '_> {
     fn slot(&mut self, name: &str) -> Option<String> {
+        if !self.dry && !self.w.vcache.contains_key(&(self.a, String::from(name))) {
+            self.w.kept_temp(self.a, name);
+        }
         self.w.slot_value(self.a, name, !self.dry)
     }
 
@@ -1561,7 +1590,7 @@ impl W<'_> {
         let r = scan(
             text,
             true,
-            &|n| {
+            &|n, _| {
                 globals
                     && n.len() <= self.global_max
                     && self.global_first[usize::from(n.as_bytes()[0] >> 6)]

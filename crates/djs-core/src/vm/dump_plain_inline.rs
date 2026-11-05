@@ -105,12 +105,8 @@ pub(super) fn pure(rhs: &str) -> bool {
     if super::is_fn_text(rhs) {
         return true;
     }
-    // (A literal's other reads: values the dump wrote, builtins.)
-    shape(rhs)
-        && super::refs(rhs.trim())
-            .names
-            .iter()
-            .all(|n| PURE_NAMES.contains(&n.as_str()))
+    // (A literal's other reads: values the dump wrote, builtins; its keys are none.)
+    shape(rhs) && !super::reads_other(rhs.trim(), PURE_NAMES)
 }
 
 /// Whether evaluating value text `rhs` only makes a value (reading names, calling nothing).
@@ -226,8 +222,9 @@ impl W<'_> {
             texts.extend(a.awaiting.as_deref());
             texts.extend(a.proto.as_deref());
             texts.extend(a.super_proto.as_deref());
-            // (A temporary K evaluates again is not written, D2836; a variable shared
-            // with closures is written from its factory's.)
+            // (A temporary K evaluates again is not written, D2836, `kept_temp` where it
+            // is after all; a variable shared with closures is written from its
+            // factory's.)
             texts.extend(
                 a.slots
                     .iter()
@@ -459,6 +456,27 @@ impl W<'_> {
         }
         out.push_str(&text[at..]);
         out
+    }
+
+    /// K writes the value of temporary `name` of activation `a` that the count took as
+    /// evaluated again (D2836): the values it names are read once more, and none goes in
+    /// place any more.
+    pub(super) fn kept_temp(&mut self, a: usize, name: &str) {
+        let act = &self.ir.acts[a];
+        if !act.rereads.iter().any(|r| r == name) {
+            return;
+        }
+        let Some(sl) = act.slots.iter().find(|s| s.name == name) else {
+            return;
+        };
+        for (s, e) in dump_refs(&sl.value) {
+            let n = &sl.value[s + 6..e];
+            *self.inl.uses.entry(String::from(n)).or_insert(0) += 1;
+            if let Some(p) = self.inl.pend.iter().position(|p| p.name == n) {
+                self.inl.pend.remove(p);
+                self.inl.pend_names.remove(n);
+            }
+        }
     }
 
     /// Notes the names of activation `a`'s continuation `text` (written in place) reads.
