@@ -88,6 +88,14 @@ net. Coordinate with pjr (0215) who measures load, and pjs (0207) who changes du
   (text identical but clock values), plain-node OK, pi-dump-every-idle OK, test262 both.
   Numbers in work/research/0218/README.md "Batch 3 results": corpus load + re-dump -3.6%,
   pi load/dump -4/-5%, records/log/binary within noise.
+- 2026-11-06 (lazy): batch 3 merged (main 03d541f2). Batch 4 measurements: no phase-1
+  emission in lazy subtrees skipped (phase-1 encode is 3.2% of a lazy corpus load in all,
+  parse 49%, resolve 34%; below the 3-5% bar). The +4% on running the codemode cases
+  lazily is the harness compiling the corpus prelude.js per VM (80% of runtime lazy
+  compiles); pi seals its prelude (compiled once): with the prelude eager, lazy runs are
+  -1.7% (1,852 vs 1,884 M). A size threshold (512-1024 B) trades the load gain away; none
+  kept. Compile cache across loads (blob of compiled cells, import with atom remapping)
+  estimated and proposed to the coordinator (~-20-25% of pi's resumeSession).
 
 ## Follow-ups
 
