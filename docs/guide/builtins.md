@@ -389,7 +389,7 @@ stay data properties; no accessors appear in their descriptors.
 The check compares the object's offset with the prefix end, which is 0 with the option
 off, so the default costs one compare per property write and stays spec-conformant.
 Engine-internal state in those objects (internal slots, header bits) is written as
-before; only the JavaScript-visible property operations look at the check. The mode is
+usual; only the JavaScript-visible property operations look at the check. The mode is
 part of the image: a restored VM keeps it. Fast paths lean on it too: `map`, `filter` and
 the other methods that create their result through the array's constructor normally
 check that `Array.prototype.constructor` and `Array[Symbol.species]` are still the
