@@ -209,9 +209,10 @@ fn the_sleep_example_dumps() {
 }
 
 /// Operands evaluated before the site are read again where that gives the saved value
-/// (D2836, dump_reread.rs): a builtin method of a session object, a binding, a global; and
+/// (D2836, dump_reread.rs): a builtin method of a session object, a binding, a global, a
+/// binary operator's left operand, a template's substitution (D2914); and
 /// kept where it would not: a receiver reassigned after its read, a shadowed method, a
-/// user function on a user object, a getter.
+/// user function on a user object, a getter, a callee that is itself a call.
 #[test]
 fn plain_dumps_read_operands_again() {
     let src = r#"
@@ -223,8 +224,12 @@ async function reassigned() { let a = [1]; const b = a; a.push(await (a = [9], l
 async function shadowed() { const a = []; a.push = (x) => log.push("own " + x); a.push(await later(4)); return log.join(); }
 async function userMethod() { const o = { m(x) { return "m" + x; } }; return o.m(await later(6)); }
 async function getter() { const o = { get m() { log.push("get"); return (x) => x + log.length; } }; return o.m(await later(7)); }
+let calls = 0;
+function self(x) { calls++; return self; }
+async function nested() { self(1)(await later(8)); return calls; }
+async function left() { const a = "x"; return a + (await later(9)) + `${a}:${await later(10)}`; }
 async function main() {
-  for (const f of [builtin, binding, global, reassigned, shadowed, userMethod, getter]) print(f.name, await f());
+  for (const f of [builtin, binding, global, reassigned, shadowed, userMethod, getter, nested, left]) print(f.name, await f());
 }
 main();
 "#;
@@ -239,9 +244,11 @@ main();
     assert!(at(1).contains("a.push(await "), "{}", at(1));
     assert!(at(2).contains("f(k, await "), "{}", at(2));
     assert!(at(3).contains("Math.max(1, await "), "{}", at(3));
-    for k in 4..=7 {
+    for k in 4..=8 {
         assert!(at(k).contains("$djs_R("), "{k}: {}", at(k));
     }
+    assert!(at(9).contains("(a + (await "), "{}", at(9));
+    assert!(at(10).contains("${a}:${await "), "{}", at(10));
 }
 
 /// The rest of the current iteration before the loop, then the loop over the saved
@@ -357,8 +364,9 @@ async function plain(path) { return JSON.stringify({ path, n: 1, "s": "x", conte
 async function reassigned() { let p = 1; return JSON.stringify({ p, v: await (p = 2, later(3)) }); }
 function g() { return "g"; }
 async function called() { return JSON.stringify({ a: g(), v: await later(4) }); }
+async function spread(q) { return JSON.stringify({ q, ...await later({ r: 5 }) }); }
 async function main() {
-  for (const f of [() => plain("a.md"), reassigned, called]) print(await f());
+  for (const f of [() => plain("a.md"), reassigned, called, () => spread("s")]) print(await f());
 }
 main();
 "#;
@@ -368,8 +376,9 @@ main();
     let (failed, _, refused) = plain_chain_program("objects", src);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
     assert!(refused.is_empty(), "{refused:?}");
-    assert!(ok >= 3, "{ok}");
+    assert!(ok >= 4, "{ok}");
     let at = |k: usize| plain_dump_at(src, k);
+    assert!(at(4).contains("{ q, ...await "), "{}", at(4));
     assert!(
         at(1).contains("{ path, n: 1, \"s\": \"x\", content: await "),
         "{}",

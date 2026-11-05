@@ -300,6 +300,19 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
 - Queued (pjz 0211 batch 3): a `finally` whose normal end is dead (`if (true) continue`)
   has no `completion.kind` slot: "missing slot completion.kind@N".
 
+- Batch after item 4: pjz's dead-end finally (corpus plain-fuzz/finally-dead-end.js);
+  liveness renders each scope once (output identical; canon::generate ~2.4 % of the dump
+  thread); D2914: object literals (`{ path, content: await … }`, spreads), binary left
+  operands and template substitutions read again; rereads decided on the site's path (the
+  call/binary at the same offset as its callee/left operand was a latent bug). Corpus
+  7,243,739 → 7,216,900. Found: for a codemode body, the first dump's `act.site.pos` is
+  relative to the body while its syntax is relative to the written `async function (…) {`
+  (22 bytes apart in sleep); dump_cont uses `act.site.pos` for the `site` mark of a `using`
+  disposal (follow-up, 0203's area).
+- Candidates (writer, after pjr's indexing): one K for the activations of one closure at one
+  site (corpus ~93 KB: 463 duplicate K texts in factories, Promise.all over map), with the
+  awaited promise a parameter; inlining single-use values.
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a

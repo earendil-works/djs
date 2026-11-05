@@ -10030,7 +10030,7 @@ Score: v2 471,916 → 424,241 raw (gzip 177,258 → 153,023), records 59 → 10.
 continuation twice (the corpus's first dumps: about 5-10 % more dump time, mostly the
 generator's liveness rendering), each re-dump once per continuation activation.
 
-## D2914: Literal operands and object literals are read again
+## D2914: Literal operands, object literals, left operands and substitutions are read again
 date: 2026-11-05 · by: pjs · issue: 0207
 D2905's rule (an operand evaluated before the site is written as the original's text where
 that gives the saved value) now also takes literals (a string without escapes, a decimal
@@ -10042,5 +10042,10 @@ key now, and the object has no other own keys. Nothing sees the object before th
 is complete, so making it again is the original's evaluation. Elsewhere the object made so
 far stays a constant with the rest defined on it (`$djs_D`). The operands of K's own
 `$djs_R`/`$djs_C` call stay constants: origin tracking finds the original's temporaries in
-K's call only where K's call is the original's. Corpus 7,243,739 → 7,222,438 raw (313
-`$djs_D` chains, mostly `text({ path, content: await … })`).
+K's call only where K's call is the original's. Likewise a binary operator's left operand (a
+literal or a name holding the value) and a template's substitution before the site (a name
+holding that string). Which construct a temporary belongs to is decided on the site's path:
+nested calls and operators start where their callee or left operand does
+(`f(a)(await b)`, `1 + (await x) + (await y)`), so `call.callee@N` or `binary.left@N` is
+read again only for the node whose arguments or right operand hold the site. Corpus
+7,243,739 → 7,216,900 raw (313 `$djs_D` chains, mostly `text({ path, content: await … })`).

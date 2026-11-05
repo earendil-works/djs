@@ -1953,6 +1953,19 @@ impl G<'_, '_> {
                     // The left side decided to evaluate the right.
                     return self.expr(i + 1);
                 }
+                // The left operand read again (D2914): the original's text.
+                if self.rereads(&cat!("binary.left@", n.start)) {
+                    self.consume(&cat!("binary.left@", n.start));
+                    let r = n.parts[k];
+                    let e = self.expr(i + 1)?;
+                    return Ok(P::L(alloc::vec![
+                        s("("),
+                        self.rest(n.start, r.start),
+                        e,
+                        self.rest(r.end, n.end),
+                        s(")")
+                    ]));
+                }
                 let l = self.tmp("binary.left", n.start)?;
                 let e = self.expr(i + 1)?;
                 Ok(P::L(alloc::vec![
@@ -2024,6 +2037,11 @@ impl G<'_, '_> {
                             seen = true;
                         }
                         Role::Subst if seen => out.push_out(self.rest_part(&n, m)),
+                        // (Read again, D2914: the original's text.)
+                        Role::Subst if self.rereads(&cat!("template.part@", p.start)) => {
+                            self.consume(&cat!("template.part@", p.start));
+                            out.push_out(self.rest_part(&n, m));
+                        }
                         // (K's part there is rebuilt from the original's frame.)
                         Role::Subst => {
                             out.push_out(self.kmark());
@@ -2504,9 +2522,16 @@ impl G<'_, '_> {
         let lit = cat!("object.literal@", n.start);
         if self.rereads(&lit) {
             self.consume(&lit);
+            // (A spread's part has its `...`.)
+            let at = n.parts[k].start
+                + if n.parts[k].role == Role::Spread {
+                    3
+                } else {
+                    0
+                };
             let e = self.expr(i + 1)?;
             return Ok(P::L(alloc::vec![
-                self.rest(n.start, n.parts[k].start),
+                self.rest(n.start, at),
                 e,
                 self.rest(n.parts[k].end, n.end)
             ]));

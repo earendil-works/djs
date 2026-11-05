@@ -78,18 +78,26 @@ impl Dumper<'_> {
         ftext: &str,
         named: &[NamedSlot],
         val: &dyn Fn(&NamedSlot) -> Value,
-        site: u32,
+        path: &[crate::compiler::Step],
     ) -> Vec<String> {
         let slot = |name: &str| named.iter().find(|x| x.name == name).map(val);
         let text = |a: u32, b: u32| ftext.get(a as usize..b as usize).unwrap_or("");
         let mut out = Vec::new();
-        for n in &syntax.nodes {
+        for (ni, n) in syntax.nodes.iter().enumerate() {
+            // The part of the node that holds the site, where it is on the site's path.
+            let held = path
+                .iter()
+                .find(|s| s.node as usize == ni)
+                .and_then(|s| s.part)
+                .map(usize::from)
+                .and_then(|k| n.parts.get(k).map(|p| (k, p.role)));
             // An object literal with the site in a property's value: written again as
             // the original's text where the properties before it read again what the
             // object made so far holds (nothing sees the object before it is complete).
             if n.kind == NodeKind::Object
                 && let Some(ov) = slot(&cat!("object.literal@", n.start))
-                && self.object_rereads(f, named, val, ftext, n, ov, site)
+                && let Some((k, _)) = held
+                && self.object_rereads(f, named, val, ftext, n, ov, k)
             {
                 out.push(cat!("object.literal@", n.start));
             }
@@ -110,6 +118,35 @@ impl Dumper<'_> {
                     out.push(cat!("for-of.closeless@", n.start));
                 }
             }
+            // A binary operator's left operand; a template's substitution before the site
+            // (its string: a name that holds that string now).
+            let simple = |t: &str, saved: Value, string: bool| {
+                (!string && is_literal(t))
+                    || matches!(parse(t), Some(Read::Ident(id)) if self
+                        .read_name(f, named, val, id)
+                        .is_some_and(|now| (!string || now.as_string().is_some()) && same(self.h, now, saved)))
+            };
+            // (Nested operators start where their left operands do: the slot is that of
+            // the one whose right operand holds the site.)
+            let right_holds = || held.is_some_and(|h| h.1 == Role::Right);
+            if n.kind == NodeKind::Binary
+                && let Some(v) = slot(&cat!("binary.left@", n.start))
+                && right_holds()
+                && let Some(l) = n.parts.iter().find(|p| p.role == Role::Left)
+                && simple(text(l.start, l.end), v, false)
+            {
+                out.push(cat!("binary.left@", n.start));
+            }
+            if n.kind == NodeKind::Template {
+                for p in n.parts.iter().filter(|p| p.role == Role::Subst) {
+                    let name = cat!("template.part@", p.start);
+                    if let Some(v) = slot(&name)
+                        && simple(text(p.start, p.end), v, true)
+                    {
+                        out.push(name);
+                    }
+                }
+            }
             let call = matches!(n.kind, NodeKind::Call { optional: false });
             if !call && n.kind != NodeKind::New {
                 continue;
@@ -117,7 +154,11 @@ impl Dumper<'_> {
             // The callee and `this` of a call.
             let callee = cat!("call.callee@", n.start);
             let this = cat!("call.this@", n.start);
+            // (Of the call whose arguments hold the site: a call's callee starts where it
+            // does, `f(a)(await b)`.)
+            let args_hold = held.is_some_and(|h| matches!(h.1, Role::Arg | Role::Spread));
             if call
+                && args_hold
                 && let (Some(cv), Some(tv)) = (slot(&callee), slot(&this))
                 && let Some(c) = n.parts.iter().find(|p| p.role == Role::Callee)
             {
@@ -162,7 +203,7 @@ impl Dumper<'_> {
         out
     }
 
-    /// Whether object literal `n` (the object made so far `ov`, the site at `site`) can
+    /// Whether object literal `n` (the object made so far `ov`, the site in part `k`) can
     /// be written as the original's text: the site in a property's value, every property
     /// before it a plain key (a name or a string) with a literal or a name that holds the
     /// object's value of it now, or a shorthand one.
@@ -175,23 +216,23 @@ impl Dumper<'_> {
         ftext: &str,
         n: &crate::compiler::Node,
         ov: Value,
-        site: u32,
+        k: usize,
     ) -> bool {
         let h = self.h;
         let text = |a: u32, b: u32| ftext.get(a as usize..b as usize).unwrap_or("");
         let Some(o) = ov.as_object() else {
             return false;
         };
-        let Some(k) = n.parts.iter().position(|p| p.start <= site && site < p.end) else {
-            return false;
+        // The site in a spread, or in a value whose key is a plain one (a computed one
+        // was evaluated already).
+        let first = match n.parts[k].role {
+            Role::Spread => k,
+            Role::Value if k > 0 && n.parts[k - 1].role == Role::Key => k - 1,
+            _ => return false,
         };
-        // (The site's own key a plain one: a computed one was evaluated already.)
-        if n.parts[k].role != Role::Value || k == 0 || n.parts[k - 1].role != Role::Key {
-            return false;
-        }
         let mut keys: Vec<String> = Vec::new();
         let mut m = 0;
-        while m + 1 < k {
+        while m < first {
             let p = n.parts[m];
             let (key, value) = match p.role {
                 Role::Shorthand => (String::from(text(p.start, p.end).trim()), p),
@@ -231,7 +272,7 @@ impl Dumper<'_> {
             keys.push(key);
         }
         // (Nothing else on it: its own keys are those.)
-        m + 1 == k && h.own_keys(o).len() == keys.len()
+        m == first && h.own_keys(o).len() == keys.len()
     }
 
     /// The value identifier `name` reads in the continuation, if it reads one without
