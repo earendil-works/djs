@@ -1,0 +1,29 @@
+function <anonymous> @1..1090
+  arg0 tools@0, arg1 console@0
+  loc0 <state>, loc1 x@362, loc8 out@0, loc9 y@477, loc14 x@505, loc21 n@0, loc22 v@0, loc23 w@0
+  node 0 Body @0..1089: Params 6..22 Stmt 351..442 Stmt 443..458 Stmt 459..654 Stmt 655..679 Stmt 680..690 Stmt 691..790 Stmt 791..801 Stmt 802..918 Stmt 919..929 Stmt 930..950 Stmt 951..957 Stmt 958..1041 Stmt 1042..1051 Stmt 1052..1086 | Param tools@0#0 Param console@0#0 Const out@0#2 Let n@0#5 Const v@0#6 Const w@0#8
+  node 1 ForOf @351..442: Head 356..363 Iterable 367..373 Body 375..442 | Const x@362#0
+  node 2 Block @375..442: Stmt 377..440
+  node 3 Try @377..440: Block 381..394 Finally 403..440
+  node 4 Block @403..440: Stmt 405..438
+  node 5 Expr @405..438: Operand 405..437
+  node 6 Call @405..437: Callee 405..416 Open 416..417 Arg 417..436
+  node 7 Await @417..436: Operand 423..436
+  node 8 Label @459..654: Label 459..464 Body 466..654
+  node 9 ForOf @466..654: Head 471..478 Iterable 482..488 Body 490..654 | Const y@477#0
+  node 10 Block @490..654: Stmt 494..652
+  node 11 ForOf @494..652: Head 499..506 Iterable 510..519 Body 521..652 | Const x@505#0
+  node 12 Block @521..652: Stmt 527..648
+  node 13 Try @527..648: Block 531..592 Finally 605..648
+  node 14 Block @605..648: Stmt 607..646
+  node 15 Expr @607..646: Operand 607..645
+  node 16 Call @607..645: Callee 607..615 Open 615..616 Arg 616..644
+  node 17 Await @616..644: Operand 622..644
+  node 18 Expr @930..950: Operand 930..949
+  node 19 Await @930..949: Operand 936..949
+  await#1 @417 (5:67) pc 78: for-of.iterator@351 for-of.next@351 completion.kind@377 completion.value@377 call.callee@405 call.this@405 (out: loc9 loc14)
+    path 0.1 1.2 2.0 3.1 4.0 5.0 6.2 7
+  await#2 @616 (10:24) pc 300: for-of.iterator@466 for-of.next@466 for-of.iterator@494 for-of.next@494 completion.kind@527 completion.value@527 call.callee@607 call.this@607 (out: loc1)
+    path 0.3 8.1 9.2 10.0 11.2 12.0 13.1 14.0 15.0 16.2 17
+  await#3 @930 (19:1) pc 587: - (out: loc1 loc9 loc14)
+    path 0.10 18.0 19

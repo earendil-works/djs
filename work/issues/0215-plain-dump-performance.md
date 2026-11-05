@@ -80,6 +80,12 @@ Measure where plain dumps stand now and fix what regressed:
   were refused (`this`) or read K's own empty `arguments` after a load. The boxes are the
   frame's now; `arguments` is renamed to `$djs_arguments` in the arrows' texts by the
   syntax's offsets. K is called as before. Corpus codemode/arrows-share-this-arguments.js.
+- pjz's two more: an accessor among an array's dense elements was written as a hole and
+  never defined (the literal's index filter skipped every dense index; now only those it
+  wrote). A `break`/`continue` through an awaiting finally in a later iteration (K's
+  copied text) was refused at the re-dump: origin tracking took the frame's completion
+  kind for the finally scaffold's constant (f-coded) though K was in a copy; `in_copy`
+  now applies there too. Corpus codemode/redump-jumps-through-finally.js.
 
 ## Follow-ups
 

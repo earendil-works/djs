@@ -192,6 +192,19 @@ fn record_of(h: &Heap, k: Obj, l: cont::canon::Layout) -> Option<Record> {
     })
 }
 
+/// Whether K, stopped at `kpos`, is in text it copied whole from the construct at `foff`
+/// on, a copy other than the scaffold at K offset `k` (a later iteration of an outer
+/// loop runs the construct as the original's text): the scaffold's constants are stale
+/// there (0215).
+fn in_copy(segs: &[u32], kpos: u32, foff: u32, k: u32) -> bool {
+    segs.chunks(3).any(|s| {
+        s.len() == 3
+            && (s[0]..s[0] + s[2]).contains(&kpos)
+            && (s[1]..s[1] + s[2]).contains(&foff)
+            && s[0] + (foff - s[1]) != k
+    })
+}
+
 /// Offset `k` of `K`'s text in `f`'s, through the stretches `K` copied.
 fn to_f(segs: &[u32], k: u32) -> Option<u32> {
     segs.chunks(3)
@@ -593,10 +606,14 @@ impl Dumper<'_> {
             v = self.h.arena().get(b, crate::heap::cells::BoxCell::VALUE);
         }
         let (c, foff) = split(&x.name)?;
-        let from_k = !rec
-            .scaf
-            .iter()
-            .any(|r| r.0 == "finally" && r.1 == foff && c == "completion.kind");
+        // (Unless K stopped in a copy of the statement: its scaffold's constant is stale
+        // there, the frame's completion is K's, 0215.)
+        let from_k = !rec.scaf.iter().any(|r| {
+            r.0 == "finally"
+                && r.1 == foff
+                && c == "completion.kind"
+                && !in_copy(&rec.segs, kpos, foff, r.2)
+        });
         match v.as_int() {
             Some(code) if c == "completion.kind" && code >= 3 && from_k => {
                 let ko = ((code - 3) / 2) as u32;
@@ -623,18 +640,8 @@ impl Dumper<'_> {
     ) -> Option<Value> {
         let h = self.h;
         let (c, foff) = split(&x.name)?;
-        // K stopped in text it copied whole from its construct's start on, a copy other
-        // than the scaffold at K offset `k` (a later iteration of an outer loop runs an
-        // inner loop as the original's text): the construct is that copy, and the
-        // scaffold's constants are stale (0215).
-        let in_copy = |k: u32| {
-            rec.segs.chunks(3).any(|s| {
-                s.len() == 3
-                    && (s[0]..s[0] + s[2]).contains(&kpos)
-                    && (s[1]..s[1] + s[2]).contains(&foff)
-                    && s[0] + (foff - s[1]) != k
-            })
-        };
+        // (The construct is a copy K stopped in: the scaffold's constants are stale.)
+        let in_copy = |k: u32| in_copy(&rec.segs, kpos, foff, k);
         let kslot = |name: &str| knamed.iter().find(|y| y.name == name).map(|y| kv(y.place));
         // A temporary of the rewritten statement evaluated before the site: K's constant.
         let from_cmap = || {

@@ -1503,10 +1503,11 @@ impl<'a> Dumper<'a> {
                     let v = array_element(h, o, el, i);
                     self.edge(n, v, || cat!(path, "[", i, "]"));
                 }
-                // Sparse elements and named properties.
+                // Sparse elements, accessors among the elements and named properties.
                 let dense = el.get().map_or(0, |el| h.value_array_len(el));
                 self.props(n, o, &|k, i| {
-                    k == atoms::LENGTH || i.is_some_and(|i| i < dense)
+                    k == atoms::LENGTH
+                        || i.is_some_and(|i| i < dense && !array_element(h, o, el, i).is_hole())
                 });
             }
             ObjectClass::Function if self.visit_runtime_made(n, o) => {}
@@ -4365,9 +4366,11 @@ impl<'a> Dumper<'a> {
         if len > 0 && array_element(h, o, el, len - 1).is_hole() {
             out.push_str(", ");
         }
+        // (An accessor among the elements is a hole in the literal, defined after.)
         let dense = el.get().map_or(0, |el| h.value_array_len(el));
         self.other_props(o, loc, &|k, i| {
-            k == atoms::LENGTH || i.is_some_and(|i| i < dense)
+            k == atoms::LENGTH
+                || i.is_some_and(|i| i < dense && !array_element(h, o, el, i).is_hole())
         });
         // An instance of a subclass of Array.
         if !self.default_proto(o, h.get_prototype_of(o)) {
