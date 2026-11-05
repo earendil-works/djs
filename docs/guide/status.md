@@ -36,31 +36,31 @@ time.
 <!-- gen:status speed -->
 | workload | djs-wasm | quickjs-wasi | ratio |
 | --- | ---: | ---: | ---: |
-| tight loop | 5.8G | 15.3G | 0.38 |
-| property access (prop1) | 2.4G | 5.4G | 0.45 |
-| strings (split, slice, join, ...) | 2.2G | 5.8G | 0.38 |
-| arrays | 9.5G | 16.3G | 0.58 |
-| JSON round trips | 1.2G | 2.0G | 0.60 |
-| JSON with Dates | 0.9G | 1.7G | 0.52 |
-| for-of | 5.1G | 6.9G | 0.73 |
-| calls | 2.9G | 3.9G | 0.75 |
-| push/pop and string methods | 3.8G | 2.9G | 1.33 |
-| an agent-like script | 5.8G | 6.9G | 0.84 |
-| forEach | 5.4G | 5.8G | 0.93 |
-| map/filter/reduce (higher-order) | 7.8G | 4.5G | 1.73 |
+| tight loop | 5.6G | 15.3G | 0.37 |
+| property access (prop1) | 2.2G | 5.4G | 0.41 |
+| strings (split, slice, join, ...) | 2.0G | 5.8G | 0.34 |
+| arrays | 7.7G | 16.3G | 0.47 |
+| JSON round trips | 1.0G | 2.0G | 0.51 |
+| JSON with Dates | 0.8G | 1.7G | 0.46 |
+| for-of | 4.1G | 7.0G | 0.59 |
+| calls | 2.7G | 3.9G | 0.68 |
+| push/pop and string methods | 3.1G | 2.9G | 1.08 |
+| an agent-like script | 5.1G | 6.9G | 0.73 |
+| forEach | 4.5G | 5.8G | 0.77 |
+| map/filter/reduce (higher-order) | 6.3G | 4.5G | 1.40 |
 
-Machine instructions per workload (`scripts/perf/w/`), measured at 7167411f0f,
+Machine instructions per workload (`scripts/perf/w/`), measured at 669ce55099,
 2026-11-05; lower is better.
 <!-- /gen -->
 
 ## Size
 
 <!-- gen:status size -->
-`djs_wasm.wasm` is 969 KB (422 KB gzip, 356 KB brotli): 821 KB of code, 98 KB of data,
+`djs_wasm.wasm` is 953 KB (414 KB gzip, 350 KB brotli): 806 KB of code, 98 KB of data,
 and the base snapshot (the initialized realm with all builtins, 186 KB) coded to 46 KB
-in a custom section. The slim build is 843 KB (357 KB gzip); the dump module, the
-shipped build with the dumper, 1,836 KB (754 KB gzip). Module sizes measured at
-035457334f-dirty, 2026-11-05.
+in a custom section. The slim build is 825 KB (349 KB gzip); the dump module, the
+shipped build with the dumper, 1,835 KB (754 KB gzip). Module sizes measured at
+31c4587e31, 2026-11-05.
 <!-- /gen -->
 
 ## The engine in numbers
@@ -89,13 +89,13 @@ instructions.
 <!-- gen:status recorded -->
 | measurement | value | measured at |
 | --- | ---: | --- |
-| `bounds/gzip` | 7895 | 7167411f0f, 2026-11-05 |
-| `bounds/instructions-max-pct` | 16.8 | 7167411f0f, 2026-11-05 |
-| `bounds/instructions-median-pct` | 10.9 | 7167411f0f, 2026-11-05 |
+| `bounds/gzip` | 7599 | 31c4587e31, 2026-11-05 |
+| `bounds/instructions-max-pct` | 19.6 | 31c4587e31, 2026-11-05 |
+| `bounds/instructions-median-pct` | 12.1 | 31c4587e31, 2026-11-05 |
 | `compile/typescript-lazy-time-pct` | 56 | 35ed5ab789, 2026-11-05 |
-| `dump/bytes` | 1835917 | 035457334f-dirty, 2026-11-05 |
-| `dump/extra-gzip` | 331830 | 035457334f-dirty, 2026-11-05 |
-| `dump/gzip` | 754146 | 035457334f-dirty, 2026-11-05 |
+| `dump/bytes` | 1835457 | 31c4587e31, 2026-11-05 |
+| `dump/extra-gzip` | 339443 | 31c4587e31, 2026-11-05 |
+| `dump/gzip` | 753819 | 31c4587e31, 2026-11-05 |
 | `dumps/corpus-cases` | 300 | 7167411f0f, 2026-11-05 |
 | `dumps/idle-points` | 1063 | 7167411f0f, 2026-11-05 |
 | `dumps/log-raw` | 1758604 | 7167411f0f, 2026-11-05 |
@@ -120,44 +120,44 @@ instructions.
 | `heap/string-10mib-staged-memory` | 35127296 | 7167411f0f, 2026-11-05 |
 | `native/arrays-x` | 3.74 | 35ed5ab789, 2026-11-05 |
 | `native/foreach-x` | 2.1 | 35ed5ab789, 2026-11-05 |
-| `slim/base` | 135056 | 035457334f-dirty, 2026-11-05 |
-| `slim/bytes` | 842966 | 035457334f-dirty, 2026-11-05 |
-| `slim/gzip` | 356917 | 035457334f-dirty, 2026-11-05 |
-| `speed/arrays/djs-wasm` | 9518.0 | 7167411f0f, 2026-11-05 |
-| `speed/arrays/qjs-wasi` | 16337.5 | 7167411f0f, 2026-11-05 |
-| `speed/calls/djs-wasm` | 2915.0 | 7167411f0f, 2026-11-05 |
-| `speed/calls/qjs-wasi` | 3893.8 | 7167411f0f, 2026-11-05 |
-| `speed/foreach/djs-wasm` | 5389.2 | 7167411f0f, 2026-11-05 |
-| `speed/foreach/qjs-wasi` | 5773.7 | 7167411f0f, 2026-11-05 |
-| `speed/forof/djs-wasm` | 5067.8 | 7167411f0f, 2026-11-05 |
-| `speed/forof/qjs-wasi` | 6941.7 | 7167411f0f, 2026-11-05 |
-| `speed/higher-order/djs-wasm` | 7821.1 | 7167411f0f, 2026-11-05 |
-| `speed/higher-order/qjs-wasi` | 4530.0 | 7167411f0f, 2026-11-05 |
-| `speed/json-date/djs-wasm` | 890.1 | 7167411f0f, 2026-11-05 |
-| `speed/json-date/qjs-wasi` | 1705.2 | 7167411f0f, 2026-11-05 |
-| `speed/json/djs-wasm` | 1207.7 | 7167411f0f, 2026-11-05 |
-| `speed/json/qjs-wasi` | 2017.4 | 7167411f0f, 2026-11-05 |
-| `speed/prop1/djs-wasm` | 2410.8 | 7167411f0f, 2026-11-05 |
-| `speed/prop1/qjs-wasi` | 5400.9 | 7167411f0f, 2026-11-05 |
-| `speed/push-pop/djs-wasm` | 3793.8 | 7167411f0f, 2026-11-05 |
-| `speed/push-pop/qjs-wasi` | 2861.9 | 7167411f0f, 2026-11-05 |
-| `speed/strings/djs-wasm` | 2221.6 | 7167411f0f, 2026-11-05 |
-| `speed/strings/qjs-wasi` | 5773.3 | 7167411f0f, 2026-11-05 |
-| `speed/tight/djs-wasm` | 5834.4 | 7167411f0f, 2026-11-05 |
-| `speed/tight/qjs-wasi` | 15335.5 | 7167411f0f, 2026-11-05 |
+| `slim/base` | 135056 | 31c4587e31, 2026-11-05 |
+| `slim/bytes` | 825264 | 31c4587e31, 2026-11-05 |
+| `slim/gzip` | 348662 | 31c4587e31, 2026-11-05 |
+| `speed/arrays/djs-wasm` | 7734.4 | 669ce55099, 2026-11-05 |
+| `speed/arrays/qjs-wasi` | 16344.9 | 669ce55099, 2026-11-05 |
+| `speed/calls/djs-wasm` | 2672.8 | 669ce55099, 2026-11-05 |
+| `speed/calls/qjs-wasi` | 3905.6 | 669ce55099, 2026-11-05 |
+| `speed/foreach/djs-wasm` | 4453.3 | 669ce55099, 2026-11-05 |
+| `speed/foreach/qjs-wasi` | 5786.3 | 669ce55099, 2026-11-05 |
+| `speed/forof/djs-wasm` | 4118.4 | 669ce55099, 2026-11-05 |
+| `speed/forof/qjs-wasi` | 6950.7 | 669ce55099, 2026-11-05 |
+| `speed/higher-order/djs-wasm` | 6347.7 | 669ce55099, 2026-11-05 |
+| `speed/higher-order/qjs-wasi` | 4536.8 | 669ce55099, 2026-11-05 |
+| `speed/json-date/djs-wasm` | 793.0 | 669ce55099, 2026-11-05 |
+| `speed/json-date/qjs-wasi` | 1719.5 | 669ce55099, 2026-11-05 |
+| `speed/json/djs-wasm` | 1042.6 | 669ce55099, 2026-11-05 |
+| `speed/json/qjs-wasi` | 2031.2 | 669ce55099, 2026-11-05 |
+| `speed/prop1/djs-wasm` | 2213.4 | 669ce55099, 2026-11-05 |
+| `speed/prop1/qjs-wasi` | 5398.3 | 669ce55099, 2026-11-05 |
+| `speed/push-pop/djs-wasm` | 3100.7 | 669ce55099, 2026-11-05 |
+| `speed/push-pop/qjs-wasi` | 2867.8 | 669ce55099, 2026-11-05 |
+| `speed/strings/djs-wasm` | 1958.8 | 669ce55099, 2026-11-05 |
+| `speed/strings/qjs-wasi` | 5779.2 | 669ce55099, 2026-11-05 |
+| `speed/tight/djs-wasm` | 5644.4 | 669ce55099, 2026-11-05 |
+| `speed/tight/qjs-wasi` | 15331.2 | 669ce55099, 2026-11-05 |
 | `startup/instantiate-us` | 40.7 | 7167411f0f, 2026-11-05 |
 | `startup/sandbox-run-us` | 141.8 | 7167411f0f, 2026-11-05 |
 | `startup/sandbox-us` | 112.7 | 7167411f0f, 2026-11-05 |
 | `startup/vm-new-us` | 2.5 | 7167411f0f, 2026-11-05 |
-| `wasm/base-coded` | 45685 | 035457334f-dirty, 2026-11-05 |
-| `wasm/brotli` | 356040 | 035457334f-dirty, 2026-11-05 |
-| `wasm/bytes` | 968949 | 035457334f-dirty, 2026-11-05 |
-| `wasm/code` | 821404 | 035457334f-dirty, 2026-11-05 |
-| `wasm/data` | 97917 | 035457334f-dirty, 2026-11-05 |
-| `wasm/exports` | 63 | 035457334f-dirty, 2026-11-05 |
-| `wasm/gzip` | 422316 | 035457334f-dirty, 2026-11-05 |
-| `wire/decode-vs-json-objects` | 1.98 | 35ed5ab789, 2026-11-05 |
-| `wire/decode-vs-json-string` | 16.0 | 35ed5ab789, 2026-11-05 |
-| `wire/read-vs-json-objects` | 1.71 | 35ed5ab789, 2026-11-05 |
-| `wire/read-vs-json-text` | 5.63 | 35ed5ab789, 2026-11-05 |
+| `wasm/base-coded` | 45685 | 31c4587e31, 2026-11-05 |
+| `wasm/brotli` | 350406 | 31c4587e31, 2026-11-05 |
+| `wasm/bytes` | 953410 | 31c4587e31, 2026-11-05 |
+| `wasm/code` | 805917 | 31c4587e31, 2026-11-05 |
+| `wasm/data` | 97925 | 31c4587e31, 2026-11-05 |
+| `wasm/exports` | 63 | 31c4587e31, 2026-11-05 |
+| `wasm/gzip` | 414376 | 31c4587e31, 2026-11-05 |
+| `wire/decode-vs-json-objects` | 2.06 | 84b37a08b0, 2026-11-05 |
+| `wire/decode-vs-json-string` | 15.7 | 84b37a08b0, 2026-11-05 |
+| `wire/read-vs-json-objects` | 1.56 | 84b37a08b0, 2026-11-05 |
+| `wire/read-vs-json-text` | 9.3 | 84b37a08b0, 2026-11-05 |
 <!-- /gen -->

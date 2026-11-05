@@ -231,7 +231,7 @@ Any other string goes through the wire, so text with a single non-ASCII characte
 nothing for the attempt.
 
 > **Trade-off.** A binary format over JSON. Measured in wasm, the VM decodes it
-> <!--n wire/decode-vs-json-objects .1-->2.0<!--/n--> times as fast as it parses the same objects as JSON, and <!--n wire/decode-vs-json-string .0-->16<!--/n--> times as fast for one
+> <!--n wire/decode-vs-json-objects .1-->2.1<!--/n--> times as fast as it parses the same objects as JSON, and <!--n wire/decode-vs-json-string .0-->16<!--/n--> times as fast for one
 > large string, which becomes a memory copy instead of an escaping serializer and a
 > parser. The one place it loses is the encoder on many small objects, where V8's
 > native `JSON.stringify` is faster than the JavaScript encoder; the decoder more than
@@ -261,7 +261,7 @@ string-keyed data properties, arrays with their holes, typed arrays as copies, B
 
 > **Trade-off.** Reading the arena directly over serializing in the VM. Reading a value
 > takes less time than the VM alone needs to turn it into JSON, before the host has
-> parsed anything: <!--n wire/read-vs-json-objects .1-->1.7<!--/n--> times less for many small objects, <!--n wire/read-vs-json-text .0-->6<!--/n--> times less for text with
+> parsed anything: <!--n wire/read-vs-json-objects .1-->1.6<!--/n--> times less for many small objects, <!--n wire/read-vs-json-text .0-->9<!--/n--> times less for text with
 > non-ASCII characters, and a 1 MiB string reads at memory-copy speed. The cost: the reader depends on the heap
 > layout (made safe by generating it from the engine's own table), the VM must not run
 > while a read is in progress (a collection moves cells), and sharing is not preserved,
@@ -275,8 +275,8 @@ variants from one source, by cargo features:
 
 | build | features | what it is for |
 | --- | --- | --- |
-| shipped | `full`, `unicode` | every host: <!--n wasm/bytes mb-->1.0 MB<!--/n-->, <!--n wasm/gzip kb-->422 KB<!--/n--> with gzip |
-| slim | none | hosts that can do without typed arrays, BigInt, iterator helpers and the other families scripts never use ([full and slim](builtins.md#two-builds-full-and-slim)): <!--n slim/bytes mb-->0.8 MB<!--/n-->, <!--n slim/gzip kb-->357 KB<!--/n--> with gzip |
+| shipped | `full`, `unicode` | every host: <!--n wasm/bytes mb-->1.0 MB<!--/n-->, <!--n wasm/gzip kb-->414 KB<!--/n--> with gzip |
+| slim | none | hosts that can do without typed arrays, BigInt, iterator helpers and the other families scripts never use ([full and slim](builtins.md#two-builds-full-and-slim)): <!--n slim/bytes mb-->0.8 MB<!--/n-->, <!--n slim/gzip kb-->349 KB<!--/n--> with gzip |
 | dump module | the shipped features and `dump` | the dumper, for hosts that persist runs: <!--n dump/bytes mb-->1.8 MB<!--/n-->, <!--n dump/gzip kb-->754 KB<!--/n--> with gzip |
 | docs module | the dump module's and `docs` | this site's live examples: the dump module plus `djs_disasm`, the bytecode listing an edited example shows |
 

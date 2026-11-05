@@ -85,7 +85,7 @@ wasm/code	805917	31c4587e31	2026-11-05
 wasm/data	97925	31c4587e31	2026-11-05
 wasm/exports	63	31c4587e31	2026-11-05
 wasm/gzip	414376	31c4587e31	2026-11-05
-wire/decode-vs-json-objects	1.98	35ed5ab789	2026-11-05
-wire/decode-vs-json-string	16.0	35ed5ab789	2026-11-05
-wire/read-vs-json-objects	1.71	35ed5ab789	2026-11-05
-wire/read-vs-json-text	5.63	35ed5ab789	2026-11-05
+wire/decode-vs-json-objects	2.06	84b37a08b0	2026-11-05
+wire/decode-vs-json-string	15.7	84b37a08b0	2026-11-05
+wire/read-vs-json-objects	1.56	84b37a08b0	2026-11-05
+wire/read-vs-json-text	9.3	84b37a08b0	2026-11-05

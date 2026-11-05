@@ -208,8 +208,8 @@ the payload, in a `Ref` field the whole word. This one rule buys four things:
 > **Trade-off.** No arena bounds checks in the shipped wasm modules. Wasm already checks
 > every load against the instance's linear memory, so an arena check only turns a bug
 > that stays inside the instance into a clean trap instead of a corrupt VM. It costs
-> about <!--n bounds/gzip kb-->8 KB<!--/n--> of the gzipped module and <!--n bounds/instructions-median-pct .0-->11<!--/n-->% of the executed instructions on a typical
-> workload, up to <!--n bounds/instructions-max-pct .0-->17<!--/n-->%, so the shipped modules build with the `unsafe-heap`
+> about <!--n bounds/gzip kb-->8 KB<!--/n--> of the gzipped module and <!--n bounds/instructions-median-pct .0-->12<!--/n-->% of the executed instructions on a typical
+> workload, up to <!--n bounds/instructions-max-pct .0-->20<!--/n-->%, so the shipped modules build with the `unsafe-heap`
 > cargo feature, which reads and writes without it. That is sound only for heaps the
 > engine laid out itself, and those are the only ones such a module sees: it restores
 > images made in its own process, and its persistent state is JavaScript source that it

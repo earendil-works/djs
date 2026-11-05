@@ -126,20 +126,20 @@ script):
 <!-- gen:status speed -->
 | workload | djs-wasm | quickjs-wasi | ratio |
 | --- | ---: | ---: | ---: |
-| tight loop | 5.8G | 15.3G | 0.38 |
-| property access (prop1) | 2.4G | 5.4G | 0.45 |
-| strings (split, slice, join, ...) | 2.2G | 5.8G | 0.38 |
-| arrays | 9.5G | 16.3G | 0.58 |
-| JSON round trips | 1.2G | 2.0G | 0.60 |
-| JSON with Dates | 0.9G | 1.7G | 0.52 |
-| for-of | 5.1G | 6.9G | 0.73 |
-| calls | 2.9G | 3.9G | 0.75 |
-| push/pop and string methods | 3.8G | 2.9G | 1.33 |
-| a pi-like script | 5.8G | 6.9G | 0.84 |
-| forEach | 5.4G | 5.8G | 0.93 |
-| map/filter/reduce (higher-order) | 7.8G | 4.5G | 1.73 |
+| tight loop | 5.6G | 15.3G | 0.37 |
+| property access (prop1) | 2.2G | 5.4G | 0.41 |
+| strings (split, slice, join, ...) | 2.0G | 5.8G | 0.34 |
+| arrays | 7.7G | 16.3G | 0.47 |
+| JSON round trips | 1.0G | 2.0G | 0.51 |
+| JSON with Dates | 0.8G | 1.7G | 0.46 |
+| for-of | 4.1G | 7.0G | 0.59 |
+| calls | 2.7G | 3.9G | 0.68 |
+| push/pop and string methods | 3.1G | 2.9G | 1.08 |
+| a pi-like script | 5.1G | 6.9G | 0.73 |
+| forEach | 4.5G | 5.8G | 0.77 |
+| map/filter/reduce (higher-order) | 6.3G | 4.5G | 1.40 |
 
-Machine instructions per workload (`scripts/perf/w/`), measured at 7167411f0f,
+Machine instructions per workload (`scripts/perf/w/`), measured at 669ce55099,
 2026-11-05; lower is better.
 <!-- /gen -->
 
@@ -169,8 +169,8 @@ The measurements behind this section, from `tests/scores/status.tsv`
 | `pi/next/total` | 226 | 7167411f0f, 2026-11-05 |
 | `pi/passed` | 221 | 7167411f0f, 2026-11-05 |
 | `pi/total` | 226 | 7167411f0f, 2026-11-05 |
-| `speed/pi-like/djs-wasm` | 5765.9 | 7167411f0f, 2026-11-05 |
-| `speed/pi-like/qjs-wasi` | 6870.7 | 7167411f0f, 2026-11-05 |
+| `speed/pi-like/djs-wasm` | 5050.7 | 669ce55099, 2026-11-05 |
+| `speed/pi-like/qjs-wasi` | 6872.4 | 669ce55099, 2026-11-05 |
 <!-- /gen -->
 
 ## Wiring up another agent host

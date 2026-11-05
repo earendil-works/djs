@@ -61,20 +61,20 @@ fingerprint.
 <!-- gen:status speed -->
 | workload | djs-wasm | quickjs-wasi | ratio |
 | --- | ---: | ---: | ---: |
-| tight loop | 5.8G | 15.3G | 0.38 |
-| property access (prop1) | 2.4G | 5.4G | 0.45 |
-| strings (split, slice, join, ...) | 2.2G | 5.8G | 0.38 |
-| arrays | 9.5G | 16.3G | 0.58 |
-| JSON round trips | 1.2G | 2.0G | 0.60 |
-| JSON with Dates | 0.9G | 1.7G | 0.52 |
-| for-of | 5.1G | 6.9G | 0.73 |
-| calls | 2.9G | 3.9G | 0.75 |
-| push/pop and string methods | 3.8G | 2.9G | 1.33 |
-| a pi-like script | 5.8G | 6.9G | 0.84 |
-| forEach | 5.4G | 5.8G | 0.93 |
-| map/filter/reduce (higher-order) | 7.8G | 4.5G | 1.73 |
+| tight loop | 5.6G | 15.3G | 0.37 |
+| property access (prop1) | 2.2G | 5.4G | 0.41 |
+| strings (split, slice, join, ...) | 2.0G | 5.8G | 0.34 |
+| arrays | 7.7G | 16.3G | 0.47 |
+| JSON round trips | 1.0G | 2.0G | 0.51 |
+| JSON with Dates | 0.8G | 1.7G | 0.46 |
+| for-of | 4.1G | 7.0G | 0.59 |
+| calls | 2.7G | 3.9G | 0.68 |
+| push/pop and string methods | 3.1G | 2.9G | 1.08 |
+| a pi-like script | 5.1G | 6.9G | 0.73 |
+| forEach | 4.5G | 5.8G | 0.77 |
+| map/filter/reduce (higher-order) | 6.3G | 4.5G | 1.40 |
 
-Machine instructions per workload (`scripts/perf/w/`), measured at 7167411f0f,
+Machine instructions per workload (`scripts/perf/w/`), measured at 669ce55099,
 2026-11-05; lower is better.
 <!-- /gen -->
 
@@ -87,11 +87,11 @@ when it runs the prelude). Callback-heavy builtin code is the main remaining gap
 **Size and startup.**
 
 <!-- gen:status size -->
-`djs_wasm.wasm` is 969 KB (422 KB gzip, 356 KB brotli): 821 KB of code, 98 KB of data,
+`djs_wasm.wasm` is 953 KB (414 KB gzip, 350 KB brotli): 806 KB of code, 98 KB of data,
 and the base snapshot (the initialized realm with all builtins, 186 KB) coded to 46 KB
-in a custom section. The slim build is 843 KB (357 KB gzip); the dump module, the
-shipped build with the dumper, 1,836 KB (754 KB gzip). Module sizes measured at
-035457334f-dirty, 2026-11-05.
+in a custom section. The slim build is 825 KB (349 KB gzip); the dump module, the
+shipped build with the dumper, 1,835 KB (754 KB gzip). Module sizes measured at
+31c4587e31, 2026-11-05.
 <!-- /gen -->
 
 Creating a VM copies the base snapshot: about <!--n startup/vm-new-us .1-->2.5<!--/n--> µs in wasm (D1990). A `Sandbox`

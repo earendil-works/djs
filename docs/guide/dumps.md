@@ -265,7 +265,7 @@ already read (`pages.push` above) as a second read of it. Without frozen builtin
 writing a dump throws a `misuse` error that says so. The live examples with `debugger;`
 run with frozen builtins for this reason.
 
-**The dumper.** The code that writes dumps nearly doubles the module (<!--n dump/extra-gzip kb-->332 KB<!--/n--> more
+**The dumper.** The code that writes dumps nearly doubles the module (<!--n dump/extra-gzip kb-->339 KB<!--/n--> more
 with gzip), and only hosts which persist runs need it, so the module djs ships leaves it
 out. Such a host loads the same
 build with the dumper as a second module and passes it as `dumpModule`: to dump, the
