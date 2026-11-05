@@ -695,3 +695,4 @@ topics when the index is next reorganized.
 - D2992: A Script keeps its source as UTF-8 bytes
 - D2993: The dump module compiles lazily; the dumper reads lazy templates
 - D3001: Values used once are written where they are used
+- D3020: Dumps take the base's builtin names from the build, not from a walk of the base
