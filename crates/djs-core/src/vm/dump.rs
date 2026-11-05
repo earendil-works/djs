@@ -100,7 +100,7 @@ pub struct DumpOptions<'a> {
     /// `BASE_NAMES` and `BASE_GLOBALS` for its `BASE`): with them `base` may be empty. Without
     /// them the dump reads `base`, a copy of it and a walk for its builtins' paths: most
     /// of a small dump's cost in a host that dumps each VM once (pi, 0215).
-    pub base_names: Option<BaseNames<'a>>,
+    pub base_names: Option<BaseNames<'static>>,
     /// Check the dump before returning it (D2888): compile the written text and refuse a
     /// function whose names would resolve to other bindings after the load. On by default;
     /// a host may turn it off to save its cost (~40% of a dump).
@@ -365,7 +365,8 @@ enum Named {
 }
 
 struct Builtin {
-    path: String,
+    /// (The base's names, D3020, are the build's: borrowed, not copied for each VM.)
+    path: alloc::borrow::Cow<'static, str>,
     named: Named,
 }
 
@@ -382,9 +383,9 @@ pub(crate) struct BaseTable {
 impl BaseTable {
     /// The table of `base`, from `names` (`DumpOptions::base_names`: its
     /// [`super::registry::reachable_names`], made when the base was built) or a walk.
-    fn new(base: Option<&Heap>, base_end: u32, names: Option<BaseNames<'_>>) -> BaseTable {
+    fn new(base: Option<&Heap>, base_end: u32, names: Option<BaseNames<'static>>) -> BaseTable {
         let mut t = BaseTable::default();
-        let mut add = |cell: u32, path: String| {
+        let mut add = |cell: u32, path: alloc::borrow::Cow<'static, str>| {
             if cell < base_end {
                 t.cells.insert(key(cell), BUILTIN | t.list.len() as u32);
                 t.list.push_out(Builtin {
@@ -396,13 +397,13 @@ impl BaseTable {
         match (names, base) {
             (Some(n), _) => {
                 for &(cell, path) in n.builtins {
-                    add(cell, String::from(path));
+                    add(cell, alloc::borrow::Cow::Borrowed(path));
                 }
                 t.globals = n.globals.iter().map(|g| String::from(g.0)).collect();
             }
             (None, Some(base)) => {
                 for (cell, path) in super::registry::reachable_names(base) {
-                    add(cell, path);
+                    add(cell, alloc::borrow::Cow::Owned(path));
                 }
                 if let Some(bg) = intrinsic(base, Intrinsic::Global).as_object() {
                     t.globals = base
@@ -1116,9 +1117,9 @@ impl<'a> Dumper<'a> {
     fn builtin_expr(&mut self, i: usize) -> String {
         let b = &self.builtins.list[i];
         if b.named == Named::Path {
-            return b.path.clone();
+            return String::from(&*b.path);
         }
-        let path = b.path.clone();
+        let path = String::from(&*b.path);
         let pl = &mut self.pl;
         let k = match pl.builtins.iter().position(|p| *p == path) {
             Some(k) => k,
@@ -1215,7 +1216,7 @@ impl<'a> Dumper<'a> {
                     Named::Path | Named::Loader => return None,
                     Named::Internal => "a builtin's internal value (",
                 };
-                let why = cat!(why, b.path, ")");
+                let why = cat!(why, &*b.path, ")");
                 self.refuse(path(), &why);
                 return None;
             }
@@ -1275,7 +1276,7 @@ impl<'a> Dumper<'a> {
         let h = self.h;
         match h.atom_symbol(k) {
             Some(s) => match self.builtin(s.offset()) {
-                Some(b) => cat!("[", b.path, "]"),
+                Some(b) => cat!("[", &*b.path, "]"),
                 None => {
                     let d = h.symbol_description(s).as_string();
                     cat!(

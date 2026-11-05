@@ -61,3 +61,23 @@ Later items (not done):
    would cut the ~85% compile share of a load. Compiler work, large.
 4. The base builtin table per fresh VM (`BaseTable`, ~4% of a re-dump in pi's fresh-VM
    model): carry it in the dump cache a host passes on (`Vm::set_dump_cache`).
+
+## pi's dump side in wasm (main 94a24f49, scripts/dump-costs/pi-sessions.ts, N=800, node --cpu-prof)
+
+A dump in pi's adapter at steady state costs ~150 µs at the median (dumps ~330 B). Inside
+`vm_dump`, as shares:
+- visit ~44%, ~30% of it the suspension maps the dump compiles for the activations'
+  scripts (`maps_entry`/`compile_maps`; on demand since 0218 batch 3; repeated code is
+  0219's compile cache);
+- plain::write ~34%: generating the continuations ~22% (the canonical K ~13% of it:
+  `canon::flatten`, `layout_of`), emitting items ~14%;
+- `Dumper::new` ~7% (after the base names were borrowed instead of copied: it was ~25%);
+- the check ~0%: pi's dumps write few function texts (the body is `$djs.source`), so on
+  or off makes no difference there;
+- host staging and string copies (dumpSession minus vm_dump) ~9%.
+
+setUp per load (~40-45 µs): a deterministic run rekeys the hash at every restore
+(`setRandomSeed` -> `set_hash_key` walks the heap, ~55% of setUp; the prelude image is
+shared across seeds, so the key cannot be in it), the `setOrigin` call (~20%), the
+adapter's state. A non-deterministic session (pi in production) reseeds Math.random only:
+~20 µs.
