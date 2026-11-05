@@ -253,7 +253,7 @@ pub fn module_text() -> String {
         "// The plain dump runtime (D2834, D2903): the helpers a plain dump calls as `$djs.NAME`.\n\
          // To run a dump outside djs, set `globalThis.$djs` to these and the host's hooks\n\
          // (`seed`, `resume`, `source`, `host`; see docs/plain-js-dumps.md, \"The host interface\"), then run the\n\
-         // dump as a Script. Generated from crates/djs-core/src/vm/dump_runtime.rs:\n\
+         // dump as a Script, and delete `$djs` and `$dump` after it. Generated from crates/djs-core/src/vm/dump_runtime.rs:\n\
          //   DJS_UPDATE_DUMP_RUNTIME=1 cargo test -p djs-core dump_runtime\n\n",
     );
     s.push_str(SHARED);
@@ -307,6 +307,18 @@ export function scriptFor(dump) {
 "#;
 
 impl Vm {
+    /// Ends a plain dump's load, once its Script was evaluated (D2916): deletes the
+    /// globals the load used, the host's `$djs` and the dump's `$dump`. A dump of the VM
+    /// refuses either name.
+    pub fn end_dump_load(&mut self) -> Result<(), crate::heap::HeapError> {
+        let g = self.global();
+        for name in ["$djs", "$dump"] {
+            let k = self.heap.atom_str(name)?;
+            self.heap.delete_own_property(g, k)?;
+        }
+        Ok(())
+    }
+
     /// A new object holding the plain dump runtime's helpers (D2903), for the host to add
     /// its hooks to and define as the global `$djs` while a plain dump loads. Evaluates
     /// the runtime: call it while the VM is not running (before loading the dump).

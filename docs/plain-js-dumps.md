@@ -347,8 +347,9 @@ implements and other hosts may ignore (D2832). Without it a resumed run's random
 differ, in node anyway.
 
 **The interface as built (0204, D2890, D2895, D2897).** The hooks are the methods of one
-global object, `$djs`, that the loading host defines and the dump deletes in its final
-`finally` (with `$dump`): `$djs.seed(lo, hi, next)` is the dump's first call, with
+global object, `$djs`, that the loading host defines and, once the Script has run,
+deletes, with the dump's own global `$dump` (D2916; djs hosts call `Vm::end_dump_load`;
+until then the dump did in a final `try`/`finally`): `$djs.seed(lo, hi, next)` is the dump's first call, with
 `Math.random`'s state and the id the dumped VM's next host call gets; `$djs.resume(id,
 name, args, state)` stands for each open call (`state` left out when the call has none).
 Both are called only while the Script itself is evaluated. A djs host reopens call `id`
@@ -362,8 +363,9 @@ names, a *root* (a namespace object, pi's `tools` Proxy), by that name, and a ro
 data properties as reads on it (`$djs.host("tools").list`). The host answers with the
 object it bound, so `===` holds across the load. (Until 0213 they were names *as
 expressions* evaluated while the dump loads, `tools.read`, which tied them to globals.)
-The Script's completion value is what the host named: the value itself for
-one handle named `run`, else a null-prototype object of all of them by name.
+The Script's completion value, its last statement, is what the host named: the value
+itself for one handle named `run`, else a null-prototype object of all of them by name;
+without handles `void 0;` (the statement before would give its value otherwise).
 
 **Frozen builtins (D2836).** Plain dumps are written only for VMs with frozen builtins
 (`VmOptions::frozen_builtins`, D2304; pi's `next` mode has them): the exporter refuses

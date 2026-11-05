@@ -1108,8 +1108,10 @@ fn plain_load(text: &str) -> Result<Vm, String> {
             s => return Err(alloc::format!("the load stopped: {s:?}")),
         }
     }
+    // (The host deletes them, D2916.)
+    vm.end_dump_load().map_err(|e| alloc::format!("{e:?}"))?;
     if run_value(&mut vm, "typeof $dump + typeof $djs") != "undefinedundefined" {
-        return Err("the dump left $dump or $djs".into());
+        return Err("the load left $dump or $djs".into());
     }
     Ok(vm)
 }

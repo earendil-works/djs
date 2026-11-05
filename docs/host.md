@@ -201,7 +201,7 @@ await again.result;
   go to the hooks as described. The hooks are served only while the Script runs to its
   first stop (an idle point, or the end); then the sandbox sets the id counter from
   `next` (`vm_set_next_call_id`), so the run's later calls get the ids the uninterrupted
-  run gives them (D2897), and the dump deletes `$djs` at the end of its Script. A dump
+  run gives them (D2897), and deletes `$djs` and the dump's `$dump` (D2916). A dump
   names the codemode body it continues as `$djs.source(name, hash, params)` instead of
   carrying its text again (D2882): the sandbox compiles the script `name` it ran (this
   process's scripts, or the `sources` option's) as it runs bodies, the one with that hash

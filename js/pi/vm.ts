@@ -694,9 +694,9 @@ class Session implements VmSession {
     const run = status === STATUS_DONE ? engine.result() : engine.outcome().handle;
     const [next, last] = this.plainIds;
     if (next !== undefined) engine.setNextCallId(Math.max(next, last + 1));
-    // The backstop for a dump that leaves `$djs` (D2890): an undefined property is no
-    // hook, and the next dump would refuse it, so take it out by running JS.
-    const drop = engine.compile(0, "dump.js", [], "delete globalThis.$djs");
+    // The load is over: the host deletes the dump's globals (D2916). An undefined property
+    // is no hook, and the next dump would refuse it, so take them out by running JS.
+    const drop = engine.compile(0, "dump.js", [], "delete globalThis.$djs; delete globalThis.$dump");
     if (!("error" in drop)) this.invoke(drop.handle, 0, []);
     return run;
   }

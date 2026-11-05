@@ -105,7 +105,7 @@ print(`${report.flat().reduce((a, b) => a + b, 0)} TODOs in ${seen.size} files`)
 return report;
 }, main, 2, 54, [0,531])(["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"], $dump.n7);
 $dump.p10 = Promise.prototype.then.call($dump.a9, (r) => print(JSON.stringify(r)), undefined);
-try { ($dump.p10); } finally { delete globalThis.$dump; delete globalThis.$djs; }
+$dump.p10;
 ```
 
 The dump has no comments (D2641; the `/* … */` and `[…]` are this page's shortening).
@@ -174,8 +174,8 @@ slices) is unchanged.
 
 ### `$djs`: the hooks and the dump runtime (D2834, D2890, D2903)
 
-The host defines one global object while a dump loads, and the dump deletes it in the
-`finally` that ends its Script:
+The host defines one global object while a dump loads, and deletes it, with the dump's
+`$dump`, once the Script has run (D2916; `Vm::end_dump_load` in a djs host):
 
 - `seed(lo, hi, next)`, the dump's first call; a djs host sets `Math.random`'s state and,
   once the Script has stopped, the id counter to `next` (or one past the highest reopened

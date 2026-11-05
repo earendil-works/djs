@@ -277,7 +277,7 @@ for (const path of $djs_I($djs_i1)) {
 }
 return notes.join("\n");
 }, $dump.Fa4, 1, 54).call(globalThis, $djs.host("tools"), $dump.n2);
-try { ($dump.a4); } finally { delete globalThis.$dump; delete globalThis.$djs; }
+$dump.a4;
 ```
 
 It is an ordinary Script (D2830): djs, or node, runs it given the host's functions and
@@ -319,7 +319,8 @@ one object the host provides while it loads, `$djs` (D2834, D2890):
   original again (**origin tracking**, D2833, D2913), so a dump stays the same size
   however many times a run is resumed and dumped;
 - the Script's completion value is what the host asked for, the run's result promise
-  (D2895), and its last statement deletes `$dump` and `$djs`.
+  (D2895), its last statement; the host deletes `$djs` and `$dump` once the Script has
+  run (D2916).
 
 To read a frame, the exporter uses what the compiler records at each `await` (its
 **suspension map**: the bindings and values a frame holds there by name, and the syntax

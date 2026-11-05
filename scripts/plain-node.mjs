@@ -111,7 +111,9 @@ async function runLink(file, now) {
     return `=== crash\nload threw: ${e}\n`;
   }
   if (process.env.PLAIN_NODE_DEBUG) console.log(out, result);
-  if ("$djs" in g || "$dump" in g) return "=== crash\nthe dump left $djs or $dump\n";
+  // The load is over: the host deletes the dump's globals (D2916).
+  delete g.$djs;
+  delete g.$dump;
   for (let n = 0; n < 1_000_000 && result === null; n++) {
     await new Promise((r) => setImmediate(r));
     if (result !== null) break;

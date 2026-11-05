@@ -496,6 +496,12 @@ impl Session {
             {
                 self.vm.set_next_call_id(next.max(last + 1));
             }
+            // The load is over: the host deletes `$djs` and `$dump` (D2916).
+            if matches!(st, Status::Done(_) | Status::Idle) {
+                self.vm
+                    .end_dump_load()
+                    .map_err(|e| format!("end_dump_load: {e:?}"))?;
+            }
             match st {
                 Status::Done(v) => return Ok(v),
                 Status::Idle => {

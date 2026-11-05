@@ -309,8 +309,8 @@ djs loads it.
 Dumps are **plain JavaScript** (D2830): the sandbox writes each stopped function as a
 continuation, an ordinary function holding the rest of its code from the `await` it waits
 at, and the whole dump as a Script that needs nothing from djs. The Script reaches the
-host through one global object, `$djs`, which the loading host defines and the dump
-deletes when it is done (D2890): `$djs.seed(lo, hi, next)` hands over `Math.random`'s
+host through one global object, `$djs`, which the loading host defines and deletes when
+the Script has run, with the dump's own `$dump` (D2890, D2916): `$djs.seed(lo, hi, next)` hands over `Math.random`'s
 state and the id of the run's next host call, `$djs.resume(id, name, args, state)`
 stands for each open call, and `$djs.source(name, hash, params)` names the script the run
 was started with, which the dump refers to instead of carrying its text a second time:

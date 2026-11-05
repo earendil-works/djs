@@ -77,7 +77,8 @@ export async function resume(dump: string, opts = options()): Promise<unknown> {
  * Continues the dump in node: the same host functions, as plain globals, and `$djs`: the
  * dump runtime's helpers (js/src/dump-runtime.js) with the hooks. `$djs.resume` runs the
  * open call's `resume` hook with its saved state; `$djs.seed` has nothing to set,
- * `$djs.source` names the script the dump continues, `$djs.host` the host's values.
+ * `$djs.source` names the script the dump continues, `$djs.host` the host's values. Once
+ * the Script ran, the host deletes `$djs` and `$dump`.
  */
 export async function resumeInNode(dump: string): Promise<unknown> {
   const signal = new AbortController().signal;
@@ -101,7 +102,13 @@ export async function resumeInNode(dump: string): Promise<unknown> {
     },
   };
   g.tools = tools;
-  return new Script(dump, { filename: "sleep.dump.js" }).runInThisContext();
+  try {
+    return new Script(dump, { filename: "sleep.dump.js" }).runInThisContext();
+  } finally {
+    // The load is over: the host deletes the dump's globals (D2916).
+    delete g.$djs;
+    delete g.$dump;
+  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

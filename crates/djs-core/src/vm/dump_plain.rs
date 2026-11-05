@@ -2099,24 +2099,32 @@ impl W<'_> {
         for l in &body {
             cat_to!(&mut s, l, "\n");
         }
-        // The completion value: nothing, the one handle named "run" (what Sandbox, pi
-        // and the CLI resume), else every handle by name (D2895).
-        let handle = match &ir.handles[..] {
-            [] => String::from("undefined"),
-            [(name, e)] if name == "run" => e.clone(),
+        // The completion value, the last statement: undefined (not the value of the
+        // statement before), the one handle named "run" (what Sandbox, pi and the CLI
+        // resume), else every handle by name (D2895). The host deletes `$djs` and `$dump`
+        // once the Script ran (D2916).
+        match &ir.handles[..] {
+            [] => s.push_str("void 0;\n"),
+            // (In parentheses unless a reference: an object literal or a function is no
+            // expression statement.)
+            [(name, e)] if name == "run" => {
+                let reference = e.split('.').all(|p| !p.is_empty() && is_ident(p));
+                if reference {
+                    cat_to!(&mut s, e, ";\n");
+                } else {
+                    cat_to!(&mut s, "(", e, ");\n");
+                }
+            }
             hs => {
                 let fields: Vec<String> = hs.iter().map(|(n, e)| cat!(quote(n), ": ", e)).collect();
-                cat!("{ __proto__: null, ", join(&fields, ", "), " }")
+                cat_to!(
+                    &mut s,
+                    "({ __proto__: null, ",
+                    join(&fields, ", "),
+                    " });\n"
+                );
             }
-        };
-        cat_to!(
-            &mut s,
-            "try { (",
-            handle.as_str(),
-            // The host's hooks go with the helpers: the Script's end is the moment
-            // the load is over, and hosts need no delete of their own (D2890).
-            "); } finally { delete globalThis.$dump; delete globalThis.$djs; }\n"
-        );
+        }
         Ok(s)
     }
 

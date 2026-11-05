@@ -97,7 +97,7 @@ sandbox defines for the load (the dump runtime's helpers and the host's hooks): 
 calls `$djs.seed(lo, hi, next)` first (the state of `Math.random` and the id of the VM's
 next host call) and `$djs.resume(id, name, args, state)` for each open call, which the
 sandbox answers by reopening call `id` under the same id and handing it to the function's
-`resume` hook. The dump deletes `$djs` at its end.
+`resume` hook. Once the Script has run, the sandbox deletes `$djs` and the dump's `$dump`.
 
 A host function without a `resume` hook (`{ call }`) is called again after a load, which
 suits calls without side effects; a plain function, with no hooks at all, has its open
@@ -141,7 +141,7 @@ host: suspended the run into examples/sleep-dump/out/sleep.dump.js (1246 bytes):
   | console.log("done after", Date.now() - t0 >= 2 * ms ? "at least" : "less than", 2 * ms, "ms:", results.join(", "));
   | return results;
   | }, $dump.Fa6, 1, 54)(5000, $dump.n2, 1793835909614, $dump.n4);
-  | try { ($dump.a6); } finally { delete globalThis.$dump; delete globalThis.$djs; }
+  | $dump.a6;
   [vm] second sleeps 5000 ms
   [vm] done after at least 10000 ms: first: slept 5000 ms, second: slept 5000 ms
 host: the run returned [ 'first: slept 5000 ms', 'second: slept 5000 ms' ]

@@ -172,6 +172,9 @@ fn the_sleep_example_dumps() {
                 vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
             }
             Status::Idle => {
+                // (The load is over at its first stop: the host deletes `$djs` and
+                // `$dump`, D2916.)
+                vm.end_dump_load().unwrap();
                 let Some(&id) = vm.pending_host_calls().first() else {
                     break;
                 };

@@ -118,6 +118,8 @@ pub(super) fn run_plain_dump(
     if let Some(n) = next {
         vm.set_next_call_id(n.max(last + 1));
     }
+    // (The host deletes `$djs` and `$dump`, D2916.)
+    vm.end_dump_load().map_err(|e| alloc::format!("{e:?}"))?;
     Ok(done)
 }
 

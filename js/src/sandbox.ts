@@ -1422,7 +1422,7 @@ export class Sandbox {
   /**
    * Loads a plain dump (D2830): runs it as a Script with the hooks in `$djs` (D2890), to
    * its first stop that is not a sync host call (idle, or done); the hooks are served only
-   * meanwhile. The dump deletes `$djs` at the end of its Script.
+   * meanwhile. Then the sandbox deletes `$djs` and the dump's `$dump` (D2916).
    * `$djs.resume(id, name, args, state)` opens the dump's call `id` of host function
    * `name` again under its id (`vm_open_call`): one of the calls returned, with its state;
    * `$djs.seed(lo, hi, next)` sets `Math.random`'s state and, once the dump has loaded,
@@ -1533,6 +1533,16 @@ export class Sandbox {
       if (ps >= 2) x.vm_handle_free(vm, outWords(x, 1)[0]);
       if (ps !== 0) handles.set("run", h);
       else if (h !== 0) x.vm_handle_free(vm, h);
+      // The load is over: the host deletes the dump's globals (D2916), by running JS (the
+      // module has no delete of its own).
+      const drop = textEncoder.encode("delete globalThis.$djs; delete globalThis.$dump");
+      this.stage(drop);
+      const f = x.vm_compile_file(vm, 0, 0, 0, drop.length);
+      if (f !== 0) {
+        this.stage(new Uint8Array(0));
+        if (x.vm_call(vm, f, 0, 0) === 0) x.vm_run(vm, slice);
+        x.vm_handle_free(vm, f);
+      }
       return { calls, handles };
     });
   }

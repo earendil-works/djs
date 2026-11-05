@@ -1,7 +1,7 @@
 // The plain dump runtime (D2834, D2903): the helpers a plain dump calls as `$djs.NAME`.
 // To run a dump outside djs, set `globalThis.$djs` to these and the host's hooks
 // (`seed`, `resume`, `source`, `host`; see docs/plain-js-dumps.md, "The host interface"), then run the
-// dump as a Script. Generated from crates/djs-core/src/vm/dump_runtime.rs:
+// dump as a Script, and delete `$djs` and `$dump` after it. Generated from crates/djs-core/src/vm/dump_runtime.rs:
 //   DJS_UPDATE_DUMP_RUNTIME=1 cargo test -p djs-core dump_runtime
 
 const matchAll = RegExp.prototype[Symbol.matchAll];

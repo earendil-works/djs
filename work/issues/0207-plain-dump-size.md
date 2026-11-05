@@ -326,6 +326,15 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   after), deriving `h` an expression/statement skipper whose ambiguous cuts would map
   wrongly; both cost re-dump time for a fraction of a percent.
 
+- 3 (D2916): no final try/finally; the last statement is the completion value (`$dump.a6;`,
+  in parentheses unless a reference, `void 0;` without handles: the CLI reads a promise
+  completion as "run"); hosts delete `$djs` and `$dump`: `Vm::end_dump_load` (CLI, difftest,
+  core tests), Sandbox and pi's adapter by running JS, node hosts themselves (plain-node,
+  sleep-dump example, js/test/bindings). Score: v2 414,762 → 400,554, sleep 1,079 → 1,008
+  (gzip 531), corpus 7,276,634 → 7,181,966. pi tests (next, dump at every idle point, debug
+  module): one new failure, the worker backend's output-limit test, also without dumps
+  (debug module speed, not this change).
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a

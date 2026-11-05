@@ -208,17 +208,14 @@ fn source_function(vm: &mut Vm, name: &str, hash: &str, params: &str) -> Result<
     Err(why)
 }
 
-/// The plain dump's Script was evaluated: its hooks go away, and the id counter goes on
+/// The plain dump's Script was evaluated: its hooks and holder go away (D2916), and the id counter goes on
 /// from the dumped VM's (the hooks took ids of their own, D2897).
 pub fn end_load(vm: &mut Vm, tools: &Tools, load: &PlainLoad) {
     tools.premake(vm);
     if let Some(next) = load.next {
         vm.set_next_call_id(next.max(load.last + 1));
     }
-    let g = vm.global();
-    if let Ok(k) = vm.heap_mut().atom_str(HOOKS) {
-        let _ = vm.heap_mut().delete_own_property(g, k);
-    }
+    let _ = vm.end_dump_load();
 }
 
 /// Loads the plain dump `text` into `vm` (a fresh one) and runs it until it stops at

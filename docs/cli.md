@@ -43,9 +43,9 @@ global object `$djs` (D2890), the dump runtime's helpers (D2903) plus the hooks:
 `source(name, hash, params)` compiles the body file `name` again (D2882), and
 `host(name)` returns the host value `name` (D2971): the tool of that identity from the
 `tools` table (the same function the run's `tools.read` reads), else the global of that
-path (`tools`, `console`, `print`, `later`). The dump
-deletes `$djs` at the end of its Script (the CLI also does, once the Script stops at an
-idle point or ends). A file that is not a dump, or a dump whose Script throws (a hook
+path (`tools`, `console`, `print`, `later`). Once the
+Script stops at an idle point or ends, the CLI deletes `$djs` and the dump's `$dump`
+(`Vm::end_dump_load`, D2916). A file that is not a dump, or a dump whose Script throws (a hook
 refused an unknown name, say), is exit code 2 with `djs: cannot load ...` or `djs: the
 dump did not load: Uncaught ...`. `--explain`, and the REPL's `.restore`, load dumps the
 same way; `--explain` lists each call's state.

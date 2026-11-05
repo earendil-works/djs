@@ -10095,3 +10095,17 @@ its field initializers, which compile to functions beside its constructor. That 
 accept a captured variable that a root of the same name holds, which the class's own
 code would read in the same way. Corpus dump 16.3k -> 13.1k M instructions, re-dump
 22.3k -> 19.2k M. The check is now ~35% of a dump, nearly all of it parsing.
+## D2916: The host deletes `$djs` and `$dump`; the completion value is the last statement
+date: 2026-11-05 · by: pjs · issue: 0207
+A plain dump no longer ends in `try { (handle); } finally { delete globalThis.$dump; delete
+globalThis.$djs; }` (D2890's end; 0216's queue item 3, 13 % of a pi dump): its last
+statement is the completion value the host asked for (`$dump.a6;`, `({ __proto__: null,
+… });` for several handles, `void 0;` without handles, so that the value of the statement
+before is none),
+and the host deletes the globals `$djs` and `$dump` once the Script has run (stopped at an
+idle point or ended, also when it threw). djs hosts call `Vm::end_dump_load()` (the CLI, the
+difftest, the core tests); the Sandbox and pi's adapter run `delete globalThis.$djs; delete
+globalThis.$dump` (the module has no delete export, and the size budget no room for one);
+node hosts (scripts/plain-node.mjs, the sleep-dump example, js tests) delete them
+themselves. `$dump` is the dump's own holder until single-use values go where they are
+used (0216's rule 3); the host deleting it is the one interface change that needs.
