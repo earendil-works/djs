@@ -173,7 +173,7 @@ corpus	codemode-harvest/h171-load-structured.js	3599	1378
 corpus	codemode-harvest/h172-bash-structured-structured.js	34197	11331
 corpus	codemode-harvest/h173-structured.js	18526	5928
 corpus	codemode-harvest/h174-structured.js	18913	6428
-corpus	codemode-harvest/h175-models.js	11366	4005
+corpus	codemode-harvest/h175-models.js	11366	4006
 corpus	codemode-harvest/h176-bash-structured-edit-read-write.js	28004	10042
 corpus	codemode-harvest/h177-edit-read.js	19543	6221
 corpus	codemode-harvest/h178-transcribe_file.js	14810	5719
@@ -208,9 +208,9 @@ corpus	codemode-harvest/h207-bash-structured-image-read.js	7271	2812
 corpus	codemode-harvest/h208-edit.js	16565	5677
 corpus	codemode-harvest/h209-bash-edit.js	13843	5218
 corpus	codemode-harvest/h210-models-read.js	40740	12928
-corpus	codemode-harvest/h211-structured.js	11776	4096
+corpus	codemode-harvest/h211-structured.js	11776	4097
 corpus	codemode-harvest/h212-transcribe_file.js	11268	4341
-corpus	codemode-harvest/h213-bash-structured-models.js	48026	15194
+corpus	codemode-harvest/h213-bash-structured-models.js	48026	15195
 corpus	codemode-harvest/h214-bash-structured-read-write.js	14639	5167
 corpus	codemode-harvest/h215-structured.js	3587	1360
 corpus	codemode-harvest/h216-bash-structured-structured.js	4599	1658
@@ -228,7 +228,7 @@ corpus	codemode-harvest/h228-edit-read.js	7499	2953
 corpus	codemode-harvest/h229-structured.js	6637	2585
 corpus	codemode-harvest/h230-image-models.js	12854	4184
 corpus	codemode-harvest/h231-bash-structured-structured-write.js	108222	33014
-corpus	codemode-harvest/h232-bash-structured-models.js	115150	33199
+corpus	codemode-harvest/h232-bash-structured-models.js	115150	33198
 corpus	codemode-harvest/h233-bash-edit.js	21548	7457
 corpus	codemode-harvest/h234-bash-structured-read.js	27218	10139
 corpus	codemode-harvest/h235-bash-structured-edit-read-write.js	42113	13335
@@ -240,7 +240,7 @@ corpus	codemode-harvest/h241-bash-structured-structured.js	4630	1650
 corpus	codemode-harvest/h242-transcribe_file.js	13141	3873
 corpus	codemode-harvest/h243-load-models-read.js	251736	72874
 corpus	codemode-harvest/h244-structured.js	2957	1163
-corpus	codemode-harvest/h246-bash-structured-models.js	38041	12263
+corpus	codemode-harvest/h246-bash-structured-models.js	38041	12264
 corpus	codemode-harvest/h247-structured.js	42322	12952
 corpus	codemode-harvest/h248-image-models.js	15575	5041
 corpus	codemode-harvest/h249-bash-load-write.js	14944	5551
@@ -255,7 +255,7 @@ corpus	codemode-harvest/h257-no-tools.js	10884	3525
 corpus	codemode-harvest/h258-bash-structured-image-read.js	21676	8639
 corpus	codemode-harvest/h259-edit.js	3934	1544
 corpus	codemode-harvest/h260-image-read.js	10473	4042
-corpus	codemode-harvest/h261-bash-structured-models.js	65826	20450
+corpus	codemode-harvest/h261-bash-structured-models.js	65826	20451
 corpus	codemode-harvest/h262-structured.js	12462	4197
 corpus	codemode-harvest/h263-transcribe_file.js	11466	4476
 corpus	codemode-harvest/h264-structured.js	8179	3286
@@ -264,7 +264,7 @@ corpus	codemode-harvest/h266-structured.js	3285	1330
 corpus	codemode-harvest/h268-bash-structured-image-read.js	40687	15952
 corpus	codemode-harvest/h269-bash.js	3599	1555
 corpus	codemode-harvest/h270-bash-structured.js	7021	2823
-corpus	codemode-harvest/h271-bash-structured-models.js	80113	26607
+corpus	codemode-harvest/h271-bash-structured-models.js	80113	26604
 corpus	codemode-harvest/h272-bash-structured-read-write.js	11737	4556
 corpus	codemode-harvest/h273-image-read.js	7379	2806
 corpus	codemode-harvest/h274-bash-write.js	10795	4211
@@ -330,7 +330,7 @@ corpus	codemode/plain-fuzz/integer-key-equal-value.js	2473	999
 corpus	codemode/plain-fuzz/static-field-reads-loop-variable.js	6142	2394
 corpus	codemode/plain-fuzz/template-plain-part-then-awaits.js	5222	2064
 corpus	codemode/plain-fuzz/template-two-awaits.js	5146	2035
-corpus	codemode/redump-copied-loops.js	96311	36884
+corpus	codemode/redump-copied-loops.js	90295	33642
 corpus	codemode/redump-loops.js	12314	4723
 corpus	codemode/redump-operands.js	39136	15375
 corpus	codemode/redump-template.js	5138	2019

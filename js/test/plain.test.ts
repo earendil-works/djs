@@ -78,13 +78,12 @@ test("Sandbox.resume continues a plain dump through the hooks", async () => {
 test("$djs holds the dump runtime while a plain dump loads", async () => {
   const module = await loadModule();
   const sb = new Sandbox({ module });
-  // The helpers the dump calls (D2903): every one js/src/dump-runtime.js exports.
-  const { helpers } = await import("../src/dump-runtime.js");
+  // The helpers the dump calls (D2903): the ones it names (and those they name, 0215).
   sb.load(`"djs-dump";
 globalThis.r = [Object.getOwnPropertyNames($djs).sort().join(), $djs.R(Math.max, undefined, [1, 2]), $djs.advance([1, 2, 3].values(), 1).next().value];
 delete globalThis.$djs;
 `);
-  const want = [...Object.keys(helpers), "host", "resume", "seed", "source"].sort().join();
+  const want = ["R", "advance", "host", "resume", "seed", "source"].sort().join();
   assert.deepEqual(sb.run(`return r`), [want, 2, 2]);
   sb.dispose();
 });

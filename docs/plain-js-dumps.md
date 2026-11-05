@@ -379,6 +379,9 @@ object from `Vm::dump_runtime()` and adds its hooks; a host without djs imports
 Sandbox and pi's adapter pass that file's `script` (the same as a Script) to the wasm
 export `vm_dump_runtime`, so that the shipped module does not carry the text. A continuation captures the
 helpers it calls (`const $djs_R = $djs.R`), since `$djs` is gone once the dump has loaded.
+A dump names every helper it uses as `$djs.NAME`, so a djs host compiles only those
+(`Vm::dump_runtime_for(text)`, `scriptFor(text)` of the JS file, 0215): compiling all of
+them was ~40% of loading a small dump.
 Each helper is a plain function that uses neither `this` nor another member, so that the
 names can become imports later. The members:
 
