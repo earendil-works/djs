@@ -674,3 +674,7 @@ topics when the index is next reorganized.
 - D2911: A continuation leaves out the frame's bindings nothing in it reads
 - D2942: The plain-dump fuzzer's second round generates wider values and TypeScript bodies
 - D2886: `$djs.source(name, hash, params, 1)`: the one function a host's wrapper script makes
+- D2912: A continuation writes origin records only where it can stop again, and less text
+- D2970: A host function is identified by a host-chosen string, one object per identity
+- D2971: Dumps refer to host values by `$djs.host(name)`, never by where they are bound
+- D2973: pi's next mode names its host functions `bridge` and `call`
