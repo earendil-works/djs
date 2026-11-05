@@ -189,10 +189,10 @@ and prints only results.
 | `.heap [sections]` | the heap report ([below](#the-heap-report)) |
 | `.pending` | the open tool calls and `debugger;` pauses, with the input that made each and where it waits |
 | `.resolve <id> <json>`, `.reject <id> <message>` | answer call `#id` |
-| `.bt <id\|all>` | the suspended functions waiting on call `#id`, or all of them, with the source line and their bindings |
+| `.bt [id\|all]` | the suspended functions waiting on call `#id`, or all of them (the default), with the source line and their bindings |
 | `.continue [id]`, `.c [id]` | continue a `debugger;` pause in place: the oldest, or `#id` |
 | `.abort` | drop the paused input and everything else in flight; the globals stay |
-| `.dump <file\|-> [names]` | write the session as a continuation dump (needs `--frozen`) |
+| `.dump [file\|-] [names]` | write the session as a continuation dump, or print it without a file (needs `--frozen`) |
 | `.restore <file>` | replace the VM with a fresh one that ran a dump |
 | `.dump-every [on\|off]` | at every idle point, dump the session and continue in a fresh VM that ran the dump |
 | `.clear` | a fresh VM |
@@ -225,7 +225,7 @@ Started with `--frozen`, the REPL can write the session as a [continuation
 dump](dumps.md): `.dump s.js` writes its globals and everything in flight (open calls,
 suspended functions, waiting inputs), and `.restore s.js` replaces the VM with a fresh
 one that ran the dump, from any build of djs, with the waiting inputs back under their
-labels. `.dump -` prints the dump instead of writing it.
+labels. `.dump` without a file (or `.dump -`) prints the dump instead of writing it. Without `--frozen`, the dump commands say so instead of dumping.
 
 ```text
 > let out = []; tools.read({ path: 'a' }).then(v => out.push(v)); 0
@@ -244,7 +244,7 @@ that input: it waits as on a tool call, and the REPL says where.
 [paused] #1 input 2 at repl:1:39
   for (let i = 0; i < 3; i++) { n += i; debugger; }
                                         ^
-(.dump - shows the continuation, .c continues, .abort drops it)
+(.dump shows the continuation, .c continues, .abort drops it)
 > .bt 1
 #1 debugger()
   async <eval> at repl:1:39 (input 2)
@@ -256,7 +256,7 @@ that input: it waits as on a tool call, and the REPL says where.
 ```
 
 While an input is paused, the prompt works as usual: other inputs run, `.pending` lists
-the pause, `.bt` shows the paused code's bindings, and `.dump -` prints the continuation,
+the pause, `.bt` shows the paused code's bindings, and `.dump` prints the continuation,
 which starts at the pause and holds the rest of the input, its later `debugger;`
 statements included. `.c` continues the pause in place, and a loop pauses again at its
 next iteration. To continue from the dump instead: `.dump p.js`, `.restore p.js` (a

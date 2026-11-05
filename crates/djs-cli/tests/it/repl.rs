@@ -205,7 +205,7 @@ fn meta_commands() {
     assert!(out.contains("init_global_lex \"q\""), "{out}");
     check(
         ".nope\n.exit\n1\n",
-        "unknown command or missing argument: .nope (.help lists them)\n",
+        "unknown command: .nope (.help lists them)\n",
     );
     let help = repl(".help\n");
     assert!(
@@ -214,7 +214,7 @@ fn meta_commands() {
     );
     check(
         ".image x.img\n",
-        "unknown command or missing argument: .image x.img (.help lists them)\n",
+        "unknown command: .image (.help lists them)\n",
     );
 }
 
@@ -556,12 +556,34 @@ fn dump_waiting_await_inputs() {
     );
     assert!(out.matches("[dumped ").count() >= 2, "{out}");
     // Without --frozen the VM's builtins are not frozen: dumps need them (D2836).
-    let out = repl(".dump -\n.dump-every on\n.dump-every\n");
+    let out = repl(".dump -\n.dump\n.dump-every on\n.dump-every\n");
     assert_eq!(
         out,
-        "dumps need frozen builtins (D2836): start the REPL with --frozen\n".repeat(2)
+        "dumps need frozen builtins: start the REPL with `djs repl --frozen`\n".repeat(3)
             + "dumping at every idle point: off\n"
     );
+}
+
+/// `.dump` with no file prints the dump, as `.dump -` does; the commands that need an
+/// argument print their usage instead of "unknown command".
+#[test]
+fn commands_without_arguments() {
+    let out = frozen("let a = 41\n.dump\n");
+    assert!(out.starts_with("\"djs-dump\";"), "{out}");
+    assert!(out.contains("41"), "{out}");
+    assert_eq!(out, frozen("let a = 41\n.dump -\n"));
+    check(
+        ".restore\n.disasm\n.load\n.resolve\n.reject\n.c\n.bt\n",
+        "usage: .restore <file> (a file .dump wrote)\n\
+         usage: .disasm <code>\n\
+         usage: .load <file>\n\
+         usage: .resolve <id> <json> or .reject <id> <message>\n\
+         usage: .resolve <id> <json> or .reject <id> <message>\n\
+         nothing is paused\n\
+         no suspended activations\n",
+    );
+    let help = repl(".help\n");
+    assert!(help.contains(".dump [file] [names]"), "{help}");
 }
 
 /// `debugger;` in `--frozen` (D3060): a pause is an open call of `debugger`; `.c`
@@ -577,7 +599,7 @@ fn debugger_pauses_and_continues() {
         out,
         format!(
             "[paused] #1 input 2 at repl:1:39\n{at}\
-             (.dump - shows the continuation, .c continues, .abort drops it)\n\
+             (.dump shows the continuation, .c continues, .abort drops it)\n\
              #1 debugger()  input 2, at repl:1:39\n\
              #1 debugger()\n  async <eval> at repl:1:39 (input 2)\n\
              \x20     for (let i = 0; i < 3; i++) {{ n += i; debugger; }}\n\
@@ -595,7 +617,7 @@ fn debugger_pauses_and_continues() {
         "[paused] #1 input 2 at repl:1:40\n\
          \x20 async function f(x) { const y = x * 2; debugger; return y }\n\
          \x20                                        ^\n\
-         (.dump - shows the continuation, .c continues, .abort drops it)\n\
+         (.dump shows the continuation, .c continues, .abort drops it)\n\
          [input 2] 8\n",
     );
     // Without the dumping mode, `debugger;` does nothing.
@@ -632,7 +654,7 @@ fn debugger_pauses_resume_from_the_dump() {
         lines,
         [
             "[paused] #1 input 2 at repl:1:39",
-            "(.dump - shows the continuation, .c continues, .abort drops it)",
+            "(.dump shows the continuation, .c continues, .abort drops it)",
             "[paused] #2 input 2 at repl:1:39",
             &format!("wrote 299 bytes to {d1} (1 activation, 1 pending call)"),
             &format!("loaded {d1} into a fresh VM"),
@@ -660,7 +682,7 @@ fn debugger_abort() {
          [paused] #1 input 1 at repl:1:12\n\
          \x20 0,  n = 1; debugger; n = 2\n\
          \x20            ^\n\
-         (.dump - shows the continuation, .c continues, .abort drops it)\n\
+         (.dump shows the continuation, .c continues, .abort drops it)\n\
          [waiting] #3 tools.read({\"path\":\"a\"})\n\
          aborted input 1, with 1 other waiting input and 1 open call\n\
          no open calls\n1\nnothing is paused\n",

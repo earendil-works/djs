@@ -190,7 +190,7 @@ suspending every 300 fuel
 | `.time [on\|off]` | after each input: wall time (compile and run) and fuel |
 | `.gc` | collect; the arena size before and after |
 | `.heap [sections]` | arena bytes used, allocated and the limit, handles, atoms; then the heap report's sections over the live VM against the base image (above; default `summary,diff`: the session's own cells and the base cells it changed, apart from the base realm every VM starts with; `all`, or a list such as `kinds,largest`) (D2340) |
-| `.dump <file\|-> [names]` | write the session's globals (or the named ones, plus the globals their functions read) as a JavaScript dump (docs/functions-as-code.md): functions as their source text, closures that share variables made by one factory, data as literals and constructor calls, binary data as base64, builtins referenced by name. With something in flight it also holds the open calls, the suspended activations (as continuations) and pending promises, with the waiting inputs as handles (below). Needs `djs repl --frozen` (D2836). What a dump cannot write is refused with its path. `-` prints it |
+| `.dump [file\|-] [names]` | write the session's globals (or the named ones, plus the globals their functions read) as a JavaScript dump (docs/functions-as-code.md): functions as their source text, closures that share variables made by one factory, data as literals and constructor calls, binary data as base64, builtins referenced by name. With something in flight it also holds the open calls, the suspended activations (as continuations) and pending promises, with the waiting inputs as handles (below). Needs `djs repl --frozen` (D2836). What a dump cannot write is refused with its path. Without a file, or with `-`, it prints the dump. Without `--frozen` it says that dumps need it |
 | `.restore <file>` | replace the VM with a fresh one that ran a dump (a file starting with `"djs-dump";`, run as a Script), from any build; its waiting run and open calls come back (below): a dump's run becomes the waiting input `run`, several waiting inputs are the properties of the dump's completion value (D2895). Images are not restored (D2700) |
 | `.dump-every [on\|off]` | at every idle point, dump the session and continue in a fresh VM that ran the dump (needs `--frozen`), printing `[dumped N bytes]`; a refused dump prints `[not dumped]` with the reasons and turns it off |
 | `.clear` | a fresh VM |
@@ -199,7 +199,7 @@ suspending every 300 fuel
 | `.reject <id> <message>` | answers call `#id` with `new Error(message)` |
 | `.continue [id]`, `.c [id]` | continue a `debugger;` pause (the oldest, or `#id`) in place (below) |
 | `.abort` | drop the paused input and everything else in flight (below) |
-| `.bt <id\|all>` | the suspended activations waiting on call `#id`, innermost first, through other activations, `then` reactions and `Promise.all`-style combinators; or every suspended activation (after a collection). Each with where it stopped, the source line with a caret under the `await`/`yield`, and its named bindings: parameters (named from the function's source) and locals |
+| `.bt [id\|all]` | the suspended activations waiting on call `#id`, innermost first, through other activations, `then` reactions and `Promise.all`-style combinators; or, with `all` or no argument, every suspended activation (after a collection). Each with where it stopped, the source line with a caret under the `await`/`yield`, and its named bindings: parameters (named from the function's source) and locals |
 
 ### Tools and waiting inputs
 
@@ -283,7 +283,7 @@ on:
 [paused] #1 input 2 at repl:1:39
   for (let i = 0; i < 3; i++) { n += i; debugger; }
                                         ^
-(.dump - shows the continuation, .c continues, .abort drops it)
+(.dump shows the continuation, .c continues, .abort drops it)
 > .bt 1
 #1 debugger()
   async <eval> at repl:1:39 (input 2)
@@ -296,7 +296,7 @@ on:
 ```
 
 While paused, inputs run as usual (`n` prints the global), `.pending` lists the pause
-and `.bt` shows the paused activation's bindings. `.dump -` prints the dump the session
+and `.bt` shows the paused activation's bindings. `.dump` prints the dump the session
 is: the paused input is a continuation that starts with the pause, `await
 $djs.resume(1, "debugger", [], {"origin":"input 2"})`, followed by the rest of its code
 (the loop's later iterations, with their `debugger;`). `.continue` (`.c`) answers the

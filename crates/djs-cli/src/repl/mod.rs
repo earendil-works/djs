@@ -57,10 +57,11 @@ const HELP: &str = "\
                       realm every VM starts with (sections summary, kinds, diff, prefix,
                       largest, strings, shapes, functions, session; default
                       summary,diff; `all` for every section)
-.dump <file> [names]  write the session's globals (or the named ones) as JavaScript,
+.dump [file] [names]  write the session's globals (or the named ones) as JavaScript,
                       with what is in flight (open calls, waiting inputs): a Script
                       that recreates them, functions as their source, closures and
-                      data as code, builtins by name (`-` prints it; needs --frozen)
+                      data as code, builtins by name (no file or `-` prints it;
+                      needs --frozen)
 .restore <file>       replace the VM with a fresh one that ran a .dump file
 .clear                start over with a fresh VM
 
@@ -69,8 +70,8 @@ prompt and prints its value when it settles.
 .pending              the open tool calls
 .resolve <id> <json>  answer call #id with a JSON value
 .reject <id> <msg>    answer call #id with an Error
-.bt <id|all>          the suspended activations waiting on call #id (or all of
-                      them), where they stopped and their bindings
+.bt [id|all]          the suspended activations waiting on call #id (or all of
+                      them, the default), where they stopped and their bindings
 .restore <dump.js>    also restores a dump's waiting run and open calls
                       (`later(v)` calls are answered with v at once; print() prints)
 .dump-every [on|off]  dump and reload at every idle point ([dumped N bytes]; needs
@@ -93,7 +94,7 @@ const FILENAME: &str = "repl";
 const ENTRY: &str = "$entry";
 const HISTORY_MAX: usize = 1000;
 /// `.dump` and `.dump-every` in a REPL whose VMs have no frozen builtins.
-const NOT_FROZEN: &str = "dumps need frozen builtins (D2836): start the REPL with --frozen";
+const NOT_FROZEN: &str = "dumps need frozen builtins: start the REPL with `djs repl --frozen`";
 
 pub fn main(args: &[String]) -> i32 {
     let mut typescript = false;
@@ -807,7 +808,7 @@ impl Repl {
         }
         if !self.paused_before {
             self.paused_before = true;
-            println!("(.dump - shows the continuation, .c continues, .abort drops it)");
+            println!("(.dump shows the continuation, .c continues, .abort drops it)");
         }
     }
 
@@ -1219,10 +1220,10 @@ impl Repl {
             ".pending" => self.pending(),
             ".continue" | ".c" => self.continue_cmd(arg),
             ".abort" => self.abort_pause(),
-            ".resolve" if !arg.is_empty() => self.settle(arg, true),
-            ".reject" if !arg.is_empty() => self.settle(arg, false),
-            ".bt" if !arg.is_empty() => self.backtrace_cmd(arg),
-            ".dump" if !arg.is_empty() => self.dump(arg),
+            ".resolve" => self.settle(arg, true),
+            ".reject" => self.settle(arg, false),
+            ".bt" => self.backtrace_cmd(if arg.is_empty() { "all" } else { arg }),
+            ".dump" => self.dump(arg),
             ".dump-every" => match on_off(arg, &mut self.dump_every) {
                 Ok(()) if self.dump_every && !self.frozen => {
                     self.dump_every = false;
@@ -1234,7 +1235,10 @@ impl Repl {
                 ),
                 Err(e) => println!("{e}"),
             },
-            ".restore" if !arg.is_empty() => match std::fs::read(arg) {
+            ".restore" if arg.is_empty() => {
+                println!("usage: .restore <file> (a file .dump wrote)")
+            }
+            ".restore" => match std::fs::read(arg) {
                 Ok(bytes) if crate::dumps::is_dump(&bytes) => {
                     let src = String::from_utf8_lossy(&bytes).into_owned();
                     self.restore_dump(arg, &src);
@@ -1246,13 +1250,14 @@ impl Repl {
                 self.replace_vm(new_vm(self.gc_stress, self.frozen));
                 println!("a fresh VM");
             }
-            ".disasm" if !arg.is_empty() => self.disasm(arg),
-            _ => println!("unknown command or missing argument: {line} (.help lists them)"),
+            ".disasm" if arg.is_empty() => println!("usage: .disasm <code>"),
+            ".disasm" => self.disasm(arg),
+            _ => println!("unknown command: {cmd} (.help lists them)"),
         }
         None
     }
 
-    /// `.dump <file> [names]`: the session as a dump (0167, 0174, D2830: with what is in
+    /// `.dump [file] [names]` (no file or `-`: to stdout): the session as a dump (0167, 0174, D2830: with what is in
     /// flight, the waiting inputs as handles).
     fn dump(&mut self, arg: &str) {
         if !self.frozen {
@@ -1422,7 +1427,7 @@ impl Repl {
 
     fn load(&mut self, path: &str) {
         if path.is_empty() {
-            println!(".load needs a file");
+            println!("usage: .load <file>");
             return;
         }
         match std::fs::read_to_string(path) {
