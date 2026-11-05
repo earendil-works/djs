@@ -4420,6 +4420,25 @@ pub(crate) struct Cache {
     maps: Vec<CachedMaps>,
 }
 
+impl Cache {
+    /// The maps of a script the VM compiled itself (a plain dump it loads, 0215), in
+    /// [`Dumper::maps_of`]'s order: the most recent last.
+    pub(super) fn keep(&mut self, bits: u32, src: &str, maps: Vec<FunctionMap>) {
+        if let Some(i) = self
+            .maps
+            .iter()
+            .position(|m| m.0 == bits && m.1.is_empty() && m.2 == src)
+        {
+            self.maps.remove(i);
+        }
+        if self.maps.len() >= MAPS_KEPT {
+            self.maps.remove(0);
+        }
+        self.maps
+            .push_out((bits, String::new(), String::from(src), Some(Rc::new(maps))));
+    }
+}
+
 /// (options bits, parameters, source, maps): `None` if the text did not compile.
 type CachedMaps = (u32, String, String, Option<Rc<Vec<FunctionMap>>>);
 

@@ -476,6 +476,20 @@ impl Vm {
         src: &[u8],
         opts: &crate::compiler::CompileOptions<'_>,
     ) -> Result<Value, crate::compiler::CompileError> {
+        // A plain dump (it starts with its directive) is compiled with its suspension
+        // maps, kept for this VM's next dump: its continuations are suspended in it, and
+        // compiling all of it again there was a third of a re-dump (0215).
+        #[cfg(feature = "dump")]
+        let template = if src.starts_with(b"\"djs-dump") && opts.params.is_empty() {
+            let (t, maps) = crate::compiler::compile_with_maps(&mut self.heap, src, opts)?;
+            if let Ok(text) = core::str::from_utf8(src) {
+                self.dump_cache.borrow_mut().keep(opts.bits(), text, maps);
+            }
+            t
+        } else {
+            crate::compiler::compile(&mut self.heap, src, opts)?
+        };
+        #[cfg(not(feature = "dump"))]
         let template = crate::compiler::compile(&mut self.heap, src, opts)?;
         self.instantiate(template)
             .map_err(|e| crate::compiler::CompileError {
