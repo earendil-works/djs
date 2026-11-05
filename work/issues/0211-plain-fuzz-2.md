@@ -85,8 +85,9 @@ jobs, wait while load > 30) and gate rules (batch merges, check slim/test262-sli
   (coordinator's call): js/pi/pi-tests.ts gives the copied fixture an endless loop
   (failing loudly if pi's workload text changes); all six pass, the entries are gone from
   both pi ratchets (next mode, slim). Checked: next mode twice and slim six times, four of
-  them with 6–8 busy processes; one early slim run under load reported one new failure
-  that the output did not keep and five more runs did not repeat. docs/host.md updated.
+  them with 6–10 busy processes (eight more runs in all); one early slim run under load reported one new failure
+  that the output did not keep and later runs did not repeat. docs/host.md updated
+  (js/pi/ and docs/host.md are outside 0211's touches: the coordinator asked for it).
 
 ## Follow-ups
 
