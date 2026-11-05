@@ -20,4 +20,4 @@ older tools in scripts/: `wasm-size.py` (sections, code by crate/path/function),
 
 Builds: `scripts/build-wasm.sh` (shipped, stripped); for names
 `CARGO_PROFILE_WASM_STRIP=debuginfo cargo build -p djs-wasm --target wasm32-unknown-unknown
---profile wasm`. The base image is `target/.../build/djs-prelude-*/out/base.img`.
+--profile wasm --features unsafe-heap` (the shipped module's arena access is unchecked). The base image is `target/.../build/djs-prelude-*/out/base.img`.

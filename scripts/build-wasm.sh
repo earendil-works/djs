@@ -10,15 +10,18 @@
 # --dump builds the dump module (the `dump` feature: the format 2 dumper and loader) in
 # target/dump-wasm and copies it to target/djs-dump.wasm: packaging B (D2635) ships it
 # next to the main module, which has no dumper.
+# The shipped and slim modules (and --keep-names, the shipped one with names) read and write
+# the arena unchecked (`unsafe-heap`, D3100): the wasm instance is the sandbox. The docs and
+# dump modules keep the checks.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-features=()
+features=(--features unsafe-heap)
 target=target
 copy=
 case "${1:-}" in
   --keep-names) export CARGO_PROFILE_WASM_STRIP=false ;;
   --docs) features=(--features docs,dump); target=target/docs-wasm ;;
-  --slim) features=(--no-default-features); target=target/slim-wasm; copy=target/djs-slim.wasm ;;
+  --slim) features=(--no-default-features --features unsafe-heap); target=target/slim-wasm; copy=target/djs-slim.wasm ;;
   --dump) features=(--features dump); target=target/dump-wasm; copy=target/djs-dump.wasm ;;
   # The old opt-in flag: stripping is the default now.
   --strip | "") ;;

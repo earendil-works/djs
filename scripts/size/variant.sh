@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Builds a variant of the shipped wasm module in a scratch copy of the tree, for size
-# experiments that must never land (0123): `scripts/size/variant.sh NAME [PATCH.py] [--
-# CARGO ARGS...]`, with the build environment (RUSTFLAGS, CARGO_PROFILE_WASM_*, a
-# `+toolchain` as the first cargo arg) taken from the caller. PATCH.py, if given, runs
+# Builds a variant of the shipped wasm module (unchecked arena access, D3100) in a scratch
+# copy of the tree, for size experiments that must never land (0123):
+# `scripts/size/variant.sh NAME [PATCH.py] [-- CARGO ARGS...]`, with the build environment
+# (RUSTFLAGS, CARGO_PROFILE_WASM_*, a `+toolchain` as the first cargo arg) taken from the
+# caller. PATCH.py, if given, runs
 # in the copy's root and edits sources. Prints the code/data sizes and gzip of the result,
 # which is kept as $OUT/NAME.wasm (OUT: work/scratch/size-variants, gitignored).
 set -euo pipefail
@@ -30,7 +31,7 @@ if [ $# -gt 0 ] && [[ "$1" == +* ]]; then
   shift
 fi
 (cd "$src" && CARGO_TARGET_DIR="$out/$name/target" nice -n 10 "$root/scripts/with-wasm-env.sh" cargo ${toolchain[@]+"${toolchain[@]}"} \
-  build -q -p djs-wasm --target wasm32-unknown-unknown --profile wasm "$@")
+  build -q -p djs-wasm --target wasm32-unknown-unknown --profile wasm --features unsafe-heap "$@")
 cp "$out/$name/target/wasm32-unknown-unknown/wasm/djs_wasm.wasm" "$out/$name.wasm"
 python3 - "$out/$name.wasm" "$name" <<'EOF'
 import gzip, sys

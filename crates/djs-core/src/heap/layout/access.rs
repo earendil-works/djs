@@ -1,22 +1,27 @@
 //! The arena's byte access: every field read and write of the heap goes through
 //! [`read`] and [`write`] (via `FieldType`, `Arena::read`/`write`/`get`/`set` and the
-//! tier-0 loop's slice). Two implementations, one chosen at build time (D2520):
+//! tier-0 loop's slice). Two implementations, one chosen at build time (D2520, D3100):
 //!
 //! - **Checked (the default, no `unsafe`).** One compare per access, `off + N <= len` in
 //!   `u64` so that it cannot wrap on wasm32. With it LLVM proves the slice access that
 //!   follows in range and drops its own two checks (`off <= len`, then `len - off >= N`),
 //!   which is what a plain `bytes.get(off..)` costs. Out of range is a panic (a wasm
-//!   trap), never undefined behavior.
+//!   trap), never undefined behavior. Native builds, the dump and docs modules and every
+//!   test build use it.
 //! - **Unchecked (`unsafe-heap`).** A plain load or store. Debug builds still assert the
-//!   bounds, so the tests catch what the checked build would. This module is the only
-//!   place in djs-core that may contain `unsafe` (lib.rs forbids it everywhere else).
+//!   bounds, so the tests catch what the checked build would. The shipped and slim wasm
+//!   modules use it (D3100). This module is the only place in djs-core that may contain
+//!   `unsafe` (lib.rs forbids it everywhere else).
 //!
-//! Why unchecked can be sound: every offset the engine uses comes from cells it laid out
-//! itself or from an image that passed `Heap::verify`, which checks every header, length
-//! and reference before anything reads through them (D1056). A violation is therefore an
-//! engine or verifier bug, which the checked build turns into a trap and the unchecked
-//! build into undefined behavior inside the wasm instance's own linear memory (which wasm
-//! still bounds-checks). The gate runs both builds (D2520).
+//! Why unchecked is acceptable there: every offset the engine uses comes from cells it
+//! laid out itself, or from an image made in the same process (images never leave it;
+//! persistence is JavaScript source, D2560) whose header and descriptor were checked. A
+//! violation is therefore an engine bug, which the checked build turns into a trap and
+//! the unchecked build into undefined behavior confined to the wasm instance's own linear
+//! memory, which wasm still bounds-checks: it can corrupt that VM's state, never the
+//! host's. Natively there is no such boundary, so native builds keep the checks. The gate
+//! runs the corpus with suspension and GC stress on the unchecked build in release, and
+//! pi's tests on the shipped modules.
 
 /// `N` bytes at `off`.
 #[inline(always)]

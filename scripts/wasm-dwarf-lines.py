@@ -9,7 +9,7 @@ Build a module with line tables first (the same code as without them, except tha
 relocations stay padded: D1570 applies only to builds without debug info):
   CARGO_TARGET_DIR=work/scratch/dbg CARGO_PROFILE_WASM_DEBUG=1 \
     CARGO_PROFILE_WASM_STRIP=false \
-    cargo build -p djs-wasm --target wasm32-unknown-unknown --profile wasm
+    cargo build -p djs-wasm --target wasm32-unknown-unknown --profile wasm --features unsafe-heap
 then: llvm-dwarfdump --debug-line module.wasm > lines.txt (homebrew llvm has it)
 
 usage: scripts/wasm-dwarf-lines.py module.wasm lines.txt [--func REGEX] [--lines] [--top N]

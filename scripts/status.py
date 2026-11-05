@@ -24,9 +24,10 @@ usage:
                                       first run (median of 3 runs)
   scripts/status.py dumps             scripts/dump-costs/dump-costs.ts, packaging B: dump sizes
                                       and times over the harvested corpus, and the log case
-  scripts/status.py bounds            what the arena's bounds checks cost: the shipped module
-                                      against the same build with `unsafe-heap`, gzip -9 bytes
-                                      and instructions on the speed workloads (takes minutes)
+  scripts/status.py bounds            what the arena's bounds checks would cost: the shipped
+                                      module (unchecked, `unsafe-heap`) against the same build
+                                      with the checks, gzip -9 bytes and instructions on the
+                                      speed workloads (takes minutes)
   scripts/status.py heap              heap bytes per object (scripts/size/object-bytes.ts) and
                                       wasm memory: a fresh sandbox, ten million appends, a
                                       10 MiB string parameter
@@ -299,16 +300,17 @@ def dumps():
 
 
 def bounds():
-    target = os.path.join(ROOT, "target/unsafe-wasm")
+    # The shipped module reads the arena unchecked (D3100); this builds it with the checks
+    # (no `unsafe-heap`) to say what they would cost.
+    target = os.path.join(ROOT, "target/checked-wasm")
     subprocess.run(["nice", "-n", "10", os.path.join(ROOT, "scripts/with-wasm-env.sh"), "cargo", "build",
-                    "-p", "djs-wasm", "--target", "wasm32-unknown-unknown", "--profile", "wasm",
-                    "--quiet", "--features", "unsafe-heap"],
+                    "-p", "djs-wasm", "--target", "wasm32-unknown-unknown", "--profile", "wasm", "--quiet"],
                    cwd=ROOT, env=dict(os.environ, CARGO_TARGET_DIR=target), check=True)
-    unchecked = os.path.join(target, "wasm32-unknown-unknown/wasm/djs_wasm.wasm")
+    checked = os.path.join(target, "wasm32-unknown-unknown/wasm/djs_wasm.wasm")
     gz = lambda p: len(gzip.compress(open(p, "rb").read(), compresslevel=9, mtime=0))
     out = subprocess.run(
         ["python3", os.path.join(ROOT, "scripts/perf/wmeasure.py"), "-n", "3", "--noqjs",
-         "--wasm", WASM, "--wasm", unchecked, *SPEED],
+         "--wasm", checked, "--wasm", WASM, *SPEED],
         cwd=ROOT, capture_output=True, text=True, check=True).stdout
     # One line per workload and build, in --wasm order: `name  djs0  Minstr ...`.
     ins = {}
@@ -320,7 +322,7 @@ def bounds():
     if len(pct) != len(SPEED):
         sys.exit(f"status.py: wmeasure gave no pair of numbers for every workload:\n{out}")
     return {
-        "bounds/gzip": gz(WASM) - gz(unchecked),
+        "bounds/gzip": gz(checked) - gz(WASM),
         "bounds/instructions-max-pct": round(max(pct.values()), 1),
         "bounds/instructions-median-pct": round(median(list(pct.values())), 1),
     }

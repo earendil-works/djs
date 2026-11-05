@@ -7,7 +7,7 @@ at that site.
 
 NAMES.wasm is a build with a name section and the shipped code:
   CARGO_PROFILE_WASM_STRIP=debuginfo scripts/with-wasm-env.sh cargo build -p djs-wasm \\
-    --target wasm32-unknown-unknown --profile wasm
+    --target wasm32-unknown-unknown --profile wasm --features unsafe-heap
 --check fails (exit 1) when a kind's total grew by more than 2% over the baseline, and
 lists the functions that gained sites; --update writes the current counts as the
 baseline (scripts/size/vec-sites.txt)."""

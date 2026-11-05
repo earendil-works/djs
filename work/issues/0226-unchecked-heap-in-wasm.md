@@ -1,7 +1,7 @@
 # 0226: Ship the wasm modules with unchecked heap access (unsafe-heap), keep checks elsewhere
 
-status: open
-agent: -
+status: in-progress
+agent: heapx
 branch: issue/0226-unchecked-heap-in-wasm
 depends-on: 0225
 guide: pages on isolation, safety and limits (goals.md Isolation, limits.md, arena.md, the wasm boundary), status sizes

@@ -236,7 +236,8 @@ def jobs():
         # --- Clippy on the other feature combinations that ship (D2668): djs-core natively
         # without `full`/`unicode` (slim), slim with the dumper (and `lazy`, as djs-wasm's
         # `dump` turns it on, D2990), full without them; and the
-        # wasm modules in release: main, slim, dump, slim with dump. Libraries only: the
+        # wasm modules in release as they ship: main and slim unchecked (D3100), dump, slim
+        # with dump. Libraries only: the
         # tests build in the default combination (and slim's in its own legs).
         J("clippy (djs-core feature combinations)", "for f in '--no-default-features'"
           " '--no-default-features --features dump,lazy' '--no-default-features --features full,unicode';"
@@ -248,7 +249,8 @@ def jobs():
             f" --release {flags} --quiet -- -D warnings", cls="rust", group=f"target/clippy-wasm-{name}")
           # One target directory each: four feature sets build nothing in common, and one
           # after another they were the gate's second-longest path (0197).
-          for name, flags in (("main", ""), ("slim", "--no-default-features"), ("dump", "--features dump"),
+          for name, flags in (("main", "--features unsafe-heap"),
+                              ("slim", "--no-default-features --features unsafe-heap"), ("dump", "--features dump"),
                               ("slim-dump", "--no-default-features --features dump"))],
 
         # --- wasm32 dev builds: djs-core no_std, and the modules the js tests load (0023),
@@ -262,11 +264,13 @@ def jobs():
           " --target wasm32-unknown-unknown --features compiled-prelude --quiet",
           group="target/wasm-nodump", build=True),
 
-        # --- The shipped modules (D020, D2411): LTO, one codegen unit, one core each.
+        # --- The shipped modules (D020, D2411): LTO, one codegen unit, one core each, and
+        # unchecked arena access, as scripts/build-wasm.sh builds them (D3100).
         J("build:size", "CARGO_TARGET_DIR=target/size scripts/with-wasm-env.sh cargo build -p djs-wasm"
-          " --target wasm32-unknown-unknown --profile wasm --quiet", group="target/size", build=True),
+          " --target wasm32-unknown-unknown --profile wasm --features unsafe-heap --quiet",
+          group="target/size", build=True),
         J("build:size-slim", "CARGO_TARGET_DIR=target/size-slim scripts/with-wasm-env.sh cargo build -p djs-wasm"
-          " --target wasm32-unknown-unknown --profile wasm --no-default-features --quiet",
+          " --target wasm32-unknown-unknown --profile wasm --no-default-features --features unsafe-heap --quiet",
           group="target/size-slim", build=True),
 
         # --- The slim build (D2411), natively in its own target directory.

@@ -35,7 +35,7 @@ pub fn wasm(r: &mut Runner) {
             "-p",
             "djs-wasm",
             "--features",
-            "compiled-prelude",
+            "compiled-prelude,unsafe-heap",
         ])
         .args(["--target", "wasm32-unknown-unknown", "--profile", "wasm"])
         .arg("--target-dir")
@@ -47,13 +47,14 @@ pub fn wasm(r: &mut Runner) {
             "building djs-wasm failed (wasm32 target installed?)",
         );
     }
-    // The shipped module (default features), for `wasm/instantiate shipped`: the same
-    // build as the size group's `size/djs-wasm`, in its target directory.
+    // The shipped module (default features, unchecked arena access: D3100), for
+    // `wasm/instantiate shipped`: the same build as the size group's `size/djs-wasm`, in
+    // its target directory.
     let size_dir = root.join("target/bench-size");
     let shipped = Command::new(env!("CARGO"))
         .current_dir(&root)
         .envs(crate::size::shipped_env())
-        .args(["build", "--quiet", "-p", "djs-wasm"])
+        .args(["build", "--quiet", "-p", "djs-wasm", "--features", "unsafe-heap"])
         .args(["--target", "wasm32-unknown-unknown", "--profile", "wasm"])
         .arg("--target-dir")
         .arg(&size_dir)

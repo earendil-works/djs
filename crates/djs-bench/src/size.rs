@@ -22,8 +22,8 @@ pub fn size(r: &mut Runner) {
     // The probe keeps its result names (`size/wasm ...`) so its history stays comparable.
     let probe = ["--manifest-path", "tests/bench/size/Cargo.toml"];
     measure(r, "size/wasm", &probe, &target_dir, "djs_size_probe.wasm");
-    // The real module (0023).
-    let module = ["-p", "djs-wasm"];
+    // The real module (0023), unchecked as it ships (D3100).
+    let module = ["-p", "djs-wasm", "--features", "unsafe-heap"];
     measure(r, "size/djs-wasm", &module, &target_dir, "djs_wasm.wasm");
 }
 
