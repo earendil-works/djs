@@ -11063,3 +11063,63 @@ output pieces were discounted: 18 collections instead of 13); 75% at 16 KiB, str
 The discount cannot tell long-lived from transient big strings; that would need a survivor mark
 in the image (follow-up). Minor collections applying the slice-detach rule (D2542) were
 measured and dropped: no gain on the benchmark workloads, pi-like +0.9%.
+
+## D3120: Pure leaf intrinsics run in the tier-0 loop
+date: 2026-11-06 · by: mathfast · issue: 0230
+A `call_intrinsic` that the hot loop did not know (everything but a few type tests) left
+run_hot for `step_once` → `call_intrinsic`: about 550 wasm instructions per call, more than
+most leaves do (Math.floor made two such calls, substring six). `Exec::pure_leaf`
+(interp/run/intrinsics.rs) now holds the leaves that compute a value from at most three
+arguments with no effect on frames, stack or fuel and none before a fault: type tests and
+`As*`, the conversions of primitives, `StrLength`, the `Str*` string leaves, `Number*`
+formatting and parsing, `SameValue`, `PrimitiveValue` and the libm leaves. The hot loop
+calls it for the ids in `hot::PURE_LEAVES` (a bitset; a test checks it against
+`pure_leaf`), so other intrinsics decline without a call. A fault declines and
+`call_intrinsic` runs the leaf again and throws (leaves change nothing before they fail).
+A host refusal stops the run at run_hot's exit (D1690). `call_intrinsic` tries `pure_leaf`
+last, so the intrinsics it does not cover pay nothing. Running every declined intrinsic
+through `step_once` in place (no loop exit) was measured first and gained nothing: the
+cost is in the general dispatch, not in the exit.
+
+## D3121: djs-bgen inlines small helpers into the bytecode prelude
+date: 2026-11-06 · by: mathfast · issue: 0230
+TS builtins are built from many tiny helpers, and every call costs a frame plus the call
+and argument bytecodes (substring: 8 helper frames). The JS emitter (emit_js.rs) now
+replaces a call of an internal helper (no installs, so it never shows in stack traces; no
+`this`, rest, `new.target` or `%ArgumentCount`; not `@native`, `@fast` or `@frame`;
+≤ 8 statements; 4 levels deep at most) with one expression when its body has one:
+`const`/`let` and assignments become `(t = e, …)` with caller temporaries `$1..`, `if` with
+`return` becomes `?:`, `throw e` becomes the new leaf `%Throw(e)`. Arguments go into
+temporaries in order (names and literals are used directly), so evaluation order and
+count are unchanged. A call is inlined only if its expansion is ≤ 160 characters of JS:
+every call site is a copy in the base image, and 160 kept most of the gain for ~1 KB gz
+(260 gave little more for 1.4 KB more). The Rust backend already inlined (emit_rust.rs);
+this is the bytecode backend's counterpart. `@frame` (new tag) keeps a helper's frame where
+the engine looks for it: `CallPrepareStackTrace`, whose frame stack.rs searches for. Helpers
+that every caller inlined disappear from the prelude after the base snapshot's collection;
+the registry tombstones them (73 `%prelude:` entries).
+
+## D3122: Math.max / Math.min get @fast entries again
+date: 2026-11-06 · by: mathfast · issue: 0230
+0159 (D2310) dropped them for want of calls in the workload set. The 0229 set has
+`lines.reduce((m, l) => Math.max(m, l.length), 0)` over ~30k lines (heavy) and a
+`Math.max` per row (json), at 8.8k wasm instructions per call (a rest array, CoerceNumbers,
+a Get loop) against ~1.4k in quickjs-wasi. The entry (fast.rs `extremum`) takes primitive
+arguments whose ToNumber is pure. It converts all of them before it answers, so an object
+after a NaN still declines to the builtin. Cost ~150 B gz; Math.max(i, 3) 8,838 → 1,206 wasm
+instructions. Handling `@fast` calls inside run_hot's call arm instead of at its exit was
+measured and dropped: +4–9% on @fast calls, but −7–10% on every plain closure call
+(register pressure in the call arm, D1352).
+
+## D3123: The size ceilings rise for 0230
+date: 2026-11-06 · by: mathfast · issue: 0230
+Approved by the coordinator. Shipped module 414,524 → 416,327 B gz (+1,803), slim 348,793 →
+350,181 (+1,388), measured on the branch against main at 42ad8afd. The ceilings rise by those
+deltas (417,059 and 350,904). Most of it is the inlined helpers in the base image, the rest
+the pure-leaf path and the Math entries. Wasm instructions per operation (scripts/perf/
+wmicro.py, main → 0230): Math.max(i, 3) 8,838 → 1,206; Math.floor 3,531 → 2,118; substring
+13,326 → 8,206; at 9,386 → 5,895; padStart 17,424 → 12,503; repeat 9,839 → 6,375; toFixed
+8,409 → 5,492; trim 4,396 → 3,340; toLowerCase 5,206 → 4,022; startsWith 12,933 → 8,720;
+lastIndexOf 9,571 → 6,029; replace 18,589 → 14,926; parseInt 4,899 → 3,835; Array.isArray
+1,819 → 1,347; String(i) 6,440 → 5,979. Plain calls, push/pop, slice, charAt and Object.keys
+are unchanged (±2%).
