@@ -443,6 +443,15 @@ struct Ser<'h, 'g> {
 }
 
 const KEY_CACHE: usize = 128;
+
+#[cfg(test)]
+extern crate std;
+
+#[cfg(test)]
+std::thread_local! {
+    /// One-byte keys quoted (cache misses), for the key cache's test.
+    static KEYS_QUOTED: core::cell::Cell<usize> = const { core::cell::Cell::new(0) };
+}
 const CLEAN_PROTOS: usize = 8;
 
 /// Whether a `toJSON` lookup result means user code might run.
@@ -640,18 +649,27 @@ impl Ser<'_, '_> {
                 .atom_string(k)
                 .expect("string atoms do not allocate");
             let view = self.heap.str_view(s).expect("atom strings are flat");
-            // Quoted straight into the output; a one-byte result is remembered.
-            let start = match &self.out.buf {
-                Buf::Narrow(b) => Some(b.len()),
-                Buf::Wide(_) => None,
-            };
-            let one_byte = matches!(view, StrView::Latin1(_));
-            self.out.quote(view);
-            if let (Some(start), true, Buf::Narrow(b)) = (start, one_byte, &self.out.buf) {
-                let at = self.key_bytes.len();
-                self.key_bytes.extend_from_slice(&b[start..]);
-                self.key_cache[slot] = (k, at as u32, (b.len() - start) as u32);
+            if !matches!(view, StrView::Latin1(_)) {
+                self.out.quote(view);
+                return;
             }
+            // A one-byte key is quoted into the cache and copied from there, whatever the
+            // output's width: once a two-byte string widened the output, quoting every
+            // key again cost `JSON.stringify` of records 7% (0224).
+            #[cfg(test)]
+            KEYS_QUOTED.with(|n| n.set(n.get() + 1));
+            let at = self.key_bytes.len();
+            let mut q = Out {
+                buf: Buf::Narrow(core::mem::take(&mut self.key_bytes)),
+                pieces: Vec::new(),
+            };
+            q.quote(view);
+            if let Buf::Narrow(b) = q.buf {
+                self.key_bytes = b;
+            }
+            let len = self.key_bytes.len() - at;
+            self.key_cache[slot] = (k, at as u32, len as u32);
+            self.out.latin1(&self.key_bytes[at..]);
         }
     }
 
@@ -934,6 +952,36 @@ impl Ser<'_, '_> {
 mod tests {
     use super::needs_escape8;
     use crate::json::escape_mask8;
+
+    #[test]
+    fn keys_come_from_the_cache_in_two_byte_output() {
+        // Once a two-byte string widens the output, keys are still quoted once each
+        // (0224: quoting them again per object cost 7% on records).
+        use crate::heap::Heap;
+        use crate::value::Value;
+        let mut h = Heap::new().unwrap();
+        let arr = h.new_array(None, 0).unwrap();
+        let wide = h.alloc_str("日本").unwrap();
+        h.set_element_fast(arr, 0, Value::string(wide)).unwrap();
+        let (a, b) = (h.atom_str("alpha").unwrap(), h.atom_str("beta").unwrap());
+        for i in 1..=100 {
+            let o = h.new_object(None).unwrap();
+            h.create_data_property(o, a, Value::int(i)).unwrap();
+            h.create_data_property(o, b, Value::int(-i)).unwrap();
+            h.set_element_fast(arr, i as u32, Value::object(o)).unwrap();
+        }
+        let before = super::KEYS_QUOTED.with(|n| n.get());
+        let s = super::stringify_fast(&mut h, Value::object(arr), &[])
+            .unwrap()
+            .unwrap();
+        assert_eq!(super::KEYS_QUOTED.with(|n| n.get()) - before, 2);
+        let text = h.str_to_string(s);
+        assert!(
+            text.starts_with("[\"日本\",{\"alpha\":1,\"beta\":-1},"),
+            "{text}"
+        );
+        assert!(text.ends_with("{\"alpha\":100,\"beta\":-100}]"), "{text}");
+    }
 
     /// The lowest flag of the mask is the first byte that needs escaping, whatever the
     /// other bytes are (random words over bytes near the edges: 0x1F/0x20, `"`, `\\`).
