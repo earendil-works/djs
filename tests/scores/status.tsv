@@ -1,6 +1,9 @@
 # Measured status numbers (D2101): `scripts/status.py` writes this file, and the
 # `gen:status` regions of README.md and docs/guide read it. Do not edit by hand.
 key	value	commit	date
+bounds/gzip	7895	3af283e33e	2026-11-05
+bounds/instructions-max-pct	16.8	3af283e33e	2026-11-05
+bounds/instructions-median-pct	10.9	3af283e33e	2026-11-05
 dump/bytes	1966073	1389e5d611	2026-11-05
 dump/extra-gzip	342133	1389e5d611	2026-11-05
 dump/gzip	784722	1389e5d611	2026-11-05
