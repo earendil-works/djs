@@ -127,8 +127,11 @@ fn run_dump(vm: &mut Vm, text: &str) -> Result<(), String> {
             }
             Status::HostCall { call_id, fn_id } if fn_id == SEED => {
                 let args = vm.host_call(call_id).unwrap().args;
+                // (`$djs.seed(lo, hi[, next])` or `$djs.seed(next)`, D2837.)
                 let half = |i: usize| args.get(i).and_then(|v| v.as_int()).unwrap_or(0) as u32;
-                vm.set_math_random_seed(u64::from(half(0)) | (u64::from(half(1)) << 32));
+                if args.get(1).is_some_and(|v| !v.is_undefined()) {
+                    vm.restore_math_random(u64::from(half(0)) | (u64::from(half(1)) << 32));
+                }
                 vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
             }
             Status::HostCall { call_id, fn_id } if fn_id == HOST => {

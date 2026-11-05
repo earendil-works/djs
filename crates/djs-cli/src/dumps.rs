@@ -139,10 +139,15 @@ pub fn serve_hook(
         let _ = vm.resolve_host_call(call_id, r);
         return true;
     }
+    // `$djs.seed(lo, hi[, next])`, or `$djs.seed(next)` (D2837).
     let r = if fn_id == SEED {
-        match (arg(0).as_int(), arg(1).as_int()) {
-            (Some(lo), Some(hi)) => {
-                vm.set_math_random_seed(u64::from(lo as u32) | u64::from(hi as u32) << 32);
+        match (arg(0).as_int(), arg(1).as_int(), arg(1).is_undefined()) {
+            (Some(n), _, true) => {
+                load.next = Some(n as u32);
+                Ok(())
+            }
+            (Some(lo), Some(hi), false) => {
+                vm.restore_math_random(u64::from(lo as u32) | u64::from(hi as u32) << 32);
                 load.next = arg(2).as_int().map(|n| n as u32);
                 Ok(())
             }
@@ -222,9 +227,8 @@ fn source_function(vm: &mut Vm, name: &str, hash: &str, params: &str) -> Result<
 /// from the dumped VM's (the hooks took ids of their own, D2897).
 pub fn end_load(vm: &mut Vm, tools: &Tools, load: &PlainLoad) {
     tools.premake(vm);
-    if let Some(next) = load.next {
-        vm.set_next_call_id(next.max(load.last + 1));
-    }
+    // (Without `next`: one past the highest reopened call, D2837.)
+    vm.set_next_call_id(load.next.unwrap_or(0).max(load.last + 1));
     let _ = vm.end_dump_load();
 }
 

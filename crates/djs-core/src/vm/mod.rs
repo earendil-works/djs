@@ -765,6 +765,12 @@ impl Vm {
         crate::builtins::number::set_math_seed(&mut self.heap, seed);
     }
 
+    /// Restores a dumped run's `Math.random` state (a plain dump's `$djs.seed(lo, hi)`):
+    /// as a state that ran, which the next dump writes again (D2837).
+    pub fn restore_math_random(&mut self, state: u64) {
+        crate::builtins::number::restore_state(&mut self.heap, state);
+    }
+
     pub fn new_error(&mut self, kind: ErrorKind, message: &str) -> Result<Value, HeapError> {
         realm::new_error(&mut self.heap, kind, message)
     }
@@ -1344,8 +1350,9 @@ fn tidy_stack(heap: &mut Heap, shrink: bool) {
 }
 
 /// The `hash` of a script's `$djs.source(name, hash)` (D2882): FNV-1a of its source text,
-/// its parameter names and its compile options, 16 hex digits. The host's script must
-/// have the same, or `Vm::source_function` refuses it.
+/// its parameter names and its compile options, folded to 32 bits, 8 hex digits (D2839:
+/// enough to tell a host's scripts apart; the name stays). The host's script must have
+/// the same, or `Vm::source_function` refuses it.
 pub fn script_hash(source: &str, params: &str, bits: u32) -> String {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     let bits = cat!(bits);
@@ -1358,9 +1365,10 @@ pub fn script_hash(source: &str, params: &str, bits: u32) -> String {
     {
         h = (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
     }
+    let h = (h ^ (h >> 32)) as u32;
     let mut s = String::new();
-    for i in (0..16).rev() {
-        let d = ((h >> (i * 4)) & 0xf) as u32;
+    for i in (0..8).rev() {
+        let d = (h >> (i * 4)) & 0xf;
         s.push(char::from_digit(d, 16).unwrap_or('0'));
     }
     s

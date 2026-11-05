@@ -306,7 +306,7 @@ const SCRIPTS_KEPT = 16;
 /**
  * The hash of `$djs.source(name, hash, params)` (D2882, `vm::script_hash`): FNV-1a 64 of
  * the UTF-8 of the parameter names (`,`-joined), the compile option bits in decimal and
- * the source, `\0`-separated, as 16 hex digits.
+ * the source, `\0`-separated, folded to 32 bits (D2839), as 8 hex digits.
  */
 export function scriptHash(source: string, params: string, bits: number): string {
   let h = 0xcbf29ce484222325n;
@@ -318,7 +318,7 @@ export function scriptHash(source: string, params: string, bits: number): string
   step(textEncoder.encode(String(bits)));
   step(new Uint8Array([0]));
   step(textEncoder.encode(source));
-  return h.toString(16).padStart(16, "0");
+  return BigInt.asUintN(32, h ^ (h >> 32n)).toString(16).padStart(8, "0");
 }
 
 function rememberScript(name: string, code: string): void {
@@ -392,6 +392,7 @@ interface Exports {
   vm_set_time_zone_offset(vm: number, minutes: number): void;
   vm_set_random_seed(vm: number, lo: number, hi: number): void;
   vm_set_math_random_seed(vm: number, lo: number, hi: number): void;
+  vm_restore_math_random?(vm: number, lo: number, hi: number): void;
   vm_outcome(vm: number): number;
   /** Since 0204 (D2890): loading plain dumps. */
   vm_open_call?(vm: number, parked: number, fnId: number): number;
@@ -1509,10 +1510,14 @@ export class Sandbox {
       let ok = true;
       let result: unknown;
       if (fnId === HOOK_SEED) {
+        // `$djs.seed(lo, hi[, next])`, or `$djs.seed(next)` (D2837).
         const [lo, hi, n] = args;
-        if (typeof lo === "number" && typeof hi === "number") this.guard(() => x.vm_set_math_random_seed(vm, lo >>> 0, hi >>> 0));
-        else [ok, result] = [false, new TypeError("seed: not two int32 halves")];
-        if (typeof n === "number") next = n;
+        if (hi === undefined && typeof lo === "number") next = lo;
+        else if (typeof lo === "number" && typeof hi === "number") {
+          // (A state that ran, which the next dump writes again: `vm_restore_math_random`.)
+          this.guard(() => (x.vm_restore_math_random ?? x.vm_set_math_random_seed)(vm, lo >>> 0, hi >>> 0));
+          if (typeof n === "number") next = n;
+        } else [ok, result] = [false, new TypeError("seed: not two int32 halves")];
       } else {
         try {
           result = this.invoke(fnId, args);
@@ -1524,9 +1529,10 @@ export class Sandbox {
       }
       this.complete(callId, ok, result, false);
     }
-    if (next !== undefined && x.vm_set_next_call_id) {
+    // (Without `next`: one past the highest reopened call, D2837.)
+    if (x.vm_set_next_call_id) {
       const last = Math.max(0, ...calls.map((c) => c.id));
-      this.guard(() => x.vm_set_next_call_id!(vm, Math.max(next!, last + 1)));
+      this.guard(() => x.vm_set_next_call_id!(vm, Math.max(next ?? 0, last + 1)));
     }
     const hookError = this.hookError;
     this.hookError = undefined;

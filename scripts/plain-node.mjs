@@ -106,7 +106,9 @@ async function runLink(file, now) {
   });
   let api;
   try {
-    api = new vm.Script(text, { filename: file }).runInContext(ctx);
+    // (Dumps are strict code without the directive, D2840: on the first line, so that
+    // the line numbers stay the dump's.)
+    api = new vm.Script(`"use strict"; ${text}`, { filename: file }).runInContext(ctx);
   } catch (e) {
     if (process.env.PLAIN_NODE_DEBUG) console.log(e);
     return `=== crash\nload threw: ${e}\n`;

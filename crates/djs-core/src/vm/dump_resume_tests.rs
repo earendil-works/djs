@@ -992,10 +992,22 @@ fn dumps_carry_the_random_state_and_iterators_again() {
     for src in [
         "async function main() { const a = Math.random(); await later(1); const b = Math.random(); await later(2); print(a, b, Math.random()); }\nmain();",
         "async function main() { const s = new Set([1, 2, 3]).values(); s.next(); for (const [k, v] of [[\"a\", 1], [\"b\", 2], [\"c\", 3]]) print(k, await later(v), await later(v + 1), s.next().value); for (const c of \"h\\u00e9\\u{1F600}x\") print(await later(c)); }\nmain();",
+        // (Math.random first after the dump: no state written, the loading VM's own
+        // seed continues as the uninterrupted run's, D2837.)
+        "async function main() { await later(1); print(Math.random()); await later(2); print(Math.random()); }\nmain();",
     ] {
         let (want, _) = run_program(src);
         assert_eq!(chained(src), want, "{src}");
     }
+    // The state only where Math.random ran (D2837); a re-dump of a loaded state writes it
+    // again (the chains above).
+    let seeded = |src: &str| dump_at(src, 1).unwrap().1.contains("$djs.seed(");
+    assert!(seeded(
+        "async function main() { Math.random(); await later(1); }\nmain();"
+    ));
+    assert!(!seeded(
+        "async function main() { await later(1); Math.random(); }\nmain();"
+    ));
 }
 
 /// A for-in loop over a Proxy walks a Record its traps fill: refused.
@@ -1023,8 +1035,11 @@ fn plain_step(vm: &mut Vm, lines: &mut Vec<String>) -> Option<u32> {
         match vm.run(1_000_000_000) {
             Status::HostCall { call_id, fn_id } if fn_id == SEED => {
                 let args = vm.host_call(call_id).unwrap().args;
+                // (`$djs.seed(lo, hi[, next])` or `$djs.seed(next)`, D2837.)
                 let half = |v: Value| v.as_number().unwrap_or(0.0) as i32 as u32 as u64;
-                vm.set_math_random_seed((half(args[1]) << 32) | half(args[0]));
+                if args.get(1).is_some_and(|v| !v.is_undefined()) {
+                    vm.restore_math_random((half(args[1]) << 32) | half(args[0]));
+                }
                 vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
             }
             Status::HostCall { call_id, fn_id } => {
@@ -1104,8 +1119,11 @@ fn plain_load(text: &str) -> Result<Vm, String> {
             Status::Idle | Status::Done(_) => break,
             Status::HostCall { call_id, fn_id } if fn_id == SEED => {
                 let args = vm.host_call(call_id).unwrap().args;
+                // (`$djs.seed(lo, hi[, next])` or `$djs.seed(next)`, D2837.)
                 let half = |v: Value| v.as_number().unwrap_or(0.0) as i32 as u32 as u64;
-                vm.set_math_random_seed((half(args[1]) << 32) | half(args[0]));
+                if args.get(1).is_some_and(|v| !v.is_undefined()) {
+                    vm.restore_math_random((half(args[1]) << 32) | half(args[0]));
+                }
                 vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
             }
             Status::Threw(e) => return Err(alloc::format!("the load threw {}", vm.display(e))),

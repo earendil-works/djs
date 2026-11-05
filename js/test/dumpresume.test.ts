@@ -184,7 +184,7 @@ async function refusals(p: Packaging): Promise<void> {
   // A dump whose Script throws while it loads does not load.
   // (Its first statement after the header: a hook the dump calls inside a continuation
   // throws into its activation, D3001.)
-  const broken = text.replace('"use strict";\n', '"use strict";\n$djs.nope();\n');
+  const broken = text.replace('"djs-dump";\n', '"djs-dump";\n$djs.nope();\n');
   await assert.rejects(Sandbox.resume(broken, sandboxOptions(p, [])), (e: unknown) => e instanceof SandboxError && /cannot load the dump: the dump threw/.test(e.message));
   // An instance with a private name cannot be written (D2878): only its class's
   // construction can add the name. Neither can a sandbox without frozen builtins dump.

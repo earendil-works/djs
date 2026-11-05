@@ -103,7 +103,8 @@ export async function resumeInNode(dump: string): Promise<unknown> {
   };
   g.tools = tools;
   try {
-    return new Script(dump, { filename: "sleep.dump.js" }).runInThisContext();
+    // (A dump is strict code; djs compiles all code so, node needs the directive, D2840.)
+    return new Script(`"use strict"; ${dump}`, { filename: "sleep.dump.js" }).runInThisContext();
   } finally {
     // The load is over: the host deletes the dump's globals (D2916).
     delete g.$djs;

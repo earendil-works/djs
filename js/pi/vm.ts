@@ -404,7 +404,10 @@ class Session implements VmSession {
     if (!next) throw new Error("dumpSession needs the next mode (shape: \"next\" with prelude-next)");
     const host = this.resume ? hostGlobals(this.resume.data) : [];
     const handles: [string, number][] = next.handles.body !== 0 ? [["run", next.handles.body]] : [];
-    const states = next.ids.map(([callId, id]): [number, string] => [callId, JSON.stringify({ id } satisfies CallState)]);
+    // (A call whose pi id is its call id has no state: no fourth `resume` argument, D2838.)
+    const states = next.ids
+      .filter(([callId, id]) => callId !== id)
+      .map(([callId, id]): [number, string] => [callId, JSON.stringify({ id } satisfies CallState)]);
     const dump = this.engine.dump(host, FN_NAMES, handles, states);
     const { handles: _, ids: _i, ...rest } = next;
     const { api: _a, settle: _s, stalled: _t, next: _n, ...state } = this.state;
@@ -719,7 +722,8 @@ class Session implements VmSession {
     if (this.hookError !== undefined) throw new Error(`Cannot load the dump: ${this.hookError}`);
     const run = status === STATUS_DONE ? engine.result() : engine.outcome().handle;
     const [next, last] = this.plainIds;
-    if (next !== undefined) engine.setNextCallId(Math.max(next, last + 1));
+    // (Without `next`: one past the highest reopened call, D2837.)
+    engine.setNextCallId(Math.max(next ?? 0, last + 1));
     // The load is over: the host deletes the dump's globals (D2916). An undefined property
     // is no hook, and the next dump would refuse it, so take them out by running JS.
     const drop = engine.compile(0, "dump.js", [], "delete globalThis.$djs; delete globalThis.$dump");
@@ -748,11 +752,15 @@ class Session implements VmSession {
       }
       why = `source: the dump continues the script ${String(a)} (${String(b)}), not this session's code`;
     } else if (fnId === HOOK_SEED) {
-      if (typeof a === "number" && typeof b === "number") engine.setMathRandomSeed(a >>> 0, b >>> 0);
-      else why = "seed: not two int32 halves";
-      if (typeof c === "number") this.plainIds[0] = c;
+      // `$djs.seed(lo, hi[, next])`, or `$djs.seed(next)` (D2837).
+      if (b === undefined && typeof a === "number") this.plainIds[0] = a;
+      else if (typeof a === "number" && typeof b === "number") {
+        engine.restoreMathRandom(a >>> 0, b >>> 0);
+        if (typeof c === "number") this.plainIds[0] = c;
+      } else why = "seed: not two int32 halves";
     } else {
-      const id = (d as Partial<CallState> | undefined)?.id;
+      // (No state: the pi id is the call id, D2838.)
+      const id = d === undefined ? a : (d as Partial<CallState>).id;
       if (b !== "call" || typeof id !== "number") why = `resume: call ${String(a)} is not a tool call with a pi id`;
       else {
         why = engine.openCall(callId, CALL_FN);

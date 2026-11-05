@@ -36,10 +36,11 @@ pub(super) struct Ir {
     pub acts: Vec<Act>,
     /// The line of `out` that writes a factory or an activation.
     pub lines: Vec<(usize, Rec)>,
-    /// `Math.random`'s state.
-    pub seed: (i32, i32),
-    /// The id the VM's next host call gets: `$djs.seed`'s third argument (D2897).
-    pub next_call: u32,
+    /// `Math.random`'s state, where the run called it (D2837).
+    pub seed: Option<(i32, i32)>,
+    /// The id the VM's next host call gets, where it is not one past the highest
+    /// reopened call's: `$djs.seed`'s third argument, or its only one (D2897, D2837).
+    pub next_call: Option<u32>,
     /// The handles, in the host's order: name, expression.
     pub handles: Vec<(String, String)>,
 }
@@ -2318,18 +2319,17 @@ impl W<'_> {
         } else {
             "\"djs-dump\";\n"
         });
-        // djs runs all code strict (D015): so does node.
-        s.push_str("\"use strict\";\n");
-        cat_to!(
-            &mut s,
-            "$djs.seed(",
-            ir.seed.0,
-            ", ",
-            ir.seed.1,
-            ", ",
-            ir.next_call,
-            ");\n"
-        );
+        // (No "use strict": djs compiles all code strict, D015; a harness that runs a
+        // dump in node puts the directive in front, D2840.)
+        // `$djs.seed(lo, hi[, next])` or `$djs.seed(next)`, where needed (D2837).
+        match (ir.seed, ir.next_call) {
+            (Some((lo, hi)), Some(n)) => {
+                cat_to!(&mut s, "$djs.seed(", lo, ", ", hi, ", ", n, ");\n")
+            }
+            (Some((lo, hi)), None) => cat_to!(&mut s, "$djs.seed(", lo, ", ", hi, ");\n"),
+            (None, Some(n)) => cat_to!(&mut s, "$djs.seed(", n, ");\n"),
+            (None, None) => {}
+        }
         // (The holder, where anything is left in it: single values go where they are
         // used, D3001.)
         let holder = s.len();

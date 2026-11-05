@@ -84,9 +84,14 @@ pub(super) fn run_plain_dump(
             },
             Status::HostCall { call_id, fn_id } if fn_id == HOOK_SEED => {
                 let args = vm.host_call(call_id).unwrap().args;
+                // (`$djs.seed(lo, hi[, next])` or `$djs.seed(next)`, D2837.)
                 let half = |i: usize| args.get(i).and_then(|v| v.as_int()).unwrap_or(0) as u32;
-                vm.set_math_random_seed(u64::from(half(0)) | (u64::from(half(1)) << 32));
-                next = args.get(2).and_then(|v| v.as_int()).map(|n| n as u32);
+                if args.get(1).is_some_and(|v| !v.is_undefined()) {
+                    vm.restore_math_random(u64::from(half(0)) | (u64::from(half(1)) << 32));
+                    next = args.get(2).and_then(|v| v.as_int()).map(|n| n as u32);
+                } else {
+                    next = args.first().and_then(|v| v.as_int()).map(|n| n as u32);
+                }
                 vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
             }
             Status::HostCall { call_id, fn_id } if fn_id == HOOK_RESUME => {
@@ -115,9 +120,7 @@ pub(super) fn run_plain_dump(
             s => return Err(alloc::format!("the dump stopped: {s:?}")),
         }
     };
-    if let Some(n) = next {
-        vm.set_next_call_id(n.max(last + 1));
-    }
+    vm.set_next_call_id(next.unwrap_or(0).max(last + 1));
     // (The host deletes `$djs` and `$dump`, D2916.)
     vm.end_dump_load().map_err(|e| alloc::format!("{e:?}"))?;
     Ok(done)

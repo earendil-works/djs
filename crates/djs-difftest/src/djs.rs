@@ -541,10 +541,10 @@ impl Session {
         self.plain_ids = (None, 0);
         loop {
             let st = self.vm.run(self.slice);
-            if matches!(st, Status::Done(_) | Status::Idle)
-                && let (Some(next), last) = self.plain_ids
-            {
-                self.vm.set_next_call_id(next.max(last + 1));
+            // (Without `$djs.seed`'s `next`: one past the highest reopened call, D2837.)
+            if matches!(st, Status::Done(_) | Status::Idle) {
+                let (next, last) = self.plain_ids;
+                self.vm.set_next_call_id(next.unwrap_or(0).max(last + 1));
             }
             // The load is over: the host deletes `$djs` and `$dump` (D2916).
             if matches!(st, Status::Done(_) | Status::Idle) {
@@ -653,10 +653,14 @@ impl Session {
                     k => return Err(Stop::Crash(format!("host.done: kind {k}"))),
                 });
             }
+            // `$djs.seed(lo, hi[, next])`, or `$djs.seed(next)` (D2837).
+            SEED if arg(1).is_undefined() => {
+                self.plain_ids.0 = arg(0).as_int().map(|n| n as u32);
+            }
             SEED => {
                 let half = |v: Value| v.as_number().unwrap_or(0.0) as i32 as u32 as u64;
                 let seed = (half(arg(1)) << 32) | half(arg(0));
-                self.vm.set_math_random_seed(seed);
+                self.vm.restore_math_random(seed);
                 self.plain_ids.0 = arg(2).as_int().map(|n| n as u32);
             }
             SOURCE => {

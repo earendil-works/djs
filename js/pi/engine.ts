@@ -84,6 +84,7 @@ interface Exports {
   vm_set_time_zone_offset(vm: number, minutes: number): void;
   vm_set_random_seed(vm: number, lo: number, hi: number): void;
   vm_set_math_random_seed(vm: number, lo: number, hi: number): void;
+  vm_restore_math_random?(vm: number, lo: number, hi: number): void;
   vm_set_weak_refs(vm: number, mode: number): number;
   /** The base snapshot (D2260); the inject exports only with the base coded (D2252). */
   djs_base_ptr(): number;
@@ -197,6 +198,11 @@ export class Engine {
   /** Seeds `Math.random` and keys the VM's string hash from the seed (D2433). */
   setRandomSeed(lo: number, hi: number): void {
     this.x.vm_set_random_seed(this.vm, lo >>> 0, hi >>> 0);
+  }
+
+  /** Restores a dumped run's `Math.random` state, as one that ran (D2837). */
+  restoreMathRandom(lo: number, hi: number): void {
+    (this.x.vm_restore_math_random ?? this.x.vm_set_math_random_seed)(this.vm, lo >>> 0, hi >>> 0);
   }
 
   /** Seeds `Math.random` alone; the hash key stays. */

@@ -167,6 +167,11 @@ impl<'a> Flight<'a> {
     }
 
     /// Open calls, activations, pending promises.
+    /// The highest id of the open calls the dump reopens (0 if none).
+    pub fn last_call_id(&self) -> u32 {
+        self.calls.iter().map(|c| c.id).max().unwrap_or(0)
+    }
+
     pub fn counts(&self) -> (usize, usize, usize) {
         (self.calls.len(), self.acts.len(), self.pends.len())
     }

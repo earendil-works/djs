@@ -123,7 +123,7 @@ test("a suspended task with body bindings resumes in a sandbox and in node", asy
       return values[name];
     },
   };
-  const run = new Script(dump, { filename: "task.dump.js" }).runInThisContext();
+  const run = new Script(`"use strict"; ${dump}`, { filename: "task.dump.js" }).runInThisContext();
   // (The host deletes the dump's globals once the Script ran, D2916.)
   delete (globalThis as Record<string, unknown>).$djs;
   delete (globalThis as Record<string, unknown>).$dump;

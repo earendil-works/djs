@@ -94,22 +94,46 @@ pub const DEFAULT_RANDOM_SEED: u64 = 0x9E37_79B9_7F4A_7C15;
 pub(crate) fn set_seed(heap: &mut Heap, seed: u64) {
     let seed = if seed == 0 { DEFAULT_RANDOM_SEED } else { seed };
     store_state(heap, seed);
+    set_used(heap, false);
     heap.set_hash_key(crate::heap::string::hash_key_for_seed(seed));
 }
 
 /// Stores a seed for `Math.random` alone; the hash key stays (`Vm::set_math_random_seed`).
 pub(crate) fn set_math_seed(heap: &mut Heap, seed: u64) {
     store_state(heap, if seed == 0 { DEFAULT_RANDOM_SEED } else { seed });
+    set_used(heap, false);
 }
 
-/// The `Math.random` state as its two int32 halves (low, high), for dumps (D2624).
+/// Restores a dumped run's `Math.random` state (`$djs.seed`): one that ran, so that the
+/// next dump writes it again (D2837).
+pub(crate) fn restore_state(heap: &mut Heap, state: u64) {
+    store_state(
+        heap,
+        if state == 0 {
+            DEFAULT_RANDOM_SEED
+        } else {
+            state
+        },
+    );
+    set_used(heap, true);
+}
+
+fn set_used(heap: &mut Heap, used: bool) {
+    let a = realm::intrinsic(heap, Intrinsic::RandomState)
+        .as_internal()
+        .expect("random state");
+    heap.value_array_set(a, 2, Value::bool(used));
+}
+
+/// The `Math.random` state as its two int32 halves (low, high), for dumps (D2624), and
+/// whether `Math.random` ran since the VM was seeded (D2837).
 #[cfg(feature = "dump")]
-pub(crate) fn random_state(heap: &Heap) -> (i32, i32) {
+pub(crate) fn random_state(heap: &Heap) -> (i32, i32, bool) {
     let a = realm::intrinsic(heap, Intrinsic::RandomState)
         .as_internal()
         .expect("random state");
     let half = |i| heap.value_array_get(a, i).as_int().unwrap_or(0);
-    (half(0), half(1))
+    (half(0), half(1), heap.value_array_get(a, 2) == Value::TRUE)
 }
 
 fn store_state(heap: &mut Heap, s: u64) {
@@ -138,6 +162,7 @@ pub(crate) fn random(heap: &mut Heap) -> f64 {
     x ^= x << 25;
     x ^= x >> 27;
     store_state(heap, x);
+    set_used(heap, true);
     let v = x.wrapping_mul(0x2545_F491_4F6C_DD1D);
     f64::from_bits((0x3ffu64 << 52) | (v >> 12)) - 1.0
 }

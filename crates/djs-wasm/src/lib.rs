@@ -1605,8 +1605,21 @@ pub extern "C" fn vm_open_call(vm: u32, parked: u32, fn_id: u32) -> i32 {
     })
 }
 
+/// Restores a dumped run's `Math.random` state `hi << 32 | lo` (a plain dump's
+/// `$djs.seed(lo, hi)`, `Vm::restore_math_random`): as a state that ran, which the next
+/// dump writes again (D2837).
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_restore_math_random(vm: u32, lo: u32, hi: u32) {
+    with(|s| {
+        s.slot(vm)
+            .vm
+            .restore_math_random((u64::from(hi) << 32) | u64::from(lo))
+    })
+}
+
 /// Sets the id the next host call gets (`Vm::set_next_call_id`): after a plain dump's
-/// load, its `$djs.seed(lo, hi, next)`, or one past its highest reopened call (D2897).
+/// load, its `$djs.seed`'s `next`, else one past its highest reopened call (D2897,
+/// D2837).
 #[unsafe(no_mangle)]
 pub extern "C" fn vm_set_next_call_id(vm: u32, id: u32) {
     with(|s| s.slot(vm).vm.set_next_call_id(id))

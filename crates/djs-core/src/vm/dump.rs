@@ -2319,14 +2319,17 @@ impl<'a> Dumper<'a> {
             return Err(self.refused());
         }
         // `Math.random`'s state and the next call id: the resumed run continues the
-        // sequence and the ids (D2624, D2897).
-        let (lo, hi) = crate::builtins::number::random_state(self.h);
-        self.pl.seed = (lo, hi);
+        // sequence and the ids (D2624, D2897). The state only where `Math.random` ran
+        // (an unobserved state is any seed's, D2837); the id only where it is not one
+        // past the highest reopened call's (what hosts take without it).
+        let (lo, hi, used) = crate::builtins::number::random_state(self.h);
+        self.pl.seed = used.then_some((lo, hi));
         let i = crate::interp::state::interp(self.h);
-        self.pl.next_call = self
+        let next: u32 = self
             .h
             .arena()
             .get(i, crate::heap::cells::Interp::NEXT_CALL_ID);
+        self.pl.next_call = (next != self.fl.last_call_id() + 1).then_some(next);
         // The lines that write no function: the checker leaves them out of the text it
         // compiles (their data cannot change what a name resolves to).
         let data_lines: alloc::collections::BTreeSet<String> = if self.check_on {
