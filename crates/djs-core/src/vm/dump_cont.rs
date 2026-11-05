@@ -930,8 +930,14 @@ impl G<'_, '_> {
         let kw = match kind {
             DeclKind::Let => "let ",
             DeclKind::Const => "const ",
-            _ => return no("a site in a using declaration (0203)"),
+            DeclKind::Using => "using ",
+            DeclKind::AwaitUsing => "await using ",
+            _ => return no("a declaration kind the exporter does not know"),
         };
+        let using = matches!(kind, DeclKind::Using | DeclKind::AwaitUsing);
+        // A `using` declaration's resources before the site are the scope's already (K
+        // adds them again at its start): their bindings are constants of their own.
+        let mut before: Vec<P> = Vec::new();
         let Some(k) = self.next_part(i) else {
             return no("a declaration at the site");
         };
@@ -981,12 +987,32 @@ impl G<'_, '_> {
                 };
                 for name in names {
                     let v = self.decl_value(&name)?;
-                    items.push_out(P::S(cat!(name, " = ", v)));
+                    let item = P::S(cat!(name, " = ", v));
+                    if using {
+                        before.push_out(item);
+                    } else {
+                        items.push_out(item);
+                    }
                 }
             }
             m = init.map_or(m + 1, |x| x + 1);
         }
-        let mut out = alloc::vec![s(kw)];
+        // The scope's record, when this declaration made it (its first resource or a
+        // loop head's): added again before the bindings.
+        let mut out = if using {
+            alloc::vec![self.using_readd(i)?]
+        } else {
+            Vec::new()
+        };
+        if !before.is_empty() {
+            if i > 0 && self.node(i - 1).kind == NodeKind::For {
+                return no("a site after another resource of a loop's using declaration");
+            }
+            out.push_out(s("const "));
+            push_joined(&mut out, before);
+            out.push_out(s("; "));
+        }
+        out.push_out(s(kw));
         push_joined(&mut out, items);
         Ok(out)
     }

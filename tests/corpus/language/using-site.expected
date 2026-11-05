@@ -1,0 +1,12 @@
+inner 1
+adispose e e
+adispose d d
+dispose c
+dispose b
+dispose a
+loop
+dispose x
+end
+adispose r r
+dispose pre
+=== completed
