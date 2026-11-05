@@ -1,7 +1,7 @@
 # 0222: examples/sleep-dump: instant apart from the sleeps, output before each sleep, 1 s sleeps
 
-status: open
-agent: -
+status: in-progress
+agent: sleepy
 branch: issue/0222-sleep-dump-instant
 depends-on: -
 guide: - (the sleep README; the guide's dumps/JS-interface pages may quote it: tell the coordinator)
