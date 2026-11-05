@@ -15,6 +15,16 @@ usage:
   scripts/status.py speed [-n N]      scripts/perf/wmeasure.py on the README workloads:
                                       instructions of djs-wasm and quickjs-wasi (needs
                                       scripts/perf/setup.sh; takes minutes)
+  scripts/status.py pi                pi's codemode tests on djs (`node js/pi/pi-tests.ts`: the
+                                      default mode, the next mode, the next mode with a dump at
+                                      every idle point on the dump module; needs pi-private)
+                                      and pi's benchmark vs quickjs-wasi (js/bench/pi.bench.ts,
+                                      the median of 3 runs)
+  scripts/status.py startup           js/bench/sandbox.bench.ts: vm_new, Sandbox.create, the
+                                      first run (median of 3 runs)
+  scripts/status.py dumps             scripts/dump-costs/dump-costs.ts, packaging B: dump sizes
+                                      and times over the harvested corpus, and the log case
+  scripts/status.py all               size, speed, pi, startup and dumps
   scripts/status.py set [--at WHEN] KEY VALUE...
                                       record values measured elsewhere, for example
                                       `set pi/passed 221 pi/total 226` after
@@ -159,6 +169,101 @@ def speed(n):
     return new
 
 
+def node(*args, env=None):
+    r = subprocess.run(["node", *args], cwd=ROOT, capture_output=True, text=True,
+                       env=dict(os.environ, **(env or {})))
+    if r.returncode != 0:
+        sys.exit(f"status.py: node {' '.join(args)} failed:\n{r.stdout[-3000:]}\n{r.stderr[-3000:]}")
+    return r.stdout
+
+
+def median(xs):
+    xs = sorted(xs)
+    return xs[len(xs) // 2]
+
+
+def pi():
+    new = {}
+    modes = [
+        ("pi", [], None),
+        ("pi/next", ["--next"], None),
+        ("pi/dump", ["--next", "--dump-every-idle"], {"DJS_WASM": DUMP}),
+    ]
+    for key, flags, env in modes:
+        out = node("js/pi/pi-tests.ts", *flags, "--out", f"target/status-{key.replace('/', '-')}",
+                   env=env)
+        m = re.search(r"^(\d+) / (\d+) passed", out, re.M)
+        if not m:
+            sys.exit(f"status.py: no pass count from pi-tests {' '.join(flags)}:\n{out[-2000:]}")
+        new[f"{key}/passed"], new[f"{key}/total"] = int(m.group(1)), int(m.group(2))
+    # pi.bench.ts's table: a row per case, a column per engine (quickjs-wasi first).
+    rows = {"script start": "start", "tool-heavy": "tool-heavy", "interrupt polls": "polls"}
+    cols = ["qjs", "djs", "djs-prelude"]
+    runs = {}
+    for _ in range(3):
+        out = node("js/bench/pi.bench.ts")
+        if "quickjs-wasi" not in out:
+            sys.exit(f"status.py: pi.bench.ts ran without quickjs-wasi (no pi-private):\n{out}")
+        for line in out.splitlines():
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            for prefix, row in rows.items():
+                if cells[0].startswith(prefix):
+                    for col, cell in zip(cols, cells[1:]):
+                        runs.setdefault(f"pibench/{row}/{col}", []).append(float(cell.split()[0]))
+    if len(runs) != len(rows) * len(cols):
+        sys.exit(f"status.py: pi.bench.ts gave {sorted(runs)}")
+    for k, xs in runs.items():
+        v = median(xs)
+        new[k] = round(v) if k.startswith("pibench/polls") else v
+    return new
+
+
+def startup():
+    pats = {"startup/vm-new-us": r"^vm_new: ([\d.]+) us", "startup/sandbox-us": r"^Sandbox.create: ([\d.]+) us",
+            "startup/sandbox-run-us": r"^Sandbox.create \+ first run: ([\d.]+) us",
+            "startup/instantiate-us": r"^instantiate: ([\d.]+) us"}
+    runs = {k: [] for k in pats}
+    for _ in range(3):
+        out = node("js/bench/sandbox.bench.ts", env={"DJS_WASM": WASM})
+        for k, p in pats.items():
+            m = re.search(p, out, re.M)
+            if not m:
+                sys.exit(f"status.py: no {k} in sandbox.bench.ts's output:\n{out}")
+            runs[k].append(float(m.group(1)))
+    return {k: median(xs) for k, xs in runs.items()}
+
+
+def dumps():
+    out_dir = os.path.join(ROOT, "work/scratch/status-dumps")
+    report = node("scripts/dump-costs/dump-costs.ts", out_dir, "--packaging=B")
+    import json
+    points = json.load(open(os.path.join(out_dir, "points.json")))
+    corpus = points["corpus B"]
+    m = re.search(r"(\d+) cases ran \((\d+) failed to start\), (\d+) idle points, (\d+) refused", report)
+    if not m:
+        sys.exit(f"status.py: no corpus summary in dump-costs' report:\n{report}")
+
+    def pct(k, p):
+        xs = sorted(x[k] for x in corpus)
+        return xs[min(len(xs) - 1, int(p / 100 * len(xs)))]
+    log = points["B/log-5mb"]
+    return {
+        "dumps/corpus-cases": int(m.group(1)),
+        "dumps/idle-points": int(m.group(3)),
+        "dumps/refused": int(m.group(4)),
+        "dumps/raw-p50": pct("raw", 50),
+        "dumps/raw-p99": pct("raw", 99),
+        "dumps/zstd-p50": pct("z3", 50),
+        "dumps/zstd-p99": pct("z3", 99),
+        "dumps/write-ms-p50": round(pct("dumpMs", 50), 3),
+        "dumps/write-ms-p99": round(pct("dumpMs", 99), 3),
+        "dumps/resume-ms-p50": round(pct("resumeMs", 50), 3),
+        "dumps/resume-ms-p99": round(pct("resumeMs", 99), 3),
+        "dumps/log-raw": max(x["raw"] for x in log),
+        "dumps/log-zstd": max(x["z3"] for x in log),
+    }
+
+
 def main():
     args = sys.argv[1:]
     if not args:
@@ -168,8 +273,25 @@ def main():
         save(rows, size())
     elif args[0] == "speed":
         n = int(args[2]) if len(args) > 2 and args[1] == "-n" else 3
-        subprocess.run(["nice", "-n", "10", os.path.join(ROOT, "scripts/build-wasm.sh")], check=True)
+        build()
         save(rows, speed(n))
+    elif args[0] == "pi":
+        build()
+        build("--dump")
+        save(rows, pi())
+    elif args[0] == "startup":
+        build()
+        save(rows, startup())
+    elif args[0] == "dumps":
+        build()
+        build("--dump")
+        save(rows, dumps())
+    elif args[0] == "all":
+        save(rows, size())
+        save(rows, speed(3))
+        save(rows, pi())
+        save(rows, startup())
+        save(rows, dumps())
     elif args[0] == "set":
         at = None
         if len(args) > 2 and args[1] == "--at":

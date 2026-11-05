@@ -133,3 +133,50 @@ for (const [name, code, n] of cases) {
   for (const engine of engines) cells.push(`${(await median(() => execute(engine, code, tool), n)).toFixed(2)} ms`);
   console.log(`| ${name} | ${cells.join(" | ")} |`);
 }
+
+// How often each engine polls `shouldInterrupt` in a loop that never ends: pi's interrupt
+// budgets are polls, so the rate says what one means in CPU time. The run is stopped 300 ms
+// after the first poll.
+function pollsPerSecond(engine: (typeof engines)[number]): Promise<number> {
+  return new Promise((resolve, reject) => {
+    let session: Session | undefined;
+    let polls = 0;
+    let t0 = 0;
+    let rate = 0;
+    let ended = false;
+    const end = () => {
+      if (ended) return;
+      ended = true;
+      queueMicrotask(() => {
+        session?.dispose();
+        resolve(rate);
+      });
+    };
+    engine
+      .start({
+        wasm: engine.wasm,
+        prelude: engine.prelude,
+        reuseImages: engine.reuseImages,
+        data: { code: "for (;;) {}", tools: [], globals: [], memoryLimitBytes: undefined, store: {} },
+        post: (m) => {
+          if (m.type === "done" || m.type === "crash") end();
+        },
+        shouldInterrupt: () => {
+          const now = performance.now();
+          if (polls++ === 0) t0 = now;
+          if (now - t0 < 300) return false;
+          rate = rate || (polls - 1) / ((now - t0) / 1000);
+          return true;
+        },
+      })
+      .then((s) => {
+        session = s;
+        if (ended) s.dispose();
+      }, reject);
+  });
+}
+{
+  const cells: string[] = [];
+  for (const engine of engines) cells.push(`${Math.round(await pollsPerSecond(engine))}`);
+  console.log(`| interrupt polls per second (a loop that never ends) | ${cells.join(" | ")} |`);
+}
