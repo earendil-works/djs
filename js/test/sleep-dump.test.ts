@@ -2,10 +2,13 @@
 // dumps in 0204) in one process with a short sleep: the run is suspended into a dump while
 // the tool sleeps, the sandbox dropped, and the run continued from the dump in a new
 // sandbox, where the tool's `resume` hook sleeps the rest of the call's deadline; and the
-// same dump continued in node itself, a plain Script given the host's functions.
+// same dump continued in node itself, a plain Script given the host's functions; and the
+// command line's two halves in two processes.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { options, resume, resumeInNode, suspend } from "../../examples/sleep-dump/sleep-dump.ts";
 
 test("examples/sleep-dump: suspend while the tool sleeps, resume, continue", async () => {
@@ -37,4 +40,28 @@ test("examples/sleep-dump: the dump continues in node", async () => {
     console.log = log;
   }
   assert.deepEqual(logged.map((a) => a.join(" ")), ["second sleeps 20 ms", "done after at least 40 ms: first: slept 20 ms, second: slept 20 ms"]);
+});
+
+test("examples/sleep-dump: two processes, the second resuming the dump the first wrote", () => {
+  // As `run.sh --restart`: process 2 has the script only through the `sources` option.
+  const run = (...args: string[]) =>
+    execFileSync(process.execPath, [fileURLToPath(new URL("../../examples/sleep-dump/sleep-dump.ts", import.meta.url)), ...args], {
+      cwd: fileURLToPath(new URL("../..", import.meta.url)),
+      encoding: "utf8",
+      timeout: 30_000,
+    })
+      .split("\n")
+      .filter((l) => l !== "" && !l.startsWith("  | "))
+      .map((l) => l.replace(/\(\d+ bytes\)/, "(N bytes)"));
+  assert.deepEqual(run("start", "30"), [
+    "host: starting sleep.js with ms = 30",
+    "  [vm] first sleeps 30 ms",
+    "host: suspended the run into examples/sleep-dump/out/sleep.dump.js (N bytes) and dropped the sandbox:",
+  ]);
+  assert.deepEqual(run("resume"), [
+    "host: resuming examples/sleep-dump/out/sleep.dump.js in a new sandbox",
+    "  [vm] second sleeps 30 ms",
+    "  [vm] done after at least 60 ms: first: slept 30 ms, second: slept 30 ms",
+    "host: the run returned [ 'first: slept 30 ms', 'second: slept 30 ms' ]",
+  ]);
 });

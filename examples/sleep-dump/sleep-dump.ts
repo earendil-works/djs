@@ -56,6 +56,9 @@ export const options = (log = (...a: unknown[]) => console.log("  [vm]", ...a)):
   // frozen builtins (D2836), with which they are the default.
   frozenBuiltins: true,
   asyncFunctions: { "tools.sleep": sleep },
+  // A dump names the script it continues (`$djs.source("sleep.js", …)`); `sources` gives
+  // it back to a process that did not run it (--restart's second one).
+  sources: (name) => (name === "sleep.js" ? SCRIPT : undefined),
   console: { log, info: log, warn: log, error: log },
 });
 
@@ -113,18 +116,24 @@ export async function resumeInNode(dump: string): Promise<unknown> {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const [mode = "both", ms = "5000"] = process.argv.slice(2);
+  const [mode = "both", ms = "1000"] = process.argv.slice(2);
   const file = fileURLToPath(new URL("out/sleep.dump.js", import.meta.url));
   if (mode !== "resume" && mode !== "node") {
+    console.log(`host: starting sleep.js with ms = ${ms}`);
     const dump = await suspend(Number(ms));
     mkdirSync(new URL("out", import.meta.url), { recursive: true });
     writeFileSync(file, dump);
     // The script beside it: the dump names the script it continues (`$djs.source`), which
     // `djs resume` reads from that path.
     writeFileSync(new URL("out/sleep.js", import.meta.url), SCRIPT);
-    console.log(`host: suspended the run into ${relative(".", file)} (${dump.length} bytes):`);
+    console.log(`host: suspended the run into ${relative(".", file)} (${dump.length} bytes) and dropped the sandbox:`);
     console.log(dump.trimEnd().replace(/^/gm, "  | "));
   }
-  if (mode === "node") console.log("node: the run returned", await resumeInNode(readFileSync(file, "utf8")));
-  else if (mode !== "start") console.log("host: the run returned", await resume(readFileSync(file, "utf8")));
+  if (mode === "node") {
+    console.log(`node: continuing ${relative(".", file)} in node`);
+    console.log("node: the run returned", await resumeInNode(readFileSync(file, "utf8")));
+  } else if (mode !== "start") {
+    console.log(`host: resuming ${relative(".", file)} in a new sandbox`);
+    console.log("host: the run returned", await resume(readFileSync(file, "utf8")));
+  }
 }

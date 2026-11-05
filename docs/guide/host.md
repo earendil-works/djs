@@ -288,7 +288,7 @@ into a new sandbox and continues each open call through its function's `resume` 
 function without `resume` is called again, which suits calls without side effects; a
 plain function, without hooks, has its call rejected, because the sandbox cannot know
 whether calling it twice is safe. [`examples/sleep-dump/`](../../examples/sleep-dump/)
-is such a host, with a tool that sleeps five seconds on the host side, in one process or
+is such a host, with a tool that sleeps a second on the host side, in one process or
 two.
 
 A host that wants to decide every call itself drives the run instead: `begin`

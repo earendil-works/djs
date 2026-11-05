@@ -1,14 +1,14 @@
 # sleep-dump: suspend a run while a host tool sleeps, continue it somewhere else
 
 A host (node) gives a script one tool, `tools.sleep(ms)`, which waits on the host side. The
-script calls it twice, 5000 ms each, from a helper inside a loop. While the first call is
+script calls it twice, 1000 ms each, from a helper inside a loop. While the first call is
 open, the VM has nothing to do: it is **idle**, and the host suspends the run into a
 **plain dump**: an ordinary JavaScript Script that recreates the script's suspended
 state, not only data but the functions stopped in the middle of running, each written as
 the rest of its code from where it waits, and the open call with the host's own state of
 it (here: when the sleep is due). The host then throws the sandbox away (or exits), and
 resumes the dump in a new sandbox (or a new process), which sleeps only what is left of
-the first five seconds. The script continues after its `await` as if nothing had
+the first second. The script continues after its `await` as if nothing had
 happened. Since the dump is plain JavaScript, node can continue it too, given the same
 host functions.
 
@@ -16,13 +16,15 @@ host functions.
 examples/sleep-dump/run.sh              # one process: suspend, drop the sandbox, resume
 examples/sleep-dump/run.sh --restart    # two processes: the first writes out/sleep.dump.js and exits
 examples/sleep-dump/run.sh --node       # the same, the second process continuing it in node, no djs
-examples/sleep-dump/run.sh 500          # a shorter sleep
+examples/sleep-dump/run.sh 300          # a shorter sleep
 ```
 
-`run.sh` builds djs-wasm with the dumper (cargo feature `dump`, which the shipped module
-leaves out: it is needed to write a dump, not to load one) and runs [sleep-dump.ts](sleep-dump.ts) with node (22.6 or later: it runs
-TypeScript directly). `js/test/sleep-dump.test.ts` runs it in one process with a 50 ms
-sleep.
+`run.sh` runs [sleep-dump.ts](sleep-dump.ts) with node (22.6 or later: it runs TypeScript
+directly) on the release build of djs-wasm with the dumper, `target/djs-dump.wasm` (cargo
+feature `dump`, which the shipped module leaves out: it is needed to write a dump, not to
+load one). It builds that module the first time, which takes a minute or two, and again
+only when a source of it changed; after that a run takes no noticeable time besides the
+sleeps. `js/test/sleep-dump.test.ts` runs it with sleeps of 20 to 50 ms.
 
 ## The script
 
@@ -44,7 +46,7 @@ return results;
 When the host suspends it, during the first sleep, three things are in the middle of
 running:
 
-- `step("first", 5000)`, stopped at its `await tools.sleep(ms)`;
+- `step("first", 1000)`, stopped at its `await tools.sleep(ms)`;
 - the script itself, stopped at `await step(...)` halfway through the call
   `results.push(...)`: it has already looked up `results.push` and is waiting for the
   argument;
@@ -68,17 +70,22 @@ const sleep = {
     return `slept ${call.args[0]} ms`;
   },
 } satisfies AsyncHostFunction<{ due: number }>;
-// Plain dumps need frozen builtins (pi's sessions run with them).
-const options = { frozenBuiltins: true, asyncFunctions: { "tools.sleep": sleep } };
+// Plain dumps need frozen builtins (pi's sessions run with them). A dump names the
+// script it continues; `sources` gives it back to a process that did not run it.
+const options = {
+  frozenBuiltins: true,
+  asyncFunctions: { "tools.sleep": sleep },
+  sources: (name) => (name === "sleep.js" ? SCRIPT : undefined),
+};
 
 // Process 1: start the script, suspend it at its first idle point.
 const sandbox = await Sandbox.create(options);
-const dump = await sandbox.start(SCRIPT, { ms: 5000 }, { filename: "sleep.js" }).suspend();
+const dump = await sandbox.start(SCRIPT, { ms: 1000 }, { filename: "sleep.js" }).suspend();
 sandbox.dispose();
 
 // Process 2, any time later: continue it.
 const task = await Sandbox.resume(dump, options);
-await task.result;                           // ["first: slept 5000 ms", "second: slept 5000 ms"]
+await task.result;                           // ["first: slept 1000 ms", "second: slept 1000 ms"]
 ```
 
 `until(due, signal)` is a `setTimeout` to the deadline that the signal cancels.
@@ -113,12 +120,13 @@ In one process (`run.sh`); `[vm]` lines are the script's `console.log`, and the 
 are the dump, which the host prints as it writes it (explained [below](#the-dump)):
 
 ```
-  [vm] first sleeps 5000 ms
-host: suspended the run into examples/sleep-dump/out/sleep.dump.js (688 bytes):
+host: starting sleep.js with ms = 1000
+  [vm] first sleeps 1000 ms
+host: suspended the run into examples/sleep-dump/out/sleep.dump.js (688 bytes) and dropped the sandbox:
   | "djs-dump";
   | $djs.k(async function (ms, step, t0, results, $djs_i1) {
   | results.push(await $djs.k(async function (label) {
-  | const r = await $djs.resume(2, "tools.sleep", [5000], {"due":1793868491866});
+  | const r = await $djs.resume(2, "tools.sleep", [1000], {"due":1793871983056});
   | return label + ": " + r;
   | }, step)("first"));
   | for (const label of $djs_i1) {
@@ -126,18 +134,19 @@ host: suspended the run into examples/sleep-dump/out/sleep.dump.js (688 bytes):
   | }
   | console.log("done after", Date.now() - t0 >= 2 * ms ? "at least" : "less than", 2 * ms, "ms:", results.join(", "));
   | return results;
-  | }, $djs.source("sleep.js", "4cef7e51", "ms"), 1, 118)(5000, async function step(label, ms) {
+  | }, $djs.source("sleep.js", "4cef7e51", "ms"), 1, 118)(1000, async function step(label, ms) {
   |   console.log(label, "sleeps", ms, "ms");
   |   const r = await tools.sleep(ms);
   |   return label + ": " + r;
-  | }, 1793868486857, [], ["second"].values());
-  [vm] second sleeps 5000 ms
-  [vm] done after at least 10000 ms: first: slept 5000 ms, second: slept 5000 ms
-host: the run returned [ 'first: slept 5000 ms', 'second: slept 5000 ms' ]
+  | }, 1793871982048, [], ["second"].values());
+host: resuming examples/sleep-dump/out/sleep.dump.js in a new sandbox
+  [vm] second sleeps 1000 ms
+  [vm] done after at least 2000 ms: first: slept 1000 ms, second: slept 1000 ms
+host: the run returned [ 'first: slept 1000 ms', 'second: slept 1000 ms' ]
 ```
 
-The first sandbox printed only `first sleeps`; everything after `suspended` comes from the
-second one, which never ran the start of the script. It takes ten seconds in all: the
+The first sandbox printed only `first sleeps`; the `[vm]` lines after `resuming` come from
+the second one, which never ran the start of the script. It takes two seconds in all: the
 resumed first sleep waits only for the rest of its deadline.
 
 With `--restart` the halves are two node processes, and the dump travels as a file; with
@@ -148,14 +157,16 @@ and a `tools.sleep`):
 
 ```
 --- node sleep-dump.ts start (process 1)
-  [vm] first sleeps 5000 ms
-host: suspended the run into examples/sleep-dump/out/sleep.dump.js (688 bytes):
+host: starting sleep.js with ms = 1000
+  [vm] first sleeps 1000 ms
+host: suspended the run into examples/sleep-dump/out/sleep.dump.js (688 bytes) and dropped the sandbox:
   | "djs-dump";
   | ... (the same dump as above)
 --- node sleep-dump.ts node (process 2, no djs)
-second sleeps 5000 ms
-done after at least 10000 ms: first: slept 5000 ms, second: slept 5000 ms
-node: the run returned [ 'first: slept 5000 ms', 'second: slept 5000 ms' ]
+node: continuing examples/sleep-dump/out/sleep.dump.js in node
+second sleeps 1000 ms
+done after at least 2000 ms: first: slept 1000 ms, second: slept 1000 ms
+node: the run returned [ 'first: slept 1000 ms', 'second: slept 1000 ms' ]
 ```
 
 ### The dump
@@ -172,10 +183,10 @@ statement is the rest of the loop iteration it stopped in: the half-done
 `results.push(await step(label, ms))`, whose callee and `this` (`results.push`) it reads
 again, which gives what the run had read (the builtins are frozen); `label` is not
 declared, since nothing in the rest of the iteration reads it any more. What it awaits is
-the continuation of `step("first", 5000)`, written in place: it runs as the outer one's
+the continuation of `step("first", 1000)`, written in place: it runs as the outer one's
 first statement does, at the same moment of the load as on a line of its own. It takes
 `label` (`ms` is dead there) and awaits the open host call: call 2 (call 1 was the first
-`console.log`), `$djs.resume(2, "tools.sleep", [5000], {"due": ...})`, by the host's name
+`console.log`), `$djs.resume(2, "tools.sleep", [1000], {"due": ...})`, by the host's name
 for the function, with its arguments and the state the call recorded, JSON written as is.
 Then the loop goes on as written, over the iterator itself, and the rest of the body
 follows verbatim. There is no `$djs.seed`: the script never called `Math.random`, and the
@@ -212,15 +223,15 @@ names, so run it beside `sleep.js`, which `sleep-dump.ts start` writes next to t
 ```
 $ cd examples/sleep-dump/out && djs resume --explain sleep.dump.js
 sleep.dump.js: 1 open call, 2 suspended activations; handles: run
-#2 tools.sleep(5000), state {"due":1793868491866}
+#2 tools.sleep(1000), state {"due":1793871983056}
   async function <anonymous> at sleep.dump.js:4:11
-      const r = await $djs.resume(2, "tools.sleep", [5000], {"due":1793868491866});
+      const r = await $djs.resume(2, "tools.sleep", [1000], {"due":1793871983056});
                 ^
     label = 'first', r = undefined
   async function <anonymous> at sleep.dump.js:3:14 (run)
       results.push(await $djs.k(async function (label) {
                    ^
-    ms = 5000, step = [AsyncFunction: step], t0 = 1793868486857, results = [], label = undefined
+    ms = 1000, step = [AsyncFunction: step], t0 = 1793871982048, results = [], label = undefined
 ```
 
 (`label = undefined`: the continuation left the dead binding out.)
@@ -232,7 +243,7 @@ The dump holds the VM's side, and the host's state of each open call:
 - the script's code: `step` verbatim, and each suspended function as its continuation,
   the rest of its text from the `await` it waits at, with the values it held there;
 - the for-of's array iterator, made again over what was left of its array, `"second"`;
-- the open host call, `$djs.resume(2, "tools.sleep", [5000], {"due": ...})`: the id the VM
+- the open host call, `$djs.resume(2, "tools.sleep", [1000], {"due": ...})`: the id the VM
   gave it, the function by the host's name for it, its arguments, and the state the host
   gave it;
 - `Math.random`'s state and the next call id, `$djs.seed(...)`, where the sandbox needs
