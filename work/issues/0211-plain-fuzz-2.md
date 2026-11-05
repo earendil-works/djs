@@ -74,6 +74,9 @@ jobs, wait while load > 30) and gate rules (batch merges, check slim/test262-sli
   plain-xfail) and `super` in an async method re-dumped ("no `<home>`", refused).
   plain-node reads lone surrogates as U+FFFD; the generator deletes with
   Reflect.deleteProperty (frozen objects).
+- plain-node maps node's "Cannot assign to read only property 'x' of …" to djs's "'x' is
+  read-only" (false alarms at seeds 184922, 4586, from pjr). regress/ gains s15-* (those
+  and pjr's D3026 seeds 668041, 82489).
 
 ## Follow-ups
 
