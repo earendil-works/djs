@@ -62,6 +62,8 @@ pub(super) struct Inline {
     /// Reopened host calls used once whose lines wait for the line that reads them, in
     /// their order (D3004): list depth, name, line, value.
     pub hooks: Vec<(usize, String, String, String)>,
+    /// Per list, whether deferred host calls are written into it (D3004).
+    pub pull: Vec<bool>,
 }
 
 /// Builtins a pure value may name (frozen builtins: nothing replaces them).
@@ -321,7 +323,8 @@ impl W<'_> {
             (super::Pl::Block(a3, b), super::Put::K(k)) if a3 == a && k == a2 => Some(b),
             _ => None,
         })?;
-        let names = super::refs(&kt.text).names;
+        let mut names = super::refs(&kt.text).names;
+        names.retain(|n| !only_keys(&kt.text, n));
         (pb <= block && !self.declared_between(a, pb, block, &names)).then_some(a2)
     }
 
@@ -398,7 +401,8 @@ impl W<'_> {
             if !super::is_fn_text(expr) {
                 continue;
             }
-            let names = super::refs(expr).names;
+            let mut names = super::refs(expr).names;
+            names.retain(|n| !only_keys(expr, n));
             if self.declared_between(a, pb, block, &names) {
                 continue;
             }
@@ -674,6 +678,45 @@ impl W<'_> {
     pub(super) fn open_list(&mut self) {
         self.inl.stack.push(Vec::new());
         self.inl.effects.push(Vec::new());
+        self.inl.pull.push(false);
+    }
+
+    /// Starts the list of a callback's part `part`: host calls deferred outside may be
+    /// written in it where every one waiting is read in it (so none is left to be written
+    /// outside, before the part runs, though it comes after one written in it).
+    pub(super) fn open_part(&mut self, part: &[super::Plan]) {
+        let depth = self.inl.stack.len();
+        let all = !self.inl.hooks.is_empty()
+            && self
+                .inl
+                .hooks
+                .iter()
+                .all(|h| h.0 < depth && self.part_reads(part, &h.1));
+        self.open_list();
+        if let Some(p) = self.inl.pull.last_mut() {
+            *p = all;
+        }
+    }
+
+    /// Whether an entry of `part` reads `$dump.name`.
+    fn part_reads(&self, part: &[super::Plan], name: &str) -> bool {
+        let r = cat!("$dump.", name);
+        let has = |t: &str| {
+            t.match_indices(r.as_str())
+                .any(|(at, _)| !t.as_bytes().get(at + r.len()).is_some_and(|&c| ident_part(c)))
+        };
+        part.iter().any(|e| match e {
+            super::Plan::Item(i) => has(&self.items[*i].text),
+            super::Plan::Call(a, cb) => {
+                let act = &self.ir.acts[*a];
+                act.awaiting.as_deref().is_some_and(has)
+                    || has(&act.fexpr)
+                    || has(&act.this)
+                    || act.slots.iter().any(|s| has(&s.value))
+                    || act.queue.iter().any(|q| has(&q.1))
+                    || cb.as_deref().is_some_and(|cb| self.part_reads(cb, name))
+            }
+        })
     }
 
     /// Defers line `text` of reopened host call `name` (value `rhs`, read once) until the
@@ -717,8 +760,11 @@ impl W<'_> {
     /// later ones written outside.)
     fn flush_upto(&mut self, i: usize) {
         let hooks: Vec<_> = self.inl.hooks.drain(..=i).collect();
+        let here = self.inl.stack.len() - 1;
+        let pull = self.inl.pull.last() == Some(&true);
         for (depth, name, text, rhs) in hooks {
-            self.put_line_at(depth, text, true, Some((name, rhs, true)), Vec::new());
+            let at = if pull { here } else { depth };
+            self.put_line_at(at, text, true, Some((name, rhs, true)), Vec::new());
         }
     }
 
@@ -731,6 +777,7 @@ impl W<'_> {
         }
         self.inl.pend.retain(|p| p.depth != depth);
         self.inl.effects.pop();
+        self.inl.pull.pop();
         let lines = self.inl.stack.pop().unwrap_or_default();
         lines.into_iter().filter(|l| !l.is_empty()).collect()
     }
@@ -969,9 +1016,11 @@ impl W<'_> {
         let Some(aw) = act.awaiting.as_deref() else {
             return;
         };
+        // (Not once its text is written: a factory's continuation may be, with its
+        // factory.)
         if self.acts[a].site_val.is_some()
+            || self.acts[a].k.is_some()
             || act.kind != crate::interp::run::suspend::ASYNC
-            || self.acts[a].home.is_some()
             || !self.acts[a].go.iter().all(String::is_empty)
             || self
                 .placed

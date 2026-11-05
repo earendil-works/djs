@@ -10482,3 +10482,14 @@ code blanked in dumped class text (D2950), host bindings and identities (D2970-D
 deliberate refusals (instances with private fields, for-in over a Proxy, an await after another
 resource in a `for (using …)` head). The size ceilings stay ratchets: room is made by shrinking
 something else.
+## D3007: Host calls go into the callback part that reads them all; a factory's continuation takes its site's value
+date: 2026-11-06 · by: pjs · issue: 0207
+Extends D3004 and D3001. Deferred host calls are written into a part of a continuation's
+callback (which runs later, at K's go point) where every call still waiting is read in that
+part (by its items, its activations' operands and slots, or its own callbacks): then none
+is left to be written outside before the part runs while coming after one written in it.
+A continuation of a factory's scope is called on `$djs.k`'s result on its own line
+(D3003), so where its text is written at that call, its site's operand may take an
+effectful value as the first thing that line evaluates, as an unhomed one does. A name
+read only as an object literal's key (`{ path: … }`) does not keep a closure or
+continuation from being written below a block that declares it.

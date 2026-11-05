@@ -1101,8 +1101,9 @@ impl Ctx for C<'_, '_> {
         // The site's operand is the first thing K's line evaluates where K is called on
         // its line and does nothing before its site (D3001).
         let a = self.a;
+        // (A continuation of a factory's too: its call line calls it, `$djs.k`'s result,
+        // D3003.)
         let first = (act.kind == crate::interp::run::suspend::ASYNC
-            && self.w.acts[a].home.is_none()
             && self.w.kline == Some(a)
             && !self.w.k_effects
             && self.w.acts[a].go.iter().all(String::is_empty))
@@ -2319,7 +2320,7 @@ impl W<'_> {
                                 go.push_out(String::new());
                                 continue;
                             }
-                            self.open_list();
+                            self.open_part(part);
                             self.emit_items(part, depth + 1, hoisted)?;
                             if last == Some(b) {
                                 self.site_from_callback(*a, b);
