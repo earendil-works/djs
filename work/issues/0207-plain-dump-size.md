@@ -366,6 +366,25 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   Not done: `$djs.keep` only for classes with deleted members (needs the class text's
   member list; dump.rs class writer).
 
+- fluff item 10 (D3002): reactions on promises of the builtin prototype without own
+  `then`/`finally` written as methods (`p.then(f)`), trailing `undefined` left out.
+- fluff item 6 (D3002, D3003): the site takes its value from the callback's last part
+  (predicted: K async, unhomed, no block code below the part); effectful values in a run of
+  first evaluations (`Promise.all([$dump.p4, $dump.p5])`, all or none, last effects in
+  order); callback parts written in K where they read nothing K binds (359 → 21 named
+  callbacks in the corpus); slot and cell values may read names K binds nowhere (no `pre`);
+  `new Map/Set/Date` pure; a frame's variable counted once (init or line); closures a
+  block of K makes written at their one use in K (`var todos = async function todos…`),
+  homed continuations called on `$djs.k`'s result and written there, members a binding
+  holds named by it (`$djs.k(K, todos)`), liveness sees those names in the site operand
+  (`P::Val(text, reads)`); rewriting only outside function bodies (a nested K's holes!);
+  `$dump.sN = {}` only where still used; unused values/calls as statements.
+  Score after rebase: v2 387,409 → 373,088; corpus 7,217,841 → 6,875,113 (−4.7%); sleep
+  820 (unchanged: the inner record's `$dump.n2` could be `step`, but K's args are decided
+  before its site operand). Tests adjusted: CLI repl line number, js task test regex.
+  Docs: continuation-dumps plan example and explain, plain-js-dumps (callbacks, runs);
+  guide snapshots and sleep README unchanged (same outputs).
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a
