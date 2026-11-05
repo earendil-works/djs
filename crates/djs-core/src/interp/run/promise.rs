@@ -23,7 +23,7 @@
 
 use alloc::vec::Vec;
 
-use super::intrinsics::{PROMISE_CONSTRUCTOR, id};
+use super::intrinsics::{PROMISE_CONSTRUCTOR, id, new_builtin_closure};
 use crate::heap::cells::{Interp, Roots, ValueArray};
 use crate::heap::{Heap, HeapError, Lookup, ObjectClass, Property, Ref, atoms};
 use crate::interp::realm;
@@ -49,6 +49,10 @@ pub(crate) const JOB_SIZE: u32 = 5;
 
 pub(super) const PROMISE_REACTION_JOB: u16 = id("PromiseReactionJob");
 const HOST_CALL_SETTLE: u16 = id("HostCallSettle");
+const PROMISE_STATIC_RESOLVE: u16 = id("PromiseStaticResolve");
+const PROMISE_PROTOTYPE_THEN: u16 = id("PromisePrototypeThen");
+const PROMISE_SPECIES: u16 = id("PromiseSpecies");
+const PROMISE_ALL_RESOLVE_ELEMENT: u16 = id("PromiseAllResolveElement");
 
 /// A new pending promise.
 pub(crate) fn alloc(heap: &mut Heap, proto: Option<Obj>) -> Result<Obj, HeapError> {
@@ -109,6 +113,205 @@ pub(crate) fn plain_promise(heap: &Heap, v: Value) -> Option<Obj> {
         Lookup::Found(_, Property::Data { value, .. }) if value == ctor => Some(p),
         _ => None,
     }
+}
+
+/// Whether Invoke ( p, "then" ) on a Promise `p` whose lookups start at `o` (`p`, or
+/// %Promise.prototype% for a new one) calls the original `then`, whose
+/// SpeciesConstructor is %Promise%, all without running user code: `then` and
+/// `constructor` are data properties found without a Proxy or a getter, and %Promise%'s
+/// own @@species is the original getter.
+fn plain_then(heap: &Heap, o: Obj) -> bool {
+    let ctor = realm::installed_intrinsic(heap, PROMISE_CONSTRUCTOR);
+    // Frozen builtins (D2304): %Promise.prototype% and %Promise% are as the base made
+    // them, which is plain; then only `o`'s own keys matter.
+    let proto = realm::intrinsic_obj(heap, realm::Intrinsic::PromiseProto);
+    if heap.frozen(proto)
+        && ctor.as_object().is_some_and(|c| heap.frozen(c))
+        && (o == proto
+            || (heap.get_prototype_of(o) == Some(proto)
+                && !heap.has_own_property(o, atoms::THEN)
+                && !heap.has_own_property(o, atoms::CONSTRUCTOR)))
+    {
+        return true;
+    }
+    let data = |key| match heap.lookup_property(o, key) {
+        Lookup::Found(_, Property::Data { value, .. }) => Some(value),
+        _ => None,
+    };
+    if data(atoms::THEN) != Some(realm::installed_intrinsic(heap, PROMISE_PROTOTYPE_THEN))
+        || data(atoms::CONSTRUCTOR) != Some(ctor)
+    {
+        return false;
+    }
+    let species = realm::installed_intrinsic(heap, PROMISE_SPECIES);
+    ctor.as_object().is_some_and(|c| {
+        matches!(heap.get_own_property(c, atoms::SYM_SPECIES),
+            Some(Property::Accessor { getter, .. }) if getter == species)
+    })
+}
+
+/// `%PromiseCombinatorStep(fixed, kind, index, x)` (D3131, builtins/intrinsics.d.ts): one
+/// element of a combinator's loop without its builtin calls, leaving the heap as they
+/// would (the values slot, the element Record and functions, `then`'s derived promise),
+/// when none of them could run user code. False, with nothing changed, otherwise.
+pub(super) fn combinator_step(
+    heap: &mut Heap,
+    fixed: Obj,
+    kind: i32,
+    index: f64,
+    x: Value,
+) -> Result<bool, HeapError> {
+    let [c, resolve, cap, values, remaining, resolve_fn, reject_fn] =
+        core::array::from_fn(|i| heap.object_slot(fixed, i as u32));
+    if c != realm::installed_intrinsic(heap, PROMISE_CONSTRUCTOR)
+        || resolve != realm::installed_intrinsic(heap, PROMISE_STATIC_RESOLVE)
+        || !(0..=3).contains(&kind)
+    {
+        return Ok(false);
+    }
+    let proto = realm::intrinsic_obj(heap, realm::Intrinsic::PromiseProto);
+    let existing = plain_promise(heap, x);
+    if (existing.is_none() && !plain_fulfillment(heap, x))
+        || !plain_then(heap, existing.unwrap_or(proto))
+    {
+        return Ok(false);
+    }
+    let (Some(values), Some(remaining)) = (values.as_object(), remaining.as_object()) else {
+        return Ok(false);
+    };
+    // CreateDataPropertyOrThrow(values, index, undefined): an append to the loop's own
+    // array, which nothing else has seen yet.
+    if kind != 3
+        && (heap.array_length(values) as f64 != index
+            || !heap.set_element_fast(values, index as u32, Value::UNDEFINED)?)
+    {
+        return Ok(false);
+    }
+    // PromiseResolve ( C, x ): x itself, or a new promise fulfilled with x.
+    let p = match existing {
+        Some(p) => p,
+        None => {
+            let p = alloc(heap, Some(proto))?;
+            set_flags(heap, p, FLAG_RESOLVED);
+            settle(heap, p, true, x)?;
+            p
+        }
+    };
+    let (on_f, on_r) = if kind == 3 {
+        (resolve_fn, reject_fn)
+    } else {
+        // NewElementRecord, and remainingElementsCount + 1.
+        let r = heap.alloc_object(ObjectClass::Record, None, 6)?;
+        let index = super::conv::number(index);
+        let slots = [
+            Value::FALSE,
+            index,
+            Value::object(values),
+            cap,
+            Value::object(remaining),
+        ];
+        for (i, v) in slots.into_iter().chain([Value::UNDEFINED]).enumerate() {
+            heap.set_object_slot(r, i as u32, v);
+        }
+        let n = heap.object_slot(remaining, 0).as_number().unwrap_or(0.0);
+        heap.set_object_slot(remaining, 0, super::conv::number(n + 1.0));
+        let mut closure = |k| -> Result<Value, HeapError> {
+            let f = new_builtin_closure(heap, k, Value::object(r), 1)?;
+            Ok(Value::object(f.expect("a builtin closure kind")))
+        };
+        match kind {
+            0 => (closure(3)?, reject_fn),
+            1 => (closure(4)?, closure(5)?),
+            _ => (resolve_fn, closure(6)?),
+        }
+    };
+    // Promise.prototype.then: NewPromiseCapability ( %Promise% ), PerformPromiseThen.
+    let derived = alloc(heap, Some(proto))?;
+    perform_then(heap, p, on_f, on_r, Value::object(derived))?;
+    Ok(true)
+}
+
+/// `%PromiseReactionJob(cap, handler, x, true)` with a Promise.all resolve element
+/// function as the handler (D3131): SettleElement and the resolution of `cap` with its
+/// result (undefined) done here, when neither runs user code: `cap` and the combinator's
+/// capability are Promises of %Promise% (or `cap` is undefined), and the last element's
+/// values fulfill the capability without a `then` call. False, with nothing changed,
+/// otherwise.
+pub(super) fn all_element_job(
+    heap: &mut Heap,
+    cap: Value,
+    handler: Value,
+    x: Value,
+) -> Result<bool, HeapError> {
+    let Some(f) = handler.as_object() else {
+        return Ok(false);
+    };
+    if heap.object_class(f) != ObjectClass::BuiltinClosure
+        || heap.object_slot(f, 0) != Value::int(i32::from(PROMISE_ALL_RESOLVE_ELEMENT))
+        || !(cap.is_undefined() || as_promise(heap, cap).is_some())
+    {
+        return Ok(false);
+    }
+    // The element Record (builtins/promise.ts NewElementRecord): 0 called, 1 index,
+    // 2 values, 3 capability, 4 remaining, 5 keys.
+    let r = heap
+        .object_slot(f, 1)
+        .as_object()
+        .expect("an element Record");
+    let [called, index, values, capability, remaining, keys] =
+        core::array::from_fn(|i| heap.object_slot(r, i as u32));
+    if called == Value::TRUE {
+        // Nothing to store: only `cap` resolves.
+        return resolve_derived(heap, cap).map(|()| true);
+    }
+    let (Some(values), Some(remaining), Some(index)) =
+        (values.as_object(), remaining.as_object(), index.as_int())
+    else {
+        return Ok(false);
+    };
+    let left = heap.object_slot(remaining, 0).as_number().unwrap_or(0.0) - 1.0;
+    let last = left == 0.0;
+    let cap_promise = as_promise(heap, capability);
+    if last
+        && (!keys.is_undefined()
+            || cap_promise.is_none_or(|p| {
+                flags(heap, p) & FLAG_RESOLVED == 0
+                    && !plain_fulfillment(heap, Value::object(values))
+            }))
+    {
+        return Ok(false);
+    }
+    // CreateDataPropertyOrThrow(values, index, x): values is the combinator's own array,
+    // which nothing else sees before the last element resolves with it.
+    if index < 0
+        || index as u32 >= heap.array_length(values)
+        || !heap.set_element_fast(values, index as u32, x)?
+    {
+        return Ok(false);
+    }
+    heap.set_object_slot(r, 0, Value::TRUE);
+    heap.set_object_slot(remaining, 0, super::conv::number(left));
+    if let Some(p) = cap_promise.filter(|_| last) {
+        // ResolveCapability ( capability, values ) of an internal capability.
+        let f = flags(heap, p);
+        set_flags(heap, p, f | FLAG_RESOLVED);
+        if f & FLAG_RESOLVED == 0 {
+            settle(heap, p, true, Value::object(values))?;
+        }
+    }
+    resolve_derived(heap, cap).map(|()| true)
+}
+
+/// ResolveCapability ( cap, undefined ) of a reaction's internal capability (or none).
+fn resolve_derived(heap: &mut Heap, cap: Value) -> Result<(), HeapError> {
+    if let Some(p) = as_promise(heap, cap) {
+        let f = flags(heap, p);
+        set_flags(heap, p, f | FLAG_RESOLVED);
+        if f & FLAG_RESOLVED == 0 {
+            settle(heap, p, true, Value::UNDEFINED)?;
+        }
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------- the job queue

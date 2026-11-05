@@ -283,6 +283,7 @@ function PromiseConstructor(executor: Value): Obj {
 /**
  * get Promise [ %Symbol.species% ], 27.2.4.9.
  * @getter Promise[Symbol.species]
+ * @intrinsic
  */
 function PromiseSpecies(this: Value): Value {
   return this;
@@ -299,6 +300,7 @@ function PromiseThisConstructor(c: Value): Value {
 /**
  * Promise.resolve ( x ), 27.2.4.7.
  * @builtin Promise.resolve
+ * @intrinsic
  */
 function PromiseStaticResolve(this: Value, x: Value): Value {
   return PromiseResolve(PromiseThisConstructor(this), x);
@@ -555,6 +557,15 @@ function PerformPromiseCombinator(thisValue: Value, iterable: Value, kind: i32):
     if (kind !== 2) {
       rejectFn = CapabilityRejectFunction(capability);
     }
+    // What PromiseCombinatorStep needs to do an element's steps itself (D3131).
+    const fixed: Obj = NewRecord(7);
+    RecordSet(fixed, 0, c);
+    RecordSet(fixed, 1, promiseResolve);
+    RecordSet(fixed, 2, capability);
+    RecordSet(fixed, 3, values);
+    RecordSet(fixed, 4, remaining);
+    RecordSet(fixed, 5, resolveFn);
+    RecordSet(fixed, 6, rejectFn);
     while (true) {
       iteratorDone = true;
       // Without a result object where that is unobservable (D1800).
@@ -576,6 +587,10 @@ function PerformPromiseCombinator(thisValue: Value, iterable: Value, kind: i32):
         nextValue = Get(result, "value");
       }
       iteratorDone = false;
+      if (PromiseCombinatorStep(fixed, kind, index, nextValue)) {
+        index++;
+        continue;
+      }
       if (kind !== 3) {
         CreateDataPropertyOrThrow(values, index, undefined);
       }
@@ -672,6 +687,7 @@ function PromiseWithResolvers(this: Value): Obj {
 /**
  * Promise.prototype.then ( onFulfilled, onRejected ), 27.2.5.4.
  * @builtin Promise.prototype.then
+ * @intrinsic
  */
 function PromisePrototypeThen(this: Value, onFulfilled: Value, onRejected: Value): Value {
   if (!IsPromise(this)) {

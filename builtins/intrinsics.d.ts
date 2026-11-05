@@ -796,6 +796,17 @@ declare function PromiseClaimResolve(p: Obj): boolean;
  * @leaf
  */
 declare function PerformPromiseThen(p: Obj, onFulfilled: Value, onRejected: Value, capability: Value): void;
+/**
+ * One element of PerformPromiseCombinator (Promise.all kind 0, allSettled 1, any 2, race
+ * 3) when its steps run no user code (D3131): `fixed` is the Record [C, promiseResolve,
+ * capability, values, remaining, resolveFn, rejectFn], C %Promise% with the original
+ * `resolve`, and x a Promise of %Promise% or a value that fulfills one without a `then`
+ * call, whose `then`, `constructor` and %Promise%[@@species] are the original ones. Then
+ * it does what the loop body would (values slot, element Record, functions, `then`) and
+ * returns true; otherwise false, with nothing changed.
+ * @leaf
+ */
+declare function PromiseCombinatorStep(fixed: Obj, kind: i32, index: f64, x: Value): boolean;
 /** Queues NewPromiseResolveThenableJob ( promise, thenable, then ), 27.2.2.2. @leaf */
 declare function EnqueuePromiseResolveThenableJob(p: Obj, thenable: Obj, then: Value): void;
 /** A new internal Record with n slots, all undefined. @leaf */

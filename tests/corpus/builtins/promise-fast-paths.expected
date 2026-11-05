@@ -1,0 +1,21 @@
+=== return
+order a0 b0 c0 a1 b1 then p1 a2 c1 p2 p3
+return order v p
+then getter 1 true
+then not callable true
+proxy then,then
+own then 5 0
+constructor read
+own constructor 6
+patched then 1,2 calls 2
+patched resolve 3,4 2
+patched species 5,6 2
+values then 7,8 true
+twice first,9
+subclass true 10,11
+allSettled [{"status":"fulfilled","value":1},{"status":"rejected","reason":2},{"status":"fulfilled","value":3}]
+any 2
+race 4
+all rejects no
+thrown TypeError
+awaited rejection late

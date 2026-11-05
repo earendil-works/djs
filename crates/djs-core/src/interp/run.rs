@@ -799,85 +799,79 @@ impl<'h> Exec<'h> {
     /// stops with the outcome. D1370: `Done`/`Threw` only once the queue is empty and no
     /// async host call is pending; with pending calls, `Idle`.
     fn next_job(&mut self) -> Option<Status> {
-        // The synchronous run of a job (or of the entry call) is over: ClearKeptObjects
-        // (9.10.3), which lets dereferenced WeakRef targets die again.
-        late::clear_kept_objects(self.heap);
-        let mut job = promise::dequeue(self.heap);
-        if job.is_none() {
-            // A microtask checkpoint. Then the next host result, as a macrotask of its own
-            // (D1670): results are applied only here, one at a time, whenever the embedder
-            // delivered them.
-            promise::rejection_checkpoint(self.heap);
-            match promise::inbox_apply(self.heap) {
-                Ok(true) => job = promise::dequeue(self.heap),
-                Ok(false) => {}
-                Err(e) => {
+        loop {
+            // The synchronous run of a job (or of the entry call) is over: ClearKeptObjects
+            // (9.10.3), which lets dereferenced WeakRef targets die again.
+            late::clear_kept_objects(self.heap);
+            let mut job = promise::dequeue(self.heap);
+            if job.is_none() {
+                // A microtask checkpoint. Then the next host result, as a macrotask of its
+                // own (D1670): results are applied only here, one at a time, whenever the
+                // embedder delivered them.
+                promise::rejection_checkpoint(self.heap);
+                match promise::inbox_apply(self.heap) {
+                    Ok(true) => job = promise::dequeue(self.heap),
+                    Ok(false) => {}
                     // No room for the settle job: the result stays in the inbox.
-                    let e = self.fault_value(Fault::from(e), None);
-                    self.sp = 0;
-                    state::set_outcome(self.heap, RunState::Threw, e);
-                    self.flush();
-                    return Some(Status::Threw(e));
+                    Err(e) => return Some(self.job_failed(Fault::from(e))),
                 }
             }
-        }
-        let Some(job) = job else {
-            let outcome = state::outcome(self.heap);
-            state::set_state(self.heap, outcome);
-            self.flush();
-            if pending_async_calls(self.heap) {
-                return Some(Status::Idle);
-            }
-            let v = state::result(self.heap);
-            return Some(match outcome {
-                RunState::Done => Status::Done(v),
-                RunState::Threw => Status::Threw(v),
-                _ => Status::Idle,
-            });
-        };
-        // Jobs are installed builtins: JS closures, which never park.
-        debug_assert!(
-            job[0]
-                .as_object()
-                .is_some_and(|o| self.heap.object_class(o) == ObjectClass::Function)
-        );
-        state::set_state(self.heap, RunState::Running);
-        // The reaction job of an await (D3130): `%PromiseReactionJob` would only resume
-        // the async function, so the job's bottom frame is the function's own.
-        if job[0] == realm::installed_intrinsic(self.heap, promise::PROMISE_REACTION_JOB)
-            && suspend::as_generator(self.heap, job[2], suspend::ASYNC).is_some()
-        {
-            let mode = Value::int(if job[4] == Value::TRUE { 0 } else { 1 });
-            return match self.generator_resume(job[2], job[3], mode, 0, Continuation::Job) {
-                Ok(s) => s,
-                Err(f) => {
-                    let e = self.fault_value(f, None);
-                    self.sp = 0;
-                    state::set_outcome(self.heap, RunState::Threw, e);
-                    self.flush();
-                    Some(Status::Threw(e))
-                }
-            };
-        }
-        let r = self.ensure(2 + 4).and_then(|()| {
-            self.push(job[0]);
-            self.push(Value::UNDEFINED);
-            for &a in &job[1..] {
-                self.push(a);
-            }
-            self.call(0, 4, Continuation::Job, 0)
-        });
-        match r {
-            Ok(_) => None,
-            Err(f) => {
-                // The job could not even start (out of memory, stack limit).
-                let e = self.fault_value(f, None);
-                self.sp = 0;
-                state::set_outcome(self.heap, RunState::Threw, e);
+            let Some(job) = job else {
+                let outcome = state::outcome(self.heap);
+                state::set_state(self.heap, outcome);
                 self.flush();
-                Some(Status::Threw(e))
+                if pending_async_calls(self.heap) {
+                    return Some(Status::Idle);
+                }
+                let v = state::result(self.heap);
+                return Some(match outcome {
+                    RunState::Done => Status::Done(v),
+                    RunState::Threw => Status::Threw(v),
+                    _ => Status::Idle,
+                });
+            };
+            // Jobs are installed builtins: JS closures, which never park.
+            debug_assert!(
+                job[0]
+                    .as_object()
+                    .is_some_and(|o| self.heap.object_class(o) == ObjectClass::Function)
+            );
+            state::set_state(self.heap, RunState::Running);
+            if job[0] == realm::installed_intrinsic(self.heap, promise::PROMISE_REACTION_JOB) {
+                // The reaction job of an await (D3130): `%PromiseReactionJob` would only
+                // resume the async function, so the job's bottom frame is the function's.
+                if suspend::as_generator(self.heap, job[2], suspend::ASYNC).is_some() {
+                    let mode = Value::int(if job[4] == Value::TRUE { 0 } else { 1 });
+                    let r = self.generator_resume(job[2], job[3], mode, 0, Continuation::Job);
+                    return r.unwrap_or_else(|f| Some(self.job_failed(f)));
+                }
+                // A Promise.all element that settles without user code (D3131).
+                match promise::all_element_job(self.heap, job[1], job[2], job[3]) {
+                    Ok(true) => continue,
+                    Ok(false) => {}
+                    Err(e) => return Some(self.job_failed(Fault::from(e))),
+                }
             }
+            let r = self.ensure(2 + 4).and_then(|()| {
+                self.push(job[0]);
+                self.push(Value::UNDEFINED);
+                for &a in &job[1..] {
+                    self.push(a);
+                }
+                self.call(0, 4, Continuation::Job, 0)
+            });
+            // (Else the job could not even start: out of memory, stack limit.)
+            return r.map_or_else(|f| Some(self.job_failed(f)), |_| None);
         }
+    }
+
+    /// A job that failed outside any frame: the run stops with the exception.
+    fn job_failed(&mut self, f: Fault) -> Status {
+        let e = self.fault_value(f, None);
+        self.sp = 0;
+        state::set_outcome(self.heap, RunState::Threw, e);
+        self.flush();
+        Status::Threw(e)
     }
 
     /// Pops the current (non-entry) frame and resumes the caller at its return pc.

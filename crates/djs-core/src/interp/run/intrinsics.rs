@@ -318,6 +318,7 @@ const ASYNC_GENERATOR_DEQUEUE: u16 = id("AsyncGeneratorDequeue");
 const CREATE_ASYNC_FROM_SYNC_ITERATOR: u16 = id("CreateAsyncFromSyncIterator");
 pub(super) const PROMISE_CONSTRUCTOR: u16 = id("PromiseConstructor");
 const PROMISE_RESOLVE_THENABLE_JOB: u16 = id("PromiseResolveThenableJob");
+const PROMISE_COMBINATOR_STEP: u16 = id("PromiseCombinatorStep");
 
 /// The classes whose slots `%RecordGet`/`%RecordSet` reach: Records, and the objects
 /// whose builtins keep all their state in slots (0051). Their builtins check the brand.
@@ -346,7 +347,7 @@ pub(crate) fn builtin_closure_kind(
 
 /// `%NewBuiltinClosure(kind, data, length)`: a builtin closure of kind `kind` (its index
 /// in `BUILTIN_CLOSURES`) holding `data`; `None` for an unknown kind.
-fn new_builtin_closure(
+pub(super) fn new_builtin_closure(
     heap: &mut crate::heap::Heap,
     kind: usize,
     data: Value,
@@ -1800,6 +1801,17 @@ impl Exec<'_> {
                 Value::object(promise::alloc(self.heap, Some(proto))?)
             }
             IS_PROMISE => Value::bool(promise::as_promise(self.heap, a0).is_some()),
+            PROMISE_COMBINATOR_STEP => {
+                let (kind, index) = (arg(self, 1).as_int(), arg(self, 2).as_number());
+                let (Some(fixed), Some(kind), Some(index)) = (a0.as_object(), kind, index) else {
+                    return bad_argument(id);
+                };
+                if self.heap.object_class(fixed) != ObjectClass::Record {
+                    return bad_argument(id);
+                }
+                let x = arg(self, 3);
+                Value::bool(promise::combinator_step(self.heap, fixed, kind, index, x)?)
+            }
             INTRINSIC_PROMISE => realm::installed_intrinsic(self.heap, PROMISE_CONSTRUCTOR),
             PROMISE_STATE
             | PROMISE_RESULT
