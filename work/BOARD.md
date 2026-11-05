@@ -6,6 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0226 | Ship wasm modules with unchecked heap access, checks elsewhere (owner) | heapx | .worktrees/heapx |
 | 0224 | Investigate and fix native perf regressions since 2026-11-01 (owner) | perfreg | .worktrees/perfreg |
 
 ## Open (ready)
@@ -22,7 +23,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | - | fuzz.mjs reduce left an orphaned djs-difftest at 100% CPU for 15 h (likely a reduced candidate with an endless loop, run without a timeout): wrap reduce's runs in scripts/timeout.sh / a fuel cap; check whether it was an engine hang instead | ready |
 | - | status.py should record the commit of the measured engine sources, not HEAD (0223) | ready |
 | - | pi adapter fuel slice ~12,700 for QuickJS-equivalent interrupt budgets (0223; pi-side) | owner |
-| - | unsafe-heap in the shipped module (-7.7 KB gz, 8-15% fewer instructions; D2520 rejected it for safety) | owner |
 | - | Data segment coded with lzrc (-5.8 KB gz, +3 ms first instance, every host must restore data): shelved (0225) | - |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
