@@ -155,7 +155,7 @@ impl Heap {
                 });
             };
             let size = a.get(pos, Header::SIZE);
-            if !size.is_multiple_of(8) || size < kind.layout().min_size || size > end - pos {
+            if !size.is_multiple_of(8) || size < kind.min_size() || size > end - pos {
                 return Err(VerifyError::BadSize { offset: pos, size });
             }
             if a.get(pos, Header::GC) != 0 {

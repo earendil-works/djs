@@ -589,6 +589,16 @@ macro_rules! cells {
                     $( CellKind::$name => &$name::LAYOUT, )*
                 }
             }
+
+            /// The smallest valid cell size (`layout().min_size`), as a constant per kind:
+            /// the run time reads this instead of [`Self::layout`], which would put every
+            /// layout, with its field names, in the module (D3095).
+            #[inline]
+            pub const fn min_size(self) -> u32 {
+                match self {
+                    $( CellKind::$name => $name::LAYOUT.min_size, )*
+                }
+            }
         }
 
         $(

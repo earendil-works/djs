@@ -133,3 +133,24 @@ Earlier measurements still valid in kind (0156): no `@native` −10.6, no `@fast
 - Flags: `-Zmerge-functions=trampolines` +41 B, `-Zinline-mir=no` 0, `-Zmir-opt-level=1`
   +353 B.
 - Allocator: dlmalloc + page allocator 8.5 KB raw (~3.5 KB gz) of code.
+
+## Top-50 review (main 9ab2c58c, 428,933)
+
+Functions ranked by standalone gzip of their bodies (work/scratch/0225/topgz.py): the top
+60 are 120 KB of the code's 328 KB gzip. `call_intrinsic` 10.3, `step_once` 9.1,
+`emit_function` 6.8, `run_hot` 6.3, `json_regexp_intrinsic` 5.2, `mark_compact` 3.0,
+then the parser, regexp, sort and JSON functions at 1–3 KB each.
+
+- Prelude-only code reachable through the intrinsic dispatch (`%Install*`, MarkNative,
+  MarkFast and their helpers): −4.9 KB, landed as D3094.
+- `CellKind::layout()` at run time (alloc sizes, the walk's size check) kept all layouts
+  with their names: −1.7 KB, landed as D3095.
+- `call_intrinsic`'s 99 `bad_argument(id)` sites, 25 bytes each (the id constant, the
+  call, the two stores of the result, a branch): one shared exit through a labeled block
+  is −0.4 KB but re-indents the whole dispatch. Not done.
+- Arena bounds checks in u32: +6.1 to +9.1 KB (LLVM keeps the slice checks).
+- Diffuse idiom costs, no single site worth it: 1,014 inlined `__rust_dealloc` sites
+  (drop glue, ~22 B each), 355 `Fault::heap` conversions, 413 arena out-of-bounds calls,
+  166 `syntax_error` sites.
+- Duplicate paths (JSON serializer natives, the sort natives, `run_hot`) are measured
+  speed trades (D2310).

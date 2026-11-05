@@ -65,6 +65,18 @@ numbers and the coordinator's OK (wasm instruction counts per workload as in 022
   zero-sized Fault alone −0.2 KB. Recommendation: don't build it.
 - Open: cell layout names (−1.3 KB measured) after perfreg's GC batch; unsafe-heap with
   the owner; #4 shelved.
+- Batch 4 (top-50 review, rebased on 0224's gc batch, main 428,933 incl. its +1,003 B):
+  D3094 (wasm builds carry the prelude's `%Install*` intrinsics and their helpers only
+  with djs-core's `prelude` feature; −4.9 KB) and D3095 (cell layouts and their names out
+  of the run time, `CellKind::min_size()`; −1.7 KB). Shipped 422,316 (1.473x), slim
+  356,917. Instructions −1.1..+0.4% on the 12 workloads, typescript.js compile ±0.
+  Measured and dropped in the review: one shared `bad_argument` exit in
+  `call_intrinsic` (−0.4 KB, but re-indents the whole 1,600-line dispatch); arena checks
+  in u32 (`saturating_sub` +9.1 KB, `wrapping_sub` +6.1 KB: LLVM keeps the slice checks,
+  as D2520 found); the JSON serializer natives (kept by D2310's group decision). The rest
+  of the top 50 is diffuse: inlined drop glue (1,014 dealloc sites in 328 functions),
+  `?` conversions of HeapError (355 sites), arena bounds checks (unsafe-heap, with the
+  owner).
 
 ## Follow-ups
 

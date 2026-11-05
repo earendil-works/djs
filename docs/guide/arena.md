@@ -103,7 +103,7 @@ the used region (`len`) and writes the header:
 
 ```rust
 pub fn alloc_cell(&mut self, kind: CellKind, size: u32) -> Result<u32, HeapError> {
-    let size = align8(size.max(kind.layout().min_size));
+    let size = align8(size.max(kind.min_size()));
     let off = self.arena.alloc(size)?;
     if self.arena.len() >= self.gc_threshold {
         self.gc_pending = true;
