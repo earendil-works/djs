@@ -169,7 +169,7 @@ impl Parser<'_, '_> {
         }
         #[cfg(feature = "lazy")]
         {
-            self.f.lazy_ok = true;
+            self.f.lazy_ok = self.may_wait(start);
             self.f.head = self.tok.start;
         }
         self.ts_fn_type_params()?;
@@ -183,6 +183,14 @@ impl Parser<'_, '_> {
         let child = self.end_function()?;
         self.leave();
         Ok(child)
+    }
+
+    /// Whether a function (expression) starting at `start` may wait for its first call:
+    /// one that is a call's argument or parenthesized usually runs at once, and stays
+    /// eager (D2995). (Both are in the parent's text, as `resolve::lazy_roots` needs.)
+    #[cfg(feature = "lazy")]
+    fn may_wait(&self, start: u32) -> bool {
+        start != self.arg_start && start != self.paren_inner
     }
 
     /// After a function expression or arrow `child`: whether a call follows it right
@@ -575,7 +583,8 @@ impl Parser<'_, '_> {
             self.f.head = start;
             self.f.after_q = after_q;
             self.f.owner = self.own_this_kind().unwrap_or(FuncKind::Normal);
-            self.f.lazy_ok = !matches!(self.f.owner, FuncKind::ClassCtor | FuncKind::DerivedCtor);
+            self.f.lazy_ok = !matches!(self.f.owner, FuncKind::ClassCtor | FuncKind::DerivedCtor)
+                && self.may_wait(start);
         }
         self.ts_fn_type_params()?;
         let params = self.tok.start;

@@ -123,6 +123,9 @@ pub(super) struct Parser<'a, 'h> {
     /// Where the content of the innermost parentheses being parsed starts (`u32::MAX`:
     /// none), so an optional chain knows it is all of it (`(a?.b)()`).
     pub paren_inner: u32,
+    /// The start of the call argument being parsed: a function there is eager (D2995).
+    #[cfg(feature = "lazy")]
+    pub arg_start: u32,
     /// The next unary operand is the operand of `delete`.
     pub delete_operand: bool,
     /// The memoized pattern-or-literal scan (docs/compiler.md 3.3).
@@ -343,6 +346,8 @@ impl<'a, 'h> Parser<'a, 'h> {
             class_thunk: None,
             delete_operand: false,
             paren_inner: u32::MAX,
+            #[cfg(feature = "lazy")]
+            arg_start: u32::MAX,
             pat_scan: Default::default(),
             pattern_vars: Vec::new(),
             open_iters: Vec::new(),
@@ -438,6 +443,16 @@ impl<'a, 'h> Parser<'a, 'h> {
         let (t, ..) = self.finish_unit_with(Some(&mut maps), None)?;
         crate::sort::sort_by(&mut maps, |a, b| (a.start, a.end) < (b.start, b.end));
         Ok((t, maps))
+    }
+
+    /// A lazy unit's compile with the globals of each of its lazy functions (D2993).
+    #[cfg(all(feature = "dump", feature = "lazy"))]
+    pub fn compile_lazy_globals(mut self) -> PResult<(Ref, Vec<super::resolve::LazyGlobals>)> {
+        self.unit.lazy = true;
+        self.parse_top()?;
+        let mut globals = Vec::new();
+        let (t, ..) = self.finish_unit_with(None, Some(&mut globals))?;
+        Ok((t, globals))
     }
 
     /// [`Parser::compile_maps`] of a lazy unit (D2994), with the globals of each of its

@@ -424,6 +424,18 @@ pub fn compile_lazy_with_maps(
     result.map_err(|e| error_at(src, e))
 }
 
+/// [`compile_lazy_unit`] with the globals each lazy function reads or writes, for a dump
+/// (D2993).
+#[cfg(all(feature = "dump", feature = "lazy"))]
+pub fn compile_lazy_with_globals(
+    heap: &mut Heap,
+    src: &[u8],
+    opts: &CompileOptions<'_>,
+) -> Result<(Ref, Vec<LazyGlobals>), CompileError> {
+    let result = parse(heap, src, opts, |p| p.compile_lazy_globals());
+    result.map_err(|e| error_at(src, e))
+}
+
 /// [`suspension_maps`] with the template, and a hook on the parser (tests).
 #[cfg(all(test, feature = "dump"))]
 fn suspension_maps_with(

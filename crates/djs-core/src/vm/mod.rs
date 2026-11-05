@@ -495,11 +495,7 @@ impl Vm {
             let lazy = false;
             let (t, maps, globals) = self.compile_with_maps(src, opts, lazy)?;
             if let Ok(text) = core::str::from_utf8(src) {
-                let h = &self.heap;
-                let globals = globals
-                    .into_iter()
-                    .map(|(a, b, g)| (a, b, g.into_iter().map(|g| h.atom_name(g)).collect()))
-                    .collect();
+                let globals = self.global_texts(globals);
                 self.dump_cache
                     .borrow_mut()
                     .keep(opts.bits(), text, maps, lazy, globals);
@@ -562,6 +558,19 @@ impl Vm {
         }
     }
 
+    /// [`crate::compiler::LazyGlobals`] as text.
+    #[cfg(feature = "dump")]
+    fn global_texts(
+        &self,
+        globals: Vec<crate::compiler::LazyGlobals>,
+    ) -> Vec<(u32, u32, Vec<String>)> {
+        let h = &self.heap;
+        globals
+            .into_iter()
+            .map(|(a, b, g)| (a, b, g.into_iter().map(|g| h.atom_name(g)).collect()))
+            .collect()
+    }
+
     /// A plain dump's compile with its suspension maps, all of them or (`lazy`) those of
     /// the functions the load compiles (D2994).
     #[cfg(feature = "dump")]
@@ -593,7 +602,23 @@ impl Vm {
         src: &[u8],
         opts: &crate::compiler::CompileOptions<'_>,
     ) -> Result<Ref, crate::compiler::CompileError> {
-        #[cfg(feature = "lazy")]
+        #[cfg(all(feature = "lazy", feature = "dump"))]
+        if self.opts.lazy_functions {
+            // The globals of its lazy functions, for a dump of this VM (D2993).
+            let (t, globals) =
+                crate::compiler::compile_lazy_with_globals(&mut self.heap, src, opts)?;
+            if !globals.is_empty()
+                && let Ok(text) = core::str::from_utf8(src)
+            {
+                let globals = self.global_texts(globals);
+                let params = opts.params.join(",");
+                self.dump_cache
+                    .borrow_mut()
+                    .keep_globals(opts.bits(), &params, text, globals);
+            }
+            return Ok(t);
+        }
+        #[cfg(all(feature = "lazy", not(feature = "dump")))]
         if self.opts.lazy_functions {
             return crate::compiler::compile_lazy_unit(&mut self.heap, src, opts);
         }

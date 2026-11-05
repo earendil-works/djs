@@ -4712,6 +4712,35 @@ pub(crate) struct Cache {
 impl Cache {
     /// The maps of a script the VM compiled itself (a plain dump it loads, 0215), in
     /// [`Dumper::maps_of`]'s order: the most recent last.
+    /// The globals of the lazy functions of a script the VM compiled lazily (D2993), with
+    /// no maps yet: a dump compiles them when it needs them (a partial set, D2994).
+    pub(super) fn keep_globals(
+        &mut self,
+        bits: u32,
+        params: &str,
+        src: &str,
+        globals: Vec<(u32, u32, Vec<String>)>,
+    ) {
+        if let Some(i) = self
+            .maps
+            .iter()
+            .position(|m| m.0 == bits && m.1 == params && m.2 == src)
+        {
+            self.maps.remove(i);
+        }
+        if self.maps.len() >= MAPS_KEPT {
+            self.maps.remove(0);
+        }
+        self.maps.push_out((
+            bits,
+            String::from(params),
+            String::from(src),
+            Some(Rc::default()),
+            true,
+            Rc::new(globals),
+        ));
+    }
+
     pub(super) fn keep(
         &mut self,
         bits: u32,

@@ -1326,6 +1326,10 @@ impl Parser<'_, '_> {
                 self.code().array_spread();
             } else {
                 let arg = self.tok.start;
+                #[cfg(feature = "lazy")]
+                {
+                    self.arg_start = arg;
+                }
                 self.parse_assign(false)?;
                 self.syn_part(Role::Arg, arg, self.prev_end);
                 if array {
