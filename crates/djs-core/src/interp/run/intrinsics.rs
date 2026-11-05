@@ -318,7 +318,6 @@ const ASYNC_GENERATOR_DEQUEUE: u16 = id("AsyncGeneratorDequeue");
 const CREATE_ASYNC_FROM_SYNC_ITERATOR: u16 = id("CreateAsyncFromSyncIterator");
 pub(super) const PROMISE_CONSTRUCTOR: u16 = id("PromiseConstructor");
 const PROMISE_RESOLVE_THENABLE_JOB: u16 = id("PromiseResolveThenableJob");
-const PROMISE_COMBINATOR_STEP: u16 = id("PromiseCombinatorStep");
 const PROMISE_COMBINATOR_RUN: u16 = id("PromiseCombinatorRun");
 
 /// The classes whose slots `%RecordGet`/`%RecordSet` reach: Records, and the objects
@@ -1802,39 +1801,16 @@ impl Exec<'_> {
                 Value::object(promise::alloc(self.heap, Some(proto))?)
             }
             IS_PROMISE => Value::bool(promise::as_promise(self.heap, a0).is_some()),
-            PROMISE_COMBINATOR_STEP => {
-                let (kind, index) = (arg(self, 1).as_int(), arg(self, 2).as_number());
-                let (Some(fixed), Some(kind), Some(index)) = (a0.as_object(), kind, index) else {
-                    return bad_argument(id);
-                };
-                if self.heap.object_class(fixed) != ObjectClass::Record {
-                    return bad_argument(id);
-                }
-                let x = arg(self, 3);
-                Value::bool(promise::combinator_step(self.heap, fixed, kind, index, x)?)
-            }
             PROMISE_COMBINATOR_RUN => {
-                let (kind, index) = (arg(self, 1), arg(self, 2).as_number());
-                let (Some(fixed), Some(kind), Some(mut index)) = (a0.as_object(), kind.as_int(), index)
-                else {
+                let (kind, index) = (arg(self, 1).as_int(), arg(self, 2).as_number());
+                let fixed = a0
+                    .as_object()
+                    .filter(|&o| self.heap.object_class(o) == ObjectClass::Record);
+                let (Some(fixed), Some(kind), Some(index)) = (fixed, kind, index) else {
                     return bad_argument(id);
                 };
-                if self.heap.object_class(fixed) != ObjectClass::Record {
-                    return bad_argument(id);
-                }
-                // Each step reads the element, does the combinator's steps for it, then
-                // advances the iterator: the order of `next` and the element's steps does
-                // not show, as neither runs user code.
                 let (it, next) = (arg(self, 3), arg(self, 4));
-                while let Some(x) = self.iter_next_peek(it, next) {
-                    if !promise::combinator_step(self.heap, fixed, kind, index, x)? {
-                        break;
-                    }
-                    self.iter_next_hit(it, next);
-                    index += 1.0;
-                    self.fuel -= 1;
-                }
-                conv::number(index)
+                conv::number(self.promise_combinator_run(fixed, kind, index, it, next)?)
             }
             INTRINSIC_PROMISE => realm::installed_intrinsic(self.heap, PROMISE_CONSTRUCTOR),
             PROMISE_STATE

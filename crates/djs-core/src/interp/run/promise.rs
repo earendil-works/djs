@@ -94,12 +94,21 @@ pub(crate) fn plain_fulfillment(heap: &Heap, v: Value) -> bool {
     let Some(o) = v.as_object() else {
         return true;
     };
-    match heap.lookup_property(o, atoms::THEN) {
-        Lookup::Absent => true,
-        Lookup::Found(_, Property::Data { value, .. }) => {
-            !value.as_object().is_some_and(|f| heap.is_callable(f))
-        }
-        _ => false,
+    match plain_get(heap, o, atoms::THEN) {
+        Some(Some(f)) => !f.as_object().is_some_and(|f| heap.is_callable(f)),
+        Some(None) => true,
+        None => false,
+    }
+}
+
+/// [[Get]] of `key` from `o` if no user code runs: `Some(None)` when absent, `None` for a
+/// getter or a Proxy on the way.
+#[inline(never)]
+fn plain_get(heap: &Heap, o: Obj, key: crate::heap::Atom) -> Option<Option<Value>> {
+    match heap.lookup_property(o, key) {
+        Lookup::Absent => Some(None),
+        Lookup::Found(_, Property::Data { value, .. }) => Some(Some(value)),
+        _ => None,
     }
 }
 
@@ -109,10 +118,7 @@ pub(crate) fn plain_fulfillment(heap: &Heap, v: Value) -> bool {
 pub(crate) fn plain_promise(heap: &Heap, v: Value) -> Option<Obj> {
     let p = as_promise(heap, v)?;
     let ctor = realm::installed_intrinsic(heap, PROMISE_CONSTRUCTOR);
-    match heap.lookup_property(p, atoms::CONSTRUCTOR) {
-        Lookup::Found(_, Property::Data { value, .. }) if value == ctor => Some(p),
-        _ => None,
-    }
+    (plain_get(heap, p, atoms::CONSTRUCTOR) == Some(Some(ctor))).then_some(p)
 }
 
 /// Whether Invoke ( p, "then" ) on a Promise `p` whose lookups start at `o` (`p`, or
@@ -134,12 +140,9 @@ fn plain_then(heap: &Heap, o: Obj) -> bool {
     {
         return true;
     }
-    let data = |key| match heap.lookup_property(o, key) {
-        Lookup::Found(_, Property::Data { value, .. }) => Some(value),
-        _ => None,
-    };
-    if data(atoms::THEN) != Some(realm::installed_intrinsic(heap, PROMISE_PROTOTYPE_THEN))
-        || data(atoms::CONSTRUCTOR) != Some(ctor)
+    let then = realm::installed_intrinsic(heap, PROMISE_PROTOTYPE_THEN);
+    if plain_get(heap, o, atoms::THEN) != Some(Some(then))
+        || plain_get(heap, o, atoms::CONSTRUCTOR) != Some(Some(ctor))
     {
         return false;
     }
@@ -150,11 +153,11 @@ fn plain_then(heap: &Heap, o: Obj) -> bool {
     })
 }
 
-/// `%PromiseCombinatorStep(fixed, kind, index, x)` (D3131, builtins/intrinsics.d.ts): one
-/// element of a combinator's loop without its builtin calls, leaving the heap as they
+/// One element `x` of a combinator's loop (D3131, `%PromiseCombinatorRun` in
+/// builtins/intrinsics.d.ts) without its builtin calls, leaving the heap as they
 /// would (the values slot, the element Record and functions, `then`'s derived promise),
 /// when none of them could run user code. False, with nothing changed, otherwise.
-pub(super) fn combinator_step(
+fn combinator_step(
     heap: &mut Heap,
     fixed: Obj,
     kind: i32,
@@ -312,6 +315,32 @@ fn resolve_derived(heap: &mut Heap, cap: Value) -> Result<(), HeapError> {
         }
     }
     Ok(())
+}
+
+impl super::Exec<'_> {
+    /// `%PromiseCombinatorRun(fixed, kind, index, it, next)`: `combinator_step` for each
+    /// element the Array iterator `it` gives without user code, while the step takes it;
+    /// the next index. Each step reads the element, does the element's steps, then
+    /// advances the iterator: the order does not show, as neither runs user code.
+    #[inline(never)]
+    pub(super) fn promise_combinator_run(
+        &mut self,
+        fixed: Obj,
+        kind: i32,
+        mut index: f64,
+        it: Value,
+        next: Value,
+    ) -> Result<f64, HeapError> {
+        while let Some(x) = self.iter_next_peek(it, next) {
+            if !combinator_step(self.heap, fixed, kind, index, x)? {
+                break;
+            }
+            self.iter_next_hit(it, next);
+            index += 1.0;
+            self.fuel -= 1;
+        }
+        Ok(index)
+    }
 }
 
 // ---------------------------------------------------------------- the job queue

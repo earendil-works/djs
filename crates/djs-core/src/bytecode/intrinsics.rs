@@ -291,7 +291,6 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("RejectPromise", L, 2, false),
     i("PromiseClaimResolve", L, 1, false),
     i("PerformPromiseThen", L, 4, false),
-    i("PromiseCombinatorStep", L, 4, false),
     i("PromiseCombinatorRun", L, 5, false),
     i("EnqueuePromiseResolveThenableJob", L, 3, false),
     i("NewRecord", L, 1, false),

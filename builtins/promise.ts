@@ -557,7 +557,7 @@ function PerformPromiseCombinator(thisValue: Value, iterable: Value, kind: i32):
     if (kind !== 2) {
       rejectFn = CapabilityRejectFunction(capability);
     }
-    // What PromiseCombinatorStep needs to do an element's steps itself (D3131).
+    // What PromiseCombinatorRun needs to do elements' steps itself (D3131).
     const fixed: Obj = NewRecord(7);
     RecordSet(fixed, 0, c);
     RecordSet(fixed, 1, promiseResolve);
@@ -588,10 +588,6 @@ function PerformPromiseCombinator(thisValue: Value, iterable: Value, kind: i32):
         nextValue = Get(result, "value");
       }
       iteratorDone = false;
-      if (PromiseCombinatorStep(fixed, kind, index, nextValue)) {
-        index++;
-        continue;
-      }
       if (kind !== 3) {
         CreateDataPropertyOrThrow(values, index, undefined);
       }

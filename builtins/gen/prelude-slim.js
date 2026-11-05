@@ -4796,10 +4796,6 @@ function PerformPromiseCombinator(thisValue, iterable, kind) {
         nextValue = %Get(result, "value");
       }
       iteratorDone = false;
-      if (%PromiseCombinatorStep(fixed, kind, index, nextValue)) {
-        index++;
-        continue;
-      }
       if (kind !== 3) {
         %CreateDataPropertyOrThrow(values, index, undefined);
       }
@@ -4828,22 +4824,22 @@ function PerformPromiseCombinator(thisValue, iterable, kind) {
   }
 }
 
-// builtins/promise.ts:627 Promise.all
+// builtins/promise.ts:623 Promise.all
 function PromiseAll(iterable) {
   return PerformPromiseCombinator(this, iterable, 0);
 }
 
-// builtins/promise.ts:635 Promise.allSettled
+// builtins/promise.ts:631 Promise.allSettled
 function PromiseAllSettled(iterable) {
   return PerformPromiseCombinator(this, iterable, 1);
 }
 
-// builtins/promise.ts:643 Promise.any
+// builtins/promise.ts:639 Promise.any
 function PromiseAny(iterable) {
   return PerformPromiseCombinator(this, iterable, 2);
 }
 
-// builtins/promise.ts:652 Promise.try
+// builtins/promise.ts:648 Promise.try
 function PromiseTry(callback, ...args) {
   const c = ((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : this);
   let result = undefined;
@@ -4857,12 +4853,12 @@ function PromiseTry(callback, ...args) {
   return PromiseResolve(c, result);
 }
 
-// builtins/promise.ts:669 Promise.race
+// builtins/promise.ts:665 Promise.race
 function PromiseRace(iterable) {
   return PerformPromiseCombinator(this, iterable, 3);
 }
 
-// builtins/promise.ts:677 Promise.withResolvers
+// builtins/promise.ts:673 Promise.withResolvers
 function PromiseWithResolvers() {
   const capability = NewPromiseCapability(((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : this));
   const o = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
@@ -4872,7 +4868,7 @@ function PromiseWithResolvers() {
   return o;
 }
 
-// builtins/promise.ts:693 Promise.prototype.then %PromisePrototypeThen
+// builtins/promise.ts:689 Promise.prototype.then %PromisePrototypeThen
 function PromisePrototypeThen(onFulfilled, onRejected) {
   if (!%IsPromise(this)) {
     throw %NewTypeError("Promise object expected");
@@ -4884,12 +4880,12 @@ function PromisePrototypeThen(onFulfilled, onRejected) {
   return ((%IsPromise(capability)) ? capability : %RecordGet(%AsObj(capability), 0));
 }
 
-// builtins/promise.ts:708 Promise.prototype.catch
+// builtins/promise.ts:704 Promise.prototype.catch
 function PromisePrototypeCatch(onRejected) {
   return (%Call(%GetV(this, "then"), this, undefined, onRejected));
 }
 
-// builtins/promise.ts:716 Promise.prototype.finally
+// builtins/promise.ts:712 Promise.prototype.finally
 function PromisePrototypeFinally(onFinally) {
   let $1, $2;
   if (!%IsObject(this)) {
@@ -4905,7 +4901,7 @@ function PromisePrototypeFinally(onFinally) {
   return ($1 = %NewBuiltinClosure(7, data, 1), $2 = %NewBuiltinClosure(8, data, 1), %Call(%GetV(this, "then"), this, $1, $2));
 }
 
-// builtins/promise.ts:734 %PromiseThenFinally
+// builtins/promise.ts:730 %PromiseThenFinally
 function PromiseThenFinally(value) {
   const data = %AsObj(this);
   const result = %Call(%RecordGet(data, 0), undefined);
@@ -4913,7 +4909,7 @@ function PromiseThenFinally(value) {
   return %Call(%GetV(p, "then"), p, %NewBuiltinClosure(9, value, 0));
 }
 
-// builtins/promise.ts:745 %PromiseCatchFinally
+// builtins/promise.ts:741 %PromiseCatchFinally
 function PromiseCatchFinally(reason) {
   const data = %AsObj(this);
   const result = %Call(%RecordGet(data, 0), undefined);
@@ -4921,22 +4917,22 @@ function PromiseCatchFinally(reason) {
   return %Call(%GetV(p, "then"), p, %NewBuiltinClosure(10, reason, 0));
 }
 
-// builtins/promise.ts:756 %PromiseValueThunk
+// builtins/promise.ts:752 %PromiseValueThunk
 function PromiseValueThunk() {
   return this;
 }
 
-// builtins/promise.ts:764 %PromiseThrower
+// builtins/promise.ts:760 %PromiseThrower
 function PromiseThrower() {
   throw this;
 }
 
-// builtins/promise.ts:773 value Promise.prototype[Symbol.toStringTag]
+// builtins/promise.ts:769 value Promise.prototype[Symbol.toStringTag]
 function PromisePrototypeToStringTag() {
   return "Promise";
 }
 
-// builtins/promise.ts:785 %HostCallSettle
+// builtins/promise.ts:781 %HostCallSettle
 function HostCallSettle(promise, ok, value) {
   if (!%PromiseClaimResolve(promise)) {
     return;

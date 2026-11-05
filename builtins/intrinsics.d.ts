@@ -797,20 +797,15 @@ declare function PromiseClaimResolve(p: Obj): boolean;
  */
 declare function PerformPromiseThen(p: Obj, onFulfilled: Value, onRejected: Value, capability: Value): void;
 /**
- * One element of PerformPromiseCombinator (Promise.all kind 0, allSettled 1, any 2, race
- * 3) when its steps run no user code (D3131): `fixed` is the Record [C, promiseResolve,
- * capability, values, remaining, resolveFn, rejectFn], C %Promise% with the original
- * `resolve`, and x a Promise of %Promise% or a value that fulfills one without a `then`
- * call, whose `then`, `constructor` and %Promise%[@@species] are the original ones. Then
- * it does what the loop body would (values slot, element Record, functions, `then`) and
- * returns true; otherwise false, with nothing changed.
+ * The elements of PerformPromiseCombinator (Promise.all kind 0, allSettled 1, any 2, race
+ * 3) that an Array values iterator gives without user code (as `IteratorFastValue` would),
+ * one after another while their steps run no user code either (D3131): `fixed` is the
+ * Record [C, promiseResolve, capability, values, remaining, resolveFn, rejectFn], C
+ * %Promise% with the original `resolve`, and the element a Promise of %Promise% or a value
+ * that fulfills one without a `then` call, whose `then`, `constructor` and
+ * %Promise%[@@species] are the original ones. Each is done as the loop body would (values
+ * slot, element Record, functions, `then`); returns the next index.
  * @leaf
- */
-declare function PromiseCombinatorStep(fixed: Obj, kind: i32, index: f64, x: Value): boolean;
-/**
- * PromiseCombinatorStep for the elements an Array values iterator gives without user code
- * (as `IteratorFastValue` would), one after another while the step takes them: the next
- * index. @leaf
  */
 declare function PromiseCombinatorRun(fixed: Obj, kind: i32, index: f64, iterator: Obj, next: Value): f64;
 /** Queues NewPromiseResolveThenableJob ( promise, thenable, then ), 27.2.2.2. @leaf */
