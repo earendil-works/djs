@@ -873,6 +873,10 @@ struct Dumper<'a> {
     /// Functions whose source was read so far (an over-count: a line that read none
     /// writes none).
     fns_read: core::cell::Cell<u32>,
+    /// The boxed `arguments` of waiting frames: the box, and the frame's function's script
+    /// and source start and its `arguments` references (relative to that start). Its
+    /// arrows' texts read it as `$djs_arguments`, K's binding of it (0215).
+    arg_boxes: Vec<(usize, Ref, u32, Vec<u32>)>,
     /// A written function comes from a TypeScript script: the dump is compiled as
     /// TypeScript (`"djs-dump 2 typescript";`).
     ts: core::cell::Cell<bool>,
@@ -973,6 +977,7 @@ impl<'a> Dumper<'a> {
             out: Vec::new(),
             skeleton: Vec::new(),
             fns_read: core::cell::Cell::new(0),
+            arg_boxes: Vec::new(),
             ts: core::cell::Cell::new(false),
             ts_scripts: core::cell::RefCell::new(Vec::new()),
             scratch: None,
@@ -1676,7 +1681,9 @@ impl<'a> Dumper<'a> {
                 }
                 continue;
             }
-            if !is_ident(&name) {
+            // (A waiting frame's `this` and `new.target` that its arrows share: K's own,
+            // 0215. Only for one waiting: the factory's, else.)
+            if !is_ident(&name) && !matches!(name.as_str(), "this" | "new.target") {
                 self.refuse(p, "a captured `this`, `arguments` or `new.target`");
                 continue;
             }
@@ -2528,7 +2535,9 @@ impl<'a> Dumper<'a> {
                     // of the same name holding its current value (the factory leaves
                     // such a variable to the global).
                     let value = captured_value(h, o, c);
+                    // (A waiting frame's `arguments`: K's `$djs_arguments`, `fn_source`.)
                     let ok = new.captures.contains(c)
+                        || (c == "arguments" && new.captures.iter().any(|x| x == "$djs_arguments"))
                         || (new.globals.contains(c)
                             && self
                                 .roots
@@ -2916,6 +2925,16 @@ impl<'a> Dumper<'a> {
         if let Some((_, blanked)) = self.class_texts.iter().find(|c| c.0 == text) {
             return Some(blanked.clone());
         }
+        if let Some((_, _, start, offs)) = self.arg_boxes.iter().find(|x| {
+            self.nodes[n].edges.contains(&x.0) && x.1 == template::debug_info(self.h, t).script
+        }) {
+            return Some(rename_arguments(
+                &text,
+                template::debug_info(self.h, t).src_start,
+                *start,
+                offs,
+            ));
+        }
         Some(text)
     }
 
@@ -3217,11 +3236,17 @@ impl<'a> Dumper<'a> {
         // The boxes' variable names (their paths end in `~name`).
         let box_names: Vec<String> = boxes
             .iter()
-            .map(|&b| String::from(self.nodes[b].path.rsplit('~').next().unwrap_or_default()))
+            .map(
+                |&b| match self.nodes[b].path.rsplit('~').next().unwrap_or_default() {
+                    // (K's binding of a waiting frame's `arguments`, 0215.)
+                    "arguments" if self.nodes[b].frame_box => String::from("$djs_arguments"),
+                    n => String::from(n),
+                },
+            )
             .collect();
         let dup = |name: &str| box_names.iter().filter(|n| *n == name).count() > 1;
         for (bi, n) in box_names.iter().enumerate() {
-            if !is_ident(n) {
+            if !is_ident(n) && !matches!(n.as_str(), "this" | "new.target") {
                 // A frame's hidden binding (a class's `<fields 0>`) that closures share.
                 let p = self.nodes[boxes[bi]].path.clone();
                 self.refuse(p, "an activation's hidden binding that closures share");
@@ -3484,6 +3509,28 @@ impl<'a> Dumper<'a> {
                 }
                 let name = &box_names[bi];
                 let inner = box_value(self, b);
+                if name == "this" || name == "new.target" {
+                    // A waiting activation's `this` that its arrows share: the closures are
+                    // written in its continuation, which is called with that `this`
+                    // (0215). No declaration: K's own is the binding. (Its `new.target`
+                    // too: an async function or generator is no constructor, undefined.)
+                    if !self.nodes[b].frame_box {
+                        let p = self.nodes[b].path.clone();
+                        self.refuse(
+                            p,
+                            "a captured `this` or `new.target` of a call that has returned",
+                        );
+                    }
+                    rec[s].vars.push_out(plain::Var {
+                        name: name.clone(),
+                        line: String::new(),
+                        init: None,
+                        tdz: false,
+                        boxn: b,
+                        class: false,
+                    });
+                    continue;
+                }
                 if inner.is_uninitialized() {
                     // In its TDZ: declared after the factory's `return`, so never
                     // initialized.
@@ -5171,6 +5218,26 @@ impl Sources {
                 .map(String::from),
         }
     }
+}
+
+/// An arrow's `text` (at `at` in its script) with the `arguments` of its frame's function
+/// (at `start`; `offs`, relative to it) read as K's `$djs_arguments` (0215). (A nested
+/// function's own `arguments` is not among them.)
+fn rename_arguments(text: &str, at: u32, start: u32, offs: &[u32]) -> String {
+    let mut out = String::new();
+    let mut last = 0;
+    for &o in offs {
+        let Some(i) = (start + o).checked_sub(at).map(|i| i as usize) else {
+            continue;
+        };
+        if i < last || !text.get(i..).is_some_and(|r| r.starts_with("arguments")) {
+            continue;
+        }
+        cat_to!(&mut out, &text[last..i], "$djs_arguments");
+        last = i + "arguments".len();
+    }
+    out.push_str(&text[last..]);
+    out
 }
 
 /// Whether computed key `[...]` has the same value wherever it is evaluated: a string or

@@ -1,0 +1,85 @@
+function <anonymous> @1..1432
+  arg0 argument 0, arg1 console@0
+  loc0 <state>, loc1 tools@0, loc2 C@0, loc4 <fields 0>, loc5 o@0, loc6 g@0, loc7 h@0, loc8 gen@0, loc9 it@0
+  node 0 Body @0..1431: Params 6..22 Stmt 358..694 Stmt 695..791 FuncDecl 792..881 FuncDecl 882..1068 FuncDecl 1069..1148 Stmt 1149..1186 Stmt 1187..1236 Stmt 1237..1263 Stmt 1264..1291 Stmt 1292..1331 Stmt 1332..1366 Stmt 1367..1377 Stmt 1378..1398 Stmt 1399..1428 | Param tools@0#0 Param console@0#0 Class C@0#1 Const o@0#2 Function g@0#3 Function h@0#4 Function gen@0#5 Const it@0#11
+  node 1 Expr @1149..1186: Operand 1149..1185
+  node 2 Call @1149..1185: Callee 1149..1160 Open 1160..1161 Arg 1161..1184
+  node 3 Await @1161..1184: Operand 1167..1184
+  node 4 Expr @1187..1236: Operand 1187..1235
+  node 5 Call @1187..1235: Callee 1187..1198 Open 1198..1199 Arg 1199..1234
+  node 6 Await @1200..1226: Operand 1206..1226
+  node 7 Member @1199..1232: Object 1199..1227 Property 1228..1232
+  node 8 Call @1199..1234: Callee 1199..1232 Open 1232..1233
+  node 9 Expr @1237..1263: Operand 1237..1262
+  node 10 Call @1237..1262: Callee 1237..1248 Open 1248..1249 Arg 1249..1261
+  node 11 Await @1249..1261: Operand 1255..1261
+  node 12 Expr @1264..1291: Operand 1264..1290
+  node 13 Call @1264..1290: Callee 1264..1275 Open 1275..1276 Arg 1276..1289
+  node 14 Await @1276..1289: Operand 1282..1289
+  node 15 Expr @1292..1331: Operand 1292..1330
+  node 16 Call @1292..1330: Callee 1292..1303 Open 1303..1304 Arg 1304..1329
+  node 17 Await @1305..1321: Operand 1311..1321
+  node 18 Member @1304..1327: Object 1304..1322 Property 1323..1327
+  node 19 Call @1304..1329: Callee 1304..1327 Open 1327..1328
+  node 20 Expr @1378..1398: Operand 1378..1397
+  node 21 Await @1378..1397: Operand 1384..1397
+  await#1 @1161 (23:13) pc 128: call.callee@1149 call.this@1149
+    path 0.6 1.0 2.2 3
+  await#2 @1200 (24:14) pc 159: call.callee@1187 call.this@1187
+    path 0.7 4.0 5.2 8.0 7.0 6
+  await#3 @1249 (25:13) pc 191: call.callee@1237 call.this@1237
+    path 0.8 9.0 10.2 11
+  await#4 @1276 (26:13) pc 210: call.callee@1264 call.this@1264
+    path 0.9 12.0 13.2 14
+  await#5 @1305 (27:14) pc 232: call.callee@1292 call.this@1292
+    path 0.10 15.0 16.2 19.0 18.0 17
+  await#6 @1378 (28:47) pc 290: -
+    path 0.13 20.0 21
+function later @446..529
+  arg0 argument 0
+  loc0 <state>, loc1 x@0, loc2 f@0, loc3 this
+  node 0 Body @0..83: Params 11..14 Stmt 17..48 Stmt 49..69 Stmt 70..81 | Param x@0#0 Const f@0#1
+  node 1 Expr @49..69: Operand 49..68
+  node 2 Await @49..68: Operand 55..68
+  await#1 @49 (8:52) pc 35: -
+    path 0.2 1.0 2
+function all @532..693
+  arg0 items@0
+  loc0 <state>, loc1 out@0, loc2 this
+  node 0 Body @0..161: Params 9..16 Stmt 23..65 Stmt 70..99 Stmt 104..157 | Param items@0#0 Const out@0#1
+  node 1 Expr @70..99: Operand 70..98
+  node 2 Await @70..98: Operand 76..98
+  await#1 @70 (11:5) pc 45: -
+    path 0.2 1.0 2
+function m @714..789
+  arg0 argument 0
+  loc0 <state>, loc1 x@0, loc2 g@0, loc3 this
+  node 0 Body @0..75: Params 7..10 Stmt 13..40 Stmt 41..61 Stmt 62..73 | Param x@0#0 Const g@0#1
+  node 1 Expr @41..61: Operand 41..60
+  node 2 Await @41..60: Operand 47..60
+  await#1 @41 (15:60) pc 35: -
+    path 0.2 1.0 2
+function g @793..882
+  loc0 <state>, loc1 f@0, loc2 arguments
+  node 0 Body @0..89: Params 16..18 Stmt 21..54 Stmt 55..75 Stmt 76..87 | Const f@0#1
+  node 1 Expr @55..75: Operand 55..74
+  node 2 Await @55..74: Operand 61..74
+  special Arguments@37
+  await#1 @55 (16:56) pc 29: -
+    path 0.2 1.0 2
+function h @883..1069
+  loc0 <state>, loc1 args@0, loc2 arguments, loc3 f@0, loc4 nt@0, loc5 new.target
+  node 0 Body @0..186: Params 16..18 Stmt 23..93 Stmt 96..116 Stmt 119..184 | Const args@0#1 Const f@0#1 Const nt@0#1
+  node 1 Expr @96..116: Operand 96..115
+  node 2 Await @96..115: Operand 102..115
+  special Arguments@36 Arguments@57 NewTarget@82 Arguments@141 Arguments@166
+  await#1 @96 (19:3) pc 45: -
+    path 0.2 1.0 2
+function gen @1070..1149
+  loc0 <state>, loc1 f@0, loc2 this, loc3 arguments
+  node 0 Body @0..79: Params 13..15 Stmt 18..56 Stmt 57..65 Stmt 66..77 | Const f@0#1
+  node 1 Expr @57..65: Operand 57..64
+  node 2 Yield @57..64: Operand 63..64
+  special Arguments@43
+  yield#1 @57 (22:58) pc 23: -
+    path 0.2 1.0 2

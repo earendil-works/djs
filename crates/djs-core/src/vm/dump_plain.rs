@@ -907,6 +907,12 @@ impl W<'_> {
                 }
             }
             for &(ref sn, sc, v) in &self.acts[a].cells {
+                // A `this` the frame's arrows share is K's own: its body's (0215).
+                if matches!(sn.as_str(), "this" | "new.target")
+                    && self.vblock[sc.0][sc.1][v].is_none()
+                {
+                    self.vblock[sc.0][sc.1][v] = Some(Pl::Block(a, 0));
+                }
                 if self.vblock[sc.0][sc.1][v].is_none() {
                     return Err(cat!("no block of the continuation declares ", sn));
                 }

@@ -73,6 +73,13 @@ Measure where plain dumps stand now and fix what regressed:
   1.4 MB instance, new instance ~32 µs. Gate: D3022 (clean djs-core/djs-prelude after
   incremental corruption). Left: the `$djs.source` wrapper's compile (33-58 µs; per code, not per start,
   so not in the prelude image), setUp (~42 µs), the dump's compile (lazy, 0218).
+- Dump setup: base globals compared by atom against the build's list (sorted by atom), a
+  name made only for the VM's own globals; host expressions made only for the host values
+  a dump writes (`HostExpr`). Same output.
+- pjz's gaps (D3024): arrows reading a waiting frame's `this`/`arguments`/`new.target`
+  were refused (`this`) or read K's own empty `arguments` after a load. The boxes are the
+  frame's now; `arguments` is renamed to `$djs_arguments` in the arrows' texts by the
+  syntax's offsets. K is called as before. Corpus codemode/arrows-share-this-arguments.js.
 
 ## Follow-ups
 

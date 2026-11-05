@@ -620,6 +620,13 @@ impl Dumper<'_> {
                     Slot::Hidden(name) if !computed_hidden(name) && !class_hidden(name) => {
                         name.as_str()
                     }
+                    // A `this` its arrows share (a box): the frame's, K's `this` (0215).
+                    Slot::Hidden(name)
+                        if matches!(name.as_str(), "this" | "new.target")
+                            && fp(lp + i).as_internal().is_some() =>
+                    {
+                        name.as_str()
+                    }
                     _ => continue,
                 };
                 let v = fp(lp + i);
@@ -637,6 +644,20 @@ impl Dumper<'_> {
                     && v.as_internal().is_some()
                 {
                     self.nodes[b].frame_box = true;
+                    // Its arrows read it as K's `$djs_arguments` (`fn_source`).
+                    if name == "arguments"
+                        && let Some(f) = fp(0).as_object()
+                        && let Some(sx) = syntax.as_deref()
+                    {
+                        let d = template::debug_info(h, h.closure_template(f));
+                        let offs = sx
+                            .special
+                            .iter()
+                            .filter(|s| s.0 == crate::compiler::Special::Arguments)
+                            .map(|s| s.1)
+                            .collect();
+                        self.arg_boxes.push_out((b, d.script, d.src_start, offs));
+                    }
                 }
             }
             // The construct temporaries, in locals of their own and on the stack.
@@ -2117,6 +2138,12 @@ impl Dumper<'_> {
             let v = fv(index(slot.place));
             let key = match slot.holds {
                 Holds::Binding if is_ident(&slot.name) => slot.name.clone(),
+                // (A `this` arrows share is the frame's: its scope goes into K, 0215.)
+                Holds::Hidden
+                    if matches!(slot.name.as_str(), "this" | "new.target") && slot.boxed =>
+                {
+                    quote(&slot.name)
+                }
                 Holds::Hidden if computed_hidden(&slot.name) => continue,
                 _ => quote(&slot.name),
             };

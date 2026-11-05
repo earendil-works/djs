@@ -10323,6 +10323,24 @@ stack) and the rest is zeroed. Nothing of the earlier session is left in it, who
 next. The allocator starts again and takes the grown memory as free pages. Renewing a
 1.4 MB instance costs ~17 µs. A new instance in pi-sessions: ~103 -> ~32 µs at the median.
 
+## D3024: A waiting frame's `this`, `arguments` and `new.target` that its arrows share are K's
+date: 2026-11-06 · by: pjr · issue: 0215
+An arrow that reads the `this`, `arguments` or `new.target` of an async function or
+generator that is waiting captures it as a box of the frame (a hidden binding). Such
+boxes were refused ("a captured `this`, `arguments` or `new.target`"), which refused
+every class method doing `items.map(x => this.f(x))` around an await; and an arrow made
+before the await that read `arguments` read K's own arguments object after a load (empty)
+instead of the original. Now the box is the frame's like any shared variable, so the
+arrows are written in K. `this`: K is called with the frame's `this` already, so K's own
+`this` is the binding, and no variable is written for it. `new.target`: an async
+function or generator is no constructor, so it is undefined in both. `arguments`: the box
+is named `$djs_arguments`, K's binding of the saved arguments object (the same object, as
+before for K's own text), and the arrows' texts read it under that name: the frame's
+function's syntax lists its `arguments` references (its arrows' included, not those of
+nested functions), so `fn_source` renames exactly those inside an arrow from the same
+script. A box of a call that has returned stays refused (a factory has no `this`).
+Corpus: codemode/arrows-share-this-arguments.js.
+
 ## D3002: A continuation's site takes its value from its callback; effectful values in a run
 date: 2026-11-06 · by: pjs · issue: 0207
 0216's queue items 6 and 10, first part. Where a continuation's prefix calls the last part
