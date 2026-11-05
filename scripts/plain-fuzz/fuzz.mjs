@@ -58,7 +58,7 @@ if (has("--big")) Object.assign(genOpts, { statements: 14, depth: 4, budget: 45 
 // --known FILE: signature substrings (one per line) of bugs already reported; matching
 // failures are counted on one line instead of listed.
 const knownFile = flag("--known", null);
-const known = knownFile ? fs.readFileSync(knownFile, "utf8").split("\n").filter((l) => l.trim() && !l.startsWith("#")) : [];
+let known = knownFile ? fs.readFileSync(knownFile, "utf8").split("\n").filter((l) => l.trim() && !l.startsWith("#")) : [];
 const dir = path.resolve(flag("--dir", path.join(ROOT, "work/scratch/0208/fuzz")));
 
 function difftestBin() {
@@ -369,7 +369,7 @@ async function fuzz(bin, failed = 0) {
 const bin = difftestBin();
 // Runs given programs (case bodies) with every chain; one line per program and
 // signature. Returns the number of failures.
-async function checkFiles(files) {
+async function checkFiles(files, ignore = []) {
   const work = path.join(dir, "check");
   const c = corpusDir(work);
   const names = files.map((f, i) => {
@@ -378,6 +378,7 @@ async function checkFiles(files) {
     return `codemode/c${i}.${ext}`;
   });
   const r = await check(bin, work, names);
+  r.fails = r.fails.filter((f) => !ignore.some((k) => f.sig.includes(k)));
   // One line per program and signature, with the idle points whose chains show it.
   const seen = new Map();
   for (const f of r.fails) {
@@ -397,7 +398,13 @@ if (argv[0] === "check") {
   // generator changes do not move them), then fresh seeds (--cases, default 300).
   const rdir = path.join(ROOT, "scripts/plain-fuzz/regress");
   const files = fs.readdirSync(rdir).filter((f) => /\.[jt]s$/.test(f)).sort().map((f) => path.join(rdir, f));
-  const bad = await checkFiles(files);
+  // Deliberate refusals (docs/plain-js-dumps.md §10) are not failures here.
+  const deliberate = fs
+    .readFileSync(path.join(rdir, "deliberate.txt"), "utf8")
+    .split("\n")
+    .filter((l) => l.trim() && !l.startsWith("#"));
+  known.push(...deliberate);
+  const bad = await checkFiles(files, deliberate);
   if (!argv.includes("--cases")) argv.push("--cases", "300");
   // Fresh seeds from a random start unless --seed is given, so that each run tries new
   // shapes; the start is printed (fuzz's summary line) to reproduce it.

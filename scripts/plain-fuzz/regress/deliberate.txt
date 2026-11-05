@@ -1,0 +1,5 @@
+# Signature substrings of refusals that are deliberate (docs/plain-js-dumps.md §10):
+# `fuzz.mjs regress` does not count them as failures.
+a for-in loop over a Proxy
+a site in an assignment's target
+an assignment to a pattern around the site
