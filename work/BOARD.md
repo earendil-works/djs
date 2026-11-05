@@ -6,9 +6,10 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0207 | Make plain dumps small (owner priority): header "djs-dump", helpers and source(ref) on host-provided $djs (D2834, D2835), record cuts, liveness pruning | pjs | .worktrees/pjs |
+| 0207 | Make plain dumps small (owner: not done until no fluff is left): header "djs-dump", helpers and source(ref) on host-provided $djs (D2834, D2835), record cuts, liveness pruning | pjs | .worktrees/pjs |
 | 0211 | Plain dump fuzzing round 2 (wider generator, new seeds) | pjz | .worktrees/pjz |
 | 0215 | Plain dump performance: export/load times vs format 2 | pjr | .worktrees/pjx |
+| 0216 | Dump fluff audit: byte-minimal dumps vs ours, ranked queue (owner: smallest possible) | fluff | .worktrees/fluff |
 
 ## Open (ready)
 
