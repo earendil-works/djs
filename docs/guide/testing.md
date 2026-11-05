@@ -35,8 +35,8 @@ purpose (it is always in strict mode, it has no direct `eval`, a stack overflow 
 
 ## test262
 
-test262 is the conformance suite of ECMAScript, <!--n test262/total-->53,597<!--/n--> tests at the pinned commit. djs runs it at
-the commit dquickts uses, with its own runner (`djs-test262`, in-process, in parallel).
+test262 is the conformance suite of ECMAScript. djs runs it at the commit dquickts uses,
+<!--n test262/total-->53,597<!--/n--> tests, with its own runner (`djs-test262`, in-process, in parallel).
 [`tests/test262.toml`](../../tests/test262.toml) puts every test into a group:
 
 - **skip**: features djs will never have (sloppy-mode tests, modules, `Intl`, Temporal,
