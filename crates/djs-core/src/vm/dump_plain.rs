@@ -2686,7 +2686,12 @@ impl W<'_> {
         // K runs, outside it.)
         let mut k = k;
         for x in &mut k.args {
-            *x = self.inline_refs(x, None, false);
+            let v = self.inline_refs(x, None, false);
+            // (A function as an argument needs no parentheses, and stays lazy, D2995.)
+            *x = match v.strip_prefix('(').and_then(|r| r.strip_suffix(')')) {
+                Some(inner) if v != *x && is_fn_text(inner) => String::from(inner),
+                _ => v,
+            };
         }
         let args = if k.args.is_empty() {
             String::new()

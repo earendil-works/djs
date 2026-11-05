@@ -152,6 +152,23 @@ fn anonymous(rhs: &str) -> bool {
     super::is_fn_text(t)
 }
 
+/// `rhs` written in place of `text[s..e]`: a function as an element, an argument or an
+/// initializer as it is (no parentheses: djs compiles it lazily, D2995), else as
+/// [`operand`].
+fn operand_at(text: &str, s: usize, e: usize, rhs: &str) -> String {
+    let prev = text[..s].trim_end();
+    let next = text[e..].trim_start();
+    let list = matches!(prev.as_bytes().last(), Some(b'(' | b',' | b'[' | b'='))
+        && !prev.ends_with("=>")
+        && !prev.ends_with("==")
+        && (next.is_empty() || matches!(next.as_bytes()[0], b',' | b')' | b']' | b';'));
+    if list && super::is_fn_text(rhs) {
+        String::from(rhs.trim())
+    } else {
+        operand(rhs)
+    }
+}
+
 /// `rhs` as an operand: in parentheses unless it is one already.
 pub(super) fn operand(rhs: &str) -> String {
     let t = rhs.trim();
@@ -882,7 +899,7 @@ impl W<'_> {
             self.inl.stack[p.depth][p.idx] = String::new();
             self.inl.effects[p.depth].retain(|&i| i != p.idx);
             out.push_str(&text[at..s]);
-            out.push_str(&operand(&p.rhs));
+            out.push_str(&operand_at(text, s, e, &p.rhs));
             at = e;
             self.inl.done.push_out(p.name);
         }

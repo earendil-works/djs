@@ -269,7 +269,7 @@ for (const path of $djs_i1) {
   notes.push(await tools.read({ path }));
 }
 return notes.join("\n");
-}, $djs.source("notes.js", "3753c3a1172c33f7", "tools,console"), 1, 118, [4,107]).call(globalThis, $djs.host("tools"), ["# A"], [].values());
+}, $djs.source("notes.js", "3753c3a1172c33f7", "tools,console"), 1, 118).call(globalThis, $djs.host("tools"), ["# A"], [].values());
 ```
 
 It is an ordinary Script (D2830): djs, or node, runs it given the host's functions and
@@ -309,8 +309,9 @@ one object the host provides while it loads, `$djs` (D2834, D2890):
   ran, named by its file and hash, and never calls), the await it stands for (`1`, the
   first), the few decisions the writer took on the run's values that shaped the
   continuation's text (`118`, as bits: whether it reads `notes.push` or the loop's `next`
-  again instead of keeping what the run looked up, …) and where its text holds a value of
-  the dump (`[4,107]`, the host call). A dump of a
+  again instead of keeping what the run looked up, …) and, where reading K's text cannot
+  find them, the places its text holds a value of the dump (none here: the host call is
+  read as the expression it is, D3005). A dump of a
   run that resumed this one writes the continuation again from the original and those
   decisions, finds out that way which stretches of the continuation's text are copies of
   the original's, reads the continuation's frame as one of the original and writes the
