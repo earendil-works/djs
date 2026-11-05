@@ -736,3 +736,4 @@ topics when the index is next reorganized.
 - D3081: Regexp follow sets only where a STAR uses them; allocation ceilings
 - D3082: Slot plans drive tracing; the compactor updates and slides in one walk
 - D3083: Benchmarks compare per collection, and the shipped module's instantiation
+- D3084: Instruction ceilings for work the gate cannot time
