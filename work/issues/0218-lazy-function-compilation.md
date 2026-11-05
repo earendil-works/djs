@@ -1,6 +1,6 @@
 # 0218: Lazy function compilation: compile a function's body on its first call
 
-status: in-progress
+status: done
 agent: lazy
 branch: issue/0218-lazy-function-compilation
 depends-on: -
@@ -104,8 +104,60 @@ net. Coordinate with pjr (0215) who measures load, and pjs (0207) who changes du
 - Continuations in plain dumps are function expressions assigned and called later
   (`$dump.Ka5 = async function …; $dump.Ka5.call(…)`); async keeps them eager now, but a
   sync continuation or callback the writer parenthesized would be eager by D2995 (pjs).
-- Batch 4: small-function threshold, `fclosure` taking the compiled template, phase-1
-  emission off inside lazy subtrees.
+- Batch 4 items left undone (measured, below the bar): phase-1 emission off inside lazy
+  subtrees, a small-function threshold; `fclosure` taking the compiled template (helps
+  only closure-heavy runs).
+- A compile cache across loads (0219).
 - The decisions index (docs/decisions-index.md) needs D2990/D2991 (coordinator).
 
 ## Result
+
+Landed in four merges (main efe2316c, 76623ae8, 03d541f2, and this close):
+
+- **Lazy functions** (D2990, D2991): behind the cargo feature `lazy` (default in djs-core,
+  turned on by djs-wasm's `dump`; off in the shipped main and slim modules, which stay
+  within their size ceilings), per VM with `VmOptions::lazy_functions` (the dump module sets
+  it for every VM). The load still parses everything and resolves every name, so every
+  early error is reported at load; a lazy function gets a lazy template (real flags, name,
+  length, captures; code `lazy`) and compiles from its own text at its first call, in the
+  same frame. Eager and lazy compiles give a function the same code (pools per
+  lazy-eligible function), which the suspension maps rely on; `vm::lazy_tests` checks it
+  over the corpus and the golden dumps. `Vm::seal` compiles all lazy templates.
+- **Script source as UTF-8** (D2992): a lazy compile copies only its function's text;
+  `toString` converts only the function.
+- **Dumps** (D2993, D2994): the dumper reads lazy templates (compiled ones, recorded
+  globals for those that never ran); a lazy VM loads a plain dump lazily with the maps of
+  what the load compiled and adds others on demand. Dumps of lazy and eager VMs are the same
+  text.
+- **Eager rules** (D2995): IIFEs, call arguments, parenthesized functions, async functions
+  and generators stay eager; the dump runtime compiles eagerly.
+- Testing: the gate's stressed difftest, plain dumps leg and test262 run lazy; the test262
+  leg also runs eager in parallel (the shipped main is eager); `--lazy` in djs-difftest and
+  djs-test262.
+
+Measured (work/research/0218/README.md): typescript.js compiles in about half the time,
+the golden dumps 23% and the full dump runtime 35% faster, compiled code on the heap -36%;
+corpus load + re-dump -3.6% (load -11%); pi sessions load and dump 4-5% faster.
+
+**Bottom line**: lazy compilation wins where most functions never run: big scripts,
+libraries, dumps with many sync closures and helpers. For pi-size dumps (~330 B) the
+compile is mostly continuations and origins, which run or need their suspension maps at
+the next dump anyway, so lazy loading gains little there; what repeats in a pi load is the
+compile of the same texts (the host's script, the dump runtime), which 0219 addresses.
+
+**The +4% on running the corpus's codemode cases lazily** is the test harness: it compiles
+the corpus prelude.js in every VM, and 80% of the runtime lazy compiles (85% of the bytes)
+are that prelude's functions being parsed a second time at their first call. pi compiles its
+prelude once per process and seals it (`Vm::seal` compiles every lazy template), then
+restores that image; with the prelude compiled once, running the cases lazily costs 1.7%
+fewer instructions than eagerly. The one remaining cost is a pi cold start parsing its
+prelude twice, once per process.
+
+**No size threshold**: making functions below 512-1,024 B eager cuts the running cost by
+2-3% but takes back the whole load gain, because dumps' small sync functions are exactly
+what lazy loading saves; with the call-argument rule, small callbacks that run are eager
+already.
+
+Known gaps: eval code and `new Function` compile eagerly; a pi cold start parses its
+prelude twice; lazy compilation is not in the shipped main and slim modules (a size trade
+for the owner if wanted).
