@@ -160,17 +160,20 @@ fn ident_part(c: u8) -> bool {
 /// name after `.` is a property, not a reference. It errs on the side of too many
 /// names (an object literal's keys count), which only adds orderings that hold anyway.
 pub(super) fn refs(text: &str) -> Refs {
-    scan(text, false)
+    scan(text, false, &|_| true)
 }
 
 /// The references of `text` its evaluation makes: [`refs`] without those inside function
 /// bodies and class bodies (read when they run). A text of the dump, a value: a
 /// `{` after `)` or `=>` opens a function's body (no statements are scanned).
+#[cfg(test)]
 fn eager_refs(text: &str) -> Refs {
-    scan(text, true)
+    scan(text, true, &|_| true)
 }
 
-fn scan(text: &str, skip_fns: bool) -> Refs {
+/// [`refs`]'s or [`eager_refs`]'s with only the names `keep` takes (a data literal's
+/// keys are names: most texts' names are wanted by no one, 0215).
+fn scan(text: &str, skip_fns: bool, keep: &dyn Fn(&str) -> bool) -> Refs {
     let b = text.as_bytes();
     let mut out = Refs::default();
     // What `out` holds, for deduplication: a dump's data names thousands (0215: the
@@ -341,7 +344,7 @@ fn scan(text: &str, skip_fns: bool) -> Refs {
                         after_dot = false;
                         continue;
                     }
-                } else if seen_names.insert(word) {
+                } else if keep(word) && seen_names.insert(word) {
                     out.names.push_out(String::from(word));
                 }
             }
@@ -1361,7 +1364,7 @@ impl W<'_> {
     /// The keys of `text`; with `globals` false only its `$dump` references: the
     /// globals a function's text names are read when it runs, after the load.
     fn keys_in(&self, text: &str, globals: bool) -> Vec<Key> {
-        let r = eager_refs(text);
+        let r = scan(text, true, &|n| globals && self.global_set.contains(n));
         let mut out = Vec::new();
         let mut seen: alloc::collections::BTreeSet<Key> = Default::default();
         for (name, key) in r.dump {
@@ -1373,13 +1376,9 @@ impl W<'_> {
                 out.push_out(k);
             }
         }
-        // (`scan` gives each name once.)
-        if globals {
-            for n in r.names {
-                if self.global_set.contains(&n) {
-                    out.push_out(Key::Global(n));
-                }
-            }
+        // (`scan` gives each global once.)
+        for n in r.names {
+            out.push_out(Key::Global(n));
         }
         out
     }
@@ -2065,7 +2064,7 @@ impl W<'_> {
         for (_, e) in &ir.handles {
             cat_to!(&mut text, "\n", e);
         }
-        let used = refs(&text);
+        let used = scan(&text, false, &|_| false);
         for (i, p) in ir.builtins.iter().enumerate() {
             let name = cat!("b", i);
             if used.dump.iter().any(|(n, _)| *n == name) {
