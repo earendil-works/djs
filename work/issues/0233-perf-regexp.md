@@ -1,7 +1,7 @@
 # 0233: Performance: regexp exec/replace/matchAll and compile
 
-status: open
-agent: -
+status: in-progress
+agent: pre
 branch: issue/0233-perf-regexp
 depends-on: -
 guide: builtins.md (regexp) if it changes
