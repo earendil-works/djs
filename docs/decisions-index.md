@@ -740,3 +740,4 @@ topics when the index is next reorganized.
 - D3082: Slot plans drive tracing; the compactor updates and slides in one walk
 - D3083: Benchmarks compare per collection, and the shipped module's instantiation
 - D3084: Instruction ceilings for work the gate cannot time
+- D2842: The npm package is @earendil-works/djs, version 0.1.0; dumps carry no version

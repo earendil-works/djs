@@ -6,6 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0228 | Publish the host package to npm as @earendil-works/djs 0.1.0 (owner, D2842) | npm | .worktrees/npm |
 
 ## Open (ready)
 

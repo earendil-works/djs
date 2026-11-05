@@ -10877,3 +10877,10 @@ loop −4.4%, calls −10.0%, call1 −7.6%, pi-like −8.0%, arrays −17.3%. S
 422,453 → 414,390 (−8.1 KB), slim 357,078 → 348,676 (−8.4 KB); ceilings lowered.
 `status.py bounds` now builds the checked module and reports what its checks would cost
 against the shipped one.
+
+## D2842: The npm package is @earendil-works/djs, version 0.1.0; dumps carry no version
+date: 2026-11-06 · by: owner · issue: 0228
+The host package publishes as `@earendil-works/djs` (the earendil-works npm scope), starting at
+0.1.0. One package holds the shipped, slim and dump modules as entry points (`.`, `./slim`,
+`./dump`). The dump header stays `"djs-dump";` without a version marker: the host knows which djs
+it loads a dump with. The pi adapter is not part of the package. Only npm for now (no crates.io).
