@@ -20,6 +20,17 @@ includes, Array.prototype.push/join, Number/parseInt) for the same rest-args/byt
 and fix the ones that show up in the 0229 workload set. Measure in wasm instructions (shipped
 module) before/after; test262 Math stays green.
 
+## Scope extended (coordinator, from 0229's per-op table)
+The Math.max cost is one case of a systemic problem: builtins written in the TS subset have
+~200-370 ns call overhead vs ~35-50 ns in QuickJS: s.substring 9.6x, padStart/padEnd 10-12x,
+s.at 7.5x, s.repeat 5.9x, String(i) 5.8x (`''+i` and `${i}` are fine), Number.isInteger 4.9x,
+toFixed 3.8x, trim 3.4x, Math.floor 3.1x, Math.max 19x, toLowerCase 1.9x, slice (@fast) 2.0x,
+charAt 2.0x. Find and fix the systemic cause in how bytecode builtins are called (frame setup,
+argument handling, rest/arguments objects, prologue checks), so all of them get faster, rather
+than a fast path per builtin; add per-builtin paths only where the general fix leaves a gap. The
+interpreter's call path is yours for this; 0232 (async) also touches call/resume: coordinate via
+the coordinator.
+
 ## Log
 
 ## Follow-ups

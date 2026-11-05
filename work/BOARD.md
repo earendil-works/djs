@@ -6,7 +6,11 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0230 | Math.max/min (and other tiny hot builtins) fast in codemode | mathfast | .worktrees/mathfast |
+| 0231 | Perf: sort comparator, Array.from, join/concat/push, Map/Set string keys | parr | .worktrees/parr |
+| 0232 | Perf: Promise.all, await, async calls | pasync | .worktrees/pasync |
+| 0233 | Perf: regexp exec/replace/matchAll/compile | pre | .worktrees/pre |
+| 0234 | Memory footprint vs QuickJS (research first) | pmem | .worktrees/pmem |
+| 0230 | Builtin call overhead (TS-subset builtins 3-19x slower per call than QuickJS), incl. Math.max/min | mathfast | .worktrees/mathfast |
 | 0229 | Benchmarks page: djs vs QuickJS versions and monty on codemode workloads; dumps, size, memory (owner) | benchpage | .worktrees/benchpage |
 
 ## Open (ready)
