@@ -32,7 +32,7 @@ pub(super) fn base() -> &'static [u8] {
 /// The base's builtins and paths, as djs-prelude's `BASE_NAMES` has them for its base
 /// (`DumpOptions::base_names`): made once.
 pub(super) fn base_names() -> super::dump::BaseNames<'static> {
-    type Names = (Vec<(u32, &'static str)>, Vec<(&'static str, u64, u8)>);
+    type Names = (Vec<(u32, &'static str)>, Vec<(u32, &'static str, u64, u8)>);
     static NAMES: std::sync::OnceLock<Names> = std::sync::OnceLock::new();
     let leak = |s: String| &*alloc::boxed::Box::leak(s.into_boxed_str());
     let (b, g) = NAMES.get_or_init(|| {
@@ -44,11 +44,11 @@ pub(super) fn base_names() -> super::dump::BaseNames<'static> {
             .map(|(c, p)| (c, leak(p)))
             .collect();
         builtins.sort_by_key(|b| b.0);
-        let mut globals: Vec<(&'static str, u64, u8)> = super::registry::base_globals(&h)
+        let mut globals: Vec<(u32, &'static str, u64, u8)> = super::registry::base_globals(&h)
             .into_iter()
-            .map(|(n, b, f)| (leak(n), b, f))
+            .map(|(a, n, b, f)| (a, leak(n), b, f))
             .collect();
-        globals.sort_by(|a, b| a.0.cmp(b.0));
+        globals.sort_by_key(|g| g.0);
         (builtins, globals)
     });
     super::dump::BaseNames {

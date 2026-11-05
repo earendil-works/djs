@@ -394,9 +394,10 @@ pub fn canonical_names(heap: &Heap) -> Vec<(u32, String)> {
 }
 
 /// The own data properties of `heap`'s global object with string keys, as a dump compares
-/// a VM's global object with its base's (`vm::dump::BaseNames::globals`): name, the value's
-/// bits, the property's flags. An accessor has `u64::MAX` (no value has those bits).
-pub fn base_globals(heap: &Heap) -> Vec<(String, u64, u8)> {
+/// a VM's global object with its base's (`vm::dump::BaseNames::globals`): the key's atom (a
+/// VM's base atoms are the base's), name, the value's bits, the property's flags. An
+/// accessor has `u64::MAX` (no value has those bits).
+pub fn base_globals(heap: &Heap) -> Vec<(u32, String, u64, u8)> {
     let Some(g) = intrinsic(heap, Intrinsic::Global).as_object() else {
         return Vec::new();
     };
@@ -408,9 +409,9 @@ pub fn base_globals(heap: &Heap) -> Vec<(String, u64, u8)> {
         let name = heap.atom_name(k);
         match heap.get_own_property(g, k) {
             Some(Property::Data { value, flags }) => {
-                out.push_out((name, value.to_bits(), flags.bits()));
+                out.push_out((k.id(), name, value.to_bits(), flags.bits()));
             }
-            Some(_) => out.push_out((name, u64::MAX, 0)),
+            Some(_) => out.push_out((k.id(), name, u64::MAX, 0)),
             None => {}
         }
     }

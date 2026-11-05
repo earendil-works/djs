@@ -115,8 +115,9 @@ pub struct BaseNames<'a> {
     /// Every builtin [`super::registry::reachable_names`] finds in the base, with its path,
     /// sorted by cell (else the dump sorts a copy).
     pub builtins: &'a [(u32, &'a str)],
-    /// The base global object's own properties ([`super::registry::base_globals`]).
-    pub globals: &'a [(&'a str, u64, u8)],
+    /// The base global object's own properties ([`super::registry::base_globals`]),
+    /// sorted by atom (else the dump searches them).
+    pub globals: &'a [(u32, &'a str, u64, u8)],
 }
 
 fn no_host_fn_name(_: u32) -> Option<String> {
@@ -422,7 +423,7 @@ impl BaseTable {
                 t.globals = n
                     .globals
                     .iter()
-                    .map(|g| alloc::borrow::Cow::Borrowed(g.0))
+                    .map(|g| alloc::borrow::Cow::Borrowed(g.1))
                     .collect();
             }
             (None, Some(base)) => {
@@ -462,6 +463,13 @@ impl BaseTable {
             named: named(path),
         }
     }
+}
+
+/// A host value's expression ([`Dumper::host_expr`]): a root's, or a member of another's.
+/// Made only for the ones a dump writes: the host's roots reach many (0215).
+enum HostExpr {
+    Root(String),
+    Member(usize, Atom),
 }
 
 /// What a cell in [`Dumper::cells`] is: the tag in the top two bits, an index below.
@@ -847,7 +855,7 @@ struct Dumper<'a> {
     /// Builtin cells (below `BASE_END`), host values, nodes and root boxes by cell offset.
     cells: Index,
     builtins: Rc<BaseTable>,
-    host_exprs: Vec<String>,
+    host_exprs: Vec<HostExpr>,
     host_names: Vec<&'a str>,
     globals: Vec<Global>,
     /// `globals` by atom id.
@@ -1008,7 +1016,7 @@ impl<'a> Dumper<'a> {
         d.builtins = table.clone();
 
         for &(name, v) in opts.host_roots {
-            d.host_values(v, host_ref(name), 0);
+            d.host_values(v, HostExpr::Root(host_ref(name)), 0);
         }
         d.read_globals(base.as_ref(), names.map_or(&[][..], |n| n.globals));
         d.scratch = base;
@@ -1049,7 +1057,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// The user's globals (what the base does not have), and the host's values by name.
-    fn read_globals(&mut self, base: Option<&Heap>, base_globals: &[(&str, u64, u8)]) {
+    fn read_globals(&mut self, base: Option<&Heap>, base_globals: &[(u32, &str, u64, u8)]) {
         let h = self.h;
         let g = self.vm.global();
         let bg = base.and_then(|b| intrinsic(b, Intrinsic::Global).as_object());
@@ -1072,11 +1080,11 @@ impl<'a> Dumper<'a> {
             if h.atom_symbol(k).is_some() {
                 continue;
             }
-            let name = atom_text(h, k);
             let Some(p) = h.get_own_property(g, k) else {
                 continue;
             };
             // The VM's atom table starts with the base's: the same keys, the same atoms.
+            // (The name only for what is not the base's: most globals are, 0215.)
             let same = match (base, bg) {
                 (Some(base), Some(bg)) => bkeys
                     .contains(&k)
@@ -1084,13 +1092,13 @@ impl<'a> Dumper<'a> {
                     .flatten()
                     .map(|bp| bp == p),
                 // The base's properties as they were built: a value by its bits.
-                // (Sorted by name when the build made them, else searched.)
-                _ => match base_globals.binary_search_by(|x| x.0.cmp(name.as_str())) {
+                // (Sorted by atom when the build made them, else searched.)
+                _ => match base_globals.binary_search_by_key(&k.id(), |x| x.0) {
                     Ok(i) => Some(i),
-                    Err(_) => base_globals.iter().position(|x| x.0 == name),
+                    Err(_) => base_globals.iter().position(|x| x.0 == k.id()),
                 }
                 .map(|i| base_globals[i])
-                .map(|(_, bits, fl)| {
+                .map(|(_, _, bits, fl)| {
                     matches!(p, Property::Data { value, flags }
                         if value.to_bits() == bits && flags.bits() == fl)
                 }),
@@ -1101,6 +1109,7 @@ impl<'a> Dumper<'a> {
             match p {
                 Property::Data { value, .. } => self.global_binding(k, value, Decl::Var),
                 Property::Accessor { .. } => {
+                    let name = atom_text(h, k);
                     if !self.host_names.contains(&name.as_str()) {
                         self.refuse(name, "a global accessor");
                     }
@@ -1114,7 +1123,7 @@ impl<'a> Dumper<'a> {
         // A host name on the global object is the host's; a lexical binding of that
         // name is the script's own and hides the host's property, so it is dumped.
         if decl == Decl::Var && self.host_names.contains(&name.as_str()) {
-            self.host_values(value, host_ref(&name), 0);
+            self.host_values(value, HostExpr::Root(host_ref(&name)), 0);
         } else if name == "$dump" || name == "$djs" {
             // A plain dump's own names: its values live in `$dump` during the load
             // and the host's runtime and hooks in `$djs` (D2890, D2903).
@@ -1134,7 +1143,15 @@ impl<'a> Dumper<'a> {
 
     /// Marks `v`, a host root or a value reached from one, as the host's: written as
     /// `expr` (`$djs.host("tools")`, `$djs.host("tools").list`), never dumped.
-    fn host_values(&mut self, v: Value, expr: String, depth: u32) {
+    /// Host value `i`'s expression (`$djs.host("tools").read`), made when it is written.
+    fn host_expr(&self, i: usize) -> String {
+        match &self.host_exprs[i] {
+            HostExpr::Root(e) => e.clone(),
+            HostExpr::Member(p, k) => cat!(self.host_expr(*p), member(&atom_text(self.h, *k))),
+        }
+    }
+
+    fn host_values(&mut self, v: Value, expr: HostExpr, depth: u32) {
         let Some(o) = v.as_object() else { return };
         // A host function is written by its identity wherever it is bound (D2970).
         if o.offset() < self.base_end
@@ -1143,9 +1160,9 @@ impl<'a> Dumper<'a> {
         {
             return;
         }
-        self.cells
-            .insert(key(o.offset()), HOST | self.host_exprs.len() as u32);
-        self.host_exprs.push_out(expr.clone());
+        let at = self.host_exprs.len();
+        self.cells.insert(key(o.offset()), HOST | at as u32);
+        self.host_exprs.push_out(expr);
         if depth >= 2 || self.h.object_class(o) == ObjectClass::Proxy {
             return;
         }
@@ -1154,8 +1171,7 @@ impl<'a> Dumper<'a> {
                 continue;
             }
             if let Some(Property::Data { value, .. }) = self.h.get_own_property(o, k) {
-                let e = cat!(expr, member(&atom_text(self.h, k)));
-                self.host_values(value, e, depth + 1);
+                self.host_values(value, HostExpr::Member(at, k), depth + 1);
             }
         }
     }
@@ -2923,7 +2939,7 @@ impl<'a> Dumper<'a> {
         };
         let n = match self.cell(c) {
             Some((BUILTIN, i)) => return self.builtin_expr(i),
-            Some((HOST, i)) => return self.host_exprs[i].clone(),
+            Some((HOST, i)) => return self.host_expr(i),
             Some((NODE, n)) => n,
             _ if c == self.vm.global().offset() => return "globalThis".into(),
             _ => return "undefined".into(),
