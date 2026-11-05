@@ -6,8 +6,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0224 | Investigate and fix native perf regressions since 2026-11-01 (owner) | perf | .worktrees/perfreg |
-| 0225 | Binary bloat: account for every byte, win them back (owner) | bloat | .worktrees/bloat |
+| 0224 | Investigate and fix native perf regressions since 2026-11-01 (owner) | perfreg | .worktrees/perfreg |
+| 0225 | Binary bloat: account for every byte, win them back (owner) | bytes | .worktrees/bloat |
 
 ## Open (ready)
 
