@@ -428,7 +428,17 @@ impl W<'_> {
         if !self.inl.pend.iter().any(|p| p.name == name) {
             return;
         }
-        // The names K may bind: any of its function's or its slots'.
+        let scope = self.k_scope(a);
+        let v = self.inline_site(aw, Some(0), &scope);
+        if v != aw {
+            self.acts[a].site_val = Some(v);
+        }
+    }
+
+    /// The names activation `a`'s continuation may bind anywhere: any declaration of its
+    /// function, any slot's name (and its own `$djs_` helpers).
+    pub(super) fn k_scope(&self, a: usize) -> Vec<String> {
+        let act = &self.ir.acts[a];
         let mut scope: Vec<String> = Vec::new();
         for nd in &act.syntax.nodes {
             scope.extend(nd.decls.iter().map(|d| d.name.clone()));
@@ -436,10 +446,22 @@ impl W<'_> {
         for sl in &act.slots {
             scope.push_out(String::from(sl.name.split('@').next().unwrap_or(&sl.name)));
         }
-        let v = self.inline_site(aw, Some(0), &scope);
-        if v != aw {
-            self.acts[a].site_val = Some(v);
-        }
+        scope
+    }
+
+    /// Whether the lines of a part of activation `a`'s callback may be written in its
+    /// continuation where it calls them (D3002): they read no name K may bind, and nothing
+    /// that is K's own there (`this`, `arguments`, `super`, `new.target`).
+    pub(super) fn callback_in_k(&self, a: usize, lines: &[String]) -> bool {
+        let scope = self.k_scope(a);
+        lines.iter().all(|l| {
+            !l.contains("new.target")
+                && super::refs(l).names.iter().all(|n| {
+                    !matches!(n.as_str(), "this" | "arguments" | "super")
+                        && !n.starts_with("$djs_")
+                        && (!scope.contains(n) || only_keys(l, n))
+                })
+        })
     }
 
     /// Whether item `kind`'s line does more than make a value.

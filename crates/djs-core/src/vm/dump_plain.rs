@@ -2258,6 +2258,11 @@ impl W<'_> {
                                 go.push_out(String::new());
                                 continue;
                             }
+                            // (Its lines in K where they read nothing K binds, D3002.)
+                            if self.callback_in_k(*a, &inner) {
+                                go.push_out(join(&inner, "\n"));
+                                continue;
+                            }
                             let name = if b == 0 {
                                 cat!("$dump.g", ir.acts[*a].name)
                             } else {
