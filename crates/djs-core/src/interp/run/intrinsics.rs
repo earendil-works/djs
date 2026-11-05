@@ -1730,7 +1730,17 @@ impl Exec<'_> {
                 let Some(s) = a0.as_string() else {
                     return bad_argument(info.name);
                 };
-                let units: alloc::vec::Vec<u16> = self.heap.str_units(s).collect();
+                // (By chunk: a dump's buffers are megabytes of Latin-1.)
+                let mut units: alloc::vec::Vec<u16> =
+                    crate::buf::vec_with_capacity(self.heap.str_len(s) as usize);
+                for c in self.heap.str_chunks(s) {
+                    match c {
+                        crate::heap::StrView::Latin1(b) => {
+                            units.extend(b.iter().map(|&x| u16::from(x)))
+                        }
+                        c => units.extend(c.units()),
+                    }
+                }
                 let max_arg = if id == HEX_DECODE {
                     arg(self, 1)
                 } else {

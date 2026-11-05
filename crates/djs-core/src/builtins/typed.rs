@@ -285,9 +285,18 @@ pub(crate) struct Decoded {
     pub error: bool,
 }
 
+/// The value of base64 digit `c` (by range: a search of the alphabet was most of decoding
+/// a dump's buffers, 0215).
 fn b64_value(c: u16) -> Option<u32> {
-    let c = u8::try_from(c).ok()?;
-    B64.iter().position(|&x| x == c).map(|p| p as u32)
+    let c = u32::from(c);
+    match c {
+        0x41..=0x5A => Some(c - 0x41),
+        0x61..=0x7A => Some(c - 0x61 + 26),
+        0x30..=0x39 => Some(c - 0x30 + 52),
+        0x2B => Some(62),
+        0x2F => Some(63),
+        _ => None,
+    }
 }
 
 fn is_ascii_ws(c: u16) -> bool {
@@ -337,6 +346,32 @@ pub(crate) fn from_base64(s: &[u16], url: bool, last: u8, max: usize) -> Decoded
     let len = s.len();
     let mut chunk: Vec<u32> = crate::buf::vec_with_capacity(4);
     let mut i = 0;
+    // Whole groups of four plain digits first, while they fit (the common case): the
+    // same bytes as the steps below, without their per-unit checks.
+    d.bytes.reserve(len.min(max) / 4 * 3);
+    while i + 4 <= len && max - d.bytes.len() >= 3 {
+        let v = |k: usize| {
+            let c = s[i + k];
+            let c = match (url, c) {
+                (true, 0x2B | 0x2F) => return None,
+                (true, 0x2D) => 0x2B,
+                (true, 0x5F) => 0x2F,
+                _ => c,
+            };
+            b64_value(c)
+        };
+        let (Some(a), Some(b), Some(c), Some(e)) = (v(0), v(1), v(2), v(3)) else {
+            break;
+        };
+        let n = (a << 18) | (b << 12) | (c << 6) | e;
+        d.bytes
+            .extend_from_slice(&[(n >> 16) as u8, (n >> 8) as u8, n as u8]);
+        i += 4;
+        d.read = i;
+    }
+    if d.bytes.len() == max {
+        return d;
+    }
     loop {
         while i < len && is_ascii_ws(s[i]) {
             i += 1;
