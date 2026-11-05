@@ -239,7 +239,8 @@ def dumps():
     report = node("scripts/dump-costs/dump-costs.ts", out_dir, "--packaging=B")
     import json
     points = json.load(open(os.path.join(out_dir, "points.json")))
-    corpus = points["corpus B"]
+    # Keyed by the packaging's label, "B (djs.wasm + djs-dump.wasm)".
+    corpus = next(v for k, v in points.items() if k.startswith("corpus B"))
     m = re.search(r"(\d+) cases ran \((\d+) failed to start\), (\d+) idle points, (\d+) refused", report)
     if not m:
         sys.exit(f"status.py: no corpus summary in dump-costs' report:\n{report}")
@@ -248,7 +249,7 @@ def dumps():
         xs = sorted(x[k] for x in corpus)
         return xs[min(len(xs) - 1, int(p / 100 * len(xs)))]
     # snapshot-research/cases/big-log.js: a 20,000-line log kept across five tool calls.
-    log = points["B/big-log"]
+    log = next(v for k, v in points.items() if k.startswith("B ") and k.endswith("/big-log"))
     return {
         "dumps/corpus-cases": int(m.group(1)),
         "dumps/idle-points": int(m.group(3)),
