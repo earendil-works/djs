@@ -3,7 +3,8 @@
 A codemode run can be stopped, saved, moved and resumed, and the host may want to run
 the same script again: after a crash, to debug what a model's script did, or to check a
 new engine build against an old one. All of that works only if a run is a function of
-its inputs. This page explains which inputs those are, how djs keeps everything else out
+its inputs, which is why [determinism](goals.md#determinism) is a requirement under
+every goal of djs. This page explains which inputs those are, how djs keeps everything else out
 of a run, how a host checks that two runs really were the same, and where determinism
 ends.
 
@@ -16,15 +17,14 @@ ends.
 
 ## Why it matters
 
-The tour so far has made two promises. A run can stop between any two instructions and
-continue from an image ([Suspending anywhere](suspension.md),
-[images](snapshots.md)), and the host hands it inputs and reads results without the
-VM doing any I/O ([The host interface](host.md)). Determinism is what makes those
-promises useful:
+A run can stop between any two instructions and continue, from an image of its memory or
+from a [continuation dump](dumps.md), and the host hands it inputs and reads results
+without the VM doing any I/O ([the JavaScript interface](js-api.md)). Determinism is
+what makes that useful:
 
-- **Durability.** pi makes a run durable by recording the results of its tool calls and,
-  after a restart, replaying them into a fresh run. That only works if the fresh run
-  makes the same calls in the same order and reaches the same state.
+- **Durability.** A host can make a run durable by recording the results of its tool
+  calls and, after a restart, replaying them into a fresh run. That only works if the
+  fresh run makes the same calls in the same order and reaches the same state.
 - **Debugging and reproduction.** A model's script that misbehaved can be run again with
   the recorded tool results, and it does exactly what it did.
 - **Testing.** The suspension tests compare a run in one go with the same run stopped
@@ -69,7 +69,7 @@ moment, and if the VM applied it at once, the order in which promise callbacks r
 depend on the fuel slice that happened to be running. So results are macrotasks:
 they wait in an inbox in the heap, and the VM applies the oldest one only when its job
 queue is empty. A script's behavior depends on the order of the results, never on when
-they arrived ([The host interface](host.md) has the details).
+they arrived ([the wasm boundary](host.md) has the details).
 
 A sync host function cannot leak timing at all: it parks the VM at a fixed instruction,
 and the script continues only with the value the host returns.
@@ -130,20 +130,22 @@ compare outputs.
 
 A host chooses how much of this it wants. By default the `Sandbox` behaves like an
 ordinary engine: the clock follows the host's clock, `Math.random` gets a seed from the
-host's entropy, and weak references are collected. With
+host's entropy, and weak references are collected ([the JavaScript
+interface](js-api.md#deterministic-runs-and-journals) has the options). With
 `deterministic: { startedAt, seed }`, it sets everything up for repeatable runs:
 
 - `Math.random` is seeded from `seed`, and so is the key of the string hash, so the same
   seed lays the heap out the same way; the time zone is UTC;
-- weak references are strong, unless the host asks for them to be absent (pi's
-  deterministic contract, matching quickjs-wasi);
+- weak references are strong, unless the host asks for them to be absent;
 - the clock starts at `startedAt` and moves only when an async result is delivered: to
   the host's clock at that moment, never backwards. Fuel slices and sync calls do not
   move it.
 
 With a fixed clock as well, the same code, parameters and results in the same order do
 the same thing on every run, with any fuel slice, and across restores from images (the
-clock is in the heap). A continuation dump keeps `Math.random`'s sequence too.
+clock is in the heap). A continuation dump keeps `Math.random`'s sequence and the ids
+of the run's host calls too, so a run resumed from a dump makes the calls an
+uninterrupted run makes, under the same ids.
 
 ## Canonical hashes and journals
 
@@ -210,8 +212,8 @@ Some things are deliberately outside the guarantee:
   sources, features and the `libm` version: a different build may run the same
   script in a different number of steps. Images are tied only to what they depend on
   ([images](snapshots.md#what-an-image-depends-on)), so a VM restored into
-  another build goes on with that build's code; that happens only inside a process now
-  (the dump module), since runs persist as dumps.
+  another build goes on with that build's code; that happens only inside a process (the
+  dump module), since runs persist as dumps.
 - **The clock in the default mode.** Without `deterministic`, the Sandbox sets the clock
   before every fuel slice, so what `Date.now()` returns depends on timing, as it does in
   any engine.

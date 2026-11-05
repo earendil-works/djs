@@ -43,7 +43,7 @@ time.
 | for-of | 5.8G | 7.2G | 0.81 |
 | calls | 3.3G | 4.0G | 0.81 |
 | push/pop and string methods | 4.3G | 3.1G | 1.40 |
-| a agent-like script | 10.0G | 7.3G | 1.38 |
+| an agent-like script | 10.0G | 7.3G | 1.38 |
 | forEach | 9.0G | 6.1G | 1.49 |
 | map/filter/reduce (higher-order) | 13.9G | 4.8G | 2.92 |
 

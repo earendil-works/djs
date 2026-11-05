@@ -23,8 +23,12 @@ code is held to the word rules):
   codemode uses djs and how another agent host could. Everywhere else, describe hosts in
   general ("a host", "an agent's codemode"). The check matches the whole word `pi` (and
   paths such as `js/pi/`), not `π` or `pipeline`.
-- **Goals by name.** The goals are explained in goals.md. Refer to one by its name and link
-  its section (`[persistence](goals.md#persistence)`), never by number ("G4").
+- **Goals by name, and only goals.md's.** Every goal a page refers to or relies on is a
+  section of goals.md, which says what it means for a user, why djs chose it, and what it
+  costs or rules out. Refer to one by its name and link its section
+  (`[persistence](goals.md#persistence)`), never by number ("G4"). An aim that is not on
+  goals.md is not called a goal elsewhere: say it in plain words. A new goal goes onto
+  goals.md first. `check` fails on a link to a section that does not exist, on any page.
 - **Source as source.** Pages may point at code, as links to repository files
   (`[`crates/djs-core/src/value.rs`](../../crates/djs-core/src/value.rs)`). The site turns
   them into links to the published source at the commit it was built from, marked as

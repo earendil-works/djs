@@ -202,49 +202,7 @@ at every idle point. [Determinism](determinism.md) covers this in depth.
 > only one can be outstanding at a time. Scripts that call tools concurrently need async
 > host functions.
 
-## The pi adapter
-
-pi's codemode runs scripts on QuickJS through one module, `src/runtime/vm.ts`, with a
-small contract: start a VM for one script, pass messages to the host (`post`), take
-results (`deliver`), and poll whether to stop. `js/pi/vm.ts` implements the same
-contract on djs and runs pi's unmodified prelude, so trying djs in pi means swapping
-that one module. `js/pi/engine.ts` is a handle-level client of the exports, because pi
-keeps its prelude's functions alive across calls, which the `Sandbox` (whole function
-bodies only) does not do.
-
-What the adapter adds over QuickJS:
-
-- **Prelude images.** Running pi's prelude, which freezes about 700 objects, is most of
-  a start. The adapter keeps the image taken right after it, collected first,
-  keyed by everything the prelude saw, and restores it on the next start with the same
-  inputs. The prelude's own work is not counted against the script's interrupt
-  budget, so cold and warm starts behave the same. A restore is a copy plus a
-  check: a script starts in about 1 ms instead of 7 ms, against about 4 ms on
-  quickjs-wasi.
-- **Sessions persisted as dumps, in the shape pi should adopt.** pi's prelude keeps its
-  own in-flight state (a map of pending calls, the store's writes, reactions on the
-  script's promise), which a dump would have to write as prelude internals. A variant of
-  the prelude without any of it runs in the adapter's *next* mode: tools are the
-  engine's async host calls, the script's promise and the store belong to the adapter,
-  and frozen builtins replace pi's lockdown. A waiting session is then written as
-  a dump plus the adapter's state, and resumed in a new instance, process or djs by
-  running the prelude again and loading the dump. pi uses deterministic replay for
-  durability today; dumps are the alternative it would adopt.
-
-pi's own test suite runs against djs through this adapter (`node js/pi/pi-tests.ts`):
-215 of its 226 tests pass, the same ones in the next mode and with a dump and a resume
-at every idle point. The rest come from djs being always strict, from a test that
-expects QuickJS's fingerprint, and from a workload pi's tests use to cancel scripts,
-which finishes on djs before the cancel.
-
-> **Trade-off.** Implementing pi's existing VM contract over designing a new one around
-> djs. pi can adopt djs behind a flag by swapping one module, and its tests run
-> unchanged. The cost: the adapter carries pi's protocol (a sync `bridge` function,
-> polling between fuel slices instead of an interrupt handler), and the benefits djs
-> could offer beyond QuickJS, such as persisting waiting sessions, are extras that pi
-> would have to opt into.
-
-### Persisting a run that waits
+## Persisting a run that waits
 
 An async call can take longer than the process that made it should live: a tool that
 waits for a person, or a host that restarts. While a run waits only on async calls, the
