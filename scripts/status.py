@@ -24,7 +24,14 @@ usage:
                                       first run (median of 3 runs)
   scripts/status.py dumps             scripts/dump-costs/dump-costs.ts, packaging B: dump sizes
                                       and times over the harvested corpus, and the log case
-  scripts/status.py all               size, speed, pi, startup and dumps
+  scripts/status.py bounds            what the arena's bounds checks cost: the shipped module
+                                      against the same build with `unsafe-heap`, gzip -9 bytes
+                                      and instructions on the speed workloads (takes minutes)
+  scripts/status.py heap              heap bytes per object (scripts/size/object-bytes.ts) and
+                                      the wasm memory of ten million appends
+  scripts/status.py bench             copy what the guide quotes from the latest run in
+                                      tests/scores/bench.tsv (scripts/bench.sh --record)
+  scripts/status.py all               size, speed, pi, startup, dumps, bounds, heap, bench
   scripts/status.py set [--at WHEN] KEY VALUE...
                                       record values measured elsewhere, for example
                                       `set pi/passed 221 pi/total 226` after
@@ -267,6 +274,79 @@ def dumps():
     }
 
 
+def bounds():
+    target = os.path.join(ROOT, "target/unsafe-wasm")
+    subprocess.run(["nice", "-n", "10", os.path.join(ROOT, "scripts/with-wasm-env.sh"), "cargo", "build",
+                    "-p", "djs-wasm", "--target", "wasm32-unknown-unknown", "--profile", "wasm",
+                    "--quiet", "--features", "unsafe-heap"],
+                   cwd=ROOT, env=dict(os.environ, CARGO_TARGET_DIR=target), check=True)
+    unchecked = os.path.join(target, "wasm32-unknown-unknown/wasm/djs_wasm.wasm")
+    gz = lambda p: len(gzip.compress(open(p, "rb").read(), compresslevel=9, mtime=0))
+    out = subprocess.run(
+        ["python3", os.path.join(ROOT, "scripts/perf/wmeasure.py"), "-n", "3", "--noqjs",
+         "--wasm", WASM, "--wasm", unchecked, *SPEED],
+        cwd=ROOT, capture_output=True, text=True, check=True).stdout
+    # One line per workload and build, in --wasm order: `name  djs0  Minstr ...`.
+    ins = {}
+    for line in out.splitlines():
+        m = re.match(r"(\S+)\s+djs[01]\s+([\d.]+)\s", line)
+        if m:
+            ins.setdefault(m.group(1), []).append(float(m.group(2)))
+    pct = {w: 100 * (v[0] / v[1] - 1) for w, v in ins.items() if len(v) == 2}
+    if len(pct) != len(SPEED):
+        sys.exit(f"status.py: wmeasure gave no pair of numbers for every workload:\n{out}")
+    return {
+        "bounds/gzip": gz(WASM) - gz(unchecked),
+        "bounds/instructions-max-pct": round(max(pct.values()), 1),
+        "bounds/instructions-median-pct": round(median(list(pct.values())), 1),
+    }
+
+
+APPEND_JS = """
+import { readFileSync } from "node:fs";
+import { Sandbox } from "./js/src/sandbox.ts";
+const module = await WebAssembly.compile(readFileSync(process.argv[1]));
+const sb = new Sandbox({ module, memoryLimit: 2 ** 31 });
+sb.run("function f() { let s = ''; for (let i = 0; i < 1e7; i++) s += 'x'; return s.length; } f()");
+console.log(sb.x.memory.buffer.byteLength);
+"""
+
+
+def heap():
+    new = {}
+    out = node("scripts/size/object-bytes.ts", WASM)
+    for line in out.splitlines():
+        name, v = line.split("\t")
+        new[f"heap/{name}"] = float(v)
+    out = node("--input-type=module", "-e", APPEND_JS, WASM)
+    new["heap/append-10m-memory"] = int(out.split()[-1])
+    return new
+
+
+# What the guide quotes from tests/scores/bench.tsv: status key -> benchmark.
+BENCH = {
+    "compile/typescript-eager-mbs": "compile/typescript.js",
+    "compile/typescript-lazy-mbs": "compile/typescript.js lazy",
+}
+
+
+def bench():
+    latest = {}
+    for line in open(os.path.join(ROOT, "tests/scores/bench.tsv"), encoding="utf-8"):
+        f = line.rstrip("\n").split("\t")
+        if len(f) == 6 and f[0] != "date":
+            latest[f[3]] = (f[4], f[1])
+    new, at = {}, set()
+    for k, b in BENCH.items():
+        if b not in latest:
+            sys.exit(f"status.py: no {b} in tests/scores/bench.tsv (scripts/bench.sh --record)")
+        new[k] = latest[b][0]
+        at.add(latest[b][1])
+    if len(at) != 1:
+        sys.exit(f"status.py: the quoted benchmarks come from different runs: {sorted(at)}")
+    return new, at.pop()
+
+
 def main():
     args = sys.argv[1:]
     if not args:
@@ -289,12 +369,25 @@ def main():
         build()
         build("--dump")
         save(rows, dumps())
+    elif args[0] == "bounds":
+        build()
+        save(rows, bounds())
+    elif args[0] == "heap":
+        build()
+        save(rows, heap())
+    elif args[0] == "bench":
+        new, at = bench()
+        save(rows, new, at)
     elif args[0] == "all":
         save(rows, size())
         save(rows, speed(3))
         save(rows, pi())
         save(rows, startup())
         save(rows, dumps())
+        save(rows, bounds())
+        save(rows, heap())
+        new, at = bench()
+        save(rows, new, at)
     elif args[0] == "set":
         at = None
         if len(args) > 2 and args[1] == "--at":
