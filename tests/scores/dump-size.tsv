@@ -340,6 +340,8 @@ corpus	codemode/plain-fuzz/nested-for-in-redump.js	9685	3871
 corpus	codemode/plain-fuzz/promise-all-calls-body-function.js	5157	2022
 corpus	codemode/plain-fuzz/regexp-in-template-substitution.js	10824	4128
 corpus	codemode/plain-fuzz/static-field-reads-loop-variable.js	5337	2086
+corpus	codemode/plain-fuzz/subclass-before-declaration.js	3155	1296
+corpus	codemode/plain-fuzz/super-in-async-method-redump.js	3267	1218
 corpus	codemode/plain-fuzz/switch-case-test-await.js	4501	1801
 corpus	codemode/plain-fuzz/template-plain-part-then-awaits.js	4597	1836
 corpus	codemode/plain-fuzz/template-two-awaits.js	4533	1807

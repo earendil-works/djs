@@ -68,6 +68,12 @@ jobs, wait while load > 30) and gate rules (batch merges, check slim/test262-sli
   in an async function; case language/plain-fuzz/crossing-callbacks.js, language/ since
   the slim build has no iterator helpers). regress ignores deliberate refusals
   (regress/deliberate.txt).
+- Generator: subclasses with `super` across awaits, null-prototype/frozen/iterable
+  objects, sparse arrays, -0/NaN/Infinity, lone surrogates and NUL. Seeds 10701–12000:
+  batch 11, a subclass published into a factory before its declaration (load crash,
+  plain-xfail) and `super` in an async method re-dumped ("no `<home>`", refused).
+  plain-node reads lone surrogates as U+FFFD; the generator deletes with
+  Reflect.deleteProperty (frozen objects).
 
 ## Follow-ups
 
