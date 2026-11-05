@@ -53,6 +53,11 @@ declare function IsBoolean(v: Value): boolean;
  * without a rest array. @leaf
  */
 declare function ArgumentCount(): i32;
+/**
+ * Throws `v`: `throw` as an expression, for helpers that the bytecode backend inlines
+ * into their callers as one expression (0230). @leaf
+ */
+declare function Throw(v: Value): Value;
 
 // ---- Casts (an internal error if the value has another type; test first) ------------
 

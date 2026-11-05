@@ -102,6 +102,9 @@ function check(cond, what) {
 
 // Plain-JS stand-ins for the intrinsics of builtins/intrinsics.d.ts.
 const I = {
+  Throw: (v) => {
+    throw v;
+  },
   IsObject: isObject,
   IsCallable: (v) => typeof v === "function",
   IsConstructor: (v) => {

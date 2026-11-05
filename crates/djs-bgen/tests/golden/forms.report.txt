@@ -7,3 +7,13 @@ Helper: leaf
 
 Callback: reentrant (%Callback)
   golden/forms.ts:76:10  User (intrinsic)
+
+Inlining: leaf (Example.inlining)
+
+Checked: leaf
+
+Clamp: leaf
+
+Looping: leaf
+
+Big: leaf

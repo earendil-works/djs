@@ -65,7 +65,7 @@ function ArrayPrototypeIndexOf(searchElement, fromIndex) {
   if (len === 0) {
     return -1;
   }
-  let n = ToIntegerOrInfinity(fromIndex);
+  let n = ((%ToIntegerOrInfinityNumber((((%IsObject(fromIndex)) ? (%ToNumberPrimitive(ToPrimitive(fromIndex, "number"))) : (%ToNumberPrimitive(fromIndex)))))));
   if (n >= len) {
     return -1;
   }
@@ -131,7 +131,7 @@ function ArrayPrototypeIncludes(searchElement, fromIndex) {
   if (len === 0) {
     return false;
   }
-  let n = ToIntegerOrInfinity(fromIndex);
+  let n = ((%ToIntegerOrInfinityNumber((((%IsObject(fromIndex)) ? (%ToNumberPrimitive(ToPrimitive(fromIndex, "number"))) : (%ToNumberPrimitive(fromIndex)))))));
   if (n < 0) {
     n = len + n;
     if (n < 0) {
@@ -204,7 +204,7 @@ function RelativeIndex(v, len, dflt) {
   if (v === undefined) {
     return dflt;
   }
-  const rel = ToIntegerOrInfinity(v);
+  const rel = ((%ToIntegerOrInfinityNumber((((%IsObject(v)) ? (%ToNumberPrimitive(ToPrimitive(v, "number"))) : (%ToNumberPrimitive(v)))))));
   if (rel < 0) {
     const k = len + rel;
     return k < 0 ? 0 : k;
@@ -284,7 +284,7 @@ function ArraySpecies() {
 function ArrayPrototypeAt(index) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
-  const rel = ToIntegerOrInfinity(index);
+  const rel = ((%ToIntegerOrInfinityNumber((((%IsObject(index)) ? (%ToNumberPrimitive(ToPrimitive(index, "number"))) : (%ToNumberPrimitive(index)))))));
   const k = rel >= 0 ? rel : len + rel;
   if (k < 0 || k >= len) {
     return undefined;
@@ -294,6 +294,7 @@ function ArrayPrototypeAt(index) {
 
 // builtins/array.ts:368 Array.prototype.lastIndexOf
 function ArrayPrototypeLastIndexOf(searchElement, ...rest) {
+  let $1;
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
   if (len === 0) {
@@ -301,7 +302,7 @@ function ArrayPrototypeLastIndexOf(searchElement, ...rest) {
   }
   let n = len - 1;
   if (LengthOfArrayLike(rest) > 0) {
-    n = ToIntegerOrInfinity(%Get(rest, 0));
+    n = ($1 = %Get(rest, 0), (%ToIntegerOrInfinityNumber((((%IsObject($1)) ? (%ToNumberPrimitive(ToPrimitive($1, "number"))) : (%ToNumberPrimitive($1)))))));
   }
   let k = 0;
   if (n === -1 / 0) {
@@ -505,16 +506,17 @@ function IsConcatSpreadable(o) {
 
 // builtins/array.ts:627 Array.prototype.concat
 function ArrayPrototypeConcat(...items) {
+  let $1, $2, $3;
   const o = %ToObject(this);
   const a = ArraySpeciesCreate(o, 0);
   let n = 0;
   const count = LengthOfArrayLike(items);
   for (let i = -1; i < count; i++) {
     const e = i < 0 ? o : %Get(items, i);
-    if (IsConcatSpreadable(e)) {
+    if ((((!%IsObject(e)) ? (false) : ($1 = %Get(%AsObj(e), %WellKnownSymbol("isConcatSpreadable")), (($1 !== undefined) ? (%ToBoolean($1)) : (%IsArray(e))))))) {
       const eo = %AsObj(e);
       const len = LengthOfArrayLike(eo);
-      CheckLength(n + len);
+      ($2 = n + len, (($2 > 9007199254740991) ? %Throw(%NewTypeError("Array loo long")) : undefined));
       for (let k = 0; k < len; k++) {
         if (%HasProperty(eo, k)) {
           %CreateDataPropertyOrThrow(a, n, %Get(eo, k));
@@ -522,7 +524,7 @@ function ArrayPrototypeConcat(...items) {
         n++;
       }
     } else {
-      CheckLength(n + 1);
+      ($3 = n + 1, (($3 > 9007199254740991) ? %Throw(%NewTypeError("Array loo long")) : undefined));
       %CreateDataPropertyOrThrow(a, n, e);
       n++;
     }
@@ -556,6 +558,7 @@ function ArrayPrototypeSlice(start, end) {
 
 // builtins/array.ts:687 Array.prototype.splice
 function ArrayPrototypeSplice(...args) {
+  let $1, $2;
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
   const argCount = LengthOfArrayLike(args);
@@ -565,13 +568,13 @@ function ArrayPrototypeSplice(...args) {
   if (argCount === 1) {
     actualDeleteCount = len - actualStart;
   } else if (argCount > 1) {
-    const dc = ToIntegerOrInfinity(%Get(args, 1));
+    const dc = ($1 = %Get(args, 1), (%ToIntegerOrInfinityNumber((((%IsObject($1)) ? (%ToNumberPrimitive(ToPrimitive($1, "number"))) : (%ToNumberPrimitive($1)))))));
     actualDeleteCount = dc < 0 ? 0 : dc;
     if (actualDeleteCount > len - actualStart) {
       actualDeleteCount = len - actualStart;
     }
   }
-  CheckLength(len + itemCount - actualDeleteCount);
+  ($2 = len + itemCount - actualDeleteCount, (($2 > 9007199254740991) ? %Throw(%NewTypeError("Array loo long")) : undefined));
   const a = ArraySpeciesCreate(o, actualDeleteCount);
   for (let k = 0; k < actualDeleteCount; k++) {
     const from = actualStart + k;
@@ -723,11 +726,12 @@ function ArrayPrototypeShift() {
 
 // builtins/array.ts:879 Array.prototype.unshift
 function ArrayPrototypeUnshift(...items) {
+  let $1;
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
   const argCount = LengthOfArrayLike(items);
   if (argCount > 0) {
-    CheckLength(len + argCount);
+    ($1 = len + argCount, (($1 > 9007199254740991) ? %Throw(%NewTypeError("Array loo long")) : undefined));
     MoveElements(o, len, 0, 0, argCount);
     for (let j = 0; j < argCount; j++) {
       %Set(o, j, %Get(items, j));
@@ -739,6 +743,7 @@ function ArrayPrototypeUnshift(...items) {
 
 // builtins/array.ts:895
 function FlattenIntoArray(target, source, sourceLen, start, depth, mapper, thisArg) {
+  let $1;
   let targetIndex = start;
   for (let sourceIndex = 0; sourceIndex < sourceLen; sourceIndex++) {
     if (%HasProperty(source, sourceIndex)) {
@@ -750,7 +755,7 @@ function FlattenIntoArray(target, source, sourceLen, start, depth, mapper, thisA
         const e = %AsObj(element);
         targetIndex = FlattenIntoArray(target, e, LengthOfArrayLike(e), targetIndex, depth - 1, undefined, undefined);
       } else {
-        CheckLength(targetIndex + 1);
+        ($1 = targetIndex + 1, (($1 > 9007199254740991) ? %Throw(%NewTypeError("Array loo long")) : undefined));
         %CreateDataPropertyOrThrow(target, targetIndex, element);
         targetIndex++;
       }
@@ -765,7 +770,7 @@ function ArrayPrototypeFlat(depth) {
   const sourceLen = LengthOfArrayLike(o);
   let depthNum = 1;
   if (depth !== undefined) {
-    depthNum = ToIntegerOrInfinity(depth);
+    depthNum = ((%ToIntegerOrInfinityNumber((((%IsObject(depth)) ? (%ToNumberPrimitive(ToPrimitive(depth, "number"))) : (%ToNumberPrimitive(depth)))))));
     if (depthNum < 0) {
       depthNum = 0;
     }
@@ -779,7 +784,7 @@ function ArrayPrototypeFlat(depth) {
 function ArrayPrototypeFlatMap(mapperFunction, thisArg) {
   const o = %ToObject(this);
   const sourceLen = LengthOfArrayLike(o);
-  RequireCallable(mapperFunction);
+  (((!%IsCallable(mapperFunction)) ? %Throw(%NewTypeError("not a function")) : (%AsFn(mapperFunction))));
   const a = ArraySpeciesCreate(o, 0);
   FlattenIntoArray(a, o, sourceLen, 0, 1, mapperFunction, thisArg);
   return a;
@@ -850,7 +855,7 @@ function SortList(list, n, comparefn) {
 function SortCompareDefined(x, y, comparefn) {
   if (comparefn !== undefined) {
     const r = %Call(comparefn, undefined, x, y);
-    const v = %IsNumber(r) ? %AsNumber(r) : ToNumber(r);
+    const v = %IsNumber(r) ? %AsNumber(r) : (((%IsObject(r)) ? (%ToNumberPrimitive(ToPrimitive(r, "number"))) : (%ToNumberPrimitive(r))));
     return v !== v ? 0 : v;
   }
   const xs = ToString(x);
@@ -894,12 +899,13 @@ function ArrayPrototypeSort(comparefn) {
 
 // builtins/array.ts:1076 Array.prototype.toSorted
 function ArrayPrototypeToSorted(comparefn) {
+  let $1;
   if (comparefn !== undefined && !%IsCallable(comparefn)) {
     throw %NewTypeError("not a function");
   }
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
-  ArrayCreateChecked(0 + len);
+  ($1 = 0 + len, (($1 > 4294967295) ? %Throw(%NewRangeError("invalid array length")) : (%ArrayCreate($1))));
   const items = CollectPresent(o, len, false);
   SortList(items, len, comparefn);
   return items;
@@ -909,7 +915,7 @@ function ArrayPrototypeToSorted(comparefn) {
 function ArrayPrototypeToReversed() {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
-  const a = ArrayCreateChecked(len);
+  const a = (((len > 4294967295) ? %Throw(%NewRangeError("invalid array length")) : (%ArrayCreate(len))));
   for (let k = 0; k < len; k++) {
     %CreateDataPropertyOrThrow(a, k, %Get(o, len - k - 1));
   }
@@ -918,6 +924,7 @@ function ArrayPrototypeToReversed() {
 
 // builtins/array.ts:1109 Array.prototype.toSpliced
 function ArrayPrototypeToSpliced(...args) {
+  let $1;
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
   const argCount = LengthOfArrayLike(args);
@@ -927,15 +934,15 @@ function ArrayPrototypeToSpliced(...args) {
   if (argCount === 1) {
     actualSkipCount = len - actualStart;
   } else if (argCount > 1) {
-    const sc = ToIntegerOrInfinity(%Get(args, 1));
+    const sc = ($1 = %Get(args, 1), (%ToIntegerOrInfinityNumber((((%IsObject($1)) ? (%ToNumberPrimitive(ToPrimitive($1, "number"))) : (%ToNumberPrimitive($1)))))));
     actualSkipCount = sc < 0 ? 0 : sc;
     if (actualSkipCount > len - actualStart) {
       actualSkipCount = len - actualStart;
     }
   }
   const newLen = len + insertCount - actualSkipCount;
-  CheckLength(newLen);
-  const a = ArrayCreateChecked(newLen);
+  (((newLen > 9007199254740991) ? %Throw(%NewTypeError("Array loo long")) : undefined));
+  const a = (((newLen > 4294967295) ? %Throw(%NewRangeError("invalid array length")) : (%ArrayCreate(newLen))));
   let i = 0;
   for (; i < actualStart; i++) {
     %CreateDataPropertyOrThrow(a, i, %Get(o, i));
@@ -955,12 +962,12 @@ function ArrayPrototypeToSpliced(...args) {
 function ArrayPrototypeWith(index, value) {
   const o = %ToObject(this);
   const len = LengthOfArrayLike(o);
-  const rel = ToIntegerOrInfinity(index);
+  const rel = ((%ToIntegerOrInfinityNumber((((%IsObject(index)) ? (%ToNumberPrimitive(ToPrimitive(index, "number"))) : (%ToNumberPrimitive(index)))))));
   const actual = rel >= 0 ? rel : len + rel;
   if (actual >= len || actual < 0) {
     throw %NewRangeError("invalid array index: " + %NumberToString(actual, 10));
   }
-  const a = ArrayCreateChecked(len);
+  const a = (((len > 4294967295) ? %Throw(%NewRangeError("invalid array length")) : (%ArrayCreate(len))));
   for (let k = 0; k < len; k++) {
     %CreateDataPropertyOrThrow(a, k, k === actual ? value : %Get(o, k));
   }
@@ -1018,8 +1025,8 @@ function ArrayPrototypeUnscopables() {
 
 // builtins/array.ts:1231 %ArraySetLength
 function ArraySetLength(a, v, strict) {
-  const newLen = ToNumber(v);
-  const numberLen = ToNumber(v);
+  const newLen = (((%IsObject(v)) ? (%ToNumberPrimitive(ToPrimitive(v, "number"))) : (%ToNumberPrimitive(v))));
+  const numberLen = (((%IsObject(v)) ? (%ToNumberPrimitive(ToPrimitive(v, "number"))) : (%ToNumberPrimitive(v))));
   if (!(newLen >= 0 && newLen <= 4294967295 && %ToIntegerOrInfinityNumber(newLen) === newLen)) {
     throw %NewRangeError("invalid array length");
   }
@@ -1037,7 +1044,7 @@ function ArraySetLength(a, v, strict) {
 
 // builtins/arraybuffer.ts:5
 function ToIndex(v) {
-  const i = ToIntegerOrInfinity(v);
+  const i = ((%ToIntegerOrInfinityNumber((((%IsObject(v)) ? (%ToNumberPrimitive(ToPrimitive(v, "number"))) : (%ToNumberPrimitive(v)))))));
   if (!(i >= 0 && i <= 9007199254740991)) {
     throw %NewRangeError("invalid array index");
   }
@@ -1127,12 +1134,12 @@ function BufferLength(b) {
 
 // builtins/arraybuffer.ts:123 ArrayBuffer.prototype.resize
 function ArrayBufferPrototypeResize(newLength) {
-  const o = ThisArrayBuffer(this);
+  const o = ((%BufferInfo(this, 0), (%AsObj(this))));
   if (!%AsBool(%BufferInfo(o, 2))) {
     throw %NewTypeError("array buffer is not resizable");
   }
   const newByteLength = ToIndex(newLength);
-  if (IsDetached(o)) {
+  if (((%AsBool(%BufferInfo(o, 3))))) {
     throw %NewTypeError("ArrayBuffer is detached");
   }
   if (newByteLength > %AsNumber(%BufferInfo(o, 1))) {
@@ -1143,33 +1150,33 @@ function ArrayBufferPrototypeResize(newLength) {
 
 // builtins/arraybuffer.ts:142 ArrayBuffer.prototype.slice
 function ArrayBufferPrototypeSlice(start, end) {
-  const o = ThisArrayBuffer(this);
-  if (IsDetached(o)) {
+  const o = ((%BufferInfo(this, 0), (%AsObj(this))));
+  if (((%AsBool(%BufferInfo(o, 3))))) {
     throw %NewTypeError("ArrayBuffer is detached");
   }
-  const len = BufferLength(o);
+  const len = ((%AsNumber(%BufferInfo(o, 0))));
   const first = RelativeIndex(start, len, 0);
   const fin = RelativeIndex(end, len, len);
   const newLen = fin > first ? fin - first : 0;
   const ctor = SpeciesConstructor(o, %RealmConstructor("ArrayBuffer"));
   const created = %Construct(ctor, newLen);
   %BufferInfo(created, 0);
-  if (IsDetached(created)) {
+  if (((%AsBool(%BufferInfo(created, 3))))) {
     throw %NewTypeError("ArrayBuffer is detached");
   }
-  if (IsImmutableBuffer(created)) {
+  if (((%AsBool(%BufferInfo(created, 4))))) {
     throw %NewTypeError("ArrayBuffer is immutable");
   }
   if (created === o) {
     throw %NewTypeError("cannot use identical ArrayBuffer");
   }
-  if (BufferLength(created) < newLen) {
+  if (((%AsNumber(%BufferInfo(created, 0)))) < newLen) {
     throw %NewTypeError("new ArrayBuffer is too small");
   }
-  if (IsDetached(o)) {
+  if (((%AsBool(%BufferInfo(o, 3))))) {
     throw %NewTypeError("ArrayBuffer is detached");
   }
-  const currentLen = BufferLength(o);
+  const currentLen = ((%AsNumber(%BufferInfo(o, 0))));
   if (first < currentLen) {
     const count = newLen < currentLen - first ? newLen : currentLen - first;
     %BufferCopy(o, first, created, 0, count);
@@ -1179,17 +1186,17 @@ function ArrayBufferPrototypeSlice(start, end) {
 
 // builtins/arraybuffer.ts:181
 function ArrayBufferCopyAndDetach(thisValue, newLength, mode) {
-  const o = ThisArrayBuffer(thisValue);
+  const o = ((%BufferInfo(thisValue, 0), (%AsObj(thisValue))));
   let newByteLength = 0;
   if (newLength === undefined) {
-    newByteLength = BufferLength(o);
+    newByteLength = ((%AsNumber(%BufferInfo(o, 0))));
   } else {
     newByteLength = ToIndex(newLength);
   }
-  if (IsDetached(o)) {
+  if (((%AsBool(%BufferInfo(o, 3))))) {
     throw %NewTypeError("ArrayBuffer is detached");
   }
-  if (IsImmutableBuffer(o)) {
+  if (((%AsBool(%BufferInfo(o, 4))))) {
     throw %NewTypeError("ArrayBuffer is immutable");
   }
   let max = undefined;
@@ -1222,18 +1229,18 @@ function ArrayBufferPrototypeTransferToImmutable(newLength) {
 
 // builtins/arraybuffer.ts:238 ArrayBuffer.prototype.sliceToImmutable
 function ArrayBufferPrototypeSliceToImmutable(start, end) {
-  const o = ThisArrayBuffer(this);
-  if (IsDetached(o)) {
+  const o = ((%BufferInfo(this, 0), (%AsObj(this))));
+  if (((%AsBool(%BufferInfo(o, 3))))) {
     throw %NewTypeError("ArrayBuffer is detached");
   }
-  const len = BufferLength(o);
+  const len = ((%AsNumber(%BufferInfo(o, 0))));
   const first = RelativeIndex(start, len, 0);
   const fin = RelativeIndex(end, len, len);
   const newLen = fin > first ? fin - first : 0;
-  if (IsDetached(o)) {
+  if (((%AsBool(%BufferInfo(o, 3))))) {
     throw %NewTypeError("ArrayBuffer is detached");
   }
-  if (BufferLength(o) < fin) {
+  if (((%AsNumber(%BufferInfo(o, 0)))) < fin) {
     throw %NewRangeError("invalid array buffer length");
   }
   const created = %ArrayBufferCreate(%RealmIntrinsic("ArrayBufferPrototype"), newLen, true);
@@ -1248,6 +1255,7 @@ function ArrayBufferPrototypeToStringTag() {
 
 // builtins/asyncgen.ts:13
 function AsyncGeneratorRequest(g, type, value) {
+  let $1, $2, $3;
   const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
   const state = %AsyncGeneratorState(g);
   if (state < 0) {
@@ -1256,12 +1264,12 @@ function AsyncGeneratorRequest(g, type, value) {
   }
   const gen = %AsObj(g);
   if (type === 0 && state === 3) {
-    ResolveWithData(promise, %CreateIterResultObject(undefined, true));
+    ($1 = %CreateIterResultObject(undefined, true), ($2 = ClaimResolution(promise), (($2 !== undefined) ? (ResolvePromise(%AsObj($2), $1), undefined) : undefined)));
     return promise;
   }
   if (type === 1 && (state === 0 || state === 3)) {
     %GeneratorSetState(gen, 3);
-    RejectWithData(promise, value);
+    (($3 = ClaimResolution(promise), (($3 !== undefined) ? (%RejectPromise(%AsObj($3), value), undefined) : undefined)));
     return promise;
   }
   const request = %NewRecord(3);
@@ -1331,12 +1339,13 @@ function AsyncGeneratorStep(g, value, mode) {
 
 // builtins/asyncgen.ts:114
 function AsyncGeneratorCompleteStep(g, type, value, done) {
+  let $1, $2, $3;
   const request = %AsObj(%AsyncGeneratorDequeue(g));
   const promise = %RecordGet(request, 2);
   if (type === 1) {
-    RejectWithData(promise, value);
+    (($1 = ClaimResolution(promise), (($1 !== undefined) ? (%RejectPromise(%AsObj($1), value), undefined) : undefined)));
   } else {
-    ResolveWithData(promise, %CreateIterResultObject(value, done));
+    ($2 = %CreateIterResultObject(value, done), ($3 = ClaimResolution(promise), (($3 !== undefined) ? (ResolvePromise(%AsObj($3), $2), undefined) : undefined)));
   }
 }
 
@@ -1399,28 +1408,31 @@ function AsyncIteratorPrototypeAsyncIterator() {
 
 // builtins/asyncgen.ts:197 %GetAsyncIterator
 function GetAsyncIterator(obj) {
+  let $1, $2;
   const method = GetMethod(obj, %WellKnownSymbol("asyncIterator"));
   if (method === undefined) {
     const syncMethod = GetMethod(obj, %WellKnownSymbol("iterator"));
     if (syncMethod === undefined) {
       throw %NewTypeError("not a function");
     }
-    const syncIterator = GetIteratorFromMethod(obj, syncMethod);
+    const syncIterator = (($1 = %Call(syncMethod, obj), ((!%IsObject($1)) ? %Throw(%NewTypeError("not an object")) : (%AsObj($1)))));
     return %CreateAsyncFromSyncIterator(syncIterator, %Get(syncIterator, "next"));
   }
-  return GetIteratorFromMethod(obj, method);
+  return (($2 = %Call(method, obj), ((!%IsObject($2)) ? %Throw(%NewTypeError("not an object")) : (%AsObj($2)))));
 }
 
 // builtins/asyncgen.ts:217 %AsyncIteratorReturnMethod
 function AsyncIteratorReturnMethod(iterator) {
-  return GetMethod(iterator, "return");
+  let $1;
+  return (($1 = %GetV(iterator, "return"), (($1 === undefined || $1 === null) ? (undefined) : ((!%IsCallable($1)) ? %Throw(%NewTypeError("not a function")) : ($1)))));
 }
 
 // builtins/asyncgen.ts:227 %AsyncIteratorCloseThrow
 function AsyncIteratorCloseThrow(iterator) {
+  let $1;
   let promise = undefined;
   try {
-    const method = GetMethod(iterator, "return");
+    const method = (($1 = %GetV(iterator, "return"), (($1 === undefined || $1 === null) ? (undefined) : ((!%IsCallable($1)) ? %Throw(%NewTypeError("not a function")) : ($1)))));
     if (method === undefined) {
       return undefined;
     }
@@ -1436,6 +1448,7 @@ function AsyncIteratorCloseThrow(iterator) {
 
 // builtins/asyncgen.ts:248
 function AsyncFromSyncIteratorContinuation(result, iterator, closeOnRejection) {
+  let $1;
   const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
   let done = false;
   let valueWrapper = undefined;
@@ -1451,7 +1464,7 @@ function AsyncFromSyncIteratorContinuation(result, iterator, closeOnRejection) {
       throw e;
     }
   } catch (e) {
-    RejectWithData(promise, e);
+    (($1 = ClaimResolution(promise), (($1 !== undefined) ? (%RejectPromise(%AsObj($1), e), undefined) : undefined)));
     return promise;
   }
   const onFulfilled = %NewBuiltinClosure(13, done, 1);
@@ -1476,6 +1489,7 @@ function AsyncFromSyncIteratorCloseThrow(error) {
 
 // builtins/asyncgen.ts:298 %AsyncFromSyncIteratorPrototype%.next
 function AsyncFromSyncIteratorNext(...args) {
+  let $1;
   const o = %AsObj(this);
   const iterator = %AsObj(%RecordGet(o, 0));
   let result = undefined;
@@ -1486,7 +1500,7 @@ function AsyncFromSyncIteratorNext(...args) {
     }
   } catch (e) {
     const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
-    RejectWithData(promise, e);
+    (($1 = ClaimResolution(promise), (($1 !== undefined) ? (%RejectPromise(%AsObj($1), e), undefined) : undefined)));
     return promise;
   }
   return AsyncFromSyncIteratorContinuation(%AsObj(result), iterator, true);
@@ -1494,11 +1508,12 @@ function AsyncFromSyncIteratorNext(...args) {
 
 // builtins/asyncgen.ts:320 %AsyncFromSyncIteratorPrototype%.return
 function AsyncFromSyncIteratorReturn(...args) {
+  let $1, $2;
   const iterator = %AsObj(%RecordGet(%AsObj(this), 0));
   const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
   let result = undefined;
   try {
-    const method = GetMethod(iterator, "return");
+    const method = (($1 = %GetV(iterator, "return"), (($1 === undefined || $1 === null) ? (undefined) : ((!%IsCallable($1)) ? %Throw(%NewTypeError("not a function")) : ($1)))));
     if (method === undefined) {
       ResolveWithData(promise, %CreateIterResultObject(%Get(args, 0), true));
       return promise;
@@ -1508,7 +1523,7 @@ function AsyncFromSyncIteratorReturn(...args) {
       throw %NewTypeError("iterator must return an object");
     }
   } catch (e) {
-    RejectWithData(promise, e);
+    (($2 = ClaimResolution(promise), (($2 !== undefined) ? (%RejectPromise(%AsObj($2), e), undefined) : undefined)));
     return promise;
   }
   return AsyncFromSyncIteratorContinuation(%AsObj(result), iterator, false);
@@ -1516,11 +1531,12 @@ function AsyncFromSyncIteratorReturn(...args) {
 
 // builtins/asyncgen.ts:347 %AsyncFromSyncIteratorPrototype%.throw
 function AsyncFromSyncIteratorThrow(...args) {
+  let $1, $2;
   const iterator = %AsObj(%RecordGet(%AsObj(this), 0));
   const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
   let result = undefined;
   try {
-    const method = GetMethod(iterator, "throw");
+    const method = (($1 = %GetV(iterator, "throw"), (($1 === undefined || $1 === null) ? (undefined) : ((!%IsCallable($1)) ? %Throw(%NewTypeError("not a function")) : ($1)))));
     if (method === undefined) {
       IteratorClose(iterator);
       throw %NewTypeError("throw is not a method");
@@ -1530,7 +1546,7 @@ function AsyncFromSyncIteratorThrow(...args) {
       throw %NewTypeError("iterator must return an object");
     }
   } catch (e) {
-    RejectWithData(promise, e);
+    (($2 = ClaimResolution(promise), (($2 !== undefined) ? (%RejectPromise(%AsObj($2), e), undefined) : undefined)));
     return promise;
   }
   return AsyncFromSyncIteratorContinuation(%AsObj(result), iterator, true);
@@ -1559,13 +1575,13 @@ function BigIntConstructor(value) {
 // builtins/bigint.ts:35 BigInt.asIntN
 function BigIntAsIntNBuiltin(bits, bigint) {
   const n = ToIndex(bits);
-  return %BigIntAsIntN(n, ToBigInt(bigint));
+  return %BigIntAsIntN(n, ((%ToBigIntPrimitive(ToPrimitive(bigint, "number")))));
 }
 
 // builtins/bigint.ts:44 BigInt.asUintN
 function BigIntAsUintNBuiltin(bits, bigint) {
   const n = ToIndex(bits);
-  return %BigIntAsUintN(n, ToBigInt(bigint));
+  return %BigIntAsUintN(n, ((%ToBigIntPrimitive(ToPrimitive(bigint, "number")))));
 }
 
 // builtins/bigint.ts:50
@@ -1579,10 +1595,11 @@ function ThisBigIntValue(value) {
 
 // builtins/bigint.ts:62 BigInt.prototype.toString
 function BigIntPrototypeToString(radix) {
-  const x = ThisBigIntValue(this);
+  let $1;
+  const x = (($1 = %PrimitiveValue(this), ((!%IsBigInt($1)) ? %Throw(%NewTypeError("not a BigInt")) : ($1))));
   let r = 10;
   if (radix !== undefined) {
-    r = ToIntegerOrInfinity(radix);
+    r = ((%ToIntegerOrInfinityNumber((((%IsObject(radix)) ? (%ToNumberPrimitive(ToPrimitive(radix, "number"))) : (%ToNumberPrimitive(radix)))))));
   }
   if (r < 2 || r > 36) {
     throw %NewRangeError("radix must be between 2 and 36");
@@ -1592,12 +1609,14 @@ function BigIntPrototypeToString(radix) {
 
 // builtins/bigint.ts:79 BigInt.prototype.toLocaleString
 function BigIntPrototypeToLocaleString() {
-  return %BigIntToString(ThisBigIntValue(this), 10);
+  let $1;
+  return %BigIntToString((($1 = %PrimitiveValue(this), ((!%IsBigInt($1)) ? %Throw(%NewTypeError("not a BigInt")) : ($1)))), 10);
 }
 
 // builtins/bigint.ts:87 BigInt.prototype.valueOf
 function BigIntPrototypeValueOf() {
-  return ThisBigIntValue(this);
+  let $1;
+  return (($1 = %PrimitiveValue(this), ((!%IsBigInt($1)) ? %Throw(%NewTypeError("not a BigInt")) : ($1))));
 }
 
 // builtins/bigint.ts:96 value BigInt.prototype[Symbol.toStringTag]
@@ -1625,12 +1644,14 @@ function ThisBooleanValue(value) {
 
 // builtins/boolean.ts:28 Boolean.prototype.toString
 function BooleanPrototypeToString() {
-  return ThisBooleanValue(this) ? "true" : "false";
+  let $1;
+  return (($1 = %PrimitiveValue(this), ((!%IsBoolean($1)) ? %Throw(%NewTypeError("not a boolean")) : (%AsBool($1))))) ? "true" : "false";
 }
 
 // builtins/boolean.ts:36 Boolean.prototype.valueOf
 function BooleanPrototypeValueOf() {
-  return ThisBooleanValue(this);
+  let $1;
+  return (($1 = %PrimitiveValue(this), ((!%IsBoolean($1)) ? %Throw(%NewTypeError("not a boolean")) : (%AsBool($1)))));
 }
 
 // builtins/conversion.ts:8 %ToPrimitive
@@ -1696,12 +1717,12 @@ function ToString(v) {
 
 // builtins/conversion.ts:78
 function ToIntegerOrInfinity(v) {
-  return %ToIntegerOrInfinityNumber(ToNumber(v));
+  return %ToIntegerOrInfinityNumber((((%IsObject(v)) ? (%ToNumberPrimitive(ToPrimitive(v, "number"))) : (%ToNumberPrimitive(v)))));
 }
 
 // builtins/conversion.ts:85
 function ToLength(v) {
-  const len = ToIntegerOrInfinity(v);
+  const len = ((%ToIntegerOrInfinityNumber((((%IsObject(v)) ? (%ToNumberPrimitive(ToPrimitive(v, "number"))) : (%ToNumberPrimitive(v)))))));
   if (len <= 0) {
     return 0;
   }
@@ -1820,12 +1841,13 @@ function DataViewPrototypeBuffer() {
 
 // builtins/dataview.ts:86 get DataView.prototype.byteLength
 function DataViewPrototypeByteLength() {
+  let $1;
   %DataViewField(this, 0);
   const view = %AsObj(this);
   if (DVOutOfBounds(view)) {
     throw %NewTypeError("ArrayBuffer is detached or resized");
   }
-  return DVByteLength(view);
+  return (($1 = %AsNumber(%DataViewField(view, 2)), (($1 >= 0) ? ($1) : (%AsNumber(%BufferInfo(%DataViewField(view, 0), 0)) - %AsNumber(%DataViewField(view, 1))))));
 }
 
 // builtins/dataview.ts:99 get DataView.prototype.byteOffset
@@ -1845,13 +1867,14 @@ function DataViewPrototypeToStringTag() {
 
 // builtins/dataview.ts:118
 function DVByteIndex(view, getIndex, kind) {
+  let $1;
   if (DVOutOfBounds(view)) {
     if (%AsBool(%BufferInfo(%DataViewField(view, 0), 3))) {
       throw %NewTypeError("ArrayBuffer is detached");
     }
     throw %NewTypeError("ArrayBuffer is detached or resized");
   }
-  if (getIndex + ElementSize(kind) > DVByteLength(view)) {
+  if (getIndex + (((kind <= 2) ? (1) : ((kind <= 4 || kind === 7) ? (2) : ((kind <= 6 || kind === 8) ? (4) : (8))))) > (($1 = %AsNumber(%DataViewField(view, 2)), (($1 >= 0) ? ($1) : (%AsNumber(%BufferInfo(%DataViewField(view, 0), 0)) - %AsNumber(%DataViewField(view, 1))))))) {
     throw %NewRangeError("out of bound");
   }
   return getIndex + %AsNumber(%DataViewField(view, 1));
@@ -1873,15 +1896,16 @@ function GetViewElement(view, requestIndex, isLittleEndian, kind) {
 
 // builtins/dataview.ts:146
 function SetViewValue(view, requestIndex, isLittleEndian, kind, value) {
-  if (IsImmutableBuffer(%AsObj(%DataViewField(view, 0)))) {
+  let $1;
+  if (($1 = %AsObj(%DataViewField(view, 0)), (%AsBool(%BufferInfo($1, 4))))) {
     throw %NewTypeError("ArrayBuffer is immutable");
   }
   const getIndex = ToIndex(requestIndex);
   let n = undefined;
   if (kind >= 10) {
-    n = ToBigInt(value);
+    n = ((%ToBigIntPrimitive(ToPrimitive(value, "number"))));
   } else {
-    n = ToNumber(value);
+    n = (((%IsObject(value)) ? (%ToNumberPrimitive(ToPrimitive(value, "number"))) : (%ToNumberPrimitive(value))));
   }
   const little = %ToBoolean(isLittleEndian);
   const v = %AsObj(view);
@@ -1890,32 +1914,32 @@ function SetViewValue(view, requestIndex, isLittleEndian, kind, value) {
 
 // builtins/dataview.ts:167 DataView.prototype.getInt8
 function DataViewPrototypeGetInt8(byteOffset) {
-  return GetViewValue(this, byteOffset, false, 0);
+  return ((%AsNumber(GetViewElement(this, byteOffset, false, 0))));
 }
 
 // builtins/dataview.ts:175 DataView.prototype.getUint8
 function DataViewPrototypeGetUint8(byteOffset) {
-  return GetViewValue(this, byteOffset, false, 1);
+  return ((%AsNumber(GetViewElement(this, byteOffset, false, 1))));
 }
 
 // builtins/dataview.ts:183 DataView.prototype.getInt16
 function DataViewPrototypeGetInt16(byteOffset, littleEndian) {
-  return GetViewValue(this, byteOffset, littleEndian, 3);
+  return ((%AsNumber(GetViewElement(this, byteOffset, littleEndian, 3))));
 }
 
 // builtins/dataview.ts:191 DataView.prototype.getUint16
 function DataViewPrototypeGetUint16(byteOffset, littleEndian) {
-  return GetViewValue(this, byteOffset, littleEndian, 4);
+  return ((%AsNumber(GetViewElement(this, byteOffset, littleEndian, 4))));
 }
 
 // builtins/dataview.ts:199 DataView.prototype.getInt32
 function DataViewPrototypeGetInt32(byteOffset, littleEndian) {
-  return GetViewValue(this, byteOffset, littleEndian, 5);
+  return ((%AsNumber(GetViewElement(this, byteOffset, littleEndian, 5))));
 }
 
 // builtins/dataview.ts:207 DataView.prototype.getUint32
 function DataViewPrototypeGetUint32(byteOffset, littleEndian) {
-  return GetViewValue(this, byteOffset, littleEndian, 6);
+  return ((%AsNumber(GetViewElement(this, byteOffset, littleEndian, 6))));
 }
 
 // builtins/dataview.ts:215 DataView.prototype.getBigInt64
@@ -1930,17 +1954,17 @@ function DataViewPrototypeGetBigUint64(byteOffset, littleEndian) {
 
 // builtins/dataview.ts:231 DataView.prototype.getFloat16
 function DataViewPrototypeGetFloat16(byteOffset, littleEndian) {
-  return GetViewValue(this, byteOffset, littleEndian, 7);
+  return ((%AsNumber(GetViewElement(this, byteOffset, littleEndian, 7))));
 }
 
 // builtins/dataview.ts:239 DataView.prototype.getFloat32
 function DataViewPrototypeGetFloat32(byteOffset, littleEndian) {
-  return GetViewValue(this, byteOffset, littleEndian, 8);
+  return ((%AsNumber(GetViewElement(this, byteOffset, littleEndian, 8))));
 }
 
 // builtins/dataview.ts:247 DataView.prototype.getFloat64
 function DataViewPrototypeGetFloat64(byteOffset, littleEndian) {
-  return GetViewValue(this, byteOffset, littleEndian, 9);
+  return ((%AsNumber(GetViewElement(this, byteOffset, littleEndian, 9))));
 }
 
 // builtins/dataview.ts:255 DataView.prototype.setInt8
@@ -2000,25 +2024,26 @@ function DataViewPrototypeSetFloat64(byteOffset, value, littleEndian) {
 
 // builtins/date.ts:6
 function DateValueFromArgs(args) {
+  let $1, $2, $3, $4;
   const n = LengthOfArrayLike(args);
   if (n === 0) {
     return %DateNow();
   }
   if (n === 1) {
     const value = %Get(args, 0);
-    if (%IsObject(value) && IsDateObject(%AsObj(value))) {
-      return TimeClip(%DateValue(value));
+    if (%IsObject(value) && ($1 = %AsObj(value), (%ObjectClassTag($1) === "Date"))) {
+      return ($2 = %DateValue(value), ((!($2 >= -8.64e15 && $2 <= 8.64e15)) ? (0 / 0) : (%ToIntegerOrInfinityNumber($2))));
     }
     const v = ToPrimitive(value, "default");
     if (%IsString(v)) {
-      return TimeClip(%DateParse(%AsStr(v)));
+      return ($3 = %DateParse(%AsStr(v)), ((!($3 >= -8.64e15 && $3 <= 8.64e15)) ? (0 / 0) : (%ToIntegerOrInfinityNumber($3))));
     }
-    return TimeClip(ToNumber(v));
+    return TimeClip((((%IsObject(v)) ? (%ToNumberPrimitive(ToPrimitive(v, "number"))) : (%ToNumberPrimitive(v)))));
   }
   const fields = %ArrayCreate(0);
   const count = n < 7 ? n : 7;
   for (let i = 0; i < count; i++) {
-    %CreateDataPropertyOrThrow(fields, i, ToNumber(%Get(args, i)));
+    %CreateDataPropertyOrThrow(fields, i, ($4 = %Get(args, i), ((%IsObject($4)) ? (%ToNumberPrimitive(ToPrimitive($4, "number"))) : (%ToNumberPrimitive($4)))));
   }
   return %DateFromFields(fields, true);
 }
@@ -2057,6 +2082,7 @@ function DateParseBuiltin(string) {
 
 // builtins/date.ts:77 Date.UTC
 function DateUTC(...values) {
+  let $1;
   const n = LengthOfArrayLike(values);
   if (n === 0) {
     return 0 / 0;
@@ -2064,7 +2090,7 @@ function DateUTC(...values) {
   const fields = %ArrayCreate(0);
   const count = n < 7 ? n : 7;
   for (let i = 0; i < count; i++) {
-    %CreateDataPropertyOrThrow(fields, i, ToNumber(%Get(values, i)));
+    %CreateDataPropertyOrThrow(fields, i, ($1 = %Get(values, i), ((%IsObject($1)) ? (%ToNumberPrimitive(ToPrimitive($1, "number"))) : (%ToNumberPrimitive($1)))));
   }
   return %DateFromFields(fields, false);
 }
@@ -2221,12 +2247,13 @@ function DatePrototypeSetUTCFullYear(...args) {
 
 // builtins/date.ts:348
 function DateSetter(date, args, first, maxCount, local) {
+  let $1;
   const t = %DateValue(date);
   const n = LengthOfArrayLike(args);
   const count = n < maxCount ? n : maxCount;
   const nums = %ArrayCreate(0);
   for (let i = 0; i < count; i++) {
-    %CreateDataPropertyOrThrow(nums, i, ToNumber(%Get(args, i)));
+    %CreateDataPropertyOrThrow(nums, i, ($1 = %Get(args, i), ((%IsObject($1)) ? (%ToNumberPrimitive(ToPrimitive($1, "number"))) : (%ToNumberPrimitive($1)))));
   }
   if (t !== t && first !== 0) {
     return t;
@@ -2252,8 +2279,8 @@ function DatePrototypeGetTimezoneOffset() {
 // builtins/date.ts:393 Date.prototype.setTime
 function DatePrototypeSetTime(time) {
   %DateValue(this);
-  const t = ToNumber(time);
-  return %DateSetValue(this, TimeClip(t));
+  const t = (((%IsObject(time)) ? (%ToNumberPrimitive(ToPrimitive(time, "number"))) : (%ToNumberPrimitive(time))));
+  return %DateSetValue(this, (((!(t >= -8.64e15 && t <= 8.64e15)) ? (0 / 0) : (%ToIntegerOrInfinityNumber(t)))));
 }
 
 // builtins/date.ts:403 Date.prototype.toString
@@ -2423,6 +2450,7 @@ function DecoratorAccessorFn(o, name) {
 
 // builtins/decorators.ts:127 %ApplyDecorators
 function ApplyDecorators(target, key, value, decs, stateV, flags) {
+  let $1, $2, $3, $4;
   const kind = flags & 7;
   const isPrivate = (flags & 16) !== 0;
   const state = %AsObj(stateV);
@@ -2509,9 +2537,9 @@ function ApplyDecorators(target, key, value, decs, stateV, flags) {
       %RecordSet(adder, 1, true);
     }
     if (kind === 5) {
-      DecoratorCheckResult(ret, kind);
+      (((ret !== undefined && !%IsCallable(ret)) ? %Throw(%NewTypeError(DecoratorKindName(kind) + " decorator must return a function or undefined")) : undefined));
       if (ret !== undefined) {
-        DecoratorPush(%AsObj(%RecordGet(%AsObj(rec), 0)), ret);
+        ($1 = %AsObj(%RecordGet(%AsObj(rec), 0)), (%CreateDataPropertyOrThrow($1, LengthOfArrayLike($1), ret), undefined));
       }
     } else if (kind === 4) {
       if (%IsObject(ret)) {
@@ -2525,13 +2553,13 @@ function ApplyDecorators(target, key, value, decs, stateV, flags) {
           curSet = s;
         }
         if (init !== undefined) {
-          DecoratorPush(%AsObj(%RecordGet(%AsObj(rec), 0)), init);
+          ($2 = %AsObj(%RecordGet(%AsObj(rec), 0)), (%CreateDataPropertyOrThrow($2, LengthOfArrayLike($2), init), undefined));
         }
       } else if (ret !== undefined) {
         throw %NewTypeError("accessor decorator must return an object or undefined");
       }
     } else {
-      DecoratorCheckResult(ret, kind);
+      (((ret !== undefined && !%IsCallable(ret)) ? %Throw(%NewTypeError(DecoratorKindName(kind) + " decorator must return a function or undefined")) : undefined));
       if (ret !== undefined) {
         cur = ret;
       }
@@ -2549,7 +2577,7 @@ function ApplyDecorators(target, key, value, decs, stateV, flags) {
       const d = %ObjectCreate(null);
       %CreateDataPropertyOrThrow(d, "get", cur);
       %CreateDataPropertyOrThrow(d, "set", curSet);
-      DecoratorDefine(%AsObj(target), key, d);
+      ($3 = %AsObj(target), ((!%DefineOwnPropertyFromRecord($3, key, d)) ? %Throw(%NewTypeError("cannot redefine property")) : undefined));
     }
     %RecordSet(%AsObj(rec), 2, cur);
     %RecordSet(%AsObj(rec), 3, curSet);
@@ -2566,7 +2594,7 @@ function ApplyDecorators(target, key, value, decs, stateV, flags) {
   } else {
     %CreateDataPropertyOrThrow(d, "set", cur);
   }
-  DecoratorDefine(%AsObj(target), key, d);
+  ($4 = %AsObj(target), ((!%DefineOwnPropertyFromRecord($4, key, d)) ? %Throw(%NewTypeError("cannot redefine property")) : undefined));
   return undefined;
 }
 
@@ -2600,6 +2628,7 @@ function DecoratorRunExtras(r, i, thisValue) {
 
 // builtins/decorators.ts:316 %DecoratorAddInitializer
 function DecoratorAddInitializer(initializer) {
+  let $1;
   const adder = %AsObj(this);
   if (%AsBool(%RecordGet(adder, 1))) {
     throw %NewTypeError("addInitializer() called after the decoration");
@@ -2607,7 +2636,7 @@ function DecoratorAddInitializer(initializer) {
   if (!%IsCallable(initializer)) {
     throw %NewTypeError("initializer must be a function");
   }
-  DecoratorPush(%AsObj(%RecordGet(adder, 0)), initializer);
+  ($1 = %AsObj(%RecordGet(adder, 0)), (%CreateDataPropertyOrThrow($1, LengthOfArrayLike($1), initializer), undefined));
 }
 
 // builtins/decorators.ts:331 %DecoratorAccessGet
@@ -2645,6 +2674,7 @@ function DecoratorReflectFn(reflect, name) {
 
 // builtins/decorators.ts:379 %ApplyLegacyDecorators
 function ApplyLegacyDecorators(target, key, decs, kind) {
+  let $1;
   let r = undefined;
   if (kind === 0) {
     r = target;
@@ -2652,7 +2682,7 @@ function ApplyLegacyDecorators(target, key, decs, kind) {
     r = ObjectGetOwnPropertyDescriptor(target, key);
   }
   const reflect = %Get(%GlobalObject(), "Reflect");
-  const decorate = DecoratorReflectFn(reflect, "decorate");
+  const decorate = (((!%IsObject(reflect)) ? (undefined) : ($1 = %Get(%AsObj(reflect), "decorate"), (%IsCallable($1) ? $1 : undefined))));
   if (decorate !== undefined) {
     if (kind === 0) {
       r = %Call(decorate, reflect, decs, target);
@@ -2699,8 +2729,9 @@ function DecoratorParamCall(target, key) {
 
 // builtins/decorators.ts:444 %DecoratorMetadata
 function DecoratorMetadata(key, value) {
+  let $1;
   const reflect = %Get(%GlobalObject(), "Reflect");
-  const f = DecoratorReflectFn(reflect, "metadata");
+  const f = (((!%IsObject(reflect)) ? (undefined) : ($1 = %Get(%AsObj(reflect), "metadata"), (%IsCallable($1) ? $1 : undefined))));
   if (f === undefined) {
     return undefined;
   }
@@ -3138,7 +3169,8 @@ function UsingAwaitValue(s) {
 
 // builtins/disposable.ts:556 Iterator.prototype[Symbol.dispose]
 function IteratorPrototypeDispose() {
-  const method = GetMethod(this, "return");
+  let $1;
+  const method = (($1 = %GetV(this, "return"), (($1 === undefined || $1 === null) ? (undefined) : ((!%IsCallable($1)) ? %Throw(%NewTypeError("not a function")) : ($1)))));
   if (method !== undefined) {
     %Call(method, this);
   }
@@ -3146,10 +3178,11 @@ function IteratorPrototypeDispose() {
 
 // builtins/disposable.ts:567 %AsyncIteratorPrototype%[Symbol.asyncDispose]
 function AsyncIteratorPrototypeAsyncDispose() {
+  let $1;
   const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
   let wrapper = undefined;
   try {
-    const method = GetMethod(this, "return");
+    const method = (($1 = %GetV(this, "return"), (($1 === undefined || $1 === null) ? (undefined) : ((!%IsCallable($1)) ? %Throw(%NewTypeError("not a function")) : ($1)))));
     if (method === undefined) {
       ResolvePromise(promise, undefined);
       return promise;
@@ -3204,12 +3237,12 @@ function FinishStack(err, v) {
   }
 }
 
-// builtins/error.ts:49 %CallPrepareStackTrace
+// builtins/error.ts:50 %CallPrepareStackTrace
 function CallPrepareStackTrace(f, ctor, err, sites) {
   return %Call(f, ctor, err, sites);
 }
 
-// builtins/error.ts:57
+// builtins/error.ts:58
 function FinishErrorStack(o) {
   const v = %ErrorStack(o);
   if (!%IsPendingStack(v)) {
@@ -3221,19 +3254,21 @@ function FinishErrorStack(o) {
   return s;
 }
 
-// builtins/error.ts:69
+// builtins/error.ts:70
 function RecordStack(o) {
+  let $1, $2;
   %CaptureStack(o);
-  FinishErrorStack(o);
+  (($1 = %ErrorStack(o), ((!%IsPendingStack($1)) ? ($1) : (%SetErrorStack(o, undefined), ($2 = FinishStack(o, $1), (%SetErrorStack(o, $2), ($2)))))));
 }
 
-// builtins/error.ts:79 %ThrowWithStack
+// builtins/error.ts:80 %ThrowWithStack
 function ThrowWithStack(e) {
-  FinishErrorStack(e);
+  let $1, $2;
+  (($1 = %ErrorStack(e), ((!%IsPendingStack($1)) ? ($1) : (%SetErrorStack(e, undefined), ($2 = FinishStack(e, $1), (%SetErrorStack(e, $2), ($2)))))));
   throw e;
 }
 
-// builtins/error.ts:89 set Error.prototype.stack
+// builtins/error.ts:90 set Error.prototype.stack
 function ErrorPrototypeSetStack(v) {
   if (!%IsObject(this)) {
     throw %NewTypeError("not an object");
@@ -3253,7 +3288,7 @@ function ErrorPrototypeSetStack(v) {
   return undefined;
 }
 
-// builtins/error.ts:113 Error.isError
+// builtins/error.ts:114 Error.isError
 function ErrorIsError(arg) {
   if (!%IsObject(arg) || %IsProxy(arg)) {
     return false;
@@ -3261,7 +3296,7 @@ function ErrorIsError(arg) {
   return %ObjectClassTag(%AsObj(arg)) === "Error";
 }
 
-// builtins/error.ts:126 Error.captureStackTrace
+// builtins/error.ts:127 Error.captureStackTrace
 function ErrorCaptureStackTrace(object, constructorOpt) {
   if (!%IsObject(object)) {
     throw %NewTypeError("not an object");
@@ -3275,12 +3310,12 @@ function ErrorCaptureStackTrace(object, constructorOpt) {
   %DefineDataPropertyOrThrow(o, "stack", stack, 5);
 }
 
-// builtins/error.ts:146 value Error.stackTraceLimit
+// builtins/error.ts:147 value Error.stackTraceLimit
 function ErrorStackTraceLimit() {
   return 10;
 }
 
-// builtins/error.ts:154
+// builtins/error.ts:155
 function ErrorConstruct(newTarget, fallback, message, options) {
   const o = %ErrorCreate(GetPrototypeFromConstructor(newTarget, fallback));
   if (message !== undefined) {
@@ -3291,52 +3326,52 @@ function ErrorConstruct(newTarget, fallback, message, options) {
   return o;
 }
 
-// builtins/error.ts:169 constructor Error
+// builtins/error.ts:170 constructor Error
 function ErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "ErrorPrototype", message, options);
 }
 
-// builtins/error.ts:179 constructor EvalError
+// builtins/error.ts:180 constructor EvalError
 function EvalErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "EvalErrorPrototype", message, options);
 }
 
-// builtins/error.ts:189 constructor RangeError
+// builtins/error.ts:190 constructor RangeError
 function RangeErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "RangeErrorPrototype", message, options);
 }
 
-// builtins/error.ts:199 constructor ReferenceError
+// builtins/error.ts:200 constructor ReferenceError
 function ReferenceErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "ReferenceErrorPrototype", message, options);
 }
 
-// builtins/error.ts:209 constructor SyntaxError
+// builtins/error.ts:210 constructor SyntaxError
 function SyntaxErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "SyntaxErrorPrototype", message, options);
 }
 
-// builtins/error.ts:219 constructor TypeError
+// builtins/error.ts:220 constructor TypeError
 function TypeErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "TypeErrorPrototype", message, options);
 }
 
-// builtins/error.ts:229 constructor URIError
+// builtins/error.ts:230 constructor URIError
 function URIErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "URIErrorPrototype", message, options);
 }
 
-// builtins/error.ts:239 value Error.prototype.name
+// builtins/error.ts:240 value Error.prototype.name
 function ErrorPrototypeName() {
   return "Error";
 }
 
-// builtins/error.ts:248 value Error.prototype.message
+// builtins/error.ts:249 value Error.prototype.message
 function ErrorPrototypeMessage() {
   return "";
 }
 
-// builtins/error.ts:256 Error.prototype.toString
+// builtins/error.ts:257 Error.prototype.toString
 function ErrorPrototypeToString() {
   if (!%IsObject(this)) {
     throw %NewTypeError("not an object");
@@ -3355,19 +3390,19 @@ function ErrorPrototypeToString() {
   return nameStr + ": " + msgStr;
 }
 
-// builtins/error.ts:280 constructor InternalError
+// builtins/error.ts:281 constructor InternalError
 function InternalErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "InternalErrorPrototype", message, options);
 }
 
-// builtins/error.ts:290 constructor AggregateError
+// builtins/error.ts:291 constructor AggregateError
 function AggregateErrorConstructor(errors, message, options) {
   const o = ErrorConstruct(new.target, "AggregateErrorPrototype", message, options);
   %DefineDataPropertyOrThrow(o, "errors", IterableToList(errors), 5);
   return o;
 }
 
-// builtins/error.ts:302 constructor SuppressedError
+// builtins/error.ts:303 constructor SuppressedError
 function SuppressedErrorConstructor(error, suppressed, message) {
   const o = %ErrorCreate(GetPrototypeFromConstructor(new.target, "SuppressedErrorPrototype"));
   if (message !== undefined) {
@@ -3379,44 +3414,44 @@ function SuppressedErrorConstructor(error, suppressed, message) {
   return o;
 }
 
-// builtins/error.ts:320 %CallSitePrototype%.isNative
+// builtins/error.ts:321 %CallSitePrototype%.isNative
 function CallSiteIsNative() {
   return %CallSiteSlot(this, 5);
 }
 
-// builtins/error.ts:328 %CallSitePrototype%.isConstructor
+// builtins/error.ts:329 %CallSitePrototype%.isConstructor
 function CallSiteIsConstructor() {
   return %CallSiteSlot(this, 6);
 }
 
-// builtins/error.ts:336 %CallSitePrototype%.getFileName
+// builtins/error.ts:337 %CallSitePrototype%.getFileName
 function CallSiteGetFileName() {
   return %CallSiteSlot(this, 2);
 }
 
-// builtins/error.ts:344 %CallSitePrototype%.getFunction
+// builtins/error.ts:345 %CallSitePrototype%.getFunction
 function CallSiteGetFunction() {
   return %CallSiteSlot(this, 0);
 }
 
-// builtins/error.ts:352 %CallSitePrototype%.getFunctionName
+// builtins/error.ts:353 %CallSitePrototype%.getFunctionName
 function CallSiteGetFunctionName() {
   return %CallSiteSlot(this, 1);
 }
 
-// builtins/error.ts:360 %CallSitePrototype%.getLineNumber
+// builtins/error.ts:361 %CallSitePrototype%.getLineNumber
 function CallSiteGetLineNumber() {
   const line = %CallSiteSlot(this, 3);
   return line === 0 ? null : line;
 }
 
-// builtins/error.ts:369 %CallSitePrototype%.getColumnNumber
+// builtins/error.ts:370 %CallSitePrototype%.getColumnNumber
 function CallSiteGetColumnNumber() {
   const line = %CallSiteSlot(this, 3);
   return line === 0 ? null : %CallSiteSlot(this, 4);
 }
 
-// builtins/error.ts:379 value %CallSitePrototype%[Symbol.toStringTag]
+// builtins/error.ts:380 value %CallSitePrototype%[Symbol.toStringTag]
 function CallSiteToStringTag() {
   return "CallSite";
 }
@@ -3481,6 +3516,7 @@ function ArrayFromAsync(asyncItems, mapfn, thisArg) {
 
 // builtins/fromasync.ts:31
 function FromAsyncStart(c, promise, asyncItems, mapfn, thisArg) {
+  let $1, $2;
   if (mapfn !== undefined && !%IsCallable(mapfn)) {
     throw %NewTypeError("mapfn is not callable");
   }
@@ -3497,9 +3533,9 @@ function FromAsyncStart(c, promise, asyncItems, mapfn, thisArg) {
   if (usingAsyncIterator !== undefined || usingSyncIterator !== undefined) {
     let iterator = s;
     if (usingAsyncIterator !== undefined) {
-      iterator = GetIteratorFromMethod(asyncItems, usingAsyncIterator);
+      iterator = (($1 = %Call(usingAsyncIterator, asyncItems), ((!%IsObject($1)) ? %Throw(%NewTypeError("not an object")) : (%AsObj($1)))));
     } else {
-      const syncIterator = GetIteratorFromMethod(asyncItems, usingSyncIterator);
+      const syncIterator = (($2 = %Call(usingSyncIterator, asyncItems), ((!%IsObject($2)) ? %Throw(%NewTypeError("not an object")) : (%AsObj($2)))));
       iterator = %CreateAsyncFromSyncIterator(syncIterator, %Get(syncIterator, "next"));
     }
     %RecordSet(s, 3, iterator);
@@ -3538,23 +3574,24 @@ function FromAsyncIteratorNext(s) {
     const result = %Call(%RecordGet(s, 4), %RecordGet(s, 3));
     FromAsyncAwait(s, result, 1);
   } catch (e) {
-    FromAsyncReject(s, e);
+    ((%RejectPromise(%AsObj(%RecordGet(s, 0)), e), undefined));
   }
 }
 
 // builtins/fromasync.ts:97
 function FromAsyncClose(s, error) {
+  let $1;
   %RecordSet(s, 10, error);
   try {
     const iterator = %AsObj(%RecordGet(s, 3));
-    const method = GetMethod(iterator, "return");
+    const method = (($1 = %GetV(iterator, "return"), (($1 === undefined || $1 === null) ? (undefined) : ((!%IsCallable($1)) ? %Throw(%NewTypeError("not a function")) : ($1)))));
     if (method === undefined) {
-      FromAsyncReject(s, error);
+      ((%RejectPromise(%AsObj(%RecordGet(s, 0)), error), undefined));
       return;
     }
     FromAsyncAwait(s, %Call(method, iterator), 3);
   } catch (e) {
-    FromAsyncReject(s, error);
+    ((%RejectPromise(%AsObj(%RecordGet(s, 0)), error), undefined));
   }
 }
 
@@ -3572,7 +3609,7 @@ function FromAsyncIteratorResult(s, nextResult) {
     }
     value = %Get(%AsObj(nextResult), "value");
   } catch (e) {
-    FromAsyncReject(s, e);
+    ((%RejectPromise(%AsObj(%RecordGet(s, 0)), e), undefined));
     return;
   }
   const mapfn = %RecordGet(s, 1);
@@ -3613,7 +3650,7 @@ function FromAsyncArrayLikeNext(s) {
     %Set(%AsObj(%RecordGet(s, 5)), "length", len);
     ResolvePromise(%AsObj(%RecordGet(s, 0)), %RecordGet(s, 5));
   } catch (e) {
-    FromAsyncReject(s, e);
+    ((%RejectPromise(%AsObj(%RecordGet(s, 0)), e), undefined));
   }
 }
 
@@ -3629,7 +3666,7 @@ function FromAsyncArrayLikeValue(s, value, phase) {
     %CreateDataPropertyOrThrow(%AsObj(%RecordGet(s, 5)), k, value);
     %RecordSet(s, 6, k + 1);
   } catch (e) {
-    FromAsyncReject(s, e);
+    ((%RejectPromise(%AsObj(%RecordGet(s, 0)), e), undefined));
     return;
   }
   FromAsyncArrayLikeNext(s);
@@ -3637,6 +3674,7 @@ function FromAsyncArrayLikeValue(s, value, phase) {
 
 // builtins/fromasync.ts:193 %FromAsyncFulfilled
 function FromAsyncFulfilled(value) {
+  let $1;
   const s = %AsObj(this);
   const phase = %F64ToI32(%AsNumber(%RecordGet(s, 7)));
   if (phase === 1) {
@@ -3644,7 +3682,7 @@ function FromAsyncFulfilled(value) {
   } else if (phase === 2) {
     FromAsyncIteratorStore(s, value);
   } else if (phase === 3) {
-    FromAsyncReject(s, %RecordGet(s, 10));
+    ($1 = %RecordGet(s, 10), (%RejectPromise(%AsObj(%RecordGet(s, 0)), $1), undefined));
   } else {
     FromAsyncArrayLikeValue(s, value, phase);
   }
@@ -3652,14 +3690,15 @@ function FromAsyncFulfilled(value) {
 
 // builtins/fromasync.ts:212 %FromAsyncRejected
 function FromAsyncRejected(reason) {
+  let $1;
   const s = %AsObj(this);
   const phase = %F64ToI32(%AsNumber(%RecordGet(s, 7)));
   if (phase === 2) {
     FromAsyncClose(s, reason);
   } else if (phase === 3) {
-    FromAsyncReject(s, %RecordGet(s, 10));
+    ($1 = %RecordGet(s, 10), (%RejectPromise(%AsObj(%RecordGet(s, 0)), $1), undefined));
   } else {
-    FromAsyncReject(s, reason);
+    ((%RejectPromise(%AsObj(%RecordGet(s, 0)), reason), undefined));
   }
 }
 
@@ -4048,13 +4087,14 @@ function ArrayPrototypeEntries() {
 
 // builtins/iter.ts:115 %ArrayIteratorPrototype%.next %ArrayIteratorPrototypeNext
 function ArrayIteratorPrototypeNext() {
+  let $1;
   const target = %ArrayIteratorTarget(this);
   if (target === undefined) {
     return %CreateIterResultObject(undefined, true);
   }
   const o = %AsObj(target);
   const index = %ArrayIteratorIndex(this);
-  const len = %IsTypedArray(o) ? TALength(ValidateTypedArray(o)) : LengthOfArrayLike(o);
+  const len = %IsTypedArray(o) ? TALength(((%TypedArrayField(o, 0), ($1 = %AsObj(o), ((((%AsBool(%TypedArrayField($1, 5))))) ? %Throw(%NewTypeError("ArrayBuffer is detached or resized")) : ($1)))))) : LengthOfArrayLike(o);
   if (index >= len) {
     %ArrayIteratorFinish(this);
     return %CreateIterResultObject(undefined, true);
@@ -4101,6 +4141,7 @@ function IteratorNextResult(iterator, next) {
 
 // builtins/iterable.ts:26
 function IterableToList(items) {
+  let $1;
   const iterator = GetIterator(items);
   const next = %Get(iterator, "next");
   const list = %ArrayCreate(0);
@@ -4110,7 +4151,7 @@ function IterableToList(items) {
     if (%IteratorFastReady(iterator, next)) {
       %CreateDataPropertyOrThrow(list, n, %IteratorFastValue(iterator, next));
     } else {
-      const result = IteratorNextResult(iterator, next);
+      const result = (($1 = %Call(next, iterator), ((!%IsObject($1)) ? %Throw(%NewTypeError("iterator must return an object")) : (%AsObj($1)))));
       if (%ToBoolean(%Get(result, "done"))) {
         return list;
       }
@@ -4122,7 +4163,8 @@ function IterableToList(items) {
 
 // builtins/iterable.ts:52
 function ArrayFromIterator(a, items, method, mapfn, thisArg) {
-  const iterator = GetIteratorFromMethod(items, method);
+  let $1, $2;
+  const iterator = (($1 = %Call(method, items), ((!%IsObject($1)) ? %Throw(%NewTypeError("not an object")) : (%AsObj($1)))));
   const next = %Get(iterator, "next");
   let k = 0;
   while (true) {
@@ -4138,7 +4180,7 @@ function ArrayFromIterator(a, items, method, mapfn, thisArg) {
     if (%IteratorFastReady(iterator, next)) {
       nextValue = %IteratorFastValue(iterator, next);
     } else {
-      const result = IteratorNextResult(iterator, next);
+      const result = (($2 = %Call(next, iterator), ((!%IsObject($2)) ? %Throw(%NewTypeError("iterator must return an object")) : (%AsObj($2)))));
       if (%ToBoolean(%Get(result, "done"))) {
         %Set(a, "length", k);
         return a;
@@ -4158,6 +4200,7 @@ function ArrayFromIterator(a, items, method, mapfn, thisArg) {
 
 // builtins/iterable.ts:93 Object.fromEntries
 function ObjectFromEntries(iterable) {
+  let $1;
   const obj = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
   const iterator = GetIterator(iterable);
   const next = %Get(iterator, "next");
@@ -4166,7 +4209,7 @@ function ObjectFromEntries(iterable) {
     if (%IteratorFastReady(iterator, next)) {
       nextItem = %IteratorFastValue(iterator, next);
     } else {
-      const result = IteratorNextResult(iterator, next);
+      const result = (($1 = %Call(next, iterator), ((!%IsObject($1)) ? %Throw(%NewTypeError("iterator must return an object")) : (%AsObj($1)))));
       if (%ToBoolean(%Get(result, "done"))) {
         return obj;
       }
@@ -4189,6 +4232,7 @@ function ObjectFromEntries(iterable) {
 
 // builtins/iterable.ts:131
 function GroupByProperty(items, callback) {
+  let $1;
   if (!%IsCallable(callback)) {
     throw %NewTypeError("not a function");
   }
@@ -4201,7 +4245,7 @@ function GroupByProperty(items, callback) {
     if (%IteratorFastReady(iterator, next)) {
       value = %IteratorFastValue(iterator, next);
     } else {
-      const result = IteratorNextResult(iterator, next);
+      const result = (($1 = %Call(next, iterator), ((!%IsObject($1)) ? %Throw(%NewTypeError("iterator must return an object")) : (%AsObj($1)))));
       if (%ToBoolean(%Get(result, "done"))) {
         return groups;
       }
@@ -4232,7 +4276,7 @@ function ObjectGroupBy(items, callback) {
 
 // builtins/iterable.ts:185 String.prototype[Symbol.iterator] %StringPrototypeIterator
 function StringPrototypeIterator() {
-  return %CreateStringIterator(ThisToString(this));
+  return %CreateStringIterator((((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this)))));
 }
 
 // builtins/iterable.ts:194 %StringIteratorPrototype%.next %StringIteratorPrototypeNext
@@ -4243,12 +4287,12 @@ function StringIteratorPrototypeNext() {
   }
   const s = %AsStr(target);
   const position = %ArrayIteratorIndex(this);
-  if (position >= StrLen(s)) {
+  if (position >= ((%StrLength(s)))) {
     %ArrayIteratorFinish(this);
     return %CreateIterResultObject(undefined, true);
   }
   const cp = %StrCodePointString(s, position);
-  %ArrayIteratorSetIndex(this, position + StrLen(cp));
+  %ArrayIteratorSetIndex(this, position + ((%StrLength(cp))));
   return %CreateIterResultObject(cp, false);
 }
 
@@ -4269,7 +4313,8 @@ function GetIteratorDirectNext(o) {
 
 // builtins/iterator.ts:39
 function IteratorStepResult(iterator, next) {
-  const result = IteratorNextResult(iterator, next);
+  let $1;
+  const result = (($1 = %Call(next, iterator), ((!%IsObject($1)) ? %Throw(%NewTypeError("iterator must return an object")) : (%AsObj($1)))));
   if (%ToBoolean(%Get(result, "done"))) {
     return undefined;
   }
@@ -4315,7 +4360,7 @@ function HelperCallable(o, f) {
 function HelperLimit(o, limit) {
   let numLimit = 0;
   try {
-    numLimit = ToNumber(limit);
+    numLimit = (((%IsObject(limit)) ? (%ToNumberPrimitive(ToPrimitive(limit, "number"))) : (%ToNumberPrimitive(limit))));
   } catch (e) {
     IteratorCloseThrow(o);
     throw e;
@@ -4336,7 +4381,7 @@ function HelperLimit(o, limit) {
 
 // builtins/iterator.ts:116
 function NewIteratorHelper(kind, o, data) {
-  const next = GetIteratorDirectNext(o);
+  const next = ((%Get(o, "next")));
   const helper = %CreateIteratorHelper(kind, o, next);
   %RecordSet(helper, 4, data);
   %RecordSet(helper, 5, 0);
@@ -4365,6 +4410,7 @@ function HelperCallFunction(o, iterator, value) {
 
 // builtins/iterator.ts:148
 function IteratorHelperStep(o) {
+  let $1, $2, $3;
   const kind = %F64ToI32(%AsNumber(%RecordGet(o, 0)));
   if (kind === 6) {
     return ConcatStep(o);
@@ -4380,7 +4426,7 @@ function IteratorHelperStep(o) {
       return undefined;
     }
     const value = %Get(%AsObj(result), "value");
-    return HelperYield(o, HelperCallFunction(o, iterator, value));
+    return ($1 = HelperCallFunction(o, iterator, value), (%RecordSet(o, 1, 1), ($1)));
   }
   if (kind === 2) {
     while (true) {
@@ -4390,7 +4436,7 @@ function IteratorHelperStep(o) {
       }
       const value = %Get(%AsObj(result), "value");
       if (%ToBoolean(HelperCallFunction(o, iterator, value))) {
-        return HelperYield(o, value);
+        return ((%RecordSet(o, 1, 1), (value)));
       }
     }
   }
@@ -4407,7 +4453,7 @@ function IteratorHelperStep(o) {
     if (result === undefined) {
       return undefined;
     }
-    return HelperYield(o, %Get(%AsObj(result), "value"));
+    return ($2 = %Get(%AsObj(result), "value"), (%RecordSet(o, 1, 1), ($2)));
   }
   if (kind === 4) {
     let remaining = %AsNumber(%RecordGet(o, 4));
@@ -4424,7 +4470,7 @@ function IteratorHelperStep(o) {
     if (result === undefined) {
       return undefined;
     }
-    return HelperYield(o, %Get(%AsObj(result), "value"));
+    return ($3 = %Get(%AsObj(result), "value"), (%RecordSet(o, 1, 1), ($3)));
   }
   if (kind === 5) {
     return FlatMapStep(o, iterator, next);
@@ -4457,20 +4503,21 @@ function ChunksStep(o, iterator, next) {
     if (result === undefined) {
       if (n > 0) {
         %RecordSet(o, 6, true);
-        return HelperYield(o, buffer);
+        return ((%RecordSet(o, 1, 1), (buffer)));
       }
       return undefined;
     }
     %CreateDataPropertyOrThrow(buffer, n, %Get(%AsObj(result), "value"));
     n++;
     if (n === size) {
-      return HelperYield(o, buffer);
+      return ((%RecordSet(o, 1, 1), (buffer)));
     }
   }
 }
 
 // builtins/iterator.ts:257
 function WindowsStep(o, iterator, next) {
+  let $1, $2;
   if (%RecordGet(o, 6) === true) {
     return undefined;
   }
@@ -4487,7 +4534,7 @@ function WindowsStep(o, iterator, next) {
     if (result === undefined) {
       if (%RecordGet(o, 5) === true && n > 0 && n < size) {
         %RecordSet(o, 6, true);
-        return HelperYield(o, ArrayPrefixCopy(w, 0, n));
+        return ($1 = ArrayPrefixCopy(w, 0, n), (%RecordSet(o, 1, 1), ($1)));
       }
       return undefined;
     }
@@ -4501,7 +4548,7 @@ function WindowsStep(o, iterator, next) {
     %CreateDataPropertyOrThrow(w, n, value);
     %Set(w, "length", n + 1);
     if (n + 1 === size) {
-      return HelperYield(o, ArrayPrefixCopy(w, 0, size));
+      return ($2 = ArrayPrefixCopy(w, 0, size), (%RecordSet(o, 1, 1), ($2)));
     }
   }
 }
@@ -4594,13 +4641,13 @@ function ZipStep(o) {
   }
   const keys = %RecordGet(o, 7);
   if (keys === undefined) {
-    return HelperYield(o, results);
+    return ((%RecordSet(o, 1, 1), (results)));
   }
   const obj = %ObjectCreate(null);
   for (let i = 0; i < n; i++) {
     %CreateDataPropertyOrThrow(obj, %Get(%AsObj(keys), i), %Get(results, i));
   }
-  return HelperYield(o, obj);
+  return ((%RecordSet(o, 1, 1), (obj)));
 }
 
 // builtins/iterator.ts:396
@@ -4630,7 +4677,7 @@ function FlatMapStep(o, iterator, next) {
         throw e;
       }
       if (result !== undefined) {
-        return HelperYield(o, value);
+        return ((%RecordSet(o, 1, 1), (value)));
       }
       %RecordSet(o, 6, undefined);
       %RecordSet(o, 7, undefined);
@@ -4642,7 +4689,7 @@ function FlatMapStep(o, iterator, next) {
     const mapped = HelperCallFunction(o, iterator, %Get(%AsObj(outer), "value"));
     try {
       const innerIterator = GetIteratorFlattenable(mapped, false);
-      const innerNext = GetIteratorDirectNext(innerIterator);
+      const innerNext = ((%Get(innerIterator, "next")));
       %RecordSet(o, 6, innerIterator);
       %RecordSet(o, 7, innerNext);
     } catch (e) {
@@ -4654,12 +4701,13 @@ function FlatMapStep(o, iterator, next) {
 
 // builtins/iterator.ts:445
 function ConcatStep(o) {
+  let $1, $2;
   while (true) {
     const current = %RecordGet(o, 2);
     if (current !== undefined) {
       const result = IteratorStepResult(%AsObj(current), %RecordGet(o, 3));
       if (result !== undefined) {
-        return HelperYield(o, %Get(%AsObj(result), "value"));
+        return ($1 = %Get(%AsObj(result), "value"), (%RecordSet(o, 1, 1), ($1)));
       }
       %RecordSet(o, 2, undefined);
       %RecordSet(o, 3, undefined);
@@ -4675,7 +4723,7 @@ function ConcatStep(o) {
     if (!%IsObject(iter)) {
       throw %NewTypeError("not an object");
     }
-    const next = GetIteratorDirectNext(%AsObj(iter));
+    const next = ($2 = %AsObj(iter), (%Get($2, "next")));
     %RecordSet(o, 2, iter);
     %RecordSet(o, 3, next);
   }
@@ -4708,7 +4756,7 @@ function IteratorHelperReturnAtYield(o) {
 // builtins/iterator.ts:506 %IteratorHelperPrototype%.next
 function IteratorHelperPrototypeNext() {
   const o = %ThisIteratorHelper(this, false);
-  const state = HelperState(o);
+  const state = ((%F64ToI32(%AsNumber(%RecordGet(o, 1)))));
   if (state === 2) {
     throw %NewTypeError("cannot invoke a running iterator");
   }
@@ -4723,7 +4771,7 @@ function IteratorHelperPrototypeNext() {
     %RecordSet(o, 1, 3);
     throw e;
   }
-  if (HelperState(o) === 1) {
+  if (((%F64ToI32(%AsNumber(%RecordGet(o, 1))))) === 1) {
     return %CreateIterResultObject(value, false);
   }
   %RecordSet(o, 1, 3);
@@ -4733,7 +4781,7 @@ function IteratorHelperPrototypeNext() {
 // builtins/iterator.ts:534 %IteratorHelperPrototype%.return
 function IteratorHelperPrototypeReturn() {
   const o = %ThisIteratorHelper(this, false);
-  const state = HelperState(o);
+  const state = ((%F64ToI32(%AsNumber(%RecordGet(o, 1)))));
   if (state === 2) {
     throw %NewTypeError("cannot invoke a running iterator");
   }
@@ -4780,7 +4828,7 @@ function IteratorConstructor() {
 // builtins/iterator.ts:592 Iterator.from
 function IteratorFrom(o) {
   const iterator = GetIteratorFlattenable(o, true);
-  const next = GetIteratorDirectNext(iterator);
+  const next = ((%Get(iterator, "next")));
   if (OrdinaryHasInstance(%RealmConstructor("Iterator"), iterator)) {
     return iterator;
   }
@@ -4795,9 +4843,10 @@ function WrapForValidIteratorPrototypeNext() {
 
 // builtins/iterator.ts:614 %WrapForValidIteratorPrototype%.return
 function WrapForValidIteratorPrototypeReturn() {
+  let $1;
   const o = %ThisIteratorHelper(this, true);
   const iterator = %AsObj(%RecordGet(o, 2));
-  const method = GetMethod(iterator, "return");
+  const method = (($1 = %GetV(iterator, "return"), (($1 === undefined || $1 === null) ? (undefined) : ((!%IsCallable($1)) ? %Throw(%NewTypeError("not a function")) : ($1)))));
   if (method === undefined) {
     return %CreateIterResultObject(undefined, true);
   }
@@ -4827,42 +4876,48 @@ function IteratorConcat(...items) {
 
 // builtins/iterator.ts:652 Iterator.prototype.map
 function IteratorPrototypeMap(mapper) {
-  const o = ThisIteratorObject(this);
-  HelperCallable(o, mapper);
-  return NewIteratorHelper(1, o, mapper);
+  let $1, $2, $3;
+  const o = (((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(this))));
+  (((!%IsCallable(mapper)) ? ($1 = %NewTypeError("not a function"), (IteratorCloseThrow(o), %Throw($1))) : undefined));
+  return (($2 = ((%Get(o, "next"))), ($3 = %CreateIteratorHelper(1, o, $2), (%RecordSet($3, 4, mapper), (%RecordSet($3, 5, 0), ($3))))));
 }
 
 // builtins/iterator.ts:662 Iterator.prototype.filter
 function IteratorPrototypeFilter(predicate) {
-  const o = ThisIteratorObject(this);
-  HelperCallable(o, predicate);
-  return NewIteratorHelper(2, o, predicate);
+  let $1, $2, $3;
+  const o = (((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(this))));
+  (((!%IsCallable(predicate)) ? ($1 = %NewTypeError("not a function"), (IteratorCloseThrow(o), %Throw($1))) : undefined));
+  return (($2 = ((%Get(o, "next"))), ($3 = %CreateIteratorHelper(2, o, $2), (%RecordSet($3, 4, predicate), (%RecordSet($3, 5, 0), ($3))))));
 }
 
 // builtins/iterator.ts:672 Iterator.prototype.take
 function IteratorPrototypeTake(limit) {
-  const o = ThisIteratorObject(this);
-  return NewIteratorHelper(3, o, HelperLimit(o, limit));
+  let $1, $2, $3;
+  const o = (((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(this))));
+  return ($1 = HelperLimit(o, limit), ($2 = ((%Get(o, "next"))), ($3 = %CreateIteratorHelper(3, o, $2), (%RecordSet($3, 4, $1), (%RecordSet($3, 5, 0), ($3))))));
 }
 
 // builtins/iterator.ts:681 Iterator.prototype.drop
 function IteratorPrototypeDrop(limit) {
-  const o = ThisIteratorObject(this);
-  return NewIteratorHelper(4, o, HelperLimit(o, limit));
+  let $1, $2, $3;
+  const o = (((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(this))));
+  return ($1 = HelperLimit(o, limit), ($2 = ((%Get(o, "next"))), ($3 = %CreateIteratorHelper(4, o, $2), (%RecordSet($3, 4, $1), (%RecordSet($3, 5, 0), ($3))))));
 }
 
 // builtins/iterator.ts:690 Iterator.prototype.flatMap
 function IteratorPrototypeFlatMap(mapper) {
-  const o = ThisIteratorObject(this);
-  HelperCallable(o, mapper);
-  return NewIteratorHelper(5, o, mapper);
+  let $1, $2, $3;
+  const o = (((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(this))));
+  (((!%IsCallable(mapper)) ? ($1 = %NewTypeError("not a function"), (IteratorCloseThrow(o), %Throw($1))) : undefined));
+  return (($2 = ((%Get(o, "next"))), ($3 = %CreateIteratorHelper(5, o, $2), (%RecordSet($3, 4, mapper), (%RecordSet($3, 5, 0), ($3))))));
 }
 
 // builtins/iterator.ts:701 Iterator.prototype.reduce
 function IteratorPrototypeReduce(reducer, ...rest) {
-  const o = ThisIteratorObject(this);
-  HelperCallable(o, reducer);
-  const next = GetIteratorDirectNext(o);
+  let $1;
+  const o = (((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(this))));
+  (((!%IsCallable(reducer)) ? ($1 = %NewTypeError("not a function"), (IteratorCloseThrow(o), %Throw($1))) : undefined));
+  const next = ((%Get(o, "next")));
   let accumulator = undefined;
   let counter = 0;
   if (LengthOfArrayLike(rest) === 0) {
@@ -4893,8 +4948,8 @@ function IteratorPrototypeReduce(reducer, ...rest) {
 
 // builtins/iterator.ts:737 Iterator.prototype.toArray
 function IteratorPrototypeToArray() {
-  const o = ThisIteratorObject(this);
-  const next = GetIteratorDirectNext(o);
+  const o = (((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(this))));
+  const next = ((%Get(o, "next")));
   const items = %ArrayCreate(0);
   let n = 0;
   while (true) {
@@ -4909,9 +4964,10 @@ function IteratorPrototypeToArray() {
 
 // builtins/iterator.ts:757
 function IteratorConsume(thisValue, fn, mode) {
-  const o = ThisIteratorObject(thisValue);
-  HelperCallable(o, fn);
-  const next = GetIteratorDirectNext(o);
+  let $1;
+  const o = (((!%IsObject(thisValue)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(thisValue))));
+  (((!%IsCallable(fn)) ? ($1 = %NewTypeError("not a function"), (IteratorCloseThrow(o), %Throw($1))) : undefined));
+  const next = ((%Get(o, "next")));
   let counter = 0;
   while (true) {
     const result = IteratorStepResult(o, next);
@@ -5019,27 +5075,28 @@ function ChunkingSize(o, size, name) {
 
 // builtins/iterator.ts:900 Iterator.prototype.chunks
 function IteratorPrototypeChunks(chunkSize) {
-  const o = ThisIteratorObject(this);
+  const o = (((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(this))));
   return NewIteratorHelper(7, o, ChunkingSize(o, chunkSize, "chunkSize"));
 }
 
 // builtins/iterator.ts:910 Iterator.prototype.windows
 function IteratorPrototypeWindows(windowSize, undersized) {
-  const o = ThisIteratorObject(this);
+  let $1, $2;
+  const o = (((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(this))));
   const size = ChunkingSize(o, windowSize, "windowSize");
   if (undersized !== undefined && undersized !== "only-full" && undersized !== "allow-partial") {
     const error = %NewTypeError("bad undersized option");
     IteratorCloseThrow(o);
     throw error;
   }
-  const helper = NewIteratorHelper(8, o, size);
+  const helper = (($1 = ((%Get(o, "next"))), ($2 = %CreateIteratorHelper(8, o, $1), (%RecordSet($2, 4, size), (%RecordSet($2, 5, 0), ($2))))));
   %RecordSet(helper, 5, undersized === "allow-partial");
   return helper;
 }
 
 // builtins/iterator.ts:928 Iterator.prototype.includes
 function IteratorPrototypeIncludes(searchElement, skippedElements) {
-  const o = ThisIteratorObject(this);
+  const o = (((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(this))));
   let toSkip = 0;
   if (skippedElements !== undefined) {
     let error = undefined;
@@ -5058,7 +5115,7 @@ function IteratorPrototypeIncludes(searchElement, skippedElements) {
       throw error;
     }
   }
-  const next = GetIteratorDirectNext(o);
+  const next = ((%Get(o, "next")));
   let skipped = 0;
   while (true) {
     const result = IteratorStepResult(o, next);
@@ -5077,7 +5134,7 @@ function IteratorPrototypeIncludes(searchElement, skippedElements) {
 
 // builtins/iterator.ts:969 Iterator.prototype.join
 function IteratorPrototypeJoin(separator) {
-  const o = ThisIteratorObject(this);
+  const o = (((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(this))));
   let sep = ",";
   if (separator !== undefined) {
     try {
@@ -5087,7 +5144,7 @@ function IteratorPrototypeJoin(separator) {
       throw e;
     }
   }
-  const next = GetIteratorDirectNext(o);
+  const next = ((%Get(o, "next")));
   let r = "";
   let first = true;
   while (true) {
@@ -5147,7 +5204,7 @@ function ZipAddIterator(iters, nexts, open, value, outer) {
   const n = LengthOfArrayLike(iters);
   try {
     const iter = GetIteratorFlattenable(value, false);
-    const next = GetIteratorDirectNext(iter);
+    const next = ((%Get(iter, "next")));
     %CreateDataPropertyOrThrow(iters, n, iter);
     %CreateDataPropertyOrThrow(nexts, n, next);
     %CreateDataPropertyOrThrow(open, n, true);
@@ -5390,7 +5447,7 @@ function JSONStringify(value, replacer, space) {
   if (%IsObject(sp)) {
     const p = %PrimitiveValue(sp);
     if (%IsNumber(p)) {
-      sp = ToNumber(sp);
+      sp = (((%IsObject(sp)) ? (%ToNumberPrimitive(ToPrimitive(sp, "number"))) : (%ToNumberPrimitive(sp))));
     } else if (%IsString(p)) {
       sp = ToString(sp);
     }
@@ -5470,7 +5527,7 @@ function SerializeJSONProperty(replacer, propertyList, gap, stack, indent, key, 
   if (%IsObject(value)) {
     const p = %PrimitiveValue(value);
     if (%IsNumber(p)) {
-      value = ToNumber(value);
+      value = (((%IsObject(value)) ? (%ToNumberPrimitive(ToPrimitive(value, "number"))) : (%ToNumberPrimitive(value))));
     } else if (%IsString(p)) {
       value = ToString(value);
     } else if (%IsBoolean(p) || %IsBigInt(p)) {
@@ -5584,6 +5641,7 @@ function ThisMap(v) {
 
 // builtins/map.ts:16 %AddEntriesFromIterable
 function AddEntriesFromIterable(target, iterable, adder) {
+  let $1;
   const direct = %IsOriginalCollectionAdder(adder, 0) && %CollectionClass(target) === 0;
   const iterator = GetIterator(iterable);
   const next = %Get(iterator, "next");
@@ -5592,7 +5650,7 @@ function AddEntriesFromIterable(target, iterable, adder) {
     if (%IteratorFastReady(iterator, next)) {
       nextItem = %IteratorFastValue(iterator, next);
     } else {
-      const result = IteratorNextResult(iterator, next);
+      const result = (($1 = %Call(next, iterator), ((!%IsObject($1)) ? %Throw(%NewTypeError("iterator must return an object")) : (%AsObj($1)))));
       if (%ToBoolean(%Get(result, "done"))) {
         return;
       }
@@ -5636,6 +5694,7 @@ function MapConstructor(iterable) {
 
 // builtins/map.ts:76 Map.groupBy
 function MapGroupBy(items, callback) {
+  let $1;
   if (!%IsCallable(callback)) {
     throw %NewTypeError("not a function");
   }
@@ -5648,7 +5707,7 @@ function MapGroupBy(items, callback) {
     if (%IteratorFastReady(iterator, next)) {
       value = %IteratorFastValue(iterator, next);
     } else {
-      const result = IteratorNextResult(iterator, next);
+      const result = (($1 = %Call(next, iterator), ((!%IsObject($1)) ? %Throw(%NewTypeError("iterator must return an object")) : (%AsObj($1)))));
       if (%ToBoolean(%Get(result, "done"))) {
         return map;
       }
@@ -5679,22 +5738,22 @@ function MapSpecies() {
 
 // builtins/map.ts:126 Map.prototype.clear
 function MapPrototypeClear() {
-  %CollectionClear(ThisMap(this));
+  %CollectionClear((((%CollectionClass(this) !== 0) ? %Throw(%NewTypeError("Map object expected")) : (%AsObj(this)))));
 }
 
 // builtins/map.ts:134 Map.prototype.delete
 function MapPrototypeDelete(key) {
-  return %CollectionDelete(ThisMap(this), key);
+  return %CollectionDelete((((%CollectionClass(this) !== 0) ? %Throw(%NewTypeError("Map object expected")) : (%AsObj(this)))), key);
 }
 
 // builtins/map.ts:143 Map.prototype.entries Map.prototype[Symbol.iterator]
 function MapPrototypeEntries() {
-  return %CollectionIterator(ThisMap(this), 2);
+  return %CollectionIterator((((%CollectionClass(this) !== 0) ? %Throw(%NewTypeError("Map object expected")) : (%AsObj(this)))), 2);
 }
 
 // builtins/map.ts:151 Map.prototype.forEach
 function MapPrototypeForEach(callbackfn, thisArg) {
-  const m = ThisMap(this);
+  const m = (((%CollectionClass(this) !== 0) ? %Throw(%NewTypeError("Map object expected")) : (%AsObj(this))));
   if (!%IsCallable(callbackfn)) {
     throw %NewTypeError("not a function");
   }
@@ -5706,7 +5765,7 @@ function MapPrototypeForEach(callbackfn, thisArg) {
 
 // builtins/map.ts:166 Map.prototype.get
 function MapPrototypeGet(key) {
-  return %CollectionGet(ThisMap(this), key);
+  return %CollectionGet((((%CollectionClass(this) !== 0) ? %Throw(%NewTypeError("Map object expected")) : (%AsObj(this)))), key);
 }
 
 // builtins/map.ts:171
@@ -5719,7 +5778,7 @@ function CanonicalizeKeyedCollectionKey(key) {
 
 // builtins/map.ts:182 Map.prototype.getOrInsert
 function MapPrototypeGetOrInsert(key, value) {
-  const m = ThisMap(this);
+  const m = (((%CollectionClass(this) !== 0) ? %Throw(%NewTypeError("Map object expected")) : (%AsObj(this))));
   if (%CollectionHas(m, key)) {
     return %CollectionGet(m, key);
   }
@@ -5729,11 +5788,11 @@ function MapPrototypeGetOrInsert(key, value) {
 
 // builtins/map.ts:196 Map.prototype.getOrInsertComputed
 function MapPrototypeGetOrInsertComputed(key, callbackfn) {
-  const m = ThisMap(this);
+  const m = (((%CollectionClass(this) !== 0) ? %Throw(%NewTypeError("Map object expected")) : (%AsObj(this))));
   if (!%IsCallable(callbackfn)) {
     throw %NewTypeError("not a function");
   }
-  const k = CanonicalizeKeyedCollectionKey(key);
+  const k = (((%IsNumber(key) && %AsNumber(key) === 0) ? (0) : (key)));
   if (%CollectionHas(m, k)) {
     return %CollectionGet(m, k);
   }
@@ -5744,28 +5803,28 @@ function MapPrototypeGetOrInsertComputed(key, callbackfn) {
 
 // builtins/map.ts:214 Map.prototype.has
 function MapPrototypeHas(key) {
-  return %CollectionHas(ThisMap(this), key);
+  return %CollectionHas((((%CollectionClass(this) !== 0) ? %Throw(%NewTypeError("Map object expected")) : (%AsObj(this)))), key);
 }
 
 // builtins/map.ts:222 Map.prototype.keys
 function MapPrototypeKeys() {
-  return %CollectionIterator(ThisMap(this), 0);
+  return %CollectionIterator((((%CollectionClass(this) !== 0) ? %Throw(%NewTypeError("Map object expected")) : (%AsObj(this)))), 0);
 }
 
 // builtins/map.ts:231 Map.prototype.set %MapPrototypeSet
 function MapPrototypeSet(key, value) {
-  %CollectionSet(ThisMap(this), key, value);
+  %CollectionSet((((%CollectionClass(this) !== 0) ? %Throw(%NewTypeError("Map object expected")) : (%AsObj(this)))), key, value);
   return this;
 }
 
 // builtins/map.ts:240 get Map.prototype.size
 function MapPrototypeSize() {
-  return %CollectionSize(ThisMap(this));
+  return %CollectionSize((((%CollectionClass(this) !== 0) ? %Throw(%NewTypeError("Map object expected")) : (%AsObj(this)))));
 }
 
 // builtins/map.ts:248 Map.prototype.values
 function MapPrototypeValues() {
-  return %CollectionIterator(ThisMap(this), 1);
+  return %CollectionIterator((((%CollectionClass(this) !== 0) ? %Throw(%NewTypeError("Map object expected")) : (%AsObj(this)))), 1);
 }
 
 // builtins/map.ts:257 value Map.prototype[Symbol.toStringTag]
@@ -5835,91 +5894,92 @@ function MathSQRT2() {
 
 // builtins/math.ts:89 Math.abs
 function MathAbs(x) {
-  return %F64Abs(ToNumber(x));
+  return %F64Abs((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:97 Math.acos
 function MathAcos(x) {
-  return %F64Acos(ToNumber(x));
+  return %F64Acos((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:105 Math.acosh
 function MathAcosh(x) {
-  return %F64Acosh(ToNumber(x));
+  return %F64Acosh((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:113 Math.asin
 function MathAsin(x) {
-  return %F64Asin(ToNumber(x));
+  return %F64Asin((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:121 Math.asinh
 function MathAsinh(x) {
-  return %F64Asinh(ToNumber(x));
+  return %F64Asinh((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:129 Math.atan
 function MathAtan(x) {
-  return %F64Atan(ToNumber(x));
+  return %F64Atan((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:137 Math.atanh
 function MathAtanh(x) {
-  return %F64Atanh(ToNumber(x));
+  return %F64Atanh((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:145 Math.cbrt
 function MathCbrt(x) {
-  return %F64Cbrt(ToNumber(x));
+  return %F64Cbrt((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:153 Math.ceil
 function MathCeil(x) {
-  return %F64Ceil(ToNumber(x));
+  return %F64Ceil((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:161 Math.clz32
 function MathClz32(x) {
-  return %F64Clz32(ToNumber(x));
+  return %F64Clz32((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:169 Math.cos
 function MathCos(x) {
-  return %F64Cos(ToNumber(x));
+  return %F64Cos((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:177 Math.cosh
 function MathCosh(x) {
-  return %F64Cosh(ToNumber(x));
+  return %F64Cosh((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:185 Math.exp
 function MathExp(x) {
-  return %F64Exp(ToNumber(x));
+  return %F64Exp((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:193 Math.expm1
 function MathExpm1(x) {
-  return %F64Expm1(ToNumber(x));
+  return %F64Expm1((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:201 Math.floor
 function MathFloor(x) {
-  return %F64Floor(ToNumber(x));
+  return %F64Floor((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:209 Math.fround
 function MathFround(x) {
-  return %F64Fround(ToNumber(x));
+  return %F64Fround((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:217 Math.f16round
 function MathF16round(x) {
-  return %F64F16round(ToNumber(x));
+  return %F64F16round((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:226 Math.sumPrecise
 function MathSumPrecise(items) {
+  let $1;
   if (items === undefined || items === null) {
     throw %NewTypeError("not an object");
   }
@@ -5928,7 +5988,7 @@ function MathSumPrecise(items) {
   const list = %ArrayCreate(0);
   let n = 0;
   while (true) {
-    const result = IteratorNextResult(iterator, next);
+    const result = (($1 = %Call(next, iterator), ((!%IsObject($1)) ? %Throw(%NewTypeError("iterator must return an object")) : (%AsObj($1)))));
     if (%ToBoolean(%Get(result, "done"))) {
       break;
     }
@@ -5945,80 +6005,80 @@ function MathSumPrecise(items) {
 
 // builtins/math.ts:254 Math.log
 function MathLog(x) {
-  return %F64Log(ToNumber(x));
+  return %F64Log((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:262 Math.log1p
 function MathLog1p(x) {
-  return %F64Log1p(ToNumber(x));
+  return %F64Log1p((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:270 Math.log10
 function MathLog10(x) {
-  return %F64Log10(ToNumber(x));
+  return %F64Log10((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:278 Math.log2
 function MathLog2(x) {
-  return %F64Log2(ToNumber(x));
+  return %F64Log2((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:286 Math.round
 function MathRound(x) {
-  return %F64Round(ToNumber(x));
+  return %F64Round((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:294 Math.sign
 function MathSign(x) {
-  return %F64Sign(ToNumber(x));
+  return %F64Sign((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:302 Math.sin
 function MathSin(x) {
-  return %F64Sin(ToNumber(x));
+  return %F64Sin((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:310 Math.sinh
 function MathSinh(x) {
-  return %F64Sinh(ToNumber(x));
+  return %F64Sinh((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:318 Math.sqrt
 function MathSqrt(x) {
-  return %F64Sqrt(ToNumber(x));
+  return %F64Sqrt((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:326 Math.tan
 function MathTan(x) {
-  return %F64Tan(ToNumber(x));
+  return %F64Tan((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:334 Math.tanh
 function MathTanh(x) {
-  return %F64Tanh(ToNumber(x));
+  return %F64Tanh((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:342 Math.trunc
 function MathTrunc(x) {
-  return %F64Trunc(ToNumber(x));
+  return %F64Trunc((((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:350 Math.atan2
 function MathAtan2(y, x) {
-  const ny = ToNumber(y);
-  return %F64Atan2(ny, ToNumber(x));
+  const ny = (((%IsObject(y)) ? (%ToNumberPrimitive(ToPrimitive(y, "number"))) : (%ToNumberPrimitive(y))));
+  return %F64Atan2(ny, (((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x)))));
 }
 
 // builtins/math.ts:359 Math.imul
 function MathImul(x, y) {
-  const a = ToNumber(x);
-  return %F64Imul(a, ToNumber(y));
+  const a = (((%IsObject(x)) ? (%ToNumberPrimitive(ToPrimitive(x, "number"))) : (%ToNumberPrimitive(x))));
+  return %F64Imul(a, (((%IsObject(y)) ? (%ToNumberPrimitive(ToPrimitive(y, "number"))) : (%ToNumberPrimitive(y)))));
 }
 
 // builtins/math.ts:368 Math.pow
 function MathPow(base, exponent) {
-  const b = ToNumber(base);
-  return %NumberPow(b, ToNumber(exponent));
+  const b = (((%IsObject(base)) ? (%ToNumberPrimitive(ToPrimitive(base, "number"))) : (%ToNumberPrimitive(base))));
+  return %NumberPow(b, (((%IsObject(exponent)) ? (%ToNumberPrimitive(ToPrimitive(exponent, "number"))) : (%ToNumberPrimitive(exponent)))));
 }
 
 // builtins/math.ts:374
@@ -6030,7 +6090,7 @@ function CoerceNumbers(args) {
   for (let i = 0; i < n; i++) {
     const v = %Get(args, i);
     if (!%IsNumber(v)) {
-      %CreateDataPropertyOrThrow(args, i, ToNumber(v));
+      %CreateDataPropertyOrThrow(args, i, (((%IsObject(v)) ? (%ToNumberPrimitive(ToPrimitive(v, "number"))) : (%ToNumberPrimitive(v)))));
     }
   }
   return n;
@@ -6085,9 +6145,10 @@ function MathRandomBuiltin() {
 
 // builtins/number.ts:9 constructor Number
 function NumberConstructor(...args) {
+  let $1, $2;
   let n = 0;
   if (LengthOfArrayLike(args) > 0) {
-    const prim = ToNumeric(%Get(args, 0));
+    const prim = ($1 = %Get(args, 0), ($2 = ToPrimitive($1, "number"), ((%IsBigInt($2)) ? ($2) : (%ToNumberPrimitive($2)))));
     if (%IsBigInt(prim)) {
       n = %BigIntToNumber(prim);
     } else {
@@ -6111,33 +6172,38 @@ function ThisNumberValue(value) {
 
 // builtins/number.ts:39 Number.prototype.toString
 function NumberPrototypeToString(radix) {
-  const x = ThisNumberValue(this);
+  let $1;
+  const x = (($1 = %PrimitiveValue(this), ((!%IsNumber($1)) ? %Throw(%NewTypeError("not a number")) : (%AsNumber($1)))));
   let r = 10;
   if (radix !== undefined) {
-    r = ToIntegerOrInfinity(radix);
+    r = ((%ToIntegerOrInfinityNumber((((%IsObject(radix)) ? (%ToNumberPrimitive(ToPrimitive(radix, "number"))) : (%ToNumberPrimitive(radix)))))));
   }
   return %NumberToString(x, r);
 }
 
 // builtins/number.ts:52 Number.prototype.toLocaleString
 function NumberPrototypeToLocaleString() {
-  return %NumberToString(ThisNumberValue(this), 10);
+  let $1;
+  return %NumberToString((($1 = %PrimitiveValue(this), ((!%IsNumber($1)) ? %Throw(%NewTypeError("not a number")) : (%AsNumber($1))))), 10);
 }
 
 // builtins/number.ts:60 Number.prototype.valueOf
 function NumberPrototypeValueOf() {
-  return ThisNumberValue(this);
+  let $1;
+  return (($1 = %PrimitiveValue(this), ((!%IsNumber($1)) ? %Throw(%NewTypeError("not a number")) : (%AsNumber($1)))));
 }
 
 // builtins/number.ts:68 Number.prototype.toFixed
 function NumberPrototypeToFixed(fractionDigits) {
-  const x = ThisNumberValue(this);
+  let $1;
+  const x = (($1 = %PrimitiveValue(this), ((!%IsNumber($1)) ? %Throw(%NewTypeError("not a number")) : (%AsNumber($1)))));
   return %NumberToFixed(x, ToIntegerOrInfinity(fractionDigits));
 }
 
 // builtins/number.ts:77 Number.prototype.toExponential
 function NumberPrototypeToExponential(fractionDigits) {
-  const x = ThisNumberValue(this);
+  let $1;
+  const x = (($1 = %PrimitiveValue(this), ((!%IsNumber($1)) ? %Throw(%NewTypeError("not a number")) : (%AsNumber($1)))));
   const f = ToIntegerOrInfinity(fractionDigits);
   if (fractionDigits === undefined) {
     return %NumberToExponential(x, undefined);
@@ -6147,11 +6213,12 @@ function NumberPrototypeToExponential(fractionDigits) {
 
 // builtins/number.ts:90 Number.prototype.toPrecision
 function NumberPrototypeToPrecision(precision) {
-  const x = ThisNumberValue(this);
+  let $1;
+  const x = (($1 = %PrimitiveValue(this), ((!%IsNumber($1)) ? %Throw(%NewTypeError("not a number")) : (%AsNumber($1)))));
   if (precision === undefined) {
     return %NumberToString(x, 10);
   }
-  return %NumberToPrecision(x, ToIntegerOrInfinity(precision));
+  return %NumberToPrecision(x, ((%ToIntegerOrInfinityNumber((((%IsObject(precision)) ? (%ToNumberPrimitive(ToPrimitive(precision, "number"))) : (%ToNumberPrimitive(precision))))))));
 }
 
 // builtins/number.ts:99
@@ -6161,7 +6228,8 @@ function IsFiniteNumber(n) {
 
 // builtins/number.ts:107 Number.isFinite
 function NumberIsFinite(number) {
-  return %IsNumber(number) && IsFiniteNumber(%AsNumber(number));
+  let $1;
+  return %IsNumber(number) && ($1 = %AsNumber(number), ($1 === $1 && $1 !== 1 / 0 && $1 !== -1 / 0));
 }
 
 // builtins/number.ts:115 Number.isInteger
@@ -6170,7 +6238,7 @@ function NumberIsInteger(number) {
     return false;
   }
   const n = %AsNumber(number);
-  return IsFiniteNumber(n) && %ToIntegerOrInfinityNumber(n) === n;
+  return ((n === n && n !== 1 / 0 && n !== -1 / 0)) && %ToIntegerOrInfinityNumber(n) === n;
 }
 
 // builtins/number.ts:127 Number.isNaN
@@ -6239,18 +6307,18 @@ function GlobalParseFloat(string) {
 // builtins/number.ts:225 parseInt Number.parseInt
 function GlobalParseInt(string, radix) {
   const s = ToString(string);
-  return %StringParseInt(s, %NumberToInt32(ToNumber(radix)));
+  return %StringParseInt(s, %NumberToInt32((((%IsObject(radix)) ? (%ToNumberPrimitive(ToPrimitive(radix, "number"))) : (%ToNumberPrimitive(radix))))));
 }
 
 // builtins/number.ts:234 isNaN
 function GlobalIsNaN(number) {
-  const n = ToNumber(number);
+  const n = (((%IsObject(number)) ? (%ToNumberPrimitive(ToPrimitive(number, "number"))) : (%ToNumberPrimitive(number))));
   return n !== n;
 }
 
 // builtins/number.ts:243 isFinite
 function GlobalIsFinite(number) {
-  return IsFiniteNumber(ToNumber(number));
+  return IsFiniteNumber((((%IsObject(number)) ? (%ToNumberPrimitive(ToPrimitive(number, "number"))) : (%ToNumberPrimitive(number)))));
 }
 
 // builtins/object.ts:8 constructor Object
@@ -6309,21 +6377,22 @@ function ToPropertyDescriptor(attributes) {
 
 // builtins/object.ts:69
 function DefineOwnProperty(o, key, desc) {
-  if (%IsTypedArray(o) && %HasOwnProperty(desc, "value") && IsCanonicalNumericKey(key) && !IsImmutableBuffer(%AsObj(%TypedArrayField(o, 1)))) {
+  let $1;
+  if (%IsTypedArray(o) && %HasOwnProperty(desc, "value") && IsCanonicalNumericKey(key) && !($1 = %AsObj(%TypedArrayField(o, 1)), (%AsBool(%BufferInfo($1, 4))))) {
     const value = %Get(desc, "value");
-    if (!IsElementValue(o, value)) {
+    if (!(((((%F64ToI32(%AsNumber(%TypedArrayField(o, 0))))) >= 10) ? (%IsBigInt(value)) : (%IsNumber(value))))) {
       %DeleteProperty(desc, "value");
       if (!%DefineOwnPropertyFromRecord(o, key, desc)) {
         return false;
       }
-      TASet(o, ToNumber(key), value);
+      TASet(o, (((%IsObject(key)) ? (%ToNumberPrimitive(ToPrimitive(key, "number"))) : (%ToNumberPrimitive(key)))), value);
       return true;
     }
   }
   if (!%IsProxy(o) && %IsArray(o) && key === "length" && %HasOwnProperty(desc, "value")) {
     const v = %Get(desc, "value");
-    const newLen = ToNumber(v);
-    const numberLen = ToNumber(v);
+    const newLen = (((%IsObject(v)) ? (%ToNumberPrimitive(ToPrimitive(v, "number"))) : (%ToNumberPrimitive(v))));
+    const numberLen = (((%IsObject(v)) ? (%ToNumberPrimitive(ToPrimitive(v, "number"))) : (%ToNumberPrimitive(v))));
     if (!(newLen >= 0 && newLen <= 4294967295 && %ToIntegerOrInfinityNumber(newLen) === newLen)) {
       throw %NewRangeError("invalid array length");
     }
@@ -6717,7 +6786,8 @@ function ClaimResolution(data) {
 
 // builtins/promise.ts:63 %PromiseResolveFunction
 function PromiseResolveFunction(resolution) {
-  ResolveWithData(this, resolution);
+  let $1;
+  (($1 = ClaimResolution(this), (($1 !== undefined) ? (ResolvePromise(%AsObj($1), resolution), undefined) : undefined)));
 }
 
 // builtins/promise.ts:68
@@ -6738,7 +6808,8 @@ function RejectWithData(data, reason) {
 
 // builtins/promise.ts:87 %PromiseRejectFunction
 function PromiseRejectFunction(reason) {
-  RejectWithData(this, reason);
+  let $1;
+  (($1 = ClaimResolution(this), (($1 !== undefined) ? (%RejectPromise(%AsObj($1), reason), undefined) : undefined)));
 }
 
 // builtins/promise.ts:92
@@ -6751,8 +6822,9 @@ function CapabilityPromise(capability) {
 
 // builtins/promise.ts:100
 function ResolveCapability(capability, v) {
+  let $1;
   if (%IsPromise(capability)) {
-    ResolveWithData(capability, v);
+    (($1 = ClaimResolution(capability), (($1 !== undefined) ? (ResolvePromise(%AsObj($1), v), undefined) : undefined)));
     return;
   }
   %Call(%RecordGet(%AsObj(capability), 1), undefined, v);
@@ -6760,8 +6832,9 @@ function ResolveCapability(capability, v) {
 
 // builtins/promise.ts:109
 function RejectCapability(capability, reason) {
+  let $1;
   if (%IsPromise(capability)) {
-    RejectWithData(capability, reason);
+    (($1 = ClaimResolution(capability), (($1 !== undefined) ? (%RejectPromise(%AsObj($1), reason), undefined) : undefined)));
     return;
   }
   %Call(%RecordGet(%AsObj(capability), 2), undefined, reason);
@@ -6821,7 +6894,7 @@ function PromiseResolve(c, x) {
   }
   const capability = NewPromiseCapability(c);
   ResolveCapability(capability, x);
-  return CapabilityPromise(capability);
+  return (((%IsPromise(capability)) ? (capability) : (%RecordGet(%AsObj(capability), 0))));
 }
 
 // builtins/promise.ts:179
@@ -6927,14 +7000,14 @@ function PromiseThisConstructor(c) {
 
 // builtins/promise.ts:303 Promise.resolve
 function PromiseStaticResolve(x) {
-  return PromiseResolve(PromiseThisConstructor(this), x);
+  return PromiseResolve((((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (this))), x);
 }
 
 // builtins/promise.ts:311 Promise.reject
 function PromiseStaticReject(r) {
-  const capability = NewPromiseCapability(PromiseThisConstructor(this));
+  const capability = NewPromiseCapability((((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (this))));
   RejectCapability(capability, r);
-  return CapabilityPromise(capability);
+  return (((%IsPromise(capability)) ? (capability) : (%RecordGet(%AsObj(capability), 0))));
 }
 
 // builtins/promise.ts:323
@@ -6966,6 +7039,7 @@ function NewElementRecord(index, values, capability, remaining) {
 
 // builtins/promise.ts:357
 function SettleElement(data, x, reject) {
+  let $1, $2;
   const r = %AsObj(data);
   if (%RecordGet(r, 0) === true) {
     return;
@@ -6973,7 +7047,7 @@ function SettleElement(data, x, reject) {
   %RecordSet(r, 0, true);
   const values = %AsObj(%RecordGet(r, 2));
   %CreateDataPropertyOrThrow(values, %RecordGet(r, 1), x);
-  if (DecrementRemaining(%AsObj(%RecordGet(r, 4))) === 0) {
+  if (($1 = %AsObj(%RecordGet(r, 4)), ($2 = %AsNumber(%RecordGet($1, 0)) - 1, (%RecordSet($1, 0, $2), ($2)))) === 0) {
     const capability = %RecordGet(r, 3);
     const keys = %RecordGet(r, 5);
     if (reject) {
@@ -6998,10 +7072,11 @@ function KeyedResult(keys, values) {
 
 // builtins/promise.ts:395
 function PerformPromiseKeyed(thisValue, promises, kind) {
-  const c = PromiseThisConstructor(thisValue);
+  let $1, $2, $3, $4, $5;
+  const c = (((!%IsObject(thisValue)) ? %Throw(%NewTypeError("not an object")) : (thisValue)));
   const capability = NewPromiseCapability(c);
   try {
-    const promiseResolve = GetPromiseResolve(c);
+    const promiseResolve = (($1 = %Get(%AsObj(c), "resolve"), ((!%IsCallable($1)) ? %Throw(%NewTypeError("not a function")) : ($1))));
     if (!%IsObject(promises)) {
       throw %NewTypeError("not an object");
     }
@@ -7012,7 +7087,7 @@ function PerformPromiseKeyed(thisValue, promises, kind) {
     const values = %ArrayCreate(0);
     const remaining = %NewRecord(1);
     %RecordSet(remaining, 0, 1);
-    const rejectFn = kind === 0 ? CapabilityRejectFunction(capability) : undefined;
+    const rejectFn = kind === 0 ? (((%IsPromise(capability)) ? (%NewBuiltinClosure(1, capability, 1)) : (%RecordGet(%AsObj(capability), 2)))) : undefined;
     let index = 0;
     for (let k = 0; k < count; k++) {
       const key = %Get(allKeys, k);
@@ -7026,20 +7101,20 @@ function PerformPromiseKeyed(thisValue, promises, kind) {
         %RecordSet(data, 5, keys);
         %RecordSet(remaining, 0, %AsNumber(%RecordGet(remaining, 0)) + 1);
         if (kind === 0) {
-          InvokeThen(nextPromise, %NewBuiltinClosure(3, data, 1), rejectFn);
+          ($2 = %NewBuiltinClosure(3, data, 1), (%Call(%GetV(nextPromise, "then"), nextPromise, $2, rejectFn)));
         } else {
-          InvokeThen(nextPromise, %NewBuiltinClosure(4, data, 1), %NewBuiltinClosure(5, data, 1));
+          ($3 = %NewBuiltinClosure(4, data, 1), $4 = %NewBuiltinClosure(5, data, 1), (%Call(%GetV(nextPromise, "then"), nextPromise, $3, $4)));
         }
         index++;
       }
     }
-    if (DecrementRemaining(remaining) === 0) {
+    if ((($5 = %AsNumber(%RecordGet(remaining, 0)) - 1, (%RecordSet(remaining, 0, $5), ($5)))) === 0) {
       ResolveCapability(capability, KeyedResult(keys, values));
     }
   } catch (e) {
     RejectCapability(capability, e);
   }
-  return CapabilityPromise(capability);
+  return (((%IsPromise(capability)) ? (capability) : (%RecordGet(%AsObj(capability), 0))));
 }
 
 // builtins/promise.ts:444 Promise.allKeyed
@@ -7106,18 +7181,19 @@ function CreateArrayFromList(list) {
 
 // builtins/promise.ts:526
 function PerformPromiseCombinator(thisValue, iterable, kind) {
-  const c = PromiseThisConstructor(thisValue);
+  let $1, $2, $3, $4, $5, $6, $7;
+  const c = (((!%IsObject(thisValue)) ? %Throw(%NewTypeError("not an object")) : (thisValue)));
   const capability = NewPromiseCapability(c);
   let promiseResolve = undefined;
   let iterator = undefined;
   let next = undefined;
   try {
-    promiseResolve = GetPromiseResolve(c);
+    promiseResolve = (($1 = %Get(%AsObj(c), "resolve"), ((!%IsCallable($1)) ? %Throw(%NewTypeError("not a function")) : ($1))));
     iterator = GetIterator(iterable);
     next = %Get(%AsObj(iterator), "next");
   } catch (e) {
     RejectCapability(capability, e);
-    return CapabilityPromise(capability);
+    return (((%IsPromise(capability)) ? (capability) : (%RecordGet(%AsObj(capability), 0))));
   }
   const it = %AsObj(iterator);
   let iteratorDone = false;
@@ -7129,10 +7205,10 @@ function PerformPromiseCombinator(thisValue, iterable, kind) {
     let resolveFn = undefined;
     let rejectFn = undefined;
     if (kind === 3 || kind === 2) {
-      resolveFn = CapabilityResolveFunction(capability);
+      resolveFn = (((%IsPromise(capability)) ? (%NewBuiltinClosure(0, capability, 1)) : (%RecordGet(%AsObj(capability), 1))));
     }
     if (kind !== 2) {
-      rejectFn = CapabilityRejectFunction(capability);
+      rejectFn = (((%IsPromise(capability)) ? (%NewBuiltinClosure(1, capability, 1)) : (%RecordGet(%AsObj(capability), 2))));
     }
     while (true) {
       iteratorDone = true;
@@ -7140,16 +7216,16 @@ function PerformPromiseCombinator(thisValue, iterable, kind) {
       if (%IteratorFastReady(it, next)) {
         nextValue = %IteratorFastValue(it, next);
       } else {
-        const result = IteratorNextResult(it, next);
+        const result = (($2 = %Call(next, it), ((!%IsObject($2)) ? %Throw(%NewTypeError("iterator must return an object")) : (%AsObj($2)))));
         if (%ToBoolean(%Get(result, "done"))) {
-          if (kind !== 3 && DecrementRemaining(remaining) === 0) {
+          if (kind !== 3 && (($3 = %AsNumber(%RecordGet(remaining, 0)) - 1, (%RecordSet(remaining, 0, $3), ($3)))) === 0) {
             if (kind === 2) {
               RejectCapability(capability, NewAggregateError(values));
             } else {
               ResolveCapability(capability, values);
             }
           }
-          return CapabilityPromise(capability);
+          return (((%IsPromise(capability)) ? (capability) : (%RecordGet(%AsObj(capability), 0))));
         }
         nextValue = %Get(result, "value");
       }
@@ -7159,16 +7235,16 @@ function PerformPromiseCombinator(thisValue, iterable, kind) {
       }
       const nextPromise = %Call(promiseResolve, c, nextValue);
       if (kind === 3) {
-        InvokeThen(nextPromise, resolveFn, rejectFn);
+        ((%Call(%GetV(nextPromise, "then"), nextPromise, resolveFn, rejectFn)));
       } else {
         const data = NewElementRecord(index, values, capability, remaining);
         %RecordSet(remaining, 0, %AsNumber(%RecordGet(remaining, 0)) + 1);
         if (kind === 0) {
-          InvokeThen(nextPromise, %NewBuiltinClosure(3, data, 1), rejectFn);
+          ($4 = %NewBuiltinClosure(3, data, 1), (%Call(%GetV(nextPromise, "then"), nextPromise, $4, rejectFn)));
         } else if (kind === 1) {
-          InvokeThen(nextPromise, %NewBuiltinClosure(4, data, 1), %NewBuiltinClosure(5, data, 1));
+          ($5 = %NewBuiltinClosure(4, data, 1), $6 = %NewBuiltinClosure(5, data, 1), (%Call(%GetV(nextPromise, "then"), nextPromise, $5, $6)));
         } else {
-          InvokeThen(nextPromise, resolveFn, %NewBuiltinClosure(6, data, 1));
+          ($7 = %NewBuiltinClosure(6, data, 1), (%Call(%GetV(nextPromise, "then"), nextPromise, resolveFn, $7)));
         }
       }
       index++;
@@ -7178,7 +7254,7 @@ function PerformPromiseCombinator(thisValue, iterable, kind) {
       IteratorCloseThrow(it);
     }
     RejectCapability(capability, e);
-    return CapabilityPromise(capability);
+    return (((%IsPromise(capability)) ? (capability) : (%RecordGet(%AsObj(capability), 0))));
   }
 }
 
@@ -7199,14 +7275,14 @@ function PromiseAny(iterable) {
 
 // builtins/promise.ts:636 Promise.try
 function PromiseTry(callback, ...args) {
-  const c = PromiseThisConstructor(this);
+  const c = (((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (this)));
   let result = undefined;
   try {
     result = %CallWithArray(callback, undefined, args);
   } catch (e) {
     const capability = NewPromiseCapability(c);
     RejectCapability(capability, e);
-    return CapabilityPromise(capability);
+    return (((%IsPromise(capability)) ? (capability) : (%RecordGet(%AsObj(capability), 0))));
   }
   return PromiseResolve(c, result);
 }
@@ -7218,11 +7294,11 @@ function PromiseRace(iterable) {
 
 // builtins/promise.ts:661 Promise.withResolvers
 function PromiseWithResolvers() {
-  const capability = NewPromiseCapability(PromiseThisConstructor(this));
+  const capability = NewPromiseCapability((((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (this))));
   const o = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
-  %CreateDataPropertyOrThrow(o, "promise", CapabilityPromise(capability));
-  %CreateDataPropertyOrThrow(o, "resolve", CapabilityResolveFunction(capability));
-  %CreateDataPropertyOrThrow(o, "reject", CapabilityRejectFunction(capability));
+  %CreateDataPropertyOrThrow(o, "promise", (((%IsPromise(capability)) ? (capability) : (%RecordGet(%AsObj(capability), 0)))));
+  %CreateDataPropertyOrThrow(o, "resolve", (((%IsPromise(capability)) ? (%NewBuiltinClosure(0, capability, 1)) : (%RecordGet(%AsObj(capability), 1)))));
+  %CreateDataPropertyOrThrow(o, "reject", (((%IsPromise(capability)) ? (%NewBuiltinClosure(1, capability, 1)) : (%RecordGet(%AsObj(capability), 2)))));
   return o;
 }
 
@@ -7235,27 +7311,28 @@ function PromisePrototypeThen(onFulfilled, onRejected) {
   const c = SpeciesConstructor(promise, %IntrinsicPromise());
   const capability = NewPromiseCapability(c);
   %PerformPromiseThen(promise, onFulfilled, onRejected, capability);
-  return CapabilityPromise(capability);
+  return (((%IsPromise(capability)) ? (capability) : (%RecordGet(%AsObj(capability), 0))));
 }
 
 // builtins/promise.ts:691 Promise.prototype.catch
 function PromisePrototypeCatch(onRejected) {
-  return InvokeThen(this, undefined, onRejected);
+  return ((%Call(%GetV(this, "then"), this, undefined, onRejected)));
 }
 
 // builtins/promise.ts:699 Promise.prototype.finally
 function PromisePrototypeFinally(onFinally) {
+  let $1, $2;
   if (!%IsObject(this)) {
     throw %NewTypeError("not an object");
   }
   const c = SpeciesConstructor(%AsObj(this), %IntrinsicPromise());
   if (!%IsCallable(onFinally)) {
-    return InvokeThen(this, onFinally, onFinally);
+    return ((%Call(%GetV(this, "then"), this, onFinally, onFinally)));
   }
   const data = %NewRecord(2);
   %RecordSet(data, 0, onFinally);
   %RecordSet(data, 1, c);
-  return InvokeThen(this, %NewBuiltinClosure(7, data, 1), %NewBuiltinClosure(8, data, 1));
+  return ($1 = %NewBuiltinClosure(7, data, 1), $2 = %NewBuiltinClosure(8, data, 1), (%Call(%GetV(this, "then"), this, $1, $2)));
 }
 
 // builtins/promise.ts:717 %PromiseThenFinally
@@ -7306,7 +7383,7 @@ function ProxyConstructor(target, handler) {
   if (new.target === undefined) {
     throw %NewTypeError("must be called with new");
   }
-  return ProxyCreate(target, handler);
+  return (((!%IsObject(target) || !%IsObject(handler)) ? %Throw(%NewTypeError("not an object")) : (%NewProxy(%AsObj(target), %AsObj(handler)))));
 }
 
 // builtins/proxy.ts:27
@@ -7319,7 +7396,7 @@ function ProxyCreate(target, handler) {
 
 // builtins/proxy.ts:38 Proxy.revocable
 function ProxyRevocable(target, handler) {
-  const p = ProxyCreate(target, handler);
+  const p = (((!%IsObject(target) || !%IsObject(handler)) ? %Throw(%NewTypeError("not an object")) : (%NewProxy(%AsObj(target), %AsObj(handler)))));
   const revoker = %NewBuiltinClosure(15, p, 0);
   const result = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
   %CreateDataPropertyOrThrow(result, "proxy", p);
@@ -7343,7 +7420,8 @@ function TrapKey(key) {
 
 // builtins/proxy.ts:68
 function ProxyTrap(handler, name) {
-  return GetMethod(handler, name);
+  let $1;
+  return (($1 = %GetV(handler, name), (($1 === undefined || $1 === null) ? (undefined) : ((!%IsCallable($1)) ? %Throw(%NewTypeError("not a function")) : ($1)))));
 }
 
 // builtins/proxy.ts:73
@@ -7363,7 +7441,7 @@ function IsDataDescriptor(desc) {
 
 // builtins/proxy.ts:88
 function CompletePropertyDescriptor(desc) {
-  if (!IsAccessorDescriptor(desc)) {
+  if (!((%HasOwnProperty(desc, "get") || %HasOwnProperty(desc, "set")))) {
     if (!%HasOwnProperty(desc, "value")) {
       %CreateDataPropertyOrThrow(desc, "value", undefined);
     }
@@ -7392,28 +7470,28 @@ function IsCompatiblePropertyDescriptor(extensible, desc, current) {
     return extensible;
   }
   const cur = %AsObj(current);
-  if (DescFlag(cur, "configurable")) {
+  if (((%HasOwnProperty(cur, "configurable") && %ToBoolean(%Get(cur, "configurable"))))) {
     return true;
   }
-  if (DescFlag(desc, "configurable")) {
+  if (((%HasOwnProperty(desc, "configurable") && %ToBoolean(%Get(desc, "configurable"))))) {
     return false;
   }
-  if (%HasOwnProperty(desc, "enumerable") && DescFlag(desc, "enumerable") !== DescFlag(cur, "enumerable")) {
+  if (%HasOwnProperty(desc, "enumerable") && ((%HasOwnProperty(desc, "enumerable") && %ToBoolean(%Get(desc, "enumerable")))) !== ((%HasOwnProperty(cur, "enumerable") && %ToBoolean(%Get(cur, "enumerable"))))) {
     return false;
   }
-  const generic = !IsAccessorDescriptor(desc) && !IsDataDescriptor(desc);
-  if (!generic && IsAccessorDescriptor(desc) !== IsAccessorDescriptor(cur)) {
+  const generic = !((%HasOwnProperty(desc, "get") || %HasOwnProperty(desc, "set"))) && !((%HasOwnProperty(desc, "value") || %HasOwnProperty(desc, "writable")));
+  if (!generic && ((%HasOwnProperty(desc, "get") || %HasOwnProperty(desc, "set"))) !== ((%HasOwnProperty(cur, "get") || %HasOwnProperty(cur, "set")))) {
     return false;
   }
-  if (IsAccessorDescriptor(cur)) {
+  if (((%HasOwnProperty(cur, "get") || %HasOwnProperty(cur, "set")))) {
     if (%HasOwnProperty(desc, "get") && !%SameValue(%Get(desc, "get"), %Get(cur, "get"))) {
       return false;
     }
     if (%HasOwnProperty(desc, "set") && !%SameValue(%Get(desc, "set"), %Get(cur, "set"))) {
       return false;
     }
-  } else if (!DescFlag(cur, "writable")) {
-    if (DescFlag(desc, "writable")) {
+  } else if (!((%HasOwnProperty(cur, "writable") && %ToBoolean(%Get(cur, "writable"))))) {
+    if (((%HasOwnProperty(desc, "writable") && %ToBoolean(%Get(desc, "writable"))))) {
       return false;
     }
     if (%HasOwnProperty(desc, "value") && !%SameValue(%Get(desc, "value"), %Get(cur, "value"))) {
@@ -7454,16 +7532,16 @@ function DescriptorAttributes(desc) {
   }
   const d = %AsObj(desc);
   let attrs = 0;
-  if (DescFlag(d, "writable")) {
+  if (((%HasOwnProperty(d, "writable") && %ToBoolean(%Get(d, "writable"))))) {
     attrs = attrs | 1;
   }
-  if (DescFlag(d, "enumerable")) {
+  if (((%HasOwnProperty(d, "enumerable") && %ToBoolean(%Get(d, "enumerable"))))) {
     attrs = attrs | 2;
   }
-  if (DescFlag(d, "configurable")) {
+  if (((%HasOwnProperty(d, "configurable") && %ToBoolean(%Get(d, "configurable"))))) {
     attrs = attrs | 4;
   }
-  if (IsAccessorDescriptor(d)) {
+  if (((%HasOwnProperty(d, "get") || %HasOwnProperty(d, "set")))) {
     attrs = attrs | 8;
   }
   return attrs;
@@ -7484,7 +7562,7 @@ function ListIncludes(list, v) {
 function ProxyGetPrototypeOf(p) {
   const handler = %ProxyHandler(p);
   const target = %ProxyTarget(p);
-  const trap = ProxyTrap(handler, "getPrototypeOf");
+  const trap = ((GetMethod(handler, "getPrototypeOf")));
   if (trap === undefined) {
     return %GetPrototypeOf(target);
   }
@@ -7505,7 +7583,7 @@ function ProxyGetPrototypeOf(p) {
 function ProxySetPrototypeOf(p, v) {
   const handler = %ProxyHandler(p);
   const target = %ProxyTarget(p);
-  const trap = ProxyTrap(handler, "setPrototypeOf");
+  const trap = ((GetMethod(handler, "setPrototypeOf")));
   if (trap === undefined) {
     return %SetPrototypeOf(target, v);
   }
@@ -7525,7 +7603,7 @@ function ProxySetPrototypeOf(p, v) {
 function ProxyIsExtensible(p) {
   const handler = %ProxyHandler(p);
   const target = %ProxyTarget(p);
-  const trap = ProxyTrap(handler, "isExtensible");
+  const trap = ((GetMethod(handler, "isExtensible")));
   if (trap === undefined) {
     return %IsExtensible(target);
   }
@@ -7540,7 +7618,7 @@ function ProxyIsExtensible(p) {
 function ProxyPreventExtensions(p) {
   const handler = %ProxyHandler(p);
   const target = %ProxyTarget(p);
-  const trap = ProxyTrap(handler, "preventExtensions");
+  const trap = ((GetMethod(handler, "preventExtensions")));
   if (trap === undefined) {
     return %PreventExtensions(target);
   }
@@ -7553,13 +7631,14 @@ function ProxyPreventExtensions(p) {
 
 // builtins/proxy.ts:298
 function ProxyGetOwnProperty(p, key) {
+  let $1, $2, $3;
   const handler = %ProxyHandler(p);
   const target = %ProxyTarget(p);
-  const trap = ProxyTrap(handler, "getOwnPropertyDescriptor");
+  const trap = ((GetMethod(handler, "getOwnPropertyDescriptor")));
   if (trap === undefined) {
     return %GetOwnPropertyDescriptorObject(target, key);
   }
-  const trapResultObj = %Call(trap, handler, target, TrapKey(key));
+  const trapResultObj = %Call(trap, handler, target, (((%IsNumber(key)) ? (%ToStringPrimitive(key)) : (key))));
   if (!%IsObject(trapResultObj) && trapResultObj !== undefined) {
     throw %NewTypeError("proxy: inconsistent getOwnPropertyDescriptor");
   }
@@ -7568,7 +7647,7 @@ function ProxyGetOwnProperty(p, key) {
     if (targetDesc === undefined) {
       return undefined;
     }
-    if (!DescFlag(%AsObj(targetDesc), "configurable")) {
+    if (!($1 = %AsObj(targetDesc), (%HasOwnProperty($1, "configurable") && %ToBoolean(%Get($1, "configurable"))))) {
       throw %NewTypeError("proxy: inconsistent getOwnPropertyDescriptor");
     }
     if (!%IsExtensible(target)) {
@@ -7582,12 +7661,12 @@ function ProxyGetOwnProperty(p, key) {
   if (!IsCompatiblePropertyDescriptor(extensibleTarget, resultDesc, targetDesc)) {
     throw %NewTypeError("proxy: inconsistent getOwnPropertyDescriptor");
   }
-  if (!DescFlag(resultDesc, "configurable")) {
-    if (targetDesc === undefined || DescFlag(%AsObj(targetDesc), "configurable")) {
+  if (!((%HasOwnProperty(resultDesc, "configurable") && %ToBoolean(%Get(resultDesc, "configurable"))))) {
+    if (targetDesc === undefined || ($2 = %AsObj(targetDesc), (%HasOwnProperty($2, "configurable") && %ToBoolean(%Get($2, "configurable"))))) {
       throw %NewTypeError("proxy: inconsistent getOwnPropertyDescriptor");
     }
-    if (%HasOwnProperty(resultDesc, "writable") && !DescFlag(resultDesc, "writable")) {
-      if (DescFlag(%AsObj(targetDesc), "writable")) {
+    if (%HasOwnProperty(resultDesc, "writable") && !((%HasOwnProperty(resultDesc, "writable") && %ToBoolean(%Get(resultDesc, "writable"))))) {
+      if (($3 = %AsObj(targetDesc), (%HasOwnProperty($3, "writable") && %ToBoolean(%Get($3, "writable"))))) {
         throw %NewTypeError("proxy: inconsistent getOwnPropertyDescriptor");
       }
     }
@@ -7618,17 +7697,17 @@ function ProxyOwnPropertyAttributes(p, key) {
 function ProxyDefineOwnPropertyFromRecord(p, key, desc) {
   const handler = %ProxyHandler(p);
   const target = %ProxyTarget(p);
-  const trap = ProxyTrap(handler, "defineProperty");
+  const trap = ((GetMethod(handler, "defineProperty")));
   if (trap === undefined) {
     return DefineOwnProperty(target, key, desc);
   }
   const descObj = FromPropertyDescriptor(desc);
-  if (!%ToBoolean(%Call(trap, handler, target, TrapKey(key), descObj))) {
+  if (!%ToBoolean(%Call(trap, handler, target, (((%IsNumber(key)) ? (%ToStringPrimitive(key)) : (key))), descObj))) {
     return false;
   }
   const targetDesc = %GetOwnPropertyDescriptorObject(target, key);
   const extensibleTarget = %IsExtensible(target);
-  const settingConfigFalse = %HasOwnProperty(desc, "configurable") && !DescFlag(desc, "configurable");
+  const settingConfigFalse = %HasOwnProperty(desc, "configurable") && !((%HasOwnProperty(desc, "configurable") && %ToBoolean(%Get(desc, "configurable"))));
   if (targetDesc === undefined) {
     if (!extensibleTarget || settingConfigFalse) {
       throw %NewTypeError("proxy: inconsistent defineProperty");
@@ -7639,11 +7718,11 @@ function ProxyDefineOwnPropertyFromRecord(p, key, desc) {
   if (!IsCompatiblePropertyDescriptor(extensibleTarget, desc, targetDesc)) {
     throw %NewTypeError("proxy: inconsistent defineProperty");
   }
-  if (settingConfigFalse && DescFlag(td, "configurable")) {
+  if (settingConfigFalse && ((%HasOwnProperty(td, "configurable") && %ToBoolean(%Get(td, "configurable"))))) {
     throw %NewTypeError("proxy: inconsistent defineProperty");
   }
-  if (IsDataDescriptor(td) && !DescFlag(td, "configurable") && DescFlag(td, "writable")) {
-    if (%HasOwnProperty(desc, "writable") && !DescFlag(desc, "writable")) {
+  if (((%HasOwnProperty(td, "value") || %HasOwnProperty(td, "writable"))) && !((%HasOwnProperty(td, "configurable") && %ToBoolean(%Get(td, "configurable")))) && ((%HasOwnProperty(td, "writable") && %ToBoolean(%Get(td, "writable"))))) {
+    if (%HasOwnProperty(desc, "writable") && !((%HasOwnProperty(desc, "writable") && %ToBoolean(%Get(desc, "writable"))))) {
       throw %NewTypeError("proxy: inconsistent defineProperty");
     }
   }
@@ -7674,24 +7753,25 @@ function ProxyCreateDataProperty(p, key, v) {
 
 // builtins/proxy.ts:441 %ProxyCreateDataPropertyOrThrow
 function ProxyCreateDataPropertyOrThrow(p, key, v) {
-  if (!ProxyCreateDataProperty(p, key, v)) {
+  if (!((ProxyDefineOwnPropertyFromRecord(p, key, DataDescriptorRecord(v, 7))))) {
     throw %NewTypeError("proxy: defineProperty exception");
   }
 }
 
 // builtins/proxy.ts:451 %ProxyHas
 function ProxyHas(p, key) {
+  let $1, $2;
   const handler = %ProxyHandler(p);
   const target = %ProxyTarget(p);
-  const trap = ProxyTrap(handler, "has");
+  const trap = (((($1 = %GetV(handler, "has"), (($1 === undefined || $1 === null) ? (undefined) : ((!%IsCallable($1)) ? %Throw(%NewTypeError("not a function")) : ($1)))))));
   if (trap === undefined) {
     return %HasProperty(target, key);
   }
-  const result = %ToBoolean(%Call(trap, handler, target, TrapKey(key)));
+  const result = %ToBoolean(%Call(trap, handler, target, (((%IsNumber(key)) ? (%ToStringPrimitive(key)) : (key)))));
   if (!result) {
     const targetDesc = %GetOwnPropertyDescriptorObject(target, key);
     if (targetDesc !== undefined) {
-      if (!DescFlag(%AsObj(targetDesc), "configurable")) {
+      if (!($2 = %AsObj(targetDesc), (%HasOwnProperty($2, "configurable") && %ToBoolean(%Get($2, "configurable"))))) {
         throw %NewTypeError("proxy: inconsistent has");
       }
       if (!%IsExtensible(target)) {
@@ -7704,23 +7784,24 @@ function ProxyHas(p, key) {
 
 // builtins/proxy.ts:477 %ProxyGet
 function ProxyGet(p, key, receiver) {
+  let $1;
   const handler = %ProxyHandler(p);
   const target = %ProxyTarget(p);
-  const trap = ProxyTrap(handler, "get");
+  const trap = (((($1 = %GetV(handler, "get"), (($1 === undefined || $1 === null) ? (undefined) : ((!%IsCallable($1)) ? %Throw(%NewTypeError("not a function")) : ($1)))))));
   if (trap === undefined) {
     return %GetWithReceiver(target, key, receiver);
   }
-  const trapResult = %Call(trap, handler, target, TrapKey(key), receiver);
+  const trapResult = %Call(trap, handler, target, (((%IsNumber(key)) ? (%ToStringPrimitive(key)) : (key))), receiver);
   const targetDesc = %GetOwnPropertyDescriptorObject(target, key);
   if (targetDesc !== undefined) {
     const td = %AsObj(targetDesc);
-    if (!DescFlag(td, "configurable")) {
-      if (IsDataDescriptor(td) && !DescFlag(td, "writable")) {
+    if (!((%HasOwnProperty(td, "configurable") && %ToBoolean(%Get(td, "configurable"))))) {
+      if (((%HasOwnProperty(td, "value") || %HasOwnProperty(td, "writable"))) && !((%HasOwnProperty(td, "writable") && %ToBoolean(%Get(td, "writable"))))) {
         if (!%SameValue(trapResult, %Get(td, "value"))) {
           throw %NewTypeError("proxy: inconsistent get");
         }
       }
-      if (IsAccessorDescriptor(td) && %Get(td, "get") === undefined && trapResult !== undefined) {
+      if (((%HasOwnProperty(td, "get") || %HasOwnProperty(td, "set"))) && %Get(td, "get") === undefined && trapResult !== undefined) {
         throw %NewTypeError("proxy: inconsistent get");
       }
     }
@@ -7730,25 +7811,26 @@ function ProxyGet(p, key, receiver) {
 
 // builtins/proxy.ts:506 %ProxySet
 function ProxySet(p, key, v, receiver) {
+  let $1;
   const handler = %ProxyHandler(p);
   const target = %ProxyTarget(p);
-  const trap = ProxyTrap(handler, "set");
+  const trap = (((($1 = %GetV(handler, "set"), (($1 === undefined || $1 === null) ? (undefined) : ((!%IsCallable($1)) ? %Throw(%NewTypeError("not a function")) : ($1)))))));
   if (trap === undefined) {
     return %SetWithReceiver(target, key, v, receiver);
   }
-  if (!%ToBoolean(%Call(trap, handler, target, TrapKey(key), v, receiver))) {
+  if (!%ToBoolean(%Call(trap, handler, target, (((%IsNumber(key)) ? (%ToStringPrimitive(key)) : (key))), v, receiver))) {
     return false;
   }
   const targetDesc = %GetOwnPropertyDescriptorObject(target, key);
   if (targetDesc !== undefined) {
     const td = %AsObj(targetDesc);
-    if (!DescFlag(td, "configurable")) {
-      if (IsDataDescriptor(td) && !DescFlag(td, "writable")) {
+    if (!((%HasOwnProperty(td, "configurable") && %ToBoolean(%Get(td, "configurable"))))) {
+      if (((%HasOwnProperty(td, "value") || %HasOwnProperty(td, "writable"))) && !((%HasOwnProperty(td, "writable") && %ToBoolean(%Get(td, "writable"))))) {
         if (!%SameValue(v, %Get(td, "value"))) {
           throw %NewTypeError("proxy: inconsistent set");
         }
       }
-      if (IsAccessorDescriptor(td) && %Get(td, "set") === undefined) {
+      if (((%HasOwnProperty(td, "get") || %HasOwnProperty(td, "set"))) && %Get(td, "set") === undefined) {
         throw %NewTypeError("proxy: inconsistent set");
       }
     }
@@ -7768,7 +7850,7 @@ function ProxySetOnReceiver(receiver, key, v) {
   const existing = %GetOwnPropertyDescriptorObject(receiver, key);
   if (existing !== undefined) {
     const e = %AsObj(existing);
-    if (IsAccessorDescriptor(e) || !DescFlag(e, "writable")) {
+    if (((%HasOwnProperty(e, "get") || %HasOwnProperty(e, "set"))) || !((%HasOwnProperty(e, "writable") && %ToBoolean(%Get(e, "writable"))))) {
       return false;
     }
     const valueDesc = %ObjectCreate(null);
@@ -7780,20 +7862,21 @@ function ProxySetOnReceiver(receiver, key, v) {
 
 // builtins/proxy.ts:568 %ProxyDeleteProperty
 function ProxyDeleteProperty(p, key) {
+  let $1;
   const handler = %ProxyHandler(p);
   const target = %ProxyTarget(p);
-  const trap = ProxyTrap(handler, "deleteProperty");
+  const trap = ((GetMethod(handler, "deleteProperty")));
   if (trap === undefined) {
     return %DeleteProperty(target, key);
   }
-  if (!%ToBoolean(%Call(trap, handler, target, TrapKey(key)))) {
+  if (!%ToBoolean(%Call(trap, handler, target, (((%IsNumber(key)) ? (%ToStringPrimitive(key)) : (key)))))) {
     return false;
   }
   const targetDesc = %GetOwnPropertyDescriptorObject(target, key);
   if (targetDesc === undefined) {
     return true;
   }
-  if (!DescFlag(%AsObj(targetDesc), "configurable")) {
+  if (!($1 = %AsObj(targetDesc), (%HasOwnProperty($1, "configurable") && %ToBoolean(%Get($1, "configurable"))))) {
     throw %NewTypeError("proxy: inconsistent deleteProperty");
   }
   if (!%IsExtensible(target)) {
@@ -7812,6 +7895,7 @@ function ProxyDeletePropertyOrThrow(p, key) {
 
 // builtins/proxy.ts:604
 function ProxyOwnKeys(p) {
+  let $1;
   const handler = %ProxyHandler(p);
   const target = %ProxyTarget(p);
   const trap = ProxyTrap(handler, "ownKeys");
@@ -7843,7 +7927,7 @@ function ProxyOwnKeys(p) {
   for (let i = 0; i < n; i++) {
     const key = %Get(targetKeys, i);
     const desc = %GetOwnPropertyDescriptorObject(target, key);
-    if (desc !== undefined && !DescFlag(%AsObj(desc), "configurable")) {
+    if (desc !== undefined && !($1 = %AsObj(desc), (%HasOwnProperty($1, "configurable") && %ToBoolean(%Get($1, "configurable"))))) {
       %CreateDataPropertyOrThrow(nonconfigurable, LengthOfArrayLike(nonconfigurable), key);
     } else {
       %CreateDataPropertyOrThrow(configurable, LengthOfArrayLike(configurable), key);
@@ -7894,6 +7978,7 @@ function StrikeKey(list, key) {
 
 // builtins/proxy.ts:695 %ProxyOwnPropertyKeys
 function ProxyOwnPropertyKeys(p, kind) {
+  let $1;
   const keys = ProxyOwnKeys(p);
   if (kind === 2) {
     return keys;
@@ -7906,7 +7991,7 @@ function ProxyOwnPropertyKeys(p, kind) {
     let take = kind === 1 ? %IsSymbol(key) : %IsString(key);
     if (take && kind === 3) {
       const desc = ProxyGetOwnProperty(p, key);
-      take = desc !== undefined && DescFlag(%AsObj(desc), "enumerable");
+      take = desc !== undefined && ($1 = %AsObj(desc), (%HasOwnProperty($1, "enumerable") && %ToBoolean(%Get($1, "enumerable"))));
     }
     if (take) {
       %CreateDataPropertyOrThrow(result, count, key);
@@ -7918,9 +8003,10 @@ function ProxyOwnPropertyKeys(p, kind) {
 
 // builtins/proxy.ts:722 %ProxyCall
 function ProxyCall(p, thisArg, args) {
+  let $1;
   const handler = %ProxyHandler(p);
   const target = %ProxyTarget(p);
-  const trap = ProxyTrap(handler, "apply");
+  const trap = (((($1 = %GetV(handler, "apply"), (($1 === undefined || $1 === null) ? (undefined) : ((!%IsCallable($1)) ? %Throw(%NewTypeError("not a function")) : ($1)))))));
   if (trap === undefined) {
     return %CallWithArray(target, thisArg, args);
   }
@@ -7950,6 +8036,7 @@ function OrdinaryConstructSlow(f, args, newTarget) {
 
 // builtins/proxy.ts:766 %ProxySetIntegrityLevel
 function ProxySetIntegrityLevel(o, frozen) {
+  let $1;
   if (!%PreventExtensions(o)) {
     return false;
   }
@@ -7964,7 +8051,7 @@ function ProxySetIntegrityLevel(o, frozen) {
       if (current === undefined) {
         continue;
       }
-      if (!IsAccessorDescriptor(%AsObj(current))) {
+      if (!($1 = %AsObj(current), (%HasOwnProperty($1, "get") || %HasOwnProperty($1, "set")))) {
         %CreateDataPropertyOrThrow(desc, "writable", false);
       }
     }
@@ -7984,10 +8071,10 @@ function ProxyTestIntegrityLevel(o, frozen) {
     const current = %GetOwnPropertyDescriptorObject(o, %Get(keys, i));
     if (current !== undefined) {
       const c = %AsObj(current);
-      if (DescFlag(c, "configurable")) {
+      if (((%HasOwnProperty(c, "configurable") && %ToBoolean(%Get(c, "configurable"))))) {
         return false;
       }
-      if (frozen && IsDataDescriptor(c) && DescFlag(c, "writable")) {
+      if (frozen && ((%HasOwnProperty(c, "value") || %HasOwnProperty(c, "writable"))) && ((%HasOwnProperty(c, "writable") && %ToBoolean(%Get(c, "writable"))))) {
         return false;
       }
     }
@@ -8101,7 +8188,7 @@ function ReflectConstruct(target, argumentsList, ...rest) {
 
 // builtins/reflect.ts:77 Reflect.defineProperty
 function ReflectDefineProperty(target, propertyKey, attributes) {
-  const o = ReflectTarget(target);
+  const o = (((!%IsObject(target)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(target))));
   const key = ToPropertyKey(propertyKey);
   const desc = ToPropertyDescriptor(attributes);
   return DefineOwnProperty(o, key, desc);
@@ -8109,13 +8196,13 @@ function ReflectDefineProperty(target, propertyKey, attributes) {
 
 // builtins/reflect.ts:88 Reflect.deleteProperty
 function ReflectDeleteProperty(target, propertyKey) {
-  const o = ReflectTarget(target);
+  const o = (((!%IsObject(target)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(target))));
   return %DeleteProperty(o, ToPropertyKey(propertyKey));
 }
 
 // builtins/reflect.ts:97 Reflect.get
 function ReflectGet(target, propertyKey, ...rest) {
-  const o = ReflectTarget(target);
+  const o = (((!%IsObject(target)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(target))));
   const key = ToPropertyKey(propertyKey);
   const receiver = LengthOfArrayLike(rest) > 0 ? %Get(rest, 0) : o;
   return %GetWithReceiver(o, key, receiver);
@@ -8123,42 +8210,43 @@ function ReflectGet(target, propertyKey, ...rest) {
 
 // builtins/reflect.ts:108 Reflect.getOwnPropertyDescriptor
 function ReflectGetOwnPropertyDescriptor(target, propertyKey) {
-  const o = ReflectTarget(target);
+  const o = (((!%IsObject(target)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(target))));
   return %GetOwnPropertyDescriptorObject(o, ToPropertyKey(propertyKey));
 }
 
 // builtins/reflect.ts:117 Reflect.getPrototypeOf
 function ReflectGetPrototypeOf(target) {
-  return %GetPrototypeOf(ReflectTarget(target));
+  return %GetPrototypeOf((((!%IsObject(target)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(target)))));
 }
 
 // builtins/reflect.ts:125 Reflect.has
 function ReflectHas(target, propertyKey) {
-  const o = ReflectTarget(target);
+  const o = (((!%IsObject(target)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(target))));
   return %HasProperty(o, ToPropertyKey(propertyKey));
 }
 
 // builtins/reflect.ts:134 Reflect.isExtensible
 function ReflectIsExtensible(target) {
-  return %IsExtensible(ReflectTarget(target));
+  return %IsExtensible((((!%IsObject(target)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(target)))));
 }
 
 // builtins/reflect.ts:142 Reflect.ownKeys
 function ReflectOwnKeys(target) {
-  return %OwnPropertyKeys(ReflectTarget(target), 2);
+  return %OwnPropertyKeys((((!%IsObject(target)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(target)))), 2);
 }
 
 // builtins/reflect.ts:150 Reflect.preventExtensions
 function ReflectPreventExtensions(target) {
-  return %PreventExtensions(ReflectTarget(target));
+  return %PreventExtensions((((!%IsObject(target)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(target)))));
 }
 
 // builtins/reflect.ts:158 Reflect.set
 function ReflectSet(target, propertyKey, v, ...rest) {
-  const o = ReflectTarget(target);
+  let $1, $2;
+  const o = (((!%IsObject(target)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(target))));
   const key = ToPropertyKey(propertyKey);
   const receiver = LengthOfArrayLike(rest) > 0 ? %Get(rest, 0) : o;
-  if (%IsTypedArray(receiver) && !IsElementValue(%AsObj(receiver), v) && IsCanonicalNumericKey(key) && !IsImmutableBuffer(%AsObj(%TypedArrayField(receiver, 1))) && ReachesReceiver(o, key, %AsObj(receiver))) {
+  if (%IsTypedArray(receiver) && !($1 = %AsObj(receiver), ((((%F64ToI32(%AsNumber(%TypedArrayField($1, 0))))) >= 10) ? (%IsBigInt(v)) : (%IsNumber(v)))) && IsCanonicalNumericKey(key) && !($2 = %AsObj(%TypedArrayField(receiver, 1)), (%AsBool(%BufferInfo($2, 4)))) && ReachesReceiver(o, key, %AsObj(receiver))) {
     return %SetWithReceiver(o, key, ToElementValue(%AsObj(receiver), v), receiver);
   }
   return %SetWithReceiver(o, key, v, receiver);
@@ -8189,7 +8277,7 @@ function ReachesReceiver(o, key, receiver) {
 
 // builtins/reflect.ts:203 Reflect.setPrototypeOf
 function ReflectSetPrototypeOf(target, proto) {
-  const o = ReflectTarget(target);
+  const o = (((!%IsObject(target)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(target))));
   if (!%IsObject(proto) && proto !== null) {
     throw %NewTypeError("not an object");
   }
@@ -8251,7 +8339,7 @@ function ThisRegExpObject(v) {
 
 // builtins/regexp.ts:72
 function RegExpFlagGetter(r, flag) {
-  const o = ThisRegExpObject(r);
+  const o = (((!%IsObject(r)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(r))));
   if (!%IsRegExpObject(o)) {
     if (o === %RealmIntrinsic("RegExpPrototype")) {
       return undefined;
@@ -8303,7 +8391,7 @@ function RegExpPrototypeSticky() {
 
 // builtins/regexp.ts:160 get RegExp.prototype.flags %RegExpPrototypeFlags
 function RegExpPrototypeFlags() {
-  const r = ThisRegExpObject(this);
+  const r = (((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(this))));
   let result = "";
   if (%ToBoolean(%Get(r, "hasIndices"))) {
     result += "d";
@@ -8334,7 +8422,7 @@ function RegExpPrototypeFlags() {
 
 // builtins/regexp.ts:194 get RegExp.prototype.source
 function RegExpPrototypeSource() {
-  const r = ThisRegExpObject(this);
+  const r = (((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(this))));
   if (!%IsRegExpObject(r)) {
     if (r === %RealmIntrinsic("RegExpPrototype")) {
       return "(?:)";
@@ -8346,7 +8434,7 @@ function RegExpPrototypeSource() {
 
 // builtins/regexp.ts:209 RegExp.prototype.toString
 function RegExpPrototypeToString() {
-  const r = ThisRegExpObject(this);
+  const r = (((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(this))));
   const pattern = ToString(%Get(r, "source"));
   const flags = ToString(%Get(r, "flags"));
   return "/" + pattern + "/" + flags;
@@ -8371,9 +8459,10 @@ function RegExpPrototypeExec(string) {
 
 // builtins/regexp.ts:239
 function RegExpExec(r, s) {
+  let $1, $2;
   const exec = %Get(r, "exec");
   if (%IsOriginalRegExpExec(exec) && %IsRegExpObject(r)) {
-    return RegExpBuiltinExec(r, s);
+    return (($1 = %Get(r, "lastIndex"), (%RegExpExecRaw(r, s, %IsNumber($1) ? %AsNumber($1) : ToLength($1), undefined))));
   }
   if (%IsCallable(exec)) {
     const result = %Call(exec, r, s);
@@ -8385,7 +8474,7 @@ function RegExpExec(r, s) {
   if (!%IsRegExpObject(r)) {
     throw %NewTypeError("RegExp object expected");
   }
-  return RegExpBuiltinExec(r, s);
+  return (($2 = %Get(r, "lastIndex"), (%RegExpExecRaw(r, s, %IsNumber($2) ? %AsNumber($2) : ToLength($2), undefined))));
 }
 
 // builtins/regexp.ts:262 RegExp.prototype.test
@@ -8406,7 +8495,7 @@ function RegExpPrototypeTest(s) {
 
 // builtins/regexp.ts:280
 function AdvanceStringIndex(s, index, unicode) {
-  if (!unicode || index + 1 >= StrLen(s)) {
+  if (!unicode || index + 1 >= ((%StrLength(s)))) {
     return index + 1;
   }
   const cp = %StrCodePointAt(s, index);
@@ -8431,13 +8520,13 @@ function AdvanceAfterEmptyMatch(rx, s, fullUnicode) {
 
 // builtins/regexp.ts:309 RegExp.prototype[Symbol.match] %RegExpPrototypeMatch
 function RegExpPrototypeMatch(string) {
-  const rx = ThisRegExpObject(this);
+  const rx = (((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(this))));
   const s = ToString(string);
   const flags = ToString(%Get(rx, "flags"));
-  if (!FlagsInclude(flags, "g")) {
+  if (!((%StrIndexOf(flags, "g", 0) >= 0))) {
     return RegExpExec(rx, s);
   }
-  const fullUnicode = FlagsInclude(flags, "u") || FlagsInclude(flags, "v");
+  const fullUnicode = ((%StrIndexOf(flags, "u", 0) >= 0)) || ((%StrIndexOf(flags, "v", 0) >= 0));
   %Set(rx, "lastIndex", 0);
   const a = %ArrayCreate(0);
   let n = 0;
@@ -8449,7 +8538,7 @@ function RegExpPrototypeMatch(string) {
       }
       return a;
     }
-    const matchStr = MatchString(result);
+    const matchStr = ((ToString(%Get(%AsObj(result), 0))));
     %CreateDataPropertyOrThrow(a, n, matchStr);
     if (matchStr === "") {
       AdvanceAfterEmptyMatch(rx, s, fullUnicode);
@@ -8460,15 +8549,15 @@ function RegExpPrototypeMatch(string) {
 
 // builtins/regexp.ts:341 RegExp.prototype[Symbol.matchAll]
 function RegExpPrototypeMatchAll(string) {
-  const r = ThisRegExpObject(this);
+  const r = (((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(this))));
   const s = ToString(string);
   const c = SpeciesConstructor(r, %RealmConstructor("RegExp"));
   const flags = ToString(%Get(r, "flags"));
   const matcher = %Construct(c, r, flags);
   const lastIndex = ToLength(%Get(r, "lastIndex"));
   %Set(matcher, "lastIndex", lastIndex);
-  const global = FlagsInclude(flags, "g");
-  const fullUnicode = FlagsInclude(flags, "u") || FlagsInclude(flags, "v");
+  const global = ((%StrIndexOf(flags, "g", 0) >= 0));
+  const fullUnicode = ((%StrIndexOf(flags, "u", 0) >= 0)) || ((%StrIndexOf(flags, "v", 0) >= 0));
   return %CreateRegExpStringIterator(matcher, s, global, fullUnicode);
 }
 
@@ -8485,7 +8574,7 @@ function RegExpStringIteratorNext() {
     return %CreateIterResultObject(undefined, true);
   }
   if (%AsBool(%RegExpStringIteratorSlot(this, 2))) {
-    if (MatchString(match) === "") {
+    if (((ToString(%Get(%AsObj(match), 0)))) === "") {
       AdvanceAfterEmptyMatch(r, s, %AsBool(%RegExpStringIteratorSlot(this, 3)));
     }
   } else {
@@ -8501,9 +8590,10 @@ function RegExpStringIteratorToStringTag() {
 
 // builtins/regexp.ts:392 RegExp.prototype[Symbol.replace]
 function RegExpPrototypeReplace(string, replaceValue) {
-  const rx = ThisRegExpObject(this);
+  let $1;
+  const rx = (((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(this))));
   const s = ToString(string);
-  const lengthS = StrLen(s);
+  const lengthS = ((%StrLength(s)));
   const functionalReplace = %IsCallable(replaceValue);
   let replaceStr = "";
   if (!functionalReplace) {
@@ -8513,10 +8603,10 @@ function RegExpPrototypeReplace(string, replaceValue) {
     return %RegExpReplaceRaw(rx, s, replaceStr, undefined);
   }
   const flags = ToString(%Get(rx, "flags"));
-  const global = FlagsInclude(flags, "g");
+  const global = ((%StrIndexOf(flags, "g", 0) >= 0));
   let fullUnicode = false;
   if (global) {
-    fullUnicode = FlagsInclude(flags, "u") || FlagsInclude(flags, "v");
+    fullUnicode = ((%StrIndexOf(flags, "u", 0) >= 0)) || ((%StrIndexOf(flags, "v", 0) >= 0));
     %Set(rx, "lastIndex", 0);
   }
   const results = %ArrayCreate(0);
@@ -8531,7 +8621,7 @@ function RegExpPrototypeReplace(string, replaceValue) {
     if (!global) {
       break;
     }
-    if (MatchString(result) === "") {
+    if (((ToString(%Get(%AsObj(result), 0)))) === "") {
       AdvanceAfterEmptyMatch(rx, s, fullUnicode);
     }
   }
@@ -8542,8 +8632,8 @@ function RegExpPrototypeReplace(string, replaceValue) {
     const resultLength = LengthOfArrayLike(result);
     const nCaptures = resultLength > 1 ? resultLength - 1 : 0;
     const matched = ToString(%Get(result, 0));
-    const matchLength = StrLen(matched);
-    let position = ToIntegerOrInfinity(%Get(result, "index"));
+    const matchLength = ((%StrLength(matched)));
+    let position = ($1 = %Get(result, "index"), (%ToIntegerOrInfinityNumber((((%IsObject($1)) ? (%ToNumberPrimitive(ToPrimitive($1, "number"))) : (%ToNumberPrimitive($1)))))));
     if (position < 0) {
       position = 0;
     } else if (position > lengthS) {
@@ -8594,8 +8684,8 @@ function GetSubstitution(matched, str, position, captures, m, namedCaptures, tem
   if (i < 0) {
     return template;
   }
-  const len = StrLen(template);
-  const stringLength = StrLen(str);
+  const len = ((%StrLength(template)));
+  const stringLength = ((%StrLength(str)));
   let result = %StrSubstring(template, 0, i);
   while (i < len) {
     const c = %StrCharCodeAt(template, i);
@@ -8619,7 +8709,7 @@ function GetSubstitution(matched, str, position, captures, m, namedCaptures, tem
       result += %StrSubstring(str, 0, position);
       i += 2;
     } else if (d === 39) {
-      const tailPos = position + StrLen(matched);
+      const tailPos = position + ((%StrLength(matched)));
       if (tailPos < stringLength) {
         result += %StrSubstring(str, tailPos, stringLength);
       }
@@ -8670,7 +8760,7 @@ function GetSubstitution(matched, str, position, captures, m, namedCaptures, tem
 
 // builtins/regexp.ts:577 RegExp.prototype[Symbol.search]
 function RegExpPrototypeSearch(string) {
-  const rx = ThisRegExpObject(this);
+  const rx = (((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(this))));
   const s = ToString(string);
   const previousLastIndex = %Get(rx, "lastIndex");
   if (!%SameValue(previousLastIndex, 0)) {
@@ -8689,9 +8779,10 @@ function RegExpPrototypeSearch(string) {
 
 // builtins/regexp.ts:599 RegExp.prototype[Symbol.split]
 function RegExpPrototypeSplit(string, limit) {
-  const rx = ThisRegExpObject(this);
+  let $1, $2;
+  const rx = (((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : (%AsObj(this))));
   const s = ToString(string);
-  if ((limit === undefined || %IsNumber(limit)) && StrLen(s) > 0 && %IsPristineRegExp(rx)) {
+  if ((limit === undefined || %IsNumber(limit)) && ((%StrLength(s))) > 0 && %IsPristineRegExp(rx)) {
     const fastLim = limit === undefined ? 4294967295 : %NumberToUint32(%AsNumber(limit));
     if (fastLim === 0) {
       return %ArrayCreate(0);
@@ -8700,16 +8791,16 @@ function RegExpPrototypeSplit(string, limit) {
   }
   const c = SpeciesConstructor(rx, %RealmConstructor("RegExp"));
   const flags = ToString(%Get(rx, "flags"));
-  const unicodeMatching = FlagsInclude(flags, "u") || FlagsInclude(flags, "v");
-  const newFlags = FlagsInclude(flags, "y") ? flags : flags + "y";
+  const unicodeMatching = ((%StrIndexOf(flags, "u", 0) >= 0)) || ((%StrIndexOf(flags, "v", 0) >= 0));
+  const newFlags = ((%StrIndexOf(flags, "y", 0) >= 0)) ? flags : flags + "y";
   const splitter = %Construct(c, rx, newFlags);
   const a = %ArrayCreate(0);
   let lengthA = 0;
-  const lim = limit === undefined ? 4294967295 : %NumberToUint32(ToNumber(limit));
+  const lim = limit === undefined ? 4294967295 : %NumberToUint32((((%IsObject(limit)) ? (%ToNumberPrimitive(ToPrimitive(limit, "number"))) : (%ToNumberPrimitive(limit)))));
   if (lim === 0) {
     return a;
   }
-  const size = StrLen(s);
+  const size = ((%StrLength(s)));
   if (size === 0) {
     const z = RegExpExec(splitter, s);
     if (z !== null) {
@@ -8724,7 +8815,7 @@ function RegExpPrototypeSplit(string, limit) {
     %Set(splitter, "lastIndex", q);
     const z = RegExpExec(splitter, s);
     if (z === null) {
-      q = AdvanceStringIndex(s, q, unicodeMatching);
+      q = (((!unicodeMatching || q + 1 >= ((%StrLength(s)))) ? (q + 1) : ($1 = %StrCodePointAt(s, q), (%IsNumber($1) && %AsNumber($1) > 65535 ? q + 2 : q + 1))));
       continue;
     }
     let e = ToLength(%Get(splitter, "lastIndex"));
@@ -8732,7 +8823,7 @@ function RegExpPrototypeSplit(string, limit) {
       e = size;
     }
     if (e === p) {
-      q = AdvanceStringIndex(s, q, unicodeMatching);
+      q = (((!unicodeMatching || q + 1 >= ((%StrLength(s)))) ? (q + 1) : ($2 = %StrCodePointAt(s, q), (%IsNumber($2) && %AsNumber($2) > 65535 ? q + 2 : q + 1))));
       continue;
     }
     %CreateDataPropertyOrThrow(a, lengthA, %StrSubstring(s, p, q));
@@ -8766,6 +8857,7 @@ function ThisSet(v) {
 
 // builtins/set.ts:15 constructor Set
 function SetConstructor(iterable) {
+  let $1;
   if (new.target === undefined) {
     throw %NewTypeError("must be called with new");
   }
@@ -8785,7 +8877,7 @@ function SetConstructor(iterable) {
     if (%IteratorFastReady(iterator, next)) {
       nextValue = %IteratorFastValue(iterator, next);
     } else {
-      const result = IteratorNextResult(iterator, next);
+      const result = (($1 = %Call(next, iterator), ((!%IsObject($1)) ? %Throw(%NewTypeError("iterator must return an object")) : (%AsObj($1)))));
       if (%ToBoolean(%Get(result, "done"))) {
         return set;
       }
@@ -8811,28 +8903,28 @@ function SetSpecies() {
 
 // builtins/set.ts:69 Set.prototype.add %SetPrototypeAdd
 function SetPrototypeAdd(value) {
-  %CollectionSet(ThisSet(this), value, true);
+  %CollectionSet((((%CollectionClass(this) !== 1) ? %Throw(%NewTypeError("Set object expected")) : (%AsObj(this)))), value, true);
   return this;
 }
 
 // builtins/set.ts:78 Set.prototype.clear
 function SetPrototypeClear() {
-  %CollectionClear(ThisSet(this));
+  %CollectionClear((((%CollectionClass(this) !== 1) ? %Throw(%NewTypeError("Set object expected")) : (%AsObj(this)))));
 }
 
 // builtins/set.ts:86 Set.prototype.delete
 function SetPrototypeDelete(value) {
-  return %CollectionDelete(ThisSet(this), value);
+  return %CollectionDelete((((%CollectionClass(this) !== 1) ? %Throw(%NewTypeError("Set object expected")) : (%AsObj(this)))), value);
 }
 
 // builtins/set.ts:94 Set.prototype.entries
 function SetPrototypeEntries() {
-  return %CollectionIterator(ThisSet(this), 2);
+  return %CollectionIterator((((%CollectionClass(this) !== 1) ? %Throw(%NewTypeError("Set object expected")) : (%AsObj(this)))), 2);
 }
 
 // builtins/set.ts:102 Set.prototype.forEach
 function SetPrototypeForEach(callbackfn, thisArg) {
-  const s = ThisSet(this);
+  const s = (((%CollectionClass(this) !== 1) ? %Throw(%NewTypeError("Set object expected")) : (%AsObj(this))));
   if (!%IsCallable(callbackfn)) {
     throw %NewTypeError("not a function");
   }
@@ -8845,17 +8937,17 @@ function SetPrototypeForEach(callbackfn, thisArg) {
 
 // builtins/set.ts:118 Set.prototype.has
 function SetPrototypeHas(value) {
-  return %CollectionHas(ThisSet(this), value);
+  return %CollectionHas((((%CollectionClass(this) !== 1) ? %Throw(%NewTypeError("Set object expected")) : (%AsObj(this)))), value);
 }
 
 // builtins/set.ts:126 get Set.prototype.size
 function SetPrototypeSize() {
-  return %CollectionSize(ThisSet(this));
+  return %CollectionSize((((%CollectionClass(this) !== 1) ? %Throw(%NewTypeError("Set object expected")) : (%AsObj(this)))));
 }
 
 // builtins/set.ts:136 Set.prototype.values Set.prototype.keys Set.prototype[Symbol.iterator]
 function SetPrototypeValues() {
-  return %CollectionIterator(ThisSet(this), 0);
+  return %CollectionIterator((((%CollectionClass(this) !== 1) ? %Throw(%NewTypeError("Set object expected")) : (%AsObj(this)))), 0);
 }
 
 // builtins/set.ts:145 value Set.prototype[Symbol.toStringTag]
@@ -8880,7 +8972,7 @@ function GetSetRecord(obj) {
   }
   const o = %AsObj(obj);
   const rawSize = %Get(o, "size");
-  const numSize = ToNumber(rawSize);
+  const numSize = (((%IsObject(rawSize)) ? (%ToNumberPrimitive(ToPrimitive(rawSize, "number"))) : (%ToNumberPrimitive(rawSize))));
   if (numSize !== numSize) {
     throw %NewTypeError(".size is not a number");
   }
@@ -8935,7 +9027,8 @@ function SetCopy(s) {
 
 // builtins/set.ts:236
 function KeysNext(iterator, next, out) {
-  const result = IteratorNextResult(iterator, next);
+  let $1;
+  const result = (($1 = %Call(next, iterator), ((!%IsObject($1)) ? %Throw(%NewTypeError("iterator must return an object")) : (%AsObj($1)))));
   if (%ToBoolean(%Get(result, "done"))) {
     return false;
   }
@@ -8945,9 +9038,10 @@ function KeysNext(iterator, next, out) {
 
 // builtins/set.ts:249 Set.prototype.union
 function SetPrototypeUnion(other) {
-  const s = ThisSet(this);
+  let $1;
+  const s = (((%CollectionClass(this) !== 1) ? %Throw(%NewTypeError("Set object expected")) : (%AsObj(this))));
   const rec = GetSetRecord(other);
-  const keys = RecordKeys(rec);
+  const keys = (($1 = %Call(%Get(rec, "keys"), %Get(rec, "set")), ((!%IsObject($1)) ? %Throw(%NewTypeError("not an object")) : (%AsObj($1)))));
   const next = %Get(keys, "next");
   const result = SetCopy(s);
   const cell = %ArrayCreate(1);
@@ -8959,20 +9053,21 @@ function SetPrototypeUnion(other) {
 
 // builtins/set.ts:266 Set.prototype.intersection
 function SetPrototypeIntersection(other) {
-  const s = ThisSet(this);
+  let $1;
+  const s = (((%CollectionClass(this) !== 1) ? %Throw(%NewTypeError("Set object expected")) : (%AsObj(this))));
   const rec = GetSetRecord(other);
   const result = %CollectionCreate(1, %RealmIntrinsic("SetPrototype"));
-  if (%CollectionSize(s) <= RecordSize(rec)) {
+  if (%CollectionSize(s) <= ((%AsNumber(%Get(rec, "size"))))) {
     const it = %CollectionIterator(s, 0);
     while (%CollectionIteratorStep(it)) {
       const e = %CollectionIteratorKey(it);
-      if (RecordHas(rec, e)) {
+      if (((%ToBoolean(%Call(%Get(rec, "has"), %Get(rec, "set"), e))))) {
         %CollectionSet(result, e, true);
       }
     }
     return result;
   }
-  const keys = RecordKeys(rec);
+  const keys = (($1 = %Call(%Get(rec, "keys"), %Get(rec, "set")), ((!%IsObject($1)) ? %Throw(%NewTypeError("not an object")) : (%AsObj($1)))));
   const next = %Get(keys, "next");
   const cell = %ArrayCreate(1);
   while (KeysNext(keys, next, cell)) {
@@ -8986,20 +9081,21 @@ function SetPrototypeIntersection(other) {
 
 // builtins/set.ts:296 Set.prototype.difference
 function SetPrototypeDifference(other) {
-  const s = ThisSet(this);
+  let $1;
+  const s = (((%CollectionClass(this) !== 1) ? %Throw(%NewTypeError("Set object expected")) : (%AsObj(this))));
   const rec = GetSetRecord(other);
   const result = SetCopy(s);
-  if (%CollectionSize(s) <= RecordSize(rec)) {
+  if (%CollectionSize(s) <= ((%AsNumber(%Get(rec, "size"))))) {
     const it = %CollectionIterator(s, 0);
     while (%CollectionIteratorStep(it)) {
       const e = %CollectionIteratorKey(it);
-      if (RecordHas(rec, e)) {
+      if (((%ToBoolean(%Call(%Get(rec, "has"), %Get(rec, "set"), e))))) {
         %CollectionDelete(result, e);
       }
     }
     return result;
   }
-  const keys = RecordKeys(rec);
+  const keys = (($1 = %Call(%Get(rec, "keys"), %Get(rec, "set")), ((!%IsObject($1)) ? %Throw(%NewTypeError("not an object")) : (%AsObj($1)))));
   const next = %Get(keys, "next");
   const cell = %ArrayCreate(1);
   while (KeysNext(keys, next, cell)) {
@@ -9010,9 +9106,10 @@ function SetPrototypeDifference(other) {
 
 // builtins/set.ts:323 Set.prototype.symmetricDifference
 function SetPrototypeSymmetricDifference(other) {
-  const s = ThisSet(this);
+  let $1;
+  const s = (((%CollectionClass(this) !== 1) ? %Throw(%NewTypeError("Set object expected")) : (%AsObj(this))));
   const rec = GetSetRecord(other);
-  const keys = RecordKeys(rec);
+  const keys = (($1 = %Call(%Get(rec, "keys"), %Get(rec, "set")), ((!%IsObject($1)) ? %Throw(%NewTypeError("not an object")) : (%AsObj($1)))));
   const next = %Get(keys, "next");
   const result = SetCopy(s);
   const cell = %ArrayCreate(1);
@@ -9029,14 +9126,15 @@ function SetPrototypeSymmetricDifference(other) {
 
 // builtins/set.ts:345 Set.prototype.isSubsetOf
 function SetPrototypeIsSubsetOf(other) {
-  const s = ThisSet(this);
+  let $1;
+  const s = (((%CollectionClass(this) !== 1) ? %Throw(%NewTypeError("Set object expected")) : (%AsObj(this))));
   const rec = GetSetRecord(other);
-  if (%CollectionSize(s) > RecordSize(rec)) {
+  if (%CollectionSize(s) > ((%AsNumber(%Get(rec, "size"))))) {
     return false;
   }
   const it = %CollectionIterator(s, 0);
   while (%CollectionIteratorStep(it)) {
-    if (!RecordHas(rec, %CollectionIteratorKey(it))) {
+    if (!($1 = %CollectionIteratorKey(it), (%ToBoolean(%Call(%Get(rec, "has"), %Get(rec, "set"), $1))))) {
       return false;
     }
   }
@@ -9045,12 +9143,13 @@ function SetPrototypeIsSubsetOf(other) {
 
 // builtins/set.ts:364 Set.prototype.isSupersetOf
 function SetPrototypeIsSupersetOf(other) {
-  const s = ThisSet(this);
+  let $1;
+  const s = (((%CollectionClass(this) !== 1) ? %Throw(%NewTypeError("Set object expected")) : (%AsObj(this))));
   const rec = GetSetRecord(other);
-  if (%CollectionSize(s) < RecordSize(rec)) {
+  if (%CollectionSize(s) < ((%AsNumber(%Get(rec, "size"))))) {
     return false;
   }
-  const keys = RecordKeys(rec);
+  const keys = (($1 = %Call(%Get(rec, "keys"), %Get(rec, "set")), ((!%IsObject($1)) ? %Throw(%NewTypeError("not an object")) : (%AsObj($1)))));
   const next = %Get(keys, "next");
   const cell = %ArrayCreate(1);
   while (KeysNext(keys, next, cell)) {
@@ -9064,18 +9163,19 @@ function SetPrototypeIsSupersetOf(other) {
 
 // builtins/set.ts:386 Set.prototype.isDisjointFrom
 function SetPrototypeIsDisjointFrom(other) {
-  const s = ThisSet(this);
+  let $1, $2;
+  const s = (((%CollectionClass(this) !== 1) ? %Throw(%NewTypeError("Set object expected")) : (%AsObj(this))));
   const rec = GetSetRecord(other);
-  if (%CollectionSize(s) <= RecordSize(rec)) {
+  if (%CollectionSize(s) <= ((%AsNumber(%Get(rec, "size"))))) {
     const it = %CollectionIterator(s, 0);
     while (%CollectionIteratorStep(it)) {
-      if (RecordHas(rec, %CollectionIteratorKey(it))) {
+      if (($1 = %CollectionIteratorKey(it), (%ToBoolean(%Call(%Get(rec, "has"), %Get(rec, "set"), $1))))) {
         return false;
       }
     }
     return true;
   }
-  const keys = RecordKeys(rec);
+  const keys = (($2 = %Call(%Get(rec, "keys"), %Get(rec, "set")), ((!%IsObject($2)) ? %Throw(%NewTypeError("not an object")) : (%AsObj($2)))));
   const next = %Get(keys, "next");
   const cell = %ArrayCreate(1);
   while (KeysNext(keys, next, cell)) {
@@ -9172,7 +9272,8 @@ function InvokeSymbol(v, name, arg) {
 
 // builtins/string-regexp.ts:21
 function RequireGlobalFlag(regexp) {
-  if (IsRegExp(regexp)) {
+  let $1;
+  if ((((!%IsObject(regexp)) ? (false) : ($1 = %Get(%AsObj(regexp), %WellKnownSymbol("match")), (($1 !== undefined) ? (%ToBoolean($1)) : (%IsRegExpObject(regexp))))))) {
     const flags = %Get(regexp, "flags");
     if (flags === undefined || flags === null) {
       throw %NewTypeError("cannot convert to object");
@@ -9190,7 +9291,8 @@ function RegExpFromPattern(pattern, flags) {
 
 // builtins/string-regexp.ts:42 String.prototype.match
 function StringPrototypeMatch(regexp) {
-  RequireThisCoercible(this);
+  let $1;
+  (((this === undefined || this === null) ? %Throw(%NewTypeError("cannot convert to object")) : undefined));
   if (%IsObject(regexp)) {
     const matcher = GetMethod(regexp, %WellKnownSymbol("match"));
     if (matcher !== undefined) {
@@ -9198,12 +9300,13 @@ function StringPrototypeMatch(regexp) {
     }
   }
   const s = ToString(this);
-  return InvokeSymbol(RegExpFromPattern(regexp, ""), "match", s);
+  return ($1 = ((%RegExpCreate(undefined, regexp === undefined ? "" : ToString(regexp), ""))), (%Call(%GetV($1, %WellKnownSymbol("match")), $1, s)));
 }
 
 // builtins/string-regexp.ts:58 String.prototype.matchAll
 function StringPrototypeMatchAll(regexp) {
-  RequireThisCoercible(this);
+  let $1;
+  (((this === undefined || this === null) ? %Throw(%NewTypeError("cannot convert to object")) : undefined));
   if (%IsObject(regexp)) {
     RequireGlobalFlag(%AsObj(regexp));
     const matcher = GetMethod(regexp, %WellKnownSymbol("matchAll"));
@@ -9212,12 +9315,13 @@ function StringPrototypeMatchAll(regexp) {
     }
   }
   const s = ToString(this);
-  return InvokeSymbol(RegExpFromPattern(regexp, "g"), "matchAll", s);
+  return ($1 = ((%RegExpCreate(undefined, regexp === undefined ? "" : ToString(regexp), "g"))), (%Call(%GetV($1, %WellKnownSymbol("matchAll")), $1, s)));
 }
 
 // builtins/string-regexp.ts:75 String.prototype.search
 function StringPrototypeSearch(regexp) {
-  RequireThisCoercible(this);
+  let $1;
+  (((this === undefined || this === null) ? %Throw(%NewTypeError("cannot convert to object")) : undefined));
   if (%IsObject(regexp)) {
     const searcher = GetMethod(regexp, %WellKnownSymbol("search"));
     if (searcher !== undefined) {
@@ -9225,7 +9329,7 @@ function StringPrototypeSearch(regexp) {
     }
   }
   const s = ToString(this);
-  return InvokeSymbol(RegExpFromPattern(regexp, ""), "search", s);
+  return ($1 = ((%RegExpCreate(undefined, regexp === undefined ? "" : ToString(regexp), ""))), (%Call(%GetV($1, %WellKnownSymbol("search")), $1, s)));
 }
 
 // builtins/string-regexp.ts:88
@@ -9238,7 +9342,7 @@ function StringReplacement(functionalReplace, replaceValue, replaceStr, searchSt
 
 // builtins/string-regexp.ts:106 String.prototype.replace
 function StringPrototypeReplace(searchValue, replaceValue) {
-  RequireThisCoercible(this);
+  (((this === undefined || this === null) ? %Throw(%NewTypeError("cannot convert to object")) : undefined));
   if (%IsObject(searchValue)) {
     const replacer = GetMethod(searchValue, %WellKnownSymbol("replace"));
     if (replacer !== undefined) {
@@ -9257,13 +9361,13 @@ function StringPrototypeReplace(searchValue, replaceValue) {
     return string;
   }
   const replacement = StringReplacement(functionalReplace, replaceValue, replaceStr, searchString, position, string);
-  const following = position + StrLen(searchString);
-  return %StrSubstring(string, 0, position) + replacement + %StrSubstring(string, following, StrLen(string));
+  const following = position + ((%StrLength(searchString)));
+  return %StrSubstring(string, 0, position) + replacement + %StrSubstring(string, following, ((%StrLength(string))));
 }
 
 // builtins/string-regexp.ts:141 String.prototype.replaceAll
 function StringPrototypeReplaceAll(searchValue, replaceValue) {
-  RequireThisCoercible(this);
+  (((this === undefined || this === null) ? %Throw(%NewTypeError("cannot convert to object")) : undefined));
   if (%IsObject(searchValue)) {
     RequireGlobalFlag(%AsObj(searchValue));
     const replacer = GetMethod(searchValue, %WellKnownSymbol("replace"));
@@ -9278,7 +9382,7 @@ function StringPrototypeReplaceAll(searchValue, replaceValue) {
   if (!functionalReplace) {
     replaceStr = ToString(replaceValue);
   }
-  const searchLength = StrLen(searchString);
+  const searchLength = ((%StrLength(searchString)));
   const advanceBy = searchLength > 1 ? searchLength : 1;
   const positions = %ArrayCreate(0);
   let count = 0;
@@ -9296,7 +9400,7 @@ function StringPrototypeReplaceAll(searchValue, replaceValue) {
     result += %StrSubstring(string, endOfLastMatch, p) + replacement;
     endOfLastMatch = p + searchLength;
   }
-  const len = StrLen(string);
+  const len = ((%StrLength(string)));
   if (endOfLastMatch < len) {
     result += %StrSubstring(string, endOfLastMatch, len);
   }
@@ -9305,7 +9409,7 @@ function StringPrototypeReplaceAll(searchValue, replaceValue) {
 
 // builtins/string-regexp.ts:194 String.prototype.split
 function StringPrototypeSplit(separator, limit) {
-  RequireThisCoercible(this);
+  (((this === undefined || this === null) ? %Throw(%NewTypeError("cannot convert to object")) : undefined));
   if (%IsObject(separator)) {
     const splitter = GetMethod(separator, %WellKnownSymbol("split"));
     if (splitter !== undefined) {
@@ -9313,7 +9417,7 @@ function StringPrototypeSplit(separator, limit) {
     }
   }
   const s = ToString(this);
-  const lim = limit === undefined ? 4294967295 : %NumberToUint32(ToNumber(limit));
+  const lim = limit === undefined ? 4294967295 : %NumberToUint32((((%IsObject(limit)) ? (%ToNumberPrimitive(ToPrimitive(limit, "number"))) : (%ToNumberPrimitive(limit)))));
   const r = ToString(separator);
   const a = %ArrayCreate(0);
   if (lim === 0) {
@@ -9323,8 +9427,8 @@ function StringPrototypeSplit(separator, limit) {
     %CreateDataPropertyOrThrow(a, 0, s);
     return a;
   }
-  const len = StrLen(s);
-  const separatorLength = StrLen(r);
+  const len = ((%StrLength(s)));
+  const separatorLength = ((%StrLength(r)));
   if (separatorLength === 0) {
     const n = len < lim ? len : lim;
     for (let i = 0; i < n; i++) {
@@ -9375,12 +9479,14 @@ function ThisStringValue(value) {
 
 // builtins/string.ts:36 String.prototype.toString
 function StringPrototypeToString() {
-  return ThisStringValue(this);
+  let $1;
+  return (($1 = %PrimitiveValue(this), ((!%IsString($1)) ? %Throw(%NewTypeError("not a string")) : (%AsStr($1)))));
 }
 
 // builtins/string.ts:44 String.prototype.valueOf
 function StringPrototypeValueOf() {
-  return ThisStringValue(this);
+  let $1;
+  return (($1 = %PrimitiveValue(this), ((!%IsString($1)) ? %Throw(%NewTypeError("not a string")) : (%AsStr($1)))));
 }
 
 // builtins/string.ts:53
@@ -9410,7 +9516,7 @@ function IsRegExp(v) {
 
 // builtins/string.ts:84
 function ClampPosition(v, len) {
-  const p = ToIntegerOrInfinity(v);
+  const p = ((%ToIntegerOrInfinityNumber((((%IsObject(v)) ? (%ToNumberPrimitive(ToPrimitive(v, "number"))) : (%ToNumberPrimitive(v)))))));
   if (p < 0) {
     return 0;
   }
@@ -9419,9 +9525,9 @@ function ClampPosition(v, len) {
 
 // builtins/string.ts:98 String.prototype.at
 function StringPrototypeAt(index) {
-  const s = ThisToString(this);
-  const len = StrLen(s);
-  const rel = ToIntegerOrInfinity(index);
+  const s = (((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this))));
+  const len = ((%StrLength(s)));
+  const rel = ((%ToIntegerOrInfinityNumber((((%IsObject(index)) ? (%ToNumberPrimitive(ToPrimitive(index, "number"))) : (%ToNumberPrimitive(index)))))));
   const k = rel >= 0 ? rel : len + rel;
   if (k < 0 || k >= len) {
     return undefined;
@@ -9431,9 +9537,9 @@ function StringPrototypeAt(index) {
 
 // builtins/string.ts:114 String.prototype.charAt
 function StringPrototypeCharAt(pos) {
-  const s = ThisToString(this);
-  const p = ToIntegerOrInfinity(pos);
-  if (p < 0 || p >= StrLen(s)) {
+  const s = (((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this))));
+  const p = ((%ToIntegerOrInfinityNumber((((%IsObject(pos)) ? (%ToNumberPrimitive(ToPrimitive(pos, "number"))) : (%ToNumberPrimitive(pos)))))));
+  if (p < 0 || p >= ((%StrLength(s)))) {
     return "";
   }
   return %StrSubstring(s, p, p + 1);
@@ -9441,32 +9547,32 @@ function StringPrototypeCharAt(pos) {
 
 // builtins/string.ts:128 String.prototype.charCodeAt
 function StringPrototypeCharCodeAt(pos) {
-  const s = ThisToString(this);
-  return %StrCharCodeAt(s, ToIntegerOrInfinity(pos));
+  const s = (((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this))));
+  return %StrCharCodeAt(s, ((%ToIntegerOrInfinityNumber((((%IsObject(pos)) ? (%ToNumberPrimitive(ToPrimitive(pos, "number"))) : (%ToNumberPrimitive(pos))))))));
 }
 
 // builtins/string.ts:137 String.prototype.codePointAt
 function StringPrototypeCodePointAt(pos) {
-  const s = ThisToString(this);
-  return %StrCodePointAt(s, ToIntegerOrInfinity(pos));
+  const s = (((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this))));
+  return %StrCodePointAt(s, ((%ToIntegerOrInfinityNumber((((%IsObject(pos)) ? (%ToNumberPrimitive(ToPrimitive(pos, "number"))) : (%ToNumberPrimitive(pos))))))));
 }
 
 // builtins/string.ts:149 String.prototype.indexOf
 function StringPrototypeIndexOf(searchString, position) {
-  const s = ThisToString(this);
+  const s = (((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this))));
   const search = ToString(searchString);
-  const start = ClampPosition(position, StrLen(s));
+  const start = ClampPosition(position, ((%StrLength(s))));
   return %StrIndexOf(s, search, start);
 }
 
 // builtins/string.ts:160 String.prototype.lastIndexOf
 function StringPrototypeLastIndexOf(searchString, position) {
-  const s = ThisToString(this);
+  const s = (((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this))));
   const search = ToString(searchString);
-  const numPos = ToNumber(position);
-  const len = StrLen(s);
+  const numPos = (((%IsObject(position)) ? (%ToNumberPrimitive(ToPrimitive(position, "number"))) : (%ToNumberPrimitive(position))));
+  const len = ((%StrLength(s)));
   const pos = numPos !== numPos ? len : ClampPosition(numPos, len);
-  const searchLen = StrLen(search);
+  const searchLen = ((%StrLength(search)));
   if (searchLen > len) {
     return -1;
   }
@@ -9475,25 +9581,25 @@ function StringPrototypeLastIndexOf(searchString, position) {
 
 // builtins/string.ts:179 String.prototype.includes
 function StringPrototypeIncludes(searchString, position) {
-  const s = ThisToString(this);
+  const s = (((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this))));
   if (IsRegExp(searchString)) {
     throw %NewTypeError("regexp not supported");
   }
   const search = ToString(searchString);
-  const start = ClampPosition(position, StrLen(s));
+  const start = ClampPosition(position, ((%StrLength(s))));
   return %StrIndexOf(s, search, start) >= 0;
 }
 
 // builtins/string.ts:193 String.prototype.startsWith
 function StringPrototypeStartsWith(searchString, position) {
-  const s = ThisToString(this);
+  const s = (((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this))));
   if (IsRegExp(searchString)) {
     throw %NewTypeError("regexp not supported");
   }
   const search = ToString(searchString);
-  const len = StrLen(s);
+  const len = ((%StrLength(s)));
   const start = ClampPosition(position, len);
-  const searchLength = StrLen(search);
+  const searchLength = ((%StrLength(search)));
   if (start + searchLength > len) {
     return false;
   }
@@ -9502,14 +9608,14 @@ function StringPrototypeStartsWith(searchString, position) {
 
 // builtins/string.ts:212 String.prototype.endsWith
 function StringPrototypeEndsWith(searchString, endPosition) {
-  const s = ThisToString(this);
+  const s = (((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this))));
   if (IsRegExp(searchString)) {
     throw %NewTypeError("regexp not supported");
   }
   const search = ToString(searchString);
-  const len = StrLen(s);
+  const len = ((%StrLength(s)));
   const end = endPosition === undefined ? len : ClampPosition(endPosition, len);
-  const searchLength = StrLen(search);
+  const searchLength = ((%StrLength(search)));
   if (searchLength > end) {
     return false;
   }
@@ -9518,14 +9624,14 @@ function StringPrototypeEndsWith(searchString, endPosition) {
 
 // builtins/string.ts:231 String.prototype.localeCompare
 function StringPrototypeLocaleCompare(that) {
-  const s = ThisToString(this);
+  const s = (((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this))));
   return %StrLocaleCompare(s, ToString(that));
 }
 
 // builtins/string.ts:243 String.prototype.slice
 function StringPrototypeSlice(start, end) {
-  const s = ThisToString(this);
-  const len = StrLen(s);
+  const s = (((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this))));
+  const len = ((%StrLength(s)));
   const from = RelativeIndex(start, len, 0);
   const to = RelativeIndex(end, len, len);
   if (from >= to) {
@@ -9536,8 +9642,8 @@ function StringPrototypeSlice(start, end) {
 
 // builtins/string.ts:258 String.prototype.substring
 function StringPrototypeSubstring(start, end) {
-  const s = ThisToString(this);
-  const len = StrLen(s);
+  const s = (((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this))));
+  const len = ((%StrLength(s)));
   const a = ClampPosition(start, len);
   const b = end === undefined ? len : ClampPosition(end, len);
   return a < b ? %StrSubstring(s, a, b) : %StrSubstring(s, b, a);
@@ -9545,12 +9651,12 @@ function StringPrototypeSubstring(start, end) {
 
 // builtins/string.ts:270 String.prototype.substr
 function StringPrototypeSubstr(start, length) {
-  const s = ThisToString(this);
-  const size = StrLen(s);
+  const s = (((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this))));
+  const size = ((%StrLength(s)));
   const intStart = RelativeIndex(start, size, 0);
   let intLength = size;
   if (length !== undefined) {
-    intLength = ToIntegerOrInfinity(length);
+    intLength = ((%ToIntegerOrInfinityNumber((((%IsObject(length)) ? (%ToNumberPrimitive(ToPrimitive(length, "number"))) : (%ToNumberPrimitive(length)))))));
   }
   let intEnd = intStart + intLength;
   if (intEnd > size) {
@@ -9564,7 +9670,7 @@ function StringPrototypeSubstr(start, length) {
 
 // builtins/string.ts:293 String.prototype.concat
 function StringPrototypeConcat(...args) {
-  let r = ThisToString(this);
+  let r = (((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this))));
   const n = LengthOfArrayLike(args);
   for (let i = 0; i < n; i++) {
     r += ToString(%Get(args, i));
@@ -9574,12 +9680,12 @@ function StringPrototypeConcat(...args) {
 
 // builtins/string.ts:306 String.prototype.repeat
 function StringPrototypeRepeat(count) {
-  const s = ThisToString(this);
-  const n = ToIntegerOrInfinity(count);
+  const s = (((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this))));
+  const n = ((%ToIntegerOrInfinityNumber((((%IsObject(count)) ? (%ToNumberPrimitive(ToPrimitive(count, "number"))) : (%ToNumberPrimitive(count)))))));
   if (n < 0 || n === 1 / 0) {
     throw %NewRangeError("invalid repeat count");
   }
-  if (StrLen(s) === 0 || n === 0) {
+  if (((%StrLength(s))) === 0 || n === 0) {
     return "";
   }
   return %StrRepeat(s, n);
@@ -9588,12 +9694,12 @@ function StringPrototypeRepeat(count) {
 // builtins/string.ts:319
 function StringPad(s, maxLength, fillString, atStart) {
   const intMaxLength = ToLength(maxLength);
-  const stringLength = StrLen(s);
+  const stringLength = ((%StrLength(s)));
   if (intMaxLength <= stringLength) {
     return s;
   }
   const filler = fillString === undefined ? " " : ToString(fillString);
-  const fillerLength = StrLen(filler);
+  const fillerLength = ((%StrLength(filler)));
   if (fillerLength === 0) {
     return s;
   }
@@ -9604,62 +9710,62 @@ function StringPad(s, maxLength, fillString, atStart) {
 
 // builtins/string.ts:339 String.prototype.padEnd
 function StringPrototypePadEnd(maxLength, fillString) {
-  return StringPad(ThisToString(this), maxLength, fillString, false);
+  return StringPad((((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this)))), maxLength, fillString, false);
 }
 
 // builtins/string.ts:347 String.prototype.padStart
 function StringPrototypePadStart(maxLength, fillString) {
-  return StringPad(ThisToString(this), maxLength, fillString, true);
+  return StringPad((((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this)))), maxLength, fillString, true);
 }
 
 // builtins/string.ts:357 String.prototype.toLowerCase
 function StringPrototypeToLowerCase() {
-  return %StrToCase(ThisToString(this), false);
+  return %StrToCase((((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this)))), false);
 }
 
 // builtins/string.ts:365 String.prototype.toUpperCase
 function StringPrototypeToUpperCase() {
-  return %StrToCase(ThisToString(this), true);
+  return %StrToCase((((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this)))), true);
 }
 
 // builtins/string.ts:373 String.prototype.toLocaleLowerCase
 function StringPrototypeToLocaleLowerCase() {
-  return %StrToCase(ThisToString(this), false);
+  return %StrToCase((((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this)))), false);
 }
 
 // builtins/string.ts:381 String.prototype.toLocaleUpperCase
 function StringPrototypeToLocaleUpperCase() {
-  return %StrToCase(ThisToString(this), true);
+  return %StrToCase((((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this)))), true);
 }
 
 // builtins/string.ts:389 String.prototype.trim
 function StringPrototypeTrim() {
-  return %StrTrim(ThisToString(this), 0);
+  return %StrTrim((((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this)))), 0);
 }
 
 // builtins/string.ts:398 String.prototype.trimStart String.prototype.trimLeft
 function StringPrototypeTrimStart() {
-  return %StrTrim(ThisToString(this), 1);
+  return %StrTrim((((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this)))), 1);
 }
 
 // builtins/string.ts:407 String.prototype.trimEnd String.prototype.trimRight
 function StringPrototypeTrimEnd() {
-  return %StrTrim(ThisToString(this), 2);
+  return %StrTrim((((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this)))), 2);
 }
 
 // builtins/string.ts:415 String.prototype.isWellFormed
 function StringPrototypeIsWellFormed() {
-  return %StrIsWellFormed(ThisToString(this));
+  return %StrIsWellFormed((((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this)))));
 }
 
 // builtins/string.ts:423 String.prototype.toWellFormed
 function StringPrototypeToWellFormed() {
-  return %StrToWellFormed(ThisToString(this));
+  return %StrToWellFormed((((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this)))));
 }
 
 // builtins/string.ts:432 String.prototype.normalize
 function StringPrototypeNormalize(form) {
-  const s = ThisToString(this);
+  const s = (((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : (ToString(this))));
   let f = "NFC";
   if (form !== undefined) {
     f = ToString(form);
@@ -9697,7 +9803,7 @@ function StringFromCodePoint(...codePoints) {
   const n = LengthOfArrayLike(codePoints);
   for (let i = 0; i < n; i++) {
     const next = %Get(codePoints, i);
-    const cp = %IsNumber(next) ? %AsNumber(next) : ToNumber(next);
+    const cp = %IsNumber(next) ? %AsNumber(next) : (((%IsObject(next)) ? (%ToNumberPrimitive(ToPrimitive(next, "number"))) : (%ToNumberPrimitive(next))));
     if (%ToIntegerOrInfinityNumber(cp) !== cp || cp < 0 || cp > 1114111) {
       throw %NewRangeError("invalid code point");
     }
@@ -9762,22 +9868,26 @@ function ThisSymbolValue(value) {
 
 // builtins/symbol.ts:49 get Symbol.prototype.description
 function SymbolPrototypeDescription() {
-  return %SymbolDescription(ThisSymbolValue(this));
+  let $1;
+  return %SymbolDescription((($1 = %PrimitiveValue(this), ((!%IsSymbol($1)) ? %Throw(%NewTypeError("not a symbol")) : (%AsSym($1))))));
 }
 
 // builtins/symbol.ts:57 Symbol.prototype.toString
 function SymbolPrototypeToString() {
-  return %SymbolDescriptiveString(ThisSymbolValue(this));
+  let $1;
+  return %SymbolDescriptiveString((($1 = %PrimitiveValue(this), ((!%IsSymbol($1)) ? %Throw(%NewTypeError("not a symbol")) : (%AsSym($1))))));
 }
 
 // builtins/symbol.ts:65 Symbol.prototype.valueOf
 function SymbolPrototypeValueOf() {
-  return ThisSymbolValue(this);
+  let $1;
+  return (($1 = %PrimitiveValue(this), ((!%IsSymbol($1)) ? %Throw(%NewTypeError("not a symbol")) : (%AsSym($1)))));
 }
 
 // builtins/symbol.ts:74 Symbol.prototype[Symbol.toPrimitive]
 function SymbolPrototypeToPrimitive(hint) {
-  return ThisSymbolValue(this);
+  let $1;
+  return (($1 = %PrimitiveValue(this), ((!%IsSymbol($1)) ? %Throw(%NewTypeError("not a symbol")) : (%AsSym($1)))));
 }
 
 // builtins/symbol.ts:83 value Symbol.prototype[Symbol.toStringTag]
@@ -9921,7 +10031,7 @@ function TAOutOfBounds(o) {
 function ValidateTypedArray(v) {
   %TypedArrayField(v, 0);
   const o = %AsObj(v);
-  if (TAOutOfBounds(o)) {
+  if (((%AsBool(%TypedArrayField(o, 5))))) {
     throw %NewTypeError("ArrayBuffer is detached or resized");
   }
   return o;
@@ -9929,15 +10039,15 @@ function ValidateTypedArray(v) {
 
 // builtins/typedarray.ts:88
 function SameContentType(a, b) {
-  return (KindOf(a) >= 10) === (KindOf(b) >= 10);
+  return (((%F64ToI32(%AsNumber(%TypedArrayField(a, 0))))) >= 10) === (((%F64ToI32(%AsNumber(%TypedArrayField(b, 0))))) >= 10);
 }
 
 // builtins/typedarray.ts:96
 function ToElementValue(o, v) {
-  if (KindOf(o) >= 10) {
-    return ToBigInt(v);
+  if (((%F64ToI32(%AsNumber(%TypedArrayField(o, 0))))) >= 10) {
+    return ((%ToBigIntPrimitive(ToPrimitive(v, "number"))));
   }
-  return ToNumber(v);
+  return (((%IsObject(v)) ? (%ToNumberPrimitive(ToPrimitive(v, "number"))) : (%ToNumberPrimitive(v))));
 }
 
 // builtins/typedarray.ts:110 %TypedArraySetElementSlow
@@ -9947,7 +10057,7 @@ function TypedArraySetElementSlow(o, index, v) {
 
 // builtins/typedarray.ts:115
 function IsElementValue(o, v) {
-  if (KindOf(o) >= 10) {
+  if (((%F64ToI32(%AsNumber(%TypedArrayField(o, 0))))) >= 10) {
     return %IsBigInt(v);
   }
   return %IsNumber(v);
@@ -9955,7 +10065,7 @@ function IsElementValue(o, v) {
 
 // builtins/typedarray.ts:123
 function AllocateTypedArrayOfLength(kind, proto, length) {
-  const size = ElementSize(kind);
+  const size = (((kind <= 2) ? (1) : ((kind <= 4 || kind === 7) ? (2) : ((kind <= 6 || kind === 8) ? (4) : (8)))));
   if (length * size > 2147483648) {
     throw %NewRangeError("invalid array buffer length");
   }
@@ -9965,7 +10075,7 @@ function AllocateTypedArrayOfLength(kind, proto, length) {
 
 // builtins/typedarray.ts:133
 function TypedArrayFromBuffer(kind, proto, buffer, byteOffset, length) {
-  const size = ElementSize(kind);
+  const size = (((kind <= 2) ? (1) : ((kind <= 4 || kind === 7) ? (2) : ((kind <= 6 || kind === 8) ? (4) : (8)))));
   const offset = ToIndex(byteOffset);
   if (offset % size !== 0) {
     throw %NewRangeError("invalid offset");
@@ -9974,10 +10084,10 @@ function TypedArrayFromBuffer(kind, proto, buffer, byteOffset, length) {
   if (length !== undefined) {
     newLength = ToIndex(length);
   }
-  if (IsDetached(buffer)) {
+  if (((%AsBool(%BufferInfo(buffer, 3))))) {
     throw %NewTypeError("ArrayBuffer is detached");
   }
-  const bufferByteLength = BufferLength(buffer);
+  const bufferByteLength = ((%AsNumber(%BufferInfo(buffer, 0))));
   if (length === undefined && %AsBool(%BufferInfo(buffer, 2))) {
     if (offset > bufferByteLength) {
       throw %NewRangeError("invalid offset");
@@ -10026,13 +10136,13 @@ function TypedArrayConstruct(newTarget, kind, args) {
   const proto = GetPrototypeFromConstructor(newTarget, KindName(kind) + "Prototype");
   const src = %AsObj(first);
   if (%IsTypedArray(src)) {
-    if (TAOutOfBounds(src)) {
+    if (((%AsBool(%TypedArrayField(src, 5))))) {
       throw %NewTypeError("ArrayBuffer is detached or resized");
     }
-    if ((KindOf(src) >= 10) !== (kind >= 10)) {
+    if ((((%F64ToI32(%AsNumber(%TypedArrayField(src, 0))))) >= 10) !== (kind >= 10)) {
       throw %NewTypeError("incompatible content type");
     }
-    const len = TALength(src);
+    const len = ((%AsNumber(%TypedArrayField(src, 3))));
     const o = AllocateTypedArrayOfLength(kind, proto, len);
     %TypedArrayCopy(src, 0, o, 0, len);
     return o;
@@ -10074,17 +10184,19 @@ function TypedArraySpecies() {
 
 // builtins/typedarray.ts:254
 function RequireMutableTypedArray(o) {
-  if (IsImmutableBuffer(%AsObj(%TypedArrayField(o, 1)))) {
+  let $1;
+  if (($1 = %AsObj(%TypedArrayField(o, 1)), (%AsBool(%BufferInfo($1, 4))))) {
     throw %NewTypeError("ArrayBuffer is immutable");
   }
 }
 
 // builtins/typedarray.ts:261
 function TypedArrayCreateWithLength(c, length) {
+  let $1;
   const created = %Construct(c, length);
   ValidateTypedArray(created);
-  RequireMutableTypedArray(created);
-  if (TALength(created) < length) {
+  (((($1 = %AsObj(%TypedArrayField(created, 1)), (%AsBool(%BufferInfo($1, 4))))) ? %Throw(%NewTypeError("ArrayBuffer is immutable")) : undefined));
+  if (((%AsNumber(%TypedArrayField(created, 3)))) < length) {
     throw %NewTypeError("TypedArray length is too small");
   }
   return created;
@@ -10092,9 +10204,9 @@ function TypedArrayCreateWithLength(c, length) {
 
 // builtins/typedarray.ts:273
 function TypedArraySpeciesCreate(exemplar, length) {
-  const c = SpeciesConstructor(exemplar, %RealmConstructor(KindName(KindOf(exemplar))));
+  const c = SpeciesConstructor(exemplar, %RealmConstructor(KindName(((%F64ToI32(%AsNumber(%TypedArrayField(exemplar, 0))))))));
   const r = TypedArrayCreateWithLength(c, length);
-  if (!SameContentType(r, exemplar)) {
+  if (!(((((%F64ToI32(%AsNumber(%TypedArrayField(r, 0))))) >= 10) === (((%F64ToI32(%AsNumber(%TypedArrayField(exemplar, 0))))) >= 10)))) {
     throw %NewTypeError("incompatible content type");
   }
   return r;
@@ -10121,20 +10233,21 @@ function TypedArrayFrom(source, mapfn, thisArg) {
   for (let k = 0; k < len; k++) {
     const kValue = %Get(values, k);
     const mapped = mapping ? %Call(mapfn, thisArg, kValue, k) : kValue;
-    TASet(target, k, mapped);
+    ((%TypedArraySet(target, k, ToElementValue(target, mapped)), undefined));
   }
   return target;
 }
 
 // builtins/typedarray.ts:315 %TypedArray%.of
 function TypedArrayOf(...items) {
+  let $1;
   if (!%IsConstructor(this)) {
     throw %NewTypeError("not a constructor");
   }
   const len = LengthOfArrayLike(items);
   const target = TypedArrayCreateWithLength(this, len);
   for (let k = 0; k < len; k++) {
-    TASet(target, k, %Get(items, k));
+    ($1 = %Get(items, k), (%TypedArraySet(target, k, ToElementValue(target, $1)), undefined));
   }
   return target;
 }
@@ -10161,36 +10274,38 @@ function TypedArrayPrototypeLength() {
 
 // builtins/typedarray.ts:363 get %TypedArray%.prototype[Symbol.toStringTag]
 function TypedArrayPrototypeToStringTag() {
+  let $1;
   if (!%IsTypedArray(this)) {
     return undefined;
   }
-  return KindName(KindOf(%AsObj(this)));
+  return KindName(($1 = %AsObj(this), (%F64ToI32(%AsNumber(%TypedArrayField($1, 0))))));
 }
 
 // builtins/typedarray.ts:374 %TypedArray%.prototype.set
 function TypedArrayPrototypeSet(source, offset) {
+  let $1;
   %TypedArrayField(this, 0);
   const target = %AsObj(this);
-  RequireMutableTypedArray(target);
-  const targetOffset = ToIntegerOrInfinity(offset);
+  (((($1 = %AsObj(%TypedArrayField(target, 1)), (%AsBool(%BufferInfo($1, 4))))) ? %Throw(%NewTypeError("ArrayBuffer is immutable")) : undefined));
+  const targetOffset = ((%ToIntegerOrInfinityNumber((((%IsObject(offset)) ? (%ToNumberPrimitive(ToPrimitive(offset, "number"))) : (%ToNumberPrimitive(offset)))))));
   if (targetOffset < 0) {
     throw %NewRangeError("invalid array length");
   }
-  if (TAOutOfBounds(target)) {
+  if (((%AsBool(%TypedArrayField(target, 5))))) {
     throw %NewTypeError("ArrayBuffer is detached");
   }
-  const targetLength = TALength(target);
+  const targetLength = ((%AsNumber(%TypedArrayField(target, 3))));
   if (%IsTypedArray(source)) {
     const src = %AsObj(source);
-    if (TAOutOfBounds(src)) {
+    if (((%AsBool(%TypedArrayField(src, 5))))) {
       throw %NewTypeError("ArrayBuffer is detached or resized");
     }
-    const srcLength = TALength(src);
+    const srcLength = ((%AsNumber(%TypedArrayField(src, 3))));
     if (targetOffset === 1 / 0 || srcLength + targetOffset > targetLength) {
       throw %NewRangeError("invalid array length");
     }
-    if (!SameContentType(src, target)) {
-      throw %NewTypeError(KindOf(target) >= 10 ? "cannot convert to bigint" : "cannot convert bigint to number");
+    if (!(((((%F64ToI32(%AsNumber(%TypedArrayField(src, 0))))) >= 10) === (((%F64ToI32(%AsNumber(%TypedArrayField(target, 0))))) >= 10)))) {
+      throw %NewTypeError(((%F64ToI32(%AsNumber(%TypedArrayField(target, 0))))) >= 10 ? "cannot convert to bigint" : "cannot convert bigint to number");
     }
     %TypedArrayCopy(src, 0, target, targetOffset, srcLength);
     return;
@@ -10208,12 +10323,13 @@ function TypedArrayPrototypeSet(source, offset) {
 
 // builtins/typedarray.ts:417 %TypedArray%.prototype.subarray
 function TypedArrayPrototypeSubarray(start, end) {
+  let $1;
   %TypedArrayField(this, 0);
   const o = %AsObj(this);
   const buffer = %AsObj(%TypedArrayField(o, 1));
-  const srcLength = TALength(o);
-  const kind = KindOf(o);
-  const size = ElementSize(kind);
+  const srcLength = ((%AsNumber(%TypedArrayField(o, 3))));
+  const kind = ((%F64ToI32(%AsNumber(%TypedArrayField(o, 0)))));
+  const size = (((kind <= 2) ? (1) : ((kind <= 4 || kind === 7) ? (2) : ((kind <= 6 || kind === 8) ? (4) : (8)))));
   const beginIndex = RelativeIndex(start, srcLength, 0);
   const tracking = %AsBool(%TypedArrayField(o, 6));
   const beginByteOffset = %AsNumber(%TypedArrayField(o, 7)) + beginIndex * size;
@@ -10227,7 +10343,7 @@ function TypedArrayPrototypeSubarray(start, end) {
     created = %Construct(c, buffer, beginByteOffset, newLength);
   }
   ValidateTypedArray(created);
-  if (!SameContentType(%AsObj(created), o)) {
+  if (!($1 = %AsObj(created), ((((%F64ToI32(%AsNumber(%TypedArrayField($1, 0))))) >= 10) === (((%F64ToI32(%AsNumber(%TypedArrayField(o, 0))))) >= 10)))) {
     throw %NewTypeError("incompatible content type");
   }
   return %AsObj(created);
@@ -10235,29 +10351,30 @@ function TypedArrayPrototypeSubarray(start, end) {
 
 // builtins/typedarray.ts:448 %TypedArray%.prototype.slice
 function TypedArrayPrototypeSlice(start, end) {
+  let $1;
   const o = ValidateTypedArray(this);
-  const srcLength = TALength(o);
+  const srcLength = ((%AsNumber(%TypedArrayField(o, 3))));
   const startIndex = RelativeIndex(start, srcLength, 0);
   const endIndex = RelativeIndex(end, srcLength, srcLength);
   const count = endIndex > startIndex ? endIndex - startIndex : 0;
   const a = TypedArraySpeciesCreate(o, count);
   if (count > 0) {
-    if (TAOutOfBounds(o)) {
+    if (((%AsBool(%TypedArrayField(o, 5))))) {
       throw %NewTypeError("ArrayBuffer is detached or resized");
     }
-    const len = TALength(o);
+    const len = ((%AsNumber(%TypedArrayField(o, 3))));
     const fin = endIndex < len ? endIndex : len;
     const n = fin > startIndex ? fin - startIndex : 0;
     if (n === 0) {
-    } else if (KindOf(a) === KindOf(o) && %TypedArrayField(a, 0) === %TypedArrayField(o, 0)) {
+    } else if (((%F64ToI32(%AsNumber(%TypedArrayField(a, 0))))) === ((%F64ToI32(%AsNumber(%TypedArrayField(o, 0))))) && %TypedArrayField(a, 0) === %TypedArrayField(o, 0)) {
       for (let k = 0; k < n; k++) {
         %TypedArraySet(a, k, %TypedArrayGet(o, startIndex + k));
       }
-    } else if (KindOf(a) === KindOf(o)) {
+    } else if (((%F64ToI32(%AsNumber(%TypedArrayField(a, 0))))) === ((%F64ToI32(%AsNumber(%TypedArrayField(o, 0)))))) {
       %TypedArrayCopy(o, startIndex, a, 0, n);
     } else {
       for (let k = 0; k < n; k++) {
-        TASet(a, k, %TypedArrayGet(o, startIndex + k));
+        ($1 = %TypedArrayGet(o, startIndex + k), (%TypedArraySet(a, k, ToElementValue(a, $1)), undefined));
       }
     }
   }
@@ -10266,16 +10383,17 @@ function TypedArrayPrototypeSlice(start, end) {
 
 // builtins/typedarray.ts:485 %TypedArray%.prototype.fill
 function TypedArrayPrototypeFill(value, start, end) {
+  let $1;
   const o = ValidateTypedArray(this);
-  RequireMutableTypedArray(o);
-  const len = TALength(o);
+  (((($1 = %AsObj(%TypedArrayField(o, 1)), (%AsBool(%BufferInfo($1, 4))))) ? %Throw(%NewTypeError("ArrayBuffer is immutable")) : undefined));
+  const len = ((%AsNumber(%TypedArrayField(o, 3))));
   const n = ToElementValue(o, value);
   const k = RelativeIndex(start, len, 0);
   const fin = RelativeIndex(end, len, len);
-  if (TAOutOfBounds(o)) {
+  if (((%AsBool(%TypedArrayField(o, 5))))) {
     throw %NewTypeError("ArrayBuffer is detached");
   }
-  const len2 = TALength(o);
+  const len2 = ((%AsNumber(%TypedArrayField(o, 3))));
   const last = fin < len2 ? fin : len2;
   for (let i = k; i < last; i++) {
     %TypedArraySet(o, i, n);
@@ -10285,7 +10403,8 @@ function TypedArrayPrototypeFill(value, start, end) {
 
 // builtins/typedarray.ts:506
 function ValidateUint8Array(v) {
-  if (!%IsTypedArray(v) || KindOf(%AsObj(v)) !== 1) {
+  let $1;
+  if (!%IsTypedArray(v) || ($1 = %AsObj(v), (%F64ToI32(%AsNumber(%TypedArrayField($1, 0))))) !== 1) {
     throw %NewTypeError("not a Uint8Array");
   }
   return %AsObj(v);
@@ -10338,27 +10457,29 @@ function LastChunkHandling(opts) {
 // builtins/typedarray.ts:558
 function Uint8ArrayFromRecord(rec) {
   const bytes = %AsObj(%Get(rec, "bytes"));
-  const len = BufferLength(bytes);
+  const len = ((%AsNumber(%BufferInfo(bytes, 0))));
   return %TypedArrayCreate(%RealmIntrinsic("Uint8ArrayPrototype"), 1, bytes, 0, len);
 }
 
 // builtins/typedarray.ts:568 Uint8Array.fromBase64
 function Uint8ArrayFromBase64(string, options) {
+  let $1, $2;
   if (!%IsString(string)) {
     throw %NewTypeError("expected string");
   }
-  const opts = GetOptionsObject(options);
+  const opts = (((options === undefined) ? (undefined) : ((!%IsObject(options)) ? %Throw(%NewTypeError("options must be an object")) : (options))));
   const url = Base64Alphabet(opts);
   const last = LastChunkHandling(opts);
   const rec = %Base64Decode(%AsStr(string), url, last, 9007199254740991);
   if (%AsBool(%Get(rec, "error"))) {
     throw %NewSyntaxError("invalid base64 string");
   }
-  return Uint8ArrayFromRecord(rec);
+  return (($1 = %AsObj(%Get(rec, "bytes")), ($2 = ((%AsNumber(%BufferInfo($1, 0)))), (%TypedArrayCreate(%RealmIntrinsic("Uint8ArrayPrototype"), 1, $1, 0, $2)))));
 }
 
 // builtins/typedarray.ts:586 Uint8Array.fromHex
 function Uint8ArrayFromHex(string) {
+  let $1, $2;
   if (!%IsString(string)) {
     throw %NewTypeError("expected string");
   }
@@ -10366,13 +10487,13 @@ function Uint8ArrayFromHex(string) {
   if (%AsBool(%Get(rec, "error"))) {
     throw %NewSyntaxError("invalid hex string");
   }
-  return Uint8ArrayFromRecord(rec);
+  return (($1 = %AsObj(%Get(rec, "bytes")), ($2 = ((%AsNumber(%BufferInfo($1, 0)))), (%TypedArrayCreate(%RealmIntrinsic("Uint8ArrayPrototype"), 1, $1, 0, $2)))));
 }
 
 // builtins/typedarray.ts:601 Uint8Array.prototype.toBase64
 function Uint8ArrayPrototypeToBase64(options) {
   const o = ValidateUint8Array(this);
-  const opts = GetOptionsObject(options);
+  const opts = (((options === undefined) ? (undefined) : ((!%IsObject(options)) ? %Throw(%NewTypeError("options must be an object")) : (options))));
   const url = Base64Alphabet(opts);
   let omit = false;
   if (opts !== undefined) {
@@ -10389,7 +10510,7 @@ function Uint8ArrayPrototypeToHex() {
 // builtins/typedarray.ts:621
 function WriteDecoded(into, rec, isHex) {
   const bytes = %AsObj(%Get(rec, "bytes"));
-  const written = BufferLength(bytes);
+  const written = ((%AsNumber(%BufferInfo(bytes, 0))));
   %BufferCopy(bytes, 0, %AsObj(%TypedArrayField(into, 1)), %AsNumber(%TypedArrayField(into, 2)), written);
   if (%AsBool(%Get(rec, "error"))) {
     throw %NewSyntaxError(isHex ? "invalid hex string" : "invalid base64 string");
@@ -10402,32 +10523,34 @@ function WriteDecoded(into, rec, isHex) {
 
 // builtins/typedarray.ts:638 Uint8Array.prototype.setFromBase64
 function Uint8ArrayPrototypeSetFromBase64(string, options) {
+  let $1;
   const into = ValidateUint8Array(this);
-  RequireMutableTypedArray(into);
+  (((($1 = %AsObj(%TypedArrayField(into, 1)), (%AsBool(%BufferInfo($1, 4))))) ? %Throw(%NewTypeError("ArrayBuffer is immutable")) : undefined));
   if (!%IsString(string)) {
     throw %NewTypeError("expected string");
   }
-  const opts = GetOptionsObject(options);
+  const opts = (((options === undefined) ? (undefined) : ((!%IsObject(options)) ? %Throw(%NewTypeError("options must be an object")) : (options))));
   const url = Base64Alphabet(opts);
   const last = LastChunkHandling(opts);
-  if (TAOutOfBounds(into)) {
+  if (((%AsBool(%TypedArrayField(into, 5))))) {
     throw %NewTypeError("ArrayBuffer is detached");
   }
-  const rec = %Base64Decode(%AsStr(string), url, last, TALength(into));
+  const rec = %Base64Decode(%AsStr(string), url, last, ((%AsNumber(%TypedArrayField(into, 3)))));
   return WriteDecoded(into, rec, false);
 }
 
 // builtins/typedarray.ts:658 Uint8Array.prototype.setFromHex
 function Uint8ArrayPrototypeSetFromHex(string) {
+  let $1;
   const into = ValidateUint8Array(this);
-  RequireMutableTypedArray(into);
+  (((($1 = %AsObj(%TypedArrayField(into, 1)), (%AsBool(%BufferInfo($1, 4))))) ? %Throw(%NewTypeError("ArrayBuffer is immutable")) : undefined));
   if (!%IsString(string)) {
     throw %NewTypeError("expected string");
   }
-  if (TAOutOfBounds(into)) {
+  if (((%AsBool(%TypedArrayField(into, 5))))) {
     throw %NewTypeError("ArrayBuffer is detached");
   }
-  const rec = %HexDecode(%AsStr(string), TALength(into));
+  const rec = %HexDecode(%AsStr(string), ((%AsNumber(%TypedArrayField(into, 3)))));
   return WriteDecoded(into, rec, true);
 }
 
@@ -10614,8 +10737,8 @@ function BigUint64ArrayPrototypeBytesPerElement() {
 // builtins/typedarray.ts:990 %TypedArray%.prototype.at
 function TypedArrayPrototypeAt(index) {
   const o = ValidateTypedArray(this);
-  const len = TALength(o);
-  const rel = ToIntegerOrInfinity(index);
+  const len = ((%AsNumber(%TypedArrayField(o, 3))));
+  const rel = ((%ToIntegerOrInfinityNumber((((%IsObject(index)) ? (%ToNumberPrimitive(ToPrimitive(index, "number"))) : (%ToNumberPrimitive(index)))))));
   const k = rel >= 0 ? rel : len + rel;
   if (k < 0 || k >= len) {
     return undefined;
@@ -10625,18 +10748,19 @@ function TypedArrayPrototypeAt(index) {
 
 // builtins/typedarray.ts:1005 %TypedArray%.prototype.copyWithin
 function TypedArrayPrototypeCopyWithin(target, start, end) {
+  let $1;
   const o = ValidateTypedArray(this);
-  RequireMutableTypedArray(o);
-  const len = TALength(o);
+  (((($1 = %AsObj(%TypedArrayField(o, 1)), (%AsBool(%BufferInfo($1, 4))))) ? %Throw(%NewTypeError("ArrayBuffer is immutable")) : undefined));
+  const len = ((%AsNumber(%TypedArrayField(o, 3))));
   const to = RelativeIndex(target, len, 0);
   const from = RelativeIndex(start, len, 0);
   const fin = RelativeIndex(end, len, len);
   let count = fin - from < len - to ? fin - from : len - to;
   if (count > 0) {
-    if (TAOutOfBounds(o)) {
+    if (((%AsBool(%TypedArrayField(o, 5))))) {
       throw %NewTypeError("ArrayBuffer is detached or resized");
     }
-    const len2 = TALength(o);
+    const len2 = ((%AsNumber(%TypedArrayField(o, 3))));
     if (from + count > len2) {
       count = len2 - from;
     }
@@ -10667,8 +10791,8 @@ function TypedArrayPrototypeValues() {
 
 // builtins/typedarray.ts:1058
 function TAEveryOrSome(o, callbackfn, thisArg, wantAll) {
-  const len = TALength(o);
-  RequireCallable(callbackfn);
+  const len = ((%AsNumber(%TypedArrayField(o, 3))));
+  (((!%IsCallable(callbackfn)) ? %Throw(%NewTypeError("not a function")) : (%AsFn(callbackfn))));
   for (let k = 0; k < len; k++) {
     const r = %ToBoolean(%Call(callbackfn, thisArg, %TypedArrayGet(o, k), k, o));
     if (r !== wantAll) {
@@ -10690,9 +10814,10 @@ function TypedArrayPrototypeSome(callbackfn, thisArg) {
 
 // builtins/typedarray.ts:1090 %TypedArray%.prototype.filter
 function TypedArrayPrototypeFilter(callbackfn, thisArg) {
+  let $1;
   const o = ValidateTypedArray(this);
-  const len = TALength(o);
-  RequireCallable(callbackfn);
+  const len = ((%AsNumber(%TypedArrayField(o, 3))));
+  (((!%IsCallable(callbackfn)) ? %Throw(%NewTypeError("not a function")) : (%AsFn(callbackfn))));
   const kept = %ArrayCreate(0);
   let captured = 0;
   for (let k = 0; k < len; k++) {
@@ -10704,7 +10829,7 @@ function TypedArrayPrototypeFilter(callbackfn, thisArg) {
   }
   const a = TypedArraySpeciesCreate(o, captured);
   for (let n = 0; n < captured; n++) {
-    TASet(a, n, %Get(kept, n));
+    ($1 = %Get(kept, n), (%TypedArraySet(a, n, ToElementValue(a, $1)), undefined));
   }
   return a;
 }
@@ -10712,8 +10837,8 @@ function TypedArrayPrototypeFilter(callbackfn, thisArg) {
 // builtins/typedarray.ts:1111
 function TAFind(thisValue, predicate, thisArg, fromEnd, wantIndex) {
   const o = ValidateTypedArray(thisValue);
-  const len = TALength(o);
-  RequireCallable(predicate);
+  const len = ((%AsNumber(%TypedArrayField(o, 3))));
+  (((!%IsCallable(predicate)) ? %Throw(%NewTypeError("not a function")) : (%AsFn(predicate))));
   for (let i = 0; i < len; i++) {
     const k = fromEnd ? len - 1 - i : i;
     const kValue = %TypedArrayGet(o, k);
@@ -10750,8 +10875,8 @@ function TypedArrayPrototypeFindLastIndex(predicate, thisArg) {
 // builtins/typedarray.ts:1164 %TypedArray%.prototype.forEach
 function TypedArrayPrototypeForEach(callbackfn, thisArg) {
   const o = ValidateTypedArray(this);
-  const len = TALength(o);
-  RequireCallable(callbackfn);
+  const len = ((%AsNumber(%TypedArrayField(o, 3))));
+  (((!%IsCallable(callbackfn)) ? %Throw(%NewTypeError("not a function")) : (%AsFn(callbackfn))));
   for (let k = 0; k < len; k++) {
     %Call(callbackfn, thisArg, %TypedArrayGet(o, k), k, o);
   }
@@ -10760,11 +10885,11 @@ function TypedArrayPrototypeForEach(callbackfn, thisArg) {
 // builtins/typedarray.ts:1177 %TypedArray%.prototype.includes
 function TypedArrayPrototypeIncludes(searchElement, fromIndex) {
   const o = ValidateTypedArray(this);
-  const len = TALength(o);
+  const len = ((%AsNumber(%TypedArrayField(o, 3))));
   if (len === 0) {
     return false;
   }
-  let n = ToIntegerOrInfinity(fromIndex);
+  let n = ((%ToIntegerOrInfinityNumber((((%IsObject(fromIndex)) ? (%ToNumberPrimitive(ToPrimitive(fromIndex, "number"))) : (%ToNumberPrimitive(fromIndex)))))));
   if (n === 1 / 0) {
     return false;
   }
@@ -10785,11 +10910,11 @@ function TypedArrayPrototypeIncludes(searchElement, fromIndex) {
 // builtins/typedarray.ts:1205 %TypedArray%.prototype.indexOf
 function TypedArrayPrototypeIndexOf(searchElement, fromIndex) {
   const o = ValidateTypedArray(this);
-  const len = TALength(o);
+  const len = ((%AsNumber(%TypedArrayField(o, 3))));
   if (len === 0) {
     return -1;
   }
-  let n = ToIntegerOrInfinity(fromIndex);
+  let n = ((%ToIntegerOrInfinityNumber((((%IsObject(fromIndex)) ? (%ToNumberPrimitive(ToPrimitive(fromIndex, "number"))) : (%ToNumberPrimitive(fromIndex)))))));
   if (n === 1 / 0) {
     return -1;
   }
@@ -10810,14 +10935,15 @@ function TypedArrayPrototypeIndexOf(searchElement, fromIndex) {
 
 // builtins/typedarray.ts:1235 %TypedArray%.prototype.lastIndexOf
 function TypedArrayPrototypeLastIndexOf(searchElement, ...rest) {
+  let $1;
   const o = ValidateTypedArray(this);
-  const len = TALength(o);
+  const len = ((%AsNumber(%TypedArrayField(o, 3))));
   if (len === 0) {
     return -1;
   }
   let n = len - 1;
   if (LengthOfArrayLike(rest) > 0) {
-    n = ToIntegerOrInfinity(%Get(rest, 0));
+    n = ($1 = %Get(rest, 0), (%ToIntegerOrInfinityNumber((((%IsObject($1)) ? (%ToNumberPrimitive(ToPrimitive($1, "number"))) : (%ToNumberPrimitive($1)))))));
   }
   if (n === -1 / 0) {
     return -1;
@@ -10835,7 +10961,7 @@ function TypedArrayPrototypeLastIndexOf(searchElement, ...rest) {
 // builtins/typedarray.ts:1262 %TypedArray%.prototype.join
 function TypedArrayPrototypeJoin(separator) {
   const o = ValidateTypedArray(this);
-  const len = TALength(o);
+  const len = ((%AsNumber(%TypedArrayField(o, 3))));
   let sep = ",";
   if (separator !== undefined) {
     sep = ToString(separator);
@@ -10856,20 +10982,20 @@ function TypedArrayPrototypeJoin(separator) {
 // builtins/typedarray.ts:1286 %TypedArray%.prototype.map
 function TypedArrayPrototypeMap(callbackfn, thisArg) {
   const o = ValidateTypedArray(this);
-  const len = TALength(o);
-  RequireCallable(callbackfn);
+  const len = ((%AsNumber(%TypedArrayField(o, 3))));
+  (((!%IsCallable(callbackfn)) ? %Throw(%NewTypeError("not a function")) : (%AsFn(callbackfn))));
   const a = TypedArraySpeciesCreate(o, len);
   for (let k = 0; k < len; k++) {
     const mapped = %Call(callbackfn, thisArg, %TypedArrayGet(o, k), k, o);
-    TASet(a, k, mapped);
+    ((%TypedArraySet(a, k, ToElementValue(a, mapped)), undefined));
   }
   return a;
 }
 
 // builtins/typedarray.ts:1299
 function TAReduce(o, callbackfn, rest, fromEnd) {
-  const len = TALength(o);
-  RequireCallable(callbackfn);
+  const len = ((%AsNumber(%TypedArrayField(o, 3))));
+  (((!%IsCallable(callbackfn)) ? %Throw(%NewTypeError("not a function")) : (%AsFn(callbackfn))));
   let i = 0;
   let accumulator = undefined;
   if (LengthOfArrayLike(rest) > 0) {
@@ -10900,9 +11026,10 @@ function TypedArrayPrototypeReduceRight(callbackfn, ...rest) {
 
 // builtins/typedarray.ts:1342 %TypedArray%.prototype.reverse
 function TypedArrayPrototypeReverse() {
+  let $1;
   const o = ValidateTypedArray(this);
-  RequireMutableTypedArray(o);
-  const len = TALength(o);
+  (((($1 = %AsObj(%TypedArrayField(o, 1)), (%AsBool(%BufferInfo($1, 4))))) ? %Throw(%NewTypeError("ArrayBuffer is immutable")) : undefined));
+  const len = ((%AsNumber(%TypedArrayField(o, 3))));
   for (let lower = 0; lower < %F64Floor(len / 2); lower++) {
     const upper = len - lower - 1;
     const lv = %TypedArrayGet(o, lower);
@@ -10929,12 +11056,13 @@ function TASortedList(o, len, comparefn) {
 
 // builtins/typedarray.ts:1374 %TypedArray%.prototype.sort
 function TypedArrayPrototypeSort(comparefn) {
+  let $1;
   if (comparefn !== undefined && !%IsCallable(comparefn)) {
     throw %NewTypeError("not a function");
   }
   const o = ValidateTypedArray(this);
-  RequireMutableTypedArray(o);
-  const len = TALength(o);
+  (((($1 = %AsObj(%TypedArrayField(o, 1)), (%AsBool(%BufferInfo($1, 4))))) ? %Throw(%NewTypeError("ArrayBuffer is immutable")) : undefined));
+  const len = ((%AsNumber(%TypedArrayField(o, 3))));
   const list = TASortedList(o, len, comparefn);
   for (let k = 0; k < len; k++) {
     %TypedArraySet(o, k, %Get(list, k));
@@ -10948,8 +11076,8 @@ function TypedArrayPrototypeToSorted(comparefn) {
     throw %NewTypeError("not a function");
   }
   const o = ValidateTypedArray(this);
-  const len = TALength(o);
-  const a = AllocateTypedArrayOfLength(KindOf(o), %TypedArrayKindProto(KindOf(o)), len);
+  const len = ((%AsNumber(%TypedArrayField(o, 3))));
+  const a = AllocateTypedArrayOfLength(((%F64ToI32(%AsNumber(%TypedArrayField(o, 0))))), %TypedArrayKindProto(((%F64ToI32(%AsNumber(%TypedArrayField(o, 0)))))), len);
   const list = TASortedList(o, len, comparefn);
   for (let k = 0; k < len; k++) {
     %TypedArraySet(a, k, %Get(list, k));
@@ -10960,8 +11088,8 @@ function TypedArrayPrototypeToSorted(comparefn) {
 // builtins/typedarray.ts:1410 %TypedArray%.prototype.toReversed
 function TypedArrayPrototypeToReversed() {
   const o = ValidateTypedArray(this);
-  const len = TALength(o);
-  const a = AllocateTypedArrayOfLength(KindOf(o), %TypedArrayKindProto(KindOf(o)), len);
+  const len = ((%AsNumber(%TypedArrayField(o, 3))));
+  const a = AllocateTypedArrayOfLength(((%F64ToI32(%AsNumber(%TypedArrayField(o, 0))))), %TypedArrayKindProto(((%F64ToI32(%AsNumber(%TypedArrayField(o, 0)))))), len);
   for (let k = 0; k < len; k++) {
     %TypedArraySet(a, k, %TypedArrayGet(o, len - k - 1));
   }
@@ -10971,14 +11099,14 @@ function TypedArrayPrototypeToReversed() {
 // builtins/typedarray.ts:1424 %TypedArray%.prototype.with
 function TypedArrayPrototypeWith(index, value) {
   const o = ValidateTypedArray(this);
-  const len = TALength(o);
-  const rel = ToIntegerOrInfinity(index);
+  const len = ((%AsNumber(%TypedArrayField(o, 3))));
+  const rel = ((%ToIntegerOrInfinityNumber((((%IsObject(index)) ? (%ToNumberPrimitive(ToPrimitive(index, "number"))) : (%ToNumberPrimitive(index)))))));
   const actual = rel >= 0 ? rel : len + rel;
   const n = ToElementValue(o, value);
-  if (!(actual >= 0 && actual < TALength(o))) {
+  if (!(actual >= 0 && actual < ((%AsNumber(%TypedArrayField(o, 3)))))) {
     throw %NewRangeError("invalid array index");
   }
-  const a = AllocateTypedArrayOfLength(KindOf(o), %TypedArrayKindProto(KindOf(o)), len);
+  const a = AllocateTypedArrayOfLength(((%F64ToI32(%AsNumber(%TypedArrayField(o, 0))))), %TypedArrayKindProto(((%F64ToI32(%AsNumber(%TypedArrayField(o, 0)))))), len);
   for (let k = 0; k < len; k++) {
     %TypedArraySet(a, k, k === actual ? n : %TypedArrayGet(o, k));
   }
@@ -10988,7 +11116,7 @@ function TypedArrayPrototypeWith(index, value) {
 // builtins/typedarray.ts:1444 %TypedArray%.prototype.toLocaleString
 function TypedArrayPrototypeToLocaleString() {
   const o = ValidateTypedArray(this);
-  const len = TALength(o);
+  const len = ((%AsNumber(%TypedArrayField(o, 3))));
   let r = "";
   for (let k = 0; k < len; k++) {
     if (k > 0) {
@@ -11010,7 +11138,7 @@ function IsCanonicalNumericKey(key) {
   if (!%IsString(key)) {
     return false;
   }
-  return key === "-0" || ToString(ToNumber(key)) === key;
+  return key === "-0" || ToString((((%IsObject(key)) ? (%ToNumberPrimitive(ToPrimitive(key, "number"))) : (%ToNumberPrimitive(key))))) === key;
 }
 
 // builtins/typedarray.ts:1477
@@ -11083,13 +11211,13 @@ function WeakMapConstructor(iterable) {
 
 // builtins/weak.ts:44 WeakMap.prototype.delete
 function WeakMapPrototypeDelete(key) {
-  const m = ThisWeakMap(this);
+  const m = (((%CollectionClass(this) !== 2) ? %Throw(%NewTypeError("WeakMap object expected")) : (%AsObj(this))));
   return %CanBeHeldWeakly(key) && %CollectionDelete(m, key);
 }
 
 // builtins/weak.ts:53 WeakMap.prototype.get
 function WeakMapPrototypeGet(key) {
-  const m = ThisWeakMap(this);
+  const m = (((%CollectionClass(this) !== 2) ? %Throw(%NewTypeError("WeakMap object expected")) : (%AsObj(this))));
   if (!%CanBeHeldWeakly(key)) {
     return undefined;
   }
@@ -11098,13 +11226,13 @@ function WeakMapPrototypeGet(key) {
 
 // builtins/weak.ts:65 WeakMap.prototype.has
 function WeakMapPrototypeHas(key) {
-  const m = ThisWeakMap(this);
+  const m = (((%CollectionClass(this) !== 2) ? %Throw(%NewTypeError("WeakMap object expected")) : (%AsObj(this))));
   return %CanBeHeldWeakly(key) && %CollectionHas(m, key);
 }
 
 // builtins/weak.ts:74 WeakMap.prototype.set
 function WeakMapPrototypeSet(key, value) {
-  const m = ThisWeakMap(this);
+  const m = (((%CollectionClass(this) !== 2) ? %Throw(%NewTypeError("WeakMap object expected")) : (%AsObj(this))));
   if (!%CanBeHeldWeakly(key)) {
     throw %NewTypeError("invalid value used as WeakMap key");
   }
@@ -11114,7 +11242,7 @@ function WeakMapPrototypeSet(key, value) {
 
 // builtins/weak.ts:87 WeakMap.prototype.getOrInsert
 function WeakMapPrototypeGetOrInsert(key, value) {
-  const m = ThisWeakMap(this);
+  const m = (((%CollectionClass(this) !== 2) ? %Throw(%NewTypeError("WeakMap object expected")) : (%AsObj(this))));
   if (!%CanBeHeldWeakly(key)) {
     throw %NewTypeError("invalid value used as WeakMap key");
   }
@@ -11127,7 +11255,7 @@ function WeakMapPrototypeGetOrInsert(key, value) {
 
 // builtins/weak.ts:103 WeakMap.prototype.getOrInsertComputed
 function WeakMapPrototypeGetOrInsertComputed(key, callbackfn) {
-  const m = ThisWeakMap(this);
+  const m = (((%CollectionClass(this) !== 2) ? %Throw(%NewTypeError("WeakMap object expected")) : (%AsObj(this))));
   if (!%IsCallable(callbackfn)) {
     throw %NewTypeError("not a function");
   }
@@ -11149,6 +11277,7 @@ function WeakMapPrototypeToStringTag() {
 
 // builtins/weak.ts:132 constructor WeakSet
 function WeakSetConstructor(iterable) {
+  let $1;
   if (new.target === undefined) {
     throw %NewTypeError("must be called with new");
   }
@@ -11167,7 +11296,7 @@ function WeakSetConstructor(iterable) {
     if (%IteratorFastReady(iterator, next)) {
       nextValue = %IteratorFastValue(iterator, next);
     } else {
-      const result = IteratorNextResult(iterator, next);
+      const result = (($1 = %Call(next, iterator), ((!%IsObject($1)) ? %Throw(%NewTypeError("iterator must return an object")) : (%AsObj($1)))));
       if (%ToBoolean(%Get(result, "done"))) {
         return set;
       }
@@ -11184,7 +11313,7 @@ function WeakSetConstructor(iterable) {
 
 // builtins/weak.ts:171 WeakSet.prototype.add
 function WeakSetPrototypeAdd(value) {
-  const s = ThisWeakSet(this);
+  const s = (((%CollectionClass(this) !== 3) ? %Throw(%NewTypeError("WeakSet object expected")) : (%AsObj(this))));
   if (!%CanBeHeldWeakly(value)) {
     throw %NewTypeError("invalid value used as WeakSet key");
   }
@@ -11194,13 +11323,13 @@ function WeakSetPrototypeAdd(value) {
 
 // builtins/weak.ts:184 WeakSet.prototype.delete
 function WeakSetPrototypeDelete(value) {
-  const s = ThisWeakSet(this);
+  const s = (((%CollectionClass(this) !== 3) ? %Throw(%NewTypeError("WeakSet object expected")) : (%AsObj(this))));
   return %CanBeHeldWeakly(value) && %CollectionDelete(s, value);
 }
 
 // builtins/weak.ts:193 WeakSet.prototype.has
 function WeakSetPrototypeHas(value) {
-  const s = ThisWeakSet(this);
+  const s = (((%CollectionClass(this) !== 3) ? %Throw(%NewTypeError("WeakSet object expected")) : (%AsObj(this))));
   return %CanBeHeldWeakly(value) && %CollectionHas(s, value);
 }
 
@@ -11296,7 +11425,7 @@ function DOMExceptionPrototypeObject() {
 
 // builtins/web.ts:13
 function NewDOMException(message, name) {
-  const o = %DOMExceptionCreate(DOMExceptionPrototypeObject(), name, message);
+  const o = %DOMExceptionCreate(((%AsObj(%Get(%RealmConstructor("DOMException"), "prototype")))), name, message);
   RecordStack(o);
   return o;
 }
@@ -11310,7 +11439,7 @@ function DOMExceptionConstructor(message, name) {
   const nm = name === undefined ? "Error" : ToString(name);
   let proto = %Get(%AsObj(new.target), "prototype");
   if (!%IsObject(proto)) {
-    proto = DOMExceptionPrototypeObject();
+    proto = ((%AsObj(%Get(%RealmConstructor("DOMException"), "prototype"))));
   }
   const o = %DOMExceptionCreate(%AsObj(proto), nm, msg);
   RecordStack(o);
@@ -11328,17 +11457,20 @@ function DOMExceptionThisField(v, i) {
 
 // builtins/web.ts:54 get DOMException.prototype.name
 function DOMExceptionPrototypeName() {
-  return DOMExceptionThisField(this, 0);
+  let $1;
+  return (($1 = %DOMExceptionField(this, 0), (($1 === undefined) ? %Throw(%NewTypeError("DOMException object expected")) : (%AsStr($1)))));
 }
 
 // builtins/web.ts:62 get DOMException.prototype.message
 function DOMExceptionPrototypeMessage() {
-  return DOMExceptionThisField(this, 1);
+  let $1;
+  return (($1 = %DOMExceptionField(this, 1), (($1 === undefined) ? %Throw(%NewTypeError("DOMException object expected")) : (%AsStr($1)))));
 }
 
 // builtins/web.ts:70 get DOMException.prototype.code
 function DOMExceptionPrototypeCode() {
-  return %DOMExceptionCode(DOMExceptionThisField(this, 0));
+  let $1;
+  return %DOMExceptionCode((($1 = %DOMExceptionField(this, 0), (($1 === undefined) ? %Throw(%NewTypeError("DOMException object expected")) : (%AsStr($1))))));
 }
 
 // builtins/web.ts:75
@@ -11350,11 +11482,12 @@ function DOMExceptionEnumerable(o, key) {
 
 // builtins/web.ts:88 value DOMException.prototype[Symbol.toStringTag]
 function DOMExceptionToStringTag() {
+  let $1, $2, $3;
   const ctor = %RealmConstructor("DOMException");
-  const proto = DOMExceptionPrototypeObject();
-  DOMExceptionEnumerable(proto, "name");
-  DOMExceptionEnumerable(proto, "message");
-  DOMExceptionEnumerable(proto, "code");
+  const proto = ((%AsObj(%Get(%RealmConstructor("DOMException"), "prototype"))));
+  (($1 = %ObjectCreate(null), (%CreateDataPropertyOrThrow($1, "enumerable", true), (%DefineOwnPropertyFromRecord(proto, "name", $1), undefined))));
+  (($2 = %ObjectCreate(null), (%CreateDataPropertyOrThrow($2, "enumerable", true), (%DefineOwnPropertyFromRecord(proto, "message", $2), undefined))));
+  (($3 = %ObjectCreate(null), (%CreateDataPropertyOrThrow($3, "enumerable", true), (%DefineOwnPropertyFromRecord(proto, "code", $3), undefined))));
   for (let i = 1; i <= 25; i++) {
     const key = %DOMExceptionConstant(i);
     %DefineDataPropertyOrThrow(ctor, key, i, 2);

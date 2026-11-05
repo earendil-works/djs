@@ -397,7 +397,11 @@ fn number_constructor(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
 /// converted before the result is known (a NaN does not end the loop), so an object or
 /// a symbol after a NaN still declines to the builtin, which runs or throws.
 fn extremum(heap: &mut Heap, args: &[Value], max: bool) -> Fast {
-    let mut r = if max { f64::NEG_INFINITY } else { f64::INFINITY };
+    let mut r = if max {
+        f64::NEG_INFINITY
+    } else {
+        f64::INFINITY
+    };
     let mut nan = false;
     for &v in args {
         let Some(x) = num(heap, v)? else {

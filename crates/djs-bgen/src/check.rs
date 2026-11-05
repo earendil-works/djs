@@ -120,6 +120,9 @@ pub struct Builtin {
     /// `@slim-omit`: left out of the slim build's prelude, like every builtin of a file
     /// marked `// @slim-omit` (D2411).
     pub slim_omit: bool,
+    /// `@frame`: keeps a frame of its own, never inlined into its callers (0230): the
+    /// engine looks for it on the stack.
+    pub frame: bool,
 }
 
 /// A checked program: every name resolved and every function type-correct.
@@ -150,6 +153,7 @@ const BUILTIN_TAGS: &[&str] = &[
     "intrinsic",
     "fast",
     "slim-omit",
+    "frame",
 ];
 
 pub fn check(decls: Declarations, modules: Vec<Module>) -> Result<Program, Vec<Diagnostic>> {
@@ -334,6 +338,7 @@ fn builtin_info(
         native: false,
         fast: false,
         slim_omit: false,
+        frame: false,
     };
     let mut length = None;
     let mut parent = None;
@@ -404,6 +409,7 @@ fn builtin_info(
             "native" => b.native = true,
             "fast" => b.fast = true,
             "slim-omit" => b.slim_omit = true,
+            "frame" => b.frame = true,
             "intrinsic" => b.intrinsic = true,
             other => err(format!(
                 "unknown tag `@{other}` (builtin functions know {})",

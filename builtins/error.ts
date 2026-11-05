@@ -43,8 +43,9 @@ function FinishStack(err: Obj, v: Value): Value {
 
 /**
  * The call of Error.prepareStackTrace. Errors made while a call of it is on the stack
- * get the default trace (crates/djs-core/src/interp/run/stack.rs).
+ * get the default trace (crates/djs-core/src/interp/run/stack.rs), which finds its frame.
  * @intrinsic
+ * @frame
  */
 function CallPrepareStackTrace(f: Value, ctor: Value, err: Obj, sites: Value): Value {
   return Call(f, ctor, err, sites);

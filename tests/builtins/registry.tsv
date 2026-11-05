@@ -1413,49 +1413,49 @@
 1408	intrinsic	FinalizationRegistryCleanupJob
 1409	value	%prelude:SameValueZero%
 1410	value	%prelude:RelativeIndex%
-1411	value	%prelude:RequireCallable%
-1412	value	%prelude:CheckLength%
-1413	value	%prelude:ArrayCreateChecked%
-1414	value	%prelude:IsConcatSpreadable%
+1411	value	%prelude:RequireCallable%	removed: removed
+1412	value	%prelude:CheckLength%	removed: removed
+1413	value	%prelude:ArrayCreateChecked%	removed: removed
+1414	value	%prelude:IsConcatSpreadable%	removed: removed
 1415	value	%prelude:MoveElements%
 1416	value	%prelude:FlattenIntoArray%
 1417	value	%prelude:SortCompareDefined%
 1418	value	%prelude:ToIndex%
-1419	value	%prelude:ThisArrayBuffer%
+1419	value	%prelude:ThisArrayBuffer%	removed: removed
 1420	value	%prelude:AllocateArrayBuffer%
-1421	value	%prelude:IsImmutableBuffer%
-1422	value	%prelude:IsDetached%
-1423	value	%prelude:BufferLength%
+1421	value	%prelude:IsImmutableBuffer%	removed: removed
+1422	value	%prelude:IsDetached%	removed: removed
+1423	value	%prelude:BufferLength%	removed: removed
 1424	value	%prelude:ArrayBufferCopyAndDetach%
 1425	value	%prelude:AsyncGeneratorRequest%
 1426	value	%prelude:AsyncGeneratorCompleteStep%
 1427	value	%prelude:AsyncGeneratorDrainQueue%
 1428	value	%prelude:AsyncGeneratorAwaitReturn%
 1429	value	%prelude:AsyncFromSyncIteratorContinuation%
-1430	value	%prelude:ThisBigIntValue%
-1431	value	%prelude:ThisBooleanValue%
+1430	value	%prelude:ThisBigIntValue%	removed: removed
+1431	value	%prelude:ThisBooleanValue%	removed: removed
 1432	value	%prelude:OrdinaryToPrimitive%
 1433	value	%prelude:GetMethod%
 1434	value	%prelude:ToIntegerOrInfinity%
 1435	value	%prelude:ToLength%
 1436	value	%prelude:DVOutOfBounds%
-1437	value	%prelude:DVByteLength%
+1437	value	%prelude:DVByteLength%	removed: removed
 1438	value	%prelude:DVByteIndex%
-1439	value	%prelude:GetViewValue%
+1439	value	%prelude:GetViewValue%	removed: removed
 1440	value	%prelude:GetViewElement%
 1441	value	%prelude:SetViewValue%
 1442	value	%prelude:DateValueFromArgs%
-1443	value	%prelude:IsDateObject%
+1443	value	%prelude:IsDateObject%	removed: removed
 1444	value	%prelude:TimeClip%
 1445	value	%prelude:DateSetter%
 1446	value	%prelude:DecoratorKindName%
-1447	value	%prelude:DecoratorPush%
+1447	value	%prelude:DecoratorPush%	removed: removed
 1448	value	%prelude:DecoratorNewAccess%
 1449	value	%prelude:DecoratorNewContext%
-1450	value	%prelude:DecoratorCheckResult%
+1450	value	%prelude:DecoratorCheckResult%	removed: removed
 1451	value	%prelude:DecoratorAccessorFn%
-1452	value	%prelude:DecoratorDefine%
-1453	value	%prelude:DecoratorReflectFn%
+1452	value	%prelude:DecoratorDefine%	removed: removed
+1453	value	%prelude:DecoratorReflectFn%	removed: removed
 1454	value	%prelude:NewSuppressedError%
 1455	value	%prelude:PendingDisposableStack%
 1456	value	%prelude:AddResource%
@@ -1473,7 +1473,7 @@
 1468	value	%prelude:CreateDynamicFunction%
 1469	value	%prelude:FromAsyncStart%
 1470	value	%prelude:FromAsyncAwait%
-1471	value	%prelude:FromAsyncReject%
+1471	value	%prelude:FromAsyncReject%	removed: removed
 1472	value	%prelude:FromAsyncIteratorNext%
 1473	value	%prelude:FromAsyncClose%
 1474	value	%prelude:FromAsyncIteratorResult%
@@ -1484,20 +1484,20 @@
 1479	value	%prelude:OrdinaryHasInstance%
 1480	value	%prelude:GeneratorValidate%
 1481	value	%prelude:GeneratorStep%
-1482	value	%prelude:GetIteratorFromMethod%
-1483	value	%prelude:IteratorNextResult%
+1482	value	%prelude:GetIteratorFromMethod%	removed: removed
+1483	value	%prelude:IteratorNextResult%	removed: removed
 1484	value	%prelude:IterableToList%
 1485	value	%prelude:ArrayFromIterator%
 1486	value	%prelude:GroupByProperty%
-1487	value	%prelude:HelperState%
-1488	value	%prelude:GetIteratorDirectNext%
+1487	value	%prelude:HelperState%	removed: removed
+1488	value	%prelude:GetIteratorDirectNext%	removed: removed
 1489	value	%prelude:IteratorStepResult%
 1490	value	%prelude:GetIteratorFlattenable%
-1491	value	%prelude:ThisIteratorObject%
-1492	value	%prelude:HelperCallable%
+1491	value	%prelude:ThisIteratorObject%	removed: removed
+1492	value	%prelude:HelperCallable%	removed: removed
 1493	value	%prelude:HelperLimit%
 1494	value	%prelude:NewIteratorHelper%
-1495	value	%prelude:HelperYield%
+1495	value	%prelude:HelperYield%	removed: removed
 1496	value	%prelude:HelperCallFunction%
 1497	value	%prelude:IteratorHelperStep%
 1498	value	%prelude:ArrayPrefixCopy%
@@ -1519,10 +1519,10 @@
 1514	value	%prelude:InternalizeJSONMember%
 1515	value	%prelude:JSONPropertyList%
 1516	value	%prelude:JSONListIncludes%
-1517	value	%prelude:ThisMap%
-1518	value	%prelude:CanonicalizeKeyedCollectionKey%
+1517	value	%prelude:ThisMap%	removed: removed
+1518	value	%prelude:CanonicalizeKeyedCollectionKey%	removed: removed
 1519	value	%prelude:CoerceNumbers%
-1520	value	%prelude:ThisNumberValue%
+1520	value	%prelude:ThisNumberValue%	removed: removed
 1521	value	%prelude:IsFiniteNumber%
 1522	value	%prelude:ToPropertyDescriptor%
 1523	value	%prelude:DefineOwnProperty%
@@ -1534,18 +1534,18 @@
 1529	value	%prelude:ClaimResolution%
 1530	value	%prelude:ResolveWithData%
 1531	value	%prelude:RejectWithData%
-1532	value	%prelude:CapabilityPromise%
+1532	value	%prelude:CapabilityPromise%	removed: removed
 1533	value	%prelude:ResolveCapability%
 1534	value	%prelude:RejectCapability%
-1535	value	%prelude:CapabilityResolveFunction%
-1536	value	%prelude:CapabilityRejectFunction%
+1535	value	%prelude:CapabilityResolveFunction%	removed: removed
+1536	value	%prelude:CapabilityRejectFunction%	removed: removed
 1537	value	%prelude:NewPromiseCapability%
 1538	value	%prelude:PromiseResolve%
 1539	value	%prelude:SpeciesConstructor%
-1540	value	%prelude:InvokeThen%
-1541	value	%prelude:PromiseThisConstructor%
-1542	value	%prelude:GetPromiseResolve%
-1543	value	%prelude:DecrementRemaining%
+1540	value	%prelude:InvokeThen%	removed: removed
+1541	value	%prelude:PromiseThisConstructor%	removed: removed
+1542	value	%prelude:GetPromiseResolve%	removed: removed
+1543	value	%prelude:DecrementRemaining%	removed: removed
 1544	value	%prelude:NewElementRecord%
 1545	value	%prelude:SettleElement%
 1546	value	%prelude:KeyedResult%
@@ -1554,12 +1554,12 @@
 1549	value	%prelude:NewAggregateError%
 1550	value	%prelude:CreateArrayFromList%
 1551	value	%prelude:PerformPromiseCombinator%
-1552	value	%prelude:ProxyCreate%
-1553	value	%prelude:TrapKey%
+1552	value	%prelude:ProxyCreate%	removed: removed
+1553	value	%prelude:TrapKey%	removed: removed
 1554	value	%prelude:ProxyTrap%
-1555	value	%prelude:DescFlag%
-1556	value	%prelude:IsAccessorDescriptor%
-1557	value	%prelude:IsDataDescriptor%
+1555	value	%prelude:DescFlag%	removed: removed
+1556	value	%prelude:IsAccessorDescriptor%	removed: removed
+1557	value	%prelude:IsDataDescriptor%	removed: removed
 1558	value	%prelude:CompletePropertyDescriptor%
 1559	value	%prelude:IsCompatiblePropertyDescriptor%
 1560	value	%prelude:FromPropertyDescriptor%
@@ -1570,58 +1570,58 @@
 1565	value	%prelude:ProxyOwnKeys%
 1566	value	%prelude:StrikeKey%
 1567	value	%prelude:RequireConstructor%
-1568	value	%prelude:ReflectTarget%
+1568	value	%prelude:ReflectTarget%	removed: removed
 1569	value	%prelude:ReachesReceiver%
-1570	value	%prelude:ThisRegExpObject%
+1570	value	%prelude:ThisRegExpObject%	removed: removed
 1571	value	%prelude:RegExpFlagGetter%
-1572	value	%prelude:RegExpBuiltinExec%
+1572	value	%prelude:RegExpBuiltinExec%	removed: removed
 1573	value	%prelude:RegExpExec%
 1574	value	%prelude:AdvanceStringIndex%
-1575	value	%prelude:FlagsInclude%
-1576	value	%prelude:MatchString%
+1575	value	%prelude:FlagsInclude%	removed: removed
+1576	value	%prelude:MatchString%	removed: removed
 1577	value	%prelude:AdvanceAfterEmptyMatch%
 1578	value	%prelude:GetSubstitution%
-1579	value	%prelude:ThisSet%
+1579	value	%prelude:ThisSet%	removed: removed
 1580	value	%prelude:GetSetRecord%
-1581	value	%prelude:RecordSize%
-1582	value	%prelude:RecordHas%
-1583	value	%prelude:RecordKeys%
+1581	value	%prelude:RecordSize%	removed: removed
+1582	value	%prelude:RecordHas%	removed: removed
+1583	value	%prelude:RecordKeys%	removed: removed
 1584	value	%prelude:SetCopy%
 1585	value	%prelude:KeysNext%
-1586	value	%prelude:RequireThisCoercible%
-1587	value	%prelude:InvokeSymbol%
+1586	value	%prelude:RequireThisCoercible%	removed: removed
+1587	value	%prelude:InvokeSymbol%	removed: removed
 1588	value	%prelude:RequireGlobalFlag%
-1589	value	%prelude:RegExpFromPattern%
+1589	value	%prelude:RegExpFromPattern%	removed: removed
 1590	value	%prelude:StringReplacement%
-1591	value	%prelude:ThisStringValue%
-1592	value	%prelude:StrLen%
-1593	value	%prelude:ThisToString%
+1591	value	%prelude:ThisStringValue%	removed: removed
+1592	value	%prelude:StrLen%	removed: removed
+1593	value	%prelude:ThisToString%	removed: removed
 1594	value	%prelude:IsRegExp%
 1595	value	%prelude:ClampPosition%
 1596	value	%prelude:StringPad%
-1597	value	%prelude:ThisSymbolValue%
-1598	value	%prelude:ElementSize%
+1597	value	%prelude:ThisSymbolValue%	removed: removed
+1598	value	%prelude:ElementSize%	removed: removed
 1599	value	%prelude:KindName%
-1600	value	%prelude:KindOf%
+1600	value	%prelude:KindOf%	removed: removed
 1601	value	%prelude:TALength%
-1602	value	%prelude:TAOutOfBounds%
+1602	value	%prelude:TAOutOfBounds%	removed: removed
 1603	value	%prelude:ValidateTypedArray%
-1604	value	%prelude:SameContentType%
+1604	value	%prelude:SameContentType%	removed: removed
 1605	value	%prelude:ToElementValue%
-1606	value	%prelude:IsElementValue%
+1606	value	%prelude:IsElementValue%	removed: removed
 1607	value	%prelude:AllocateTypedArrayOfLength%
 1608	value	%prelude:TypedArrayFromBuffer%
 1609	value	%prelude:TypedArrayFromValues%
 1610	value	%prelude:TypedArrayConstruct%
 1611	value	%prelude:BufferInfoOrUndefined%
-1612	value	%prelude:RequireMutableTypedArray%
+1612	value	%prelude:RequireMutableTypedArray%	removed: removed
 1613	value	%prelude:TypedArrayCreateWithLength%
 1614	value	%prelude:TypedArraySpeciesCreate%
 1615	value	%prelude:ValidateUint8Array%
-1616	value	%prelude:GetOptionsObject%
+1616	value	%prelude:GetOptionsObject%	removed: removed
 1617	value	%prelude:Base64Alphabet%
 1618	value	%prelude:LastChunkHandling%
-1619	value	%prelude:Uint8ArrayFromRecord%
+1619	value	%prelude:Uint8ArrayFromRecord%	removed: removed
 1620	value	%prelude:WriteDecoded%
 1621	value	%prelude:TAEveryOrSome%
 1622	value	%prelude:TAFind%
@@ -1629,11 +1629,12 @@
 1624	value	%prelude:TASortedList%
 1625	value	%prelude:IsCanonicalNumericKey%
 1626	value	%prelude:TASet%
-1627	value	%prelude:ThisWeakMap%
-1628	value	%prelude:ThisWeakSet%
-1629	value	%prelude:DOMExceptionPrototypeObject%
+1627	value	%prelude:ThisWeakMap%	removed: removed
+1628	value	%prelude:ThisWeakSet%	removed: removed
+1629	value	%prelude:DOMExceptionPrototypeObject%	removed: removed
 1630	value	%prelude:NewDOMException%
-1631	value	%prelude:DOMExceptionThisField%
-1632	value	%prelude:DOMExceptionEnumerable%
+1631	value	%prelude:DOMExceptionThisField%	removed: removed
+1632	value	%prelude:DOMExceptionEnumerable%	removed: removed
 1633	intrinsic	IteratorFastDrain
 1634	intrinsic	ArgumentCount
+1635	intrinsic	Throw

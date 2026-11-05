@@ -110,14 +110,14 @@ pub(crate) fn hot(b: &[u8], template: u32, op: u8, pc: u32) {
 pub(crate) fn step(heap: &crate::heap::Heap, template: u32, op: Option<u8>, pc: u32) {
     if !on() { return; }
     let Some(op) = op else { CUR.store(2, Relaxed); return; };
-    let flags: u32 = heap.arena().get(template, FuncTemplate::FLAGS);
+    let flags: u32 = u32::from(heap.arena().get::<u16>(template, FuncTemplate::FLAGS));
     let name: u32 = heap.arena().get(template, FuncTemplate::NAME);
     count(kind_flags(flags), 1, op, template, name, pc);
 }
 
 pub(crate) fn frame(heap: &crate::heap::Heap, template: u32) {
     if !on() { return; }
-    let flags: u32 = heap.arena().get(template, FuncTemplate::FLAGS);
+    let flags: u32 = u32::from(heap.arena().get::<u16>(template, FuncTemplate::FLAGS));
     FRAMES[kind_flags(flags)].fetch_add(1, Relaxed);
 }
 
@@ -155,7 +155,7 @@ pub fn dump(heap: &crate::heap::Heap) -> alloc::string::String {
     rows.sort_by(|a, b| b.0.cmp(&a.0));
     out += "opcodes (share, count, through step, kind):\n";
     for (n, st, k, b) in rows.iter().take(40) {
-        let name = crate::bytecode::Op::from_u8(*b as u8).map(|o| crate::bytecode::OPS[o as usize].name).unwrap_or("?");
+        let name = crate::bytecode::Op::from_u8(*b as u8).map(|o| o.name()).unwrap_or("?");
         out += &format!("  {:5.1}% {:>11} step {:5.1}% {} {}\n", pct(*n, all), n, pct(*st, *n), if *k == 1 { "builtin" } else { "user   " }, name);
     }
     let mut ir = Vec::new();
@@ -181,7 +181,7 @@ pub fn dump(heap: &crate::heap::Heap) -> alloc::string::String {
         let o = crate::value::Obj(cell);
         if heap.cell_kind(cell) != crate::heap::CellKind::Object
             || heap.object_class(o) != crate::heap::ObjectClass::Function { continue; }
-        if let Some(t) = heap.object_slot(o, 0).as_internal() {
+        if let Some(t) = Some(heap.closure_template(o)) {
             builtin_names.entry(t).or_insert(path);
         }
     }
@@ -239,7 +239,7 @@ patch("crates/djs-core/src/interp/run/intrinsics.rs",
       "    pub(super) fn call_intrinsic(&mut self, id: u16, argc: u32, next: u32) -> Step {\n",
       f"        {P}::inc(&{P}::INTR[(self.native != 0) as usize][(id as usize).min(2047)], 1);\n")
 H = "crates/djs-core/src/heap/mod.rs"
-patch(H, "        let size = align8(size.max(kind.layout().min_size));\n",
+patch(H, "        let size = align8(size.max(kind.min_size()));\n",
       f"        {P}::inc(&{P}::ALLOC_N[kind as usize & 63], 1);\n"
       f"        {P}::inc(&{P}::ALLOC_B[kind as usize & 63], size as u64);\n", count=None)
 # Every collection ends in after_collect; the collectors themselves are marked for the
@@ -248,7 +248,7 @@ G = "crates/djs-core/src/heap/gc.rs"
 patch(G, "    fn after_collect(&mut self, after: u32) {\n",
       f"        {P}::inc(&{P}::GCS, 1);\n        {P}::inc(&{P}::GC_BYTES, after as u64);\n")
 patch("crates/djs-core/src/heap/compactor.rs",
-      "    pub(super) fn mark_compact(&mut self, old: u32) -> Result<(u32, u32, u32), HeapError> {\n",
+      "    ) -> Result<(u32, u32, u32, Vec<u32>), HeapError> {\n",
       f"        let _gc = {P}::Gc::start();\n")
 patch(G, "    pub fn collect_canonical(&mut self) -> Result<GcStats, HeapError> {\n",
       f"        let _gc = {P}::Gc::start();\n")
@@ -264,11 +264,9 @@ patch(C, "    vm.call(main, this, args).expect(\"the VM is idle\");\n",
       "            djs_core::prof::SAMPLES[c.min(4)].fetch_add(1, std::sync::atomic::Ordering::Relaxed);\n"
       "        });\n"
       "    }\n")
-patch(C, "        match vm.run(fuel) {\n",
-      "        let st = vm.run(fuel);\n"
+patch(C, "        let status = vm.run(fuel);\n",
       "        djs_core::prof::CUR.store(4, std::sync::atomic::Ordering::Relaxed);\n"
-      "        if prof && matches!(st, Status::Done(_) | Status::Idle) { eprint!(\"{}\", djs_core::prof::dump(vm.heap())); }\n"
-      "        match st {\n", where="replace")
+      "        if std::env::var_os(\"DJS_PROF\").is_some() && matches!(status, Status::Done(_) | Status::Idle) { eprint!(\"{}\", djs_core::prof::dump(vm.heap())); }\n")
 if failures:
     sys.exit("instr.py: patches do not apply to this checkout (fix the anchors in scripts/perf/instr.py):\n"
              + "\n".join(failures))

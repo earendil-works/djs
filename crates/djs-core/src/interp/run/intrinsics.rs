@@ -37,6 +37,7 @@ const IS_NUMBER: u16 = id("IsNumber");
 const IS_SYMBOL: u16 = id("IsSymbol");
 const IS_BOOLEAN: u16 = id("IsBoolean");
 const ARGUMENT_COUNT: u16 = id("ArgumentCount");
+const THROW: u16 = id("Throw");
 const AS_OBJ: u16 = id("AsObj");
 const AS_FN: u16 = id("AsFn");
 const AS_STR: u16 = id("AsStr");
@@ -576,6 +577,7 @@ impl Exec<'_> {
                 ));
             }
             ARGUMENT_COUNT => Value::int(self.header_int(frame::ARGC) as i32),
+            THROW => return Err(Fault::throw(a0)),
             GET | GET_V => {
                 // Dense elements first: builtins read arrays element by element.
                 if let (Some(o), Some(i)) = (a0.as_object(), index_key(arg(self, 1)))

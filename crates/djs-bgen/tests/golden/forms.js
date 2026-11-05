@@ -49,7 +49,7 @@ function AllForms(a, b) {
   } catch (e) {
     throw e;
   } finally {
-    Helper(z, u);
+    ((z === u));
   }
   try {
     %Leaf(null);
@@ -65,16 +65,36 @@ function AllForms(a, b) {
   return neg === 0 ? %Make() : s;
 }
 
-// golden/forms.ts:67
-function Helper(a, b) {
-  return a === b;
-}
-
 // golden/forms.ts:75 %Callback
 function Callback(f) {
   return %User(f);
 }
 
+// golden/forms.ts:84 Example.inlining
+function Inlining(x, n) {
+  let $1, $2, $3, $4, $5, $6;
+  const a = ($1 = (((%Leaf(x)) ? %Throw(%NewError("object")) : (1))), $2 = n + 1, ($3 = 0, ($3 = $3 + 1, ($4 = $1 * 2, (($4 < $3) ? ($3) : (($4 > $2) ? ($2) : ($4)))))));
+  const b = Looping(a);
+  return Big(a, b) + (($5 = 0, ($5 = $5 + 1, ($6 = b * 2, (($6 < $5) ? ($5) : (($6 > n) ? (n) : ($6)))))));
+}
+
+// golden/forms.ts:111
+function Looping(v) {
+  let r = v;
+  while (r > 10) {
+    r = r - 1;
+  }
+  return r;
+}
+
+// golden/forms.ts:119
+function Big(a, b) {
+  const s = a + b + a + b + a + b + a + b + a + b + a + b + a + b + a + b;
+  const t = s * s * s * s * s * s * s * s * s * s * s * s * s * s * s * s * s * s;
+  return s + t + a + b + a + b + a + b + a + b + a + b + a + b + a + b + a + b + a;
+}
+
 %InstallMethod("Example.prototype", "all", AllForms, 1);
+%InstallMethod("Example", "inlining", Inlining, 2);
 %InstallIntrinsic("Callback", Callback);
 })();

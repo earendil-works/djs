@@ -43,7 +43,7 @@ fn base_offsets_agree_with_paths() {
         }
         assert_eq!(registry::path(e.id).as_deref(), Some(e.path.as_str()));
     }
-    assert!(values > if djs_core::FULL { 900 } else { 500 }, "{values}");
+    assert!(values > if djs_core::FULL { 800 } else { 500 }, "{values}");
     for (i, info) in INTRINSICS.iter().enumerate() {
         let id = registry::id_of_intrinsic(i as u16).unwrap();
         assert_eq!(registry::path(id).as_deref(), Some(info.name));

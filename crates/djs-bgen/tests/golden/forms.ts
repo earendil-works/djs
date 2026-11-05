@@ -75,3 +75,49 @@ function Helper(a: u32, b: u32): boolean {
 function Callback(f: Value): Value {
   return User(f);
 }
+
+/**
+ * The bytecode backend's inlining (0230): `Checked` and `Clamp` become expressions in
+ * the caller; `Looping` (a loop) and `Big` (too long) stay calls.
+ * @builtin Example.inlining
+ */
+function Inlining(x: Value, n: f64): f64 {
+  const a: f64 = Clamp(Checked(x), n + 1);
+  const b: f64 = Looping(a);
+  return Big(a, b) + Clamp(b, n);
+}
+
+/** Throws for an object, `throw` as `%Throw(...)`. */
+function Checked(v: Value): f64 {
+  if (Leaf(v)) {
+    throw NewError("object");
+  }
+  return 1;
+}
+
+/** A local and an `if` / `else`; `lo` is assigned, so it gets a temporary. */
+function Clamp(v: f64, hi: f64): f64 {
+  let lo: f64 = 0;
+  lo = lo + 1;
+  const p: f64 = v * 2;
+  if (p < lo) {
+    return lo;
+  } else if (p > hi) {
+    return hi;
+  }
+  return p;
+}
+
+function Looping(v: f64): f64 {
+  let r: f64 = v;
+  while (r > 10) {
+    r = r - 1;
+  }
+  return r;
+}
+
+function Big(a: f64, b: f64): f64 {
+  const s: f64 = a + b + a + b + a + b + a + b + a + b + a + b + a + b + a + b;
+  const t: f64 = s * s * s * s * s * s * s * s * s * s * s * s * s * s * s * s * s * s;
+  return s + t + a + b + a + b + a + b + a + b + a + b + a + b + a + b + a + b + a;
+}

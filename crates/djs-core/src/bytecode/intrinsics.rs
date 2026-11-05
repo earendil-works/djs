@@ -59,6 +59,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("IsSymbol", L, 1, false),
     i("IsBoolean", L, 1, false),
     i("ArgumentCount", L, 0, false),
+    i("Throw", L, 1, false),
     i("AsObj", L, 1, false),
     i("AsFn", L, 1, false),
     i("AsStr", L, 1, false),
