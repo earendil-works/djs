@@ -7,6 +7,7 @@
 //! evaluate again and gives the saved value on the dumped state can be written as the
 //! original text (`results.push(await p)`):
 //!
+//! - a literal (a string without escapes, a decimal number, `true`, `false`, `null`);
 //! - an identifier whose binding (a frame binding of that name, unique at the site; else a
 //!   variable the function captured; else a global's data property) holds the saved
 //!   value now;
@@ -38,6 +39,22 @@ fn parse(text: &str) -> Option<Read<'_>> {
     }
     let (b, k) = t.split_once('.')?;
     (is_ident(b) && is_ident(k)).then_some(Read::Member(b, k))
+}
+
+/// Whether `text` is a literal: a string without escapes, a decimal number, `true`,
+/// `false`, `null`.
+fn is_literal(text: &str) -> bool {
+    let t = text.trim();
+    let quoted = |q: char| {
+        t.len() >= 2
+            && t.starts_with(q)
+            && t.ends_with(q)
+            && !t[1..t.len() - 1].contains([q, '\\', '\n', '\r'])
+    };
+    matches!(t, "true" | "false" | "null")
+        || quoted('"')
+        || quoted('\'')
+        || (t.bytes().all(|b| b.is_ascii_digit() || b == b'.') && t.parse::<f64>().is_ok())
 }
 
 /// Strict equality of a saved operand and a value read now.
@@ -118,6 +135,11 @@ impl Dumper<'_> {
             for p in n.parts.iter().filter(|p| p.role == Role::Arg) {
                 let name = cat!(construct, p.start);
                 let Some(v) = slot(&name) else { continue };
+                // (A literal gives its value again.)
+                if is_literal(text(p.start, p.end)) {
+                    out.push(name);
+                    continue;
+                }
                 if let Some(Read::Ident(id)) = parse(text(p.start, p.end))
                     && self
                         .read_name(f, named, val, id)

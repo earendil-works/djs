@@ -2166,10 +2166,13 @@ impl G<'_, '_> {
             return Ok(P::L(out));
         }
         let simple = !args.iter().any(|&m| n.parts[m].role == Role::Spread);
+        // (Operands before the site are K's constants here, not read again: origin
+        // tracking finds the original's temporaries in K's call only where K's call is
+        // the original's.)
         for &m in &args {
             let p = n.parts[m];
             let e = if m < k {
-                self.operand(construct, n, m)?
+                self.tmp(construct, n.parts[m].start)?
             } else if m == k {
                 self.arg(i, n, m)?
             } else {

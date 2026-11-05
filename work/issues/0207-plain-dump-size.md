@@ -291,6 +291,15 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
 - 0207 stays open (owner): after item 4, fluff's (0216) ranked queue. pjr (0215) makes
   dump_plain's schedule/keys_in/dep_items/creator_block indexed after this merge.
 
+- After the rebase onto 0203/0213: literal operands (strings without escapes, decimal
+  numbers, true/false/null) are read again (dump_reread `is_literal`), as string
+  temporaries are constants now; operands of K's own `$djs_R`/`$djs_C` call are always
+  constants (origin tracking finds the original's temporaries in K's call only where it is
+  the original's: a reread `new.arg` there was lost). Score vs main: v2 473,214 → 426,479,
+  corpus 7,425,150 → 7,243,739, sleep 1,247 → 1,093.
+- Queued (pjz 0211 batch 3): a `finally` whose normal end is dead (`if (true) continue`)
+  has no `completion.kind` slot: "missing slot completion.kind@N".
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a
