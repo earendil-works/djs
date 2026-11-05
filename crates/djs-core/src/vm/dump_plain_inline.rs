@@ -473,8 +473,11 @@ pub(super) fn def_rhs(text: &str) -> Option<&str> {
 /// argument of a builtin's call (`Promise.prototype.then.call($dump.a3, …)`), or the
 /// value itself.
 pub(super) fn first_eval(text: &str) -> Option<usize> {
-    let rest = text.strip_prefix("$dump.")?;
-    let (_, v) = rest.split_once(" = ")?;
+    // (`void $dump.p3.then(…);`: a reaction whose promise nothing reads.)
+    let v = match text.strip_prefix("void ") {
+        Some(v) => v,
+        None => text.strip_prefix("$dump.")?.split_once(" = ")?.1,
+    };
     let at = text.len() - v.len();
     if v.starts_with("$dump.") {
         return Some(at);

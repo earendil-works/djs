@@ -2334,7 +2334,10 @@ impl W<'_> {
                             self.put_line(text, effect, def);
                         }
                         _ => {
-                            let text = self.inline_refs(&text, None, false);
+                            let first = (kind == IK::Stmt)
+                                .then(|| inline::first_eval(&text))
+                                .flatten();
+                            let text = self.inline_refs(&text, first, false);
                             let effect = Self::effectful(&kind, &text);
                             self.put_line(text, effect, None);
                         }

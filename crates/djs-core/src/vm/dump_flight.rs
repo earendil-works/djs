@@ -1868,6 +1868,30 @@ impl Dumper<'_> {
             ..
         } = self.fl.pends[q].reactions[j];
         let ql = self.make(q);
+        // A promise of the builtin prototype without own methods is subscribed to by
+        // its methods (`p.then(f)`, 0216's rule 9): while the dump loads, builtins are
+        // the realm's own (their changes come at the end).
+        let pv = self.nodes[self.fl.pends[q].node].v;
+        let method = pv.as_object().is_some_and(|o| {
+            h.get_prototype_of(o).map(Value::object) == Some(intrinsic(h, Intrinsic::PromiseProto))
+                && !h
+                    .own_keys(o)
+                    .iter()
+                    .any(|k| *k == atoms::THEN || *k == atoms::FINALLY)
+        });
+        let recv = |m: &str| {
+            if !method {
+                return cat!("Promise.prototype.", m, ".call(", ql, ", ");
+            }
+            let simple = ql
+                .bytes()
+                .all(|c| c == b'.' || c == b'$' || c == b'_' || c.is_ascii_alphanumeric());
+            if simple {
+                cat!(ql, ".", m, "(")
+            } else {
+                cat!("(", ql, ").", m, "(")
+            }
+        };
         // (Array.fromAsync's promise is the one its call makes.)
         let mut cap = cap;
         let call = if consumer == Consumer::FromAsync {
@@ -1895,14 +1919,14 @@ impl Dumper<'_> {
             }
             cat!(self.rt(), "fromAsync(", join(&args, ", "), ")")
         } else if consumer == Consumer::Dead {
-            cat!("Promise.prototype.then.call(", ql, ", () => {}, () => {})")
+            cat!(recv("then"), "() => {}, () => {})")
         } else if consumer == Consumer::Finally {
             let on = self
                 .clo_of(f)
                 .and_then(|c| c.data.as_object())
                 .map_or(Value::UNDEFINED, |d| h.object_slot(d, 0));
             let e = self.expr(on, None, None);
-            cat!("Promise.prototype.finally.call(", ql, ", ", e, ")")
+            cat!(recv("finally"), e, ")")
         } else {
             let fe = self.expr(f, None, None);
             let re = self.expr(r, None, None);
@@ -1910,7 +1934,13 @@ impl Dumper<'_> {
                 let path = self.nodes[self.fl.pends[q].node].path.clone();
                 self.refuse(path, "a reaction whose handler is on a reference cycle");
             }
-            cat!("Promise.prototype.then.call(", ql, ", ", fe, ", ", re, ")")
+            // (A missing argument is `undefined`: trailing ones left out.)
+            let args = match (fe.as_str(), re.as_str()) {
+                ("undefined", "undefined") if method => String::new(),
+                (_, "undefined") if method => fe,
+                _ => cat!(fe, ", ", re),
+            };
+            cat!(recv("then"), args, ")")
         };
         self.react_upto(q, j);
         match self.pend_of(cap) {
