@@ -81,3 +81,18 @@ setUp per load (~40-45 µs): a deterministic run rekeys the hash at every restor
 shared across seeds, so the key cannot be in it), the `setOrigin` call (~20%), the
 adapter's state. A non-deterministic session (pi in production) reseeds Math.random only:
 ~20 µs.
+
+### Continuation generation and the dump's setup (after pjs cleared them, 0215)
+
+pi-sessions profile (wasm, steady state), shares of `vm_dump` before -> after, same output:
+- continuation generation (`cont::run`): ~32% -> ~22%: K's scaffold names checked once
+  against whether the text holds `$djs` at all (each was a scan of the function's text),
+  identifier and `$dump.s` searches by first byte instead of `str::find` (a searcher's
+  setup was most of each), K's helpers counted in one pass instead of one per helper and
+  value, constant text without an allocation (`P::T`), rendering into sized strings.
+- `Dumper::new` ~25% -> ~16%: the base's builtins found by a binary search in the build's
+  list (sorted by cell, borrowed) instead of an index built and copied per dump; its
+  global names borrowed, its globals found by name.
+- Corpus (native): dump 14,399 -> 13,818 M, re-dump 14,430 -> 13,450 M instructions.
+- What is left of continuation generation is allocation (the piece tree's strings,
+  `cat!`) and rendering: a rework of the piece tree, not a hot spot.

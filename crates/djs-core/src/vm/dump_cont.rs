@@ -42,6 +42,8 @@ fn no<T>(why: &str) -> R<T> {
 #[derive(Clone)]
 enum P {
     S(String),
+    /// Text of K's own that is a constant (`s`): no allocation for it (0215).
+    T(&'static str),
     V(u32, u32),
     /// A scaffold record (`scaf[i]`): its continuation offset is set here.
     Mark(usize),
@@ -63,8 +65,8 @@ enum P {
     Val(String, Vec<String>),
 }
 
-fn s(t: &str) -> P {
-    P::S(String::from(t))
+fn s(t: &'static str) -> P {
+    P::T(t)
 }
 
 /// Writes activation `act`'s continuation, with what a re-dump needs to make its layout
@@ -131,6 +133,7 @@ fn run(act: &Act, ctx: &mut dyn Ctx, replay: Option<&[u32]>) -> R<Out> {
         tape: Vec::new(),
         replay: replay.map(|r| (r.to_vec(), 0)),
         aliases: Vec::new(),
+        fdjs: core::cell::OnceCell::new(),
     };
     let mut body = g.body()?;
     if !g.deferred.is_empty() {
@@ -138,11 +141,11 @@ fn run(act: &Act, ctx: &mut dyn Ctx, replay: Option<&[u32]>) -> R<Out> {
     }
     // Liveness (D2911): bindings nothing in K reads are left out, unless K may read names
     // in ways its text does not show.
-    let mut all = String::new();
+    let mut all = String::with_capacity(act.ftext.len() + 256);
     render(&body, &act.ftext, "", &mut all);
     if !has_ident(&all, "eval") && !has_ident(&all, "with") {
         prune(&mut body, &act.ftext);
-        let mut text = String::new();
+        let mut text = String::with_capacity(all.len());
         render(&body, &act.ftext, "", &mut text);
         let params = core::mem::take(&mut g.params);
         for (n, v) in params {
@@ -302,11 +305,19 @@ fn may_assign(text: &str, name: &str) -> bool {
 /// Whether `text` holds the identifier `name` (not as part of a longer one).
 fn has_ident(text: &str, name: &str) -> bool {
     let ident = |c: u8| c.is_ascii_alphanumeric() || c == b'_' || c == b'$';
-    let b = text.as_bytes();
+    let (b, n) = (text.as_bytes(), name.as_bytes());
+    let Some(&first) = n.first() else {
+        return false;
+    };
+    // (By its first byte and a compare, not `str::find`: the texts and names are short,
+    // and a searcher's setup was most of the time, 0215.)
     let mut from = 0;
-    while let Some(at) = text[from..].find(name) {
-        let (s, e) = (from + at, from + at + name.len());
-        if (s == 0 || !ident(b[s - 1])) && (e == b.len() || !ident(b[e])) {
+    while from + n.len() <= b.len() {
+        let Some(at) = b[from..=b.len() - n.len()].iter().position(|&c| c == first) else {
+            return false;
+        };
+        let (s, e) = (from + at, from + at + n.len());
+        if &b[s..e] == n && (s == 0 || !ident(b[s - 1])) && (e == b.len() || !ident(b[e])) {
             return true;
         }
         from = s + 1;
@@ -348,6 +359,19 @@ struct G<'a, 'c> {
     replay: Option<(Vec<u32>, usize)>,
     /// Temporaries whose literal is another's: `(cmap index, the other's)`.
     aliases: Vec<(usize, usize)>,
+    /// Whether the function's text holds `$djs` at all (`G::f_names`): K's own names
+    /// all start with it, and checking each against the text was a scan each (0215).
+    fdjs: core::cell::OnceCell<bool>,
+}
+
+impl G<'_, '_> {
+    /// [`has_ident`] of the function's text.
+    fn f_names(&self, name: &str) -> bool {
+        if name.starts_with("$djs") && !*self.fdjs.get_or_init(|| self.act.ftext.contains("$djs")) {
+            return false;
+        }
+        has_ident(&self.act.ftext, name)
+    }
 }
 
 impl G<'_, '_> {
@@ -358,13 +382,13 @@ impl G<'_, '_> {
     /// `base`, or `base_k` if the function's text names it already (a continuation
     /// of a continuation has the first one's scaffold names).
     fn fresh(&self, base: String) -> String {
-        if !has_ident(self.ftext(), &base) {
+        if !self.f_names(&base) {
             return base;
         }
         let mut k = 1;
         loop {
             let n = cat!(base, "_", k);
-            if !has_ident(self.ftext(), &n) {
+            if !self.f_names(&n) {
                 return n;
             }
             k += 1;
@@ -554,7 +578,7 @@ impl G<'_, '_> {
                 l.iter()
                     .any(|t| t == &name || t.starts_with(&cat!(name, " ")))
             };
-            if !has_ident(self.ftext(), &name) && !taken(&self.temps) && !taken(&self.lets) {
+            if !self.f_names(&name) && !taken(&self.temps) && !taken(&self.lets) {
                 return name;
             }
         }
@@ -2832,6 +2856,7 @@ impl G<'_, '_> {
 fn render(p: &P, ftext: &str, skip: &str, out: &mut String) {
     match p {
         P::S(t) => out.push_str(t),
+        P::T(t) => out.push_str(t),
         P::Decl(n, t) => {
             if n != skip {
                 out.push_str(t)
@@ -3001,12 +3026,14 @@ fn literal(v: &str) -> bool {
 fn has_factory_ref(v: &str) -> bool {
     let b = v.as_bytes();
     let mut i = 0;
-    while let Some(at) = v[i..].find("$dump.s") {
-        let j = i + at + "$dump.s".len();
-        if b.get(j).is_some_and(u8::is_ascii_digit) {
+    // (By `$` and a compare: see `has_ident`.)
+    while let Some(at) = b[i..].iter().position(|&c| c == b'$') {
+        let s = i + at;
+        let j = s + "$dump.s".len();
+        if b.get(s..j) == Some(b"$dump.s") && b.get(j).is_some_and(u8::is_ascii_digit) {
             return true;
         }
-        i = j;
+        i = s + 1;
     }
     false
 }

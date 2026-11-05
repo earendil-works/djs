@@ -38,15 +38,17 @@ pub(super) fn base_names() -> super::dump::BaseNames<'static> {
     let (b, g) = NAMES.get_or_init(|| {
         let h = crate::heap::Heap::from_bytes_trusted(base().to_vec(), usize::MAX).unwrap();
         let end = h.base_end();
-        let builtins = super::registry::reachable_names(&h)
+        let mut builtins: Vec<(u32, &'static str)> = super::registry::reachable_names(&h)
             .into_iter()
             .filter(|(c, _)| *c < end)
             .map(|(c, p)| (c, leak(p)))
             .collect();
-        let globals = super::registry::base_globals(&h)
+        builtins.sort_by_key(|b| b.0);
+        let mut globals: Vec<(&'static str, u64, u8)> = super::registry::base_globals(&h)
             .into_iter()
             .map(|(n, b, f)| (leak(n), b, f))
             .collect();
+        globals.sort_by(|a, b| a.0.cmp(b.0));
         (builtins, globals)
     });
     super::dump::BaseNames {

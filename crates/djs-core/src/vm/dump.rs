@@ -112,7 +112,8 @@ pub use super::script_hash;
 /// A base image's builtins and globals as a dump needs them ([`DumpOptions::base_names`]).
 #[derive(Clone, Copy)]
 pub struct BaseNames<'a> {
-    /// Every builtin [`super::registry::reachable_names`] finds in the base, with its path.
+    /// Every builtin [`super::registry::reachable_names`] finds in the base, with its path,
+    /// sorted by cell (else the dump sorts a copy).
     pub builtins: &'a [(u32, &'a str)],
     /// The base global object's own properties ([`super::registry::base_globals`]).
     pub globals: &'a [(&'a str, u64, u8)],
@@ -364,20 +365,22 @@ enum Named {
     Internal,
 }
 
-struct Builtin {
-    /// (The base's names, D3020, are the build's: borrowed, not copied for each VM.)
-    path: alloc::borrow::Cow<'static, str>,
+/// A builtin of the base: its path and what kind of name it is.
+struct Builtin<'t> {
+    path: &'t str,
     named: Named,
 }
 
-/// The base's builtins as the dumper names them, made once per VM (`Vm::base_names`):
-/// by canonical path (D2371), indexed by cell, and the base's global names.
+/// The base's builtins as the dumper names them, made once per VM (`Vm::base_names`): by
+/// canonical path (D2371), sorted by cell, and the base's global names. With the build's
+/// names (D3020) the list is theirs, borrowed: a fresh VM's first dump builds nothing
+/// for it (0215).
 #[derive(Default)]
 pub(crate) struct BaseTable {
-    list: Vec<Builtin>,
-    /// `list` by cell offset (`BUILTIN | index`): each dump's `cells` starts as a copy.
-    cells: Index,
-    globals: Vec<String>,
+    list: alloc::borrow::Cow<'static, [(u32, &'static str)]>,
+    /// The walked paths, which `list` refers to by index (`""` borrowed for each).
+    owned: Vec<String>,
+    globals: Vec<alloc::borrow::Cow<'static, str>>,
 }
 
 impl BaseTable {
@@ -385,37 +388,64 @@ impl BaseTable {
     /// [`super::registry::reachable_names`], made when the base was built) or a walk.
     fn new(base: Option<&Heap>, base_end: u32, names: Option<BaseNames<'static>>) -> BaseTable {
         let mut t = BaseTable::default();
-        let mut add = |cell: u32, path: alloc::borrow::Cow<'static, str>| {
-            if cell < base_end {
-                t.cells.insert(key(cell), BUILTIN | t.list.len() as u32);
-                t.list.push_out(Builtin {
-                    named: named(&path),
-                    path,
-                });
-            }
-        };
         match (names, base) {
             (Some(n), _) => {
-                for &(cell, path) in n.builtins {
-                    add(cell, alloc::borrow::Cow::Borrowed(path));
+                if n.builtins.windows(2).all(|w| w[0].0 < w[1].0)
+                    && n.builtins.last().is_none_or(|l| l.0 < base_end)
+                {
+                    t.list = alloc::borrow::Cow::Borrowed(n.builtins);
+                } else {
+                    let mut l: Vec<(u32, &'static str)> = n
+                        .builtins
+                        .iter()
+                        .copied()
+                        .filter(|b| b.0 < base_end)
+                        .collect();
+                    crate::sort::sort_by(&mut l, |a, b| a.0 < b.0);
+                    t.list = alloc::borrow::Cow::Owned(l);
                 }
-                t.globals = n.globals.iter().map(|g| String::from(g.0)).collect();
+                t.globals = n
+                    .globals
+                    .iter()
+                    .map(|g| alloc::borrow::Cow::Borrowed(g.0))
+                    .collect();
             }
             (None, Some(base)) => {
-                for (cell, path) in super::registry::reachable_names(base) {
-                    add(cell, alloc::borrow::Cow::Owned(path));
-                }
+                let mut walked: Vec<(u32, String)> = super::registry::reachable_names(base)
+                    .into_iter()
+                    .filter(|b| b.0 < base_end)
+                    .collect();
+                crate::sort::sort_by(&mut walked, |a, b| a.0 < b.0);
+                // (The owned paths are found by index: `list` holds `""` for them.)
+                t.list = alloc::borrow::Cow::Owned(walked.iter().map(|w| (w.0, "")).collect());
+                t.owned = walked.into_iter().map(|w| w.1).collect();
                 if let Some(bg) = intrinsic(base, Intrinsic::Global).as_object() {
                     t.globals = base
                         .own_keys(bg)
                         .into_iter()
-                        .map(|k| atom_text(base, k))
+                        .map(|k| alloc::borrow::Cow::Owned(atom_text(base, k)))
                         .collect();
                 }
             }
             (None, None) => {}
         }
         t
+    }
+
+    /// The index of base cell `cell`'s builtin.
+    fn index(&self, cell: u32) -> Option<usize> {
+        self.list.binary_search_by_key(&cell, |b| b.0).ok()
+    }
+
+    fn get(&self, i: usize) -> Builtin<'_> {
+        let path = match self.owned.get(i) {
+            Some(p) => p.as_str(),
+            None => self.list[i].1,
+        };
+        Builtin {
+            path,
+            named: named(path),
+        }
     }
 }
 
@@ -804,8 +834,6 @@ struct Dumper<'a> {
     builtins: Rc<BaseTable>,
     host_exprs: Vec<String>,
     host_names: Vec<&'a str>,
-    /// The global object's properties on the base: the builtin globals.
-    base_globals: Vec<String>,
     globals: Vec<Global>,
     /// `globals` by atom id.
     global_atoms: Index,
@@ -912,7 +940,6 @@ impl<'a> Dumper<'a> {
             builtins: Rc::default(),
             host_exprs: Vec::new(),
             host_names: opts.host.to_vec(),
-            base_globals: Vec::new(),
             globals: Vec::new(),
             global_atoms: Index::default(),
             roots: Vec::new(),
@@ -964,8 +991,7 @@ impl<'a> Dumper<'a> {
             }
         };
         d.builtins = table.clone();
-        d.cells = table.cells.clone();
-        d.base_globals = table.globals.clone();
+
         for &(name, v) in opts.host_roots {
             d.host_values(v, host_ref(name), 0);
         }
@@ -992,13 +1018,17 @@ impl<'a> Dumper<'a> {
 
     /// What `cell` is to the dump: its tag and index.
     fn cell(&self, cell: u32) -> Option<(u32, usize)> {
+        // (The base's builtins are below `base_end`: the base table's, not in `cells`.)
+        if cell < self.base_end {
+            return self.builtins.index(cell).map(|i| (BUILTIN, i));
+        }
         let t = self.cells.get(key(cell))?;
         Some((t & TAG, (t & !TAG) as usize))
     }
 
-    fn builtin(&self, cell: u32) -> Option<&Builtin> {
+    fn builtin(&self, cell: u32) -> Option<Builtin<'_>> {
         match self.cell(cell)? {
-            (BUILTIN, i) => Some(&self.builtins.list[i]),
+            (BUILTIN, i) => Some(self.builtins.get(i)),
             _ => None,
         }
     }
@@ -1039,13 +1069,16 @@ impl<'a> Dumper<'a> {
                     .flatten()
                     .map(|bp| bp == p),
                 // The base's properties as they were built: a value by its bits.
-                _ => base_globals
-                    .iter()
-                    .find(|x| x.0 == name)
-                    .map(|&(_, bits, fl)| {
-                        matches!(p, Property::Data { value, flags }
+                // (Sorted by name when the build made them, else searched.)
+                _ => match base_globals.binary_search_by(|x| x.0.cmp(name.as_str())) {
+                    Ok(i) => Some(i),
+                    Err(_) => base_globals.iter().position(|x| x.0 == name),
+                }
+                .map(|i| base_globals[i])
+                .map(|(_, bits, fl)| {
+                    matches!(p, Property::Data { value, flags }
                         if value.to_bits() == bits && flags.bits() == fl)
-                    }),
+                }),
             };
             if same == Some(true) {
                 continue;
@@ -1115,11 +1148,11 @@ impl<'a> Dumper<'a> {
     /// The expression for builtin `i`: its path, or `$dump.bN`, captured at the top of
     /// the dump before user code runs.
     fn builtin_expr(&mut self, i: usize) -> String {
-        let b = &self.builtins.list[i];
+        let b = self.builtins.get(i);
         if b.named == Named::Path {
-            return String::from(&*b.path);
+            return String::from(b.path);
         }
-        let path = String::from(&*b.path);
+        let path = String::from(b.path);
         let pl = &mut self.pl;
         let k = match pl.builtins.iter().position(|p| *p == path) {
             Some(k) => k,
@@ -1211,12 +1244,12 @@ impl<'a> Dumper<'a> {
         let c = cell_of(v)?;
         match self.cell(c) {
             Some((BUILTIN, i)) => {
-                let b = &self.builtins.list[i];
+                let b = self.builtins.get(i);
                 let why = match b.named {
                     Named::Path | Named::Loader => return None,
                     Named::Internal => "a builtin's internal value (",
                 };
-                let why = cat!(why, &*b.path, ")");
+                let why = cat!(why, b.path, ")");
                 self.refuse(path(), &why);
                 return None;
             }
@@ -1276,7 +1309,7 @@ impl<'a> Dumper<'a> {
         let h = self.h;
         match h.atom_symbol(k) {
             Some(s) => match self.builtin(s.offset()) {
-                Some(b) => cat!("[", &*b.path, "]"),
+                Some(b) => cat!("[", b.path, "]"),
                 None => {
                     let d = h.symbol_description(s).as_string();
                     cat!(
@@ -2492,7 +2525,7 @@ impl<'a> Dumper<'a> {
                             u.name == *g
                                 && (u.decl != Decl::Var
                                     || !self.host_names.contains(&g.as_str())
-                                        && !self.base_globals.contains(g))
+                                        && !self.builtins.globals.iter().any(|b| b == g))
                         })
                     {
                         why.push_out(cat!(

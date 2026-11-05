@@ -87,21 +87,40 @@ impl G<'_, '_> {
         }
         // K's helpers, captured where the marker is.
         let act = self.act;
-        let names: Vec<&str> = [
+        const HELPERS: [&str; 17] = [
             "R", "G", "C", "D", "A", "L", "N", "Q", "X", "O", "I", "E", "P", "S", "Y", "U", "DD",
-        ]
-        .into_iter()
-        // (Not those of a value written in K's text: a continuation written in place
-        // captures its own, D3001.)
-        .filter(|h| {
-            let pat = cat!("$djs_", *h, "(");
-            let inner: usize = vals.iter().map(|v| v.matches(pat.as_str()).count()).sum();
-            text.matches(pat.as_str()).count() > inner
-        })
-        // A continuation of a continuation declares them already (its own
-        // first line, restored from its slot).
-        .filter(|h| !act.slots.iter().any(|s| s.name == cat!("$djs_", *h)))
-        .collect();
+        ];
+        // The calls `$djs_H(` of each helper, in the text and in its values: one pass each
+        // (0215: a search per helper and value was most of this function).
+        let calls = |t: &str, counts: &mut [usize; 17]| {
+            for (at, _) in t.match_indices("$djs_") {
+                let rest = &t.as_bytes()[at + 5..];
+                // (Helper names are one or two letters.)
+                let end = rest.iter().take(3).position(|&c| c == b'(');
+                if let Some(end) = end
+                    && let Some(h) = HELPERS.iter().position(|h| h.as_bytes() == &rest[..end])
+                {
+                    counts[h] += 1;
+                }
+            }
+        };
+        let mut in_text = [0usize; 17];
+        calls(&text, &mut in_text);
+        let mut in_vals = [0usize; 17];
+        for v in &vals {
+            calls(v, &mut in_vals);
+        }
+        let names: Vec<&str> = HELPERS
+            .iter()
+            .enumerate()
+            // (Not those of a value written in K's text: a continuation written in place
+            // captures its own, D3001.)
+            .filter(|&(i, _)| in_text[i] > in_vals[i])
+            .map(|(_, h)| *h)
+            // A continuation of a continuation declares them already (its own
+            // first line, restored from its slot).
+            .filter(|h| !act.slots.iter().any(|s| s.name == cat!("$djs_", *h)))
+            .collect();
         let mut decl = String::new();
         if !names.is_empty() {
             let list: Vec<String> = names
@@ -182,6 +201,7 @@ impl Render<'_> {
     fn walk(&mut self, p: &P) {
         match p {
             P::S(t) | P::Decl(_, t) | P::Val(t, _) => self.text(t),
+            P::T(t) => self.text(t),
             P::Scope(names, braced, q) => {
                 let braces = *braced && !names.is_empty();
                 if braces {

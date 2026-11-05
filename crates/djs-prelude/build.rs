@@ -36,13 +36,18 @@ fn registry_offsets(vm: &Vm, dir: &std::path::Path) {
 /// (`registry::reachable_names`, `DumpOptions::base_names`): a VM's first dump does not
 /// walk the base for them (0215).
 fn base_names(vm: &Vm, base_end: u32, dir: &std::path::Path) {
-    let names = djs_core::vm::registry::reachable_names(vm.heap());
+    let mut names = djs_core::vm::registry::reachable_names(vm.heap());
+    // By cell: a dump finds a builtin by a binary search (0215).
+    names.sort_by_key(|n| n.0);
     let body: Vec<String> = names
         .iter()
         .filter(|(cell, _)| *cell < base_end)
         .map(|(cell, path)| format!("({cell}, {path:?})"))
         .collect();
-    let globals: Vec<String> = djs_core::vm::registry::base_globals(vm.heap())
+    let mut globals = djs_core::vm::registry::base_globals(vm.heap());
+    // By name: a dump finds one by a binary search (0215).
+    globals.sort_by(|a, b| a.0.cmp(&b.0));
+    let globals: Vec<String> = globals
         .iter()
         .map(|(name, bits, flags)| format!("({name:?}, {bits:#x}, {flags})"))
         .collect();
