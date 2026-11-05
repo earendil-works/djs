@@ -58,6 +58,11 @@ pub fn summary(s: &str) -> Vec<Entry> {
 /// Renders the guide's pages: (source name, page).
 pub fn render_all(g: &mut Guide) -> Vec<(String, Page)> {
     let pages = page_set(g);
+    let anchors: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> = g
+        .pages
+        .iter()
+        .map(|(name, src)| (name.clone(), render::heading_ids(src)))
+        .collect();
     let repo = repo();
     let rev = source_rev(&repo);
     let index = crate::paths::RepoIndex::load(&repo);
@@ -66,6 +71,7 @@ pub fn render_all(g: &mut Guide) -> Vec<(String, Page)> {
         let mut env = render::Env {
             files: &g.cx.files,
             pages: &pages,
+            anchors: &anchors,
             repo: &repo,
             rev: &rev,
             index: &index,

@@ -24,6 +24,9 @@ pub struct Env<'a> {
     pub files: &'a BTreeMap<String, String>,
     /// The guide's pages (`values.md`), for checking links between them.
     pub pages: &'a BTreeSet<String>,
+    /// The section ids of each page (`heading_ids`), for checking links to a section
+    /// (`goals.md#persistence`). A page without an entry is not checked.
+    pub anchors: &'a BTreeMap<String, BTreeSet<String>>,
     /// The repository root, for checking links to its files.
     pub repo: &'a Path,
     /// The commit source links point at (`source_url`).
@@ -47,6 +50,29 @@ pub fn slug(s: &str) -> String {
         }
     }
     out.trim_matches('-').to_string()
+}
+
+/// The ids `render` gives a page's headings: what `page.md#id` links may point at.
+pub fn heading_ids(md: &str) -> BTreeSet<String> {
+    let mut ids = BTreeSet::new();
+    let mut text: Option<String> = None;
+    for e in Parser::new_ext(md, options()) {
+        match e {
+            Event::Start(Tag::Heading { .. }) => text = Some(String::new()),
+            Event::Text(t) | Event::Code(t) => {
+                if let Some(s) = &mut text {
+                    s.push_str(&t);
+                }
+            }
+            Event::End(TagEnd::Heading(_)) => {
+                if let Some(s) = text.take() {
+                    ids.insert(slug(&s));
+                }
+            }
+            _ => {}
+        }
+    }
+    ids
 }
 
 pub fn esc(s: &str) -> String {
@@ -341,13 +367,27 @@ pub fn has_debugger(code: &str) -> bool {
 /// A link to another page becomes its `.html`; a relative link to a repository file goes
 /// to the file on GitHub. Either must exist.
 fn resolve_link(page: &str, dest: &str, env: &mut Env) -> String {
-    if dest.contains("://") || dest.starts_with('#') || dest.starts_with("mailto:") {
+    if dest.contains("://") || dest.starts_with("mailto:") {
         return dest.to_string();
     }
     let (path, frag) = match dest.split_once('#') {
         Some((p, f)) => (p, format!("#{f}")),
         None => (dest, String::new()),
     };
+    // A link to a section of a page (this one: `#id`) must name one of its headings.
+    let target = if path.is_empty() { page } else { path };
+    if !frag.is_empty()
+        && let Some(ids) = env.anchors.get(target)
+        && !ids.contains(&frag[1..])
+    {
+        env.errors.push(format!(
+            "{page}: broken link {dest}: {target} has no section #{}",
+            &frag[1..]
+        ));
+    }
+    if path.is_empty() {
+        return dest.to_string();
+    }
     if env.pages.contains(path) {
         return format!("{}{frag}", html_name(path));
     }
@@ -630,12 +670,18 @@ mod tests {
     fn with_env<R>(f: impl FnOnce(&mut Env) -> R) -> (R, Vec<String>) {
         let files = BTreeMap::new();
         let pages: BTreeSet<String> = ["values.md".to_string()].into();
+        let anchors: BTreeMap<String, BTreeSet<String>> = [(
+            "values.md".to_string(),
+            heading_ids("# Values\n## NaN-boxing\n"),
+        )]
+        .into();
         let mut errors = Vec::new();
         let repo = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
         let index = crate::paths::RepoIndex::load(repo);
         let r = f(&mut Env {
             files: &files,
             pages: &pages,
+            anchors: &anchors,
             repo,
             rev: "main",
             index: &index,
@@ -646,10 +692,10 @@ mod tests {
 
     #[test]
     fn links() {
-        let md = "# Title\n\nSee [values](values.md#x), [code](../../crates/djs-core/src/value.rs), [gone](nope.md).\n\n## Sub `code`\n";
+        let md = "# Title\n\nSee [values](values.md#nan-boxing), [code](../../crates/djs-core/src/value.rs), [gone](nope.md).\n\n## Sub `code`\n";
         let (p, errors) = with_env(|env| render("p.md", md, env));
         assert_eq!(p.title, "Title");
-        assert!(p.html.contains("href=\"values.html#x\""));
+        assert!(p.html.contains("href=\"values.html#nan-boxing\""));
         assert!(p.html.contains(&format!(
             "<a class=\"source\" href=\"{REPO_URL}/blob/main/crates/djs-core/src/value.rs\""
         )));
@@ -758,6 +804,18 @@ mod tests {
         assert!(p.html.contains("<h2 id=\"values\">"));
         assert!(p.html.contains("<blockquote class=\"tradeoff\">"));
         assert!(p.html.contains("<blockquote class=\"short\">"));
+    }
+
+    #[test]
+    fn section_links_must_exist() {
+        let md = "# P\n\n[ok](values.md#nan-boxing) [bad](values.md#nope) [no](#nowhere)\n";
+        let (_, errors) = with_env(|env| render("values.md", md, env));
+        assert_eq!(errors.len(), 2, "{errors:?}");
+        assert!(
+            errors[0].contains("values.md has no section #nope"),
+            "{errors:?}"
+        );
+        assert!(errors[1].contains("#nowhere"), "{errors:?}");
     }
 
     #[test]
