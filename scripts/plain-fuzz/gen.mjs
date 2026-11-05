@@ -23,7 +23,7 @@ function rng(seed) {
 
 const TYPES = ["num", "str", "arr", "obj"];
 // Round 2 (0211, D2942): values codemode holds across awaits beyond plain JSON data.
-const WIDE = ["map", "set", "date", "re", "bytes", "err"];
+const WIDE = ["map", "set", "date", "re", "bytes", "err", "big"];
 // TypeScript annotations of the value types.
 const TS_TYPES = {
   num: "number",
@@ -36,6 +36,7 @@ const TS_TYPES = {
   re: "RegExp",
   bytes: "Uint8Array | Float64Array",
   err: "Error",
+  big: "bigint",
 };
 // Strings that are hard to write back: escapes, line separators, astral characters,
 // markup, template-looking text.
@@ -191,6 +192,13 @@ class Gen {
           [1, () => `new TypeError(${s()}, { cause: ${n()} })`],
           [1, () => `Object.assign(new RangeError("r"), { code: ${n()} })`],
         ]);
+      case "big":
+        return this.oneOf([
+          [2, () => `${this.rand(100)}n`],
+          [2, () => `BigInt(${n()})`],
+          [1, () => `(2n ** ${40 + this.rand(40)}n + ${this.rand(9)}n)`],
+          [v ? 2 : 0, () => `(${v} * 3n + 1n)`],
+        ]);
     }
     throw new Error(type);
   }
@@ -205,6 +213,7 @@ class Gen {
       re: { num: [`${e}.lastIndex`, `(${e}.test("abab xx1") ? 1 : 0)`], str: [`String(${e}.exec("xabab x1 l"))`, `${e}.source`], arr: [`[${e}.lastIndex]`] },
       bytes: { num: [`${e}.length`, `(${e}[0] ?? 0)`, `${e}.byteOffset`], str: [`${e}.join(":")`], arr: [`Array.from(${e})`] },
       err: { num: [`${e}.message.length`], str: [`String(${e})`, `String(${e}.cause)`], arr: [`[${e}.message.length]`] },
+      big: { num: [`Number(${e} % 1000n)`, `(${e} > 5n ? 1 : 0)`], str: [`String(${e})`, `${e}.toString(16)`], arr: [`[Number(BigInt.asUintN(8, ${e}))]`] },
     };
     return this.pick(uses[t][kind]);
   }
@@ -222,6 +231,8 @@ class Gen {
         return `Array.from(${v.name})`;
       case "err":
         return `[${v.name}.name, ${v.name}.message, ${v.name}.extra ?? null]`;
+      case "big":
+        return `String(${v.name})`;
     }
     return v.name;
   }
@@ -257,6 +268,7 @@ class Gen {
       [a ? 1 : 0, () => `(await (async () => (${sub()}))())`],
       [a ? 1 : 0, () => `(await new Promise((res) => res(${this.sync(sub)})))`],
       [this.opts.wide ? 3 : 0, () => this.wideUse("num", d)],
+      [this.opts.wide && this.varOf("arr") ? 1 : 0, () => `(${this.varOf("arr")}.sum ?? 0)`],
       [this.varOf("sym") ? 1 : 0, () => `(${this.obj(d - 1)}[${this.varOf("sym")}] ?? 0)`],
       [this.varOf("enum") ? 1 : 0, () => `${this.varOf("enum")}.B`],
       [this.opts.ts ? 1 : 0, () => `(${sub()} as number)`],
@@ -359,6 +371,11 @@ class Gen {
       ],
       [this.vars((v) => v.type === "gen").length ? 1 : 0, () => `[...${this.pick(this.vars((v) => v.type === "gen")).name}(${this.rand(3) + 1})]`],
       [this.opts.wide ? 2 : 0, () => this.wideUse("arr", d)],
+      [this.opts.wide ? 1 : 0, () => this.accessorArr(d)],
+      [this.opts.wide && a && this.varOf("agen") ? 1 : 0, () => {
+        this.awaits += this.fn.mult * 2;
+        return `(await Array.fromAsync(${this.varOf("agen")}(2)))`;
+      }],
     ]);
   }
   obj(d) {
@@ -377,6 +394,30 @@ class Gen {
       [this.opts.wide ? 1 : 0, () => `JSON.parse(JSON.stringify(${this.obj(d - 1)}))`],
       [this.varOf("sym") ? 2 : 0, () => `{ a: ${sub()}, b: ${sub()}, [${this.varOf("sym")}]: ${sub()} }`],
       [this.opts.ts ? 1 : 0, () => `(${this.obj(d - 1)} satisfies object)`],
+      [this.opts.wide ? 2 : 0, () => this.proxyObj(d)],
+    ]);
+  }
+  // A Proxy whose handler captures a variable of the frame (0211): its traps are
+  // closures, the target an ordinary object.
+  proxyObj(d) {
+    const muts = this.vars((v) => v.type === "num" && v.mut);
+    const n = muts.length ? this.pick(muts).name : null;
+    const t = `{ a: ${this.num(d - 1)}, b: ${this.num(d - 1)} }`;
+    return this.oneOf([
+      [2, () => `new Proxy(${t}, { get: (o, k) => (k === "b" ? ${n ?? "7"} : o[k]) })`],
+      [n ? 1 : 0, () => `new Proxy(${t}, { set(o, k, v) { ${n}++; o[k] = v; return true; } })`],
+      [1, () => `new Proxy(${t}, {})`],
+    ]);
+  }
+  // An array with accessors: a getter property and a getter at an index past the end,
+  // capturing a variable of the frame.
+  accessorArr(d) {
+    const muts = this.vars((v) => v.type === "num" && v.mut);
+    const n = muts.length ? this.pick(muts).name : "1";
+    const base = `[${this.num(d - 1)}, ${this.num(d - 1)}]`;
+    return this.oneOf([
+      [1, () => `Object.defineProperty(${base}, "sum", { get() { return this[0] + this[1] + ${n}; } })`],
+      [1, () => `Object.defineProperty(${base}, 2, { get: () => ${n}, enumerable: true, configurable: true })`],
     ]);
   }
   // An object with accessors that capture a variable of the frame (the `get m() { n++ }`
@@ -437,7 +478,7 @@ class Gen {
       [this.fn.top && d > 0 && a ? 1 : 0, () => this.asyncGenStmt(d)],
       [this.opts.using && d > 0 ? 1 : 0, () => this.usingStmt(d)],
       [this.fn.loops.length ? 1 : 0, () => this.jumpStmt()],
-      [this.vars((v) => WIDE.includes(v.type)).length ? 3 : 0, () => this.wideStmt()],
+      [this.vars((v) => WIDE.includes(v.type) && (v.type !== "big" || v.mut)).length ? 3 : 0, () => this.wideStmt()],
     ]);
   }
   declStmt() {
@@ -452,7 +493,7 @@ class Gen {
   }
   // A change to a Map, Set, Date, RegExp, typed array or Error in scope.
   wideStmt() {
-    const v = this.pick(this.vars((v) => WIDE.includes(v.type)));
+    const v = this.pick(this.vars((v) => WIDE.includes(v.type) && (v.type !== "big" || v.mut)));
     const x = v.name;
     const n = () => this.num(2);
     const lines = {
@@ -462,6 +503,7 @@ class Gen {
       re: [`${x}.lastIndex = ${n()} % 3;`, `${x}.exec("abab xx1 l");`],
       bytes: [`${x}[${n()} % 2] = ${n()};`],
       err: [`${x}.extra = ${n()};`],
+      big: [`${x} = ${x} * 2n + BigInt(${n()});`, `${x} += ${this.wide("big", 1)};`],
     };
     this.line(this.pick(lines[v.type]));
     if (this.chance(0.4)) this.print(this.show(v));
@@ -567,6 +609,8 @@ class Gen {
       [this.canAwait() ? 2 : 0, () => `(await ${this.tool(`[${this.num(0)}, ${this.num(0)}]`)})`],
       [this.varOf("gen") ? 2 : 0, () => `${this.varOf("gen")}(2)`],
       [1, () => `[${this.num(1)}, ${this.num(1)}].entries().map(([k, x]) => k + x)`],
+      [this.opts.wide && this.varOf("gen") ? 2 : 0, () => `${this.varOf("gen")}(3).map((x) => x * 2).filter((x) => x >= 0).take(2)`],
+      [this.opts.wide && this.varOf("gen") ? 1 : 0, () => `Iterator.from(${this.varOf("gen")}(2)).flatMap((x) => [x, x + 1]).drop(1)`],
     ]);
     this.line(`for (const ${x} of ${src}) {`);
     this.loop({ cont: true }, 3, () =>
@@ -767,6 +811,7 @@ class Gen {
     this.line(`    yield await tools.echo(i * ${this.rand(5) + 1});`);
     this.line(`  }`);
     this.line(`}`);
+    this.declare(g, "agen");
     const k = 1 + this.rand(2);
     this.awaits += this.fn.mult * k;
     this.line(`for await (const ${x} of ${g}(${k})) {`);

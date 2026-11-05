@@ -9,6 +9,7 @@
 //                                    [--jobs J] [--max-load L] [--from-max K] [--dir DIR]
 //                                    [--no-node] [--known FILE] [--no-statics] [--big]
 //   node scripts/plain-fuzz/fuzz.mjs check FILE...      one program (a case body) each
+//   node scripts/plain-fuzz/fuzz.mjs regress [--cases N] [--seed S]   regress/ and N seeds
 //   node scripts/plain-fuzz/fuzz.mjs reduce FILE --sig TEXT [--time SECS] [-o OUT]
 //
 // Seeds S, S+1, ... (default 1); stops after N programs (default 200) or SECS seconds
@@ -304,7 +305,7 @@ async function reduce(bin, file, sig, out, deadline) {
   console.log(`${out}: ${lines.length} lines`);
 }
 
-async function fuzz(bin) {
+async function fuzz(bin, failed = 0) {
   const seed0 = Number(flag("--seed", 1));
   const cases = Number(flag("--cases", 200));
   const deadline = Date.now() + Number(flag("--time", 300)) * 1000;
@@ -356,14 +357,16 @@ async function fuzz(bin) {
   for (const [sig, e] of [...found].filter(([k]) => !isKnown(k)).sort((a, b) => b[1].seeds.size - a[1].seeds.size)) {
     console.log(`${String(e.seeds.size).padStart(4)} programs  ${sig}\n        smallest: seed ${e.seed} (${e.size} bytes), chain from idle point ${e.from}`);
   }
-  process.exit(found.size ? 1 : 0);
+  process.exit(found.size || failed ? 1 : 0);
 }
 
 const bin = difftestBin();
-if (argv[0] === "check") {
+// Runs given programs (case bodies) with every chain; one line per program and
+// signature. Returns the number of failures.
+async function checkFiles(files) {
   const work = path.join(dir, "check");
   const c = corpusDir(work);
-  const names = argv.slice(1).map((f, i) => {
+  const names = files.map((f, i) => {
     const ext = f.endsWith(".ts") ? "ts" : "js";
     fs.copyFileSync(f, path.join(c, `codemode/c${i}.${ext}`));
     return `codemode/c${i}.${ext}`;
@@ -372,13 +375,25 @@ if (argv[0] === "check") {
   // One line per program and signature, with the idle points whose chains show it.
   const seen = new Map();
   for (const f of r.fails) {
-    const key = `${argv[1 + Number(/c(\d+)/.exec(f.name)[1])]}: ${f.sig}`;
+    const key = `${files[Number(/c(\d+)/.exec(f.name)[1])]}: ${f.sig}`;
     if (!seen.has(key)) seen.set(key, { from: [], detail: f.detail });
     seen.get(key).from.push(f.from);
   }
   for (const [k, v] of seen) console.log(`${k}\n    chains from ${[...new Set(v.from)].sort((a, b) => a - b).join(",")}: ${v.detail}`);
   console.log(`check: ${names.length} programs, ${[...r.idle.values()].reduce((a, b) => a + b, 0)} idle points, ${r.fails.length} failures`);
-  process.exit(r.fails.length ? 1 : 0);
+  return r.fails.length;
+}
+
+if (argv[0] === "check") {
+  process.exit((await checkFiles(argv.slice(1))) ? 1 : 0);
+} else if (argv[0] === "regress") {
+  // The regression set (0211): the programs that found bugs (regress/, frozen as text, so
+  // generator changes do not move them), then fresh seeds (--cases, default 300).
+  const rdir = path.join(ROOT, "scripts/plain-fuzz/regress");
+  const files = fs.readdirSync(rdir).filter((f) => /\.[jt]s$/.test(f)).sort().map((f) => path.join(rdir, f));
+  const bad = await checkFiles(files);
+  if (!argv.includes("--cases")) argv.push("--cases", "300");
+  await fuzz(bin, bad);
 } else if (argv[0] === "reduce") {
   const sig = flag("--sig", "");
   const out = flag("-o", argv[1].replace(/\.([jt]s)$/, ".min.$1"));
