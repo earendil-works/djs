@@ -247,7 +247,8 @@ def dumps():
     def pct(k, p):
         xs = sorted(x[k] for x in corpus)
         return xs[min(len(xs) - 1, int(p / 100 * len(xs)))]
-    log = points["B/log-5mb"]
+    # snapshot-research/cases/big-log.js: a 20,000-line log kept across five tool calls.
+    log = points["B/big-log"]
     return {
         "dumps/corpus-cases": int(m.group(1)),
         "dumps/idle-points": int(m.group(3)),

@@ -160,7 +160,8 @@ const PACKAGINGS: [string, SandboxOptions][] = (
 // background: counted, not fatal.
 let lateRejections = 0;
 process.on("unhandledRejection", () => void lateRejections++);
-const DET = { deterministic: { startedAt: 1_762_000_000_000, seed: 42 } };
+// Dumps need frozen builtins (D2836).
+const DET = { deterministic: { startedAt: 1_762_000_000_000, seed: 42 }, frozenBuiltins: true };
 
 interface Point {
   dumpMs: number;
