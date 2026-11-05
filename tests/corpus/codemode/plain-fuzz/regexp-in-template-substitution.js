@@ -3,10 +3,8 @@
 // scan read it as a division and missed the references after it, so a value still read
 // was written as a statement and the load read `undefined`.
 async function f2(a3) {
-  {
-    await using r4 = { async [Symbol.asyncDispose]() { console.log("u5", await tools.echo("bye")); } };
-    console.log("p7", await tools.echo(a3));
-  }
+  console.log("p7", await tools.echo(a3));
+  console.log("u5", await tools.echo("bye"));
   const v13 = `${await tools.echo("ok")}-${(await tools.echo([1, 9]))[1]}:${/a(b)?/g.source}`;
   return v13;
 }
