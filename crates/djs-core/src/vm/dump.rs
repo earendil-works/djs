@@ -185,7 +185,7 @@ impl Vm {
     /// (D3041): the compile cache's half for dumps.
     #[cfg(feature = "compile-cache")]
     pub fn export_dump_maps(&self) -> Vec<u8> {
-        self.dump_cache.borrow().export()
+        self.dump_cache.borrow_mut().export()
     }
 
     /// Takes the maps of [`Vm::export_dump_maps`]'s bytes that this VM has not; false if
@@ -2622,6 +2622,10 @@ impl<'a> Dumper<'a> {
         globals: ScriptGlobals,
     ) {
         let mut cache = self.vm.dump_cache.borrow_mut();
+        #[cfg(feature = "compile-cache")]
+        if !src.starts_with("\"djs-dump") {
+            cache.changed = true;
+        }
         if let Some(i) = cache
             .maps
             .iter()
@@ -4757,15 +4761,22 @@ const MAPS_KEPT: usize = 8;
 #[derive(Default, Clone)]
 pub(crate) struct Cache {
     pub(super) maps: Vec<CachedMaps>,
+    /// A dump compiled maps since the last export (D3041).
+    #[cfg(feature = "compile-cache")]
+    pub(super) changed: bool,
 }
 
 #[cfg(feature = "compile-cache")]
 impl Cache {
     /// The entries of texts that are not plain dumps (a plain dump's text is new at every
-    /// idle point), as bytes for another VM of this build (D3041).
-    pub(super) fn export(&self) -> Vec<u8> {
+    /// idle point), as bytes for another VM of this build (D3041); empty when no dump
+    /// compiled maps since the last export (the host keeps what it has).
+    pub(super) fn export(&mut self) -> Vec<u8> {
         use crate::compiler::smap_codec::Code;
         let mut out = Vec::new();
+        if !core::mem::take(&mut self.changed) {
+            return out;
+        }
         MAPS_MAGIC.put(&mut out);
         super::BUILD_HASH.put(&mut out);
         let entries: Vec<&CachedMaps> = self

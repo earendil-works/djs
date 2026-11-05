@@ -226,9 +226,11 @@ fn dump_maps_round_trip() {
             continue;
         };
         let want: Vec<String> = maps.iter().map(|m| m.text(src.as_bytes())).collect();
-        a.dump_cache
-            .borrow_mut()
-            .keep(opts.bits(), &src, maps, false, Vec::new());
+        {
+            let mut c = a.dump_cache.borrow_mut();
+            c.keep(opts.bits(), &src, maps, false, Vec::new());
+            c.changed = true;
+        }
         let bytes = a.export_dump_maps();
         let b = vm(false);
         assert!(b.import_dump_maps(&bytes));

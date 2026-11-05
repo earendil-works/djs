@@ -584,3 +584,19 @@ $dump.Ka2.call(undefined, $djs.host("tools"), $djs.host("console"));
     /Cannot load the dump: the dump threw: resume: call 1 is not a tool call with a pi id/,
   );
 });
+
+test("next: the compile cache (D3040) leaves a VM as compiling leaves it", async () => {
+  const { Engine } = await import("../pi/engine.ts");
+  const module = await loadModule();
+  const src = "const f = (a) => a.map(x => x * 2); return f([1, 2, 3]).join(',') + typeof zork";
+  // The first engine compiles and keeps the blob; the second imports it; the third
+  // compiles a text that is not cached. The first two must be the same bytes.
+  const a = Engine.create(module, undefined);
+  const b = Engine.create(module, undefined);
+  const ra = a.compile(1, "cache-test.js", [], src);
+  const rb = b.compile(1, "cache-test.js", [], src);
+  assert.ok("handle" in ra && "handle" in rb);
+  assert.deepEqual(b.image(), a.image());
+  a.dispose?.();
+  b.dispose?.();
+});
