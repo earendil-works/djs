@@ -29,6 +29,33 @@ before restructuring code it may also touch. Batched merges, gate checks locally
 
 ## Log
 
+- 2026-11-05: confirmed at 23b0a946 (load 3.5–8): regexp/compile, gc per MiB, wire/stringify
+  and engine/djs/empty as 0223 reported; UTF-16 scans and wasm/instantiate needed a closer
+  look. Sampled 16 commits since 0394842cf4, then `git bisect run` per regression on a
+  bench threshold (work/scratch/0224/bisect*.sh); instruction counts from a fixed-work
+  harness (`/usr/bin/time -l`) wherever timings were noisy. Findings and numbers:
+  work/research/0224/README.md.
+- regexp/compile: e354b3664d (STAR follow sets computed for every concatenation element).
+  Fixed in regexp/compiler.rs + charset.rs, identical bytecode; guard tests/allocs.rs.
+- wire/stringify: ddd792d6f2 (mark-compact): `Arena::truncate` kept a zeroed frontier, so
+  strings took `alloc_from_iter`'s byte loop. One-line fix + unit test.
+- gc per MiB: mostly the metric (objects 60 → 34 MiB for the same records). Per collection:
+  379M instructions (2026-11-01), 296M (Cheney), 350M (HEAD). Slot plans for
+  `for_each_slot`, inline mark push, single header read: 248M. Owner approved the fused
+  update+slide pass: 238M (list 724M → 593M), IC emptying moved to trace with a targeted
+  test. Bench reports `gc/<w> collection` now.
+- UTF-16 scans: no regression in instructions; timings bimodal on both builds.
+- wasm/instantiate: data segment of the compiled-prelude bench module; added
+  `wasm/instantiate shipped`. engine/djs/empty: 681e323c36 runs the prelude per job;
+  documented in engine.rs.
+- Shipped wasm (wmeasure, base → branch): regexp-compile −13%, json-objects (stringify)
+  −25%, other workloads equal or better; module +1,003 bytes.
+- Checks run: djs-core lib, e2e plain/gc/suspend, difftest `--lazy --ratchet
+  --suspend-every 97 --gc-stress --determinism`, native-vs-wasm, test262 RegExp +
+  String.prototype.
+- Guide: gc.md "Sliding in place" (three passes, update and slide in one walk).
+  docs/mark-compact.md got a note. Decisions D3080–D3083.
+
 ## Follow-ups
 
 ## Result
