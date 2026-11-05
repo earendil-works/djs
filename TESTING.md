@@ -752,6 +752,10 @@ three runs as `engines/*` keys, which the page's `gen:status engines-*` tables r
 engine's result must equal node's. The gate's `codemode workloads` leg runs the set once on
 djs's dev modules (`run.ts --quick --engines djs`), dumps and loads included, so a workload
 that stops working fails the gate, not the next recording.
+`node js/bench/engines/ops.ts [FILTER...]` times single operations (string, number, regex,
+array, collection and async builtins on workload-shaped data) on djs and the two QuickJS
+releases, engines taking turns run by run, and prints djs over the best QuickJS build: the
+tool for work on a gap the comparison shows.
 
 ### Size budget (D020)
 

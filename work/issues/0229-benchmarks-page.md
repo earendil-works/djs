@@ -64,6 +64,9 @@ A guide page with benchmarks a reader can trust and we can re-run:
   crates/djs-docs/src/status.rs, scripts/gate.py, TESTING.md (leg list + a section),
   docs/guide/README.md (region table). Decisions D3110-D3114.
 - Batch 1 (workloads, harness, engines, tooling) merged; page + recorded numbers are batch 2.
+- js/bench/engines/ops.ts: the per-operation microbench (56 ops, djs vs QuickJS releases,
+  interleaved runs, djs/best ratio, ! above 1.5x) for the fix agents 0230-0234; merged alone.
+  The page draft waits on branch wip/0229-page-draft.
 
 ## Follow-ups
 
