@@ -1436,7 +1436,7 @@
 1431	value	%prelude:ThisBooleanValue%	removed: removed
 1432	value	%prelude:OrdinaryToPrimitive%
 1433	value	%prelude:GetMethod%
-1434	value	%prelude:ToIntegerOrInfinity%
+1434	value	%prelude:ToIntegerOrInfinity%	removed: removed
 1435	value	%prelude:ToLength%
 1436	value	%prelude:DVOutOfBounds%
 1437	value	%prelude:DVByteLength%	removed: removed
@@ -1460,7 +1460,7 @@
 1455	value	%prelude:PendingDisposableStack%
 1456	value	%prelude:AddResource%
 1457	value	%prelude:AddDisposableValue%
-1458	value	%prelude:CallDisposeMethod%
+1458	value	%prelude:CallDisposeMethod%	removed: removed
 1459	value	%prelude:DisposableStackMove%
 1460	value	%prelude:AsyncDisposeError%
 1461	value	%prelude:AsyncDisposeAwait%
@@ -1523,7 +1523,7 @@
 1518	value	%prelude:CanonicalizeKeyedCollectionKey%	removed: removed
 1519	value	%prelude:CoerceNumbers%
 1520	value	%prelude:ThisNumberValue%	removed: removed
-1521	value	%prelude:IsFiniteNumber%
+1521	value	%prelude:IsFiniteNumber%	removed: removed
 1522	value	%prelude:ToPropertyDescriptor%
 1523	value	%prelude:DefineOwnProperty%
 1524	value	%prelude:DefinePropertyOrThrow%
@@ -1617,7 +1617,7 @@
 1612	value	%prelude:RequireMutableTypedArray%	removed: removed
 1613	value	%prelude:TypedArrayCreateWithLength%
 1614	value	%prelude:TypedArraySpeciesCreate%
-1615	value	%prelude:ValidateUint8Array%
+1615	value	%prelude:ValidateUint8Array%	removed: removed
 1616	value	%prelude:GetOptionsObject%	removed: removed
 1617	value	%prelude:Base64Alphabet%
 1618	value	%prelude:LastChunkHandling%

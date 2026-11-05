@@ -220,7 +220,6 @@
 1455	%prelude:PendingDisposableStack%
 1456	%prelude:AddResource%
 1457	%prelude:AddDisposableValue%
-1458	%prelude:CallDisposeMethod%
 1459	%prelude:DisposableStackMove%
 1460	%prelude:AsyncDisposeError%
 1461	%prelude:AsyncDisposeAwait%
@@ -257,7 +256,6 @@
 1611	%prelude:BufferInfoOrUndefined%
 1613	%prelude:TypedArrayCreateWithLength%
 1614	%prelude:TypedArraySpeciesCreate%
-1615	%prelude:ValidateUint8Array%
 1617	%prelude:Base64Alphabet%
 1618	%prelude:LastChunkHandling%
 1620	%prelude:WriteDecoded%
