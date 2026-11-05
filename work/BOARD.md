@@ -9,7 +9,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0207 | Make plain dumps small (owner: not done until no fluff is left): header "djs-dump", helpers and source(ref) on host-provided $djs (D2834, D2835), record cuts, liveness pruning | pjs | .worktrees/pjs |
 | 0211 | Plain dump fuzzing round 2 (wider generator, new seeds) | pjz | .worktrees/pjz |
 | 0215 | Plain dump performance (Result written; pjr paused, resumes on new hot spots) | pjr | .worktrees/pjx |
-| 0220 | Rewrite the guide: behavior + architecture, no history/decisions, JS interface page, live dumps, debugger suspend (owner) | docs | .worktrees/docs |
+| 0220 | Rewrite the guide: behavior + architecture, no history/decisions, JS interface page, live dumps, debugger suspend (owner) | guide | .worktrees/docs |
 
 ## Open (ready)
 
