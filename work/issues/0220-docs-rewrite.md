@@ -1,7 +1,7 @@
 # 0220: Rewrite the guide: behavior and architecture, no history, a JS interface page, live dumps
 
-status: open
-agent: -
+status: in-progress
+agent: guide
 branch: issue/0220-docs-rewrite
 depends-on: -
 guide: all of docs/guide
