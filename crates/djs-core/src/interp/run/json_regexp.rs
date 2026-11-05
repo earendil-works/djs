@@ -32,6 +32,7 @@ const IS_DENSE_ARRAY: u16 = id("IsDenseArray");
 const ALL_NUMBERS: u16 = id("AllNumbers");
 const ALL_CODE_POINTS: u16 = id("AllCodePoints");
 const REGEXP_TEST_RAW: u16 = id("RegExpTestRaw");
+const REGEXP_EXEC_OWN: u16 = id("RegExpExecOwn");
 const IS_ORIGINAL_REGEXP_EXEC: u16 = id("IsOriginalRegExpExec");
 const REGEXP_SPLIT_RAW: u16 = id("RegExpSplitRaw");
 const REGEXP_REPLACE_RAW: u16 = id("RegExpReplaceRaw");
@@ -178,6 +179,7 @@ impl Exec<'_> {
             }
             REGEXP_EXEC_RAW if argc == 4 => return self.regexp_exec_raw(id, base, next, false),
             REGEXP_TEST_RAW if argc == 4 => return self.regexp_exec_raw(id, base, next, true),
+            REGEXP_EXEC_OWN if argc == 4 => return self.regexp_exec_own(id, base, next),
             IS_ORIGINAL_REGEXP_EXEC => {
                 Value::bool(a0 == realm::installed_intrinsic(self.heap, REGEXP_PROTOTYPE_EXEC))
             }
@@ -404,7 +406,6 @@ impl Exec<'_> {
     /// suspended resumes the same match.
     /// With `test`, the result is just whether it matched (RegExp.prototype.test, D1560).
     fn regexp_exec_raw(&mut self, id: u16, base: u32, next: u32, test: bool) -> Step {
-        let state_slot = base + 3;
         let (Some(r), Some(s), Some(last)) = (
             re::as_regexp(self.heap, self.get(base)),
             self.get(base + 1).as_string(),
@@ -412,6 +413,52 @@ impl Exec<'_> {
         ) else {
             return bad_argument(id);
         };
+        self.regexp_exec(r, s, last, base, next, test)
+    }
+
+    /// `%RegExpExecOwn(r, s, test, state)`: RegExpExec when `exec` is the original and
+    /// lastIndex an own Number (D3137); undefined otherwise. A resumed call (a state in
+    /// its slot) passed the checks before, and nothing ran since.
+    fn regexp_exec_own(&mut self, id: u16, base: u32, next: u32) -> Step {
+        use crate::heap::Property;
+        let Some(s) = self.get(base + 1).as_string() else {
+            return bad_argument(id);
+        };
+        let test = self.get(base + 2) == Value::TRUE;
+        let decline = |ex: &mut Self| {
+            ex.sp = base;
+            ex.push(Value::UNDEFINED);
+            ex.pc = next;
+            Ok(None)
+        };
+        let Some(r) = re::as_regexp(self.heap, self.get(base)) else {
+            return decline(self);
+        };
+        let last = match self.heap.get_own_property(r, atoms::LAST_INDEX) {
+            Some(Property::Data { value, .. }) if value.is_number() => value.as_number(),
+            _ => None,
+        };
+        let proto = intrinsic_obj(self.heap, Intrinsic::RegExpProto);
+        let original = || {
+            self.heap.get_prototype_of(r) == Some(proto)
+                && self.heap.get_own_property(r, atoms::EXEC).is_none()
+                && matches!(
+                    self.heap.get_own_property(proto, atoms::EXEC),
+                    Some(Property::Data { value, .. })
+                        if value == realm::installed_intrinsic(self.heap, REGEXP_PROTOTYPE_EXEC)
+                )
+        };
+        match last {
+            Some(last) if self.get(base + 3).as_internal().is_some() || original() => {
+                self.regexp_exec(r, s, last, base, next, test)
+            }
+            _ => decline(self),
+        }
+    }
+
+    /// RegExpBuiltinExec once lastIndex was read (`last`); the state slot is `base + 3`.
+    fn regexp_exec(&mut self, r: Obj, s: Str, last: f64, base: u32, next: u32, test: bool) -> Step {
+        let state_slot = base + 3;
         // ToLength.
         let last = if last > 0.0 { libm::trunc(last) } else { 0.0 };
         let flags = re::flags(self.heap, r);

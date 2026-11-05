@@ -238,6 +238,10 @@ function RegExpPrototypeExec(this: Value, string: Value): Value {
   }
   const r: Obj = AsObj(this);
   const s: Str = IsString(string) ? AsStr(string) : ToString(string);
+  const fast: Value = RegExpExecOwn(r, s, false, undefined);
+  if (fast !== undefined) {
+    return fast;
+  }
   // RegExpBuiltinExec, inlined: this is the hot path of every match (D1560).
   const lastIndex: Value = Get(r, "lastIndex");
   return RegExpExecRaw(r, s, IsNumber(lastIndex) ? AsNumber(lastIndex) : ToLength(lastIndex), undefined);
@@ -245,6 +249,10 @@ function RegExpPrototypeExec(this: Value, string: Value): Value {
 
 /** RegExpExec ( R, S ), 22.2.7.1. */
 function RegExpExec(r: Obj, s: Str): Value {
+  const fast: Value = RegExpExecOwn(r, s, false, undefined);
+  if (fast !== undefined) {
+    return fast;
+  }
   const exec: Value = Get(r, "exec");
   // The original exec on a RegExp: call its body directly (no frame, no result check).
   if (IsOriginalRegExpExec(exec) && IsRegExpObject(r)) {
@@ -274,6 +282,10 @@ function RegExpPrototypeTest(this: Value, s: Value): boolean {
   }
   const r: Obj = AsObj(this);
   const str: Str = IsString(s) ? AsStr(s) : ToString(s);
+  const fast: Value = RegExpExecOwn(r, str, true, undefined);
+  if (fast !== undefined) {
+    return AsBool(fast);
+  }
   const exec: Value = Get(r, "exec");
   if (IsOriginalRegExpExec(exec) && IsRegExpObject(r)) {
     // No match array is built when only the outcome is needed (D1560).

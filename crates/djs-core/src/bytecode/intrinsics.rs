@@ -341,6 +341,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("RegExpEscapedSource", L, 1, false),
     i("RegExpExecRaw", L, 4, false),
     i("RegExpTestRaw", L, 4, false),
+    i("RegExpExecOwn", L, 4, false),
     i("IsOriginalRegExpExec", L, 1, false),
     i("CreateRegExpStringIterator", L, 4, false),
     i("RegExpStringIteratorSlot", L, 2, false),

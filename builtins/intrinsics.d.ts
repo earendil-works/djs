@@ -1001,6 +1001,14 @@ declare function RegExpExecRaw(r: Obj, s: Str, lastIndex: f64, state: Value): Va
  * same way). Suspendable like RegExpExecRaw. @leaf
  */
 declare function RegExpTestRaw(r: Obj, s: Str, lastIndex: f64, state: Value): boolean;
+/**
+ * RegExpExec ( R, S ) when its lookups read only data (D3137): R is a RegExp without an
+ * own `exec`, whose prototype is %RegExp.prototype% with the original `exec`, and whose
+ * own lastIndex is a Number. Then the match array or null (with `test`, true or false),
+ * lastIndex updated; else undefined, with nothing done. Suspendable like RegExpExecRaw
+ * (pass undefined as state). @leaf
+ */
+declare function RegExpExecOwn(r: Value, s: Str, test: boolean, state: Value): Value;
 /** Whether v is the original RegExp.prototype.exec (the installed builtin). @leaf */
 declare function IsOriginalRegExpExec(v: Value): boolean;
 /** A RegExp String Iterator (CreateRegExpStringIterator, 22.2.9.1). @leaf */
