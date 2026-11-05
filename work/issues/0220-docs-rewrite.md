@@ -110,6 +110,20 @@ boundary"), testing. Reference: opcodes, cells, intrinsics, status. Batches: 1 t
   3 pauses + end on suspension.html and dumps.html, a WeakMap refusal, the tip.
 - NOT_YET_REWRITTEN now lists only the batch-3 pages.
 
+### Exact pause positions (D3054)
+- `Vm::call_site(call_id)` (djs-core vm/call_site.rs, `dump` only): file/line/col of the
+  innermost activation waiting on an open call (breadth first through reactions and
+  combinators, like the CLI's `waiting_on`). wasm `vm_call_site` (dump builds),
+  js `Sandbox.callSite(id)`. Test: `dump_debugger_tests::call_sites_of_pauses` (loop +
+  `Promise.all` pauses, through re-dumps), js/test/debugger.test.ts (two tests).
+- Decided: positions are where the code runs: example.js for the first part, `dump.js`
+  (the dump that part continued from) after a resume; mapping back to the original would
+  need the dumper's normalization. live.js: pause lines "paused at line 7:3 of dump 1"
+  with links that show any of the run's dumps (marked at the statement); box summary
+  "Dump N of this run". Checked in headless Chrome (steps7.mjs) on suspension.html,
+  dumps.html. Size: shipped 1,033,538 B and slim 906,238 B before and after (5 bytes:
+  source hash). Guide: dumps.md, js-api.md, README.md.
+
 ## Follow-ups
 
 ## Result
