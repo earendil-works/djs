@@ -42,6 +42,14 @@ jobs, wait while load > 30) and gate rules (batch merges, check slim/test262-sli
   merge (plain cases); batch 6, a class with an async method in a nested loop's body
   (refused "class in a nested scope", pjr; refusals ratchet). `fuzz.mjs --big` for longer
   programs.
+- Regression set: scripts/plain-fuzz/regress/ (23 programs that found round-2 bugs, frozen
+  as text) and `fuzz.mjs regress [--cases N]`: those, then N fresh seeds. To run after each
+  pjs or lazy merge.
+- gen.mjs: Proxies with traps capturing frame variables, arrays with getter properties
+  and index getters, BigInt, iterator helpers live across awaits, `Array.fromAsync`.
+  Seeds 7001–8060: no wrong results; two refusals: `Array.fromAsync` in flight (to be
+  fixed, pjr; refusals ratchet for now) and for-in over a Proxy (deliberate, noted in
+  docs/plain-js-dumps.md §10).
 
 ## Follow-ups
 
