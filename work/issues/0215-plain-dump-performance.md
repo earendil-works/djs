@@ -23,6 +23,15 @@ Measure where plain dumps stand now and fix what regressed:
    coordinator sequences it. Record bench numbers only on a quiet machine (load < ~4).
 
 ## Log
+- Measured (pjr): dump_perf now re-dumps the loaded VM and counts failures; first numbers
+  and profiles in work/research/0215/README.md. Every data case had been refused
+  (`const rnd = ;`, a frame closure data reaches): fixed in dump.rs.
+- Batch 1: frame-closure fix; base64 decode by range (+ whole groups, dump builds only:
+  +250 B slim otherwise); loads compile only the runtime helpers the dump names
+  (`Vm::dump_runtime_for`, `scriptFor`); a VM keeps the maps of a dump it compiles for its
+  next dump; pjz's nested for-in re-dump (a copied inner loop read the scaffold's stale
+  iterator; dump_origin `origin_temp_k`, not `record()`). Native instructions, corpus:
+  load 13,348 -> 9,621 M, re-dump 29,117 -> 21,120 M; binary load 390 -> 165 M.
 
 ## Follow-ups
 
