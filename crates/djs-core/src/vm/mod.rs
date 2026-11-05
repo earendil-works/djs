@@ -210,7 +210,14 @@ impl Vm {
         };
         crate::builtins::number::set_seed(&mut vm.heap, opts.random_seed);
         if opts.prelude {
+            #[cfg(djs_prelude)]
             vm.install_prelude()?;
+            // A wasm build without the `prelude` feature starts VMs from the base image
+            // (D3094).
+            #[cfg(not(djs_prelude))]
+            panic!(
+                "this build cannot run the prelude: Vm::new needs djs-core's `prelude` feature in wasm"
+            );
         }
         vm.set_weak_refs(opts.weak_refs)?;
         if opts.frozen_builtins {
@@ -228,6 +235,7 @@ impl Vm {
     /// Compiles the generated prelude in privileged mode and runs it (D1172, D1281): it
     /// installs the builtin methods and registers the `@intrinsic` builtins. Compiled at
     /// every VM creation until there is a base snapshot (ARCH G2).
+    #[cfg(djs_prelude)]
     fn install_prelude(&mut self) -> Result<(), HeapError> {
         use crate::compiler::{CompileErrorKind, CompileOptions};
         let opts = CompileOptions::privileged_script("<prelude>");

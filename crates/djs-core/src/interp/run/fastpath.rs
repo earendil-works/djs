@@ -1,15 +1,18 @@
 //! Calls of `@fast` builtins (D1850): the leaf fast path of `builtins::fast` runs in
 //! place of the call when it accepts the arguments.
 
+#[cfg(djs_prelude)]
 use alloc::string::String;
 
 use super::Exec;
 use crate::builtins::fast::{FAST, MAX_ARGS};
 use crate::bytecode::template::func_flags;
 use crate::bytecode::{OPS, Op};
+#[cfg(djs_prelude)]
 use crate::heap::Atom;
 use crate::heap::cells::FuncTemplate;
 use crate::heap::{HeapError, ObjectClass};
+#[cfg(djs_prelude)]
 use crate::interp::ErrorKind;
 use crate::interp::conv::{Fault, FaultKind};
 use crate::interp::frame::Continuation;
@@ -67,6 +70,7 @@ impl Exec<'_> {
         }
     }
 
+    #[cfg(djs_prelude)]
     /// `%MarkFast(f)`: gives the builtin `f` the fast path named like it. A name without
     /// an entry fails the prelude (at base-image build time).
     pub(super) fn mark_fast(&mut self, f: Value) -> Result<(), Fault> {

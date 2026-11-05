@@ -29,6 +29,7 @@ pub(crate) type Fast = Result<Option<Value>, Fault>;
 
 pub(crate) struct FastFn {
     /// The builtin's function name in the prelude (checked by `%MarkFast`).
+    #[cfg(djs_prelude)]
     pub name: &'static str,
     /// `run(heap, this, args)`.
     pub run: fn(&mut Heap, Value, &[Value]) -> Fast,
@@ -43,13 +44,20 @@ impl FastFn {
     }
 }
 
+#[cfg(djs_prelude)]
 /// The index of the entry for builtin `name`.
 pub(crate) fn index(name: &str) -> Option<usize> {
     FAST.iter().position(|f| f.name == name)
 }
 
 const fn f(name: &'static str, run: fn(&mut Heap, Value, &[Value]) -> Fast) -> FastFn {
-    FastFn { name, run }
+    #[cfg(not(djs_prelude))]
+    let _ = name;
+    FastFn {
+        #[cfg(djs_prelude)]
+        name,
+        run,
+    }
 }
 
 /// The entries that pay their bytes (D2310: the rule and the measurements of every twin).

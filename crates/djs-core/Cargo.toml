@@ -32,6 +32,11 @@ lazy = []
 # The compile cache (0219, D3040): `Vm::compile_cached` exports a compile's cells as a
 # blob that another VM imports instead of compiling again. Code only.
 compile-cache = []
+# Running the prelude source in wasm (D3094): `Vm::new` with `VmOptions::prelude` and the
+# `%Install*` intrinsics the prelude calls. Native builds always have it; wasm modules
+# start from the base image and leave it out unless they need it (djs-wasm's
+# `compiled-prelude`). Code only.
+prelude = []
 # The Unicode tables: both features below.
 unicode = ["regexp-unicode-props", "unicode-normalization"]
 # (Each feature also turns on djs-prelude's of the same name, for the e2e tests' base: the

@@ -590,6 +590,7 @@ pub(crate) fn installed_intrinsic(heap: &Heap, id: u16) -> Value {
     }
 }
 
+#[cfg(djs_prelude)]
 pub(crate) fn install_intrinsic(heap: &mut Heap, id: u16, f: Value) {
     let t: crate::heap::Ref = heap.arena().get(realm(heap), Realm::INSTALLED);
     heap.value_array_set(t.0, id as u32, f);

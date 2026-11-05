@@ -10803,3 +10803,19 @@ versions; `per MiB live` comes from the same samples and rises whenever cells ge
 faster). `wasm/instantiate` measures the `compiled-prelude` build, dominated by its 515 KB
 data segment; `wasm/instantiate shipped` is the module hosts load. `engine/djs/empty` is a
 VM plus the shared prelude since 0044, not a bare VM.
+
+## D3094: Wasm builds run the prelude only with djs-core's `prelude` feature
+date: 2026-11-05 · by: bytes · issue: 0225
+The `%Install*` intrinsics (InstallConstructor, InstallPrototype,
+InstallPrototypeConstructor, InstallAccessor, InstallValue, InstallMethod,
+InstallIntrinsic, MarkNative, MarkFast) and what only they use (`Intrinsic::prototype_of`,
+the install helpers, `fast::index`, the `@fast` entries' names) run only while the
+prelude builds a realm. A wasm module starts every VM from the base image, so it never
+calls them, but the intrinsic dispatch kept all of it reachable. djs-core's build script
+sets `cfg(djs_prelude)` natively always and in wasm only with the new `prelude` feature
+(djs-wasm's `compiled-prelude` turns it on for `vm_new_compiled`). Without it those
+intrinsics fail with "%Name is not in this build", and `Vm::new` with
+`VmOptions::prelude` panics with a message naming the feature. The feature is code only:
+image neutral (compat_inputs.rs) and outside the build hash, so the base made by the
+native build script still matches. Module 428,519 → 423,617 gzip (−4.9 KB); pi's tests
+on the shipped module 221/226 as before.

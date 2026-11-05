@@ -76,7 +76,8 @@ fn libm_version(manifest: &str) -> String {
 /// a build with it, and images move freely between the two. Nor `dump` (0167), which only
 /// adds `Vm::dump`, a reader of the heap: a run never calls it. Nor `lazy` (D2990): the base
 /// holds no lazy template (the prelude is privileged), and lazy compilation is a VM option.
-/// Nor `compile-cache` (D3040): an import makes what the compile makes.
+/// Nor `compile-cache` (D3040): an import makes what the compile makes. Nor `prelude`
+/// (D3094): it only decides whether a wasm build can run the prelude source.
 fn features() -> Vec<String> {
     enabled_features()
         .into_iter()
@@ -89,6 +90,7 @@ fn features() -> Vec<String> {
                 && f != "dump"
                 && f != "lazy"
                 && f != "compile-cache"
+                && f != "prelude"
         })
         .collect()
 }
@@ -107,6 +109,15 @@ fn enabled_features() -> Vec<String> {
 }
 
 fn main() {
+    // `djs_prelude` (D3094): this build can compile and run the prelude source (`Vm::new`
+    // with `VmOptions::prelude`, the `%Install*` intrinsics it calls). Always natively; in
+    // wasm only with the `prelude` feature, so that the shipped modules, which start from
+    // the base image, carry none of it.
+    println!("cargo::rustc-check-cfg=cfg(djs_prelude)");
+    let wasm = std::env::var("CARGO_CFG_TARGET_ARCH").is_ok_and(|a| a == "wasm32");
+    if !wasm || std::env::var_os("CARGO_FEATURE_PRELUDE").is_some() {
+        println!("cargo::rustc-cfg=djs_prelude");
+    }
     let root = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let mut files = Vec::new();
     collect(&root.join("src"), &mut files);

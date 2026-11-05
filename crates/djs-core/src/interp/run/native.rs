@@ -32,7 +32,9 @@ pub(super) const CALL_FUEL: i64 = 2;
 
 /// A generated native function (`builtins/gen/natives.rs`).
 pub(crate) struct NativeFn {
-    /// The builtin's function name in the prelude (checked by `%MarkNative`).
+    /// The builtin's function name in the prelude (checked by `%MarkNative`; wasm
+    /// builds without the prelude never read it, D3094).
+    #[cfg_attr(not(djs_prelude), allow(dead_code))]
     pub name: &'static str,
     /// Formal parameters (the argument area is padded to it).
     pub params: u32,
@@ -256,6 +258,7 @@ impl Exec<'_> {
         }
     }
 
+    #[cfg(djs_prelude)]
     /// `%MarkNative(f, index)`: makes the builtin `f` native builtin `index`. The name
     /// must match the generated table, or the prelude fails (at base-image build time).
     pub(super) fn mark_native(&mut self, f: Value, index: Value) -> Result<(), Fault> {

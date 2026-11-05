@@ -2533,6 +2533,7 @@ impl Heap {
         })
     }
 
+    #[cfg(djs_prelude)]
     /// Removes an own table property even if it is non-configurable. Only for setting up
     /// builtins (a prelude function loses the `prototype` every ordinary function gets).
     pub(crate) fn remove_own_property_unchecked(

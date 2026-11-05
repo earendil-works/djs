@@ -16,7 +16,10 @@ use crate::compiler::DynamicKind;
 /// Fuel per code unit of compiled source (eval, the Function constructors): compiling
 /// one unit costs about as much as a few simple instructions (D1591).
 const COMPILE_FUEL_PER_UNIT: i64 = 4;
-use crate::bytecode::intrinsics::{IntrinsicKind, intrinsic, intrinsic_id, intrinsic_name};
+#[cfg(djs_prelude)]
+use crate::bytecode::intrinsics::intrinsic_id;
+use crate::bytecode::intrinsics::{IntrinsicKind, intrinsic, intrinsic_name};
+#[cfg(djs_prelude)]
 use crate::heap::cells::flags::{OBJ_BUILTIN, OBJ_BUILTIN_CTOR};
 use crate::heap::{ObjectClass, atoms};
 
@@ -392,6 +395,7 @@ const BUILTIN_CLOSURES: [u16; 25] = [
     id("DecoratorParamCall"),
 ];
 
+#[cfg(djs_prelude)]
 /// The function-kind constructors, wired to their prototypes when installed (D1420).
 const FUNCTION_KIND_CONSTRUCTORS: [(u16, Intrinsic, &str); 3] = [
     (
@@ -543,6 +547,22 @@ impl Exec<'_> {
         }
         let a0 = arg(self, 0);
         let v = match id {
+            // Only the prelude calls these, while it builds the realm (D3094).
+            #[cfg(not(djs_prelude))]
+            INSTALL_CONSTRUCTOR
+            | INSTALL_PROTOTYPE
+            | INSTALL_PROTOTYPE_CONSTRUCTOR
+            | INSTALL_ACCESSOR
+            | INSTALL_VALUE
+            | INSTALL_METHOD
+            | MARK_NATIVE
+            | MARK_FAST
+            | INSTALL_INTRINSIC => {
+                return Err(Fault::error(
+                    ErrorKind::InternalError,
+                    crate::text::cat!("%", intrinsic_name(id), " is not in this build"),
+                ));
+            }
             IS_OBJECT => Value::bool(a0.as_object().is_some()),
             IS_CALLABLE => Value::bool(self.is_callable(a0)),
             IS_CONSTRUCTOR => Value::bool(a0.as_object().is_some_and(|o| self.is_constructor(o))),
@@ -1883,6 +1903,7 @@ impl Exec<'_> {
                 };
                 Value::string(self.heap.alloc_str(&crate::text::cat!("Symbol(", d, ")"))?)
             }
+            #[cfg(djs_prelude)]
             INSTALL_CONSTRUCTOR => {
                 self.install_constructor(
                     a0,
@@ -1893,18 +1914,22 @@ impl Exec<'_> {
                 )?;
                 Value::UNDEFINED
             }
+            #[cfg(djs_prelude)]
             INSTALL_PROTOTYPE => {
                 self.install_prototype(a0, arg(self, 1), arg(self, 2))?;
                 Value::UNDEFINED
             }
+            #[cfg(djs_prelude)]
             INSTALL_PROTOTYPE_CONSTRUCTOR => {
                 self.install_prototype_constructor(a0)?;
                 Value::UNDEFINED
             }
+            #[cfg(djs_prelude)]
             INSTALL_ACCESSOR => {
                 self.install_accessor(a0, arg(self, 1), arg(self, 2), arg(self, 3))?;
                 Value::UNDEFINED
             }
+            #[cfg(djs_prelude)]
             INSTALL_VALUE => {
                 let Some(t) = a0.as_string() else {
                     return bad_argument(id);
@@ -1916,6 +1941,7 @@ impl Exec<'_> {
                 self.heap.define_own_property(holder, key, &d)?;
                 Value::UNDEFINED
             }
+            #[cfg(djs_prelude)]
             INSTALL_METHOD => {
                 self.install_method(a0, arg(self, 1), arg(self, 2), arg(self, 3))?;
                 Value::UNDEFINED
@@ -2062,14 +2088,17 @@ impl Exec<'_> {
                     None => return bad_argument(id),
                 }
             }
+            #[cfg(djs_prelude)]
             MARK_NATIVE => {
                 self.mark_native(a0, arg(self, 1))?;
                 Value::UNDEFINED
             }
+            #[cfg(djs_prelude)]
             MARK_FAST => {
                 self.mark_fast(a0)?;
                 Value::UNDEFINED
             }
+            #[cfg(djs_prelude)]
             INSTALL_INTRINSIC => {
                 let name = a0
                     .as_string()
@@ -2191,6 +2220,7 @@ impl Exec<'_> {
         Ok(e)
     }
 
+    #[cfg(djs_prelude)]
     /// `%InstallMethod(target, key, f, length)` (D1172): `f` becomes the method `key` of
     /// the object at the dotted path `target` (writable, configurable, not enumerable),
     /// with `name` = key and `length`.
@@ -2299,6 +2329,7 @@ impl Exec<'_> {
         }))
     }
 
+    #[cfg(djs_prelude)]
     /// The property key of an install call (a string or a symbol) and the function name
     /// it gives (`[description]` for a symbol).
     fn install_key(&mut self, key: Value) -> Result<(Atom, Value), Fault> {
@@ -2316,6 +2347,7 @@ impl Exec<'_> {
         Ok((self.heap.symbol_atom(sym), Value::string(name)))
     }
 
+    #[cfg(djs_prelude)]
     /// Flags an installed prelude function; non-constructors lose the `prototype` that
     /// every ordinary function gets (D1310).
     /// %GeneratorFunction% and friends (D1420): a builtin constructor named `name` with
@@ -2369,6 +2401,7 @@ impl Exec<'_> {
         Ok(())
     }
 
+    #[cfg(djs_prelude)]
     fn mark_builtin(&mut self, fo: Obj, flag: u16) -> Result<(), HeapError> {
         let flags = self.heap.cell_flags(fo.offset());
         self.heap.set_cell_flags(fo.offset(), flags | flag);
@@ -2379,6 +2412,7 @@ impl Exec<'_> {
         Ok(())
     }
 
+    #[cfg(djs_prelude)]
     /// `name` and `length` of an installed builtin (configurable only).
     /// `length` then `name` (qjs's and the spec's order of a builtin's own keys).
     fn name_and_length(&mut self, fo: Obj, name: Value, length: f64) -> Result<(), Fault> {
@@ -2390,6 +2424,7 @@ impl Exec<'_> {
         Ok(())
     }
 
+    #[cfg(djs_prelude)]
     /// `%InstallPrototype(target, key, parent)` (D2052): the `prototype` of the
     /// constructor `key`, after its statics (qjs's order): the realm's intrinsic
     /// prototype, or a new object inheriting from the parent's prototype.
@@ -2448,6 +2483,7 @@ impl Exec<'_> {
         Ok(())
     }
 
+    #[cfg(djs_prelude)]
     /// `%InstallPrototypeConstructor(key)` (D2150): `prototype.constructor` of the
     /// constructor `key`, after the prototype's methods (where qjs's order puts it).
     fn install_prototype_constructor(&mut self, key: Value) -> Result<(), Fault> {
@@ -2483,6 +2519,7 @@ impl Exec<'_> {
         Ok(())
     }
 
+    #[cfg(djs_prelude)]
     /// `%InstallConstructor(target, key, f, length, parent)` (D1310): `f` becomes the
     /// constructor `key`; `%InstallPrototype` adds its prototype after its statics.
     fn install_constructor(
@@ -2536,6 +2573,7 @@ impl Exec<'_> {
         Ok(())
     }
 
+    #[cfg(djs_prelude)]
     /// `%InstallAccessor(target, key, f, isSetter)` (D1310): the getter or setter half
     /// of an accessor (configurable, not enumerable), named `get key` / `set key`.
     fn install_accessor(
@@ -2587,6 +2625,7 @@ impl Exec<'_> {
         Ok(())
     }
 
+    #[cfg(djs_prelude)]
     /// The object at a dotted path from the global object. A first segment `%Name%`
     /// names a realm intrinsic object (`%ArrayIteratorPrototype%`). The intrinsic
     /// prototypes are reachable as `X.prototype` even before their constructors exist.
