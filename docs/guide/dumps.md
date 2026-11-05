@@ -21,7 +21,10 @@ On this site, a `debugger;` statement in a live example makes the run wait: the 
 gives the sandbox a host function that the statement awaits, so the run is idle there,
 exactly as if it waited for a tool. The page then writes the run out as a dump and
 throws its sandbox away. **Continue** loads the dump into a fresh sandbox, which runs on
-to the next `debugger;` or the end. The output of all the parts reads as one run:
+to the next `debugger;` or the end. The output of all the parts reads as one run, with a
+line at each pause that says where it stopped: a line and column of the example in the
+first part, and of the dump a later part continued from, since that part runs the dump's
+text (the link shows that dump with the statement marked):
 
 ```js live
 async function fetchPage(n) {

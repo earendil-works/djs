@@ -112,8 +112,10 @@ the widget until the reader runs the code, and without JavaScript.
 A `debugger;` in a live example (with the docs module, which has the dumper) pauses the
 run there: the page suspends it into a continuation dump, disposes of its sandbox, and
 Run becomes Continue, which resumes the run from the dump in a fresh sandbox, on to the
-next pause or the end. The output reads as one transcript with a line at each pause, and
-the current dump, with its raw and gzip size, is one click away under it (for readers
+next pause or the end. The output reads as one transcript with a line at each pause,
+which says where the run stopped (line and column in the example, or in the dump that
+part continued from, linked), and the current dump, with its raw and gzip size, is one
+click away under it (for readers
 without JavaScript, the dump at the first pause, made at build time). A run the dumper
 refuses shows why and continues in the same sandbox. Such runs have frozen builtins,
 which dumps need. An info tip next to Run explains the pause and links the dumps page.

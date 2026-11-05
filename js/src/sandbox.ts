@@ -230,6 +230,13 @@ export type JournalEntry =
   | { type: "end"; ok: boolean; value: unknown; delivered: number; issued: number; hash: string };
 
 /** Options of one run. */
+/** A source position (`Sandbox.callSite`): the script's name, line and column from 1. */
+export interface CallSite {
+  file: string;
+  line: number;
+  column: number;
+}
+
 export interface RunOptions {
   /** Record the run (deterministic sandboxes only): entries are appended to this array. */
   journal?: JournalEntry[];
@@ -363,6 +370,8 @@ interface Exports {
   vm_dump?(vm: number, len: number): number;
   /** Since 0207 (D2882): whether dumps refer to the scripts the host ran (`$djs.source`). */
   vm_set_dump_source_refs?(vm: number, on: number): void;
+  /** Dump builds only (D3054): `line:col:file` of the activation waiting on a call, in the out buffer. */
+  vm_call_site?(vm: number, callId: number): number;
   vm_from_bytes(len: number, memoryLimit: number): number;
   /** Since 0177 (D2701). */
   vm_replace_image?(vm: number, len: number): number;
@@ -1678,6 +1687,25 @@ export class Sandbox {
   heapView(): Uint8Array {
     this.alive();
     return this.arena();
+  }
+
+  /**
+   * Where the run waits on open host call `id` (D3054): the `await` (or `yield`) of the
+   * innermost suspended activation waiting on the call, directly or through promise
+   * combinators. `file` is the name the code was compiled as: the run's `filename` for
+   * the code it started with, the dump loader's name (`dump.js`) for code a dump carried
+   * (a run continued from a dump runs the dump's text). Undefined when the call is not
+   * open or nothing waits on it at a known position, and in modules without the dumper
+   * (the `dump` feature), where it is not built.
+   */
+  callSite(id: number): CallSite | undefined {
+    this.alive();
+    const x = this.x;
+    if (!x.vm_call_site) return undefined;
+    const n = this.guard(() => x.vm_call_site!(this.vm, id));
+    if (n === 0) return undefined;
+    const m = /^(\d+):(\d+):(.*)$/s.exec(outText(x));
+    return m ? { file: m[3], line: Number(m[1]), column: Number(m[2]) } : undefined;
   }
 
   /** Collects garbage now. False if the heap could not reserve the to-space. */

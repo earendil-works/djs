@@ -10633,3 +10633,24 @@ build fills with the first pause's dump for readers without JavaScript. A dump t
 refuses is shown with its reasons, and Continue goes on in the same sandbox. An info tip
 left of Run explains the pause and links dumps.md. `ts` blocks (static and live) compile
 as TypeScript, in `gen:run`/`gen:disasm`/`gen:dump` and in the browser.
+
+## D3054: where a run waits: `Vm::call_site`, `vm_call_site`, `Sandbox.callSite`
+date: 2026-11-06 · by: guide · issue: 0220
+The live examples' pause lines name the exact position of every pause, as the CLI's
+`[paused]` lines do (D3060). `Vm::call_site(call_id)` (djs-core, `dump` feature only)
+returns `{file, line, col}` of the innermost suspended activation waiting on the open
+call's promise: breadth first over the promise's reactions, through combinator element
+closures and capability records, the first Generator found (an `await` awaits the call's
+promise itself, so a `debugger;` pause is found at depth one; a pause inside a
+`Promise.all` callback is its own activation). The position is that activation's pc
+looked up in its function's line table, and the file its Script's name: the host's
+filename for the code the run started with, `dump.js` (the loader's name) for code a
+dump carries. A run continued from a dump runs the dump's text, so later pauses are
+positions in the dump it continued from, not in the original: mapping back through origin
+tracking's layouts would need the dumper's normalization, which this does not touch. The
+docs site shows them as such ("line 7:3 of dump 1", a link that shows that dump with the
+statement marked); every dump of a run stays reachable from the transcript. wasm:
+`vm_call_site(vm, id)` writes `line:col:file` to the out buffer (0 = none), in dump
+builds only; the shipped and slim modules are unchanged (1,033,538 and 906,238 B before
+and after, differing only in the source-hash constant). js: `Sandbox.callSite(id)`
+returns `{file, line, column}` or `undefined` (no export, call not open, nothing waits).

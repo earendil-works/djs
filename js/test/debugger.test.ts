@@ -93,3 +93,31 @@ test("the option needs a module with the dumper", async () => {
     (e: unknown) => e instanceof SandboxError && e.kind === "misuse" && /dumper/.test(e.message),
   );
 });
+
+test("callSite: where a pause waits, in the body, then in the dump the run continued from (D3054)", async () => {
+  const h = host(await loadModule());
+  let task = new Sandbox(h.opts).start(LOOP, {}, { filename: "loop.js" });
+  while (h.paused() < 1) await new Promise((r) => setTimeout(r, 1));
+  const [call] = task.calls;
+  assert.equal(call.fn, "debugger");
+  assert.deepEqual(task.sandbox.callSite(call.id), { file: "loop.js", line: 6, column: 3 });
+  assert.equal(task.sandbox.callSite(call.id + 100), undefined);
+  // Continued from a dump, the run executes the dump's text: positions are in it.
+  const dump = await task.suspend();
+  task.sandbox.dispose();
+  task = await Sandbox.resume(dump, h.opts);
+  while (h.paused() < 2) await new Promise((r) => setTimeout(r, 1));
+  const at = task.sandbox.callSite(task.calls[0].id)!;
+  assert.equal(at.file, "dump.js");
+  assert.equal(dump.split("\n")[at.line - 1].slice(at.column - 1), "debugger;");
+  task.result.catch(() => {});
+  task.sandbox.dispose();
+});
+
+test("callSite is absent without the dumper", async () => {
+  const nodump = process.env.DJS_WASM_NODUMP;
+  if (!nodump) return;
+  const sb = new Sandbox({ module: await loadModule(nodump) });
+  assert.equal(sb.callSite(1), undefined);
+  sb.dispose();
+});

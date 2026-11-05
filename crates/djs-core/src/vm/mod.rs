@@ -15,6 +15,8 @@
 //! references: valid until the next `run` or collection. Keep them in a
 //! [`Handle`](crate::heap::Handle) to hold them longer.
 
+#[cfg(feature = "dump")]
+mod call_site;
 pub mod compat;
 #[cfg(feature = "compile-cache")]
 pub(crate) mod compile_cache;
@@ -41,6 +43,8 @@ use crate::interp::run::{self, Exec};
 use crate::interp::{Continuation, state};
 pub use crate::interp::{ErrorKind, ExecOptions, RunState, Status};
 use crate::value::{Obj, Str, Value};
+#[cfg(feature = "dump")]
+pub use call_site::CallSite;
 pub use compat::{COMPAT_VERSION, FEATURES, IMAGE_DEPS, ImageDep, ImageDeps, RECORDS_HASH};
 
 /// `HostCall::FLAGS`: returned by `Vm::new_host_calls` already.

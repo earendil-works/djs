@@ -9,7 +9,7 @@
 
 extern crate std;
 
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use super::*;
@@ -218,4 +218,71 @@ fn show_debugger_dumps() {
     for d in dumps {
         std::println!("{d}\n-----");
     }
+}
+
+/// Runs until the VM is idle: the open calls.
+fn step_all(vm: &mut Vm, lines: &mut Vec<String>) -> Vec<u32> {
+    loop {
+        match vm.run(1_000_000_000) {
+            Status::HostCall { call_id, .. } => print(vm, lines, call_id),
+            Status::Idle | Status::Done(_) => return vm.pending_host_calls(),
+            s => panic!("{s:?}"),
+        }
+    }
+}
+
+/// `Vm::call_site` (D3054): a pause's position, in the script the run started with, then
+/// in the dump each later part continued from, at the `debugger;` it stopped at; pauses
+/// inside a `Promise.all` each at their own.
+#[test]
+fn call_sites_of_pauses() {
+    let src = "(async () => {\n  let sum = 0;\n  for (let i = 0; i < 2; i++) {\n    sum += i;\n    \
+               debugger;\n  }\n  await Promise.all([1, 2].map(async (x) => {\n    debugger;\n  }));\n})();\n";
+    let mut vm = start(src);
+    let mut lines = Vec::new();
+    let open = step_all(&mut vm, &mut lines);
+    let at = vm.call_site(open[0]).unwrap();
+    assert_eq!((at.file.as_str(), at.line, at.col), ("src.js", 5, 5));
+    // Not an open call.
+    assert_eq!(vm.call_site(open[0] + 100), None);
+    let mut sites = Vec::new();
+    loop {
+        let text = dump(&vm);
+        let mut next = new_vm();
+        let mut serve = |vm: &mut Vm, call_id: u32, _: u32| print(vm, &mut lines, call_id);
+        super::dump_tests::run_plain_dump_with(&mut next, &text, &host_fn, &mut serve, true)
+            .unwrap_or_else(|e| panic!("{e}\n{text}"));
+        let line_of = |at: &CallSite| {
+            text.lines()
+                .nth(at.line as usize - 1)
+                .unwrap_or("")
+                .to_string()
+        };
+        // The reopened pauses wait at the dump's own `await $djs.resume(...)`.
+        for id in next.pending_host_calls() {
+            let at = next.call_site(id).unwrap();
+            assert_eq!(at.file, "dump.js");
+            assert!(line_of(&at).contains("$djs.resume("), "{at:?}\n{text}");
+            next.resolve_host_call(id, Ok(Value::UNDEFINED)).unwrap();
+        }
+        let open = step_all(&mut next, &mut lines);
+        if open.is_empty() {
+            break;
+        }
+        let mut here = Vec::new();
+        for &id in &open {
+            let at = next.call_site(id).unwrap();
+            assert_eq!(at.file, "dump.js");
+            let line = line_of(&at);
+            assert_eq!(&line[at.col as usize - 1..], "debugger;", "{at:?}\n{text}");
+            here.push(at.line);
+        }
+        sites.push(here);
+        vm = next;
+    }
+    // The loop's second pause, then the two callbacks' pauses at once, on one line.
+    assert_eq!(sites.len(), 2, "{sites:?}");
+    assert_eq!(sites[0].len(), 1);
+    assert_eq!(sites[1].len(), 2);
+    assert_eq!(sites[1][0], sites[1][1]);
 }

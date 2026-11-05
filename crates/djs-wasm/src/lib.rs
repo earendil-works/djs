@@ -810,6 +810,26 @@ pub extern "C" fn vm_set_dump_source_refs(vm: u32, on: u32) {
     with(|s| s.slot(vm).source_refs = on != 0);
 }
 
+/// Where the run in `vm` waits on open call `call_id` (D3054, `Vm::call_site`): the out
+/// buffer holds `line:col:file` (the script's name as compiled: the host's for its body,
+/// the dump's loader name for code a dump carries). Returns its length, 0 when nothing
+/// waits on the call at a known position. Dump builds only, for the docs site's pauses.
+#[cfg(feature = "dump")]
+#[unsafe(no_mangle)]
+pub extern "C" fn vm_call_site(vm: u32, call_id: u32) -> usize {
+    with(|s| {
+        let text = s
+            .slot(vm)
+            .vm
+            .call_site(call_id)
+            .map_or_else(String::new, |at| {
+                alloc::format!("{}:{}:{}", at.line, at.col, at.file)
+            });
+        s.set_out(text.as_bytes());
+        text.len()
+    })
+}
+
 /// The suspension maps `vm` compiled for its dumps (D3041), as bytes in the out buffer for
 /// the host to give the next VM of this module (`vm_dump_maps_import`). Returns their
 /// length.

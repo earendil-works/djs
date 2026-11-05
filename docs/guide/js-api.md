@@ -274,6 +274,12 @@ Dumps are the subject of [their own page](dumps.md). What the options do:
 - `debugger`, a host function, makes `debugger;` in an async function a pause: the
   statement awaits a call of this function, so the run is idle there and can be dumped.
   It needs a module with the dumper. Without the option, `debugger;` does nothing.
+- `sandbox.callSite(id)` says where the run waits on open call `id`: `{ file, line,
+  column }` of the `await` of the innermost activation waiting on it, directly or through
+  `Promise.all` and the like. The file is the name the code was compiled as: the run's
+  `filename` for the code it started with, `dump.js` for code a dump carried, because a
+  run continued from a dump runs the dump's text. It is part of the dump module only and
+  returns `undefined` elsewhere, and when nothing waits on the call.
 
 `sandbox.dump(names?)` writes the sandbox's globals (or the named ones) as a dump of
 data and functions, without a run; `sandbox.load(dump)` runs such a dump in a fresh
