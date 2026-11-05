@@ -11,6 +11,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0215 | Plain dump performance (Result written; pjr paused, resumes on new hot spots) | pjr | .worktrees/pjx |
 | 0220 | Rewrite the guide: behavior + architecture, no history/decisions, JS interface page, live dumps, debugger suspend (owner) | guide | .worktrees/docs |
 | 0221 | `debugger;` pauses in the CLI: REPL and djs run (owner) | dbg | .worktrees/dbg |
+| 0222 | sleep-dump example: instant apart from sleeps, output before sleeps, 1 s (owner) | sleepy | .worktrees/sleepy |
 
 ## Open (ready)
 
