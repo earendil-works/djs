@@ -8,7 +8,7 @@ import { IN_PLACE_MIN, encode, stringInPlace } from "../src/wire.ts";
 import { readValue } from "../src/reader.ts";
 import { trapText } from "../src/trap.ts";
 import { provideBase, rememberBase } from "../src/base.ts";
-import { script as dumpRuntimeScript } from "../src/dump-runtime.js";
+import { scriptFor as dumpRuntimeFor } from "../src/dump-runtime.js";
 
 export const STATUS_DONE = 0;
 export const STATUS_THREW = 1;
@@ -308,11 +308,11 @@ export class Engine {
     return h === 0 ? { error: outText(this.x) } : { handle: h };
   }
 
-  /** A new object holding the plain dump runtime's helpers (D2903): `$djs` without the hooks. */
-  dumpRuntime(): number {
+  /** A new object holding the plain dump runtime's helpers that dump `text` names (D2903): `$djs` without the hooks. */
+  dumpRuntime(text: string): number {
     const f = this.x.vm_dump_runtime;
     if (!f) throw new Error("The djs-wasm module cannot load plain dumps (no vm_dump_runtime)");
-    const bytes = textEncoder.encode(dumpRuntimeScript);
+    const bytes = textEncoder.encode(dumpRuntimeFor(text));
     this.stage(bytes);
     const h = this.trap(() => f(this.vm, bytes.length));
     if (h === 0) throw new Error("Out of memory creating the dump runtime");

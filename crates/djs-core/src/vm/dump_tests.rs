@@ -54,7 +54,10 @@ pub(super) fn run_plain_dump(
     } else {
         return Err(String::from("not a djs dump"));
     };
-    let hooks = vm.dump_runtime()?.as_object().ok_or("no dump runtime")?;
+    let hooks = vm
+        .dump_runtime_for(text)?
+        .as_object()
+        .ok_or("no dump runtime")?;
     let seed = vm.new_host_function(HOOK_SEED, "seed").unwrap();
     vm.define(hooks, "seed", seed).unwrap();
     let resume = vm.new_host_function(HOOK_RESUME, "resume").unwrap();

@@ -658,7 +658,7 @@ class Session implements VmSession {
     }
     engine.free(read);
     this.hostValues = values;
-    const hooks = engine.dumpRuntime();
+    const hooks = engine.dumpRuntime(text);
     const fns: [string, number][] = [
       ["resume", engine.hostFunction(HOOK_RESUME, "resume")],
       ["seed", engine.hostFunction(HOOK_SEED, "seed")],

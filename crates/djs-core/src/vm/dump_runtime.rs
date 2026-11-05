@@ -15,6 +15,7 @@
 //! imports, one named export per helper.
 
 use alloc::string::String;
+use alloc::vec::Vec;
 
 use super::Vm;
 use crate::interp::run::Status;
@@ -179,22 +180,66 @@ pub(crate) const HELPERS: &[(&str, &str)] = &[
 
 /// The runtime as a Script whose completion value is the helpers object.
 pub fn script_text() -> String {
+    script_of(&[true; HELPERS.len()])
+}
+
+/// [`script_text`] with only the helpers `dump` names (`$djs.NAME`) and the ones their
+/// texts name: a load compiles a few helpers instead of all of them (0215). Generous: a
+/// name in a string or a parameter that is also a helper's adds that helper.
+pub fn script_text_for(dump: &str) -> String {
+    let mut want = [false; HELPERS.len()];
+    let mut todo: Vec<usize> = Vec::new();
+    let add = |name: &str, want: &mut [bool], todo: &mut Vec<usize>| {
+        if let Some(i) = HELPERS.iter().position(|h| h.0 == name)
+            && !want[i]
+        {
+            want[i] = true;
+            todo.push(i);
+        }
+    };
+    let mut rest = dump;
+    while let Some(p) = rest.find("$djs.") {
+        rest = &rest[p + 5..];
+        let n = rest
+            .bytes()
+            .position(|b| !(b.is_ascii_alphanumeric() || b == b'_' || b == b'$'))
+            .unwrap_or(rest.len());
+        add(&rest[..n], &mut want, &mut todo);
+    }
+    while let Some(i) = todo.pop() {
+        for w in HELPERS[i]
+            .1
+            .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$'))
+        {
+            add(w, &mut want, &mut todo);
+        }
+    }
+    script_of(&want)
+}
+
+fn script_of(want: &[bool]) -> String {
     let mut s = String::from("\"use strict\";\n(() => {\n");
     s.push_str(SHARED);
     s.push('\n');
-    for (k, v) in HELPERS {
-        s.push_str("const ");
-        s.push_str(k);
-        s.push_str(" = ");
-        s.push_str(v);
-        s.push_str(";\n");
+    for (i, (k, v)) in HELPERS.iter().enumerate() {
+        if want[i] {
+            s.push_str("const ");
+            s.push_str(k);
+            s.push_str(" = ");
+            s.push_str(v);
+            s.push_str(";\n");
+        }
     }
     s.push_str("return { ");
+    let mut first = true;
     for (i, (k, _)) in HELPERS.iter().enumerate() {
-        if i > 0 {
-            s.push_str(", ");
+        if want[i] {
+            if !first {
+                s.push_str(", ");
+            }
+            first = false;
+            s.push_str(k);
         }
-        s.push_str(k);
     }
     s.push_str(" };\n})();\n");
     s
@@ -233,8 +278,32 @@ pub fn module_text() -> String {
     );
     s.push_str(&script_text());
     s.push_str("`;\n");
+    s.push_str(SCRIPT_FOR);
     s
 }
+
+/// [`script_text_for`] in JavaScript, over `script`'s lines (one helper each).
+const SCRIPT_FOR: &str = r#"
+/** `script` with only the helpers `dump` names (`$djs.NAME`) and the ones their texts name:
+ * a load compiles a few helpers instead of all of them. */
+export function scriptFor(dump) {
+  const lines = script.split("\n");
+  const def = (l) => (l.startsWith("const ") && !l.startsWith("const matchAll ") ? l.slice(6, l.indexOf(" = ")) : undefined);
+  const defs = new Map(lines.filter(def).map((l) => [def(l), l]));
+  const want = new Set();
+  const add = (n) => {
+    if (!defs.has(n) || want.has(n)) return;
+    want.add(n);
+    for (const w of defs.get(n).slice(n.length + 9).split(/[^\w$]+/)) add(w);
+  };
+  for (const m of dump.split("$djs.").slice(1)) add(/^[\w$]*/.exec(m)[0]);
+  const names = [...defs.keys()].filter((n) => want.has(n));
+  return lines
+    .filter((l) => def(l) === undefined || want.has(def(l)))
+    .map((l) => (l.startsWith("return { ") ? `return { ${names.join(", ")} };` : l))
+    .join("\n");
+}
+"#;
 
 impl Vm {
     /// A new object holding the plain dump runtime's helpers (D2903), for the host to add
@@ -242,6 +311,12 @@ impl Vm {
     /// the runtime: call it while the VM is not running (before loading the dump).
     pub fn dump_runtime(&mut self) -> Result<Value, String> {
         self.dump_runtime_from(&script_text())
+    }
+
+    /// [`Vm::dump_runtime`] with only the helpers dump `text` names (0215): what a host
+    /// that has the dump calls.
+    pub fn dump_runtime_for(&mut self, text: &str) -> Result<Value, String> {
+        self.dump_runtime_from(&script_text_for(text))
     }
 
     /// [`Vm::dump_runtime`] from the runtime's [`script_text`] the host passes: the wasm
@@ -291,6 +366,27 @@ mod tests {
             have == want,
             "js/src/dump-runtime.js is out of date: run DJS_UPDATE_DUMP_RUNTIME=1 cargo test -p djs-core dump_runtime"
         );
+    }
+
+    /// A dump's subset holds the helpers it names and those they call (`FM` calls `L`),
+    /// and evaluates.
+    #[test]
+    fn the_subset_for_a_dump() {
+        let s = script_text_for("const $djs_FM = $djs.FM; $djs.k(f, {});");
+        for want in [
+            "const FM = ",
+            "const L = ",
+            "const k = ",
+            "return { L, FM, k };",
+        ] {
+            assert!(s.contains(want), "{want}: {s}");
+        }
+        assert!(!s.contains("const Y = "), "{s}");
+        let mut vm = Vm::new(Default::default()).unwrap();
+        let o = vm.dump_runtime_for("$djs.FM").unwrap().as_object().unwrap();
+        // (FM, L, and k: a parameter of FM shares its name.)
+        assert_eq!(vm.heap().own_keys(o).len(), 3);
+        assert_eq!(script_text_for(""), script_of(&[false; HELPERS.len()]));
     }
 
     /// The runtime evaluates in a VM and holds every helper.

@@ -5,7 +5,7 @@ import { IN_PLACE_MIN, encode, stringInPlace } from "./wire.ts";
 import { trapText } from "./trap.ts";
 import { Opaque, readValue } from "./reader.ts";
 import { provideBase, rememberBase } from "./base.ts";
-import { script as dumpRuntimeScript } from "./dump-runtime.js";
+import { scriptFor as dumpRuntimeFor } from "./dump-runtime.js";
 
 /** A host function callable from the sandbox. Arguments and the result are host values. */
 export type HostFunction = (...args: unknown[]) => unknown;
@@ -1440,8 +1440,8 @@ export class Sandbox {
     const dumpRuntime = x.vm_dump_runtime;
     const calls: OpenCall[] = [];
     this.guard(() => {
-      // `$djs`: the dump runtime's helpers (D2903) with the hooks added.
-      const hooks = this.check(dumpRuntime(vm, this.stageText(dumpRuntimeScript)), "memory");
+      // `$djs`: the dump runtime's helpers the dump names (D2903, 0215) with the hooks added.
+      const hooks = this.check(dumpRuntime(vm, this.stageText(dumpRuntimeFor(dump))), "memory");
       for (const [name, id] of [["resume", HOOK_RESUME], ["seed", HOOK_SEED], ["source", HOOK_SOURCE], ["host", HOOK_HOST]] as const) {
         const f = this.check(x.vm_new_host_function(vm, id, this.stageText(name)), "memory");
         this.defineOn(hooks, name, f);

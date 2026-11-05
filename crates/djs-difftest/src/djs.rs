@@ -422,7 +422,7 @@ impl Session {
         }
         // The dump runtime's helpers, with the hooks added (D2903).
         let hooks = vm
-            .dump_runtime()
+            .dump_runtime_for(&text)
             .map_err(Stop::Crash)?
             .as_object()
             .ok_or_else(|| Stop::Crash("the dump runtime is not an object".into()))?;

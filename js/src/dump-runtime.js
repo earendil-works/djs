@@ -83,3 +83,23 @@ const keep = (o, keys) => { for (const k of Reflect.ownKeys(o)) if (!['length', 
 return { R, G, C, D, A, L, I, E, Y, DD, U, M, FM, CC, CI, HD, P, S, N, X, O, fromSync, Q, regexpIterator, closeThrow, forIn, advance, fn, spent, rejected, bytes, k, keep };
 })();
 `;
+
+/** `script` with only the helpers `dump` names (`$djs.NAME`) and the ones their texts name:
+ * a load compiles a few helpers instead of all of them. */
+export function scriptFor(dump) {
+  const lines = script.split("\n");
+  const def = (l) => (l.startsWith("const ") && !l.startsWith("const matchAll ") ? l.slice(6, l.indexOf(" = ")) : undefined);
+  const defs = new Map(lines.filter(def).map((l) => [def(l), l]));
+  const want = new Set();
+  const add = (n) => {
+    if (!defs.has(n) || want.has(n)) return;
+    want.add(n);
+    for (const w of defs.get(n).slice(n.length + 9).split(/[^\w$]+/)) add(w);
+  };
+  for (const m of dump.split("$djs.").slice(1)) add(/^[\w$]*/.exec(m)[0]);
+  const names = [...defs.keys()].filter((n) => want.has(n));
+  return lines
+    .filter((l) => def(l) === undefined || want.has(def(l)))
+    .map((l) => (l.startsWith("return { ") ? `return { ${names.join(", ")} };` : l))
+    .join("\n");
+}

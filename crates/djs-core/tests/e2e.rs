@@ -103,7 +103,10 @@ const HOST: u32 = 0x7fff_fff2;
 /// host's values are the globals of their names, D2971), and the
 /// Script runs to its end. Why it failed, if it did.
 fn run_dump(vm: &mut Vm, text: &str) -> Result<(), String> {
-    let hooks = vm.dump_runtime()?.as_object().ok_or("no dump runtime")?;
+    let hooks = vm
+        .dump_runtime_for(text)?
+        .as_object()
+        .ok_or("no dump runtime")?;
     let seed = vm.new_host_function(SEED, "seed").unwrap();
     vm.define(hooks, "seed", seed).unwrap();
     let resume = vm.new_host_function(RESUME, "resume").unwrap();

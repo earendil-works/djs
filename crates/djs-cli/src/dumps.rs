@@ -64,7 +64,7 @@ pub fn begin_plain(vm: &mut Vm, text: &str, filename: &str) -> Result<(), String
     let oom = |_| String::from("out of memory");
     // The dump runtime's helpers, with the hooks added (D2903).
     let hooks = vm
-        .dump_runtime()?
+        .dump_runtime_for(text)?
         .as_object()
         .ok_or("the dump runtime is not an object")?;
     let resume = vm.new_host_function(RESUME, "resume").map_err(oom)?;
