@@ -752,3 +752,8 @@ topics when the index is next reorganized.
 - D3112: monty runs as its wasm component, instantiated on the calling thread
 - D3113: The codemode workload set is synthetic; the sessions it was derived from stay private
 - D3114: The benchmarks page's tables are generated from `engines/*` status keys
+- D3140: Below the GC threshold the arena grows by an eighth, in whole pages
+- D3141: A VM's arena starts at the image in whole pages; the page allocator's HUGE is 128 KiB
+- D3142: Big staging requests get their own block, placed after room for the arena
+- D3143: The mark stack reserves 16 KiB up front
+- D3144: Large live leaf cells count for 40% of the next collection's growth
