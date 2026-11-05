@@ -40,7 +40,7 @@ const TS_TYPES = {
 };
 // Strings that are hard to write back: escapes, line separators, astral characters,
 // markup, template-looking text.
-const STRINGS = ["a", "b", "x", "ok", "s1", "", "line\nbreak", 'quo"te', "üñí", "\u2028", "😀", "</script>", "a\\b", "${x}"];
+const STRINGS = ["a", "b", "x", "ok", "s1", "", "line\nbreak", 'quo"te', "üñí", "\u2028", "😀", "</script>", "a\\b", "${x}", "\ud800", "\u0000z"];
 
 class Gen {
   constructor(seed, opts) {
@@ -344,6 +344,7 @@ class Gen {
       [1, () => `Object.keys(${this.obj(d - 1)}).join("")`],
       [1, () => `JSON.stringify(${this.obj(d - 1)})`],
       [this.opts.wide ? 3 : 0, () => this.wideUse("str", d)],
+      [this.opts.wide ? 1 : 0, () => `[-0, NaN, Infinity, ${this.num(d - 1)} / 0].map((x) => (Object.is(x, -0) ? "-0" : String(x))).join(",")`],
       [this.opts.wide ? 1 : 0, () => `${this.str(d - 1)}.repeat(3).padStart(8, "*")`],
       [this.opts.wide ? 1 : 0, () => `[...${this.str(d - 1)}].reverse().join("")`],
       [this.varOf("enum") ? 1 : 0, () => `${this.varOf("enum")}[${this.varOf("enum")}.A]`],
@@ -381,6 +382,7 @@ class Gen {
       [this.vars((v) => v.type === "gen").length ? 1 : 0, () => `[...${this.pick(this.vars((v) => v.type === "gen")).name}(${this.rand(3) + 1})]`],
       [this.opts.wide ? 2 : 0, () => this.wideUse("arr", d)],
       [this.opts.wide ? 1 : 0, () => this.accessorArr(d)],
+      [this.opts.wide ? 1 : 0, () => `[${sub()}, , ${sub()}]`],
       [this.opts.wide && a && this.varOf("agen") ? 1 : 0, () => {
         this.awaits += this.fn.mult * 2;
         return `(await Array.fromAsync(${this.varOf("agen")}(2)))`;
@@ -404,6 +406,9 @@ class Gen {
       [this.varOf("sym") ? 2 : 0, () => `{ a: ${sub()}, b: ${sub()}, [${this.varOf("sym")}]: ${sub()} }`],
       [this.opts.ts ? 1 : 0, () => `(${this.obj(d - 1)} satisfies object)`],
       [this.opts.wide ? 2 : 0, () => this.proxyObj(d)],
+      [this.opts.wide ? 1 : 0, () => `Object.assign(Object.create(null), { a: ${sub()}, b: ${sub()} })`],
+      [this.opts.wide ? 1 : 0, () => `Object.freeze({ a: ${sub()}, b: ${sub()} })`],
+      [this.opts.wide ? 1 : 0, () => `{ a: ${sub()}, b: ${sub()}, *[Symbol.iterator]() { yield this.a; yield this.b; } }`],
     ]);
   }
   // A Proxy whose handler captures a variable of the frame (0211): its traps are
@@ -811,8 +816,20 @@ class Gen {
     this.line(`  static make(v) { return new ${c}(v + 1); }`);
     this.line(`}`);
     this.declare(c, "cls");
+    let made = c;
+    if (this.opts.wide && this.chance(0.4)) {
+      // A subclass whose async methods call `super` across an await (0211).
+      const d = this.fresh("D");
+      this.line(`class ${d} extends ${c} {`);
+      this.line(`  constructor(v) { super(v * 2); this.extra = v; }`);
+      this.line(`  get(x) { return super.get(x) + this.extra; }`);
+      this.line(`  async fetch(x) { const a = await super.fetch(x); return a + (await tools.echo(this.extra)); }`);
+      this.line(`}`);
+      this.declare(d, "cls");
+      made = d;
+    }
     const i = this.fresh("o");
-    this.line(`const ${i} = new ${c}(${this.num(2)});`);
+    this.line(`const ${i} = new ${made}(${this.num(2)});`);
     this.declare(i, "inst");
   }
   genDecl() {
