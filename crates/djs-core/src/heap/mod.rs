@@ -263,15 +263,15 @@ impl Heap {
     }
 
     /// The arena capacity a heap restored from an image of `image_len` bytes reserves
-    /// (D1942, D2541): the image plus one wasm page, in whole pages. A host can stage the
-    /// image in a buffer of this capacity, which becomes the arena without growing again
-    /// (`djs_image_staging`). The arena grows from there on demand; in wasm it stays at the
-    /// end of memory and grows in place, so reserving the first GC threshold up front
-    /// (twice the image) only held pages most VMs never touch.
+    /// (D1942, D2541, D3141): the image, rounded up to whole wasm pages. A host can stage
+    /// the image in a buffer of this capacity, which becomes the arena without growing
+    /// again (`djs_image_staging`). The arena grows from there on demand; in wasm it stays
+    /// at the end of memory and grows in place, so any room reserved up front only held
+    /// pages an idle VM never touches.
     pub fn image_capacity(image_len: usize, limit: usize) -> usize {
         const PAGE: usize = 64 << 10;
         let hard = (limit.min(arena::MAX_ARENA as usize) & !7).max(image_len);
-        (image_len + PAGE).next_multiple_of(PAGE).min(hard)
+        image_len.next_multiple_of(PAGE).min(hard)
     }
 
     /// The arena capacity of a VM made from an image of `image_len` bytes for a host that

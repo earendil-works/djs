@@ -23,7 +23,7 @@ pub struct Arena {
     len: u32,
     limit: u32,
     /// While the arena is below this size, growing never reserves past it (0: no target).
-    /// The heap sets it to the GC threshold, so the Vec's doubling does not overshoot the
+    /// The heap sets it to the GC threshold, so the Vec's growth does not overshoot the
     /// size the next collection starts at (D1870).
     target: u32,
     /// The prefix write barrier (D2065): in debug builds, a write below this offset (and
@@ -45,6 +45,9 @@ std::thread_local! {
 /// How far ahead of an allocation the frontier is zeroed: big enough that small cells
 /// rarely touch the Vec, small enough not to matter for memory or the GC.
 const ZERO_AHEAD: u32 = 16 << 10;
+
+/// A wasm page: the arena's growth step below the GC threshold.
+const PAGE: usize = 64 << 10;
 
 impl Arena {
     /// An empty arena that may grow to `limit` bytes (clamped to [`MAX_ARENA`]).
@@ -248,14 +251,20 @@ impl Arena {
         Ok(())
     }
 
-    /// Makes the Vec's capacity at least `end`: amortized doubling, never past the cap.
+    /// Makes the Vec's capacity at least `end`: geometric growth (by an eighth, in pages),
+    /// never past the cap.
     fn reserve(&mut self, end: u32) -> Result<(), HeapError> {
         let end = end as usize;
         if end > self.bytes.capacity() {
             let cap = self.bytes.capacity();
             let mut want = if self.target == 0 || end <= self.target as usize {
-                // Doubling, but not past the target (D1870).
-                let w = (cap * 2).max(end).max(4096);
+                // An eighth more, in whole wasm pages, but not past the target (D1870,
+                // D3140): wasm grows the arena in place at memory's end, so doubling only
+                // reserved pages the run might never touch, and memory never shrinks.
+                let w = (cap + (cap / 8).max(PAGE))
+                    .next_multiple_of(PAGE)
+                    .max(end)
+                    .max(4096);
                 if self.target == 0 {
                     w
                 } else {

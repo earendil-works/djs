@@ -42,8 +42,9 @@ pub(crate) mod pages {
 
     /// Blocks at least this large are whole pages of their own (not dlmalloc's).
     /// The side tables of a collection and most Rust buffers stay below it; the arena is
-    /// above from its start (the base image alone is about 400 KB).
-    pub(crate) const HUGE: usize = 256 * 1024;
+    /// above from its start (the base image alone is about 180 KB, and a VM's arena starts
+    /// at the image in whole pages, D3141).
+    pub(crate) const HUGE: usize = 128 * 1024;
 
     /// Free page ranges kept: the allocator cannot allocate for itself, so the list is a
     /// fixed array. A run freed while it is full is leaked; in practice a VM has a handful
@@ -360,6 +361,27 @@ pub(crate) mod pages {
             }
         }
 
+        /// Makes the next page runs placed right after the top block start `bytes` further
+        /// on (D3142), for a buffer whose contents are about to be copied into the top
+        /// block (the arena): it grows into those pages in place instead of moving. Returns
+        /// the setting it replaced, for [`PageAlloc::restore_keep`].
+        pub(crate) fn leave_top_room(&mut self, bytes: usize) -> Keep {
+            let old = self.keep;
+            if self.top.0 != usize::MAX {
+                let top_end = self.top.0 + self.top.1;
+                self.keep = Keep {
+                    near: [top_end, usize::MAX],
+                    from: top_end + bytes.div_ceil(PAGE),
+                };
+            }
+            old
+        }
+
+        /// Puts back what [`PageAlloc::leave_top_room`] replaced.
+        pub(crate) fn restore_keep(&mut self, keep: Keep) {
+            self.keep = keep;
+        }
+
         /// A huge block at `start` now has `len` pages: it becomes the top block if there is
         /// none or it is at least as large.
         fn note_huge(&mut self, start: usize, len: usize) {
@@ -607,6 +629,17 @@ mod wasm {
         }
     }
 
+    /// Runs `f`, whose page runs placed right after the arena start `bytes` further on
+    /// ([`PageAlloc::leave_top_room`]).
+    pub(crate) fn with_top_room<R>(bytes: usize, f: impl FnOnce() -> R) -> R {
+        // SAFETY: one thread; the reference ends before `f` allocates.
+        let old = unsafe { get().leave_top_room(bytes) };
+        let r = f();
+        // SAFETY: as above.
+        unsafe { get().restore_keep(old) };
+        r
+    }
+
     /// The global allocator on wasm32 (allocator.rs docs).
     pub(crate) struct Base;
 
@@ -629,7 +662,13 @@ mod wasm {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub(crate) use wasm::Base;
+pub(crate) use wasm::{Base, with_top_room};
+
+/// Natively there is no page allocator: just `f`.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn with_top_room<R>(_bytes: usize, f: impl FnOnce() -> R) -> R {
+    f()
+}
 // Used natively only by the `alloc-stats` wrapper.
 #[cfg(all(not(target_arch = "wasm32"), feature = "alloc-stats"))]
 pub(crate) use std::alloc::System as Base;

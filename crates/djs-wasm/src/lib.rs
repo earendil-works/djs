@@ -173,7 +173,10 @@ fn base_buffer() -> Vec<u8> {
 
 /// [`base_buffer`]'s capacity.
 fn base_capacity() -> usize {
-    djs_core::heap::Heap::image_capacity(djs_prelude::base_len(), djs_core::heap::DEFAULT_LIMIT)
+    page_block(djs_core::heap::Heap::image_capacity(
+        djs_prelude::base_len(),
+        djs_core::heap::DEFAULT_LIMIT,
+    ))
 }
 
 /// The base snapshot (D1321), decoded now unless the instance holds it (D2252), and its
@@ -563,12 +566,30 @@ pub extern "C" fn djs_image_staging(len: usize, memory_limit: u32) -> usize {
 #[unsafe(no_mangle)]
 pub extern "C" fn djs_staging(len: usize) -> usize {
     with(|s| {
-        if s.staging.len() < len {
-            s.staging.resize(len, 0);
+        if len >= BIG_STAGING {
+            // A fresh block, freeing the old one first, with room for the arena to grow
+            // into before it: what is staged this large is usually decoded into the arena
+            // next (a tool result, a non-Latin-1 string), up to twice as large as UTF-16. A
+            // block right behind the arena would make it move and leave its pages behind as
+            // a hole (D3142).
+            s.staging = Vec::new();
+            s.staging = allocator::with_top_room(2 * len, || alloc::vec![0; len]);
+        } else {
+            if s.staging.capacity() >= BIG_STAGING {
+                // Do not keep a big block behind the arena past its use.
+                s.staging = Vec::new();
+            }
+            if s.staging.len() < len {
+                s.staging.resize(len, 0);
+            }
         }
         s.staging.as_mut_ptr() as usize
     })
 }
+
+/// Staging requests from this size on get a block of their own (`djs_staging`): above the
+/// page allocator's medium blocks, which may be page runs.
+const BIG_STAGING: usize = 16 << 10;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn djs_out_ptr() -> usize {

@@ -43,10 +43,14 @@ use super::walk::{self, Slot};
 use super::{CellKind, Heap, HeapError};
 use crate::value::{Obj, Value};
 
-/// Mark stack entries reserved up front (64 KiB). The stack grows on demand up to
-/// len/64 entries (len/16 bytes, for deep structures like long lists); past that, or when
-/// the host refuses, cells are marked without being pushed and found by a rescan.
+/// Mark stack entries allowed at least (64 KiB). The stack grows on demand up to
+/// len/64 entries (len/16 bytes, for deep structures like long lists) or this; past that,
+/// or when the host refuses, cells are marked without being pushed and found by a rescan.
 const STACK_CAP: usize = 16 * 1024;
+
+/// Mark stack entries reserved up front (16 KiB): small enough for the wasm module's
+/// dlmalloc segment, where a bigger block becomes a page run at memory's end (D3143).
+const STACK_RESERVE: usize = 4 * 1024;
 
 #[cfg(test)]
 extern crate std;
@@ -672,7 +676,7 @@ impl Heap {
                 0 => Ok(()),
                 _ => remembered.try_reserve_exact(remembered_cap()),
             })
-            .and_then(|()| stack.try_reserve_exact(STACK_CAP.min(stack_cap(before))))
+            .and_then(|()| stack.try_reserve_exact(STACK_RESERVE.min(stack_cap(before))))
             .map_err(|_| HeapError::HostOutOfMemory)?;
         live.resize(blocks, 0);
         // 1. Mark: from the roots cell, or (minor) from every old cell.
