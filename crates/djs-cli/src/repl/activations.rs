@@ -169,28 +169,37 @@ impl Activation {
         self
     }
 
+    /// The source line it stopped in (without its indentation, at most 120 characters)
+    /// and a caret under the `await`/`yield`, each after `indent`; empty when the source
+    /// is not known.
+    pub fn source_lines(&self, indent: &str) -> String {
+        let mut out = String::new();
+        if let Some((line, col)) = &self.source {
+            // The caret under the same character as in the indented line.
+            let lead = line.chars().take_while(|c| c.is_whitespace()).count();
+            let col = (*col as usize).saturating_sub(1).max(lead);
+            let caret: String = line
+                .chars()
+                .take(col)
+                .skip(lead)
+                .map(|c| if c == '\t' { '\t' } else { ' ' })
+                .collect();
+            // The caret only if it falls in the characters shown.
+            let line: String = line.trim_start().chars().take(120).collect();
+            out.push_str(&format!("{indent}{line}\n"));
+            if caret.chars().count() < 120 {
+                out.push_str(&format!("{indent}{caret}^\n"));
+            }
+        }
+        out
+    }
+
     /// For `.bt` and `djs resume --explain`: what it is and where it stopped (`label`
     /// names the input or handle whose promise it is), the source line with a caret
     /// under the `await`/`yield`, and the bindings, indented by two spaces.
     pub fn describe(&self, label: &str) -> String {
         let mut out = format!("  {} at {}{label}\n", self.what, self.at);
-        if let Some((line, col)) = &self.source {
-            // The line without its indentation, the caret under the same character.
-            let indent = line.chars().take_while(|c| c.is_whitespace()).count();
-            let col = (*col as usize).saturating_sub(1).max(indent);
-            let caret: String = line
-                .chars()
-                .take(col)
-                .skip(indent)
-                .map(|c| if c == '\t' { '\t' } else { ' ' })
-                .collect();
-            // At most 120 characters of the line, and the caret only if it falls in them.
-            let line: String = line.trim_start().chars().take(120).collect();
-            out.push_str(&format!("      {line}\n"));
-            if caret.chars().count() < 120 {
-                out.push_str(&format!("      {caret}^\n"));
-            }
-        }
+        out.push_str(&self.source_lines("      "));
         // Without a plain dump's scaffolding (`$djs_*`, D2830), and a name once: a
         // continuation declares a loop's binding for the current iteration and for the
         // later ones, and the first is the one in scope at the site.

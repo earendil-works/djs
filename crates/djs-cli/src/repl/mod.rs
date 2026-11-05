@@ -32,7 +32,8 @@ const USAGE: &str = "usage: djs repl [--ts] [--gc-stress] [--no-history] [--froz
   --tools FILE    answer tools.x(...) calls from FILE (docs/cli.md); others wait for .resolve\n\
   --gc-stress     collect garbage at every safepoint\n\
   --no-history    do not read or write the history file ($DJS_HISTORY, ~/.djs_history)\n\
-  --frozen        the VMs have frozen builtins, which .dump and .dump-every need (D2836)";
+  --frozen        the VMs have frozen builtins, which .dump and .dump-every need (D2836);
+                  `debugger;` pauses (.help)";
 
 const HELP: &str = "\
 .help                 this text
@@ -74,6 +75,12 @@ prompt and prints its value when it settles.
                       (`later(v)` calls are answered with v at once; print() prints)
 .dump-every [on|off]  dump and reload at every idle point ([dumped N bytes]; needs
                       --frozen)
+
+With --frozen, `debugger;` in an async function or an input pauses it ([paused] #id):
+.continue, .c [id]    continue the pause (the oldest, or #id) in place
+.abort                drop the paused input and everything else in flight (Ctrl-C
+                      at an empty prompt does too)
+.dump then .restore of the file continue from the dump: the pause is open again.
 
 Ctrl-C cancels the line, or stops a running input between fuel slices.
 Input continues on the next line while it is incomplete (an unclosed bracket, string
@@ -255,6 +262,8 @@ struct Repl {
     hold_vm: bool,
     /// The dump file the VM was `.restore`d from (its functions' positions are in it).
     dump_file: Option<String>,
+    /// A `debugger;` paused before: the hint on how to go on was shown.
+    paused_before: bool,
 }
 
 impl Repl {
@@ -284,6 +293,7 @@ impl Repl {
             entry_override: None,
             hold_vm: false,
             dump_file: None,
+            paused_before: false,
         }
     }
 
@@ -338,7 +348,9 @@ impl Repl {
             match read {
                 Input::Eof => break,
                 Input::Interrupt => {
-                    if buf.is_empty() {
+                    if buf.is_empty() && !self.pauses().is_empty() {
+                        self.abort_pause();
+                    } else if buf.is_empty() {
                         println!("(To exit, press Ctrl-D or type .exit)");
                     }
                     buf.clear();
@@ -389,6 +401,8 @@ impl Repl {
             typescript: self.typescript,
             experimental_decorators: self.legacy_decorators,
             emit_decorator_metadata: self.decorator_metadata,
+            // The dumping mode: `debugger;` pauses (D3060).
+            debugger_awaits: self.frozen,
             ..o
         }
     }
@@ -409,6 +423,14 @@ impl Repl {
         if expr_first && let Some(f) = try_expr(self) {
             return Plan::Expr(f);
         }
+        // A `debugger;` pauses in an async body only: an input with one runs as a
+        // top-level-await input (D3060).
+        if self.frozen
+            && input::has_top_level_debugger(src)
+            && let Some(Ok(p)) = self.plan_await(src, filename)
+        {
+            return p;
+        }
         let script_err = match self.compile(src, false, filename) {
             Ok(f) => return Plan::Script(f),
             Err(e) => e,
@@ -421,35 +443,47 @@ impl Repl {
         }
         let mut err = script_err.clone();
         let mut incomplete = input::is_incomplete(src, &script_err);
-        if let Some((declare, body, ts)) = self.await_parts(src, filename) {
-            let saved = self.typescript;
-            self.typescript = ts;
-            let compiled = self.compile(&body, true, filename);
-            self.typescript = saved;
-            match compiled {
-                Ok(f) => {
-                    if declare.is_empty() {
-                        return Plan::Await(None, f);
-                    }
-                    let h = self.vm.heap_mut().new_handle(f).expect("out of memory");
-                    let d = self.compile(&declare, false, filename);
-                    let f = self.vm.heap().get_handle(h);
-                    self.vm.heap_mut().drop_handle(h);
-                    return match d {
-                        Ok(d) => Plan::Await(Some(d), f),
-                        Err(e) => Plan::Error(compile_error(&e, filename)),
-                    };
-                }
-                Err(e) => {
-                    incomplete |= input::is_incomplete(&body, &e);
-                    err = e;
-                }
+        match self.plan_await(src, filename) {
+            Some(Ok(p)) => return p,
+            Some(Err((e, body))) => {
+                incomplete |= input::is_incomplete(&body, &e);
+                err = e;
             }
+            None => {}
         }
         if incomplete && !last && err.kind == CompileErrorKind::Syntax {
             return Plan::Incomplete;
         }
         Plan::Error(compile_error(&err, filename))
+    }
+
+    /// `src` as a top-level-await input: `None` if it does not rewrite, else its plan or
+    /// the body's compile error and the body.
+    fn plan_await(
+        &mut self,
+        src: &str,
+        filename: &str,
+    ) -> Option<Result<Plan, (CompileError, String)>> {
+        let (declare, body, ts) = self.await_parts(src, filename)?;
+        let saved = self.typescript;
+        self.typescript = ts;
+        let compiled = self.compile(&body, true, filename);
+        self.typescript = saved;
+        let f = match compiled {
+            Ok(f) => f,
+            Err(e) => return Some(Err((e, body))),
+        };
+        if declare.is_empty() {
+            return Some(Ok(Plan::Await(None, f)));
+        }
+        let h = self.vm.heap_mut().new_handle(f).expect("out of memory");
+        let d = self.compile(&declare, false, filename);
+        let f = self.vm.heap().get_handle(h);
+        self.vm.heap_mut().drop_handle(h);
+        Some(Ok(match d {
+            Ok(d) => Plan::Await(Some(d), f),
+            Err(e) => Plan::Error(compile_error(&e, filename)),
+        }))
     }
 
     /// The top-level-await rewrite of `src`: the declaring Script, the body, and whether
@@ -478,7 +512,7 @@ impl Repl {
         } else {
             (src.to_string(), false)
         };
-        let rw = input::rewrite_await(&js)?;
+        let rw = input::rewrite_await(&js, self.frozen)?;
         Some((rw.declare, rw.body, ts))
     }
 
@@ -745,9 +779,107 @@ impl Repl {
         self.announced = false;
         for id in fresh.into_iter().filter(|id| pending.contains(id)) {
             self.announced = true;
-            println!("[waiting] #{id} {}", self.tools.describe(&mut self.vm, id));
+            if self.tools.is_pause(&self.vm, id) {
+                self.announce_pause(id);
+            } else {
+                println!("[waiting] #{id} {}", self.tools.describe(&mut self.vm, id));
+            }
         }
         outcome
+    }
+
+    /// A `debugger;` pause (D3060): the call, the input that made it and where it stopped,
+    /// with the source line; the first time, how to go on.
+    fn announce_pause(&mut self, id: u32) {
+        let origin = self.origins.get(&id).cloned().unwrap_or_default();
+        let heap = self.vm.heap();
+        let a = activations::call_promise(heap, id)
+            .and_then(|p| activations::waiting_on(heap, p).first().copied())
+            .and_then(|g| activations::activation(heap, g))
+            .map(|a| self.in_dump_file(a));
+        let at = a
+            .as_ref()
+            .map(|a| format!(" at {}", a.at))
+            .unwrap_or_default();
+        println!("[paused] #{id} {origin}{at}");
+        if let Some(a) = a {
+            print!("{}", a.source_lines("  "));
+        }
+        if !self.paused_before {
+            self.paused_before = true;
+            println!("(.dump - shows the continuation, .c continues, .abort drops it)");
+        }
+    }
+
+    /// The open `debugger;` pauses, oldest first.
+    fn pauses(&self) -> Vec<u32> {
+        let mut ids = self.vm.pending_host_calls();
+        ids.retain(|&id| self.tools.is_pause(&self.vm, id));
+        ids
+    }
+
+    /// `.continue [id]`: answers the pause `#id` (the oldest one without an id) and runs on.
+    fn continue_cmd(&mut self, arg: &str) {
+        let pauses = self.pauses();
+        let id = match arg.trim_start_matches('#') {
+            "" => pauses.first().copied(),
+            n => n.parse::<u32>().ok().filter(|id| pauses.contains(id)),
+        };
+        match id {
+            // The paused input goes on: its next calls are its own.
+            Some(id) => {
+                let origin = self.origins.get(&id).cloned();
+                let origin = origin.unwrap_or_else(|| format!(".continue {id}"));
+                self.answer_and_run(id, Ok(Value::UNDEFINED), origin)
+            }
+            None if arg.is_empty() => println!("nothing is paused"),
+            None => println!("no pause #{arg} (.pending lists the open calls)"),
+        }
+    }
+
+    /// `.abort` (or Ctrl-C at an empty prompt while paused): drops what is in flight,
+    /// the paused input with the others (`vm.abort()`, as Ctrl-C does to a running input;
+    /// one input cannot be dropped alone). The globals stay.
+    fn abort_pause(&mut self) {
+        let pauses = self.pauses();
+        if pauses.is_empty() {
+            println!("nothing is paused");
+            return;
+        }
+        let paused: Vec<String> = pauses
+            .iter()
+            .filter_map(|id| self.origins.get(id).cloned())
+            .collect();
+        let others = self
+            .waiting
+            .iter()
+            .filter(|w| !paused.contains(&w.label))
+            .count();
+        let calls = self.vm.pending_host_calls().len() - pauses.len();
+        self.vm.abort();
+        for w in std::mem::take(&mut self.waiting) {
+            self.vm.heap_mut().drop_handle(w.promise);
+        }
+        if let Some(h) = self.entry_override.take() {
+            self.vm.heap_mut().drop_handle(h);
+        }
+        self.origins.clear();
+        self.fresh.clear();
+        let what = if paused.is_empty() {
+            String::from("the paused input")
+        } else {
+            paused.join(", ")
+        };
+        let plural = |n: usize, one: &str| format!("{n} {one}{}", if n == 1 { "" } else { "s" });
+        if others == 0 && calls == 0 {
+            println!("aborted {what}");
+        } else {
+            println!(
+                "aborted {what}, with {} and {}",
+                plural(others, "other waiting input"),
+                plural(calls, "open call")
+            );
+        }
     }
 
     /// Records the tool calls made since the last look.
@@ -841,9 +973,15 @@ impl Repl {
         } else {
             Err(self.vm.new_error(ErrorKind::Error, rest).expect("oom"))
         };
+        self.answer_and_run(id, result, format!(".resolve {id}"));
+    }
+
+    /// Answers the open call `id` and runs what that unblocks; the calls that makes are
+    /// `origin`'s.
+    fn answer_and_run(&mut self, id: u32, result: Result<Value, Value>, origin: String) {
         self.vm.resolve_host_call(id, result).expect("an open call");
         self.origins.remove(&id);
-        self.current = format!(".resolve {id}");
+        self.current = origin;
         self.vm.set_now(now_ms());
         if let Outcome::Stopped(why) = self.pump(false) {
             println!("{why}");
@@ -1079,6 +1217,8 @@ impl Repl {
             }
             ".heap" => self.heap_report(arg),
             ".pending" => self.pending(),
+            ".continue" | ".c" => self.continue_cmd(arg),
+            ".abort" => self.abort_pause(),
             ".resolve" if !arg.is_empty() => self.settle(arg, true),
             ".reject" if !arg.is_empty() => self.settle(arg, false),
             ".bt" if !arg.is_empty() => self.backtrace_cmd(arg),
@@ -1177,7 +1317,14 @@ impl Repl {
                 .collect();
             println!("{}", parts.join(" "));
         };
-        crate::dumps::run_plain(&mut vm, &mut self.tools, &d.text, "<dump>", &mut log)?;
+        crate::dumps::run_plain(
+            &mut vm,
+            &mut self.tools,
+            &d.text,
+            "<dump>",
+            self.frozen,
+            &mut log,
+        )?;
         let mut handles = crate::dumps::plain_handles(&mut vm);
         // The old VM's handles go with it; positions are now in this dump, which has no file.
         self.vm = vm;
@@ -1213,7 +1360,7 @@ impl Repl {
             println!("{}", parts.join(" "));
         };
         // The values the dump names, and the open calls' states.
-        let r = crate::dumps::run_plain(&mut self.vm, &mut self.tools, src, arg, &mut log);
+        let r = crate::dumps::run_plain(&mut self.vm, &mut self.tools, src, arg, true, &mut log);
         let (handles, states) = match r {
             Ok(l) => (crate::dumps::plain_handles(&mut self.vm), l.states),
             Err(e) => {
@@ -1265,7 +1412,11 @@ impl Repl {
     /// After a restore: the calls the image still has open.
     fn pending_after_restore(&mut self) {
         for id in self.vm.pending_host_calls() {
-            println!("waiting: #{id} {}", self.tools.describe(&mut self.vm, id));
+            if self.tools.is_pause(&self.vm, id) {
+                self.announce_pause(id);
+            } else {
+                println!("waiting: #{id} {}", self.tools.describe(&mut self.vm, id));
+            }
         }
     }
 
@@ -1442,5 +1593,9 @@ fn new_vm(gc_stress: bool, frozen_builtins: bool) -> Vm {
     vm.define_global("console", Value::object(console))
         .expect("oom");
     tools::install(&mut vm);
+    // The dumping mode is the debugger mode: `debugger;` awaits `debugger()` (D3060).
+    if frozen_builtins {
+        tools::install_debugger(&mut vm);
+    }
     vm
 }

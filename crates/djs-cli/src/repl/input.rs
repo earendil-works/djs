@@ -74,6 +74,56 @@ pub fn is_incomplete(src: &str, e: &CompileError) -> bool {
         || (e.message.contains("end of string") && src.as_bytes().get(pos) == Some(&b'`'))
 }
 
+/// The input has a `debugger` statement outside the functions it defines (D3060): the
+/// top-level code that pauses only as an async body. A function's body is a `{` after
+/// `=>`, or after `)` whose `(` does not follow `if`, `for`, `while`, `catch`, `switch`
+/// or `with` (token based, like the rest of the rewrite).
+pub fn has_top_level_debugger(src: &str) -> bool {
+    let Ok(toks) = tokens(src) else { return false };
+    // Per open bracket: it is (inside) a function's body.
+    let mut stack: Vec<bool> = Vec::new();
+    for (i, t) in toks.iter().enumerate() {
+        use TokenKind::*;
+        let inside = stack.last().copied().unwrap_or(false);
+        match t.kind {
+            Debugger if !inside => return true,
+            LBrace => {
+                let body = match i.checked_sub(1).map(|p| &toks[p]) {
+                    Some(p) if p.kind == Arrow => true,
+                    Some(p) if p.kind == RParen => {
+                        let open = toks[..i - 1]
+                            .iter()
+                            .rposition(|o| o.kind == LParen && o.depth == p.depth);
+                        let before = open.and_then(|o| o.checked_sub(1)).map(|b| &toks[b]);
+                        let at = |b: usize| toks.get(b).map(|t| t.kind);
+                        let control = match before {
+                            Some(b)
+                                if matches!(b.kind, If | For | While | Catch | Switch | With) =>
+                            {
+                                true
+                            }
+                            // `for await (`
+                            Some(b) if b.is_contextual(Kw::Await) => {
+                                open.and_then(|o| o.checked_sub(2)).and_then(at) == Some(For)
+                            }
+                            _ => false,
+                        };
+                        !control
+                    }
+                    _ => false,
+                };
+                stack.push(inside || body);
+            }
+            LParen | LBracket | TemplateHead => stack.push(inside),
+            RParen | RBracket | RBrace | TemplateTail => {
+                stack.pop();
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
 /// A top-level-`await` input rewritten as an async body whose declarations are globals.
 #[derive(Debug, PartialEq, Eq)]
 pub struct AwaitRewrite {
@@ -91,13 +141,16 @@ pub struct AwaitRewrite {
 /// - `class C {}` becomes `C = class C {};`;
 /// - `function f() {}` stays (it is hoisted in the body) and is followed by
 ///   `;globalThis.f = f;`.
-pub fn rewrite_await(src: &str) -> Option<AwaitRewrite> {
+///
+/// With `debugger` (the REPL's debugger mode, D3060), an input with a `debugger;` is
+/// rewritten too, so that the statement is in an async body and pauses there.
+pub fn rewrite_await(src: &str, debugger: bool) -> Option<AwaitRewrite> {
     let toks = tokens(src).ok()?;
     let text = |t: &Tok| &src[t.start..t.end];
-    if !toks
-        .iter()
-        .any(|t| t.kind == TokenKind::Ident && text(t) == "await")
-    {
+    if !toks.iter().any(|t| {
+        (t.kind == TokenKind::Ident && text(t) == "await")
+            || (debugger && t.kind == TokenKind::Debugger)
+    }) {
         return None;
     }
     let mut lets: Vec<String> = Vec::new();
@@ -434,14 +487,32 @@ mod tests {
     use super::*;
 
     fn rw(src: &str) -> (String, String) {
-        let r = rewrite_await(src).expect("rewrites");
+        let r = rewrite_await(src, false).expect("rewrites");
         (r.declare, r.body)
     }
 
     #[test]
     fn no_await_no_rewrite() {
-        assert_eq!(rewrite_await("let x = 1"), None);
-        assert_eq!(rewrite_await("let x = 'await'"), None);
+        assert_eq!(rewrite_await("let x = 1", false), None);
+        assert_eq!(rewrite_await("let x = 'await'", false), None);
+        assert_eq!(rewrite_await("let x = 1; debugger;", false), None);
+        let r = rewrite_await("let x = 1; debugger;", true).expect("rewrites");
+        assert_eq!(r.body, "0,  x = 1; debugger;");
+        assert!(has_top_level_debugger("if (a) { debugger }"));
+        assert!(has_top_level_debugger(
+            "for (;;) { try { debugger } catch (e) {} }"
+        ));
+        assert!(has_top_level_debugger("for await (x of y) { debugger }"));
+        assert!(!has_top_level_debugger("'debugger'"));
+        assert!(!has_top_level_debugger(
+            "async function f(x) { if (x) { debugger } }"
+        ));
+        assert!(!has_top_level_debugger(
+            "const f = async () => { debugger }"
+        ));
+        assert!(!has_top_level_debugger(
+            "class A { async m() { debugger } }"
+        ));
     }
 
     #[test]

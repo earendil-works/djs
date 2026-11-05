@@ -43,13 +43,16 @@ const USAGE: &str = "usage: djs run [--body] [--ts] [--experimental-decorators]\
                      at idle point K (from 1) and stop; `djs resume OUT` continues it\n\
   --dump-every-idle  at every idle point, dump the run and continue in a fresh VM that\n\
                      ran the dump\n\
-                     (with either, the VM has frozen builtins, which dumps need, D2836)";
+  --debugger OUT     `debugger;` in an async function (or a --body) pauses: at the\n\
+                     first pause, write the run as a dump to OUT and stop; `djs\n\
+                     resume OUT` continues it\n\
+                     (with any of these, the VM has frozen builtins, which dumps need)";
 
 const RESUME_USAGE: &str = "usage: djs resume [--explain] [--tools answers.json] [--gc-stress]\n\
-                [--suspend-every N] [--backend B] <dump.js>\n\
+                [--suspend-every N] [--backend B] [--debugger OUT] <dump.js>\n\
   runs a dump (`\"djs-dump\";`, a Script) in a fresh VM with frozen builtins, to its\n\
-  end, answering open calls as `djs run` does (--dump-after and --dump-every-idle as\n\
-  for run)\n\
+  end, answering open calls as `djs run` does (--dump-after, --dump-every-idle and\n\
+  --debugger as for run); a `debugger;` pause the dump holds continues at once\n\
   --explain          only load it, print its open calls and suspended activations (where\n\
                      each stopped in the dump, with the source line), and exit";
 
@@ -107,6 +110,13 @@ fn command(args: &[String], resume: bool) -> i32 {
                 }
             },
             "--dump-every-idle" => opts.dumping.every_idle = true,
+            "--debugger" => match it.next() {
+                Some(out) => opts.debugger = Some(out.clone()),
+                None => {
+                    eprintln!("{usage}");
+                    return 2;
+                }
+            },
             "--tools" => match it.next().map(|p| crate::tools::read_answers(p)) {
                 Some(Ok(a)) => tools = Tools::with_answers(Some(a)),
                 Some(Err(e)) => {
@@ -213,6 +223,7 @@ pub fn run_source(
         typescript: opts.typescript,
         experimental_decorators: opts.experimental_decorators,
         emit_decorator_metadata: opts.emit_decorator_metadata,
+        debugger_awaits: opts.debugger.is_some(),
         ..copts
     };
     let main = match vm.compile(src, &copts) {
@@ -253,7 +264,7 @@ pub fn run_source(
     } else {
         Vec::new()
     };
-    run_main(vm, main, &args, opts, tools, out, err)
+    run_main(vm, main, &args, filename, opts, tools, out, err)
 }
 
 /// Loads a dump into a fresh VM and runs it to its end (D2603); exit codes as `run`.
@@ -267,12 +278,12 @@ pub fn resume_dump(
 ) -> i32 {
     let mut vm = new_vm(opts);
     // A dump is a Script: run it, with the hooks served while it loads.
-    if let Err(e) = crate::dumps::begin_plain(&mut vm, text, filename) {
+    if let Err(e) = crate::dumps::begin_plain(&mut vm, text, filename, opts.debugger.is_some()) {
         let _ = writeln!(err, "djs: cannot load {filename}: {e}");
         return 2;
     }
     let load = Some(crate::dumps::PlainLoad::default());
-    drive_from(vm, None, load, opts, tools, out, err)
+    drive_from(vm, filename, None, load, opts, tools, out, err)
 }
 
 /// `djs resume --explain` (D2641): what a dump holds in flight, for a reader, since the
@@ -298,7 +309,7 @@ pub fn explain_dump(
         return 2;
     };
     // The dump runs to its first stop; nothing it prints is shown.
-    let loaded = crate::dumps::run_plain(&mut vm, tools, text, filename, &mut |_, _| {});
+    let loaded = crate::dumps::run_plain(&mut vm, tools, text, filename, false, &mut |_, _| {});
     let loaded = match loaded {
         Ok(l) => l,
         Err(e) => {
@@ -412,6 +423,9 @@ pub struct RunOptions {
     pub resume: bool,
     /// `--bind NAME=IDENTITY`: more body parameters, bound to host functions (D2972).
     pub binds: Vec<(String, String)>,
+    /// `--debugger OUT`: `debugger;` pauses (D3050); the first pause dumps the run to OUT
+    /// and stops it (D3060).
+    pub debugger: Option<String>,
 }
 
 /// A codemode body's parameters in the CLI: its default bindings (D2972), the `tools`
@@ -428,7 +442,10 @@ impl RunOptions {
             },
             // Dumps need frozen builtins (D2836), and a resumed run goes on as the dumped
             // one, which had them.
-            frozen_builtins: self.resume || self.dumping.after.is_some() || self.dumping.every_idle,
+            frozen_builtins: self.resume
+                || self.dumping.after.is_some()
+                || self.dumping.every_idle
+                || self.debugger.is_some(),
             ..Default::default()
         }
     }
@@ -445,15 +462,22 @@ pub fn new_vm(opts: &RunOptions) -> Vm {
     vm.define_global("console", Value::object(console))
         .expect("oom");
     crate::tools::install(&mut vm);
+    // A dump may hold a pause, or continue a body compiled with `debugger_awaits`, so a
+    // resumed run has `debugger` too: it answers such a pause at once (D3060).
+    if opts.debugger.is_some() || opts.resume {
+        crate::tools::install_debugger(&mut vm);
+    }
     vm
 }
 
 /// Calls `main` and runs it to completion. Output goes to `out`; an uncaught exception
 /// is printed to `err`. Returns the process exit code.
+#[allow(clippy::too_many_arguments)]
 pub fn run_main(
     mut vm: Vm,
     main: Value,
     args: &[Value],
+    filename: &str,
     opts: &RunOptions,
     tools: &mut Tools,
     out: &mut impl Write,
@@ -462,25 +486,28 @@ pub fn run_main(
     // The top level is called with `this` = the global object in both modes (D1140).
     let this = Value::object(vm.global());
     vm.call(main, this, args).expect("the VM is idle");
-    drive(vm, opts, tools, out, err)
+    drive(vm, filename, opts, tools, out, err)
 }
 
 /// Runs the VM to its end, answering open calls at idle points.
 fn drive(
     vm: Vm,
+    filename: &str,
     opts: &RunOptions,
     tools: &mut Tools,
     out: &mut impl Write,
     err: &mut impl Write,
 ) -> i32 {
-    drive_from(vm, None, None, opts, tools, out, err)
+    drive_from(vm, filename, None, None, opts, tools, out, err)
 }
 
 /// [`drive`] with the handle of the run's promise of a resumed run (else the entry
 /// call's result is the run's), and the plain dump `vm` is loading (its hooks are served
 /// until the Script stops at something other than a sync host call).
+#[allow(clippy::too_many_arguments)]
 fn drive_from(
     mut vm: Vm,
+    filename: &str,
     mut run: Option<Handle>,
     mut load: Option<crate::dumps::PlainLoad>,
     opts: &RunOptions,
@@ -521,6 +548,9 @@ fn drive_from(
             }
             Status::Idle if !vm.pending_host_calls().is_empty() => {
                 idle_points += 1;
+                // The calls made since the last idle point: a pause among them stops the
+                // run with `--debugger` (the pauses a loaded dump reopened are not new).
+                let new = vm.new_host_calls();
                 if let Some((k, path)) = &opts.dumping.after
                     && *k == idle_points
                 {
@@ -539,12 +569,39 @@ fn drive_from(
                         }
                     };
                 }
+                if let Some(path) = &opts.debugger
+                    && let Some(&id) = new.iter().find(|&&id| tools.is_pause(&vm, id))
+                {
+                    let _ = out.flush();
+                    let at = pause_position(&vm, id, filename);
+                    return match dump_run(&vm, run, tools) {
+                        Ok(d) => match std::fs::write(path, &d.text) {
+                            Ok(()) => {
+                                let _ = writeln!(err, "djs: paused at {at}, wrote {path}");
+                                0
+                            }
+                            Err(e) => {
+                                let _ = writeln!(err, "djs: cannot write {path}: {e}");
+                                2
+                            }
+                        },
+                        Err(e) => {
+                            let _ = writeln!(err, "djs: paused at {at}: {e}");
+                            1
+                        }
+                    };
+                }
                 if opts.dumping.every_idle {
                     // The dump of this idle point, loaded in a fresh VM, which runs to the
                     // same idle point before the next answer.
                     let fresh = dump_run(&vm, run, tools).and_then(|d| {
                         let mut fresh = new_vm(opts);
-                        crate::dumps::begin_plain(&mut fresh, &d.text, "<dump>")?;
+                        crate::dumps::begin_plain(
+                            &mut fresh,
+                            &d.text,
+                            "<dump>",
+                            opts.debugger.is_some(),
+                        )?;
                         Ok(fresh)
                     });
                     match fresh {
@@ -629,9 +686,12 @@ fn drive_from(
 /// the open calls) when there is none.
 fn answer_one(vm: &mut Vm, tools: &mut Tools, err: &mut impl Write) -> bool {
     let open = vm.pending_host_calls();
-    let answered = open
-        .iter()
-        .find_map(|&id| Some((id, tools.answer(vm, id)?)));
+    // A pause that does not stop the run (a resumed dump's) continues at once.
+    let answered = open.iter().find_map(|&id| {
+        let r = tools.answer(vm, id);
+        let r = r.or_else(|| tools.is_pause(vm, id).then_some(Ok(Value::UNDEFINED)));
+        Some((id, r?))
+    });
     match answered {
         Some((id, r)) => {
             vm.resolve_host_call(id, r).expect("an open call");
@@ -645,6 +705,18 @@ fn answer_one(vm: &mut Vm, tools: &mut Tools, err: &mut impl Write) -> bool {
             true
         }
     }
+}
+
+/// Where the activation waiting on the pause `id` stopped (`file.js:3:5`; in a loaded dump,
+/// in `filename`), else the call.
+fn pause_position(vm: &Vm, id: u32, filename: &str) -> String {
+    use crate::repl::activations;
+    let heap = vm.heap();
+    activations::call_promise(heap, id)
+        .and_then(|p| activations::waiting_on(heap, p).first().copied())
+        .and_then(|g| activations::activation(heap, g))
+        .map(|a| a.in_file(filename).at)
+        .unwrap_or_else(|| format!("call #{id}"))
 }
 
 /// Dumps the run at an idle point (D2830); its result promise (an async body's) is the

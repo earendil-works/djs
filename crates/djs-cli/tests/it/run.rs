@@ -393,3 +393,104 @@ fn an_unknown_host_function() {
         assert!(err.contains("unknown host function sleep"), "{err}");
     }
 }
+
+/// `--debugger OUT` (D3060): the first `debugger;` pause writes the run to OUT and stops;
+/// `resume --debugger OUT OUT` steps to the next pause (a re-dump of a resumed run),
+/// `resume OUT` goes on to the end. Together they print what the run without pauses
+/// prints; without the flag `debugger;` does nothing.
+#[test]
+fn debugger_pauses_dump_and_resume() {
+    let dir = env!("CARGO_TARGET_TMPDIR");
+    let id = std::process::id();
+    let (js, dump) = (
+        format!("{dir}/pause-{id}.js"),
+        format!("{dir}/pause-{id}.dump.js"),
+    );
+    std::fs::write(
+        &js,
+        "async function main() {
+  let total = 0;
+  for (let i = 1; i <= 3; i++) {
+    total += i;
+    console.log('step', i, total);
+    debugger;
+  }
+  return total;
+}
+main().then((t) => console.log('total', t));
+",
+    )
+    .unwrap();
+    let all = "step 1 1\nstep 2 3\nstep 3 6\ntotal 6\n";
+    assert_eq!(djs(&[&js]), (0, all.into(), String::new()));
+    let r = djs(&["--debugger", &dump, &js]);
+    assert_eq!(
+        r,
+        (
+            0,
+            "step 1 1\n".into(),
+            format!("djs: paused at {js}:6:5, wrote {dump}\n")
+        )
+    );
+    let text = std::fs::read_to_string(&dump).unwrap();
+    assert!(text.contains("\"debugger\", []);"), "{text}");
+    // The continuation copies the loop's `debugger;`, which pauses again.
+    let r = djs_cmd(&["resume", "--debugger", &dump, &dump]);
+    assert_eq!(r.0, 0, "{r:?}");
+    assert_eq!(r.1, "step 2 3\n");
+    assert!(
+        r.2.starts_with(&format!("djs: paused at {dump}:")),
+        "{}",
+        r.2
+    );
+    let r = djs_cmd(&["resume", &dump]);
+    assert_eq!(r, (0, "step 3 6\ntotal 6\n".into(), String::new()));
+    // Every pause, from the start, in --dump-every-idle's fresh VMs too.
+    let r = djs(&["--dump-every-idle", "--debugger", &dump, &js]);
+    assert_eq!(r.1, "step 1 1\n");
+    for f in [&js, &dump] {
+        std::fs::remove_file(f).unwrap();
+    }
+}
+
+/// A codemode body pauses at its top level; its dump refers to the file (`$djs.source`),
+/// compiled again with the pause option.
+#[test]
+fn debugger_pauses_a_body() {
+    let dir = env!("CARGO_TARGET_TMPDIR");
+    let id = std::process::id();
+    let (js, dump) = (
+        format!("{dir}/pause-body-{id}.js"),
+        format!("{dir}/pause-body-{id}.dump.js"),
+    );
+    std::fs::write(
+        &js,
+        "debugger;\nconsole.log(await later(1));\ndebugger;\nconsole.log(2);\n",
+    )
+    .unwrap();
+    assert_eq!(djs(&["--body", &js]), (0, "1\n2\n".into(), String::new()));
+    let r = djs(&["--body", "--debugger", &dump, &js]);
+    assert_eq!(
+        r,
+        (
+            0,
+            String::new(),
+            format!("djs: paused at {js}:1:1, wrote {dump}\n")
+        )
+    );
+    assert!(
+        std::fs::read_to_string(&dump)
+            .unwrap()
+            .contains("$djs.source("),
+    );
+    let r = djs_cmd(&["resume", "--debugger", &dump, &dump]);
+    assert_eq!(r.0, 0, "{r:?}");
+    assert_eq!(r.1, "1\n");
+    assert_eq!(
+        djs_cmd(&["resume", &dump]),
+        (0, "2\n".into(), String::new())
+    );
+    for f in [&js, &dump] {
+        std::fs::remove_file(f).unwrap();
+    }
+}

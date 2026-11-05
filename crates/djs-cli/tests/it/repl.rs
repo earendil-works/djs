@@ -563,3 +563,106 @@ fn dump_waiting_await_inputs() {
             + "dumping at every idle point: off\n"
     );
 }
+
+/// `debugger;` in `--frozen` (D3060): a pause is an open call of `debugger`; `.c`
+/// continues it in place, several times in a loop; the input's top level pauses too.
+#[test]
+fn debugger_pauses_and_continues() {
+    let out = frozen(
+        "let n = 0\nfor (let i = 0; i < 3; i++) { n += i; debugger; }\n.pending\n.bt 1\nn\n.c\n.c\n.c\n.c\nn\n",
+    );
+    let at = "  for (let i = 0; i < 3; i++) { n += i; debugger; }\n\
+              \x20                                       ^\n";
+    assert_eq!(
+        out,
+        format!(
+            "[paused] #1 input 2 at repl:1:39\n{at}\
+             (.dump - shows the continuation, .c continues, .abort drops it)\n\
+             #1 debugger()  input 2, at repl:1:39\n\
+             #1 debugger()\n  async <eval> at repl:1:39 (input 2)\n\
+             \x20     for (let i = 0; i < 3; i++) {{ n += i; debugger; }}\n\
+             \x20                                           ^\n\
+             \x20   i = 0\n\
+             0\n\
+             [paused] #2 input 2 at repl:1:39\n{at}\
+             [paused] #3 input 2 at repl:1:39\n{at}\
+             nothing is paused\n3\n"
+        )
+    );
+    // In an async function: the caller's promise waits; its value prints after `.c`.
+    assert_eq!(
+        frozen("async function f(x) { const y = x * 2; debugger; return y }\nawait f(4)\n.c 1\n"),
+        "[paused] #1 input 2 at repl:1:40\n\
+         \x20 async function f(x) { const y = x * 2; debugger; return y }\n\
+         \x20                                        ^\n\
+         (.dump - shows the continuation, .c continues, .abort drops it)\n\
+         [input 2] 8\n",
+    );
+    // Without the dumping mode, `debugger;` does nothing.
+    check(
+        "debugger; 1\nasync function f() { debugger; return 2 }\nawait f()\n",
+        "1\n2\n",
+    );
+}
+
+/// A paused session dumps; the dump continues the run in a fresh VM (`.restore`, then
+/// `.c`), pauses again at the loop's next `debugger;` and dumps again from there.
+#[test]
+fn debugger_pauses_resume_from_the_dump() {
+    let dir = env!("CARGO_TARGET_TMPDIR");
+    let id = std::process::id();
+    let (d1, d2) = (
+        format!("{dir}/repl-pause-{id}-1.js"),
+        format!("{dir}/repl-pause-{id}-2.js"),
+    );
+    let out = frozen(&format!(
+        "let n = 0\nfor (let i = 0; i < 4; i++) {{ n += i; debugger; }}\n.c\n\
+         .dump {d1}\n.restore {d1}\n.c\n.dump {d2}\n.restore {d2}\nn\n.c\n.c\nn\n"
+    ));
+    let text = std::fs::read_to_string(&d1).unwrap();
+    for f in [&d1, &d2] {
+        std::fs::remove_file(f).unwrap();
+    }
+    assert!(
+        text.contains("await $djs.resume(2, \"debugger\", [], {\"origin\":\"input 2\"});"),
+        "{text}"
+    );
+    let lines: Vec<&str> = out.lines().filter(|l| !l.starts_with(' ')).collect();
+    assert_eq!(
+        lines,
+        [
+            "[paused] #1 input 2 at repl:1:39",
+            "(.dump - shows the continuation, .c continues, .abort drops it)",
+            "[paused] #2 input 2 at repl:1:39",
+            &format!("wrote 299 bytes to {d1} (1 activation, 1 pending call)"),
+            &format!("loaded {d1} into a fresh VM"),
+            &format!("[paused] #2 input 2 at {d1}:5:1"),
+            &format!("[paused] #3 input 2 at {d1}:6:33"),
+            &format!("wrote 299 bytes to {d2} (1 activation, 1 pending call)"),
+            &format!("loaded {d2} into a fresh VM"),
+            &format!("[paused] #3 input 2 at {d2}:5:1"),
+            "3",
+            &format!("[paused] #4 input 2 at {d2}:6:33"),
+            "6",
+        ],
+        "{out}"
+    );
+}
+
+/// `.abort` drops the paused input and everything else in flight; the globals stay.
+#[test]
+fn debugger_abort() {
+    assert_eq!(
+        frozen(
+            ".abort\nlet n = 1; debugger; n = 2\nconst r = await tools.read({path: 'a'})\n.abort\n.pending\nn\n.c\n"
+        ),
+        "nothing is paused\n\
+         [paused] #1 input 1 at repl:1:12\n\
+         \x20 0,  n = 1; debugger; n = 2\n\
+         \x20            ^\n\
+         (.dump - shows the continuation, .c continues, .abort drops it)\n\
+         [waiting] #3 tools.read({\"path\":\"a\"})\n\
+         aborted input 1, with 1 other waiting input and 1 open call\n\
+         no open calls\n1\nnothing is paused\n",
+    );
+}

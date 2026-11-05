@@ -17,7 +17,7 @@ use djs_core::vm::{ErrorKind, Status, Vm};
 use crate::tools::Tools;
 
 /// The globals the CLI defines in every VM: never dumped, referenced by name.
-pub const HOST_GLOBALS: &[&str] = &["console", "tools", "print", "later"];
+pub const HOST_GLOBALS: &[&str] = &["console", "tools", "print", "later", "debugger"];
 
 /// The global object of the plain dump's host hooks (D2890).
 pub const HOOKS: &str = "$djs";
@@ -61,8 +61,10 @@ pub struct PlainLoad {
 
 /// Starts loading the plain dump `text` into `vm` (a fresh one): defines `$djs` (the dump
 /// runtime and the hooks) and calls the Script. The caller runs the VM, serving the hooks with [`serve_hook`], and calls
-/// [`end_load`] at the first stop that is not a sync host call.
-pub fn begin_plain(vm: &mut Vm, text: &str, filename: &str) -> Result<(), String> {
+/// [`end_load`] at the first stop that is not a sync host call. `debugger`: compile it
+/// with `debugger_awaits`, so that a `debugger;` its continuations copied pauses again
+/// (D3050, D3060).
+pub fn begin_plain(vm: &mut Vm, text: &str, filename: &str, debugger: bool) -> Result<(), String> {
     let ts = plain_format(text).ok_or("not a djs dump (no \"djs-dump\"; header)")?;
     let oom = |_| String::from("out of memory");
     // The dump runtime's helpers, with the hooks added (D2903).
@@ -81,6 +83,7 @@ pub fn begin_plain(vm: &mut Vm, text: &str, filename: &str) -> Result<(), String
     vm.define_global(HOOKS, Value::object(hooks)).map_err(oom)?;
     let copts = CompileOptions {
         typescript: ts,
+        debugger_awaits: debugger,
         ..CompileOptions::script(filename)
     };
     let f = vm.compile(text.as_bytes(), &copts).map_err(|e| {
@@ -196,21 +199,25 @@ pub fn serve_hook(
 
 /// `$djs.source(name, hash, params)`: the file `name` (the path the run was given), as
 /// the codemode body it ran as (TypeScript and decorator options tried until one is the
-/// script the dump refers to).
+/// script the dump refers to; a run with `--debugger` compiled it with `debugger_awaits`).
 fn source_function(vm: &mut Vm, name: &str, hash: &str, params: &str) -> Result<Value, String> {
     let src = std::fs::read(name).map_err(|e| {
         format!("source: the dump continues the script {name}, which cannot be read ({e})")
     })?;
     let params: Vec<&str> = params.split(',').filter(|p| !p.is_empty()).collect();
     let mut why = String::new();
-    for (typescript, legacy, meta) in [
+    let modes = [
         (false, false, false),
         (true, false, false),
         (true, true, false),
         (true, true, true),
-    ] {
+    ];
+    for (debugger_awaits, (typescript, legacy, meta)) in
+        modes.iter().flat_map(|&m| [(false, m), (true, m)])
+    {
         let opts = CompileOptions {
             typescript,
+            debugger_awaits,
             experimental_decorators: legacy,
             emit_decorator_metadata: meta,
             ..CompileOptions::async_body(name, &params)
@@ -242,9 +249,10 @@ pub fn run_plain(
     tools: &mut Tools,
     text: &str,
     filename: &str,
+    debugger: bool,
     log: &mut dyn FnMut(&Vm, &[Value]),
 ) -> Result<PlainLoad, String> {
-    begin_plain(vm, text, filename)?;
+    begin_plain(vm, text, filename, debugger)?;
     let mut load = PlainLoad::default();
     loop {
         match vm.run(u64::MAX) {

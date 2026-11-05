@@ -10563,3 +10563,24 @@ only as a citation". New: `gen:dump [N]`, the dump the block above writes at its
 `debugger;` pause (D3050), checked like `gen:run` and accepted with `regen --examples`.
 While the rewrite runs, pages it has not reached yet are listed in `NOT_YET_REWRITTEN`
 (render.rs), exempt from the pi and history rules; the list ends empty.
+
+## D3060: `debugger;` pauses in the CLI: `djs repl --frozen` and `--debugger OUT`
+date: 2026-11-06 · by: dbg · issue: 0221
+The CLI's dumping modes are its debugger modes: `djs repl --frozen`, and `djs run` /
+`djs resume` with `--debugger OUT`, compile inputs, scripts and the dumps they load with
+`debugger_awaits` (D3050) and bind the global `debugger` (identity `debugger`). A pause is
+then an open host call like a tool's, so `.pending`, `.bt`, `.dump`, `.restore` and
+`$djs.resume(id, "debugger", [])` need no case of their own; the CLI tells a pause by the
+call's identity. REPL: an input with a `debugger;` outside the functions it defines (a
+token scan) runs as a top-level-await input, so it pauses at its own top level; a pause
+prints `[paused] #id input N at repl:L:C` with the line, `.continue`/`.c [id]` answers it
+in place, `.dump` + `.restore` + `.c` continues from the dump, and `.abort` (Ctrl-C at an
+empty prompt) is `vm.abort()`: it drops the paused input and everything else in flight,
+since one input cannot be dropped alone (rejecting the pause would run the input's
+`catch`/`finally`). `run --debugger OUT` writes the dump at the first new pause and stops
+(exit 0, `djs: paused at FILE:L:C, wrote OUT`), parallel to `--dump-after K OUT`;
+`resume --debugger OUT2 OUT` stops at the next one, stepping pause by pause. A resumed
+run answers the pause its dump reopened at once, and without the flag every later one (it
+always binds `debugger`, since a `--body` dump compiles the file again with the options
+its hash names, and `$djs.source` tries `debugger_awaits` among them). Without these modes
+`debugger;` does nothing.

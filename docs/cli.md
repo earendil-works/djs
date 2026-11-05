@@ -3,10 +3,11 @@
 ```sh
 cargo run -p djs-cli -- run [--body] [--ts] [--experimental-decorators] [--emit-decorator-metadata]
     [--gc-stress] [--suspend-every N] [--backend bytecode|native] [--tools answers.json]
-    [--bind NAME=IDENTITY] file.js
+    [--bind NAME=IDENTITY] [--dump-after K OUT] [--dump-every-idle] [--debugger OUT] file.js
 cargo run -p djs-cli -- disasm [--body] file.js
 cargo run -p djs-cli -- strip-types file.ts
-cargo run -p djs-cli -- resume [--explain] [--tools answers.json] [--gc-stress] [--suspend-every N] dump.js
+cargo run -p djs-cli -- resume [--explain] [--tools answers.json] [--gc-stress] [--suspend-every N]
+    [--debugger OUT] dump.js
 cargo run -p djs-cli -- repl [--ts] [--gc-stress] [--no-history] [--frozen] [--tools answers.json]
 ```
 
@@ -91,6 +92,31 @@ refusal (`cannot dump:` and one `path: reason` line per value). `run --dump-ever
 dumps at every idle point and continues in a fresh VM that ran the dump. An async
 body's promise (`--body`) is the dump's handle `run`, its Script's completion value.
 
+### `debugger;` pauses (`--debugger OUT`)
+
+With `--debugger OUT` (D3060), `debugger;` in an async function, or at the top level of a
+`--body`, is a pause: it awaits a call of the host function `debugger` (D3050). At the
+first pause the run is written as a dump to `OUT` and stops, exit code 0, with what it
+printed so far on stdout and where it paused on stderr. `djs resume OUT` goes on to the
+end; `djs resume --debugger OUT OUT` goes on to the next pause and writes it to `OUT`
+again, so a run can be stepped pause by pause. The dump holds the pause as an open call
+(`await $djs.resume(4, "debugger", [])`), which a resumed run answers at once. Without the
+flag `debugger;` does nothing. Pauses are idle points, so `--dump-after` counts them.
+
+```text
+$ djs run --debugger p.js loop.js
+step 1 1
+djs: paused at loop.js:6:5, wrote p.js
+$ djs resume --debugger p.js p.js
+step 2 3
+djs: paused at p.js:17:5, wrote p.js
+$ djs resume p.js
+step 3 6
+total 6
+```
+
+The positions of a resumed run are in the dump (the continuation of the loop it holds).
+
 A `--body` script suspended in its own top level dumps as the async function it runs as
 (D2617). Known gap: a body whose parameter (`tools`, `console`) a closure captures is
 refused ("a codemode body whose frame at await#1 differs from the async function the dump
@@ -171,6 +197,8 @@ suspending every 300 fuel
 | `.pending` | the open tool calls: `#2 tools.read({"path":"a.ts"})  input 1, at repl:1:11`, with the input (or `.resolve`/answer) that made the call and where the innermost activation waiting on it stopped |
 | `.resolve <id> <json>` | answers call `#id` with a JSON value (`null` without one), then runs what that unblocks |
 | `.reject <id> <message>` | answers call `#id` with `new Error(message)` |
+| `.continue [id]`, `.c [id]` | continue a `debugger;` pause (the oldest, or `#id`) in place (below) |
+| `.abort` | drop the paused input and everything else in flight (below) |
 | `.bt <id\|all>` | the suspended activations waiting on call `#id`, innermost first, through other activations, `then` reactions and `Promise.all`-style combinators; or every suspended activation (after a collection). Each with where it stopped, the source line with a caret under the `await`/`yield`, and its named bindings: parameters (named from the function's source) and locals |
 
 ### Tools and waiting inputs
@@ -239,6 +267,47 @@ dump too. A waiting expression input is the handle `input N (value)` and a state
 input `input N`, so a restore prints them as before; inputs typed after a restore are
 numbered after the restored ones. While an input's declarations run (the first part of a
 top-level-await input), `.dump-every` skips that idle point.
+
+### `debugger;` pauses
+
+In `djs repl --frozen`, the dumping mode, `debugger;` pauses (D3060): in an async
+function, or anywhere in an input that has one outside the functions it defines (such an
+input runs as a top-level-await input, with the same gaps). The pause is an open call of
+the host function `debugger`, so the paused input waits as on a tool call and the prompt
+comes back; the REPL prints where it paused, with the line, and the first time how to go
+on:
+
+```text
+> let n = 0
+> for (let i = 0; i < 3; i++) { n += i; debugger; }
+[paused] #1 input 2 at repl:1:39
+  for (let i = 0; i < 3; i++) { n += i; debugger; }
+                                        ^
+(.dump - shows the continuation, .c continues, .abort drops it)
+> .bt 1
+#1 debugger()
+  async <eval> at repl:1:39 (input 2)
+      for (let i = 0; i < 3; i++) { n += i; debugger; }
+                                            ^
+    i = 0
+> .c
+[paused] #2 input 2 at repl:1:39
+...
+```
+
+While paused, inputs run as usual (`n` prints the global), `.pending` lists the pause
+and `.bt` shows the paused activation's bindings. `.dump -` prints the dump the session
+is: the paused input is a continuation that starts with the pause, `await
+$djs.resume(1, "debugger", [], {"origin":"input 2"})`, followed by the rest of its code
+(the loop's later iterations, with their `debugger;`). `.continue` (`.c`) answers the
+pause in place and the input runs on to its end or its next pause; `.c 3` picks the
+pause `#3` when several inputs are paused. To continue from the dump instead, `.dump
+p.js`, `.restore p.js` (a fresh VM runs the dump: the pause is open again, at its line in
+`p.js`) and `.c`; the continuation pauses again at the next `debugger;` and can be dumped
+again from there. `.abort`, or Ctrl-C at an empty prompt while something is paused, drops
+the paused input with everything else in flight (`vm.abort()`, as Ctrl-C does to a
+running input: other waiting inputs and their open calls go too, and the message counts
+them); the globals stay. Without `--frozen`, `debugger;` does nothing.
 
 **The answers file** (D2601) maps functions by identity (`tools.read`, or a `--bind`
 identity) to lists of answers, each `{"value": v}` or `{"error": "message"}`, optionally

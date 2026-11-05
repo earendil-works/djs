@@ -30,6 +30,11 @@ use crate::heap::json::J;
 pub const MAKE_TOOL: u32 = 2;
 /// `later(v, rejected)`: an async host call answered with its own argument.
 pub const LATER: u32 = 3;
+/// `debugger`, the async host function a `debugger;` pause awaits (D3050, D3060): the
+/// global the CLI binds in its debugger modes, identity [`DEBUGGER_NAME`].
+pub const DEBUGGER: u32 = 8;
+/// The identity of the `debugger;` pause's host function.
+pub const DEBUGGER_NAME: &str = "debugger";
 /// Tool functions have ids from here on, in the order they were made.
 pub const TOOL_BASE: u32 = 16;
 
@@ -72,6 +77,15 @@ pub fn install(vm: &mut Vm) {
         Status::Done(_) => {}
         s => panic!("the tools setup did not finish: {s:?}"),
     }
+}
+
+/// Defines the global `debugger` (D3060): with `CompileOptions::debugger_awaits`, a
+/// `debugger;` in an async function awaits a call of it, a pause.
+pub fn install_debugger(vm: &mut Vm) {
+    let f = vm
+        .new_async_host_function(DEBUGGER, DEBUGGER_NAME)
+        .expect("oom");
+    vm.define_global(DEBUGGER_NAME, f).expect("oom");
 }
 
 /// The tools of a VM by id, and the scripted answers.
@@ -130,6 +144,7 @@ impl Tools {
     pub fn id_for_call_name(&self, call_name: &str) -> Option<u32> {
         match call_name {
             "later" => return Some(LATER),
+            DEBUGGER_NAME => return Some(DEBUGGER),
             "print" | "console.log" | "console.info" | "console.warn" | "console.error"
             | "console.debug" => return Some(crate::run::CONSOLE_LOG),
             _ => {}
@@ -152,6 +167,9 @@ impl Tools {
     pub fn call_name(&self, fn_id: u32) -> Option<String> {
         if fn_id == LATER {
             return Some(String::from("later"));
+        }
+        if fn_id == DEBUGGER {
+            return Some(String::from(DEBUGGER_NAME));
         }
         if fn_id == crate::run::CONSOLE_LOG {
             return Some(String::from("print"));
@@ -187,6 +205,14 @@ impl Tools {
             }
             names[i] = heap.atom_name(k);
         }
+    }
+
+    /// The open call `call_id` is a `debugger;` pause: a call of the host function with
+    /// identity `debugger`.
+    pub fn is_pause(&self, vm: &Vm, call_id: u32) -> bool {
+        vm.host_call(call_id)
+            .and_then(|c| self.call_name(c.fn_id))
+            .is_some_and(|n| n == DEBUGGER_NAME)
     }
 
     /// `tools.read`, or `host function 3` for another id.
