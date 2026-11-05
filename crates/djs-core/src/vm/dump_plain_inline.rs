@@ -36,13 +36,13 @@ pub(super) struct Pend {
     bound: Vec<String>,
 }
 
-/// Where a reference stands, for what may be written there.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum At {
-    /// Somewhere evaluated later than the value's line: pure values only.
-    Later,
-    /// The first thing the line evaluates: effectful values too.
-    First,
+/// The names a value written in place may read.
+#[derive(Clone, Copy)]
+enum Reads<'a> {
+    Any,
+    Only(&'a [&'a str]),
+    /// None that a continuation binds where the reference is (`scope`).
+    Scope(&'a [String]),
 }
 
 #[derive(Default)]
@@ -53,8 +53,8 @@ pub(super) struct Inline {
     pub pend: Vec<Pend>,
     /// The lines of each list being written (a callback's inside the top level's).
     pub stack: Vec<Vec<String>>,
-    /// Per list, the index of its last effectful line.
-    pub effects: Vec<Option<usize>>,
+    /// Per list, the indexes of its effectful lines (those written in place left out).
+    pub effects: Vec<Vec<usize>>,
     /// The values written in place.
     pub done: Vec<String>,
 }
@@ -224,7 +224,7 @@ impl W<'_> {
     /// Starts a list of lines (a callback's, or the top level).
     pub(super) fn open_list(&mut self) {
         self.inl.stack.push(Vec::new());
-        self.inl.effects.push(None);
+        self.inl.effects.push(Vec::new());
     }
 
     /// Ends the current list: its lines (those written in place left out).
@@ -259,7 +259,7 @@ impl W<'_> {
         let idx = self.inl.stack[depth].len();
         self.inl.stack[depth].push_out(text);
         if effect {
-            self.inl.effects[depth] = Some(idx);
+            self.inl.effects[depth].push_out(idx);
         }
         if let Some((name, rhs, eff)) = def {
             self.inl.pend.push_out(Pend {
@@ -275,98 +275,123 @@ impl W<'_> {
 
     /// `text` with the references to values waiting for their one use written in place
     /// where that keeps the order: `first` is where in `text` the line's first evaluation
-    /// is (the one place an effectful value may go), if anywhere.
+    /// is (where effectful values may go, [`first_run`]), if anywhere.
     ///
     /// `in_k`: `text` is a value of a continuation's text, whose bindings could hide the
     /// names a value reads: only values that read none but builtins go there.
     pub(super) fn inline_refs(&mut self, text: &str, first: Option<usize>, in_k: bool) -> String {
-        self.inline_refs_reading(text, first, if in_k { PURE_NAMES } else { &[] }, !in_k)
+        if in_k {
+            self.inline_with(text, first, Reads::Only(PURE_NAMES))
+        } else {
+            self.inline_with(text, first, Reads::Any)
+        }
     }
 
     /// A continuation's site operand `text`, its first evaluation at `first` (if so), where
     /// K may bind the names `scope`: a value may go there that reads, besides builtins and
-    /// what it binds itself, no name of `scope` (and not `this`, `arguments`, `super`).
+    /// what it binds itself, no name of `scope` (and not `this`, `arguments`, `super`, or
+    /// K's own `$djs_` helpers).
     pub(super) fn inline_site(
         &mut self,
         text: &str,
         first: Option<usize>,
         scope: &[String],
     ) -> String {
+        self.inline_with(text, first, Reads::Scope(scope))
+    }
+
+    fn inline_with(&mut self, text: &str, first: Option<usize>, reads: Reads) -> String {
         if self.inl.pend.is_empty() || !text.contains("$dump.") {
             return String::from(text);
         }
         let spans = scan_spans(text);
-        let mut out = String::new();
-        let mut at = 0;
-        for (s, e) in spans {
+        let run = first.map_or_else(Vec::new, |f| first_run(text, f, &spans));
+        let depth = self.inl.stack.len() - 1;
+        // Per reference: the pending value written there, if one may be.
+        let mut take: Vec<Option<usize>> = Vec::new();
+        for &(s, e) in &spans {
+            // (`$dump.X.key`: a factory's member, never a candidate.)
             let name = &text[s + 6..e];
             let Some(p) = self.inl.pend.iter().position(|p| p.name == name) else {
+                take.push_out(None);
                 continue;
-            };
-            let where_ = if first == Some(s) {
-                At::First
-            } else {
-                At::Later
             };
             let pd = &self.inl.pend[p];
-            let reads_ok = super::refs(&pd.rhs).names.iter().all(|n| {
-                !matches!(n.as_str(), "this" | "arguments" | "super" | "new")
-                    && (PURE_NAMES.contains(&n.as_str())
-                        || pd.bound.contains(n)
-                        || !scope.contains(n)
-                        || only_keys(&pd.rhs, n))
-            });
-            if !reads_ok || !self.may_inline(p, where_, &text[..s]) {
+            let names = super::refs(&pd.rhs).names;
+            let reads_ok = match reads {
+                Reads::Any => true,
+                Reads::Only(only) => names.iter().all(|n| only.contains(&n.as_str())),
+                Reads::Scope(scope) => names.iter().all(|n| {
+                    !matches!(n.as_str(), "this" | "arguments" | "super" | "new")
+                        && !n.starts_with("$djs_")
+                        && (PURE_NAMES.contains(&n.as_str())
+                            || pd.bound.contains(n)
+                            || !scope.contains(n)
+                            || only_keys(&pd.rhs, n))
+                }),
+            };
+            let ok = reads_ok
+                && if pd.effect {
+                    // (In the run of first evaluations, of the list being written; the
+                    // run's order is checked below.)
+                    run.contains(&s) && pd.depth == depth
+                } else {
+                    // A function without a name where one would be inferred keeps its
+                    // line.
+                    let prev = text[..s].trim_end();
+                    let infers =
+                        (prev.ends_with('=') && !prev.ends_with("==") && !prev.ends_with("=>"))
+                            || prev.ends_with(':');
+                    !(infers && anonymous(&pd.rhs))
+                };
+            take.push_out(ok.then_some(p));
+        }
+        // The effectful values of the run go there all or none: each must be the next of
+        // the list's effects, the last one its last (nothing effectful comes between
+        // their lines and this one).
+        let mut eff: Vec<usize> = Vec::new();
+        let mut all = true;
+        for (k, &(s, e)) in spans.iter().enumerate() {
+            if !run.contains(&s) {
                 continue;
             }
-            let p = self.inl.pend.remove(p);
-            self.inl.stack[p.depth][p.idx] = String::new();
-            out.push_str(&text[at..s]);
-            out.push_str(&operand(&p.rhs));
-            at = e;
-            self.inl.done.push_out(p.name);
+            let name = &text[s + 6..e];
+            if let Some(pd) = self.inl.pend.iter().find(|p| p.name == name && p.effect) {
+                all &= take[k].is_some();
+                eff.push_out(pd.idx);
+            }
         }
-        out.push_str(&text[at..]);
-        out
-    }
-
-    /// [`W::inline_refs`] where the values written in place may read the names `names`
-    /// only, or any (`any`).
-    fn inline_refs_reading(
-        &mut self,
-        text: &str,
-        first: Option<usize>,
-        names: &[&str],
-        any: bool,
-    ) -> String {
-        if self.inl.pend.is_empty() || !text.contains("$dump.") {
-            return String::from(text);
+        let tail: Vec<usize> = match eff.first() {
+            Some(&f) => self.inl.effects[depth]
+                .iter()
+                .copied()
+                .filter(|&i| i >= f)
+                .collect(),
+            None => Vec::new(),
+        };
+        if !all || tail != eff {
+            for t in &mut take {
+                if t.is_some_and(|p| self.inl.pend[p].effect) {
+                    *t = None;
+                }
+            }
         }
-        let spans = scan_spans(text);
+        let names: Vec<Option<String>> = take
+            .iter()
+            .map(|t| t.map(|p| self.inl.pend[p].name.clone()))
+            .collect();
         let mut out = String::new();
         let mut at = 0;
-        for (s, e) in spans {
-            let name = &text[s + 6..e];
-            // (`$dump.X.key`: a factory's member, never a candidate.)
-            let Some(p) = self.inl.pend.iter().position(|p| p.name == name) else {
+        for (k, &(s, e)) in spans.iter().enumerate() {
+            let Some(name) = &names[k] else {
                 continue;
             };
-            let where_ = if first == Some(s) {
-                At::First
-            } else {
-                At::Later
-            };
-            if !self.may_inline(p, where_, &text[..s])
-                || !any
-                    && !super::refs(&self.inl.pend[p].rhs)
-                        .names
-                        .iter()
-                        .all(|n| names.contains(&n.as_str()))
-            {
+            let Some(p) = self.inl.pend.iter().position(|p| p.name == *name) else {
                 continue;
-            }
+            };
             let p = self.inl.pend.remove(p);
             self.inl.stack[p.depth][p.idx] = String::new();
+            self.inl.effects[p.depth].retain(|&i| i != p.idx);
             out.push_str(&text[at..s]);
             out.push_str(&operand(&p.rhs));
             at = e;
@@ -376,18 +401,45 @@ impl W<'_> {
         out
     }
 
-    fn may_inline(&self, p: usize, at: At, before: &str) -> bool {
-        let p = &self.inl.pend[p];
-        let depth = self.inl.stack.len() - 1;
-        if p.effect {
-            // Nothing effectful since its line, and this the first thing evaluated.
-            return at == At::First && p.depth == depth && self.inl.effects[depth] == Some(p.idx);
+    /// Activation `a`'s site operand where it is a value the last part of its callback
+    /// (`b`, the list being written) makes for it alone (D3002): K runs that part right
+    /// before its site, and where nothing effectful comes between (no code of K's blocks
+    /// below `b`), the value is made at the site instead, as its first evaluation.
+    pub(super) fn site_from_callback(&mut self, a: usize, b: usize) {
+        let ir = self.ir;
+        let act = &ir.acts[a];
+        let Some(aw) = act.awaiting.as_deref() else {
+            return;
+        };
+        let Some(name) = aw.strip_prefix("$dump.").filter(|n| super::is_ident(n)) else {
+            return;
+        };
+        // (As `awaiting` asks for it: K called on its own line, its site its first
+        // evaluation after its prefix.)
+        if act.kind != crate::interp::run::suspend::ASYNC
+            || self.acts[a].home.is_some()
+            || self
+                .placed
+                .iter()
+                .any(|x| matches!(x.0, super::Pl::Block(a2, i) if a2 == a && i > b))
+        {
+            return;
         }
-        // A function without a name where one would be inferred keeps its line.
-        let prev = before.trim_end();
-        let infers = (prev.ends_with('=') && !prev.ends_with("==") && !prev.ends_with("=>"))
-            || prev.ends_with(':');
-        !(infers && anonymous(&p.rhs))
+        if !self.inl.pend.iter().any(|p| p.name == name) {
+            return;
+        }
+        // The names K may bind: any of its function's or its slots'.
+        let mut scope: Vec<String> = Vec::new();
+        for nd in &act.syntax.nodes {
+            scope.extend(nd.decls.iter().map(|d| d.name.clone()));
+        }
+        for sl in &act.slots {
+            scope.push_out(String::from(sl.name.split('@').next().unwrap_or(&sl.name)));
+        }
+        let v = self.inline_site(aw, Some(0), &scope);
+        if v != aw {
+            self.acts[a].site_val = Some(v);
+        }
     }
 
     /// Whether item `kind`'s line does more than make a value.
@@ -415,7 +467,11 @@ impl W<'_> {
             return s.clone();
         }
         // (A value that reads a name would be read before the continuation, `pre`.)
-        let s = self.inline_refs_reading(v, None, &["undefined", "true", "false", "null"], false);
+        let s = self.inline_with(
+            v,
+            None,
+            Reads::Only(&["undefined", "true", "false", "null"]),
+        );
         self.vcache.insert(key, s.clone());
         s
     }
@@ -469,26 +525,91 @@ pub(super) fn def_rhs(text: &str) -> Option<&str> {
     Some(v.strip_suffix(';').unwrap_or(v))
 }
 
-/// Where in a line `$dump.X = <callee>(…)` its first evaluation is a reference: the first
-/// argument of a builtin's call (`Promise.prototype.then.call($dump.a3, …)`), or the
-/// value itself.
+/// Where in a line `$dump.X = value;` or `void value;` its value starts (its first
+/// evaluation, [`first_run`]).
 pub(super) fn first_eval(text: &str) -> Option<usize> {
-    // (`void $dump.p3.then(…);`: a reaction whose promise nothing reads.)
     let v = match text.strip_prefix("void ") {
         Some(v) => v,
         None => text.strip_prefix("$dump.")?.split_once(" = ")?.1,
     };
-    let at = text.len() - v.len();
-    if v.starts_with("$dump.") {
-        return Some(at);
+    Some(text.len() - v.len())
+}
+
+/// The references of `text` its evaluation from `first` evaluates first, one after another
+/// with nothing effectful between (`spans`: its references): the value itself
+/// (`$dump.a3.then(…)`: its receiver), or a builtin call's or an array's leading operands
+/// (`Promise.all([$dump.p4, $dump.p5])`) with literals among them. Effectful values may
+/// go there, in this order.
+pub(super) fn first_run(text: &str, first: usize, spans: &[(usize, usize)]) -> Vec<usize> {
+    let b = text.as_bytes();
+    let mut i = first;
+    let ws = |i: &mut usize| {
+        while b.get(*i).is_some_and(u8::is_ascii_whitespace) {
+            *i += 1;
+        }
+    };
+    // A builtin's call (not the dump's own): its callee read, its arguments in order.
+    let n = b[i..]
+        .iter()
+        .take_while(|&&c| ident_part(c) || c == b'.')
+        .count();
+    if n > 0
+        && b.get(i + n) == Some(&b'(')
+        && ident_start(b[i])
+        && !text[i..].starts_with("$dump")
+        && !text[i..].starts_with("$djs")
+        && text[i..i + n].split('.').all(|p| !p.is_empty())
+    {
+        i += n + 1;
     }
-    let open = v.find('(')?;
-    let callee = &v[..open];
-    let builtin = !callee.is_empty()
-        && callee
-            .split('.')
-            .all(|p| !p.is_empty() && p.bytes().all(ident_part))
-        && !callee.starts_with("$dump")
-        && !callee.starts_with("$djs");
-    (builtin && v[open + 1..].starts_with("$dump.")).then_some(at + open + 1)
+    let mut out = Vec::new();
+    loop {
+        // Literals and punctuation evaluate nothing.
+        loop {
+            ws(&mut i);
+            match b.get(i) {
+                Some(b'[' | b',') => i += 1,
+                Some(b'"') => {
+                    let mut j = i + 1;
+                    while j < b.len() && b[j] != b'"' {
+                        j += if b[j] == b'\\' { 2 } else { 1 };
+                    }
+                    i = j + 1;
+                }
+                Some(c)
+                    if c.is_ascii_digit()
+                        || *c == b'-' && b.get(i + 1).is_some_and(u8::is_ascii_digit) =>
+                {
+                    i += 1;
+                    while b
+                        .get(i)
+                        .is_some_and(|&c| c.is_ascii_alphanumeric() || c == b'.' || c == b'_')
+                    {
+                        i += 1;
+                    }
+                }
+                _ => {
+                    let word = ["true", "false", "null", "undefined"].iter().find(|w| {
+                        text[i..].starts_with(**w)
+                            && !b.get(i + w.len()).is_some_and(|&c| ident_part(c))
+                    });
+                    match word {
+                        Some(w) => i += w.len(),
+                        None => break,
+                    }
+                }
+            }
+        }
+        let Some(&(s, e)) = spans.iter().find(|x| x.0 == i) else {
+            break;
+        };
+        out.push_out(s);
+        i = e;
+        // (Only a whole operand lets the next one follow.)
+        ws(&mut i);
+        if b.get(i) != Some(&b',') {
+            break;
+        }
+    }
+    out
 }

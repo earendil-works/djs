@@ -558,6 +558,8 @@ struct AState {
     made: Vec<(String, usize)>,
     k: Option<KText>,
     blocks_done: bool,
+    /// The site's operand, taken from the last part of its callback (D3002).
+    site_val: Option<String>,
 }
 
 /// One entry of the schedule: an item, or an activation's call with its callback.
@@ -1029,6 +1031,12 @@ impl Ctx for C<'_, '_> {
         }
         if let Some(v) = self.w.vcache.get(&(self.a, String::from("<awaiting>"))) {
             return v.clone();
+        }
+        if let Some(v) = self.w.acts[self.a].site_val.clone() {
+            self.w
+                .vcache
+                .insert((self.a, String::from("<awaiting>")), v.clone());
+            return v;
         }
         // The site's operand is the first thing K's line evaluates where K is called on
         // its line and does nothing before its site (D3001).
@@ -2224,18 +2232,7 @@ impl W<'_> {
         Ok(s)
     }
 
-    fn emit_list(
-        &mut self,
-        list: &[Plan],
-        depth: u32,
-        hoisted: &mut Vec<String>,
-    ) -> R<Vec<String>> {
-        self.open_list();
-        self.emit_items(list, depth, hoisted)?;
-        Ok(self.close_list())
-    }
-
-    /// [`W::emit_list`] into the list being written (D3001: a value may go where its one
+    /// The lines of `list` into the list being written (D3001: a value may go where its one
     /// use is, its own line left out).
     fn emit_items(&mut self, list: &[Plan], depth: u32, hoisted: &mut Vec<String>) -> R<()> {
         let ir = self.ir;
@@ -2245,8 +2242,19 @@ impl W<'_> {
                     if let Some(cb) = cb {
                         let parts = self.split_callback(*a, cb)?;
                         let mut go = Vec::new();
+                        let last = parts.iter().rposition(|p| !p.is_empty());
                         for (b, part) in parts.iter().enumerate() {
                             if part.is_empty() {
+                                go.push_out(String::new());
+                                continue;
+                            }
+                            self.open_list();
+                            self.emit_items(part, depth + 1, hoisted)?;
+                            if last == Some(b) {
+                                self.site_from_callback(*a, b);
+                            }
+                            let inner = self.close_list();
+                            if inner.is_empty() {
                                 go.push_out(String::new());
                                 continue;
                             }
@@ -2256,7 +2264,6 @@ impl W<'_> {
                                 cat!("$dump.g", ir.acts[*a].name, "_", b)
                             };
                             go.push_out(cat!(name, "();"));
-                            let inner = self.emit_list(part, depth + 1, hoisted)?;
                             let l = cat!(name, " = () => {\n", join(&inner, "\n"), "\n};");
                             self.put_line(l, false, None);
                         }

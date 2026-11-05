@@ -10322,3 +10322,17 @@ module's first instance as it was before any call (static data, the allocator's 
 stack) and the rest is zeroed. Nothing of the earlier session is left in it, whoever runs
 next. The allocator starts again and takes the grown memory as free pages. Renewing a
 1.4 MB instance costs ~17 µs. A new instance in pi-sessions: ~103 -> ~32 µs at the median.
+
+## D3002: A continuation's site takes its value from its callback; effectful values in a run
+date: 2026-11-06 · by: pjs · issue: 0207
+0216's queue items 6 and 10, first part. Where a continuation's prefix calls the last part
+of its callback right before its site (K async, called on its own line, no code of the
+dump's in its blocks below that part's), a value that part makes for the site alone is
+made at the site instead (`report.push(await Promise.all([2, …]))`), reading no name K may
+bind (any declaration of its function, any slot's name, its `$djs_` helpers). Effectful
+values may go to the *run* of a line's first evaluations: the value itself (its receiver,
+`$dump.a3.then(f)`), or a builtin call's or an array's leading operands with literals
+between (`Promise.all([$dump.p4, $dump.p5])`), all or none, where their lines are the last
+effects of the list, in that order. A reaction on a promise of the builtin prototype
+without own `then`/`finally` is written as the method call (`p.then(f)`, trailing
+`undefined` left out): while the dump loads, builtins are the realm's own.
