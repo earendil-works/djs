@@ -7,9 +7,12 @@
 //! most once per frame: `slot_gen` records the generation of the frame that last logged
 //! it, and undoing an entry restores that too, so writes under a frame whose inner frames
 //! were popped are not logged again (a `STAR` retry writing its count under the frame
-//! below would otherwise grow the stack by an entry per retry). Nothing lives on the Rust stack between
-//! instructions, so running out of fuel at any instruction returns an [`ExecState`] that
-//! [`resume`] continues exactly where it stopped.
+//! below would otherwise grow the stack by an entry per retry). Writes with no frame at
+//! all are not logged: a search runs each attempt on an empty stack and clears the
+//! captures before the next (D3135). Nothing lives on the Rust stack between
+//! instructions, so running out of fuel at any instruction (or while looking for the next
+//! start) returns with the [`ExecState`] holding everything, and [`resume_in`] continues
+//! exactly where it stopped.
 use crate::PushOut;
 
 use alloc::vec::Vec;
@@ -30,26 +33,88 @@ const K_NEG_LOOK: u32 = 2;
 const K_STAR: u32 = 3;
 const FRAME: usize = 4;
 
-/// The instruction after the `STAR` at `pc` (D1501).
-fn star_next(code: &[u32], pc: usize) -> u32 {
-    let lead = (code[pc] & F_LEAD != 0) as usize;
-    (pc + 6 + code[pc + 4] as usize + 2 * code[pc + 5] as usize + lead) as u32
+/// The `pc` of a search between attempts: looking for the next start from `pos`.
+const PC_FIND: u32 = u32::MAX;
+
+/// A program's words read in place: little-endian byte quads, as a heap cell holds them
+/// (so an exec reads the RegExp's cell without copying it, D3135).
+#[derive(Clone, Copy, Debug)]
+pub struct Prog<'a>(&'a [[u8; 4]]);
+
+impl<'a> Prog<'a> {
+    pub fn new(words: &'a [[u8; 4]]) -> Prog<'a> {
+        Prog(words)
+    }
+
+    #[inline(always)]
+    fn at(self, i: usize) -> u32 {
+        u32::from_le_bytes(self.0[i])
+    }
+
+    #[inline(always)]
+    fn sub(self, at: usize, len: usize) -> Prog<'a> {
+        Prog(&self.0[at..at + len])
+    }
+
+    pub fn flags(self) -> super::Flags {
+        super::Flags::from_bits(self.at(H_FLAGS) as u16)
+    }
+
+    /// Number of capture groups, including group 0.
+    pub fn capture_count(self) -> usize {
+        self.at(H_CAPTURES) as usize
+    }
+
+    /// Whether any group has a name.
+    pub fn has_group_names(self) -> bool {
+        self.at(H_MODE) & M_NAMES != 0
+    }
+
+    /// The name of capture group `index` (UTF-16 code units), if it has one.
+    pub fn group_name(self, index: usize) -> Option<impl Iterator<Item = u16> + 'a> {
+        let count = self.capture_count();
+        if index == 0 || index >= count {
+            return None;
+        }
+        let mut p = H_LEN;
+        for _ in 1..index {
+            p += 1 + self.at(p) as usize;
+        }
+        let len = self.at(p) as usize;
+        (len > 0).then(|| {
+            self.0[p + 1..p + 1 + len]
+                .iter()
+                .map(|w| w[0] as u16 | (w[1] as u16) << 8)
+        })
+    }
+
+    /// Whether the name of group `index` is `name`.
+    pub fn group_name_is(self, index: usize, name: &[u16]) -> bool {
+        self.group_name(index)
+            .is_some_and(|n| n.eq(name.iter().copied()))
+    }
 }
 
 /// Binary search in sorted inclusive `(lo, hi)` pairs.
-fn in_ranges(ranges: &[u32], c: u32) -> bool {
-    let (mut lo, mut hi) = (0, ranges.len() / 2);
+fn in_ranges(ranges: Prog<'_>, c: u32) -> bool {
+    let (mut lo, mut hi) = (0, ranges.0.len() / 2);
     while lo < hi {
         let mid = (lo + hi) / 2;
-        if c < ranges[2 * mid] {
+        if c < ranges.at(2 * mid) {
             hi = mid;
-        } else if c > ranges[2 * mid + 1] {
+        } else if c > ranges.at(2 * mid + 1) {
             lo = mid + 1;
         } else {
             return true;
         }
     }
     false
+}
+
+/// The instruction after the `STAR` at `pc` (D1501).
+fn star_next(code: Prog<'_>, pc: usize) -> u32 {
+    let lead = (code.at(pc) & F_LEAD != 0) as usize;
+    (pc + 6 + code.at(pc + 4) as usize + 2 * code.at(pc + 5) as usize + lead) as u32
 }
 
 /// The string being matched.
@@ -96,13 +161,14 @@ impl Default for ExecLimits {
     }
 }
 
-/// Capture positions of a match, as UTF-16 (or Latin-1) indices.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Captures {
-    slots: Vec<u32>,
+/// Capture positions of a match, as UTF-16 (or Latin-1) indices: a view of the state's
+/// slots ([`ExecState::captures`]).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Caps<'a> {
+    slots: &'a [u32],
 }
 
-impl Captures {
+impl Caps<'_> {
     /// Number of groups, including group 0.
     pub fn len(&self) -> usize {
         self.slots.len() / 2
@@ -119,6 +185,42 @@ impl Captures {
     }
 }
 
+/// Owned capture positions ([`exec`]'s result).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Captures {
+    slots: Vec<u32>,
+}
+
+impl Captures {
+    pub fn caps(&self) -> Caps<'_> {
+        Caps { slots: &self.slots }
+    }
+
+    pub fn len(&self) -> usize {
+        self.caps().len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.slots.is_empty()
+    }
+
+    pub fn get(&self, i: usize) -> Option<(usize, usize)> {
+        self.caps().get(i)
+    }
+}
+
+/// How a run of [`exec_in`] or [`resume_in`] ended; the captures of a match are in the
+/// state.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Outcome {
+    Match,
+    NoMatch,
+    /// The fuel ran out; [`resume_in`] continues (with the same program and input).
+    OutOfFuel,
+    /// The backtrack stack would exceed [`ExecLimits::max_stack`].
+    StackOverflow,
+}
+
 pub enum ExecResult {
     Match(Captures),
     NoMatch,
@@ -128,19 +230,36 @@ pub enum ExecResult {
     StackOverflow,
 }
 
-/// A suspended match.
-#[derive(Clone, PartialEq, Eq, Debug)]
+/// A match in progress, or the captures of the last one. One state can run match after
+/// match (a global replace keeps one), reusing its memory.
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct ExecState {
     pc: u32,
     pos: u32,
+    /// The top frame: the index in `mem` just above it, `2 * nslots` with no frame.
     bp: u32,
     next_gen: u32,
-    slots: Vec<u32>,
-    slot_gen: Vec<u32>,
-    stack: Vec<u32>,
+    /// Where the current attempt started.
+    start: u32,
+    /// Whether a failed attempt moves on to the next start (a search).
+    search: bool,
+    nslots: u32,
+    /// The slots, their generations (`slot_gen`), then the backtrack stack.
+    mem: Vec<u32>,
 }
 
 impl ExecState {
+    pub fn new() -> ExecState {
+        ExecState::default()
+    }
+
+    /// The captures of the match just found.
+    pub fn captures(&self, prog: Prog<'_>) -> Caps<'_> {
+        Caps {
+            slots: &self.mem[..2 * prog.capture_count()],
+        }
+    }
+
     /// The state as plain words, for storing it in the arena.
     pub fn to_words(&self) -> Vec<u32> {
         let mut w = alloc::vec![
@@ -148,18 +267,19 @@ impl ExecState {
             self.pos,
             self.bp,
             self.next_gen,
-            self.slots.len() as u32
+            self.start,
+            self.search as u32,
+            self.nslots
         ];
-        w.extend_from_slice(&self.slots);
-        w.extend_from_slice(&self.slot_gen);
-        w.extend_from_slice(&self.stack);
+        w.extend_from_slice(&self.mem);
         w
     }
 
     /// Rebuilds a state from [`ExecState::to_words`].
     pub fn from_words(w: &[u32]) -> Option<ExecState> {
-        let n = *w.get(4)? as usize;
-        if w.len() < 5 + 2 * n {
+        let nslots = *w.get(6)?;
+        let mem = w[7..].to_vec();
+        if mem.len() < 2 * nslots as usize || (w[2] as usize) < 2 * nslots as usize {
             return None;
         }
         Some(ExecState {
@@ -167,11 +287,17 @@ impl ExecState {
             pos: w[1],
             bp: w[2],
             next_gen: w[3],
-            slots: w[5..5 + n].to_vec(),
-            slot_gen: w[5 + n..5 + 2 * n].to_vec(),
-            stack: w[5 + 2 * n..].to_vec(),
+            start: w[4],
+            search: w[5] != 0,
+            nslots,
+            mem,
         })
     }
+}
+
+/// The program's words as byte quads (for [`exec`], which takes a [`Program`]).
+fn quads(prog: &Program) -> Vec<[u8; 4]> {
+    prog.words().iter().map(|w| w.to_le_bytes()).collect()
 }
 
 /// Runs `prog` on `input` starting at `start` (a UTF-16 index). Unless the program is
@@ -190,8 +316,7 @@ pub fn exec(
     exec_at(prog, input, start, sticky, fuel, limits)
 }
 
-/// [`exec`] with stickiness chosen by the caller: `sticky` false searches even for a
-/// sticky program (RegExp.prototype[@@split] on an unmodified RegExp, D1503).
+/// [`exec`] with stickiness chosen by the caller.
 pub fn exec_at(
     prog: &Program,
     input: Input<'_>,
@@ -200,9 +325,50 @@ pub fn exec_at(
     fuel: &mut i64,
     limits: ExecLimits,
 ) -> ExecResult {
-    let w = prog.words();
+    let q = quads(prog);
+    let mut st = ExecState::new();
+    let o = exec_in(Prog(&q), input, start, sticky, fuel, limits, &mut st);
+    result(Prog(&q), o, st)
+}
+
+/// Continues a match suspended by running out of fuel.
+pub fn resume(
+    prog: &Program,
+    input: Input<'_>,
+    mut state: ExecState,
+    fuel: &mut i64,
+    limits: ExecLimits,
+) -> ExecResult {
+    let q = quads(prog);
+    let o = resume_in(Prog(&q), input, fuel, limits, &mut state);
+    result(Prog(&q), o, state)
+}
+
+fn result(prog: Prog<'_>, o: Outcome, st: ExecState) -> ExecResult {
+    match o {
+        Outcome::Match => ExecResult::Match(Captures {
+            slots: st.captures(prog).slots.to_vec(),
+        }),
+        Outcome::NoMatch => ExecResult::NoMatch,
+        Outcome::OutOfFuel => ExecResult::OutOfFuel(st),
+        Outcome::StackOverflow => ExecResult::StackOverflow,
+    }
+}
+
+/// [`exec_at`] on a program read in place, in the state `st` (whatever it held before):
+/// `sticky` false searches even for a sticky program (RegExp.prototype[@@split] on an
+/// unmodified RegExp, D1503).
+pub fn exec_in(
+    prog: Prog<'_>,
+    input: Input<'_>,
+    start: usize,
+    sticky: bool,
+    fuel: &mut i64,
+    limits: ExecLimits,
+    st: &mut ExecState,
+) -> Outcome {
     if start > input.len() {
-        return ExecResult::NoMatch;
+        return Outcome::NoMatch;
     }
     let unicode = prog.flags().unicode_mode();
     let mut start = start;
@@ -214,48 +380,60 @@ pub fn exec_at(
             start -= 1;
         }
     }
-    let nslots = 2 * w[H_CAPTURES] as usize + w[H_REGISTERS] as usize;
-    let entry = if sticky { w[H_ANCHORED] } else { w[H_SEARCH] };
-    let state = ExecState {
-        pc: entry,
-        pos: start as u32,
-        bp: 0,
-        next_gen: 0,
-        slots: alloc::vec![UNSET; nslots],
-        slot_gen: alloc::vec![UNSET; nslots],
-        // Most matches need a few frames; growing from empty reallocates repeatedly.
-        stack: crate::buf::vec_with_capacity(64),
-    };
-    resume(prog, input, state, fuel, limits)
+    let nslots = 2 * prog.at(H_CAPTURES) + prog.at(H_REGISTERS);
+    // A pattern anchored at the input's start can only match where it starts.
+    let search = !sticky && prog.at(H_MODE) & M_ANCHOR != A_INPUT;
+    st.pc = if search { PC_FIND } else { prog.at(H_ANCHORED) };
+    st.pos = start as u32;
+    st.start = start as u32;
+    st.bp = 2 * nslots;
+    st.next_gen = 0;
+    st.search = search;
+    st.nslots = nslots;
+    st.mem.clear();
+    // Most matches need a few frames; growing from empty reallocates repeatedly.
+    st.mem.reserve(2 * nslots as usize + 64);
+    st.mem.resize(2 * nslots as usize, UNSET);
+    resume_in(prog, input, fuel, limits, st)
 }
 
-/// Continues a match suspended by running out of fuel.
-pub fn resume(
-    prog: &Program,
+/// Continues a match in `st` that ran out of fuel.
+pub fn resume_in(
+    prog: Prog<'_>,
     input: Input<'_>,
-    state: ExecState,
     fuel: &mut i64,
     limits: ExecLimits,
-) -> ExecResult {
+    st: &mut ExecState,
+) -> Outcome {
+    let mode = prog.at(H_MODE);
     let mut m = Machine {
-        code: prog.words(),
+        code: prog,
         input,
         unicode: prog.flags().unicode_mode(),
-        regs: 2 * prog.words()[H_CAPTURES] as usize,
+        regs: 2 * prog.at(H_CAPTURES) as usize,
+        nslots: st.nslots as usize,
+        base: 2 * st.nslots as usize,
+        mode,
         limits,
-        s: state,
+        s: st,
     };
     m.run(fuel)
 }
 
-struct Machine<'a> {
-    code: &'a [u32],
+struct Machine<'a, 's> {
+    code: Prog<'a>,
     input: Input<'a>,
     unicode: bool,
     /// Index of the first register slot.
     regs: usize,
+    /// Index of the first slot generation.
+    nslots: usize,
+    /// Where the backtrack stack starts in `mem`.
+    base: usize,
+    /// The program's `H_MODE` word.
+    mode: u32,
     limits: ExecLimits,
-    s: ExecState,
+    s: &'s mut ExecState,
 }
 
 /// Why an instruction did not continue normally.
@@ -264,7 +442,14 @@ enum Stop {
     Overflow,
 }
 
-impl Machine<'_> {
+/// What looking for the next start of a search found.
+enum Find {
+    Start,
+    None,
+    OutOfFuel,
+}
+
+impl Machine<'_, '_> {
     fn next_char(&self, pos: usize) -> Option<(u32, usize)> {
         if pos >= self.input.len() {
             return None;
@@ -306,10 +491,10 @@ impl Machine<'_> {
     }
 
     fn push(&mut self, words: &[u32]) -> Result<(), Stop> {
-        if self.s.stack.len() + words.len() > self.limits.max_stack {
+        if self.s.mem.len() - self.base + words.len() > self.limits.max_stack {
             return Err(Stop::Overflow);
         }
-        self.s.stack.extend_from_slice(words);
+        self.s.mem.extend_from_slice(words);
         Ok(())
     }
 
@@ -317,38 +502,36 @@ impl Machine<'_> {
         let g = self.s.next_gen;
         self.s.next_gen = g.wrapping_add(1);
         self.push(&[pc, self.s.pos, self.s.bp << 2 | kind, g])?;
-        self.s.bp = self.s.stack.len() as u32;
+        self.s.bp = self.s.mem.len() as u32;
         Ok(())
     }
 
     fn write_slot(&mut self, slot: usize, value: u32) -> Result<(), Stop> {
         let bp = self.s.bp as usize;
-        if bp > 0 {
-            let g = self.s.stack[bp - 1];
-            if self.s.slot_gen[slot] != g {
-                let old = self.s.slots[slot];
-                let old_gen = self.s.slot_gen[slot];
+        if bp > self.base {
+            let g = self.s.mem[bp - 1];
+            let gen_at = self.nslots + slot;
+            if self.s.mem[gen_at] != g {
+                let old = self.s.mem[slot];
+                let old_gen = self.s.mem[gen_at];
                 self.push(&[slot as u32, old, old_gen])?;
-                self.s.slot_gen[slot] = g;
+                self.s.mem[gen_at] = g;
             }
         }
-        self.s.slots[slot] = value;
+        self.s.mem[slot] = value;
         Ok(())
     }
 
     /// Undoes the slot writes logged above the current frame.
     fn undo_to_frame(&mut self) {
         let bp = self.s.bp as usize;
-        while self.s.stack.len() > bp {
-            let n = self.s.stack.len();
-            let (slot, old, old_gen) = (
-                self.s.stack[n - 3],
-                self.s.stack[n - 2],
-                self.s.stack[n - 1],
-            );
-            self.s.slots[slot as usize] = old;
-            self.s.slot_gen[slot as usize] = old_gen;
-            self.s.stack.truncate(n - 3);
+        let mem = &mut self.s.mem;
+        while mem.len() > bp {
+            let n = mem.len();
+            let (slot, old, old_gen) = (mem[n - 3] as usize, mem[n - 2], mem[n - 1]);
+            mem[slot] = old;
+            mem[self.nslots + slot] = old_gen;
+            mem.truncate(n - 3);
         }
     }
 
@@ -356,19 +539,19 @@ impl Machine<'_> {
     fn pop_frame(&mut self) -> u32 {
         self.undo_to_frame();
         let f = self.s.bp as usize - FRAME;
-        let st = &self.s.stack;
+        let st = &self.s.mem;
         self.s.pc = st[f];
         self.s.pos = st[f + 1];
         let kind = st[f + 2] & 3;
         self.s.bp = st[f + 2] >> 2;
-        self.s.stack.truncate(f);
+        self.s.mem.truncate(f);
         kind
     }
 
     /// Backtracks to the most recent alternative. Returns false if there is none.
     fn backtrack(&mut self) -> bool {
         loop {
-            if self.s.bp == 0 {
+            if self.s.bp as usize == self.base {
                 return false;
             }
             // A failed positive lookahead keeps failing; a failed negative one succeeds
@@ -385,11 +568,158 @@ impl Machine<'_> {
         }
     }
 
+    /// After a failed attempt of a search: the next start is one character on, or past
+    /// the run of the leading `STAR` (every start inside it fails too, D1501). False if
+    /// there is none.
+    fn next_attempt(&mut self) -> bool {
+        if !self.s.search {
+            return false;
+        }
+        let mut from = self.s.start as usize;
+        if self.mode & M_SKIP != 0 {
+            let to = self.s.mem[self.regs + self.code.at(H_SKIP) as usize];
+            if to != UNSET && to as usize > from {
+                from = to as usize;
+            }
+        }
+        let Some((_, next)) = self.next_char(from) else {
+            return false;
+        };
+        // The attempt left its captures behind (writes without a frame are not logged).
+        self.s.mem[..self.regs].fill(UNSET);
+        self.s.pos = next as u32;
+        self.s.pc = PC_FIND;
+        true
+    }
+
+    /// Moves `pos` to the next position where an attempt can match: the start of a line
+    /// for a pattern that starts with a multiline `^`, and a character of the program's
+    /// first set if it has one. One unit of fuel per character passed (`find_line`: per
+    /// code unit).
+    fn find(&mut self, fuel: &mut i64) -> Find {
+        let first = self.code.at(H_SEARCH) as usize;
+        if self.mode & M_ANCHOR == A_LINE {
+            return self.find_line(first, fuel);
+        }
+        if first == 0 {
+            return Find::Start;
+        }
+        if !self.unicode {
+            return self.find_first(first, fuel);
+        }
+        loop {
+            let p = self.s.pos as usize;
+            let next = self.next_char(p);
+            if let Some((c, _)) = next
+                && self.in_first(first, c)
+            {
+                return Find::Start;
+            }
+            let Some((_, np)) = next else {
+                return Find::None;
+            };
+            // Paid before moving on, so a resumed search examines `p` again and the
+            // total does not depend on where the fuel ran out (D1711).
+            if *fuel <= 0 {
+                return Find::OutOfFuel;
+            }
+            *fuel -= 1;
+            self.s.pos = np as u32;
+        }
+    }
+
+    /// `find` for a pattern anchored at line starts: from a position that cannot start
+    /// a match, everything up to and including the next line terminator is passed in one
+    /// loop (one unit of fuel per code unit).
+    fn find_line(&mut self, first: usize, fuel: &mut i64) -> Find {
+        let len = self.input.len();
+        loop {
+            let p = self.s.pos as usize;
+            if (p == 0 || is_line_terminator(self.input.unit(p - 1)))
+                && (first == 0
+                    || self
+                        .next_char(p)
+                        .is_some_and(|(c, _)| self.in_first(first, c)))
+            {
+                return Find::Start;
+            }
+            if p >= len {
+                return Find::None;
+            }
+            let passes = usize::try_from((*fuel).max(0)).unwrap_or(usize::MAX);
+            let limit = len.min(p.saturating_add(passes));
+            match (p..limit).find(|&i| is_line_terminator(self.input.unit(i))) {
+                Some(q) => {
+                    *fuel -= (q + 1 - p) as i64;
+                    self.s.pos = (q + 1) as u32;
+                }
+                None if limit == len => {
+                    *fuel -= (len - p) as i64;
+                    self.s.pos = len as u32;
+                    return Find::None;
+                }
+                None => {
+                    *fuel -= passes as i64;
+                    self.s.pos = limit as u32;
+                    return Find::OutOfFuel;
+                }
+            }
+        }
+    }
+
+    /// Whether `c` is in the first set at `first` (`n (lo hi){n}` then a bitmap of the
+    /// Latin-1 characters in 8 words).
+    #[inline(always)]
+    fn in_first(&self, first: usize, c: u32) -> bool {
+        let n = self.code.at(first) as usize;
+        if c < 256 {
+            self.code.at(first + 1 + 2 * n + (c >> 5) as usize) >> (c & 31) & 1 != 0
+        } else {
+            in_ranges(self.code.sub(first + 1, 2 * n), c)
+        }
+    }
+
+    /// `find` for code units (no `u`/`v`) and no line anchor: a tight loop per input
+    /// representation.
+    fn find_first(&mut self, first: usize, fuel: &mut i64) -> Find {
+        let p = self.s.pos as usize;
+        // The same accounting as `find`: examining a position is free, passing it costs
+        // one unit, so at most fuel + 1 positions are examined.
+        let passes = usize::try_from((*fuel).max(0)).unwrap_or(usize::MAX);
+        let len = self.input.len();
+        let end = len.min(p.saturating_add(passes).saturating_add(1));
+        let found = match self.input {
+            Input::Latin1(b) => (p..end).find(|&i| self.in_first(first, b[i] as u32)),
+            Input::Utf16(u) => (p..end).find(|&i| self.in_first(first, u[i] as u32)),
+            Input::Utf16Le(b) => (p..end).find(|&i| {
+                self.in_first(first, u16::from_le_bytes([b[2 * i], b[2 * i + 1]]) as u32)
+            }),
+        };
+        match found {
+            Some(i) => {
+                *fuel -= (i - p) as i64;
+                self.s.pos = i as u32;
+                Find::Start
+            }
+            None if len - p <= passes => {
+                *fuel -= (len - p) as i64;
+                self.s.pos = len as u32;
+                Find::None
+            }
+            None => {
+                // The last position examined is passed by the next slice.
+                *fuel -= passes as i64;
+                self.s.pos = (p + passes) as u32;
+                Find::OutOfFuel
+            }
+        }
+    }
+
     /// The character matcher at `pc` (`CHAR`, `CLASS`, `DOT` or `ANY`) at the current
     /// position: the position after the character if it matches.
     #[inline]
     fn single(&self, pc: usize, back: bool) -> Option<u32> {
-        let word = self.code[pc];
+        let word = self.code.at(pc);
         let pos = self.s.pos as usize;
         let (mut c, next) = if back {
             self.prev_char(pos)?
@@ -400,10 +730,10 @@ impl Machine<'_> {
             c = canonicalize(c, self.unicode);
         }
         let ok = match word & OP_MASK {
-            CHAR => c == self.code[pc + 1],
+            CHAR => c == self.code.at(pc + 1),
             CLASS => {
-                let n = self.code[pc + 1] as usize;
-                in_ranges(&self.code[pc + 2..pc + 2 + 2 * n], c)
+                let n = self.code.at(pc + 1) as usize;
+                in_ranges(self.code.sub(pc + 2, 2 * n), c)
             }
             DOT => !is_line_terminator(c),
             _ => true,
@@ -432,14 +762,15 @@ impl Machine<'_> {
         unit: impl Fn(usize) -> u32,
     ) -> (u32, u32) {
         let code = self.code;
-        let op = code[pc] & OP_MASK;
-        let ranges: &[u32] = if op == CLASS {
-            let n = code[pc + 1] as usize;
-            &code[pc + 2..pc + 2 + 2 * n]
+        let op = code.at(pc) & OP_MASK;
+        let ranges = if op == CLASS {
+            let n = code.at(pc + 1) as usize;
+            code.sub(pc + 2, 2 * n)
         } else {
-            &[]
+            code.sub(pc, 0)
         };
-        let ch = code[pc + 1];
+        let nr = ranges.0.len();
+        let ch = code.at(pc + 1);
         let mut hint = 0usize;
         let mut pos = self.s.pos as usize;
         let mut count = 0;
@@ -457,16 +788,16 @@ impl Machine<'_> {
                 CHAR => c == ch,
                 CLASS => {
                     // Consecutive characters usually fall in the same range.
-                    if hint < ranges.len() && ranges[hint] <= c && c <= ranges[hint + 1] {
+                    if hint < nr && ranges.at(hint) <= c && c <= ranges.at(hint + 1) {
                         true
                     } else {
-                        let (mut lo, mut hi) = (0, ranges.len() / 2);
+                        let (mut lo, mut hi) = (0, nr / 2);
                         let mut found = false;
                         while lo < hi {
                             let mid = (lo + hi) / 2;
-                            if c < ranges[2 * mid] {
+                            if c < ranges.at(2 * mid) {
                                 hi = mid;
-                            } else if c > ranges[2 * mid + 1] {
+                            } else if c > ranges.at(2 * mid + 1) {
                                 lo = mid + 1;
                             } else {
                                 hint = 2 * mid;
@@ -510,14 +841,14 @@ impl Machine<'_> {
     /// `STAR` at `pc` (always, without a follow set).
     fn star_follows(&self, pc: usize) -> bool {
         let code = self.code;
-        if code[pc] & F_CHECK == 0 {
+        if code.at(pc) & F_CHECK == 0 {
             return true;
         }
-        let n = code[pc + 5] as usize;
-        let at = pc + 6 + code[pc + 4] as usize;
+        let n = code.at(pc + 5) as usize;
+        let at = pc + 6 + code.at(pc + 4) as usize;
         match self.next_char(self.s.pos as usize) {
-            Some((c, _)) => in_ranges(&code[at..at + 2 * n], c),
-            None => code[pc] & F_END != 0,
+            Some((c, _)) => in_ranges(code.sub(at, 2 * n), c),
+            None => code.at(pc) & F_END != 0,
         }
     }
 
@@ -526,16 +857,17 @@ impl Machine<'_> {
     /// count register if it changed; `None` if there is no such count.
     fn star_settle(&mut self, pc: usize, mut n: u32) -> Option<u32> {
         let code = self.code;
-        let r = self.regs + code[pc + 1] as usize;
-        let (min, max) = (code[pc + 2], code[pc + 3]);
-        let back = code[pc] & F_BACK != 0;
+        let word = code.at(pc);
+        let r = self.regs + code.at(pc + 1) as usize;
+        let (min, max) = (code.at(pc + 2), code.at(pc + 3));
+        let back = word & F_BACK != 0;
         let n0 = n;
         while !self.star_follows(pc) {
-            if code[pc] & F_GREEDY != 0 {
-                if n <= min || code[pc] & F_DISJOINT != 0 {
+            if word & F_GREEDY != 0 {
+                if n <= min || word & F_DISJOINT != 0 {
                     return None;
                 }
-                self.s.pos = self.give_back(back, self.s.slots[r + 1]);
+                self.s.pos = self.give_back(back, self.s.mem[r + 1]);
                 n -= 1;
             } else {
                 if n >= max {
@@ -556,17 +888,17 @@ impl Machine<'_> {
     /// False if the loop has no choices left.
     fn star_retry(&mut self) -> bool {
         let pc = self.s.pc as usize;
-        let word = self.code[pc];
-        let r = self.regs + self.code[pc + 1] as usize;
-        let (min, max) = (self.code[pc + 2], self.code[pc + 3]);
+        let word = self.code.at(pc);
+        let r = self.regs + self.code.at(pc + 1) as usize;
+        let (min, max) = (self.code.at(pc + 2), self.code.at(pc + 3));
         let next = star_next(self.code, pc);
         let back = word & F_BACK != 0;
-        let n = self.s.slots[r];
+        let n = self.s.mem[r];
         let n = if word & F_GREEDY != 0 {
             if n <= min {
                 return false;
             }
-            self.s.pos = self.give_back(back, self.s.slots[r + 1]);
+            self.s.pos = self.give_back(back, self.s.mem[r + 1]);
             n - 1
         } else {
             if n >= max {
@@ -607,7 +939,7 @@ impl Machine<'_> {
         let look_start;
         loop {
             let f = bp - FRAME;
-            let w = self.s.stack[f + 2];
+            let w = self.s.mem[f + 2];
             if w & 3 == K_LOOK {
                 look_start = f;
                 bp = (w >> 2) as usize;
@@ -617,10 +949,10 @@ impl Machine<'_> {
             bp = (w >> 2) as usize;
         }
         // A lookaround does not consume input.
-        self.s.pos = self.s.stack[look_start + 1];
-        let st = &mut self.s.stack;
+        self.s.pos = self.s.mem[look_start + 1];
+        let st = &mut self.s.mem;
         let mut out = look_start;
-        if bp > 0 {
+        if bp > self.base {
             // Copy the logs: [look_start + FRAME, next frame), ... , [last frame + FRAME, len).
             let mut from = look_start + FRAME;
             let len = st.len();
@@ -643,38 +975,32 @@ impl Machine<'_> {
         while self.pop_frame() != K_NEG_LOOK {}
     }
 
-    fn captures(&self) -> Captures {
-        Captures {
-            slots: self.s.slots[..self.regs].to_vec(),
-        }
-    }
-
-    fn run(&mut self, fuel: &mut i64) -> ExecResult {
+    fn run(&mut self, fuel: &mut i64) -> Outcome {
         loop {
             if *fuel <= 0 {
-                return ExecResult::OutOfFuel(core::mem::replace(
-                    &mut self.s,
-                    ExecState {
-                        pc: 0,
-                        pos: 0,
-                        bp: 0,
-                        next_gen: 0,
-                        slots: Vec::new(),
-                        slot_gen: Vec::new(),
-                        stack: Vec::new(),
-                    },
-                ));
+                return Outcome::OutOfFuel;
+            }
+            if self.s.pc == PC_FIND {
+                match self.find(fuel) {
+                    Find::Start => {
+                        self.s.start = self.s.pos;
+                        self.s.pc = self.code.at(H_ANCHORED);
+                    }
+                    Find::None => return Outcome::NoMatch,
+                    Find::OutOfFuel => return Outcome::OutOfFuel,
+                }
+                continue;
             }
             *fuel -= 1;
             match self.step(fuel) {
-                Ok(true) => return ExecResult::Match(self.captures()),
+                Ok(true) => return Outcome::Match,
                 Ok(false) => {}
                 Err(Stop::Fail) => {
-                    if !self.backtrack() {
-                        return ExecResult::NoMatch;
+                    if !self.backtrack() && !self.next_attempt() {
+                        return Outcome::NoMatch;
                     }
                 }
-                Err(Stop::Overflow) => return ExecResult::StackOverflow,
+                Err(Stop::Overflow) => return Outcome::StackOverflow,
             }
         }
     }
@@ -683,7 +1009,7 @@ impl Machine<'_> {
     fn step(&mut self, fuel: &mut i64) -> Result<bool, Stop> {
         let code = self.code;
         let pc = self.s.pc as usize;
-        let word = code[pc];
+        let word = code.at(pc);
         let op = word & OP_MASK;
         let back = word & F_BACK != 0;
         let icase = word & F_ICASE != 0;
@@ -697,20 +1023,20 @@ impl Machine<'_> {
                 if icase {
                     c = canonicalize(c, self.unicode);
                 }
-                if c != code[pc + 1] {
+                if c != code.at(pc + 1) {
                     return fail;
                 }
                 self.s.pc += 2;
             }
             CLASS => {
-                let n = code[pc + 1] as usize;
+                let n = code.at(pc + 1) as usize;
                 let Some(mut c) = self.read(back) else {
                     return fail;
                 };
                 if icase {
                     c = canonicalize(c, self.unicode);
                 }
-                if !in_ranges(&code[pc + 2..pc + 2 + 2 * n], c) {
+                if !in_ranges(code.sub(pc + 2, 2 * n), c) {
                     return fail;
                 }
                 self.s.pc += 2 + 2 * n as u32;
@@ -768,38 +1094,18 @@ impl Machine<'_> {
                 }
                 self.s.pc += 1;
             }
-            SCAN => {
-                let n = code[pc + 1] as usize;
-                let ranges = &code[pc + 2..pc + 2 + 2 * n];
-                loop {
-                    let pos = self.s.pos as usize;
-                    let Some((c, next)) = self.next_char(pos) else {
-                        return fail;
-                    };
-                    if in_ranges(ranges, c) {
-                        self.s.pc += 2 + 2 * n as u32;
-                        break;
-                    }
-                    self.s.pos = next as u32;
-                    if *fuel <= 0 {
-                        // Out of fuel mid-scan: resume at this instruction.
-                        break;
-                    }
-                    *fuel -= 1;
-                }
-            }
             STAR => {
-                let r = self.regs + code[pc + 1] as usize;
-                let (min, max) = (code[pc + 2], code[pc + 3]);
+                let r = self.regs + code.at(pc + 1) as usize;
+                let (min, max) = (code.at(pc + 2), code.at(pc + 3));
                 let greedy = word & F_GREEDY != 0;
                 // Greedy matches all it can, lazy only the minimum. Resumable: the count
                 // is in a register (written when the loop stops) and the position in the
                 // state.
                 let limit = if greedy { max } else { min };
-                let start = self.s.slots[r];
+                let start = self.s.mem[r];
                 let mut n = start;
                 let mut stopped = false;
-                let fast = !back && code[pc + 6] & F_ICASE == 0;
+                let fast = !back && code.at(pc + 6) & F_ICASE == 0;
                 if fast && n < limit {
                     // The common case in one tight loop (D1562); same fuel accounting as
                     // the general loop below: one unit per character after the first.
@@ -839,9 +1145,9 @@ impl Machine<'_> {
                     return Ok(false);
                 }
                 if word & F_LEAD != 0 {
-                    // Not logged: the search loop reads it after this attempt failed.
+                    // Not logged: the search reads it after this attempt failed.
                     let at = star_next(code, pc) as usize - 1;
-                    self.s.slots[self.regs + code[at] as usize] = self.s.pos;
+                    self.s.mem[self.regs + code.at(at) as usize] = self.s.pos;
                 }
                 if n < min {
                     return fail;
@@ -859,42 +1165,31 @@ impl Machine<'_> {
                 }
                 self.s.pc = star_next(code, pc);
             }
-            SKIP => {
-                let r = self.regs + code[pc + 1] as usize;
-                let to = self.s.slots[r];
-                if to != UNSET && to > self.s.pos {
-                    self.s.pos = to;
-                }
-                self.s.pc += 2;
-            }
-            GOTO => self.s.pc = code[pc + 1],
+            GOTO => self.s.pc = code.at(pc + 1),
             SPLIT_NEXT => {
-                self.push_frame(code[pc + 1], K_SPLIT)?;
+                self.push_frame(code.at(pc + 1), K_SPLIT)?;
                 self.s.pc += 2;
             }
             SPLIT_GOTO => {
                 self.push_frame(pc as u32 + 2, K_SPLIT)?;
-                self.s.pc = code[pc + 1];
+                self.s.pc = code.at(pc + 1);
             }
             SAVE => {
-                self.write_slot(code[pc + 1] as usize, self.s.pos)?;
+                self.write_slot(code.at(pc + 1) as usize, self.s.pos)?;
                 self.s.pc += 2;
             }
             RESET => {
-                for g in code[pc + 1]..=code[pc + 2] {
+                for g in code.at(pc + 1)..=code.at(pc + 2) {
                     self.write_slot(2 * g as usize, UNSET)?;
                     self.write_slot(2 * g as usize + 1, UNSET)?;
                 }
                 self.s.pc += 3;
             }
             BACKREF => {
-                let n = code[pc + 1] as usize;
-                let groups = &code[pc + 2..pc + 2 + n];
-                let span = groups.iter().find_map(|&g| {
-                    let (s, e) = (
-                        self.s.slots[2 * g as usize],
-                        self.s.slots[2 * g as usize + 1],
-                    );
+                let n = code.at(pc + 1) as usize;
+                let span = (0..n).find_map(|i| {
+                    let g = code.at(pc + 2 + i) as usize;
+                    let (s, e) = (self.s.mem[2 * g], self.s.mem[2 * g + 1]);
                     (s != UNSET && e != UNSET).then_some((s as usize, e as usize))
                 });
                 if let Some((s, e)) = span {
@@ -914,7 +1209,7 @@ impl Machine<'_> {
                 } else {
                     K_LOOK
                 };
-                self.push_frame(code[pc + 1], kind)?;
+                self.push_frame(code.at(pc + 1), kind)?;
                 self.s.pc += 2;
             }
             LOOK_END => {
@@ -926,37 +1221,41 @@ impl Machine<'_> {
                 self.s.pc += 1;
             }
             SET_REG => {
-                self.write_slot(self.regs + code[pc + 1] as usize, code[pc + 2])?;
+                self.write_slot(self.regs + code.at(pc + 1) as usize, code.at(pc + 2))?;
                 self.s.pc += 3;
             }
             SET_POS => {
-                self.write_slot(self.regs + code[pc + 1] as usize, self.s.pos)?;
+                self.write_slot(self.regs + code.at(pc + 1) as usize, self.s.pos)?;
                 self.s.pc += 2;
             }
             CHECK_ADV => {
-                if self.s.slots[self.regs + code[pc + 1] as usize] == self.s.pos {
+                if self.s.mem[self.regs + code.at(pc + 1) as usize] == self.s.pos {
                     return fail;
                 }
                 self.s.pc += 2;
             }
             LOOP => {
-                let r = self.regs + code[pc + 1] as usize;
-                let v = self.s.slots[r].wrapping_sub(1);
+                let r = self.regs + code.at(pc + 1) as usize;
+                let v = self.s.mem[r].wrapping_sub(1);
                 self.write_slot(r, v)?;
-                self.s.pc = if v != 0 { code[pc + 2] } else { pc as u32 + 3 };
+                self.s.pc = if v != 0 {
+                    code.at(pc + 2)
+                } else {
+                    pc as u32 + 3
+                };
             }
             LOOP_SPLIT => {
-                let r = self.regs + code[pc + 1] as usize;
-                let limit = code[pc + 2];
-                let target = code[pc + 3];
+                let r = self.regs + code.at(pc + 1) as usize;
+                let limit = code.at(pc + 2);
+                let target = code.at(pc + 3);
                 let next = pc as u32 + 4;
-                let v = self.s.slots[r].wrapping_sub(1);
+                let v = self.s.mem[r].wrapping_sub(1);
                 self.write_slot(r, v)?;
                 if v > limit {
                     // Still below the minimum: iterate.
                     self.s.pc = target;
                 } else {
-                    if word & F_CHECK != 0 && self.s.slots[r + 1] == self.s.pos && v != limit {
+                    if word & F_CHECK != 0 && self.s.mem[r + 1] == self.s.pos && v != limit {
                         // An optional iteration that matched empty.
                         return fail;
                     }

@@ -6,7 +6,7 @@ use super::intrinsics::{bad_argument, id};
 use super::*;
 use crate::builtins::{json, regexp as re};
 use crate::heap::{Atom, atoms};
-use crate::regexp::{ExecLimits, ExecResult, ExecState, Flags, Program};
+use crate::regexp::{ExecLimits, ExecState, Flags, Outcome};
 use crate::value::Str;
 
 const JSON_PARSE: u16 = id("JsonParse");
@@ -269,25 +269,29 @@ impl Exec<'_> {
             .then_some(n)
     }
 
-    /// Runs the matcher on the flat string `flat` with the remaining fuel (at least one
-    /// unit, so a resumed match always makes progress), from `start` or from `pending`.
+    /// Runs the matcher of the RegExp `r` on the flat string `flat` with the remaining fuel
+    /// (at least one unit, so a resumed match always makes progress), from `start`, or
+    /// continuing the match in `st` with `resume`.
     fn run_matcher(
         &mut self,
-        prog: &Program,
+        r: Obj,
         flat: Str,
         start: usize,
         sticky: bool,
-        pending: Option<ExecState>,
-    ) -> ExecResult {
+        resume: bool,
+        st: &mut ExecState,
+    ) -> Outcome {
         let budget = self.fuel.max(1);
         let mut fuel = budget;
         let limits = ExecLimits::default();
         let result = {
+            let prog = re::program(self.heap, r);
             let view = self.heap.str_view(flat).expect("flat string");
             let input = re::input(view);
-            match pending {
-                Some(st) => crate::regexp::resume(prog, input, st, &mut fuel, limits),
-                None => crate::regexp::exec_at(prog, input, start, sticky, &mut fuel, limits),
+            if resume {
+                crate::regexp::resume_in(prog, input, &mut fuel, limits, st)
+            } else {
+                crate::regexp::exec_in(prog, input, start, sticky, &mut fuel, limits, st)
             }
         };
         // A backreference can overdraw (D1711): the overdraft stays negative fuel, which
@@ -306,12 +310,22 @@ impl Exec<'_> {
         Ok(Value::internal(cell))
     }
 
-    fn load_exec_state(&self, v: Value) -> Option<ExecState> {
-        let cell = v.as_internal()?;
+    /// The matcher state saved in `v`, if there is one (into `st`): whether the match is
+    /// to be resumed.
+    fn load_exec_state(&self, v: Value, st: &mut ExecState) -> bool {
+        let Some(cell) = v.as_internal() else {
+            return false;
+        };
         let n = self.heap.u32_array_len(cell);
         let words: alloc::vec::Vec<u32> =
             (0..n).map(|i| self.heap.u32_array_get(cell, i)).collect();
-        ExecState::from_words(&words)
+        match ExecState::from_words(&words) {
+            Some(saved) => {
+                *st = saved;
+                true
+            }
+            None => false,
+        }
     }
 
     /// Allocates a suspension record with `f` outside the memory cap and the GC threshold
@@ -404,24 +418,25 @@ impl Exec<'_> {
             }
             if test { Value::FALSE } else { Value::NULL }
         } else {
-            let prog = re::program(self.heap, r);
             let state = self.get(state_slot);
-            let pending = self.load_exec_state(state);
+            let mut st = ExecState::new();
+            let pending = self.load_exec_state(state, &mut st);
             self.release_progress(state_slot, state);
             let sticky = flags.contains(Flags::STICKY);
-            match self.run_matcher(&prog, flat, last as usize, sticky, pending) {
-                ExecResult::OutOfFuel(st) => {
+            match self.run_matcher(r, flat, last as usize, sticky, pending, &mut st) {
+                Outcome::OutOfFuel => {
                     let saved = self.unbudgeted(|ex| ex.save_exec_state(&st))?;
                     return self.suspend_in(state_slot, saved);
                 }
-                ExecResult::StackOverflow => return regexp_overflow(),
-                ExecResult::NoMatch => {
+                Outcome::StackOverflow => return regexp_overflow(),
+                Outcome::NoMatch => {
                     if g_or_y {
                         re::set_last_index(self.heap, r, Value::int(0))?;
                     }
                     if test { Value::FALSE } else { Value::NULL }
                 }
-                ExecResult::Match(caps) => {
+                Outcome::Match => {
+                    let caps = st.captures(re::program(self.heap, r));
                     if g_or_y {
                         let (_, end) = caps.get(0).expect("group 0 matched");
                         re::set_last_index(self.heap, r, Value::int(end as i32))?;
@@ -429,7 +444,7 @@ impl Exec<'_> {
                     if test {
                         Value::TRUE
                     } else {
-                        re::match_result(self.heap, &prog, s, &caps)?
+                        re::match_result(self.heap, r, s, caps)?
                     }
                 }
             }
@@ -510,19 +525,19 @@ impl Exec<'_> {
         let lim = lim as u32;
         let flat = self.heap.contiguous(s)?;
         let size = self.heap.str_len(flat) as usize;
-        let prog = re::program(self.heap, r);
-        let unicode = prog.flags().unicode_mode();
+        let unicode = re::program(self.heap, r).flags().unicode_mode();
         let state = self.get(state_slot);
+        let mut st = ExecState::new();
         let (a, mut p, mut q, mut pending) = match state.as_internal() {
             Some(_) => (
                 self.progress(state, 0).as_object().expect("split array"),
                 self.progress(state, 1).as_int().unwrap_or(0) as usize,
                 self.progress(state, 2).as_int().unwrap_or(0) as usize,
-                self.load_exec_state(self.progress(state, 3)),
+                self.load_exec_state(self.progress(state, 3), &mut st),
             ),
             None => {
                 let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
-                (self.heap.new_array(Some(proto), 0)?, 0, 0, None)
+                (self.heap.new_array(Some(proto), 0)?, 0, 0, false)
             }
         };
         self.release_progress(state_slot, self.progress(state, 3));
@@ -538,8 +553,9 @@ impl Exec<'_> {
             if q >= size {
                 break false;
             }
-            match self.run_matcher(&prog, flat, q, false, pending.take()) {
-                ExecResult::OutOfFuel(st) => {
+            let resume = core::mem::take(&mut pending);
+            match self.run_matcher(r, flat, q, false, resume, &mut st) {
+                Outcome::OutOfFuel => {
                     let rec = self.unbudgeted(|ex| {
                         let saved = ex.save_exec_state(&st)?;
                         ex.save_progress(&[
@@ -551,9 +567,10 @@ impl Exec<'_> {
                     })?;
                     return self.suspend_in(state_slot, rec);
                 }
-                ExecResult::StackOverflow => return regexp_overflow(),
-                ExecResult::NoMatch => break false,
-                ExecResult::Match(caps) => {
+                Outcome::StackOverflow => return regexp_overflow(),
+                Outcome::NoMatch => break false,
+                Outcome::Match => {
+                    let caps = st.captures(re::program(self.heap, r));
                     let (at, e) = caps.get(0).expect("group 0 matched");
                     if at >= size {
                         break false;
@@ -608,11 +625,13 @@ impl Exec<'_> {
         let flat = self.heap.contiguous(s)?;
         let size = self.heap.str_len(flat) as usize;
         let template = self.heap.str_to_utf16(t);
-        let prog = re::program(self.heap, r);
-        let unicode = prog.flags().unicode_mode();
-        let sticky = prog.flags().contains(Flags::STICKY);
+        // One byte per unit when the string and the template are: no widening and no
+        // narrowing pass at the end.
+        let narrow = !self.heap.str_view(flat).expect("flat string").is_two_byte()
+            && template.iter().all(|&u| u <= 0xFF);
         let state = self.get(state_slot);
-        let (mut out, mut next_pos, mut last, mut pending) = match state.as_internal() {
+        let mut st = ExecState::new();
+        let (acc, mut next_pos, mut last, mut resume) = match state.as_internal() {
             Some(_) => (
                 self.progress(state, 0)
                     .as_string()
@@ -620,51 +639,79 @@ impl Exec<'_> {
                     .unwrap_or_default(),
                 self.progress(state, 1).as_int().unwrap_or(0) as usize,
                 self.progress(state, 2).as_int().unwrap_or(0) as usize,
-                self.load_exec_state(self.progress(state, 3)),
+                self.load_exec_state(self.progress(state, 3), &mut st),
             ),
-            None => (alloc::vec::Vec::new(), 0, 0, None),
+            None => (alloc::vec::Vec::new(), 0, 0, false),
         };
         self.release_progress(state_slot, self.progress(state, 3));
-        while last <= size {
-            match self.run_matcher(&prog, flat, last, sticky, pending.take()) {
-                ExecResult::OutOfFuel(st) => {
-                    let rec = self.unbudgeted(|ex| {
-                        let saved = ex.save_exec_state(&st)?;
-                        // A fresh cell (never a shared one-character string): it is freed
-                        // with the record.
-                        let acc = ex.heap.alloc_utf16(&out)?;
-                        ex.save_progress(&[
-                            Value::string(acc),
-                            Value::int(next_pos as i32),
-                            Value::int(last as i32),
-                            saved,
-                        ])
-                    })?;
-                    return self.suspend_in(state_slot, rec);
+        let mut out = if narrow {
+            re::Units::Narrow(acc.iter().map(|&u| u as u8).collect())
+        } else {
+            re::Units::Wide(acc)
+        };
+        // Every match in one borrow of the program and the string: nothing in the loop
+        // allocates on the heap.
+        let budget = self.fuel.max(1);
+        let mut fuel = budget;
+        let outcome = {
+            let prog = re::program(self.heap, r);
+            let view = self.heap.str_view(flat).expect("flat string");
+            let input = re::input(view);
+            let unicode = prog.flags().unicode_mode();
+            let sticky = prog.flags().contains(Flags::STICKY);
+            let limits = ExecLimits::default();
+            loop {
+                if last > size {
+                    break Outcome::NoMatch;
                 }
-                ExecResult::StackOverflow => return regexp_overflow(),
-                ExecResult::NoMatch => break,
-                ExecResult::Match(caps) => {
-                    let (m0, m1) = caps.get(0).expect("group 0 matched");
-                    let view = self.heap.str_view(flat).expect("flat string");
-                    out.extend((next_pos..m0).map(|i| view.get(i)));
-                    re::substitute(&mut out, &template, view, &caps, &prog);
-                    next_pos = m1;
-                    last = if m1 == m0 {
-                        re::advance(view, m1, unicode)
-                    } else {
-                        m1
-                    };
+                let o = if core::mem::take(&mut resume) {
+                    crate::regexp::resume_in(prog, input, &mut fuel, limits, &mut st)
+                } else {
+                    crate::regexp::exec_in(prog, input, last, sticky, &mut fuel, limits, &mut st)
+                };
+                if o != Outcome::Match {
+                    break o;
                 }
+                let caps = st.captures(prog);
+                let (m0, m1) = caps.get(0).expect("group 0 matched");
+                out.range(view, next_pos, m0);
+                re::substitute(&mut out, &template, view, caps, prog);
+                next_pos = m1;
+                last = if m1 == m0 {
+                    re::advance(view, m1, unicode)
+                } else {
+                    m1
+                };
             }
+        };
+        // A backreference can overdraw (D1711), as in `run_matcher`.
+        self.fuel -= budget - fuel;
+        match outcome {
+            Outcome::OutOfFuel => {
+                let rec = self.unbudgeted(|ex| {
+                    let saved = ex.save_exec_state(&st)?;
+                    // A fresh cell (never a shared one-character string): it is freed
+                    // with the record.
+                    let acc = ex.heap.alloc_utf16(&out.to_utf16())?;
+                    ex.save_progress(&[
+                        Value::string(acc),
+                        Value::int(next_pos as i32),
+                        Value::int(last as i32),
+                        saved,
+                    ])
+                })?;
+                return self.suspend_in(state_slot, rec);
+            }
+            Outcome::StackOverflow => return regexp_overflow(),
+            _ => {}
         }
         {
             let view = self.heap.str_view(flat).expect("flat string");
-            out.extend((next_pos.min(size)..size).map(|i| view.get(i)));
+            out.range(view, next_pos.min(size), size);
         }
         re::set_last_index(self.heap, r, Value::int(0))?;
         self.fuel -= length_fuel(out.len() as u32);
-        let result = re::string_from_units(self.heap, &out)?;
+        let result = out.into_string(self.heap)?;
         self.sp = base;
         self.push(Value::string(result));
         self.pc = next;

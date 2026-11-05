@@ -15,7 +15,7 @@ use crate::heap::{
 };
 use crate::interp::conv::{Fault, type_error};
 use crate::interp::{ErrorKind, Intrinsic, realm};
-use crate::regexp::{self, Captures, Flags, Program};
+use crate::regexp::{self, Caps, Flags, Prog, Program};
 use crate::value::{Obj, Str, Value};
 
 pub(crate) const SLOT_PROGRAM: u32 = 0;
@@ -104,24 +104,17 @@ pub(crate) fn create(
     Ok(o)
 }
 
-/// The compiled program of a RegExp object (copied out of its cell).
-pub(crate) fn program(heap: &Heap, o: Obj) -> Program {
+/// The compiled program of a RegExp object, read in place from its cell (D3135).
+pub(crate) fn program(heap: &Heap, o: Obj) -> Prog<'_> {
     let cell = heap
         .object_slot(o, SLOT_PROGRAM)
         .as_internal()
         .expect("RegExp program");
     let n = heap.u32_array_len(cell);
-    // One bulk read: this runs on every exec.
     let bytes = heap
         .arena()
         .slice(crate::heap::cells::U32Array::DATA.at(cell, 0), 4 * n);
-    let words = bytes
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .map(|b| u32::from_le_bytes(*b))
-        .collect();
-    Program::from_words(words)
+    Prog::new(bytes.as_chunks::<4>().0)
 }
 
 pub(crate) fn flags(heap: &Heap, o: Obj) -> Flags {
@@ -252,9 +245,8 @@ fn substring(heap: &mut Heap, s: Str, start: usize, end: usize) -> Result<Value,
 
 /// Defines `key: v` on a groups object, except that an undefined value never replaces
 /// a defined one (duplicate named groups: only one of them participates).
-fn define_group(heap: &mut Heap, groups: Obj, name: &[u32], v: Value) -> Result<(), Fault> {
-    let units: Vec<u16> = name.iter().map(|&u| u as u16).collect();
-    let key = heap.atom_utf16(&units)?;
+fn define_group(heap: &mut Heap, groups: Obj, name: &[u16], v: Value) -> Result<(), Fault> {
+    let key = heap.atom_utf16(name)?;
     if v.is_undefined() && heap.has_own_property(groups, key) {
         return Ok(());
     }
@@ -262,14 +254,33 @@ fn define_group(heap: &mut Heap, groups: Obj, name: &[u32], v: Value) -> Result<
     Ok(())
 }
 
-/// The match result array of RegExpBuiltinExec (22.2.7.2 steps 22-35): the captures,
-/// `index`, `input`, `groups`, and with the `d` flag `indices`.
+/// A groups object of `values` (by group index) under the group names of `r`'s program.
+fn groups_object(heap: &mut Heap, r: Obj, values: &[Value]) -> Result<Value, Fault> {
+    let g = heap.new_object(None)?;
+    for (i, v) in values.iter().enumerate().skip(1) {
+        let name: Option<Vec<u16>> = program(heap, r).group_name(i).map(|n| n.collect());
+        if let Some(name) = name {
+            define_group(heap, g, &name, *v)?;
+        }
+    }
+    Ok(Value::object(g))
+}
+
+/// The match result array of RegExpBuiltinExec (22.2.7.2 steps 22-35) of the RegExp `r`:
+/// the captures, `index`, `input`, `groups`, and with the `d` flag `indices`.
 pub(crate) fn match_result(
     heap: &mut Heap,
-    prog: &Program,
+    r: Obj,
     s: Str,
-    caps: &Captures,
+    caps: Caps<'_>,
 ) -> Result<Value, Fault> {
+    let (has_names, indices) = {
+        let prog = program(heap, r);
+        (
+            prog.has_group_names(),
+            prog.flags().contains(Flags::HAS_INDICES),
+        )
+    };
     let n = caps.len();
     let mut values = crate::buf::vec_with_capacity(n);
     for i in 0..n {
@@ -285,21 +296,14 @@ pub(crate) fn match_result(
     heap.create_data_property(a, index, Value::int(start as i32))?;
     let input = atoms::INPUT;
     heap.create_data_property(a, input, Value::string(s))?;
-    let has_names = prog.has_group_names();
     let groups = if has_names {
-        let g = heap.new_object(None)?;
-        for (i, v) in values.iter().enumerate().skip(1) {
-            if let Some(name) = prog.group_name(i) {
-                define_group(heap, g, name, *v)?;
-            }
-        }
-        Value::object(g)
+        groups_object(heap, r, &values)?
     } else {
         Value::UNDEFINED
     };
     let groups_key = atoms::GROUPS;
     heap.create_data_property(a, groups_key, groups)?;
-    if prog.flags().contains(Flags::HAS_INDICES) {
+    if indices {
         let mut pairs = crate::buf::vec_with_capacity(n);
         for i in 0..n {
             pairs.push_out(match caps.get(i) {
@@ -312,13 +316,7 @@ pub(crate) fn match_result(
         }
         let indices = heap.new_array_from_values(Some(array_proto), &pairs)?;
         let igroups = if has_names {
-            let g = heap.new_object(None)?;
-            for (i, v) in pairs.iter().enumerate().skip(1) {
-                if let Some(name) = prog.group_name(i) {
-                    define_group(heap, g, name, *v)?;
-                }
-            }
-            Value::object(g)
+            groups_object(heap, r, &pairs)?
         } else {
             Value::UNDEFINED
         };
@@ -418,29 +416,27 @@ pub(crate) fn advance(view: StrView<'_>, i: usize, unicode: bool) -> usize {
 /// `$'`, `$n`/`$nn` and `$<name>` (only with named groups, else literal), appended to
 /// `out`. `s` is the matched string.
 pub(crate) fn substitute(
-    out: &mut Vec<u16>,
+    out: &mut Units,
     template: &[u16],
     s: StrView<'_>,
-    caps: &Captures,
-    prog: &Program,
+    caps: Caps<'_>,
+    prog: Prog<'_>,
 ) {
     let (m0, m1) = caps.get(0).expect("group 0 matched");
     let m = caps.len() - 1;
-    let push_range = |out: &mut Vec<u16>, a: usize, b: usize| {
-        out.extend((a..b).map(|i| s.get(i)));
-    };
+    let push_range = |out: &mut Units, a: usize, b: usize| out.range(s, a, b);
     let mut i = 0;
     while i < template.len() {
         let c = template[i];
         if c != b'$' as u16 || i + 1 >= template.len() {
-            out.push_out(c);
+            out.push(c);
             i += 1;
             continue;
         }
         let d = template[i + 1];
         match d {
             0x24 => {
-                out.push_out(0x24);
+                out.push(0x24);
                 i += 2;
             }
             0x26 => {
@@ -473,26 +469,22 @@ pub(crate) fn substitute(
                     }
                     i += 1 + digits;
                 } else {
-                    out.push_out(0x24);
+                    out.push(0x24);
                     i += 1;
                 }
             }
             0x3C if prog.has_group_names() => {
                 match template[i + 2..].iter().position(|&u| u == b'>' as u16) {
                     None => {
-                        out.extend_from_slice(&[0x24, 0x3C]);
+                        out.push(0x24);
+                        out.push(0x3C);
                         i += 2;
                     }
                     Some(k) => {
                         let name = &template[i + 2..i + 2 + k];
                         // The participating group of that name, if any (duplicate names).
                         let span = (1..caps.len())
-                            .filter(|&g| {
-                                prog.group_name(g).is_some_and(|n| {
-                                    n.len() == name.len()
-                                        && n.iter().zip(name).all(|(&a, &b)| a == b as u32)
-                                })
-                            })
+                            .filter(|&g| prog.group_name_is(g, name))
                             .find_map(|g| caps.get(g));
                         if let Some((a, b)) = span {
                             push_range(out, a, b);
@@ -502,7 +494,7 @@ pub(crate) fn substitute(
                 }
             }
             _ => {
-                out.push_out(0x24);
+                out.push(0x24);
                 i += 1;
             }
         }
@@ -512,4 +504,61 @@ pub(crate) fn substitute(
 /// A heap string from UTF-16 units (one byte per unit when possible).
 pub(crate) fn string_from_units(heap: &mut Heap, units: &[u16]) -> Result<Str, HeapError> {
     alloc_units(heap, units)
+}
+
+/// A string being built from code units: one byte each while every unit fits (a
+/// replace of a one-byte string with a one-byte template), else two.
+pub(crate) enum Units {
+    Narrow(Vec<u8>),
+    Wide(Vec<u16>),
+}
+
+impl Units {
+    pub(crate) fn len(&self) -> usize {
+        match self {
+            Units::Narrow(v) => v.len(),
+            Units::Wide(v) => v.len(),
+        }
+    }
+
+    /// Appends `u` (at most 0xFF in a narrow buffer).
+    pub(crate) fn push(&mut self, u: u16) {
+        match self {
+            Units::Narrow(v) => v.push_out(u as u8),
+            Units::Wide(v) => v.push_out(u),
+        }
+    }
+
+    /// Appends `s[a..b)` (a one-byte `s` in a narrow buffer).
+    pub(crate) fn range(&mut self, s: StrView<'_>, a: usize, b: usize) {
+        match (self, s) {
+            (Units::Narrow(v), StrView::Latin1(bytes)) => v.extend_from_slice(&bytes[a..b]),
+            (Units::Narrow(v), s) => v.extend((a..b).map(|i| s.get(i) as u8)),
+            (Units::Wide(v), StrView::Latin1(bytes)) => {
+                v.extend(bytes[a..b].iter().map(|&c| c as u16))
+            }
+            (Units::Wide(v), StrView::Utf16(bytes)) => v.extend(
+                bytes[2 * a..2 * b]
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|c| u16::from_le_bytes(*c)),
+            ),
+        }
+    }
+
+    pub(crate) fn to_utf16(&self) -> Vec<u16> {
+        match self {
+            Units::Narrow(v) => v.iter().map(|&c| c as u16).collect(),
+            Units::Wide(v) => v.clone(),
+        }
+    }
+
+    /// The heap string (one byte per unit when possible).
+    pub(crate) fn into_string(self, heap: &mut Heap) -> Result<Str, HeapError> {
+        match self {
+            Units::Narrow(v) => heap.alloc_latin1(&v),
+            Units::Wide(v) => alloc_units(heap, &v),
+        }
+    }
 }

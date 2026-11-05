@@ -7,6 +7,8 @@
 //! - [`exec`] runs a program on a Latin-1 or UTF-16 input from a start index, with a fuel
 //!   budget. It returns the capture positions (UTF-16 indices), no match, or an
 //!   [`ExecState`] to [`resume`] later. The state is plain data ([`ExecState::to_words`]).
+//!   [`exec_in`] and [`resume_in`] do the same on a program read in place ([`Prog`]) and
+//!   in a state the caller keeps, which one state can do match after match (D3135).
 //!
 //! `g` and `y` are the caller's business except that a sticky program only matches at the
 //! start index. The module has no heap or VM dependencies.
@@ -24,7 +26,10 @@ mod tests;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-pub use exec::{Captures, ExecLimits, ExecResult, ExecState, Input, exec, exec_at, resume};
+pub use exec::{
+    Caps, Captures, ExecLimits, ExecResult, ExecState, Input, Outcome, Prog, exec, exec_at,
+    exec_in, resume, resume_in,
+};
 
 /// RegExp flags.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
@@ -147,7 +152,7 @@ impl Program {
 
     /// True if any group has a name.
     pub fn has_group_names(&self) -> bool {
-        (1..self.capture_count()).any(|i| self.group_name(i).is_some())
+        self.words[compiler::H_MODE] & compiler::M_NAMES != 0
     }
 }
 

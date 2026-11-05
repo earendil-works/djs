@@ -17,11 +17,28 @@ use super::parser::{Node, Parsed};
 pub(crate) const H_FLAGS: usize = 0;
 pub(crate) const H_CAPTURES: usize = 1;
 pub(crate) const H_REGISTERS: usize = 2;
-/// Entry point that searches forward from the start index.
+/// The first set of a search: the word index of `n (lo hi){n}` followed by a bitmap of
+/// its Latin-1 characters (8 words), or 0 if any position can start a match (D3135).
 pub(crate) const H_SEARCH: usize = 3;
-/// Entry point that only matches at the start index.
+/// Entry point of an attempt at the current position.
 pub(crate) const H_ANCHORED: usize = 4;
-const H_LEN: usize = 5;
+/// `M_*` bits: how a search finds the starts of its attempts.
+pub(crate) const H_MODE: usize = 5;
+/// With `M_SKIP`: the register of the leading `STAR`'s run end (see `F_LEAD`).
+pub(crate) const H_SKIP: usize = 6;
+pub(crate) const H_LEN: usize = 7;
+
+/// `H_MODE`: the pattern's anchor, `A_*`.
+pub(crate) const M_ANCHOR: u32 = 3;
+/// Every alternative starts with a non-multiline `^`: an attempt where the exec starts,
+/// and no search.
+pub(crate) const A_INPUT: u32 = 1;
+/// Every alternative starts with `^`, some multiline: attempts only at line starts.
+pub(crate) const A_LINE: u32 = 2;
+/// `H_MODE`: the pattern leads with a `STAR` whose run a failed attempt skips.
+pub(crate) const M_SKIP: u32 = 4;
+/// `H_MODE`: some group has a name.
+pub(crate) const M_NAMES: u32 = 8;
 
 // Opcodes.
 pub(crate) const MATCH: u32 = 0;
@@ -77,11 +94,6 @@ pub(crate) const F_UICASE: u32 = 1 << 14;
 
 pub(crate) const OP_MASK: u32 = 0xFF;
 
-/// `SCAN n (lo hi){n}`: advances to the next position whose character is in the set (without
-/// consuming it); fails if there is none. Charges one unit of fuel per character examined
-/// and can stop in the middle of a scan.
-pub(crate) const SCAN: u32 = 21;
-
 /// `STAR r min max len n body (lo hi){n}`: a quantifier over one character (`body`, a
 /// `len`-word `CHAR`, `CLASS`, `DOT` or `ANY`, never executed itself), D1501. With
 /// `F_CHECK`, the `n` ranges are the characters that can start the continuation: a
@@ -93,11 +105,9 @@ pub(crate) const SCAN: u32 = 21;
 /// the backtrack stack stays constant instead of growing by a frame per character.
 pub(crate) const STAR: u32 = 22;
 
-/// `SKIP r`: if register `r` (written by the leading `STAR` without the undo log, flag
-/// `F_LEAD`) holds a position after the current one, moves there (D1501).
-pub(crate) const SKIP: u32 = 23;
-/// On a `STAR`: it starts the pattern; its run end goes into the skip register, the word
-/// after its follow set.
+/// On a `STAR`: it starts the pattern; its run end goes into the skip register (the word
+/// after its follow set, also in `H_SKIP`) without the undo log, and a search that failed
+/// starts its next attempt after it (D1501).
 pub(crate) const F_LEAD: u32 = 1 << 15;
 /// On a `STAR` with a follow set: the end of the input can start the continuation too.
 pub(crate) const F_END: u32 = 1 << 16;
@@ -162,26 +172,37 @@ pub(crate) fn compile(parsed: &Parsed, flags: Flags) -> super::Program {
     // search continues after the run (`SKIP`). A backreference could see the start
     // through group 0's neighbours, so patterns with one do without.
     let lead = leads_with_star(&parsed.node) && !has_backref(&parsed.node);
-    let skip_reg = if lead { Some(c.alloc_regs(1)) } else { None };
-    c.lead = skip_reg;
-    // search: skip to a possible first character, try a match there; on failure advance
-    // one character and retry.
-    let search = c.here();
-    c.code[H_SEARCH] = search;
-    if let Some((first, false)) = first_chars(&parsed.node, flags.unicode_mode())
+    let mut mode = anchor(&parsed.node);
+    if parsed.names.iter().any(|n| n.is_some()) {
+        mode |= M_NAMES;
+    }
+    if lead {
+        let r = c.alloc_regs(1);
+        c.lead = Some(r);
+        mode |= M_SKIP;
+        c.code[H_SKIP] = r;
+    }
+    c.code[H_MODE] = mode;
+    // A search (run by the matcher, D3135) tries an attempt at each position that can
+    // start a match: one with a character of the first set, if there is one.
+    if mode & M_ANCHOR != A_INPUT
+        && let Some((first, false)) = first_chars(&parsed.node, flags.unicode_mode())
         && first.ranges() != [(0, charset::MAX_CP)]
     {
-        c.class_op(SCAN, &first);
+        c.code[H_SEARCH] = c.here();
+        let ranges = first.ranges();
+        c.code.push_out(ranges.len() as u32);
+        let mut bits = [0u32; 8];
+        for &(lo, hi) in ranges {
+            c.code.push_out(lo);
+            c.code.push_out(hi);
+            for ch in lo..=hi.min(255) {
+                bits[ch as usize >> 5] |= 1 << (ch & 31);
+            }
+        }
+        c.code.extend_from_slice(&bits);
     }
-    let split = c.emit2(SPLIT_GOTO, 0);
-    if let Some(r) = skip_reg {
-        c.emit2(SKIP, r);
-    }
-    c.emit(ANY);
-    c.emit2(GOTO, search);
-    let anchored = c.here();
-    c.patch(split, anchored);
-    c.code[H_ANCHORED] = anchored;
+    c.code[H_ANCHORED] = c.here();
     c.emit2(SAVE, 0);
     c.node(&parsed.node, false);
     c.emit2(SAVE, 1);
@@ -338,6 +359,33 @@ fn leads_with_star(node: &Node) -> bool {
             ..
         } => is_single_char(body),
         _ => false,
+    }
+}
+
+/// Where every match of `node` must start (`A_*`): after a `^` at its start in every
+/// alternative.
+fn anchor(node: &Node) -> u32 {
+    match node {
+        Node::LineStart { multiline } => {
+            if *multiline {
+                A_LINE
+            } else {
+                A_INPUT
+            }
+        }
+        Node::Group { body, .. } => anchor(body),
+        Node::Concat(v) => v.first().map_or(0, anchor),
+        Node::Alt(v) => {
+            let mut a = A_INPUT;
+            for n in v {
+                match anchor(n) {
+                    0 => return 0,
+                    x => a = a.max(x),
+                }
+            }
+            if v.is_empty() { 0 } else { a }
+        }
+        _ => 0,
     }
 }
 
