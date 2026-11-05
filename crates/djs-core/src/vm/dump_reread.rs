@@ -78,11 +78,21 @@ impl Dumper<'_> {
         ftext: &str,
         named: &[NamedSlot],
         val: &dyn Fn(&NamedSlot) -> Value,
+        site: u32,
     ) -> Vec<String> {
         let slot = |name: &str| named.iter().find(|x| x.name == name).map(val);
         let text = |a: u32, b: u32| ftext.get(a as usize..b as usize).unwrap_or("");
         let mut out = Vec::new();
         for n in &syntax.nodes {
+            // An object literal with the site in a property's value: written again as
+            // the original's text where the properties before it read again what the
+            // object made so far holds (nothing sees the object before it is complete).
+            if n.kind == NodeKind::Object
+                && let Some(ov) = slot(&cat!("object.literal@", n.start))
+                && self.object_rereads(f, named, val, ftext, n, ov, site)
+            {
+                out.push(cat!("object.literal@", n.start));
+            }
             // A loop over a saved iterator: its `next` read again from the iterator, and
             // whether it has no `return` (nothing closes it: the rest of the current
             // iteration may run outside the loop, D2908).
@@ -150,6 +160,78 @@ impl Dumper<'_> {
             }
         }
         out
+    }
+
+    /// Whether object literal `n` (the object made so far `ov`, the site at `site`) can
+    /// be written as the original's text: the site in a property's value, every property
+    /// before it a plain key (a name or a string) with a literal or a name that holds the
+    /// object's value of it now, or a shorthand one.
+    #[allow(clippy::too_many_arguments)]
+    fn object_rereads(
+        &self,
+        f: Option<Obj>,
+        named: &[NamedSlot],
+        val: &dyn Fn(&NamedSlot) -> Value,
+        ftext: &str,
+        n: &crate::compiler::Node,
+        ov: Value,
+        site: u32,
+    ) -> bool {
+        let h = self.h;
+        let text = |a: u32, b: u32| ftext.get(a as usize..b as usize).unwrap_or("");
+        let Some(o) = ov.as_object() else {
+            return false;
+        };
+        let Some(k) = n.parts.iter().position(|p| p.start <= site && site < p.end) else {
+            return false;
+        };
+        // (The site's own key a plain one: a computed one was evaluated already.)
+        if n.parts[k].role != Role::Value || k == 0 || n.parts[k - 1].role != Role::Key {
+            return false;
+        }
+        let mut keys: Vec<String> = Vec::new();
+        let mut m = 0;
+        while m + 1 < k {
+            let p = n.parts[m];
+            let (key, value) = match p.role {
+                Role::Shorthand => (String::from(text(p.start, p.end).trim()), p),
+                Role::Key if n.parts[m + 1].role == Role::Value => {
+                    let t = text(p.start, p.end).trim();
+                    let key = if is_ident(t) {
+                        String::from(t)
+                    } else if is_literal(t) && (t.starts_with('"') || t.starts_with('\'')) {
+                        String::from(&t[1..t.len() - 1])
+                    } else {
+                        return false;
+                    };
+                    m += 1;
+                    (key, n.parts[m])
+                }
+                _ => return false,
+            };
+            m += 1;
+            if key == "__proto__" || keys.contains(&key) || key.parse::<u32>().is_ok() {
+                return false;
+            }
+            let Some(have) = super::origin::own(h, o, &key) else {
+                return false;
+            };
+            let vt = text(value.start, value.end);
+            let ok = if p.role != Role::Shorthand && is_literal(vt) {
+                true
+            } else if let Some(Read::Ident(id)) = parse(vt) {
+                self.read_name(f, named, val, id)
+                    .is_some_and(|now| same(h, now, have))
+            } else {
+                false
+            };
+            if !ok {
+                return false;
+            }
+            keys.push(key);
+        }
+        // (Nothing else on it: its own keys are those.)
+        m + 1 == k && h.own_keys(o).len() == keys.len()
     }
 
     /// The value identifier `name` reads in the continuation, if it reads one without

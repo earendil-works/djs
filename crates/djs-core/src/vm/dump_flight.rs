@@ -1971,6 +1971,7 @@ impl Dumper<'_> {
             &ftext,
             &named,
             &|x| fv(index(x.place)),
+            site.pos,
         );
         let act = plain::Act {
             rereads,

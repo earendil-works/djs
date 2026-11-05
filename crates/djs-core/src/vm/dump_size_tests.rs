@@ -345,3 +345,36 @@ f([2, 3]).then(print);
         "{e}"
     );
 }
+
+/// An object literal with the site in a property's value is written as the original's
+/// text where the properties before it read again what the object made so far holds
+/// (D2836): shorthand and literal ones; kept as the object made so far where a property
+/// would read something else (a binding the site's operand reassigns, a call).
+#[test]
+fn plain_dumps_write_object_literals_again() {
+    let src = r#"
+async function plain(path) { return JSON.stringify({ path, n: 1, "s": "x", content: await later(2) }); }
+async function reassigned() { let p = 1; return JSON.stringify({ p, v: await (p = 2, later(3)) }); }
+function g() { return "g"; }
+async function called() { return JSON.stringify({ a: g(), v: await later(4) }); }
+async function main() {
+  for (const f of [() => plain("a.md"), reassigned, called]) print(await f());
+}
+main();
+"#;
+    let (failed, refused, ok) = plain_check_program("objects", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, _, refused) = plain_chain_program("objects", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 3, "{ok}");
+    let at = |k: usize| plain_dump_at(src, k);
+    assert!(
+        at(1).contains("{ path, n: 1, \"s\": \"x\", content: await "),
+        "{}",
+        at(1)
+    );
+    assert!(at(2).contains("$djs_D("), "{}", at(2));
+    assert!(at(3).contains("$djs_D("), "{}", at(3));
+}

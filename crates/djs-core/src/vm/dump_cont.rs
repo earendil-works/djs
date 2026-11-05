@@ -2499,6 +2499,18 @@ impl G<'_, '_> {
     }
 
     fn object(&mut self, i: usize, n: &Node, k: usize) -> R<P> {
+        // The literal as written, where its properties before the site read again what
+        // the object made so far holds (D2836, dump_reread.rs).
+        let lit = cat!("object.literal@", n.start);
+        if self.rereads(&lit) {
+            self.consume(&lit);
+            let e = self.expr(i + 1)?;
+            return Ok(P::L(alloc::vec![
+                self.rest(n.start, n.parts[k].start),
+                e,
+                self.rest(n.parts[k].end, n.end)
+            ]));
+        }
         // The object made so far; the rest of the literal is defined on it in order.
         let ot = self.tmp_text("object.literal", n.start)?;
         // The first part of the property holding the site.

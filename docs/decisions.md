@@ -10029,3 +10029,18 @@ Score: v2 471,916 → 424,241 raw (gzip 177,258 → 153,023), records 59 → 10.
 1,247 → 1,093 (648 → 563); corpus 7,286,070 → 7,108,975. Cost: the writer generates each
 continuation twice (the corpus's first dumps: about 5-10 % more dump time, mostly the
 generator's liveness rendering), each re-dump once per continuation activation.
+
+## D2914: Literal operands and object literals are read again
+date: 2026-11-05 · by: pjs · issue: 0207
+D2905's rule (an operand evaluated before the site is written as the original's text where
+that gives the saved value) now also takes literals (a string without escapes, a decimal
+number, `true`, `false`, `null`), which give their value again, and object literals: one
+with the site in a property's value (its own key a plain one) is written as the original's
+text where every property before it has a plain key (a name or a string, no index, no
+`__proto__`, no duplicate) and a literal, or a name that holds the object's value of that
+key now, and the object has no other own keys. Nothing sees the object before the literal
+is complete, so making it again is the original's evaluation. Elsewhere the object made so
+far stays a constant with the rest defined on it (`$djs_D`). The operands of K's own
+`$djs_R`/`$djs_C` call stay constants: origin tracking finds the original's temporaries in
+K's call only where K's call is the original's. Corpus 7,243,739 → 7,222,438 raw (313
+`$djs_D` chains, mostly `text({ path, content: await … })`).
