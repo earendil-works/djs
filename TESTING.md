@@ -275,9 +275,11 @@ every case a second (third) time; a transcript that differs from the plain djs r
 hard failure, separate from the oracle comparison and the ratchet (D1161). Stressed runs
 get three times the case's time limit, and a stressed run that still times out is a
 failure too: mark such a case `no-stress` with the measured reason (D1530).
-`--lazy` runs every djs VM with lazy functions (D2990); the gate's stressed difftest uses
-it, its test262 leg runs the active group both lazy and eager (in parallel), the other legs (the bytecode backend, unsafe-heap, slim, plain dumps)
-run eager, and `vm::lazy_tests` checks that lazily compiled code equals eager code (D2991).
+`--lazy` runs every djs VM with lazy functions (D2990). The gate's stressed difftest and
+its plain dumps leg use it (the dump module is lazy, D2993), its test262 leg runs the active
+group both lazy and eager (in parallel), the other legs (the bytecode backend, unsafe-heap,
+slim) run eager, and `vm::lazy_tests` checks that lazily compiled code equals eager code
+(D2991).
 `--plain-dumps` (0172, 0201, D2830) dumps the VM at every idle point (a plain Script: the
 session's globals, the prelude's state, open calls, pending promises, suspended
 activations as continuations, the prelude's `api` as the completion value), runs the dump
