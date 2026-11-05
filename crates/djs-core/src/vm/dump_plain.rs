@@ -2334,6 +2334,17 @@ impl W<'_> {
                         let effect = last
                             || !l.starts_with("$dump.")
                             || inline::def_rhs(&l).is_some_and(|r| !inline::shape(r));
+                        // (A call whose activation nothing names: a statement.)
+                        let l = match inline::def_rhs(&l) {
+                            Some(r)
+                                if n == 1
+                                    && l.starts_with(&cat!(me, " = "))
+                                    && !self.inl.uses.contains_key(&ir.acts[*a].name) =>
+                            {
+                                inline::statement(r)
+                            }
+                            _ => l,
+                        };
                         let bound = self.acts[*a]
                             .k
                             .as_ref()
@@ -2379,6 +2390,16 @@ impl W<'_> {
                             let first = inline::first_eval(&text);
                             let text = self.inline_refs(&text, first, false);
                             let effect = Self::effectful(&kind, &text);
+                            // A value nothing reads: its effect alone, or nothing.
+                            if self.inl.uses.get(name).copied() == Some(1)
+                                && let Some(r) = inline::def_rhs(&text)
+                            {
+                                if effect {
+                                    let st = inline::statement(r);
+                                    self.put_line(st, true, None);
+                                }
+                                continue;
+                            }
                             let def = self
                                 .single(name, true)
                                 .then(|| inline::def_rhs(&text).map(String::from))

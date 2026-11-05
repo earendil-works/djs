@@ -827,6 +827,20 @@ pub(super) fn only_keys(text: &str, name: &str) -> bool {
     any
 }
 
+/// Value text `rhs` as an expression statement (in parentheses where it would start
+/// another statement).
+pub(super) fn statement(rhs: &str) -> String {
+    let t = rhs.trim();
+    let other = ["{", "function", "class", "async", "let"]
+        .iter()
+        .any(|k| t.starts_with(k));
+    if other {
+        cat!("(", t, ");")
+    } else {
+        cat!(t, ";")
+    }
+}
+
 /// The value of a `$dump.X = value;` line.
 pub(super) fn def_rhs(text: &str) -> Option<&str> {
     let rest = text.strip_prefix("$dump.")?;
