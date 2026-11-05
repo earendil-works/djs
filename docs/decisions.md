@@ -9982,3 +9982,23 @@ the dump primes K to the delegation's yield, as for a generator suspended there
 (`$dump.p = $dump.a.return(v)`). The wrapper `$djs_Y(it, next, 2, promise)` hands out
 its placeholder first, and its first `return` gives the awaited promise. K's `yield*`
 then awaits it, checks it is an object, and returns or yields as the original does.
+
+## D2972: Hosts bind host functions explicitly: globals, namespaces and body bindings
+date: 2026-11-05 · by: hb · issue: 0213
+Where scripts find a host function is the host's choice, separate from its identity
+(D2970). The Sandbox takes `functions`/`asyncFunctions` keyed by identity and two binding
+tables: `globals` (global name → identity of a function or namespace) and `bindings`
+(parameter name → identity, given to every codemode body after the run's `params`): a
+script that calls `myTool("x")` finds it as a parameter, the stand-in for `import {
+myTool } from "@sdk/our-stuff"`. An identity `ns.member` of two identifiers makes the
+function a member of the namespace object `ns`, itself a value with identity `ns` that
+can be bound anywhere, also as a body binding. Without `globals` one written rule
+applies: `console`, every namespace and every function whose identity is an identifier
+are globals of their own names (`tools.read` makes the global `tools`); `defineFunction`
+binds the same way. The CLI binds `tools` and `console` as a body's parameters
+(`BODY_PARAMS`) and `--bind NAME=IDENTITY` adds one; its answers files are keyed by
+identity (`"tools.read"`), with no bare-name fallback (D024). The docs runner's bodies
+have no parameters. Imports later are one more binding: a host resolver maps (specifier,
+export) to an identity, by default `specifier#export`, and the import binding holds that
+identity's object; dumps already name it by identity (D2971). Per-run bindings are left
+out until a host needs them.

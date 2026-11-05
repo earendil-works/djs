@@ -166,7 +166,7 @@ return twice(Promise.resolve(21));
 
 <!-- gen:disasm -->
 ```text
-function 0 <anonymous>: params=2 locals=2 stack=5 captures=0
+function 0 <anonymous>: params=0 locals=2 stack=5 captures=0
   handler [3, 32) -> 32 depth 0
     0  async_start loc0 (<state>)
     3  fclosure child0

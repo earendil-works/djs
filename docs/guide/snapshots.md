@@ -264,7 +264,7 @@ is this dump (`djs run --body --dump-after 2`; the open call's state is the CLI'
 "use strict";
 $djs.seed(2135587861, -1640531527, 4);
 globalThis.$dump = {};
-$dump.p1 = $djs.resume(3, "tools.read", [{ path: "b.md" }], {"made":["read"],"answered":{"read":1}});
+$dump.p1 = $djs.resume(3, "tools.read", [{ path: "b.md" }], {"made":["tools.read"],"answered":{"tools.read":1}});
 $dump.n2 = ["# A"];
 $dump.i3 = $djs.advance(Array.prototype.values.call(["a.md", "b.md"]), 2);
 $dump.Fa4 = $djs.source("notes.js", "3753c3a1172c33f7", "tools,console");
@@ -276,7 +276,7 @@ for (const path of $djs_I($djs_i1)) {
   notes.push(await tools.read({ path }));
 }
 return notes.join("\n");
-}, { f: $dump.Fa4, segs: […], scaf: […] }).call(globalThis, tools, $dump.n2);
+}, { f: $dump.Fa4, segs: […], scaf: […] }).call(globalThis, $djs.host("tools"), $dump.n2);
 try { ($dump.a4); } finally { delete globalThis.$dump; delete globalThis.$djs; }
 ```
 
@@ -290,6 +290,9 @@ one object the host provides while it loads, `$djs` (D2834, D2890):
 - `$djs.resume(id, name, args, state)` stands for the open tool call: the host continues
   call `id` of its function `name` under the same id and gives back its promise; the
   last argument is the host's own state of the call, JSON it gave when it dumped (D2770);
+- `$djs.host("tools")` is the host's `tools` object, named by the name the host gave it
+  rather than by where the script found it (here a parameter); the host returns the very
+  object it bound under that name (D2970, D2971);
 - `$dump.a4` is what the suspended function's **continuation** returned: a function of
   the same kind whose body is the rest of the original from the `await` on, written where
   it is called. Its parameters are the values the frame held there that the rest still

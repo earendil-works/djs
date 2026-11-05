@@ -159,8 +159,14 @@ is a `TypeError` naming its path.
 
 ## Host calls
 
-A tool is a host function, installed as a global or passed as a parameter. There are two
-kinds:
+A tool is a host function. What identifies it is a name its host chooses, such as
+`tools.read` or `@sdk/our-stuff#myTool`, not where scripts find it (D2970): the host
+binds it wherever it likes, as a global, as a member of a namespace object like `tools`,
+or as a parameter of the script's body, so a script can call a bare `myTool("x")` as it
+later will after `import { myTool } from "@sdk/our-stuff"` (D2972). The Sandbox takes
+the functions by name and two small tables, `globals` and `bindings`, that say where they
+appear; without `globals`, a name like `tools.read` makes a global `tools` holding
+`read`. Calls, journals and dumps always use the name. There are two kinds:
 
 - A **sync host function** (`vm_new_host_function`) parks the VM. `vm_run` returns
   HOST_CALL, the host reads the arguments with the reader, calls the function, sends the

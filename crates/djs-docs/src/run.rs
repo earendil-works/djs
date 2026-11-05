@@ -3,7 +3,8 @@
 //!
 //! Examples are codemode async function bodies (D008), as in pi and in the live examples
 //! (`Sandbox.run`): top-level `await` and `return` work, and `console.log` prints. The
-//! VM starts from the base snapshot, with the clock at 0.
+//! VM starts from the base snapshot, with the clock at 0. The bodies have no parameters:
+//! `console` is a global, as a host binds it (D2972).
 
 use djs_core::bytecode::template::disasm_template;
 use djs_core::compiler::{CompileOptions, compile};
@@ -12,7 +13,6 @@ use djs_core::value::Value;
 use djs_core::vm::{Status, Vm, VmOptions};
 
 const CONSOLE_LOG: u32 = 1;
-const PARAMS: [&str; 2] = ["tools", "console"];
 
 /// Runs `src`; returns what it printed, then `Uncaught ...` if it threw.
 pub fn run(src: &str) -> String {
@@ -27,14 +27,13 @@ pub fn run(src: &str) -> String {
         .expect("out of memory");
     let main = match vm.compile(
         src.as_bytes(),
-        &CompileOptions::async_body("example.js", &PARAMS),
+        &CompileOptions::async_body("example.js", &[]),
     ) {
         Ok(f) => f,
         Err(e) => return format!("SyntaxError: {} at {}:{}\n", e.message, e.line, e.col),
     };
     let this = Value::object(vm.global());
-    vm.call(main, this, &[Value::UNDEFINED, Value::object(console)])
-        .expect("the VM is idle");
+    vm.call(main, this, &[]).expect("the VM is idle");
     let mut out = String::new();
     // Suspend every SLICE units of fuel and resume in a new VM from the heap image, like
     // the gate's stress mode: an example also proves that it survives suspension.
@@ -81,7 +80,7 @@ pub fn disasm(src: &str) -> String {
     match compile(
         &mut heap,
         src.as_bytes(),
-        &CompileOptions::async_body("example.js", &PARAMS),
+        &CompileOptions::async_body("example.js", &[]),
     ) {
         Ok(t) => disasm_template(&heap, t),
         Err(e) => format!("SyntaxError: {} at {}:{}\n", e.message, e.line, e.col),

@@ -172,7 +172,7 @@ return log;
 
 <!-- gen:disasm -->
 ```text
-function 0 <anonymous>: params=2 locals=4 stack=3 captures=0
+function 0 <anonymous>: params=0 locals=4 stack=3 captures=0
   handler [7, 19) -> 40 depth 0
   handler [3, 49) -> 49 depth 0
     0  async_start loc0 (<state>)

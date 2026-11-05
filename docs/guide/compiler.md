@@ -65,7 +65,7 @@ return price * qty - discount;
 
 <!-- gen:disasm -->
 ```text
-function 0 <anonymous>: params=2 locals=4 stack=2 captures=0
+function 0 <anonymous>: params=0 locals=4 stack=2 captures=0
   handler [3, 19) -> 19 depth 0
     0  async_start loc0 (<state>)
     3  push_i8 12
@@ -176,7 +176,7 @@ return count;
 
 <!-- gen:disasm -->
 ```text
-function 0 <anonymous>: params=2 locals=3 stack=2 captures=0
+function 0 <anonymous>: params=0 locals=3 stack=2 captures=0
   handler [3, 29) -> 29 depth 0
     0  async_start loc0 (<state>)
     3  new_box loc1 (count)
@@ -277,8 +277,8 @@ console.log(sum);
 
 <!-- gen:disasm -->
 ```text
-function 0 <anonymous>: params=2 locals=3 stack=3 captures=0
-  handler [3, 37) -> 37 depth 0
+function 0 <anonymous>: params=0 locals=3 stack=3 captures=0
+  handler [3, 43) -> 43 depth 0
     0  async_start loc0 (<state>)
     3  push0
     4  put_loc1 (sum)
@@ -294,22 +294,22 @@ function 0 <anonymous>: params=2 locals=3 stack=3 captures=0
    17  push_i8 10
    19  lt  ; 2:19
    20  jump_if_true8 -> 9  ; 2:30
-   22  get_arg1  ; 3:1
-   23  get_method "log" ic0  ; 3:8
-   30  get_loc1 (sum)  ; 3:13
-   31  call1  ; 3:12
-   32  drop
-   33  undefined
-   34  async_return loc0 (<state>)
-   37  async_reject loc0 (<state>)
+   22  get_global "console" ic0  ; 3:1
+   29  get_method "log" ic1  ; 3:8
+   36  get_loc1 (sum)  ; 3:13
+   37  call1  ; 3:12
+   38  drop
+   39  undefined
+   40  async_return loc0 (<state>)
+   43  async_reject loc0 (<state>)
 ```
 <!-- /gen -->
 
 The loop is entered with one jump to the condition at the bottom; every iteration after
 that is the body, `inc_loc`, the comparison and one backward conditional jump. Two more
-details show up here: `console` is the codemode body's second parameter
-(`get_arg1`), and `get_method "log" ic0` carries the number of its inline cache slot
-(D1620). Measured in wasm, rotation, the peepholes and the matching interpreter fast
+details show up here: `console` is a global the host defines, read with an inline
+cache like a property (`get_global "console" ic0`), and `get_method "log" ic1` carries
+the number of its own inline cache slot (D1620). Measured in wasm, rotation, the peepholes and the matching interpreter fast
 paths cut the instructions executed by the tightest benchmark loops by 35 to 38%.
 
 > **Trade-off.** A stack machine over registers. A register VM executes fewer

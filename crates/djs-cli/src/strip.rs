@@ -36,8 +36,11 @@ pub fn main(args: &[String]) -> i32 {
 fn strip(path: &str, src: &[u8]) -> Result<Vec<u8>, CompileError> {
     let mut heap = Heap::new().expect("heap");
     // A codemode body: top-level `await` and `return` parse.
-    let params = ["tools", "console"];
-    strip_types(&mut heap, src, &CompileOptions::async_body(path, &params))
+    strip_types(
+        &mut heap,
+        src,
+        &CompileOptions::async_body(path, crate::run::BODY_PARAMS),
+    )
 }
 
 fn strip_file(path: &str) -> i32 {

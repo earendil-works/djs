@@ -2,7 +2,8 @@
 
 ```sh
 cargo run -p djs-cli -- run [--body] [--ts] [--experimental-decorators] [--emit-decorator-metadata]
-    [--gc-stress] [--suspend-every N] [--backend bytecode|native] [--tools answers.json] file.js
+    [--gc-stress] [--suspend-every N] [--backend bytecode|native] [--tools answers.json]
+    [--bind NAME=IDENTITY] file.js
 cargo run -p djs-cli -- disasm [--body] file.js
 cargo run -p djs-cli -- strip-types file.ts
 cargo run -p djs-cli -- resume [--explain] [--tools answers.json] [--gc-stress] [--suspend-every N] dump.js
@@ -25,13 +26,24 @@ continues: `later` calls always, tool calls from `--tools answers.json`. A call 
 answer ends the run with `djs: no answer for #4 tools.read({"path":"x"})` on stderr and
 exit code 1.
 
+A host function is named by its identity (D2970), its full name: `tools.read` for a tool,
+`later`, `print`. A `--body` gets the CLI's default bindings `tools` and `console` as its
+parameters; `--bind NAME=IDENTITY` adds a parameter `NAME` holding the async host
+function `IDENTITY` (`--bind myTool=@sdk/our-stuff#myTool`, a stand-in for an import,
+D2972), answered like a tool from the answers file's entry for `IDENTITY`. A dump names
+the host values it holds by identity, `$djs.host("tools.read")` (D2971).
+
 `resume dump.js` (D2603) runs a dump (`"djs-dump";`, D2830, D2835) in a fresh VM with the
 same globals and goes on to its end like `run`: the open calls the dump recreates keep
 their ids and are answered the same way. A dump is a Script: `resume` runs it with the
-global object `$djs` (D2890), the dump runtime's helpers (D2903) plus two hooks:
-`seed(lo, hi, next)` sets `Math.random`'s state and the next call's id (D2897), and
+global object `$djs` (D2890), the dump runtime's helpers (D2903) plus the hooks:
+`seed(lo, hi, next)` sets `Math.random`'s state and the next call's id (D2897),
 `resume(id, name, args, state)` opens the dump's call `id` of `name` (`later`,
-`tools.read`, ...) again under that id; the CLI then answers it like any call. The dump
+`tools.read`, ...) again under that id, and the CLI then answers it like any call;
+`source(name, hash, params)` compiles the body file `name` again (D2882), and
+`host(name)` returns the host value `name` (D2971): the tool of that identity from the
+`tools` table (the same function the run's `tools.read` reads), else the global of that
+path (`tools`, `console`, `print`, `later`). The dump
 deletes `$djs` at the end of its Script (the CLI also does, once the Script stops at an
 idle point or ends). A file that is not a dump, or a dump whose Script throws (a hook
 refused an unknown name, say), is exit code 2 with `djs: cannot load ...` or `djs: the
@@ -228,13 +240,14 @@ input `input N`, so a restore prints them as before; inputs typed after a restor
 numbered after the restored ones. While an input's declarations run (the first part of a
 top-level-await input), `.dump-every` skips that idle point.
 
-**The answers file** (D2601) maps tool names to lists of answers, each `{"value": v}` or
-`{"error": "message"}`, optionally with `"args": [...]`:
+**The answers file** (D2601) maps functions by identity (`tools.read`, or a `--bind`
+identity) to lists of answers, each `{"value": v}` or `{"error": "message"}`, optionally
+with `"args": [...]`:
 
 ```json
 {
-  "glob": [{ "value": ["src/a.ts", "src/b.ts"] }],
-  "read": [
+  "tools.glob": [{ "value": ["src/a.ts", "src/b.ts"] }],
+  "tools.read": [
     { "args": [{ "path": "src/a.ts" }], "value": "// TODO" },
     { "value": "" },
     { "error": "ENOENT" }

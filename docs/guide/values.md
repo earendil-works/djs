@@ -94,7 +94,7 @@ let a = 1, b = 1000000, c = 2.5;
 
 <!-- gen:disasm -->
 ```text
-function 0 <anonymous>: params=2 locals=4 stack=1 captures=0
+function 0 <anonymous>: params=0 locals=4 stack=1 captures=0
   handler [3, 18) -> 18 depth 0
     0  async_start loc0 (<state>)
     3  push1

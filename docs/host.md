@@ -30,6 +30,8 @@ import { Sandbox, loadModule } from "@djs/host";
 const sb = await Sandbox.create({
   functions: { readFile: (p) => fs.readFileSync(p as string, "utf8") },
   asyncFunctions: { fetchJson: (url) => fetch(url as string).then((r) => r.json()) },
+  // globals: { readFile: "readFile", fetchJson: "fetchJson", console: "console" }, // the default
+  // bindings: { myTool: "@sdk/our-stuff#myTool" }, // body parameters bound to host functions
   console: myConsole,            // receives console.log/info/warn/error; default: console
   memoryLimit: 64 << 20,         // heap cap in bytes; default 4 GiB (see below)
   fuelSlice: 1_000_000,          // fuel per vm_run, i.e. how often the host gets control
@@ -64,6 +66,20 @@ sb.dispose();
   the wire format). A thrown host error is thrown in the VM at the call, as an Error of the
   same kind (TypeError, RangeError, otherwise Error) with the same message. A return value
   the wire format cannot carry (a function, a cycle) becomes such an error too.
+- **Identities and bindings (D2970, D2972).** `functions` and `asyncFunctions` are keyed
+  by the function's identity, any string (`readFile`, `tools.read`,
+  `@sdk/our-stuff#myTool`): calls, journals, `run.calls` and dumps name the function by
+  it, and the sandbox makes one function object per identity. An identity `ns.member` of
+  two identifiers also makes the function member `member` of the namespace object `ns`
+  (identity `ns`). Where scripts find them is separate: `globals` maps global names to
+  identities of functions or namespaces, and `bindings` maps parameter names to them,
+  which every codemode body gets after the run's `params` (`bindings: { myTool:
+  "@sdk/our-stuff#myTool", sdk: "sdk" }`: the script calls `myTool("x")` and
+  `sdk.fetch(u)`; the stand-in for imports). Without `globals`, one written rule:
+  `console`, every namespace and every function whose identity is an identifier are
+  globals of their own names, so `{ "tools.read": f }` makes the global `tools`; other
+  identities are bound nowhere. A run parameter with a binding's name, or a binding or
+  global to an identity the sandbox lacks, is a `misuse` error.
 - `functions` are *sync* host functions: a call parks the VM until it returns. `run` needs
   them to return synchronously (a promise is a TypeError in the VM); `runAsync` awaits a
   promise while the VM stays parked at the call.
@@ -99,10 +115,9 @@ sb.dispose();
 - A promise as the result is unwrapped: its value, or `threw` with its reason; a promise
   that can never settle is a `threw` error.
 - `defineFunction(name, f)`, `defineAsyncFunction(name, f)` and `setGlobal(name, value)`
-  add globals between runs. A function's name is its identity (D2970): what calls,
-  journals and dumps name it by, and the sandbox makes one function object per name. A
-  dotted name (`tools.read`) is a property of a global namespace object (`tools`) the
-  sandbox makes for its first such name (D2632).
+  add functions and globals between runs; the functions are bound by the written rule
+  above (a dotted name, `tools.read`, as a property of the global namespace object
+  `tools`, D2632).
 - Errors are `SandboxError` with a `kind`:
   - `threw`: an uncaught exception in the VM. `message` is the display form (`TypeError: x`);
     `value` is the value as read.

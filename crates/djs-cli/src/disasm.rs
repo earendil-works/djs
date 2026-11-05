@@ -5,7 +5,7 @@ use djs_core::compiler::{CompileOptions, compile};
 use djs_core::heap::Heap;
 
 const USAGE: &str = "usage: djs disasm [--body] <file.js>\n\
-  --body   compile as a codemode async body with parameters (tools, console)";
+  --body   compile as a codemode async body with parameters (tools, console), the CLI's default bindings";
 
 pub fn main(args: &[String]) -> i32 {
     let mut body = false;
@@ -35,9 +35,9 @@ pub fn main(args: &[String]) -> i32 {
             return 1;
         }
     };
-    let params = ["tools", "console"];
+    let params = crate::run::BODY_PARAMS;
     let opts = if body {
-        CompileOptions::async_body(path, &params)
+        CompileOptions::async_body(path, params)
     } else {
         CompileOptions::script(path)
     };

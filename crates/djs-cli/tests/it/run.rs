@@ -39,7 +39,7 @@ fn tools_from_an_answers_file() {
 fn a_call_without_an_answer() {
     let dir = env!("CARGO_TARGET_TMPDIR");
     let answers = format!("{dir}/run-answers-{}.json", std::process::id());
-    std::fs::write(&answers, r#"{"glob": [{"value": ["x"]}]}"#).unwrap();
+    std::fs::write(&answers, r#"{"tools.glob": [{"value": ["x"]}]}"#).unwrap();
     let r = djs(&["--body", "--tools", &answers, &format!("{DIR}/todos.js")]);
     std::fs::remove_file(&answers).unwrap();
     assert_eq!(
@@ -122,7 +122,7 @@ main();
     .unwrap();
     std::fs::write(
         &answers,
-        r#"{"n": [{"value": 1}, {"value": 2}, {"value": 3}]}"#,
+        r#"{"tools.n": [{"value": 1}, {"value": 2}, {"value": 3}]}"#,
     )
     .unwrap();
     assert_eq!(
@@ -133,7 +133,7 @@ main();
     assert_eq!(r, (0, "1\n".into(), String::new()));
     let text = std::fs::read_to_string(&dump).unwrap();
     assert!(
-        text.contains(r#", [], {"made":["n"],"answered":{"n":1}});"#),
+        text.contains(r#", [], {"made":["tools.n"],"answered":{"tools.n":1}});"#),
         "{text}"
     );
     let r = djs_cmd(&["resume", "--tools", &answers, &dump]);
@@ -253,19 +253,36 @@ fn every_idle_point_refused(script: &str, args: &[&str]) -> (u64, u64) {
             );
         }
         let mut r = vec!["resume"];
-        r.extend(args.iter().filter(|&&a| a != "--body"));
+        r.extend(resume_args(args));
         r.push(&out);
         let (code, rest, err) = djs_cmd(&r);
         assert_eq!((code, err.as_str()), (0, ""), "{script} k={k} resume");
         assert_eq!(format!("{head}{rest}"), full, "{script} k={k}");
         let _ = std::fs::remove_file(&chained);
         let mut r = vec!["resume"];
-        r.extend(args.iter().filter(|&&a| a != "--body"));
+        r.extend(resume_args(args));
         r.extend_from_slice(&["--dump-after", "2", &chained, &out]);
         djs_cmd(&r);
         expected_hooks = std::fs::read_to_string(&chained).ok().map(|t| hooks(&t));
     }
     unreachable!()
+}
+
+/// `run`'s arguments that `resume` takes too: not `--body` or `--bind NAME=ID` (the dump
+/// has the body's parameters and the functions bound to them).
+fn resume_args<'a>(args: &[&'a str]) -> Vec<&'a str> {
+    let mut out = Vec::new();
+    let mut it = args.iter();
+    while let Some(&a) = it.next() {
+        match a {
+            "--body" => {}
+            "--bind" => {
+                it.next();
+            }
+            _ => out.push(a),
+        }
+    }
+    out
 }
 
 /// `run --dump-after K` (and `--dump-every-idle`) then `resume`, so the CLI's loader
@@ -303,6 +320,39 @@ fn dump_after_every_idle_point() {
     let n = every_idle_point(&held, &["--body", "--tools", &answers]);
     std::fs::remove_file(&held).unwrap();
     assert_eq!(n, 5);
+    // A function bound as a bare body parameter, not under `tools` (`--bind`, D2972),
+    // answered by its identity; held across idle points and compared with itself.
+    let bound = format!("{dir}/dump-bound-{}.js", std::process::id());
+    let bound_answers = format!("{dir}/dump-bound-{}.json", std::process::id());
+    std::fs::write(
+        &bound,
+        "const held = myTool;\n\
+         const a = await myTool(1);\n\
+         const b = await held(2);\n\
+         console.log(a, b, held === myTool, typeof globalThis.myTool);\n",
+    )
+    .unwrap();
+    std::fs::write(
+        &bound_answers,
+        r#"{"@sdk/our-stuff#myTool": [{"value": "one"}, {"value": "two"}]}"#,
+    )
+    .unwrap();
+    let bind = [
+        "--body",
+        "--tools",
+        &bound_answers,
+        "--bind",
+        "myTool=@sdk/our-stuff#myTool",
+    ];
+    assert_eq!(
+        djs(&[&bind[..], &[bound.as_str()]].concat()),
+        (0, "one two true undefined\n".into(), String::new())
+    );
+    let n = every_idle_point(&bound, &bind);
+    for f in [&bound, &bound_answers] {
+        std::fs::remove_file(f).unwrap();
+    }
+    assert_eq!(n, 2);
     // A codemode body whose helper closes over the `tools` parameter (D2620).
     let n = every_idle_point(&format!("{DIR}/todos.js"), &["--body", "--tools", &answers]);
     assert!(n >= 2, "{n} idle points");

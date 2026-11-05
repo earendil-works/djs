@@ -360,8 +360,8 @@ fn answers_file() {
     let path = format!("{dir}/repl-answers-{}.json", std::process::id());
     std::fs::write(
         &path,
-        r#"{"read": [{"args": [{"path": "a"}], "value": "A"}, {"value": {"n": 1}}],
-            "fail": [{"error": "boom"}]}"#,
+        r#"{"tools.read": [{"args": [{"path": "a"}], "value": "A"}, {"value": {"n": 1}}],
+            "tools.fail": [{"error": "boom"}]}"#,
     )
     .unwrap();
     let out = repl_with(

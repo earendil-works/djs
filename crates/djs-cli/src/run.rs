@@ -2,7 +2,9 @@
 //! [--gc-stress] [--suspend-every N] [--backend B] [--tools answers.json] <file.js>`: run
 //! a script, serving `console.log` and `print` as sync host calls, `later(v)` and
 //! `tools.x()` as async host calls (0174, D2602): `later` is answered with its argument,
-//! tools from `--tools answers.json`, one call at every idle point.
+//! tools from `--tools answers.json`, one call at every idle point. A codemode body's
+//! parameters are the CLI's default bindings `tools` and `console`, and the functions
+//! `--bind NAME=IDENTITY` adds (D2972).
 //!
 //! `djs resume [same options] <dump.js>` runs a dump (a plain Script, D2830) in a fresh
 //! VM and goes on the same way (D2603).
@@ -21,8 +23,11 @@ use crate::tools::{MAKE_TOOL, Tools};
 
 const USAGE: &str = "usage: djs run [--body] [--ts] [--experimental-decorators]\n\
                 [--emit-decorator-metadata] [--gc-stress] [--suspend-every N] [--backend B]\n\
-                [--tools answers.json] <file.js>\n\
+                [--tools answers.json] [--bind NAME=IDENTITY] <file.js>\n\
   --body             run as a codemode async body with parameters (tools, console)\n\
+  --bind NAME=ID     with --body: one more parameter NAME, the async host function\n\
+                     ID (`--bind myTool=@sdk/our-stuff#myTool`), answered from\n\
+                     --tools under ID like a tool (repeatable)\n\
   --ts               parse as TypeScript (the default for .ts files)\n\
   --experimental-decorators\n\
                      TypeScript legacy decorators (experimentalDecorators)\n\
@@ -77,6 +82,15 @@ fn command(args: &[String], resume: bool) -> i32 {
     while let Some(a) = it.next() {
         match a.as_str() {
             "--body" => opts.body = true,
+            "--bind" if !resume => match it.next().and_then(|b| b.split_once('=')) {
+                Some((name, id)) if !name.is_empty() && !id.is_empty() => {
+                    opts.binds.push((name.to_string(), id.to_string()))
+                }
+                _ => {
+                    eprintln!("{usage}");
+                    return 2;
+                }
+            },
             "--ts" => opts.typescript = true,
             "--experimental-decorators" => opts.experimental_decorators = true,
             "--emit-decorator-metadata" => {
@@ -188,7 +202,8 @@ pub fn run_source(
     err: &mut impl Write,
 ) -> i32 {
     let mut vm = new_vm(opts);
-    let params = ["tools", "console"];
+    let mut params: Vec<&str> = BODY_PARAMS.to_vec();
+    params.extend(opts.binds.iter().map(|(n, _)| n.as_str()));
     let copts = if opts.body {
         CompileOptions::async_body(filename, &params)
     } else {
@@ -222,15 +237,19 @@ pub fn run_source(
         }
     };
     let args: Vec<Value> = if opts.body {
-        // `tools` (with `--tools`) and `console` are the globals.
-        let mut global = |name: &str| {
-            let key = vm.heap_mut().atom_str(name).expect("oom");
-            vm.heap()
-                .find_property(vm.global(), key)
-                .and_then(|(_, p)| p.value())
-                .unwrap_or(Value::UNDEFINED)
-        };
-        vec![global("tools"), global("console")]
+        // `tools` and `console` are the globals; a bound function is made in the tools'
+        // table under its identity, so that a dump names it so (D2971).
+        let mut args: Vec<Value> = BODY_PARAMS
+            .iter()
+            .map(|n| vm.global_path(n).unwrap_or(Value::UNDEFINED))
+            .collect();
+        for (_, id) in &opts.binds {
+            if tools.id_for_call_name(id).is_none() {
+                tools.id_for(id);
+            }
+            args.push(tools.host_value(&mut vm, id).unwrap_or(Value::UNDEFINED));
+        }
+        args
     } else {
         Vec::new()
     };
@@ -391,7 +410,13 @@ pub struct RunOptions {
     pub dumping: Dumping,
     /// `djs resume`: the run goes on from a dump.
     pub resume: bool,
+    /// `--bind NAME=IDENTITY`: more body parameters, bound to host functions (D2972).
+    pub binds: Vec<(String, String)>,
 }
+
+/// A codemode body's parameters in the CLI: its default bindings (D2972), the `tools`
+/// Proxy and `console`; `--bind` adds more.
+pub const BODY_PARAMS: &[&str] = &["tools", "console"];
 
 impl RunOptions {
     pub fn vm_options(&self) -> VmOptions {
