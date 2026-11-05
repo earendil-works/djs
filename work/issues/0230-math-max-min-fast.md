@@ -83,6 +83,7 @@ Merged: pure leaf intrinsics in the tier-0 loop (D3120), bgen inlining of small 
 the bytecode prelude with `%Throw` and `@frame` (D3121), @fast Math.max/min (D3122), and
 ceilings +1.8 KB / +1.4 KB gz (D3123). Wasm instructions per op: Math.max 8.8k → 1.2k,
 Math.floor -40%, substring/at/repeat/toFixed/lastIndexOf -35-40%, padStart/startsWith
--30%, trim/toLowerCase/replace/parseInt -20-25%. Gaps that remain over 2x QuickJS
-(substring, padStart/End, at, String(i), Number.isInteger) need per-builtin paths or more
-inlining; see Follow-ups.
+-30%, trim/toLowerCase/replace/parseInt -20-25%. 0230b then added @fast entries for
+substring, at, repeat, padStart/padEnd, String(), Number.isInteger and toFixed (D3124, +1.3 KB
+gz): all of them are now within 1.1-1.5x quickjs-wasi in wasm instructions, Number.isInteger
+faster than it.
