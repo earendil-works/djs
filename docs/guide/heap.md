@@ -78,8 +78,8 @@ into the buffer in place and makes a new 24-byte append rope with the longer len
 old string is still the shorter rope over the same buffer, and still reads the same
 units, because the units past its length are not part of it. Only the rope at the end of
 the buffer may write into it; any other append copies first. Ten million
-single-character appends in a function take 150 MB of resident memory this way, against
-574 MB with one rope node per append.
+single-character appends in a function leave a sandbox with <!--n heap/append-10m-memory mb-->40.5 MB<!--/n--> of wasm memory
+this way; a rope node per append would add 24 bytes for each, 240 MB.
 
 ```js live
 const ascii = "codemode";
@@ -206,8 +206,9 @@ bytes. `JSON.parse`, the host's value decoder and object literals with a known k
 walk the transitions once per key and allocate the values block at its exact size, so
 every record of a JSON array shares one chain.
 
-In numbers: a `{a, b, c, d}` literal costs 82.5 bytes per object with a shape against
-122.5 with a private table, and a five-key `JSON.parse` record 130.5 against 178.5. And
+In numbers: a `{a, b, c, d}` literal costs <!--n heap/literal4/shape .0-->72<!--/n--> bytes of heap per object with a shape
+against <!--n heap/literal4/dictionary .0-->112<!--/n--> with a private table, and a five-key `JSON.parse` record <!--n heap/json5/shape .0-->104<!--/n--> against
+<!--n heap/json5/dictionary .0-->152<!--/n-->. And
 since a shape is something an [inline cache](interpreter.md) can compare,
 property reads and additions on such objects hit the caches.
 

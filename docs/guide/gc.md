@@ -74,10 +74,9 @@ build on, together with collection points that don't depend on slicing.
 > **Trade-off.** In-place over copying for a VM's own collections. A copying
 > collector needs the old and the new arena at once, about twice the live data, plus
 > what the host allocator fragments when the arena moves. In wasm, memory never shrinks,
-> so that peak is what every run costs; sliding in place has no second arena and cuts
-> the peak of allocation-heavy runs by up to half. The cost: two traversals instead of
-> one, plus the bitmap work, so a collection takes 1.1 to 1.6 times as long, and the
-> engine carries two collectors.
+> so that peak is what every run costs; sliding in place has no second arena, which
+> matters most for allocation-heavy runs. The cost: two traversals instead of one, plus
+> the bitmap work, so a collection takes longer, and the engine carries two collectors.
 
 ## The old region
 
@@ -143,8 +142,8 @@ collections ran before it or not.
 > stores into old cells (a card table) would let a minor collection read only the cells
 > written since the last one. But it costs a compare on every traced store in the
 > interpreter's hottest paths, and it has to be complete, raw stack writes included: a
-> forgotten store frees a live cell. The walk has nothing to forget, and with the
-> per-kind tables it costs about 1% of the runs that collect most often.
+> forgotten store frees a live cell. The walk has nothing to forget, and the per-kind
+> tables keep it cheap.
 
 > **Trade-off.** A sealed setup phase over promotion. A generational collector moves
 > long-lived young cells into the old region, so later collections stop tracing them.

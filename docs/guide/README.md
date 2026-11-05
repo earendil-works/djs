@@ -87,10 +87,22 @@ in, so the Markdown reads the same on GitHub. Never edit it by hand.
 | `ops-all` | every opcode |
 | `intrinsics-all` | every intrinsic, descriptions from builtins/intrinsics.d.ts |
 | `excerpt PATH "ANCHOR" "START" N` | N lines of a repository file: from the first line containing START after the line containing ANCHOR (quoted code that cannot drift) |
-| `status conformance\|speed\|size\|inventory` | status numbers: counted from the repository, or read from `tests/scores/status.tsv` (`scripts/status.py`); also used in README.md |
+| `status conformance\|speed\|size\|inventory\|recorded` | status numbers: counted from the repository, or read from `tests/scores/status.tsv` (`scripts/status.py`); also used in README.md. `recorded` lists the recorded measurements (on pi.md those that name pi, elsewhere the others) |
 | `disasm` | the bytecode of the closest `js` or `ts` block above |
 | `run` | the output of the closest `js` or `ts` block above, as this build prints it |
 | `dump [N]` | the continuation dump the closest `js` or `ts` block above writes at its Nth `debugger;` pause (default 1), as a live example writes it at that pause |
+
+A single number in prose is generated the same way, inline:
+`<!--n KEY FMT-->1,234<!--/n-->`, with its markers on one line. KEY is a count from the
+repository (`test262/active`, `test262/total`, `test262/passed`, `corpus/cases`,
+`corpus/harvest`, `base/bytes`, `base/tail`, `builtins/all`, `builtins/native`,
+`builtins/fast`, `intrinsics/leaf`, `intrinsics/reentrant`, `opcodes`, `cell-kinds`, and
+the other counts of crates/djs-docs/src/status.rs) or a key of `tests/scores/status.tsv`.
+FMT is optional: `.N` for N decimals, `~K` to round to a multiple of K, `kb`/`mb`
+(1000-based) or `kib`/`mib` (1024-based) for bytes, `kb.1` and so on with decimals.
+Without FMT an integer gets thousands separators. A figure that is measured belongs in
+`scripts/status.py` and in the prose as an inline number, never typed in by hand; a
+figure that follows from the code (a constant, a cell size) may be written out.
 
 Examples (`js` blocks, and `ts` blocks, which compile as TypeScript) are codemode async
 function bodies: `await` and `return` work at the top level and `console.log` prints. `run` executes them in a VM from the base

@@ -153,7 +153,7 @@ the realm record, `Math.random`'s state, the global object, the global lexical s
 `Symbol.for`'s registry, Map and Set tables, the atom table's cell with room for the
 atoms the VM adds, the host call table, the interpreter state and the value stack, the
 queues for promise jobs, host results and unhandled rejections, and the VM's own shape
-tree, already holding the shapes of the objects builtins create; about 8 KB in all.
+tree, already holding the shapes of the objects builtins create; <!--n base/tail kb.1-->7.8 KB<!--/n--> in all.
 Everything before the tail is the **builtin prefix**, which no VM writes to while
 builtins are merely used. The builtins' objects are marked as prototypes when the base is
 built, not when a cache first goes through them. Strings in the prefix don't cache their
@@ -180,7 +180,7 @@ Every VM's memory holds the base, so it is built to be small:
 - the final collection is a copying one, so the layout depends only on the object graph,
   not on how the prelude allocated.
 
-The base is about 182 KB in the full build and 132 KB in the
+The base is <!--n base/bytes kb-->186 KB<!--/n--> in the full build and <!--n slim/base kb-->135 KB<!--/n--> in the
 [slim one](builtins.md#two-builds-full-and-slim). Building it twice gives the same bytes,
 and the base built natively is byte for byte the realm that djs-wasm builds inside
 wasm32, which a test checks, so nothing in it depends on the platform.
@@ -244,7 +244,7 @@ are called, and liveness follows the collector's rules. From that it reports:
 - what a waiting VM holds: queued jobs, pending host calls, promises, and the suspended
   async functions and generators with their locals by name.
 
-An almost empty session is still about 190 KB of image, nearly all of it the base. So the
+An almost empty session's image is little more than the base's <!--n base/bytes kb-->186 KB<!--/n-->. So the
 largest cells, strings, shapes and functions describe only the session's own part: the
 cells that are new or changed against the base. The base's part is one line of totals.
 

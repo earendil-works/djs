@@ -64,8 +64,8 @@ looks at the time and decides whether to go on. A host that drives the engine di
 does this in its run loop; at the level of the wasm module, the run is abandoned with
 one call, and the VM is ready for the next. With the `Sandbox`, `maxFuel` is the
 budget, and a task that should end early is ended by disposing of its sandbox. A host
-that polls often keeps its latency low: a slice of 10,000 fuel is a few tens of
-microseconds of work.
+that polls often keeps its latency low: a slice of 10,000 fuel is about <!--n fuel/slice-us .0-->13<!--/n--> microseconds
+of work in a tight loop in wasm.
 
 ## Memory
 

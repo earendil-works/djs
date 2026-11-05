@@ -77,8 +77,8 @@ Machine instructions per workload (`scripts/perf/w/`), measured at 12f469900e,
 <!-- /gen -->
 
 pi's own benchmark (`js/bench/pi.bench.ts`, through pi's adapter, `scripts/status.py pi`):
-a tool-heavy script with 61 calls takes <!--n pibench/tool-heavy/djs .1-->2.4<!--/n--> ms on djs (reusing the prelude image)
-vs <!--n pibench/tool-heavy/qjs .1-->4.5<!--/n--> ms on quickjs-wasi, a script start <!--n pibench/start/djs .2-->0.14<!--/n--> ms vs <!--n pibench/start/qjs .1-->2.9<!--/n--> ms (<!--n pibench/start/djs-prelude .1-->4.9<!--/n--> ms on djs
+a tool-heavy script with 61 calls takes <!--n pi/bench/tool-heavy/djs .1-->2.4<!--/n--> ms on djs (reusing the prelude image)
+vs <!--n pi/bench/tool-heavy/qjs .1-->4.5<!--/n--> ms on quickjs-wasi, a script start <!--n pi/bench/start/djs .2-->0.14<!--/n--> ms vs <!--n pi/bench/start/qjs .1-->2.9<!--/n--> ms (<!--n pi/bench/start/djs-prelude .1-->4.9<!--/n--> ms on djs
 when it runs the prelude). Callback-heavy builtin code is the main remaining gap
 (work/issues/0081-perf-anatomy.md).
 
@@ -89,7 +89,7 @@ when it runs the prelude). Callback-heavy builtin code is the main remaining gap
 data, and the base snapshot (the initialized realm with all builtins, 186 KB) coded to
 46 KB in a custom section. The slim build is 906 KB (378 KB gzip); the dump module, the
 shipped build with the dumper, 1,966 KB (785 KB gzip). Module sizes measured at
-1389e5d611, 2026-11-05.
+86b0e17f6f, 2026-11-05.
 <!-- /gen -->
 
 Creating a VM copies the base snapshot: about <!--n startup/vm-new-us .1-->2.5<!--/n--> µs in wasm (D1990). A `Sandbox`

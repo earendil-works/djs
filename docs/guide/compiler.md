@@ -371,12 +371,12 @@ compiles all its lazy functions first, so no run pays for them.
 > **Trade-off.** Parse twice over keeping a tree. Keeping the first parse's state for
 > later would need a second code format in the heap, which images would then have to
 > carry. Parsing again needs nothing stored: the source is kept anyway, for `toString`
-> and stack traces. The cost: a function that runs is parsed twice, so its compile costs
-> about one and a half times an eager one, while a function that never runs costs about
-> 40% of one. Lazy compilation wins where most functions never run (dumps, libraries:
-> TypeScript's own compiler, a single 9 MB file, compiles in about half the time) and
-> loses on codemode scripts, whose callbacks nearly all run, which is why the codemode
-> modules leave it out.
+> and stack traces. The cost: a function that runs is parsed twice, so it costs more
+> than an eager compile, while a function that never runs costs well under one. Lazy
+> compilation wins where most functions never run (dumps, libraries: TypeScript's own
+> compiler, a single 9 MB file, loads in <!--n compile/typescript-lazy-time-pct .0-->56<!--/n-->% of the time) and loses on codemode
+> scripts, whose callbacks nearly all run, which is why the codemode modules leave it
+> out.
 
 ## What the missing tree costs
 

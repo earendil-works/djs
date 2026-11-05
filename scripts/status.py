@@ -239,14 +239,14 @@ def pi():
             for prefix, row in rows.items():
                 if cells[0].startswith(prefix):
                     for col, cell in zip(cols, cells[1:]):
-                        runs.setdefault(f"pibench/{row}/{col}", []).append(float(cell.split()[0]))
+                        runs.setdefault(f"pi/bench/{row}/{col}", []).append(float(cell.split()[0]))
     if len(runs) != len(rows) * len(cols):
         sys.exit(f"status.py: pi.bench.ts gave {sorted(runs)}")
     for k, xs in runs.items():
         v = median(xs)
-        new[k] = round(v) if k.startswith("pibench/polls") else v
+        new[k] = round(v) if k.startswith("pi/bench/polls") else v
     # The time of one 10,000-fuel slice (the adapter's poll interval) in a tight loop.
-    new["fuel/slice-us"] = round(1e6 / new["pibench/polls/djs"], 1)
+    new["fuel/slice-us"] = round(1e6 / new["pi/bench/polls/djs"], 1)
     return new
 
 

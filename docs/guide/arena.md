@@ -206,9 +206,9 @@ the payload, in a `Ref` field the whole word. This one rule buys four things:
 > against linear memory. Each check is one compare, `offset + size <= length`, done in
 > 64-bit arithmetic so that it cannot wrap, which lets the compiler drop the slice's own
 > checks behind it. Release builds keep the checks but leave the offsets out of the panic
-> message, which keeps the roughly 1,600 inlined access sites small. The cost: about
-> 7 KB of the gzipped module and up to 15% of the executed instructions on some
-> workloads. An optional build, the `unsafe-heap` cargo feature (off by default), skips
+> message, which keeps the many inlined access sites small. The cost: about
+> <!--n bounds/gzip kb-->8 KB<!--/n--> of the gzipped module and <!--n bounds/instructions-median-pct .0-->11<!--/n-->% of the executed instructions on a typical
+> workload, up to <!--n bounds/instructions-max-pct .0-->17<!--/n-->%. An optional build, the `unsafe-heap` cargo feature (off by default), skips
 > the checks. It is safe only for images the engine made itself, because the verifier
 > guarantees an image's structure but not every invariant whose violation the checked
 > build turns into a trap. All of its `unsafe` sits in one small module, and the merge

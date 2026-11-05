@@ -35,7 +35,7 @@ purpose (it is always in strict mode, it has no direct `eval`, a stack overflow 
 
 ## test262
 
-test262 is the conformance suite of ECMAScript, more than 50,000 tests. djs runs it at
+test262 is the conformance suite of ECMAScript, <!--n test262/total-->53,597<!--/n--> tests at the pinned commit. djs runs it at
 the commit dquickts uses, with its own runner (`djs-test262`, in-process, in parallel).
 [`tests/test262.toml`](../../tests/test262.toml) puts every test into a group:
 
@@ -43,7 +43,7 @@ the commit dquickts uses, with its own runner (`djs-test262`, in-process, in par
   `SharedArrayBuffer`, direct `eval`, ...). They are left out of the count, so the score
   stays honest. A rule matches by frontmatter flag, directory, feature tag, or a scan of
   the source for constructs no tag names, such as a direct `eval(` call.
-- **active**: everything else, about 38,000 tests.
+- **active**: everything else, <!--n test262/active-->38,109<!--/n--> tests.
 
 A test runs as a Script, strict, with the harness files it asks for, and a `$262` host
 object (`evalScript`, `detachArrayBuffer`, `gc`). djs passes all but a few dozen active
@@ -126,7 +126,7 @@ The cases come from four sources:
 
 - dquickts' own tests, split into one case per test function;
 - codemode-style scripts with fake tools;
-- about 300 scripts that models actually wrote in agent sessions, redacted before they
+- <!--n corpus/harvest-->300<!--/n--> scripts that models actually wrote in agent sessions, redacted before they
   were committed;
 - hand-written cases for builtins, formatting, errors and every fast path, including the
   inputs where a fast path must decline.

@@ -7,11 +7,13 @@
 //! Fuel: every instruction charges its cost class. `run` stops before the next instruction
 //! once the fuel is used up, so resuming continues exactly there.
 //!
-//! Safepoints (back jumps, calls, returns, and the start of `run`): when the heap asks for
-//! a collection (or always, with `gc_stress`), the registers are flushed, the stack above
-//! `sp` is cleared, the heap is collected, and the cached code and stack offsets are
-//! re-derived from the roots and `stack[bp]`. Everything live is in the arena, so the
-//! collector needs nothing else.
+//! Safepoints (back jumps, frame entry, returns, the back-edges of native builtins and the
+//! out-of-memory handler; not the start of `run`, so that collection points depend only
+//! on the program, never on where a fuel slice ended): when the heap asks for a collection
+//! (or always, with `gc_stress`), the registers are flushed, the stack above `sp` is
+//! cleared, the heap is collected, and the cached code and stack offsets are re-derived
+//! from the roots and `stack[bp]`. Everything live is in the arena, so the collector needs
+//! nothing else.
 
 use alloc::string::String;
 

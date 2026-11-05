@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::path::Path;
 
-use djs_core::bytecode::intrinsics::INTRINSICS;
+use djs_core::bytecode::intrinsics::{INTRINSICS, IntrinsicKind};
 use djs_core::bytecode::ops::OPS;
 use djs_core::heap::cells::LAYOUTS;
 
@@ -28,7 +28,11 @@ pub struct Status {
     pub corpus_cases: usize,
     pub corpus_skipped: usize,
     pub corpus_ratchet: usize,
+    /// Scripts of tests/corpus/codemode-harvest: codemode scripts models wrote.
+    pub harvest: usize,
     pub base_bytes: usize,
+    /// The base's tail: the cells past the builtin prefix, which every VM writes.
+    pub base_tail: usize,
     pub builtins: usize,
     pub native: usize,
     pub fast: usize,
@@ -58,7 +62,17 @@ impl Status {
             corpus_cases,
             corpus_skipped,
             corpus_ratchet: ratchet_entries(&read(root, "tests/corpus/expected-failures.txt")),
+            harvest: std::fs::read_dir(root.join("tests/corpus/codemode-harvest"))
+                .map(|rd| {
+                    rd.flatten()
+                        .filter(|e| e.path().extension().is_some_and(|x| x == "js"))
+                        .count()
+                })
+                .unwrap_or(0),
             base_bytes: djs_prelude::BASE.len(),
+            base_tail: djs_prelude::new_vm(Default::default()).map_or(0, |vm| {
+                djs_prelude::BASE.len() - vm.heap().base_end() as usize
+            }),
             builtins,
             native,
             fast,
@@ -256,6 +270,10 @@ pub enum Missing {
     Key(String),
 }
 
+fn intrinsics_of(kind: IntrinsicKind) -> usize {
+    INTRINSICS.iter().filter(|i| i.kind == kind).count()
+}
+
 /// The numbers computed from the repository, by inline key.
 fn computed(st: &Status, key: &str) -> Option<Result<f64, Missing>> {
     let t = || st.test262.as_ref().map_err(|e| Missing::Test262(e.clone()));
@@ -271,10 +289,17 @@ fn computed(st: &Status, key: &str) -> Option<Result<f64, Missing>> {
         "corpus/passed" => n(run.saturating_sub(st.corpus_ratchet)),
         "corpus/known-failures" => n(st.corpus_ratchet),
         "corpus/skipped" => n(st.corpus_skipped),
+        "corpus/harvest" => n(st.harvest),
         "base/bytes" => n(st.base_bytes),
+        "base/tail" => n(st.base_tail),
         "builtins/all" => n(st.builtins),
         "builtins/native" => n(st.native),
         "builtins/fast" => n(st.fast),
+        "intrinsics/all" => n(INTRINSICS.len()),
+        "intrinsics/leaf" => n(intrinsics_of(IntrinsicKind::Leaf)),
+        "intrinsics/reentrant" => n(intrinsics_of(IntrinsicKind::Reentrant)),
+        "opcodes" => n(OPS.len()),
+        "cell-kinds" => n(LAYOUTS.len()),
         _ => None,
     }
 }
@@ -344,10 +369,13 @@ pub fn value(st: &Status, key: &str, fmt: &str) -> Result<String, Missing> {
     })
 }
 
-/// `gen:status recorded`: every recorded measurement with where it was taken.
-fn recorded(st: &Status) -> String {
+/// `gen:status recorded`: the recorded measurements with where they were taken. Only
+/// a page that may name pi lists those whose key names pi (its tests, its benchmark,
+/// the pi-like workload), and it lists only those.
+fn recorded(st: &Status, pi: bool) -> String {
+    let names_pi = |k: &str| k.split(|c: char| !c.is_ascii_alphanumeric()).any(|w| w == "pi");
     let mut s = String::from("| measurement | value | measured at |\n| --- | ---: | --- |\n");
-    for (k, (v, c, d)) in &st.recorded {
+    for (k, (v, c, d)) in st.recorded.iter().filter(|(k, _)| names_pi(k) == pi) {
         let at = if c.len() == 4 && c.bytes().all(|b| b.is_ascii_digit()) {
             d.clone()
         } else {
@@ -367,7 +395,7 @@ pub fn generate(st: &Status, what: &str, pi: bool) -> Result<String, String> {
         "speed" => speed(st, pi),
         "size" => size(st),
         "inventory" => Ok(inventory(st)),
-        "recorded" => Ok(recorded(st)),
+        "recorded" => Ok(recorded(st, pi)),
         _ => Err(format!(
             "gen:status {what}: expected conformance, speed, size, inventory or recorded"
         )),
@@ -608,7 +636,9 @@ mod tests {
             corpus_cases: 10,
             corpus_skipped: 1,
             corpus_ratchet: 2,
+            harvest: 0,
             base_bytes: 186_376,
+            base_tail: 0,
             builtins: 0,
             native: 0,
             fast: 0,

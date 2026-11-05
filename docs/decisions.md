@@ -10672,3 +10672,21 @@ statement marked); every dump of a run stays reachable from the transcript. wasm
 builds only; the shipped and slim modules are unchanged (1,033,538 and 906,238 B before
 and after, differing only in the source-hash constant). js: `Sandbox.callSite(id)`
 returns `{file, line, column}` or `undefined` (no export, call not open, nothing waits).
+
+## D3070: Measured figures in prose are inline status numbers
+date: 2026-11-05 · by: meas · issue: 0223
+A measured number in the guide's prose or README.md is written `<!--n KEY FMT-->TEXT<!--/n-->`
+and regenerated like a `gen:status` region (D2101): KEY is a repository count djs-docs
+computes or a key of `tests/scores/status.tsv`; a missing key fails `check`. So every
+figure the guide quotes (dump sizes and times, module sizes, heap bytes per object,
+bounds-check cost, startup, pi's benchmark) has a measurement behind it, and a re-recording
+updates every page that quotes it. `scripts/status.py` gained the measurements: `size`
+(shipped, slim and dump modules, coded base, exports), `pi` (pi's tests in three modes,
+js/bench/pi.bench.ts incl. interrupt polls per second), `startup`, `dumps`
+(scripts/dump-costs, packaging B), `bounds` (the `unsafe-heap` build against the shipped
+one), `heap` (scripts/size/object-bytes.ts, wasm memory), `bench` (ratios from the latest
+`bench.sh --record`), `all`. `gen:status recorded` lists all records (pi's on pi.md).
+Figures nothing could re-measure were removed from the prose (gc.md's collection-time and
+peak ratios, compiler.md's per-function lazy costs). Numbers measured on a branch whose
+engine sources equal its base are recorded at the base commit, which survives the rebase
+(0223).

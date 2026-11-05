@@ -43,7 +43,7 @@ So djs has one rule:
 ## The builtin language
 
 The builtins live in `builtins/*.ts`: about a thousand functions in a strict subset of
-TypeScript, of which about 450 are installed as builtins and the rest are the spec's
+TypeScript, of which <!--n builtins/all-->455<!--/n--> are installed as builtins and the rest are the spec's
 abstract operations and helpers. A builtin does the conversions and checks in spec order,
 where user code can run, and hands the actual work to leaf intrinsics. Here is
 `Array.prototype.includes` from [`builtins/array.ts`](../../builtins/array.ts):
@@ -99,8 +99,8 @@ The subset is small on purpose:
 
 Intrinsics are declared in [`builtins/intrinsics.d.ts`](../../builtins/intrinsics.d.ts),
 each tagged `@leaf` (never runs user code) or `@reentrant` (may call exactly one user
-function, whose result completes the operation, such as `Get` calling a getter). About
-280 are leaves and 30 are reentrant. Builtins tagged `@intrinsic` join them, so that the
+function, whose result completes the operation, such as `Get` calling a getter).
+<!--n intrinsics/leaf-->281<!--/n--> are leaves and <!--n intrinsics/reentrant-->29<!--/n--> are reentrant. Builtins tagged `@intrinsic` join them, so that the
 interpreter's slow paths and other builtins can call them as `%Name(...)`. They are all
 numbered in one table; the [intrinsics reference](ref-intrinsics.md) lists them.
 
@@ -242,7 +242,7 @@ Many hot builtins rarely meet user code: `"a,b".split(",")`, `s.includes("x")`,
 `@fast` has a hand-written Rust entry of the same name in
 [`crates/djs-core/src/builtins/fast.rs`](../../crates/djs-core/src/builtins/fast.rs).
 With the native backend, a call first runs the entry, which either returns the builtin's
-result or *declines*, and then the builtin runs as usual. 18 builtins have one.
+result or *declines*, and then the builtin runs as usual. <!--n builtins/fast-->18<!--/n--> builtins have one.
 
 An entry may answer only when nothing observable can happen: primitive arguments, dense
 arrays whose elements are plain data, no proxies. Every case that would throw declines,
@@ -295,15 +295,16 @@ kilobyte (gzipped) of the twin's code. Twins that call each other are judged tog
 such as `sort` and its merge step, or the serializer functions of `JSON.stringify`.
 `scripts/native-sizes.sh` prints the wasm size of each native function.
 
-By that rule the twins are the 18 `@fast` entries (`split`, `includes`, `indexOf` and
+By that rule the twins are the <!--n builtins/fast-->18<!--/n--> `@fast` entries (`split`, `includes`, `indexOf` and
 `slice` on strings and arrays, `charAt` and `charCodeAt`, `push`, `pop` and `join`,
 `String.fromCharCode`, `Number`, `ArraySpeciesCreate` and the conversion helpers the
-builtins call most) and the 8
+builtins call most) and the <!--n builtins/native-->8<!--/n-->
 `@native` functions above. A builtin without a twin is not slow by default: its loops
 over dense arrays already run in leaf intrinsics.
 
 > **Trade-off.** Opt-in twins over making every builtin native. Generated Rust runs
-> several times faster than the same builtin as bytecode, but most builtins are called
+> several times faster than the same builtin as bytecode (on the benchmark workloads,
+> forEach callbacks run <!--n native/foreach-x .1-->2.0<!--/n--> and array methods <!--n native/arrays-x .1-->4.0<!--/n--> times as fast), but most builtins are called
 > too rarely for that to show, and each one would add wasm code that every host loads.
 > The cost of having the option: two implementations of each twin's semantics to keep
 > equal, which is why the gate tests both backends.

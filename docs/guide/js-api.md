@@ -145,9 +145,10 @@ a `TypeError` naming its path. A value budget turns a blow-up (a small structure
 referenced many times) into an error. To get a `Map` or a `Date` out, a script converts
 it: `Object.fromEntries(map)`, `date.toISOString()`.
 
-> **Trade-off.** Reading the VM's memory over serializing in the VM. Structured data
-> reads 3x to 130x faster than producing JSON in the VM and parsing it on the host, and
-> a 1 MiB string reads at memory-copy speed. The cost: no sharing or identity crosses
+> **Trade-off.** Reading the VM's memory over serializing in the VM. Reading a value
+> takes less time than the VM alone needs to turn it into JSON, before the host has
+> parsed anything: <!--n wire/read-vs-json-objects .1-->1.9<!--/n--> times less for many small objects, <!--n wire/read-vs-json-text .0-->10<!--/n--> times less for text with
+> non-ASCII characters, and a 1 MiB string reads at memory-copy speed. The cost: no sharing or identity crosses
 > the boundary, and what crosses is data, not live objects.
 
 ## Errors

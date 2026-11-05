@@ -49,14 +49,14 @@ for whole function bodies, does not do.
 most of a start. The adapter collects the heap right after it, keeps that VM image, keyed
 by everything the prelude saw (the tools, the globals, the store, the heap limit), and
 starts the next script with the same inputs from a copy of it. A start then takes
-<!--n pibench/start/djs .2-->0.14<!--/n--> ms instead of <!--n pibench/start/djs-prelude .1-->4.9<!--/n--> ms, against <!--n pibench/start/qjs .1-->2.9<!--/n--> ms on QuickJS. The prelude's work is not counted
+<!--n pi/bench/start/djs .2-->0.14<!--/n--> ms instead of <!--n pi/bench/start/djs-prelude .1-->4.9<!--/n--> ms, against <!--n pi/bench/start/qjs .1-->2.9<!--/n--> ms on QuickJS. The prelude's work is not counted
 against the script's interrupt budget, so a start from an image and one that runs the
 prelude behave the same. The image never leaves the process: it is a cache, not a
 persistence format.
 
 **Interrupts.** pi's contract polls `shouldInterrupt`; the adapter runs the script in
 slices of 10,000 fuel and polls between them. A tight loop then polls about
-<!--n pibench/polls/djs ~1000-->77,000<!--/n--> times a second, against <!--n pibench/polls/qjs ~1000-->61,000<!--/n--> on pi's QuickJS VM, so pi's interrupt budgets
+<!--n pi/bench/polls/djs ~1000-->77,000<!--/n--> times a second, against <!--n pi/bench/polls/qjs ~1000-->61,000<!--/n--> on pi's QuickJS VM, so pi's interrupt budgets
 mean somewhat less CPU time on djs ([limits](limits.md#fuel)). Code that allocates or calls builtins
 polls more often than on QuickJS, since djs charges fuel for that work too. When the
 poll says stop, the adapter abandons the run, which the script cannot catch.
@@ -145,8 +145,33 @@ Machine instructions per workload (`scripts/perf/w/`), measured at 12f469900e,
 
 Through the VM contract, as pi runs them (`js/bench/pi.bench.ts`, on the calling
 thread): a tool-heavy script, which searches, reads 60 files in parallel batches,
-filters and prints, takes <!--n pibench/tool-heavy/djs .1-->2.4<!--/n--> ms on djs from the prelude image and
-<!--n pibench/tool-heavy/qjs .1-->4.5<!--/n--> ms on QuickJS; a script that only returns takes <!--n pibench/start/djs .2-->0.14<!--/n--> ms against <!--n pibench/start/qjs .1-->2.9<!--/n--> ms.
+filters and prints, takes <!--n pi/bench/tool-heavy/djs .1-->2.4<!--/n--> ms on djs from the prelude image and
+<!--n pi/bench/tool-heavy/qjs .1-->4.5<!--/n--> ms on QuickJS; a script that only returns takes <!--n pi/bench/start/djs .2-->0.14<!--/n--> ms against <!--n pi/bench/start/qjs .1-->2.9<!--/n--> ms.
+
+The measurements behind this section, from `tests/scores/status.tsv`
+(`scripts/status.py pi` and `speed`):
+
+<!-- gen:status recorded -->
+| measurement | value | measured at |
+| --- | ---: | --- |
+| `pi/bench/polls/djs` | 76782 | 80f9c059ef, 2026-11-05 |
+| `pi/bench/polls/djs-prelude` | 74205 | 80f9c059ef, 2026-11-05 |
+| `pi/bench/polls/qjs` | 60652 | 80f9c059ef, 2026-11-05 |
+| `pi/bench/start/djs` | 0.14 | 80f9c059ef, 2026-11-05 |
+| `pi/bench/start/djs-prelude` | 4.87 | 80f9c059ef, 2026-11-05 |
+| `pi/bench/start/qjs` | 2.9 | 80f9c059ef, 2026-11-05 |
+| `pi/bench/tool-heavy/djs` | 2.43 | 80f9c059ef, 2026-11-05 |
+| `pi/bench/tool-heavy/djs-prelude` | 6.82 | 80f9c059ef, 2026-11-05 |
+| `pi/bench/tool-heavy/qjs` | 4.45 | 80f9c059ef, 2026-11-05 |
+| `pi/dump/passed` | 221 | 80f9c059ef, 2026-11-05 |
+| `pi/dump/total` | 226 | 80f9c059ef, 2026-11-05 |
+| `pi/next/passed` | 221 | 80f9c059ef, 2026-11-05 |
+| `pi/next/total` | 226 | 80f9c059ef, 2026-11-05 |
+| `pi/passed` | 221 | 80f9c059ef, 2026-11-05 |
+| `pi/total` | 226 | 80f9c059ef, 2026-11-05 |
+| `speed/pi-like/djs-wasm` | 5765.9 | 12f469900e, 2026-11-05 |
+| `speed/pi-like/qjs-wasi` | 6870.7 | 12f469900e, 2026-11-05 |
+<!-- /gen -->
 
 ## Wiring up another agent host
 
