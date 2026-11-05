@@ -106,8 +106,9 @@ fn base64_check_on_megabytes() {
     let src = r#"(() => { const s = "QUJD".repeat(1310720); const re = /^[A-Za-z0-9+/]+={0,2}$/; return [re.test(s + "=="), re.test(s + "==!"), re.test("")].join() })()"#;
     let (r, _) = run_sliced(src, u64::MAX, false);
     assert_eq!(r, "true,false,false");
-    // Suspended mid-match and restored from images, in large slices.
-    let (r, stops) = run_sliced(src, 20_000_000, true);
+    // Suspended mid-match and restored from images, in large slices (a match is one
+    // attempt of about 5 M units since D3135: the `^` pattern is tried only at 0).
+    let (r, stops) = run_sliced(src, 2_000_000, true);
     assert_eq!(r, "true,false,false");
     assert!(stops > 0);
 }
