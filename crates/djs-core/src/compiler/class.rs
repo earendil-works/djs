@@ -24,6 +24,7 @@
 //! constructors call: a base constructor at entry, a derived one after `super()`.
 //! Static blocks are functions of their own, called by the static initializer.
 use crate::PushOut;
+use crate::bytecode::intrinsics::intrinsic_id_of;
 
 use alloc::vec::Vec;
 
@@ -129,10 +130,6 @@ struct Elem {
     thunk: Option<Thunk>,
 }
 
-fn intrinsic(name: &str) -> u16 {
-    crate::bytecode::intrinsics::intrinsic_id(name).expect("intrinsic")
-}
-
 /// The name of an element.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Key {
@@ -221,7 +218,7 @@ impl Parser<'_, '_> {
                 self.ts_erase(args);
             }
             self.code().dup();
-            let id = crate::bytecode::intrinsics::intrinsic_id("ClassHeritage").expect("intrinsic");
+            let id = intrinsic_id_of!("ClassHeritage");
             self.mark(pos);
             self.code().call_intrinsic(id, 1);
         } else {
@@ -718,7 +715,8 @@ impl Parser<'_, '_> {
                 Key::Computed => {
                     // The decorators need the key again.
                     let v = self.dec_hidden(b.scope, &mut b.hidden)?;
-                    self.code().call_intrinsic(intrinsic("ToPropertyKey"), 1);
+                    self.code()
+                        .call_intrinsic(intrinsic_id_of!("ToPropertyKey"), 1);
                     self.code().dup();
                     let r = self.init_ref(v, start);
                     self.code().name_init(r);
@@ -746,7 +744,8 @@ impl Parser<'_, '_> {
             let lkey = match key {
                 Key::Computed => {
                     let v = self.dec_hidden(b.scope, &mut b.hidden)?;
-                    self.code().call_intrinsic(intrinsic("ToPropertyKey"), 1);
+                    self.code()
+                        .call_intrinsic(intrinsic_id_of!("ToPropertyKey"), 1);
                     self.code().dup();
                     let r = self.init_ref(v, start);
                     self.code().name_init(r);
@@ -918,7 +917,8 @@ impl Parser<'_, '_> {
         };
         let key_var = match key {
             Key::Computed => {
-                self.code().call_intrinsic(intrinsic("ToPropertyKey"), 1);
+                self.code()
+                    .call_intrinsic(intrinsic_id_of!("ToPropertyKey"), 1);
                 let atom = if auto {
                     self.dec_hidden(b.scope, &mut b.hidden)?
                 } else {

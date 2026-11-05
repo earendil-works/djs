@@ -11,13 +11,9 @@ use super::expr::Expr;
 use super::func::HandlerLabels;
 use super::parser::{OpenIter, Parser, syntax};
 use super::smap::SiteKind;
-use crate::bytecode::intrinsics::intrinsic_id;
+use crate::bytecode::intrinsics::intrinsic_id_of;
 use crate::heap::atoms;
 use crate::lexer::TokenKind;
-
-fn intrinsic(name: &str) -> u16 {
-    intrinsic_id(name).expect("compiler intrinsic")
-}
 
 impl Parser<'_, '_> {
     /// `yield`, `yield expr` or `yield* expr` in a generator, with the current token
@@ -115,7 +111,8 @@ impl Parser<'_, '_> {
             self.code().jump_if_true(l_skip);
             self.code().undefined();
             self.temp_put(it);
-            self.code().call_intrinsic(intrinsic("IteratorClose"), 1);
+            self.code()
+                .call_intrinsic(intrinsic_id_of!("IteratorClose"), 1);
             self.place(l_skip);
             self.code().drop();
         }
@@ -156,12 +153,12 @@ impl Parser<'_, '_> {
         let l_done = self.new_label();
         let l_end = self.new_label();
         let get_iterator = if is_async {
-            "GetAsyncIterator"
+            intrinsic_id_of!("GetAsyncIterator")
         } else {
-            "GetIterator"
+            intrinsic_id_of!("GetIterator")
         };
         self.mark(pos);
-        self.code().call_intrinsic(intrinsic(get_iterator), 1);
+        self.code().call_intrinsic(get_iterator, 1);
         self.code().dup();
         self.code().get_field(atoms::NEXT, 0);
         let it = self.temp("yield*.iterator", pos);
@@ -245,7 +242,8 @@ impl Parser<'_, '_> {
         if is_async {
             self.emit_async_close_normal((SiteKind::YieldStarAwait, pos));
         } else {
-            self.code().call_intrinsic(intrinsic("IteratorClose"), 1);
+            self.code()
+                .call_intrinsic(intrinsic_id_of!("IteratorClose"), 1);
             self.code().drop();
         }
         let msg: alloc::vec::Vec<u16> = "iterator does not have a throw method"
@@ -253,7 +251,8 @@ impl Parser<'_, '_> {
             .collect();
         let idx = self.string_const(&msg)?;
         self.code().push_const(idx);
-        self.code().call_intrinsic(intrinsic("NewTypeError"), 1);
+        self.code()
+            .call_intrinsic(intrinsic_id_of!("NewTypeError"), 1);
         self.mark(pos);
         self.code().throw();
         // Done: the result's value is the value of `yield*`.
@@ -299,7 +298,7 @@ impl Parser<'_, '_> {
         let l_closed = self.new_label();
         self.code().dup();
         self.code()
-            .call_intrinsic(intrinsic("AsyncIteratorReturnMethod"), 1);
+            .call_intrinsic(intrinsic_id_of!("AsyncIteratorReturnMethod"), 1);
         // `it ret`
         self.code().dup();
         self.code().is_undefined();

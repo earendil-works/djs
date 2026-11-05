@@ -44,7 +44,7 @@ use super::func::{HandlerLabels, VarKind};
 use super::parser::{BlockKind, Parser, syntax};
 use super::smap::SiteKind;
 use crate::bytecode::Label;
-use crate::bytecode::intrinsics::intrinsic_id;
+use crate::bytecode::intrinsics::intrinsic_id_of;
 use crate::lexer::{Kw, TokenKind};
 
 /// Whether the statement list being parsed may have `using` declarations, and its
@@ -71,10 +71,6 @@ pub(super) struct UsingRegion {
     l_fin: Label,
     /// An `await using` is in the list: disposal awaits.
     is_async: bool,
-}
-
-fn intrinsic(name: &str) -> u16 {
-    intrinsic_id(name).expect("using intrinsic")
 }
 
 impl Parser<'_, '_> {
@@ -183,7 +179,8 @@ impl Parser<'_, '_> {
     /// Makes the Record and starts the region. `at`, the
     /// start of the region's first bound name, names the Record's temporary.
     pub(super) fn using_region_start(&mut self, is_await: bool, at: u32) -> UsingRegion {
-        self.code().call_intrinsic(intrinsic("UsingCreate"), 0);
+        self.code()
+            .call_intrinsic(intrinsic_id_of!("UsingCreate"), 0);
         let rec = self.temp("using.record", at);
         self.temp_put(rec);
         let l_try = self.new_label();
@@ -262,11 +259,11 @@ impl Parser<'_, '_> {
         self.temp_get(rec);
         self.code().swap();
         let add = if is_await {
-            "AwaitUsingAdd"
+            intrinsic_id_of!("AwaitUsingAdd")
         } else {
-            "UsingAdd"
+            intrinsic_id_of!("UsingAdd")
         };
-        self.code().call_intrinsic(intrinsic(add), 2);
+        self.code().call_intrinsic(add, 2);
     }
 
     /// Ends a region: the normal exit, the disposal and the exception handler.
@@ -290,10 +287,12 @@ impl Parser<'_, '_> {
             let (l_a, l_a_end, l_rej) = (self.new_label(), self.new_label(), self.new_label());
             self.place(l_loop);
             self.temp_get(r.rec);
-            self.code().call_intrinsic(intrinsic("UsingDisposeStep"), 1);
+            self.code()
+                .call_intrinsic(intrinsic_id_of!("UsingDisposeStep"), 1);
             self.code().jump_if_false(l_done);
             self.temp_get(r.rec);
-            self.code().call_intrinsic(intrinsic("UsingAwaitValue"), 1);
+            self.code()
+                .call_intrinsic(intrinsic_id_of!("UsingAwaitValue"), 1);
             self.place(l_a);
             // Named by the list's end.
             self.site(SiteKind::AwaitUsing, self.prev_end);
@@ -312,13 +311,14 @@ impl Parser<'_, '_> {
             self.temp_get(r.rec);
             self.code().swap();
             self.code()
-                .call_intrinsic(intrinsic("UsingDisposeError"), 2);
+                .call_intrinsic(intrinsic_id_of!("UsingDisposeError"), 2);
             self.code().drop();
             self.code().jump(l_loop);
             self.place(l_done);
         } else {
             self.temp_get(r.rec);
-            self.code().call_intrinsic(intrinsic("UsingDispose"), 1);
+            self.code()
+                .call_intrinsic(intrinsic_id_of!("UsingDispose"), 1);
             self.code().drop();
         }
         self.end_completion(&c, Some(l_end), true);
@@ -334,7 +334,7 @@ impl Parser<'_, '_> {
         self.temp_get(r.rec);
         self.code().swap();
         self.code()
-            .call_intrinsic(intrinsic("UsingDisposeError"), 2);
+            .call_intrinsic(intrinsic_id_of!("UsingDisposeError"), 2);
         self.complete_throwing(&c, r.l_fin);
         self.place(l_end);
     }

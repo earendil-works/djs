@@ -54,7 +54,7 @@ use super::scan::Follow;
 use super::smap::SiteKind;
 use super::smap_syntax::{DeclKind, NodeKind, Role};
 use crate::bytecode::Label;
-use crate::bytecode::intrinsics::intrinsic_id;
+use crate::bytecode::intrinsics::intrinsic_id_of;
 use crate::heap::{Atom, atoms};
 use crate::lexer::{Kw, TokenKind};
 
@@ -289,12 +289,11 @@ impl<'a> Parser<'a, '_> {
         }
         self.mark(for_pos);
         if is_of {
-            let name = if is_await {
-                "GetAsyncIterator"
+            let get_iterator = if is_await {
+                intrinsic_id_of!("GetAsyncIterator")
             } else {
-                "GetIterator"
+                intrinsic_id_of!("GetIterator")
             };
-            let get_iterator = intrinsic_id(name).expect("%GetIterator");
             self.code().call_intrinsic(get_iterator, 1);
             self.code().dup();
             self.code().get_field(atoms::NEXT, 0);
@@ -320,7 +319,7 @@ impl<'a> Parser<'a, '_> {
                 self.temp_put(exc);
                 self.temp_get(it);
                 // A promise that always fulfills (errors from `return()` are dropped).
-                let close = intrinsic_id("AsyncIteratorCloseThrow").expect("intrinsic");
+                let close = intrinsic_id_of!("AsyncIteratorCloseThrow");
                 self.code().call_intrinsic(close, 1);
                 self.site(SiteKind::ForAwaitClose, for_pos);
                 self.code().await_(0);
@@ -328,7 +327,7 @@ impl<'a> Parser<'a, '_> {
                 self.temp_get(exc);
             } else {
                 self.temp_get(it);
-                let close = intrinsic_id("IteratorCloseThrow").expect("%IteratorCloseThrow");
+                let close = intrinsic_id_of!("IteratorCloseThrow");
                 self.code().call_intrinsic(close, 1);
                 self.code().drop();
             }
@@ -458,7 +457,7 @@ impl<'a> Parser<'a, '_> {
             if close_used || loop_used {
                 self.code().jump(l_end);
             }
-            let close_fn = intrinsic_id("IteratorClose").expect("%IteratorClose");
+            let close_fn = intrinsic_id_of!("IteratorClose");
             if let Some(c) = close.as_ref().filter(|c| c.has_exits()) {
                 // Closes the iterator, then continues the exit.
                 self.place(l_close);

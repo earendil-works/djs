@@ -1671,7 +1671,7 @@ impl Parser<'_, '_> {
         self.expect(TokenKind::RParen, ")")?;
         self.syn_close();
         self.mark(pos);
-        let id = crate::bytecode::intrinsics::intrinsic_id("DynamicImport").expect("intrinsic");
+        let id = crate::bytecode::intrinsics::intrinsic_id_of!("DynamicImport");
         self.code().call_intrinsic(id, 2);
         Ok(Expr::Value)
     }

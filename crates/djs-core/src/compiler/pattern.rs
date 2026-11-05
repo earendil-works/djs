@@ -35,7 +35,7 @@ use super::parser::{Checkpoint, Parser, syntax};
 use super::scan::Follow;
 use super::smap_syntax::{NodeKind, Role};
 use crate::bytecode::Label;
-use crate::bytecode::intrinsics::intrinsic_id;
+use crate::bytecode::intrinsics::intrinsic_id_of;
 use crate::heap::{Atom, atoms};
 use crate::lexer::{Kw, TokenKind};
 
@@ -82,10 +82,6 @@ impl Target<'_> {
             _ => &[],
         }
     }
-}
-
-fn intrinsic(name: &str) -> u16 {
-    intrinsic_id(name).expect("destructuring intrinsic")
 }
 
 impl<'a> Parser<'a, '_> {
@@ -329,7 +325,7 @@ impl<'a> Parser<'a, '_> {
                 }
                 self.mark(pos);
                 self.code()
-                    .call_intrinsic(intrinsic("CopyDataPropertiesExcluding"), 2);
+                    .call_intrinsic(intrinsic_id_of!("CopyDataPropertiesExcluding"), 2);
                 self.store_target(b, t)?;
                 self.syn_part(Role::Rest, pos, self.prev_end);
                 self.names_pop(t.stack_names().len());
@@ -378,7 +374,8 @@ impl<'a> Parser<'a, '_> {
                     (None, _) => {
                         // Converted once, before the target is evaluated.
                         self.mark(key_tok.start);
-                        self.code().call_intrinsic(intrinsic("ToPropertyKey"), 1);
+                        self.code()
+                            .call_intrinsic(intrinsic_id_of!("ToPropertyKey"), 1);
                         if let Some(e) = excl {
                             // `k` -> `k`, with k appended to the excluded keys.
                             self.code().dup();
@@ -471,7 +468,8 @@ impl<'a> Parser<'a, '_> {
         self.syn_open(NodeKind::ArrayPattern, open.start);
         self.next()?;
         self.mark(open.start);
-        self.code().call_intrinsic(intrinsic("GetIterator"), 1);
+        self.code()
+            .call_intrinsic(intrinsic_id_of!("GetIterator"), 1);
         self.code().dup();
         self.code().get_field(atoms::NEXT, 0);
         // The iterator (`undefined` once done) and its `next` (D2732).
@@ -562,7 +560,8 @@ impl<'a> Parser<'a, '_> {
         self.code().is_undefined();
         self.code().jump_if_true(l_skip);
         self.mark(open.start);
-        self.code().call_intrinsic(intrinsic("IteratorClose"), 1);
+        self.code()
+            .call_intrinsic(intrinsic_id_of!("IteratorClose"), 1);
         self.place(l_skip);
         self.code().drop();
         if may_throw && !regions.list.is_empty() {
@@ -577,7 +576,7 @@ impl<'a> Parser<'a, '_> {
             self.code().is_undefined();
             self.code().jump_if_true(l_rethrow);
             self.code()
-                .call_intrinsic(intrinsic("IteratorCloseThrow"), 1);
+                .call_intrinsic(intrinsic_id_of!("IteratorCloseThrow"), 1);
             self.place(l_rethrow);
             self.code().drop();
             self.code().throw();
@@ -657,7 +656,8 @@ impl<'a> Parser<'a, '_> {
         }
         self.temp_get(next);
         self.mark(pos);
-        self.code().call_intrinsic(intrinsic("IteratorRest"), 2);
+        self.code()
+            .call_intrinsic(intrinsic_id_of!("IteratorRest"), 2);
         self.code().undefined();
         self.temp_put(it);
         if !first {

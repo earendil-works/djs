@@ -10750,3 +10750,14 @@ yet: ...") say `op N` in the shipped module (`detail::op_name`, like D2336's det
 and the name elsewhere; debug assertions use `Op::name`. The dump module's global scan
 matches opcodes instead of names. Module 430,963 → 429,322 gzip (−1.6 KB),
 instructions within ±1.1% on the 12 workloads.
+
+## D3093: The compiler names intrinsics at compile time
+date: 2026-11-05 · by: bytes · issue: 0225
+The compiler emits calls to about 40 intrinsics for ordinary code (destructuring,
+for-of, generators, classes, decorators, `using`, `import()`), and looked each one up by
+name at every emitted call: a linear search over the 452 names. `intrinsic_id_of!("Name")`
+(bytecode/intrinsics.rs) is `const { const_id("Name") }`, so the id is a constant and an
+unknown name fails the build. Run-time lookups by name remain where the name is data:
+privileged `%Name` calls and `%InstallIntrinsic`. typescript.js compiles in 6.2% fewer
+wasm instructions (4,204 → 3,944 M), codemode bodies 0.2–2.5% fewer; module −0.8 KB gzip
+(429,322 → 428,507).

@@ -637,6 +637,16 @@ pub fn names() -> impl Iterator<Item = &'static str> {
     (0..COUNT as u16).map(intrinsic_name)
 }
 
+/// The id of the intrinsic named by a string literal, computed at compile time (an
+/// unknown name fails the build): for the compiler, which emits calls to intrinsics by
+/// name, without a search of the names per emitted call (0225).
+macro_rules! intrinsic_id_of {
+    ($name:literal) => {
+        const { $crate::bytecode::intrinsics::const_id($name) }
+    };
+}
+pub(crate) use intrinsic_id_of;
+
 /// The id of the intrinsic `name`.
 pub fn intrinsic_id(name: &str) -> Option<u16> {
     (0..COUNT as u16).find(|&i| intrinsic_name(i) == name)

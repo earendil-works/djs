@@ -24,6 +24,7 @@
 //! thunks evaluated after the class (`Thunk`), parameter decorators (`DecParams`) and
 //! tsc's `__decorate` (`emit_legacy_apply`); the metadata types are in ts_meta.rs.
 use crate::PushOut;
+use crate::bytecode::intrinsics::intrinsic_id_of;
 
 use alloc::vec::Vec;
 
@@ -131,10 +132,6 @@ pub(super) enum Synth {
     AccessSet,
     /// `(o) => #x in o`
     AccessHas,
-}
-
-fn intrinsic(name: &str) -> u16 {
-    crate::bytecode::intrinsics::intrinsic_id(name).expect("intrinsic")
 }
 
 impl Parser<'_, '_> {
@@ -350,7 +347,8 @@ impl Parser<'_, '_> {
             self.code().push_false();
         }
         self.mark(pos);
-        self.code().call_intrinsic(intrinsic("DecoratorStart"), 2);
+        self.code()
+            .call_intrinsic(intrinsic_id_of!("DecoratorStart"), 2);
         let r = self.init_ref(state, pos);
         self.code().name_init(r);
         for pass in 0..4 {
@@ -421,14 +419,15 @@ impl Parser<'_, '_> {
         }
         self.code().push_i8(flags as i8);
         self.mark(pos);
-        self.code().call_intrinsic(intrinsic("ApplyDecorators"), 6);
+        self.code()
+            .call_intrinsic(intrinsic_id_of!("ApplyDecorators"), 6);
         // Result.
         if d.kind == DEC_FIELD || d.kind == DEC_ACCESSOR {
             if !hidden_set.is_null() {
                 for (h, slot) in [(hidden, REC_GET), (hidden_set, REC_SET)] {
                     self.code().dup();
                     self.code().push_i8(slot);
-                    self.code().call_intrinsic(intrinsic("RecordGet"), 2);
+                    self.code().call_intrinsic(intrinsic_id_of!("RecordGet"), 2);
                     let r = self.init_ref(h, pos);
                     self.code().name_init(r);
                 }
@@ -471,7 +470,8 @@ impl Parser<'_, '_> {
         self.code().name_get(r);
         self.code().push_i8(DEC_CLASS as i8);
         self.mark(pos);
-        self.code().call_intrinsic(intrinsic("ApplyDecorators"), 6);
+        self.code()
+            .call_intrinsic(intrinsic_id_of!("ApplyDecorators"), 6);
         Ok(())
     }
 
@@ -484,7 +484,7 @@ impl Parser<'_, '_> {
         self.code().pick(2);
         self.mark(pos);
         self.code()
-            .call_intrinsic(intrinsic("DecoratorRunExtras"), 3);
+            .call_intrinsic(intrinsic_id_of!("DecoratorRunExtras"), 3);
         self.code().drop();
     }
 
@@ -496,7 +496,7 @@ impl Parser<'_, '_> {
         self.emit_this(pos);
         self.mark(pos);
         self.code()
-            .call_intrinsic(intrinsic("DecoratorRunInits"), 3);
+            .call_intrinsic(intrinsic_id_of!("DecoratorRunInits"), 3);
     }
 
     /// In a field initializer, after the definition: the extra initializers of `rec`.
@@ -507,7 +507,7 @@ impl Parser<'_, '_> {
         self.emit_this(pos);
         self.mark(pos);
         self.code()
-            .call_intrinsic(intrinsic("DecoratorRunExtras"), 3);
+            .call_intrinsic(intrinsic_id_of!("DecoratorRunExtras"), 3);
         self.code().drop();
     }
 
@@ -520,7 +520,7 @@ impl Parser<'_, '_> {
         self.emit_this(pos);
         self.mark(pos);
         self.code()
-            .call_intrinsic(intrinsic("DecoratorRunExtras"), 3);
+            .call_intrinsic(intrinsic_id_of!("DecoratorRunExtras"), 3);
         self.code().drop();
     }
 
@@ -604,7 +604,7 @@ impl Parser<'_, '_> {
             None => self.new_thunk(self.tok.start)?,
         };
         self.resume_function(*t.f);
-        let id = intrinsic("DecoratorParam");
+        let id = intrinsic_id_of!("DecoratorParam");
         while self.is(TokenKind::At) {
             let pos = self.tok.start;
             self.parse_decorator(false)?;
@@ -669,7 +669,7 @@ impl Parser<'_, '_> {
         }
         self.mark(pos);
         self.code()
-            .call_intrinsic(intrinsic("DecoratorMetadata"), 2);
+            .call_intrinsic(intrinsic_id_of!("DecoratorMetadata"), 2);
         t.count += 1;
         *t.f = self.park_function()?;
         Ok(t)
@@ -750,7 +750,7 @@ impl Parser<'_, '_> {
         self.code().push_i8(e.kind as i8);
         self.mark(pos);
         self.code()
-            .call_intrinsic(intrinsic("ApplyLegacyDecorators"), 4);
+            .call_intrinsic(intrinsic_id_of!("ApplyLegacyDecorators"), 4);
         self.code().drop();
         Ok(())
     }
@@ -764,7 +764,7 @@ impl Parser<'_, '_> {
         self.code().push_i8(DEC_CLASS as i8);
         self.mark(pos);
         self.code()
-            .call_intrinsic(intrinsic("ApplyLegacyDecorators"), 4);
+            .call_intrinsic(intrinsic_id_of!("ApplyLegacyDecorators"), 4);
         Ok(())
     }
 }

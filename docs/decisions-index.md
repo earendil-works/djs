@@ -441,6 +441,7 @@ topics when the index is next reorganized.
 - D3090: The shipped module builds core and alloc itself, with panics as bare traps
 - D3091: Intrinsic names and signatures in compact run-time tables
 - D3092: Opcode names apart from the instruction table
+- D3093: The compiler names intrinsics at compile time
 - D2253: The base image drops the prelude's internal names
 - D2254: `@native` only where benchmarks or real codemode pay
 - D2045: The first collection after a canonical image is full
