@@ -50,6 +50,13 @@ jobs, wait while load > 30) and gate rules (batch merges, check slim/test262-sli
   Seeds 7001–8060: no wrong results; two refusals: `Array.fromAsync` in flight (to be
   fixed, pjr; refusals ratchet for now) and for-in over a Proxy (deliberate, noted in
   docs/plain-js-dumps.md §10).
+- `fuzz.mjs --lazy` (difftest --lazy, D2990): regress + 300 seeds clean with and without
+  lazy functions after lazy batch 3 and 0215's merges. Generator: optional calls, tagged
+  templates, async methods with arrows over `this`, labelled blocks, `delete`.
+- Seeds 9001–9800: batch 8, an arrow capturing `arguments` of a waiting async function
+  (wrong result, plain-xfail) and one capturing `this` in a waiting method (refused);
+  batch 9, an array's accessor element before a data element written as a hole
+  (plain-xfail) and `continue` out of a try whose finally awaits, re-dumped (refused).
 
 ## Follow-ups
 

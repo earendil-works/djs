@@ -306,6 +306,8 @@ corpus	codemode/plain-class-statics.js	6790	2447
 corpus	codemode/plain-for-await-sync.js	32595	12857
 corpus	codemode/plain-fuzz/accessor-pair-after-site.js	2302	961
 corpus	codemode/plain-fuzz/array-from-async.js	5739	2284
+corpus	codemode/plain-fuzz/array-index-getter.js	2264	949
+corpus	codemode/plain-fuzz/arrow-arguments-in-async.js	2760	1089
 corpus	codemode/plain-fuzz/assign-member-nested-call.js	7474	3051
 corpus	codemode/plain-fuzz/async-generator-for-await.js	12262	4865
 corpus	codemode/plain-fuzz/async-method-of-temporary.js	2716	1099
@@ -321,6 +323,7 @@ corpus	codemode/plain-fuzz/class-instance-loop-closure.js	6168	2409
 corpus	codemode/plain-fuzz/class-static-in-promise-all.js	5429	2182
 corpus	codemode/plain-fuzz/class-with-async-method-in-loop.js	5132	2024
 corpus	codemode/plain-fuzz/class-with-async-method-nested-loop.js	3287	1226
+corpus	codemode/plain-fuzz/continue-through-finally-await.js	2723	1138
 corpus	codemode/plain-fuzz/finally-await-in-loop.js	5025	2028
 corpus	codemode/plain-fuzz/finally-dead-end.js	7902	3196
 corpus	codemode/plain-fuzz/for-await-break.js	8732	3445
