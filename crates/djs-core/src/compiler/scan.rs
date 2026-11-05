@@ -24,41 +24,93 @@ pub(super) fn regex_allowed(prev: &Token) -> bool {
 struct Scanner<'a> {
     lx: Lexer<'a>,
     prev: Token,
-    /// Open brackets: `(`, `[`, `{`, or `` ` `` for a template substitution.
+    /// Open brackets: `(`, `[`, `{`, or `` ` `` for a template substitution; [`BLOCK`]
+    /// and [`HEAD`] for the statement forms of `{` and `(`.
     stack: Vec<u8>,
+    /// `prev` closed a [`BLOCK`] or [`HEAD`]: a `/` after it starts a regex, which
+    /// [`regex_allowed`] cannot tell from `prev` alone (`if (a) {} /x/`, 0217).
+    after_stmt: bool,
+    /// The stack depth at a `class` keyword: the next `{` at that depth is its body.
+    class_at: Option<usize>,
 }
 
+/// A `{` that opens a statement block, function or class body rather than an object
+/// literal or pattern.
+const BLOCK: u8 = b'B';
+/// The `(` of an `if`, `for`, `while` or `with` head.
+const HEAD: u8 = b'H';
+
 impl<'a> Scanner<'a> {
+    fn new(lx: Lexer<'a>, prev: Token, open: u8) -> Self {
+        Scanner {
+            lx,
+            prev,
+            stack: alloc::vec![open],
+            after_stmt: false,
+            class_at: None,
+        }
+    }
+
+    /// Does a `{` after `prev` open a block? A guess like [`regex_allowed`]: a `{`
+    /// after `)` or `=>` is a body, one after `:` is a block inside a block (a label
+    /// or `case`), else an object; a function or class expression followed by `/`
+    /// is taken for a declaration, which division after it would make no sense for.
+    fn opens_block(&self) -> bool {
+        use TokenKind::*;
+        match self.prev.kind {
+            RParen | Arrow | Semicolon | LBrace | RBrace | Else | Try | Catch | Finally | Do => {
+                true
+            }
+            Colon => self.stack.last() == Some(&BLOCK),
+            _ => self.class_at == Some(self.stack.len()),
+        }
+    }
+
     fn next(&mut self) -> Option<Token> {
+        use TokenKind::*;
         let mut tok = self.lx.next_token().ok()?;
+        let mut after_stmt = false;
         match tok.kind {
-            TokenKind::Slash | TokenKind::SlashAssign if regex_allowed(&self.prev) => {
+            Slash | SlashAssign if self.after_stmt || regex_allowed(&self.prev) => {
                 tok = self.lx.rescan_as_regex(tok).ok()?;
             }
-            TokenKind::RBrace if self.stack.last() == Some(&b'`') => {
+            RBrace if self.stack.last() == Some(&b'`') => {
                 tok = self.lx.rescan_template_continuation(tok).ok()?;
-                if tok.kind == TokenKind::TemplateTail {
+                if tok.kind == TemplateTail {
                     self.stack.pop();
                 }
             }
-            TokenKind::TemplateHead => self.stack.push_out(b'`'),
-            TokenKind::LParen => self.stack.push_out(b'('),
-            TokenKind::LBracket => self.stack.push_out(b'['),
-            TokenKind::LBrace => self.stack.push_out(b'{'),
-            TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
-                let open = match tok.kind {
-                    TokenKind::RParen => b'(',
-                    TokenKind::RBracket => b'[',
-                    _ => b'{',
+            TemplateHead => self.stack.push_out(b'`'),
+            LParen => {
+                let head = matches!(self.prev.kind, If | For | While | With);
+                self.stack.push_out(if head { HEAD } else { b'(' });
+            }
+            LBracket => self.stack.push_out(b'['),
+            LBrace => {
+                let open = if self.opens_block() { BLOCK } else { b'{' };
+                if open == BLOCK && self.class_at == Some(self.stack.len()) {
+                    self.class_at = None;
+                }
+                self.stack.push_out(open);
+            }
+            Class => self.class_at = Some(self.stack.len()),
+            RParen | RBracket | RBrace => {
+                let top = self.stack.pop()?;
+                let fits = match tok.kind {
+                    RParen => top == b'(' || top == HEAD,
+                    RBracket => top == b'[',
+                    _ => top == b'{' || top == BLOCK,
                 };
-                if self.stack.pop() != Some(open) {
+                if !fits {
                     return None;
                 }
+                after_stmt = top == BLOCK || top == HEAD;
             }
-            TokenKind::Eof => return None,
+            Eof => return None,
             _ => {}
         }
         self.prev = tok;
+        self.after_stmt = after_stmt;
         Some(tok)
     }
 }
@@ -74,11 +126,7 @@ pub(super) fn is_arrow_head(lx: Lexer<'_>, open: Token) -> bool {
         AfterParam,
         Default,
     }
-    let mut s = Scanner {
-        lx,
-        prev: open,
-        stack: alloc::vec![b'('],
-    };
+    let mut s = Scanner::new(lx, open, b'(');
     let mut state = State::Param;
     loop {
         let depth_before = s.stack.len();
@@ -166,11 +214,7 @@ impl PatternScan {
         } else {
             b'['
         };
-        let mut s = Scanner {
-            lx,
-            prev: open,
-            stack: alloc::vec![kind],
-        };
+        let mut s = Scanner::new(lx, open, kind);
         // Parallel to `s.stack`: the start of each open `{`/`[`.
         let mut opens: Vec<Option<u32>> = alloc::vec![Some(open.start)];
         let mut pending: Option<u32> = None;
@@ -282,11 +326,7 @@ pub(super) fn skip_group<'a>(lx: Lexer<'a>, open: Token) -> Option<(Lexer<'a>, u
     } else {
         b'['
     };
-    let mut s = Scanner {
-        lx,
-        prev: open,
-        stack: alloc::vec![kind],
-    };
+    let mut s = Scanner::new(lx, open, kind);
     let mut end = open.end;
     while !s.stack.is_empty() {
         end = s.next()?.end;
@@ -297,11 +337,7 @@ pub(super) fn skip_group<'a>(lx: Lexer<'a>, open: Token) -> Option<(Lexer<'a>, u
 /// With `open` a `{` and `lx` after it: does the object pattern have a rest property
 /// (`...` directly inside)?
 pub(super) fn object_has_rest(lx: Lexer<'_>, open: Token) -> bool {
-    let mut s = Scanner {
-        lx,
-        prev: open,
-        stack: alloc::vec![b'{'],
-    };
+    let mut s = Scanner::new(lx, open, b'{');
     while !s.stack.is_empty() {
         let Some(t) = s.next() else { return false };
         if t.kind == TokenKind::Ellipsis && s.stack.len() == 1 {
@@ -315,11 +351,7 @@ pub(super) fn object_has_rest(lx: Lexer<'_>, open: Token) -> bool {
 /// `finally` clause? (`break`/`return` inside the try block must know before it is
 /// parsed, D1080.)
 pub(super) fn try_has_finally(lx: Lexer<'_>, open: Token) -> bool {
-    let mut s = Scanner {
-        lx,
-        prev: open,
-        stack: alloc::vec![b'{'],
-    };
+    let mut s = Scanner::new(lx, open, BLOCK);
     let skip_group = |s: &mut Scanner<'_>| -> Option<()> {
         while !s.stack.is_empty() {
             s.next()?;
@@ -359,11 +391,7 @@ pub(super) fn try_has_finally(lx: Lexer<'_>, open: Token) -> bool {
 /// QuickJS does the same)? Otherwise it is for-in/of, also for a head that does not
 /// scan (unbalanced, end of input): its parser reports the error, as in QuickJS.
 pub(super) fn for_head_is_c_style(lx: Lexer<'_>, open: Token) -> bool {
-    let mut s = Scanner {
-        lx,
-        prev: open,
-        stack: alloc::vec![b'('],
-    };
+    let mut s = Scanner::new(lx, open, b'(');
     loop {
         let Some(t) = s.next() else { return false };
         if s.stack.is_empty() {
@@ -380,11 +408,7 @@ pub(super) fn for_head_is_c_style(lx: Lexer<'_>, open: Token) -> bool {
 /// directly inside the head's parentheses; an `of` after `.` or `?.` is a property
 /// name.
 pub(super) fn for_lhs_ends_with_of(lx: Lexer<'_>, first: Token) -> bool {
-    let mut s = Scanner {
-        lx,
-        prev: first,
-        stack: alloc::vec![b'('],
-    };
+    let mut s = Scanner::new(lx, first, b'(');
     match first.kind {
         TokenKind::LParen => s.stack.push_out(b'('),
         TokenKind::LBracket => s.stack.push_out(b'['),
@@ -435,6 +459,38 @@ mod tests {
         assert!(!has("try {} catch (e) {}"));
         assert!(!has("try { } catch (e) { } x; finally"));
         assert!(!has("try {"));
+        // A `/` after a closed block or statement head starts a regex (0217).
+        for src in [
+            "try { if (1) {} /x./.test('xy'); } finally {}",
+            "try { if (1) {} else {} /x./g; } finally {}",
+            "try { {} /x./ } finally {}",
+            "try { for (;;) {} /'/ } finally {}",
+            "try { while (a) {} /x./ } finally {}",
+            "try { L: {} /x./ } finally {}",
+            "try { switch (a) { case 1: {} /x./ } } finally {}",
+            "try { function f() {} /x./ } finally {}",
+            "try { class A { m() {} } /x./ } finally {}",
+            "try { class A extends f({}) {} /x./ } finally {}",
+            "try { a = () => {}\n/x./ } finally {}",
+            "try { if (a) /x./.test(b) } finally {}",
+            "try { try {} finally {} /x./ } finally {}",
+            "try {} catch { if (1) {} /x./ } finally {}",
+            "try {} catch (e) { if (1) {} /'/ } finally {}",
+            "try { if (1) {}\n/./s.source; } finally {}",
+            "try { if (1) {} /=./ } finally {}",
+        ] {
+            assert!(has(src), "{src}");
+        }
+        // After an object literal or a call it is division.
+        for src in [
+            "try { x = {} / 2 } finally {}",
+            "try { x = {a: {}} /= 2 } finally {}",
+            "try { x = f(a) / 2 } finally {}",
+            "try { x = {a: b ? {} : 1} / 2 } finally {}",
+            "try { x = `${{}}` / 2 } finally {}",
+        ] {
+            assert!(has(src), "{src}");
+        }
     }
 
     #[test]
