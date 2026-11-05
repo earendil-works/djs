@@ -1,7 +1,7 @@
 # 0229: A benchmarks page: djs vs QuickJS versions (and monty) on real codemode workloads; dumps, size, memory
 
-status: open
-agent: -
+status: in-progress
+agent: benchpage
 branch: issue/0229-benchmarks-page
 depends-on: -
 guide: new page (Using djs or Reference: "Benchmarks"); status.md / README links
