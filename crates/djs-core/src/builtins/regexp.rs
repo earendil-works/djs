@@ -117,8 +117,10 @@ pub(crate) fn create(
 
 /// Entries of the compile cache (D3138).
 const CACHE_ENTRIES: u32 = 8;
-/// Longer sources are not cached: the cache keeps at most a few KB alive.
+/// Longer sources and bigger programs (4 KiB) are not cached: the cache keeps at most
+/// about 36 KiB alive, typically 3-4 KiB.
 const CACHE_MAX_LEN: u32 = 256;
+const CACHE_MAX_WORDS: u32 = 1024;
 
 /// The program of `pattern` with `flags` from the compile cache (moved to the front), if
 /// it is there.
@@ -157,7 +159,7 @@ fn shift_down(heap: &mut Heap, t: u32, to: u32) {
 
 /// Puts a just compiled program at the front of the compile cache.
 fn cache(heap: &mut Heap, pattern: Str, flags: Str, cell: u32) -> Result<(), HeapError> {
-    if heap.str_len(pattern) > CACHE_MAX_LEN {
+    if heap.str_len(pattern) > CACHE_MAX_LEN || heap.u32_array_len(cell) > CACHE_MAX_WORDS {
         return Ok(());
     }
     let t = match realm::intrinsic(heap, Intrinsic::RegExpCache).as_internal() {
