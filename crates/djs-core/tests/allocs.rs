@@ -79,3 +79,33 @@ fn regexp_compile_allocations() {
         over.join("\n")
     );
 }
+
+#[test]
+fn tmp_print_allocs() {
+    for (pattern, flags) in [
+        ("report|metric123", "i"),
+        ("report|metric123", ""),
+        (r"\s+", "g"),
+        (r"^([^:]+):(\d+):(.*)$", ""),
+        (r"\b(TODO|FIXME)\b", ""),
+        (r"^export (?:async )?function (\w+)\((\w+)", "gm"),
+    ] {
+        let (p, f) = (u16s(pattern), Flags::parse(&u16s(flags)).unwrap());
+        let n = allocations(|| drop(compile(&p, f).unwrap()));
+        let parse = allocations(|| drop(djs_core::regexp::parse_only(&p, f)));
+        println!("/{pattern}/{flags}: {n} (parse {parse})");
+    }
+}
+
+#[test]
+#[ignore]
+fn tmp_compile_loop() {
+    let n: usize = std::env::var("N").map(|s| s.parse().unwrap()).unwrap_or(0);
+    let pats: Vec<Vec<u16>> = (0..1000)
+        .map(|i| u16s(&format!("report|metric{i}")))
+        .collect();
+    let f = Flags::parse(&u16s(&std::env::var("F").unwrap_or_default())).unwrap();
+    for i in 0..n {
+        std::hint::black_box(compile(&pats[i % 1000], f).unwrap());
+    }
+}

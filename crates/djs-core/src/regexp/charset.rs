@@ -19,14 +19,6 @@ impl CharSet {
         CharSet { ranges: Vec::new() }
     }
 
-    pub(crate) fn from_ranges(ranges: &[(u32, u32)]) -> CharSet {
-        let mut s = CharSet::new();
-        for &(lo, hi) in ranges {
-            s.add_range(lo, hi);
-        }
-        s
-    }
-
     /// A set from ranges that are already sorted, disjoint and non-adjacent.
     pub(crate) fn from_sorted(ranges: Vec<(u32, u32)>) -> CharSet {
         debug_assert!(ranges.windows(2).all(|w| w[0].1 + 1 < w[1].0));
@@ -312,7 +304,11 @@ mod tests {
     use super::*;
 
     fn set(r: &[(u32, u32)]) -> CharSet {
-        CharSet::from_ranges(r)
+        let mut s = CharSet::new();
+        for &(lo, hi) in r {
+            s.add_range(lo, hi);
+        }
+        s
     }
 
     #[test]

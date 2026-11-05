@@ -232,66 +232,97 @@ pub(crate) fn group_name(words: &[u32], index: usize) -> Option<&[u32]> {
 /// `None` if unknown (a backreference can start with anything). Assertions and lookarounds
 /// are treated as matching empty, which over-approximates.
 fn first_chars(node: &Node, unicode: bool) -> Option<(CharSet, bool)> {
+    let mut set = CharSet::new();
+    let nullable = first_into(node, unicode, &mut set)?;
+    Some((set, nullable))
+}
+
+/// `first_chars` added to `acc` (one set for the whole tree: compile time is mostly
+/// allocations); whether `node` can match empty.
+fn first_into(node: &Node, unicode: bool, acc: &mut CharSet) -> Option<bool> {
     Some(match node {
         Node::Empty
         | Node::LineStart { .. }
         | Node::LineEnd { .. }
         | Node::WordBoundary { .. }
-        | Node::Look { .. } => (CharSet::new(), true),
+        | Node::Look { .. } => true,
         Node::Char { c, icase } => {
-            let mut s = CharSet::new();
-            s.add(*c);
-            (case_closure(s, *icase, unicode), false)
+            let c = *c;
+            if !*icase {
+                acc.add(c);
+            } else if c < 0x80 && !(unicode && matches!(c | 0x20, 0x6B | 0x73)) {
+                // (`k` and `s` also have a non-ASCII form in unicode mode.)
+                // The ASCII case of `CharSet::case_closure`, without building the set.
+                acc.add(c);
+                if (c as u8).is_ascii_alphabetic() {
+                    acc.add(c ^ 0x20);
+                }
+            } else {
+                let mut s = CharSet::new();
+                s.add(c);
+                add_set(acc, &s.case_closure(unicode));
+            }
+            false
         }
         Node::Class {
             set,
             strings,
             icase,
         } => {
+            if strings.is_empty() && !*icase {
+                add_set(acc, set);
+                return Some(false);
+            }
             let mut s = set.clone();
             for st in strings.iter().filter(|st| !st.is_empty()) {
                 s.add_range(st[0], st[0]);
             }
-            let nullable = strings.iter().any(|st| st.is_empty());
-            (case_closure(s, *icase, unicode), nullable)
+            add_set(acc, &case_closure(s, *icase, unicode));
+            strings.iter().any(|st| st.is_empty())
         }
         Node::Dot { all } => {
-            let all_chars = CharSet::from_ranges(&[(0, charset::MAX_CP)]);
             if *all {
-                (all_chars, false)
+                acc.add_range(0, charset::MAX_CP);
             } else {
-                let lt = CharSet::from_ranges(&[(0x0A, 0x0A), (0x0D, 0x0D), (0x2028, 0x2029)]);
-                (all_chars.subtract(&lt), false)
-            }
-        }
-        Node::Backref { .. } => return None,
-        Node::Group { body, .. } => first_chars(body, unicode)?,
-        Node::Repeat { min, body, .. } => {
-            let (f, n) = first_chars(body, unicode)?;
-            (f, n || *min == 0)
-        }
-        Node::Concat(v) => {
-            let mut acc = CharSet::new();
-            for n in v {
-                let (f, nullable) = first_chars(n, unicode)?;
-                acc = acc.union(&f);
-                if !nullable {
-                    return Some((acc, false));
+                for (lo, hi) in [
+                    (0, 0x09),
+                    (0x0B, 0x0C),
+                    (0x0E, 0x2027),
+                    (0x202A, charset::MAX_CP),
+                ] {
+                    acc.add_range(lo, hi);
                 }
             }
-            (acc, true)
+            false
+        }
+        Node::Backref { .. } => return None,
+        Node::Group { body, .. } => first_into(body, unicode, acc)?,
+        Node::Repeat { min, body, .. } => first_into(body, unicode, acc)? || *min == 0,
+        Node::Concat(v) => {
+            for n in v {
+                if !first_into(n, unicode, acc)? {
+                    return Some(false);
+                }
+            }
+            true
         }
         Node::Alt(v) => {
-            let mut acc = CharSet::new();
             let mut nullable = false;
             for n in v {
-                let (f, nn) = first_chars(n, unicode)?;
-                acc = acc.union(&f);
-                nullable |= nn;
+                nullable |= first_into(n, unicode, acc)?;
             }
-            (acc, nullable)
+            nullable
         }
     })
+}
+
+/// Adds `set` to `acc` with one allocation.
+fn add_set(acc: &mut CharSet, set: &CharSet) {
+    *acc = if acc.is_empty() {
+        set.clone()
+    } else {
+        acc.union(set)
+    };
 }
 
 /// With `icase`, the input characters `c` with `canonicalize(c)` in `set`.

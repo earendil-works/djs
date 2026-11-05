@@ -205,7 +205,10 @@ pub(crate) fn parse(src: &[u16], flags: Flags) -> Result<Parsed, SyntaxError> {
     for g in &p.names {
         names[g.index as usize] = Some(g.name.clone());
     }
-    resolve_names(&mut node, &p.names);
+    // Only named backreferences need it (their groups start empty).
+    if !p.names.is_empty() {
+        resolve_names(&mut node, &p.names);
+    }
     Ok(Parsed {
         node,
         capture_count: p.capture_count,
@@ -306,7 +309,14 @@ impl Parser<'_> {
         let id = self.next_disjunction;
         self.next_disjunction += 1;
         self.path.push_out((id, 0));
-        let mut alts = alloc::vec![self.alternative(backward)?];
+        let first = self.alternative(backward)?;
+        if self.at_end() || self.cur() != '|' as u32 {
+            self.path.pop();
+            self.depth -= 1;
+            return Ok(first);
+        }
+        let mut alts = crate::buf::vec_with_capacity(4);
+        alts.push_out(first);
         while !self.at_end() && self.cur() == '|' as u32 {
             self.pos += 1;
             self.path.last_mut().unwrap().1 += 1;
@@ -322,7 +332,14 @@ impl Parser<'_> {
     }
 
     fn alternative(&mut self, backward: bool) -> Result<Node, SyntaxError> {
-        let mut terms = Vec::new();
+        // Room for the terms up to the next `|` or `)` if each were one character (a
+        // literal run usually is): growing from empty reallocates repeatedly.
+        let room = self.src[self.pos.min(self.src.len())..]
+            .iter()
+            .take(32)
+            .take_while(|&&c| c != '|' as u16 && c != ')' as u16)
+            .count();
+        let mut terms = crate::buf::vec_with_capacity(room);
         while !self.at_end() && self.cur() != '|' as u32 && self.cur() != ')' as u32 {
             if let Some(t) = self.term(backward)? {
                 terms.push_out(t);
