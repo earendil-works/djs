@@ -1702,9 +1702,21 @@ impl G<'_, '_> {
             }
             Role::Finally => {
                 // The rest of the finally block, then the completion that entered it.
-                let kind = self.take(&cat!("completion.kind@", n.start))?;
-                let kind = self.steer_kind(&kind)?;
-                let v = self.take(&cat!("completion.value@", n.start))?;
+                // (No completion where the block's end is dead, `if (true) continue;`:
+                // the compiler keeps none, and K never reaches the end either.)
+                let (kname, vname) = (
+                    cat!("completion.kind@", n.start),
+                    cat!("completion.value@", n.start),
+                );
+                let (kind, v) = if self.has(&kname) {
+                    let kind = self.take(&kname)?;
+                    (self.steer_kind(&kind)?, self.take(&vname)?)
+                } else {
+                    if self.has(&vname) {
+                        self.take(&vname)?;
+                    }
+                    (String::from("0"), String::from("undefined"))
+                };
                 let cv = self.fresh(cat!("$djs_c", i));
                 let done = match kind.as_str() {
                     "0" => String::new(),
