@@ -359,7 +359,7 @@ async function fuzz(bin, failed = 0) {
   console.log(`plain runs end: ${[...ends].map(([e, n]) => `${n} ${e}`).join(", ")}`);
   const isKnown = (sig) => known.some((k) => sig.includes(k));
   const old = [...found.keys()].filter(isKnown);
-  if (old.length) console.log(`known: ${old.length} signatures (${knownFile})`);
+  if (old.length) console.log(`known: ${old.length} signatures (${knownFile ?? "regress/deliberate.txt"})`);
   for (const [sig, e] of [...found].filter(([k]) => !isKnown(k)).sort((a, b) => b[1].seeds.size - a[1].seeds.size)) {
     console.log(`${String(e.seeds.size).padStart(4)} programs  ${sig}\n        smallest: seed ${e.seed} (${e.size} bytes), chain from idle point ${e.from}`);
   }
