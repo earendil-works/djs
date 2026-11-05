@@ -318,6 +318,7 @@ corpus	codemode/plain-fuzz/class-instance-in-idle-function.js	2754	1108
 corpus	codemode/plain-fuzz/class-instance-loop-closure.js	6580	2525
 corpus	codemode/plain-fuzz/class-static-in-promise-all.js	6016	2337
 corpus	codemode/plain-fuzz/class-with-async-method-in-loop.js	5289	2062
+corpus	codemode/plain-fuzz/class-with-async-method-nested-loop.js	3450	1270
 corpus	codemode/plain-fuzz/finally-await-in-loop.js	5182	2066
 corpus	codemode/plain-fuzz/finally-dead-end.js	8452	3349
 corpus	codemode/plain-fuzz/for-await-break.js	9467	3645
