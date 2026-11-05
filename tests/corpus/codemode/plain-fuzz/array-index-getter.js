@@ -1,4 +1,3 @@
-// difftest: plain-xfail an array's accessor element before a data element is written as a hole: wrong result
 // Found by the plain-dump fuzzer (0211): an array with a getter at an index, followed by
 // a pushed element, live across an await.
 let n = 1;
