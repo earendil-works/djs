@@ -678,3 +678,4 @@ topics when the index is next reorganized.
 - D2970: A host function is identified by a host-chosen string, one object per identity
 - D2971: Dumps refer to host values by `$djs.host(name)`, never by where they are bound
 - D2973: pi's next mode names its host functions `bridge` and `call`
+- D2887: a `yield*` awaiting its inner `return()`: K primed, the request delivered again
