@@ -9971,3 +9971,14 @@ adapter's identities are plainly `bridge` and `call` (`$djs.resume(id, "call", a
 {"id": n})`), and `$djs.host("call")` returns the very function the prelude was given
 (the adapter keeps both handles in `next` mode), where D2893's `$djs.call` was a second
 function object. `$djs` no longer carries them while a dump loads.
+## D2887: a `yield*` awaiting its inner `return()`: K primed, the request delivered again
+date: 2026-11-05 · by: pjr · issue: 0203
+An async generator whose `return()` reached an inner iterator through `yield*` awaits that
+`return()`'s promise. What comes next depends on the result: if it is done, the generator
+returns (through its `finally` blocks), and if not, it yields and the delegation goes on.
+Only a `return` request can make K's `yield*` return from the middle of an expression. So
+the dump primes K to the delegation's yield, as for a generator suspended there
+(`$dump.a.next()`), and delivers the original's in-flight request again as what it was
+(`$dump.p = $dump.a.return(v)`). The wrapper `$djs_Y(it, next, 2, promise)` hands out
+its placeholder first, and its first `return` gives the awaited promise. K's `yield*`
+then awaits it, checks it is an object, and returns or yields as the original does.

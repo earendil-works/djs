@@ -1,0 +1,15 @@
+{"value":"a1","done":false}
+inner finally a a
+outer finally f
+{"value":"stop","done":true}
+{"done":true}
+{"value":"c0","done":false}
+custom return x
+{"value":"kept1","done":false}
+custom return y
+{"value":"kept2","done":false}
+custom return z
+outer finally f
+{"value":"z!","done":true}
+{"done":true}
+=== completed

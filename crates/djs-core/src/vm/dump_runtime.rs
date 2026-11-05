@@ -55,10 +55,12 @@ pub(crate) const HELPERS: &[(&str, &str)] = &[
     ),
     // A `yield*`'s inner record (D2875): the first step is `first` if given, else a
     // placeholder (the delegation's yield the original is suspended at); `throw` and
-    // `return` are the inner iterator's, looked up when the delegation uses them.
+    // `return` are the inner iterator's, looked up when the delegation uses them. With
+    // `a` 2 (async, awaiting the inner `return()`, D2887) the placeholder comes first and
+    // the first `return` gives `first`.
     (
         "Y",
-        "(it, next, a, ...first) => { let ph = !first.length; const m = (k) => { const f = it[k]; return f == null ? f : (...v) => Reflect.apply(f, it, v); }; const r = { next(...v) { if (first.length) return first.pop(); if (ph) { ph = false; return { value: undefined, done: false }; } return Reflect.apply(next, it, v); }, get throw() { return m('throw'); }, get return() { return m('return'); }, [a ? Symbol.asyncIterator : Symbol.iterator]() { return r; } }; return r; }",
+        "(it, next, a, ...first) => { const r2 = a > 1; let ph = r2 || !first.length; const m = (k) => { if (r2 && k == 'return' && first.length) { const p = first.pop(); return () => p; } const f = it[k]; return f == null ? f : (...v) => Reflect.apply(f, it, v); }; const r = { next(...v) { if (!r2 && first.length) return first.pop(); if (ph) { ph = false; return { value: undefined, done: false }; } return Reflect.apply(next, it, v); }, get throw() { return m('throw'); }, get return() { return m('return'); }, [a ? Symbol.asyncIterator : Symbol.iterator]() { return r; } }; return r; }",
     ),
     // A `using` resource added again (D2876): its saved dispose method called on its
     // value; the exporter reads `$djs_v`/`$djs_m` back.

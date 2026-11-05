@@ -2348,7 +2348,12 @@ impl W<'_> {
             lines.push_out(cat!("$djs.k(", kref, ", { ", rec, " }", proto, ");"));
             kref.clone()
         };
-        let at_yield = act.site.name.starts_with("yield#") || act.site.name.starts_with("yield*#");
+        // (A `yield*` awaiting its inner `return()` too: K is primed to the delegation's
+        // yield and gets the original's request, D2887.)
+        let at_yield = act.site.name.starts_with("yield#")
+            || act.site.name.starts_with("yield*#")
+            || (act.site.kind == crate::compiler::SiteKind::YieldStarAwait
+                && act.peers.get(1) == Some(&act.site.name));
         // (The continuation's parameters, D2909.)
         let args = if k.args.is_empty() {
             String::new()

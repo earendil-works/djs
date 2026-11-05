@@ -2385,7 +2385,11 @@ impl G<'_, '_> {
         } else if k == pr {
             P::L(alloc::vec![s("["), self.expr(i + 1)?, s("]")])
         } else {
-            P::L(alloc::vec![s("["), self.rest(p.start + 1, p.end - 1), s("]")])
+            P::L(alloc::vec![
+                s("["),
+                self.rest(p.start + 1, p.end - 1),
+                s("]")
+            ])
         };
         let e = self.rest_part(n, r);
         Ok(P::L(alloc::vec![

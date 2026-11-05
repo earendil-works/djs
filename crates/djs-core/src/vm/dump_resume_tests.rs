@@ -1550,6 +1550,56 @@ main().catch((e) => print("main", e)).then(main2);
     assert!(ok >= 5, "{ok}");
 }
 
+/// An async `yield*` awaiting its inner `return()`'s promise (0203 follow-up, D2887): a
+/// done result returns through the delegating generator's `finally`, one that is not
+/// yields and the delegation goes on.
+#[test]
+fn plain_dumps_of_yield_star_awaiting_return() {
+    let src = r#"
+async function* inner(tag) {
+  try { yield tag + 1; yield tag + 2; } finally { print("inner finally", tag, await later(tag)); }
+}
+async function* outer(src) {
+  try {
+    const r = yield* src;
+    print("delegated", r);
+  } finally {
+    print("outer finally", await later("f"));
+  }
+  return "end";
+}
+function custom() {
+  let n = 0;
+  return {
+    [Symbol.asyncIterator]() { return this; },
+    next() { return later({ value: "c" + n++, done: false }); },
+    return(v) { print("custom return", v); return later(n < 3 ? { value: "kept" + n++, done: false } : { value: v + "!", done: true }); },
+  };
+}
+async function main() {
+  const g = outer(inner("a"));
+  print(JSON.stringify(await g.next()));
+  print(JSON.stringify(await g.return("stop")));
+  print(JSON.stringify(await g.next()));
+  const h = outer(custom());
+  print(JSON.stringify(await h.next()));
+  print(JSON.stringify(await h.return("x")));
+  print(JSON.stringify(await h.return("y")));
+  print(JSON.stringify(await h.next()));
+  print(JSON.stringify(await h.return("z")));
+  print(JSON.stringify(await h.next()));
+}
+main();
+"#;
+    let (failed, refused, ok) = plain_check_program("yieldstar-return", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, _, refused) = plain_chain_program("yieldstar-return", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 8, "{ok}");
+}
+
 /// `using` scopes stopped in their code and in their disposal: a labelled jump out of a
 /// scope whose async disposal awaits, disposals that throw (suppressed errors), a sync
 /// `using` per iteration, a `null` resource before a sync one.
