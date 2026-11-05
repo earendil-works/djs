@@ -7,7 +7,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0224 | Investigate and fix native perf regressions since 2026-11-01 (owner) | perfreg | .worktrees/perfreg |
-| 0225 | Binary bloat: account for every byte, win them back (owner) | bytes | .worktrees/bloat |
 
 ## Open (ready)
 
@@ -23,6 +22,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | - | fuzz.mjs reduce left an orphaned djs-difftest at 100% CPU for 15 h (likely a reduced candidate with an endless loop, run without a timeout): wrap reduce's runs in scripts/timeout.sh / a fuel cap; check whether it was an engine hang instead | ready |
 | - | status.py should record the commit of the measured engine sources, not HEAD (0223) | ready |
 | - | pi adapter fuel slice ~12,700 for QuickJS-equivalent interrupt budgets (0223; pi-side) | owner |
+| - | unsafe-heap in the shipped module (-7.7 KB gz, 8-15% fewer instructions; D2520 rejected it for safety) | owner |
+| - | Data segment coded with lzrc (-5.8 KB gz, +3 ms first instance, every host must restore data): shelved (0225) | - |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
 | - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |
@@ -92,6 +93,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0198 | Dump performance: corpus dump p50 1.42 -> 0.43 ms wasm, totals 3,243 -> 610 ms; data cases 2-6x (D2800-D2802) | 429184db (agent dumpperf) |
 | - | base_equals_a_compiled_realm test fixed (8f0fdd72); gate recovers from incremental corruption (D2896, b55180dd); CLI/REPL call states (D2894) | agent pjh |
 | 0220 | Guide rewrite: Using djs / How it works / Reference, JS API, dumps, CLI, pi page; live Run/Continue with debugger pauses at exact positions (D3050-D3054) | 13002add (agent guide) |
+| 0225 | Binary bloat: shipped 442.6 -> 422.3 KB gz (1.473x, under budget), slim 357 KB (D3090-D3095) | d11133eb (agent bytes) |
 | 0223 | Measurements refreshed; inline generated numbers in prose (D3070); status.py measures pi/startup/dumps/bounds/heap/bench | a8b704d8 (agent meas) |
 | 0222 | sleep-dump example instant (release dump module, compile cache), output before sleeps, 1 s; --restart fixed | fde5b7f4 (agent sleepy) |
 | 0221 | `debugger;` pauses in the CLI: REPL .c/.abort, run/resume --debugger (D3060) | 00cd7d63 (agent dbg) |
