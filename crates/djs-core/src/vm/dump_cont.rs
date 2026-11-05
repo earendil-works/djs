@@ -2243,6 +2243,9 @@ impl G<'_, '_> {
                 s(")")
             ]));
         }
+        if matches!(n.parts[k].role, Role::Object | Role::Property) {
+            return self.assign_target_site(i, n, k);
+        }
         if n.parts[k].role != Role::Right {
             return no("a site in an assignment's target (0203)");
         }
@@ -2301,6 +2304,70 @@ impl G<'_, '_> {
         } else {
             P::L(alloc::vec![s("("), target, s(" = "), e, s(")")])
         })
+    }
+
+    /// The site in an assignment's member target (`(await o).p = v`, `o[await k] = v`):
+    /// nothing of the store happened yet, so K's assignment is the original's from the
+    /// site on, with its operator as written (a compound one reads the old value itself).
+    fn assign_target_site(&mut self, i: usize, n: &Node, k: usize) -> R<P> {
+        let role = |r: Role| n.parts.iter().position(|p| p.role == r);
+        let (Some(o), Some(pr), Some(op), Some(r)) = (
+            role(Role::Object),
+            role(Role::Property),
+            role(Role::Op),
+            role(Role::Right),
+        ) else {
+            return no("an assignment target the compiler did not describe");
+        };
+        if self.text(n.parts[o].start, n.parts[o].end) == "super" {
+            return no("an assignment to super around the site (0203)");
+        }
+        // (Before its key, the target is still the member expression the compiler read,
+        // its object named where it starts.)
+        let at = if k == o || self.has(&cat!("member.object@", n.parts[o].start)) {
+            n.parts[o].start
+        } else {
+            n.start
+        };
+        let p = n.parts[pr];
+        let computed = self.text(p.start, p.end).starts_with('[');
+        let opt = String::from(self.text(n.parts[op].start, n.parts[op].end));
+        // Should K stop again in its assignment, its member's object, its target's
+        // reference and old value keep what the original's do.
+        let mut marks = Vec::new();
+        let mut kslots = alloc::vec![(cat!("assign.object@", n.start), "assign.object")];
+        if computed {
+            kslots.push_out((cat!("member.object@", at), "member.object"));
+            kslots.push_out((cat!("assign.key@", n.start), "assign.key"));
+        }
+        if opt != "=" && !matches!(opt.as_str(), "&&=" | "||=" | "??=") {
+            kslots.push_out((cat!("assign.old@", n.start), "assign.old"));
+        }
+        for (fslot, kc) in kslots {
+            marks.push_out(self.ktemp(fslot, kc));
+        }
+        let obj = if k == o {
+            self.expr(i + 1)?
+        } else {
+            self.tmp("member.object", at)?
+        };
+        let key = if !computed {
+            P::L(alloc::vec![s("."), P::V(p.start, p.end)])
+        } else if k == pr {
+            P::L(alloc::vec![s("["), self.expr(i + 1)?, s("]")])
+        } else {
+            P::L(alloc::vec![s("["), self.rest(p.start + 1, p.end - 1), s("]")])
+        };
+        let e = self.rest_part(n, r);
+        Ok(P::L(alloc::vec![
+            s("("),
+            P::L(marks),
+            obj,
+            key,
+            P::S(cat!(" ", opt, " ")),
+            e,
+            s(")")
+        ]))
     }
 
     fn object(&mut self, i: usize, n: &Node, k: usize) -> R<P> {
