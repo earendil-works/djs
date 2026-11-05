@@ -359,7 +359,8 @@ impl Session {
                 .map_err(|e| format!("compile cache: copy: {e:?}"))?;
             let blob = match twin.compile_cached(src.as_bytes(), copts, None) {
                 Ok((_, blob)) => blob,
-                Err(e) => return Ok(Err(e)),
+                // (A compile that fails changes the heap too: compile here as well.)
+                Err(_) => return Ok(self.vm.compile(src.as_bytes(), copts)),
             };
             let (f, again) = match self
                 .vm
