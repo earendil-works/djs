@@ -1,7 +1,7 @@
 # 0224: Investigate and fix the native performance regressions since 2026-11-01
 
-status: open
-agent: -
+status: in-progress
+agent: perfreg
 branch: issue/0224-perf-regressions
 depends-on: 0223
 guide: pages quoting the affected numbers (generated via status.tsv)
