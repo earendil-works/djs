@@ -54,6 +54,9 @@ interface Exports {
   vm_outcome?(vm: number): number;
   /** With the `dump` feature (D2352): continuation dumps. */
   vm_dump?(vm: number, len: number): number;
+  /** The dump module (0219, D3041): suspension maps from one VM to the next. */
+  vm_dump_maps_export?(vm: number): number;
+  vm_dump_maps_import?(vm: number, len: number): number;
   /** Since 0204 (D2890): loading plain dumps. */
   vm_open_call?(vm: number, parked: number, fnId: number): number;
   vm_set_next_call_id?(vm: number, id: number): void;
@@ -283,9 +286,20 @@ export class Engine {
       states.map(([id, json]) => `${id}:${textEncoder.encode(json).length}`).join("\t"),
       states.map(([, json]) => json).join(""),
     ].join("\n");
+    // The compile cache's maps (D3041): what the module's earlier dumps compiled.
+    const maps = dumpMaps.get(this.module);
+    if (maps && x.vm_dump_maps_import) {
+      this.stage(maps);
+      x.vm_dump_maps_import(this.vm, maps.length);
+    }
     const r = this.trap(() => x.vm_dump!(this.vm, this.stageText(text)));
     if (r !== 0) throw new Error(`Cannot dump the session:\n${outText(x)}`);
-    return outText(x);
+    const out = outText(x);
+    if (x.vm_dump_maps_export) {
+      const n = x.vm_dump_maps_export(this.vm);
+      if (n > 0 && n <= COMPILE_CACHE_BYTES) dumpMaps.set(this.module, new Uint8Array(x.memory.buffer, x.djs_out_ptr(), n).slice());
+    }
+    return out;
   }
 
   /**
@@ -543,6 +557,9 @@ function outWords(x: Exports, n: number): number[] {
 function outText(x: Exports): string {
   return textDecoder.decode(new Uint8Array(x.memory.buffer, x.djs_out_ptr(), x.djs_out_len()));
 }
+
+/** The suspension maps of the module's last dump (D3041). */
+const dumpMaps = new WeakMap<WebAssembly.Module, Uint8Array>();
 
 /** The compile cache per module (D3040): the source's key to its compile's blob. */
 const compileCaches = new WeakMap<WebAssembly.Module, Map<string, Uint8Array>>();
