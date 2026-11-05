@@ -136,7 +136,7 @@ impl G<'_, '_> {
 /// The values `p` writes in K's text ([`P::Val`]).
 fn vals_of<'p>(p: &'p P, out: &mut Vec<&'p str>) {
     match p {
-        P::Val(t) => out.push_out(t.as_str()),
+        P::Val(t, _) => out.push_out(t.as_str()),
         P::L(list) => {
             for q in list {
                 vals_of(q, out);
@@ -181,7 +181,7 @@ impl Render<'_> {
 
     fn walk(&mut self, p: &P) {
         match p {
-            P::S(t) | P::Decl(_, t) | P::Val(t) => self.text(t),
+            P::S(t) | P::Decl(_, t) | P::Val(t, _) => self.text(t),
             P::Scope(names, braced, q) => {
                 let braces = *braced && !names.is_empty();
                 if braces {
@@ -594,5 +594,8 @@ impl Ctx for Canon<'_> {
     }
     fn awaiting(&mut self, _: &[String]) -> String {
         String::from(PH)
+    }
+    fn site_reads(&self) -> Vec<String> {
+        Vec::new()
     }
 }

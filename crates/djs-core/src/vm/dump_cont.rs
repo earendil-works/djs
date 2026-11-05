@@ -58,8 +58,9 @@ enum P {
     /// re-dump reads the literal back from K's text (D2913).
     Lit(usize, String),
     /// A value of the dump written in K's text (the awaited operand): it reads none of K's
-    /// bindings (D3001), so liveness does not look into it.
-    Val(String),
+    /// bindings (D3001) but those the dump names there (`.1`, D3003), all liveness sees
+    /// of it.
+    Val(String, Vec<String>),
 }
 
 fn s(t: &str) -> P {
@@ -2010,7 +2011,7 @@ impl G<'_, '_> {
                     s(open),
                     m,
                     s("await "),
-                    P::Val(self.awaiting()),
+                    P::Val(self.awaiting(), self.ctx.site_reads()),
                     s(close)
                 ]),
                 // A yield's operand was yielded before the dump.
@@ -2837,8 +2838,15 @@ fn render(p: &P, ftext: &str, skip: &str, out: &mut String) {
             }
         }
         P::Lit(_, t) => out.push_str(t),
-        // (A space: what it stands between stays apart.)
-        P::Val(_) => out.push(' '),
+        // (Only the bindings of K the dump names there, D3003; apart from what it stands
+        // between.)
+        P::Val(_, reads) => {
+            for n in reads {
+                out.push(' ');
+                out.push_str(n);
+            }
+            out.push(' ');
+        }
         P::V(a, b) => out.push_str(ftext.get(*a as usize..*b as usize).unwrap_or("")),
         P::Mark(_) | P::Helpers => {}
         P::L(list) => {

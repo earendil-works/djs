@@ -282,6 +282,24 @@ impl W<'_> {
         None
     }
 
+    /// The activation whose continuation is member `key` of factory `fac`, placed in a
+    /// block of activation `a`'s continuation at or above `block`, its text written, and
+    /// reading no name a block between declares.
+    fn block_k(&self, a: usize, block: usize, fac: &str, key: &str) -> Option<usize> {
+        let a2 = self.kkeys.iter().position(|k| k == key)?;
+        let (hsc, _) = self.acts[a2].home?;
+        if self.ir.factories[hsc.0].name != fac || self.taken_k.contains(&a2) {
+            return None;
+        }
+        let kt = self.acts[a2].k.as_ref()?;
+        let pb = self.placed.iter().find_map(|x| match (x.0, x.1) {
+            (super::Pl::Block(a3, b), super::Put::K(k)) if a3 == a && k == a2 => Some(b),
+            _ => None,
+        })?;
+        let names = super::refs(&kt.text).names;
+        (pb <= block && !self.declared_between(a, pb, block, &names)).then_some(a2)
+    }
+
     /// Whether a block of activation `a`'s continuation in `(from, to]` declares one of
     /// `names` (a closure written there would see that binding instead).
     fn declared_between(&self, a: usize, from: usize, to: usize, names: &[String]) -> bool {
@@ -313,13 +331,33 @@ impl W<'_> {
         let b = text.as_bytes();
         let mut out = String::new();
         let mut at = 0;
-        for (s, e) in scan_spans(text) {
+        for (s, e) in super::eager_spans(text) {
             if b.get(e) != Some(&b'.') {
                 continue;
             }
             let fac = &text[s + 6..e];
             let (key, end) = super::ident_at(text, e + 1);
-            if key.is_empty() || !self.single_key(fac, key) {
+            if key.is_empty() {
+                continue;
+            }
+            // A continuation its block makes, called here (its one use, `$djs.k(K, …)(…)`).
+            if let Some(a2) = self.block_k(a, block, fac, key) {
+                let kt = self.acts[a2]
+                    .k
+                    .as_ref()
+                    .map(|k| k.text.clone())
+                    .unwrap_or_default();
+                out.push_str(&text[at..s]);
+                if matches!(b.get(end), Some(b'.' | b'(' | b'[' | b'`')) {
+                    out.push_str(&operand(&kt));
+                } else {
+                    out.push_str(&kt);
+                }
+                at = end;
+                self.taken_k.push_out(a2);
+                continue;
+            }
+            if !self.single_key(fac, key) {
                 continue;
             }
             let Some((sc, i, pb)) = self.block_prop(a, fac, key) else {
@@ -387,9 +425,14 @@ impl W<'_> {
     /// `text`, a part of activation `a`'s continuation in its block `block`, with the
     /// members of merged scopes that a binding of K declared at or above `block` holds
     /// named by that binding (D3003): `$dump.s2.todos` → `todos`.
-    pub(super) fn bindings_in_k(&mut self, a: usize, block: usize, text: &str) -> String {
+    pub(super) fn bindings_in_k(
+        &mut self,
+        a: usize,
+        block: usize,
+        text: &str,
+    ) -> (String, Vec<String>) {
         if !text.contains("$dump.") {
-            return String::from(text);
+            return (String::from(text), Vec::new());
         }
         // The bindings whose value is a member: name, value, block.
         let mut held: Vec<(String, String, usize)> = Vec::new();
@@ -424,12 +467,13 @@ impl W<'_> {
             }
         }
         if held.is_empty() {
-            return String::from(text);
+            return (String::from(text), Vec::new());
         }
         let b = text.as_bytes();
+        let mut named = Vec::new();
         let mut out = String::new();
         let mut at = 0;
-        for (s, e) in scan_spans(text) {
+        for (s, e) in super::eager_spans(text) {
             if b.get(e) != Some(&b'.') {
                 continue;
             }
@@ -448,13 +492,14 @@ impl W<'_> {
             let fac = String::from(&text[s + 6..e]);
             out.push_str(&text[at..s]);
             out.push_str(name);
+            named.push_out(name.clone());
             at = end;
             if let Some(n) = self.inl.key_uses.get_mut(&(fac, String::from(key))) {
                 *n -= 1;
             }
         }
         out.push_str(&text[at..]);
-        out
+        (out, named)
     }
 
     /// Starts a list of lines (a callback's, or the top level).
@@ -670,9 +715,10 @@ impl W<'_> {
         let scope = self.k_scope(a);
         let v = self.inline_site(aw, Some(0), &scope);
         if v != aw {
-            // (K's deepest block holds the site. Not K's bindings: liveness does not look
-            // into the site's operand.)
+            // (K's deepest block holds the site.)
             let last = self.acts[a].blocks.len().saturating_sub(1);
+            let (v, reads) = self.bindings_in_k(a, last, &v);
+            self.acts[a].site_reads = reads;
             let v = self.props_in_place(a, last, &v);
             self.acts[a].site_val = Some(v);
         }

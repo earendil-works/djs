@@ -175,6 +175,14 @@ pub(super) fn scan_spans(text: &str) -> Vec<(usize, usize)> {
     out
 }
 
+/// [`scan_spans`] outside function and class bodies: the references a text's own
+/// evaluation makes (a continuation's text inside it has its layout already, D3003).
+pub(super) fn eager_spans(text: &str) -> Vec<(usize, usize)> {
+    let mut out = Vec::new();
+    scan(text, true, &|_| false, &mut |s, e| out.push_out((s, e)));
+    out
+}
+
 /// The references of `text` its evaluation makes: [`refs`] without those inside function
 /// bodies and class bodies (read when they run). A text of the dump, a value: a
 /// `{` after `)` or `=>` opens a function's body (no statements are scanned).
@@ -520,6 +528,8 @@ pub(super) trait Ctx {
     fn go(&self, block: usize) -> String;
     /// `scope`: the names K may bind where the operand stands.
     fn awaiting(&mut self, scope: &[String]) -> String;
+    /// The bindings of K the dump named in the site's operand (D3003).
+    fn site_reads(&self) -> Vec<String>;
 }
 
 /// A continuation's text and its origin record (D2833).
@@ -559,8 +569,10 @@ struct AState {
     made: Vec<(String, usize)>,
     k: Option<KText>,
     blocks_done: bool,
-    /// The site's operand, taken from the last part of its callback (D3002).
+    /// The site's operand, taken from the last part of its callback (D3002), and the
+    /// bindings of K it names (D3003).
     site_val: Option<String>,
+    site_reads: Vec<String>,
 }
 
 /// One entry of the schedule: an item, or an activation's call with its callback.
@@ -610,6 +622,8 @@ struct W<'x> {
     vcache: alloc::collections::BTreeMap<(usize, String), String>,
     /// Members of merged scopes written where they are used instead (D3003).
     taken: Vec<(Sc, usize)>,
+    /// Continuations of merged scopes written where they are called instead (D3003).
+    taken_k: Vec<usize>,
 }
 
 type R<T> = Result<T, String>;
@@ -742,6 +756,7 @@ pub(super) fn write(
         k_effects: false,
         vcache: Default::default(),
         taken: Vec::new(),
+        taken_k: Vec::new(),
     };
     for (f, fac) in ir.factories.iter().enumerate() {
         for (s, sc) in fac.scopes.iter().enumerate() {
@@ -1039,6 +1054,13 @@ impl Ctx for C<'_, '_> {
                 .cloned()
                 .unwrap_or_default()
         }
+    }
+
+    fn site_reads(&self) -> Vec<String> {
+        if self.dry {
+            return Vec::new();
+        }
+        self.w.acts[self.a].site_reads.clone()
     }
 
     fn awaiting(&mut self, scope: &[String]) -> String {
@@ -2280,7 +2302,7 @@ impl W<'_> {
                             // there they may name K's bindings and closures, D3003.)
                             if self.callback_in_k(*a, &inner) {
                                 let text = join(&inner, "\n");
-                                let text = self.bindings_in_k(*a, b, &text);
+                                let (text, _) = self.bindings_in_k(*a, b, &text);
                                 let text = self.props_in_place(*a, b, &text);
                                 go.push_out(text);
                                 continue;
@@ -2584,11 +2606,12 @@ impl W<'_> {
             rec.pop();
         }
         let rec = join(&rec, ", ");
+        // (`$djs.k` returns K: a continuation of a factory's is called on its result,
+        // its one use, so that it may be written there, D3003.)
         let kexpr = if self.acts[a].home.is_none() {
             cat!("$djs.k(", k.text, ", ", rec, ")")
         } else {
-            lines.push_out(cat!("$djs.k(", kref, ", ", rec, ");"));
-            kref.clone()
+            cat!("$djs.k(", kref, ", ", rec, ")")
         };
         // (A `yield*` awaiting its inner `return()` too: K is primed to the delegation's
         // yield and gets the original's request, D2887.)
@@ -2602,7 +2625,7 @@ impl W<'_> {
         } else {
             cat!(", ", join(&k.args, ", "))
         };
-        let direct = self.acts[a].home.is_none() && (act.this == "undefined" || self.is_arrow(a));
+        let direct = act.this == "undefined" || self.is_arrow(a);
         let this = self.inline_refs(&act.this, None, false);
         if generator {
             if direct {
@@ -2803,6 +2826,9 @@ impl W<'_> {
                             (ir.factories[sc2.0].name.clone(), self.prop_text(sc2, i2))
                         }
                         Put::K(a) => {
+                            if self.taken_k.contains(&a) {
+                                continue;
+                            }
                             let Some((hsc, _)) = self.acts[a].home else {
                                 return refuse("internal: a placed continuation without a home");
                             };
