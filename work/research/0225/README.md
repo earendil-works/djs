@@ -115,3 +115,21 @@ Earlier measurements still valid in kind (0156): no `@native` −10.6, no `@fast
    tables compressed well).
 6. Small: optimize(size) on cold modules −2.0, Unicode re-packing ~−3, monomorphized
    width copies ≤ 3–5 (perf), dlmalloc → smaller allocator ~2.
+
+## After batch 1 (main f7aa2c48, 430,963)
+
+- #4 lzrc of the data segments: 107,291 B → 47,768 coded (−5.8 KB gz). Per instance:
+  instantiate 29–31 µs with active segments, 29–30 µs without them plus a JS
+  `memory.set` of the decoded bytes. Per module: ~3 ms decode (the base's 45.7 KB decode
+  in 2.8 ms). Shelved: cold start doubles and every build path and host must cooperate.
+- `#[optimize(size)]` (patches/optsize.py): all cold dirs −2.7 KB, but unicode +23%
+  instructions on case mapping/normalization; without unicode −2.5 KB, typescript.js
+  compile +1.0%, codemode bodies −1..−2%, regexp compile +1.4%. Needs ~750 attributes.
+- Opcode names out of the runtime table (D3092): −1.6 KB. Cell layout names (variant
+  with empty names): −1.3 KB. Intrinsic names: needed at run time (the compiler looks up
+  15 intrinsics by name for ordinary code; privileged `%Name`).
+- Identical function bodies: 13 groups, 2,080 B raw; gzip absorbs them (libm::fmod → `%`:
+  −888 raw, −12 gz).
+- Flags: `-Zmerge-functions=trampolines` +41 B, `-Zinline-mir=no` 0, `-Zmir-opt-level=1`
+  +353 B.
+- Allocator: dlmalloc + page allocator 8.5 KB raw (~3.5 KB gz) of code.

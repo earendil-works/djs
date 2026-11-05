@@ -42,6 +42,21 @@ numbers and the coordinator's OK (wasm instruction counts per workload as in 022
   (intrinsic run-time tables, −0.8 KB). Shipped 442,576 → 430,963; slim 377.2 → 365.3;
   dump module 784.7 → 762.8. Ceilings lowered; status sizes re-recorded. Guide pages:
   host.md prose (panics); generated numbers in README, host.md, dumps.md, status.md.
+- #4 shelved (coordinator): data segment lzrc −5.8 KB gz, per instance ±0 (29–31 µs
+  either way), +~3 ms per module (first instance), every build path and host would need a
+  rewrite step / data restore. Written up in work/research/0225.
+- #6: `#[optimize(size)]` on compiler/lexer/bigint/wire/regexp parser+compiler: −2.5 KB,
+  compile ±1% (typescript.js +1.0%, bodies −1..−2%), but on unicode +23% on case
+  mapping/normalization (excluded) and ~750 per-function attributes (rustc rejects it
+  on modules/impls) behind a cfg for stable: not done. Unicode re-packing: the tables are
+  already varint/delta-coded (D2334, D1760), lzrc of all of them saves only 3.1 KB, so
+  the encoding is near its entropy: not done.
+- Batch 2: D3092 (opcode names apart from OPS; −1.6 KB). Shipped 429,334 (1.498x,
+  within the D020 budget), slim 363,857, dump 760,897. Measured and dropped: libm::fmod
+  → `%` (−888 raw, −12 gz: gzip absorbs identical bodies, so duplicate monomorphs cost
+  little), `-Zmerge-functions=trampolines` (+41), `-Zinline-mir=no` (0),
+  `-Zmir-opt-level=1` (+353). Cell layout names: −1.3 KB measured (variant), but
+  for_each_slot (GC) reads those tables: deferred while 0224 bisects GC.
 
 ## Follow-ups
 
