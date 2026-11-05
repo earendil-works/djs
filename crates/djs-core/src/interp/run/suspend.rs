@@ -25,10 +25,11 @@
 //! Async generators use both: their resumer (builtins/asyncgen.ts) tells them apart by
 //! the state after the frame hands control back.
 //!
-//! `await` and the end of an async function replace the frame with a call of a builtin
-//! (`%AsyncAwait`, `%AsyncFunctionReturn`, `%AsyncFunctionThrow`) with the frame's own
-//! continuation: a tail call. Those return the result promise, so whoever ran the frame
-//! (the caller the first time, the job that resumed it later) gets the promise.
+//! `await` and the end of an async function return the result promise, so whoever ran
+//! the frame (the caller the first time, the job that resumed it later) gets it. Where
+//! that needs no user code (D3130), the op subscribes or settles itself; else it replaces
+//! the frame with a call of a builtin (`%AsyncAwait`, `%AsyncFunctionReturn`) with the
+//! frame's own continuation: a tail call.
 
 use super::*;
 
@@ -55,7 +56,6 @@ pub(crate) const QUEUE: u32 = 6;
 
 const ASYNC_AWAIT: u16 = intrinsics::id("AsyncAwait");
 const ASYNC_FUNCTION_RETURN: u16 = intrinsics::id("AsyncFunctionReturn");
-const ASYNC_FUNCTION_THROW: u16 = intrinsics::id("AsyncFunctionThrow");
 
 /// `v` as a Generator object of `kind`.
 pub(crate) fn as_generator(heap: &Heap, v: Value, kind: i32) -> Option<Obj> {
@@ -293,34 +293,69 @@ impl Exec<'_> {
         Ok(())
     }
 
-    /// `await loc`.
+    /// `await loc`. Await ( v ) runs no user code when `v` is a Promise of %Promise% or a
+    /// value that fulfills a new one without a `then` call (D3130): then the frame
+    /// subscribes here, as `%AsyncAwait` would, without the intermediate promise (which
+    /// nothing else could reach), and returns as `%AsyncAwait` returns.
     pub(super) fn await_value(&mut self, next: u32) -> Step {
         let a = self.local_generator(self.imm_u16(1), &[ASYNC, ASYNC_GENERATOR])?;
         let v = self.pop();
+        let p = promise::plain_promise(self.heap, v);
+        if p.is_none() && !promise::plain_fulfillment(self.heap, v) {
+            self.suspend_frame(a, AWAITING, next)?;
+            return self.tail_call_builtin(ASYNC_AWAIT, [Value::object(a), v]);
+        }
         self.suspend_frame(a, AWAITING, next)?;
-        self.tail_call_builtin(ASYNC_AWAIT, [Value::object(a), v])
+        let h = Value::object(a);
+        let r = match p {
+            Some(p) => promise::perform_then(self.heap, p, h, h, Value::UNDEFINED),
+            None => {
+                let job = realm::installed_intrinsic(self.heap, promise::PROMISE_REACTION_JOB);
+                promise::enqueue(self.heap, job, [Value::UNDEFINED, h, v, Value::TRUE])
+            }
+        };
+        if let Err(e) = r {
+            // Out of memory: the frame goes on as if it had not suspended.
+            self.heap.set_object_slot(a, STATE, Value::int(EXECUTING));
+            self.heap.set_object_slot(a, FRAME, Value::UNDEFINED);
+            return Err(e.into());
+        }
+        // An async generator's resumer (AsyncGeneratorStep) only looks at its state.
+        let result = if self.heap.object_slot(a, KIND).as_int() == Some(ASYNC) {
+            promise_of(self.heap, a)
+        } else {
+            Value::UNDEFINED
+        };
+        self.do_return(result)
     }
 
-    /// `async_return loc` / `async_reject loc`.
+    /// `async_return loc` / `async_reject loc`: settles the result promise and returns it.
+    /// A value whose resolution may call user code (a `then`) goes to
+    /// `%AsyncFunctionReturn` instead (D3130).
     pub(super) fn async_finish(&mut self, reject: bool) -> Step {
         let a = self.local_generator(self.imm_u16(1), &[ASYNC])?;
         let v = self.pop();
-        let id = if reject {
-            ASYNC_FUNCTION_THROW
-        } else {
-            ASYNC_FUNCTION_RETURN
-        };
-        self.tail_call_builtin(id, [Value::object(a), v])
+        if !reject && !promise::plain_fulfillment(self.heap, v) {
+            return self.tail_call_builtin(ASYNC_FUNCTION_RETURN, [Value::object(a), v]);
+        }
+        let p = promise_of(self.heap, a)
+            .as_object()
+            .expect("an async function's promise");
+        set_state(self.heap, a, COMPLETED);
+        promise::settle(self.heap, p, !reject, v)?;
+        self.do_return(Value::object(p))
     }
 
     /// `%GeneratorResume(g, value, mode)`: the arguments are popped (`sp` = their base);
-    /// pushes the saved frame of `g` with `PushResult` back to `next`.
+    /// pushes the saved frame of `g` with `cont` back to `next` (`PushResult`, or `Job`
+    /// for a job's bottom frame).
     pub(super) fn generator_resume(
         &mut self,
         g: Value,
         value: Value,
         mode: Value,
         next: u32,
+        cont: Continuation,
     ) -> Step {
         let g = g
             .as_object()
@@ -371,14 +406,18 @@ impl Exec<'_> {
         }
         self.fuel -= (len / 8) as i64;
         let hp = base + hp_off;
+        let bottom = cont.is_bottom();
         let header = [
-            (frame::PREV_BP, Value::int(self.bp as i32)),
-            (frame::PREV_HP, Value::int(self.hp as i32)),
-            (frame::RET_PC, Value::int(next as i32)),
             (
-                frame::FLAGS,
-                Value::int(Continuation::PushResult.to_flags()),
+                frame::PREV_BP,
+                Value::int(if bottom { 0 } else { self.bp as i32 }),
             ),
+            (
+                frame::PREV_HP,
+                Value::int(if bottom { 0 } else { self.hp as i32 }),
+            ),
+            (frame::RET_PC, Value::int(next as i32)),
+            (frame::FLAGS, Value::int(cont.to_flags())),
         ];
         for (k, v) in header {
             self.set(hp + k, v);

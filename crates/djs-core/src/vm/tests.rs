@@ -1558,7 +1558,8 @@ fn vm_call_never_collects() {
     });
     let f = vm
         .compile(
-            b"return 1 + 1",
+            // (A call: the frame entry is the run's first safepoint.)
+            b"return (() => 1 + 1)()",
             &crate::compiler::CompileOptions::async_body("c.js", &[]),
         )
         .unwrap();

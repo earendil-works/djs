@@ -842,6 +842,23 @@ impl<'h> Exec<'h> {
                 .is_some_and(|o| self.heap.object_class(o) == ObjectClass::Function)
         );
         state::set_state(self.heap, RunState::Running);
+        // The reaction job of an await (D3130): `%PromiseReactionJob` would only resume
+        // the async function, so the job's bottom frame is the function's own.
+        if job[0] == realm::installed_intrinsic(self.heap, promise::PROMISE_REACTION_JOB)
+            && suspend::as_generator(self.heap, job[2], suspend::ASYNC).is_some()
+        {
+            let mode = Value::int(if job[4] == Value::TRUE { 0 } else { 1 });
+            return match self.generator_resume(job[2], job[3], mode, 0, Continuation::Job) {
+                Ok(s) => s,
+                Err(f) => {
+                    let e = self.fault_value(f, None);
+                    self.sp = 0;
+                    state::set_outcome(self.heap, RunState::Threw, e);
+                    self.flush();
+                    Some(Status::Threw(e))
+                }
+            };
+        }
         let r = self.ensure(2 + 4).and_then(|()| {
             self.push(job[0]);
             self.push(Value::UNDEFINED);

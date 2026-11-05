@@ -23,9 +23,9 @@
 
 use alloc::vec::Vec;
 
-use super::intrinsics::id;
+use super::intrinsics::{PROMISE_CONSTRUCTOR, id};
 use crate::heap::cells::{Interp, Roots, ValueArray};
-use crate::heap::{Heap, HeapError, ObjectClass, Ref};
+use crate::heap::{Heap, HeapError, Lookup, ObjectClass, Property, Ref, atoms};
 use crate::interp::realm;
 use crate::interp::state;
 use crate::value::{Obj, Value};
@@ -80,6 +80,35 @@ pub(crate) fn flags(heap: &Heap, p: Obj) -> i32 {
 
 pub(crate) fn set_flags(heap: &mut Heap, p: Obj, f: i32) {
     heap.set_object_slot(p, FLAGS, Value::int(f));
+}
+
+/// Whether ResolvePromise ( promise, v ) fulfills with `v` without running user code
+/// (D3130): `v` is no object, or its `then` is absent or a data property that is not
+/// callable, found without meeting a Proxy or a getter. (The caller's promise is never
+/// `v`: no self-resolution.)
+pub(crate) fn plain_fulfillment(heap: &Heap, v: Value) -> bool {
+    let Some(o) = v.as_object() else {
+        return true;
+    };
+    match heap.lookup_property(o, atoms::THEN) {
+        Lookup::Absent => true,
+        Lookup::Found(_, Property::Data { value, .. }) => {
+            !value.as_object().is_some_and(|f| heap.is_callable(f))
+        }
+        _ => false,
+    }
+}
+
+/// PromiseResolve ( %Promise%, v ) when it is `v` itself without running user code
+/// (D3130): a Promise whose `constructor`, a data property found without a Proxy or a
+/// getter on the way, is %Promise%.
+pub(crate) fn plain_promise(heap: &Heap, v: Value) -> Option<Obj> {
+    let p = as_promise(heap, v)?;
+    let ctor = realm::installed_intrinsic(heap, PROMISE_CONSTRUCTOR);
+    match heap.lookup_property(p, atoms::CONSTRUCTOR) {
+        Lookup::Found(_, Property::Data { value, .. }) if value == ctor => Some(p),
+        _ => None,
+    }
 }
 
 // ---------------------------------------------------------------- the job queue

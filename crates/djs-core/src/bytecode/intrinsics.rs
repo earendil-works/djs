@@ -422,7 +422,6 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("FunctionPrototypeBehavior", B, 0, false),
     i("AsyncAwait", B, 2, false),
     i("AsyncFunctionReturn", B, 2, false),
-    i("AsyncFunctionThrow", B, 2, false),
     i("GeneratorFunctionConstructor", B, 0, true),
     i("AsyncGeneratorFunctionConstructor", B, 0, true),
     i("AsyncFunctionConstructor", B, 0, true),

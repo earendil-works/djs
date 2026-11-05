@@ -1135,11 +1135,12 @@ impl Exec<'_> {
                 None => return bad_argument(id),
             },
             REALM_INTRINSIC => {
-                let name = a0
-                    .as_string()
-                    .map(|s| self.heap.str_to_string(s))
-                    .unwrap_or_default();
-                match Intrinsic::by_name(&name) {
+                // The name is a Latin-1 literal of the builtins: read in place, no copy.
+                let name = match a0.as_string().and_then(|s| self.heap.str_view(s)) {
+                    Some(crate::heap::StrView::Latin1(b)) => core::str::from_utf8(b).ok(),
+                    _ => None,
+                };
+                match name.and_then(Intrinsic::by_name) {
                     Some(i) => realm::intrinsic(self.heap, i),
                     None => return bad_argument(id),
                 }
@@ -1855,7 +1856,7 @@ impl Exec<'_> {
             GENERATOR_RESUME => {
                 let (value, mode) = (arg(self, 1), arg(self, 2));
                 self.sp = base;
-                return self.generator_resume(a0, value, mode, next);
+                return self.generator_resume(a0, value, mode, next, Continuation::PushResult);
             }
             IS_ASYNC_FUNCTION_STATE => {
                 Value::bool(suspend::as_generator(self.heap, a0, suspend::ASYNC).is_some())

@@ -2563,7 +2563,7 @@ function AsyncAwait(a, v) {
   return undefined;
 }
 
-// builtins/generator.ts:120 %AsyncFunctionReturn
+// builtins/generator.ts:122 %AsyncFunctionReturn
 function AsyncFunctionReturn(a, v) {
   %GeneratorSetState(a, 3);
   const promise = %AsyncFunctionPromise(a);
@@ -2571,25 +2571,17 @@ function AsyncFunctionReturn(a, v) {
   return promise;
 }
 
-// builtins/generator.ts:131 %AsyncFunctionThrow
-function AsyncFunctionThrow(a, e) {
-  %GeneratorSetState(a, 3);
-  const promise = %AsyncFunctionPromise(a);
-  %RejectPromise(promise, e);
-  return promise;
-}
-
-// builtins/generator.ts:147 %GeneratorFunctionConstructor
+// builtins/generator.ts:138 %GeneratorFunctionConstructor
 function GeneratorFunctionConstructor(...args) {
   return CreateDynamicFunction(new.target, 1, "GeneratorFunctionPrototype", args);
 }
 
-// builtins/generator.ts:155 %AsyncGeneratorFunctionConstructor
+// builtins/generator.ts:146 %AsyncGeneratorFunctionConstructor
 function AsyncGeneratorFunctionConstructor(...args) {
   return CreateDynamicFunction(new.target, 3, "AsyncGeneratorFunctionPrototype", args);
 }
 
-// builtins/generator.ts:163 %AsyncFunctionConstructor
+// builtins/generator.ts:154 %AsyncFunctionConstructor
 function AsyncFunctionConstructor(...args) {
   return CreateDynamicFunction(new.target, 2, "AsyncFunctionPrototype", args);
 }
@@ -8391,7 +8383,6 @@ function GlobalAtob(...args) {
 %InstallIntrinsic("FunctionPrototypeBehavior", FunctionPrototypeBehavior);
 %InstallIntrinsic("AsyncAwait", AsyncAwait);
 %InstallIntrinsic("AsyncFunctionReturn", AsyncFunctionReturn);
-%InstallIntrinsic("AsyncFunctionThrow", AsyncFunctionThrow);
 %InstallIntrinsic("GeneratorFunctionConstructor", GeneratorFunctionConstructor);
 %InstallIntrinsic("AsyncGeneratorFunctionConstructor", AsyncGeneratorFunctionConstructor);
 %InstallIntrinsic("AsyncFunctionConstructor", AsyncFunctionConstructor);

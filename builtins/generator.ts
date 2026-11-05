@@ -114,24 +114,15 @@ function AsyncAwait(a: Obj, v: Value): Value {
 }
 
 /**
- * An async function returns v (`async_return`): resolves its promise, returns it.
+ * An async function returns v (`async_return`): resolves its promise, returns it. The
+ * `async_return` op does that itself unless resolving calls `then` (D3130); an
+ * `async_reject` rejects in the op.
  * @intrinsic
  */
 function AsyncFunctionReturn(a: Obj, v: Value): Value {
   GeneratorSetState(a, 3);
   const promise: Obj = AsyncFunctionPromise(a);
   ResolvePromise(promise, v);
-  return promise;
-}
-
-/**
- * An exception e leaves an async function (`async_reject`): rejects its promise.
- * @intrinsic
- */
-function AsyncFunctionThrow(a: Obj, e: Value): Value {
-  GeneratorSetState(a, 3);
-  const promise: Obj = AsyncFunctionPromise(a);
-  RejectPromise(promise, e);
   return promise;
 }
 

@@ -679,7 +679,7 @@
 674	value	%intrinsic:FunctionPrototypeBehavior%
 675	value	%intrinsic:AsyncAwait%
 676	value	%intrinsic:AsyncFunctionReturn%
-677	value	%intrinsic:AsyncFunctionThrow%
+677	value	%intrinsic:AsyncFunctionThrow%	removed: removed
 678	value	%intrinsic:DynamicImport%
 679	value	%intrinsic:GetIterator%
 680	value	%intrinsic:IteratorClose%
@@ -1329,7 +1329,7 @@
 1324	intrinsic	FunctionPrototypeBehavior
 1325	intrinsic	AsyncAwait
 1326	intrinsic	AsyncFunctionReturn
-1327	intrinsic	AsyncFunctionThrow
+1327	intrinsic	AsyncFunctionThrow	removed: removed
 1328	intrinsic	GeneratorFunctionConstructor
 1329	intrinsic	AsyncGeneratorFunctionConstructor
 1330	intrinsic	AsyncFunctionConstructor
