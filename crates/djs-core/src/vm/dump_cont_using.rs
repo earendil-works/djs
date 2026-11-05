@@ -157,7 +157,7 @@ impl G<'_, '_> {
             for x in ["completion.kind", "completion.value"] {
                 let n = cat!(x, "@", pos);
                 if self.has(&n) {
-                    self.take(&n)?;
+                    self.consume(&n);
                 }
             }
             cat!("throw ", c, ";")
@@ -171,7 +171,7 @@ impl G<'_, '_> {
             };
             let vname = cat!("completion.value@", pos);
             if kind == "0" && self.has(&vname) {
-                self.take(&vname)?;
+                self.consume(&vname);
             }
             match kind.parse::<i32>() {
                 Ok(0) => String::new(),
@@ -179,7 +179,7 @@ impl G<'_, '_> {
                 Ok(c) if c >= 3 => {
                     let n = cat!("completion.value@", pos);
                     if self.has(&n) {
-                        self.take(&n)?;
+                        self.consume(&n);
                     }
                     self.jump_to(i + 1, ((c - 3) / 2) as u32, c % 2 == 0)?
                 }

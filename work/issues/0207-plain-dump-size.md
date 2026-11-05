@@ -360,6 +360,12 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   `host` knows its answers' tools. Tests adjusted (dump_state, CLI repl/run, js task/
   dumpresume).
 
+- fluff item 9 (part): temporaries K only marks used (`super.this/base`, a pattern's done
+  iterator, a using scope's completion, …) are consumed without asking their value, so no
+  `pre` line (`$dump.a40_0 = Base.prototype`) is written for them. v2 387,945 → 387,409.
+  Not done: `$djs.keep` only for classes with deleted members (needs the class text's
+  member list; dump.rs class writer).
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a

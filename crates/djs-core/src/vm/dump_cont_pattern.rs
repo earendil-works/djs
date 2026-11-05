@@ -129,10 +129,10 @@ impl G<'_, '_> {
         let done = self.steer(u32::from(done)) == 1;
         let rec = if done {
             if self.has(&iname) {
-                self.take(&iname)?;
+                self.consume(&iname);
             }
             if self.has(&cat!("pattern.next@", n.start)) {
-                self.take(&cat!("pattern.next@", n.start))?;
+                self.consume(&cat!("pattern.next@", n.start));
             }
             None
         } else {

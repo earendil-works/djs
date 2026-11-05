@@ -1718,7 +1718,7 @@ impl G<'_, '_> {
                 ]),
                 Ok(c) if c >= 3 => {
                     if self.has(&vname) {
-                        self.take(&vname)?;
+                        self.consume(&vname);
                     }
                     let l = self.label_at(((c - 3) / 2) as u32)?;
                     P::S(cat!(
@@ -1830,7 +1830,7 @@ impl G<'_, '_> {
                     (self.steer_kind(&kind)?, self.take(&vname)?)
                 } else {
                     if self.has(&vname) {
-                        self.take(&vname)?;
+                        self.consume(&vname);
                     }
                     (String::from("0"), String::from("undefined"))
                 };
@@ -1913,7 +1913,7 @@ impl G<'_, '_> {
             // both, D2913.)
             let disc = self.tmp("switch.discriminant", n.start)?;
             let lname = cat!("binary.left@", kw);
-            self.take(&lname)?;
+            self.consume(&lname);
             let i = self.cmap.len() - 1;
             let (v, lit) = (self.cmap[i].1.clone(), self.cmap[i].2);
             self.cmap.push_out((lname, v, lit));
@@ -2217,8 +2217,8 @@ impl G<'_, '_> {
             return no("a site in super's base");
         }
         // The exporter checked they are what K's `super` and `this` are.
-        self.take(&cat!("super.this@", n.start))?;
-        self.take(&cat!("super.base@", n.start))?;
+        self.consume(&cat!("super.this@", n.start));
+        self.consume(&cat!("super.base@", n.start));
         let e = self.expr(i + 1)?;
         Ok(P::L(alloc::vec![
             P::V(n.start, n.parts[k].start + 1),
