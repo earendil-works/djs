@@ -282,9 +282,9 @@ fn computed(st: &Status, key: &str) -> Option<Result<f64, Missing>> {
 /// The text of an inline number in prose, `<!--n KEY FMT-->TEXT<!--/n-->`: KEY is a
 /// count computed from the repository ([`computed`]) or a key of
 /// `tests/scores/status.tsv`. FMT: none (an integer with thousands separators, else
-/// the recorded text), `.N` (N decimals), `~K` (rounded to a multiple of K), `kb` or
-/// `mb` (bytes in KB or MB, 1000-based; `kb.N`, `mb.N` with N decimals, `mb` has one
-/// by default).
+/// the recorded text), `.N` (N decimals), `~K` (rounded to a multiple of K), `kb`, `mb`
+/// (bytes in KB or MB, 1000-based), `kib`, `mib` (1024-based): `kb.N` and so on with N
+/// decimals; the MB units have one by default.
 pub fn value(st: &Status, key: &str, fmt: &str) -> Result<String, Missing> {
     let (v, text) = match computed(st, key) {
         Some(v) => {
@@ -328,6 +328,10 @@ pub fn value(st: &Status, key: &str, fmt: &str) -> Result<String, Missing> {
         } else {
             text
         }
+    } else if let Some(d) = fmt.strip_prefix("kib") {
+        fixed(v / 1024.0, decimals(d, 0)?) + " KiB"
+    } else if let Some(d) = fmt.strip_prefix("mib") {
+        fixed(v / 1048576.0, decimals(d, 1)?) + " MiB"
     } else if let Some(d) = fmt.strip_prefix("kb") {
         fixed(v / 1000.0, decimals(d, 0)?) + " KB"
     } else if let Some(d) = fmt.strip_prefix("mb") {
@@ -615,6 +619,8 @@ mod tests {
         assert_eq!(v("a/bytes", "kb"), "1,034 KB");
         assert_eq!(v("a/bytes", "mb"), "1.0 MB");
         assert_eq!(v("a/bytes", "mb.2"), "1.03 MB");
+        assert_eq!(v("a/bytes", "kib"), "1,009 KiB");
+        assert_eq!(v("a/bytes", "mib"), "1.0 MiB");
         assert_eq!(v("b/ratio", ""), "1.456");
         assert_eq!(v("b/ratio", ".1"), "1.5");
         assert_eq!(v("c/n", "~1000"), "38,000");
