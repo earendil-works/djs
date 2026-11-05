@@ -81,15 +81,20 @@ pub(crate) fn create(
 ) -> Result<Obj, Fault> {
     let cell = match cell {
         Some(c) => c,
-        None => {
-            let p = units(heap, pattern)?;
-            let f = units(heap, flags)?;
-            let prog = match compile(&p, &f) {
-                Ok(prog) => prog,
-                Err(e) => return syntax_error(e.message()),
-            };
-            program_cell(heap, &prog)?
-        }
+        None => match cached(heap, pattern, flags) {
+            Some(c) => c,
+            None => {
+                let p = units(heap, pattern)?;
+                let f = units(heap, flags)?;
+                let prog = match compile(&p, &f) {
+                    Ok(prog) => prog,
+                    Err(e) => return syntax_error(e.message()),
+                };
+                let c = program_cell(heap, &prog)?;
+                cache(heap, pattern, flags, c)?;
+                c
+            }
+        },
     };
     // The flag bits are the program's header word (`compiler::H_FLAGS`).
     let bits = heap.u32_array_get(cell, 0);
@@ -102,6 +107,70 @@ pub(crate) fn create(
     let d = PropertyDescriptor::data(Value::int(0), PropFlags::WRITABLE);
     heap.define_own_property(o, key, &d)?;
     Ok(o)
+}
+
+/// Entries of the compile cache (D3138).
+const CACHE_ENTRIES: u32 = 8;
+/// Longer sources are not cached: the cache keeps at most a few KB alive.
+const CACHE_MAX_LEN: u32 = 256;
+
+/// The program of `pattern` with `flags` from the compile cache (moved to the front), if
+/// it is there.
+fn cached(heap: &mut Heap, pattern: Str, flags: Str) -> Option<u32> {
+    let t = realm::intrinsic(heap, Intrinsic::RegExpCache).as_internal()?;
+    let hit = (0..CACHE_ENTRIES).find(|&i| {
+        let (p, f) = (
+            heap.value_array_get(t, 3 * i),
+            heap.value_array_get(t, 3 * i + 1),
+        );
+        p.as_string().is_some_and(|p| heap.str_eq(p, pattern))
+            && f.as_string().is_some_and(|f| heap.str_eq(f, flags))
+    })?;
+    let cell = heap.value_array_get(t, 3 * hit + 2);
+    let entry = [
+        heap.value_array_get(t, 3 * hit),
+        heap.value_array_get(t, 3 * hit + 1),
+        cell,
+    ];
+    shift_down(heap, t, hit);
+    for (k, v) in entry.into_iter().enumerate() {
+        heap.value_array_set(t, k as u32, v);
+    }
+    cell.as_internal()
+}
+
+/// Entries `0..to` one place down (entry `to` is overwritten).
+fn shift_down(heap: &mut Heap, t: u32, to: u32) {
+    for k in (0..3 * to).rev() {
+        let v = heap.value_array_get(t, k);
+        heap.value_array_set(t, k + 3, v);
+    }
+}
+
+/// Puts a just compiled program at the front of the compile cache.
+fn cache(heap: &mut Heap, pattern: Str, flags: Str, cell: u32) -> Result<(), HeapError> {
+    if heap.str_len(pattern) > CACHE_MAX_LEN {
+        return Ok(());
+    }
+    let t = match realm::intrinsic(heap, Intrinsic::RegExpCache).as_internal() {
+        Some(t) => t,
+        None => {
+            let n = 3 * CACHE_ENTRIES;
+            let t = heap.alloc_value_array(n)?;
+            for k in 0..n {
+                heap.value_array_set(t, k, Value::UNDEFINED);
+            }
+            heap.arena_mut()
+                .set(t, crate::heap::cells::ValueArray::LEN, n);
+            realm::set_intrinsic(heap, Intrinsic::RegExpCache, Value::internal(t));
+            t
+        }
+    };
+    shift_down(heap, t, CACHE_ENTRIES - 1);
+    heap.value_array_set(t, 0, Value::string(pattern));
+    heap.value_array_set(t, 1, Value::string(flags));
+    heap.value_array_set(t, 2, Value::internal(cell));
+    Ok(())
 }
 
 /// RegExpCreate of the source of the RegExp `like` with `flags`: with its flags, the
@@ -183,6 +252,13 @@ pub(crate) fn has_flag(heap: &Heap, o: Obj, c: u16) -> bool {
 /// escaped, `(?:)` for the empty pattern.
 pub(crate) fn escaped_source(heap: &mut Heap, o: Obj) -> Result<Str, Fault> {
     let src = source(heap, o);
+    // Most sources need no escape: then the source itself, without copying it.
+    if let Some(v) = heap.str_view(src)
+        && !v.is_empty()
+        && (0..v.len()).all(|i| !matches!(v.get(i), 0x0A | 0x0D | 0x2F))
+    {
+        return Ok(src);
+    }
     let units = heap.str_to_utf16(src);
     if units.is_empty() {
         return Ok(heap.alloc_str("(?:)")?);

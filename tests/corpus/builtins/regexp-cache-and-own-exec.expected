@@ -1,0 +1,18 @@
+20 false false 2,0,0 true 2 0
+gi:a(b)?|c0 g:a(b)?|c1 g:a(b)?|c2 gi:a(b)?|c3 - AB
+SyntaxError
+SyntaxError again
+SyntaxError flags
+gi|o+|0 g|o+|0 gi|o+|0 y|o+|0 f_ b_ fOO b_ f_ b_ fOO boo
+true 302
+["c3@4","d4@6"] 3
+["y,a","z,b"]
+[0,1] g global,global,global
+false abc global,global,global,own exec,own exec
+true ["c"] 2 proto exec c,proto exec c,proto exec c
+true 2 ["d"] valueOf
+TypeError frozen exec
+TypeError frozen test
+null 2 false ["a","b","c"]
+x y z éé_ü 日本  |語 a日b
+=== completed

@@ -185,9 +185,13 @@ pub enum Intrinsic {
     /// functions that other prelude functions refer to (`get_builtin`), or undefined
     /// before the prelude runs.
     PreludeFunctions,
+    /// The RegExp compile cache (D3138): an internal ValueArray of `CACHE_ENTRIES`
+    /// `[source, flags, program cell]` triples, most recently used first, or undefined.
+    /// No user code reaches it.
+    RegExpCache,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::PreludeFunctions as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::RegExpCache as u32 + 1;
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the
@@ -387,6 +391,7 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     }
     set(heap, Intrinsic::TypedArrayCtor, Value::UNDEFINED);
     set(heap, Intrinsic::KeptObjects, Value::UNDEFINED);
+    set(heap, Intrinsic::RegExpCache, Value::UNDEFINED);
     set(heap, Intrinsic::Registries, Value::UNDEFINED);
     set(heap, Intrinsic::GlobalLexEpoch, Value::int(0));
     let ctors = heap.new_object(None)?;
