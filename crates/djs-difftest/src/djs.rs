@@ -361,7 +361,10 @@ impl Session {
                 Ok((_, blob)) => blob,
                 Err(e) => return Ok(Err(e)),
             };
-            let (f, again) = match self.vm.compile_cached(src.as_bytes(), copts, blob.as_deref()) {
+            let (f, again) = match self
+                .vm
+                .compile_cached(src.as_bytes(), copts, blob.as_deref())
+            {
                 Ok(r) => r,
                 Err(e) => return Ok(Err(e)),
             };
