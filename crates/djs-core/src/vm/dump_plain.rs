@@ -436,7 +436,10 @@ fn scan(
 
 /// Whether the word `b[s..e]` is an object literal's key (`{ key: …`, `, key: …`).
 fn key_at(b: &[u8], s: usize, e: usize) -> bool {
-    let next = b[e..].iter().position(|c| !c.is_ascii_whitespace()).map(|k| e + k);
+    let next = b[e..]
+        .iter()
+        .position(|c| !c.is_ascii_whitespace())
+        .map(|k| e + k);
     next.is_some_and(|k| b[k] == b':' && b.get(k + 1) != Some(&b':'))
         && b[..s]
             .iter()
@@ -457,6 +460,24 @@ pub(super) fn reads_other(text: &str, allowed: &[&str]) -> bool {
     )
     .names
     .is_empty()
+}
+
+/// Whether item text `t` names what makes a value with effects: `Promise.all/any/race`,
+/// `.then`, `.next()`, `$djs.resume`, `$djs.k(`, a continuation `$dump.K…`. (One pass by
+/// the dots, 0215: a data line is long.)
+fn effect_marker(t: &str) -> bool {
+    let b = t.as_bytes();
+    t.match_indices('.').any(|(at, _)| {
+        let before = &t[..at];
+        let after = &b[at + 1..];
+        let ends = |p: &str| before.ends_with(p);
+        let starts = |p: &[u8]| after.starts_with(p);
+        (ends("Promise") && (starts(b"all") || starts(b"any") || starts(b"race")))
+            || starts(b"then")
+            || starts(b"next()")
+            || (ends("$djs") && (starts(b"resume") || starts(b"k(")))
+            || (ends("$dump") && starts(b"K"))
+    })
 }
 
 /// Where the string literal whose text starts at `i` ends (after its closing `q`): by
@@ -1601,20 +1622,24 @@ impl W<'_> {
             &mut |_, _| {},
             true,
         );
-        let mut out = Vec::new();
-        let mut seen: alloc::collections::BTreeSet<Key> = Default::default();
-        for (name, key) in r.dump {
-            let k = match key {
-                Some(key) if self.fac_by_name.contains_key(&name) => Key::Factory(name, key),
-                _ => Key::Loc(name),
-            };
-            if seen.insert(k.clone()) {
-                out.push_out(k);
+        // (`scan` gives each `(name, key)` once; a location named with two keys, once.)
+        let mut out = Vec::with_capacity(r.dump.len() + r.names.len());
+        let mut locs: alloc::collections::BTreeSet<&str> = Default::default();
+        for (name, key) in &r.dump {
+            match key {
+                Some(key) if self.fac_by_name.contains_key(name) => {
+                    out.push_out(Key::Factory(name.clone(), key.clone()));
+                }
+                _ => {
+                    if locs.insert(name) {
+                        out.push_out(Key::Loc(name.clone()));
+                    }
+                }
             }
         }
         // (`scan` gives each global once.)
-        for n in r.names {
-            out.push_out(Key::Global(n));
+        for n in &r.names {
+            out.push_out(Key::Global(n.clone()));
         }
         out
     }
@@ -1981,7 +2006,7 @@ impl W<'_> {
                     (Vec::new(), Vec::new(), Vec::new())
                 }
                 _ => {
-                    let k = self.keys_of(&self.items[i].text.clone());
+                    let k = self.keys_of(&self.items[i].text);
                     (self.dep_items(&k, i, &providers)?, Vec::new(), Vec::new())
                 }
             };
@@ -1993,11 +2018,11 @@ impl W<'_> {
         // matchAll's iterator clones its regexp when made: the regexp's lastIndex (a
         // patch the dump writes later) must be set before.
         for i in 0..self.items.len() {
-            let t = self.items[i].text.clone();
+            let t = &self.items[i].text;
             if let IK::Def(_) = self.items[i].kind
                 && let Some(at) = t.find("$djs.regexpIterator($dump.")
             {
-                let (re, _) = ident_at(&t, at + "$djs.regexpIterator($dump.".len());
+                let (re, _) = ident_at(t, at + "$djs.regexpIterator($dump.".len());
                 let patch = cat!("$dump.", re, ".lastIndex = ");
                 if let Some(p) = self
                     .items
@@ -2012,22 +2037,7 @@ impl W<'_> {
         for i in 0..self.items.len() {
             let pure = match &self.items[i].kind {
                 IK::Factory(_) | IK::Decl(_) | IK::FnDecl => true,
-                IK::Def(_) => {
-                    let t = &self.items[i].text;
-                    ![
-                        "Promise.all",
-                        "Promise.any",
-                        "Promise.race",
-                        ".then",
-                        ".next()",
-                        "$djs.resume",
-                        "(0, $dump.K",
-                        "$dump.K",
-                        "$djs.k(",
-                    ]
-                    .iter()
-                    .any(|p| t.contains(p))
-                }
+                IK::Def(_) => !effect_marker(&self.items[i].text),
                 _ => false,
             };
             self.items[i].pure |= pure;
@@ -2296,7 +2306,7 @@ impl W<'_> {
             })
             .collect();
         let mut body = self.close_list();
-        self.drop_unread(&mut body, &handles)?;
+        let named = self.drop_unread(&mut body, &handles)?;
         body.retain(|l| !l.is_empty());
         let mut s = String::from(if ts {
             "\"djs-dump typescript\";\n"
@@ -2321,40 +2331,20 @@ impl W<'_> {
         s.push_str("globalThis.$dump = {};\n");
         // The builtins the text reads (a value a continuation reads again from the
         // original's text, D2905, leaves its builtin unread).
-        let mut text = join(&body, "\n");
-        for it in self.items.iter().filter(|it| it.kind == IK::FnDecl) {
-            cat_to!(&mut text, "\n", it.text);
-        }
-        for (_, e) in &handles {
-            cat_to!(&mut text, "\n", e);
-        }
-        // (By substring, not `scan`: the text is the whole dump, data included, 0215. A
-        // `$dump.bN` in a string would only define a builtin no one reads.)
-        let mut used = alloc::vec![false; ir.builtins.len()];
-        for (at, _) in text.match_indices("$dump.b") {
-            let rest = &text.as_bytes()[at + 7..];
-            let n = rest.iter().take_while(|c| c.is_ascii_digit()).count();
-            if n > 0
-                && !rest.get(n).is_some_and(|&c| ident_part(c))
-                && let Ok(i) = text[at + 7..at + 7 + n].parse::<usize>()
-                && i < used.len()
-            {
-                used[i] = true;
-            }
-        }
+        // (The names the text reads, from `drop_unread`'s pass, 0215. A `$dump.bN` in a
+        // string would only define a builtin no one reads.)
+        let used: Vec<bool> = (0..ir.builtins.len())
+            .map(|i| named.contains(&inline::name_hash(&cat!("b", i))))
+            .collect();
         for (i, p) in ir.builtins.iter().enumerate() {
             if used[i] {
                 cat_to!(&mut s, "$dump.b", i, " = ", builtin_expr(p)?, ";\n");
             }
         }
         // (Where a member is still written on it: closures may all be in place, D3003.
-        // The names on `$dump` the text reads, in one pass, 0215.)
-        let named: alloc::collections::BTreeSet<&str> = inline::dump_refs(&text)
-            .into_iter()
-            .map(|(s, e)| &text[s + 6..e])
-            .collect();
+        // The names on `$dump` the text reads, from `drop_unread`'s pass, 0215.)
         for (f, fac) in ir.factories.iter().enumerate() {
-            if self.is_merged((f, 0)) && named.contains(fac.name.as_str()) {
+            if self.is_merged((f, 0)) && named.contains(&inline::name_hash(&fac.name)) {
                 cat_to!(&mut s, "$dump.", fac.name, " = {};\n");
             }
         }
@@ -2470,7 +2460,10 @@ impl W<'_> {
                             Some(r)
                                 if n == 1
                                     && l.starts_with(&cat!(me, " = "))
-                                    && !self.inl.uses.contains_key(&ir.acts[*a].name) =>
+                                    && !self
+                                        .inl
+                                        .uses
+                                        .contains_key(&inline::name_hash(&ir.acts[*a].name)) =>
                             {
                                 inline::statement(r)
                             }
@@ -2481,6 +2474,7 @@ impl W<'_> {
                             .as_ref()
                             .map(|k| k.top.clone())
                             .unwrap_or_default();
+                        self.flush_hooks(&l);
                         self.put_line_binding(l, effect, def, bound);
                     }
                 }
@@ -2499,6 +2493,7 @@ impl W<'_> {
                             if !self.is_merged((*f, 0)) {
                                 let t = self.factory_text((*f, 0))?;
                                 let l = cat!("$dump.", ir.factories[*f].name, " = ", t, ";");
+                                self.flush_hooks(&l);
                                 self.put_line(l, false, None);
                             }
                         }
@@ -2528,7 +2523,7 @@ impl W<'_> {
                             let text = self.inline_refs(&text, first, false);
                             let effect = Self::effectful(&kind, &text);
                             // A value nothing reads: its effect alone, or nothing.
-                            if self.inl.uses.get(name).copied() == Some(1)
+                            if self.inl.uses.get(&inline::name_hash(name)).copied() == Some(1)
                                 && let Some(r) = inline::def_rhs(&text)
                             {
                                 if effect {

@@ -49,7 +49,8 @@ enum Reads<'a> {
 pub(super) struct Inline {
     /// `$dump.X` references over the writer's input, by name (a value's own `$dump.X = `
     /// among them).
-    pub uses: BTreeMap<String, u32>,
+    /// (By the names' hashes, `name_hash`, 0215: a collision only adds uses.)
+    pub uses: BTreeMap<u64, u32>,
     /// `$dump.F.key` references (a factory's members), by factory and key.
     pub key_uses: BTreeMap<(String, String), u32>,
     pub pend: Vec<Pend>,
@@ -258,13 +259,13 @@ impl W<'_> {
             }
         }
         texts.extend(ir.handles.iter().map(|h| h.1.as_str()));
-        let mut uses: BTreeMap<String, u32> = BTreeMap::new();
+        let mut uses: BTreeMap<u64, u32> = BTreeMap::new();
         let mut key_uses: BTreeMap<(String, String), u32> = BTreeMap::new();
         // (By substring, not `scan`, 0215: one in a string counts too, which only keeps a
         // value named.)
         for t in texts {
             for (s, e) in dump_refs(t) {
-                *uses.entry(String::from(&t[s + 6..e])).or_insert(0) += 1;
+                *uses.entry(name_hash(&t[s + 6..e])).or_insert(0) += 1;
                 if t.as_bytes().get(e) == Some(&b'.') {
                     let (key, _) = super::ident_at(t, e + 1);
                     if !key.is_empty() {
@@ -282,7 +283,7 @@ impl W<'_> {
     /// Whether `$dump.name` is read once besides its own line (`own`: whether its line is
     /// among the counted texts).
     pub(super) fn single(&self, name: &str, own: bool) -> bool {
-        self.inl.uses.get(name).copied() == Some(1 + u32::from(own))
+        self.inl.uses.get(&name_hash(name)).copied() == Some(1 + u32::from(own))
     }
 
     /// Whether `$dump.F.key` (a factory's member) is read once.
@@ -471,7 +472,7 @@ impl W<'_> {
         };
         for (s, e) in dump_refs(&sl.value) {
             let n = &sl.value[s + 6..e];
-            *self.inl.uses.entry(String::from(n)).or_insert(0) += 1;
+            *self.inl.uses.entry(name_hash(n)).or_insert(0) += 1;
             if let Some(p) = self.inl.pend.iter().position(|p| p.name == n) {
                 self.inl.pend.remove(p);
                 self.inl.pend_names.remove(n);
@@ -601,7 +602,7 @@ impl W<'_> {
             named.push_out(name.clone());
             at = end;
             if key.is_empty() {
-                if let Some(n) = self.inl.uses.get_mut(&fac) {
+                if let Some(n) = self.inl.uses.get_mut(&name_hash(&fac)) {
                     *n -= 1;
                 }
                 self.repend(&fac);
@@ -691,8 +692,22 @@ impl W<'_> {
         &self,
         body: &mut [String],
         handles: &[(String, String)],
-    ) -> Result<(), String> {
-        let mut uses: BTreeMap<String, u32> = BTreeMap::new();
+    ) -> Result<BTreeSet<u64>, String> {
+        // (By the names' hashes, 0215: integer keys. A collision only adds uses, which
+        // keeps a line; a name in place seen where it is not only asks `scan` again.)
+        let done: BTreeSet<u64> = self.inl.done.iter().map(|n| name_hash(n)).collect();
+        // The definitions by name, and the lines to look at.
+        let mut defs: BTreeMap<u64, usize> = BTreeMap::new();
+        for (i, l) in body.iter().enumerate() {
+            if let Some(rest) = l.strip_prefix("$dump.") {
+                let (name, _) = super::ident_at(rest, 0);
+                if !name.is_empty() && rest[name.len()..].starts_with(" = ") {
+                    defs.insert(name_hash(name), i);
+                }
+            }
+        }
+        // Every name's uses.
+        let mut uses: BTreeMap<u64, u32> = BTreeMap::new();
         let fns = self
             .items
             .iter()
@@ -704,14 +719,14 @@ impl W<'_> {
             .chain(fns)
             .chain(handles.iter().map(|h| h.1.as_str()))
         {
-            let mut done = false;
-            for (s, e) in dump_refs(t) {
-                let name = &t[s + 6..e];
-                done |= self.inl.done.contains(name);
-                *uses.entry(String::from(name)).or_insert(0) += 1;
-            }
+            let mut seen_done = false;
+            for_dump_refs(t, |name| {
+                let h = name_hash(name);
+                seen_done |= done.contains(&h);
+                *uses.entry(h).or_insert(0) += 1;
+            });
             // (Checked by `scan`, which skips strings, only where it may be so.)
-            if done
+            if seen_done
                 && let Some(name) = scan_spans(t)
                     .into_iter()
                     .map(|(s, e)| &t[s + 6..e])
@@ -724,24 +739,14 @@ impl W<'_> {
                 ));
             }
         }
-        // The definitions by name, and the lines to look at.
-        let mut defs: BTreeMap<String, usize> = BTreeMap::new();
-        for (i, l) in body.iter().enumerate() {
-            if let Some(rest) = l.strip_prefix("$dump.") {
-                let (name, _) = super::ident_at(rest, 0);
-                if !name.is_empty() && rest[name.len()..].starts_with(" = ") {
-                    defs.insert(String::from(name), i);
-                }
-            }
-        }
-        let mut work: Vec<String> = defs
+        let mut work: Vec<u64> = defs
             .keys()
-            .filter(|n| uses.get(n.as_str()).copied() == Some(1))
-            .cloned()
+            .filter(|h| uses.get(h).copied() == Some(1))
+            .copied()
             .collect();
-        while let Some(name) = work.pop() {
-            let Some(&i) = defs.get(&name) else { continue };
-            if uses.get(&name).copied() != Some(1) {
+        while let Some(h) = work.pop() {
+            let Some(&i) = defs.get(&h) else { continue };
+            if uses.get(&h).copied() != Some(1) {
                 continue;
             }
             let Some(rhs) = def_rhs(&body[i]) else {
@@ -752,23 +757,32 @@ impl W<'_> {
             let new = if drop { String::new() } else { statement(rhs) };
             // What the line read is read once less.
             let old = core::mem::replace(&mut body[i], new);
-            defs.remove(&name);
-            uses.remove(&name);
+            defs.remove(&h);
+            if let Some(c) = uses.get_mut(&h) {
+                *c -= 1;
+            }
             if drop {
-                for (s, e) in dump_refs(&old) {
-                    let n = &old[s + 6..e];
-                    if let Some(c) = uses.get_mut(n)
-                        && n != name
-                    {
+                let mut first = true;
+                for_dump_refs(&old, |n| {
+                    // (Its own name first.)
+                    if core::mem::take(&mut first) {
+                        return;
+                    }
+                    let k = name_hash(n);
+                    if let Some(c) = uses.get_mut(&k) {
                         *c -= 1;
-                        if *c == 1 && defs.contains_key(n) {
-                            work.push_out(String::from(n));
+                        if *c == 1 && defs.contains_key(&k) {
+                            work.push_out(k);
                         }
                     }
-                }
+                });
             }
         }
-        Ok(())
+        Ok(uses
+            .into_iter()
+            .filter(|(_, c)| *c > 0)
+            .map(|(h, _)| h)
+            .collect())
     }
 
     /// Starts a list of lines (a callback's, or the top level).
@@ -829,7 +843,7 @@ impl W<'_> {
 
     /// Writes the deferred host calls `text` reads, and those before them (their order is
     /// the host's).
-    fn flush_hooks(&mut self, text: &str) {
+    pub(super) fn flush_hooks(&mut self, text: &str) {
         if self.inl.hooks.is_empty() {
             return;
         }
@@ -914,7 +928,8 @@ impl W<'_> {
         def: Option<(String, String, bool)>,
         bound: Vec<String>,
     ) {
-        self.flush_hooks(&text);
+        // (The deferred host calls a line reads are written before it by `inline_with`,
+        // which every line written from text goes through; `flush_hooks` for the others.)
         let depth = self.inl.stack.len() - 1;
         self.put_line_at(depth, text, effect, def, bound);
     }
@@ -975,15 +990,26 @@ impl W<'_> {
     }
 
     fn inline_with(&mut self, text: &str, first: Option<usize>, reads: Reads) -> String {
-        self.flush_hooks(text);
-        if self.inl.pend.is_empty() || !text.contains("$dump.") {
+        if self.inl.pend.is_empty() && self.inl.hooks.is_empty() {
             return String::from(text);
         }
-        // (No pending value named: no scan, 0215.)
-        let named = text.match_indices("$dump.").any(|(at, _)| {
+        // One pass over the names: deferred host calls to write first (D3004), pending
+        // values (none: no scan, 0215).
+        let mut last_hook = None;
+        let mut named = false;
+        for (at, _) in text.match_indices("$dump.") {
             let (n, _) = super::ident_at(text, at + 6);
-            self.inl.pend_names.contains(n)
-        });
+            named |= self.inl.pend_names.contains(n);
+            if self.inl.hook_names.contains(n)
+                && let Some(i) = self.inl.hooks.iter().position(|h| h.1 == n)
+            {
+                last_hook = last_hook.max(Some(i));
+            }
+        }
+        if let Some(i) = last_hook {
+            self.flush_upto(i);
+            named = true;
+        }
         if !named {
             return String::from(text);
         }
@@ -1227,6 +1253,28 @@ impl W<'_> {
         let s = self.inline_with(v, None, Reads::Scope(&bound));
         self.vcache.insert(key, s.clone());
         s
+    }
+}
+
+/// A name's hash (FNV-1a), a map key cheaper than the name.
+pub(super) fn name_hash(n: &str) -> u64 {
+    n.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    })
+}
+
+/// Calls `f` with the name of each `$dump.X` reference of `text`, by substring (as
+/// [`dump_refs`]).
+pub(super) fn for_dump_refs<'t>(text: &'t str, mut f: impl FnMut(&'t str)) {
+    let b = text.as_bytes();
+    for (at, _) in text.match_indices("$dump.") {
+        if at > 0 && (ident_part(b[at - 1]) || b[at - 1] == b'.') {
+            continue;
+        }
+        let (n, _) = super::ident_at(text, at + 6);
+        if !n.is_empty() {
+            f(n);
+        }
     }
 }
 
