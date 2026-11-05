@@ -698,3 +698,6 @@ topics when the index is next reorganized.
 - D3020: Dumps take the base's builtin names from the build, not from a walk of the base
 - D2994: A lazy VM loads a plain dump lazily; maps of other functions on demand
 - D2995: Functions that run at once stay eager: call arguments, parenthesized, async
+- D3021: Array.fromAsync in flight is written as the runtime's `fromAsync`
+- D3022: Amends D2896: the gate also cleans djs-core and djs-prelude after incremental corruption
+- D3023: pi's adapter reuses disposed wasm instances, made as new before reuse
