@@ -75,7 +75,7 @@ fn line(out: &mut String, insn: &Insn, cx: &DisasmContext<'_>) {
         let _ = write!(out, "{:>5}  L{}:", insn.pc, insn.imm(0));
         return;
     }
-    let _ = write!(out, "{:>5}  {}", insn.pc, info.name);
+    let _ = write!(out, "{:>5}  {}", insn.pc, insn.op.name());
     for (i, &kind) in info.imms.iter().enumerate() {
         out.push_out(' ');
         operand(out, insn, i, kind.wide(), cx);

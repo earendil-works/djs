@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 
 use djs_core::bytecode::intrinsics::{INTRINSICS, IntrinsicKind};
-use djs_core::bytecode::ops::{OPS, OpInfo};
+use djs_core::bytecode::ops::{OP_NAMES, OPS, OpInfo};
 use djs_core::heap::cells::LAYOUTS;
 use djs_core::heap::layout::EXPORTED_TAGS;
 use djs_core::value::{TAG_PREFIX, tag};
@@ -326,7 +326,7 @@ fn generate(
         }
         "ops" => ops_table(args, page, cx),
         "ops-all" => {
-            let names: Vec<&str> = OPS.iter().map(|o| o.name).collect();
+            let names: Vec<&str> = OP_NAMES.to_vec();
             ops_table(&names, page, cx)
         }
         "intrinsics-all" => intrinsics_table(cx),
@@ -571,20 +571,20 @@ fn ops_table(names: &[&str], page: &str, cx: &mut Ctx) -> String {
          | --- | ---: | --- | ---: | --- | --- | --- |\n",
     );
     for name in names {
-        let Some((i, o)) = OPS.iter().enumerate().find(|(_, o)| o.name == *name) else {
+        let Some((i, o)) = OPS.iter().enumerate().find(|&(i, _)| OP_NAMES[i] == *name) else {
             cx.errors.push(format!("{page}: no opcode {name}"));
             continue;
         };
         let imms: Vec<String> = o.imms.iter().map(|k| format!("{k:?}")).collect();
         let doc = cx
             .op_docs
-            .get(o.name)
+            .get(OP_NAMES[i])
             .map(|d| cell_text(&without_dev_refs(d)))
             .unwrap_or_default();
         let _ = writeln!(
             s,
             "| `{}` | {i} | {} | {} | {} | {:?} | {doc} |",
-            o.name,
+            OP_NAMES[i],
             if imms.is_empty() {
                 "–".into()
             } else {
@@ -769,11 +769,11 @@ mod tests {
             false,
         );
         // Every opcode has an entry (possibly empty); most have docs.
-        for o in OPS {
+        for name in OP_NAMES {
             assert!(
-                c.op_docs.contains_key(o.name),
+                c.op_docs.contains_key(name),
                 "no ops! entry found for {}",
-                o.name
+                name
             );
         }
         assert!(c.op_docs.values().filter(|d| !d.is_empty()).count() > OPS.len() / 2);

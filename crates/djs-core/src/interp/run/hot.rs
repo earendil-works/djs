@@ -405,7 +405,7 @@ impl Exec<'_> {
                                 sp + info.pop as u32,
                                 sp0 + info.push as u32,
                                 "hot {} stack effect disagrees with the table",
-                                info.name
+                                crate::bytecode::OP_NAMES[$op as usize]
                             );
                             fuel -= info.cost.fuel() as i64;
                             ip += info.size as u32;

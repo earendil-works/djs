@@ -35,8 +35,8 @@ pub use handlers::{Handler, HandlerTable, encode_handlers};
 pub use imm::ImmKind;
 pub use lines::{LineTableBuilder, line_entries, lookup_line};
 pub use ops::{
-    CostClass, OP_COUNT, OPS, OPS_HASH, Op, OpInfo, build_hash, capture_desc, flags, global_decls,
-    special,
+    CostClass, OP_COUNT, OP_NAMES, OPS, OPS_HASH, Op, OpInfo, build_hash, capture_desc, flags,
+    global_decls, special,
 };
 pub use stack::{StackError, StackScratch, UNKNOWN_DEPTH, check_stack, stack_depths};
 pub use template::{

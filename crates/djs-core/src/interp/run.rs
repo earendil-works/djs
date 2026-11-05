@@ -1369,7 +1369,7 @@ impl<'h> Exec<'h> {
             self.sp + info.pop as u32,
             sp0 + info.push as u32,
             "fast {} stack effect disagrees with the table",
-            info.name
+            op.name()
         );
         let _ = sp0;
         self.fuel -= info.cost.fuel() as i64;
@@ -1750,16 +1750,17 @@ impl<'h> Exec<'h> {
             let pushes = info.push as u32 + info.push_imm.map_or(0, imm);
             if info.flags & (opflags::JUMP | opflags::BRANCH | opflags::TERM) == 0 {
                 debug_assert_eq!(
-                    self.pc, next,
+                    self.pc,
+                    next,
                     "{} did not advance pc by its size",
-                    info.name
+                    op.name()
                 );
             }
             debug_assert_eq!(
                 self.sp + pops,
                 sp0 + pushes,
                 "{} stack effect disagrees with the table",
-                info.name
+                op.name()
             );
         }
         r
@@ -2924,13 +2925,13 @@ impl<'h> Exec<'h> {
             | Op::Label => {
                 return Err(Fault::error(
                     ErrorKind::InternalError,
-                    crate::text::cat!("bad bytecode: phase-1 op ", op.name()),
+                    crate::text::cat!("bad bytecode: phase-1 op ", crate::detail::op_name(op)),
                 ));
             }
             _ => {
                 return Err(Fault::error(
                     ErrorKind::InternalError,
-                    crate::text::cat!("not supported yet: ", op.name()),
+                    crate::text::cat!("not supported yet: ", crate::detail::op_name(op)),
                 ));
             }
         }
@@ -3000,7 +3001,7 @@ impl<'h> Exec<'h> {
             _ => {
                 return Err(Fault::error(
                     ErrorKind::InternalError,
-                    crate::text::cat!("bad bytecode: ", op.name()),
+                    crate::text::cat!("bad bytecode: ", crate::detail::op_name(op)),
                 ));
             }
         }

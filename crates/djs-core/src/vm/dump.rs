@@ -2089,8 +2089,10 @@ impl<'a> Dumper<'a> {
         }
         for insn in crate::bytecode::insns(template::code(h, t)).flatten() {
             if matches!(
-                insn.info().name,
-                "get_global" | "get_global_typeof" | "put_global"
+                insn.op,
+                crate::bytecode::Op::GetGlobal
+                    | crate::bytecode::Op::GetGlobalTypeof
+                    | crate::bytecode::Op::PutGlobal
             ) && let Some(g) = self.global_atoms.get(key(insn.atom(0).id()))
             {
                 self.global_root(g as usize);

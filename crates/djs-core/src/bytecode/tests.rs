@@ -29,21 +29,22 @@ fn table_is_consistent() {
         assert_eq!(*op as usize, i);
         assert_eq!(Op::from_u8(i as u8), Some(*op));
         let info = op.info();
-        assert!(names.insert(info.name), "duplicate name {}", info.name);
-        assert!(!info.name.ends_with('_'), "{}", info.name);
+        let name = op.name();
+        assert!(names.insert(name), "duplicate name {}", name);
+        assert!(!name.ends_with('_'), "{}", name);
         let width: usize = info.imms.iter().map(|k| k.width() as usize).sum();
-        assert_eq!(op.size(), 1 + width, "{}", info.name);
-        assert!(info.imms.len() <= 2, "{}", info.name);
+        assert_eq!(op.size(), 1 + width, "{}", name);
+        assert!(info.imms.len() <= 2, "{}", name);
         // Phase-1 ops are exactly the scope-generic names and markers.
-        let phase1 = info.name.starts_with("name_")
+        let phase1 = name.starts_with("name_")
             || matches!(
                 *op,
                 Op::EnterScope | Op::LeaveScope | Op::IterScope | Op::Label
             );
-        assert_eq!(info.has(flags::PHASE1), phase1, "{}", info.name);
+        assert_eq!(info.has(flags::PHASE1), phase1, "{}", name);
         // Calling implies the op can also throw.
         if info.has(flags::CALLS) {
-            assert!(info.has(flags::THROWS), "{}", info.name);
+            assert!(info.has(flags::THROWS), "{}", name);
         }
     }
     assert_eq!(Op::from_u8(OP_COUNT as u8), None);
@@ -686,7 +687,7 @@ fn stack_bad() {
 
 #[test]
 fn ops_hash_tracks_the_table() {
-    assert_eq!(OPS_HASH, hash_ops(OPS));
+    assert_eq!(OPS_HASH, hash_ops(OPS, &OP_NAMES));
     assert_ne!(OPS_HASH, 0);
     let base: Vec<OpInfo> = OPS.to_vec();
     let mut seen = HashSet::new();
@@ -694,9 +695,9 @@ fn ops_hash_tracks_the_table() {
     // Any change to any field of any entry (or the order) changes the hash.
     for i in 0..base.len() {
         let mut variants: Vec<Vec<OpInfo>> = Vec::new();
-        let mut t = base.clone();
-        t[i].name = "renamed";
-        variants.push(t);
+        let mut names = OP_NAMES;
+        names[i] = "renamed";
+        assert_ne!(hash_ops(OPS, &names), OPS_HASH, "op {i} renamed");
         let mut t = base.clone();
         t[i].push += 1;
         variants.push(t);
@@ -740,10 +741,12 @@ fn ops_hash_tracks_the_table() {
         if i + 1 < base.len() {
             let mut t = base.clone();
             t.swap(i, i + 1);
-            variants.push(t);
+            let mut names = OP_NAMES;
+            names.swap(i, i + 1);
+            assert_ne!(hash_ops(&t, &names), OPS_HASH, "op {i} swapped");
         }
         for v in variants {
-            let h = hash_ops(&v);
+            let h = hash_ops(&v, &OP_NAMES);
             assert_ne!(h, OPS_HASH, "op {i}");
         }
     }

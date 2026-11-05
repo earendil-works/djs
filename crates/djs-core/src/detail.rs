@@ -21,3 +21,17 @@ pub(crate) fn detail(what: &str, detail: &dyn core::fmt::Debug) -> String {
         alloc::format!("{what}: {detail:?}")
     }
 }
+
+/// An opcode's name for an internal error message, or its byte in the shipped module,
+/// which then needs no opcode names (D3092).
+#[inline(always)]
+pub(crate) fn op_name(op: crate::bytecode::Op) -> String {
+    #[cfg(all(target_arch = "wasm32", not(debug_assertions)))]
+    {
+        crate::text::cat!("op ", op as u8)
+    }
+    #[cfg(not(all(target_arch = "wasm32", not(debug_assertions))))]
+    {
+        String::from(op.name())
+    }
+}

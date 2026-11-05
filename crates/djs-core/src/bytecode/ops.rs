@@ -174,8 +174,6 @@ impl CostClass {
 /// Everything known about an opcode, from the table.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OpInfo {
-    /// The disassembler name (snake_case, also the emitter method name).
-    pub name: &'static str,
     /// Immediate kinds, in encoding order.
     pub imms: &'static [ImmKind],
     /// Encoded size in bytes: the opcode byte plus the immediates.
@@ -224,10 +222,14 @@ macro_rules! ops {
         /// The number of opcodes.
         pub const OP_COUNT: usize = [$( Op::$name ),*].len();
 
+        /// The disassembler names (snake_case, also the emitter method names), indexed by
+        /// opcode byte. Apart from [`OPS`]: the run time indexes `OPS`, which puts it in
+        /// the module, and the shipped module needs no names (0225, D3092).
+        pub const OP_NAMES: [&str; OP_COUNT] = [ $( trim_underscore(stringify!($method)) ),* ];
+
         /// The instruction table, indexed by opcode byte.
         pub const OPS: &[OpInfo] = &[ $(
             OpInfo {
-                name: trim_underscore(stringify!($method)),
                 imms: &[ $( ImmKind::$ikind ),* ],
                 size: 1 $( + ImmKind::$ikind.width() )*,
                 pop: $pop,
@@ -312,7 +314,7 @@ impl Op {
     }
 
     pub const fn name(self) -> &'static str {
-        OPS[self as usize].name
+        OP_NAMES[self as usize]
     }
 }
 
@@ -958,10 +960,10 @@ const _: () = {
 /// Hash of the instruction table: names, immediates, stack effects, costs, flags and
 /// order. Part of the snapshot build hash (with the heap's `LAYOUT_HASH`, see
 /// [`build_hash`]): bytecode is only valid for the table it was compiled with.
-pub const OPS_HASH: u32 = hash_ops(OPS);
+pub const OPS_HASH: u32 = hash_ops(OPS, &OP_NAMES);
 
 /// FNV-1a over the table.
-pub const fn hash_ops(ops: &[OpInfo]) -> u32 {
+pub const fn hash_ops(ops: &[OpInfo], names: &[&str]) -> u32 {
     const fn mix(h: u32, b: u8) -> u32 {
         (h ^ b as u32).wrapping_mul(0x0100_0193)
     }
@@ -969,7 +971,11 @@ pub const fn hash_ops(ops: &[OpInfo]) -> u32 {
     let mut i = 0;
     while i < ops.len() {
         let op = &ops[i];
-        let name = op.name.as_bytes();
+        let name = if i < names.len() {
+            names[i].as_bytes()
+        } else {
+            b""
+        };
         let mut j = 0;
         while j < name.len() {
             h = mix(h, name[j]);

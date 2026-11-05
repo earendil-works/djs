@@ -10737,3 +10737,16 @@ register per site instead of a pointer and a length); `bad_argument_named` cover
 two non-intrinsic names. The literal runtime lookups by name became `const_id`.
 Messages are unchanged. Module 431,762 → 430,963 gzip (−0.8 KB; data −3.5 KB raw),
 instructions within ±0.8% on the 12 workloads.
+
+## D3092: Opcode names apart from the instruction table
+date: 2026-11-05 · by: bytes · issue: 0225
+`OpInfo` has no `name`; the names are `bytecode::OP_NAMES` (a `const` array, by opcode
+byte), which `Op::name`, the disassembler, the opcode hash (`hash_ops(OPS, &OP_NAMES)`,
+the same value as before) and djs-docs read. The interpreter indexes `OPS` at run time,
+which puts the whole table in the module; with the names in it, 214 name pointers and
+2.4 KB of names went along although nothing in the shipped module prints them. The
+three internal-error messages that named an opcode ("bad bytecode: ...", "not supported
+yet: ...") say `op N` in the shipped module (`detail::op_name`, like D2336's details)
+and the name elsewhere; debug assertions use `Op::name`. The dump module's global scan
+matches opcodes instead of names. Module 430,963 → 429,322 gzip (−1.6 KB),
+instructions within ±1.1% on the 12 workloads.

@@ -106,25 +106,25 @@ fn loading_names_the_component_that_differs() {
 #[test]
 fn the_opcode_hash_sees_every_op_change() {
     use crate::bytecode::ops::hash_ops;
-    use crate::bytecode::{OPS, OPS_HASH};
-    assert_eq!(hash_ops(OPS), OPS_HASH);
+    use crate::bytecode::{OP_NAMES, OPS, OPS_HASH};
+    assert_eq!(hash_ops(OPS, &OP_NAMES), OPS_HASH);
     let mut ops = OPS.to_vec();
     ops[3].pop += 1;
-    assert_ne!(hash_ops(&ops), OPS_HASH, "a stack effect");
+    assert_ne!(hash_ops(&ops, &OP_NAMES), OPS_HASH, "a stack effect");
     let mut ops = OPS.to_vec();
     ops[7].imms = ops[8].imms;
     if ops[7].imms != OPS[7].imms {
-        assert_ne!(hash_ops(&ops), OPS_HASH, "an immediate");
+        assert_ne!(hash_ops(&ops, &OP_NAMES), OPS_HASH, "an immediate");
     }
     let mut ops = OPS.to_vec();
     ops.swap(10, 11);
-    assert_ne!(hash_ops(&ops), OPS_HASH, "the numbering");
+    assert_ne!(hash_ops(&ops, &OP_NAMES), OPS_HASH, "the numbering");
     let mut ops = OPS.to_vec();
     ops.pop();
-    assert_ne!(hash_ops(&ops), OPS_HASH, "a removed op");
-    let mut ops = OPS.to_vec();
-    ops[0].name = "Renamed";
-    assert_ne!(hash_ops(&ops), OPS_HASH, "a name");
+    assert_ne!(hash_ops(&ops, &OP_NAMES), OPS_HASH, "a removed op");
+    let mut names = OP_NAMES;
+    names[0] = "Renamed";
+    assert_ne!(hash_ops(OPS, &names), OPS_HASH, "a name");
 }
 
 #[test]

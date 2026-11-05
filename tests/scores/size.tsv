@@ -7,6 +7,6 @@
 # panics abort without a message).
 # quickjs_wasi_gzip: quickjs-wasi 3.6.2 quickjs.wasm (pi's engine), gzip -9.
 quickjs_wasi_gzip	286655
-ceiling_gzip	431999
+ceiling_gzip	430358
 # slim_ceiling_gzip: the slim module (scripts/build-wasm.sh --slim, D2411), its own ratchet.
 slim_ceiling_gzip	366352
