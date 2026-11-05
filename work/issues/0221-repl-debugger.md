@@ -1,7 +1,7 @@
 # 0221: `debugger;` pauses in the CLI: REPL and `djs run`
 
-status: open
-agent: -
+status: in-progress
+agent: dbg
 branch: issue/0221-repl-debugger
 depends-on: 0220 batch 1 (D3050, on main)
 guide: the CLI/REPL page (coordinate with 0220's agent `guide`, who writes it)
