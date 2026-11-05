@@ -134,7 +134,10 @@ struct Compiler {
 }
 
 pub(crate) fn compile(parsed: &Parsed, flags: Flags) -> super::Program {
-    let mut words = alloc::vec![0u32; H_LEN];
+    // The words are copied into the heap afterwards: room for a typical program up
+    // front saves the doubling reallocations, which showed in compile time.
+    let mut words = crate::buf::vec_with_capacity(128);
+    words.resize(H_LEN, 0u32);
     words[H_FLAGS] = flags.bits() as u32;
     words[H_CAPTURES] = parsed.capture_count;
     for name in &parsed.names[1..] {
@@ -349,6 +352,17 @@ fn has_backref(node: &Node) -> bool {
     }
 }
 
+/// Whether compiling `node` hands its follow set (`Compiler::follow`) to a `STAR`:
+/// through groups, alternatives and concatenations, as `Compiler::node` passes it on.
+fn wants_follow(node: &Node) -> bool {
+    match node {
+        Node::Repeat { body, .. } => is_single_char(body),
+        Node::Group { body, .. } => wants_follow(body),
+        Node::Concat(v) | Node::Alt(v) => v.iter().any(wants_follow),
+        _ => false,
+    }
+}
+
 /// A node that matches exactly one character (what `STAR` loops over).
 fn is_single_char(node: &Node) -> bool {
     match node {
@@ -470,6 +484,10 @@ impl Compiler {
             Node::Concat(v) => {
                 if back {
                     v.iter().rev().for_each(|n| self.node(n, back));
+                } else if !v.iter().any(wants_follow) {
+                    // No STAR to give a follow set to: skip computing them (they cost
+                    // more than the rest of compiling a short pattern).
+                    v.iter().for_each(|n| self.node(n, back));
                 } else {
                     let follows = self.concat_follows(v, follow);
                     for (n, f) in v.iter().zip(follows) {
@@ -499,19 +517,28 @@ impl Compiler {
     fn concat_follows(&self, v: &[Node], outer: Option<Follow>) -> Vec<Option<Follow>> {
         let unicode = self.unicode;
         let mut out = alloc::vec![None; v.len()];
+        // Only elements with a STAR in reach use their follow set, and the elements
+        // before the first of them do not contribute to any.
+        let first = v.iter().position(wants_follow).unwrap_or(v.len());
         let mut acc = outer;
-        for i in (0..v.len()).rev() {
-            out[i] = acc
-                .clone()
-                .filter(|(s, end)| !(*end && s.ranges() == [(0, charset::MAX_CP)]));
-            acc = match start_cond(&v[i], unicode) {
-                None => None,
-                Some((f, Empty::No)) => Some((f, false)),
-                // Empty only at the end, where no character follows: the rest must then
-                // accept the end too.
-                Some((f, Empty::AtEnd)) => Some((f, acc.as_ref().is_none_or(|(_, e)| *e))),
-                Some((f, Empty::Anywhere)) => acc.map(|(a, e)| (f.union(&a), e)),
+        for i in (first..v.len()).rev() {
+            // What can follow `v[i - 1]`, computed before `acc` moves into `out[i]`.
+            let next = if i == first {
+                None
+            } else {
+                match start_cond(&v[i], unicode) {
+                    None => None,
+                    Some((f, Empty::No)) => Some((f, false)),
+                    // Empty only at the end, where no character follows: the rest must
+                    // then accept the end too.
+                    Some((f, Empty::AtEnd)) => Some((f, acc.as_ref().is_none_or(|(_, e)| *e))),
+                    Some((f, Empty::Anywhere)) => acc.as_ref().map(|(a, e)| (f.union(a), *e)),
+                }
             };
+            if wants_follow(&v[i]) {
+                out[i] = acc.filter(|(s, end)| !(*end && s.ranges() == [(0, charset::MAX_CP)]));
+            }
+            acc = next;
         }
         out
     }
@@ -570,6 +597,20 @@ impl Compiler {
         self.alternatives(alts.iter(), back, None);
     }
 
+    /// Whether no character the one-character `body` matches is in `set` (without
+    /// building the body's set where it is at hand).
+    fn body_disjoint(&self, body: &Node, set: &CharSet) -> bool {
+        match body {
+            Node::Char { c, icase: false } => !set.contains(*c),
+            Node::Class {
+                set: chars,
+                icase: false,
+                ..
+            } => chars.is_disjoint(set),
+            _ => first_chars(body, self.unicode).is_some_and(|(b, _)| b.is_disjoint(set)),
+        }
+    }
+
     /// A `Node::Repeat`.
     fn repeat(&mut self, node: &Node, back: bool, follow: Option<Follow>) {
         let Node::Repeat {
@@ -597,10 +638,9 @@ impl Compiler {
                 Some((_, false)) => F_CHECK,
                 None => 0,
             };
-            if let (Some((f, _)), Some((body_chars, _))) =
-                (&follow, first_chars(body, self.unicode))
-                && greedy
-                && body_chars.intersect(f).is_empty()
+            if greedy
+                && let Some((f, _)) = &follow
+                && self.body_disjoint(body, f)
             {
                 check |= F_DISJOINT;
             }
@@ -615,13 +655,12 @@ impl Compiler {
             self.code.push_out(max);
             let len_at = self.code.len();
             self.code.push_out(0);
-            let follow_ranges: Vec<(u32, u32)> =
-                follow.map(|(f, _)| f.ranges().to_vec()).unwrap_or_default();
+            let follow_ranges = follow.as_ref().map_or(&[][..], |(f, _)| f.ranges());
             self.code.push_out(follow_ranges.len() as u32);
             let body_start = self.here();
             self.node(body, back);
             self.code[len_at] = self.here() - body_start;
-            for (lo, hi) in follow_ranges {
+            for &(lo, hi) in follow.as_ref().map_or(&[][..], |(f, _)| f.ranges()) {
                 self.code.push_out(lo);
                 self.code.push_out(hi);
             }

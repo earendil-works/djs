@@ -385,11 +385,14 @@ impl Arena {
         self.slice_mut(off, len).fill(0);
     }
 
-    /// Frees everything from `to` on (`to <= len`): the bytes are zeroed again, so the
-    /// frontier invariant holds and the next allocation there starts from zeros.
+    /// Frees everything from `to` on (`to <= len`). The zeroed frontier moves back to
+    /// `to` too (the capacity stays): zeroing the freed bytes instead cost the collector
+    /// a memset of all the garbage, and left a frontier far ahead, so every string
+    /// allocated afterwards took `alloc_from_iter`'s byte-by-byte path below the frontier
+    /// instead of the append (0224: `JSON.stringify` of 10k objects 1.5x slower).
     pub(crate) fn truncate(&mut self, to: u32) {
         assert!(to <= self.len, "truncate past the end");
-        self.bytes[to as usize..self.len as usize].fill(0);
+        self.bytes.truncate(to as usize);
         self.len = to;
     }
 }
@@ -527,6 +530,22 @@ mod tests {
             let off = b.alloc(100).unwrap();
             assert!(b.slice(off, 100).iter().all(|&x| x == 0));
         }
+    }
+
+    #[test]
+    fn truncate_moves_the_frontier_back() {
+        let mut a = Arena::new(1 << 24);
+        a.alloc(1 << 20).unwrap();
+        let cap = a.capacity();
+        a.truncate(64);
+        assert_eq!(a.len(), 64);
+        // No zeroed tail kept: big allocations after a collection append their data
+        // (the guard for 0224's stringify regression).
+        assert_eq!(a.bytes.len(), 64);
+        assert_eq!(a.capacity(), cap);
+        let o = a.alloc(16).unwrap();
+        assert_eq!(o, 64);
+        assert!(a.bytes().iter().all(|&b| b == 0));
     }
 
     #[test]

@@ -28,7 +28,6 @@ impl CharSet {
     }
 
     /// A set from ranges that are already sorted, disjoint and non-adjacent.
-    #[cfg_attr(not(feature = "regexp-unicode-props"), allow(dead_code))]
     pub(crate) fn from_sorted(ranges: Vec<(u32, u32)>) -> CharSet {
         debug_assert!(ranges.windows(2).all(|w| w[0].1 + 1 < w[1].0));
         CharSet { ranges }
@@ -64,8 +63,16 @@ impl CharSet {
             nhi = nhi.max(self.ranges[last].1);
             last += 1;
         }
-        self.ranges
-            .splice(first..last, core::iter::once((nlo, nhi)));
+        // Sets are mostly built in order: appending or widening one range are the
+        // common cases, and much cheaper than a splice (regexp compile time).
+        match last - first {
+            0 => self.ranges.insert(first, (nlo, nhi)),
+            1 => self.ranges[first] = (nlo, nhi),
+            _ => {
+                self.ranges
+                    .splice(first..last, core::iter::once((nlo, nhi)));
+            }
+        }
     }
 
     pub(crate) fn union(&self, other: &CharSet) -> CharSet {
@@ -108,6 +115,25 @@ impl CharSet {
             }
         }
         CharSet { ranges: out }
+    }
+
+    /// Whether no code point is in both sets (`intersect(..).is_empty()` without
+    /// building the intersection).
+    pub(crate) fn is_disjoint(&self, other: &CharSet) -> bool {
+        let (mut i, mut j) = (0, 0);
+        while i < self.ranges.len() && j < other.ranges.len() {
+            let (a0, a1) = self.ranges[i];
+            let (b0, b1) = other.ranges[j];
+            if a0.max(b0) <= a1.min(b1) {
+                return false;
+            }
+            if a1 < b1 {
+                i += 1;
+            } else {
+                j += 1;
+            }
+        }
+        true
     }
 
     /// The complement within 0..=0x10FFFF.
@@ -238,12 +264,12 @@ pub(crate) fn canonicalize(c: u32, unicode: bool) -> u32 {
 
 /// `\d`
 pub(crate) fn digits() -> CharSet {
-    CharSet::from_ranges(&[(0x30, 0x39)])
+    CharSet::from_sorted(alloc::vec![(0x30, 0x39)])
 }
 
 /// `\s`: WhiteSpace and LineTerminator.
 pub(crate) fn spaces() -> CharSet {
-    CharSet::from_ranges(&[
+    CharSet::from_sorted(alloc::vec![
         (0x09, 0x0D),
         (0x20, 0x20),
         (0xA0, 0xA0),
@@ -259,7 +285,12 @@ pub(crate) fn spaces() -> CharSet {
 
 /// `\w` (the basic word characters; see `is_word_char` for the `ui` extras).
 pub(crate) fn word() -> CharSet {
-    CharSet::from_ranges(&[(0x30, 0x39), (0x41, 0x5A), (0x5F, 0x5F), (0x61, 0x7A)])
+    CharSet::from_sorted(alloc::vec![
+        (0x30, 0x39),
+        (0x41, 0x5A),
+        (0x5F, 0x5F),
+        (0x61, 0x7A)
+    ])
 }
 
 /// IsWordChar for `\b`: ASCII word characters, plus U+017F and U+212A when case-insensitive
@@ -291,6 +322,10 @@ mod tests {
         assert_eq!(a.union(&b).ranges(), &[(1, 20), (30, 30)]);
         assert_eq!(a.intersect(&b).ranges(), &[(4, 5), (10, 12)]);
         assert_eq!(a.subtract(&b).ranges(), &[(1, 3), (13, 20)]);
+        assert!(!a.is_disjoint(&b));
+        assert!(a.is_disjoint(&set(&[(6, 9), (21, 40)])));
+        assert!(!a.is_disjoint(&set(&[(6, 10)])));
+        assert!(set(&[]).is_disjoint(&a));
         assert_eq!(set(&[]).invert().ranges(), &[(0, MAX_CP)]);
         assert_eq!(set(&[(0, 3)]).invert().ranges(), &[(4, MAX_CP)]);
         assert_eq!(a.invert().invert(), a);
