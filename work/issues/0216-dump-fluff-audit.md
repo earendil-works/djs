@@ -1,7 +1,7 @@
 # 0216: Dump fluff audit: the byte-minimal dump, and every byte between it and ours
 
-status: open
-agent: -
+status: in-progress
+agent: fluff
 branch: issue/0216-dump-fluff-audit
 depends-on: -
 guide: -
