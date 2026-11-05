@@ -210,7 +210,8 @@ fn probe_import_cost() {
 #[test]
 fn dump_maps_round_trip() {
     extern crate std;
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/codemode-harvest");
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/corpus/codemode-harvest");
     let mut n = 0;
     for e in std::fs::read_dir(dir).unwrap() {
         let p = e.unwrap().path();
@@ -232,7 +233,13 @@ fn dump_maps_round_trip() {
         let b = vm(false);
         assert!(b.import_dump_maps(&bytes));
         let c = b.dump_cache.borrow();
-        let got: Vec<String> = c.maps[0].3.as_ref().unwrap().iter().map(|m| m.text(src.as_bytes())).collect();
+        let got: Vec<String> = c.maps[0]
+            .3
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|m| m.text(src.as_bytes()))
+            .collect();
         assert_eq!(got, want);
         n += want.len();
     }

@@ -4820,7 +4820,11 @@ impl Cache {
             return false;
         };
         for e in entries {
-            if self.maps.iter().any(|m| m.0 == e.0 && m.1 == e.1 && m.2 == e.2) {
+            if self
+                .maps
+                .iter()
+                .any(|m| m.0 == e.0 && m.1 == e.1 && m.2 == e.2)
+            {
                 continue;
             }
             if self.maps.len() >= MAPS_KEPT {

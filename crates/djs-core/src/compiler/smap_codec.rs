@@ -5,8 +5,8 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use super::smap::{
-    Decl, DeclKind, FunctionMap, Node, NodeKind, Part, Role, Site, SiteKind, Slot, Special,
-    Step, Syntax,
+    Decl, DeclKind, FunctionMap, Node, NodeKind, Part, Role, Site, SiteKind, Slot, Special, Step,
+    Syntax,
 };
 
 /// A value that encodes itself.
@@ -167,10 +167,40 @@ impl Code for NodeKind {
     fn put(&self, out: &mut Vec<u8>) {
         use NodeKind::*;
         const UNIT: &[NodeKind] = &[
-            Body, Block, Expr, If, Label, While, DoWhile, For, ForIn, ForOf, ForAwait, Try,
-            Switch, Return, Throw, Await, Yield, YieldStar, New, ImportCall, Binary, Logical,
-            Assign, Unary, Update, Conditional, Sequence, Template, TaggedTemplate, Array, Object,
-            ArrayPattern, ObjectPattern, Default,
+            Body,
+            Block,
+            Expr,
+            If,
+            Label,
+            While,
+            DoWhile,
+            For,
+            ForIn,
+            ForOf,
+            ForAwait,
+            Try,
+            Switch,
+            Return,
+            Throw,
+            Await,
+            Yield,
+            YieldStar,
+            New,
+            ImportCall,
+            Binary,
+            Logical,
+            Assign,
+            Unary,
+            Update,
+            Conditional,
+            Sequence,
+            Template,
+            TaggedTemplate,
+            Array,
+            Object,
+            ArrayPattern,
+            ObjectPattern,
+            Default,
         ];
         match *self {
             Decl(k) => {
@@ -192,10 +222,40 @@ impl Code for NodeKind {
     fn get(r: &mut Reader<'_>) -> Option<NodeKind> {
         use NodeKind::*;
         const UNIT: &[NodeKind] = &[
-            Body, Block, Expr, If, Label, While, DoWhile, For, ForIn, ForOf, ForAwait, Try,
-            Switch, Return, Throw, Await, Yield, YieldStar, New, ImportCall, Binary, Logical,
-            Assign, Unary, Update, Conditional, Sequence, Template, TaggedTemplate, Array, Object,
-            ArrayPattern, ObjectPattern, Default,
+            Body,
+            Block,
+            Expr,
+            If,
+            Label,
+            While,
+            DoWhile,
+            For,
+            ForIn,
+            ForOf,
+            ForAwait,
+            Try,
+            Switch,
+            Return,
+            Throw,
+            Await,
+            Yield,
+            YieldStar,
+            New,
+            ImportCall,
+            Binary,
+            Logical,
+            Assign,
+            Unary,
+            Update,
+            Conditional,
+            Sequence,
+            Template,
+            TaggedTemplate,
+            Array,
+            Object,
+            ArrayPattern,
+            ObjectPattern,
+            Default,
         ];
         Some(match u8::get(r)? {
             200 => Decl(DeclKind::get(r)?),
@@ -251,10 +311,43 @@ impl Code for Slot {
 
 record!(Step { node, part });
 record!(Part { role, start, end });
-record!(Decl { name, kind, scope, at, part });
-record!(Node { kind, start, end, parts, decls });
-record!(Syntax { nodes, special, erased });
-record!(Site {
-    name, kind, pos, resume_pc, args, locals, boxed, stack, unsupported, path, gap
+record!(Decl {
+    name,
+    kind,
+    scope,
+    at,
+    part
 });
-record!(FunctionMap { name, start, end, sites, computed_keys, syntax });
+record!(Node {
+    kind,
+    start,
+    end,
+    parts,
+    decls
+});
+record!(Syntax {
+    nodes,
+    special,
+    erased
+});
+record!(Site {
+    name,
+    kind,
+    pos,
+    resume_pc,
+    args,
+    locals,
+    boxed,
+    stack,
+    unsupported,
+    path,
+    gap
+});
+record!(FunctionMap {
+    name,
+    start,
+    end,
+    sites,
+    computed_keys,
+    syntax
+});
