@@ -385,6 +385,21 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   Docs: continuation-dumps plan example and explain, plain-js-dumps (callbacks, runs);
   guide snapshots and sleep README unchanged (same outputs).
 
+- Batch 2 (D3004–D3006): reopened host calls read once wait for their reader (keeping the
+  hosts' order: never past a host call written where listed; into their own list);
+  records leave out holes the reader finds by reading the value (token → expression
+  scan, self-verified by the writer: records with holes 2,552 → 736); a site worked out
+  before K where K does nothing before it, so a function both K's parameter and named in
+  the site is written once (`$djs.k(…, step)`); K's call arguments inlined outside K
+  (any names); function texts pure; values on `$dump` named by bindings only where the
+  original reads the binding after the site or in an enclosing loop; unread
+  `$dump.X = …` lines dropped (factories too) or made statements; functions as arguments
+  without parentheses (lazy, D2995); `k_scope` computed once per activation.
+  pi suite (103 dumps, debug module): 32,620 B before batch 2 (fluff's minimal ≈31,000
+  for 106). Score: v2 373,088 → 363,390; corpus 6,875,113 → 6,797,991; sleep 820 → 749
+  (fluff's minimal 716). Docs: sleep README transcript/explain/prose, plan example,
+  guide snapshots (no holes in the notes record).
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a
