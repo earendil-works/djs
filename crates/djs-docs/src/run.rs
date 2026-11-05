@@ -83,6 +83,9 @@ const DEBUGGER: u32 = 2;
 /// `console` a namespace of host functions, the body by reference (`$djs.source`), the
 /// run's promise as the dump's value. The text, or why there is none.
 pub fn dump(src: &str, nth: usize) -> String {
+    // As the editor has it: without the block's final newline, which the script's hash in
+    // `$djs.source` would count.
+    let src = src.strip_suffix('\n').unwrap_or(src);
     use djs_core::vm::dump::{BaseNames, DumpOptions};
     let mut vm = djs_prelude::new_vm(VmOptions {
         frozen_builtins: true,
@@ -109,8 +112,9 @@ pub fn dump(src: &str, nth: usize) -> String {
         Ok(f) => f,
         Err(e) => return format!("SyntaxError: {} at {}:{}\n", e.message, e.line, e.col),
     };
-    let this = Value::object(vm.global());
-    vm.call(main, this, &[]).expect("the VM is idle");
+    // (`this` undefined, as the Sandbox calls a body.)
+    vm.call(main, Value::UNDEFINED, &[])
+        .expect("the VM is idle");
     let mut pauses = 0;
     let mut spent = 0;
     loop {

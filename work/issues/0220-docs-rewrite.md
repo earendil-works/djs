@@ -54,6 +54,40 @@ the guide current" section accordingly (no "the ID only as a citation").
 
 ## Log
 
+### Plan (approved by the coordinator)
+TOC: Part "Using djs": introduction, goals, language (new), typescript (new), js-api (new),
+dumps (new), limits (new), determinism, cli (new), pi (new, the only page naming pi). Part
+"How it works": arena, values, heap, compiler, interpreter, suspension, gc, snapshots (images
+and the base), continuations (new, how dumps are written), builtins, host ("the wasm
+boundary"), testing. Reference: opcodes, cells, intrinsics, status. Batches: 1 tooling +
+`debugger`; 2 Using djs; 3 How it works.
+
+### Batch 1 (tooling, `debugger`)
+- `debugger;` as a pause (D3050): `CompileOptions::debugger_awaits` (dump builds only,
+  cfg-gated field), bit 6 of `bits()`, `vm_compile`'s `| 16`; the parser emits
+  `await debugger()` with the syntax of that statement, so the exporter needs no case of its
+  own (dump_cont/dump_plain untouched; one wrapper in dump_tests.rs for the tests). Tests:
+  djs-core `vm::dump_debugger_tests` (a pause in a loop dumped and resumed at each of 3
+  pauses, every load re-dumped; a nested async function; no-ops), js/test/debugger.test.ts
+  (task pauses, suspend/resume chain with re-dumps of equal size, misuse without dumper).
+- Size: shipped 1,033,436 B before and after, slim 906,125 → 906,126 B; the only differing
+  bytes are djs-core's source-hash constant (an `i32.const`, one LEB byte longer in slim),
+  which any djs-core edit changes. No code difference.
+- Sandbox option `debugger` (identity "debugger", global `debugger`, needs `vm_dump`).
+- djs-docs: decision log off the site (page, nav, search, `a.decision`), `gen:decisions`
+  gone, decision IDs/decision-log links are errors, generated op/intrinsic docs drop their
+  citations; pi rule (whole word, prose + inline code, not on pi.md) and history phrases
+  (D3051), with a temporary `NOT_YET_REWRITTEN` list exempting the pages not rewritten
+  yet; `gen:status` names pi only on README.md/pi.md. `gen:dump [N]` (native, matching the
+  browser's dump but for the seed). Live examples: a Dump tab; code with `debugger;` runs as
+  a task with the `debugger` option, frozen builtins, dumps at the pause, Resume loads the
+  dump in a fresh sandbox (checked in headless Chrome: 3 pauses and the end, a pause in a
+  `Promise.all` of async callbacks). Docs module = `--features docs,dump`.
+- Pages: decision IDs and `gen:decisions` stripped mechanically from every page (some
+  lines are ragged until their rewrite); suspension.md has the first live `debugger`
+  example with a `gen:dump`. README.md (writing rules) and AGENTS.md's guide section
+  rewritten.
+
 ## Follow-ups
 
 ## Result

@@ -181,7 +181,7 @@ for (const word of $djs_i1) {
   debugger;
 }
 return total;
-}, $djs.source("example.js", "c7da8262"), 1, 22).call(globalThis, 4, ["frames", "arena"].values());
+}, $djs.source("example.js", "7ab0490b"), 1, 22)(4, ["frames", "arena"].values());
 ```
 <!-- /gen -->
 

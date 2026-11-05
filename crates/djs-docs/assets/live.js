@@ -333,8 +333,12 @@ async function runPausing(ex, l, id) {
   const lines = [];
   const out = (...a) => lines.push(esc(a.map(show).join(" ")));
   const showOut = (extra = "") =>
-    (pane("out").innerHTML = (lines.join("\n") || `<span class="muted">(no output)</span>`) + extra);
-  let paused = null;
+    (pane("out").innerHTML = lines.length
+      ? lines.join("\n") + extra
+      : extra.replace(/^\n/, "") || `<span class="muted">(no output)</span>`);
+  // The pause may come while `start` or `resume` still runs, before `step` waits for it.
+  let paused = false;
+  let wake = null;
   const opts = {
     module,
     frozenBuiltins: true,
@@ -345,7 +349,8 @@ async function runPausing(ex, l, id) {
     // The pause: the run is idle while this call is open, so the task can be dumped.
     debugger: {
       call() {
-        paused?.();
+        paused = true;
+        wake?.();
         return new Promise(() => {});
       },
       // Continued from a dump: the run goes on at once.
@@ -354,7 +359,7 @@ async function runPausing(ex, l, id) {
   };
   let resumes = 0;
   const step = async (task) => {
-    const atPause = new Promise((r) => (paused = r));
+    const atPause = paused ? Promise.resolve() : new Promise((r) => (wake = r));
     const end = task.result.then(
       (v) => ({ done: true, v }),
       (e) => ({ done: true, e }),
@@ -366,9 +371,14 @@ async function runPausing(ex, l, id) {
       const failure = first.e ? describe(first.e, ex.ta.value, false) : null;
       showOut(failure ? `\n<span class="live-error">${esc(failure.text)}</span>` : "");
       setStatus(failure ? "threw" : resumes ? `ran to the end, resumed ${resumes}× from a dump` : "ran without pausing");
-      if (!resumes) pane("dump").innerHTML = `<p class="muted">The run ended without reaching a <code>debugger;</code> in an async function.</p>`;
+      const last = pane("dump").querySelector(".live-dump");
+      pane("dump").innerHTML = resumes && last
+        ? `<p class="muted">The run went on from this dump to its end.</p>${last.outerHTML}`
+        : `<p class="muted">The run ended without reaching a <code>debugger;</code> in an async function.</p>`;
       return;
     }
+    paused = false;
+    wake = null;
     let dump;
     try {
       dump = await task.suspend();

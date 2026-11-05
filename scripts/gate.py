@@ -287,7 +287,7 @@ def jobs():
           summary=r"^slowest tests:|^  +[0-9.]+s  "),
         J("test (djs-docs)", f"{tests} {G}/tests.json --only djs-docs", cls="all", needs=["build:tests"]),
         # 0103: the guide's generated regions are fresh, its examples print what they
-        # printed, its links and decision IDs resolve (D2100).
+        # printed, its links resolve and its writing rules hold (D2100, D3051).
         J("guide (docs/guide)", f"{G}/bin/djs-docs check", cls="all", needs=["build:docs"]),
 
         # --- The host-side JS package (0018), on the dev modules.
