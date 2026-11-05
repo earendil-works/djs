@@ -394,6 +394,25 @@ impl<'a, 'h> Parser<'a, 'h> {
         self.finish_unit()
     }
 
+    /// Parses the whole source and resolves its names: [`super::free_names`].
+    #[cfg(feature = "dump")]
+    pub fn free_names(mut self) -> PResult<Vec<super::FreeNames>> {
+        self.parse_top()?;
+        self.end_async_region();
+        let top = core::mem::replace(&mut self.f, FuncState::new(0, FuncKind::Script, None));
+        self.done[0] = Some(top);
+        let funcs = core::mem::take(&mut self.done)
+            .into_iter()
+            .map(|f| f.ok_or_else(|| super::resolve::internal("unfinished function")))
+            .collect::<PResult<Vec<_>>>()?;
+        Ok(super::resolve::free_names(
+            funcs,
+            &self.ts_decls,
+            self.opts.privileged,
+            self.atom_undefined,
+        ))
+    }
+
     /// Parses the whole source and returns the class spans it recorded
     /// (`compiler::class_spans`); the templates are not built.
     #[cfg(feature = "dump")]

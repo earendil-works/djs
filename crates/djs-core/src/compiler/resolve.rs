@@ -171,6 +171,57 @@ pub(super) fn internal(what: &str) -> PErr {
     )
 }
 
+/// Step 1 of [`finish`] alone: every function's free names ([`super::free_names`]), its
+/// globals with those of the functions inside it. The global `undefined`, which reads
+/// compile to `undefined`, is left out.
+#[cfg(feature = "dump")]
+pub(super) fn free_names(
+    mut funcs: Vec<FuncState>,
+    decls: &[TsDecl],
+    privileged: bool,
+    atom_undefined: Atom,
+) -> Vec<super::FreeNames> {
+    let mut resolved: Vec<Vec<Resolved>> = (0..funcs.len()).map(|_| Vec::new()).collect();
+    for id in (0..funcs.len()).rev() {
+        let mut r = 0;
+        while r < funcs[id].refs.len() {
+            let res = classify(&mut funcs, id, r, decls, privileged);
+            resolved[id].push(res);
+            r += 1;
+        }
+    }
+    let mut globals: Vec<Vec<Atom>> = vec![Vec::new(); funcs.len()];
+    // Children have higher ids than their parents: theirs are complete first.
+    for id in (0..funcs.len()).rev() {
+        let mut own = core::mem::take(&mut globals[id]);
+        for (r, res) in resolved[id].iter().enumerate() {
+            let a = funcs[id].refs[r].atom;
+            if matches!(res.target, Target::Global) && a != atom_undefined && !own.contains(&a) {
+                own.push(a);
+            }
+        }
+        if let Some((p, _)) = funcs[id].parent {
+            let up = &mut globals[p as usize];
+            for &g in &own {
+                if !up.contains(&g) {
+                    up.push(g);
+                }
+            }
+        }
+        globals[id] = own;
+    }
+    funcs
+        .iter()
+        .zip(globals)
+        .map(|(f, globals)| super::FreeNames {
+            start: f.src_start,
+            end: f.src_end,
+            captures: f.capture_names.clone(),
+            globals,
+        })
+        .collect()
+}
+
 /// Resolves all functions of the unit and writes their templates. `funcs` is indexed
 /// by function id; id 0 is the top level.
 #[allow(clippy::too_many_arguments)]

@@ -2388,11 +2388,27 @@ impl<'a> Dumper<'a> {
             return Err(String::from("no memory to check it"));
         };
         let opts = dump_options(self.ts.get());
-        match crate::compiler::compile(&mut scratch, text.as_bytes(), &opts) {
-            Ok(t) => match t.get() {
-                Some(t) => Ok(check_table(&scratch, t, text)),
-                None => Err(String::from("does not compile")),
-            },
+        // Parsed and resolved, without code (0215): the names are all it needs.
+        match crate::compiler::free_names(&mut scratch, text.as_bytes(), &opts) {
+            Ok(fns) => {
+                let s = &scratch;
+                // (The top level, the whole text, is no function the dump writes.)
+                Ok(check_index(
+                    fns.iter().skip(1).map(|f| {
+                        let names = FreeNames {
+                            captures: f
+                                .captures
+                                .iter()
+                                .map(|&a| atom_text(s, a))
+                                .filter(|n| is_ident(n))
+                                .collect(),
+                            globals: f.globals.iter().map(|&a| atom_text(s, a)).collect(),
+                        };
+                        (f.start, f.end, names)
+                    }),
+                    text,
+                ))
+            }
             Err(e) => Err(cat!(
                 "does not compile: ",
                 e.message,
@@ -4508,49 +4524,13 @@ type CachedMaps = (u32, String, String, Option<Rc<Vec<FunctionMap>>>);
 /// with its span, its free names and the next entry of the same hash.
 type CheckTable = (Index, Vec<(u32, u32, FreeNames, u32)>);
 
-/// The checker's table of the dump `text` compiled to template `t`.
-fn check_table(scratch: &Heap, t: u32, text: &str) -> CheckTable {
-    // Every template after its parent, then each one's globals (its code's and its
-    // nested functions') gathered children first, so each code is read once (0198: a
-    // walk of the subtree per template was quadratic in nesting).
-    let mut ts: Vec<(u32, usize)> = alloc::vec![(t, usize::MAX)];
-    let mut i = 0;
-    while let Some(&(t, _)) = ts.get(i) {
-        for c in 0..template::child_count(scratch, t) {
-            if let Some(c) = template::child(scratch, t, c).and_then(|r| r.get()) {
-                ts.push_out((c, i));
-            }
-        }
-        i += 1;
-    }
-    let mut globals: Vec<Vec<Atom>> = alloc::vec![Vec::new(); ts.len()];
-    for i in (0..ts.len()).rev() {
-        let mut own = core::mem::take(&mut globals[i]);
-        for g in code_globals(scratch, ts[i].0) {
-            if !own.contains(&g) {
-                own.push_out(g);
-            }
-        }
-        if let Some(up) = globals.get_mut(ts[i].1) {
-            for &g in &own {
-                if !up.contains(&g) {
-                    up.push_out(g);
-                }
-            }
-        }
-        globals[i] = own;
-    }
+/// The checker's table of the functions of the dump `text`: their spans and free names.
+fn check_index(fns: impl Iterator<Item = (u32, u32, FreeNames)>, text: &str) -> CheckTable {
     let mut by_text = Index::default();
     let mut written: Vec<(u32, u32, FreeNames, u32)> = Vec::new();
-    for (i, &(t, _)) in ts.iter().enumerate() {
-        let info = template::debug_info(scratch, t);
-        let (a, b) = (info.src_start, info.src_end);
+    for (a, b, names) in fns {
         if let Some(src) = text.get(a as usize..b as usize) {
             let key = hash_text(src);
-            let names = FreeNames {
-                captures: capture_names(scratch, t),
-                globals: globals[i].iter().map(|&g| atom_text(scratch, g)).collect(),
-            };
             let first = by_text.get(key).unwrap_or(u32::MAX);
             // One entry per text and free names: a thousand closures of one factory
             // function are one entry.
@@ -4922,6 +4902,72 @@ mod check_tests {
 
     const SETUP: &str = "let foo = [1]; function getStuff() { return foo; }\n\
                          function blah(a) { return () => a } const blah2 = blah(2);";
+
+    /// The check's names without code (`compiler::free_names`) are the compiled code's
+    /// (a class's are a superset: its field initializers count for it):
+    /// captures, globals read, written and `typeof`d, nested functions' globals, classes,
+    /// script-level bindings, `undefined` (0215).
+    #[test]
+    fn free_names_without_code_are_the_codes() {
+        let src = "let top = 1; var v = 2; const K = class K { m() { return [t, K, top]; } static s = g1; };\n\
+                   function mk(a, b) { let c = a; return { f: () => a + c + v + g2, g() { b = g3; typeof g4; undefined; return this; }, h: async function* () { yield* q; } }; }\n\
+                   const o = mk(1, 2); x = 5; (function (u) { with0 = u; })(1);\n\
+                   try { nope(); } catch (e) { (() => e + g5)(); }\n";
+        let mut h = Heap::new().unwrap();
+        let opts = dump_options(false);
+        let t = crate::compiler::compile(&mut h, src.as_bytes(), &opts)
+            .unwrap()
+            .get()
+            .unwrap();
+        let mut templates = alloc::vec![t];
+        let mut i = 0;
+        while let Some(&t) = templates.get(i) {
+            for c in 0..template::child_count(&h, t) {
+                if let Some(c) = template::child(&h, t, c).and_then(|r| r.get()) {
+                    templates.push(c);
+                }
+            }
+            i += 1;
+        }
+        let fns = crate::compiler::free_names(&mut h, src.as_bytes(), &opts).unwrap();
+        let mut checked = 0;
+        for f in fns.iter().skip(1) {
+            let t = templates
+                .iter()
+                .copied()
+                .find(|&t| {
+                    let d = template::debug_info(&h, t);
+                    (d.src_start, d.src_end) == (f.start, f.end)
+                })
+                .unwrap();
+            let want = free_names(&h, t);
+            let mut caps: Vec<String> = f
+                .captures
+                .iter()
+                .map(|&a| atom_text(&h, a))
+                .filter(|n| is_ident(n))
+                .collect();
+            let mut globs: Vec<String> = f.globals.iter().map(|&a| atom_text(&h, a)).collect();
+            let (mut wc, mut wg) = (want.captures, want.globals);
+            for v in [&mut caps, &mut globs, &mut wc, &mut wg] {
+                v.sort();
+            }
+            let text = &src[f.start as usize..f.end as usize];
+            assert_eq!(caps, wc, "{text}");
+            // (A class's text also holds its field initializers, which compile to
+            // functions beside its constructor: their globals count for the class here.)
+            if text.starts_with("class") {
+                assert!(
+                    wg.iter().all(|g| globs.contains(g)),
+                    "{text}: {globs:?} {wg:?}"
+                );
+            } else {
+                assert_eq!(globs, wg, "{text}");
+            }
+            checked += 1;
+        }
+        assert!(checked >= 8, "{checked}");
+    }
 
     #[test]
     fn a_closure_outside_its_factory_is_refused() {

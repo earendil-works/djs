@@ -332,6 +332,31 @@ pub fn class_spans(
     parse(heap, src, opts, |p| p.compile_class_spans()).map_err(|e| error_at(src, e))
 }
 
+/// The free names of every function of `src`, from parsing and name resolution alone (no
+/// code is generated): what a dump's check compares with the original functions (D2888,
+/// 0215; a full compile cost twice as much). In source order of their ends, the top level
+/// first.
+#[cfg(feature = "dump")]
+pub fn free_names(
+    heap: &mut Heap,
+    src: &[u8],
+    opts: &CompileOptions<'_>,
+) -> Result<Vec<FreeNames>, CompileError> {
+    parse(heap, src, opts, |p| p.free_names()).map_err(|e| error_at(src, e))
+}
+
+/// A function's free names ([`free_names`]): its source span, the names it captures,
+/// and the globals it or a function inside it reads or writes by name (as the code it
+/// compiles to does: `get_global`, `get_global_typeof`, `put_global`).
+#[cfg(feature = "dump")]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FreeNames {
+    pub start: u32,
+    pub end: u32,
+    pub captures: Vec<crate::heap::Atom>,
+    pub globals: Vec<crate::heap::Atom>,
+}
+
 /// The suspension maps (D2563, compiler/smap.rs) of every function of `src` that has an
 /// `await` or `yield` or evaluates a computed property key (D2623), in source order: compiles `src` again with recording on (into
 /// `heap`; the templates are garbage). The maps describe frames of this build's code for
