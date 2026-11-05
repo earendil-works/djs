@@ -417,3 +417,25 @@ main();
     assert!(at(2).contains("$djs_D("), "{}", at(2));
     assert!(at(3).contains("$djs_D("), "{}", at(3));
 }
+
+/// A site in a case test with the discriminant kept: the test's left operand is the
+/// discriminant's value, and K's one constant or literal stands for both (D2913; pjz's
+/// codemode/plain-fuzz/switch-case-test-await.js), also on a chain.
+#[test]
+fn plain_dumps_of_case_tests() {
+    let src = r#"
+async function f(d) {
+  switch (d) { case await later(5): print("five"); case 0: print(await later("x")); }
+  switch ("k") { case await later("j"): print("j"); case "k": print(await later("y")); }
+  return "end";
+}
+f(0).then(print);
+"#;
+    let (failed, refused, ok) = plain_check_program("cases", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, _, refused) = plain_chain_program("cases", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 4, "{ok}");
+}

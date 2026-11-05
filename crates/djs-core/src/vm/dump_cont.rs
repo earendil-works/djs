@@ -126,6 +126,7 @@ fn run(act: &Act, ctx: &mut dyn Ctx, replay: Option<&[u32]>) -> R<Out> {
         marks: true,
         tape: Vec::new(),
         replay: replay.map(|r| (r.to_vec(), 0)),
+        aliases: Vec::new(),
     };
     let mut body = g.body()?;
     if !g.deferred.is_empty() {
@@ -337,6 +338,8 @@ struct G<'a, 'c> {
     tape: Vec<u32>,
     /// Writing again from a tape: it, and how far it was read.
     replay: Option<(Vec<u32>, usize)>,
+    /// Temporaries whose literal is another's: `(cmap index, the other's)`.
+    aliases: Vec<(usize, usize)>,
 }
 
 impl G<'_, '_> {
@@ -1876,12 +1879,22 @@ impl G<'_, '_> {
         let kw = case_kw(self, k)?;
         // The value the test compares: the discriminant (its temporary is dead once the
         // last test runs).
-        let left = self.tmp("binary.left", kw)?;
         let dname = cat!("switch.discriminant@", n.start);
         let disc = if self.has(&dname) {
-            self.tmp("switch.discriminant", n.start)?
+            // (The test's left operand is the discriminant's value: K's one stands for
+            // both, D2913.)
+            let disc = self.tmp("switch.discriminant", n.start)?;
+            let lname = cat!("binary.left@", kw);
+            self.take(&lname)?;
+            let i = self.cmap.len() - 1;
+            let (v, lit) = (self.cmap[i].1.clone(), self.cmap[i].2);
+            self.cmap.push_out((lname, v, lit));
+            if lit {
+                self.aliases.push_out((self.cmap.len() - 1, i));
+            }
+            disc
         } else {
-            left
+            self.tmp("binary.left", kw)?
         };
         let d = n
             .parts

@@ -51,6 +51,8 @@ pub(super) struct Out {
     pub used: Vec<String>,
     pub args: Vec<String>,
     pub tape: Vec<u32>,
+    /// Temporaries whose literal is another's: `(cmap index, the other's)`.
+    pub aliases: Vec<(usize, usize)>,
     /// A method's home object's prototype: K's text goes in `({ __proto__: p, K }).K`.
     pub wrap: Option<String>,
 }
@@ -114,6 +116,7 @@ impl G<'_, '_> {
             used: self.used,
             args: Vec::new(),
             tape: self.tape,
+            aliases: self.aliases,
             wrap: None,
         }
     }
@@ -189,6 +192,7 @@ pub(super) fn layout(
     ftext: &str,
     scaf: &mut [(&'static str, u32, u32, String)],
     cmap: &mut [(String, String, bool)],
+    aliases: &[(usize, usize)],
 ) -> (String, Vec<u32>) {
     let mut text = String::new();
     let mut segs: Vec<u32> = Vec::new();
@@ -241,6 +245,13 @@ pub(super) fn layout(
             }
         }
     }
+    for &(a, b) in aliases {
+        if let Some(v) = cmap.get(b).map(|c| c.1.clone())
+            && let Some(c) = cmap.get_mut(a)
+        {
+            c.1 = v;
+        }
+    }
     (text, segs)
 }
 
@@ -269,7 +280,7 @@ pub(super) fn generate(act: &Act, ctx: &mut dyn Ctx) -> R<KText> {
     };
     let r = run(&c, &mut Canon { act: &c }, Some(&w.tape)).map_err(again)?;
     let h = holes(&w, &r, &act.ftext).map_err(again)?;
-    let (text, _) = layout(&w.pieces, &act.ftext, &mut w.scaf, &mut w.cmap);
+    let (text, _) = layout(&w.pieces, &act.ftext, &mut w.scaf, &mut w.cmap, &w.aliases);
     let text = match &w.wrap {
         Some(p) => cat!("({ __proto__: ", p, ", ", text, " }).K"),
         None => text,
@@ -329,11 +340,10 @@ fn holes(w: &Out, r: &Out, ftext: &str) -> R<Vec<u32>> {
         return Err(String::from("its records differ"));
     }
     let same_cmap = w.cmap.len() == r.cmap.len()
-        && w.cmap
-            .iter()
-            .zip(&r.cmap)
-            .enumerate()
-            .all(|(i, (x, y))| x.0 == y.0 && x.2 == y.2 && (lits.contains(&i) || x.1 == y.1));
+        && w.cmap.iter().zip(&r.cmap).enumerate().all(|(i, (x, y))| {
+            let filled = lits.contains(&i) || w.aliases.iter().any(|a| a.0 == i);
+            x.0 == y.0 && x.2 == y.2 && (filled || x.1 == y.1)
+        });
     if !same_cmap {
         return Err(String::from("its temporaries differ"));
     }
@@ -463,7 +473,7 @@ pub(in super::super) fn layout_of(
     if at != ktext.len() || next.is_some() {
         return Err(differs());
     }
-    let (_, segs) = layout(&r.pieces, &act.ftext, &mut r.scaf, &mut r.cmap);
+    let (_, segs) = layout(&r.pieces, &act.ftext, &mut r.scaf, &mut r.cmap, &r.aliases);
     Ok(Layout {
         segs,
         scaf: r.scaf,
