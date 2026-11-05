@@ -96,19 +96,36 @@ djs is unreleased (D024): no compatibility code for format 2 once it is retired.
   waiting for its inner return() (async generator return through yield*). Found by the
   probe, outside plain dumps: an arrow capturing `this`/`super` in a method is refused by
   the exporter generally ("a captured `this`").
+- Follow-ups done (pjr, branch issue/0203-followups):
+  - A site in an assignment's member target (`(await o).p = v`, `o[await k] op= v`):
+    K's assignment is the original's from the site on, with its operator as written. The
+    object before the key is `member.object@`. ktemp marks map K's target slots for
+    re-dumps.
+  - An assignment to a pattern with the site on its right (`({a: o.b = 1} = await x)`):
+    the pattern's text as is (`=` only).
+  - A site in a `using`/`await using` initializer: written with its keyword. Earlier
+    resources of the same declaration become constants of their own. The scope record
+    the declaration made is added again first (`using_readd` on the declaration node). A
+    loop head with earlier resources stays refused.
+  - A `yield*` awaiting its inner `return()` (D2887): K is primed to the delegation's
+    yield and the original's request is delivered again (`.return(v)`). `$djs_Y(…, 2,
+    p)`'s first `return` gives the awaited promise. Outside the allowed area this needed
+    one condition in dump_plain.rs `at_yield`.
+  - Tests: `plain_dumps_sites_in_assignment_targets` and
+    `plain_dumps_of_yield_star_awaiting_return`. New corpus cases: `language/using-site.js`
+    and `codemode/yield-star-return.js`. The two plain-fuzz refusals are gone from
+    tests/plain-refusals.txt. The corpus now has 1333 plain links, 0 differ, 2 refused
+    (others' cases).
 
 ## Follow-ups
 - Private names on instances (D2878) stay refused. If codemode ever needs them, the
   only encoding is rewriting class text in the dump, which the owner rejects.
 - TypeScript dumps with enums or namespaces stay TypeScript (D2879). Lowering those to
   JavaScript in the dump would let node run them too.
-- Three small sites still refused, all in dump_cont.rs (to do in 0205 once 0207's
-  dump_cont.rs items have landed): a site in a `using` declaration (`await using r =
-  await x`: decl_list needs the `using`/`await using` keyword), a site in an assignment's
-  member target (`o[await k] = v`: the object from `member.object@`/`assign.object@`,
-  then `(T[e] OP right)`), and an async generator's `return()` forwarded through `yield*`
-  while the inner `return()`'s result is awaited (`yield*.await` after `return`; the
-  other `yield*.await` kinds before the inner call, #1–#4, are refused too).
+- ~~Three small sites still refused~~: done (pjr, after the merge), see the Log's
+  "Follow-ups done". Still refused: a site after another resource of a loop head's
+  `using` declaration (`for (using a = x, b = await y; ;)`), and the `yield*.await`
+  kinds before the inner call (#1–#4).
 - The exporter generally refuses an arrow that captures `this`/`super` of a method frame
   alive across an await ("a captured `this`"); not a plain-dump construct, found by the
   probe.
