@@ -336,10 +336,16 @@ def jobs():
         J("unsafe-heap difftest", f"{G}/bin/release/djs-difftest --engine djs --ratchet --suspend-every 97"
           f" --gc-stress --quiet --no-diff --times {G}/times/difftest-unsafe.tsv",
           cls="rust", needs=["build:unsafe-release"], summary=r"^(stress|ratchet):"),
-        # 0007: test262's active group against the ratchet.
-        J("test262", f"./scripts/fetch-test262.sh > /dev/null && {G}/bin/djs-test262 run --engine djs"
-          " --lazy --group active --quiet --slowest 10 --expected tests/test262/expected-failures.txt",
-          cls="rust", needs=["build:test262"], summary=r"^ratchet:|^\| active|^slowest:|^ +[0-9.]+s "),
+        # 0007: test262's active group against the ratchet, with lazy functions (D2990) and,
+        # alongside, eager as the shipped main module runs.
+        J("test262", f"./scripts/fetch-test262.sh > /dev/null; e=$(mktemp); rc=0;"
+          f" {{ {G}/bin/djs-test262 run --engine djs --group active --quiet"
+          " --expected tests/test262/expected-failures.txt > \"$e\" 2>&1 && echo 0 >> \"$e\" || echo 1 >> \"$e\"; } &"
+          f" {G}/bin/djs-test262 run --engine djs --lazy --group active --quiet --slowest 10"
+          " --expected tests/test262/expected-failures.txt || rc=$?;"
+          " wait; echo 'eager:'; sed '$d' \"$e\"; erc=$(tail -n 1 \"$e\"); rm -f \"$e\";"
+          " [ \"$rc\" = 0 ] && [ \"$erc\" = 0 ]",
+          cls="rust", needs=["build:test262"], summary=r"^ratchet:|^\| active|^slowest:|^ +[0-9.]+s |^eager:"),
 
         # --- Slim (D2411): the djs-core and djs-prelude tests that hold in both builds, the
         # codemode corpora with the stress modes, test262 without the families it leaves out
