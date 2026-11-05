@@ -349,6 +349,10 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
 - D2918: assignments with the site on the right written as the original's (names, members,
   computed keys, compound old values where the target holds them now). v2 395,119 → 393,692.
 
+- D2919: string temporaries literals again (re-dump: K's template constants or the
+  interned atom; not index strings), number template substitutions reread. D3000 (IDs now
+  D3000–D3019): a placeholder loop's first iteration prunes its own bindings. v2 392,780.
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a

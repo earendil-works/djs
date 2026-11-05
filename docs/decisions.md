@@ -10146,3 +10146,10 @@ allocating); so a string temporary is a literal in place again, except an index'
 (`"0"`, an integer key with no string of its own). A template's substitution before the
 site whose name now holds a number whose string is the saved part is read again too
 (D2914).
+
+## D3000: A placeholder loop's first iteration is a scope of its own for liveness
+date: 2026-11-05 · by: pjs · issue: 0207
+0216's item 13: the bindings a for-of placeholder scaffold declares for the rest of the
+current iteration (`const x = 2;`) are pruned as those of a block (D2911): within the first
+iteration's block, not against the whole of K, whose later iterations declare the name
+again from the loop's head (`const x = $djs_v1`).

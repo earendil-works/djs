@@ -1383,9 +1383,12 @@ impl G<'_, '_> {
                 f,
                 " = false; {\n"
             )),
-            d,
-            s("\n"),
-            first,
+            // (The first iteration's block: its bindings live there only, D2911.)
+            P::Scope(
+                decls.iter().map(|d| d.0.clone()).collect(),
+                false,
+                alloc::boxed::Box::new(P::L(alloc::vec![d, s("\n"), first]))
+            ),
             s("\n}"),
             // (The iteration's `using` scope ends here: its disposal is a site.)
             if using_head {
