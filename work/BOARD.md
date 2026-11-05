@@ -10,6 +10,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0211 | Plain dump fuzzing round 2 (wider generator, new seeds) | pjz | .worktrees/pjz |
 | 0215 | Plain dump performance (Result written; pjr paused, resumes on new hot spots) | pjr | .worktrees/pjx |
 | 0220 | Rewrite the guide: behavior + architecture, no history/decisions, JS interface page, live dumps, debugger suspend (owner) | guide | .worktrees/docs |
+| 0221 | `debugger;` pauses in the CLI: REPL and djs run (owner) | dbg | .worktrees/dbg |
 
 ## Open (ready)
 
