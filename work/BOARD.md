@@ -8,8 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0231 | Perf: sort comparator, Array.from, join/concat/push, Map/Set string keys | parr | .worktrees/parr |
 | 0232 | Perf: Promise.all, await, async calls | pasync | .worktrees/pasync |
-| 0233 | Perf: regexp exec/replace/matchAll/compile | pre | .worktrees/pre |
-| 0230 | Builtin call overhead (TS-subset builtins 3-19x slower per call than QuickJS), incl. Math.max/min | mathfast | .worktrees/mathfast |
+| 0230b | Builtin follow-ups: @fast for substring/pad/at/String(i)/isInteger/repeat, opt-in inlining | mathfast | .worktrees/mathfast |
 | 0229 | Benchmarks page: djs vs QuickJS versions and monty on codemode workloads; dumps, size, memory (owner) | benchpage | .worktrees/benchpage |
 
 ## Open (ready)
@@ -32,6 +31,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | - | First npm publish: confirm MIT copyright holder and homepage, create the `npm` GitHub environment with reviewers, trusted publishing or NPM_TOKEN, push tag v0.1.0 | owner |
 | - | pi slim/next 'exits promptly' timing tests (elapsed < 1000 ms) fail under very high load (~180): make them load-independent like 0211 did for the lifetime tests | ready |
 | - | Memory follow-ups (0234): survivor mark for big strings (format change), slice detach in minor GCs, base image 182 KB vs QuickJS ~130 KB realm, GC side tables vs dlmalloc's first segment, shadow stack/static data padding | ready |
+| - | Regexp follow-ups (0233): literal runs as one node (distinct-pattern compile 2x QuickJS), replace 1.14x | ready |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
 | - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |
@@ -101,6 +101,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0198 | Dump performance: corpus dump p50 1.42 -> 0.43 ms wasm, totals 3,243 -> 610 ms; data cases 2-6x (D2800-D2802) | 429184db (agent dumpperf) |
 | - | base_equals_a_compiled_realm test fixed (8f0fdd72); gate recovers from incremental corruption (D2896, b55180dd); CLI/REPL call states (D2894) | agent pjh |
 | 0220 | Guide rewrite: Using djs / How it works / Reference, JS API, dumps, CLI, pi page; live Run/Continue with debugger pauses at exact positions (D3050-D3054) | 13002add (agent guide) |
+| 0233 | Regexp perf: exec 0.78x, test 0.58x, replace 1.14x of QuickJS; compile cache (D3135-D3139) | 51d4a5fe (agent pre) |
+| 0230 | Builtin calls: pure leaves in the hot loop, bgen helper inlining, Math.max/min @fast (D3120-D3123) | b1419ffb (agent mathfast) |
 | 0234 | Memory footprint: arena growth 1/8, exact reserve, staging buffer, GC leaf discount (D3140-D3144): idle 640->576 KiB, fanout 2496->1792, json 1856->1472, heavy 4864->4480 | 373e9422 (agent pmem) |
 | 0228 | npm package @earendil-works/djs 0.1.0 ready (dry run): dist JS + d.ts, three wasm entry points, publish workflow, gate leg (D3105-D3109) | fe7f7083 (agent npm) |
 | 0226 | Shipped/slim wasm with unchecked heap (D3100): -8.1/-8.4 KB gz, every workload 4.5-30% faster; hot.rs slot access through access.rs | 5df8c9bc (agent heapx) |

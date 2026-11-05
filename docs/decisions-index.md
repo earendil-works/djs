@@ -757,3 +757,12 @@ topics when the index is next reorganized.
 - D3142: Big staging requests get their own block, placed after room for the arena
 - D3143: The mark stack reserves 16 KiB up front
 - D3144: Large live leaf cells count for 40% of the next collection's growth
+- D3120: Pure leaf intrinsics run in the tier-0 loop
+- D3121: djs-bgen inlines small helpers into the bytecode prelude
+- D3122: Math.max / Math.min get @fast entries again
+- D3123: The size ceilings rise for 0230
+- D3135: The RegExp search is the matcher's; programs are read in place; one exec state serves many matches
+- D3136: RegExpCreate shares a RegExp's program; pristine RegExps skip the flag getters and matchAll's Construct
+- D3137: %RegExpExecOwn: RegExpExec without its lookups when they read only data
+- D3138: A RegExp compile cache of 8 entries in a realm slot
+- D3139: Size of 0233; the size ceiling rises by what it measured
