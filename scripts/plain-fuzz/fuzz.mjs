@@ -9,7 +9,8 @@
 //                                    [--jobs J] [--max-load L] [--from-max K] [--dir DIR]
 //                                    [--no-node] [--known FILE] [--no-statics] [--big] [--lazy]
 //   node scripts/plain-fuzz/fuzz.mjs check FILE...      one program (a case body) each
-//   node scripts/plain-fuzz/fuzz.mjs regress [--cases N] [--seed S]   regress/ and N seeds
+//   node scripts/plain-fuzz/fuzz.mjs regress [--cases N] [--seed S]   regress/, then N seeds from
+//                                    S (default: a random start, printed)
 //   node scripts/plain-fuzz/fuzz.mjs reduce FILE --sig TEXT [--time SECS] [-o OUT]
 //
 // Seeds S, S+1, ... (default 1); stops after N programs (default 200) or SECS seconds
@@ -267,7 +268,9 @@ async function reduce(bin, file, sig, out, deadline) {
   const fails = async (ls) => {
     const text = ls.join("\n");
     if (!parses(text, ext === "ts")) return false;
-    for (const s of await sigsOf(bin, work, text, ext)) if (s.includes(sig)) return true;
+    // The uninterrupted run's own end counts only when asked for (`--sig "plain …"`):
+    // otherwise a candidate that fails by itself would pass for the dump bug.
+    for (const s of await sigsOf(bin, work, text, ext)) if (s.includes(sig) && (sig.startsWith("plain") || !s.startsWith("plain"))) return true;
     return false;
   };
   if (!(await fails(lines))) {
@@ -396,6 +399,10 @@ if (argv[0] === "check") {
   const files = fs.readdirSync(rdir).filter((f) => /\.[jt]s$/.test(f)).sort().map((f) => path.join(rdir, f));
   const bad = await checkFiles(files);
   if (!argv.includes("--cases")) argv.push("--cases", "300");
+  // Fresh seeds from a random start unless --seed is given, so that each run tries new
+  // shapes; the start is printed (fuzz's summary line) to reproduce it.
+  if (!argv.includes("--seed")) argv.push("--seed", String(1000 + Math.floor(Math.random() * 1_000_000)));
+  console.log(`regress: fresh seeds from ${argv[argv.indexOf("--seed") + 1]} (reproduce with --seed)`);
   await fuzz(bin, bad);
 } else if (argv[0] === "reduce") {
   const sig = flag("--sig", "");
