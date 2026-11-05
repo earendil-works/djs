@@ -2387,6 +2387,12 @@ impl W<'_> {
                 Plan::Item(i) => {
                     let kind = self.items[*i].kind.clone();
                     let text = self.items[*i].text.clone();
+                    // (Host calls keep their order, D3004.)
+                    let deferred = matches!(&kind, IK::Def(n) if self.single(n, true))
+                        && inline::def_rhs(&text).is_some_and(|r| r.starts_with("$djs.resume("));
+                    if !deferred && text.contains("$djs.resume(") {
+                        self.flush_all_hooks();
+                    }
                     match &kind {
                         IK::FnDecl => {}
                         IK::Factory(f) => {

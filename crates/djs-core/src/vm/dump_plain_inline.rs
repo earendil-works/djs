@@ -686,7 +686,10 @@ impl W<'_> {
     /// Writes the deferred host calls `text` reads, and those before them (their order is
     /// the host's).
     fn flush_hooks(&mut self, text: &str) {
-        if self.inl.hooks.is_empty() || !text.contains("$dump.") {
+        if self.inl.hooks.is_empty() {
+            return;
+        }
+        if !text.contains("$dump.") {
             return;
         }
         let mut last = None;
@@ -698,6 +701,14 @@ impl W<'_> {
         }
         if let Some(i) = last {
             self.flush_upto(i);
+        }
+    }
+
+    /// Writes every deferred host call: a line with a host call of its own comes after
+    /// them.
+    pub(super) fn flush_all_hooks(&mut self) {
+        if let Some(n) = self.inl.hooks.len().checked_sub(1) {
+            self.flush_upto(n);
         }
     }
 
