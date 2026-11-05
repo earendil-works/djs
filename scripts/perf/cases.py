@@ -73,4 +73,10 @@ CASES = [
     ("Array.isArray(a)", "const a = [];", "Array.isArray(a);"),
     ("Number(s)", "const s = '42';", "Number(s);"),
     ("parseInt(s, 10)", "const s = '42';", "parseInt(s, 10);"),
+    # 0230b: the builtins 0229 found >2x QuickJS
+    ("Number.isInteger(i)", "", "Number.isInteger(i);"),
+    ("s.padEnd(8, '-')", "const s = '42';", "s.padEnd(8, '-');"),
+    ("a.at(-1)", "const a = [1,2,3,4,5,6,7,8];", "a.at(-1);"),
+    ("a.lastIndexOf(3, -2)", "const a = [1,2,3,4,5,6,7,8];", "a.lastIndexOf(3, -2);"),
+    ("s.substr(2, 3)", "const s = 'hello world';", "s.substr(2, 3);"),
 ]

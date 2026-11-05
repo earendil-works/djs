@@ -274,7 +274,7 @@ Many hot builtins rarely meet user code: `"a,b".split(",")`, `s.includes("x")`,
 `@fast` has a hand-written Rust entry of the same name in
 [`crates/djs-core/src/builtins/fast.rs`](../../crates/djs-core/src/builtins/fast.rs).
 With the native backend, a call first runs the entry, which either returns the builtin's
-result or *declines*, and then the builtin runs as usual. <!--n builtins/fast-->20<!--/n--> builtins have one.
+result or *declines*, and then the builtin runs as usual. <!--n builtins/fast-->28<!--/n--> builtins have one.
 
 An entry may answer only when nothing observable can happen: primitive arguments, dense
 arrays whose elements are plain data, no proxies. Every case that would throw declines,
@@ -327,10 +327,11 @@ kilobyte (gzipped) of the twin's code. Twins that call each other are judged tog
 such as `sort` and its merge step, or the serializer functions of `JSON.stringify`.
 `scripts/native-sizes.sh` prints the wasm size of each native function.
 
-By that rule the twins are the <!--n builtins/fast-->20<!--/n--> `@fast` entries (`split`, `includes`, `indexOf` and
-`slice` on strings and arrays, `charAt` and `charCodeAt`, `push`, `pop` and `join`,
-`String.fromCharCode`, `Number`, `ArraySpeciesCreate` and the conversion helpers the
-builtins call most) and the <!--n builtins/native-->8<!--/n-->
+By that rule the twins are the <!--n builtins/fast-->28<!--/n--> `@fast` entries (`split`, `includes`, `indexOf` and
+`slice` on strings and arrays, `charAt` and `charCodeAt`, `substring`, `at`, `repeat`,
+`padStart` and `padEnd`, `push`, `pop` and `join`, `String.fromCharCode`, `String` and
+`Number` called as functions, `Number.isInteger`, `toFixed`, `Math.max` and `Math.min`,
+`ArraySpeciesCreate` and the conversion helpers the builtins call most) and the <!--n builtins/native-->8<!--/n-->
 `@native` functions above. A builtin without a twin is not slow by default: its loops
 over dense arrays already run in leaf intrinsics.
 

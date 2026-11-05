@@ -3758,14 +3758,14 @@ function NumberPrototypeValueOf() {
   return (($1 = %PrimitiveValue(this), (!%IsNumber($1)) ? %Throw(%NewTypeError("not a number")) : %AsNumber($1)));
 }
 
-// builtins/number.ts:68 Number.prototype.toFixed
+// builtins/number.ts:69 Number.prototype.toFixed
 function NumberPrototypeToFixed(fractionDigits) {
   let $1;
   const x = (($1 = %PrimitiveValue(this), (!%IsNumber($1)) ? %Throw(%NewTypeError("not a number")) : %AsNumber($1)));
   return %NumberToFixed(x, (%ToIntegerOrInfinityNumber(((%IsObject(fractionDigits)) ? %ToNumberPrimitive(ToPrimitive(fractionDigits, "number")) : %ToNumberPrimitive(fractionDigits)))));
 }
 
-// builtins/number.ts:77 Number.prototype.toExponential
+// builtins/number.ts:78 Number.prototype.toExponential
 function NumberPrototypeToExponential(fractionDigits) {
   let $1;
   const x = (($1 = %PrimitiveValue(this), (!%IsNumber($1)) ? %Throw(%NewTypeError("not a number")) : %AsNumber($1)));
@@ -3776,7 +3776,7 @@ function NumberPrototypeToExponential(fractionDigits) {
   return %NumberToExponential(x, f);
 }
 
-// builtins/number.ts:90 Number.prototype.toPrecision
+// builtins/number.ts:91 Number.prototype.toPrecision
 function NumberPrototypeToPrecision(precision) {
   let $1;
   const x = (($1 = %PrimitiveValue(this), (!%IsNumber($1)) ? %Throw(%NewTypeError("not a number")) : %AsNumber($1)));
@@ -3786,18 +3786,18 @@ function NumberPrototypeToPrecision(precision) {
   return %NumberToPrecision(x, (%ToIntegerOrInfinityNumber(((%IsObject(precision)) ? %ToNumberPrimitive(ToPrimitive(precision, "number")) : %ToNumberPrimitive(precision)))));
 }
 
-// builtins/number.ts:99
+// builtins/number.ts:100
 function IsFiniteNumber(n) {
   return n === n && n !== 1 / 0 && n !== -1 / 0;
 }
 
-// builtins/number.ts:107 Number.isFinite
+// builtins/number.ts:108 Number.isFinite
 function NumberIsFinite(number) {
   let $1;
   return %IsNumber(number) && ($1 = %AsNumber(number), $1 === $1 && $1 !== 1 / 0 && $1 !== -1 / 0);
 }
 
-// builtins/number.ts:115 Number.isInteger
+// builtins/number.ts:117 Number.isInteger
 function NumberIsInteger(number) {
   if (!%IsNumber(number)) {
     return false;
@@ -3806,7 +3806,7 @@ function NumberIsInteger(number) {
   return (n === n && n !== 1 / 0 && n !== -1 / 0) && %ToIntegerOrInfinityNumber(n) === n;
 }
 
-// builtins/number.ts:127 Number.isNaN
+// builtins/number.ts:129 Number.isNaN
 function NumberIsNaN(number) {
   if (!%IsNumber(number)) {
     return false;
@@ -3815,7 +3815,7 @@ function NumberIsNaN(number) {
   return n !== n;
 }
 
-// builtins/number.ts:139 Number.isSafeInteger
+// builtins/number.ts:141 Number.isSafeInteger
 function NumberIsSafeInteger(number) {
   if (!NumberIsInteger(number)) {
     return false;
@@ -3824,64 +3824,64 @@ function NumberIsSafeInteger(number) {
   return n <= 9007199254740991 && n >= -9007199254740991;
 }
 
-// builtins/number.ts:151 value Number.EPSILON
+// builtins/number.ts:153 value Number.EPSILON
 function NumberEpsilon() {
   return 2.220446049250313e-16;
 }
 
-// builtins/number.ts:159 value Number.MAX_SAFE_INTEGER
+// builtins/number.ts:161 value Number.MAX_SAFE_INTEGER
 function NumberMaxSafeInteger() {
   return 9007199254740991;
 }
 
-// builtins/number.ts:167 value Number.MAX_VALUE
+// builtins/number.ts:169 value Number.MAX_VALUE
 function NumberMaxValue() {
   return 1.7976931348623157e308;
 }
 
-// builtins/number.ts:175 value Number.MIN_SAFE_INTEGER
+// builtins/number.ts:177 value Number.MIN_SAFE_INTEGER
 function NumberMinSafeInteger() {
   return -9007199254740991;
 }
 
-// builtins/number.ts:183 value Number.MIN_VALUE
+// builtins/number.ts:185 value Number.MIN_VALUE
 function NumberMinValue() {
   return 5e-324;
 }
 
-// builtins/number.ts:191 value Number.NaN
+// builtins/number.ts:193 value Number.NaN
 function NumberNaN() {
   return 0 / 0;
 }
 
-// builtins/number.ts:199 value Number.NEGATIVE_INFINITY
+// builtins/number.ts:201 value Number.NEGATIVE_INFINITY
 function NumberNegativeInfinity() {
   return -1 / 0;
 }
 
-// builtins/number.ts:207 value Number.POSITIVE_INFINITY
+// builtins/number.ts:209 value Number.POSITIVE_INFINITY
 function NumberPositiveInfinity() {
   return 1 / 0;
 }
 
-// builtins/number.ts:216 parseFloat Number.parseFloat
+// builtins/number.ts:218 parseFloat Number.parseFloat
 function GlobalParseFloat(string) {
   return %StringParseFloat(ToString(string));
 }
 
-// builtins/number.ts:225 parseInt Number.parseInt
+// builtins/number.ts:227 parseInt Number.parseInt
 function GlobalParseInt(string, radix) {
   const s = ToString(string);
   return %StringParseInt(s, %NumberToInt32(((%IsObject(radix)) ? %ToNumberPrimitive(ToPrimitive(radix, "number")) : %ToNumberPrimitive(radix))));
 }
 
-// builtins/number.ts:234 isNaN
+// builtins/number.ts:236 isNaN
 function GlobalIsNaN(number) {
   const n = ((%IsObject(number)) ? %ToNumberPrimitive(ToPrimitive(number, "number")) : %ToNumberPrimitive(number));
   return n !== n;
 }
 
-// builtins/number.ts:243 isFinite
+// builtins/number.ts:245 isFinite
 function GlobalIsFinite(number) {
   let $1;
   return ($1 = ((%IsObject(number)) ? %ToNumberPrimitive(ToPrimitive(number, "number")) : %ToNumberPrimitive(number)), $1 === $1 && $1 !== 1 / 0 && $1 !== -1 / 0);
@@ -7049,23 +7049,23 @@ function StringPrototypeSplit(separator, limit) {
   return a;
 }
 
-// builtins/string.ts:8 constructor String
-function StringConstructor(...args) {
+// builtins/string.ts:9 constructor String
+function StringConstructor(value) {
+  const nt = new.target;
   let s = "";
-  if (LengthOfArrayLike(args) > 0) {
-    const value = %Get(args, 0);
-    if (new.target === undefined && %IsSymbol(value)) {
+  if (%ArgumentCount() > 0) {
+    if (nt === undefined && %IsSymbol(value)) {
       return %SymbolDescriptiveString(%AsSym(value));
     }
     s = ToString(value);
   }
-  if (new.target === undefined) {
+  if (nt === undefined) {
     return s;
   }
-  return %WrapPrimitive(s, GetPrototypeFromConstructor(new.target, "StringPrototype"));
+  return %WrapPrimitive(s, GetPrototypeFromConstructor(nt, "StringPrototype"));
 }
 
-// builtins/string.ts:24
+// builtins/string.ts:26
 function ThisStringValue(value) {
   const s = %PrimitiveValue(value);
   if (!%IsString(s)) {
@@ -7074,24 +7074,24 @@ function ThisStringValue(value) {
   return %AsStr(s);
 }
 
-// builtins/string.ts:36 String.prototype.toString
+// builtins/string.ts:38 String.prototype.toString
 function StringPrototypeToString() {
   let $1;
   return (($1 = %PrimitiveValue(this), (!%IsString($1)) ? %Throw(%NewTypeError("not a string")) : %AsStr($1)));
 }
 
-// builtins/string.ts:44 String.prototype.valueOf
+// builtins/string.ts:46 String.prototype.valueOf
 function StringPrototypeValueOf() {
   let $1;
   return (($1 = %PrimitiveValue(this), (!%IsString($1)) ? %Throw(%NewTypeError("not a string")) : %AsStr($1)));
 }
 
-// builtins/string.ts:53
+// builtins/string.ts:55
 function StrLen(s) {
   return %StrLength(s);
 }
 
-// builtins/string.ts:60
+// builtins/string.ts:62
 function ThisToString(v) {
   if (v === undefined || v === null) {
     throw %NewTypeError("null or undefined are forbidden");
@@ -7099,7 +7099,7 @@ function ThisToString(v) {
   return ToString(v);
 }
 
-// builtins/string.ts:70
+// builtins/string.ts:72
 function IsRegExp(v) {
   if (!%IsObject(v)) {
     return false;
@@ -7111,7 +7111,7 @@ function IsRegExp(v) {
   return %IsRegExpObject(v);
 }
 
-// builtins/string.ts:84
+// builtins/string.ts:86
 function ClampPosition(v, len) {
   const p = (%ToIntegerOrInfinityNumber(((%IsObject(v)) ? %ToNumberPrimitive(ToPrimitive(v, "number")) : %ToNumberPrimitive(v))));
   if (p < 0) {
@@ -7120,7 +7120,7 @@ function ClampPosition(v, len) {
   return p > len ? len : p;
 }
 
-// builtins/string.ts:98 String.prototype.at
+// builtins/string.ts:101 String.prototype.at
 function StringPrototypeAt(index) {
   const s = ((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this));
   const len = (%StrLength(s));
@@ -7132,7 +7132,7 @@ function StringPrototypeAt(index) {
   return %StrSubstring(s, k, k + 1);
 }
 
-// builtins/string.ts:114 String.prototype.charAt
+// builtins/string.ts:117 String.prototype.charAt
 function StringPrototypeCharAt(pos) {
   const s = ((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this));
   const p = (%ToIntegerOrInfinityNumber(((%IsObject(pos)) ? %ToNumberPrimitive(ToPrimitive(pos, "number")) : %ToNumberPrimitive(pos))));
@@ -7142,19 +7142,19 @@ function StringPrototypeCharAt(pos) {
   return %StrSubstring(s, p, p + 1);
 }
 
-// builtins/string.ts:128 String.prototype.charCodeAt
+// builtins/string.ts:131 String.prototype.charCodeAt
 function StringPrototypeCharCodeAt(pos) {
   const s = ((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this));
   return %StrCharCodeAt(s, (%ToIntegerOrInfinityNumber(((%IsObject(pos)) ? %ToNumberPrimitive(ToPrimitive(pos, "number")) : %ToNumberPrimitive(pos)))));
 }
 
-// builtins/string.ts:137 String.prototype.codePointAt
+// builtins/string.ts:140 String.prototype.codePointAt
 function StringPrototypeCodePointAt(pos) {
   const s = ((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this));
   return %StrCodePointAt(s, (%ToIntegerOrInfinityNumber(((%IsObject(pos)) ? %ToNumberPrimitive(ToPrimitive(pos, "number")) : %ToNumberPrimitive(pos)))));
 }
 
-// builtins/string.ts:149 String.prototype.indexOf
+// builtins/string.ts:152 String.prototype.indexOf
 function StringPrototypeIndexOf(searchString, position) {
   const s = ((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this));
   const search = ToString(searchString);
@@ -7162,7 +7162,7 @@ function StringPrototypeIndexOf(searchString, position) {
   return %StrIndexOf(s, search, start);
 }
 
-// builtins/string.ts:160 String.prototype.lastIndexOf
+// builtins/string.ts:163 String.prototype.lastIndexOf
 function StringPrototypeLastIndexOf(searchString, position) {
   const s = ((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this));
   const search = ToString(searchString);
@@ -7176,7 +7176,7 @@ function StringPrototypeLastIndexOf(searchString, position) {
   return %StrLastIndexOf(s, search, pos < len - searchLen ? pos : len - searchLen);
 }
 
-// builtins/string.ts:179 String.prototype.includes
+// builtins/string.ts:182 String.prototype.includes
 function StringPrototypeIncludes(searchString, position) {
   const s = ((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this));
   if (IsRegExp(searchString)) {
@@ -7187,7 +7187,7 @@ function StringPrototypeIncludes(searchString, position) {
   return %StrIndexOf(s, search, start) >= 0;
 }
 
-// builtins/string.ts:193 String.prototype.startsWith
+// builtins/string.ts:196 String.prototype.startsWith
 function StringPrototypeStartsWith(searchString, position) {
   const s = ((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this));
   if (IsRegExp(searchString)) {
@@ -7203,7 +7203,7 @@ function StringPrototypeStartsWith(searchString, position) {
   return %StrSubstring(s, start, start + searchLength) === search;
 }
 
-// builtins/string.ts:212 String.prototype.endsWith
+// builtins/string.ts:215 String.prototype.endsWith
 function StringPrototypeEndsWith(searchString, endPosition) {
   const s = ((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this));
   if (IsRegExp(searchString)) {
@@ -7219,13 +7219,13 @@ function StringPrototypeEndsWith(searchString, endPosition) {
   return %StrSubstring(s, end - searchLength, end) === search;
 }
 
-// builtins/string.ts:231 String.prototype.localeCompare
+// builtins/string.ts:234 String.prototype.localeCompare
 function StringPrototypeLocaleCompare(that) {
   const s = ((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this));
   return %StrLocaleCompare(s, ToString(that));
 }
 
-// builtins/string.ts:243 String.prototype.slice
+// builtins/string.ts:246 String.prototype.slice
 function StringPrototypeSlice(start, end) {
   const s = ((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this));
   const len = (%StrLength(s));
@@ -7237,7 +7237,7 @@ function StringPrototypeSlice(start, end) {
   return %StrSubstring(s, from, to);
 }
 
-// builtins/string.ts:258 String.prototype.substring
+// builtins/string.ts:262 String.prototype.substring
 function StringPrototypeSubstring(start, end) {
   const s = ((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this));
   const len = (%StrLength(s));
@@ -7246,7 +7246,7 @@ function StringPrototypeSubstring(start, end) {
   return a < b ? %StrSubstring(s, a, b) : %StrSubstring(s, b, a);
 }
 
-// builtins/string.ts:270 String.prototype.substr
+// builtins/string.ts:274 String.prototype.substr
 function StringPrototypeSubstr(start, length) {
   const s = ((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this));
   const size = (%StrLength(s));
@@ -7265,7 +7265,7 @@ function StringPrototypeSubstr(start, length) {
   return %StrSubstring(s, intStart, intEnd);
 }
 
-// builtins/string.ts:293 String.prototype.concat
+// builtins/string.ts:297 String.prototype.concat
 function StringPrototypeConcat(...args) {
   let r = ((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this));
   const n = LengthOfArrayLike(args);
@@ -7275,7 +7275,7 @@ function StringPrototypeConcat(...args) {
   return r;
 }
 
-// builtins/string.ts:306 String.prototype.repeat
+// builtins/string.ts:311 String.prototype.repeat
 function StringPrototypeRepeat(count) {
   const s = ((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this));
   const n = (%ToIntegerOrInfinityNumber(((%IsObject(count)) ? %ToNumberPrimitive(ToPrimitive(count, "number")) : %ToNumberPrimitive(count))));
@@ -7288,7 +7288,7 @@ function StringPrototypeRepeat(count) {
   return %StrRepeat(s, n);
 }
 
-// builtins/string.ts:319
+// builtins/string.ts:324
 function StringPad(s, maxLength, fillString, atStart) {
   const intMaxLength = ToLength(maxLength);
   const stringLength = (%StrLength(s));
@@ -7305,62 +7305,62 @@ function StringPad(s, maxLength, fillString, atStart) {
   return atStart ? truncated + s : s + truncated;
 }
 
-// builtins/string.ts:339 String.prototype.padEnd
+// builtins/string.ts:345 String.prototype.padEnd
 function StringPrototypePadEnd(maxLength, fillString) {
   return StringPad(((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this)), maxLength, fillString, false);
 }
 
-// builtins/string.ts:347 String.prototype.padStart
+// builtins/string.ts:354 String.prototype.padStart
 function StringPrototypePadStart(maxLength, fillString) {
   return StringPad(((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this)), maxLength, fillString, true);
 }
 
-// builtins/string.ts:357 String.prototype.toLowerCase
+// builtins/string.ts:364 String.prototype.toLowerCase
 function StringPrototypeToLowerCase() {
   return %StrToCase(((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this)), false);
 }
 
-// builtins/string.ts:365 String.prototype.toUpperCase
+// builtins/string.ts:372 String.prototype.toUpperCase
 function StringPrototypeToUpperCase() {
   return %StrToCase(((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this)), true);
 }
 
-// builtins/string.ts:373 String.prototype.toLocaleLowerCase
+// builtins/string.ts:380 String.prototype.toLocaleLowerCase
 function StringPrototypeToLocaleLowerCase() {
   return %StrToCase(((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this)), false);
 }
 
-// builtins/string.ts:381 String.prototype.toLocaleUpperCase
+// builtins/string.ts:388 String.prototype.toLocaleUpperCase
 function StringPrototypeToLocaleUpperCase() {
   return %StrToCase(((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this)), true);
 }
 
-// builtins/string.ts:389 String.prototype.trim
+// builtins/string.ts:396 String.prototype.trim
 function StringPrototypeTrim() {
   return %StrTrim(((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this)), 0);
 }
 
-// builtins/string.ts:398 String.prototype.trimStart String.prototype.trimLeft
+// builtins/string.ts:405 String.prototype.trimStart String.prototype.trimLeft
 function StringPrototypeTrimStart() {
   return %StrTrim(((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this)), 1);
 }
 
-// builtins/string.ts:407 String.prototype.trimEnd String.prototype.trimRight
+// builtins/string.ts:414 String.prototype.trimEnd String.prototype.trimRight
 function StringPrototypeTrimEnd() {
   return %StrTrim(((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this)), 2);
 }
 
-// builtins/string.ts:415 String.prototype.isWellFormed
+// builtins/string.ts:422 String.prototype.isWellFormed
 function StringPrototypeIsWellFormed() {
   return %StrIsWellFormed(((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this)));
 }
 
-// builtins/string.ts:423 String.prototype.toWellFormed
+// builtins/string.ts:430 String.prototype.toWellFormed
 function StringPrototypeToWellFormed() {
   return %StrToWellFormed(((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this)));
 }
 
-// builtins/string.ts:432 String.prototype.normalize
+// builtins/string.ts:439 String.prototype.normalize
 function StringPrototypeNormalize(form) {
   const s = ((this === undefined || this === null) ? %Throw(%NewTypeError("null or undefined are forbidden")) : ToString(this));
   let f = "NFC";
@@ -7386,13 +7386,13 @@ function StringPrototypeNormalize(form) {
   return %AsStr(r);
 }
 
-// builtins/string.ts:465 String.fromCharCode
+// builtins/string.ts:472 String.fromCharCode
 function StringFromCharCode(...codeUnits) {
   CoerceNumbers(codeUnits);
   return %StrFromCodeUnits(codeUnits);
 }
 
-// builtins/string.ts:475 String.fromCodePoint
+// builtins/string.ts:482 String.fromCodePoint
 function StringFromCodePoint(...codePoints) {
   if (%AllCodePoints(codePoints)) {
     return %StrFromCodePoints(codePoints);
@@ -7409,7 +7409,7 @@ function StringFromCodePoint(...codePoints) {
   return %StrFromCodePoints(codePoints);
 }
 
-// builtins/string.ts:496 String.raw
+// builtins/string.ts:503 String.raw
 function StringRaw(template, ...substitutions) {
   const cooked = %ToObject(template);
   const literals = %ToObject(%Get(cooked, "raw"));
@@ -8492,11 +8492,19 @@ function GlobalAtob(...args) {
 %MarkFast(MathMax);
 %MarkFast(MathMin);
 %MarkFast(NumberConstructor);
+%MarkFast(NumberPrototypeToFixed);
+%MarkFast(NumberIsInteger);
 %MarkFast(StringPrototypeSplit);
+%MarkFast(StringConstructor);
+%MarkFast(StringPrototypeAt);
 %MarkFast(StringPrototypeCharAt);
 %MarkFast(StringPrototypeCharCodeAt);
 %MarkFast(StringPrototypeIndexOf);
 %MarkFast(StringPrototypeIncludes);
 %MarkFast(StringPrototypeSlice);
+%MarkFast(StringPrototypeSubstring);
+%MarkFast(StringPrototypeRepeat);
+%MarkFast(StringPrototypePadEnd);
+%MarkFast(StringPrototypePadStart);
 %MarkFast(StringFromCharCode);
 })();

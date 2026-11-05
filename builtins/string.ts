@@ -4,20 +4,22 @@
  * String ( value ), 22.1.1.1.
  * @constructor String
  * @length 1
+ * @fast
  */
-function StringConstructor(...args: Value[]): Value {
+function StringConstructor(value?: Value): Value {
+  // The argument count, not a rest array: `String(x)` allocates nothing (0230b).
+  const nt: Value = new.target;
   let s: Str = "";
-  if (LengthOfArrayLike(args) > 0) {
-    const value: Value = Get(args, 0);
-    if (new.target === undefined && IsSymbol(value)) {
+  if (ArgumentCount() > 0) {
+    if (nt === undefined && IsSymbol(value)) {
       return SymbolDescriptiveString(AsSym(value));
     }
     s = ToString(value);
   }
-  if (new.target === undefined) {
+  if (nt === undefined) {
     return s;
   }
-  return WrapPrimitive(s, GetPrototypeFromConstructor(new.target, "StringPrototype"));
+  return WrapPrimitive(s, GetPrototypeFromConstructor(nt, "StringPrototype"));
 }
 
 /** ThisStringValue ( value ), 22.1.3.35.1. */
@@ -94,6 +96,7 @@ function ClampPosition(v: Value, len: f64): f64 {
 /**
  * String.prototype.at ( index ), 22.1.3.1.
  * @builtin String.prototype.at
+ * @fast
  */
 function StringPrototypeAt(this: Value, index: Value): Value {
   const s: Str = ThisToString(this);
@@ -254,6 +257,7 @@ function StringPrototypeSlice(this: Value, start: Value, end: Value): Str {
 /**
  * String.prototype.substring ( start, end ), 22.1.3.25.
  * @builtin String.prototype.substring
+ * @fast
  */
 function StringPrototypeSubstring(this: Value, start: Value, end: Value): Str {
   const s: Str = ThisToString(this);
@@ -302,6 +306,7 @@ function StringPrototypeConcat(this: Value, ...args: Value[]): Str {
 /**
  * String.prototype.repeat ( count ), 22.1.3.19.
  * @builtin String.prototype.repeat
+ * @fast
  */
 function StringPrototypeRepeat(this: Value, count: Value): Str {
   const s: Str = ThisToString(this);
@@ -335,6 +340,7 @@ function StringPad(s: Str, maxLength: Value, fillString: Value, atStart: boolean
 /**
  * String.prototype.padEnd ( maxLength [ , fillString ] ), 22.1.3.16.
  * @builtin String.prototype.padEnd
+ * @fast
  */
 function StringPrototypePadEnd(this: Value, maxLength: Value, fillString?: Value): Str {
   return StringPad(ThisToString(this), maxLength, fillString, false);
@@ -343,6 +349,7 @@ function StringPrototypePadEnd(this: Value, maxLength: Value, fillString?: Value
 /**
  * String.prototype.padStart ( maxLength [ , fillString ] ), 22.1.3.17.
  * @builtin String.prototype.padStart
+ * @fast
  */
 function StringPrototypePadStart(this: Value, maxLength: Value, fillString?: Value): Str {
   return StringPad(ThisToString(this), maxLength, fillString, true);

@@ -1,0 +1,46 @@
+ell ell he rld hello world lo llo h
+["hello world","hel","lo world","",""," wőrld 😀"]
+ell valueOf 1;valueOf 4
+substring symbol -> TypeError: cannot convert symbol to number
+substring symbol end -> TypeError: cannot convert symbol to number
+substring null this -> TypeError: null or undefined are forbidden
+23 rue
+["h","d",null,null,"e","l","h","h","h","\ude00","\ud83d",null]
+o valueOf 4
+at symbol -> TypeError: cannot convert symbol to number
+at undefined this -> TypeError: null or undefined are forbidden
+["ababab","","","xx","xxx","","",40,""]
+abab valueOf 2
+repeat -1 -> RangeError: invalid repeat count
+repeat Infinity -> RangeError: invalid repeat count
+repeat huge -> RangeError
+repeat symbol -> TypeError: cannot convert symbol to number
+repeat null this -> TypeError: null or undefined are forbidden
+["000042","xaba","abc","abc   ","a","a  ","ééő","005","5nul"]
+["x","x","x--","x121","1231231abc","héllo wőrld 😀\ud83d\ud83d\ud83d\ud83d\ud83d\ud83d"]
+100001 ababa abx 9000 ő  ééa 70000 y | őz
+001 1 valueOf 3;toString 0;valueOf 1
+padEnd huge -> RangeError: invalid string length
+padStart Infinity -> RangeError: invalid string length
+padStart Infinity empty filler -> "x"
+padStart symbol filler -> TypeError: cannot convert symbol to string
+padStart symbol filler unused -> "xxxxx"
+padEnd symbol length -> TypeError: cannot convert symbol to number
+padEnd undefined this -> TypeError: null or undefined are forbidden
+true false true false false false true true false
+false false false false false false 3
+patched
+e
+["","42","0","1e+21","null","undefined","true","x","12"]
+Symbol(d) 7 object 1 0 "ab"
+new String symbol -> TypeError: cannot convert symbol to string
+3 true true
+3 4
+["1.00","13","0.000","0.0","-2","1e+21","NaN","1.4","123",102]
+3.14 valueOf 2
+toFixed 101 -> RangeError: invalid number of digits
+toFixed -1 -> RangeError: invalid number of digits
+toFixed symbol -> TypeError: cannot convert symbol to number
+toFixed on string -> TypeError: not a number
+2.5
+=== completed

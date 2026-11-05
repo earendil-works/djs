@@ -64,6 +64,7 @@ function NumberPrototypeValueOf(this: Value): f64 {
 /**
  * Number.prototype.toFixed ( fractionDigits ), 21.1.3.3.
  * @builtin Number.prototype.toFixed
+ * @fast
  */
 function NumberPrototypeToFixed(this: Value, fractionDigits: Value): Str {
   const x: f64 = ThisNumberValue(this);
@@ -111,6 +112,7 @@ function NumberIsFinite(number: Value): boolean {
 /**
  * Number.isInteger ( number ), 21.1.2.3.
  * @builtin Number.isInteger
+ * @fast
  */
 function NumberIsInteger(number: Value): boolean {
   if (!IsNumber(number)) {

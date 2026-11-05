@@ -19,7 +19,7 @@ records; [the last section](#every-recorded-measurement) lists them all.
   failures are listed with reasons in `tests/test262/expected-failures.txt`; dquickts'
   qjs fails 4 active tests under the same runner.
 - The differential corpus (codemode scripts, console and result formatting, error
-  messages, TypeScript, dquickts' own tests): **622 of 633** cases match qjs; 6 known
+  messages, TypeScript, dquickts' own tests): **623 of 634** cases match qjs; 6 known
   failures (`tests/corpus/expected-failures.txt`) and 5 skipped as non-goals.
 <!-- /gen -->
 
@@ -73,9 +73,9 @@ shipped build with the dumper, 1,835 KB (754 KB gzip). Module sizes measured at
 | intrinsics ([reference](ref-intrinsics.md)) | 454 |
 | builtins in `builtins/*.ts` | 455 |
 | of them `@native` (also compiled to Rust) | 8 |
-| of them `@fast` (a Rust leaf entry) | 20 |
-| difftest corpus cases | 633 |
-| base snapshot, bytes | 188,584 |
+| of them `@fast` (a Rust leaf entry) | 28 |
+| difftest corpus cases | 634 |
+| base snapshot, bytes | 188,576 |
 <!-- /gen -->
 
 ## Every recorded measurement
