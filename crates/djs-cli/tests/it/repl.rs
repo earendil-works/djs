@@ -479,7 +479,7 @@ fn dump_a_waiting_session() {
             "a fresh VM",
             &format!("loaded {dump} into a fresh VM"),
             "waiting: #2 tools.read({\"path\":\"a\"})",
-            &format!("  async function <anonymous> at {dump}:7:11"),
+            &format!("  async function <anonymous> at {dump}:5:11"),
             "      const v = await $djs.resume(2, \"tools.read\", [{ path: \"a\" }], {\"origin\":\"input 2\",\"made\":[\"tools.read\"]});",
             "                ^",
             // (`p` is dead after the await: the continuation leaves it out, D2911.)
