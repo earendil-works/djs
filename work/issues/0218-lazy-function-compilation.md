@@ -1,7 +1,7 @@
 # 0218: Lazy function compilation: compile a function's body on its first call
 
-status: open
-agent: -
+status: in-progress
+agent: lazy
 branch: issue/0218-lazy-function-compilation
 depends-on: -
 guide: compiler.md (and any page describing when code is compiled)
@@ -32,6 +32,16 @@ Then implement in batched merges behind the gate, with test262 and the difftest 
 net. Coordinate with pjr (0215) who measures load, and pjs (0207) who changes dump text.
 
 ## Log
+
+- 2026-11-06 (lazy): design in work/research/0218/README.md, sent to the coordinator
+  before building. Profiled `compile` (typescript.js: parse 38%, `resolve::finish` 60%)
+  and prototyped deferring phase 2 for lazy-eligible functions (patch in
+  work/scratch/0218/proto.patch, reverted): typescript.js -40%, golden dumps -26%, dump
+  runtime -35%, codemode harvest -10%. Proposal: full parse at load (all early errors),
+  lazy template + `lazy` trampoline op, re-parse of the span on first call with a
+  synthetic outer for captures, pools split along lazy roots so eager and lazy code are
+  identical (maps), cargo feature `lazy` on in native/dump builds and off in main/slim
+  (size). Waiting for the coordinator's go.
 
 ## Follow-ups
 
