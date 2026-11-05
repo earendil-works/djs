@@ -4,7 +4,11 @@
 //! as the model sees it, or `completed`), which every run is checked against.
 //!
 //! A sample is one whole run (process start included for qjs). `empty.js` measures that
-//! overhead; the other scripts report their time minus its median.
+//! overhead; the other scripts report their time minus its median. For djs that is a new
+//! VM plus running the shared prelude (tests/corpus/prelude.js) in every job, as
+//! djs-difftest does since 0044 (about 0.13 ms; a bare VM from the base image is
+//! `startup/vm_new from base`, a few µs): records of 0.005 ms before that measured a VM
+//! without the prelude (0224).
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};

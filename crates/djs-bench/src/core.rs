@@ -524,12 +524,22 @@ pub fn gc(r: &mut Runner) {
     }
 }
 
+/// A full collection of the fixed workload `name` built: `{name} collection` in ms, the
+/// number to compare across versions, and `{name} per MiB live` from the same samples.
+/// The per-MiB value alone misleads when cells get smaller: the same objects in fewer
+/// bytes collect in about the same time, so it rose by 60% while collections got faster
+/// (0224).
 fn collect_bench(r: &mut Runner, name: &str, h: &mut Heap) {
     h.collect().unwrap();
     let mib = h.arena().len() as f64 / (1 << 20) as f64;
-    r.time(&format!("{name} per MiB live"), Unit::MsPerMiB, mib, || {
-        h.collect().unwrap();
-    });
+    let per_mib = format!("{name} per MiB live");
+    r.time_and_per(
+        &format!("{name} collection"),
+        (&per_mib, Unit::MsPerMiB, mib),
+        || {
+            h.collect().unwrap();
+        },
+    );
 }
 
 // ---- wire ----------------------------------------------------------------------------------

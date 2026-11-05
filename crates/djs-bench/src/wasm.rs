@@ -4,7 +4,9 @@
 //! - `wasm/decode` and `wasm/parse_json`: wire and JSON into a fresh VM;
 //! - `wasm/readValue` and `wasm/json_stringify`: the two ways out;
 //! - `wasm/instantiate`, `wasm/vm_new` (from the base snapshot) and `wasm/vm_new compiling
-//!   the prelude`: startup.
+//!   the prelude`: startup. This module is built with `compiled-prelude`, whose data
+//!   segment (what building the realm needs) dominates its instantiation;
+//!   `wasm/instantiate shipped` is the shipped module's (0224).
 //!
 //! Skipped without node or the wasm32 target, and in quick mode.
 
@@ -45,6 +47,19 @@ pub fn wasm(r: &mut Runner) {
             "building djs-wasm failed (wasm32 target installed?)",
         );
     }
+    // The shipped module (default features), for `wasm/instantiate shipped`: the same
+    // build as the size group's `size/djs-wasm`, in its target directory.
+    let size_dir = root.join("target/bench-size");
+    let shipped = Command::new(env!("CARGO"))
+        .current_dir(&root)
+        .envs(crate::size::shipped_env())
+        .args(["build", "--quiet", "-p", "djs-wasm"])
+        .args(["--target", "wasm32-unknown-unknown", "--profile", "wasm"])
+        .arg("--target-dir")
+        .arg(&size_dir)
+        .status();
+    let shipped = matches!(shipped, Ok(s) if s.success())
+        .then(|| size_dir.join("wasm32-unknown-unknown/wasm/djs_wasm.wasm"));
     let data_dir = root.join("target/bench-wasm");
     if let Err(e) = std::fs::create_dir_all(&data_dir) {
         return r.skip("wasm/", format!("{}: {e}", data_dir.display()));
@@ -63,6 +78,7 @@ pub fn wasm(r: &mut Runner) {
             "DJS_WASM",
             target_dir.join("wasm32-unknown-unknown/wasm/djs_wasm.wasm"),
         )
+        .envs(shipped.map(|p| ("DJS_WASM_SHIPPED", p)))
         .output();
     let out = match out {
         Ok(o) if o.status.success() => o,

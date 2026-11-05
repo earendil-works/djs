@@ -102,6 +102,15 @@ const row = (name: string, ms: number) => rows.push(`wasm/${name}\t${ms.toFixed(
   };
   const module = new WebAssembly.Module(bytes);
   rows.push(`wasm/instantiate\t${ns(() => new WebAssembly.Instance(module, {})).toFixed(0)}\tns/op`);
+  // The module above carries what building the realm from scratch needs (the
+  // compiled-prelude feature, for `vm_new compiling the prelude`), several times the
+  // shipped module's data segment, and instantiation copies the data: the shipped
+  // module's number is the one hosts pay (0224).
+  const shipped = process.env.DJS_WASM_SHIPPED;
+  if (shipped) {
+    const m = new WebAssembly.Module(readFileSync(shipped));
+    rows.push(`wasm/instantiate shipped\t${ns(() => new WebAssembly.Instance(m, {})).toFixed(0)}\tns/op`);
+  }
   // Batches of 100: one copy of the base is close to the timer's resolution.
   const vmNew = ns(() => {
     for (let i = 0; i < 100; i++) x.vm_free(x.vm_new(0));

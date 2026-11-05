@@ -202,6 +202,32 @@ impl Runner {
         }
     }
 
+    /// Times `f` per call as `name` (ms), and reports the same samples divided by
+    /// `per` as `per_name` in `per_unit` (the GC's time per MiB live). Runs if either
+    /// name passes the filters; reports only those that do.
+    pub fn time_and_per(
+        &mut self,
+        name: &str,
+        (per_name, per_unit, per): (&str, Unit, f64),
+        f: impl FnMut(),
+    ) {
+        let (whole, part) = (self.wants(name), self.wants(per_name));
+        if !whole && !part {
+            return;
+        }
+        let Some(samples) = self.sample_always(|| {}, f) else {
+            return;
+        };
+        let ms = |d: Duration| d.as_secs_f64() * 1e3;
+        let (value, best, n) = (ms(median(&samples)), ms(samples[0]), samples.len());
+        if whole {
+            self.push(name, Unit::Ms, value, best, n);
+        }
+        if part {
+            self.push(per_name, per_unit, value / per, best / per, n);
+        }
+    }
+
     /// Records a value that is not a timing (sizes), or a timing measured elsewhere.
     pub fn value(&mut self, name: &str, unit: Unit, value: f64) {
         if self.wants(name) {
@@ -253,15 +279,15 @@ impl Runner {
     }
 
     /// Warmup, then samples until the budget is used; sorted ascending.
-    fn sample(
-        &self,
-        name: &str,
-        mut setup: impl FnMut(),
-        mut f: impl FnMut(),
-    ) -> Option<Vec<Duration>> {
+    fn sample(&self, name: &str, setup: impl FnMut(), f: impl FnMut()) -> Option<Vec<Duration>> {
         if !self.wants(name) {
             return None;
         }
+        self.sample_always(setup, f)
+    }
+
+    /// `sample` without the filter check.
+    fn sample_always(&self, mut setup: impl FnMut(), mut f: impl FnMut()) -> Option<Vec<Duration>> {
         if !self.config.quick {
             // Warm caches and the allocator: at least two calls or 100 ms.
             let t = Instant::now();
