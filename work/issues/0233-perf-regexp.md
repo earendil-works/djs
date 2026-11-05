@@ -19,6 +19,55 @@ Constraints: exact semantics (test262 and the difftest stay green); measure in w
 
 ## Log
 
+Measuring: work/scratch/0233/m.py runs synthetic workloads like benchpage's ops (w/*.js from
+gen.py: 4000 lines of source-like text, 200 prose paragraphs) in the perf wasm build (unsafe
+heap, as shipped) and in Bellard QuickJS 2026-06-04 (vendor/engines), and reports node's
+instructions as the slope between 1 and 4 repetitions (V8's tier-up and setup cancel out;
+single counts carried 300-500 M of fixed cost). Minstr per repetition, base = 8f2f839f:
+
+| workload | base | QuickJS |
+| --- | ---: | ---: |
+| replace /\s+/g | 916 | 372 |
+| exec /^([^:]+):(\d+):(.*)$/ per line | 726 | 397 |
+| matchAll /^export .../gm | 386 | 248 |
+| test /\b(TODO\|FIXME)\b/ per line | 390 | 371 |
+| new RegExp('report\|metric'+i, 'i') | 264 | 96 |
+| match /function \w+/g | 246 | 241 |
+
+Root causes found (profiles: node --cpu-prof of the wasm module, samply natively):
+- Every exec copied the program out of its cell (an allocation) and allocated slots, slot
+  generations, a 64-word stack and the captures: 5 allocations per exec, per match in a
+  global replace.
+- The search was bytecode around the pattern (`SPLIT_GOTO; ANY; GOTO`, a `SCAN`): every
+  attempt pushed a frame, so every capture write was logged and undone. A pattern starting
+  with `^` (no `m`) was tried at every position of a line that failed (the exec workload: the
+  lines without a colon), a multiline one at every first character of the text.
+- A loop at the end of a pattern (`\s+`) left a backtrack frame per match.
+- replace built UTF-16 per unit and narrowed it at the end; its output grew by doubling.
+- compile: first_chars allocated a set per character and a union per element; the parser's
+  term vectors grew from empty; rope patterns were read unit by unit through the chunk
+  iterator; RegExpConstructor ran IsRegExp, GetPrototypeFromConstructor and ToStrings for
+  string arguments.
+- exec/test/matchAll's next looked up `exec` and `lastIndex` through Get (atoms interned per
+  call); matchAll recompiled its regexp (Construct) and called the 8 flag getters twice.
+
+Done so far (commits on the branch):
+- D3135: the search is the matcher's (PC_FIND): attempts on an empty stack, first set with a
+  Latin-1 bitmap, `^` anchors (input start: one attempt; line starts: skips to the next line
+  terminator), the leading STAR's skip; programs read in place (`Prog`, byte quads of the
+  cell); one `ExecState` (slots, generations and stack in one Vec) reused across the matches of
+  replace and split; `F_LAST` STAR without frame; replace output one byte per unit when it can
+  be, sized to the input. Fuel stays additive (tests `search_fuel_is_additive`,
+  `searches_need_no_stack`, `anchored_patterns_start_where_they_can`).
+- Compile: first set accumulated in one set, parser vectors sized from the source, literal
+  fast path, names resolved only with named groups, pattern units from the flat string.
+- D3136: RegExpCreate(proto, regexp, flags) shares the program when the flags match (matchAll,
+  `new RegExp(re)`); the flags getter returns [[OriginalFlags]] for a pristine RegExp;
+  matchAll's pristine path skips SpeciesConstructor and Construct; RegExp(string, string)
+  skips the unobservable steps.
+- D3137: `%RegExpExecOwn` runs exec/test/RegExpExec when `exec` is the original data
+  property and lastIndex an own Number, else declines (undefined).
+
 ## Follow-ups
 
 ## Result
