@@ -31,6 +31,17 @@ Constraints: 0224 (perf regressions) runs at the same time; size cuts must not c
 numbers and the coordinator's OK (wasm instruction counts per workload as in 0223). Batched merges.
 
 ## Log
+- Accounting and history in work/research/0225/README.md: code 336.9 KB gz, data 56.6
+  (Unicode 32.3), coded base 45.7. No net growth since 0161 (+2.2 code, −1.5 base);
+  never within budget (510 KB at 0122). Ranked list sent to the coordinator; decisions:
+  #1 build-std approved, #5 go, #4 prototype + instantiate numbers first, #2 after 0224,
+  #3 to the owner, #6 cheap ones after #1/#5.
+- Batch 1: D3090 (build-std core/alloc, `-Cpanic=immediate-abort`,
+  `-Zshare-generics=no`; −10.8 KB gz, instructions −3.1..+2.3%; trap.ts says "engine
+  panic"; AGENTS.md, README requirements, docs.yml rust-src, guide host.md) and D3091
+  (intrinsic run-time tables, −0.8 KB). Shipped 442,576 → 430,963; slim 377.2 → 365.3;
+  dump module 784.7 → 762.8. Ceilings lowered; status sizes re-recorded. Guide pages:
+  host.md prose (panics); generated numbers in README, host.md, dumps.md, status.md.
 
 ## Follow-ups
 
