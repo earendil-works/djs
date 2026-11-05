@@ -1,6 +1,6 @@
 # 0233: Performance: regexp exec/replace/matchAll and compile
 
-status: in-progress
+status: done
 agent: pre
 branch: issue/0233-perf-regexp
 depends-on: -
@@ -68,6 +68,46 @@ Done so far (commits on the branch):
 - D3137: `%RegExpExecOwn` runs exec/test/RegExpExec when `exec` is the original data
   property and lastIndex an own Number, else declines (undefined).
 
+Later (same log):
+- D3138: the compile cache (coordinator-approved): 8 entries in `Intrinsic::RegExpCache`,
+  exact (source, flags) equality on flat strings, sources up to 256 units and programs up to
+  1024 words: at most ~36 KiB alive, typically 3-4 KiB. Plain-dump fuzzer regress: clean
+  without --lazy; with --lazy one finding (seed 342347, "TypeError: not an object" at plain
+  load), which main's difftest binary reproduces identically: not this branch.
+- Escaped `source` returns the source itself when nothing needs escaping.
+- Allocation ceilings in tests/allocs.rs lowered to today's counts (7, 22, 30, 32, 5, 15).
+- Tests: regexp unit tests for the search (stackless attempts, anchors, fuel additivity over
+  Latin-1/UTF-16/code points/line starts), corpus case builtins/regexp-cache-and-own-exec
+  (cache hits and misses, shared programs with other flags, matchAll's copies, own and
+  prototype exec, lastIndex objects, frozen RegExps, line terminators, one- and two-byte
+  replace). test262 built-ins/RegExp and String/prototype: 2918/2918; difftest builtins and
+  codemode with --suspend-every 7 --gc-stress --determinism: clean; e2e plain and dump.
+- Size (D3139): +2,210 gzip shipped, +2,128 slim; ceilings raised by that (approved).
+- Guide: no page describes the matcher's internals or these fast paths; continuations.md,
+  suspension.md, limits.md still read true. No guide change.
+
 ## Follow-ups
+- Compiling distinct patterns is still ~2x QuickJS: parse builds a tree (a node per
+  character, dropped right after); literal runs as one node, or emitting without a tree, is
+  the next step.
+- Plain-dump fuzz --lazy finding, seed 342347 (pre-existing on main).
+- benchpage's ops.ts could not be read at load 90-190 (zeros, inverted ratios); rerun it
+  quiet for the record.
 
 ## Result
+Final, wasm instructions per repetition (m.py, slope of 1 vs 4 reps, n = 5; QuickJS =
+Bellard 2026-06-04 wasm), base 8f2f839f -> branch:
+
+| workload | base | branch | QuickJS | djs/QuickJS before -> after |
+| --- | ---: | ---: | ---: | --- |
+| replace /\s+/g | 895 | 424 | 370 | 2.42 -> 1.14 |
+| exec /^([^:]+):(\d+):(.*)$/ per line | 734 | 318 | 408 | 1.80 -> 0.78 |
+| matchAll /^export .../gm | 382 | 236 | 245 | 1.56 -> 0.97 |
+| test /\b(TODO\|FIXME)\b/ per line | 399 | 222 | 385 | 1.04 -> 0.58 |
+| new RegExp('report\|metric'+i, 'i') (distinct) | 261 | 199 | 100 | 2.62 -> 2.00 |
+| new RegExp('report\|metric', 'i') (repeated) | 201 | 83 | 70 | 2.87 -> 1.19 |
+| match /function \w+/g | 235 | 123 | 244 | 0.96 -> 0.50 |
+
+wmeasure (whole runs, Minstr): regexp-compile 4,239 -> 2,179 (-49%), pi-like 5,096 -> 4,969,
+strings 1,979 -> 1,953, loop unchanged. Decisions D3135-D3139. Size +2,210 gzip (D3139).
+Known gaps: distinct-pattern compile 2x and replace 1.1x QuickJS (see Follow-ups).
