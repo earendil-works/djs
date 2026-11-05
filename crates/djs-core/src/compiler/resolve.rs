@@ -295,7 +295,8 @@ fn lazy_roots(
                 FuncKind::Normal | FuncKind::Arrow | FuncKind::Method | FuncKind::Getter | FuncKind::Setter
             )
             // Called where it is defined, as far as the parent's text shows.
-            && (f.call_end == 0 || f.call_end > funcs[p as usize].src_end);
+            && (f.call_end == 0 || f.call_end > funcs[p as usize].src_end)
+            && !f.is_async && !f.is_generator;
     }
     // Names resolved through TypeScript declarations (const enums, namespace members)
     // need the unit's declarations: such a function and all around it stay eager.

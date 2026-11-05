@@ -120,6 +120,7 @@ pub(super) struct Flight<'a> {
     /// built at the first need.
     lazy: Option<LazyIndex>,
     /// Scripts the VM's cache has no entry for (`recorded_globals`).
+    #[cfg_attr(not(feature = "lazy"), allow(dead_code))]
     uncached: Vec<u32>,
     /// Promises in the order the dump made them: the end writes their other reactions.
     made: Vec<usize>,
@@ -409,10 +410,13 @@ impl Dumper<'_> {
         let (src, params, bits) = script_inputs(h, script);
         let Some(src) = src else { return };
         let root = self.lazy_index().root(script, a, b);
+        #[cfg(feature = "lazy")]
         let more = root.and_then(|t| {
             let heap = self.scratch_heap()?;
             crate::compiler::lazy_function_maps(h, Ref(t), heap).ok()
         });
+        #[cfg(not(feature = "lazy"))]
+        let more: Option<Vec<FunctionMap>> = root.and(None);
         let (maps, partial) = match more {
             Some(more) => {
                 let mut all: Vec<FunctionMap> =
@@ -455,6 +459,7 @@ impl Dumper<'_> {
 
     /// The globals a lazy load recorded for the lazy function at `a..b` of `script`
     /// (D2993), if the VM's cache has that script's entry (looked up once per script).
+    #[cfg(feature = "lazy")]
     pub(super) fn recorded_globals(&mut self, script: u32, a: u32, b: u32) -> Option<Vec<String>> {
         let i = match self.fl.maps.iter().position(|m| m.0 == script) {
             Some(i) => i,

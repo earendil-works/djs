@@ -338,12 +338,13 @@ impl Vm {
     pub fn dump_runtime_from(&mut self, script: &str) -> Result<Value, String> {
         // (Plain messages: formatting the errors' Debug would pull their code into the
         // shipped module, and the runtime is fixed text that fails only without memory.)
-        let f = self
-            .compile(
-                script.as_bytes(),
-                &crate::compiler::CompileOptions::script("djs-dump-runtime.js"),
-            )
+        // Eager even in a lazy VM (D2995): a host passes the helpers its dump names, and
+        // the load calls them.
+        let fail = |_| String::from("the dump runtime does not compile");
+        let opts = crate::compiler::CompileOptions::script("djs-dump-runtime.js");
+        let t = crate::compiler::compile(&mut self.heap, script.as_bytes(), &opts)
             .map_err(|_| String::from("the dump runtime does not compile"))?;
+        let f = self.instantiate(t).map_err(fail)?;
         let this = Value::object(self.global());
         self.call(f, this, &[])
             .map_err(|_| String::from("the dump runtime: the VM is busy"))?;

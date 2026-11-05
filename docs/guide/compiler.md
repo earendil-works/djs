@@ -327,9 +327,11 @@ the dump module does so for every VM (D2993).
 The unit is still parsed whole: every early error is reported when the script loads,
 and name resolution still sees every function, so it knows which bindings inner
 functions capture and the enclosing code is unchanged. Only the second half, the re-emit
-and the template, is skipped for a function that is not called where it is defined.
-That function gets a *lazy template*: its real flags, name, length and capture
-descriptors, and the single instruction `lazy` as its code. Creating closures, `name`,
+and the template, is skipped for a function that will probably not run soon. Functions
+that stay eager: one called where it is defined, a call's argument (`items.map(x =>
+x.id)`), a parenthesized one, and async functions and generators, whose suspension maps a
+dump needs anyway (D2995). Any other function gets a *lazy template*: its real flags,
+name, length and capture descriptors, and the single instruction `lazy` as its code. Creating closures, `name`,
 `length` and `toString` work on it as on any template.
 
 The first call enters the frame as usual and runs `lazy`. It parses the function's own
@@ -384,7 +386,7 @@ REPL (D004, D1581).
 
 Decisions on this page:
 
-<!-- gen:decisions D1080 D1360 D1081 D1083 D1082 D1130 D1131 D1860 D1620 D1480 D1481 D1482 D008 D1582 D2443 D2444 D2446 D2990 D2991 D2993 -->
+<!-- gen:decisions D1080 D1360 D1081 D1083 D1082 D1130 D1131 D1860 D1620 D1480 D1481 D1482 D008 D1582 D2443 D2444 D2446 D2990 D2991 D2993 D2995 -->
 - D1080: Speculative parsing never emits bytecode
 - D1360: destructuring patterns are parsed after their value (deferred patterns)
 - D1081: Name resolution runs once per compilation unit, children first
@@ -405,4 +407,5 @@ Decisions on this page:
 - D2990: Lazy function compilation, a `lazy` feature on in native and dump builds
 - D2991: Eager and lazy compiles give a function the same code
 - D2993: The dump module compiles lazily; the dumper reads lazy templates
+- D2995: Functions that run at once stay eager: call arguments, parenthesized, async
 <!-- /gen -->

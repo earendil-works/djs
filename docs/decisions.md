@@ -10256,3 +10256,34 @@ The dump module carries the tables (+26 KB raw, about 1,600 builtins) and no lon
 the host for the base, so `vm_dump` returns only 0 or 1. The output is byte-identical over
 the corpus. Corpus re-dump (a loaded VM's first dump) 19.2k -> 11.6k M instructions. In
 wasm, in pi's adapter, a dump is ~1.24 -> ~0.3 ms at the median.
+
+## D2994: A lazy VM loads a plain dump lazily; maps of other functions on demand
+date: 2026-11-06 · by: lazy · issue: 0218
+`Vm::compile` of a plain dump in a lazy VM compiles it lazily and keeps the suspension maps
+of the code the load compiled (`compiler::compile_lazy_with_maps`, every map, those without
+sites too) as a partial entry of the VM's dump cache, with the globals of each lazy
+function (D2993). When a dump needs the map of a function the entry lacks (an activation's
+function compiled at a first call, an origin that never ran, the function that evaluated a
+class's computed keys), `Dumper::script_maps` finds the innermost lazy template around it
+(`LazyIndex`, one walk of the heap per dump) and compiles that function alone with
+recording, every function inside it eager (`compiler::lazy_function_maps`); by D2991 the
+maps equal an eager compile's (`vm::lazy_tests::lazy_maps_are_eager_maps` checks it over
+the corpus and the golden dumps). Without such a template it compiles the whole script
+again, as before. A lazily compiled codemode script keeps an entry too (globals only, no
+maps). Measured (native, instructions, `scripts/dump-costs/instructions.sh`, with D2995):
+corpus load 9,465 -> 8,420 M, re-dump 14,394 -> 14,572 M (load + re-dump -3.6%); records,
+log-5mb and binary within 1%; pi's sessions (wasm, `pi-sessions.ts`) load and dump about
+4-5% faster.
+
+## D2995: Functions that run at once stay eager: call arguments, parenthesized, async
+date: 2026-11-06 · by: lazy · issue: 0218
+A lazy function that runs is parsed twice. Besides IIFEs (D2990), a function expression
+or arrow that is a call's argument (`items.map(x => x.id)`) or parenthesized (`(function
+() {})`, the convention other engines use for "runs soon") stays eager, and so does every
+async function and generator: in dumps those are the continuations and origins whose
+suspension maps a re-dump needs anyway, so compiling them lazily only moved their compile
+(and doubled it for continuations). The rules look at the function and its parent's text
+only (D2991). The dump runtime compiles eagerly in a lazy VM: a host passes the helpers its
+dump names, and the load calls them. With these the corpus's codemode runs cost 4% more
+instructions lazily than eagerly (42% without the argument rule), and typescript.js still
+compiles in about half the time.

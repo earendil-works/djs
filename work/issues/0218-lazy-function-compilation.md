@@ -77,12 +77,25 @@ net. Coordinate with pjr (0215) who measures load, and pjs (0207) who changes du
   `--lazy`. Checked: corpus plain dumps lazy = eager (only clock values differ), plain-node
   on the lazy dumps, native-vs-wasm images, js tests, `scripts/pi-dump-every-idle.sh` on
   the release dump module (0 new failures), test262 both modes.
+- 2026-11-06 (lazy): batch 2 merged (main 76623ae8). Batch 3 (coordinator: pjr/pjs stay
+  out of `Vm::compile`, `dump_cache`, `script_maps`, map lookups): lazy plain-dump loads with
+  the load's maps as a partial cache entry, others on demand (`compile_lazy_with_maps`,
+  `lazy_function_maps`, `LazyIndex`, `Dumper::creator_maps`), D2994; globals of lazy
+  functions recorded at every lazy compile (`compile_lazy_with_globals`, `LazyGlobals`),
+  the dumper's per-function compile only as a fallback; eager rules for call arguments,
+  parenthesized functions, async functions and generators, eager dump runtime, D2995.
+  `vm::lazy_tests::lazy_maps_are_eager_maps` (1.4k maps). Corpus plain dumps lazy = eager
+  (text identical but clock values), plain-node OK, pi-dump-every-idle OK, test262 both.
+  Numbers in work/research/0218/README.md "Batch 3 results": corpus load + re-dump -3.6%,
+  pi load/dump -4/-5%, records/log/binary within noise.
 
 ## Follow-ups
 
 - Eval code and `new Function` still compile eagerly (builtins/eval.rs has only the heap;
   it would need the VM's option).
-- Batch 3 (with pjr, pjs, through the coordinator): lazy plain-dump loads, maps on demand.
+- Continuations in plain dumps are function expressions assigned and called later
+  (`$dump.Ka5 = async function …; $dump.Ka5.call(…)`); async keeps them eager now, but a
+  sync continuation or callback the writer parenthesized would be eager by D2995 (pjs).
 - Batch 4: small-function threshold, `fclosure` taking the compiled template, phase-1
   emission off inside lazy subtrees.
 - The decisions index (docs/decisions-index.md) needs D2990/D2991 (coordinator).

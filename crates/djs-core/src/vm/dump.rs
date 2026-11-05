@@ -833,6 +833,7 @@ struct Dumper<'a> {
     /// Lazy templates that never ran (D2993): the globals of each, and the heap they
     /// compile into.
     lazy_globals: alloc::collections::BTreeMap<u32, Rc<Vec<String>>>,
+    #[cfg_attr(not(feature = "lazy"), allow(dead_code))]
     lazy_heap: Option<Heap>,
     /// Plain dumps: the text written for a class whose static code is blanked
     /// (dump_statics.rs), by the class's text.
@@ -4714,6 +4715,7 @@ impl Cache {
     /// [`Dumper::maps_of`]'s order: the most recent last.
     /// The globals of the lazy functions of a script the VM compiled lazily (D2993), with
     /// no maps yet: a dump compiles them when it needs them (a partial set, D2994).
+    #[cfg(feature = "lazy")]
     pub(super) fn keep_globals(
         &mut self,
         bits: u32,

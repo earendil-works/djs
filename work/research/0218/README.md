@@ -263,3 +263,31 @@ it in main later, it is a recorded size trade.
 - The dumper (batch 2) is the largest consumer of template internals; lazy stays off by
   default until it is adapted.
 - Size: off in main/slim; a later wish for main is a size trade.
+
+## Batch 3 results (lazy plain-dump loads, D2994, D2995)
+
+Native instructions (`scripts/dump-costs/instructions.sh`, M, eager = main 00265366 + this
+branch without `DJS_LAZY`):
+
+| | dump | load | re-dump | load + re-dump |
+| --- | ---: | ---: | ---: | ---: |
+| corpus eager | 13,994 | 9,465 | 14,394 | 23,859 |
+| corpus lazy, first version | 15,687 | 8,052 | 23,288 | 31,340 |
+| corpus lazy (recorded globals, D2995 rules) | 13,905 | 8,420 | 14,572 | 22,992 (-3.6%) |
+| records eager / lazy | 6,602 / 6,599 | 4,415 / 4,427 | 7,179 / 7,153 | 0% |
+| log-5mb eager / lazy (before D2995's async rule) | 2,300 / 2,311 | 797 / 796 | 2,147 / 2,133 | 0% |
+| binary eager / lazy (same) | 268 / 266 | 163 / 158 | 340 / 327 | -3% |
+
+What the first version paid for: the dumper compiled every never-run function it met to
+read its globals (now recorded at the compile, D2993), and continuations and origins were
+lazy, so their maps were compiled at the re-dump (and continuations twice). Async
+functions and generators are now eager (D2995).
+
+pi (wasm, release dump module, `pi-sessions.ts` N=300 with pi-phases.patch, six
+alternating runs, load 8-12; medians of the five runs after the first): loadPlain
+186 -> 179 µs, resumeSession 291 -> 282 µs, dumpSession 218 -> 208 µs; l.compile and
+l.runtime unchanged within noise, l.run 44 -> 30 µs. pi-size dumps (~330 B) have little
+for lazy compilation to skip: their functions are continuations and origins.
+
+The dump runtime: a host passes only the helpers its dump names (`scriptFor`), and the
+load calls them all, so it compiles eagerly even in a lazy VM.
