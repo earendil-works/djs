@@ -213,6 +213,7 @@ fn source_function(vm: &mut Vm, name: &str, hash: &str, params: &str) -> Result<
             typescript,
             experimental_decorators: legacy,
             emit_decorator_metadata: meta,
+            debugger_awaits: false,
             ..CompileOptions::async_body(name, &params)
         };
         match vm.source_function(&src, &opts, hash) {

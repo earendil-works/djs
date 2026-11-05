@@ -320,6 +320,7 @@ impl Session {
             typescript: job.ts,
             experimental_decorators: job.legacy_decorators,
             emit_decorator_metadata: job.decorator_metadata,
+            debugger_awaits: false,
             ..CompileOptions::script(name)
         };
         self.case = Some((src.clone(), copts));

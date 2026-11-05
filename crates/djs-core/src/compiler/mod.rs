@@ -97,6 +97,11 @@ pub struct CompileOptions<'a> {
     /// With `experimental_decorators`: `emitDecoratorMetadata`, the `design:type`,
     /// `design:paramtypes` and `design:returntype` metadata (compiler/ts_meta.rs).
     pub emit_decorator_metadata: bool,
+    /// `debugger;` in an async function awaits a call of the global `debugger` (D3050):
+    /// a host that binds an async function there makes the statement a suspension point,
+    /// where the run can be dumped. Only builds with the `dump` feature compile it so;
+    /// elsewhere, and outside async functions, `debugger` does nothing.
+    pub debugger_awaits: bool,
 }
 
 impl<'a> CompileOptions<'a> {
@@ -109,6 +114,7 @@ impl<'a> CompileOptions<'a> {
             typescript: false,
             experimental_decorators: false,
             emit_decorator_metadata: false,
+            debugger_awaits: false,
         }
     }
 
@@ -129,6 +135,7 @@ impl<'a> CompileOptions<'a> {
             typescript: false,
             experimental_decorators: false,
             emit_decorator_metadata: false,
+            debugger_awaits: false,
         }
     }
 
@@ -149,6 +156,7 @@ impl<'a> CompileOptions<'a> {
             | u32::from(self.experimental_decorators) << 3
             | u32::from(self.emit_decorator_metadata) << 4
             | u32::from(self.privileged) << 5
+            | u32::from(self.debugger_awaits) << 6
     }
 
     /// `script` with the options of [`CompileOptions::bits`] `bits` (privileged code
@@ -167,6 +175,7 @@ impl<'a> CompileOptions<'a> {
             typescript: bits & 1 << 2 != 0,
             experimental_decorators: bits & 1 << 3 != 0,
             emit_decorator_metadata: bits & 1 << 4 != 0,
+            debugger_awaits: bits & 1 << 6 != 0,
         }
     }
 

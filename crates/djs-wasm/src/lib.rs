@@ -778,8 +778,9 @@ pub extern "C" fn vm_seal(vm: u32) -> i32 {
 /// Compiles staging[params_len..params_len + src_len] (UTF-8 source). `goal` 0 is a
 /// Script; 1 is a codemode async function body whose parameter names are
 /// staging[0..params_len], separated by `\n`. `goal | 2` parses TypeScript (0048), `| 4`
-/// with legacy `experimentalDecorators`, `| 8` also with `emitDecoratorMetadata` (0065).
-/// Returns a handle to the closure, or 0 with the error (`SyntaxError: ... at
+/// with legacy `experimentalDecorators`, `| 8` also with `emitDecoratorMetadata` (0065),
+/// `| 16` compiles `debugger;` in async functions as an await of the global `debugger`
+/// (D3050; the dump module only: elsewhere the bit is ignored). Returns a handle to the closure, or 0 with the error (`SyntaxError: ... at
 /// line:col`) in the out buffer. Stack traces name the code `sandbox.js`;
 /// `vm_compile_file` names it.
 #[unsafe(no_mangle)]
@@ -886,6 +887,8 @@ fn compile_with(
             typescript: goal & 2 != 0,
             experimental_decorators: goal & 12 != 0,
             emit_decorator_metadata: goal & 8 != 0,
+            // Only the dump module compiles `debugger;` as a pause (D3050).
+            debugger_awaits: cfg!(feature = "dump") && goal & 16 != 0,
         };
         #[cfg(feature = "dump")]
         let result = match blob_len {
@@ -951,6 +954,8 @@ pub extern "C" fn djs_disasm(goal: u32, params_len: usize, src_len: usize) -> u3
             typescript: goal & 2 != 0,
             experimental_decorators: goal & 12 != 0,
             emit_decorator_metadata: goal & 8 != 0,
+            // Only the dump module compiles `debugger;` as a pause (D3050).
+            debugger_awaits: cfg!(feature = "dump") && goal & 16 != 0,
         };
         let listing = djs_core::heap::Heap::new()
             .map_err(|e| String::from(e.as_str()))

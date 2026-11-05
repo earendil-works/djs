@@ -213,6 +213,7 @@ pub fn run_source(
         typescript: opts.typescript,
         experimental_decorators: opts.experimental_decorators,
         emit_decorator_metadata: opts.emit_decorator_metadata,
+        debugger_awaits: false,
         ..copts
     };
     let main = match vm.compile(src, &copts) {

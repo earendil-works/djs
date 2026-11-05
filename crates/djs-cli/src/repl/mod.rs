@@ -389,6 +389,7 @@ impl Repl {
             typescript: self.typescript,
             experimental_decorators: self.legacy_decorators,
             emit_decorator_metadata: self.decorator_metadata,
+            debugger_awaits: false,
             ..o
         }
     }

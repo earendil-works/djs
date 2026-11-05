@@ -47,6 +47,17 @@ pub(super) fn run_plain_dump(
     host_fn: &dyn Fn(&str) -> Option<u32>,
     serve: &mut dyn FnMut(&mut Vm, u32, u32),
 ) -> Result<Value, String> {
+    run_plain_dump_with(vm, text, host_fn, serve, false)
+}
+
+/// [`run_plain_dump`], the dump compiled with `debugger_awaits` (D3050) if asked.
+pub(super) fn run_plain_dump_with(
+    vm: &mut Vm,
+    text: &str,
+    host_fn: &dyn Fn(&str) -> Option<u32>,
+    serve: &mut dyn FnMut(&mut Vm, u32, u32),
+    debugger_awaits: bool,
+) -> Result<Value, String> {
     let ts = if text.starts_with("\"djs-dump\";") {
         false
     } else if text.starts_with("\"djs-dump typescript\";") {
@@ -67,6 +78,7 @@ pub(super) fn run_plain_dump(
     vm.define_global("$djs", Value::object(hooks)).unwrap();
     let opts = crate::compiler::CompileOptions {
         typescript: ts,
+        debugger_awaits,
         ..crate::compiler::CompileOptions::script("dump.js")
     };
     let f = vm

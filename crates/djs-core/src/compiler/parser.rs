@@ -143,6 +143,9 @@ pub(super) struct Parser<'a, 'h> {
     pub str_table: Vec<(u32, u32)>,
     /// The TypeScript grammar is on (`CompileOptions::typescript`).
     pub ts: bool,
+    /// `CompileOptions::debugger_awaits` (D3050).
+    #[cfg(feature = "dump")]
+    pub debugger_awaits: bool,
     /// Nesting of TypeScript speculation (compiler/ts.rs): errors inside are cheap and
     /// only mean "not this".
     pub spec: u32,
@@ -354,6 +357,8 @@ impl<'a, 'h> Parser<'a, 'h> {
             str_pool: Vec::new(),
             str_table: Vec::new(),
             ts: opts.typescript,
+            #[cfg(feature = "dump")]
+            debugger_awaits: opts.debugger_awaits,
             spec: 0,
             erased: None,
             class_spans: None,
