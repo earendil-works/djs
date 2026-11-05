@@ -55,56 +55,27 @@ pub fn summary(s: &str) -> Vec<Entry> {
     v
 }
 
-/// Renders the guide's pages and the decision log: (source name, page).
+/// Renders the guide's pages: (source name, page).
 pub fn render_all(g: &mut Guide) -> Vec<(String, Page)> {
     let pages = page_set(g);
     let repo = repo();
     let rev = source_rev(&repo);
     let index = crate::paths::RepoIndex::load(&repo);
     let mut out = Vec::new();
-    let mut all: Vec<(String, &str, bool)> = g
-        .pages
-        .iter()
-        .map(|(k, v)| (k.clone(), v.as_str(), true))
-        .collect();
-    // The log's own preamble addresses contributors (format, append-only); on the site it
-    // gets an introduction for readers instead (D2102).
-    let entries = g
-        .decisions_md
-        .match_indices("\n## D")
-        .find(|(i, _)| g.decisions_md[i + 5..].starts_with(|c: char| c.is_ascii_digit()))
-        .map_or(g.decisions_md.as_str(), |(i, _)| &g.decisions_md[i + 1..]);
-    let log = format!("{DECISIONS_INTRO}\n{entries}");
-    all.push(("decisions.md".into(), log.as_str(), false));
-    for (name, src, strict) in all {
+    for (name, src) in &g.pages {
         let mut env = render::Env {
             files: &g.cx.files,
-            decisions: &g.cx.decisions,
             pages: &pages,
             repo: &repo,
-            strict,
             rev: &rev,
             index: &index,
             errors: &mut g.cx.errors,
         };
-        let page = render::render(&name, src, &mut env);
-        out.push((name, page));
+        let page = render::render(name, src, &mut env);
+        out.push((name.clone(), page));
     }
     out
 }
-
-/// The top of the decision log page.
-const DECISIONS_INTRO: &str = "# Decision log
-
-While djs was built, every decision that others needed to know about was recorded, in the
-order it was made: what was decided and why, often with the measurements behind it. The
-chapters of this guide explain the decisions that matter for understanding djs; each
-mention of an ID such as D1050 links to its entry here.
-
-The entries are a working record, written for the people building djs: they name files
-of the repository and the issues in which the work happened, and a later entry may
-refine or replace an earlier one, saying so.
-";
 
 /// The commit source links point at: the one being deployed (`$GITHUB_SHA` in the Pages
 /// workflow), else the checkout's HEAD, else `main`.
@@ -258,15 +229,7 @@ fn template(
             }
         }
     }
-    let cur = if current == "decisions.md" {
-        " aria-current=\"page\""
-    } else {
-        ""
-    };
-    let _ = write!(
-        nav,
-        "<li class=\"d0\"><a href=\"decisions.html\"{cur}>Decision log</a></li></ol>"
-    );
+    nav.push_str("</ol>");
     let mut toc = String::new();
     if !page.toc.is_empty() {
         toc.push_str("<p class=\"toc-title\">On this page</p><ol>");

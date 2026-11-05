@@ -1,11 +1,11 @@
 # Status in numbers
 
 Where djs stands, in numbers that cannot go stale: every number on this page is
-generated (D2101). Counts that follow from the repository (test262's grouping and
+generated. Counts that follow from the repository (test262's grouping and
 ratchet, the difftest corpus, the base snapshot, the builtin tags, the engine's tables)
 are recomputed whenever the guide is regenerated, which the merge flow does on every
 merge. Measurements that need a build or a benchmark (the wasm module's size, the speed
-against quickjs-wasi, pi's test suite) are recorded in `tests/scores/status.tsv` by
+against quickjs-wasi, an agent's codemode test suite) are recorded in `tests/scores/status.tsv` by
 `scripts/status.py`, with the commit they were measured at, and shown with it. The
 repository's front page shows the same numbers.
 
@@ -19,7 +19,6 @@ repository's front page shows the same numbers.
 - The differential corpus (codemode scripts, console and result formatting, error
   messages, TypeScript, dquickts' own tests): **613 of 624** cases match qjs; 6 known
   failures (`tests/corpus/expected-failures.txt`) and 5 skipped as non-goals.
-- pi's codemode test suite on djs: 221 of 226 tests pass (measured at 2026-11-01).
 <!-- /gen -->
 
 [How djs is tested](testing.md) explains the suites and the ratchets.
@@ -27,7 +26,8 @@ repository's front page shows the same numbers.
 ## Speed in wasm
 
 Machine instructions retired by node running each workload once, minus an empty run, for
-djs-wasm and for quickjs-wasi, pi's current engine (`scripts/perf/wmeasure.py`).
+djs-wasm and for quickjs-wasi, the QuickJS build that codemode hosts use today
+(`scripts/perf/wmeasure.py`).
 Instructions repeat to within a fraction of a percent even on a loaded machine, unlike
 time.
 
@@ -43,7 +43,7 @@ time.
 | for-of | 5.8G | 7.2G | 0.81 |
 | calls | 3.3G | 4.0G | 0.81 |
 | push/pop and string methods | 4.3G | 3.1G | 1.40 |
-| a pi-like script | 10.0G | 7.3G | 1.38 |
+| a agent-like script | 10.0G | 7.3G | 1.38 |
 | forEach | 9.0G | 6.1G | 1.49 |
 | map/filter/reduce (higher-order) | 13.9G | 4.8G | 2.92 |
 
@@ -72,13 +72,4 @@ Module sizes measured at d780463b0d, 2026-11-01.
 | of them `@fast` (a Rust leaf entry) | 18 |
 | difftest corpus cases | 624 |
 | base snapshot, bytes | 186,376 |
-<!-- /gen -->
-
-Decisions on this page:
-
-<!-- gen:decisions D2101 D016 D1023 D1192 -->
-- D2101: Status numbers are generated: counted from the repository or recorded with their commit
-- D016: wasm32 is the primary target for performance and memory design
-- D1023: Ratchet file semantics
-- D1192: Wasm size probe
 <!-- /gen -->

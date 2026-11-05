@@ -46,7 +46,7 @@ Such scripts have a particular profile, and each part of it became a design goal
 
 The goals are in priority order, and the next chapter, [what djs optimizes
 for](goals.md), explains each of them. Two more constraints shape everything: **wasm32
-is the target that counts** (memory and speed are judged in V8's wasm tier, D016), and
+is the target that counts** (memory and speed are judged in V8's wasm tier), and
 **behavior matches QuickJS**, down to error messages, because models read those messages
 and pi's tests expect them.
 
@@ -82,19 +82,8 @@ things left out on purpose; [the non-goals](goals.md#non-goals) lists them and w
 The tour goes from the bottom up: the arena and values, cells and objects, the compiler,
 the interpreter, suspension, the collector, images and dumps, the builtins, determinism, and
 the host interface. Each chapter explains its **trade-offs**: what the design costs, and
-the alternatives that were not taken. The chapters explain each decision where it
-matters; the decision's ID (D1050) links to its entry in the [decision
-log](../decisions.md), the record kept while djs was built, with the full reasoning and
-the measurements behind it.
+the alternatives that were not taken.
 
 Code samples marked *live* run in djs-wasm in your browser on the docs site. The output
 shown under each sample was produced by running it in this build of djs when the guide
 was checked, so it cannot drift from what djs actually does.
-
-Decisions on this page:
-
-<!-- gen:decisions D016 D008 D1100 -->
-- D016: wasm32 is the primary target for performance and memory design
-- D008: Codemode top level is a function body
-- D1100: Difftest compares what pi's codemode shows the model
-<!-- /gen -->

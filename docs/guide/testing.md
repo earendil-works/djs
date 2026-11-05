@@ -29,13 +29,13 @@ accepted.
 > existing engine catches what test262 does not check, and makes djs a drop-in
 > replacement. The cost: QuickJS's own bugs and quirks become targets too, so each
 > deliberate difference needs a decision and a declaration in the tests (`djs-expect`,
-> D1540, and the reason next to every ratchet entry, below).
+> and the reason next to every ratchet entry, below).
 
 ## test262
 
 test262 is the conformance suite of ECMAScript, more than 50,000 tests. djs runs it at
 the commit dquickts uses, with its own runner (`djs-test262`, in-process, in parallel).
-Every test is assigned to a group in `tests/test262.toml` (D1022):
+Every test is assigned to a group in `tests/test262.toml`:
 
 - **skip**: features djs will never have (sloppy-mode tests, modules, `Intl`, Temporal,
   `SharedArrayBuffer`, direct `eval`, ...). They are left out of the count, so the score
@@ -44,7 +44,7 @@ Every test is assigned to a group in `tests/test262.toml` (D1022):
   roadmap; it is empty now.)
 
 djs passes all but a few dozen active tests. Those are listed with a reason in
-`tests/test262/expected-failures.txt`, the **ratchet** (D1023): a test that fails and is
+`tests/test262/expected-failures.txt`, the **ratchet**: a test that fails and is
 not in the file fails the gate, and a listed test that starts passing is reported, so
 the entry gets removed and the list can only shrink. Every remaining entry is a
 deliberate difference:
@@ -64,7 +64,7 @@ The corpus's ratchet has one case, a dquickts test that needs `SharedArrayBuffer
 djs leaves out on purpose.
 
 Every test runs with a fuel budget and a memory limit, and a test that exhausts either
-fails as `timeout` or `oom`. The budget is fuel, not wall-clock time (D1790): a loaded
+fails as `timeout` or `oom`. The budget is fuel, not wall-clock time: a loaded
 machine slows a test down but cannot turn a pass into a failure.
 
 > **Trade-off.** A ratchet over requiring every test to pass. The suite can be in the
@@ -83,13 +83,13 @@ test262 checks pass or fail. It does not check what `console.log` prints, the te
 error, or how a script that reads tool results behaves. The difftest corpus
 (`tests/corpus/`, a few hundred cases) checks exactly that.
 
-A case is a codemode script: the body of a strict async function, as in pi (D008). Both
+A case is a codemode script: the body of a strict async function, as in pi. Both
 engines run it in the same model: the same JavaScript prelude
-(`tests/corpus/prelude.js`, D1440) defines `console`, fake `tools` and pi's formatting,
+(`tests/corpus/prelude.js`) defines `console`, fake `tools` and pi's formatting,
 and the result is a *transcript*: every output line, then how the script ended
 (`=== return` with the value, `=== completed`, or `=== throw` with the error). QuickJS's
 transcript is checked in as `<case>.expected` and the runner compares djs's with it
-(D1100).
+.
 
 The examples in this guide run the same way. This one could be a difftest case:
 
@@ -113,22 +113,22 @@ TypeError: cannot read property 'x' of null
 
 Stack frame lines are left out of the comparison, because the two harnesses differ below
 the case. Cases marked `// difftest: stacks` compare them too, with the frames
-normalized to the case's own (D2032). Other directives in a case's leading comments mark
+normalized to the case's own. Other directives in a case's leading comments mark
 a TypeScript case, a deliberate difference (`djs-expect`), or a case that cannot run
-under the stress modes (`no-stress`, with the measured reason, D1530).
+under the stress modes (`no-stress`, with the measured reason).
 
 The cases come from four sources: dquickts' own tests, split into one case per test
-function (D1102); codemode-style scripts with fake tools; scripts that models actually
-wrote in pi sessions, redacted before they were committed (D2280, D2281); and
+function; codemode-style scripts with fake tools; scripts that models actually
+wrote in pi sessions, redacted before they were committed; and
 hand-written cases for builtins, formatting, errors and every fast path, including the
 inputs where a fast path must decline. The harvested scripts are the most realistic
 input there is: they read files and run commands in parallel, slice and join the
 results, and print summaries. The sessions do not record what the tools returned, so
 each harvested case answers its tool calls with synthetic results of the same kind:
 text for files and commands, and for tools with structured results a value built from
-the result type the session declared for the tool (D2283). The text of the calls'
+the result type the session declared for the tool. The text of the calls'
 arguments, which is where the private paths and commands were, is replaced, and so is
-any long string literal, such as a prompt or an embedded program (D2284).
+any long string literal, such as a prompt or an embedded program.
 
 > **Trade-off.** Comparing transcripts with QuickJS over writing expected output by
 > hand. A new case costs only its source: `--update` records the expected output from
@@ -147,19 +147,19 @@ tests almost never hit. So the tests make stops happen everywhere:
   fuel, and at every stop the VM continues in a new VM restored from its image.
 - **GC stress** (`--gc-stress`): a collection at every safepoint, so every place that
   holds a heap value across an allocation is exercised.
-- **Determinism** (`--determinism`, D1720, D1725): the suspended runs must leave exactly
+- **Determinism** (`--determinism`): the suspended runs must leave exactly
   the same heap image as the plain run, byte for byte, and the same canonical hash (the
-  graph alone, D2040). Collections happen at the same instructions under any slicing,
+  graph alone). Collections happen at the same instructions under any slicing,
   and the in-place collector keeps cells in allocation order, so any difference means a
   stop or a restore changed something.
 - **Native and wasm**: `scripts/determinism/native-vs-wasm.sh` runs the same programs in
   a native build and in djs-wasm and compares their images stop for stop.
-- **Both builtin backends** (D1635): the corpus runs again with the builtins as bytecode
+- **Both builtin backends**: the corpus runs again with the builtins as bytecode
   instead of generated Rust and without the `@fast` entries ([Builtins](builtins.md)),
   so both implementations of a builtin stay equal.
 
 In every mode the transcript must equal the plain run's: a difference is a failure on
-its own, separate from the comparison with QuickJS (D1161). The end-to-end tests of
+its own, separate from the comparison with QuickJS. The end-to-end tests of
 djs-core (`tests/data/e2e/`) run the same three ways at a finer grain, with one unit of
 fuel per slice.
 
@@ -167,7 +167,7 @@ fuel per slice.
 > suspension. Every feature, including those added later, is tested for resumability
 > without anyone writing a test for it. The cost: CPU time. The stressed corpus and the
 > full test262 run are the largest part of the gate, which is why agents run only the
-> cases their change touches while they work (D012).
+> cases their change touches while they work.
 
 ## More checks against an independent reference
 
@@ -196,25 +196,25 @@ against its ratchet, the slim build's tests and corpora, the size budget, and pi
 tests on the shipped modules.
 
 Nothing reaches `main` without passing it. `scripts/merge-to-main.sh` rebases the branch
-onto `main`, regenerates the generated files from the merged sources (D1791), runs the
-gate on exactly that commit in a dedicated worktree (D1792), and fast-forwards `main` to
+onto `main`, regenerates the generated files from the merged sources, runs the
+gate on exactly that commit in a dedicated worktree, and fast-forwards `main` to
 it only if it passes and `main` has not moved since; otherwise it rebases and gates again
-(D2666). The lock that orders changes to `main` is held only for the fast-forward. So
+. The lock that orders changes to `main` is held only for the fast-forward. So
 `main` only ever points at commits that passed the gate, and the gate runs at full
-priority while everything else on the machine runs niced (D1793).
+priority while everything else on the machine runs niced.
 
 Three things keep it fast without checking less. Every build the legs need gets its own
 cargo target directory, so they all build at once, and each leg starts as soon as its
-builds are done (D2661). Each leg is cached by its inputs: a hash of the files it can
+builds are done. Each leg is cached by its inputs: a hash of the files it can
 read, and of what it reads outside the repository (the toolchain, the oracle, the
 test262 checkout, pi's sources). A leg that passed on exactly those inputs is not run
-again (D2662). Which files a leg can read is one of three classes: everything (the
+again. Which files a leg can read is one of three classes: everything (the
 guide), everything but the documentation (the JavaScript legs), and that minus the
 JavaScript package (the Rust legs). An always-run check fails when Rust code starts
-naming a file outside its class (D2663). So a documentation change gates in seconds, a
+naming a file outside its class. So a documentation change gates in seconds, a
 change to the host package in about ten, and a change to the engine reruns everything.
 `scripts/gate.sh --full` ignores the cache and adds checks too slow for every merge; it
-runs daily and before releases (D2664).
+runs daily and before releases.
 
 > **Trade-off.** One gate on every merge over checks after the fact. `main` is always
 > green, and a regression is caught in the change that caused it, by the agent that wrote
@@ -236,32 +236,3 @@ runs daily and before releases (D2664).
   [`scripts/gate.sh`](../../scripts/gate.sh)) and
   [`scripts/merge-to-main.sh`](../../scripts/merge-to-main.sh): the gate's legs, their
   input classes and the cache, and the merge flow.
-
-Decisions on this page:
-
-<!-- gen:decisions D2040 D008 D012 D1022 D1023 D1100 D1102 D1161 D1440 D1530 D1540 D1635 D1720 D1725 D1790 D1791 D1792 D1793 D2032 D2661 D2662 D2663 D2664 D2666 -->
-- D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
-- D008: Codemode top level is a function body
-- D012: Development flow: per-agent job caps, iteration habits, worktree slots
-- D1022: test262 grouping rules
-- D1023: Ratchet file semantics
-- D1100: Difftest compares what pi's codemode shows the model
-- D1102: Importing dquickts' tests
-- D1161: Stress variants in difftest and the gate
-- D1440: djs-difftest runs the shared prelude (supersedes D1160)
-- D1530: difftest `no-stress`; a stressed timeout is a failure again
-- D1540: D013 in practice: which overflows are RangeErrors; `djs-expect` in difftest
-- D1635: Both backends are tested
-- D1720: Determinism checks in the gate: heap images across schedules and builds
-- D1725: The determinism checks compare raw images too
-- D1790: The gate's runners decide timeouts by fuel, not by the wall clock
-- D1791: Generated files are regenerated after a rebase, not merged; line lists union
-- D1792: The gate runs in one persistent gate worktree
-- D1793: Agents' runs are niced; the gate is not
-- D2032: `difftest: stacks` compares stack frames
-- D2661: Every build configuration builds at once in its own target directory
-- D2662: Gate legs are cached by input hash
-- D2663: Three input classes, guarded
-- D2664: `--full` and full-only legs; a full run daily
-- D2666: The gate runs outside the merge lock; only the fast-forward is inside
-<!-- /gen -->

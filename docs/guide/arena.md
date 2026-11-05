@@ -19,11 +19,10 @@ The list of what lives in the arena is the list of what a suspended VM needs to 
 - objects, strings, symbols, BigInts, shapes and property tables;
 - compiled code: function templates, bytecode, constant pools, line tables;
 - the **value stack** with every call frame, and the interpreter's registers, flushed
-  into a cell whenever `run` returns (D1151);
-- the promise job queue, the table of pending host calls and the inbox of their results
-  (D1670);
+  into a cell whenever `run` returns;
+- the promise job queue, the table of pending host calls and the inbox of their results;
 - atoms (interned property keys), the realm with its intrinsics, and the handle table
-  through which the embedder holds values (D1091).
+  through which the embedder holds values.
 
 Rust data structures (`Vec`, `Box`) hold only transient state: the compiler's working
 state while it compiles, and scratch space inside one native operation. Neither survives
@@ -40,11 +39,11 @@ from it:
 <!-- /gen -->
 
 A few fields are not references but small pieces of VM state that must survive a
-snapshot: the GC threshold (D1601), the inline cache epoch (D1621), the shape budget
-(D1831). `COMPAT`, `OPS`, `INTRINSICS`, `RECORDS` and `FEATURES` are, with `VERSION`,
+snapshot: the GC threshold, the inline cache epoch, the shape budget
+. `COMPAT`, `OPS`, `INTRINSICS`, `RECORDS` and `FEATURES` are, with `VERSION`,
 the image's dependency descriptor: hashes of the tables whose numbers the image holds,
 so an image never loads into an engine that would read its bytecode or its records
-differently ([snapshots](snapshots.md#what-an-image-depends-on), D2265).
+differently ([snapshots](snapshots.md#what-an-image-depends-on)).
 
 ## Cells, back to back
 
@@ -55,11 +54,11 @@ header, and the cells sit back to back with no gaps:
 
 The header's `size` is the size of the whole cell, so `offset + size` is the next cell,
 and anyone holding the bytes can walk the heap from 0 without knowing any cell kind. The
-garbage collector, the image verifier (D1056) and the host all do. On the docs site, the
+garbage collector, the image verifier and the host all do. On the docs site, the
 *Heap* tab of a live example walks the arena of the wasm VM in your browser this way, in
 a short loop of JavaScript, and counts the cells by kind. It separates what the example
 allocated from the base realm before it: the roughly 5,800 cells of builtins, their
-code and names that every VM starts with as a copy of the base snapshot (D2340):
+code and names that every VM starts with as a copy of the base snapshot:
 
 ```js live
 const rows = [];
@@ -77,7 +76,7 @@ console.log(rows.length, "rows,", text.length, "characters");
 Those base cells come in two parts. The first, the **builtin prefix**, holds the builtin
 objects, their code and their names. Nothing a script does through the builtins writes
 there, no collection moves or frees it, and every VM of a build starts with the same bytes
-in it (D2063, D2064), which keeps the cells of every VM's start in place across
+in it, which keeps the cells of every VM's start in place across
 collections ([images](snapshots.md#the-base-snapshot)). After it comes a short **tail** of the
 cells every VM writes: the realm record, the global object, the atoms the VM adds (the
 base's own atoms stay in the prefix), the value stack.
@@ -89,7 +88,7 @@ for the collector to scan, which is what lets allocation hand out zeroed bytes a
 them in later.
 
 What the cell kinds are and what their fields mean comes from one declaration, the
-`cells!` macro in `heap/cells.rs` (D1052). The next chapter, and the [cell layouts
+`cells!` macro in `heap/cells.rs`. The next chapter, and the [cell layouts
 reference](ref-cells.md), go through them.
 
 ## Allocation is a bump
@@ -111,7 +110,7 @@ pub fn alloc_cell(&mut self, kind: CellKind, size: u32) -> Result<u32, HeapError
 ```
 
 The arena keeps a **zeroed frontier** up to 16 KiB beyond `len`, so most allocations are
-a compare and an add and never touch the `Vec` (D1261). Data that arrives with the
+a compare and an add and never touch the `Vec`. Data that arrives with the
 allocation (a string's bytes, a cell the collector copies) is appended at the frontier
 instead of zeroed first and copied afterwards, so it is written once.
 
@@ -128,7 +127,7 @@ story.
 > before making the second, at every one of hundreds of call sites in the heap code. The
 > cost: the arena can overshoot the threshold between two safepoints, and an operation
 > that hits the memory cap cannot simply collect and continue. It fails, and the
-> interpreter collects and runs the whole instruction once more (D1700, D1900).
+> interpreter collects and runs the whole instruction once more.
 
 ## Growing, and the cap
 
@@ -137,29 +136,29 @@ The arena grows like a `Vec`, by reallocating, with two twists:
 - **It stops at the GC threshold.** wasm linear memory never shrinks, so the peak is
   what a run costs. Below the threshold, growth doubles but never reserves past the
   threshold; past it, a collection is pending and growth is by a quarter. Thresholds are
-  whole 64 KiB wasm pages (D1870).
+  whole 64 KiB wasm pages.
 - **It starts small.** A VM made from the base or restored from an image reserves the
   image plus one 64 KiB page, not room up to its first collection threshold: most
-  sandboxes never need more, and the rest grow in place (D2541). Only a host that says
+  sandboxes never need more, and the rest grow in place. Only a host that says
   how big the heap will get (pi's cold start, which runs its prelude next) gets that
   room up front.
 - **In wasm it grows in place.** The module's allocator keeps big blocks, the arena
   among them, as runs of whole pages. When the pages after the arena are free or memory
   ends there, a growth adds pages instead of copying the arena into a new block, which
-  would hold the old and the new copy at once (D2053). The allocator works to keep the
+  would hold the old and the new copy at once. The allocator works to keep the
   arena at the end of memory: the general-purpose allocator's first pages come before
   it, mid-sized blocks the general allocator cannot hold get pages of their own that go
   back when freed instead of staying behind the arena for good, and a buffer that grows
-  right behind the arena leaves room for the arena's next growth (D2541).
+  right behind the arena leaves room for the arena's next growth.
 - **It has a cap.** The embedder sets a memory limit. The arena may grow to the limit
   minus a reserve of `min(cap / 32, 1 MiB)`. Reaching that point is the catchable
   `InternalError: out of memory`, a preallocated object, as in QuickJS. Throwing it
   opens the reserve, so the script's handler has room to run, and collects when the
-  handler is reached (D1600).
+  handler is reached.
 
 When the *host* refuses memory below the cap (the `Vec` cannot grow), that is not the
 program's doing, so it is not a JavaScript error: the run stops with
-`Status::HostOutOfMemory` and the VM stays valid and idle (D1690). Keeping the two apart
+`Status::HostOutOfMemory` and the VM stays valid and idle. Keeping the two apart
 keeps the out-of-memory point a function of the program and the cap, which
 [deterministic runs](determinism.md) rely on.
 
@@ -179,13 +178,13 @@ the payload, in a `Ref` field the whole word. This one rule buys four things:
    nothing to fix up.
 2. **The host can read values in place.** A tool result that the script turned into an
    array of objects is read by walking cells in wasm memory, with a reader generated
-   from the same layout table (D1210).
+   from the same layout table.
 3. **Bugs trap instead of corrupting memory.** Every access is bounds-checked, with no
    `unsafe`. A bad offset from a VM bug or a corrupt image is a panic (a wasm trap) or a
    corrupt JS heap, never undefined behavior in the host.
 4. **The heap can move.** The collector compacts the arena by sliding live cells down,
    and the arena can be reallocated, without any reference outside it going stale: the embedder
-   holds values through handles (D1091), slot numbers in a table inside the arena, never
+   holds values through handles, slot numbers in a table inside the arena, never
    through offsets.
 
 > **Trade-off.** One arena of offsets over Rust-managed objects. The model for djs's
@@ -198,11 +197,11 @@ the payload, in a `Ref` field the whole word. This one rule buys four things:
 > verifier and the stress tests have to catch, not the compiler.
 
 > **Trade-off.** Bounds checks on every access. In wasm, every load is already checked
-> against linear memory, so the arena's checks are a second check (D016). Each costs one
+> against linear memory, so the arena's checks are a second check. Each costs one
 > compare: `offset + size <= length`, done in 64-bit arithmetic so it cannot wrap, which
-> lets the compiler drop the slice's own checks behind it (D2520). Release builds keep
+> lets the compiler drop the slice's own checks behind it. Release builds keep
 > the checks but drop the offsets from the panic message, which saved code size at the
-> about 1,600 inlined access sites (D1573). An optional build (the `unsafe-heap` cargo
+> about 1,600 inlined access sites. An optional build (the `unsafe-heap` cargo
 > feature, off by default) skips them: about 7 KB of gzipped module and up to 15% of the
 > instructions. It is safe only for images the engine made itself, because the verifier
 > guarantees structure but not every semantic invariant that the checked build would
@@ -226,25 +225,3 @@ the payload, in a `Ref` field the whole word. This one rule buys four things:
   header and every cell kind.
 - [`crates/djs-core/src/heap/walk.rs`](../../crates/djs-core/src/heap/walk.rs): the cell
   walker and the verifier.
-
-Decisions on this page:
-
-<!-- gen:decisions D2063 D2064 D2053 D1051 D1052 D1261 D1151 D1091 D1870 D1600 D1690 D1700 D1056 D1573 D2520 D2265 D2541 -->
-- D2063: The base image ends with a tail of per-VM cells; nothing writes below BASE_END
-- D2064: Collections never move or free the builtin prefix
-- D2053: A page allocator under dlmalloc in djs-wasm: huge blocks grow in place
-- D1051: Arena and cell header
-- D1052: Layout description macro
-- D1261: The arena keeps a zeroed frontier; data is written once
-- D1151: Interpreter state in the arena
-- D1091: Handle table
-- D1870: Arena growth stops at the GC threshold; thresholds in 64 KiB pages; no to-space reuse
-- D1600: Out-of-memory recovery: a collection at the handler and a reserve below the cap
-- D1690: Running out of host memory is not a JS out-of-memory error
-- D1700: A failing allocation collects and retries its instruction once
-- D1056: Heap images are verified on load
-- D1573: Arena out-of-bounds panics carry no offsets in release builds
-- D2520: Arena access: one u64 compare by default, an optional unchecked `unsafe-heap` build
-- D2265: Images carry a dependency descriptor; loading and containers check it, not the build hash
-- D2541: Instance memory: the arena kept at memory's end, lean start capacity, the coded base outside memory
-<!-- /gen -->

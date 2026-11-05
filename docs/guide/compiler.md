@@ -32,20 +32,20 @@ function template cells in the heap
 
 Only the last step touches the arena: the compiler interns atoms and string constants
 while it parses, and writes one **function template** cell per function at the end
-(D1131). Everything else (code under construction, scope trees, fixup lists) is Rust
+. Everything else (code under construction, scope trees, fixup lists) is Rust
 state that is dropped when `compile` returns. A template holds the bytecode, the
 constant pool, the line and handler tables and the child templates, so compiled code is
 part of the heap and of every snapshot.
 
 The template is laid out for the builtins, which are most of the templates in every
-heap (D2444). The bytecode, the capture descriptors and the handler table sit inline at
+heap. The bytecode, the capture descriptors and the handler table sit inline at
 the end of the template cell, so a call finds its code at a fixed offset from the
 template and no separate code cell pays a header and padding. Everything a builtin never
 has, the child templates and the debug info (script, source span, line table, local
 names), lives in a separate info cell that a builtin's template does not point to: a
 builtin's template is 48 bytes plus its code.
 
-The functions of one compilation unit share one constant pool (D2446): a string or number
+The functions of one compilation unit share one constant pool: a string or number
 that many functions use, an error message or a property name passed as a string, is
 stored once, and the unit pays one cell header instead of one per function. The top
 level gets a pool of its own, since it runs once, and with lazy functions so does every
@@ -85,7 +85,7 @@ function 0 <anonymous>: params=0 locals=4 stack=2 captures=0
 ```
 <!-- /gen -->
 
-The function is a codemode body, an async function (D008), which is why it starts with
+The function is a codemode body, an async function, which is why it starts with
 `async_start` and ends with `async_return`; the `handler` line is the region that turns
 an exception into a rejected promise. In between, every operand is pushed and every
 operator pops its inputs and pushes its result. The [opcode reference](ref-opcodes.md)
@@ -113,7 +113,7 @@ an array literal or the target of a destructuring assignment `[a, b] = pair`? A 
 that builds a tree can parse a "cover" form and reinterpret it afterwards. A parser that
 emits code as it goes has already committed to bytecode.
 
-djs follows one rule (D1080): **speculation never emits bytecode.** Every ambiguity is
+djs follows one rule: **speculation never emits bytecode.** Every ambiguity is
 decided before anything is emitted for it:
 
 - **Token scans.** For `(`, a scan on a copy of the lexer skips the balanced parentheses
@@ -130,7 +130,7 @@ decided before anything is emitted for it:
 - **Deferred patterns.** In `let [a, b] = pair`, the pattern comes before its value, but
   its code must run after. The parser skips the pattern with a bracket scan, parses and
   emits the value, rewinds the lexer to the pattern and emits it, then jumps forward
-  past the value again (D1360).
+  past the value again.
 
 The one place where emitted code is rewritten is assignment: `a.b.c = v` has already
 emitted `get_field c` when the parser sees `=`, so it turns that last instruction into
@@ -151,7 +151,7 @@ inner function may be a `var` its parent declares further down, a `let` that is 
 its temporal dead zone, or a global. So the parser emits a scope-generic placeholder and
 records the name and scope in a side table. After the whole compilation unit is parsed,
 a **resolution pass** walks the functions in reverse creation order, which visits
-children before parents without recursion (D1081). For each name it decides the storage:
+children before parents without recursion. For each name it decides the storage:
 
 | binding | storage |
 | --- | --- |
@@ -165,7 +165,7 @@ dropping scope markers, inserting TDZ checks where a read might come before the
 declaration has run (and only there), patching jumps and computing the maximum stack
 depth.
 
-A captured variable lives in a box from the moment its scope is entered (D1083), so a
+A captured variable lives in a box from the moment its scope is entered, so a
 closure holds the box, never a pointer into its parent's frame:
 
 ```js
@@ -220,7 +220,7 @@ load became one `set_loc`.
 
 ## TypeScript is skipped while parsing
 
-TypeScript is a compile flag, not a separate front end (D1480). With it on, the parser
+TypeScript is a compile flag, not a separate front end. With it on, the parser
 calls a **type skipper** wherever a type may appear, and the skipper consumes the type
 without emitting anything: annotations, type parameter and argument lists, `as` and
 `satisfies`, `!`, interfaces and type aliases, `declare`, overload signatures. The rules
@@ -230,8 +230,8 @@ messages, so the two engines agree on what is valid TypeScript.
 Constructs with runtime meaning compile directly to bytecode the way tsc would emit
 them: enums and namespaces become closures called with their object, `const enum`
 members are folded into constants, and parameter properties become assignments in the
-constructor (D1482-D1484). `djs strip-types` shows the erasure, blanked like
-ts-blank-space so line and column numbers stay where they were (D1481).
+constructor. `djs strip-types` shows the erasure, blanked like
+ts-blank-space so line and column numbers stay where they were.
 
 > **Trade-off.** Erasing types in the parser over a separate transpile step. Codemode
 > scripts are often TypeScript, and a separate pass (like ts-blank-space in front of
@@ -245,12 +245,12 @@ The bytecode is stack-based, with variable-length instructions: a `u8` opcode fo
 by little-endian immediates (local slots, atom ids, constant indexes, relative jump
 offsets). The instruction set is declared once, in the `ops!` table in
 `bytecode/ops.rs`, with each instruction's immediates, stack effect, fuel cost and flags
-(D1082, D1130). The emitter, the decoder, the disassembler, the stack-depth checker, the
+. The emitter, the decoder, the disassembler, the stack-depth checker, the
 opcode hash that images are checked against and the [opcode reference](ref-opcodes.md)
 are all generated from that table.
 
 There are no general superinstructions. What the compiler does instead is a small set of
-layout changes and peepholes over the phase-1 code (D1860):
+layout changes and peepholes over the phase-1 code:
 
 - loops are **rotated**: the condition is tested at the bottom, so an iteration costs
   one conditional jump;
@@ -258,7 +258,7 @@ layout changes and peepholes over the phase-1 code (D1860):
 - jumps to jumps are threaded, `not` before a conditional jump flips the jump, a store
   followed by a load of the same local becomes `set_loc`.
 
-The final code is then made **short** (D2443). Most operands are small: locals, arguments
+The final code is then made **short**. Most operands are small: locals, arguments
 and constant indexes below 256, calls with up to three arguments, jumps of a few dozen
 bytes. So the most frequent instructions have short forms that the emitter picks when
 the operand fits. `get_loc2` has the operand in its opcode, `get_loc8 12` has a
@@ -310,7 +310,7 @@ The loop is entered with one jump to the condition at the bottom; every iteratio
 that is the body, `inc_loc`, the comparison and one backward conditional jump. Two more
 details show up here: `console` is a global the host defines, read with an inline
 cache like a property (`get_global "console" ic0`), and `get_method "log" ic1` carries
-the number of its own inline cache slot (D1620). Measured in wasm, rotation, the peepholes and the matching interpreter fast
+the number of its own inline cache slot. Measured in wasm, rotation, the peepholes and the matching interpreter fast
 paths cut the instructions executed by the tightest benchmark loops by 35 to 38%.
 
 > **Trade-off.** A stack machine over registers. A register VM executes fewer
@@ -322,15 +322,15 @@ paths cut the instructions executed by the tightest benchmark loops by 35 to 38%
 ## Lazy functions
 
 In builds with the `lazy` feature (natively and in the dump module, not in the shipped
-main and slim modules), a VM can compile function bodies at their first call (D2990);
-the dump module does so for every VM (D2993).
+main and slim modules), a VM can compile function bodies at their first call;
+the dump module does so for every VM.
 The unit is still parsed whole: every early error is reported when the script loads,
 and name resolution still sees every function, so it knows which bindings inner
 functions capture and the enclosing code is unchanged. Only the second half, the re-emit
 and the template, is skipped for a function that will probably not run soon. Functions
 that stay eager: one called where it is defined, a call's argument (`items.map(x =>
 x.id)`), a parenthesized one, and async functions and generators, whose suspension maps a
-dump needs anyway (D2995). Any other function gets a *lazy template*: its real flags,
+dump needs anyway. Any other function gets a *lazy template*: its real flags,
 name, length and capture descriptors, and the single instruction `lazy` as its code. Creating closures, `name`,
 `length` and `toString` work on it as on any template.
 
@@ -342,7 +342,7 @@ check, not a compile. Since the first half was done for everything, nothing can 
 that point except memory.
 
 A function's code is the same whether it is compiled with its unit or at its first call
-(D2991): a function that may compile lazily has a constant pool of its own in every
+: a function that may compile lazily has a constant pool of its own in every
 compile, and the rule for what is lazy looks only at the function and its parent. This
 matters because the maps that name a suspended frame's slots come from another compile of
 the same source.
@@ -361,9 +361,9 @@ The compiler recurses on the Rust stack, unlike the interpreter: compilation is 
 by the size of the input and never needs to suspend. A nesting-depth limit turns
 pathological input (ten thousand nested parentheses) into a SyntaxError instead of a
 stack overflow. Codemode scripts are always strict; there is no `with`, no direct
-`eval`, and no ES modules: `import()` compiles and rejects (D1582). A Script goal with
+`eval`, and no ES modules: `import()` compiles and rejects. A Script goal with
 global `var` bindings and completion values exists for test262, indirect `eval` and the
-REPL (D004, D1581).
+REPL.
 
 > **Trade-off.** No AST at all. Without a tree there are no optimization passes over
 > whole functions: no constant folding across statements, no escape analysis, no
@@ -383,29 +383,3 @@ REPL (D004, D1581).
   the instruction table.
 - `djs disasm file.js`, a command of djs's command-line tool, prints the bytecode of any
   script, as the listings on this page show it.
-
-Decisions on this page:
-
-<!-- gen:decisions D1080 D1360 D1081 D1083 D1082 D1130 D1131 D1860 D1620 D1480 D1481 D1482 D008 D1582 D2443 D2444 D2446 D2990 D2991 D2993 D2995 -->
-- D1080: Speculative parsing never emits bytecode
-- D1360: destructuring patterns are parsed after their value (deferred patterns)
-- D1081: Name resolution runs once per compilation unit, children first
-- D1083: Captured bindings live in heap Box cells
-- D1082: Bytecode encoding and the instruction table
-- D1130: The bytecode table and emitter API
-- D1131: Code cells
-- D1860: Loop rotation and peepholes in the compiler; inc_loc/dec_loc; fast_more
-- D1620: Inline caches: verified table indexes in a per-template array
-- D1480: TypeScript is a compile flag; the skipper ports dquickts' rules
-- D1481: Erased ranges are recorded by committing code, blanked like ts-blank-space
-- D1482: Enums and namespaces are closures; their members resolve after parsing
-- D008: Codemode top level is a function body
-- D1582: `import()` without modules: compiled, rejected in a job
-- D2443: Short opcode forms and shortened jumps, a recorded trade
-- D2444: Code inline in the template, the rest of a user function in FuncInfo
-- D2446: One constant pool per compilation unit
-- D2990: Lazy function compilation, a `lazy` feature on in native and dump builds
-- D2991: Eager and lazy compiles give a function the same code
-- D2993: The dump module compiles lazily; the dumper reads lazy templates
-- D2995: Functions that run at once stay eager: call arguments, parenthesized, async
-<!-- /gen -->

@@ -1,13 +1,13 @@
 //! Generated regions: `<!-- gen:NAME ARGS -->` ... `<!-- /gen -->` in a guide page.
 //!
 //! The content between the markers comes from djs-core's own tables (`LAYOUTS`, `OPS`,
-//! `INTRINSICS`, the value tags), from the decision log, or from compiling and running
+//! `INTRINSICS`, the value tags), from repository files, or from compiling and running
 //! the page's preceding `js` block. It is checked in, so a page reads the same on GitHub,
 //! and `djs-docs check` fails when it is stale.
 //!
-//! `run` regions (example output) are only rewritten with `--examples`: a changed output
-//! is a behavior change someone should look at, so the gate fails on it instead of
-//! regenerating it after a rebase.
+//! `run` and `dump` regions (example output) are only rewritten with `--examples`: a
+//! changed output is a behavior change someone should look at, so the gate fails on it
+//! instead of regenerating it after a rebase.
 
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -22,8 +22,6 @@ use crate::svg;
 
 /// What the generators read besides djs-core: repository text files.
 pub struct Sources {
-    /// `docs/decisions.md`.
-    pub decisions_md: String,
     /// `crates/djs-core/src/bytecode/ops.rs`: the `///` docs of the opcodes.
     pub ops_rs: String,
     /// `builtins/intrinsics.d.ts`: the docs of the Rust intrinsics.
@@ -33,8 +31,6 @@ pub struct Sources {
 pub struct Ctx {
     /// Generated files (diagrams), relative to the guide directory.
     pub files: BTreeMap<String, String>,
-    /// Decision ID (`D1050`) -> title.
-    pub decisions: BTreeMap<String, String>,
     op_docs: BTreeMap<String, String>,
     intrinsic_docs: BTreeMap<String, String>,
     pub errors: Vec<String>,
@@ -42,9 +38,9 @@ pub struct Ctx {
     pub warnings: Vec<String>,
     /// Status numbers, computed on the first `gen:status` region (D2101).
     status: Option<crate::status::Status>,
-    /// Rewrite `run` regions too.
+    /// Rewrite `run` and `dump` regions too.
     pub examples: bool,
-    /// `run` regions whose output changed (page names).
+    /// `run` and `dump` regions whose output changed (page names).
     pub changed_examples: Vec<String>,
 }
 
@@ -52,9 +48,8 @@ impl Ctx {
     pub fn new(src: &Sources, examples: bool) -> Ctx {
         Ctx {
             files: BTreeMap::new(),
-            decisions: parse_decisions(&src.decisions_md),
-            op_docs: parse_op_docs(&src.ops_rs),
-            intrinsic_docs: parse_intrinsic_docs(&src.intrinsics_dts),
+            op_docs: without_ids(parse_op_docs(&src.ops_rs)),
+            intrinsic_docs: without_ids(parse_intrinsic_docs(&src.intrinsics_dts)),
             errors: Vec::new(),
             warnings: Vec::new(),
             status: None,
@@ -64,16 +59,42 @@ impl Ctx {
     }
 }
 
-pub fn parse_decisions(md: &str) -> BTreeMap<String, String> {
-    let mut m = BTreeMap::new();
-    for line in md.lines() {
-        if let Some((num, title)) = line.strip_prefix("## D").and_then(|r| r.split_once(": "))
-            && num.bytes().all(|b| b.is_ascii_digit())
-        {
-            m.insert(format!("D{num}"), title.to_string());
+/// The docs with their decision citations taken out (`(D1800)`, `, D2440)`,
+/// `(D2052, qjs's order)`): the guide cites no decisions; the source comments do.
+fn without_ids(m: BTreeMap<String, String>) -> BTreeMap<String, String> {
+    m.into_iter().map(|(k, v)| (k, strip_ids(&v))).collect()
+}
+
+fn strip_ids(s: &str) -> String {
+    let is_id = |w: &str| {
+        w.len() >= 4
+            && w.len() <= 5
+            && w.starts_with('D')
+            && w[1..].bytes().all(|b| b.is_ascii_digit())
+    };
+    let mut out = String::new();
+    let mut rest = s;
+    while let Some(open) = rest.find('(') {
+        let Some(close) = rest[open..].find(')').map(|c| open + c) else {
+            break;
+        };
+        let inner = &rest[open + 1..close];
+        let kept: Vec<&str> = inner.split(", ").filter(|w| !is_id(w.trim())).collect();
+        out.push_str(&rest[..open]);
+        if kept.is_empty() {
+            // ` (D1800).` -> `.`
+            while out.ends_with(' ') {
+                out.pop();
+            }
+        } else {
+            out.push('(');
+            out.push_str(&kept.join(", "));
+            out.push(')');
         }
+        rest = &rest[close + 1..];
     }
-    m
+    out.push_str(rest);
+    out
 }
 
 /// Opcode name -> the `///` doc lines before its `ops!` entry, joined.
@@ -238,18 +259,6 @@ fn generate(
             ops_table(&names, page, cx)
         }
         "intrinsics-all" => intrinsics_table(cx),
-        "decisions" => {
-            let mut s = String::new();
-            for id in args {
-                match cx.decisions.get(*id) {
-                    Some(title) => {
-                        let _ = writeln!(s, "- {id}: {title}");
-                    }
-                    None => cx.errors.push(format!("{page}: no decision {id}")),
-                }
-            }
-            s
-        }
         "excerpt" => excerpt(args, page, cx),
         "status" => {
             let st = cx
@@ -262,10 +271,11 @@ fn generate(
                 return old.to_string();
             }
             match args {
-                [what] => crate::status::generate(st, what).unwrap_or_else(|e| {
-                    cx.errors.push(format!("{page}: {e}"));
-                    String::new()
-                }),
+                [what] => crate::status::generate(st, what, matches!(page, "README.md" | "pi.md"))
+                    .unwrap_or_else(|e| {
+                        cx.errors.push(format!("{page}: {e}"));
+                        String::new()
+                    }),
                 _ => {
                     cx.errors
                         .push(format!("{page}: gen:status takes one argument"));
@@ -273,7 +283,7 @@ fn generate(
                 }
             }
         }
-        "run" | "disasm" => {
+        "run" | "disasm" | "dump" => {
             let Some(src) = last_js else {
                 cx.errors
                     .push(format!("{page}: gen:{name} without a js block before it"));
@@ -282,7 +292,23 @@ fn generate(
             if name == "disasm" {
                 return fenced("text", &crate::run::disasm(src));
             }
-            let new = fenced("text", &crate::run::run(src));
+            let new = if name == "dump" {
+                // `gen:dump [N]`: the dump at the block's Nth `debugger;` pause.
+                let nth = match args {
+                    [] => 1,
+                    [n] => n.parse().unwrap_or(0),
+                    _ => 0,
+                };
+                if nth == 0 {
+                    cx.errors.push(format!(
+                        "{page}: gen:dump takes one optional pause number (from 1)"
+                    ));
+                    return old.to_string();
+                }
+                fenced("js", &crate::run::dump(src, nth))
+            } else {
+                fenced("text", &crate::run::run(src))
+            };
             if new != old && !cx.examples {
                 cx.changed_examples.push(page.to_string());
                 return old.to_string();
@@ -539,6 +565,18 @@ mod tests {
     }
 
     #[test]
+    fn decision_citations_are_dropped() {
+        assert_eq!(
+            strip_ids("x (D1800). y (`@fast`, D1850): z"),
+            "x. y (`@fast`): z"
+        );
+        assert_eq!(
+            strip_ids("a (D2052, qjs's order) (b)"),
+            "a (qjs's order) (b)"
+        );
+    }
+
+    #[test]
     fn args_may_be_quoted() {
         assert_eq!(
             split_args(r#"excerpt a/b.rs "fn x(" "5 => {" 3 "#),
@@ -559,7 +597,6 @@ mod tests {
     fn cx() -> Ctx {
         Ctx::new(
             &Sources {
-                decisions_md: "## D1050: Value encoding\ntext\n## D007: Internal tag\n".into(),
                 ops_rs: "x\nops! {\n    /// `-> undefined`\n    Undefined undefined() pop 0 push 1 cost Basic;\n    /// `a b -> a+b`\n    /// more\n    Add add() pop 2 push 1 cost Basic;\n    In in_() pop 2 push 1 cost Access;\n}\n".into(),
                 intrinsics_dts: "/** IsArray ( argument ), 7.2.2. @leaf */\ndeclare function IsArray(v: Value): boolean;\n/**\n * Two\n * lines. @reentrant\n */\ndeclare function Call(f: Fn): Value;\n".into(),
             },
@@ -570,14 +607,6 @@ mod tests {
     #[test]
     fn sources_are_parsed() {
         let c = cx();
-        assert_eq!(
-            c.decisions.get("D1050").map(String::as_str),
-            Some("Value encoding")
-        );
-        assert_eq!(
-            c.decisions.get("D007").map(String::as_str),
-            Some("Internal tag")
-        );
         assert_eq!(c.op_docs["undefined"], "`-> undefined`");
         assert_eq!(c.op_docs["add"], "`a b -> a+b` more");
         assert_eq!(c.op_docs["in"], "");
@@ -588,12 +617,13 @@ mod tests {
     #[test]
     fn regions_are_replaced_and_kept_in_place() {
         let mut c = cx();
-        let md = "# T\n\n<!-- gen:decisions D1050 -->\nold\n<!-- /gen -->\ntail\n";
+        let md = "# T\n\n<!-- gen:ops add -->\nold\n<!-- /gen -->\ntail\n";
         let out = regen("p.md", md, &mut c);
-        assert_eq!(
-            out,
-            "# T\n\n<!-- gen:decisions D1050 -->\n- D1050: Value encoding\n<!-- /gen -->\ntail\n"
+        assert!(
+            out.starts_with("# T\n\n<!-- gen:ops add -->\n| opcode |"),
+            "{out}"
         );
+        assert!(out.ends_with("<!-- /gen -->\ntail\n"), "{out}");
         assert!(c.errors.is_empty());
         // Idempotent.
         assert_eq!(regen("p.md", &out, &mut c), out);
@@ -604,7 +634,7 @@ mod tests {
         let mut c = cx();
         regen(
             "p.md",
-            "<!-- gen:decisions D9 -->\n<!-- /gen -->\n<!-- gen:ops nope -->\n<!-- /gen -->\n<!-- gen:cell Nope -->\n<!-- /gen -->\n<!-- gen:what -->\n",
+            "<!-- gen:decisions D1050 -->\n<!-- /gen -->\n<!-- gen:ops nope -->\n<!-- /gen -->\n<!-- gen:cell Nope -->\n<!-- /gen -->\n<!-- gen:what -->\n",
             &mut c,
         );
         assert_eq!(c.errors.len(), 5, "{:?}", c.errors);
@@ -628,7 +658,6 @@ mod tests {
         let read = |p: &str| std::fs::read_to_string(format!("{root}/{p}")).unwrap();
         let c = Ctx::new(
             &Sources {
-                decisions_md: read("docs/decisions.md"),
                 ops_rs: read("crates/djs-core/src/bytecode/ops.rs"),
                 intrinsics_dts: read("builtins/intrinsics.d.ts"),
             },

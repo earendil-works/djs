@@ -1,5 +1,5 @@
 # Publishes the guide (docs/guide, D2100) to GitHub Pages: `djs-docs build` renders the
-# pages and the decision log, and copies djs-wasm and the host package (types stripped by
+# pages and copies djs-wasm and the host package (types stripped by
 # node) for the live examples. The gate already runs `djs-docs check` before anything
 # reaches main, so this only builds and deploys. The deploy step is retried once after a
 # short wait: deploy-pages can fail transiently ("Failed to get ID Token … socket hang up").
@@ -35,7 +35,8 @@ jobs:
         with:
           node-version: 24
       # The docs build of djs-wasm: the shipping module plus `djs_disasm` for the live
-      # examples' Bytecode tab (target/docs-wasm, picked up by `djs-docs build`).
+      # examples' Bytecode tab and the dumper for their Dump tab (target/docs-wasm, picked
+      # up by `djs-docs build`).
       - name: Build djs-wasm (live examples)
         run: scripts/build-wasm.sh --docs
       - name: Build the site

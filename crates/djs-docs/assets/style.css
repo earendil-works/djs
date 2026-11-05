@@ -278,15 +278,6 @@ blockquote.tradeoff { background: var(--semantic-color-background-fill-secondary
 blockquote.tradeoff > p:first-child > strong:first-child { color: var(--semantic-color-text-warning); }
 blockquote :where(code) { background: var(--semantic-color-background-fill-ghost-neutral-active); }
 
-a.decision {
-  padding-inline: var(--semantic-dimension-space-control-padding-inline-x-small);
-  border-radius: var(--semantic-dimension-radius-small);
-  background: var(--semantic-color-background-fill-secondary-information);
-  color: var(--semantic-color-text-on-secondary-fill-information);
-  font-family: var(--semantic-font-family-code); font-size: 0.8em;
-  text-decoration: none; white-space: nowrap;
-}
-
 /* Diagrams: inline SVG whose styles follow the tokens (svg.rs). */
 figure.diagram {
   margin-inline: 0; padding: var(--semantic-dimension-space-padding-large);

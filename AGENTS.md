@@ -97,8 +97,9 @@ Rules:
 
 ## Keeping the guide current
 
-`docs/guide/` is the human-facing explanation of djs: how it works and why (D2100,
-`docs/guide/README.md` for how to write it). It must stay true as the code changes:
+`docs/guide/` is the human-facing explanation of djs: what a user sees and can do, and the
+architecture, how it works and why (`docs/guide/README.md` for how to write it). It must
+stay true as the code changes:
 
 - If your change alters what a guide page says (the issue's `guide:` field names the
   pages; otherwise skim `docs/guide/SUMMARY.md`), update that page's prose on your
@@ -108,15 +109,17 @@ Rules:
   or `docs/guide/ref-*.md` by hand: `cargo run -q -p djs-docs -- regen` rewrites them,
   and merge-to-main does it after the rebase (scripts/regen.sh).
 - `cargo run -q -p djs-docs -- check` (part of the gate) fails on stale generated parts,
-  broken links, unknown decision IDs, the self-containment rule below, and an example
-  whose output changed. If the new output is right, accept it with `regen --examples`
+  broken links, the writing rules below, and an example whose output (`gen:run`,
+  `gen:dump`) changed. If the new output is right, accept it with `regen --examples`
   and reread the text around it.
-- The guide is self-contained (owner's rule, D2102): a page explains what it needs in its
-  own words. No mentions of or links to ARCH.md, TESTING.md, docs/*.md, work/… or issue
-  numbers; goals by name with a link to goals.md, never "G2"; decisions explained in
-  words, the ID only as a citation (it links to the site's decision log); code only as
-  links to repository files, which the site turns into source links. `check` enforces
-  this; docs/guide/README.md has the details.
+- The guide is self-contained and describes djs as it is (owner's rules, D2102, D3051): a
+  page explains what it needs in its own words. No mentions of or links to ARCH.md,
+  TESTING.md, docs/*.md (the decision log included), work/… or issue numbers; no decision
+  IDs: explain the reason in words; no history ("used to", "was replaced", format
+  versions); pi named only on `pi.md`, hosts described in general elsewhere; goals by name
+  with a link to goals.md, never "G2"; code only as links to repository files, which the
+  site turns into source links. `check` enforces this; docs/guide/README.md has the
+  details.
 - If a change makes a whole chapter wrong or calls for a new one, do not rewrite it as a
   side job: list it under `## Follow-ups`; the coordinator schedules it.
 

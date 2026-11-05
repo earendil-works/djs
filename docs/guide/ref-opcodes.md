@@ -75,7 +75,7 @@ with them.
 | `get_cap_chk` | 63 | Cap | 3 | 0 → 1 | Basic | `-> v` with a TDZ check. |
 | `put_cap_chk` | 64 | Cap | 3 | 1 → 0 | Basic | `v ->` with a TDZ check. |
 | `set_cap_chk` | 65 | Cap | 3 | 1 → 1 | Basic | `v -> v` with a TDZ check. |
-| `get_builtin` | 66 | Builtin | 3 | 0 → 1 | Basic | `-> f`: entry `idx` of the realm's prelude function table (privileged code: a prelude function another one refers to, D2440). |
+| `get_builtin` | 66 | Builtin | 3 | 0 → 1 | Basic | `-> f`: entry `idx` of the realm's prelude function table (privileged code: a prelude function another one refers to). |
 | `put_builtin` | 67 | Builtin, Count | 5 | 1 → 0 | Alloc | `f ->`: stores entry `idx` of the prelude function table, which has `len` entries (allocated by the first store). |
 | `get_global` | 68 | Atom, Cache | 7 | 0 → 1 | Access | `-> v`: global lexical record, then the global object; ReferenceError if missing. |
 | `get_global_typeof` | 69 | Atom, Cache | 7 | 0 → 1 | Access | `-> v`: like `get_global`, but `undefined` if missing (`typeof`). |
@@ -175,8 +175,8 @@ with them.
 | `async_return` | 163 | Loc | 3 | 1 → 0 | Call | `v ->`: return from an async function: resolves the result promise with `v` and returns the promise. |
 | `async_reject` | 164 | Loc | 3 | 1 → 0 | Call | `e ->`: an exception leaves an async function: rejects the result promise with `e` and returns the promise (the target of the body's catch-all handler). |
 | `get_iterator` | 165 | – | 1 | 1 → 1 | Access | `obj -> iterator` |
-| `iter_next` | 166 | Target | 5 | 2 → 1 | Call | `it next -> r`: `r = next.call(it)`, an iterator result. When `next` is the original `next` of an Array or String Iterator and that step runs no user code, `r` is the next value itself and the instruction jumps (no result object, D1800). |
-| `iter_next_loc` | 167 | Loc, Target | 7 | 0 → 1 | Call | `-> r`: `iter_next` of the iterator in local `loc` and its `next` in `loc + 1` (a loop's or pattern's temporaries, D2732): one instruction for for-of's step. |
+| `iter_next` | 166 | Target | 5 | 2 → 1 | Call | `it next -> r`: `r = next.call(it)`, an iterator result. When `next` is the original `next` of an Array or String Iterator and that step runs no user code, `r` is the next value itself and the instruction jumps (no result object). |
+| `iter_next_loc` | 167 | Loc, Target | 7 | 0 → 1 | Call | `-> r`: `iter_next` of the iterator in local `loc` and its `next` in `loc + 1` (a loop's or pattern's temporaries): one instruction for for-of's step. |
 | `iter_check_object` | 168 | – | 1 | 1 → 1 | Basic | `v -> v`: TypeError if `v` is not an object (iterator results). |
 | `iterator_close` | 169 | – | 1 | 1 → 0 | Access | `iterator ->`: call `iterator.return()` if present. |
 | `for_in_start` | 170 | – | 1 | 1 → 1 | Alloc | `obj -> for-in iterator` (a snapshot of the enumerable keys) |
@@ -222,5 +222,5 @@ with them.
 | `jump8` | 210 | Target8 | 2 | 0 → 0 | Basic | `jump` with an 8-bit offset. |
 | `jump_if_false8` | 211 | Target8 | 2 | 1 → 0 | Basic | `jump_if_false` with an 8-bit offset. |
 | `jump_if_true8` | 212 | Target8 | 2 | 1 → 0 | Basic | `jump_if_true` with an 8-bit offset. |
-| `lazy` | 213 | – | 1 | 0 → 0 | Alloc | The whole code of a lazy template (D2990): compiles the function at its first call and continues in the compiled template, in the same frame. |
+| `lazy` | 213 | – | 1 | 0 → 0 | Alloc | The whole code of a lazy template: compiles the function at its first call and continues in the compiled template, in the same frame. |
 <!-- /gen -->

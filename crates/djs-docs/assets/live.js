@@ -1,5 +1,7 @@
 // Live examples: every ```js live block of the guide is an editor whose code runs in
-// djs-wasm in the page (D2103). The editor is a textarea with transparent text over the
+// djs-wasm in the page (D2103). A `debugger;` in the code pauses the run there (D3050):
+// the page writes it out as a continuation dump, shows it in the Dump tab and can resume
+// the run from it, in a fresh sandbox. The editor is a textarea with transparent text over the
 // highlighted `pre` the page already has (render.rs live_block): the textarea does the
 // editing (caret, selection, undo, input methods, screen readers) and highlight.js
 // repaints the `pre` under it on every input. Without JavaScript (or from file://) the
@@ -27,6 +29,8 @@ function lib() {
   ]).then(([{ Sandbox }, { LAYOUT }, module]) => ({
     Sandbox,
     module,
+    // The docs build has the dumper (`vm_dump`), which a `debugger;` pause needs.
+    dumps: WebAssembly.Module.exports(module).some((e) => e.name === "vm_dump"),
     kindNames: Object.fromEntries(Object.entries(LAYOUT.cells).map(([n, c]) => [c.kind, n])),
     classNames: Object.fromEntries(Object.entries(LAYOUT.objectClasses).map(([n, c]) => [c, n])),
   }));
@@ -299,6 +303,108 @@ function onKey(ev, ex) {
 
 // ---- Running ----------------------------------------------------------------------
 
+/** The code has a `debugger` statement (the keyword, not in a string or a comment). */
+const hasDebugger = (src) => tokens(src).some(([role, s]) => role === "keyword" && s === "debugger");
+
+/** Bytes as KiB with one decimal, or bytes. */
+const size = (n) => (n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KiB`);
+
+/** The gzip size of `text` (CompressionStream), or null where the browser has none. */
+async function gzipSize(text) {
+  if (typeof CompressionStream === "undefined") return null;
+  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream("gzip"));
+  return (await new Response(stream).arrayBuffer()).byteLength;
+}
+
+/**
+ * A run with `debugger;` pauses (D3050): a task whose `debugger` host function suspends it
+ * into a dump. Each pause shows the dump; Resume loads it into a fresh sandbox, which runs
+ * on to the next pause or the end. The output of all of them goes to one pane.
+ */
+async function runPausing(ex, l, id) {
+  const { el } = ex;
+  const pane = (n) => el.querySelector(`[data-pane="${n}"]`);
+  const setStatus = (t) => (el.querySelector(".live-status").textContent = t);
+  const { Sandbox, module } = l;
+  if (!l.dumps) {
+    pane("dump").innerHTML = `<p class="muted">This build of the site has no dumper (the docs module is built with it), so <code>debugger;</code> does nothing.</p>`;
+    return false;
+  }
+  const lines = [];
+  const out = (...a) => lines.push(esc(a.map(show).join(" ")));
+  const showOut = (extra = "") =>
+    (pane("out").innerHTML = (lines.join("\n") || `<span class="muted">(no output)</span>`) + extra);
+  let paused = null;
+  const opts = {
+    module,
+    frozenBuiltins: true,
+    console: { log: out, info: out, warn: out, error: out },
+    fuelSlice: FUEL_SLICE,
+    maxFuel: MAX_FUEL,
+    now: 0,
+    // The pause: the run is idle while this call is open, so the task can be dumped.
+    debugger: {
+      call() {
+        paused?.();
+        return new Promise(() => {});
+      },
+      // Continued from a dump: the run goes on at once.
+      resume() {},
+    },
+  };
+  let resumes = 0;
+  const step = async (task) => {
+    const atPause = new Promise((r) => (paused = r));
+    const end = task.result.then(
+      (v) => ({ done: true, v }),
+      (e) => ({ done: true, e }),
+    );
+    const first = await Promise.race([atPause.then(() => ({ done: false })), end]);
+    if (id !== ex.runs) return task.sandbox.dispose();
+    if (first.done) {
+      task.sandbox.dispose();
+      const failure = first.e ? describe(first.e, ex.ta.value, false) : null;
+      showOut(failure ? `\n<span class="live-error">${esc(failure.text)}</span>` : "");
+      setStatus(failure ? "threw" : resumes ? `ran to the end, resumed ${resumes}× from a dump` : "ran without pausing");
+      if (!resumes) pane("dump").innerHTML = `<p class="muted">The run ended without reaching a <code>debugger;</code> in an async function.</p>`;
+      return;
+    }
+    let dump;
+    try {
+      dump = await task.suspend();
+    } catch (e) {
+      task.sandbox.dispose();
+      showOut(`\n<span class="live-error">${esc(String(e?.message ?? e))}</span>`);
+      setStatus("could not dump");
+      pane("dump").innerHTML = `<p class="live-error">${esc(String(e?.message ?? e))}</p>`;
+      return;
+    }
+    task.sandbox.dispose();
+    showOut(`\n<span class="muted">(paused at debugger)</span>`);
+    setStatus(`paused at debugger${resumes ? ` (after ${resumes} resume${resumes > 1 ? "s" : ""})` : ""}`);
+    const gz = await gzipSize(dump);
+    const bytes = new TextEncoder().encode(dump).length;
+    pane("dump").innerHTML =
+      `<p>The run is idle at <code>debugger;</code>: it waits for the host's <code>debugger</code> call, so the page wrote it out as a continuation dump, ` +
+      `<b>${size(bytes)}</b>${gz === null ? "" : ` (${size(gz)} gzipped)`}. The sandbox that ran it is gone; the dump is all that is left of the run. ` +
+      `<button class="live-resume">Resume from the dump</button></p>` +
+      `<pre class="code live-dump"><code class="lang-js">${paint(dump, null)}</code></pre>`;
+    pane("dump").querySelector(".live-resume").onclick = async () => {
+      if (id !== ex.runs) return;
+      resumes++;
+      setStatus("resuming…");
+      try {
+        await step(await Sandbox.resume(dump, opts));
+      } catch (e) {
+        setStatus(`could not resume: ${e.message}`);
+      }
+    };
+    select(ex, "dump");
+  };
+  await step(new Sandbox(opts).start(ex.ta.value, {}, { filename: "example.js" }));
+  return true;
+}
+
 async function run(ex) {
   const { el, ta } = ex;
   clearTimeout(ex.timer);
@@ -311,6 +417,14 @@ async function run(ex) {
   try {
     const l = await lib();
     const { Sandbox, module } = l;
+    if (hasDebugger(src)) {
+      pane("bytecode").textContent = disasm(module, src) ?? ex.listing;
+      pane("heap").innerHTML = `<p class="muted">A run that pauses at <code>debugger;</code> ends in a dump; its heap is gone.</p>`;
+      pane("suspend").innerHTML = `<p class="muted">See the Dump tab: this run is suspended into a dump at its <code>debugger;</code>.</p>`;
+      if (await runPausing(ex, l, id)) return;
+    } else if (pane("dump").querySelector(".live-dump")) {
+      pane("dump").innerHTML = DUMP_HINT;
+    }
     let lines = [];
     const out = (...a) => lines.push(esc(a.map(show).join(" ")));
     let slices = 0;
@@ -380,6 +494,13 @@ async function run(ex) {
   } finally {
     if (id === ex.runs) el.classList.remove("is-running");
   }
+}
+
+const DUMP_HINT = `<p class="muted">Put <code>debugger;</code> in the code, at the top level or in any async function: the run then pauses there, and the page writes it out as a continuation dump, shows it, and can resume the run from it.</p>`;
+
+/** Shows the result tab `name`. */
+function select(ex, name) {
+  ex.select?.(ex.el.querySelector(`[role="tab"][data-tab="${name}"]`));
 }
 
 // ---- Setup ------------------------------------------------------------------------
@@ -460,6 +581,7 @@ function setup(el, n) {
     }
     for (const p of el.querySelectorAll(".live-pane")) p.hidden = p.dataset.pane !== b.dataset.tab;
   };
+  ex.select = select;
   for (const [i, b] of tabs.entries()) {
     b.hidden = false;
     b.onclick = () => select(b);

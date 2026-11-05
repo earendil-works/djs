@@ -249,10 +249,12 @@ fn provenance(st: &Status, keys: &[&str]) -> String {
 }
 
 /// The text of `gen:status WHAT`, or an error.
-pub fn generate(st: &Status, what: &str) -> Result<String, String> {
+/// `pi`: the region may name pi (README.md and the guide's pi page): its test suite, its
+/// workload by name. Elsewhere the guide names no host.
+pub fn generate(st: &Status, what: &str, pi: bool) -> Result<String, String> {
     match what {
-        "conformance" => conformance(st),
-        "speed" => speed(st),
+        "conformance" => conformance(st, pi),
+        "speed" => speed(st, pi),
         "size" => size(st),
         "inventory" => Ok(inventory(st)),
         _ => Err(format!(
@@ -261,7 +263,7 @@ pub fn generate(st: &Status, what: &str) -> Result<String, String> {
     }
 }
 
-fn conformance(st: &Status) -> Result<String, String> {
+fn conformance(st: &Status, pi: bool) -> Result<String, String> {
     let t = st.test262.as_ref().map_err(Clone::clone)?;
     let pass = t.active.saturating_sub(st.ratchet262);
     let pct = 100.0 * pass as f64 / t.active.max(1) as f64;
@@ -294,7 +296,7 @@ fn conformance(st: &Status) -> Result<String, String> {
         "- ",
         "  ",
     );
-    if let (Some(p), Some(n)) = (st.num("pi/passed"), st.num("pi/total")) {
+    if let (true, Some(p), Some(n)) = (pi, st.num("pi/passed"), st.num("pi/total")) {
         s += &wrap(
             &format!(
                 "pi's codemode test suite on djs: {p} of {n} tests pass ({}).",
@@ -323,7 +325,7 @@ const SPEED: &[(&str, &str)] = &[
     ("higher-order", "map/filter/reduce (higher-order)"),
 ];
 
-fn speed(st: &Status) -> Result<String, String> {
+fn speed(st: &Status, pi: bool) -> Result<String, String> {
     let mut s = String::from(
         "| workload | djs-wasm | quickjs-wasi | ratio |\n| --- | ---: | ---: | ---: |\n",
     );
@@ -335,6 +337,11 @@ fn speed(st: &Status) -> Result<String, String> {
             return Err(format!(
                 "gen:status speed: no {dk} or {qk} in tests/scores/status.tsv (scripts/status.py speed)"
             ));
+        };
+        let label = if pi {
+            label.to_string()
+        } else {
+            label.replace("pi-like", "agent-like")
         };
         let _ = writeln!(
             s,

@@ -75,12 +75,12 @@ function ArrayPrototypeIncludes(this: Value, searchElement: Value, fromIndex?: V
 ```
 
 It reads like the spec, step by step. `LengthOfArrayLike`, `ToIntegerOrInfinity` and
-`Get` may run user code. `ArraySearchDense` is a leaf (D1801): it searches the array's
+`Get` may run user code. `ArraySearchDense` is a leaf: it searches the array's
 dense storage in Rust in one go when every element it looks at is a plain data element,
 and returns `-2` when it cannot answer (a hole, an accessor, an object that is not an
 Array), so the loop below it handles the general case.
 
-The subset is small on purpose (D1171):
+The subset is small on purpose:
 
 - Only top-level functions with explicit types: `Value`, `Obj`, `Str`, `Sym`, `Fn`,
   `boolean`, and the numeric types `i32`, `u32` and `f64`. Numbers never mix types
@@ -96,7 +96,7 @@ user code) or `@reentrant` (may call exactly one user function, whose result com
 the operation, such as `Get` calling a getter). Today about 280 are leaves and about 30
 are reentrant. Builtins tagged `@intrinsic` join them, so that the interpreter's slow
 paths and other builtins can call them as `%Name(...)`. They are all numbered in one
-table (D1270); the [intrinsics reference](ref-intrinsics.md) lists them.
+table; the [intrinsics reference](ref-intrinsics.md) lists them.
 
 A call to a reentrant intrinsic or another reentrant builtin is a **resume point**: the
 builtin may stop there and resume later. djs-bgen finds every resume point and lists
@@ -111,7 +111,7 @@ builtin starts calling user code.
 > get one of the faster paths below.
 
 > **Trade-off.** Our own parser for the subset over the TypeScript compiler or oxc
-> (D1170). djs-bgen is a dependency-free Rust crate with a hand-written parser and type
+>. djs-bgen is a dependency-free Rust crate with a hand-written parser and type
 > checker, so regenerating needs only cargo, and accepting only the subset is most of
 > the checking. The cost: its own parser and messages to maintain, and no full-TS
 > tooling inside bgen.
@@ -122,8 +122,7 @@ djs-bgen compiles every builtin twice.
 
 **The bytecode backend** covers every builtin. bgen erases the types and writes
 `builtins/gen/prelude.js`: plain JavaScript with `%Name(...)` intrinsic calls, an
-installation call per builtin (`%InstallMethod`, `%InstallConstructor`, ..., D1172,
-D1310), and the list of `@native` and `@fast` builtins. djs compiles it in *privileged
+installation call per builtin (`%InstallMethod`, `%InstallConstructor`, ...), and the list of `@native` and `@fast` builtins. djs compiles it in *privileged
 mode*, the only mode in which `%Name(...)` compiles: to the `call_intrinsic` opcode.
 
 <!-- gen:ops call_intrinsic -->
@@ -132,17 +131,17 @@ mode*, the only mode in which `%Name(...)` compiles: to the `call_intrinsic` opc
 | `call_intrinsic` | 157 | Intrinsic, Argc | 5 | imm1 → 1 | Call | `a1 .. an -> r`: privileged code only. |
 <!-- /gen -->
 
-The prelude runs once, when the base snapshot is built (D1321). Every VM starts as a
+The prelude runs once, when the base snapshot is built. Every VM starts as a
 copy of that image, with all builtins installed and compiled, so no VM ever compiles the
 prelude. Privileged templates keep no line tables or local names, which saves space in
-that image (D1430, D1980).
+that image.
 
 The prelude is one wrapper function that declares every builtin as a function inside
 it. A builtin that calls another one, such as a helper like `LengthOfArrayLike`, would
 normally capture that name the way any closure captures a variable of its enclosing
 function: a Box cell per captured function, a capture descriptor per caller and a slot
 per capture in every caller's function object. Privileged code does without them
-(D2440). The compiler gives each top-level prelude function that another one refers to
+. The compiler gives each top-level prelude function that another one refers to
 a slot in one table of the realm, and references compile to `get_builtin` (read the
 slot) instead of `get_cap`; the wrapper fills the table once with `put_builtin`. That
 took 27 KB off every VM, about a twelfth of the base image. User code never sees the
@@ -151,7 +150,7 @@ table, and its closures work as before.
 **The Rust backend** is opt-in. A builtin tagged `@native` (eight of them: `push`, `sort`
 and its merge, and `JSON.stringify`'s slow path) is also
 compiled to a Rust state machine in
-`crates/djs-core/src/builtins/gen/natives.rs` (D1632). bgen splits the function into
+`crates/djs-core/src/builtins/gen/natives.rs`. bgen splits the function into
 basic blocks, and each block becomes one arm of a `match` on the state. A resume point
 ends a block. Here is the loop of `Array.prototype.push` for several items, excerpted
 from the generated file. The source is the plain loop
@@ -184,8 +183,8 @@ from the generated file. The source is the plain loop
 
 A native builtin runs in a **native frame**: an ordinary frame record in the arena with
 a header bit set, its state in place of the program counter and its locals in the
-frame's slots (D1631). A typed local such as the counter `i` (`l4f` above) also lives in
-a Rust variable, but every write goes to the slot too (D2000), so the frame always holds
+frame's slots. A typed local such as the counter `i` (`l4f` above) also lives in
+a Rust variable, but every write goes to the slot too, so the frame always holds
 the whole state. The common case stays in the same Rust loop. State 8's `Set` is a
 resume point: on an Array it completes inline (`Flow::Inline`) and the loop goes on to
 state 11. When a call needs a JavaScript frame (a setter, a proxy trap), the native
@@ -196,42 +195,41 @@ can stop and be saved in the middle, like bytecode.
 
 The callback loops of `forEach`, `map`, `filter`, `some`, `every`, `find`, `findIndex`
 and `reduce` are bytecode builtins. Their dense part is one intrinsic, `%EachDense`
-(D2303). It enters the callback's frame once and, on each return, completes the step
+. It enters the callback's frame once and, on each return, completes the step
 (store, test, accumulate) and enters the same frame again for the next element. No
 native state machine runs per element, and the builtin's own spec loop takes over at the
 first hole, proxy or other array. That made these builtins about twice as fast per
 element as their native versions, and dropping them from the Rust backend left the
 module smaller. `Array.from(arrayLike, f)` uses the same loop, reading each element of
-the array-like where that reads only data properties (D2306). Calls on short arrays pay
+the array-like where that reads only data properties. Calls on short arrays pay
 mostly fixed costs: an empty array skips the intrinsic, and the intrinsic starts without
-the interpreter's general instruction path (D2307). `reduce` keeps its running
+the interpreter's general instruction path. `reduce` keeps its running
 accumulator in the loop's own state rather than in an array, and learns whether
 `initialValue` was passed from its frame's argument count (`%ArgumentCount`) instead of
 a rest parameter, so a call allocates nothing for an empty array and runs in one frame
-(D2552).
+.
 
 Two rules keep this safe:
 
 - **No collection inside a state arm.** An allocation never collects; it only sets a
   pending flag. The collector runs at state transitions (back-edges, and calls that
   return to the interpreter), where every value the builtin holds is in a frame slot.
-  The one exception is collect-and-retry at the heap cap (D1900): a native operation
+  The one exception is collect-and-retry at the heap cap: a native operation
   that hits the cap collects and runs again, but only at points where bgen knows that
   the generated code holds no other heap value in a Rust local.
-- **Fuel per transition.** A native frame charges 4 fuel per back-edge and 2 per call
-  (D1633). Bytecode charges per instruction, so the fuel a run uses depends on the
+- **Fuel per transition.** A native frame charges 4 fuel per back-edge and 2 per call. Bytecode charges per instruction, so the fuel a run uses depends on the
   backend. Results do not.
 
 Both backends must behave the same, and they are tested against each other: `djs run`,
 the difftest runner and the test262 runner take `--backend bytecode|native`, and the
-gate runs the corpus with both (D1635, [How djs is tested](testing.md)).
+gate runs the corpus with both ([How djs is tested](testing.md)).
 
 > **Trade-off.** An opt-in Rust backend over making every builtin native. Generated Rust
 > runs much faster than the same builtin as bytecode (when it landed, 3.4 times for
 > `map` and 5.3 times on the higher-order benchmark), but every native function adds
 > wasm code, and wasm size is part of startup ([fast startup in
 > wasm](goals.md#fast-startup-in-wasm)). The native API is kept out of line in wasm to
-> limit that cost (D1634), and `scripts/native-sizes.sh` prints the size per function. A
+> limit that cost, and `scripts/native-sizes.sh` prints the size per function. A
 > builtin becomes `@native` only when a benchmark shows that it is hot. The cost of
 > having the option: two implementations of every native builtin's semantics to keep
 > equal, which is why both are tested in the gate.
@@ -242,16 +240,16 @@ Many hot builtins rarely meet user code: `"a,b".split(",")`, `s.includes("x")`,
 `xs.indexOf(3)`, `xs.push(v)`. Even as native code, entering a frame and running
 `ToObject` and `LengthOfArrayLike` costs more than the work itself. A builtin tagged
 `@fast` has a hand-written Rust entry of the same name in
-`crates/djs-core/src/builtins/fast.rs` (D1850). With the native backend, a call first
+`crates/djs-core/src/builtins/fast.rs`. With the native backend, a call first
 runs the entry, which either returns the builtin's result or *declines*, and then the
 builtin runs as usual. 18 builtins have one.
 
 An entry is allowed to answer only when nothing observable can happen: primitive
 arguments, dense arrays whose elements are plain data, no proxies. Every case that would
 throw declines, so errors and their stack traces always come from the builtin itself. An
-entry that reaches the heap cap declines too (D1910), so that the builtin's own
+entry that reaches the heap cap declines too, so that the builtin's own
 allocations collect and retry. A builtin is `@fast` or `@native`, not both, except
-`Array.prototype.push` (D2020): the leaf covers the common case, and the bytecode
+`Array.prototype.push`: the leaf covers the common case, and the bytecode
 version handles the rest.
 
 Here is the slow path at work. The array has a getter at index 1, so `includes` cannot
@@ -291,7 +289,7 @@ Each twin, an `@native` state machine or an `@fast` entry, is code in every modu
 each must pay for its bytes. A twin stays only where turning it off makes pi-like
 codemode work (the pi-like workload, the pi bench) at least 1% slower in wasm
 instructions, or makes some workload slower by at least 10% for each kilobyte (gzipped)
-of the twin's code (D2310). The measurement kept 18 `@fast` entries (`split`,
+of the twin's code. The measurement kept 18 `@fast` entries (`split`,
 `includes`, `push` and `pop`, the dense array searches and slices, `String.fromCharCode`,
 the conversion helpers the builtins call most) and 8 `@native` builtins (`push`, `sort`
 and the `JSON.stringify` serializer). The other 56 came out: they saved under 1%
@@ -302,7 +300,7 @@ anywhere, and some were slower than their bytecode builtins.
 Offsets, intrinsic ids and the base image's layout change from build to build: a new
 builtin shifts every cell after it. Something that must name a builtin across builds
 (a snapshot exported by meaning, a heap dump read by a newer tool) names it by its
-*registry* entry instead (D2371). Every builtin object, function and symbol of the base
+*registry* entry instead. Every builtin object, function and symbol of the base
 realm, and every intrinsic, has a stable id there, keyed by a path in the spec's style:
 
 ```text
@@ -343,7 +341,7 @@ heap analyzer prints builtins by their registry paths (`%Array.prototype.map%`).
 > reaches are named by their source name in the prelude (`%prelude:Name%`), which stays
 > the same while the helper keeps its name. They used to be named by the capture that
 > reached them, a path that changed with the calling builtin's code; those entries are
-> tombstones now (D2440).
+> tombstones now.
 
 ## Frozen builtins
 
@@ -357,7 +355,7 @@ prelude spent most of its 3 ms startup doing it.
 
 djs offers the same result as an option at VM creation: `frozen_builtins` in
 [`VmOptions`](../../crates/djs-core/src/vm/mod.rs), `frozenBuiltins` in the Sandbox and
-the pi adapter, flag 1 of `vm_new_with` in wasm (D2304). Nothing is frozen. Every VM's
+the pi adapter, flag 1 of `vm_new_with` in wasm. Nothing is frozen. Every VM's
 arena starts with a copy of the base image, so the builtins sit below a known offset,
 the end of that prefix. With the option on, the property operations treat every object
 below it as frozen: it is not extensible, its properties read as non-writable and
@@ -390,7 +388,7 @@ The mode is part of the image: a restored VM keeps it. Fast paths can lean on it
 `map`, `filter` and the other methods that create their result through the array's
 constructor normally check that `Array.prototype.constructor` and `Array[Symbol.species]`
 are still the originals; when both objects are frozen builtins that check is the region
-compare (D2554).
+compare.
 
 > **Trade-off.** A region check over freezing the objects. Freezing at startup costs
 > time and memory in every VM and rewrites the base; marking frozen objects in their
@@ -399,7 +397,7 @@ compare (D2554).
 > from the spec (test262 expects the `TypeError`), so the mode is opt-in, and a builtin is
 > frozen by where it lives, which only works because the prefix never moves: collections
 > leave every cell below its end in place, and the per-VM objects that must stay
-> writable, such as the global object, live above it (D2064).
+> writable, such as the global object, live above it.
 
 ## Two builds: full and slim
 
@@ -415,7 +413,7 @@ The variants are cargo features, and features may only add things. So the defaul
 turns on a feature called `full`, which carries those families, and a second one,
 `unicode`, which carries the Unicode property tables of `\p{…}` in regular expressions
 and full normalization. Building without the default features gives the slim build
-(D2411, D025).
+.
 
 Three mechanisms take a family out:
 - **Builtins.** A builtin file can be marked as left out of the slim build, and so can a
@@ -478,34 +476,3 @@ slim VM therefore names its builtins with the same ids as a full one.
   and `builtins/dense.rs`: the `@fast` entries and dense leaves.
 - [`crates/djs-core/src/vm/registry.rs`](../../crates/djs-core/src/vm/registry.rs) and
   [tests/builtins/registry.tsv](../../tests/builtins/registry.tsv): the builtin registry.
-
-Decisions on this page:
-
-<!-- gen:decisions D1170 D1171 D1172 D1270 D1310 D1321 D1430 D1631 D1632 D1633 D1634 D1635 D1801 D1850 D1900 D1910 D2000 D2020 D2060 D2090 D2304 D2306 D2307 D2310 D2371 D2440 -->
-- D1170: djs-bgen is Rust with its own parser for the subset
-- D1171: Builtin subset rules
-- D1172: Generated prelude format and installation
-- D1270: Intrinsic ids
-- D1310: Builtin installation forms
-- D1321: The base snapshot (djs-prelude)
-- D1430: Privileged code keeps no line tables or local names
-- D1631: Native frames are ordinary frame records with a header bit
-- D1632: The bgen Rust backend: states are basic blocks, calls go through call_intrinsic
-- D1633: Fuel per transition; the backend is part of the engine's identity
-- D1634: Code size: the native API is out of line in wasm
-- D1635: Both backends are tested
-- D1801: Dense-array leaves for the element loops of Array builtins
-- D1850: Leaf fast paths for everyday builtins (`@fast`)
-- D1900: Native builtins collect and retry at the heap cap
-- D1910: Dense-array loops, fromCharCode and the URI functions as `@fast`; entries decline at the heap cap
-- D2000: Typed locals of native builtins live in Rust variables, written through
-- D2020: `@fast` builtins are not also `@native`, except Array.prototype.push
-- D2060: The base is decoded or injected straight into the first VM's arena
-- D2090: Fused dense HasProperty + Get in natives; one-pass string search and in-arena joins
-- D2304: Frozen builtins: gates in the property layer, the override fix in [[Set]]
-- D2306: Array.from(arrayLike, mapfn) runs through `%EachDense`
-- D2307: Callback builtins on short arrays: no `%EachDense` for an empty array, and its call outside `step`
-- D2310: A twin stays only where it pays its bytes
-- D2371: The builtin registry: stable ids by spec path, append-only, gate-checked
-- D2440: Prelude functions live in a realm table, not in captured Boxes
-<!-- /gen -->

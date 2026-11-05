@@ -10532,3 +10532,17 @@ compiles the script again with the same options. It exists for the docs site, wh
 examples show the dump a run writes at a `debugger;`. Alternatives: rewriting the source
 in the page (columns move, the dump shows the rewrite) or a new opcode or intrinsic (the
 image descriptor of the dump module would then differ from the shipped one's).
+
+## D3051: The guide cites no decisions, tells no history and names pi on one page
+date: 2026-11-06 · by: guide · issue: 0220
+Owner's rules for docs/guide, enforced by `djs-docs check` on the pages in SUMMARY.md
+(prose and inline code; code blocks exempt): no decision IDs and no links to the decision
+log (which leaves the site, with its search entries and the `gen:decisions` region); no
+history (a short list of telling phrases: "no longer", "used to be", "originally", "was
+replaced", "format 2", ...); pi, as a whole word or a path (`js/pi/`), only on `pi.md`, so
+`π` and `pipeline` pass. Generated descriptions (opcodes, intrinsics) drop their decision
+citations; `gen:status` names pi only on README.md and `pi.md`. Supersedes D2102's "the ID
+only as a citation". New: `gen:dump [N]`, the dump the block above writes at its Nth
+`debugger;` pause (D3050), checked like `gen:run` and accepted with `regen --examples`.
+While the rewrite runs, pages it has not reached yet are listed in `NOT_YET_REWRITTEN`
+(render.rs), exempt from the pi and history rules; the list ends empty.

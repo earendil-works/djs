@@ -13,7 +13,7 @@ path = "src/main.rs"
 [dependencies]
 djs-core = { path = "../djs-core" }
 # Examples run in a VM made from the base snapshot, as `djs run` does.
-djs-prelude = { path = "../djs-prelude" }
+djs-prelude = { path = "../djs-prelude", features = ["names"] }
 # Status numbers (D2101): test262 grouping, as the runner classifies tests.
 djs-test262 = { path = "../djs-test262" }
 pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }

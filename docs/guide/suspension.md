@@ -29,10 +29,10 @@ The host calls `run` with an amount of fuel. It returns one of:
 | `OutOfFuel` | the fuel ran out at an instruction boundary | runs again later, or gives up |
 | `HostCall` | a sync host function was called; the VM is parked on it | handles it, resolves it, runs again |
 | `Idle` | nothing to run, but async host calls are pending | delivers a result, runs again |
-| `HostOutOfMemory` | the host allocator refused memory (D1690) | discards the call; the VM is still usable |
+| `HostOutOfMemory` | the host allocator refused memory | discards the call; the VM is still usable |
 
 In every case, the interpreter's registers have been written to the `Interp` cell, and
-the arena is a complete description of the VM (D1151). Copying it gives an image, and
+the arena is a complete description of the VM. Copying it gives an image, and
 a fresh VM restored from that image inside the same process continues exactly where the
 old one stopped. The examples in this guide show it: every output on these pages was
 produced by a VM that was stopped every 50 units of fuel, copied into an image, and
@@ -69,14 +69,14 @@ costs come in five classes, in the instruction table:
 
 Work that is not one instruction is charged in proportion to what it does: a leaf
 intrinsic that copies a string charges for the units it copies, `JSON.parse` for the
-bytes it reads, the regex matcher for every step it takes (D1711). A `@native` builtin
-charges 4 per loop iteration and 2 per call it makes (D1633). So fuel bounds the *work*
+bytes it reads, the regex matcher for every step it takes. A `@native` builtin
+charges 4 per loop iteration and 2 per call it makes. So fuel bounds the *work*
 a slice does, not just its instruction count: one instruction that parses a large tool
 result costs as much fuel as the work it does.
 
 An instruction is charged before it runs, so a slice can end with the fuel below zero
 when its last instruction was expensive. That overshoot is stored in the heap as a debt
-(`Interp::FUEL_DEBT`) and paid first by the next run (D1740, D1712). The result: a
+(`Interp::FUEL_DEBT`) and paid first by the next run. The result: a
 budget of a million fuel stops at the same instruction whether it was given as one run
 or as a thousand slices of a thousand, with or without snapshots in between.
 
@@ -86,23 +86,23 @@ or as a thousand slices of a thousand, with or without snapshots in between.
 > makes the stopping point a function of the program. The cost: fuel only approximates
 > time, the weights are coarse, and every new native operation has to charge for its
 > work or it becomes a way to stall the host. Hosts that need a time limit (pi does)
-> poll the clock between slices: pi runs 10,000 fuel per poll (D1492).
+> poll the clock between slices: pi runs 10,000 fuel per poll.
 
 ## Safepoints
 
 Stopping for fuel can happen at any instruction boundary. Collecting garbage can happen
 only at **safepoints**, the subset of boundaries where the interpreter checks whether a
 collection is pending: backward jumps, frame entry and return, the start of a run, and
-the state transitions of native builtins (D1152). At a safepoint, every live value is on
+the state transitions of native builtins. At a safepoint, every live value is on
 the value stack or in a heap cell, the interpreter's cached offsets into the code are
 re-derived afterwards, and Rust code holds no raw values. Between safepoints allocation
 only bumps (see [the arena](arena.md)), which is what lets Rust code keep heap values in
 local variables.
 
 Collection points depend only on the program, not on how it was sliced: the threshold is
-in the heap and the arena's growth does not depend on fuel (D1710). That is why the
+in the heap and the arena's growth does not depend on fuel. That is why the
 images of two runs with different slicing are byte for byte the same, which the gate
-checks (D1720; [Determinism](determinism.md)).
+checks ([Determinism](determinism.md)).
 
 ## Host calls
 
@@ -111,14 +111,14 @@ The call instruction records a pending call in the heap with its arguments, save
 registers as if a JavaScript callee had been entered, and `run` returns `HostCall`. The
 host reads the arguments, does whatever it needs (asynchronously on its side, if it
 likes), and resolves the call: the result is pushed where a JavaScript callee's return
-value would go, and the next `run` continues after the call instruction (D1152). An
+value would go, and the next `run` continues after the call instruction. An
 error result is thrown at the call instruction, so the script can catch it.
 
 An **async** host function (`tools.*` in pi) does not park. The call creates a promise,
 records `{call id, function, arguments, promise}` in the pending host call table, and
 continues. The host collects new calls after each `run`. Their results go into an
 **inbox** in the heap and are applied one at a time, each when the job queue has run
-empty, like I/O callbacks in an event loop (D1374, D1670). So what a script does depends
+empty, like I/O callbacks in an event loop. So what a script does depends
 on the order of the results, never on when they arrived relative to the fuel slices.
 
 Both kinds are heap state, so a VM that waits for ten tools is as complete a description
@@ -134,9 +134,9 @@ so far changed some of that numbering ([images](snapshots.md#what-an-image-depen
 minutes for a tool or a person must survive restarts and upgrades. So persistence is
 something else: a **continuation dump**, the run written out as an ordinary JavaScript
 program that recreates it, in which every suspended function is a continuation, the rest
-of its code from where it waits (D2560, D2830). Any later djs, or node, runs it.
+of its code from where it waits. Any later djs, or node, runs it.
 
-A dump is taken only at an **idle point** (D2561): when `run` returned `Idle`, waiting on
+A dump is taken only at an **idle point**: when `run` returned `Idle`, waiting on
 async host calls with no jobs queued and no frame on the stack. There, every suspended
 piece of the run is an async function or generator stopped at an `await` or `yield`,
 which the compiler can describe by name (the bindings in scope, the values held for the
@@ -146,6 +146,45 @@ instruction sequence has no such description; a host that must persist it gives 
 to reach an idle point, or reruns it from its last tool result, which determinism makes
 safe. [Images and dumps](snapshots.md) shows what a dump holds.
 
+On the docs site, a `debugger;` statement in a live example makes such an idle point: the
+page binds a host function `debugger` that the statement awaits, so the run stops there
+and waits for it. The page then writes the run out, shows the dump in the *Dump* tab, and
+resumes it from the dump in a fresh sandbox when asked:
+
+```js live
+let total = 0;
+for (const word of ["fuel", "frames", "arena"]) {
+  total += word.length;
+  console.log(word, total);
+  debugger;
+}
+return total;
+```
+<!-- gen:run -->
+```text
+fuel 4
+frames 10
+arena 15
+```
+<!-- /gen -->
+
+At the first pause, the dump is this Script:
+
+<!-- gen:dump -->
+```js
+"djs-dump";
+$djs.k(async function (total, $djs_i1) {
+await $djs.resume(2, "debugger", []);
+for (const word of $djs_i1) {
+  total += word.length;
+  console.log(word, total);
+  debugger;
+}
+return total;
+}, $djs.source("example.js", "c7da8262"), 1, 22).call(globalThis, 4, ["frames", "arena"].values());
+```
+<!-- /gen -->
+
 ## Generators and async functions
 
 A generator's frame must outlive the call that created it, and an async function's frame
@@ -153,7 +192,7 @@ must survive every `await`. djs does not give them separate stacks. When a gener
 yields or an async function awaits, the interpreter copies the frame's slice of the
 value stack (arguments, header, locals, operand stack) into a `Generator` object in the
 heap, and pops the frame. Resuming copies the slice back onto the top of the stack and
-rewrites the four header words that link it to its new caller (D1375). A frame contains
+rewrites the four header words that link it to its new caller. A frame contains
 no absolute positions besides those links, so it can be resumed at any depth.
 
 ```js
@@ -198,7 +237,7 @@ In `twice`, `async_start` creates the async state object in a hidden local (`<st
 `%AsyncAwait`, a tail call that subscribes the state to the promise and returns the
 function's result promise to the caller. When the promise settles, a promise job resumes
 the state, and `await` pushes the value. Since closures capture boxes and never point
-into frames (D1083), nothing else needs to happen.
+into frames, nothing else needs to happen.
 
 ```js live
 function* counter() {
@@ -233,8 +272,8 @@ The hardest stops are the ones inside builtins: a `map` over a million elements,
 `sort` with a comparator, a regular expression that backtracks. The [leaf
 rule](builtins.md) handles the first two: hand-written Rust never runs user code, and a
 builtin that does is either bytecode or a generated state machine whose every resume
-point and loop back-edge is a place it can stop (D1631, D1632). The regex engine keeps
-its backtracking stack in the arena and can suspend in the middle of a match (D1332), so
+point and loop back-edge is a place it can stop. The regex engine keeps
+its backtracking stack in the arena and can suspend in the middle of a match, so
 catastrophic backtracking is a timeout, not a hang. The remaining leaf operations (a big
 `join`, `JSON.parse` of a large tool result) do not stop in the middle, but they are
 bounded by their input and charge fuel for it.
@@ -259,29 +298,3 @@ bounded by their input and charge fuel for it.
   [`vm/dump.rs`](../../crates/djs-core/src/vm/dump.rs) and
   [`vm/dump_cont.rs`](../../crates/djs-core/src/vm/dump_cont.rs): writing continuation
   dumps (loading one is running it).
-
-Decisions on this page:
-
-<!-- gen:decisions D1151 D1152 D1690 D1711 D1633 D1740 D1712 D1492 D1710 D1720 D1374 D1670 D1370 D1375 D1083 D1631 D1632 D1332 D2560 D2561 D2830 -->
-- D1151: Interpreter state in the arena
-- D1152: Host call protocol and fuel semantics
-- D1690: Running out of host memory is not a JS out-of-memory error
-- D1711: Regexp fuel can overdraw; backreferences are charged in full
-- D1633: Fuel per transition; the backend is part of the engine's identity
-- D1740: Fuel overshoot carries to the next run; a suspended intrinsic is charged once
-- D1712: A suspended intrinsic's refund carries to the next run as a credit
-- D1492: pi adapter: 10,000 fuel per interrupt poll
-- D1710: GC points and raw images do not depend on the fuel slice
-- D1720: Determinism checks in the gate: heap images across schedules and builds
-- D1374: Async host functions: a promise plus an entry in the pending host call table
-- D1670: Async host results are macrotasks: the host inbox
-- D1370: The job queue, and when `run` reports Done
-- D1375: Suspendable frames: frame slices in Generator objects, tail calls for await
-- D1083: Captured bindings live in heap Box cells
-- D1631: Native frames are ordinary frame records with a header bit
-- D1632: The bgen Rust backend: states are basic blocks, calls go through call_intrinsic
-- D1332: RegExp objects, suspendable matching and regex literals
-- D2560: A waiting session persists as a continuation dump; heap images stay inside a process
-- D2561: Dumps are taken only at idle points
-- D2830: Continuation dumps become plain JavaScript
-<!-- /gen -->

@@ -72,7 +72,7 @@ anywhere](suspension.md)), and with builtins that can stop in the middle
 ## Two constraints
 
 **wasm32 is the target that counts.** djs runs mainly as a WebAssembly module inside a
-JavaScript host, so memory and speed are judged in V8's wasm tier, not natively (D016).
+JavaScript host, so memory and speed are judged in V8's wasm tier, not natively.
 Layouts assume a 32-bit address space, memory grows in 64 KiB pages and never shrinks,
 and code size matters as much as speed.
 
@@ -88,11 +88,3 @@ djs is always in strict mode. It has no `with`, no direct `eval`, no ES modules
 workers, and no JIT. Each of these would cost size or complexity for scripts that do not
 need them. Its conformance target is the part of the test262 conformance suite that
 codemode scripts can reach, not test262 for its own sake.
-
-Decisions on this page:
-
-<!-- gen:decisions D016 D008 D1100 -->
-- D016: wasm32 is the primary target for performance and memory design
-- D008: Codemode top level is a function body
-- D1100: Difftest compares what pi's codemode shows the model
-<!-- /gen -->

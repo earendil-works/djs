@@ -74,6 +74,101 @@ pub fn run(src: &str) -> String {
     out
 }
 
+/// Host function ids of [`dump`]'s VMs.
+const DEBUGGER: u32 = 2;
+
+/// The continuation dump `src` writes at its `nth` pause (from 1): a `debugger;` in an
+/// async function awaits the host's `debugger` there (D3050), and the run is dumped while
+/// it waits, as the live examples' Dump tab does with the Sandbox: frozen builtins,
+/// `console` a namespace of host functions, the body by reference (`$djs.source`), the
+/// run's promise as the dump's value. The text, or why there is none.
+pub fn dump(src: &str, nth: usize) -> String {
+    use djs_core::vm::dump::{BaseNames, DumpOptions};
+    let mut vm = djs_prelude::new_vm(VmOptions {
+        frozen_builtins: true,
+        ..VmOptions::default()
+    })
+    .expect("out of memory");
+    vm.set_now(0.0);
+    let console = vm.new_object().expect("out of memory");
+    let log = vm
+        .new_host_function(CONSOLE_LOG, "log")
+        .expect("out of memory");
+    vm.define(console, "log", log).expect("out of memory");
+    vm.define_global("console", Value::object(console))
+        .expect("out of memory");
+    let pause = vm
+        .new_async_host_function(DEBUGGER, "debugger")
+        .expect("out of memory");
+    vm.define_global("debugger", pause).expect("out of memory");
+    let opts = CompileOptions {
+        debugger_awaits: true,
+        ..CompileOptions::async_body("example.js", &[])
+    };
+    let main = match vm.compile(src.as_bytes(), &opts) {
+        Ok(f) => f,
+        Err(e) => return format!("SyntaxError: {} at {}:{}\n", e.message, e.line, e.col),
+    };
+    let this = Value::object(vm.global());
+    vm.call(main, this, &[]).expect("the VM is idle");
+    let mut pauses = 0;
+    let mut spent = 0;
+    loop {
+        match vm.run(1_000_000) {
+            Status::OutOfFuel if spent < 20 => spent += 1,
+            Status::OutOfFuel => return "(out of fuel)\n".into(),
+            Status::HostCall { call_id, .. } => {
+                vm.resolve_host_call(call_id, Ok(Value::UNDEFINED))
+                    .expect("parked on this call");
+            }
+            Status::Idle => {
+                let open = vm.pending_host_calls();
+                let Some(&id) = open.first() else {
+                    return "(the run waits for nothing)\n".into();
+                };
+                pauses += 1;
+                if pauses < nth {
+                    vm.resolve_host_call(id, Ok(Value::UNDEFINED))
+                        .expect("an open call");
+                    continue;
+                }
+                let run = match vm.outcome() {
+                    Some(Ok(v)) => v,
+                    _ => return "(the run has no result promise)\n".into(),
+                };
+                let name = |id: u32| match id {
+                    CONSOLE_LOG => Some("console.log".to_string()),
+                    DEBUGGER => Some("debugger".to_string()),
+                    _ => None,
+                };
+                let roots = [("console", Value::object(console))];
+                let handles = [("run", run)];
+                let opts = DumpOptions {
+                    base: djs_prelude::BASE,
+                    host: &["console", "debugger"],
+                    host_roots: &roots,
+                    host_fn_name: &name,
+                    handles: &handles,
+                    call_states: &[],
+                    source_refs: true,
+                    base_names: Some(BaseNames {
+                        builtins: djs_prelude::BASE_NAMES,
+                        globals: djs_prelude::BASE_GLOBALS,
+                    }),
+                    check: true,
+                };
+                return match vm.dump(&opts, None) {
+                    Ok(text) => text,
+                    Err(e) => format!("(refused: {})\n", e.message()),
+                };
+            }
+            Status::Done(_) => return "(the run ended without pausing)\n".into(),
+            Status::Threw(e) => return format!("Uncaught {}\n", vm.display(e)),
+            Status::HostOutOfMemory => return "out of host memory\n".into(),
+        }
+    }
+}
+
 /// The bytecode of `src` and of every function in it.
 pub fn disasm(src: &str) -> String {
     let mut heap = Heap::new().expect("out of memory");
@@ -108,5 +203,15 @@ mod tests {
         );
         assert!(run("let").starts_with("SyntaxError"));
         assert!(disasm("return 1").contains("return"));
+    }
+
+    #[test]
+    fn examples_dump_at_debugger() {
+        let src = "let n = 0;\nfor (const x of [1, 2]) {\n  n += x;\n  debugger;\n}\nreturn n;\n";
+        let d = dump(src, 1);
+        assert!(d.contains("$djs.resume("), "{d}");
+        assert!(d.contains("\"debugger\""), "{d}");
+        assert!(dump(src, 2).contains("$djs.resume("));
+        assert_eq!(dump(src, 3), "(the run ended without pausing)\n");
     }
 }

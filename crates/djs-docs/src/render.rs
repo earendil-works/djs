@@ -1,7 +1,7 @@
 //! Markdown to HTML: pulldown-cmark plus what the guide needs on top: heading anchors
 //! and a page outline, inline SVG diagrams, checked links (to other pages and to files of
-//! the repository), decision links (`D1050`), the "In short" and "Trade-off" asides,
-//! syntax highlighting, and live examples.
+//! the repository), the guide's writing rules (`check_prose`), the "In short" and
+//! "Trade-off" asides, syntax highlighting, and live examples.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -22,14 +22,10 @@ pub struct Page {
 
 pub struct Env<'a> {
     pub files: &'a BTreeMap<String, String>,
-    pub decisions: &'a BTreeMap<String, String>,
     /// The guide's pages (`values.md`), for checking links between them.
     pub pages: &'a BTreeSet<String>,
     /// The repository root, for checking links to its files.
     pub repo: &'a Path,
-    /// Unknown references are errors (the guide); the decision log is rendered leniently.
-    /// Strict pages are also held to the self-containment rule (D2102, `check_prose`).
-    pub strict: bool,
     /// The commit source links point at (`source_url`).
     pub rev: &'a str,
     /// The repository's tracked paths, for linking mentions of them (D2104).
@@ -90,20 +86,8 @@ pub fn render(page: &str, md: &str, env: &mut Env) -> Page {
                     }
                     j += 1;
                 }
-                if env.strict {
-                    check_prose(&text, page, env);
-                }
-                // Decision headings (`D1050: Value encoding`) are anchored by their ID.
-                let id = match text.split_once(':') {
-                    Some((d, _))
-                        if d.len() > 1
-                            && d.starts_with('D')
-                            && d[1..].bytes().all(|b| b.is_ascii_digit()) =>
-                    {
-                        d.to_lowercase()
-                    }
-                    _ => slug(&text),
-                };
+                check_prose(&text, page, env);
+                let id = slug(&text);
                 if *level == HeadingLevel::H1 && title.is_empty() {
                     title = text.clone();
                 } else if (2..=3).contains(&lvl) {
@@ -219,25 +203,21 @@ pub fn render(page: &str, md: &str, env: &mut Env) -> Page {
                 continue;
             }
             Event::Text(t) => {
-                if env.strict {
-                    check_prose(t, page, env);
-                }
+                check_prose(t, page, env);
                 link_text(t, &mut out, env, page, in_link);
                 i += 1;
                 continue;
             }
             Event::End(TagEnd::Link) => in_link = false,
             Event::Code(t) => {
-                if env.strict {
-                    check_prose(t, page, env);
-                }
+                check_code(t, page, env);
                 // A path as a link's text names the file the link goes to.
                 if let (true, Some(rel), crate::paths::Resolved::Path(p, ..)) =
-                    (env.strict && in_link, &link_rel, env.index.code(t))
+                    (in_link, &link_rel, env.index.code(t))
                     && &p != rel
                 {
                     env.errors
-                        .push(format!("{page}: `{t}` links to {rel}, not to {p} (D2104)"));
+                        .push(format!("{page}: `{t}` links to {rel}, not to {p}"));
                 }
                 if !in_link && let Some(html) = code_link(t, page, env) {
                     out.push(Event::InlineHtml(CowStr::from(html)));
@@ -252,12 +232,10 @@ pub fn render(page: &str, md: &str, env: &mut Env) -> Page {
     }
     let mut body = String::new();
     html::push_html(&mut body, out.into_iter());
-    if env.strict {
-        for p in crate::paths::unlinked(&body, env.index) {
-            env.errors.push(format!(
-                "{page}: {p} is not a link: a mention of a repository path links to it (D2104)"
-            ));
-        }
+    for p in crate::paths::unlinked(&body, env.index) {
+        env.errors.push(format!(
+            "{page}: {p} is not a link: a mention of a repository path links to it"
+        ));
     }
     // Source links (`source_url`) are marked, so that readers can tell them from pages.
     let body = body.replace(
@@ -288,6 +266,17 @@ pub fn render(page: &str, md: &str, env: &mut Env) -> Page {
 fn live_block(n: usize, lang: &str, hl: &str, code: &str) -> String {
     let out_text = crate::run::run(code);
     let disasm = crate::run::disasm(code);
+    // An example with a `debugger;` shows the dump it writes there (D3050): built here,
+    // so that the page shows it without JavaScript too; live.js makes it live.
+    let dump = if has_debugger(code) {
+        format!(
+            "<p class=\"muted\">The run paused at its first <code>debugger;</code> and was dumped there:</p>\
+             <pre class=\"code live-dump\"><code class=\"lang-js\">{}</code></pre>",
+            crate::highlight::highlight("js", &crate::run::dump(code, 1))
+        )
+    } else {
+        DUMP_HINT.to_string()
+    };
     let tab = |id: &str, label: &str, selected: bool| {
         format!(
             "<button role=\"tab\" id=\"live-{n}-tab-{id}\" data-tab=\"{id}\" aria-controls=\"live-{n}-{id}\" \
@@ -311,13 +300,14 @@ fn live_block(n: usize, lang: &str, hl: &str, code: &str) -> String {
          <button class=\"live-reset\" hidden>Reset</button>\
          <button class=\"live-run\" hidden>Run</button></div>\n\
          <div class=\"live-editor\"><pre class=\"code\"><code class=\"lang-{lang}\">{hl}</code></pre></div>\n\
-         <div class=\"live-tabs\" role=\"tablist\" aria-label=\"Results\">{}{}{}{}\
+         <div class=\"live-tabs\" role=\"tablist\" aria-label=\"Results\">{}{}{}{}{}\
          <span class=\"live-status\" role=\"status\"></span></div>\n\
-         {}{}{}{}</div>\n",
+         {}{}{}{}{}</div>\n",
         tab("out", "Output", true),
         tab("bytecode", "Bytecode", false),
         tab("heap", "Heap", false),
         tab("suspend", "Suspend", false),
+        tab("dump", "Dump", false),
         pane("pre", "out", false, &esc(&out_text)),
         pane("pre", "bytecode", true, &esc(&disasm)),
         pane(
@@ -332,7 +322,19 @@ fn live_block(n: usize, lang: &str, hl: &str, code: &str) -> String {
             true,
             "<p class=\"muted\">Run the example to see it suspend.</p>"
         ),
+        pane("div", "dump", true, &dump),
     )
+}
+
+/// The Dump tab of an example without `debugger;`.
+const DUMP_HINT: &str = "<p class=\"muted\">Put <code>debugger;</code> in the code, at the top \
+     level or in any async function: the run then pauses there, and the page writes it out as \
+     a continuation dump, shows it, and can resume the run from it.</p>";
+
+/// The code has a `debugger` statement (the keyword as a token, not in a string or a
+/// comment).
+pub fn has_debugger(code: &str) -> bool {
+    crate::highlight::highlight("js", code).contains("<span class=\"tok-keyword\">debugger</span>")
 }
 
 /// A link to another page becomes its `.html`; a relative link to a repository file goes
@@ -360,22 +362,16 @@ fn resolve_link(page: &str, dest: &str, env: &mut Env) -> String {
         }
     }
     let rel = parts.join("/");
-    // The decision log is part of the site.
-    if rel == "docs/decisions.md" {
-        return format!("decisions.html{frag}");
-    }
     let full = env.repo.join(&rel);
     if !full.exists() {
-        if env.strict {
-            env.errors.push(format!("{page}: broken link {dest}"));
-        }
+        env.errors.push(format!("{page}: broken link {dest}"));
         return dest.to_string();
     }
-    // The guide is self-contained (D2102): it may point at code, never at other
-    // documents of the repository as the place where something is explained.
-    if env.strict && rel.ends_with(".md") {
+    // The guide is self-contained: it may point at code, never at other documents of the
+    // repository as the place where something is explained.
+    if rel.ends_with(".md") {
         env.errors.push(format!(
-            "{page}: link to {rel}, a document outside the guide: explain it in the guide instead (D2102)"
+            "{page}: link to {rel}, a document outside the guide: explain it in the guide instead"
         ));
     }
     source_url(&rel, full.is_dir(), &frag, env.rev)
@@ -388,72 +384,141 @@ pub fn source_url(rel: &str, dir: bool, frag: &str, rev: &str) -> String {
     format!("{REPO_URL}/{kind}/{rev}/{rel}{frag}")
 }
 
-/// The self-containment rule for prose (D2102): no bare goal numbers (`G2`: name the
-/// goal and link goals.md), no issue numbers (`0088`), and no mentions of documents
-/// outside the guide (`ARCH.md`, `docs/host.md`, `work/...`), in text or inline code.
-/// Code blocks are not prose.
+/// The one page that may name pi, the agent djs was built for: everywhere else the guide
+/// describes hosts in general.
+const PI_PAGE: &str = "pi.md";
+
+/// Pages not yet rewritten to the pi and history rules: the guide's rewrite takes them in
+/// batches, and each batch takes its pages off this list (empty at its end).
+const NOT_YET_REWRITTEN: &[&str] = &[
+    "arena.md",
+    "builtins.md",
+    "compiler.md",
+    "determinism.md",
+    "gc.md",
+    "goals.md",
+    "heap.md",
+    "host.md",
+    "interpreter.md",
+    "introduction.md",
+    "snapshots.md",
+    "suspension.md",
+    "testing.md",
+    "values.md",
+];
+
+/// Phrases that tell history (what djs used to do, what replaced what). The guide
+/// describes djs as it is; the history is in the repository.
+const HISTORY: &[&str] = &[
+    "no longer",
+    "used to be",
+    "formerly",
+    "originally",
+    "was replaced",
+    "were replaced",
+    "was removed",
+    "were removed",
+    "format 2",
+    "earlier design",
+    "the old design",
+];
+
+/// The writing rules for prose (docs/guide/README.md), in text and inline code (code
+/// blocks are not prose): the guide is self-contained (no bare goal numbers such as `G2`:
+/// name the goal and link goals.md; no issue numbers such as `0088`; no mentions of
+/// documents outside the guide: `ARCH.md`, `docs/host.md`, `work/...`), cites no
+/// decisions (`D1050`), names pi on its own page only, and tells no history.
 fn check_prose(text: &str, page: &str, env: &mut Env) {
+    check_code(text, page, env);
+    if NOT_YET_REWRITTEN.contains(&page) {
+        return;
+    }
+    let lower = text.to_lowercase();
+    for h in HISTORY {
+        if lower.contains(h) {
+            env.errors.push(format!(
+                "{page}: \"{h}\" tells history: describe djs as it is (in: {})",
+                text.trim()
+            ));
+        }
+    }
+}
+
+/// [`check_prose`]'s word rules, which inline code is held to as well.
+fn check_code(text: &str, page: &str, env: &mut Env) {
     for word in text.split(|c: char| c.is_whitespace() || "()[]{},;:\"'`“”‘’".contains(c)) {
         let word = word.trim_end_matches(['.', '!', '?']);
         if word.len() == 2 && word.starts_with('G') && matches!(word.as_bytes()[1], b'1'..=b'5') {
             env.errors.push(format!(
-                "{page}: bare goal number {word}: name the goal and link it (goals.md) (D2102)"
+                "{page}: bare goal number {word}: name the goal and link it (goals.md)"
             ));
         } else if word.len() == 4
             && word.starts_with('0')
             && word.bytes().all(|b| b.is_ascii_digit())
         {
             env.errors.push(format!(
-                "{page}: issue number {word}: the guide cannot point at work/issues; say what was found (D2102)"
+                "{page}: issue number {word}: the guide cannot point at work/issues; say what was found"
+            ));
+        } else if is_decision_id(word) {
+            env.errors.push(format!(
+                "{page}: decision ID {word}: the guide cites no decisions; explain the reason in words"
             ));
         } else if word.starts_with("work/")
             || matches!(word, "ARCH" | "TESTING")
+            || word.ends_with("decisions.md")
             || (word.ends_with(".md") && word.len() > 3 && !env.pages.contains(word))
         {
             env.errors.push(format!(
-                "{page}: mentions {word}, a document outside the guide: explain it in the guide instead (D2102)"
+                "{page}: mentions {word}, a document outside the guide: explain it in the guide instead"
             ));
         }
     }
+    // pi by name (`pi`, `pi's`, `js/pi/vm.ts`): whole words, so neither `π` nor `pipeline`.
+    if page != PI_PAGE
+        && !NOT_YET_REWRITTEN.contains(&page)
+        && text
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .any(|w| w == "pi" || w == "Pi")
+    {
+        env.errors.push(format!(
+            "{page}: names pi: only {PI_PAGE} does; describe hosts in general (in: {})",
+            text.trim()
+        ));
+    }
 }
 
-/// A source link for inline code that names a repository path (D2104). In the guide a
-/// mention that names no tracked path, or more than one, is an error; the decision log
-/// is a record of its time and links only full paths that still exist.
+/// `D123`, `D1050`: a decision log ID.
+fn is_decision_id(word: &str) -> bool {
+    word.len() >= 4
+        && word.len() <= 5
+        && word.starts_with('D')
+        && word[1..].bytes().all(|b| b.is_ascii_digit())
+}
+
+/// A source link for inline code that names a repository path. A mention that names no
+/// tracked path, or more than one, is an error.
 fn code_link(t: &str, page: &str, env: &mut Env) -> Option<String> {
     use crate::paths::Resolved;
     match env.index.code(t) {
-        Resolved::Path(p, dir, frag) => {
-            let full = t
-                .trim()
-                .split(':')
-                .next()
-                .unwrap_or("")
-                .trim_end_matches('/')
-                == p;
-            (env.strict || full).then(|| {
-                format!(
-                    "<a href=\"{}\"><code>{}</code></a>",
-                    source_url(&p, dir, &frag, env.rev),
-                    esc(t)
-                )
-            })
-        }
-        Resolved::Missing if env.strict => {
+        Resolved::Path(p, dir, frag) => Some(format!(
+            "<a href=\"{}\"><code>{}</code></a>",
+            source_url(&p, dir, &frag, env.rev),
+            esc(t)
+        )),
+        Resolved::Missing => {
             env.errors.push(format!(
-                "{page}: `{t}` names no file or directory of the repository (renamed or removed?) (D2104)"
+                "{page}: `{t}` names no file or directory of the repository (renamed or removed?)"
             ));
             None
         }
-        Resolved::Ambiguous(all) if env.strict => {
+        Resolved::Ambiguous(all) => {
             env.errors.push(format!(
-                "{page}: `{t}` could be any of {}: write the path (D2104)",
+                "{page}: `{t}` could be any of {}: write the path",
                 all.join(", ")
             ));
             None
         }
         Resolved::No => code_words(t, page, env),
-        _ => None,
     }
 }
 
@@ -482,9 +547,9 @@ fn code_words(t: &str, page: &str, env: &mut Env) -> Option<String> {
                     ),
                 );
             }
-            Resolved::Missing if env.strict => {
+            Resolved::Missing => {
                 env.errors.push(format!(
-                    "{page}: {w} in `{t}` names no file or directory of the repository (renamed or removed?) (D2104)"
+                    "{page}: {w} in `{t}` names no file or directory of the repository (renamed or removed?)"
                 ));
                 html.push_str(&esc(w));
             }
@@ -495,10 +560,8 @@ fn code_words(t: &str, page: &str, env: &mut Env) -> Option<String> {
     any.then_some(html)
 }
 
-/// Prose: `D1050` becomes a link to the decision, with its title as the tooltip, and a
-/// repository path (`crates/djs-core/src/heap/gc.rs`) a source link (D2104). In the
-/// guide an unknown ID or a path that does not exist is an error, so references cannot
-/// dangle.
+/// Prose: a repository path (`crates/djs-core/src/heap/gc.rs`) becomes a source link;
+/// a path that does not exist is an error, so references cannot dangle.
 fn link_text<'a>(
     t: &CowStr<'a>,
     out: &mut Vec<Event<'a>>,
@@ -510,37 +573,6 @@ fn link_text<'a>(
     let s = t.as_ref();
     // (start, end, html) of each replacement, in order.
     let mut subs: Vec<(usize, usize, String)> = Vec::new();
-    let b = s.as_bytes();
-    let mut i = 0;
-    while i < b.len() {
-        let boundary = i == 0 || !b[i - 1].is_ascii_alphanumeric();
-        if b[i] == b'D' && boundary {
-            let mut j = i + 1;
-            while j < b.len() && b[j].is_ascii_digit() {
-                j += 1;
-            }
-            let end_ok = j == b.len() || !b[j].is_ascii_alphanumeric();
-            if (3..=4).contains(&(j - i - 1)) && end_ok {
-                let id = &s[i..j];
-                match env.decisions.get(id) {
-                    Some(title) => subs.push((
-                        i,
-                        j,
-                        format!(
-                            "<a class=\"decision\" href=\"decisions.html#{}\" title=\"{}\">{id}</a>",
-                            id.to_lowercase(),
-                            esc(title)
-                        ),
-                    )),
-                    None if env.strict => env.errors.push(format!("{page}: unknown decision {id}")),
-                    None => {}
-                }
-                i = j;
-                continue;
-            }
-        }
-        i += 1;
-    }
     if !in_link {
         let sep = |c: char| c.is_whitespace() || "()[]{},;\"'“”‘’".contains(c);
         let mut at = 0;
@@ -553,14 +585,18 @@ fn link_text<'a>(
                     subs.push((
                         start,
                         start + core.len(),
-                        format!("<a href=\"{}\">{}</a>", source_url(&p, dir, &frag, env.rev), esc(core)),
+                        format!(
+                            "<a href=\"{}\">{}</a>",
+                            source_url(&p, dir, &frag, env.rev),
+                            esc(core)
+                        ),
                     ));
                 }
-                Resolved::Missing if env.strict => env.errors.push(format!(
-                    "{page}: {w} names no file or directory of the repository (renamed or removed?) (D2104)"
+                Resolved::Missing => env.errors.push(format!(
+                    "{page}: {w} names no file or directory of the repository (renamed or removed?)"
                 )),
-                Resolved::Ambiguous(all) if env.strict => env.errors.push(format!(
-                    "{page}: {w} could be any of {}: write the path (D2104)",
+                Resolved::Ambiguous(all) => env.errors.push(format!(
+                    "{page}: {w} could be any of {}: write the path",
                     all.join(", ")
                 )),
                 _ => {}
@@ -590,20 +626,16 @@ fn link_text<'a>(
 mod tests {
     use super::*;
 
-    fn with_env<R>(strict: bool, f: impl FnOnce(&mut Env) -> R) -> (R, Vec<String>) {
+    fn with_env<R>(f: impl FnOnce(&mut Env) -> R) -> (R, Vec<String>) {
         let files = BTreeMap::new();
-        let mut decisions = BTreeMap::new();
-        decisions.insert("D1050".to_string(), "Value encoding".to_string());
         let pages: BTreeSet<String> = ["values.md".to_string()].into();
         let mut errors = Vec::new();
         let repo = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
         let index = crate::paths::RepoIndex::load(repo);
         let r = f(&mut Env {
             files: &files,
-            decisions: &decisions,
             pages: &pages,
             repo,
-            strict,
             rev: "main",
             index: &index,
             errors: &mut errors,
@@ -612,42 +644,32 @@ mod tests {
     }
 
     #[test]
-    fn decisions_and_links() {
-        let md = "# Title\n\nSee D1050 and D9999, [values](values.md#x), [code](../../crates/djs-core/src/value.rs), [log](../decisions.md#d1050), [gone](nope.md).\n\n## Sub `code`\n";
-        let (p, errors) = with_env(true, |env| render("p.md", md, env));
+    fn links() {
+        let md = "# Title\n\nSee [values](values.md#x), [code](../../crates/djs-core/src/value.rs), [gone](nope.md).\n\n## Sub `code`\n";
+        let (p, errors) = with_env(|env| render("p.md", md, env));
         assert_eq!(p.title, "Title");
-        assert!(
-            p.html
-                .contains("href=\"decisions.html#d1050\" title=\"Value encoding\">D1050</a>")
-        );
         assert!(p.html.contains("href=\"values.html#x\""));
         assert!(p.html.contains(&format!(
             "<a class=\"source\" href=\"{REPO_URL}/blob/main/crates/djs-core/src/value.rs\""
         )));
-        assert!(p.html.contains("href=\"decisions.html#d1050\">log"));
         assert_eq!(p.toc, [(2, "sub-code".to_string(), "Sub code".to_string())]);
-        assert_eq!(
-            errors,
-            ["p.md: unknown decision D9999", "p.md: broken link nope.md"]
-        );
-        // The decision log itself is lenient.
-        let (_, errors) = with_env(false, |env| {
-            render("decisions.md", "D9999 [x](nope.md)", env)
-        });
-        assert!(errors.is_empty());
+        assert_eq!(errors, ["p.md: broken link nope.md"]);
+    }
+
+    fn short(errors: &[String]) -> Vec<&str> {
+        errors
+            .iter()
+            .map(|e| e.split(": ").nth(1).unwrap_or("").trim())
+            .collect()
     }
 
     #[test]
     fn the_guide_is_self_contained() {
         let md = "# T\n\nGoal G2 (see ARCH.md, `docs/host.md`, work/issues/x, 0088 and values.md); \
-                  [arch](../../ARCH.md).\n\n## Heading G4\n\n```js\nconst f = \"README.md\";\n```\n";
-        let (_, errors) = with_env(true, |env| render("p.md", md, env));
-        let short: Vec<&str> = errors
-            .iter()
-            .map(|e| e.split(':').nth(1).unwrap_or("").trim())
-            .collect();
+                  [arch](../../ARCH.md), [log](../decisions.md).\n\n## Heading G4\n\n```js\nconst f = \"README.md\";\n```\n";
+        let (_, errors) = with_env(|env| render("p.md", md, env));
         assert_eq!(
-            short,
+            short(&errors),
             [
                 "bare goal number G2",
                 "mentions ARCH.md, a document outside the guide",
@@ -655,21 +677,42 @@ mod tests {
                 "mentions work/issues/x, a document outside the guide",
                 "issue number 0088",
                 "link to ARCH.md, a document outside the guide",
+                "link to docs/decisions.md, a document outside the guide",
                 "bare goal number G4",
             ]
         );
-        // The decision log is a record, not explanation: exempt.
-        let (_, errors) = with_env(false, |env| render("decisions.md", md, env));
-        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn no_decisions_no_history_pi_on_its_page() {
+        let md = "# T\n\nAs D1050 says (`D016`), this was replaced. It no longer \
+                  runs in pi or pi's adapter (`js/pi/vm.ts`).\n\n\
+                  A pipeline, π and `Math.PI` are fine; so is code:\n\n```js\n// pi, D1050, no longer\n```\n";
+        let (_, errors) = with_env(|env| render("p.md", md, env));
+        assert_eq!(
+            short(&errors),
+            [
+                "decision ID D1050",
+                "decision ID D016",
+                "names pi",
+                "\"no longer\" tells history",
+                "\"was replaced\" tells history",
+                "names pi",
+            ],
+            "{errors:#?}"
+        );
+        let (_, errors) =
+            with_env(|env| render("pi.md", "# pi\n\npi's adapter, `js/pi/vm.ts`.\n", env));
+        assert!(errors.is_empty(), "{errors:?}");
     }
 
     #[test]
     fn repository_paths_link_to_the_source() {
         let md = "# T\n\nIn `crates/djs-core/src/heap/gc.rs`, `js/src/`, `heap/cells.rs:12`, \
-                  `node js/pi/pi-tests.ts`, scripts/gate.sh. and `x / y`.\n\n\
+                  `node scripts/gate.py`, scripts/gate.sh. and `x / y`.\n\n\
                   Gone: `crates/djs-core/src/nope.rs`, crates/nope; vague: `lib.rs`; \
                   [`js/src/`](../../js/src/sandbox.ts).\n\n```sh\nscripts/gate.sh\n```\n";
-        let (p, errors) = with_env(true, |env| render("p.md", md, env));
+        let (p, errors) = with_env(|env| render("p.md", md, env));
         let src = |kind: &str, path: &str| {
             format!("<a class=\"source\" href=\"{REPO_URL}/{kind}/main/{path}\">")
         };
@@ -684,8 +727,8 @@ mod tests {
                 src("blob", "crates/djs-core/src/heap/cells.rs#L12")
             ),
             format!(
-                "<code>node {}js/pi/pi-tests.ts</a></code>",
-                src("blob", "js/pi/pi-tests.ts")
+                "<code>node {}scripts/gate.py</a></code>",
+                src("blob", "scripts/gate.py")
             ),
             format!(
                 "{}scripts/gate.sh</a>. and <code>x / y</code>",
@@ -699,27 +742,19 @@ mod tests {
             "p.md: `crates/djs-core/src/nope.rs` names no file or directory",
             "p.md: crates/nope names no file or directory",
             "p.md: `lib.rs` could be any of crates/",
-            "p.md: `js/src/` links to js/src/sandbox.ts, not to js/src (D2104)",
+            "p.md: `js/src/` links to js/src/sandbox.ts, not to js/src",
         ];
         assert_eq!(errors.len(), want.len(), "{errors:#?}");
         for (e, w) in errors.iter().zip(want) {
             assert!(e.starts_with(w), "{e} vs {w}");
         }
-        // The decision log links full paths only, and quietly.
-        let (p, errors) = with_env(false, |env| render("decisions.md", md, env));
-        assert!(errors.is_empty(), "{errors:?}");
-        assert!(p.html.contains("<code>heap/cells.rs:12</code>"));
-        assert!(
-            p.html
-                .contains(&src("blob", "crates/djs-core/src/heap/gc.rs"))
-        );
     }
 
     #[test]
-    fn asides_and_decision_anchors() {
-        let md = "## D1050: Value encoding\n\n> **Trade-off.** x\n\n> **In short.** y\n";
-        let (p, _) = with_env(false, |env| render("decisions.md", md, env));
-        assert!(p.html.contains("<h2 id=\"d1050\">"));
+    fn asides() {
+        let md = "## Values\n\n> **Trade-off.** x\n\n> **In short.** y\n";
+        let (p, _) = with_env(|env| render("p.md", md, env));
+        assert!(p.html.contains("<h2 id=\"values\">"));
         assert!(p.html.contains("<blockquote class=\"tradeoff\">"));
         assert!(p.html.contains("<blockquote class=\"short\">"));
     }
@@ -727,7 +762,7 @@ mod tests {
     #[test]
     fn live_blocks_carry_their_output() {
         let md = "```js live\nconsole.log(6 * 7)\n```\n<!-- gen:run -->\n```text\n42\n```\n<!-- /gen -->\n\nafter\n";
-        let (p, _) = with_env(true, |env| render("p.md", md, env));
+        let (p, _) = with_env(|env| render("p.md", md, env));
         // Without JavaScript: the highlighted code and the build's output, visible.
         for want in [
             "<div class=\"live-editor\"><pre class=\"code\"><code class=\"lang-js\"><span class=\"tok-variable\">console</span>",

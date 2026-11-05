@@ -39,14 +39,14 @@ An engine meets the outside world in a few places: the clock, the local time zon
 each of them is a value the host sets, stored in the heap like any other state, so an
 image carries it along:
 
-| Source | In djs | Decision |
-| --- | --- | --- |
-| `Date.now()`, `new Date()` | Reads a time the host sets with `vm_set_now` (0 until then). A host that wants time to pass sets it again between fuel slices, or with each async result. | D1383 |
-| The local time zone | A fixed offset the host sets (`vm_set_time_zone_offset`), UTC by default, no daylight-saving rules. | D1383 |
-| `Math.random()` | xorshift64*, as in QuickJS, seeded by the host (`vm_set_random_seed`). The state is in the heap, so a restored VM continues the sequence. | D1314 |
-| The string hash's key | Derived from the same seed (one-way), and kept in the image. It decides where the VM's own atoms and Map and Set keys sit in their tables, never what a script sees: iteration follows insertion order. | D2433 |
-| `WeakRef`, `FinalizationRegistry` | By default they work as specified, and collection timing is observable. The host can make them strong (nothing ever dies) or absent (the globals are deleted). | D1680 |
-| Tool results | Applied in delivery order, as macrotasks (below). | D1670 |
+| Source | In djs |
+| --- | --- |
+| `Date.now()`, `new Date()` | Reads a time the host sets with `vm_set_now` (0 until then). A host that wants time to pass sets it again between fuel slices, or with each async result. |
+| The local time zone | A fixed offset the host sets (`vm_set_time_zone_offset`), UTC by default, no daylight-saving rules. |
+| `Math.random()` | xorshift64*, as in QuickJS, seeded by the host (`vm_set_random_seed`). The state is in the heap, so a restored VM continues the sequence. |
+| The string hash's key | Derived from the same seed (one-way), and kept in the image. It decides where the VM's own atoms and Map and Set keys sit in their tables, never what a script sees: iteration follows insertion order. |
+| `WeakRef`, `FinalizationRegistry` | By default they work as specified, and collection timing is observable. The host can make them strong (nothing ever dies) or absent (the globals are deleted). |
+| Tool results | Applied in delivery order, as macrotasks (below). |
 
 The examples in this guide run with the clock at 0 and the default seed, so their output
 is fixed and the gate can check it:
@@ -66,7 +66,7 @@ console.log(Math.random(), Math.random());
 
 Async tool calls are where timing would leak in. A result can reach the host at any
 moment, and if the VM applied it at once, the order in which promise callbacks run would
-depend on the fuel slice that happened to be running. So results are macrotasks (D1670):
+depend on the fuel slice that happened to be running. So results are macrotasks:
 they wait in an inbox in the heap, and the VM applies the oldest one only when its job
 queue is empty. A script's behavior depends on the order of the results, never on when
 they arrived ([The host interface](host.md) has the details).
@@ -81,40 +81,39 @@ the same *heap*, byte for byte. That is a stronger property, and the design of s
 parts of the engine exists to keep it:
 
 - **Fuel** stops a run at the same instruction however the budget was sliced, because an
-  overshoot is carried to the next run as a debt (D1740; [Suspending
+  overshoot is carried to the next run as a debt ([Suspending
   anywhere](suspension.md)).
 - **Collections** happen at the same instructions under any slicing and restore. The
-  threshold lives in the heap (D1601), and nothing about a stop allocates or collects
-  (D1710; [The garbage collector](gc.md)). So does the choice between a minor and a full
+  threshold lives in the heap, and nothing about a stop allocates or collects
+  ([The garbage collector](gc.md)). So does the choice between a minor and a full
   collection: where the old region ends and how many minor collections ran since the last
-  full one are in the heap too (D2041).
+  full one are in the heap too.
 - **The collector's layout** is a function of what the program did. A collection slides
   the live cells down in their allocation order, so the same allocations give the same
-  bytes, whenever the collections came (D2040). A minor collection keeps dead cells of the
+  bytes, whenever the collections came. A minor collection keeps dead cells of the
   old region until the next full one, but a full collection drops them, and its result
   doesn't depend on whether minor ones ran before it. For a layout that depends on the
-  object graph alone, the canonical hash collects a copy breadth-first (D1090). The copy
+  object graph alone, the canonical hash collects a copy breadth-first. The copy
   also ends up with the whole heap as its old region, so the hash does not depend on
   where a VM's old region ended.
 - **Builtins leave no trace.** Calling a builtin never writes into the builtin prefix,
-  the part of the heap every VM of a build starts with (D2063): no cached string hash,
+  the part of the heap every VM of a build starts with: no cached string hash,
   no flag set on first use, no shape transition added to a builtin's shape. Two runs that
-  call different builtins, in any order, leave the same prefix (D2066). Nor do they leave
+  call different builtins, in any order, leave the same prefix. Nor do they leave
   anything in the session's part of the heap. The shapes of the objects builtins create
   (iterator results, RegExp match results, property descriptors, functions and their
   prototypes, errors) are already in each VM's shape tree when it starts, and so are the
-  engine's queues for promise jobs, host results and unhandled rejections (D2067). Two
+  engine's queues for promise jobs, host results and unhandled rejections. Two
   runs that use Map iteration and RegExp matching in opposite orders, and keep nothing,
   leave the same image. What stays the script's own is what its source and data name:
   its identifiers, its object literals' keys, results keyed by data such as
   `Object.groupBy`, and a property it adds to an object a builtin made.
 - **Nothing depends on addresses or timing.** Map and Set rehash after every collection
   instead of hashing by a per-object id that would vary, and shape transitions are
-  strong so that the shape tree does not depend on when collections ran (D1831; [Cells,
-  strings and objects](heap.md)).
+  strong so that the shape tree does not depend on when collections ran ([Cells, strings and objects](heap.md)).
 - **Out of memory** is a function of the program and the cap: running out of the heap
   cap is a JavaScript error, and the host's own refusal to provide memory is kept
-  separate (D1690; [One arena](arena.md)).
+  separate ([One arena](arena.md)).
 
 Byte-identical images make the strongest possible check: if two runs left the same
 raw image, they did the same allocations and built the same graph, with no need to
@@ -132,7 +131,7 @@ compare outputs.
 A host chooses how much of this it wants. By default the `Sandbox` behaves like an
 ordinary engine: the clock follows the host's clock, `Math.random` gets a seed from the
 host's entropy, and weak references are collected. With
-`deterministic: { startedAt, seed }` (D1680), it sets everything up for repeatable runs:
+`deterministic: { startedAt, seed }`, it sets everything up for repeatable runs:
 
 - `Math.random` is seeded from `seed`, and so is the key of the string hash, so the same
   seed lays the heap out the same way; the time zone is UTC;
@@ -144,11 +143,11 @@ host's entropy, and weak references are collected. With
 
 With a fixed clock as well, the same code, parameters and results in the same order do
 the same thing on every run, with any fuel slice, and across restores from images (the
-clock is in the heap). A continuation dump keeps `Math.random`'s sequence too (D2624).
+clock is in the heap). A continuation dump keeps `Math.random`'s sequence too.
 
 ## Canonical hashes and journals
 
-To check that two runs agree, a host compares **canonical hashes** (D1730):
+To check that two runs agree, a host compares **canonical hashes**:
 `vm_canonical_hash` is a 64-bit FNV-1a hash of the image a copying collection leaves,
 computed on a copy so that the VM itself is not touched. The copying collector lays the
 heap out breadth-first from the roots, so garbage, the order of allocation and the moment
@@ -173,19 +172,19 @@ recorded idle state even if the recording got several results at once.
 
 ## What the gate compares
 
-The determinism claims are checked on every merge (D1720, D1725; [How djs is
+The determinism claims are checked on every merge ([How djs is
 tested](testing.md)):
 
 - **Across schedules.** The end-to-end tests and the difftest corpus run each case in
   one go and again in slices (1 and 997 fuel in the end-to-end tests, 97 and 1009 in the
   corpus), restoring a fresh VM from its image at every stop. The raw image at the end, and
-  the canonical hash, must equal the plain run's (D2040).
+  the canonical hash, must equal the plain run's.
 - **Across builds.** The same programs run in a native build and in djs-wasm, driven
   through the same export calls. The build hash, the raw images at every slice, the
   images after a final collection, the canonical hash, the number of stops and the
   results must all match. This is why djs avoids
   float operations whose bits differ between platforms: wasm leaves the NaN bits of
-  `f64` to `f32` conversion open, so djs canonicalizes them (D1750).
+  `f64` to `f32` conversion open, so djs canonicalizes them.
 
 GC stress is the one mode excluded from the image comparisons: collecting at every
 safepoint is another collection policy, and weak tables lose dead entries at other
@@ -197,7 +196,7 @@ Some things are deliberately outside the guarantee:
 
 - **The host's memory.** Running out of the heap cap is deterministic; the host failing
   to provide memory below the cap is not, since it depends on the machine. That stops
-  the run with its own status, not a JavaScript error (D1690). A host that wants
+  the run with its own status, not a JavaScript error. A host that wants
   deterministic out-of-memory chooses a cap it can always back (in wasm32, about 1 GiB
   at most).
 - **Weak references in the default mode.** When a `WeakRef`'s target dies depends on
@@ -205,12 +204,12 @@ Some things are deliberately outside the guarantee:
   that. Deterministic mode makes them strong or absent for this reason.
 - **Fuel across backends.** A builtin compiled to Rust charges fuel per loop iteration
   and call, and the same builtin as bytecode charges per instruction. Results are the
-  same, fuel counts are not, so the backend is part of the engine's identity (D1633).
+  same, fuel counts are not, so the backend is part of the engine's identity.
   djs-wasm always uses the Rust backend.
 - **Other builds.** Journals are tied to the build hash, which covers the engine's
-  sources, features and the `libm` version (D1750): a different build may run the same
+  sources, features and the `libm` version: a different build may run the same
   script in a different number of steps. Images are tied only to what they depend on
-  ([images](snapshots.md#what-an-image-depends-on), D2265), so a VM restored into
+  ([images](snapshots.md#what-an-image-depends-on)), so a VM restored into
   another build goes on with that build's code; that happens only inside a process now
   (the dump module), since runs persist as dumps.
 - **The clock in the default mode.** Without `deterministic`, the Sandbox sets the clock
@@ -229,29 +228,3 @@ Some things are deliberately outside the guarantee:
   [`crates/djs-core/src/vm/mod.rs`](../../crates/djs-core/src/vm/mod.rs):
   `canonical_hash`, `set_now`, `set_random_seed`, `set_weak_refs`.
 - [`scripts/determinism/`](../../scripts/determinism/): the native-versus-wasm check.
-
-Decisions on this page:
-
-<!-- gen:decisions D2040 D2041 D2063 D2066 D2067 D1314 D1383 D1670 D1680 D1690 D1090 D1601 D1710 D1740 D1831 D1730 D1720 D1725 D1750 D1633 D2265 -->
-- D2040: In-place mark-compact for in-VM collections; Cheney for canonical layouts
-- D2041: An old region that minor collections neither trace nor move
-- D2063: The base image ends with a tail of per-VM cells; nothing writes below BASE_END
-- D2066: Session images: the roots cell, a canonical prefix diff and the session region
-- D2067: Builtin result shapes and the engine's queues are in the base; the ceiling rises 720 B
-- D1314: Math.random
-- D1383: Date reads the host's clock and a fixed local offset
-- D1670: Async host results are macrotasks: the host inbox
-- D1680: Deterministic mode: weak references collected, strong or absent; the Sandbox's deterministic option
-- D1690: Running out of host memory is not a JS out-of-memory error
-- D1090: Copying collector
-- D1601: The GC threshold is part of the heap image
-- D1710: GC points and raw images do not depend on the fuel slice
-- D1740: Fuel overshoot carries to the next run; a suspended intrinsic is charged once
-- D1831: Shapes with strong transitions and a per-heap shape budget
-- D1730: Canonical hash and run journals
-- D1720: Determinism checks in the gate: heap images across schedules and builds
-- D1725: The determinism checks compare raw images too
-- D1750: The build hash covers features and libm; canonical f32/f16 NaN
-- D1633: Fuel per transition; the backend is part of the engine's identity
-- D2265: Images carry a dependency descriptor; loading and containers check it, not the build hash
-<!-- /gen -->

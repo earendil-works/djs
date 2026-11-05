@@ -18,7 +18,7 @@ script.
 ## One declaration for every kind
 
 Every cell kind is declared once, with explicit byte offsets, in the `cells!` macro of
-`heap/cells.rs` (D1052). The declaration generates the typed field accessors that Rust
+`heap/cells.rs`. The declaration generates the typed field accessors that Rust
 code uses (`arena.get(cell, Str8::LEN)`), compile-time checks of the layout, and the
 `LAYOUTS` table. Everything else that needs to know a layout reads that table:
 
@@ -27,7 +27,7 @@ code uses (`arena.get(cell, Str8::LEN)`), compile-time checks of the layout, and
   correctly the moment it is declared;
 - the layout hash, which is part of every image's dependency descriptor, so changing a
   layout invalidates old images instead of misreading them;
-- the host's reader, generated as `js/src/layout.generated.ts` (D1210);
+- the host's reader, generated as `js/src/layout.generated.ts`;
 - the diagrams in this guide and in the [cell layouts reference](ref-cells.md).
 
 There are 24 kinds. JavaScript objects of every class (arrays, functions, promises,
@@ -39,7 +39,7 @@ property tables, shapes, value arrays, bytecode.
 ## Strings
 
 JavaScript strings are sequences of UTF-16 code units, lone surrogates allowed. djs
-stores them the way V8 does, in one of three cell kinds (D1053):
+stores them the way V8 does, in one of three cell kinds:
 
 - **`Str8`**: one byte per code unit, for strings whose units all fit in Latin-1. Most
   strings in practice: JSON keys, identifiers, ASCII text.
@@ -48,7 +48,7 @@ stores them the way V8 does, in one of three cell kinds (D1053):
   strings have equal bytes, so comparing them is a `memcmp`.
 - **`Rope`**: the concatenation of two strings, made when the result has at least 32
   units. Shorter results are copied into a flat cell right away (without any Rust
-  allocation, D1871). A rope is flattened when something needs its units: the flat copy
+  allocation). A rope is flattened when something needs its units: the flat copy
   is written once and the rope is redirected to it.
 
 <!-- gen:cell Rope -->
@@ -59,14 +59,14 @@ stores them the way V8 does, in one of three cell kinds (D1053):
 Codemode scripts build their output with `+=` in a loop, and a plain rope makes that a
 chain of one node per append: millions of cells for the collector to copy and a
 million-deep tree to flatten. Once a string is a few hundred units long, an append chain
-switches to an **append rope** instead (D1610): a rope that means "the first `LEN` units
+switches to an **append rope** instead: a rope that means "the first `LEN` units
 of this buffer", over a flat cell with spare capacity. `s += piece` writes the piece
 into the buffer in place and makes a new 24-byte append rope with the longer length. The
 old string value is still the shorter rope over the same buffer, and still reads the
 same units, because the units past its length are never part of it. Only the rope at the
 end of the buffer may write into it; any other append copies first. Measured on 10
 million single-character appends in a function: 574 MB of resident memory before, 150 MB
-after (D1610 has the numbers).
+after.
 
 ```js live
 const ascii = "codemode";
@@ -85,7 +85,7 @@ A fourth kind keeps tool results from being stored twice. A codemode script typi
 reads a log or a file and cuts it up: `text.split("\n")`, `line.slice(a, b)`,
 `JSON.parse(text)`. Each piece used to be a copy, so a 5 MB log split into lines held
 10 MB. A **`Slice`** is instead the units `[OFF, OFF + LEN)` of a flat one-byte string,
-in a 24-byte cell (D2542):
+in a 24-byte cell:
 
 <!-- gen:cell Slice -->
 ![The Slice cell](gen/cell-Slice.svg)
@@ -117,7 +117,7 @@ could pin the text: [the collector](gc.md) copies such slices out.
 
 ## Atoms: property keys as integers
 
-A property key is an **atom**, a `u32` (D1054):
+A property key is an **atom**, a `u32`:
 
 - with bit 31 set, it is an array index (0 to 2³¹−1) stored in the atom itself, never
   interned;
@@ -130,10 +130,10 @@ bytecode as immediates. Well-known names (`length`, `prototype`, `Symbol.iterato
 fixed ids generated from a list in `heap/atom.rs`, so the interpreter and the builtins
 refer to them as constants. In a VM made from the base image the table has two levels:
 the base's atoms with their hash index in the builtin prefix, never written, and the
-VM's own after them, in a small list and index of its own (D2431).
+VM's own after them, in a small list and index of its own.
 
 The two levels hash strings with the same function, SipHash-1-3 over code units, under
-different keys (D2433). The base's index uses a fixed key, the same in every VM of the
+different keys. The base's index uses a fixed key, the same in every VM of the
 build, since the prefix must be. The VM's own index, and Map and Set, use a key derived
 from the VM's random seed and kept in the image, the seed a host takes from its entropy
 or, in deterministic mode, from the run's seed. A multiplicative hash with no key is
@@ -161,7 +161,7 @@ reference to its dense elements, and a tail of class-specific slots:
 Codemode scripts make many objects with the same keys: the rows of a tool result, the
 records a `map` callback returns, instances of one class. Storing the keys in every
 object wastes most of its memory. So an ordinary object starts in **shape mode**
-(D1831): it holds only a `PropValues` block, and the block points to a **shape** that
+: it holds only a `PropValues` block, and the block points to a **shape** that
 lists the keys and attributes in insertion order. A property's slot is its index in the
 shape. Objects with the same key sequence share the shape:
 
@@ -205,10 +205,10 @@ one way, when sharing is unlikely or the shape tree would grow without bound:
 A dictionary is a `PropTable` of 16-byte entries (key, flags, value) in insertion order,
 searched linearly up to 8 entries and through a hash index above that. An accessor's
 entry points to an `AccessorPair` cell holding the getter and setter, which is what
-keeps data entries at 16 bytes (D1830). An index has room for twice the table's capacity,
+keeps data entries at 16 bytes. An index has room for twice the table's capacity,
 so a growing table probes little; the builtin prototypes and namespaces in the base are
 full and almost never grow, so theirs are sized for a load of three quarters, which
-halves most of them for no measurable cost (D2450).
+halves most of them for no measurable cost.
 
 <!-- gen:cell PropTable -->
 ![The PropTable cell](gen/cell-PropTable.svg)
@@ -226,13 +226,13 @@ halves most of them for no measurable cost (D2450).
 
 > **Trade-off.** The prototype stays in the object, not in the shape. Changing a
 > prototype then touches no shape, and objects with the same keys share a shape whatever
-> their prototype. The inline caches check the prototype separately (D1621), which costs
+> their prototype. The inline caches check the prototype separately, which costs
 > one compare on a prototype hit.
 
 ### Elements
 
 Array elements are not named properties. An object's `ELEMENTS` is a `ValueArray`
-holding the dense part of its index keys, with a hole marker for missing ones (D1055). A
+holding the dense part of its index keys, with a hole marker for missing ones. A
 dense slot always means a plain writable, enumerable, configurable data property, so the
 interpreter's element fast paths can read and write it directly. Anything else lives in
 the property table:
@@ -244,9 +244,9 @@ the property table:
 
 The fast paths check the flag once and can then trust the dense store. An array's
 `length` is slot 0 of its tail, a Number, and read-only lengths are a header flag. Typed
-arrays and ArrayBuffers keep their bytes in an untraced `Bytes` cell (D1390).
+arrays and ArrayBuffers keep their bytes in an untraced `Bytes` cell.
 
-A closure's `length` and `name` are not stored either (D2445). Every function has both,
+A closure's `length` and `name` are not stored either. Every function has both,
 read-only and non-enumerable, and almost none ever changes them, so two header flags say
 "this function still has the `length` and `name` its template records", and property
 lookup, key listing and deletion answer from the template. Creating a closure then
@@ -259,25 +259,25 @@ requires. Inline caches cannot see the two keys in a shape, so for functions the
 
 Only arrays ever get dense elements, so a closure keeps its template in the `ELEMENTS`
 field instead of in a slot, and its slots are just its captured bindings: a closure is 8
-bytes smaller, and so is each of the builtins in every VM (D2448). The element paths stay
+bytes smaller, and so is each of the builtins in every VM. The element paths stay
 free of class checks: a template's first word, where an elements array keeps its length,
 is always zero, so a closure read as an array has no elements.
 
 ## Map, Set and the weak collections
 
-Map and Set are ordered hash tables in the heap (D1381): an entries array in insertion
+Map and Set are ordered hash tables in the heap: an entries array in insertion
 order, a linear-probing index of entry numbers, and a live count. Keys follow
 SameValueZero: numbers are normalized (−0 to +0, one NaN, the int32 form where it fits)
 and strings hash by content. Objects and symbols hash by their offset, which the
 collector changes, so after every collection it rehashes each table it copied, in place.
 Every key goes through the VM's keyed hash, described with the atoms above, so tool data
-built to collide can't make a table's lookups quadratic (D2433).
+built to collide can't make a table's lookups quadratic.
 
 WeakMap and WeakSet keep their pairs in an `EphemeronArray`, a cell the collector does
-not trace normally (D1382). A pair survives a collection only if its key is reachable
+not trace normally. A pair survives a collection only if its key is reachable
 some other way, including through the values of other weak tables. WeakRef and
-FinalizationRegistry are built from the same tables (D1513). Weak references make
-collection timing observable, so the host can make them strong or absent (D1680).
+FinalizationRegistry are built from the same tables. Weak references make
+collection timing observable, so the host can make them strong or absent.
 
 ```js live
 const m = new Map([["b", 1], ["a", 2]]);
@@ -312,23 +312,3 @@ helo
 - [`crates/djs-core/src/heap/collection.rs`](../../crates/djs-core/src/heap/collection.rs)
   and [`weakref.rs`](../../crates/djs-core/src/heap/weakref.rs): Map, Set and the weak
   collections.
-
-Decisions on this page:
-
-<!-- gen:decisions D1052 D1053 D1610 D1871 D1054 D1055 D1830 D1831 D1621 D1390 D1381 D1382 D1513 D2445 D2542 -->
-- D1052: Layout description macro
-- D1053: String representation
-- D1610: Append ropes: `s += x` writes into a growable buffer
-- D1871: No Rust allocations in short concatenation and fromCharCode
-- D1054: Atom representation; symbols are atoms
-- D1055: Object storage
-- D1830: Property entries are 16 bytes; accessors live in an AccessorPair cell
-- D1831: Shapes with strong transitions and a per-heap shape budget
-- D1621: Prototype property caches: a receiver-prototype offset, an epoch, and GC clearing
-- D1390: ArrayBuffers and typed arrays in the heap
-- D1381: Map and Set are ordered hash tables rehashed by the collector
-- D1382: WeakMap and WeakSet are ephemerons in the Cheney collector
-- D1513: WeakRef and FinalizationRegistry on ephemeron tables; cleanup jobs after a collection
-- D2445: A closure's length and name come from its template until changed
-- D2542: Slices: substrings that share a one-byte parent, copied out when they pin it
-<!-- /gen -->

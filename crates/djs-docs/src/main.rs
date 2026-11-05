@@ -4,7 +4,8 @@
 //! djs-docs check               generated regions and diagrams fresh, examples' output
 //!                              unchanged, links and references valid; renders every page
 //! djs-docs regen [--examples]  rewrite the generated regions and diagrams in place;
-//!                              --examples also rewrites example output (`gen:run`)
+//!                              --examples also rewrites example output (`gen:run`,
+//!                              `gen:dump`)
 //! djs-docs build [--out DIR] [--wasm FILE]
 //!                              the static site (default target/docs-site), with live
 //!                              examples on djs-wasm (default: the `wasm` profile build)
@@ -52,7 +53,6 @@ pub struct Guide {
     pub stale_extra: Vec<String>,
     /// Diagrams in gen/ that nothing generates any more.
     pub orphans: Vec<String>,
-    pub decisions_md: String,
 }
 
 /// Repository files outside docs/guide whose generated regions djs-docs maintains.
@@ -62,7 +62,6 @@ fn load(examples: bool) -> Guide {
     let root = repo();
     let dir = root.join("docs/guide");
     let src = regions::Sources {
-        decisions_md: read(&root.join("docs/decisions.md")),
         ops_rs: read(&root.join("crates/djs-core/src/bytecode/ops.rs")),
         intrinsics_dts: read(&root.join("builtins/intrinsics.d.ts")),
     };
@@ -138,7 +137,6 @@ fn load(examples: bool) -> Guide {
         cx,
         stale,
         orphans,
-        decisions_md: src.decisions_md,
     }
 }
 
@@ -158,7 +156,7 @@ fn main() -> ExitCode {
     match cmd.as_str() {
         "check" => {
             let mut g = load(false);
-            // Render every page too: missing diagrams, broken links, unknown decisions.
+            // Render every page too: missing diagrams, broken links, the writing rules.
             let _ = site::render_all(&mut g);
             let mut bad = false;
             for s in &g.stale {

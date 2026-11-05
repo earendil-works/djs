@@ -28,14 +28,14 @@ loop {
 
 The registers are a handful of indexes: `bp`, `hp` and `sp` into the value stack, and
 `pc` into the current function's bytecode. Whenever `run` returns, for whatever reason,
-they are written into the `Interp` cell of the arena (D1151). Fuel, and what running out
+they are written into the `Interp` cell of the arena. Fuel, and what running out
 of it means, is the subject of [the next chapter](suspension.md).
 
 ## Frames on the value stack
 
 The value stack is a growable array of values in the arena (`Roots::STACK`), addressed
 by index, so growing it moves nothing the interpreter holds. A call frame is a stretch
-of it (D1086):
+of it:
 
 ```text
 bp      callee            the function object
@@ -74,7 +74,7 @@ console.log(depth(10000));
 Ten thousand nested JavaScript calls use ten thousand frames in the arena and one Rust
 stack frame. The limit is the size of the value stack, 2²⁰ slots by default; beyond it a
 call throws `RangeError: Maximum call stack size exceeded`, the message pi's QuickJS
-build and V8 give (D013).
+build and V8 give.
 
 > **Trade-off.** A stackless interpreter over a recursive one. A recursive interpreter
 > gets its frames for free from the native stack and can call back into JavaScript from
@@ -89,7 +89,7 @@ Many instructions can run user code: `get_field` on a getter, `+` on an object w
 `valueOf`, `for-of` on a user iterator, `instanceof` with `Symbol.hasInstance`, anything
 on a Proxy. A recursive interpreter would call the user function from inside the
 instruction and wait. djs's rule is that **an instruction never resumes in the middle**
-(D1085):
+:
 
 1. It runs its fast path, in plain Rust that runs no user code.
 2. If user code is needed, it pushes a frame for the callee, with a continuation in the
@@ -109,7 +109,7 @@ There are only a few continuations:
 | `Retry(slot)` | store it in a stack slot and run the same instruction again |
 | `Each` | a callback of `%EachDense`: complete the loop's step, then enter the same frame again for the next element, or give the builtin the index its own loop goes on from |
 
-`Retry` is how conversions work (D1280, D1861). When `+` finds an object operand, it
+`Retry` is how conversions work. When `+` finds an object operand, it
 calls the builtin `%ToPrimitive` on it with `Retry` aimed at the operand's own stack
 slot. When `%ToPrimitive` returns, the primitive replaces the object and the `+` runs
 again from the start, this time on primitives. The multi-step logic (look up
@@ -152,7 +152,7 @@ to the handler. If not, the frame is popped and the search continues in the call
 the call instruction. An `Entry` frame without a handler makes `run` return
 `Threw(value)`.
 
-`finally` blocks are compiled once and entered with a plain jump (D2733). Normal exit,
+`finally` blocks are compiled once and entered with a plain jump. Normal exit,
 `return`, `break`, `continue` and a thrown exception all reach the same code after storing
 their **completion** in two hidden locals: a kind (0 normal, 1 throw, 2 return, or a
 number naming the statement a `break` or `continue` goes to) and a value (the exception
@@ -222,13 +222,13 @@ Some builtins (`Array.prototype.push`, `sort`, `JSON.stringify`'s slow path, ...
 compiled to Rust state machines rather than bytecode ([builtins](builtins.md)). They run in **native frames**:
 the same frame records on the same value stack, with a bit in the flags, the state
 number where a bytecode frame has its `pc`, and the builtin's locals in the frame's
-slots (D1631, D1632). When `sort` calls its comparator, it does not call it from Rust: it
+slots. When `sort` calls its comparator, it does not call it from Rust: it
 writes the callee's frame on top of its own, saves the state to resume at, and leaves.
 The loop runs the callback like any other closure, and its return re-enters the native
-frame at the saved state, one native run per callback call (D2060). A native builtin in
+frame at the saved state, one native run per callback call. A native builtin in
 the middle of a loop is therefore as suspendable as bytecode.
 
-`map`, `forEach`, `filter` and the other callback loops go one step further (D2303).
+`map`, `forEach`, `filter` and the other callback loops go one step further.
 Their intrinsic `%EachDense` keeps the loop's state in its own arguments, below the
 callback's frame, and pushes that frame once with the `Each` continuation. When the
 callback returns, the hot loop completes the step (the store into `map`'s result, say)
@@ -236,7 +236,7 @@ and rewrites the same frame for the next element: arguments, undefined locals, `
 The builtin itself only runs again when the dense part is over.
 
 Errors carry QuickJS-style stack traces, with the function names and source positions of
-the frames, read from the frame records and the templates' line tables (D1282).
+the frames, read from the frame records and the templates' line tables.
 
 ## Making it fast
 
@@ -245,10 +245,10 @@ and returns a `Result` from every arm spends more time on its own bookkeeping th
 simple instructions. djs keeps the general loop for the full semantics and puts a faster
 one in front of it:
 
-- **The tier-0 loop** (`run_hot`, D1930) is the main loop. It keeps `pc`, `sp`, the fuel
+- **The tier-0 loop** (`run_hot`) is the main loop. It keeps `pc`, `sp`, the fuel
   and the current frame's data in Rust locals and handles the hottest cases itself:
   locals, constants, int32 and float arithmetic, comparisons, jumps, calls of plain
-  closures and returns (D1931), inline-cache hits and dense array elements. Anything
+  closures and returns, inline-cache hits and dense array elements. Anything
   else, and any case it declines (an int overflow, an object operand), it hands to the
   general path (`step_once`), which runs that one instruction in place, with identical
   fuel and safepoints, after the locals have been written back. Nothing the tier-0 loop
@@ -256,22 +256,22 @@ one in front of it:
   locals.
 - **Inline caches.** Property and global accesses carry a cache slot number (the `ic0`
   in the disassembly). A slot remembers where a property was found: a shape, a table
-  index, or a prototype holder validated by an epoch (D1620, D1621). A hit is a compare
+  index, or a prototype holder validated by an epoch. A hit is a compare
   and a load; a stale slot is a miss and is refilled, so caches never change semantics,
   and a VM restored with warm caches behaves exactly like one with cold caches.
 - **Iteration without result objects.** `for-of` and array destructuring over arrays,
   strings, Maps and Sets step the iterator inside the interpreter when `next` is the
-  original builtin, without allocating `{value, done}` objects (`iter_next`, D1800); a
+  original builtin, without allocating `{value, done}` objects (`iter_next`); a
   loop keeps its iterator and `next` in two locals, which `iter_next_loc` reads in the
-  same instruction (D2732).
+  same instruction.
 
 Every one of these was measured, in wasm under V8, before it was kept: the register
 allocation of a dispatch loop is fragile, and an extra arm can make the hottest
-instructions slower (D1352). One rule came out of reading V8's machine code for the
+instructions slower. One rule came out of reading V8's machine code for the
 loop: nothing computed for every instruction (the instruction word, an immediate, the
 opcode) may stay alive across a heap call in any arm. V8 spills such a value where it is
 defined, so every instruction would pay a store. The arms therefore extract their own
-immediates and read the opcode again after a call (D2441).
+immediates and read the opcode again after a call.
 
 ## Where to look
 
@@ -282,27 +282,3 @@ immediates and read the opcode again after a call (D2441).
   tier-0 loop; [`run/ic.rs`](../../crates/djs-core/src/interp/run/ic.rs): inline caches.
 - [`crates/djs-core/src/bytecode/ops.rs`](../../crates/djs-core/src/bytecode/ops.rs):
   every instruction's cost and stack effect ([reference](ref-opcodes.md)).
-
-Decisions on this page:
-
-<!-- gen:decisions D1151 D1086 D013 D1085 D1280 D1861 D1084 D1250 D1282 D1930 D1931 D1631 D1632 D2060 D1620 D1621 D1800 D1352 D2441 -->
-- D1151: Interpreter state in the arena
-- D1086: Frame records in the index-addressed value stack
-- D013: Stack overflow is a RangeError
-- D1085: Re-entrant ops finish immediately, slow paths call privileged JS
-- D1280: Slow paths replace an operand and re-execute the instruction
-- D1861: The Retry continuation
-- D1084: Exception handler tables and gosub/ret for finally
-- D1250: try/catch/finally compilation
-- D1282: Error stack traces
-- D1930: The tier-0 loop keeps the interpreter state in locals
-- D1931: Calls and returns in the tier-0 loop: the same frames, block access
-- D1631: Native frames are ordinary frame records with a header bit
-- D1632: The bgen Rust backend: states are basic blocks, calls go through call_intrinsic
-- D2060: The base is decoded or injected straight into the first VM's arena
-- D1620: Inline caches: verified table indexes in a per-template array
-- D1621: Prototype property caches: a receiver-prototype offset, an epoch, and GC clearing
-- D1800: iter_next: iteration steps without result objects
-- D1352: more fast paths: leaf intrinsics, floats, dense elements, own-property writes
-- D2441: The hot loop's dispatch keeps no per-instruction values across calls
-<!-- /gen -->
