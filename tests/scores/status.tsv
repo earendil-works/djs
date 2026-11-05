@@ -46,6 +46,10 @@ speed/strings/djs-wasm	2221.6	12f469900e	2026-11-05
 speed/strings/qjs-wasi	5773.3	12f469900e	2026-11-05
 speed/tight/djs-wasm	5834.4	12f469900e	2026-11-05
 speed/tight/qjs-wasi	15335.5	12f469900e	2026-11-05
+startup/instantiate-us	40.7	5e9fd4c6bc	2026-11-05
+startup/sandbox-run-us	141.8	5e9fd4c6bc	2026-11-05
+startup/sandbox-us	112.7	5e9fd4c6bc	2026-11-05
+startup/vm-new-us	2.5	5e9fd4c6bc	2026-11-05
 wasm/base-coded	45685	1389e5d611	2026-11-05
 wasm/brotli	371761	1389e5d611	2026-11-05
 wasm/bytes	1033538	1389e5d611	2026-11-05
