@@ -49,7 +49,7 @@ const norm = (t) =>
 // realm's: js/src/dump-runtime.js as a Script whose completion value is `helpers`.
 const RUNTIME = `(() => {\n${fs
   .readFileSync(new URL("../js/src/dump-runtime.js", import.meta.url), "utf8")
-  .replace(/^export const /gm, "const ")}\nreturn helpers;\n})()`;
+  .replace(/^export (const|function) /gm, "$1 ")}\nreturn helpers;\n})()`;
 
 async function runLink(file, now) {
   const text = fs.readFileSync(file, "utf8");

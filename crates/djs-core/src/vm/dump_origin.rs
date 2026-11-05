@@ -475,7 +475,7 @@ impl Dumper<'_> {
                         ));
                     }
                 },
-                Holds::Temp => match self.origin_temp(&rec, &knamed, &kv, at_site, x) {
+                Holds::Temp => match self.origin_temp(&rec, &knamed, &kv, at_site, ksite.pos, x) {
                     Some(v) => v,
                     None => {
                         return Err(cat!(
@@ -554,9 +554,10 @@ impl Dumper<'_> {
         knamed: &[NamedSlot],
         kv: &dyn Fn(Place) -> Value,
         at_site: Option<u32>,
+        kpos: u32,
         x: &NamedSlot,
     ) -> Option<Value> {
-        let mut v = self.origin_temp_k(rec, knamed, kv, at_site, x)?;
+        let mut v = self.origin_temp_k(rec, knamed, kv, at_site, kpos, x)?;
         // A constant of K that closures capture (a pattern's source, read by K's
         // getters) is a box in K's frame; the original's temporary is its value.
         if let Some(b) = v.as_internal()
@@ -590,10 +591,19 @@ impl Dumper<'_> {
         knamed: &[NamedSlot],
         kv: &dyn Fn(Place) -> Value,
         at_site: Option<u32>,
+        kpos: u32,
         x: &NamedSlot,
     ) -> Option<Value> {
         let h = self.h;
         let (c, foff) = split(&x.name)?;
+        // K stopped in text it copied whole from its construct's start on (a later
+        // iteration of an outer loop runs an inner loop as the original's text): the
+        // construct is that copy, not K's scaffold, whose constants are stale (0215).
+        let in_copy = rec.segs.chunks(3).any(|s| {
+            s.len() == 3
+                && (s[0]..s[0] + s[2]).contains(&kpos)
+                && (s[1]..s[1] + s[2]).contains(&foff)
+        });
         let kslot = |name: &str| knamed.iter().find(|y| y.name == name).map(|y| kv(y.place));
         // A temporary of the rewritten statement evaluated before the site: K's constant.
         let from_cmap = || {
@@ -611,7 +621,7 @@ impl Dumper<'_> {
             return Some(v);
         }
         // A scaffold's: the loop's saved iterator record, a finally's completion.
-        for r in rec.scaf.iter().filter(|r| r.1 == foff) {
+        for r in rec.scaf.iter().filter(|r| r.1 == foff && !in_copy) {
             match (r.0.as_str(), c) {
                 ("for-of", "for-of.iterator") | ("for-of", "for-of.next") => {
                     // (Only while K is inside its scaffold: a later iteration of an

@@ -1902,3 +1902,31 @@ main();
     assert!(refused.is_empty(), "{refused:?}");
     assert!(ok >= 2, "{ok}");
 }
+
+/// Re-dumps inside loops K copied as the original's text (a later iteration of an outer
+/// loop): the inner loop's iterator is the copy's, not the stale constant of K's
+/// scaffold for the first iteration (0215; pjz's nested for-in).
+#[test]
+fn plain_dumps_of_loops_in_copied_text() {
+    let src = r#"
+async function* gen(n) { for (let i = 0; i < n; i++) yield i; }
+async function main() {
+  let count = 0;
+  for (const a of [1, 2]) for (const b in a === 1 ? { c: 3 } : { a: 1, b: 2, c: 3 }) { print(await later(b)); count++; }
+  for (const a of [1, 2, 3]) for (const b of a === 1 ? ["x"] : ["y", "z", "w"]) { print(a, await later(b)); count++; }
+  for (const a of [1, 2]) for await (const b of gen(a + 1)) { print(a, await later(b)); count++; }
+  for (const a of [1, 2]) { try { print(await later(a)); } finally { print("fin", await later(a)); count++; } }
+  outer: for (const a of [1, 2]) for (const b of [1, 2, 3]) { if (b === 3) continue outer; print(a, b, await later(b)); }
+  for (const a of [1, 2]) { const [x, y = await later(a)] = [a]; print(x, y); }
+  print(count);
+}
+main();
+"#;
+    let (failed, refused, ok) = plain_check_program("copied-loops", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, links, refused) = plain_chain_program("copied-loops", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 26 && links >= 26, "{ok} {links}");
+}

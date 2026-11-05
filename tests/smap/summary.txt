@@ -1,25 +1,25 @@
 # Suspension map coverage (compiler/smap_tests.rs)
-sites 1145
+sites 1157
 
 ## by kind
- 1012 await
+ 1019 await
    11 await-using
-   13 for-await.close
-   11 for-await.next
+   14 for-await.close
+   12 for-await.next
     3 return.await
-   38 yield
+   39 yield
    10 yield*
    21 yield*.await
-   13 yield.await
-   13 yield.return
+   14 yield.await
+   14 yield.return
 
 ## described, by temporaries (in locals, then on the stack)
-  745 -
+  748 -
   212 call.callee call.this
    22 yield*.iterator yield*.next
    20 for-of.iterator for-of.next
    18 call.callee call.this object.literal
-   14 for-of.iterator for-of.next call.callee call.this
+   15 for-of.iterator for-of.next call.callee call.this
    13 call.callee call.this call.callee call.this
    11 for-await.exception
    10 for-await.iterator for-await.next
@@ -37,6 +37,7 @@ sites 1145
     2 call.callee call.this call.arg
     2 call.callee call.this template.part template.part
     2 for-of.iterator for-of.next assign.old
+    2 for-of.iterator for-of.next completion.kind completion.value call.callee call.this call.arg
     2 object.literal object.literal array.element object.literal
     1 array.literal
     1 assign.object binary.left
@@ -53,15 +54,21 @@ sites 1145
     1 for-await.iterator
     1 for-await.iterator for-await.next call.callee call.this
     1 for-of.iterator
+    1 for-of.iterator for-await.exception
     1 for-of.iterator for-of.next call.callee call.this call.callee call.this
-    1 for-of.iterator for-of.next completion.kind completion.value call.callee call.this call.arg
+    1 for-of.iterator for-of.next for-await.iterator for-await.next
+    1 for-of.iterator for-of.next for-await.iterator for-await.next call.callee call.this call.arg
+    1 for-of.iterator for-of.next for-in.iterator call.callee call.this
+    1 for-of.iterator for-of.next for-of.iterator for-of.next call.callee call.this call.arg
+    1 for-of.iterator for-of.next for-of.iterator for-of.next call.callee call.this call.arg call.arg
+    1 for-of.iterator for-of.next pattern.iterator
     1 for-of.iterator for-of.next using.record completion.kind completion.value
     1 object.literal array.element array.element
     1 object.literal object.key
     1 pattern.iterator
 
 ## paths (D2850)
- 1145 complete
+ 1157 complete
 
 ## path gaps, by the part they are in
 
