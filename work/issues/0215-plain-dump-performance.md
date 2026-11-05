@@ -90,3 +90,52 @@ Measure where plain dumps stand now and fix what regressed:
 ## Follow-ups
 
 ## Result
+Paused for the coordinator (status left in-progress: it may bring pjr back for a writer or
+maps hot spot). Measurements and profiles: work/research/0215/README.md; tools:
+scripts/dump-costs/ (`instructions.sh corpus|cases [filter]`, `pi-sessions.ts`, the native
+`dump_perf` with `DJS_DUMP_PERF*`, which also re-dumps the loaded VM and counts refusals).
+
+What landed (same output unless a fix says otherwise):
+- The check: D2888 (compile the plain text with data lines stripped; `DumpOptions::check`)
+  and D2889 (free names from parse and resolve, no code generation).
+- Writer scheduling indexed (providers, factories, keys; the quadratic `keys_in`/`dep_items`
+  lookups) and `scan` keeping only the names wanted; builtins found by substring.
+- Base and setup: D3020 (djs-prelude `names`: `BASE_NAMES`/`BASE_GLOBALS` from the build; a
+  dump needs no base VM; `vm_dump` returns 0/1), base builtins as a sorted, borrowed table
+  (`BaseTable`), base globals compared by atom (names only for the VM's own), host
+  expressions made only when written.
+- Continuation generation: name checks by first byte, one-pass helper count, static pieces.
+- Loads: base64 decoding by digit range; `Vm::dump_runtime_for`; a VM keeps the maps of a
+  dump it loads; pi: D3021 (Array.fromAsync as `$djs.fromAsync`), the runtime and host
+  globals in the prelude image, D3023 (an instance pool, renewed as new, ~17 µs).
+- Gate: D3022 (clean djs-core/djs-prelude after incremental corruption).
+- Fixes found on the way: the frame-closure refusal of every data case (`const rnd = ;`),
+  stale TDZ locals in later loop iterations, the for-await `"loop"` mark (pjz's
+  await-using continue), pjz's nested for-in re-dump (`in_copy`), D3024 (arrows sharing a
+  waiting frame's `this`/`arguments`/`new.target`), an accessor among array elements, a
+  jump through an awaiting finally in K's copy.
+
+Numbers (native, M instructions retired, `instructions.sh`; corpus has grown by ~10 cases
+since 0198's table):
+
+| | 0198 (format 2) | 0215 start | now (main a3f8f572) |
+| --- | ---: | ---: | ---: |
+| corpus dump (check on / off) | 12,262 | 15,551 | 15,424 / 10,383 |
+| corpus load | 9,076 | 13,348 | 8,905 |
+| corpus re-dump (check on / off) | - | 28,935 | 14,209 / 9,244 |
+| records dump | 2,311 | 10,130 | ~4,000 at best (9,794 now: a writer regression, pjs) |
+| log-5mb dump / load | 1,279 / 895 | 1,758 / 833 | 2,462 / 830 |
+| binary dump / load | 128 / 159 | 205 / 390 | 342 / 156 |
+
+pi in wasm (`pi-sessions.ts`, medians): a dump ~1.24 ms -> ~0.13-0.3 ms; a load ~760 ->
+~230 µs (runtime and hosts 118-140 -> 5 µs, new instance 103 -> ~32 µs).
+
+The check costs ~35% of a corpus dump but ~0% of pi's (its dumps write few function
+texts); whether production turns it off is the owner's call.
+
+Left, with owners: the writer's emit and repeated scans (records regression: `drop_unread`,
+`flush_hooks`/`part_reads`, the inline passes; pjs, details sent); suspension maps and
+repeated code at dump and load (lazy, 0218/0219); the dump's compile at load (lazy); setUp
+per load ~40-45 µs (hash rekey ~55%; a seed-per-image cache costs more than it saves);
+continuation generation's remaining cost is the piece tree's allocation (pjs's item 11
+touches it).
