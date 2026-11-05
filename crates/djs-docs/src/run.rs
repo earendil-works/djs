@@ -14,8 +14,16 @@ use djs_core::vm::{Status, Vm, VmOptions};
 
 const CONSOLE_LOG: u32 = 1;
 
-/// Runs `src`; returns what it printed, then `Uncaught ...` if it threw.
-pub fn run(src: &str) -> String {
+/// The compile options of an example: a codemode body, TypeScript for a `ts` block.
+fn body_options(ts: bool) -> CompileOptions<'static> {
+    CompileOptions {
+        typescript: ts,
+        ..CompileOptions::async_body("example.js", &[])
+    }
+}
+
+/// Runs `src` (TypeScript if `ts`); returns what it printed, then `Uncaught ...` if it threw.
+pub fn run(src: &str, ts: bool) -> String {
     let mut vm = djs_prelude::new_vm(VmOptions::default()).expect("out of memory");
     vm.set_now(0.0);
     let console = vm.new_object().expect("out of memory");
@@ -25,10 +33,7 @@ pub fn run(src: &str) -> String {
     vm.define(console, "log", log).expect("out of memory");
     vm.define_global("console", Value::object(console))
         .expect("out of memory");
-    let main = match vm.compile(
-        src.as_bytes(),
-        &CompileOptions::async_body("example.js", &[]),
-    ) {
+    let main = match vm.compile(src.as_bytes(), &body_options(ts)) {
         Ok(f) => f,
         Err(e) => return format!("SyntaxError: {} at {}:{}\n", e.message, e.line, e.col),
     };
@@ -82,7 +87,7 @@ const DEBUGGER: u32 = 2;
 /// it waits, as the live examples' Dump tab does with the Sandbox: frozen builtins,
 /// `console` a namespace of host functions, the body by reference (`$djs.source`), the
 /// run's promise as the dump's value. The text, or why there is none.
-pub fn dump(src: &str, nth: usize) -> String {
+pub fn dump(src: &str, nth: usize, ts: bool) -> String {
     // As the editor has it: without the block's final newline, which the script's hash in
     // `$djs.source` would count.
     let src = src.strip_suffix('\n').unwrap_or(src);
@@ -106,7 +111,7 @@ pub fn dump(src: &str, nth: usize) -> String {
     vm.define_global("debugger", pause).expect("out of memory");
     let opts = CompileOptions {
         debugger_awaits: true,
-        ..CompileOptions::async_body("example.js", &[])
+        ..body_options(ts)
     };
     let main = match vm.compile(src.as_bytes(), &opts) {
         Ok(f) => f,
@@ -174,13 +179,9 @@ pub fn dump(src: &str, nth: usize) -> String {
 }
 
 /// The bytecode of `src` and of every function in it.
-pub fn disasm(src: &str) -> String {
+pub fn disasm(src: &str, ts: bool) -> String {
     let mut heap = Heap::new().expect("out of memory");
-    match compile(
-        &mut heap,
-        src.as_bytes(),
-        &CompileOptions::async_body("example.js", &[]),
-    ) {
+    match compile(&mut heap, src.as_bytes(), &body_options(ts)) {
         Ok(t) => disasm_template(&heap, t),
         Err(e) => format!("SyntaxError: {} at {}:{}\n", e.message, e.line, e.col),
     }
@@ -192,30 +193,42 @@ mod tests {
 
     #[test]
     fn examples_print_await_and_throw() {
-        assert_eq!(run("console.log(1, 'a', [2])"), "1 a [2]\n");
+        assert_eq!(run("console.log(1, 'a', [2])", false), "1 a [2]\n");
         assert_eq!(
-            run("const x = await Promise.resolve(3); console.log(x)"),
+            run("const x = await Promise.resolve(3); console.log(x)", false),
             "3\n"
         );
         assert_eq!(
-            run("console.log(1); null.x"),
+            run("console.log(1); null.x", false),
             "1\nUncaught TypeError: cannot read property 'x' of null\n"
         );
         assert!(
-            run("let s = 0; for (let i = 0; i < 1000; i++) s += i; console.log(s)")
-                .ends_with("499500\n")
+            run(
+                "let s = 0; for (let i = 0; i < 1000; i++) s += i; console.log(s)",
+                false
+            )
+            .ends_with("499500\n")
         );
-        assert!(run("let").starts_with("SyntaxError"));
-        assert!(disasm("return 1").contains("return"));
+        assert!(run("let", false).starts_with("SyntaxError"));
+        // A `ts` block is TypeScript.
+        assert_eq!(
+            run(
+                "enum E { A, B } const n: number = E.B; console.log(n)",
+                true
+            ),
+            "1\n"
+        );
+        assert!(run("const n: number = 1", false).starts_with("SyntaxError"));
+        assert!(disasm("return 1", false).contains("return"));
     }
 
     #[test]
     fn examples_dump_at_debugger() {
         let src = "let n = 0;\nfor (const x of [1, 2]) {\n  n += x;\n  debugger;\n}\nreturn n;\n";
-        let d = dump(src, 1);
+        let d = dump(src, 1, false);
         assert!(d.contains("$djs.resume("), "{d}");
         assert!(d.contains("\"debugger\""), "{d}");
-        assert!(dump(src, 2).contains("$djs.resume("));
-        assert_eq!(dump(src, 3), "(the run ended without pausing)\n");
+        assert!(dump(src, 2, false).contains("$djs.resume("));
+        assert_eq!(dump(src, 3, false), "(the run ended without pausing)\n");
     }
 }

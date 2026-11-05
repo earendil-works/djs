@@ -88,18 +88,18 @@ in, so the Markdown reads the same on GitHub. Never edit it by hand.
 | `intrinsics-all` | every intrinsic, descriptions from builtins/intrinsics.d.ts |
 | `excerpt PATH "ANCHOR" "START" N` | N lines of a repository file: from the first line containing START after the line containing ANCHOR (quoted code that cannot drift) |
 | `status conformance\|speed\|size\|inventory` | status numbers: counted from the repository, or read from `tests/scores/status.tsv` (`scripts/status.py`); also used in README.md |
-| `disasm` | the bytecode of the closest `js` block above |
-| `run` | the output of the closest `js` block above, as this build prints it |
-| `dump [N]` | the continuation dump the closest `js` block above writes at its Nth `debugger;` pause (default 1), as the live examples' Dump tab writes it |
+| `disasm` | the bytecode of the closest `js` or `ts` block above |
+| `run` | the output of the closest `js` or `ts` block above, as this build prints it |
+| `dump [N]` | the continuation dump the closest `js` or `ts` block above writes at its Nth `debugger;` pause (default 1), as the live examples' Dump tab writes it |
 
-Examples (`js` blocks) are codemode async function bodies: `await` and `return` work at
-the top level and `console.log` prints. `run` executes them in a VM from the base
+Examples (`js` blocks, and `ts` blocks, which compile as TypeScript) are codemode async
+function bodies: `await` and `return` work at the top level and `console.log` prints. `run` executes them in a VM from the base
 snapshot, suspended and restored from its heap image every 50 fuel units. `run` and
 `dump` regions are only rewritten by `regen --examples`: a changed output fails the gate,
 because it is a behavior change that someone should look at. Since the dump format still
 changes, prose around a `dump` region describes what the dump does, not the exact text.
 
-A block marked ```` ```js live ```` becomes a live example on the site: the code is
+A block marked ```` ```js live ```` (or ```` ```ts live ````) becomes a live example on the site: the code is
 an editor, highlighted as it is typed in the same colors as static code, and runs in
 djs-wasm in the browser, with its bytecode, a walk over the VM's heap, and its fuel slices
 and snapshot. Put its `gen:run` region right after it; the site shows that output inside

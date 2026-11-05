@@ -155,15 +155,18 @@ fn parse_intrinsic_docs(dts: &str) -> BTreeMap<String, String> {
 pub fn regen(page: &str, md: &str, cx: &mut Ctx) -> String {
     let mut out = String::new();
     let mut lines = md.lines();
-    let mut last_js: Option<String> = None;
+    // The closest `js` or `ts` block: (source, is TypeScript).
+    let mut last_js: Option<(String, bool)> = None;
     let mut fence: Option<(String, String)> = None; // (info, body)
     while let Some(line) = lines.next() {
         out.push_str(line);
         out.push('\n');
         if let Some((info, body)) = &mut fence {
             if line.trim_start().starts_with("```") {
-                if info.split_whitespace().next() == Some("js") {
-                    last_js = Some(body.clone());
+                match info.split_whitespace().next() {
+                    Some("js") => last_js = Some((body.clone(), false)),
+                    Some("ts") => last_js = Some((body.clone(), true)),
+                    _ => {}
                 }
                 fence = None;
             } else {
@@ -202,7 +205,14 @@ pub fn regen(page: &str, md: &str, cx: &mut Ctx) -> String {
         let words = split_args(spec);
         let name = words.first().map_or("", String::as_str);
         let args: Vec<&str> = words.iter().skip(1).map(String::as_str).collect();
-        let body = generate(page, name, &args, last_js.as_deref(), &old, cx);
+        let body = generate(
+            page,
+            name,
+            &args,
+            last_js.as_ref().map(|(s, ts)| (s.as_str(), *ts)),
+            &old,
+            cx,
+        );
         out.push_str(&body);
         out.push_str("<!-- /gen -->\n");
     }
@@ -213,7 +223,7 @@ fn generate(
     page: &str,
     name: &str,
     args: &[&str],
-    last_js: Option<&str>,
+    last_js: Option<(&str, bool)>,
     old: &str,
     cx: &mut Ctx,
 ) -> String {
@@ -284,13 +294,14 @@ fn generate(
             }
         }
         "run" | "disasm" | "dump" => {
-            let Some(src) = last_js else {
-                cx.errors
-                    .push(format!("{page}: gen:{name} without a js block before it"));
+            let Some((src, ts)) = last_js else {
+                cx.errors.push(format!(
+                    "{page}: gen:{name} without a js or ts block before it"
+                ));
                 return String::new();
             };
             if name == "disasm" {
-                return fenced("text", &crate::run::disasm(src));
+                return fenced("text", &crate::run::disasm(src, ts));
             }
             let new = if name == "dump" {
                 // `gen:dump [N]`: the dump at the block's Nth `debugger;` pause.
@@ -305,9 +316,9 @@ fn generate(
                     ));
                     return old.to_string();
                 }
-                fenced("js", &crate::run::dump(src, nth))
+                fenced("js", &crate::run::dump(src, nth, ts))
             } else {
-                fenced("text", &crate::run::run(src))
+                fenced("text", &crate::run::run(src, ts))
             };
             if new != old && !cx.examples {
                 cx.changed_examples.push(page.to_string());

@@ -41,7 +41,7 @@ function lib() {
 // exports `djs_disasm`, the listing `djs disasm` prints, so an edited example shows its
 // own bytecode. With the shipping module the tab keeps the build-time listing.
 let disasmExports;
-function disasm(module, src) {
+function disasm(module, src, ts) {
   if (!WebAssembly.Module.exports(module).some((e) => e.name === "djs_disasm")) return null;
   disasmExports ??= new WebAssembly.Instance(module, {}).exports;
   const x = disasmExports;
@@ -52,7 +52,8 @@ function disasm(module, src) {
   const mem = new Uint8Array(x.memory.buffer);
   mem.set(params, at);
   mem.set(body, at + params.length);
-  x.djs_disasm(1, params.length, body.length);
+  // Goal bits as for vm_compile: 1 a codemode body, 2 TypeScript.
+  x.djs_disasm(ts ? 3 : 1, params.length, body.length);
   return new TextDecoder().decode(new Uint8Array(x.memory.buffer, x.djs_out_ptr(), x.djs_out_len()));
 }
 
@@ -342,6 +343,7 @@ async function runPausing(ex, l, id) {
   const opts = {
     module,
     frozenBuiltins: true,
+    typescript: ex.ts,
     console: { log: out, info: out, warn: out, error: out },
     fuelSlice: FUEL_SLICE,
     maxFuel: MAX_FUEL,
@@ -428,7 +430,7 @@ async function run(ex) {
     const l = await lib();
     const { Sandbox, module } = l;
     if (hasDebugger(src)) {
-      pane("bytecode").textContent = disasm(module, src) ?? ex.listing;
+      pane("bytecode").textContent = disasm(module, src, ex.ts) ?? ex.listing;
       pane("heap").innerHTML = `<p class="muted">A run that pauses at <code>debugger;</code> ends in a dump; its heap is gone.</p>`;
       pane("suspend").innerHTML = `<p class="muted">See the Dump tab: this run is suspended into a dump at its <code>debugger;</code>.</p>`;
       if (await runPausing(ex, l, id)) return;
@@ -441,6 +443,7 @@ async function run(ex) {
     const make = () =>
       new Sandbox({
         module,
+        typescript: ex.ts,
         console: { log: out, info: out, warn: out, error: out },
         fuelSlice: FUEL_SLICE,
         maxFuel: MAX_FUEL,
@@ -480,7 +483,7 @@ async function run(ex) {
     pane("out").innerHTML = lines.join("\n") || `<span class="muted">(no output)</span>`;
     ex.mark = failure?.line ? markAt(src, failure.line, failure.col) : null;
     repaint(ex);
-    const listing = disasm(module, src);
+    const listing = disasm(module, src, ex.ts);
     pane("bytecode").textContent =
       listing ?? (src === ex.original ? ex.listing : `(The original example's bytecode, from the build.)\n\n${ex.listing}`);
     const after = walk(sb, l, before.len);
@@ -528,6 +531,8 @@ function setup(el, n) {
     // The Markdown block's final newline would be an empty last line in the editor.
     original: code.textContent.replace(/\n$/, ""),
     listing: el.querySelector('[data-pane="bytecode"]').textContent,
+    // A ```ts live block runs as TypeScript.
+    ts: code.classList.contains("lang-ts"),
     mark: null,
     runs: 0,
     timer: 0,
@@ -546,7 +551,7 @@ function setup(el, n) {
   ta.value = ex.original;
   ta.spellcheck = false;
   for (const [k, v] of Object.entries({ autocapitalize: "off", autocomplete: "off", autocorrect: "off", wrap: "soft" })) ta.setAttribute(k, v);
-  ta.setAttribute("aria-label", `Example ${n}: JavaScript, editable`);
+  ta.setAttribute("aria-label", `Example ${n}: ${ex.ts ? "TypeScript" : "JavaScript"}, editable`);
   ta.setAttribute("aria-describedby", hint.id);
   pre.setAttribute("aria-hidden", "true");
   pre.after(ta);

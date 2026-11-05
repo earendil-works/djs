@@ -116,7 +116,7 @@ pub fn render(page: &str, md: &str, env: &mut Env) -> Page {
                 }
                 let mut words = info.split_whitespace();
                 let lang = words.next().unwrap_or("");
-                let live = lang == "js" && words.any(|w| w == "live");
+                let live = matches!(lang, "js" | "ts") && words.any(|w| w == "live");
                 let hl = crate::highlight::highlight(lang, &code);
                 let html = if live {
                     live_n += 1;
@@ -264,15 +264,16 @@ pub fn render(page: &str, md: &str, env: &mut Env) -> Page {
 /// editor (a textarea over this `pre`, which keeps showing the highlighting), shows the
 /// Run and Reset buttons and makes the tabs work.
 fn live_block(n: usize, lang: &str, hl: &str, code: &str) -> String {
-    let out_text = crate::run::run(code);
-    let disasm = crate::run::disasm(code);
+    let ts = lang == "ts";
+    let out_text = crate::run::run(code, ts);
+    let disasm = crate::run::disasm(code, ts);
     // An example with a `debugger;` shows the dump it writes there (D3050): built here,
     // so that the page shows it without JavaScript too; live.js makes it live.
     let dump = if has_debugger(code) {
         format!(
             "<p class=\"muted\">The run paused at its first <code>debugger;</code> and was dumped there:</p>\
              <pre class=\"code live-dump\"><code class=\"lang-js\">{}</code></pre>",
-            crate::highlight::highlight("js", &crate::run::dump(code, 1))
+            crate::highlight::highlight("js", &crate::run::dump(code, 1, ts))
         )
     } else {
         DUMP_HINT.to_string()
