@@ -569,7 +569,7 @@ impl Heap {
     }
 
     /// `Array.prototype.join` over the first `len` slots of an Array's dense store when
-    /// each is a flat one-byte string, `undefined` or `null`, and `sep` is a flat one-byte
+    /// each is a flat one-byte string or a slice, `undefined` or `null`, and `sep` is a flat one-byte
     /// string: the result written once, straight from the cells (0129: no list of
     /// pieces, one kind read per element). `None` (nothing allocated) for anything else,
     /// holes included.
@@ -591,32 +591,54 @@ impl Heap {
         if self.array_length(o) != len {
             return Ok(None);
         }
+        // One-byte flat strings and slices (the lines of a split): read in place, from
+        // where their units start (found once, in the first pass).
+        let mut pieces: Vec<(u32, u32)> = crate::buf::vec_with_capacity(len as usize);
         let mut total = u64::from(sep_len) * u64::from(len.saturating_sub(1));
         for v in values {
             match v.as_string() {
-                Some(s) if str8(self, s) => total += u64::from(self.str_len(s)),
-                None if v.is_nullish() => {}
-                _ => return Ok(None),
+                Some(s) => {
+                    let k = self.arena().get(s.0, Header::KIND);
+                    let data = if k == CellKind::Str8 as u8 {
+                        s.0 + Str8::DATA.offset
+                    } else if k == CellKind::Slice as u8 {
+                        let (parent, start) = self.slice_parts(s.0);
+                        parent + Str8::DATA.offset + start
+                    } else {
+                        return Ok(None);
+                    };
+                    let n = self.str_len(s);
+                    total += u64::from(n);
+                    pieces.push_out((data, n));
+                }
+                None if v.is_nullish() => pieces.push_out((0, 0)),
+                None => return Ok(None),
             }
         }
         if total > u64::from(MAX_LEN) {
             return Err(HeapError::StringTooLong);
         }
         let dst = self.alloc_flat(total as u32, false)?;
-        let mut at = dst + Str8::DATA.offset;
-        for i in 0..len {
+        let sep_at = (sep.0 + Str8::DATA.offset) as usize;
+        // Every piece and the separator are older cells than `dst`, so below it.
+        let (src, out) = self.arena_mut().split_mut(dst);
+        let sep = &src[sep_at..sep_at + sep_len as usize];
+        let mut at = Str8::DATA.offset as usize;
+        for (i, &(data, n)) in pieces.iter().enumerate() {
             if i > 0 {
-                self.arena_mut()
-                    .copy_within(sep.0 + Str8::DATA.offset, sep_len, at);
-                at += sep_len;
+                // (A one-unit separator, the usual one, without a copy call.)
+                if let [b] = sep {
+                    out[at] = *b;
+                } else {
+                    out[at..at + sep.len()].copy_from_slice(sep);
+                }
+                at += sep.len();
             }
-            if let Some(s) = self.get_element_fast(o, i).and_then(|v| v.as_string()) {
-                let n = self.str_len(s);
-                self.arena_mut().copy_within(s.0 + Str8::DATA.offset, n, at);
-                at += n;
-            }
+            let (data, n) = (data as usize, n as usize);
+            out[at..at + n].copy_from_slice(&src[data..data + n]);
+            at += n;
         }
-        debug_assert_eq!(at, dst + Str8::DATA.offset + total as u32);
+        debug_assert_eq!(at, Str8::DATA.offset as usize + total as usize);
         Ok(Some(Str(dst)))
     }
 
@@ -1176,6 +1198,13 @@ impl Heap {
         }
         let two_byte = self.str_is_two_byte(a) || self.str_is_two_byte(b);
         if len < ROPE_MIN_LEN {
+            // Two flat pieces (the usual `a + b`): copied as they are, without the walk
+            // and its two zeroed 32-entry arrays.
+            if self.cell_kind(a.0) != CellKind::Rope && self.cell_kind(b.0) != CellKind::Rope {
+                let dst = self.alloc_flat(len, two_byte)?;
+                self.write_leaves(&[(a.0, la), (b.0, lb)], dst, 0);
+                return Ok(Str(dst));
+            }
             let mut leaves = [(0, 0); ROPE_MIN_LEN as usize];
             let n = self.short_leaves([(a.0, la), (b.0, lb)], &mut leaves);
             let dst = self.alloc_flat(len, two_byte)?;

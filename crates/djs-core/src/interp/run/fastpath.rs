@@ -26,7 +26,7 @@ impl Exec<'_> {
     /// The `call` instruction at `pc` when its callee is a `@fast` builtin whose fast path
     /// accepts the arguments: true when it completed. Declining leaves everything
     /// unchanged, and `step` makes the full call.
-    #[inline(never)]
+    #[inline]
     pub(super) fn fast_leaf_call(&mut self, op: u8) -> bool {
         // `call argc` or a short form (`call2`, D2443).
         let (argc, size) = if op == super::fast::CALL {
@@ -52,6 +52,31 @@ impl Exec<'_> {
         // (`call0`..`call3` cost as much as `call`: the table's check.)
         let info = &OPS[Op::Call as usize];
         let next = self.pc + size;
+        // `arr.push(x)`, the commonest @fast call, straight to the heap's append (0231):
+        // what `try_fast_call` and its `array_push` entry do, without the generic steps.
+        if argc == 1
+            && self.heap.arena().get(t, FuncTemplate::FAST) as usize
+                == crate::builtins::fast::ARRAY_PUSH
+            && let Some(a) = self.get(base + 1).as_object()
+            && self.is_class(a, ObjectClass::Array)
+        {
+            match self.heap.array_append_fast(a, self.get(base + 2)) {
+                Ok(Some(n)) => {
+                    self.sp = base;
+                    self.push(crate::interp::conv::number(f64::from(n)));
+                    self.pc = next;
+                    self.fuel -= info.cost.fuel() as i64 + FAST_FUEL;
+                    return true;
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    if matches!(e, HeapError::HostOutOfMemory) {
+                        self.host_out_of_memory();
+                    }
+                    return false;
+                }
+            }
+        }
         match self.try_fast_call(t, base, argc, Continuation::PushResult, next) {
             Ok(true) => {
                 self.fuel -= info.cost.fuel() as i64;

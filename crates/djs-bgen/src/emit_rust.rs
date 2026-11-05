@@ -235,6 +235,9 @@ fn inline_leaf(name: &str) -> Option<&'static str> {
         "AsFn" => "ex.n_as_fn({0})?",
         "AsStr" => "ex.n_as_str({0})?",
         "ToObject" => "ex.n_to_object({0})?",
+        // The comparator sort's leaves, once per comparison (D3125).
+        "SortStep" => "ex.n_sort_step({0}, {1})?",
+        "SortOperand" => "ex.n_sort_operand({0}, {1})?",
         _ => return None,
     })
 }

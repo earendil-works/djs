@@ -100,7 +100,7 @@ The subset is small on purpose:
 Intrinsics are declared in [`builtins/intrinsics.d.ts`](../../builtins/intrinsics.d.ts),
 each tagged `@leaf` (never runs user code) or `@reentrant` (may call exactly one user
 function, whose result completes the operation, such as `Get` calling a getter).
-<!--n intrinsics/leaf-->284<!--/n--> are leaves and <!--n intrinsics/reentrant-->29<!--/n--> are reentrant. Builtins tagged `@intrinsic` join them, so that the
+<!--n intrinsics/leaf-->288<!--/n--> are leaves and <!--n intrinsics/reentrant-->29<!--/n--> are reentrant. Builtins tagged `@intrinsic` join them, so that the
 interpreter's slow paths and other builtins can call them as `%Name(...)`. They are all
 numbered in one table; the [intrinsics reference](ref-intrinsics.md) lists them.
 
@@ -165,7 +165,7 @@ changes. A helper whose frame the engine looks for on the stack is tagged `@fram
 keeps it. Here is `substring` as the prelude has it:
 
 <!-- gen:excerpt builtins/gen/prelude.js "String.prototype.substring" "function StringPrototypeSubstring(" 8 -->
-[`builtins/gen/prelude.js`](../../builtins/gen/prelude.js#L9686-L9693), lines 9686–9693:
+[`builtins/gen/prelude.js`](../../builtins/gen/prelude.js#L9637-L9644), lines 9637–9644:
 
 ```js
 function StringPrototypeSubstring(start, end) {
@@ -195,15 +195,17 @@ line tables or local names, which keeps that image small.
 
 A builtin tagged `@native` is also compiled to a Rust state machine in
 [`crates/djs-core/src/builtins/gen/natives.rs`](../../crates/djs-core/src/builtins/gen/natives.rs).
-There are eight: `Array.prototype.push`, `sort` and its merge step, and the five
-functions of `JSON.stringify`'s serializer. bgen splits the function into basic blocks,
+There are eight: `Array.prototype.push`, `sort` and its comparison loop, and the five
+functions of `JSON.stringify`'s serializer. (The merging between two comparisons is a
+leaf: it keeps its position in an internal array on the heap, so the state machine only
+calls the comparator and hands its result back.) bgen splits the function into basic blocks,
 and each block becomes one arm of a `match` on the state. A resume point ends a block.
 Here is the loop of `Array.prototype.push` for several items, excerpted from the
 generated file. The source is the plain loop
 `for (let i = 0; i < argCount; i++) { Set(o, len, Get(items, i)); len++; }`:
 
 <!-- gen:excerpt crates/djs-core/src/builtins/gen/natives.rs "fn native_ArrayPrototypePush(" "7 => {" 18 -->
-[`crates/djs-core/src/builtins/gen/natives.rs`](../../crates/djs-core/src/builtins/gen/natives.rs#L93-L110), lines 93–110:
+[`crates/djs-core/src/builtins/gen/natives.rs`](../../crates/djs-core/src/builtins/gen/natives.rs#L94-L111), lines 94–111:
 
 ```rust
 7 => {
@@ -274,7 +276,7 @@ Many hot builtins rarely meet user code: `"a,b".split(",")`, `s.includes("x")`,
 `@fast` has a hand-written Rust entry of the same name in
 [`crates/djs-core/src/builtins/fast.rs`](../../crates/djs-core/src/builtins/fast.rs).
 With the native backend, a call first runs the entry, which either returns the builtin's
-result or *declines*, and then the builtin runs as usual. <!--n builtins/fast-->28<!--/n--> builtins have one.
+result or *declines*, and then the builtin runs as usual. <!--n builtins/fast-->33<!--/n--> builtins have one.
 
 An entry may answer only when nothing observable can happen: primitive arguments, dense
 arrays whose elements are plain data, no proxies. Every case that would throw declines,
@@ -324,14 +326,15 @@ in every wasm module, and module size is part of startup
 bytes. It stays only where turning it off makes typical codemode work at least 1% slower
 in wasm instructions, or makes some benchmark workload slower by at least 10% for each
 kilobyte (gzipped) of the twin's code. Twins that call each other are judged together,
-such as `sort` and its merge step, or the serializer functions of `JSON.stringify`.
+such as `sort` and its comparison loop, or the serializer functions of `JSON.stringify`.
 `scripts/native-sizes.sh` prints the wasm size of each native function.
 
-By that rule the twins are the <!--n builtins/fast-->28<!--/n--> `@fast` entries (`split`, `includes`, `indexOf` and
+By that rule the twins are the <!--n builtins/fast-->33<!--/n--> `@fast` entries (`split`, `includes`, `indexOf` and
 `slice` on strings and arrays, `charAt` and `charCodeAt`, `substring`, `at`, `repeat`,
 `padStart` and `padEnd`, `push`, `pop` and `join`, `String.fromCharCode`, `String` and
 `Number` called as functions, `Number.isInteger`, `toFixed`, `Math.max` and `Math.min`,
-`ArraySpeciesCreate` and the conversion helpers the builtins call most) and the <!--n builtins/native-->8<!--/n-->
+`ArraySpeciesCreate`, `get`, `has`, `set` and `add` of `Map` and `Set`, and the conversion
+helpers the builtins call most) and the <!--n builtins/native-->8<!--/n-->
 `@native` functions above. A builtin without a twin is not slow by default: its loops
 over dense arrays already run in leaf intrinsics.
 

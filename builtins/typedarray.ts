@@ -1362,7 +1362,7 @@ function TASortedList(o: Obj, len: f64, comparefn: Value): Obj {
   if (comparefn === undefined) {
     SortNumbers(list);
   } else {
-    SortList(list, len, comparefn);
+    SortList(list, comparefn);
   }
   return list;
 }

@@ -162,6 +162,7 @@ function MapPrototypeForEach(this: Value, callbackfn: Value, thisArg?: Value): v
 /**
  * Map.prototype.get ( key ), 24.1.3.6.
  * @builtin Map.prototype.get
+ * @fast
  */
 function MapPrototypeGet(this: Value, key: Value): Value {
   return CollectionGet(ThisMap(this), key);
@@ -210,6 +211,7 @@ function MapPrototypeGetOrInsertComputed(this: Value, key: Value, callbackfn: Va
 /**
  * Map.prototype.has ( key ), 24.1.3.7.
  * @builtin Map.prototype.has
+ * @fast
  */
 function MapPrototypeHas(this: Value, key: Value): boolean {
   return CollectionHas(ThisMap(this), key);
@@ -226,6 +228,7 @@ function MapPrototypeKeys(this: Value): Obj {
 /**
  * Map.prototype.set ( key, value ), 24.1.3.9.
  * @builtin Map.prototype.set
+ * @fast
  * @intrinsic
  */
 function MapPrototypeSet(this: Value, key: Value, value: Value): Value {

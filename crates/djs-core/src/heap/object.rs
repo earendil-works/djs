@@ -820,6 +820,14 @@ impl Heap {
         self.arena().get::<Ref>(o.0, Object::ELEMENTS).0
     }
 
+    /// The dense store of `o` (a `ValueArray` cell, 0 for none), for leaves that keep
+    /// their working data in an internal Array they made (the comparator sort, D3125)
+    /// and read it with `value_array_get`/`value_array_set`.
+    #[inline]
+    pub(crate) fn dense_store(&self, o: Obj) -> u32 {
+        self.elements(o)
+    }
+
     /// The dense length (0 without elements).
     #[inline]
     pub fn dense_len(&self, o: Obj) -> u32 {
@@ -993,6 +1001,42 @@ impl Heap {
             self.set_array_length_raw(o, i + 1);
         }
         Ok(true)
+    }
+
+    /// `o.push(v)` of one value on an Array as a plain append: what `set_element_fast(o,
+    /// length, v)` does when the dense store ends at `length`, in one pass over the
+    /// object's flags (0231: push's leaf was a third of a push loop). The new length, or
+    /// `None` with nothing changed (the caller takes the general path).
+    pub(crate) fn array_append_fast(&mut self, o: Obj, v: Value) -> Result<Option<u32>, HeapError> {
+        let f = self.obj_flags(o);
+        if f & (OBJ_INDEXED_PROPS | OBJ_LENGTH_READONLY) != 0
+            || f & OBJ_EXTENSIBLE == 0
+            || self.frozen(o)
+            || self.object_class(o) != ObjectClass::Array
+        {
+            return Ok(None);
+        }
+        let el = self.elements(o);
+        let len = if el == 0 { 0 } else { self.value_array_len(el) };
+        if len != self.array_length(o) || len >= atom_int_max() {
+            return Ok(None);
+        }
+        // [[Set]] of a new index looks at the prototypes for a setter.
+        let mut p = self.get_prototype_of(o);
+        while let Some(q) = p {
+            if self.dense_len(q) != 0 || self.obj_flags(q) & OBJ_INDEXED_PROPS != 0 {
+                return Ok(None);
+            }
+            p = self.get_prototype_of(q);
+        }
+        if el != 0 && len < self.value_array_capacity(el) {
+            self.value_array_set(el, len, v);
+            self.arena_mut().set(el, ValueArray::LEN, len + 1);
+        } else {
+            self.dense_put(o, len, v)?;
+        }
+        self.set_array_length_raw(o, len + 1);
+        Ok(Some(len + 1))
     }
 
     /// CreateDataProperty(o, i, v) on an Array as a dense store: an existing dense element

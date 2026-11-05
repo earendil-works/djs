@@ -430,6 +430,41 @@ impl Exec<'_> {
         }
     }
 
+    /// What the loop declined, done here instead of through `step` where that is cheap:
+    /// a call of a `@fast` builtin (D1850), or `+` of a string and a primitive whose
+    /// ToString runs no user code and cannot throw (`"id " + i`, 0231). False, with
+    /// nothing changed, for anything else or at the heap cap (`step` runs it then and
+    /// retries, D1700). One out-of-line call: changes to the loop's own code, even a
+    /// `continue` here, slowed plain loops and calls by 4-6% in V8 (0231).
+    #[inline(never)]
+    fn decline_fast(&mut self, op: u8) -> bool {
+        if fast::is_call(op) {
+            return self.pc < self.code_len && self.fast_leaf_call(op);
+        }
+        if op != fast::ADD {
+            return false;
+        }
+        use crate::value::Kind;
+        let (a, c) = (self.get(self.sp - 2), self.get(self.sp - 1));
+        let plain = |v: Value| !matches!(v.kind(), Kind::Object | Kind::Symbol);
+        if (a.as_string().is_none() && c.as_string().is_none()) || !plain(a) || !plain(c) {
+            return false;
+        }
+        let r = conv::to_string(self.heap, a)
+            .and_then(|x| Ok((x, conv::to_string(self.heap, c)?)))
+            .ok()
+            .and_then(|(x, y)| self.heap.concat(x, y).ok());
+        let Some(s) = r else {
+            return false;
+        };
+        self.sp -= 1;
+        self.set(self.sp - 1, Value::string(s));
+        let info = &OPS[Op::Add as usize];
+        self.fuel -= info.cost.fuel() as i64;
+        self.pc += info.size as u32;
+        true
+    }
+
     /// Runs instructions from `pc`, `step` included, until fuel runs out (`None`, the run
     /// loop stops there), the run stops (`Some`), or `hot_backedges` backward jumps or
     /// general-path instructions went by (`None`, for V8's tier-up).
@@ -1344,10 +1379,7 @@ impl Exec<'_> {
                         if let Some(st) = r {
                             return Some(st);
                         }
-                    } else if !(fast::is_call(op)
-                        && self.pc < self.code_len
-                        && self.fast_leaf_call(op))
-                    {
+                    } else if !self.decline_fast(op) {
                         if let Some(st) = self.step_once() {
                             return Some(st);
                         }

@@ -64,6 +64,7 @@ function SetSpecies(this: Value): Value {
 /**
  * Set.prototype.add ( value ), 24.2.4.1.
  * @builtin Set.prototype.add
+ * @fast
  * @intrinsic
  */
 function SetPrototypeAdd(this: Value, value: Value): Value {
@@ -114,6 +115,7 @@ function SetPrototypeForEach(this: Value, callbackfn: Value, thisArg?: Value): v
 /**
  * Set.prototype.has ( value ), 24.2.4.8.
  * @builtin Set.prototype.has
+ * @fast
  */
 function SetPrototypeHas(this: Value, value: Value): boolean {
   return CollectionHas(ThisSet(this), value);

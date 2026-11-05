@@ -302,6 +302,11 @@ declare function CollectionIteratorNext(it: Value, isSet: boolean): Obj;
  * the constructors then store directly (0080). @leaf
  */
 declare function IsOriginalCollectionAdder(adder: Value, kind: i32): boolean;
+/**
+ * Whether `v` is the realm's %Array%: Array.from then makes its array itself, as
+ * Construct(%Array%, ..) would (its `prototype` cannot change). @leaf
+ */
+declare function IsArrayConstructor(v: Value): boolean;
 /** Advances an iterator to the next entry; false when done. @leaf */
 declare function CollectionIteratorStep(it: Obj): boolean;
 /** The key of the entry the last step reached. @leaf */
@@ -455,6 +460,21 @@ declare function StringCodePoints(s: Str): Obj;
  * symbol. Returns false, leaving it unchanged, otherwise. @leaf
  */
 declare function SortPrimitives(list: Obj): boolean;
+/**
+ * The state of a stable bottom-up merge sort of the dense array `list` (made by
+ * SortList, never seen by user code) by SortCompare: its undefined elements move to the
+ * end of the list (they sort last and are never compared), the others into the state.
+ * @leaf
+ */
+declare function SortStart(list: Obj): Obj;
+/**
+ * Places the pending comparison's element by its result v, a Number (the right one if
+ * v > 0), then merges on to the next comparison: true if there is one (SortOperand reads
+ * it), false once the list is sorted (written back into it). @leaf
+ */
+declare function SortStep(st: Obj, v: Value): boolean;
+/** The left (0) or right (1) value of the pending comparison of SortStep. @leaf */
+declare function SortOperand(st: Obj, which: f64): Value;
 /**
  * Splice's element moves in one step on a plain dense Array (no holes, default
  * attributes, extensible, writable length, no index properties on the prototype chain):

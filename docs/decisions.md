@@ -11262,3 +11262,88 @@ resumption, Promise.all element jobs) ~1 KB, the await/return op paths ~0.6 KB, 
 helpers ~0.6 KB. It buys await 26.2 k -> 3.8 k instructions (quickjs 9.3 k), async call + await
 20.5 k -> 7.2 k (10.1 k), Promise.all of 20 resolved promises 1,323 k -> 220 k (257 k). The
 Promise.all element-job path (~0.4 KB gzip) stays: fan-out over tools is a core codemode shape.
+## D3125: The comparator sort merges in leaves; only the comparisons run in the state machine
+## D3125: The comparator sort merges in leaves; the default sort compares strings in place
+date: 2026-11-05 · by: parr · issue: 0231
+SortList (builtins/array.ts, `@native`) re-entered its generated state machine for a dozen
+resume points per comparison (two Gets, the CreateDataPropertyOrThrow of the merge, slot
+traffic): 3.2-3.4x QuickJS's wasm instructions. Now `%SortStart(list)` puts the list's
+defined values in an internal null-prototype Array (undefined ones go to the list's end, never
+compared), and `%SortStep(st, v)` places the pending comparison's element by `v` and merges
+on, in Rust, to the next comparison (true) or writes the sorted values back (false);
+`%SortOperand(st, 0|1)` reads its two values. The state (run width, pair start, the two read
+positions, the flip and pending flags, the list, the operands, the two regions) is that
+array's dense store, so a suspension inside the comparator dumps it like any value. The merge
+is the same bottom-up merge as before, so the comparator sees the same calls in the same order
+and the sort stays stable; djs-bgen gives SortStep and SortOperand inline forms
+(`ex.n_sort_step`, `ex.n_sort_operand`) so they skip the intrinsic dispatch. The default sort
+of non-primitives uses the same leaves with ToString/CompareStrings per comparison. Heap
+addition: `Heap::dense_store(o)` (the elements cell), for leaves that own their array.
+The default sort of primitives compares strings in place: `%SortPrimitives` copied every
+element's code units into a `Vec<u16>` through the chunk iterator; it now makes each string contiguous (flattening ropes, which allocates, before any
+view is taken), takes the views, and sorts by `string::view_cmp` (bytes for two one-byte
+strings, units otherwise); `string::compare` (CompareStrings) uses views too when both are in
+one piece. 30k lines: the sort itself at parity with QuickJS (was 1.6x).
+
+## D3127: Map and Set get/has/set/add are @fast entries
+date: 2026-11-05 · by: parr · issue: 0231
+Map/Set with string keys were 2-2.5x QuickJS, and hashing was not the cause: the keyed hash
+is cached in the string and is ~5% of the time. The cost was the bytecode builtin's frame
+(ThisMap and the collection intrinsic behind it). `MapPrototypeGet/Has/Set` and
+`SetPrototypeHas/Add` now have fast.rs entries: `this` of the right class, else they
+decline (the builtin throws its TypeError); CollectionSet allocates (flattening a key,
+growing or reindexing the table) before it changes anything observable, so the heap-cap
+rule of D1910 holds. +272 B gzip; Map/Set loops with string keys 1.1-1.5x QuickJS (from
+2-2.5x), the rest being 0230's call overhead and the string concatenations of the keys.
+Size (coordinator-approved trade): 0231 as a whole, measured on main at 0211f403 (after 0230,
+0230b, 0232, 0233), adds 925 B gzip to the shipped module (422,242 -> 423,167); the ceilings
+rise to the measured sizes (`ceiling_gzip` 423,167, `slim_ceiling_gzip` 356,911) for
+D3125-D3129's speedups.
+
+## D3128: `+` of a string and a primitive, and `arr.push(x)`, finish in the hot loop's decline path
+date: 2026-11-05 · by: parr · issue: 0231
+run_hot's Add handled numbers only: a string operand declined to `step` and `conv::add`; and
+every `@fast` call (push most of all) declined, went through `fast_leaf_call` and the generic
+`try_fast_call` (an argument array, the entry by function pointer) and `array_push`, whose
+`set_element_fast` checked the object four ways before appending. Changing run_hot's own code
+moved V8's code for the whole loop: concatenating in the Add arm, or even a `continue` after a
+fast call in the exit path, made plain loops and closure calls 4-6% slower (0230 saw the same
+for @fast calls in the call arm, D3122). So the loop's code stays as it was but for one call:
+the exit path's `fast_leaf_call` became `Exec::decline_fast(op)` (out of line), which runs a
+declined `@fast` call as before and a declined `add` of a string and a primitive other than a
+symbol (ToString runs no user code and cannot throw; an object, a symbol or the heap cap still
+goes to `step`, which keeps D1700's retry). `fast_leaf_call` (now inlined into it) sends a
+one-argument call of Array.prototype.push's entry (`fast::ARRAY_PUSH`, a test checks the
+index) straight to `Heap::array_append_fast`, which appends when the dense store ends at
+`length` (flags, prototypes without index properties, room in the store) with the same fuel
+and result as the entry. `Heap::concat` of two flat (or sliced) pieces under ROPE_MIN_LEN
+copies them directly instead of walking leaves with two zeroed 32-entry arrays. Measured
+against main (0211f403), alternating builds: plain closure calls and loops ±0; push 1.60x ->
+1.18x QuickJS; `a + b` of strings 1.73x -> 1.33x.
+
+## D3129: Array.from from %Array% skips Construct; join reads slices in place
+date: 2026-11-05 · by: parr · issue: 0231
+Array.from called Construct(%Array%, len) (a second builtin call) after ArrayCreate and
+`Set(a, "length", len)` at the end. With `this` the realm's %Array% (new leaf
+`%IsArrayConstructor`), Construct would make exactly ArrayCreate's array (%Array%.prototype is
+non-writable and non-configurable) and the final length Set changes nothing, so both are
+skipped. Its array-like reads (`plain_get_index`, D2306) skip objects without
+OBJ_INDEXED_PROPS instead of looking the index up in their tables. `join_flat_latin1` accepts
+one-byte slices (the lines of a split) besides flat cells, finds each piece's data once, and
+writes into the result through one split borrow with a one-byte separator stored directly.
+Array.from({length: 20}, fn) 1.2x QuickJS (was 1.8x); joining split lines 1.5x (was 2.0x,
+the rest is the collector moving the large results, 0234's area).
+
+## D3126: Amends D3022: any undefined symbol from our crates' objects is incremental corruption
+date: 2026-11-05 · by: parr · issue: 0231
+D2896/D3022's retry recognized only a missing `.llvm.<n>` symbol in ld64's or GNU ld's
+words. 0231's merge failed in build:wasm on rust-lld's `undefined symbol: anon.*.llvm.N`,
+which it did not match, and pmem saw native drop glue (`__RINvNtCs.._4core3ptr9drop_glue..`,
+no suffix) go missing from `sort_primitives`' object. In a pure-Rust workspace a real
+undefined symbol at link time essentially never happens, so `link_corruption` in
+scripts/gate.py now treats any `Undefined symbols` / `undefined reference` / `undefined
+symbol:` as corruption when the symbol is LLVM-local or the referencing object is one of our
+crates' codegen units (`djs_<crate>-<hash>.<cgu>.rcgu.o`: on the line, the line before, or
+under ld64's "referenced from:"), and retries once after D3022's clean. scripts/gate-test.py
+(leg `gate self-test`) checks it on excerpts of both failures, a GNU ld one, and two that must
+not match (a C library's undefined reference, a compile error).

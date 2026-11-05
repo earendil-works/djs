@@ -225,6 +225,11 @@ const F64_TRUNC: u16 = id("F64Trunc");
 const COMPARE_STRINGS: u16 = id("CompareStrings");
 const STRING_CODE_POINTS: u16 = id("StringCodePoints");
 const SORT_PRIMITIVES: u16 = id("SortPrimitives");
+const SORT_START: u16 = id("SortStart");
+const SORT_STEP: u16 = id("SortStep");
+const SORT_OPERAND: u16 = id("SortOperand");
+const IS_ARRAY_CONSTRUCTOR: u16 = id("IsArrayConstructor");
+const ARRAY_CONSTRUCTOR: u16 = id("ArrayConstructor");
 const STR_LOCALE_COMPARE: u16 = id("StrLocaleCompare");
 const STR_CHAR_CODE_AT: u16 = id("StrCharCodeAt");
 const STR_CODE_POINT_AT: u16 = id("StrCodePointAt");
@@ -1082,6 +1087,9 @@ impl Exec<'_> {
                 };
                 decline_oom(self.enumerable_own_data(o, kind), Value::UNDEFINED)?
             }
+            IS_ARRAY_CONSTRUCTOR => {
+                Value::bool(a0 == realm::installed_intrinsic(self.heap, ARRAY_CONSTRUCTOR))
+            }
             IS_ORIGINAL_COLLECTION_ADDER => {
                 let original = match arg(self, 1).as_int() {
                     Some(0) => MAP_PROTOTYPE_SET,
@@ -1134,6 +1142,18 @@ impl Exec<'_> {
             SORT_PRIMITIVES => match a0.as_object() {
                 Some(o) => Value::bool(array::sort_primitives(self.heap, o)?),
                 None => return bad_argument(id),
+            },
+            SORT_START => match a0.as_object() {
+                Some(o) => Value::object(array::sort_start(self.heap, o)?),
+                None => return bad_argument(id),
+            },
+            SORT_STEP => match (a0.as_object(), arg(self, 1).as_number()) {
+                (Some(o), Some(v)) => Value::bool(array::sort_step(self.heap, o, v)?),
+                _ => return bad_argument(id),
+            },
+            SORT_OPERAND => match (a0.as_object(), arg(self, 1).as_number()) {
+                (Some(o), Some(w)) => array::sort_operand(self.heap, o, w != 0.0),
+                _ => return bad_argument(id),
             },
             REALM_INTRINSIC => {
                 // The name is a Latin-1 literal of the builtins: read in place, no copy.

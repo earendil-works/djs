@@ -17,7 +17,7 @@ use crate::PushOut;
 
 use alloc::vec::Vec;
 
-use crate::builtins::{dense, number, string};
+use crate::builtins::{collection, dense, number, string};
 use crate::bytecode::intrinsics::INTRINSICS;
 use crate::heap::{Heap, ObjectClass, Property, StrView, atoms};
 use crate::interp::conv::{self, Fault};
@@ -60,6 +60,10 @@ const fn f(name: &'static str, run: fn(&mut Heap, Value, &[Value]) -> Fast) -> F
     }
 }
 
+/// The index of `ArrayPrototypePush`'s entry: the interpreter appends for it directly
+/// (interp/run/fastpath.rs, 0231; a test checks the index).
+pub(crate) const ARRAY_PUSH: usize = 21;
+
 /// The entries that pay their bytes (D2310: the rule and the measurements of every twin).
 pub(crate) static FAST: &[FastFn] = &[
     // ---- conversion helpers of the builtin language (calls from bytecode builtins) ----
@@ -90,12 +94,19 @@ pub(crate) static FAST: &[FastFn] = &[
     // ---- Array ----
     f("ArraySpeciesCreate", array_species_create),
     // ---- Array element loops over dense arrays (0091, builtins/dense.rs) ----
+    // (Its index is ARRAY_PUSH: entries added above it move it.)
     f("ArrayPrototypePush", array_push),
     f("ArrayPrototypePop", array_pop),
     f("ArrayPrototypeIndexOf", array_index_of),
     f("ArrayPrototypeIncludes", array_includes),
     f("ArrayPrototypeSlice", array_slice),
     f("ArrayPrototypeJoin", array_join),
+    // ---- Map and Set (0231: the builtin's frames cost more than the lookup) ----
+    f("MapPrototypeGet", map_get),
+    f("MapPrototypeHas", map_has),
+    f("MapPrototypeSet", map_set),
+    f("SetPrototypeHas", set_has),
+    f("SetPrototypeAdd", set_add),
     // ---- String.fromCharCode (0091; the URI functions run their builtins, D2256) ----
     f("StringFromCharCode", from_char_code),
 ];
@@ -787,4 +798,62 @@ fn from_char_code(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
         heap.alloc_utf16(&units)?
     };
     some_str(s)
+}
+
+// ---- Map and Set ----------------------------------------------------------------------
+// ThisMap/ThisSet decline for anything but a Map (Set); the collection leaves run no user
+// code, and CollectionSet allocates (flattening the key, growing the table) before it
+// changes anything observable.
+
+/// `this` if it is an object of class `c`.
+fn this_collection(heap: &Heap, this: Value, c: ObjectClass) -> Option<Obj> {
+    this.as_object().filter(|&o| heap.object_class(o) == c)
+}
+
+/// Map.prototype.get ( key ).
+fn map_get(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
+    Ok(this_collection(heap, this, ObjectClass::Map).map(|m| {
+        heap.collection_get(m, arg(args, 0))
+            .unwrap_or(Value::UNDEFINED)
+    }))
+}
+
+/// Map.prototype.has ( key ) and Set.prototype.has ( value ).
+fn has(heap: &Heap, this: Value, args: &[Value], c: ObjectClass) -> Fast {
+    Ok(this_collection(heap, this, c).map(|m| Value::bool(heap.collection_has(m, arg(args, 0)))))
+}
+
+fn map_has(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
+    has(heap, this, args, ObjectClass::Map)
+}
+
+fn set_has(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
+    has(heap, this, args, ObjectClass::Set)
+}
+
+/// Map.prototype.set ( key, value ) and Set.prototype.add ( value ): `this`.
+fn set(heap: &mut Heap, this: Value, key: Value, v: Value, c: ObjectClass) -> Fast {
+    let Some(m) = this_collection(heap, this, c) else {
+        return Ok(None);
+    };
+    let key = collection::stored_key(heap, key)?;
+    heap.collection_set(m, key, v)?;
+    Ok(Some(this))
+}
+
+fn map_set(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
+    set(heap, this, arg(args, 0), arg(args, 1), ObjectClass::Map)
+}
+
+fn set_add(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
+    set(heap, this, arg(args, 0), Value::TRUE, ObjectClass::Set)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn array_push_index() {
+        let run = super::FAST[super::ARRAY_PUSH].run as usize;
+        assert_eq!(run, super::array_push as fn(_, _, _) -> _ as usize);
+    }
 }

@@ -11,10 +11,23 @@ use crate::value::{Obj, Str, Value};
 
 /// IsLessThan for two strings, as -1, 0 or 1 (code unit order).
 pub(crate) fn compare(heap: &Heap, a: Str, b: Str) -> f64 {
-    match heap.str_units(a).cmp(heap.str_units(b)) {
+    let order = match (heap.str_view(a), heap.str_view(b)) {
+        (Some(x), Some(y)) => view_cmp(x, y),
+        _ => heap.str_units(a).cmp(heap.str_units(b)),
+    };
+    match order {
         core::cmp::Ordering::Less => -1.0,
         core::cmp::Ordering::Equal => 0.0,
         core::cmp::Ordering::Greater => 1.0,
+    }
+}
+
+/// Code unit order of two flat strings: bytes for two one-byte ones (most), units
+/// otherwise.
+pub(crate) fn view_cmp(a: StrView, b: StrView) -> core::cmp::Ordering {
+    match (a, b) {
+        (StrView::Latin1(x), StrView::Latin1(y)) => x.cmp(y),
+        _ => a.units().cmp(b.units()),
     }
 }
 

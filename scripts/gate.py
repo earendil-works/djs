@@ -204,6 +204,8 @@ def jobs():
         J("targets", "python3 scripts/gate.py targets"),
         # 0214: the merge drivers of derived files, through scripted three-way merges.
         J("merge drivers", "python3 scripts/merge-driver-test.py", cls="nodocs"),
+        # 0231: the gate's recognition of incremental corruption in linker output.
+        J("gate self-test", "python3 scripts/gate-test.py", cls="nodocs"),
 
         # --- Host builds. Each cargo configuration (package and features) has its own target
         # directory, so that they build at once (cargo locks a target directory's profile).
@@ -579,15 +581,38 @@ def run(argv):
 
 
 # rustc's incremental cache can go bad so that a link fails on symbols no object defines
-# (D2896). The missing symbols carry LLVM's local suffix `.llvm.<n>` (`_anon.<hash>.<n>.llvm.<n>`,
-# or a mangled Rust name such as `drop_glue<regexp::parser::Node>.llvm.<n>`, 0209): they
-# are internal to a codegen unit and go missing only when the cache is bad. Such a failure
-# says nothing about the commit: the gate clears the incremental directories of the job's
-# target directory, cleans djs-core and djs-prelude there (D3022: a corrupt rlib stays
-# fingerprinted as fresh) and runs the job once more. (The first such symbol can come many
-# lines after the first undefined one: 0205.)
-INCREMENTAL_CORRUPTION = re.compile(r"(Undefined symbols|undefined reference).*(?:\n.*){0,400}?"
-                                    r"\.llvm\.[0-9]+\b")
+# (D2896). Such a failure says nothing about the commit: the gate clears the incremental
+# directories of the job's target directory, cleans djs-core and djs-prelude there (D3022: a
+# corrupt rlib stays fingerprinted as fresh) and runs the job once more. In a pure-Rust
+# workspace a real undefined symbol at link time essentially never happens, so any linker
+# report of one counts (D3022's amendment, 0231): ld64's `Undefined symbols`, GNU ld's
+# `undefined reference`, rust-lld's `undefined symbol:` (wasm), when the missing symbol is
+# LLVM-local (`.llvm.<n>`, D2896, 0209) or the object referencing it is one of our crates'
+# codegen units (`djs_core-<hash>.<cgu>.rcgu.o`; v0-mangled drop glue without the suffix
+# went missing that way). The first such symbol can come many lines after the first
+# undefined one (0205).
+LINK_UNDEFINED = re.compile(r"Undefined symbols|undefined reference|undefined symbol:")
+LLVM_LOCAL = re.compile(r"\.llvm\.[0-9]+\b")
+OUR_OBJECT = re.compile(r"\bdjs_[a-z0-9_]+-[0-9a-f]+\.[A-Za-z0-9_.-]*\brcgu\.o\b")
+
+
+def link_corruption(text):
+    """Whether linker output `text` reports an undefined symbol of a bad incremental cache."""
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if not LINK_UNDEFINED.search(line):
+            continue
+        window = lines[i:i + 400]
+        if any(LLVM_LOCAL.search(w) for w in window):
+            return True
+        # The referencing object: on the line itself (rust-lld, GNU ld), on the line before
+        # (GNU ld's "in function"), or under ld64's "referenced from:".
+        if OUR_OBJECT.search(line) or (i > 0 and OUR_OBJECT.search(lines[i - 1])):
+            return True
+        for j, w in enumerate(window):
+            if "referenced from:" in w and any(OUR_OBJECT.search(x) for x in window[j:j + 4]):
+                return True
+    return False
 
 
 def incremental_corruption(log):
@@ -595,7 +620,7 @@ def incremental_corruption(log):
         text = Path(log).read_text(errors="replace")[-200000:]
     except OSError:
         return False
-    return INCREMENTAL_CORRUPTION.search(text) is not None
+    return link_corruption(text)
 
 
 def incremental_dirs(group, groups):
@@ -652,7 +677,7 @@ def schedule(todo, by_name, ready, launch, running, lock, failed, clean, sha, un
                         shutil.rmtree(d, ignore_errors=True)
                     clean_corrupt_rlibs(j.group)
                     shutil.copyfile(j.log, j.log + ".corrupt")
-                    print(f"!! {j.name}: rustc incremental corruption (link: undefined _anon.*.llvm.*);"
+                    print(f"!! {j.name}: rustc incremental corruption (link: undefined symbols in our crates);"
                           f" cleared {', '.join(map(str, dirs)) or 'nothing'}, running it again"
                           f" (the failed run's log: {j.log}.corrupt)", flush=True)
                     j.retried, j.state = True, "pending"

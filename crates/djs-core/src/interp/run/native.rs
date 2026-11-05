@@ -637,6 +637,23 @@ impl Exec<'_> {
         self.n_leaf(const { iid("ToObject") }, &[v])
     }
 
+    /// `%SortStep(st, v)` (as `call_intrinsic`): once per comparison of a sort, so not
+    /// through the intrinsic dispatch.
+    pub(crate) fn n_sort_step(&mut self, st: Value, v: Value) -> Result<bool, Fault> {
+        match (st.as_object(), v.as_number()) {
+            (Some(o), Some(v)) => crate::builtins::array::sort_step(self.heap, o, v),
+            _ => intrinsics::bad_argument(const { iid("SortStep") }),
+        }
+    }
+
+    /// `%SortOperand(st, which)` (as `call_intrinsic`).
+    pub(crate) fn n_sort_operand(&self, st: Value, which: Value) -> Result<Value, Fault> {
+        match (st.as_object(), which.as_number()) {
+            (Some(o), Some(w)) => Ok(crate::builtins::array::sort_operand(self.heap, o, w != 0.0)),
+            _ => intrinsics::bad_argument(const { iid("SortOperand") }),
+        }
+    }
+
     /// `Str + Str`.
     pub(crate) fn n_concat(&mut self, a: Value, b: Value) -> Result<Value, Fault> {
         match (a.as_string(), b.as_string()) {

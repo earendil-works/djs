@@ -143,6 +143,9 @@ pub(crate) fn push(heap: &mut Heap, o: Obj, v: Value) -> Result<Option<u32>, Fau
     if heap.object_class(o) != ObjectClass::Array {
         return Ok(None);
     }
+    if let Some(n) = heap.array_append_fast(o, v)? {
+        return Ok(Some(n));
+    }
     let len = heap.array_length(o);
     if len >= MAX_INT_ATOM || !heap.set_element_fast(o, len, v)? {
         return Ok(None);

@@ -291,7 +291,10 @@ faster loop in front of it:
   sees what the first one saw. Anything
   else, and any case it declines (an int overflow, an object operand), goes to the
   general path (`step_once`), which runs that one instruction after the locals have been
-  written back. Nothing the tier-0 loop does itself can collect or run user code, which
+  written back. Two declined cases are finished on the way out instead, by one call that
+  keeps the loop's own code as small as it is: a `@fast` builtin call (with `arr.push(x)`
+  appended straight to the array) and `+` of a string with a primitive. V8 compiles the
+  whole loop as one function, and even small additions to it slowed every plain call. Nothing the tier-0 loop does itself can collect or run user code, which
   is why it may hold the state in locals. It charges the same fuel and stops at the same
   safepoints as the general path, so turning it off changes no result, no fuel count and
   no image.

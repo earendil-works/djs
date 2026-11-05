@@ -443,6 +443,8 @@ const I = {
   IteratorFastReady: (it, next) => false,
   IteratorFastDrain: (it, next, arr, n) => n,
   IsOriginalCollectionAdder: (adder, kind) => false,
+  // No %Array% shortcut in the stand-ins: Array.from constructs through `this`.
+  IsArrayConstructor: (v) => false,
   TypedArraySetFromDense: (o, values) => false,
   // No direct paths in the stand-ins: always the iterator protocol.
   HasOriginalIteration: (v) => false,
@@ -667,6 +669,46 @@ const I = {
     const out = (big ? BigInt64Array : Float64Array).from(list).sort();
     for (let i = 0; i < out.length; i++) list[i] = out[i];
   },
+  // The comparator sort's state (builtins/array.rs): the same bottom-up merge.
+  SortStart: (list) => {
+    check(Array.isArray(list), "SortStart");
+    const vals = list.filter((v) => v !== undefined);
+    for (let i = vals.length; i < list.length; i++) list[i] = undefined;
+    return { list, src: vals, dst: new Array(vals.length), m: vals.length, w: 1, lo: 0, i: 0, j: Math.min(1, vals.length), pending: false };
+  },
+  SortStep: (st, v) => {
+    check(typeof v === "number", "SortStep");
+    const mid = () => Math.min(st.lo + st.w, st.m);
+    const hi = () => Math.min(st.lo + 2 * st.w, st.m);
+    if (st.pending) {
+      const k = st.i + st.j - mid();
+      st.dst[k] = v > 0 ? st.src[st.j++] : st.src[st.i++];
+      st.pending = false;
+    }
+    for (;;) {
+      if (st.w >= st.m) {
+        for (let t = 0; t < st.m; t++) st.list[t] = st.src[t];
+        return false;
+      }
+      if (st.i < mid() && st.j < hi()) {
+        st.pending = true;
+        return true;
+      }
+      let k = st.i + st.j - mid();
+      while (st.i < mid()) st.dst[k++] = st.src[st.i++];
+      while (st.j < hi()) st.dst[k++] = st.src[st.j++];
+      st.lo = hi();
+      if (st.lo >= st.m) {
+        [st.src, st.dst] = [st.dst, st.src];
+        st.w *= 2;
+        st.lo = 0;
+        if (st.w >= st.m) continue;
+      }
+      st.i = st.lo;
+      st.j = mid();
+    }
+  },
+  SortOperand: (st, which) => st.src[which ? st.j : st.i],
   SortPrimitives: (list) => {
     check(Array.isArray(list), "SortPrimitives");
     if (list.some((v) => isObject(v) || typeof v === "symbol")) return false;

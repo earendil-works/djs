@@ -305,12 +305,15 @@ function ArrayFrom(this: Value, items: Value, mapfn?: Value, thisArg?: Value): O
   if (mapping && !IsCallable(mapfn)) {
     throw NewTypeError("not a function");
   }
+  // From %Array%, Construct(%Array%) and Construct(%Array%, len) are ArrayCreate(0) and
+  // ArrayCreate(len), and the final Set of `length` on that array changes nothing.
+  const plain: boolean = IsArrayConstructor(this);
   const usingIterator: Value = GetMethod(items, WellKnownSymbol("iterator"));
   // A mapping function could grow an array while it is read; the iterator re-reads
   // the length, so only strings keep the direct path then.
   const direct: boolean = HasOriginalIteration(items) && (IsString(items) || !mapping);
   if (usingIterator !== undefined && !direct) {
-    const target: Obj = IsConstructor(this) ? Construct(this) : ArrayCreate(0);
+    const target: Obj = !plain && IsConstructor(this) ? Construct(this) : ArrayCreate(0);
     return ArrayFromIterator(target, items, usingIterator, mapfn, thisArg);
   }
   // Arrays and strings with their original iteration are read directly: the same
@@ -320,7 +323,7 @@ function ArrayFrom(this: Value, items: Value, mapfn?: Value, thisArg?: Value): O
   const arrayLike: Obj = IsString(items) ? StringCodePoints(AsStr(items)) : ToObject(items);
   const len: f64 = LengthOfArrayLike(arrayLike);
   let a: Obj = ArrayCreate(iterable ? 0 : len);
-  if (IsConstructor(this)) {
+  if (!plain && IsConstructor(this)) {
     a = iterable ? Construct(this) : Construct(this, len);
   }
   // With a mapping function, the elements whose Get observes nothing in one callback
@@ -331,7 +334,9 @@ function ArrayFrom(this: Value, items: Value, mapfn?: Value, thisArg?: Value): O
     const mappedValue: Value = mapping ? Call(mapfn, thisArg, kValue, k) : kValue;
     CreateDataPropertyOrThrow(a, k, mappedValue);
   }
-  Set(a, "length", len);
+  if (!plain) {
+    Set(a, "length", len);
+  }
   return a;
 }
 
@@ -948,81 +953,31 @@ function ArrayPrototypeFlatMap(this: Value, mapperFunction: Value, thisArg?: Val
 // ---- Sorting ----------------------------------------------------------------------------
 
 /**
- * Sorts the dense array `list` (length n) in place: stable, a bottom-up merge sort with
- * comparefn or ToString order. Lists of primitives without comparefn go to a leaf.
+ * Sorts the dense array `list` in place: stable, a bottom-up merge sort with comparefn
+ * or ToString order. Lists of primitives without comparefn go to a leaf; otherwise the
+ * merge runs in leaves between the comparisons (SortStep), and only the comparisons run
+ * here.
  * @intrinsic
  * @native
  */
-function SortList(list: Obj, n: f64, comparefn: Value): void {
+function SortList(list: Obj, comparefn: Value): void {
   if (comparefn === undefined && SortPrimitives(list)) {
     return;
   }
-  // undefined sorts last and is never passed to comparefn: set those aside first.
-  let m: f64 = 0;
-  for (let k: f64 = 0; k < n; k++) {
-    const v: Value = Get(list, k);
-    if (v !== undefined) {
-      if (m !== k) {
-        CreateDataPropertyOrThrow(list, m, v);
-      }
-      m++;
-    }
-  }
-  for (let k: f64 = m; k < n; k++) {
-    CreateDataPropertyOrThrow(list, k, undefined);
-  }
-  let src: Obj = list;
-  let dst: Obj = ArrayCreate(m);
-  let width: f64 = 1;
-  while (width < m) {
-    for (let lo: f64 = 0; lo < m; lo += 2 * width) {
-      const mid: f64 = lo + width < m ? lo + width : m;
-      const hi: f64 = lo + 2 * width < m ? lo + 2 * width : m;
-      let i: f64 = lo;
-      let j: f64 = mid;
-      let k: f64 = lo;
-      while (i < mid && j < hi) {
-        const x: Value = Get(src, i);
-        const y: Value = Get(src, j);
-        if (SortCompareDefined(x, y, comparefn) <= 0) {
-          CreateDataPropertyOrThrow(dst, k, x);
-          i++;
-        } else {
-          CreateDataPropertyOrThrow(dst, k, y);
-          j++;
-        }
-        k++;
-      }
-      for (; i < mid; i++) {
-        CreateDataPropertyOrThrow(dst, k, Get(src, i));
-        k++;
-      }
-      for (; j < hi; j++) {
-        CreateDataPropertyOrThrow(dst, k, Get(src, j));
-        k++;
+  const st: Obj = SortStart(list);
+  // SortCompare's result, a Number (NaN counts as 0).
+  let r: Value = 0;
+  while (SortStep(st, r)) {
+    if (comparefn === undefined) {
+      const xs: Str = ToString(SortOperand(st, 0));
+      r = CompareStrings(xs, ToString(SortOperand(st, 1)));
+    } else {
+      r = Call(comparefn, undefined, SortOperand(st, 0), SortOperand(st, 1));
+      if (!IsNumber(r)) {
+        r = ToNumber(r);
       }
     }
-    const t: Obj = src;
-    src = dst;
-    dst = t;
-    width = width * 2;
   }
-  if (src !== list) {
-    for (let k: f64 = 0; k < m; k++) {
-      CreateDataPropertyOrThrow(list, k, Get(src, k));
-    }
-  }
-}
-
-/** SortCompare for two values that are not undefined. */
-function SortCompareDefined(x: Value, y: Value, comparefn: Value): f64 {
-  if (comparefn !== undefined) {
-    const r: Value = Call(comparefn, undefined, x, y);
-    const v: f64 = IsNumber(r) ? AsNumber(r) : ToNumber(r);
-    return v !== v ? 0 : v;
-  }
-  const xs: Str = ToString(x);
-  return CompareStrings(xs, ToString(y));
 }
 
 /**
@@ -1058,7 +1013,7 @@ function ArrayPrototypeSort(this: Value, comparefn: Value): Obj {
   const len: f64 = LengthOfArrayLike(o);
   const items: Obj = CollectPresent(o, len, true);
   const n: f64 = LengthOfArrayLike(items);
-  SortList(items, n, comparefn);
+  SortList(items, comparefn);
   for (let k: f64 = 0; k < n; k++) {
     Set(o, k, Get(items, k));
   }
@@ -1081,7 +1036,7 @@ function ArrayPrototypeToSorted(this: Value, comparefn: Value): Obj {
   const len: f64 = LengthOfArrayLike(o);
   ArrayCreateChecked(0 + len);
   const items: Obj = CollectPresent(o, len, false);
-  SortList(items, len, comparefn);
+  SortList(items, comparefn);
   return items;
 }
 

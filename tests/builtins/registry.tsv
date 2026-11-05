@@ -1419,7 +1419,7 @@
 1414	value	%prelude:IsConcatSpreadable%	removed: removed
 1415	value	%prelude:MoveElements%
 1416	value	%prelude:FlattenIntoArray%
-1417	value	%prelude:SortCompareDefined%
+1417	value	%prelude:SortCompareDefined%	removed: removed
 1418	value	%prelude:ToIndex%
 1419	value	%prelude:ThisArrayBuffer%	removed: removed
 1420	value	%prelude:AllocateArrayBuffer%
@@ -1643,3 +1643,7 @@
 1638	intrinsic	PromiseStaticResolve
 1639	intrinsic	PromisePrototypeThen
 1640	intrinsic	PromiseCombinatorRun
+1641	intrinsic	IsArrayConstructor
+1642	intrinsic	SortStart
+1643	intrinsic	SortStep
+1644	intrinsic	SortOperand

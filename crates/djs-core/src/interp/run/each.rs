@@ -152,6 +152,7 @@ impl Exec<'_> {
     /// property is a data property (undefined when no object has one).
     #[inline(never)]
     fn plain_get_index(&self, o: Obj, k: u32) -> Option<Value> {
+        use crate::heap::cells::flags::OBJ_INDEXED_PROPS;
         let key = Atom::int(k)?;
         let mut c = Some(o);
         while let Some(q) = c {
@@ -160,6 +161,15 @@ impl Exec<'_> {
                 ObjectClass::Ordinary | ObjectClass::Array | ObjectClass::Function
             ) {
                 return None;
+            }
+            if let Some(v) = self.heap.get_element_fast(q, k) {
+                return Some(v);
+            }
+            // Without the flag the index is in no property table: the usual case, an
+            // array-like `{ length }` and Object.prototype (no lookups per element).
+            if self.heap.cell_flags(q.offset()) & OBJ_INDEXED_PROPS == 0 {
+                c = self.heap.get_prototype_of(q);
+                continue;
             }
             match self.heap.get_own_property(q, key) {
                 Some(Property::Data { value, .. }) => return Some(value),

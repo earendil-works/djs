@@ -1,0 +1,39 @@
+1 zero zero nan rope undefined 4
+true true true false false undefined
+true undefined 2 5 k,0,NaN,a long key made of pieces, longer than thirty-two units,undefined
+obj undefined true
+true 1 true false true false true 4
+124 true false key118,key119
+Map.get on a Set -> TypeError: Map object expected
+Map.set on {} -> TypeError: Map object expected
+Map.has on a WeakMap -> TypeError: Map object expected
+Set.add on a Map -> TypeError: Set object expected
+Set.has on null -> TypeError: Set object expected
+patched set x 1
+patched set y 2
+2 1 2
+sub 1
+0,5,10,15,20,25,30,35,3,8,13,18,23,28,33,38,1,6,11,16,21,26,31,36,4,9,14,19,24,29,34,39,2,7,12,17,22,27,32,37
+1,1,2,3,4,5,, 3,1,2
+1,2,3 3,2,1
+3,1,2 4,3,2,1 1,2
+50 true 50
+comparator throws -> Error: cmp
+comparator symbol -> TypeError: cannot convert symbol to number
+not callable -> TypeError: not a function
+3,1,0.5,0 1,2,3
+1,2,3 true
+line 0 of some text that is long enough to slice|line 1 of some text that is long enough to slice|line 10 of some text that is long enough to slice
+,1,10,9,a,ab,aé,aĀ,b,null,true,ÿ,Ā,�,￿
+true 1460 1576
+line 0 of some text that is long enough to slice---x--ő 51
+2290 1490 svc0/0svc1/1svc2/2sv /198svc3/199
+ő0ő1ő2ő3ő4 10 x12 3x
+0,1,4,9 ,b 3 h|é|!
+true 2
+2 2 z 0,1,made,length
+Array.from huge -> RangeError: invalid array length
+Array.from bad map -> TypeError: not a function
+0,0truenullundefined100NaN|1,0.3333333333333333truenullundefined100NaN|2,0.6666666666666666truenullundefined100NaN|3,1truenullundefined100NaN| aT 12 big1.2089258196146292e+241e+211e-7
+string + symbol -> TypeError: cannot convert symbol to string
+=== completed
