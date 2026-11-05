@@ -718,3 +718,5 @@ topics when the index is next reorganized.
 - D3008: How D2837–D2840 are carried out
 - D3050: `debugger;` can be a pause: an await of the host's `debugger`, in dump builds only
 - D3051: The guide cites no decisions, tells no history and names pi on one page
+- D3025: A block's placed code waits for the late binding it reads; a re-dumped method's home is its function's
+- D3060: `debugger;` pauses in the CLI: `djs repl --frozen` and `--debugger OUT`
