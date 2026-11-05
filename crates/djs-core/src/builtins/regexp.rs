@@ -616,6 +616,7 @@ pub(crate) fn substitute(
 }
 
 /// A heap string from UTF-16 units (one byte per unit when possible).
+#[cfg(feature = "unicode-normalization")]
 pub(crate) fn string_from_units(heap: &mut Heap, units: &[u16]) -> Result<Str, HeapError> {
     alloc_units(heap, units)
 }
