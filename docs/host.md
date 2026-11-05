@@ -2,8 +2,8 @@
 
 ARCH.md "Host Interface" and "Execution API". djs runs in a host (node, a browser, any wasm
 runtime) as `djs_wasm.wasm`, a `wasm32-unknown-unknown` cdylib (`crates/djs-wasm`) with a
-thin export layer over `djs_core::vm::Vm`. `js/src/sandbox.ts` (package `@djs/host`) is its
-TypeScript client. Values go in through the wire format and come out through direct heap
+thin export layer over `djs_core::vm::Vm`. `js/src/sandbox.ts` (package `@earendil-works/djs`, js/README.md) is
+its TypeScript client. Values go in through the wire format and come out through direct heap
 reads (docs/wire.md, both halves).
 
 ```sh
@@ -11,7 +11,17 @@ scripts/build-wasm.sh              # target/wasm32-unknown-unknown/wasm/djs_wasm
 scripts/build-wasm.sh --keep-names # with the name section (profiling, scripts/wasm-funcs.py)
 scripts/build-wasm.sh --slim       # target/djs-slim.wasm: the slim build (D2411)
 node --test js/test/*.test.ts    # sandbox.test.ts needs a build ($DJS_WASM overrides the path)
+scripts/npm-pack.sh                # the npm package: target/npm/earendil-works-djs-VERSION.tgz
+scripts/npm-test.sh TARBALL node   # its smoke test (also bun, deno, js-tests, browser)
 ```
+
+The npm package (D3105–D3109) has three entry points, each the whole API with its own
+module as the default: `.` (`src/index.ts`, wasm/djs.wasm, `$DJS_WASM` overrides it),
+`./slim` (wasm/djs-slim.wasm) and `./dump` (wasm/djs-dump.wasm), plus `./dump-runtime`.
+Each finds its module with `new URL("../wasm/NAME.wasm", import.meta.url)`, which bundlers
+copy as an asset; `Sandbox.defaultModule()` is the hook the entry points override.
+`js/src/sandbox.ts` itself defaults to `$DJS_WASM`, else the repository's build when it
+runs from source. The wire encoder, the reader and the pi adapter are not exported.
 
 The gate builds a debug djs-wasm and runs the node tests against it.
 
@@ -25,7 +35,7 @@ lockdown (js/pi/pi-tests.ts `--no-lockdown`); the Sandbox keeps the full module 
 ## The Sandbox API
 
 ```ts
-import { Sandbox, loadModule } from "@djs/host";
+import { Sandbox, loadModule } from "@earendil-works/djs";
 
 const sb = await Sandbox.create({
   functions: { readFile: (p) => fs.readFileSync(p as string, "utf8") },
@@ -599,8 +609,8 @@ touch QuickJS. `js/pi/vm.ts` implements the same `startVm` contract on djs, runn
 unmodified `PRELUDE_SOURCE`. To try it, swap that one module (issue 0049).
 
 ```ts
-import { loadModule } from "@djs/host";
-import { startVm } from "@djs/host/pi";                  // js/pi/vm.ts
+import { loadModule } from "../src/sandbox.ts";
+import { startVm } from "./vm.ts";                       // js/pi/vm.ts, not in the package
 const session = await startVm({ data, wasm: await loadModule(), prelude: PRELUDE_SOURCE, post, shouldInterrupt });
 session.deliver({ type: "result", id, ok: true, payload: "42" });
 // Persisting a waiting session: the next mode (prelude-next), below.

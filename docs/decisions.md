@@ -10884,3 +10884,69 @@ The host package publishes as `@earendil-works/djs` (the earendil-works npm scop
 0.1.0. One package holds the shipped, slim and dump modules as entry points (`.`, `./slim`,
 `./dump`). The dump header stays `"djs-dump";` without a version marker: the host knows which djs
 it loads a dump with. The pi adapter is not part of the package. Only npm for now (no crates.io).
+
+## D3105: The npm package is built by tsc into target/npm/package and packed from there
+date: 2026-11-06 · by: npm · issue: 0228
+`scripts/npm-pack.sh` builds `@earendil-works/djs`: the three release modules (or the files
+given with `--modules`), then tsc (TypeScript 5.9.3, js/package.json's only devDependency, pinned
+by js/package-lock.json and installed with `npm ci` when it differs) emits dist/*.js and *.d.ts
+from js/src with `rewriteRelativeImportExtensions` (js/tsconfig.build.json); the declarations'
+`./x.ts` specifiers are rewritten to `./x.js` afterwards (tsc keeps them). The generated
+dump-runtime.js is copied with a hand-written dump-runtime.d.ts (helpers, script, scriptFor):
+tsc's inferred declarations of it needed `esnext` libs in every consumer. The package directory
+gets dist/, wasm/{djs,djs-slim,djs-dump}.wasm, js/README.md, both license files and js/package.json
+minus `scripts` and `devDependencies`; `npm pack` runs there. js/ itself stays the source (node
+runs its TypeScript in the repository; node refuses to strip types under node_modules, so the
+package ships JavaScript). tsc rather than node's type stripping: the declarations need tsc anyway,
+and it type-checks the package on the way (js/tsconfig.json now checks clean).
+
+## D3106: Each entry point is the whole API with its own module; Sandbox.defaultModule
+date: 2026-11-06 · by: npm · issue: 0228
+js/src/index.ts (`.`), slim.ts (`./slim`) and dump.ts (`./dump`) re-export sandbox.ts and
+override `loadModule`, `defaultWasmPath` and `Sandbox` (a subclass whose static
+`defaultModule()` names the entry point's module), each with a literal `new URL("../wasm/NAME.wasm",
+import.meta.url)` in its own file, so that bundlers (webpack, Vite: tested) copy exactly the
+modules an application imports. `create` and `resume` use `this.defaultModule()`; the synchronous
+constructor finds a finished `loadModule` of that location (compiled modules are kept by location,
+which replaces the one "loaded default"). One process can use several entry points at once (the
+main one with the dump one as `dumpModule`): the defaults are per class, not global. `$DJS_WASM`
+overrides only the main entry point (the slim and dump ones are not interchangeable with it).
+sandbox.ts itself defaults to `$DJS_WASM`, else, from source (`.ts`), the repository's build, written
+so that no bundler takes it for an asset; built, it has no default. Environment reads go through
+env.ts, which asks Deno's permissions first (an unpermitted read would prompt or throw). A location
+string is a file path in node, Bun and Deno and fetched in a browser; a `file:` URL (or string)
+is read, anything else fetched.
+
+## D3107: What the package exports and ships
+date: 2026-11-06 · by: npm · issue: 0228
+Exports: `.`, `./slim`, `./dump`, `./dump-runtime` (hosts that continue dumps outside djs need
+its helpers), `./wasm/*.wasm` (for hosts that place the modules themselves) and `./package.json`.
+Not exported: `./pi` (D2842), `./wire` and `./reader` (the Sandbox's internals; their formats move
+with the ABI, so exporting them would freeze them). `engines` stays node >= 20: the smoke test
+passes on node 20, 22, 24 and 26; Deno needs `--allow-read` (for the package's directory). The
+license files are LICENSE-MIT (copyright Earendil Works Co.) and LICENSE-APACHE (the canonical
+text), in the repository root and in the package (named in `files`: npm adds only `LICENSE*`
+files without a suffix by itself). `sideEffects: false`.
+
+## D3108: The publish workflow tests the one packed tarball everywhere, then publishes on a tag
+date: 2026-11-06 · by: npm · issue: 0228
+.github/workflows/publish.yml builds the tarball once (scripts/npm-pack.sh on stable Rust with
+rust-src: the shipped build environment), runs `npm publish --dry-run` and hands the tarball to a
+test matrix: scripts/npm-test.sh installs it in a clean directory and runs js/pkg-test/smoke.js
+(every entry point by the package's name: runs, async calls, TypeScript, errors, slim, a dump and
+resume in the dump module and through `dumpModule`, the dump continued in the host's engine) on
+node 20, 22 and 24, Bun and Deno; js/test's tests (minus the internal modules' and pi's) and the
+sleep-dump example on the package on node 22 and 24; and smoke.js in headless Chromium as native
+modules (an import map), bundled by Vite and by webpack. A tag `vX.Y.Z` must match
+js/package.json's version; it publishes (`npm publish TARBALL --provenance --access public`) in
+the `npm` environment, for the owner's approval, by npm trusted publishing (OIDC) or an
+`NPM_TOKEN` secret there. A manual run stops at the dry run unless `publish` is ticked.
+
+## D3109: The gate packs the package and runs its smoke test in node
+date: 2026-11-06 · by: npm · issue: 0228
+The `npm package` leg (class nodocs; its key also has npm's version) runs scripts/npm-pack.sh
+with the gate's builds, the size and size-slim modules as they ship and the dev module with the
+dumper standing in for the dump module, then the smoke test in node on the tarball: about 4 s
+on top of builds the gate makes anyway, and it catches a package that no longer builds (tsc type
+errors included), packs, resolves or runs. TypeScript comes from the npm cache after the first
+`npm ci` in a worktree (js/node_modules stays: the gate's clean keeps ignored files).

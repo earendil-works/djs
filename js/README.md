@@ -66,16 +66,17 @@ const dump = await task.suspend(); // later, anywhere: (await Sandbox.resume(dum
 `loadModule(location)` loads another one and `new Sandbox({ module })` uses it. In node,
 Bun and Deno the module is read from the package's `wasm/` directory (`$DJS_WASM` names
 another main module). In a browser it is fetched from the URL
-`new URL("../wasm/djs.wasm", import.meta.url)`, a pattern that webpack, Vite, Rollup and
-Parcel recognize and copy into the build. In Vite's dev server, exclude the package from
-dependency pre-bundling, which would move the code away from its modules:
+`new URL("../wasm/djs.wasm", import.meta.url)`, a pattern that webpack and Vite recognize
+and copy into the build. In Vite's dev server, exclude the package from dependency
+pre-bundling, which would move the code away from its modules:
 
 ```js
 // vite.config.js
 export default { optimizeDeps: { exclude: ["@earendil-works/djs"] } };
 ```
 
-Elsewhere, serve the `.wasm` file yourself and pass its URL:
+In Deno, allow reading the package's directory (`--allow-read`). With a bundler that does
+not know the pattern, serve the `.wasm` file yourself and pass its URL:
 `Sandbox.create({ module: await loadModule("/assets/djs.wasm") })`.
 
 ## Documentation

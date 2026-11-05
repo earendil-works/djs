@@ -26,7 +26,7 @@ pub enum Resolved {
     Missing,
     /// A partial path (`cells.rs`) that more than one tracked path ends with.
     Ambiguous(Vec<String>),
-    /// Not a repository path (`@djs/host`, `built-ins/RegExp`, `x / y`).
+    /// Not a repository path (`@earendil-works/djs`, `built-ins/RegExp`, `x / y`).
     No,
 }
 
@@ -358,7 +358,7 @@ mod tests {
         );
         assert_eq!(ix.code("crates/djs-core/src/gone.rs"), Resolved::Missing);
         for no in [
-            "@djs/host",
+            "@earendil-works/djs",
             "built-ins/RegExp",
             "a / b",
             "x.y",

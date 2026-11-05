@@ -142,6 +142,9 @@ def _externals():
             _git_state(os.environ.get("DJS_TEST262", PRIMARY / "vendor/test262")),
             _stat(PRIMARY / "vendor/unicode/17.0.0/NormalizationTest.txt"),
         ]),
+        # The npm package's leg: npm packs and installs it (TypeScript is pinned by
+        # js/package-lock.json, in the tree).
+        "npm": lambda: _run("npm", "--version"),
         # pi's codemode tests and prelude, and its installed packages.
         "pi": lambda: "\n".join([_git_state(pi), _stat(Path(pi) / "node_modules/.package-lock.json")]),
     }
@@ -297,6 +300,13 @@ def jobs():
         # --- The host-side JS package (0018), on the dev modules.
         J("js tests", f"DJS_WASM=$PWD/{wasm} DJS_WASM_NODUMP=$PWD/{nodump} node --test js/test/*.test.ts",
           cls="nodocs", needs=["build:wasm", "build:wasm-nodump"]),
+        # 0228: the npm package stays publishable (D3109): it builds (tsc, with the
+        # declarations), packs, and the packed tarball's smoke test runs in node. The gate's
+        # builds stand in for the release ones: the main and slim modules as they ship, the
+        # dev module for the dump module (the publish workflow tests the real ones).
+        J("npm package", f'd=$(mktemp -d); t=$(scripts/npm-pack.sh --modules {size_mod} {slim_mod} {wasm}'
+          ' --out "$d") && scripts/npm-test.sh "$t" node; rc=$?; rm -rf "$d"; exit $rc',
+          cls="nodocs", ext=("base", "npm"), needs=["build:size", "build:size-slim", "build:wasm"]),
         # 0072: native and wasm builds leave byte-identical heap images and spend the same fuel.
         J("native vs wasm images", f"DJS_ABIDRIVE={G}/bin/djs-abidrive"
           f" ./scripts/determinism/native-vs-wasm.sh $PWD/{wasm}",

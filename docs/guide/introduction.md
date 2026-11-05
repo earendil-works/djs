@@ -80,15 +80,17 @@ models read those messages and the hosts' tests expect them.
   tool calls. Loading a dump is running it.
 - The **host** loads the djs-wasm module, sends values in through a compact wire format
   and reads results by walking the arena directly, with a reader generated from the same
-  layout tables as the engine. The `@djs/host` package wraps all of that in one class,
+  layout tables as the engine. The `@earendil-works/djs` package wraps all of that in one class,
   `Sandbox`.
 
 ## What it looks like from a host
 
-A host creates a sandbox, gives it the tools a script may call, and runs the script:
+The host package is on npm (`npm install @earendil-works/djs`, see
+[installing](js-api.md#installing)). A host creates a sandbox, gives it the tools a
+script may call, and runs the script:
 
 ```ts
-import { Sandbox } from "@djs/host";
+import { Sandbox } from "@earendil-works/djs";
 
 const sandbox = await Sandbox.create({
   asyncFunctions: { "tools.search": async (q) => searchTheWeb(q as string) },

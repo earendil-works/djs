@@ -1,8 +1,8 @@
 # The JavaScript interface
 
-A host uses djs through the `@djs/host` package: one class, `Sandbox`, over the djs-wasm
-module. This page covers all of it, from running one script to runs that are suspended
-into a dump and continued in another process. Each sandbox is its own wasm instance with
+A host uses djs through the `@earendil-works/djs` package: one class, `Sandbox`, over the
+djs-wasm module. This page covers all of it, from running one script to runs that are
+suspended into a dump and continued in another process. Each sandbox is its own wasm instance with
 one VM, so sandboxes share nothing and a fault in one cannot touch another.
 
 > **In short.** `Sandbox.create(options)` makes a sandbox; `run` and `runAsync` run a
@@ -12,27 +12,59 @@ one VM, so sandboxes share nothing and a fault in one cannot touch another.
 > can be suspended into a [continuation dump](dumps.md) and resumed with
 > `Sandbox.resume`; `begin` hands every call to the host instead.
 
+## Installing
+
+```sh
+npm install @earendil-works/djs
+```
+
+The package has no dependencies and carries the wasm modules itself. It runs in node 20
+or newer, Bun, Deno, browsers and web workers: the module has no imports, so it runs in
+any wasm runtime. Its entry points all export the same API, each with its own build of
+the module as the default:
+
+| import | module | for |
+| --- | --- | --- |
+| `@earendil-works/djs` | the shipped module: <!--n wasm/bytes mb-->1.0 MB<!--/n-->, <!--n wasm/gzip kb-->414 KB<!--/n--> with gzip | every host |
+| `@earendil-works/djs/slim` | the slim module: <!--n slim/bytes mb-->0.8 MB<!--/n-->, <!--n slim/gzip kb-->349 KB<!--/n--> with gzip | hosts that can do without typed arrays, BigInt and the other families of [the slim build](language.md#the-slim-build) |
+| `@earendil-works/djs/dump` | the dump module: <!--n dump/bytes mb-->1.8 MB<!--/n-->, <!--n dump/gzip kb-->754 KB<!--/n--> with gzip | hosts that write [dumps](#continuation-dumps): the shipped module plus the dumper |
+| `@earendil-works/djs/dump-runtime` | none | the helpers a [dump](dumps.md#djs-what-the-loading-host-provides) needs in a host without djs |
+
+A host that persists runs usually imports the main entry point and gives its sandboxes
+the dump module as `dumpModule` (`loadModule()` of `@earendil-works/djs/dump`): its runs
+then go on in the smaller module, and only a dump moves into the bigger one. The wire
+encoder and the heap reader the `Sandbox` uses are internal and not exported.
+
 ## Loading the module
 
 ```ts
-import { Sandbox, SandboxError, loadModule } from "@djs/host";
+import { Sandbox, SandboxError, loadModule } from "@earendil-works/djs";
 
 const module = await loadModule();                       // compiled once, cached
 const sandbox = await Sandbox.create({ module });
 ```
 
 `loadModule(location?)` compiles djs-wasm once per location and caches the
-`WebAssembly.Module`; every sandbox then gets its own instance of it. The default
-location is `$DJS_WASM`, else the build output of the repository; in a browser, pass a
-URL. `Sandbox.create` loads the default module itself when no `module` is given. The
-constructor, `new Sandbox(options)`, works synchronously once a module is loaded.
+`WebAssembly.Module`; every sandbox then gets its own instance of it. Without a location
+it loads the entry point's own module, from the package's `wasm/` directory; in node, Bun
+and Deno, `$DJS_WASM` names another main module instead. `Sandbox.create` loads the
+default module itself when no `module` is given. The constructor, `new Sandbox(options)`,
+works synchronously once a module is loaded.
 
-The module has no imports, so it runs in node, in a browser or in any wasm runtime. The
-package is TypeScript that node runs directly; its entry points are
-[`js/src/sandbox.ts`](../../js/src/sandbox.ts) (the `Sandbox`), `@djs/host/wire` (the
-encoder), `@djs/host/reader` (the heap reader) and `@djs/host/dump-runtime` (the
-helpers a [dump](dumps.md#djs-what-the-loading-host-provides) needs in a host without
-djs).
+A location is a path or a URL: node, Bun and Deno read a path or a `file:` URL from the
+disk (Deno needs `--allow-read` for the package's directory), anything else is fetched.
+Each entry point names its module as `new URL("../wasm/djs.wasm", import.meta.url)`, a
+pattern that webpack and Vite recognize: they copy the module into the build and rewrite
+the URL, and an application that imports only the main entry point gets only the main
+module. Vite's development server is the exception, because it pre-bundles dependencies
+away from their files; exclude the package there with `optimizeDeps: { exclude:
+["@earendil-works/djs"] }`. In the browser without a bundler, the package's files work as
+they are, served with the module next to them; with a bundler that does not know the
+pattern, serve the `.wasm` file yourself and pass its URL to `loadModule`.
+
+The package's source is [`js/src/`](../../js/src/): [`sandbox.ts`](../../js/src/sandbox.ts)
+holds the `Sandbox`, and [`index.ts`](../../js/src/index.ts), [`slim.ts`](../../js/src/slim.ts) and
+[`dump.ts`](../../js/src/dump.ts) are the entry points.
 
 ## Creating a sandbox
 
@@ -308,8 +340,9 @@ what that guarantees.
 
 `heapSize` is the arena's size in bytes, `collect()` runs the garbage collector, and
 `heapView()` returns the arena itself as a `Uint8Array`, valid until the next call into
-the sandbox, for tools that walk the heap with the layout tables the package exports
-(this site's live examples do).
+the sandbox, for tools that walk the heap with the layout tables of
+[`js/src/layout.generated.ts`](../../js/src/layout.generated.ts) (this site's live
+examples do).
 
 ## Where to look
 
@@ -317,6 +350,9 @@ the sandbox, for tools that walk the heap with the layout tables the package exp
   classes and every option, with their doc comments.
 - [`js/src/wire.ts`](../../js/src/wire.ts) and [`js/src/reader.ts`](../../js/src/reader.ts):
   values in and out.
+- [`scripts/npm-pack.sh`](../../scripts/npm-pack.sh) and
+  [`scripts/npm-test.sh`](../../scripts/npm-test.sh): how the package is built, and how
+  the packed package is tested in node, Bun, Deno and a browser, bundled and not.
 - [`js/test/`](../../js/test/): the package's tests, which use every part of it.
 - [`examples/sleep-dump/`](../../examples/sleep-dump/): a complete host that suspends
   and resumes a run.

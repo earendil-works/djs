@@ -173,7 +173,7 @@ run. The simple one is a **task**: the sandbox drives the run and calls the host
 functions, and `suspend()` writes the dump at the next idle point.
 
 ```ts
-import { Sandbox, type AsyncHostFunction } from "@djs/host";
+import { Sandbox, type AsyncHostFunction } from "@earendil-works/djs";
 
 const sleep: AsyncHostFunction<{ due: number }> = {
   async call(ms) {                         // the script called it

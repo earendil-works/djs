@@ -62,7 +62,7 @@ export interface VmSession {
 }
 
 export interface VmHooks {
-  /** The compiled djs-wasm module (`loadModule()` of `@djs/host`). */
+  /** The compiled djs-wasm module (`loadModule()` of js/src/sandbox.ts). */
   wasm: WebAssembly.Module | object;
   /** Interrupt polls this VM may use, if the launcher counts them; part of the fingerprint. */
   interruptBudget?: number;

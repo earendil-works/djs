@@ -1,0 +1,122 @@
+# Builds, tests and publishes the npm package @earendil-works/djs (js/, D3108).
+#
+# A tag `vX.Y.Z` (X.Y.Z must be js/package.json's version) runs everything and publishes,
+# after the `npm` environment's approval; a manual run does the same up to a dry run
+# unless `publish` is ticked. The package is built once (scripts/npm-pack.sh: the three
+# release wasm modules in the shipped build environment, tsc's JavaScript and
+# declarations), and that tarball is what every test installs and what is published.
+#
+# Publishing uses npm's trusted publishing (OIDC: register this repository and workflow
+# for the package on npmjs.com) and attaches provenance. Until that is set up, an
+# `NPM_TOKEN` secret in the `npm` environment works too.
+name: publish
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to npm (else stop at npm publish --dry-run)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      tarball: ${{ steps.pack.outputs.tarball }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          # The shipped modules build core and alloc from source (scripts/wasm-build-env.sh).
+          components: rust-src
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: The tag names the package's version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(node -p 'require("./js/package.json").version')
+          [ "${GITHUB_REF_NAME}" = "v$version" ] || { echo "tag ${GITHUB_REF_NAME}, package version $version" >&2; exit 1; }
+      - name: Toolchain
+        run: rustc -vV && cargo -V && node --version && npm --version
+      - name: Build and pack
+        id: pack
+        run: |
+          tarball=$(scripts/npm-pack.sh --out npm-out)
+          echo "tarball=$(basename "$tarball")" >> "$GITHUB_OUTPUT"
+          sha256sum npm-out/*.tgz npm-out/package/wasm/*.wasm
+      - name: npm publish --dry-run
+        run: npm publish npm-out/${{ steps.pack.outputs.tarball }} --dry-run --access public
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: npm-out/*.tgz
+          if-no-files-found: error
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: node 20, node: 20, tests: node }
+          - { name: node 22, node: 22, tests: node js-tests }
+          - { name: node 24, node: 24, tests: node js-tests }
+          - { name: bun, node: 24, tests: bun }
+          - { name: deno, node: 24, tests: deno }
+          - { name: chromium, node: 24, tests: browser }
+    name: test (${{ matrix.name }})
+    steps:
+      # The tests (js/pkg-test, js/test, examples) and scripts/npm-test.sh; the package
+      # itself comes from the build job.
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - if: matrix.name == 'bun'
+        uses: oven-sh/setup-bun@v2
+      - if: matrix.name == 'deno'
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - if: matrix.name == 'chromium'
+        run: npx -y playwright@1 install-deps chromium
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-package
+          path: npm-out
+      - name: Test the packed package
+        run: scripts/npm-test.sh npm-out/${{ needs.build.outputs.tarball }} ${{ matrix.tests }}
+
+  publish:
+    needs: [build, test]
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
+    runs-on: ubuntu-latest
+    # Approval by the owner: protect this environment (required reviewers, tags only).
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write # trusted publishing and provenance
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm >= 11.5.1.
+      - run: npm install -g npm@11 && npm --version
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-package
+          path: npm-out
+      - name: npm publish
+        run: npm publish npm-out/${{ needs.build.outputs.tarball }} --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

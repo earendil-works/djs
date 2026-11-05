@@ -207,7 +207,7 @@ since 0136; the module is 1.06 MB (458 KB gzip), its host code 148 KB (42 KB gzi
 ### a. Engine registry with drain
 
 Keep every build that wrote snapshots still alive: its djs-wasm module and its host code
-(`@djs/host` and the pi adapter, since the host side changes with the ABI and the
+(`@earendil-works/djs` and the pi adapter, since the host side changes with the ABI and the
 adapter's recipe), keyed by the build hash every container already carries. Restore a
 snapshot with its own build and let the session finish there (drain); start new sessions
 on the newest build. Retire a build when no snapshot needs it (sessions done, or past a

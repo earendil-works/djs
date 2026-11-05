@@ -41,6 +41,8 @@ pkg=$out/package
 rm -rf "$pkg"
 mkdir -p "$pkg/wasm"
 js/node_modules/.bin/tsc -p js/tsconfig.build.json --outDir "$pkg/dist"
+# The dump runtime is JavaScript generated from Rust, with declarations beside it.
+cp js/src/dump-runtime.js js/src/dump-runtime.d.ts "$pkg/dist/"
 # tsc keeps the sources' `./x.ts` specifiers in the declarations; the package has `./x.js`
 # (D3105).
 node -e '

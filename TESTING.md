@@ -565,7 +565,8 @@ slim with `dump`, full without `dump`; the wasm modules in release: main, slim, 
 with dump); the workspace's unit and integration tests (djs-docs's apart; djs-bgen's
 `builtins_gen_is_fresh` is what `scripts/bgen.sh --check` checks); the no_std wasm32 build
 of djs-core; the builtin registry's append-only check (`scripts/registry.py check main`); the guide (`djs-docs
-check`); the JS host package's tests on the dev modules; native versus wasm heap images;
+check`); the JS host package's tests on the dev modules; the npm package (below); native
+versus wasm heap images;
 the wire and reader cross-language checks; difftest on djs with the ratchet, suspension,
 GC stress, heap-image determinism and a dump at every idle point; difftest with the
 bytecode backend; the unsafe-heap build, which the shipped and slim modules use (D3100;
@@ -622,7 +623,7 @@ all of them:
 | class | leaves out | legs |
 |---|---|---|
 | `all` | nothing | the guide, djs-docs's tests |
-| `nodocs` | `docs/`, `work/`, `.github/`, the top-level `*.md` | js tests, wire/reader cross-language, native vs wasm, pi's tests |
+| `nodocs` | `docs/`, `work/`, `.github/`, the top-level `*.md` | js tests, the npm package, wire/reader cross-language, native vs wasm, pi's tests |
 | `rust` | `nodocs`'s, and `js/` (but `js/src/layout.generated.ts`) and `examples/` | everything else |
 
 `scripts/` is in every class, so a change to the gate reruns every leg. Outside the
@@ -630,7 +631,8 @@ repository, every leg's key has the toolchain (`rustc -vV`, `cargo -V`, node, py
 the qjs binary (size and mtime; `$DJS_QJS`), vendor/test262's commit and local changes
 (`$DJS_TEST262`) and vendor/unicode's NormalizationTest.txt; pi's legs also have
 pi-private's commit, its local changes and its installed packages
-(`$PI_PRIVATE`, node_modules/.package-lock.json). A leg that reads something new outside
+(`$PI_PRIVATE`, node_modules/.package-lock.json); the npm package's leg also has npm's
+version. A leg that reads something new outside
 the repository adds it to `EXTERNALS` in scripts/gate.py.
 
 Why nothing the uncached gate caught can pass: a cached leg passed on a tree whose files
@@ -725,6 +727,19 @@ A change that adds or removes a builtin in an omitted family updates
 tests/builtins/registry-slim.txt with `scripts/registry-update.sh` (merge-to-main runs it).
 A new builtin file or builtin that belongs to the slim cut gets `// @slim-omit` (file) or
 `@slim-omit` (builtin), and its globals go into `realm::ABSENT_GLOBALS`.
+
+### The npm package (D3105–D3109)
+
+`js/` is published as `@earendil-works/djs`. `scripts/npm-pack.sh` builds it (the three
+release modules, tsc's JavaScript and declarations from js/src, with TypeScript pinned
+by js/package-lock.json) into target/npm/package and packs it; `scripts/npm-test.sh
+TARBALL node bun deno js-tests browser` installs the tarball in a clean directory and
+runs js/pkg-test/smoke.js (every entry point, by the package's name) in each runtime, js/test's
+tests and the sleep-dump example on the package, and smoke.js in headless Chromium as
+native modules and bundled by Vite and webpack. The gate's `npm package` leg packs with
+the gate's builds and runs the smoke test in node, so main stays publishable;
+.github/workflows/publish.yml runs everything on the release modules (node 20, 22 and 24,
+Bun, Deno, Chromium) before it publishes.
 
 ### Size budget (D020)
 

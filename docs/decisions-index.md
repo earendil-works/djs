@@ -741,3 +741,8 @@ topics when the index is next reorganized.
 - D3083: Benchmarks compare per collection, and the shipped module's instantiation
 - D3084: Instruction ceilings for work the gate cannot time
 - D2842: The npm package is @earendil-works/djs, version 0.1.0; dumps carry no version
+- D3105: The npm package is built by tsc into target/npm/package and packed from there
+- D3106: Each entry point is the whole API with its own module; Sandbox.defaultModule
+- D3107: What the package exports and ships
+- D3108: The publish workflow tests the one packed tarball everywhere, then publishes on a tag
+- D3109: The gate packs the package and runs its smoke test in node

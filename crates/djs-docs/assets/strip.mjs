@@ -13,7 +13,9 @@ const written = [];
 for (const f of readdirSync(src)) {
   let code;
   let name = f;
-  if (f.endsWith(".ts")) {
+  if (f.endsWith(".d.ts")) {
+    continue; // declarations (js/src/dump-runtime.d.ts): nothing to run
+  } else if (f.endsWith(".ts")) {
     code = stripTypeScriptTypes(readFileSync(join(src, f), "utf8"), { mode: "strip" });
     code = code.replace(/from "(\.\/[^"]+)\.ts"/g, 'from "$1.js"');
     name = f.replace(/\.ts$/, ".js");

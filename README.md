@@ -119,16 +119,18 @@ scripts/build-wasm.sh                        # target/wasm32-unknown-unknown/was
 `djs run` also takes `--gc-stress`, `--suspend-every N` and `--backend bytecode|native`
 (docs/cli.md).
 
-From JavaScript (`js/`, package `@djs/host`, docs/host.md):
+From JavaScript (`js/`, published as `@earendil-works/djs`: `npm install
+@earendil-works/djs`; js/README.md, docs/host.md):
 
 ```ts
-import { loadModule, Sandbox } from "@djs/host";
+import { Sandbox } from "@earendil-works/djs";
+import { loadModule as loadDumpModule } from "@earendil-works/djs/dump";
 
 const sb = await Sandbox.create({
   asyncFunctions: { search: (q) => mySearch(q as string) },
   memoryLimit: 64 << 20,
   frozenBuiltins: true,                           // dumps need them (D2836)
-  dumpModule: await loadModule("djs-dump.wasm"),  // only to persist runs (scripts/build-wasm.sh --dump)
+  dumpModule: await loadDumpModule(),             // only to persist runs
 });
 const result = await sb.runAsync("const hits = await search(q); return hits.length;", { q: "djs" });
 const run = sb.begin("return (await search(q)).length", { q: "djs" });  // a run the host drives
