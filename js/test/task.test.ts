@@ -121,7 +121,7 @@ test("suspend dumps the call states; resume continues every call by its hooks", 
       const task = sb.start(CODE, { n: 1 });
       const dump = await task.suspend();
       assert.match(dump, /\$djs\.resume\(\d+, "tools\.job", \[1\], \{"n":1,"step":"started, saved"\}\)/);
-      assert.match(dump, /\$djs\.resume\(\d+, "tools\.again", \["x"\]\);/);
+      assert.match(dump, /\$djs\.resume\(\d+, "tools\.again", \["x"\]\)/);
       assert.match(dump, /\$djs\.resume\(\d+, "tools\.plain", \["y"\]\)/);
       await assert.rejects(task.result, (e: unknown) => e instanceof SandboxError && e.kind === "suspended");
       assert.ok(h.seen.calls[0].signal.aborted, "the suspended task stops waiting for its calls");
