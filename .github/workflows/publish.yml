@@ -53,7 +53,7 @@ jobs:
           echo "tarball=$(basename "$tarball")" >> "$GITHUB_OUTPUT"
           sha256sum npm-out/*.tgz npm-out/package/wasm/*.wasm
       - name: npm publish --dry-run
-        run: npm publish npm-out/${{ steps.pack.outputs.tarball }} --dry-run --access public
+        run: npm publish ./npm-out/${{ steps.pack.outputs.tarball }} --dry-run --access public
       - uses: actions/upload-artifact@v4
         with:
           name: npm-package
@@ -117,6 +117,6 @@ jobs:
           name: npm-package
           path: npm-out
       - name: npm publish
-        run: npm publish npm-out/${{ needs.build.outputs.tarball }} --provenance --access public
+        run: npm publish ./npm-out/${{ needs.build.outputs.tarball }} --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
