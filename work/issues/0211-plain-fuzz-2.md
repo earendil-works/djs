@@ -77,6 +77,12 @@ jobs, wait while load > 30) and gate rules (batch merges, check slim/test262-sli
 - plain-node maps node's "Cannot assign to read only property 'x' of …" to djs's "'x' is
   read-only" (false alarms at seeds 184922, 4586, from pjr). regress/ gains s15-* (those
   and pjr's D3026 seeds 668041, 82489).
+- Housekeeping: dropped the stale refusal entry codemode/plain-class-static-private.js
+  (fixed by D2883/D2950). The gate's stale entry in tests/pi/expected-failures.txt was
+  "'Node' process lifetime exits promptly after timeout with a real worker"; three local
+  runs of `pi-tests.ts --next` on a quiet machine (load ~5) fail it every time as listed,
+  so it passed only under the gate's load (timing): left listed, since dropping it would
+  fail the gate whenever it fails again.
 
 ## Follow-ups
 
