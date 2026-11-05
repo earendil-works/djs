@@ -109,7 +109,7 @@ impl Exec<'_> {
     pub(super) fn call_installed(&mut self, id: u16, base: u32, argc: u32, next: u32) -> Step {
         let f = realm::installed_intrinsic(self.heap, id);
         if f.is_undefined() {
-            let name = crate::bytecode::intrinsics::intrinsic(id).map_or("?", |i| i.name);
+            let name = crate::bytecode::intrinsics::intrinsic_name(id);
             return Err(Fault::error(
                 ErrorKind::InternalError,
                 crate::text::cat!("%", name, " is not installed"),
@@ -209,7 +209,9 @@ impl Exec<'_> {
             self.get(base + 3),
         );
         let Some(args) = args.as_object() else {
-            return super::intrinsics::bad_argument("ConstructWithThis");
+            return super::intrinsics::bad_argument(
+                const { crate::bytecode::intrinsics::const_id("ConstructWithThis") },
+            );
         };
         let n = self.heap.array_length(args);
         self.ensure(base + 2 + n)?;
@@ -296,7 +298,9 @@ impl Exec<'_> {
             IS_PROXY => Ok(Value::bool(proxy().is_some())),
             NEW_PROXY => (|| {
                 let (Some(t), Some(h)) = (a0.as_object(), a1.as_object()) else {
-                    return super::intrinsics::bad_argument("NewProxy");
+                    return super::intrinsics::bad_argument(
+                        const { crate::bytecode::intrinsics::const_id("NewProxy") },
+                    );
                 };
                 let mut flags = 0;
                 if self.heap.is_callable(t) {
@@ -308,7 +312,9 @@ impl Exec<'_> {
                 Ok(Value::object(self.heap.new_proxy(t, h, flags)?))
             })(),
             PROXY_TARGET | PROXY_HANDLER => match proxy() {
-                None => super::intrinsics::bad_argument("ProxyTarget"),
+                None => super::intrinsics::bad_argument(
+                    const { crate::bytecode::intrinsics::const_id("ProxyTarget") },
+                ),
                 Some(p) => {
                     let v = if id == PROXY_TARGET {
                         self.heap.proxy_target(p)
@@ -322,7 +328,9 @@ impl Exec<'_> {
                 }
             },
             PROXY_REVOKE => match proxy() {
-                None => super::intrinsics::bad_argument("ProxyRevoke"),
+                None => super::intrinsics::bad_argument(
+                    const { crate::bytecode::intrinsics::const_id("ProxyRevoke") },
+                ),
                 Some(p) => {
                     self.heap.proxy_revoke(p);
                     Ok(Value::UNDEFINED)

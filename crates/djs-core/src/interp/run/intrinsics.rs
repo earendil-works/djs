@@ -16,7 +16,7 @@ use crate::compiler::DynamicKind;
 /// Fuel per code unit of compiled source (eval, the Function constructors): compiling
 /// one unit costs about as much as a few simple instructions (D1591).
 const COMPILE_FUEL_PER_UNIT: i64 = 4;
-use crate::bytecode::intrinsics::{IntrinsicKind, intrinsic, intrinsic_id};
+use crate::bytecode::intrinsics::{IntrinsicKind, intrinsic, intrinsic_id, intrinsic_name};
 use crate::heap::cells::flags::{OBJ_BUILTIN, OBJ_BUILTIN_CTOR};
 use crate::heap::{ObjectClass, atoms};
 
@@ -488,17 +488,27 @@ fn decline_oom<T>(r: Result<T, Fault>, decline: T) -> Result<T, Fault> {
     }
 }
 
-pub(super) fn bad_argument<T>(name: &str) -> Result<T, Fault> {
-    Err(bad_argument_fault(name))
+/// Intrinsic `id` got arguments it does not take (a prelude bug). By id: the name is
+/// looked up in the cold path, so a site passes one register (0225).
+pub(super) fn bad_argument<T>(id: u16) -> Result<T, Fault> {
+    Err(bad_argument_fault(id))
+}
+
+/// [`bad_argument`] for a group of intrinsics ("Install*") or a non-intrinsic.
+pub(super) fn bad_argument_named<T>(name: &str) -> Result<T, Fault> {
+    Err(Fault::error(
+        ErrorKind::InternalError,
+        crate::text::cat!("bad argument to %", name),
+    ))
 }
 
 /// Out of line: the `format!` of 136 sites (0107).
 #[cold]
 #[inline(never)]
-fn bad_argument_fault(name: &str) -> Fault {
+fn bad_argument_fault(id: u16) -> Fault {
     Fault::error(
         ErrorKind::InternalError,
-        crate::text::cat!("bad argument to %", name),
+        crate::text::cat!("bad argument to %", intrinsic_name(id)),
     )
 }
 
@@ -553,18 +563,18 @@ impl Exec<'_> {
             AS_SYM if a0.as_symbol().is_some() => a0,
             AS_BOOL if a0.as_bool().is_some() => a0,
             AS_OBJ | AS_FN | AS_STR | AS_NUMBER | AS_SYM | AS_BOOL => {
-                return bad_argument(info.name);
+                return bad_argument(id);
             }
             TO_BOOLEAN => Value::bool(conv::to_boolean(self.heap, a0)),
             TO_NUMBER_PRIMITIVE => {
                 if a0.as_object().is_some() {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 }
                 conv::number(conv::to_number(self.heap, a0)?)
             }
             TO_STRING_PRIMITIVE => {
                 if a0.as_object().is_some() {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 }
                 Value::string(conv::to_string(self.heap, a0)?)
             }
@@ -592,13 +602,13 @@ impl Exec<'_> {
                     (n as i32) as f64 == n
                 };
                 if !ok {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 }
                 conv::number(n)
             }
             STR_LENGTH => match a0.as_string() {
                 Some(s) => Value::int(self.heap.str_len(s) as i32),
-                None => return bad_argument(info.name),
+                None => return bad_argument(id),
             },
             GET | GET_V => {
                 // Dense elements first: builtins read arrays element by element.
@@ -627,7 +637,7 @@ impl Exec<'_> {
             }
             SET => {
                 let Some(o) = a0.as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let key = conv::to_property_key(self.heap, arg(self, 1))?;
                 let v = arg(self, 2);
@@ -639,7 +649,7 @@ impl Exec<'_> {
             }
             HAS_PROPERTY => {
                 let Some(o) = a0.as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let key = conv::to_property_key(self.heap, arg(self, 1))?;
                 match self.heap.has_property_or_proxy(o, key) {
@@ -658,7 +668,7 @@ impl Exec<'_> {
             }
             CREATE_DATA_PROPERTY_OR_THROW => {
                 let Some(o) = a0.as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 // An Array's dense element (or the next one) takes the dense store.
                 if let Some(i) = index_key(arg(self, 1))
@@ -678,7 +688,7 @@ impl Exec<'_> {
             }
             DELETE_PROPERTY_OR_THROW => {
                 let Some(o) = a0.as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let key = conv::to_property_key(self.heap, arg(self, 1))?;
                 if !self.heap.delete_own_property(o, key)? {
@@ -713,7 +723,7 @@ impl Exec<'_> {
             NEW_TYPE_ERROR | NEW_RANGE_ERROR | NEW_SYNTAX_ERROR | NEW_REFERENCE_ERROR => {
                 let msg = match a0.as_string() {
                     Some(s) => self.heap.str_to_string(s),
-                    None => return bad_argument(info.name),
+                    None => return bad_argument(id),
                 };
                 let kind = match id {
                     NEW_TYPE_ERROR => ErrorKind::TypeError,
@@ -754,13 +764,13 @@ impl Exec<'_> {
                     (b"metadata", atoms::SYM_METADATA),
                 ];
                 let Some(&(_, atom)) = NAMES.iter().find(|(n, _)| *n == name) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 Value::symbol(self.heap.atom_symbol(atom).expect("well-known symbol"))
             }
             GET_PROTOTYPE_OF | PREVENT_EXTENSIONS | IS_EXTENSIBLE | OBJECT_CLASS_TAG => {
                 let Some(o) = a0.as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 match id {
                     GET_PROTOTYPE_OF => self
@@ -784,11 +794,11 @@ impl Exec<'_> {
             }
             SET_PROTOTYPE_OF => {
                 let Some(o) = a0.as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let proto = arg(self, 1);
                 if proto.as_object().is_none() && !proto.is_null() {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 }
                 // Object.prototype is an immutable prototype exotic object (10.4.7).
                 if o == intrinsic_obj(self.heap, Intrinsic::ObjectProto)
@@ -801,7 +811,7 @@ impl Exec<'_> {
             }
             SET_INTEGRITY_LEVEL | TEST_INTEGRITY_LEVEL => {
                 let Some(o) = a0.as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let frozen = arg(self, 1).as_bool() == Some(true);
                 Value::bool(if id == SET_INTEGRITY_LEVEL {
@@ -815,7 +825,7 @@ impl Exec<'_> {
                 let proto = arg(self, 1).as_object();
                 match realm::wrap_primitive(self.heap, a0, proto)? {
                     Some(o) if proto.is_some() => Value::object(o),
-                    _ => return bad_argument(info.name),
+                    _ => return bad_argument(id),
                 }
             }
             PRIMITIVE_VALUE => match a0.as_object() {
@@ -837,17 +847,17 @@ impl Exec<'_> {
             },
             NEW_SYMBOL => {
                 if !a0.is_undefined() && a0.as_string().is_none() {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 }
                 Value::symbol(self.heap.new_symbol(a0)?)
             }
             SYMBOL_DESCRIPTION => match a0.as_symbol() {
                 Some(sym) => self.heap.symbol_description(sym),
-                None => return bad_argument(info.name),
+                None => return bad_argument(id),
             },
             SYMBOL_FOR => {
                 let Some(key) = a0.as_string() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let registry = intrinsic_obj(self.heap, Intrinsic::SymbolRegistry);
                 let atom = self.heap.intern(key)?;
@@ -866,7 +876,7 @@ impl Exec<'_> {
             }
             SYMBOL_KEY_FOR => {
                 let Some(sym) = a0.as_symbol() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 // Registered symbols are described by their key.
                 let desc = self.heap.symbol_description(sym);
@@ -899,7 +909,7 @@ impl Exec<'_> {
             }
             STRING_PARSE_FLOAT | STRING_PARSE_INT => {
                 let Some(s) = a0.as_string() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let radix = (id == STRING_PARSE_INT).then(|| arg(self, 1).as_int().unwrap_or(0));
                 conv::number(number::parse(self.heap, s, radix)?)
@@ -913,12 +923,12 @@ impl Exec<'_> {
                         Some(1) => DynamicKind::Generator,
                         Some(2) => DynamicKind::Async,
                         Some(3) => DynamicKind::AsyncGenerator,
-                        _ => return bad_argument(info.name),
+                        _ => return bad_argument(id),
                     };
                     (arg(self, 1), Some(kind), arg(self, 2))
                 };
                 let Some(s) = src.as_string() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 // The compile is bounded by the source (D1591).
                 let len =
@@ -928,7 +938,7 @@ impl Exec<'_> {
                     None => eval::compile_eval(self.heap, s)?,
                     Some(kind) => {
                         let Some(b) = body.as_string() else {
-                            return bad_argument(info.name);
+                            return bad_argument(id);
                         };
                         eval::compile_function(self.heap, kind, s, b)?
                     }
@@ -952,7 +962,7 @@ impl Exec<'_> {
             }
             URI_ENCODE | URI_DECODE | STR_ESCAPE | STR_UNESCAPE => {
                 let Some(s) = a0.as_string() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 // Linear work: charge for it like the other string scans.
                 self.fuel -= i64::from(self.heap.str_len(s) / 8);
@@ -973,7 +983,7 @@ impl Exec<'_> {
             // next index (a Number), 2 the kind (0 keys, 1 values, 2 entries).
             CREATE_ARRAY_ITERATOR => {
                 let (Some(o), Some(kind)) = (a0.as_object(), arg(self, 1).as_int()) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let proto = realm::intrinsic_obj(self.heap, Intrinsic::ArrayIteratorProto);
                 let it = self.heap.alloc_object(
@@ -996,7 +1006,7 @@ impl Exec<'_> {
             }
             CREATE_STRING_ITERATOR => {
                 let Some(s) = a0.as_string() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let proto = realm::intrinsic_obj(self.heap, Intrinsic::StringIteratorProto);
                 let it = self.heap.alloc_object(
@@ -1021,14 +1031,14 @@ impl Exec<'_> {
             },
             STR_CODE_POINT_STRING => {
                 let (Some(s), Some(i)) = (a0.as_string(), arg(self, 1).as_number()) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let s = self.heap.contiguous(s)?;
                 let i = i as u32;
                 let n = match string::code_point_at(self.heap, s, i) {
                     Some(c) if c >= 65536.0 => 2,
                     Some(_) => 1,
-                    None => return bad_argument(info.name),
+                    None => return bad_argument(id),
                 };
                 Value::string(string::substring(self.heap, s, i, i + n)?)
             }
@@ -1037,7 +1047,7 @@ impl Exec<'_> {
             ARRAY_ITERATOR_SET_INDEX => {
                 let it = self.array_iterator(a0)?;
                 let Some(i) = arg(self, 1).as_number() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 self.heap.set_object_slot(it, 1, conv::number(i));
                 Value::UNDEFINED
@@ -1050,7 +1060,7 @@ impl Exec<'_> {
             ARRAY_ITERATOR_KIND => self.heap.object_slot(self.array_iterator(a0)?, 2),
             CREATE_ITER_RESULT_OBJECT => {
                 let Some(done) = arg(self, 1).as_bool() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let proto = realm::intrinsic_obj(self.heap, Intrinsic::ObjectProto);
                 let o = self.heap.new_object_from_entries(
@@ -1067,11 +1077,11 @@ impl Exec<'_> {
             }
             COMPARE_STRINGS => match (a0.as_string(), arg(self, 1).as_string()) {
                 (Some(a), Some(b)) => conv::number(string::compare(self.heap, a, b)),
-                _ => return bad_argument(info.name),
+                _ => return bad_argument(id),
             },
             STRING_CODE_POINTS => match a0.as_string() {
                 Some(s) => Value::object(string::code_points(self.heap, s)?),
-                None => return bad_argument(info.name),
+                None => return bad_argument(id),
             },
             ARRAY_CAN_POP_DENSE => Value::bool(
                 a0.as_object()
@@ -1079,7 +1089,7 @@ impl Exec<'_> {
             ),
             ARRAY_POP_DENSE => match a0.as_object().and_then(|o| self.heap.array_pop_dense(o)) {
                 Some(v) => v,
-                None => return bad_argument(info.name),
+                None => return bad_argument(id),
             },
             ARRAY_FILL_DENSE => {
                 let (Some(o), Some(k), Some(fin)) = (
@@ -1087,7 +1097,7 @@ impl Exec<'_> {
                     arg(self, 2).as_number(),
                     arg(self, 3).as_number(),
                 ) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 conv::number(decline_oom(
                     self.array_fill_dense(o, arg(self, 1), k, fin),
@@ -1096,7 +1106,7 @@ impl Exec<'_> {
             }
             ARRAY_PUSH_DENSE => match a0.as_object() {
                 Some(o) => conv::number(decline_oom(self.array_push_dense(o, arg(self, 1)), -1.0)?),
-                None => return bad_argument(info.name),
+                None => return bad_argument(id),
             },
             ARRAY_SEARCH_DENSE => {
                 let (Some(o), Some(from), Some(len), Some(mode)) = (
@@ -1105,7 +1115,7 @@ impl Exec<'_> {
                     arg(self, 3).as_number(),
                     arg(self, 4).as_int(),
                 ) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 conv::number(self.array_search_dense(o, arg(self, 1), from, len, mode))
             }
@@ -1116,7 +1126,7 @@ impl Exec<'_> {
                     arg(self, 2).as_number(),
                     arg(self, 3).as_object(),
                 ) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 Value::bool(decline_oom(self.array_slice_dense(o, k, fin, a), false)?)
             }
@@ -1126,7 +1136,7 @@ impl Exec<'_> {
                     arg(self, 1).as_number(),
                     arg(self, 2).as_string(),
                 ) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 decline_oom(self.array_join_dense(o, len, sep), Value::UNDEFINED)?
             }
@@ -1135,12 +1145,12 @@ impl Exec<'_> {
                     (Some(o), Some(values)) => {
                         Value::bool(self.typed_array_set_from_dense(o, values))
                     }
-                    _ => return bad_argument(info.name),
+                    _ => return bad_argument(id),
                 }
             }
             ENUMERABLE_OWN_DATA_PROPERTIES => {
                 let (Some(o), Some(kind)) = (a0.as_object(), arg(self, 1).as_int()) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 decline_oom(self.enumerable_own_data(o, kind), Value::UNDEFINED)?
             }
@@ -1148,7 +1158,7 @@ impl Exec<'_> {
                 let original = match arg(self, 1).as_int() {
                     Some(0) => MAP_PROTOTYPE_SET,
                     Some(1) => SET_PROTOTYPE_ADD,
-                    _ => return bad_argument(info.name),
+                    _ => return bad_argument(id),
                 };
                 Value::bool(a0 == realm::installed_intrinsic(self.heap, original))
             }
@@ -1159,11 +1169,11 @@ impl Exec<'_> {
             }
             ITERATOR_FAST_VALUE => match self.iter_fast_next(a0, arg(self, 1))? {
                 super::iter::FastStep::Value(v) => v,
-                _ => return bad_argument(info.name),
+                _ => return bad_argument(id),
             },
             ARRAY_SPLICE_DENSE => {
                 let Some(o) = a0.as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let as_u32 = |v: Value| {
                     v.as_number()
@@ -1185,7 +1195,7 @@ impl Exec<'_> {
             | STR_LAST_INDEX_OF | STR_TO_CASE | STR_TRIM | STR_IS_WELL_FORMED
             | STR_TO_WELL_FORMED | STR_REPEAT | STR_NORMALIZE => {
                 let Some(s) = a0.as_string() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 // A rope is flattened once (the result is cached in the rope), so a loop
                 // of charCodeAt over a built-up string is not quadratic in its depth.
@@ -1216,7 +1226,7 @@ impl Exec<'_> {
                     }
                     STR_INDEX_OF | STR_LAST_INDEX_OF => {
                         let Some(search) = a1.as_string() else {
-                            return bad_argument(info.name);
+                            return bad_argument(id);
                         };
                         let from = idx(arg(self, 2));
                         conv::number(string::index_of(
@@ -1244,7 +1254,7 @@ impl Exec<'_> {
             }
             STR_LOCALE_COMPARE => match (a0.as_string(), arg(self, 1).as_string()) {
                 (Some(a), Some(b)) => conv::number(string::locale_compare(self.heap, a, b)?),
-                _ => return bad_argument(info.name),
+                _ => return bad_argument(id),
             },
             STR_FROM_CODE_UNITS | STR_FROM_CODE_POINTS => match a0.as_object() {
                 Some(list) => Value::string(string::from_codes(
@@ -1252,11 +1262,11 @@ impl Exec<'_> {
                     list,
                     id == STR_FROM_CODE_POINTS,
                 )?),
-                None => return bad_argument(info.name),
+                None => return bad_argument(id),
             },
             SORT_PRIMITIVES => match a0.as_object() {
                 Some(o) => Value::bool(array::sort_primitives(self.heap, o)?),
-                None => return bad_argument(info.name),
+                None => return bad_argument(id),
             },
             REALM_INTRINSIC => {
                 let name = a0
@@ -1265,12 +1275,12 @@ impl Exec<'_> {
                     .unwrap_or_default();
                 match Intrinsic::by_name(&name) {
                     Some(i) => realm::intrinsic(self.heap, i),
-                    None => return bad_argument(info.name),
+                    None => return bad_argument(id),
                 }
             }
             ERROR_CREATE => {
                 let Some(proto) = a0.as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 Value::object(self.heap.alloc_object(
                     ObjectClass::Error,
@@ -1286,7 +1296,7 @@ impl Exec<'_> {
             }
             CAPTURE_STACK => {
                 let Some(o) = a0.as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let v = self.new_stack(self.pc, true, None, None)?;
                 realm::set_error_stack(self.heap, o, v)?;
@@ -1295,7 +1305,7 @@ impl Exec<'_> {
             IS_PENDING_STACK => Value::bool(super::stack::is_pending_stack(self.heap, a0)),
             SET_ERROR_STACK => {
                 let Some(o) = a0.as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 realm::set_error_stack(self.heap, o, arg(self, 1))?;
                 Value::UNDEFINED
@@ -1306,7 +1316,7 @@ impl Exec<'_> {
             }
             DEFINE_DATA_PROPERTY_OR_THROW => {
                 let Some(o) = a0.as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let key = object::key(self.heap, arg(self, 1))?;
                 let flags = object::flags(arg(self, 3));
@@ -1315,14 +1325,14 @@ impl Exec<'_> {
             }
             DEFINE_OWN_PROPERTY_FROM_RECORD => {
                 let (Some(o), Some(rec)) = (a0.as_object(), arg(self, 2).as_object()) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let key = object::key(self.heap, arg(self, 1))?;
                 Value::bool(object::define_from_record(self.heap, o, key, rec)?)
             }
             GET_OWN_PROPERTY_DESCRIPTOR_OBJECT | HAS_OWN_PROPERTY | OWN_PROPERTY_ATTRIBUTES => {
                 let Some(o) = a0.as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let key = object::key(self.heap, arg(self, 1))?;
                 match id {
@@ -1333,14 +1343,14 @@ impl Exec<'_> {
             }
             OWN_PROPERTY_KEYS => {
                 let Some(o) = a0.as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 object::own_keys(self.heap, o, arg(self, 1).as_int().unwrap_or(0))?
             }
             CALL_WITH_ARRAY => {
                 // `f this args` becomes `f this a1 .. an`.
                 let Some(args) = arg(self, 2).as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let n = self.heap.array_length(args);
                 self.ensure(base + 2 + n)?;
@@ -1375,7 +1385,7 @@ impl Exec<'_> {
                     a0.as_int().and_then(collection::class_of),
                     arg(self, 1).as_object(),
                 ) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 Value::object(self.heap.collection_new(cls, proto)?)
             }
@@ -1383,7 +1393,7 @@ impl Exec<'_> {
             COLLECTION_GET | COLLECTION_HAS | COLLECTION_SET | COLLECTION_DELETE
             | COLLECTION_CLEAR | COLLECTION_SIZE | COLLECTION_ITERATOR => {
                 if collection::class_index(self.heap, a0) < 0 {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 }
                 let m = a0.as_object().expect("collection");
                 let key = arg(self, 1);
@@ -1416,7 +1426,7 @@ impl Exec<'_> {
                     .as_object()
                     .filter(|&o| self.heap.object_class(o) == ObjectClass::CollectionIterator)
                 else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 match id {
                     COLLECTION_ITERATOR_STEP => {
@@ -1430,7 +1440,7 @@ impl Exec<'_> {
             DATE_NOW => realm::intrinsic(self.heap, Intrinsic::Clock),
             DATE_CREATE => {
                 let Some(proto) = a0.as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let o = self.heap.alloc_object(ObjectClass::Date, Some(proto), 1)?;
                 let t = arg(self, 1).as_number().unwrap_or(f64::NAN);
@@ -1461,7 +1471,7 @@ impl Exec<'_> {
                     )
                 };
                 let Some(list) = list else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let n = self.heap.array_length(list).min(7);
                 let nums: alloc::vec::Vec<f64> = (0..n)
@@ -1510,7 +1520,7 @@ impl Exec<'_> {
             }
             DATE_PARSE => {
                 let Some(s) = a0.as_string() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let offset = self.time_zone_offset();
                 conv::number(date::parse(self.heap.str_units(s), offset))
@@ -1525,7 +1535,7 @@ impl Exec<'_> {
             }
             ARRAY_BUFFER_CREATE if FULL => {
                 let Some(proto) = a0.as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let len = arg(self, 1).as_number().unwrap_or(f64::NAN);
                 let max = arg(self, 2).as_number();
@@ -1569,7 +1579,7 @@ impl Exec<'_> {
                 if from as u64 + count as u64 > self.heap.buffer_len(src) as u64
                     || to as u64 + count as u64 > self.heap.buffer_len(dst) as u64
                 {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 }
                 typed::buffer_copy(self.heap, src, from, dst, to, count);
                 Value::UNDEFINED
@@ -1579,11 +1589,11 @@ impl Exec<'_> {
                     array::sort_numbers(self.heap, o)?;
                     Value::UNDEFINED
                 }
-                None => return bad_argument(info.name),
+                None => return bad_argument(id),
             },
             DATA_VIEW_CREATE if FULL => {
                 let (Some(proto), Some(buffer)) = (a0.as_object(), arg(self, 1).as_object()) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let off = arg(self, 2).as_number().unwrap_or(0.0);
                 let len = arg(self, 3).as_number().unwrap_or(-1.0);
@@ -1601,7 +1611,7 @@ impl Exec<'_> {
                     .as_int()
                     .and_then(crate::heap::typed::Kind::from_i32)
                 else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 if id == DATA_VIEW_GET {
                     let little = arg(self, 3) == Value::TRUE;
@@ -1612,7 +1622,7 @@ impl Exec<'_> {
                     }
                 } else {
                     let Some(e) = self.heap.element_of(kind, arg(self, 3)) else {
-                        return bad_argument(info.name);
+                        return bad_argument(id);
                     };
                     let little = arg(self, 4) == Value::TRUE;
                     typed::view_set(self.heap, o, at, kind, e, little);
@@ -1625,7 +1635,7 @@ impl Exec<'_> {
             ),
             REALM_CONSTRUCTOR => {
                 let Some(k) = a0.as_string() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let ctors = intrinsic_obj(self.heap, Intrinsic::Constructors);
                 let key = self.heap.intern(k)?;
@@ -1635,7 +1645,7 @@ impl Exec<'_> {
                     .and_then(|p| p.value())
                 {
                     Some(f) => f,
-                    None => return bad_argument(info.name),
+                    None => return bad_argument(id),
                 }
             }
             IS_TYPED_ARRAY => {
@@ -1649,7 +1659,7 @@ impl Exec<'_> {
                         .and_then(crate::heap::typed::Kind::from_i32),
                     arg(self, 2).as_object(),
                 ) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let off = arg(self, 3).as_number().unwrap_or(0.0);
                 let len = arg(self, 4).as_number().unwrap_or(-1.0);
@@ -1699,14 +1709,14 @@ impl Exec<'_> {
                     self.heap.ta_length(dst).unwrap_or(0),
                 );
                 if from as u64 + count as u64 > ls as u64 || to as u64 + count as u64 > ld as u64 {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 }
                 typed::typed_array_copy(self.heap, src, from, dst, to, count);
                 Value::UNDEFINED
             }
             TYPED_ARRAY_KIND_PROTO if FULL => {
                 let Some(kind) = a0.as_int().and_then(crate::heap::typed::Kind::from_i32) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 realm::intrinsic(self.heap, typed::kind_proto(kind))
             }
@@ -1728,7 +1738,7 @@ impl Exec<'_> {
             }
             BASE64_DECODE | HEX_DECODE if FULL => {
                 let Some(s) = a0.as_string() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 // (By chunk: a dump's buffers are megabytes of Latin-1.)
                 let mut units: alloc::vec::Vec<u16> =
@@ -1764,7 +1774,7 @@ impl Exec<'_> {
             CONSTRUCT_WITH_ARRAY => {
                 // `f args newTarget` becomes `f a1 .. an`.
                 let Some(args) = arg(self, 1).as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let new_target = arg(self, 2);
                 let n = self.heap.array_length(args);
@@ -1798,7 +1808,7 @@ impl Exec<'_> {
             }
             SET_WITH_RECEIVER => {
                 let Some(o) = a0.as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let key = object::key(self.heap, arg(self, 1))?;
                 let (v, receiver) = (arg(self, 2), arg(self, 3));
@@ -1847,14 +1857,14 @@ impl Exec<'_> {
             }
             DELETE_PROPERTY => {
                 let Some(o) = a0.as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let key = object::key(self.heap, arg(self, 1))?;
                 Value::bool(self.heap.delete_own_property(o, key)?)
             }
             BOUND_FUNCTION_CREATE => {
                 let (Some(target), Some(args)) = (a0.as_object(), arg(self, 2).as_object()) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 function::bound_function_create(self.heap, target, arg(self, 1), args)?
             }
@@ -1865,7 +1875,7 @@ impl Exec<'_> {
             )),
             SYMBOL_DESCRIPTIVE_STRING => {
                 let Some(sym) = a0.as_symbol() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let d = match self.heap.symbol_description(sym).as_string() {
                     Some(d) => self.heap.str_to_string(d),
@@ -1897,7 +1907,7 @@ impl Exec<'_> {
             }
             INSTALL_VALUE => {
                 let Some(t) = a0.as_string() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let path = self.heap.str_to_string(t);
                 let holder = self.resolve_path(&path)?;
@@ -1912,7 +1922,7 @@ impl Exec<'_> {
             }
             PROMISE_CREATE => {
                 let Some(proto) = a0.as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 Value::object(promise::alloc(self.heap, Some(proto))?)
             }
@@ -1926,7 +1936,7 @@ impl Exec<'_> {
             | PERFORM_PROMISE_THEN
             | ENQUEUE_PROMISE_RESOLVE_THENABLE_JOB => {
                 let Some(p) = promise::as_promise(self.heap, a0) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 match id {
                     PROMISE_STATE => Value::int(promise::state_of(self.heap, p)),
@@ -1965,7 +1975,7 @@ impl Exec<'_> {
                     .filter(|&o| self.heap.object_class(o) == ObjectClass::Generator);
                 let s = arg(self, 1).as_int().filter(|s| (0..=6).contains(s));
                 let (Some(g), Some(s)) = (g, s) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 suspend::set_state(self.heap, g, s);
                 Value::UNDEFINED
@@ -1980,7 +1990,7 @@ impl Exec<'_> {
             }
             ASYNC_FUNCTION_PROMISE => match suspend::as_generator(self.heap, a0, suspend::ASYNC) {
                 Some(a) => suspend::promise_of(self.heap, a),
-                None => return bad_argument(info.name),
+                None => return bad_argument(id),
             },
             ASYNC_GENERATOR_STATE => {
                 match suspend::as_generator(self.heap, a0, suspend::ASYNC_GENERATOR) {
@@ -1990,7 +2000,7 @@ impl Exec<'_> {
             }
             ASYNC_GENERATOR_ENQUEUE | ASYNC_GENERATOR_FIRST_REQUEST | ASYNC_GENERATOR_DEQUEUE => {
                 let Some(g) = suspend::as_generator(self.heap, a0, suspend::ASYNC_GENERATOR) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 match id {
                     ASYNC_GENERATOR_ENQUEUE => {
@@ -2003,7 +2013,7 @@ impl Exec<'_> {
             }
             CREATE_ASYNC_FROM_SYNC_ITERATOR => {
                 if a0.as_object().is_none() {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 }
                 let proto = intrinsic_obj(self.heap, Intrinsic::AsyncFromSyncIteratorProto);
                 let r = self
@@ -2016,7 +2026,7 @@ impl Exec<'_> {
             NEW_RECORD => {
                 let n = a0.as_int().and_then(|n| u32::try_from(n).ok());
                 let Some(n) = n.filter(|&n| n <= 16) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let r = self.heap.alloc_object(ObjectClass::Record, None, n)?;
                 for i in 0..n {
@@ -2030,10 +2040,10 @@ impl Exec<'_> {
                     .filter(|&o| is_slot_object(self.heap.object_class(o)));
                 let i = arg(self, 1).as_int().and_then(|i| u32::try_from(i).ok());
                 let (Some(r), Some(i)) = (r, i) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 if i >= self.heap.object_slot_count(r) {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 }
                 if id == RECORD_GET {
                     self.heap.object_slot(r, i)
@@ -2045,11 +2055,11 @@ impl Exec<'_> {
             NEW_BUILTIN_CLOSURE => {
                 let kind = a0.as_int().and_then(|k| usize::try_from(k).ok());
                 let (Some(kind), Some(length)) = (kind, arg(self, 2).as_int()) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 match new_builtin_closure(self.heap, kind, arg(self, 1), length)? {
                     Some(f) => Value::object(f),
-                    None => return bad_argument(info.name),
+                    None => return bad_argument(id),
                 }
             }
             MARK_NATIVE => {
@@ -2075,7 +2085,7 @@ impl Exec<'_> {
                             self.wire_function_kind_constructor(f, proto, name)?;
                         }
                     }
-                    _ => return bad_argument(info.name),
+                    _ => return bad_argument(id),
                 }
                 Value::UNDEFINED
             }
@@ -2085,7 +2095,7 @@ impl Exec<'_> {
                     arg(self, 1).as_string(),
                     arg(self, 2).as_string(),
                 ) else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 // An Error with three slots (the stack, then name and message): nothing
                 // else allocates one (D1840, D1971).
@@ -2109,7 +2119,7 @@ impl Exec<'_> {
             }
             DOM_EXCEPTION_CODE => {
                 let Some(s) = a0.as_string() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let units: alloc::vec::Vec<u16> = self.heap.str_units(s).collect();
                 Value::int(crate::builtins::dom::code_of(&units))
@@ -2119,13 +2129,13 @@ impl Exec<'_> {
                 let Some(&(_, name)) =
                     i.and_then(|i| crate::builtins::dom::NAMES.get(i.wrapping_sub(1)))
                 else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 Value::string(self.heap.alloc_str(name)?)
             }
             BTOA | ATOB => {
                 let Some(s) = a0.as_string() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 if id == BTOA {
                     match crate::builtins::dom::btoa(self.heap.str_units(s)) {
@@ -2142,7 +2152,7 @@ impl Exec<'_> {
             }
             F64_SUM_PRECISE => {
                 let Some(list) = a0.as_object() else {
-                    return bad_argument(info.name);
+                    return bad_argument(id);
                 };
                 let n = self.heap.array_length(list);
                 let heap = &*self.heap;
@@ -2160,7 +2170,7 @@ impl Exec<'_> {
                 arg(self, 1).as_number().unwrap_or(f64::NAN),
             ) {
                 Some(r) => conv::number(r),
-                None => return self.json_regexp_intrinsic(id, info.name, base, argc, next),
+                None => return self.json_regexp_intrinsic(id, base, argc, next),
             },
         };
         self.sp = base;
@@ -2192,7 +2202,7 @@ impl Exec<'_> {
         length: Value,
     ) -> Result<(), Fault> {
         let (Some(t), Some(fo)) = (target.as_string(), f.as_object()) else {
-            return bad_argument("InstallMethod");
+            return bad_argument(const { crate::bytecode::intrinsics::const_id("InstallMethod") });
         };
         let path = self.heap.str_to_string(t);
         let holder = self.resolve_path(&path)?;
@@ -2296,7 +2306,7 @@ impl Exec<'_> {
             return Ok((self.heap.intern(k)?, Value::string(k)));
         }
         let Some(sym) = key.as_symbol() else {
-            return bad_argument("Install*");
+            return bad_argument_named("Install*");
         };
         let d = match self.heap.symbol_description(sym).as_string() {
             Some(d) => self.heap.str_to_string(d),
@@ -2318,7 +2328,9 @@ impl Exec<'_> {
         name: &str,
     ) -> Result<(), Fault> {
         let Some(fo) = f.as_object() else {
-            return bad_argument("InstallIntrinsic");
+            return bad_argument(
+                const { crate::bytecode::intrinsics::const_id("InstallIntrinsic") },
+            );
         };
         let p = intrinsic_obj(self.heap, proto);
         let function = self.heap.atom_str("Function")?;
@@ -2383,7 +2395,9 @@ impl Exec<'_> {
     /// prototype, or a new object inheriting from the parent's prototype.
     fn install_prototype(&mut self, target: Value, key: Value, parent: Value) -> Result<(), Fault> {
         let (Some(_), Some(k)) = (target.as_string(), key.as_string()) else {
-            return bad_argument("InstallPrototype");
+            return bad_argument(
+                const { crate::bytecode::intrinsics::const_id("InstallPrototype") },
+            );
         };
         let name = self.heap.str_to_string(k);
         // The Proxy constructor has no `prototype` (28.2.2): proxies take theirs from
@@ -2398,10 +2412,14 @@ impl Exec<'_> {
             .get_own_property(ctors, ckey)
             .and_then(|p| p.value())
         else {
-            return bad_argument("InstallPrototype");
+            return bad_argument(
+                const { crate::bytecode::intrinsics::const_id("InstallPrototype") },
+            );
         };
         let Some(fo) = f.as_object() else {
-            return bad_argument("InstallPrototype");
+            return bad_argument(
+                const { crate::bytecode::intrinsics::const_id("InstallPrototype") },
+            );
         };
         let parent = match parent.as_string() {
             Some(p) => {
@@ -2434,7 +2452,9 @@ impl Exec<'_> {
     /// constructor `key`, after the prototype's methods (where qjs's order puts it).
     fn install_prototype_constructor(&mut self, key: Value) -> Result<(), Fault> {
         let Some(k) = key.as_string() else {
-            return bad_argument("InstallPrototypeConstructor");
+            return bad_argument(
+                const { crate::bytecode::intrinsics::const_id("InstallPrototypeConstructor") },
+            );
         };
         let ctors = intrinsic_obj(self.heap, Intrinsic::Constructors);
         let ckey = self.heap.intern(k)?;
@@ -2448,7 +2468,9 @@ impl Exec<'_> {
             .and_then(|p| p.value())
             .and_then(|v| v.as_object());
         let (Some(f), Some(proto)) = (f, proto) else {
-            return bad_argument("InstallPrototypeConstructor");
+            return bad_argument(
+                const { crate::bytecode::intrinsics::const_id("InstallPrototypeConstructor") },
+            );
         };
         // A builtin may have installed its own (Iterator.prototype's accessor).
         if self
@@ -2473,7 +2495,9 @@ impl Exec<'_> {
     ) -> Result<(), Fault> {
         let (Some(t), Some(k), Some(fo)) = (target.as_string(), key.as_string(), f.as_object())
         else {
-            return bad_argument("InstallConstructor");
+            return bad_argument(
+                const { crate::bytecode::intrinsics::const_id("InstallConstructor") },
+            );
         };
         let path = self.heap.str_to_string(t);
         let holder = self.resolve_path(&path)?;
@@ -2522,7 +2546,9 @@ impl Exec<'_> {
         is_setter: Value,
     ) -> Result<(), Fault> {
         let (Some(t), Some(fo)) = (target.as_string(), f.as_object()) else {
-            return bad_argument("InstallAccessor");
+            return bad_argument(
+                const { crate::bytecode::intrinsics::const_id("InstallAccessor") },
+            );
         };
         let path = self.heap.str_to_string(t);
         let holder = self.resolve_path(&path)?;

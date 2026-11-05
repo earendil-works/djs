@@ -339,8 +339,7 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     // builtin closure of %FunctionPrototypeBehavior%, callable once the prelude has
     // installed it (D1840).
     let function_proto = heap.alloc_object(ObjectClass::BuiltinClosure, Some(object_proto), 2)?;
-    let behavior =
-        crate::bytecode::intrinsics::intrinsic_id("FunctionPrototypeBehavior").expect("intrinsic");
+    let behavior = const { crate::bytecode::intrinsics::const_id("FunctionPrototypeBehavior") };
     heap.set_object_slot(function_proto, 0, Value::int(i32::from(behavior)));
     set(
         heap,

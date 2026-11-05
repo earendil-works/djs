@@ -10724,3 +10724,16 @@ and alloc (a few seconds). DJS_STABLE_ONLY=1 drops all of it and builds today's 
 plain stable (450.5 KB without D2333 too). Exit plan: if cargo or rustc change the
 flags, drop the lines in wasm-build-env.sh and raise the ceiling by the recorded 10.8 KB
 under this decision.
+
+## D3091: Intrinsic names and signatures in compact run-time tables
+date: 2026-11-05 · by: bytes · issue: 0225
+`bytecode::intrinsics::INTRINSICS` (name, kind, arity per intrinsic) is a `const` for the
+compile-time users (`const_id`, the hash, the registry tests); the run time reads
+`SIGNATURES` (one byte per intrinsic: params, variadic, kind), `NAMES` (all names back to
+back) and `NAME_ENDS` (u16), built from it in const. Indexing the `const` at run time had
+put the whole 12-byte-per-entry table in the module, with a pointer and length per name.
+`bad_argument` takes the intrinsic id and looks the name up in its cold path (one
+register per site instead of a pointer and a length); `bad_argument_named` covers the
+two non-intrinsic names. The literal runtime lookups by name became `const_id`.
+Messages are unchanged. Module 431,762 → 430,963 gzip (−0.8 KB; data −3.5 KB raw),
+instructions within ±0.8% on the 12 workloads.

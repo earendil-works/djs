@@ -63,7 +63,6 @@ impl Exec<'_> {
     pub(super) fn json_regexp_intrinsic(
         &mut self,
         id: u16,
-        name: &str,
         base: u32,
         argc: u32,
         next: u32,
@@ -79,7 +78,7 @@ impl Exec<'_> {
         let v = match id {
             JSON_PARSE => {
                 let Some(s) = a0.as_string() else {
-                    return bad_argument(name);
+                    return bad_argument(id);
                 };
                 self.fuel -= length_fuel(self.heap.str_len(s));
                 match json::parse(self.heap, s)? {
@@ -101,13 +100,13 @@ impl Exec<'_> {
             }
             JSON_STRINGIFY_FAST | JSON_STRINGIFY_FAST_AT => {
                 let Some(gap) = arg(self, 1).as_string() else {
-                    return bad_argument(name);
+                    return bad_argument(id);
                 };
                 let r = if id == JSON_STRINGIFY_FAST {
                     json::stringify_fast(self.heap, a0, gap)?
                 } else {
                     let Some(stack) = arg(self, 2).as_object() else {
-                        return bad_argument(name);
+                        return bad_argument(id);
                     };
                     json::stringify_fast_in(self.heap, a0, gap, stack, arg(self, 3))?
                 };
@@ -118,7 +117,7 @@ impl Exec<'_> {
             }
             JSON_RAW_JSON => {
                 let Some(s) = a0.as_string() else {
-                    return bad_argument(name);
+                    return bad_argument(id);
                 };
                 json::raw_json(self.heap, s)?
             }
@@ -129,14 +128,14 @@ impl Exec<'_> {
             }
             JSON_QUOTE => {
                 let Some(s) = a0.as_string() else {
-                    return bad_argument(name);
+                    return bad_argument(id);
                 };
                 self.fuel -= length_fuel(self.heap.str_len(s));
                 Value::string(json::quote(self.heap, s)?)
             }
             CREATE_DATA_PROPERTY => {
                 let Some(o) = a0.as_object() else {
-                    return bad_argument(name);
+                    return bad_argument(id);
                 };
                 let key = conv::to_property_key(self.heap, arg(self, 1))?;
                 Value::bool(self.heap.create_data_property(o, key, arg(self, 2))?)
@@ -147,13 +146,13 @@ impl Exec<'_> {
                 let (proto, cell) = (a0.as_object(), a0.as_internal());
                 let (Some(p), Some(f)) = (arg(self, 1).as_string(), arg(self, 2).as_string())
                 else {
-                    return bad_argument(name);
+                    return bad_argument(id);
                 };
                 Value::object(re::create(self.heap, proto, p, f, cell)?)
             }
             REGEXP_SOURCE | REGEXP_FLAGS | REGEXP_HAS_FLAG | REGEXP_ESCAPED_SOURCE => {
                 let Some(r) = re::as_regexp(self.heap, a0) else {
-                    return bad_argument(name);
+                    return bad_argument(id);
                 };
                 match id {
                     REGEXP_SOURCE => Value::string(re::source(self.heap, r)),
@@ -164,19 +163,19 @@ impl Exec<'_> {
                             .as_string()
                             .and_then(|f| self.heap.char_code_at(f, 0))
                         else {
-                            return bad_argument(name);
+                            return bad_argument(id);
                         };
                         Value::bool(re::has_flag(self.heap, r, c))
                     }
                 }
             }
-            REGEXP_EXEC_RAW if argc == 4 => return self.regexp_exec_raw(name, base, next, false),
-            REGEXP_TEST_RAW if argc == 4 => return self.regexp_exec_raw(name, base, next, true),
+            REGEXP_EXEC_RAW if argc == 4 => return self.regexp_exec_raw(id, base, next, false),
+            REGEXP_TEST_RAW if argc == 4 => return self.regexp_exec_raw(id, base, next, true),
             IS_ORIGINAL_REGEXP_EXEC => {
                 Value::bool(a0 == realm::installed_intrinsic(self.heap, REGEXP_PROTOTYPE_EXEC))
             }
-            REGEXP_SPLIT_RAW if argc == 4 => return self.regexp_split_raw(name, base, next),
-            REGEXP_REPLACE_RAW if argc == 4 => return self.regexp_replace_raw(name, base, next),
+            REGEXP_SPLIT_RAW if argc == 4 => return self.regexp_split_raw(id, base, next),
+            REGEXP_REPLACE_RAW if argc == 4 => return self.regexp_replace_raw(id, base, next),
             IS_PRISTINE_REGEXP => Value::bool(self.regexp_pristine(a0)?),
             // Bulk fast paths for builtins (D1561): apply, fromCodePoint, Math.max.
             IS_DENSE_ARRAY => Value::bool(
@@ -185,7 +184,7 @@ impl Exec<'_> {
             ),
             ALL_NUMBERS | ALL_CODE_POINTS => {
                 let Some(list) = a0.as_object() else {
-                    return bad_argument(name);
+                    return bad_argument(id);
                 };
                 let points = id == ALL_CODE_POINTS;
                 // One pass over the dense store (holes are not Numbers), ints first.
@@ -205,7 +204,7 @@ impl Exec<'_> {
             }
             CREATE_REGEXP_STRING_ITERATOR => {
                 let (Some(r), Some(s)) = (a0.as_object(), arg(self, 1).as_string()) else {
-                    return bad_argument(name);
+                    return bad_argument(id);
                 };
                 let mut flags = 0;
                 if arg(self, 2).as_bool() == Some(true) {
@@ -229,12 +228,12 @@ impl Exec<'_> {
                     Some(2) => Value::bool(flags & re::IT_GLOBAL != 0),
                     Some(3) => Value::bool(flags & re::IT_UNICODE != 0),
                     Some(4) => Value::bool(flags & re::IT_DONE != 0),
-                    _ => return bad_argument(name),
+                    _ => return bad_argument(id),
                 }
             }
             REGEXP_ESCAPE_STRING => {
                 let Some(s) = a0.as_string() else {
-                    return bad_argument(name);
+                    return bad_argument(id);
                 };
                 Value::string(re::escape(self.heap, s)?)
             }
@@ -249,7 +248,7 @@ impl Exec<'_> {
                     .set_object_slot(it, re::IT_FLAGS, Value::int(flags | re::IT_DONE));
                 Value::UNDEFINED
             }
-            _ => return self.bigint_intrinsic(id, name, base, argc, next),
+            _ => return self.bigint_intrinsic(id, base, argc, next),
         };
         self.sp = base;
         self.push(v);
@@ -383,14 +382,14 @@ impl Exec<'_> {
     /// match from that state. Everything is in the arena: a heap image taken while
     /// suspended resumes the same match.
     /// With `test`, the result is just whether it matched (RegExp.prototype.test, D1560).
-    fn regexp_exec_raw(&mut self, name: &str, base: u32, next: u32, test: bool) -> Step {
+    fn regexp_exec_raw(&mut self, id: u16, base: u32, next: u32, test: bool) -> Step {
         let state_slot = base + 3;
         let (Some(r), Some(s), Some(last)) = (
             re::as_regexp(self.heap, self.get(base)),
             self.get(base + 1).as_string(),
             self.get(base + 2).as_number(),
         ) else {
-            return bad_argument(name);
+            return bad_argument(id);
         };
         // ToLength.
         let last = if last > 0.0 { libm::trunc(last) } else { 0.0 };
@@ -499,14 +498,14 @@ impl Exec<'_> {
     /// every position equals a search from that position. Suspendable like
     /// `RegExpExecRaw`: the progress (result array, p, q, matcher state) is kept in the
     /// state slot.
-    fn regexp_split_raw(&mut self, name: &str, base: u32, next: u32) -> Step {
+    fn regexp_split_raw(&mut self, id: u16, base: u32, next: u32) -> Step {
         let state_slot = base + 3;
         let (Some(r), Some(s), Some(lim)) = (
             re::as_regexp(self.heap, self.get(base)),
             self.get(base + 1).as_string(),
             self.get(base + 2).as_number(),
         ) else {
-            return bad_argument(name);
+            return bad_argument(id);
         };
         let lim = lim as u32;
         let flat = self.heap.contiguous(s)?;
@@ -597,14 +596,14 @@ impl Exec<'_> {
     /// lastIndex 0, GetSubstitution in Rust, lastIndex 0 at the end. Suspendable: the
     /// output so far (as a string), the next source position, lastIndex and the matcher
     /// state are kept in the state slot.
-    fn regexp_replace_raw(&mut self, name: &str, base: u32, next: u32) -> Step {
+    fn regexp_replace_raw(&mut self, id: u16, base: u32, next: u32) -> Step {
         let state_slot = base + 3;
         let (Some(r), Some(s), Some(t)) = (
             re::as_regexp(self.heap, self.get(base)),
             self.get(base + 1).as_string(),
             self.get(base + 2).as_string(),
         ) else {
-            return bad_argument(name);
+            return bad_argument(id);
         };
         let flat = self.heap.contiguous(s)?;
         let size = self.heap.str_len(flat) as usize;

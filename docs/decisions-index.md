@@ -439,6 +439,7 @@ topics when the index is next reorganized.
 - D2332: djs-wasm is no_std on wasm32, with a panic handler that never formats
 - D2333: The shipped module drops panic locations (-Zlocation-detail=none, the one unstable flag)
 - D3090: The shipped module builds core and alloc itself, with panics as bare traps
+- D3091: Intrinsic names and signatures in compact run-time tables
 - D2253: The base image drops the prelude's internal names
 - D2254: `@native` only where benchmarks or real codemode pay
 - D2045: The first collection after a canonical image is full

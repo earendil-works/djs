@@ -326,12 +326,16 @@ impl Exec<'_> {
             .as_object()
             .filter(|&o| self.heap.object_class(o) == ObjectClass::Generator);
         let (Some(g), Some(mode)) = (g, mode.as_int()) else {
-            return intrinsics::bad_argument("GeneratorResume");
+            return intrinsics::bad_argument(
+                const { crate::bytecode::intrinsics::const_id("GeneratorResume") },
+            );
         };
         let state = state_of(self.heap, g);
         let saved = self.heap.object_slot(g, FRAME).as_internal();
         let (Some(arr), START | SUSPENDED | AWAITING | SUSPENDED_RAW) = (saved, state) else {
-            return intrinsics::bad_argument("GeneratorResume");
+            return intrinsics::bad_argument(
+                const { crate::bytecode::intrinsics::const_id("GeneratorResume") },
+            );
         };
         let pc = self.heap.object_slot(g, PC).as_int().unwrap_or(0) as u32;
         let f = self

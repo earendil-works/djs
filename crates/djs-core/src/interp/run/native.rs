@@ -587,7 +587,7 @@ impl Exec<'_> {
         if let Some(n) = v.as_number() {
             Ok(n)
         } else {
-            intrinsics::bad_argument("AsNumber")
+            intrinsics::bad_argument(const { crate::bytecode::intrinsics::const_id("AsNumber") })
         }
     }
 
@@ -598,7 +598,7 @@ impl Exec<'_> {
         if self.is_callable(v) {
             Ok(v)
         } else {
-            intrinsics::bad_argument("AsFn")
+            intrinsics::bad_argument(const { crate::bytecode::intrinsics::const_id("AsFn") })
         }
     }
 
@@ -609,7 +609,7 @@ impl Exec<'_> {
         if v.as_string().is_some() {
             Ok(v)
         } else {
-            intrinsics::bad_argument("AsStr")
+            intrinsics::bad_argument(const { crate::bytecode::intrinsics::const_id("AsStr") })
         }
     }
 
@@ -620,7 +620,7 @@ impl Exec<'_> {
         if v.as_object().is_some() {
             Ok(v)
         } else {
-            intrinsics::bad_argument("AsObj")
+            intrinsics::bad_argument(const { crate::bytecode::intrinsics::const_id("AsObj") })
         }
     }
 
@@ -638,7 +638,7 @@ impl Exec<'_> {
     pub(crate) fn n_concat(&mut self, a: Value, b: Value) -> Result<Value, Fault> {
         match (a.as_string(), b.as_string()) {
             (Some(x), Some(y)) => Ok(Value::string(self.heap.concat(x, y)?)),
-            _ => intrinsics::bad_argument("concat"),
+            _ => intrinsics::bad_argument_named("concat"),
         }
     }
 

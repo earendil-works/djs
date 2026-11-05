@@ -875,7 +875,7 @@ pub fn short_form(op: Op, a: u32, b: u32) -> Option<Op> {
         Op::PushI8 => (Some(Op::Push0), None),
         Op::PushConst => (None, Some(Op::PushConst8)),
         Op::CallIntrinsic => {
-            let fixed = match super::intrinsics::INTRINSICS.get(a as usize) {
+            let fixed = match super::intrinsics::intrinsic(a as u16) {
                 Some(i) => !i.variadic && i.params as u32 == b,
                 None => false,
             };

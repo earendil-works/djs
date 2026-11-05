@@ -1499,8 +1499,7 @@ impl Parser<'_, '_> {
         self.code().push_const(prog);
         self.code().push_const(p);
         self.code().push_const(f);
-        let create =
-            crate::bytecode::intrinsics::intrinsic_id("RegExpCreate").expect("%RegExpCreate");
+        let create = const { crate::bytecode::intrinsics::const_id("RegExpCreate") };
         self.code().call_intrinsic(create, 3);
         Ok(Expr::Value)
     }
@@ -1862,7 +1861,7 @@ impl Parser<'_, '_> {
         if !ok {
             return syntax(
                 paren,
-                crate::text::cat!("wrong number of arguments for %", info.name),
+                crate::text::cat!("wrong number of arguments for %", name),
             );
         }
         self.mark(pos);

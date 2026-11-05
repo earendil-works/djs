@@ -106,7 +106,7 @@ fn operand(out: &mut String, insn: &Insn, i: usize, kind: ImmKind, cx: &DisasmCo
         ImmKind::Builtin => write!(out, "b{raw}"),
         ImmKind::Cache => write!(out, "ic{raw}"),
         ImmKind::Intrinsic => match super::intrinsics::intrinsic(raw as u16) {
-            Some(i) => write!(out, "%{}", i.name),
+            Some(_) => write!(out, "%{}", super::intrinsics::intrinsic_name(raw as u16)),
             None => write!(out, "%{raw}"),
         },
         ImmKind::Const if insn.op == super::Op::GlobalDecls => {

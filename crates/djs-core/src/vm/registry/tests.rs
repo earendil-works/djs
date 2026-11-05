@@ -119,7 +119,7 @@ fn ids_name_cells_and_intrinsics() {
     // An alias gets no entry of its own: the object keeps its id.
     assert!(reg.id_of(EntryKind::Value, "globalThis.Array").is_none());
     let ids = reg.intrinsic_ids();
-    assert_eq!(ids.len(), INTRINSICS.len());
+    assert_eq!(ids.len(), crate::bytecode::intrinsics::INTRINSICS.len());
     assert!(ids.iter().all(Option::is_some));
 }
 

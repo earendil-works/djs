@@ -32,7 +32,7 @@ use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
-use crate::bytecode::intrinsics::INTRINSICS;
+use crate::bytecode::intrinsics;
 use crate::heap::{Atom, Heap, Property};
 use crate::interp::realm::{Intrinsic, installed_intrinsic, intrinsic};
 use crate::value::{Obj, Value};
@@ -165,9 +165,8 @@ impl Registry {
 
     /// Registry ids of the intrinsics table, by intrinsic id (`None`: unregistered).
     pub fn intrinsic_ids(&self) -> Vec<Option<u32>> {
-        INTRINSICS
-            .iter()
-            .map(|i| self.id_of(EntryKind::Intrinsic, i.name))
+        intrinsics::names()
+            .map(|i| self.id_of(EntryKind::Intrinsic, i))
             .collect()
     }
 
@@ -201,7 +200,7 @@ impl Registry {
         for e in self.entries.iter().filter(|e| e.removed.is_none()) {
             let ok = match e.kind {
                 EntryKind::Value => r.resolve(&e.path).and_then(cell_of).is_some(),
-                EntryKind::Intrinsic => INTRINSICS.iter().any(|i| i.name == e.path),
+                EntryKind::Intrinsic => intrinsics::names().any(|i| i == e.path),
             };
             if ok && absent.contains(&e.id) {
                 problems.push(format!(
@@ -225,9 +224,9 @@ impl Registry {
                 problems.push_out(format!("value {path} has no entry"));
             }
         }
-        for i in INTRINSICS {
-            if self.id_of(EntryKind::Intrinsic, i.name).is_none() {
-                problems.push_out(format!("intrinsic {} has no entry", i.name));
+        for i in intrinsics::names() {
+            if self.id_of(EntryKind::Intrinsic, i).is_none() {
+                problems.push_out(format!("intrinsic {i} has no entry"));
             }
         }
         problems
@@ -254,7 +253,7 @@ impl Registry {
         for e in self.entries.iter_mut().filter(|e| e.removed.is_none()) {
             let ok = match e.kind {
                 EntryKind::Value => r.resolve(&e.path).and_then(cell_of).is_some(),
-                EntryKind::Intrinsic => INTRINSICS.iter().any(|i| i.name == e.path),
+                EntryKind::Intrinsic => intrinsics::names().any(|i| i == e.path),
             };
             if !ok {
                 e.removed = Some(reason.to_string());
@@ -267,10 +266,10 @@ impl Registry {
                 u.added.push_out(self.push(EntryKind::Value, path));
             }
         }
-        for i in INTRINSICS {
-            if self.id_of(EntryKind::Intrinsic, i.name).is_none() {
+        for i in intrinsics::names() {
+            if self.id_of(EntryKind::Intrinsic, i).is_none() {
                 u.added
-                    .push_out(self.push(EntryKind::Intrinsic, i.name.to_string()));
+                    .push_out(self.push(EntryKind::Intrinsic, i.to_string()));
             }
         }
         u
@@ -456,13 +455,12 @@ fn names(heap: &Heap, prelude: impl FnOnce(&Heap) -> Vec<(Value, String)>) -> Ve
         .map(|(i, name)| (intrinsic(heap, *i), cat!("%", *name, "%")))
         .collect();
     walk(heap, realm, false, &mut seen, &mut out);
-    let installed = INTRINSICS
-        .iter()
+    let installed = intrinsics::names()
         .enumerate()
-        .map(|(id, info)| {
+        .map(|(id, name)| {
             (
                 installed_intrinsic(heap, id as u16),
-                cat!("%intrinsic:", info.name, "%"),
+                cat!("%intrinsic:", name, "%"),
             )
         })
         .collect();
@@ -675,10 +673,10 @@ impl<'h> Resolver<'h> {
         for (i, name) in REALM_ROOTS {
             roots.insert(format!("%{name}%"), intrinsic(heap, *i));
         }
-        for (id, info) in INTRINSICS.iter().enumerate() {
+        for (id, name) in intrinsics::names().enumerate() {
             let v = installed_intrinsic(heap, id as u16);
             if !v.is_undefined() {
-                roots.insert(format!("%intrinsic:{}%", info.name), v);
+                roots.insert(format!("%intrinsic:{name}%"), v);
             }
         }
         for (v, path) in prelude {

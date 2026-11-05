@@ -152,9 +152,7 @@ impl Insn {
 /// for an unknown id, which the interpreter rejects).
 #[inline]
 pub fn arity(id: u32) -> u32 {
-    super::intrinsics::INTRINSICS
-        .get(id as usize)
-        .map_or(0, |i| i.params as u32)
+    super::intrinsics::params(id)
 }
 
 /// Per opcode, how its immediates decode (0092: one table load instead of walking

@@ -74,14 +74,7 @@ const KIND_WRAP: i32 = 0;
 
 impl Exec<'_> {
     /// `call_intrinsic` for the leaves of 0051; the end of the fallback chain.
-    pub(super) fn late_intrinsic(
-        &mut self,
-        id: u16,
-        name: &str,
-        base: u32,
-        argc: u32,
-        next: u32,
-    ) -> Step {
+    pub(super) fn late_intrinsic(&mut self, id: u16, base: u32, argc: u32, next: u32) -> Step {
         let arg = |ex: &Self, i: u32| {
             if i < argc {
                 ex.get(base + i)
@@ -93,7 +86,7 @@ impl Exec<'_> {
         let v = match id {
             CREATE_ITERATOR_HELPER if FULL => {
                 let Some(kind) = a0.as_int() else {
-                    return bad_argument(name);
+                    return bad_argument(id);
                 };
                 let proto = if kind == KIND_WRAP {
                     Intrinsic::WrapForValidIteratorProto
@@ -131,7 +124,7 @@ impl Exec<'_> {
             }
             DISPOSABLE_STACK_CREATE if FULL => {
                 let Some(proto) = a0.as_object() else {
-                    return bad_argument(name);
+                    return bad_argument(id);
                 };
                 let o = self
                     .heap
@@ -147,7 +140,7 @@ impl Exec<'_> {
             }
             WEAK_REF_CREATE if FULL => {
                 let Some(proto) = a0.as_object() else {
-                    return bad_argument(name);
+                    return bad_argument(id);
                 };
                 let target = arg(self, 1);
                 let o = self.heap.weakref_new(proto, target)?;
@@ -171,7 +164,7 @@ impl Exec<'_> {
             }
             FINALIZATION_REGISTRY_CREATE if FULL => {
                 let Some(proto) = a0.as_object() else {
-                    return bad_argument(name);
+                    return bad_argument(id);
                 };
                 let r = self.heap.registry_new(proto, arg(self, 1))?;
                 let list = intrinsic(self.heap, Intrinsic::Registries)
@@ -201,7 +194,7 @@ impl Exec<'_> {
                     .as_object()
                     .filter(|&o| self.heap.object_class(o) == ObjectClass::FinalizationRegistry);
                 let Some(r) = r else {
-                    return bad_argument(name);
+                    return bad_argument(id);
                 };
                 match id {
                     FINALIZATION_REGISTRY_REGISTER => {
@@ -223,7 +216,7 @@ impl Exec<'_> {
                         let i = arg(self, 1).as_int().and_then(|i| u32::try_from(i).ok());
                         match i.and_then(|i| self.heap.registry_take(r, i)) {
                             Some(v) => v,
-                            None => return bad_argument(name),
+                            None => return bad_argument(id),
                         }
                     }
                     _ => {
@@ -254,13 +247,20 @@ impl Exec<'_> {
             _ if !FULL => {
                 return Err(Fault::error(
                     ErrorKind::InternalError,
-                    crate::text::cat!("%", name, " is not available in this build"),
+                    crate::text::cat!(
+                        "%",
+                        crate::bytecode::intrinsics::intrinsic_name(id),
+                        " is not available in this build"
+                    ),
                 ));
             }
             _ => {
                 return Err(Fault::error(
                     ErrorKind::InternalError,
-                    crate::text::cat!("not supported yet: %", name),
+                    crate::text::cat!(
+                        "not supported yet: %",
+                        crate::bytecode::intrinsics::intrinsic_name(id)
+                    ),
                 ));
             }
         };

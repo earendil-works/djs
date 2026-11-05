@@ -243,7 +243,7 @@ impl Exec<'_> {
             return None;
         }
         // Errors made while it runs get the default trace (qjs's in_prepare_stack_trace).
-        let id = crate::bytecode::intrinsics::intrinsic_id("CallPrepareStackTrace")?;
+        let id = const { crate::bytecode::intrinsics::const_id("CallPrepareStackTrace") };
         let running = realm::installed_intrinsic(self.heap, id);
         let (mut bp, mut hp) = (self.bp, self.hp);
         loop {
@@ -351,9 +351,8 @@ impl Exec<'_> {
     /// handlers that apply are those of `pc`, as for a direct throw.
     pub(super) fn throw_fault(&mut self, f: Fault, pc: u32) -> Option<Status> {
         let exc = self.fault_value(f, Some(pc));
-        if is_pending_stack(self.heap, realm::error_stack_raw(self.heap, exc))
-            && let Some(id) = crate::bytecode::intrinsics::intrinsic_id("ThrowWithStack")
-        {
+        if is_pending_stack(self.heap, realm::error_stack_raw(self.heap, exc)) {
+            let id = const { crate::bytecode::intrinsics::const_id("ThrowWithStack") };
             let throw = realm::installed_intrinsic(self.heap, id);
             let base = self.sp;
             let called = self.ensure(base + 3).and_then(|()| {

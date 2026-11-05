@@ -525,17 +525,121 @@ pub const fn const_id(name: &str) -> u16 {
     panic!("unknown intrinsic")
 }
 
-/// The id of the intrinsic `name`.
-pub fn intrinsic_id(name: &str) -> Option<u16> {
-    INTRINSICS
-        .iter()
-        .position(|i| i.name == name)
-        .map(|i| i as u16)
+// The run-time tables (0225, D3091). [`INTRINSICS`] is a `const`: indexing it at run time
+// would put the whole table in the module, 12 bytes per entry of which 8 are the name's
+// pointer and length, and those pointer tables compress badly. The run time reads a byte
+// per intrinsic for its signature and the names from one string with end offsets.
+
+const COUNT: usize = INTRINSICS.len();
+
+/// Per intrinsic: params in bits 0-4, variadic in bit 5, the kind in bits 6-7.
+static SIGNATURES: [u8; COUNT] = {
+    let mut t = [0u8; COUNT];
+    let mut k = 0;
+    while k < COUNT {
+        let e = &INTRINSICS[k];
+        assert!(e.params < 32);
+        t[k] = e.params | (e.variadic as u8) << 5 | (e.kind as u8) << 6;
+        k += 1;
+    }
+    t
+};
+
+const NAMES_LEN: usize = {
+    let mut n = 0;
+    let mut k = 0;
+    while k < COUNT {
+        n += INTRINSICS[k].name.len();
+        k += 1;
+    }
+    n
+};
+const _: () = assert!(NAMES_LEN <= u16::MAX as usize);
+
+/// All names, back to back.
+static NAMES: [u8; NAMES_LEN] = {
+    let mut t = [0u8; NAMES_LEN];
+    let (mut k, mut at) = (0, 0);
+    while k < COUNT {
+        let n = INTRINSICS[k].name.as_bytes();
+        let mut j = 0;
+        while j < n.len() {
+            t[at] = n[j];
+            at += 1;
+            j += 1;
+        }
+        k += 1;
+    }
+    t
+};
+
+/// Where each name ends in [`NAMES`].
+static NAME_ENDS: [u16; COUNT] = {
+    let mut t = [0u16; COUNT];
+    let (mut k, mut at) = (0, 0);
+    while k < COUNT {
+        at += INTRINSICS[k].name.len();
+        t[k] = at as u16;
+        k += 1;
+    }
+    t
+};
+
+/// An intrinsic's signature, as the run time and the compiler read it.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Signature {
+    pub kind: IntrinsicKind,
+    /// Declared parameters (without a rest parameter, without `this`).
+    pub params: u8,
+    /// Takes `...args` after the declared parameters.
+    pub variadic: bool,
 }
 
-/// The intrinsic with id `id`.
-pub fn intrinsic(id: u16) -> Option<&'static IntrinsicInfo> {
-    INTRINSICS.get(id as usize)
+/// The signature of the intrinsic with id `id`.
+#[inline]
+pub fn intrinsic(id: u16) -> Option<Signature> {
+    let b = *SIGNATURES.get(id as usize)?;
+    let kind = match b >> 6 {
+        0 => IntrinsicKind::Leaf,
+        1 => IntrinsicKind::Reentrant,
+        _ => IntrinsicKind::Builtin,
+    };
+    Some(Signature {
+        kind,
+        params: b & 31,
+        variadic: b & 32 != 0,
+    })
+}
+
+/// The declared parameters of intrinsic `id` (0 for an unknown id).
+#[inline]
+pub fn params(id: u32) -> u32 {
+    SIGNATURES.get(id as usize).map_or(0, |b| (b & 31) as u32)
+}
+
+/// The name of the intrinsic with id `id` ("?" for an unknown id), for messages.
+pub fn intrinsic_name(id: u16) -> &'static str {
+    let i = id as usize;
+    let end = NAME_ENDS.get(i).map_or(0, |&e| e as usize);
+    let start = match i {
+        0 => 0,
+        _ => NAME_ENDS.get(i - 1).map_or(end, |&e| e as usize),
+    };
+    NAMES
+        .get(start..end)
+        .and_then(|b| core::str::from_utf8(b).ok())
+        .filter(|n| !n.is_empty())
+        .unwrap_or("?")
+}
+
+/// All names, by id (from the run-time tables).
+pub fn names() -> impl Iterator<Item = &'static str> {
+    (0..COUNT as u16).map(intrinsic_name)
+}
+
+/// The id of the intrinsic `name`.
+pub fn intrinsic_id(name: &str) -> Option<u16> {
+    (0..COUNT as u16).find(|&i| intrinsic_name(i) == name)
 }
 
 /// FNV-1a over the table (names, kinds, arities, order).
@@ -565,6 +669,11 @@ pub const fn hash_intrinsics(table: &[IntrinsicInfo]) -> u32 {
 }
 
 const _: () = assert!(INTRINSICS.len() <= u16::MAX as usize);
+const _: () = assert!(
+    IntrinsicKind::Leaf as u8 == 0
+        && IntrinsicKind::Reentrant as u8 == 1
+        && IntrinsicKind::Builtin as u8 == 2
+);
 
 #[cfg(test)]
 mod tests {
@@ -686,6 +795,18 @@ mod tests {
         let get = intrinsic_id("Get").unwrap();
         assert_eq!(intrinsic(get).unwrap().kind, IntrinsicKind::Reentrant);
         assert_eq!(intrinsic_id("Nope"), None);
+        // The run-time tables agree with the table.
+        for (k, e) in INTRINSICS.iter().enumerate() {
+            let sig = intrinsic(k as u16).unwrap();
+            assert_eq!(
+                (sig.kind, sig.params, sig.variadic),
+                (e.kind, e.params, e.variadic)
+            );
+            assert_eq!(intrinsic_name(k as u16), e.name);
+            assert_eq!(params(k as u32), e.params as u32);
+        }
+        assert_eq!(intrinsic(COUNT as u16), None);
+        assert_eq!(intrinsic_name(COUNT as u16), "?");
         assert_eq!(
             intrinsic(intrinsic_id("ToPrimitive").unwrap())
                 .unwrap()

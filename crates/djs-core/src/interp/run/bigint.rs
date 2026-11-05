@@ -144,14 +144,7 @@ impl Exec<'_> {
     }
 
     /// `call_intrinsic` for the BigInt leaves; falls back to `late_intrinsic`.
-    pub(super) fn bigint_intrinsic(
-        &mut self,
-        id: u16,
-        name: &str,
-        base: u32,
-        argc: u32,
-        next: u32,
-    ) -> Step {
+    pub(super) fn bigint_intrinsic(&mut self, id: u16, base: u32, argc: u32, next: u32) -> Step {
         let arg = |ex: &Self, i: u32| {
             if i < argc {
                 ex.get(base + i)
@@ -165,7 +158,7 @@ impl Exec<'_> {
             TO_BIGINT_PRIMITIVE if FULL => self.bigint_of_primitive(a0)?,
             NUMBER_TO_BIGINT if FULL => {
                 let Some(n) = a0.as_number() else {
-                    return bad_argument(name);
+                    return bad_argument(id);
                 };
                 let msg = if !n.is_finite() {
                     "cannot convert NaN or Infinity to BigInt"
@@ -181,7 +174,7 @@ impl Exec<'_> {
             }
             BIGINT_TO_STRING if FULL => {
                 let (Some(_), Some(radix)) = (a0.as_bigint(), arg(self, 1).as_int()) else {
-                    return bad_argument(name);
+                    return bad_argument(id);
                 };
                 let x = self.heap.bigint(a0);
                 self.fuel -= x.to_string_cost(radix as u32) as i64;
@@ -191,7 +184,7 @@ impl Exec<'_> {
             BIGINT_AS_INT_N | BIGINT_AS_UINT_N if FULL => {
                 let (Some(bits), Some(_)) = (arg(self, 0).as_number(), arg(self, 1).as_bigint())
                 else {
-                    return bad_argument(name);
+                    return bad_argument(id);
                 };
                 let x = self.heap.bigint(arg(self, 1));
                 let bits = bits as u64;
@@ -206,11 +199,11 @@ impl Exec<'_> {
             }
             BIGINT_TO_NUMBER => {
                 if a0.as_bigint().is_none() {
-                    return bad_argument(name);
+                    return bad_argument(id);
                 }
                 conv::number(self.heap.bigint(a0).to_f64())
             }
-            _ => return self.late_intrinsic(id, name, base, argc, next),
+            _ => return self.late_intrinsic(id, base, argc, next),
         };
         self.sp = base;
         self.push(v);
