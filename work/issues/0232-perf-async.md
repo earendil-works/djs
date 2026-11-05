@@ -83,5 +83,5 @@ js/bench/engines/ops.ts (djs/best QuickJS, load 110-180, noisy): await value 50k
 async call+await 20k 2.86 → 0.12, Promise.all 20 x500 4.58 → 1.17 (that op also times its
 Array.from callback loop).
 
-Size: shipped module 953,410 → 958,976 bytes (+5,566), gzip -9 414,390 → 416,754 (+2,364).
+Size (D3133, vs main 09b8cb8f): shipped module 964,175 → 969,696 bytes (+5,521), gzip -9 420,075 → 422,256 (+2,181); slim +2,327 gzip.
 Most of it is the combinator step (~2.1 KB raw) and the next_job fast paths (~1 KB).

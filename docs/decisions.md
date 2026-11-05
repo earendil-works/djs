@@ -11252,10 +11252,10 @@ every builtin that makes an object with `RealmIntrinsic("…Prototype")`).
 
 ## D3133: Size of 0232; the size ceiling rises by what it measured
 date: 2026-11-06 · by: pasync · issue: 0232 · approved: coordinator
-Measured at the merge (main 3714daaf vs the branch, same build environment): shipped module
-418,773 -> 421,094 gzip (+2,321; 959,766 -> 965,300 raw, +5,534), slim 352,509 -> 354,764
-(+2,255). On top of 0230b's ceilings (D3124): ceiling_gzip 420,571 -> 422,892 and
-slim_ceiling_gzip 354,341 -> 356,596: the ratchet rises by exactly that (~1.475x quickjs-wasi,
+Measured at the merge (main 09b8cb8f, after 0230b, vs the branch, same build environment):
+shipped module 420,075 -> 422,256 gzip (+2,181; 964,175 -> 969,696 raw, +5,521), slim 353,818 ->
+356,145 (+2,327). On top of 0230b's ceilings (D3124): ceiling_gzip 420,571 -> 422,752 and
+slim_ceiling_gzip 354,341 -> 356,668: the ratchet rises by exactly that (~1.473x quickjs-wasi,
 under the 1.5x budget). Code bytes (perf build with
 names): the combinator step with its run loop (D3131) ~2.1 KB, next_job's fast paths (await
 resumption, Promise.all element jobs) ~1 KB, the await/return op paths ~0.6 KB, the plain-lookup
