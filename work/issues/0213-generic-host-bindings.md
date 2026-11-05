@@ -69,6 +69,23 @@ D2970-D2989.
   CLI answers by full name only; batch 1 (engine, wasm, Rust hosts) now, rebased onto 0212 before merging;
   batch 3 (pi, CLI --bind) after pjr's merge.
 
+- Batch 1 (engine, wasm, hosts' loaders): dumps write host values as `$djs.host(name)`
+  (functions by identity, roots and their members as reads on the root); `DumpOptions::host_roots`,
+  `vm_dump` sixth line, ABI 5; the identifier refusal and D2618's captured-global special case gone.
+  Every loader had to serve the new hook in the same merge (a dump with any host value calls it),
+  so batch 1 also carries: CLI (`Tools::host_value`), difftest, e2e/unit test loaders,
+  scripts/plain-node.mjs, examples/sleep-dump, the Sandbox (namespaces incl. `console` are roots,
+  one function handle per identity, `host` hook) and pi's adapter (identities `bridge`/`call`,
+  supersedes D2893 as D2973; `host` answers with the prelude's own functions and its globals).
+  `Vm::global_path` for hosts that bind by path. Tests: dump_tests (myTool bound only as a
+  parameter, an `sdk` root that is no global, identity after load), Sandbox dumpresume case
+  "held host values" (`sdk.fetch`), CLI every-idle-point case with held tools. dump-size score
+  +0.7% raw, +0.5% gzip (updated). Decisions D2970, D2971, D2973. Docs: host.md,
+  plain-js-dumps.md, continuation-dumps.md, guide host.md. pi --next --dump-every-idle on a debug
+  module: 2 timing failures (a 5 s timeout, debug speed), not dump-related.
+- Batch 2 (next): Sandbox `globals`/`bindings` options (D2972), CLI `--bind` and answers by
+  full name, docs runner without body params, remaining docs.
+
 ## Follow-ups
 
 ## Result
