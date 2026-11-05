@@ -567,6 +567,7 @@ function PerformPromiseCombinator(thisValue: Value, iterable: Value, kind: i32):
     RecordSet(fixed, 5, resolveFn);
     RecordSet(fixed, 6, rejectFn);
     while (true) {
+      index = PromiseCombinatorRun(fixed, kind, index, it, next);
       iteratorDone = true;
       // Without a result object where that is unobservable (D1800).
       let nextValue: Value = undefined;

@@ -807,6 +807,12 @@ declare function PerformPromiseThen(p: Obj, onFulfilled: Value, onRejected: Valu
  * @leaf
  */
 declare function PromiseCombinatorStep(fixed: Obj, kind: i32, index: f64, x: Value): boolean;
+/**
+ * PromiseCombinatorStep for the elements an Array values iterator gives without user code
+ * (as `IteratorFastValue` would), one after another while the step takes them: the next
+ * index. @leaf
+ */
+declare function PromiseCombinatorRun(fixed: Obj, kind: i32, index: f64, iterator: Obj, next: Value): f64;
 /** Queues NewPromiseResolveThenableJob ( promise, thenable, then ), 27.2.2.2. @leaf */
 declare function EnqueuePromiseResolveThenableJob(p: Obj, thenable: Obj, then: Value): void;
 /** A new internal Record with n slots, all undefined. @leaf */

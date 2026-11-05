@@ -190,6 +190,14 @@ impl Exec<'_> {
         Some(v)
     }
 
+    /// The element `iter_next_hit` would return, without advancing.
+    pub(super) fn iter_next_peek(&self, it: Value, f: Value) -> Option<Value> {
+        match self.iter_plan(it, f) {
+            Plan::Elem(_, v, _, 1) => Some(v),
+            _ => None,
+        }
+    }
+
     /// Whether `iter_fast_next` would produce a value (`%IteratorFastReady`).
     pub(super) fn iter_fast_ready(&self, it: Value, f: Value) -> bool {
         matches!(self.iter_plan(it, f), Plan::Str(..) | Plan::Elem(..))
