@@ -28,3 +28,36 @@ frame's closure that data reaches); fixed. dump_perf counted refusals as nothing
   provider and factory lookups, `Vec::contains` of keys: quadratic in data items),
   `scan` 42% (each item's text scanned again per use).
 - binary load: `Uint8Array.fromBase64` searched the alphabet per digit (fixed: 390 -> 171 M).
+
+## After batches 1-2 (main 1ddec501) and the builtins substring (M instructions)
+
+| | 0198 dump | dump | dump, check off | 0198 load | load | re-dump | re-dump, check off |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| corpus | 12,262 | 16,282 | 8,603 | 9,076 | 9,597 | 22,292 | 14,804 |
+| records | 2,311 | 4,131 | ~3,760 | 4,226 | 4,368 | 5,922 | ~4,700 |
+| log-5mb | 1,279 | 1,653 | | 895 | 821 | 1,486 | |
+| binary | 128 | 218 | | 159 | 164 | 295 | |
+
+Where the time goes now:
+- Corpus dump: the check ~47% (its compile ~75% of that: parse ~45%, resolve and
+  emit ~55%), plain::write ~24% (pjs's canonical K generation ~9%), visit ~7%.
+- Corpus re-dump: the check ~47%, plain::write ~19%, visit ~8%, `BaseTable::new` ~4%
+  (a fresh VM builds the builtin table again).
+- Corpus load: the dump's compile ~85% (recording its maps for the next dump ~11% of
+  the load); the rest runs it.
+- records dump: plain::write ~50% (scan of each item ~30%, schedule ~30%), the
+  Dumper's own rendering of the data (format-2 IR lines) ~20%, visit ~11%.
+
+Later items (not done):
+1. The check's compile without code generation (parse and resolve only, the free
+   names from the scopes): roughly halves the check (~-20% of a dump, -15% of a
+   re-dump). Compiler work.
+2. Writing plain directly: the Dumper renders format-2-shaped lines that plain::write
+   reads back (classifies, scans for references, schedules). Rendering items with their
+   references already known would drop most of the scan (~30% of a data-heavy dump) and
+   the read-back. A rewrite of the Dumper/writer boundary.
+3. Loads compile every function body of the dump, also those that never run (the
+   factories' closures, the origins written for re-dumps). Lazy function compilation
+   would cut the ~85% compile share of a load. Compiler work, large.
+4. The base builtin table per fresh VM (`BaseTable`, ~4% of a re-dump in pi's fresh-VM
+   model): carry it in the dump cache a host passes on (`Vm::set_dump_cache`).
