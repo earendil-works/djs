@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0223 | Refresh every benchmark, table and published measurement (owner) | meas | .worktrees/meas |
 
 ## Open (ready)
 
@@ -17,10 +16,12 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| - | (in 0223) Guide figures not re-measured (heap, arena, compiler, gc, builtins): re-measure or make them gen:status numbers; run.rs module comment lists a safepoint the code lacks (0220 follow-ups) | ready |
 | - | Stale entry in tests/pi/expected-failures.txt (next mode): update the ratchet | ready |
 | - | Paused, agents archived (owner): 0207 dump size (fluff queue items 8, 9, 11; crossing-callbacks and for-in.iterator refusals), 0211 fuzzing, 0215 performance (Result written) | restart on request |
 | - | fuzz.mjs reduce left an orphaned djs-difftest at 100% CPU for 15 h (likely a reduced candidate with an endless loop, run without a timeout): wrap reduce's runs in scripts/timeout.sh / a fuel cap; check whether it was an engine hang instead | ready |
+| - | Native regressions since 2026-11-01 (0223): regexp/compile +26-83%, gc per MiB +60-66%, wire/stringify 10k-objects +48% (confirmed); UTF-16 literal regexp scans, wasm/instantiate, engine/djs/empty (one run) | ready |
+| - | status.py should record the commit of the measured engine sources, not HEAD (0223) | ready |
+| - | pi adapter fuel slice ~12,700 for QuickJS-equivalent interrupt budgets (0223; pi-side) | owner |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
 | - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |
@@ -90,6 +91,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0198 | Dump performance: corpus dump p50 1.42 -> 0.43 ms wasm, totals 3,243 -> 610 ms; data cases 2-6x (D2800-D2802) | 429184db (agent dumpperf) |
 | - | base_equals_a_compiled_realm test fixed (8f0fdd72); gate recovers from incremental corruption (D2896, b55180dd); CLI/REPL call states (D2894) | agent pjh |
 | 0220 | Guide rewrite: Using djs / How it works / Reference, JS API, dumps, CLI, pi page; live Run/Continue with debugger pauses at exact positions (D3050-D3054) | 13002add (agent guide) |
+| 0223 | Measurements refreshed; inline generated numbers in prose (D3070); status.py measures pi/startup/dumps/bounds/heap/bench | a8b704d8 (agent meas) |
 | 0222 | sleep-dump example instant (release dump module, compile cache), output before sleeps, 1 s; --restart fixed | fde5b7f4 (agent sleepy) |
 | 0221 | `debugger;` pauses in the CLI: REPL .c/.abort, run/resume --debugger (D3060) | 00cd7d63 (agent dbg) |
 | 0219 | Compile cache across VMs + suspension maps carried between dumps (D3040, D3041; dump module only) | d92b15f4 (agent lazy; pi -6% instructions per session) |

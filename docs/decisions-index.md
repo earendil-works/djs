@@ -725,3 +725,4 @@ topics when the index is next reorganized.
 - D3053: live examples pause at `debugger;` in their normal Run
 - D3054: where a run waits: `Vm::call_site`, `vm_call_site`, `Sandbox.callSite`
 - D3027: An object literal's method that uses `super` is made where its home is
+- D3070: Measured figures in prose are inline status numbers
