@@ -169,10 +169,10 @@ def speed(n):
     return new
 
 
-def node(*args, env=None):
+def node(*args, env=None, check=True):
     r = subprocess.run(["node", *args], cwd=ROOT, capture_output=True, text=True,
                        env=dict(os.environ, **(env or {})))
-    if r.returncode != 0:
+    if check and r.returncode != 0:
         sys.exit(f"status.py: node {' '.join(args)} failed:\n{r.stdout[-3000:]}\n{r.stderr[-3000:]}")
     return r.stdout
 
@@ -190,8 +190,9 @@ def pi():
         ("pi/dump", ["--next", "--dump-every-idle"], {"DJS_WASM": DUMP}),
     ]
     for key, flags, env in modes:
+        # Failing tests make it exit non-zero; the count is what is recorded.
         out = node("js/pi/pi-tests.ts", *flags, "--out", f"target/status-{key.replace('/', '-')}",
-                   env=env)
+                   env=env, check=False)
         m = re.search(r"^(\d+) / (\d+) passed", out, re.M)
         if not m:
             sys.exit(f"status.py: no pass count from pi-tests {' '.join(flags)}:\n{out[-2000:]}")
