@@ -27,6 +27,7 @@ use crate::bytecode::decode::arity;
 use crate::bytecode::special;
 use crate::bytecode::{OPS, Op};
 use crate::heap::cells::{FuncTemplate, Header, Object, Realm, Roots, ValueArray};
+use crate::heap::layout::{arena_read, arena_write};
 use crate::heap::{Atom, ObjectClass, atoms};
 use crate::interp::conv;
 use crate::interp::frame::{self, Continuation, HEADER};
@@ -64,32 +65,25 @@ fn out_of_bounds() -> ! {
     panic!("arena access out of bounds")
 }
 
-/// The Value at byte offset `off` (one-sided check).
+// The single-field accessors go through the arena's own (heap/layout/access.rs): one
+// compare, or none in the shipped wasm modules (`unsafe-heap`, D3100). Kept checked
+// here, the slot loads and stores of every instruction were ~5% of a tight loop's
+// instructions. The block writes below keep one slice check per block.
+
+/// The Value at byte offset `off`.
 #[inline(always)]
 pub(super) fn ld(b: &[u8], off: u32) -> Value {
-    let o = off as usize;
-    match b.get(o..o + 8) {
-        Some(s) => Value::from_raw(u64::from_le_bytes(s.try_into().unwrap())),
-        None => out_of_bounds(),
-    }
+    Value::from_raw(u64::from_le_bytes(arena_read(b, off as usize)))
 }
 
 #[inline(always)]
 fn st(b: &mut [u8], off: u32, v: Value) {
-    let o = off as usize;
-    match b.get_mut(o..o + 8) {
-        Some(s) => s.copy_from_slice(&v.to_bits().to_le_bytes()),
-        None => out_of_bounds(),
-    }
+    arena_write(b, off as usize, v.to_bits().to_le_bytes())
 }
 
 #[inline(always)]
 fn ld32(b: &[u8], off: u32) -> u32 {
-    let o = off as usize;
-    match b.get(o..o + 4) {
-        Some(s) => u32::from_le_bytes(s.try_into().unwrap()),
-        None => out_of_bounds(),
-    }
+    u32::from_le_bytes(arena_read(b, off as usize))
 }
 
 /// `n` Values at `off` set to `v`, with one range check.
@@ -179,11 +173,7 @@ pub(super) fn template_head(b: &[u8], t: u32) -> TemplateHead {
 /// `N` bytes at `off`, with one range check.
 #[inline(always)]
 fn window<const N: usize>(b: &[u8], off: u32) -> [u8; N] {
-    let o = off as usize;
-    match b.get(o..o + N) {
-        Some(s) => s.try_into().unwrap(),
-        None => out_of_bounds(),
-    }
+    arena_read(b, off as usize)
 }
 
 fn u16_at(w: &[u8], i: usize) -> u32 {

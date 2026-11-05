@@ -26,6 +26,8 @@
 use core::marker::PhantomData;
 
 mod access;
+// For the tier-0 loop's own accessors (interp/run/hot.rs), which take the arena as a slice.
+pub(crate) use access::{read as arena_read, write as arena_write};
 
 use crate::value::Value;
 
