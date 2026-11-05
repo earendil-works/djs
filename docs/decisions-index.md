@@ -696,3 +696,5 @@ topics when the index is next reorganized.
 - D2993: The dump module compiles lazily; the dumper reads lazy templates
 - D3001: Values used once are written where they are used
 - D3020: Dumps take the base's builtin names from the build, not from a walk of the base
+- D2994: A lazy VM loads a plain dump lazily; maps of other functions on demand
+- D2995: Functions that run at once stay eager: call arguments, parenthesized, async
