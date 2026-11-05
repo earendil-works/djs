@@ -360,6 +360,7 @@ corpus	language/generator-prototype.js	3529	1285
 corpus	language/plain-fuzz/await-using-continue-after-catch.js	10671	4109
 corpus	language/plain-fuzz/await-using-hoisted-function.js	2866	1138
 corpus	language/plain-fuzz/await-using-redump.js	7399	2966
+corpus	language/plain-fuzz/crossing-callbacks.js	7560	2768
 corpus	language/redump-using-jumps.js	67184	25512
 corpus	language/redump-using.js	5202	2079
 corpus	language/using-site.js	31464	10107

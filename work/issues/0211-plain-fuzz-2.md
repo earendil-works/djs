@@ -63,6 +63,11 @@ jobs, wait while load > 30) and gate rules (batch merges, check slim/test262-sli
   results, seeds 9922/9828) and 05e7a4ad (D3005: re-dump text refusal, seed 10014). Their
   programs are in regress/ (s12-*). `regress` now takes its fresh seeds from a random,
   printed start.
+- pjs fixed all three (d881a8c4). Seeds 10101–10700 (lazy and --big): a new refusal,
+  "crossing callbacks" (for of over a generator's iterator helpers + nested Promise.all
+  in an async function; case language/plain-fuzz/crossing-callbacks.js, language/ since
+  the slim build has no iterator helpers). regress ignores deliberate refusals
+  (regress/deliberate.txt).
 
 ## Follow-ups
 

@@ -1,3 +1,4 @@
+// In language/, not codemode/: the slim build has no iterator helpers (D2411).
 // Found by the plain-dump fuzzer (0211): in an async function, a `for of` over iterator
 // helpers of a generator that captures a variable of the body, with nested
 // `Promise.all` over mapped closures in the loop body.
