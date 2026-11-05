@@ -373,7 +373,10 @@ pub fn value(st: &Status, key: &str, fmt: &str) -> Result<String, Missing> {
 /// a page that may name pi lists those whose key names pi (its tests, its benchmark,
 /// the pi-like workload), and it lists only those.
 fn recorded(st: &Status, pi: bool) -> String {
-    let names_pi = |k: &str| k.split(|c: char| !c.is_ascii_alphanumeric()).any(|w| w == "pi");
+    let names_pi = |k: &str| {
+        k.split(|c: char| !c.is_ascii_alphanumeric())
+            .any(|w| w == "pi")
+    };
     let mut s = String::from("| measurement | value | measured at |\n| --- | ---: | --- |\n");
     for (k, (v, c, d)) in st.recorded.iter().filter(|(k, _)| names_pi(k) == pi) {
         let at = if c.len() == 4 && c.bytes().all(|b| b.is_ascii_digit()) {
