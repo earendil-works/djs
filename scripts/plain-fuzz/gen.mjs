@@ -263,6 +263,8 @@ class Gen {
       [2, () => `${this.obj(d - 1)}.${this.pick(["a", "b"])}`],
       [1, () => `${this.arr(d - 1)}.reduce((s, x) => s + x, ${sub()})`],
       [1, () => `Math.max(${sub()}, ${sub()})`],
+      [this.opts.wide && a ? 1 : 0, () => `(Math?.max?.(${sub()}, await ${this.tool(sub())}) ?? 0)`],
+      [this.opts.wide ? 1 : 0, () => `((s, ...v) => s.length + v.length)\`a\${${sub()}}b\${${sub()}}\``],
       [1, () => `[${sub()}, ${sub()}][${this.rand(2)}]`],
       [2, () => this.callNum(d)],
       [a ? 1 : 0, () => `(await (async () => (${sub()}))())`],
@@ -294,6 +296,13 @@ class Gen {
           [2, () => `${f.name}.get(${arg()})`],
           [2, () => `${f.name}.twice`],
           [1, () => `(${f.name}.value = ${arg()})`],
+          [
+            this.opts.wide && this.canAwait() ? 1 : 0,
+            () => {
+              this.awaits += this.fn.mult;
+              return `(await ${f.name}.later(${arg()}))`;
+            },
+          ],
           [this.opts.wide ? 1 : 0, () => `(${f.name}.v = ${arg()})`],
           [this.opts.wide ? 1 : 0, () => `${f.name}.v`],
           [
@@ -479,6 +488,8 @@ class Gen {
       [this.opts.using && d > 0 ? 1 : 0, () => this.usingStmt(d)],
       [this.fn.loops.length ? 1 : 0, () => this.jumpStmt()],
       [this.vars((v) => WIDE.includes(v.type) && (v.type !== "big" || v.mut)).length ? 3 : 0, () => this.wideStmt()],
+      [this.opts.wide && d > 0 ? 1 : 0, () => this.labeledBlock(d)],
+      [this.opts.wide && this.varOf("obj") ? 1 : 0, () => this.line(`delete ${this.varOf("obj")}.${this.pick(["a", "b", "c"])};`)],
     ]);
   }
   declStmt() {
@@ -660,6 +671,17 @@ class Gen {
     );
     this.line(`}`);
   }
+  // A labelled block left early by `break`, around awaits (0211).
+  labeledBlock(d) {
+    const l = this.fresh("B");
+    this.line(`${l}: {`);
+    this.block(() => {
+      this.stmts(1 + this.rand(2), d - 1);
+      this.line(`if (${this.bool(1)}) break ${l};`);
+      this.stmts(1 + this.rand(2), d - 1);
+    });
+    this.line(`}`);
+  }
   jumpStmt() {
     const loops = this.fn.loops;
     const inner = loops[loops.length - 1];
@@ -785,6 +807,7 @@ class Gen {
     }
     this.line(`  get(x) { return this.value + x + ${cap}; }`);
     this.line(`  async fetch(x) { return this.value + (await tools.echo(x)); }`);
+    if (this.opts.wide) this.line(`  async later(x) { const f = () => this.value + x; await tools.echo(x); return f(); }`);
     this.line(`  static make(v) { return new ${c}(v + 1); }`);
     this.line(`}`);
     this.declare(c, "cls");
