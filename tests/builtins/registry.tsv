@@ -1639,12 +1639,7 @@
 1634	intrinsic	ArgumentCount
 1635	intrinsic	Throw
 1636	intrinsic	RegExpExecOwn
-1635	intrinsic	PromiseCombinatorStep
-1636	intrinsic	PromiseSpecies
-1637	intrinsic	PromiseStaticResolve
-1638	intrinsic	PromisePrototypeThen
-1639	intrinsic	PromiseCombinatorRun
-1635	intrinsic	PromiseSpecies
-1636	intrinsic	PromiseStaticResolve
-1637	intrinsic	PromisePrototypeThen
-1638	intrinsic	PromiseCombinatorRun
+1637	intrinsic	PromiseSpecies
+1638	intrinsic	PromiseStaticResolve
+1639	intrinsic	PromisePrototypeThen
+1640	intrinsic	PromiseCombinatorRun
