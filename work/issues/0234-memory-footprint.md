@@ -1,7 +1,7 @@
 # 0234: Memory footprint: idle and per-run linear memory vs QuickJS
 
-status: open
-agent: -
+status: in-progress
+agent: pmem
 branch: issue/0234-memory-footprint
 depends-on: -
 guide: gc.md, limits.md, arena.md if behaviour changes
