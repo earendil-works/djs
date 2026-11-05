@@ -48,7 +48,8 @@ builtin's template is 48 bytes plus its code.
 The functions of one compilation unit share one constant pool (D2446): a string or number
 that many functions use, an error message or a property name passed as a string, is
 stored once, and the unit pays one cell header instead of one per function. The top
-level gets a pool of its own, since it runs once. Indexes are handed out as the functions
+level gets a pool of its own, since it runs once, and with lazy functions so does every
+function that may compile lazily (see below). Indexes are handed out as the functions
 are emitted, so the short `push_const8` form covers the first 256 constants. The base
 image drops the entries that only dead code used (the prelude's set-up code), keeping
 the order, so every index only gets smaller and the code is patched in place.
@@ -318,6 +319,39 @@ paths cut the instructions executed by the tightest benchmark loops by 35 to 38%
 > in parse order. The cost is instruction count, which the peepholes, the interpreter's
 > fast paths and inline caches claw back where it matters.
 
+## Lazy functions
+
+In builds with the `lazy` feature (natively and in the dump module, not in the shipped
+main and slim modules), a VM can compile function bodies at their first call (D2990).
+The unit is still parsed whole: every early error is reported when the script loads,
+and name resolution still sees every function, so it knows which bindings inner
+functions capture and the enclosing code is unchanged. Only the second half, the re-emit
+and the template, is skipped for a function that is not called where it is defined.
+That function gets a *lazy template*: its real flags, name, length and capture
+descriptors, and the single instruction `lazy` as its code. Creating closures, `name`,
+`length` and `toString` work on it as on any template.
+
+The first call enters the frame as usual and runs `lazy`. It parses the function's own
+text again, with a stand-in for the enclosing function that binds one variable per
+capture, emits it, switches the closure to the compiled template and continues in the
+same frame. The compiled template is kept on the lazy one, so later closures pay a
+check, not a compile. Since the first half was done for everything, nothing can fail at
+that point except memory.
+
+A function's code is the same whether it is compiled with its unit or at its first call
+(D2991): a function that may compile lazily has a constant pool of its own in every
+compile, and the rule for what is lazy looks only at the function and its parent. This
+matters because the maps that name a suspended frame's slots come from another compile of
+the same source.
+
+> **Trade-off.** Parse twice over keeping a tree. A function that runs is parsed twice,
+> at load and at its first call, which costs about half its compile again; one that
+> never runs costs about 40% of a compile instead of all of it. Keeping the first parse's
+> state for later would need a second code format in the heap. Lazy compilation
+> wins where most functions never run (dumps, libraries, the dump runtime) and loses on
+> codemode scripts, whose callbacks all run. That is why the shipped codemode modules
+> leave it out.
+
 ## Limits
 
 The compiler recurses on the Rust stack, unlike the interpreter: compilation is bounded
@@ -349,7 +383,7 @@ REPL (D004, D1581).
 
 Decisions on this page:
 
-<!-- gen:decisions D1080 D1360 D1081 D1083 D1082 D1130 D1131 D1860 D1620 D1480 D1481 D1482 D008 D1582 D2443 D2444 D2446 -->
+<!-- gen:decisions D1080 D1360 D1081 D1083 D1082 D1130 D1131 D1860 D1620 D1480 D1481 D1482 D008 D1582 D2443 D2444 D2446 D2990 D2991 -->
 - D1080: Speculative parsing never emits bytecode
 - D1360: destructuring patterns are parsed after their value (deferred patterns)
 - D1081: Name resolution runs once per compilation unit, children first
@@ -367,4 +401,6 @@ Decisions on this page:
 - D2443: Short opcode forms and shortened jumps, a recorded trade
 - D2444: Code inline in the template, the rest of a user function in FuncInfo
 - D2446: One constant pool per compilation unit
+- D2990: Lazy function compilation, a `lazy` feature on in native and dump builds
+- D2991: Eager and lazy compiles give a function the same code
 <!-- /gen -->

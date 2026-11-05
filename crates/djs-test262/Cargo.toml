@@ -16,10 +16,12 @@ test = false
 path = "src/main.rs"
 
 [features]
-default = ["full", "unicode"]
+default = ["full", "unicode", "lazy"]
 # djs-core's features (D2411): `--no-default-features` builds against the slim engine.
 full = ["djs-prelude/full"]
 unicode = ["djs-prelude/unicode"]
+# `--lazy`: lazy functions (D2990).
+lazy = ["djs-core/lazy"]
 
 [dependencies]
 djs-core = { path = "../djs-core", default-features = false }

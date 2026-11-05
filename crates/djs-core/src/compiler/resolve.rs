@@ -226,6 +226,7 @@ pub(super) fn free_names(
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Unit {
     /// Lazy functions get lazy templates (`lazy_roots`), compiled at their first call.
+    #[cfg_attr(not(feature = "lazy"), allow(dead_code))]
     pub lazy: bool,
     /// A lazy function compiled on its own (compiler/lazy.rs): function 0 is the
     /// stand-in for its enclosing function and is not emitted, function 1 is the result.
@@ -248,6 +249,11 @@ impl Unit {
         col: 1,
     };
 
+    /// The source offset of the parsed text (0 without lazy functions).
+    fn base(&self) -> u32 {
+        if cfg!(feature = "lazy") { self.base } else { 0 }
+    }
+
     /// The line and column of source offset `pos` of the parsed text.
     fn line_col(
         &self,
@@ -257,6 +263,9 @@ impl Unit {
         cursor: &mut crate::lexer::LineCursor,
     ) -> (u32, u32) {
         let (line, col) = lt.line_col_from(src, pos, cursor);
+        if !cfg!(feature = "lazy") {
+            return (line, col);
+        }
         let col = if line == 1 { col + self.col - 1 } else { col };
         (line + self.line - 1, col)
     }
@@ -267,6 +276,7 @@ impl Unit {
 /// function decides the same as the whole unit's, and every eligible function gets a
 /// constant pool of its own in every compile: its code is the same either way, which the
 /// suspension maps of an eager compile rely on.
+#[cfg(feature = "lazy")]
 fn lazy_roots(
     funcs: &[FuncState],
     resolved: &[Vec<Resolved>],
@@ -274,7 +284,7 @@ fn lazy_roots(
     privileged: bool,
 ) -> Vec<bool> {
     let mut lazy = vec![false; funcs.len()];
-    if privileged || !cfg!(feature = "lazy") {
+    if privileged {
         return lazy;
     }
     for (id, f) in funcs.iter().enumerate().skip(if unit.root { 2 } else { 1 }) {
@@ -289,8 +299,8 @@ fn lazy_roots(
     }
     // Names resolved through TypeScript declarations (const enums, namespace members)
     // need the unit's declarations: such a function and all around it stay eager.
-    for id in 0..funcs.len() {
-        if resolved[id]
+    for (id, res) in resolved.iter().enumerate() {
+        if res
             .iter()
             .any(|r| r.decl.is_some() || matches!(r.target, Target::Member(_)))
         {
@@ -302,6 +312,115 @@ fn lazy_roots(
         }
     }
     lazy
+}
+
+/// Which functions a unit emits as code or as lazy templates, and their constant pools
+/// (D2446): the top level has its own (it runs once, and its constants need not live as
+/// long as the functions it creates), every lazy-eligible function one shared with the
+/// functions inside it that are not (D2990), and the rest share pool 1. A lazily
+/// compiled function (`Unit::root`, id 1) is in pool 1.
+#[cfg(feature = "lazy")]
+struct Plan {
+    pool_of: Vec<usize>,
+    pools: usize,
+    /// 0 nothing (inside a lazy function, or the stand-in of a root), 1 a lazy template,
+    /// 2 code.
+    emit: Vec<u8>,
+    /// The attributes of every capture (`capture_desc::IMMUTABLE`, `CHECKED`) of the
+    /// lazy templates.
+    cap_attrs: Vec<Vec<u32>>,
+}
+
+#[cfg(feature = "lazy")]
+impl Plan {
+    fn new(funcs: &[FuncState], resolved: &[Vec<Resolved>], unit: &Unit, privileged: bool) -> Plan {
+        let eligible = lazy_roots(funcs, resolved, unit, privileged);
+        let mut pools = 2;
+        let mut pool_of = vec![0usize; funcs.len()];
+        let mut emit = vec![2u8; funcs.len()];
+        if unit.root {
+            emit[0] = 0;
+        }
+        for id in 1..funcs.len() {
+            let p = funcs[id].parent.map_or(0, |(p, _)| p as usize);
+            if emit[p] < 2 && !(unit.root && id == 1) {
+                emit[id] = 0;
+            } else if eligible[id] && unit.lazy {
+                emit[id] = 1;
+            }
+            pool_of[id] = if eligible[id] {
+                pools += 1;
+                pools - 1
+            } else if p == 0 {
+                1
+            } else {
+                pool_of[p]
+            };
+        }
+        // Parents first: an `Outer` capture has its parent's attributes.
+        let mut cap_attrs: Vec<Vec<u32>> = vec![Vec::new(); funcs.len()];
+        for id in (1..funcs.len()).filter(|_| unit.lazy) {
+            let Some((p, _)) = funcs[id].parent else {
+                continue;
+            };
+            let p = p as usize;
+            let attrs = funcs[id]
+                .captures
+                .iter()
+                .map(|c| match *c {
+                    Capture::Local(v) => {
+                        let var = &funcs[p].vars[v as usize];
+                        let mut a = 0;
+                        if var.kind.is_immutable() {
+                            a |= capture_desc::IMMUTABLE;
+                        }
+                        if var.kind.is_lexical()
+                            || (var.kind == VarKind::Param && !funcs[p].simple_params)
+                        {
+                            a |= capture_desc::CHECKED;
+                        }
+                        a
+                    }
+                    Capture::Outer(n) => cap_attrs[p].get(n as usize).copied().unwrap_or(0),
+                })
+                .collect();
+            cap_attrs[id] = attrs;
+        }
+        Plan {
+            pool_of,
+            pools,
+            emit,
+            cap_attrs,
+        }
+    }
+
+    fn pools(&self) -> Vec<UnitPool> {
+        (0..self.pools).map(|_| UnitPool::default()).collect()
+    }
+
+    fn pool(&self, id: usize) -> usize {
+        self.pool_of[id]
+    }
+}
+
+/// Without lazy functions: every function emitted, the top level in pool 0, the rest in
+/// pool 1.
+#[cfg(not(feature = "lazy"))]
+struct Plan;
+
+#[cfg(not(feature = "lazy"))]
+impl Plan {
+    fn new(_: &[FuncState], _: &[Vec<Resolved>], _: &Unit, _: bool) -> Plan {
+        Plan
+    }
+
+    fn pools(&self) -> [UnitPool; 2] {
+        [UnitPool::default(), UnitPool::default()]
+    }
+
+    fn pool(&self, id: usize) -> usize {
+        usize::from(id != 0)
+    }
 }
 
 /// Resolves all functions of the unit and writes their templates. `funcs` is indexed
@@ -400,85 +519,31 @@ pub(super) fn finish(
         alloc_script(heap, name, source, opts.bits(), params)?
     };
     let line_table = LineTable::new(src);
-    // Pools (D2446): the top level has its own (it runs once, and its constants need not
-    // live as long as the functions it creates), every lazy-eligible function one shared
-    // with the functions inside it that are not (D2990), and the rest share pool 1. A
-    // lazily compiled function (`root`, id 1) is in pool 1.
-    let eligible = lazy_roots(&funcs, &resolved, unit, opts.privileged);
-    let mut pools = vec![UnitPool::default(), UnitPool::default()];
-    let mut pool_of = vec![0usize; funcs.len()];
-    // What is emitted: 0 nothing (inside a lazy function), 1 a lazy template, 2 code.
-    let mut emit = vec![2u8; funcs.len()];
-    if unit.root {
-        emit[0] = 0;
-    }
-    for id in 1..funcs.len() {
-        let p = funcs[id].parent.map_or(0, |(p, _)| p as usize);
-        if emit[p] < 2 && !(unit.root && id == 1) {
-            emit[id] = 0;
-        } else if eligible[id] && unit.lazy {
-            emit[id] = 1;
-        }
-        pool_of[id] = if eligible[id] {
-            pools.push(UnitPool::default());
-            pools.len() - 1
-        } else if p == 0 {
-            1
-        } else {
-            pool_of[p]
-        };
-    }
-    // The attributes of every capture (`capture_desc::IMMUTABLE`, `CHECKED`), for lazy
-    // templates (parents first).
-    let mut cap_attrs: Vec<Vec<u32>> = vec![Vec::new(); funcs.len()];
-    for id in 1..funcs.len() {
-        let Some((p, _)) = funcs[id].parent else {
-            continue;
-        };
-        let p = p as usize;
-        let attrs = funcs[id]
-            .captures
-            .iter()
-            .map(|c| match *c {
-                Capture::Local(v) => {
-                    let var = &funcs[p].vars[v as usize];
-                    let mut a = 0;
-                    if var.kind.is_immutable() {
-                        a |= capture_desc::IMMUTABLE;
-                    }
-                    if var.kind.is_lexical()
-                        || (var.kind == VarKind::Param && !funcs[p].simple_params)
-                    {
-                        a |= capture_desc::CHECKED;
-                    }
-                    a
-                }
-                Capture::Outer(n) => cap_attrs[p].get(n as usize).copied().unwrap_or(0),
-            })
-            .collect();
-        cap_attrs[id] = attrs;
-    }
+    let plan = Plan::new(&funcs, &resolved, unit, opts.privileged);
+    let mut pools = plan.pools();
     let mut templates: Vec<Ref> = vec![Ref::NULL; funcs.len()];
     let mut scratch = Scratch::default();
     for id in (0..funcs.len()).rev() {
         let f = &mut funcs[id];
         let parent_storage = f.parent.map(|(p, _)| &storages[p as usize].0);
-        if emit[id] == 0 {
-            continue;
-        }
-        if emit[id] == 1 {
-            templates[id] = emit_lazy(
-                heap,
-                f,
-                parent_storage,
-                &cap_attrs[id],
-                &line_table,
-                src,
-                script,
-                unit,
-                &mut scratch,
-            )?;
-            continue;
+        #[cfg(feature = "lazy")]
+        match plan.emit[id] {
+            0 => continue,
+            1 => {
+                templates[id] = emit_lazy(
+                    heap,
+                    f,
+                    parent_storage,
+                    &plan.cap_attrs[id],
+                    &line_table,
+                    src,
+                    script,
+                    unit,
+                    &mut scratch,
+                )?;
+                continue;
+            }
+            _ => {}
         }
         let mut phase1 = core::mem::take(&mut f.code)
             .finish()
@@ -502,24 +567,33 @@ pub(super) fn finish(
             src,
             script,
             unit,
-            &mut pools[pool_of[id]],
+            &mut pools[plan.pool(id)],
             &mut scratch,
             #[cfg(feature = "dump")]
             maps.as_deref_mut(),
         )?;
         templates[id] = t;
     }
-    for (i, pool) in pools.iter().enumerate() {
-        if pool.values.is_empty() {
-            continue;
-        }
-        let members: Vec<Ref> = (0..funcs.len())
-            .filter(|&id| pool_of[id] == i && emit[id] == 2)
-            .map(|id| templates[id])
-            .collect();
-        set_pool(heap, pool, &members)?;
+    #[cfg(not(feature = "lazy"))]
+    {
+        set_pool(heap, &pools[1], &templates[1..])?;
+        set_pool(heap, &pools[0], &templates[..1])?;
+        Ok(templates[0])
     }
-    Ok(templates[usize::from(unit.root)])
+    #[cfg(feature = "lazy")]
+    {
+        for (i, pool) in pools.iter().enumerate() {
+            if pool.values.is_empty() {
+                continue;
+            }
+            let members: Vec<Ref> = (0..funcs.len())
+                .filter(|&id| plan.pool_of[id] == i && plan.emit[id] == 2)
+                .map(|id| templates[id])
+                .collect();
+            set_pool(heap, pool, &members)?;
+        }
+        Ok(templates[usize::from(unit.root)])
+    }
 }
 
 /// The lazy template of `f` (D2990): its flags, name, parameters and captures as its
@@ -528,6 +602,7 @@ pub(super) fn finish(
 /// (a stack trace through the frame names it), then at pc 1 the offset of its
 /// parameters from its start and at pc 2 the context bits, as the columns of the next
 /// two lines (compiler/lazy.rs reads them).
+#[cfg(feature = "lazy")]
 #[allow(clippy::too_many_arguments)]
 fn emit_lazy(
     heap: &mut Heap,
@@ -1438,8 +1513,8 @@ fn emit_function(
         lines: &line_bytes,
         names: &all_names,
         script,
-        src_start: f.src_start + unit.base,
-        src_end: f.src_end + unit.base,
+        src_start: f.src_start + unit.base(),
+        src_end: f.src_end + unit.base(),
     };
     let t = alloc_template_in(heap, &parts, &mut scratch.stack).map_err(|e| match e {
         TemplateError::Heap(e) => e.into(),
@@ -1450,6 +1525,7 @@ fn emit_function(
 }
 
 /// The capture descriptors of `f` (`capture_desc`).
+#[inline(always)]
 fn capture_words(f: &FuncState, parent_storage: Option<&Vec<Storage>>) -> PResult<Vec<u32>> {
     let mut capture_words = crate::buf::vec_with_capacity(f.captures.len());
     for &c in &f.captures {
@@ -1470,6 +1546,7 @@ fn capture_words(f: &FuncState, parent_storage: Option<&Vec<Storage>>) -> PResul
 }
 
 /// The `func_flags` of `f`'s template.
+#[inline(always)]
 fn template_flags(f: &FuncState, privileged: bool) -> u32 {
     let kind = match f.kind {
         // Eval code runs like a Script's top level (the embedder supplies `this`).

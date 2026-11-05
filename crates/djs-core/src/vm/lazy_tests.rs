@@ -208,3 +208,34 @@ fn lazy_code_is_eager_code_corpus() {
     }
     assert!(n > 1000, "{n} lazy functions compared");
 }
+
+/// `Vm::seal` leaves no lazy template uncompiled, and the closures still run.
+#[test]
+fn seal_compiles_lazy_templates() {
+    let mut vm = vm(true);
+    let src =
+        "function later(n) { const sq = x => x * x; return sq(n) + 1 } globalThis.later = later; 0";
+    assert_eq!(
+        eval_with(&mut vm, src, &CompileOptions::script("t.js")),
+        "0"
+    );
+    let pending = |vm: &Vm| {
+        templates(vm)
+            .iter()
+            .filter(|&&(_, _, t)| {
+                code(&vm.heap, t) == [crate::bytecode::Op::Lazy as u8]
+                    && vm
+                        .heap
+                        .arena()
+                        .get::<Ref>(t, FuncTemplate::IC)
+                        .get()
+                        .is_none()
+            })
+            .count()
+    };
+    assert_eq!(pending(&vm), 1);
+    vm.seal().unwrap();
+    assert_eq!(pending(&vm), 0);
+    let r = eval_with(&mut vm, "later(4)", &CompileOptions::script("u.js"));
+    assert_eq!(r, "17");
+}

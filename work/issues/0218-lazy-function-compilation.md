@@ -42,7 +42,40 @@ net. Coordinate with pjr (0215) who measures load, and pjs (0207) who changes du
   synthetic outer for captures, pools split along lazy roots so eager and lazy code are
   identical (maps), cargo feature `lazy` on in native/dump builds and off in main/slim
   (size). Waiting for the coordinator's go.
+- 2026-11-06 (lazy): approved: feature `lazy` (native + dump module, off in main/slim),
+  image-neutral (images stay in one process and module, D2560), seal compiles all lazy
+  templates; gate's stressed difftest and test262 legs run `--lazy`.
+- 2026-11-06 (lazy): batch 1 built. `compiler/lazy.rs` (`compile_lazy`), `resolve::Unit`
+  / `Plan` / `lazy_roots` / `emit_lazy`, the `lazy` op (`interp/run/lazy.rs`),
+  `VmOptions::lazy_functions` (opt-in), `Vm::compile_lazy_templates` (from `seal`),
+  `--lazy` in djs-difftest and djs-test262 (their new `lazy` features), D2990, D2991,
+  guide compiler.md "Lazy functions", TESTING.md. Lazy record: the template's line table
+  (pc 0 = the function's start; pc 1/2 carry the head offset and context bits as columns).
+  Capture attributes in bits 16-17 of the descriptors (`closure` masks them). Pinned
+  smaps changed (4 harvest cases: pool split moved pcs), accepted.
+  Size: non-lazy builds were +1.1 KB gz at first (pool/emit restructuring inlined into
+  `finish_unit`); all lazy-only code now behind cfg: slim +43 B gz (378,129 / ceiling
+  378,201), main +145 B (442,678 / 442,831).
+  Found: djs-test262/djs-difftest depend on djs-core without default features, so they
+  needed their own `lazy` feature (my first `--lazy` runs were eager).
+  Tests: vm::lazy_tests (results eager = lazy, early errors at load, identity of 3.4k
+  lazily compiled functions of the corpus and golden dumps, seal); test262 active in both
+  modes; difftest `--lazy` whole corpus, and stressed (suspend 97/1009, gc, determinism)
+  on codemode, codemode-harvest, language, dquickts; `--plain-dumps --lazy` on codemode.
+  Measured (native release, load ~10-20): typescript.js 183-200 -> 116 ms, golden dumps
+  9.3 -> 6.2-6.9 ms, dump runtime 0.26 -> 0.155 ms, harvest 13.2-14.0 -> 11.6-12.5 ms.
+  Known gap for batch 2: `compile_lazy` converts the whole Script source to UTF-8 per
+  compile (O(script) per first call); the dumper does not read lazy templates yet, so
+  `lazy_functions` stays off by default.
 
 ## Follow-ups
+
+- Batch 2: Script source as UTF-8 (O(span) lazy compiles, toString); the dumper reads lazy
+  templates through scratch compiles (`global_refs`, `code_globals`, harvest); lazy on by
+  default in lazy builds; eval and `new Function` lazily.
+- Batch 3 (with pjr, pjs, through the coordinator): lazy plain-dump loads, maps on demand.
+- Batch 4: small-function threshold, `fclosure` taking the compiled template, phase-1
+  emission off inside lazy subtrees.
+- The decisions index (docs/decisions-index.md) needs D2990/D2991 (coordinator).
 
 ## Result

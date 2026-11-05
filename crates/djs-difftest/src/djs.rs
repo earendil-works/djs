@@ -67,6 +67,8 @@ pub struct Djs {
     /// fuzzer (scripts/plain-fuzz) starts a chain at every idle point, so that each site
     /// is also dumped from its original function, not only from a continuation (D2940).
     pub plain_from: u32,
+    /// Lazy functions (`VmOptions::lazy_functions`, D2990).
+    pub lazy: bool,
 }
 
 /// The longest chain of plain dumps a case runs through (later idle points are not
@@ -94,6 +96,9 @@ impl Djs {
         }
         if self.plain_from > 1 {
             s += &format!(" --plain-from {}", self.plain_from);
+        }
+        if self.lazy {
+            s += " --lazy";
         }
         s
     }
@@ -229,6 +234,8 @@ impl Djs {
             prefix_barrier: ARMED_AREAS.iter().any(|a| job.name.starts_with(a)),
             // Dumps are written only with frozen builtins (D2836), as pi's next mode runs.
             frozen_builtins: self.dump_every_idle,
+            #[cfg(feature = "lazy")]
+            lazy_functions: self.lazy,
             ..VmOptions::default()
         };
         let mut vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;

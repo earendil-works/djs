@@ -323,16 +323,21 @@ pub(super) struct FuncState {
     pub smap: Option<alloc::boxed::Box<super::smap::Recorder>>,
     /// Lazy compilation (D2990): a function written in source that may compile at its
     /// first call (the rest of the rule is in `resolve::lazy_roots`).
+    #[cfg(feature = "lazy")]
     pub lazy_ok: bool,
     /// Where its parameters start (a type parameter list, `(`, or an arrow's head):
     /// where a lazy compile starts parsing.
+    #[cfg(feature = "lazy")]
     pub head: u32,
     /// The end of the tokens that call it right where it is defined (`fn(`, `(fn)(`),
     /// or 0.
+    #[cfg(feature = "lazy")]
     pub call_end: u32,
     /// An arrow: the kind of the function that owns its `this`; `after_q` of
     /// `parse_arrow`.
+    #[cfg(feature = "lazy")]
     pub owner: FuncKind,
+    #[cfg(feature = "lazy")]
     pub after_q: bool,
 }
 
@@ -456,10 +461,15 @@ impl FuncState {
             temps: Vec::new(),
             #[cfg(feature = "dump")]
             smap: None,
+            #[cfg(feature = "lazy")]
             lazy_ok: false,
+            #[cfg(feature = "lazy")]
             head: 0,
+            #[cfg(feature = "lazy")]
             call_end: 0,
+            #[cfg(feature = "lazy")]
             owner: FuncKind::Normal,
+            #[cfg(feature = "lazy")]
             after_q: false,
         }
     }

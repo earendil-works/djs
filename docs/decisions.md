@@ -10153,3 +10153,40 @@ date: 2026-11-05 · by: pjs · issue: 0207
 current iteration (`const x = 2;`) are pruned as those of a block (D2911): within the first
 iteration's block, not against the whole of K, whose later iterations declare the name
 again from the loop's head (`const x = $djs_v1`).
+
+## D2990: Lazy function compilation, a `lazy` feature on in native and dump builds
+date: 2026-11-06 · by: lazy · issue: 0218
+A unit's compile still parses all of its source with phase-1 emission and classifies every
+name, so every early error is reported at load and the enclosing functions' code is what
+it was. A lazy function (a function, arrow, method, getter or setter written in source,
+not called where it is defined, not owned by a class constructor, without legacy
+parameter decorators, and with no name resolved through TypeScript declarations in its
+subtree) skips phase 2: it gets a lazy template whose code is the one instruction `lazy`,
+with its real flags, name, length, parameters and capture descriptors. At the first call
+`lazy` parses the function's text again on its own (`compiler::compile_lazy`), keeps the
+result in the template's `IC` field, switches the closure to it and continues in the same
+frame. No call path changes. Measured with a prototype (work/research/0218, native):
+typescript.js compiles 40% faster, the golden dumps 26%, the dump runtime 35%, and
+compiled code on typescript.js's heap shrinks 36%. Codemode scripts gain only 10% of a
+~40 µs compile and parse again every callback that runs, so the shipped main and slim
+modules leave it out: the code is behind the cargo feature `lazy` (default in djs-core
+natively, turned on by djs-wasm's `dump`), and it is image-neutral (D2267). A build
+without it treats `lazy` as unsupported bytecode; images do not cross modules (D2560).
+`VmOptions::lazy_functions` turns it on per VM (off by default until the dumper reads
+lazy templates, 0218 batch 2). `Vm::seal` compiles every lazy template first, so a sealed
+image (pi's prelude) never compiles at run time. Shipping it in main later would be a size
+trade for the owner.
+
+## D2991: Eager and lazy compiles give a function the same code
+date: 2026-11-06 · by: lazy · issue: 0218
+Suspension maps come from another compile of the same source (D2563), so a function's
+code must not depend on whether it was compiled with its unit or at its first call. The
+unit-wide state that the code depends on was the shared constant pool (D2446). With the
+`lazy` feature each lazy-eligible function now gets a pool of its own, shared with the
+functions inside it that are not eligible, in eager compiles too; eligibility looks only
+at a function's own text and its parent's (a call counts only if its tokens end inside
+the parent), so the compile of an enclosing lazy function decides the same. A lazily
+compiled function's positions are relative to its start; `resolve::Unit` adds the offset
+and the line and column back. `vm::lazy_tests` compares every lazily compiled function of
+the corpus and the golden dumps with its eager template (code, constants, line table,
+names, sizes).

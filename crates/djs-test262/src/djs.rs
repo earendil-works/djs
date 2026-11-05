@@ -37,6 +37,8 @@ pub struct Djs {
     pub fuel: u64,
     /// Run the `@native` builtins as bytecode (`--backend bytecode`, 0063).
     pub bytecode_builtins: bool,
+    /// Lazy functions (`--lazy`, `VmOptions::lazy_functions`, D2990).
+    pub lazy: bool,
 }
 
 impl Default for Djs {
@@ -44,6 +46,7 @@ impl Default for Djs {
         Djs {
             fuel: DEFAULT_FUEL,
             bytecode_builtins: false,
+            lazy: false,
         }
     }
 }
@@ -90,6 +93,8 @@ impl Djs {
                 native_builtins: !self.bytecode_builtins,
                 ..Default::default()
             },
+            #[cfg(feature = "lazy")]
+            lazy_functions: self.lazy,
             ..VmOptions::default()
         };
         let mut vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;

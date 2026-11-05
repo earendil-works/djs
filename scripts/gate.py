@@ -234,11 +234,12 @@ def jobs():
           cls="rust", group="target/clippy"),
 
         # --- Clippy on the other feature combinations that ship (D2668): djs-core natively
-        # without `full`/`unicode` (slim), slim with the dumper, full without it; and the
+        # without `full`/`unicode` (slim), slim with the dumper (and `lazy`, as djs-wasm's
+        # `dump` turns it on, D2990), full without them; and the
         # wasm modules in release: main, slim, dump, slim with dump. Libraries only: the
         # tests build in the default combination (and slim's in its own legs).
         J("clippy (djs-core feature combinations)", "for f in '--no-default-features'"
-          " '--no-default-features --features dump' '--no-default-features --features full,unicode';"
+          " '--no-default-features --features dump,lazy' '--no-default-features --features full,unicode';"
           " do CARGO_TARGET_DIR=target/clippy-combos cargo clippy -p djs-core $f --lib --quiet -- -D warnings"
           " || { echo \"in: cargo clippy -p djs-core $f\"; exit 1; }; done",
           cls="rust", group="target/clippy-combos"),
@@ -307,7 +308,8 @@ def jobs():
 
         # --- The corpus (0016, 0072): ratchet, suspension and GC stress, heap images; and
         # with the @native builtins as bytecode (0063). (Dumps: the plain dumps leg.)
-        J("difftest", f"{G}/bin/djs-difftest --engine djs --ratchet --suspend-every 97 --gc-stress"
+        # Lazy functions (D2990) here and in test262's leg; the other legs run eager.
+        J("difftest", f"{G}/bin/djs-difftest --engine djs --lazy --ratchet --suspend-every 97 --gc-stress"
           f" --determinism --quiet --no-diff --times {G}/times/difftest.tsv",
           cls="rust", needs=["build:difftest"], summary=r"^(stress|ratchet):"),
         # 0201: plain dumps (D2830) at every idle point of the corpus (chains of at most 50),
@@ -336,7 +338,7 @@ def jobs():
           cls="rust", needs=["build:unsafe-release"], summary=r"^(stress|ratchet):"),
         # 0007: test262's active group against the ratchet.
         J("test262", f"./scripts/fetch-test262.sh > /dev/null && {G}/bin/djs-test262 run --engine djs"
-          " --group active --quiet --slowest 10 --expected tests/test262/expected-failures.txt",
+          " --lazy --group active --quiet --slowest 10 --expected tests/test262/expected-failures.txt",
           cls="rust", needs=["build:test262"], summary=r"^ratchet:|^\| active|^slowest:|^ +[0-9.]+s "),
 
         # --- Slim (D2411): the djs-core and djs-prelude tests that hold in both builds, the

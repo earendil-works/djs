@@ -3,8 +3,9 @@
 //! `cargo run --release -p djs-bench --example prof_compile -- [seconds] files...`
 //! A file ending in `.body.js` compiles as a codemode body, `.ts` as TypeScript.
 //! `nCOUNT` instead of seconds runs exactly COUNT compiles per file (for instruction
-//! counts with `/usr/bin/time -l`).
-use djs_core::compiler::{CompileOptions, compile};
+//! counts with `/usr/bin/time -l`). With `DJS_LAZY=1` the compile is lazy (D2990):
+//! functions not run at load get lazy templates.
+use djs_core::compiler::{CompileOptions, compile, compile_lazy_unit};
 use djs_core::heap::Heap;
 use std::time::{Duration, Instant};
 
@@ -14,6 +15,8 @@ fn main() {
         Some(n) => (0.0, n.parse::<u64>().expect("count")),
         None => (args[0].parse::<f64>().expect("seconds"), u64::MAX),
     };
+    let lazy = std::env::var("DJS_LAZY").is_ok_and(|v| v == "1");
+    let compile = if lazy { compile_lazy_unit } else { compile };
     for path in &args[1..] {
         let src = std::fs::read(path).expect("read");
         let mut opts = if path.ends_with(".body.js") {

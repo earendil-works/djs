@@ -176,6 +176,7 @@ pub(super) struct Parser<'a, 'h> {
     /// The atoms of the identifiers seen so far, by source text (0096).
     pub ident_atoms: IdentAtoms,
     /// Lazy or eager, and a lazy function's own compile (D2990).
+    #[cfg(feature = "lazy")]
     pub unit: super::resolve::Unit,
     /// Record suspension maps (compiler/smap.rs): every function gets a recorder.
     #[cfg(feature = "dump")]
@@ -362,6 +363,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             using: Default::default(),
             completion: None,
             ident_atoms: IdentAtoms::default(),
+            #[cfg(feature = "lazy")]
             unit: super::resolve::Unit::EAGER,
             #[cfg(feature = "dump")]
             smaps: false,
@@ -489,7 +491,10 @@ impl<'a, 'h> Parser<'a, 'h> {
             self.heap,
             self.src,
             self.opts,
+            #[cfg(feature = "lazy")]
             &self.unit,
+            #[cfg(not(feature = "lazy"))]
+            &super::resolve::Unit::EAGER,
             self.atom_undefined,
             funcs,
             &self.ts_decls,

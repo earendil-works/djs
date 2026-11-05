@@ -40,6 +40,8 @@ options:
                       and by canonical hash (hard failure; GC stress is not compared, D1720)
                       The stressed runs get 3x the time limit; cases marked
                       `difftest: no-stress` skip them
+  --lazy              djs only: every djs run compiles functions at their first call
+                      (VmOptions::lazy_functions, D2990)
   --backend B         djs only: run the @native builtins as `native` code (default)
                       or as `bytecode` (both must behave the same, 0063)
   --clusters          group the failures by the first line of what went wrong
@@ -82,6 +84,7 @@ struct Args {
     quiet: bool,
     suspend_every: Option<u64>,
     gc_stress: bool,
+    lazy: bool,
     plain_dumps: bool,
     plain_from: u32,
     determinism: bool,
@@ -126,6 +129,7 @@ fn parse_args() -> Result<Args, String> {
         quiet: false,
         suspend_every: None,
         gc_stress: false,
+        lazy: false,
         plain_dumps: false,
         plain_from: 0,
         determinism: false,
@@ -186,6 +190,7 @@ fn parse_args() -> Result<Args, String> {
                 args.suspend_every = Some(n);
             }
             "--gc-stress" => args.gc_stress = true,
+            "--lazy" if cfg!(feature = "lazy") => args.lazy = true,
             "--plain-dumps" => args.plain_dumps = true,
             "--plain-out" => {
                 args.plain_dumps = true;
@@ -304,6 +309,7 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
         "djs" => Box::new(Djs {
             image: args.determinism,
             bytecode_builtins: args.bytecode_builtins,
+            lazy: args.lazy,
             ..Djs::default()
         }),
         e => return Err(format!("unknown engine `{e}`")),
@@ -629,6 +635,7 @@ fn stress_variants(args: &Args) -> Vec<(String, Box<dyn Engine>)> {
             bytecode_builtins: args.bytecode_builtins,
             dump_every_idle: false,
             plain_from: 0,
+            lazy: args.lazy,
         };
         v.push((e.label(), Box::new(e)));
     }
@@ -640,6 +647,7 @@ fn stress_variants(args: &Args) -> Vec<(String, Box<dyn Engine>)> {
             bytecode_builtins: args.bytecode_builtins,
             dump_every_idle: false,
             plain_from: 0,
+            lazy: args.lazy,
         };
         v.push((e.label(), Box::new(e)));
     }
@@ -648,6 +656,7 @@ fn stress_variants(args: &Args) -> Vec<(String, Box<dyn Engine>)> {
             dump_every_idle: true,
             plain_from: args.plain_from,
             bytecode_builtins: args.bytecode_builtins,
+            lazy: args.lazy,
             ..Djs::default()
         };
         v.push((e.label(), Box::new(e)));

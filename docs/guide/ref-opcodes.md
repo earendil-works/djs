@@ -222,4 +222,5 @@ with them.
 | `jump8` | 210 | Target8 | 2 | 0 → 0 | Basic | `jump` with an 8-bit offset. |
 | `jump_if_false8` | 211 | Target8 | 2 | 1 → 0 | Basic | `jump_if_false` with an 8-bit offset. |
 | `jump_if_true8` | 212 | Target8 | 2 | 1 → 0 | Basic | `jump_if_true` with an 8-bit offset. |
+| `lazy` | 213 | – | 1 | 0 → 0 | Alloc | The whole code of a lazy template (D2990): compiles the function at its first call and continues in the compiled template, in the same frame. |
 <!-- /gen -->

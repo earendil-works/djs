@@ -136,7 +136,7 @@ $T list --paths --group direct-eval      # each test with the rule that grouped 
 $T run                                   # active + later with qjs (the default engine)
 $T run built-ins/Array --failures        # a path prefix, with one-line failure reasons
 $T run --engine djs --clusters           # djs in-process; failures grouped by reason
-$T run --engine djs --group active --expected tests/test262/expected-failures.txt  # the gate
+$T run --engine djs --lazy --group active --expected tests/test262/expected-failures.txt  # the gate
 $T run 'language/**/S11*.js' -j 4        # globs: * within a segment, ** across
 $T run --group skip language/statements/with  # run a skipped group explicitly
 
@@ -257,7 +257,7 @@ $D --update-ratchet                  # rewrite tests/corpus/expected-failures.tx
 scripts/difftest-import-dquickts.py  # re-split the dquickts tests (then --update dquickts)
 
 $D --engine djs --clusters           # djs in-process; failures grouped by error
-$D --engine djs --ratchet --suspend-every 97 --gc-stress --determinism
+$D --engine djs --lazy --ratchet --suspend-every 97 --gc-stress --determinism
                                      # what the gate runs (--suspend-every 97 also runs 1009)
 $D --engine djs --backend bytecode --ratchet               # the gate, too (0063)
 $D --engine djs --update-ratchet     # after fixing cases: rewrite expected-failures.txt
@@ -275,6 +275,9 @@ every case a second (third) time; a transcript that differs from the plain djs r
 hard failure, separate from the oracle comparison and the ratchet (D1161). Stressed runs
 get three times the case's time limit, and a stressed run that still times out is a
 failure too: mark such a case `no-stress` with the measured reason (D1530).
+`--lazy` runs every djs VM with lazy functions (D2990); the gate's stressed difftest and its
+test262 run use it, the other legs (the bytecode backend, unsafe-heap, slim, plain dumps)
+run eager, and `vm::lazy_tests` checks that lazily compiled code equals eager code (D2991).
 `--plain-dumps` (0172, 0201, D2830) dumps the VM at every idle point (a plain Script: the
 session's globals, the prelude's state, open calls, pending promises, suspended
 activations as continuations, the prelude's `api` as the completion value), runs the dump

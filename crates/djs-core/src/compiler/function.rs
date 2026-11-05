@@ -106,8 +106,11 @@ impl Parser<'_, '_> {
         self.start_flavor(flavor)?;
         self.f.name = name;
         self.f.src_start = start;
-        self.f.lazy_ok = dp.is_none();
-        self.f.head = self.tok.start;
+        #[cfg(feature = "lazy")]
+        {
+            self.f.lazy_ok = dp.is_none();
+            self.f.head = self.tok.start;
+        }
         self.ts_fn_type_params()?;
         let params = self.tok.start;
         self.expect(TokenKind::LParen, "(")?;
@@ -164,8 +167,11 @@ impl Parser<'_, '_> {
             self.f.func_name_var = Some(v);
             self.syn_decl(v, super::smap_syntax::DeclKind::FuncName);
         }
-        self.f.lazy_ok = true;
-        self.f.head = self.tok.start;
+        #[cfg(feature = "lazy")]
+        {
+            self.f.lazy_ok = true;
+            self.f.head = self.tok.start;
+        }
         self.ts_fn_type_params()?;
         let params = self.tok.start;
         self.expect(TokenKind::LParen, "(")?;
@@ -182,6 +188,14 @@ impl Parser<'_, '_> {
     /// After a function expression or arrow `child`: whether a call follows it right
     /// away (`fn(`, `(fn)(`), which keeps it eager (D2990).
     fn note_call(&mut self, child: u32) {
+        #[cfg(feature = "lazy")]
+        self.note_call_lazy(child);
+        #[cfg(not(feature = "lazy"))]
+        let _ = child;
+    }
+
+    #[cfg(feature = "lazy")]
+    fn note_call_lazy(&mut self, child: u32) {
         let end = if self.is(TokenKind::LParen) {
             self.tok.end
         } else if self.is(TokenKind::RParen) && self.peek().kind == TokenKind::LParen {
@@ -554,12 +568,15 @@ impl Parser<'_, '_> {
         self.start_flavor((is_async, false))?;
         self.f.name = hint;
         self.f.src_start = start;
-        self.f.head = start;
-        self.f.after_q = after_q;
         // `super()` and `this` in a constructor's arrows depend on the constructor's
         // state (D2990): those stay eager.
-        self.f.owner = self.own_this_kind().unwrap_or(FuncKind::Normal);
-        self.f.lazy_ok = !matches!(self.f.owner, FuncKind::ClassCtor | FuncKind::DerivedCtor);
+        #[cfg(feature = "lazy")]
+        {
+            self.f.head = start;
+            self.f.after_q = after_q;
+            self.f.owner = self.own_this_kind().unwrap_or(FuncKind::Normal);
+            self.f.lazy_ok = !matches!(self.f.owner, FuncKind::ClassCtor | FuncKind::DerivedCtor);
+        }
         self.ts_fn_type_params()?;
         let params = self.tok.start;
         if self.is(TokenKind::Ident) {

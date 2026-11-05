@@ -119,6 +119,7 @@ pub struct VmOptions {
     /// Lazy functions (D2990, builds with the `lazy` feature): `Vm::compile` parses the
     /// whole source (every early error is reported) but compiles a function's body at its
     /// first call. Not part of the image: a VM's lazy templates compile in any lazy build.
+    #[cfg(feature = "lazy")]
     pub lazy_functions: bool,
 }
 
@@ -132,6 +133,7 @@ impl Default for VmOptions {
             weak_refs: WeakRefs::Collected,
             frozen_builtins: false,
             prefix_barrier: false,
+            #[cfg(feature = "lazy")]
             lazy_functions: false,
         }
     }
