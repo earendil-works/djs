@@ -10419,3 +10419,15 @@ of a `Promise.all`). Host calls keep their order among themselves (the host's or
 they move past is the dump's own code, which hands them nothing and makes no host call.
 Each is written into the list it was listed in (a callback's lines run after the lines
 that follow it outside), at the latest when that list ends.
+
+## D3005: A hole the reader finds by reading the value is left out of the record
+date: 2026-11-06 · by: pjs · issue: 0207
+A continuation's record lists the holes (D2913) whose length the reader cannot find in K's
+text. Before, the reader took a placeholder's text as one token (a name, a number, a string
+without escapes); now as a value: a token or an expression read up to the first `,`, `;`,
+closing bracket or line end outside brackets, strings, templates, comments and regular
+expressions, its spaces only before a name or a bracket (`await $djs.resume(2, "call",
+[…], {…})`, `new Map([…])`, `async function (…) {…}`). The writer leaves a hole out only
+where this reading gives the value's length in its own text, so a reader scanning the same
+text finds the same; anything else keeps its hole. Records with holes: 2,552 → 736 of the
+corpus and v2's.

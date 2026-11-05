@@ -416,26 +416,161 @@ fn scan(pattern: &str, at: usize, same: &dyn Fn(usize, &str) -> bool, k: &str) -
     Some(cur - at)
 }
 
-/// The length of the token `t` starts with: a string without escapes, a number, a name
-/// or a reference (`$dump.s3.f`), `undefined`, `true`, …
+/// The length of the value `t` starts with (D3005): a token, or an expression read up to
+/// the first `,`, `;`, closing bracket or line end outside brackets, strings, templates,
+/// comments and regular expressions, its spaces only before a name or a bracket
+/// (`async function (…) {…}`, `new Map([…])`). The writer leaves out a hole only where
+/// this gives the value's length in its own text, so the reader, scanning the same text,
+/// finds the same.
 fn token_len(t: &str) -> usize {
     let b = t.as_bytes();
-    if b.first() == Some(&b'"') {
-        return match t[1..].find(['"', '\\', '\n']) {
-            Some(e) if b[1 + e] == b'"' => e + 2,
-            _ => 0,
-        };
-    }
-    let mut i = usize::from(b.first() == Some(&b'-'));
-    while let Some(&c) = b.get(i) {
-        let exp_sign = i > 0 && (c == b'+' || c == b'-') && matches!(b[i - 1], b'e' | b'E');
-        if c.is_ascii_alphanumeric() || c == b'.' || c == b'_' || c == b'$' || exp_sign {
-            i += 1;
-        } else {
-            break;
+    let mut i = 0;
+    let mut depth = 0u32;
+    // Template literals open: the bracket depth at each `${`.
+    let mut tpl: Vec<u32> = Vec::new();
+    // Whether a `/` here starts a regular expression.
+    let mut regex_ok = true;
+    while i < b.len() {
+        let c = b[i];
+        match c {
+            b'"' | b'\'' => {
+                let mut j = i + 1;
+                while j < b.len() && b[j] != c {
+                    if b[j] == b'\n' {
+                        return 0;
+                    }
+                    j += if b[j] == b'\\' { 2 } else { 1 };
+                }
+                if j >= b.len() {
+                    return 0;
+                }
+                i = j + 1;
+                regex_ok = false;
+                continue;
+            }
+            b'`' => {
+                i = match template_end(b, i + 1) {
+                    Some((j, open)) => {
+                        if open {
+                            tpl.push_out(depth);
+                            depth += 1;
+                            regex_ok = true;
+                        } else {
+                            regex_ok = false;
+                        }
+                        j
+                    }
+                    None => return 0,
+                };
+                continue;
+            }
+            b'}' if depth > 0 && tpl.last() == Some(&(depth - 1)) => {
+                // The end of a template's substitution: the template goes on.
+                tpl.pop();
+                depth -= 1;
+                i = match template_end(b, i + 1) {
+                    Some((j, open)) => {
+                        if open {
+                            tpl.push_out(depth);
+                            depth += 1;
+                            regex_ok = true;
+                        } else {
+                            regex_ok = false;
+                        }
+                        j
+                    }
+                    None => return 0,
+                };
+                continue;
+            }
+            b'(' | b'[' | b'{' => {
+                depth += 1;
+                regex_ok = true;
+            }
+            b')' | b']' | b'}' => {
+                if depth == 0 {
+                    break;
+                }
+                depth -= 1;
+                regex_ok = false;
+            }
+            b',' | b';' | b'\n' if depth == 0 => break,
+            b' ' if depth == 0 => {
+                let next = b.get(i + 1).copied().unwrap_or(b' ');
+                if !(next.is_ascii_alphanumeric()
+                    || matches!(next, b'_' | b'$' | b'(' | b'{' | b'['))
+                {
+                    break;
+                }
+            }
+            b'/' if b.get(i + 1) == Some(&b'/') => {
+                while i < b.len() && b[i] != b'\n' {
+                    i += 1;
+                }
+                continue;
+            }
+            b'/' if b.get(i + 1) == Some(&b'*') => {
+                let Some(e) = t[i + 2..].find("*/") else {
+                    return 0;
+                };
+                i += e + 4;
+                continue;
+            }
+            b'/' if regex_ok => {
+                let mut j = i + 1;
+                let mut class = false;
+                while j < b.len() && (class || b[j] != b'/') {
+                    match b[j] {
+                        b'\\' => j += 1,
+                        b'[' => class = true,
+                        b']' => class = false,
+                        b'\n' => return 0,
+                        _ => {}
+                    }
+                    j += 1;
+                }
+                if j >= b.len() {
+                    return 0;
+                }
+                i = j + 1;
+                while i < b.len() && b[i].is_ascii_alphabetic() {
+                    i += 1;
+                }
+                regex_ok = false;
+                continue;
+            }
+            _ => {}
         }
+        if !c.is_ascii_whitespace() {
+            // (After a name or a literal a `/` divides; after an operator it starts a
+            // regular expression. A keyword before one is rare in a value: a miss only
+            // keeps a hole.)
+            regex_ok = !(c.is_ascii_alphanumeric() || matches!(c, b'_' | b'$' | b')' | b']'));
+        }
+        i += 1;
+    }
+    if depth != 0 || !tpl.is_empty() {
+        return 0;
+    }
+    // (No trailing spaces.)
+    while i > 0 && b[i - 1] == b' ' {
+        i -= 1;
     }
     i
+}
+
+/// Where the template literal text from `i` (after a backtick or a substitution's `}`)
+/// ends: after its closing backtick (`false`) or after a `${` (`true`).
+fn template_end(b: &[u8], mut i: usize) -> Option<(usize, bool)> {
+    while i < b.len() {
+        match b[i] {
+            b'\\' => i += 2,
+            b'`' => return Some((i + 1, false)),
+            b'$' if b.get(i + 1) == Some(&b'{') => return Some((i + 2, true)),
+            _ => i += 1,
+        }
+    }
+    None
 }
 
 /// The layout of a continuation `ktext` of the original `act` stands for (canonical),
