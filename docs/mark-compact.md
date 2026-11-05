@@ -62,6 +62,11 @@ block's new start. The forwarding address of a live cell at `a` is
 mask and a popcount. Nothing is stored in the cells, so the headers stay intact for
 passes 3 and 4.
 
+(0224: passes 3 and 4 are one walk now, a run of adjacent live cells at a time: update
+the run's cells, then move the run. `clear_offset_caches` runs when the marker traces a
+template, since the walk may already have moved its cache cell; the freed tail is
+truncated rather than zeroed, the arena re-zeroes as it allocates.)
+
 **Pass 3, update.** Walk the marked cells in address order. The bitmap gives cell
 starts; dead runs are skipped a 64-bit word at a time.
 - Every traced slot is rewritten with its target's forwarding address. A flattened-rope

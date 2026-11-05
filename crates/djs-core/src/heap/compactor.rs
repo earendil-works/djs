@@ -11,10 +11,12 @@
 //! 2. **Block table:** the new address of each 512-byte block's first live word, a prefix
 //!    sum over the bitmap. A live cell at `a` moves to `table[a / 512]` plus 8 times the
 //!    live words before it in its block (one popcount). Nothing is written into cells.
-//! 3. **Update** every traced slot of every marked cell to its target's new address,
-//!    and empty the offset slots of inline caches (D1621), as Cheney does.
-//! 4. **Slide** the marked cells down in address order, clear their marks, and zero the
-//!    freed tail. Map/Set indexes are rehashed afterwards (D1381).
+//! 3. **Update** the old region's slots that reference young cells.
+//! 4. **Update and slide**, in one walk over the marked cells in address order: rewrite
+//!    every traced slot to its target's new address, clear the mark, and move each run
+//!    of adjacent live cells down; then truncate the freed tail. The offset slots of
+//!    inline caches (D1621) were emptied when their template was traced, as Cheney
+//!    does. Map/Set indexes are rehashed afterwards (D1381).
 //!
 //! A **minor** collection (D2041) leaves the old region `[0, Roots::OLD_END)` alone: its
 //! cells count as live and are neither marked nor moved. The mark pass starts from a
@@ -235,6 +237,11 @@ impl Marker<'_> {
         let kind = CellKind::from_u8(kb).unwrap_or_else(|| super::fail::bad_cell_kind(kb, cell));
         if kind == CellKind::EphemeronArray || (kind == CellKind::Slice && self.weak_slices) {
             return;
+        }
+        if kind == CellKind::FuncTemplate {
+            // Offsets of shapes and prototypes may move (D1621). Emptied now, where the
+            // inline cache cell still is: the update-and-slide walk reads no other cell.
+            super::gc::clear_offset_caches(self.arena, cell);
         }
         let size = self.arena.get(cell, Header::SIZE);
         walk::for_each_slot(kind, cell, size, |slot| self.mark_slot(slot));
@@ -736,7 +743,7 @@ impl Heap {
         };
         // Nothing below the first dead word moves (usually the base image's cells).
         let dense = live.next_dead(old).min(before);
-        // 3. Update every traced slot of the old and the marked cells.
+        // 3. Update the old region's references to young cells.
         let arena = &mut self.arena;
         let update_slot = |arena: &mut Arena, slot: Slot| match slot {
             Slot::Value(s) => {
@@ -803,39 +810,42 @@ impl Heap {
                 c += size;
             }
         }
+        // 4. Update the marked cells' slots and slide them down, in one walk: a run of
+        // adjacent live cells at a time, which all move by the same distance (never onto
+        // a cell not yet updated). Forwarding needs only the bitmap and the block table,
+        // so each cell is touched once (0224: a quarter fewer cycles than an update pass
+        // and then a slide). Nothing here reads another cell: the templates' inline
+        // caches were emptied by the mark.
         let mut at = live.next_live(old);
-        while let Some(c) = at {
-            // The whole header in one read: kind, gc bits, flags, size.
-            let h: u64 = arena.read(c);
-            let (kb, size) = (h as u8, (h >> 32) as u32);
-            let kind = CellKind::from_u8(kb).unwrap_or_else(|| super::fail::bad_cell_kind(kb, c));
-            // The mark is not needed past this point (the bitmap has it).
-            let gc = (h >> 8) as u8;
-            arena.set(c, Header::GC, gc & !(gc_bits::MARK | gc_bits::COUNTED));
-            if kind == CellKind::FuncTemplate {
-                // Before its IC ref is updated: the slots are cleared where they are now.
-                super::gc::clear_offset_caches(arena, c);
-            } else if kind == CellKind::Object && is_collection(arena, c) {
-                if collections.len() < collections.capacity() {
-                    collections.push_out(live.forward(&table, c));
-                } else {
-                    all_collections = false;
+        while let Some(run) = at {
+            let end = live.next_dead(run).min(before);
+            let mut c = run;
+            while c < end {
+                // The whole header in one read: kind, gc bits, flags, size.
+                let h: u64 = arena.read(c);
+                let (kb, size) = (h as u8, (h >> 32) as u32);
+                // The mark is not needed past this point (the bitmap has it).
+                let gc = (h >> 8) as u8;
+                arena.set(c, Header::GC, gc & !(gc_bits::MARK | gc_bits::COUNTED));
+                if !is_leaf(kb) {
+                    let kind =
+                        CellKind::from_u8(kb).unwrap_or_else(|| super::fail::bad_cell_kind(kb, c));
+                    if kind == CellKind::Object && is_collection(arena, c) {
+                        if collections.len() < collections.capacity() {
+                            collections.push_out(live.forward(&table, c));
+                        } else {
+                            all_collections = false;
+                        }
+                    }
+                    // Marking rewrote references to flattened ropes: every target is
+                    // marked.
+                    update(arena, kind, c, size);
                 }
+                c += size;
             }
-            // Marking rewrote references to flattened ropes: every target is marked.
-            if !is_leaf(kb) {
-                update(arena, kind, c, size);
-            }
-            at = live.next_live(c + size);
-        }
-        // 4. Slide down in address order (never onto a cell not yet moved), a run of
-        // adjacent live cells at a time: they all move by the same distance.
-        let mut at = live.next_live(old);
-        while let Some(c) = at {
-            let end = live.next_dead(c).min(before);
-            let to = live.forward(&table, c);
-            if to != c {
-                arena.copy_within(c, end - c, to);
+            let to = live.forward(&table, run);
+            if to != run {
+                arena.copy_within(run, end - run, to);
             }
             at = live.next_live(end);
         }

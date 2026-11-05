@@ -43,7 +43,7 @@ about frames. A few kinds get extra treatment:
 
 ## Sliding in place
 
-A full collection runs four passes over the arena:
+A full collection runs three passes over the arena:
 
 1. **Mark.** Starting at the `Roots` cell, every reachable cell gets a mark bit in its
    header, and its words are set in a **live bitmap**, one bit per 8 bytes. The marker
@@ -55,11 +55,11 @@ A full collection runs four passes over the arena:
    lie before that block. The new address of a live cell is that entry plus the live
    words before it in its block, which one population count of a bitmap word gives.
    Nothing is written into the cells.
-3. **Update.** Every traced field of every marked cell is rewritten with its target's
-   new address. Nothing below the first dead word moves, so fields pointing there stay
-   as they are.
-4. **Slide.** The marked cells move down in address order, a run of adjacent live cells
-   at a time, and the freed tail is zeroed. Map and Set tables are rehashed last.
+3. **Update and slide.** One walk over the marked cells in address order rewrites every
+   traced field with its target's new address and moves each run of adjacent live cells
+   down. The new addresses come from the bitmap and the table alone, so each cell is
+   visited once, and nothing below the first dead word moves, so fields pointing there
+   stay as they are. Map and Set tables are rehashed last.
 
 The bitmap, the table and the stack take about 2.3% of the arena. They are allocated
 before anything is touched, so a host that cannot provide them gets an error with the

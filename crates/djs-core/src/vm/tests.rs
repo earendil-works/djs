@@ -3088,6 +3088,71 @@ fn collections_empty_prototype_caches_and_stay_deterministic() {
 }
 
 #[test]
+fn a_template_above_its_moving_cache_still_has_it_emptied() {
+    // The compactor updates the cells and slides them in one walk (0224), so a template
+    // cannot empty its cache's offset slots (D1621) on the way: the cache cell may have
+    // moved already. They are emptied when the marker traces the template. Built by hand:
+    // f's template is copied above its cache, with garbage below the cache.
+    use crate::heap::CellKind;
+    use crate::heap::cells::{FuncTemplate, IC_OFFSET_SLOT, IC_WORDS, Object, U32Array};
+    use crate::heap::layout::Ref;
+    let src = "globalThis.P = { m() { return 'm'; } };\n\
+               globalThis.o = Object.create(P);\n\
+               globalThis.junk = 'x'.repeat(5000) + 1;\n\
+               globalThis.f = (x) => x.m();\n\
+               for (let i = 0; i < 3; i++) f(o);\n\
+               junk = null;\n";
+    let (mut vm, _) = run_script(vm(), src);
+    let template_of = |vm: &Vm| {
+        let h = vm.heap();
+        let key = h.find_atom_str("f").unwrap();
+        let f = h.get_own_property(vm.global(), key).unwrap().value();
+        let f = f.and_then(|v| v.as_object()).unwrap().offset();
+        (f, h.arena().get::<Ref>(f, Object::ELEMENTS).get().unwrap())
+    };
+    let offset_slots = |vm: &Vm, t: u32| {
+        let a = vm.heap().arena();
+        let ic = a.get::<Ref>(t, FuncTemplate::IC).get().unwrap();
+        let n = u32::from(a.get(t, FuncTemplate::IC_COUNT));
+        (0..n)
+            .filter(|&i| a.read::<u32>(U32Array::DATA.at(ic, i * IC_WORDS)) & IC_OFFSET_SLOT != 0)
+            .count()
+    };
+    let (f, t) = template_of(&vm);
+    let ic = vm
+        .heap()
+        .arena()
+        .get::<Ref>(t, FuncTemplate::IC)
+        .get()
+        .unwrap();
+    assert!(ic > t, "the cache is allocated at the first call");
+    assert!(offset_slots(&vm, t) > 0, "x.m() caches a prototype slot");
+    // The copy above the cache; the original lets go of the cache.
+    let h = vm.heap_mut();
+    let size = h.cell_size(t);
+    let bytes = h.arena().slice(t, size).to_vec();
+    let copy = h
+        .alloc_cell_init(CellKind::FuncTemplate, size, 8, &bytes[8..])
+        .unwrap();
+    h.arena_mut().set(t, FuncTemplate::IC, Ref::NULL);
+    h.arena_mut().set(f, Object::ELEMENTS, Ref(copy));
+    assert!(ic < copy);
+    vm.collect().unwrap();
+    let (_, t) = template_of(&vm);
+    let ic_now = vm
+        .heap()
+        .arena()
+        .get::<Ref>(t, FuncTemplate::IC)
+        .get()
+        .unwrap();
+    assert!(ic_now < ic, "the cache moved down over the garbage");
+    assert_eq!(offset_slots(&vm, t), 0);
+    vm.heap().verify().unwrap();
+    let (_, out) = run_script(vm, "console.log(f(o), f(Object.create(o)));\n");
+    assert_eq!(out.log, ["m m"]);
+}
+
+#[test]
 fn host_memory_failure_is_not_a_js_error() {
     // The arena cannot grow (the host allocator refuses below the cap): the run ends with
     // HostOutOfMemory, the script's catch never runs, and the VM is usable (D1690).
