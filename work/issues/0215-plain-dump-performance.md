@@ -87,7 +87,23 @@ Measure where plain dumps stand now and fix what regressed:
   kind for the finally scaffold's constant (f-coded) though K was in a copy; `in_copy`
   now applies there too. Corpus codemode/redump-jumps-through-finally.js.
 
+- Writer pass (parked for the subclass bugs, on the branch): keys from the scan's spans,
+  `$`-searches instead of substring searchers, use counts / providers / scan deduplication
+  by hash (exact: providers and scan's sets verify), one walk state per activation's cycle
+  check. Records dump 4.81k -> 4.12k M (target <= 4.0k), byte-identical (corpus and every
+  dump_perf dump). Per records dump left: emit_items ~1.8 ms (continuation generation, inline
+  passes), schedule ~1.3 ms (keys_in's scan, 0.8 ns/byte over the items), drop_unread
+  ~0.4 ms, count_uses ~0.3 ms. The timing instrumentation is work/scratch/0215/instr.patch.
+- pjz's subclass bugs (D3025): placed code reading a late class binding moved after it
+  (subclass-before-declaration.js); a re-dumped subclass method's `<home>` and super
+  prototype from its function (super-in-async-method-redump.js). Corpus guard
+  codemode/redump-super-late-class.js. Fuzz regress both modes: only s13-s10173's crossing
+  callbacks, as on main.
+
 ## Follow-ups
+- An object literal's async method using `super` after an await is refused ("a method that
+  uses super outside its object literal"), e.g. `{ __proto__: base, async m(n) { await x;
+  await y; return super.hi(n); } }` at its second idle point. Older refusal, not 0215's.
 
 ## Result
 Paused for the coordinator (status left in-progress: it may bring pjr back for a writer or

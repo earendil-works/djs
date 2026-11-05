@@ -736,8 +736,17 @@ impl Dumper<'_> {
             sx.special
                 .iter()
                 .any(|x| x.0 == crate::compiler::Special::Super)
-        }) && let Some(rf) = runs.as_object()
-            && let Some(home) = home_object(h, rf)
+        }) && let Some(home) = runs
+            .as_object()
+            .and_then(|rf| home_object(h, rf))
+            // (A continuation that uses no `super` (it resumes the call that did) has no
+            // home: its origin's, the frame's function now, 0215.)
+            .or_else(|| {
+                s.frame
+                    .first()
+                    .and_then(|f| f.as_object())
+                    .and_then(|f| home_object(h, f))
+            })
         {
             let p = h.get_prototype_of(home).map_or(Value::NULL, Value::object);
             if super_read
@@ -2558,7 +2567,7 @@ fn unwrap_using(h: &Heap, v: Value, m: Value) -> (Value, Value) {
 }
 
 /// The home object of method `f` (one that uses `super`).
-fn home_object(h: &Heap, f: Obj) -> Option<Obj> {
+pub(super) fn home_object(h: &Heap, f: Obj) -> Option<Obj> {
     if h.object_class(f) != ObjectClass::Function {
         return None;
     }

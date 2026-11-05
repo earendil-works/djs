@@ -204,6 +204,12 @@ pub(super) fn eager_spans(text: &str) -> Vec<(usize, usize)> {
     out
 }
 
+/// The names `text`'s own evaluation reads: outside function and class bodies (read when
+/// they run), object literals' keys left out.
+pub(super) fn eager_names(text: &str) -> Vec<String> {
+    scan(text, true, &|_| true, &mut |_, _| {}, false, true).names
+}
+
 /// The references of `text` its evaluation makes: [`refs`] without those inside function
 /// bodies and class bodies (read when they run). A text of the dump, a value: a
 /// `{` after `)` or `=>` opens a function's body (no statements are scanned).
@@ -694,8 +700,8 @@ pub(super) trait Ctx {
     fn arg(&mut self, name: &str) -> Option<String>;
     /// The part of the dump's callback that makes what `text` reads, if it does (D2907).
     fn made_in(&self, text: &str) -> Option<usize>;
-    /// The code the dump puts in the continuation's block `index`.
-    fn block(&mut self, index: usize, info: &[BDecl]) -> Result<String, String>;
+    /// The code the dump puts in the continuation's block `index`, by statement.
+    fn block(&mut self, index: usize, info: &[BDecl]) -> Result<Vec<String>, String>;
     /// The call of the part of the dump's callback that runs once block `block` of the
     /// continuation has its code, or "" (D2907).
     fn go(&self, block: usize) -> String;
@@ -1241,19 +1247,18 @@ impl Ctx for C<'_, '_> {
         Some(sl.value.clone())
     }
 
-    fn block(&mut self, index: usize, info: &[BDecl]) -> R<String> {
+    fn block(&mut self, index: usize, info: &[BDecl]) -> R<Vec<String>> {
         if self.dry {
             if !self.w.acts[self.a].blocks_done {
                 self.w.acts[self.a].blocks.push_out(info.to_vec());
             }
-            return Ok(String::new());
+            return Ok(Vec::new());
         }
         let lines = self.w.emit_place(Pl::Block(self.a, index))?;
-        let content = join(&lines, "\n");
-        if !content.trim().is_empty() {
+        if lines.iter().any(|l| !l.trim().is_empty()) {
             self.w.k_effects = true;
         }
-        Ok(content)
+        Ok(lines)
     }
 
     fn go(&self, block: usize) -> String {

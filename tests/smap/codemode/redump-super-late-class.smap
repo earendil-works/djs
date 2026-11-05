@@ -1,0 +1,51 @@
+function <anonymous> @1..1110
+  arg0 argument 0, arg1 console@0
+  loc0 <state>, loc1 tools@0, loc2 C@0, loc4 <fields 0>, loc5 D@0, loc7 <fields 0>, loc8 make@0, loc9 B@0, loc11 <fields 0>, loc12 E@0, loc14 <fields 0>
+  node 0 Body @0..1109: Params 6..22 Stmt 414..567 Stmt 568..819 Stmt 820..857 Stmt 858..887 Stmt 888..969 Stmt 970..1048 Stmt 1049..1106 | Param tools@0#0 Param console@0#0 Class C@0#1 Class D@0#2 Const make@0#4 Class B@0#5 Class E@0#6
+  node 1 Expr @820..857: Operand 820..856
+  node 2 Call @820..856: Callee 820..831 Open 831..832 Arg 832..855
+  node 3 Await @832..855: Operand 838..855
+  node 4 Expr @1049..1106: Operand 1049..1105
+  node 5 Call @1049..1105: Callee 1049..1060 Open 1060..1061 Arg 1061..1081 Arg 1083..1104
+  node 6 Await @1061..1081: Operand 1067..1081
+  node 7 Await @1083..1104: Operand 1089..1104
+  await#1 @832 (20:13) pc 116: call.callee@820 call.this@820
+    path 0.3 1.0 2.2 3
+  await#2 @1061 (24:13) pc 223: call.callee@1049 call.this@1049
+    path 0.7 4.0 5.2 6
+  await#3 @1083 (24:35) pc 239: call.callee@1049 call.this@1049 call.arg@1061
+    path 0.7 4.0 5.3 7
+function fetch @464..525
+  arg0 x@0
+  loc0 <state>, loc1 this
+  node 0 Body @0..61: Params 11..14 Stmt 17..59 | Param x@0#0
+  node 1 Return @17..59: Operand 24..58
+  node 2 Binary @24..58: Left 24..34 Op 35..36 Right 37..58
+  node 3 Await @38..57: Operand 44..57
+  await#1 @38 (8:41) pc 29: binary.left@24
+    path 0.1 1.0 2.2 3
+function fetch @642..818
+  arg0 x@0
+  loc0 <state>, loc1 a@0, loc2 this, loc3 <home>, loc4 b@0, loc5 c@0
+  node 0 Body @0..176: Params 11..14 Stmt 21..52 Stmt 57..96 Stmt 101..135 Stmt 140..172 | Param x@0#0 Const a@0#1 Const b@0#2 Const c@0#3
+  node 1 Decl(Const) @21..52: Target 27..28 Init 31..51
+  node 2 Await @31..51: Operand 37..51
+  node 3 Decl(Const) @57..96: Target 63..64 Init 67..95
+  node 4 Await @67..95: Operand 73..95
+  node 5 Decl(Const) @101..135: Target 107..108 Init 111..134
+  node 6 Await @111..134: Operand 117..134
+  special Super@37 Super@159
+  await#1 @31 (14:15) pc 23: -
+    path 0.1 1.1 2
+  await#2 @67 (15:15) pc 46: -
+    path 0.2 3.1 4
+  await#3 @111 (16:15) pc 66: -
+    path 0.3 5.1 6
+function twice @991..1047
+  loc0 <state>, loc1 this
+  node 0 Body @0..56: Params 11..13 Stmt 16..54
+  node 1 Return @16..54: Operand 23..53
+  node 2 Await @24..48: Operand 30..48
+  node 3 Binary @23..53: Left 23..49 Op 50..51 Right 52..53
+  await#1 @24 (23:45) pc 28: -
+    path 0.1 1.0 3.0 2

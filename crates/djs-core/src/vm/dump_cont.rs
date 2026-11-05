@@ -648,6 +648,8 @@ impl G<'_, '_> {
     fn declare(&mut self, decls: &[(String, DeclKind, u32, bool)]) -> R<P> {
         let mut early: Vec<P> = Vec::new();
         let mut late: Vec<P> = Vec::new();
+        // (The names `late` binds and their values, by line.)
+        let mut late_names: Vec<(String, String)> = Vec::new();
         let mut after: Vec<P> = Vec::new();
         let mut info = Vec::new();
         let block = self.block_index;
@@ -749,6 +751,7 @@ impl G<'_, '_> {
                 after.push_out(line);
             } else if has_factory_ref(&value) {
                 late.push_out(line);
+                late_names.push_out((String::from(target), value.clone()));
             } else {
                 early.push_out(line);
             }
@@ -756,10 +759,56 @@ impl G<'_, '_> {
         let content = self.ctx.block(block, &info)?;
         self.block_index += 1;
         let mut lines = early;
-        if !content.is_empty() {
-            lines.push_out(P::S(content));
+        // The dump's code before the late bindings, but a line whose evaluation reads one (a member
+        // of a scope the frame shares: `Object.assign($dump.s8, { D3 })` of a class K
+        // declares late) after it, and the lines after that one with it (0215). Not where
+        // a binding it would follow reads a factory that it or a later line fills (the
+        // late bindings wait for that code; the names err on the side of too many).
+        let mut after_late: Vec<Option<usize>> = Vec::new();
+        let mut need = None;
+        for (k, l) in content.iter().enumerate() {
+            if need.is_none() && !late_names.is_empty() {
+                let names = super::plain::eager_names(l);
+                let last = late_names.iter().rposition(|n| names.contains(&n.0));
+                if let Some(last) = last {
+                    let filled = filled_factories(&content[k..]);
+                    let waits = late_names[..=last]
+                        .iter()
+                        .any(|(_, v)| filled.iter().any(|f| v.contains(&cat!("$dump.", f, "."))));
+                    if !waits {
+                        need = Some(last);
+                    }
+                }
+            } else if let Some(n) = need
+                && !late_names.is_empty()
+            {
+                let names = super::plain::eager_names(l);
+                need = Some(
+                    n.max(
+                        late_names
+                            .iter()
+                            .rposition(|x| names.contains(&x.0))
+                            .unwrap_or(n),
+                    ),
+                );
+            }
+            after_late.push_out(need);
         }
-        lines.extend(late);
+        if content.iter().any(|l| !l.is_empty()) {
+            for (l, n) in content.iter().zip(&after_late) {
+                if n.is_none() {
+                    lines.push_out(P::S(l.clone()));
+                }
+            }
+        }
+        for (i, p) in late.into_iter().enumerate() {
+            lines.push_out(p);
+            for (l, n) in content.iter().zip(&after_late) {
+                if *n == Some(i) {
+                    lines.push_out(P::S(l.clone()));
+                }
+            }
+        }
         // The part of the dump's callback that needs this block's code, before the
         // bindings that take what it makes and the code nested in the block (D2907).
         let go = self.ctx.go(block);
@@ -3078,4 +3127,20 @@ fn kind_name(k: NodeKind) -> &'static str {
         NodeKind::ObjectPattern => "an object pattern (0203)",
         NodeKind::Default => "a default value (0203)",
     }
+}
+
+/// The factories (`$dump.F`) the dump's code `lines` assigns members to.
+fn filled_factories(lines: &[String]) -> Vec<&str> {
+    let mut out = Vec::new();
+    for l in lines {
+        for (at, _) in l.match_indices("Object.assign($dump.") {
+            let r = &l[at + "Object.assign($dump.".len()..];
+            let n = r
+                .bytes()
+                .take_while(|c| c.is_ascii_alphanumeric() || *c == b'_')
+                .count();
+            out.push_out(&r[..n]);
+        }
+    }
+    out
 }

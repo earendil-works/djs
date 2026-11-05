@@ -10396,6 +10396,23 @@ compiles each case through a blob from a copy of the VM and requires the same he
 pi's `Engine.compile` keeps blobs per module (64 entries, 8 MB). Import costs about a
 quarter of a compile (a 2.6 KB codemode script: 8 µs for 32 µs native).
 
+## D3025: A block's placed code waits for the late binding it reads; a re-dumped method's home is its function's
+date: 2026-11-07 · by: pjr · issue: 0215
+Two subclass bugs from the plain-dump fuzzer (pjz). First: a block of K writes the dump's
+code for that block (classes, members of a scope the frame shares) before its "late"
+bindings, those whose values read a factory's members (`let D3 = ((C2) => class D3 extends
+C2 {…})($dump.s9.C2)`), so that code made the members first. A member that names such a
+binding (`Object.assign($dump.s8, { D3 })`) then ran in its TDZ and the load threw. Now a
+placed line whose own evaluation reads a late binding (its names outside function and class
+bodies, keys left out) goes right after that binding's line, and the placed lines after it
+go with it (their order stays). It doesn't move where a late binding it would follow reads a
+factory that it or a later placed line fills. Every other dump stays byte for byte as it was.
+Second: a subclass's async method that awaited `super.fetch(...)` was dumped with K
+resuming that call, so K uses no `super` and has no home object. At the next dump origin
+tracking found no `<home>` in K's frame for the method's own, and no super prototype for the
+regenerated K. Both now come from the origin function's home object (the value its
+`<home>` local holds, D2871's form gives the new K that home's prototype).
+
 ## D3041: Suspension maps travel from one VM's dump to the next VM
 date: 2026-11-06 · by: lazy · issue: 0219
 A dump compiles the suspension maps of the scripts its activations run in (pjr: ~30% of a

@@ -773,8 +773,8 @@ impl Ctx for Canon<'_> {
     fn made_in(&self, _: &str) -> Option<usize> {
         None
     }
-    fn block(&mut self, _: usize, _: &[BDecl]) -> Result<String, String> {
-        Ok(String::new())
+    fn block(&mut self, _: usize, _: &[BDecl]) -> Result<Vec<String>, String> {
+        Ok(Vec::new())
     }
     fn go(&self, _: usize) -> String {
         String::new()

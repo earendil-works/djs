@@ -507,6 +507,10 @@ impl Dumper<'_> {
                     None if super::flight::class_hidden(&x.name) => Value::UNDEFINED,
                     // The function's `this` kept in a local: K is called with it.
                     None if x.name == "this" => frame[1],
+                    // Its home object kept in a local, where K uses no `super` (the call
+                    // was in flight: K resumes it): the function's own (0215).
+                    None if x.name == "<home>" => super::flight::home_object(self.h, f)
+                        .map_or(Value::UNDEFINED, Value::object),
                     None => {
                         return Err(cat!(
                             "a continuation of an earlier dump: no `",

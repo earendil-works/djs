@@ -351,6 +351,7 @@ corpus	codemode/redump-jumps-through-finally.js	21980	8502
 corpus	codemode/redump-loops.js	10406	4055
 corpus	codemode/redump-operands.js	34006	13431
 corpus	codemode/redump-stale-locals.js	15453	5590
+corpus	codemode/redump-super-late-class.js	17514	6547
 corpus	codemode/redump-template.js	4513	1790
 corpus	codemode/script-style.js	2775	1160
 corpus	codemode/tool-failure.js	2110	844
