@@ -10829,3 +10829,16 @@ table at run time and so put every `CellLayout`, `FieldInfo`, `TailInfo` and the
 in the module. Since the GC traces from compile-time slot plans (0224), nothing else at
 run time reads the layouts; `layout()` stays for tests, the layout hash and djs-docs.
 Module −1.7 KB gzip, instructions within ±1.1% on the 12 workloads (with D3094).
+
+## D3084: Instruction ceilings for work the gate cannot time
+date: 2026-11-05 · by: perfreg · issue: 0224
+crates/djs-core/tests/instructions.rs measures the machine instructions a `Vm::new`
+(building the realm and compiling the prelude from source) takes: the test binary
+re-runs itself under `/usr/bin/time -l` with the work and without it, the lower of two
+runs each. Instructions retired repeat to 0.1% whatever the load, where times in the
+gate (everything in parallel) do not. The ceiling is the count measured when it was set
+plus 20%, per profile (dev, which the gate runs, and release), for growth of the prelude
+and the builtins; a count above it is a regression unless that growth explains it, and
+raising it takes the numbers. D3091's name lookup measured 198M against 136M. Only macOS
+reports the counter; elsewhere the test says so and passes. Further ceilings of this kind
+go in the same file.

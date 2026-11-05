@@ -4,7 +4,7 @@ key	value	commit	date
 bounds/gzip	7895	7167411f0f	2026-11-05
 bounds/instructions-max-pct	16.8	7167411f0f	2026-11-05
 bounds/instructions-median-pct	10.9	7167411f0f	2026-11-05
-compile/typescript-lazy-time-pct	56	1d4008576c	2026-11-05
+compile/typescript-lazy-time-pct	56	35ed5ab789	2026-11-05
 dump/bytes	1835917	035457334f-dirty	2026-11-05
 dump/extra-gzip	331830	035457334f-dirty	2026-11-05
 dump/gzip	754146	035457334f-dirty	2026-11-05
@@ -30,8 +30,8 @@ heap/literal4/shape	72.0	7167411f0f	2026-11-05
 heap/sandbox-memory	655360	7167411f0f	2026-11-05
 heap/string-10mib-memory	14024704	7167411f0f	2026-11-05
 heap/string-10mib-staged-memory	35127296	7167411f0f	2026-11-05
-native/arrays-x	3.74	1d4008576c	2026-11-05
-native/foreach-x	2.1	1d4008576c	2026-11-05
+native/arrays-x	3.74	35ed5ab789	2026-11-05
+native/foreach-x	2.1	35ed5ab789	2026-11-05
 pi/bench/polls/djs	76782	7167411f0f	2026-11-05
 pi/bench/polls/djs-prelude	74205	7167411f0f	2026-11-05
 pi/bench/polls/qjs	60652	7167411f0f	2026-11-05
@@ -85,7 +85,7 @@ wasm/code	821404	035457334f-dirty	2026-11-05
 wasm/data	97917	035457334f-dirty	2026-11-05
 wasm/exports	63	035457334f-dirty	2026-11-05
 wasm/gzip	422316	035457334f-dirty	2026-11-05
-wire/decode-vs-json-objects	1.98	1d4008576c	2026-11-05
-wire/decode-vs-json-string	16.0	1d4008576c	2026-11-05
-wire/read-vs-json-objects	1.71	1d4008576c	2026-11-05
-wire/read-vs-json-text	5.63	1d4008576c	2026-11-05
+wire/decode-vs-json-objects	1.98	35ed5ab789	2026-11-05
+wire/decode-vs-json-string	16.0	35ed5ab789	2026-11-05
+wire/read-vs-json-objects	1.71	35ed5ab789	2026-11-05
+wire/read-vs-json-text	5.63	35ed5ab789	2026-11-05

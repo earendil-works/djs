@@ -61,6 +61,11 @@ before restructuring code it may also touch. Batched merges, gate checks locally
   two-byte output; fixed, test) and startup/vm_new compiling the prelude 5.8 → 9.4 ms
   (e3093e0c6b, 0225's intrinsic_id via a UTF-8 check per name; fixed). Recorded the
   whole bench at 1d4008576c (load 3.0–4.1), status.py bench, regen.
+- Merged (b1a0249a). merge-to-main had rebased 1d4008576c to 35ed5ab789 over two commits
+  that add issue files only, so all rows were relabelled (sources identical). The wasm rows
+  were not re-recorded: 0226 is so far an issue on main, not code, so they already describe
+  the shipped module. Added crates/djs-core/tests/instructions.rs (owner): instructions of a
+  `Vm::new`, ceiling +20% over today's 136M (dev); the D3091 lookup measured 198M (D3084).
 
 ## Follow-ups
 - regexp compile of `/(?<y>\d{4})-.../` is still +6% instructions over 2026-11-01: the start
@@ -68,9 +73,7 @@ before restructuring code it may also touch. Batched merges, gate checks locally
   check buys little; dropping it would change bytecode and scans, measure first.
 - `wasm/instantiate` is mostly memory setup and data-segment copying: the shipped
   module's data (98 KB now) is the lever, in size work.
-- No gate guard for prelude compile time (the intrinsic_id regression showed only in a
-  bench record); a fixed-work instruction count of `vm_new compiling the prelude` would
-  catch the next one if the gate grows a perf leg.
+- Re-record the wasm group once 0226 lands the unchecked heap in the shipped module.
 
 ## Result
 All six 0223 findings resolved (work/research/0224/README.md has the bisections and numbers):
@@ -85,6 +88,10 @@ All six 0223 findings resolved (work/research/0224/README.md has the bisections 
 - UTF-16 scans: no regression (instruction counts).
 - wasm/instantiate: the bench module's data segment; `wasm/instantiate shipped` added.
 - engine/djs/empty: measures the prelude since 0044; documented.
-- Also fixed: 0225's intrinsic_id slowdown of prelude compilation (9.4 → 5.9 ms).
+- Also fixed: 0225's intrinsic_id slowdown of prelude compilation (9.4 → 5.9 ms), guarded
+  by an instruction-count test.
 Shipped wasm: regexp-compile −13%, json-objects −25% instructions, the rest equal or
-better. Decisions D3080–D3083. Bench re-recorded at 1d4008576c.
+better. Decisions D3080–D3083. Bench re-recorded (rows at 35ed5ab789).
+Guards: tests/allocs.rs (regexp compile allocations), tests/instructions.rs (prelude
+compile instructions, macOS), arena and stringify unit tests, the IC-cache test, and the
+bench's per-collection gc rows.

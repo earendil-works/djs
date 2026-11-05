@@ -84,7 +84,7 @@ output buffer was one-byte, so once a two-byte string (the dataset's 日本) wid
 output, every key of every object was quoted again. One-byte keys are now quoted into the
 cache and copied from there whatever the output's width.
 
-| (native, ms, recorded) | 2026-11-01 | 0223 (7167411f0f) | 0224 (1d4008576c) |
+| (native, ms, recorded) | 2026-11-01 | 0223 (7167411f0f) | 0224 (35ed5ab789) |
 | --- | ---: | ---: | ---: |
 | stringify 10k-objects | 2.29 | 3.38 | 2.37 |
 | stringify 1mib-text-unicode | 0.93–1.95 | 1.21 | 0.73 |
@@ -158,11 +158,20 @@ at 9.1–9.4 ms (0223: 5.8 ms; wasm 12.9 → 15.8 ms). Bisected to e3093e0c6b (0
 the compact intrinsic name tables): `intrinsic_id` searched the names through
 `intrinsic_name`, a UTF-8 check per name, and the compiler looks up every `@intrinsic`
 reference of the builtins' and the prelude's source. It compares the name bytes in place
-now: 5.9 ms native, 11.7 ms wasm, no size cost. Only the paths that build a realm from
+now: 5.9 ms native, 11.7 ms wasm, no size cost. Guard: crates/djs-core/tests/instructions.rs
+counts the instructions of a `Vm::new` (macOS `/usr/bin/time -l`, the test binary
+re-running itself, minus an empty run): 136M in the dev profile the gate runs (repeats
+within 0.1%), ceiling 163M; with the D3091 lookup it measures 198M. Only the paths that build a realm from
 source pay this (the base image is built that way at build time; `vm_new` from the base
 does not compile).
 
-## Final records (1d4008576c, load 3.0–4.1)
+## Final records (35ed5ab789, load 3.0–4.1)
+
+Recorded at 1d4008576c, which merge-to-main rebased to 35ed5ab789 onto two commits that
+only add issue files (0226, 0227): the sources are identical
+(`git diff --stat 1d4008576c 35ed5ab7` lists work/ only), so every row, wasm included, was
+relabelled. 0226 (the unchecked heap in the shipped module) is an issue, not yet code:
+the wasm rows describe the checked module that ships today.
 
 Against 0223's record (7167411f0f): regexp/compile 0.44–0.71x the time, gc per MiB 0.62x
 (records) and 0.77x (list), `gc/records collection` 7.3 ms and `gc/linked list
