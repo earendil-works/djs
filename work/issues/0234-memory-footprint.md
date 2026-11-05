@@ -46,6 +46,31 @@ After a run, memory = 384 KiB + arena capacity + holes where the arena moved:
 Native instruction counts (djs run --body, data inlined) for the CPU side; wasm counts in
 node are within V8 tier-up noise (±5%).
 
+### Coordinator decisions (after the ranked list)
+1 (arena growth), 2 (exact start), 3 (staging), 7 (mark stack reserve): approved, shared heap
+edits included; one merge. 4+5 (GC growth discounting big leaf cells, minor collections detach
+slices): do, within ≤2% CPU on every workload, or 5 alone. 6 (smaller allowance): no. Shadow
+stack: no. Base image size: follow-up.
+
+### Batch 1 (D3140-D3143)
+Landed 1, 2, 3, 7. KiB of linear memory after a run (fresh sandbox, 2nd instance of the module;
+mem.ts):
+
+| | idle | seq | fanout | media | inspect | loop | text | json | heavy |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| before | 640 | 896 | 2496 | 1024 | 640 | 896 | 1344 | 1856 | 4864 |
+| after | 576 | 704 | 1792 | 1024 | 640 | 896 | 1216 | 1472 | 4864 |
+| quickjs | 320 | 448 | 1664 | 1088 | 384 | 512 | 640 | 1152 | 2432 |
+
+Wasm instructions per run (node, 20 runs minus 0, two rounds): within noise (±2%) on every
+workload. Module +148 B gzip (shipped), +131 B (slim). Guide: arena.md (start, growth steps,
+staging) updated; gc.md unaffected.
+The mark stack reserve shows no change in these numbers: at heavy's size the other side tables
+(bitmap 66 KiB, table 33 KiB, remembered list 16 KiB) already overflow the 128 KiB segment.
+
 ## Follow-ups
+
+- The base image (182 KB) against QuickJS's ~130 KB realm: the largest piece of idle memory
+  after the stack.
 
 ## Result

@@ -140,11 +140,13 @@ The arena grows like a `Vec`, by reallocating, with a few twists, all aimed at t
 of wasm memory: wasm linear memory never shrinks, so the peak is what a run costs.
 
 - **It starts small.** A VM made from the base or restored from an image reserves the
-  image plus one 64 KiB page, not room up to its first collection threshold: most
-  sandboxes never need more, and the rest grow in place. Only a host that says how big
+  image rounded up to whole 64 KiB pages, not room up to its first collection threshold:
+  an idle sandbox needs no more, and a running one grows in place. Only a host that says how big
   the heap will get (one that runs a large script of its own right after creating the
   VM, say) gets that room up front.
-- **It stops at the GC threshold.** Below the threshold, growth doubles but never
+- **It grows in small steps and stops at the GC threshold.** Below the threshold, each
+  growth adds an eighth, in whole pages, rather than doubling: in wasm the arena grows in
+  place, so doubling would only reserve pages the run may never touch. Growth never
   reserves past the threshold and a small slack for what is allocated before the next
   safepoint. Past it, a collection is pending and growth is by a quarter. Thresholds are
   whole 64 KiB wasm pages.
@@ -154,7 +156,10 @@ of wasm memory: wasm linear memory never shrinks, so the peak is what a run cost
   hold the old and the new copy at once. The allocator works to keep the arena at the
   end of memory: the general-purpose allocator's first pages come before it, and
   mid-sized blocks that the general allocator cannot hold get page runs of their own,
-  which go back when freed instead of staying behind the arena for good.
+  which go back when freed instead of staying behind the arena for good. A large value
+  the host hands in (a tool result) is staged in a block that starts some pages after the
+  arena, so that the arena grows into the gap while the value is decoded into it, and the
+  block is freed once the next small value is staged.
 - **It has a cap.** The embedder sets a memory limit. The arena may grow to the limit
   minus a reserve of `min(cap / 32, 1 MiB)`. Reaching that point is the catchable
   `InternalError: out of memory`, a preallocated object, as in QuickJS. Throwing it

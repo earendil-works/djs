@@ -11016,3 +11016,36 @@ medians as `engines/<engine>/...`, `engines/<engine>/<workload>/{run-ms,memory}`
 engines-size|engines-startup|engines-run|engines-memory|engines-dumps` (the engine and workload
 lists are constants in crates/djs-docs/src/status.rs), with the commit, date and load. The
 `recorded` region leaves these keys out: they are the page's tables.
+## D3140: Below the GC threshold the arena grows by an eighth, in whole pages
+date: 2026-11-05 · by: pmem · issue: 0234
+`Arena::reserve` grows the capacity to `cap + max(cap/8, 64 KiB)`, rounded up to 64 KiB, not
+to `2 * cap` (still capped by the GC target, D1870). In wasm the arena grows in place at
+memory's end (D2053), so doubling bought nothing but pages a run might never touch, and the
+benchmark runs that end below their first threshold paid for them: sequential 896 → 704 KiB,
+text 1344 → 1216, json 1856 → 1472. Natively the more frequent reallocs cost nothing measurable
+(scripts/perf/w workloads within ±0.2% instructions).
+
+## D3141: A VM's arena starts at the image in whole pages; the page allocator's HUGE is 128 KiB
+date: 2026-11-05 · by: pmem · issue: 0234
+`Heap::image_capacity` is the image rounded up to 64 KiB pages, no longer the image plus a page
+(D1942, D2541): idle memory 640 → 576 KiB. For the arena to grow in place from there, the base
+buffer must be a page run (a huge block) and the top block: `HUGE` drops from 256 to 128 KiB (the
+base is ~182 KB, the slim one ~132 KB; `page_block` still lifts a smaller one to HUGE), so a
+192 KiB base buffer no longer starts as a medium block that moves when it outgrows HUGE. Blocks
+of 128–256 KiB never fit dlmalloc's 128 KiB first segment anyway.
+
+## D3142: Big staging requests get their own block, placed after room for the arena
+date: 2026-11-05 · by: pmem · issue: 0234
+`djs_staging(len)` for `len` ≥ 16 KiB frees the old buffer and allocates a fresh one with the
+page allocator told (`with_top_room`) to start page runs placed right behind the arena `2 * len`
+later; a smaller request drops a big buffer. Before, the staging buffer stayed at its high-water
+size right behind the arena, and decoding a big wire value (a tool result, a non-Latin-1
+string: UTF-8 can double as UTF-16) moved the arena past it, leaving its old pages as a hole:
+fanout 2496 → 1792 KiB. The gap pages are free; the arena grows into them.
+
+## D3143: The mark stack reserves 16 KiB up front
+date: 2026-11-05 · by: pmem · issue: 0234
+`STACK_RESERVE` (4096 entries) is what a collection reserves before marking; the stack still
+grows on demand to `max(len/64, STACK_CAP)` entries. The 64 KiB reserve did not fit dlmalloc's
+first segment next to the other side tables, so it became a page run at memory's end, one more
+page for every run that collected.
