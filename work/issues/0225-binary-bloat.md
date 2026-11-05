@@ -1,6 +1,6 @@
 # 0225: Binary bloat: where the shipped module's bytes go and how to win them back
 
-status: in-progress
+status: done
 agent: bytes
 branch: issue/0225-binary-bloat
 depends-on: 0223
@@ -79,5 +79,31 @@ numbers and the coordinator's OK (wasm instruction counts per workload as in 022
   owner).
 
 ## Follow-ups
+- unsafe-heap in the shipped module: −7.7 KB gzip and −8 to −15% instructions, but
+  rejected for safety in D2520; an owner decision.
+- #4, the data segments coded with lzrc: −5.8 KB gzip, but +~3 ms per module (first
+  instance) and every build path and host would have to restore the data. Shelved;
+  numbers in work/research/0225/README.md.
 
 ## Result
+The shipped module is 442,576 → 422,316 bytes gzip (1.544x → 1.473x quickjs-wasi, within
+the D020 budget of 429,982 with 7.7 KB of headroom). Slim 378.2 → 356.9 KB, the dump
+module 784.7 → 754.1 KB. Ceilings: shipped 423,340, slim 357,941.
+
+- Accounting and history: work/research/0225/README.md (every section, area, function,
+  source line and data symbol; named builds of 0148, 0161, 0204). The module did not grow
+  since 0161: features paid for themselves with cuts, and the budget was never met.
+- Landed: D3090 (core and alloc built for the module, `-Cpanic=immediate-abort`,
+  `-Zshare-generics=no`: −10.8 KB), D3091 (intrinsic run-time tables: −0.8), D3092 (opcode
+  names apart from the instruction table: −1.6), D3093 (the compiler names intrinsics at
+  compile time: −0.8, typescript.js compile −6.2% instructions), D3094 (wasm builds carry
+  the prelude's install intrinsics only with djs-core's `prelude` feature: −4.9), D3095
+  (cell layouts out of the run time: −1.7). Speed per batch within −3.1..+2.3% on the 12
+  workloads, none past 3%.
+- Measured and not done (numbers in the research notes and the log): wasm-opt (larger
+  gzip), `#[optimize(size)]` (−2.5 KB for ~750 attributes), Unicode re-packing (near
+  entropy), the Fault/Value niche #2 (+2.6..+4.0 KB and slower: work/research/0225/niche.md),
+  duplicate monomorphs (gzip absorbs them), a smaller allocator, u32 arena checks, a shared
+  `bad_argument` exit.
+- Known gaps: what remains is diffuse Rust idiom cost (drop glue, `?` conversions, arena
+  bounds checks) and the measured speed twins (D2310).
