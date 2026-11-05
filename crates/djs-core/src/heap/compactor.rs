@@ -805,11 +805,12 @@ impl Heap {
         }
         let mut at = live.next_live(old);
         while let Some(c) = at {
-            let kb = arena.get(c, Header::KIND);
+            // The whole header in one read: kind, gc bits, flags, size.
+            let h: u64 = arena.read(c);
+            let (kb, size) = (h as u8, (h >> 32) as u32);
             let kind = CellKind::from_u8(kb).unwrap_or_else(|| super::fail::bad_cell_kind(kb, c));
-            let size = arena.get(c, Header::SIZE);
             // The mark is not needed past this point (the bitmap has it).
-            let gc = arena.get(c, Header::GC);
+            let gc = (h >> 8) as u8;
             arena.set(c, Header::GC, gc & !(gc_bits::MARK | gc_bits::COUNTED));
             if kind == CellKind::FuncTemplate {
                 // Before its IC ref is updated: the slots are cleared where they are now.
@@ -822,7 +823,9 @@ impl Heap {
                 }
             }
             // Marking rewrote references to flattened ropes: every target is marked.
-            update(arena, kind, c, size);
+            if !is_leaf(kb) {
+                update(arena, kind, c, size);
+            }
             at = live.next_live(c + size);
         }
         // 4. Slide down in address order (never onto a cell not yet moved), a run of
