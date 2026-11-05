@@ -296,7 +296,8 @@ fn scan(
             }
             b'`' => {
                 i = template_text(b, i + 1, &mut tpl, depth);
-                regex_ok = false;
+                // (After `${` an expression starts: `${/a/g.source}`.)
+                regex_ok = b[..i].ends_with(b"${");
                 after_dot = false;
                 continue;
             }
@@ -343,7 +344,7 @@ fn scan(
                 if tpl.last() == Some(&depth) {
                     tpl.pop();
                     i = template_text(b, i + 1, &mut tpl, depth);
-                    regex_ok = false;
+                    regex_ok = b[..i].ends_with(b"${");
                     after_dot = false;
                     continue;
                 }
@@ -3013,6 +3014,14 @@ mod tests {
 
     fn dump_names(r: &Refs) -> Vec<&str> {
         r.dump.iter().map(|(n, _)| n.as_str()).collect()
+    }
+
+    /// A regular expression in a template's substitution (0207, seed 9828): the scan once
+    /// read it as a division and lost the rest of the text.
+    #[test]
+    fn spans_after_a_regexp_in_a_substitution() {
+        let t = "const v = `${f()}-${g()}:${/a(b)?/g.source}`;\n$dump.zz;";
+        assert_eq!(scan_spans(t).len(), 1);
     }
 
     #[test]
