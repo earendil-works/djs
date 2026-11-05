@@ -3,9 +3,9 @@
 use alloc::string::String;
 
 use crate::bytecode::template::func_flags;
+use crate::heap::cells::FuncTemplate;
 use crate::heap::cells::flags::OBJ_BUILTIN;
-use crate::heap::cells::{FuncTemplate, Script};
-use crate::heap::{Heap, ObjectClass, Ref, atoms};
+use crate::heap::{Heap, ObjectClass, atoms};
 use crate::interp::conv::{Fault, type_error};
 use crate::value::{Obj, Str, Value};
 
@@ -56,12 +56,13 @@ pub(crate) fn source_slice(heap: &Heap, f: Obj) -> Option<String> {
     let t = heap.closure_template(f);
     let a = heap.arena();
     let debug = crate::bytecode::template::debug_info(heap, t);
-    let source: Ref = a.get(debug.script.get()?, Script::SOURCE);
     let (start, end) = (debug.src_start as usize, debug.src_end as usize);
     let kind = func_flags::kind(u32::from(a.get::<u16>(t, FuncTemplate::FLAGS)));
     if matches!(kind, func_flags::KIND_SCRIPT | func_flags::KIND_ASYNC_BODY) {
         return None;
     }
-    let text = heap.str_to_string(Str(source.get()?));
-    text.get(start..end).map(String::from)
+    let source = crate::bytecode::template::script_source(heap, debug.script.get()?)?;
+    core::str::from_utf8(source.get(start..end)?)
+        .ok()
+        .map(String::from)
 }

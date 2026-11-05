@@ -19,7 +19,7 @@ use super::resolve::Unit;
 use super::{CompileError, CompileOptions, PResult, error_at};
 use crate::bytecode::capture_desc;
 use crate::bytecode::lines::line_entries;
-use crate::bytecode::template::{bytes_of, debug_info, func_flags};
+use crate::bytecode::template::{bytes_of, debug_info, func_flags, script_source};
 use crate::heap::cells::{FuncTemplate, Script, U32Array};
 use crate::heap::{Atom, Heap, Ref};
 use crate::value::Str;
@@ -69,20 +69,20 @@ pub fn compile_lazy(heap: &mut Heap, t: Ref) -> Result<Ref, CompileError> {
             .map(|s| heap.str_to_string(Str(s)))
             .unwrap_or_default()
     };
-    let (src, filename, params, bits) = match script.get() {
+    let (span, filename, params, bits) = match script.get() {
         Some(s) => (
-            text(a.get(s, Script::SOURCE)),
+            // Only the function's text is copied (the source is UTF-8, D2992).
+            script_source(heap, s)
+                .and_then(|b| b.get(info.src_start as usize..info.src_end as usize))
+                .map(<[u8]>::to_vec)
+                .unwrap_or_default(),
             text(a.get(s, Script::NAME)),
             text(a.get(s, Script::PARAMS)),
             a.get::<u32>(s, Script::OPTIONS),
         ),
         None => Default::default(),
     };
-    // (Batch 1 converts the whole source; the span is what is parsed.)
-    let span = src
-        .as_bytes()
-        .get(info.src_start as usize..info.src_end as usize)
-        .unwrap_or_default();
+    let span = &span[..];
     let params: Vec<&str> = if params.is_empty() {
         Vec::new()
     } else {

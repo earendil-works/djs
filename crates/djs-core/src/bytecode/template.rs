@@ -311,10 +311,14 @@ fn nonempty<T>(
 pub fn alloc_script(
     heap: &mut Heap,
     name: Str,
-    source: Option<Str>,
+    source: Option<&[u8]>,
     options: u32,
     params: Option<Str>,
 ) -> Result<Ref, HeapError> {
+    let source = match source {
+        Some(s) => alloc_bytes(heap, s)?,
+        None => Ref::NULL,
+    };
     let off = heap.alloc_cell(CellKind::Script, Script::LAYOUT.min_size)?;
     let a = heap.arena_mut();
     a.set(off, Script::OPTIONS, options);
@@ -324,12 +328,22 @@ pub fn alloc_script(
         params.map_or(Ref::NULL, |s| Ref(s.offset())),
     );
     a.set(off, Script::NAME, Ref(name.offset()));
-    a.set(
-        off,
-        Script::SOURCE,
-        source.map_or(Ref::NULL, |s| Ref(s.offset())),
-    );
+    a.set(off, Script::SOURCE, source);
     Ok(Ref(off))
+}
+
+/// The source text of Script cell `script` as UTF-8 (D2992), or `None` when it keeps none.
+pub fn script_source(heap: &Heap, script: u32) -> Option<&[u8]> {
+    let r: Ref = heap.arena().get(script, Script::SOURCE);
+    r.get()?;
+    Some(bytes_of(heap, r))
+}
+
+/// [`script_source`] as a `String`.
+pub fn script_text(heap: &Heap, script: u32) -> Option<alloc::string::String> {
+    core::str::from_utf8(script_source(heap, script)?)
+        .ok()
+        .map(alloc::string::String::from)
 }
 
 fn alloc_value_array(heap: &mut Heap, values: &[Value]) -> Result<Ref, HeapError> {

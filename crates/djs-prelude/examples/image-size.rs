@@ -36,7 +36,7 @@ fn main() {
             CellKind::Script => {
                 let r: Ref = a.get(c.offset, Script::SOURCE);
                 if let Some(r) = r.get() {
-                    role.insert(r, "Str: script sources");
+                    role.insert(r, "Bytes: script sources");
                 }
             }
             CellKind::Object => {

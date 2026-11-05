@@ -607,6 +607,9 @@ fn options(memory_limit: u32) -> VmOptions {
         } else {
             memory_limit as usize
         },
+        // The dump module compiles functions at their first call (D2990, D2993).
+        #[cfg(feature = "dump")]
+        lazy_functions: true,
         ..VmOptions::default()
     }
 }

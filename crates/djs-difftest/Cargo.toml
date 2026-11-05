@@ -26,7 +26,8 @@ path = "src/bin/djs-abidrive.rs"
 [features]
 default = ["full", "unicode", "dump", "lazy"]
 # `--plain-dumps` (0172, 0201): djs-core's dumper.
-dump = ["djs-core/dump"]
+# (djs-wasm's too: djs-abidrive drives the exports as the dump module has them.)
+dump = ["djs-core/dump", "djs-wasm/dump"]
 # `--lazy`: lazy functions (D2990).
 lazy = ["djs-core/lazy", "djs-test262/lazy"]
 # djs-core's features (D2411): `--no-default-features` builds against the slim engine.

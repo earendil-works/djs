@@ -10190,3 +10190,25 @@ compiled function's positions are relative to its start; `resolve::Unit` adds th
 and the line and column back. `vm::lazy_tests` compares every lazily compiled function of
 the corpus and the golden dumps with its eager template (code, constants, line table,
 names, sizes).
+
+## D2992: A Script keeps its source as UTF-8 bytes
+date: 2026-11-06 · by: lazy · issue: 0218
+`Script::SOURCE` was a string (Latin-1 or UTF-16) while every template's source span is
+in UTF-8 bytes, so each reader converted the whole source: `Function.prototype.toString`
+per call, and a lazy function's first compile (D2990) would have been O(script). The
+Script now holds the bytes the compiler read, in a `Bytes` cell (`template::script_source`,
+`script_text`): a lazy compile copies only its function's span and `toString` converts
+only the function's text. Same size for ASCII. COMPAT_VERSION 3.
+
+## D2993: The dump module compiles lazily; the dumper reads lazy templates
+date: 2026-11-06 · by: lazy · issue: 0218
+djs-wasm's `dump` feature sets `VmOptions::lazy_functions` for every VM (pi's dumping path
+runs that module); the native library default stays eager. The dumper reads templates of
+closures that may never have run: for a lazy template that ran it reads the compiled one
+(its `IC`), and for one that never ran it takes the globals the function and the ones
+inside it read from its script's `compiler::free_names` (D2889), parsed once per script
+(`Dumper::lazy_globals`); capture names are on every lazy template. A dump of a lazy VM
+is the same text as of an eager one (the corpus's plain dumps differ only in the clock).
+The gate's plain dumps leg runs `--lazy`, like the stressed difftest and test262 (with an
+eager test262 run beside it). A plain dump's own load stays eager (`compile_with_maps`)
+until 0218's batch 3.

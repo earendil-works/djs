@@ -30,7 +30,7 @@ include!(concat!(env!("OUT_DIR"), "/image_deps.rs"));
 /// existing slot or record field holds, in how the builtins' JS reads internal records
 /// (`%RecordGet` indexes), in Map/Set or string invariants, in what an inline cache word
 /// or an opcode's immediate means, or in the frame layout of suspended generators.
-pub const COMPAT_VERSION: u32 = 2;
+pub const COMPAT_VERSION: u32 = 3;
 
 /// One component of the descriptor.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

@@ -499,10 +499,8 @@ pub(super) fn finish(
         let name = heap.alloc_str(opts.filename)?;
         // Privileged code (the prelude) keeps no source text: its functions print as
         // native code, and the text would be a quarter of the base image (D1340).
-        let source = match core::str::from_utf8(src) {
-            Ok(s) if !opts.privileged => Some(heap.alloc_str(s)?),
-            _ => None,
-        };
+        // UTF-8, as compiled: a lazy function's text is a slice of it (D2992).
+        let source = (!opts.privileged && core::str::from_utf8(src).is_ok()).then_some(src);
         let params = if opts.goal == super::Goal::AsyncBody && !opts.params.is_empty() {
             // (Not `join`: its generic copy is a kilobyte of wasm.)
             let mut joined = alloc::string::String::new();

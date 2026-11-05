@@ -799,6 +799,10 @@ struct Dumper<'a> {
     ts_scripts: core::cell::RefCell<Vec<u32>>,
     /// The base heap: the checker compiles the dump into it.
     scratch: Option<Heap>,
+    /// The globals of each function of a script with lazy templates that never ran
+    /// (D2990): `(script, [(start, end, globals of it and the functions inside it)])`.
+    #[allow(clippy::type_complexity)]
+    lazy_names: Vec<(u32, Vec<(u32, u32, Vec<String>)>)>,
     /// Plain dumps: the text written for a class whose static code is blanked
     /// (dump_statics.rs), by the class's text.
     class_texts: Vec<(String, String)>,
@@ -882,6 +886,7 @@ impl<'a> Dumper<'a> {
             ts: core::cell::Cell::new(false),
             ts_scripts: core::cell::RefCell::new(Vec::new()),
             scratch: None,
+            lazy_names: Vec::new(),
             class_texts: Vec::new(),
             fn_protos: Index::default(),
             class_locals: Vec::new(),
@@ -1600,16 +1605,7 @@ impl<'a> Dumper<'a> {
         let t = h.closure_template(o);
         let info = template::debug_info(h, t);
         let (a, b) = (info.src_start, info.src_end);
-        let Some(src) = info
-            .script
-            .get()
-            .and_then(|s| {
-                h.arena()
-                    .get::<Ref>(s, crate::heap::cells::Script::SOURCE)
-                    .get()
-            })
-            .map(|s| text_of(h, crate::value::Str(s)))
-        else {
+        let Some(src) = info.script.get().and_then(|s| template::script_text(h, s)) else {
             return;
         };
         let symbol_shadowed = self.globals.iter().any(|g| g.name == "Symbol");
@@ -1886,28 +1882,120 @@ impl<'a> Dumper<'a> {
     /// as roots, visited after the current node.
     fn global_refs(&mut self, t: u32) {
         let h = self.h;
+        let t = compiled(h, t);
+        if unrun(h, t) {
+            for name in self.lazy_globals(t) {
+                if let Some(g) = self.globals.iter().position(|g| g.name == name) {
+                    self.global_root(g);
+                }
+            }
+            return;
+        }
         for insn in crate::bytecode::insns(template::code(h, t)).flatten() {
             if matches!(
                 insn.info().name,
                 "get_global" | "get_global_typeof" | "put_global"
             ) && let Some(g) = self.global_atoms.get(key(insn.atom(0).id()))
             {
-                let g = g as usize;
-                if self.globals[g].root.is_none() {
-                    let name = self.globals[g].name.clone();
-                    if self.roots[..self.explicit].iter().any(|r| r.name == name) {
-                        continue;
-                    }
-                    self.globals[g].root = Some(self.roots.len());
-                    let (decl, value) = (self.globals[g].decl, self.globals[g].value);
-                    self.push_root(name, decl, value);
-                }
+                self.global_root(g as usize);
             }
         }
         for i in 0..template::child_count(h, t) {
             if let Some(c) = template::child(h, t, i).and_then(|r| r.get()) {
                 self.global_refs(c);
             }
+        }
+    }
+
+    /// Makes user global `g` a root, visited after the current node.
+    fn global_root(&mut self, g: usize) {
+        if self.globals[g].root.is_none() {
+            let name = self.globals[g].name.clone();
+            if self.roots[..self.explicit].iter().any(|r| r.name == name) {
+                return;
+            }
+            self.globals[g].root = Some(self.roots.len());
+            let (decl, value) = (self.globals[g].decl, self.globals[g].value);
+            self.push_root(name, decl, value);
+        }
+    }
+
+    /// The globals that lazy template `t`, which never ran, or a function inside it reads
+    /// or writes (D2990): its script's free names (`compiler::free_names`, the names
+    /// its code would have), parsed once per script in a heap of their own.
+    fn lazy_globals(&mut self, t: u32) -> Vec<String> {
+        let h = self.h;
+        let info = template::debug_info(h, t);
+        let Some(script) = info.script.get() else {
+            return Vec::new();
+        };
+        let i = match self.lazy_names.iter().position(|m| m.0 == script) {
+            Some(i) => i,
+            None => {
+                let names = (|| {
+                    let src = template::script_text(h, script)?;
+                    let a = h.arena();
+                    let params: Ref = a.get(script, crate::heap::cells::Script::PARAMS);
+                    let params = params
+                        .get()
+                        .map(|s| text_of(h, crate::value::Str(s)))
+                        .unwrap_or_default();
+                    let bits = a.get::<u32>(script, crate::heap::cells::Script::OPTIONS);
+                    let list: Vec<&str> = params.split(',').filter(|p| !p.is_empty()).collect();
+                    let opts = crate::compiler::CompileOptions::from_bits("dump.js", &list, bits);
+                    let mut heap = Heap::new().ok()?;
+                    let fns = crate::compiler::free_names(&mut heap, src.as_bytes(), &opts).ok()?;
+                    Some(
+                        fns.iter()
+                            .map(|f| {
+                                let g = f.globals.iter().map(|&g| atom_text(&heap, g)).collect();
+                                (f.start, f.end, g)
+                            })
+                            .collect(),
+                    )
+                })()
+                .unwrap_or_default();
+                self.lazy_names.push_out((script, names));
+                self.lazy_names.len() - 1
+            }
+        };
+        self.lazy_names[i]
+            .1
+            .iter()
+            .find(|f| f.0 == info.src_start && f.1 == info.src_end)
+            .map(|f| f.2.clone())
+            .unwrap_or_default()
+    }
+
+    /// The free names of template `t` (a closure's): its captures, and the globals it or
+    /// a function inside it reads or writes.
+    fn template_free_names(&mut self, t: u32) -> FreeNames {
+        let h = self.h;
+        let mut globals: Vec<String> = Vec::new();
+        let mut stack = alloc::vec![t];
+        while let Some(t) = stack.pop() {
+            let t = compiled(h, t);
+            let own: Vec<String> = if unrun(h, t) {
+                self.lazy_globals(t)
+            } else {
+                code_globals(h, t).map(|g| atom_text(h, g)).collect()
+            };
+            for g in own {
+                if !globals.contains(&g) {
+                    globals.push_out(g);
+                }
+            }
+            if !unrun(h, t) {
+                for i in 0..template::child_count(h, t) {
+                    if let Some(c) = template::child(h, t, i).and_then(|r| r.get()) {
+                        stack.push_out(c);
+                    }
+                }
+            }
+        }
+        FreeNames {
+            captures: capture_names(h, compiled(h, t)),
+            globals,
         }
     }
 
@@ -2175,7 +2263,7 @@ impl<'a> Dumper<'a> {
                     .map(|s| text_of(h, crate::value::Str(s)))
                     .unwrap_or_default()
             };
-            let src = text(a.get::<Ref>(script, crate::heap::cells::Script::SOURCE));
+            let src = template::script_text(h, script).unwrap_or_default();
             let params = text(a.get::<Ref>(script, crate::heap::cells::Script::PARAMS));
             let list: Vec<&str> = params.split(',').filter(|p| !p.is_empty()).collect();
             let bits = a.get::<u32>(script, crate::heap::cells::Script::OPTIONS);
@@ -2208,7 +2296,7 @@ impl<'a> Dumper<'a> {
         let script = info.script.get()?;
         let a = h.arena();
         let text = |r: Ref| r.get().map(|s| text_of(h, crate::value::Str(s)));
-        let source = text(a.get::<Ref>(script, crate::heap::cells::Script::SOURCE))?;
+        let source = template::script_text(h, script)?;
         let params =
             text(a.get::<Ref>(script, crate::heap::cells::Script::PARAMS)).unwrap_or_default();
         let name = text(a.get::<Ref>(script, crate::heap::cells::Script::NAME)).unwrap_or_default();
@@ -2281,7 +2369,7 @@ impl<'a> Dumper<'a> {
             let Some(src) = self.fn_source(n) else {
                 continue;
             };
-            let orig = free_names(h, h.closure_template(o));
+            let orig = self.template_free_names(h.closure_template(o));
             let path = self.nodes[n].path.clone();
             let mut at = by_text.get(hash_text(&src)).unwrap_or(u32::MAX);
             // Functions of the same text (a class's constructor and field initializer
@@ -4555,6 +4643,24 @@ fn check_index(fns: impl Iterator<Item = (u32, u32, FreeNames)>, text: &str) -> 
     (by_text, written)
 }
 
+/// Template `t`, or for a lazy template that ran, its compiled template (D2990).
+fn compiled(h: &Heap, t: u32) -> u32 {
+    if template::code(h, t) == [crate::bytecode::Op::Lazy as u8] {
+        let c: Ref = h.arena().get(t, FuncTemplate::IC);
+        if let Some(c) = c.get() {
+            return c;
+        }
+    }
+    t
+}
+
+/// Whether `t` is a lazy template that never ran (D2990): no code to read.
+fn unrun(h: &Heap, t: u32) -> bool {
+    template::code(h, t) == [crate::bytecode::Op::Lazy as u8]
+        && h.arena().get::<Ref>(t, FuncTemplate::IC).get().is_none()
+}
+
+#[cfg(test)]
 fn free_names(h: &Heap, t: u32) -> FreeNames {
     let mut globals = Vec::new();
     let mut stack = alloc::vec![t];
@@ -4697,7 +4803,7 @@ impl Sources {
             Some(i) => i as usize,
             None => {
                 let mut texts = self.texts.borrow_mut();
-                texts.push_out(text_of(h, crate::value::Str(source)));
+                texts.push_out(template::script_text(h, script).unwrap_or_default());
                 self.index
                     .borrow_mut()
                     .insert(key(source), texts.len() as u32 - 1);

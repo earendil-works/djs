@@ -1356,7 +1356,7 @@ impl Vm {
                 .map(|s| h.str_to_string(crate::value::Str(s)))
                 .unwrap_or_default()
         };
-        let source = text(a.get::<Ref>(script, crate::heap::cells::Script::SOURCE));
+        let source = crate::bytecode::template::script_text(h, script).unwrap_or_default();
         let params = text(a.get::<Ref>(script, crate::heap::cells::Script::PARAMS));
         let bits = a.get::<u32>(script, crate::heap::cells::Script::OPTIONS);
         if script_hash(&source, &params, bits) != hash {

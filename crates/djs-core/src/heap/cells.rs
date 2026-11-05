@@ -423,7 +423,8 @@ cells! {
     13 => Script {
         /// The file name, a string.
         NAME: Ref = 8,
-        /// The source text, a string (D009), or null when stripped.
+        /// The source text (D009) as UTF-8 in a [`Bytes`] cell (D2992), or null when
+        /// stripped.
         SOURCE: Ref = 12,
         /// The compile options that matter to the code (`CompileOptions::bits`): a dump
         /// compiles the source again to name a suspended frame's slots (D2610).

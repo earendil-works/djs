@@ -363,7 +363,7 @@ impl Dumper<'_> {
             None => {
                 let a = h.arena();
                 let text = |r: Ref| r.get().map(|s| super::text_of(h, crate::value::Str(s)));
-                let src = text(a.get::<Ref>(script, Script::SOURCE));
+                let src = template::script_text(h, script);
                 let params = text(a.get::<Ref>(script, Script::PARAMS)).unwrap_or_default();
                 let bits = a.get::<u32>(script, Script::OPTIONS);
                 let maps = src.and_then(|src| self.maps_of(&src, &params, bits));
@@ -2174,7 +2174,7 @@ impl Dumper<'_> {
         let text = |r: Ref| r.get().map(|s| super::text_of(h, crate::value::Str(s)));
         let script = info.script.get();
         let src = script
-            .and_then(|s| text(a.get::<Ref>(s, Script::SOURCE)))
+            .and_then(|s| template::script_text(h, s))
             .unwrap_or_default();
         let file = script
             .and_then(|s| text(a.get::<Ref>(s, Script::NAME)))

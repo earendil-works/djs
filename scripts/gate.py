@@ -318,7 +318,7 @@ def jobs():
         # programs' dumps (plain_dumps_at_every_idle_point writes them to DJS_PLAIN_OUT)
         # and the sleep-dump example's (the_sleep_example_dumps, DJS_SLEEP_OUT).
         J("plain dumps (djs and node)", f'd=$(mktemp -d); v=$(mktemp -d); s=$(mktemp -d); {G}/bin/djs-difftest'
-          f' --engine djs --ratchet --quiet --no-diff --plain-out "$d" && node scripts/plain-node.mjs "$d"'
+          f' --engine djs --lazy --ratchet --quiet --no-diff --plain-out "$d" && node scripts/plain-node.mjs "$d"'
           ' --refusals tests/plain-refusals.txt'
           f' && DJS_PLAIN_OUT="$v" DJS_SLEEP_OUT="$s" {tests} {G}/core-tests.json --'
           ' plain_dumps_at_every_idle_point the_sleep_example_dumps'

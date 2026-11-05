@@ -90,12 +90,10 @@ pub fn activation(heap: &Heap, g: Obj) -> Option<Activation> {
         Some((l, c)) => format!("{file}:{l}:{c}"),
         None => file,
     };
-    let script_text = info.script.get().and_then(|s| {
-        let src = a
-            .get::<djs_core::heap::Ref>(s, djs_core::heap::cells::Script::SOURCE)
-            .get()?;
-        Some(heap.str_to_string(ref_value(djs_core::value::tag::STRING, src)?.as_string()?))
-    });
+    let script_text = info
+        .script
+        .get()
+        .and_then(|s| djs_core::bytecode::template::script_text(heap, s));
     let source = match (pos, &script_text) {
         (Some((l, c)), Some(text)) => text
             .lines()
