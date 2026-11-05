@@ -1,19 +1,31 @@
 {
-  "name": "@djs/host",
-  "version": "0.0.0",
-  "private": true,
-  "description": "The djs host package: the Sandbox API over djs-wasm, the wire encoder and the heap reader.",
+  "name": "@earendil-works/djs",
+  "version": "0.1.0",
+  "description": "A small, sandboxed JavaScript and TypeScript engine in WebAssembly: runs untrusted scripts with fuel and memory limits, and suspends runs into dumps that continue later.",
+  "keywords": ["javascript", "typescript", "sandbox", "interpreter", "webassembly", "wasm", "codemode"],
   "type": "module",
   "license": "MIT OR Apache-2.0",
+  "repository": { "type": "git", "url": "git+https://github.com/earendil-works/djs.git", "directory": "js" },
+  "homepage": "https://earendil-works.github.io/djs/",
+  "bugs": "https://github.com/earendil-works/djs/issues",
   "engines": { "node": ">=20" },
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/sandbox.ts",
-    "./wire": "./src/wire.ts",
-    "./reader": "./src/reader.ts",
-    "./dump-runtime": "./src/dump-runtime.js",
-    "./pi": "./pi/vm.ts"
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./slim": { "types": "./dist/slim.d.ts", "default": "./dist/slim.js" },
+    "./dump": { "types": "./dist/dump.d.ts", "default": "./dist/dump.js" },
+    "./dump-runtime": { "types": "./dist/dump-runtime.d.ts", "default": "./dist/dump-runtime.js" },
+    "./wasm/*.wasm": "./wasm/*.wasm",
+    "./package.json": "./package.json"
   },
+  "files": ["dist", "wasm", "LICENSE-MIT", "LICENSE-APACHE"],
   "scripts": {
+    "build": "../scripts/npm-pack.sh",
     "test": "node --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
   }
 }

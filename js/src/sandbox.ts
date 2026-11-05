@@ -6,6 +6,7 @@ import { trapText } from "./trap.ts";
 import { Opaque, readValue } from "./reader.ts";
 import { provideBase, rememberBase } from "./base.ts";
 import { scriptFor as dumpRuntimeFor } from "./dump-runtime.js";
+import { envVar } from "./env.ts";
 
 /** A host function callable from the sandbox. Arguments and the result are host values. */
 export type HostFunction = (...args: unknown[]) => unknown;
@@ -428,9 +429,10 @@ interface Exports {
   djs_base_coded_ptr?(len: number): number;
 }
 
+/** The modules being compiled or compiled, by location. */
 const modules = new Map<string, Promise<WebAssembly.Module>>();
-/** The default module once loaded, for the synchronous constructor. */
-let loadedDefault: WebAssembly.Module | undefined;
+/** The compiled ones, for the synchronous constructor. */
+const compiled = new Map<string, WebAssembly.Module>();
 
 /**
  * The dump module's sandboxes, one per module and memory limit in the process (D2802):
@@ -440,15 +442,26 @@ let loadedDefault: WebAssembly.Module | undefined;
  */
 const dumpers = new WeakMap<WebAssembly.Module, Map<number, Sandbox>>();
 
-/** The default location of djs-wasm: `$DJS_WASM`, else the `wasm` profile build output. */
+/**
+ * The default location of djs-wasm: `$DJS_WASM`, else, running from the repository's
+ * sources (js/src/*.ts), the `wasm` profile build. The package's entry points have their
+ * own defaults (`Sandbox.defaultModule`), the modules shipped in the package (D3106).
+ */
 export function defaultWasmPath(): string | URL {
-  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
-  return env?.DJS_WASM ?? new URL("../../target/wasm32-unknown-unknown/wasm/djs_wasm.wasm", import.meta.url);
+  const env = envVar("DJS_WASM");
+  if (env !== undefined) return env;
+  // Not `new URL("…", import.meta.url)` literally: bundlers take that for an asset of the
+  // package, and the built package has no repository around it.
+  const here = import.meta.url;
+  if (here.endsWith(".ts")) return new URL("../../target/wasm32-unknown-unknown/wasm/djs_wasm.wasm", here);
+  throw new SandboxError("misuse", "no default djs-wasm module: pass a location or set $DJS_WASM");
 }
 
 /**
  * Compiles djs-wasm once per location and caches the `WebAssembly.Module` (ARCH: the
- * module is compiled once; every sandbox gets its own instance).
+ * module is compiled once; every sandbox gets its own instance). A `file:` URL, or a
+ * string that is no URL in node, Bun or Deno, is read from the file system; anything else
+ * is fetched (in a browser, a relative string is relative to the page).
  */
 export function loadModule(location: string | URL = defaultWasmPath()): Promise<WebAssembly.Module> {
   const key = String(location);
@@ -456,26 +469,37 @@ export function loadModule(location: string | URL = defaultWasmPath()): Promise<
   if (m === undefined) {
     m = (async () => {
       let bytes: Uint8Array;
-      if (typeof location === "string" || location.protocol === "file:") {
-        // Not a literal specifier, so the package type-checks without node's types.
+      if (isFile(location)) {
+        // Not a literal specifier, so the package type-checks without node's types, and
+        // bundlers for the browser leave it alone.
         const fsModule = "node:fs/promises";
-        const fs = (await import(fsModule)) as { readFile(p: string | URL): Promise<Uint8Array> };
-        bytes = await fs.readFile(location);
+        const fs = (await import(/* @vite-ignore */ /* webpackIgnore: true */ fsModule)) as {
+          readFile(p: string | URL): Promise<Uint8Array>;
+        };
+        bytes = await fs.readFile(typeof location === "string" && /^file:/i.test(location) ? new URL(location) : location);
       } else {
-        bytes = new Uint8Array(await (await fetch(location)).arrayBuffer());
+        const r = await fetch(location);
+        if (!r.ok) throw new SandboxError("misuse", `cannot fetch djs-wasm from ${key}: HTTP ${r.status}`);
+        bytes = new Uint8Array(await r.arrayBuffer());
       }
       return WebAssembly.compile(bytes as Uint8Array<ArrayBuffer>);
     })();
     modules.set(key, m);
-    const isDefault = key === String(defaultWasmPath());
     m.then(
-      (mod) => {
-        if (isDefault) loadedDefault = mod;
-      },
+      (mod) => compiled.set(key, mod),
       () => modules.delete(key),
     );
   }
   return m;
+}
+
+/** Whether `loadModule` reads `location` from the file system (else it fetches it). */
+function isFile(location: string | URL): boolean {
+  // A scheme of two letters or more: `C:\x` is a path.
+  const url = typeof location === "string" ? /^([a-z][a-z0-9+.-]+):/i.exec(location)?.[1] : location.protocol.slice(0, -1);
+  if (url !== undefined) return url.toLowerCase() === "file";
+  const g = globalThis as { process?: { versions?: { node?: string } }; Deno?: unknown; Bun?: unknown };
+  return g.process?.versions?.node !== undefined || g.Deno !== undefined || g.Bun !== undefined;
 }
 
 const textEncoder = new TextEncoder();
@@ -682,9 +706,18 @@ export class Sandbox {
   /** The task in progress (`start`, `resume`): ends it when the sandbox is disposed. */
   private cancelTask: (() => void) | null = null;
 
+  /**
+   * Where `create` and the constructor find the module when `opts.module` is not given:
+   * here `defaultWasmPath()`; each entry point of the package overrides it with its own
+   * module (D3106).
+   */
+  static defaultModule(): string | URL {
+    return defaultWasmPath();
+  }
+
   /** A new sandbox; loads (and caches) the default module unless `opts.module` is given. */
   static async create(opts: SandboxOptions = {}): Promise<Sandbox> {
-    return new Sandbox({ ...opts, module: opts.module ?? (await loadModule()) });
+    return new this({ ...opts, module: opts.module ?? (await loadModule(this.defaultModule())) });
   }
 
   /**
@@ -694,7 +727,7 @@ export class Sandbox {
    * resume only dumps you trust.
    */
   static async resume(dump: string, opts: SandboxOptions = {}): Promise<Task> {
-    const sandbox = await Sandbox.create(opts);
+    const sandbox = await this.create(opts);
     try {
       return sandbox.resume(dump);
     } catch (e) {
@@ -741,7 +774,14 @@ export class Sandbox {
    * of this process moving to the dump module, D2635.)
    */
   constructor(opts: SandboxOptions = {}, raw?: RawImage) {
-    const module = opts.module ?? loadedDefault;
+    let module = opts.module;
+    if (module === undefined) {
+      try {
+        module = compiled.get(String((new.target as typeof Sandbox).defaultModule()));
+      } catch {
+        // No default location: the error below.
+      }
+    }
     if (module === undefined) {
       throw new SandboxError("misuse", "no compiled module: pass opts.module or await loadModule() first");
     }
@@ -1559,7 +1599,8 @@ export class Sandbox {
       const last = Math.max(0, ...calls.map((c) => c.id));
       this.guard(() => x.vm_set_next_call_id!(vm, Math.max(next ?? 0, last + 1)));
     }
-    const hookError = this.hookError;
+    // Set by hooks that ran meanwhile, which the narrowing of `this.hookError` cannot see.
+    const hookError = this.hookError as Error | undefined;
     this.hookError = undefined;
     return this.guard(() => {
       if (st === STATUS_THREW || st === STATUS_HOST_OUT_OF_MEMORY) {

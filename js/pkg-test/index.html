@@ -1,0 +1,15 @@
+<!doctype html>
+<!-- The smoke test in a browser, the package as native modules (js/pkg-test/browser.js). -->
+<meta charset="utf-8">
+<title>djs smoke</title>
+<script type="importmap">
+{
+  "imports": {
+    "@earendil-works/djs": "./node_modules/@earendil-works/djs/dist/index.js",
+    "@earendil-works/djs/slim": "./node_modules/@earendil-works/djs/dist/slim.js",
+    "@earendil-works/djs/dump": "./node_modules/@earendil-works/djs/dist/dump.js",
+    "@earendil-works/djs/dump-runtime": "./node_modules/@earendil-works/djs/dist/dump-runtime.js"
+  }
+}
+</script>
+<script type="module" src="./page.js"></script>
