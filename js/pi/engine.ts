@@ -44,6 +44,8 @@ interface Exports {
   /** Since 0146 (D2304); older modules lack it. */
   vm_new_with?(memoryLimit: number, live: number, flags: number): number;
   vm_compile_file(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number): number;
+  /** The dump module (0219, D3040): `vm_compile_file` with an earlier compile's blob. */
+  vm_compile_cached?(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number, blobLen: number): number;
   vm_new_host_function(vm: number, fnId: number, nameLen: number): number;
   vm_new_async_host_function(vm: number, fnId: number, nameLen: number): number;
   vm_new_host_calls(vm: number): number;
@@ -295,13 +297,30 @@ export class Engine {
     const name = textEncoder.encode(file);
     const head = textEncoder.encode(params.join("\n"));
     const body = textEncoder.encode(src);
-    const all = new Uint8Array(name.length + head.length + body.length);
+    const cached = this.x.vm_compile_cached;
+    // The compile cache (D3040): the blob of the last compile of this text in this
+    // process, imported instead of compiling. Not for a plain dump, whose text is new at
+    // every idle point.
+    const key = cached && !src.startsWith('"djs-dump') ? `${goal}\n${file}\n${params.join("\n")}\n${src}` : undefined;
+    const blob = key === undefined ? undefined : compileCache(this.module).get(key);
+    const all = new Uint8Array(name.length + head.length + body.length + (blob?.length ?? 0));
     all.set(name);
     all.set(head, name.length);
     all.set(body, name.length + head.length);
+    if (blob) all.set(blob, name.length + head.length + body.length);
     this.stage(all);
-    const h = this.trap(() => this.x.vm_compile_file(this.vm, goal, name.length, head.length, body.length));
-    return h === 0 ? { error: outText(this.x) } : { handle: h };
+    const h = this.trap(() =>
+      key !== undefined
+        ? cached!(this.vm, goal, name.length, head.length, body.length, blob?.length ?? 0)
+        : this.x.vm_compile_file(this.vm, goal, name.length, head.length, body.length),
+    );
+    if (h === 0) return { error: outText(this.x) };
+    if (blob && this.x.djs_out_len() === 0) rememberCompile(this.module, key!, blob);
+    else if (key !== undefined && this.x.djs_out_len() > 0) {
+      const out = new Uint8Array(this.x.memory.buffer, this.x.djs_out_ptr(), this.x.djs_out_len()).slice();
+      rememberCompile(this.module, key, out);
+    }
+    return { handle: h };
   }
 
   /** A new object holding the plain dump runtime's helpers that dump `text` names (D2903): `$djs` without the hooks. */
@@ -523,4 +542,29 @@ function outWords(x: Exports, n: number): number[] {
 
 function outText(x: Exports): string {
   return textDecoder.decode(new Uint8Array(x.memory.buffer, x.djs_out_ptr(), x.djs_out_len()));
+}
+
+/** The compile cache per module (D3040): the source's key to its compile's blob. */
+const compileCaches = new WeakMap<WebAssembly.Module, Map<string, Uint8Array>>();
+/** The most blobs and bytes kept per module (the least recently used go first). */
+const COMPILE_CACHE_ENTRIES = 64;
+const COMPILE_CACHE_BYTES = 8 << 20;
+
+function compileCache(module: WebAssembly.Module): Map<string, Uint8Array> {
+  let m = compileCaches.get(module);
+  if (!m) compileCaches.set(module, (m = new Map()));
+  return m;
+}
+
+function rememberCompile(module: WebAssembly.Module, key: string, blob: Uint8Array): void {
+  const m = compileCache(module);
+  m.delete(key);
+  m.set(key, blob);
+  let bytes = 0;
+  for (const b of m.values()) bytes += b.length;
+  for (const [k, b] of m) {
+    if (m.size <= COMPILE_CACHE_ENTRIES && bytes <= COMPILE_CACHE_BYTES) break;
+    m.delete(k);
+    bytes -= b.length;
+  }
 }
