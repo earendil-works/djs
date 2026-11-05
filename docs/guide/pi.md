@@ -48,16 +48,16 @@ for whole function bodies, does not do.
 **Prelude images.** Running pi's prelude, whose lockdown freezes about 700 objects, is
 most of a start. The adapter collects the heap right after it, keeps that VM image, keyed
 by everything the prelude saw (the tools, the globals, the store, the heap limit), and
-starts the next script with the same inputs from a copy of it. A start then takes about
-1 ms instead of 7 ms, against about 4 ms on QuickJS. The prelude's work is not counted
+starts the next script with the same inputs from a copy of it. A start then takes
+<!--n pibench/start/djs .2-->0.14<!--/n--> ms instead of <!--n pibench/start/djs-prelude .1-->4.9<!--/n--> ms, against <!--n pibench/start/qjs .1-->2.9<!--/n--> ms on QuickJS. The prelude's work is not counted
 against the script's interrupt budget, so a start from an image and one that runs the
 prelude behave the same. The image never leaves the process: it is a cache, not a
 persistence format.
 
 **Interrupts.** pi's contract polls `shouldInterrupt`; the adapter runs the script in
-slices of 10,000 fuel and polls between them. A tight loop then polls about as often per
-second as pi's QuickJS VM does, about 33,000 times, so pi's interrupt budgets mean about
-the same CPU time ([limits](limits.md#fuel)). Code that allocates or calls builtins
+slices of 10,000 fuel and polls between them. A tight loop then polls about
+<!--n pibench/polls/djs ~1000-->77,000<!--/n--> times a second, against <!--n pibench/polls/qjs ~1000-->61,000<!--/n--> on pi's QuickJS VM, so pi's interrupt budgets
+mean somewhat less CPU time on djs ([limits](limits.md#fuel)). Code that allocates or calls builtins
 polls more often than on QuickJS, since djs charges fuel for that work too. When the
 poll says stop, the adapter abandons the run, which the script cannot catch.
 
@@ -111,7 +111,8 @@ the default mode, in the next mode, and with a dump and a resume at every idle p
 - The differential corpus (codemode scripts, console and result formatting, error
   messages, TypeScript, dquickts' own tests): **621 of 632** cases match qjs; 6 known
   failures (`tests/corpus/expected-failures.txt`) and 5 skipped as non-goals.
-- pi's codemode test suite on djs: 221 of 226 tests pass (measured at 2026-11-01).
+- pi's codemode test suite on djs: 221 of 226 tests pass in the default mode, in the
+  next mode and with a dump at every idle point (measured at 80f9c059ef, 2026-11-05).
 <!-- /gen -->
 
 The tests that fail come from djs being always strict, from a test that expects
@@ -125,22 +126,27 @@ script):
 <!-- gen:status speed -->
 | workload | djs-wasm | quickjs-wasi | ratio |
 | --- | ---: | ---: | ---: |
-| tight loop | 6.6G | 15.7G | 0.42 |
-| property access (prop1) | 2.7G | 5.5G | 0.49 |
-| strings (split, slice, join, ...) | 3.1G | 6.0G | 0.51 |
-| arrays | 10.8G | 16.8G | 0.64 |
-| JSON round trips | 1.3G | 2.2G | 0.57 |
-| JSON with Dates | 0.9G | 1.9G | 0.48 |
-| for-of | 5.8G | 7.2G | 0.81 |
-| calls | 3.3G | 4.0G | 0.81 |
-| push/pop and string methods | 4.3G | 3.1G | 1.40 |
-| a pi-like script | 10.0G | 7.3G | 1.38 |
-| forEach | 9.0G | 6.1G | 1.49 |
-| map/filter/reduce (higher-order) | 13.9G | 4.8G | 2.92 |
+| tight loop | 5.8G | 15.3G | 0.38 |
+| property access (prop1) | 2.4G | 5.4G | 0.45 |
+| strings (split, slice, join, ...) | 2.2G | 5.8G | 0.38 |
+| arrays | 9.5G | 16.3G | 0.58 |
+| JSON round trips | 1.2G | 2.0G | 0.60 |
+| JSON with Dates | 0.9G | 1.7G | 0.52 |
+| for-of | 5.1G | 6.9G | 0.73 |
+| calls | 2.9G | 3.9G | 0.75 |
+| push/pop and string methods | 3.8G | 2.9G | 1.33 |
+| a pi-like script | 5.8G | 6.9G | 0.84 |
+| forEach | 5.4G | 5.8G | 0.93 |
+| map/filter/reduce (higher-order) | 7.8G | 4.5G | 1.73 |
 
-Machine instructions per workload (`scripts/perf/w/`), measured at d780463b0d,
-2026-11-01; lower is better.
+Machine instructions per workload (`scripts/perf/w/`), measured at 12f469900e,
+2026-11-05; lower is better.
 <!-- /gen -->
+
+Through the VM contract, as pi runs them (`js/bench/pi.bench.ts`, on the calling
+thread): a tool-heavy script, which searches, reads 60 files in parallel batches,
+filters and prints, takes <!--n pibench/tool-heavy/djs .1-->2.4<!--/n--> ms on djs from the prelude image and
+<!--n pibench/tool-heavy/qjs .1-->4.5<!--/n--> ms on QuickJS; a script that only returns takes <!--n pibench/start/djs .2-->0.14<!--/n--> ms against <!--n pibench/start/qjs .1-->2.9<!--/n--> ms.
 
 ## Wiring up another agent host
 

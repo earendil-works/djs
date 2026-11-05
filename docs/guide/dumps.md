@@ -239,18 +239,19 @@ that would rather not keep scripts sets `inlineSources`, and its dumps carry the
 ## Storing dumps
 
 A dump is plain text, and it compresses well: hosts store it compressed with zstd at
-level 3, which node has built in. Measured over 300 real codemode scripts and their
-1,063 idle points:
+level 3, which node has built in. Measured over <!--n dumps/corpus-cases-->300<!--/n--> real codemode scripts and
+their <!--n dumps/idle-points-->1,063<!--/n--> idle points, with a dump at each:
 
 | | median | 99th percentile |
 | --- | ---: | ---: |
-| dump text | 6 KB | |
-| zstd level 3 | 1.7 KB | 17 KB |
+| dump text | <!--n dumps/raw-p50 kb.1-->2.6 KB<!--/n--> | <!--n dumps/raw-p99 kb.1-->12.4 KB<!--/n--> |
+| zstd level 3 | <!--n dumps/zstd-p50 kb.1-->1.0 KB<!--/n--> | <!--n dumps/zstd-p99 kb.1-->3.0 KB<!--/n--> |
+| writing the dump | <!--n dumps/write-ms-p50 .2-->0.26<!--/n--> ms | <!--n dumps/write-ms-p99 .1-->1.7<!--/n--> ms |
+| resuming it, a new sandbox included | <!--n dumps/resume-ms-p50 .2-->0.39<!--/n--> ms | <!--n dumps/resume-ms-p99 .1-->2.5<!--/n--> ms |
 
-A run that holds a large log is about as large as the log: one holding 1.8 MB of text
-dumps to 1.8 MB and 394 KB compressed. Writing a dump takes about 0.4 ms at the median in
-wasm (3 ms at the 99th percentile), and resuming one, a new sandbox included, under a
-millisecond.
+Times are in wasm. A run that holds a large log is about as large as the log: one that
+keeps a 20,000-line log across its tool calls dumps to <!--n dumps/log-raw mb-->1.8 MB<!--/n--> and
+<!--n dumps/log-zstd kb-->403 KB<!--/n--> compressed.
 
 A dump is code: a host loads only dumps it wrote or trusts, into a fresh sandbox.
 
@@ -264,7 +265,7 @@ already read (`pages.push` above) as a second read of it. Without frozen builtin
 writing a dump throws a `misuse` error that says so. The live examples with `debugger;`
 run with frozen builtins for this reason.
 
-**The dumper.** The code that writes dumps nearly doubles the module (about 340 KB more
+**The dumper.** The code that writes dumps nearly doubles the module (<!--n dump/extra-gzip kb-->342 KB<!--/n--> more
 with gzip), and only hosts which persist runs need it, so the module djs ships leaves it
 out. Such a host loads the same
 build with the dumper as a second module and passes it as `dumpModule`: to dump, the

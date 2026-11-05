@@ -28,7 +28,8 @@ usage:
                                       against the same build with `unsafe-heap`, gzip -9 bytes
                                       and instructions on the speed workloads (takes minutes)
   scripts/status.py heap              heap bytes per object (scripts/size/object-bytes.ts) and
-                                      the wasm memory of ten million appends
+                                      wasm memory: a fresh sandbox, ten million appends, a
+                                      10 MiB string parameter
   scripts/status.py bench             copy what the guide quotes from the latest run in
                                       tests/scores/bench.tsv (scripts/bench.sh --record)
   scripts/status.py all               size, speed, pi, startup, dumps, bounds, heap, bench
@@ -134,6 +135,26 @@ def build(*flags):
     subprocess.run(["nice", "-n", "10", os.path.join(ROOT, "scripts/build-wasm.sh"), *flags], check=True)
 
 
+def exported_functions(b):
+    """Function exports (kind 0) of the export section (7)."""
+    i = 8
+    while i < len(b):
+        sid = b[i]
+        n, j = leb(b, i + 1)
+        if sid == 7:
+            count, k = leb(b, j)
+            funcs = 0
+            for _ in range(count):
+                ln, k = leb(b, k)
+                k += ln
+                kind = b[k]
+                _, k = leb(b, k + 1)
+                funcs += kind == 0
+            return funcs
+        i = j + n
+    return 0
+
+
 def size():
     build()
     build("--slim")
@@ -147,6 +168,7 @@ def size():
         "wasm/code": code,
         "wasm/data": data,
         "wasm/base-coded": coded,
+        "wasm/exports": exported_functions(b),
     }
     if shutil.which("brotli"):
         r = subprocess.run(["brotli", "-c", "-q", "11"], input=b, capture_output=True, check=True)
@@ -304,13 +326,25 @@ def bounds():
     }
 
 
-APPEND_JS = """
+# wasm memory (bytes) of a fresh sandbox; after ten million one-character appends; after a
+# 10 MiB ASCII string came in as a parameter (straight into the arena) and one with a
+# single non-ASCII character (through the staging buffer).
+HEAP_JS = """
 import { readFileSync } from "node:fs";
 import { Sandbox } from "./js/src/sandbox.ts";
 const module = await WebAssembly.compile(readFileSync(process.argv[1]));
-const sb = new Sandbox({ module, memoryLimit: 2 ** 31 });
-sb.run("function f() { let s = ''; for (let i = 0; i < 1e7; i++) s += 'x'; return s.length; } f()");
-console.log(sb.x.memory.buffer.byteLength);
+const memory = (sb) => sb.x.memory.buffer.byteLength;
+const fresh = new Sandbox({ module });
+const out = [memory(fresh)];
+const append = new Sandbox({ module, memoryLimit: 2 ** 31 });
+append.run("function f() { let s = ''; for (let i = 0; i < 1e7; i++) s += 'x'; return s.length; } return f();");
+out.push(memory(append));
+for (const s of ["x".repeat(10 << 20), "\u00e9" + "x".repeat((10 << 20) - 1)]) {
+  const sb = new Sandbox({ module, memoryLimit: 2 ** 31 });
+  sb.run("return s.length", { s });
+  out.push(memory(sb));
+}
+console.log(out.join(" "));
 """
 
 
@@ -320,8 +354,11 @@ def heap():
     for line in out.splitlines():
         name, v = line.split("\t")
         new[f"heap/{name}"] = float(v)
-    out = node("--input-type=module", "-e", APPEND_JS, WASM)
-    new["heap/append-10m-memory"] = int(out.split()[-1])
+    fresh, append, ascii, staged = (int(x) for x in node("--input-type=module", "-e", HEAP_JS, WASM).split())
+    new["heap/sandbox-memory"] = fresh
+    new["heap/append-10m-memory"] = append
+    new["heap/string-10mib-memory"] = ascii
+    new["heap/string-10mib-staged-memory"] = staged
     return new
 
 
@@ -334,6 +371,8 @@ BENCH = {
     "wire/decode-vs-json-string": ("wasm/parse_json 1mib-string", "wasm/decode 1mib-string"),
     "wire/read-vs-json-objects": ("wasm/json_stringify 10k-objects", "wasm/readValue 10k-objects"),
     "wire/read-vs-json-text": ("wasm/json_stringify 1mib-text-unicode", "wasm/readValue 1mib-text-unicode"),
+    "native/foreach-x": ("engine/djs-bytecode/foreach", "engine/djs/foreach"),
+    "native/arrays-x": ("engine/djs-bytecode/arrays", "engine/djs/arrays"),
 }
 
 

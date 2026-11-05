@@ -44,7 +44,8 @@ measured at. TESTING.md and docs/host.md have the details.
 - The differential corpus (codemode scripts, console and result formatting, error
   messages, TypeScript, dquickts' own tests): **621 of 632** cases match qjs; 6 known
   failures (`tests/corpus/expected-failures.txt`) and 5 skipped as non-goals.
-- pi's codemode test suite on djs: 221 of 226 tests pass (measured at 2026-11-01).
+- pi's codemode test suite on djs: 221 of 226 tests pass in the default mode, in the
+  next mode and with a dump at every idle point (measured at 80f9c059ef, 2026-11-05).
 <!-- /gen -->
 
 Skipped by design: Intl, Temporal, SharedArrayBuffer/Atomics, Annex B, sloppy mode,
@@ -58,38 +59,42 @@ fingerprint.
 <!-- gen:status speed -->
 | workload | djs-wasm | quickjs-wasi | ratio |
 | --- | ---: | ---: | ---: |
-| tight loop | 6.6G | 15.7G | 0.42 |
-| property access (prop1) | 2.7G | 5.5G | 0.49 |
-| strings (split, slice, join, ...) | 3.1G | 6.0G | 0.51 |
-| arrays | 10.8G | 16.8G | 0.64 |
-| JSON round trips | 1.3G | 2.2G | 0.57 |
-| JSON with Dates | 0.9G | 1.9G | 0.48 |
-| for-of | 5.8G | 7.2G | 0.81 |
-| calls | 3.3G | 4.0G | 0.81 |
-| push/pop and string methods | 4.3G | 3.1G | 1.40 |
-| a pi-like script | 10.0G | 7.3G | 1.38 |
-| forEach | 9.0G | 6.1G | 1.49 |
-| map/filter/reduce (higher-order) | 13.9G | 4.8G | 2.92 |
+| tight loop | 5.8G | 15.3G | 0.38 |
+| property access (prop1) | 2.4G | 5.4G | 0.45 |
+| strings (split, slice, join, ...) | 2.2G | 5.8G | 0.38 |
+| arrays | 9.5G | 16.3G | 0.58 |
+| JSON round trips | 1.2G | 2.0G | 0.60 |
+| JSON with Dates | 0.9G | 1.7G | 0.52 |
+| for-of | 5.1G | 6.9G | 0.73 |
+| calls | 2.9G | 3.9G | 0.75 |
+| push/pop and string methods | 3.8G | 2.9G | 1.33 |
+| a pi-like script | 5.8G | 6.9G | 0.84 |
+| forEach | 5.4G | 5.8G | 0.93 |
+| map/filter/reduce (higher-order) | 7.8G | 4.5G | 1.73 |
 
-Machine instructions per workload (`scripts/perf/w/`), measured at d780463b0d,
-2026-11-01; lower is better.
+Machine instructions per workload (`scripts/perf/w/`), measured at 12f469900e,
+2026-11-05; lower is better.
 <!-- /gen -->
 
-pi's own benchmark (`js/bench/pi.bench.ts`, a tool-heavy script with 61 calls, through
-pi's adapter): 4.2 ms on djs (reusing the prelude image) vs 5.3 ms on quickjs-wasi; a
-script start is 1.0 ms vs 3.9 ms (at 0095). Callback-heavy builtin code is the main
-remaining gap (work/issues/0081-perf-anatomy.md).
+pi's own benchmark (`js/bench/pi.bench.ts`, through pi's adapter, `scripts/status.py pi`):
+a tool-heavy script with 61 calls takes <!--n pibench/tool-heavy/djs .1-->2.4<!--/n--> ms on djs (reusing the prelude image)
+vs <!--n pibench/tool-heavy/qjs .1-->4.5<!--/n--> ms on quickjs-wasi, a script start <!--n pibench/start/djs .2-->0.14<!--/n--> ms vs <!--n pibench/start/qjs .1-->2.9<!--/n--> ms (<!--n pibench/start/djs-prelude .1-->4.9<!--/n--> ms on djs
+when it runs the prelude). Callback-heavy builtin code is the main remaining gap
+(work/issues/0081-perf-anatomy.md).
 
 **Size and startup.**
 
 <!-- gen:status size -->
-`djs_wasm.wasm` is 1,471 KB (525 KB gzip, 423 KB brotli): 901 KB of code and 566 KB of
-data, of which 186 KB is the base snapshot (the initialized realm with all builtins).
-Module sizes measured at d780463b0d, 2026-11-01.
+`djs_wasm.wasm` is 1,034 KB (443 KB gzip, 372 KB brotli): 868 KB of code, 116 KB of
+data, and the base snapshot (the initialized realm with all builtins, 186 KB) coded to
+46 KB in a custom section. The slim build is 906 KB (378 KB gzip); the dump module, the
+shipped build with the dumper, 1,966 KB (785 KB gzip). Module sizes measured at
+1389e5d611, 2026-11-05.
 <!-- /gen -->
 
-Creating a VM copies the base snapshot: about 40 µs in wasm (D1990). A `Sandbox`
-(instance plus VM) takes about 60-140 µs.
+Creating a VM copies the base snapshot: about <!--n startup/vm-new-us .1-->2.5<!--/n--> µs in wasm (D1990). A `Sandbox`
+(instance plus VM) takes about <!--n startup/sandbox-us .0-->113<!--/n--> µs, <!--n startup/sandbox-run-us .0-->142<!--/n--> µs with its first run
+(`js/bench/sandbox.bench.ts`, `scripts/status.py startup`).
 
 ## Building and running
 
