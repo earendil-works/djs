@@ -2260,7 +2260,10 @@ impl G<'_, '_> {
         let bin = String::from(opt.strip_suffix('=').unwrap_or(&opt));
         let target: P = if let Some(l) = n.parts.iter().position(|p| p.role == Role::Left) {
             let t = self.text(n.parts[l].start, n.parts[l].end).trim();
-            if !is_ident(t) {
+            // A pattern destructures K's value as it would the original's: its targets
+            // and defaults all come after the right side.
+            let pattern = opt == "=" && (t.starts_with('{') || t.starts_with('['));
+            if !is_ident(t) && !pattern {
                 return no("an assignment to a pattern around the site (0203)");
             }
             P::V(n.parts[l].start, n.parts[l].end)

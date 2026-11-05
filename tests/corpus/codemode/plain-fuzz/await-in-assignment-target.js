@@ -1,5 +1,5 @@
 // Found by the plain-dump fuzzer (0208): an await in an assignment's target (a computed
-// key, a pattern's default around the site). Plain dumps refuse these on purpose.
+// key, a pattern's default around the site).
 const o = { a: 1 };
 o[await tools.echo("a")] = await tools.echo(2);
 console.log(o.a);

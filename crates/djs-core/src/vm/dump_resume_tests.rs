@@ -1476,6 +1476,40 @@ main();
     assert!(ok >= 6, "{ok}");
 }
 
+/// A site in an assignment's member target (its object, its computed key; plain, compound
+/// and logical operators, the key converted after the right side as the original does)
+/// and an assignment to a pattern with the site on its right (0203 follow-ups).
+#[test]
+fn plain_dumps_sites_in_assignment_targets() {
+    let src = r#"
+async function main() {
+  const o = { a: 1, n: 5 };
+  o[await later("a")] = await later(2);
+  (await later(o)).b = 7;
+  (await later(o))[await later("c")] = 8;
+  o[await later("n")] += await later(10);
+  (o)[await later("p")] = 1;
+  ((o))[await later("r")] ??= await later(3);
+  (await later(o)).n -= await later(1);
+  (await later(o)).z ||= await later(1);
+  o[await later({ toString() { print("key"); return "k"; } })] = (print("rhs"), await later(1));
+  ({ a: o.d = await later(3) } = { a: await later(undefined) });
+  [o.e, o.f = await later(4)] = [await later(9)];
+  let x, y;
+  ({ x, y = await later(5) } = await later({ x: 1 }));
+  print(JSON.stringify(o), x, y);
+}
+main();
+"#;
+    let (failed, refused, ok) = plain_check_program("targets", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    let (failed, _, refused) = plain_chain_program("targets", src);
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+    assert!(refused.is_empty(), "{refused:?}");
+    assert!(ok >= 20, "{ok}");
+}
+
 /// `yield*` stopped at its yield and at the awaits of inner results: `throw` and
 /// `return` forwarded after the dump, an inner iterator without `throw`, an async
 /// delegation to a sync iterable whose values are promises.
