@@ -496,7 +496,8 @@ fn token_len(t: &str) -> usize {
             }
             b',' | b';' | b'\n' if depth == 0 => break,
             b' ' if depth == 0 => {
-                let next = b.get(i + 1).copied().unwrap_or(b' ');
+                // (After the spaces: a TypeScript original's blanked types are several.)
+                let next = b[i..].iter().find(|&&c| c != b' ').copied().unwrap_or(b' ');
                 if !(next.is_ascii_alphanumeric()
                     || matches!(next, b'_' | b'$' | b'(' | b'{' | b'['))
                 {
