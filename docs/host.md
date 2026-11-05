@@ -191,8 +191,10 @@ await again.result;
   SandboxError (`dumps need frozen builtins`). `Sandbox.resume`, `loadRun` and `load`
   run a dump with the global object `$djs` defined, which holds the
   dump runtime's helpers (`vm_dump_runtime`, D2903) and the hooks: the dump calls
-  `$djs.seed(lo, hi, next)` first (Math.random's state and the id of the next host call)
-  and `$djs.resume(id, name, args, state)` for each open call, which opens call `id` of the
+  `$djs.seed(lo, hi, next)` first (Math.random's state where the run used it, restored
+  with `vm_restore_math_random` as one that ran, and the id of the next host call where it
+  is not one past the highest reopened call's; `$djs.seed(next)` for the id alone, or no
+  call, D2837) and `$djs.resume(id, name, args, state)` for each open call, which opens call `id` of the
   host function `name` again under the same id (`vm_open_call`) and gives the dump its
   promise. A host value the dump holds (a host function, a namespace object such as
   `tools` or `console`) is written as `$djs.host(name)`, by its identity rather than by
@@ -425,6 +427,7 @@ frees handles with `vm_handle_free`. Using a freed VM or handle is a trap.
 | `vm_dump_runtime(vm, len) -> h` | a new object holding the plain dump runtime's helpers (D2903), evaluated from staging[0..len], the runtime's Script (js/src/dump-runtime.js `scriptFor(dump)`, the helpers the dump names, or `script`, all of them; the module does not carry it): the host adds its hooks (`seed`, `resume`) and defines it as the global `$djs` before it runs a plain dump. Runs the VM, so call it while the VM is not running. 0: out of memory or not the runtime's text |
 | `vm_set_dump_source_refs(vm, on)` | whether `vm_dump` names codemode bodies by `$djs.source` (1, the default) or writes their text (0) (D2882) |
 | `vm_set_next_call_id(vm, id)` | the id the next host call gets: after a plain dump's load, its `$djs.seed`'s `next` or one past the highest reopened call, whichever is larger (`Vm::set_next_call_id`, D2897) |
+| `vm_restore_math_random(vm, lo, hi)` | a plain dump's `$djs.seed(lo, hi)`: `Math.random`'s state `hi << 32 \| lo`, as one that ran, so that the next dump writes it again (`Vm::restore_math_random`, D2837) |
 | `vm_host_call(vm) -> argc` | out = `[call_id, fn_id, this lo, hi, (arg lo, hi)*]` |
 | `vm_host_call_info(vm, call_id) -> argc` | `vm_host_call` for any pending call (async ones) |
 | `vm_new_host_calls(vm) -> n` | out = the ids (u32) of the async calls made since the last check |
@@ -747,8 +750,10 @@ pi's suite passes the same in all three modes (`node js/pi/pi-tests.ts`, `--next
 --dump-every-idle`: 215 of 226 at 0176, at 0195 with the call states and at 0204 with
 plain dumps, the same 11 failures as above), and js/test/pi-vm.test.ts runs every adapter
 test in each and the open-call policies through a real dump. A dump carries
-`Math.random`'s state (`$djs.seed`, D2897), so a resumed deterministic run continues its
-sequence. What every load needs and is the same for the start is made with the prelude,
+`Math.random`'s state where the run used it (`$djs.seed`, D2897, D2837), so a resumed
+deterministic run continues its sequence; one that never drew a number continues from the
+resumed session's own (deterministic) seed, as the uninterrupted run does. A call whose pi
+id is its call id has no state argument (D2838). What every load needs and is the same for the start is made with the prelude,
 in its image: the dump runtime with the hooks, and the host globals' values (0215). The
 adapter keeps up to two instances whose VM was disposed and gives the next VM one of them,
 made as new first: its memory restored to a new instance's, the rest zeroed (D3023;

@@ -93,9 +93,10 @@ call with its function's `resume` hook and the saved state; the run goes on by i
 ordinary calls of `call`.
 
 Loading a plain dump is running it as a Script with one extra global, `$djs`, that the
-sandbox defines for the load (the dump runtime's helpers and the host's hooks): the dump
-calls `$djs.seed(lo, hi, next)` first (the state of `Math.random` and the id of the VM's
-next host call) and `$djs.resume(id, name, args, state)` for each open call, which the
+sandbox defines for the load (the dump runtime's helpers and the host's hooks): a dump of
+a run that drew random numbers calls `$djs.seed(lo, hi)` first (the state of
+`Math.random`, and the id of the VM's next host call where the sandbox could not tell it
+otherwise), and every dump calls `$djs.resume(id, name, args, state)` for each open call, which the
 sandbox answers by reopening call `id` under the same id and handing it to the function's
 `resume` hook. Once the Script has run, the sandbox deletes `$djs` and the dump's `$dump`.
 
@@ -113,13 +114,11 @@ are the dump, which the host prints as it writes it (explained [below](#the-dump
 
 ```
   [vm] first sleeps 5000 ms
-host: suspended the run into examples/sleep-dump/out/sleep.dump.js (750 bytes):
+host: suspended the run into examples/sleep-dump/out/sleep.dump.js (688 bytes):
   | "djs-dump";
-  | "use strict";
-  | $djs.seed(-1705729789, -1615204441, 3);
   | $djs.k(async function (ms, step, t0, results, $djs_i1) {
   | results.push(await $djs.k(async function (label) {
-  | const r = await $djs.resume(2, "tools.sleep", [5000], {"due":1793856436710});
+  | const r = await $djs.resume(2, "tools.sleep", [5000], {"due":1793868491866});
   | return label + ": " + r;
   | }, step)("first"));
   | for (const label of $djs_i1) {
@@ -127,11 +126,11 @@ host: suspended the run into examples/sleep-dump/out/sleep.dump.js (750 bytes):
   | }
   | console.log("done after", Date.now() - t0 >= 2 * ms ? "at least" : "less than", 2 * ms, "ms:", results.join(", "));
   | return results;
-  | }, $djs.source("sleep.js", "b48bd687f864a8d6", "ms"), 1, 118)(5000, async function step(label, ms) {
+  | }, $djs.source("sleep.js", "4cef7e51", "ms"), 1, 118)(5000, async function step(label, ms) {
   |   console.log(label, "sleeps", ms, "ms");
   |   const r = await tools.sleep(ms);
   |   return label + ": " + r;
-  | }, 1793856431700, [], ["second"].values());
+  | }, 1793868486857, [], ["second"].values());
   [vm] second sleeps 5000 ms
   [vm] done after at least 10000 ms: first: slept 5000 ms, second: slept 5000 ms
 host: the run returned [ 'first: slept 5000 ms', 'second: slept 5000 ms' ]
@@ -150,7 +149,7 @@ and a `tools.sleep`):
 ```
 --- node sleep-dump.ts start (process 1)
   [vm] first sleeps 5000 ms
-host: suspended the run into examples/sleep-dump/out/sleep.dump.js (750 bytes):
+host: suspended the run into examples/sleep-dump/out/sleep.dump.js (688 bytes):
   | "djs-dump";
   | ... (the same dump as above)
 --- node sleep-dump.ts node (process 2, no djs)
@@ -179,9 +178,11 @@ first statement does, at the same moment of the load as on a line of its own. It
 `console.log`), `$djs.resume(2, "tools.sleep", [5000], {"due": ...})`, by the host's name
 for the function, with its arguments and the state the call recorded, JSON written as is.
 Then the loop goes on as written, over the iterator itself, and the rest of the body
-follows verbatim. `$djs.seed` on the third line gives the sandbox `Math.random`'s state and
-the next call id, 3, so the resumed run's calls get the ids the uninterrupted run gives
-them.
+follows verbatim. There is no `$djs.seed`: the script never called `Math.random`, and the
+next call id, 3, is one past the reopened call's, which the sandbox takes by itself, so
+the resumed run's calls get the ids the uninterrupted run gives them. The dump has no
+`"use strict"` either: djs compiles all code strict, and the node half of this example
+puts the directive in front itself.
 
 The rest is plain JavaScript too: a dump that uses a value more than once keeps it on
 `$dump`, an ordinary object the host deletes once the Script has run (this one needs
@@ -211,15 +212,15 @@ names, so run it beside `sleep.js`, which `sleep-dump.ts start` writes next to t
 ```
 $ cd examples/sleep-dump/out && djs resume --explain sleep.dump.js
 sleep.dump.js: 1 open call, 2 suspended activations; handles: run
-#2 tools.sleep(5000), state {"due":1793856436710}
-  async function <anonymous> at sleep.dump.js:6:11
-      const r = await $djs.resume(2, "tools.sleep", [5000], {"due":1793856436710});
+#2 tools.sleep(5000), state {"due":1793868491866}
+  async function <anonymous> at sleep.dump.js:4:11
+      const r = await $djs.resume(2, "tools.sleep", [5000], {"due":1793868491866});
                 ^
     label = 'first', r = undefined
-  async function <anonymous> at sleep.dump.js:5:14 (run)
+  async function <anonymous> at sleep.dump.js:3:14 (run)
       results.push(await $djs.k(async function (label) {
                    ^
-    ms = 5000, step = [AsyncFunction: step], t0 = 1793856431700, results = [], label = undefined
+    ms = 5000, step = [AsyncFunction: step], t0 = 1793868486857, results = [], label = undefined
 ```
 
 (`label = undefined`: the continuation left the dead binding out.)
@@ -234,7 +235,8 @@ The dump holds the VM's side, and the host's state of each open call:
 - the open host call, `$djs.resume(2, "tools.sleep", [5000], {"due": ...})`: the id the VM
   gave it, the function by the host's name for it, its arguments, and the state the host
   gave it;
-- `Math.random`'s state and the next call id, `$djs.seed(...)`;
+- `Math.random`'s state and the next call id, `$djs.seed(...)`, where the sandbox needs
+  them (here neither);
 - the run's result promise, as the Script's completion value.
 
 It holds no reference to djs's compiled code: no sites, slot names or loader calls. Any

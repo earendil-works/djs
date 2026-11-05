@@ -65,13 +65,9 @@ between them. `djs run --dump-after 5 plan.js tests/dump/v2/plan.src.js` writes 
 
 ```js
 "djs-dump";
-"use strict";
-$djs.seed(2135587861, -1640531527, 6);
-globalThis.$dump = {};
 async function main() { /* … verbatim … */ }
 const contents = { /* … */ };
 const tools = { /* … */ };
-$dump.p1 = $djs.resume(5, "later", ["TODO four\nok\nTODO five"]);
 $djs.k(async function (files, report, $djs_i1) {
 const seen = new Map([["src/a.ts", 2], ["src/b.ts", 0], ["src/c.ts", 1]]);
 var todos = async function todos(path) {
@@ -81,7 +77,7 @@ var todos = async function todos(path) {
     return n;
   };
 report.push(await Promise.all([1, $djs.k(async function (path) {
-const body = await $dump.p1;
+const body = await $djs.resume(5, "later", ["TODO four\nok\nTODO five"]);
 const n = body.split("\n").filter((l) => l.includes("TODO")).length;
 seen.set(path, n);
 return n;
@@ -98,15 +94,19 @@ The dump has no comments (D2641; the `/* … */` and `[…]` are this page's sho
 Read top to bottom:
 
 - The directive `"djs-dump";` names the format (D2835; `"djs-dump typescript";` when a
-  function's TypeScript is more than types, D2879). The Script is strict.
-- `$djs.seed(lo, hi, next)`: `Math.random`'s state and the id the dumped VM's next host
-  call gets (D2897). `$dump` is an ordinary global object the dump makes for its own
-  locations; the host deletes it, with `$djs`, once the Script has run (D2916).
+  function's TypeScript is more than types, D2879). The Script is strict: djs hosts compile
+  all code so, and a harness that runs a dump in node puts `"use strict"` in front (D2840).
+- No `$djs.seed`: the run never called `Math.random` (an unobserved state is any seed's),
+  and the next call id is one past the reopened call's, which hosts take without being
+  told (D2837, D2897). A run that drew random numbers starts with `$djs.seed(lo, hi)`.
+  `$dump` is an ordinary global object a dump makes for values it uses more than once
+  (this one needs none); the host deletes it, with `$djs`, once the Script has run
+  (D2916).
 - Host call 5, issued before the dump: `$djs.resume(id, name, args, state)` asks the host
   to continue it, under the same id. What it means is the host's policy (deliver a
   recorded result, issue it again, reject it); the hook returns the call's promise. It is
-  written right before the line that reads it (D3004), here the last line, whose inner
-  continuation awaits it.
+  written right before the line that reads it (D3004), here inside the inner continuation
+  that awaits it.
 - Data: the Map, the batches, the report; the for-of's iterator, a new one over what was
   left of an array nothing else holds (`[].values()`: the second batch was the last,
   D2917). A value the dump uses once is written where it is used (D3001): the Map as
@@ -135,11 +135,11 @@ Where each activation stopped is what `djs resume --explain` prints:
 ```text
 plan.js: 1 open call, 2 suspended activations; handles: run
 #5 later("TODO four\nok\nTODO five")
-  async function <anonymous> at plan.js:33:14
-      const body = await $dump.p1;
+  async function <anonymous> at plan.js:29:14
+      const body = await $djs.resume(5, "later", ["TODO four\nok\nTODO five"]);
                    ^
     path = 'src/d.ts', body = undefined, n = undefined
-  async function <anonymous> at plan.js:32:13
+  async function <anonymous> at plan.js:28:13
       report.push(await Promise.all([1, $djs.k(async function (path) {
                   ^
     files = [ 'src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts' ], report = [ [ 2, 0 ] ], seen = Map(3) { … }, todos = [AsyncFunction: todos], batch = undefined

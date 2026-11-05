@@ -10493,3 +10493,22 @@ A continuation of a factory's scope is called on `$djs.k`'s result on its own li
 effectful value as the first thing that line evaluates, as an unhomed one does. A name
 read only as an object literal's key (`{ path: … }`) does not keep a closure or
 continuation from being written below a block that declares it.
+
+## D3008: How D2837–D2840 are carried out
+date: 2026-11-06 · by: pjs · issue: 0207
+- `Math.random`'s state record holds a third element, whether `Math.random` ran since the
+  VM was seeded (`set_random_seed`/`set_math_random_seed` clear it, a draw sets it;
+  `COMPAT_VERSION` 4). A dump writes the state only where it is set. A host restores a
+  dump's state with `Vm::restore_math_random` (wasm `vm_restore_math_random`), which sets
+  it: a re-dump of a loaded run that drew numbers writes the state again.
+- `$djs.seed` has three forms: `(lo, hi, next)`, `(lo, hi)` and `(next)` (a second
+  argument `undefined`), or is left out. `next` is written only where it is not one past
+  the highest reopened call's id; every host now sets the id counter after a load to
+  `max(next ?? 0, last + 1)`.
+- The source hash is the 64-bit FNV-1a folded to 32 bits (`h ^ h >> 32`), 8 hex digits,
+  in `vm::script_hash` and Sandbox's `scriptHash`.
+- pi's adapter writes no state for a call whose pi id equals its call id and reads a
+  missing state as the call id.
+- Without `"use strict"` the dump's first line is `"djs-dump";`. The node harnesses
+  (plain-node.mjs, the sleep example, js tests) prepend `"use strict"; ` on that line, so
+  line numbers stay the dump's.

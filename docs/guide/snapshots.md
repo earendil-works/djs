@@ -261,24 +261,27 @@ is this dump (`djs run --body --dump-after 2`; the open call's state is the CLI'
 
 ```js
 "djs-dump";
-"use strict";
-$djs.seed(2135587861, -1640531527, 4);
 $djs.k(async function (tools, notes, $djs_i1) {
 notes.push(await $djs.resume(3, "tools.read", [{ path: "b.md" }], {"made":["tools.read"],"answered":{"tools.read":1}}));
 for (const path of $djs_i1) {
   notes.push(await tools.read({ path }));
 }
 return notes.join("\n");
-}, $djs.source("notes.js", "3753c3a1172c33f7", "tools,console"), 1, 118).call(globalThis, $djs.host("tools"), ["# A"], [].values());
+}, $djs.source("notes.js", "207ff056", "tools,console"), 1, 118).call(globalThis, $djs.host("tools"), ["# A"], [].values());
 ```
 
 It is an ordinary Script (D2830): djs, or node, runs it given the host's functions and
-one object the host provides while it loads, `$djs` (D2834, D2890):
+one object the host provides while it loads, `$djs` (D2834, D2890). It is strict code
+without saying so: djs compiles everything strict, and a harness that runs a dump in node
+puts `"use strict"` in front itself (D2840).
 
 - data is written as literals and the calls that make it; a builtin is the expression
   that finds it, never its contents;
-- `$djs.seed(...)` restores `Math.random`'s sequence and says which id the run's next
-  host call gets (D2897);
+- this run never called `Math.random`, so the dump does not say where its sequence
+  stood: an unobserved state is any seed's, and the loading host's own seed goes on. A
+  run that drew random numbers starts with `$djs.seed(lo, hi)`, which restores the
+  sequence; the id the run's next host call gets is written there too where it is not one
+  past the reopened call's, the one hosts take without being told (D2837, D2897);
 - `$djs.resume(id, name, args, state)` stands for the open tool call: the host continues
   call `id` of its function `name` under the same id and gives back its promise; the
   last argument is the host's own state of the call, JSON it gave when it dumped (D2770).
@@ -306,7 +309,7 @@ one object the host provides while it loads, `$djs` (D2834, D2890):
   [js/src/dump-runtime.js](../../js/src/dump-runtime.js);
 - the continuation's origin record, the arguments of `$djs.k` after it, names its origin,
   the script's function (`$djs.source(…)`, which the host makes again from the script it
-  ran, named by its file and hash, and never calls), the await it stands for (`1`, the
+  ran, named by its file and a 32-bit hash of its text, D2839, and never calls), the await it stands for (`1`, the
   first), the few decisions the writer took on the run's values that shaped the
   continuation's text (`118`, as bits: whether it reads `notes.push` or the loop's `next`
   again instead of keeping what the run looked up, …) and, where reading K's text cannot

@@ -371,6 +371,16 @@ deletes, with the dump's own global `$dump` (D2916; djs hosts call `Vm::end_dump
 until then the dump did in a final `try`/`finally`): `$djs.seed(lo, hi, next)` is the dump's first call, with
 `Math.random`'s state and the id the dumped VM's next host call gets; `$djs.resume(id,
 name, args, state)` stands for each open call (`state` left out when the call has none).
+Since D2837 the state is written only where the run called `Math.random` before the dump
+(an unobserved state is any seed's: the loading host's own seed continues), and `next`
+only where it is not one past the highest reopened id: `$djs.seed(lo, hi)`,
+`$djs.seed(next)` for the id alone, or no call at all. A djs host restores a written state
+as one that ran (`Vm::restore_math_random`), so that the next dump writes it again; tests
+that compare a resumed run with the uninterrupted one load into a VM with the original's
+seed (the default one, or the deterministic seed both runs get). pi's adapter leaves out
+`state` where the pi id equals the call id (D2838), the case of almost every call. Dumps
+carry no `"use strict"`: djs hosts compile everything strict, and a harness that runs a
+dump in node puts the directive in front itself (D2840).
 Both are called only while the Script itself is evaluated. A djs host reopens call `id`
 under that id (`Vm::open_host_call`) and, when the Script has stopped, sets the id counter
 to `next` (or one past the highest reopened id): the hooks are sync calls, which take ids
@@ -413,10 +423,10 @@ names can become imports later. The members:
 
 | member | what it is |
 | --- | --- |
-| `seed(lo, hi, next)` | hook: `Math.random`'s state, the next call id (above) |
+| `seed(lo, hi[, next])`, `seed(next)` | hook: `Math.random`'s state where the run used it, the next call id where needed (above, D2837) |
 | `resume(id, name, args, state)` | hook: an open host call (above) |
 | `host(name)` | hook: a host value by name, a host function by its identity or a root the host names (above, D2971) |
-| `source(name, hash, params[, 1])` | hook: the codemode body `name` the host ran, or with `1` the one function its wrapper script makes (pi's, the difftest's), which the continuations name as their origin instead of a second copy of its text (D2882, D2886); djs hosts compile it again (and evaluate the wrapper) and check the hash, node returns any function (it never dumps again) |
+| `source(name, hash, params[, 1])` | hook (`hash`: 8 hex digits, FNV-1a 64 of the parameters, option bits and source folded to 32 bits, D2839): the codemode body `name` the host ran, or with `1` the one function its wrapper script makes (pi's, the difftest's), which the continuations name as their origin instead of a second copy of its text (D2882, D2886); djs hosts compile it again (and evaluate the wrapper) and check the hash, node returns any function (it never dumps again) |
 | `R`, `G`, `C`, `A` | `Reflect.apply`, `Reflect.get`, `Reflect.construct`, `Object.assign`: a call, read or construction whose callee or receiver was evaluated before the site |
 | `D(o, k, v)` | defines a data property (an object literal's member written after the site) |
 | `P(k)` | ToPropertyKey, as a computed key does it |

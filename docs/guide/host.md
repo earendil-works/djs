@@ -311,10 +311,14 @@ continuation, an ordinary function holding the rest of its code from the `await`
 at, and the whole dump as a Script that needs nothing from djs. The Script reaches the
 host through one global object, `$djs`, which the loading host defines and deletes when
 the Script has run, with the dump's own `$dump` (D2890, D2916): `$djs.seed(lo, hi, next)` hands over `Math.random`'s
-state and the id of the run's next host call, `$djs.resume(id, name, args, state)`
+state and the id of the run's next host call, each only where needed (the state where the
+run called `Math.random`, the id where it is not one past the highest reopened call's;
+`$djs.seed(next)` for the id alone, D2837), `$djs.resume(id, name, args, state)`
 stands for each open call, and `$djs.source(name, hash, params)` names the script the run
-was started with, which the dump refers to instead of carrying its text a second time:
-the sandbox compiles that script again and checks it is the same one (D2882).
+was started with by its name and a 32-bit hash (D2839), which the dump refers to instead
+of carrying its text a second time: the sandbox compiles that script again and checks it
+is the same one (D2882). A dump is strict code without a `"use strict"` directive: every
+djs host compiles it strict (D2840).
 `$djs.host(name)` stands for a host value the run holds, such as a tool function it put
 in a variable or the `tools` object itself: the dump names it by the name the host gave
 it, never by where the script found it, and the host hands back the very object it bound
