@@ -14,7 +14,7 @@ doctest = false
 libm = "=0.2.16"
 
 [features]
-default = ["full", "unicode", "dump"]
+default = ["full", "unicode", "dump", "lazy"]
 # Everything djs implements. Off, the build is slim (D2411, docs/slim-codemode.md): no typed
 # arrays/ArrayBuffer/DataView, Iterator helpers or `Iterator`, BigInt, WeakRef/
 # FinalizationRegistry, DisposableStack/AsyncDisposableStack/SuppressedError, and no
@@ -24,6 +24,11 @@ full = ["djs-prelude/full"]
 # `Vm::dump` (0167, docs/functions-as-code.md): a VM's bindings written as JavaScript.
 # Code only: images and the base do not depend on it.
 dump = []
+# Lazy function compilation (0218, D2990): with `VmOptions::lazy_functions`, a function
+# body is compiled at its first call; the load still parses everything. Code only: a
+# build without it treats a lazy template as corrupt bytecode, and `Vm::seal` compiles
+# them all first. Off in the shipped main and slim modules (D2990), on in the dump module.
+lazy = []
 # The Unicode tables: both features below.
 unicode = ["regexp-unicode-props", "unicode-normalization"]
 # (Each feature also turns on djs-prelude's of the same name, for the e2e tests' base: the

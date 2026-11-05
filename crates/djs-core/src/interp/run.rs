@@ -103,6 +103,8 @@ mod intrinsics;
 mod iter;
 mod json_regexp;
 pub(crate) mod late;
+#[cfg(feature = "lazy")]
+mod lazy;
 pub(crate) mod native;
 pub(crate) mod promise;
 mod proxy;
@@ -238,6 +240,8 @@ mod retry {
     pub const DEFINE_FIELD: u8 = Op::DefineField as u8;
     pub const ADD: u8 = Op::Add as u8;
     pub const OBJECT: u8 = Op::Object as u8;
+    #[cfg(feature = "lazy")]
+    pub const LAZY: u8 = Op::Lazy as u8;
     /// Intrinsics that allocate before they change anything (and take at most 4
     /// arguments).
     pub const INTRINSICS: [u16; 8] = [
@@ -1133,6 +1137,9 @@ impl<'h> Exec<'h> {
             fast::PUT_FIELD => 2,
             retry::DEFINE_FIELD | retry::ADD => 2,
             retry::OBJECT => 0,
+            // Compiles before it changes anything (D2990).
+            #[cfg(feature = "lazy")]
+            retry::LAZY => 0,
             fast::CALL_INTRINSIC => {
                 let (id, argc) = (self.imm_u16(1) as u16, self.imm_u16(3));
                 if !retry::retries(id) || argc > 4 {
@@ -2903,6 +2910,8 @@ impl<'h> Exec<'h> {
             Op::Await => return self.await_value(next),
             Op::AsyncReturn => return self.async_finish(false),
             Op::AsyncReject => return self.async_finish(true),
+            #[cfg(feature = "lazy")]
+            Op::Lazy => return self.lazy(),
             Op::NameGet
             | Op::NamePut
             | Op::NameSet
@@ -3052,10 +3061,11 @@ impl<'h> Exec<'h> {
         let f = self.heap.alloc_closure(Some(proto), t.0, ncap + home)?;
         for i in 0..ncap {
             let d = template::capture_desc(self.heap, t.0, i);
+            // (Bits 16-30 are a lazy template's capture attributes, D2990.)
             let b = if d & 0x8000_0000 != 0 {
-                self.capture(d & 0x7FFF_FFFF)
+                self.capture(d & 0xFFFF)
             } else {
-                self.get(self.lp + d)
+                self.get(self.lp + (d & 0xFFFF))
             };
             self.heap.set_object_slot(f, i, b);
         }

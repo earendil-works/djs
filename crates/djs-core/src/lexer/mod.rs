@@ -92,6 +92,11 @@ impl<'a> Lexer<'a> {
         self.src
     }
 
+    /// Moves to `pos` (a token start): a lazy function's parameters (D2990).
+    pub fn seek(&mut self, pos: u32) {
+        self.pos = pos;
+    }
+
     /// The position where the next token scan starts (just after the last token).
     pub fn pos(&self) -> u32 {
         self.pos

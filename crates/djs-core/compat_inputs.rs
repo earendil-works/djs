@@ -17,7 +17,7 @@ pub const IMAGE_FEATURES: &[&str] = &["full", "regexp-unicode-props", "unicode-n
 /// The features that change no image: umbrellas that only name others, and ones that
 /// change how the heap is accessed, not what it holds. A feature in neither list fails the
 /// build, so that each new one is classified.
-pub const IMAGE_NEUTRAL_FEATURES: &[&str] = &["default", "dump", "unicode", "unsafe-heap"];
+pub const IMAGE_NEUTRAL_FEATURES: &[&str] = &["default", "dump", "lazy", "unicode", "unsafe-heap"];
 
 /// The `IMAGE_FEATURES` mask of the enabled features (`enabled` as cargo names them).
 pub fn feature_mask(enabled: &[String]) -> Result<u32, String> {

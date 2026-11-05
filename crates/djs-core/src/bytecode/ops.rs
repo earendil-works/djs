@@ -121,6 +121,11 @@ pub mod capture_desc {
     /// Set: from the creating closure's captures; clear: from a local slot of the
     /// creating frame.
     pub const OUTER: u32 = 1 << 31;
+    /// A lazy template's (D2990): the captured binding is immutable (`const`, a
+    /// function expression's own name).
+    pub const IMMUTABLE: u32 = 1 << 16;
+    /// A lazy template's: reads of the captured binding are TDZ-checked.
+    pub const CHECKED: u32 = 1 << 17;
 
     pub const fn local(slot: u16) -> u32 {
         slot as u32
@@ -810,6 +815,9 @@ ops! {
     JumpIfFalse8 jump_if_false8(target: Target8) pop 1 push 0 cost Basic flags BRANCH;
     /// `jump_if_true` with an 8-bit offset.
     JumpIfTrue8 jump_if_true8(target: Target8) pop 1 push 0 cost Basic flags BRANCH;
+    /// The whole code of a lazy template (D2990): compiles the function at its first
+    /// call and continues in the compiled template, in the same frame.
+    Lazy lazy() pop 0 push 0 cost Alloc flags THROWS | ALLOC | TERM;
 }
 
 impl Op {

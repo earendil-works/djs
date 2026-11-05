@@ -40,6 +40,7 @@ use crate::heap::Atom;
 use crate::lexer::{Kw, TokenKind};
 
 /// A class being parsed: its private names, for the early errors.
+#[derive(Default)]
 pub(super) struct ClassCtx {
     privates: Vec<Private>,
     /// Private name references (`#x` and position) to check at the class end: each

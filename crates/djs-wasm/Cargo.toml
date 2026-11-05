@@ -30,7 +30,7 @@ alloc-stats = []
 docs = []
 # Exports `vm_dump` (`Vm::dump`, 0167): a VM's bindings written as JavaScript. Off by
 # default: it costs the module 58 KB gzip (D2352); the gate's debug build turns it on.
-dump = ["djs-core/dump"]
+dump = ["djs-core/dump", "djs-core/lazy"]
 # Unchecked arena field access in djs-core (D2520); off in the shipped module.
 unsafe-heap = ["djs-core/unsafe-heap"]
 

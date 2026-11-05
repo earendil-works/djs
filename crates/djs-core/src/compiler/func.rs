@@ -321,6 +321,19 @@ pub(super) struct FuncState {
     /// Recording for a suspension map (D2563, compiler/smap.rs), when requested.
     #[cfg(feature = "dump")]
     pub smap: Option<alloc::boxed::Box<super::smap::Recorder>>,
+    /// Lazy compilation (D2990): a function written in source that may compile at its
+    /// first call (the rest of the rule is in `resolve::lazy_roots`).
+    pub lazy_ok: bool,
+    /// Where its parameters start (a type parameter list, `(`, or an arrow's head):
+    /// where a lazy compile starts parsing.
+    pub head: u32,
+    /// The end of the tokens that call it right where it is defined (`fn(`, `(fn)(`),
+    /// or 0.
+    pub call_end: u32,
+    /// An arrow: the kind of the function that owns its `this`; `after_q` of
+    /// `parse_arrow`.
+    pub owner: FuncKind,
+    pub after_q: bool,
 }
 
 /// A hash index of the bindings by `(scope, name)`: the first one declared with that
@@ -443,6 +456,11 @@ impl FuncState {
             temps: Vec::new(),
             #[cfg(feature = "dump")]
             smap: None,
+            lazy_ok: false,
+            head: 0,
+            call_end: 0,
+            owner: FuncKind::Normal,
+            after_q: false,
         }
     }
 

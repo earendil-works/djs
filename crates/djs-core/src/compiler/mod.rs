@@ -24,6 +24,8 @@ mod for_in_of;
 mod func;
 mod function;
 mod generator;
+#[cfg(feature = "lazy")]
+mod lazy;
 mod module;
 mod parser;
 mod pattern;
@@ -149,7 +151,7 @@ impl<'a> CompileOptions<'a> {
 
     /// `script` with the options of [`CompileOptions::bits`] `bits` (privileged code
     /// keeps no source: never compiled again).
-    #[cfg(feature = "dump")]
+    #[cfg(any(feature = "dump", feature = "lazy"))]
     pub(crate) fn from_bits(filename: &'a str, params: &'a [&'a str], bits: u32) -> Self {
         CompileOptions {
             goal: match bits & 3 {
@@ -319,6 +321,22 @@ pub fn compile(
     result.map(|(t, ..)| t).map_err(|e| error_at(src, e))
 }
 
+/// [`compile`] with lazy functions (D2990): the source is parsed whole (every early
+/// error is reported), but a function that is not run at once gets a lazy template,
+/// compiled at its first call ([`compile_lazy`]). Its code is the same either way.
+#[cfg(feature = "lazy")]
+pub fn compile_lazy_unit(
+    heap: &mut Heap,
+    src: &[u8],
+    opts: &CompileOptions<'_>,
+) -> Result<Ref, CompileError> {
+    let result = parse(heap, src, opts, |mut p| {
+        p.unit.lazy = true;
+        p.compile()
+    });
+    result.map(|(t, ..)| t).map_err(|e| error_at(src, e))
+}
+
 /// The spans of the code that the outermost class of `src` (a class's text) runs when
 /// it is evaluated: static blocks' bodies and static fields' initializers, in source
 /// order. Plain dumps blank the static code, whose effects the dump
@@ -406,6 +424,8 @@ fn suspension_maps_with(
     result.map_err(|e| error_at(src, e))
 }
 
+#[cfg(feature = "lazy")]
+pub use lazy::compile_lazy;
 pub use parser::{ClassSpan, ClassSpanKind};
 #[cfg(feature = "dump")]
 pub use smap::{Decl, DeclKind, Node, NodeKind, Part, Role, Special, Step, Syntax};
