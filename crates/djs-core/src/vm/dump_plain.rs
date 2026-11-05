@@ -2317,41 +2317,45 @@ impl W<'_> {
         // The origin, the site, the holes and the tape a re-dump makes K's layout again
         // from (D2913); fields at their default are left out (D2900): `at` when it is the
         // first await, empty `h` and `r`.
-        let mut rec = cat!("f: ", fref);
-        if act.site.name != "await#1" {
-            rec = cat!(rec, ", at: ", quote(&act.site.name));
-        }
-        let list = |v: &[u32]| -> String {
-            let v: Vec<String> = v.iter().map(|x| cat!(*x)).collect();
-            join(&v, ",")
-        };
-        if !k.holes.is_empty() {
-            rec = cat!(rec, ", h: [", list(&k.holes), "]");
-        }
-        // A tape of yes/no decisions is a number, its bits the decisions (the first the
-        // lowest; a tape leaves out its trailing zeros).
-        if k.tape.iter().all(|&x| x <= 1) && k.tape.len() <= 53 {
-            let bits = k.tape.iter().rev().fold(0u64, |n, &x| n * 2 + u64::from(x));
-            if bits != 0 {
-                rec = cat!(rec, ", r: ", bits);
-            }
-        } else {
-            rec = cat!(rec, ", r: [", list(&k.tape), "]");
-        }
         let me = cat!("$dump.", act.name);
         let generator = act.kind == crate::interp::run::suspend::GENERATOR
             || act.kind == crate::interp::run::suspend::ASYNC_GENERATOR;
-        // `$djs.k(K, record[, prototype])` gives K its origin record (and a generator's
-        // prototype) and returns it (D2909): K written in place of its call, or, where a
-        // factory holds it, its reference.
-        let proto = match (&act.proto, generator) {
-            (Some(p), true) => cat!(", ", p),
-            _ => String::new(),
+        // `$djs.k(K, f, at, r, h, prototype)` gives K its origin record and a generator's
+        // prototype, and returns it (D2909, D2915): the origin, the site (an await by its
+        // number), the tape and the holes a re-dump makes K's layout again from (D2913),
+        // and the generator's prototype where it is not `f.prototype`; arguments at their
+        // defaults (the first await, no decisions, no holes) are left out at the end.
+        let list = |v: &[u32]| -> String {
+            let v: Vec<String> = v.iter().map(|x| cat!(*x)).collect();
+            cat!("[", join(&v, ","), "]")
         };
-        let kexpr = if self.acts[a].home.is_none() {
-            cat!("$djs.k(", k.text, ", { ", rec, " }", proto, ")")
+        let mut rec: Vec<String> = alloc::vec![fref.clone()];
+        rec.push_out(match act.site.name.strip_prefix("await#") {
+            Some(n) if n.parse::<u32>().is_ok() => String::from(n),
+            _ => quote(&act.site.name),
+        });
+        // A tape of yes/no decisions is a number, its bits the decisions (the first the
+        // lowest; a tape leaves out its trailing zeros).
+        rec.push_out(if k.tape.iter().all(|&x| x <= 1) && k.tape.len() <= 53 {
+            cat!(k.tape.iter().rev().fold(0u64, |n, &x| n * 2 + u64::from(x)))
         } else {
-            lines.push_out(cat!("$djs.k(", kref, ", { ", rec, " }", proto, ");"));
+            list(&k.tape)
+        });
+        rec.push_out(list(&k.holes));
+        let fproto = cat!(fref, ".prototype");
+        rec.push_out(match &act.proto {
+            Some(p) if generator && *p != fproto => p.clone(),
+            _ => String::new(),
+        });
+        let defaults = ["", "1", "0", "[]", ""];
+        while rec.len() > 1 && rec.last().map(String::as_str) == Some(defaults[rec.len() - 1]) {
+            rec.pop();
+        }
+        let rec = join(&rec, ", ");
+        let kexpr = if self.acts[a].home.is_none() {
+            cat!("$djs.k(", k.text, ", ", rec, ")")
+        } else {
+            lines.push_out(cat!("$djs.k(", kref, ", ", rec, ");"));
             kref.clone()
         };
         // (A `yield*` awaiting its inner `return()` too: K is primed to the delegation's

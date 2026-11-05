@@ -127,7 +127,7 @@ host: suspended the run into examples/sleep-dump/out/sleep.dump.js (1246 bytes):
   | $dump.a3 = $djs.k(async function (label) {
   | const r = await $dump.p1;
   | return label + ": " + r;
-  | }, { f: $dump.n2 })("first");
+  | }, $dump.n2)("first");
   | $dump.n4 = [];
   | $dump.i5 = $djs.advance(Array.prototype.values.call(["first", "second"]), 1);
   | $dump.Fa6 = $djs.source("sleep.js", "b48bd687f864a8d6", "ms");
@@ -140,7 +140,7 @@ host: suspended the run into examples/sleep-dump/out/sleep.dump.js (1246 bytes):
   | }
   | console.log("done after", Date.now() - t0 >= 2 * ms ? "at least" : "less than", 2 * ms, "ms:", results.join(", "));
   | return results;
-  | }, { f: $dump.Fa6, r: 54 })(5000, $dump.n2, 1793835909614, $dump.n4);
+  | }, $dump.Fa6, 1, 54)(5000, $dump.n2, 1793835909614, $dump.n4);
   | try { ($dump.a6); } finally { delete globalThis.$dump; delete globalThis.$djs; }
   [vm] second sleeps 5000 ms
   [vm] done after at least 10000 ms: first: slept 5000 ms, second: slept 5000 ms
@@ -197,12 +197,13 @@ dump shares between statements, deleted again at the end. The small helpers the 
 calls (`$djs.k`, `$djs.advance`, and `I` for the loop over the saved iterator, which the
 continuation takes as `$djs_I`) are not in the dump: they are the dump runtime, the same
 for every dump, which the host defines as members of `$djs` next to its hooks
-([js/src/dump-runtime.js](../../js/src/dump-runtime.js)). The second argument of `$djs.k`
-is the continuation's origin record: the original function (`step` for `a3`; for the
+([js/src/dump-runtime.js](../../js/src/dump-runtime.js)). The arguments of `$djs.k` after
+the continuation are its origin record: the original function (`step` for `a3`; for the
 body, `Fa6`, the script by its name and hash, `$djs.source("sleep.js", …)`, which the host
-gives back from the script it ran) and, as `r`, the decisions the writer took on the
-run's values that shaped the continuation (whether it reads `results.push` or the loop's
-`next` again instead of keeping what the run had looked up, …), as bits. A dump of a resumed run writes the continuation
+gives back from the script it ran), the await it stands for (`1`, the first, left out for
+`a3`) and the decisions the writer took on the run's values that shaped the continuation
+(whether it reads `results.push` or the loop's `next` again instead of keeping what the run
+had looked up, …), as bits (`54`). A dump of a resumed run writes the continuation
 again from those, which tells it which stretches of the continuation's text came from
 where, so that it can be written from the original code again instead of from the
 continuation.

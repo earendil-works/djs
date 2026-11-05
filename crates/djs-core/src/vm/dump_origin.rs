@@ -2,7 +2,7 @@
 //! continuation `K` is read as an activation of the function `K` stands for.
 //!
 //! A plain dump writes every suspended activation as a continuation `K` with its origin
-//! `K.$djs = { f, at, h, r }`. Once the dump is loaded and runs, the frames are `K`'s.
+//! `K.$djs = [f, at, r, h]` (`$djs.k(K, f, at, r, h)`). Once the dump is loaded and runs, the frames are `K`'s.
 //! Dumped again as they are, the next continuation would be written from `K`'s text,
 //! which holds the previous dump's prefix: chains would grow with every link. So the
 //! exporter reads such a frame as one of `f` at the site `K`'s site stands for, through
@@ -216,35 +216,48 @@ impl Dumper<'_> {
             return Ok(None);
         };
         let no = |why: &str| Err(cat!("a continuation of an earlier dump: ", why));
-        // `K.$djs`: its origin, the site and what makes K's layout again (D2913).
-        let Some(r) = own(h, k, "$djs").and_then(|r| r.as_object()) else {
+        // `K.$djs`: `[f, at, r, h]`, its origin, the site and what makes K's layout again
+        // (D2913, D2915).
+        let Some(r) = own(h, k, "$djs").and_then(|r| elements(h, r)) else {
             return Ok(None);
         };
-        let Some(f) = own(h, r, "f")
+        let Some(f) = r
+            .first()
             .and_then(|f| f.as_object())
             .filter(|&f| h.object_class(f) == ObjectClass::Function)
         else {
             return Ok(None);
         };
-        let field = |name: &str| own(h, r, name).map_or(Some(Vec::new()), |v| numbers(h, v));
+        let field = |i: usize| r.get(i).copied().unwrap_or(Value::UNDEFINED);
+        let at = match field(1) {
+            v if v.is_undefined() => Some(String::from("await#1")),
+            v => match v.as_number() {
+                Some(n) => number(v).map(|_| cat!("await#", n as u32)),
+                None => string(h, v),
+            },
+        };
         // (A tape of yes/no decisions is a number, its bits the decisions.)
-        let tape = match own(h, r, "r").and_then(|v| v.as_number()) {
-            Some(n) if (0.0..9007199254740992.0).contains(&n) && (n as u64) as f64 == n => {
-                let mut n = n as u64;
-                let mut v = Vec::new();
-                while n != 0 {
-                    v.push_out((n & 1) as u32);
-                    n >>= 1;
+        let tape = match field(2) {
+            v if v.is_undefined() => Some(Vec::new()),
+            v => match v.as_number() {
+                Some(n) if (0.0..9007199254740992.0).contains(&n) && (n as u64) as f64 == n => {
+                    let mut n = n as u64;
+                    let mut v = Vec::new();
+                    while n != 0 {
+                        v.push_out((n & 1) as u32);
+                        n >>= 1;
+                    }
+                    Some(v)
                 }
-                Some(v)
-            }
-            _ => field("r"),
+                Some(_) => None,
+                None => numbers(h, v),
+            },
         };
-        let (Some(holes), Some(tape)) = (field("h"), tape) else {
-            return no("its record is not one");
+        let holes = match field(3) {
+            v if v.is_undefined() => Some(Vec::new()),
+            v => numbers(h, v),
         };
-        let at = own(h, r, "at").map_or(Some(String::from("await#1")), |v| string(h, v));
-        let Some(at) = at else {
+        let (Some(at), Some(tape), Some(holes)) = (at, tape, holes) else {
             return no("its record is not one");
         };
         let t = h.closure_template(f);

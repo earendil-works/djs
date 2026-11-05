@@ -276,7 +276,7 @@ for (const path of $djs_I($djs_i1)) {
   notes.push(await tools.read({ path }));
 }
 return notes.join("\n");
-}, { f: $dump.Fa4, r: 54 }).call(globalThis, $djs.host("tools"), $dump.n2);
+}, $dump.Fa4, 1, 54).call(globalThis, $djs.host("tools"), $dump.n2);
 try { ($dump.a4); } finally { delete globalThis.$dump; delete globalThis.$djs; }
 ```
 
@@ -307,10 +307,11 @@ one object the host provides while it loads, `$djs` (D2834, D2890):
   dump, so the host provides them as a fixed runtime instead of each dump carrying them
   (D2903); djs makes that object for its hosts, and a host without djs imports it from
   [js/src/dump-runtime.js](../../js/src/dump-runtime.js);
-- the continuation's `$djs` record names its origin, the script's function (`$dump.Fa4`,
-  which the host makes again from the script it ran, named by its file and hash, and never
-  calls), and the few decisions the writer took on the run's values that shaped the
-  continuation's text (`r`, as bits: whether it reads `notes.push` or the loop's `next`
+- the continuation's origin record, the arguments of `$djs.k` after it, names its origin,
+  the script's function (`$dump.Fa4`, which the host makes again from the script it ran,
+  named by its file and hash, and never calls), the await it stands for (`1`, the
+  first) and the few decisions the writer took on the run's values that shaped the
+  continuation's text (`54`, as bits: whether it reads `notes.push` or the loop's `next`
   again instead of keeping what the run looked up, …). A dump of a
   run that resumed this one writes the continuation again from the original and those
   decisions, finds out that way which stretches of the continuation's text are copies of

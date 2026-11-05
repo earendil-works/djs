@@ -2047,7 +2047,7 @@ impl Dumper<'_> {
             let args: Vec<String> = (0..argc)
                 .map(|i| self.expr(fv(2 + i), None, None))
                 .collect();
-            cat!(
+            let call = cat!(
                 "Reflect.apply(",
                 f,
                 ", ",
@@ -2055,7 +2055,23 @@ impl Dumper<'_> {
                 ", [",
                 join(&args, ", "),
                 "])"
-            )
+            );
+            // Its prototype, where it is not the one its function's text makes (a
+            // function's `prototype` replaced or changed, which the dump sets later).
+            let g = self.nodes[n].v.as_object().expect("a generator");
+            let proto = h.get_prototype_of(g).map_or(Value::NULL, Value::object);
+            let default = fv(0).as_object().is_some_and(|f| {
+                h.get_own_property(f, crate::heap::atoms::PROTOTYPE)
+                    .and_then(|p| p.value())
+                    == Some(proto)
+                    && self.default_fn_prototype(f)
+            });
+            if default {
+                call
+            } else {
+                let p = self.expr_or_loc(proto);
+                cat!("Object.setPrototypeOf(", call, ", ", p, ")")
+            }
         } else {
             let g = self.nodes[n].v.as_object().expect("a generator");
             let proto = h.get_prototype_of(g).map_or(Value::NULL, Value::object);

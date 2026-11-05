@@ -36,7 +36,7 @@ export const fn = (o) => { const d = Object.getOwnPropertyDescriptor(o, Reflect.
 export const spent = (k) => { let f; new Promise((a, b) => { f = k ? b : a; a(); }); return f; };
 export const rejected = (e) => { const p = Promise.reject(e); p.then(undefined, () => {}); return p; };
 export const bytes = (b) => Uint8Array.fromBase64(b).buffer;
-export const k = (f, r, p) => { Object.defineProperty(f, '$djs', { value: r }); if (p !== undefined) f.prototype = p; return f; };
+export const k = (K, f, at, r, h, p) => { Object.defineProperty(K, '$djs', { value: [f, at, r, h] }); if (p !== undefined) K.prototype = p; else if ('prototype' in K) K.prototype = f.prototype; return K; };
 export const keep = (o, keys) => { for (const k of Reflect.ownKeys(o)) if (!['length', 'name', 'prototype', 'constructor'].includes(k) && !keys.includes(k) && !delete o[k]) throw new TypeError('keep'); };
 
 /** The helpers by name: `globalThis.$djs = { ...helpers, seed, resume }`. */
@@ -78,7 +78,7 @@ const fn = (o) => { const d = Object.getOwnPropertyDescriptor(o, Reflect.ownKeys
 const spent = (k) => { let f; new Promise((a, b) => { f = k ? b : a; a(); }); return f; };
 const rejected = (e) => { const p = Promise.reject(e); p.then(undefined, () => {}); return p; };
 const bytes = (b) => Uint8Array.fromBase64(b).buffer;
-const k = (f, r, p) => { Object.defineProperty(f, '$djs', { value: r }); if (p !== undefined) f.prototype = p; return f; };
+const k = (K, f, at, r, h, p) => { Object.defineProperty(K, '$djs', { value: [f, at, r, h] }); if (p !== undefined) K.prototype = p; else if ('prototype' in K) K.prototype = f.prototype; return K; };
 const keep = (o, keys) => { for (const k of Reflect.ownKeys(o)) if (!['length', 'name', 'prototype', 'constructor'].includes(k) && !keys.includes(k) && !delete o[k]) throw new TypeError('keep'); };
 return { R, G, C, D, A, L, I, E, Y, DD, U, M, FM, CC, CI, HD, P, S, N, X, O, fromSync, Q, regexpIterator, closeThrow, forIn, advance, fn, spent, rejected, bytes, k, keep };
 })();

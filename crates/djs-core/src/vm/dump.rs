@@ -797,6 +797,10 @@ struct Dumper<'a> {
     /// Plain dumps: the text written for a class whose static code is blanked
     /// (dump_statics.rs), by the class's text.
     class_texts: Vec<(String, String)>,
+    /// The `prototype` objects functions (not classes) have as their definitions make
+    /// them, by the object's cell: the function's node. The dump's text of the function
+    /// makes it again, so it is written as `f.prototype`.
+    fn_protos: Index,
     /// The classes of the factory being written, by their names inside it.
     class_locals: Vec<(usize, String)>,
     /// The private names of the dumped classes: symbol cell, class node, name, and
@@ -872,6 +876,7 @@ impl<'a> Dumper<'a> {
             ts_scripts: core::cell::RefCell::new(Vec::new()),
             scratch: None,
             class_texts: Vec::new(),
+            fn_protos: Index::default(),
             class_locals: Vec::new(),
             private_names: Vec::new(),
             patches: Vec::new(),
@@ -1821,6 +1826,30 @@ impl<'a> Dumper<'a> {
             || (k == atoms::PROTOTYPE && self.default_fn_prototype(f))
     }
 
+    /// [`Dumper::fn_protos`]: the default `prototype` objects of the functions the dump
+    /// writes from their text.
+    fn find_fn_protos(&mut self) {
+        let h = self.h;
+        for n in 0..self.nodes.len() {
+            let Some(f) = self.nodes[n].v.as_object() else {
+                continue;
+            };
+            if h.object_class(f) != ObjectClass::Function
+                || super::dump_classes::is_class(h, f)
+                || self.nodes[n].member.is_some()
+                || !self.default_fn_prototype(f)
+            {
+                continue;
+            }
+            if let Some(Property::Data { value, .. }) = h.get_own_property(f, atoms::PROTOTYPE)
+                && let Some(p) = value.as_object()
+                && self.node_of(value).is_some()
+            {
+                self.fn_protos.insert(key(p.offset()), n as u32);
+            }
+        }
+    }
+
     /// A function's `prototype` as its definition makes it: absent, or an object with
     /// only `constructor` (back to the function), or an empty generator prototype.
     fn default_fn_prototype(&self, f: Obj) -> bool {
@@ -2018,6 +2047,7 @@ impl<'a> Dumper<'a> {
     fn finish(mut self) -> Result<Dumped, DumpError> {
         self.drain();
         self.assign_members();
+        self.find_fn_protos();
         self.resolve_privates();
         if !self.refusals.is_empty() {
             return Err(self.refused());
@@ -2624,6 +2654,19 @@ impl<'a> Dumper<'a> {
             // Only nodes on a cycle are reached while busy; the caller patches.
             State::Busy => return String::new(),
             State::New => {}
+        }
+        // A function's `prototype` as its text makes it: read from the function.
+        if let Some(fnode) = self.fn_protos.get(key(c))
+            && self.nodes[n].root.is_none()
+        {
+            let fv = self.nodes[fnode as usize].v;
+            let fe = self.expr(fv, None, None);
+            if !fe.is_empty() && self.nodes[n].state == State::New {
+                let loc = cat!(fe, ".prototype");
+                self.nodes[n].loc = loc.clone();
+                self.nodes[n].state = State::Done;
+                return loc;
+            }
         }
         if let Some(m) = self.nodes[n].member
             && self.nodes[n]

@@ -10049,3 +10049,22 @@ nested calls and operators start where their callee or left operand does
 (`f(a)(await b)`, `1 + (await x) + (await y)`), so `call.callee@N` or `binary.left@N` is
 read again only for the node whose arguments or right operand hold the site. Corpus
 7,243,739 → 7,216,900 raw (313 `$djs_D` chains, mostly `text({ path, content: await … })`).
+
+## D2915: Positional origin records; a generator's prototype is its function's
+date: 2026-11-05 · by: pjs · issue: 0207
+`$djs.k(K, f, at, r, h, proto)` replaces `$djs.k(K, { f, at, h, r }, proto)` (0216's queue
+item 7): the site an await's number (`2`; other sites by name, `"yield#1"`), the tape and
+holes as in D2913, trailing arguments at their defaults (`1`, `0`, `[]`, none) left out;
+`K.$djs` is the array `[f, at, r, h]`. A generator continuation's `proto` is written only
+where the generator's prototype is not `f.prototype`; otherwise the runtime gives `K`
+`f.prototype`. That fixes 0216's finding: a resumed generator's prototype was a fresh
+`{ __proto__: %GeneratorPrototype% }`, not its function's `prototype`
+(`Object.getPrototypeOf(g) === counter.prototype` was false after a load). The same bug in
+general: a function's `prototype` as its definition makes it, held
+elsewhere (a frame's `const p = F.prototype`, a generator's prototype), was written as an
+object of its own; it is now `F.prototype`, read from the function the dump writes (the
+function written first). An unstarted generator whose prototype is not its function's
+default one (a `prototype` replaced or changed, which the dump sets after the function) is
+made with `Object.setPrototypeOf(Reflect.apply(f, …), proto)`. The golden dumps keep their
+object records: they still run (the record is not read on a load), D2619. Corpus case
+language/generator-prototype.js.

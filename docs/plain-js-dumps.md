@@ -202,16 +202,21 @@ copied from `f`; `scaf`, the constructs `K` made itself (the loop scaffolds, the
 `await`) with the offsets of the originals; `cmap`, the temporaries of `K`'s rewritten site
 statement and the slots of `f` they stand for (`$djs_R(callee, …)`'s first argument is
 `f`'s `call.callee@41`). The record does not hold the layout but what makes it again from
-`f` (D2913), `K.$djs = {f, at, h, r}`:
+`f` (D2913), given positionally, `$djs.k(K, f, at, r, h, proto)` (D2915), trailing
+arguments at their defaults left out; `K.$djs` is `[f, at, r, h]`:
 
 - `f`: the original function (a reference when the run holds it, else its text, §5);
-- `at`: the site of `f` that `K` stands for (left out for `await#1`);
+- `at`: the site of `f` that `K` stands for: an await by its number (`2`, default `1`),
+  another site by its name (`"yield#1"`);
 - `r`: the tape, the decisions the writer took on values that shape `K` (whether it reads
   an operand again, writes a temporary's literal in place, a completion's kind, …), in
   order; a number whose bits they are when all are yes/no;
 - `h`: `[piece, length, …]`, the generated stretches of `K` whose text the canonical `K`
   (written from `f`'s site with every value a placeholder) does not give, not even with a
-  name, reference or literal for each placeholder.
+  name, reference or literal for each placeholder;
+- `proto`: a generator continuation's prototype where it is not `f.prototype` (the
+  runtime gives `K` `f.prototype` otherwise, so the generator's prototype is its
+  function's, D2915).
 
 The exporter writes `K` twice, as it is and canonically with the tape, and refuses a dump
 where the two differ in more than those texts.

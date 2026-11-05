@@ -313,6 +313,19 @@ examples/sleep-dump/out/sleep.dump.js (a 2.7 KB dump of a 12-line script).
   site (corpus ~93 KB: 463 duplicate K texts in factories, Promise.all over map), with the
   awaited promise a parameter; inlining single-use values.
 
+- fluff's queue (0216, work/research/0216/README.md) is the list now (coordinator's order).
+  0/7 (D2915): positional records `$djs.k(K, f, at, r, h, proto)`, `K.$djs = [f, at, r, h]`;
+  a generator's prototype is its function's (runtime default `f.prototype`); a function's
+  default `prototype` held elsewhere is written `F.prototype` (dump.rs `fn_protos`); an
+  unstarted generator with another prototype gets `Object.setPrototypeOf`. Corpus case
+  language/generator-prototype.js. Score: v2 426,479 → 414,762; sleep 1,093 → 1,079;
+  corpus 7,243,739 → 7,187,487.
+  1 (evaluated): `h` and `r` stay. Measured now: v2 h 546 B + r 1,709 B of 415 KB (0.5 %),
+  corpus h 7.4 KB + r 5.0 KB of 7.2 MB (0.17 %). Deriving `r` from K's text needs a search
+  over decisions at re-dump (generation is not in text order: liveness and helpers come
+  after), deriving `h` an expression/statement skipper whose ambiguous cuts would map
+  wrongly; both cost re-dump time for a fraction of a percent.
+
 ## Follow-ups
 - Exporter: write objects the dump runtime made (`$djs.fromSync`'s wrapper, `closeThrow`'s
   handler) as their helper call again instead of the runtime's closures (chain dumps of a

@@ -76,7 +76,7 @@ $dump.n4 = ["src/c.ts", "src/d.ts"];
 $dump.n7 = [[2, 0]];
 $dump.i8 = $djs.advance(Array.prototype.values.call([["src/a.ts", "src/b.ts"], $dump.n4]), 2);
 $dump.ga9 = () => {
-$djs.k($dump.s2.$Ka5, { f: $dump.s2.todos, … });
+$djs.k($dump.s2.$Ka5, $dump.s2.todos);
 $dump.a5 = $dump.s2.$Ka5.call(undefined, "src/d.ts");
 $dump.p6 = Promise.all([1, $dump.a5]);
 };
@@ -103,7 +103,7 @@ for (const batch of $djs_I($djs_i1)) {
   }
 print(`${report.flat().reduce((a, b) => a + b, 0)} TODOs in ${seen.size} files`);
 return report;
-}, { f: main, at: "await#2", … })(["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"], $dump.n7);
+}, main, 2, 54, [0,531])(["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"], $dump.n7);
 $dump.p10 = Promise.prototype.then.call($dump.a9, (r) => print(JSON.stringify(r)), undefined);
 try { ($dump.p10); } finally { delete globalThis.$dump; delete globalThis.$djs; }
 ```
@@ -233,9 +233,8 @@ its lines plus an IR of factories and activations, which the plain writer
   again. Constructs with their own encodings: `for await` (D2872), destructuring (D2874),
   `yield*` (D2875), `using` (D2876), iterator helpers (D2877), loop heads and `var`
   (D2880), methods using `super` (D2871), classes a waiting frame shares (D2881).
-- **Origin tracking:** a continuation's frame is read as one of its origin (`K.$djs = {f,
-  at, h, r}`: the origin, its site, the holes and the decisions that make `K`'s layout
-  again, D2913), so the next continuation is written from the original's text (D2833,
+- **Origin tracking:** a continuation's frame is read as one of its origin (`$djs.k(K, f, at, r, h)`: the origin, its site, the decisions and the holes that make
+  `K`'s layout again, D2913, D2915), so the next continuation is written from the original's text (D2833,
   D2870, D2873).
 - **Codemode bodies:** a run compiled as an async body has no function text of its own;
   its continuation is `async function (tools, console) {…}` over the body's text, and
