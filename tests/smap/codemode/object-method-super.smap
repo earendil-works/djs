@@ -1,0 +1,73 @@
+function <anonymous> @1..1187
+  arg0 argument 0, arg1 console@0
+  loc0 <state>, loc1 tools@0, loc2 base@0, loc3 api@0, loc4 box@0, loc5 list@0, loc6 describe@0, loc7 p@0, loc8 it@0
+  node 0 Body @0..1186: Params 6..22 Stmt 386..446 Stmt 447..655 Stmt 656..771 Stmt 772..881 Stmt 882..912 Stmt 913..940 Stmt 941..969 Stmt 970..1005 Stmt 1006..1077 Stmt 1078..1183 | Param tools@0#0 Param console@0#0 Const base@0#1 Const api@0#2 Const box@0#3 Const list@0#4 Const describe@0#5 Const p@0#6 Const it@0#7
+  node 1 Expr @970..1005: Operand 970..1004
+  node 2 Call @970..1004: Callee 970..981 Open 981..982 Arg 982..1003
+  node 3 Await @982..1003: Operand 988..1003
+  node 4 Expr @1006..1077: Operand 1006..1076
+  node 5 Call @1006..1076: Callee 1006..1017 Open 1017..1018 Arg 1018..1025 Arg 1027..1050 Arg 1052..1075
+  node 6 Await @1018..1025: Operand 1024..1025
+  node 7 Await @1028..1043: Operand 1034..1043
+  node 8 Member @1027..1050: Object 1027..1044 Property 1045..1050
+  node 9 Await @1053..1068: Operand 1059..1068
+  node 10 Member @1052..1075: Object 1052..1069 Property 1070..1075
+  node 11 Expr @1078..1183: Operand 1078..1182
+  node 12 Call @1078..1182: Callee 1078..1089 Open 1089..1090 Arg 1090..1117 Arg 1119..1144 Arg 1146..1181
+  node 13 Await @1090..1117: Operand 1096..1117
+  await#1 @982 (20:13) pc 159: call.callee@970 call.this@970
+    path 0.8 1.0 2.2 3
+  await#2 @1018 (21:13) pc 174: call.callee@1006 call.this@1006
+    path 0.9 4.0 5.2 6
+  await#3 @1028 (21:23) pc 187: call.callee@1006 call.this@1006 call.arg@1018
+    path 0.9 4.0 5.3 8.0 7
+  await#4 @1053 (21:48) pc 207: call.callee@1006 call.this@1006 call.arg@1018 call.arg@1027
+    path 0.9 4.0 5.4 10.0 9
+  await#5 @1090 (22:13) pc 239: call.callee@1078 call.this@1078
+    path 0.10 11.0 12.2 13
+function describe @498..652
+  arg0 n@0
+  loc0 <state>, loc1 a@0, loc2 b@0, loc3 this, loc4 <home>
+  node 0 Body @0..154: Params 14..17 Stmt 24..54 Stmt 59..93 Stmt 98..150 | Param n@0#0 Const a@0#1 Const b@0#2
+  node 1 Decl(Const) @24..54: Target 30..31 Init 34..53
+  node 2 Await @34..53: Operand 40..53
+  node 3 Decl(Const) @59..93: Target 65..66 Init 69..92
+  node 4 Await @69..92: Operand 75..92
+  special Super@119 Super@140
+  await#1 @34 (10:15) pc 25: -
+    path 0.1 1.1 2
+  await#2 @69 (11:15) pc 43: -
+    path 0.2 3.1 4
+function one @697..767
+  arg0 n@0
+  loc0 <state>, loc1 v@0, loc2 this, loc3 <home>
+  node 0 Body @0..70: Params 9..12 Stmt 15..45 Stmt 46..68 | Param n@0#0 Const v@0#1
+  node 1 Decl(Const) @15..45: Target 21..22 Init 25..44
+  node 2 Await @25..44: Operand 31..44
+  special Super@53
+  await#1 @25 (15:66) pc 24: -
+    path 0.1 1.1 2
+function pages @806..878
+  arg0 n@0
+  loc0 <state>, loc1 this, loc2 <home>
+  node 0 Body @0..72: Params 12..15 Stmt 18..44 Stmt 45..70 | Param n@0#0
+  node 1 Expr @18..44: Operand 18..43
+  node 2 Yield @18..43: Operand 24..43
+  node 3 Await @24..43: Operand 30..43
+  node 4 Expr @45..70: Operand 45..69
+  node 5 Yield @45..69: Operand 51..69
+  special Super@51
+  yield.await#1 @18 (16:52) pc 27: -
+    path 0.1 1.0 2
+  yield#1 @18 (16:52) pc 30: -
+    path 0.1 1.0 2
+  yield.return#1 @18 (16:52) pc 35: -
+    path 0.1 1.0 2
+  await#1 @24 (16:58) pc 24: -
+    path 0.1 1.0 2.0 3
+  yield.await#2 @45 (16:79) pc 54: -
+    path 0.2 4.0 5
+  yield#2 @45 (16:79) pc 57: -
+    path 0.2 4.0 5
+  yield.return#2 @45 (16:79) pc 62: -
+    path 0.2 4.0 5

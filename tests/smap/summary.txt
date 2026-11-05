@@ -1,21 +1,21 @@
 # Suspension map coverage (compiler/smap_tests.rs)
-sites 1201
+sites 1216
 
 ## by kind
- 1059 await
+ 1068 await
    11 await-using
    14 for-await.close
    12 for-await.next
     3 return.await
-   41 yield
+   43 yield
    10 yield*
    21 yield*.await
-   15 yield.await
-   15 yield.return
+   17 yield.await
+   17 yield.return
 
 ## described, by temporaries (in locals, then on the stack)
-  768 -
-  219 call.callee call.this
+  778 -
+  222 call.callee call.this
    22 yield*.iterator yield*.next
    21 for-of.iterator for-of.next
    18 call.callee call.this call.callee call.this
@@ -28,7 +28,7 @@ sites 1201
     8 using.record
     7 binary.left
     5 object.literal
-    3 call.callee call.this call.arg
+    4 call.callee call.this call.arg
     3 call.callee call.this call.arg call.arg binary.left
     3 for-of.iterator for-of.next call.callee call.this binary.left
     3 object.literal array.element
@@ -45,6 +45,7 @@ sites 1201
     1 assign.object call.callee call.this
     1 assign.old
     1 binary.left array.element
+    1 call.callee call.this call.arg call.arg
     1 call.callee call.this call.arg call.callee call.this
     1 call.callee call.this call.arg call.callee call.this call.arg
     1 call.callee call.this member.object
@@ -74,7 +75,7 @@ sites 1201
     1 pattern.iterator
 
 ## paths (D2850)
- 1201 complete
+ 1216 complete
 
 ## path gaps, by the part they are in
 

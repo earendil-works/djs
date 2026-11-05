@@ -2863,6 +2863,17 @@ impl<'a> Dumper<'a> {
         if self.roots[r].state != State::New {
             return;
         }
+        // A method that uses `super` is made in its home's literal: a binding of it
+        // (`const alias = o.m`) after the home's own, which writes it there (0215).
+        if let Some(n) = self.node_of(self.roots[r].value)
+            && self.nodes[n].state == State::New
+            && let Some(home) = self.home_of(n)
+            && let Some(hn) = self.node_of(home)
+            && let Some(r2) = self.nodes[hn].root
+            && r2 != r
+        {
+            self.emit_root(r2);
+        }
         self.roots[r].state = State::Busy;
         let fns_before = self.fns_read.get();
         let name = self.roots[r].name.clone();
@@ -3716,7 +3727,25 @@ impl<'a> Dumper<'a> {
                     (cat!(key, ": ", locals[j]), caps_of(self, c))
                 } else {
                     let src = self.fn_source(c).unwrap_or_default();
-                    if self.method_text(c, key, func_flags::KIND_METHOD) {
+                    let home = self.home_of(c);
+                    if let Some(home) = home {
+                        // A method that uses `super` (a member here: it reads the scope's
+                        // variables): made in an object whose prototype is its home's, as
+                        // a continuation's K is (D2871); `super` reads that prototype
+                        // (0215: the factory's own literal was its home).
+                        let proto = home.as_object().map(|o| {
+                            self.h
+                                .get_prototype_of(o)
+                                .map_or(Value::NULL, Value::object)
+                        });
+                        let pe = proto.map(|p| self.expr(p, None, None)).unwrap_or_default();
+                        if pe.is_empty() || !self.method_text(c, key, func_flags::KIND_METHOD) {
+                            let p = self.nodes[c].path.clone();
+                            self.refuse(p, "a method that uses super in a scope the dump makes");
+                        }
+                        let text = cat!(key, ": ({ __proto__: ", pe, ", ", src, " })", member(key));
+                        (text, caps_of(self, c))
+                    } else if self.method_text(c, key, func_flags::KIND_METHOD) {
                         (src, caps_of(self, c))
                     } else {
                         let e = self.fn_expr(c, &src);
@@ -4173,10 +4202,13 @@ impl<'a> Dumper<'a> {
 
     /// A method's home object.
     fn home_of(&self, n: usize) -> Option<Value> {
+        if !self.has_home(n) {
+            return None;
+        }
         let o = self.nodes[n].v.as_object()?;
         let t = self.h.closure_template(o);
         let captures = u32::from(self.h.arena().get::<u16>(t, FuncTemplate::CAPTURES));
-        self.has_home(n).then(|| self.h.object_slot(o, captures))
+        Some(self.h.object_slot(o, captures))
     }
 
     /// The `Symbol.for` key of a registered symbol, quoted.
@@ -4708,7 +4740,7 @@ impl<'a> Dumper<'a> {
                     // A method written in place: `m() {...}`.
                     if flags == PropFlags::ALL
                         && let Some(c) = self.node_of(value)
-                        && self.inline_method(c, &name, func_flags::KIND_METHOD, o)
+                        && self.inline_method(c, &name, func_flags::KIND_METHOD, o, !loc.is_empty())
                     {
                         let src = self.fn_source(c).unwrap_or_default();
                         self.nodes[c].loc = at;
@@ -4761,12 +4793,12 @@ impl<'a> Dumper<'a> {
                     flags,
                 }) => {
                     let name = atom_text(h, k);
-                    let g = self
-                        .node_of(getter)
-                        .filter(|&c| self.inline_method(c, &name, func_flags::KIND_GETTER, o));
-                    let s = self
-                        .node_of(setter)
-                        .filter(|&c| self.inline_method(c, &name, func_flags::KIND_SETTER, o));
+                    let g = self.node_of(getter).filter(|&c| {
+                        self.inline_method(c, &name, func_flags::KIND_GETTER, o, false)
+                    });
+                    let s = self.node_of(setter).filter(|&c| {
+                        self.inline_method(c, &name, func_flags::KIND_SETTER, o, false)
+                    });
                     let fits = flags.enumerable()
                         && flags.configurable()
                         && (getter.is_undefined() || g.is_some())
@@ -4817,14 +4849,21 @@ impl<'a> Dumper<'a> {
     }
 
     /// Whether closure `c` can be written as a method, getter or setter in its holder's
-    /// literal: free, written once, of that kind, and its text starts with the key.
-    fn inline_method(&self, c: usize, key: &str, kind: u32, holder: Obj) -> bool {
-        self.free_closure(c)
-            && self.nodes[c].member.is_none()
-            && self.home_of(c).is_none_or(|h| h == Value::object(holder))
-            && self.nodes[c].refs == 1
+    /// literal: free, written once, of that kind, and its text starts with the key. A method
+    /// whose home is the holder (it uses `super`) also where something else names it, if
+    /// the holder has a location (`named`): the others read it there (`holder.key`), and it
+    /// can't be made anywhere else (0215: a suspended one, whose continuation names it).
+    fn inline_method(&self, c: usize, key: &str, kind: u32, holder: Obj, named: bool) -> bool {
+        if !self.free_closure(c) || self.nodes[c].member.is_some() {
+            return false;
+        }
+        let home = self.home_of(c);
+        // (Elsewhere too: in a binding, `const alias = o.m`, which then reads it here.)
+        let shared = named && home.is_some();
+        home.is_none_or(|h| h == Value::object(holder))
+            && (self.nodes[c].refs == 1 || shared)
             && self.nodes[c].state == State::New
-            && self.nodes[c].root.is_none()
+            && (self.nodes[c].root.is_none() || shared)
             && self.method_text(c, key, kind)
     }
 

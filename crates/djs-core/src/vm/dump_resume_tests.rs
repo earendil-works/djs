@@ -1155,6 +1155,7 @@ fn plain_programs() -> Vec<(String, String)> {
         "steps",
         "reenact",
         "cycles",
+        "supers",
     ] {
         let src =
             std::fs::read_to_string(fixture_dir().join(alloc::format!("{name}.src.js"))).unwrap();

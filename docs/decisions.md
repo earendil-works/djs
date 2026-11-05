@@ -10437,6 +10437,24 @@ it is U+FFFD. Quoted keys (literals, members, `Object.defineProperty`, `Symbol.f
 now come from the heap string itself, as values always did; well-formed keys quote byte for
 byte as before.
 
+## D3027: An object literal's method that uses `super` is made where its home is
+date: 2026-11-07 · by: pjr · issue: 0215
+A method's `super` reads its home object's prototype, and the home is fixed when the method
+is made, so the dump can't write such a method on its own. That refused every object
+literal's async method that awaited before or after using `super`: its frame names the
+method, so it had two references, and only a method with one was written in its literal.
+Now a method whose home is the literal holding it goes in that literal whenever the
+literal has a location, whatever else names it (its frame, K's call, a binding like
+`const alias = o.m`); the others read it at `holder.key`. A binding whose value is such a
+method is written after its home's binding (roots aren't in declaration order). And a
+method that is a member of a scope the dump makes (it reads the scope's variables, as a
+codemode method reading `tools` does) had silently got the factory's own literal as its home:
+`super.label` read `Object.prototype` after a load. It is now written as `key: ({ __proto__:
+P, async key(…) {…} }).key` with P its home's prototype, as a continuation's K is made
+(D2871). `super` reads the same prototype, though a later `Object.setPrototypeOf` on the
+original home isn't followed, as with D2871. Where P can't be written yet, the dump refuses.
+Corpus codemode/object-method-super.js; tests/dump/v2/supers.src.js.
+
 ## D3041: Suspension maps travel from one VM's dump to the next VM
 date: 2026-11-06 · by: lazy · issue: 0219
 A dump compiles the suspension maps of the scripts its activations run in (pjr: ~30% of a

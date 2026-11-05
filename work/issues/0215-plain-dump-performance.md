@@ -112,10 +112,13 @@ Measure where plain dumps stand now and fix what regressed:
   codemode/redump-subclass-class-local.js, redump-placed-function-name.js,
   redump-lone-surrogate-key.js, redump-subclass-in-loop-block.js.
 
+- Object literal methods using `super` (D3027): written in their home's literal also when
+  their frame or a binding names them; as factory members (they read `tools`), made in an
+  object with the home's prototype (they had silently got the factory's literal as home:
+  wrong `super` after a load, also on main). Corpus codemode/object-method-super.js, v2
+  program supers.
+
 ## Follow-ups
-- An object literal's async method using `super` after an await is refused ("a method that
-  uses super outside its object literal"), e.g. `{ __proto__: base, async m(n) { await x;
-  await y; return super.hi(n); } }` at its second idle point. Older refusal, not 0215's.
 
 ## Result
 Paused for the coordinator (status left in-progress: it may bring pjr back for a writer or
