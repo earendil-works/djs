@@ -7,7 +7,7 @@
 //
 //   node scripts/plain-fuzz/fuzz.mjs [--seed S] [--cases N] [--time SECS] [--batch B]
 //                                    [--jobs J] [--max-load L] [--from-max K] [--dir DIR]
-//                                    [--no-node] [--known FILE] [--no-statics]
+//                                    [--no-node] [--known FILE] [--no-statics] [--big]
 //   node scripts/plain-fuzz/fuzz.mjs check FILE...      one program (a case body) each
 //   node scripts/plain-fuzz/fuzz.mjs reduce FILE --sig TEXT [--time SECS] [-o OUT]
 //
@@ -48,6 +48,8 @@ const fromMax = Number(flag("--from-max", 40));
 const noNode = has("--no-node");
 // --no-statics: classes without static fields and blocks (gen.mjs `statics`).
 const genOpts = has("--no-statics") ? { statics: false } : {};
+// --big: longer, deeper programs with more awaits (more state live at each idle point).
+if (has("--big")) Object.assign(genOpts, { statements: 14, depth: 4, budget: 45 });
 // --known FILE: signature substrings (one per line) of bugs already reported; matching
 // failures are counted on one line instead of listed.
 const knownFile = flag("--known", null);
