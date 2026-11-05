@@ -605,6 +605,21 @@ pub(in super::super) fn layout_of(
     let mut holes = h.chunks(2);
     let mut next = holes.next();
     let differs = || String::from("its text is not the one its origin makes");
+    // The first byte each piece's successors expect (a TypeScript original's blanked
+    // types, below).
+    let mut after: Vec<Option<u8>> = alloc::vec![None; r.pieces.len()];
+    let mut first = None;
+    for (i, p) in r.pieces.iter().enumerate().rev() {
+        after[i] = first;
+        let f = match p {
+            Piece::Run(t) | Piece::Lit(_, t) => t.as_bytes().first().copied(),
+            Piece::Copy(a, b) if a < b => act.ftext.as_bytes().get(*a as usize).copied(),
+            _ => None,
+        };
+        if f.is_some() {
+            first = f;
+        }
+    }
     for (i, p) in r.pieces.iter_mut().enumerate() {
         let hole = match next {
             Some(&[j, len]) if j as usize == i => {
@@ -643,6 +658,22 @@ pub(in super::super) fn layout_of(
                     return Err(differs());
                 }
                 at += t.len();
+                // The writer copied the TypeScript original, a node with its types
+                // (`n1!`); the origin read back is the dump's JavaScript, the types blank,
+                // where the node ends before them: the copy goes on over the blanks K has
+                // where the next piece cannot start with one. (Whatever the origin's
+                // script: a dump that blanked them is JavaScript.)
+                {
+                    let f = act.ftext.as_bytes();
+                    let k = ktext.as_bytes();
+                    while f.get(*b as usize) == Some(&b' ')
+                        && k.get(at) == Some(&b' ')
+                        && after[i].is_some_and(|c| c != b' ')
+                    {
+                        *b += 1;
+                        at += 1;
+                    }
+                }
             }
             Piece::Mark(_) => {
                 if hole.is_some() {

@@ -66,6 +66,9 @@ pub(super) struct Inline {
     pub hooks: Vec<(usize, String, String, String)>,
     /// The names of `hooks`.
     pub hook_names: BTreeSet<String>,
+    /// The names of K's the closures and continuations written in place read (liveness
+    /// must see them in a site's operand, D3003).
+    pub placed_reads: Vec<String>,
     /// Per list, whether deferred host calls are written into it (D3004).
     pub pull: Vec<bool>,
 }
@@ -398,6 +401,7 @@ impl W<'_> {
                     .as_ref()
                     .map(|k| k.text.clone())
                     .unwrap_or_default();
+                self.note_reads(a, &kt);
                 out.push_str(&text[at..s]);
                 if matches!(b.get(end), Some(b'.' | b'(' | b'[' | b'`')) {
                     out.push_str(&operand(&kt));
@@ -440,6 +444,7 @@ impl W<'_> {
             } else {
                 String::from(expr)
             };
+            self.note_reads(a, &expr);
             out.push_str(&text[at..s]);
             out.push_str(&expr);
             at = end;
@@ -454,6 +459,16 @@ impl W<'_> {
         }
         out.push_str(&text[at..]);
         out
+    }
+
+    /// Notes the names of activation `a`'s continuation `text` (written in place) reads.
+    fn note_reads(&mut self, a: usize, text: &str) {
+        let scope = self.kscopes[a].clone();
+        for n in super::refs(text).names {
+            if scope.contains(&n) && !self.inl.placed_reads.contains(&n) {
+                self.inl.placed_reads.push_out(n);
+            }
+        }
     }
 
     /// The value `v` of binding slot `sname` (`<cell>sname` for a shared one) of activation
@@ -1094,9 +1109,11 @@ impl W<'_> {
         if v != aw {
             // (K's deepest block holds the site.)
             let last = self.acts[a].blocks.len().saturating_sub(1);
-            let (v, reads) = self.bindings_in_k(a, last, &v, true);
-            self.acts[a].site_reads = reads;
+            let (v, mut reads) = self.bindings_in_k(a, last, &v, true);
+            self.inl.placed_reads.clear();
             let v = self.props_in_place(a, last, &v);
+            reads.append(&mut self.inl.placed_reads);
+            self.acts[a].site_reads = reads;
             self.acts[a].site_val = Some(v);
         }
     }
@@ -1130,8 +1147,10 @@ impl W<'_> {
         let bound = |n: &str| scope.contains(n);
         let v = self.inline_with(aw, Some(0), Reads::Scope(&bound));
         let last = self.acts[a].blocks.len().saturating_sub(1);
-        let (v, reads) = self.bindings_in_k(a, last, &v, true);
+        let (v, mut reads) = self.bindings_in_k(a, last, &v, true);
+        self.inl.placed_reads.clear();
         let v = self.props_in_place(a, last, &v);
+        reads.append(&mut self.inl.placed_reads);
         if v != aw {
             self.acts[a].site_reads = reads;
             self.acts[a].site_val = Some(v);
