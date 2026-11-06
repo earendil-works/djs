@@ -1,6 +1,6 @@
 # 0238: Benchmarks page: graphs, and data passing through the host bridge
 
-status: in-progress
+status: done
 agent: bridge
 branch: issue/0238-bench-graphs-bridge
 depends-on: 0229
@@ -54,6 +54,14 @@ Bench at load < ~4. Merge in at most two batches.
   (3.4 ms vs 1.8 for QuickJS).
 - scripts/gate.py: the codemode-workloads leg also runs `bridge.ts --quick --engines djs`
   (outside `touches:`, one line).
+- A first `status.py engines` run hit load 7 during its ops phase; ops and bridge re-ran
+  quiet. Then the driver's host strings (malloc'd at len*3 for encodeInto) inflated QuickJS's
+  workload memory (heavy 2.4 -> 4.1 MiB): fixed to the exact UTF-8 size and everything
+  re-recorded at 1268c57e, load 2.0-2.3. The `-dirty` suffix status.py wrote (only status.tsv
+  itself was modified) was stripped.
+- Page: new section "Passing data through the bridge" (paths table, in/out/rate/memory/e2e
+  regions, prose on why and where not); "In short", re-running and where-to-look updated;
+  host.md's two trade-offs link to it. Other guide pages unaffected.
 - driver.c's change rebuilt vendor/engines/build/quickjs*.wasm (shared; the new exports are
   additive), so the engines-size numbers are re-recorded with them.
 
@@ -65,3 +73,16 @@ Bench at load < ~4. Merge in at most two batches.
   copied in place like long ASCII strings.
 
 ## Result
+
+- Charts: crates/djs-docs/src/chart.rs; every `gen:status engines-*` and `bridge-*` region
+  writes `gen/chart-*.svg` above its table (9 charts), regen/check keep them current (D3166).
+- Bridge benchmark: `node js/bench/engines/bridge.ts` (or `scripts/status.py bridge`, also run
+  by `status.py engines`), 11 payloads x in/out x 7 engines plus 3 end-to-end cases, each
+  engine's best path, alternatives measured (D3165). Gate: the codemode-workloads leg runs it
+  on djs with --quick.
+- Findings (load 2.0): in, djs ~2x faster than the best QuickJS path (1 MB JSON 3.1 vs 6.4 ms;
+  10 MB ASCII 1.0 vs 3.8); out ~7-10x (1 MB JSON 1.2 vs 8.5 ms, strings at memcpy speed);
+  edit-1m 0.30 vs 4.0 ms. Behind: Uint8Array in (0.19 vs 0.08-0.14 ms, three copies) and 1,000
+  small sync calls (2.9 vs 1.7 ms for the C embedding).
+- Known gaps: memory is the linear-memory high-water mark, so emscripten's 16 MiB initial heap
+  hides small payloads; copies are described, not counted.
