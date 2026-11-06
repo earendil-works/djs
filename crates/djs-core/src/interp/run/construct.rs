@@ -27,6 +27,27 @@ const CHECK_THIS: u8 = Op::CheckThis as u8;
 const CHECK_THIS_UNINIT: u8 = Op::CheckThisUninit as u8;
 const CHECK_CTOR_RETURN: u8 = Op::CheckCtorReturn as u8;
 
+/// The opcodes `decline_construct` takes: the test before its call, so that the other
+/// declined instructions pay no call on their way to `step`.
+#[inline(always)]
+pub(super) fn takes(op: u8) -> bool {
+    matches!(
+        op,
+        CONSTRUCT
+            | SUPER_CALL
+            | SUPER_CALL_SPREAD
+            | REST
+            | fast::RETURN
+            | fast::RETURN_UNDEF
+            | fast::SPECIAL_OBJECT
+            | CHECK_CTOR
+            | CHECK_THIS
+            | CHECK_THIS_UNINIT
+            | CHECK_CTOR_RETURN
+            | GET_SUPER
+    )
+}
+
 impl Exec<'_> {
     /// The instruction `op` at `pc` (declined by `run_hot`), if it is one of the
     /// construct path's and its case needs nothing of `step`.

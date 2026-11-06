@@ -449,7 +449,7 @@ impl Exec<'_> {
             return self.pc < self.code_len && self.fast_leaf_call(op);
         }
         if op != fast::ADD {
-            return self.decline_construct(op);
+            return super::construct::takes(op) && self.decline_construct(op);
         }
         use crate::value::Kind;
         let (a, c) = (self.get(self.sp - 2), self.get(self.sp - 1));
