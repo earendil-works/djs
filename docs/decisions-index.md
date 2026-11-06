@@ -790,3 +790,5 @@ topics when the index is next reorganized.
 - D3162: %ConstructorPrototype; constructor allocations are pure leaves
 - D3163: `new` entries for Array, Map, Set and Date
 - D3164: Size of 0236; the size ceiling rises by what it measured
+- D3165: The bridge benchmark: each engine's best path, one operation timed
+- D3166: Charts are generated with their table, from status.tsv

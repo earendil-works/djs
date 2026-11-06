@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0238 | Benchmarks page: SVG charts + host-bridge data-passing benchmark (owner) | bridge | .worktrees/bridge |
 
 ## Open (ready)
 
@@ -32,6 +31,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | - | Per-op gaps vs best QuickJS (0229): trim 2.8, padStart/End 2.5, Object.entries+fromEntries 2.3, Math.floor 2.2, slice 1.9, sort cmp 1.9, Map.set 1.8, toFixed 1.8, toLowerCase/String(i) 1.7; wasm/* sizes in status.tsv stale (status.py size); compare monty snapshots on the page; comparator sort 1.6x (n_call frame + native re-entry); builtins re-intern string-literal keys (Get(o, "length")) on every call; run_hot is sensitive to any code change (4-6% on loops): understand before adding arms (0230b, 0231) | ready |
 | - | Plain-dump 'crossing callbacks' refusal (s13-s10173, seed 689232 with --lazy): open since 0211 | ready |
 | - | new Error 30k vs 18.7k (CaptureStack converts frame names to Rust strings); derived class construct 1.2-1.6x (super_call opcode) (0236) | ready |
+| - | Bridge follow-ups (0238): Sandbox sync host call ~3 us vs ~1.7 us C embedding; Uint8Array in with one copy (like long ASCII strings); Math.max ratio 1.08 -> 1.79 vs QuickJS (noise or regression?); lazily read tool results (host buffer read on demand; ties to result buffers) | ready |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
 | - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |
@@ -101,6 +101,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0198 | Dump performance: corpus dump p50 1.42 -> 0.43 ms wasm, totals 3,243 -> 610 ms; data cases 2-6x (D2800-D2802) | 429184db (agent dumpperf) |
 | - | base_equals_a_compiled_realm test fixed (8f0fdd72); gate recovers from incremental corruption (D2896, b55180dd); CLI/REPL call states (D2894) | agent pjh |
 | 0220 | Guide rewrite: Using djs / How it works / Reference, JS API, dumps, CLI, pi page; live Run/Continue with debugger pauses at exact positions (D3050-D3054) | 13002add (agent guide) |
+| 0238 | Benchmark charts (chart.rs, 9 SVGs) + host-bridge benchmark: djs ~2x faster in, 7-10x out than best QuickJS (D3165, D3166) | 005cd667 (agent bridge) |
 | 0229 | Benchmarks page (docs/guide/benchmarks.md): 7 wasm engines incl. monty, 9 codemode workloads, ops table; djs fastest geomean (QuickJS 1.17x) (D3110-D3114) | dc92bc22 (agent benchpage) |
 | 0236 | Construct path: new C() parity, Map/Set/Array/Date new entries faster than QuickJS (D3160-D3164; shipped 426.8 KB, ~3.2 KB left) | c441a76f (agent pnew) |
 | 0232b | Promise closures, then/resolve fast paths, async state at first await, allSettled/any in Rust (D3155-D3159) | add476fa (agent pasync) |
