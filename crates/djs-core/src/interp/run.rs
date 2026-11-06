@@ -845,7 +845,7 @@ impl<'h> Exec<'h> {
                     let r = self.generator_resume(job[2], job[3], mode, 0, Continuation::Job);
                     return r.unwrap_or_else(|f| Some(self.job_failed(f)));
                 }
-                // A Promise.all element that settles without user code (D3131).
+                // A combinator element that settles without user code (D3131, D3158).
                 match promise::all_element_job(self.heap, job[1], job[2], job[3]) {
                     Ok(true) => continue,
                     Ok(false) => {}

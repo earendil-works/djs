@@ -54,6 +54,9 @@ const PROMISE_STATIC_RESOLVE: u16 = id("PromiseStaticResolve");
 const PROMISE_PROTOTYPE_THEN: u16 = id("PromisePrototypeThen");
 const PROMISE_SPECIES: u16 = id("PromiseSpecies");
 const PROMISE_ALL_RESOLVE_ELEMENT: u16 = id("PromiseAllResolveElement");
+const PROMISE_ALL_SETTLED_RESOLVE_ELEMENT: u16 = id("PromiseAllSettledResolveElement");
+const PROMISE_ALL_SETTLED_REJECT_ELEMENT: u16 = id("PromiseAllSettledRejectElement");
+const PROMISE_ANY_REJECT_ELEMENT: u16 = id("PromiseAnyRejectElement");
 
 /// A new pending promise.
 pub(crate) fn alloc(heap: &mut Heap, proto: Option<Obj>) -> Result<Obj, HeapError> {
@@ -292,12 +295,13 @@ fn combinator_step(
     Ok(true)
 }
 
-/// `%PromiseReactionJob(cap, handler, x, true)` with a Promise.all resolve element
-/// function as the handler (D3131): SettleElement and the resolution of `cap` with its
-/// result (undefined) done here, when neither runs user code: `cap` and the combinator's
-/// capability are Promises of %Promise% (or `cap` is undefined), and the last element's
-/// values fulfill the capability without a `then` call. False, with nothing changed,
-/// otherwise.
+/// `%PromiseReactionJob(cap, handler, x, _)` with an element function of Promise.all,
+/// allSettled or any as the handler (D3131, D3158): SettleElement and the resolution of
+/// `cap` with the handler's result (undefined) done here, when neither runs user code:
+/// `cap` and the combinator's capability are Promises of %Promise% (or `cap` is
+/// undefined), the last element's values fulfill the capability without a `then` call,
+/// and the last element of `any` (which makes an AggregateError) is left to the builtin.
+/// False, with nothing changed, otherwise.
 pub(super) fn all_element_job(
     heap: &mut Heap,
     cap: Value,
@@ -308,11 +312,22 @@ pub(super) fn all_element_job(
         return Ok(false);
     };
     if heap.object_class(f) != ObjectClass::BuiltinClosure
-        || heap.object_slot(f, 0) != Value::int(i32::from(PROMISE_ALL_RESOLVE_ELEMENT))
         || !(cap.is_undefined() || as_promise(heap, cap).is_some())
     {
         return Ok(false);
     }
+    let id = heap
+        .object_slot(f, 0)
+        .as_int()
+        .and_then(|i| u16::try_from(i).ok());
+    // The settled record's status atom (allSettled), and whether this is `any`.
+    let (settled, any) = match id {
+        Some(PROMISE_ALL_RESOLVE_ELEMENT) => (None, false),
+        Some(PROMISE_ALL_SETTLED_RESOLVE_ELEMENT) => (Some(atoms::FULFILLED), false),
+        Some(PROMISE_ALL_SETTLED_REJECT_ELEMENT) => (Some(atoms::REJECTED), false),
+        Some(PROMISE_ANY_REJECT_ELEMENT) => (None, true),
+        _ => return Ok(false),
+    };
     // The element Record (builtins/promise.ts NewElementRecord): 0 called, 1 index,
     // 2 values, 3 capability, 4 remaining, 5 keys.
     let r = heap
@@ -334,7 +349,8 @@ pub(super) fn all_element_job(
     let last = left == 0.0;
     let cap_promise = as_promise(heap, capability);
     if last
-        && (!keys.is_undefined()
+        && (any
+            || !keys.is_undefined()
             || cap_promise.is_none_or(|p| {
                 flags(heap, p) & FLAG_RESOLVED == 0
                     && !plain_fulfillment(heap, Value::object(values))
@@ -342,12 +358,31 @@ pub(super) fn all_element_job(
     {
         return Ok(false);
     }
+    if index < 0 || index as u32 >= heap.array_length(values) {
+        return Ok(false);
+    }
+    // allSettled stores { status, value | reason } (SettledRecord).
+    let x = match settled {
+        Some(status) => {
+            let key = if status == atoms::FULFILLED {
+                atoms::VALUE
+            } else {
+                atoms::REASON
+            };
+            let s = heap.atom_str_value(status).expect("a string atom");
+            let proto = realm::intrinsic_obj(heap, realm::Intrinsic::ObjectProto);
+            let keys = [atoms::STATUS, key];
+            Value::object(heap.new_object_from_entries(
+                Some(proto),
+                &keys,
+                &[Value::string(s), x],
+            )?)
+        }
+        None => x,
+    };
     // CreateDataPropertyOrThrow(values, index, x): values is the combinator's own array,
     // which nothing else sees before the last element resolves with it.
-    if index < 0
-        || index as u32 >= heap.array_length(values)
-        || !heap.set_element_fast(values, index as u32, x)?
-    {
+    if !heap.set_element_fast(values, index as u32, x)? {
         return Ok(false);
     }
     heap.set_object_slot(r, 0, Value::TRUE);

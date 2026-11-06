@@ -1,0 +1,33 @@
+=== return
+keys ["length","name"]
+length name [1,"",1,""]
+desc {"value":1,"writable":false,"enumerable":false,"configurable":true}
+name desc {"value":"","writable":false,"enumerable":false,"configurable":true}
+keys+extra ["length","name","extra"]
+deleted length [["name","extra"],0,true]
+renamed [["length","name"],"r",{"value":"r","writable":false,"enumerable":false,"configurable":true}]
+frozen [true,false]
+withResolvers [1,"",[]]
+subclass resolving [1,1,""]
+twice 1
+self resolution TypeError
+thenable then
+thenable adopted
+then species 2 reads 1
+subclass then true 2
+then on non-promise TypeError
+non-callable handlers 3
+newTarget proxy 1 true
+newTarget plain 1 true
+newTarget primitive prototype true
+no await true 3
+no await throw RangeError
+no await thenable from thenable
+no await order body after call then
+conditional await 1 2
+allSettled [{"status":"fulfilled","value":1},{"status":"rejected","reason":2},{"status":"fulfilled","value":3},{"status":"rejected","reason":{}}]
+allSettled keys [["status","value"],["status","reason"],["status","value"],["status","reason"]]
+allSettled setter 0
+any errors ["AggregateError",[1,2,{}]]
+any first 2
+allSettled empty []
