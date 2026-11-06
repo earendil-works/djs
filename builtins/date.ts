@@ -44,6 +44,7 @@ function TimeClip(t: f64): f64 {
  * Date ( ...values ), 21.4.2.1.
  * @constructor Date
  * @length 7
+ * @fast
  */
 function DateConstructor(...values: Value[]): Value {
   if (new.target === undefined) {

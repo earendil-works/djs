@@ -34,6 +34,9 @@ pub(crate) struct FastFn {
     pub name: &'static str,
     /// `run(heap, this, args)`.
     pub run: fn(&mut Heap, Value, &[Value]) -> Fast,
+    /// A constructor's `new F(args)` with new.target F, `new(heap, args)` (0236); `None`:
+    /// constructs run the builtin.
+    pub new: Option<fn(&mut Heap, &[Value]) -> Fast>,
 }
 
 /// The most arguments an entry looks at (calls with more decline).
@@ -58,6 +61,19 @@ const fn f(name: &'static str, run: fn(&mut Heap, Value, &[Value]) -> Fast) -> F
         #[cfg(djs_prelude)]
         name,
         run,
+        new: None,
+    }
+}
+
+/// A constructor's entry: `run` for calls, `new` for constructs.
+const fn ctor(
+    name: &'static str,
+    run: fn(&mut Heap, Value, &[Value]) -> Fast,
+    new: fn(&mut Heap, &[Value]) -> Fast,
+) -> FastFn {
+    FastFn {
+        new: Some(new),
+        ..f(name, run)
     }
 }
 
@@ -126,6 +142,11 @@ pub(crate) static FAST: &[FastFn] = &[
     f("PromiseStaticResolve", promise::fast_static_resolve),
     // ---- String.fromCharCode (0091; the URI functions run their builtins, D2256) ----
     f("StringFromCharCode", from_char_code),
+    // ---- constructors (0236: `new Map()` was 2x QuickJS after the general fixes) ----
+    ctor("ArrayConstructor", array_call, array_new),
+    ctor("MapConstructor", no_call, map_new),
+    ctor("SetConstructor", no_call, set_new),
+    ctor("DateConstructor", no_call, date_new),
 ];
 
 // ---- argument helpers ----------------------------------------------------------------
@@ -873,4 +894,93 @@ mod tests {
         let run = super::FAST[super::ARRAY_PUSH].run as usize;
         assert_eq!(run, super::array_push as fn(_, _, _) -> _ as usize);
     }
+}
+
+// ---- constructors (0236) ---------------------------------------------------------------
+// A construct takes an entry only when new.target is the constructor itself, whose
+// `prototype` is non-writable and non-configurable: GetPrototypeFromConstructor is the
+// realm's prototype without a lookup.
+
+/// A constructor whose calls run the builtin.
+fn no_call(_: &mut Heap, _: Value, _: &[Value]) -> Fast {
+    Ok(None)
+}
+
+/// Array(...values) and new Array(...values): one Number argument is a length (an
+/// invalid one throws in the builtin), anything else the elements.
+fn array_new(heap: &mut Heap, args: &[Value]) -> Fast {
+    match args {
+        [len] if len.is_number() => {
+            let n = len.as_number().unwrap_or(f64::NAN);
+            if !(n >= 0.0 && n <= u32::MAX as f64 && (n as u32) as f64 == n) {
+                return Ok(None);
+            }
+            let proto = realm::intrinsic_obj(heap, Intrinsic::ArrayProto);
+            Ok(Some(Value::object(
+                heap.new_array_with_length(Some(proto), n as u32)?,
+            )))
+        }
+        _ => new_array(heap, args),
+    }
+}
+
+fn array_call(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
+    array_new(heap, args)
+}
+
+/// `new Map()`, `new Map(undefined)`, `new Map(null)`: no entries to add.
+fn map_new(heap: &mut Heap, args: &[Value]) -> Fast {
+    empty_collection(heap, args, ObjectClass::Map, Intrinsic::MapProto)
+}
+
+fn set_new(heap: &mut Heap, args: &[Value]) -> Fast {
+    empty_collection(heap, args, ObjectClass::Set, Intrinsic::SetProto)
+}
+
+fn empty_collection(heap: &mut Heap, args: &[Value], class: ObjectClass, proto: Intrinsic) -> Fast {
+    let v = arg(args, 0);
+    if !(v.is_undefined() || v.is_null()) {
+        return Ok(None);
+    }
+    let proto = realm::intrinsic_obj(heap, proto);
+    Ok(Some(Value::object(heap.collection_new(class, proto)?)))
+}
+
+/// `new Date()`, and `new Date(v)` where DateValueFromArgs runs no user code: a Date
+/// (its time value), a string (parsed), another primitive whose ToNumber cannot throw.
+fn date_new(heap: &mut Heap, args: &[Value]) -> Fast {
+    let tv = match args {
+        [] => realm::intrinsic(heap, Intrinsic::Clock)
+            .as_number()
+            .unwrap_or(f64::NAN),
+        [v] => {
+            let t = if let Some(o) = v.as_object() {
+                if heap.object_class(o) != ObjectClass::Date {
+                    return Ok(None);
+                }
+                heap.object_slot(o, 0).as_number().unwrap_or(f64::NAN)
+            } else if let Some(s) = v.as_string() {
+                let offset = realm::intrinsic(heap, Intrinsic::TimeZoneOffset)
+                    .as_int()
+                    .unwrap_or(0) as i64;
+                crate::builtins::date::parse(heap.str_units(s), offset)
+            } else {
+                let Some(n) = num(heap, *v)? else {
+                    return Ok(None);
+                };
+                n
+            };
+            // TimeClip.
+            if !(-8.64e15..=8.64e15).contains(&t) {
+                f64::NAN
+            } else {
+                integer(t)
+            }
+        }
+        _ => return Ok(None),
+    };
+    let proto = realm::intrinsic_obj(heap, Intrinsic::DateProto);
+    let o = heap.alloc_object(ObjectClass::Date, Some(proto), 1)?;
+    heap.set_object_slot(o, 0, Value::number(tv));
+    Ok(Some(Value::object(o)))
 }

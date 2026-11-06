@@ -52,6 +52,7 @@ function AddEntriesFromIterable(target: Obj, iterable: Value, adder: Value): voi
 /**
  * Map ( [ iterable ] ), 24.1.1.1.
  * @constructor Map
+ * @fast
  */
 function MapConstructor(iterable?: Value): Obj {
   if (new.target === undefined) {

@@ -11,6 +11,7 @@ function ThisSet(v: Value): Obj {
 /**
  * Set ( [ iterable ] ), 24.2.2.1.
  * @constructor Set
+ * @fast
  */
 function SetConstructor(iterable?: Value): Obj {
   if (new.target === undefined) {

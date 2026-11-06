@@ -4217,7 +4217,7 @@ impl<'h> Exec<'h> {
         // Make room for `this` below the arguments.
         self.ensure(self.sp + 1)?;
         self.insert_this(base, argc, this);
-        self.construct_call(base, argc, new_target, next)
+        self.construct_call(base, argc, new_target, next, true)
     }
 
     /// The `this` that [[Construct]] of the function `fo` (not a proxy or bound
@@ -4260,22 +4260,31 @@ impl<'h> Exec<'h> {
     }
 
     /// [[Construct]] of the ordinary function at `stack[base]` with `this` and the
-    /// arguments above it (`f this a1 .. an`) and new.target (`None`: f).
+    /// arguments above it (`f this a1 .. an`) and new.target (`None`: f). `fast`: a
+    /// constructor's `new` entry may answer (0236).
     pub(super) fn construct_call(
         &mut self,
         base: u32,
         argc: u32,
         new_target: Option<Value>,
         next: u32,
+        fast: bool,
     ) -> Step {
         let f = self.get(base);
         // A bytecode frame is pushed flagged and with its new.target, as `call` would
-        // push it otherwise (a `@fast` entry never takes a construct).
+        // push it otherwise (`call`'s `@fast` entries are for calls).
         if let Some(fo) = f.as_object()
             && self.heap.object_class(fo) == ObjectClass::Function
         {
             let t = self.template_of(fo);
             let flags = u32::from(self.heap.arena().get::<u16>(t, FuncTemplate::FLAGS));
+            if fast
+                && new_target.is_none()
+                && flags & self.slow_call_flags & func_flags::FAST != 0
+                && self.try_fast_new(t, base, base + 2, argc, next)?
+            {
+                return Ok(None);
+            }
             if flags & self.slow_call_flags & func_flags::NATIVE == 0 {
                 if flags & func_flags::SLOPPY_THIS != 0 {
                     self.bind_sloppy_this(base + 1)?;

@@ -131,6 +131,44 @@ impl Exec<'_> {
     /// locals across an inline call); the allocation sets `gc_pending` for the next
     /// safepoint as usual.
     #[inline(never)]
+    /// `new F(a1 .. an)` with new.target F of a constructor with a `new` entry (0236), the
+    /// arguments from stack index `first`: true when it completed, the object at `base`
+    /// and pc at `next`. Declining leaves everything unchanged, as for a call.
+    pub(super) fn try_fast_new(
+        &mut self,
+        t: u32,
+        base: u32,
+        first: u32,
+        argc: u32,
+        next: u32,
+    ) -> Result<bool, Fault> {
+        let idx = self.heap.arena().get(t, FuncTemplate::FAST) as usize;
+        let Some(new) = FAST.get(idx).and_then(|f| f.new) else {
+            return Ok(false);
+        };
+        if argc as usize > MAX_ARGS {
+            return Ok(false);
+        }
+        let mut args = [Value::UNDEFINED; MAX_ARGS];
+        for (i, a) in args.iter_mut().enumerate().take(argc as usize) {
+            *a = self.get(first + i as u32);
+        }
+        let v = match new(self.heap, &args[..argc as usize]) {
+            Ok(Some(v)) => v,
+            Ok(None) => return Ok(false),
+            // As for a call: a host refusal stops the run, anything else is the builtin's.
+            Err(f) if matches!(&*f.0, FaultKind::Heap(HeapError::HostOutOfMemory)) => {
+                return Err(f);
+            }
+            Err(_) => return Ok(false),
+        };
+        self.fuel -= FAST_FUEL;
+        self.sp = base;
+        self.push(v);
+        self.pc = next;
+        Ok(true)
+    }
+
     pub(super) fn try_fast_call(
         &mut self,
         t: u32,

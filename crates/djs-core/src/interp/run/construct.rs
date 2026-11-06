@@ -105,7 +105,8 @@ impl Exec<'_> {
         if self.heap.object_class(fo) != ObjectClass::Function || !self.is_constructor(fo) {
             return false;
         }
-        let th = super::hot::template_head(self.heap.arena().bytes(), self.template_of(fo));
+        let t = self.template_of(fo);
+        let th = super::hot::template_head(self.heap.arena().bytes(), t);
         // A native frame, or a sloppy `this` to bind (builtins have none; another
         // function's `this` is an object): `construct_call`'s other paths.
         let builtin =
@@ -120,16 +121,29 @@ impl Exec<'_> {
             return false;
         }
         let nt = sup.then(|| self.top(0));
+        let info = &OPS[op as usize];
+        let next = self.pc + info.size as u32;
+        // A constructor's `new` entry, before anything changes (`construct_call` would
+        // run it after inserting `this`): a host refusal leaves the instruction to `step`.
+        if !sup && th.flags & self.slow_call_flags & func_flags::FAST != 0 {
+            match self.try_fast_new(t, base, base + 1, argc, next) {
+                Ok(true) => {
+                    self.fuel -= info.cost.fuel() as i64;
+                    return true;
+                }
+                Ok(false) => {}
+                Err(_) => return false,
+            }
+        }
         // Allocates `this` (or fails) before anything changes.
         let Ok(Some(this)) = self.construct_this(fo, nt) else {
             return false;
         };
-        let next = self.pc + OPS[op as usize].size as u32;
-        self.fuel -= OPS[op as usize].cost.fuel() as i64;
+        self.fuel -= info.cost.fuel() as i64;
         self.sp -= sup as u32;
         self.insert_this(base, argc, this);
         // Cannot fail: the frame fits and `this` needs no binding.
-        let r = self.construct_call(base, argc, nt, next);
+        let r = self.construct_call(base, argc, nt, next, false);
         debug_assert!(matches!(r, Ok(None)));
         true
     }

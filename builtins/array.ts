@@ -179,6 +179,7 @@ function ArrayPrototypeIncludes(this: Value, searchElement: Value, fromIndex?: V
  * @constructor Array
  * @length 1
  * @intrinsic
+ * @fast
  */
 function ArrayConstructor(...values: Value[]): Obj {
   let a: Obj = values;
