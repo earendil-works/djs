@@ -767,3 +767,7 @@ topics when the index is next reorganized.
 - D3138: A RegExp compile cache of 8 entries in a realm slot
 - D3139: Size of 0233; the size ceiling rises by what it measured
 - D3124: @fast entries for the string builtins still over 2x QuickJS after D3120/D3121
+- D3130: await and async return subscribe and settle in the op where no user code runs
+- D3131: Promise combinators do plain elements in Rust
+- D3132: %RealmIntrinsic reads its name in place
+- D3133: Size of 0232; the size ceiling rises by what it measured

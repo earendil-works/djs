@@ -6,8 +6,9 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0235 | Plain-dump fuzz findings on main: 342347 (--lazy), 344676, 208872 (--lazy) | pjr | .worktrees/pjx |
 | 0231 | Perf: sort comparator, Array.from, join/concat/push, Map/Set string keys | parr | .worktrees/parr |
-| 0232 | Perf: Promise.all, await, async calls | pasync | .worktrees/pasync |
+| 0232b | new Promise / then 4-6x (builtin closure length/name), async state at first await, allSettled/any jobs | pasync | .worktrees/pasync |
 | 0229 | Benchmarks page: djs vs QuickJS versions and monty on codemode workloads; dumps, size, memory (owner) | benchpage | .worktrees/benchpage |
 
 ## Open (ready)
@@ -101,6 +102,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0198 | Dump performance: corpus dump p50 1.42 -> 0.43 ms wasm, totals 3,243 -> 610 ms; data cases 2-6x (D2800-D2802) | 429184db (agent dumpperf) |
 | - | base_equals_a_compiled_realm test fixed (8f0fdd72); gate recovers from incremental corruption (D2896, b55180dd); CLI/REPL call states (D2894) | agent pjh |
 | 0220 | Guide rewrite: Using djs / How it works / Reference, JS API, dumps, CLI, pi page; live Run/Continue with debugger pauses at exact positions (D3050-D3054) | 13002add (agent guide) |
+| 0232 | Async perf: await 0.16x, async call 0.12x, Promise.all ~1.2x of QuickJS (D3130-D3133) | f037273d (agent pasync) |
 | 0230b | @fast entries: substring/at/repeat/pad/String()/isInteger/toFixed now 1.1-1.5x QuickJS (D3124) | 2648d784 (agent mathfast) |
 | 0233 | Regexp perf: exec 0.78x, test 0.58x, replace 1.14x of QuickJS; compile cache (D3135-D3139) | 51d4a5fe (agent pre) |
 | 0230 | Builtin calls: pure leaves in the hot loop, bgen helper inlining, Math.max/min @fast (D3120-D3123) | b1419ffb (agent mathfast) |
