@@ -1,6 +1,6 @@
 # 0232b: Performance: builtin closures, async state at first await, allSettled/any jobs
 
-status: in-progress
+status: done
 agent: pasync
 branch: issue/0232b-promise-closures
 depends-on: 0232
@@ -20,10 +20,10 @@ Measure with wmicro (wasm instructions); keep the size small. Dumps: plain-dump 
 and fuzz regress with and without --lazy.
 
 ## Acceptance criteria
-- [ ] new Promise / then within ~1.5x QuickJS, or the remaining cause documented
-- [ ] async call without await at QuickJS parity, or the remaining cause documented
-- [ ] test262, difftest (stress), plain dumps and fuzz regress (both modes) green
-- [ ] size cost measured and recorded
+- [x] new Promise / then within ~1.5x QuickJS, or the remaining cause documented
+- [x] async call without await at QuickJS parity, or the remaining cause documented
+- [x] test262, difftest (stress), plain dumps and fuzz regress (both modes) green
+- [x] size cost measured and recorded
 
 ## Log
 - 2026-11-06 pasync: builtin closures' `length`/`name` lazy (D3155): `new Promise` 25.6 k ->
@@ -46,6 +46,28 @@ and fuzz regress with and without --lazy.
 - The construct path: `new C()` of a user class 2.4x QuickJS, `new Map()` 4.6x, `new Promise`
   2.7x (D3155/D3156 removed the promise-specific part). Interpreter construct/call path and
   builtin constructors, not promises.
-- Fuzz seeds 344676 and 208872 (--lazy) fail on main too (dumper; given to pjr).
+- Fuzz seeds 344676 and 208872 (fixed by pjr in 0235, pass here); --lazy seeds 689441 (node
+  wrong output, 0237) and 689232 (refused: crossing callbacks) fail on main too.
 
 ## Result
+Builtin closures keep `length`/`name` lazy (D3155); @fast entries for the resolving functions,
+ResolveWithData/RejectWithData, `then`, `Promise.resolve` and GetPrototypeFromConstructor
+(D3156); an async function's state object is made at its first await (D3157); allSettled and
+any element jobs settle in Rust (D3158). COMPAT_VERSION 6.
+
+Wasm instructions per op (node --no-liftoff, N = 100 k; combinators N = 10 k), before -> after
+(quickjs 2026-06-04 / quickjs-ng 0.18):
+| op | before | after | quickjs | ng |
+| --- | ---: | ---: | ---: | ---: |
+| `p.then(f)` (+ its job) | 30.3 k | 12-15 k | 10.8 k | 14.5 k |
+| `new Promise(r => r(1))` | 25.6 k | 14.2 k | 5.3 k | 6.6 k |
+| `Promise.resolve(1)` | 13.6 k | 3.8 k | 6.9 k | 6.2 k |
+| async call without await | 4.3 k | 3.8 k | 7.4 k | 6.8 k |
+| allSettled of 20 resolved | 662 k | 233 k | 333 k | 348 k |
+| any of 20 rejected | 544 k | 285 k | 279 k | 281 k |
+
+`new Promise` stays 2.7x: the general construct path (`new C()` 2.4x, `new Map()` 4.6x), now
+0236. Size (D3159): shipped +910 gzip (+2,589 raw), slim +881. Verified: test262 Promise and
+async directories, difftest plain and stress (--lazy, suspend-every, GC stress, determinism),
+bytecode backend, plain dumps in djs and node, fuzz regress in both modes (only failures main
+has too), the two seeds pjr fixed.

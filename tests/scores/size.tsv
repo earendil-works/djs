@@ -7,9 +7,10 @@
 # panics abort without a message; lowered by 0226, D3100: the shipped and slim modules read the
 # arena unchecked; raised by 0230, D3123: builtins' helpers inlined, pure leaves in the hot loop; raised by 0232,
 # D3133: await, async return and Promise combinators without builtin calls; raised by 0231, D3127: sort, Map/Set, string +, push, join and
-# Array.from fast paths, +0.9 KB).
+# Array.from fast paths, +0.9 KB; raised by 0232b,
+# D3159: lazy internal closures, @fast resolving functions and then).
 # quickjs_wasi_gzip: quickjs-wasi 3.6.2 quickjs.wasm (pi's engine), gzip -9.
 quickjs_wasi_gzip	286655
-ceiling_gzip	423167
+ceiling_gzip	424077
 # slim_ceiling_gzip: the slim module (scripts/build-wasm.sh --slim, D2411), its own ratchet.
-slim_ceiling_gzip	356911
+slim_ceiling_gzip	357792

@@ -11424,3 +11424,15 @@ date: 2026-11-06 · by: pasync · issue: 0232b
 rejected: the `{status, value | reason}` record made with `new_object_from_entries`, whose keys
 `status`, `reason` and the values `fulfilled`, `rejected` are well-known atoms now) and `any`'s
 reject element, except `any`'s last one, which makes the AggregateError in the builtin.
+
+## D3159: Size of 0232b; the size ceiling rises by what it measured
+date: 2026-11-06 · by: pasync · issue: 0232b · approved: coordinator
+Measured before the merge (main a805a2a2 vs the branch, same build environment): shipped module
+423,181 -> 424,091 gzip (+910; 971,356 -> 973,945 raw, +2,589), slim 356,924 -> 357,805 (+881).
+ceiling_gzip 423,167 -> 424,077 and slim_ceiling_gzip 356,911 -> 357,792: the ratchet rises by
+exactly that. It buys (wasm instructions per op, quickjs 2026-06-04 in brackets): `p.then(f)`
+30.3 k -> ~12-15 k (10.8 k), `new Promise(r => r(1))` 25.6 k -> 14.2 k (5.3 k),
+`Promise.resolve(1)` 13.6 k -> 3.8 k (6.9 k), an async call without await 4.3 k -> 3.8 k
+(7.4 k), allSettled of 20 662 k -> 233 k (333 k), any of 20 rejected 544 k -> 285 k (279 k).
+The bytes: seven @fast entries (D3156), the allSettled/any element jobs (D3158), the async
+state at the first await (D3157), four well-known atoms.
