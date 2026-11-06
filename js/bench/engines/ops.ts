@@ -6,13 +6,13 @@
 // QuickJS build; above 1 djs is slower. The engines take turns run by run.
 //
 //   scripts/bench-engines.sh --setup     (once: builds the QuickJS releases into vendor/engines)
-//   node js/bench/engines/ops.ts [--reps N] [--engines djs,quickjs,quickjs-ng,quickjs-wasi] [FILTER...]
+//   node js/bench/engines/ops.ts [--reps N] [--engines djs,quickjs,quickjs-ng,quickjs-wasi] [--json FILE] [FILTER...]
 //
 // FILTER: ops whose name contains one of them. DJS_WASM picks the djs build (default: the
 // shipped module, scripts/build-wasm.sh). Times are wall clock: compare runs made at a
 // similar load (printed), and prefer ratios to absolute numbers.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { loadavg } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,6 +26,7 @@ const opt = (name: string) => {
   return i >= 0 ? argv.splice(i, 2)[1] : undefined;
 };
 const REPS = Number(opt("--reps") ?? 9);
+const json = opt("--json");
 const want = (opt("--engines") ?? "djs,quickjs,quickjs-ng").split(",");
 const filters = argv.filter((a) => !a.startsWith("--"));
 
@@ -150,3 +151,4 @@ for (const [name] of ops) {
   const ratio = best < 0.05 || row[0] < 0.05 ? "-" : (row[0] / best).toFixed(2) + (row[0] / best > 1.5 ? " !" : "");
   console.log(`${name.padEnd(w)} ${row.map((x) => x.toFixed(2).padStart(12)).join(" ")}   ${ratio}`);
 }
+if (json) writeFileSync(json, JSON.stringify({ load: loadavg()[0], engines: engines.map((e) => e.name), ops: Object.fromEntries(times) }, null, 1));

@@ -402,12 +402,11 @@ pub fn generate(st: &Status, what: &str, pi: bool) -> Result<String, String> {
         "size" => size(st),
         "inventory" => Ok(inventory(st)),
         "recorded" => Ok(recorded(st, pi)),
-        "engines-size" | "engines-startup" | "engines-run" | "engines-memory" | "engines-dumps" => {
-            engines(st, what)
-        }
+        "engines-size" | "engines-startup" | "engines-run" | "engines-memory" | "engines-dumps"
+        | "engines-ops" => engines(st, what),
         _ => Err(format!(
             "gen:status {what}: expected conformance, speed, size, inventory, recorded or \
-             engines-size|startup|run|memory|dumps"
+             engines-size|startup|run|memory|dumps|ops"
         )),
     }
 }
@@ -615,9 +614,52 @@ const WORKLOADS: [&str; 9] = [
     "heavy",
 ];
 
+/// The operations of js/bench/engines/ops.ts the benchmarks page lists: key (status.py's
+/// `ops_slug` of the op's name), label.
+const OPS_LISTED: [(&str, &str); 30] = [
+    ("json-parse-rows-x5", "`JSON.parse` of 600 query rows"),
+    (
+        "json-stringify-rows-x5",
+        "`JSON.stringify` of 600 query rows",
+    ),
+    ("split-lines-x3", "`split(\"\\n\")` of file texts"),
+    ("join-lines-x3", "`join(\"\\n\")` of their lines"),
+    ("includes-x2-per-line", "`includes` per line"),
+    ("template-concat", "template literal appends"),
+    ("trim-100k", "`trim`"),
+    ("slice-100k", "`slice`"),
+    ("padstart-50k", "`padStart`"),
+    ("tolowercase-100k", "`toLowerCase`"),
+    ("charcodeat-loop", "`charCodeAt` loop"),
+    ("string-i-100k", "`String(i)`"),
+    ("tofixed-50k", "`toFixed`"),
+    ("math-max-per-line", "`Math.max`"),
+    ("math-floor-100k", "`Math.floor`"),
+    ("regex-match-function-w-g", "`match(/function \\w+/g)`"),
+    ("regex-replace-s-g-x20", "`replace(/\\s+/g, \" \")`"),
+    ("regex-exec-per-line", "`exec` of a line pattern"),
+    ("matchall-gm", "`matchAll` with `/gm`"),
+    ("new-regexp-5k", "`new RegExp`"),
+    ("map-x200", "`map`"),
+    ("sort-comparator-x50", "`sort` with a comparator"),
+    ("sort-default-x50", "`sort` of strings"),
+    ("push-300k", "`push`"),
+    ("map-string-keys-x200", "`Map.set` with string keys"),
+    ("set-string-keys-x200", "`Set.add` with string keys"),
+    ("object-spread-x20", "object spread"),
+    ("object-entries-fromentries-x200", "`Object.entries` and `fromEntries`"),
+    ("await-value-50k", "`await` of a value"),
+    ("promise-all-20-x500", "`Promise.all` of 20"),
+];
+
 /// `gen:status engines-*`: the benchmarks page's tables.
 fn engines(st: &Status, what: &str) -> Result<String, String> {
-    let mut keys: Vec<String> = vec!["engines/load".into()];
+    let load_key = if what == "engines-ops" {
+        "engines/ops/load"
+    } else {
+        "engines/load"
+    };
+    let mut keys: Vec<String> = vec![load_key.into()];
     let mut get = |k: String| -> Result<f64, String> {
         let v = st.num(&k).ok_or_else(|| {
             format!(
@@ -721,6 +763,25 @@ fn engines(st: &Status, what: &str) -> Result<String, String> {
                 },
             )
         }
+        "engines-ops" => {
+            let mut s = String::from(
+                "| operation | djs, ms | QuickJS, ms | djs / QuickJS |\n| --- | ---: | ---: | ---: |\n",
+            );
+            for (k, label) in OPS_LISTED {
+                let d = get(format!("engines/ops/{k}/djs"))?;
+                let q = get(format!("engines/ops/{k}/quickjs"))?;
+                let ratio = if d < 0.05 || q < 0.05 {
+                    "-".to_string()
+                } else {
+                    format!("{:.2}", d / q)
+                };
+                let _ = writeln!(s, "| {label} | {} | {} | {ratio} |", ms(d), ms(q));
+            }
+            (
+                s,
+                "Milliseconds per loop of the operation (js/bench/engines/ops.ts), the setup's time subtracted; QuickJS: the faster of the two latest releases",
+            )
+        }
         _ => {
             let mut s = String::from(
                 "| workload | idle points | dump, KiB (max) | gzip, KiB (max) | write, ms | load, ms |\n| --- | ---: | ---: | ---: | ---: | ---: |\n",
@@ -749,7 +810,7 @@ fn engines(st: &Status, what: &str) -> Result<String, String> {
             )
         }
     };
-    let load = st.num("engines/load").unwrap_or(f64::NAN);
+    let load = st.num(load_key).unwrap_or(f64::NAN);
     let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
     s.push('\n');
     s += &wrap(

@@ -1,6 +1,6 @@
 # 0229: A benchmarks page: djs vs QuickJS versions (and monty) on real codemode workloads; dumps, size, memory
 
-status: in-progress
+status: done
 agent: benchpage
 branch: issue/0229-benchmarks-page
 depends-on: -
@@ -67,9 +67,36 @@ A guide page with benchmarks a reader can trust and we can re-run:
 - js/bench/engines/ops.ts: the per-operation microbench (56 ops, djs vs QuickJS releases,
   interleaved runs, djs/best ratio, ! above 1.5x) for the fix agents 0230-0234; merged alone.
   The page draft waits on branch wip/0229-page-draft.
+- 2026-11-06 03:07-03:11, after 0230-0236 (main 8175610deb), load 1.9-3.8: `status.py engines`
+  (3 runs) and the new `status.py ops` (3 runs of ops.ts; `engines/ops/*`, djs and the faster
+  QuickJS release). New table `gen:status engines-ops` (30 listed ops). Commit field of the
+  `engines/*` keys set to 8175610deb (the engine sources; the branch's own hash does not
+  survive the rebase). Page written with the results, in SUMMARY after Determinism.
+  Guide pages: benchmarks.md (new), SUMMARY.md; none other affected.
 
 ## Follow-ups
 
-- Per-op djs-vs-QuickJS gaps (sent 2026-11-06): being fixed in 0230-0234.
+- Per-op djs-vs-QuickJS gaps (sent 2026-11-06): fixed in 0230-0236. Left above 1.5x after
+  them (ops.ts, djs / faster QuickJS release): trim 2.8, padStart/padEnd 2.5, Object.entries +
+  fromEntries 2.3, Math.floor 2.2, replaceAll 2.2, slice 1.9, sort with comparator 1.9, Map.set
+  string keys 1.8, toFixed 1.8, toLowerCase 1.7, String(i) 1.7, at/charAt/substring/repeat
+  1.7-2.0, charCodeAt loop 1.5. Memory ~1.45x the QuickJS releases (0234's Result: shadow stack,
+  base image, GC threshold).
+- status.tsv's `wasm/*` sizes predate 0230-0236 (953 KB recorded, 980 KB now): `status.py size`.
+- Monty has snapshots (`dump`/`load` requests); a dump-size comparison with djs would be a
+  follow-up for the page.
 
 ## Result
+
+- docs/guide/benchmarks.md (Using djs, after Determinism): method, engines, workloads, generated
+  tables (size, startup, run time, memory, per-operation, djs dumps) with honest notes.
+- Re-run: `scripts/bench-engines.sh` (fetch/build/run, prints tables); record with
+  `scripts/status.py engines` (includes `ops`), then `cargo run -q -p djs-docs -- regen`.
+  Per-op tool for perf work: `node js/bench/engines/ops.ts [FILTER]`.
+- Workloads tests/bench/codemode (9 + Python translations), harness js/bench/engines, engines
+  pinned in scripts/bench-engines.sh + package-lock; derivation in work/research/0229.
+- Headline (load ~3, M5 Max, node 26): new VM djs 0.12 ms vs 0.20-0.29 QuickJS builds;
+  geometric-mean run time: next best QuickJS 2026-06-04 1.17x djs's; memory djs ~1.45x the
+  QuickJS releases; module 427 KB gzip (QuickJS 331, QuickJS-NG 371, quickjs-wasi 287 + 28 glue).
+- Known gaps: wall-clock only (no instruction counts across engines); monty's snapshots not
+  compared; quickjs-emscripten memory is its 16 MiB initial heap.

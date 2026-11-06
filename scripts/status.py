@@ -38,6 +38,9 @@ usage:
                                       times over the codemode workload set; per engine module
                                       sizes, compile time, idle memory and startup, per workload
                                       run time and memory, djs's dumps (medians of the 3 runs)
+  scripts/status.py ops               js/bench/engines/ops.ts three times (djs and the two QuickJS
+                                      releases): per operation djs's time and the best QuickJS
+                                      build's (medians); `engines` runs it too
   scripts/status.py all               size, speed, pi, startup, dumps, bounds, heap, engines, bench
   scripts/status.py set [--at WHEN] KEY VALUE...
                                       record values measured elsewhere, for example
@@ -446,7 +449,35 @@ def engines():
     for k, xs in vals.items():
         v = median(xs)
         new[k] = round(v, 1) if k == "engines/load" else round(v, 3) if k.endswith("-ms") else int(v)
+    new.update(ops())
     return new
+
+
+def ops_slug(name):
+    """An op's key in status.tsv: `regex replace /\\s+/g x20` -> `regex-replace-s-g-x20`."""
+    return re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", name.lower())).strip("-")
+
+
+def ops():
+    """`engines/ops/<op>/{djs,quickjs}` (ms, medians of three runs; quickjs: the faster of
+    the two QuickJS releases in each run) and `engines/ops/load`."""
+    import json
+    f = os.path.join(ROOT, "work/scratch/status-engines/ops.json")
+    os.makedirs(os.path.dirname(f), exist_ok=True)
+    vals = {}
+    for _ in range(3):
+        r = subprocess.run(["node", "js/bench/engines/ops.ts", "--json", f], cwd=ROOT, capture_output=True, text=True)
+        if r.returncode != 0:
+            sys.exit(f"status.py: js/bench/engines/ops.ts failed:\n{r.stdout[-3000:]}\n{r.stderr[-3000:]}")
+        run = json.load(open(f))
+        if len({ops_slug(n) for n in run["ops"]}) != len(run["ops"]):
+            sys.exit("status.py: two ops of js/bench/engines/ops.ts have the same key")
+        vals.setdefault("engines/ops/load", []).append(run["load"])
+        for name, row in run["ops"].items():
+            k = f"engines/ops/{ops_slug(name)}"
+            vals.setdefault(f"{k}/djs", []).append(row[0])
+            vals.setdefault(f"{k}/quickjs", []).append(min(row[1:]))
+    return {k: round(median(xs), 1 if k.endswith("load") else 3) for k, xs in vals.items()}
 
 
 def main():
@@ -482,6 +513,9 @@ def main():
             save(rows, new, at)
     elif args[0] == "engines":
         save(rows, engines())
+    elif args[0] == "ops":
+        build()
+        save(rows, ops())
     elif args[0] == "all":
         save(rows, size())
         save(rows, speed(3))

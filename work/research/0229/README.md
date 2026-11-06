@@ -95,6 +95,9 @@ See js/bench/engines/run.ts's header, scripts/bench-engines.sh and D3110–D3114
 
 ## Findings
 
+Before the fixes (first measurements, load ~3, 2026-11-06; fixed since by 0230-0236):
+
+
 - djs is fastest at startup (a new instance and VM) and on the small bodies, and smallest
   in memory among the engines that start under 1 MiB, but slower than QuickJS on `heavy`:
   6.5 ms of its 20 ms there are 30,000 `Math.max` calls (about 200 ns each, against 20 ns in
@@ -106,3 +109,12 @@ See js/bench/engines/run.ts's header, scripts/bench-engines.sh and D3110–D3114
   heap), whatever the workload.
 - monty's module is 24 MB (7.5 MB gzip); its regex and string splitting make it the
   fastest on `heavy`.
+
+After the fixes (recorded at 8175610deb, load 1.9-3.8; docs/guide/benchmarks.md): djs has the
+lowest geometric-mean run time over the set (next: QuickJS 1.17x, QuickJS-NG 1.21x,
+quickjs-wasi 1.36x, monty 1.76x); `heavy` 20.0 -> 11.5 ms, `loop` 1.49 -> 0.77 ms. New VM
+0.12 ms (QuickJS 0.20). Still slower: `sequential`, `inspect`, `ts` by hundredths of a ms;
+memory (QuickJS releases use ~0.7x of djs's; tracing GC threshold, larger idle footprint);
+module size (427 KB gzip vs 331/371 KB); single small builtins trim 2.8x, padStart 2.5x,
+Object.entries 2.3x, Math.floor 2.2x, slice 1.9x, sort with comparator 1.9x, Map.set string
+keys 1.8x, toFixed 1.8x, toLowerCase/String(i) 1.7x.

@@ -8,6 +8,7 @@
 - [Continuation dumps](dumps.md)
 - [Limits and resource control](limits.md)
 - [Determinism](determinism.md)
+- [Benchmarks](benchmarks.md)
 - [The command line and the REPL](cli.md)
 - [djs in pi](pi.md)
 
