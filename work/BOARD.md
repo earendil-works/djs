@@ -6,6 +6,8 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0236 | Perf: construct path (new C() 2.4x, new Map() 4.6x, new Promise 2.7x) | pnew | .worktrees/pnew |
+| 0237 | Plain-dump fuzz: seed 689441 wrong output in node (--lazy) | pjr | .worktrees/pjx |
 | 0232b | new Promise / then 4-6x (builtin closure length/name), async state at first await, allSettled/any jobs | pasync | .worktrees/pasync |
 | 0229 | Benchmarks page: djs vs QuickJS versions and monty on codemode workloads; dumps, size, memory (owner) | benchpage | .worktrees/benchpage |
 
