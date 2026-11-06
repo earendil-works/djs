@@ -517,7 +517,7 @@ impl Exec<'_> {
         }
         let vals = crate::heap::cells::ValueArray::VALUES.at(self.stack, 0);
         super::hot::write_values(self.heap.arena_mut().hot_bytes(), vals + 8 * base, args);
-        self.push_frame_head(t, &th, base, argc, Continuation::PushResult, next);
+        self.push_frame_head(t, &th, base, argc, Continuation::PushResult, next, None);
         Some(Ok(Flow::Leave(None)))
     }
 

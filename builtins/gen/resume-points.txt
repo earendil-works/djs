@@ -585,11 +585,14 @@ LengthOfArrayLike: reentrant (%LengthOfArrayLike)
 ToPropertyKey: reentrant (%ToPropertyKey)
   builtins/conversion.ts:111:22  ToPrimitive (builtin)
 
-GetPrototypeFromConstructor: reentrant (%GetPrototypeFromConstructor)
-  builtins/conversion.ts:130:24  Get (intrinsic)
+GetPrototypeFromConstructor: reentrant
+  builtins/conversion.ts:128:10  GetPrototypeFromConstructorSlow (builtin)
+
+GetPrototypeFromConstructorSlow: reentrant (%GetPrototypeFromConstructorSlow)
+  builtins/conversion.ts:141:24  Get (intrinsic)
 
 ToNumeric: reentrant (%ToNumeric)
-  builtins/conversion.ts:148:23  ToPrimitive (builtin)
+  builtins/conversion.ts:159:23  ToPrimitive (builtin)
 
 DVOutOfBounds: leaf
 

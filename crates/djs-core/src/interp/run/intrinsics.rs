@@ -69,6 +69,7 @@ const NEW_REFERENCE_ERROR: u16 = id("NewReferenceError");
 const NEW_SYNTAX_ERROR: u16 = id("NewSyntaxError");
 const WELL_KNOWN_SYMBOL: u16 = id("WellKnownSymbol");
 const REALM_INTRINSIC: u16 = id("RealmIntrinsic");
+const CONSTRUCTOR_PROTOTYPE: u16 = id("ConstructorPrototype");
 const ERROR_CREATE: u16 = id("ErrorCreate");
 const ERROR_STACK: u16 = id("ErrorStack");
 const STACK_TRACE_VALUE: u16 = id("StackTraceValue");
@@ -1153,27 +1154,10 @@ impl Exec<'_> {
                 (Some(o), Some(w)) => array::sort_operand(self.heap, o, w != 0.0),
                 _ => return bad_argument(id),
             },
-            REALM_INTRINSIC => {
-                // The name is a Latin-1 literal of the builtins: read in place, no copy.
-                let name = match a0.as_string().and_then(|s| self.heap.str_view(s)) {
-                    Some(crate::heap::StrView::Latin1(b)) => core::str::from_utf8(b).ok(),
-                    _ => None,
-                };
-                match name.and_then(Intrinsic::by_name) {
-                    Some(i) => realm::intrinsic(self.heap, i),
-                    None => return bad_argument(id),
-                }
-            }
-            ERROR_CREATE => {
-                let Some(proto) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                Value::object(self.heap.alloc_object(
-                    ObjectClass::Error,
-                    Some(proto),
-                    ObjectClass::Error.slots(),
-                )?)
-            }
+            REALM_INTRINSIC => match self.realm_intrinsic(a0) {
+                Some(v) => v,
+                None => return bad_argument(id),
+            },
             ERROR_STACK => realm::error_stack_raw(self.heap, a0),
             STACK_TRACE_VALUE => {
                 // The caller's frames (the builtin calling this is left out), below the
@@ -1266,15 +1250,6 @@ impl Exec<'_> {
                 self.sp = base + 2 + n;
                 return self.call(base, n, Continuation::PushResult, next);
             }
-            COLLECTION_CREATE => {
-                let (Some(cls), Some(proto)) = (
-                    a0.as_int().and_then(collection::class_of),
-                    arg(self, 1).as_object(),
-                ) else {
-                    return bad_argument(id);
-                };
-                Value::object(self.heap.collection_new(cls, proto)?)
-            }
             COLLECTION_CLASS => Value::int(collection::class_index(self.heap, a0)),
             COLLECTION_GET | COLLECTION_HAS | COLLECTION_SET | COLLECTION_DELETE
             | COLLECTION_CLEAR | COLLECTION_SIZE | COLLECTION_ITERATOR => {
@@ -1324,15 +1299,6 @@ impl Exec<'_> {
             }
             CAN_BE_HELD_WEAKLY => Value::bool(collection::can_be_held_weakly(self.heap, a0)?),
             DATE_NOW => realm::intrinsic(self.heap, Intrinsic::Clock),
-            DATE_CREATE => {
-                let Some(proto) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                let o = self.heap.alloc_object(ObjectClass::Date, Some(proto), 1)?;
-                let t = arg(self, 1).as_number().unwrap_or(f64::NAN);
-                self.heap.set_object_slot(o, 0, Value::number(t));
-                Value::object(o)
-            }
             DATE_VALUE | DATE_SET_VALUE => {
                 let Some(o) = a0
                     .as_object()
@@ -1812,12 +1778,6 @@ impl Exec<'_> {
                 self.install_method(a0, arg(self, 1), arg(self, 2), arg(self, 3))?;
                 Value::UNDEFINED
             }
-            PROMISE_CREATE => {
-                let Some(proto) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                Value::object(promise::alloc(self.heap, Some(proto))?)
-            }
             IS_PROMISE => Value::bool(promise::as_promise(self.heap, a0).is_some()),
             PROMISE_COMBINATOR_RUN => {
                 let (kind, index) = (arg(self, 1).as_int(), arg(self, 2).as_number());
@@ -1955,16 +1915,6 @@ impl Exec<'_> {
                     Value::UNDEFINED
                 }
             }
-            NEW_BUILTIN_CLOSURE => {
-                let kind = a0.as_int().and_then(|k| usize::try_from(k).ok());
-                let (Some(kind), Some(length)) = (kind, arg(self, 2).as_int()) else {
-                    return bad_argument(id);
-                };
-                match new_builtin_closure(self.heap, kind, arg(self, 1), length)? {
-                    Some(f) => Value::object(f),
-                    None => return bad_argument(id),
-                }
-            }
             #[cfg(djs_prelude)]
             MARK_NATIVE => {
                 self.mark_native(a0, arg(self, 1))?;
@@ -2085,6 +2035,16 @@ impl Exec<'_> {
         Ok(None)
     }
 
+    /// `%RealmIntrinsic(name)`: the realm's `<Constructor>Prototype`. The name is a
+    /// Latin-1 literal of the builtins: read in place, no copy.
+    fn realm_intrinsic(&self, name: Value) -> Option<Value> {
+        let name = match name.as_string().and_then(|s| self.heap.str_view(s)) {
+            Some(crate::heap::StrView::Latin1(b)) => core::str::from_utf8(b).ok(),
+            _ => None,
+        };
+        Some(realm::intrinsic(self.heap, Intrinsic::by_name(name?)?))
+    }
+
     /// The pure leaf intrinsics (0230): a result from at most three arguments, with no
     /// effect on the frames, the stack or the fuel and none before a fault, so the hot
     /// loop runs them in place and, on a fault, `call_intrinsic` runs them again and
@@ -2096,6 +2056,71 @@ impl Exec<'_> {
         let arg = |i: usize| a[i];
         Ok(Some(match id {
             IS_OBJECT => Value::bool(a0.as_object().is_some()),
+            // Constructors' allocations (0236).
+            COLLECTION_CREATE => {
+                let (Some(cls), Some(proto)) = (
+                    a0.as_int().and_then(collection::class_of),
+                    arg(1).as_object(),
+                ) else {
+                    return bad_argument(id);
+                };
+                Value::object(self.heap.collection_new(cls, proto)?)
+            }
+            PROMISE_CREATE => {
+                let Some(proto) = a0.as_object() else {
+                    return bad_argument(id);
+                };
+                Value::object(promise::alloc(self.heap, Some(proto))?)
+            }
+            ERROR_CREATE => {
+                let Some(proto) = a0.as_object() else {
+                    return bad_argument(id);
+                };
+                Value::object(self.heap.alloc_object(
+                    ObjectClass::Error,
+                    Some(proto),
+                    ObjectClass::Error.slots(),
+                )?)
+            }
+            DATE_CREATE => {
+                let Some(proto) = a0.as_object() else {
+                    return bad_argument(id);
+                };
+                let o = self.heap.alloc_object(ObjectClass::Date, Some(proto), 1)?;
+                let t = arg(1).as_number().unwrap_or(f64::NAN);
+                self.heap.set_object_slot(o, 0, Value::number(t));
+                Value::object(o)
+            }
+            NEW_BUILTIN_CLOSURE => {
+                let kind = a0.as_int().and_then(|k| usize::try_from(k).ok());
+                let (Some(kind), Some(length)) = (kind, arg(2).as_int()) else {
+                    return bad_argument(id);
+                };
+                match new_builtin_closure(self.heap, kind, arg(1), length)? {
+                    Some(f) => Value::object(f),
+                    None => return bad_argument(id),
+                }
+            }
+            CONSTRUCTOR_PROTOTYPE => {
+                let proto = match a0.as_object() {
+                    Some(nt) => match self.heap.lookup_property(nt, crate::heap::atoms::PROTOTYPE) {
+                        Lookup::Found(_, Property::Data { value, .. }) => value.as_object(),
+                        Lookup::Absent => None,
+                        // A getter or a proxy's trap: the builtin's steps.
+                        Lookup::Found(..) | Lookup::Proxy(_) => return Ok(Some(Value::UNDEFINED)),
+                    },
+                    None if a0.is_undefined() => None,
+                    None => return bad_argument(id),
+                };
+                // Else the realm's: GetFunctionRealm of a function that is no proxy.
+                match proto {
+                    Some(p) => Value::object(p),
+                    None => match self.realm_intrinsic(arg(1)) {
+                        Some(v) => v,
+                        None => return bad_argument(id),
+                    },
+                }
+            }
             IS_CALLABLE => Value::bool(self.is_callable(a0)),
             IS_CONSTRUCTOR => Value::bool(a0.as_object().is_some_and(|o| self.is_constructor(o))),
             IS_ARRAY => match a0.as_object().map(|o| self.heap.is_array(o)) {

@@ -64,6 +64,12 @@ const EACH: i32 = Continuation::Each.to_flags();
 /// so the others decline without a call (a test checks the list against `pure_leaf`).
 pub(super) const PURE_LEAVES: &[&str] = &[
     "IsObject",
+    "ConstructorPrototype",
+    "CollectionCreate",
+    "PromiseCreate",
+    "ErrorCreate",
+    "DateCreate",
+    "NewBuiltinClosure",
     "IsCallable",
     "IsConstructor",
     "IsArray",
@@ -431,8 +437,9 @@ impl Exec<'_> {
     }
 
     /// What the loop declined, done here instead of through `step` where that is cheap:
-    /// a call of a `@fast` builtin (D1850), or `+` of a string and a primitive whose
-    /// ToString runs no user code and cannot throw (`"id " + i`, 0231). False, with
+    /// a call of a `@fast` builtin (D1850), `+` of a string and a primitive whose
+    /// ToString runs no user code and cannot throw (`"id " + i`, 0231), or an
+    /// instruction of the construct path (`decline_construct`, 0236). False, with
     /// nothing changed, for anything else or at the heap cap (`step` runs it then and
     /// retries, D1700). One out-of-line call: changes to the loop's own code, even a
     /// `continue` here, slowed plain loops and calls by 4-6% in V8 (0231).
@@ -442,7 +449,7 @@ impl Exec<'_> {
             return self.pc < self.code_len && self.fast_leaf_call(op);
         }
         if op != fast::ADD {
-            return false;
+            return self.decline_construct(op);
         }
         use crate::value::Kind;
         let (a, c) = (self.get(self.sp - 2), self.get(self.sp - 1));

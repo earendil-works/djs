@@ -109,7 +109,7 @@ pub(crate) static FAST: &[FastFn] = &[
     f("SetPrototypeHas", set_has),
     f("SetPrototypeAdd", set_add),
     // ---- Promises (0232b, D3156: `new Promise` and `then` were 4-6x QuickJS) ----
-    f("GetPrototypeFromConstructor", prototype_from_constructor),
+    // (GetPrototypeFromConstructor is the hot loop's leaf %ConstructorPrototype, 0236.)
     f("PromiseResolveFunction", |h, this, a| {
         promise::fast_resolve(h, this, arg(a, 0))
     }),
@@ -127,22 +127,6 @@ pub(crate) static FAST: &[FastFn] = &[
     // ---- String.fromCharCode (0091; the URI functions run their builtins, D2256) ----
     f("StringFromCharCode", from_char_code),
 ];
-
-/// GetPrototypeFromConstructor ( newTarget, fallback ) when `newTarget.prototype` is an
-/// object found as a data property without a Proxy or a getter on the way.
-fn prototype_from_constructor(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
-    let Some(c) = arg(args, 0).as_object() else {
-        return Ok(None);
-    };
-    Ok(match heap.lookup_property(c, atoms::PROTOTYPE) {
-        crate::heap::Lookup::Found(_, Property::Data { value, .. })
-            if value.as_object().is_some() =>
-        {
-            Some(value)
-        }
-        _ => None,
-    })
-}
 
 // ---- argument helpers ----------------------------------------------------------------
 

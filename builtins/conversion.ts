@@ -117,13 +117,24 @@ function ToPropertyKey(v: Value): Value {
 }
 
 /**
- * GetPrototypeFromConstructor ( constructor, intrinsicDefaultProto ), 10.1.14.
- * `newTarget` undefined means the builtin was called as a function, so the active
- * function is the constructor and its prototype is the realm's.
- * @intrinsic
- * @fast
+ * GetPrototypeFromConstructor ( constructor, intrinsicDefaultProto ), 10.1.14. The leaf
+ * %ConstructorPrototype answers unless reading `prototype` runs user code (0236).
  */
 function GetPrototypeFromConstructor(newTarget: Value, fallback: Str): Obj {
+  const proto: Value = ConstructorPrototype(newTarget, fallback);
+  if (proto !== undefined) {
+    return AsObj(proto);
+  }
+  return GetPrototypeFromConstructorSlow(newTarget, fallback);
+}
+
+/**
+ * GetPrototypeFromConstructor's steps. `newTarget` undefined means the builtin was
+ * called as a function, so the active function is the constructor and its prototype
+ * is the realm's.
+ * @intrinsic
+ */
+function GetPrototypeFromConstructorSlow(newTarget: Value, fallback: Str): Obj {
   if (newTarget === undefined) {
     return RealmIntrinsic(fallback);
   }

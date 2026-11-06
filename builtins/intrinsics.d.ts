@@ -143,6 +143,13 @@ declare function WellKnownSymbol(name: Str): Sym;
  * ErrorPrototype and the native error prototypes (TypeErrorPrototype, ...). @leaf
  */
 declare function RealmIntrinsic(name: Str): Obj;
+/**
+ * GetPrototypeFromConstructor where it runs no user code (0236): newTarget's `prototype`
+ * if that is an object, else the realm's prototype `fallback` (named as for
+ * RealmIntrinsic), also for an undefined newTarget; undefined when reading `prototype`
+ * would call a getter or a proxy trap. @leaf
+ */
+declare function ConstructorPrototype(newTarget: Value, fallback: Str): Value;
 /** An object with [[ErrorData]] and prototype `proto`. @leaf */
 declare function ErrorCreate(proto: Obj): Obj;
 /** A DOMException: an object with [[ErrorData]], its name and message in slots (D1840). @leaf */

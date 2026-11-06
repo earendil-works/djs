@@ -152,6 +152,7 @@ function ArrayPrototypeIncludes(searchElement, fromIndex) {
 
 // builtins/array.ts:183 constructor Array %ArrayConstructor
 function ArrayConstructor(...values) {
+  let $1, $2;
   let a = values;
   if (LengthOfArrayLike(values) === 1) {
     const len = %Get(values, 0);
@@ -164,7 +165,7 @@ function ArrayConstructor(...values) {
     }
   }
   if (new.target !== undefined) {
-    const proto = GetPrototypeFromConstructor(new.target, "ArrayPrototype");
+    const proto = ($1 = new.target, ($2 = %ConstructorPrototype($1, "ArrayPrototype"), ($2 !== undefined) ? %AsObj($2) : GetPrototypeFromConstructorSlow($1, "ArrayPrototype")));
     if (proto !== %RealmIntrinsic("ArrayPrototype")) {
       %SetPrototypeOf(a, proto);
     }
@@ -1693,8 +1694,17 @@ function ToPropertyKey(v) {
   return %ToStringPrimitive(key);
 }
 
-// builtins/conversion.ts:126 %GetPrototypeFromConstructor
+// builtins/conversion.ts:123
 function GetPrototypeFromConstructor(newTarget, fallback) {
+  const proto = %ConstructorPrototype(newTarget, fallback);
+  if (proto !== undefined) {
+    return %AsObj(proto);
+  }
+  return GetPrototypeFromConstructorSlow(newTarget, fallback);
+}
+
+// builtins/conversion.ts:137 %GetPrototypeFromConstructorSlow
+function GetPrototypeFromConstructorSlow(newTarget, fallback) {
   if (newTarget === undefined) {
     return %RealmIntrinsic(fallback);
   }
@@ -1709,7 +1719,7 @@ function GetPrototypeFromConstructor(newTarget, fallback) {
   return %RealmIntrinsic(fallback);
 }
 
-// builtins/conversion.ts:147 %ToNumeric
+// builtins/conversion.ts:158 %ToNumeric
 function ToNumeric(v) {
   const prim = ToPrimitive(v, "number");
   if (%IsBigInt(prim)) {
@@ -2012,11 +2022,12 @@ function TimeClip(t) {
 
 // builtins/date.ts:48 constructor Date
 function DateConstructor(...values) {
+  let $1, $2;
   if (new.target === undefined) {
     return %DateFormat(%DateNow(), 1, 3);
   }
   const tv = DateValueFromArgs(values);
-  return %DateCreate(GetPrototypeFromConstructor(new.target, "DatePrototype"), tv);
+  return %DateCreate(($1 = new.target, ($2 = %ConstructorPrototype($1, "DatePrototype"), ($2 !== undefined) ? %AsObj($2) : GetPrototypeFromConstructorSlow($1, "DatePrototype"))), tv);
 }
 
 // builtins/date.ts:60 Date.now
@@ -3270,7 +3281,8 @@ function ErrorStackTraceLimit() {
 
 // builtins/error.ts:155
 function ErrorConstruct(newTarget, fallback, message, options) {
-  const o = %ErrorCreate(GetPrototypeFromConstructor(newTarget, fallback));
+  let $1;
+  const o = %ErrorCreate((($1 = %ConstructorPrototype(newTarget, fallback), ($1 !== undefined) ? %AsObj($1) : GetPrototypeFromConstructorSlow(newTarget, fallback))));
   if (message !== undefined) {
     %DefineDataPropertyOrThrow(o, "message", ToString(message), 5);
   }
@@ -3420,6 +3432,7 @@ function GlobalEval(x) {
 
 // builtins/eval.ts:22
 function CreateDynamicFunction(newTarget, kind, fallback, args) {
+  let $1;
   const argCount = LengthOfArrayLike(args);
   let p = "";
   let body = "";
@@ -3433,7 +3446,7 @@ function CreateDynamicFunction(newTarget, kind, fallback, args) {
   const script = %CompileFunction(kind, p, body);
   const f = %AsObj(%Call(script, %GlobalObject()));
   if (newTarget !== undefined) {
-    const proto = GetPrototypeFromConstructor(newTarget, fallback);
+    const proto = (($1 = %ConstructorPrototype(newTarget, fallback), ($1 !== undefined) ? %AsObj($1) : GetPrototypeFromConstructorSlow(newTarget, fallback)));
     %SetPrototypeOf(f, proto);
   }
   return f;
@@ -5623,10 +5636,11 @@ function AddEntriesFromIterable(target, iterable, adder) {
 
 // builtins/map.ts:56 constructor Map
 function MapConstructor(iterable) {
+  let $1, $2;
   if (new.target === undefined) {
     throw %NewTypeError("must be called with new");
   }
-  const map = %CollectionCreate(0, GetPrototypeFromConstructor(new.target, "MapPrototype"));
+  const map = %CollectionCreate(0, ($1 = new.target, ($2 = %ConstructorPrototype($1, "MapPrototype"), ($2 !== undefined) ? %AsObj($2) : GetPrototypeFromConstructorSlow($1, "MapPrototype"))));
   if (iterable === undefined || iterable === null) {
     return map;
   }
@@ -6091,7 +6105,7 @@ function MathRandomBuiltin() {
 
 // builtins/number.ts:9 constructor Number
 function NumberConstructor(...args) {
-  let $1, $2;
+  let $1, $2, $3, $4;
   let n = 0;
   if (LengthOfArrayLike(args) > 0) {
     const prim = ($1 = %Get(args, 0), ($2 = ToPrimitive($1, "number"), (%IsBigInt($2)) ? $2 : %ToNumberPrimitive($2)));
@@ -6104,7 +6118,7 @@ function NumberConstructor(...args) {
   if (new.target === undefined) {
     return n;
   }
-  return %WrapPrimitive(n, GetPrototypeFromConstructor(new.target, "NumberPrototype"));
+  return %WrapPrimitive(n, ($3 = new.target, ($4 = %ConstructorPrototype($3, "NumberPrototype"), ($4 !== undefined) ? %AsObj($4) : GetPrototypeFromConstructorSlow($3, "NumberPrototype"))));
 }
 
 // builtins/number.ts:26
@@ -6270,11 +6284,12 @@ function GlobalIsFinite(number) {
 
 // builtins/object.ts:8 constructor Object
 function ObjectConstructor(value) {
+  let $1, $2, $3, $4;
   if (new.target !== undefined && new.target !== %RealmConstructor("Object")) {
-    return %ObjectCreate(GetPrototypeFromConstructor(new.target, "ObjectPrototype"));
+    return %ObjectCreate(($1 = new.target, ($2 = %ConstructorPrototype($1, "ObjectPrototype"), ($2 !== undefined) ? %AsObj($2) : GetPrototypeFromConstructorSlow($1, "ObjectPrototype"))));
   }
   if (value === undefined || value === null) {
-    return %ObjectCreate(GetPrototypeFromConstructor(new.target, "ObjectPrototype"));
+    return %ObjectCreate(($3 = new.target, ($4 = %ConstructorPrototype($3, "ObjectPrototype"), ($4 !== undefined) ? %AsObj($4) : GetPrototypeFromConstructorSlow($3, "ObjectPrototype"))));
   }
   return %ToObject(value);
 }
@@ -7987,7 +8002,8 @@ function ProxyConstruct(p, args, newTarget) {
 
 // builtins/proxy.ts:757 %OrdinaryConstructSlow
 function OrdinaryConstructSlow(f, args, newTarget) {
-  const proto = GetPrototypeFromConstructor(newTarget, "ObjectPrototype");
+  let $1;
+  const proto = (($1 = %ConstructorPrototype(newTarget, "ObjectPrototype"), ($1 !== undefined) ? %AsObj($1) : GetPrototypeFromConstructorSlow(newTarget, "ObjectPrototype")));
   return %ConstructWithThis(f, %ObjectCreate(proto), args, newTarget);
 }
 
@@ -8243,7 +8259,7 @@ function ReflectSetPrototypeOf(target, proto) {
 
 // builtins/regexp.ts:10 constructor RegExp
 function RegExpConstructor(pattern, flags) {
-  let $1;
+  let $1, $2;
   let newTarget = new.target;
   if (%IsString(pattern) && (flags === undefined || %IsString(flags)) && (newTarget === undefined || newTarget === %RealmConstructor("RegExp"))) {
     return %RegExpCreate(undefined, %AsStr(pattern), flags === undefined ? "" : %AsStr(flags));
@@ -8271,7 +8287,7 @@ function RegExpConstructor(pattern, flags) {
       f = %Get(%AsObj(pattern), "flags");
     }
   }
-  const proto = GetPrototypeFromConstructor(newTarget, "RegExpPrototype");
+  const proto = (($2 = %ConstructorPrototype(newTarget, "RegExpPrototype"), ($2 !== undefined) ? %AsObj($2) : GetPrototypeFromConstructorSlow(newTarget, "RegExpPrototype")));
   const pStr = p === undefined ? "" : ToString(p);
   const fStr = f === undefined ? "" : ToString(f);
   if (%IsRegExpObject(pattern)) {
@@ -8842,11 +8858,11 @@ function ThisSet(v) {
 
 // builtins/set.ts:15 constructor Set
 function SetConstructor(iterable) {
-  let $1;
+  let $1, $2, $3;
   if (new.target === undefined) {
     throw %NewTypeError("must be called with new");
   }
-  const set = %CollectionCreate(1, GetPrototypeFromConstructor(new.target, "SetPrototype"));
+  const set = %CollectionCreate(1, ($1 = new.target, ($2 = %ConstructorPrototype($1, "SetPrototype"), ($2 !== undefined) ? %AsObj($2) : GetPrototypeFromConstructorSlow($1, "SetPrototype"))));
   if (iterable === undefined || iterable === null) {
     return set;
   }
@@ -8862,7 +8878,7 @@ function SetConstructor(iterable) {
     if (%IteratorFastReady(iterator, next)) {
       nextValue = %IteratorFastValue(iterator, next);
     } else {
-      const result = (($1 = %Call(next, iterator), (!%IsObject($1)) ? %Throw(%NewTypeError("iterator must return an object")) : %AsObj($1)));
+      const result = (($3 = %Call(next, iterator), (!%IsObject($3)) ? %Throw(%NewTypeError("iterator must return an object")) : %AsObj($3)));
       if (%ToBoolean(%Get(result, "done"))) {
         return set;
       }
@@ -9439,6 +9455,7 @@ function StringPrototypeSplit(separator, limit) {
 
 // builtins/string.ts:9 constructor String
 function StringConstructor(value) {
+  let $1;
   const nt = new.target;
   let s = "";
   if (%ArgumentCount() > 0) {
@@ -9450,7 +9467,7 @@ function StringConstructor(value) {
   if (nt === undefined) {
     return s;
   }
-  return %WrapPrimitive(s, GetPrototypeFromConstructor(nt, "StringPrototype"));
+  return %WrapPrimitive(s, (($1 = %ConstructorPrototype(nt, "StringPrototype"), ($1 !== undefined) ? %AsObj($1) : GetPrototypeFromConstructorSlow(nt, "StringPrototype"))));
 }
 
 // builtins/string.ts:26
@@ -12284,7 +12301,7 @@ function GlobalAtob(...args) {
 %InstallIntrinsic("ToString", ToString);
 %InstallIntrinsic("LengthOfArrayLike", LengthOfArrayLike);
 %InstallIntrinsic("ToPropertyKey", ToPropertyKey);
-%InstallIntrinsic("GetPrototypeFromConstructor", GetPrototypeFromConstructor);
+%InstallIntrinsic("GetPrototypeFromConstructorSlow", GetPrototypeFromConstructorSlow);
 %InstallIntrinsic("ToNumeric", ToNumeric);
 %InstallIntrinsic("DatePrototypeValueOf", DatePrototypeValueOf);
 %InstallIntrinsic("DatePrototypeToISOString", DatePrototypeToISOString);
@@ -12424,7 +12441,6 @@ function GlobalAtob(...args) {
 %MarkFast(ToString);
 %MarkFast(LengthOfArrayLike);
 %MarkFast(ToPropertyKey);
-%MarkFast(GetPrototypeFromConstructor);
 %MarkFast(MapPrototypeGet);
 %MarkFast(MapPrototypeHas);
 %MarkFast(MapPrototypeSet);

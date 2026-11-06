@@ -93,6 +93,7 @@ impl Default for ExecOptions {
 
 mod bigint;
 mod class;
+mod construct;
 mod dense;
 mod each;
 mod fastpath;
@@ -549,11 +550,14 @@ impl<'h> Exec<'h> {
     #[inline(always)]
     fn push_frame(&mut self, t: u32, base: u32, argc: u32, cont: Continuation, ret_pc: u32) {
         let th = hot::template_head(self.heap.arena().bytes(), t);
-        self.push_frame_head(t, &th, base, argc, cont, ret_pc);
+        self.push_frame_head(t, &th, base, argc, cont, ret_pc, None);
     }
 
-    /// `push_frame` with the template's fields already read.
+    /// `push_frame` with the template's fields already read. `new_target` is a
+    /// construct's: the frame is flagged as one and holds it before the entry's
+    /// safepoint, which may move it.
     #[inline(always)]
+    #[allow(clippy::too_many_arguments)]
     fn push_frame_head(
         &mut self,
         t: u32,
@@ -562,6 +566,7 @@ impl<'h> Exec<'h> {
         argc: u32,
         cont: Continuation,
         ret_pc: u32,
+        new_target: Option<Value>,
     ) {
         let (params, locals) = (th.params, th.locals);
         let n = argc.max(params);
@@ -574,8 +579,8 @@ impl<'h> Exec<'h> {
             Value::int(if bottom { 0 } else { self.hp as i32 }),
             Value::int(ret_pc as i32),
             Value::int(argc as i32),
-            Value::int(cont.to_flags()),
-            Value::UNDEFINED,
+            Value::int(cont.to_flags() | new_target.map_or(0, |_| frame::FLAG_CONSTRUCT)),
+            new_target.unwrap_or(Value::UNDEFINED),
         ];
         let vals = ValueArray::VALUES.at(self.stack, 0);
         hot::write_frame(
@@ -630,7 +635,7 @@ impl<'h> Exec<'h> {
                 let th = hot::template_head(self.heap.arena().bytes(), t);
                 let top = base + 2 + argc.max(th.params) + HEADER + th.locals + th.stack;
                 self.ensure(top)?;
-                self.push_frame_head(t, &th, base, argc, cont, ret_pc);
+                self.push_frame_head(t, &th, base, argc, cont, ret_pc, None);
                 Ok(None)
             }
             ObjectClass::HostFunction => {
@@ -4203,46 +4208,55 @@ impl<'h> Exec<'h> {
             let nt = new_target.unwrap_or(f);
             return self.construct_through(proxy::PROXY_CONSTRUCT, base, argc, nt, next);
         }
-        let proto_source = new_target.and_then(|v| v.as_object()).unwrap_or(fo);
-        // A builtin constructor makes its own object (GetPrototypeFromConstructor in the
-        // builtin, which may run a `prototype` getter): `this` is not read (0039). A
-        // derived class constructor gets its `this` from `super()`.
-        let builtin =
-            self.heap.cell_flags(fo.offset()) & crate::heap::cells::flags::OBJ_BUILTIN != 0;
-        let this = if builtin || self.is_derived_ctor(fo) {
-            Value::UNDEFINED
-        } else {
-            let proto = match self
-                .heap
-                .lookup_property(proto_source, crate::heap::atoms::PROTOTYPE)
-            {
-                Lookup::Found(_, Property::Data { value, .. }) => value.as_object(),
-                Lookup::Absent => None,
-                // A `prototype` getter or a proxy's `get` trap: GetPrototypeFromConstructor
-                // runs user code, in %OrdinaryConstructSlow.
-                Lookup::Found(..) | Lookup::Proxy(_) => {
-                    let nt = new_target.unwrap_or(f);
-                    return self.construct_through(
-                        proxy::ORDINARY_CONSTRUCT_SLOW,
-                        base,
-                        argc,
-                        nt,
-                        next,
-                    );
-                }
-            };
-            let proto = proto.unwrap_or_else(|| intrinsic_obj(self.heap, Intrinsic::ObjectProto));
-            Value::object(self.heap.new_object(Some(proto))?)
+        let Some(this) = self.construct_this(fo, new_target)? else {
+            // A `prototype` getter or a proxy's `get` trap: GetPrototypeFromConstructor
+            // runs user code, in %OrdinaryConstructSlow.
+            let nt = new_target.unwrap_or(f);
+            return self.construct_through(proxy::ORDINARY_CONSTRUCT_SLOW, base, argc, nt, next);
         };
         // Make room for `this` below the arguments.
         self.ensure(self.sp + 1)?;
+        self.insert_this(base, argc, this);
+        self.construct_call(base, argc, new_target, next)
+    }
+
+    /// The `this` that [[Construct]] of the function `fo` (not a proxy or bound
+    /// function) passes: a new ordinary object whose prototype is new.target's
+    /// `prototype` (`None`: reading it runs user code). A builtin constructor makes its
+    /// own object (GetPrototypeFromConstructor in the builtin, which may run a
+    /// `prototype` getter): `this` is not read (0039). A derived class constructor gets
+    /// its `this` from `super()`. Both get undefined.
+    fn construct_this(
+        &mut self,
+        fo: Obj,
+        new_target: Option<Value>,
+    ) -> Result<Option<Value>, Fault> {
+        let builtin =
+            self.heap.cell_flags(fo.offset()) & crate::heap::cells::flags::OBJ_BUILTIN != 0;
+        if builtin || self.is_derived_ctor(fo) {
+            return Ok(Some(Value::UNDEFINED));
+        }
+        let proto_source = new_target.and_then(|v| v.as_object()).unwrap_or(fo);
+        let proto = match self
+            .heap
+            .lookup_property(proto_source, crate::heap::atoms::PROTOTYPE)
+        {
+            Lookup::Found(_, Property::Data { value, .. }) => value.as_object(),
+            Lookup::Absent => None,
+            Lookup::Found(..) | Lookup::Proxy(_) => return Ok(None),
+        };
+        let proto = proto.unwrap_or_else(|| intrinsic_obj(self.heap, Intrinsic::ObjectProto));
+        Ok(Some(Value::object(self.heap.new_object(Some(proto))?)))
+    }
+
+    /// `f a1 .. an` at `base` becomes `f this a1 .. an` (room checked by the caller).
+    fn insert_this(&mut self, base: u32, argc: u32, this: Value) {
         for i in (0..argc).rev() {
             let v = self.get(base + 1 + i);
             self.set(base + 2 + i, v);
         }
         self.set(base + 1, this);
         self.sp += 1;
-        self.construct_call(base, argc, new_target, next)
     }
 
     /// [[Construct]] of the ordinary function at `stack[base]` with `this` and the
@@ -4254,8 +4268,29 @@ impl<'h> Exec<'h> {
         new_target: Option<Value>,
         next: u32,
     ) -> Step {
-        // An explicit new.target is held in a handle across `call`, whose safepoint may
-        // move it; without one it is the callee, read back from the frame.
+        let f = self.get(base);
+        // A bytecode frame is pushed flagged and with its new.target, as `call` would
+        // push it otherwise (a `@fast` entry never takes a construct).
+        if let Some(fo) = f.as_object()
+            && self.heap.object_class(fo) == ObjectClass::Function
+        {
+            let t = self.template_of(fo);
+            let flags = u32::from(self.heap.arena().get::<u16>(t, FuncTemplate::FLAGS));
+            if flags & self.slow_call_flags & func_flags::NATIVE == 0 {
+                if flags & func_flags::SLOPPY_THIS != 0 {
+                    self.bind_sloppy_this(base + 1)?;
+                }
+                let th = hot::template_head(self.heap.arena().bytes(), t);
+                self.ensure(base + 2 + argc.max(th.params) + HEADER + th.locals + th.stack)?;
+                let nt = new_target.unwrap_or(f);
+                let cont = Continuation::ConstructResult;
+                self.push_frame_head(t, &th, base, argc, cont, next, Some(nt));
+                return Ok(None);
+            }
+        }
+        // A native frame: an explicit new.target is held in a handle across `call`,
+        // whose safepoint may move it; without one it is the callee, read back from the
+        // frame.
         let held = match new_target {
             Some(v) => Some(self.heap.new_handle(v)?),
             None => None,

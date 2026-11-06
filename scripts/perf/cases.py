@@ -79,4 +79,16 @@ CASES = [
     ("a.at(-1)", "const a = [1,2,3,4,5,6,7,8];", "a.at(-1);"),
     ("a.lastIndexOf(3, -2)", "const a = [1,2,3,4,5,6,7,8];", "a.lastIndexOf(3, -2);"),
     ("s.substr(2, 3)", "const s = 'hello world';", "s.substr(2, 3);"),
+    # 0236: the construct path
+    ("new C() (empty class)", "class C {}", "new C();"),
+    ("new C(i) (ctor sets field)", "class C { constructor(a) { this.a = a; } }", "new C(i);"),
+    ("new D(i) (derived)", "class B { constructor(a) { this.a = a; } } class D extends B {}", "new D(i);"),
+    ("new E(i) (derived, super(a))", "class B { constructor(a) { this.a = a; } } class E extends B { constructor(a) { super(a); } }", "new E(i);"),
+    ("new F(i) (function ctor)", "function F(a) { this.a = a; }", "new F(i);"),
+    ("new Map()", "", "new Map();"),
+    ("new Set()", "", "new Set();"),
+    ("new Promise(() => {})", "const f = () => {};", "new Promise(f);"),
+    ("new Er('x') (Er = Error)", "const Er = Error;", "new Er('x');"),
+    ("new Array(4)", "", "new Array(4);"),
+    ("new Date(0)", "", "new Date(0);"),
 ]
