@@ -2275,12 +2275,16 @@ impl Exec<'_> {
             }
             CONSTRUCTOR_PROTOTYPE => {
                 let proto = match a0.as_object() {
-                    Some(nt) => match self.heap.lookup_property(nt, crate::heap::atoms::PROTOTYPE) {
-                        Lookup::Found(_, Property::Data { value, .. }) => value.as_object(),
-                        Lookup::Absent => None,
-                        // A getter or a proxy's trap: the builtin's steps.
-                        Lookup::Found(..) | Lookup::Proxy(_) => return Ok(Some(Value::UNDEFINED)),
-                    },
+                    Some(nt) => {
+                        match self.heap.lookup_property(nt, crate::heap::atoms::PROTOTYPE) {
+                            Lookup::Found(_, Property::Data { value, .. }) => value.as_object(),
+                            Lookup::Absent => None,
+                            // A getter or a proxy's trap: the builtin's steps.
+                            Lookup::Found(..) | Lookup::Proxy(_) => {
+                                return Ok(Some(Value::UNDEFINED));
+                            }
+                        }
+                    }
                     None if a0.is_undefined() => None,
                     None => return bad_argument(id),
                 };

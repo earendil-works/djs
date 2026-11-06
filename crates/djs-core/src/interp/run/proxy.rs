@@ -225,7 +225,7 @@ impl Exec<'_> {
             self.set(base + 2 + i, v);
         }
         self.sp = base + 2 + n;
-        self.construct_call(base, n, Some(nt), next, false)
+        self.construct_call(base, n, Some(nt), next)
     }
 
     /// The for-in iterator of an object with a proxy on its prototype chain: the Record

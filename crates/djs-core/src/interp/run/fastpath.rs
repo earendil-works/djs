@@ -131,14 +131,13 @@ impl Exec<'_> {
     /// locals across an inline call); the allocation sets `gc_pending` for the next
     /// safepoint as usual.
     #[inline(never)]
-    /// `new F(a1 .. an)` with new.target F of a constructor with a `new` entry (0236), the
-    /// arguments from stack index `first`: true when it completed, the object at `base`
-    /// and pc at `next`. Declining leaves everything unchanged, as for a call.
+    /// `new F(a1 .. an)` (`F a1 .. an` at `base`) with new.target F of a constructor with
+    /// a `new` entry (0236): true when it completed, the object at `base` and pc at
+    /// `next`. Declining leaves everything unchanged, as for a call.
     pub(super) fn try_fast_new(
         &mut self,
         t: u32,
         base: u32,
-        first: u32,
         argc: u32,
         next: u32,
     ) -> Result<bool, Fault> {
@@ -151,7 +150,7 @@ impl Exec<'_> {
         }
         let mut args = [Value::UNDEFINED; MAX_ARGS];
         for (i, a) in args.iter_mut().enumerate().take(argc as usize) {
-            *a = self.get(first + i as u32);
+            *a = self.get(base + 1 + i as u32);
         }
         let v = match new(self.heap, &args[..argc as usize]) {
             Ok(Some(v)) => v,

@@ -887,15 +887,6 @@ fn set_add(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
     set(heap, this, arg(args, 0), Value::TRUE, ObjectClass::Set)
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn array_push_index() {
-        let run = super::FAST[super::ARRAY_PUSH].run as usize;
-        assert_eq!(run, super::array_push as fn(_, _, _) -> _ as usize);
-    }
-}
-
 // ---- constructors (0236) ---------------------------------------------------------------
 // A construct takes an entry only when new.target is the constructor itself, whose
 // `prototype` is non-writable and non-configurable: GetPrototypeFromConstructor is the
@@ -983,4 +974,13 @@ fn date_new(heap: &mut Heap, args: &[Value]) -> Fast {
     let o = heap.alloc_object(ObjectClass::Date, Some(proto), 1)?;
     heap.set_object_slot(o, 0, Value::number(tv));
     Ok(Some(Value::object(o)))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn array_push_index() {
+        let run = super::FAST[super::ARRAY_PUSH].run as usize;
+        assert_eq!(run, super::array_push as fn(_, _, _) -> _ as usize);
+    }
 }

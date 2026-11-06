@@ -123,10 +123,10 @@ impl Exec<'_> {
         let nt = sup.then(|| self.top(0));
         let info = &OPS[op as usize];
         let next = self.pc + info.size as u32;
-        // A constructor's `new` entry, before anything changes (`construct_call` would
-        // run it after inserting `this`): a host refusal leaves the instruction to `step`.
+        // A constructor's `new` entry, as `construct_with` tries it: a host refusal
+        // leaves the instruction to `step`.
         if !sup && th.flags & self.slow_call_flags & func_flags::FAST != 0 {
-            match self.try_fast_new(t, base, base + 1, argc, next) {
+            match self.try_fast_new(t, base, argc, next) {
                 Ok(true) => {
                     self.fuel -= info.cost.fuel() as i64;
                     return true;
@@ -143,7 +143,7 @@ impl Exec<'_> {
         self.sp -= sup as u32;
         self.insert_this(base, argc, this);
         // Cannot fail: the frame fits and `this` needs no binding.
-        let r = self.construct_call(base, argc, nt, next, false);
+        let r = self.construct_call(base, argc, nt, next);
         debug_assert!(matches!(r, Ok(None)));
         true
     }
