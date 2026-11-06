@@ -771,3 +771,9 @@ topics when the index is next reorganized.
 - D3131: Promise combinators do plain elements in Rust
 - D3132: %RealmIntrinsic reads its name in place
 - D3133: Size of 0232; the size ceiling rises by what it measured
+- D3125: The comparator sort merges in leaves; only the comparisons run in the state machine
+- D3125: The comparator sort merges in leaves; the default sort compares strings in place
+- D3127: Map and Set get/has/set/add are @fast entries
+- D3128: `+` of a string and a primitive, and `arr.push(x)`, finish in the hot loop's decline path
+- D3129: Array.from from %Array% skips Construct; join reads slices in place
+- D3126: Amends D3022: any undefined symbol from our crates' objects is incremental corruption

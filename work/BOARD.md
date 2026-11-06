@@ -7,7 +7,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0235 | Plain-dump fuzz findings on main: 342347 (--lazy), 344676, 208872 (--lazy) | pjr | .worktrees/pjx |
-| 0231 | Perf: sort comparator, Array.from, join/concat/push, Map/Set string keys | parr | .worktrees/parr |
 | 0232b | new Promise / then 4-6x (builtin closure length/name), async state at first await, allSettled/any jobs | pasync | .worktrees/pasync |
 | 0229 | Benchmarks page: djs vs QuickJS versions and monty on codemode workloads; dumps, size, memory (owner) | benchpage | .worktrees/benchpage |
 
@@ -32,7 +31,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | - | pi slim/next 'exits promptly' timing tests (elapsed < 1000 ms) fail under very high load (~180): make them load-independent like 0211 did for the lifetime tests | ready |
 | - | Memory follow-ups (0234): survivor mark for big strings (format change), slice detach in minor GCs, base image 182 KB vs QuickJS ~130 KB realm, GC side tables vs dlmalloc's first segment, shadow stack/static data padding | ready |
 | - | Regexp follow-ups (0233): literal runs as one node (distinct-pattern compile 2x QuickJS), replace 1.14x | ready |
-| - | trim and toLowerCase still ~1.9x QuickJS (own frame + ToString), push 1.75x (0230b, 0231) | ready |
+| - | trim and toLowerCase ~1.9x QuickJS; comparator sort 1.6x (n_call frame + native re-entry); builtins re-intern string-literal keys (Get(o, "length")) on every call; run_hot is sensitive to any code change (4-6% on loops): understand before adding arms (0230b, 0231) | ready |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
 | - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |
@@ -102,6 +101,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0198 | Dump performance: corpus dump p50 1.42 -> 0.43 ms wasm, totals 3,243 -> 610 ms; data cases 2-6x (D2800-D2802) | 429184db (agent dumpperf) |
 | - | base_equals_a_compiled_realm test fixed (8f0fdd72); gate recovers from incremental corruption (D2896, b55180dd); CLI/REPL call states (D2894) | agent pjh |
 | 0220 | Guide rewrite: Using djs / How it works / Reference, JS API, dumps, CLI, pi page; live Run/Continue with debugger pauses at exact positions (D3050-D3054) | 13002add (agent guide) |
+| 0231 | Arrays/strings/collections perf: sort cmp 1.62x, default sort 0.74x, Map/Set 1.3-1.7x, a+b 1.33x, push 1.18x, Array.from 1.25x; gate self-test leg (D3125-D3129) | 0133eb35 (agent parr) |
 | 0232 | Async perf: await 0.16x, async call 0.12x, Promise.all ~1.2x of QuickJS (D3130-D3133) | f037273d (agent pasync) |
 | 0230b | @fast entries: substring/at/repeat/pad/String()/isInteger/toFixed now 1.1-1.5x QuickJS (D3124) | 2648d784 (agent mathfast) |
 | 0233 | Regexp perf: exec 0.78x, test 0.58x, replace 1.14x of QuickJS; compile cache (D3135-D3139) | 51d4a5fe (agent pre) |
