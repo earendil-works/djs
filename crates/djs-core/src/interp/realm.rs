@@ -342,9 +342,12 @@ pub(crate) fn init(heap: &mut Heap) -> Result<(), HeapError> {
     // Function.prototype is itself a function that returns undefined (20.2.3): a
     // builtin closure of %FunctionPrototypeBehavior%, callable once the prelude has
     // installed it (D1840).
-    let function_proto = heap.alloc_object(ObjectClass::BuiltinClosure, Some(object_proto), 2)?;
+    let class = ObjectClass::BuiltinClosure;
+    let function_proto = heap.alloc_object(class, Some(object_proto), class.slots())?;
     let behavior = const { crate::bytecode::intrinsics::const_id("FunctionPrototypeBehavior") };
     heap.set_object_slot(function_proto, 0, Value::int(i32::from(behavior)));
+    heap.set_object_slot(function_proto, 1, Value::UNDEFINED);
+    heap.set_object_slot(function_proto, 2, Value::UNDEFINED);
     set(
         heap,
         Intrinsic::FunctionProto,

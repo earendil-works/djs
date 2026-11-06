@@ -214,7 +214,8 @@ impl ObjectClass {
             | ObjectClass::Record
             | ObjectClass::RawJSON => 0,
             ObjectClass::Promise => 4,
-            ObjectClass::BuiltinClosure => 2,
+            // The builtin, its data and its `length` (D3155).
+            ObjectClass::BuiltinClosure => 3,
             ObjectClass::Function => 0,
             ObjectClass::Array | ObjectClass::HostFunction => 1,
             // The stack trace (D1971); a DOMException has two more (D1840).
@@ -1836,6 +1837,13 @@ impl Heap {
     /// The value of a closure's lazy `length` or `name` (D2445): the template's `LENGTH`,
     /// the string of its `NAME` atom (empty for none).
     fn lazy_value(&self, o: Obj, loc: Loc) -> Value {
+        // A builtin closure's `length` is its slot 2, its `name` empty (D3155).
+        if self.object_class(o) == ObjectClass::BuiltinClosure {
+            if loc == Loc::LazyLength {
+                return self.object_slot(o, 2);
+            }
+            return Value::string(self.atom_str_value(atoms::EMPTY).expect("the empty atom"));
+        }
         let t = self.closure_template(o);
         if loc == Loc::LazyLength {
             return Value::int(self.arena().get(t, FuncTemplate::LENGTH) as i32);
@@ -1858,6 +1866,16 @@ impl Heap {
         }
         self.set_obj_flag(o, OBJ_LAZY, true);
         true
+    }
+
+    /// Gives builtin closure `o` (no stored keys yet) its `length` (slot 2) and empty
+    /// `name` as lazy properties (D3155), as defining them non-writable, non-enumerable
+    /// and configurable before any other key would.
+    pub(crate) fn set_lazy_builtin_closure_props(&mut self, o: Obj) {
+        debug_assert!(
+            self.object_class(o) == ObjectClass::BuiltinClosure && self.prop_slots(o) == 0
+        );
+        self.set_obj_flag(o, OBJ_LAZY, true);
     }
 
     /// Stores a closure's lazy `length` and `name` (D2445) as ordinary properties, first

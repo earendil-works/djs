@@ -362,15 +362,13 @@ pub(super) fn new_builtin_closure(
         return Ok(None);
     };
     let proto = intrinsic_obj(heap, Intrinsic::FunctionProto);
-    let f = heap.alloc_object(ObjectClass::BuiltinClosure, Some(proto), 2)?;
+    let class = ObjectClass::BuiltinClosure;
+    let f = heap.alloc_object(class, Some(proto), class.slots())?;
     heap.set_object_slot(f, 0, Value::int(i32::from(target)));
     heap.set_object_slot(f, 1, data);
-    let ro = PropFlags::CONFIGURABLE;
-    let d = PropertyDescriptor::data(Value::int(length), ro);
-    heap.define_own_property(f, atoms::LENGTH, &d)?;
-    let empty = Value::string(heap.atom_string(atoms::EMPTY)?);
-    let d = PropertyDescriptor::data(empty, ro);
-    heap.define_own_property(f, atoms::NAME, &d)?;
+    heap.set_object_slot(f, 2, Value::int(length));
+    // `length` and `name` (empty) as lazy properties: no defines, no values block (D3155).
+    heap.set_lazy_builtin_closure_props(f);
     Ok(Some(f))
 }
 
