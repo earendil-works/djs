@@ -1158,7 +1158,6 @@ impl Exec<'_> {
                 Some(v) => v,
                 None => return bad_argument(id),
             },
-            ERROR_STACK => realm::error_stack_raw(self.heap, a0),
             STACK_TRACE_VALUE => {
                 // The caller's frames (the builtin calling this is left out), below the
                 // topmost call of `a0` if it is a function (D2010).
@@ -1172,7 +1171,6 @@ impl Exec<'_> {
                 realm::set_error_stack(self.heap, o, v)?;
                 Value::UNDEFINED
             }
-            IS_PENDING_STACK => Value::bool(super::stack::is_pending_stack(self.heap, a0)),
             SET_ERROR_STACK => {
                 let Some(o) = a0.as_object() else {
                     return bad_argument(id);
@@ -2273,6 +2271,9 @@ impl Exec<'_> {
                     None => return bad_argument(id),
                 }
             }
+            // RecordStack's reads (every new error).
+            ERROR_STACK => realm::error_stack_raw(self.heap, a0),
+            IS_PENDING_STACK => Value::bool(super::stack::is_pending_stack(self.heap, a0)),
             CONSTRUCTOR_PROTOTYPE => {
                 let proto = match a0.as_object() {
                     Some(nt) => {

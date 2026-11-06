@@ -70,6 +70,8 @@ pub(super) const PURE_LEAVES: &[&str] = &[
     "ErrorCreate",
     "DateCreate",
     "NewBuiltinClosure",
+    "ErrorStack",
+    "IsPendingStack",
     "IsCallable",
     "IsConstructor",
     "IsArray",
