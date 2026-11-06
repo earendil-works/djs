@@ -777,3 +777,5 @@ topics when the index is next reorganized.
 - D3128: `+` of a string and a primitive, and `arr.push(x)`, finish in the hot loop's decline path
 - D3129: Array.from from %Array% skips Construct; join reads slices in place
 - D3126: Amends D3022: any undefined symbol from our crates' objects is incremental corruption
+- D3150: A block's dump code and late bindings go in the order what they read needs
+- D3151: A subclass outside its base's factory names the base by its location
