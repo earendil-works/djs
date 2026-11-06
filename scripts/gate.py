@@ -303,9 +303,11 @@ def jobs():
         J("js tests", f"DJS_WASM=$PWD/{wasm} DJS_WASM_NODUMP=$PWD/{nodump} node --test js/test/*.test.ts",
           cls="nodocs", needs=["build:wasm", "build:wasm-nodump"]),
         # 0229: the codemode workload set of the benchmarks page runs on djs and gives node's
-        # results, with a dump and a load at every idle point (D3113): about 2 s.
+        # results, with a dump and a load at every idle point (D3113); 0238: every payload of
+        # the bridge benchmark reads back as it went in (D3165): about 4 s.
         J("codemode workloads", f"DJS_WASM=$PWD/{nodump} DJS_DUMP_WASM=$PWD/{wasm}"
-          " node js/bench/engines/run.ts --quick --engines djs",
+          " node js/bench/engines/run.ts --quick --engines djs"
+          " && node js/bench/engines/bridge.ts --quick --engines djs",
           cls="nodocs", needs=["build:wasm", "build:wasm-nodump"]),
         # 0228: the npm package stays publishable (D3109): it builds (tsc, with the
         # declarations), packs, and the packed tarball's smoke test runs in node. The gate's

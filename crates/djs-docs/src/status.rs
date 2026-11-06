@@ -404,9 +404,12 @@ pub fn generate(st: &Status, what: &str, pi: bool) -> Result<String, String> {
         "recorded" => Ok(recorded(st, pi)),
         "engines-size" | "engines-startup" | "engines-run" | "engines-memory" | "engines-dumps"
         | "engines-ops" => engines(st, what),
+        "bridge-in" | "bridge-out" | "bridge-rate" | "bridge-memory" | "bridge-e2e" => {
+            bridge(st, what)
+        }
         _ => Err(format!(
-            "gen:status {what}: expected conformance, speed, size, inventory, recorded or \
-             engines-size|startup|run|memory|dumps|ops"
+            "gen:status {what}: expected conformance, speed, size, inventory, recorded, \
+             engines-size|startup|run|memory|dumps|ops or bridge-in|out|rate|memory|e2e"
         )),
     }
 }
@@ -824,6 +827,179 @@ fn engines(st: &Status, what: &str) -> Result<String, String> {
     Ok(s)
 }
 
+/// The payloads of js/bench/engines/bridge.ts, in the page's order: key, label.
+const BRIDGE_PAYLOADS: [(&str, &str); 11] = [
+    ("args", "call arguments"),
+    ("json-1k", "JSON, 1 KB"),
+    ("json-100k", "JSON, 100 KB"),
+    ("json-1m", "JSON, 1 MB"),
+    ("json-10m", "JSON, 10 MB"),
+    ("text-1m", "ASCII, 1 MB"),
+    ("text-10m", "ASCII, 10 MB"),
+    ("unicode-1m", "non-ASCII, 1 MB"),
+    ("numbers", "100k numbers"),
+    ("bytes-1m", "bytes, 1 MiB"),
+    ("nested", "nested 100 deep"),
+];
+/// Its end-to-end cases: key, label.
+const BRIDGE_CASES: [(&str, &str); 3] = [
+    ("field-1m", "one field of 1 MB"),
+    ("edit-1m", "edit a 1 MB file"),
+    ("calls-1000", "1,000 small calls"),
+];
+
+/// A bridge time: three significant digits, down to microseconds.
+fn bridge_ms(v: f64) -> String {
+    crate::chart::short(v)
+}
+
+/// `gen:status bridge-*`: the benchmarks page's tables of passing data through the bridge.
+fn bridge(st: &Status, what: &str) -> Result<String, String> {
+    let mut keys: Vec<String> = vec!["engines/bridge/load".into()];
+    let mut get = |k: String| -> Result<f64, String> {
+        let v = st.num(&k).ok_or_else(|| {
+            format!(
+                "gen:status {what}: no {k} in tests/scores/status.tsv (scripts/status.py bridge)"
+            )
+        })?;
+        keys.push(k);
+        Ok(v)
+    };
+    let header = |first: &str, extra: &str| {
+        let mut s = format!("| {first} |{extra}");
+        for (_, label) in ENGINES {
+            let _ = write!(s, " {label} |");
+        }
+        s.push_str("\n| --- |");
+        if !extra.is_empty() {
+            s.push_str(" ---: |");
+        }
+        s.push_str(&" ---: |".repeat(ENGINES.len()));
+        s.push('\n');
+        s
+    };
+    let (mut s, note) = match what {
+        "bridge-in" | "bridge-out" => {
+            let dir = &what["bridge-".len()..];
+            let mut s = header("payload", " size |");
+            let mut logs = [0.0f64; ENGINES.len()];
+            let mut n = 0;
+            for (p, label) in BRIDGE_PAYLOADS {
+                let bytes = get(format!("engines/bridge/payload/{p}/bytes"))?;
+                let _ = write!(s, "| {label} | {} |", kb(bytes));
+                let mut row = [None; ENGINES.len()];
+                for (i, (e, _)) in ENGINES.iter().enumerate() {
+                    // An engine that cannot take the payload has no number.
+                    row[i] = get(format!("engines/bridge/{e}/{p}/{dir}-ms")).ok();
+                    match row[i] {
+                        Some(v) => {
+                            let _ = write!(s, " {} |", bridge_ms(v));
+                        }
+                        None => s.push_str(" fails |"),
+                    }
+                }
+                if row.iter().all(Option::is_some) {
+                    n += 1;
+                    for i in 0..ENGINES.len() {
+                        logs[i] += (row[i].unwrap() / row[0].unwrap()).ln();
+                    }
+                }
+                s.push('\n');
+            }
+            s.push_str("| relative to djs | |");
+            for l in logs {
+                let _ = write!(s, " {:.1}× |", (l / n.max(1) as f64).exp());
+            }
+            s.push('\n');
+            (
+                s,
+                if dir == "in" {
+                    "Milliseconds per value put into a fresh VM (median), each engine's best path; the last row is the geometric mean of each engine's time over djs's"
+                } else {
+                    "Milliseconds per value read out of a VM (median), each engine's best path; the last row is the geometric mean of each engine's time over djs's"
+                },
+            )
+        }
+        "bridge-rate" => {
+            let cols = [
+                ("json-1m", "JSON 1 MB"),
+                ("json-10m", "JSON 10 MB"),
+                ("text-10m", "ASCII 10 MB"),
+                ("unicode-1m", "non-ASCII 1 MB"),
+                ("bytes-1m", "bytes 1 MiB"),
+            ];
+            let mut s = String::from("| engine |");
+            for (_, l) in cols {
+                let _ = write!(s, " {l}, in | out |");
+            }
+            s.push_str("\n| --- |");
+            s.push_str(&" ---: | ---: |".repeat(cols.len()));
+            s.push('\n');
+            for (e, label) in ENGINES {
+                let _ = write!(s, "| {label} |");
+                for (p, _) in cols {
+                    let bytes = get(format!("engines/bridge/payload/{p}/bytes"))?;
+                    for dir in ["in", "out"] {
+                        let ms = get(format!("engines/bridge/{e}/{p}/{dir}-ms"))?;
+                        let _ = write!(s, " {} |", thousands((bytes / 1e3 / ms).round() as usize));
+                    }
+                }
+                s.push('\n');
+            }
+            (s, "MB per second: the payload's size over the median time")
+        }
+        "bridge-memory" => {
+            let mut s = String::from(
+                "| engine | idle | JSON 10 MB in | and out | ASCII 10 MB in | and out |\n| --- | ---: | ---: | ---: | ---: | ---: |\n",
+            );
+            let mib = |v: f64| format!("{:.1}", v / 1048576.0);
+            for (e, label) in ENGINES {
+                let k = |m: &str| format!("engines/bridge/{e}/{m}");
+                let _ = writeln!(
+                    s,
+                    "| {label} | {} | {} | {} | {} | {} |",
+                    mib(get(k("idle-memory"))?),
+                    mib(get(k("json-10m/in-memory"))?),
+                    mib(get(k("json-10m/out-memory"))?),
+                    mib(get(k("text-10m/in-memory"))?),
+                    mib(get(k("text-10m/out-memory"))?)
+                );
+            }
+            (
+                s,
+                "Linear memory, MiB: of a fresh VM, after putting the value in, and after reading it back out",
+            )
+        }
+        _ => {
+            let mut s = header("case", "");
+            for (c, label) in BRIDGE_CASES {
+                let _ = write!(s, "| {label} |");
+                for (e, _) in ENGINES {
+                    let _ = write!(
+                        s,
+                        " {} |",
+                        bridge_ms(get(format!("engines/bridge/{e}/e2e/{c}-ms"))?)
+                    );
+                }
+                s.push('\n');
+            }
+            (
+                s,
+                "Milliseconds per run in a fresh VM (median): compiling and running the script, its tool calls through each engine's host function",
+            )
+        }
+    };
+    let load = st.num("engines/bridge/load").unwrap_or(f64::NAN);
+    let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
+    s.push('\n');
+    s += &wrap(
+        &format!("{note}; {}, load {load:.1}.", provenance(st, &keys)),
+        "",
+        "",
+    );
+    Ok(s)
+}
+
 /// Each engine's palette color in the charts (chart.rs), in `ENGINES` order: djs blue,
 /// the QuickJS builds warm colors and teal, monty green.
 const ENGINE_COLORS: [usize; 7] = [0, 3, 1, 2, 5, 6, 4];
@@ -1019,6 +1195,70 @@ pub fn chart(st: &Status, what: &str) -> Result<Option<Chart>, String> {
                         format: short,
                     },
                 ],
+            );
+            (alt, svg)
+        }
+        "bridge-in" | "bridge-out" => {
+            let dir = &what["bridge-".len()..];
+            let groups: Vec<&str> = BRIDGE_PAYLOADS.iter().map(|(_, l)| *l).collect();
+            let values = BRIDGE_PAYLOADS
+                .iter()
+                .map(|(p, _)| {
+                    ENGINES
+                        .iter()
+                        .map(|(e, _)| st.num(&format!("engines/bridge/{e}/{p}/{dir}-ms")))
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            if values.iter().flatten().all(Option::is_none) {
+                return Err(format!(
+                    "gen:status {what}: no engines/bridge/* in tests/scores/status.tsv"
+                ));
+            }
+            let alt = if dir == "in" {
+                "Putting a value into the VM, per payload and engine, in ms on a logarithmic scale"
+            } else {
+                "Reading a value out of the VM, per payload and engine, in ms on a logarithmic scale"
+            };
+            let svg = columns(
+                &Meta {
+                    name: &name,
+                    title: alt,
+                    desc: "Grouped columns: one group per payload, one column per engine, lower is better. The table below has the exact numbers.",
+                },
+                "ms",
+                &groups,
+                &series,
+                &values,
+                true,
+            );
+            (alt, svg)
+        }
+        "bridge-e2e" => {
+            let panels = BRIDGE_CASES
+                .iter()
+                .map(|(c, label)| {
+                    Ok(Panel {
+                        title: label,
+                        values: ENGINES
+                            .iter()
+                            .map(|(e, _)| get(format!("engines/bridge/{e}/e2e/{c}-ms")).map(Some))
+                            .collect::<Result<Vec<_>, String>>()?,
+                        log: true,
+                        format: short,
+                    })
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            let alt =
+                "Whole runs that pass data through a tool, per engine, in ms on logarithmic scales";
+            let svg = bars(
+                &Meta {
+                    name: &name,
+                    title: alt,
+                    desc: "Horizontal bars per engine, one panel per case: a tool's 1 MB result of which the script reads one field, a 1 MB file read, edited and written back, and a thousand small calls. Lower is better. The table below has the exact numbers.",
+                },
+                &rows,
+                &panels,
             );
             (alt, svg)
         }

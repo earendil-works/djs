@@ -41,6 +41,9 @@ usage:
   scripts/status.py ops               js/bench/engines/ops.ts three times (djs and the two QuickJS
                                       releases): per operation djs's time and the best QuickJS
                                       build's (medians); `engines` runs it too
+  scripts/status.py bridge            js/bench/engines/bridge.ts three times: per payload and engine
+                                      the time and memory of passing it in and out, per end-to-end
+                                      case the run time (medians); `engines` runs it too
   scripts/status.py all               size, speed, pi, startup, dumps, bounds, heap, engines, bench
   scripts/status.py set [--at WHEN] KEY VALUE...
                                       record values measured elsewhere, for example
@@ -450,6 +453,7 @@ def engines():
         v = median(xs)
         new[k] = round(v, 1) if k == "engines/load" else round(v, 3) if k.endswith("-ms") else int(v)
     new.update(ops())
+    new.update(bridge())
     return new
 
 
@@ -478,6 +482,45 @@ def ops():
             vals.setdefault(f"{k}/djs", []).append(row[0])
             vals.setdefault(f"{k}/quickjs", []).append(min(row[1:]))
     return {k: round(median(xs), 1 if k.endswith("load") else 3) for k, xs in vals.items()}
+
+
+def bridge():
+    """`engines/bridge/...` keys from three runs of js/bench/engines/bridge.ts (medians):
+    per engine and payload `in-ms`, `out-ms`, `in-memory`, `out-memory` (each its best
+    path's), per case `e2e/<case>-ms`, the payloads' sizes and the load."""
+    import json
+    f = os.path.join(ROOT, "work/scratch/status-engines/bridge.json")
+    os.makedirs(os.path.dirname(f), exist_ok=True)
+    vals = {}
+
+    def put(k, v):
+        vals.setdefault(k, []).append(v)
+    slug = lambda name: re.sub(r"-$", "", re.sub(r"[^a-z0-9]+", "-", name.lower()))
+    for _ in range(3):
+        r = subprocess.run(["node", "js/bench/engines/bridge.ts", "--json", f], cwd=ROOT, capture_output=True, text=True)
+        # Exit 1: a value read back differs, or a case's result: a broken comparison.
+        if r.returncode != 0:
+            sys.exit(f"status.py: js/bench/engines/bridge.ts failed:\n{r.stdout[-3000:]}\n{r.stderr[-3000:]}")
+        run = json.load(open(f))
+        put("engines/bridge/load", run["load"])
+        for p in run["payloads"]:
+            put(f"engines/bridge/payload/{p['name']}/bytes", p["bytes"])
+        for e in run["engines"]:
+            k = f"engines/bridge/{slug(e['name'])}"
+            put(f"{k}/idle-memory", e["idleMemory"])
+            for p, cells in e["payloads"].items():
+                if cells is None:
+                    continue
+                for d in ("in", "out"):
+                    put(f"{k}/{p}/{d}-ms", cells[d]["ms"])
+                    put(f"{k}/{p}/{d}-memory", cells[d]["memory"])
+            for c, cell in e["e2e"].items():
+                put(f"{k}/e2e/{c}-ms", cell["ms"])
+    new = {}
+    for k, xs in vals.items():
+        v = median(xs)
+        new[k] = round(v, 1) if k.endswith("load") else round(v, 4) if k.endswith("-ms") else int(v)
+    return new
 
 
 def main():
@@ -516,6 +559,9 @@ def main():
     elif args[0] == "ops":
         build()
         save(rows, ops())
+    elif args[0] == "bridge":
+        subprocess.run([os.path.join(ROOT, "scripts/bench-engines.sh"), "--setup"], cwd=ROOT, check=True)
+        save(rows, bridge())
     elif args[0] == "all":
         save(rows, size())
         save(rows, speed(3))
