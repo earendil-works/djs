@@ -801,54 +801,19 @@ impl G<'_, '_> {
             }
         }
         let mut lines = early;
-        // The dump's code before the late bindings, but a line whose evaluation reads one (a member
-        // of a scope the frame shares: `Object.assign($dump.s8, { D3 })` of a class K
-        // declares late) after it, and the lines after that one with it (0215). Not where
-        // a binding it would follow reads a factory that it or a later line fills (the
-        // late bindings wait for that code; the names err on the side of too many).
-        let mut after_late: Vec<Option<usize>> = Vec::new();
-        let mut need = None;
-        for (k, l) in content.iter().enumerate() {
-            if need.is_none() && !late_names.is_empty() {
-                let names = super::plain::eager_names(l);
-                let last = late_names.iter().rposition(|n| names.contains(&n.0));
-                if let Some(last) = last {
-                    let waits = late_names[..=last]
-                        .iter()
-                        .any(|(_, v)| waits_for(v, &content[k..]));
-                    if !waits {
-                        need = Some(last);
+        // The dump's code and the late bindings, in an order where each binding comes after
+        // the code that makes what it reads and a line of code after the bindings it reads
+        // (D3150).
+        let shown = content.iter().any(|l| !l.is_empty());
+        let mut late: Vec<Option<P>> = late.into_iter().map(Some).collect();
+        for item in block_order(&content, &late_names) {
+            match item {
+                Ok(k) if shown => lines.push_out(P::S(content[k].clone())),
+                Ok(_) => {}
+                Err(i) => {
+                    if let Some(p) = late[i].take() {
+                        lines.push_out(p);
                     }
-                }
-            } else if let Some(n) = need
-                && !late_names.is_empty()
-            {
-                // (Further than the lines before it only where nothing it would follow
-                // waits for it; at `n` the first line's check holds for it.)
-                let names = super::plain::eager_names(l);
-                if let Some(last) = late_names.iter().rposition(|x| names.contains(&x.0))
-                    && last > n
-                    && !late_names[..=last]
-                        .iter()
-                        .any(|(_, v)| waits_for(v, &content[k..]))
-                {
-                    need = Some(last);
-                }
-            }
-            after_late.push_out(need);
-        }
-        if content.iter().any(|l| !l.is_empty()) {
-            for (l, n) in content.iter().zip(&after_late) {
-                if n.is_none() {
-                    lines.push_out(P::S(l.clone()));
-                }
-            }
-        }
-        for (i, p) in late.into_iter().enumerate() {
-            lines.push_out(p);
-            for (l, n) in content.iter().zip(&after_late) {
-                if *n == Some(i) {
-                    lines.push_out(P::S(l.clone()));
                 }
             }
         }
@@ -3187,6 +3152,84 @@ fn declared_names(lines: &[String]) -> Vec<&str> {
                 }
             }
         }
+    }
+    out
+}
+
+/// The order of a block's dump code `content` (`Ok(k)`) and its late bindings (`Err(i)`,
+/// name and value each): as written, code first, where nothing below holds it back
+/// (0215, D3150). A binding comes after the line that fills a factory member it reads
+/// ([`waits_for`]), the line that declares a name it reads, and a binding whose name it
+/// reads; a line of code after the lines before it and, where that can be, after the
+/// bindings whose names it reads (those names err on the side of too many: a function's
+/// own name, a parameter; where nothing can come next, they give way, and then the order
+/// as written).
+fn block_order(content: &[String], late: &[(String, String)]) -> Vec<Result<usize, usize>> {
+    let (c, l) = (content.len(), late.len());
+    if l == 0 {
+        return (0..c).map(Ok).collect();
+    }
+    let declared: Vec<Vec<&str>> = content
+        .iter()
+        .map(|x| declared_names(core::slice::from_ref(x)))
+        .collect();
+    // A binding's hard predecessors: lines of code and other bindings.
+    let mut late_after: Vec<(Vec<usize>, Vec<usize>)> = Vec::new();
+    for (i, (_, v)) in late.iter().enumerate() {
+        let names = super::plain::eager_names(v);
+        let lines: Vec<usize> = (0..c)
+            .filter(|&k| {
+                waits_for(v, core::slice::from_ref(&content[k]))
+                    || declared[k].iter().any(|d| names.iter().any(|n| n == d))
+            })
+            .collect();
+        let binds: Vec<usize> = (0..l)
+            .filter(|&j| j != i && names.contains(&late[j].0))
+            .collect();
+        late_after.push_out((lines, binds));
+    }
+    // A line's soft predecessors: the bindings whose names it reads.
+    let reads: Vec<Vec<usize>> = content
+        .iter()
+        .map(|x| {
+            let names = super::plain::eager_names(x);
+            (0..l).filter(|&j| names.contains(&late[j].0)).collect()
+        })
+        .collect();
+    let mut done_c = alloc::vec![false; c];
+    let mut done_l = alloc::vec![false; l];
+    let mut out = Vec::with_capacity(c + l);
+    let mut next_c = 0;
+    while out.len() < c + l {
+        let late_ready = |i: usize, done_c: &[bool], done_l: &[bool]| {
+            !done_l[i]
+                && late_after[i].0.iter().all(|&k| done_c[k])
+                && late_after[i].1.iter().all(|&j| done_l[j])
+        };
+        // (Strict, then without the soft predecessors, then as written.)
+        let mut pick = None;
+        for soft in [true, false] {
+            if next_c < c && (!soft || reads[next_c].iter().all(|&j| done_l[j])) {
+                pick = Some(Ok(next_c));
+                break;
+            }
+            if let Some(i) = (0..l).find(|&i| late_ready(i, &done_c, &done_l)) {
+                pick = Some(Err(i));
+                break;
+            }
+        }
+        let pick = pick.unwrap_or_else(|| match (0..l).find(|&i| !done_l[i]) {
+            Some(i) if next_c >= c => Err(i),
+            _ => Ok(next_c),
+        });
+        match pick {
+            Ok(k) => {
+                done_c[k] = true;
+                next_c += 1;
+            }
+            Err(i) => done_l[i] = true,
+        }
+        out.push_out(pick);
     }
     out
 }

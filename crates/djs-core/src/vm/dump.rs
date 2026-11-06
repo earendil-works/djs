@@ -948,6 +948,9 @@ struct Dumper<'a> {
     fn_protos: Index,
     /// The classes of the factory being written, by their names inside it.
     class_locals: Vec<(usize, String)>,
+    /// The classes of the scope group whose factory is being written (`class_locals` are
+    /// theirs only, 0235).
+    group_classes: Vec<usize>,
     /// The private names of the dumped classes: symbol cell, class node, name, and
     /// whether the name is ambiguous in its class.
     private_names: Vec<(u32, usize, String, bool)>,
@@ -1034,6 +1037,7 @@ impl<'a> Dumper<'a> {
             class_texts: Vec::new(),
             fn_protos: Index::default(),
             class_locals: Vec::new(),
+            group_classes: Vec::new(),
             private_names: Vec::new(),
             patches: Vec::new(),
             finals: Vec::new(),
@@ -3506,6 +3510,7 @@ impl<'a> Dumper<'a> {
                 .filter(|b| d.nodes[c].edges.contains(b))
                 .collect()
         };
+        self.group_classes = classes.iter().map(|&j| closures[j]).collect();
         for &j in &classes {
             let c = closures[j];
             if fn_scope[j] != 0 {
@@ -3811,6 +3816,7 @@ impl<'a> Dumper<'a> {
         self.out.push_out(text);
         self.skeleton.push_out(None);
         self.class_locals.clear();
+        self.group_classes.clear();
         for &b in &boxes {
             self.nodes[b].state = State::Done;
             if self.nodes[b].frame_box {
@@ -3870,7 +3876,10 @@ impl<'a> Dumper<'a> {
         {
             return src;
         }
-        let pe = match self.node_of(parent).and_then(|p| {
+        // (A base's local only for a class of the same factory, written there: another
+        // class made meanwhile is written outside it, 0235.)
+        let in_group = self.group_classes.contains(&n);
+        let pe = match self.node_of(parent).filter(|_| in_group).and_then(|p| {
             self.class_locals
                 .iter()
                 .find(|(c, _)| *c == p)

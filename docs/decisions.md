@@ -10455,6 +10455,34 @@ P, async key(…) {…} }).key` with P its home's prototype, as a continuation's
 original home isn't followed, as with D2871. Where P can't be written yet, the dump refuses.
 Corpus codemode/object-method-super.js; tests/dump/v2/supers.src.js.
 
+## D3150: A block's dump code and late bindings go in the order what they read needs
+date: 2026-11-07 · by: pjr · issue: 0235
+Plain-dump fuzzer seeds 342347 (found with `--lazy`, also without), 344676 and 208872 crashed
+at load. All three were D3025/D3026's placement of a block's dump code around K's late
+bindings: one `Object.assign($dump.sN, { … })` line can fill a member a late binding
+reads (`const f33 = $dump.s8.f33`) and also read a later late binding (`D39`). Cutting the
+late list once can't satisfy both, and a function's own name counted as a read (`{ ag42:
+async function* ag42() {…} }`) blocked the move. Now the block's lines are ordered by a
+small list schedule. Hard edges: a late binding comes after the code line that fills a
+factory member it reads (`$dump.F.K`), after the line that declares a name it reads, and
+after another late binding whose name it reads; code lines keep their order. Soft edge: a
+code line comes after the late bindings whose names it reads. Each step takes the first item
+in the written order (code, then the late bindings) whose edges hold; when none does, the
+soft edges give way, then the order as written. Where nothing constrains them, late
+bindings stay in declaration order after the code, as before. In the corpus only one dump
+changed (a binding now precedes a line it doesn't need), and it runs the same.
+
+## D3151: A subclass outside its base's factory names the base by its location
+date: 2026-11-07 · by: pjr · issue: 0235
+Reduced from seed 342347: a class that captures nothing (`class D4 extends C3 {}`), whose
+base is a class of a scope a frame shares (written in K's block as `let $c29 = class C3`),
+was written as top-level data `((C3) => class D4 extends C3 {})($c29)`. It read the base's
+local, which exists only inside K's block. The local is meant for the classes of the
+factory being written, but any class rendered meanwhile took it. Now only the group's own
+classes use it. Another class names the base by its location (`$dump.s8.C3`), and the plain
+writer then makes it after the block code that publishes the base, in K's callback.
+
+
 ## D3041: Suspension maps travel from one VM's dump to the next VM
 date: 2026-11-06 · by: lazy · issue: 0219
 A dump compiles the suspension maps of the scripts its activations run in (pjr: ~30% of a
