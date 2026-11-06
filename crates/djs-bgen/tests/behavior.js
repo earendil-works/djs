@@ -291,6 +291,9 @@ const I = {
     installed[target + "." + String(key)] = { v, attrs };
   },
   RealmIntrinsic: (name) => globalThis[name.replace(/Prototype$/, "")].prototype,
+  // (0236) Undefined sends every other case to GetPrototypeFromConstructorSlow, whose
+  // steps answer the same.
+  ConstructorPrototype: (nt, name) => (nt === undefined ? globalThis[name.replace(/Prototype$/, "")].prototype : undefined),
   ErrorCreate: (proto) => Object.setPrototypeOf(new Error(), proto),
   // DOMException, atob, btoa (0084): qjs has them natively.
   DOMExceptionCreate: (proto, name, message) => Object.setPrototypeOf(new DOMException(message, name), proto),
