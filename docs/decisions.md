@@ -11436,3 +11436,69 @@ exactly that. It buys (wasm instructions per op, quickjs 2026-06-04 in brackets)
 (7.4 k), allSettled of 20 662 k -> 233 k (333 k), any of 20 rejected 544 k -> 285 k (279 k).
 The bytes: seven @fast entries (D3156), the allSettled/any element jobs (D3158), the async
 state at the first await (D3157), four well-known atoms.
+
+## D3160: The construct path's instructions finish outside `step`
+date: 2026-11-06 · by: pnew · issue: 0236
+Every instruction of `new` left run_hot for `step`, ~1000 wasm instructions each before its
+own work (a function returning `new.target` cost 2.1 k vs 1.0 k for one returning 1); `new C()`
+took four such trips, a derived constructor eight or more. `Exec::decline_construct`
+(interp/run/construct.rs), called from `decline_fast` for its opcodes only (`construct::takes`,
+so other declines pay no call), completes: `construct`, `super_call` and `super_call_spread` of
+a bytecode function or builtin constructor whose frame fits the stack, the return into a
+ConstructResult frame, `special_object` this/new.target/active function, `check_ctor`,
+`check_this`, `check_this_uninit`, `check_ctor_return`, `get_super` and `rest`. Each does what
+`step` does (fuel, pc, stack including the slots above sp, safepoints, the retry marker) or
+changes nothing and `step` runs it (an error, a `prototype` getter, a stack that must grow, the
+heap cap); hot_loop_is_invisible now runs classes, derived classes and the builtin
+constructors. A cheap decline still costs ~300. Tried and dropped: these arms in run_hot's
+body (arrays +1.6%, tight +0.8% instructions), and running on through following trivial ops in
+`decline_construct` (slower: they are faster in run_hot). The compiler returns the checked
+`this` directly when a derived constructor's body falls off its end; the epilogue
+(`check_ctor_return`) is emitted only when a `return` jumps to it.
+
+## D3161: A construct's frame holds its new.target from the entry safepoint on
+date: 2026-11-06 · by: pnew · issue: 0236
+`construct_call` pushes a bytecode frame with FLAG_CONSTRUCT and new.target in its header
+(`push_frame_head` takes it) before the entry safepoint, instead of patching them after `call`
+and holding an explicit new.target in a handle across it; the handle remains for native frames.
+`construct_with` is split into `construct_this` (the new `this`, or undefined for builtins and
+derived constructors, `None` for a `prototype` getter or proxy) and `insert_this`, which
+`decline_construct` shares.
+
+## D3162: %ConstructorPrototype; constructor allocations are pure leaves
+date: 2026-11-06 · by: pnew · issue: 0236
+GetPrototypeFromConstructor (a frame plus %Get with an interned key: 2.7 k of `new Map()`'s
+10 k) is an inlined helper around the new pure leaf `%ConstructorPrototype(newTarget,
+fallback)`: newTarget's data `prototype` if an object, else the realm's `fallback` prototype,
+undefined when a getter or proxy is on the way, then `GetPrototypeFromConstructorSlow` (the old
+steps, `@intrinsic`). It replaces D3156's `@fast` entry, which still cost a decline. The hot
+loop runs it in place; so are CollectionCreate, PromiseCreate, ErrorCreate, DateCreate,
+NewBuiltinClosure (allocations only) and ErrorStack/IsPendingStack (RecordStack's reads), in
+`constructor_leaf`, out of line of `pure_leaf` so its string leaves stay inlined.
+INTRINSICS_HASH changes.
+
+## D3163: `new` entries for Array, Map, Set and Date
+date: 2026-11-06 · by: pnew · issue: 0236
+`FastFn::new` is a constructor's entry for `new F(args)` with new.target F (whose `prototype` is
+non-writable and non-configurable, so the prototype is the realm's without a lookup): `new
+Map()`/`new Set()` with no or a nullish argument, `Array(...)`/`new Array(...)` (a valid length
+or the elements; an invalid length declines), `new Date()` and `new Date(v)` for a Number, a
+string or a Date. `construct_with` and `decline_construct` try it before `this` is inserted,
+both, so the stack slots left above sp are the same either way (else the images differ).
+Calls of Map/Set/Date run the builtin (`no_call`). Measured (wasm instructions, quickjs-wasi
+in brackets): new Map() 7.4 k -> 2.1 k (2.9 k), new Array(4) 12.6 k -> 1.7 k (3.4 k), new
+Date(0) 14.8 k -> 1.7 k (2.9 k).
+
+## D3164: Size of 0236; the size ceiling rises by what it measured
+date: 2026-11-06 · by: pnew · issue: 0236 · approved: coordinator
+Measured (scripts/build-wasm.sh, main cc33e7d9 vs the branch): shipped 424,091 -> 426,806 gzip
+(+2,715; raw 973,945 -> 980,158), slim 357,805 -> 360,485 (+2,680). ceiling_gzip 424,077 ->
+426,806, slim_ceiling_gzip 357,792 -> 360,485 (1.489x quickjs-wasi). Code bytes:
+decline_construct +2.3 KB raw, the construct_call/construct_this/insert_this split +1.2 KB, the
+`new` entries +1.5 KB (Date 825 B), constructor leaves +0.2 KB, ConstructorPrototype +0.3 KB.
+It buys (wasm instructions, main -> branch, quickjs-wasi): new C() 4.3 k -> 3.2 k (3.2 k),
+new C(i) 5.0 k -> 3.9 k (4.2 k), new F(i) 4.0 k -> 3.1 k (3.8 k), derived default constructor
+11.2 k -> 8.9 k (5.5 k), derived `super(a)` 10.7 k -> 7.6 k (6.2 k), Map/Set 7.4 k -> 2.1 k
+(2.9 k), new Promise 10.2 k -> 8.5 k (8.7 k), Array(4) 12.6 k -> 1.7 k (3.4 k), Date(0)
+14.8 k -> 1.7 k (2.9 k). Plain workloads within +0.6% instructions. Only ~3.2 KB are left to
+the 1.5x budget: later speed work has to fund itself.

@@ -1,6 +1,6 @@
 # 0236: Performance: the construct path (`new C()`, `new Map()`, `new Promise`)
 
-status: in-progress
+status: done
 agent: pnew
 branch: issue/0236-construct-path
 depends-on: -
@@ -57,6 +57,37 @@ and report.
   super, new.target, class; native and bytecode backends) and difftest (stress on
   language/builtins/errors) pass.
 
+- Later (same day): `rest` and `super(...args)` without step (derived default constructor
+  10.0k -> 8.9k); decline_construct is reached only for its opcodes (`construct::takes`: an
+  out-of-line call for every other decline cost props +2%); ErrorStack/IsPendingStack pure
+  leaves; the compiler returns the checked `this` when a derived constructor falls off its
+  body (epilogue only when a `return` uses it; E 8.2k -> 7.6k). Tried and dropped: the class
+  check arms in run_hot's body (arrays +1.6%, tight +0.8% instructions), running on through
+  trivial ops inside decline_construct (C and F got slower), a define-free builtin closure
+  (0232b made them lazy meanwhile; dropped at the rebase).
+- Rebased on 0232b: its @fast GetPrototypeFromConstructor entry is replaced by the inlined
+  %ConstructorPrototype leaf (no decline). Decisions D3160-D3164; size approved (D3164).
+- Guide: interpreter.md (the construct path's declines), builtins.md (constructors' `new`
+  entries); docs/compiler.md (derived constructor epilogue); builtins/README.md (@fast new).
+- Corpus case builtins/construct-path.js. Fuzz regress, plain and --lazy: only the
+  pre-existing s13-s10173 refusal (same on main's gate build) and the known deliberate one.
+
 ## Follow-ups
+- new Error: 30.1k vs 18.7k wasm instructions. ~60% is CaptureStack (trace_frames converts
+  file and function names to Rust Strings with decode_utf16, malloc), and
+  DefineDataPropertyOrThrow/CaptureStack go through step.
+- Derived classes still 1.2-1.6x QuickJS: ~10 cheap declines (~300 each) per `new D()`; a
+  `super_call` that reads the active function and new.target from its frame (a new op) would
+  remove three of them.
 
 ## Result
+The construct path no longer goes through `step`: `decline_construct` (interp/run/construct.rs)
+finishes construct, super calls, constructing returns, new.target and the class checks;
+GetPrototypeFromConstructor is the inlined leaf %ConstructorPrototype; constructor allocations
+are pure leaves; Array/Map/Set/Date have `new` entries (FastFn::new). Wasm instructions per op,
+main -> branch (quickjs-wasi): new C() 4.3k -> 3.2k (3.2k), new C(i) 5.0k -> 3.9k (4.2k),
+new F(i) 4.0k -> 3.1k (3.8k), derived 11.2k -> 8.9k (5.5k), derived super(a) 10.7k -> 7.6k
+(6.2k), new Map()/Set() 7.4k -> 2.1k (2.9k), new Promise 10.2k -> 8.5k (8.7k), new Array(4)
+12.6k -> 1.7k (3.4k), new Date(0) 14.8k -> 1.7k (2.9k). Plain workloads within +0.6%
+instructions; run_hot's body unchanged. Size +2,715 B gzip shipped (426,806), +2,680 slim
+(D3164). Gaps: new Error (1.6x) and derived classes (1.2-1.6x), see Follow-ups.
