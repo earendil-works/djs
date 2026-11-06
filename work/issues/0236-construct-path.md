@@ -1,7 +1,7 @@
 # 0236: Performance: the construct path (`new C()`, `new Map()`, `new Promise`)
 
-status: open
-agent: -
+status: in-progress
+agent: pnew
 branch: issue/0236-construct-path
 depends-on: -
 guide: interpreter.md if the call/construct story changes
