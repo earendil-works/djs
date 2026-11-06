@@ -647,7 +647,10 @@ const OPS_LISTED: [(&str, &str); 30] = [
     ("map-string-keys-x200", "`Map.set` with string keys"),
     ("set-string-keys-x200", "`Set.add` with string keys"),
     ("object-spread-x20", "object spread"),
-    ("object-entries-fromentries-x200", "`Object.entries` and `fromEntries`"),
+    (
+        "object-entries-fromentries-x200",
+        "`Object.entries` and `fromEntries`",
+    ),
     ("await-value-50k", "`await` of a value"),
     ("promise-all-20-x500", "`Promise.all` of 20"),
 ];
