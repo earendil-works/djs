@@ -1,0 +1,204 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg-chart-bridge-in" viewBox="0 0 720 288" width="720" height="288" role="img" aria-labelledby="chart-bridge-in-t chart-bridge-in-d">
+<title id="chart-bridge-in-t">Putting a value into the VM, per payload and engine, in ms on a logarithmic scale</title>
+<desc id="chart-bridge-in-d">Grouped columns: one group per payload, one column per engine, lower is better. The table below has the exact numbers.</desc>
+<style>
+  .dg-chart-bridge-in text { font-family: var(--semantic-font-family-ui, "Mallos Serif", Georgia, serif); font-size: 12px; fill: var(--semantic-color-text-primary, #111111); }
+  .dg-chart-bridge-in .mono { font-family: var(--semantic-font-family-code, "Commit Mono", ui-monospace, Menlo, monospace); font-size: 11px; }
+  .dg-chart-bridge-in .small { font-size: 10.5px; fill: var(--semantic-color-text-secondary, #5e5e5e); }
+  .dg-chart-bridge-in .label { font-weight: 600; }
+  .dg-chart-bridge-in .title { font-weight: 600; font-size: 13px; }
+  .dg-chart-bridge-in .box, .dg-chart-bridge-in .host { fill: var(--semantic-color-background-surface, #f1f1f1); stroke: var(--semantic-color-border-primary, #777777); }
+  .dg-chart-bridge-in .hdr, .dg-chart-bridge-in .engine { fill: var(--semantic-color-background-fill-secondary-information, #dbe4ea); stroke: var(--semantic-color-border-information, #3380a4); }
+  .dg-chart-bridge-in .traced, .dg-chart-bridge-in .arena { fill: var(--semantic-color-background-fill-secondary-warning, #f3e0be); stroke: var(--semantic-color-border-warning, #996f00); }
+  .dg-chart-bridge-in .tag { fill: var(--semantic-color-background-fill-secondary-positive, #dae6df); stroke: var(--semantic-color-border-positive, #378960); }
+  .dg-chart-bridge-in .cell { fill: var(--semantic-color-background-canvas, #f8f8f8); stroke: var(--semantic-color-border-warning, #996f00); }
+  .dg-chart-bridge-in .pad { fill: url(#chart-bridge-in-hatch); stroke: var(--semantic-color-border-secondary, #e2e2e2); }
+  .dg-chart-bridge-in .tail { fill: var(--semantic-color-background-surface, #f1f1f1); stroke: var(--semantic-color-border-primary, #777777); stroke-dasharray: 4 3; }
+  .dg-chart-bridge-in .zero { fill: var(--semantic-color-background-canvas, #f8f8f8); stroke: var(--semantic-color-border-primary, #777777); stroke-dasharray: 4 3; }
+  .dg-chart-bridge-in .dead { fill: var(--semantic-color-background-surface, #f1f1f1); stroke: var(--semantic-color-border-secondary, #e2e2e2); stroke-dasharray: 3 2; }
+  .dg-chart-bridge-in .opt { stroke-dasharray: 3 2; }
+  .dg-chart-bridge-in .rule { stroke: var(--semantic-color-text-secondary, #5e5e5e); stroke-width: 1.2; }
+  .dg-chart-bridge-in .dash { stroke: var(--semantic-color-text-secondary, #5e5e5e); stroke-width: 1.2; stroke-dasharray: 4 3; }
+  .dg-chart-bridge-in .arrow { stroke: var(--semantic-color-text-secondary, #5e5e5e); fill: none; stroke-width: 1.3; marker-end: url(#chart-bridge-in-a); }
+  .dg-chart-bridge-in .faint { stroke: var(--semantic-color-border-primary, #777777); fill: none; stroke-width: 1.1; stroke-dasharray: 4 3; marker-end: url(#chart-bridge-in-a); }
+  .dg-chart-bridge-in .head { fill: var(--semantic-color-text-secondary, #5e5e5e); }
+  .dg-chart-bridge-in .hatch { stroke: var(--semantic-color-border-secondary, #e2e2e2); }
+  .dg-chart-bridge-in .grid { stroke: var(--semantic-color-border-secondary, #e2e2e2); stroke-width: 1; }
+  .dg-chart-bridge-in .axis { stroke: var(--semantic-color-border-primary, #777777); stroke-width: 1; }
+  .dg-chart-bridge-in .parity { stroke: var(--semantic-color-text-secondary, #5e5e5e); stroke-width: 1.2; stroke-dasharray: 4 3; }
+  .dg-chart-bridge-in .faster { fill: var(--semantic-color-background-fill-primary-positive, #2e6c4c); }
+  .dg-chart-bridge-in .slower { fill: var(--semantic-color-background-fill-primary-negative, #a42c2d); }
+  .dg-chart-bridge-in .s0 { fill: var(--semantic-color-background-fill-data-viz-100, #557ca7); }
+  .dg-chart-bridge-in .s1 { fill: var(--semantic-color-background-fill-data-viz-200, #e98a2e); }
+  .dg-chart-bridge-in .s2 { fill: var(--semantic-color-background-fill-data-viz-300, #d5525a); }
+  .dg-chart-bridge-in .s3 { fill: var(--semantic-color-background-fill-data-viz-400, #80b9b2); }
+  .dg-chart-bridge-in .s4 { fill: var(--semantic-color-background-fill-data-viz-500, #66a14f); }
+  .dg-chart-bridge-in .s5 { fill: var(--semantic-color-background-fill-data-viz-600, #e9c74c); }
+  .dg-chart-bridge-in .s6 { fill: var(--semantic-color-background-fill-data-viz-700, #aa7aa0); }
+  .dg-chart-bridge-in .s7 { fill: var(--semantic-color-background-fill-data-viz-800, #f79ba8); }
+  .dg-chart-bridge-in .s8 { fill: var(--semantic-color-background-fill-data-viz-900, #98745e); }
+  .dg-chart-bridge-in .s9 { fill: var(--semantic-color-background-fill-data-viz-1000, #b9b0ab); }
+  @media (prefers-color-scheme: dark) {
+    .dg-chart-bridge-in text { fill: var(--semantic-color-text-primary, #f6f6f6); }
+    .dg-chart-bridge-in .small { fill: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-bridge-in .box, .dg-chart-bridge-in .host { fill: var(--semantic-color-background-surface, #2e2e2e); stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-chart-bridge-in .hdr, .dg-chart-bridge-in .engine { fill: var(--semantic-color-background-fill-secondary-information, #1e313b); stroke: var(--semantic-color-border-information, #4c9bc1); }
+    .dg-chart-bridge-in .traced, .dg-chart-bridge-in .arena { fill: var(--semantic-color-background-fill-secondary-warning, #3b2b0c); stroke: var(--semantic-color-border-warning, #b8880c); }
+    .dg-chart-bridge-in .tag { fill: var(--semantic-color-background-fill-secondary-positive, #1f3328); stroke: var(--semantic-color-border-positive, #4da578); }
+    .dg-chart-bridge-in .cell { fill: var(--semantic-color-background-canvas, #161616); stroke: var(--semantic-color-border-warning, #b8880c); }
+    .dg-chart-bridge-in .pad { stroke: var(--semantic-color-border-secondary, #464646); }
+    .dg-chart-bridge-in .tail { fill: var(--semantic-color-background-surface, #2e2e2e); stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-chart-bridge-in .zero { fill: var(--semantic-color-background-canvas, #161616); stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-chart-bridge-in .dead { fill: var(--semantic-color-background-surface, #2e2e2e); stroke: var(--semantic-color-border-secondary, #464646); }
+    .dg-chart-bridge-in .rule { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-bridge-in .dash { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-bridge-in .arrow { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-bridge-in .faint { stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-chart-bridge-in .head { fill: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-bridge-in .hatch { stroke: var(--semantic-color-border-secondary, #464646); }
+    .dg-chart-bridge-in .grid { stroke: var(--semantic-color-border-secondary, #464646); }
+    .dg-chart-bridge-in .axis { stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-chart-bridge-in .parity { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-bridge-in .faster { fill: var(--semantic-color-background-fill-primary-positive, #4da578); }
+    .dg-chart-bridge-in .slower { fill: var(--semantic-color-background-fill-primary-negative, #ea5a56); }
+    .dg-chart-bridge-in .s0 { fill: var(--semantic-color-background-fill-data-viz-100, #557ca7); }
+    .dg-chart-bridge-in .s1 { fill: var(--semantic-color-background-fill-data-viz-200, #e98a2e); }
+    .dg-chart-bridge-in .s2 { fill: var(--semantic-color-background-fill-data-viz-300, #d5525a); }
+    .dg-chart-bridge-in .s3 { fill: var(--semantic-color-background-fill-data-viz-400, #80b9b2); }
+    .dg-chart-bridge-in .s4 { fill: var(--semantic-color-background-fill-data-viz-500, #66a14f); }
+    .dg-chart-bridge-in .s5 { fill: var(--semantic-color-background-fill-data-viz-600, #e9c74c); }
+    .dg-chart-bridge-in .s6 { fill: var(--semantic-color-background-fill-data-viz-700, #aa7aa0); }
+    .dg-chart-bridge-in .s7 { fill: var(--semantic-color-background-fill-data-viz-800, #f79ba8); }
+    .dg-chart-bridge-in .s8 { fill: var(--semantic-color-background-fill-data-viz-900, #98745e); }
+    .dg-chart-bridge-in .s9 { fill: var(--semantic-color-background-fill-data-viz-1000, #b9b0ab); }
+  }
+</style>
+<defs><pattern id="chart-bridge-in-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" class="hatch"/></pattern><marker id="chart-bridge-in-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<rect class="s0" x="52.0" y="5.0" width="10.0" height="10.0"/>
+<text class="" x="67.0" y="14.0" text-anchor="start">djs</text>
+<rect class="s3" x="104.2" y="5.0" width="10.0" height="10.0"/>
+<text class="" x="119.2" y="14.0" text-anchor="start">quickjs-wasi</text>
+<rect class="s1" x="216.8" y="5.0" width="10.0" height="10.0"/>
+<text class="" x="231.8" y="14.0" text-anchor="start">QuickJS</text>
+<rect class="s2" x="295.8" y="5.0" width="10.0" height="10.0"/>
+<text class="" x="310.8" y="14.0" text-anchor="start">QuickJS-NG</text>
+<rect class="s5" x="395.0" y="5.0" width="10.0" height="10.0"/>
+<text class="" x="410.0" y="14.0" text-anchor="start">quickjs-emscripten</text>
+<rect class="s6" x="52.0" y="23.0" width="10.0" height="10.0"/>
+<text class="" x="67.0" y="32.0" text-anchor="start">quickjs-emscripten (NG)</text>
+<rect class="s4" x="238.6" y="23.0" width="10.0" height="10.0"/>
+<text class="" x="253.6" y="32.0" text-anchor="start">monty</text>
+<line class="grid" x1="52.0" y1="237.3" x2="712.0" y2="237.3"/>
+<text class="small" x="46.0" y="240.8" text-anchor="end">0.001</text>
+<line class="grid" x1="52.0" y1="201.6" x2="712.0" y2="201.6"/>
+<text class="small" x="46.0" y="205.1" text-anchor="end">0.01</text>
+<line class="grid" x1="52.0" y1="165.9" x2="712.0" y2="165.9"/>
+<text class="small" x="46.0" y="169.4" text-anchor="end">0.1</text>
+<line class="grid" x1="52.0" y1="130.1" x2="712.0" y2="130.1"/>
+<text class="small" x="46.0" y="133.6" text-anchor="end">1</text>
+<line class="grid" x1="52.0" y1="94.4" x2="712.0" y2="94.4"/>
+<text class="small" x="46.0" y="97.9" text-anchor="end">10</text>
+<line class="grid" x1="52.0" y1="58.7" x2="712.0" y2="58.7"/>
+<text class="small" x="46.0" y="62.2" text-anchor="end">100</text>
+<text class="small" x="46.0" y="40.0" text-anchor="end">ms</text>
+<rect class="s0" x="57.0" y="223.7" width="6.1" height="24.3"/>
+<rect class="s3" x="64.1" y="230.0" width="6.1" height="18.0"/>
+<rect class="s1" x="71.3" y="233.2" width="6.1" height="14.8"/>
+<rect class="s2" x="78.4" y="237.3" width="6.1" height="10.7"/>
+<rect class="s5" x="85.6" y="223.0" width="6.1" height="25.0"/>
+<rect class="s6" x="92.7" y="220.7" width="6.1" height="27.3"/>
+<rect class="s4" x="99.9" y="187.2" width="6.1" height="60.8"/>
+<text class="" x="82.0" y="264.0" text-anchor="middle">call</text>
+<text class="" x="82.0" y="278.0" text-anchor="middle">arguments</text>
+<rect class="s0" x="117.0" y="209.7" width="6.1" height="38.3"/>
+<rect class="s3" x="124.1" y="202.5" width="6.1" height="45.5"/>
+<rect class="s1" x="131.3" y="205.4" width="6.1" height="42.6"/>
+<rect class="s2" x="138.4" y="205.2" width="6.1" height="42.8"/>
+<rect class="s5" x="145.6" y="194.9" width="6.1" height="53.1"/>
+<rect class="s6" x="152.7" y="189.8" width="6.1" height="58.2"/>
+<rect class="s4" x="159.9" y="176.0" width="6.1" height="72.0"/>
+<text class="" x="142.0" y="264.0" text-anchor="middle">JSON,</text>
+<text class="" x="142.0" y="278.0" text-anchor="middle">1 KB</text>
+<rect class="s0" x="177.0" y="148.1" width="6.1" height="99.9"/>
+<rect class="s3" x="184.1" y="134.2" width="6.1" height="113.8"/>
+<rect class="s1" x="191.3" y="137.0" width="6.1" height="111.0"/>
+<rect class="s2" x="198.4" y="135.6" width="6.1" height="112.4"/>
+<rect class="s5" x="205.6" y="128.7" width="6.1" height="119.3"/>
+<rect class="s6" x="212.7" y="127.5" width="6.1" height="120.5"/>
+<rect class="s4" x="219.9" y="133.3" width="6.1" height="114.7"/>
+<text class="" x="202.0" y="264.0" text-anchor="middle">JSON,</text>
+<text class="" x="202.0" y="278.0" text-anchor="middle">100 KB</text>
+<rect class="s0" x="237.0" y="112.5" width="6.1" height="135.5"/>
+<rect class="s3" x="244.1" y="99.2" width="6.1" height="148.8"/>
+<rect class="s1" x="251.3" y="101.5" width="6.1" height="146.5"/>
+<rect class="s2" x="258.4" y="100.0" width="6.1" height="148.0"/>
+<rect class="s5" x="265.6" y="93.0" width="6.1" height="155.0"/>
+<rect class="s6" x="272.7" y="91.7" width="6.1" height="156.3"/>
+<rect class="s4" x="279.9" y="98.3" width="6.1" height="149.7"/>
+<text class="" x="262.0" y="264.0" text-anchor="middle">JSON,</text>
+<text class="" x="262.0" y="278.0" text-anchor="middle">1 MB</text>
+<rect class="s0" x="297.0" y="76.8" width="6.1" height="171.2"/>
+<rect class="s3" x="304.1" y="62.0" width="6.1" height="186.0"/>
+<rect class="s1" x="311.3" y="63.7" width="6.1" height="184.3"/>
+<rect class="s2" x="318.4" y="62.6" width="6.1" height="185.4"/>
+<rect class="s5" x="325.6" y="56.3" width="6.1" height="191.7"/>
+<rect class="s6" x="332.7" y="55.0" width="6.1" height="193.0"/>
+<rect class="s4" x="339.9" y="59.1" width="6.1" height="188.9"/>
+<text class="" x="322.0" y="264.0" text-anchor="middle">JSON,</text>
+<text class="" x="322.0" y="278.0" text-anchor="middle">10 MB</text>
+<rect class="s0" x="357.0" y="160.1" width="6.1" height="87.9"/>
+<rect class="s3" x="364.1" y="144.2" width="6.1" height="103.8"/>
+<rect class="s1" x="371.3" y="144.7" width="6.1" height="103.3"/>
+<rect class="s2" x="378.4" y="144.7" width="6.1" height="103.3"/>
+<rect class="s5" x="385.6" y="110.2" width="6.1" height="137.8"/>
+<rect class="s6" x="392.7" y="109.7" width="6.1" height="138.3"/>
+<rect class="s4" x="399.9" y="117.7" width="6.1" height="130.3"/>
+<text class="" x="382.0" y="264.0" text-anchor="middle">ASCII,</text>
+<text class="" x="382.0" y="278.0" text-anchor="middle">1 MB</text>
+<rect class="s0" x="417.0" y="129.4" width="6.1" height="118.6"/>
+<rect class="s3" x="424.1" y="108.5" width="6.1" height="139.5"/>
+<rect class="s1" x="431.3" y="109.5" width="6.1" height="138.5"/>
+<rect class="s2" x="438.4" y="109.6" width="6.1" height="138.4"/>
+<rect class="s5" x="445.6" y="74.5" width="6.1" height="173.5"/>
+<rect class="s6" x="452.7" y="74.2" width="6.1" height="173.8"/>
+<rect class="s4" x="459.9" y="81.8" width="6.1" height="166.2"/>
+<text class="" x="442.0" y="264.0" text-anchor="middle">ASCII,</text>
+<text class="" x="442.0" y="278.0" text-anchor="middle">10 MB</text>
+<rect class="s0" x="477.0" y="121.0" width="6.1" height="127.0"/>
+<rect class="s3" x="484.1" y="105.2" width="6.1" height="142.8"/>
+<rect class="s1" x="491.3" y="114.9" width="6.1" height="133.1"/>
+<rect class="s2" x="498.4" y="111.8" width="6.1" height="136.2"/>
+<rect class="s5" x="505.6" y="104.0" width="6.1" height="144.0"/>
+<rect class="s6" x="512.7" y="101.9" width="6.1" height="146.1"/>
+<rect class="s4" x="519.9" y="117.2" width="6.1" height="130.8"/>
+<text class="" x="502.0" y="264.0" text-anchor="middle">non-ASCII,</text>
+<text class="" x="502.0" y="278.0" text-anchor="middle">1 MB</text>
+<rect class="s0" x="537.0" y="129.8" width="6.1" height="118.2"/>
+<rect class="s3" x="544.1" y="110.0" width="6.1" height="138.0"/>
+<rect class="s1" x="551.3" y="96.4" width="6.1" height="151.6"/>
+<rect class="s2" x="558.4" y="83.1" width="6.1" height="164.9"/>
+<rect class="s5" x="565.6" y="96.8" width="6.1" height="151.2"/>
+<rect class="s6" x="572.7" y="89.2" width="6.1" height="158.8"/>
+<rect class="s4" x="579.9" y="101.1" width="6.1" height="146.9"/>
+<text class="" x="562.0" y="264.0" text-anchor="middle">100k</text>
+<text class="" x="562.0" y="278.0" text-anchor="middle">numbers</text>
+<rect class="s0" x="597.0" y="155.6" width="6.1" height="92.4"/>
+<rect class="s3" x="604.1" y="160.5" width="6.1" height="87.5"/>
+<rect class="s1" x="611.3" y="160.3" width="6.1" height="87.7"/>
+<rect class="s2" x="618.4" y="159.5" width="6.1" height="88.5"/>
+<rect class="s5" x="625.6" y="168.6" width="6.1" height="79.4"/>
+<rect class="s6" x="632.7" y="168.7" width="6.1" height="79.3"/>
+<rect class="s4" x="639.9" y="167.3" width="6.1" height="80.7"/>
+<text class="" x="622.0" y="264.0" text-anchor="middle">bytes,</text>
+<text class="" x="622.0" y="278.0" text-anchor="middle">1 MiB</text>
+<rect class="s0" x="657.0" y="190.8" width="6.1" height="57.2"/>
+<rect class="s3" x="664.1" y="181.5" width="6.1" height="66.5"/>
+<rect class="s1" x="671.3" y="185.4" width="6.1" height="62.6"/>
+<rect class="s2" x="678.4" y="183.3" width="6.1" height="64.7"/>
+<rect class="s5" x="685.6" y="176.7" width="6.1" height="71.3"/>
+<rect class="s6" x="692.7" y="175.7" width="6.1" height="72.3"/>
+<rect class="s4" x="699.9" y="167.7" width="6.1" height="80.3"/>
+<text class="" x="682.0" y="264.0" text-anchor="middle">nested 100</text>
+<text class="" x="682.0" y="278.0" text-anchor="middle">deep</text>
+<line class="axis" x1="52.0" y1="248.0" x2="712.0" y2="248.0"/>
+</svg>

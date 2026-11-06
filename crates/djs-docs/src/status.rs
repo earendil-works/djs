@@ -1347,6 +1347,24 @@ mod tests {
                 rec += &format!("engines/djs/{w}/dump-{m}\t3\tabc\t2026-11-06\n");
             }
         }
+        rec += "engines/bridge/load\t2.0\tabc\t2026-11-06\n";
+        for (p, _) in BRIDGE_PAYLOADS {
+            rec += &format!("engines/bridge/payload/{p}/bytes\t1000000\tabc\t2026-11-06\n");
+            for (e, _) in ENGINES {
+                for m in ["in-ms", "out-ms", "in-memory", "out-memory"] {
+                    // monty cannot take the nested payload: no numbers.
+                    if !(e == "monty" && p == "nested") {
+                        rec += &format!("engines/bridge/{e}/{p}/{m}\t2\tabc\t2026-11-06\n");
+                    }
+                }
+            }
+        }
+        for (e, _) in ENGINES {
+            rec += &format!("engines/bridge/{e}/idle-memory\t1048576\tabc\t2026-11-06\n");
+            for (c, _) in BRIDGE_CASES {
+                rec += &format!("engines/bridge/{e}/e2e/{c}-ms\t3\tabc\t2026-11-06\n");
+            }
+        }
         let st = Status {
             test262: Err("no checkout".into()),
             ratchet262: 0,
@@ -1391,6 +1409,19 @@ mod tests {
             assert!(c.svg.contains("<desc id="), "{what}");
         }
         assert!(chart(&st, "inventory").unwrap().is_none());
+        let t = generate(&st, "bridge-in", false).unwrap();
+        assert!(t.contains("| nested 100 deep | 1,000 KB | 2 |"), "{t}");
+        assert!(t.contains(" fails |"), "{t}");
+        assert!(t.contains("| relative to djs | | 1.0× |"), "{t}");
+        assert!(
+            generate(&st, "bridge-rate", false)
+                .unwrap()
+                .contains("| djs | 500 |")
+        );
+        for what in ["bridge-out", "bridge-memory", "bridge-e2e"] {
+            generate(&st, what, false).unwrap();
+        }
+        assert!(chart(&st, "bridge-e2e").unwrap().is_some());
         let mut st = st;
         st.recorded.remove("engines/monty/heavy/memory");
         assert!(chart(&st, "engines-memory").is_err());

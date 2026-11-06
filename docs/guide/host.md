@@ -235,7 +235,8 @@ nothing for the attempt.
 > large string, which becomes a memory copy instead of an escaping serializer and a
 > parser. The one place it loses is the encoder on many small objects, where V8's
 > native `JSON.stringify` is faster than the JavaScript encoder; the decoder more than
-> makes up for it. The cost: a format and two implementations (TypeScript and Rust) to
+> makes up for it. [The benchmarks](benchmarks.md#passing-data-through-the-bridge)
+> compare the whole path, encoder and decoder, with each QuickJS embedding's. The cost: a format and two implementations (TypeScript and Rust) to
 > keep in agreement, which cross-language tests check.
 
 ## Values out: the reader
@@ -262,7 +263,9 @@ string-keyed data properties, arrays with their holes, typed arrays as copies, B
 > **Trade-off.** Reading the arena directly over serializing in the VM. Reading a value
 > takes less time than the VM alone needs to turn it into JSON, before the host has
 > parsed anything: <!--n wire/read-vs-json-objects .1-->1.6<!--/n--> times less for many small objects, <!--n wire/read-vs-json-text .0-->9<!--/n--> times less for text with
-> non-ASCII characters, and a 1 MiB string reads at memory-copy speed. The cost: the reader depends on the heap
+> non-ASCII characters, and a 1 MiB string reads at memory-copy speed. Against the
+> engines that read values out as JSON text, that is an order of magnitude ([the
+> benchmarks](benchmarks.md#passing-data-through-the-bridge)). The cost: the reader depends on the heap
 > layout (made safe by generating it from the engine's own table), the VM must not run
 > while a read is in progress (a collection moves cells), and sharing is not preserved,
 > so a value with the same object at many places is read once per reference (a value

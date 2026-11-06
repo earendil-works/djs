@@ -86,46 +86,44 @@
 <text class="small" x="185.4" y="26.0" text-anchor="middle">1</text>
 <line class="grid" x1="248.0" y1="30.0" x2="248.0" y2="160.0"/>
 <text class="small" x="248.0" y="26.0" text-anchor="middle">10</text>
-<rect class="s0" x="166.6" y="37.0" width="22.4" height="12.0"/>
-<text class="small" x="193.0" y="47.0" text-anchor="start">1.14</text>
-<rect class="s3" x="166.6" y="55.0" width="61.5" height="12.0"/>
-<text class="small" x="232.0" y="65.0" text-anchor="start">4.8</text>
-<rect class="s1" x="166.6" y="73.0" width="49.4" height="12.0"/>
-<text class="small" x="220.0" y="83.0" text-anchor="start">3.08</text>
-<rect class="s2" x="166.6" y="91.0" width="38.0" height="12.0"/>
-<text class="small" x="208.6" y="101.0" text-anchor="start">2.02</text>
-<rect class="s5" x="166.6" y="109.0" width="20.1" height="12.0"/>
-<text class="small" x="190.6" y="119.0" text-anchor="start">1.05</text>
-<rect class="s6" x="166.6" y="127.0" width="63.5" height="12.0"/>
-<text class="small" x="234.1" y="137.0" text-anchor="start">5.17</text>
-<rect class="s4" x="166.6" y="145.0" width="112.6" height="12.0"/>
-<text class="small" x="283.2" y="155.0" text-anchor="start">31.6</text>
+<rect class="s0" x="166.6" y="37.0" width="19.6" height="12.0"/>
+<text class="small" x="190.2" y="47.0" text-anchor="start">1.03</text>
+<rect class="s3" x="166.6" y="55.0" width="48.2" height="12.0"/>
+<text class="small" x="218.7" y="65.0" text-anchor="start">2.94</text>
+<rect class="s1" x="166.6" y="73.0" width="51.1" height="12.0"/>
+<text class="small" x="221.6" y="83.0" text-anchor="start">3.27</text>
+<rect class="s2" x="166.6" y="91.0" width="36.7" height="12.0"/>
+<text class="small" x="207.3" y="101.0" text-anchor="start">1.93</text>
+<rect class="s5" x="166.6" y="109.0" width="25.5" height="12.0"/>
+<text class="small" x="196.1" y="119.0" text-anchor="start">1.28</text>
+<rect class="s6" x="166.6" y="127.0" width="70.5" height="12.0"/>
+<text class="small" x="241.1" y="137.0" text-anchor="start">6.7</text>
+<rect class="s4" x="166.6" y="145.0" width="111.7" height="12.0"/>
+<text class="small" x="282.3" y="155.0" text-anchor="start">30.5</text>
 <line class="axis" x1="166.6" y1="30.0" x2="166.6" y2="160.0"/>
 <text class="label" x="357.7" y="14.0" text-anchor="start">new VM, ms</text>
 <line class="grid" x1="357.7" y1="30.0" x2="357.7" y2="160.0"/>
 <text class="small" x="357.7" y="26.0" text-anchor="middle">0</text>
-<line class="grid" x1="389.0" y1="30.0" x2="389.0" y2="160.0"/>
-<text class="small" x="389.0" y="26.0" text-anchor="middle">0.2</text>
-<line class="grid" x1="420.3" y1="30.0" x2="420.3" y2="160.0"/>
-<text class="small" x="420.3" y="26.0" text-anchor="middle">0.4</text>
-<line class="grid" x1="451.6" y1="30.0" x2="451.6" y2="160.0"/>
-<text class="small" x="451.6" y="26.0" text-anchor="middle">0.6</text>
+<line class="grid" x1="399.4" y1="30.0" x2="399.4" y2="160.0"/>
+<text class="small" x="399.4" y="26.0" text-anchor="middle">0.2</text>
+<line class="grid" x1="441.1" y1="30.0" x2="441.1" y2="160.0"/>
+<text class="small" x="441.1" y="26.0" text-anchor="middle">0.4</text>
 <line class="grid" x1="482.9" y1="30.0" x2="482.9" y2="160.0"/>
-<text class="small" x="482.9" y="26.0" text-anchor="middle">0.8</text>
-<rect class="s0" x="357.7" y="37.0" width="20.5" height="12.0"/>
-<text class="small" x="382.2" y="47.0" text-anchor="start">0.131</text>
-<rect class="s3" x="357.7" y="55.0" width="39.4" height="12.0"/>
-<text class="small" x="401.1" y="65.0" text-anchor="start">0.252</text>
-<rect class="s1" x="357.7" y="73.0" width="31.0" height="12.0"/>
-<text class="small" x="392.7" y="83.0" text-anchor="start">0.198</text>
-<rect class="s2" x="357.7" y="91.0" width="40.7" height="12.0"/>
-<text class="small" x="402.4" y="101.0" text-anchor="start">0.26</text>
-<rect class="s5" x="357.7" y="109.0" width="36.3" height="12.0"/>
-<text class="small" x="398.0" y="119.0" text-anchor="start">0.232</text>
-<rect class="s6" x="357.7" y="127.0" width="45.7" height="12.0"/>
-<text class="small" x="407.4" y="137.0" text-anchor="start">0.292</text>
-<rect class="s4" x="357.7" y="145.0" width="109.0" height="12.0"/>
-<text class="small" x="470.7" y="155.0" text-anchor="start">0.697</text>
+<text class="small" x="482.9" y="26.0" text-anchor="middle">0.6</text>
+<rect class="s0" x="357.7" y="37.0" width="25.9" height="12.0"/>
+<text class="small" x="387.6" y="47.0" text-anchor="start">0.124</text>
+<rect class="s3" x="357.7" y="55.0" width="54.6" height="12.0"/>
+<text class="small" x="416.4" y="65.0" text-anchor="start">0.262</text>
+<rect class="s1" x="357.7" y="73.0" width="42.5" height="12.0"/>
+<text class="small" x="404.3" y="83.0" text-anchor="start">0.204</text>
+<rect class="s2" x="357.7" y="91.0" width="54.4" height="12.0"/>
+<text class="small" x="416.1" y="101.0" text-anchor="start">0.261</text>
+<rect class="s5" x="357.7" y="109.0" width="49.6" height="12.0"/>
+<text class="small" x="411.3" y="119.0" text-anchor="start">0.238</text>
+<rect class="s6" x="357.7" y="127.0" width="58.6" height="12.0"/>
+<text class="small" x="420.3" y="137.0" text-anchor="start">0.281</text>
+<rect class="s4" x="357.7" y="145.0" width="113.3" height="12.0"/>
+<text class="small" x="475.0" y="155.0" text-anchor="start">0.543</text>
 <line class="axis" x1="357.7" y1="30.0" x2="357.7" y2="160.0"/>
 <text class="label" x="548.9" y="14.0" text-anchor="start">idle memory, MiB</text>
 <line class="grid" x1="548.9" y1="30.0" x2="548.9" y2="160.0"/>
