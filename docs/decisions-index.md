@@ -779,3 +779,4 @@ topics when the index is next reorganized.
 - D3126: Amends D3022: any undefined symbol from our crates' objects is incremental corruption
 - D3150: A block's dump code and late bindings go in the order what they read needs
 - D3151: A subclass outside its base's factory names the base by its location
+- D3152: plain-node reads node's "Invalid time value" as djs's "Date value is NaN"

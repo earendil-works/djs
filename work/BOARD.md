@@ -7,7 +7,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0236 | Perf: construct path (new C() 2.4x, new Map() 4.6x, new Promise 2.7x) | pnew | .worktrees/pnew |
-| 0237 | Plain-dump fuzz: seed 689441 wrong output in node (--lazy) | pjr | .worktrees/pjx |
 | 0232b | new Promise / then 4-6x (builtin closure length/name), async state at first await, allSettled/any jobs | pasync | .worktrees/pasync |
 | 0229 | Benchmarks page: djs vs QuickJS versions and monty on codemode workloads; dumps, size, memory (owner) | benchpage | .worktrees/benchpage |
 
@@ -102,6 +101,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0198 | Dump performance: corpus dump p50 1.42 -> 0.43 ms wasm, totals 3,243 -> 610 ms; data cases 2-6x (D2800-D2802) | 429184db (agent dumpperf) |
 | - | base_equals_a_compiled_realm test fixed (8f0fdd72); gate recovers from incremental corruption (D2896, b55180dd); CLI/REPL call states (D2894) | agent pjh |
 | 0220 | Guide rewrite: Using djs / How it works / Reference, JS API, dumps, CLI, pi page; live Run/Continue with debugger pauses at exact positions (D3050-D3054) | 13002add (agent guide) |
+| 0237 | Fuzz seed 689441: harness false alarm (node's invalid-date message), mapped in plain-node.mjs (D3152) | 2e658c5b (agent pjr) |
 | 0235 | Plain-dump fuzz findings 342347/344676/208872: block code vs late bindings list-scheduled (D3150), free subclass reading base's factory-local name (D3151) | 0bbb724d (agent pjr) |
 | 0231 | Arrays/strings/collections perf: sort cmp 1.62x, default sort 0.74x, Map/Set 1.3-1.7x, a+b 1.33x, push 1.18x, Array.from 1.25x; gate self-test leg (D3125-D3129) | 0133eb35 (agent parr) |
 | 0232 | Async perf: await 0.16x, async call 0.12x, Promise.all ~1.2x of QuickJS (D3130-D3133) | f037273d (agent pasync) |
