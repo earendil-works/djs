@@ -824,6 +824,213 @@ fn engines(st: &Status, what: &str) -> Result<String, String> {
     Ok(s)
 }
 
+/// Each engine's palette color in the charts (chart.rs), in `ENGINES` order: djs blue,
+/// the QuickJS builds warm colors and teal, monty green.
+const ENGINE_COLORS: [usize; 7] = [0, 3, 1, 2, 5, 6, 4];
+
+/// A generated chart: its file under docs/guide, its alt text (the figure's caption) and
+/// the SVG.
+pub struct Chart {
+    pub file: String,
+    pub alt: String,
+    pub svg: String,
+}
+
+/// The chart drawn above the table of `gen:status WHAT`, if it has one. Like the tables
+/// it only reads status.tsv.
+pub fn chart(st: &Status, what: &str) -> Result<Option<Chart>, String> {
+    use crate::chart::{Meta, Panel, Series, bars, columns, ratios, short};
+    let get = |k: String| -> Result<f64, String> {
+        st.num(&k)
+            .ok_or_else(|| format!("gen:status {what}: no {k} in tests/scores/status.tsv"))
+    };
+    let name = format!("chart-{what}");
+    let series: Vec<Series> = ENGINES
+        .iter()
+        .zip(ENGINE_COLORS)
+        .map(|((_, label), color)| Series { label, color })
+        .collect();
+    let rows: Vec<(&str, usize)> = ENGINES
+        .iter()
+        .zip(ENGINE_COLORS)
+        .map(|((_, l), c)| (*l, c))
+        .collect();
+    let per_engine = |m: &str, scale: f64| -> Result<Vec<Option<f64>>, String> {
+        ENGINES
+            .iter()
+            .map(|(e, _)| get(format!("engines/{e}/{m}")).map(|v| Some(v / scale)))
+            .collect()
+    };
+    let (alt, svg) = match what {
+        "engines-size" => {
+            let alt = "Module size per engine, raw and with gzip, in KB on a logarithmic scale";
+            let svg = bars(
+                &Meta {
+                    name: &name,
+                    title: alt,
+                    desc: "Horizontal bars per engine: the wasm module's bytes and its gzip -9 size. The table below has the exact numbers.",
+                },
+                &rows,
+                &[
+                    Panel {
+                        title: "wasm, KB",
+                        values: per_engine("wasm-bytes", 1000.0)?,
+                        log: true,
+                        format: |v| short(v.round()),
+                    },
+                    Panel {
+                        title: "gzip, KB",
+                        values: per_engine("wasm-gzip", 1000.0)?,
+                        log: true,
+                        format: |v| short(v.round()),
+                    },
+                ],
+            );
+            (alt, svg)
+        }
+        "engines-startup" => {
+            let alt = "Compiling the module, starting a VM and an idle VM's memory, per engine";
+            let svg = bars(
+                &Meta {
+                    name: &name,
+                    title: alt,
+                    desc: "Horizontal bars per engine: compile time in ms and idle memory in MiB on logarithmic scales, new-VM time in ms on a linear one. The table below has the exact numbers.",
+                },
+                &rows,
+                &[
+                    Panel {
+                        title: "compile, ms",
+                        values: per_engine("compile-ms", 1.0)?,
+                        log: true,
+                        format: short,
+                    },
+                    Panel {
+                        title: "new VM, ms",
+                        values: per_engine("startup-ms", 1.0)?,
+                        log: false,
+                        format: short,
+                    },
+                    Panel {
+                        title: "idle memory, MiB",
+                        values: per_engine("idle-memory", 1048576.0)?,
+                        log: true,
+                        format: |v| format!("{v:.1}"),
+                    },
+                ],
+            );
+            (alt, svg)
+        }
+        "engines-run" | "engines-memory" => {
+            let run = what == "engines-run";
+            let values = WORKLOADS
+                .iter()
+                .map(|w| {
+                    ENGINES
+                        .iter()
+                        .map(|(e, _)| {
+                            if run {
+                                get(format!("engines/{e}/{w}/run-ms")).map(Some)
+                            } else {
+                                get(format!("engines/{e}/{w}/memory")).map(|v| Some(v / 1048576.0))
+                            }
+                        })
+                        .collect::<Result<Vec<_>, _>>()
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let alt = if run {
+                "Run time per workload and engine, in ms on a logarithmic scale"
+            } else {
+                "Linear memory after the run per workload and engine, in MiB on a logarithmic scale"
+            };
+            let svg = columns(
+                &Meta {
+                    name: &name,
+                    title: alt,
+                    desc: "Grouped columns: one group per workload, one column per engine, lower is better. The table below has the exact numbers.",
+                },
+                if run { "ms" } else { "MiB" },
+                &WORKLOADS,
+                &series,
+                &values,
+                true,
+            );
+            (alt, svg)
+        }
+        "engines-ops" => {
+            let mut rows = Vec::new();
+            for (k, label) in OPS_LISTED {
+                let d = get(format!("engines/ops/{k}/djs"))?;
+                let q = get(format!("engines/ops/{k}/quickjs"))?;
+                rows.push((label, (d >= 0.05 && q >= 0.05).then(|| d / q)));
+            }
+            let alt = "djs's time over the best QuickJS build's, per operation, on a logarithmic scale around parity";
+            let svg = ratios(
+                &Meta {
+                    name: &name,
+                    title: alt,
+                    desc: "Bars from the parity line at 1: to the left djs is faster, to the right slower. The table below has the times.",
+                },
+                &rows,
+                "djs faster",
+                "djs slower",
+            );
+            (alt, svg)
+        }
+        "engines-dumps" => {
+            let rows: Vec<(&str, usize)> = WORKLOADS.iter().map(|w| (*w, 0)).collect();
+            let col = |m: &str, scale: f64| -> Result<Vec<Option<f64>>, String> {
+                WORKLOADS
+                    .iter()
+                    .map(|w| {
+                        let k = format!("engines/djs/{w}/dump-{m}");
+                        if st.num(&format!("engines/djs/{w}/dump-points")).is_none() {
+                            Ok(None)
+                        } else {
+                            get(k).map(|v| Some(v / scale))
+                        }
+                    })
+                    .collect()
+            };
+            let alt = "djs's continuation dumps per workload: size, and the time to write and to load one";
+            let svg = bars(
+                &Meta {
+                    name: &name,
+                    title: alt,
+                    desc: "Horizontal bars per workload: the median dump size in KiB on a logarithmic scale, the median write and load times in ms. A workload that never waits has no dump. The table below has the exact numbers.",
+                },
+                &rows,
+                &[
+                    Panel {
+                        title: "dump, KiB",
+                        values: col("raw-p50", 1024.0)?,
+                        log: true,
+                        format: |v| format!("{v:.1}"),
+                    },
+                    Panel {
+                        title: "write, ms",
+                        values: col("ms", 1.0)?,
+                        log: false,
+                        format: short,
+                    },
+                    Panel {
+                        title: "load, ms",
+                        values: col("load-ms", 1.0)?,
+                        log: false,
+                        format: short,
+                    },
+                ],
+            );
+            (alt, svg)
+        }
+        _ => return Ok(None),
+    };
+    Ok(Some(Chart {
+        file: format!("gen/{name}.svg"),
+        alt: alt.to_string(),
+        svg,
+    }))
+}
+
 fn inventory(st: &Status) -> String {
     let mut s = String::from("| | count |\n| --- | ---: |\n");
     let rows = [
@@ -927,8 +1134,21 @@ mod tests {
                 .unwrap()
                 .contains("| djs | 1 KB |")
         );
+        for what in [
+            "engines-size",
+            "engines-startup",
+            "engines-run",
+            "engines-memory",
+            "engines-dumps",
+        ] {
+            let c = chart(&st, what).unwrap().unwrap();
+            assert_eq!(c.file, format!("gen/chart-{what}.svg"));
+            assert!(c.svg.contains("<desc id="), "{what}");
+        }
+        assert!(chart(&st, "inventory").unwrap().is_none());
         let mut st = st;
         st.recorded.remove("engines/monty/heavy/memory");
+        assert!(chart(&st, "engines-memory").is_err());
         assert!(
             generate(&st, "engines-memory", false)
                 .unwrap_err()

@@ -90,6 +90,8 @@ a little above their cluster's median, so that the engines' work shows.
 What a host ships: the wasm module, and the JavaScript some builds need around it.
 
 <!-- gen:status engines-size -->
+![Module size per engine, raw and with gzip, in KB on a logarithmic scale](gen/chart-engines-size.svg)
+
 | engine | wasm | gzip | brotli | JS glue, gzip |
 | --- | ---: | ---: | ---: | ---: |
 | djs | 980 KB | 427 KB | 360 KB | none |
@@ -117,6 +119,8 @@ type checker.
 A host that gives every call a fresh VM pays this on every call.
 
 <!-- gen:status engines-startup -->
+![Compiling the module, starting a VM and an idle VM's memory, per engine](gen/chart-engines-startup.svg)
+
 | engine | compile, ms | new VM, ms | idle VM memory, MiB |
 | --- | ---: | ---: | ---: |
 | djs | 1.09 | 0.12 | 0.6 |
@@ -147,6 +151,8 @@ The time from handing a fresh VM the script and its tool answers to having the r
 parsing and compiling the body, the tool calls through the bridge, and the script's work.
 
 <!-- gen:status engines-run -->
+![Run time per workload and engine, in ms on a logarithmic scale](gen/chart-engines-run.svg)
+
 | workload | djs | quickjs-wasi | QuickJS | QuickJS-NG | quickjs-emscripten | quickjs-emscripten (NG) | monty |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | sequential | 0.42 | 0.38 | 0.36 | 0.37 | 0.40 | 0.40 | 0.56 |
@@ -184,6 +190,8 @@ The instance's linear memory after the run: what the run cost, since wasm memory
 shrink.
 
 <!-- gen:status engines-memory -->
+![Linear memory after the run per workload and engine, in MiB on a logarithmic scale](gen/chart-engines-memory.svg)
+
 | workload | djs | quickjs-wasi | QuickJS | QuickJS-NG | quickjs-emscripten | quickjs-emscripten (NG) | monty |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | sequential | 0.7 | 1.4 | 0.4 | 0.4 | 16.0 | 16.0 | 5.1 |
@@ -215,6 +223,8 @@ Single operations on data shaped like the workloads', each in a loop, against th
 of the two QuickJS releases. Above 1, djs is slower.
 
 <!-- gen:status engines-ops -->
+![djs's time over the best QuickJS build's, per operation, on a logarithmic scale around parity](gen/chart-engines-ops.svg)
+
 | operation | djs, ms | QuickJS, ms | djs / QuickJS |
 | --- | ---: | ---: | ---: |
 | `JSON.parse` of 600 query rows | 0.95 | 2.90 | 0.33 |
@@ -272,6 +282,8 @@ continue it later in a new sandbox. Here every workload runs through the sandbox
 asynchronous host tools and is dumped at every idle point, every time it waits on a call:
 
 <!-- gen:status engines-dumps -->
+![djs's continuation dumps per workload: size, and the time to write and to load one](gen/chart-engines-dumps.svg)
+
 | workload | idle points | dump, KiB (max) | gzip, KiB (max) | write, ms | load, ms |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | sequential | 4 | 1.2 (2.3) | 0.6 (0.9) | 0.30 | 0.30 |

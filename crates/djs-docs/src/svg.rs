@@ -114,6 +114,12 @@ fn fill(decls: &str, name: &str, dark: bool) -> String {
 /// document, and the hand-drawn diagrams use the same class names differently than the
 /// page does.
 pub fn style(name: &str) -> String {
+    style_with(name, &[])
+}
+
+/// [`style`] with `extra` rules after the shared ones (the charts' series colors).
+pub fn style_with(name: &str, extra: &[(&str, &str)]) -> String {
+    let rules = || RULES.iter().chain(extra);
     let scope = |sel: &str| {
         sel.split(", ")
             .map(|s| format!(".dg-{name} {s}"))
@@ -121,11 +127,11 @@ pub fn style(name: &str) -> String {
             .join(", ")
     };
     let mut s = String::from("<style>\n");
-    for (sel, decls) in RULES {
+    for (sel, decls) in rules() {
         let _ = writeln!(s, "  {} {{ {} }}", scope(sel), fill(decls, name, false));
     }
     s.push_str("  @media (prefers-color-scheme: dark) {\n");
-    for (sel, decls) in RULES {
+    for (sel, decls) in rules() {
         // Only the colors change.
         let colors: Vec<&str> = decls
             .split(';')

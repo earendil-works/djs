@@ -1,0 +1,183 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg-chart-engines-run" viewBox="0 0 720 274" width="720" height="274" role="img" aria-labelledby="chart-engines-run-t chart-engines-run-d">
+<title id="chart-engines-run-t">Run time per workload and engine, in ms on a logarithmic scale</title>
+<desc id="chart-engines-run-d">Grouped columns: one group per workload, one column per engine, lower is better. The table below has the exact numbers.</desc>
+<style>
+  .dg-chart-engines-run text { font-family: var(--semantic-font-family-ui, "Mallos Serif", Georgia, serif); font-size: 12px; fill: var(--semantic-color-text-primary, #111111); }
+  .dg-chart-engines-run .mono { font-family: var(--semantic-font-family-code, "Commit Mono", ui-monospace, Menlo, monospace); font-size: 11px; }
+  .dg-chart-engines-run .small { font-size: 10.5px; fill: var(--semantic-color-text-secondary, #5e5e5e); }
+  .dg-chart-engines-run .label { font-weight: 600; }
+  .dg-chart-engines-run .title { font-weight: 600; font-size: 13px; }
+  .dg-chart-engines-run .box, .dg-chart-engines-run .host { fill: var(--semantic-color-background-surface, #f1f1f1); stroke: var(--semantic-color-border-primary, #777777); }
+  .dg-chart-engines-run .hdr, .dg-chart-engines-run .engine { fill: var(--semantic-color-background-fill-secondary-information, #dbe4ea); stroke: var(--semantic-color-border-information, #3380a4); }
+  .dg-chart-engines-run .traced, .dg-chart-engines-run .arena { fill: var(--semantic-color-background-fill-secondary-warning, #f3e0be); stroke: var(--semantic-color-border-warning, #996f00); }
+  .dg-chart-engines-run .tag { fill: var(--semantic-color-background-fill-secondary-positive, #dae6df); stroke: var(--semantic-color-border-positive, #378960); }
+  .dg-chart-engines-run .cell { fill: var(--semantic-color-background-canvas, #f8f8f8); stroke: var(--semantic-color-border-warning, #996f00); }
+  .dg-chart-engines-run .pad { fill: url(#chart-engines-run-hatch); stroke: var(--semantic-color-border-secondary, #e2e2e2); }
+  .dg-chart-engines-run .tail { fill: var(--semantic-color-background-surface, #f1f1f1); stroke: var(--semantic-color-border-primary, #777777); stroke-dasharray: 4 3; }
+  .dg-chart-engines-run .zero { fill: var(--semantic-color-background-canvas, #f8f8f8); stroke: var(--semantic-color-border-primary, #777777); stroke-dasharray: 4 3; }
+  .dg-chart-engines-run .dead { fill: var(--semantic-color-background-surface, #f1f1f1); stroke: var(--semantic-color-border-secondary, #e2e2e2); stroke-dasharray: 3 2; }
+  .dg-chart-engines-run .opt { stroke-dasharray: 3 2; }
+  .dg-chart-engines-run .rule { stroke: var(--semantic-color-text-secondary, #5e5e5e); stroke-width: 1.2; }
+  .dg-chart-engines-run .dash { stroke: var(--semantic-color-text-secondary, #5e5e5e); stroke-width: 1.2; stroke-dasharray: 4 3; }
+  .dg-chart-engines-run .arrow { stroke: var(--semantic-color-text-secondary, #5e5e5e); fill: none; stroke-width: 1.3; marker-end: url(#chart-engines-run-a); }
+  .dg-chart-engines-run .faint { stroke: var(--semantic-color-border-primary, #777777); fill: none; stroke-width: 1.1; stroke-dasharray: 4 3; marker-end: url(#chart-engines-run-a); }
+  .dg-chart-engines-run .head { fill: var(--semantic-color-text-secondary, #5e5e5e); }
+  .dg-chart-engines-run .hatch { stroke: var(--semantic-color-border-secondary, #e2e2e2); }
+  .dg-chart-engines-run .grid { stroke: var(--semantic-color-border-secondary, #e2e2e2); stroke-width: 1; }
+  .dg-chart-engines-run .axis { stroke: var(--semantic-color-border-primary, #777777); stroke-width: 1; }
+  .dg-chart-engines-run .parity { stroke: var(--semantic-color-text-secondary, #5e5e5e); stroke-width: 1.2; stroke-dasharray: 4 3; }
+  .dg-chart-engines-run .faster { fill: var(--semantic-color-background-fill-primary-positive, #2e6c4c); }
+  .dg-chart-engines-run .slower { fill: var(--semantic-color-background-fill-primary-negative, #a42c2d); }
+  .dg-chart-engines-run .s0 { fill: var(--semantic-color-background-fill-data-viz-100, #557ca7); }
+  .dg-chart-engines-run .s1 { fill: var(--semantic-color-background-fill-data-viz-200, #e98a2e); }
+  .dg-chart-engines-run .s2 { fill: var(--semantic-color-background-fill-data-viz-300, #d5525a); }
+  .dg-chart-engines-run .s3 { fill: var(--semantic-color-background-fill-data-viz-400, #80b9b2); }
+  .dg-chart-engines-run .s4 { fill: var(--semantic-color-background-fill-data-viz-500, #66a14f); }
+  .dg-chart-engines-run .s5 { fill: var(--semantic-color-background-fill-data-viz-600, #e9c74c); }
+  .dg-chart-engines-run .s6 { fill: var(--semantic-color-background-fill-data-viz-700, #aa7aa0); }
+  .dg-chart-engines-run .s7 { fill: var(--semantic-color-background-fill-data-viz-800, #f79ba8); }
+  .dg-chart-engines-run .s8 { fill: var(--semantic-color-background-fill-data-viz-900, #98745e); }
+  .dg-chart-engines-run .s9 { fill: var(--semantic-color-background-fill-data-viz-1000, #b9b0ab); }
+  @media (prefers-color-scheme: dark) {
+    .dg-chart-engines-run text { fill: var(--semantic-color-text-primary, #f6f6f6); }
+    .dg-chart-engines-run .small { fill: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-engines-run .box, .dg-chart-engines-run .host { fill: var(--semantic-color-background-surface, #2e2e2e); stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-chart-engines-run .hdr, .dg-chart-engines-run .engine { fill: var(--semantic-color-background-fill-secondary-information, #1e313b); stroke: var(--semantic-color-border-information, #4c9bc1); }
+    .dg-chart-engines-run .traced, .dg-chart-engines-run .arena { fill: var(--semantic-color-background-fill-secondary-warning, #3b2b0c); stroke: var(--semantic-color-border-warning, #b8880c); }
+    .dg-chart-engines-run .tag { fill: var(--semantic-color-background-fill-secondary-positive, #1f3328); stroke: var(--semantic-color-border-positive, #4da578); }
+    .dg-chart-engines-run .cell { fill: var(--semantic-color-background-canvas, #161616); stroke: var(--semantic-color-border-warning, #b8880c); }
+    .dg-chart-engines-run .pad { stroke: var(--semantic-color-border-secondary, #464646); }
+    .dg-chart-engines-run .tail { fill: var(--semantic-color-background-surface, #2e2e2e); stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-chart-engines-run .zero { fill: var(--semantic-color-background-canvas, #161616); stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-chart-engines-run .dead { fill: var(--semantic-color-background-surface, #2e2e2e); stroke: var(--semantic-color-border-secondary, #464646); }
+    .dg-chart-engines-run .rule { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-engines-run .dash { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-engines-run .arrow { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-engines-run .faint { stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-chart-engines-run .head { fill: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-engines-run .hatch { stroke: var(--semantic-color-border-secondary, #464646); }
+    .dg-chart-engines-run .grid { stroke: var(--semantic-color-border-secondary, #464646); }
+    .dg-chart-engines-run .axis { stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-chart-engines-run .parity { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-engines-run .faster { fill: var(--semantic-color-background-fill-primary-positive, #4da578); }
+    .dg-chart-engines-run .slower { fill: var(--semantic-color-background-fill-primary-negative, #ea5a56); }
+    .dg-chart-engines-run .s0 { fill: var(--semantic-color-background-fill-data-viz-100, #557ca7); }
+    .dg-chart-engines-run .s1 { fill: var(--semantic-color-background-fill-data-viz-200, #e98a2e); }
+    .dg-chart-engines-run .s2 { fill: var(--semantic-color-background-fill-data-viz-300, #d5525a); }
+    .dg-chart-engines-run .s3 { fill: var(--semantic-color-background-fill-data-viz-400, #80b9b2); }
+    .dg-chart-engines-run .s4 { fill: var(--semantic-color-background-fill-data-viz-500, #66a14f); }
+    .dg-chart-engines-run .s5 { fill: var(--semantic-color-background-fill-data-viz-600, #e9c74c); }
+    .dg-chart-engines-run .s6 { fill: var(--semantic-color-background-fill-data-viz-700, #aa7aa0); }
+    .dg-chart-engines-run .s7 { fill: var(--semantic-color-background-fill-data-viz-800, #f79ba8); }
+    .dg-chart-engines-run .s8 { fill: var(--semantic-color-background-fill-data-viz-900, #98745e); }
+    .dg-chart-engines-run .s9 { fill: var(--semantic-color-background-fill-data-viz-1000, #b9b0ab); }
+  }
+</style>
+<defs><pattern id="chart-engines-run-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" class="hatch"/></pattern><marker id="chart-engines-run-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<rect class="s0" x="52.0" y="5.0" width="10.0" height="10.0"/>
+<text class="" x="67.0" y="14.0" text-anchor="start">djs</text>
+<rect class="s3" x="104.2" y="5.0" width="10.0" height="10.0"/>
+<text class="" x="119.2" y="14.0" text-anchor="start">quickjs-wasi</text>
+<rect class="s1" x="216.8" y="5.0" width="10.0" height="10.0"/>
+<text class="" x="231.8" y="14.0" text-anchor="start">QuickJS</text>
+<rect class="s2" x="295.8" y="5.0" width="10.0" height="10.0"/>
+<text class="" x="310.8" y="14.0" text-anchor="start">QuickJS-NG</text>
+<rect class="s5" x="395.0" y="5.0" width="10.0" height="10.0"/>
+<text class="" x="410.0" y="14.0" text-anchor="start">quickjs-emscripten</text>
+<rect class="s6" x="52.0" y="23.0" width="10.0" height="10.0"/>
+<text class="" x="67.0" y="32.0" text-anchor="start">quickjs-emscripten (NG)</text>
+<rect class="s4" x="238.6" y="23.0" width="10.0" height="10.0"/>
+<text class="" x="253.6" y="32.0" text-anchor="start">monty</text>
+<line class="grid" x1="52.0" y1="248.0" x2="712.0" y2="248.0"/>
+<text class="small" x="46.0" y="251.5" text-anchor="end">0.1</text>
+<line class="grid" x1="52.0" y1="225.7" x2="712.0" y2="225.7"/>
+<text class="small" x="46.0" y="229.2" text-anchor="end">0.2</text>
+<line class="grid" x1="52.0" y1="196.2" x2="712.0" y2="196.2"/>
+<text class="small" x="46.0" y="199.7" text-anchor="end">0.5</text>
+<line class="grid" x1="52.0" y1="173.9" x2="712.0" y2="173.9"/>
+<text class="small" x="46.0" y="177.4" text-anchor="end">1</text>
+<line class="grid" x1="52.0" y1="151.6" x2="712.0" y2="151.6"/>
+<text class="small" x="46.0" y="155.1" text-anchor="end">2</text>
+<line class="grid" x1="52.0" y1="122.1" x2="712.0" y2="122.1"/>
+<text class="small" x="46.0" y="125.6" text-anchor="end">5</text>
+<line class="grid" x1="52.0" y1="99.8" x2="712.0" y2="99.8"/>
+<text class="small" x="46.0" y="103.3" text-anchor="end">10</text>
+<line class="grid" x1="52.0" y1="77.5" x2="712.0" y2="77.5"/>
+<text class="small" x="46.0" y="81.0" text-anchor="end">20</text>
+<line class="grid" x1="52.0" y1="48.0" x2="712.0" y2="48.0"/>
+<text class="small" x="46.0" y="51.5" text-anchor="end">50</text>
+<text class="small" x="46.0" y="40.0" text-anchor="end">ms</text>
+<rect class="s0" x="57.0" y="202.0" width="8.0" height="46.0"/>
+<rect class="s3" x="66.0" y="205.4" width="8.0" height="42.6"/>
+<rect class="s1" x="75.1" y="206.7" width="8.0" height="41.3"/>
+<rect class="s2" x="84.1" y="205.5" width="8.0" height="42.5"/>
+<rect class="s5" x="93.2" y="203.1" width="8.0" height="44.9"/>
+<rect class="s6" x="102.2" y="203.2" width="8.0" height="44.8"/>
+<rect class="s4" x="111.3" y="192.7" width="8.0" height="55.3"/>
+<text class="" x="88.7" y="264.0" text-anchor="middle">sequential</text>
+<rect class="s0" x="130.3" y="173.0" width="8.0" height="75.0"/>
+<rect class="s3" x="139.4" y="158.4" width="8.0" height="89.6"/>
+<rect class="s1" x="148.4" y="167.5" width="8.0" height="80.5"/>
+<rect class="s2" x="157.5" y="169.5" width="8.0" height="78.5"/>
+<rect class="s5" x="166.5" y="155.1" width="8.0" height="92.9"/>
+<rect class="s6" x="175.6" y="157.1" width="8.0" height="90.9"/>
+<rect class="s4" x="184.6" y="162.6" width="8.0" height="85.4"/>
+<text class="" x="162.0" y="264.0" text-anchor="middle">fanout</text>
+<rect class="s0" x="203.7" y="214.2" width="8.0" height="33.8"/>
+<rect class="s3" x="212.7" y="198.1" width="8.0" height="49.9"/>
+<rect class="s1" x="221.8" y="176.1" width="8.0" height="71.9"/>
+<rect class="s2" x="230.8" y="199.9" width="8.0" height="48.1"/>
+<rect class="s5" x="239.9" y="160.9" width="8.0" height="87.1"/>
+<rect class="s6" x="248.9" y="175.1" width="8.0" height="72.9"/>
+<rect class="s4" x="258.0" y="180.5" width="8.0" height="67.5"/>
+<text class="" x="235.3" y="264.0" text-anchor="middle">media</text>
+<rect class="s0" x="277.0" y="217.9" width="8.0" height="30.1"/>
+<rect class="s3" x="286.0" y="220.8" width="8.0" height="27.2"/>
+<rect class="s1" x="295.1" y="224.9" width="8.0" height="23.1"/>
+<rect class="s2" x="304.1" y="226.2" width="8.0" height="21.8"/>
+<rect class="s5" x="313.2" y="213.8" width="8.0" height="34.2"/>
+<rect class="s6" x="322.2" y="212.0" width="8.0" height="36.0"/>
+<rect class="s4" x="331.3" y="188.7" width="8.0" height="59.3"/>
+<text class="" x="308.7" y="264.0" text-anchor="middle">inspect</text>
+<rect class="s0" x="350.3" y="182.5" width="8.0" height="65.5"/>
+<rect class="s3" x="359.4" y="143.0" width="8.0" height="105.0"/>
+<rect class="s1" x="368.4" y="179.1" width="8.0" height="68.9"/>
+<rect class="s2" x="377.5" y="149.6" width="8.0" height="98.4"/>
+<rect class="s5" x="386.5" y="170.5" width="8.0" height="77.5"/>
+<rect class="s6" x="395.6" y="126.3" width="8.0" height="121.7"/>
+<rect class="s4" x="404.6" y="157.8" width="8.0" height="90.2"/>
+<text class="" x="382.0" y="264.0" text-anchor="middle">loop</text>
+<rect class="s0" x="423.7" y="161.7" width="8.0" height="86.3"/>
+<rect class="s3" x="432.7" y="157.5" width="8.0" height="90.5"/>
+<rect class="s1" x="441.8" y="160.1" width="8.0" height="87.9"/>
+<rect class="s2" x="450.8" y="161.6" width="8.0" height="86.4"/>
+<rect class="s5" x="459.9" y="153.4" width="8.0" height="94.6"/>
+<rect class="s6" x="468.9" y="145.7" width="8.0" height="102.3"/>
+<rect class="s4" x="478.0" y="139.8" width="8.0" height="108.2"/>
+<text class="" x="455.3" y="264.0" text-anchor="middle">text</text>
+<rect class="s0" x="497.0" y="157.3" width="8.0" height="90.7"/>
+<rect class="s3" x="506.0" y="149.3" width="8.0" height="98.7"/>
+<rect class="s1" x="515.1" y="155.4" width="8.0" height="92.6"/>
+<rect class="s2" x="524.1" y="153.2" width="8.0" height="94.8"/>
+<rect class="s5" x="533.2" y="142.7" width="8.0" height="105.3"/>
+<rect class="s6" x="542.2" y="141.4" width="8.0" height="106.6"/>
+<rect class="s4" x="551.3" y="133.2" width="8.0" height="114.8"/>
+<text class="" x="528.7" y="264.0" text-anchor="middle">json</text>
+<rect class="s0" x="570.3" y="150.9" width="8.0" height="97.1"/>
+<rect class="s3" x="579.4" y="146.8" width="8.0" height="101.2"/>
+<rect class="s1" x="588.4" y="152.1" width="8.0" height="95.9"/>
+<rect class="s2" x="597.5" y="149.5" width="8.0" height="98.5"/>
+<rect class="s5" x="606.5" y="139.3" width="8.0" height="108.7"/>
+<rect class="s6" x="615.6" y="138.5" width="8.0" height="109.5"/>
+<rect class="s4" x="624.6" y="141.6" width="8.0" height="106.4"/>
+<text class="" x="602.0" y="264.0" text-anchor="middle">ts</text>
+<rect class="s0" x="643.7" y="95.2" width="8.0" height="152.8"/>
+<rect class="s3" x="652.7" y="85.4" width="8.0" height="162.6"/>
+<rect class="s1" x="661.8" y="86.1" width="8.0" height="161.9"/>
+<rect class="s2" x="670.8" y="84.1" width="8.0" height="163.9"/>
+<rect class="s5" x="679.9" y="79.6" width="8.0" height="168.4"/>
+<rect class="s6" x="688.9" y="65.2" width="8.0" height="182.8"/>
+<rect class="s4" x="698.0" y="94.7" width="8.0" height="153.3"/>
+<text class="" x="675.3" y="264.0" text-anchor="middle">heavy</text>
+<line class="axis" x1="52.0" y1="248.0" x2="712.0" y2="248.0"/>
+</svg>

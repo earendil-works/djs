@@ -13,6 +13,7 @@
 //!
 //! The guide's pages are listed in docs/guide/SUMMARY.md (mdBook's format).
 
+mod chart;
 mod highlight;
 mod paths;
 mod regions;

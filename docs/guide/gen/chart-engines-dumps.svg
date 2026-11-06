@@ -1,0 +1,167 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg-chart-engines-dumps" viewBox="0 0 720 204" width="720" height="204" role="img" aria-labelledby="chart-engines-dumps-t chart-engines-dumps-d">
+<title id="chart-engines-dumps-t">djs's continuation dumps per workload: size, and the time to write and to load one</title>
+<desc id="chart-engines-dumps-d">Horizontal bars per workload: the median dump size in KiB on a logarithmic scale, the median write and load times in ms. A workload that never waits has no dump. The table below has the exact numbers.</desc>
+<style>
+  .dg-chart-engines-dumps text { font-family: var(--semantic-font-family-ui, "Mallos Serif", Georgia, serif); font-size: 12px; fill: var(--semantic-color-text-primary, #111111); }
+  .dg-chart-engines-dumps .mono { font-family: var(--semantic-font-family-code, "Commit Mono", ui-monospace, Menlo, monospace); font-size: 11px; }
+  .dg-chart-engines-dumps .small { font-size: 10.5px; fill: var(--semantic-color-text-secondary, #5e5e5e); }
+  .dg-chart-engines-dumps .label { font-weight: 600; }
+  .dg-chart-engines-dumps .title { font-weight: 600; font-size: 13px; }
+  .dg-chart-engines-dumps .box, .dg-chart-engines-dumps .host { fill: var(--semantic-color-background-surface, #f1f1f1); stroke: var(--semantic-color-border-primary, #777777); }
+  .dg-chart-engines-dumps .hdr, .dg-chart-engines-dumps .engine { fill: var(--semantic-color-background-fill-secondary-information, #dbe4ea); stroke: var(--semantic-color-border-information, #3380a4); }
+  .dg-chart-engines-dumps .traced, .dg-chart-engines-dumps .arena { fill: var(--semantic-color-background-fill-secondary-warning, #f3e0be); stroke: var(--semantic-color-border-warning, #996f00); }
+  .dg-chart-engines-dumps .tag { fill: var(--semantic-color-background-fill-secondary-positive, #dae6df); stroke: var(--semantic-color-border-positive, #378960); }
+  .dg-chart-engines-dumps .cell { fill: var(--semantic-color-background-canvas, #f8f8f8); stroke: var(--semantic-color-border-warning, #996f00); }
+  .dg-chart-engines-dumps .pad { fill: url(#chart-engines-dumps-hatch); stroke: var(--semantic-color-border-secondary, #e2e2e2); }
+  .dg-chart-engines-dumps .tail { fill: var(--semantic-color-background-surface, #f1f1f1); stroke: var(--semantic-color-border-primary, #777777); stroke-dasharray: 4 3; }
+  .dg-chart-engines-dumps .zero { fill: var(--semantic-color-background-canvas, #f8f8f8); stroke: var(--semantic-color-border-primary, #777777); stroke-dasharray: 4 3; }
+  .dg-chart-engines-dumps .dead { fill: var(--semantic-color-background-surface, #f1f1f1); stroke: var(--semantic-color-border-secondary, #e2e2e2); stroke-dasharray: 3 2; }
+  .dg-chart-engines-dumps .opt { stroke-dasharray: 3 2; }
+  .dg-chart-engines-dumps .rule { stroke: var(--semantic-color-text-secondary, #5e5e5e); stroke-width: 1.2; }
+  .dg-chart-engines-dumps .dash { stroke: var(--semantic-color-text-secondary, #5e5e5e); stroke-width: 1.2; stroke-dasharray: 4 3; }
+  .dg-chart-engines-dumps .arrow { stroke: var(--semantic-color-text-secondary, #5e5e5e); fill: none; stroke-width: 1.3; marker-end: url(#chart-engines-dumps-a); }
+  .dg-chart-engines-dumps .faint { stroke: var(--semantic-color-border-primary, #777777); fill: none; stroke-width: 1.1; stroke-dasharray: 4 3; marker-end: url(#chart-engines-dumps-a); }
+  .dg-chart-engines-dumps .head { fill: var(--semantic-color-text-secondary, #5e5e5e); }
+  .dg-chart-engines-dumps .hatch { stroke: var(--semantic-color-border-secondary, #e2e2e2); }
+  .dg-chart-engines-dumps .grid { stroke: var(--semantic-color-border-secondary, #e2e2e2); stroke-width: 1; }
+  .dg-chart-engines-dumps .axis { stroke: var(--semantic-color-border-primary, #777777); stroke-width: 1; }
+  .dg-chart-engines-dumps .parity { stroke: var(--semantic-color-text-secondary, #5e5e5e); stroke-width: 1.2; stroke-dasharray: 4 3; }
+  .dg-chart-engines-dumps .faster { fill: var(--semantic-color-background-fill-primary-positive, #2e6c4c); }
+  .dg-chart-engines-dumps .slower { fill: var(--semantic-color-background-fill-primary-negative, #a42c2d); }
+  .dg-chart-engines-dumps .s0 { fill: var(--semantic-color-background-fill-data-viz-100, #557ca7); }
+  .dg-chart-engines-dumps .s1 { fill: var(--semantic-color-background-fill-data-viz-200, #e98a2e); }
+  .dg-chart-engines-dumps .s2 { fill: var(--semantic-color-background-fill-data-viz-300, #d5525a); }
+  .dg-chart-engines-dumps .s3 { fill: var(--semantic-color-background-fill-data-viz-400, #80b9b2); }
+  .dg-chart-engines-dumps .s4 { fill: var(--semantic-color-background-fill-data-viz-500, #66a14f); }
+  .dg-chart-engines-dumps .s5 { fill: var(--semantic-color-background-fill-data-viz-600, #e9c74c); }
+  .dg-chart-engines-dumps .s6 { fill: var(--semantic-color-background-fill-data-viz-700, #aa7aa0); }
+  .dg-chart-engines-dumps .s7 { fill: var(--semantic-color-background-fill-data-viz-800, #f79ba8); }
+  .dg-chart-engines-dumps .s8 { fill: var(--semantic-color-background-fill-data-viz-900, #98745e); }
+  .dg-chart-engines-dumps .s9 { fill: var(--semantic-color-background-fill-data-viz-1000, #b9b0ab); }
+  @media (prefers-color-scheme: dark) {
+    .dg-chart-engines-dumps text { fill: var(--semantic-color-text-primary, #f6f6f6); }
+    .dg-chart-engines-dumps .small { fill: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-engines-dumps .box, .dg-chart-engines-dumps .host { fill: var(--semantic-color-background-surface, #2e2e2e); stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-chart-engines-dumps .hdr, .dg-chart-engines-dumps .engine { fill: var(--semantic-color-background-fill-secondary-information, #1e313b); stroke: var(--semantic-color-border-information, #4c9bc1); }
+    .dg-chart-engines-dumps .traced, .dg-chart-engines-dumps .arena { fill: var(--semantic-color-background-fill-secondary-warning, #3b2b0c); stroke: var(--semantic-color-border-warning, #b8880c); }
+    .dg-chart-engines-dumps .tag { fill: var(--semantic-color-background-fill-secondary-positive, #1f3328); stroke: var(--semantic-color-border-positive, #4da578); }
+    .dg-chart-engines-dumps .cell { fill: var(--semantic-color-background-canvas, #161616); stroke: var(--semantic-color-border-warning, #b8880c); }
+    .dg-chart-engines-dumps .pad { stroke: var(--semantic-color-border-secondary, #464646); }
+    .dg-chart-engines-dumps .tail { fill: var(--semantic-color-background-surface, #2e2e2e); stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-chart-engines-dumps .zero { fill: var(--semantic-color-background-canvas, #161616); stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-chart-engines-dumps .dead { fill: var(--semantic-color-background-surface, #2e2e2e); stroke: var(--semantic-color-border-secondary, #464646); }
+    .dg-chart-engines-dumps .rule { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-engines-dumps .dash { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-engines-dumps .arrow { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-engines-dumps .faint { stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-chart-engines-dumps .head { fill: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-engines-dumps .hatch { stroke: var(--semantic-color-border-secondary, #464646); }
+    .dg-chart-engines-dumps .grid { stroke: var(--semantic-color-border-secondary, #464646); }
+    .dg-chart-engines-dumps .axis { stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-chart-engines-dumps .parity { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-engines-dumps .faster { fill: var(--semantic-color-background-fill-primary-positive, #4da578); }
+    .dg-chart-engines-dumps .slower { fill: var(--semantic-color-background-fill-primary-negative, #ea5a56); }
+    .dg-chart-engines-dumps .s0 { fill: var(--semantic-color-background-fill-data-viz-100, #557ca7); }
+    .dg-chart-engines-dumps .s1 { fill: var(--semantic-color-background-fill-data-viz-200, #e98a2e); }
+    .dg-chart-engines-dumps .s2 { fill: var(--semantic-color-background-fill-data-viz-300, #d5525a); }
+    .dg-chart-engines-dumps .s3 { fill: var(--semantic-color-background-fill-data-viz-400, #80b9b2); }
+    .dg-chart-engines-dumps .s4 { fill: var(--semantic-color-background-fill-data-viz-500, #66a14f); }
+    .dg-chart-engines-dumps .s5 { fill: var(--semantic-color-background-fill-data-viz-600, #e9c74c); }
+    .dg-chart-engines-dumps .s6 { fill: var(--semantic-color-background-fill-data-viz-700, #aa7aa0); }
+    .dg-chart-engines-dumps .s7 { fill: var(--semantic-color-background-fill-data-viz-800, #f79ba8); }
+    .dg-chart-engines-dumps .s8 { fill: var(--semantic-color-background-fill-data-viz-900, #98745e); }
+    .dg-chart-engines-dumps .s9 { fill: var(--semantic-color-background-fill-data-viz-1000, #b9b0ab); }
+  }
+</style>
+<defs><pattern id="chart-engines-dumps-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" class="hatch"/></pattern><marker id="chart-engines-dumps-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<text class="" x="71.2" y="46.5" text-anchor="end">sequential</text>
+<text class="" x="71.2" y="64.5" text-anchor="end">fanout</text>
+<text class="" x="71.2" y="82.5" text-anchor="end">media</text>
+<text class="" x="71.2" y="100.5" text-anchor="end">inspect</text>
+<text class="" x="71.2" y="118.5" text-anchor="end">loop</text>
+<text class="" x="71.2" y="136.5" text-anchor="end">text</text>
+<text class="" x="71.2" y="154.5" text-anchor="end">json</text>
+<text class="" x="71.2" y="172.5" text-anchor="end">ts</text>
+<text class="" x="71.2" y="190.5" text-anchor="end">heavy</text>
+<text class="label" x="79.2" y="14.0" text-anchor="start">dump, KiB</text>
+<line class="grid" x1="115.1" y1="30.0" x2="115.1" y2="196.0"/>
+<text class="small" x="115.1" y="26.0" text-anchor="middle">1</text>
+<line class="grid" x1="166.6" y1="30.0" x2="166.6" y2="196.0"/>
+<text class="small" x="166.6" y="26.0" text-anchor="middle">10</text>
+<line class="grid" x1="218.0" y1="30.0" x2="218.0" y2="196.0"/>
+<text class="small" x="218.0" y="26.0" text-anchor="middle">100</text>
+<rect class="s0" x="79.2" y="37.0" width="40.7" height="12.0"/>
+<text class="small" x="123.9" y="47.0" text-anchor="start">1.2</text>
+<rect class="s0" x="79.2" y="55.0" width="132.1" height="12.0"/>
+<text class="small" x="215.3" y="65.0" text-anchor="start">74.3</text>
+<rect class="s0" x="79.2" y="73.0" width="14.0" height="12.0"/>
+<text class="small" x="97.2" y="83.0" text-anchor="start">0.4</text>
+<text class="small" x="83.2" y="101.0" text-anchor="start">none</text>
+<rect class="s0" x="79.2" y="109.0" width="83.9" height="12.0"/>
+<text class="small" x="167.1" y="119.0" text-anchor="start">8.6</text>
+<rect class="s0" x="79.2" y="127.0" width="124.3" height="12.0"/>
+<text class="small" x="207.5" y="137.0" text-anchor="start">52.2</text>
+<rect class="s0" x="79.2" y="145.0" width="143.2" height="12.0"/>
+<text class="small" x="226.4" y="155.0" text-anchor="start">121.9</text>
+<rect class="s0" x="79.2" y="163.0" width="47.3" height="12.0"/>
+<text class="small" x="130.5" y="173.0" text-anchor="start">1.7</text>
+<rect class="s0" x="79.2" y="181.0" width="119.5" height="12.0"/>
+<text class="small" x="202.7" y="191.0" text-anchor="start">42.1</text>
+<line class="axis" x1="79.2" y1="30.0" x2="79.2" y2="196.0"/>
+<text class="label" x="299.5" y="14.0" text-anchor="start">write, ms</text>
+<line class="grid" x1="299.5" y1="30.0" x2="299.5" y2="196.0"/>
+<text class="small" x="299.5" y="26.0" text-anchor="middle">0</text>
+<line class="grid" x1="338.0" y1="30.0" x2="338.0" y2="196.0"/>
+<text class="small" x="338.0" y="26.0" text-anchor="middle">1</text>
+<line class="grid" x1="376.6" y1="30.0" x2="376.6" y2="196.0"/>
+<text class="small" x="376.6" y="26.0" text-anchor="middle">2</text>
+<line class="grid" x1="415.2" y1="30.0" x2="415.2" y2="196.0"/>
+<text class="small" x="415.2" y="26.0" text-anchor="middle">3</text>
+<line class="grid" x1="453.7" y1="30.0" x2="453.7" y2="196.0"/>
+<text class="small" x="453.7" y="26.0" text-anchor="middle">4</text>
+<rect class="s0" x="299.5" y="37.0" width="11.7" height="12.0"/>
+<text class="small" x="315.2" y="47.0" text-anchor="start">0.304</text>
+<rect class="s0" x="299.5" y="55.0" width="19.6" height="12.0"/>
+<text class="small" x="323.0" y="65.0" text-anchor="start">0.507</text>
+<rect class="s0" x="299.5" y="73.0" width="5.1" height="12.0"/>
+<text class="small" x="308.5" y="83.0" text-anchor="start">0.131</text>
+<text class="small" x="303.5" y="101.0" text-anchor="start">none</text>
+<rect class="s0" x="299.5" y="109.0" width="17.6" height="12.0"/>
+<text class="small" x="321.1" y="119.0" text-anchor="start">0.457</text>
+<rect class="s0" x="299.5" y="127.0" width="29.1" height="12.0"/>
+<text class="small" x="332.6" y="137.0" text-anchor="start">0.755</text>
+<rect class="s0" x="299.5" y="145.0" width="149.2" height="12.0"/>
+<text class="small" x="452.7" y="155.0" text-anchor="start">3.87</text>
+<rect class="s0" x="299.5" y="163.0" width="27.8" height="12.0"/>
+<text class="small" x="331.3" y="173.0" text-anchor="start">0.722</text>
+<rect class="s0" x="299.5" y="181.0" width="18.8" height="12.0"/>
+<text class="small" x="322.3" y="191.0" text-anchor="start">0.488</text>
+<line class="axis" x1="299.5" y1="30.0" x2="299.5" y2="196.0"/>
+<text class="label" x="519.7" y="14.0" text-anchor="start">load, ms</text>
+<line class="grid" x1="519.7" y1="30.0" x2="519.7" y2="196.0"/>
+<text class="small" x="519.7" y="26.0" text-anchor="middle">0</text>
+<line class="grid" x1="571.2" y1="30.0" x2="571.2" y2="196.0"/>
+<text class="small" x="571.2" y="26.0" text-anchor="middle">1</text>
+<line class="grid" x1="622.6" y1="30.0" x2="622.6" y2="196.0"/>
+<text class="small" x="622.6" y="26.0" text-anchor="middle">2</text>
+<line class="grid" x1="674.0" y1="30.0" x2="674.0" y2="196.0"/>
+<text class="small" x="674.0" y="26.0" text-anchor="middle">3</text>
+<rect class="s0" x="519.7" y="37.0" width="15.3" height="12.0"/>
+<text class="small" x="539.1" y="47.0" text-anchor="start">0.298</text>
+<rect class="s0" x="519.7" y="55.0" width="32.5" height="12.0"/>
+<text class="small" x="556.2" y="65.0" text-anchor="start">0.632</text>
+<rect class="s0" x="519.7" y="73.0" width="11.2" height="12.0"/>
+<text class="small" x="534.9" y="83.0" text-anchor="start">0.217</text>
+<text class="small" x="523.7" y="101.0" text-anchor="start">none</text>
+<rect class="s0" x="519.7" y="109.0" width="18.0" height="12.0"/>
+<text class="small" x="541.7" y="119.0" text-anchor="start">0.35</text>
+<rect class="s0" x="519.7" y="127.0" width="46.5" height="12.0"/>
+<text class="small" x="570.3" y="137.0" text-anchor="start">0.905</text>
+<rect class="s0" x="519.7" y="145.0" width="149.2" height="12.0"/>
+<text class="small" x="673.0" y="155.0" text-anchor="start">2.9</text>
+<rect class="s0" x="519.7" y="163.0" width="19.2" height="12.0"/>
+<text class="small" x="542.9" y="173.0" text-anchor="start">0.373</text>
+<rect class="s0" x="519.7" y="181.0" width="34.6" height="12.0"/>
+<text class="small" x="558.3" y="191.0" text-anchor="start">0.673</text>
+<line class="axis" x1="519.7" y1="30.0" x2="519.7" y2="196.0"/>
+</svg>

@@ -342,11 +342,26 @@ fn generate(
                 return old.to_string();
             }
             match args {
-                [what] => crate::status::generate(st, what, matches!(page, "README.md" | "pi.md"))
-                    .unwrap_or_else(|e| {
-                        cx.errors.push(format!("{page}: {e}"));
-                        String::new()
-                    }),
+                [what] => {
+                    let table =
+                        crate::status::generate(st, what, matches!(page, "README.md" | "pi.md"))
+                            .unwrap_or_else(|e| {
+                                cx.errors.push(format!("{page}: {e}"));
+                                String::new()
+                            });
+                    match crate::status::chart(st, what) {
+                        Ok(Some(c)) => {
+                            let head = format!("![{}]({})\n\n", c.alt, c.file);
+                            cx.files.insert(c.file, c.svg);
+                            head + &table
+                        }
+                        Ok(None) => table,
+                        Err(e) => {
+                            cx.errors.push(format!("{page}: {e}"));
+                            table
+                        }
+                    }
+                }
                 _ => {
                     cx.errors
                         .push(format!("{page}: gen:status takes one argument"));

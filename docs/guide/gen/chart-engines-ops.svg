@@ -1,0 +1,179 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg-chart-engines-ops" viewBox="0 0 720 558" width="720" height="558" role="img" aria-labelledby="chart-engines-ops-t chart-engines-ops-d">
+<title id="chart-engines-ops-t">djs's time over the best QuickJS build's, per operation, on a logarithmic scale around parity</title>
+<desc id="chart-engines-ops-d">Bars from the parity line at 1: to the left djs is faster, to the right slower. The table below has the times.</desc>
+<style>
+  .dg-chart-engines-ops text { font-family: var(--semantic-font-family-ui, "Mallos Serif", Georgia, serif); font-size: 12px; fill: var(--semantic-color-text-primary, #111111); }
+  .dg-chart-engines-ops .mono { font-family: var(--semantic-font-family-code, "Commit Mono", ui-monospace, Menlo, monospace); font-size: 11px; }
+  .dg-chart-engines-ops .small { font-size: 10.5px; fill: var(--semantic-color-text-secondary, #5e5e5e); }
+  .dg-chart-engines-ops .label { font-weight: 600; }
+  .dg-chart-engines-ops .title { font-weight: 600; font-size: 13px; }
+  .dg-chart-engines-ops .box, .dg-chart-engines-ops .host { fill: var(--semantic-color-background-surface, #f1f1f1); stroke: var(--semantic-color-border-primary, #777777); }
+  .dg-chart-engines-ops .hdr, .dg-chart-engines-ops .engine { fill: var(--semantic-color-background-fill-secondary-information, #dbe4ea); stroke: var(--semantic-color-border-information, #3380a4); }
+  .dg-chart-engines-ops .traced, .dg-chart-engines-ops .arena { fill: var(--semantic-color-background-fill-secondary-warning, #f3e0be); stroke: var(--semantic-color-border-warning, #996f00); }
+  .dg-chart-engines-ops .tag { fill: var(--semantic-color-background-fill-secondary-positive, #dae6df); stroke: var(--semantic-color-border-positive, #378960); }
+  .dg-chart-engines-ops .cell { fill: var(--semantic-color-background-canvas, #f8f8f8); stroke: var(--semantic-color-border-warning, #996f00); }
+  .dg-chart-engines-ops .pad { fill: url(#chart-engines-ops-hatch); stroke: var(--semantic-color-border-secondary, #e2e2e2); }
+  .dg-chart-engines-ops .tail { fill: var(--semantic-color-background-surface, #f1f1f1); stroke: var(--semantic-color-border-primary, #777777); stroke-dasharray: 4 3; }
+  .dg-chart-engines-ops .zero { fill: var(--semantic-color-background-canvas, #f8f8f8); stroke: var(--semantic-color-border-primary, #777777); stroke-dasharray: 4 3; }
+  .dg-chart-engines-ops .dead { fill: var(--semantic-color-background-surface, #f1f1f1); stroke: var(--semantic-color-border-secondary, #e2e2e2); stroke-dasharray: 3 2; }
+  .dg-chart-engines-ops .opt { stroke-dasharray: 3 2; }
+  .dg-chart-engines-ops .rule { stroke: var(--semantic-color-text-secondary, #5e5e5e); stroke-width: 1.2; }
+  .dg-chart-engines-ops .dash { stroke: var(--semantic-color-text-secondary, #5e5e5e); stroke-width: 1.2; stroke-dasharray: 4 3; }
+  .dg-chart-engines-ops .arrow { stroke: var(--semantic-color-text-secondary, #5e5e5e); fill: none; stroke-width: 1.3; marker-end: url(#chart-engines-ops-a); }
+  .dg-chart-engines-ops .faint { stroke: var(--semantic-color-border-primary, #777777); fill: none; stroke-width: 1.1; stroke-dasharray: 4 3; marker-end: url(#chart-engines-ops-a); }
+  .dg-chart-engines-ops .head { fill: var(--semantic-color-text-secondary, #5e5e5e); }
+  .dg-chart-engines-ops .hatch { stroke: var(--semantic-color-border-secondary, #e2e2e2); }
+  .dg-chart-engines-ops .grid { stroke: var(--semantic-color-border-secondary, #e2e2e2); stroke-width: 1; }
+  .dg-chart-engines-ops .axis { stroke: var(--semantic-color-border-primary, #777777); stroke-width: 1; }
+  .dg-chart-engines-ops .parity { stroke: var(--semantic-color-text-secondary, #5e5e5e); stroke-width: 1.2; stroke-dasharray: 4 3; }
+  .dg-chart-engines-ops .faster { fill: var(--semantic-color-background-fill-primary-positive, #2e6c4c); }
+  .dg-chart-engines-ops .slower { fill: var(--semantic-color-background-fill-primary-negative, #a42c2d); }
+  .dg-chart-engines-ops .s0 { fill: var(--semantic-color-background-fill-data-viz-100, #557ca7); }
+  .dg-chart-engines-ops .s1 { fill: var(--semantic-color-background-fill-data-viz-200, #e98a2e); }
+  .dg-chart-engines-ops .s2 { fill: var(--semantic-color-background-fill-data-viz-300, #d5525a); }
+  .dg-chart-engines-ops .s3 { fill: var(--semantic-color-background-fill-data-viz-400, #80b9b2); }
+  .dg-chart-engines-ops .s4 { fill: var(--semantic-color-background-fill-data-viz-500, #66a14f); }
+  .dg-chart-engines-ops .s5 { fill: var(--semantic-color-background-fill-data-viz-600, #e9c74c); }
+  .dg-chart-engines-ops .s6 { fill: var(--semantic-color-background-fill-data-viz-700, #aa7aa0); }
+  .dg-chart-engines-ops .s7 { fill: var(--semantic-color-background-fill-data-viz-800, #f79ba8); }
+  .dg-chart-engines-ops .s8 { fill: var(--semantic-color-background-fill-data-viz-900, #98745e); }
+  .dg-chart-engines-ops .s9 { fill: var(--semantic-color-background-fill-data-viz-1000, #b9b0ab); }
+  @media (prefers-color-scheme: dark) {
+    .dg-chart-engines-ops text { fill: var(--semantic-color-text-primary, #f6f6f6); }
+    .dg-chart-engines-ops .small { fill: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-engines-ops .box, .dg-chart-engines-ops .host { fill: var(--semantic-color-background-surface, #2e2e2e); stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-chart-engines-ops .hdr, .dg-chart-engines-ops .engine { fill: var(--semantic-color-background-fill-secondary-information, #1e313b); stroke: var(--semantic-color-border-information, #4c9bc1); }
+    .dg-chart-engines-ops .traced, .dg-chart-engines-ops .arena { fill: var(--semantic-color-background-fill-secondary-warning, #3b2b0c); stroke: var(--semantic-color-border-warning, #b8880c); }
+    .dg-chart-engines-ops .tag { fill: var(--semantic-color-background-fill-secondary-positive, #1f3328); stroke: var(--semantic-color-border-positive, #4da578); }
+    .dg-chart-engines-ops .cell { fill: var(--semantic-color-background-canvas, #161616); stroke: var(--semantic-color-border-warning, #b8880c); }
+    .dg-chart-engines-ops .pad { stroke: var(--semantic-color-border-secondary, #464646); }
+    .dg-chart-engines-ops .tail { fill: var(--semantic-color-background-surface, #2e2e2e); stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-chart-engines-ops .zero { fill: var(--semantic-color-background-canvas, #161616); stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-chart-engines-ops .dead { fill: var(--semantic-color-background-surface, #2e2e2e); stroke: var(--semantic-color-border-secondary, #464646); }
+    .dg-chart-engines-ops .rule { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-engines-ops .dash { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-engines-ops .arrow { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-engines-ops .faint { stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-chart-engines-ops .head { fill: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-engines-ops .hatch { stroke: var(--semantic-color-border-secondary, #464646); }
+    .dg-chart-engines-ops .grid { stroke: var(--semantic-color-border-secondary, #464646); }
+    .dg-chart-engines-ops .axis { stroke: var(--semantic-color-border-primary, #919191); }
+    .dg-chart-engines-ops .parity { stroke: var(--semantic-color-text-secondary, #ababab); }
+    .dg-chart-engines-ops .faster { fill: var(--semantic-color-background-fill-primary-positive, #4da578); }
+    .dg-chart-engines-ops .slower { fill: var(--semantic-color-background-fill-primary-negative, #ea5a56); }
+    .dg-chart-engines-ops .s0 { fill: var(--semantic-color-background-fill-data-viz-100, #557ca7); }
+    .dg-chart-engines-ops .s1 { fill: var(--semantic-color-background-fill-data-viz-200, #e98a2e); }
+    .dg-chart-engines-ops .s2 { fill: var(--semantic-color-background-fill-data-viz-300, #d5525a); }
+    .dg-chart-engines-ops .s3 { fill: var(--semantic-color-background-fill-data-viz-400, #80b9b2); }
+    .dg-chart-engines-ops .s4 { fill: var(--semantic-color-background-fill-data-viz-500, #66a14f); }
+    .dg-chart-engines-ops .s5 { fill: var(--semantic-color-background-fill-data-viz-600, #e9c74c); }
+    .dg-chart-engines-ops .s6 { fill: var(--semantic-color-background-fill-data-viz-700, #aa7aa0); }
+    .dg-chart-engines-ops .s7 { fill: var(--semantic-color-background-fill-data-viz-800, #f79ba8); }
+    .dg-chart-engines-ops .s8 { fill: var(--semantic-color-background-fill-data-viz-900, #98745e); }
+    .dg-chart-engines-ops .s9 { fill: var(--semantic-color-background-fill-data-viz-1000, #b9b0ab); }
+  }
+</style>
+<defs><pattern id="chart-engines-ops-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" class="hatch"/></pattern><marker id="chart-engines-ops-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<text class="small" x="447.1" y="14.0" text-anchor="end">← djs faster</text>
+<text class="small" x="463.1" y="14.0" text-anchor="start">djs slower →</text>
+<text class="small" x="455.1" y="31.0" text-anchor="middle">1×</text>
+<line class="grid" x1="567.6" y1="36.0" x2="567.6" y2="550.0"/>
+<text class="small" x="567.6" y="31.0" text-anchor="middle">2×</text>
+<line class="grid" x1="342.7" y1="36.0" x2="342.7" y2="550.0"/>
+<text class="small" x="342.7" y="31.0" text-anchor="middle">0.5×</text>
+<line class="grid" x1="680.0" y1="36.0" x2="680.0" y2="550.0"/>
+<text class="small" x="680.0" y="31.0" text-anchor="middle">4×</text>
+<line class="grid" x1="230.2" y1="36.0" x2="230.2" y2="550.0"/>
+<text class="small" x="230.2" y="31.0" text-anchor="middle">0.25×</text>
+<text class="mono" x="222.2" y="52.0" text-anchor="end">JSON.parse of 600 query rows</text>
+<rect class="faster" x="273.6" y="43.0" width="181.5" height="11.0"/>
+<text class="small" x="269.6" y="52.0" text-anchor="end">0.33</text>
+<text class="mono" x="222.2" y="69.0" text-anchor="end">JSON.stringify of 600 query rows</text>
+<rect class="faster" x="253.9" y="60.0" width="201.2" height="11.0"/>
+<text class="small" x="249.9" y="69.0" text-anchor="end">0.29</text>
+<text class="mono" x="222.2" y="86.0" text-anchor="end">split("\n") of file texts</text>
+<rect class="faster" x="314.9" y="77.0" width="140.2" height="11.0"/>
+<text class="small" x="310.9" y="86.0" text-anchor="end">0.42</text>
+<text class="mono" x="222.2" y="103.0" text-anchor="end">join("\n") of their lines</text>
+<rect class="faster" x="347.4" y="94.0" width="107.7" height="11.0"/>
+<text class="small" x="343.4" y="103.0" text-anchor="end">0.51</text>
+<text class="mono" x="222.2" y="120.0" text-anchor="end">includes per line</text>
+<rect class="slower" x="455.1" y="111.0" width="11.5" height="11.0"/>
+<text class="small" x="470.6" y="120.0" text-anchor="start">1.07</text>
+<text class="mono" x="222.2" y="137.0" text-anchor="end">template literal appends</text>
+<rect class="slower" x="455.1" y="128.0" width="33.6" height="11.0"/>
+<text class="small" x="492.7" y="137.0" text-anchor="start">1.23</text>
+<text class="mono" x="222.2" y="154.0" text-anchor="end">trim</text>
+<rect class="slower" x="455.1" y="145.0" width="167.2" height="11.0"/>
+<text class="small" x="626.3" y="154.0" text-anchor="start">2.80</text>
+<text class="mono" x="222.2" y="171.0" text-anchor="end">slice</text>
+<rect class="slower" x="455.1" y="162.0" width="106.7" height="11.0"/>
+<text class="small" x="565.8" y="171.0" text-anchor="start">1.93</text>
+<text class="mono" x="222.2" y="188.0" text-anchor="end">padStart</text>
+<rect class="slower" x="455.1" y="179.0" width="148.5" height="11.0"/>
+<text class="small" x="607.6" y="188.0" text-anchor="start">2.50</text>
+<text class="mono" x="222.2" y="205.0" text-anchor="end">toLowerCase</text>
+<rect class="slower" x="455.1" y="196.0" width="87.3" height="11.0"/>
+<text class="small" x="546.5" y="205.0" text-anchor="start">1.71</text>
+<text class="mono" x="222.2" y="222.0" text-anchor="end">charCodeAt loop</text>
+<rect class="slower" x="455.1" y="213.0" width="71.4" height="11.0"/>
+<text class="small" x="530.5" y="222.0" text-anchor="start">1.55</text>
+<text class="mono" x="222.2" y="239.0" text-anchor="end">String(i)</text>
+<rect class="slower" x="455.1" y="230.0" width="87.1" height="11.0"/>
+<text class="small" x="546.2" y="239.0" text-anchor="start">1.71</text>
+<text class="mono" x="222.2" y="256.0" text-anchor="end">toFixed</text>
+<rect class="slower" x="455.1" y="247.0" width="96.4" height="11.0"/>
+<text class="small" x="555.5" y="256.0" text-anchor="start">1.81</text>
+<text class="mono" x="222.2" y="273.0" text-anchor="end">Math.max</text>
+<rect class="slower" x="455.1" y="264.0" width="11.8" height="11.0"/>
+<text class="small" x="470.9" y="273.0" text-anchor="start">1.08</text>
+<text class="mono" x="222.2" y="290.0" text-anchor="end">Math.floor</text>
+<rect class="slower" x="455.1" y="281.0" width="126.2" height="11.0"/>
+<text class="small" x="585.3" y="290.0" text-anchor="start">2.18</text>
+<text class="mono" x="222.2" y="307.0" text-anchor="end">match(/function \w+/g)</text>
+<rect class="faster" x="305.5" y="298.0" width="149.6" height="11.0"/>
+<text class="small" x="301.5" y="307.0" text-anchor="end">0.40</text>
+<text class="mono" x="222.2" y="324.0" text-anchor="end">replace(/\s+/g, " ")</text>
+<rect class="slower" x="455.1" y="315.0" width="3.9" height="11.0"/>
+<text class="small" x="463.0" y="324.0" text-anchor="start">1.02</text>
+<text class="mono" x="222.2" y="341.0" text-anchor="end">exec of a line pattern</text>
+<rect class="faster" x="397.0" y="332.0" width="58.1" height="11.0"/>
+<text class="small" x="393.0" y="341.0" text-anchor="end">0.70</text>
+<text class="mono" x="222.2" y="358.0" text-anchor="end">matchAll with /gm</text>
+<rect class="faster" x="432.9" y="349.0" width="22.2" height="11.0"/>
+<text class="small" x="428.9" y="358.0" text-anchor="end">0.87</text>
+<text class="mono" x="222.2" y="375.0" text-anchor="end">new RegExp</text>
+<rect class="faster" x="412.6" y="366.0" width="42.6" height="11.0"/>
+<text class="small" x="408.6" y="375.0" text-anchor="end">0.77</text>
+<text class="mono" x="222.2" y="392.0" text-anchor="end">map</text>
+<rect class="faster" x="446.7" y="383.0" width="8.5" height="11.0"/>
+<text class="small" x="442.7" y="392.0" text-anchor="end">0.95</text>
+<text class="mono" x="222.2" y="409.0" text-anchor="end">sort with a comparator</text>
+<rect class="slower" x="455.1" y="400.0" width="101.2" height="11.0"/>
+<text class="small" x="560.3" y="409.0" text-anchor="start">1.87</text>
+<text class="mono" x="222.2" y="426.0" text-anchor="end">sort of strings</text>
+<rect class="faster" x="431.7" y="417.0" width="23.4" height="11.0"/>
+<text class="small" x="427.7" y="426.0" text-anchor="end">0.87</text>
+<text class="mono" x="222.2" y="443.0" text-anchor="end">push</text>
+<rect class="slower" x="455.1" y="434.0" width="6.2" height="11.0"/>
+<text class="small" x="465.3" y="443.0" text-anchor="start">1.04</text>
+<text class="mono" x="222.2" y="460.0" text-anchor="end">Map.set with string keys</text>
+<rect class="slower" x="455.1" y="451.0" width="93.7" height="11.0"/>
+<text class="small" x="552.8" y="460.0" text-anchor="start">1.78</text>
+<text class="mono" x="222.2" y="477.0" text-anchor="end">Set.add with string keys</text>
+<rect class="slower" x="455.1" y="468.0" width="63.3" height="11.0"/>
+<text class="small" x="522.4" y="477.0" text-anchor="start">1.48</text>
+<text class="mono" x="222.2" y="494.0" text-anchor="end">object spread</text>
+<rect class="slower" x="455.1" y="485.0" width="48.9" height="11.0"/>
+<text class="small" x="508.0" y="494.0" text-anchor="start">1.35</text>
+<text class="mono" x="222.2" y="511.0" text-anchor="end">Object.entries and fromEntries</text>
+<rect class="slower" x="455.1" y="502.0" width="136.3" height="11.0"/>
+<text class="small" x="595.4" y="511.0" text-anchor="start">2.32</text>
+<text class="mono" x="222.2" y="528.0" text-anchor="end">await of a value</text>
+<rect class="faster" x="268.8" y="519.0" width="186.3" height="11.0"/>
+<text class="small" x="264.8" y="528.0" text-anchor="end">0.32</text>
+<text class="mono" x="222.2" y="545.0" text-anchor="end">Promise.all of 20</text>
+<rect class="faster" x="352.8" y="536.0" width="102.3" height="11.0"/>
+<text class="small" x="348.8" y="545.0" text-anchor="end">0.53</text>
+<line class="parity" x1="455.1" y1="36.0" x2="455.1" y2="550.0"/>
+</svg>
