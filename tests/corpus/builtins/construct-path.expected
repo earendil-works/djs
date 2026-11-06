@@ -1,0 +1,29 @@
+F 3 true NaN true
+ret 1 false true
+proto true
+proto2 false true
+cls 3 10 B 7 C 3 4 1
+G ReferenceError this is not initialized
+call TypeError class constructors must be invoked with 'new'
+twice ReferenceError 'this' can be initialized only once
+ret TypeError derived class constructor must return an object or undefined
+G1 1
+bound ab true
+reflect 8 true false
+proxy 9 true
+Array 0::0 3:||:0 0::0 1:3:1 2:1|2:2 1::1 2:|:0 8:1|2|3|4|5|6|7|8:8
+len -1 RangeError
+len 1.5 RangeError
+len 4294967296 RangeError
+len NaN RangeError
+MyArray 2 true 2
+Map 0 0 0 0 2 3 true
+Map() TypeError
+Set() TypeError
+Map(1) TypeError
+MyMap 1 true 0
+Date 0 0 1577934245000 1 0 NaN 0 1 NaN
+Date2 NaN 5 true string number
+Date symbol TypeError
+Date bigint TypeError
+=== completed

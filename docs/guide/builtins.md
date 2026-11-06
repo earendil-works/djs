@@ -100,7 +100,7 @@ The subset is small on purpose:
 Intrinsics are declared in [`builtins/intrinsics.d.ts`](../../builtins/intrinsics.d.ts),
 each tagged `@leaf` (never runs user code) or `@reentrant` (may call exactly one user
 function, whose result completes the operation, such as `Get` calling a getter).
-<!--n intrinsics/leaf-->288<!--/n--> are leaves and <!--n intrinsics/reentrant-->29<!--/n--> are reentrant. Builtins tagged `@intrinsic` join them, so that the
+<!--n intrinsics/leaf-->289<!--/n--> are leaves and <!--n intrinsics/reentrant-->29<!--/n--> are reentrant. Builtins tagged `@intrinsic` join them, so that the
 interpreter's slow paths and other builtins can call them as `%Name(...)`. They are all
 numbered in one table; the [intrinsics reference](ref-intrinsics.md) lists them.
 
@@ -165,7 +165,7 @@ changes. A helper whose frame the engine looks for on the stack is tagged `@fram
 keeps it. Here is `substring` as the prelude has it:
 
 <!-- gen:excerpt builtins/gen/prelude.js "String.prototype.substring" "function StringPrototypeSubstring(" 8 -->
-[`builtins/gen/prelude.js`](../../builtins/gen/prelude.js#L9629-L9636), lines 9629–9636:
+[`builtins/gen/prelude.js`](../../builtins/gen/prelude.js#L9646-L9653), lines 9646–9653:
 
 ```js
 function StringPrototypeSubstring(start, end) {
@@ -276,7 +276,13 @@ Many hot builtins rarely meet user code: `"a,b".split(",")`, `s.includes("x")`,
 `@fast` has a hand-written Rust entry of the same name in
 [`crates/djs-core/src/builtins/fast.rs`](../../crates/djs-core/src/builtins/fast.rs).
 With the native backend, a call first runs the entry, which either returns the builtin's
-result or *declines*, and then the builtin runs as usual. <!--n builtins/fast-->40<!--/n--> builtins have one.
+result or *declines*, and then the builtin runs as usual. <!--n builtins/fast-->43<!--/n--> builtins have one.
+
+A constructor's entry can also answer `new`: `new Map()`, `new Set()`, `new Array(n)`
+and `new Date(v)` for a primitive or a Date. It runs only when `new.target` is the
+constructor itself, whose `prototype` property can never change, so the new object's
+prototype is known without a lookup. A subclass's `super()` and `Reflect.construct`
+with another `new.target` run the builtin.
 
 An entry may answer only when nothing observable can happen: primitive arguments, dense
 arrays whose elements are plain data, no proxies. Every case that would throw declines,
@@ -329,7 +335,7 @@ kilobyte (gzipped) of the twin's code. Twins that call each other are judged tog
 such as `sort` and its comparison loop, or the serializer functions of `JSON.stringify`.
 `scripts/native-sizes.sh` prints the wasm size of each native function.
 
-By that rule the twins are the <!--n builtins/fast-->40<!--/n--> `@fast` entries (`split`, `includes`, `indexOf` and
+By that rule the twins are the <!--n builtins/fast-->43<!--/n--> `@fast` entries (`split`, `includes`, `indexOf` and
 `slice` on strings and arrays, `charAt` and `charCodeAt`, `substring`, `at`, `repeat`,
 `padStart` and `padEnd`, `push`, `pop` and `join`, `String.fromCharCode`, `String` and
 `Number` called as functions, `Number.isInteger`, `toFixed`, `Math.max` and `Math.min`,

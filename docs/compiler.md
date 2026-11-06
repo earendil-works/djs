@@ -1578,7 +1578,8 @@ What the compiler emits:
   `this` (`check_this_uninit`) and calls `.fields`. Its returns store the value in a
   local and jump to an epilogue after the body, outside every try region (the result
   check belongs to [[Construct]]): `check_ctor_return`, and `undefined` → the checked
-  `this`. Default constructors: `{}`, or `super(...args)` with `rest 0;
+  `this`. Falling off the body returns the checked `this` directly; the epilogue is
+  emitted only when a `return` jumps to it (0236). Default constructors: `{}`, or `super(...args)` with `rest 0;
   super_call_spread` (no iteration).
 - **Home objects.** A function that uses `super.x` (itself or in arrows) declares the
   `<home>` pseudo-binding (`special_object HOME_OBJECT`); its template gets

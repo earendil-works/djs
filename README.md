@@ -44,7 +44,7 @@ guide's status page lists every record). Figures inside sentences are generated 
   failures are listed with reasons in `tests/test262/expected-failures.txt`; dquickts'
   qjs fails 4 active tests under the same runner.
 - The differential corpus (codemode scripts, console and result formatting, error
-  messages, TypeScript, dquickts' own tests): **630 of 641** cases match qjs; 6 known
+  messages, TypeScript, dquickts' own tests): **631 of 642** cases match qjs; 6 known
   failures (`tests/corpus/expected-failures.txt`) and 5 skipped as non-goals.
 - pi's codemode test suite on djs: 221 of 226 tests pass in the default mode, in the
   next mode and with a dump at every idle point (measured at 7167411f0f, 2026-11-05).
@@ -88,7 +88,7 @@ when it runs the prelude). Callback-heavy builtin code is the main remaining gap
 
 <!-- gen:status size -->
 `djs_wasm.wasm` is 953 KB (414 KB gzip, 350 KB brotli): 806 KB of code, 98 KB of data,
-and the base snapshot (the initialized realm with all builtins, 188 KB) coded to 46 KB
+and the base snapshot (the initialized realm with all builtins, 189 KB) coded to 46 KB
 in a custom section. The slim build is 825 KB (349 KB gzip); the dump module, the
 shipped build with the dumper, 1,835 KB (754 KB gzip). Module sizes measured at
 31c4587e31, 2026-11-05.

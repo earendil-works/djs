@@ -117,7 +117,8 @@ On builtin functions (JSDoc):
   does reaching the heap cap: an entry allocates before it changes anything, or makes
   only stores the builtin repeats (D1910). Keep the two in sync;
   `tests/corpus/builtins/fast-paths.js` and `fast-entries-array.js` check them against
-  qjs, and the bytecode-backend run tests the TS path.
+  qjs, and the bytecode-backend run tests the TS path. A constructor's entry may also
+  have a `new` part (`FastFn::new`, 0236): `new F(...)` with new.target F runs it.
 
 On intrinsics in `intrinsics.d.ts`, exactly one of:
 

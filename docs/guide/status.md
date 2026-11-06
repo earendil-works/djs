@@ -19,7 +19,7 @@ records; [the last section](#every-recorded-measurement) lists them all.
   failures are listed with reasons in `tests/test262/expected-failures.txt`; dquickts'
   qjs fails 4 active tests under the same runner.
 - The differential corpus (codemode scripts, console and result formatting, error
-  messages, TypeScript, dquickts' own tests): **630 of 641** cases match qjs; 6 known
+  messages, TypeScript, dquickts' own tests): **631 of 642** cases match qjs; 6 known
   failures (`tests/corpus/expected-failures.txt`) and 5 skipped as non-goals.
 <!-- /gen -->
 
@@ -57,7 +57,7 @@ Machine instructions per workload (`scripts/perf/w/`), measured at 669ce55099,
 
 <!-- gen:status size -->
 `djs_wasm.wasm` is 953 KB (414 KB gzip, 350 KB brotli): 806 KB of code, 98 KB of data,
-and the base snapshot (the initialized realm with all builtins, 188 KB) coded to 46 KB
+and the base snapshot (the initialized realm with all builtins, 189 KB) coded to 46 KB
 in a custom section. The slim build is 825 KB (349 KB gzip); the dump module, the
 shipped build with the dumper, 1,835 KB (754 KB gzip). Module sizes measured at
 31c4587e31, 2026-11-05.
@@ -70,12 +70,12 @@ shipped build with the dumper, 1,835 KB (754 KB gzip). Module sizes measured at
 | --- | ---: |
 | opcodes ([reference](ref-opcodes.md)) | 214 |
 | cell kinds ([reference](ref-cells.md)) | 26 |
-| intrinsics ([reference](ref-intrinsics.md)) | 461 |
+| intrinsics ([reference](ref-intrinsics.md)) | 462 |
 | builtins in `builtins/*.ts` | 455 |
 | of them `@native` (also compiled to Rust) | 8 |
-| of them `@fast` (a Rust leaf entry) | 40 |
-| difftest corpus cases | 641 |
-| base snapshot, bytes | 188,280 |
+| of them `@fast` (a Rust leaf entry) | 43 |
+| difftest corpus cases | 642 |
+| base snapshot, bytes | 188,672 |
 <!-- /gen -->
 
 ## Every recorded measurement
