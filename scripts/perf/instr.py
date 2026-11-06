@@ -245,10 +245,10 @@ patch(H, "        let size = align8(size.max(kind.min_size()));\n",
 # Every collection ends in after_collect; the collectors themselves are marked for the
 # sampler (mark-compact: full, minor, seal; Cheney: canonical).
 G = "crates/djs-core/src/heap/gc.rs"
-patch(G, "    fn after_collect(&mut self, after: u32) {\n",
+patch(G, "    fn after_collect(&mut self, after: u32, cheap: u32) {\n",
       f"        {P}::inc(&{P}::GCS, 1);\n        {P}::inc(&{P}::GC_BYTES, after as u64);\n")
 patch("crates/djs-core/src/heap/compactor.rs",
-      "    ) -> Result<(u32, u32, u32, Vec<u32>), HeapError> {\n",
+      "    pub(super) fn mark_compact(&mut self, old: u32, full: bool) -> Result<Compacted, HeapError> {\n",
       f"        let _gc = {P}::Gc::start();\n")
 patch(G, "    pub fn collect_canonical(&mut self) -> Result<GcStats, HeapError> {\n",
       f"        let _gc = {P}::Gc::start();\n")

@@ -59,12 +59,16 @@ function ClaimResolution(data: Value): Value {
 /**
  * Promise Resolve Functions, 27.2.1.3.2.
  * @intrinsic
+ * @fast
  */
 function PromiseResolveFunction(this: Value, resolution: Value): void {
   ResolveWithData(this, resolution);
 }
 
-/** A resolve function with `data` (see ClaimResolution) called with resolution. */
+/**
+ * A resolve function with `data` (see ClaimResolution) called with resolution.
+ * @fast
+ */
 function ResolveWithData(data: Value, resolution: Value): void {
   const promise: Value = ClaimResolution(data);
   if (promise !== undefined) {
@@ -72,7 +76,10 @@ function ResolveWithData(data: Value, resolution: Value): void {
   }
 }
 
-/** A reject function with `data` called with reason. */
+/**
+ * A reject function with `data` called with reason.
+ * @fast
+ */
 function RejectWithData(data: Value, reason: Value): void {
   const promise: Value = ClaimResolution(data);
   if (promise !== undefined) {
@@ -83,6 +90,7 @@ function RejectWithData(data: Value, reason: Value): void {
 /**
  * Promise Reject Functions, 27.2.1.3.1.
  * @intrinsic
+ * @fast
  */
 function PromiseRejectFunction(this: Value, reason: Value): void {
   RejectWithData(this, reason);
@@ -685,6 +693,7 @@ function PromiseWithResolvers(this: Value): Obj {
  * Promise.prototype.then ( onFulfilled, onRejected ), 27.2.5.4.
  * @builtin Promise.prototype.then
  * @intrinsic
+ * @fast
  */
 function PromisePrototypeThen(this: Value, onFulfilled: Value, onRejected: Value): Value {
   if (!IsPromise(this)) {

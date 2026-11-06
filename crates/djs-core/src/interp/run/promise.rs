@@ -24,6 +24,7 @@
 use alloc::vec::Vec;
 
 use super::intrinsics::{PROMISE_CONSTRUCTOR, id, new_builtin_closure};
+use crate::builtins::fast::Fast;
 use crate::heap::cells::{Interp, Roots, ValueArray};
 use crate::heap::{Heap, HeapError, Lookup, ObjectClass, Property, Ref, atoms};
 use crate::interp::realm;
@@ -127,23 +128,34 @@ pub(crate) fn plain_promise(heap: &Heap, v: Value) -> Option<Obj> {
 /// `constructor` are data properties found without a Proxy or a getter, and %Promise%'s
 /// own @@species is the original getter.
 fn plain_then(heap: &Heap, o: Obj) -> bool {
+    let then = realm::installed_intrinsic(heap, PROMISE_PROTOTYPE_THEN);
+    plain_species(heap, o)
+        && (frozen_plain(heap, o) || plain_get(heap, o, atoms::THEN) == Some(Some(then)))
+}
+
+/// Whether the builtins are frozen (D2304), so that %Promise.prototype% and %Promise% are
+/// as the base made them, which is plain, and lookups from `o` reach them unchanged: `o`
+/// is %Promise.prototype%, or has it as prototype and no own `then` or `constructor`.
+fn frozen_plain(heap: &Heap, o: Obj) -> bool {
     let ctor = realm::installed_intrinsic(heap, PROMISE_CONSTRUCTOR);
-    // Frozen builtins (D2304): %Promise.prototype% and %Promise% are as the base made
-    // them, which is plain; then only `o`'s own keys matter.
     let proto = realm::intrinsic_obj(heap, realm::Intrinsic::PromiseProto);
-    if heap.frozen(proto)
+    heap.frozen(proto)
         && ctor.as_object().is_some_and(|c| heap.frozen(c))
         && (o == proto
             || (heap.get_prototype_of(o) == Some(proto)
                 && !heap.has_own_property(o, atoms::THEN)
                 && !heap.has_own_property(o, atoms::CONSTRUCTOR)))
-    {
+}
+
+/// Whether SpeciesConstructor ( o, %Promise% ) is %Promise% without running user code:
+/// `constructor` is %Promise% as a data property found without a Proxy or a getter, and
+/// %Promise%'s own @@species is the original getter.
+fn plain_species(heap: &Heap, o: Obj) -> bool {
+    if frozen_plain(heap, o) {
         return true;
     }
-    let then = realm::installed_intrinsic(heap, PROMISE_PROTOTYPE_THEN);
-    if plain_get(heap, o, atoms::THEN) != Some(Some(then))
-        || plain_get(heap, o, atoms::CONSTRUCTOR) != Some(Some(ctor))
-    {
+    let ctor = realm::installed_intrinsic(heap, PROMISE_CONSTRUCTOR);
+    if plain_get(heap, o, atoms::CONSTRUCTOR) != Some(Some(ctor)) {
         return false;
     }
     let species = realm::installed_intrinsic(heap, PROMISE_SPECIES);
@@ -151,6 +163,52 @@ fn plain_then(heap: &Heap, o: Obj) -> bool {
         matches!(heap.get_own_property(c, atoms::SYM_SPECIES),
             Some(Property::Accessor { getter, .. }) if getter == species)
     })
+}
+
+/// `ResolveWithData ( data, v )` (and the resolve functions, whose `this` is the data),
+/// a `@fast` entry (D3156): for a Promise `data` (its own resolving functions or an
+/// internal capability) when the resolution runs no user code. Declines otherwise.
+pub(crate) fn fast_resolve(heap: &mut Heap, data: Value, v: Value) -> Fast {
+    let Some(p) = as_promise(heap, data) else {
+        return Ok(None);
+    };
+    let f = flags(heap, p);
+    if f & FLAG_RESOLVED == 0 {
+        if v == data || !plain_fulfillment(heap, v) {
+            return Ok(None);
+        }
+        set_flags(heap, p, f | FLAG_RESOLVED);
+        settle(heap, p, true, v)?;
+    }
+    Ok(Some(Value::UNDEFINED))
+}
+
+/// `RejectWithData ( data, reason )` (and the reject functions), a `@fast` entry
+/// (D3156) for a Promise `data`.
+pub(crate) fn fast_reject(heap: &mut Heap, data: Value, reason: Value) -> Fast {
+    let Some(p) = as_promise(heap, data) else {
+        return Ok(None);
+    };
+    let f = flags(heap, p);
+    if f & FLAG_RESOLVED == 0 {
+        set_flags(heap, p, f | FLAG_RESOLVED);
+        settle(heap, p, false, reason)?;
+    }
+    Ok(Some(Value::UNDEFINED))
+}
+
+/// `Promise.prototype.then`, a `@fast` entry (D3156): on a Promise whose
+/// SpeciesConstructor is %Promise% without user code, the derived promise is a new one
+/// of %Promise% (NewPromiseCapability), subscribed with PerformPromiseThen.
+pub(crate) fn fast_then(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
+    let Some(p) = as_promise(heap, this).filter(|&p| plain_species(heap, p)) else {
+        return Ok(None);
+    };
+    let arg = |i: usize| args.get(i).copied().unwrap_or(Value::UNDEFINED);
+    let proto = realm::intrinsic_obj(heap, realm::Intrinsic::PromiseProto);
+    let derived = alloc(heap, Some(proto))?;
+    perform_then(heap, p, arg(0), arg(1), Value::object(derived))?;
+    Ok(Some(Value::object(derived)))
 }
 
 /// One element `x` of a combinator's loop (D3131, `%PromiseCombinatorRun` in

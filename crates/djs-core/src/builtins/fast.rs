@@ -21,6 +21,7 @@ use crate::builtins::{collection, dense, number, string};
 use crate::bytecode::intrinsics::INTRINSICS;
 use crate::heap::{Heap, ObjectClass, Property, StrView, atoms};
 use crate::interp::conv::{self, Fault};
+use crate::interp::run::promise;
 use crate::interp::{Intrinsic, realm};
 use crate::value::{Kind, Obj, Str, Value};
 
@@ -107,9 +108,40 @@ pub(crate) static FAST: &[FastFn] = &[
     f("MapPrototypeSet", map_set),
     f("SetPrototypeHas", set_has),
     f("SetPrototypeAdd", set_add),
+    // ---- Promises (0232b, D3156: `new Promise` and `then` were 4-6x QuickJS) ----
+    f("GetPrototypeFromConstructor", prototype_from_constructor),
+    f("PromiseResolveFunction", |h, this, a| {
+        promise::fast_resolve(h, this, arg(a, 0))
+    }),
+    f("PromiseRejectFunction", |h, this, a| {
+        promise::fast_reject(h, this, arg(a, 0))
+    }),
+    f("ResolveWithData", |h, _, a| {
+        promise::fast_resolve(h, arg(a, 0), arg(a, 1))
+    }),
+    f("RejectWithData", |h, _, a| {
+        promise::fast_reject(h, arg(a, 0), arg(a, 1))
+    }),
+    f("PromisePrototypeThen", promise::fast_then),
     // ---- String.fromCharCode (0091; the URI functions run their builtins, D2256) ----
     f("StringFromCharCode", from_char_code),
 ];
+
+/// GetPrototypeFromConstructor ( newTarget, fallback ) when `newTarget.prototype` is an
+/// object found as a data property without a Proxy or a getter on the way.
+fn prototype_from_constructor(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
+    let Some(c) = arg(args, 0).as_object() else {
+        return Ok(None);
+    };
+    Ok(match heap.lookup_property(c, atoms::PROTOTYPE) {
+        crate::heap::Lookup::Found(_, Property::Data { value, .. })
+            if value.as_object().is_some() =>
+        {
+            Some(value)
+        }
+        _ => None,
+    })
+}
 
 // ---- argument helpers ----------------------------------------------------------------
 

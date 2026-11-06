@@ -121,6 +121,7 @@ function ToPropertyKey(v: Value): Value {
  * `newTarget` undefined means the builtin was called as a function, so the active
  * function is the constructor and its prototype is the realm's.
  * @intrinsic
+ * @fast
  */
 function GetPrototypeFromConstructor(newTarget: Value, fallback: Str): Obj {
   if (newTarget === undefined) {
