@@ -86,94 +86,93 @@
 <line class="grid" x1="230.2" y1="36.0" x2="230.2" y2="550.0"/>
 <text class="small" x="230.2" y="31.0" text-anchor="middle">0.25×</text>
 <text class="mono" x="222.2" y="52.0" text-anchor="end">JSON.parse of 600 query rows</text>
-<rect class="faster" x="273.6" y="43.0" width="181.5" height="11.0"/>
-<text class="small" x="269.6" y="52.0" text-anchor="end">0.33</text>
+<rect class="faster" x="290.1" y="43.0" width="165.0" height="11.0"/>
+<text class="small" x="286.1" y="52.0" text-anchor="end">0.36</text>
 <text class="mono" x="222.2" y="69.0" text-anchor="end">JSON.stringify of 600 query rows</text>
-<rect class="faster" x="253.9" y="60.0" width="201.2" height="11.0"/>
-<text class="small" x="249.9" y="69.0" text-anchor="end">0.29</text>
+<rect class="faster" x="283.5" y="60.0" width="171.6" height="11.0"/>
+<text class="small" x="279.5" y="69.0" text-anchor="end">0.35</text>
 <text class="mono" x="222.2" y="86.0" text-anchor="end">split("\n") of file texts</text>
-<rect class="faster" x="314.9" y="77.0" width="140.2" height="11.0"/>
-<text class="small" x="310.9" y="86.0" text-anchor="end">0.42</text>
+<rect class="faster" x="329.9" y="77.0" width="125.3" height="11.0"/>
+<text class="small" x="325.9" y="86.0" text-anchor="end">0.46</text>
 <text class="mono" x="222.2" y="103.0" text-anchor="end">join("\n") of their lines</text>
-<rect class="faster" x="347.4" y="94.0" width="107.7" height="11.0"/>
-<text class="small" x="343.4" y="103.0" text-anchor="end">0.51</text>
+<rect class="faster" x="362.3" y="94.0" width="92.8" height="11.0"/>
+<text class="small" x="358.3" y="103.0" text-anchor="end">0.56</text>
 <text class="mono" x="222.2" y="120.0" text-anchor="end">includes per line</text>
-<rect class="slower" x="455.1" y="111.0" width="11.5" height="11.0"/>
-<text class="small" x="470.6" y="120.0" text-anchor="start">1.07</text>
+<rect class="slower" x="455.1" y="111.0" width="33.4" height="11.0"/>
+<text class="small" x="492.6" y="120.0" text-anchor="start">1.23</text>
 <text class="mono" x="222.2" y="137.0" text-anchor="end">template literal appends</text>
-<rect class="slower" x="455.1" y="128.0" width="33.6" height="11.0"/>
-<text class="small" x="492.7" y="137.0" text-anchor="start">1.23</text>
+<rect class="slower" x="455.1" y="128.0" width="42.3" height="11.0"/>
+<text class="small" x="501.5" y="137.0" text-anchor="start">1.30</text>
 <text class="mono" x="222.2" y="154.0" text-anchor="end">trim</text>
-<rect class="slower" x="455.1" y="145.0" width="167.2" height="11.0"/>
-<text class="small" x="626.3" y="154.0" text-anchor="start">2.80</text>
+<rect class="slower" x="455.1" y="145.0" width="182.4" height="11.0"/>
+<text class="small" x="641.5" y="154.0" text-anchor="start">3.08</text>
 <text class="mono" x="222.2" y="171.0" text-anchor="end">slice</text>
-<rect class="slower" x="455.1" y="162.0" width="106.7" height="11.0"/>
-<text class="small" x="565.8" y="171.0" text-anchor="start">1.93</text>
+<rect class="slower" x="455.1" y="162.0" width="114.0" height="11.0"/>
+<text class="small" x="573.1" y="171.0" text-anchor="start">2.02</text>
 <text class="mono" x="222.2" y="188.0" text-anchor="end">padStart</text>
-<rect class="slower" x="455.1" y="179.0" width="148.5" height="11.0"/>
-<text class="small" x="607.6" y="188.0" text-anchor="start">2.50</text>
+<rect class="slower" x="455.1" y="179.0" width="158.4" height="11.0"/>
+<text class="small" x="617.6" y="188.0" text-anchor="start">2.66</text>
 <text class="mono" x="222.2" y="205.0" text-anchor="end">toLowerCase</text>
-<rect class="slower" x="455.1" y="196.0" width="87.3" height="11.0"/>
-<text class="small" x="546.5" y="205.0" text-anchor="start">1.71</text>
+<rect class="slower" x="455.1" y="196.0" width="91.6" height="11.0"/>
+<text class="small" x="550.8" y="205.0" text-anchor="start">1.76</text>
 <text class="mono" x="222.2" y="222.0" text-anchor="end">charCodeAt loop</text>
-<rect class="slower" x="455.1" y="213.0" width="71.4" height="11.0"/>
-<text class="small" x="530.5" y="222.0" text-anchor="start">1.55</text>
+<rect class="slower" x="455.1" y="213.0" width="74.9" height="11.0"/>
+<text class="small" x="534.0" y="222.0" text-anchor="start">1.59</text>
 <text class="mono" x="222.2" y="239.0" text-anchor="end">String(i)</text>
-<rect class="slower" x="455.1" y="230.0" width="87.1" height="11.0"/>
-<text class="small" x="546.2" y="239.0" text-anchor="start">1.71</text>
+<rect class="slower" x="455.1" y="230.0" width="95.0" height="11.0"/>
+<text class="small" x="554.1" y="239.0" text-anchor="start">1.80</text>
 <text class="mono" x="222.2" y="256.0" text-anchor="end">toFixed</text>
-<rect class="slower" x="455.1" y="247.0" width="96.4" height="11.0"/>
-<text class="small" x="555.5" y="256.0" text-anchor="start">1.81</text>
+<rect class="slower" x="455.1" y="247.0" width="105.0" height="11.0"/>
+<text class="small" x="564.1" y="256.0" text-anchor="start">1.91</text>
 <text class="mono" x="222.2" y="273.0" text-anchor="end">Math.max</text>
-<rect class="slower" x="455.1" y="264.0" width="11.8" height="11.0"/>
-<text class="small" x="470.9" y="273.0" text-anchor="start">1.08</text>
+<rect class="slower" x="455.1" y="264.0" width="56.7" height="11.0"/>
+<text class="small" x="515.9" y="273.0" text-anchor="start">1.42</text>
 <text class="mono" x="222.2" y="290.0" text-anchor="end">Math.floor</text>
-<rect class="slower" x="455.1" y="281.0" width="126.2" height="11.0"/>
-<text class="small" x="585.3" y="290.0" text-anchor="start">2.18</text>
+<rect class="slower" x="455.1" y="281.0" width="127.7" height="11.0"/>
+<text class="small" x="586.8" y="290.0" text-anchor="start">2.20</text>
 <text class="mono" x="222.2" y="307.0" text-anchor="end">match(/function \w+/g)</text>
-<rect class="faster" x="305.5" y="298.0" width="149.6" height="11.0"/>
-<text class="small" x="301.5" y="307.0" text-anchor="end">0.40</text>
+<rect class="faster" x="313.2" y="298.0" width="142.0" height="11.0"/>
+<text class="small" x="309.2" y="307.0" text-anchor="end">0.42</text>
 <text class="mono" x="222.2" y="324.0" text-anchor="end">replace(/\s+/g, " ")</text>
-<rect class="slower" x="455.1" y="315.0" width="3.9" height="11.0"/>
-<text class="small" x="463.0" y="324.0" text-anchor="start">1.02</text>
+<rect class="slower" x="455.1" y="315.0" width="8.6" height="11.0"/>
+<text class="small" x="467.7" y="324.0" text-anchor="start">1.05</text>
 <text class="mono" x="222.2" y="341.0" text-anchor="end">exec of a line pattern</text>
-<rect class="faster" x="397.0" y="332.0" width="58.1" height="11.0"/>
-<text class="small" x="393.0" y="341.0" text-anchor="end">0.70</text>
+<rect class="faster" x="395.0" y="332.0" width="60.1" height="11.0"/>
+<text class="small" x="391.0" y="341.0" text-anchor="end">0.69</text>
 <text class="mono" x="222.2" y="358.0" text-anchor="end">matchAll with /gm</text>
-<rect class="faster" x="432.9" y="349.0" width="22.2" height="11.0"/>
-<text class="small" x="428.9" y="358.0" text-anchor="end">0.87</text>
+<rect class="faster" x="436.1" y="349.0" width="19.0" height="11.0"/>
+<text class="small" x="432.1" y="358.0" text-anchor="end">0.89</text>
 <text class="mono" x="222.2" y="375.0" text-anchor="end">new RegExp</text>
-<rect class="faster" x="412.6" y="366.0" width="42.6" height="11.0"/>
-<text class="small" x="408.6" y="375.0" text-anchor="end">0.77</text>
+<rect class="faster" x="437.5" y="366.0" width="17.6" height="11.0"/>
+<text class="small" x="433.5" y="375.0" text-anchor="end">0.90</text>
 <text class="mono" x="222.2" y="392.0" text-anchor="end">map</text>
-<rect class="faster" x="446.7" y="383.0" width="8.5" height="11.0"/>
-<text class="small" x="442.7" y="392.0" text-anchor="end">0.95</text>
+<rect class="faster" x="454.3" y="383.0" width="0.8" height="11.0"/>
+<text class="small" x="450.3" y="392.0" text-anchor="end">0.99</text>
 <text class="mono" x="222.2" y="409.0" text-anchor="end">sort with a comparator</text>
-<rect class="slower" x="455.1" y="400.0" width="101.2" height="11.0"/>
-<text class="small" x="560.3" y="409.0" text-anchor="start">1.87</text>
+<rect class="slower" x="455.1" y="400.0" width="106.8" height="11.0"/>
+<text class="small" x="565.9" y="409.0" text-anchor="start">1.93</text>
 <text class="mono" x="222.2" y="426.0" text-anchor="end">sort of strings</text>
-<rect class="faster" x="431.7" y="417.0" width="23.4" height="11.0"/>
-<text class="small" x="427.7" y="426.0" text-anchor="end">0.87</text>
+<rect class="faster" x="448.4" y="417.0" width="6.8" height="11.0"/>
+<text class="small" x="444.4" y="426.0" text-anchor="end">0.96</text>
 <text class="mono" x="222.2" y="443.0" text-anchor="end">push</text>
-<rect class="slower" x="455.1" y="434.0" width="6.2" height="11.0"/>
-<text class="small" x="465.3" y="443.0" text-anchor="start">1.04</text>
+<rect class="slower" x="455.1" y="434.0" width="13.6" height="11.0"/>
+<text class="small" x="472.7" y="443.0" text-anchor="start">1.09</text>
 <text class="mono" x="222.2" y="460.0" text-anchor="end">Map.set with string keys</text>
-<rect class="slower" x="455.1" y="451.0" width="93.7" height="11.0"/>
-<text class="small" x="552.8" y="460.0" text-anchor="start">1.78</text>
+<rect class="slower" x="455.1" y="451.0" width="97.9" height="11.0"/>
+<text class="small" x="557.0" y="460.0" text-anchor="start">1.83</text>
 <text class="mono" x="222.2" y="477.0" text-anchor="end">Set.add with string keys</text>
-<rect class="slower" x="455.1" y="468.0" width="63.3" height="11.0"/>
-<text class="small" x="522.4" y="477.0" text-anchor="start">1.48</text>
+<rect class="slower" x="455.1" y="468.0" width="65.7" height="11.0"/>
+<text class="small" x="524.8" y="477.0" text-anchor="start">1.50</text>
 <text class="mono" x="222.2" y="494.0" text-anchor="end">object spread</text>
-<rect class="slower" x="455.1" y="485.0" width="48.9" height="11.0"/>
-<text class="small" x="508.0" y="494.0" text-anchor="start">1.35</text>
+<rect class="slower" x="455.1" y="485.0" width="61.5" height="11.0"/>
+<text class="small" x="520.7" y="494.0" text-anchor="start">1.46</text>
 <text class="mono" x="222.2" y="511.0" text-anchor="end">Object.entries and fromEntries</text>
-<rect class="slower" x="455.1" y="502.0" width="136.3" height="11.0"/>
-<text class="small" x="595.4" y="511.0" text-anchor="start">2.32</text>
+<text class="small" x="459.1" y="511.0" text-anchor="start">too short to compare</text>
 <text class="mono" x="222.2" y="528.0" text-anchor="end">await of a value</text>
-<rect class="faster" x="268.8" y="519.0" width="186.3" height="11.0"/>
-<text class="small" x="264.8" y="528.0" text-anchor="end">0.32</text>
+<rect class="faster" x="271.7" y="519.0" width="183.4" height="11.0"/>
+<text class="small" x="267.7" y="528.0" text-anchor="end">0.32</text>
 <text class="mono" x="222.2" y="545.0" text-anchor="end">Promise.all of 20</text>
-<rect class="faster" x="352.8" y="536.0" width="102.3" height="11.0"/>
-<text class="small" x="348.8" y="545.0" text-anchor="end">0.53</text>
+<rect class="faster" x="360.6" y="536.0" width="94.5" height="11.0"/>
+<text class="small" x="356.6" y="545.0" text-anchor="end">0.56</text>
 <line class="parity" x1="455.1" y1="36.0" x2="455.1" y2="550.0"/>
 </svg>

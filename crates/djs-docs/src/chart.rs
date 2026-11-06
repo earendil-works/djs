@@ -294,6 +294,7 @@ pub fn columns(
     let plot_w = W - left - right;
     let gw = plot_w / groups.len() as f32;
     let col = ((gw - 10.0) / series.len() as f32).min(14.0);
+    let mut two_lines = false;
     for t in &axis.fit(plot_h, |_| 12.0) {
         let y = bottom - axis.at(*t) * plot_h;
         line(&mut body, "grid", left, y, W - right, y);
@@ -315,17 +316,26 @@ pub fn columns(
                 );
             }
         }
-        text(
-            &mut body,
-            "",
-            left + (g as f32 + 0.5) * gw,
-            bottom + 16.0,
-            "middle",
-            name,
-        );
+        // A label wider than its group goes on two lines, split at its last comma or space.
+        let x = left + (g as f32 + 0.5) * gw;
+        let split = if width(name, 12.0) > gw - 6.0 {
+            name.rfind(", ")
+                .map(|i| (&name[..i + 1], &name[i + 2..]))
+                .or_else(|| name.rfind(' ').map(|i| (&name[..i], &name[i + 1..])))
+        } else {
+            None
+        };
+        match split {
+            Some((a, b)) => {
+                two_lines = true;
+                text(&mut body, "", x, bottom + 16.0, "middle", a);
+                text(&mut body, "", x, bottom + 30.0, "middle", b);
+            }
+            None => text(&mut body, "", x, bottom + 16.0, "middle", name),
+        }
     }
     line(&mut body, "axis", left, bottom, W - right, bottom);
-    let h = bottom + 26.0;
+    let h = bottom + if two_lines { 40.0 } else { 26.0 };
     format!("{}{body}</svg>\n", open(m, W, h))
 }
 

@@ -11502,3 +11502,29 @@ new C(i) 5.0 k -> 3.9 k (4.2 k), new F(i) 4.0 k -> 3.1 k (3.8 k), derived defaul
 (2.9 k), new Promise 10.2 k -> 8.5 k (8.7 k), Array(4) 12.6 k -> 1.7 k (3.4 k), Date(0)
 14.8 k -> 1.7 k (2.9 k). Plain workloads within +0.6% instructions. Only ~3.2 KB are left to
 the 1.5x budget: later speed work has to fund itself.
+
+## D3165: The bridge benchmark: each engine's best path, one operation timed
+date: 2026-11-06 · by: bridge · issue: 0238
+js/bench/engines/bridge.ts times passing a value between host and VM as the operation an
+embedder calls (`BridgeVm.put`/`get` in engines.ts), not as a script's run minus a baseline:
+the difference of two runs drowns small payloads in noise. Small payloads repeat within a
+sample; every sample is a fresh VM. Each engine gets the best path its API offers, and where it
+offers several (quickjs-wasi: JSON text or its handle walk; quickjs-emscripten: JSON text or
+building through handles; monty: JSON text with json.loads/dumps or its value arena) each is
+measured and each number is the faster path's, since a host that knows what it passes picks it.
+The two QuickJS releases get the best C API path in driver.c: JS_ParseJSON straight from linear
+memory (no intermediate JS string), JS_NewStringLen, JS_NewArrayBufferCopy, and out
+JS_JSONStringify + JS_ToCStringLen read in place. djs goes through the Sandbox's own conversions
+(the wire format in, with long ASCII strings copied into a reserved string; the reader out).
+Every value must read back equal, and end-to-end cases (a sync host function `tool`) must agree,
+or the run fails. The gate's codemode-workloads leg runs it on djs with --quick.
+
+## D3166: Charts are generated with their table, from status.tsv
+date: 2026-11-06 · by: bridge · issue: 0238
+A `gen:status` region of the benchmarks page writes `![alt](gen/chart-WHAT.svg)` above its table
+and the SVG into gen/ (crates/djs-docs/src/chart.rs), so regen keeps both current and check
+fails on either being stale. Three shapes: grouped columns, paneled horizontal bars, ratios
+around a parity line; log axes with 1-2-5 ticks thinned to fit. Colors: the diagrams'
+stylesheet (svg::style_with) plus Elanor's data-viz palette for series (the same in light and
+dark mode) and the positive/negative fills for ratios. Each SVG has `<title>` and `<desc>`
+(aria-labelledby); the figure caption is the alt text; the exact numbers stay in the table.

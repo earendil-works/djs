@@ -886,7 +886,12 @@ fn bridge(st: &Status, what: &str) -> Result<String, String> {
             let mut n = 0;
             for (p, label) in BRIDGE_PAYLOADS {
                 let bytes = get(format!("engines/bridge/payload/{p}/bytes"))?;
-                let _ = write!(s, "| {label} | {} |", kb(bytes));
+                let size = if bytes < 1000.0 {
+                    format!("{bytes} B")
+                } else {
+                    kb(bytes)
+                };
+                let _ = write!(s, "| {label} | {size} |");
                 let mut row = [None; ENGINES.len()];
                 for (i, (e, _)) in ENGINES.iter().enumerate() {
                     // An engine that cannot take the payload has no number.

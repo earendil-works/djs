@@ -35,6 +35,33 @@ Bench at load < ~4. Merge in at most two batches.
 
 ## Log
 
+- Plan sent to the coordinator (charts batch, then bridge batch).
+- Charts: crates/djs-docs/src/chart.rs (columns, paneled bars, ratios around parity; log axes
+  with 1-2-5 ticks thinned to fit the space), svg::style_with for the extra series rules
+  (Elanor data-viz palette, same in light and dark). Every `gen:status engines-*` region now
+  writes its chart above its table (status::chart, regions.rs). D3166.
+- Bridge: js/bench/engines/bridge.ts; `BridgeVm` (put/get/call) per engine in engines.ts;
+  driver.c gains bench_put/bench_get (JS_ParseJSON / JS_NewStringLen / ArrayBuffer copy in;
+  JS_JSONStringify + ToCStringLen in place out) and a sync C host function `tool` through the
+  import env.bench_host. Bellard's JS_NewTypedArray needs a new.target, so `new Uint8Array(buf)`
+  goes through the constructor in both releases. Alternatives measured per engine
+  (quickjs-wasi json/handles, emscripten json/handles, monty json/values); each number is the
+  faster path's (D3165). Monty's json.loads hits its recursion limit at ~200 levels, so the
+  nested payload is 100 deep.
+- First look (load ~2.7): djs leads in and out for JSON and strings (out: 7x at 1 MB JSON, the
+  reader does no VM work), edit-1m 0.4 ms vs 3.8 (QuickJS); behind on bytes in (0.19 vs 0.13 ms:
+  wire encode copies the bytes twice before the VM's copy) and on 1,000 small sync calls
+  (3.4 ms vs 1.8 for QuickJS).
+- scripts/gate.py: the codemode-workloads leg also runs `bridge.ts --quick --engines djs`
+  (outside `touches:`, one line).
+- driver.c's change rebuilt vendor/engines/build/quickjs*.wasm (shared; the new exports are
+  additive), so the engines-size numbers are re-recorded with them.
+
 ## Follow-ups
+
+- djs: a sync host call costs ~3.4 µs round trip in the Sandbox vs ~1.8 µs for a minimal
+  QuickJS C embedding (calls-1000); worth profiling (vm_run re-entry, record read, toHandle).
+- djs: Uint8Array in goes encode -> staging -> Bytes cell (two host-side copies); could be
+  copied in place like long ASCII strings.
 
 ## Result

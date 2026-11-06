@@ -410,12 +410,13 @@ export function quickjsBuilt(flavor: "bellard" | "ng"): Engine {
       m[b.length] = 0;
       return [p, b.length];
     };
-    /** A string into malloc'd memory: encodeInto with room for the worst case, no intermediate array. */
+    /** A string into malloc'd memory of its exact UTF-8 size, encoded in place (no intermediate array). */
     const put = (s: string): [number, number] => {
-      const p = x.malloc(s.length * 3 + 1);
-      const { written } = enc.encodeInto(s, new Uint8Array(x.memory.buffer, p, s.length * 3));
-      new Uint8Array(x.memory.buffer)[p + written] = 0;
-      return [p, written];
+      const n = Buffer.byteLength(s, "utf8");
+      const p = x.malloc(n + 1);
+      enc.encodeInto(s, new Uint8Array(x.memory.buffer, p, n));
+      new Uint8Array(x.memory.buffer)[p + n] = 0;
+      return [p, n];
     };
     return { x, put, putBytes };
   };
