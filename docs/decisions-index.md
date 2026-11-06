@@ -780,3 +780,8 @@ topics when the index is next reorganized.
 - D3150: A block's dump code and late bindings go in the order what they read needs
 - D3151: A subclass outside its base's factory names the base by its location
 - D3152: plain-node reads node's "Invalid time value" as djs's "Date value is NaN"
+- D3155: Builtin closures keep `length` and `name` lazy
+- D3156: @fast entries for the resolving functions, then, Promise.resolve and GetPrototypeFromConstructor
+- D3157: An async function's state object is made at its first await
+- D3158: allSettled and any element jobs settle in Rust
+- D3159: Size of 0232b; the size ceiling rises by what it measured
