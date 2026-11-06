@@ -196,8 +196,10 @@ function 0.0 twice: params=1 locals=2 stack=2 captures=0
 ```
 <!-- /gen -->
 
-In `twice`, `async_start` creates the async state object in a hidden local (`<state>`).
-`await` saves the frame into it, subscribes the state to the promise and returns the
+In `twice`, `async_start` creates the function's result promise in a hidden local
+(`<state>`). The first `await` replaces it there with the async state object, which holds
+the promise, so a call that returns without awaiting allocates nothing but its promise.
+`await` saves the frame into the state, subscribes the state to the promise and returns the
 function's result promise to whoever ran the frame: the caller the first time, a job
 later. When the promise settles, a promise job resumes the state as the job's own
 bottom frame, and `await` pushes the value. The common cases need no builtin call: a

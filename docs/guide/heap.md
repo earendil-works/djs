@@ -283,7 +283,10 @@ allocation and no shape search, and the builtins in every VM carry no storage fo
 two. Deleting one clears its flag; any other change first stores both as ordinary
 properties in front of the others, which keeps the key order the spec requires. Inline
 caches cannot see the two keys in a shape, so for functions they look `length` and
-`name` up instead of trusting a shape compare.
+`name` up instead of trusting a shape compare. The engine's internal closures, such as the
+resolve and reject functions a `new Promise` hands its executor, work the same way: their
+`length` sits in a slot and their `name` is always empty, so making one is a single
+allocation too.
 
 Only arrays ever get dense elements, so a closure keeps its function template in the
 `ELEMENTS` field instead of a slot, and its slots are just its captured variables. That
