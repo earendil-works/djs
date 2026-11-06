@@ -647,7 +647,7 @@
 642	value	%intrinsic:ToString%
 643	value	%intrinsic:LengthOfArrayLike%
 644	value	%intrinsic:ToPropertyKey%
-645	value	%intrinsic:GetPrototypeFromConstructor%
+645	value	%intrinsic:GetPrototypeFromConstructor%	removed: removed
 646	value	%intrinsic:DecoratorStart%
 647	value	%intrinsic:ApplyDecorators%
 648	value	%intrinsic:DecoratorRunInits%
@@ -1292,7 +1292,7 @@
 1287	intrinsic	ToString
 1288	intrinsic	LengthOfArrayLike
 1289	intrinsic	ToPropertyKey
-1290	intrinsic	GetPrototypeFromConstructor
+1290	intrinsic	GetPrototypeFromConstructor	removed: removed
 1291	intrinsic	DatePrototypeValueOf
 1292	intrinsic	DatePrototypeToISOString
 1293	intrinsic	DatePrototypeToJSON
@@ -1647,3 +1647,7 @@
 1642	intrinsic	SortStart
 1643	intrinsic	SortStep
 1644	intrinsic	SortOperand
+1645	value	%intrinsic:GetPrototypeFromConstructorSlow%
+1646	value	%prelude:GetPrototypeFromConstructor%
+1647	intrinsic	ConstructorPrototype
+1648	intrinsic	GetPrototypeFromConstructorSlow
