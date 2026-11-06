@@ -6,6 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0238 | Benchmarks page: SVG charts + host-bridge data-passing benchmark (owner) | bridge | .worktrees/bridge |
 
 ## Open (ready)
 
