@@ -10483,6 +10483,15 @@ classes use it. Another class names the base by its location (`$dump.s8.C3`), an
 writer then makes it after the block code that publishes the base, in K's callback.
 
 
+## D3152: plain-node reads node's "Invalid time value" as djs's "Date value is NaN"
+date: 2026-11-07 · by: pjr · issue: 0237
+Plain-dump fuzzer seed 689441 (found with `--lazy`, also without) was "node wrong output": an
+invalid date's `toISOString` throws a RangeError in djs, as in qjs, worded "Date value is
+NaN", and in node worded "Invalid time value". The dump was right, and djs's plain and dumped
+runs agreed. scripts/plain-node.mjs maps node's wording to djs's, as it already does for
+other common errors. Corpus codemode/plain-fuzz/date-nan-iso-string.js (fails with the old
+mapping); the program is frozen as regress/s0237-s689441.js.
+
 ## D3041: Suspension maps travel from one VM's dump to the next VM
 date: 2026-11-06 · by: lazy · issue: 0219
 A dump compiles the suspension maps of the scripts its activations run in (pjr: ~30% of a

@@ -48,6 +48,8 @@ const norm = (t) =>
     .map((l) => l.replace(/Cannot read properties of (undefined|null) \(reading '([^']*)'\)/g, "cannot read property '$2' of $1"))
     .map((l) => l.replace(/Cannot convert \S+ to a BigInt/g, "cannot convert to BigInt"))
     .map((l) => l.replace(/Cannot assign to read only property '([^']*)' of (?:object '[^']*'|\S+)/g, "'$1' is read-only"))
+    // (`toISOString` of an invalid date, 0237.)
+    .map((l) => l.replace(/RangeError: Invalid time value/g, "RangeError: Date value is NaN"))
     .join("\n");
 
 // The dump runtime (D2903), evaluated in each link's context so that its helpers are that
