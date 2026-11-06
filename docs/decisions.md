@@ -11384,3 +11384,43 @@ crates' codegen units (`djs_<crate>-<hash>.<cgu>.rcgu.o`: on the line, the line 
 under ld64's "referenced from:"), and retries once after D3022's clean. scripts/gate-test.py
 (leg `gate self-test`) checks it on excerpts of both failures, a GNU ld one, and two that must
 not match (a C library's undefined reference, a compile error).
+
+## D3155: Builtin closures keep `length` and `name` lazy
+date: 2026-11-06 · by: pasync · issue: 0232b
+A builtin closure (`%NewBuiltinClosure`: resolving functions, combinator element functions,
+`finally` thunks ...) has three slots now: the builtin, its data and its `length`. Its `length`
+and `name` (always empty) are D2445's lazy properties (`OBJ_LAZY_LENGTH`/`_NAME`): `lazy_value`
+reads slot 2 and the empty atom for this class, and every other path (own keys first in order,
+attributes, redefine/delete materializing them, frozen reads) is the closures' one. Before, each
+closure ran two validated `define_own_property` calls and allocated a values block; `new Promise`
+made two such closures. COMPAT_VERSION 6 (what a builtin closure's slots and flags mean, and
+D3157's async state local).
+
+## D3156: @fast entries for the resolving functions, then, Promise.resolve and GetPrototypeFromConstructor
+date: 2026-11-06 · by: pasync · issue: 0232b
+`PromiseResolveFunction`/`ResolveWithData` and `PromiseRejectFunction`/`RejectWithData` settle a
+Promise data (its own resolving functions, an internal capability) in Rust when the resolution
+is a `plain_fulfillment` value (D3130) and not the promise itself, or a rejection; a Record data
+(another constructor's capability) declines. `Promise.prototype.then` on a Promise whose
+SpeciesConstructor is %Promise% without user code (`plain_species`: a data `constructor` that is
+%Promise% and the original @@species getter, or frozen builtins) makes the derived promise and
+subscribes. `Promise.resolve` on %Promise% returns a `plain_promise` or a new fulfilled promise.
+`GetPrototypeFromConstructor` returns `newTarget.prototype` when it is an object found as a data
+property without a Proxy or getter (every builtin constructor benefits). Each mirrors its TS
+step by step and declines everywhere else.
+
+## D3157: An async function's state object is made at its first await
+date: 2026-11-06 · by: pasync · issue: 0232b
+`async_start` allocates just the result promise and keeps it in the state local; the first
+`await` (or an `async_return` that needs %AsyncFunctionReturn) makes the Generator object with
+that promise and stores it there (`Exec::async_state`). `async_return`/`async_reject` settle the
+promise in the local directly when the function never awaited. A suspended frame always holds
+the state object, so dumps (taken at idle points, where every activation has suspended) see
+what they saw before.
+
+## D3158: allSettled and any element jobs settle in Rust
+date: 2026-11-06 · by: pasync · issue: 0232b
+`promise::all_element_job` (D3131) takes the element functions of allSettled (fulfilled and
+rejected: the `{status, value | reason}` record made with `new_object_from_entries`, whose keys
+`status`, `reason` and the values `fulfilled`, `rejected` are well-known atoms now) and `any`'s
+reject element, except `any`'s last one, which makes the AggregateError in the builtin.
