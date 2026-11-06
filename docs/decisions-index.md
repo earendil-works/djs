@@ -785,3 +785,8 @@ topics when the index is next reorganized.
 - D3157: An async function's state object is made at its first await
 - D3158: allSettled and any element jobs settle in Rust
 - D3159: Size of 0232b; the size ceiling rises by what it measured
+- D3160: The construct path's instructions finish outside `step`
+- D3161: A construct's frame holds its new.target from the entry safepoint on
+- D3162: %ConstructorPrototype; constructor allocations are pure leaves
+- D3163: `new` entries for Array, Map, Set and Date
+- D3164: Size of 0236; the size ceiling rises by what it measured

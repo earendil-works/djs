@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0236 | Perf: construct path (new C() 2.4x, new Map() 4.6x, new Promise 2.7x) | pnew | .worktrees/pnew |
 | 0229 | Benchmarks page: djs vs QuickJS versions and monty on codemode workloads; dumps, size, memory (owner) | benchpage | .worktrees/benchpage |
 
 ## Open (ready)
@@ -32,6 +31,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | - | Regexp follow-ups (0233): literal runs as one node (distinct-pattern compile 2x QuickJS), replace 1.14x | ready |
 | - | trim and toLowerCase ~1.9x QuickJS; comparator sort 1.6x (n_call frame + native re-entry); builtins re-intern string-literal keys (Get(o, "length")) on every call; run_hot is sensitive to any code change (4-6% on loops): understand before adding arms (0230b, 0231) | ready |
 | - | Plain-dump 'crossing callbacks' refusal (s13-s10173, seed 689232 with --lazy): open since 0211 | ready |
+| - | new Error 30k vs 18.7k (CaptureStack converts frame names to Rust strings); derived class construct 1.2-1.6x (super_call opcode) (0236) | ready |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
 | - | Blob buffers in dumps; persist() convention for pi (0167 follow-ups; the TS dumper is dropped, D2564; classes are 0170) | owner |
@@ -101,6 +101,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | 0198 | Dump performance: corpus dump p50 1.42 -> 0.43 ms wasm, totals 3,243 -> 610 ms; data cases 2-6x (D2800-D2802) | 429184db (agent dumpperf) |
 | - | base_equals_a_compiled_realm test fixed (8f0fdd72); gate recovers from incremental corruption (D2896, b55180dd); CLI/REPL call states (D2894) | agent pjh |
 | 0220 | Guide rewrite: Using djs / How it works / Reference, JS API, dumps, CLI, pi page; live Run/Continue with debugger pauses at exact positions (D3050-D3054) | 13002add (agent guide) |
+| 0236 | Construct path: new C() parity, Map/Set/Array/Date new entries faster than QuickJS (D3160-D3164; shipped 426.8 KB, ~3.2 KB left) | c441a76f (agent pnew) |
 | 0232b | Promise closures, then/resolve fast paths, async state at first await, allSettled/any in Rust (D3155-D3159) | add476fa (agent pasync) |
 | 0237 | Fuzz seed 689441: harness false alarm (node's invalid-date message), mapped in plain-node.mjs (D3152) | 2e658c5b (agent pjr) |
 | 0235 | Plain-dump fuzz findings 342347/344676/208872: block code vs late bindings list-scheduled (D3150), free subclass reading base's factory-local name (D3151) | 0bbb724d (agent pjr) |
