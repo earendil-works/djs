@@ -282,15 +282,27 @@ impl Exec<'_> {
         self.do_return(v)
     }
 
-    /// `async_start loc`.
+    /// `async_start loc`: the result promise. The state object comes at the first `await`
+    /// (`async_state`, D3157): until then local `loc` holds the promise, so a call that
+    /// never awaits allocates just that.
     pub(super) fn async_start(&mut self) -> Result<(), Fault> {
         let loc = self.imm_u16(1);
-        let a = alloc(self.heap, None, ASYNC)?;
         let proto = intrinsic_obj(self.heap, Intrinsic::PromiseProto);
         let p = promise::alloc(self.heap, Some(proto))?;
-        self.heap.set_object_slot(a, PROMISE, Value::object(p));
-        self.set(self.lp + loc, Value::object(a));
+        self.set(self.lp + loc, Value::object(p));
         Ok(())
+    }
+
+    /// The async state in local `loc`, made now if the local still holds the result
+    /// promise (D3157); an async generator's is made by `generator_start`.
+    fn async_state(&mut self, loc: u32) -> Result<Obj, Fault> {
+        if let Some(p) = promise::as_promise(self.heap, self.get(self.lp + loc)) {
+            let a = alloc(self.heap, None, ASYNC)?;
+            self.heap.set_object_slot(a, PROMISE, Value::object(p));
+            self.set(self.lp + loc, Value::object(a));
+            return Ok(a);
+        }
+        self.local_generator(loc, &[ASYNC, ASYNC_GENERATOR])
     }
 
     /// `await loc`. Await ( v ) runs no user code when `v` is a Promise of %Promise% or a
@@ -298,7 +310,7 @@ impl Exec<'_> {
     /// subscribes here, as `%AsyncAwait` would, without the intermediate promise (which
     /// nothing else could reach), and returns as `%AsyncAwait` returns.
     pub(super) fn await_value(&mut self, next: u32) -> Step {
-        let a = self.local_generator(self.imm_u16(1), &[ASYNC, ASYNC_GENERATOR])?;
+        let a = self.async_state(self.imm_u16(1))?;
         let v = self.pop();
         let p = promise::plain_promise(self.heap, v);
         if p.is_none() && !promise::plain_fulfillment(self.heap, v) {
@@ -333,15 +345,23 @@ impl Exec<'_> {
     /// A value whose resolution may call user code (a `then`) goes to
     /// `%AsyncFunctionReturn` instead (D3130).
     pub(super) fn async_finish(&mut self, reject: bool) -> Step {
-        let a = self.local_generator(self.imm_u16(1), &[ASYNC])?;
+        let loc = self.imm_u16(1);
         let v = self.pop();
         if !reject && !promise::plain_fulfillment(self.heap, v) {
+            let a = self.async_state(loc)?;
             return self.tail_call_builtin(ASYNC_FUNCTION_RETURN, [Value::object(a), v]);
         }
-        let p = promise_of(self.heap, a)
-            .as_object()
-            .expect("an async function's promise");
-        set_state(self.heap, a, COMPLETED);
+        // The state, if the function awaited (D3157), else the promise itself.
+        let p = match promise::as_promise(self.heap, self.get(self.lp + loc)) {
+            Some(p) => p,
+            None => {
+                let a = self.local_generator(loc, &[ASYNC])?;
+                set_state(self.heap, a, COMPLETED);
+                promise_of(self.heap, a)
+                    .as_object()
+                    .expect("an async function's promise")
+            }
+        };
         promise::settle(self.heap, p, !reject, v)?;
         self.do_return(Value::object(p))
     }

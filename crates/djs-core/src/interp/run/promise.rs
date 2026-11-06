@@ -546,7 +546,7 @@ pub(crate) fn settle(heap: &mut Heap, p: Obj, fulfilled: bool, v: Value) -> Resu
     let reactions = heap.object_slot(p, REACTIONS).as_internal();
     let n = reactions.map_or(0, |r| heap.value_array_len(r) / 3);
     // Reserve first, so running out of memory leaves the promise pending.
-    let q = reserve_jobs(heap, n)?;
+    let q = if n > 0 { reserve_jobs(heap, n)? } else { 0 };
     if !fulfilled && flags(heap, p) & FLAG_HANDLED == 0 {
         track_rejection(heap, p)?;
     }
