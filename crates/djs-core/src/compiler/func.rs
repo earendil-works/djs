@@ -290,6 +290,8 @@ pub(super) struct FuncState {
     /// Derived constructors: the epilogue label and the local its returns store the
     /// value in (`Parser::emit_ctor_epilogue`).
     pub ctor_return: Option<(crate::bytecode::Label, Atom)>,
+    /// A `return` jumped to that epilogue (falling off the body does not).
+    pub ctor_return_used: bool,
     /// `async` function (or the codemode body): `await` is an operator.
     pub is_async: bool,
     /// Generator function: `yield` is an operator.
@@ -445,6 +447,7 @@ impl FuncState {
             active_var: None,
             fields_atom: Atom::NULL,
             ctor_return: None,
+            ctor_return_used: false,
             is_async: false,
             is_generator: false,
             tail_call: None,

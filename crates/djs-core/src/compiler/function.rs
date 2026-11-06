@@ -459,7 +459,15 @@ impl Parser<'_, '_> {
             self.scope = BODY_SCOPE;
         }
         self.code().leave_scope(BODY_SCOPE as u16);
-        self.emit_return_undef();
+        if self.f.ctor_return.is_some() {
+            // Falling off a derived constructor: its checked `this`, as the epilogue
+            // returns it for `undefined` but without testing the value (0236).
+            let pos = self.prev_end;
+            self.emit_this(pos);
+            self.code().return_();
+        } else {
+            self.emit_return_undef();
+        }
         Ok(())
     }
 
@@ -512,6 +520,7 @@ impl Parser<'_, '_> {
             let r = self.name_ref(ret, self.prev_end);
             self.code().name_put(r);
             self.code().jump(epilogue);
+            self.f.ctor_return_used = true;
             return;
         }
         if self.f.is_async && !self.f.is_generator {
@@ -528,6 +537,9 @@ impl Parser<'_, '_> {
         let Some((epilogue, ret)) = self.f.ctor_return else {
             return;
         };
+        if !self.f.ctor_return_used {
+            return;
+        }
         let pos = self.prev_end;
         self.place(epilogue);
         let r = self.name_ref(ret, pos);

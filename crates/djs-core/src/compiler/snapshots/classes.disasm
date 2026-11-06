@@ -61,17 +61,9 @@ function 0.0 A: params=1 locals=4 stack=3 captures=1
    30  call0
    31  drop
    32  drop
-   33  undefined
-   34  put_loc0 (<return>)
-   35  get_loc0 (<return>)
-   36  check_ctor_return  ; 9:4
-   37  dup
-   38  is_undefined
-   39  jump_if_false8 -> 44
-   41  drop
-   42  get_loc3 (this)
-   43  check_this
-   44  return
+   33  get_loc3 (this)  ; 9:4
+   34  check_this
+   35  return
 function 0.1 #m: params=0 locals=1 stack=2 captures=1
     0  special_object 4
     2  put_loc0 (this)
