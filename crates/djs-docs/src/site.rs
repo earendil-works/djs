@@ -21,6 +21,9 @@ const ICON_DARK: &str = include_str!("../assets/elanor/icons/dark-mode.svg");
 const ICON_LIGHT: &str = include_str!("../assets/elanor/icons/light-mode.svg");
 const ICON_MENU: &str = include_str!("../assets/elanor/icons/menu.svg");
 
+/// The site's front page (`index.html`): a short summary of djs, not a chapter.
+pub const LANDING: &str = "index.md";
+
 /// One line of SUMMARY.md: `# Part`, `- [Title](page.md)`, or a draft `- [Title]()`.
 pub struct Entry {
     pub depth: usize,
@@ -104,14 +107,19 @@ fn source_rev(repo: &Path) -> String {
 }
 
 pub fn build(g: &mut Guide, out: &Path, wasm: &Path) -> Result<(), String> {
-    let rendered = render_all(g);
+    let mut rendered = render_all(g);
+    // The front page only summarizes the chapters: search finds them instead.
+    let landing = rendered
+        .iter()
+        .position(|(n, _)| n == LANDING)
+        .map(|i| rendered.remove(i));
     let rev = source_rev(&repo());
     std::fs::create_dir_all(out.join("djs")).map_err(|e| format!("{}: {e}", out.display()))?;
     let order: Vec<&Entry> = g.summary.iter().filter(|e| e.path.is_some()).collect();
     let write = |name: &str, text: &str| {
         std::fs::write(out.join(name), text).map_err(|e| format!("{name}: {e}"))
     };
-    for (name, page) in &rendered {
+    for (name, page) in rendered.iter().chain(&landing) {
         let pos = order
             .iter()
             .position(|e| e.path.as_deref() == Some(name.as_str()));
@@ -127,15 +135,6 @@ pub fn build(g: &mut Guide, out: &Path, wasm: &Path) -> Result<(), String> {
     write("highlight.js", HIGHLIGHT)?;
     write("search.js", SEARCH)?;
     write("search.json", &crate::search::index(&rendered, html_name))?;
-    if let Some(first) = order.first().and_then(|e| e.path.as_deref()) {
-        let to = html_name(first);
-        write(
-            "index.html",
-            &format!(
-                "<!doctype html><meta charset=\"utf-8\"><meta http-equiv=\"refresh\" content=\"0; url={to}\"><a href=\"{to}\">How djs works</a>"
-            ),
-        )?;
-    }
     // The live examples: djs-wasm and the host package, types stripped by node.
     let djs = out.join("djs");
     if wasm.exists() {
@@ -162,7 +161,11 @@ pub fn build(g: &mut Guide, out: &Path, wasm: &Path) -> Result<(), String> {
     if !st.success() {
         return Err("stripping js/src for the browser failed (node >= 22.13 needed)".into());
     }
-    println!("djs-docs: {} pages in {}", rendered.len(), out.display());
+    println!(
+        "djs-docs: {} pages in {}",
+        rendered.len() + landing.iter().len(),
+        out.display()
+    );
     Ok(())
 }
 
@@ -209,8 +212,9 @@ fn template(
     pos: Option<(usize, &[&Entry])>,
     rev: &str,
 ) -> String {
+    let landing = current == LANDING;
     let mut nav = String::from("<ol>");
-    for e in entries {
+    for e in entries.iter().filter(|_| !landing) {
         if e.part {
             let _ = write!(nav, "<li class=\"part\">{}</li>", esc(&e.title));
             continue;
@@ -279,13 +283,27 @@ fn template(
         rev,
     );
     let (sha, brand) = elanor_version();
+    let title = if landing {
+        "djs: a small JavaScript engine for agents' scripts".to_string()
+    } else {
+        format!("{} · How djs works", esc(&page.title))
+    };
+    let (layout, nav, toc) = if landing {
+        ("layout landing", String::new(), String::new())
+    } else {
+        (
+            "layout",
+            format!("<nav class=\"book\" aria-label=\"Chapters\">{nav}</nav>"),
+            format!("<aside class=\"toc\">{toc}</aside>"),
+        )
+    };
     format!(
         r##"<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{title} · How djs works</title>
+<title>{title}</title>
 <link rel="icon" href="elanor/logos/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="elanor/tokens.css">
 <link rel="stylesheet" href="elanor/fonts/mallos-serif.css">
@@ -296,26 +314,24 @@ fn template(
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
-<button class="icon-button menu-button" type="button" aria-label="Chapters" aria-expanded="false">{menu}</button>
-<div class="identity"><a class="mark" href="https://earendil.com" title="Earendil"><img class="on-light" src="elanor/logos/earendil-logo-on-light.svg" alt="Earendil"><img class="on-dark" src="elanor/logos/earendil-logo-on-dark.svg" alt="Earendil"></a><a class="brand" href="index.html"><b>djs</b><span>How djs works</span></a></div>
+{menu}<div class="identity"><a class="mark" href="https://earendil.com" title="Earendil"><img class="on-light" src="elanor/logos/earendil-logo-on-light.svg" alt="Earendil"><img class="on-dark" src="elanor/logos/earendil-logo-on-dark.svg" alt="Earendil"></a><a class="brand" href="index.html"><b>djs</b><span>How djs works</span></a></div>
 <span class="spacer"></span>
 <div class="search">{search_icon}<input type="search" id="search" placeholder="Search  /" aria-label="Search the guide" autocomplete="off"><ol id="search-results" hidden></ol></div>
 <div class="actions"><a class="icon-button src" href="{edit}" title="This page's source">Source</a><button class="icon-button scheme" type="button" aria-label="Switch between light and dark">{to_dark}{to_light}</button></div>
 </header>
-<div class="layout">
-<nav class="book" aria-label="Chapters">{nav}</nav>
+<div class="{layout}">
+{nav}
 <main id="main" tabindex="-1"><div class="page"><article data-text-context="prose">
 {body}
 </article>{pager}
 <footer class="foot"><p>djs is built by <a href="https://earendil.com">Earendil</a>. <a href="{repo}">Source on GitHub</a>.</p><p>Designed with Elanor, Earendil's design system (<a href="https://github.com/earendil-works/elanor/commit/{sha}">{short}</a>, {brand} tokens, <a href="elanor/tokens.LICENSE">ISC License</a>). Fonts: Mallos Serif and Commit Mono, SIL Open Font License 1.1 (<a href="elanor/fonts/licenses/mallos-serif.txt">Mallos Serif</a>, <a href="elanor/fonts/licenses/commit-mono.txt">Commit Mono</a>). Icons: Material Symbols, <a href="elanor/icons/LICENSE">Apache License 2.0</a>.</p></footer></div>
-<aside class="toc">{toc}</aside></main>
+{toc}</main>
 </div>
 <script type="module" src="page.js"></script>
 {live}<script type="module" src="search.js"></script>
 </body>
 </html>
 "##,
-        title = esc(&page.title),
         // Wide tables scroll inside their wrapper instead of widening the column.
         body = page
             .html
@@ -329,7 +345,15 @@ fn template(
             ""
         },
         repo = render::REPO_URL,
-        menu = icon(ICON_MENU, "menu-icon"),
+        // The front page has no chapter list to open.
+        menu = if landing {
+            String::new()
+        } else {
+            format!(
+                "<button class=\"icon-button menu-button\" type=\"button\" aria-label=\"Chapters\" aria-expanded=\"false\">{}</button>\n",
+                icon(ICON_MENU, "menu-icon")
+            )
+        },
         search_icon = icon(ICON_SEARCH, "search-icon"),
         to_dark = icon(ICON_DARK, "to-dark"),
         to_light = icon(ICON_LIGHT, "to-light"),

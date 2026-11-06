@@ -424,6 +424,37 @@ footer.foot {
 footer.foot p { margin: 0 0 var(--semantic-dimension-space-gap-x-small); }
 footer.foot a { color: inherit; }
 
+/* The front page (docs/guide/index.md): no chapters or outline, a wider column, a lead
+   paragraph, two links as buttons and the features as a grid of cards. */
+.layout.landing { display: block; }
+.landing main { grid-template-columns: minmax(0, 60rem); }
+.landing article > h1 { font: var(--semantic-typography-heading-marketing-1); letter-spacing: var(--semantic-typography-heading-marketing-1-letter-spacing); }
+.landing article > .lead { font: var(--semantic-typography-heading-app-5); color: var(--semantic-color-text-secondary); text-wrap: pretty; }
+.landing .cta { display: flex; flex-wrap: wrap; gap: var(--semantic-dimension-space-gap-medium); }
+.landing .button {
+  padding: var(--semantic-dimension-space-control-padding-block-medium) var(--semantic-dimension-space-control-padding-inline-medium);
+  border-radius: var(--semantic-dimension-radius-small);
+  background: var(--semantic-color-background-fill-primary); color: var(--semantic-color-text-on-primary-fill);
+  font: var(--semantic-typography-ui-primary); font-weight: var(--semantic-font-weight-ui-emphasis); text-decoration: none;
+}
+@media (hover: hover) { .landing .button:hover { background: var(--semantic-color-background-fill-primary-hover); } }
+.landing .button.secondary { background: var(--semantic-color-background-fill-secondary); color: var(--semantic-color-text-primary); }
+@media (hover: hover) { .landing .button.secondary:hover { background: var(--semantic-color-background-fill-secondary-hover); } }
+article > * + .features { margin-block-start: var(--semantic-dimension-space-flow-x-large); }
+.landing .features ul {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: var(--semantic-dimension-space-gap-large);
+  margin: 0; padding: 0; list-style: none;
+}
+.landing .features li {
+  margin: 0; padding: var(--semantic-dimension-space-padding-large);
+  border: var(--semantic-dimension-border-width-small) solid var(--semantic-color-border-secondary);
+  border-radius: var(--semantic-dimension-radius-medium);
+  color: var(--semantic-color-text-secondary); font: var(--semantic-typography-ui-primary);
+}
+.landing .features li > strong:first-child { display: block; margin-block-end: var(--semantic-dimension-space-gap-small); color: var(--semantic-color-text-primary); font: var(--semantic-typography-heading-app-6); }
+.landing .features li > strong:first-child a { color: inherit; text-decoration: none; }
+.landing .features + p { margin-block-start: var(--semantic-dimension-space-flow-x-large); }
+
 /* Narrower: no table of contents; then the chapters move into a menu (as in Elanor's docs
    below 61.625rem). */
 @media (width < 75rem) {

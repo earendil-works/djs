@@ -69,7 +69,7 @@ HEADER = [
     "# `gen:status` regions of README.md and docs/guide read it. Do not edit by hand.",
     "key\tvalue\tcommit\tdate",
 ]
-# The workloads of README.md's speed table (scripts/perf/w/), in table order.
+# The workloads of the speed table (`gen:status speed`) (scripts/perf/w/), in table order.
 SPEED = ["tight", "prop1", "strings", "arrays", "json", "json-date", "forof", "calls",
          "push-pop", "pi-like", "foreach", "higher-order"]
 

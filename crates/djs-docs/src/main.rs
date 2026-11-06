@@ -70,8 +70,11 @@ fn load(examples: bool) -> Guide {
     let summary = site::summary(&read(&dir.join("SUMMARY.md")));
     let mut pages = BTreeMap::new();
     let mut stale = Vec::new();
-    for e in &summary {
-        let Some(p) = &e.path else { continue };
+    // The site's front page is a page like the others (regions, links, the writing
+    // rules), but outside the chapters: SUMMARY.md does not list it.
+    let landing = Some(site::LANDING.to_string());
+    for p in summary.iter().map(|e| &e.path).chain([&landing]) {
+        let Some(p) = p else { continue };
         let path = dir.join(p);
         let Ok(old) = std::fs::read_to_string(&path) else {
             cx.errors.push(format!("SUMMARY.md: {p} does not exist"));

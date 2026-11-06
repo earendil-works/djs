@@ -43,7 +43,9 @@ code is held to the word rules):
   with a link to the quoted lines.
 
 `SUMMARY.md` lists the pages in reading order (mdBook's format). A `- [Title]()` entry
-is a chapter not written yet.
+is a chapter not written yet. `index.md` is the site's front page (`index.html`): a short
+summary of djs with links into the guide. It is not a chapter, so SUMMARY.md does not list
+it, but the rules and generated regions apply to it as to every page.
 
 ## Tooling
 

@@ -490,7 +490,7 @@ fn conformance(st: &Status, pi: bool) -> Result<String, String> {
     Ok(s)
 }
 
-/// README's speed table: (workload, label).
+/// The speed table (`gen:status speed`): (workload, label).
 const SPEED: &[(&str, &str)] = &[
     ("tight", "tight loop"),
     ("prop1", "property access (prop1)"),

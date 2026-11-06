@@ -1,202 +1,65 @@
 # djs
 
-djs is a small JavaScript and TypeScript engine written in `no_std` Rust. It is built
-mainly for wasm32, where it replaces QuickJS in pi's codemode: model-written scripts that
-call tools, process their results and print or return data. Its design follows from that
-use (ARCH.md):
+djs is a small JavaScript and TypeScript engine written in `no_std` Rust and built mainly
+for wasm32. It runs codemode scripts, model-written programs that call tools, process
+their results and return data, and replaces QuickJS in pi's codemode.
 
-- **All VM state is one byte arena addressed by `u32` offsets**: objects, strings,
-  bytecode, frames, the job queue, pending host calls. Suspending a VM inside a process
-  is free; creating one is a copy of a prebuilt image.
-- **Suspend anywhere.** The interpreter never recurses on the Rust stack for JS calls.
-  It can stop between any two instructions (fuel, a host call) and resume,
-  also inside getters, callbacks of builtins, promise jobs, generators and async
-  functions.
-- **Cheap data passing.** Values go in through a compact wire format and come out through
-  direct reads of the heap from the host, with no serialization step in the VM.
-- **A compiler without an AST** (single pass to stack bytecode, like QuickJS), with
-  TypeScript erased while parsing.
-- **Builtins in a strict TypeScript subset**, compiled to bytecode for the base snapshot
-  and, for the hot ones, to resumable Rust state machines.
-- **Persistence as code**: a run waiting on its tools is written out as a continuation
-  dump, a plain JavaScript program that recreates it, which any later djs (or node)
-  runs (docs/continuation-dumps.md).
-- **Deterministic by construction**: the clock, randomness and weak references come from
-  the host, and the same inputs give byte-identical heap images, natively and in wasm.
+- **One arena.** All VM state lives in one byte array addressed by `u32` offsets, so a
+  new VM is a copy of a prebuilt image and the host reads results straight out of it.
+- **Suspend anywhere.** The interpreter never recurses on the Rust stack for JS calls; it
+  can stop between any two instructions and resume, also inside callbacks, getters and
+  async functions.
+- **Persistence as code.** A run waiting on its tools can be written out as a
+  continuation dump: a plain JavaScript program that recreates it.
+- **No AST.** A single pass compiles to stack bytecode; TypeScript is erased while
+  parsing.
+- **Deterministic.** Clock, randomness and weak references come from the host; the same
+  inputs give byte-identical heaps, natively and in wasm.
 
-The behavior reference and test oracle is dquickts (a QuickJS fork), including its error
-messages.
+It behaves like QuickJS, down to error messages (dquickts, a QuickJS fork, is the test
+oracle), passes <!--n test262/passed-->38,069<!--/n--> of the <!--n test262/active-->38,109<!--/n--> test262 tests in its active group, and
+the wasm module is <!--n wasm/brotli kb-->350 KB<!--/n--> brotli-compressed.
 
-## Status
+**Documentation:** [How djs works](https://earendil-works.github.io/djs/), the guide
+(source in `docs/guide/`).
 
-The numbers below are generated (`djs-docs regen`, D2101): counts from the repository
-(test262 grouping and ratchets, the corpus) on every merge, measurements from
-`tests/scores/status.tsv`, which `scripts/status.py` records with the commit they were
-measured at (`scripts/status.py` without arguments lists what it measures and how; the
-guide's status page lists every record). Figures inside sentences are generated too
-(inline `n` markers, D3070).
-
-**Conformance.**
-
-<!-- gen:status conformance -->
-- test262 (at dquickts' pinned commit): djs passes **38,069 of the 38,109** tests in the
-  active group (99.9%; 53,597 tests in all, the rest skipped by design). The 40 known
-  failures are listed with reasons in `tests/test262/expected-failures.txt`; dquickts'
-  qjs fails 4 active tests under the same runner.
-- The differential corpus (codemode scripts, console and result formatting, error
-  messages, TypeScript, dquickts' own tests): **631 of 642** cases match qjs; 6 known
-  failures (`tests/corpus/expected-failures.txt`) and 5 skipped as non-goals.
-- pi's codemode test suite on djs: 221 of 226 tests pass in the default mode, in the
-  next mode and with a dump at every idle point (measured at 7167411f0f, 2026-11-05).
-<!-- /gen -->
-
-Skipped by design: Intl, Temporal, SharedArrayBuffer/Atomics, Annex B, sloppy mode,
-direct eval, modules. Most known failures follow from djs being always strict (TESTING.md
-"Known differences"); pi's failures from that, or from tests that expect the quickjs-wasi
-fingerprint.
-
-**Speed in wasm** (node, V8's wasm tier). djs-wasm vs quickjs-wasi (pi's engine), from
-`scripts/perf/wmeasure.py`:
-
-<!-- gen:status speed -->
-| workload | djs-wasm | quickjs-wasi | ratio |
-| --- | ---: | ---: | ---: |
-| tight loop | 5.6G | 15.3G | 0.37 |
-| property access (prop1) | 2.2G | 5.4G | 0.41 |
-| strings (split, slice, join, ...) | 2.0G | 5.8G | 0.34 |
-| arrays | 7.7G | 16.3G | 0.47 |
-| JSON round trips | 1.0G | 2.0G | 0.51 |
-| JSON with Dates | 0.8G | 1.7G | 0.46 |
-| for-of | 4.1G | 7.0G | 0.59 |
-| calls | 2.7G | 3.9G | 0.68 |
-| push/pop and string methods | 3.1G | 2.9G | 1.08 |
-| a pi-like script | 5.1G | 6.9G | 0.73 |
-| forEach | 4.5G | 5.8G | 0.77 |
-| map/filter/reduce (higher-order) | 6.3G | 4.5G | 1.40 |
-
-Machine instructions per workload (`scripts/perf/w/`), measured at 669ce55099,
-2026-11-05; lower is better.
-<!-- /gen -->
-
-pi's own benchmark (`js/bench/pi.bench.ts`, through pi's adapter, `scripts/status.py pi`):
-a tool-heavy script with 61 calls takes <!--n pi/bench/tool-heavy/djs .1-->2.4<!--/n--> ms on djs (reusing the prelude image)
-vs <!--n pi/bench/tool-heavy/qjs .1-->4.5<!--/n--> ms on quickjs-wasi, a script start <!--n pi/bench/start/djs .2-->0.14<!--/n--> ms vs <!--n pi/bench/start/qjs .1-->2.9<!--/n--> ms (<!--n pi/bench/start/djs-prelude .1-->4.9<!--/n--> ms on djs
-when it runs the prelude). Callback-heavy builtin code is the main remaining gap
-(work/issues/0081-perf-anatomy.md).
-
-**Size and startup.**
-
-<!-- gen:status size -->
-`djs_wasm.wasm` is 953 KB (414 KB gzip, 350 KB brotli): 806 KB of code, 98 KB of data,
-and the base snapshot (the initialized realm with all builtins, 189 KB) coded to 46 KB
-in a custom section. The slim build is 825 KB (349 KB gzip); the dump module, the
-shipped build with the dumper, 1,835 KB (754 KB gzip). Module sizes measured at
-31c4587e31, 2026-11-05.
-<!-- /gen -->
-
-Creating a VM copies the base snapshot: about <!--n startup/vm-new-us .1-->2.5<!--/n--> µs in wasm (D1990). A `Sandbox`
-(instance plus VM) takes about <!--n startup/sandbox-us .0-->113<!--/n--> µs, <!--n startup/sandbox-run-us .0-->142<!--/n--> µs with its first run
-(`js/bench/sandbox.bench.ts`, `scripts/status.py startup`).
-
-## Building and running
-
-Requirements: stable Rust (edition 2024) with the `wasm32-unknown-unknown` target and the
-`rust-src` component (the wasm module builds core and alloc from source), node
-22.6 or newer for the JS host package (it runs TypeScript directly), and, for the
-oracle-based tests, dquickts' `qjs` at `~/Development/dquickts/qjs` (or `$DJS_QJS`).
+## Using it
 
 ```sh
-cargo build                                  # the workspace
-cargo run -p djs-cli -- run file.js          # run a Script (prints console output)
-cargo run -p djs-cli -- run --body file.js   # run a codemode async function body
-cargo run -p djs-cli -- run --ts file.ts     # TypeScript
-cargo run -p djs-cli -- repl                 # REPL with fuel, suspension and heap commands
-cargo run -p djs-cli -- disasm file.js       # bytecode listing
-cargo run -p djs-cli -- strip-types file.ts  # the source with its types blanked
-scripts/build-wasm.sh                        # target/wasm32-unknown-unknown/wasm/djs_wasm.wasm
+npm install @earendil-works/djs
 ```
-
-`djs run` also takes `--gc-stress`, `--suspend-every N` and `--backend bytecode|native`
-(docs/cli.md).
-
-From JavaScript (`js/`, published as `@earendil-works/djs`: `npm install
-@earendil-works/djs`; js/README.md, docs/host.md):
 
 ```ts
 import { Sandbox } from "@earendil-works/djs";
-import { loadModule as loadDumpModule } from "@earendil-works/djs/dump";
 
 const sb = await Sandbox.create({
   asyncFunctions: { search: (q) => mySearch(q as string) },
   memoryLimit: 64 << 20,
-  frozenBuiltins: true,                           // dumps need them (D2836)
-  dumpModule: await loadDumpModule(),             // only to persist runs
 });
-const result = await sb.runAsync("const hits = await search(q); return hits.length;", { q: "djs" });
-const run = sb.begin("return (await search(q)).length", { q: "djs" });  // a run the host drives
-const dump = run.dump();                     // while it waits: a dump, a plain JavaScript Script
+const n = await sb.runAsync("const hits = await search(q); return hits.length", { q: "djs" });
 ```
 
-`js/pi/vm.ts` implements pi's codemode VM contract (`startVm`) on djs, running pi's
-unmodified prelude (docs/host.md "pi codemode").
+See `js/README.md` for the package and `js/pi/vm.ts` for pi's codemode adapter.
 
-## Testing
+## Building and testing
+
+Needs stable Rust (edition 2024) with the `wasm32-unknown-unknown` target and
+`rust-src`, and node 22.6+. Oracle tests need dquickts' `qjs` (`$DJS_QJS`).
 
 ```sh
+cargo build                                  # the workspace
+cargo run -p djs-cli -- run file.js          # run a script (also: repl, disasm)
+scripts/build-wasm.sh                        # the wasm module
 cargo test                                   # unit and integration tests
-scripts/fetch-test262.sh                     # once: vendor/test262 at the pinned commit
-cargo run --release -p djs-test262 -- run --engine djs --group active \
-    --expected tests/test262/expected-failures.txt       # test262 against the ratchet
-cargo run --release -p djs-difftest -- --engine djs --ratchet   # the corpus against qjs
-node --test js/test/*.test.ts                # the JS host package (needs a djs-wasm build)
+cargo run -p djs-docs -- build               # the guide: target/docs-site/
 ```
 
-Everything that runs an engine should run under `scripts/timeout.sh`. TESTING.md
-explains the layers: test262 with skip/later/active groups and a ratchet, the
-differential corpus in pi's codemode model, and the stress modes (suspension through heap
-images, GC stress, both builtin backends, heap-image determinism, native versus wasm).
+`TESTING.md` covers test262, the differential corpus and the stress modes;
+`scripts/gate.sh` is what every change to `main` must pass.
 
-`scripts/gate.sh` runs everything that must pass before a change reaches `main`;
-`scripts/merge-to-main.sh` rebases, regenerates generated files, runs the gate and
-fast-forwards `main` (work/README.md). Benchmarks: `scripts/bench.sh` (engine track and
-size), `scripts/perf/` (instruction counts natively and in wasm).
+## Further reading
 
-## Layout
-
-```
-crates/djs-core      the engine: lexer, compiler, heap, GC, interpreter, builtins' Rust parts (no_std)
-crates/djs-bgen      the builtin compiler: TS subset -> prelude JS and Rust state machines
-crates/djs-prelude   builds the base snapshot from bgen's output
-crates/djs-wasm      the wasm32 build and its integer ABI
-crates/djs-cli       the `djs` command
-crates/djs-test262   the test262 runner
-crates/djs-difftest  the differential corpus runner
-crates/djs-bench     benchmarks
-crates/djs-docs      the guide's generator and checker (docs/guide)
-builtins/            the builtins in the TypeScript subset (builtins/README.md)
-js/                  the host package: Sandbox, wire encoder, heap reader, pi adapter
-tests/               corpus, test262 lists, benchmarks, pi fixtures
-scripts/             gate, merge, build, bench, perf and determinism tools
-docs/                design notes and the decision log
-work/                issues, board and process
-```
-
-## Documentation
-
-- **docs/guide/**: *How djs works*, the guide for humans: the design and its trade-offs,
-  with live examples. `cargo run -p djs-docs -- build` writes the site to
-  `target/docs-site/` (live examples need `scripts/build-wasm.sh` first; serve the
-  directory over HTTP for them).
-- **ARCH.md**: the architecture: goals, the arena, values and heap, compiler,
-  interpreter, builtins, host interface, snapshots, and what was planned but replaced.
-- **TESTING.md**: test262, the differential corpus, stress modes, known differences, the
-  gate.
-- **docs/decisions.md**: every design decision in order (append-only);
-  **docs/decisions-index.md** groups them by topic.
-- **docs/compiler.md**: the compiler and bytecode design note.
-- **docs/objects.md**: property access, inline caches, shapes and dictionaries.
-- **docs/host.md**: the Sandbox API, the wasm ABI, the pi adapter, numbers.
-- **docs/wire.md**: the inbound wire format and the outbound heap reader.
-- **docs/cli.md**: the `djs` command and the REPL.
-- **builtins/README.md**: the builtin language and its tags.
-- **AGENTS.md** and **work/README.md**: how work is organized (issues, worktrees, merging).
+- `ARCH.md`: the architecture.
+- `TESTING.md`: how djs is tested.
+- `docs/decisions.md`: the decision log (`docs/decisions-index.md` by topic).
+- `AGENTS.md`, `work/README.md`: how work is organized.
