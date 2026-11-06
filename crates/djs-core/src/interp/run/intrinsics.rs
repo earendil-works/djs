@@ -2056,71 +2056,6 @@ impl Exec<'_> {
         let arg = |i: usize| a[i];
         Ok(Some(match id {
             IS_OBJECT => Value::bool(a0.as_object().is_some()),
-            // Constructors' allocations (0236).
-            COLLECTION_CREATE => {
-                let (Some(cls), Some(proto)) = (
-                    a0.as_int().and_then(collection::class_of),
-                    arg(1).as_object(),
-                ) else {
-                    return bad_argument(id);
-                };
-                Value::object(self.heap.collection_new(cls, proto)?)
-            }
-            PROMISE_CREATE => {
-                let Some(proto) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                Value::object(promise::alloc(self.heap, Some(proto))?)
-            }
-            ERROR_CREATE => {
-                let Some(proto) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                Value::object(self.heap.alloc_object(
-                    ObjectClass::Error,
-                    Some(proto),
-                    ObjectClass::Error.slots(),
-                )?)
-            }
-            DATE_CREATE => {
-                let Some(proto) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                let o = self.heap.alloc_object(ObjectClass::Date, Some(proto), 1)?;
-                let t = arg(1).as_number().unwrap_or(f64::NAN);
-                self.heap.set_object_slot(o, 0, Value::number(t));
-                Value::object(o)
-            }
-            NEW_BUILTIN_CLOSURE => {
-                let kind = a0.as_int().and_then(|k| usize::try_from(k).ok());
-                let (Some(kind), Some(length)) = (kind, arg(2).as_int()) else {
-                    return bad_argument(id);
-                };
-                match new_builtin_closure(self.heap, kind, arg(1), length)? {
-                    Some(f) => Value::object(f),
-                    None => return bad_argument(id),
-                }
-            }
-            CONSTRUCTOR_PROTOTYPE => {
-                let proto = match a0.as_object() {
-                    Some(nt) => match self.heap.lookup_property(nt, crate::heap::atoms::PROTOTYPE) {
-                        Lookup::Found(_, Property::Data { value, .. }) => value.as_object(),
-                        Lookup::Absent => None,
-                        // A getter or a proxy's trap: the builtin's steps.
-                        Lookup::Found(..) | Lookup::Proxy(_) => return Ok(Some(Value::UNDEFINED)),
-                    },
-                    None if a0.is_undefined() => None,
-                    None => return bad_argument(id),
-                };
-                // Else the realm's: GetFunctionRealm of a function that is no proxy.
-                match proto {
-                    Some(p) => Value::object(p),
-                    None => match self.realm_intrinsic(arg(1)) {
-                        Some(v) => v,
-                        None => return bad_argument(id),
-                    },
-                }
-            }
             IS_CALLABLE => Value::bool(self.is_callable(a0)),
             IS_CONSTRUCTOR => Value::bool(a0.as_object().is_some_and(|o| self.is_constructor(o))),
             IS_ARRAY => match a0.as_object().map(|o| self.heap.is_array(o)) {
@@ -2282,8 +2217,83 @@ impl Exec<'_> {
                 a[1].as_number().unwrap_or(f64::NAN),
             ) {
                 Some(r) => conv::number(r),
-                None => return Ok(None),
+                None => return self.constructor_leaf(id, a),
             },
+        }))
+    }
+
+    /// The pure leaves of the builtin constructors (0236): `pure_leaf`'s, out of line
+    /// so that its string leaves stay inlined there.
+    #[inline(never)]
+    fn constructor_leaf(&mut self, id: u16, a: [Value; 3]) -> Result<Option<Value>, Fault> {
+        let a0 = a[0];
+        let arg = |i: usize| a[i];
+        Ok(Some(match id {
+            COLLECTION_CREATE => {
+                let (Some(cls), Some(proto)) = (
+                    a0.as_int().and_then(collection::class_of),
+                    arg(1).as_object(),
+                ) else {
+                    return bad_argument(id);
+                };
+                Value::object(self.heap.collection_new(cls, proto)?)
+            }
+            PROMISE_CREATE => {
+                let Some(proto) = a0.as_object() else {
+                    return bad_argument(id);
+                };
+                Value::object(promise::alloc(self.heap, Some(proto))?)
+            }
+            ERROR_CREATE => {
+                let Some(proto) = a0.as_object() else {
+                    return bad_argument(id);
+                };
+                Value::object(self.heap.alloc_object(
+                    ObjectClass::Error,
+                    Some(proto),
+                    ObjectClass::Error.slots(),
+                )?)
+            }
+            DATE_CREATE => {
+                let Some(proto) = a0.as_object() else {
+                    return bad_argument(id);
+                };
+                let o = self.heap.alloc_object(ObjectClass::Date, Some(proto), 1)?;
+                let t = arg(1).as_number().unwrap_or(f64::NAN);
+                self.heap.set_object_slot(o, 0, Value::number(t));
+                Value::object(o)
+            }
+            NEW_BUILTIN_CLOSURE => {
+                let kind = a0.as_int().and_then(|k| usize::try_from(k).ok());
+                let (Some(kind), Some(length)) = (kind, arg(2).as_int()) else {
+                    return bad_argument(id);
+                };
+                match new_builtin_closure(self.heap, kind, arg(1), length)? {
+                    Some(f) => Value::object(f),
+                    None => return bad_argument(id),
+                }
+            }
+            CONSTRUCTOR_PROTOTYPE => {
+                let proto = match a0.as_object() {
+                    Some(nt) => match self.heap.lookup_property(nt, crate::heap::atoms::PROTOTYPE) {
+                        Lookup::Found(_, Property::Data { value, .. }) => value.as_object(),
+                        Lookup::Absent => None,
+                        // A getter or a proxy's trap: the builtin's steps.
+                        Lookup::Found(..) | Lookup::Proxy(_) => return Ok(Some(Value::UNDEFINED)),
+                    },
+                    None if a0.is_undefined() => None,
+                    None => return bad_argument(id),
+                };
+                // Else the realm's: GetFunctionRealm of a function that is no proxy.
+                match proto {
+                    Some(p) => Value::object(p),
+                    None => match self.realm_intrinsic(arg(1)) {
+                        Some(v) => v,
+                        None => return bad_argument(id),
+                    },
+                }
+            }
+            _ => return Ok(None),
         }))
     }
 

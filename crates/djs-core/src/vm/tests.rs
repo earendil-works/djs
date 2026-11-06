@@ -3677,7 +3677,13 @@ fn hot_loop_is_invisible() {
         try { nums.forEach((x) => { if (x === 50) throw new Error('stop ' + x); }); } catch (e) { cb += e.message.length; }\n\
         cb += [[1, 2], [3]].map((p) => p.map((x) => x * cb % 7).join('')).join('|').length;\n\
         console.log(cb, words[3], sorted[150]);\n\
-        console.log(sum, o.a, xs.length, s);\n";
+        console.log(sum, o.a, xs.length, s);\n\
+        class Q extends P { constructor(x) { super(x + 1); this.t = new.target === Q; } }\n\
+        class R extends P {} function F(a) { this.a = a; } let qs = 0;\n\
+        for (let i = 0; i < 120; i++) { const q = new Q(i), m = new Map(); m.set(i, q);\n\
+          qs += q.x + q.t + m.size + new R(i).x + new F(i).a + new Set().size + new Date(i).getTime();\n\
+          if (i % 10 === 0) qs += new Error('e' + i).message.length + (new Promise(() => {}) instanceof Promise); }\n\
+        console.log(qs);\n";
     const HOT: u32 = crate::interp::run::HOT_BACKEDGES;
     let cases: &[(u64, bool, u32, bool)] = &[
         // (fuel slice, gc stress, backward jumps per run_hot, suspend through images)
