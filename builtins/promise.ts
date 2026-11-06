@@ -309,6 +309,7 @@ function PromiseThisConstructor(c: Value): Value {
  * Promise.resolve ( x ), 27.2.4.7.
  * @builtin Promise.resolve
  * @intrinsic
+ * @fast
  */
 function PromiseStaticResolve(this: Value, x: Value): Value {
   return PromiseResolve(PromiseThisConstructor(this), x);

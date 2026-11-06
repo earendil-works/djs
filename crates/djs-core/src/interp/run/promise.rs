@@ -200,6 +200,26 @@ pub(crate) fn fast_reject(heap: &mut Heap, data: Value, reason: Value) -> Fast {
     Ok(Some(Value::UNDEFINED))
 }
 
+/// `Promise.resolve ( x )` on %Promise%, a `@fast` entry (D3156): `x` itself for a
+/// `plain_promise`, else a new promise fulfilled with a `plain_fulfillment` value.
+pub(crate) fn fast_static_resolve(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
+    let x = args.first().copied().unwrap_or(Value::UNDEFINED);
+    if this != realm::installed_intrinsic(heap, PROMISE_CONSTRUCTOR) {
+        return Ok(None);
+    }
+    if plain_promise(heap, x).is_some() {
+        return Ok(Some(x));
+    }
+    if as_promise(heap, x).is_some() || !plain_fulfillment(heap, x) {
+        return Ok(None);
+    }
+    let proto = realm::intrinsic_obj(heap, realm::Intrinsic::PromiseProto);
+    let p = alloc(heap, Some(proto))?;
+    set_flags(heap, p, FLAG_RESOLVED);
+    settle(heap, p, true, x)?;
+    Ok(Some(Value::object(p)))
+}
+
 /// `Promise.prototype.then`, a `@fast` entry (D3156): on a Promise whose
 /// SpeciesConstructor is %Promise% without user code, the derived promise is a new one
 /// of %Promise% (NewPromiseCapability), subscribed with PerformPromiseThen.

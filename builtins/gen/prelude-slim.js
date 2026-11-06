@@ -4498,19 +4498,19 @@ function PromiseThisConstructor(c) {
   return c;
 }
 
-// builtins/promise.ts:313 Promise.resolve %PromiseStaticResolve
+// builtins/promise.ts:314 Promise.resolve %PromiseStaticResolve
 function PromiseStaticResolve(x) {
   return PromiseResolve(((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : this), x);
 }
 
-// builtins/promise.ts:321 Promise.reject
+// builtins/promise.ts:322 Promise.reject
 function PromiseStaticReject(r) {
   const capability = NewPromiseCapability(((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : this));
   ((%IsPromise(capability)) ? (RejectWithData(capability, r), undefined) : (%Call(%RecordGet(%AsObj(capability), 2), undefined, r), undefined));
   return ((%IsPromise(capability)) ? capability : %RecordGet(%AsObj(capability), 0));
 }
 
-// builtins/promise.ts:333
+// builtins/promise.ts:334
 function GetPromiseResolve(c) {
   const promiseResolve = %Get(%AsObj(c), "resolve");
   if (!%IsCallable(promiseResolve)) {
@@ -4519,14 +4519,14 @@ function GetPromiseResolve(c) {
   return promiseResolve;
 }
 
-// builtins/promise.ts:342
+// builtins/promise.ts:343
 function DecrementRemaining(remaining) {
   const n = %AsNumber(%RecordGet(remaining, 0)) - 1;
   %RecordSet(remaining, 0, n);
   return n;
 }
 
-// builtins/promise.ts:352
+// builtins/promise.ts:353
 function NewElementRecord(index, values, capability, remaining) {
   const r = %NewRecord(6);
   %RecordSet(r, 0, false);
@@ -4537,7 +4537,7 @@ function NewElementRecord(index, values, capability, remaining) {
   return r;
 }
 
-// builtins/promise.ts:367
+// builtins/promise.ts:368
 function SettleElement(data, x, reject) {
   let $1, $2;
   const r = %AsObj(data);
@@ -4560,7 +4560,7 @@ function SettleElement(data, x, reject) {
   }
 }
 
-// builtins/promise.ts:389
+// builtins/promise.ts:390
 function KeyedResult(keys, values) {
   const o = %ObjectCreate(null);
   const n = LengthOfArrayLike(keys);
@@ -4570,7 +4570,7 @@ function KeyedResult(keys, values) {
   return o;
 }
 
-// builtins/promise.ts:405
+// builtins/promise.ts:406
 function PerformPromiseKeyed(thisValue, promises, kind) {
   let $1, $2, $3, $4, $5;
   const c = ((!%IsObject(thisValue)) ? %Throw(%NewTypeError("not an object")) : thisValue);
@@ -4617,22 +4617,22 @@ function PerformPromiseKeyed(thisValue, promises, kind) {
   return ((%IsPromise(capability)) ? capability : %RecordGet(%AsObj(capability), 0));
 }
 
-// builtins/promise.ts:454 Promise.allKeyed
+// builtins/promise.ts:455 Promise.allKeyed
 function PromiseAllKeyed(promises) {
   return PerformPromiseKeyed(this, promises, 0);
 }
 
-// builtins/promise.ts:462 Promise.allSettledKeyed
+// builtins/promise.ts:463 Promise.allSettledKeyed
 function PromiseAllSettledKeyed(promises) {
   return PerformPromiseKeyed(this, promises, 1);
 }
 
-// builtins/promise.ts:470 %PromiseAllResolveElement
+// builtins/promise.ts:471 %PromiseAllResolveElement
 function PromiseAllResolveElement(x) {
   SettleElement(this, x, false);
 }
 
-// builtins/promise.ts:475
+// builtins/promise.ts:476
 function SettledRecord(fulfilled, x) {
   const o = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
   %CreateDataPropertyOrThrow(o, "status", fulfilled ? "fulfilled" : "rejected");
@@ -4640,7 +4640,7 @@ function SettledRecord(fulfilled, x) {
   return o;
 }
 
-// builtins/promise.ts:486 %PromiseAllSettledResolveElement
+// builtins/promise.ts:487 %PromiseAllSettledResolveElement
 function PromiseAllSettledResolveElement(x) {
   if (%RecordGet(%AsObj(this), 0) === true) {
     return;
@@ -4648,7 +4648,7 @@ function PromiseAllSettledResolveElement(x) {
   SettleElement(this, SettledRecord(true, x), false);
 }
 
-// builtins/promise.ts:497 %PromiseAllSettledRejectElement
+// builtins/promise.ts:498 %PromiseAllSettledRejectElement
 function PromiseAllSettledRejectElement(x) {
   if (%RecordGet(%AsObj(this), 0) === true) {
     return;
@@ -4656,12 +4656,12 @@ function PromiseAllSettledRejectElement(x) {
   SettleElement(this, SettledRecord(false, x), false);
 }
 
-// builtins/promise.ts:508 %PromiseAnyRejectElement
+// builtins/promise.ts:509 %PromiseAnyRejectElement
 function PromiseAnyRejectElement(x) {
   SettleElement(this, x, true);
 }
 
-// builtins/promise.ts:513
+// builtins/promise.ts:514
 function NewAggregateError(errors) {
   const e = %ErrorCreate(%RealmIntrinsic("AggregateErrorPrototype"));
   %DefineDataPropertyOrThrow(e, "errors", CreateArrayFromList(errors), 5);
@@ -4669,7 +4669,7 @@ function NewAggregateError(errors) {
   return e;
 }
 
-// builtins/promise.ts:521
+// builtins/promise.ts:522
 function CreateArrayFromList(list) {
   const len = LengthOfArrayLike(list);
   const a = %ArrayCreate(0);
@@ -4679,7 +4679,7 @@ function CreateArrayFromList(list) {
   return a;
 }
 
-// builtins/promise.ts:536
+// builtins/promise.ts:537
 function PerformPromiseCombinator(thisValue, iterable, kind) {
   let $1, $2, $3, $4, $5, $6, $7;
   const c = ((!%IsObject(thisValue)) ? %Throw(%NewTypeError("not an object")) : thisValue);
@@ -4767,22 +4767,22 @@ function PerformPromiseCombinator(thisValue, iterable, kind) {
   }
 }
 
-// builtins/promise.ts:631 Promise.all
+// builtins/promise.ts:632 Promise.all
 function PromiseAll(iterable) {
   return PerformPromiseCombinator(this, iterable, 0);
 }
 
-// builtins/promise.ts:639 Promise.allSettled
+// builtins/promise.ts:640 Promise.allSettled
 function PromiseAllSettled(iterable) {
   return PerformPromiseCombinator(this, iterable, 1);
 }
 
-// builtins/promise.ts:647 Promise.any
+// builtins/promise.ts:648 Promise.any
 function PromiseAny(iterable) {
   return PerformPromiseCombinator(this, iterable, 2);
 }
 
-// builtins/promise.ts:656 Promise.try
+// builtins/promise.ts:657 Promise.try
 function PromiseTry(callback, ...args) {
   const c = ((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : this);
   let result = undefined;
@@ -4796,12 +4796,12 @@ function PromiseTry(callback, ...args) {
   return PromiseResolve(c, result);
 }
 
-// builtins/promise.ts:673 Promise.race
+// builtins/promise.ts:674 Promise.race
 function PromiseRace(iterable) {
   return PerformPromiseCombinator(this, iterable, 3);
 }
 
-// builtins/promise.ts:681 Promise.withResolvers
+// builtins/promise.ts:682 Promise.withResolvers
 function PromiseWithResolvers() {
   const capability = NewPromiseCapability(((!%IsObject(this)) ? %Throw(%NewTypeError("not an object")) : this));
   const o = %ObjectCreate(%RealmIntrinsic("ObjectPrototype"));
@@ -4811,7 +4811,7 @@ function PromiseWithResolvers() {
   return o;
 }
 
-// builtins/promise.ts:698 Promise.prototype.then %PromisePrototypeThen
+// builtins/promise.ts:699 Promise.prototype.then %PromisePrototypeThen
 function PromisePrototypeThen(onFulfilled, onRejected) {
   if (!%IsPromise(this)) {
     throw %NewTypeError("Promise object expected");
@@ -4823,12 +4823,12 @@ function PromisePrototypeThen(onFulfilled, onRejected) {
   return ((%IsPromise(capability)) ? capability : %RecordGet(%AsObj(capability), 0));
 }
 
-// builtins/promise.ts:713 Promise.prototype.catch
+// builtins/promise.ts:714 Promise.prototype.catch
 function PromisePrototypeCatch(onRejected) {
   return (%Call(%GetV(this, "then"), this, undefined, onRejected));
 }
 
-// builtins/promise.ts:721 Promise.prototype.finally
+// builtins/promise.ts:722 Promise.prototype.finally
 function PromisePrototypeFinally(onFinally) {
   let $1, $2;
   if (!%IsObject(this)) {
@@ -4844,7 +4844,7 @@ function PromisePrototypeFinally(onFinally) {
   return ($1 = %NewBuiltinClosure(7, data, 1), $2 = %NewBuiltinClosure(8, data, 1), %Call(%GetV(this, "then"), this, $1, $2));
 }
 
-// builtins/promise.ts:739 %PromiseThenFinally
+// builtins/promise.ts:740 %PromiseThenFinally
 function PromiseThenFinally(value) {
   const data = %AsObj(this);
   const result = %Call(%RecordGet(data, 0), undefined);
@@ -4852,7 +4852,7 @@ function PromiseThenFinally(value) {
   return %Call(%GetV(p, "then"), p, %NewBuiltinClosure(9, value, 0));
 }
 
-// builtins/promise.ts:750 %PromiseCatchFinally
+// builtins/promise.ts:751 %PromiseCatchFinally
 function PromiseCatchFinally(reason) {
   const data = %AsObj(this);
   const result = %Call(%RecordGet(data, 0), undefined);
@@ -4860,22 +4860,22 @@ function PromiseCatchFinally(reason) {
   return %Call(%GetV(p, "then"), p, %NewBuiltinClosure(10, reason, 0));
 }
 
-// builtins/promise.ts:761 %PromiseValueThunk
+// builtins/promise.ts:762 %PromiseValueThunk
 function PromiseValueThunk() {
   return this;
 }
 
-// builtins/promise.ts:769 %PromiseThrower
+// builtins/promise.ts:770 %PromiseThrower
 function PromiseThrower() {
   throw this;
 }
 
-// builtins/promise.ts:778 value Promise.prototype[Symbol.toStringTag]
+// builtins/promise.ts:779 value Promise.prototype[Symbol.toStringTag]
 function PromisePrototypeToStringTag() {
   return "Promise";
 }
 
-// builtins/promise.ts:790 %HostCallSettle
+// builtins/promise.ts:791 %HostCallSettle
 function HostCallSettle(promise, ok, value) {
   if (!%PromiseClaimResolve(promise)) {
     return;
@@ -8448,6 +8448,7 @@ function GlobalAtob(...args) {
 %MarkFast(ResolveWithData);
 %MarkFast(RejectWithData);
 %MarkFast(PromiseRejectFunction);
+%MarkFast(PromiseStaticResolve);
 %MarkFast(PromisePrototypeThen);
 %MarkFast(SetPrototypeAdd);
 %MarkFast(SetPrototypeHas);

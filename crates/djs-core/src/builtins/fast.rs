@@ -123,6 +123,7 @@ pub(crate) static FAST: &[FastFn] = &[
         promise::fast_reject(h, arg(a, 0), arg(a, 1))
     }),
     f("PromisePrototypeThen", promise::fast_then),
+    f("PromiseStaticResolve", promise::fast_static_resolve),
     // ---- String.fromCharCode (0091; the URI functions run their builtins, D2256) ----
     f("StringFromCharCode", from_char_code),
 ];
