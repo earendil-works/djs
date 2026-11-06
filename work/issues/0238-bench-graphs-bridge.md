@@ -1,7 +1,7 @@
 # 0238: Benchmarks page: graphs, and data passing through the host bridge
 
-status: open
-agent: -
+status: in-progress
+agent: bridge
 branch: issue/0238-bench-graphs-bridge
 depends-on: 0229
 guide: docs/guide/benchmarks.md (and the JS interface / wasm boundary pages where they describe passing values)
