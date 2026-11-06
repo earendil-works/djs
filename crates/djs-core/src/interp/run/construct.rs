@@ -19,6 +19,8 @@ use crate::value::Value;
 
 const CONSTRUCT: u8 = Op::Construct as u8;
 const SUPER_CALL: u8 = Op::SuperCall as u8;
+const SUPER_CALL_SPREAD: u8 = Op::SuperCallSpread as u8;
+const REST: u8 = Op::Rest as u8;
 const GET_SUPER: u8 = Op::GetSuper as u8;
 const CHECK_CTOR: u8 = Op::CheckCtor as u8;
 const CHECK_THIS: u8 = Op::CheckThis as u8;
@@ -34,7 +36,15 @@ impl Exec<'_> {
             return false;
         }
         let done = match op {
-            CONSTRUCT | SUPER_CALL => self.construct_fast(op),
+            CONSTRUCT | SUPER_CALL | SUPER_CALL_SPREAD => self.construct_fast(op),
+            REST => {
+                // An allocation that fails changes nothing: `step` runs it then.
+                let Ok(a) = self.rest_array() else {
+                    return false;
+                };
+                self.push(a);
+                self.advance_op(Op::Rest)
+            }
             fast::RETURN | fast::RETURN_UNDEF => self.return_constructed(op),
             fast::SPECIAL_OBJECT => {
                 let v = match self.byte(self.pc + 1) {
@@ -91,13 +101,26 @@ impl Exec<'_> {
         true
     }
 
-    /// `construct argc` (`f a1 .. an`) or `super_call argc` (`f a1 .. an newTarget`)
-    /// of a bytecode function or builtin constructor whose frame fits the stack: what
+    /// `construct argc` (`f a1 .. an`), `super_call argc` (`f a1 .. an newTarget`) or
+    /// `super_call_spread` (`f args newTarget`, the arguments in an array) of a
+    /// bytecode function or builtin constructor whose frame fits the stack: what
     /// `construct_with` does after its checks.
     fn construct_fast(&mut self, op: u8) -> bool {
-        let argc = self.imm_u16(1);
-        let sup = op == SUPER_CALL;
-        let base = self.sp - 1 - argc - sup as u32;
+        let sup = op != CONSTRUCT;
+        let (base, argc, spread) = if op == SUPER_CALL_SPREAD {
+            // The compiler's argument array: its elements, in place of it (`spread_args`).
+            let Some(a) = self.top(1).as_object() else {
+                return false;
+            };
+            let n = self.heap.array_length(a);
+            if (0..n).any(|i| self.heap.get_element_fast(a, i).is_none()) {
+                return false;
+            }
+            (self.sp - 3, n, Some(a))
+        } else {
+            let argc = self.imm_u16(1);
+            (self.sp - 1 - argc - sup as u32, argc, None)
+        };
         let Some(fo) = self.get(base).as_object() else {
             return false;
         };
@@ -140,8 +163,18 @@ impl Exec<'_> {
             return false;
         };
         self.fuel -= info.cost.fuel() as i64;
-        self.sp -= sup as u32;
-        self.insert_this(base, argc, this);
+        if let Some(a) = spread {
+            // `f this a1 .. an` (the frame overwrites what lies above).
+            for i in 0..argc {
+                let v = self.heap.get_element_fast(a, i).unwrap_or(Value::UNDEFINED);
+                self.set(base + 2 + i, v);
+            }
+            self.set(base + 1, this);
+            self.sp = base + 2 + argc;
+        } else {
+            self.sp -= sup as u32;
+            self.insert_this(base, argc, this);
+        }
         // Cannot fail: the frame fits and `this` needs no binding.
         let r = self.construct_call(base, argc, nt, next);
         debug_assert!(matches!(r, Ok(None)));

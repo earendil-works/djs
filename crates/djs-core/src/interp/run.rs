@@ -2292,15 +2292,8 @@ impl<'h> Exec<'h> {
                 self.global_decls(idx)?;
             }
             Op::Rest => {
-                let index = self.imm_u16(1);
-                let argc = self.header_int(frame::ARGC);
-                let mut vals = alloc::vec::Vec::new();
-                for i in index..argc.max(index) {
-                    vals.push(self.get(self.bp + 2 + i));
-                }
-                let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
-                let a = self.heap.new_array_from_values(Some(proto), &vals)?;
-                self.push(Value::object(a));
+                let a = self.rest_array()?;
+                self.push(a);
             }
             Op::GetTemplateObject => {
                 let site = self.imm_u32(1);
@@ -4268,6 +4261,20 @@ impl<'h> Exec<'h> {
         };
         let proto = proto.unwrap_or_else(|| intrinsic_obj(self.heap, Intrinsic::ObjectProto));
         Ok(Some(Value::object(self.heap.new_object(Some(proto))?)))
+    }
+
+    /// `rest index`: the arguments from `index` on, in a new Array.
+    fn rest_array(&mut self) -> Result<Value, Fault> {
+        let index = self.imm_u16(1);
+        let argc = self.header_int(frame::ARGC);
+        let mut vals = alloc::vec::Vec::new();
+        for i in index..argc.max(index) {
+            vals.push(self.get(self.bp + 2 + i));
+        }
+        let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
+        Ok(Value::object(
+            self.heap.new_array_from_values(Some(proto), &vals)?,
+        ))
     }
 
     /// `f a1 .. an` at `base` becomes `f this a1 .. an` (room checked by the caller).
