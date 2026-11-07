@@ -198,6 +198,10 @@ scripts/merge-to-main.sh from the worktree.
   combinations (+ full,embed), bgen --check, djs-prelude/djs-embed/djs-bgen/djs-wasm/
   djs-cli tests, slim tests and slim bins, test262 language/ + built-ins/{Object,Proxy,
   Reflect} (ratchet OK), djs-docs check.
+- Gate leg `clippy (wasm32 release)` (`-p djs-core -p djs-wasm`) failed: djs-core's defaults
+  have `embed`, djs-wasm's djs-prelude did not, so the base's build hash differed. The leg
+  now adds `djs-prelude/embed` (still lints everything it did, plus the embed code on
+  wasm32); the shipped modules' own clippy legs are unchanged.
 - Guide: language.md (modules come with the native build for Rust hosts), compiler.md,
   goals.md and typescript.md no longer say there are no ES modules at all.
 

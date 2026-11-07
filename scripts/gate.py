@@ -232,10 +232,13 @@ def jobs():
 
         # --- Clippy, host and wasm32 release (no debug_assertions, so warnings that only
         # appear there fail too; with djs-wasm's docs feature for the docs site's module).
+        # djs-core's defaults include `embed`, an image feature (D3193): djs-prelude, which
+        # djs-wasm brings in, must build its base with it too.
         J("clippy", "CARGO_TARGET_DIR=target/clippy cargo clippy --workspace --all-targets --quiet -- -D warnings",
           cls="rust", group="target/clippy"),
         J("clippy (wasm32 release)", "CARGO_TARGET_DIR=target/clippy cargo clippy -p djs-core -p djs-wasm"
-          " --features djs-wasm/docs --target wasm32-unknown-unknown --release --quiet -- -D warnings",
+          " --features djs-wasm/docs,djs-prelude/embed --target wasm32-unknown-unknown --release --quiet"
+          " -- -D warnings",
           cls="rust", group="target/clippy"),
 
         # --- Clippy on the other feature combinations that ship (D2668): djs-core natively
