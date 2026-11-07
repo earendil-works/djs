@@ -1475,6 +1475,8 @@ mod dump_perf;
 mod dump_resume_tests;
 #[cfg(all(test, feature = "dump"))]
 mod dump_tests;
+#[cfg(all(test, feature = "full"))]
+mod encoding_tests;
 #[cfg(test)]
 mod frozen_tests;
 #[cfg(all(test, feature = "lazy"))]
