@@ -1,7 +1,7 @@
 # 0246: djs-embed for Gondolin's targets: cross-builds, image portability, consuming it
 
-status: open
-agent: -
+status: in-progress
+agent: libm
 branch: issue/0246-cross-builds
 depends-on: 0240, 0245
 touches: scripts/ (a cross-build check), crates/djs-embed (README / docs on depending on it), crates/djs-prelude (only if its build script needs a change), TESTING.md, docs/guide/rust-api.md
