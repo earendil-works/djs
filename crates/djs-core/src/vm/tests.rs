@@ -3052,6 +3052,9 @@ fn build_inputs_list_features() {
     if cfg!(feature = "full") {
         want.push("feature full".into());
     }
+    if cfg!(feature = "modules") {
+        want.push("feature modules".into());
+    }
     if cfg!(feature = "regexp-unicode-props") {
         want.push("feature regexp-unicode-props".into());
     }

@@ -39,7 +39,7 @@ const KINDS: [FuncKind; 13] = [
     FuncKind::DerivedCtor,
     FuncKind::FieldInit,
     FuncKind::StaticBlock,
-    FuncKind::Normal,
+    FuncKind::Module,
 ];
 
 /// Compiles lazy template `t` and returns its compiled template.

@@ -175,9 +175,6 @@ pub(super) enum FuncKind {
     AsyncBody,
     /// Indirect eval code (`Goal::Eval`): top level like a sync codemode body.
     Eval,
-    /// A module's body (`Goal::Module`): strict, `this` undefined, its top-level
-    /// bindings in the module environment (compiler/module.rs).
-    Module,
     /// A function declaration or expression.
     Normal,
     Arrow,
@@ -192,6 +189,10 @@ pub(super) enum FuncKind {
     FieldInit,
     /// A class static block, called by the static initializer.
     StaticBlock,
+    /// A module's body (`Goal::Module`): strict, `this` undefined, its top-level
+    /// bindings in the module environment (compiler/module.rs). Last: lazy records store
+    /// kinds by number (compiler/lazy.rs `KINDS`).
+    Module,
 }
 
 impl FuncKind {
