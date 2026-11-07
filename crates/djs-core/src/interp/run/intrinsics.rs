@@ -210,9 +210,6 @@ const DOM_EXCEPTION_CODE: u16 = id("DOMExceptionCode");
 const DOM_EXCEPTION_CONSTANT: u16 = id("DOMExceptionConstant");
 const BTOA: u16 = id("Btoa");
 const TEXT_CODEC_CREATE: u16 = id("TextCodecCreate");
-const TEXT_CODEC_FLAGS: u16 = id("TextCodecFlags");
-const IS_BUFFER_SOURCE: u16 = id("IsBufferSource");
-const UTF8_ENCODE: u16 = id("Utf8Encode");
 const UTF8_DECODE: u16 = id("Utf8Decode");
 const ATOB: u16 = id("Atob");
 const F64_IMUL: u16 = id("F64Imul");
@@ -2007,37 +2004,13 @@ impl Exec<'_> {
                 };
                 Value::string(self.heap.alloc_str(name)?)
             }
-            TEXT_CODEC_CREATE if FULL => {
-                let (Some(proto), Some(flags)) = (a0.as_object(), arg(self, 1).as_int()) else {
-                    return bad_argument(id);
-                };
-                let o = self
-                    .heap
-                    .alloc_object(ObjectClass::TextCodec, Some(proto), 2)?;
-                self.heap.set_object_slot(o, 0, Value::int(flags));
-                self.heap.set_object_slot(o, 1, Value::int(0));
-                Value::object(o)
-            }
-            TEXT_CODEC_FLAGS if FULL => {
-                Value::int(encoding::flags(self.heap, a0, arg(self, 1) == Value::TRUE)?)
-            }
-            IS_BUFFER_SOURCE if FULL => Value::bool(a0.as_object().is_some_and(|o| {
-                matches!(
-                    self.heap.object_class(o),
-                    ObjectClass::ArrayBuffer | ObjectClass::TypedArray | ObjectClass::DataView
-                )
-            })),
-            UTF8_ENCODE | UTF8_DECODE if FULL => {
-                let range = [arg(self, 1), arg(self, 2), arg(self, 3)];
-                match (a0.as_string(), a0.as_object()) {
-                    (Some(s), _) if id == UTF8_ENCODE => {
-                        encoding::encode(self.heap, s, range, &mut self.fuel)?
-                    }
-                    (_, Some(d)) if id == UTF8_DECODE => {
-                        let stream = arg(self, 4) == Value::TRUE;
-                        encoding::decode(self.heap, d, range, stream, &mut self.fuel)?
-                    }
-                    _ => return bad_argument(id),
+            // The five are consecutive (builtins/intrinsics.d.ts).
+            TEXT_CODEC_CREATE..=UTF8_DECODE if FULL => {
+                let args = [a0, arg(self, 1), arg(self, 2), arg(self, 3), arg(self, 4)];
+                let k = id - TEXT_CODEC_CREATE;
+                match encoding::intrinsic(self.heap, k, args, &mut self.fuel)? {
+                    Some(v) => v,
+                    None => return bad_argument(id),
                 }
             }
             BTOA | ATOB => {

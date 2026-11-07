@@ -27,9 +27,39 @@ const IGNORE_BOM: i32 = 4;
 const BOM_SEEN: u32 = 1 << 26;
 const DO_NOT_FLUSH: u32 = 1 << 27;
 
+/// The leaves of builtins/encoding.ts, by their index from `%TextCodecCreate`: create,
+/// flags, IsBufferSource, encode, decode (builtins/intrinsics.d.ts). `None` for an
+/// argument of the wrong type.
+pub(crate) fn intrinsic(
+    heap: &mut Heap,
+    k: u16,
+    a: [Value; 5],
+    fuel: &mut i64,
+) -> Result<Option<Value>, Fault> {
+    let range = [a[1], a[2], a[3]];
+    Ok(Some(match (k, a[0].as_object(), a[0].as_string()) {
+        (0, Some(proto), _) => {
+            let o = heap.alloc_object(ObjectClass::TextCodec, Some(proto), 2)?;
+            heap.set_object_slot(o, 0, a[1]);
+            heap.set_object_slot(o, 1, Value::int(0));
+            Value::object(o)
+        }
+        (1, ..) => Value::int(flags(heap, a[0], a[1] == Value::TRUE)?),
+        (2, o, _) => Value::bool(o.is_some_and(|o| {
+            matches!(
+                heap.object_class(o),
+                ObjectClass::ArrayBuffer | ObjectClass::TypedArray | ObjectClass::DataView
+            )
+        })),
+        (3, _, Some(s)) => encode(heap, s, range, fuel)?,
+        (4, Some(d), _) => decode(heap, d, range, a[4] == Value::TRUE, fuel)?,
+        _ => return Ok(None),
+    }))
+}
+
 /// The flags of `v` if it is a TextDecoder (`decoder`) or a TextEncoder, else WebIDL's
 /// TypeError (in node's words).
-pub(crate) fn flags(heap: &Heap, v: Value, decoder: bool) -> Result<i32, Fault> {
+fn flags(heap: &Heap, v: Value, decoder: bool) -> Result<i32, Fault> {
     if let Some(o) = v.as_object()
         && heap.object_class(o) == ObjectClass::TextCodec
     {
@@ -79,7 +109,7 @@ fn incomplete_tail(b: &[u8]) -> usize {
 /// TextDecoder.prototype.decode's steps after the conversions: decodes the bytes (after
 /// those the last `stream: true` call held back) as UTF-8. `undefined` for invalid input
 /// to a fatal decoder, which then starts over (as node's does).
-pub(crate) fn decode(
+fn decode(
     heap: &mut Heap,
     d: Obj,
     input: [Value; 3],
@@ -132,12 +162,7 @@ pub(crate) fn decode(
 /// `s`, lone surrogates as U+FFFD. encodeInto (`dest` a Uint8Array's buffer, byte offset
 /// and byte length): writes the longest prefix of whole code points that fits,
 /// `{ read, written }`.
-pub(crate) fn encode(
-    heap: &mut Heap,
-    s: Str,
-    dest: [Value; 3],
-    fuel: &mut i64,
-) -> Result<Value, Fault> {
+fn encode(heap: &mut Heap, s: Str, dest: [Value; 3], fuel: &mut i64) -> Result<Value, Fault> {
     *fuel -= i64::from(heap.str_len(s) / 8);
     let text = match heap.str_view(s) {
         // ASCII: the bytes as they are.
