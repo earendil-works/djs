@@ -1,0 +1,3 @@
+tdz ReferenceError
+ns tdz ReferenceError
+Uncaught ReferenceError: fromA is not initialized

@@ -248,13 +248,27 @@ fn run_case(src: &str, name: &str, mode: Mode) -> (String, Option<Images>) {
         (Vm::from_bytes(image.clone(), opts).unwrap(), *console)
     };
     let body = src.starts_with("// mode: body");
+    // A module graph (gen-expected.sh): main.js, then a module per `// file:` line.
+    let module = src.starts_with("// mode: module");
     let params = ["tools", "console"];
     let copts = if body {
         CompileOptions::async_body(name, &params)
     } else {
         CompileOptions::script(name)
     };
-    let main = match vm.compile(src.as_bytes(), &copts) {
+    if module {
+        let mut loader = CaseModules::new(src);
+        if let Err(e) = vm.load_module("main.js", &mut loader) {
+            return (format!("Uncaught {}\n", vm.display(e)), None);
+        }
+        assert!(vm.evaluate_module("main.js").unwrap());
+    }
+    let compiled = if module {
+        Ok(Value::UNDEFINED)
+    } else {
+        vm.compile(src.as_bytes(), &copts)
+    };
+    let main = match compiled {
         Ok(f) => f,
         Err(e) => {
             assert_eq!(e.kind, CompileErrorKind::Syntax);
@@ -268,7 +282,9 @@ fn run_case(src: &str, name: &str, mode: Mode) -> (String, Option<Images>) {
         vec![]
     };
     let this = Value::object(vm.global());
-    vm.call(main, this, &args).unwrap();
+    if !module {
+        vm.call(main, this, &args).unwrap();
+    }
     let mut out = String::new();
     let mut stops: u64 = 0;
     let (mut spent, mut lines, start) = (0u64, 0usize, Instant::now());
@@ -293,6 +309,7 @@ fn run_case(src: &str, name: &str, mode: Mode) -> (String, Option<Images>) {
         match status {
             Status::Done(v) => {
                 if matches!(mode, Mode::Dump)
+                    && !module
                     && let Some(f) = dump_round_trip(&vm)
                 {
                     out += &f;
@@ -300,7 +317,9 @@ fn run_case(src: &str, name: &str, mode: Mode) -> (String, Option<Images>) {
                 let rejections = vm.take_unhandled_rejections();
                 // A body is an async function (D008): gen-expected.sh catches its
                 // rejected promise and prints `Uncaught <reason>`.
-                if body && let Some(Some(Err(e))) = vm.promise_state(v) {
+                if (body || module)
+                    && let Some(Some(Err(e))) = vm.promise_state(v)
+                {
                     out += &format!("Uncaught {}\n", vm.display(e));
                     break;
                 }
@@ -338,6 +357,47 @@ fn run_case(src: &str, name: &str, mode: Mode) -> (String, Option<Images>) {
     vm.heap().verify().unwrap();
     let raw = fnv64(vm.image());
     (out, Some((raw, vm.canonical_hash().unwrap())))
+}
+
+/// The modules of a `// mode: module` case: `main.js` up to the first `// file: <name>`
+/// line, then one per such line. Specifiers name files (a leading `./` is dropped).
+struct CaseModules(Vec<(String, String)>);
+
+impl CaseModules {
+    fn new(src: &str) -> CaseModules {
+        let mut files = vec![(String::from("main.js"), String::new())];
+        for line in src.lines() {
+            if let Some(name) = line.strip_prefix("// file: ") {
+                files.push((name.trim().to_string(), String::new()));
+            } else {
+                let text = &mut files.last_mut().unwrap().1;
+                text.push_str(line);
+                text.push('\n');
+            }
+        }
+        CaseModules(files)
+    }
+}
+
+impl djs_core::vm::ModuleLoader for CaseModules {
+    fn resolve(&mut self, specifier: &str, _: Option<&str>) -> Result<String, String> {
+        Ok(specifier
+            .strip_prefix("./")
+            .unwrap_or(specifier)
+            .to_string())
+    }
+
+    fn load(&mut self, key: &str) -> Result<djs_core::vm::ModuleSource, String> {
+        let (_, text) = self
+            .0
+            .iter()
+            .find(|f| f.0 == key)
+            .ok_or_else(|| format!("no module {key}"))?;
+        Ok(djs_core::vm::ModuleSource {
+            text: text.clone(),
+            typescript: false,
+        })
+    }
 }
 
 #[test]

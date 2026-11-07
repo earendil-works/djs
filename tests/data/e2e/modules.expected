@@ -1,0 +1,10 @@
+counter runs
+cycle2 runs function
+cycle runs back anonymous default
+main starts 0 object Counter,count,default,inc
+1 1 10
+anonymous default later 1 Counter,count,default,inc
+TypeError
+TypeError
+Counter,count,default,inc Module
+hoisted function

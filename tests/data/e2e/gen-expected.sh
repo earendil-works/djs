@@ -8,7 +8,11 @@
 # exception adds a last line `Uncaught <formatted>`.
 #
 # A case whose first line is `// mode: body` runs as a codemode body,
-# `(async (tools, console) => { <case> })`, otherwise as a Script.
+# `(async (tools, console) => { <case> })`; one whose first line is `// mode: module` is a
+# module graph: the entry module main.js, then a module per `// file: <name>` line (the
+# e2e test's loader strips a leading `./` from specifiers), imported dynamically after
+# the console is set up; otherwise it runs as a Script.
+# CASES="a.js b.js" regenerates only those cases.
 set -euo pipefail
 cd "$(dirname "$0")"
 QJS="${QJS:-$HOME/Development/dquickts/qjs}"
@@ -26,8 +30,19 @@ PRELUDE='function __fmt(v) {
   return j === undefined ? String(v) : j;
 }
 var console = { log: (...a) => print(a.map(__fmt).join(" ")) };'
-for f in *.js; do
+for f in ${CASES:-*.js}; do
   tmp=$(mktemp)
+  if head -1 "$f" | grep -q '^// mode: module'; then
+    dir=$(mktemp -d)
+    awk -v dir="$dir" 'BEGIN { out = dir "/main.js" }
+      /^\/\/ file: / { out = dir "/" $3; next }
+      { print > out }' "$f"
+    { echo "$PRELUDE" | sed 's/^var console = /globalThis.console = /; s/^function __fmt/globalThis.__fmt = function/'
+      echo 'import("./main.js").catch((e) => print("Uncaught " + __fmt(e)));'; } > "$dir/run.js"
+    "$QJS" -m "$dir/run.js" > "${f%.js}.expected" 2>&1 || true
+    rm -rf "$dir" "$tmp"
+    continue
+  fi
   if head -1 "$f" | grep -q '^// mode: body'; then
     { echo '"use strict";'; echo "$PRELUDE"
       echo '(async (tools, console) => {'; cat "$f"; echo
