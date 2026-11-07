@@ -182,7 +182,7 @@ Every VM's memory holds the base, so it is built to be small:
 - the final collection is a copying one, so the layout depends only on the object graph,
   not on how the prelude allocated.
 
-The base is <!--n base/bytes kb-->189 KB<!--/n--> in the full build and <!--n slim/base kb-->135 KB<!--/n--> in the
+The base is <!--n base/bytes kb-->190 KB<!--/n--> in the full build and <!--n slim/base kb-->135 KB<!--/n--> in the
 [slim one](builtins.md#two-builds-full-and-slim). Building it twice gives the same bytes,
 and the base built natively is byte for byte the realm that djs-wasm builds inside
 wasm32, which a test checks, so nothing in it depends on the platform.
@@ -246,7 +246,7 @@ are called, and liveness follows the collector's rules. From that it reports:
 - what a waiting VM holds: queued jobs, pending host calls, promises, and the suspended
   async functions and generators with their locals by name.
 
-An almost empty session's image is little more than the base's <!--n base/bytes kb-->189 KB<!--/n-->. So the
+An almost empty session's image is little more than the base's <!--n base/bytes kb-->190 KB<!--/n-->. So the
 largest cells, strings, shapes and functions describe only the session's own part: the
 cells that are new or changed against the base. The base's part is one line of totals.
 
