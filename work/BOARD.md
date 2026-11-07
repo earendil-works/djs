@@ -6,6 +6,10 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0240 | djs-embed: the native embedding crate (E1–E7) | embed | .worktrees/embed |
+| 0241 | ES modules: module goal, loader, linking and evaluation (M1–M3, M6, M7) | modules | .worktrees/modules |
+| 0244 | TextEncoder and TextDecoder (UTF-8) (B1) | encoding | .worktrees/encoding |
+| 0245 | djs-libm: libm's functions as a djs crate | libm | .worktrees/libm |
 
 ## Open (ready)
 
@@ -16,6 +20,11 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
+| 0242 | test262's module tests: a fixture loader in the runner, groups and ratchet | 0241 |
+| 0243 | Synthetic modules, import() through the loader, modules in djs-embed (M4, M5) | 0240, 0241 |
+| 0246 | djs-embed for Gondolin's targets: cross-builds, image portability, consuming it | 0240, 0245 |
+| 0247 | The hook benchmark on djs-embed: per-call costs for Gondolin | 0240 |
+| 0248 | Top-level await, JSON modules and source positions for modules (M8) | 0241, 0242, 0243 |
 | - | Stale entry in tests/pi/expected-failures.txt (next mode): update the ratchet | ready |
 | - | Paused, agents archived (owner): 0207 dump size (fluff queue items 8, 9, 11; crossing-callbacks and for-in.iterator refusals), 0211 fuzzing, 0215 performance (Result written) | restart on request |
 | - | fuzz.mjs reduce left an orphaned djs-difftest at 100% CPU for 15 h (likely a reduced candidate with an endless loop, run without a timeout): wrap reduce's runs in scripts/timeout.sh / a fuel cap; check whether it was an engine hang instead | ready |

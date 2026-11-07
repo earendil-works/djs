@@ -11528,3 +11528,70 @@ around a parity line; log axes with 1-2-5 ticks thinned to fit. Colors: the diag
 stylesheet (svg::style_with) plus Elanor's data-viz palette for series (the same in light and
 dark mode) and the positive/negative fills for ratios. Each SVG has `<title>` and `<desc>`
 (aria-labelledby); the figure caption is the alt text; the exact numbers stay in the table.
+
+## D3170: djs-embed: the native embedding crate for Rust hosts
+date: 2026-11-07 · by: coordinator · issue: 0240
+Rust hosts (first: Gondolin's daemon, which runs JS network hooks in-process) get a crate of
+their own, `crates/djs-embed`, instead of reaching into `djs_core::vm`, `interp`, `heap` and
+`wire`. It is a std crate in the workspace with its own version (0.x semver: a minor bump may
+break, a patch may not); its public API names no djs-core type, so djs-core keeps changing in
+place (D024) behind it. Its only dependencies are djs-core and djs-prelude (no third-party
+runtime crates: hosts like Gondolin count every crate), and it builds wherever djs-core does
+natively (darwin, linux-musl with a foreign linker). The shape: a compiled, `Send + Sync`
+snapshot (an image of a VM after the host's setup scripts ran) that instantiates fresh VMs or
+resets one in place; typed host functions (sync and async) with `&str`/`&[u8]`/number/bool/
+plain-data arguments and results; an async entry point that ends with the settled value of the
+returned promise; plain data in and out without JSON (the wire format, with a Rust encoder,
+and an outbound encoder from VM values); fuel, memory and wall-clock budgets a script cannot
+catch; one error type, and a documented failure model in which every failure fails closed and
+an engine panic poisons only the VM it happened in. Hosts depend on it by path or by a git
+revision until djs publishes crates.
+
+## D3171: ES modules in djs-core, behind the `modules` feature
+date: 2026-11-07 · by: coordinator · issue: 0241
+djs gains the module goal (ARCH listed modules as a non-goal; embedders now need them: policy
+modules importing host-provided `@sdk/...` libraries). Constraints the implementation keeps:
+- **No I/O in the engine.** The host resolves specifiers and supplies sources through a loader
+  (resolve `(specifier, referrer) -> key`, load `key -> source`), synchronously, before or
+  outside runs; specifiers are opaque strings (no URL or path semantics built in). A dynamic
+  `import()` becomes an async host call that the host answers with a loaded graph.
+- **Stackless.** Module bodies run as ordinary frames; the evaluation algorithm that calls them
+  is in the builtin language (the leaf rule), so evaluation suspends, meters fuel and survives
+  images like any code.
+- **Heap state.** Module records, environments and namespaces are cells reachable from the
+  realm, so a snapshot taken after evaluation carries the evaluated graph (the
+  compile-once/instantiate-many model).
+- **Size.** The Rust side is behind a djs-core feature `modules` (cut by a constant like
+  `FULL`, D2411), on in native default builds and off in every djs-wasm module, which stays
+  within its budget (D020); without it the module goal is a SyntaxError and `import()` keeps
+  D1582's rejection.
+- **Tests.** test262's module tests (`flags: [module]`, language/module-code,
+  language/import, dynamic-import) move from the skip group to active as the runner gains a
+  fixture loader, with failures in the ratchet; the corpus oracle stays the codemode model.
+
+## D3172: TextEncoder and TextDecoder (UTF-8) are builtins
+date: 2026-11-07 · by: coordinator · issue: 0244
+Embedders hand bytes to scripts (request bodies), and scripts that count or produce UTF-8 need
+`TextEncoder`/`TextDecoder`; a host function per conversion costs a suspension each. They
+become builtins of the full build (left out of the slim one), UTF-8 only as the WHATWG
+Encoding standard's `TextEncoder` and the `utf-8` decoder (its labels, `fatal`, `ignoreBOM`,
+`stream`), over leaf intrinsics that reuse the engine's transcoders. If their cost in the
+shipped module goes over 1.5 KB gzip they are cut from it like a slim family instead, and
+the size ceiling rises only by what is measured (recorded in the issue's size decision).
+`structuredClone` is not part of this.
+
+## D3173: No URL or URLSearchParams in djs
+date: 2026-11-07 · by: coordinator · issue: -
+A WHATWG URL parser needs IDNA mapping and punycode, tables of a size the shipped module
+cannot carry (D020), and its one embedder so far (Gondolin) wants URL semantics identical to
+its own Rust parser, which a host function gives exactly. So embedders that need URL provide
+it from the host, in their own shim. Revisit when a second embedder needs it in-engine.
+
+## D3174: libm becomes a djs crate (djs-libm)
+date: 2026-11-07 · by: coordinator · issue: 0245
+Embedders count third-party runtime crates (Gondolin has a budget), and libm was djs-core's
+only one (D1150). The functions djs-core calls are copied from libm 0.2.16 (MIT, a port of
+musl's libm) into `crates/djs-libm`, with its license and the `arch` paths (wasm32 and x86
+intrinsics) kept, so every result stays bit for bit what it was; the version pin of D1750
+becomes the crate's own sources in the build hash. Updating it is copying a newer libm's
+files, with a decision.
