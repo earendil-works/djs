@@ -30,7 +30,11 @@ strip = true
 [profile.dev.package.djs-core]
 opt-level = 1
 
-# Dependencies (libm) at opt-level 1 too: at opt-level 0/1 rustc shares generic
+# djs-libm (D3174), which djs-core calls for Math, like the dependencies below (D1785).
+[profile.dev.package.djs-libm]
+opt-level = 1
+
+# Dependencies at opt-level 1 too: at opt-level 0/1 rustc shares generic
 # instantiations with upstream crates, so djs-core called libm's unoptimized, non-inlinable
 # copies of `Range::contains`, range iterators and `unchecked_add`'s precondition checks
 # in its hottest paths: 22% of the instructions of a debug test262 run (D1785).
