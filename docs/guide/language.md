@@ -109,12 +109,27 @@ so a [snapshot](snapshots.md) taken after evaluation carries the evaluated graph
 made from it reads the same exports. The host reads a module's exports and namespace
 directly.
 
+A host can also define **synthetic modules**: modules without source whose exports are
+values the host made, such as host functions and configuration data (an `@sdk/net` with
+`allowHosts` and `secret`). Code imports them like any module, and the host can change an
+export's value later, which importers see, since their bindings are live.
+
+**`import()`** goes through the same loader when the host turns that on, in modules and
+in Scripts alike. The call becomes an asynchronous host call with the specifier and the
+referrer, which is the importing module's key or the Script's name, known when the code
+is compiled. The host loads and links the graph and answers with its key, or with the
+error, which rejects the promise; the engine then evaluates the graph in a later step and
+fulfills the promise with the namespace. A module that throws rejects every later import
+of it with the same error. Import attributes (`with { type: "json" }`) are a
+`SyntaxError`, for `import()` as for static imports: there are no JSON modules.
+
 Modules come with the native build for Rust hosts, together with the rest of what only
 such hosts use: `TextEncoder` and `TextDecoder` are the other part. The wasm modules leave
 them out, since codemode scripts are one piece of code that gets its data from host
 functions. There `import` and `export` declarations are syntax errors, `import()`
-compiles everywhere but returns a rejected promise, as below, and a use of `TextEncoder`
-is a ReferenceError that names the build.
+compiles everywhere but returns a rejected promise, as below (as it does in a native VM
+whose host does not answer imports), and a use of `TextEncoder` is a ReferenceError that
+names the build.
 
 ## What is left out, and why
 

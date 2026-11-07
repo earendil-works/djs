@@ -9,8 +9,8 @@ change underneath it. Its crate documentation
 ([`crates/djs-embed/src/lib.rs`](../../crates/djs-embed/src/lib.rs)) is the reference;
 this page is the overview.
 
-> **In short.** The host compiles its setup (host functions, data, scripts) once into a
-> snapshot, an image of a VM after that setup. Each call runs in an instance made from
+> **In short.** The host compiles its setup (host functions, data, scripts and modules)
+> once into a snapshot, an image of a VM after that setup. Each call runs in an instance made from
 > the snapshot by copying the image, or in one reset to it. A call is stepped in slices:
 > the host answers host calls, starts async work while the script waits, and gets the
 > settled value of the function's promise as typed data. Fuel, memory and a deadline
@@ -32,7 +32,8 @@ let snapshot = Snapshot::builder()
     .build()?;
 ```
 
-A syntax error or a top-level exception fails the build, so a bad policy is rejected
+A syntax error, a module that cannot be loaded or linked, or a top-level exception fails
+the build, so a bad policy is rejected
 when it is loaded rather than on its first request. The builtins are frozen by default:
 a script cannot patch `Array.prototype` or `JSON` to influence the next call. The
 snapshot is the heap image of the VM at the end of setup: immutable, shared by reference
@@ -94,6 +95,47 @@ let decision = loop {
 
 For a host that answers everything at once (no I/O), `call` runs this loop with a
 closure and returns the result as data.
+
+## Modules
+
+A policy can be an ES module that imports what the host provides and helpers of its
+own ([modules](language.md#modules) describes the language side):
+
+```rust
+let snapshot = Snapshot::builder()
+    .module(
+        SyntheticModule::new("@sdk/net")
+            .host_fn(HostFn::sync(ALLOW_HOSTS, "allowHosts"))
+            .data("secret", Data::from(token)),
+    )
+    .loader(ModuleMap::from_iter(user_files)) // key -> source, in memory
+    .source(Source::module("policy.js", policy))
+    .build()?;
+
+let mut vm = snapshot.instantiate(Limits::default())?;
+vm.start_export("policy.js", "onRequest", &[Value::Data(&request)])?;
+```
+
+A **synthetic module** has no source: its exports are host functions, answered by id like
+any other, and plain data. Modules import it by its exact key. Every other import goes
+to the snapshot's **loader**, a trait with two calls, one that resolves a specifier
+against the importing module's key and one that returns a key's source, JavaScript or
+TypeScript. The crate's in-memory map is one: its keys are names such as
+`lib/hosts.js`, and `./` and `../` specifiers are taken relative to the importer's key.
+The engine itself reads no files.
+
+Setup loads the module and everything it imports, links the graph (a missing export
+fails the build) and evaluates it, so the snapshot holds the evaluated graph and an
+instance starts with it, without running module code again. `start_export` and
+`call_export` call an exported function as `start` and `call` call a global one, and
+`export` reads an export's current value.
+
+An `import()` in a module or a script goes to the same loader. The instance answers it
+inside `step`, between two slices, so the host sees no step for it: the graph is loaded,
+compiled and linked, then evaluated, and the promise gets the namespace; a module that
+cannot be found, does not compile or throws rejects it instead. Modules loaded this way
+stay in the instance until it is reset. Loading and compiling run no JavaScript, so they
+use no fuel, but they count against the heap cap.
 
 ## Values
 
