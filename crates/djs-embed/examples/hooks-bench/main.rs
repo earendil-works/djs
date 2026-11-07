@@ -200,6 +200,8 @@ struct DjsHooks {
     pool: Mutex<Vec<Instance>>,
     /// Fuel of the last finished call
     last_fuel: AtomicU64,
+    /// The head goes in as a [`Data`] tree (owned strings) instead of borrowed [`Value`]s
+    data_head: bool,
 }
 
 impl DjsHooks {
@@ -218,6 +220,7 @@ impl DjsHooks {
             limits,
             pool: Mutex::new(Vec::new()),
             last_fuel: AtomicU64::new(0),
+            data_head: false,
         })
     }
 
@@ -248,17 +251,32 @@ impl DjsHooks {
         head: &RequestHead,
         body: Option<&[u8]>,
     ) -> Result<Decision, Error> {
-        let head = head.to_data();
-        let stream = if body.is_some() { 1.0 } else { -1.0 };
-        i.start(
-            "__gondolin_on_request",
-            &[Value::Data(&head), Value::Number(stream)],
-        )?;
+        let stream = Value::Number(if body.is_some() { 1.0 } else { -1.0 });
+        if self.data_head {
+            i.start(
+                "__gondolin_on_request",
+                &[Value::Data(&head.to_data()), stream],
+            )?;
+        } else {
+            // The head from borrowed parts: no host allocation per string.
+            let pairs: Vec<[Value; 2]> = head
+                .headers
+                .iter()
+                .map(|(k, v)| [Value::Str(k), Value::Str(v)])
+                .collect();
+            let headers: Vec<Value> = pairs.iter().map(|p| Value::Array(p)).collect();
+            let fields = [
+                ("method", Value::Str(&head.method)),
+                ("url", Value::Str(&head.url)),
+                ("headers", Value::Array(&headers)),
+            ];
+            i.start("__gondolin_on_request", &[Value::Object(&fields), stream])?;
+        }
         loop {
             match i.step()? {
                 Step::Done => {
                     self.last_fuel.store(i.fuel_used(), Ordering::Relaxed);
-                    return decision(&i.result()?.to_data()?).map_err(Error::Usage);
+                    return decision(i.result()?.to_data()?).map_err(Error::Usage);
                 }
                 Step::Yield => {}
                 Step::HostCall(id) => serve_sync(i, id)?,
@@ -335,88 +353,94 @@ fn serve_async(i: &mut Instance, id: djs_embed::CallId, body: Option<&[u8]>) -> 
     }
 }
 
-fn str_of(d: &Data, key: &str) -> Result<String, String> {
-    d.get(key)
-        .and_then(Data::as_str)
-        .map(str::to_owned)
-        .ok_or_else(|| format!("bad hook decision: no string {key}"))
+/// Takes the member `key` out of an object's entries.
+fn take(entries: &mut Vec<(String, Data)>, key: &str) -> Option<Data> {
+    let i = entries.iter().position(|(k, _)| k == key)?;
+    Some(entries.swap_remove(i).1)
 }
 
-fn pairs(d: Option<&Data>) -> Vec<(String, String)> {
-    d.and_then(Data::as_array)
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|p| {
-            let p = p.as_array()?;
-            Some((
-                p.first()?.as_str()?.to_owned(),
-                p.get(1)?.as_str()?.to_owned(),
-            ))
+fn string(d: Option<Data>) -> Option<String> {
+    match d? {
+        Data::String(s) => Some(s),
+        _ => None,
+    }
+}
+
+fn number(d: Option<Data>, default: f64) -> f64 {
+    d.and_then(|d| d.as_f64()).unwrap_or(default)
+}
+
+/// `[[name, value], ...]` (other members are skipped).
+fn pairs(d: Option<Data>) -> Vec<(String, String)> {
+    let Some(Data::Array(items)) = d else {
+        return Vec::new();
+    };
+    items
+        .into_iter()
+        .filter_map(|p| match p {
+            Data::Array(p) => match <[Data; 2]>::try_from(p) {
+                Ok([Data::String(k), Data::String(v)]) => Some((k, v)),
+                _ => None,
+            },
+            _ => None,
         })
         .collect()
 }
 
-fn body_choice(d: Option<&Data>) -> BodyChoice {
-    let Some(d) = d else { return BodyChoice::None };
-    match d.get("kind").and_then(Data::as_str) {
+fn body_choice(d: Option<Data>) -> BodyChoice {
+    let Some(Data::Object(mut d)) = d else {
+        return BodyChoice::None;
+    };
+    match string(take(&mut d, "kind")).as_deref() {
         Some("original") => BodyChoice::Original,
-        Some("text") => BodyChoice::Body(d.get("text").and_then(Data::as_str).unwrap_or("").into()),
-        Some("bytes") => BodyChoice::Body(
-            d.get("bytes")
-                .and_then(Data::as_bytes)
-                .unwrap_or(&[])
-                .into(),
-        ),
+        Some("text") => BodyChoice::Body(string(take(&mut d, "text")).unwrap_or_default().into()),
+        Some("bytes") => match take(&mut d, "bytes") {
+            Some(Data::Bytes(b)) => BodyChoice::Body(b),
+            _ => BodyChoice::Body(Vec::new()),
+        },
         _ => BodyChoice::None,
     }
 }
 
-/// The shim's decision (plain data) as a [`Decision`].
-fn decision(d: &Data) -> Result<Decision, String> {
-    let num =
-        |d: &Data, key: &str, default: f64| d.get(key).and_then(Data::as_f64).unwrap_or(default);
-    match d.get("action").and_then(Data::as_str) {
+/// The shim's decision (plain data) as a [`Decision`], moving its strings out.
+fn decision(d: Data) -> Result<Decision, String> {
+    let Data::Object(mut d) = d else {
+        return Err(format!("bad hook decision: {d:?}"));
+    };
+    let head = |d: &mut Vec<(String, Data)>| match take(d, "head") {
+        Some(Data::Object(h)) => Ok(h),
+        _ => Err("bad hook decision: no head".to_owned()),
+    };
+    match string(take(&mut d, "action")).as_deref() {
         Some("continue") => Ok(Decision::Continue),
         Some("request") => {
-            let h = d.get("head").ok_or("bad hook decision: no head")?;
+            let mut h = head(&mut d)?;
             Ok(Decision::Request {
                 head: RequestHead {
-                    method: str_of(h, "method")?,
-                    url: str_of(h, "url")?,
-                    headers: pairs(h.get("headers")),
+                    method: string(take(&mut h, "method")).ok_or("bad hook decision: no method")?,
+                    url: string(take(&mut h, "url")).ok_or("bad hook decision: no url")?,
+                    headers: pairs(take(&mut h, "headers")),
                 },
-                body: body_choice(d.get("body")),
+                body: body_choice(take(&mut d, "body")),
             })
         }
         Some("respond") => {
-            let h = d.get("head").ok_or("bad hook decision: no head")?;
+            let mut h = head(&mut d)?;
             Ok(Decision::Respond {
                 head: ResponseHead {
-                    status: num(h, "status", 200.0) as u16,
-                    status_text: h
-                        .get("statusText")
-                        .and_then(Data::as_str)
-                        .unwrap_or("")
-                        .into(),
-                    headers: pairs(h.get("headers")),
+                    status: number(take(&mut h, "status"), 200.0) as u16,
+                    status_text: string(take(&mut h, "statusText")).unwrap_or_default(),
+                    headers: pairs(take(&mut h, "headers")),
                 },
-                body: body_choice(d.get("body")),
+                body: body_choice(take(&mut d, "body")),
             })
         }
         Some("block") => Ok(Decision::Block {
-            status: num(d, "status", 403.0) as u16,
-            status_text: d
-                .get("statusText")
-                .and_then(Data::as_str)
-                .unwrap_or("Forbidden")
-                .into(),
-            message: d
-                .get("message")
-                .and_then(Data::as_str)
-                .unwrap_or("request blocked")
-                .into(),
+            status: number(take(&mut d, "status"), 403.0) as u16,
+            status_text: string(take(&mut d, "statusText")).unwrap_or("Forbidden".into()),
+            message: string(take(&mut d, "message")).unwrap_or("request blocked".into()),
         }),
-        _ => Err(format!("bad hook decision: {d:?}")),
+        a => Err(format!("bad hook decision: action {a:?}")),
     }
 }
 
@@ -571,7 +595,7 @@ fn us(d: Duration) -> String {
     format!("{:.1}", d.as_secs_f64() * 1e6)
 }
 
-/// `probe <policy> <fresh|reset|pooled> <calls>`: runs one row's calls in a loop, for a
+/// `probe <policy> <fresh|reset|pooled> <calls> [data]`: runs one row's calls in a loop, for a
 /// sampling profiler or a CPU-time measurement (`/usr/bin/time`), which a loaded machine
 /// disturbs less than latencies.
 fn probe(args: &[String]) {
@@ -580,7 +604,8 @@ fn probe(args: &[String]) {
         "reset" => Mode::Reset,
         _ => Mode::Pooled,
     };
-    let hooks = DjsHooks::new(policy(&args[0]), mode, Limits::default()).unwrap();
+    let mut hooks = DjsHooks::new(policy(&args[0]), mode, Limits::default()).unwrap();
+    hooks.data_head = args.get(3).map(String::as_str) == Some("data");
     let calls: u64 = args[2].parse().unwrap();
     let (bhead, bdata) = body_request();
     let gh = header_request("api.github.com");
@@ -623,6 +648,8 @@ fn main() {
     );
     let reset = make("allowlist", Mode::Reset);
     let pooled = make("allowlist", Mode::Pooled);
+    let mut pooled_data = make("allowlist", Mode::Pooled);
+    pooled_data.data_head = true;
     let noop = make("noop", Mode::Pooled);
     let text_only = make("body-text", Mode::Pooled);
     let bytes_only = make("body-bytes", Mode::Pooled);
@@ -694,12 +721,19 @@ fn main() {
         "| engine | hook | p50 µs | p99 µs | calls/s (1 caller) | calls/s (8 callers) | fuel/call |"
     );
     println!("|---|---|---:|---:|---:|---:|---:|");
-    let rows: [Row; 11] = [
+    let rows: [Row; 12] = [
         ("native Rust", "header-only", &Native, None, false),
         ("djs pooled", "empty policy", &noop, Some(&noop), false),
         ("djs fresh", "header-only", &fresh, Some(&fresh), false),
         ("djs reset", "header-only", &reset, Some(&reset), false),
         ("djs pooled", "header-only", &pooled, Some(&pooled), false),
+        (
+            "djs pooled",
+            "header-only, head as a Data tree",
+            &pooled_data,
+            Some(&pooled_data),
+            false,
+        ),
         ("native Rust", "64 KiB body", &Native, None, true),
         (
             "djs pooled",

@@ -28,6 +28,11 @@ pub enum Value<'a> {
     Data(&'a Data),
     /// A wire buffer (docs/wire.md), decoded in the VM
     Wire(&'a [u8]),
+    /// A new array of these elements: plain data built from borrowed parts, without a
+    /// [`Data`] tree (no allocation on the host for strings it already has)
+    Array(&'a [Value<'a>]),
+    /// A new plain object with these properties, in order (as [`Data::Object`])
+    Object(&'a [(&'a str, Value<'a>)]),
 }
 
 impl From<bool> for Value<'_> {
@@ -104,6 +109,14 @@ pub(crate) fn wire_error(e: WireError) -> Error {
 
 /// Makes `v` in the VM. Allocates but never collects: values made earlier stay valid.
 pub(crate) fn to_raw(vm: &mut Vm, v: &Value<'_>) -> Result<Raw, Error> {
+    match v {
+        Value::Array(_) | Value::Object(_) => build(vm, v),
+        v => leaf(vm, v),
+    }
+}
+
+/// A value that is not a container of [`Value`]s.
+fn leaf(vm: &mut Vm, v: &Value<'_>) -> Result<Raw, Error> {
     Ok(match *v {
         Value::Undefined => Raw::UNDEFINED,
         Value::Null => Raw::NULL,
@@ -121,7 +134,50 @@ pub(crate) fn to_raw(vm: &mut Vm, v: &Value<'_>) -> Result<Raw, Error> {
         }
         Value::Data(d) => build(vm, d)?,
         Value::Wire(b) => vm.decode_wire(b).map_err(wire_error)?,
+        Value::Array(_) | Value::Object(_) => build(vm, v)?,
     })
+}
+
+/// A tree of plain data [`build`] makes in the VM: a [`Data`], or [`Value`]s with
+/// [`Value::Array`] and [`Value::Object`].
+trait Tree: Sized {
+    type Key: AsRef<str>;
+    fn node(&self) -> Node<'_, Self>;
+}
+
+enum Node<'d, T: Tree> {
+    Leaf(Value<'d>),
+    Hole,
+    Array(&'d [T]),
+    Object(&'d [(T::Key, T)]),
+}
+
+impl Tree for Data {
+    type Key = String;
+    fn node(&self) -> Node<'_, Data> {
+        match self {
+            Data::Undefined => Node::Leaf(Value::Undefined),
+            Data::Null => Node::Leaf(Value::Null),
+            Data::Bool(b) => Node::Leaf(Value::Bool(*b)),
+            Data::Number(n) => Node::Leaf(Value::Number(*n)),
+            Data::String(s) => Node::Leaf(Value::Str(s)),
+            Data::Bytes(b) => Node::Leaf(Value::Bytes(b)),
+            Data::Hole => Node::Hole,
+            Data::Array(items) => Node::Array(items),
+            Data::Object(entries) => Node::Object(entries),
+        }
+    }
+}
+
+impl<'a> Tree for Value<'a> {
+    type Key = &'a str;
+    fn node(&self) -> Node<'_, Value<'a>> {
+        match *self {
+            Value::Array(items) => Node::Array(items),
+            Value::Object(entries) => Node::Object(entries),
+            v => Node::Leaf(v),
+        }
+    }
 }
 
 /// Nesting [`build`] accepts: the wire decoder's limit (`JSON.parse`'s).
@@ -129,57 +185,72 @@ const MAX_DEPTH: usize = djs_core::json::DEFAULT_MAX_DEPTH as usize;
 
 /// An open container of [`build`]: its members, the next one, and where its keys and
 /// values start in the shared stacks.
-struct Open<'d> {
-    array: Option<&'d [Data]>,
-    object: &'d [(String, Data)],
+struct Open<'d, T: Tree> {
+    array: Option<&'d [T]>,
+    object: &'d [(T::Key, T)],
     next: usize,
     keys: usize,
     values: usize,
 }
 
-impl Open<'_> {
+impl<T: Tree> Open<'_, T> {
     fn len(&self) -> usize {
-        self.array.map_or(self.object.len(), <[Data]>::len)
+        self.array.map_or(self.object.len(), <[T]>::len)
     }
 }
 
-/// Makes plain data in the VM straight from the tree: what decoding its wire form makes
+/// Makes plain data in the VM straight from a tree: what decoding its wire form makes
 /// (the same prototypes, int-form numbers, holes only in arrays, the same depth limit),
 /// without writing and parsing the buffer. An explicit stack, as the decoder's: deep data
 /// cannot overflow the host's. Allocates but never collects.
-fn build(vm: &mut Vm, d: &Data) -> Result<Raw, Error> {
-    let heap = vm.heap_mut();
+fn build<T: Tree>(vm: &mut Vm, d: &T) -> Result<Raw, Error> {
+    let heap = vm.heap();
     let object_proto = Some(realm::intrinsic_obj(heap, Intrinsic::ObjectProto));
     let array_proto = Some(realm::intrinsic_obj(heap, Intrinsic::ArrayProto));
-    let mut keys = Vec::new();
-    let mut values: Vec<Raw> = Vec::new();
-    let mut stack: Vec<Open<'_>> = Vec::new();
+    let mut keys = Vec::with_capacity(8);
+    let mut values: Vec<Raw> = Vec::with_capacity(16);
+    let mut stack: Vec<Open<'_, T>> = Vec::new();
     let mut next = d;
     loop {
         // Make `next`, or open it if it is a container with members.
-        let mut made = match next {
-            Data::Array(items) if !items.is_empty() => {
-                stack.push(Open {
+        let in_array = stack.last().is_some_and(|o| o.array.is_some());
+        let (keys_at, values_at) = (keys.len(), values.len());
+        let mut made = match next.node() {
+            Node::Array(items) if !items.is_empty() => {
+                let o = Open {
                     array: Some(items),
                     object: &[],
                     next: 0,
-                    keys: keys.len(),
-                    values: values.len(),
-                });
+                    keys: keys_at,
+                    values: values_at,
+                };
+                stack.push(o);
                 None
             }
-            Data::Object(entries) if !entries.is_empty() => {
-                stack.push(Open {
+            Node::Object(entries) if !entries.is_empty() => {
+                let o = Open {
                     array: None,
                     object: entries,
                     next: 0,
-                    keys: keys.len(),
-                    values: values.len(),
-                });
+                    keys: keys_at,
+                    values: values_at,
+                };
+                stack.push(o);
                 None
             }
-            Data::Hole if stack.last().is_some_and(|o| o.array.is_some()) => Some(Raw::HOLE),
-            leaf => Some(make_leaf(heap, leaf, object_proto, array_proto)?),
+            Node::Array(_) => {
+                let o = vm.heap_mut().new_array_from_values(array_proto, &[]);
+                Some(Raw::object(o.map_err(heap_error)?))
+            }
+            Node::Object(_) => {
+                let o = vm
+                    .heap_mut()
+                    .new_object_from_entries(object_proto, &[], &[]);
+                Some(Raw::object(o.map_err(heap_error)?))
+            }
+            Node::Hole if in_array => Some(Raw::HOLE),
+            Node::Hole => return Err(Error::Data("a hole outside an array".into())),
+            Node::Leaf(v) => Some(leaf(vm, &v)?),
         };
         if stack.len() > MAX_DEPTH {
             return Err(Error::Data("nesting too deep".into()));
@@ -198,13 +269,14 @@ fn build(vm: &mut Vm, d: &Data) -> Result<Raw, Error> {
                     Some(items) => &items[top.next],
                     None => {
                         let (k, v) = &top.object[top.next];
-                        keys.push(heap.atom_str(k).map_err(heap_error)?);
+                        keys.push(vm.heap_mut().atom_str(k.as_ref()).map_err(heap_error)?);
                         v
                     }
                 };
                 break;
             }
             let top = stack.pop().expect("an open container");
+            let heap = vm.heap_mut();
             let o = match top.array {
                 Some(_) => heap.new_array_from_values(array_proto, &values[top.values..]),
                 None => heap.new_object_from_entries(
@@ -218,39 +290,6 @@ fn build(vm: &mut Vm, d: &Data) -> Result<Raw, Error> {
             made = Some(Raw::object(o.map_err(heap_error)?));
         }
     }
-}
-
-/// A value of [`build`] that is not a container with members.
-fn make_leaf(
-    heap: &mut Heap,
-    d: &Data,
-    object_proto: Option<djs_core::value::Obj>,
-    array_proto: Option<djs_core::value::Obj>,
-) -> Result<Raw, Error> {
-    Ok(match d {
-        Data::Undefined => Raw::UNDEFINED,
-        Data::Null => Raw::NULL,
-        Data::Bool(b) => Raw::bool(*b),
-        Data::Number(n) => number(*n),
-        Data::String(s) => Raw::string(heap.alloc_str(s).map_err(heap_error)?),
-        Data::Bytes(b) => {
-            let bp = realm::intrinsic_obj(heap, Intrinsic::ArrayBufferProto);
-            let p = realm::intrinsic_obj(heap, Intrinsic::Uint8ArrayProto);
-            Raw::object(
-                heap.new_uint8_array(b, Some(bp), Some(p))
-                    .map_err(heap_error)?,
-            )
-        }
-        Data::Hole => return Err(Error::Data("a hole outside an array".into())),
-        Data::Array(_) => Raw::object(
-            heap.new_array_from_values(array_proto, &[])
-                .map_err(heap_error)?,
-        ),
-        Data::Object(_) => Raw::object(
-            heap.new_object_from_entries(object_proto, &[], &[])
-                .map_err(heap_error)?,
-        ),
-    })
 }
 
 /// A VM value, read without running JS: a host call's argument or a call's result. It

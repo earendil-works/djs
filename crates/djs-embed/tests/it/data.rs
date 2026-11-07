@@ -39,7 +39,8 @@ fn data_in_is_what_its_wire_form_decodes_to() {
            return [Object.getPrototypeOf(x) === Object.prototype, Array.isArray(x.a),\n\
              1 in x.a, x.a.length, Object.keys(x).join(), x.b instanceof Uint8Array,\n\
              x.b.length, x.s.length, typeof x.i, Object.hasOwn(x, '__proto__')];\n\
-         }",
+         }\n\
+         function id(x) { return x; }",
     );
     let v = Data::Object(vec![
         (
@@ -69,6 +70,32 @@ fn data_in_is_what_its_wire_form_decodes_to() {
         true.into(),
     ];
     assert_eq!(direct, Data::Array(expected));
+    // The same from borrowed parts (no holes: a `Value` has none).
+    let items = [1.into(), Value::Data(&Data::Undefined), 3.into()];
+    let fields = [
+        ("a", Value::Array(&items)),
+        ("10", "ten".into()),
+        ("b", Value::Bytes(&[1, 2, 3])),
+        ("s", "hé😀".into()),
+        ("i", 7.into()),
+        ("__proto__", Value::Null),
+    ];
+    let borrowed = i.call("f", &[Value::Object(&fields)], |_| Ok(())).unwrap();
+    let Data::Array(mut b) = borrowed else {
+        panic!("{borrowed:?}")
+    };
+    assert_eq!(b[2], true.into()); // `1 in x.a`: undefined, not a hole
+    b[2] = false.into();
+    assert_eq!(Data::Array(b), direct);
+    let e = Value::Array(&[]);
+    let nested = [("e", e), ("o", Value::Object(&[]))];
+    let out = i
+        .call("id", &[Value::Object(&nested)], |_| Ok(()))
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(
+        out,
+        Data::object([("e", Data::Array(vec![])), ("o", Data::Object(vec![]))])
+    );
     // What the decoder refuses, the direct build refuses too.
     for bad in [Data::Hole, Data::object([("h", Data::Hole)])] {
         let e = i.call("f", &[Value::Data(&bad)], |_| Ok(())).unwrap_err();
