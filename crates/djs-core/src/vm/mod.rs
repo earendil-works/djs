@@ -801,6 +801,29 @@ impl Vm {
         self.heap.alloc_str_uninit(len, false)
     }
 
+    /// Decodes a wire buffer (docs/wire.md) into a value of this VM's realm: objects and
+    /// arrays get its prototypes. Allocates but never collects, so the value stays valid
+    /// until the next `run` or collection.
+    pub fn decode_wire(&mut self, bytes: &[u8]) -> Result<Value, crate::wire::WireError> {
+        let opts = crate::wire::DecodeOptions {
+            object_proto: Some(intrinsic_obj(&self.heap, Intrinsic::ObjectProto)),
+            array_proto: Some(intrinsic_obj(&self.heap, Intrinsic::ArrayProto)),
+            ..Default::default()
+        };
+        crate::wire::decode(&mut self.heap, bytes, &opts)
+    }
+
+    /// Encodes plain data as a wire buffer of at most `max_bytes` (`wire::encode`): reads
+    /// the heap, never runs JS.
+    #[cfg(feature = "embed")]
+    pub fn encode_wire(
+        &self,
+        v: Value,
+        max_bytes: usize,
+    ) -> Result<Vec<u8>, crate::wire::EncodeError> {
+        crate::wire::encode(&self.heap, v, max_bytes)
+    }
+
     /// Starts a call of `f`: pushes the entry frame (or parks on a host function). `run`
     /// executes it. Never collects, so `f`, `this` and the arguments the embedder holds
     /// stay valid until the next `run`.

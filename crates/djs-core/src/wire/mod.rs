@@ -12,8 +12,15 @@
 //! returns; the caller checks `Heap::gc_pending` afterwards.
 use crate::PushOut;
 
+#[cfg(feature = "embed")]
+mod encode;
 #[cfg(test)]
 mod tests;
+mod writer;
+
+#[cfg(feature = "embed")]
+pub use encode::{EncodeError, encode};
+pub use writer::Writer;
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -37,6 +44,9 @@ pub mod tag {
     pub const INT8: u8 = 0x07;
     pub const STR_UTF8: u8 = 0x10;
     pub const STR_UTF16: u8 = 0x11;
+    /// UTF-8 without the unit count up front (Rust hosts' `Writer`; builds with the
+    /// `embed` feature decode it).
+    pub const STR_UTF8_UNCOUNTED: u8 = 0x12;
     pub const ARRAY: u8 = 0x20;
     pub const OBJECT: u8 = 0x21;
     pub const BYTES: u8 = 0x30;
@@ -265,7 +275,7 @@ impl<'a> Decoder<'a, '_> {
                 }
                 Value::HOLE
             }
-            tag::STR_UTF8 | tag::STR_UTF16 => self.string(t, false)?.0,
+            tag::STR_UTF8 | tag::STR_UTF16 | tag::STR_UTF8_UNCOUNTED => self.string(t, false)?.0,
             tag::ARRAY | tag::OBJECT => {
                 let is_object = t == tag::OBJECT;
                 let count = self.varint()?;
@@ -335,7 +345,7 @@ impl<'a> Decoder<'a, '_> {
         let k = self.varint()?;
         if k == 0 {
             let t = self.byte()?;
-            if t != tag::STR_UTF8 && t != tag::STR_UTF16 {
+            if !matches!(t, tag::STR_UTF8 | tag::STR_UTF16 | tag::STR_UTF8_UNCOUNTED) {
                 self.pos -= 1;
                 return self.invalid("expected a key string");
             }
@@ -352,6 +362,9 @@ impl<'a> Decoder<'a, '_> {
     /// Reads a string payload (after its tag). As a key it is interned (the atom is
     /// returned, the value is undefined); otherwise it becomes a heap string.
     fn string(&mut self, t: u8, as_key: bool) -> Result<(Value, Atom), WireError> {
+        if t == tag::STR_UTF8_UNCOUNTED {
+            return self.uncounted(as_key);
+        }
         let units = self.varint()?;
         if units > MAX_LEN {
             return self.invalid("string too long");
@@ -380,6 +393,46 @@ impl<'a> Decoder<'a, '_> {
         }
         let start = self.pos;
         let bytes = self.take(nbytes as usize)?;
+        self.utf8(bytes, units, start, as_key)
+    }
+
+    /// A UTF-8 string without its unit count (`STR_UTF8_UNCOUNTED`): the units are counted
+    /// from the lead bytes, which is exact for valid UTF-8; invalid input fails in
+    /// [`Decoder::utf8`]'s validation as with a counted string.
+    #[cfg(feature = "embed")]
+    fn uncounted(&mut self, as_key: bool) -> Result<(Value, Atom), WireError> {
+        let nbytes = self.varint()?;
+        let start = self.pos;
+        let bytes = self.take(nbytes as usize)?;
+        // Every byte but a continuation byte (0x80..=0xBF) starts a code point; a four-byte
+        // one (lead 0xF0 or more) is two UTF-16 units.
+        let units = bytes
+            .iter()
+            .map(|&b| ((b as i8) >= -64) as u64 + (b >= 0xF0) as u64)
+            .sum::<u64>();
+        if units > MAX_LEN as u64 {
+            self.pos = start;
+            return self.invalid("string too long");
+        }
+        self.utf8(bytes, units as u32, start, as_key)
+    }
+
+    #[cfg(not(feature = "embed"))]
+    fn uncounted(&mut self, _as_key: bool) -> Result<(Value, Atom), WireError> {
+        self.pos -= 1;
+        self.invalid("uncounted UTF-8 strings are not available in this build")
+    }
+
+    /// The UTF-8 string `bytes` (at input offset `start`) of `units` UTF-16 code units, as
+    /// in [`Decoder::string`].
+    fn utf8(
+        &mut self,
+        bytes: &'a [u8],
+        units: u32,
+        start: usize,
+        as_key: bool,
+    ) -> Result<(Value, Atom), WireError> {
+        let nbytes = bytes.len() as u32;
         // Valid UTF-8 has as many bytes as UTF-16 units only if it is ASCII, which is much
         // cheaper to check than full UTF-8 validation (most strings are short).
         let ascii = units == nbytes;

@@ -62,7 +62,9 @@ fn fnv(mut h: u32, bytes: &[u8]) -> u32 {
 /// adds `Vm::dump`, a reader of the heap: a run never calls it. Nor `lazy` (D2990): the base
 /// holds no lazy template (the prelude is privileged), and lazy compilation is a VM option.
 /// Nor `compile-cache` (D3040): an import makes what the compile makes. Nor `prelude`
-/// (D3094): it only decides whether a wasm build can run the prelude source.
+/// (D3094): it only decides whether a wasm build can run the prelude source. Nor `embed`
+/// (D3180): it adds what Rust hosts call (the outbound wire encoder, uncounted UTF-8
+/// strings, fatal out of memory), which no image records.
 fn features() -> Vec<String> {
     enabled_features()
         .into_iter()
@@ -76,6 +78,7 @@ fn features() -> Vec<String> {
                 && f != "lazy"
                 && f != "compile-cache"
                 && f != "prelude"
+                && f != "embed"
         })
         .collect()
 }

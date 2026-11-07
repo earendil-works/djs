@@ -607,10 +607,11 @@ fn fuzz_long() {
 fn fuzz(seed: u64, iterations: usize) {
     let mut r = Rng(seed);
     let mut valid = Vec::new();
-    for _ in 0..200 {
+    for i in 0..200 {
         let mut v = random_value(&mut r, 0);
         dedupe(&mut v);
-        valid.push(encode(&v));
+        // Half of them as the Rust `Writer` writes them (uncounted UTF-8 strings).
+        valid.push(if i % 2 == 0 { encode(&v) } else { write(&v) });
     }
     let mut ok = 0;
     for i in 0..iterations {
@@ -1154,4 +1155,150 @@ fn transcode_matches_from_utf8() {
             }
         }
     }
+}
+
+/// `v` as the Rust host encoder (`Writer`) writes it.
+fn write(v: &T) -> Vec<u8> {
+    fn go(w: &mut Writer, v: &T) {
+        match v {
+            T::Undef => w.undefined(),
+            T::Null => w.null(),
+            T::Bool(b) => w.bool(*b),
+            T::Num(n) => w.number(*n),
+            T::Str(s) => w.str(s),
+            T::Str16(u) => w.str_utf16(u),
+            T::Arr(items) => {
+                w.array(items.len());
+                for it in items {
+                    match it {
+                        Some(v) => go(w, v),
+                        None => w.hole(),
+                    }
+                }
+            }
+            T::Obj(props) => {
+                w.object(props.len());
+                for (k, v) in props {
+                    w.key(k);
+                    go(w, v);
+                }
+            }
+            T::Bytes(b) => w.bytes(b),
+        }
+    }
+    let mut w = Writer::new();
+    go(&mut w, v);
+    w.finish()
+}
+
+#[test]
+fn writer_round_trips() {
+    let mut r = Rng(0x0bad_cafe_1234_5678);
+    for _ in 0..3000 {
+        let mut v = random_value(&mut r, 0);
+        dedupe(&mut v);
+        let (mut h, out) = decode_ok(&write(&v));
+        assert_eq!(dump(&mut h, out), dump_t(&v), "{v:?}");
+    }
+    // Numbers take the smallest exact form; Latin-1 is written counted.
+    let mut w = Writer::new();
+    w.array(5);
+    for n in [5.0, -129.0, 0.5, -0.0] {
+        w.number(n);
+    }
+    w.str_latin1(b"caf\xe9");
+    let b = w.finish();
+    assert_eq!(&b[4..9], &[tag::ARRAY, 5, tag::INT8, 5, tag::INT32]);
+    let (mut h, out) = decode_ok(&b);
+    assert_eq!(
+        dump(&mut h, out),
+        r#"[n:5,n:-129,n:0.5,n:-0,s:"caf\u00e9"]"#
+    );
+    // Keys are sent once each, a UTF-16 key apart from its UTF-8 twin.
+    let mut w = Writer::new();
+    w.array(3);
+    for _ in 0..2 {
+        w.object(1);
+        w.key("k");
+        w.null();
+    }
+    w.object(1);
+    w.key_utf16(&[0xD800]);
+    w.null();
+    let (mut h, out) = decode_ok(&w.finish());
+    assert_eq!(
+        dump(&mut h, out),
+        r#"[{"k":null},{"k":null},{"\ud800":null}]"#
+    );
+}
+
+#[test]
+fn uncounted_strings_are_validated() {
+    let buf = |payload: &[u8]| {
+        let mut b = vec![
+            b'D',
+            b'J',
+            b'W',
+            VERSION,
+            tag::STR_UTF8_UNCOUNTED,
+            payload.len() as u8,
+        ];
+        b.extend_from_slice(payload);
+        b
+    };
+    for good in ["", "ascii", "é", "€ and 😀", "\u{FF}"] {
+        let (mut h, out) = decode_ok(&buf(good.as_bytes()));
+        assert_eq!(dump(&mut h, out), dump_t(&s(good)));
+    }
+    for bad in [
+        &b"\xF0"[..],
+        b"\xF0\x80",
+        b"\xC3",
+        b"\xED\xA0\x80",
+        b"a\xFFb",
+        b"\xE2\x82",
+    ] {
+        assert_eq!(invalid(&buf(bad)), (6, "invalid UTF-8"), "{bad:?}");
+    }
+    // As a key too.
+    let mut b = vec![
+        b'D',
+        b'J',
+        b'W',
+        VERSION,
+        tag::OBJECT,
+        1,
+        0,
+        tag::STR_UTF8_UNCOUNTED,
+        1,
+        0xC3,
+    ];
+    b.push(tag::NULL);
+    assert_eq!(invalid(&b).1, "invalid UTF-8");
+}
+
+/// The outbound encoder gives back what the decoder made (plain data in a heap without a
+/// realm: objects without a prototype count as plain).
+#[test]
+fn outbound_round_trips() {
+    let mut r = Rng(0x5eed_0f0b_b000_0001);
+    for _ in 0..3000 {
+        let mut v = random_value(&mut r, 0);
+        dedupe(&mut v);
+        let (mut h, out) = decode_ok(&encode(&v));
+        let bytes = super::encode(&h, out, usize::MAX).unwrap_or_else(|e| panic!("{e}"));
+        let (mut h2, back) = decode_ok(&bytes);
+        assert_eq!(dump(&mut h2, back), dump(&mut h, out), "{v:?}");
+    }
+}
+
+#[test]
+fn outbound_limits() {
+    let v = T::Arr(vec![Some(s("x")); 100]);
+    let (h, out) = decode_ok(&encode(&v));
+    assert_eq!(
+        super::encode(&h, out, 50),
+        Err(EncodeError::TooLarge { limit: 50 })
+    );
+    assert!(super::encode(&h, out, 1000).is_ok());
 }
