@@ -80,8 +80,9 @@ pub struct ExecOptions {
     /// Reaching the heap's memory cap ends the run like host memory exhaustion
     /// (`Status::HostOutOfMemory`, D3181) instead of throwing a catchable
     /// `InternalError`: no `catch` or `finally` runs, the call is abandoned and the VM is
-    /// idle. For embedders whose scripts must not swallow it (djs-embed). Builds without
-    /// the `embed` feature ignore it.
+    /// idle. For embedders whose scripts must not swallow it (djs-embed). Only in builds
+    /// with the `embed` feature: the wasm modules copy these options around a lot.
+    #[cfg(feature = "embed")]
     pub fatal_out_of_memory: bool,
 }
 
@@ -94,6 +95,7 @@ impl Default for ExecOptions {
             native_builtins: true,
             hot_loop: true,
             hot_backedges: hot::HOT_BACKEDGES,
+            #[cfg(feature = "embed")]
             fatal_out_of_memory: false,
         }
     }
@@ -982,12 +984,14 @@ impl<'h> Exec<'h> {
     /// The heap reached its cap: the `InternalError` to throw, whose handlers get the
     /// reserve below the cap to run in (D1600), or with `fatal_out_of_memory` the end of
     /// the run, as when the host refuses memory (D3181).
+    #[inline(always)]
     fn out_of_memory(&mut self) -> Value {
-        if cfg!(feature = "embed") && self.opts.fatal_out_of_memory {
+        #[cfg(feature = "embed")]
+        if self.opts.fatal_out_of_memory {
             self.host_out_of_memory();
-        } else {
-            self.heap.open_memory_reserve();
+            return intrinsic(self.heap, Intrinsic::OutOfMemoryError);
         }
+        self.heap.open_memory_reserve();
         intrinsic(self.heap, Intrinsic::OutOfMemoryError)
     }
 

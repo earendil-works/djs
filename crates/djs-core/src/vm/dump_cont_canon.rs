@@ -16,8 +16,8 @@
 //! against K's own text, takes the holes' texts from it and so has the writer's pieces,
 //! whose layout is the writer's.
 
-use alloc::rc::Rc;
 use alloc::string::String;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use super::super::plain::{Act, BDecl, Ctx, KText, Slot, Using};
@@ -698,7 +698,7 @@ pub(in super::super) fn layout_of(
 /// site's slots, every value a placeholder.
 pub(in super::super) fn canonical(
     site: &Site,
-    syntax: Rc<Syntax>,
+    syntax: Arc<Syntax>,
     ftext: String,
     fkind: u32,
     kind: i32,

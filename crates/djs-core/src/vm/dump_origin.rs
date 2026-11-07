@@ -237,7 +237,7 @@ impl Dumper<'_> {
         &mut self,
         s: &suspend::Suspended,
         ksite: &Site,
-    ) -> Result<Option<(suspend::Suspended, Site, Rc<Syntax>)>, String> {
+    ) -> Result<Option<(suspend::Suspended, Site, Arc<Syntax>)>, String> {
         let h = self.h;
         let Some(k) = s.frame.first().and_then(|v| v.as_object()) else {
             return Ok(None);
@@ -320,7 +320,7 @@ impl Dumper<'_> {
             };
             m.clone()
         };
-        let syntax = Rc::new(m.syntax.clone());
+        let syntax = Arc::new(m.syntax.clone());
         // K's layout, made again from f at the site K was written for.
         let Some(site) = m.sites.iter().find(|x| x.name == at) else {
             return no("its origin has no site of its record");

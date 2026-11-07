@@ -100,7 +100,7 @@ pub(super) struct Act {
     pub ftext: String,
     pub fkind: u32,
     pub site: Site,
-    pub syntax: alloc::rc::Rc<crate::compiler::Syntax>,
+    pub syntax: alloc::sync::Arc<crate::compiler::Syntax>,
     pub awaiting: Option<String>,
     pub this: String,
     pub slots: Vec<Slot>,
@@ -860,7 +860,7 @@ struct W<'x> {
     /// Continuations of merged scopes written where they are called instead (D3003).
     taken_k: Vec<usize>,
     /// Per activation, the names its continuation may bind ([`W::k_scope`]).
-    kscopes: Vec<alloc::rc::Rc<alloc::collections::BTreeSet<String>>>,
+    kscopes: Vec<alloc::sync::Arc<alloc::collections::BTreeSet<String>>>,
 }
 
 type R<T> = Result<T, String>;
@@ -1010,7 +1010,7 @@ pub(super) fn write(
                 for sl in &act.slots {
                     scope.insert(String::from(sl.name.split('@').next().unwrap_or(&sl.name)));
                 }
-                alloc::rc::Rc::new(scope)
+                alloc::sync::Arc::new(scope)
             })
             .collect(),
     };

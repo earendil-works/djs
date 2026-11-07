@@ -3177,6 +3177,7 @@ fn host_memory_failure_is_not_a_js_error() {
     assert_eq!(out.log, ["again 2"]);
 }
 
+#[cfg(feature = "embed")]
 #[test]
 fn fatal_out_of_memory_runs_no_handler() {
     // With `fatal_out_of_memory`, reaching the cap ends the run as host memory exhaustion
@@ -3244,6 +3245,14 @@ fn reset_to_reuses_the_arena() {
     vm.heap().verify().unwrap();
     let (_, out) = run_script(vm, "console.log(n, typeof big);\n");
     assert_eq!(out.log, ["1 undefined"]);
+}
+
+/// A VM moves between threads (an embedder's async tasks): `Send` in every build, the
+/// dump feature's caches included (D3183).
+#[test]
+fn vm_is_send() {
+    fn send<T: Send>() {}
+    send::<Vm>();
 }
 
 #[test]

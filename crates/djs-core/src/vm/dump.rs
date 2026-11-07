@@ -27,8 +27,8 @@
 //! (D2339) and lookups go through one small hash index of cells and atoms: the dumper
 //! adds no ordered maps, sorts or `core::fmt` to the module.
 
-use alloc::rc::Rc;
 use alloc::string::String;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use super::Vm;
@@ -902,7 +902,7 @@ struct Dumper<'a> {
     base_end: u32,
     /// Builtin cells (below `BASE_END`), host values, nodes and root boxes by cell offset.
     cells: Index,
-    builtins: Rc<BaseTable>,
+    builtins: Arc<BaseTable>,
     host_exprs: Vec<HostExpr>,
     host_names: Vec<&'a str>,
     globals: Vec<Global>,
@@ -936,7 +936,7 @@ struct Dumper<'a> {
     scratch: Option<Heap>,
     /// Lazy templates that never ran (D2993): the globals of each, and the heap they
     /// compile into.
-    lazy_globals: alloc::collections::BTreeMap<u32, Rc<Vec<String>>>,
+    lazy_globals: alloc::collections::BTreeMap<u32, Arc<Vec<String>>>,
     #[cfg_attr(not(feature = "lazy"), allow(dead_code))]
     lazy_heap: Option<Heap>,
     /// Plain dumps: the text written for a class whose static code is blanked
@@ -961,10 +961,10 @@ struct Dumper<'a> {
     sources: Sources,
     /// `literal_key` of string atoms, by atom id.
     literal_keys: Index,
-    literal_key_texts: Vec<Rc<str>>,
+    literal_key_texts: Vec<Arc<str>>,
     /// `member_of`, by atom id.
     members: Index,
-    member_texts: Vec<Rc<str>>,
+    member_texts: Vec<Arc<str>>,
     /// Objects being written as data (`render`): promises made by activations or
     /// reactions are patched into them instead (dump_flight.rs `make`).
     data_depth: u32,
@@ -1015,7 +1015,7 @@ impl<'a> Dumper<'a> {
             h,
             base_end,
             cells: Index::default(),
-            builtins: Rc::default(),
+            builtins: Arc::default(),
             host_exprs: Vec::new(),
             host_names: opts.host.to_vec(),
             globals: Vec::new(),
@@ -1060,13 +1060,15 @@ impl<'a> Dumper<'a> {
         let fresh;
         // (Kept by the base's length; names given count as their own.)
         let key = names.map_or(opts.base.len(), |n| usize::MAX - n.builtins.len());
-        let table: &Rc<BaseTable> = match vm
-            .base_names
-            .get_or_init(|| (key, Rc::new(BaseTable::new(base.as_ref(), base_end, names))))
-        {
+        let table: &Arc<BaseTable> = match vm.base_names.get_or_init(|| {
+            (
+                key,
+                Arc::new(BaseTable::new(base.as_ref(), base_end, names)),
+            )
+        }) {
             (k, t) if *k == key => t,
             _ => {
-                fresh = Rc::new(BaseTable::new(base.as_ref(), base_end, names));
+                fresh = Arc::new(BaseTable::new(base.as_ref(), base_end, names));
                 &fresh
             }
         };
@@ -2125,11 +2127,11 @@ impl<'a> Dumper<'a> {
     /// The globals that lazy template `t`, which never ran, or a function inside it reads
     /// or writes, in the order its code would (D2993): it compiled on its own, with the
     /// functions inside it, in a heap of its own.
-    fn lazy_globals(&mut self, t: u32) -> Rc<Vec<String>> {
+    fn lazy_globals(&mut self, t: u32) -> Arc<Vec<String>> {
         if let Some(g) = self.lazy_globals.get(&t) {
             return g.clone();
         }
-        let g = Rc::new(self.lazy_globals_of(t));
+        let g = Arc::new(self.lazy_globals_of(t));
         self.lazy_globals.insert(t, g.clone());
         g
     }
@@ -2656,7 +2658,7 @@ impl<'a> Dumper<'a> {
 
     /// The suspension maps of `src` compiled with `params` and the options `bits`, from
     /// the VM's `Cache` or compiled in the scratch heap (and kept there).
-    fn maps_of(&mut self, src: &str, params: &str, bits: u32) -> Option<Rc<Vec<FunctionMap>>> {
+    fn maps_of(&mut self, src: &str, params: &str, bits: u32) -> Option<Arc<Vec<FunctionMap>>> {
         self.maps_entry(src, params, bits).0
     }
 
@@ -2667,7 +2669,7 @@ impl<'a> Dumper<'a> {
         src: &str,
         params: &str,
         bits: u32,
-    ) -> (Option<Rc<Vec<FunctionMap>>>, bool, ScriptGlobals) {
+    ) -> (Option<Arc<Vec<FunctionMap>>>, bool, ScriptGlobals) {
         let mut cache = self.vm.dump_cache.borrow_mut();
         if let Some(i) = cache
             .maps
@@ -2680,7 +2682,7 @@ impl<'a> Dumper<'a> {
             return maps;
         }
         drop(cache);
-        (self.compile_maps(src, params, bits), false, Rc::default())
+        (self.compile_maps(src, params, bits), false, Arc::default())
     }
 
     /// The complete maps of `src` (an eager compile in the scratch heap), kept in the
@@ -2690,14 +2692,14 @@ impl<'a> Dumper<'a> {
         src: &str,
         params: &str,
         bits: u32,
-    ) -> Option<Rc<Vec<FunctionMap>>> {
+    ) -> Option<Arc<Vec<FunctionMap>>> {
         let scratch = self.scratch_heap()?;
         let list: Vec<&str> = params.split(',').filter(|p| !p.is_empty()).collect();
         let opts = crate::compiler::CompileOptions::from_bits("dump.js", &list, bits);
         let maps = crate::compiler::suspension_maps(scratch, src.as_bytes(), &opts)
             .ok()
-            .map(Rc::new);
-        self.set_maps(src, params, bits, maps.clone(), false, Rc::default());
+            .map(Arc::new);
+        self.set_maps(src, params, bits, maps.clone(), false, Arc::default());
         maps
     }
 
@@ -2707,7 +2709,7 @@ impl<'a> Dumper<'a> {
         src: &str,
         params: &str,
         bits: u32,
-        maps: Option<Rc<Vec<FunctionMap>>>,
+        maps: Option<Arc<Vec<FunctionMap>>>,
         partial: bool,
         globals: ScriptGlobals,
     ) {
@@ -2789,36 +2791,36 @@ impl<'a> Dumper<'a> {
 
     /// The key in an object literal: `name`, `"a b"`, `[Symbol.iterator]`.
     /// [`Dumper::key_member`], kept per dump for string atoms.
-    fn member_of(&mut self, k: Atom) -> Rc<str> {
+    fn member_of(&mut self, k: Atom) -> Arc<str> {
         if self.h.atom_symbol(k).is_some() {
-            return Rc::from(self.key_member(k));
+            return Arc::from(self.key_member(k));
         }
         let id = u64::from(k.id()) + 1;
         if let Some(i) = self.members.get(id) {
             return self.member_texts[i as usize].clone();
         }
-        let m: Rc<str> = Rc::from(self.key_member(k));
+        let m: Arc<str> = Arc::from(self.key_member(k));
         self.members.insert(id, self.member_texts.len() as u32);
         self.member_texts.push_out(m.clone());
         m
     }
 
-    fn literal_key(&mut self, k: Atom) -> Rc<str> {
+    fn literal_key(&mut self, k: Atom) -> Arc<str> {
         let h = self.h;
         match h.atom_symbol(k) {
-            Some(s) => Rc::from(cat!("[", self.expr(Value::symbol(s), None, None), "]")),
+            Some(s) => Arc::from(cat!("[", self.expr(Value::symbol(s), None, None), "]")),
             None => {
                 // Kept per dump: data repeats its keys in every record (0198).
                 if let Some(i) = self.literal_keys.get(u64::from(k.id()) + 1) {
                     return self.literal_key_texts[i as usize].clone();
                 }
                 let name = atom_text(h, k);
-                let text: Rc<str> = if name == "__proto__" {
-                    Rc::from(cat!("[", quote(&name), "]"))
+                let text: Arc<str> = if name == "__proto__" {
+                    Arc::from(cat!("[", quote(&name), "]"))
                 } else if is_ident(&name) || h.atom_array_index(k).is_some() {
-                    Rc::from(name)
+                    Arc::from(name)
                 } else {
-                    Rc::from(quote_atom(h, k))
+                    Arc::from(quote_atom(h, k))
                 };
                 self.literal_keys
                     .insert(u64::from(k.id()) + 1, self.literal_key_texts.len() as u32);
@@ -4990,14 +4992,14 @@ impl Cache {
                 let bits = u32::get(r)?;
                 let params = String::get(r)?;
                 let src = String::get(r)?;
-                let maps = Option::<Vec<FunctionMap>>::get(r)?.map(Rc::new);
+                let maps = Option::<Vec<FunctionMap>>::get(r)?.map(Arc::new);
                 let partial = bool::get(r)?;
                 let k = u32::get(r)?;
                 let mut globals = Vec::new();
                 for _ in 0..k {
                     globals.push((u32::get(r)?, u32::get(r)?, Vec::<String>::get(r)?));
                 }
-                out.push((bits, params, src, maps, partial, Rc::new(globals)));
+                out.push((bits, params, src, maps, partial, Arc::new(globals)));
             }
             (r.at == r.b.len()).then_some(out)
         };
@@ -5052,9 +5054,9 @@ impl Cache {
             bits,
             String::from(params),
             String::from(src),
-            Some(Rc::default()),
+            Some(Arc::default()),
             true,
-            Rc::new(globals),
+            Arc::new(globals),
         ));
     }
 
@@ -5080,9 +5082,9 @@ impl Cache {
             bits,
             String::new(),
             String::from(src),
-            Some(Rc::new(maps)),
+            Some(Arc::new(maps)),
             partial,
-            Rc::new(globals),
+            Arc::new(globals),
         ));
     }
 }
@@ -5095,14 +5097,14 @@ type CachedMaps = (
     u32,
     String,
     String,
-    Option<Rc<Vec<FunctionMap>>>,
+    Option<Arc<Vec<FunctionMap>>>,
     bool,
     ScriptGlobals,
 );
 
 /// The globals of the lazy functions a lazy load wrote (`compiler::LazyGlobals`, D2993),
 /// as text.
-pub(super) type ScriptGlobals = Rc<Vec<(u32, u32, Vec<String>)>>;
+pub(super) type ScriptGlobals = Arc<Vec<(u32, u32, Vec<String>)>>;
 
 /// The functions of a dump by the hash of their text (`Index` into the list), each
 /// with its span, its free names and the next entry of the same hash.

@@ -118,7 +118,7 @@ pub(super) struct Flight<'a> {
     #[allow(clippy::type_complexity)]
     maps: Vec<(
         u32,
-        Option<alloc::rc::Rc<Vec<FunctionMap>>>,
+        Option<alloc::sync::Arc<Vec<FunctionMap>>>,
         bool,
         super::ScriptGlobals,
     )>,
@@ -241,7 +241,7 @@ struct Act {
     s: suspend::Suspended,
     site: Option<Site>,
     /// The syntax around its function's sites (plain dumps).
-    syntax: Option<Rc<crate::compiler::Syntax>>,
+    syntax: Option<Arc<crate::compiler::Syntax>>,
     /// The awaited promise and the reaction's index there.
     awaiting: Option<(usize, usize)>,
     state: State,
@@ -452,7 +452,7 @@ impl Dumper<'_> {
                         all.push(m);
                     }
                 }
-                (Some(alloc::rc::Rc::new(all)), true)
+                (Some(alloc::sync::Arc::new(all)), true)
             }
             None => (self.compile_maps(&src, &params, bits), false),
         };
@@ -793,7 +793,7 @@ impl Dumper<'_> {
         &mut self,
         path: &str,
         s: &suspend::Suspended,
-    ) -> Option<(Site, Rc<crate::compiler::Syntax>)> {
+    ) -> Option<(Site, Arc<crate::compiler::Syntax>)> {
         let h = self.h;
         let Some(f) = s.frame.first().and_then(|v| v.as_object()) else {
             self.refuse(path.into(), "an activation without its function");
@@ -868,7 +868,7 @@ impl Dumper<'_> {
             );
             return None;
         }
-        Some((site, Rc::new(syntax)))
+        Some((site, Arc::new(syntax)))
     }
 
     /// A codemode body's site as the loader sees it: the dump writes the body as an

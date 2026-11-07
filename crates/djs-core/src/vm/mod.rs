@@ -188,7 +188,7 @@ pub struct Vm {
     /// The base image's builtins as dumps name them (`dump::BaseTable`): made by the
     /// first `dump` and kept, with the length of the base it was made from (D2626).
     #[cfg(feature = "dump")]
-    base_names: core::cell::OnceCell<(usize, alloc::rc::Rc<dump::BaseTable>)>,
+    base_names: core::cell::OnceCell<(usize, alloc::sync::Arc<dump::BaseTable>)>,
     /// What dumps keep for the next dump: the suspension maps of their scripts.
     #[cfg(feature = "dump")]
     dump_cache: core::cell::RefCell<dump::Cache>,

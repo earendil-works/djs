@@ -64,6 +64,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "djs-embed"
+version = "0.1.0"
+dependencies = [
+ "djs-core",
+ "djs-prelude",
+]
+
+[[package]]
 name = "djs-libm"
 version = "0.0.0"
 dependencies = [

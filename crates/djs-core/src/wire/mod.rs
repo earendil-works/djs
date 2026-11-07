@@ -275,7 +275,10 @@ impl<'a> Decoder<'a, '_> {
                 }
                 Value::HOLE
             }
-            tag::STR_UTF8 | tag::STR_UTF16 | tag::STR_UTF8_UNCOUNTED => self.string(t, false)?.0,
+            tag::STR_UTF8 | tag::STR_UTF16 => self.string(t, false)?.0,
+            // (Builds without `embed` reject it as an unknown tag.)
+            #[cfg(feature = "embed")]
+            tag::STR_UTF8_UNCOUNTED => self.uncounted(false)?.0,
             tag::ARRAY | tag::OBJECT => {
                 let is_object = t == tag::OBJECT;
                 let count = self.varint()?;
@@ -345,7 +348,13 @@ impl<'a> Decoder<'a, '_> {
         let k = self.varint()?;
         if k == 0 {
             let t = self.byte()?;
-            if !matches!(t, tag::STR_UTF8 | tag::STR_UTF16 | tag::STR_UTF8_UNCOUNTED) {
+            #[cfg(feature = "embed")]
+            if t == tag::STR_UTF8_UNCOUNTED {
+                let atom = self.uncounted(true)?.1;
+                self.key_table.push_out(atom);
+                return Ok(atom);
+            }
+            if t != tag::STR_UTF8 && t != tag::STR_UTF16 {
                 self.pos -= 1;
                 return self.invalid("expected a key string");
             }
@@ -362,9 +371,6 @@ impl<'a> Decoder<'a, '_> {
     /// Reads a string payload (after its tag). As a key it is interned (the atom is
     /// returned, the value is undefined); otherwise it becomes a heap string.
     fn string(&mut self, t: u8, as_key: bool) -> Result<(Value, Atom), WireError> {
-        if t == tag::STR_UTF8_UNCOUNTED {
-            return self.uncounted(as_key);
-        }
         let units = self.varint()?;
         if units > MAX_LEN {
             return self.invalid("string too long");
@@ -417,14 +423,10 @@ impl<'a> Decoder<'a, '_> {
         self.utf8(bytes, units as u32, start, as_key)
     }
 
-    #[cfg(not(feature = "embed"))]
-    fn uncounted(&mut self, _as_key: bool) -> Result<(Value, Atom), WireError> {
-        self.pos -= 1;
-        self.invalid("uncounted UTF-8 strings are not available in this build")
-    }
-
     /// The UTF-8 string `bytes` (at input offset `start`) of `units` UTF-16 code units, as
-    /// in [`Decoder::string`].
+    /// in [`Decoder::string`]. (Inlined: the wasm modules have the one caller, as before
+    /// the uncounted form existed.)
+    #[inline(always)]
     fn utf8(
         &mut self,
         bytes: &'a [u8],
