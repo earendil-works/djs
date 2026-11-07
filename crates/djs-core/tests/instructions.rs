@@ -18,8 +18,11 @@ use djs_core::vm::{Vm, VmOptions};
 
 /// Instructions per `Vm::new` in the dev profile (djs-core at opt-level 1, what the gate
 /// runs) and in release: 136M and 109M at 0224, +20%. With D3091's lookup the dev count
-/// was 198M.
-const CEILING_DEV: u64 = 163_000_000;
+/// was 198M. Native default builds compile the `embed` builtins too (ES modules, the
+/// encoding classes; D3175): 162.0M in dev before 0248, 164.5M with its async module
+/// evaluation, so the dev ceiling is that plus 5% (not 20%, which would hide another
+/// D3091).
+const CEILING_DEV: u64 = 172_000_000;
 const CEILING_RELEASE: u64 = 131_000_000;
 
 const REPS: u32 = 3;
