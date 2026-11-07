@@ -1,7 +1,7 @@
 # 0244: TextEncoder and TextDecoder (UTF-8) (B1)
 
-status: open
-agent: -
+status: in-progress
+agent: encoding
 branch: issue/0244-text-encoding
 depends-on: -
 touches: builtins/ (a new encoding.ts), builtins/intrinsics.d.ts, crates/djs-core/src/interp/run/intrinsics.rs (leaf intrinsics), crates/djs-core/src/interp/realm.rs (ABSENT_GLOBALS for slim), tests/builtins/registry*.tsv/txt, tests/corpus (cases), tests/scores/size.tsv (only if D3172 allows)
