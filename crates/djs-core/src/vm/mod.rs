@@ -829,7 +829,9 @@ impl Vm {
 
     /// Decodes a wire buffer (docs/wire.md) into a value of this VM's realm: objects and
     /// arrays get its prototypes. Allocates but never collects, so the value stays valid
-    /// until the next `run` or collection.
+    /// until the next `run` or collection. (Only with `embed`: the wasm modules decode with
+    /// `wire::decode`, and even an unused caller moves that function in their code, D3180.)
+    #[cfg(feature = "embed")]
     pub fn decode_wire(&mut self, bytes: &[u8]) -> Result<Value, crate::wire::WireError> {
         let opts = crate::wire::DecodeOptions {
             object_proto: Some(intrinsic_obj(&self.heap, Intrinsic::ObjectProto)),

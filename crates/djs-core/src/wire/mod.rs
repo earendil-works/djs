@@ -278,7 +278,7 @@ impl<'a> Decoder<'a, '_> {
             tag::STR_UTF8 | tag::STR_UTF16 => self.string(t, false)?.0,
             // (Builds without `embed` reject it as an unknown tag.)
             #[cfg(feature = "embed")]
-            tag::STR_UTF8_UNCOUNTED => self.uncounted(false)?.0,
+            tag::STR_UTF8_UNCOUNTED => self.string(t, false)?.0,
             tag::ARRAY | tag::OBJECT => {
                 let is_object = t == tag::OBJECT;
                 let count = self.varint()?;
@@ -349,12 +349,10 @@ impl<'a> Decoder<'a, '_> {
         if k == 0 {
             let t = self.byte()?;
             #[cfg(feature = "embed")]
-            if t == tag::STR_UTF8_UNCOUNTED {
-                let atom = self.uncounted(true)?.1;
-                self.key_table.push_out(atom);
-                return Ok(atom);
-            }
-            if t != tag::STR_UTF8 && t != tag::STR_UTF16 {
+            let uncounted = t == tag::STR_UTF8_UNCOUNTED;
+            #[cfg(not(feature = "embed"))]
+            let uncounted = false;
+            if t != tag::STR_UTF8 && t != tag::STR_UTF16 && !uncounted {
                 self.pos -= 1;
                 return self.invalid("expected a key string");
             }
@@ -371,6 +369,13 @@ impl<'a> Decoder<'a, '_> {
     /// Reads a string payload (after its tag). As a key it is interned (the atom is
     /// returned, the value is undefined); otherwise it becomes a heap string.
     fn string(&mut self, t: u8, as_key: bool) -> Result<(Value, Atom), WireError> {
+        #[cfg(feature = "embed")]
+        let units = if t == tag::STR_UTF8_UNCOUNTED {
+            self.uncounted_units()?
+        } else {
+            self.varint()?
+        };
+        #[cfg(not(feature = "embed"))]
         let units = self.varint()?;
         if units > MAX_LEN {
             return self.invalid("string too long");
@@ -399,42 +404,6 @@ impl<'a> Decoder<'a, '_> {
         }
         let start = self.pos;
         let bytes = self.take(nbytes as usize)?;
-        self.utf8(bytes, units, start, as_key)
-    }
-
-    /// A UTF-8 string without its unit count (`STR_UTF8_UNCOUNTED`): the units are counted
-    /// from the lead bytes, which is exact for valid UTF-8; invalid input fails in
-    /// [`Decoder::utf8`]'s validation as with a counted string.
-    #[cfg(feature = "embed")]
-    fn uncounted(&mut self, as_key: bool) -> Result<(Value, Atom), WireError> {
-        let nbytes = self.varint()?;
-        let start = self.pos;
-        let bytes = self.take(nbytes as usize)?;
-        // Every byte but a continuation byte (0x80..=0xBF) starts a code point; a four-byte
-        // one (lead 0xF0 or more) is two UTF-16 units.
-        let units = bytes
-            .iter()
-            .map(|&b| ((b as i8) >= -64) as u64 + (b >= 0xF0) as u64)
-            .sum::<u64>();
-        if units > MAX_LEN as u64 {
-            self.pos = start;
-            return self.invalid("string too long");
-        }
-        self.utf8(bytes, units as u32, start, as_key)
-    }
-
-    /// The UTF-8 string `bytes` (at input offset `start`) of `units` UTF-16 code units, as
-    /// in [`Decoder::string`]. (Inlined: the wasm modules have the one caller, as before
-    /// the uncounted form existed.)
-    #[inline(always)]
-    fn utf8(
-        &mut self,
-        bytes: &'a [u8],
-        units: u32,
-        start: usize,
-        as_key: bool,
-    ) -> Result<(Value, Atom), WireError> {
-        let nbytes = bytes.len() as u32;
         // Valid UTF-8 has as many bytes as UTF-16 units only if it is ASCII, which is much
         // cheaper to check than full UTF-8 validation (most strings are short).
         let ascii = units == nbytes;
@@ -490,6 +459,26 @@ impl<'a> Decoder<'a, '_> {
                 self.invalid("string lengths do not match")
             }
         }
+    }
+
+    /// The UTF-16 length of an uncounted UTF-8 string (`STR_UTF8_UNCOUNTED`: `varint
+    /// bytes` and the bytes), counted from its lead bytes, which is exact for valid UTF-8
+    /// (the rest of [`Decoder::string`] validates it, as for a counted one). Leaves the
+    /// position where it was, so the payload reads on like a counted string's after its
+    /// unit count.
+    #[cfg(feature = "embed")]
+    fn uncounted_units(&mut self) -> Result<u32, WireError> {
+        let at = self.pos;
+        let n = self.varint()?;
+        let bytes = self.take(n as usize)?;
+        self.pos = at;
+        // Every byte but a continuation byte (0x80..=0xBF) starts a code point; a four-byte
+        // one (lead 0xF0 or more) is two UTF-16 units.
+        let units = bytes
+            .iter()
+            .map(|&b| ((b as i8) >= -64) as u64 + (b >= 0xF0) as u64)
+            .sum::<u64>();
+        Ok(u32::try_from(units).unwrap_or(u32::MAX))
     }
 
     fn empty_string(&mut self) -> Result<Value, WireError> {
