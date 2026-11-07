@@ -260,10 +260,12 @@ impl<'a> Reader<'a> {
             }
             _ => {
                 let units = self.varint()? as usize;
-                let data = self.take(units.checked_mul(2).unwrap_or(usize::MAX))?;
+                let data = self.take(units.saturating_mul(2))?;
                 let units = data
-                    .chunks_exact(2)
-                    .map(|p| u16::from_le_bytes([p[0], p[1]]));
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|p| u16::from_le_bytes(*p));
                 Ok(char::decode_utf16(units)
                     .map(|c| c.unwrap_or(char::REPLACEMENT_CHARACTER))
                     .collect())

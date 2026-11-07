@@ -65,7 +65,10 @@ fn sync_host_calls_with_typed_arguments() {
         ]
     );
     assert_eq!(out.as_array().unwrap().len(), 8);
-    assert_eq!(out.as_array().unwrap()[1], Data::from("str héllo € borrowed=false"));
+    assert_eq!(
+        out.as_array().unwrap()[1],
+        Data::from("str héllo € borrowed=false")
+    );
 }
 
 #[test]
@@ -119,10 +122,14 @@ fn host_errors_are_thrown_at_the_call() {
     );
     let mut i = snap.instantiate(Limits::default()).unwrap();
     let out = i
-        .call("f", &[], |c| c.reply(Err(Throw::new(ErrorKind::RangeError, "too far"))))
+        .call("f", &[], |c| {
+            c.reply(Err(Throw::new(ErrorKind::RangeError, "too far")))
+        })
         .unwrap();
     assert_eq!(out, Data::Array(vec![true.into(), "too far".into()]));
-    let e = i.call("g", &[], |c| c.reply(Err(Throw::type_error("bad")))).unwrap_err();
+    let e = i
+        .call("g", &[], |c| c.reply(Err(Throw::type_error("bad"))))
+        .unwrap_err();
     match e {
         Error::Exception(e) => assert_eq!(e.message, "TypeError: bad"),
         e => panic!("{e:?}"),
@@ -183,11 +190,17 @@ fn a_rejected_promise_is_an_exception() {
     let snap = snapshot("async function f() { await read('x'); throw new Error('late'); }");
     let mut i = snap.instantiate(Limits::default()).unwrap();
     let e = i.call("f", &[], |c| c.reply(Ok(Value::Null))).unwrap_err();
-    assert!(matches!(&e, Error::Exception(x) if x.message == "Error: late"), "{e:?}");
+    assert!(
+        matches!(&e, Error::Exception(x) if x.message == "Error: late"),
+        "{e:?}"
+    );
     // An async host call answered with an error rejects its promise.
-    let snap = snapshot("async function f() { try { await read('x'); } catch (e) { return e.message; } }");
+    let snap =
+        snapshot("async function f() { try { await read('x'); } catch (e) { return e.message; } }");
     let mut i = snap.instantiate(Limits::default()).unwrap();
-    let out = i.call("f", &[], |c| c.reply(Err(Throw::error("io")))).unwrap();
+    let out = i
+        .call("f", &[], |c| c.reply(Err(Throw::error("io"))))
+        .unwrap();
     assert_eq!(out, "io".into());
 }
 
@@ -226,5 +239,8 @@ fn one_call_at_a_time() {
     let e = i.call("f", &[], |_| Ok(())).unwrap_err();
     assert!(matches!(e, Error::Usage(_)), "{e:?}");
     // After a failed call the instance serves the next one.
-    assert_eq!(i.call("f", &[], |c| c.reply(Ok(5.into()))).unwrap(), 5.into());
+    assert_eq!(
+        i.call("f", &[], |c| c.reply(Ok(5.into()))).unwrap(),
+        5.into()
+    );
 }

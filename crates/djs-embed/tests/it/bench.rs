@@ -66,10 +66,15 @@ fn bench() {
         (
             "headers",
             Data::Array(
-                [("host", "api.example.org"), ("accept", "*/*"), ("cookie", "a=b"), ("user-agent", "bench")]
-                    .iter()
-                    .map(|(k, v)| Data::Array(vec![(*k).into(), (*v).into()]))
-                    .collect(),
+                [
+                    ("host", "api.example.org"),
+                    ("accept", "*/*"),
+                    ("cookie", "a=b"),
+                    ("user-agent", "bench"),
+                ]
+                .iter()
+                .map(|(k, v)| Data::Array(vec![(*k).into(), (*v).into()]))
+                .collect(),
             ),
         ),
     ]);
@@ -83,8 +88,10 @@ fn bench() {
         inst.call("empty", &[], |_| Ok(())).unwrap();
     });
     let policy = |inst: &mut djs_embed::Instance| {
-        inst.call("onRequest", &[Value::Wire(&wire)], |c| c.reply(Ok(Value::Undefined)))
-            .unwrap()
+        inst.call("onRequest", &[Value::Wire(&wire)], |c| {
+            c.reply(Ok(Value::Undefined))
+        })
+        .unwrap()
     };
     let pooled = time(n, || {
         policy(&mut inst);

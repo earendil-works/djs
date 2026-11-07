@@ -25,7 +25,11 @@ const SWALLOW: &str = "var ran = 'nothing';\n\
 #[test]
 fn fuel_runs_out_in_slices() {
     let snap = snapshot(SWALLOW);
-    let limits = Limits { fuel: 1_000_000, slice: 100_000, ..Limits::default() };
+    let limits = Limits {
+        fuel: 1_000_000,
+        slice: 100_000,
+        ..Limits::default()
+    };
     let mut i = snap.instantiate(limits).unwrap();
     i.start("spin", &[]).unwrap();
     let mut yields = 0;
@@ -61,12 +65,17 @@ fn the_deadline_is_checked_between_slices() {
     // While waiting for async host work too: the host reads the deadline.
     let snap = Snapshot::builder()
         .host_fn(HostFn::asynchronous(1, "slow"))
-        .source(Source::script("t.js", "async function f() { return await slow(); }"))
+        .source(Source::script(
+            "t.js",
+            "async function f() { return await slow(); }",
+        ))
         .build()
         .unwrap();
     let mut i = snap.instantiate(limits).unwrap();
     i.start("f", &[]).unwrap();
-    let Step::Wait(ids) = i.step().unwrap() else { panic!() };
+    let Step::Wait(ids) = i.step().unwrap() else {
+        panic!()
+    };
     assert!(i.deadline().is_some());
     std::thread::sleep(Duration::from_millis(30));
     i.resolve(ids[0], Ok(Value::Null)).unwrap();
@@ -76,7 +85,10 @@ fn the_deadline_is_checked_between_slices() {
 #[test]
 fn the_memory_cap_cannot_be_caught() {
     let snap = snapshot(SWALLOW);
-    let limits = Limits { memory: 4 << 20, ..Limits::default() };
+    let limits = Limits {
+        memory: 4 << 20,
+        ..Limits::default()
+    };
     let mut i = snap.instantiate(limits).unwrap();
     assert_eq!(call(&mut i, "hog"), Err(Error::OutOfMemory));
     // Neither the catch nor the finally ran.
@@ -110,7 +122,10 @@ fn a_bad_return_is_a_data_error() {
 fn a_small_instance_cannot_load_a_big_snapshot() {
     let snap = snapshot("var big = Array.from({ length: 50000 }, (_, i) => 'item ' + i);");
     assert!(snap.image_len() > 1 << 20);
-    let small = Limits { memory: 1 << 20, ..Limits::default() };
+    let small = Limits {
+        memory: 1 << 20,
+        ..Limits::default()
+    };
     assert_eq!(snap.instantiate(small).err(), Some(Error::OutOfMemory));
 }
 

@@ -63,7 +63,10 @@ fn setup_order_globals_and_frozen_builtins() {
     assert!(snap.image_len() > 10_000);
     let open = Snapshot::builder()
         .frozen_builtins(false)
-        .source(Source::script("b.js", "function patch() { Array.prototype.x = 1; return [].x; }"))
+        .source(Source::script(
+            "b.js",
+            "function patch() { Array.prototype.x = 1; return [].x; }",
+        ))
         .build()
         .unwrap();
     let mut i = open.instantiate(Limits::default()).unwrap();
