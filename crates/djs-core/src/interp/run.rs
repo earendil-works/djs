@@ -47,8 +47,9 @@ pub enum Status {
     /// Nothing to run: no call in progress, or the job queue is empty and only async
     /// host calls are pending (resolve them, then `run` again).
     Idle,
-    /// The host could not provide memory below the cap (D1690). Not a JS error: the
-    /// call is abandoned (`Vm::run` aborts it) and the VM is idle and usable.
+    /// The host could not provide memory below the cap (D1690), or the heap reached its
+    /// cap with [`ExecOptions::fatal_out_of_memory`]. Not a JS error: the call is
+    /// abandoned (`Vm::run` aborts it) and the VM is idle and usable.
     HostOutOfMemory,
 }
 
@@ -76,6 +77,12 @@ pub struct ExecOptions {
     /// Backward jumps after which the tier-0 loop returns to the run loop
     /// (`hot::HOT_BACKEDGES`; tests lower it to force those exits).
     pub hot_backedges: u32,
+    /// Reaching the heap's memory cap ends the run like host memory exhaustion
+    /// (`Status::HostOutOfMemory`, D3181) instead of throwing a catchable
+    /// `InternalError`: no `catch` or `finally` runs, the call is abandoned and the VM is
+    /// idle. For embedders whose scripts must not swallow it (djs-embed). Builds without
+    /// the `embed` feature ignore it.
+    pub fatal_out_of_memory: bool,
 }
 
 impl Default for ExecOptions {
@@ -87,6 +94,7 @@ impl Default for ExecOptions {
             native_builtins: true,
             hot_loop: true,
             hot_backedges: hot::HOT_BACKEDGES,
+            fatal_out_of_memory: false,
         }
     }
 }
@@ -948,11 +956,7 @@ impl<'h> Exec<'h> {
         let (kind, msg) = match *f.0 {
             FaultKind::Throw(v) => return v,
             FaultKind::Error(k, m) => (k, m),
-            FaultKind::Heap(HeapError::OutOfMemory) => {
-                // The handlers get the reserve below the cap to run in (D1600).
-                self.heap.open_memory_reserve();
-                return intrinsic(self.heap, Intrinsic::OutOfMemoryError);
-            }
+            FaultKind::Heap(HeapError::OutOfMemory) => return self.out_of_memory(),
             FaultKind::Heap(HeapError::HostOutOfMemory) => {
                 // Not catchable: the run stops before a handler can run (D1690).
                 self.host_out_of_memory();
@@ -967,15 +971,24 @@ impl<'h> Exec<'h> {
         };
         let e = match realm::new_error(self.heap, kind, &msg) {
             Ok(e) => e,
-            Err(_) => {
-                self.heap.open_memory_reserve();
-                return intrinsic(self.heap, Intrinsic::OutOfMemoryError);
-            }
+            Err(_) => return self.out_of_memory(),
         };
         if let Some(pc) = pc {
             let _ = self.set_stack(e, pc);
         }
         e
+    }
+
+    /// The heap reached its cap: the `InternalError` to throw, whose handlers get the
+    /// reserve below the cap to run in (D1600), or with `fatal_out_of_memory` the end of
+    /// the run, as when the host refuses memory (D3181).
+    fn out_of_memory(&mut self) -> Value {
+        if cfg!(feature = "embed") && self.opts.fatal_out_of_memory {
+            self.host_out_of_memory();
+        } else {
+            self.heap.open_memory_reserve();
+        }
+        intrinsic(self.heap, Intrinsic::OutOfMemoryError)
     }
 
     /// Collects if the heap asks for it (or always under `gc_stress`).

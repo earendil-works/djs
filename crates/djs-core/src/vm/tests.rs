@@ -3178,6 +3178,60 @@ fn host_memory_failure_is_not_a_js_error() {
 }
 
 #[test]
+fn fatal_out_of_memory_runs_no_handler() {
+    // With `fatal_out_of_memory`, reaching the cap ends the run as host memory exhaustion
+    // does: neither the catch nor the finally runs (no console.log at all), and the VM is
+    // idle and usable (D3181). Without it the same script catches the InternalError.
+    let src = "(function () { let a = [];\n\
+               try { for (let i = 0; ; i++) a.push('x'.repeat(1000) + i); }\n\
+               catch (e) { console.log('caught', String(e)); }\n\
+               finally { console.log('finally'); } })();\n";
+    for fatal in [true, false] {
+        let mut vm = vm_with(VmOptions {
+            memory_limit: 4 << 20,
+            exec: ExecOptions {
+                fatal_out_of_memory: fatal,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        let f = vm
+            .compile(
+                src.as_bytes(),
+                &crate::compiler::CompileOptions::script("t.js"),
+            )
+            .unwrap();
+        let this = Value::object(vm.global());
+        vm.call(f, this, &[]).unwrap();
+        let mut log = Vec::new();
+        let st = loop {
+            match vm.run(1 << 40) {
+                Status::HostCall { call_id, .. } => {
+                    let info = vm.host_call(call_id).unwrap();
+                    let line: Vec<String> = info.args.iter().map(|&v| vm.display(v)).collect();
+                    log.push(line.join(" "));
+                    vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap()
+                }
+                st => break st,
+            }
+        };
+        if fatal {
+            assert_eq!(st, Status::HostOutOfMemory);
+            assert!(log.is_empty(), "{log:?}");
+            assert_eq!(vm.state(), RunState::Idle);
+            vm.heap().verify().unwrap();
+            // The abandoned call's data is garbage now.
+            vm.collect().unwrap();
+            let (_, out) = run_script(vm, "console.log('again', [1, 2].length);\n");
+            assert_eq!(out.log, ["again 2"]);
+        } else {
+            assert!(matches!(st, Status::Done(_)), "{st:?}");
+            assert_eq!(log, ["caught InternalError: out of memory", "finally"]);
+        }
+    }
+}
+
+#[test]
 fn a_refused_to_space_stops_the_run() {
     // A collection whose to-space the host refuses is not skipped: the run stops.
     let mut vm = vm_with(VmOptions {
