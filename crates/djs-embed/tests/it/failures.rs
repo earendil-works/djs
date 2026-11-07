@@ -149,8 +149,20 @@ fn the_next_call_after_the_cap_has_its_memory_back() {
         };
         let mut i = snap.instantiate(limits).unwrap();
         assert_eq!(call(&mut i, "hog"), Err(Error::OutOfMemory), "{mb} MiB");
-        assert_eq!(call(&mut i, "ranWhat").unwrap(), "nothing".into(), "{mb} MiB");
-        assert_eq!(call(&mut i, "hogAsync"), Err(Error::OutOfMemory), "{mb} MiB");
-        assert_eq!(call(&mut i, "ranWhat").unwrap(), "nothing".into(), "{mb} MiB");
+        assert_eq!(
+            call(&mut i, "ranWhat").unwrap(),
+            "nothing".into(),
+            "{mb} MiB"
+        );
+        assert_eq!(
+            call(&mut i, "hogAsync"),
+            Err(Error::OutOfMemory),
+            "{mb} MiB"
+        );
+        assert_eq!(
+            call(&mut i, "ranWhat").unwrap(),
+            "nothing".into(),
+            "{mb} MiB"
+        );
     }
 }
