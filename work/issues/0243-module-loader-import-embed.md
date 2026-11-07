@@ -1,7 +1,7 @@
 # 0243: Synthetic modules, import() through the loader, modules in djs-embed (M4, M5)
 
-status: open
-agent: -
+status: in-progress
+agent: embed
 branch: issue/0243-module-loader-import-embed
 depends-on: 0240, 0241
 touches: crates/djs-core/src/vm (module API), crates/djs-core/src/interp, builtins/import.ts, builtins/module.ts, crates/djs-embed, crates/djs-test262 (dynamic-import tests), tests/test262.toml, docs/guide/rust-api.md, docs/guide/language.md
