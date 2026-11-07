@@ -98,10 +98,14 @@ closure and returns the result as data.
 ## Values
 
 Arguments and answers go in as typed values: undefined, null, booleans, numbers,
-strings, bytes (which become a `Uint8Array`), plain data (`Data`, an owned tree of
-those plus arrays and objects) and wire bytes, djs's binary encoding of the same
-values. A string or byte slice is copied into the VM's heap once, and an ASCII string is
-copied as it is. The heap is a single block of memory that the VM owns and moves as it
+strings, text as UTF-8 bytes, bytes (which become a `Uint8Array`), arrays and objects of
+such values, plain data (`Data`, an owned tree of the same) and wire bytes, djs's binary
+encoding of the same values. Arrays and objects of values borrow their parts, so a host
+passes a request head built from the strings it already holds, with no allocation per
+header; the VM builds the objects straight in its heap, as it does for a `Data` tree.
+A string or byte slice is copied into the VM's heap once, and ASCII is copied as it is:
+text given as bytes (a body) is checked and copied in one pass, and invalid UTF-8 in it
+becomes U+FFFD. The heap is a single block of memory that the VM owns and moves as it
 grows, so the VM cannot wrap a host's buffer in place: bytes are always that one copy.
 
 Values come out as references into the heap: a host call's arguments and a call's
@@ -190,6 +194,42 @@ program for aarch64 and x86_64 macOS and linux-musl, runs each (x86_64 macOS und
 Rosetta, linux in a container), and compares their output, the embedded image and an
 image each makes itself.
 
+## Costs
+
+[`crates/djs-embed/examples/hooks-bench/main.rs`](../../crates/djs-embed/examples/hooks-bench/main.rs)
+measures a network hook: a shim of about 330 lines that gives policies `Request`,
+`Response` and `Headers` over three host functions (URL parsing, the body as an async
+read, logging), a request head with eight headers going in as borrowed values, and the
+decision coming out as plain data. `cargo run --release -p djs-embed --example
+hooks-bench -- 10000` prints the table. On an Apple M-series machine shared with other
+work (load average 30 to 70), the median per call was:
+
+| policy | instance | median | fuel |
+| --- | --- | ---: | ---: |
+| empty (the shim alone) | long-lived | 3.7 µs | 312 |
+| header allowlist and rewrite | long-lived | 35 µs | 5,763 |
+| header allowlist and rewrite | reset per call | 42 µs | 5,763 |
+| header allowlist and rewrite | fresh per call | 43 µs | 5,763 |
+| 64 KiB body read as text, unused | long-lived | 12.5 µs | 1,132 |
+| 64 KiB body read as bytes, unused | long-lived | 14.7 µs | 1,501 |
+| 64 KiB body read and searched | long-lived | 26 µs | 1,158 |
+
+The same allowlist as a native Rust closure takes 1 µs. Compiling the shim and a policy
+into a snapshot takes about 6 ms, and the snapshot is 237 KiB. Where the time goes:
+
+- **The script.** Running the policy and the shim is most of every call: about 60% of
+  the empty policy (wrapper objects, private fields, the promise chain) and 75% of the
+  header policy, at roughly 4 to 5 ns per unit of fuel. A policy written with plain
+  loops costs less than one built on iterators and sorting.
+- **A fresh or reset instance** costs one copy of the snapshot, about 3 µs for this
+  one: the copy runs at memory speed, and a smaller setup makes a smaller snapshot. A
+  long-lived instance skips it.
+- **Values in and out** take well under a microsecond for a request head and its
+  decision: no buffer in between, no JSON.
+- **Bytes and text** are one copy into the heap, plus a check for text. A long-lived
+  instance that takes large bodies collects garbage every few calls, and each
+  collection reads all of the snapshot's memory.
+
 ## Where to look
 
 - [`crates/djs-embed/src/lib.rs`](../../crates/djs-embed/src/lib.rs): the reference,
@@ -202,6 +242,9 @@ image each makes itself.
   protocol and the failure handling.
 - [`crates/djs-embed/tests/it/failures.rs`](../../crates/djs-embed/tests/it/failures.rs):
   each failure mode.
+- [`crates/djs-embed/examples/hooks-bench/shim.js`](../../crates/djs-embed/examples/hooks-bench/shim.js):
+  the hook shim the benchmark runs, an example of a host environment written in
+  JavaScript over a few host functions.
 - [`crates/djs-core/src/wire/encode.rs`](../../crates/djs-core/src/wire/encode.rs): the
   reading of plain data out of the heap;
   [`crates/djs-core/src/wire/writer.rs`](../../crates/djs-core/src/wire/writer.rs): the

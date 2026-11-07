@@ -115,6 +115,11 @@
 //! [`Value::Wire`] passes bytes a host already has, and [`Data::to_wire`] /
 //! [`Data::from_wire`] convert.
 //!
+//! Into the VM, [`Value::Data`] builds the tree in the heap directly, and
+//! [`Value::Array`] / [`Value::Object`] do the same from borrowed parts: a host passes a
+//! request head made of the strings it already has, without building a [`Data`] first.
+//! [`Value::Utf8`] makes a string from bytes (a body), replacing invalid UTF-8.
+//!
 //! Bytes are always copied into the VM: the VM's heap is one arena it owns, so a
 //! `Uint8Array` cannot point at host memory.
 //!
