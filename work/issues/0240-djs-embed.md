@@ -1,7 +1,7 @@
 # 0240: djs-embed: the native embedding crate (E1–E7)
 
-status: open
-agent: -
+status: in-progress
+agent: embed
 branch: issue/0240-djs-embed
 depends-on: -
 touches: crates/djs-embed (new), crates/djs-core/src/wire (Rust encoder, outbound encoder, a UTF-8 tag without units), crates/djs-core/src/vm/mod.rs (small embedder API additions), crates/djs-core/src/interp (uncatchable heap limit), docs/wire.md, docs/host.md, js/src/wire.ts (only if the new tag is used there), docs/guide (a new page)
