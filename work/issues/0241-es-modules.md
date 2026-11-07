@@ -1,6 +1,6 @@
 # 0241: ES modules: module goal, loader, linking and evaluation (M1–M3, M6, M7)
 
-status: in-progress
+status: done
 agent: modules
 branch: issue/0241-es-modules
 depends-on: -
@@ -42,19 +42,19 @@ same code; without it `CompileOptions::module` compiles to a SyntaxError "module
 available in this build". Classify the feature in compat_inputs.rs (D2267).
 
 ## Acceptance criteria
-- [ ] module goal compiles every module syntax form; early errors (duplicate exports, `export`
+- [x] module goal compiles every module syntax form; early errors (duplicate exports, `export`
       of an undeclared name, `import` bindings assigned, `await`/`yield` rules, ...)
-- [ ] loader API on `Vm`, graph loading, linking with link-time SyntaxErrors
-- [ ] evaluation in the builtin language, stackless (a module body can suspend on a sync host
+- [x] loader API on `Vm`, graph loading, linking with link-time SyntaxErrors
+- [x] evaluation in the builtin language, stackless (a module body can suspend on a sync host
       call and run out of fuel mid-evaluation), errors cached per module
-- [ ] live bindings, cycles (including a function exported from a module whose body has not run
+- [x] live bindings, cycles (including a function exported from a module whose body has not run
       yet), namespaces exotic, import.meta.url
-- [ ] graphs survive `collect`, image round trips and the suspension/GC stress modes the e2e
+- [x] graphs survive `collect`, image round trips and the suspension/GC stress modes the e2e
       tests have
-- [ ] host reads of exports
-- [ ] unit tests + e2e tests (crates/djs-core/tests); the existing gate legs green; the shipped
+- [x] host reads of exports
+- [x] unit tests + e2e tests (crates/djs-core/tests); the existing gate legs green; the shipped
       wasm module's size within its ceiling
-- [ ] docs/compiler.md section on the module goal; ARCH.md non-goals and "Semantics stance"
+- [x] docs/compiler.md section on the module goal; ARCH.md non-goals and "Semantics stance"
       updated; the guide's language page
 
 ## Notes (a suggested design; deviate where the code says otherwise, and record it)
@@ -156,6 +156,39 @@ Design (deviations from the Notes recorded as D3190+):
   360,485). gzip moves +-25 B with trivial edits: keep new live code behind MODULES.
 - Gotcha: compiler/lazy.rs numbers FuncKinds (`KINDS`): new kinds go last.
 
+- Assigning an import binding is a TypeError at run time (as for `const`), not an early
+  error: the spec has no early error for it (SetMutableBinding of an immutable binding).
+- Guide: language.md (new "Modules" section, the in-short paragraph and the left-out
+  table); compiler.md (guide) did not mention modules. docs/compiler.md 5.11, ARCH.md.
+
 ## Follow-ups
+- 0242: test262 module tests need a fixture loader in djs-test262 (`ModuleLoader` over the
+  test's directory; `flags: [module]` compile with `Vm::load_module`); djs-test262 and
+  djs-difftest build without `modules` today (add `modules = ["djs-prelude/modules"]`).
+- HTML-like comments (`<!--`, `-->`) are still accepted in module code (the lexer has no
+  goal flag); test262 checks it.
+- Import attributes: any `with { ... }` key is a SyntaxError (no JSON modules yet, M8).
+- `import()` from module code still rejects (D1582); 0243 routes it through the loader.
+- The dumper (vm/dump.rs) knows nothing of module records; e2e's dump mode skips module
+  cases' dump round trip.
+- Namespace property access goes through Proxy traps (a builtin call per `ns.x`); named
+  imports are direct capture reads. Worth a fast path only if hosts use namespaces hot.
 
 ## Result
+ES modules in djs-core behind the `modules` feature (on in native default builds and
+djs-prelude's defaults, off in every djs-wasm module), D3190/D3191.
+
+- Compile: `compiler::compile_module(heap, src, &CompileOptions::module(key))` →
+  (template, metadata); `compile()` refuses `Goal::Module`.
+- Host API (`djs_core::vm`): implement `ModuleLoader { resolve(specifier, referrer) ->
+  Result<key, msg>, load(key) -> Result<ModuleSource { text, typescript }, msg> }`;
+  `vm.load_module(specifier, &mut loader) -> Result<key, error Value>` loads, compiles and
+  links the graph; `vm.evaluate_module(key)` starts the evaluation (run until `Done(p)`; `p`
+  is the Evaluate promise); `vm.module_export(key, name)`, `vm.module_namespace(key)`,
+  `vm.has_module(key)`.
+- Semantics: every import/export form, live bindings, cycles (hoisted functions exist at
+  link time), Proxy-based namespaces with the 10.4.6 behavior, import.meta (`url` = key),
+  link-time SyntaxErrors, evaluation errors kept per module; graphs survive collections,
+  images and the e2e stress modes.
+- Known gaps: no top-level await (0248), no import attributes/JSON modules, `import()`
+  unchanged (0243), HTML comments not rejected in module code, no dumper support.
