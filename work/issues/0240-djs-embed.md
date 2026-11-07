@@ -89,6 +89,22 @@ leg (check scripts/gate.py; clippy legs too).
 
 ## Log
 
+- 2026-11-07 embed: baseline shipped module 426,792 B gzip, ceiling 426,806: 14 B of
+  slack, so nothing new may reach djs-wasm. New djs-core feature `embed` (code only, in
+  djs-core's defaults, off in djs-wasm; build.rs/compat_inputs classify it image-neutral)
+  holds what is reachable from the wasm paths: the decoder's 0x12 arm, the
+  `fatal_out_of_memory` check, `Vm::reset_to`, `wire::encode`.
+- djs-core commits: `wire::Writer` (Rust encoder, src/wire/writer.rs), tag 0x12
+  `STR_UTF8_UNCOUNTED` (units counted from lead bytes, then the existing validating
+  transcode), `wire::encode` (src/wire/encode.rs, heap → wire, explicit stack, path errors,
+  `max_bytes` cap against sharing blowup), `Vm::decode_wire`/`encode_wire`,
+  `ExecOptions::fatal_out_of_memory` (routes the cap's OOM through `host_out_of_memory`:
+  status `HostOutOfMemory`, `after_run` aborts), `Vm::reset_to(&[u8])` (copies into the old
+  arena Vec). Tests: wire::tests writer/uncounted/outbound, vm::tests
+  fatal_out_of_memory_runs_no_handler, reset_to_reuses_the_arena.
+- Clippy lints the build-dependency copy of djs-core (djs-prelude's build script, no
+  default features) too: helpers used only by `embed` code need the cfg as well.
+
 ## Follow-ups
 
 ## Result
