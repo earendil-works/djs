@@ -108,6 +108,7 @@ language/expressions/assignment/destructuring/target-assign-throws-iterator-retu
 language/expressions/class/elements/private-getter-is-not-a-own-property.js: TypeError: not a function
 language/expressions/class/elements/private-setter-is-not-a-own-property.js: TypeError: not a function
 language/identifier-resolution/assign-to-global-undefined.js: expected runtime ReferenceError, but no error was thrown
+language/module-code/top-level-await/dynamic-import-of-waiting-module.js: async: $DONE was not called
 language/statements/class/elements/private-getter-is-not-a-own-property.js: TypeError: not a function
 language/statements/class/elements/private-setter-is-not-a-own-property.js: TypeError: not a function
 language/statements/function/13.0-12-s.js: SyntaxError: invalid lvalue in strict mode

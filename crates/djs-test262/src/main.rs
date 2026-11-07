@@ -211,11 +211,12 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
     let mut config = Config::load(&args.config)?;
     // A djs-core without some features (the slim build, D2411) skips what it leaves out:
     // the matching groups of tests/test262-slim.toml come first.
-    if args.engine == "djs" && (!djs_core::FULL || !djs_core::UNICODE) {
+    if args.engine == "djs" && (!djs_core::FULL || !djs_core::UNICODE || !djs_core::MODULES) {
         let slim = Config::load(&suite::workspace_root().join("tests/test262-slim.toml"))?;
         let want = |name: &str| match name {
             "slim" => !djs_core::FULL,
             "no-unicode" => !djs_core::UNICODE,
+            "no-modules" => !djs_core::MODULES,
             _ => false,
         };
         let groups: Vec<_> = slim.groups.into_iter().filter(|g| want(&g.name)).collect();
