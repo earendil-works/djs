@@ -275,10 +275,11 @@ const I = {
   // The Rust backend's table (0063): nothing to do in JS.
   MarkNative: () => {},
   MarkFast: () => {},
-  // The constructor gets the native one's prototype, so instances compare equal.
+  // The constructor gets the native one's prototype, so instances compare equal; one qjs
+  // does not have (TextEncoder, TextDecoder) gets a fresh one.
   InstallConstructor: (target, key, f, length, parent) => {
     const native = key === "%TypedArray%" ? Object.getPrototypeOf(Int8Array) : globalThis[key];
-    Object.defineProperty(f, "prototype", { value: native.prototype });
+    Object.defineProperty(f, "prototype", { value: native ? native.prototype : {} });
     installed[target + "." + key] = { f, length };
   },
   // The prototype is set by InstallConstructor already.
@@ -606,7 +607,8 @@ const I = {
       return false;
     }
   },
-  RealmConstructor: (name) => (name === "%TypedArray%" ? Object.getPrototypeOf(Int8Array) : globalThis[name]),
+  RealmConstructor: (name) =>
+    name === "%TypedArray%" ? Object.getPrototypeOf(Int8Array) : (globalThis[name] ?? installed["globalThis." + name].f),
   TypedArrayCreate: (proto, kind, buffer, off, len) => {
     const C = TA_CTORS[kind];
     return Object.setPrototypeOf(len < 0 ? new C(buffer, off) : new C(buffer, off, len), proto);

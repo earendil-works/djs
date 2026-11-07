@@ -91,6 +91,10 @@ measured amount with a size decision (as D3164 does), approved: coordinator.
 - djs-embed's cross_check example prints a `utf8` line (encode of the fetched body, decode
   with a split/invalid tail); outside `touches`, as are vm/tests.rs, run.rs, slim_tests.rs
   and crates/djs-prelude/tests/registry.rs.
+- The gate's djs-bgen behavior test (prelude.js run in qjs) failed: qjs has no
+  TextEncoder/TextDecoder for `InstallConstructor`/`RealmConstructor` to take the prototype
+  from. crates/djs-bgen/tests/behavior.js now gives such a constructor a fresh prototype
+  and resolves `RealmConstructor` to the installed one (outside `touches`).
 
 ## Follow-ups
 - Dumps: a TextEncoder/TextDecoder object in a plain dump is not handled by the dumper
