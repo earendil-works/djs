@@ -11768,3 +11768,20 @@ region (no write barrier): 12% of a pooled 64 KiB body call. (4) An IC addition 
 `canonical_numeric_index`, which built every key's `String`: it now rejects a key by its first
 unit (4% of an empty call on a reset instance; the shipped module 12 B smaller). (5) A call
 reads the clock only when it has a deadline. (2) and (3) are engine work, not the embedding's.
+
+## D3175: One djs-core feature for native embedders: `embed` carries ES modules and the encoding builtins
+date: 2026-11-07 · by: coordinator · issue: 0241, 0244
+Amends D3171 and D3172. 0241 made ES modules an image feature (`modules`, with a prelude
+variant without builtins/module.ts) and 0244 measured TextEncoder/TextDecoder at +2.4 KB gzip
+in the shipped module, which would spend most of what is left under the 1.5x budget (D020) on
+something pi's codemode does not need. Both are what native embedders get and the wasm modules
+leave out, and no build wants one without the other, so they share one feature instead of
+multiplying prelude variants: djs-core's `embed` (D3180) becomes an image feature that covers
+the embedder API (D3180-D3182), ES modules (the module goal, records, the module builtins) and
+the encoding builtins. Builtin files only these builds have are tagged `// @embed-only`; bgen's
+prelude for full builds without `embed` (the shipped module) leaves them out, and the slim
+prelude leaves them out too (slim builds have no `embed`; `embed` needs `full`). Rust code
+gated by a constant (`crate::EMBED`, or a `MODULES` alias of it) as D2411 does. The residual
+cost in the shipped and slim modules that a constant cannot cut (intrinsic table entries,
+realm slots, enum arms; 0241 measured +60 B and +135 B gzip) is approved: the ceilings rise by
+the re-measured amounts in the issue's size decision (approved: coordinator).
