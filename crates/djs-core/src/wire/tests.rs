@@ -610,8 +610,13 @@ fn fuzz(seed: u64, iterations: usize) {
     for i in 0..200 {
         let mut v = random_value(&mut r, 0);
         dedupe(&mut v);
-        // Half of them as the Rust `Writer` writes them (uncounted UTF-8 strings).
-        valid.push(if i % 2 == 0 { encode(&v) } else { write(&v) });
+        // Half of them as the Rust `Writer` writes them (uncounted UTF-8 strings, which
+        // only builds with `embed` decode).
+        valid.push(if i % 2 == 0 || !cfg!(feature = "embed") {
+            encode(&v)
+        } else {
+            write(&v)
+        });
     }
     let mut ok = 0;
     for i in 0..iterations {
@@ -1191,6 +1196,7 @@ fn write(v: &T) -> Vec<u8> {
     w.finish()
 }
 
+#[cfg(feature = "embed")]
 #[test]
 fn writer_round_trips() {
     let mut r = Rng(0x0bad_cafe_1234_5678);
@@ -1232,6 +1238,7 @@ fn writer_round_trips() {
     );
 }
 
+#[cfg(feature = "embed")]
 #[test]
 fn uncounted_strings_are_validated() {
     let buf = |payload: &[u8]| {
@@ -1284,6 +1291,7 @@ fn uncounted_strings_are_validated() {
 
 /// The outbound encoder gives back what the decoder made (plain data in a heap without a
 /// realm: objects without a prototype count as plain).
+#[cfg(feature = "embed")]
 #[test]
 fn outbound_round_trips() {
     let mut r = Rng(0x5eed_0f0b_b000_0001);
@@ -1297,6 +1305,7 @@ fn outbound_round_trips() {
     }
 }
 
+#[cfg(feature = "embed")]
 #[test]
 fn outbound_limits() {
     let v = T::Arr(vec![Some(s("x")); 100]);
