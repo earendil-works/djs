@@ -32,6 +32,32 @@ record each with before/after numbers.
 
 ## Log
 
+- 2026-11-07 embed: ported the bench to `crates/djs-embed/examples/hooks-bench/` (main.rs,
+  shim.js adapted: no `__settle`, the entry's settled value is the decision, replaced bytes
+  leave as a Uint8Array; policies copied unchanged). URL parsing: a small absolute-URL parser
+  in the example (no `url` crate). Modes fresh / reset (pool + `reset` after each call) /
+  pooled; native Rust rows; no node tier-3 rows (needs Gondolin crates). 8 callers = 8 std
+  threads sharing the hooks. `probe <policy> <mode> <calls> [data]` loops one row for
+  `sample` / `/usr/bin/time`.
+- Load was 90-240 all session (other agents). Wall-clock latencies swing 2x run to run, so
+  before/after numbers are CPU time (`/usr/bin/time -p`, user+sys / calls), alternating the
+  two binaries 5 times and taking each one's minimum: work/scratch/0247/ab.sh.
+- Profile (sample, noop pooled, before fixes): interpreter (the shim) ~47%, `start` 32%
+  (head in: Data -> wire 9.5%, wire decode 17%), decision out (`to_data`: encode + from_wire)
+  8%, host Data building/dropping ~10%. Header-only pooled: interpreter 75%, head in 10%,
+  decision out 7%, URL parse reply (Data -> wire -> decode) 6%. Body pooled: `includes`
+  26%, minor GC (mark_old) 12%, host `from_utf8` of 64 KiB 7%, copy in 6%; the harness's
+  body copy 5%. Reset ~8% of a header-only call.
+- Fix 1 (5e57cae5): `Value::Data` builds in the heap directly (explicit stack, same protos,
+  int numbers, holes, depth limit as the decoder), `to_data` builds the tree from the
+  outbound encoder through a new `wire::Sink` trait (djs-core, `embed` only; Writer is one
+  Sink). The to_data cap now counts the tree's host memory (32 B a node), not wire bytes.
+  CPU/call: noop pooled 5.10 -> 3.67 us (-28%), header-only pooled 38.0 -> 34.5 (-9%),
+  64 KiB body pooled 28.0 -> 24.3 (-13%).
+- Fix 2 (32cc7522): `Value::Array(&[Value])` / `Value::Object(&[(&str, Value)])`: plain data
+  from borrowed parts (the head without a Data tree); the bench moves the decision's
+  strings out of the Data. noop 3.70 -> 3.47 (-6%), header-only 40.3 -> 35.5 (-12%, noisy).
+
 ## Follow-ups
 
 ## Result
