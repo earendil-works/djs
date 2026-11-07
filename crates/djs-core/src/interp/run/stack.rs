@@ -127,8 +127,16 @@ impl Exec<'_> {
                 });
             } else if !in_prelude {
                 let kind = func_flags::kind(u32::from(a.get::<u16>(t, FuncTemplate::FLAGS)));
-                let name = if matches!(kind, func_flags::KIND_SCRIPT | func_flags::KIND_ASYNC_BODY)
-                {
+                // A module body has no name (`<anonymous>`, as qjs prints it); a Script's
+                // top level and a codemode body are `<eval>`.
+                let module = crate::MODULES
+                    && kind == func_flags::KIND_SCRIPT
+                    && script
+                        .get()
+                        .is_some_and(|s| a.get::<u32>(s, Script::OPTIONS) & 3 == 3);
+                let name = if module {
+                    None
+                } else if matches!(kind, func_flags::KIND_SCRIPT | func_flags::KIND_ASYNC_BODY) {
                     Some(String::from("<eval>"))
                 } else {
                     let name = Atom::from_id(a.get(t, FuncTemplate::NAME));

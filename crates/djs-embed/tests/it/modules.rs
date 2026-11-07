@@ -337,3 +337,60 @@ fn setup_errors() {
         Error::Usage("module s: SyntaxError: duplicate export 'a'".into())
     );
 }
+
+/// Stack traces of module code name each module by its key, with the line and column in
+/// its own source (TypeScript erasure keeps them), and a module body as `<anonymous>`.
+#[test]
+fn stack_traces_of_module_code() {
+    let mut files = ModuleMap::new().module(
+        "lib/t.js",
+        "// c\n\nexport function f() {\n  throw new TypeError('x');\n}\n",
+    );
+    files.insert(
+        "lib/u.ts",
+        ModuleSource::typescript(
+            "type T = { a: number };\n\
+             export function g(x: T): string { return new Error('u' + x.a).stack!; }\n",
+        ),
+    );
+    let snap = Snapshot::builder()
+        .loader(files)
+        .source(Source::module(
+            "main.js",
+            "import { f } from './lib/t.js';\nimport { g } from './lib/u.ts';\n\n\
+             export function h() {\n    return f();\n}\n\
+             export function k() { return g({ a: 1 }); }\n\
+             export const top = new Error('m').stack;\n",
+        ))
+        .build()
+        .unwrap_or_else(|e| panic!("{e}"));
+    let mut i = snap.instantiate(Limits::default()).unwrap();
+    match i.call_export("main.js", "h", &[], host) {
+        Err(Error::Exception(e)) => assert_eq!(
+            e.stack.as_deref(),
+            Some("    at f (lib/t.js:4:22)\n    at h (main.js:5:5)\n")
+        ),
+        r => panic!("{r:?}"),
+    }
+    let s = i.call_export("main.js", "k", &[], host).unwrap();
+    assert_eq!(
+        s,
+        Data::from("    at g (lib/u.ts:2:51)\n    at k (main.js:7:23)\n")
+    );
+    let top = i.export("main.js", "top").unwrap().unwrap();
+    assert_eq!(
+        top.as_str().as_deref(),
+        Some("    at <anonymous> (main.js:8:29)\n")
+    );
+    let e = Snapshot::builder()
+        .loader(ModuleMap::new().module("x.js", "\n\nthrow new Error('top');"))
+        .source(Source::module("m.js", "import './x.js';"))
+        .build()
+        .unwrap_err();
+    match e {
+        Error::Exception(e) => {
+            assert_eq!(e.stack.as_deref(), Some("    at <anonymous> (x.js:3:16)\n"))
+        }
+        e => panic!("{e:?}"),
+    }
+}
