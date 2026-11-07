@@ -19,6 +19,19 @@ supported.
 
 ## Log
 
+- (modules agent) Stack traces of module code: a module body's frame is named
+  `<anonymous>` like a Script's, positions are the module's own (key:line:col); tested in
+  djs-embed (fd0a8453). Per-module filenames were already the keys.
+- (coordinator, continuing the agent's uncommitted WIP after the agent was stopped) JSON
+  modules (D3245): import attributes parsed in full, the `type` attribute passed to
+  `ModuleLoader::resolve`, `ModuleSource { text, kind: ModuleKind }` with `Json`, a synthetic
+  module with the parsed default export, mismatch TypeErrors, other attributes a
+  SyntaxError at load; `import()` passes `type` as the host call's third argument.
+  djs-embed: `ModuleSource::json`, `ModuleMap::json`. Tests: vm::module_tests::json_modules,
+  json_modules_through_import, djs-embed modules::json_modules; test262 import-attributes
+  and json-modules active (610/610 in those dirs on djs; qjs fails 8). COMPAT_VERSION 8 (the
+  record's flags slot).
+
 ## Follow-ups
 
 ## Result

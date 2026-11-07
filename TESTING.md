@@ -54,8 +54,9 @@ The skip set (from ARCH non-goals, and the module features djs does not have yet
   `built-ins/AbstractModuleSource`.
 - features: `Intl-*`, `Intl.*`, `Temporal`, `SharedArrayBuffer`, `Atomics*`, `ShadowRealm`,
   `tail-call-optimization`, `IsHTMLDDA`, `cross-realm`, `caller`, `legacy-regexp`,
-  `import-*` (import attributes, `import defer`, text/bytes imports), `json-modules`,
-  `source-phase-imports*`, `top-level-await` (until 0248), `host-gc-required`.
+  `import-defer`, `import-text`, `import-bytes`, `source-phase-imports*`,
+  `top-level-await` (until 0248), `host-gc-required`. Import attributes and JSON modules
+  (`import-attributes`, `json-modules`) are active since 0248.
 - Module tests (`flags: [module]`, language/module-code, language/import,
   language/expressions/dynamic-import, import.meta) are active since 0242 (D3171, D3230).
 - direct eval (`direct-eval`, skipped, D014): `language/eval-code/direct` and every test

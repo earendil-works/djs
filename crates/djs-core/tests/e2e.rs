@@ -380,7 +380,12 @@ impl CaseModules {
 }
 
 impl djs_core::vm::ModuleLoader for CaseModules {
-    fn resolve(&mut self, specifier: &str, _: Option<&str>) -> Result<String, String> {
+    fn resolve(
+        &mut self,
+        specifier: &str,
+        _: Option<&str>,
+        _attributes: &[(&str, &str)],
+    ) -> Result<String, String> {
         Ok(specifier
             .strip_prefix("./")
             .unwrap_or(specifier)
@@ -395,7 +400,7 @@ impl djs_core::vm::ModuleLoader for CaseModules {
             .ok_or_else(|| format!("no module {key}"))?;
         Ok(djs_core::vm::ModuleSource {
             text: text.clone(),
-            typescript: false,
+            kind: djs_core::vm::ModuleKind::JavaScript,
         })
     }
 }

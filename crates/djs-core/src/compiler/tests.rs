@@ -66,7 +66,14 @@ fn snapshots() {
                         ));
                     }
                     for r in &m.requests {
-                        out.push_str(&alloc::format!("  request {:?}\n", name(*r)));
+                        out.push_str(&alloc::format!("  request {:?}", name(r.specifier)));
+                        if !r.ty.is_null() {
+                            out.push_str(&alloc::format!(" type {:?}", name(r.ty)));
+                        }
+                        if !r.unsupported.is_null() {
+                            out.push_str(&alloc::format!(" unsupported {:?}", name(r.unsupported)));
+                        }
+                        out.push('\n');
                     }
                     for &(e, r, n) in &m.imports {
                         out.push_str(&alloc::format!(
@@ -3203,9 +3210,10 @@ fn module_errors() {
         ("function f() { import 'm' }", "unsupported keyword: import"),
         ("export 1", "unexpected token"),
         (
-            "import a from 'm' with { type: 'json' }",
-            "unsupported import attribute",
+            "import a from 'm' with { type: 'json', type: 'json' }",
+            "duplicate import attribute",
         ),
+        ("import a from 'm' with { type: 1 }", "expecting string"),
         (
             "export { '\\uD800' as a } from 'm'",
             "invalid module export name",

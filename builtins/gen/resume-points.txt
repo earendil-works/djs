@@ -2160,23 +2160,25 @@ EvaluateGraph: reentrant
 ImportCall: reentrant
   builtins/module.ts:64:12  DynamicImport (builtin)
   builtins/module.ts:68:23  ToString (builtin)
-  builtins/module.ts:73:33  Get (intrinsic)
-  builtins/module.ts:78:30  EnumerableOwnProperties (builtin)
-  builtins/module.ts:79:24  LengthOfArrayLike (builtin)
-  builtins/module.ts:81:25  Get (intrinsic)
-  builtins/module.ts:91:27  Call (intrinsic)
+  builtins/module.ts:75:33  Get (intrinsic)
+  builtins/module.ts:80:30  EnumerableOwnProperties (builtin)
+  builtins/module.ts:81:24  LengthOfArrayLike (builtin)
+  builtins/module.ts:84:36  Get (intrinsic)
+  builtins/module.ts:85:30  Get (intrinsic)
+  builtins/module.ts:86:32  Get (intrinsic)
+  builtins/module.ts:102:27  Call (intrinsic)
 
 FinishImport: reentrant
-  builtins/module.ts:107:3  EvaluateGraph (builtin)
+  builtins/module.ts:118:3  EvaluateGraph (builtin)
 
 InnerModuleEvaluation: reentrant
-  builtins/module.ts:132:5  InnerModuleEvaluation (builtin)
-  builtins/module.ts:140:3  Call (intrinsic)
+  builtins/module.ts:143:5  InnerModuleEvaluation (builtin)
+  builtins/module.ts:151:3  Call (intrinsic)
 
 ModuleOp: reentrant (%ModuleOp)
-  builtins/module.ts:174:12  ImportCall (builtin)
-  builtins/module.ts:178:12  ModuleEvaluate (builtin)
-  builtins/module.ts:181:12  FinishImport (builtin)
+  builtins/module.ts:185:12  ImportCall (builtin)
+  builtins/module.ts:189:12  ModuleEvaluate (builtin)
+  builtins/module.ts:192:12  FinishImport (builtin)
 
 NumberConstructor: reentrant (constructor Number)
   builtins/number.ts:11:7  LengthOfArrayLike (builtin)

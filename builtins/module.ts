@@ -66,6 +66,8 @@ function ImportCall(specifier: Value, options: Value, referrer: Value): Obj {
   const promise: Obj = PromiseCreate(RealmIntrinsic("PromisePrototype"));
   try {
     const name: Str = ToString(specifier);
+    // The `type` attribute (the only one djs supports), or undefined.
+    let type: Value = undefined;
     if (options !== undefined) {
       if (!IsObject(options)) {
         throw NewTypeError("options must be an object");
@@ -75,20 +77,29 @@ function ImportCall(specifier: Value, options: Value, referrer: Value): Obj {
         if (!IsObject(attributes)) {
           throw NewTypeError("options.with must be an object");
         }
-        const entries: Obj = EnumerableOwnProperties(AsObj(attributes), 1);
+        const entries: Obj = EnumerableOwnProperties(AsObj(attributes), 2);
         const n: f64 = LengthOfArrayLike(entries);
+        let unsupported: Value = undefined;
         for (let i: f64 = 0; i < n; i++) {
-          if (!IsString(Get(entries, i))) {
+          const entry: Obj = AsObj(Get(entries, i));
+          const key: Value = Get(entry, 0);
+          const value: Value = Get(entry, 1);
+          if (!IsString(value)) {
             throw NewTypeError("module attribute values must be strings");
           }
+          if (key === "type") {
+            type = value;
+          } else if (unsupported === undefined) {
+            unsupported = key;
+          }
         }
-        if (n > 0) {
-          // No attribute is supported (no JSON modules), as in static imports.
+        if (unsupported !== undefined) {
+          // AllImportAttributesSupported.
           throw NewSyntaxError("unsupported import attribute");
         }
       }
     }
-    const loaded: Value = Call(load, undefined, name, referrer);
+    const loaded: Value = Call(load, undefined, name, referrer, type);
     const finish: Value = NsOp(7, undefined, undefined, undefined);
     PerformPromiseThen(AsObj(loaded), finish, undefined, promise);
   } catch (e) {

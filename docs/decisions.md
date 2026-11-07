@@ -11981,3 +11981,19 @@ through `export *` are no longer ambiguous
 (ambiguous-export-bindings/namespace-unambiguous-*), and the linker no longer reads such an
 entry's Box from a module whose imports are not bound yet (instn-star-equality.js panicked:
 the namespace of a module was made while a fixture's import Box was still empty).
+
+## D3245: JSON modules: the `type` attribute goes to the loader, the source says what is JSON
+date: 2026-11-08 · by: coordinator · issue: 0248
+Import attributes parse in full (a WithClause: identifier or string keys, string values,
+duplicate keys an early error, a line break allowed before `with`); a ModuleRequest keeps
+its `type` and the first other key, and an other key is a SyntaxError when the graph loads
+(AllImportAttributesSupported, also for `import()`), not when the module parses. The
+loader's `resolve` gets the attributes (`[("type", v)]` or none), and `ModuleSource` carries
+a kind, JavaScript, TypeScript or JSON: a JSON source becomes a synthetic module whose
+`default` is `JSON.parse` of the text (a record flag marks it). The module map stays keyed
+by the key alone, not by key and type as in the specification: the host decides what a key
+is, and a mismatch between the import's `type` and the source's kind is a TypeError either
+way, so an import that expects data is never handed code and the other way round. A type
+other than `json` is a TypeError (`unsupported module type`). The module record gained a
+flags slot, so COMPAT_VERSION goes to 8. test262's `import-attributes` and `json-modules`
+features are active (all pass on djs; qjs fails 8, in oracle-failures.txt).

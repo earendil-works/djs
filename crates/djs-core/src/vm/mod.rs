@@ -47,7 +47,7 @@ use crate::value::{Obj, Str, Value};
 #[cfg(feature = "dump")]
 pub use call_site::CallSite;
 pub use compat::{COMPAT_VERSION, FEATURES, IMAGE_DEPS, ImageDep, ImageDeps, RECORDS_HASH};
-pub use module::{IMPORT_FN_ID, ModuleLoader, ModuleSource};
+pub use module::{IMPORT_FN_ID, ModuleKind, ModuleLoader, ModuleSource};
 
 /// `HostCall::FLAGS`: returned by `Vm::new_host_calls` already.
 const HOST_CALL_REPORTED: u32 = 1;

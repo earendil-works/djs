@@ -151,8 +151,12 @@
 //! slices (the load and compile are not counted as fuel), evaluates the graph and settles
 //! the promise with the module namespace; a module that cannot be found, does not compile
 //! or throws rejects it. Modules an `import()` loaded stay in the instance until
-//! [`Instance::reset`]. Top-level `await` and import attributes (JSON modules) are not
-//! supported.
+//! [`Instance::reset`].
+//!
+//! JSON modules: a [`ModuleSource::json`] (or [`ModuleMap::json`]) is imported `with {
+//! type: "json" }` and has the parsed text as its default export; an import with that
+//! attribute loads nothing else, and one without it cannot load JSON (a `TypeError`). Other
+//! import attributes are a `SyntaxError`. Top-level `await` is not supported.
 //!
 //! # Plain data
 //!

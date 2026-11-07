@@ -52,8 +52,9 @@ features = [
   "legacy-regexp",               # RegExp.$1 and friends (Annex B)
   "__getter__",                  # __defineGetter__ / __lookupGetter__ (Annex B)
   "__setter__",                  # __defineSetter__ / __lookupSetter__ (Annex B)
-  "import-*",                    # import attributes/defer/text/bytes: not implemented
-  "json-modules",                # JSON modules: not implemented (needs import attributes)
+  "import-defer",                # deferred module evaluation: not implemented
+  "import-text",                 # text modules: not implemented
+  "import-bytes",                # bytes modules: not implemented
   "source-phase-imports*",       # source phase imports: not implemented
   "top-level-await",             # not implemented yet (0248)
   "host-gc-required",            # needs a real $262.gc

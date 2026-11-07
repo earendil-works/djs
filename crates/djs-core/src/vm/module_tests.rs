@@ -6,6 +6,7 @@ use alloc::{format, vec};
 
 use super::*;
 use crate::compiler::CompileOptions;
+use crate::vm::ModuleKind;
 
 /// A loader over `(key, source)` pairs; specifiers are keys. Counts loads.
 struct Map {
@@ -14,7 +15,12 @@ struct Map {
 }
 
 impl ModuleLoader for Map {
-    fn resolve(&mut self, specifier: &str, _referrer: Option<&str>) -> Result<String, String> {
+    fn resolve(
+        &mut self,
+        specifier: &str,
+        _referrer: Option<&str>,
+        _attributes: &[(&str, &str)],
+    ) -> Result<String, String> {
         if specifier.starts_with("bad:") {
             return Err(format!("cannot resolve {specifier}"));
         }
@@ -31,7 +37,13 @@ impl ModuleLoader for Map {
             .1;
         Ok(ModuleSource {
             text: text.to_string(),
-            typescript: key.ends_with(".ts"),
+            kind: if key.ends_with(".ts") {
+                ModuleKind::TypeScript
+            } else if key.ends_with(".json") {
+                ModuleKind::Json
+            } else {
+                ModuleKind::JavaScript
+            },
         })
     }
 }
@@ -428,7 +440,12 @@ struct Rel {
 }
 
 impl ModuleLoader for Rel {
-    fn resolve(&mut self, specifier: &str, referrer: Option<&str>) -> Result<String, String> {
+    fn resolve(
+        &mut self,
+        specifier: &str,
+        referrer: Option<&str>,
+        _attributes: &[(&str, &str)],
+    ) -> Result<String, String> {
         self.resolves
             .push(format!("{specifier}<{}", referrer.unwrap_or("-")));
         let key = match (specifier.strip_prefix("./"), referrer) {
@@ -449,7 +466,11 @@ impl ModuleLoader for Rel {
         let text = self.files.iter().find(|f| f.0 == key).unwrap().1;
         Ok(ModuleSource {
             text: text.to_string(),
-            typescript: false,
+            kind: if key.ends_with(".json") {
+                ModuleKind::Json
+            } else {
+                ModuleKind::JavaScript
+            },
         })
     }
 }
@@ -581,7 +602,7 @@ fn dynamic_import_errors_reject() {
           \"3 SyntaxError: Could not find export 'z' in module 'dir/b.js'\",\
           \"4 SyntaxError: variable name expected at dir/syntax.js:1:14\",\
           \"5 TypeError: options must be an object\",\
-          \"6 SyntaxError: unsupported import attribute\",\
+          \"6 TypeError: module 'dir/b.js' is not a JSON module\",\
           \"7 TypeError: module attribute values must be strings\",\
           \"8 TypeError: spec\",\"9 ok thenable\"]"
     );
@@ -646,5 +667,93 @@ fn dynamic_import_survives_images() {
     assert_eq!(
         vm.answer_import(calls[0], &mut l),
         Err(VmError::UnknownHostCall)
+    );
+}
+
+#[test]
+fn json_modules() {
+    let mut vm = Vm::new(VmOptions::default()).unwrap();
+    let mut l = map(&[
+        (
+            "m",
+            "import data from 'd.json' with { type: 'json' };
+             import * as ns from 'd.json' with { type: 'json' };
+             export const seen = [data.a, data.list.length, ns.default === data,
+                                  Object.keys(ns).join(), Object.getPrototypeOf(data) === Object.prototype];
+             data.a = 5;",
+        ),
+        ("d.json", "{\"a\": 1, \"list\": [1, 2, 3]}"),
+        ("bad.json", "{\"a\": "),
+        ("plain", "export const x = 1"),
+        ("n1", "import x from 'plain' with { type: 'json' }"),
+        ("n2", "import x from 'd.json'"),
+        ("n3", "import x from 'd.json' with { type: 'css' }"),
+        ("n4", "import x from 'd.json' with { type: 'json', other: 'x' }"),
+        ("n5", "import x from 'bad.json' with { type: 'json' }"),
+        ("n6", "import { a } from 'd.json' with { type: 'json' }"),
+    ]);
+    vm.load_module("m", &mut l).unwrap();
+    assert_eq!(eval(&mut vm, "m"), "ok undefined");
+    assert_eq!(export(&mut vm, "m", "seen"), "[1,3,true,\"default\",true]");
+    // The parsed value is one object, shared by its importers (and mutable, as in browsers).
+    assert_eq!(
+        export(&mut vm, "d.json", "default"),
+        "{\"a\":5,\"list\":[1,2,3]}"
+    );
+    for (key, msg) in [
+        ("n1", "TypeError: module 'plain' is not a JSON module"),
+        (
+            "n2",
+            "TypeError: module 'd.json' is JSON: import it with type 'json'",
+        ),
+        ("n3", "TypeError: unsupported module type 'css'"),
+        ("n4", "SyntaxError: unsupported import attribute 'other'"),
+        ("n5", "SyntaxError: "),
+        (
+            "n6",
+            "SyntaxError: Could not find export 'a' in module 'd.json'",
+        ),
+    ] {
+        let e = vm.load_module(key, &mut l).unwrap_err();
+        let text = vm.display(e);
+        assert!(text.starts_with(msg), "{key}: {text}");
+        assert!(!vm.has_module(key));
+    }
+    // Duplicate attribute keys are an early error; a line break may precede `with`.
+    let opts = CompileOptions::module("x");
+    let dup = "import x from 'd.json' with { type: 'json', type: 'json' }";
+    assert!(crate::compiler::compile_module(vm.heap_mut(), dup.as_bytes(), &opts).is_err());
+    let nl = "import x from 'd.json'\n  with { type: 'json' };";
+    assert!(crate::compiler::compile_module(vm.heap_mut(), nl.as_bytes(), &opts).is_ok());
+}
+
+#[test]
+fn json_modules_through_import() {
+    let mut vm = Vm::new(VmOptions::default()).unwrap();
+    vm.set_dynamic_import(true).unwrap();
+    let mut l = Rel {
+        files: vec![
+            ("dir/d.json", "[1, {\"b\": true}]"),
+            ("dir/m.js", "export const x = 1"),
+        ],
+        resolves: Vec::new(),
+    };
+    let out = run_imports(
+        &mut vm,
+        &mut l,
+        "globalThis.log = [];
+         import('./d.json', { with: { type: 'json' } })
+           .then(ns => log.push(JSON.stringify(ns.default)))
+           .then(() => import('./d.json'))
+           .catch(e => log.push(e.name + ': ' + e.message))
+           .then(() => import('./m.js', { with: { type: 'json' } }))
+           .catch(e => log.push(e.name))
+           .then(() => import('./m.js', { with: { kind: 'x' } }))
+           .catch(e => log.push(e.name))
+           .then(() => { globalThis.out = log; });",
+    );
+    assert_eq!(
+        out,
+        "[\"[1,{\\\"b\\\":true}]\",\"TypeError: module 'dir/d.json' is JSON: import it with type 'json'\",\"TypeError\",\"SyntaxError\"]"
     );
 }

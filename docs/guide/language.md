@@ -120,8 +120,15 @@ referrer, which is the importing module's key or the Script's name, known when t
 is compiled. The host loads and links the graph and answers with its key, or with the
 error, which rejects the promise; the engine then evaluates the graph in a later step and
 fulfills the promise with the namespace. A module that throws rejects every later import
-of it with the same error. Import attributes (`with { type: "json" }`) are a
-`SyntaxError`, for `import()` as for static imports: there are no JSON modules.
+of it with the same error.
+
+**JSON modules** are the one kind of module besides JavaScript and TypeScript: `import
+data from "./config.json" with { type: "json" }` (or `import("./config.json", { with: {
+type: "json" } })`) gets the parsed JSON text as the default export. The `type` attribute
+reaches the host's loader with the specifier, and the loader says which modules are JSON
+when it returns their source. An import with `type: "json"` loads only a JSON module and one
+without it never does (a `TypeError` either way, so a policy that expects data cannot be
+handed code), and any attribute other than `type` is a `SyntaxError` when the graph loads.
 
 Modules come with the native build for Rust hosts, together with the rest of what only
 such hosts use: `TextEncoder` and `TextDecoder` are the other part. The wasm modules leave

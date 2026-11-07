@@ -6,6 +6,14 @@ language/module-code/export-expname-from-star-string.js: parse: SyntaxError: ide
 language/module-code/export-expname-from-string-binding.js: parse: SyntaxError: identifier expected
 language/module-code/export-expname-from-string-string.js: parse: SyntaxError: identifier expected
 language/module-code/export-expname-from-string.js: parse: SyntaxError: identifier expected
+language/module-code/import-attributes/import-attribute-key-identifiername.js: expected resolution SyntaxError, got parse TypeError: import attribute 'if' is not supported
+language/module-code/import-attributes/import-attribute-key-string-double.js: expected resolution SyntaxError, got parse TypeError: import attribute 'test262x' is not supported
+language/module-code/import-attributes/import-attribute-key-string-single.js: expected resolution SyntaxError, got parse TypeError: import attribute 'test262x' is not supported
+language/module-code/import-attributes/import-attribute-many.js: expected resolution SyntaxError, got parse TypeError: import attribute 'test262_1' is not supported
+language/module-code/import-attributes/import-attribute-newlines.js: expected resolution SyntaxError, got parse TypeError: import attribute 'test262' is not supported
+language/module-code/import-attributes/import-attribute-trlng-comma.js: expected resolution SyntaxError, got parse TypeError: import attribute 'test262' is not supported
+language/module-code/import-attributes/import-attribute-value-string-double.js: expected resolution SyntaxError, got parse TypeError: import attribute 'test262' is not supported
+language/module-code/import-attributes/import-attribute-value-string-single.js: expected resolution SyntaxError, got parse TypeError: import attribute 'test262' is not supported
 language/module-code/top-level-await/dynamic-import-of-waiting-module.js: async: $DONE was not called (Possibly unhandled promise rejection: ReferenceError: could not load module filename 'dynamic-import-of-waiting-module_FIXTURE.js')
 language/statements/class/elements/private-class-field-on-nonextensible-objects.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all
 language/statements/class/subclass/private-class-field-on-nonextensible-return-override.js: Test262Error: Expected a TypeError to be thrown but no exception was thrown at all

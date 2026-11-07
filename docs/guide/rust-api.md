@@ -119,8 +119,9 @@ vm.start_export("policy.js", "onRequest", &[Value::Data(&request)])?;
 A **synthetic module** has no source: its exports are host functions, answered by id like
 any other, and plain data. Modules import it by its exact key. Every other import goes
 to the snapshot's **loader**, a trait with two calls, one that resolves a specifier
-against the importing module's key and one that returns a key's source, JavaScript or
-TypeScript. The crate's in-memory map is one: its keys are names such as
+against the importing module's key and one that returns a key's source, JavaScript,
+TypeScript or JSON. A JSON module is imported `with { type: "json" }` and has the parsed
+text as its default export: policy data in its own file. The crate's in-memory map is one: its keys are names such as
 `lib/hosts.js`, and `./` and `../` specifiers are taken relative to the importer's key.
 The engine itself reads no files.
 

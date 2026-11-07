@@ -47,7 +47,15 @@ pub(crate) mod slot {
     pub const STACK: u32 = 10;
     /// A Box holding the namespace (what `import * as` and `export * as` bind), once made.
     pub const NS_BOX: u32 = 11;
-    pub const COUNT_SLOTS: u32 = 12;
+    /// [`super::flags`], an int.
+    pub const FLAGS: u32 = 12;
+    pub const COUNT_SLOTS: u32 = 13;
+}
+
+/// `slot::FLAGS` of a module record.
+pub(crate) mod flags {
+    /// A JSON module (a synthetic module with the parsed text as its default export).
+    pub const JSON: i32 = 1;
 }
 
 /// [[Status]] of a module record (module.ts tests these numbers).
@@ -186,6 +194,7 @@ pub(crate) fn new_record(
     let k = heap.alloc_str(key)?;
     heap.set_object_slot(r, slot::KEY, Value::string(k));
     heap.set_object_slot(r, slot::STATUS, Value::int(status::NEW));
+    heap.set_object_slot(r, slot::FLAGS, Value::int(0));
     heap.set_object_slot(r, slot::META, Value::internal(meta.0));
     heap.set_object_slot(r, slot::STACK, Value::NULL);
     let body = super::run::alloc_closure_of(heap, template)?;
@@ -202,12 +211,14 @@ pub(crate) fn new_record(
 /// A new synthetic module (the JSON modules proposal's Synthetic Module Record) registered
 /// under `key`, whose exports `names` hold `values`: it has no code, needs no linking and is
 /// evaluated from the start, so importers bind its Boxes and read what they hold. Its body
-/// is a Record of the Boxes instead of a closure, which marks it synthetic.
+/// is a Record of the Boxes instead of a closure, which marks it synthetic. `flags` its
+/// [`flags`].
 pub(crate) fn new_synthetic(
     heap: &mut Heap,
     key: &str,
     names: &[Atom],
     values: &[Value],
+    flags: i32,
 ) -> Result<Obj, Fault> {
     let mods = modules(heap)?;
     let reg = heap
@@ -236,6 +247,7 @@ pub(crate) fn new_synthetic(
     let k = heap.alloc_str(key)?;
     heap.set_object_slot(r, slot::KEY, Value::string(k));
     heap.set_object_slot(r, slot::STATUS, Value::int(status::EVALUATED));
+    heap.set_object_slot(r, slot::FLAGS, Value::int(flags));
     heap.set_object_slot(r, slot::META, Value::internal(arr));
     heap.set_object_slot(r, slot::STACK, Value::NULL);
     heap.set_object_slot(r, slot::BODY, Value::object(body));
@@ -285,6 +297,11 @@ pub(crate) fn meta(heap: &Heap, m: Obj) -> ModuleMeta {
         .map(|i| heap.u32_array_get(a, i))
         .collect();
     ModuleMeta::decode(&words).expect("module metadata")
+}
+
+/// The [`flags`] of `m`.
+pub(crate) fn flags_of(heap: &Heap, m: Obj) -> i32 {
+    heap.object_slot(m, slot::FLAGS).as_int().unwrap_or(0)
 }
 
 pub(crate) fn status_of(heap: &Heap, m: Obj) -> i32 {

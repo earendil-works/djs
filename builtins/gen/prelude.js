@@ -6310,6 +6310,7 @@ function ImportCall(specifier, options, referrer) {
   const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
   try {
     const name = ToString(specifier);
+    let type = undefined;
     if (options !== undefined) {
       if (!%IsObject(options)) {
         throw %NewTypeError("options must be an object");
@@ -6319,19 +6320,28 @@ function ImportCall(specifier, options, referrer) {
         if (!%IsObject(attributes)) {
           throw %NewTypeError("options.with must be an object");
         }
-        const entries = EnumerableOwnProperties(%AsObj(attributes), 1);
+        const entries = EnumerableOwnProperties(%AsObj(attributes), 2);
         const n = LengthOfArrayLike(entries);
+        let unsupported = undefined;
         for (let i = 0; i < n; i++) {
-          if (!%IsString(%Get(entries, i))) {
+          const entry = %AsObj(%Get(entries, i));
+          const key = %Get(entry, 0);
+          const value = %Get(entry, 1);
+          if (!%IsString(value)) {
             throw %NewTypeError("module attribute values must be strings");
           }
+          if (key === "type") {
+            type = value;
+          } else if (unsupported === undefined) {
+            unsupported = key;
+          }
         }
-        if (n > 0) {
+        if (unsupported !== undefined) {
           throw %NewSyntaxError("unsupported import attribute");
         }
       }
     }
-    const loaded = %Call(load, undefined, name, referrer);
+    const loaded = %Call(load, undefined, name, referrer, type);
     const finish = %NsOp(7, undefined, undefined, undefined);
     %PerformPromiseThen(%AsObj(loaded), finish, undefined, promise);
   } catch (e) {
@@ -6340,14 +6350,14 @@ function ImportCall(specifier, options, referrer) {
   return promise;
 }
 
-// builtins/module.ts:105
+// builtins/module.ts:116
 function FinishImport(key) {
   const m = %AsObj(%NsOp(5, key, undefined, undefined));
   EvaluateGraph(m);
   return %NsOp(6, m, undefined, undefined);
 }
 
-// builtins/module.ts:112
+// builtins/module.ts:123
 function InnerModuleEvaluation(m, state) {
   const status = %AsNumber(%RecordGet(m, 1));
   if (status === 5) {
@@ -6388,7 +6398,7 @@ function InnerModuleEvaluation(m, state) {
   }
 }
 
-// builtins/module.ts:172 %ModuleOp
+// builtins/module.ts:183 %ModuleOp
 function ModuleOp(target, key, a) {
   let $1;
   if (this === undefined) {

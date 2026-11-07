@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use djs_core::vm::{ModuleLoader, ModuleSource as CoreSource};
+use djs_core::vm::{ModuleKind, ModuleLoader, ModuleSource as CoreSource};
 
 use crate::{Data, HostFn};
 
@@ -10,7 +10,7 @@ use crate::{Data, HostFn};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ModuleSource {
     pub(crate) text: String,
-    pub(crate) typescript: bool,
+    pub(crate) kind: ModuleKind,
 }
 
 impl ModuleSource {
@@ -18,7 +18,7 @@ impl ModuleSource {
     pub fn js(text: impl Into<String>) -> ModuleSource {
         ModuleSource {
             text: text.into(),
-            typescript: false,
+            kind: ModuleKind::JavaScript,
         }
     }
 
@@ -27,7 +27,17 @@ impl ModuleSource {
     pub fn typescript(text: impl Into<String>) -> ModuleSource {
         ModuleSource {
             text: text.into(),
-            typescript: true,
+            kind: ModuleKind::TypeScript,
+        }
+    }
+
+    /// JSON text: a JSON module, whose default export is the parsed value (a fresh copy
+    /// per instance state, like any module's). Only an import with `with { type: "json" }`
+    /// may load it, and such an import loads nothing else (a `TypeError` either way).
+    pub fn json(text: impl Into<String>) -> ModuleSource {
+        ModuleSource {
+            text: text.into(),
+            kind: ModuleKind::Json,
         }
     }
 
@@ -36,7 +46,11 @@ impl ModuleSource {
     }
 
     pub fn is_typescript(&self) -> bool {
-        self.typescript
+        self.kind == ModuleKind::TypeScript
+    }
+
+    pub fn is_json(&self) -> bool {
+        self.kind == ModuleKind::Json
     }
 }
 
@@ -70,6 +84,12 @@ impl ModuleMap {
     /// Adds (or replaces) JavaScript module `key`.
     pub fn module(mut self, key: impl Into<String>, text: impl Into<String>) -> ModuleMap {
         self.0.insert(key.into(), ModuleSource::js(text));
+        self
+    }
+
+    /// Adds (or replaces) JSON module `key` (imported `with { type: "json" }`).
+    pub fn json(mut self, key: impl Into<String>, text: impl Into<String>) -> ModuleMap {
+        self.0.insert(key.into(), ModuleSource::json(text));
         self
     }
 
@@ -202,7 +222,13 @@ pub(crate) struct Adapter<'a> {
 }
 
 impl ModuleLoader for Adapter<'_> {
-    fn resolve(&mut self, specifier: &str, referrer: Option<&str>) -> Result<String, String> {
+    fn resolve(
+        &mut self,
+        specifier: &str,
+        referrer: Option<&str>,
+        // Only `type` reaches a loader; djs-core checks it against the source's kind.
+        _attributes: &[(&str, &str)],
+    ) -> Result<String, String> {
         if self.synthetic.iter().any(|m| m.key == specifier)
             || self
                 .entry
@@ -228,7 +254,7 @@ impl ModuleLoader for Adapter<'_> {
         };
         Ok(CoreSource {
             text: source.text,
-            typescript: source.typescript,
+            kind: source.kind,
         })
     }
 }

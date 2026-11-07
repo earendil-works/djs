@@ -10,7 +10,9 @@ use alloc::vec::Vec;
 
 use super::PResult;
 use super::func::{VarId, VarKind};
-use super::module_meta::{ENV_FUNCTION, ENV_IMPORT, ENV_LEXICAL, ENV_META, ENV_VAR, ModuleMeta};
+use super::module_meta::{
+    ENV_FUNCTION, ENV_IMPORT, ENV_LEXICAL, ENV_META, ENV_VAR, ModuleMeta, Request,
+};
 use super::parser::{Parser, syntax};
 use crate::heap::{Atom, Ref};
 use crate::lexer::{Kw, TokenKind};
@@ -316,7 +318,7 @@ const NO_REQUEST: u32 = u32::MAX;
 pub(super) struct ModuleBuild {
     /// The module specifiers in source order, deduplicated, with whether something
     /// keeps the request (TypeScript drops the imports no value refers to).
-    pub requests: Vec<(Atom, bool)>,
+    pub requests: Vec<(Request, bool)>,
     /// `(binding, request, import name or NULL for a namespace import)`.
     pub imports: Vec<(VarId, u32, Atom)>,
     pub exports: Vec<ExportEntry>,
@@ -439,8 +441,9 @@ impl Parser<'_, '_> {
     }
 
     /// The request for specifier `spec` (ModuleRequests: one per distinct specifier).
-    fn module_request(&mut self, spec: Atom, keep: bool) -> u32 {
+    fn module_request(&mut self, spec: Request, keep: bool) -> u32 {
         let m = self.mb();
+        // ModuleRequestsEqual: the same specifier and attributes.
         if let Some(i) = m.requests.iter().position(|r| r.0 == spec) {
             m.requests[i].1 |= keep;
             return i as u32;
@@ -470,7 +473,7 @@ impl Parser<'_, '_> {
     }
 
     /// `from "specifier"` with its import attributes, and the `;`.
-    fn module_from(&mut self) -> PResult<Atom> {
+    fn module_from(&mut self) -> PResult<Request> {
         if !self.tok.is_contextual(Kw::From) {
             return syntax(self.tok.start, "expecting 'from'");
         }
@@ -478,25 +481,63 @@ impl Parser<'_, '_> {
         self.module_specifier()
     }
 
-    /// The module specifier string, its import attributes and the `;`. djs supports no
-    /// import attribute (HostGetSupportedImportAttributes is empty), so any is an error.
-    fn module_specifier(&mut self) -> PResult<Atom> {
+    /// The module specifier string, its import attributes (a WithClause) and the `;`.
+    fn module_specifier(&mut self) -> PResult<Request> {
         if !self.is(TokenKind::String) {
             return syntax(self.tok.start, "expecting string");
         }
         let units = self.cooked_string();
-        let spec = self.atom_of_units(&units)?;
+        let specifier = self.atom_of_units(&units)?;
         self.next()?;
-        if self.is(TokenKind::With) && !self.tok.newline_before() {
+        let mut req = Request {
+            specifier,
+            ty: Atom::NULL,
+            unsupported: Atom::NULL,
+        };
+        // A line break may precede `with`: a `with` statement cannot follow in module code.
+        if self.is(TokenKind::With) {
             self.next()?;
             self.expect(TokenKind::LBrace, "{")?;
-            if !self.is(TokenKind::RBrace) {
-                return syntax(self.tok.start, "unsupported import attribute");
+            let ty = self.heap.atom_str("type")?;
+            let mut keys: Vec<Atom> = Vec::new();
+            while !self.is(TokenKind::RBrace) {
+                let pos = self.tok.start;
+                let key = if self.is(TokenKind::String) {
+                    let units = self.cooked_string();
+                    let a = self.atom_of_units(&units)?;
+                    self.next()?;
+                    a
+                } else if self.tok.kind.is_identifier_name() {
+                    let a = self.ident_atom()?;
+                    self.next()?;
+                    a
+                } else {
+                    return syntax(pos, "identifier expected");
+                };
+                if keys.contains(&key) {
+                    return syntax(pos, "duplicate import attribute");
+                }
+                keys.push(key);
+                self.expect(TokenKind::Colon, ":")?;
+                if !self.is(TokenKind::String) {
+                    return syntax(self.tok.start, "expecting string");
+                }
+                let units = self.cooked_string();
+                let value = self.atom_of_units(&units)?;
+                self.next()?;
+                if key == ty {
+                    req.ty = value;
+                } else if req.unsupported.is_null() {
+                    req.unsupported = key;
+                }
+                if !self.eat(TokenKind::Comma)? {
+                    break;
+                }
             }
-            self.next()?;
+            self.expect(TokenKind::RBrace, "}")?;
         }
         self.expect_semicolon()?;
-        Ok(spec)
+        Ok(req)
     }
 
     /// `import type X from` / `import type { .. }` (not the default import `type`).

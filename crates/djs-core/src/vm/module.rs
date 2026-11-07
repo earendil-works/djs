@@ -28,12 +28,22 @@ use crate::value::{Obj, Value};
 /// Hosts answer it with [`Vm::answer_import`]; their own host functions must not use it.
 pub const IMPORT_FN_ID: u32 = u32::MAX;
 
+/// What a [`ModuleSource`]'s text is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ModuleKind {
+    JavaScript,
+    /// Compiled as TypeScript (`CompileOptions::typescript`).
+    TypeScript,
+    /// JSON text: a JSON module, whose default export is the parsed value. Only an import
+    /// with `with { type: "json" }` may load it, and such an import loads nothing else.
+    Json,
+}
+
 /// A module's source as the host supplies it.
 #[derive(Clone, Debug)]
 pub struct ModuleSource {
     pub text: String,
-    /// Compile it as TypeScript (`CompileOptions::typescript`).
-    pub typescript: bool,
+    pub kind: ModuleKind,
 }
 
 /// The host side of module loading. Specifiers and keys are opaque strings: the engine
@@ -41,9 +51,16 @@ pub struct ModuleSource {
 /// and keeps its record.
 pub trait ModuleLoader {
     /// The key of the module that `specifier` names when module `referrer` (its key)
-    /// imports it; `None` for the graph's entry point. An error becomes an `Error` with
-    /// the message.
-    fn resolve(&mut self, specifier: &str, referrer: Option<&str>) -> Result<String, String>;
+    /// imports it; `None` for the graph's entry point. `attributes` are the import's
+    /// attributes as `(key, value)`: djs supports `type` alone (an import with any other
+    /// key fails before this is asked), so they are empty or `[("type", value)]`. An
+    /// error becomes an `Error` with the message.
+    fn resolve(
+        &mut self,
+        specifier: &str,
+        referrer: Option<&str>,
+        attributes: &[(&str, &str)],
+    ) -> Result<String, String>;
     /// The source of module `key`. An error becomes an `Error` with the message.
     fn load(&mut self, key: &str) -> Result<ModuleSource, String>;
 }
@@ -71,6 +88,18 @@ impl Vm {
         referrer: Option<&str>,
         loader: &mut dyn ModuleLoader,
     ) -> Result<String, Value> {
+        self.load_request(specifier, referrer, None, loader)
+    }
+
+    /// [`Vm::load_module_from`] of a request with module type `ty` (the `type` import
+    /// attribute).
+    fn load_request(
+        &mut self,
+        specifier: &str,
+        referrer: Option<&str>,
+        ty: Option<&str>,
+        loader: &mut dyn ModuleLoader,
+    ) -> Result<String, Value> {
         if !crate::MODULES {
             return Err(self.error_value(
                 ErrorKind::SyntaxError,
@@ -78,7 +107,7 @@ impl Vm {
             ));
         }
         let mut created: Vec<String> = Vec::new();
-        let r = self.load_graph(specifier, referrer, loader, &mut created);
+        let r = self.load_graph(specifier, referrer, ty, loader, &mut created);
         match r {
             Ok(key) => Ok(key),
             Err(f) => {
@@ -94,21 +123,45 @@ impl Vm {
         &mut self,
         specifier: &str,
         referrer: Option<&str>,
+        ty: Option<&str>,
         loader: &mut dyn ModuleLoader,
         created: &mut Vec<String>,
     ) -> Result<String, Fault> {
-        let key = loader.resolve(specifier, referrer).map_err(host_error)?;
+        let json = check_type(ty)?;
+        let attrs: &[(&str, &str)] = match ty {
+            Some(t) => &[("type", t)],
+            None => &[],
+        };
+        let key = loader
+            .resolve(specifier, referrer, attrs)
+            .map_err(host_error)?;
         let mut queue = Vec::new();
-        let root = self.module_record(&key, loader, created, &mut queue)?;
-        // The new records. requests (each key is loaded once).
+        let root = self.module_record(&key, json, loader, created, &mut queue)?;
+        // The new records' requests (each key is loaded once).
         while let Some(m) = queue.pop() {
             let meta = module::meta(&self.heap, m);
             let referrer = module::key_of(&self.heap, m);
             let mut records = Vec::new();
-            for &spec in &meta.requests {
-                let s = self.heap.atom_name(spec);
-                let k = loader.resolve(&s, Some(&referrer)).map_err(host_error)?;
-                records.push(self.module_record(&k, loader, created, &mut queue)?);
+            for req in &meta.requests {
+                // AllImportAttributesSupported, at load time (InnerModuleLoading).
+                if !req.unsupported.is_null() {
+                    let k = self.heap.atom_name(req.unsupported);
+                    return Err(Fault::error(
+                        ErrorKind::SyntaxError,
+                        crate::text::cat!("unsupported import attribute '", &k, "'"),
+                    ));
+                }
+                let ty = (!req.ty.is_null()).then(|| self.heap.atom_name(req.ty));
+                let json = check_type(ty.as_deref())?;
+                let attrs: &[(&str, &str)] = match &ty {
+                    Some(t) => &[("type", t)],
+                    None => &[],
+                };
+                let s = self.heap.atom_name(req.specifier);
+                let k = loader
+                    .resolve(&s, Some(&referrer), attrs)
+                    .map_err(host_error)?;
+                records.push(self.module_record(&k, json, loader, created, &mut queue)?);
             }
             module::set_requested(&mut self.heap, m, &records)?;
         }
@@ -117,19 +170,68 @@ impl Vm {
     }
 
     /// The record of `key`: loaded and compiled now if new (and queued for its requests).
+    /// `json`: the import has `type: "json"`, and the module must be a JSON module (and
+    /// one without must not be).
     fn module_record(
         &mut self,
         key: &str,
+        json: bool,
         loader: &mut dyn ModuleLoader,
         created: &mut Vec<String>,
         queue: &mut Vec<Obj>,
     ) -> Result<Obj, Fault> {
+        let mismatch = |is_json: bool| {
+            Fault::error(
+                ErrorKind::TypeError,
+                if is_json {
+                    crate::text::cat!("module '", key, "' is JSON: import it with type 'json'")
+                } else {
+                    crate::text::cat!("module '", key, "' is not a JSON module")
+                },
+            )
+        };
         if let Some(m) = module::find(&mut self.heap, key)? {
+            let is_json = module::flags_of(&self.heap, m) & module::flags::JSON != 0;
+            if is_json != json {
+                return Err(mismatch(is_json));
+            }
             return Ok(m);
         }
         let src = loader.load(key).map_err(host_error)?;
+        if (src.kind == ModuleKind::Json) != json {
+            return Err(mismatch(!json));
+        }
+        if json {
+            // ParseJSONModule: JSON.parse of the text, the default export of a synthetic
+            // module.
+            let opts = crate::json::ParseOptions {
+                object_proto: realm::intrinsic(&self.heap, realm::Intrinsic::ObjectProto)
+                    .as_object(),
+                array_proto: realm::intrinsic(&self.heap, realm::Intrinsic::ArrayProto).as_object(),
+                ..Default::default()
+            };
+            let v = match crate::json::parse_utf8(&mut self.heap, src.text.as_bytes(), &opts) {
+                Ok(v) => v,
+                Err(crate::json::ParseError::Heap(e)) => return Err(Fault::heap(e)),
+                Err(crate::json::ParseError::Syntax(e)) => {
+                    return Err(Fault::error(
+                        ErrorKind::SyntaxError,
+                        crate::text::cat!(&e.message, " in JSON module '", key, "'"),
+                    ));
+                }
+            };
+            let m = module::new_synthetic(
+                &mut self.heap,
+                key,
+                &[crate::heap::atoms::DEFAULT],
+                &[v],
+                module::flags::JSON,
+            )?;
+            created.push(String::from(key));
+            return Ok(m);
+        }
         let mut opts = CompileOptions::module(key);
-        opts.typescript = src.typescript;
+        opts.typescript = src.kind == ModuleKind::TypeScript;
         let (t, meta) =
             compile_module(&mut self.heap, src.text.as_bytes(), &opts).map_err(|e| {
                 if e.kind == crate::compiler::CompileErrorKind::Syntax {
@@ -183,7 +285,7 @@ impl Vm {
                 names.push(a);
             }
             let values: Vec<Value> = exports.iter().map(|e| e.1).collect();
-            module::new_synthetic(&mut self.heap, key, &names, &values)?;
+            module::new_synthetic(&mut self.heap, key, &names, &values, 0)?;
             Ok(())
         })();
         r.map_err(|f| self.fault_to_value(f))
@@ -201,7 +303,8 @@ impl Vm {
 
     /// Lets `import()` load modules through the host (`on`), in modules and scripts alike:
     /// a call becomes an async host call with fn id [`IMPORT_FN_ID`] and the arguments
-    /// specifier and referrer (the importing module's key or script's name), which the host
+    /// specifier, referrer (the importing module's key or script's name) and the `type`
+    /// import attribute (a string, or undefined without one), which the host
     /// answers with [`Vm::answer_import`]; the VM then evaluates the graph in a later run
     /// and fulfills the promise with its namespace. Off (the default), `import()` rejects
     /// as in a build without modules. Kept in the heap: images carry it.
@@ -245,7 +348,13 @@ impl Vm {
         let Some((specifier, referrer)) = self.import_request(call_id) else {
             return Err(VmError::UnknownHostCall);
         };
-        let result = match self.load_module_from(&specifier, Some(&referrer), loader) {
+        // The third argument: the `type` import attribute, if any.
+        let ty = self
+            .host_call(call_id)
+            .and_then(|c| c.args.get(2).copied())
+            .and_then(|v| v.as_string())
+            .map(|s| self.heap.str_to_string(s));
+        let result = match self.load_request(&specifier, Some(&referrer), ty.as_deref(), loader) {
             Ok(key) => Ok(Value::string(self.heap.alloc_str(&key)?)),
             Err(e) => Err(e),
         };
@@ -312,6 +421,19 @@ impl Vm {
             FaultKind::Error(kind, msg) => self.error_value(kind, &msg),
             FaultKind::Heap(e) => self.error_value(ErrorKind::InternalError, e.as_str()),
         }
+    }
+}
+
+/// Whether a request of module type `ty` (the `type` import attribute) is for a JSON
+/// module; a TypeError for a type djs has no modules of.
+fn check_type(ty: Option<&str>) -> Result<bool, Fault> {
+    match ty {
+        None => Ok(false),
+        Some("json") => Ok(true),
+        Some(t) => Err(Fault::error(
+            ErrorKind::TypeError,
+            crate::text::cat!("unsupported module type '", t, "'"),
+        )),
     }
 }
 

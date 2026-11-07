@@ -22,7 +22,9 @@ use djs_core::compiler::{CompileErrorKind, CompileOptions, compile_module};
 use djs_core::heap::{DEFAULT_LIMIT, atoms};
 use djs_core::interp::error_summary;
 use djs_core::value::{Kind, Value};
-use djs_core::vm::{ErrorKind, ModuleLoader, ModuleSource, Status as VmStatus, Vm, VmOptions};
+use djs_core::vm::{
+    ErrorKind, ModuleKind, ModuleLoader, ModuleSource, Status as VmStatus, Vm, VmOptions,
+};
 
 use crate::engine::{Engine, ErrorInfo, Job, RunResult, Status};
 
@@ -457,7 +459,12 @@ struct Fixtures<'a> {
 }
 
 impl ModuleLoader for Fixtures<'_> {
-    fn resolve(&mut self, specifier: &str, referrer: Option<&str>) -> Result<String, String> {
+    fn resolve(
+        &mut self,
+        specifier: &str,
+        referrer: Option<&str>,
+        _attributes: &[(&str, &str)],
+    ) -> Result<String, String> {
         let Some(referrer) = referrer else {
             return Ok(specifier.into());
         };
@@ -484,10 +491,12 @@ impl ModuleLoader for Fixtures<'_> {
             std::fs::read_to_string(self.dir.join(key))
                 .map_err(|e| format!("cannot load module {key}: {e}"))?
         };
-        Ok(ModuleSource {
-            text,
-            typescript: false,
-        })
+        let kind = if key.ends_with(".json") {
+            ModuleKind::Json
+        } else {
+            ModuleKind::JavaScript
+        };
+        Ok(ModuleSource { text, kind })
     }
 }
 

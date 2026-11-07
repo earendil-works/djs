@@ -290,9 +290,10 @@ impl Builder {
                 vm.call(f, this, &[])
                     .map_err(|e| Error::Usage(format!("{e:?}")))?;
             } else {
-                let source = ModuleSource {
-                    text: s.text.clone(),
-                    typescript: s.kind == SourceKind::TypeScriptModule,
+                let source = if s.kind == SourceKind::TypeScriptModule {
+                    ModuleSource::typescript(s.text.clone())
+                } else {
+                    ModuleSource::js(s.text.clone())
                 };
                 let mut adapter = self.adapter(Some((&s.name, &source)));
                 let key = vm

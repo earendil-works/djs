@@ -41,8 +41,7 @@ test262 is the conformance suite of ECMAScript. djs runs it at the commit dquick
 
 - **skip**: features djs will never have (sloppy-mode tests, `Intl`, Temporal,
   `SharedArrayBuffer`, direct `eval`, ...) and the module features it does not have yet
-  (top-level `await`, import attributes and JSON modules, deferred and source-phase
-  imports). They are left out of the count, so the score stays honest. A rule matches by frontmatter flag, directory, feature tag, or a scan of
+  (top-level `await`, deferred, text, bytes and source-phase imports). They are left out of the count, so the score stays honest. A rule matches by frontmatter flag, directory, feature tag, or a scan of
   the source for constructs no tag names, such as a direct `eval(` call.
 - **active**: everything else, <!--n test262/active-->39,017<!--/n--> tests.
 

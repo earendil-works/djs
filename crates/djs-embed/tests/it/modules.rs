@@ -394,3 +394,54 @@ fn stack_traces_of_module_code() {
         e => panic!("{e:?}"),
     }
 }
+
+#[test]
+fn json_modules() {
+    let files = ModuleMap::new()
+        .json(
+            "data/hosts.json",
+            r#"{"allow": ["example.com", "api.example.com"]}"#,
+        )
+        .module("lib/x.js", "export const x = 1;");
+    let snap = Snapshot::builder()
+        .loader(files.clone())
+        .source(Source::module(
+            "policy.js",
+            "import cfg from './data/hosts.json' with { type: 'json' };\n\
+             export function allowed(h) { return cfg.allow.includes(h); }\n\
+             export async function later() {\n\
+               const m = await import('./data/hosts.json', { with: { type: 'json' } });\n\
+               return m.default === cfg;\n\
+             }",
+        ))
+        .build()
+        .unwrap();
+    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let out = i
+        .call_export(
+            "policy.js",
+            "allowed",
+            &[Value::Str("api.example.com")],
+            host,
+        )
+        .unwrap();
+    assert_eq!(out, Data::Bool(true));
+    let out = i.call_export("policy.js", "later", &[], host).unwrap();
+    assert_eq!(out, Data::Bool(true));
+    // JSON only with the attribute, and the attribute only for JSON.
+    for (src, msg) in [
+        ("import cfg from './data/hosts.json';", "is JSON"),
+        (
+            "import x from './lib/x.js' with { type: 'json' };",
+            "not a JSON module",
+        ),
+    ] {
+        let e = Snapshot::builder()
+            .loader(files.clone())
+            .source(Source::module("bad.js", src))
+            .build()
+            .err()
+            .unwrap();
+        assert!(e.to_string().contains(msg), "{src}: {e}");
+    }
+}
