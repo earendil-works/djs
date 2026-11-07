@@ -129,6 +129,20 @@ Design (deviations from the Notes recorded as D3190+):
 - Stages: (1) compiler, (2) records/loader/link, (3) evaluation/namespaces/meta,
   (4) images/stress/docs.
 
+### Progress
+- Stage 1 done (482fe2db): compiler/module.rs (real module items), module_meta.rs
+  (metadata words), `Storage::Env` in resolve.rs, snapshot `snapshots/modules.js`,
+  `compiler::tests::module_errors`. `modules` is a code-only feature (build.rs hash
+  filter + compat_inputs neutral list): no image or base depends on it.
+- Stages 2+3 done (a974bfe2): interp/module.rs (records, registry in
+  `Intrinsic::Modules`, link, ResolveExport, namespaces as Proxies, the namespace
+  leaves), vm/module.rs (`ModuleLoader`, `ModuleSource`, `Vm::load_module`,
+  `evaluate_module`, `module_namespace`, `module_export`, `has_module`),
+  builtins/module.ts (`ModuleEvaluate`, traps; @slim-omit), Exec::closure split into
+  `run::alloc_closure_of` + `run::function_properties` (free fns). vm/module_tests.rs
+  covers live bindings, namespaces, cycles, link/load errors, cached errors,
+  import.meta, TS type imports, images and suspension.
+
 ## Follow-ups
 
 ## Result
