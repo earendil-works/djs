@@ -387,7 +387,9 @@ impl Instance {
                 Step::Done => return self.result()?.to_data(),
                 Step::Yield => {}
                 Step::HostCall(id) => {
-                    host(self.host_call(id)?)?;
+                    if let Err(e) = host(self.host_call(id)?) {
+                        return self.fail(e);
+                    }
                     if self.guard(|vm| vm.host_call(id.0).is_some())? {
                         return self
                             .fail(Error::Usage(format!("host call {} was not answered", id.0)));
@@ -399,7 +401,9 @@ impl Instance {
                             .fail(Error::Usage("async host calls were not answered".into()));
                     }
                     for id in ids {
-                        host(self.host_call(id)?)?;
+                        if let Err(e) = host(self.host_call(id)?) {
+                            return self.fail(e);
+                        }
                     }
                 }
             }

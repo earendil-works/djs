@@ -244,3 +244,15 @@ fn one_call_at_a_time() {
         5.into()
     );
 }
+
+#[test]
+fn a_host_error_in_the_driver_ends_the_call() {
+    let snap = snapshot(
+        "var after = 0; function f() { echo(); after = 1; }\nfunction get() { return after; }",
+    );
+    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let e = i.call("f", &[], |_| Err(Error::Usage("host gave up".into())));
+    assert_eq!(e, Err(Error::Usage("host gave up".into())));
+    assert_eq!(i.step(), Err(Error::Usage("the call is over".into())));
+    assert_eq!(i.call("get", &[], |_| Ok(())).unwrap(), 0.into());
+}
