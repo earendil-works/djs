@@ -64,6 +64,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "djs-libm"
+version = "0.0.0"
+dependencies = [
+ "libm",
+]
+
+[[package]]
 name = "djs-lzrc"
 version = "0.0.0"
 
