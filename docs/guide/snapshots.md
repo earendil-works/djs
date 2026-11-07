@@ -107,8 +107,8 @@ shows by name, so a slim image in a full build reads as just that. Tests flip on
 each table and expect its hash to change, so a hash cannot quietly stop seeing its table.
 
 The engine's **build hash** (`djs_build_hash` in wasm) covers everything that can change
-behavior: the tables above, djs-core's sources and generated prelude, the enabled features
-and the `libm` version. It identifies the exact build, which is what a run journal needs
+behavior: the tables above, djs-core's sources and generated prelude, the sources of its
+math library (djs-libm) and the enabled features. It identifies the exact build, which is what a run journal needs
 to replay step by step ([determinism](determinism.md)), but images are not keyed on it:
 nearly every change to the engine changes the build hash, and far fewer change the
 descriptor.

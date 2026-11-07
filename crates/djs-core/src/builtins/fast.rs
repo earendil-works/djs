@@ -578,11 +578,9 @@ fn string_constructor(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
 
 /// Number.isInteger: never throws, so every argument is answered.
 fn number_is_integer(_: &mut Heap, _: Value, args: &[Value]) -> Fast {
-    Ok(Some(Value::bool(
-        arg(args, 0)
-            .as_number()
-            .is_some_and(|n| n.is_finite() && djs_libm::trunc(n) == n),
-    )))
+    Ok(Some(Value::bool(arg(args, 0).as_number().is_some_and(
+        |n| n.is_finite() && djs_libm::trunc(n) == n,
+    ))))
 }
 
 // ---- Math ----------------------------------------------------------------------------

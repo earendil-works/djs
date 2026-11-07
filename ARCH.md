@@ -130,8 +130,10 @@ build does not depend on the builtin compiler. `scripts/bgen.sh` regenerates the
 `scripts/regen.sh` regenerates everything generated after a rebase (D1791), and the gate
 checks that they are up to date.
 
-Dependencies stay near zero to keep the wasm small and compile times short: `libm` is the
-math dependency of djs-core (D1150), and djs-wasm uses std's dlmalloc. We wrote our own
+Dependencies stay near zero to keep the wasm small and compile times short: djs-core has no
+third-party crate. Its math functions (`pow`, `exp`, `sin`, ...: `core` has none) are libm
+0.2.16's, copied into the workspace crate `djs-libm` (D3174, which supersedes D1150's
+dependency; D1750's build hash covers djs-libm's sources), and djs-wasm uses std's dlmalloc. We wrote our own
 number formatting (D1040, D1262) and float parsing, regex (D1111), BigInt arithmetic
 (D1461), Unicode tables (D1031) and hashing. Tool crates may use small, well-known crates.
 

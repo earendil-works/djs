@@ -434,7 +434,7 @@ enum SetStep {
     ArrayLength(Obj),
 }
 
-/// The libm intrinsics (D1150): `F64Sin(x)` and friends.
+/// The libm intrinsics (djs-libm, D1150, D3174): `F64Sin(x)` and friends.
 fn math_leaf(id: u16, x: f64, y: f64) -> Option<f64> {
     Some(match id {
         F64_ABS => djs_libm::fabs(x),
@@ -1524,8 +1524,8 @@ impl Exec<'_> {
             TYPED_ARRAY_GET | TYPED_ARRAY_SET if FULL => {
                 let o = typed::as_typed_array(self.heap, a0)?;
                 let i = arg(self, 1).as_number().unwrap_or(-1.0);
-                let index =
-                    (i >= 0.0 && i <= u32::MAX as f64 && i == djs_libm::trunc(i)).then_some(i as u32);
+                let index = (i >= 0.0 && i <= u32::MAX as f64 && i == djs_libm::trunc(i))
+                    .then_some(i as u32);
                 if id == TYPED_ARRAY_GET {
                     match index {
                         Some(i) => self.heap.ta_get_alloc(o, i)?.unwrap_or(Value::UNDEFINED),

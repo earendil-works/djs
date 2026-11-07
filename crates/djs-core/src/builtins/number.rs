@@ -1,5 +1,5 @@
 //! Number and Math leaf intrinsics: formatting and parsing through `crate::num`, the
-//! libm functions (D1150), and `Math.random`'s generator.
+//! libm functions (djs-libm, D1150, D3174), and `Math.random`'s generator.
 
 use crate::heap::{Heap, StrView};
 use crate::interp::conv::{Fault, to_int32};

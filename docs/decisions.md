@@ -11595,3 +11595,34 @@ musl's libm) into `crates/djs-libm`, with its license and the `arch` paths (wasm
 intrinsics) kept, so every result stays bit for bit what it was; the version pin of D1750
 becomes the crate's own sources in the build hash. Updating it is copying a newer libm's
 files, with a decision.
+
+## D3215: djs-libm: what was copied, and how the build hash covers it
+date: 2026-11-07 · by: libm · issue: 0245
+Implements D3174; supersedes D1150's dependency (its notes on `pow`'s special cases and on
+qjs's last-bit differences still hold) and D1750's libm pin. `crates/djs-libm` holds libm 0.2.16's files for the functions djs-core
+calls and everything they reach (`fma`, through cbrt; `scalbn`; the trig reductions; the
+generic floor/ceil/trunc/sqrt/fmod/fabs and the `support` traits they use), each file as
+in libm except for cuts: other functions and the f32/f16/f128 variants, libm's own tests,
+items of cfgs off in its default build (`f16_enabled`, `f128_enabled`, `assert_no_panic`,
+`unstable-public-internals`), trait items nothing reaches (`DFloat`/`HFloat`, the u256
+narrowing division). `arch_enabled` (libm's default `arch` feature) is always on;
+`intrinsics_enabled` and `x86_no_sse` are declared cfgs that are never set.
+- **Arch routines.** Kept what libm selects by default: SSE2 `sqrt` and runtime-detected
+  `fma` (FMA/FMA4, else the soft one) on x86, `fsqrt`/`fmadd` on aarch64. On wasm32, libm's
+  default build uses the generic code: its wasm32 routines (`f64.floor`, `f64.sqrt`) need
+  `unstable-intrinsics`, so they are not copied. The i586 routines (x86 without SSE2) are
+  left out: djs does not build for it.
+- **Style.** Edition 2024 like the workspace; `cargo fmt` changed only blank lines. Clippy
+  runs with libm's allow-list plus `explicit_counter_loop` and `unstable_name_collisions`.
+  The crate has libm's `unsafe` (`force_eval!`'s volatile read, the unchecked `i!` indexing
+  of release builds, `asm!`, transmutes): it is libm's code, kept as is, so djs-core's
+  no-`unsafe` rule does not apply to it.
+- **Build hash.** djs-core's build.rs hashes djs-libm's `src/` with its own sources;
+  `BUILD_INPUTS` lists the features only (the `libm X.Y.Z` entry and its Cargo.lock check
+  are gone). Any edit to djs-libm changes `BUILD_HASH`.
+- **Proof.** `crates/djs-libm/tests/same_as_libm.rs` compares every exported function with
+  libm 0.2.16 (a dev-dependency) bit for bit on special values, branch thresholds and
+  200,000 random inputs each (also run under x86_64 Rosetta, where the x86 paths are used).
+  The shipped module is 174 bytes smaller (979,984 vs 980,158): with `rem_pio2f` gone,
+  `rem_pio2_large` has one caller and LLVM inlines it; no other function changed size.
+- djs-libm is opt-level 1 in dev, as libm was through `[profile.dev.package."*"]` (D1785).

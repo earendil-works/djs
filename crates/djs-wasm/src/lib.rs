@@ -456,7 +456,7 @@ pub extern "C" fn djs_abi_version() -> u32 {
 }
 
 /// The engine build hash (`djs_core::vm::BUILD_HASH`): it changes with the engine's
-/// sources, cargo features and libm version, so a host can tell builds apart (journals,
+/// and djs-libm's sources and cargo features, so a host can tell builds apart (journals,
 /// pi's deterministic fingerprint, 0049; djs-prelude's base check). Images are keyed on
 /// their dependency descriptor instead (D2265).
 #[unsafe(no_mangle)]

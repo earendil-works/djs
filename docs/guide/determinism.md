@@ -209,7 +209,7 @@ Some things are deliberately outside the guarantee:
   same, fuel counts are not, so the backend is part of the engine's identity.
   djs-wasm always uses the Rust backend.
 - **Other builds.** Journals are tied to the build hash, which covers the engine's
-  sources, features and the `libm` version: a different build may run the same
+  sources (its math library's included) and features: a different build may run the same
   script in a different number of steps. Images are tied only to what they depend on
   ([images](snapshots.md#what-an-image-depends-on)), so a VM restored into
   another build goes on with that build's code; that happens only inside a process (the

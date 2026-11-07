@@ -114,7 +114,7 @@ listed at the end. Search the log for the ID (`## D1234:`) to read a decision.
 - D1320: VM images carry a build hash (Roots::BUILD)
 - D1321: The base snapshot (djs-prelude)
 - D1330: The build hash includes a hash of djs-core's sources
-- D1750: The build hash covers features and libm; canonical f32/f16 NaN
+- D1750: The build hash covers features and libm; canonical f32/f16 NaN (libm pin superseded by D3215)
 - D1431: The base image is compacted before it is collected
 - D1340: The prelude keeps no source text
 - D1430: Privileged code keeps no line tables or local names
@@ -175,7 +175,7 @@ listed at the end. Search the log for the ID (`## D1234:`) to read a decision.
 
 - D1085: Re-entrant ops finish immediately, slow paths call privileged JS
 - D1086: Frame records in the index-addressed value stack
-- D1150: libm is the math dependency of djs-core
+- D1150: libm is the math dependency of djs-core (superseded by D3174, D3215)
 - D1151: Interpreter state in the arena
 - D1152: Host call protocol and fuel semantics
 - D1280: Slow paths replace an operand and re-execute the instruction
@@ -800,3 +800,4 @@ topics when the index is next reorganized.
 - D3172: TextEncoder and TextDecoder (UTF-8) are builtins
 - D3173: No URL or URLSearchParams in djs
 - D3174: libm becomes a djs crate (djs-libm)
+- D3215: djs-libm: what was copied, and how the build hash covers it

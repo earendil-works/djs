@@ -460,7 +460,11 @@ impl Exec<'_> {
     fn regexp_exec(&mut self, r: Obj, s: Str, last: f64, base: u32, next: u32, test: bool) -> Step {
         let state_slot = base + 3;
         // ToLength.
-        let last = if last > 0.0 { djs_libm::trunc(last) } else { 0.0 };
+        let last = if last > 0.0 {
+            djs_libm::trunc(last)
+        } else {
+            0.0
+        };
         let flags = re::flags(self.heap, r);
         let g_or_y = flags.contains(Flags::GLOBAL) || flags.contains(Flags::STICKY);
         let last = if g_or_y { last } else { 0.0 };
