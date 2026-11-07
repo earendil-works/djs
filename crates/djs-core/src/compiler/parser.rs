@@ -172,9 +172,8 @@ pub(super) struct Parser<'a, 'h> {
     /// nothing useful): the corpus is modules.
     pub strip: bool,
     /// Module code (`Goal::Module`): the import and export entries parsed so far
-    /// (compiler/module.rs). Never dropped with the parser: `compile_module` takes it out,
-    /// so that builds without modules have no drop code for it.
-    pub module: core::mem::ManuallyDrop<Option<alloc::boxed::Box<super::module::ModuleBuild>>>,
+    /// (compiler/module.rs).
+    pub module: super::module::ModuleSlot,
     /// strip-types: where the last formal parameter list's contents ended (tsc's
     /// `parameters.end`).
     pub ts_params_end: u32,
@@ -374,7 +373,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             ts_type_only: false,
             ts_semi: false,
             strip: false,
-            module: core::mem::ManuallyDrop::new(None),
+            module: Default::default(),
             ts_params_end: 0,
             using: Default::default(),
             completion: None,
@@ -388,9 +387,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         };
         p.f.src_end = src.len() as u32;
         if crate::MODULES && kind == FuncKind::Module {
-            p.module = core::mem::ManuallyDrop::new(Some(alloc::boxed::Box::new(
-                super::module::ModuleBuild::new(p.heap)?,
-            )));
+            p.module = super::module::ModuleSlot::new(super::module::ModuleBuild::new(p.heap)?);
         }
         if kind == FuncKind::AsyncBody {
             // Before the parameters, as for an async function: a body's frame is laid out
@@ -498,7 +495,9 @@ impl<'a, 'h> Parser<'a, 'h> {
         // `using` is not allowed at the top level of a Script, but in a codemode body
         // (an async function's) and a module (strip-types).
         let using = self.begin_using_list(
-            matches!(self.f.kind, FuncKind::AsyncBody | FuncKind::Module) || self.strip,
+            self.f.kind == FuncKind::AsyncBody
+                || (crate::MODULES && self.f.kind == FuncKind::Module)
+                || self.strip,
         );
         while self.tok.kind != TokenKind::Eof {
             self.parse_statement_list_item()?;
@@ -535,11 +534,6 @@ impl<'a, 'h> Parser<'a, 'h> {
         #[cfg(feature = "dump")] maps: Option<&mut Vec<super::smap::FunctionMap>>,
         #[cfg(feature = "dump")] globals: Option<&mut Vec<super::resolve::LazyGlobals>>,
     ) -> PResult<(Ref, Option<Erased>, Option<Vec<crate::heap::Atom>>)> {
-        if crate::MODULES {
-            // (Module code that did not come through `compile_module`.)
-            let m = core::mem::replace(&mut self.module, core::mem::ManuallyDrop::new(None));
-            drop(core::mem::ManuallyDrop::into_inner(m));
-        }
         self.end_async_region();
         let top = core::mem::replace(&mut self.f, FuncState::new(0, FuncKind::Script, None));
         self.done[0] = Some(top);

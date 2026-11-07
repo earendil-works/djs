@@ -1140,10 +1140,11 @@ declare function MarkFast(f: Value): void;
 // ---- ES modules (0241, builtins/module.ts, interp/module.rs) -------------------------
 
 /**
- * A module namespace's internal method op on key: 0 [[Get]] (a symbol key: the target's;
- * ReferenceError in a binding's TDZ), 1 [[GetOwnProperty]] as a descriptor object or
- * undefined, 2 [[DefineOwnProperty]] with descriptor object desc (its own fields), 3
+ * Internal method op (builtins/module.ts NsTrap) of the module namespace whose proxy
+ * target is target, on key: 0 [[Get]] (a symbol key: the target's; ReferenceError in a
+ * binding's TDZ), 1 [[GetOwnProperty]] as a descriptor object or undefined, 2
+ * [[DefineOwnProperty]] with descriptor object desc (its own fields), 3
  * [[OwnPropertyKeys]] as a new array.
  * @leaf
  */
-declare function ModuleNamespace(op: i32, handler: Obj, target: Obj, key: Value, desc: Value): Value;
+declare function NsOp(op: i32, target: Obj, key: Value, desc: Value): Value;

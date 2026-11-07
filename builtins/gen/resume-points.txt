@@ -2106,15 +2106,7 @@ InnerModuleEvaluation: reentrant
   builtins/module.ts:64:5  InnerModuleEvaluation (builtin)
   builtins/module.ts:72:3  Call (intrinsic)
 
-NamespaceGet: leaf (%NamespaceGet)
-
-NamespaceSet: leaf (%NamespaceSet)
-
-NamespaceGetOwnProperty: leaf (%NamespaceGetOwnProperty)
-
-NamespaceDefineProperty: leaf (%NamespaceDefineProperty)
-
-NamespaceOwnKeys: leaf (%NamespaceOwnKeys)
+NsTrap: leaf (%NsTrap)
 
 NumberConstructor: reentrant (constructor Number)
   builtins/number.ts:11:7  LengthOfArrayLike (builtin)

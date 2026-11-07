@@ -810,10 +810,9 @@ impl Parser<'_, '_> {
 
     fn parse_return(&mut self) -> PResult<()> {
         let pos = self.tok.start;
-        if matches!(
-            self.f.kind,
-            FuncKind::Script | FuncKind::Eval | FuncKind::Module
-        ) || self.f.ns.is_some()
+        if matches!(self.f.kind, FuncKind::Script | FuncKind::Eval)
+            || (crate::MODULES && self.f.kind == FuncKind::Module)
+            || self.f.ns.is_some()
         {
             return syntax(pos, "return not in a function");
         }

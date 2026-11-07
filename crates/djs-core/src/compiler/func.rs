@@ -123,6 +123,14 @@ impl VarKind {
     }
 }
 
+impl Var {
+    /// A module's top-level binding: its index in the module environment.
+    #[inline(always)]
+    pub fn env(&self) -> Option<u16> {
+        (crate::MODULES && self.kind != VarKind::Param && self.param != 0).then(|| self.param - 1)
+    }
+}
+
 pub(super) struct Var {
     pub name: Atom,
     pub kind: VarKind,
@@ -134,8 +142,9 @@ pub(super) struct Var {
     pub init_end: u32,
     /// Script top-level `var`/`let`/`const`/function: a global binding, not a local.
     pub global: bool,
-    /// Parameter index for `Param`; with `env`, the binding's index in the module
-    /// environment.
+    /// Parameter index for `Param`; for other bindings 0, or a module's top-level
+    /// binding's index in the module environment plus 1 (the module closure's captures,
+    /// compiler/module.rs; `Var::env`).
     pub param: u16,
     /// Some inner function refers to it: it lives in a Box.
     pub captured: bool,
@@ -146,9 +155,6 @@ pub(super) struct Var {
     pub used: bool,
     /// The TypeScript enum or namespace this binding holds (const enum folding).
     pub ts_decl: Option<u32>,
-    /// A module's top-level binding: `param` is its index in the module environment, the
-    /// module closure's captures (compiler/module.rs).
-    pub env: bool,
 }
 
 /// A name reference in phase-1 code: the `name_*` op's immediate indexes this table.
@@ -216,8 +222,8 @@ impl FuncKind {
     pub fn is_top_level(self) -> bool {
         matches!(
             self,
-            FuncKind::Script | FuncKind::AsyncBody | FuncKind::Eval | FuncKind::Module
-        )
+            FuncKind::Script | FuncKind::AsyncBody | FuncKind::Eval
+        ) || (crate::MODULES && self == FuncKind::Module)
     }
 }
 
@@ -520,7 +526,6 @@ impl FuncState {
             builtin: false,
             used: false,
             ts_decl: None,
-            env: false,
         });
         self.scopes[scope as usize].vars.push_out(id);
         if !self.index.slots.is_empty() {

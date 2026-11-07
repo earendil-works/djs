@@ -83,33 +83,23 @@ function InnerModuleEvaluation(m: Obj, state: Obj): void {
   }
 }
 
-// A module namespace object (10.4.6) is a Proxy whose handler is an internal Record of
-// the namespace (its prototype holds these traps) and whose target is a non-extensible
-// object with the same keys, so that the proxy invariants hold. The traps read the
-// bindings; the others (has, deleteProperty, getPrototypeOf, ...) are the target's,
-// which answers them as a namespace does.
+// A module namespace object (10.4.6) is a Proxy over a non-extensible target with the
+// same keys (so that the proxy invariants hold), which also holds the namespace's data in
+// internal slots. Its handler's traps get, set, getOwnPropertyDescriptor, defineProperty
+// and ownKeys are builtin closures of NsTrap; the other internal methods (has,
+// deleteProperty, getPrototypeOf, ...) are the target's, which answers them as a
+// namespace does.
 
-/** [[Get]] ( P, Receiver ), 10.4.6.8: the binding's value (TDZ: ReferenceError). @intrinsic */
-function NamespaceGet(this: Value, target: Value, key: Value, receiver: Value): Value {
-  return ModuleNamespace(0, AsObj(this), AsObj(target), key, undefined);
-}
-
-/** [[Set]] ( P, V, Receiver ), 10.4.6.9: always false. @intrinsic */
-function NamespaceSet(this: Value, target: Value, key: Value, v: Value, receiver: Value): boolean {
-  return false;
-}
-
-/** [[GetOwnProperty]] ( P ), 10.4.6.5. @intrinsic */
-function NamespaceGetOwnProperty(this: Value, target: Value, key: Value): Value {
-  return ModuleNamespace(1, AsObj(this), AsObj(target), key, undefined);
-}
-
-/** [[DefineOwnProperty]] ( P, Desc ), 10.4.6.6. @intrinsic */
-function NamespaceDefineProperty(this: Value, target: Value, key: Value, desc: Value): boolean {
-  return AsBool(ModuleNamespace(2, AsObj(this), AsObj(target), key, desc));
-}
-
-/** [[OwnPropertyKeys]] ( ), 10.4.6.11: the exports in code unit order, then Symbol.toStringTag. @intrinsic */
-function NamespaceOwnKeys(this: Value, target: Value): Obj {
-  return AsObj(ModuleNamespace(3, AsObj(this), AsObj(target), undefined, undefined));
+/**
+ * A namespace trap; `this` (the closure's data) is the internal method: 0 [[Get]]
+ * (10.4.6.8), 1 [[GetOwnProperty]] (10.4.6.5), 2 [[DefineOwnProperty]] (10.4.6.6), 3
+ * [[OwnPropertyKeys]] (10.4.6.11), 4 [[Set]] (10.4.6.9: always false).
+ * @intrinsic
+ */
+function NsTrap(this: Value, target: Value, key: Value, a: Value): Value {
+  const op: i32 = F64ToI32(AsNumber(this));
+  if (op === 4) {
+    return false;
+  }
+  return NsOp(op, AsObj(target), key, a);
 }

@@ -62,7 +62,7 @@ pub(crate) mod status {
     pub const ERRORED: i32 = 5;
 }
 
-/// Slots of a namespace's handler (a Record whose prototype holds the traps).
+/// Slots of a namespace's proxy target (an ordinary object with internal slots).
 mod ns {
     /// The module record.
     pub const MODULE: u32 = 0;
@@ -82,19 +82,27 @@ fn modules(heap: &mut Heap) -> Result<Obj, HeapError> {
     }
     let r = heap.alloc_object(ObjectClass::Record, None, 2)?;
     let registry = heap.new_object(None)?;
+    // The handler of every namespace: builtin closures of `%NsTrap` with the internal
+    // method's number (builtins/module.ts).
     let traps = heap.new_object(None)?;
-    use crate::bytecode::intrinsics::intrinsic_id_of as id;
     let names = [
-        ("get", id!("NamespaceGet")),
-        ("set", id!("NamespaceSet")),
-        ("getOwnPropertyDescriptor", id!("NamespaceGetOwnProperty")),
-        ("defineProperty", id!("NamespaceDefineProperty")),
-        ("ownKeys", id!("NamespaceOwnKeys")),
+        "get",
+        "getOwnPropertyDescriptor",
+        "defineProperty",
+        "ownKeys",
+        "set",
     ];
-    for (name, id) in names {
+    let proto = intrinsic_obj(heap, Intrinsic::FunctionProto);
+    for (op, name) in names.into_iter().enumerate() {
         let key = heap.atom_str(name)?;
-        let f = realm::installed_intrinsic(heap, id);
-        realm::define_hidden(heap, traps, key, f)?;
+        let class = ObjectClass::BuiltinClosure;
+        let f = heap.alloc_object(class, Some(proto), class.slots())?;
+        let id = crate::bytecode::intrinsics::intrinsic_id_of!("NsTrap");
+        heap.set_object_slot(f, 0, Value::int(i32::from(id)));
+        heap.set_object_slot(f, 1, Value::int(op as i32));
+        heap.set_object_slot(f, 2, Value::int(0));
+        heap.set_lazy_builtin_closure_props(f);
+        realm::define_hidden(heap, traps, key, Value::object(f))?;
     }
     heap.set_object_slot(r, 0, Value::object(registry));
     heap.set_object_slot(r, 1, Value::object(traps));
@@ -495,13 +503,12 @@ pub(crate) fn namespace(heap: &mut Heap, m: Obj) -> Result<Obj, Fault> {
         .object_slot(mods, 1)
         .as_object()
         .expect("namespace traps");
-    let handler = heap.alloc_object(ObjectClass::Record, Some(traps), ns::COUNT)?;
+    let target = heap.alloc_object(ObjectClass::Ordinary, None, ns::COUNT)?;
     for i in 0..ns::COUNT {
-        heap.set_object_slot(handler, i, Value::UNDEFINED);
+        heap.set_object_slot(target, i, Value::UNDEFINED);
     }
-    heap.set_object_slot(handler, ns::MODULE, Value::object(m));
-    let target = heap.new_object(None)?;
-    let proxy = heap.new_proxy(target, handler, 0)?;
+    heap.set_object_slot(target, ns::MODULE, Value::object(m));
+    let proxy = heap.new_proxy(target, traps, 0)?;
     heap.set_object_slot(m, slot::NAMESPACE, Value::object(proxy));
     // The exports that resolve, in code unit order (ambiguous ones are left out).
     let mut names = Vec::new();
@@ -517,9 +524,9 @@ pub(crate) fn namespace(heap: &mut Heap, m: Obj) -> Result<Obj, Fault> {
     let index = heap.new_object(None)?;
     let boxes = heap.alloc_value_array(entries.len() as u32)?;
     let keys = heap.alloc_u32_array(entries.len() as u32)?;
-    heap.set_object_slot(handler, ns::INDEX, Value::object(index));
-    heap.set_object_slot(handler, ns::BOXES, Value::internal(boxes));
-    heap.set_object_slot(handler, ns::KEYS, Value::internal(keys));
+    heap.set_object_slot(target, ns::INDEX, Value::object(index));
+    heap.set_object_slot(target, ns::BOXES, Value::internal(boxes));
+    heap.set_object_slot(target, ns::KEYS, Value::internal(keys));
     for (i, &(_, n, r)) in entries.iter().enumerate() {
         let b = resolution_box(heap, r)?;
         heap.value_array_set(boxes, i as u32, b);
@@ -543,11 +550,11 @@ pub(crate) fn namespace(heap: &mut Heap, m: Obj) -> Result<Obj, Fault> {
     Ok(proxy)
 }
 
-/// The Box of export `key` of the namespace whose handler is `handler`, if it has one.
-fn namespace_binding(heap: &Heap, handler: Obj, key: Atom) -> Option<Value> {
-    let index = heap.object_slot(handler, ns::INDEX).as_object()?;
+/// The Box of export `key` of the namespace whose proxy target is `target`, if it has one.
+fn namespace_binding(heap: &Heap, target: Obj, key: Atom) -> Option<Value> {
+    let index = heap.object_slot(target, ns::INDEX).as_object()?;
     let i = heap.get_own_property(index, key)?.value()?.as_int()?;
-    let boxes = heap.object_slot(handler, ns::BOXES).as_internal()?;
+    let boxes = heap.object_slot(target, ns::BOXES).as_internal()?;
     Some(heap.value_array_get(boxes, i as u32))
 }
 
@@ -563,32 +570,29 @@ fn binding_value(heap: &Heap, b: Value, key: Atom) -> Result<Value, Fault> {
     Ok(v)
 }
 
-/// `%ModuleNamespace`: internal method `op` of the namespace whose handler is `handler`
+/// `%NsOp`: internal method `op` of the namespace whose proxy target is `target`
 /// (builtins/module.ts).
 pub(crate) fn namespace_op(
     heap: &mut Heap,
     op: i32,
-    handler: Obj,
     target: Obj,
     key: Value,
     desc: Value,
 ) -> Result<Value, Fault> {
     match (op, desc.as_object()) {
-        (0, _) => namespace_get(heap, handler, target, key),
-        (1, _) => namespace_descriptor(heap, handler, target, key),
-        (2, Some(desc)) => Ok(Value::bool(namespace_define(
-            heap, handler, target, key, desc,
-        )?)),
-        (3, _) => namespace_keys(heap, handler),
+        (0, _) => namespace_get(heap, target, key),
+        (1, _) => namespace_descriptor(heap, target, key),
+        (2, Some(desc)) => Ok(Value::bool(namespace_define(heap, target, key, desc)?)),
+        (3, _) => namespace_keys(heap, target),
         _ => Err(Fault::error(
             ErrorKind::InternalError,
-            "bad %ModuleNamespace operation".into(),
+            "bad %NsOp operation".into(),
         )),
     }
 }
 
 /// A namespace's [[Get]] (10.4.6.8).
-fn namespace_get(heap: &mut Heap, handler: Obj, target: Obj, key: Value) -> Result<Value, Fault> {
+fn namespace_get(heap: &mut Heap, target: Obj, key: Value) -> Result<Value, Fault> {
     let key = crate::builtins::object::key(heap, key)?;
     if key.is_symbol() {
         return Ok(heap
@@ -596,24 +600,19 @@ fn namespace_get(heap: &mut Heap, handler: Obj, target: Obj, key: Value) -> Resu
             .and_then(|p| p.value())
             .unwrap_or(Value::UNDEFINED));
     }
-    match namespace_binding(heap, handler, key) {
+    match namespace_binding(heap, target, key) {
         Some(b) => binding_value(heap, b, key),
         None => Ok(Value::UNDEFINED),
     }
 }
 
 /// [[GetOwnProperty]] (10.4.6.5) as a descriptor object.
-fn namespace_descriptor(
-    heap: &mut Heap,
-    handler: Obj,
-    target: Obj,
-    key: Value,
-) -> Result<Value, Fault> {
+fn namespace_descriptor(heap: &mut Heap, target: Obj, key: Value) -> Result<Value, Fault> {
     let key = crate::builtins::object::key(heap, key)?;
     if key.is_symbol() {
         return crate::builtins::object::descriptor_object(heap, target, key);
     }
-    let Some(b) = namespace_binding(heap, handler, key) else {
+    let Some(b) = namespace_binding(heap, target, key) else {
         return Ok(Value::UNDEFINED);
     };
     let v = binding_value(heap, b, key)?;
@@ -631,18 +630,12 @@ fn namespace_descriptor(
 }
 
 /// [[DefineOwnProperty]] (10.4.6.6) with a descriptor record.
-fn namespace_define(
-    heap: &mut Heap,
-    handler: Obj,
-    target: Obj,
-    key: Value,
-    desc: Obj,
-) -> Result<bool, Fault> {
+fn namespace_define(heap: &mut Heap, target: Obj, key: Value, desc: Obj) -> Result<bool, Fault> {
     let key = crate::builtins::object::key(heap, key)?;
     if key.is_symbol() {
         return crate::builtins::object::define_from_record(heap, target, key, desc);
     }
-    let Some(b) = namespace_binding(heap, handler, key) else {
+    let Some(b) = namespace_binding(heap, target, key) else {
         return Ok(false);
     };
     let current = binding_value(heap, b, key)?;
@@ -663,9 +656,9 @@ fn namespace_define(
 }
 
 /// [[OwnPropertyKeys]] (10.4.6.11) as a new array.
-fn namespace_keys(heap: &mut Heap, handler: Obj) -> Result<Value, Fault> {
+fn namespace_keys(heap: &mut Heap, target: Obj) -> Result<Value, Fault> {
     let keys = heap
-        .object_slot(handler, ns::KEYS)
+        .object_slot(target, ns::KEYS)
         .as_internal()
         .expect("namespace keys");
     let n = heap.u32_array_len(keys);

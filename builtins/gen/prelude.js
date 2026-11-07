@@ -6168,29 +6168,13 @@ function InnerModuleEvaluation(m, state) {
   }
 }
 
-// builtins/module.ts:93 %NamespaceGet
-function NamespaceGet(target, key, receiver) {
-  return %ModuleNamespace(0, %AsObj(this), %AsObj(target), key, undefined);
-}
-
-// builtins/module.ts:98 %NamespaceSet
-function NamespaceSet(target, key, v, receiver) {
-  return false;
-}
-
-// builtins/module.ts:103 %NamespaceGetOwnProperty
-function NamespaceGetOwnProperty(target, key) {
-  return %ModuleNamespace(1, %AsObj(this), %AsObj(target), key, undefined);
-}
-
-// builtins/module.ts:108 %NamespaceDefineProperty
-function NamespaceDefineProperty(target, key, desc) {
-  return %AsBool(%ModuleNamespace(2, %AsObj(this), %AsObj(target), key, desc));
-}
-
-// builtins/module.ts:113 %NamespaceOwnKeys
-function NamespaceOwnKeys(target) {
-  return %AsObj(%ModuleNamespace(3, %AsObj(this), %AsObj(target), undefined, undefined));
+// builtins/module.ts:99 %NsTrap
+function NsTrap(target, key, a) {
+  const op = %F64ToI32(%AsNumber(this));
+  if (op === 4) {
+    return false;
+  }
+  return %NsOp(op, %AsObj(target), key, a);
 }
 
 // builtins/number.ts:9 constructor Number
@@ -12450,11 +12434,7 @@ function GlobalAtob(...args) {
 %InstallIntrinsic("MapPrototypeSet", MapPrototypeSet);
 %InstallIntrinsic("MapIteratorPrototypeNext", MapIteratorPrototypeNext);
 %InstallIntrinsic("ModuleEvaluate", ModuleEvaluate);
-%InstallIntrinsic("NamespaceGet", NamespaceGet);
-%InstallIntrinsic("NamespaceSet", NamespaceSet);
-%InstallIntrinsic("NamespaceGetOwnProperty", NamespaceGetOwnProperty);
-%InstallIntrinsic("NamespaceDefineProperty", NamespaceDefineProperty);
-%InstallIntrinsic("NamespaceOwnKeys", NamespaceOwnKeys);
+%InstallIntrinsic("NsTrap", NsTrap);
 %InstallIntrinsic("ResolvePromise", ResolvePromise);
 %InstallIntrinsic("PromiseResolveFunction", PromiseResolveFunction);
 %InstallIntrinsic("PromiseRejectFunction", PromiseRejectFunction);

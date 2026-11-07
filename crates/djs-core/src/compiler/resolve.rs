@@ -822,10 +822,9 @@ fn classify(
             // The function directly inside `pf` takes the parent's Box (a module's
             // environment entry: the module closure's capture); each one below takes its
             // parent's capture.
-            let mut cap = if crate::MODULES && var.env {
-                Capture::Outer(var.param)
-            } else {
-                Capture::Local(v)
+            let mut cap = match var.env() {
+                Some(e) => Capture::Outer(e),
+                None => Capture::Local(v),
             };
             let mut slot = 0;
             for &f in path.iter().rev() {
@@ -874,8 +873,8 @@ fn assign_storage(
     let mut names = Vec::new();
     for v in &f.vars {
         let pseudo = v.kind.is_pseudo();
-        storage.push(if crate::MODULES && v.env {
-            Storage::Env(v.param)
+        storage.push(if let Some(e) = v.env() {
+            Storage::Env(e)
         } else if v.global {
             Storage::Global
         } else if v.builtin {
@@ -1089,11 +1088,8 @@ fn emit_init(out: &mut CodeBuf, storage: Storage, atom: Atom, lexical: bool) {
         Storage::Global => out.put_global(atom, 0),
         Storage::None => out.drop(),
         Storage::Builtin { idx, len } => out.put_builtin(idx, len),
-        Storage::Env(c) => {
-            if crate::MODULES {
-                out.put_cap(c)
-            }
-        }
+        Storage::Env(c) if crate::MODULES => out.put_cap(c),
+        Storage::Env(_) => {}
     }
 }
 
@@ -1734,8 +1730,8 @@ fn emit_name(
             Storage::Box(s) => At::Box(s),
             Storage::Arg(a) => At::Arg(a),
             Storage::Builtin { idx, .. } => At::Builtin(idx),
-            Storage::Env(c) => At::Cap(c),
-            Storage::Global | Storage::None => At::Global,
+            Storage::Env(c) if crate::MODULES => At::Cap(c),
+            Storage::Global | Storage::None | Storage::Env(_) => At::Global,
         },
         Target::Capture(c) => At::Cap(c),
         Target::Slot(i) => At::Builtin(i),

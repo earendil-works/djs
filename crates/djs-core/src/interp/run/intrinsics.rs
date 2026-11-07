@@ -310,7 +310,7 @@ const PERFORM_PROMISE_THEN: u16 = id("PerformPromiseThen");
 const ENQUEUE_PROMISE_RESOLVE_THENABLE_JOB: u16 = id("EnqueuePromiseResolveThenableJob");
 const NEW_RECORD: u16 = id("NewRecord");
 const RECORD_GET: u16 = id("RecordGet");
-const MODULE_NAMESPACE: u16 = id("ModuleNamespace");
+const MODULE_NAMESPACE: u16 = id("NsOp");
 const RECORD_SET: u16 = id("RecordSet");
 const NEW_BUILTIN_CLOSURE: u16 = id("NewBuiltinClosure");
 const GENERATOR_STATE: u16 = id("GeneratorState");
@@ -1896,22 +1896,18 @@ impl Exec<'_> {
                 }
                 Value::object(r)
             }
-            MODULE_NAMESPACE => {
-                let (true, Some(handler), Some(target)) = (
-                    crate::MODULES,
-                    arg(self, 1).as_object(),
-                    arg(self, 2).as_object(),
-                ) else {
+            // (Without modules, the intrinsic falls to the unknown ones.)
+            MODULE_NAMESPACE if crate::MODULES => {
+                let Some(target) = arg(self, 1).as_object() else {
                     return bad_argument(id);
                 };
                 let op = a0.as_int().unwrap_or(-1);
                 crate::interp::module::namespace_op(
                     self.heap,
                     op,
-                    handler,
                     target,
+                    arg(self, 2),
                     arg(self, 3),
-                    arg(self, 4),
                 )?
             }
             RECORD_GET | RECORD_SET => {

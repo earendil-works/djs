@@ -349,6 +349,47 @@ impl ModuleBuild {
     }
 }
 
+/// The parser's module state: `Option<Box<ModuleBuild>>`, and in builds without modules a
+/// unit that is never set, so that their parser stays as it is (D3190).
+#[cfg(feature = "modules")]
+#[derive(Default)]
+pub(super) struct ModuleSlot(Option<alloc::boxed::Box<ModuleBuild>>);
+#[cfg(not(feature = "modules"))]
+#[derive(Default)]
+pub(super) struct ModuleSlot;
+
+impl ModuleSlot {
+    #[allow(unused_variables)]
+    pub fn new(m: ModuleBuild) -> ModuleSlot {
+        #[cfg(feature = "modules")]
+        return ModuleSlot(Some(alloc::boxed::Box::new(m)));
+        #[cfg(not(feature = "modules"))]
+        return ModuleSlot;
+    }
+
+    #[inline(always)]
+    pub fn is_some(&self) -> bool {
+        #[cfg(feature = "modules")]
+        return self.0.is_some();
+        #[cfg(not(feature = "modules"))]
+        return false;
+    }
+
+    pub fn as_mut(&mut self) -> Option<&mut ModuleBuild> {
+        #[cfg(feature = "modules")]
+        return self.0.as_deref_mut();
+        #[cfg(not(feature = "modules"))]
+        return None;
+    }
+
+    pub fn take(&mut self) -> Option<alloc::boxed::Box<ModuleBuild>> {
+        #[cfg(feature = "modules")]
+        return self.0.take();
+        #[cfg(not(feature = "modules"))]
+        return None;
+    }
+}
+
 fn well_formed(units: &[u16]) -> bool {
     let mut i = 0;
     while i < units.len() {
@@ -851,8 +892,7 @@ impl Parser<'_, '_> {
     /// compiler/module_meta.rs).
     pub fn compile_module(mut self) -> PResult<(Ref, Ref)> {
         let parsed = self.parse_top();
-        let m = core::mem::replace(&mut self.module, core::mem::ManuallyDrop::new(None));
-        let m = core::mem::ManuallyDrop::into_inner(m).expect("module code");
+        let m = self.module.take().expect("module code");
         parsed?;
         let meta = self.finish_module(m)?.encode();
         let arr = self.heap.alloc_u32_array(meta.len() as u32)?;
@@ -960,13 +1000,12 @@ impl Parser<'_, '_> {
             env.push((var.name, kind.0, kind.1));
             names.push(var.name);
         }
-        if env.len() > u16::MAX as usize {
+        if env.len() >= u16::MAX as usize {
             return syntax(0, "too many module bindings");
         }
         for (i, &e) in env_of.iter().enumerate() {
             if e != u32::MAX {
-                self.f.vars[i].env = true;
-                self.f.vars[i].param = e as u16;
+                self.f.vars[i].param = e as u16 + 1;
             }
         }
         self.f.captures = (0..env.len() as u16).map(Capture::Outer).collect();
