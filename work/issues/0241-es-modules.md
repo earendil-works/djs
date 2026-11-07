@@ -1,6 +1,6 @@
 # 0241: ES modules: module goal, loader, linking and evaluation (M1–M3, M6, M7)
 
-status: done
+status: blocked
 agent: modules
 branch: issue/0241-es-modules
 depends-on: -
@@ -155,6 +155,24 @@ Design (deviations from the Notes recorded as D3190+):
   shipped 426,705 -> 426,760 gzip (ceiling 426,806), slim 360,319 -> 360,458 (ceiling
   360,485). gzip moves +-25 B with trivial edits: keep new live code behind MODULES.
 - Gotcha: compiler/lazy.rs numbers FuncKinds (`KINDS`): new kinds go last.
+
+### Blocked: the size ceilings (needs the coordinator)
+Everything is implemented, tested and rebased onto main 017ae943 (regen clean); the merge
+gate failed only on `size budget`. Measured (scripts/build-wasm.sh, main 017ae943 vs the
+branch): shipped 426,780 -> 426,840 gzip (+60; raw 980,184 -> 980,274, +90), ceiling
+426,806; slim 360,398 -> 360,533 (+135; raw 851,767 -> 851,876, +109), ceiling 360,485.
+Main itself is 26 bytes under its ceiling (it grew 75 bytes since 4771aa63). What is left
+of 0241 in the wasm modules is what no constant can cut: two INTRINSICS entries (`ModuleOp`,
+`NsOp`) and their installed-array slots in the base, the realm's `Intrinsic::Modules`
+slot, and enum arms (`Goal::Module`, `FuncKind::Module`, `VarKind::Import`,
+`Storage::Env`) in compiler matches; everything else is behind `crate::MODULES`, and the
+module builtins are out of both wasm preludes. gzip moves +-25 bytes with trivial edits
+(measured several times). Tried and dropped: keeping the module state in the installed
+array instead of a realm slot (bigger, and broke an e2e image check).
+Proposed decision (as D3164 did): "D3192: Size of 0241; the size ceilings rise by what it
+measured": `ceiling_gzip` 426,806 -> 426,840 and `slim_ceiling_gzip` 360,485 -> 360,533 in
+tests/scores/size.tsv (plus the header line "raised by 0241, D3192"). With it, rerun
+scripts/merge-to-main.sh from the worktree.
 
 - Assigning an import binding is a TypeError at run time (as for `const`), not an early
   error: the spec has no early error for it (SetMutableBinding of an immutable binding).
