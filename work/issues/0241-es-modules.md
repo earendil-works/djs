@@ -142,6 +142,19 @@ Design (deviations from the Notes recorded as D3190+):
   `run::alloc_closure_of` + `run::function_properties` (free fns). vm/module_tests.rs
   covers live bindings, namespaces, cycles, link/load errors, cached errors,
   import.meta, TS type imports, images and suspension.
+- e2e: `// mode: module` cases (tests/data/e2e/modules.js, modules-errors.js; files split
+  by `// file:` lines; gen-expected.sh runs them in qjs through a dynamic import, CASES=
+  regenerates single cases). All four modes pass (dump mode skips the dump round trip).
+- Size (D3190): the module builtins cost ~290 B gzip in the base, so `modules` became an
+  image feature: bgen writes builtins/gen/prelude-nomodules.js (without files tagged
+  `// @modules-only`), which full builds without modules (the shipped module) use; the
+  slim prelude leaves them out too. Rust paths are cut by `crate::MODULES`; the parser's
+  module state is a `ModuleSlot` (unit without the feature), the env index lives in
+  `Var::param` (+1), one leaf `NsOp` and one builtin `ModuleOp` (evaluate + the five
+  namespace traps as builtin closures with the op as data). Measured vs main 4771aa63:
+  shipped 426,705 -> 426,760 gzip (ceiling 426,806), slim 360,319 -> 360,458 (ceiling
+  360,485). gzip moves +-25 B with trivial edits: keep new live code behind MODULES.
+- Gotcha: compiler/lazy.rs numbers FuncKinds (`KINDS`): new kinds go last.
 
 ## Follow-ups
 
