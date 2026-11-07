@@ -57,6 +57,22 @@ record each with before/after numbers.
 - Fix 2 (32cc7522): `Value::Array(&[Value])` / `Value::Object(&[(&str, Value)])`: plain data
   from borrowed parts (the head without a Data tree); the bench moves the decision's
   strings out of the Data. noop 3.70 -> 3.47 (-6%), header-only 40.3 -> 35.5 (-12%, noisy).
+- Fix 3 (4bc0234d, djs-core): `canonical_numeric_index` built every key's String
+  (`atom_name`) and every IC addition fill asks it: 4% of a noop call on a reset instance
+  (ICs cold each call). Now it rejects by the first unit. noop reset 8.57 -> 8.20 (-4%).
+  Wasm sizes: shipped 426,780 gzip (ceiling 426,806), slim 360,398 (ceiling 360,485).
+- Fix 4 (0256a396): `Value::Utf8(&[u8])`: text from bytes, lossy, one pass over ASCII (the
+  host's `from_utf8` before the VM's ASCII check was a second pass). 64 KiB as text pooled
+  17.8 -> 16.0 (-10%), 64 KiB body policy 27.8 -> 27.0 (-3%).
+- Fix 5 (6dc207e0): `Instant::now()` only for calls with a deadline (~1% of a noop call).
+- Fresh and reset are dominated by copying the image: memmove is 39% of a noop call on a
+  reset instance and 29% on a fresh one (237 KiB image; ~3 us at this load). Not cold ICs:
+  an experiment (`Instance::to_snapshot` after a warm-up call, patch in
+  work/scratch/0247/warm-experiment.patch) gave no measurable gain, so it was dropped.
+- Not embedding costs, left alone: the shim's interpretation (private fields, async
+  wrappers: ~60% of a noop call), minor GCs in pooled instances walk the whole old region
+  (no write barrier; 12% of a pooled 64 KiB body call), atom lookups of the head's keys
+  (~4% of noop), `global_path` per call (~1%).
 
 ## Follow-ups
 
