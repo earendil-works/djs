@@ -10,7 +10,8 @@ const P = Object.getPrototypeOf;
 const list = [];
 for (const n of Object.getOwnPropertyNames(globalThis).sort()) {
   const v = globalThis[n];
-  if (n !== "SharedArrayBuffer" && typeof v === "function" && /^[A-Z]/.test(n) && v.prototype) {
+  // djs has no SharedArrayBuffer, qjs no TextEncoder or TextDecoder.
+  if (n !== "SharedArrayBuffer" && n !== "TextEncoder" && n !== "TextDecoder" && typeof v === "function" && /^[A-Z]/.test(n) && v.prototype) {
     list.push([n + ".prototype", v.prototype]);
   }
 }

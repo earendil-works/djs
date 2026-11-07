@@ -546,6 +546,15 @@ const ORDER: &[(&str, &[&str])] = &[
             "[Symbol.toStringTag]",
         ],
     ),
+    // Not in qjs: node's order (0244).
+    (
+        "TextDecoder.prototype",
+        &["constructor", "decode", "encoding", "fatal", "ignoreBOM"],
+    ),
+    (
+        "TextEncoder.prototype",
+        &["constructor", "encoding", "encode", "encodeInto"],
+    ),
     (
         "Uint8Array.prototype",
         &[

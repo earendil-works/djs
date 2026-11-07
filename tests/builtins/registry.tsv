@@ -1656,3 +1656,20 @@
 1651	value	%prelude:InnerModuleEvaluation%
 1652	intrinsic	NsOp
 1653	intrinsic	ModuleOp
+1649	value	TextDecoder
+1650	value	TextEncoder
+1651	value	TextDecoder.prototype
+1652	value	TextEncoder.prototype
+1653	value	TextDecoder.prototype.decode
+1654	value	get TextDecoder.prototype.encoding
+1655	value	get TextDecoder.prototype.fatal
+1656	value	get TextDecoder.prototype.ignoreBOM
+1657	value	TextEncoder.prototype.encode
+1658	value	TextEncoder.prototype.encodeInto
+1659	value	get TextEncoder.prototype.encoding
+1660	intrinsic	TextCodecCreate
+1661	intrinsic	TextCodecFlags
+1662	intrinsic	IsBufferSource
+1663	intrinsic	Utf8Encode
+1664	intrinsic	Utf8EncodeInto
+1665	intrinsic	Utf8Decode
