@@ -11862,3 +11862,25 @@ abandoned frames' data is garbage, but a collection is only due at the next thre
 the cap is reached before it whenever the threshold lies past the cap. Whether that happened
 depended on the base's size (adding the module builtins made the 4 MiB test fail);
 tests/it/failures.rs checks the next call at five caps.
+## D3210: TextEncoder and TextDecoder: a TextCodec class, WebIDL in the builtin, the engine's transcoders
+date: 2026-11-07 · by: encoding · issue: 0244
+Both are objects of a new class `TextCodec` (slot 0 the flags: decoder, fatal, ignoreBOM;
+slot 1 a decoder's stream state as one int32: the up to three held-back bytes of an
+incomplete sequence, their count, BOM seen, do not flush), so a decoder's state is plain
+heap data that images and dumps carry. builtins/encoding.ts does all of WebIDL: brand
+checks, argument conversions in order and before the steps (the options dictionary is read
+before an unknown label throws, the argument count is checked before any conversion,
+encodeInto's source is ToString'ed like any USVString: node differs in all three), the
+label check (ASCII whitespace trimmed, ASCII case-insensitive, UTF-8's six labels only;
+others are a RangeError), and a BufferSource's bytes as a buffer, an offset and a length
+from the existing typed array and DataView fields. Members are enumerable, as WebIDL's are;
+prototype key order is node's. The leaves (builtins/encoding.rs, one dispatch arm) reuse
+the transcoders the binary has anyway instead of new ones, for size: `from_utf8_lossy`
+(maximal-subpart U+FFFD replacement, which is the Encoding standard's) then `alloc_str` to
+decode, a straight copy for ASCII; `str_to_string` (lone surrogates as U+FFFD) to encode,
+with a copy for flat ASCII; encodeInto encodes the whole string and keeps the longest
+prefix of whole code points that fits. A fatal error resets the decoder (as node's).
+Fuel: one per 8 bytes. Messages are node's where node's do not name its internals.
+qjs has neither class, so the oracle is node: tests/data/encoding/cases.js with node's
+transcript (gen-expected.sh), run by vm::encoding_tests, which also asserts the deliberate
+differences.

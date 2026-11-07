@@ -124,7 +124,7 @@ code, so there `import` and `export` declarations are syntax errors; and
 | `Intl` | Locale data is megabytes. `toLocaleString` and friends use a fixed, locale-independent form. |
 | `Temporal` | Not needed by the scripts djs runs; `Date` is there. |
 | `SharedArrayBuffer`, `Atomics`, workers | A sandbox is one thread. |
-| Timers, `fetch`, file access, `TextEncoder`, `structuredClone` | The engine does no I/O and has no event loop of its own: everything outside the script is a host function the host chose to give it. |
+| Timers, `fetch`, file access, `structuredClone` | The engine does no I/O and has no event loop of its own: everything outside the script is a host function the host chose to give it. |
 | A JIT | wasm and a small module size come first; the interpreter is fast enough for scripts that mostly move data. |
 
 A few host-like globals are there because scripts use them and they need no outside
@@ -164,7 +164,9 @@ Everything else of the standard library is there:
 - control: `Promise` with its combinators and `withResolvers`, generators, async
   functions and async generators, iterators with the `Iterator` helpers
   (`map`, `filter`, `take`, ...), `Array.fromAsync`;
-- data: `JSON`, `Date`, `Uint8Array.fromBase64` and `toBase64`, the URI functions;
+- data: `JSON`, `Date`, `Uint8Array.fromBase64` and `toBase64`, the URI functions,
+  `TextEncoder` and `TextDecoder` (UTF-8 only: another label is a RangeError; with
+  `fatal`, `ignoreBOM` and `stream`);
 - resource management: `using` and `await using` declarations, `DisposableStack` and
   `AsyncDisposableStack`;
 - classes with private fields and methods, static blocks, and decorators.
@@ -200,7 +202,8 @@ them. [Status in numbers](status.md) gives the conformance figures.
 djs also comes in a *slim* build, for hosts that count every kilobyte. It leaves out the
 families that codemode scripts don't use and that cost real size: typed arrays with
 `ArrayBuffer` and `DataView`, `BigInt`, the `Iterator` helpers, `WeakRef` and
-`FinalizationRegistry`, `DisposableStack` and the `using` declarations, and decorators.
+`FinalizationRegistry`, `DisposableStack` and the `using` declarations, decorators, and
+`TextEncoder` and `TextDecoder`.
 A script that reaches for one gets an error that names the build, and feature tests keep
 working:
 

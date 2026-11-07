@@ -815,3 +815,4 @@ topics when the index is next reorganized.
 - D3225: djs-embed values in and out without a wire buffer; borrowed plain data in
 - D3226: Where a hook call's time goes; what was not done
 - D3175: One djs-core feature for native embedders: `embed` carries ES modules and the encoding builtins
+- D3210: TextEncoder and TextDecoder: a TextCodec class, WebIDL in the builtin, the engine's transcoders

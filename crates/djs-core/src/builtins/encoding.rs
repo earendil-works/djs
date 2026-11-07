@@ -164,9 +164,9 @@ fn decode(
 /// `{ read, written }`.
 fn encode(heap: &mut Heap, s: Str, dest: [Value; 3], fuel: &mut i64) -> Result<Value, Fault> {
     *fuel -= i64::from(heap.str_len(s) / 8);
-    let text = match heap.str_view(s) {
+    let text = match heap.str_view_flat(s)? {
         // ASCII: the bytes as they are.
-        Some(StrView::Latin1(b)) if is_ascii(b) => b.to_vec(),
+        StrView::Latin1(b) if is_ascii(b) => b.to_vec(),
         _ => heap.str_to_string(s).into_bytes(),
     };
     let Some(b) = dest[0].as_object() else {
