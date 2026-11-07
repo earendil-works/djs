@@ -1136,6 +1136,46 @@ number. The conversion is atomic: if it throws, the local still holds the object
 nothing can observe the local in between (it is not captured). `i += 1` stays `get_loc;
 push_i8 1; add; put_loc`: `+` on a string concatenates.
 
+### 5.11 Module code (0241, compiler/module.rs, D3171, D3190)
+
+`Goal::Module` compiles with `compile_module`, which returns the body's template and the
+module's metadata (compiler/module_meta.rs: a U32Array of atom ids and integers with the
+environment layout, [[RequestedModules]], the import entries and the local, indirect and
+star export entries of ParseModule). The body is a `FuncKind::Module` top level: strict,
+`this` undefined (the evaluator calls it so), `return` and `new.target` are errors, `await`
+is reserved everywhere in the unit (no top-level `await` yet), `using` is allowed.
+
+Import and export declarations parse only at the top level of the body function and record
+their entries in the parser's `ModuleBuild`:
+
+- an import binding is declared like a `let` of kind `VarKind::Import` (immutable, always
+  TDZ-checked; a namespace import never is);
+- an export declaration (`export var/let/const/function/class/enum ...`) exports every name
+  it binds at the top level, collected by the `declare_*` functions while it is parsed;
+- `export default <expression>` and an anonymous default class bind the hidden lexical
+  `*default*` (initialized by the statement, the value named `default`); an anonymous
+  default function declaration binds `*default*` too and is hoisted like any;
+- `import.meta` reads the hidden binding `*meta*`, declared in the body function on first
+  use, wherever the reference is;
+- at the end, `finish_module` checks the early errors (duplicate export names, local
+  exports of undeclared names), turns local exports of imported bindings into indirect
+  exports (ParseModule step 10), and in TypeScript drops imports nothing reads (D3191).
+
+Top-level function declarations are lexical in module code (16.2.1.1): a second
+declaration of the name, or a `var` of it, is an error.
+
+**The environment.** Every binding of the body scope (vars, lexicals, functions, imports,
+the hidden ones) gets an environment index (`Var::param`, see `Var::env`), and its storage
+is `Storage::Env(i)`: capture `i` of the module closure. Accesses compile to
+`get_cap`/`put_cap`/`set_cap` (checked or not by the rules of 5.6 for the body itself),
+inner functions capture the entry as `Capture::Outer(i)`, and the body's template has one
+capture per entry. The body creates no Box for them and hoists no top-level function: the
+linker does both before any module body runs (interp/module.rs): a fresh Box per local
+entry (var `undefined`, lexicals uninitialized, functions instantiated from their child
+template, whose captures are all environment entries), and for an import the exporter's
+Box itself, which makes imports live bindings. Linking, ResolveExport and namespaces are in
+interp/module.rs; Evaluate is builtins/module.ts.
+
 ## 6. Function templates and heap cells
 
 0005 (heap) and 0009 (copying GC, handles) have landed. These are sketches in their

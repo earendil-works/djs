@@ -33,8 +33,9 @@ In priority order. Each design decision below should be traceable to one of thes
   a run continues from its idle points (D2561).
 
 Non-goals for now: Intl, Temporal, `SharedArrayBuffer`/Atomics, workers, sloppy mode,
-`with`, direct `eval`, ES modules (`import()` compiles and rejects, D1582), a JIT, and full
-test262 conformance for its own sake.
+`with`, direct `eval`, a JIT, and full test262 conformance for its own sake. ES modules
+exist for embedders (D3171, D3190): a host loads a graph through its loader; codemode and
+the shipped module have none (`import()` compiles and rejects, D1582).
 
 D016 (owner direction) adds the measuring stick: wasm32 is the primary target, so memory
 and performance work is judged by its effect in wasm32 under node/V8. Layouts are designed
@@ -284,8 +285,12 @@ constants are shared across a compilation unit (D1434).
 **Semantics stance:** always strict. Codemode scripts compile as the body of an async
 function (D008, D1410). A Script mode (global `var`/function bindings on the global
 object, a global lexical scope, completion values) exists as well, for test262,
-`$262.evalScript` and the REPL (D004, D1581). Modules are not supported: `import()`
-compiles and rejects (D1582). There is no direct `eval`. Indirect eval and the `Function`
+`$262.evalScript` and the REPL (D004, D1581). Module code (the `modules` feature, on in
+native builds, D3171) is a goal of its own: `import`/`export`, top-level bindings in a
+module environment set up by linking, `this` undefined, no top-level `await` yet; the host
+loads module graphs through a loader callback, synchronously, with no I/O in the engine
+(vm/module.rs, D3190). `import()` still compiles and rejects (D1582). There is no direct
+`eval`. Indirect eval and the `Function`
 constructors exist (D014, D1590, D1591): a call `eval(x)` behaves as indirect eval.
 Functions created by the `Function` constructors without a `"use strict"` directive get
 sloppy `this` binding only (D015, D1630), nothing else of sloppy mode. `using` and
