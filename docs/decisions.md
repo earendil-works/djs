@@ -11900,3 +11900,48 @@ shipped 426,839 → 426,951 gzip (+112; raw 980,273 → 980,578), slim 360,536 �
 (+74; raw 851,876 → 852,048). Both ceilings in tests/scores/size.tsv rise by exactly that:
 `ceiling_gzip` 426,865 → 426,977, `slim_ceiling_gzip` 360,623 → 360,697. Before D3175 the
 classes cost the shipped module +2,387 gzip.
+
+## D3235: Synthetic modules and `import()` through the host's loader
+date: 2026-11-08 · by: embed · issue: 0243
+M4 and M5 of D3171 in djs-core (`embed` builds). **Synthetic modules**
+(`Vm::define_synthetic_module(key, exports)`, the JSON modules proposal's Synthetic Module
+Record): a module record whose body is a Record of Boxes instead of the module closure (the
+class marks it synthetic), with metadata of one `var` entry and local export per name, status
+evaluated from the start. Everything else (ResolveExport, linking importers to its Boxes,
+namespaces, `module_export`) is the source modules' code; `Vm::set_module_export` writes a Box,
+so the exports are live. The loader is not asked for a key that exists, so a host maps the
+specifier to the key in `resolve` and nothing more. **`import()`**: the compiler emits
+`%ModuleOp(specifier, options, referrer)` (`this` undefined) when `crate::MODULES`, with the
+unit's filename (the module key or the script's name) as a string constant: the referrer is
+known at compile time, so no frame walk, and the wasm modules keep `%DynamicImport` byte for
+byte (one more intrinsic or table entry would have cost the shipped module bytes under a
+26-byte slack). builtins/module.ts `ImportCall` does EvaluateImportCall's checks (any import
+attribute is then a SyntaxError, as static imports make it), calls a hidden async host
+function (fn id `vm::IMPORT_FN_ID` = `u32::MAX`, arguments specifier and referrer: an
+ordinary async host call, so durability, inbox order and determinism are those of D1374/
+D1670) and chains `FinishImport` (a builtin closure of `%ModuleOp`, op 6), which finds the
+linked record of the key the host fulfilled the call with, evaluates the graph (errors kept
+per module, so a second import rejects with the same error) and returns the namespace. The
+host answers with `Vm::answer_import(call_id, loader)` (= `load_module_from(specifier,
+Some(referrer))` and a resolve with the key, or a reject with the load error). It is opt-in
+per VM (`Vm::set_dynamic_import`, stored in the Modules record, so images carry it): off,
+`import()` falls back to D1582's DynamicImport, so hosts that never answer imports (the e2e
+harness, djs-test262 until its loader) see the old rejection rather than a call that never
+settles. The Modules record grew from 2 to 4 slots: COMPAT_VERSION 7.
+
+## D3236: djs-embed's module API
+date: 2026-11-08 · by: embed · issue: 0243
+`Source::module`/`typescript_module` are setup sources: setup loads, links and evaluates the
+graph, so the snapshot carries the evaluated modules (M6) and no module code runs per
+instance. A snapshot keeps one `Loader` (`&self` methods, `Send + Sync`, behind an `Arc`,
+since instances answer `import()` with it) and its `SyntheticModule`s (exports: `HostFn`s,
+which are not globals, and `Data`). Resolution order: an exact synthetic key, then the setup
+source's own name (its text is given, the loader is not asked), then the loader. `ModuleMap`
+is the in-memory loader: keys, `./`/`../` joined to the referrer's key as `/` paths, no other
+meaning. Entry points: `start_export(module, name, args)`/`call_export` (`this` undefined),
+`export(module, name)` reads a binding (M7). `Instance::step` answers imports itself and runs
+on when only imports were waiting, so hosts see no step for them; the load and compile are
+not metered as fuel (they run no JS; the memory cap still applies). Errors: a module's syntax
+or link error is `Error::Syntax`, a loader failure in setup the new `Error::Load`, a module
+that throws `Error::Exception`; in calls they reject the `import()`. Host fn id `u32::MAX` is
+refused (reserved for imports).

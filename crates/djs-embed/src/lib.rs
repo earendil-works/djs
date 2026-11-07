@@ -64,7 +64,8 @@
 //! [`Snapshot::builder`] defines the host functions ([`HostFn::sync`],
 //! [`HostFn::asynchronous`]) and data globals ([`Builder::global`]) as non-enumerable
 //! globals, then runs each [`Source`] in order with a fuel budget of its own. A syntax
-//! error is [`Error::Syntax`], a top-level throw [`Error::Exception`]; setup code must not
+//! error (or a module's link error) is [`Error::Syntax`], a module the loader cannot
+//! supply [`Error::Load`], a top-level throw [`Error::Exception`]; setup code must not
 //! call host functions. The builtins are frozen by default ([`Builder::frozen_builtins`]),
 //! so a script cannot patch `Array.prototype` for the next call. The result is an image of
 //! the VM (a few hundred KB for a shim and a policy), immutable, cheap to clone and
@@ -101,6 +102,57 @@
 //! `as_number`, `as_bool`, `to_data`, `to_wire`. A [`ValueRef`] borrows the instance, so
 //! copy out what must outlive the next step. Answers are a [`Value`] (strings and bytes are
 //! copied into the heap once) or a [`Throw`], an Error of a [`ErrorKind`] with a message.
+//!
+//! # Modules
+//!
+//! A setup source can be an ES module ([`Source::module`], [`Source::typescript_module`]):
+//! setup loads it and everything it imports, links and evaluates the graph, so the
+//! snapshot holds the evaluated modules and instances start with them, no module code run
+//! again. Imports resolve through the snapshot's [`Loader`] ([`Builder::loader`]; a
+//! [`ModuleMap`] is the in-memory one, with `./` and `../` relative to the importer's key)
+//! and its [`SyntheticModule`]s ([`Builder::module`]): modules without source whose exports
+//! are host functions and plain data, imported by their exact key. Specifiers and keys are
+//! opaque strings; djs does no I/O.
+//!
+//! ```ignore
+//! use djs_embed::{Data, HostFn, Limits, ModuleMap, Snapshot, Source, SyntheticModule, Value};
+//!
+//! const ALLOW: u32 = 1;
+//!
+//! let snapshot = Snapshot::builder()
+//!     .module(
+//!         SyntheticModule::new("@sdk/net")
+//!             .host_fn(HostFn::sync(ALLOW, "allowHosts"))
+//!             .data("secret", Data::from("t0k")),
+//!     )
+//!     .loader(ModuleMap::new().module("lib/hosts.js", "export const lower = (h) => h.toLowerCase();"))
+//!     .source(Source::module("policy.js", r#"
+//!         import { allowHosts, secret } from "@sdk/net";
+//!         import { lower } from "./lib/hosts.js";
+//!         export async function onRequest(req) {
+//!             return { allow: allowHosts(lower(req.host)), auth: secret };
+//!         }
+//!     "#))
+//!     .build()?;
+//!
+//! let mut vm = snapshot.instantiate(Limits::default())?;
+//! let req = Data::object([("host", Data::from("Example.com"))]);
+//! let decision = vm.call_export("policy.js", "onRequest", &[Value::Data(&req)], |call| {
+//!     let ok = call.arg(0).as_str().is_some_and(|h| h == "example.com");
+//!     call.reply(Ok(Value::Bool(ok)))
+//! })?;
+//! assert_eq!(decision.get("allow"), Some(&Data::Bool(true)));
+//! ```
+//!
+//! [`Instance::start_export`] and [`Instance::call_export`] call a module's exported
+//! function (`this` undefined), as [`Instance::start`] and [`Instance::call`] do a global's;
+//! [`Instance::export`] reads an export's current value. An `import()`, in a module or a
+//! script, goes through the same loader: [`Instance::step`] answers it itself between two
+//! slices (the load and compile are not counted as fuel), evaluates the graph and settles
+//! the promise with the module namespace; a module that cannot be found, does not compile
+//! or throws rejects it. Modules an `import()` loaded stay in the instance until
+//! [`Instance::reset`]. Top-level `await` and import attributes (JSON modules) are not
+//! supported.
 //!
 //! # Plain data
 //!

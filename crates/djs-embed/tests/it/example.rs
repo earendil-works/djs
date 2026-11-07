@@ -53,3 +53,41 @@ fn the_crate_example_runs() -> Result<(), Error> {
     assert_eq!(decision.get("length"), Some(&Data::from(28)));
     Ok(())
 }
+
+#[test]
+fn the_module_example_runs() -> Result<(), Error> {
+    use djs_embed::{ModuleMap, SyntheticModule};
+    const ALLOW: u32 = 1;
+
+    let snapshot = Snapshot::builder()
+        .module(
+            SyntheticModule::new("@sdk/net")
+                .host_fn(HostFn::sync(ALLOW, "allowHosts"))
+                .data("secret", Data::from("t0k")),
+        )
+        .loader(ModuleMap::new().module(
+            "lib/hosts.js",
+            "export const lower = (h) => h.toLowerCase();",
+        ))
+        .source(Source::module(
+            "policy.js",
+            r#"
+            import { allowHosts, secret } from "@sdk/net";
+            import { lower } from "./lib/hosts.js";
+            export async function onRequest(req) {
+                return { allow: allowHosts(lower(req.host)), auth: secret };
+            }
+        "#,
+        ))
+        .build()?;
+
+    let mut vm = snapshot.instantiate(Limits::default())?;
+    let req = Data::object([("host", Data::from("Example.com"))]);
+    let decision = vm.call_export("policy.js", "onRequest", &[Value::Data(&req)], |call| {
+        let ok = call.arg(0).as_str().is_some_and(|h| h == "example.com");
+        call.reply(Ok(Value::Bool(ok)))
+    })?;
+    assert_eq!(decision.get("allow"), Some(&Data::Bool(true)));
+    assert_eq!(decision.get("auth"), Some(&Data::from("t0k")));
+    Ok(())
+}
