@@ -25,6 +25,14 @@ runs from source. The wire encoder, the reader and the pi adapter are not export
 
 The gate builds a debug djs-wasm and runs the node tests against it.
 
+Rust hosts do not go through wasm: they link `crates/djs-embed` (D3170), a std crate over
+`djs_core::vm::Vm` whose API names no djs-core type (snapshots, instances, typed host
+functions, plain data as `Data` or wire bytes, budgets, one `Error`; its crate docs are the
+reference, the guide's rust-api.md the overview). What it needs from djs-core beyond the wasm
+modules' needs sits behind djs-core's `embed` feature (D3180): the outbound wire encoder, the
+uncounted UTF-8 string tag, `ExecOptions::fatal_out_of_memory` (D3181), `Vm::reset_to`
+(D3182), `Vm::decode_wire`.
+
 The slim module (djs-core without its default `full` and `unicode` features, D2411) has
 the same exports and ABI. It lacks typed arrays, BigInt, the Iterator helpers, weak
 references, DisposableStack/`using` and decorators, so the wire format's bytes tag

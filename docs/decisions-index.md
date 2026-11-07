@@ -800,4 +800,9 @@ topics when the index is next reorganized.
 - D3172: TextEncoder and TextDecoder (UTF-8) are builtins
 - D3173: No URL or URLSearchParams in djs
 - D3174: libm becomes a djs crate (djs-libm)
+- D3180: djs-core's `embed` feature; the wire format's uncounted UTF-8 strings
+- D3181: Reaching the heap cap can end the run uncatchably
+- D3182: `Vm::reset_to`: reload an image into the VM's own arena buffer
+- D3183: `Vm` is `Send` in every build
+- D3184: djs-embed's API and failure model
 - D3215: djs-libm: what was copied, and how the build hash covers it

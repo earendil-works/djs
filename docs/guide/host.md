@@ -216,7 +216,10 @@ keys are interned in a key table, and `Uint8Array`s as raw bytes. The VM's decod
 (`vm_decode_wire`) allocates every cell at its final size in one pass and transcodes
 UTF-8 to the VM's one-byte or two-byte strings natively. The format is validated as it
 is decoded: malformed input is an error, never a corrupt heap. A host that holds JSON
-text already can pass it to `vm_parse_json` instead.
+text already can pass it to `vm_parse_json` instead. A Rust host writes the same
+format with its own encoder (the [Rust interface](rust-api.md) uses it), whose strings
+may leave out the UTF-16 length: Rust strings are UTF-8, and the decoder counts the
+units from the lead bytes instead of the encoder counting them in a pass of its own.
 
 A large string on its own skips the staging buffer when it is ASCII, which is the common
 case for a tool result passed as JSON text. The encoder's output already shows it: the

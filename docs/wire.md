@@ -1,8 +1,10 @@
 # Data passing: the inbound wire format (host → VM) and direct heap reads (VM → host)
 
 ARCH.md, "Data passing (G1)": the host encodes a JS value into a byte buffer
-(`js/src/wire.ts`, `encode`), and the VM materializes it in one native pass
-(`djs_core::wire::decode`). This document is the format specification, version 1.
+(`js/src/wire.ts`, `encode`; Rust hosts `djs_core::wire::Writer`), and the VM materializes it
+in one native pass (`djs_core::wire::decode`). This document is the format specification,
+version 1. Rust hosts also encode VM values into the same format (`djs_core::wire::encode`,
+"Outbound encoding" below).
 
 Design goals, in order: a fast JS encoder (one pass, typed-array writes, `TextEncoder`
 for long strings), a fast one-pass decoder that allocates every heap cell at its final size,
@@ -35,6 +37,7 @@ learns later: `5` may be written as `0x85 0x00`.
 | `0x07` | int8 number          | `i8`                                                       |
 | `0x10` | string, UTF-8        | `varint units`, `varint bytes`, `bytes` of UTF-8           |
 | `0x11` | string, UTF-16       | `varint units`, `units` × `u16`                            |
+| `0x12` | string, UTF-8, uncounted | `varint bytes`, `bytes` of UTF-8                       |
 | `0x20` | array                | `varint count`, `count` × value                            |
 | `0x21` | object               | `varint count`, `count` × (key, value)                     |
 | `0x30` | bytes (`Uint8Array`) | `varint length`, `length` bytes                            |
@@ -57,6 +60,14 @@ surrogate code points) and decode to exactly `units` code units; this needs
 Otherwise the decoder scans for a lead byte `>= 0xC4` (a code point above U+00FF) to choose
 a one-byte or two-byte heap string, and transcodes into it.
 
+The uncounted UTF-8 form (`0x12`, D3180) is the same string without `units`: for Rust hosts,
+whose strings are UTF-8 and whose encoder would otherwise count UTF-16 units in a pass of its
+own. The decoder counts them from the lead bytes (every byte that is not a continuation byte
+`0x80..=0xBF` starts a code point; a lead byte `>= 0xF0` is two units), which is exact for valid
+UTF-8, and then decodes the string as a counted one, validating as it transcodes. Invalid input
+is an error as for `0x10`. Only builds with djs-core's `embed` feature decode it; the wasm
+modules, whose only encoder is `js/src/wire.ts`, reject it as an unknown tag. It may be a key.
+
 The UTF-16 form carries any code unit sequence. An encoder uses it only for strings that
 are not well-formed (lone surrogates), which UTF-8 cannot represent; `TextEncoder` would
 replace them with U+FFFD. The decoder stores it one-byte if every unit is at most 0xFF.
@@ -65,8 +76,8 @@ replace them with U+FFFD. The decoder stores it one-byte if every unit is at mos
 
 Each property is a key followed by its value. A key is a `varint k`:
 
-- `k = 0`: a new key follows, as a string value (tag `0x10` or `0x11` and its payload). It is
-  appended to the key table.
+- `k = 0`: a new key follows, as a string value (tag `0x10`, `0x11` or `0x12` and its
+  payload). It is appended to the key table.
 - `k >= 1`: entry `k - 1` of the key table.
 
 The key table starts empty and grows across the whole buffer, so a key that occurs in 10,000
@@ -110,6 +121,40 @@ Anything else (functions, symbols, BigInt, class instances, `Date`, `Map`, `Set`
 references are encoded once per occurrence; the VM gets independent copies. Nesting is limited
 by the JS stack of the encoder (it recurses) and by the decoder's depth limit (5000, as
 `JSON.parse` in djs).
+
+## The Rust encoder
+
+`djs_core::wire::Writer` (`crates/djs-core/src/wire/writer.rs`, no_std) writes a buffer value by
+value: `number` (the smallest exact form), `str` (`0x12`), `str_latin1` (counted `0x10`, for
+one-byte heap strings), `str_utf16`, `bytes`, `hole`, and containers announced with their
+count (`array(n)`, `object(n)` followed by `n` × `key` and value). Keys are interned in the key
+table by the writer. It does not check the structure; the decoder does. djs-embed's `Data`
+tree is written with it.
+
+## Outbound encoding
+
+`djs_core::wire::encode(heap, value, max_bytes)` (`crates/djs-core/src/wire/encode.rs`, builds
+with `embed`; `Vm::encode_wire`) writes a VM value as a buffer of this format, for Rust hosts
+that take plain data out of a VM (djs-embed's results). It reads the heap and never runs JS, so
+it accepts less than `encode` on the JS side, which calls getters:
+
+- primitives except symbols and BigInts; strings as counted Latin-1 (`0x10`) when they are
+  one-byte, as `0x12` when they are well-formed UTF-16, and as `0x11` when they hold lone
+  surrogates (so a string comes back exactly);
+- arrays (any `Array`, whatever its prototype): `length` elements, own data properties only,
+  holes as holes; extra properties are left out;
+- `Uint8Array`s (a detached one is empty);
+- plain objects (prototype `%Object.prototype%` of the heap's realm, or `null`): own
+  enumerable string-keyed data properties in property order; non-enumerable properties and
+  symbol keys are left out.
+
+Everything else is an error naming the path, as `js/src/wire.ts` names it: an enumerable
+accessor (`cannot encode an accessor at $.x`), functions, proxies, objects with another
+prototype (`an object with a custom prototype (a class instance)`), `Date`, `Map`, `Set`,
+`RegExp`, `Error`, `Promise`, other typed arrays, `ArrayBuffer`, primitive wrappers, cycles
+(`cyclic value at $.o.self`) and nesting beyond the decoder's depth limit. Shared values are
+written once per occurrence, so a heap with sharing at every level could produce an exponentially
+large buffer: `max_bytes` bounds it (`TooLarge`).
 
 ## Validation
 
@@ -159,8 +204,11 @@ UTF-8 while transcoding (D1781).
 
 - Encoder: `js/src/wire.ts` (`encode(value, buffer?)`), tests `node --test js/test/*.test.ts`
   (node >= 22.6 runs the TypeScript directly).
-- Decoder: `crates/djs-core/src/wire/` (`wire::decode(heap, bytes, &DecodeOptions)`), with unit
-  tests, a fuzz test (`fuzz_long` is the longer ignored run) and `wire_cross`: node writes a corpus
+- Rust encoder and outbound encoder: `crates/djs-core/src/wire/writer.rs` and `encode.rs`, tested
+  by round trips in the decoder's tests (`writer_round_trips`, `outbound_round_trips`) and, with
+  JS values, in djs-embed's `tests/it/data.rs`.
+- Decoder: `crates/djs-core/src/wire/` (`wire::decode(heap, bytes, &DecodeOptions)`, or
+  `Vm::decode_wire`, which takes the prototypes from the VM's realm), with unit tests, a fuzz test (`fuzz_long` is the longer ignored run) and `wire_cross`: node writes a corpus
   (`node js/test/gen-cross.ts <dir>`) and the Rust test decodes it and compares it with the node
   side's dump and with `json::parse_utf8` of the same value. The gate runs the node tests and
   `wire_cross`.

@@ -11626,3 +11626,88 @@ narrowing division). `arch_enabled` (libm's default `arch` feature) is always on
   The shipped module is 174 bytes smaller (979,984 vs 980,158): with `rem_pio2f` gone,
   `rem_pio2_large` has one caller and LLVM inlines it; no other function changed size.
 - djs-libm is opt-level 1 in dev, as libm was through `[profile.dev.package."*"]` (D1785).
+## D3180: djs-core's `embed` feature; the wire format's uncounted UTF-8 strings
+date: 2026-11-07 · by: embed · issue: 0240
+What djs-embed needs from djs-core and the wasm modules do not is behind a new code-only
+feature `embed` (in djs-core's defaults, image-neutral in build.rs and compat_inputs.rs, off in
+every djs-wasm module): `wire::encode` (VM value → wire buffer, never runs JS, refuses with a
+path like js/src/wire.ts), `Vm::encode_wire`/`decode_wire`, `Vm::reset_to`,
+`ExecOptions::fatal_out_of_memory` (D3181) and the decoder's tag `0x12`, a UTF-8 string without
+its UTF-16 unit count: the decoder counts units from the lead bytes (exact for valid UTF-8) and
+decodes it as a counted `0x10`, which validates while it transcodes. The format stays version 1:
+the tag is additive and every decoder is this repository's (D024); a decoder without `embed`
+rejects it as an unknown tag, and js/src/wire.ts does not write it (V8 strings are UTF-16, it
+knows the count). `wire::Writer`, the Rust encoder, is not gated: nothing in the modules calls
+it. Why gate rather than measure: the shipped module had 14 B of gzip slack, and the module's
+function order follows first references, so even code that is never called on a module path
+moved its functions: an unused `Vm::decode_wire` moved `wire::decode`, and `transcode`'s
+closures moved with a new enclosing function; each cost ~70 B gzip at the same raw size. With
+the gating the shipped module is byte-for-byte the size it was (426,792 gzip, 980,158 raw) and
+the slim one 360,471.
+
+## D3181: Reaching the heap cap can end the run uncatchably
+date: 2026-11-07 · by: embed · issue: 0240
+`ExecOptions::fatal_out_of_memory` (builds with `embed`): the heap cap's out-of-memory fault
+takes the host-out-of-memory path (D1690) instead of opening the reserve and throwing the
+catchable `InternalError`: the run stops at the next instruction boundary with
+`Status::HostOutOfMemory`, before any handler instruction runs (no `catch`, no `finally`, no
+promise reaction), and `Vm::run` aborts the call, so the VM is idle with its realm intact.
+djs-embed turns it on for every VM it makes; a policy cannot swallow its own memory exhaustion.
+The status keeps its name; its doc says it covers both causes. Data the abandoned call held in
+globals stays (a host resets the instance); the abandoned frames' data is garbage at the next
+collection.
+
+## D3182: `Vm::reset_to`: reload an image into the VM's own arena buffer
+date: 2026-11-07 · by: embed · issue: 0240
+`Vm::reset_to(&[u8])` (builds with `embed`) is `replace_image` from a borrowed image: it takes
+the arena's `Vec` out, clears it, copies the image in and loads it as `from_bytes_trusted`
+does, keeping the options, the dump caches and the derived Unicode composition table. One
+copy, no allocation once the buffer is big enough (it keeps the capacity a call grew it to).
+On an error the VM has no heap left (djs-embed poisons the instance). Copy-on-write images
+were not attempted: the arena is one `Vec`, and the copy is a memcpy. Measured (release,
+Apple M-series, load ~140, `cargo test --release -p djs-embed --test it bench -- --ignored`)
+on a 192 KiB snapshot of a shim-sized setup: instantiate 2.9-3.9 µs, reset 2.8-3.0 µs, an empty
+call 0.2 µs, a header policy (Headers class over a Map, allowlist, 2245 fuel) 12.5-13.5 µs
+pooled, 17-18 µs with a reset or a fresh instance per call. The prototype measured 6-7 µs for
+`from_bytes_trusted(image.clone())` of 238 KiB, whose exact-size buffer the heap reallocated
+on its first growth; djs-embed's instances start in a buffer of the image's restore capacity.
+
+## D3183: `Vm` is `Send` in every build
+date: 2026-11-07 · by: embed · issue: 0240
+An embedder's async task holds an instance across awaits and may resume on another thread,
+so `Vm` must be `Send`. It was not in builds with `dump`: the dump caches (`Vm::base_names`,
+`dump::Cache` and the maps they hold) used `Rc`. They use `Arc` now (vm/dump*.rs, a rename);
+workspace builds unify `dump` into djs-core, so djs-embed's compile-time `Instance: Send`
+assertion would otherwise fail there. `vm::tests::vm_is_send` keeps it so. Not `Sync`: the
+caches are `RefCell`s, and one VM serves one call at a time.
+
+## D3184: djs-embed's API and failure model
+date: 2026-11-07 · by: embed · issue: 0240
+The shape of crates/djs-embed 0.1 (its crate docs are the reference): `Snapshot::builder()`
+defines host functions (`HostFn::sync`/`asynchronous`, by id and global name) and plain-data
+globals first, then runs the setup `Source`s in order (a `SourceKind` leaves room for modules,
+0243); setup may not call host functions (no host to answer: `Error::Usage`); builtins are
+frozen by default; the image is sealed (everything old). `Snapshot` is an `Arc` (`Send + Sync`,
+asserted), `Instance` is `Send` (asserted). A call is `start(path, args)` then `step()` →
+`Step::{Done, HostCall(id), Wait(new ids), Yield}`; `this` is the object the dotted path ends
+on; `Instance::call` is the same loop for hosts that answer at once. The entry's return value
+is kept in a heap handle across runs (no settle callback in the script); when it is a promise
+it is marked handled and the call settles with it; settling aborts the VM, dropping async
+calls nobody awaits and queued jobs; the value stays readable (`result()`) until the next
+`start`. Values in are `Value<'a>` (borrowed `&str`/`&[u8]`/`&Data`/wire; strings via
+`alloc_str`, ASCII a memcpy; bytes one copy: the single arena cannot wrap host memory); values
+out are `ValueRef<'a>` borrowing the instance (`as_str` borrowed when the string is flat
+ASCII, `as_bytes` borrowed from a `Uint8Array`/`ArrayBuffer`), `to_wire` (D3180's encoder,
+capped at the memory limit) and `to_data` (through the wire form). `Data` is the owned tree;
+array holes are a `Data::Hole` variant (not `Option` elements: most arrays have none);
+strings read out with lone surrogates get U+FFFD (the wire form keeps them). Failure model:
+everything that is not a settled value is an `Error` and ends the call (abort: idle, realm
+intact), except a stale call id given to `resolve`, which changes nothing. Budgets: fuel per
+call in slices, a deadline checked before each slice (`deadline()` for hosts awaiting host
+work), the memory cap uncatchable (D3181). The cap's catchable OOM error, should one escape
+(a call's argument setup), maps to `Error::OutOfMemory` too. Every djs-core entry that runs
+engine code goes through `catch_unwind`; a panic is `Error::Panicked` and poisons the instance
+(every later use `Error::Poisoned`), never the snapshot or other instances: djs-core keeps no
+global mutable state outside tests (checked: no `static mut`, atomics or thread-locals outside
+cfg(test); the `OnceLock`s are in test modules), everything is in the VM's own heap. This needs
+`panic = "unwind"`. Host-thrown errors (`Throw`) carry no stack (`Vm::new_error` records none).

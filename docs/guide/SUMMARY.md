@@ -5,6 +5,7 @@
 - [The language](language.md)
 - [TypeScript](typescript.md)
 - [The JavaScript interface](js-api.md)
+- [The Rust interface](rust-api.md)
 - [Continuation dumps](dumps.md)
 - [Limits and resource control](limits.md)
 - [Determinism](determinism.md)

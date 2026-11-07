@@ -10,9 +10,9 @@ host keeps control of time.
 > **In short.** Every instruction costs fuel, and so does the work inside builtins; a
 > run goes in slices of fuel, between which the host gets control back, and a budget
 > ends it. Reaching the heap cap is a catchable `InternalError: out of memory`, with a
-> reserve so the handler can run. Deep recursion is a `RangeError`, deep nesting in
-> source a `SyntaxError`. None of these can hurt the host: they are errors in the run,
-> and the sandbox stays usable.
+> reserve so the handler can run, or, if the host asks for it, the end of the run. Deep
+> recursion is a `RangeError`, deep nesting in source a `SyntaxError`. None of these can
+> hurt the host: they are errors in the run, and the sandbox stays usable.
 
 ## Fuel
 
@@ -88,6 +88,13 @@ step that failed collects garbage and tries once more, so the error means that l
 fills the cap. Since the cap is checked against the heap's own size, the point at which
 it is reached is a function of the program, like everything else in a run. An uncaught
 out-of-memory error ends the run as an ordinary exception (kind `threw`).
+
+A host can also make the cap final. With that option, used by every VM of the
+[Rust interface](rust-api.md#limits), reaching the cap stops the run at once, as host
+memory exhaustion does below: no `catch` or `finally` block runs, the call is abandoned,
+and the VM is idle and usable. A script that must not decide anything after running out
+of memory, such as a policy whose answer would otherwise come from its error handler,
+cannot swallow it then.
 
 The host's own memory is a different matter: if wasm memory cannot grow below the cap
 (the machine is out of memory, or the cap is larger than the host can back), the run
