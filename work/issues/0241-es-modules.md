@@ -1,7 +1,7 @@
 # 0241: ES modules: module goal, loader, linking and evaluation (M1–M3, M6, M7)
 
-status: open
-agent: -
+status: in-progress
+agent: modules
 branch: issue/0241-es-modules
 depends-on: -
 touches: crates/djs-core/src/compiler (module goal; compiler/module.rs is strip-types' module syntax today), crates/djs-core/src/interp (module records, environments, namespace objects, intrinsics), crates/djs-core/src/heap (new cell kinds, the namespace object class), crates/djs-core/src/vm (a module API, new file), builtins/ (module evaluation in the builtin language; import.ts), crates/djs-core/Cargo.toml (feature `modules`), crates/djs-prelude/Cargo.toml (feature pass-through), crates/djs-core/compat_inputs.rs, tests (unit and e2e), docs/compiler.md, ARCH.md (modules no longer a non-goal)
