@@ -1,7 +1,7 @@
 # 0247: The hook benchmark on djs-embed: per-call costs for Gondolin
 
-status: open
-agent: -
+status: in-progress
+agent: embed
 branch: issue/0247-embed-hook-bench
 depends-on: 0240
 touches: crates/djs-embed (examples/ or benches/, the shim and policies copied from Gondolin's prototype), crates/djs-core (only for performance fixes found), docs/guide/rust-api.md (a short costs section), tests/scores/status.tsv (only if recorded through scripts/status.py)
