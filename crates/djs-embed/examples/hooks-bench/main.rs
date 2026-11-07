@@ -571,11 +571,40 @@ fn us(d: Duration) -> String {
     format!("{:.1}", d.as_secs_f64() * 1e6)
 }
 
+/// `probe <policy> <fresh|reset|pooled> <calls>`: runs one row's calls in a loop, for a
+/// sampling profiler or a CPU-time measurement (`/usr/bin/time`), which a loaded machine
+/// disturbs less than latencies.
+fn probe(args: &[String]) {
+    let mode = match args[1].as_str() {
+        "fresh" => Mode::Fresh,
+        "reset" => Mode::Reset,
+        _ => Mode::Pooled,
+    };
+    let hooks = DjsHooks::new(policy(&args[0]), mode, Limits::default()).unwrap();
+    let calls: u64 = args[2].parse().unwrap();
+    let (bhead, bdata) = body_request();
+    let gh = header_request("api.github.com");
+    let (head, body) = if args[0].starts_with("body") {
+        (&bhead, Some(&bdata[..]))
+    } else {
+        (&gh, None)
+    };
+    let start = Instant::now();
+    for _ in 0..calls {
+        one(&hooks, head, body).unwrap();
+    }
+    println!(
+        "{:.2} µs/call",
+        start.elapsed().as_secs_f64() * 1e6 / calls as f64
+    );
+}
+
 fn main() {
-    let calls: usize = std::env::args()
-        .nth(1)
-        .and_then(|a| a.parse().ok())
-        .unwrap_or(5000);
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("probe") {
+        return probe(&args[1..]);
+    }
+    let calls: usize = args.first().and_then(|a| a.parse().ok()).unwrap_or(5000);
     let limits = Limits::default();
     let make = |name: &str, mode| DjsHooks::new(policy(name), mode, limits).unwrap();
 
