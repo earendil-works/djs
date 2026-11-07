@@ -1,6 +1,6 @@
 # 0241: ES modules: module goal, loader, linking and evaluation (M1–M3, M6, M7)
 
-status: blocked
+status: in-progress
 agent: modules
 branch: issue/0241-es-modules
 depends-on: -
