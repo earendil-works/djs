@@ -7,10 +7,11 @@ can choose, the slim build and frozen builtins.
 
 > **In short.** Code is always strict. A host runs a script as the body of an async
 > function, so `await` and `return` work at the top level; Scripts in the specification's
-> sense exist for the REPL and for tests. What is left out (`with`, direct `eval`,
-> modules, `Intl`, timers, I/O) is what codemode scripts don't need and what would cost
-> size or safety; the rest of the standard library is there, matching QuickJS's behavior
-> and messages.
+> sense exist for the REPL and for tests, and ES modules for native hosts that load them
+> through a loader of their own. What is left out (`with`, direct `eval`, `Intl`, timers,
+> I/O, and modules in the wasm modules) is what codemode scripts don't need and what would
+> cost size or safety; the rest of the standard library is there, matching QuickJS's
+> behavior and messages.
 
 ## Always strict
 
@@ -83,13 +84,42 @@ completion value. The REPL runs every input as a Script ([the REPL](cli.md#the-r
 the test suites use them, and a continuation dump is one ([dumps](dumps.md)). A Script
 has no top-level `await`.
 
+## Modules
+
+The third kind is **module code**, for native hosts that embed djs in Rust: a policy
+written as a module that imports libraries the host provides. Every form of `import` and
+`export` works (default, named, namespace and string names, re-exports, `export * as`,
+`export default` of expressions, functions and classes), and so does `import.meta`, whose
+`url` is the module's key. Module code has no top-level `await` yet, and `this` at its
+top level is `undefined`. TypeScript modules work too: type-only imports and exports are
+erased, and an import that no value refers to is dropped, as tsc does when it cannot see
+the types.
+
+The engine does no I/O for modules. The host implements a loader with two calls, one
+that turns a specifier into a key and one that returns a key's source
+([`crates/djs-core/src/vm/module.rs`](../../crates/djs-core/src/vm/module.rs)); keys are
+opaque strings, and a key already loaded is not loaded again. Loading a module loads,
+compiles and links its whole graph at once, so a missing or ambiguous import is a
+`SyntaxError` before any module runs. Evaluating it is a run like any call: module bodies
+are ordinary frames, so they can wait on host calls, run out of fuel and continue, and an
+error a module throws stays its result for later evaluations. Imports are live bindings
+(an importer sees the exporter's binding, not a copy), cycles work as the specification
+says, namespace objects behave as specified, and the module records live in the VM's heap,
+so a [snapshot](snapshots.md) taken after evaluation carries the evaluated graph: a VM
+made from it reads the same exports. The host reads a module's exports and namespace
+directly.
+
+Modules are a build feature. The wasm modules leave it out, since codemode scripts are
+one piece of code, so there `import` and `export` declarations are syntax errors; and
+`import()` compiles everywhere but returns a rejected promise, as below.
+
 ## What is left out, and why
 
 | Left out | Why |
 | --- | --- |
 | Sloppy mode, `with` | See above: one set of semantics. `with` is a syntax error. |
 | Direct `eval` | A direct `eval` can see and change the caller's local variables, so every function that contains one would need its scopes kept by name. `eval(x)` is always an indirect eval: it compiles `x` as a global Script. The `Function` constructors work. |
-| ES modules | A codemode script is one piece of code. `import` and `export` declarations are syntax errors, and `import()` compiles and returns a rejected promise. Hosts give scripts their functions as globals or parameters instead ([bindings](js-api.md#host-functions)). |
+| ES modules in codemode | A codemode script is one piece of code: in a body or a Script, `import` and `export` declarations are syntax errors, and `import()` compiles and returns a rejected promise. Hosts give scripts their functions as globals or parameters instead ([bindings](js-api.md#host-functions)). Native hosts can load [modules](#modules). |
 | `Intl` | Locale data is megabytes. `toLocaleString` and friends use a fixed, locale-independent form. |
 | `Temporal` | Not needed by the scripts djs runs; `Date` is there. |
 | `SharedArrayBuffer`, `Atomics`, workers | A sandbox is one thread. |
