@@ -1,5 +1,6 @@
 //! Computes `SOURCE_HASH` (D1330): a hash of everything that goes into the library and so
-//! into its heap images: the non-test Rust sources under `src/` and the generated prelude.
+//! into its heap images: the non-test Rust sources under `src/`, those of djs-libm (Math
+//! results come from it, D3174) and the generated prelude.
 //! `vm::BUILD_HASH` includes it and so identifies the exact build (`djs_build_hash`, run
 //! journals, djs-prelude's check that the base image is this build's). Images are not keyed
 //! on it but on their dependency descriptor (below, D2265).
@@ -7,11 +8,9 @@
 //! Test files (`*tests.rs`) are left out, so editing a test does not rebuild the library
 //! and the base snapshot. Line endings are normalized, so a CRLF checkout hashes the same.
 //!
-//! Behavior also depends on things outside the sources (D1750): the enabled cargo
-//! features (`\p{..}` is a SyntaxError without `regexp-unicode-props`) and the `libm`
-//! version (Math results). Both are hashed too, and listed in `BUILD_INPUTS`. `libm` is
-//! pinned with `=` in Cargo.toml, so the version read from there is the one compiled
-//! (`vm::tests` checks it against Cargo.lock).
+//! Behavior also depends on something outside the sources (D1750): the enabled cargo
+//! features (`\p{..}` is a SyntaxError without `regexp-unicode-props`). They are hashed
+//! too, and listed in `BUILD_INPUTS`.
 //!
 //! It also computes two components of an image's dependency descriptor (`vm::ImageDeps`,
 //! D2265), which unlike `SOURCE_HASH` key image compatibility: `RECORDS_HASH` (D2266), the
@@ -54,20 +53,6 @@ fn fnv(mut h: u32, bytes: &[u8]) -> u32 {
         h = (h ^ b as u32).wrapping_mul(0x0100_0193);
     }
     h
-}
-
-/// The exact `libm` requirement (`libm = "=X.Y.Z"`) from Cargo.toml.
-fn libm_version(manifest: &str) -> String {
-    for line in manifest.lines() {
-        if let Some(rest) = line.trim().strip_prefix("libm") {
-            let req = rest.trim().trim_start_matches('=').trim().trim_matches('"');
-            let version = req
-                .strip_prefix('=')
-                .expect("libm must be pinned with `=` in Cargo.toml (D1750)");
-            return version.to_string();
-        }
-    }
-    panic!("no libm dependency in Cargo.toml");
 }
 
 /// The enabled features of this crate, sorted, without `default` and `unicode` (which only
@@ -121,6 +106,8 @@ fn main() {
     let root = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let mut files = Vec::new();
     collect(&root.join("src"), &mut files);
+    // djs-libm's tests are in its tests/, which is not hashed.
+    collect(&root.join("../djs-libm/src"), &mut files);
     files.push(root.join("../../builtins/gen/prelude.js"));
     files.push(root.join("../../builtins/gen/prelude-slim.js"));
     let mut h: u32 = 0x811c_9dc5;
@@ -134,14 +121,11 @@ fn main() {
         h = fnv(h, &std::fs::read(f).expect("cannot read a source file"));
         h = fnv(h, &[0]);
     }
-    // Cargo reruns the script when the features change; Cargo.toml holds the libm pin.
-    println!("cargo:rerun-if-changed=Cargo.toml");
-    let manifest = std::fs::read_to_string(root.join("Cargo.toml")).expect("Cargo.toml");
-    let mut inputs: Vec<String> = features()
+    // Cargo reruns the script when the features change.
+    let inputs: Vec<String> = features()
         .into_iter()
         .map(|f| format!("feature {f}"))
         .collect();
-    inputs.push(format!("libm {}", libm_version(&manifest)));
     for input in &inputs {
         h = fnv(h, input.as_bytes());
         h = fnv(h, &[0]);
@@ -172,7 +156,7 @@ fn main() {
         format!(
             "/// See `build.rs`.\npub const SOURCE_HASH: u32 = {h:#010x};\n\
              /// What `SOURCE_HASH` covers besides the sources and the prelude: the enabled\n\
-             /// cargo features and the libm version (build.rs, D1750).\n\
+             /// cargo features (build.rs, D1750).\n\
              pub const BUILD_INPUTS: &[&str] = &[{list}];\n"
         ),
     )

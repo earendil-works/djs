@@ -57,8 +57,8 @@ const PRELUDE: &str = include_str!("../../../../builtins/gen/prelude.js");
 #[cfg(not(feature = "full"))]
 const PRELUDE: &str = include_str!("../../../../builtins/gen/prelude-slim.js");
 
-// `SOURCE_HASH`: the library's non-test sources and the prelude (build.rs, D1330), the
-// enabled cargo features and the libm version (`BUILD_INPUTS`, D1750).
+// `SOURCE_HASH`: the library's non-test sources, djs-libm's and the prelude (build.rs,
+// D1330, D3174) and the enabled cargo features (`BUILD_INPUTS`, D1750).
 include!(concat!(env!("OUT_DIR"), "/source_hash.rs"));
 
 /// The engine build hash (D1320, D1330): the heap layout (with the well-known atoms),

@@ -162,7 +162,7 @@ impl Exec<'_> {
                 };
                 let msg = if !n.is_finite() {
                     "cannot convert NaN or Infinity to BigInt"
-                } else if libm::trunc(n) != n {
+                } else if djs_libm::trunc(n) != n {
                     "cannot convert to BigInt: not an integer"
                 } else {
                     ""

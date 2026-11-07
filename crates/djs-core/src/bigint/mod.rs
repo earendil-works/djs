@@ -691,7 +691,7 @@ impl BigInt {
                 Ordering::Greater
             });
         }
-        let fl = libm::floor(f);
+        let fl = djs_libm::floor(f);
         let c = self.cmp(&BigInt::from_f64(fl));
         // floor(f) < f when f is not integral.
         Some(if c == Ordering::Equal && fl != f {

@@ -215,11 +215,11 @@ pub(crate) fn to_int32(n: f64) -> i32 {
     }
     // Truncate, then reduce modulo 2^32.
     let t = if n < 0.0 {
-        -libm::floor(-n)
+        -djs_libm::floor(-n)
     } else {
-        libm::floor(n)
+        djs_libm::floor(n)
     };
-    let m = libm::fmod(t, 4294967296.0);
+    let m = djs_libm::fmod(t, 4294967296.0);
     let m = if m < 0.0 { m + 4294967296.0 } else { m };
     m as u32 as i32
 }
@@ -366,7 +366,7 @@ pub(crate) fn pow(base: f64, exp: f64) -> f64 {
     if exp.is_infinite() && (base == 1.0 || base == -1.0) {
         return f64::NAN;
     }
-    libm::pow(base, exp)
+    djs_libm::pow(base, exp)
 }
 
 /// The `+` operator on primitives.

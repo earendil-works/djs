@@ -39,8 +39,8 @@ dependencies = [
 name = "djs-core"
 version = "0.0.0"
 dependencies = [
+ "djs-libm",
  "djs-prelude",
- "libm",
 ]
 
 [[package]]

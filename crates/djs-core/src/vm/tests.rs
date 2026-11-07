@@ -3043,10 +3043,10 @@ fn abort_drops_delivered_results() {
     assert_eq!(vm.run(100), Status::Idle);
 }
 
-/// D1750: the build hash covers the enabled features and the libm version, and the
-/// version build.rs reads from the pin is the one Cargo.lock resolved.
+/// D1750: the build hash covers the enabled features (and djs-libm's sources, D3174, which
+/// build.rs hashes with djs-core's).
 #[test]
-fn build_inputs_list_features_and_libm() {
+fn build_inputs_list_features() {
     extern crate std;
     let mut want: Vec<String> = Vec::new();
     if cfg!(feature = "full") {
@@ -3058,13 +3058,6 @@ fn build_inputs_list_features_and_libm() {
     if cfg!(feature = "unicode-normalization") {
         want.push("feature unicode-normalization".into());
     }
-    let lock = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../Cargo.lock"))
-        .expect("Cargo.lock");
-    let at = lock
-        .find("name = \"libm\"\nversion = \"")
-        .expect("libm in Cargo.lock");
-    let rest = &lock[at + "name = \"libm\"\nversion = \"".len()..];
-    want.push(format!("libm {}", &rest[..rest.find('"').unwrap()]));
     assert_eq!(
         BUILD_INPUTS,
         want.iter().map(String::as_str).collect::<Vec<_>>()

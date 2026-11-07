@@ -588,7 +588,7 @@ pub(crate) fn view_set(
 fn view_range(heap: &Heap, view: Obj, at: f64, size: usize) -> Option<core::ops::Range<usize>> {
     let buffer = heap.object_slot(view, 0).as_object()?;
     heap.buffer_bytes(buffer)?;
-    if !(at >= 0.0 && at == libm::trunc(at)) {
+    if !(at >= 0.0 && at == djs_libm::trunc(at)) {
         return None;
     }
     let start = at as usize;

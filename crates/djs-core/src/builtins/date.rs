@@ -48,7 +48,7 @@ fn year_from_days(days: &mut i64) -> i64 {
 /// TimeClip.
 pub(crate) fn time_clip(t: f64) -> f64 {
     if (-8.64e15..=8.64e15).contains(&t) {
-        libm::trunc(t) + 0.0
+        djs_libm::trunc(t) + 0.0
     } else {
         f64::NAN
     }
@@ -108,8 +108,8 @@ pub(crate) fn fields(t: f64, local: bool, offset: i64, force: bool) -> Option<[f
 /// MakeDay/MakeTime/MakeDate of 7 fields, then local → UTC and TimeClip.
 pub(crate) fn from_fields(f: &[f64; 7], local: bool, offset: i64) -> f64 {
     let (y, m, dt) = (f[0], f[1], f[2]);
-    let ym = y + libm::floor(m / 12.0);
-    let mut mn = libm::fmod(m, 12.0);
+    let ym = y + djs_libm::floor(m / 12.0);
+    let mut mn = djs_libm::fmod(m, 12.0);
     if mn < 0.0 {
         mn += 12.0;
     }
@@ -146,7 +146,7 @@ pub(crate) fn from_fields_checked(f: &mut [f64; 7], local: bool, offset: i64) ->
         if !a.is_finite() {
             return f64::NAN;
         }
-        *a = libm::trunc(*a);
+        *a = djs_libm::trunc(*a);
         if i == 0 && *a >= 0.0 && *a < 100.0 {
             *a += 1900.0;
         }
@@ -166,7 +166,7 @@ pub(crate) fn set_fields(t: f64, first: usize, args: &[f64], local: bool, offset
     let mut ok = true;
     for (i, &a) in args.iter().enumerate() {
         ok &= a.is_finite();
-        f[first + i] = libm::trunc(a);
+        f[first + i] = djs_libm::trunc(a);
     }
     if !ok || args.is_empty() {
         return f64::NAN;

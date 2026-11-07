@@ -194,7 +194,7 @@ fn integer(n: f64) -> f64 {
     if n.is_nan() {
         0.0
     } else {
-        libm::trunc(n) + 0.0
+        djs_libm::trunc(n) + 0.0
     }
 }
 
@@ -581,7 +581,7 @@ fn number_is_integer(_: &mut Heap, _: Value, args: &[Value]) -> Fast {
     Ok(Some(Value::bool(
         arg(args, 0)
             .as_number()
-            .is_some_and(|n| n.is_finite() && libm::trunc(n) == n),
+            .is_some_and(|n| n.is_finite() && djs_libm::trunc(n) == n),
     )))
 }
 

@@ -118,13 +118,13 @@ fn to_int_bits(n: f64) -> u64 {
     if !n.is_finite() {
         return 0;
     }
-    let t = libm::trunc(n);
+    let t = djs_libm::trunc(n);
     if t.abs() < 9223372036854775808.0 {
         // Two's complement modulo 2^64; every element size divides 64.
         return t as i64 as u64;
     }
     // Large magnitudes: reduce modulo 2^64 exactly (t is an integer, so is the rest).
-    let m = libm::fmod(t, 18446744073709551616.0);
+    let m = djs_libm::fmod(t, 18446744073709551616.0);
     let m = if m < 0.0 {
         m + 18446744073709551616.0
     } else {
@@ -145,7 +145,7 @@ fn to_uint8_clamp(n: f64) -> u8 {
     if n >= 255.0 {
         return 255;
     }
-    let f = libm::floor(n);
+    let f = djs_libm::floor(n);
     if f + 0.5 < n {
         return (f + 1.0) as u8;
     }
@@ -208,10 +208,10 @@ pub fn f16_bits_to_f64(h: u16) -> f64 {
     let e = ((h >> 10) & 0x1F) as i32;
     let m = (h & 0x3FF) as f64;
     match e {
-        0 => sign * m * libm::ldexp(1.0, -24),
+        0 => sign * m * djs_libm::ldexp(1.0, -24),
         31 if m == 0.0 => sign * f64::INFINITY,
         31 => f64::NAN,
-        _ => sign * (1.0 + m / 1024.0) * libm::ldexp(1.0, e - 15),
+        _ => sign * (1.0 + m / 1024.0) * djs_libm::ldexp(1.0, e - 15),
     }
 }
 
@@ -608,7 +608,7 @@ impl Heap {
 
     /// The valid integer index a numeric key names, if any (IsValidIntegerIndex).
     fn ta_index(&self, o: Obj, n: f64) -> Option<u32> {
-        if n != libm::trunc(n) || (n == 0.0 && n.is_sign_negative()) || n < 0.0 {
+        if n != djs_libm::trunc(n) || (n == 0.0 && n.is_sign_negative()) || n < 0.0 {
             return None;
         }
         let len = self.ta_length(o)?;

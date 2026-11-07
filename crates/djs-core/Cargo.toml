@@ -10,8 +10,8 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
-# Pinned: Math results depend on the version, which is hashed into BUILD_HASH (D1750).
-libm = "=0.2.16"
+# Math (D3174): libm 0.2.16's functions; its sources are hashed into BUILD_HASH (build.rs).
+djs-libm = { path = "../djs-libm" }
 
 [features]
 default = ["full", "unicode", "dump", "lazy", "compile-cache"]

@@ -437,38 +437,38 @@ enum SetStep {
 /// The libm intrinsics (D1150): `F64Sin(x)` and friends.
 fn math_leaf(id: u16, x: f64, y: f64) -> Option<f64> {
     Some(match id {
-        F64_ABS => libm::fabs(x),
-        F64_ACOS => libm::acos(x),
-        F64_ACOSH => libm::acosh(x),
-        F64_ASIN => libm::asin(x),
-        F64_ASINH => libm::asinh(x),
-        F64_ATAN => libm::atan(x),
-        F64_ATANH => libm::atanh(x),
-        F64_ATAN2 => libm::atan2(x, y),
-        F64_CBRT => libm::cbrt(x),
-        F64_HYPOT => libm::hypot(x, y),
-        F64_CEIL => libm::ceil(x),
+        F64_ABS => djs_libm::fabs(x),
+        F64_ACOS => djs_libm::acos(x),
+        F64_ACOSH => djs_libm::acosh(x),
+        F64_ASIN => djs_libm::asin(x),
+        F64_ASINH => djs_libm::asinh(x),
+        F64_ATAN => djs_libm::atan(x),
+        F64_ATANH => djs_libm::atanh(x),
+        F64_ATAN2 => djs_libm::atan2(x, y),
+        F64_CBRT => djs_libm::cbrt(x),
+        F64_HYPOT => djs_libm::hypot(x, y),
+        F64_CEIL => djs_libm::ceil(x),
         F64_CLZ32 => number::to_uint32(x).leading_zeros() as f64,
-        F64_COS => libm::cos(x),
-        F64_COSH => libm::cosh(x),
-        F64_EXP => libm::exp(x),
-        F64_EXPM1 => libm::expm1(x),
-        F64_FLOOR => libm::floor(x),
+        F64_COS => djs_libm::cos(x),
+        F64_COSH => djs_libm::cosh(x),
+        F64_EXP => djs_libm::exp(x),
+        F64_EXPM1 => djs_libm::expm1(x),
+        F64_FLOOR => djs_libm::floor(x),
         F64_FROUND => crate::heap::typed::f32_bits_to_f64(crate::heap::typed::f64_to_f32_bits(x)),
         F64_F16ROUND => crate::builtins::math::f16_round(x),
         F64_IMUL => (number::to_uint32(x).wrapping_mul(number::to_uint32(y)) as i32) as f64,
-        F64_LOG => libm::log(x),
-        F64_LOG1P => libm::log1p(x),
-        F64_LOG10 => libm::log10(x),
-        F64_LOG2 => libm::log2(x),
+        F64_LOG => djs_libm::log(x),
+        F64_LOG1P => djs_libm::log1p(x),
+        F64_LOG10 => djs_libm::log10(x),
+        F64_LOG2 => djs_libm::log2(x),
         F64_ROUND => number::round(x),
         F64_SIGN => number::sign(x),
-        F64_SIN => libm::sin(x),
-        F64_SINH => libm::sinh(x),
-        F64_SQRT => libm::sqrt(x),
-        F64_TAN => libm::tan(x),
-        F64_TANH => libm::tanh(x),
-        F64_TRUNC => libm::trunc(x),
+        F64_SIN => djs_libm::sin(x),
+        F64_SINH => djs_libm::sinh(x),
+        F64_SQRT => djs_libm::sqrt(x),
+        F64_TAN => djs_libm::tan(x),
+        F64_TANH => djs_libm::tanh(x),
+        F64_TRUNC => djs_libm::trunc(x),
         _ => return None,
     })
 }
@@ -1525,7 +1525,7 @@ impl Exec<'_> {
                 let o = typed::as_typed_array(self.heap, a0)?;
                 let i = arg(self, 1).as_number().unwrap_or(-1.0);
                 let index =
-                    (i >= 0.0 && i <= u32::MAX as f64 && i == libm::trunc(i)).then_some(i as u32);
+                    (i >= 0.0 && i <= u32::MAX as f64 && i == djs_libm::trunc(i)).then_some(i as u32);
                 if id == TYPED_ARRAY_GET {
                     match index {
                         Some(i) => self.heap.ta_get_alloc(o, i)?.unwrap_or(Value::UNDEFINED),
@@ -2099,7 +2099,7 @@ impl Exec<'_> {
             }
             TO_INTEGER_OR_INFINITY_NUMBER => {
                 let n = a0.as_number().unwrap_or(f64::NAN);
-                let t = if n.is_nan() { 0.0 } else { libm::trunc(n) };
+                let t = if n.is_nan() { 0.0 } else { djs_libm::trunc(n) };
                 // -0 becomes +0.
                 conv::number(t + 0.0)
             }

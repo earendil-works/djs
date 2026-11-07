@@ -133,7 +133,7 @@ fn qjs_corpus() {
             }
             "fromnum" => {
                 let f = f64_hex(c[1]);
-                let got = if f.is_finite() && libm::trunc(f) == f {
+                let got = if f.is_finite() && djs_libm::trunc(f) == f {
                     show(&BigInt::from_f64(f))
                 } else {
                     "!RangeError".to_string()
