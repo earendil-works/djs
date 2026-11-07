@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# `zig cc` as the C compiler and linker of a linux-musl cross build (scripts/cross-check.sh;
+# no other toolchain needed), as Gondolin's native build does. The zig target comes from
+# ZIGCC_TARGET (e.g. aarch64-linux-musl). Rust's self-contained musl start files are left
+# out because zig links its own crt objects with libc, and flags zig rejects are dropped,
+# as cargo-zigbuild does.
+set -euo pipefail
+: "${ZIGCC_TARGET:?ZIGCC_TARGET must be set}"
+args=()
+for arg in "$@"; do
+  case "$arg" in
+    */self-contained/*.o) continue ;;
+    -nostartfiles) continue ;;
+    -Wl,-O1) continue ;;
+    --target=*) continue ;;
+    -Wl,--no-undefined-version) continue ;;
+    -Wl,-znostart-stop-gc) continue ;;
+    -Wl,--fix-cortex-a53-843419) continue ;;
+    -lgcc_s) args+=("-lunwind") ;;
+    *) args+=("$arg") ;;
+  esac
+done
+exec zig cc -target "$ZIGCC_TARGET" "${args[@]}"
