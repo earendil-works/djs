@@ -176,8 +176,9 @@ clearer.
 
 ## Non-goals
 
-djs is always in strict mode. It has no `with`, no direct `eval`, no ES modules
-(`import()` compiles and rejects), no `Intl`, `Temporal`, `SharedArrayBuffer` or
+djs is always in strict mode. It has no `with`, no direct `eval`, no ES modules in
+codemode scripts (`import()` compiles and rejects; native hosts can load
+[modules](language.md#modules)), no `Intl`, `Temporal`, `SharedArrayBuffer` or
 workers, and no JIT. Each of these would cost size or complexity for scripts that do not
 need them ([the language](language.md) lists what is left out and why). Its conformance
 target is the part of the test262 conformance suite that codemode scripts can reach, not

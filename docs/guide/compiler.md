@@ -396,10 +396,11 @@ The compiler, unlike the interpreter, recurses on the Rust stack: compilation is
 bounded by the size of its input and never needs to suspend. A nesting limit turns
 pathological input (ten thousand nested parentheses) into a SyntaxError instead of a
 stack overflow ([limits](limits.md#nesting-in-source)). Codemode scripts are always
-strict, and there is no `with`, no direct `eval` and no ES modules: `import()` compiles
-and returns a rejected promise ([the language](language.md#what-is-left-out-and-why)). A
-Script goal, with global `var` bindings and completion values, exists for indirect
-`eval`, the REPL and conformance tests.
+strict, and there is no `with`, no direct `eval` and no `import`/`export` in them:
+`import()` compiles and returns a rejected promise
+([the language](language.md#what-is-left-out-and-why)). A Script goal, with global `var`
+bindings and completion values, exists for indirect `eval`, the REPL and conformance
+tests, and a Module goal for the [ES modules](language.md#modules) that native hosts load.
 
 ## Where to look
 
