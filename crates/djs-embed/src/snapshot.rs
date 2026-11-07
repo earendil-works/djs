@@ -5,11 +5,12 @@ use std::sync::Arc;
 use djs_core::compiler::CompileOptions;
 use djs_core::heap::Heap;
 use djs_core::value::Value as Raw;
-use djs_core::vm::{ExecOptions, Status, Vm, VmOptions};
+use djs_core::vm::{ExecOptions, IMPORT_FN_ID, Status, Vm, VmOptions};
 
-use crate::instance::{exception, guard_vm};
-use crate::value::wire_error;
-use crate::{Data, Error, Instance, Limits};
+use crate::instance::{answer_imports, exception, guard_vm};
+use crate::module::{Adapter, Export, SharedLoader};
+use crate::value::{to_raw, wire_error};
+use crate::{Data, Error, Instance, Limits, Loader, ModuleSource, SyntheticModule, Value};
 
 /// JavaScript source with its name (for stack traces and syntax errors).
 #[derive(Clone, Debug)]
@@ -25,6 +26,12 @@ pub struct Source {
 pub enum SourceKind {
     /// A classic script: its top-level declarations become globals
     Script,
+    /// An ES module: its name is its key, its imports go through the snapshot's
+    /// [`Loader`] and synthetic modules, and its exports are read with
+    /// [`crate::Instance::export`] and called with [`crate::Instance::start_export`]
+    Module,
+    /// A module in TypeScript
+    TypeScriptModule,
 }
 
 impl Source {
@@ -34,6 +41,26 @@ impl Source {
             name: name.into(),
             text: text.into(),
             kind: SourceKind::Script,
+        }
+    }
+
+    /// An ES module with key `name` (a policy module that exports `onRequest`). Setup loads
+    /// it and the modules it imports, links and evaluates them; the snapshot holds the
+    /// evaluated graph. The loader is not asked for `name` itself.
+    pub fn module(name: impl Into<String>, text: impl Into<String>) -> Source {
+        Source {
+            name: name.into(),
+            text: text.into(),
+            kind: SourceKind::Module,
+        }
+    }
+
+    /// [`Source::module`] in TypeScript.
+    pub fn typescript_module(name: impl Into<String>, text: impl Into<String>) -> Source {
+        Source {
+            name: name.into(),
+            text: text.into(),
+            kind: SourceKind::TypeScriptModule,
         }
     }
 
@@ -100,6 +127,8 @@ impl HostFn {
 pub struct Builder {
     host_fns: Vec<HostFn>,
     globals: Vec<(String, Data)>,
+    modules: Vec<SyntheticModule>,
+    loader: Option<SharedLoader>,
     sources: Vec<Source>,
     frozen_builtins: bool,
     memory: usize,
@@ -111,6 +140,8 @@ impl Default for Builder {
         Builder {
             host_fns: Vec::new(),
             globals: Vec::new(),
+            modules: Vec::new(),
+            loader: None,
             sources: Vec::new(),
             frozen_builtins: true,
             memory: 64 << 20,
@@ -129,6 +160,21 @@ impl Builder {
     /// Defines a global holding plain data (configuration for the scripts).
     pub fn global(mut self, name: impl Into<String>, value: Data) -> Builder {
         self.globals.push((name.into(), value));
+        self
+    }
+
+    /// Defines a synthetic module (its exports host functions and data), which modules
+    /// import by its key without the loader.
+    pub fn module(mut self, m: SyntheticModule) -> Builder {
+        self.modules.push(m);
+        self
+    }
+
+    /// The loader of the modules that setup modules import, and of every `import()` in
+    /// setup and in calls (answered inside [`crate::Instance::step`]). Without one, only
+    /// synthetic modules and setup modules can be imported.
+    pub fn loader(mut self, loader: impl Loader + 'static) -> Builder {
+        self.loader = Some(SharedLoader(Arc::new(loader)));
         self
     }
 
@@ -169,11 +215,29 @@ impl Builder {
             image,
             frozen_builtins: self.frozen_builtins,
             host_fns: self.host_fns,
+            modules: self.modules,
+            loader: self.loader,
         })))
     }
 
     fn setup(&self, vm: &mut Vm) -> Result<Vec<u8>, Error> {
         let oom = |_| Error::OutOfMemory;
+        let reserved = self
+            .host_fns
+            .iter()
+            .chain(self.modules.iter().flat_map(|m| {
+                m.exports.iter().filter_map(|e| match e {
+                    Export::Fn(f) => Some(f),
+                    Export::Data(..) => None,
+                })
+            }))
+            .find(|f| f.id == IMPORT_FN_ID);
+        if let Some(f) = reserved {
+            return Err(Error::Usage(format!(
+                "host function {}: id {IMPORT_FN_ID} is reserved for import()",
+                f.name
+            )));
+        }
         for f in &self.host_fns {
             let v = if f.is_async {
                 vm.new_async_host_function(f.id, &f.name)
@@ -187,22 +251,68 @@ impl Builder {
             let v = vm.decode_wire(&data.to_wire()).map_err(wire_error)?;
             vm.define_global(name, v).map_err(oom)?;
         }
+        for m in &self.modules {
+            let mut values = Vec::with_capacity(m.exports.len());
+            for e in &m.exports {
+                values.push(match e {
+                    Export::Fn(f) if f.is_async => {
+                        vm.new_async_host_function(f.id, &f.name).map_err(oom)?
+                    }
+                    Export::Fn(f) => vm.new_host_function(f.id, &f.name).map_err(oom)?,
+                    Export::Data(_, d) => to_raw(vm, &Value::Data(d))?,
+                });
+            }
+            let exports: Vec<(&str, Raw)> = m
+                .exports
+                .iter()
+                .zip(values)
+                .map(|(e, v)| match e {
+                    Export::Fn(f) => (f.name.as_str(), v),
+                    Export::Data(n, _) => (n.as_str(), v),
+                })
+                .collect();
+            if let Err(e) = vm.define_synthetic_module(&m.key, &exports) {
+                return Err(Error::Usage(format!("module {}: {}", m.key, vm.display(e))));
+            }
+        }
+        vm.set_dynamic_import(true)
+            .map_err(|_| Error::OutOfMemory)?;
         let mut fuel = self.fuel;
         for s in &self.sources {
-            let f = vm
-                .compile(s.text.as_bytes(), &CompileOptions::script(&s.name))
-                .map_err(|e| Error::Syntax {
-                    source: s.name.clone(),
-                    message: e.to_string(),
-                })?;
-            let this = Raw::object(vm.global());
-            vm.call(f, this, &[])
-                .map_err(|e| Error::Usage(format!("{e:?}")))?;
+            if s.kind == SourceKind::Script {
+                let f = vm
+                    .compile(s.text.as_bytes(), &CompileOptions::script(&s.name))
+                    .map_err(|e| Error::Syntax {
+                        source: s.name.clone(),
+                        message: e.to_string(),
+                    })?;
+                let this = Raw::object(vm.global());
+                vm.call(f, this, &[])
+                    .map_err(|e| Error::Usage(format!("{e:?}")))?;
+            } else {
+                let source = ModuleSource {
+                    text: s.text.clone(),
+                    typescript: s.kind == SourceKind::TypeScriptModule,
+                };
+                let mut adapter = self.adapter(Some((&s.name, &source)));
+                let key = vm
+                    .load_module(&s.name, &mut adapter)
+                    .map_err(|e| load_error(vm, &s.name, e))?;
+                vm.evaluate_module(&key)
+                    .map_err(|e| Error::Usage(format!("{e:?}")))?;
+            }
             loop {
                 let (st, used) = vm.run_metered(fuel);
                 fuel = fuel.saturating_sub(used);
                 match st {
-                    Status::Done(_) => break,
+                    Status::Done(v) => {
+                        // A module's evaluation ends with its promise, rejected if it threw.
+                        if let Some(Some(Err(e))) = vm.promise_state(v) {
+                            vm.mark_promise_handled(v);
+                            return Err(exception(vm, e));
+                        }
+                        break;
+                    }
                     Status::Threw(e) => return Err(exception(vm, e)),
                     Status::OutOfFuel if fuel == 0 => {
                         vm.abort();
@@ -218,11 +328,17 @@ impl Builder {
                         )));
                     }
                     Status::Idle => {
-                        vm.abort();
-                        return Err(Error::Usage(format!(
-                            "{} left async host calls pending during setup",
-                            s.name
-                        )));
+                        // Only `import()`s can be answered here.
+                        let calls = vm.new_host_calls();
+                        let none = calls.is_empty();
+                        let rest = answer_imports(vm, &mut self.adapter(None), calls)?;
+                        if none || !rest.is_empty() {
+                            vm.abort();
+                            return Err(Error::Usage(format!(
+                                "{} left async host calls pending during setup",
+                                s.name
+                            )));
+                        }
                     }
                 }
             }
@@ -231,6 +347,33 @@ impl Builder {
         // alone.
         vm.seal().map_err(oom)?;
         Ok(vm.image().to_vec())
+    }
+}
+
+impl Builder {
+    fn adapter<'a>(&'a self, entry: Option<(&'a str, &'a ModuleSource)>) -> Adapter<'a> {
+        Adapter {
+            loader: self.loader.as_ref().map(|l| &*l.0),
+            synthetic: &self.modules,
+            entry,
+        }
+    }
+}
+
+/// A module graph that did not load: a syntax or link error (a SyntaxError), or the
+/// loader's.
+pub(crate) fn load_error(vm: &mut Vm, name: &str, e: Raw) -> Error {
+    let message = vm.display(e);
+    if message.starts_with("SyntaxError") {
+        Error::Syntax {
+            source: name.to_owned(),
+            message,
+        }
+    } else {
+        Error::Load {
+            module: name.to_owned(),
+            message,
+        }
     }
 }
 
@@ -258,6 +401,8 @@ struct Inner {
     image: Vec<u8>,
     frozen_builtins: bool,
     host_fns: Vec<HostFn>,
+    modules: Vec<SyntheticModule>,
+    loader: Option<SharedLoader>,
 }
 
 impl std::fmt::Debug for Snapshot {
@@ -292,6 +437,20 @@ impl Snapshot {
     /// The host functions, as declared.
     pub fn host_fns(&self) -> &[HostFn] {
         &self.0.host_fns
+    }
+
+    /// The synthetic modules, as declared.
+    pub fn modules(&self) -> &[SyntheticModule] {
+        &self.0.modules
+    }
+
+    /// The loader of `import()` in calls.
+    pub(crate) fn adapter(&self) -> Adapter<'_> {
+        Adapter {
+            loader: self.0.loader.as_ref().map(|l| &*l.0),
+            synthetic: &self.0.modules,
+            entry: None,
+        }
     }
 
     pub(crate) fn image(&self) -> &[u8] {

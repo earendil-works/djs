@@ -11,6 +11,9 @@ pub enum Error {
     /// A source did not compile (a syntax error, or one of the early errors JS reports
     /// before running anything)
     Syntax { source: String, message: String },
+    /// A setup module's graph did not load: the [`crate::Loader`] failed (its message). A
+    /// syntax or link error in it is [`Error::Syntax`]
+    Load { module: String, message: String },
     /// The script threw, or the entry's promise was rejected
     Exception(Exception),
     /// The call used up its fuel budget ([`crate::Limits::fuel`])
@@ -50,6 +53,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Syntax { source, message } => write!(f, "{source}: {message}"),
+            Error::Load { module, message } => write!(f, "{module}: {message}"),
             Error::Exception(e) => write!(f, "uncaught {}", e.message),
             Error::OutOfFuel { budget } => write!(f, "out of fuel (budget {budget})"),
             Error::Deadline => f.write_str("deadline exceeded"),

@@ -230,13 +230,43 @@ impl Instance {
     /// object it was found on. Then [`Instance::step`] until [`Step::Done`] or an error,
     /// or use [`Instance::call`].
     pub fn start(&mut self, path: &str, args: &[Value<'_>]) -> Result<(), Error> {
+        self.start_with(path, args, |vm| lookup(vm, path))
+    }
+
+    /// Starts calling the function that module `module` (a setup [`crate::Source::module`]
+    /// or a module it imported) exports as `name`, with `this` undefined: a policy module's
+    /// `export async function onRequest(req)`. Then [`Instance::step`] as for
+    /// [`Instance::start`].
+    pub fn start_export(
+        &mut self,
+        module: &str,
+        name: &str,
+        args: &[Value<'_>],
+    ) -> Result<(), Error> {
+        let what = format!("{module} export {name}");
+        self.start_with(&what, args, |vm| match vm.module_export(module, name) {
+            Ok(Some(f)) => Ok((Raw::UNDEFINED, f)),
+            Ok(None) if vm.has_module(module) => Err(Error::Usage(format!(
+                "module {module} has no export {name}"
+            ))),
+            Ok(None) => Err(Error::Usage(format!("no module {module}"))),
+            Err(_) => Err(Error::OutOfMemory),
+        })
+    }
+
+    fn start_with(
+        &mut self,
+        path: &str,
+        args: &[Value<'_>],
+        find: impl FnOnce(&mut Vm) -> Result<(Raw, Raw), Error>,
+    ) -> Result<(), Error> {
         if self.call.as_ref().is_some_and(|c| !c.over) {
             return Err(Error::Usage("a call is in progress".into()));
         }
         self.clear_call()?;
         let deadline = self.limits.deadline.map(|d| Instant::now() + d);
         let r = self.guard(|vm| -> Result<(), Error> {
-            let (this, f) = lookup(vm, path)?;
+            let (this, f) = find(vm)?;
             let f = match f.as_object() {
                 Some(o) if vm.heap().is_callable(o) => f,
                 _ => return Err(Error::Usage(format!("{path} is not a function"))),
@@ -263,8 +293,32 @@ impl Instance {
         }
     }
 
-    /// Runs one slice of the current call (at most [`Limits::slice`] fuel).
+    /// Runs one slice of the current call (at most [`Limits::slice`] fuel). An `import()`
+    /// is answered here, with the snapshot's loader (and synthetic modules), without a
+    /// [`Step`] for it: the graph is loaded, compiled and linked between two slices (that
+    /// work is not metered as fuel), and the script goes on.
     pub fn step(&mut self) -> Result<Step, Error> {
+        loop {
+            let step = self.step_once()?;
+            let Step::Wait(ids) = step else {
+                return Ok(step);
+            };
+            let n = ids.len();
+            let snapshot = self.snapshot.clone();
+            let raw = ids.into_iter().map(CallId::get).collect();
+            let r = self.guard(|vm| answer_imports(vm, &mut snapshot.adapter(), raw));
+            let rest = match r {
+                Ok(Ok(rest)) => rest,
+                Ok(Err(e)) | Err(e) => return self.fail(e),
+            };
+            if n == 0 || !rest.is_empty() {
+                return Ok(Step::Wait(rest.into_iter().map(CallId).collect()));
+            }
+            // Only imports: run on.
+        }
+    }
+
+    fn step_once(&mut self) -> Result<Step, Error> {
         if self.poisoned {
             return Err(Error::Poisoned);
         }
@@ -377,6 +431,21 @@ impl Instance {
         })
     }
 
+    /// The current value of export `name` of module `module` (M7): `None` if there is no
+    /// such module or export, or its binding is not initialized. Reads the instance's
+    /// state: what setup and the calls so far left.
+    pub fn export(&mut self, module: &str, name: &str) -> Result<Option<ValueRef<'_>>, Error> {
+        let raw = match self.guard(|vm| vm.module_export(module, name))? {
+            Ok(v) => v,
+            Err(_) => return Err(Error::OutOfMemory),
+        };
+        Ok(raw.map(|raw| ValueRef {
+            heap: self.vm.heap(),
+            raw,
+            max_bytes: self.limits.memory,
+        }))
+    }
+
     /// Abandons the current call: the VM is idle, its pending host calls are dropped.
     pub fn abort(&mut self) {
         let _ = self.fail::<()>(Error::Usage("aborted".into()));
@@ -386,11 +455,34 @@ impl Instance {
     /// with `host` at once, and returns the settled value as plain data: for hosts whose
     /// host functions finish synchronously, and for tests. `host` must answer each call
     /// with [`HostCall::reply`].
-    pub fn call<F>(&mut self, path: &str, args: &[Value<'_>], mut host: F) -> Result<Data, Error>
+    pub fn call<F>(&mut self, path: &str, args: &[Value<'_>], host: F) -> Result<Data, Error>
     where
         F: FnMut(HostCall<'_>) -> Result<(), Error>,
     {
         self.start(path, args)?;
+        self.finish(host)
+    }
+
+    /// [`Instance::call`] of the function module `module` exports as `name`
+    /// ([`Instance::start_export`]).
+    pub fn call_export<F>(
+        &mut self,
+        module: &str,
+        name: &str,
+        args: &[Value<'_>],
+        host: F,
+    ) -> Result<Data, Error>
+    where
+        F: FnMut(HostCall<'_>) -> Result<(), Error>,
+    {
+        self.start_export(module, name, args)?;
+        self.finish(host)
+    }
+
+    fn finish<F>(&mut self, mut host: F) -> Result<Data, Error>
+    where
+        F: FnMut(HostCall<'_>) -> Result<(), Error>,
+    {
         loop {
             match self.step()? {
                 Step::Done => return self.result()?.to_data(),
@@ -418,6 +510,24 @@ impl Instance {
             }
         }
     }
+}
+
+/// Answers the `import()`s among async host calls `ids` with `loader`: the other ids.
+pub(crate) fn answer_imports(
+    vm: &mut Vm,
+    loader: &mut dyn djs_core::vm::ModuleLoader,
+    ids: Vec<u32>,
+) -> Result<Vec<u32>, Error> {
+    let mut rest = Vec::new();
+    for id in ids {
+        if vm.import_request(id).is_none() {
+            rest.push(id);
+            continue;
+        }
+        vm.answer_import(id, loader)
+            .map_err(|_| Error::OutOfMemory)?;
+    }
+    Ok(rest)
 }
 
 /// The function at `path` and the object it is a property of.

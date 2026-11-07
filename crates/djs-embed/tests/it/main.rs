@@ -6,6 +6,7 @@ mod calls;
 mod data;
 mod example;
 mod failures;
+mod modules;
 mod snapshot;
 
 use djs_embed::{Data, Error, Instance, Limits, Snapshot, Source};
