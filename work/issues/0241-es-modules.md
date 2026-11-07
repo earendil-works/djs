@@ -1,6 +1,6 @@
 # 0241: ES modules: module goal, loader, linking and evaluation (M1–M3, M6, M7)
 
-status: in-progress
+status: done
 agent: modules
 branch: issue/0241-es-modules
 depends-on: -
@@ -179,10 +179,34 @@ scripts/merge-to-main.sh from the worktree.
 - Guide: language.md (new "Modules" section, the in-short paragraph and the left-out
   table); compiler.md (guide) did not mention modules. docs/compiler.md 5.11, ARCH.md.
 
+### Continuation: modules fold into `embed` (D3175)
+- Rebased onto main 7237378f. The `modules` feature is gone: djs-core's `embed` is the image
+  feature (IMAGE_FEATURES bit 3, in the build hash; `embed = ["djs-prelude/embed"]`), the
+  constant `crate::EMBED` with `crate::MODULES` as its alias, `// @embed-only` and
+  `builtins/gen/prelude-noembed.js` (now also hashed by build.rs, which the old
+  prelude-nomodules.js was not). `embed` without `full` is a compile_error (lib.rs). D3193.
+- djs-embed's base and djs-test262 (default feature `embed`) now have modules; djs-difftest
+  builds djs-test262 without default features, so it stays without `embed`.
+- Found: djs-embed's `the_memory_cap_cannot_be_caught` failed once the base had the module
+  builtins: after the cap's OOM abort, the next call hit the cap again (no collection due).
+  Fix in djs-embed (outside `touches:`, minimal): `fail` collects after an OOM abort; new
+  test over five caps. D3194.
+- Sizes re-measured (scripts/build-wasm.sh): shipped 426,839 gzip (+59 vs main), slim
+  360,536 (+138). Ceilings raised by exactly that (D3192, approved by D3175): 426,865 and
+  360,623.
+- Checked: djs-core lib tests, e2e plain, clippy workspace + the gate's djs-core feature
+  combinations (+ full,embed), bgen --check, djs-prelude/djs-embed/djs-bgen/djs-wasm/
+  djs-cli tests, slim tests and slim bins, test262 language/ + built-ins/{Object,Proxy,
+  Reflect} (ratchet OK), djs-docs check.
+- Guide: language.md (modules come with the native build for Rust hosts), compiler.md,
+  goals.md and typescript.md no longer say there are no ES modules at all.
+
 ## Follow-ups
 - 0242: test262 module tests need a fixture loader in djs-test262 (`ModuleLoader` over the
-  test's directory; `flags: [module]` compile with `Vm::load_module`); djs-test262 and
-  djs-difftest build without `modules` today (add `modules = ["djs-prelude/modules"]`).
+  test's directory; `flags: [module]` compile with `Vm::load_module`); djs-test262 has
+  `embed` (modules) by default now, djs-difftest does not.
+- docs/guide/rust-api.md does not describe djs-core's module API (`Vm::load_module` etc.);
+  djs-embed has no module API yet.
 - HTML-like comments (`<!--`, `-->`) are still accepted in module code (the lexer has no
   goal flag); test262 checks it.
 - Import attributes: any `with { ... }` key is a SyntaxError (no JSON modules yet, M8).
@@ -193,8 +217,10 @@ scripts/merge-to-main.sh from the worktree.
   imports are direct capture reads. Worth a fast path only if hosts use namespaces hot.
 
 ## Result
-ES modules in djs-core behind the `modules` feature (on in native default builds and
-djs-prelude's defaults, off in every djs-wasm module), D3190/D3191.
+ES modules in djs-core behind the `embed` feature (D3175, D3193: on in native default
+builds, djs-prelude's defaults, djs-embed and djs-test262; off in every djs-wasm module and
+in djs-difftest), D3190/D3191; size ceilings raised by the residual, D3192; djs-embed
+collects after an out-of-memory abort, D3194.
 
 - Compile: `compiler::compile_module(heap, src, &CompileOptions::module(key))` →
   (template, metadata); `compile()` refuses `Goal::Module`.
