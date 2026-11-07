@@ -1,6 +1,6 @@
 # 0242: test262's module tests: a fixture loader in the runner, groups and ratchet
 
-status: in-progress
+status: done
 agent: t262
 branch: issue/0242-test262-modules
 depends-on: 0241
@@ -20,13 +20,14 @@ parts) out of the skip group as far as djs supports them; features that stay ski
 stay skipped by feature. Fix what fails in 0241's implementation, or ratchet it with a reason.
 
 ## Acceptance criteria
-- [ ] the runner runs module tests on djs and qjs; negative `resolution` phase tests check
+- [x] the runner runs module tests on djs and qjs; negative `resolution` phase tests check
       link errors; async module tests work
-- [ ] tests/test262.toml groups updated with reasons; `djs-test262 list` counts in TESTING.md
-- [ ] ratchet updated (`--update`), the oracle failures file for qjs updated
-- [ ] the slim build keeps `modules` (it is not a slim cut; only djs-wasm leaves it out): the
-      slim leg's test262 run passes with its own ratchet
-- [ ] the gate's test262 leg green, in both its lazy and eager runs
+- [x] tests/test262.toml groups updated with reasons; `djs-test262 list` counts in TESTING.md
+- [x] ratchet updated (`--update`), the oracle failures file for qjs updated
+- [x] the slim build keeps `modules` (it is not a slim cut; only djs-wasm leaves it out): the
+      slim leg's test262 run passes with its own ratchet (amended: slim has no `embed`
+      since D3193, so its `no-modules` group skips the module tests; D3230)
+- [x] the gate's test262 leg green, in both its lazy and eager runs
 
 ## Notes
 - TESTING.md "test262" describes the runner, the groups and the ratchet.
@@ -69,5 +70,24 @@ stay skipped by feature. Fix what fails in 0241's implementation, or ratchet it 
   top-level await); status.md/README/index regenerated. D3230, D3231.
 
 ## Follow-ups
+- 0248 (top-level await): 4 ratchet entries use TLA without the `top-level-await` tag
+  (3 `await using` at module top level, module-code/top-level-await/
+  dynamic-import-of-waiting-module.js); un-skip the `top-level-await` feature there.
+- `import()` inside `$262.evalScript` code resolves against `<evalScript>` (test/ itself),
+  not the calling test; no active test needs it.
 
 ## Result
+test262's module tests run (D3230): `flags: [module]` tests are the root of a module graph
+loaded from the checkout's `_FIXTURE` files (djs: `Vm::load_module` over a path loader;
+qjs: `std.evalScript` with `compile_module`/`eval_module`), with the parse, resolution and
+runtime phases told apart, and `import()` answered through the same loader in modules and
+Scripts. Active now: language/module-code, language/import, language/expressions/
+dynamic-import, import.meta and every `module` test elsewhere, 908 more tests (39,017
+active, 529 direct-eval, 14,051 skipped). djs passes all but 4 of them (top-level await
+without its feature tag; ratcheted, 44 entries in all); qjs fails 5 (oracle-failures.txt,
+9 in all). Skipped by feature: top-level-await, import attributes/defer/text/bytes, JSON
+modules, source-phase imports. Slim runner: `no-modules` group (no `embed`). djs-core fix:
+`import * as ns; export { ns }` is an indirect export (D3231: a linker panic and a spurious
+ambiguity). Group paths in the toml may be globs.
+
+Run: `cargo run -q -p djs-test262 -- run --engine djs language/module-code`.
