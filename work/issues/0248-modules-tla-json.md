@@ -1,7 +1,7 @@
 # 0248: Top-level await, JSON modules and source positions for modules (M8)
 
-status: open
-agent: -
+status: in-progress
+agent: modules
 branch: issue/0248-modules-tla-json
 depends-on: 0241, 0242, 0243
 touches: crates/djs-core/src/compiler, builtins/module.ts, crates/djs-core/src/vm, crates/djs-embed, crates/djs-test262, tests/test262.toml
