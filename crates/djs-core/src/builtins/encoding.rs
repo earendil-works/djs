@@ -116,16 +116,22 @@ pub(crate) fn decode(
     if failed {
         return Ok(Value::UNDEFINED);
     }
-    let mut t: &str = &text;
-    if flags & IGNORE_BOM == 0 && state & BOM_SEEN == 0 {
-        t = t.strip_prefix('\u{FEFF}').unwrap_or(t);
-    }
-    Ok(Value::string(heap.alloc_str(t)?))
+    // U+FEFF is EF BB BF.
+    let skip = if flags & IGNORE_BOM == 0
+        && state & BOM_SEEN == 0
+        && text.as_bytes().starts_with(&[0xEF, 0xBB, 0xBF])
+    {
+        3
+    } else {
+        0
+    };
+    Ok(Value::string(heap.alloc_str(&text[skip..])?))
 }
 
 /// TextEncoder.prototype.encode (`dest[0]` undefined): a new Uint8Array of the UTF-8 of
 /// `s`, lone surrogates as U+FFFD. encodeInto (`dest` a Uint8Array's buffer, byte offset
-/// and byte length): writes as many whole code points as fit, `{ read, written }`.
+/// and byte length): writes the longest prefix of whole code points that fits,
+/// `{ read, written }`.
 pub(crate) fn encode(
     heap: &mut Heap,
     s: Str,
@@ -133,40 +139,40 @@ pub(crate) fn encode(
     fuel: &mut i64,
 ) -> Result<Value, Fault> {
     *fuel -= i64::from(heap.str_len(s) / 8);
-    if dest[0].is_undefined() {
-        let bytes = match heap.str_view(s) {
-            // ASCII: the bytes as they are.
-            Some(StrView::Latin1(b)) if is_ascii(b) => b.to_vec(),
-            _ => heap.str_to_string(s).into_bytes(),
-        };
+    let text = match heap.str_view(s) {
+        // ASCII: the bytes as they are.
+        Some(StrView::Latin1(b)) if is_ascii(b) => b.to_vec(),
+        _ => heap.str_to_string(s).into_bytes(),
+    };
+    let Some(b) = dest[0].as_object() else {
         let bp = realm::intrinsic_obj(heap, Intrinsic::ArrayBufferProto);
         let p = realm::intrinsic_obj(heap, Intrinsic::Uint8ArrayProto);
         return Ok(Value::object(heap.new_uint8_array(
-            &bytes,
+            &text,
             Some(bp),
             Some(p),
         )?));
+    };
+    let mut n = bytes_of(heap, dest[0], dest[1], dest[2])
+        .len()
+        .min(text.len());
+    // Back to the start of a code point (a continuation byte is 0b10xxxxxx).
+    while n > 0 && n < text.len() && text[n] & 0xC0 == 0x80 {
+        n -= 1;
     }
-    let room = bytes_of(heap, dest[0], dest[1], dest[2]).len();
-    let mut out: Vec<u8> = crate::buf::vec_with_capacity(room.min(heap.str_len(s) as usize * 3));
-    let mut read = 0;
-    for c in char::decode_utf16(heap.str_units(s)) {
-        let c = c.unwrap_or(char::REPLACEMENT_CHARACTER);
-        if out.len() + c.len_utf8() > room {
-            break;
-        }
-        out.extend_from_slice(c.encode_utf8(&mut [0; 4]).as_bytes());
-        read += c.len_utf16();
-    }
-    if let Some(b) = dest[0].as_object()
-        && !out.is_empty()
-    {
+    if n > 0 {
         let at = dest[1].as_number().unwrap_or(0.0) as usize;
-        heap.buffer_data_mut(b)[at..at + out.len()].copy_from_slice(&out);
+        heap.buffer_data_mut(b)[at..at + n].copy_from_slice(&text[..n]);
     }
+    // Code units read: one per code point, two for those that take four bytes (a lone
+    // surrogate, one unit, became the three bytes of U+FFFD).
+    let read = text[..n]
+        .iter()
+        .map(|&c| usize::from(c & 0xC0 != 0x80) + usize::from(c >= 0xF0))
+        .sum();
     let keys = [heap.atom_str("read")?, heap.atom_str("written")?];
-    let n = |x: usize| i32::try_from(x).map_or(Value::number(x as f64), Value::int);
-    let values = [n(read), n(out.len())];
+    let int = |x: usize| i32::try_from(x).map_or(Value::number(x as f64), Value::int);
+    let values = [int(read), int(n)];
     let proto = realm::intrinsic_obj(heap, Intrinsic::ObjectProto);
     Ok(Value::object(heap.new_object_from_entries(
         Some(proto),
