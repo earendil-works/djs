@@ -8,7 +8,8 @@
 #
 # Rules (a test matches a group if any rule matches):
 #   flags     the test has one of these frontmatter flags
-#   paths     directory prefixes or files, relative to test/
+#   paths     directory prefixes or files, relative to test/, or globs (`*` within a
+#             segment, `**` across)
 #   features  feature globs (`*`), matched against the test's features plus the ones
 #             implied by its includes (harness/features.yml)
 #   scan      literal patterns searched in the test and its includes, outside comments,
@@ -22,7 +23,6 @@ kind = "skip"
 description = "Non-goals from ARCH.md: never implemented."
 flags = [
   "noStrict",         # djs is always strict
-  "module",           # modules are not planned for now
   "CanBlockIsFalse",  # agent blocking semantics only matter with Atomics
   "CanBlockIsTrue",   # same
 ]
@@ -35,8 +35,6 @@ paths = [
   "built-ins/Atomics",             # no shared memory
   "built-ins/ShadowRealm",         # no realms
   "built-ins/AbstractModuleSource", # source phase imports (modules)
-  "language/module-code",          # modules
-  "language/import",               # modules
   "language/comments/hashbang/use-strict.js", # raw test that needs sloppy mode (`with`)
 ]
 features = [
@@ -54,16 +52,27 @@ features = [
   "legacy-regexp",               # RegExp.$1 and friends (Annex B)
   "__getter__",                  # __defineGetter__ / __lookupGetter__ (Annex B)
   "__setter__",                  # __defineSetter__ / __lookupSetter__ (Annex B)
-  "dynamic-import",              # import() needs modules
-  "import-*",                    # import attributes/defer/text/bytes (modules)
-  "import.meta",                 # modules
-  "json-modules",                # modules
-  "source-phase-imports*",       # modules
-  "top-level-await",             # modules
+  "import-*",                    # import attributes/defer/text/bytes: not implemented
+  "json-modules",                # JSON modules: not implemented (needs import attributes)
+  "source-phase-imports*",       # source phase imports: not implemented
+  "top-level-await",             # not implemented yet (0248)
   "host-gc-required",            # needs a real $262.gc
 ]
 scan = [
   "$262.createRealm(",  # a few realm tests lack the cross-realm feature tag
+]
+
+[[group]]
+name = "dynamic-import"
+kind = "skip"
+description = "import() that loads a module: until 0243 routes it through the module loader, it rejects (D1582). Its syntax tests (dynamic-import/syntax) are active."
+paths = [
+  "language/expressions/dynamic-import/*.js",
+  "language/expressions/dynamic-import/assignment-expression",
+  "language/expressions/dynamic-import/catch",
+  "language/expressions/dynamic-import/namespace",
+  "language/expressions/dynamic-import/usage",
+  "language/expressions/dynamic-import/import-attributes",
 ]
 
 [[group]]

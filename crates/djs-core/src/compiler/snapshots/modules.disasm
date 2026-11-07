@@ -84,7 +84,6 @@ module:
   import env 4 request 0 "*"
   export "y z" env 5
   export "f" env 9
-  export "reNs" env 4
   export "k" env 7
   export "default" env 10
   export "C" env 11
@@ -92,4 +91,5 @@ module:
   export "r" request 0 "q"
   export "dd" request 0 "default"
   export "reA" request 0 "a"
+  export "reNs" request 0 "*"
   export * request 2

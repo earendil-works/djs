@@ -186,6 +186,36 @@ fn cycles_and_hoisted_functions() {
 }
 
 #[test]
+fn re_exported_namespace_imports() {
+    // `import * as ns; export { ns }` re-exports the namespace (as `export * as`): the
+    // module's own namespace, imported back from a module that imports it, and two such
+    // re-exports of one namespace through `export *` are not ambiguous (test262's
+    // instn-star-equality.js and ambiguous-export-bindings).
+    let mut vm = Vm::new(VmOptions::default()).unwrap();
+    let mut l = map(&[
+        (
+            "main",
+            "import * as self from 'main';
+             import { selfNs } from 'other';
+             export * from 'one';
+             export * from 'two';
+             import { empty } from 'main';
+             export const same = [self === selfNs, typeof empty];",
+        ),
+        (
+            "other",
+            "import * as selfNs from 'main'; export { selfNs };",
+        ),
+        ("one", "import * as empty from 'empty'; export { empty };"),
+        ("two", "import * as empty from 'empty'; export { empty };"),
+        ("empty", ""),
+    ]);
+    vm.load_module("main", &mut l).unwrap();
+    assert_eq!(eval(&mut vm, "main"), "ok undefined");
+    assert_eq!(export(&mut vm, "main", "same"), "[true,\"object\"]");
+}
+
+#[test]
 fn link_and_load_errors() {
     let mut vm = Vm::new(VmOptions::default()).unwrap();
     let cases: &[(&[(&'static str, &'static str)], &str)] = &[

@@ -69,6 +69,7 @@ fn prepare_and_run(
         harness,
         strict: !(raw || test.meta.has_flag("noStrict")),
         is_async: test.meta.has_flag("async"),
+        module: test.meta.has_flag("module"),
         timeout: opts.timeout,
         memory_limit: opts.memory_limit,
     };

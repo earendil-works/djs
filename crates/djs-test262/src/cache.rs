@@ -128,12 +128,12 @@ impl Engine for Cached<'_> {
 /// strictness and the harness files in order.
 fn job_key(job: &Job<'_>) -> String {
     let harness: Vec<&str> = job.harness.iter().map(|h| h.name.as_str()).collect();
-    format!(
-        "{}|{}|{}",
-        job.path,
-        if job.strict { "strict" } else { "sloppy" },
-        harness.join(",")
-    )
+    let mode = match (job.module, job.strict) {
+        (true, _) => "module",
+        (false, true) => "strict",
+        (false, false) => "sloppy",
+    };
+    format!("{}|{mode}|{}", job.path, harness.join(","))
 }
 
 const FNV_INIT: u64 = 0xcbf2_9ce4_8422_2325;
@@ -154,6 +154,7 @@ fn encode_line(key: &str, r: &RunResult) -> String {
         Status::OutOfMemory => vec!["oom"],
         Status::HarnessError { file, error } => vec!["harness", file, &error.name, &error.message],
         Status::ParseError(e) => vec!["parse", &e.name, &e.message],
+        Status::ResolutionError(e) => vec!["resolution", &e.name, &e.message],
         Status::RuntimeError(e) => vec!["runtime", &e.name, &e.message],
         // Never stored (see `Cached::run`); decoding rejects them.
         Status::Timeout => vec!["timeout"],
@@ -194,6 +195,7 @@ fn decode_line(line: &str) -> Option<(String, RunResult)> {
             error: err(2)?,
         },
         "parse" => Status::ParseError(err(1)?),
+        "resolution" => Status::ResolutionError(err(1)?),
         "runtime" => Status::RuntimeError(err(1)?),
         _ => return None,
     };
@@ -281,6 +283,7 @@ mod tests {
                 "",
             ),
             result(Status::ParseError(e("SyntaxError", "")), &[], ""),
+            result(Status::ResolutionError(e("SyntaxError", "m")), &[], ""),
             result(
                 Status::RuntimeError(e("Test262Error", "1\n2\u{1f}")),
                 &["p"],

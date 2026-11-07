@@ -27,6 +27,10 @@ pub struct Job<'a> {
     pub strict: bool,
     /// The test has the `async` flag: it signals completion via `print`.
     pub is_async: bool,
+    /// The test has the `module` flag: it runs as the root module of a graph whose other
+    /// modules (`*_FIXTURE.js`) are files resolved relative to the importing module's
+    /// directory. The harness still runs as Scripts first.
+    pub module: bool,
     /// Wall-clock limit for the whole job.
     pub timeout: Duration,
     /// Memory limit in bytes, if any.
@@ -60,6 +64,9 @@ pub enum Status {
     HarnessError { file: String, error: ErrorInfo },
     /// The test source failed to parse (including early errors). Nothing ran.
     ParseError(ErrorInfo),
+    /// A module test's graph failed to load or link (a missing or ambiguous import, a
+    /// module that does not parse or cannot be found). Nothing ran.
+    ResolutionError(ErrorInfo),
     /// The test script threw during evaluation.
     RuntimeError(ErrorInfo),
     /// The wall-clock or fuel limit was hit.
@@ -113,13 +120,14 @@ pub fn judge(meta: &Meta, result: &RunResult) -> Verdict {
                 "expected {} {}, got {phase} {e}",
                 neg.phase, neg.error_type
             )),
-            None if phase == Phase::Parse => fail(format!("parse: {e}")),
+            None if phase != Phase::Runtime => fail(format!("{phase}: {e}")),
             None => fail(e.to_string()),
         }
     };
     match &result.status {
         Status::HarnessError { file, error } => fail(format!("harness {file}: {error}")),
         Status::ParseError(e) => got_error(Phase::Parse, e),
+        Status::ResolutionError(e) => got_error(Phase::Resolution, e),
         Status::RuntimeError(e) => got_error(Phase::Runtime, e),
         Status::Timeout => fail("timeout".into()),
         Status::OutOfMemory => fail("oom".into()),

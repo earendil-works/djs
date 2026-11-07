@@ -6,14 +6,22 @@
 //! host function that compiles its argument as a Script in the same VM and returns the
 //! function, which the wrapper then calls. Each run gets a fuel budget (a timeout when
 //! used up) and a memory limit (`InternalError: out of memory` becomes `oom`).
+//!
+//! A `module` test is the root of a module graph (D3230): its key is its path relative to
+//! `test/`, a specifier names the file relative to the importing module's directory, and
+//! the loader reads the `*_FIXTURE.js` files from disk. The test alone is compiled first
+//! (the parse phase), then the graph is loaded and linked (the resolution phase), then
+//! evaluated; the evaluation's promise says how it ended.
 
 use std::time::Instant;
 
-use djs_core::compiler::{CompileErrorKind, CompileOptions};
+use std::path::{Path, PathBuf};
+
+use djs_core::compiler::{CompileErrorKind, CompileOptions, compile_module};
 use djs_core::heap::{DEFAULT_LIMIT, atoms};
 use djs_core::interp::error_summary;
 use djs_core::value::{Kind, Value};
-use djs_core::vm::{ErrorKind, Status as VmStatus, Vm, VmOptions};
+use djs_core::vm::{ErrorKind, ModuleLoader, ModuleSource, Status as VmStatus, Vm, VmOptions};
 
 use crate::engine::{Engine, ErrorInfo, Job, RunResult, Status};
 
@@ -53,7 +61,8 @@ impl Default for Djs {
 
 /// How one Script ended.
 enum Outcome {
-    Completed,
+    /// With the value the call returned (`undefined` if there was none).
+    Completed(Value),
     Threw(ErrorInfo),
     /// Out of fuel or past the wall-clock limit (which one is in `Session::limit`).
     Timeout,
@@ -116,14 +125,14 @@ impl Djs {
         s.install_host()
             .map_err(|e| format!("installing $262: {e:?}"))?;
         match s.script(SETUP.as_bytes(), "<setup>")? {
-            Ok(Outcome::Completed) => {}
+            Ok(Outcome::Completed(_)) => {}
             Ok(Outcome::Threw(e)) => return Err(format!("$262 setup threw {e}")),
             Ok(Outcome::Timeout) => return Err("$262 setup timed out".into()),
             Err(e) => return Err(format!("$262 setup does not compile: {e}")),
         }
         for h in &job.harness {
             let status = match s.script(h.source.as_bytes(), &h.name)? {
-                Ok(Outcome::Completed) => continue,
+                Ok(Outcome::Completed(_)) => continue,
                 Ok(Outcome::Threw(error)) => s.harness_status(&h.name, error),
                 Ok(Outcome::Timeout) => Status::Timeout,
                 Err(error) => Status::HarnessError {
@@ -133,8 +142,12 @@ impl Djs {
             };
             return Ok(s.finish(status));
         }
+        if job.module {
+            let status = s.module()?;
+            return Ok(s.finish(status));
+        }
         let status = match s.script(job.source.as_bytes(), job.path)? {
-            Ok(Outcome::Completed) => Status::Completed,
+            Ok(Outcome::Completed(_)) => Status::Completed,
             Ok(Outcome::Threw(e)) if is_oom(&e) => Status::OutOfMemory,
             Ok(Outcome::Threw(e)) => Status::RuntimeError(e),
             Ok(Outcome::Timeout) => Status::Timeout,
@@ -199,11 +212,72 @@ impl Session<'_> {
         self.vm
             .call(f, this, &[])
             .map_err(|e| format!("Vm::call: {e:?}"))?;
+        self.drive().map(Ok)
+    }
+
+    /// Runs the module test: the parse phase (the test alone), the resolution phase
+    /// (loading and linking its graph), then its evaluation.
+    fn module(&mut self) -> Result<Status, String> {
+        let job = self.job;
+        let opts = CompileOptions::module(job.path);
+        if let Err(e) = compile_module(self.vm.heap_mut(), job.source.as_bytes(), &opts) {
+            let e = compile_error(e.kind, &e.message);
+            return Ok(if is_oom(&e) {
+                Status::OutOfMemory
+            } else {
+                Status::ParseError(e)
+            });
+        }
+        let mut loader = Fixtures {
+            dir: test_dir(job),
+            root: job.path,
+            source: job.source,
+        };
+        let key = match self.vm.load_module(job.path, &mut loader) {
+            Ok(key) => key,
+            Err(e) => {
+                let e = self.error_info(e);
+                return Ok(if is_oom(&e) {
+                    Status::OutOfMemory
+                } else {
+                    Status::ResolutionError(e)
+                });
+            }
+        };
+        if !self
+            .vm
+            .evaluate_module(&key)
+            .map_err(|e| format!("Vm::evaluate_module: {e:?}"))?
+        {
+            return Err(format!("module {key} is not loaded after loading it"));
+        }
+        let e = match self.drive()? {
+            Outcome::Completed(p) => match self.vm.promise_state(p) {
+                Some(Some(Ok(_))) => return Ok(Status::Completed),
+                Some(Some(Err(e))) => self.error_info(e),
+                // Only top-level await leaves it pending with nothing left to run.
+                Some(None) => return Err("the module's evaluation never settled".into()),
+                None => return Err("Evaluate did not return a promise".into()),
+            },
+            Outcome::Threw(e) => e,
+            Outcome::Timeout => return Ok(Status::Timeout),
+        };
+        Ok(if is_oom(&e) {
+            Status::OutOfMemory
+        } else {
+            Status::RuntimeError(e)
+        })
+    }
+
+    /// Runs the call in progress (and the jobs it queues) to the end, within the fuel
+    /// budget, answering the host calls.
+    fn drive(&mut self) -> Result<Outcome, String> {
         loop {
             let slice = SLICE.min(self.fuel_left.max(1));
             match self.vm.run(slice) {
-                VmStatus::Done(_) | VmStatus::Idle => return Ok(Ok(Outcome::Completed)),
-                VmStatus::Threw(e) => return Ok(Ok(Outcome::Threw(self.error_info(e)))),
+                VmStatus::Done(v) => return Ok(Outcome::Completed(v)),
+                VmStatus::Idle => return Ok(Outcome::Completed(Value::UNDEFINED)),
+                VmStatus::Threw(e) => return Ok(Outcome::Threw(self.error_info(e))),
                 VmStatus::HostOutOfMemory => return Err("out of host memory".into()),
                 VmStatus::OutOfFuel => {
                     self.fuel_left = self.fuel_left.saturating_sub(slice);
@@ -217,7 +291,7 @@ impl Session<'_> {
                             )
                         };
                         self.vm.abort();
-                        return Ok(Ok(Outcome::Timeout));
+                        return Ok(Outcome::Timeout);
                     }
                 }
                 VmStatus::HostCall { call_id, fn_id } => {
@@ -318,6 +392,60 @@ impl Session<'_> {
         let message = string_prop(o, atoms::MESSAGE)
             .unwrap_or_else(|| error_summary(heap, e).unwrap_or_default());
         ErrorInfo { name, message }
+    }
+}
+
+/// `test/` of the checkout: the test's file without its path relative to it.
+fn test_dir(job: &Job<'_>) -> PathBuf {
+    let mut dir = job.file.to_path_buf();
+    for _ in Path::new(job.path).components() {
+        dir.pop();
+    }
+    dir
+}
+
+/// The module loader of a module test: keys are paths relative to `test/`, a specifier
+/// names a file relative to the directory of the module that imports it (`./x.js`,
+/// `x.js` and `../d/x.js` alike, as test262's fixtures use them), and the test itself
+/// is the source the runner read.
+struct Fixtures<'a> {
+    dir: PathBuf,
+    root: &'a str,
+    source: &'a str,
+}
+
+impl ModuleLoader for Fixtures<'_> {
+    fn resolve(&mut self, specifier: &str, referrer: Option<&str>) -> Result<String, String> {
+        let Some(referrer) = referrer else {
+            return Ok(specifier.into());
+        };
+        let mut parts: Vec<&str> = referrer.split('/').collect();
+        parts.pop();
+        for seg in specifier.split('/') {
+            match seg {
+                "" | "." => {}
+                ".." => {
+                    if parts.pop().is_none() {
+                        return Err(format!("{specifier} from {referrer} is outside test/"));
+                    }
+                }
+                s => parts.push(s),
+            }
+        }
+        Ok(parts.join("/"))
+    }
+
+    fn load(&mut self, key: &str) -> Result<ModuleSource, String> {
+        let text = if key == self.root {
+            self.source.to_string()
+        } else {
+            std::fs::read_to_string(self.dir.join(key))
+                .map_err(|e| format!("cannot load module {key}: {e}"))?
+        };
+        Ok(ModuleSource {
+            text,
+            typescript: false,
+        })
     }
 }
 

@@ -937,7 +937,10 @@ impl Parser<'_, '_> {
             }
             m.imports = kept;
         }
-        // Local exports of imported bindings re-export them (ParseModule step 10).
+        // Local exports of imported bindings re-export them (ParseModule step 10), a
+        // namespace import too: `import * as ns from "m"; export { ns }` resolves to m's
+        // namespace like `export * as ns from "m"`, so two modules that both re-export it
+        // under one name through `export *` are not ambiguous.
         let mut local = Vec::new();
         let mut indirect = Vec::new();
         for e in &m.exports {
@@ -957,10 +960,8 @@ impl Parser<'_, '_> {
                 );
             };
             match m.imports.iter().find(|i| i.0 == v) {
-                Some(&(_, req, import)) if !import.is_null() => {
-                    indirect.push((e.name, req, import))
-                }
-                _ => local.push((e.name, v)),
+                Some(&(_, req, import)) => indirect.push((e.name, req, import)),
+                None => local.push((e.name, v)),
             }
         }
         // Requests that nothing keeps (TypeScript type imports) are dropped.

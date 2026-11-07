@@ -32,7 +32,7 @@ impl Kind {
 pub struct Rules {
     /// Matches if the test has any of these flags.
     pub flags: Vec<String>,
-    /// Directory prefixes (or file paths) relative to `test/`.
+    /// Directory prefixes (or file paths) relative to `test/`, or globs (`glob`).
     pub paths: Vec<String>,
     /// Feature globs (`*` wildcard), matched against the test's features, including
     /// those implied by its includes (`harness/features.yml`).
@@ -148,7 +148,7 @@ impl Config {
             if let Some(p) = r
                 .paths
                 .iter()
-                .find(|p| glob::has_path_prefix(facts.path, p))
+                .find(|p| glob::path_filter_matches(p, facts.path))
             {
                 return (i, Reason::Path(p.clone()));
             }
@@ -225,7 +225,7 @@ name = "skip"
 kind = "skip"
 description = "never"
 flags = ["noStrict"]
-paths = ["intl402", "built-ins/Temporal/"]
+paths = ["intl402", "built-ins/Temporal/", "built-ins/Date/*.js"]
 features = ["Intl-*"]
 
 [[group]]
@@ -268,6 +268,8 @@ features = ["generators"]
         assert_eq!(g("intl402/x.js", &[], &[], ""), "skip");
         assert_eq!(g("built-ins/Temporal/x.js", &[], &[], ""), "skip");
         assert_eq!(g("built-ins/Array/x.js", &["noStrict"], &[], ""), "skip");
+        assert_eq!(g("built-ins/Date/x.js", &[], &[], ""), "skip");
+        assert_eq!(g("built-ins/Date/now/x.js", &[], &[], ""), "active");
         assert_eq!(
             g("built-ins/Array/x.js", &[], &["Intl-enumeration"], ""),
             "skip"
