@@ -589,17 +589,23 @@ impl Heap {
         if let Some(i) = key.as_int() {
             return Some(i as f64);
         }
-        if key.is_symbol() || key.is_null() {
+        // Only digits, '-', 'I'(nfinity) and 'N'(aN) can start a canonical number: most
+        // keys fail on their first unit, before their text is built (an IC fill asks for
+        // every key it adds to an object).
+        let first = match self.str_view(self.atom_str_value(key)?) {
+            Some(super::StrView::Latin1(b)) => *b.first()?,
+            // A first unit above 0xFF is no ASCII character either.
+            Some(super::StrView::Utf16(b)) => {
+                u8::try_from(u16::from_le_bytes([*b.first()?, b[1]])).ok()?
+            }
+            None => *self.atom_name(key).as_bytes().first()?,
+        };
+        if !(first.is_ascii_digit() || first == b'-' || first == b'I' || first == b'N') {
             return None;
         }
         let s = self.atom_name(key);
         if s == "-0" {
             return Some(-0.0);
-        }
-        let first = s.as_bytes().first().copied()?;
-        // Only digits, '-', 'I'(nfinity) and 'N'(aN) can start a canonical number.
-        if !(first.is_ascii_digit() || first == b'-' || first == b'I' || first == b'N') {
-            return None;
         }
         let n = crate::num::string_to_number(s.as_bytes());
         let canon = crate::num::to_string(n);
