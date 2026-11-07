@@ -6103,7 +6103,7 @@ function MathRandomBuiltin() {
   return %MathRandom();
 }
 
-// builtins/module.ts:19 %ModuleEvaluate
+// builtins/module.ts:18
 function ModuleEvaluate(m) {
   const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
   const state = %NewRecord(2);
@@ -6127,7 +6127,7 @@ function ModuleEvaluate(m) {
   return promise;
 }
 
-// builtins/module.ts:44
+// builtins/module.ts:43
 function InnerModuleEvaluation(m, state) {
   const status = %AsNumber(%RecordGet(m, 1));
   if (status === 5) {
@@ -6168,9 +6168,12 @@ function InnerModuleEvaluation(m, state) {
   }
 }
 
-// builtins/module.ts:99 %NsTrap
-function NsTrap(target, key, a) {
+// builtins/module.ts:100 %ModuleOp
+function ModuleOp(target, key, a) {
   const op = %F64ToI32(%AsNumber(this));
+  if (op === 5) {
+    return ModuleEvaluate(%AsObj(target));
+  }
   if (op === 4) {
     return false;
   }
@@ -12433,8 +12436,7 @@ function GlobalAtob(...args) {
 %InstallIntrinsic("AddEntriesFromIterable", AddEntriesFromIterable);
 %InstallIntrinsic("MapPrototypeSet", MapPrototypeSet);
 %InstallIntrinsic("MapIteratorPrototypeNext", MapIteratorPrototypeNext);
-%InstallIntrinsic("ModuleEvaluate", ModuleEvaluate);
-%InstallIntrinsic("NsTrap", NsTrap);
+%InstallIntrinsic("ModuleOp", ModuleOp);
 %InstallIntrinsic("ResolvePromise", ResolvePromise);
 %InstallIntrinsic("PromiseResolveFunction", PromiseResolveFunction);
 %InstallIntrinsic("PromiseRejectFunction", PromiseRejectFunction);

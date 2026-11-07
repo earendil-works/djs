@@ -143,8 +143,9 @@ impl Vm {
             return Ok(false);
         }
         use crate::bytecode::intrinsics::intrinsic_id_of as id;
-        let f = realm::installed_intrinsic(&self.heap, id!("ModuleEvaluate"));
-        self.call(f, Value::UNDEFINED, &[Value::object(m)])?;
+        // `%ModuleOp` with `this` 5: Evaluate (builtins/module.ts).
+        let f = realm::installed_intrinsic(&self.heap, id!("ModuleOp"));
+        self.call(f, Value::int(5), &[Value::object(m)])?;
         Ok(true)
     }
 

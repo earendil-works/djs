@@ -1651,9 +1651,8 @@
 1646	value	%prelude:GetPrototypeFromConstructor%
 1647	intrinsic	ConstructorPrototype
 1648	intrinsic	GetPrototypeFromConstructorSlow
-1649	value	%intrinsic:ModuleEvaluate%
-1650	value	%intrinsic:NsTrap%
+1649	value	%intrinsic:ModuleOp%
+1650	value	%prelude:ModuleEvaluate%
 1651	value	%prelude:InnerModuleEvaluation%
 1652	intrinsic	NsOp
-1653	intrinsic	ModuleEvaluate
-1654	intrinsic	NsTrap
+1653	intrinsic	ModuleOp

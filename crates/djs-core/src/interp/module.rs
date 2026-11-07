@@ -82,7 +82,7 @@ fn modules(heap: &mut Heap) -> Result<Obj, HeapError> {
     }
     let r = heap.alloc_object(ObjectClass::Record, None, 2)?;
     let registry = heap.new_object(None)?;
-    // The handler of every namespace: builtin closures of `%NsTrap` with the internal
+    // The handler of every namespace: builtin closures of `%ModuleOp` with the internal
     // method's number (builtins/module.ts).
     let traps = heap.new_object(None)?;
     let names = [
@@ -97,7 +97,7 @@ fn modules(heap: &mut Heap) -> Result<Obj, HeapError> {
         let key = heap.atom_str(name)?;
         let class = ObjectClass::BuiltinClosure;
         let f = heap.alloc_object(class, Some(proto), class.slots())?;
-        let id = crate::bytecode::intrinsics::intrinsic_id_of!("NsTrap");
+        let id = crate::bytecode::intrinsics::intrinsic_id_of!("ModuleOp");
         heap.set_object_slot(f, 0, Value::int(i32::from(id)));
         heap.set_object_slot(f, 1, Value::int(op as i32));
         heap.set_object_slot(f, 2, Value::int(0));

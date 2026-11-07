@@ -14,7 +14,6 @@
  * Evaluate ( ), 16.2.1.5.3, of a linked module, without top-level await: the promise of
  * the evaluation, settled when it returns. An error is kept by every module on the stack
  * and thrown again by later evaluations.
- * @intrinsic
  */
 function ModuleEvaluate(m: Obj): Obj {
   const promise: Obj = PromiseCreate(RealmIntrinsic("PromisePrototype"));
@@ -86,18 +85,23 @@ function InnerModuleEvaluation(m: Obj, state: Obj): void {
 // A module namespace object (10.4.6) is a Proxy over a non-extensible target with the
 // same keys (so that the proxy invariants hold), which also holds the namespace's data in
 // internal slots. Its handler's traps get, set, getOwnPropertyDescriptor, defineProperty
-// and ownKeys are builtin closures of NsTrap; the other internal methods (has,
+// and ownKeys are builtin closures of ModuleOp; the other internal methods (has,
 // deleteProperty, getPrototypeOf, ...) are the target's, which answers them as a
 // namespace does.
 
 /**
- * A namespace trap; `this` (the closure's data) is the internal method: 0 [[Get]]
- * (10.4.6.8), 1 [[GetOwnProperty]] (10.4.6.5), 2 [[DefineOwnProperty]] (10.4.6.6), 3
- * [[OwnPropertyKeys]] (10.4.6.11), 4 [[Set]] (10.4.6.9: always false).
+ * The module builtins' entry for Rust (one intrinsic: each costs the shipped module
+ * table space): `this` 5 evaluates module record target ([`ModuleEvaluate`]); otherwise
+ * it is a namespace trap and `this` (the builtin closure's data) the internal method: 0
+ * [[Get]] (10.4.6.8), 1 [[GetOwnProperty]] (10.4.6.5), 2 [[DefineOwnProperty]] (10.4.6.6),
+ * 3 [[OwnPropertyKeys]] (10.4.6.11), 4 [[Set]] (10.4.6.9: always false).
  * @intrinsic
  */
-function NsTrap(this: Value, target: Value, key: Value, a: Value): Value {
+function ModuleOp(this: Value, target: Value, key: Value, a: Value): Value {
   const op: i32 = F64ToI32(AsNumber(this));
+  if (op === 5) {
+    return ModuleEvaluate(AsObj(target));
+  }
   if (op === 4) {
     return false;
   }

@@ -2099,14 +2099,15 @@ MathHypot: reentrant (Math.hypot)
 
 MathRandomBuiltin: leaf (Math.random)
 
-ModuleEvaluate: reentrant (%ModuleEvaluate)
-  builtins/module.ts:26:5  InnerModuleEvaluation (builtin)
+ModuleEvaluate: reentrant
+  builtins/module.ts:25:5  InnerModuleEvaluation (builtin)
 
 InnerModuleEvaluation: reentrant
-  builtins/module.ts:64:5  InnerModuleEvaluation (builtin)
-  builtins/module.ts:72:3  Call (intrinsic)
+  builtins/module.ts:63:5  InnerModuleEvaluation (builtin)
+  builtins/module.ts:71:3  Call (intrinsic)
 
-NsTrap: leaf (%NsTrap)
+ModuleOp: reentrant (%ModuleOp)
+  builtins/module.ts:103:12  ModuleEvaluate (builtin)
 
 NumberConstructor: reentrant (constructor Number)
   builtins/number.ts:11:7  LengthOfArrayLike (builtin)

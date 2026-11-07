@@ -265,6 +265,6 @@
 1624	%prelude:TASortedList%
 1625	%prelude:IsCanonicalNumericKey%
 1626	%prelude:TASet%
-1649	%intrinsic:ModuleEvaluate%
-1650	%intrinsic:NsTrap%
+1649	%intrinsic:ModuleOp%
+1650	%prelude:ModuleEvaluate%
 1651	%prelude:InnerModuleEvaluation%
