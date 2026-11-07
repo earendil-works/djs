@@ -110,9 +110,11 @@ made from it reads the same exports. The host reads a module's exports and names
 directly.
 
 Modules come with the native build for Rust hosts, together with the rest of what only
-such hosts use. The wasm modules leave them out, since codemode scripts are one piece of
-code, so there `import` and `export` declarations are syntax errors; and
-`import()` compiles everywhere but returns a rejected promise, as below.
+such hosts use: `TextEncoder` and `TextDecoder` are the other part. The wasm modules leave
+them out, since codemode scripts are one piece of code that gets its data from host
+functions. There `import` and `export` declarations are syntax errors, `import()`
+compiles everywhere but returns a rejected promise, as below, and a use of `TextEncoder`
+is a ReferenceError that names the build.
 
 ## What is left out, and why
 
@@ -165,8 +167,8 @@ Everything else of the standard library is there:
   functions and async generators, iterators with the `Iterator` helpers
   (`map`, `filter`, `take`, ...), `Array.fromAsync`;
 - data: `JSON`, `Date`, `Uint8Array.fromBase64` and `toBase64`, the URI functions,
-  `TextEncoder` and `TextDecoder` (UTF-8 only: another label is a RangeError; with
-  `fatal`, `ignoreBOM` and `stream`);
+  `TextEncoder` and `TextDecoder` in the native build (UTF-8 only: another label is a
+  RangeError; with `fatal`, `ignoreBOM` and `stream`);
 - resource management: `using` and `await using` declarations, `DisposableStack` and
   `AsyncDisposableStack`;
 - classes with private fields and methods, static blocks, and decorators.
@@ -202,8 +204,7 @@ them. [Status in numbers](status.md) gives the conformance figures.
 djs also comes in a *slim* build, for hosts that count every kilobyte. It leaves out the
 families that codemode scripts don't use and that cost real size: typed arrays with
 `ArrayBuffer` and `DataView`, `BigInt`, the `Iterator` helpers, `WeakRef` and
-`FinalizationRegistry`, `DisposableStack` and the `using` declarations, decorators, and
-`TextEncoder` and `TextDecoder`.
+`FinalizationRegistry`, `DisposableStack` and the `using` declarations, and decorators.
 A script that reaches for one gets an error that names the build, and feature tests keep
 working:
 

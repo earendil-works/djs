@@ -1,6 +1,6 @@
 # 0244: TextEncoder and TextDecoder (UTF-8) (B1)
 
-status: blocked
+status: in-progress
 agent: encoding
 branch: issue/0244-text-encoding
 depends-on: -

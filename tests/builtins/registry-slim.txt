@@ -268,3 +268,15 @@
 1649	%intrinsic:ModuleOp%
 1650	%prelude:ModuleEvaluate%
 1651	%prelude:InnerModuleEvaluation%
+1654	TextDecoder
+1655	TextEncoder
+1656	TextDecoder.prototype
+1657	TextEncoder.prototype
+1658	TextDecoder.prototype.decode
+1659	get TextDecoder.prototype.encoding
+1660	get TextDecoder.prototype.fatal
+1661	get TextDecoder.prototype.ignoreBOM
+1662	TextEncoder.prototype.encode
+1663	TextEncoder.prototype.encodeInto
+1664	get TextEncoder.prototype.encoding
+1665	%prelude:TextLabelIsUtf8%

@@ -3240,8 +3240,11 @@ fn fatal_out_of_memory_runs_no_handler() {
 fn reset_to_reuses_the_arena() {
     let (mut vm, _) = run_script(vm(), "globalThis.n = 1;\n");
     let image = vm.image().to_vec();
-    let (mut vm, _) = run_script(vm, "n = 2; globalThis.big = 'x'.repeat(1 << 20) + n;\n");
+    // An arena much bigger than the image, so the reset has room for what a VM adds to
+    // it (the base's size must not decide the test).
+    let (mut vm, _) = run_script(vm, "n = 2; globalThis.big = Array(1 << 17).fill(n);\n");
     let cap = vm.heap().arena().capacity();
+    assert!(cap > 2 * image.len(), "{cap}");
     vm.reset_to(&image).unwrap();
     assert_eq!(vm.bytes(), &image[..]);
     assert_eq!(vm.heap().arena().capacity(), cap);

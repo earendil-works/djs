@@ -183,7 +183,7 @@ results, which is what [deterministic runs](determinism.md) build on.
 
 A VM created with `vm_new` is a copy of the [base snapshot](snapshots.md#the-base-snapshot),
 so creating one is a memory copy, not an initialization. The module carries the base
-coded with djs's own small compressor (<!--n wasm/base-coded kb-->46 KB<!--/n--> for the full build's <!--n base/bytes kb-->192 KB<!--/n-->), in a
+coded with djs's own small compressor (<!--n wasm/base-coded kb-->46 KB<!--/n--> for the full build's <!--n base/bytes kb-->193 KB<!--/n-->), in a
 custom section named `djs_base`. A custom section is outside the instance's linear
 memory: a copy in memory would cost every instance pages for bytes it reads once.
 

@@ -3,7 +3,7 @@
 // checked and a BufferSource's bytes found here (as a buffer, an offset and a length),
 // and the leaves in builtins/encoding.rs transcode. Messages are node's. Methods and
 // accessors are enumerable, as WebIDL's are.
-// @slim-omit: left out of the slim build (D2411).
+// @embed-only: left out of the preludes of builds without `embed` (D3175).
 
 /** The prototype for a new codec: new.target's, else the realm constructor `name`'s. */
 function TextCodecPrototype(newTarget: Value, name: Str): Obj {

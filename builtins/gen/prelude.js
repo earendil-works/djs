@@ -3170,6 +3170,171 @@ function SymbolAsyncDispose() {
   return %WellKnownSymbol("asyncDispose");
 }
 
+// builtins/encoding.ts:9
+function TextCodecPrototype(newTarget, name) {
+  const proto = %Get(%AsObj(newTarget), "prototype");
+  if (%IsObject(proto)) {
+    return %AsObj(proto);
+  }
+  return %AsObj(%Get(%RealmConstructor(name), "prototype"));
+}
+
+// builtins/encoding.ts:21
+function TextDictionary(v) {
+  if (v === undefined || v === null) {
+    return false;
+  }
+  if (!%IsObject(v)) {
+    throw %NewTypeError("The \"options\" argument must be of type object");
+  }
+  return true;
+}
+
+// builtins/encoding.ts:32
+function TextIsAsciiWhitespace(c) {
+  return c === 9 || c === 10 || c === 12 || c === 13 || c === 32;
+}
+
+// builtins/encoding.ts:41
+function TextLabelIsUtf8(label) {
+  let $1, $2;
+  let start = 0;
+  let end = %StrLength(label);
+  while (start < end && ($1 = %StrCharCodeAt(label, start), $1 === 9 || $1 === 10 || $1 === 12 || $1 === 13 || $1 === 32)) {
+    start += 1;
+  }
+  while (end > start && ($2 = %StrCharCodeAt(label, end - 1), $2 === 9 || $2 === 10 || $2 === 12 || $2 === 13 || $2 === 32)) {
+    end -= 1;
+  }
+  const l = %StrToCase(%StrSubstring(label, start, end), false);
+  return l === "utf-8" || l === "utf8" || l === "unicode-1-1-utf-8" || l === "unicode11utf8" || l === "unicode20utf8" || l === "x-unicode20utf8";
+}
+
+// builtins/encoding.ts:59 constructor TextEncoder
+function TextEncoderConstructor() {
+  let $1, $2;
+  if (new.target === undefined) {
+    throw %NewTypeError("must be called with new");
+  }
+  return %TextCodecCreate(($1 = new.target, ($2 = %Get(%AsObj($1), "prototype"), (%IsObject($2)) ? %AsObj($2) : %AsObj(%Get(%RealmConstructor("TextEncoder"), "prototype")))), 0);
+}
+
+// builtins/encoding.ts:70 get TextEncoder.prototype.encoding
+function TextEncoderPrototypeEncoding() {
+  %TextCodecFlags(this, false);
+  return "utf-8";
+}
+
+// builtins/encoding.ts:79 TextEncoder.prototype.encode
+function TextEncoderPrototypeEncode(input) {
+  %TextCodecFlags(this, false);
+  return %AsObj(%Utf8Encode(input === undefined ? "" : ToString(input), undefined, 0, 0));
+}
+
+// builtins/encoding.ts:89 TextEncoder.prototype.encodeInto
+function TextEncoderPrototypeEncodeInto(...args) {
+  %TextCodecFlags(this, false);
+  if (LengthOfArrayLike(args) < 2) {
+    throw %NewTypeError("2 arguments required");
+  }
+  const source = ToString(%Get(args, 0));
+  const dest = %Get(args, 1);
+  if (!%IsTypedArray(dest) || %TypedArrayField(dest, 0) !== 1) {
+    throw %NewTypeError("The \"dest\" argument must be an instance of Uint8Array");
+  }
+  const at = %TypedArrayField(dest, 2);
+  return %AsObj(%Utf8Encode(source, %TypedArrayField(dest, 1), at, %TypedArrayField(dest, 4)));
+}
+
+// builtins/encoding.ts:110 value TextEncoder.prototype[Symbol.toStringTag]
+function TextEncoderToStringTag() {
+  let $1, $2, $3;
+  const proto = %AsObj(%Get(%RealmConstructor("TextEncoder"), "prototype"));
+  (($1 = %ObjectCreate(null), (%CreateDataPropertyOrThrow($1, "enumerable", true), (%DefineOwnPropertyFromRecord(proto, "encoding", $1), undefined))));
+  (($2 = %ObjectCreate(null), (%CreateDataPropertyOrThrow($2, "enumerable", true), (%DefineOwnPropertyFromRecord(proto, "encode", $2), undefined))));
+  (($3 = %ObjectCreate(null), (%CreateDataPropertyOrThrow($3, "enumerable", true), (%DefineOwnPropertyFromRecord(proto, "encodeInto", $3), undefined))));
+  return "TextEncoder";
+}
+
+// builtins/encoding.ts:123 constructor TextDecoder
+function TextDecoderConstructor(label, options) {
+  let $1, $2;
+  if (new.target === undefined) {
+    throw %NewTypeError("must be called with new");
+  }
+  const l = label === undefined ? "utf-8" : ToString(label);
+  let flags = 1;
+  if (((options === undefined || options === null) ? false : (!%IsObject(options)) ? %Throw(%NewTypeError("The \"options\" argument must be of type object")) : true)) {
+    if (%ToBoolean(%Get(%AsObj(options), "fatal"))) {
+      flags = flags | 2;
+    }
+    if (%ToBoolean(%Get(%AsObj(options), "ignoreBOM"))) {
+      flags = flags | 4;
+    }
+  }
+  const proto = ($1 = new.target, ($2 = %Get(%AsObj($1), "prototype"), (%IsObject($2)) ? %AsObj($2) : %AsObj(%Get(%RealmConstructor("TextDecoder"), "prototype"))));
+  if (!TextLabelIsUtf8(l)) {
+    throw %NewRangeError("The \"" + l + "\" encoding is not supported");
+  }
+  return %TextCodecCreate(proto, flags);
+}
+
+// builtins/encoding.ts:148 get TextDecoder.prototype.encoding
+function TextDecoderPrototypeEncoding() {
+  %TextCodecFlags(this, true);
+  return "utf-8";
+}
+
+// builtins/encoding.ts:157 get TextDecoder.prototype.fatal
+function TextDecoderPrototypeFatal() {
+  return (%TextCodecFlags(this, true) & 2) !== 0;
+}
+
+// builtins/encoding.ts:165 get TextDecoder.prototype.ignoreBOM
+function TextDecoderPrototypeIgnoreBOM() {
+  return (%TextCodecFlags(this, true) & 4) !== 0;
+}
+
+// builtins/encoding.ts:175 TextDecoder.prototype.decode
+function TextDecoderPrototypeDecode(input, options) {
+  %TextCodecFlags(this, true);
+  if (input !== undefined && !%IsBufferSource(input)) {
+    throw %NewTypeError("The \"input\" argument must be an instance of ArrayBuffer or ArrayBufferView");
+  }
+  let stream = false;
+  if (((options === undefined || options === null) ? false : (!%IsObject(options)) ? %Throw(%NewTypeError("The \"options\" argument must be of type object")) : true)) {
+    stream = %ToBoolean(%Get(%AsObj(options), "stream"));
+  }
+  let buffer = input;
+  let offset = 0;
+  let length = -1;
+  if (%IsTypedArray(input)) {
+    buffer = %TypedArrayField(input, 1);
+    offset = %TypedArrayField(input, 2);
+    length = %TypedArrayField(input, 4);
+  } else if (%IsDataView(input)) {
+    buffer = %DataViewField(input, 0);
+    offset = %DataViewField(input, 1);
+    length = %DataViewField(input, 2);
+  }
+  const r = %Utf8Decode(%AsObj(this), buffer, offset, length, stream);
+  if (r === undefined) {
+    throw %NewTypeError("The encoded data was not valid for encoding utf-8");
+  }
+  return %AsStr(r);
+}
+
+// builtins/encoding.ts:210 value TextDecoder.prototype[Symbol.toStringTag]
+function TextDecoderToStringTag() {
+  let $1, $2, $3, $4;
+  const proto = %AsObj(%Get(%RealmConstructor("TextDecoder"), "prototype"));
+  (($1 = %ObjectCreate(null), (%CreateDataPropertyOrThrow($1, "enumerable", true), (%DefineOwnPropertyFromRecord(proto, "encoding", $1), undefined))));
+  (($2 = %ObjectCreate(null), (%CreateDataPropertyOrThrow($2, "enumerable", true), (%DefineOwnPropertyFromRecord(proto, "fatal", $2), undefined))));
+  (($3 = %ObjectCreate(null), (%CreateDataPropertyOrThrow($3, "enumerable", true), (%DefineOwnPropertyFromRecord(proto, "ignoreBOM", $3), undefined))));
+  (($4 = %ObjectCreate(null), (%CreateDataPropertyOrThrow($4, "enumerable", true), (%DefineOwnPropertyFromRecord(proto, "decode", $4), undefined))));
+  return "TextDecoder";
+}
+
 // builtins/error.ts:4
 function InstallErrorCause(o, options) {
   if (%IsObject(options)) {
@@ -11646,6 +11811,10 @@ function GlobalAtob(...args) {
 %InstallPrototype("globalThis", "DisposableStack", undefined);
 %InstallConstructor("globalThis", "AsyncDisposableStack", AsyncDisposableStackConstructor, 0, undefined);
 %InstallPrototype("globalThis", "AsyncDisposableStack", undefined);
+%InstallConstructor("globalThis", "TextEncoder", TextEncoderConstructor, 0, undefined);
+%InstallPrototype("globalThis", "TextEncoder", undefined);
+%InstallConstructor("globalThis", "TextDecoder", TextDecoderConstructor, 0, undefined);
+%InstallPrototype("globalThis", "TextDecoder", undefined);
 %InstallConstructor("globalThis", "Error", ErrorConstructor, 1, undefined);
 %InstallMethod("Error", "isError", ErrorIsError, 1);
 %InstallMethod("Error", "captureStackTrace", ErrorCaptureStackTrace, 2);
@@ -11992,6 +12161,15 @@ function GlobalAtob(...args) {
 %InstallMethod("AsyncDisposableStack.prototype", %WellKnownSymbol("asyncDispose"), AsyncDisposableStackPrototypeDisposeAsync, 0);
 %InstallMethod("Iterator.prototype", "chunks", IteratorPrototypeChunks, 1);
 %InstallMethod("%AsyncIteratorPrototype%", %WellKnownSymbol("asyncDispose"), AsyncIteratorPrototypeAsyncDispose, 0);
+%InstallPrototypeConstructor("TextEncoder");
+%InstallAccessor("TextEncoder.prototype", "encoding", TextEncoderPrototypeEncoding, false);
+%InstallMethod("TextEncoder.prototype", "encode", TextEncoderPrototypeEncode, 0);
+%InstallMethod("TextEncoder.prototype", "encodeInto", TextEncoderPrototypeEncodeInto, 2);
+%InstallPrototypeConstructor("TextDecoder");
+%InstallMethod("TextDecoder.prototype", "decode", TextDecoderPrototypeDecode, 0);
+%InstallAccessor("TextDecoder.prototype", "encoding", TextDecoderPrototypeEncoding, false);
+%InstallAccessor("TextDecoder.prototype", "fatal", TextDecoderPrototypeFatal, false);
+%InstallAccessor("TextDecoder.prototype", "ignoreBOM", TextDecoderPrototypeIgnoreBOM, false);
 %InstallMethod("Error.prototype", "toString", ErrorPrototypeToString, 0);
 %InstallValue("Error.prototype", "name", ErrorPrototypeName(), 5);
 %InstallValue("Error.prototype", "message", ErrorPrototypeMessage(), 5);
@@ -12317,6 +12495,8 @@ function GlobalAtob(...args) {
 %InstallValue("Date.prototype", %WellKnownSymbol("toPrimitive"), DatePrototypeToPrimitive, 4);
 %InstallValue("DisposableStack.prototype", %WellKnownSymbol("toStringTag"), DisposableStackPrototypeToStringTag(), 4);
 %InstallValue("AsyncDisposableStack.prototype", %WellKnownSymbol("toStringTag"), AsyncDisposableStackPrototypeToStringTag(), 4);
+%InstallValue("TextEncoder.prototype", %WellKnownSymbol("toStringTag"), TextEncoderToStringTag(), 4);
+%InstallValue("TextDecoder.prototype", %WellKnownSymbol("toStringTag"), TextDecoderToStringTag(), 4);
 %InstallPrototypeConstructor("Error");
 %InstallPrototypeConstructor("EvalError");
 %InstallPrototypeConstructor("RangeError");

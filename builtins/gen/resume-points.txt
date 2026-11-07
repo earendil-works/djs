@@ -1087,6 +1087,58 @@ SymbolDispose: leaf (value Symbol.dispose)
 
 SymbolAsyncDispose: leaf (value Symbol.asyncDispose)
 
+TextCodecPrototype: reentrant
+  builtins/encoding.ts:10:24  Get (intrinsic)
+  builtins/encoding.ts:14:16  Get (intrinsic)
+
+TextDictionary: leaf
+
+TextIsAsciiWhitespace: leaf
+
+TextLabelIsUtf8: leaf
+
+TextEncoderConstructor: reentrant (constructor TextEncoder)
+  builtins/encoding.ts:63:26  TextCodecPrototype (builtin)
+
+TextEncoderPrototypeEncoding: leaf (get TextEncoder.prototype.encoding)
+
+TextEncoderPrototypeEncode: reentrant (TextEncoder.prototype.encode)
+  builtins/encoding.ts:81:54  ToString (builtin)
+
+TextEncoderPrototypeEncodeInto: reentrant (TextEncoder.prototype.encodeInto)
+  builtins/encoding.ts:91:7  LengthOfArrayLike (builtin)
+  builtins/encoding.ts:94:32  Get (intrinsic)
+  builtins/encoding.ts:94:23  ToString (builtin)
+  builtins/encoding.ts:95:23  Get (intrinsic)
+
+TextEncoderToStringTag: reentrant (value TextEncoder.prototype[Symbol.toStringTag])
+  builtins/encoding.ts:111:28  Get (intrinsic)
+  builtins/encoding.ts:112:3  DOMExceptionEnumerable (builtin)
+  builtins/encoding.ts:113:3  DOMExceptionEnumerable (builtin)
+  builtins/encoding.ts:114:3  DOMExceptionEnumerable (builtin)
+
+TextDecoderConstructor: reentrant (constructor TextDecoder)
+  builtins/encoding.ts:127:50  ToString (builtin)
+  builtins/encoding.ts:130:19  Get (intrinsic)
+  builtins/encoding.ts:133:19  Get (intrinsic)
+  builtins/encoding.ts:137:22  TextCodecPrototype (builtin)
+
+TextDecoderPrototypeEncoding: leaf (get TextDecoder.prototype.encoding)
+
+TextDecoderPrototypeFatal: leaf (get TextDecoder.prototype.fatal)
+
+TextDecoderPrototypeIgnoreBOM: leaf (get TextDecoder.prototype.ignoreBOM)
+
+TextDecoderPrototypeDecode: reentrant (TextDecoder.prototype.decode)
+  builtins/encoding.ts:182:24  Get (intrinsic)
+
+TextDecoderToStringTag: reentrant (value TextDecoder.prototype[Symbol.toStringTag])
+  builtins/encoding.ts:211:28  Get (intrinsic)
+  builtins/encoding.ts:212:3  DOMExceptionEnumerable (builtin)
+  builtins/encoding.ts:213:3  DOMExceptionEnumerable (builtin)
+  builtins/encoding.ts:214:3  DOMExceptionEnumerable (builtin)
+  builtins/encoding.ts:215:3  DOMExceptionEnumerable (builtin)
+
 InstallErrorCause: reentrant
   builtins/error.ts:7:9  HasProperty (intrinsic)
   builtins/error.ts:8:45  Get (intrinsic)

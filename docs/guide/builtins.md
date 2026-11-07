@@ -43,7 +43,7 @@ So djs has one rule:
 ## The builtin language
 
 The builtins live in `builtins/*.ts`: about a thousand functions in a strict subset of
-TypeScript, of which <!--n builtins/all-->455<!--/n--> are installed as builtins and the rest are the spec's
+TypeScript, of which <!--n builtins/all-->458<!--/n--> are installed as builtins and the rest are the spec's
 abstract operations and helpers. A builtin does the conversions and checks in spec order,
 where user code can run, and hands the actual work to leaf intrinsics. Here is
 `Array.prototype.includes` from [`builtins/array.ts`](../../builtins/array.ts):
@@ -100,7 +100,7 @@ The subset is small on purpose:
 Intrinsics are declared in [`builtins/intrinsics.d.ts`](../../builtins/intrinsics.d.ts),
 each tagged `@leaf` (never runs user code) or `@reentrant` (may call exactly one user
 function, whose result completes the operation, such as `Get` calling a getter).
-<!--n intrinsics/leaf-->290<!--/n--> are leaves and <!--n intrinsics/reentrant-->29<!--/n--> are reentrant. Builtins tagged `@intrinsic` join them, so that the
+<!--n intrinsics/leaf-->295<!--/n--> are leaves and <!--n intrinsics/reentrant-->29<!--/n--> are reentrant. Builtins tagged `@intrinsic` join them, so that the
 interpreter's slow paths and other builtins can call them as `%Name(...)`. They are all
 numbered in one table; the [intrinsics reference](ref-intrinsics.md) lists them.
 
@@ -165,7 +165,7 @@ changes. A helper whose frame the engine looks for on the stack is tagged `@fram
 keeps it. Here is `substring` as the prelude has it:
 
 <!-- gen:excerpt builtins/gen/prelude.js "String.prototype.substring" "function StringPrototypeSubstring(" 8 -->
-[`builtins/gen/prelude.js`](../../builtins/gen/prelude.js#L9723-L9730), lines 9723–9730:
+[`builtins/gen/prelude.js`](../../builtins/gen/prelude.js#L9888-L9895), lines 9888–9895:
 
 ```js
 function StringPrototypeSubstring(start, end) {

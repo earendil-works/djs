@@ -52,7 +52,7 @@ fn base_offsets_agree_with_paths() {
     assert!(registry::base_offset(map).is_some());
 }
 
-/// The slim build's absent globals (D2411) are exactly the global names the slim registry
+/// The slim build's absent globals (D2411), with the embed-only ones (D3175), are exactly the global names the slim registry
 /// list has: so `ReferenceError`s say "not available in this build" for all of them and
 /// for nothing that exists.
 #[test]
@@ -67,6 +67,7 @@ fn slim_absent_globals_match_the_registry() {
         .collect();
     from_registry.sort();
     let mut listed = djs_core::interp::realm::ABSENT_GLOBALS.to_vec();
+    listed.extend(djs_core::interp::realm::EMBED_GLOBALS);
     listed.sort();
     assert_eq!(listed, from_registry);
 }

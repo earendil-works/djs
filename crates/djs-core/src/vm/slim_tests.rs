@@ -32,15 +32,17 @@ fn eval(vm: &mut Vm, src: &str) -> String {
     }
 }
 
-/// The globals the slim build leaves out: `typeof` is "undefined" and a use names the
-/// build; in the full build they are functions.
+/// The globals the slim build leaves out, and the embed-only ones: `typeof` is
+/// "undefined" and a use names the build; in builds that have them they are functions.
 #[test]
 fn absent_globals() {
     let mut vm = vm();
-    for name in crate::interp::realm::ABSENT_GLOBALS {
+    let realm = crate::interp::realm::ABSENT_GLOBALS.iter().map(|n| (n, FULL));
+    let embed = crate::interp::realm::EMBED_GLOBALS.iter().map(|n| (n, crate::EMBED));
+    for (name, present) in realm.chain(embed) {
         let t = eval(&mut vm, &alloc::format!("typeof {name}"));
         let used = eval(&mut vm, &alloc::format!("'use strict'; {name}; 1"));
-        if FULL {
+        if present {
             assert_eq!(t, "function", "{name}");
             assert_eq!(used, "1", "{name}");
         } else {

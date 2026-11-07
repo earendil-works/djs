@@ -2005,7 +2005,7 @@ impl Exec<'_> {
                 Value::string(self.heap.alloc_str(name)?)
             }
             // The five are consecutive (builtins/intrinsics.d.ts).
-            TEXT_CODEC_CREATE..=UTF8_DECODE if FULL => {
+            TEXT_CODEC_CREATE..=UTF8_DECODE if crate::EMBED => {
                 let args = [a0, arg(self, 1), arg(self, 2), arg(self, 3), arg(self, 4)];
                 let k = id - TEXT_CODEC_CREATE;
                 match encoding::intrinsic(self.heap, k, args, &mut self.fuel)? {
