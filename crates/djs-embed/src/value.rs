@@ -22,6 +22,10 @@ pub enum Value<'a> {
     Bool(bool),
     Number(f64),
     Str(&'a str),
+    /// A string from UTF-8 bytes: invalid sequences become U+FFFD (as the WHATWG decoder
+    /// replaces them), a leading byte order mark stays. For text the host has as bytes,
+    /// such as a body: one pass over ASCII, which is copied straight in
+    Utf8(&'a [u8]),
     /// A new `Uint8Array` with a copy of the bytes
     Bytes(&'a [u8]),
     /// Plain data, built in the VM
@@ -123,6 +127,15 @@ fn leaf(vm: &mut Vm, v: &Value<'_>) -> Result<Raw, Error> {
         Value::Bool(b) => Raw::bool(b),
         Value::Number(n) => number(n),
         Value::Str(s) => Raw::string(vm.heap_mut().alloc_str(s).map_err(heap_error)?),
+        Value::Utf8(b) => {
+            let heap = vm.heap_mut();
+            let s = if b.is_ascii() {
+                heap.alloc_latin1(b)
+            } else {
+                heap.alloc_str(&String::from_utf8_lossy(b))
+            };
+            Raw::string(s.map_err(heap_error)?)
+        }
         Value::Bytes(b) => {
             let heap = vm.heap_mut();
             let bp = realm::intrinsic_obj(heap, Intrinsic::ArrayBufferProto);

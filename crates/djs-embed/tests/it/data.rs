@@ -118,6 +118,26 @@ fn data_in_is_what_its_wire_form_decodes_to() {
 }
 
 #[test]
+fn utf8_bytes_become_strings() {
+    let mut i = instance("function f(s) { return [s, s.length]; }");
+    let cases: [(&[u8], &str); 4] = [
+        (b"plain ascii", "plain ascii"),
+        ("h\u{e9}\u{1F600}".as_bytes(), "h\u{e9}\u{1F600}"),
+        (b"a\xffb\xe2\x82", "a\u{FFFD}b\u{FFFD}"),
+        (b"", ""),
+    ];
+    for (bytes, text) in cases {
+        let out = i.call("f", &[Value::Utf8(bytes)], |_| Ok(())).unwrap();
+        let units = text.encode_utf16().count() as u32;
+        assert_eq!(
+            out,
+            Data::Array(vec![text.into(), units.into()]),
+            "{bytes:?}"
+        );
+    }
+}
+
+#[test]
 fn outbound_data_follows_js() {
     let mut i = instance(
         "function f() {\n\

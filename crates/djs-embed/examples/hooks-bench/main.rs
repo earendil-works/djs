@@ -347,10 +347,8 @@ fn serve_async(i: &mut Instance, id: djs_embed::CallId, body: Option<&[u8]>) -> 
     if !text {
         return call.reply(Ok(Value::Bytes(body)));
     }
-    match std::str::from_utf8(body) {
-        Ok(s) => call.reply(Ok(Value::Str(s))),
-        Err(_) => call.reply(Ok(Value::Str(&String::from_utf8_lossy(body)))),
-    }
+    // The VM decodes the bytes (lossy, as `Response.text()`): one pass over ASCII.
+    call.reply(Ok(Value::Utf8(body)))
 }
 
 /// Takes the member `key` out of an object's entries.
