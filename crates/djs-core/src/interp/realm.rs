@@ -28,6 +28,8 @@ pub const ABSENT_GLOBALS: &[&str] = &[
     "Int8Array",
     "Iterator",
     "SuppressedError",
+    "TextDecoder",
+    "TextEncoder",
     "Uint16Array",
     "Uint32Array",
     "Uint8Array",

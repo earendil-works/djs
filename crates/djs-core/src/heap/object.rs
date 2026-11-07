@@ -162,6 +162,9 @@ pub enum ObjectClass {
     /// column (int32, line 0 without a position), 5 whether it is native and 6 whether
     /// it was called as a constructor (booleans).
     CallSite = 34,
+    /// A TextEncoder or TextDecoder (0244, `builtins/encoding.rs`): slot 0 the flags,
+    /// slot 1 a decoder's stream state (both int32).
+    TextCodec = 35,
 }
 
 impl ObjectClass {
@@ -202,6 +205,7 @@ impl ObjectClass {
             30 => Some(ObjectClass::BigInt),
             29 => Some(ObjectClass::RawJSON),
             34 => Some(ObjectClass::CallSite),
+            35 => Some(ObjectClass::TextCodec),
             _ => None,
         }
     }
@@ -241,6 +245,7 @@ impl ObjectClass {
             ObjectClass::WeakRef => 1,
             ObjectClass::FinalizationRegistry => 5,
             ObjectClass::CallSite => 7,
+            ObjectClass::TextCodec => 2,
         }
     }
 

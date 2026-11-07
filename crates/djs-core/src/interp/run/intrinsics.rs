@@ -9,7 +9,7 @@
 use super::*;
 use crate::FULL;
 use crate::builtins::{
-    array, collection, date, eval, function, number, object, string, typed, uri,
+    array, collection, date, encoding, eval, function, number, object, string, typed, uri,
 };
 use crate::compiler::DynamicKind;
 
@@ -209,6 +209,12 @@ const DOM_EXCEPTION_FIELD: u16 = id("DOMExceptionField");
 const DOM_EXCEPTION_CODE: u16 = id("DOMExceptionCode");
 const DOM_EXCEPTION_CONSTANT: u16 = id("DOMExceptionConstant");
 const BTOA: u16 = id("Btoa");
+const TEXT_CODEC_CREATE: u16 = id("TextCodecCreate");
+const TEXT_CODEC_FLAGS: u16 = id("TextCodecFlags");
+const IS_BUFFER_SOURCE: u16 = id("IsBufferSource");
+const UTF8_ENCODE: u16 = id("Utf8Encode");
+const UTF8_ENCODE_INTO: u16 = id("Utf8EncodeInto");
+const UTF8_DECODE: u16 = id("Utf8Decode");
 const ATOB: u16 = id("Atob");
 const F64_IMUL: u16 = id("F64Imul");
 const F64_LOG: u16 = id("F64Log");
@@ -2001,6 +2007,39 @@ impl Exec<'_> {
                     return bad_argument(id);
                 };
                 Value::string(self.heap.alloc_str(name)?)
+            }
+            TEXT_CODEC_CREATE if FULL => {
+                let (Some(proto), Some(flags), Some(label)) = (
+                    a0.as_object(),
+                    arg(self, 1).as_int(),
+                    arg(self, 2).as_string(),
+                ) else {
+                    return bad_argument(id);
+                };
+                encoding::create(self.heap, proto, flags, label)?
+            }
+            TEXT_CODEC_FLAGS if FULL => {
+                Value::int(encoding::flags(self.heap, a0, arg(self, 1) == Value::TRUE)?)
+            }
+            IS_BUFFER_SOURCE if FULL => {
+                Value::bool(encoding::source_range(self.heap, a0).is_some())
+            }
+            UTF8_ENCODE | UTF8_ENCODE_INTO if FULL => {
+                let Some(s) = a0.as_string() else {
+                    return bad_argument(id);
+                };
+                if id == UTF8_ENCODE {
+                    encoding::encode_new(self.heap, s, &mut self.fuel)?
+                } else {
+                    encoding::encode_into(self.heap, s, arg(self, 1), &mut self.fuel)?
+                }
+            }
+            UTF8_DECODE if FULL => {
+                let Some(d) = a0.as_object() else {
+                    return bad_argument(id);
+                };
+                let stream = arg(self, 2) == Value::TRUE;
+                encoding::decode(self.heap, d, arg(self, 1), stream, &mut self.fuel)?
             }
             BTOA | ATOB => {
                 let Some(s) = a0.as_string() else {

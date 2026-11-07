@@ -10,6 +10,7 @@ pub(crate) mod collection;
 pub(crate) mod date;
 pub(crate) mod dense;
 pub(crate) mod dom;
+pub(crate) mod encoding;
 pub(crate) mod eval;
 pub(crate) mod fast;
 pub(crate) mod function;

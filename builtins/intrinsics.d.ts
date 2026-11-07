@@ -954,6 +954,27 @@ declare function DisposableStackCreate(proto: Obj, isAsync: boolean): Obj;
  * "DisposableStack object expected" / "AsyncDisposableStack object expected". @leaf
  */
 declare function ThisDisposableStack(v: Value, isAsync: boolean): Obj;
+// ---- TextEncoder and TextDecoder (0244, builtins/encoding.rs, D3172) --------------------
+
+/**
+ * A new TextEncoder (flags 0) or TextDecoder (flags 1 | fatal 2 | ignoreBOM 4) with
+ * prototype proto; undefined if label is not a label of UTF-8. @leaf
+ */
+declare function TextCodecCreate(proto: Obj, flags: i32, label: Str): Value;
+/** The flags of v, a TextDecoder (decoder) or a TextEncoder; else TypeError. @leaf */
+declare function TextCodecFlags(v: Value, decoder: boolean): i32;
+/** Whether v is an ArrayBuffer, a typed array or a DataView. @leaf */
+declare function IsBufferSource(v: Value): boolean;
+/** A new Uint8Array of the UTF-8 of s (lone surrogates as U+FFFD). @leaf */
+declare function Utf8Encode(s: Str): Obj;
+/** encodeInto's { read, written } (lone surrogates as U+FFFD); undefined if dest is no Uint8Array. @leaf */
+declare function Utf8EncodeInto(s: Str, dest: Value): Value;
+/**
+ * The decoder's output for the bytes of input (a BufferSource or undefined), keeping an
+ * incomplete sequence for the next call if stream; undefined for a fatal error. @leaf
+ */
+declare function Utf8Decode(decoder: Obj, input: Value, stream: boolean): Value;
+
 // ---- JSON (0033, builtins/json.rs over crate::json) -------------------------------------
 
 /**
