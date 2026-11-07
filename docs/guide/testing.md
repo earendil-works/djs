@@ -43,7 +43,7 @@ test262 is the conformance suite of ECMAScript. djs runs it at the commit dquick
   `SharedArrayBuffer`, direct `eval`, ...). They are left out of the count, so the score
   stays honest. A rule matches by frontmatter flag, directory, feature tag, or a scan of
   the source for constructs no tag names, such as a direct `eval(` call.
-- **active**: everything else, <!--n test262/active-->38,109<!--/n--> tests.
+- **active**: everything else, <!--n test262/active-->38,682<!--/n--> tests.
 
 A test runs as a Script, strict, with the harness files it asks for, and a `$262` host
 object (`evalScript`, `detachArrayBuffer`, `gc`). djs passes all but a few dozen active
