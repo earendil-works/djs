@@ -11711,3 +11711,23 @@ engine code goes through `catch_unwind`; a panic is `Error::Panicked` and poison
 global mutable state outside tests (checked: no `static mut`, atomics or thread-locals outside
 cfg(test); the `OnceLock`s are in test modules), everything is in the VM's own heap. This needs
 `panic = "unwind"`. Host-thrown errors (`Throw`) carry no stack (`Vm::new_error` records none).
+
+## D3220: Base images are target independent; cross builds are a manual check
+date: 2026-11-07 · by: libm · issue: 0246
+djs-prelude's build script makes the base image with a build-machine djs-core and the target
+embeds it; that is correct for every target, because the image has no target-dependent byte
+(big-endian targets included in principle, though none is built or tested): heap cells are read and written with explicit
+`from_le_bytes`/`to_le_bytes` (heap/layout.rs), offsets are `u32` (wasm32 modules have always
+embedded a base made on a 64-bit build machine), and the floats computed while making it go
+through djs-libm, whose arch routines (sqrt, fma) are correctly rounded, so x86 and aarch64
+agree. So no target-side base build and no per-target image check in the build. Verified by
+`scripts/cross-check.sh`: djs-embed's example for aarch64/x86_64-apple-darwin and
+-unknown-linux-musl (zig cc as the musl linker, Gondolin's wrapper approach in
+scripts/cross/) compares its embedded base with one it makes at run time and prints the same
+lines on all four (run natively, under Rosetta, in docker); also as a consumer outside the
+workspace by `git = "file://..."` and a rev, with a fat-LTO release profile. It is not a gate
+leg: zig, the rustup targets and docker are not guaranteed on the gate machine; TESTING.md
+"Cross builds of djs-embed" says when to run it. Hosts depend by path or a git rev; nothing
+needs to move into the crate directories for that (cargo's git checkout is the whole
+repository), only a crates.io package would. djs-embed's runtime crates: djs-embed, djs-core,
+djs-prelude, djs-libm.

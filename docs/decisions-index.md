@@ -806,3 +806,4 @@ topics when the index is next reorganized.
 - D3183: `Vm` is `Send` in every build
 - D3184: djs-embed's API and failure model
 - D3215: djs-libm: what was copied, and how the build hash covers it
+- D3220: Base images are target independent; cross builds are a manual check

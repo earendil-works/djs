@@ -552,6 +552,27 @@ k × 1000 bytes allocated first. Compare the distributions (mean and max) agains
 with `--root` pointing at a main checkout for builds whose heap layout differs. A workload
 is worse than main if its distribution is, not if one run is.
 
+## Cross builds of djs-embed (0246, D3220)
+
+Rust hosts build djs-embed for their own targets (Gondolin: aarch64/x86_64-apple-darwin and
+-unknown-linux-musl). `scripts/cross-check.sh` builds `crates/djs-embed/examples/cross_check.rs`
+for those four, runs each where the machine can (darwin natively, x86_64 under Rosetta with
+`arch -x86_64`, linux-musl in `docker run --platform linux/arm64|amd64 alpine:3`) and fails
+unless every target prints the same lines: a script with sync and async host functions
+through an async entry, numbers whose bits depend on djs-libm and the number formatting, and
+whether the base image the binary embeds (made by djs-prelude's build script on the build
+machine) equals the one it makes at run time. It also lists the runtime crates per target
+(`cargo tree -e normal`: djs-embed, djs-core, djs-prelude, djs-libm). The musl linker is
+`zig cc` through `scripts/cross/zigcc*` (zig 0.17 on PATH). `--release` uses the release
+profile; `--consumer REV` builds a scratch project outside the workspace that depends on the
+crates by `git = "file://<repository>"` and `rev = REV`, with a fat-LTO release profile like
+Gondolin's, which also checks that a git dependency builds.
+
+It is not a gate leg (zig, the rustup targets and docker are not guaranteed on the gate
+machine): run it by hand after a change that could make a build target dependent, such as
+djs-prelude's build script, djs-libm's `arch` code, the heap's byte encoding, or a new build
+dependency. About 2 minutes cold in dev, 3 for `--release --consumer`.
+
 ## The gate
 
 `scripts/gate.sh` must pass before anything merges into `main` (`scripts/merge-to-main.sh`

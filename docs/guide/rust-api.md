@@ -157,12 +157,47 @@ can move between threads, between calls or between steps of one call, which is w
 async host does when a task resumes on another worker. Parallel calls take one instance
 each.
 
+## Adding it to a project
+
+djs is not on crates.io yet, so a project depends on the repository: by path while it
+develops against a local checkout, and by a pinned revision otherwise:
+
+```toml
+[dependencies]
+djs-embed = { git = "https://github.com/earendil-works/djs", rev = "<commit>" }
+# or, next to a checkout: djs-embed = { path = "../djs/crates/djs-embed" }
+
+[profile.dev.package.djs-core]
+opt-level = 1
+```
+
+The profile line is for debug builds: unoptimized, the engine runs several times slower.
+The crate's one feature is `unicode`, on by default: Unicode property escapes in regular
+expressions and `String.prototype.normalize`, about 60 KB of native code. The engine's
+other build options (dumps, lazy compilation, the compile cache) stay off, since an
+embedder does not use them. What the build pulls in at run time is four crates of the
+repository, the engine, its base image, its math functions and the embedding crate,
+and no third-party crate.
+
+The engine is plain Rust with no C code and no target-specific build step, so it
+cross-compiles with nothing but a linker for the target, for example `zig cc` for
+static linux-musl binaries. The base image, the engine's realm with all builtins that
+every snapshot starts from, is made at build time on the build machine and embedded;
+its format is the same on every target (little-endian cells, 32-bit offsets, the same
+math results), so a cross build embeds exactly the image the target would have made.
+[`scripts/cross-check.sh`](../../scripts/cross-check.sh) checks this: it builds a small
+program for aarch64 and x86_64 macOS and linux-musl, runs each (x86_64 macOS under
+Rosetta, linux in a container), and compares their output, the embedded image and an
+image each makes itself.
+
 ## Where to look
 
 - [`crates/djs-embed/src/lib.rs`](../../crates/djs-embed/src/lib.rs): the reference,
   with an example that
   [`crates/djs-embed/tests/it/example.rs`](../../crates/djs-embed/tests/it/example.rs)
   runs.
+- [`crates/djs-embed/examples/cross_check.rs`](../../crates/djs-embed/examples/cross_check.rs):
+  the program the cross-build check runs on each target.
 - [`crates/djs-embed/src/instance.rs`](../../crates/djs-embed/src/instance.rs): the call
   protocol and the failure handling.
 - [`crates/djs-embed/tests/it/failures.rs`](../../crates/djs-embed/tests/it/failures.rs):
