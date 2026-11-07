@@ -42,6 +42,42 @@ targets (the base image a cross build embeds must be the one the target would ma
 
 ## Log
 
+- 2026-11-07 (libm): `crates/djs-embed/examples/cross_check.rs`: a script with a sync
+  (`log`) and an async (`fetchText`) host function through an async entry; prints the
+  result, numbers whose bits depend on djs-libm and the number formatting, fuel used, the
+  snapshot's size, and compares `djs_prelude::BASE` (made by the build machine's build
+  script) with a base the binary makes at run time (`Vm::new` + `prepare_base_image`):
+  exit 1 if they differ.
+- `scripts/cross-check.sh` (+ `scripts/cross/zigcc*`, `zigar`: Gondolin's zig cc wrapper
+  approach, copied) builds it for aarch64/x86_64-apple-darwin and -unknown-linux-musl, runs
+  darwin natively / `arch -x86_64` (Rosetta), linux in `docker run --platform linux/arm64|amd64
+  alpine:3`, compares stdout across targets, lists the runtime crates per target.
+  `--release`, `--consumer REV` (a scratch project in work/scratch/cross-check/consumer with
+  its own `[workspace]`, deps by `git = "file://<common git dir>"`, `rev`; release profile
+  like Gondolin's: fat LTO, 1 CGU, strip).
+- Results (all `cross-check: ok`, every target's output identical, base 188,672 bytes, fnv
+  c1d1c3d1f74dfda4, "base made here: identical" on all four):
+  - workspace, dev: darwin arm64 4.3 MB, x86_64 4.3 MB; musl aarch64 42 MB, x86_64 43 MB
+    (static, debug info); ~2 min cold.
+  - workspace, release: 3.1 / 3.1 / 19.9 / 19.1 MB.
+  - consumer by git rev b947a8bb, dev: builds; release with fat LTO + strip: 2.4 / 2.4 /
+    2.4 / 2.5 MB (static musl).
+  - runtime crates (`cargo tree -e normal -p djs-embed`, every target, workspace and
+    consumer): djs-core, djs-embed, djs-libm, djs-prelude. No third-party crate.
+- Why images are target independent (64-bit LE and beyond): heap cells are read and written
+  with explicit little-endian `from_le_bytes`/`to_le_bytes` (heap/layout.rs; the only
+  `_ne_bytes` is an ASCII test that ORs words, endian-neutral), offsets are `u32`, and
+  wasm32 builds already embed a base made by a 64-bit build machine. Floats computed while
+  making the base go through djs-libm, whose arch routines (sqrt, fma) are correctly
+  rounded, so x86 and aarch64 agree.
+- Git dependency: files outside the crate directories (builtins/gen/prelude.js via
+  `include_str!`, djs-core's build hash over ../djs-libm/src and builtins/gen/*.js,
+  djs-prelude's registry.tsv when `registry` is on) resolve in cargo's git checkout,
+  which is the whole repository. djs-embed turns `registry` off anyway. A crates.io
+  package would need them inside the crate (not now: publish = false).
+- A consumer's dev profile builds djs-core at opt-level 0: the example's run takes 0.35 s
+  vs 0.045 s at the workspace's opt-level 1. The docs recommend the profile override.
+
 ## Follow-ups
 
 ## Result
