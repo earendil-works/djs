@@ -31,6 +31,65 @@ fn data_round_trips_through_the_vm() {
     assert_eq!(Data::from_wire(&wire).unwrap(), v);
 }
 
+/// `Value::Data` builds in the heap directly: the same objects the wire form decodes to.
+#[test]
+fn data_in_is_what_its_wire_form_decodes_to() {
+    let mut i = instance(
+        "function f(x) {\n\
+           return [Object.getPrototypeOf(x) === Object.prototype, Array.isArray(x.a),\n\
+             1 in x.a, x.a.length, Object.keys(x).join(), x.b instanceof Uint8Array,\n\
+             x.b.length, x.s.length, typeof x.i, Object.hasOwn(x, '__proto__')];\n\
+         }",
+    );
+    let v = Data::Object(vec![
+        (
+            "a".into(),
+            Data::Array(vec![1.into(), Data::Hole, 3.into()]),
+        ),
+        ("10".into(), "ten".into()),
+        ("b".into(), Data::Bytes(vec![1, 2, 3])),
+        ("s".into(), "hé😀".into()),
+        ("i".into(), 7.into()),
+        ("__proto__".into(), Data::Null),
+    ]);
+    let direct = i.call("f", &[Value::Data(&v)], |_| Ok(())).unwrap();
+    let wire = v.to_wire();
+    let decoded = i.call("f", &[Value::Wire(&wire)], |_| Ok(())).unwrap();
+    assert_eq!(direct, decoded);
+    let expected: Vec<Data> = vec![
+        true.into(),
+        true.into(),
+        false.into(),
+        3.into(),
+        "10,a,b,s,i,__proto__".into(),
+        true.into(),
+        3.into(),
+        4.into(),
+        "number".into(),
+        true.into(),
+    ];
+    assert_eq!(direct, Data::Array(expected));
+    // What the decoder refuses, the direct build refuses too.
+    for bad in [Data::Hole, Data::object([("h", Data::Hole)])] {
+        let e = i.call("f", &[Value::Data(&bad)], |_| Ok(())).unwrap_err();
+        assert!(matches!(e, Error::Data(_)), "{e:?}");
+        assert!(
+            i.call("f", &[Value::Wire(&bad.to_wire())], |_| Ok(()))
+                .is_err()
+        );
+    }
+    let mut deep = Data::Null;
+    for _ in 0..6000 {
+        deep = Data::Array(vec![deep]);
+    }
+    let e = i.call("f", &[Value::Data(&deep)], |_| Ok(())).unwrap_err();
+    assert!(matches!(e, Error::Data(_)), "{e:?}");
+    // (Dropping a 6000-deep tree recurses on the test thread's stack: unwrap it first.)
+    while let Data::Array(mut a) = deep {
+        deep = a.pop().unwrap();
+    }
+}
+
 #[test]
 fn outbound_data_follows_js() {
     let mut i = instance(
@@ -109,11 +168,20 @@ fn outbound_refuses_what_is_not_plain_data() {
             r => panic!("{expr}: {r:?}"),
         }
     }
-    // An exponential sharing blowup is bounded by the memory limit.
-    let mut i = instance(
+    // An exponential sharing blowup is bounded by the memory limit, as a tree and as wire.
+    let mut i = crate::snapshot(
         "function f() { let v = [1]; for (let i = 0; i < 40; i++) v = [v, v]; return v; }",
-    );
+    )
+    .instantiate(djs_embed::Limits {
+        memory: 8 << 20,
+        ..Default::default()
+    })
+    .unwrap();
     assert!(matches!(call(&mut i, "f"), Err(Error::Data(m)) if m.contains("exceeds")));
+    i.start("f", &[]).unwrap();
+    assert_eq!(i.step().unwrap(), djs_embed::Step::Done);
+    let e = i.result().unwrap().to_wire().unwrap_err();
+    assert!(matches!(e, Error::Data(m) if m.contains("exceeds")));
 }
 
 #[test]

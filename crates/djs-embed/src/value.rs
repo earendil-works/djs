@@ -119,8 +119,137 @@ pub(crate) fn to_raw(vm: &mut Vm, v: &Value<'_>) -> Result<Raw, Error> {
                     .map_err(heap_error)?,
             )
         }
-        Value::Data(d) => vm.decode_wire(&d.to_wire()).map_err(wire_error)?,
+        Value::Data(d) => build(vm, d)?,
         Value::Wire(b) => vm.decode_wire(b).map_err(wire_error)?,
+    })
+}
+
+/// Nesting [`build`] accepts: the wire decoder's limit (`JSON.parse`'s).
+const MAX_DEPTH: usize = djs_core::json::DEFAULT_MAX_DEPTH as usize;
+
+/// An open container of [`build`]: its members, the next one, and where its keys and
+/// values start in the shared stacks.
+struct Open<'d> {
+    array: Option<&'d [Data]>,
+    object: &'d [(String, Data)],
+    next: usize,
+    keys: usize,
+    values: usize,
+}
+
+impl Open<'_> {
+    fn len(&self) -> usize {
+        self.array.map_or(self.object.len(), <[Data]>::len)
+    }
+}
+
+/// Makes plain data in the VM straight from the tree: what decoding its wire form makes
+/// (the same prototypes, int-form numbers, holes only in arrays, the same depth limit),
+/// without writing and parsing the buffer. An explicit stack, as the decoder's: deep data
+/// cannot overflow the host's. Allocates but never collects.
+fn build(vm: &mut Vm, d: &Data) -> Result<Raw, Error> {
+    let heap = vm.heap_mut();
+    let object_proto = Some(realm::intrinsic_obj(heap, Intrinsic::ObjectProto));
+    let array_proto = Some(realm::intrinsic_obj(heap, Intrinsic::ArrayProto));
+    let mut keys = Vec::new();
+    let mut values: Vec<Raw> = Vec::new();
+    let mut stack: Vec<Open<'_>> = Vec::new();
+    let mut next = d;
+    loop {
+        // Make `next`, or open it if it is a container with members.
+        let mut made = match next {
+            Data::Array(items) if !items.is_empty() => {
+                stack.push(Open {
+                    array: Some(items),
+                    object: &[],
+                    next: 0,
+                    keys: keys.len(),
+                    values: values.len(),
+                });
+                None
+            }
+            Data::Object(entries) if !entries.is_empty() => {
+                stack.push(Open {
+                    array: None,
+                    object: entries,
+                    next: 0,
+                    keys: keys.len(),
+                    values: values.len(),
+                });
+                None
+            }
+            Data::Hole if stack.last().is_some_and(|o| o.array.is_some()) => Some(Raw::HOLE),
+            leaf => Some(make_leaf(heap, leaf, object_proto, array_proto)?),
+        };
+        if stack.len() > MAX_DEPTH {
+            return Err(Error::Data("nesting too deep".into()));
+        }
+        // Store it in its container, closing every container that is now complete.
+        loop {
+            let Some(top) = stack.last_mut() else {
+                return Ok(made.expect("a value"));
+            };
+            if let Some(v) = made.take() {
+                values.push(v);
+                top.next += 1;
+            }
+            if top.next < top.len() {
+                next = match top.array {
+                    Some(items) => &items[top.next],
+                    None => {
+                        let (k, v) = &top.object[top.next];
+                        keys.push(heap.atom_str(k).map_err(heap_error)?);
+                        v
+                    }
+                };
+                break;
+            }
+            let top = stack.pop().expect("an open container");
+            let o = match top.array {
+                Some(_) => heap.new_array_from_values(array_proto, &values[top.values..]),
+                None => heap.new_object_from_entries(
+                    object_proto,
+                    &keys[top.keys..],
+                    &values[top.values..],
+                ),
+            };
+            keys.truncate(top.keys);
+            values.truncate(top.values);
+            made = Some(Raw::object(o.map_err(heap_error)?));
+        }
+    }
+}
+
+/// A value of [`build`] that is not a container with members.
+fn make_leaf(
+    heap: &mut Heap,
+    d: &Data,
+    object_proto: Option<djs_core::value::Obj>,
+    array_proto: Option<djs_core::value::Obj>,
+) -> Result<Raw, Error> {
+    Ok(match d {
+        Data::Undefined => Raw::UNDEFINED,
+        Data::Null => Raw::NULL,
+        Data::Bool(b) => Raw::bool(*b),
+        Data::Number(n) => number(*n),
+        Data::String(s) => Raw::string(heap.alloc_str(s).map_err(heap_error)?),
+        Data::Bytes(b) => {
+            let bp = realm::intrinsic_obj(heap, Intrinsic::ArrayBufferProto);
+            let p = realm::intrinsic_obj(heap, Intrinsic::Uint8ArrayProto);
+            Raw::object(
+                heap.new_uint8_array(b, Some(bp), Some(p))
+                    .map_err(heap_error)?,
+            )
+        }
+        Data::Hole => return Err(Error::Data("a hole outside an array".into())),
+        Data::Array(_) => Raw::object(
+            heap.new_array_from_values(array_proto, &[])
+                .map_err(heap_error)?,
+        ),
+        Data::Object(_) => Raw::object(
+            heap.new_object_from_entries(object_proto, &[], &[])
+                .map_err(heap_error)?,
+        ),
     })
 }
 
@@ -201,10 +330,15 @@ impl<'a> ValueRef<'a> {
             .map_err(|e: EncodeError| Error::Data(e.text()))
     }
 
-    /// The plain data as a [`Data`] tree (through the wire form; the same refusals as
-    /// [`ValueRef::to_wire`]).
+    /// The plain data as a [`Data`] tree: what [`Data::from_wire`] of
+    /// [`ValueRef::to_wire`] gives, with the same refusals, built without the buffer. The
+    /// memory cap bounds the tree's host memory (nodes and payloads).
     pub fn to_data(&self) -> Result<Data, Error> {
-        Data::from_wire(&self.to_wire()?)
+        // The encoder builds the tree directly, without a wire buffer in between.
+        let mut b = crate::data::Builder::default();
+        djs_core::wire::encode_to(self.heap, self.raw, self.max_bytes, &mut b)
+            .map_err(|e: EncodeError| Error::Data(e.text()))?;
+        Ok(b.finish())
     }
 
     /// The JS type: `"undefined"`, `"object"`, `"function"`, ... as `typeof` says.

@@ -386,3 +386,127 @@ impl<'a> Reader<'a> {
         }
     }
 }
+
+/// Builds a [`Data`] tree from the outbound encoder's calls ([`wire::encode_to`]): what
+/// [`Data::from_wire`] of the encoded buffer gives, without the buffer.
+#[derive(Default)]
+pub(crate) struct Builder {
+    stack: Vec<Open>,
+    done: Option<Data>,
+    /// The tree's host memory so far in `bytes` (nodes and payloads), for the encoder's
+    /// cap: a tree takes more memory than the wire form, so the cap counts what it costs
+    size: usize,
+}
+
+impl Builder {
+    pub(crate) fn finish(self) -> Data {
+        self.done.unwrap_or(Data::Undefined)
+    }
+
+    /// Stores a value in the open container, closing every container that is now complete.
+    fn put(&mut self, mut v: Data) {
+        self.size += size_of::<Data>();
+        loop {
+            let Some(top) = self.stack.last_mut() else {
+                self.done = Some(v);
+                return;
+            };
+            let left = match top {
+                Open::Array(items, left) => {
+                    items.push(v);
+                    left
+                }
+                Open::Object(entries, left, key) => {
+                    entries.push((key.take().unwrap_or_default(), v));
+                    left
+                }
+            };
+            *left -= 1;
+            if *left > 0 {
+                return;
+            }
+            v = match self.stack.pop().expect("an open container") {
+                Open::Array(items, _) => Data::Array(items),
+                Open::Object(entries, _, _) => Data::Object(entries),
+            };
+        }
+    }
+
+    fn string(&mut self, s: String) {
+        self.size += s.len();
+        self.put(Data::String(s));
+    }
+}
+
+fn latin1(units: &[u8]) -> String {
+    if units.is_ascii() {
+        return String::from_utf8(units.to_vec()).expect("ASCII");
+    }
+    units.iter().map(|&b| char::from(b)).collect()
+}
+
+fn utf16_lossy(units: &[u16]) -> String {
+    char::decode_utf16(units.iter().copied())
+        .map(|c| c.unwrap_or(char::REPLACEMENT_CHARACTER))
+        .collect()
+}
+
+impl wire::Sink for Builder {
+    fn written(&self) -> usize {
+        self.size
+    }
+    fn undefined(&mut self) {
+        self.put(Data::Undefined)
+    }
+    fn null(&mut self) {
+        self.put(Data::Null)
+    }
+    fn bool(&mut self, b: bool) {
+        self.put(Data::Bool(b))
+    }
+    fn number(&mut self, n: f64) {
+        self.put(Data::Number(n))
+    }
+    fn hole(&mut self) {
+        self.put(Data::Hole)
+    }
+    fn str_latin1(&mut self, units: &[u8]) {
+        self.string(latin1(units))
+    }
+    fn str(&mut self, s: &str) {
+        self.string(s.to_owned())
+    }
+    fn str_utf16(&mut self, units: &[u16]) {
+        self.string(utf16_lossy(units))
+    }
+    fn bytes(&mut self, b: &[u8]) {
+        self.size += b.len();
+        self.put(Data::Bytes(b.to_vec()))
+    }
+    fn array(&mut self, count: usize) {
+        match u32::try_from(count) {
+            Ok(n) if n > 0 => self.stack.push(Open::Array(Vec::with_capacity(count), n)),
+            _ => self.put(Data::Array(Vec::new())),
+        }
+    }
+    fn object(&mut self, count: usize) {
+        match u32::try_from(count) {
+            Ok(n) if n > 0 => self
+                .stack
+                .push(Open::Object(Vec::with_capacity(count), n, None)),
+            _ => self.put(Data::Object(Vec::new())),
+        }
+    }
+    fn key(&mut self, k: &str) {
+        self.size += size_of::<String>() + k.len();
+        if let Some(Open::Object(_, _, key)) = self.stack.last_mut() {
+            *key = Some(k.to_owned());
+        }
+    }
+    fn key_utf16(&mut self, units: &[u16]) {
+        self.size += size_of::<String>() + units.len() * 3;
+        if let Some(Open::Object(_, _, key)) = self.stack.last_mut() {
+            *key = Some(utf16_lossy(units));
+        }
+    }
+}

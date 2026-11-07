@@ -19,7 +19,7 @@ mod tests;
 mod writer;
 
 #[cfg(feature = "embed")]
-pub use encode::{EncodeError, encode};
+pub use encode::{EncodeError, Sink, encode, encode_to};
 pub use writer::Writer;
 
 use alloc::string::String;

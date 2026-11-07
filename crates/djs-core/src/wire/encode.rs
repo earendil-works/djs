@@ -5,7 +5,8 @@
 //! the path (`$.items[3].when`), as js/src/wire.ts does on the host side.
 //!
 //! An explicit stack (no recursion), like the decoder: each open container's members wait
-//! in one shared vector.
+//! in one shared vector. It writes to a [`Sink`]: the wire [`Writer`], or a host's own
+//! builder (djs-embed builds its data tree directly, without a buffer in between).
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -68,9 +69,80 @@ struct Frame {
     end: usize,
 }
 
-struct Enc<'h> {
+/// Where [`encode_to`] writes: a value is a primitive call, or `array(n)` / `object(n)`
+/// followed by its `n` members (an object's each after its `key`), as [`Writer`] has them.
+pub trait Sink {
+    /// The size so far in `bytes` of the value's wire form (or an estimate), for the cap
+    fn written(&self) -> usize;
+    fn undefined(&mut self);
+    fn null(&mut self);
+    fn bool(&mut self, b: bool);
+    fn number(&mut self, n: f64);
+    /// A hole: only as an array element
+    fn hole(&mut self);
+    /// A string of Latin-1 code units
+    fn str_latin1(&mut self, units: &[u8]);
+    /// A well-formed string
+    fn str(&mut self, s: &str);
+    /// A string with lone surrogates
+    fn str_utf16(&mut self, units: &[u16]);
+    /// A `Uint8Array`'s bytes
+    fn bytes(&mut self, b: &[u8]);
+    fn array(&mut self, count: usize);
+    fn object(&mut self, count: usize);
+    fn key(&mut self, k: &str);
+    /// A key with lone surrogates
+    fn key_utf16(&mut self, units: &[u16]);
+}
+
+impl Sink for Writer {
+    fn written(&self) -> usize {
+        Writer::written(self)
+    }
+    fn undefined(&mut self) {
+        Writer::undefined(self)
+    }
+    fn null(&mut self) {
+        Writer::null(self)
+    }
+    fn bool(&mut self, b: bool) {
+        Writer::bool(self, b)
+    }
+    fn number(&mut self, n: f64) {
+        Writer::number(self, n)
+    }
+    fn hole(&mut self) {
+        Writer::hole(self)
+    }
+    fn str_latin1(&mut self, units: &[u8]) {
+        Writer::str_latin1(self, units)
+    }
+    fn str(&mut self, s: &str) {
+        Writer::str(self, s)
+    }
+    fn str_utf16(&mut self, units: &[u16]) {
+        Writer::str_utf16(self, units)
+    }
+    fn bytes(&mut self, b: &[u8]) {
+        Writer::bytes(self, b)
+    }
+    fn array(&mut self, count: usize) {
+        Writer::array(self, count)
+    }
+    fn object(&mut self, count: usize) {
+        Writer::object(self, count)
+    }
+    fn key(&mut self, k: &str) {
+        Writer::key(self, k)
+    }
+    fn key_utf16(&mut self, units: &[u16]) {
+        Writer::key_utf16(self, units)
+    }
+}
+
+struct Enc<'h, 's, S: Sink> {
     heap: &'h Heap,
-    w: Writer,
+    w: &'s mut S,
     max_bytes: usize,
     object_proto: Option<Obj>,
     stack: Vec<Frame>,
@@ -83,6 +155,18 @@ struct Enc<'h> {
 /// string-keyed data properties in property order. Never runs JS and never allocates in
 /// the heap.
 pub fn encode(heap: &Heap, v: Value, max_bytes: usize) -> Result<Vec<u8>, EncodeError> {
+    let mut w = Writer::new();
+    encode_to(heap, v, max_bytes, &mut w)?;
+    Ok(w.finish())
+}
+
+/// [`encode`] to any [`Sink`]: the same values, refusals and cap.
+pub fn encode_to<S: Sink>(
+    heap: &Heap,
+    v: Value,
+    max_bytes: usize,
+    sink: &mut S,
+) -> Result<(), EncodeError> {
     let object_proto = if heap.realm().is_undefined() {
         None
     } else {
@@ -93,7 +177,7 @@ pub fn encode(heap: &Heap, v: Value, max_bytes: usize) -> Result<Vec<u8>, Encode
     };
     let mut e = Enc {
         heap,
-        w: Writer::new(),
+        w: sink,
         max_bytes,
         object_proto,
         stack: Vec::new(),
@@ -114,10 +198,10 @@ pub fn encode(heap: &Heap, v: Value, max_bytes: usize) -> Result<Vec<u8>, Encode
         }
         e.value(v)?;
     }
-    Ok(e.w.finish())
+    Ok(())
 }
 
-impl Enc<'_> {
+impl<S: Sink> Enc<'_, '_, S> {
     /// The path of the member being written: each open container's current member.
     fn path(&self) -> String {
         let mut p = String::from("$");
