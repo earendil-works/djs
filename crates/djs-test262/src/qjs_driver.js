@@ -1,14 +1,20 @@
 // Test driver for running test262 with dquickts' qjs (`qjs -m -e <this> <spec>`).
 //
-// <spec> is JSON: {"harness": [[name, path], ...], "test": path, "strict": bool}.
-// The harness files and the test are each evaluated as a Script in the global scope
-// (std.evalScript). The test is compiled first and run second, so parse errors are
-// told apart from runtime errors. The outcome is written as one line:
+// <spec> is JSON: {"harness": [[name, path], ...], "test": path, "strict": bool,
+// "module": bool}. The harness files and the test are each evaluated as a Script in the
+// global scope (std.evalScript). The test is compiled first and run second, so parse
+// errors are told apart from runtime errors. A module test (an absolute path; the runner
+// starts qjs in its directory, where qjs looks for specifiers without a `./`) is
+// compiled first (the parse phase; qjs loads its requests there already, so an error in
+// another file or a failed load belongs to the resolution phase), then imported
+// by a module of one import declaration: evaluating that one loads and links the graph, which throws on a load or
+// link error (the resolution phase), and returns the evaluation's promise (the runtime
+// phase). The outcome is written as one line:
 //
 //   \x01T262 <status> <file> <name> <message>
 //
-// where status is completed | harness | parse | runtime and the other fields are
-// JSON-quoted strings. Everything else on stdout comes from the test's print().
+// where status is completed | harness | parse | resolution | runtime and the other
+// fields are JSON-quoted strings. Everything else on stdout comes from the test's print().
 //
 // Tests may tamper with builtins, so everything used after the test ran is captured
 // up front and nothing relies on prototype methods or the iterator protocol.
@@ -19,7 +25,11 @@ const evalScript = std.evalScript;
 const loadFile = std.loadFile;
 const toStr = String;
 const apply = Reflect.apply;
+const then = Promise.prototype.then;
 const charCodeAt = String.prototype.charCodeAt;
+const startsWith = String.prototype.startsWith;
+const exec = RegExp.prototype.exec;
+const FRAME = /^    at ([^ ()]+):\d+:\d+\n/;
 const defineProperty = Object.defineProperty;
 const transfer = ArrayBuffer.prototype.transfer;
 const isDetached = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, "detached").get;
@@ -92,6 +102,10 @@ function main() {
       return;
     }
   }
+  if (spec.module) {
+    runModule();
+    return;
+  }
   let compiled;
   try {
     compiled = evalScript(prefix + load(spec.test), { compile_only: true });
@@ -106,6 +120,36 @@ function main() {
     return;
   }
   report("completed", "", undefined, false);
+}
+
+function runModule() {
+  try {
+    evalScript(load(spec.test), { compile_module: true, compile_only: true });
+  } catch (e) {
+    // qjs loads (and compiles) the requested modules while it compiles a module: an
+    // error located in another file, or a module that cannot be loaded, is not the
+    // test's own.
+    let other = false;
+    try {
+      const at = apply(exec, FRAME, [toStr(e.stack)]);
+      other = (at !== null && at[1] !== "<evalScript>") ||
+        apply(startsWith, toStr(e.message), ["could not load module"]);
+    } catch (_) {}
+    report(other ? "resolution" : "parse", "", e, true);
+    return;
+  }
+  let evaluated;
+  try {
+    const root = evalScript("import " + quote(spec.test) + ";", { compile_module: true, compile_only: true });
+    evaluated = evalScript(root, { eval_module: true });
+  } catch (e) {
+    report("resolution", "", e, true);
+    return;
+  }
+  apply(then, evaluated, [
+    () => report("completed", "", undefined, false),
+    (e) => report("runtime", "", e, true),
+  ]);
 }
 
 main();

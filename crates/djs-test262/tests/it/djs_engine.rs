@@ -1,6 +1,7 @@
 //! The djs engine on a fixture suite that only uses what djs runs today
 //! (tests/fixture/djs): every `pass/` test passes and every `fail/` test fails for the
-//! expected reason. Covers Scripts and the harness, negative tests by phase, `$262`
+//! expected reason. Covers Scripts and the harness, module tests and their fixtures,
+//! negative tests by phase, `$262`
 //! (global, evalScript, gc, detachArrayBuffer),
 //! `print` and `$DONE`, and the fuel and memory limits.
 
@@ -34,6 +35,8 @@ const FAILURES: &[(&str, &str)] = &[
     ("fail/parse-error.js", "parse: SyntaxError"),
     ("fail/throw-primitive.js", "number: 1"),
     ("fail/throws.js", "Test262Error: boom"),
+    ("fail/module-throws.js", "Test262Error: in fixture"),
+    ("fail/module-missing-export.js", "resolution: SyntaxError"),
     ("fail/timeout.js", "timeout: the fuel budget is used up"),
 ];
 

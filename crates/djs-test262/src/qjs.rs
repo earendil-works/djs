@@ -41,10 +41,16 @@ impl Qjs {
             })
             .collect();
         format!(
-            "{{\"harness\":[{}],\"test\":{},\"strict\":{}}}",
+            "{{\"harness\":[{}],\"test\":{},\"strict\":{},\"module\":{}}}",
             harness.join(","),
-            json_quote(&job.file.to_string_lossy()),
-            job.strict
+            // Absolute: a module test is imported by this path, from its directory.
+            json_quote(
+                &std::path::absolute(job.file)
+                    .unwrap_or_else(|_| job.file.to_path_buf())
+                    .to_string_lossy()
+            ),
+            job.strict,
+            job.module
         )
     }
 }
@@ -60,6 +66,12 @@ impl Engine for Qjs {
             cmd.arg("--memory-limit").arg(limit.to_string());
         }
         cmd.args(["-m", "-e", DRIVER]).arg(Self::spec(job));
+        if job.module
+            && let Some(dir) = job.file.parent()
+        {
+            // qjs resolves a specifier without `./` against the working directory.
+            cmd.current_dir(dir);
+        }
         cmd.stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -173,6 +185,7 @@ fn parse_report(rest: &str) -> Status {
         }
         "harness" => Status::HarnessError { file, error },
         "parse" => Status::ParseError(error),
+        "resolution" => Status::ResolutionError(error),
         "runtime" => Status::RuntimeError(error),
         other => Status::Crash(format!("bad driver status {other}")),
     }

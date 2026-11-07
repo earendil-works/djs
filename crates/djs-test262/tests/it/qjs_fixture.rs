@@ -55,6 +55,8 @@ const FAILURES: &[(&str, &str)] = &[
     ("fail/tamper-throw.js", "Test262Error: after tampering é\n"),
     ("fail/throw-primitive.js", "number: 1"),
     ("fail/throws.js", "Test262Error: boom"),
+    ("fail/module-throws.js", "Test262Error: in fixture"),
+    ("fail/module-missing-export.js", "resolution: SyntaxError"),
     ("fail/timeout.js", "timeout: no result within 0.5s"),
 ];
 
