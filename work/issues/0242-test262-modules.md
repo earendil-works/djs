@@ -1,7 +1,7 @@
 # 0242: test262's module tests: a fixture loader in the runner, groups and ratchet
 
-status: open
-agent: -
+status: in-progress
+agent: t262
 branch: issue/0242-test262-modules
 depends-on: 0241
 touches: crates/djs-test262 (module flag, fixture loader, dynamic import once 0243 lands), tests/test262.toml, tests/test262/expected-failures*.txt, tests/test262-slim.toml, crates/djs-core (fixes for failures found), TESTING.md
