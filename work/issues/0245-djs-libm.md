@@ -1,7 +1,7 @@
 # 0245: djs-libm: libm's functions as a djs crate
 
-status: open
-agent: -
+status: in-progress
+agent: libm
 branch: issue/0245-djs-libm
 depends-on: -
 touches: crates/djs-libm (new), crates/djs-core/Cargo.toml, crates/djs-core/build.rs (BUILD_INPUTS: the libm version), every `libm::` call site in djs-core, Cargo.lock, docs/decisions (D1150/D1750 superseded by D3174), ARCH.md (dependencies paragraph)
