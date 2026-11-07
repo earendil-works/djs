@@ -68,7 +68,8 @@ pub enum Step {
 
 /// The current call.
 struct Call {
-    started: Instant,
+    /// When the call's deadline passes (read the clock only for calls that have one)
+    deadline: Option<Instant>,
     fuel_used: u64,
     /// The entry's return value once it returned: the promise it settles with, or the
     /// result itself
@@ -190,7 +191,7 @@ impl Instance {
     /// async host call's work, to give up in time.
     pub fn deadline(&self) -> Option<Instant> {
         let c = self.call.as_ref()?;
-        Some(c.started + self.limits.deadline?)
+        c.deadline
     }
 
     /// Drops the handles of the previous call.
@@ -225,7 +226,7 @@ impl Instance {
             return Err(Error::Usage("a call is in progress".into()));
         }
         self.clear_call()?;
-        let started = Instant::now();
+        let deadline = self.limits.deadline.map(|d| Instant::now() + d);
         let r = self.guard(|vm| -> Result<(), Error> {
             let (this, f) = lookup(vm, path)?;
             let f = match f.as_object() {
@@ -242,7 +243,7 @@ impl Instance {
             })
         })?;
         self.call = Some(Call {
-            started,
+            deadline,
             fuel_used: 0,
             entry: None,
             result: None,
@@ -268,8 +269,8 @@ impl Instance {
         if c.over {
             return Err(Error::Usage("the call is over".into()));
         }
-        if let Some(d) = self.limits.deadline
-            && c.started.elapsed() >= d
+        if let Some(d) = c.deadline
+            && Instant::now() >= d
         {
             return self.fail(Error::Deadline);
         }
