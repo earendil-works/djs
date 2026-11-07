@@ -896,6 +896,13 @@ impl Vm {
     /// dropped (and delivered results not applied yet) and the VM is `Idle` again,
     /// with its realm and globals intact. For hosts that stop a run that used up its fuel
     /// budget.
+    ///
+    /// What it guarantees: afterwards the VM is idle and the next [`Vm::call`] starts
+    /// cleanly; nothing of the abandoned call runs any more (no frame, no `finally`, no job,
+    /// no promise reaction, no host result is applied later); its fuel debt is cleared and
+    /// [`Vm::outcome`] is `None`. What it keeps: the heap as the call left it (globals and
+    /// objects it changed stay changed, handles stay valid), the clock and the random state.
+    /// The abandoned frames' values become garbage for the next collection.
     pub fn abort(&mut self) {
         let i = state::interp(&self.heap);
         let stack = state::stack(&self.heap);
