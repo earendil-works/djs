@@ -39,9 +39,63 @@ fn snapshots() {
     for js in files {
         let src = std::fs::read_to_string(&js).unwrap();
         let mut heap = Heap::new().unwrap();
-        let text = match compile_src(&mut heap, &src) {
-            Ok(t) => disasm_template(&heap, t),
-            Err(e) => alloc::format!("error: {e}\n"),
+        let text = if src.starts_with("// goal: module") {
+            match compile_module(
+                &mut heap,
+                src.as_bytes(),
+                &CompileOptions::module("test.js"),
+            ) {
+                Ok((t, meta)) => {
+                    let words: Vec<u32> = (0..heap.u32_array_len(meta.0))
+                        .map(|i| heap.u32_array_get(meta.0, i))
+                        .collect();
+                    let m = module_meta::ModuleMeta::decode(&words).unwrap();
+                    let name = |a: crate::heap::Atom| {
+                        if a.is_null() {
+                            String::from("*")
+                        } else {
+                            heap.atom_name(a)
+                        }
+                    };
+                    let mut out = disasm_template(&heap, t);
+                    out.push_str("module:\n");
+                    for (i, &(n, k, aux)) in m.env.iter().enumerate() {
+                        out.push_str(&alloc::format!(
+                            "  env {i} {} kind {k} aux {aux}\n",
+                            name(n)
+                        ));
+                    }
+                    for r in &m.requests {
+                        out.push_str(&alloc::format!("  request {:?}\n", name(*r)));
+                    }
+                    for &(e, r, n) in &m.imports {
+                        out.push_str(&alloc::format!(
+                            "  import env {e} request {r} {:?}\n",
+                            name(n)
+                        ));
+                    }
+                    for &(n, e) in &m.local {
+                        out.push_str(&alloc::format!("  export {:?} env {e}\n", name(n)));
+                    }
+                    for &(n, r, i) in &m.indirect {
+                        out.push_str(&alloc::format!(
+                            "  export {:?} request {r} {:?}\n",
+                            name(n),
+                            name(i)
+                        ));
+                    }
+                    for r in &m.star {
+                        out.push_str(&alloc::format!("  export * request {r}\n"));
+                    }
+                    out
+                }
+                Err(e) => alloc::format!("error: {e}\n"),
+            }
+        } else {
+            match compile_src(&mut heap, &src) {
+                Ok(t) => disasm_template(&heap, t),
+                Err(e) => alloc::format!("error: {e}\n"),
+            }
         };
         let expected_path = js.with_extension("disasm");
         if update {
@@ -3097,4 +3151,92 @@ fn peepholes() {
         }
     }
     assert!(bad.is_empty(), "\n{}", bad.join("\n"));
+}
+
+/// Module code's early errors (16.2.1.1) and what it rejects.
+#[test]
+fn module_errors() {
+    let cases: &[(&str, &str)] = &[
+        ("export { x }", "exported variable 'x' does not exist"),
+        ("let x; export { x, x }", "duplicate exported name 'x'"),
+        (
+            "export default 1; export default 2",
+            "invalid redefinition of lexical identifier",
+        ),
+        (
+            "let a, b; export { a as c, b as c }",
+            "duplicate exported name 'c'",
+        ),
+        (
+            "export * as a from 'm'; export let a",
+            "duplicate exported name 'a'",
+        ),
+        (
+            "import { a } from 'm'; let a",
+            "invalid redefinition of lexical identifier",
+        ),
+        (
+            "import a from 'm'; var a",
+            "invalid redefinition of lexical identifier",
+        ),
+        (
+            "function f() {} function f() {}",
+            "invalid redefinition of lexical identifier",
+        ),
+        (
+            "var f; function f() {}",
+            "invalid redefinition of lexical identifier",
+        ),
+        (
+            "function f() {} var f",
+            "invalid redefinition of lexical identifier",
+        ),
+        ("var await", "variable name expected"),
+        ("function f() { var await }", "variable name expected"),
+        ("import { await } from 'm'", "variable name expected"),
+        ("import { default } from 'm'", "variable name expected"),
+        ("export { default }", "identifier expected"),
+        ("export { 'a' }", "identifier expected"),
+        ("return 1", "return not in a function"),
+        ("new.target", "new.target only allowed within functions"),
+        ("{ export let x }", "unsupported keyword: export"),
+        ("function f() { import 'm' }", "unsupported keyword: import"),
+        ("export 1", "unexpected token"),
+        (
+            "import a from 'm' with { type: 'json' }",
+            "unsupported import attribute",
+        ),
+        (
+            "export { '\\uD800' as a } from 'm'",
+            "invalid module export name",
+        ),
+        ("import * from 'm'", "expecting 'as'"),
+    ];
+    for &(src, msg) in cases {
+        let mut heap = Heap::new().unwrap();
+        match compile_module(&mut heap, src.as_bytes(), &CompileOptions::module("m.js")) {
+            Ok(_) => panic!("{src:?} compiled"),
+            Err(e) => assert!(e.message.starts_with(msg), "{src:?}: {}", e.message),
+        }
+    }
+    // Valid forms.
+    for src in [
+        "import {} from 'm'; export {}",
+        "import a, * as b from 'm'; export { a, b }",
+        "import a, { b as c, 'd e' as f } from 'm'",
+        "export { a as 'x', a as default } from 'm'; export * from 'n'",
+        "export default class {}",
+        "export default async function* () {}",
+        "export default (function () {})",
+        "export var a = 1, { b, c: [d] } = {}",
+        "export async function f() { await 1 }",
+        "let x; export { x as y, x as z }",
+        "import.meta; () => import.meta.url",
+        "label: for (;;) break label",
+    ] {
+        let mut heap = Heap::new().unwrap();
+        if let Err(e) = compile_module(&mut heap, src.as_bytes(), &CompileOptions::module("m.js")) {
+            panic!("{src:?}: {e}");
+        }
+    }
 }

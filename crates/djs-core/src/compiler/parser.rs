@@ -171,6 +171,9 @@ pub(super) struct Parser<'a, 'h> {
     /// strip-types: module syntax (`import`, `export`) is parsed (and compiles to
     /// nothing useful): the corpus is modules.
     pub strip: bool,
+    /// Module code (`Goal::Module`): the import and export entries parsed so far
+    /// (compiler/module.rs).
+    pub module: Option<alloc::boxed::Box<super::module::ModuleBuild>>,
     /// strip-types: where the last formal parameter list's contents ended (tsc's
     /// `parameters.end`).
     pub ts_params_end: u32,
@@ -313,6 +316,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             Goal::Script => FuncKind::Script,
             Goal::AsyncBody => FuncKind::AsyncBody,
             Goal::Eval => FuncKind::Eval,
+            Goal::Module => FuncKind::Module,
         };
         let atom_undefined = heap.atom_str("undefined")?;
         let atom_this = heap.atom_str("this")?;
@@ -369,6 +373,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             ts_type_only: false,
             ts_semi: false,
             strip: false,
+            module: None,
             ts_params_end: 0,
             using: Default::default(),
             completion: None,
@@ -381,6 +386,11 @@ impl<'a, 'h> Parser<'a, 'h> {
             test_swap_call: false,
         };
         p.f.src_end = src.len() as u32;
+        if kind == FuncKind::Module {
+            p.module = Some(alloc::boxed::Box::new(super::module::ModuleBuild::new(
+                p.heap,
+            )?));
+        }
         if kind == FuncKind::AsyncBody {
             // Before the parameters, as for an async function: a body's frame is laid out
             // as the `async function (params) {...}` a dump writes for it (D2617, D2620).
@@ -481,12 +491,14 @@ impl<'a, 'h> Parser<'a, 'h> {
     }
 
     /// The top-level code, up to its return.
-    fn parse_top(&mut self) -> PResult<()> {
+    pub(super) fn parse_top(&mut self) -> PResult<()> {
         self.code().enter_scope(BODY_SCOPE as u16);
         self.reset_completion();
         // `using` is not allowed at the top level of a Script, but in a codemode body
         // (an async function's) and a module (strip-types).
-        let using = self.begin_using_list(self.f.kind == FuncKind::AsyncBody || self.strip);
+        let using = self.begin_using_list(
+            matches!(self.f.kind, FuncKind::AsyncBody | FuncKind::Module) || self.strip,
+        );
         while self.tok.kind != TokenKind::Eof {
             self.parse_statement_list_item()?;
         }
@@ -1099,8 +1111,11 @@ impl<'a, 'h> Parser<'a, 'h> {
         loop {
             if let Some(v) = self.f.find_in_scope(s, name) {
                 let kind = self.f.vars[v as usize].kind;
-                // Block-level function declarations are lexical too.
-                if kind.is_lexical() || (kind == VarKind::Func && s != self.f.var_scope) {
+                // Block-level function declarations are lexical too, and a module's
+                // top-level ones (16.2.1.1: LexicallyDeclaredNames of a ModuleItemList).
+                if kind.is_lexical()
+                    || (kind == VarKind::Func && (s != self.f.var_scope || self.at_module_top()))
+                {
                     return syntax(pos, "invalid redefinition of lexical identifier");
                 }
             }
@@ -1118,6 +1133,7 @@ impl<'a, 'h> Parser<'a, 'h> {
         let v = self.f.add_var(name, VarKind::Var, vs);
         self.f.vars[v as usize].global = self.f.kind == FuncKind::Script;
         self.syn_decl(v, super::smap_syntax::DeclKind::Var);
+        self.note_export(name, pos);
         Ok(v)
     }
 
@@ -1153,6 +1169,9 @@ impl<'a, 'h> Parser<'a, 'h> {
         }
         let v = self.f.add_var(name, kind, scope);
         self.f.vars[v as usize].global = self.f.kind == FuncKind::Script && scope == BODY_SCOPE;
+        if scope == BODY_SCOPE {
+            self.note_export(name, pos);
+        }
         let dk = if kind == VarKind::Const {
             super::smap_syntax::DeclKind::Const
         } else {
@@ -1186,7 +1205,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             // Like `var` at the function level: it may share a binding with a `var`,
             // a parameter or an earlier function declaration (the last one wins).
             match self.f.find_in_scope(scope, name) {
-                Some(v) if self.f.vars[v as usize].kind.is_lexical() => {
+                Some(v) if self.f.vars[v as usize].kind.is_lexical() || self.at_module_top() => {
                     return syntax(pos, "invalid redefinition of lexical identifier");
                 }
                 Some(v) => v,
@@ -1219,6 +1238,9 @@ impl<'a, 'h> Parser<'a, 'h> {
             self.syn_decl(v, super::smap_syntax::DeclKind::Function);
         }
         self.f.scopes[scope as usize].funcs.push_out((v, child));
+        if scope == BODY_SCOPE {
+            self.note_export(name, pos);
+        }
         Ok(())
     }
 
@@ -1284,7 +1306,8 @@ impl<'a, 'h> Parser<'a, 'h> {
     /// nested in their parameters or bodies (arrow parameters see the enclosing
     /// context, ECMA-262 15.3).
     pub fn await_reserved(&self) -> bool {
-        if self.f.is_async || self.f.kind == FuncKind::StaticBlock {
+        // Module code reserves `await` everywhere (ECMA-262 13.1.1).
+        if self.f.is_async || self.f.kind == FuncKind::StaticBlock || self.module.is_some() {
             return true;
         }
         if !(self.f.kind == FuncKind::Arrow && self.f.in_params) {

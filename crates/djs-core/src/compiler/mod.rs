@@ -27,6 +27,7 @@ mod generator;
 #[cfg(feature = "lazy")]
 mod lazy;
 mod module;
+pub mod module_meta;
 mod parser;
 mod pattern;
 mod peephole;
@@ -74,6 +75,9 @@ pub enum Goal {
     /// value. `return`, `new.target` and `super` are errors; `await` is an identifier,
     /// as in a Script.
     Eval,
+    /// An ECMAScript module ([`compile_module`]): strict, `import`/`export`, top-level
+    /// bindings in the module environment the linker sets up, `this` undefined.
+    Module,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -129,6 +133,14 @@ impl<'a> CompileOptions<'a> {
         }
     }
 
+    /// A module ([`Goal::Module`]); `filename` is its key.
+    pub fn module(filename: &'a str) -> Self {
+        CompileOptions {
+            goal: Goal::Module,
+            ..Self::script(filename)
+        }
+    }
+
     pub fn async_body(filename: &'a str, params: &'a [&'a str]) -> Self {
         CompileOptions {
             goal: Goal::AsyncBody,
@@ -156,6 +168,7 @@ impl<'a> CompileOptions<'a> {
             Goal::Script => 0,
             Goal::AsyncBody => 1,
             Goal::Eval => 2,
+            Goal::Module => 3,
         };
         let bits = goal
             | u32::from(self.typescript) << 2
@@ -175,6 +188,7 @@ impl<'a> CompileOptions<'a> {
             goal: match bits & 3 {
                 1 => Goal::AsyncBody,
                 2 => Goal::Eval,
+                3 => Goal::Module,
                 _ => Goal::Script,
             },
             filename,
@@ -339,6 +353,27 @@ pub fn compile(
 ) -> Result<Ref, CompileError> {
     let result = parse(heap, src, opts, |p| p.compile());
     result.map(|(t, ..)| t).map_err(|e| error_at(src, e))
+}
+
+/// Compiles module source `src` ([`Goal::Module`]): the template of the module body and
+/// its module record metadata, a U32Array (`compiler::module_meta` describes the words).
+/// Without the `modules` feature a SyntaxError.
+pub fn compile_module(
+    heap: &mut Heap,
+    src: &[u8],
+    opts: &CompileOptions<'_>,
+) -> Result<(Ref, Ref), CompileError> {
+    let opts = CompileOptions {
+        goal: Goal::Module,
+        ..*opts
+    };
+    if !crate::MODULES {
+        return Err(error_at(
+            src,
+            PErr::syntax(0, Cow::Borrowed("modules are not available in this build")),
+        ));
+    }
+    parse(heap, src, &opts, |p| p.compile_module()).map_err(|e| error_at(src, e))
 }
 
 /// [`compile`] with lazy functions (D2990): the source is parsed whole (every early

@@ -15,6 +15,10 @@ extern crate alloc;
 /// slim one can't reach.
 pub const FULL: bool = cfg!(feature = "full");
 
+/// Whether this build has ES modules (the `modules` feature, D3171): without it the module
+/// goal is a SyntaxError and the module API fails. A constant like [`FULL`].
+pub const MODULES: bool = cfg!(feature = "modules");
+
 /// Whether this build has the Unicode tables (`\p{..}` in regular expressions and full
 /// normalization: the `unicode` feature, D2411).
 pub const UNICODE: bool = cfg!(all(

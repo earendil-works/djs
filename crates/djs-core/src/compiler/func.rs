@@ -92,16 +92,20 @@ pub(super) enum VarKind {
     /// discriminant, a pattern's source, D2732): named `construct@offset` like the
     /// temporaries of suspension maps (D2721), written before anything reads it.
     Temp,
+    /// A module's import binding (immutable; its Box is the exporting module's, so reads
+    /// are always TDZ-checked), and the hidden bindings the linker initializes (a
+    /// namespace import, `import.meta`).
+    Import,
 }
 
 impl VarKind {
     pub fn is_lexical(self) -> bool {
-        matches!(self, VarKind::Let | VarKind::Const)
+        matches!(self, VarKind::Let | VarKind::Const | VarKind::Import)
     }
 
     /// Assignment throws a TypeError.
     pub fn is_immutable(self) -> bool {
-        matches!(self, VarKind::Const | VarKind::FuncName)
+        matches!(self, VarKind::Const | VarKind::FuncName | VarKind::Import)
     }
 
     /// Set up by the prologue from `special_object` (docs/compiler.md 5.7); no storage
@@ -141,6 +145,9 @@ pub(super) struct Var {
     pub used: bool,
     /// The TypeScript enum or namespace this binding holds (const enum folding).
     pub ts_decl: Option<u32>,
+    /// A module's top-level binding: its index in the module environment, the module
+    /// closure's captures (compiler/module.rs).
+    pub env: Option<u16>,
 }
 
 /// A name reference in phase-1 code: the `name_*` op's immediate indexes this table.
@@ -161,6 +168,9 @@ pub(super) enum FuncKind {
     AsyncBody,
     /// Indirect eval code (`Goal::Eval`): top level like a sync codemode body.
     Eval,
+    /// A module's body (`Goal::Module`): strict, `this` undefined, its top-level
+    /// bindings in the module environment (compiler/module.rs).
+    Module,
     /// A function declaration or expression.
     Normal,
     Arrow,
@@ -205,7 +215,7 @@ impl FuncKind {
     pub fn is_top_level(self) -> bool {
         matches!(
             self,
-            FuncKind::Script | FuncKind::AsyncBody | FuncKind::Eval
+            FuncKind::Script | FuncKind::AsyncBody | FuncKind::Eval | FuncKind::Module
         )
     }
 }
@@ -494,7 +504,10 @@ impl FuncState {
 
     pub fn add_var(&mut self, name: Atom, kind: VarKind, scope: ScopeId) -> VarId {
         let id = self.vars.len() as VarId;
-        let immediate = !matches!(kind, VarKind::Let | VarKind::Const | VarKind::Param);
+        let immediate = !matches!(
+            kind,
+            VarKind::Let | VarKind::Const | VarKind::Param | VarKind::Import
+        );
         self.vars.push_out(Var {
             name,
             kind,
@@ -506,6 +519,7 @@ impl FuncState {
             builtin: false,
             used: false,
             ts_decl: None,
+            env: None,
         });
         self.scopes[scope as usize].vars.push_out(id);
         if !self.index.slots.is_empty() {

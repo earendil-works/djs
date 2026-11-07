@@ -125,6 +125,9 @@ enum Storage {
     Arg(u16),
     /// Script top-level declarations.
     Global,
+    /// A module's top-level binding: capture `.0` of the module closure, its environment
+    /// entry (compiler/module.rs).
+    Env(u16),
     /// A prelude function in the realm's prelude function table, which has `len` entries
     /// (D2440).
     Builtin {
@@ -816,9 +819,13 @@ fn classify(
             // create closures before later parameters are initialized).
             let check =
                 var.kind.is_lexical() || (var.kind == VarKind::Param && !funcs[pf].simple_params);
-            // The function directly inside `pf` takes the parent's Box; each one below
-            // takes its parent's capture.
-            let mut cap = Capture::Local(v);
+            // The function directly inside `pf` takes the parent's Box (a module's
+            // environment entry: the module closure's capture); each one below takes its
+            // parent's capture.
+            let mut cap = match var.env {
+                Some(e) => Capture::Outer(e),
+                None => Capture::Local(v),
+            };
             let mut slot = 0;
             for &f in path.iter().rev() {
                 slot = funcs[f].capture_slot(cap, nr.atom);
@@ -866,7 +873,9 @@ fn assign_storage(
     let mut names = Vec::new();
     for v in &f.vars {
         let pseudo = v.kind.is_pseudo();
-        storage.push(if v.global {
+        storage.push(if let Some(e) = v.env {
+            Storage::Env(e)
+        } else if v.global {
             Storage::Global
         } else if v.builtin {
             *next_builtin += 1;
@@ -1079,6 +1088,7 @@ fn emit_init(out: &mut CodeBuf, storage: Storage, atom: Atom, lexical: bool) {
         Storage::Global => out.put_global(atom, 0),
         Storage::None => out.drop(),
         Storage::Builtin { idx, len } => out.put_builtin(idx, len),
+        Storage::Env(c) => out.put_cap(c),
     }
 }
 
@@ -1439,8 +1449,12 @@ fn emit_function(
                         false,
                     );
                 }
-                // Hoisted function declarations (docs/compiler.md 5.5).
+                // Hoisted function declarations (docs/compiler.md 5.5); a module's
+                // top-level ones exist from linking on.
                 for &(v, child) in &scope.funcs {
+                    if let Storage::Env(_) = storage[v as usize] {
+                        continue;
+                    }
                     out.fclosure(child);
                     let var = &f.vars[v as usize];
                     emit_init(&mut out, storage[v as usize], var.name, false);
@@ -1592,7 +1606,7 @@ fn capture_words(f: &FuncState, parent_storage: Option<&Vec<Storage>>) -> PResul
 fn template_flags(f: &FuncState, privileged: bool) -> u32 {
     let kind = match f.kind {
         // Eval code runs like a Script's top level (the embedder supplies `this`).
-        FuncKind::Script | FuncKind::Eval => func_flags::KIND_SCRIPT,
+        FuncKind::Script | FuncKind::Eval | FuncKind::Module => func_flags::KIND_SCRIPT,
         FuncKind::AsyncBody => func_flags::KIND_ASYNC_BODY,
         FuncKind::Normal => func_flags::KIND_NORMAL,
         FuncKind::Arrow => func_flags::KIND_ARROW,
@@ -1715,6 +1729,7 @@ fn emit_name(
             Storage::Box(s) => At::Box(s),
             Storage::Arg(a) => At::Arg(a),
             Storage::Builtin { idx, .. } => At::Builtin(idx),
+            Storage::Env(c) => At::Cap(c),
             Storage::Global | Storage::None => At::Global,
         },
         Target::Capture(c) => At::Cap(c),

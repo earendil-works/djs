@@ -14,13 +14,17 @@ doctest = false
 djs-libm = { path = "../djs-libm" }
 
 [features]
-default = ["full", "unicode", "dump", "lazy", "compile-cache", "embed"]
+default = ["full", "unicode", "dump", "lazy", "compile-cache", "embed", "modules"]
 # Everything djs implements. Off, the build is slim (D2411, docs/slim-codemode.md): no typed
 # arrays/ArrayBuffer/DataView, Iterator helpers or `Iterator`, BigInt, WeakRef/
 # FinalizationRegistry, DisposableStack/AsyncDisposableStack/SuppressedError, and no
 # `using`, decorator or BigInt literal syntax; their names say "not available in this
 # build". Additive: turning it on only adds.
 full = ["djs-prelude/full"]
+# ES modules (D3171): the module goal, the loader, linking and evaluation
+# (`Vm::load_module`). Off, `Goal::Module` is a SyntaxError. Code only: the prelude's
+# module builtins are in every build.
+modules = []
 # `Vm::dump` (0167, docs/functions-as-code.md): a VM's bindings written as JavaScript.
 # Code only: images and the base do not depend on it.
 dump = []

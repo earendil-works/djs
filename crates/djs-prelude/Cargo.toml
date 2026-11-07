@@ -11,11 +11,14 @@ description = "The base snapshot: djs-core's realm with the prelude installed, m
 doctest = false
 
 [features]
-default = ["raw", "registry", "full", "unicode"]
+default = ["raw", "registry", "full", "unicode", "modules"]
 # djs-core's features (D2411), for the base image this crate builds: its build script's
 # djs-core must have the same as the library's (a build-dependency resolves its features
 # on its own), which lib.rs checks by the build hash.
 full = ["djs-core/full"]
+# ES modules (D3171): code only (no image depends on it), passed through for hosts that
+# pick djs-core's features here.
+modules = ["djs-core/modules"]
 unicode = ["regexp-unicode-props", "unicode-normalization"]
 regexp-unicode-props = ["djs-core/regexp-unicode-props"]
 unicode-normalization = ["djs-core/unicode-normalization"]
