@@ -1,7 +1,8 @@
 // TextEncoder and TextDecoder (WHATWG Encoding standard, UTF-8 only; 0244, D3172). The
-// arguments are converted as WebIDL does, in order, before the steps; the bytes are
-// read and written by the leaves in builtins/encoding.rs. Messages are node's. Methods
-// and accessors are enumerable, as WebIDL's are.
+// arguments are converted as WebIDL does, in order, before the steps; the labels are
+// checked and a BufferSource's bytes found here (as a buffer, an offset and a length),
+// and the leaves in builtins/encoding.rs transcode. Messages are node's. Methods and
+// accessors are enumerable, as WebIDL's are.
 // @slim-omit: left out of the slim build (D2411).
 
 /** The prototype for a new codec: new.target's, else the realm constructor `name`'s. */
@@ -27,6 +28,30 @@ function TextDictionary(v: Value): boolean {
   return true;
 }
 
+/** Whether c is ASCII whitespace (TAB, LF, FF, CR, SPACE). */
+function TextIsAsciiWhitespace(c: f64): boolean {
+  return c === 9 || c === 10 || c === 12 || c === 13 || c === 32;
+}
+
+/**
+ * Whether label names UTF-8, the one encoding djs has: get an encoding (Encoding
+ * standard, 4.2) trims ASCII whitespace and ignores ASCII case. (No other code point
+ * lowercases to a letter of these labels.)
+ */
+function TextLabelIsUtf8(label: Str): boolean {
+  let start: f64 = 0;
+  let end: f64 = StrLength(label);
+  while (start < end && TextIsAsciiWhitespace(StrCharCodeAt(label, start))) {
+    start += 1;
+  }
+  while (end > start && TextIsAsciiWhitespace(StrCharCodeAt(label, end - 1))) {
+    end -= 1;
+  }
+  const l: Str = StrToCase(StrSubstring(label, start, end), false);
+  return l === "utf-8" || l === "utf8" || l === "unicode-1-1-utf-8" || l === "unicode11utf8" ||
+    l === "unicode20utf8" || l === "x-unicode20utf8";
+}
+
 /**
  * TextEncoder ( ).
  * @constructor TextEncoder
@@ -35,7 +60,7 @@ function TextEncoderConstructor(): Obj {
   if (new.target === undefined) {
     throw NewTypeError("must be called with new");
   }
-  return AsObj(TextCodecCreate(TextCodecPrototype(new.target, "TextEncoder"), 0, "utf-8"));
+  return TextCodecCreate(TextCodecPrototype(new.target, "TextEncoder"), 0);
 }
 
 /**
@@ -53,7 +78,7 @@ function TextEncoderPrototypeEncoding(this: Value): Str {
  */
 function TextEncoderPrototypeEncode(this: Value, input?: Value): Obj {
   TextCodecFlags(this, false);
-  return Utf8Encode(input === undefined ? "" : ToString(input));
+  return AsObj(Utf8Encode(input === undefined ? "" : ToString(input), undefined, 0, 0));
 }
 
 /**
@@ -66,11 +91,14 @@ function TextEncoderPrototypeEncodeInto(this: Value, ...args: Value[]): Obj {
   if (LengthOfArrayLike(args) < 2) {
     throw NewTypeError("2 arguments required");
   }
-  const r: Value = Utf8EncodeInto(ToString(Get(args, 0)), Get(args, 1));
-  if (r === undefined) {
+  const source: Str = ToString(Get(args, 0));
+  const dest: Value = Get(args, 1);
+  // Uint8Array is kind 1.
+  if (!IsTypedArray(dest) || TypedArrayField(dest, 0) !== 1) {
     throw NewTypeError("The \"dest\" argument must be an instance of Uint8Array");
   }
-  return AsObj(r);
+  const at: Value = TypedArrayField(dest, 2);
+  return AsObj(Utf8Encode(source, TypedArrayField(dest, 1), at, TypedArrayField(dest, 4)));
 }
 
 /**
@@ -106,11 +134,11 @@ function TextDecoderConstructor(label?: Value, options?: Value): Obj {
       flags = flags | 4;
     }
   }
-  const d: Value = TextCodecCreate(TextCodecPrototype(new.target, "TextDecoder"), flags, l);
-  if (d === undefined) {
+  const proto: Obj = TextCodecPrototype(new.target, "TextDecoder");
+  if (!TextLabelIsUtf8(l)) {
     throw NewRangeError("The \"" + l + "\" encoding is not supported");
   }
-  return AsObj(d);
+  return TextCodecCreate(proto, flags);
 }
 
 /**
@@ -153,7 +181,20 @@ function TextDecoderPrototypeDecode(this: Value, input?: Value, options?: Value)
   if (TextDictionary(options)) {
     stream = ToBoolean(Get(AsObj(options), "stream"));
   }
-  const r: Value = Utf8Decode(AsObj(this), input, stream);
+  // The bytes: an ArrayBuffer's all (length -1), a view's range (none when out of bounds).
+  let buffer: Value = input;
+  let offset: Value = 0;
+  let length: Value = -1;
+  if (IsTypedArray(input)) {
+    buffer = TypedArrayField(input, 1);
+    offset = TypedArrayField(input, 2);
+    length = TypedArrayField(input, 4);
+  } else if (IsDataView(input)) {
+    buffer = DataViewField(input, 0);
+    offset = DataViewField(input, 1);
+    length = DataViewField(input, 2);
+  }
+  const r: Value = Utf8Decode(AsObj(this), buffer, offset, length, stream);
   if (r === undefined) {
     throw NewTypeError("The encoded data was not valid for encoding utf-8");
   }

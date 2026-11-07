@@ -1667,9 +1667,9 @@
 1657	value	TextEncoder.prototype.encode
 1658	value	TextEncoder.prototype.encodeInto
 1659	value	get TextEncoder.prototype.encoding
-1660	intrinsic	TextCodecCreate
-1661	intrinsic	TextCodecFlags
-1662	intrinsic	IsBufferSource
-1663	intrinsic	Utf8Encode
-1664	intrinsic	Utf8EncodeInto
+1660	value	%prelude:TextLabelIsUtf8%
+1661	intrinsic	TextCodecCreate
+1662	intrinsic	TextCodecFlags
+1663	intrinsic	IsBufferSource
+1664	intrinsic	Utf8Encode
 1665	intrinsic	Utf8Decode
