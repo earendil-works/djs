@@ -78,6 +78,12 @@ djs-embed = { git = "file://$repo", rev = "$rev" }
 # The example compares the embedded base with one it makes, through djs-core directly.
 djs-core = { git = "file://$repo", rev = "$rev", default-features = false }
 djs-prelude = { git = "file://$repo", rev = "$rev", default-features = false, features = ["raw"] }
+
+# Gondolin's release profile: fat LTO across djs and the host.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
 EOF
   rm -f "$proj/Cargo.lock"
   build() { (cd "$proj" && cargo build -q --profile "$profile" --target "$1"); }
