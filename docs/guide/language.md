@@ -109,8 +109,9 @@ so a [snapshot](snapshots.md) taken after evaluation carries the evaluated graph
 made from it reads the same exports. The host reads a module's exports and namespace
 directly.
 
-Modules are a build feature. The wasm modules leave it out, since codemode scripts are
-one piece of code, so there `import` and `export` declarations are syntax errors; and
+Modules come with the native build for Rust hosts, together with the rest of what only
+such hosts use. The wasm modules leave them out, since codemode scripts are one piece of
+code, so there `import` and `export` declarations are syntax errors; and
 `import()` compiles everywhere but returns a rejected promise, as below.
 
 ## What is left out, and why

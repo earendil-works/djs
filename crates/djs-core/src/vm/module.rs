@@ -10,7 +10,7 @@
 //! let on_request = vm.module_export(&key, "onRequest");
 //! ```
 //!
-//! Without the `modules` feature every call fails: loading with a SyntaxError "modules
+//! Without the `embed` feature (D3175) every call fails: loading with a SyntaxError "modules
 //! are not available in this build".
 
 use alloc::string::String;

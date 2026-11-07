@@ -11828,3 +11828,37 @@ a shadowing local keeps it), and a declaration whose bindings were all dropped l
 nothing; `import type`, `export type` and `type` specifiers are erased; a local
 `export { T }` of a name with no value binding is dropped. Re-exports (`export { T } from`)
 are kept: a type there is a link error, as isolatedModules makes it in tsc.
+
+## D3192: Size of 0241; the size ceilings rise by what it measured
+date: 2026-11-08 · by: modules · issue: 0241 · approved: coordinator (D3175)
+With ES modules under `embed` (D3193), the wasm modules (no `embed`) carry only what no
+constant cuts: the `%ModuleOp` and `%NsOp` entries of the intrinsic table and their
+installed-array slots in the base, the realm's `Intrinsic::Modules` slot, and the arms of
+`Goal::Module`, `FuncKind::Module`, `VarKind::Import` and `Storage::Env` in compiler matches.
+Measured with scripts/build-wasm.sh against main 017ae943 (whose code main 7237378f has):
+shipped 426,780 → 426,839 gzip (+59), slim 360,398 → 360,536 (+138). Both ceilings in
+tests/scores/size.tsv rise by exactly that: `ceiling_gzip` 426,806 → 426,865,
+`slim_ceiling_gzip` 360,485 → 360,623; main keeps the headroom it had.
+
+## D3193: ES modules are part of `embed`, not a feature of their own
+date: 2026-11-08 · by: modules · issue: 0241
+Amends D3190's size handling as D3175 decided. djs-core has no `modules` feature: `embed`
+is the image feature (bit 3 of `IMAGE_FEATURES` in compat_inputs.rs; counted in the build
+hash, no longer neutral) and passes through djs-prelude's `embed`. `crate::EMBED` is the
+constant; `crate::MODULES` stays as an alias of it, so the gated paths still say what they
+are. Builtin files tagged `// @embed-only` (builtins/module.ts so far) are left out of
+`builtins/gen/prelude-noembed.js`, the prelude of full builds without `embed` (the shipped
+module), and of the slim prelude; prelude-noembed.js is in the build hash like the other
+two. `embed` without `full` is a compile_error. djs-embed's base and djs-test262 (default
+feature `embed`, for 0242's `flags: [module]` tests) have modules; djs-difftest builds
+djs-test262 without default features and adds no `embed`, so its engine, the slim bins and
+djs-abidrive's images stay what the wasm modules have.
+
+## D3194: djs-embed collects after the cap's out-of-memory abort
+date: 2026-11-08 · by: modules · issue: 0241
+Amends D3181/D3184. After `Error::OutOfMemory` the instance aborts the call and then runs a
+full collection. Without it the next call's first allocation could hit the cap again: the
+abandoned frames' data is garbage, but a collection is only due at the next threshold, and
+the cap is reached before it whenever the threshold lies past the cap. Whether that happened
+depended on the base's size (adding the module builtins made the 4 MiB test fail);
+tests/it/failures.rs checks the next call at five caps.

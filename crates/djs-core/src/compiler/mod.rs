@@ -360,7 +360,7 @@ pub fn compile(
 
 /// Compiles module source `src` ([`Goal::Module`]): the template of the module body and
 /// its module record metadata, a U32Array (`compiler::module_meta` describes the words).
-/// Without the `modules` feature a SyntaxError.
+/// Without the `embed` feature (D3175) a SyntaxError.
 pub fn compile_module(
     heap: &mut Heap,
     src: &[u8],

@@ -285,8 +285,8 @@ constants are shared across a compilation unit (D1434).
 **Semantics stance:** always strict. Codemode scripts compile as the body of an async
 function (D008, D1410). A Script mode (global `var`/function bindings on the global
 object, a global lexical scope, completion values) exists as well, for test262,
-`$262.evalScript` and the REPL (D004, D1581). Module code (the `modules` feature, on in
-native builds, D3171) is a goal of its own: `import`/`export`, top-level bindings in a
+`$262.evalScript` and the REPL (D004, D1581). Module code (djs-core's `embed` feature, on in
+native builds, D3171, D3175) is a goal of its own: `import`/`export`, top-level bindings in a
 module environment set up by linking, `this` undefined, no top-level `await` yet; the host
 loads module graphs through a loader callback, synchronously, with no I/O in the engine
 (vm/module.rs, D3190). `import()` still compiles and rejects (D1582). There is no direct

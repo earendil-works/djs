@@ -799,6 +799,9 @@ topics when the index is next reorganized.
 - D3171: ES modules in djs-core, behind the `modules` feature
 - D3190: ES modules: environments are the module closure's captures; records, namespaces, size
 - D3191: TypeScript modules drop imports no value refers to
+- D3192: Size of 0241; the size ceilings rise by what it measured
+- D3193: ES modules are part of `embed`, not a feature of their own
+- D3194: djs-embed collects after the cap's out-of-memory abort
 - D3172: TextEncoder and TextDecoder (UTF-8) are builtins
 - D3173: No URL or URLSearchParams in djs
 - D3174: libm becomes a djs crate (djs-libm)
