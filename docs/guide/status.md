@@ -14,8 +14,8 @@ records; [the last section](#every-recorded-measurement) lists them all.
 ## Conformance
 
 <!-- gen:status conformance -->
-- test262 (at dquickts' pinned commit): djs passes **38,637 of the 38,682** tests in the
-  active group (99.9%; 53,597 tests in all, the rest skipped by design). The 45 known
+- test262 (at dquickts' pinned commit): djs passes **38,973 of the 39,017** tests in the
+  active group (99.9%; 53,597 tests in all, the rest skipped by design). The 44 known
   failures are listed with reasons in `tests/test262/expected-failures.txt`; dquickts'
   qjs fails 9 active tests under the same runner.
 - The differential corpus (codemode scripts, console and result formatting, error

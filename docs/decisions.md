@@ -11945,3 +11945,39 @@ not metered as fuel (they run no JS; the memory cap still applies). Errors: a mo
 or link error is `Error::Syntax`, a loader failure in setup the new `Error::Load`, a module
 that throws `Error::Exception`; in calls they reject the `import()`. Host fn id `u32::MAX` is
 refused (reserved for imports).
+
+## D3230: test262 runs the module tests: a fixture loader in the runner
+date: 2026-11-08 · by: t262 · issue: 0242
+Carries out D3171's test plan. `flags: [module]`, language/module-code, language/import,
+language/expressions/dynamic-import and import.meta are active; what stays skipped is skipped
+by feature (`top-level-await` until 0248, `import-*`, `json-modules`, `source-phase-imports*`).
+**djs**: the harness runs as Scripts, then the test is the root of a graph whose keys are paths
+relative to `test/`; the loader resolves every specifier against the referrer's directory
+(`./x`, `x` and `../d/x` alike: test262's fixtures use all three) and reads the files.
+Phases: compiling the test alone with `compile_module` is the parse phase (so a negative parse
+test cannot pass by a fixture's error), `Vm::load_module` the resolution phase (a fixture's
+syntax error, a missing file, a link error), and a rejected Evaluate promise a runtime error.
+`import()` is on in every test (`set_dynamic_import`) and answered with `answer_import` through
+the same loader, a Script's referrer being its path. The runner's clock moves between fuel
+slices (`set_now`), since one fixture busy-waits on `Date.now()`. **qjs**: runs in the test's
+directory (where it resolves bare specifiers and a Script's `import()`), compiles the test
+with `std.evalScript(.., {compile_module, compile_only})`, then evaluates a one-line module
+`import "<absolute path>"` (`eval_module`; it throws on a load or link error, else returns
+the evaluation promise). qjs loads a module's requests while compiling it, so the driver calls
+an error at compile time resolution-phase when its stack starts in another file or the module
+cannot be loaded. The cache key's mode is `module` for these jobs; the driver is in the file
+key, so old results are not reused. **Slim**: djs-core without `embed` has no modules, so
+tests/test262-slim.toml's `no-modules` group skips `flags: [module]` and the `dynamic-import`
+feature there (the issue's "the slim build keeps modules" predates D3193: no wasm or slim
+build has `embed`). Group `paths` may be globs now.
+
+## D3231: `import * as ns; export { ns }` is an indirect export of the namespace
+date: 2026-11-08 · by: t262 · issue: 0242
+Amends D3190. The compiler made a local export of a namespace import a local export of the
+import's environment entry. The current spec (ParseModule, which test262 follows) makes it an
+indirect export with import name `all`, as `export * as ns from` is: ResolveExport then
+resolves it to the module's namespace. Two modules that re-export one namespace this way
+through `export *` are no longer ambiguous
+(ambiguous-export-bindings/namespace-unambiguous-*), and the linker no longer reads such an
+entry's Box from a module whose imports are not bound yet (instn-star-equality.js panicked:
+the namespace of a module was made while a fixture's import Box was still empty).

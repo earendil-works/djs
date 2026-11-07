@@ -39,19 +39,26 @@ test262 is the conformance suite of ECMAScript. djs runs it at the commit dquick
 <!--n test262/total-->53,597<!--/n--> tests, with its own runner (`djs-test262`, in-process, in parallel).
 [`tests/test262.toml`](../../tests/test262.toml) puts every test into a group:
 
-- **skip**: features djs will never have (sloppy-mode tests, modules, `Intl`, Temporal,
-  `SharedArrayBuffer`, direct `eval`, ...). They are left out of the count, so the score
-  stays honest. A rule matches by frontmatter flag, directory, feature tag, or a scan of
+- **skip**: features djs will never have (sloppy-mode tests, `Intl`, Temporal,
+  `SharedArrayBuffer`, direct `eval`, ...) and the module features it does not have yet
+  (top-level `await`, import attributes and JSON modules, deferred and source-phase
+  imports). They are left out of the count, so the score stays honest. A rule matches by frontmatter flag, directory, feature tag, or a scan of
   the source for constructs no tag names, such as a direct `eval(` call.
-- **active**: everything else, <!--n test262/active-->38,682<!--/n--> tests.
+- **active**: everything else, <!--n test262/active-->39,017<!--/n--> tests.
 
 A test runs as a Script, strict, with the harness files it asks for, and a `$262` host
-object (`evalScript`, `detachArrayBuffer`, `gc`). djs passes all but a few dozen active
+object (`evalScript`, `detachArrayBuffer`, `gc`). A test flagged `module` runs as the
+root module of a graph instead, after the harness Scripts: its key is its path, and the
+runner's module loader resolves each specifier against the importing module's directory
+and reads the `_FIXTURE` files next to the tests. Compiling the test alone is the parse
+phase and loading and linking its graph the resolution phase, so a negative test can
+expect a missing export to fail at link time. `import()`, from modules and Scripts alike,
+loads through the same loader. djs passes all but a few dozen active
 tests ([status in numbers](status.md#conformance)). Those are listed with a reason in
 [`tests/test262/expected-failures.txt`](../../tests/test262/expected-failures.txt), the
 **ratchet**: a test that fails and is not in the file fails the gate, and a listed test
 that starts passing is reported, so its entry gets removed and the list only shrinks.
-Every remaining entry is a deliberate difference:
+Every remaining entry is a deliberate difference or waits for a feature:
 
 - **Always strict.** djs has no sloppy mode, so tests that need it fail: `Function()`
   with duplicate parameter names or parameters named `eval` or `arguments`, sloppy code
@@ -60,6 +67,9 @@ Every remaining entry is a deliberate difference:
   is most of the list.
 - **Annex B accessors.** `__lookupGetter__` and `__lookupSetter__` are not implemented;
   a few class tests use them without declaring the feature.
+- **Top-level `await`.** Four module tests use it without declaring the feature (an
+  `await using` at the top of a module, a fixture that awaits); djs does not have it
+  yet.
 - **Same as QuickJS.** One test expects an assignment to an undeclared global to throw
   because the reference is resolved before the right-hand side runs; djs resolves it at
   the store, as QuickJS does.

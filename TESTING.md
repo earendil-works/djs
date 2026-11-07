@@ -46,16 +46,18 @@ Tests can be matched by `flags`, by directory prefix, by `features` (globs allow
 a **source scan** for constructs that have no feature tag (direct `eval(`, the
 `Function(` constructor). The scan is a cheap regex and is allowed to be conservative.
 
-Initial skip set (from ARCH non-goals):
+The skip set (from ARCH non-goals, and the module features djs does not have yet):
 
-- flags: `noStrict` (djs is always strict), `module` (modules are not planned for now).
+- flags: `noStrict` (djs is always strict).
 - dirs: `intl402`, `annexB`, `staging`, `built-ins/Temporal`,
   `built-ins/SharedArrayBuffer`, `built-ins/Atomics`, `built-ins/ShadowRealm`,
-  `language/module-code`, `language/import`.
+  `built-ins/AbstractModuleSource`.
 - features: `Intl-*`, `Intl.*`, `Temporal`, `SharedArrayBuffer`, `Atomics*`, `ShadowRealm`,
   `tail-call-optimization`, `IsHTMLDDA`, `cross-realm`, `caller`, `legacy-regexp`,
-  `dynamic-import`, `import-*`, `json-modules`, `source-phase-imports*`, `top-level-await`,
-  `host-gc-required`, `Atomics.waitAsync`, `import-defer`.
+  `import-*` (import attributes, `import defer`, text/bytes imports), `json-modules`,
+  `source-phase-imports*`, `top-level-await` (until 0248), `host-gc-required`.
+- Module tests (`flags: [module]`, language/module-code, language/import,
+  language/expressions/dynamic-import, import.meta) are active since 0242 (D3171, D3230).
 - direct eval (`direct-eval`, skipped, D014): `language/eval-code/direct` and every test
   whose source has an `eval(` call. djs treats `eval(x)` as indirect eval (0059). Indirect
   eval (`(0, eval)(`) and the Function constructors are active.
@@ -65,13 +67,13 @@ arrays, ArrayBuffer/DataView, generators, regexp features, WeakRef/FinalizationR
 decorators, explicit-resource-management, Symbol-heavy features, …). Those phases are done
 and their features are active. 0097 promoted the last 179 (immutable ArrayBuffers,
 the error-stack accessor, Promise.allKeyed, Symbol.unscopables), so the later group is
-empty: 38,109 active, 525 direct-eval and 14,963 skipped, of 53,597 tests
-(`djs-test262 list`). Moving tests from `later` to
+empty. 0242 activated the module tests: 39,017 active, 529 direct-eval and 14,051
+skipped, of 53,597 tests (`djs-test262 list`). Moving tests from `later` to
 `active` is a coordinator decision; `tests/test262.toml` says why each rule exists.
 
 ### Execution model
 
-- test262 tests are **Scripts**. djs has a Script compile mode next to the codemode
+- test262 tests are **Scripts**, except `module` tests (below). djs has a Script compile mode next to the codemode
   "async function body" mode: top-level `var` and function declarations create global
   object properties, top-level `let`/`const`/`class` go into the global lexical scope, and
   top-level `this` is the global object.
@@ -85,7 +87,21 @@ empty: 38,109 active, 525 direct-eval and 14,963 skipped, of 53,597 tests
   tests.
 - Negative tests: `negative: {phase: parse|resolution|runtime, type: X}`. A parse-phase
   negative must fail at compile time with the right error type, without running
-  anything.
+  anything; a resolution-phase one when its module graph loads or links.
+- **Module tests** (`flags: [module]`, D3230): the harness runs as Scripts first, then the
+  test is the root module of a graph. Its key is its path relative to `test/`; a specifier
+  names the file relative to the importing module's directory (`./x_FIXTURE.js`,
+  `x_FIXTURE.js` and `../d/x_FIXTURE.js` alike), read from the checkout. djs compiles the
+  test alone (the parse phase), then `Vm::load_module` loads and links the graph (an error
+  there is the resolution phase: a missing or ambiguous import, a fixture that does not
+  parse or does not exist), then evaluates it; a rejected evaluation promise is a runtime
+  error. `import()` (modules and Scripts; a Script's referrer is its path) is answered
+  through the same loader (`Vm::answer_import`). qjs runs in the test's directory and
+  imports the test by its absolute path from a one-line module (`std.evalScript` with
+  `compile_module`/`eval_module`); qjs loads a module's requests while it compiles it, so
+  its driver tells the phases apart by where the error is.
+- The runner's clock (`Vm::set_now`) moves between fuel slices: a fixture busy-waits on
+  `Date.now()`.
 - Async tests pass when `Test262:AsyncTestComplete` is printed and fail on
   `Test262:AsyncTestFailure`.
 - Every test runs with a fuel limit and a memory limit. Hitting either one is a failure
@@ -101,7 +117,7 @@ handling can run:
 - `--engine qjs`: dquickts' `qjs` as a subprocess. This validates the runner and gives
   the oracle baseline before djs exists. Its results are cached in `vendor/qjs-cache/`
   next to the test262 checkout, keyed by the qjs binary, the test262 commit and the
-  driver, so a repeated qjs run takes seconds; `--no-cache` runs everything (D1531).
+  driver (each entry by test path, mode `strict`/`sloppy`/`module` and harness), so a repeated qjs run takes seconds; `--no-cache` runs everything (D1531).
 - `--engine djs`: djs in-process. Its own `$262` implementation is provided by the
   runner.
 
@@ -153,9 +169,10 @@ and `--test262 DIR` / `$DJS_TEST262` the checkout. qjs results are cached (D1531
 repeated qjs run of active + later (about 38,100 tests) takes seconds; djs runs the active
 group in about a minute of CPU (release, `-j` workers).
 
-Status at 0097: djs passes 38,069 of the 38,109 active tests (99.9%), with both builtin
-backends; the 40 failures are listed with reasons in `tests/test262/expected-failures.txt`.
-qjs fails 4 active tests under our runner (`tests/test262/oracle-failures.txt`).
+Status at 0242: djs passes 38,973 of the 39,017 active tests (99.9%); the 44 failures are
+listed with reasons in `tests/test262/expected-failures.txt`. qjs fails 9 active tests
+under our runner (`tests/test262/oracle-failures.txt`; 5 of them module tests: string
+export names after `export * as`, and top-level await with a dynamic import).
 
 `cargo test -p djs-test262` includes a fixture suite run with qjs that checks failures
 are detected (skipped if qjs is missing). `cargo test -p djs-test262 --test
@@ -391,9 +408,16 @@ At 0048: 4053/4802 compared files match, 0 differ, 749 are djs syntax errors.
 
 ## Known differences (0082)
 
-What is left in the ratchets (`tests/test262/expected-failures.txt`, 40 active tests at
-0095; `tests/corpus/expected-failures.txt`, 1 case at 0097) and why. Everything else in the active
+What is left in the ratchets (`tests/test262/expected-failures.txt`, 44 active tests at
+0242; `tests/corpus/expected-failures.txt`, 1 case at 0097) and why. Everything else in the active
 group passes. Update this list when an entry goes away or a new one is accepted.
+
+**Waiting for top-level await** (0248; 4 test262 tests without the `top-level-await`
+tag): `await using` at the top of a module
+(language/statements/await-using/syntax/await-using{,-allowed-at-top-level-of-module}.js,
+language/statements/for-of/head-await-using-fresh-binding-per-iteration.js) and
+language/module-code/top-level-await/dynamic-import-of-waiting-module.js (its fixture
+awaits).
 
 **By design** (no fix planned; 40 test262 tests):
 
@@ -738,7 +762,8 @@ runs the full build. The slim build, natively in `target/slim`
   --gc-stress --determinism`;
 - test262's active group: a runner built without `full` skips tests/test262-slim.toml's
   groups and compares with tests/test262/expected-failures-slim.txt (update it with the
-  same command and `--update`);
+  same command and `--update`). The slim build has no `embed`, so no ES modules: its
+  `no-modules` group skips the `module` and `dynamic-import` tests (D3230);
 - pi's codemode tests on djs-slim.wasm, with pi's prelude minus its lockdown on frozen
   builtins: `DJS_WASM=target/djs-slim.wasm node js/pi/pi-tests.ts --no-lockdown --expected
   tests/pi/slim-expected-failures.txt` (only new failures fail);

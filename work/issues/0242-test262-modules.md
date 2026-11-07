@@ -34,6 +34,40 @@ stay skipped by feature. Fix what fails in 0241's implementation, or ratchet it 
 
 ## Log
 
+### t262, 2026-11-08
+- Runner (crates/djs-test262): `Job::module`, `Status::ResolutionError`; djs.rs `Fixtures`
+  loader (keys = paths relative to test/, specifiers joined to the referrer's dir), parse
+  phase = `compile_module` of the test alone, resolution = `Vm::load_module`, runtime = the
+  Evaluate promise. `drive()` answers `import()` calls (0243 landed meanwhile:
+  `set_dynamic_import(true)` + `answer_import`), holding the call's result in a Handle;
+  the clock (`set_now`) moves between fuel slices (dynamic-import/await-import-evaluation's
+  fixture busy-waits on Date.now()). qjs: driver runs module tests via `std.evalScript`
+  `compile_module`/`eval_module` of `import "<abs path>"`, cwd = the test's dir for every
+  job; qjs loads requests at compile time, so a compile error whose stack starts in another
+  file (or "could not load module") is resolution phase. Cache key mode `module`.
+- Group paths accept globs (config.rs), used briefly for a dynamic-import group that is gone
+  again since import() works.
+- tests/test262.toml: dropped flag `module`, paths module-code/import, features
+  dynamic-import/import.meta. 908 tests newly active: djs fails 4 (top-level await without
+  the feature tag: 3 `await using` at module top level, dynamic-import-of-waiting-module),
+  ratcheted; qjs fails 5 (4 string export names after `export * as`, the TLA one), in
+  oracle-failures.txt. Lazy run: same 4.
+- djs-core fix (D3231): `import * as ns; export {ns}` is now an indirect export (namespace),
+  fixing a linker panic (instn-star-equality.js: "a Box", an unfilled import Box read while
+  making a namespace) and two spurious ambiguity errors. Unit test
+  `re_exported_namespace_imports`, snapshot modules.disasm updated.
+- Slim: no `embed` = no modules (D3193 postdates the issue's slim criterion), so
+  tests/test262-slim.toml `no-modules` group (flag module, feature dynamic-import), applied
+  when `!djs_core::MODULES`; slim ratchet unchanged.
+- Runner fixture suites (tests/fixture/{djs,test262}): module, module-async, module-parse,
+  module-resolution, module-fixture-syntax, dynamic-import passes; module-throws,
+  module-missing-export failures.
+- Checked: djs-test262 tests, djs-core module_tests/compiler, test262 language + Date +
+  Promise against the ratchet (OK), slim runner on the newly active set.
+- Docs: TESTING.md (skip set, module execution model, counts 39,017/529/14,051, status,
+  known differences, slim), guide testing.md (skip set, module tests, ratchet bullet for
+  top-level await); status.md/README/index regenerated. D3230, D3231.
+
 ## Follow-ups
 
 ## Result
