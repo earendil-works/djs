@@ -17,6 +17,18 @@
  */
 function ModuleEvaluate(m: Obj): Obj {
   const promise: Obj = PromiseCreate(RealmIntrinsic("PromisePrototype"));
+  try {
+    EvaluateGraph(m);
+  } catch (e) {
+    RejectPromise(promise, e);
+    return promise;
+  }
+  FulfillPromise(promise, undefined);
+  return promise;
+}
+
+/** Evaluate's work: runs the graph of m, or throws the error it ends with. */
+function EvaluateGraph(m: Obj): void {
   // [the top of the stack, the next DFS index]
   const state: Obj = NewRecord(2);
   RecordSet(state, 0, null);
@@ -32,11 +44,68 @@ function ModuleEvaluate(m: Obj): Obj {
       top = RecordGet(t, 10);
       RecordSet(t, 10, null);
     }
-    RejectPromise(promise, e);
-    return promise;
+    throw e;
   }
-  FulfillPromise(promise, undefined);
+}
+
+/**
+ * EvaluateImportCall ( specifierExpression, optionsExpression ), 13.3.10.2, in builds with
+ * modules: the compiler calls this (through ModuleOp) with the referrer, the key of the
+ * module or the name of the script the call is in. The checks reject as in
+ * builtins/import.ts; then HostLoadImportedModule is a call of the VM's async host
+ * function for imports (`vm::IMPORT_FN_ID`), which the host answers with the key of the
+ * graph it loaded and linked (or an error, which rejects), and FinishImport evaluates it
+ * (ContinueDynamicImport). A VM whose host does not answer imports rejects as without
+ * modules.
+ */
+function ImportCall(specifier: Value, options: Value, referrer: Value): Obj {
+  const load: Value = NsOp(4, undefined, undefined, undefined);
+  if (load === undefined) {
+    return DynamicImport(specifier, options);
+  }
+  const promise: Obj = PromiseCreate(RealmIntrinsic("PromisePrototype"));
+  try {
+    const name: Str = ToString(specifier);
+    if (options !== undefined) {
+      if (!IsObject(options)) {
+        throw NewTypeError("options must be an object");
+      }
+      const attributes: Value = Get(AsObj(options), "with");
+      if (attributes !== undefined) {
+        if (!IsObject(attributes)) {
+          throw NewTypeError("options.with must be an object");
+        }
+        const entries: Obj = EnumerableOwnProperties(AsObj(attributes), 1);
+        const n: f64 = LengthOfArrayLike(entries);
+        for (let i: f64 = 0; i < n; i++) {
+          if (!IsString(Get(entries, i))) {
+            throw NewTypeError("module attribute values must be strings");
+          }
+        }
+        if (n > 0) {
+          // No attribute is supported (no JSON modules), as in static imports.
+          throw NewSyntaxError("unsupported import attribute");
+        }
+      }
+    }
+    const loaded: Value = Call(load, undefined, name, referrer);
+    const finish: Value = NsOp(7, undefined, undefined, undefined);
+    PerformPromiseThen(AsObj(loaded), finish, undefined, promise);
+  } catch (e) {
+    RejectPromise(promise, e);
+  }
   return promise;
+}
+
+/**
+ * ContinueDynamicImport's fulfilled path, 16.2.1.10.1, once the host loaded and linked the
+ * graph of key: evaluates it (a module evaluates once; an error is kept and thrown again)
+ * and gives its namespace.
+ */
+function FinishImport(key: Value): Value {
+  const m: Obj = AsObj(NsOp(5, key, undefined, undefined));
+  EvaluateGraph(m);
+  return NsOp(6, m, undefined, undefined);
 }
 
 /** InnerModuleEvaluation ( module, stack, index ), 16.2.1.5.3.1, without async modules. */
@@ -90,17 +159,26 @@ function InnerModuleEvaluation(m: Obj, state: Obj): void {
 // namespace does.
 
 /**
- * The module builtins' entry for Rust (one intrinsic: each costs the shipped module
- * table space): `this` 5 evaluates module record target ([`ModuleEvaluate`]); otherwise
- * it is a namespace trap and `this` (the builtin closure's data) the internal method: 0
- * [[Get]] (10.4.6.8), 1 [[GetOwnProperty]] (10.4.6.5), 2 [[DefineOwnProperty]] (10.4.6.6),
- * 3 [[OwnPropertyKeys]] (10.4.6.11), 4 [[Set]] (10.4.6.9: always false).
+ * The module builtins' entry for Rust and the compiler (one intrinsic: each costs the
+ * shipped module table space): `this` undefined is `import(target, key)` from referrer a
+ * ([`ImportCall`], the compiler's call); `this` 5 evaluates module record target
+ * ([`ModuleEvaluate`]); 6 finishes an import of key target ([`FinishImport`], the
+ * reaction); otherwise it is a namespace trap and `this` (the builtin closure's data) the
+ * internal method: 0 [[Get]] (10.4.6.8), 1 [[GetOwnProperty]] (10.4.6.5), 2
+ * [[DefineOwnProperty]] (10.4.6.6), 3 [[OwnPropertyKeys]] (10.4.6.11), 4 [[Set]] (10.4.6.9:
+ * always false).
  * @intrinsic
  */
 function ModuleOp(this: Value, target: Value, key: Value, a: Value): Value {
+  if (this === undefined) {
+    return ImportCall(target, key, a);
+  }
   const op: i32 = F64ToI32(AsNumber(this));
   if (op === 5) {
     return ModuleEvaluate(AsObj(target));
+  }
+  if (op === 6) {
+    return FinishImport(target);
   }
   if (op === 4) {
     return false;

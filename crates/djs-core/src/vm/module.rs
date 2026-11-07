@@ -23,6 +23,11 @@ use crate::interp::module::{self, status};
 use crate::interp::{ErrorKind, realm};
 use crate::value::{Obj, Value};
 
+/// The fn id of the async host call an `import()` makes in a VM with
+/// [`Vm::set_dynamic_import`] on: arguments the specifier and the referrer (strings).
+/// Hosts answer it with [`Vm::answer_import`]; their own host functions must not use it.
+pub const IMPORT_FN_ID: u32 = u32::MAX;
+
 /// A module's source as the host supplies it.
 #[derive(Clone, Debug)]
 pub struct ModuleSource {
@@ -55,6 +60,17 @@ impl Vm {
         specifier: &str,
         loader: &mut dyn ModuleLoader,
     ) -> Result<String, Value> {
+        self.load_module_from(specifier, None, loader)
+    }
+
+    /// [`Vm::load_module`] of `specifier` as module (or script) `referrer` imports it: the
+    /// loader resolves the specifier against it (an `import()`).
+    pub fn load_module_from(
+        &mut self,
+        specifier: &str,
+        referrer: Option<&str>,
+        loader: &mut dyn ModuleLoader,
+    ) -> Result<String, Value> {
         if !crate::MODULES {
             return Err(self.error_value(
                 ErrorKind::SyntaxError,
@@ -62,7 +78,7 @@ impl Vm {
             ));
         }
         let mut created: Vec<String> = Vec::new();
-        let r = self.load_graph(specifier, loader, &mut created);
+        let r = self.load_graph(specifier, referrer, loader, &mut created);
         match r {
             Ok(key) => Ok(key),
             Err(f) => {
@@ -77,10 +93,11 @@ impl Vm {
     fn load_graph(
         &mut self,
         specifier: &str,
+        referrer: Option<&str>,
         loader: &mut dyn ModuleLoader,
         created: &mut Vec<String>,
     ) -> Result<String, Fault> {
-        let key = loader.resolve(specifier, None).map_err(host_error)?;
+        let key = loader.resolve(specifier, referrer).map_err(host_error)?;
         let mut queue = Vec::new();
         let root = self.module_record(&key, loader, created, &mut queue)?;
         // The new records. requests (each key is loaded once).
@@ -128,6 +145,111 @@ impl Vm {
         created.push(String::from(key));
         queue.push(m);
         Ok(m)
+    }
+
+    /// Defines synthetic module `key` (the JSON modules proposal's Synthetic Module Record):
+    /// a module without source whose exports are `exports` (name and value: host
+    /// functions, data, anything the VM holds). It counts as linked and evaluated: a graph
+    /// that imports `key` links to it without asking the loader for it (resolve still maps
+    /// specifiers to the key), and its exports are live ([`Vm::set_module_export`]). Fails
+    /// with an Error if a module `key` exists, a SyntaxError for a duplicate export name.
+    pub fn define_synthetic_module(
+        &mut self,
+        key: &str,
+        exports: &[(&str, Value)],
+    ) -> Result<(), Value> {
+        if !crate::MODULES {
+            return Err(self.error_value(
+                ErrorKind::SyntaxError,
+                "modules are not available in this build",
+            ));
+        }
+        let r = (|| -> Result<(), Fault> {
+            if module::find(&mut self.heap, key)?.is_some() {
+                return Err(Fault::error(
+                    ErrorKind::Error,
+                    crate::text::cat!("module '", key, "' is loaded already"),
+                ));
+            }
+            let mut names = Vec::with_capacity(exports.len());
+            for &(n, _) in exports {
+                let a = self.heap.atom_str(n)?;
+                if names.contains(&a) {
+                    return Err(Fault::error(
+                        ErrorKind::SyntaxError,
+                        crate::text::cat!("duplicate export '", n, "'"),
+                    ));
+                }
+                names.push(a);
+            }
+            let values: Vec<Value> = exports.iter().map(|e| e.1).collect();
+            module::new_synthetic(&mut self.heap, key, &names, &values)?;
+            Ok(())
+        })();
+        r.map_err(|f| self.fault_to_value(f))
+    }
+
+    /// Sets export `name` of synthetic module `key` to `v` (SetSyntheticModuleExport):
+    /// importers read the new value from then on. `false` if there is no synthetic module
+    /// `key` or it has no export `name`.
+    pub fn set_module_export(&mut self, key: &str, name: &str, v: Value) -> Result<bool, VmError> {
+        let Some(m) = module::find(&mut self.heap, key)? else {
+            return Ok(false);
+        };
+        Ok(module::set_synthetic_export(&mut self.heap, m, name, v)?)
+    }
+
+    /// Lets `import()` load modules through the host (`on`), in modules and scripts alike:
+    /// a call becomes an async host call with fn id [`IMPORT_FN_ID`] and the arguments
+    /// specifier and referrer (the importing module's key or script's name), which the host
+    /// answers with [`Vm::answer_import`]; the VM then evaluates the graph in a later run
+    /// and fulfills the promise with its namespace. Off (the default), `import()` rejects
+    /// as in a build without modules. Kept in the heap: images carry it.
+    pub fn set_dynamic_import(&mut self, on: bool) -> Result<(), VmError> {
+        if !crate::MODULES {
+            return Ok(());
+        }
+        let f = if on {
+            self.new_async_host_function(IMPORT_FN_ID, "import")?
+        } else {
+            Value::UNDEFINED
+        };
+        module::set_import_function(&mut self.heap, f)?;
+        Ok(())
+    }
+
+    /// The specifier and referrer of pending host call `call_id` if it is an `import()`
+    /// ([`Vm::set_dynamic_import`]).
+    pub fn import_request(&self, call_id: u32) -> Option<(String, String)> {
+        let c = self.host_call(call_id)?;
+        if c.fn_id != IMPORT_FN_ID || !c.is_async {
+            return None;
+        }
+        let s = |v: Option<&Value>| {
+            v.and_then(|v| v.as_string())
+                .map(|s| self.heap.str_to_string(s))
+                .unwrap_or_default()
+        };
+        Some((s(c.args.first()), s(c.args.get(1))))
+    }
+
+    /// Answers `import()` call `call_id` (see [`Vm::import_request`]): loads and links the
+    /// graph of its specifier through `loader` ([`Vm::load_module_from`] with its referrer)
+    /// and resolves the call, so that the next run evaluates the graph and fulfills the
+    /// import's promise with the namespace; a load or link error rejects it. Runs no JS.
+    pub fn answer_import(
+        &mut self,
+        call_id: u32,
+        loader: &mut dyn ModuleLoader,
+    ) -> Result<(), VmError> {
+        let Some((specifier, referrer)) = self.import_request(call_id) else {
+            return Err(VmError::UnknownHostCall);
+        };
+        let result = match self.load_module_from(&specifier, Some(&referrer), loader) {
+            Ok(key) => Ok(Value::string(self.heap.alloc_str(&key)?)),
+            Err(e) => Err(e),
+        };
+        self.resolve_host_call(call_id, result)
     }
 
     /// Starts the evaluation of the loaded module `key` (Evaluate(), 16.2.1.5.3): `run`

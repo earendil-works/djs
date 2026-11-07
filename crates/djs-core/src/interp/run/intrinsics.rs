@@ -1900,14 +1900,11 @@ impl Exec<'_> {
             }
             // (Without modules, the intrinsic falls to the unknown ones.)
             MODULE_NAMESPACE if crate::MODULES => {
-                let Some(target) = arg(self, 1).as_object() else {
-                    return bad_argument(id);
-                };
                 let op = a0.as_int().unwrap_or(-1);
                 crate::interp::module::namespace_op(
                     self.heap,
                     op,
-                    target,
+                    arg(self, 1),
                     arg(self, 2),
                     arg(self, 3),
                 )?

@@ -1679,8 +1679,19 @@ impl Parser<'_, '_> {
         self.expect(TokenKind::RParen, ")")?;
         self.syn_close();
         self.mark(pos);
-        let id = crate::bytecode::intrinsics::intrinsic_id_of!("DynamicImport");
-        self.code().call_intrinsic(id, 2);
+        if crate::MODULES {
+            // `%ModuleOp(specifier, options, referrer)`: the import goes to the host's
+            // loader, which resolves the specifier against this unit's module key or
+            // script name (builtins/module.ts ImportCall).
+            let units: alloc::vec::Vec<u16> = self.opts.filename.encode_utf16().collect();
+            let referrer = self.string_const(&units)?;
+            self.code().push_const(referrer);
+            let id = crate::bytecode::intrinsics::intrinsic_id_of!("ModuleOp");
+            self.code().call_intrinsic(id, 3);
+        } else {
+            let id = crate::bytecode::intrinsics::intrinsic_id_of!("DynamicImport");
+            self.code().call_intrinsic(id, 2);
+        }
         Ok(Expr::Value)
     }
 

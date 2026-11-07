@@ -5,6 +5,7 @@ use alloc::vec::Vec;
 use alloc::{format, vec};
 
 use super::*;
+use crate::compiler::CompileOptions;
 
 /// A loader over `(key, source)` pairs; specifiers are keys. Counts loads.
 struct Map {
@@ -313,4 +314,307 @@ fn graphs_survive_images_and_suspension() {
     // The original VM is unaffected.
     assert_eq!(export(&mut vm, "n", "n"), "1");
     let _ = vec![0];
+}
+
+#[test]
+fn synthetic_modules() {
+    let mut vm = Vm::new(VmOptions::default()).unwrap();
+    let allow = vm.new_host_function(7, "allowHosts").unwrap();
+    let secret = Value::string(vm.heap.alloc_str("s3cret").unwrap());
+    vm.define_synthetic_module("@sdk/net", &[("allowHosts", allow), ("secret", secret)])
+        .unwrap();
+    let mut l = map(&[
+        (
+            "main",
+            "import { allowHosts, secret } from '@sdk/net';
+             import * as net from '@sdk/net';
+             export * from '@sdk/net';
+             export function read() { return secret; }
+             export function call() { return allowHosts('a', 'b'); }
+             export const seen = [typeof allowHosts, secret, Object.keys(net).join(),
+                                  net.secret === secret];",
+        ),
+        ("bad", "import { nope } from '@sdk/net';"),
+    ]);
+    vm.load_module("main", &mut l).unwrap();
+    // The synthetic module is never asked of the loader.
+    assert_eq!(l.loads, ["main"]);
+    assert_eq!(eval(&mut vm, "main"), "ok undefined");
+    assert_eq!(
+        export(&mut vm, "main", "seen"),
+        "[\"function\",\"s3cret\",\"allowHosts,secret\",true]"
+    );
+    assert_eq!(export(&mut vm, "main", "secret"), "s3cret");
+    // The exports are host functions like any other.
+    let f = vm.module_export("main", "call").unwrap().unwrap();
+    vm.call(f, Value::UNDEFINED, &[]).unwrap();
+    let Status::HostCall { call_id, fn_id } = vm.run(1_000_000) else {
+        panic!("a host call")
+    };
+    assert_eq!(fn_id, 7);
+    assert_eq!(vm.host_call(call_id).unwrap().args.len(), 2);
+    vm.resolve_host_call(call_id, Ok(Value::TRUE)).unwrap();
+    assert!(matches!(vm.run(1_000_000), Status::Done(v) if v == Value::TRUE));
+    // Live: importers see a new value.
+    assert!(
+        vm.set_module_export("@sdk/net", "secret", Value::int(5))
+            .unwrap()
+    );
+    assert_eq!(call_export(&mut vm, "main", "read"), "5");
+    assert!(
+        !vm.set_module_export("@sdk/net", "nope", Value::int(5))
+            .unwrap()
+    );
+    assert!(!vm.set_module_export("main", "seen", Value::int(5)).unwrap());
+    assert!(!vm.set_module_export("none", "x", Value::int(5)).unwrap());
+    // Evaluating it runs nothing.
+    assert_eq!(eval(&mut vm, "@sdk/net"), "ok undefined");
+    let e = vm.load_module("bad", &mut l).unwrap_err();
+    assert_eq!(
+        vm.display(e),
+        "SyntaxError: Could not find export 'nope' in module '@sdk/net'"
+    );
+    let e = vm.define_synthetic_module("@sdk/net", &[]).unwrap_err();
+    assert_eq!(vm.display(e), "Error: module '@sdk/net' is loaded already");
+    let e = vm
+        .define_synthetic_module("dup", &[("a", Value::NULL), ("a", Value::NULL)])
+        .unwrap_err();
+    assert_eq!(vm.display(e), "SyntaxError: duplicate export 'a'");
+    // Images carry it, live bindings included.
+    vm.collect().unwrap();
+    let mut vm = Vm::from_bytes(vm.image().to_vec(), VmOptions::default()).unwrap();
+    assert!(
+        vm.set_module_export("@sdk/net", "secret", Value::int(6))
+            .unwrap()
+    );
+    assert_eq!(call_export(&mut vm, "main", "read"), "6");
+}
+
+/// A loader that resolves relative specifiers against the referrer and records the
+/// requests it saw.
+struct Rel {
+    files: Vec<(&'static str, &'static str)>,
+    resolves: Vec<String>,
+}
+
+impl ModuleLoader for Rel {
+    fn resolve(&mut self, specifier: &str, referrer: Option<&str>) -> Result<String, String> {
+        self.resolves
+            .push(format!("{specifier}<{}", referrer.unwrap_or("-")));
+        let key = match (specifier.strip_prefix("./"), referrer) {
+            (Some(rest), Some(r)) => match r.rsplit_once('/') {
+                Some((dir, _)) => format!("{dir}/{rest}"),
+                None => rest.to_string(),
+            },
+            _ => specifier.to_string(),
+        };
+        if self.files.iter().any(|f| f.0 == key) {
+            Ok(key)
+        } else {
+            Err(format!("cannot find {specifier}"))
+        }
+    }
+
+    fn load(&mut self, key: &str) -> Result<ModuleSource, String> {
+        let text = self.files.iter().find(|f| f.0 == key).unwrap().1;
+        Ok(ModuleSource {
+            text: text.to_string(),
+            typescript: false,
+        })
+    }
+}
+
+/// Runs a script that sets `globalThis.out` (a promise's outcome or anything), answering
+/// every import with `l`: `out` when nothing is left to do.
+fn run_imports(vm: &mut Vm, l: &mut Rel, src: &str) -> String {
+    let f = vm
+        .compile(src.as_bytes(), &CompileOptions::script("dir/script.js"))
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    loop {
+        match vm.run(1_000_000) {
+            Status::Idle => {
+                let calls = vm.new_host_calls();
+                assert!(!calls.is_empty(), "idle without new calls");
+                for c in calls {
+                    vm.answer_import(c, l).unwrap();
+                }
+            }
+            Status::Done(_) if !vm.pending_host_calls().is_empty() => {
+                for c in vm.new_host_calls() {
+                    vm.answer_import(c, l).unwrap();
+                }
+            }
+            Status::Done(_) => break,
+            s => panic!("{s:?}"),
+        }
+    }
+    let out = vm.global_path("out").unwrap_or(Value::UNDEFINED);
+    vm.display(out)
+}
+
+const IMPORT_FILES: &[(&str, &str)] = &[
+    (
+        "dir/a.js",
+        "export const x = 1; export default 'A'; import * as b from './b.js'; export { b };",
+    ),
+    ("dir/b.js", "export let y = 2; log.push('b ran');"),
+    (
+        "dir/c.js",
+        "export async function go() { const m = await import('./a.js'); return m.x; }",
+    ),
+    (
+        "dir/throws.js",
+        "log.push('throws ran'); throw new RangeError('boom');",
+    ),
+    ("dir/missing.js", "import { z } from './b.js';"),
+    ("dir/syntax.js", "export const = 1;"),
+    (
+        "dir/then.js",
+        "export function then(resolve) { resolve('thenable'); }",
+    ),
+];
+
+#[test]
+fn dynamic_import_through_the_loader() {
+    let mut vm = Vm::new(VmOptions::default()).unwrap();
+    vm.set_dynamic_import(true).unwrap();
+    let mut l = Rel {
+        files: IMPORT_FILES.to_vec(),
+        resolves: Vec::new(),
+    };
+    let out = run_imports(
+        &mut vm,
+        &mut l,
+        "globalThis.log = [];
+         const p = import('./a.js');
+         log.push(String(p instanceof Promise));
+         p.then(ns => { log.push('ns ' + [ns.x, ns.default, ns.b.y, Object.keys(ns)].join());
+                        return import('./a.js').then(ns2 => log.push(String(ns2 === ns))); })
+          .then(() => import('./c.js')).then(c => c.go()).then(x => log.push('c ' + x))
+          .then(() => { globalThis.out = log; });",
+    );
+    assert_eq!(
+        out,
+        "[\"true\",\"b ran\",\"ns 1,A,2,b,default,x\",\"true\",\"c 1\"]"
+    );
+    // The referrers: the script's name, then the module's key (from an async function).
+    assert_eq!(
+        l.resolves,
+        [
+            "./a.js<dir/script.js",
+            "./b.js<dir/a.js",
+            "./a.js<dir/script.js",
+            "./c.js<dir/script.js",
+            "./a.js<dir/c.js",
+        ]
+    );
+}
+
+#[test]
+fn dynamic_import_errors_reject() {
+    let mut vm = Vm::new(VmOptions::default()).unwrap();
+    vm.set_dynamic_import(true).unwrap();
+    let mut l = Rel {
+        files: IMPORT_FILES.to_vec(),
+        resolves: Vec::new(),
+    };
+    let out = run_imports(
+        &mut vm,
+        &mut l,
+        "globalThis.log = [];
+         const show = (e) => e instanceof Error ? e.name + ': ' + e.message : String(e);
+         const tries = [
+           () => import('./nowhere.js'),
+           () => import('./throws.js'),
+           () => import('./throws.js'),
+           () => import('./missing.js'),
+           () => import('./syntax.js'),
+           () => import('./b.js', 5),
+           () => import('./b.js', { with: { type: 'json' } }),
+           () => import('./b.js', { with: { type: 1 } }),
+           () => import({ toString() { throw new TypeError('spec'); } }),
+           () => import('./then.js'),
+         ];
+         let first;
+         tries.reduce((p, f, i) => p.then(() => f()).then(
+             (v) => log.push(i + ' ok ' + (typeof v === 'string' ? v : typeof v)),
+             (e) => { if (i === 1) first = e; else if (i === 2) log.push('same ' + (e === first));
+                      log.push(i + ' ' + show(e)); }),
+           Promise.resolve()).then(() => { globalThis.out = log; });",
+    );
+    assert_eq!(
+        out,
+        "[\"0 Error: cannot find ./nowhere.js\",\"throws ran\",\"1 RangeError: boom\",\
+          \"same true\",\"2 RangeError: boom\",\
+          \"3 SyntaxError: Could not find export 'z' in module 'dir/b.js'\",\
+          \"4 SyntaxError: variable name expected at dir/syntax.js:1:14\",\
+          \"5 TypeError: options must be an object\",\
+          \"6 SyntaxError: unsupported import attribute\",\
+          \"7 TypeError: module attribute values must be strings\",\
+          \"8 TypeError: spec\",\"9 ok thenable\"]"
+    );
+}
+
+#[test]
+fn dynamic_import_off_rejects_as_without_modules() {
+    let mut vm = Vm::new(VmOptions::default()).unwrap();
+    let mut l = Rel {
+        files: IMPORT_FILES.to_vec(),
+        resolves: Vec::new(),
+    };
+    let out = run_imports(
+        &mut vm,
+        &mut l,
+        "import('./a.js').catch(e => { globalThis.out = e.name + ': ' + e.message; });",
+    );
+    assert_eq!(out, "ReferenceError: could not load module './a.js'");
+    // Turned on and off again.
+    vm.set_dynamic_import(true).unwrap();
+    vm.set_dynamic_import(false).unwrap();
+    let out = run_imports(
+        &mut vm,
+        &mut l,
+        "import('./a.js').catch(e => { globalThis.out = e.name; });",
+    );
+    assert_eq!(out, "ReferenceError");
+    assert!(l.resolves.is_empty());
+}
+
+#[test]
+fn dynamic_import_survives_images() {
+    let mut vm = Vm::new(VmOptions::default()).unwrap();
+    vm.set_dynamic_import(true).unwrap();
+    vm.collect().unwrap();
+    let mut vm = Vm::from_bytes(vm.image().to_vec(), VmOptions::default()).unwrap();
+    let f = vm
+        .compile(
+            b"globalThis.log = []; import('./b.js').then(ns => { globalThis.out = ns.y; });",
+            &CompileOptions::script("dir/script.js"),
+        )
+        .unwrap();
+    let this = Value::object(vm.global());
+    vm.call(f, this, &[]).unwrap();
+    assert!(matches!(vm.run(1_000_000), Status::Idle));
+    let calls = vm.new_host_calls();
+    assert_eq!(
+        vm.import_request(calls[0]),
+        Some(("./b.js".to_string(), "dir/script.js".to_string()))
+    );
+    // An image between the call and its answer.
+    vm.collect().unwrap();
+    let mut vm = Vm::from_bytes(vm.image().to_vec(), VmOptions::default()).unwrap();
+    let mut l = Rel {
+        files: IMPORT_FILES.to_vec(),
+        resolves: Vec::new(),
+    };
+    vm.answer_import(calls[0], &mut l).unwrap();
+    assert!(matches!(vm.run(1_000_000), Status::Done(_)));
+    let out = vm.global_path("out").unwrap();
+    assert_eq!(vm.display(out), "2");
+    assert_eq!(
+        vm.answer_import(calls[0], &mut l),
+        Err(VmError::UnknownHostCall)
+    );
 }

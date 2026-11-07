@@ -75,12 +75,27 @@ mod ns {
     pub const COUNT: u32 = 4;
 }
 
-/// `Intrinsic::Modules`: the `[registry, traps]` Record, made on first use.
+/// The slots of the `Intrinsic::Modules` Record.
+mod modules_slot {
+    /// The registry: a null-prototype object from key atom to module record.
+    pub const REGISTRY: u32 = 0;
+    /// The handler of every namespace proxy.
+    pub const TRAPS: u32 = 1;
+    /// The async host function `import()` calls (fn id `vm::IMPORT_FN_ID`), or undefined:
+    /// then `import()` rejects as without modules (builtins/import.ts).
+    pub const IMPORT: u32 = 2;
+    /// The reaction that finishes an `import()` once the host loaded its graph: a builtin
+    /// closure of `%ModuleOp` with op 6 (builtins/module.ts).
+    pub const FINISH: u32 = 3;
+    pub const COUNT: u32 = 4;
+}
+
+/// `Intrinsic::Modules`: the Record of [`modules_slot`], made on first use.
 fn modules(heap: &mut Heap) -> Result<Obj, HeapError> {
     if let Some(m) = realm::intrinsic(heap, Intrinsic::Modules).as_object() {
         return Ok(m);
     }
-    let r = heap.alloc_object(ObjectClass::Record, None, 2)?;
+    let r = heap.alloc_object(ObjectClass::Record, None, modules_slot::COUNT)?;
     let registry = heap.new_object(None)?;
     // The handler of every namespace: builtin closures of `%ModuleOp` with the internal
     // method's number (builtins/module.ts).
@@ -92,27 +107,51 @@ fn modules(heap: &mut Heap) -> Result<Obj, HeapError> {
         "ownKeys",
         "set",
     ];
-    let proto = intrinsic_obj(heap, Intrinsic::FunctionProto);
     for (op, name) in names.into_iter().enumerate() {
         let key = heap.atom_str(name)?;
-        let class = ObjectClass::BuiltinClosure;
-        let f = heap.alloc_object(class, Some(proto), class.slots())?;
-        let id = crate::bytecode::intrinsics::intrinsic_id_of!("ModuleOp");
-        heap.set_object_slot(f, 0, Value::int(i32::from(id)));
-        heap.set_object_slot(f, 1, Value::int(op as i32));
-        heap.set_object_slot(f, 2, Value::int(0));
-        heap.set_lazy_builtin_closure_props(f);
+        let f = module_op_closure(heap, op as i32, 0)?;
         realm::define_hidden(heap, traps, key, Value::object(f))?;
     }
-    heap.set_object_slot(r, 0, Value::object(registry));
-    heap.set_object_slot(r, 1, Value::object(traps));
+    let finish = module_op_closure(heap, 6, 1)?;
+    heap.set_object_slot(r, modules_slot::REGISTRY, Value::object(registry));
+    heap.set_object_slot(r, modules_slot::TRAPS, Value::object(traps));
+    heap.set_object_slot(r, modules_slot::IMPORT, Value::UNDEFINED);
+    heap.set_object_slot(r, modules_slot::FINISH, Value::object(finish));
     realm::set_intrinsic(heap, Intrinsic::Modules, Value::object(r));
     Ok(r)
 }
 
+/// A builtin closure of `%ModuleOp` with `op` as its data (`this`).
+fn module_op_closure(heap: &mut Heap, op: i32, length: i32) -> Result<Obj, HeapError> {
+    let proto = intrinsic_obj(heap, Intrinsic::FunctionProto);
+    let class = ObjectClass::BuiltinClosure;
+    let f = heap.alloc_object(class, Some(proto), class.slots())?;
+    let id = crate::bytecode::intrinsics::intrinsic_id_of!("ModuleOp");
+    heap.set_object_slot(f, 0, Value::int(i32::from(id)));
+    heap.set_object_slot(f, 1, Value::int(op));
+    heap.set_object_slot(f, 2, Value::int(length));
+    heap.set_lazy_builtin_closure_props(f);
+    Ok(f)
+}
+
 fn registry(heap: &Heap) -> Option<Obj> {
     let m = realm::intrinsic(heap, Intrinsic::Modules).as_object()?;
-    heap.object_slot(m, 0).as_object()
+    heap.object_slot(m, modules_slot::REGISTRY).as_object()
+}
+
+/// Sets the async host function `import()` calls (undefined: `import()` rejects).
+pub(crate) fn set_import_function(heap: &mut Heap, f: Value) -> Result<(), HeapError> {
+    let m = modules(heap)?;
+    heap.set_object_slot(m, modules_slot::IMPORT, f);
+    Ok(())
+}
+
+/// The async host function `import()` calls, or undefined.
+fn import_function(heap: &Heap) -> Value {
+    match realm::intrinsic(heap, Intrinsic::Modules).as_object() {
+        Some(m) => heap.object_slot(m, modules_slot::IMPORT),
+        None => Value::UNDEFINED,
+    }
 }
 
 /// The record of the module with key `key`, if loaded.
@@ -137,7 +176,7 @@ pub(crate) fn new_record(
 ) -> Result<Obj, Fault> {
     let mods = modules(heap)?;
     let reg = heap
-        .object_slot(mods, 0)
+        .object_slot(mods, modules_slot::REGISTRY)
         .as_object()
         .expect("module registry");
     let r = heap.alloc_object(ObjectClass::Record, None, slot::COUNT_SLOTS)?;
@@ -158,6 +197,74 @@ pub(crate) fn new_record(
     let atom = heap.intern(k)?;
     realm::define_hidden(heap, reg, atom, Value::object(r))?;
     Ok(r)
+}
+
+/// A new synthetic module (the JSON modules proposal's Synthetic Module Record) registered
+/// under `key`, whose exports `names` hold `values`: it has no code, needs no linking and is
+/// evaluated from the start, so importers bind its Boxes and read what they hold. Its body
+/// is a Record of the Boxes instead of a closure, which marks it synthetic.
+pub(crate) fn new_synthetic(
+    heap: &mut Heap,
+    key: &str,
+    names: &[Atom],
+    values: &[Value],
+) -> Result<Obj, Fault> {
+    let mods = modules(heap)?;
+    let reg = heap
+        .object_slot(mods, modules_slot::REGISTRY)
+        .as_object()
+        .expect("module registry");
+    let mut meta = ModuleMeta::default();
+    for (i, &n) in names.iter().enumerate() {
+        meta.env.push((n, ENV_VAR, 0));
+        meta.local.push((n, i as u32));
+    }
+    let words = meta.encode();
+    let arr = heap.alloc_u32_array(words.len() as u32)?;
+    for (i, &w) in words.iter().enumerate() {
+        heap.u32_array_set(arr, i as u32, w);
+    }
+    let r = heap.alloc_object(ObjectClass::Record, None, slot::COUNT_SLOTS)?;
+    for i in 0..slot::COUNT_SLOTS {
+        heap.set_object_slot(r, i, Value::UNDEFINED);
+    }
+    let body = heap.alloc_object(ObjectClass::Record, None, names.len() as u32)?;
+    for (i, &v) in values.iter().enumerate() {
+        let b = new_box(heap, v)?;
+        heap.set_object_slot(body, i as u32, b);
+    }
+    let k = heap.alloc_str(key)?;
+    heap.set_object_slot(r, slot::KEY, Value::string(k));
+    heap.set_object_slot(r, slot::STATUS, Value::int(status::EVALUATED));
+    heap.set_object_slot(r, slot::META, Value::internal(arr));
+    heap.set_object_slot(r, slot::STACK, Value::NULL);
+    heap.set_object_slot(r, slot::BODY, Value::object(body));
+    set_requested(heap, r, &[])?;
+    let atom = heap.intern(k)?;
+    realm::define_hidden(heap, reg, atom, Value::object(r))?;
+    Ok(r)
+}
+
+/// Sets export `name` of synthetic module `m` (SetSyntheticModuleExport): importers see the
+/// new value. `false` if `m` is not synthetic or has no export `name`.
+pub(crate) fn set_synthetic_export(
+    heap: &mut Heap,
+    m: Obj,
+    name: &str,
+    v: Value,
+) -> Result<bool, HeapError> {
+    let body = heap.object_slot(m, slot::BODY).as_object();
+    if body.is_none_or(|b| heap.object_class(b) != ObjectClass::Record) {
+        return Ok(false);
+    }
+    let name = heap.atom_str(name)?;
+    let Some(&(_, e)) = meta(heap, m).local.iter().find(|x| x.0 == name) else {
+        return Ok(false);
+    };
+    let b = env_box(heap, m, e);
+    heap.arena_mut()
+        .set(b.as_internal().expect("a Box"), BoxCell::VALUE, v);
+    Ok(true)
 }
 
 /// Forgets the module with key `key` (a graph whose load failed).
@@ -500,7 +607,7 @@ pub(crate) fn namespace(heap: &mut Heap, m: Obj) -> Result<Obj, Fault> {
     }
     let mods = modules(heap)?;
     let traps = heap
-        .object_slot(mods, 1)
+        .object_slot(mods, modules_slot::TRAPS)
         .as_object()
         .expect("namespace traps");
     let target = heap.alloc_object(ObjectClass::Ordinary, None, ns::COUNT)?;
@@ -572,22 +679,50 @@ fn binding_value(heap: &Heap, b: Value, key: Atom) -> Result<Value, Fault> {
 
 /// `%NsOp`: internal method `op` of the namespace whose proxy target is `target`
 /// (builtins/module.ts).
+///
+/// Ops 4 to 7 serve `import()` (module.ts ImportCall): 4 the async host function it calls
+/// (or undefined), 5 the linked record of key `target` (an Error if there is none), 6 the
+/// namespace of record `target`, 7 the reaction that finishes an import.
 pub(crate) fn namespace_op(
     heap: &mut Heap,
     op: i32,
-    target: Obj,
+    target: Value,
     key: Value,
     desc: Value,
 ) -> Result<Value, Fault> {
+    let bad = || Fault::error(ErrorKind::InternalError, "bad %NsOp operation".into());
+    match op {
+        4 => return Ok(import_function(heap)),
+        5 => {
+            let k = target.as_string().ok_or_else(bad)?;
+            let k = heap.str_to_string(k);
+            return match find(heap, &k)? {
+                Some(m) if status_of(heap, m) >= status::LINKED => Ok(Value::object(m)),
+                _ => Err(Fault::error(
+                    ErrorKind::Error,
+                    crate::text::cat!("module '", &k, "' is not loaded"),
+                )),
+            };
+        }
+        6 => {
+            return Ok(Value::object(namespace(
+                heap,
+                target.as_object().ok_or_else(bad)?,
+            )?));
+        }
+        7 => {
+            let m = modules(heap)?;
+            return Ok(heap.object_slot(m, modules_slot::FINISH));
+        }
+        _ => {}
+    }
+    let target = target.as_object().ok_or_else(bad)?;
     match (op, desc.as_object()) {
         (0, _) => namespace_get(heap, target, key),
         (1, _) => namespace_descriptor(heap, target, key),
         (2, Some(desc)) => Ok(Value::bool(namespace_define(heap, target, key, desc)?)),
         (3, _) => namespace_keys(heap, target),
-        _ => Err(Fault::error(
-            ErrorKind::InternalError,
-            "bad %NsOp operation".into(),
-        )),
+        _ => Err(bad()),
     }
 }
 

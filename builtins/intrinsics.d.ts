@@ -1164,7 +1164,9 @@ declare function MarkFast(f: Value): void;
  * target is target, on key: 0 [[Get]] (a symbol key: the target's; ReferenceError in a
  * binding's TDZ), 1 [[GetOwnProperty]] as a descriptor object or undefined, 2
  * [[DefineOwnProperty]] with descriptor object desc (its own fields), 3
- * [[OwnPropertyKeys]] as a new array.
+ * [[OwnPropertyKeys]] as a new array. For import(): 4 the VM's async host function for
+ * imports or undefined, 5 the linked module record of key target (an Error if none), 6
+ * the namespace of module record target, 7 the reaction that finishes an import.
  * @leaf
  */
-declare function NsOp(op: i32, target: Obj, key: Value, desc: Value): Value;
+declare function NsOp(op: i32, target: Value, key: Value, desc: Value): Value;
