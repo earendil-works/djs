@@ -100,12 +100,13 @@ pub(super) enum VarKind {
 
 impl VarKind {
     pub fn is_lexical(self) -> bool {
-        matches!(self, VarKind::Let | VarKind::Const | VarKind::Import)
+        matches!(self, VarKind::Let | VarKind::Const) || (crate::MODULES && self == VarKind::Import)
     }
 
     /// Assignment throws a TypeError.
     pub fn is_immutable(self) -> bool {
-        matches!(self, VarKind::Const | VarKind::FuncName | VarKind::Import)
+        matches!(self, VarKind::Const | VarKind::FuncName)
+            || (crate::MODULES && self == VarKind::Import)
     }
 
     /// Set up by the prologue from `special_object` (docs/compiler.md 5.7); no storage
@@ -512,10 +513,8 @@ impl FuncState {
 
     pub fn add_var(&mut self, name: Atom, kind: VarKind, scope: ScopeId) -> VarId {
         let id = self.vars.len() as VarId;
-        let immediate = !matches!(
-            kind,
-            VarKind::Let | VarKind::Const | VarKind::Param | VarKind::Import
-        );
+        let immediate = !(matches!(kind, VarKind::Let | VarKind::Const | VarKind::Param)
+            || (crate::MODULES && kind == VarKind::Import));
         self.vars.push_out(Var {
             name,
             kind,
