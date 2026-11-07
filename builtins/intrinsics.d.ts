@@ -1139,11 +1139,11 @@ declare function MarkFast(f: Value): void;
 
 // ---- ES modules (0241, builtins/module.ts, interp/module.rs) -------------------------
 
-/** A namespace's [[Get]] of key (a symbol: the target's): the binding's value, ReferenceError in its TDZ. @leaf */
-declare function ModuleNamespaceGet(handler: Obj, target: Obj, key: Value): Value;
-/** A namespace's [[GetOwnProperty]] of key as a descriptor object, or undefined. @leaf */
-declare function ModuleNamespaceDescriptor(handler: Obj, target: Obj, key: Value): Value;
-/** A namespace's [[DefineOwnProperty]] of key with descriptor object desc (its own fields). @leaf */
-declare function ModuleNamespaceDefine(handler: Obj, target: Obj, key: Value, desc: Obj): boolean;
-/** A namespace's [[OwnPropertyKeys]] as a new array. @leaf */
-declare function ModuleNamespaceKeys(handler: Obj, target: Obj): Obj;
+/**
+ * A module namespace's internal method op on key: 0 [[Get]] (a symbol key: the target's;
+ * ReferenceError in a binding's TDZ), 1 [[GetOwnProperty]] as a descriptor object or
+ * undefined, 2 [[DefineOwnProperty]] with descriptor object desc (its own fields), 3
+ * [[OwnPropertyKeys]] as a new array.
+ * @leaf
+ */
+declare function ModuleNamespace(op: i32, handler: Obj, target: Obj, key: Value, desc: Value): Value;

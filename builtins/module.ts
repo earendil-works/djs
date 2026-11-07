@@ -91,7 +91,7 @@ function InnerModuleEvaluation(m: Obj, state: Obj): void {
 
 /** [[Get]] ( P, Receiver ), 10.4.6.8: the binding's value (TDZ: ReferenceError). @intrinsic */
 function NamespaceGet(this: Value, target: Value, key: Value, receiver: Value): Value {
-  return ModuleNamespaceGet(AsObj(this), AsObj(target), key);
+  return ModuleNamespace(0, AsObj(this), AsObj(target), key, undefined);
 }
 
 /** [[Set]] ( P, V, Receiver ), 10.4.6.9: always false. @intrinsic */
@@ -101,15 +101,15 @@ function NamespaceSet(this: Value, target: Value, key: Value, v: Value, receiver
 
 /** [[GetOwnProperty]] ( P ), 10.4.6.5. @intrinsic */
 function NamespaceGetOwnProperty(this: Value, target: Value, key: Value): Value {
-  return ModuleNamespaceDescriptor(AsObj(this), AsObj(target), key);
+  return ModuleNamespace(1, AsObj(this), AsObj(target), key, undefined);
 }
 
 /** [[DefineOwnProperty]] ( P, Desc ), 10.4.6.6. @intrinsic */
 function NamespaceDefineProperty(this: Value, target: Value, key: Value, desc: Value): boolean {
-  return ModuleNamespaceDefine(AsObj(this), AsObj(target), key, AsObj(desc));
+  return AsBool(ModuleNamespace(2, AsObj(this), AsObj(target), key, desc));
 }
 
 /** [[OwnPropertyKeys]] ( ), 10.4.6.11: the exports in code unit order, then Symbol.toStringTag. @intrinsic */
 function NamespaceOwnKeys(this: Value, target: Value): Obj {
-  return ModuleNamespaceKeys(AsObj(this), AsObj(target));
+  return AsObj(ModuleNamespace(3, AsObj(this), AsObj(target), undefined, undefined));
 }

@@ -351,7 +351,7 @@ pub fn compile(
     src: &[u8],
     opts: &CompileOptions<'_>,
 ) -> Result<Ref, CompileError> {
-    if opts.goal == Goal::Module {
+    if crate::MODULES && opts.goal == Goal::Module {
         return Err(not_a_module_entry(src));
     }
     let result = parse(heap, src, opts, |p| p.compile());
@@ -388,7 +388,7 @@ pub fn compile_lazy_unit(
     src: &[u8],
     opts: &CompileOptions<'_>,
 ) -> Result<Ref, CompileError> {
-    if opts.goal == Goal::Module {
+    if crate::MODULES && opts.goal == Goal::Module {
         return Err(not_a_module_entry(src));
     }
     let result = parse(heap, src, opts, |mut p| {

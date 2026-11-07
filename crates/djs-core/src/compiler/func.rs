@@ -134,7 +134,8 @@ pub(super) struct Var {
     pub init_end: u32,
     /// Script top-level `var`/`let`/`const`/function: a global binding, not a local.
     pub global: bool,
-    /// Parameter index for `Param`.
+    /// Parameter index for `Param`; with `env`, the binding's index in the module
+    /// environment.
     pub param: u16,
     /// Some inner function refers to it: it lives in a Box.
     pub captured: bool,
@@ -145,9 +146,9 @@ pub(super) struct Var {
     pub used: bool,
     /// The TypeScript enum or namespace this binding holds (const enum folding).
     pub ts_decl: Option<u32>,
-    /// A module's top-level binding: its index in the module environment, the module
-    /// closure's captures (compiler/module.rs).
-    pub env: Option<u16>,
+    /// A module's top-level binding: `param` is its index in the module environment, the
+    /// module closure's captures (compiler/module.rs).
+    pub env: bool,
 }
 
 /// A name reference in phase-1 code: the `name_*` op's immediate indexes this table.
@@ -519,7 +520,7 @@ impl FuncState {
             builtin: false,
             used: false,
             ts_decl: None,
-            env: None,
+            env: false,
         });
         self.scopes[scope as usize].vars.push_out(id);
         if !self.index.slots.is_empty() {

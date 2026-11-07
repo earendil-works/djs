@@ -822,9 +822,10 @@ fn classify(
             // The function directly inside `pf` takes the parent's Box (a module's
             // environment entry: the module closure's capture); each one below takes its
             // parent's capture.
-            let mut cap = match var.env {
-                Some(e) => Capture::Outer(e),
-                None => Capture::Local(v),
+            let mut cap = if crate::MODULES && var.env {
+                Capture::Outer(var.param)
+            } else {
+                Capture::Local(v)
             };
             let mut slot = 0;
             for &f in path.iter().rev() {
@@ -873,8 +874,8 @@ fn assign_storage(
     let mut names = Vec::new();
     for v in &f.vars {
         let pseudo = v.kind.is_pseudo();
-        storage.push(if let Some(e) = v.env {
-            Storage::Env(e)
+        storage.push(if crate::MODULES && v.env {
+            Storage::Env(v.param)
         } else if v.global {
             Storage::Global
         } else if v.builtin {
@@ -1088,7 +1089,11 @@ fn emit_init(out: &mut CodeBuf, storage: Storage, atom: Atom, lexical: bool) {
         Storage::Global => out.put_global(atom, 0),
         Storage::None => out.drop(),
         Storage::Builtin { idx, len } => out.put_builtin(idx, len),
-        Storage::Env(c) => out.put_cap(c),
+        Storage::Env(c) => {
+            if crate::MODULES {
+                out.put_cap(c)
+            }
+        }
     }
 }
 
@@ -1452,7 +1457,7 @@ fn emit_function(
                 // Hoisted function declarations (docs/compiler.md 5.5); a module's
                 // top-level ones exist from linking on.
                 for &(v, child) in &scope.funcs {
-                    if let Storage::Env(_) = storage[v as usize] {
+                    if crate::MODULES && matches!(storage[v as usize], Storage::Env(_)) {
                         continue;
                     }
                     out.fclosure(child);

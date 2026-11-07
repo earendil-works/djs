@@ -965,7 +965,8 @@ impl Parser<'_, '_> {
         }
         for (i, &e) in env_of.iter().enumerate() {
             if e != u32::MAX {
-                self.f.vars[i].env = Some(e as u16);
+                self.f.vars[i].env = true;
+                self.f.vars[i].param = e as u16;
             }
         }
         self.f.captures = (0..env.len() as u16).map(Capture::Outer).collect();

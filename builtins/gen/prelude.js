@@ -6170,7 +6170,7 @@ function InnerModuleEvaluation(m, state) {
 
 // builtins/module.ts:93 %NamespaceGet
 function NamespaceGet(target, key, receiver) {
-  return %ModuleNamespaceGet(%AsObj(this), %AsObj(target), key);
+  return %ModuleNamespace(0, %AsObj(this), %AsObj(target), key, undefined);
 }
 
 // builtins/module.ts:98 %NamespaceSet
@@ -6180,17 +6180,17 @@ function NamespaceSet(target, key, v, receiver) {
 
 // builtins/module.ts:103 %NamespaceGetOwnProperty
 function NamespaceGetOwnProperty(target, key) {
-  return %ModuleNamespaceDescriptor(%AsObj(this), %AsObj(target), key);
+  return %ModuleNamespace(1, %AsObj(this), %AsObj(target), key, undefined);
 }
 
 // builtins/module.ts:108 %NamespaceDefineProperty
 function NamespaceDefineProperty(target, key, desc) {
-  return %ModuleNamespaceDefine(%AsObj(this), %AsObj(target), key, %AsObj(desc));
+  return %AsBool(%ModuleNamespace(2, %AsObj(this), %AsObj(target), key, desc));
 }
 
 // builtins/module.ts:113 %NamespaceOwnKeys
 function NamespaceOwnKeys(target) {
-  return %ModuleNamespaceKeys(%AsObj(this), %AsObj(target));
+  return %AsObj(%ModuleNamespace(3, %AsObj(this), %AsObj(target), undefined, undefined));
 }
 
 // builtins/number.ts:9 constructor Number

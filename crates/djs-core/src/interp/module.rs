@@ -563,13 +563,32 @@ fn binding_value(heap: &Heap, b: Value, key: Atom) -> Result<Value, Fault> {
     Ok(v)
 }
 
-/// `%ModuleNamespaceGet`: a namespace's [[Get]] (10.4.6.8).
-pub(crate) fn namespace_get(
+/// `%ModuleNamespace`: internal method `op` of the namespace whose handler is `handler`
+/// (builtins/module.ts).
+pub(crate) fn namespace_op(
     heap: &mut Heap,
+    op: i32,
     handler: Obj,
     target: Obj,
     key: Value,
+    desc: Value,
 ) -> Result<Value, Fault> {
+    match (op, desc.as_object()) {
+        (0, _) => namespace_get(heap, handler, target, key),
+        (1, _) => namespace_descriptor(heap, handler, target, key),
+        (2, Some(desc)) => Ok(Value::bool(namespace_define(
+            heap, handler, target, key, desc,
+        )?)),
+        (3, _) => namespace_keys(heap, handler),
+        _ => Err(Fault::error(
+            ErrorKind::InternalError,
+            "bad %ModuleNamespace operation".into(),
+        )),
+    }
+}
+
+/// A namespace's [[Get]] (10.4.6.8).
+fn namespace_get(heap: &mut Heap, handler: Obj, target: Obj, key: Value) -> Result<Value, Fault> {
     let key = crate::builtins::object::key(heap, key)?;
     if key.is_symbol() {
         return Ok(heap
@@ -583,8 +602,8 @@ pub(crate) fn namespace_get(
     }
 }
 
-/// `%ModuleNamespaceDescriptor`: [[GetOwnProperty]] (10.4.6.5) as a descriptor object.
-pub(crate) fn namespace_descriptor(
+/// [[GetOwnProperty]] (10.4.6.5) as a descriptor object.
+fn namespace_descriptor(
     heap: &mut Heap,
     handler: Obj,
     target: Obj,
@@ -611,8 +630,8 @@ pub(crate) fn namespace_descriptor(
     )?))
 }
 
-/// `%ModuleNamespaceDefine`: [[DefineOwnProperty]] (10.4.6.6) with a descriptor record.
-pub(crate) fn namespace_define(
+/// [[DefineOwnProperty]] (10.4.6.6) with a descriptor record.
+fn namespace_define(
     heap: &mut Heap,
     handler: Obj,
     target: Obj,
@@ -643,8 +662,8 @@ pub(crate) fn namespace_define(
     })
 }
 
-/// `%ModuleNamespaceKeys`: [[OwnPropertyKeys]] (10.4.6.11) as a new array.
-pub(crate) fn namespace_keys(heap: &mut Heap, handler: Obj) -> Result<Value, Fault> {
+/// [[OwnPropertyKeys]] (10.4.6.11) as a new array.
+fn namespace_keys(heap: &mut Heap, handler: Obj) -> Result<Value, Fault> {
     let keys = heap
         .object_slot(handler, ns::KEYS)
         .as_internal()
