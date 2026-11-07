@@ -95,6 +95,40 @@ available in this build". Classify the feature in compat_inputs.rs (D2267).
 
 ## Log
 
+### Plan (modules agent)
+Design (deviations from the Notes recorded as D3190+):
+- **Compiler.** `Goal::Module` (bits goal 3), `FuncKind::Module` (top level, KIND_SCRIPT
+  template), parser flag `module`: `await` reserved everywhere, top-level function
+  declarations lexical (duplicates and var conflicts are errors), `return`/`new.target`
+  errors. compiler/module.rs parses import/export for real when `module` (strip-types keeps
+  its path) into a `ModuleInfo` (requests, imports, local/indirect/star exports).
+  `compile_module(heap, src, opts) -> (template, meta)`; `meta` is a U32Array of atoms and
+  ints (atoms never die).
+- **Environment = the module closure's captures.** Every body-scope binding of the module
+  function (var/let/const/class/function/import, hidden `*default*`, `*meta*` for
+  import.meta) gets `Storage::Env(i)`: accessed with `get_cap/put_cap` (TDZ elision as for
+  boxes), and inner functions capture it as `Capture::Outer(i)`. The body's prologue makes
+  no boxes and does not hoist top-level functions. The linker (Rust) creates the closure
+  of the module template and fills capture i with a Box: a fresh one (var undefined,
+  lexical uninitialized, function = closure instantiated by the linker from the child
+  template, whose captures are all `Outer(env)`), or the exporter's Box for an import
+  (live bindings), a Box holding the namespace / the import.meta object.
+- **Records** are `ObjectClass::Record` objects (slots: key, status, body closure,
+  requested records, error, dfs index/ancestor, namespace, meta U32Array, ...), in a
+  registry object (key atom -> record) in a new realm intrinsic slot: images carry them.
+- **Linking** (ResolveExport, InitializeEnvironment) in Rust (leaf), explicit stacks.
+- **Evaluation** in builtins/module.ts (`%ModuleEvaluate`, InnerModuleEvaluation without
+  TLA, errors cached), called by `Vm::evaluate_module` via the installed intrinsic.
+- **Namespaces** are Proxy objects (target: null-proto non-extensible object with a
+  writable non-configurable data property per export + @@toStringTag; handler: a Record
+  whose prototype holds builtin traps get/set/getOwnPropertyDescriptor/defineProperty/
+  ownKeys over leaf intrinsics): every property path already sends proxies to the
+  traps, so no IC or shape path can skip them, and no new exotic class is needed.
+- **TS modules**: imports never referenced as values are dropped (type imports), local
+  `export {T}` of a non-value name is dropped.
+- Stages: (1) compiler, (2) records/loader/link, (3) evaluation/namespaces/meta,
+  (4) images/stress/docs.
+
 ## Follow-ups
 
 ## Result
