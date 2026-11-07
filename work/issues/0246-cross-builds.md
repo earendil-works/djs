@@ -1,6 +1,6 @@
 # 0246: djs-embed for Gondolin's targets: cross-builds, image portability, consuming it
 
-status: in-progress
+status: done
 agent: libm
 branch: issue/0246-cross-builds
 depends-on: 0240, 0245
@@ -35,10 +35,10 @@ targets (the base image a cross build embeds must be the one the target would ma
   documented manual check, run once here, with results in the issue.
 
 ## Acceptance criteria
-- [ ] cross-build script; all four targets build; binaries run in docker / Rosetta with the same
+- [x] cross-build script; all four targets build; binaries run in docker / Rosetta with the same
       output; base image identical across targets (or the reason it isn't, and a fix)
-- [ ] docs on depending on djs-embed by git rev; a scratch consumer builds by `git = file://`
-- [ ] runtime crate list recorded
+- [x] docs on depending on djs-embed by git rev; a scratch consumer builds by `git = file://`
+- [x] runtime crate list recorded
 
 ## Log
 
@@ -78,6 +78,27 @@ targets (the base image a cross build embeds must be the one the target would ma
 - A consumer's dev profile builds djs-core at opt-level 0: the example's run takes 0.35 s
   vs 0.045 s at the workspace's opt-level 1. The docs recommend the profile override.
 
+- Docs: djs-embed's crate docs (src/lib.rs "Depending on djs-embed"), guide
+  docs/guide/rust-api.md ("Adding it to a project", the example in "Where to look"),
+  TESTING.md "Cross builds of djs-embed", D3220 (+ index line). No djs-prelude change needed.
+
 ## Follow-ups
+- Publishing to crates.io would need the files djs-core reads outside its directory
+  (builtins/gen/prelude*.js, ../djs-libm/src for the build hash) inside the packaged crates;
+  git and path dependencies do not.
+- Big-endian targets: the image encoding is explicit little-endian, so they should work, but
+  none is built or tested.
 
 ## Result
+`scripts/cross-check.sh` (manual, not a gate leg; TESTING.md "Cross builds of djs-embed")
+builds `crates/djs-embed/examples/cross_check.rs` for aarch64/x86_64-apple-darwin and
+-unknown-linux-musl (`zig cc` linker wrappers in `scripts/cross/`), runs them natively, under
+Rosetta and in docker, and requires identical output on all four, including that the embedded
+base image equals the one each target makes at run time. `--release`, `--consumer REV` (a
+scratch project depending by `git = "file://..."` + `rev`, fat-LTO release profile).
+Run once here: all four targets build and run with identical output in dev, release and
+consumer-by-git-rev (dev and fat-LTO release) builds; base 188,672 bytes, identical on every
+target (D3220 says why). Runtime crates on every target: djs-embed, djs-core, djs-prelude,
+djs-libm. Release fat-LTO stripped binary of the example: 2.4-2.5 MB per target (static musl).
+How hosts depend on it: djs-embed's crate docs and docs/guide/rust-api.md (path or git rev,
+the `unicode` feature, `[profile.dev.package.djs-core] opt-level = 1`, panics must unwind).
