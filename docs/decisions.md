@@ -11997,3 +11997,25 @@ way, so an import that expects data is never handed code and the other way round
 other than `json` is a TypeError (`unsupported module type`). The module record gained a
 flags slot, so COMPAT_VERSION goes to 8. test262's `import-attributes` and `json-modules`
 features are active (all pass on djs; qjs fails 8, in oracle-failures.txt).
+
+## D3246: Top-level await: such a module is an async body, found by a first sync parse
+date: 2026-11-08 · by: coordinator · issue: 0248
+A module with top-level `await` ([[HasTLA]]) compiles as an async function body; one
+without stays a sync body, so the common module pays nothing (no promise, no async state).
+Which one a module is shows only while it parses, so `compile_module` parses it as sync
+first and `Parser::await_operator` notes an `await` where it would be the operator at the
+module's own top level (`await x`, `for await`, `await using`); `await` is reserved in
+module code, so that parse fails, and the module compiles again as async. The record's
+flags slot marks [[HasTLA]] from the template's async flag. Evaluation is ECMA-262's
+algorithm with async modules in builtins/module.ts (InnerModuleEvaluation with
+[[PendingAsyncDependencies]] and [[AsyncParentModules]], ExecuteAsyncModule,
+GatherAvailableAncestors sorted by [[AsyncEvaluationOrder]], AsyncModuleExecution-
+Fulfilled/Rejected, [[CycleRoot]] and one [[TopLevelCapability]] per root), with the
+current text's details: a module's own evaluation promise rejects before its async parents
+are rejected, and an Evaluate of a done async module fulfills at once. The reactions are
+builtin closures of `%ModuleOp` whose data is a Record `[op, operand]` (`%NsOp` 8 makes
+them, 7 counts the evaluation order), so no new intrinsic or closure kind is needed;
+`import()` resolves its promise from the evaluation's without the shared reaction it had.
+The record grew by five slots (COMPAT_VERSION 8, with D3245's). test262's
+`top-level-await` feature is active: every module test passes. djs-embed's setup waits for
+an evaluation to settle and fails with `NeverSettles` if it cannot.

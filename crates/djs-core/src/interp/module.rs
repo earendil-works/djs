@@ -49,13 +49,26 @@ pub(crate) mod slot {
     pub const NS_BOX: u32 = 11;
     /// [`super::flags`], an int.
     pub const FLAGS: u32 = 12;
-    pub const COUNT_SLOTS: u32 = 13;
+    /// [[CycleRoot]] (module.ts): the root of its strongly connected component once that
+    /// is done, or null.
+    pub const CYCLE_ROOT: u32 = 13;
+    /// [[AsyncEvaluationOrder]]: 0 unset, -1 done, else the order (an int).
+    pub const ASYNC_ORDER: u32 = 14;
+    /// [[PendingAsyncDependencies]], an int.
+    pub const PENDING: u32 = 15;
+    /// [[AsyncParentModules]]: an Array of records, or null.
+    pub const PARENTS: u32 = 16;
+    /// [[TopLevelCapability]]: the promise of an Evaluate of it, or undefined.
+    pub const CAPABILITY: u32 = 17;
+    pub const COUNT_SLOTS: u32 = 18;
 }
 
 /// `slot::FLAGS` of a module record.
 pub(crate) mod flags {
     /// A JSON module (a synthetic module with the parsed text as its default export).
     pub const JSON: i32 = 1;
+    /// [[HasTLA]]: the body is an async function (top-level await).
+    pub const TLA: i32 = 2;
 }
 
 /// [[Status]] of a module record (module.ts tests these numbers).
@@ -68,6 +81,8 @@ pub(crate) mod status {
     pub const EVALUATED: i32 = 4;
     /// Evaluated with an error ([[EvaluationError]] in `slot::ERROR`).
     pub const ERRORED: i32 = 5;
+    /// evaluating-async: its SCC is done, an async module in it (or below) is not.
+    pub const EVALUATING_ASYNC: i32 = 6;
 }
 
 /// Slots of a namespace's proxy target (an ordinary object with internal slots).
@@ -92,9 +107,9 @@ mod modules_slot {
     /// The async host function `import()` calls (fn id `vm::IMPORT_FN_ID`), or undefined:
     /// then `import()` rejects as without modules (builtins/import.ts).
     pub const IMPORT: u32 = 2;
-    /// The reaction that finishes an `import()` once the host loaded its graph: a builtin
-    /// closure of `%ModuleOp` with op 6 (builtins/module.ts).
-    pub const FINISH: u32 = 3;
+    /// The last [[AsyncEvaluationOrder]] given (IncrementModuleAsyncEvaluationCount), an
+    /// int.
+    pub const ASYNC_COUNT: u32 = 3;
     pub const COUNT: u32 = 4;
 }
 
@@ -117,26 +132,26 @@ fn modules(heap: &mut Heap) -> Result<Obj, HeapError> {
     ];
     for (op, name) in names.into_iter().enumerate() {
         let key = heap.atom_str(name)?;
-        let f = module_op_closure(heap, op as i32, 0)?;
+        let f = module_op_closure(heap, Value::int(op as i32), 0)?;
         realm::define_hidden(heap, traps, key, Value::object(f))?;
     }
-    let finish = module_op_closure(heap, 6, 1)?;
     heap.set_object_slot(r, modules_slot::REGISTRY, Value::object(registry));
     heap.set_object_slot(r, modules_slot::TRAPS, Value::object(traps));
     heap.set_object_slot(r, modules_slot::IMPORT, Value::UNDEFINED);
-    heap.set_object_slot(r, modules_slot::FINISH, Value::object(finish));
+    heap.set_object_slot(r, modules_slot::ASYNC_COUNT, Value::int(0));
     realm::set_intrinsic(heap, Intrinsic::Modules, Value::object(r));
     Ok(r)
 }
 
-/// A builtin closure of `%ModuleOp` with `op` as its data (`this`).
-fn module_op_closure(heap: &mut Heap, op: i32, length: i32) -> Result<Obj, HeapError> {
+/// A builtin closure of `%ModuleOp` with `data` (`this`: an op, or a Record of an op and
+/// its operand, builtins/module.ts).
+fn module_op_closure(heap: &mut Heap, data: Value, length: i32) -> Result<Obj, HeapError> {
     let proto = intrinsic_obj(heap, Intrinsic::FunctionProto);
     let class = ObjectClass::BuiltinClosure;
     let f = heap.alloc_object(class, Some(proto), class.slots())?;
     let id = crate::bytecode::intrinsics::intrinsic_id_of!("ModuleOp");
     heap.set_object_slot(f, 0, Value::int(i32::from(id)));
-    heap.set_object_slot(f, 1, Value::int(op));
+    heap.set_object_slot(f, 1, data);
     heap.set_object_slot(f, 2, Value::int(length));
     heap.set_lazy_builtin_closure_props(f);
     Ok(f)
@@ -194,9 +209,15 @@ pub(crate) fn new_record(
     let k = heap.alloc_str(key)?;
     heap.set_object_slot(r, slot::KEY, Value::string(k));
     heap.set_object_slot(r, slot::STATUS, Value::int(status::NEW));
-    heap.set_object_slot(r, slot::FLAGS, Value::int(0));
+    let async_body = u32::from(
+        heap.arena()
+            .get::<u16>(template.0, crate::heap::cells::FuncTemplate::FLAGS),
+    ) & template::func_flags::ASYNC
+        != 0;
+    let fl = if async_body { flags::TLA } else { 0 };
+    heap.set_object_slot(r, slot::FLAGS, Value::int(fl));
     heap.set_object_slot(r, slot::META, Value::internal(meta.0));
-    heap.set_object_slot(r, slot::STACK, Value::NULL);
+    init_evaluation_slots(heap, r);
     let body = super::run::alloc_closure_of(heap, template)?;
     let n = heap.object_slot_count(body);
     for i in 0..n {
@@ -249,12 +270,21 @@ pub(crate) fn new_synthetic(
     heap.set_object_slot(r, slot::STATUS, Value::int(status::EVALUATED));
     heap.set_object_slot(r, slot::FLAGS, Value::int(flags));
     heap.set_object_slot(r, slot::META, Value::internal(arr));
-    heap.set_object_slot(r, slot::STACK, Value::NULL);
+    init_evaluation_slots(heap, r);
     heap.set_object_slot(r, slot::BODY, Value::object(body));
     set_requested(heap, r, &[])?;
     let atom = heap.intern(k)?;
     realm::define_hidden(heap, reg, atom, Value::object(r))?;
     Ok(r)
+}
+
+/// The evaluation slots of a new record (module.ts reads them).
+fn init_evaluation_slots(heap: &mut Heap, r: Obj) {
+    heap.set_object_slot(r, slot::STACK, Value::NULL);
+    heap.set_object_slot(r, slot::CYCLE_ROOT, Value::NULL);
+    heap.set_object_slot(r, slot::ASYNC_ORDER, Value::int(0));
+    heap.set_object_slot(r, slot::PENDING, Value::int(0));
+    heap.set_object_slot(r, slot::PARENTS, Value::NULL);
 }
 
 /// Sets export `name` of synthetic module `m` (SetSyntheticModuleExport): importers see the
@@ -697,9 +727,10 @@ fn binding_value(heap: &Heap, b: Value, key: Atom) -> Result<Value, Fault> {
 /// `%NsOp`: internal method `op` of the namespace whose proxy target is `target`
 /// (builtins/module.ts).
 ///
-/// Ops 4 to 7 serve `import()` (module.ts ImportCall): 4 the async host function it calls
+/// Ops 4 to 6 serve `import()` (module.ts ImportCall): 4 the async host function it calls
 /// (or undefined), 5 the linked record of key `target` (an Error if there is none), 6 the
-/// namespace of record `target`, 7 the reaction that finishes an import.
+/// namespace of record `target`. 7 is IncrementModuleAsyncEvaluationCount, 8 a builtin
+/// closure of `%ModuleOp` with data `target` and length `key` (module.ts's reactions).
 pub(crate) fn namespace_op(
     heap: &mut Heap,
     op: i32,
@@ -729,7 +760,17 @@ pub(crate) fn namespace_op(
         }
         7 => {
             let m = modules(heap)?;
-            return Ok(heap.object_slot(m, modules_slot::FINISH));
+            let n = heap
+                .object_slot(m, modules_slot::ASYNC_COUNT)
+                .as_int()
+                .unwrap_or(0)
+                + 1;
+            heap.set_object_slot(m, modules_slot::ASYNC_COUNT, Value::int(n));
+            return Ok(Value::int(n));
+        }
+        8 => {
+            let length = key.as_int().unwrap_or(0);
+            return Ok(Value::object(module_op_closure(heap, target, length)?));
         }
         _ => {}
     }

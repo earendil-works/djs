@@ -6268,26 +6268,27 @@ function MathRandomBuiltin() {
   return %MathRandom();
 }
 
-// builtins/module.ts:18
+// builtins/module.ts:21
 function ModuleEvaluate(m) {
-  const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
-  try {
-    EvaluateGraph(m);
-  } catch (e) {
-    %RejectPromise(promise, e);
-    return promise;
+  let module = m;
+  const status = %AsNumber(%RecordGet(module, 1));
+  if (status === 4 || status === 5 || status === 6) {
+    const root = %RecordGet(module, 13);
+    if (root !== null) {
+      module = %AsObj(root);
+    }
   }
-  %FulfillPromise(promise, undefined);
-  return promise;
-}
-
-// builtins/module.ts:31
-function EvaluateGraph(m) {
+  const existing = %RecordGet(module, 17);
+  if (existing !== undefined) {
+    return %AsObj(existing);
+  }
+  const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
+  %RecordSet(module, 17, promise);
   const state = %NewRecord(2);
   %RecordSet(state, 0, null);
   %RecordSet(state, 1, 0);
   try {
-    InnerModuleEvaluation(m, state);
+    InnerModuleEvaluation(module, state);
   } catch (e) {
     let top = %RecordGet(state, 0);
     while (top !== null) {
@@ -6297,12 +6298,31 @@ function EvaluateGraph(m) {
       top = %RecordGet(t, 10);
       %RecordSet(t, 10, null);
     }
-    throw e;
+    %RejectPromise(promise, e);
+    return promise;
   }
+  if (%AsNumber(%RecordGet(module, 14)) <= 0) {
+    %FulfillPromise(promise, undefined);
+  }
+  return promise;
 }
 
-// builtins/module.ts:61
+// builtins/module.ts:62
+function HasTLA(m) {
+  return (%F64ToI32(%AsNumber(%RecordGet(m, 12))) & 2) !== 0;
+}
+
+// builtins/module.ts:67
+function ModuleClosure(op, operand, length) {
+  const data = %NewRecord(2);
+  %RecordSet(data, 0, op);
+  %RecordSet(data, 1, operand);
+  return %NsOp(8, data, length, undefined);
+}
+
+// builtins/module.ts:84
 function ImportCall(specifier, options, referrer) {
+  let $1, $2;
   const load = %NsOp(4, undefined, undefined, undefined);
   if (load === undefined) {
     return DynamicImport(specifier, options);
@@ -6342,22 +6362,26 @@ function ImportCall(specifier, options, referrer) {
       }
     }
     const loaded = %Call(load, undefined, name, referrer, type);
-    const finish = %NsOp(7, undefined, undefined, undefined);
-    %PerformPromiseThen(%AsObj(loaded), finish, undefined, promise);
+    %PerformPromiseThen(%AsObj(loaded), (($1 = %NewRecord(2), (%RecordSet($1, 0, 13), (%RecordSet($1, 1, promise), %NsOp(8, $1, 1, undefined))))), (($2 = %NewRecord(2), (%RecordSet($2, 0, 14), (%RecordSet($2, 1, promise), %NsOp(8, $2, 1, undefined))))), undefined);
   } catch (e) {
     %RejectPromise(promise, e);
   }
   return promise;
 }
 
-// builtins/module.ts:116
-function FinishImport(key) {
-  const m = %AsObj(%NsOp(5, key, undefined, undefined));
-  EvaluateGraph(m);
-  return %NsOp(6, m, undefined, undefined);
+// builtins/module.ts:143
+function FinishImport(promise, key) {
+  let $1;
+  try {
+    const m = %AsObj(%NsOp(5, key, undefined, undefined));
+    const evaluated = ModuleEvaluate(m);
+    %PerformPromiseThen(evaluated, (($1 = %NewRecord(2), (%RecordSet($1, 0, 12), (%RecordSet($1, 1, m), %NsOp(8, $1, 0, undefined))))), undefined, promise);
+  } catch (e) {
+    %RejectPromise(promise, e);
+  }
 }
 
-// builtins/module.ts:123
+// builtins/module.ts:154
 function InnerModuleEvaluation(m, state) {
   const status = %AsNumber(%RecordGet(m, 1));
   if (status === 5) {
@@ -6370,46 +6394,201 @@ function InnerModuleEvaluation(m, state) {
   %RecordSet(m, 1, 3);
   %RecordSet(m, 6, index);
   %RecordSet(m, 7, index);
+  %RecordSet(m, 15, 0);
   %RecordSet(state, 1, index + 1);
   %RecordSet(m, 10, %RecordGet(state, 0));
   %RecordSet(state, 0, m);
   const requested = %AsObj(%RecordGet(m, 3));
   const n = %AsNumber(%RecordGet(m, 4));
   for (let i = 0; i < n; i++) {
-    const r = %AsObj(%RecordGet(requested, %F64ToI32(i)));
+    let r = %AsObj(%RecordGet(requested, %F64ToI32(i)));
     InnerModuleEvaluation(r, state);
     if (%AsNumber(%RecordGet(r, 1)) === 3) {
       const ancestor = %AsNumber(%RecordGet(r, 7));
       if (ancestor < %AsNumber(%RecordGet(m, 7))) {
         %RecordSet(m, 7, ancestor);
       }
+    } else {
+      const root = %RecordGet(r, 13);
+      if (root === null) {
+        continue;
+      }
+      r = %AsObj(root);
+      if (%AsNumber(%RecordGet(r, 1)) === 5) {
+        throw %RecordGet(r, 5);
+      }
+    }
+    if (%AsNumber(%RecordGet(r, 14)) > 0) {
+      %RecordSet(m, 15, %AsNumber(%RecordGet(m, 15)) + 1);
+      let parents = %RecordGet(r, 16);
+      if (parents === null) {
+        parents = %ArrayCreate(0);
+        %RecordSet(r, 16, parents);
+      }
+      %ArrayPushDense(%AsObj(parents), m);
     }
   }
-  %Call(%RecordGet(m, 2), undefined);
+  const pending = %AsNumber(%RecordGet(m, 15));
+  if (pending > 0 || ((%F64ToI32(%AsNumber(%RecordGet(m, 12))) & 2) !== 0)) {
+    %RecordSet(m, 14, %NsOp(7, undefined, undefined, undefined));
+    if (pending === 0) {
+      ExecuteAsyncModule(m);
+    }
+  } else {
+    %Call(%RecordGet(m, 2), undefined);
+  }
   if (%AsNumber(%RecordGet(m, 7)) === index) {
     let done = false;
     while (!done) {
       const t = %AsObj(%RecordGet(state, 0));
       %RecordSet(state, 0, %RecordGet(t, 10));
       %RecordSet(t, 10, null);
-      %RecordSet(t, 1, 4);
+      %RecordSet(t, 1, %AsNumber(%RecordGet(t, 14)) === 0 ? 4 : 6);
+      %RecordSet(t, 13, m);
       done = t === m;
     }
   }
 }
 
-// builtins/module.ts:183 %ModuleOp
+// builtins/module.ts:226
+function ExecuteAsyncModule(m) {
+  let $1, $2;
+  const p = %Call(%RecordGet(m, 2), undefined);
+  %PerformPromiseThen(%AsObj(p), (($1 = %NewRecord(2), (%RecordSet($1, 0, 10), (%RecordSet($1, 1, m), %NsOp(8, $1, 0, undefined))))), (($2 = %NewRecord(2), (%RecordSet($2, 0, 11), (%RecordSet($2, 1, m), %NsOp(8, $2, 1, undefined))))), undefined);
+}
+
+// builtins/module.ts:235
+function GatherAvailableAncestors(m, list) {
+  const parents = %RecordGet(m, 16);
+  if (parents === null) {
+    return;
+  }
+  const n = LengthOfArrayLike(%AsObj(parents));
+  for (let i = 0; i < n; i++) {
+    const p = %AsObj(%Get(%AsObj(parents), i));
+    if (ListContains(list, p)) {
+      continue;
+    }
+    if (%AsNumber(%RecordGet(%AsObj(%RecordGet(p, 13)), 1)) === 5) {
+      continue;
+    }
+    const pending = %AsNumber(%RecordGet(p, 15)) - 1;
+    %RecordSet(p, 15, pending);
+    if (pending === 0) {
+      %ArrayPushDense(list, p);
+      if (!((%F64ToI32(%AsNumber(%RecordGet(p, 12))) & 2) !== 0)) {
+        GatherAvailableAncestors(p, list);
+      }
+    }
+  }
+}
+
+// builtins/module.ts:261
+function ListContains(list, v) {
+  const n = LengthOfArrayLike(list);
+  for (let i = 0; i < n; i++) {
+    if (%Get(list, i) === v) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// builtins/module.ts:272
+function AsyncModuleExecutionFulfilled(m) {
+  if (%AsNumber(%RecordGet(m, 1)) === 5) {
+    return;
+  }
+  %RecordSet(m, 14, -1);
+  %RecordSet(m, 1, 4);
+  const capability = %RecordGet(m, 17);
+  if (capability !== undefined) {
+    %FulfillPromise(%AsObj(capability), undefined);
+  }
+  const list = %ArrayCreate(0);
+  GatherAvailableAncestors(m, list);
+  const n = LengthOfArrayLike(list);
+  for (let i = 1; i < n; i++) {
+    const x = %Get(list, i);
+    const order = %AsNumber(%RecordGet(%AsObj(x), 14));
+    let j = i - 1;
+    while (j >= 0 && %AsNumber(%RecordGet(%AsObj(%Get(list, j)), 14)) > order) {
+      %CreateDataPropertyOrThrow(list, j + 1, %Get(list, j));
+      j = j - 1;
+    }
+    %CreateDataPropertyOrThrow(list, j + 1, x);
+  }
+  for (let i = 0; i < n; i++) {
+    const x = %AsObj(%Get(list, i));
+    const status = %AsNumber(%RecordGet(x, 1));
+    if (status === 4 || status === 5) {
+      continue;
+    }
+    if (((%F64ToI32(%AsNumber(%RecordGet(x, 12))) & 2) !== 0)) {
+      ExecuteAsyncModule(x);
+      continue;
+    }
+    try {
+      %Call(%RecordGet(x, 2), undefined);
+    } catch (e) {
+      AsyncModuleExecutionRejected(x, e);
+      continue;
+    }
+    %RecordSet(x, 14, -1);
+    %RecordSet(x, 1, 4);
+    const c = %RecordGet(x, 17);
+    if (c !== undefined) {
+      %FulfillPromise(%AsObj(c), undefined);
+    }
+  }
+}
+
+// builtins/module.ts:322
+function AsyncModuleExecutionRejected(m, error) {
+  if (%AsNumber(%RecordGet(m, 1)) === 5) {
+    return;
+  }
+  %RecordSet(m, 5, error);
+  %RecordSet(m, 1, 5);
+  %RecordSet(m, 14, -1);
+  const capability = %RecordGet(m, 17);
+  if (capability !== undefined) {
+    %RejectPromise(%AsObj(capability), error);
+  }
+  const parents = %RecordGet(m, 16);
+  if (parents !== null) {
+    const n = LengthOfArrayLike(%AsObj(parents));
+    for (let i = 0; i < n; i++) {
+      AsyncModuleExecutionRejected(%AsObj(%Get(%AsObj(parents), i)), error);
+    }
+  }
+}
+
+// builtins/module.ts:364 %ModuleOp
 function ModuleOp(target, key, a) {
-  let $1;
   if (this === undefined) {
     return ImportCall(target, key, a);
+  }
+  if (%IsObject(this)) {
+    const r = %AsObj(this);
+    const op = %AsNumber(%RecordGet(r, 0));
+    const operand = %RecordGet(r, 1);
+    if (op === 10) {
+      AsyncModuleExecutionFulfilled(%AsObj(operand));
+    } else if (op === 11) {
+      AsyncModuleExecutionRejected(%AsObj(operand), target);
+    } else if (op === 12) {
+      return %NsOp(6, operand, undefined, undefined);
+    } else if (op === 13) {
+      FinishImport(%AsObj(operand), target);
+    } else {
+      %RejectPromise(%AsObj(operand), target);
+    }
+    return undefined;
   }
   const op = %F64ToI32(%AsNumber(this));
   if (op === 5) {
     return ModuleEvaluate(%AsObj(target));
-  }
-  if (op === 6) {
-    return (($1 = %AsObj(%NsOp(5, target, undefined, undefined)), (EvaluateGraph($1), %NsOp(6, $1, undefined, undefined))));
   }
   if (op === 4) {
     return false;

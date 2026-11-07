@@ -1143,7 +1143,12 @@ module's metadata (compiler/module_meta.rs: a U32Array of atom ids and integers 
 environment layout, [[RequestedModules]], the import entries and the local, indirect and
 star export entries of ParseModule). The body is a `FuncKind::Module` top level: strict,
 `this` undefined (the evaluator calls it so), `return` and `new.target` are errors, `await`
-is reserved everywhere in the unit (no top-level `await` yet), `using` is allowed.
+is reserved everywhere in the unit, `using` is allowed. A module with top-level `await`
+([[HasTLA]]) compiles as an async body: `compile_module` parses it as a sync body first, and
+`Parser::await_operator` notes an `await` where it would be the operator at the top level
+(`await x`, `for await`, `await using`); that parse fails, since `await` is reserved, and
+the module compiles again with the async flavor. Only modules with top-level `await` pay the
+second parse. The evaluator tells them apart by the template's async flag.
 
 Import and export declarations parse only at the top level of the body function and record
 their entries in the parser's `ModuleBuild`:

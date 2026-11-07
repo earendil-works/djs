@@ -757,3 +757,114 @@ fn json_modules_through_import() {
         "[\"[1,{\\\"b\\\":true}]\",\"TypeError: module 'dir/d.json' is JSON: import it with type 'json'\",\"TypeError\",\"SyntaxError\"]"
     );
 }
+
+#[test]
+fn top_level_await() {
+    for suspend in [false, true] {
+        let mut vm = Vm::new(VmOptions::default()).unwrap();
+        let mut l = map(&[
+            (
+                "main",
+                "import { x } from 'slow';
+                 import { y } from 'sync';
+                 import 'fast';
+                 globalThis.log.push('main ' + x + y);
+                 export const z = await x + 1;",
+            ),
+            (
+                "slow",
+                "import 'log';
+                 log.push('slow start');
+                 export let x = 0;
+                 for await (const v of [Promise.resolve(1), 2]) x += v;
+                 await null; await null;
+                 log.push('slow end');",
+            ),
+            (
+                "sync",
+                "import 'log'; log.push('sync'); export const y = 'y';",
+            ),
+            (
+                "fast",
+                "import 'log'; log.push('fast start'); await 0; log.push('fast end');",
+            ),
+            ("log", "globalThis.log = [];"),
+        ]);
+        vm.load_module("main", &mut l).unwrap();
+        assert!(vm.evaluate_module("main").unwrap());
+        let r = settle(&mut vm, suspend);
+        let log = vm.global_path("log").unwrap();
+        assert_eq!(r, "ok undefined", "{}", vm.display(log));
+        // Async siblings interleave; their importer runs once both are done.
+        assert_eq!(
+            vm.display(log),
+            "[\"slow start\",\"sync\",\"fast start\",\"fast end\",\"slow end\",\"main 3y\"]"
+        );
+        assert_eq!(export(&mut vm, "main", "z"), "4");
+        // Evaluated: a second evaluation gives a settled promise at once.
+        assert_eq!(eval(&mut vm, "main"), "ok undefined");
+        assert_eq!(eval(&mut vm, "fast"), "ok undefined");
+    }
+}
+
+#[test]
+fn top_level_await_errors() {
+    let mut vm = Vm::new(VmOptions::default()).unwrap();
+    let mut l = map(&[
+        ("m", "import 'a'; export const after = 1;"),
+        ("a", "await 0; throw new RangeError('late');"),
+        ("k", "import 'm';"),
+        ("ok", "export const v = await new Promise(r => r('v'));"),
+        ("await_id", "function f() { await 1 }"),
+        ("await_arrow", "const f = () => await 1;"),
+    ]);
+    vm.load_module("m", &mut l).unwrap();
+    assert_eq!(eval(&mut vm, "m"), "err RangeError: late");
+    assert_eq!(export(&mut vm, "m", "after"), "-");
+    vm.load_module("k", &mut l).unwrap();
+    assert_eq!(eval(&mut vm, "k"), "err RangeError: late");
+    assert_eq!(eval(&mut vm, "m"), "err RangeError: late");
+    vm.load_module("ok", &mut l).unwrap();
+    assert_eq!(eval(&mut vm, "ok"), "ok undefined");
+    assert_eq!(export(&mut vm, "ok", "v"), "v");
+    // `await` outside the module's own top level is no operator.
+    for key in ["await_id", "await_arrow"] {
+        let e = vm.load_module(key, &mut l).unwrap_err();
+        assert!(vm.display(e).starts_with("SyntaxError"), "{key}");
+    }
+}
+
+#[test]
+fn top_level_await_in_cycles_and_imports() {
+    let mut vm = Vm::new(VmOptions::default()).unwrap();
+    vm.set_dynamic_import(true).unwrap();
+    let mut l = Rel {
+        files: vec![
+            (
+                "dir/a.js",
+                "import { b } from './b.js'; export const a = 'a'; log.push('a ' + b);",
+            ),
+            (
+                "dir/b.js",
+                "import { a } from './a.js'; log.push('b'); await 0; export const b = 'b';
+                 export function getA() { return a; }",
+            ),
+            (
+                "dir/waits.js",
+                "log.push('waits'); export default await import('./a.js').then(m => m.a);",
+            ),
+        ],
+        resolves: Vec::new(),
+    };
+    let out = run_imports(
+        &mut vm,
+        &mut l,
+        "globalThis.log = [];
+         import('./waits.js')
+           .then(ns => log.push('done ' + ns.default))
+           .then(() => import('./b.js'))
+           .then(ns => log.push('b.getA ' + ns.getA()))
+           .then(() => { globalThis.out = log; });",
+    );
+    assert_eq!(out, "[\"waits\",\"b\",\"a b\",\"done a\",\"b.getA a\"]");
+}

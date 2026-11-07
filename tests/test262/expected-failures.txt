@@ -28,12 +28,8 @@ language/eval-code/indirect/var-env-var-non-strict.js: ReferenceError: 'x' is no
 language/expressions/class/elements/private-getter-is-not-a-own-property.js: TypeError: not a function
 language/expressions/class/elements/private-setter-is-not-a-own-property.js: TypeError: not a function
 language/identifier-resolution/assign-to-global-undefined.js: expected runtime ReferenceError, but no error was thrown
-language/module-code/top-level-await/dynamic-import-of-waiting-module.js: async: $DONE was not called
-language/statements/await-using/syntax/await-using-allowed-at-top-level-of-module.js: parse: SyntaxError: unexpected token in expression: 'await'
-language/statements/await-using/syntax/await-using.js: parse: SyntaxError: unexpected token in expression: 'await'
 language/statements/class/elements/private-getter-is-not-a-own-property.js: TypeError: not a function
 language/statements/class/elements/private-setter-is-not-a-own-property.js: TypeError: not a function
-language/statements/for-of/head-await-using-fresh-binding-per-iteration.js: parse: SyntaxError: unexpected token in expression: 'await'
 language/statements/function/13.0-12-s.js: SyntaxError: invalid lvalue in strict mode
 language/statements/function/13.0_4-17gs.js: SyntaxError: invalid lvalue in strict mode
 language/statements/variable/12.2.1-10-s.js: SyntaxError: invalid lvalue in strict mode

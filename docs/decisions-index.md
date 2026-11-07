@@ -822,3 +822,4 @@ topics when the index is next reorganized.
 - D3235: Synthetic modules and `import()` through the host's loader
 - D3236: djs-embed's module API
 - D3245: JSON modules: the `type` attribute goes to the loader, the source says what is JSON
+- D3246: Top-level await: such a module is an async body, found by a first sync parse

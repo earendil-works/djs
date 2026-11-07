@@ -1,0 +1,9 @@
+slow starts
+fast starts
+fast ends
+slow ends
+main 3 fast 42
+for await ab
+late fast
+rejects: RangeError: rejected late
+again: RangeError: rejected late

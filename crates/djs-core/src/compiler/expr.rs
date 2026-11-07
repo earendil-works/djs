@@ -416,7 +416,7 @@ impl Parser<'_, '_> {
             {
                 return syntax(tok.start, "unexpected 'await' keyword");
             }
-            TokenKind::Ident if tok.is_contextual(Kw::Await) && self.f.is_async => {}
+            TokenKind::Ident if tok.is_contextual(Kw::Await) && self.await_operator() => {}
             TokenKind::Ident => {
                 let next = self.peek();
                 if next.kind == TokenKind::Arrow && !next.newline_before() {
@@ -776,7 +776,7 @@ impl Parser<'_, '_> {
             | TokenKind::Tilde
             | TokenKind::Bang => Some(NodeKind::Unary),
             TokenKind::PlusPlus | TokenKind::MinusMinus => Some(NodeKind::Update),
-            TokenKind::Ident if tok.is_contextual(Kw::Await) && self.f.is_async => {
+            TokenKind::Ident if tok.is_contextual(Kw::Await) && self.await_operator() => {
                 Some(NodeKind::Await)
             }
             _ => None,
@@ -926,7 +926,7 @@ impl Parser<'_, '_> {
             {
                 return syntax(tok.start, "unexpected 'await' keyword");
             }
-            TokenKind::Ident if tok.is_contextual(Kw::Await) && self.f.is_async => {
+            TokenKind::Ident if tok.is_contextual(Kw::Await) && self.await_operator() => {
                 if self.f.in_params {
                     return syntax(tok.start, "await in default expression");
                 }

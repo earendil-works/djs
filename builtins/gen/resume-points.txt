@@ -2152,33 +2152,68 @@ MathHypot: reentrant (Math.hypot)
 MathRandomBuiltin: leaf (Math.random)
 
 ModuleEvaluate: reentrant
-  builtins/module.ts:21:5  EvaluateGraph (builtin)
+  builtins/module.ts:41:5  InnerModuleEvaluation (builtin)
 
-EvaluateGraph: reentrant
-  builtins/module.ts:37:5  InnerModuleEvaluation (builtin)
+HasTLA: leaf
+
+ModuleClosure: leaf
 
 ImportCall: reentrant
-  builtins/module.ts:64:12  DynamicImport (builtin)
-  builtins/module.ts:68:23  ToString (builtin)
-  builtins/module.ts:75:33  Get (intrinsic)
-  builtins/module.ts:80:30  EnumerableOwnProperties (builtin)
-  builtins/module.ts:81:24  LengthOfArrayLike (builtin)
-  builtins/module.ts:84:36  Get (intrinsic)
-  builtins/module.ts:85:30  Get (intrinsic)
-  builtins/module.ts:86:32  Get (intrinsic)
-  builtins/module.ts:102:27  Call (intrinsic)
+  builtins/module.ts:87:12  DynamicImport (builtin)
+  builtins/module.ts:91:23  ToString (builtin)
+  builtins/module.ts:98:33  Get (intrinsic)
+  builtins/module.ts:103:30  EnumerableOwnProperties (builtin)
+  builtins/module.ts:104:24  LengthOfArrayLike (builtin)
+  builtins/module.ts:107:36  Get (intrinsic)
+  builtins/module.ts:108:30  Get (intrinsic)
+  builtins/module.ts:109:32  Get (intrinsic)
+  builtins/module.ts:125:27  Call (intrinsic)
 
 FinishImport: reentrant
-  builtins/module.ts:118:3  EvaluateGraph (builtin)
+  builtins/module.ts:146:28  ModuleEvaluate (builtin)
 
 InnerModuleEvaluation: reentrant
-  builtins/module.ts:143:5  InnerModuleEvaluation (builtin)
-  builtins/module.ts:151:3  Call (intrinsic)
+  builtins/module.ts:175:5  InnerModuleEvaluation (builtin)
+  builtins/module.ts:206:7  ExecuteAsyncModule (builtin)
+  builtins/module.ts:209:5  Call (intrinsic)
+
+ExecuteAsyncModule: reentrant
+  builtins/module.ts:227:20  Call (intrinsic)
+
+GatherAvailableAncestors: reentrant
+  builtins/module.ts:240:18  LengthOfArrayLike (builtin)
+  builtins/module.ts:242:26  Get (intrinsic)
+  builtins/module.ts:243:9  ListContains (builtin)
+  builtins/module.ts:254:9  GatherAvailableAncestors (builtin)
+
+ListContains: reentrant
+  builtins/module.ts:262:18  LengthOfArrayLike (builtin)
+  builtins/module.ts:264:9  Get (intrinsic)
+
+AsyncModuleExecutionFulfilled: reentrant
+  builtins/module.ts:283:3  GatherAvailableAncestors (builtin)
+  builtins/module.ts:285:18  LengthOfArrayLike (builtin)
+  builtins/module.ts:287:22  Get (intrinsic)
+  builtins/module.ts:290:47  Get (intrinsic)
+  builtins/module.ts:291:46  Get (intrinsic)
+  builtins/module.ts:291:7  CreateDataPropertyOrThrow (intrinsic)
+  builtins/module.ts:294:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/module.ts:297:26  Get (intrinsic)
+  builtins/module.ts:303:7  ExecuteAsyncModule (builtin)
+  builtins/module.ts:307:7  Call (intrinsic)
+  builtins/module.ts:309:7  AsyncModuleExecutionRejected (builtin)
+
+AsyncModuleExecutionRejected: reentrant
+  builtins/module.ts:337:20  LengthOfArrayLike (builtin)
+  builtins/module.ts:339:42  Get (intrinsic)
+  builtins/module.ts:339:7  AsyncModuleExecutionRejected (builtin)
 
 ModuleOp: reentrant (%ModuleOp)
-  builtins/module.ts:185:12  ImportCall (builtin)
-  builtins/module.ts:189:12  ModuleEvaluate (builtin)
-  builtins/module.ts:192:12  FinishImport (builtin)
+  builtins/module.ts:366:12  ImportCall (builtin)
+  builtins/module.ts:374:7  AsyncModuleExecutionFulfilled (builtin)
+  builtins/module.ts:376:7  AsyncModuleExecutionRejected (builtin)
+  builtins/module.ts:380:7  FinishImport (builtin)
+  builtins/module.ts:388:12  ModuleEvaluate (builtin)
 
 NumberConstructor: reentrant (constructor Number)
   builtins/number.ts:11:7  LengthOfArrayLike (builtin)

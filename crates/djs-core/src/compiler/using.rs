@@ -96,7 +96,7 @@ impl Parser<'_, '_> {
 
     /// At `await using x` (no line breaks) in an async function.
     pub(super) fn at_await_using(&self) -> bool {
-        if !(self.f.is_async && self.tok.is_contextual(Kw::Await)) {
+        if !(self.tok.is_contextual(Kw::Await) && self.await_operator()) {
             return false;
         }
         let mut lx = self.lx;

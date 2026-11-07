@@ -376,7 +376,19 @@ pub fn compile_module(
             PErr::syntax(0, Cow::Borrowed("modules are not available in this build")),
         ));
     }
-    parse(heap, src, &opts, |p| p.compile_module()).map_err(|e| error_at(src, e))
+    // A module with top-level await is an async body ([[HasTLA]]); which one is, the first
+    // parse finds out (`Parser::module_await`): only those compile twice.
+    let first = parser::Parser::new(heap, src, &opts)
+        .map_err(|e| (e, false))
+        .and_then(|p| p.compile_module(false));
+    match first {
+        Ok(r) => Ok(r),
+        Err((_, true)) => parse(heap, src, &opts, |p| {
+            p.compile_module(true).map_err(|e| e.0)
+        })
+        .map_err(|e| error_at(src, e)),
+        Err((e, false)) => Err(error_at(src, e)),
+    }
 }
 
 /// [`compile`] with lazy functions (D2990): the source is parsed whole (every early

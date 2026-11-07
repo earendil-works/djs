@@ -1673,5 +1673,11 @@
 1668	intrinsic	IsBufferSource
 1669	intrinsic	Utf8Encode
 1670	intrinsic	Utf8Decode
-1671	value	%prelude:EvaluateGraph%
+1671	value	%prelude:EvaluateGraph%	removed: 0248: module evaluation with top-level await
 1672	value	%prelude:ImportCall%
+1673	value	%prelude:FinishImport%
+1674	value	%prelude:ExecuteAsyncModule%
+1675	value	%prelude:GatherAvailableAncestors%
+1676	value	%prelude:ListContains%
+1677	value	%prelude:AsyncModuleExecutionFulfilled%
+1678	value	%prelude:AsyncModuleExecutionRejected%

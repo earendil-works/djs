@@ -56,7 +56,6 @@ features = [
   "import-text",                 # text modules: not implemented
   "import-bytes",                # bytes modules: not implemented
   "source-phase-imports*",       # source phase imports: not implemented
-  "top-level-await",             # not implemented yet (0248)
   "host-gc-required",            # needs a real $262.gc
 ]
 scan = [

@@ -174,6 +174,9 @@ pub(super) struct Parser<'a, 'h> {
     /// Module code (`Goal::Module`): the import and export entries parsed so far
     /// (compiler/module.rs).
     pub module: super::module::ModuleSlot,
+    /// Module code that is not compiled as async met an `await` where it would be the
+    /// operator (top-level await): `compile_module` compiles it again as an async body.
+    pub module_await: core::cell::Cell<bool>,
     /// strip-types: where the last formal parameter list's contents ended (tsc's
     /// `parameters.end`).
     pub ts_params_end: u32,
@@ -374,6 +377,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             ts_semi: false,
             strip: false,
             module: Default::default(),
+            module_await: core::cell::Cell::new(false),
             ts_params_end: 0,
             using: Default::default(),
             completion: None,
@@ -1300,6 +1304,19 @@ impl<'a, 'h> Parser<'a, 'h> {
             f.add_var(atom, kind, BODY_SCOPE);
         }
         true
+    }
+
+    /// Whether `await` is the operator here (an async function). At the top level of
+    /// module code that is not compiled as async yet it would be (top-level await): that
+    /// is noted, and the module is compiled again as an async body.
+    pub fn await_operator(&self) -> bool {
+        if self.f.is_async {
+            return true;
+        }
+        if crate::MODULES && self.f.kind == FuncKind::Module {
+            self.module_await.set(true);
+        }
+        false
     }
 
     /// `await` is reserved here: in async functions, and in the parameters of arrows

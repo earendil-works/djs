@@ -560,7 +560,7 @@ impl Parser<'_, '_> {
         let for_pos = self.tok.start;
         self.next()?;
         self.reset_completion();
-        let is_await = self.f.is_async && self.tok.is_contextual(Kw::Await);
+        let is_await = self.tok.is_contextual(Kw::Await) && self.await_operator();
         if is_await {
             self.next()?;
         }

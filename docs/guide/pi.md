@@ -104,10 +104,10 @@ pi's own codemode test suite runs against the adapter (`node js/pi/pi-tests.ts`)
 the default mode, in the next mode, and with a dump and a resume at every idle point:
 
 <!-- gen:status conformance -->
-- test262 (at dquickts' pinned commit): djs passes **38,973 of the 39,017** tests in the
-  active group (99.9%; 53,597 tests in all, the rest skipped by design). The 44 known
+- test262 (at dquickts' pinned commit): djs passes **39,325 of the 39,365** tests in the
+  active group (99.9%; 53,597 tests in all, the rest skipped by design). The 40 known
   failures are listed with reasons in `tests/test262/expected-failures.txt`; dquickts'
-  qjs fails 9 active tests under the same runner.
+  qjs fails 17 active tests under the same runner.
 - The differential corpus (codemode scripts, console and result formatting, error
   messages, TypeScript, dquickts' own tests): **631 of 642** cases match qjs; 6 known
   failures (`tests/corpus/expected-failures.txt`) and 5 skipped as non-goals.

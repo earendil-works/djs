@@ -90,8 +90,10 @@ The third kind is **module code**, for native hosts that embed djs in Rust: a po
 written as a module that imports libraries the host provides. Every form of `import` and
 `export` works (default, named, namespace and string names, re-exports, `export * as`,
 `export default` of expressions, functions and classes), and so does `import.meta`, whose
-`url` is the module's key. Module code has no top-level `await` yet, and `this` at its
-top level is `undefined`. TypeScript modules work too: type-only imports and exports are
+`url` is the module's key, and so does top-level `await`: a module that awaits at its top
+level is evaluated asynchronously, its importers run once it is done, and modules that do
+not depend on each other wait at the same time, in the order the specification gives.
+`this` at a module's top level is `undefined`. TypeScript modules work too: type-only imports and exports are
 erased, and an import that no value refers to is dropped, as tsc does when it cannot see
 the types.
 

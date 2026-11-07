@@ -156,7 +156,10 @@
 //! JSON modules: a [`ModuleSource::json`] (or [`ModuleMap::json`]) is imported `with {
 //! type: "json" }` and has the parsed text as its default export; an import with that
 //! attribute loads nothing else, and one without it cannot load JSON (a `TypeError`). Other
-//! import attributes are a `SyntaxError`. Top-level `await` is not supported.
+//! import attributes are a `SyntaxError`. Top-level `await` works: setup waits for the
+//! graph's evaluation to settle (no host function may be called during setup, so it can
+//! wait only on promises and `import()`); one that never settles is
+//! [`Error::NeverSettles`].
 //!
 //! # Plain data
 //!

@@ -445,3 +445,36 @@ fn json_modules() {
         assert!(e.to_string().contains(msg), "{src}: {e}");
     }
 }
+
+#[test]
+fn top_level_await() {
+    let files = ModuleMap::new()
+        .module(
+            "lib/config.js",
+            "export const hosts = await Promise.resolve(['example.com']);",
+        )
+        .module("lib/never.js", "await new Promise(() => {});");
+    let snap = Snapshot::builder()
+        .loader(files.clone())
+        .source(Source::module(
+            "policy.js",
+            "import { hosts } from './lib/config.js';\n\
+             const extra = await import('./lib/config.js').then(m => m.hosts.length);\n\
+             export function allowed(h) { return hosts.includes(h) && extra === 1; }",
+        ))
+        .build()
+        .unwrap();
+    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let out = i
+        .call_export("policy.js", "allowed", &[Value::Str("example.com")], host)
+        .unwrap();
+    assert_eq!(out, Data::Bool(true));
+    // A top-level await that waits on nothing fails the build.
+    let e = Snapshot::builder()
+        .loader(files)
+        .source(Source::module("bad.js", "import './lib/never.js';"))
+        .build()
+        .err()
+        .unwrap();
+    assert!(matches!(e, Error::NeverSettles), "{e}");
+}

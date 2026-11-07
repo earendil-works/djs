@@ -931,8 +931,25 @@ impl Parser<'_, '_> {
 
     /// Parses module source: the module template and its metadata (a U32Array,
     /// compiler/module_meta.rs).
-    pub fn compile_module(mut self) -> PResult<(Ref, Ref)> {
+    /// Compiles the module, as an async body if `is_async` (top-level await). The error's
+    /// flag: compiled as sync, the module met an `await` operator; compile it as async.
+    pub fn compile_module(mut self, is_async: bool) -> Result<(Ref, Ref), (super::PErr, bool)> {
+        if is_async {
+            self.start_flavor((true, false)).map_err(|e| (e, false))?;
+        }
         let parsed = self.parse_top();
+        if !is_async && self.module_await.get() {
+            return Err((
+                parsed
+                    .err()
+                    .unwrap_or_else(|| super::resolve::internal("await")),
+                true,
+            ));
+        }
+        self.compile_module_parsed(parsed).map_err(|e| (e, false))
+    }
+
+    fn compile_module_parsed(mut self, parsed: PResult<()>) -> PResult<(Ref, Ref)> {
         let m = self.module.take().expect("module code");
         parsed?;
         let meta = self.finish_module(m)?.encode();

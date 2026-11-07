@@ -14,10 +14,10 @@ records; [the last section](#every-recorded-measurement) lists them all.
 ## Conformance
 
 <!-- gen:status conformance -->
-- test262 (at dquickts' pinned commit): djs passes **38,973 of the 39,017** tests in the
-  active group (99.9%; 53,597 tests in all, the rest skipped by design). The 44 known
+- test262 (at dquickts' pinned commit): djs passes **39,325 of the 39,365** tests in the
+  active group (99.9%; 53,597 tests in all, the rest skipped by design). The 40 known
   failures are listed with reasons in `tests/test262/expected-failures.txt`; dquickts'
-  qjs fails 9 active tests under the same runner.
+  qjs fails 17 active tests under the same runner.
 - The differential corpus (codemode scripts, console and result formatting, error
   messages, TypeScript, dquickts' own tests): **631 of 642** cases match qjs; 6 known
   failures (`tests/corpus/expected-failures.txt`) and 5 skipped as non-goals.
@@ -57,7 +57,7 @@ Machine instructions per workload (`scripts/perf/w/`), measured at 669ce55099,
 
 <!-- gen:status size -->
 `djs_wasm.wasm` is 953 KB (414 KB gzip, 350 KB brotli): 806 KB of code, 98 KB of data,
-and the base snapshot (the initialized realm with all builtins, 193 KB) coded to 46 KB
+and the base snapshot (the initialized realm with all builtins, 195 KB) coded to 46 KB
 in a custom section. The slim build is 825 KB (349 KB gzip); the dump module, the
 shipped build with the dumper, 1,835 KB (754 KB gzip). Module sizes measured at
 31c4587e31, 2026-11-05.
@@ -75,7 +75,7 @@ shipped build with the dumper, 1,835 KB (754 KB gzip). Module sizes measured at
 | of them `@native` (also compiled to Rust) | 8 |
 | of them `@fast` (a Rust leaf entry) | 43 |
 | difftest corpus cases | 642 |
-| base snapshot, bytes | 193,464 |
+| base snapshot, bytes | 195,000 |
 <!-- /gen -->
 
 ## Every recorded measurement

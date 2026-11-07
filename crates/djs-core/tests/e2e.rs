@@ -256,8 +256,10 @@ fn run_case(src: &str, name: &str, mode: Mode) -> (String, Option<Images>) {
     } else {
         CompileOptions::script(name)
     };
+    // `import()` in a module case loads from the same files.
+    let mut loader = CaseModules::new(if module { src } else { "" });
     if module {
-        let mut loader = CaseModules::new(src);
+        vm.set_dynamic_import(true).unwrap();
         if let Err(e) = vm.load_module("main.js", &mut loader) {
             return (format!("Uncaught {}\n", vm.display(e)), None);
         }
@@ -345,6 +347,13 @@ fn run_case(src: &str, name: &str, mode: Mode) -> (String, Option<Images>) {
                 out.push('\n');
                 lines += 1;
                 vm.resolve_host_call(call_id, Ok(Value::UNDEFINED)).unwrap();
+            }
+            Status::Idle if module => {
+                let calls = vm.new_host_calls();
+                assert!(!calls.is_empty(), "idle without calls");
+                for c in calls {
+                    vm.answer_import(c, &mut loader).unwrap();
+                }
             }
             Status::Idle => panic!("idle"),
             Status::HostOutOfMemory => panic!("out of host memory"),

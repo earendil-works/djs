@@ -307,10 +307,15 @@ impl Builder {
                 fuel = fuel.saturating_sub(used);
                 match st {
                     Status::Done(v) => {
-                        // A module's evaluation ends with its promise, rejected if it threw.
-                        if let Some(Some(Err(e))) = vm.promise_state(v) {
-                            vm.mark_promise_handled(v);
-                            return Err(exception(vm, e));
+                        // A module's evaluation ends with its promise, rejected if it threw,
+                        // still pending if its top-level await waits on nothing.
+                        match vm.promise_state(v) {
+                            Some(Some(Err(e))) => {
+                                vm.mark_promise_handled(v);
+                                return Err(exception(vm, e));
+                            }
+                            Some(None) => return Err(Error::NeverSettles),
+                            _ => {}
                         }
                         break;
                     }
