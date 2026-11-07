@@ -3231,6 +3231,21 @@ fn fatal_out_of_memory_runs_no_handler() {
     }
 }
 
+#[cfg(feature = "embed")]
+#[test]
+fn reset_to_reuses_the_arena() {
+    let (mut vm, _) = run_script(vm(), "globalThis.n = 1;\n");
+    let image = vm.image().to_vec();
+    let (mut vm, _) = run_script(vm, "n = 2; globalThis.big = 'x'.repeat(1 << 20) + n;\n");
+    let cap = vm.heap().arena().capacity();
+    vm.reset_to(&image).unwrap();
+    assert_eq!(vm.bytes(), &image[..]);
+    assert_eq!(vm.heap().arena().capacity(), cap);
+    vm.heap().verify().unwrap();
+    let (_, out) = run_script(vm, "console.log(n, typeof big);\n");
+    assert_eq!(out.log, ["1 undefined"]);
+}
+
 #[test]
 fn a_refused_to_space_stops_the_run() {
     // A collection whose to-space the host refuses is not skipped: the run stops.

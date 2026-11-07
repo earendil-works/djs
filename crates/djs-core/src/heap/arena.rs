@@ -121,6 +121,14 @@ impl Arena {
         }
     }
 
+    /// Takes the buffer out, leaving the arena empty: for a reload into the same
+    /// allocation (`Vm::reset_to`).
+    #[cfg(feature = "embed")]
+    pub(crate) fn take_bytes(&mut self) -> Vec<u8> {
+        self.len = 0;
+        core::mem::take(&mut self.bytes)
+    }
+
     /// Bytes in use. This is also the offset of the next allocation.
     #[inline(always)]
     pub fn len(&self) -> u32 {

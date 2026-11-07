@@ -311,6 +311,32 @@ impl Vm {
         Ok(())
     }
 
+    /// [`Vm::replace_image`] from a borrowed image, copied into this VM's own arena
+    /// buffer: one copy and, once the buffer is big enough, no allocation (D3182). For an
+    /// embedder that resets a VM to the same snapshot after every call (djs-embed). On an
+    /// error the VM has no heap left and must be dropped.
+    #[cfg(feature = "embed")]
+    pub fn reset_to(&mut self, image: &[u8]) -> Result<(), LoadError> {
+        Vm::check_image(image)?;
+        let mut bytes = self.heap.arena_mut().take_bytes();
+        bytes.clear();
+        bytes
+            .try_reserve_exact(image.len())
+            .map_err(|_| LoadError::TooLarge)?;
+        bytes.extend_from_slice(image);
+        let mut fresh = Vm::over(
+            Heap::from_bytes_trusted(bytes, self.opts.memory_limit)?,
+            self.opts,
+        )?;
+        // What the heap derived for itself and keeps for the VM's lifetime.
+        #[cfg(feature = "unicode-normalization")]
+        {
+            fresh.heap.compositions = core::mem::take(&mut self.heap.compositions);
+        }
+        core::mem::swap(&mut self.heap, &mut fresh.heap);
+        Ok(())
+    }
+
     /// A new VM from a base snapshot: the image of an idle VM with its prelude installed,
     /// made at build time (`djs-prelude`, D1321). Creating a VM is then a copy, with no
     /// compile. The image is trusted (its cells are not verified: it was verified when it
