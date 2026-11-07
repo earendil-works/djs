@@ -807,3 +807,5 @@ topics when the index is next reorganized.
 - D3184: djs-embed's API and failure model
 - D3215: djs-libm: what was copied, and how the build hash covers it
 - D3220: Base images are target independent; cross builds are a manual check
+- D3225: djs-embed values in and out without a wire buffer; borrowed plain data in
+- D3226: Where a hook call's time goes; what was not done

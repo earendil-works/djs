@@ -11731,3 +11731,40 @@ leg: zig, the rustup targets and docker are not guaranteed on the gate machine; 
 needs to move into the crate directories for that (cargo's git checkout is the whole
 repository), only a crates.io package would. djs-embed's runtime crates: djs-embed, djs-core,
 djs-prelude, djs-libm.
+## D3225: djs-embed values in and out without a wire buffer; borrowed plain data in
+date: 2026-11-07 · by: embed · issue: 0247
+The hook benchmark (0247) showed the head going in and the decision coming out as a third of
+an empty policy's call: `Value::Data` wrote the tree as wire bytes and decoded them, and
+`to_data` encoded to wire and parsed that again. Now `Value::Data` builds in the heap straight
+from the tree (the decoder's semantics: prototypes, int-form numbers, holes only in arrays,
+the depth limit, an explicit stack), and `to_data` builds the `Data` from the outbound encoder,
+which writes to a `wire::Sink` (djs-core, `embed` only; `Writer` is one, djs-embed's tree
+builder the other), so the refusals and paths stay in one place. The cap of `to_data` counts
+the tree's host memory (a node 32 B plus payloads), which is what the memory limit is to bound,
+not wire bytes (a tree is several times its wire size). New `Value` variants: `Array(&[Value])`
+and `Object(&[(&str, Value)])`, plain data from borrowed parts, so a host passes a request head
+without allocating a `String` per header (`Value` stays `Copy`; no holes: `Data` has them), and
+`Utf8(&[u8])`, text from bytes with invalid sequences as U+FFFD (Rust's lossy decoding, which
+replaces maximal subparts as the WHATWG decoder does; a BOM stays): one pass over ASCII where a
+host's `from_utf8` plus the VM's ASCII check were two. Measured (CPU time per call, alternating
+binaries, load 90-140): an empty policy 5.1 → 3.5 µs, the header-only policy 38 → ~33 µs, 64 KiB
+read as text 17.8 → 16.0 µs. The wire forms (`Value::Wire`, `to_wire`) are unchanged.
+
+## D3226: Where a hook call's time goes; what was not done
+date: 2026-11-07 · by: embed · issue: 0247
+`crates/djs-embed/examples/hooks-bench` ports Gondolin's prototype bench (shim, policies, fresh /
+reset / pooled instances, native Rust rows; no node rows, no third-party crates; URL parsing is
+a small host parser). On a machine that never got below load ~30 during 0247, wall-clock
+latencies swing 2x between runs, so changes were judged by CPU time per call (`probe` under
+`/usr/bin/time`, the two binaries alternating, each one's minimum: work/scratch/0247/ab.sh);
+the table itself takes each row's best of three rounds. Findings: (1) A fresh or reset instance
+costs a copy of the image (memmove is ~30-40% of an empty call; the 237 KiB image takes ~3 µs
+under load); cold inline caches are not the cost: a snapshot taken after a warm-up call
+(`Instance::to_snapshot`, tried and dropped) changed nothing measurable. Copying less needs to
+know what a call wrote in the old region, which djs does not track (no write barrier). (2) The
+interpreter is ~60% of an empty call (the shim: private fields, async wrappers) and ~75% of the
+header-only one (5,763 fuel). (3) Minor collections in a pooled instance walk the whole old
+region (no write barrier): 12% of a pooled 64 KiB body call. (4) An IC addition fill asked
+`canonical_numeric_index`, which built every key's `String`: it now rejects a key by its first
+unit (4% of an empty call on a reset instance; the shipped module 12 B smaller). (5) A call
+reads the clock only when it has a deadline. (2) and (3) are engine work, not the embedding's.
