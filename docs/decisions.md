@@ -11884,3 +11884,19 @@ Fuel: one per 8 bytes. Messages are node's where node's do not name its internal
 qjs has neither class, so the oracle is node: tests/data/encoding/cases.js with node's
 transcript (gen-expected.sh), run by vm::encoding_tests, which also asserts the deliberate
 differences.
+Amended by D3175: both are `// @embed-only`, so only builds with djs-core's `embed` (the
+native ones, djs-embed) have them; the leaves' dispatch arm is cut by `crate::EMBED`, and
+builds without `embed` name the two globals in their ReferenceError
+(`realm::EMBED_GLOBALS`, like the slim build's `ABSENT_GLOBALS`).
+
+## D3211: Size of 0244; the size ceilings rise by what it measured
+date: 2026-11-08 · by: encoding · issue: 0244 · approved: coordinator (D3175)
+With TextEncoder and TextDecoder `// @embed-only` (D3175), the wasm modules carry what no
+constant cuts: the five intrinsic table entries (`TextCodecCreate`, `TextCodecFlags`,
+`IsBufferSource`, `Utf8Encode`, `Utf8Decode`) and their installed-array slots in the base,
+the `ObjectClass::TextCodec` arms, and `realm::EMBED_GLOBALS` with its ReferenceError
+check. Measured with scripts/build-wasm.sh against main e269da5f (its gate's numbers):
+shipped 426,839 → 426,951 gzip (+112; raw 980,273 → 980,578), slim 360,536 → 360,610
+(+74; raw 851,876 → 852,048). Both ceilings in tests/scores/size.tsv rise by exactly that:
+`ceiling_gzip` 426,865 → 426,977, `slim_ceiling_gzip` 360,623 → 360,697. Before D3175 the
+classes cost the shipped module +2,387 gzip.

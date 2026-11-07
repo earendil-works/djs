@@ -10,9 +10,10 @@
 # Array.from fast paths, +0.9 KB; raised by 0232b,
 # D3159: lazy internal closures, @fast resolving functions and then; raised by 0236, D3164: the
 # construct path outside step, `new` entries; raised by 0241, D3192: ES modules' intrinsic
-# table entries, realm slot and enum arms, +59 B, slim +138 B).
+# table entries, realm slot and enum arms, +59 B, slim +138 B; raised by 0244, D3211: the
+# encoding builtins' intrinsic table entries and dispatch arm, +112 B, slim +74 B).
 # quickjs_wasi_gzip: quickjs-wasi 3.6.2 quickjs.wasm (pi's engine), gzip -9.
 quickjs_wasi_gzip	286655
-ceiling_gzip	426865
+ceiling_gzip	426977
 # slim_ceiling_gzip: the slim module (scripts/build-wasm.sh --slim, D2411), its own ratchet.
-slim_ceiling_gzip	360623
+slim_ceiling_gzip	360697

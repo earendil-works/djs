@@ -1,6 +1,6 @@
 # 0244: TextEncoder and TextDecoder (UTF-8) (B1)
 
-status: in-progress
+status: done
 agent: encoding
 branch: issue/0244-text-encoding
 depends-on: -
@@ -24,12 +24,12 @@ from the shipped module like a slim family then); otherwise raise `ceiling_gzip`
 measured amount with a size decision (as D3164 does), approved: coordinator.
 
 ## Acceptance criteria
-- [ ] both classes with the full option surface above; `toString` tags, `length`s, property
+- [x] both classes with the full option surface above; `toString` tags, `length`s, property
       attributes as WebIDL classes in browsers (check against node)
-- [ ] tests: corpus cases where qjs can be the oracle are not possible (qjs has no
+- [x] tests: corpus cases where qjs can be the oracle are not possible (qjs has no
       TextEncoder): use e2e/unit tests with expectations checked against node, and mark them so
-- [ ] registry and slim updates; size measured and recorded
-- [ ] performance: encoding/decoding 64 KiB ASCII and non-ASCII is memcpy-like / one pass
+- [x] registry and slim updates; size measured and recorded
+- [x] performance: encoding/decoding 64 KiB ASCII and non-ASCII is memcpy-like / one pass
       (measure; native release)
 
 ## Log
@@ -73,6 +73,25 @@ measured amount with a size decision (as D3164 does), approved: coordinator.
      leaner decode state handling; my estimate of the floor is ~1.8-2.0 KB.
   Then: merge (scripts/merge-to-main.sh); the gate also runs the slim legs, not run here.
 
+2026-11-08 (encoding, continuation after D3175):
+- Rebased onto main e269da5f (0241's embed/prelude-noembed); generated files taken from
+  main in the conflicts and rewritten by scripts/regen.sh --layout.
+- D3175: builtins/encoding.ts is `// @embed-only` (was `@slim-omit`), the leaves' dispatch
+  arm is `if crate::EMBED`, vm::encoding_tests are `cfg(feature = "embed")`. The globals
+  moved from `ABSENT_GLOBALS` to a new `realm::EMBED_GLOBALS`: builds without `embed` say
+  "'TextEncoder' is not available in this build" (run.rs `undefined_global`);
+  slim_tests::absent_globals and djs-prelude's registry test cover both lists (checked in
+  default, slim, and `--no-default-features --features full,unicode` builds).
+- vm::tests::reset_to_reuses_the_arena (0240's) failed after the rebase: its arena was only
+  ~6 KB larger than the image, and the bigger base crossed it. It now makes an arena more
+  than twice the image (an `Array(1 << 17)`), so the base's size cannot decide it.
+- Size (scripts/build-wasm.sh, against main e269da5f's gate numbers): shipped 426,839 ->
+  426,951 gzip (+112), slim 360,536 -> 360,610 (+74). Ceilings raised by exactly that,
+  D3211 (approved: coordinator per D3175). D3210 amended with the embed-only part.
+- djs-embed's cross_check example prints a `utf8` line (encode of the fetched body, decode
+  with a split/invalid tail); outside `touches`, as are vm/tests.rs, run.rs, slim_tests.rs
+  and crates/djs-prelude/tests/registry.rs.
+
 ## Follow-ups
 - Dumps: a TextEncoder/TextDecoder object in a plain dump is not handled by the dumper
   (vm/dump.rs knows no TextCodec class); probably refused like other exotic classes.
@@ -80,3 +99,9 @@ measured amount with a size decision (as D3164 does), approved: coordinator.
   benchmark needs it.
 
 ## Result
+TextEncoder and TextDecoder (UTF-8, the full option surface, D3210) in builds with
+djs-core's `embed` (the native ones, djs-embed), `// @embed-only` per D3175; the wasm
+modules leave them out and name them in their ReferenceError. Tests against node's
+transcript (tests/data/encoding, vm::encoding_tests). Size: shipped +112 B gzip, slim
++74 B, ceilings raised by that (D3211). Performance as logged (one pass each; non-ASCII
+encode ~5x node's, follow-up).

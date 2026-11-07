@@ -24,6 +24,8 @@ async function onRequest(req) {
                parseFloat("1.7976931348623157e308").toString(36).slice(0, 20)].join(" "),
         sorted: [3, 1, 2, 10].sort().join(","),
         regexp: "a1b22c333".replace(/\d+/g, (m) => m.length),
+        utf8: new TextEncoder().encode(body).join(",") + " " +
+              new TextDecoder().decode(new Uint8Array([0xe2, 0x82, 0xac, 0xf0, 0x9f, 0xff])),
     };
 }
 "#;
@@ -62,7 +64,7 @@ fn main() -> Result<(), Error> {
             }
         }
     };
-    for key in ["allow", "length", "math", "text", "sorted", "regexp"] {
+    for key in ["allow", "length", "math", "text", "sorted", "regexp", "utf8"] {
         println!("{key}: {:?}", result.get(key));
     }
     println!("fuel used: {}", vm.fuel_used());
