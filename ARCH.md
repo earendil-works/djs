@@ -111,6 +111,10 @@ djs/
     djs-difftest/   the differential corpus runner and the djs-abidrive driver.
     djs-bench/      benchmarks: component, engine track, wasm size.
     djs-docs/       the guide's generator and checker (docs/guide, D2100).
+    djs-embed/      the native embedding crate for Rust hosts (D3170, D3184): snapshots,
+                    instances, typed host functions, plain data in and out, budgets, ES
+                    modules; its own semver, no djs-core type in its API.
+    djs-libm/       libm 0.2.16's functions djs-core uses, copied (D3174, D3215).
   builtins/         builtin sources in the strict TS subset (*.ts), intrinsics.d.ts,
                     tsconfig.json (so tsc and editors type-check them); gen/ holds the
                     generated prelude.js and resume-points.txt.
@@ -607,6 +611,23 @@ sessions as dumps (D2650).
   strong or absent (deterministic mode, D1680). Same inputs in the same order give the
   same heap images, across fuel slices, restores, and native and wasm builds (D1720,
   D1725; checked in the gate).
+
+### Native hosts: djs-embed (D3170)
+
+Rust hosts embed djs natively through `crates/djs-embed` (first user: Gondolin's daemon,
+which runs JS network hooks in-process). It wraps the same `Vm` behind an API of its own:
+a `Snapshot` is the image of a VM after the host's setup (host functions, plain-data
+globals, scripts and ES modules, with the module graph evaluated), `Send + Sync`; an
+`Instance` is a VM copied from it (`reset` copies it back into the same arena buffer,
+D3182). Calls are stepped by the host: sync host calls park the VM, async ones are listed
+when it waits, and an async entry ends with its promise's settled value (held in a
+handle). Values go in and out typed or as plain data built directly in the heap (the wire
+format's Rust encoder and the outbound encoder, D3180, D3225), never as JSON. Budgets: fuel
+per call in slices, a wall-clock deadline between slices, and the heap cap as an
+uncatchable end of the run (D3181). Every entry runs under `catch_unwind`; a panic poisons
+only that instance (D3184). What only native embedders get (this API's core parts, ES
+modules, TextEncoder/TextDecoder) is djs-core's `embed` feature, off in the wasm modules
+(D3175).
 
 ### Data passing (G1)
 

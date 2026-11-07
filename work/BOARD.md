@@ -6,10 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0240 | djs-embed: the native embedding crate (E1–E7) | embed | .worktrees/embed |
-| 0241 | ES modules: module goal, loader, linking and evaluation (M1–M3, M6, M7) | modules | .worktrees/modules |
-| 0244 | TextEncoder and TextDecoder (UTF-8) (B1) | encoding | .worktrees/encoding |
-| 0245 | djs-libm: libm's functions as a djs crate | libm | .worktrees/libm |
 
 ## Open (ready)
 
@@ -20,11 +16,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on |
 | --- | --- | --- |
-| 0242 | test262's module tests: a fixture loader in the runner, groups and ratchet | 0241 |
-| 0243 | Synthetic modules, import() through the loader, modules in djs-embed (M4, M5) | 0240, 0241 |
-| 0246 | djs-embed for Gondolin's targets: cross-builds, image portability, consuming it | 0240, 0245 |
-| 0247 | The hook benchmark on djs-embed: per-call costs for Gondolin | 0240 |
-| 0248 | Top-level await, JSON modules and source positions for modules (M8) | 0241, 0242, 0243 |
 | - | Stale entry in tests/pi/expected-failures.txt (next mode): update the ratchet | ready |
 | - | Paused, agents archived (owner): 0207 dump size (fluff queue items 8, 9, 11; crossing-callbacks and for-in.iterator refusals), 0211 fuzzing, 0215 performance (Result written) | restart on request |
 | - | fuzz.mjs reduce left an orphaned djs-difftest at 100% CPU for 15 h (likely a reduced candidate with an endless loop, run without a timeout): wrap reduce's runs in scripts/timeout.sh / a fuel cap; check whether it was an engine hang instead | ready |
@@ -40,6 +31,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | - | Per-op gaps vs best QuickJS (0229): trim 2.8, padStart/End 2.5, Object.entries+fromEntries 2.3, Math.floor 2.2, slice 1.9, sort cmp 1.9, Map.set 1.8, toFixed 1.8, toLowerCase/String(i) 1.7; wasm/* sizes in status.tsv stale (status.py size); compare monty snapshots on the page; comparator sort 1.6x (n_call frame + native re-entry); builtins re-intern string-literal keys (Get(o, "length")) on every call; run_hot is sensitive to any code change (4-6% on loops): understand before adding arms (0230b, 0231) | ready |
 | - | Plain-dump 'crossing callbacks' refusal (s13-s10173, seed 689232 with --lazy): open since 0211 | ready |
 | - | new Error 30k vs 18.7k (CaptureStack converts frame names to Rust strings); derived class construct 1.2-1.6x (super_call opcode) (0236) | ready |
+| - | Embedding follow-ups (0240-0248): module code accepts HTML-like comments; the dumper knows no module records or TextCodec objects; host-function Throws have no stack; Step::Wait reports async calls only when the VM waits; import() loads are not fuel-metered; minor GCs walk the whole sealed snapshot region (12% of a 64 KiB body call; a card table would also let reset copy only what changed); non-ASCII TextEncoder.encode ~5x node; publishing djs-embed to crates.io needs builtins/gen and djs-libm sources inside the packaged crates | ready |
 | - | Bridge follow-ups (0238): Sandbox sync host call ~3 us vs ~1.7 us C embedding; Uint8Array in with one copy (like long ASCII strings); Math.max ratio 1.08 -> 1.79 vs QuickJS (noise or regression?); lazily read tool results (host buffer read on demand; ties to result buffers) | ready |
 | - | One djs-prelude build script per target dir (~20 fresh executables per core change): fewer cargo configs or a base image without that build script | owner (design) |
 | - | macOS Developer Tools for the agent host app (first-exec notarization checks, 30-80 s per new binary) | owner (GUI) |
@@ -51,6 +43,15 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0240 | djs-embed: the native embedding crate (E1–E7) | e847b7fa (agent embed; D3180-D3184) |
+| 0245 | djs-libm: libm's functions as a djs crate | 4771aa63 (agent libm; D3215; no third-party runtime crate in djs-core) |
+| 0246 | djs-embed for Gondolin's targets: cross-builds, image portability | 439f6b7a (agent libm; D3220; scripts/cross-check.sh, 4 targets identical) |
+| 0247 | The hook benchmark on djs-embed | 017ae943 (agent embed; D3225, D3226; examples/hooks-bench) |
+| 0241 | ES modules: module goal, loader, linking and evaluation (M1–M3, M6, M7) | dbb7ee0e (agent modules; D3190-D3194; folded into `embed`, D3175) |
+| 0244 | TextEncoder and TextDecoder (UTF-8) (B1) | 67425ca2 (agent encoding; D3210, D3211; embed-only) |
+| 0243 | Synthetic modules, import() through the loader, modules in djs-embed (M4, M5) | 32d07ff7 (agent embed; D3235, D3236) |
+| 0242 | test262's module tests | 2a6d1fb2 (agent t262; D3230, D3231) |
+| 0248 | Top-level await, JSON modules, module positions (M8) | f5b973ef (agent modules, finished by the coordinator; D3245, D3246) |
 | 0001 | Workspace skeleton and process | initial commit |
 | 0003 | Lexer | e4a42c3 (agent lexer; parser follow-ups listed in the issue) |
 | 0005 | Values, arena heap, strings, atoms, objects | dc751e2 (agent heap; follow-ups in the issue) |
