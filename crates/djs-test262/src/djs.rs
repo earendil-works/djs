@@ -11,7 +11,8 @@
 //! `test/`, a specifier names the file relative to the importing module's directory, and
 //! the loader reads the `*_FIXTURE.js` files from disk. The test alone is compiled first
 //! (the parse phase), then the graph is loaded and linked (the resolution phase), then
-//! evaluated; the evaluation's promise says how it ended.
+//! evaluated; the evaluation's promise says how it ended. `import()` (in modules and
+//! Scripts alike) loads through the same loader; a Script's key is its path too.
 
 use std::time::Instant;
 
@@ -107,13 +108,7 @@ impl Djs {
             ..VmOptions::default()
         };
         let mut vm = djs_prelude::new_vm(opts).map_err(|e| format!("new_vm: {e:?}"))?;
-        // The wall clock, in UTC (D1383).
-        vm.set_now(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis() as f64)
-                .unwrap_or(0.0),
-        );
+        vm.set_now(now());
         let mut s = Session {
             vm,
             printed: Vec::new(),
@@ -124,6 +119,9 @@ impl Djs {
         };
         s.install_host()
             .map_err(|e| format!("installing $262: {e:?}"))?;
+        // `import()` loads from the fixture files (a no-op without modules).
+        s.vm.set_dynamic_import(true)
+            .map_err(|e| format!("set_dynamic_import: {e:?}"))?;
         match s.script(SETUP.as_bytes(), "<setup>")? {
             Ok(Outcome::Completed(_)) => {}
             Ok(Outcome::Threw(e)) => return Err(format!("$262 setup threw {e}")),
@@ -156,6 +154,14 @@ impl Djs {
         };
         Ok(s.finish(status))
     }
+}
+
+/// The wall clock, in UTC (D1383): `ms` since the epoch.
+fn now() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as f64)
+        .unwrap_or(0.0)
 }
 
 fn is_oom(e: &ErrorInfo) -> bool {
@@ -272,14 +278,33 @@ impl Session<'_> {
     /// Runs the call in progress (and the jobs it queues) to the end, within the fuel
     /// budget, answering the host calls.
     fn drive(&mut self) -> Result<Outcome, String> {
+        // The call's result, held while `import()`s are still answered and run.
+        let mut result = None;
         loop {
             let slice = SLICE.min(self.fuel_left.max(1));
-            match self.vm.run(slice) {
-                VmStatus::Done(v) => return Ok(Outcome::Completed(v)),
-                VmStatus::Idle => return Ok(Outcome::Completed(Value::UNDEFINED)),
+            let status = self.vm.run(slice);
+            if let VmStatus::Done(_) | VmStatus::Idle = status {
+                if let (VmStatus::Done(v), None) = (status, result) {
+                    let h = self.vm.heap_mut().new_handle(v);
+                    result = Some(h.map_err(|_| "out of memory for a handle")?);
+                }
+                if self.answer_imports()? {
+                    continue;
+                }
+                let v = result.map_or(Value::UNDEFINED, |h| {
+                    let v = self.vm.heap().get_handle(h);
+                    self.vm.heap_mut().drop_handle(h);
+                    v
+                });
+                return Ok(Outcome::Completed(v));
+            }
+            match status {
+                VmStatus::Done(_) | VmStatus::Idle => unreachable!(),
                 VmStatus::Threw(e) => return Ok(Outcome::Threw(self.error_info(e))),
                 VmStatus::HostOutOfMemory => return Err("out of host memory".into()),
                 VmStatus::OutOfFuel => {
+                    // The clock moves between slices: a test may wait for it in a loop.
+                    self.vm.set_now(now());
                     self.fuel_left = self.fuel_left.saturating_sub(slice);
                     if self.fuel_left == 0 || self.start.elapsed() >= self.job.timeout {
                         self.limit = if self.fuel_left == 0 {
@@ -305,6 +330,23 @@ impl Session<'_> {
                 }
             }
         }
+    }
+
+    /// Answers the `import()` calls made since the last time (they load from the fixture
+    /// files, as a module test's graph does): whether there were any.
+    fn answer_imports(&mut self) -> Result<bool, String> {
+        let calls = self.vm.new_host_calls();
+        let mut loader = Fixtures {
+            dir: test_dir(self.job),
+            root: self.job.path,
+            source: self.job.source,
+        };
+        for &c in &calls {
+            self.vm
+                .answer_import(c, &mut loader)
+                .map_err(|e| format!("Vm::answer_import: {e:?}"))?;
+        }
+        Ok(!calls.is_empty())
     }
 
     fn host_call(&mut self, fn_id: u32, args: &[Value]) -> HeapResult<Result<Value, Value>> {

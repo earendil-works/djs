@@ -63,19 +63,6 @@ scan = [
 ]
 
 [[group]]
-name = "dynamic-import"
-kind = "skip"
-description = "import() that loads a module: until 0243 routes it through the module loader, it rejects (D1582). Its syntax tests (dynamic-import/syntax) are active."
-paths = [
-  "language/expressions/dynamic-import/*.js",
-  "language/expressions/dynamic-import/assignment-expression",
-  "language/expressions/dynamic-import/catch",
-  "language/expressions/dynamic-import/namespace",
-  "language/expressions/dynamic-import/usage",
-  "language/expressions/dynamic-import/import-attributes",
-]
-
-[[group]]
 name = "direct-eval"
 kind = "skip"
 description = "Direct eval: access to the caller's scope is a non-goal (D014). djs treats `eval(x)` as indirect eval, so tests of direct eval semantics cannot pass. Indirect eval and the Function constructors are active since 0059."

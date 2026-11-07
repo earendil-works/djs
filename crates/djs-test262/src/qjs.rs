@@ -36,19 +36,16 @@ impl Qjs {
                 format!(
                     "[{},{}]",
                     json_quote(&h.name),
-                    json_quote(&h.path.to_string_lossy())
+                    json_quote(&absolute(&h.path).to_string_lossy())
                 )
             })
             .collect();
         format!(
             "{{\"harness\":[{}],\"test\":{},\"strict\":{},\"module\":{}}}",
             harness.join(","),
-            // Absolute: a module test is imported by this path, from its directory.
-            json_quote(
-                &std::path::absolute(job.file)
-                    .unwrap_or_else(|_| job.file.to_path_buf())
-                    .to_string_lossy()
-            ),
+            // Absolute: qjs runs in the test's directory, and imports a module test by
+            // this path.
+            json_quote(&absolute(job.file).to_string_lossy()),
             job.strict,
             job.module
         )
@@ -66,10 +63,9 @@ impl Engine for Qjs {
             cmd.arg("--memory-limit").arg(limit.to_string());
         }
         cmd.args(["-m", "-e", DRIVER]).arg(Self::spec(job));
-        if job.module
-            && let Some(dir) = job.file.parent()
-        {
-            // qjs resolves a specifier without `./` against the working directory.
+        if let Some(dir) = job.file.parent() {
+            // qjs resolves the specifiers of a Script's `import()`, and a module's that
+            // lack a `./`, against the working directory.
             cmd.current_dir(dir);
         }
         cmd.stdin(Stdio::null())
@@ -146,6 +142,10 @@ impl Engine for Qjs {
             diagnostics,
         }
     }
+}
+
+fn absolute(p: &std::path::Path) -> PathBuf {
+    std::path::absolute(p).unwrap_or_else(|_| p.to_path_buf())
 }
 
 #[cfg(unix)]

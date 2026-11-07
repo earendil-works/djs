@@ -29,7 +29,6 @@ language/expressions/class/elements/private-getter-is-not-a-own-property.js: Typ
 language/expressions/class/elements/private-setter-is-not-a-own-property.js: TypeError: not a function
 language/identifier-resolution/assign-to-global-undefined.js: expected runtime ReferenceError, but no error was thrown
 language/module-code/top-level-await/dynamic-import-of-waiting-module.js: async: $DONE was not called
-language/module-code/verify-dfs.js: async: ReferenceError: could not load module './verify-dfs-b_FIXTURE.js'
 language/statements/await-using/syntax/await-using-allowed-at-top-level-of-module.js: parse: SyntaxError: unexpected token in expression: 'await'
 language/statements/await-using/syntax/await-using.js: parse: SyntaxError: unexpected token in expression: 'await'
 language/statements/class/elements/private-getter-is-not-a-own-property.js: TypeError: not a function

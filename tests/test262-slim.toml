@@ -79,5 +79,6 @@ paths = [
 [[group]]
 name = "no-modules"
 kind = "skip"
-description = "Without djs-core's `embed` (D3175, D3193): no ES modules, as in the wasm modules; the module goal is a SyntaxError there."
+description = "Without djs-core's `embed` (D3175, D3193): no ES modules, as in the wasm modules. The module goal is a SyntaxError there and `import()` rejects (D1582); its syntax tests go too."
 flags = ["module"]
+features = ["dynamic-import"]
