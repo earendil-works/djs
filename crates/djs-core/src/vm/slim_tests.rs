@@ -37,8 +37,12 @@ fn eval(vm: &mut Vm, src: &str) -> String {
 #[test]
 fn absent_globals() {
     let mut vm = vm();
-    let realm = crate::interp::realm::ABSENT_GLOBALS.iter().map(|n| (n, FULL));
-    let embed = crate::interp::realm::EMBED_GLOBALS.iter().map(|n| (n, crate::EMBED));
+    let realm = crate::interp::realm::ABSENT_GLOBALS
+        .iter()
+        .map(|n| (n, FULL));
+    let embed = crate::interp::realm::EMBED_GLOBALS
+        .iter()
+        .map(|n| (n, crate::EMBED));
     for (name, present) in realm.chain(embed) {
         let t = eval(&mut vm, &alloc::format!("typeof {name}"));
         let used = eval(&mut vm, &alloc::format!("'use strict'; {name}; 1"));

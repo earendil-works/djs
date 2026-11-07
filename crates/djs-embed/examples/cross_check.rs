@@ -64,7 +64,9 @@ fn main() -> Result<(), Error> {
             }
         }
     };
-    for key in ["allow", "length", "math", "text", "sorted", "regexp", "utf8"] {
+    for key in [
+        "allow", "length", "math", "text", "sorted", "regexp", "utf8",
+    ] {
         println!("{key}: {:?}", result.get(key));
     }
     println!("fuel used: {}", vm.fuel_used());
