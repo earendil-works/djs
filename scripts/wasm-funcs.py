@@ -95,7 +95,7 @@ AREAS = [
     ("snapshot/wire", r"djs_core::(wire|image|snapshot)::"),
     ("vm api", r"djs_core::vm::|djs_wasm::|^vm_|std::thread::local"),
     ("djs_core other", r"djs_core::"),
-    ("libm", r"^libm::|compiler_builtins::math"),
+    ("libm", r"^(djs_)?libm::|compiler_builtins::math"),
     ("malloc", r"dlmalloc|__rdl_|__rust_(alloc|dealloc|realloc)"),
     ("core::fmt / panic", r"core::fmt|core::panicking|panic|core::result::unwrap_failed|core::option::(expect|unwrap)_failed"),
     ("alloc/core generics", r"^<?(alloc|core)::|^<\[|^<&|^<\(|^<(u8|u16|u32|usize|i64|char|bool|str)"),

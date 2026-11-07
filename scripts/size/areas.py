@@ -83,7 +83,7 @@ DJS = [
     (BUILTINS, r"heap::collection|Heap>::collection_"),
     (RUNTIME, r"djs_core::interp::|djs_core::bytecode::|djs_core::heap::|djs_core::value|djs_core::sort"),
     (HOST, r"djs_core::vm::|djs_wasm::|^vm_|^djs_|std::thread::local"),
-    (LIBM, r"^libm::|compiler_builtins::math|compiler_builtins::float|__(mul|add|div|sub)tf3"),
+    (LIBM, r"^(djs_)?libm::|compiler_builtins::math|compiler_builtins::float|__(mul|add|div|sub)tf3"),
     (STD, r"djs_core::|core::|alloc::|std::|^<|panic|compiler_builtins|^__|^mem(cpy|set|move|cmp)|dlmalloc"),
 ]
 
