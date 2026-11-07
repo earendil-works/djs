@@ -29,6 +29,7 @@ pub mod dump_runtime;
 mod dump_state;
 mod format;
 mod image;
+mod module;
 pub mod registry;
 
 use alloc::string::String;
@@ -46,6 +47,7 @@ use crate::value::{Obj, Str, Value};
 #[cfg(feature = "dump")]
 pub use call_site::CallSite;
 pub use compat::{COMPAT_VERSION, FEATURES, IMAGE_DEPS, ImageDep, ImageDeps, RECORDS_HASH};
+pub use module::{ModuleLoader, ModuleSource};
 
 /// `HostCall::FLAGS`: returned by `Vm::new_host_calls` already.
 const HOST_CALL_REPORTED: u32 = 1;
@@ -1474,6 +1476,8 @@ mod dump_tests;
 mod frozen_tests;
 #[cfg(all(test, feature = "lazy"))]
 mod lazy_tests;
+#[cfg(all(test, feature = "modules"))]
+mod module_tests;
 #[cfg(test)]
 mod slim_tests;
 #[cfg(test)]

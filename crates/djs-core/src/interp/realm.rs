@@ -189,9 +189,13 @@ pub enum Intrinsic {
     /// `[source, flags, program cell]` triples, most recently used first, or undefined.
     /// No user code reaches it.
     RegExpCache,
+    /// ES modules (D3171, interp/module.rs): an internal Record `[registry, traps]`, the
+    /// registry a hidden object from module key to module record and the traps the
+    /// prototype of the namespace handlers; undefined until the first module loads.
+    Modules,
 }
 
-const INTRINSIC_COUNT: u32 = Intrinsic::RegExpCache as u32 + 1;
+const INTRINSIC_COUNT: u32 = Intrinsic::Modules as u32 + 1;
 
 impl Intrinsic {
     /// The intrinsic prototype of the constructor `name`, if the realm has one: the

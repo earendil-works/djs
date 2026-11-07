@@ -3071,23 +3071,7 @@ impl<'h> Exec<'h> {
         let t = template::child(self.heap, self.template, child).expect("child template");
         let a = self.heap.arena();
         let ncap = a.get(t.0, FuncTemplate::CAPTURES) as u32;
-        // [[Prototype]] by the ASYNC/GENERATOR bits, for every kind (D1420).
-        let flags = u32::from(a.get::<u16>(t.0, FuncTemplate::FLAGS));
-        let proto = intrinsic_obj(
-            self.heap,
-            match (
-                flags & func_flags::ASYNC != 0,
-                flags & func_flags::GENERATOR != 0,
-            ) {
-                (false, false) => Intrinsic::FunctionProto,
-                (true, false) => Intrinsic::AsyncFunctionProto,
-                (false, true) => Intrinsic::GeneratorFunctionProto,
-                (true, true) => Intrinsic::AsyncGeneratorFunctionProto,
-            },
-        );
-        // Methods that use `super` get a home object slot after the captures.
-        let home = u32::from(flags & func_flags::HOME != 0);
-        let f = self.heap.alloc_closure(Some(proto), t.0, ncap + home)?;
+        let f = alloc_closure_of(self.heap, t)?;
         for i in 0..ncap {
             let d = template::capture_desc(self.heap, t.0, i);
             // (Bits 16-30 are a lazy template's capture attributes, D2990.)
@@ -3098,56 +3082,8 @@ impl<'h> Exec<'h> {
             };
             self.heap.set_object_slot(f, i, b);
         }
-        self.function_properties(f, t.0)?;
+        function_properties(self.heap, f, t.0)?;
         Ok(Value::object(f))
-    }
-
-    /// `length`, `name` and (for ordinary functions) `prototype` of a new closure.
-    fn function_properties(&mut self, f: Obj, t: u32) -> Result<(), Fault> {
-        use crate::heap::atoms;
-        let a = self.heap.arena();
-        let length = a.get(t, FuncTemplate::LENGTH);
-        let name = Atom::from_id(a.get(t, FuncTemplate::NAME));
-        let flags = u32::from(a.get::<u16>(t, FuncTemplate::FLAGS));
-        if flags & func_flags::PRIVILEGED != 0 {
-            // The prelude: `%Install*` names the builtins user code can see (D1433).
-            return Ok(());
-        }
-        // `length` and `name` come from the template until changed (D2445); stored only
-        // for a name that is not a string atom (an integer key's).
-        if !self.heap.set_lazy_fn_props(f) {
-            let ro = PropFlags::CONFIGURABLE;
-            let d = PropertyDescriptor::data(Value::int(length as i32), ro);
-            self.heap.define_own_property(f, atoms::LENGTH, &d)?;
-            let name = self.heap.atom_string(name)?;
-            let d = PropertyDescriptor::data(Value::string(name), ro);
-            self.heap.define_own_property(f, atoms::NAME, &d)?;
-        }
-        if func_flags::kind(flags) == func_flags::KIND_NORMAL
-            && flags & (func_flags::ASYNC | func_flags::GENERATOR) == 0
-        {
-            let op = intrinsic_obj(self.heap, Intrinsic::ObjectProto);
-            let proto = self.heap.new_object(Some(op))?;
-            realm::define_hidden(self.heap, proto, atoms::CONSTRUCTOR, Value::object(f))?;
-            let d = PropertyDescriptor::data(Value::object(proto), PropFlags::WRITABLE);
-            self.heap.define_own_property(f, atoms::PROTOTYPE, &d)?;
-        } else if flags & func_flags::GENERATOR != 0 {
-            // A generator function's `prototype` is the prototype of its generator
-            // objects (no `constructor`), D1375; async ones inherit from
-            // %AsyncGeneratorPrototype% (D1420).
-            let gp = intrinsic_obj(
-                self.heap,
-                if flags & func_flags::ASYNC != 0 {
-                    Intrinsic::AsyncGeneratorProto
-                } else {
-                    Intrinsic::GeneratorProto
-                },
-            );
-            let proto = self.heap.new_object(Some(gp))?;
-            let d = PropertyDescriptor::data(Value::object(proto), PropFlags::WRITABLE);
-            self.heap.define_own_property(f, atoms::PROTOTYPE, &d)?;
-        }
-        Ok(())
     }
 
     /// ToPropertyKey of a primitive key. Object keys never get here: the
@@ -4547,4 +4483,75 @@ fn undefined_global(heap: &Heap, key: Atom) -> Fault {
         ErrorKind::ReferenceError,
         crate::text::cat!("'", name, "' is not defined"),
     )
+}
+
+/// A closure of template `t` (its [[Prototype]] by the ASYNC/GENERATOR bits, for every
+/// kind, D1420; a `super` method gets its home object slot after the captures), with
+/// its capture slots still to fill.
+pub(crate) fn alloc_closure_of(heap: &mut Heap, t: Ref) -> Result<Obj, Fault> {
+    let a = heap.arena();
+    let ncap = a.get(t.0, FuncTemplate::CAPTURES) as u32;
+    let flags = u32::from(a.get::<u16>(t.0, FuncTemplate::FLAGS));
+    let proto = intrinsic_obj(
+        heap,
+        match (
+            flags & func_flags::ASYNC != 0,
+            flags & func_flags::GENERATOR != 0,
+        ) {
+            (false, false) => Intrinsic::FunctionProto,
+            (true, false) => Intrinsic::AsyncFunctionProto,
+            (false, true) => Intrinsic::GeneratorFunctionProto,
+            (true, true) => Intrinsic::AsyncGeneratorFunctionProto,
+        },
+    );
+    let home = u32::from(flags & func_flags::HOME != 0);
+    Ok(heap.alloc_closure(Some(proto), t.0, ncap + home)?)
+}
+
+/// `length`, `name` and (for ordinary functions) `prototype` of a new closure.
+pub(crate) fn function_properties(heap: &mut Heap, f: Obj, t: u32) -> Result<(), Fault> {
+    use crate::heap::atoms;
+    let a = heap.arena();
+    let length = a.get(t, FuncTemplate::LENGTH);
+    let name = Atom::from_id(a.get(t, FuncTemplate::NAME));
+    let flags = u32::from(a.get::<u16>(t, FuncTemplate::FLAGS));
+    if flags & func_flags::PRIVILEGED != 0 {
+        // The prelude: `%Install*` names the builtins user code can see (D1433).
+        return Ok(());
+    }
+    // `length` and `name` come from the template until changed (D2445); stored only
+    // for a name that is not a string atom (an integer key's).
+    if !heap.set_lazy_fn_props(f) {
+        let ro = PropFlags::CONFIGURABLE;
+        let d = PropertyDescriptor::data(Value::int(length as i32), ro);
+        heap.define_own_property(f, atoms::LENGTH, &d)?;
+        let name = heap.atom_string(name)?;
+        let d = PropertyDescriptor::data(Value::string(name), ro);
+        heap.define_own_property(f, atoms::NAME, &d)?;
+    }
+    if func_flags::kind(flags) == func_flags::KIND_NORMAL
+        && flags & (func_flags::ASYNC | func_flags::GENERATOR) == 0
+    {
+        let op = intrinsic_obj(heap, Intrinsic::ObjectProto);
+        let proto = heap.new_object(Some(op))?;
+        realm::define_hidden(heap, proto, atoms::CONSTRUCTOR, Value::object(f))?;
+        let d = PropertyDescriptor::data(Value::object(proto), PropFlags::WRITABLE);
+        heap.define_own_property(f, atoms::PROTOTYPE, &d)?;
+    } else if flags & func_flags::GENERATOR != 0 {
+        // A generator function's `prototype` is the prototype of its generator
+        // objects (no `constructor`), D1375; async ones inherit from
+        // %AsyncGeneratorPrototype% (D1420).
+        let gp = intrinsic_obj(
+            heap,
+            if flags & func_flags::ASYNC != 0 {
+                Intrinsic::AsyncGeneratorProto
+            } else {
+                Intrinsic::GeneratorProto
+            },
+        );
+        let proto = heap.new_object(Some(gp))?;
+        let d = PropertyDescriptor::data(Value::object(proto), PropFlags::WRITABLE);
+        heap.define_own_property(f, atoms::PROTOTYPE, &d)?;
+    }
+    Ok(())
 }

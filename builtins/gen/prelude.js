@@ -6103,6 +6103,96 @@ function MathRandomBuiltin() {
   return %MathRandom();
 }
 
+// builtins/module.ts:19 %ModuleEvaluate
+function ModuleEvaluate(m) {
+  const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
+  const state = %NewRecord(2);
+  %RecordSet(state, 0, null);
+  %RecordSet(state, 1, 0);
+  try {
+    InnerModuleEvaluation(m, state);
+  } catch (e) {
+    let top = %RecordGet(state, 0);
+    while (top !== null) {
+      const t = %AsObj(top);
+      %RecordSet(t, 1, 5);
+      %RecordSet(t, 5, e);
+      top = %RecordGet(t, 10);
+      %RecordSet(t, 10, null);
+    }
+    %RejectPromise(promise, e);
+    return promise;
+  }
+  %FulfillPromise(promise, undefined);
+  return promise;
+}
+
+// builtins/module.ts:44
+function InnerModuleEvaluation(m, state) {
+  const status = %AsNumber(%RecordGet(m, 1));
+  if (status === 5) {
+    throw %RecordGet(m, 5);
+  }
+  if (status !== 2) {
+    return;
+  }
+  const index = %AsNumber(%RecordGet(state, 1));
+  %RecordSet(m, 1, 3);
+  %RecordSet(m, 6, index);
+  %RecordSet(m, 7, index);
+  %RecordSet(state, 1, index + 1);
+  %RecordSet(m, 10, %RecordGet(state, 0));
+  %RecordSet(state, 0, m);
+  const requested = %AsObj(%RecordGet(m, 3));
+  const n = %AsNumber(%RecordGet(m, 4));
+  for (let i = 0; i < n; i++) {
+    const r = %AsObj(%RecordGet(requested, %F64ToI32(i)));
+    InnerModuleEvaluation(r, state);
+    if (%AsNumber(%RecordGet(r, 1)) === 3) {
+      const ancestor = %AsNumber(%RecordGet(r, 7));
+      if (ancestor < %AsNumber(%RecordGet(m, 7))) {
+        %RecordSet(m, 7, ancestor);
+      }
+    }
+  }
+  %Call(%RecordGet(m, 2), undefined);
+  if (%AsNumber(%RecordGet(m, 7)) === index) {
+    let done = false;
+    while (!done) {
+      const t = %AsObj(%RecordGet(state, 0));
+      %RecordSet(state, 0, %RecordGet(t, 10));
+      %RecordSet(t, 10, null);
+      %RecordSet(t, 1, 4);
+      done = t === m;
+    }
+  }
+}
+
+// builtins/module.ts:93 %NamespaceGet
+function NamespaceGet(target, key, receiver) {
+  return %ModuleNamespaceGet(%AsObj(this), %AsObj(target), key);
+}
+
+// builtins/module.ts:98 %NamespaceSet
+function NamespaceSet(target, key, v, receiver) {
+  return false;
+}
+
+// builtins/module.ts:103 %NamespaceGetOwnProperty
+function NamespaceGetOwnProperty(target, key) {
+  return %ModuleNamespaceDescriptor(%AsObj(this), %AsObj(target), key);
+}
+
+// builtins/module.ts:108 %NamespaceDefineProperty
+function NamespaceDefineProperty(target, key, desc) {
+  return %ModuleNamespaceDefine(%AsObj(this), %AsObj(target), key, %AsObj(desc));
+}
+
+// builtins/module.ts:113 %NamespaceOwnKeys
+function NamespaceOwnKeys(target) {
+  return %ModuleNamespaceKeys(%AsObj(this), %AsObj(target));
+}
+
 // builtins/number.ts:9 constructor Number
 function NumberConstructor(...args) {
   let $1, $2, $3, $4;
@@ -12359,6 +12449,12 @@ function GlobalAtob(...args) {
 %InstallIntrinsic("AddEntriesFromIterable", AddEntriesFromIterable);
 %InstallIntrinsic("MapPrototypeSet", MapPrototypeSet);
 %InstallIntrinsic("MapIteratorPrototypeNext", MapIteratorPrototypeNext);
+%InstallIntrinsic("ModuleEvaluate", ModuleEvaluate);
+%InstallIntrinsic("NamespaceGet", NamespaceGet);
+%InstallIntrinsic("NamespaceSet", NamespaceSet);
+%InstallIntrinsic("NamespaceGetOwnProperty", NamespaceGetOwnProperty);
+%InstallIntrinsic("NamespaceDefineProperty", NamespaceDefineProperty);
+%InstallIntrinsic("NamespaceOwnKeys", NamespaceOwnKeys);
 %InstallIntrinsic("ResolvePromise", ResolvePromise);
 %InstallIntrinsic("PromiseResolveFunction", PromiseResolveFunction);
 %InstallIntrinsic("PromiseRejectFunction", PromiseRejectFunction);

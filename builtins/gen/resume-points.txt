@@ -2099,6 +2099,23 @@ MathHypot: reentrant (Math.hypot)
 
 MathRandomBuiltin: leaf (Math.random)
 
+ModuleEvaluate: reentrant (%ModuleEvaluate)
+  builtins/module.ts:26:5  InnerModuleEvaluation (builtin)
+
+InnerModuleEvaluation: reentrant
+  builtins/module.ts:64:5  InnerModuleEvaluation (builtin)
+  builtins/module.ts:72:3  Call (intrinsic)
+
+NamespaceGet: leaf (%NamespaceGet)
+
+NamespaceSet: leaf (%NamespaceSet)
+
+NamespaceGetOwnProperty: leaf (%NamespaceGetOwnProperty)
+
+NamespaceDefineProperty: leaf (%NamespaceDefineProperty)
+
+NamespaceOwnKeys: leaf (%NamespaceOwnKeys)
+
 NumberConstructor: reentrant (constructor Number)
   builtins/number.ts:11:7  LengthOfArrayLike (builtin)
   builtins/number.ts:12:35  Get (intrinsic)

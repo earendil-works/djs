@@ -13,6 +13,7 @@
 
 pub(crate) mod conv;
 pub mod frame;
+pub(crate) mod module;
 pub mod realm;
 pub(crate) mod run;
 pub mod state;

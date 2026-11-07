@@ -310,6 +310,10 @@ const PERFORM_PROMISE_THEN: u16 = id("PerformPromiseThen");
 const ENQUEUE_PROMISE_RESOLVE_THENABLE_JOB: u16 = id("EnqueuePromiseResolveThenableJob");
 const NEW_RECORD: u16 = id("NewRecord");
 const RECORD_GET: u16 = id("RecordGet");
+const MODULE_NAMESPACE_GET: u16 = id("ModuleNamespaceGet");
+const MODULE_NAMESPACE_DESCRIPTOR: u16 = id("ModuleNamespaceDescriptor");
+const MODULE_NAMESPACE_DEFINE: u16 = id("ModuleNamespaceDefine");
+const MODULE_NAMESPACE_KEYS: u16 = id("ModuleNamespaceKeys");
 const RECORD_SET: u16 = id("RecordSet");
 const NEW_BUILTIN_CLOSURE: u16 = id("NewBuiltinClosure");
 const GENERATOR_STATE: u16 = id("GeneratorState");
@@ -1894,6 +1898,37 @@ impl Exec<'_> {
                     self.heap.set_object_slot(r, i, Value::UNDEFINED);
                 }
                 Value::object(r)
+            }
+            MODULE_NAMESPACE_GET
+            | MODULE_NAMESPACE_DESCRIPTOR
+            | MODULE_NAMESPACE_DEFINE
+            | MODULE_NAMESPACE_KEYS => {
+                use crate::interp::module;
+                let (Some(handler), Some(target)) = (a0.as_object(), arg(self, 1).as_object())
+                else {
+                    return bad_argument(id);
+                };
+                match id {
+                    MODULE_NAMESPACE_GET => {
+                        module::namespace_get(self.heap, handler, target, arg(self, 2))?
+                    }
+                    MODULE_NAMESPACE_DESCRIPTOR => {
+                        module::namespace_descriptor(self.heap, handler, target, arg(self, 2))?
+                    }
+                    MODULE_NAMESPACE_DEFINE => {
+                        let Some(desc) = arg(self, 3).as_object() else {
+                            return bad_argument(id);
+                        };
+                        Value::bool(module::namespace_define(
+                            self.heap,
+                            handler,
+                            target,
+                            arg(self, 2),
+                            desc,
+                        )?)
+                    }
+                    _ => module::namespace_keys(self.heap, handler)?,
+                }
             }
             RECORD_GET | RECORD_SET => {
                 let r = a0
