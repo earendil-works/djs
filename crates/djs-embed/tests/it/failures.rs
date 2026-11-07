@@ -136,3 +136,21 @@ fn every_error_displays() {
     let boxed: Box<dyn std::error::Error> = Box::new(Error::Deadline);
     assert_eq!(boxed.to_string(), "deadline exceeded");
 }
+
+/// After the cap the abandoned call's data is garbage that the next call must not trip
+/// over, whatever the cap (whether a collection was due when the cap was hit varies).
+#[test]
+fn the_next_call_after_the_cap_has_its_memory_back() {
+    let snap = snapshot(SWALLOW);
+    for mb in [3usize, 4, 5, 6, 8] {
+        let limits = Limits {
+            memory: mb << 20,
+            ..Limits::default()
+        };
+        let mut i = snap.instantiate(limits).unwrap();
+        assert_eq!(call(&mut i, "hog"), Err(Error::OutOfMemory), "{mb} MiB");
+        assert_eq!(call(&mut i, "ranWhat").unwrap(), "nothing".into(), "{mb} MiB");
+        assert_eq!(call(&mut i, "hogAsync"), Err(Error::OutOfMemory), "{mb} MiB");
+        assert_eq!(call(&mut i, "ranWhat").unwrap(), "nothing".into(), "{mb} MiB");
+    }
+}

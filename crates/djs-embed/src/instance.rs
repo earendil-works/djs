@@ -209,7 +209,15 @@ impl Instance {
     /// Ends the call with `e`: the VM is aborted (idle, nothing left of the call).
     fn fail<T>(&mut self, e: Error) -> Result<T, Error> {
         if !self.poisoned {
-            let _ = self.guard(|vm| vm.abort());
+            let oom = e == Error::OutOfMemory;
+            let _ = self.guard(|vm| {
+                vm.abort();
+                // The abandoned frames' data is garbage, but no collection is due before
+                // the next call's first allocation, which would hit the cap again.
+                if oom {
+                    let _ = vm.collect();
+                }
+            });
         }
         if let Some(c) = self.call.as_mut() {
             c.over = true;

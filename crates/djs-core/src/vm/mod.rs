@@ -53,12 +53,12 @@ pub use module::{ModuleLoader, ModuleSource};
 const HOST_CALL_REPORTED: u32 = 1;
 
 /// The generated prelude (`builtins/gen/prelude.js`, D1172); the slim build's leaves out
-/// the families it doesn't have (D2411), and full builds without ES modules leave out the
-/// module builtins (D3190).
-#[cfg(all(feature = "full", feature = "modules"))]
+/// the families it doesn't have (D2411), and full builds without `embed` leave out the
+/// builtins tagged `// @embed-only` (D3175).
+#[cfg(all(feature = "full", feature = "embed"))]
 const PRELUDE: &str = include_str!("../../../../builtins/gen/prelude.js");
-#[cfg(all(feature = "full", not(feature = "modules")))]
-const PRELUDE: &str = include_str!("../../../../builtins/gen/prelude-nomodules.js");
+#[cfg(all(feature = "full", not(feature = "embed")))]
+const PRELUDE: &str = include_str!("../../../../builtins/gen/prelude-noembed.js");
 #[cfg(not(feature = "full"))]
 const PRELUDE: &str = include_str!("../../../../builtins/gen/prelude-slim.js");
 
@@ -1479,7 +1479,7 @@ mod dump_tests;
 mod frozen_tests;
 #[cfg(all(test, feature = "lazy"))]
 mod lazy_tests;
-#[cfg(all(test, feature = "modules"))]
+#[cfg(all(test, feature = "embed"))]
 mod module_tests;
 #[cfg(test)]
 mod slim_tests;

@@ -3049,11 +3049,11 @@ fn abort_drops_delivered_results() {
 fn build_inputs_list_features() {
     extern crate std;
     let mut want: Vec<String> = Vec::new();
+    if cfg!(feature = "embed") {
+        want.push("feature embed".into());
+    }
     if cfg!(feature = "full") {
         want.push("feature full".into());
-    }
-    if cfg!(feature = "modules") {
-        want.push("feature modules".into());
     }
     if cfg!(feature = "regexp-unicode-props") {
         want.push("feature regexp-unicode-props".into());

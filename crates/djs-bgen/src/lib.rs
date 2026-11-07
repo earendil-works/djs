@@ -23,9 +23,9 @@ pub struct Output {
     /// `gen/prelude-slim.js`: the prelude without the files marked `// @slim-omit`, for the
     /// slim build (D2411).
     pub prelude_slim: String,
-    /// `gen/prelude-nomodules.js`: the prelude without the files marked
-    /// `// @modules-only`, for full builds without ES modules (the shipped module, D3190).
-    pub prelude_nomodules: String,
+    /// `gen/prelude-noembed.js`: the prelude without the files marked `// @embed-only`,
+    /// for full builds without djs-core's `embed` (the shipped module, D3175).
+    pub prelude_noembed: String,
     /// `gen/resume-points.txt`
     pub report: String,
     /// `crates/djs-core/src/builtins/gen/natives.rs`: the Rust backend (0063).
@@ -36,10 +36,10 @@ pub const PRELUDE_PATH: &str = "gen/prelude.js";
 pub const PRELUDE_SLIM_PATH: &str = "gen/prelude-slim.js";
 /// A line of a builtin file that leaves the file out of the slim build's prelude (D2411).
 pub const SLIM_OMIT: &str = "// @slim-omit";
-pub const PRELUDE_NOMODULES_PATH: &str = "gen/prelude-nomodules.js";
-/// A line of a builtin file that leaves the file out of the preludes of builds without ES
-/// modules (D3190): the slim one and `gen/prelude-nomodules.js`.
-pub const MODULES_ONLY: &str = "// @modules-only";
+pub const PRELUDE_NOEMBED_PATH: &str = "gen/prelude-noembed.js";
+/// A line of a builtin file that leaves the file out of the preludes of builds without
+/// djs-core's `embed` (D3175): the slim one and `gen/prelude-noembed.js`.
+pub const EMBED_ONLY: &str = "// @embed-only";
 pub const REPORT_PATH: &str = "gen/resume-points.txt";
 /// Relative to the builtins directory.
 pub const NATIVES_PATH: &str = "../crates/djs-core/src/builtins/gen/natives.rs";
@@ -65,10 +65,10 @@ pub fn compile(intrinsics: (&str, &str), modules: &[(String, String)]) -> Result
             .map(|(name, _)| name.as_str())
             .collect()
     };
-    let modules_only = marked(MODULES_ONLY);
+    let embed_only = marked(EMBED_ONLY);
     let mut omitted = marked(SLIM_OMIT);
     omitted.extend(
-        modules_only
+        embed_only
             .iter()
             .filter(|m| !omitted.contains(m))
             .collect::<Vec<_>>(),
@@ -100,7 +100,7 @@ pub fn compile(intrinsics: (&str, &str), modules: &[(String, String)]) -> Result
     Ok(Output {
         prelude: emit_js::emit(&program, &sources, &[], false),
         prelude_slim: emit_js::emit(&program, &sources, &omitted, true),
-        prelude_nomodules: emit_js::emit(&program, &sources, &modules_only, false),
+        prelude_noembed: emit_js::emit(&program, &sources, &embed_only, false),
         report: analysis::report(&program, &analysis, &sources),
         natives,
     })

@@ -14,17 +14,13 @@ doctest = false
 djs-libm = { path = "../djs-libm" }
 
 [features]
-default = ["full", "unicode", "dump", "lazy", "compile-cache", "embed", "modules"]
+default = ["full", "unicode", "dump", "lazy", "compile-cache", "embed"]
 # Everything djs implements. Off, the build is slim (D2411, docs/slim-codemode.md): no typed
 # arrays/ArrayBuffer/DataView, Iterator helpers or `Iterator`, BigInt, WeakRef/
 # FinalizationRegistry, DisposableStack/AsyncDisposableStack/SuppressedError, and no
 # `using`, decorator or BigInt literal syntax; their names say "not available in this
 # build". Additive: turning it on only adds.
 full = ["djs-prelude/full"]
-# ES modules (D3171): the module goal, the loader, linking and evaluation
-# (`Vm::load_module`). Off, `Goal::Module` is a SyntaxError and the prelude leaves out the
-# module builtins (builtins/module.ts, D3190), so images depend on it, like on `full`.
-modules = ["djs-prelude/modules"]
 # `Vm::dump` (0167, docs/functions-as-code.md): a VM's bindings written as JavaScript.
 # Code only: images and the base do not depend on it.
 dump = []
@@ -36,11 +32,13 @@ lazy = []
 # The compile cache (0219, D3040): `Vm::compile_cached` exports a compile's cells as a
 # blob that another VM imports instead of compiling again. Code only.
 compile-cache = []
-# What Rust hosts (djs-embed, D3180) use beyond the wasm modules' needs: the outbound wire
-# encoder (`wire::encode`), the wire format's uncounted UTF-8 strings, and
-# `ExecOptions::fatal_out_of_memory`. Code only; off in djs-wasm's modules, whose size
-# counts (D020): they decode no uncounted string.
-embed = []
+# What Rust hosts (djs-embed) use beyond the wasm modules' needs (D3175, D3180): the
+# outbound wire encoder (`wire::encode`), the wire format's uncounted UTF-8 strings,
+# `ExecOptions::fatal_out_of_memory`, and ES modules (D3171: the module goal, the loader,
+# linking and evaluation, `Vm::load_module`). Off in djs-wasm's modules, whose size counts
+# (D020). An image feature: the base of a build without it leaves out the builtins tagged
+# `// @embed-only` (builtins/gen/prelude-noembed.js). Needs `full`.
+embed = ["djs-prelude/embed"]
 # Running the prelude source in wasm (D3094): `Vm::new` with `VmOptions::prelude` and the
 # `%Install*` intrinsics the prelude calls. Native builds always have it; wasm modules
 # start from the base image and leave it out unless they need it (djs-wasm's

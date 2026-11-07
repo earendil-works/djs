@@ -38,7 +38,8 @@ pub const HEADER: &str =
 /// omitted builtins make), and the header lists them so that a new one shows in review.
 ///
 /// `slim`: also leave out the builtins tagged @slim-omit (the slim prelude); without it,
-/// `omit` are the files a build without ES modules leaves out (`// @modules-only`, D3190).
+/// `omit` are the files a build without djs-core's `embed` leaves out (`// @embed-only`,
+/// D3175).
 pub fn emit(p: &Program, sources: &Sources, omit: &[&str], slim: bool) -> String {
     let file_of = |b: &Builtin| sources.file(p.function(b).span).name.as_str();
     let gone = |b: &Builtin| (slim && b.slim_omit) || omit.contains(&file_of(b));
@@ -60,7 +61,7 @@ pub fn emit(p: &Program, sources: &Sources, omit: &[&str], slim: bool) -> String
     };
     let mut out = String::from(HEADER);
     if !slim && !omit.is_empty() {
-        out.push_str("// The prelude of builds without ES modules (D3190): without ");
+        out.push_str("// The prelude of full builds without `embed` (D3175): without ");
         out.push_str(&omit.join(", "));
         out.push_str(".\n");
     }

@@ -351,41 +351,41 @@ impl ModuleBuild {
 
 /// The parser's module state: `Option<Box<ModuleBuild>>`, and in builds without modules a
 /// unit that is never set, so that their parser stays as it is (D3190).
-#[cfg(feature = "modules")]
+#[cfg(feature = "embed")]
 #[derive(Default)]
 pub(super) struct ModuleSlot(Option<alloc::boxed::Box<ModuleBuild>>);
-#[cfg(not(feature = "modules"))]
+#[cfg(not(feature = "embed"))]
 #[derive(Default)]
 pub(super) struct ModuleSlot;
 
 impl ModuleSlot {
     #[allow(unused_variables)]
     pub fn new(m: ModuleBuild) -> ModuleSlot {
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "embed")]
         return ModuleSlot(Some(alloc::boxed::Box::new(m)));
-        #[cfg(not(feature = "modules"))]
+        #[cfg(not(feature = "embed"))]
         return ModuleSlot;
     }
 
     #[inline(always)]
     pub fn is_some(&self) -> bool {
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "embed")]
         return self.0.is_some();
-        #[cfg(not(feature = "modules"))]
+        #[cfg(not(feature = "embed"))]
         return false;
     }
 
     pub fn as_mut(&mut self) -> Option<&mut ModuleBuild> {
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "embed")]
         return self.0.as_deref_mut();
-        #[cfg(not(feature = "modules"))]
+        #[cfg(not(feature = "embed"))]
         return None;
     }
 
     pub fn take(&mut self) -> Option<alloc::boxed::Box<ModuleBuild>> {
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "embed")]
         return self.0.take();
-        #[cfg(not(feature = "modules"))]
+        #[cfg(not(feature = "embed"))]
         return None;
     }
 }

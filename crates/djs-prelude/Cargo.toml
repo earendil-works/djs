@@ -11,13 +11,13 @@ description = "The base snapshot: djs-core's realm with the prelude installed, m
 doctest = false
 
 [features]
-default = ["raw", "registry", "full", "unicode", "modules"]
+default = ["raw", "registry", "full", "unicode", "embed"]
 # djs-core's features (D2411), for the base image this crate builds: its build script's
 # djs-core must have the same as the library's (a build-dependency resolves its features
 # on its own), which lib.rs checks by the build hash.
 full = ["djs-core/full"]
-# ES modules (D3171): the base image has the module builtins (D3190).
-modules = ["djs-core/modules"]
+# djs-core's `embed` (D3175): the base image has the builtins only Rust hosts get.
+embed = ["djs-core/embed"]
 unicode = ["regexp-unicode-props", "unicode-normalization"]
 regexp-unicode-props = ["djs-core/regexp-unicode-props"]
 unicode-normalization = ["djs-core/unicode-normalization"]

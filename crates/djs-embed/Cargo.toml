@@ -21,4 +21,4 @@ unicode = ["djs-core/unicode", "djs-prelude/unicode"]
 [dependencies]
 # `full`: every builtin; `embed`: the additions for Rust hosts (D3180).
 djs-core = { path = "../djs-core", default-features = false, features = ["full", "embed"] }
-djs-prelude = { path = "../djs-prelude", default-features = false, features = ["raw", "full"] }
+djs-prelude = { path = "../djs-prelude", default-features = false, features = ["raw", "full", "embed"] }
