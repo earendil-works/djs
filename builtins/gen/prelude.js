@@ -6271,6 +6271,18 @@ function MathRandomBuiltin() {
 // builtins/module.ts:18
 function ModuleEvaluate(m) {
   const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
+  try {
+    EvaluateGraph(m);
+  } catch (e) {
+    %RejectPromise(promise, e);
+    return promise;
+  }
+  %FulfillPromise(promise, undefined);
+  return promise;
+}
+
+// builtins/module.ts:31
+function EvaluateGraph(m) {
   const state = %NewRecord(2);
   %RecordSet(state, 0, null);
   %RecordSet(state, 1, 0);
@@ -6285,14 +6297,57 @@ function ModuleEvaluate(m) {
       top = %RecordGet(t, 10);
       %RecordSet(t, 10, null);
     }
-    %RejectPromise(promise, e);
-    return promise;
+    throw e;
   }
-  %FulfillPromise(promise, undefined);
+}
+
+// builtins/module.ts:61
+function ImportCall(specifier, options, referrer) {
+  const load = %NsOp(4, undefined, undefined, undefined);
+  if (load === undefined) {
+    return DynamicImport(specifier, options);
+  }
+  const promise = %PromiseCreate(%RealmIntrinsic("PromisePrototype"));
+  try {
+    const name = ToString(specifier);
+    if (options !== undefined) {
+      if (!%IsObject(options)) {
+        throw %NewTypeError("options must be an object");
+      }
+      const attributes = %Get(%AsObj(options), "with");
+      if (attributes !== undefined) {
+        if (!%IsObject(attributes)) {
+          throw %NewTypeError("options.with must be an object");
+        }
+        const entries = EnumerableOwnProperties(%AsObj(attributes), 1);
+        const n = LengthOfArrayLike(entries);
+        for (let i = 0; i < n; i++) {
+          if (!%IsString(%Get(entries, i))) {
+            throw %NewTypeError("module attribute values must be strings");
+          }
+        }
+        if (n > 0) {
+          throw %NewSyntaxError("unsupported import attribute");
+        }
+      }
+    }
+    const loaded = %Call(load, undefined, name, referrer);
+    const finish = %NsOp(7, undefined, undefined, undefined);
+    %PerformPromiseThen(%AsObj(loaded), finish, undefined, promise);
+  } catch (e) {
+    %RejectPromise(promise, e);
+  }
   return promise;
 }
 
-// builtins/module.ts:43
+// builtins/module.ts:105
+function FinishImport(key) {
+  const m = %AsObj(%NsOp(5, key, undefined, undefined));
+  EvaluateGraph(m);
+  return %NsOp(6, m, undefined, undefined);
+}
+
+// builtins/module.ts:112
 function InnerModuleEvaluation(m, state) {
   const status = %AsNumber(%RecordGet(m, 1));
   if (status === 5) {
@@ -6333,11 +6388,18 @@ function InnerModuleEvaluation(m, state) {
   }
 }
 
-// builtins/module.ts:100 %ModuleOp
+// builtins/module.ts:172 %ModuleOp
 function ModuleOp(target, key, a) {
+  let $1;
+  if (this === undefined) {
+    return ImportCall(target, key, a);
+  }
   const op = %F64ToI32(%AsNumber(this));
   if (op === 5) {
     return ModuleEvaluate(%AsObj(target));
+  }
+  if (op === 6) {
+    return (($1 = %AsObj(%NsOp(5, target, undefined, undefined)), (EvaluateGraph($1), %NsOp(6, $1, undefined, undefined))));
   }
   if (op === 4) {
     return false;

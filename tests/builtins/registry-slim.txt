@@ -280,3 +280,5 @@
 1663	TextEncoder.prototype.encodeInto
 1664	get TextEncoder.prototype.encoding
 1665	%prelude:TextLabelIsUtf8%
+1671	%prelude:EvaluateGraph%
+1672	%prelude:ImportCall%

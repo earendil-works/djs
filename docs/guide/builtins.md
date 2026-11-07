@@ -165,7 +165,7 @@ changes. A helper whose frame the engine looks for on the stack is tagged `@fram
 keeps it. Here is `substring` as the prelude has it:
 
 <!-- gen:excerpt builtins/gen/prelude.js "String.prototype.substring" "function StringPrototypeSubstring(" 8 -->
-[`builtins/gen/prelude.js`](../../builtins/gen/prelude.js#L9888-L9895), lines 9888–9895:
+[`builtins/gen/prelude.js`](../../builtins/gen/prelude.js#L9950-L9957), lines 9950–9957:
 
 ```js
 function StringPrototypeSubstring(start, end) {

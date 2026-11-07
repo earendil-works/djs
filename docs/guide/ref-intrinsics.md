@@ -333,7 +333,7 @@ result completes it) and JS builtins tagged `@intrinsic`. The id is the immediat
 | 320 | `InstallIntrinsic` | leaf | 2 | Registers f so that privileged code can call it as %name(...). |
 | 321 | `MarkNative` | leaf | 2 | Makes the builtin f native builtin `index` of the generated table: with native builtins on, its calls run the Rust state machine. |
 | 322 | `MarkFast` | leaf | 1 | Gives the builtin f its leaf fast path (`@fast`): with native builtins on, a call first tries the Rust function of the same name in builtins/fast.rs. |
-| 323 | `NsOp` | leaf | 4 | Internal method op (builtins/module.ts ModuleOp) of the module namespace whose proxy target is target, on key: 0 [[Get]] (a symbol key: the target's; ReferenceError in a binding's TDZ), 1 [[GetOwnProperty]] as a descriptor object or undefined, 2 [[DefineOwnProperty]] with descriptor object desc (its own fields), 3 [[OwnPropertyKeys]] as a new array. |
+| 323 | `NsOp` | leaf | 4 | Internal method op (builtins/module.ts ModuleOp) of the module namespace whose proxy target is target, on key: 0 [[Get]] (a symbol key: the target's; ReferenceError in a binding's TDZ), 1 [[GetOwnProperty]] as a descriptor object or undefined, 2 [[DefineOwnProperty]] with descriptor object desc (its own fields), 3 [[OwnPropertyKeys]] as a new array. For import(): 4 the VM's async host function for imports or undefined, 5 the linked module record of key target (an Error if none), 6 the namespace of module record target, 7 the reaction that finishes an import. |
 | 324 | `ArraySpeciesCreate` | builtin (JS) | 2 |  |
 | 325 | `ArrayConstructor` | builtin (JS) | 0 + rest |  |
 | 326 | `ArraySpecies` | builtin (JS) | 0 |  |

@@ -1673,3 +1673,5 @@
 1668	intrinsic	IsBufferSource
 1669	intrinsic	Utf8Encode
 1670	intrinsic	Utf8Decode
+1671	value	%prelude:EvaluateGraph%
+1672	value	%prelude:ImportCall%
