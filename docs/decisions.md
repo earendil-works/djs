@@ -11785,3 +11785,46 @@ gated by a constant (`crate::EMBED`, or a `MODULES` alias of it) as D2411 does. 
 cost in the shipped and slim modules that a constant cannot cut (intrinsic table entries,
 realm slots, enum arms; 0241 measured +60 B and +135 B gzip) is approved: the ceilings rise by
 the re-measured amounts in the issue's size decision (approved: coordinator).
+## D3190: ES modules: environments are the module closure's captures; records, namespaces, size
+date: 2026-11-08 · by: modules · issue: 0241
+How D3171 is built. **Compiler**: `Goal::Module` (`compile_module` → the body template and
+a metadata U32Array, compiler/module_meta.rs). Every top-level binding of the module
+function (var, let, const, class, function, import, the hidden `*default*` and `*meta*`)
+is an environment entry stored as capture `i` of the module closure (`Storage::Env`:
+`get_cap`/`put_cap`, TDZ elision as for Boxes; inner functions capture it as
+`Capture::Outer(i)`). The body creates no Box and hoists no top-level function: the linker
+(interp/module.rs, Rust) fills the captures with Boxes (var undefined, lexical
+uninitialized, function = a closure the linker instantiates from the child template, whose
+captures are all environment entries), and an import's capture *is* the exporter's Box, so
+imports are live with no indirection and compile as immutable, always-checked bindings
+(`VarKind::Import`). Top-level functions are lexical in modules (16.2.1.1). **Records** are
+internal `Record` objects in a registry object (key atom → record) in `Intrinsic::Modules`:
+images carry loaded, linked and evaluated graphs. Linking (ResolveExport,
+GetExportedNames, InitializeEnvironment) is Rust; Evaluate is builtins/module.ts (stackless,
+errors kept per module). **Namespaces** are Proxies (no new exotic class): a null-prototype,
+non-extensible target with one writable non-configurable data property per export (sorted
+by code units) plus @@toStringTag "Module", which also holds the namespace data in internal
+slots, and one shared handler whose get/getOwnPropertyDescriptor/defineProperty/ownKeys/set
+traps are builtin closures of `%ModuleOp` over the leaf `%NsOp`; every property path
+already sends proxies to their traps, and the proxy invariants hold by construction.
+**Host API** (vm/module.rs): one `ModuleLoader` trait with `resolve(specifier, referrer)` and
+`load(key) -> ModuleSource { text, typescript }`, `Vm::load_module` (loads, compiles and
+links synchronously; on failure forgets the modules it loaded), `evaluate_module` (a call
+that ends Done with the Evaluate promise), `module_namespace`, `module_export`,
+`has_module`. Loader errors are `Error`s with the host's message, link errors SyntaxErrors.
+**Size**: the module builtins are ~290 B gzip of base, so `modules` is an image feature
+(`compat_inputs.rs`, build hash, passed through djs-prelude like `full`): bgen also writes
+`builtins/gen/prelude-nomodules.js` without the files tagged `// @modules-only`, the prelude
+of full builds without modules (the shipped module); every other Rust path is cut by
+`crate::MODULES`. Measured against main 4771aa63: shipped 426,705 → 426,760 gzip, slim
+360,319 → 360,458, both within their ceilings.
+
+## D3191: TypeScript modules drop imports no value refers to
+date: 2026-11-08 · by: modules · issue: 0241
+Without type information an `import { T } from "./types"` of an interface would fail to
+link. As tsc and esbuild do without `verbatimModuleSyntax`: in a TypeScript module an import
+binding that no reference reads is dropped (an over-approximation by name across the unit:
+a shadowing local keeps it), and a declaration whose bindings were all dropped loads
+nothing; `import type`, `export type` and `type` specifiers are erased; a local
+`export { T }` of a name with no value binding is dropped. Re-exports (`export { T } from`)
+are kept: a type there is a link error, as isolatedModules makes it in tsc.
