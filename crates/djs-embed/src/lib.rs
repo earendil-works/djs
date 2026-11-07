@@ -153,6 +153,41 @@
 //! [`Snapshot`] is `Send + Sync`: share one across threads. An [`Instance`] is `Send`:
 //! it can move between threads (an async task that awaits host work between steps) but
 //! serves one call at a time. Parallel calls take one instance each.
+//!
+//! # Depending on djs-embed
+//!
+//! djs publishes no crates yet: depend on the repository, by path while developing both
+//! and by a pinned git revision otherwise.
+//!
+//! ```toml
+//! [dependencies]
+//! # local development, next to a djs checkout:
+//! # djs-embed = { path = "../djs/crates/djs-embed" }
+//! djs-embed = { git = "https://github.com/earendil-works/djs", rev = "<commit>" }
+//!
+//! # djs-core at opt-level 1 in debug builds: at 0 its calls run several times slower
+//! [profile.dev.package.djs-core]
+//! opt-level = 1
+//! ```
+//!
+//! - **Features.** The only one is `unicode` (default): `\p{..}` in regular expressions and
+//!   `String.prototype.normalize`, about 60 KB of native code;
+//!   `default-features = false` leaves it out. djs-embed picks djs-core's features itself
+//!   (every builtin, nothing a host does not use: no dumps, lazy compilation or compile
+//!   cache) and turns djs-prelude's builtin registry off.
+//! - **Runtime crates.** `cargo tree -e normal` gives djs-embed, djs-core, djs-prelude
+//!   and djs-libm (djs's copy of libm's math functions): no third-party crate.
+//! - **Git checkouts.** The crates read files elsewhere in the repository at build time
+//!   (the builtins' compiled JavaScript in `builtins/gen/`); cargo's git checkout is the
+//!   whole repository, so they resolve. The build script of djs-prelude makes the base
+//!   image (the realm every snapshot starts from) on the build machine.
+//! - **Cross builds.** djs-embed builds for any target djs-core does, with nothing but a
+//!   linker for it: no C code, no target-specific build step. The base image a cross build
+//!   embeds is byte for byte the one the target makes itself (heap cells are little-endian
+//!   with 32-bit offsets on every target). `scripts/cross-check.sh` in the repository
+//!   builds and runs an example for aarch64 and x86_64 macOS and linux-musl (with `zig cc`
+//!   as the musl linker) and compares their output.
+//! - **Panics** must unwind (the default profile setting), see Failures.
 
 mod data;
 mod error;
