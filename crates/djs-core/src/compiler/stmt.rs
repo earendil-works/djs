@@ -77,7 +77,8 @@ impl Parser<'_, '_> {
                 return self.strip_module_item();
             }
             TokenKind::Import | TokenKind::Export
-                if self.at_module_top()
+                if crate::MODULES
+                    && self.at_module_top()
                     && self.scope == super::func::BODY_SCOPE
                     && self.strip_at_module_item() =>
             {

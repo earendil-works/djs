@@ -370,7 +370,7 @@ fn well_formed(units: &[u16]) -> bool {
 impl Parser<'_, '_> {
     /// In the top-level function of module code (not in a nested function).
     pub(super) fn at_module_top(&self) -> bool {
-        self.module.is_some() && self.stack.is_empty()
+        crate::MODULES && self.module.is_some() && self.stack.is_empty()
     }
 
     fn mb(&mut self) -> &mut ModuleBuild {
@@ -850,8 +850,11 @@ impl Parser<'_, '_> {
     /// Parses module source: the module template and its metadata (a U32Array,
     /// compiler/module_meta.rs).
     pub fn compile_module(mut self) -> PResult<(Ref, Ref)> {
-        self.parse_top()?;
-        let meta = self.finish_module()?.encode();
+        let parsed = self.parse_top();
+        let m = core::mem::replace(&mut self.module, core::mem::ManuallyDrop::new(None));
+        let m = core::mem::ManuallyDrop::into_inner(m).expect("module code");
+        parsed?;
+        let meta = self.finish_module(m)?.encode();
         let arr = self.heap.alloc_u32_array(meta.len() as u32)?;
         for (i, &w) in meta.iter().enumerate() {
             self.heap.u32_array_set(arr, i as u32, w);
@@ -862,9 +865,8 @@ impl Parser<'_, '_> {
 
     /// The module's early errors on its entries (16.2.1.1), its environment (every
     /// top-level binding gets an entry, `Var::env`) and its metadata.
-    fn finish_module(&mut self) -> PResult<ModuleMeta> {
+    fn finish_module(&mut self, mut m: alloc::boxed::Box<ModuleBuild>) -> PResult<ModuleMeta> {
         use super::func::{BODY_SCOPE, Capture};
-        let mut m = self.module.take().expect("module code");
         // Duplicate export names.
         for (i, e) in m.exports.iter().enumerate() {
             if m.exports[..i].iter().any(|d| d.name == e.name) {

@@ -36,10 +36,12 @@ pub const HEADER: &str =
 /// build's prelude (D2411). Calls into them from the others stay as they are; they become
 /// global reads that no slim run reaches (they sit behind checks for values only the
 /// omitted builtins make), and the header lists them so that a new one shows in review.
-pub fn emit(p: &Program, sources: &Sources, omit: &[&str]) -> String {
+///
+/// `slim`: also leave out the builtins tagged @slim-omit (the slim prelude); without it,
+/// `omit` are the files a build without ES modules leaves out (`// @modules-only`, D3190).
+pub fn emit(p: &Program, sources: &Sources, omit: &[&str], slim: bool) -> String {
     let file_of = |b: &Builtin| sources.file(p.function(b).span).name.as_str();
-    let slim = !omit.is_empty();
-    let gone = |b: &Builtin| slim && (b.slim_omit || omit.contains(&file_of(b)));
+    let gone = |b: &Builtin| (slim && b.slim_omit) || omit.contains(&file_of(b));
     let e = Emitter::new(p, p.builtins.iter().map(|b| !gone(b)).collect());
     let kept: Vec<&Builtin> = p.builtins.iter().filter(|b| !gone(b)).collect();
     // The constructors the omitted builtins make: kept builtins installed onto them
@@ -57,6 +59,11 @@ pub fn emit(p: &Program, sources: &Sources, omit: &[&str]) -> String {
         gone_ctors.contains(&root)
     };
     let mut out = String::from(HEADER);
+    if !slim && !omit.is_empty() {
+        out.push_str("// The prelude of builds without ES modules (D3190): without ");
+        out.push_str(&omit.join(", "));
+        out.push_str(".\n");
+    }
     if slim {
         out.push_str("// The slim build's prelude (D2411): without ");
         out.push_str(&omit.join(", "));

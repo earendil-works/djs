@@ -1648,7 +1648,11 @@ impl Parser<'_, '_> {
         let pos = self.tok.start;
         self.next()?;
         if self.eat(TokenKind::Dot)? {
-            if self.tok.is_contextual(Kw::Meta) && self.module.is_some() && !self.tok.has_escape() {
+            if crate::MODULES
+                && self.tok.is_contextual(Kw::Meta)
+                && self.module.is_some()
+                && !self.tok.has_escape()
+            {
                 self.import_meta(pos)?;
                 return Ok(Expr::Value);
             }

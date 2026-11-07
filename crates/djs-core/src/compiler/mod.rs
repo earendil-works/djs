@@ -351,6 +351,9 @@ pub fn compile(
     src: &[u8],
     opts: &CompileOptions<'_>,
 ) -> Result<Ref, CompileError> {
+    if opts.goal == Goal::Module {
+        return Err(not_a_module_entry(src));
+    }
     let result = parse(heap, src, opts, |p| p.compile());
     result.map(|(t, ..)| t).map_err(|e| error_at(src, e))
 }
@@ -385,6 +388,9 @@ pub fn compile_lazy_unit(
     src: &[u8],
     opts: &CompileOptions<'_>,
 ) -> Result<Ref, CompileError> {
+    if opts.goal == Goal::Module {
+        return Err(not_a_module_entry(src));
+    }
     let result = parse(heap, src, opts, |mut p| {
         p.unit.lazy = true;
         p.compile()
@@ -605,6 +611,15 @@ pub fn strip_types(
     });
     let (_, ranges, _) = result.map_err(|e| error_at(src, e))?;
     Ok(ts::blank(src, ranges.unwrap_or_default()))
+}
+
+/// Module code compiles with [`compile_module`] only: it needs its metadata.
+#[cold]
+fn not_a_module_entry(src: &[u8]) -> CompileError {
+    error_at(
+        src,
+        PErr::syntax(0, Cow::Borrowed("module code compiles with compile_module")),
+    )
 }
 
 fn error_at(src: &[u8], e: PErr) -> CompileError {

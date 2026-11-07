@@ -64,8 +64,7 @@ fn fnv(mut h: u32, bytes: &[u8]) -> u32 {
 /// Nor `compile-cache` (D3040): an import makes what the compile makes. Nor `prelude`
 /// (D3094): it only decides whether a wasm build can run the prelude source. Nor `embed`
 /// (D3180): it adds what Rust hosts call (the outbound wire encoder, uncounted UTF-8
-/// strings, fatal out of memory), which no image records. Nor `modules`
-/// (D3171): it only adds the module goal and API; the prelude is the same.
+/// strings, fatal out of memory), which no image records.
 fn features() -> Vec<String> {
     enabled_features()
         .into_iter()
@@ -80,7 +79,6 @@ fn features() -> Vec<String> {
                 && f != "compile-cache"
                 && f != "prelude"
                 && f != "embed"
-                && f != "modules"
         })
         .collect()
 }

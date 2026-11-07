@@ -22,9 +22,9 @@ default = ["full", "unicode", "dump", "lazy", "compile-cache", "embed", "modules
 # build". Additive: turning it on only adds.
 full = ["djs-prelude/full"]
 # ES modules (D3171): the module goal, the loader, linking and evaluation
-# (`Vm::load_module`). Off, `Goal::Module` is a SyntaxError. Code only: the prelude's
-# module builtins are in every build.
-modules = []
+# (`Vm::load_module`). Off, `Goal::Module` is a SyntaxError and the prelude leaves out the
+# module builtins (builtins/module.ts, D3190), so images depend on it, like on `full`.
+modules = ["djs-prelude/modules"]
 # `Vm::dump` (0167, docs/functions-as-code.md): a VM's bindings written as JavaScript.
 # Code only: images and the base do not depend on it.
 dump = []

@@ -50,6 +50,7 @@ fn main() -> ExitCode {
     let files = [
         (djs_bgen::PRELUDE_PATH, &out.prelude),
         (djs_bgen::PRELUDE_SLIM_PATH, &out.prelude_slim),
+        (djs_bgen::PRELUDE_NOMODULES_PATH, &out.prelude_nomodules),
         (djs_bgen::REPORT_PATH, &out.report),
         (djs_bgen::NATIVES_PATH, &out.natives),
     ];

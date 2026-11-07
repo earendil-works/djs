@@ -1904,6 +1904,9 @@ impl Exec<'_> {
             | MODULE_NAMESPACE_DEFINE
             | MODULE_NAMESPACE_KEYS => {
                 use crate::interp::module;
+                if !crate::MODULES {
+                    return bad_argument(id);
+                }
                 let (Some(handler), Some(target)) = (a0.as_object(), arg(self, 1).as_object())
                 else {
                     return bad_argument(id);

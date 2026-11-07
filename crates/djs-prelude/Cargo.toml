@@ -16,8 +16,7 @@ default = ["raw", "registry", "full", "unicode", "modules"]
 # djs-core must have the same as the library's (a build-dependency resolves its features
 # on its own), which lib.rs checks by the build hash.
 full = ["djs-core/full"]
-# ES modules (D3171): code only (no image depends on it), passed through for hosts that
-# pick djs-core's features here.
+# ES modules (D3171): the base image has the module builtins (D3190).
 modules = ["djs-core/modules"]
 unicode = ["regexp-unicode-props", "unicode-normalization"]
 regexp-unicode-props = ["djs-core/regexp-unicode-props"]

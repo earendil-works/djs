@@ -23,6 +23,9 @@ pub struct Output {
     /// `gen/prelude-slim.js`: the prelude without the files marked `// @slim-omit`, for the
     /// slim build (D2411).
     pub prelude_slim: String,
+    /// `gen/prelude-nomodules.js`: the prelude without the files marked
+    /// `// @modules-only`, for full builds without ES modules (the shipped module, D3190).
+    pub prelude_nomodules: String,
     /// `gen/resume-points.txt`
     pub report: String,
     /// `crates/djs-core/src/builtins/gen/natives.rs`: the Rust backend (0063).
@@ -33,6 +36,10 @@ pub const PRELUDE_PATH: &str = "gen/prelude.js";
 pub const PRELUDE_SLIM_PATH: &str = "gen/prelude-slim.js";
 /// A line of a builtin file that leaves the file out of the slim build's prelude (D2411).
 pub const SLIM_OMIT: &str = "// @slim-omit";
+pub const PRELUDE_NOMODULES_PATH: &str = "gen/prelude-nomodules.js";
+/// A line of a builtin file that leaves the file out of the preludes of builds without ES
+/// modules (D3190): the slim one and `gen/prelude-nomodules.js`.
+pub const MODULES_ONLY: &str = "// @modules-only";
 pub const REPORT_PATH: &str = "gen/resume-points.txt";
 /// Relative to the builtins directory.
 pub const NATIVES_PATH: &str = "../crates/djs-core/src/builtins/gen/natives.rs";
@@ -51,11 +58,21 @@ pub fn compile(intrinsics: (&str, &str), modules: &[(String, String)]) -> Result
         }
     };
     let mut parsed = Vec::new();
-    let omitted: Vec<&str> = modules
-        .iter()
-        .filter(|(_, text)| text.lines().any(|l| l.starts_with(SLIM_OMIT)))
-        .map(|(name, _)| name.as_str())
-        .collect();
+    let marked = |tag: &str| -> Vec<&str> {
+        modules
+            .iter()
+            .filter(|(_, text)| text.lines().any(|l| l.starts_with(tag)))
+            .map(|(name, _)| name.as_str())
+            .collect()
+    };
+    let modules_only = marked(MODULES_ONLY);
+    let mut omitted = marked(SLIM_OMIT);
+    omitted.extend(
+        modules_only
+            .iter()
+            .filter(|m| !omitted.contains(m))
+            .collect::<Vec<_>>(),
+    );
     for (name, text) in modules {
         let file = sources.add(name.clone(), text.clone());
         match parser::parse_module(file, text) {
@@ -81,8 +98,9 @@ pub fn compile(intrinsics: (&str, &str), modules: &[(String, String)]) -> Result
     let natives = emit_rust::emit(&program, &analysis, &sources)
         .map_err(|errors| render(&errors, &sources))?;
     Ok(Output {
-        prelude: emit_js::emit(&program, &sources, &[]),
-        prelude_slim: emit_js::emit(&program, &sources, &omitted),
+        prelude: emit_js::emit(&program, &sources, &[], false),
+        prelude_slim: emit_js::emit(&program, &sources, &omitted, true),
+        prelude_nomodules: emit_js::emit(&program, &sources, &modules_only, false),
         report: analysis::report(&program, &analysis, &sources),
         natives,
     })

@@ -8,7 +8,7 @@
 // and 7 [[DFSIndex]] and [[DFSAncestorIndex]], 10 the record under it on the evaluation
 // stack.
 //
-// @slim-omit: left out of the slim build (D2411), which has no modules.
+// @modules-only: left out of the preludes of builds without ES modules (D3190).
 
 /**
  * Evaluate ( ), 16.2.1.5.3, of a linked module, without top-level await: the promise of

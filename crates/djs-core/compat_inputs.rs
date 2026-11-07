@@ -12,13 +12,18 @@
 
 /// The cargo features an image depends on, by bit of `vm::FEATURES` (`Roots::FEATURES`):
 /// they change which builtins a VM has or what its images can hold. Append only.
-pub const IMAGE_FEATURES: &[&str] = &["full", "regexp-unicode-props", "unicode-normalization"];
+pub const IMAGE_FEATURES: &[&str] = &[
+    "full",
+    "regexp-unicode-props",
+    "unicode-normalization",
+    "modules",
+];
 
 /// The features that change no image: umbrellas that only name others, and ones that
 /// change how the heap is accessed, not what it holds. A feature in neither list fails the
 /// build, so that each new one is classified.
 pub const IMAGE_NEUTRAL_FEATURES: &[&str] =
-    &["compile-cache", "default", "dump", "embed", "lazy", "modules", "prelude", "unicode", "unsafe-heap"];
+    &["compile-cache", "default", "dump", "embed", "lazy", "prelude", "unicode", "unsafe-heap"];
 
 /// The `IMAGE_FEATURES` mask of the enabled features (`enabled` as cargo names them).
 pub fn feature_mask(enabled: &[String]) -> Result<u32, String> {

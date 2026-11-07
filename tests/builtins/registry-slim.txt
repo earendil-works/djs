@@ -265,3 +265,10 @@
 1624	%prelude:TASortedList%
 1625	%prelude:IsCanonicalNumericKey%
 1626	%prelude:TASet%
+1649	%intrinsic:ModuleEvaluate%
+1650	%intrinsic:NamespaceGet%
+1651	%intrinsic:NamespaceSet%
+1652	%intrinsic:NamespaceGetOwnProperty%
+1653	%intrinsic:NamespaceDefineProperty%
+1654	%intrinsic:NamespaceOwnKeys%
+1655	%prelude:InnerModuleEvaluation%
