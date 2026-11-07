@@ -11,7 +11,9 @@
 //! uses its own Rust parser), standing in for the `url` crate of the prototype.
 //!
 //! Every row includes the harness: cloning the head, and for body rows copying the 64 KiB
-//! body into a new buffer (the prototype built a body stream over a copy).
+//! body into a new buffer (the prototype built a body stream over a copy). Each row is the
+//! best of three rounds (by p50, and the best 8-caller rate). Where the time goes:
+//! `probe` (below) loops one row for `sample` or `/usr/bin/time`.
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -775,8 +777,14 @@ fn main() {
         } else {
             (&gh, None)
         };
-        let s = measure(hooks, head, body, calls);
-        let c = concurrent(hooks, head, body, calls * 2, 8);
+        // The best of three rounds: a loaded machine slows some rounds down a lot.
+        let s = (0..3)
+            .map(|_| measure(hooks, head, body, calls))
+            .min_by(|a, b| a.p50.cmp(&b.p50))
+            .expect("three rounds");
+        let c = (0..3)
+            .map(|_| concurrent(hooks, head, body, calls * 2, 8))
+            .fold(0.0, f64::max);
         let fuel = djs.map_or("–".into(), |h| {
             h.last_fuel.load(Ordering::Relaxed).to_string()
         });
