@@ -1,6 +1,6 @@
 # 0243: Synthetic modules, import() through the loader, modules in djs-embed (M4, M5)
 
-status: in-progress
+status: done
 agent: embed
 branch: issue/0243-module-loader-import-embed
 depends-on: 0240, 0241
@@ -30,11 +30,12 @@ M4, M5 and the embedding side of M2/M7 (`~/Development/gondolin/native/docs/djs-
 - test262: the dynamic-import tests that become possible (0242's runner) into active.
 
 ## Acceptance criteria
-- [ ] synthetic modules in djs-core and djs-embed
-- [ ] import() through the loader, async, with errors rejecting; referrer passed
-- [ ] djs-embed module entry points and snapshots of evaluated graphs, tested
-- [ ] test262 dynamic-import group active as far as supported; ratchet updated
-- [ ] guide pages
+- [x] synthetic modules in djs-core and djs-embed
+- [x] import() through the loader, async, with errors rejecting; referrer passed
+- [x] djs-embed module entry points and snapshots of evaluated graphs, tested
+- [ ] test262 dynamic-import group active as far as supported; ratchet updated (0242 has
+  not started: no fixture loader in djs-test262 yet; see Follow-ups)
+- [x] guide pages
 
 ## Log
 
@@ -83,6 +84,47 @@ M4, M5 and the embedding side of M2/M7 (`~/Development/gondolin/native/docs/djs-
 - tests/it/modules.rs: the Gondolin policy scenario, stepping, dynamic import in calls,
   scripts importing, TS + custom loader, setup errors.
 
+### Docs, sizes, rebase
+- D3235 (djs-core design), D3236 (djs-embed API); index lines under "Embedding in Rust hosts".
+- Guide: rust-api.md (new "Modules" section, in-short and setup-failure sentences),
+  language.md (synthetic modules and `import()` in "Modules"; the wasm paragraph says a
+  native VM without an import-answering host rejects too). Crate docs: djs-embed lib.rs
+  "# Modules" with an example that tests/it/example.rs runs.
+- Sizes (scripts/build-wasm.sh, after the djs-core change): shipped 426,824 gzip / 980,275
+  raw (ceiling 426,865), slim 360,544 (ceiling 360,623): the compiler's module path is
+  const-cut, module.ts is @embed-only, so nothing of this reaches the wasm modules.
+- Rebased onto main 879ba761 (0244): took main's reset_to test fix (the same fix as mine),
+  merged the index lines and language.md's paragraph, regen (registry gained
+  %prelude:EvaluateGraph% and %prelude:ImportCall%).
+- Checked: djs-core lib, e2e plain + dynamic_import/modules in all modes, djs-embed, clippy
+  workspace + wasm32 release leg + djs-core feature combinations, fmt, djs-docs check.
+
 ## Follow-ups
+- test262 dynamic-import: 0242's fixture loader should call `Vm::set_dynamic_import(true)`
+  and answer `Vm::import_request` calls with `Vm::answer_import` (referrer = the test's
+  file name, which is what scripts compile with), then move `dynamic-import` out of the skip
+  group as far as it passes and update the ratchet.
+- Fuel for `import()`: loading and compiling a graph inside `Instance::step` is not metered
+  (it runs no JS; the memory cap applies). A host with untrusted large module maps may want a
+  bound (e.g. on the source bytes a call may load).
+- Synthetic module host functions are not in `Snapshot::host_fns()` (they are in
+  `Snapshot::modules()`); a host dispatching by id should list both.
+- No top-level await (0248) and no import attributes / JSON modules: `import(x, { with:
+  {...} })` with any key rejects with a SyntaxError.
+- The dumper knows nothing of module records (unchanged from 0241).
 
 ## Result
+- **djs-core** (`embed` builds; D3235): `Vm::define_synthetic_module(key, &[(name, value)])`
+  and `Vm::set_module_export` (live) for modules without source; `Vm::set_dynamic_import(on)`
+  makes `import()` (modules and scripts) an async host call with fn id `vm::IMPORT_FN_ID`
+  (args specifier, referrer = module key or script name), answered with
+  `Vm::answer_import(call_id, loader)` (`import_request` to recognize one,
+  `load_module_from` underneath); the next run evaluates the graph and fulfills with the
+  namespace, errors reject (load, link, syntax, evaluation; evaluation errors are kept).
+  Off by default: D1582's rejection. Images carry synthetic modules and the setting.
+- **djs-embed** (D3236): `Source::module`/`typescript_module`, `Builder::loader(impl Loader)`
+  (`ModuleMap` in memory), `Builder::module(SyntheticModule::new("@sdk/net")
+  .host_fn(..).data(..))`, `Instance::start_export`/`call_export`/`export`, `import()`
+  answered inside `step`, `Error::Load`. Snapshots hold the evaluated graph.
+- Gaps: test262 dynamic-import not activated (needs 0242's loader), no TLA, no JSON
+  modules, import loads unmetered by fuel.
