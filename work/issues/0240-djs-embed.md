@@ -1,6 +1,6 @@
 # 0240: djs-embed: the native embedding crate (E1–E7)
 
-status: in-progress
+status: done
 agent: embed
 branch: issue/0240-djs-embed
 depends-on: -
@@ -65,15 +65,15 @@ exists). Add a gate leg if djs-embed's tests are not picked up by the existing w
 leg (check scripts/gate.py; clippy legs too).
 
 ## Acceptance criteria
-- [ ] crates/djs-embed with the API above, documented; no djs-core types in its public API
-- [ ] wire: Rust encoder, `Vm` decode without intrinsics, outbound encoder, UTF-8 tag without
+- [x] crates/djs-embed with the API above, documented; no djs-core types in its public API
+- [x] wire: Rust encoder, `Vm` decode without intrinsics, outbound encoder, UTF-8 tag without
       units; docs/wire.md updated; wire tests and wire_cross green
-- [ ] uncatchable heap limit option in djs-core, tested (a `try/catch` and a `finally` do not run)
-- [ ] snapshot `Send + Sync` (compile-time assertion), instantiate and reset measured
-- [ ] async entry point with settled value; async and sync host calls; typed args/results
-- [ ] tests for every failure mode, panics poison only their instance
-- [ ] docs/guide page; `cargo run -q -p djs-docs -- check` passes
-- [ ] the shipped wasm module's size within its ceiling (core additions should cost it nothing
+- [x] uncatchable heap limit option in djs-core, tested (a `try/catch` and a `finally` do not run)
+- [x] snapshot `Send + Sync` (compile-time assertion), instantiate and reset measured
+- [x] async entry point with settled value; async and sync host calls; typed args/results
+- [x] tests for every failure mode, panics poison only their instance
+- [x] docs/guide page; `cargo run -q -p djs-docs -- check` passes
+- [x] the shipped wasm module's size within its ceiling (core additions should cost it nothing
       or near nothing: keep new core code out of the wasm module's reachable set, or measure)
 
 ## Notes
@@ -105,6 +105,55 @@ leg (check scripts/gate.py; clippy legs too).
 - Clippy lints the build-dependency copy of djs-core (djs-prelude's build script, no
   default features) too: helpers used only by `embed` code need the cfg as well.
 
+- Size: the first build cost +116 B gzip at about the same raw size. Cause, found with
+  `--keep-names` builds of main and the branch and the function order (not sizes): the
+  module's function order follows first references, so an unused `Vm::decode_wire` moved
+  `wire::decode`, and `transcode`'s closures moved with a new enclosing fn (`utf8`). Fixed by
+  gating `decode_wire` and the `ExecOptions` field behind `embed` and keeping `string()`'s
+  structure (the uncounted count is a peek in a separate fn). Now the shipped module is
+  426,792 gzip / 980,158 raw, identical to main; slim 360,471 (ceiling 360,485). A
+  comment-only change moves gzip by ~3 B (source hash).
+- `Vm` was not `Send` with djs-core's `dump` (Rc in the dump caches), and workspace builds
+  unify `dump` in: renamed Rc -> Arc in vm/dump*.rs and vm/mod.rs (outside `touches:`, a
+  mechanical rename; D3183).
+- djs-embed (crates/djs-embed): src/{lib,snapshot,instance,value,data,error}.rs, unit tests
+  in src/tests.rs (panic poisoning through the guard, and a real panic from a corrupted
+  heap), integration tests tests/it/{snapshot,calls,data,failures,example,bench}.rs. The
+  workspace `test` and `clippy` legs pick it up (no new gate leg); doctest = false, the docs'
+  example is an `ignore` block that tests/it/example.rs runs.
+- Bench (release, load ~140): image 192 KiB; instantiate 2.9-3.9 µs, reset 2.8-3.0 µs, empty
+  call 0.2 µs, header policy pooled 12.5-13.5 µs, reset + call / fresh + call 17-18 µs.
+- Decisions D3180-D3184. Guide: new docs/guide/rust-api.md (SUMMARY after js-api), limits.md
+  (the final cap option), host.md (Rust encoder, uncounted strings); js-api.md unaffected.
+  docs/wire.md and docs/host.md updated.
+
 ## Follow-ups
+- Errors a host function throws (`Throw`) have no `stack`: `Vm::new_error` records none. A
+  stack of the calling frames would help policy authors.
+- `Step::Wait` reports async calls only when the VM waits; a long CPU-bound script that
+  issues one early starts it late (at most a slice). A `Step` that reports new calls at once
+  would need a fifth variant.
+- ARCH.md does not mention djs-embed or the `embed` feature yet (coordinator).
+- Instances keep the heap capacity a call grew them to across resets; a host pool may want
+  a way to shrink (`Arena::shrink_capacity` exists).
 
 ## Result
+crates/djs-embed 0.1.0 (publish = false), deps djs-core and djs-prelude only. API:
+`Snapshot::builder()` (`host_fn(HostFn::sync|asynchronous)`, `global(name, Data)`,
+`source(Source::script)`, `frozen_builtins` (default on), `memory`, `fuel`, `build`);
+`Snapshot` (Arc, Send + Sync asserted) `instantiate(Limits)`; `Instance` (Send asserted)
+`start(path, args)`, `step() -> Step::{Done, HostCall, Wait(ids), Yield}`, `host_call(id)`,
+`resolve(id, Result<Value, Throw>)`, `result() -> ValueRef`, `call(path, args, closure)`,
+`reset`, `abort`, `set_now`, `deadline`, `fuel_used`, `set_limits`; values in `Value<'a>`
+(Str/Bytes/Data/Wire/...), out `ValueRef<'a>` (`as_str` Cow borrowed for flat ASCII,
+`as_bytes` borrowed, `to_data`, `to_wire`), `Data` tree with `to_wire`/`from_wire`; one
+`Error` enum (Syntax, Exception, OutOfFuel, Deadline, OutOfMemory, NeverSettles, Data,
+Usage, Panicked, Poisoned). The crate docs in src/lib.rs are the reference; guide page
+docs/guide/rust-api.md.
+
+djs-core (feature `embed`, default on, off in djs-wasm): `wire::Writer` (Rust encoder),
+tag 0x12 uncounted UTF-8, `wire::encode` / `Vm::encode_wire` (outbound, path errors, byte
+cap), `Vm::decode_wire`, `ExecOptions::fatal_out_of_memory`, `Vm::reset_to`; `Vm` is `Send`
+in every build. Shipped wasm module unchanged in size (426,792 gzip).
+
+Known gaps: see Follow-ups. Modules (0243), the bench port (0247) and musl (0246) build on it.
