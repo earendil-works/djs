@@ -11,6 +11,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | depends-on | touches |
 | --- | --- | --- | --- |
+| 0250 | Cheaper instance resets: copy back only what a call changed (Gondolin: reset ~4 µs of a ~38 µs hook call) | 0249 | djs-core heap/interp/vm, djs-embed |
 
 ## Open (blocked on dependencies)
 
@@ -43,6 +44,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0249 | djs-embed: report and shrink an instance's heap after reset | d0957337 (coordinator; D3247; djs-embed 0.1.1, CHANGES.md) |
 | 0240 | djs-embed: the native embedding crate (E1–E7) | e847b7fa (agent embed; D3180-D3184) |
 | 0245 | djs-libm: libm's functions as a djs crate | 4771aa63 (agent libm; D3215; no third-party runtime crate in djs-core) |
 | 0246 | djs-embed for Gondolin's targets: cross-builds, image portability | 439f6b7a (agent libm; D3220; scripts/cross-check.sh, 4 targets identical) |
