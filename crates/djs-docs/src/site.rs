@@ -15,7 +15,6 @@ const STRIP: &str = include_str!("../assets/strip.mjs");
 const PAGE: &str = include_str!("../assets/page.js");
 /// Elanor's published files, vendored by scripts/elanor-update.sh (D2200).
 const ELANOR_DIR: &str = "crates/djs-docs/assets/elanor";
-const ELANOR_VERSION: &str = include_str!("../assets/elanor/VERSION");
 const ICON_SEARCH: &str = include_str!("../assets/elanor/icons/search.svg");
 const ICON_DARK: &str = include_str!("../assets/elanor/icons/dark-mode.svg");
 const ICON_LIGHT: &str = include_str!("../assets/elanor/icons/light-mode.svg");
@@ -194,17 +193,6 @@ fn icon(svg: &str, class: &str) -> String {
     )
 }
 
-/// The pinned Elanor commit and the token brand, from assets/elanor/VERSION.
-fn elanor_version() -> (&'static str, &'static str) {
-    let field = |k: &str| {
-        ELANOR_VERSION
-            .lines()
-            .find_map(|l| l.strip_prefix(k)?.strip_prefix(' '))
-            .unwrap_or("?")
-    };
-    (field("elanor"), field("brand"))
-}
-
 fn template(
     entries: &[Entry],
     current: &str,
@@ -282,7 +270,6 @@ fn template(
         "",
         rev,
     );
-    let (sha, brand) = elanor_version();
     let title = if landing {
         "djs: a small JavaScript engine for agents' scripts".to_string()
     } else {
@@ -324,7 +311,7 @@ fn template(
 <main id="main" tabindex="-1"><div class="page"><article data-text-context="prose">
 {body}
 </article>{pager}
-<footer class="foot"><p>djs is built by <a href="https://earendil.com">Earendil</a>. <a href="{repo}">Source on GitHub</a>.</p><p>Designed with Elanor, Earendil's design system (<a href="https://github.com/earendil-works/elanor/commit/{sha}">{short}</a>, {brand} tokens, <a href="elanor/tokens.LICENSE">ISC License</a>). Fonts: Mallos Serif and Commit Mono, SIL Open Font License 1.1 (<a href="elanor/fonts/licenses/mallos-serif.txt">Mallos Serif</a>, <a href="elanor/fonts/licenses/commit-mono.txt">Commit Mono</a>). Icons: Material Symbols, <a href="elanor/icons/LICENSE">Apache License 2.0</a>.</p></footer></div>
+<footer class="foot"><p>djs is built by <a href="https://earendil.com">Earendil</a>. <a href="{repo}">Source on GitHub</a>.</p></footer></div>
 {toc}</main>
 </div>
 <script type="module" src="page.js"></script>
@@ -357,7 +344,6 @@ fn template(
         search_icon = icon(ICON_SEARCH, "search-icon"),
         to_dark = icon(ICON_DARK, "to-dark"),
         to_light = icon(ICON_LIGHT, "to-light"),
-        short = &sha[..sha.len().min(10)],
     )
 }
 
@@ -389,8 +375,26 @@ mod tests {
             i.starts_with("<svg class=\"icon s\" aria-hidden=\"true\""),
             "{i}"
         );
-        let (sha, brand) = elanor_version();
-        assert_eq!((sha.len(), brand), (40, "earendil"));
+    }
+
+    #[test]
+    fn footer_contains_only_project_links() {
+        let page = Page {
+            title: "Test".into(),
+            html: String::new(),
+            toc: Vec::new(),
+        };
+        for current in [LANDING, "values.md"] {
+            let html = template(&[], current, &page, None, "main");
+            let footer = html.split_once("<footer").unwrap().1;
+            let footer = footer.split_once("</footer>").unwrap().0;
+            assert!(footer.contains("djs is built by"));
+            assert!(footer.contains("Source on GitHub"));
+            assert_eq!(footer.matches("<p>").count(), 1);
+            assert!(!footer.contains("Designed with Elanor"));
+            assert!(!footer.contains("Fonts:"));
+            assert!(!footer.contains("Icons:"));
+        }
     }
 
     #[test]
