@@ -108,3 +108,28 @@ fn the_clock_is_the_hosts() {
     i.set_now(1.5e12).unwrap();
     assert_eq!(call(&mut i, "now").unwrap(), 1.5e12.into());
 }
+
+#[test]
+fn reset_keeps_the_grown_heap_until_shrunk() {
+    let snap = snapshot(
+        "function big(n) { return 'x'.repeat(n).split('').length; }\n\
+         function small() { return 1; }",
+    );
+    let mut i = snap.instantiate(Limits::default()).unwrap();
+    let fresh = i.heap_size();
+    assert!(i.heap_used() <= fresh);
+    assert_eq!(i.heap_used(), snap.image_len());
+    let out = i.call("big", &[(1u32 << 20).into()], |_| Ok(())).unwrap();
+    assert_eq!(out, Data::from(f64::from(1u32 << 20)));
+    i.reset().unwrap();
+    let grown = i.heap_size();
+    assert!(grown > 4 << 20, "{grown}");
+    assert_eq!(i.heap_used(), snap.image_len());
+    i.shrink_heap(0).unwrap();
+    assert!(i.heap_size() < grown / 4, "{} of {grown}", i.heap_size());
+    assert!(i.heap_size() >= i.heap_used());
+    // Works as before, and grows again when it needs to.
+    assert_eq!(call(&mut i, "small").unwrap(), 1.into());
+    i.call("big", &[(1u32 << 20).into()], |_| Ok(())).unwrap();
+    assert!(i.heap_size() > 4 << 20);
+}

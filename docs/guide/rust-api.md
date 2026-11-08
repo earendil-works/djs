@@ -50,6 +50,12 @@ already has, which also saves the allocation. A host chooses per use:
 - **A long-lived instance.** Globals persist from call to call, so a script can cache
   or count. Calls are cheaper by the reset, but the state is per instance.
 
+A reset keeps the heap memory as large as calls grew it, so the next call does not
+allocate again. A pool that does not want an instance to hold on to what one large call
+needed (a big request body) reads `heap_size` after the reset and gives the rest back
+with `shrink_heap`; the instance then holds what a fresh one does and grows again when a
+call needs it.
+
 ## Calls
 
 `start` looks a function up by its global path (`"onRequest"`, or `"hooks.onRequest"`

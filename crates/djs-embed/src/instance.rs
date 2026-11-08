@@ -163,6 +163,8 @@ impl Instance {
 
     /// Back to the snapshot's state (globals, heap, clock), reusing the heap's allocation:
     /// what a fresh instance would be, without its allocation. Ends a call in progress.
+    /// The allocation stays as large as calls grew it ([`Instance::heap_size`]);
+    /// [`Instance::shrink_heap`] returns what a pool does not want to keep.
     pub fn reset(&mut self) -> Result<(), Error> {
         self.call = None;
         let image = self.snapshot.clone();
@@ -174,6 +176,28 @@ impl Instance {
                 Err(Error::Usage(format!("cannot load the snapshot: {e:?}")))
             }
         }
+    }
+
+    /// The host memory the instance's heap holds, in bytes: its arena's allocation, which
+    /// grows with what calls allocate and which [`Instance::reset`] keeps (the next call
+    /// reuses it). At least [`Instance::heap_used`].
+    pub fn heap_size(&self) -> usize {
+        self.vm.heap().arena().capacity()
+    }
+
+    /// The bytes of the heap in use: the snapshot's image right after a reset, more while a
+    /// call allocates (until its garbage is collected).
+    pub fn heap_used(&self) -> usize {
+        self.vm.heap().arena().len() as usize
+    }
+
+    /// Returns the heap's allocation beyond `keep` bytes (never below
+    /// [`Instance::heap_used`]) to the host's allocator. For pools: after a call that read
+    /// a large body, `reset` and then `shrink_heap(0)` gives the instance the footprint of a
+    /// fresh one; the next call that needs more grows it again. Any time between steps;
+    /// it changes nothing a script can observe.
+    pub fn shrink_heap(&mut self, keep: usize) -> Result<(), Error> {
+        self.guard(|vm| vm.heap_mut().arena_mut().shrink_capacity(keep))
     }
 
     /// Sets the clock `Date.now()` and `new Date()` read, in ms since the epoch. The VM

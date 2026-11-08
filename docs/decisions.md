@@ -12019,3 +12019,11 @@ them, 7 counts the evaluation order), so no new intrinsic or closure kind is nee
 The record grew by five slots (COMPAT_VERSION 8, with D3245's). test262's
 `top-level-await` feature is active: every module test passes. djs-embed's setup waits for
 an evaluation to settle and fails with `NeverSettles` if it cannot.
+
+## D3247: djs-embed's API changes are listed in its CHANGES.md
+date: 2026-11-08 · by: coordinator · issue: 0249
+Gondolin depends on djs-embed by a pinned git revision. From 0.1.1 on, the crate keeps
+crates/djs-embed/CHANGES.md: a patch version only adds, a minor version (0.2) may break,
+and every incompatible change is listed with what to do instead, so a host reads one file
+before it moves its pin. The structs with public fields (`Limits`) stay as they are within
+0.1 (a new field would break struct literals); new options come as methods.
