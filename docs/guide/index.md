@@ -5,6 +5,9 @@ programs that call tools, combine their results and return what matters. djs run
 in a WebAssembly sandbox, and it can stop a run at any instruction, write it out while it
 waits for a tool, and continue it later, somewhere else.</p>
 
+> **Experimental.** djs is under active development. Expect bugs and changes to APIs
+> and behavior.
+
 <p class="cta"><a class="button" href="introduction.html">Read the guide</a><a class="button secondary" href="https://github.com/earendil-works/djs">Source on GitHub</a></p>
 
 ```ts

@@ -1,5 +1,8 @@
 # What djs is
 
+> **Experimental.** djs is under active development. Expect bugs and changes to APIs
+> and behavior.
+
 djs is a small JavaScript and TypeScript engine written in Rust. It runs short scripts
 that call tools, written by a language model or a person, inside a WebAssembly sandbox,
 and it can stop such a script at any moment, write it out while it waits for a tool, and
