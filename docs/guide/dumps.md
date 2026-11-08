@@ -147,24 +147,247 @@ numbering, so any later djs runs it as it runs any script.
 > to re-enact every kind of in-flight builtin state, and it refuses what it cannot
 > write.
 
-## `$djs`: what the loading host provides
+## The dump format
+
+This section is for a host that loads dumps itself, with or without djs: what the
+Script looks like, line by line, and what each name it calls must be.
+
+### The shape of the Script
+
+A dump is a strict-mode Script. Its statements come in this order:
+
+1. **The header**, the directive `"djs-dump";`. It marks the text as a dump and is
+   otherwise an ordinary directive. A run whose script was TypeScript is written as
+   JavaScript, its types blanked; only TypeScript that is more than types (an `enum`, a
+   `namespace`) stays, and then the header is `"djs-dump typescript";` and the Script
+   has to be compiled as TypeScript.
+2. **`$djs.seed(...)`**, only where the run's engine state needs it: before any line that
+   could draw a random number.
+3. **`globalThis.$dump = {};`**, only when a value is used more than once.
+4. **The data and the continuations**, in an order where every line finds what it uses
+   already made. Data is the lines `$dump.n4 = ...` that make the shared values, the
+   run's global bindings as declarations (`var`, `function`, `class`) of the Script, and
+   the patches that close cycles. A continuation is called where the activation it
+   stands for was: as an argument, an element of the array a `Promise.all` gets, or a
+   statement of its own. Its prefix runs while the Script runs, up to the `await` the
+   original waits at, so when the Script ends the loaded run waits exactly where the
+   dumped one did.
+5. **The completion value**, the last statement: the run's result promise, which the
+   host takes as the run. A host that named several values to keep when it wrote the
+   dump gets an object of them by name, `({ __proto__: null, run: ..., other: ... })`;
+   one that named none gets `void 0`.
+
+The Script has no `"use strict"`, because djs compiles all code strict. Another engine
+needs the directive put in front.
+
+Here two calls of `attempt` wait at once, the run holds `console.log` in a variable, an
+object is reached from two places, and `Math.random` has been called:
+
+```js live
+const log = console.log;              // a host value, kept in a variable
+const job = { id: 7, step: "fetch" };
+const byId = new Map([[job.id, job]]);  // the same object, reached twice
+const jitter = Math.random();          // Math.random's sequence has moved on
+async function attempt(name) {
+  debugger;                            // the run waits here, as on a tool call
+  return name + " ok";
+}
+const results = await Promise.all([attempt("a"), attempt("b")]);
+log(results.join(", "), byId.get(7) === job, jitter < 1);
+return results;
+```
+<!-- gen:run -->
+```text
+a ok, b ok true true
+```
+<!-- /gen -->
+
+<!-- gen:dump -->
+```js
+"djs-dump";
+$djs.seed(-29772990, 66527711);
+globalThis.$dump = {};
+$dump.n3 = async function attempt(name) {
+  debugger;                            // the run waits here, as on a tool call
+  return name + " ok";
+};
+$dump.n8 = { id: 7, step: "fetch" };
+$djs.k(async function (log, job, byId, jitter) {
+const results = await Promise.all([$djs.k(async function (name) {
+await $djs.resume(1, "debugger", []);
+return name + " ok";
+}, $dump.n3)("a"), $djs.k(async function (name) {
+await $djs.resume(2, "debugger", []);
+return name + " ok";
+}, $dump.n3)("b")]);
+log(results.join(", "), byId.get(7) === job, jitter < 1);
+return results;
+}, $djs.source("example.js", "c8828614"))($djs.host("console.log"), $dump.n8, new Map([[7, $dump.n8]]), 0.05279087335850807);
+```
+<!-- /gen -->
+
+Line by line:
+
+- `$djs.seed(-29772990, 66527711)` puts `Math.random` back where the run left it, since
+  the run drew a number. It comes first, before anything could draw another.
+- `$dump.n3` is `attempt`, written once as its source text because two continuations
+  name it as their origin. `$dump.n8` is `job`, which the body holds and the `Map` holds
+  too: written once, it stays one object after the load.
+- The last statement calls the body's continuation, an async function whose parameters
+  are the bindings the rest of the body reads. Its arguments are the values: `log` is the
+  host's function `console.log`, found again by `$djs.host`, the `Map` is written where
+  it is used, and `jitter` is a number. `$djs.k(K, origin)` attaches the origin record,
+  here the host's script by reference, and returns `K`.
+- Inside it, `Promise.all` gets the two continuations of `attempt`, each awaiting its
+  open call, `$djs.resume(1, ...)` and `$djs.resume(2, ...)`, in the order the calls
+  were made. When the Script ends, both calls are open again and the body waits on the
+  `Promise.all`, as before the dump.
+- The Script's value is the body's promise: the run.
+
+### `$djs`: what the loading host provides
 
 A dump reaches its host through one global object, `$djs`, which the host defines
-before it runs the dump and deletes afterwards, together with the dump's `$dump`:
+before it runs the dump and deletes afterwards, together with the dump's `$dump`. It
+has two kinds of members: four **hooks**, which only the host can answer, and the
+**runtime helpers**, small fixed functions that the host provides so that dumps do not
+carry them. Besides `$djs`, the dump's code reads the same globals the run read: the
+host's functions and namespaces bound as globals (a `tools` object, a `console`), under
+the same names.
 
-| member | what the host does |
+Every hook is called synchronously while the Script runs and must return at once.
+
+**`$djs.seed(lo, hi, next)`** restores engine state. `lo` and `hi` are the low and high
+halves, as signed 32-bit integers, of the 64-bit state of `Math.random`'s xorshift64\*
+generator; `next` is the id the run's next host call gets. Either part is written only
+where it is needed: `seed(lo, hi)` when the next id is one past the highest id the dump
+reopens (the default a host assumes), `seed(next)` for the id alone. A host that cannot
+set its engine's `Math.random` ignores the first two: the run goes on with other random
+numbers than the uninterrupted run would draw.
+
+**`$djs.resume(id, name, args, state)`** reopens an open host call and returns its
+promise.
+
+- `id` is the number the run gave the call. Host calls are numbered from 1 in the order
+  the run made them, sync calls such as `console.log` included, and a host that answers
+  calls by id keeps it.
+- `name` is the host's name for the function, its identity: `"tools.read"`, or
+  `"debugger"` for a pause on this site.
+- `args` is the array of the call's arguments, written as data like the rest of the
+  run, so an argument that is also held elsewhere is the same object.
+- `state` is the JSON value the host gave the call when the dump was written, as a
+  literal, and left out when the call has none.
+
+The hook returns a promise of the realm's own `Promise`, which settles with the call's
+outcome once the host answers it. The dump awaits it, passes it to a combinator or calls
+`then` on it, as the run did with the original call's promise.
+
+**`$djs.source(name, hash, params, wrapper)`** returns the function the host's script
+compiles to, the origin of the continuation of the script's body. `name` is the file
+name the run was started under, `params` the body's parameter names joined by commas
+(left out when it has none), and `hash` eight hex digits: FNV-1a 64 over the UTF-8 of the
+parameters, a NUL byte, the compile options as a decimal number, a NUL byte and the
+script's text, folded to 32 bits by XOR of its halves (`scriptHash` in
+[`js/src/sandbox.ts`](../../js/src/sandbox.ts)). A djs host compiles the script it has
+under that name, checks the hash and returns the body. A fourth argument, `1`, marks a
+script that is a wrapper, one parenthesized function expression such as
+`(async (tools, console) => { ... })`, as some hosts compile their bodies: the hook then
+returns the function that evaluating the script gives. The dump never calls the function:
+it is the origin a later dump reads the code from. A host that never dumps the run again
+may return any function. A dump written with `inlineSources` has no `$djs.source`: the
+body's text is in the dump as a function expression in its place.
+
+**`$djs.host(name)`** returns the host value the run held under `name`: a host function
+by its identity (`"tools.read"`, `"console.log"`), or a namespace object of host
+functions (`"tools"`, `"console"`). It must be the very object the run's globals and
+parameters give, since the run may compare them or keep them in a `Map`.
+
+**The runtime helpers** are the same for every dump. Each is a plain function that uses
+neither `this` nor another member of `$djs`, so a continuation copies the ones it calls
+into locals (`const $djs_L = $djs.L;`) and keeps working after the host deletes `$djs`.
+They are defined once, in [`crates/djs-core/src/vm/dump_runtime.rs`](../../crates/djs-core/src/vm/dump_runtime.rs),
+which is also written out as [`js/src/dump-runtime.js`](../../js/src/dump-runtime.js):
+`helpers` there is the object of all of them, `script` the same as a Script whose value is
+that object, and `scriptFor(dump)` a Script of only the helpers a given dump names.
+
+| helper | what it is for |
 | --- | --- |
-| `seed(...)` | restores `Math.random`'s state and the next host call's id; written only where needed |
-| `resume(id, name, args, state)` | opens call `id` of its function `name` again under the same id, and returns its promise |
-| `source(name, hash, params)` | returns the function the script `name` compiles to, after checking the hash |
-| `host(name)` | returns the host value bound under `name`: the very object the host gave the sandbox |
-| the runtime helpers | small functions continuations call (to rebuild an iterator in flight, give a continuation its origin record, ...) |
+| `R`, `G`, `C` | `Reflect.apply`, `Reflect.get`, `Reflect.construct`: a call, a property read or a `new` whose callee, receiver or key the run had evaluated before it stopped |
+| `D(o, k, v)`, `DD(o, src)`, `A` | go on with an object literal the run had started: define a property, copy the methods and accessors of a literal of their own, a spread (`Object.assign`) |
+| `Q(a, ...v)` | append to an argument list or array literal the run had started |
+| `P(k)`, `S(o, excluded)` | a computed key converted as the language converts it; a pattern's rest property |
+| `L(it, next)`, `I(it, next)`, `E()` | iterables over a saved iterator and its `next`: with a placeholder first step, for the rest of the iteration in flight; without one; and one that is done |
+| `N`, `X`, `O`, `fromSync`, `closeThrow` | a `for await` in flight: its iterator, closing it, the check of a step's result, and the wrapper over a sync iterator |
+| `Y(it, next, a, ...first)` | the inner iterator of a `yield*` in flight |
+| `U(value, method, kind)` | a `using` resource, added again with its saved dispose method |
+| `advance(it, n)`, `forIn(o, keys)`, `regexpIterator(re, s, f)` | an iterator stepped `n` times, the keys a `for in` has left, a `matchAll` iterator |
+| `M`, `FM`, `CC`, `CI`, `HD` | iterator helpers in flight: a callback with its counter shifted, a `flatMap` inside its inner iterator, an `Iterator.concat` inside an item, a concat item, a finished helper |
+| `fromAsync(...)` | an `Array.fromAsync` waiting at an `await`, its closure made again from its state |
+| `spent(kind)`, `rejected(e)` | a resolving function whose promise is settled; a rejected promise, marked handled |
+| `bytes(base64)` | an `ArrayBuffer` from base64 |
+| `fn(o)` | the method, getter or setter of a one-property literal, as the function it is |
+| `keep(o, keys)` | delete the own properties of a class that the run had deleted |
+| `k(K, f, at, r, h, p)` | attach a continuation's origin record and return `K` |
 
-The helpers are the same for every dump, so the host provides them instead of each dump
-carrying them. Every djs sandbox does all of this by itself. A host without djs imports
-the helpers from [`js/src/dump-runtime.js`](../../js/src/dump-runtime.js) and writes
-the four hooks; [`examples/sleep-dump/`](../../examples/sleep-dump/) continues a dump
-in node that way.
+`$djs.k` deserves a word, because every continuation passes through it. `f` is the
+original function: a value of the dump, or `$djs.source(...)`. `at` is the site the
+continuation stands for, a number for the nth `await` and a name such as `"yield#1"`
+otherwise; `r` and `h` record how the run's values shaped the continuation's text; `p` is
+a generator continuation's prototype where it is not `f.prototype`. Arguments at their
+defaults are left out at the end (`at` 1, `r` 0, `h` empty). The helper stores
+`[f, at, r, h]` as a hidden property of `K` and gives a generator continuation the
+original's prototype, so `instanceof` and `Object.getPrototypeOf` see the original
+function. The record means nothing to the loader; it is there for the next dump
+([origin tracking](continuations.md#origin-tracking)).
+
+### Loading a dump without djs
+
+Every djs sandbox does all of this by itself. A host without djs loads a dump in five
+steps:
+
+1. Make a fresh realm, or a fresh process, and bind the host's functions and namespaces
+   under the names the run had: the dump's code calls them by those names.
+2. Define `globalThis.$djs` as the runtime helpers plus the four hooks.
+3. Run the dump as a strict Script and keep its completion value, the run's promise.
+4. Delete `$djs` and `$dump`. The prefixes of the continuations have run by then, and
+   the run waits at its `await`s.
+5. Answer the reopened calls as they finish: each `resume` promise settles, and the run
+   goes on as it would have.
+
+In node:
+
+```js
+import { Script } from "node:vm";
+import { helpers } from "@earendil-works/djs/dump-runtime";
+
+export function loadDump(text, { tools, reopen }) {
+  const host = { tools, console, "console.log": console.log };
+  for (const [name, f] of Object.entries(tools)) host[`tools.${name}`] = f;
+  globalThis.tools = tools;
+  globalThis.$djs = {
+    ...helpers,
+    seed() {},                          // node's Math.random has no seed to set
+    resume: (id, name, args, state) => reopen(name, args, state),  // a Promise
+    source: () => async function body() {},  // only an origin: never called
+    host(name) {
+      if (!Object.hasOwn(host, name)) throw new Error(`no host value ${name}`);
+      return host[name];
+    },
+  };
+  try {
+    return new Script(`"use strict";\n${text}`, { filename: "dump.js" }).runInThisContext();
+  } finally {
+    delete globalThis.$djs;
+    delete globalThis.$dump;
+  }
+}
+```
+
+`reopen` decides what an open call becomes: it can wait for the rest of a timer whose
+due time the state holds, poll a request by an id the state names, or call the tool
+again. [`examples/sleep-dump/`](../../examples/sleep-dump/) continues a dump this way.
+A few helpers call recent builtins (`Iterator.concat`, `Uint8Array.fromBase64`, the
+iterator helpers); an engine without them still loads every dump that does not name
+those helpers.
 
 ## Writing and resuming a dump
 

@@ -258,6 +258,9 @@ them:
 | `advance`, `forIn`, `regexpIterator`, `fromSync`, `M`, `FM`, `CC`, `Y`, `U`, ... | builtin state in flight: iterators, helpers, `yield*` and `using` |
 | `k`, `keep`, `bytes`, `spent`, `rejected`, ... | an origin record, a class's deleted members, binary data, settled promises |
 
+[The dump format](dumps.md#djs-what-the-loading-host-provides) lists every helper with
+what it is for, and what each hook takes and returns.
+
 The helpers are defined once, in Rust, as a table of JavaScript texts; the file a host
 without djs imports, [`js/src/dump-runtime.js`](../../js/src/dump-runtime.js), is written
 from the same table, and a test keeps it current. A djs host evaluates the runtime in the
