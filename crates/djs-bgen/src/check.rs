@@ -123,8 +123,8 @@ pub struct Builtin {
     /// `@frame`: keeps a frame of its own, never inlined into its callers (0230): the
     /// engine looks for it on the stack.
     pub frame: bool,
-    /// `@rust` (experiment): implemented only in Rust (an owned entry of
-    /// `builtins/fast.rs`); the prelude keeps an empty function for its object.
+    /// `@rust`: compiled by the leaf backend to straight-line Rust only (D3230,
+    /// `emit_leaf.rs`); the prelude keeps an empty function for its object.
     pub rust: bool,
 }
 

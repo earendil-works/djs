@@ -62,10 +62,11 @@ pub enum Continuation {
     /// state is in the intrinsic's arguments right below the frame, then the frame is
     /// entered again for the next element, or the loop's k goes to the caller.
     Each,
-    /// Experiment (`@rust` builtins): the result is the primitive of a Rust builtin's
-    /// operand. At the absolute stack index `stash` lie the call's continuation flags, its
-    /// return pc, its argc and the operand's slot, right above the call's arguments: the
-    /// operand is replaced and the call is made again.
+    /// A generated (`@rust`) builtin's conversion site (D3230): the result goes into the
+    /// site's shadow slot and the builtin is called again. At the absolute stack index
+    /// `stash`, right above the call's arguments: the call's continuation flags, return
+    /// pc and argc, the site, the shadow mask, the key its errors are thrown at, and the
+    /// four shadow values.
     RetryCall(u32),
 }
 

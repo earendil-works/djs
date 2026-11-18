@@ -375,8 +375,6 @@ impl<'h> Exec<'h> {
             consts: 0,
             lp: 0,
             native: 0,
-            // FAST always (experiment): `@rust` builtins have no bytecode, so even the
-            // bytecode backend calls them through their entries; it skips the others.
             // Builtins with generated Rust have no bytecode body (D3231): their calls
             // always take the native frame or the fast entry.
             slow_call_flags: func_flags::SLOPPY_THIS | func_flags::FAST | func_flags::NATIVE,

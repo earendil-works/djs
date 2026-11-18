@@ -199,15 +199,16 @@ impl Exec<'_> {
         Ok(true)
     }
 
-    /// The generated function of the `@rust` builtin template `t` (experiment).
+    /// The generated function of the `@rust` builtin template `t` (D3230).
     pub(super) fn owned(&self, t: u32) -> Option<&'static crate::builtins::fast::Leaf> {
         crate::builtins::fast::leaf_of(self.heap.arena().get(t, FuncTemplate::FAST) as usize)
     }
 
-    /// The call of a `@rust` builtin (experiment): its generated function runs with every
-    /// continuation. A conversion it asks for runs `%ToPrimitive` under `RetryCall`; the
-    /// call is then made again with the primitive in the site's shadow slot. An error is
-    /// thrown with the builtin as the innermost (native) frame.
+    /// The call of a `@rust` builtin (D3230): its generated function runs with every
+    /// continuation. A conversion site it reaches runs its operation (`%ToPrimitive`,
+    /// `%GetSite`) under `RetryCall`; the call is then made again with the result in the
+    /// site's shadow slot. At the heap cap it is made again once after a collection. An
+    /// error is thrown with the builtin as the innermost (native) frame.
     #[inline(never)]
     pub(super) fn own_call(
         &mut self,
@@ -440,7 +441,7 @@ pub(crate) fn lnum(n: f64) -> Value {
     crate::interp::run::native::num(n)
 }
 
-/// Typed leaves for the generated builtins (experiment): what the `pure_leaf` arms do,
+/// Typed leaves for the generated builtins (D3230): what the `pure_leaf` arms do,
 /// called directly instead of through the dispatch.
 #[allow(missing_docs)]
 impl Exec<'_> {

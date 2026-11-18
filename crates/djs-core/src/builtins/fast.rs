@@ -1,8 +1,8 @@
 //! Leaf fast paths of everyday builtins (D1850, 0085).
 //!
 //! A builtin tagged `@fast` in `builtins/*.ts` has an entry here under its function
-//! name; the prelude marks it with `%MarkFast(f)`. With native builtins on, a call of it
-//! first runs the entry with `this` and the arguments. The entry either returns the
+//! name; the prelude marks it with `%MarkFast(f)`. A call of it first runs the entry
+//! with `this` and the arguments. The entry either returns the
 //! builtin's result, or declines (`Ok(None)`) and the builtin runs as usual.
 //!
 //! The rule that keeps this unobservable (the D1351 rule): an entry handles only
@@ -13,6 +13,10 @@
 //! own-property check of a non-proxy). Anything else, and every case where the builtin
 //! would throw, declines, so errors and their stack traces come from the builtin itself.
 //! Each entry mirrors its TS source step by step; keep them in sync.
+//!
+//! Builtins tagged `@rust` have no entry here: djs-bgen generates their whole
+//! implementation (`builtins/gen/leaves.rs`, D3230), and their fast indexes come after
+//! this table's. They never decline.
 use crate::PushOut;
 
 use alloc::vec::Vec;
@@ -39,7 +43,8 @@ pub(crate) struct FastFn {
     pub new: Option<fn(&mut Heap, &[Value]) -> Fast>,
 }
 
-/// The primitives of the conversion sites done so far (bit k of `mask`: site k).
+/// The results of a generated builtin's conversion sites done so far (bit k of `mask`:
+/// site k), D3230.
 #[derive(Clone, Copy)]
 pub(crate) struct Shadow {
     pub mask: u32,
