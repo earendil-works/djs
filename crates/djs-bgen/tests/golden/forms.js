@@ -77,10 +77,9 @@ function Callback(f) {
 
 // golden/forms.ts:84 Example.inlining
 function Inlining(x, n) {
-  let $1, $2;
-  const a = Clamp(((%Leaf(x)) ? %Throw(%NewError("object")) : 1), n + 1);
+  const a = Clamp(Checked(x), n + 1);
   const b = Looping(a);
-  return Big(a, b) + (($1 = 0, ($1 = $1 + 1, ($2 = b * 2, ($2 < $1) ? $1 : ($2 > n) ? n : $2))));
+  return Big(a, b) + Clamp(b, n);
 }
 
 // golden/forms.ts:91
