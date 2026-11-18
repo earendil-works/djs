@@ -12133,3 +12133,24 @@ date: 2026-11-18 · by: owner · issue: 0252
 D3264 and dropping `to_case`'s two-byte ASCII path (one-byte strings take
 `latin1_case` since 0251): shipped 429,692 → 428,624 B gz (−1,068; 1,358 B under the
 D020 budget), slim 363,372 → 362,325 (−1,047). Ceilings 429,648 and 363,349.
+
+## D3267: Number formatting and small allocations take short paths
+date: 2026-11-18 · by: owner · issue: 0254
+- ToString of an int Value writes its digits with 32-bit division by the constant 10
+  (`num::u32_decimal`) instead of going through the float formatter, and `u64_digits` in
+  radix 10 takes the same path for values below 2^32 (a 64-bit division by a variable
+  radix per digit before).
+- toFixed with at most 22 digits of |x| < 2^53 computes `round(m · 10^f / 2^k)`, halves
+  up, in u128 (`fixed_small`): m < 2^53 and 10^22 < 2^74 keep the product below 2^127.
+  Larger values and digit counts keep the exact big-integer path;
+  `to_fixed_small_path_matches_reference` checks the new path against the reference
+  formatter on quotients, exact halves and values near 2^53.
+- `Arena::alloc_init` of at most 1 KB past the frontier zeroes ahead as `alloc` does and
+  copies, instead of the append's four Vec operations; the next small cells then find
+  their bytes zeroed. Larger data is still appended once.
+- `Heap::contiguous` of a rope flattened before returns its flat copy directly (out of
+  line, so the flat case stays as small as before).
+Wasm instructions: String(i) −24%, toFixed −23%, `(i).toString()` −12%, `'a' + i` −10%,
+template −7%; ops.ts wall clock String(i) 6.3 → 4.6 ms, toFixed 6.0 → 4.1, padStart
+8.8 → 7.2; charCodeAt over a flattened rope −13%. Workloads (wmeasure) within ±0.8%,
+strbuild −3.9%. Size +162 B gz (428,786), slim +163.
