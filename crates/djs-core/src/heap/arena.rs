@@ -178,7 +178,13 @@ impl Arena {
         assert!(fits.is_some(), "alloc_init: data does not fit");
         let (start, end) = self.bounds(size)?;
         let at_us = (start + at) as usize;
-        if end as usize > self.bytes.len() {
+        if end as usize > self.bytes.len() && data.len() <= ZERO_AHEAD as usize / 16 {
+            // A small cell past the frontier: zero ahead as `alloc` does, so the next small
+            // allocations find their bytes zeroed (one copy each instead of the four Vec
+            // operations of an append).
+            self.zero_ahead(end)?;
+            self.bytes[at_us..at_us + data.len()].copy_from_slice(data);
+        } else if end as usize > self.bytes.len() {
             // Past the frontier: append instead of zeroing and then copying. The bytes
             // from `at_us` to the frontier are zeros, so dropping them keeps the invariant.
             self.reserve(end)?;

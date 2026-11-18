@@ -83,12 +83,32 @@ fn layout<const N: usize>(out: &mut NumStr<N>, digits: &[u8], e: i32, exp: Exp) 
 
 /// Writes `n` in `radix` at the end of `buf` and returns the digits.
 fn u64_digits(mut n: u64, radix: u32, buf: &mut [u8]) -> &[u8] {
+    if radix == 10
+        && let Ok(n) = u32::try_from(n)
+    {
+        return u32_decimal(n, buf);
+    }
     let mut i = buf.len();
     loop {
         i -= 1;
         let d = (n % radix as u64) as u8;
         buf[i] = if d < 10 { b'0' + d } else { b'a' + d - 10 };
         n /= radix as u64;
+        if n == 0 {
+            return &buf[i..];
+        }
+    }
+}
+
+/// Writes the decimal digits of `n` at the end of `buf` and returns them: a 32-bit
+/// division by the constant 10 is a multiplication, a 64-bit one by a variable radix a
+/// division per digit (`String(i)`, `'' + i`).
+pub(crate) fn u32_decimal(mut n: u32, buf: &mut [u8]) -> &[u8] {
+    let mut i = buf.len();
+    loop {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
         if n == 0 {
             return &buf[i..];
         }
@@ -360,6 +380,21 @@ fn shortest_radix(a: f64, m: u64, e2: i32, radix: u32) -> (u64, i32, i32) {
     found.unwrap_or((m, 0, 0))
 }
 
+/// `round(m / 2^k * 10^f)`, halves up, in 128-bit integers, when it fits (`None`
+/// otherwise): `m < 2^53` and `f <= 22` keep `m * 10^f` below 2^127, and `k > 0` holds for
+/// every |x| below 2^53. toFixed of an ordinary number without the big-integer path.
+fn fixed_small(m: u64, k: i32, f: i32) -> Option<u64> {
+    if !(0..=22).contains(&f) || k <= 0 {
+        return None;
+    }
+    if k >= 128 {
+        // m * 10^f / 2^k < 1/2.
+        return Some(0);
+    }
+    let n = m as u128 * 10u128.pow(f as u32);
+    u64::try_from((n + (1u128 << (k - 1))) >> k).ok()
+}
+
 /// `Number.prototype.toFixed(digits)`. The caller passes ToIntegerOrInfinity(digits),
 /// saturated to `i32`.
 pub fn to_fixed(x: f64, digits: i32) -> Result<NumStr<MAX_FIXED_LEN>, RangeError> {
@@ -384,8 +419,13 @@ pub fn to_fixed(x: f64, digits: i32) -> Result<NumStr<MAX_FIXED_LEN>, RangeError
             out.push(b'-');
         }
         let (m, e) = decompose(x.abs());
-        let b = scale_round(Big::from_u64(m), e - 53, 10, digits, Round::HalfUp);
-        big_decimal_digits(b, &mut tmp)
+        match fixed_small(m, 53 - e, digits) {
+            Some(q) => u64_digits(q, 10, &mut tmp),
+            None => {
+                let b = scale_round(Big::from_u64(m), e - 53, 10, digits, Round::HalfUp);
+                big_decimal_digits(b, &mut tmp)
+            }
+        }
     };
     // n is round(|x| * 10^f); print it with f fractional digits.
     if n.len() > f {

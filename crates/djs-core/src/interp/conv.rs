@@ -148,12 +148,15 @@ pub(crate) fn to_number(heap: &mut Heap, v: Value) -> Result<f64, Fault> {
 
 /// ToString for a Number.
 pub(crate) fn number_to_string(heap: &mut Heap, v: Value) -> Result<Str, Fault> {
-    if let Some(i) = v.as_int()
-        && (0..=9).contains(&i)
-    {
-        // Single digits are frequent (array indexes, counters); still allocate, but skip
-        // the float formatter.
-        return Ok(heap.alloc_latin1(&[b'0' + i as u8])?);
+    if let Some(i) = v.as_int() {
+        // Ints (indexes, counters) skip the float formatter.
+        let mut buf = [0u8; 11];
+        let d = num::u32_decimal(i.unsigned_abs(), &mut buf[1..]).len();
+        let start = 11 - d - (i < 0) as usize;
+        if i < 0 {
+            buf[start] = b'-';
+        }
+        return Ok(heap.alloc_latin1(&buf[start..])?);
     }
     let n = v.as_number().unwrap();
     Ok(heap.alloc_latin1(num::to_string(n).as_bytes())?)

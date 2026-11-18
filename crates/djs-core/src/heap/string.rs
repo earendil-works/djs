@@ -1164,9 +1164,14 @@ impl Heap {
     #[inline]
     pub fn contiguous(&mut self, s: Str) -> Result<Str, HeapError> {
         // (One kind read for flat strings and slices, as `flatten` has for flat ones.)
-        if self.arena().get(s.0, Header::KIND) != CellKind::Rope as u8
-            || self.append_rope_buffer(s).is_some()
-        {
+        if self.arena().get(s.0, Header::KIND) != CellKind::Rope as u8 {
+            return Ok(s);
+        }
+        // A rope flattened before (a string built once and read in a loop): its flat copy.
+        if self.cell_flags(s.0) & flags::ROPE_FLATTENED != 0 {
+            return Ok(Str(self.arena().get(s.0, Rope::LEFT).0));
+        }
+        if self.append_rope_buffer(s).is_some() {
             return Ok(s);
         }
         self.flatten(s)

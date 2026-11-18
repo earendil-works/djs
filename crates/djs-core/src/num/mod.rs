@@ -23,6 +23,7 @@
 mod big;
 mod exact;
 mod format;
+pub(crate) use format::u32_decimal;
 mod parse;
 mod pow5;
 mod ryu;
