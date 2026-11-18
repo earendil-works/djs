@@ -232,40 +232,40 @@ of the two QuickJS releases. Above 1, djs is slower.
 
 | operation | djs, ms | QuickJS, ms | djs / QuickJS |
 | --- | ---: | ---: | ---: |
-| `JSON.parse` of 600 query rows | 1.11 | 3.09 | 0.36 |
-| `JSON.stringify` of 600 query rows | 0.99 | 3.22 | 0.31 |
-| `split("\n")` of file texts | 1.32 | 2.86 | 0.46 |
-| `join("\n")` of their lines | 0.50 | 0.95 | 0.53 |
-| `includes` per line | 2.90 | 2.72 | 1.07 |
-| template literal appends | 5.70 | 4.60 | 1.24 |
-| `trim` | 5.33 | 3.94 | 1.35 |
-| `slice` | 5.45 | 4.05 | 1.34 |
-| `padStart` | 8.64 | 3.35 | 2.58 |
-| `toLowerCase` | 5.64 | 10.7 | 0.53 |
-| `charCodeAt` loop | 9.41 | 6.61 | 1.42 |
-| `String(i)` | 6.42 | 3.54 | 1.81 |
-| `toFixed` | 6.11 | 3.18 | 1.92 |
-| `Math.max` | 0.79 | 0.59 | 1.33 |
-| `Math.floor` | 3.74 | 2.85 | 1.31 |
-| `match(/function \w+/g)` | 2.23 | 5.39 | 0.41 |
-| `replace(/\s+/g, " ")` | 8.26 | 8.27 | 1.00 |
-| `exec` of a line pattern | 9.67 | 14.2 | 0.68 |
-| `matchAll` with `/gm` | 4.85 | 5.70 | 0.85 |
-| `new RegExp` | 1.84 | 1.97 | 0.93 |
-| `map` | 3.58 | 3.60 | 0.99 |
-| `sort` with a comparator | 11.4 | 5.97 | 1.91 |
-| `sort` of strings | 2.40 | 2.57 | 0.93 |
-| `push` | 8.72 | 7.94 | 1.10 |
-| `Map.set` with string keys | 18.9 | 10.5 | 1.80 |
-| `Set.add` with string keys | 11.1 | 7.29 | 1.52 |
-| object spread | 6.64 | 4.56 | 1.46 |
-| `Object.entries` and `fromEntries` | 0.52 | 0.12 | 4.21 |
-| `await` of a value | 5.79 | 17.5 | 0.33 |
-| `Promise.all` of 20 | 4.64 | 8.14 | 0.57 |
+| `JSON.parse` of 600 query rows | 1.59 | 4.52 | 0.35 |
+| `JSON.stringify` of 600 query rows | 1.38 | 4.72 | 0.29 |
+| `split("\n")` of file texts | 2.00 | 4.46 | 0.45 |
+| `join("\n")` of their lines | 0.85 | 1.50 | 0.57 |
+| `includes` per line | 4.31 | 4.38 | 0.98 |
+| template literal appends | 7.83 | 6.53 | 1.20 |
+| `trim` | 8.08 | 5.98 | 1.35 |
+| `slice` | 9.65 | 7.33 | 1.32 |
+| `padStart` | 11.1 | 4.95 | 2.25 |
+| `toLowerCase` | 8.51 | 16.0 | 0.53 |
+| `charCodeAt` loop | 14.5 | 10.1 | 1.43 |
+| `String(i)` | 6.68 | 5.29 | 1.26 |
+| `toFixed` | 5.92 | 4.85 | 1.22 |
+| `Math.max` | 1.14 | 0.83 | 1.37 |
+| `Math.floor` | 5.57 | 4.29 | 1.30 |
+| `match(/function \w+/g)` | 3.36 | 8.11 | 0.41 |
+| `replace(/\s+/g, " ")` | 12.5 | 12.0 | 1.04 |
+| `exec` of a line pattern | 14.2 | 20.4 | 0.70 |
+| `matchAll` with `/gm` | 7.07 | 8.13 | 0.87 |
+| `new RegExp` | 2.56 | 2.74 | 0.93 |
+| `map` | 5.42 | 5.56 | 0.98 |
+| `sort` with a comparator | 17.3 | 9.39 | 1.84 |
+| `sort` of strings | 3.44 | 3.81 | 0.90 |
+| `push` | 13.0 | 12.0 | 1.08 |
+| `Map.set` with string keys | 28.9 | 16.0 | 1.81 |
+| `Set.add` with string keys | 16.6 | 10.9 | 1.52 |
+| object spread | 10.2 | 7.02 | 1.45 |
+| `Object.entries` and `fromEntries` | 0.82 | 0.34 | 2.38 |
+| `await` of a value | 8.76 | 25.9 | 0.34 |
+| `Promise.all` of 20 | 6.99 | 12.2 | 0.57 |
 
 Milliseconds per loop of the operation (js/bench/engines/ops.ts), the setup's time
-subtracted; QuickJS: the faster of the two latest releases; measured at 68954b21c7,
-2026-11-18, load 5.9.
+subtracted; QuickJS: the faster of the two latest releases; measured at 17e89acc47,
+2026-11-18, load 9.7.
 <!-- /gen -->
 
 JSON, splitting and joining, `toLowerCase`, regular expression matching, sorting
@@ -274,9 +274,12 @@ strings, `await` and `Promise.all` are faster in djs; `includes`, `replace`, `ma
 Rust that is generated from their TypeScript source, so what is left of the gap in
 `trim`, `slice`, `Math.floor` and the `charCodeAt` loop is mostly the call itself:
 finding the function and leaving the interpreter's loop to run it cost more than a call
-of QuickJS's C functions, which shows when the operation is tiny. `String(i)` and
-`toFixed` spend their time formatting the number and allocating the short result
-string; `padStart` here pads `String(i)`, so it pays for both. `sort` with a comparator
+of QuickJS's C functions, which shows when the operation is tiny. `String(i)`,
+`toFixed` and template literals come within about a quarter of QuickJS: integers are
+written without the floating-point formatter and `toFixed` of an ordinary number
+without big-integer arithmetic, and what remains is mostly allocating the short result
+string. `padStart` here pads `String(i)`, so it pays for that, a second call and a
+second string. `sort` with a comparator
 runs the comparator, a script function, for every comparison, and calling it from the
 sort still costs more than in QuickJS; `Map.set` and `Set.add` with string keys also
 take more instructions per call. `Object.entries` and `fromEntries` are a fraction of a
