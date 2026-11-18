@@ -1597,8 +1597,8 @@
 1592	value	%prelude:StrLen%	removed: removed
 1593	value	%prelude:ThisToString%	removed: removed
 1594	value	%prelude:IsRegExp%
-1595	value	%prelude:ClampPosition%
-1596	value	%prelude:StringPad%
+1595	value	%prelude:ClampPosition%	removed: 0251: generated Rust only
+1596	value	%prelude:StringPad%	removed: 0251: generated Rust only
 1597	value	%prelude:ThisSymbolValue%	removed: removed
 1598	value	%prelude:ElementSize%	removed: removed
 1599	value	%prelude:KindName%
@@ -1681,3 +1681,75 @@
 1676	value	%prelude:ListContains%
 1677	value	%prelude:AsyncModuleExecutionFulfilled%
 1678	value	%prelude:AsyncModuleExecutionRejected%
+1679	value	%intrinsic:GetSite%
+1680	value	%prelude:RequireCallable%
+1681	value	%prelude:CheckLength%
+1682	value	%prelude:ArrayCreateChecked%
+1683	value	%prelude:IsConcatSpreadable%
+1684	value	%prelude:ThisArrayBuffer%
+1685	value	%prelude:IsImmutableBuffer%
+1686	value	%prelude:ThisBigIntValue%
+1687	value	%prelude:ThisBooleanValue%
+1688	value	%prelude:ToIntegerOrInfinity%
+1689	value	%prelude:DVByteLength%
+1690	value	%prelude:GetViewValue%
+1691	value	%prelude:IsDateObject%
+1692	value	%prelude:DecoratorPush%
+1693	value	%prelude:DecoratorCheckResult%
+1694	value	%prelude:DecoratorDefine%
+1695	value	%prelude:DecoratorReflectFn%
+1696	value	%prelude:CallDisposeMethod%
+1697	value	%prelude:TextCodecPrototype%
+1698	value	%prelude:TextDictionary%
+1699	value	%prelude:TextIsAsciiWhitespace%
+1700	value	%prelude:FromAsyncReject%
+1701	value	%prelude:GetIteratorFromMethod%
+1702	value	%prelude:IteratorNextResult%
+1703	value	%prelude:ThisIteratorObject%
+1704	value	%prelude:HelperCallable%
+1705	value	%prelude:HelperYield%
+1706	value	%prelude:ThisMap%
+1707	value	%prelude:CanonicalizeKeyedCollectionKey%
+1708	value	%prelude:HasTLA%
+1709	value	%prelude:ModuleClosure%
+1710	value	%prelude:ThisNumberValue%
+1711	value	%prelude:IsFiniteNumber%
+1712	value	%prelude:CapabilityPromise%
+1713	value	%prelude:CapabilityResolveFunction%
+1714	value	%prelude:CapabilityRejectFunction%
+1715	value	%prelude:InvokeThen%
+1716	value	%prelude:PromiseThisConstructor%
+1717	value	%prelude:GetPromiseResolve%
+1718	value	%prelude:DecrementRemaining%
+1719	value	%prelude:ProxyCreate%
+1720	value	%prelude:TrapKey%
+1721	value	%prelude:DescFlag%
+1722	value	%prelude:IsAccessorDescriptor%
+1723	value	%prelude:IsDataDescriptor%
+1724	value	%prelude:ReflectTarget%
+1725	value	%prelude:ThisRegExpObject%
+1726	value	%prelude:RegExpBuiltinExec%
+1727	value	%prelude:ThisSet%
+1728	value	%prelude:RecordHas%
+1729	value	%prelude:RecordKeys%
+1730	value	%prelude:RequireThisCoercible%
+1731	value	%prelude:InvokeSymbol%
+1732	value	%prelude:RegExpFromPattern%
+1733	value	%prelude:ThisStringValue%
+1734	value	%prelude:ThisToString%
+1735	value	%prelude:ThisSymbolValue%
+1736	value	%prelude:ElementSize%
+1737	value	%prelude:KindOf%
+1738	value	%prelude:SameContentType%
+1739	value	%prelude:IsElementValue%
+1740	value	%prelude:RequireMutableTypedArray%
+1741	value	%prelude:ValidateUint8Array%
+1742	value	%prelude:GetOptionsObject%
+1743	value	%prelude:Uint8ArrayFromRecord%
+1744	value	%prelude:ThisWeakMap%
+1745	value	%prelude:ThisWeakSet%
+1746	value	%prelude:DOMExceptionPrototypeObject%
+1747	value	%prelude:DOMExceptionThisField%
+1748	value	%prelude:DOMExceptionEnumerable%
+1749	intrinsic	StrPad
+1750	intrinsic	GetSite
