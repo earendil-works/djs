@@ -30,3 +30,18 @@ for (let i = 0; i < 300; i++) {
 console.log(acc);
 try { console.log(String.prototype.trim.call({ toString() { return null; } })); } catch (e) { console.log(e.name, e.message); }
 try { console.log(String.prototype.toUpperCase.call({ toString() { return undefined; } })); } catch (e) { console.log(e.name, e.message); }
+const log = [];
+console.log("hello".startsWith("he"), "hello".endsWith("lo"), "hello".includes("ll"), "hello".startsWith("l", 2), "hello".endsWith("l", 4), "hello".includes("h", 1));
+try { "abc".startsWith(/a/); } catch (e) { console.log(e.name, e.message); console.log(e.stack); }
+try { "abc".includes({ [Symbol.match]: true }); } catch (e) { console.log(e.name, e.message); }
+const re = /a/; re[Symbol.match] = false; console.log("/a/".startsWith(re), "x/a/".includes(re));
+console.log("abc".startsWith({ get [Symbol.match]() { log.push("match"); return undefined; }, toString() { log.push("str"); return "ab"; } }, { valueOf() { log.push("pos"); return 0; } }), log.join());
+try { "abc".endsWith({ get [Symbol.match]() { throw new Error("getter"); } }); } catch (e) { console.log(e.message); }
+try { String.prototype.includes.call(null, "a"); } catch (e) { console.log(e.name, e.message); }
+console.log("a\u1234b".includes("\u1234"), "".startsWith(""), "abc".endsWith("", 1), "abc".includes("c", -5));
+try { String.prototype.trim.call({ toString() { return Symbol(); } }); } catch (e) { console.log(e.name, e.message); console.log(e.stack); }
+try { Math.floor({ valueOf() { return Symbol(); } }); } catch (e) { console.log(e.name, e.message); console.log(e.stack); }
+function f() { try { return "x".padStart({ valueOf() { return 5; } }, { toString() { return Symbol(); } }); } catch (e) { return "caught " + e.message; } }
+console.log(f());
+console.log([{ valueOf() { return Symbol(); } }].map((x) => { try { return Math.abs(x); } catch (e) { return e.message; } })[0]);
+try { [{ valueOf() { return Symbol(); } }].map(Math.abs); } catch (e) { console.log(e.message); console.log(e.stack); }

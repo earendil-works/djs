@@ -183,6 +183,7 @@ function StringPrototypeLastIndexOf(this: Value, searchString: Value, position?:
  * String.prototype.includes ( searchString [ , position ] ), 22.1.3.8.
  * @builtin String.prototype.includes
  * @fast
+ * @rust
  */
 function StringPrototypeIncludes(this: Value, searchString: Value, position?: Value): boolean {
   const s: Str = ThisToString(this);
@@ -197,6 +198,7 @@ function StringPrototypeIncludes(this: Value, searchString: Value, position?: Va
 /**
  * String.prototype.startsWith ( searchString [ , position ] ), 22.1.3.24.
  * @builtin String.prototype.startsWith
+ * @rust
  */
 function StringPrototypeStartsWith(this: Value, searchString: Value, position?: Value): boolean {
   const s: Str = ThisToString(this);
@@ -216,6 +218,7 @@ function StringPrototypeStartsWith(this: Value, searchString: Value, position?: 
 /**
  * String.prototype.endsWith ( searchString [ , endPosition ] ), 22.1.3.7.
  * @builtin String.prototype.endsWith
+ * @rust
  */
 function StringPrototypeEndsWith(this: Value, searchString: Value, endPosition?: Value): boolean {
   const s: Str = ThisToString(this);

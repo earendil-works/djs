@@ -3668,6 +3668,26 @@ fn fast_entries_decline_at_the_cap() {
     }
 }
 
+#[test]
+fn generated_builtins_collect_at_the_cap() {
+    // Generated builtins (D3230): case conversion, pad and trim of large strings after
+    // garbage. One that reaches the cap has the interpreter collect and calls it again;
+    // without that, these caps printed `E`s.
+    let src = include_str!("../../../../scripts/determinism/js/oom_generated.js");
+    let dots = ".".repeat(8);
+    for limit in LIMITS_GENERATED {
+        let plain = run_limited(src, limit, 1 << 40, false).unwrap();
+        assert_eq!(plain.log, [dots.as_str()], "{limit}");
+        let sliced = run_limited(src, limit, 7919, false).unwrap();
+        let restored = run_limited(src, limit, 300_000, true).unwrap();
+        assert_eq!(plain, sliced, "{limit}");
+        assert_eq!(plain, restored, "{limit}");
+    }
+}
+
+/// Heap caps for `generated_builtins_collect_at_the_cap`.
+const LIMITS_GENERATED: [usize; 2] = [1_800_000, 2_000_000];
+
 /// The stops of a run of `src` (a Script) with `opts` and slices of `fuel`, restoring the
 /// image at every stop with `suspend`: a hash of the heap image at each stop and at the
 /// end, and the console output (0093, D1930).

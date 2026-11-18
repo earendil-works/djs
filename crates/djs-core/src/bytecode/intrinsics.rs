@@ -392,6 +392,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("AsyncFromSyncIteratorUnwrap", B, 1, false),
     i("AsyncFromSyncIteratorCloseThrow", B, 1, false),
     i("ToBigInt", B, 1, false),
+    i("GetSite", B, 2, false),
     i("ToPrimitive", B, 2, false),
     i("ToNumber", B, 1, false),
     i("ToString", B, 1, false),

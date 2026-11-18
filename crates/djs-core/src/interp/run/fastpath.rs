@@ -18,6 +18,9 @@ use crate::interp::conv::{Fault, FaultKind};
 use crate::interp::frame::Continuation;
 use crate::value::Value;
 
+/// The `RetryCall` site of a collection at the heap cap (no shadow slot).
+pub(super) const COLLECT_SITE: u32 = 31;
+
 /// Fuel per fast call on top of the call instruction's: a builtin's call runs a few
 /// instructions at least.
 const FAST_FUEL: i64 = 2;
@@ -243,24 +246,36 @@ impl Exec<'_> {
                 self.pc = ret_pc;
                 Ok(None)
             }
-            Err(e) if matches!(*e.0, FaultKind::Convert(..)) => {
-                let FaultKind::Convert(site, value, hint) = *e.0 else {
-                    unreachable!()
+            Err(e) => {
+                let (site, id, a, b) = match *e.0 {
+                    FaultKind::Convert(site, id, a, b) => (site, id, a, b),
+                    // At the heap cap: once, a collection and the call again. The stash
+                    // roots the shadow values; entering the no-op frame (`%ToPrimitive` of
+                    // undefined returns at once) is the safepoint that collects, where no
+                    // caller holds heap values in Rust locals.
+                    _ if e.is_out_of_memory() && !shadow.collected && !self.host_oom => {
+                        self.heap.request_collect();
+                        (COLLECT_SITE, super::intrinsics::TO_PRIMITIVE, Value::UNDEFINED, Value::UNDEFINED)
+                    }
+                    _ => {
+                        self.native_callee = self.get(base).as_object();
+                        return Err(e);
+                    }
                 };
-                let f = crate::interp::realm::installed_intrinsic(
-                    self.heap,
-                    super::intrinsics::TO_PRIMITIVE,
-                );
-                let hint = Value::string(self.heap.atom_string(hint)?);
+                let f = crate::interp::realm::installed_intrinsic(self.heap, id);
+                // The stash: the call (continuation, return pc, argc), the site, the
+                // shadow, and the key an error of the call is thrown at (`pc` now: the
+                // call instruction, or the calling native frame's state).
                 let stash = base + 2 + argc;
                 self.sp = stash;
-                self.ensure(stash + 13)?;
+                self.ensure(stash + 14)?;
                 for v in [
                     cont.to_flags(),
                     ret_pc as i32,
                     argc as i32,
                     site as i32,
                     shadow.mask as i32,
+                    self.pc as i32,
                 ] {
                     self.push(Value::int(v));
                 }
@@ -270,13 +285,9 @@ impl Exec<'_> {
                 let cbase = self.sp;
                 self.push(f);
                 self.push(Value::UNDEFINED);
-                self.push(value);
-                self.push(hint);
+                self.push(a);
+                self.push(b);
                 self.call(cbase, 2, Continuation::RetryCall(stash), ret_pc)
-            }
-            Err(f) => {
-                self.native_callee = self.get(base).as_object();
-                Err(f)
             }
         }
     }

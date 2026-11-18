@@ -554,45 +554,48 @@ BooleanPrototypeToString: leaf (Boolean.prototype.toString)
 
 BooleanPrototypeValueOf: leaf (Boolean.prototype.valueOf)
 
+GetSite: reentrant (%GetSite)
+  builtins/conversion.ts:9:10  Get (intrinsic)
+
 ToPrimitive: reentrant (%ToPrimitive)
-  builtins/conversion.ts:13:31  GetMethod (builtin)
-  builtins/conversion.ts:15:27  Call (intrinsic)
-  builtins/conversion.ts:21:10  OrdinaryToPrimitive (builtin)
+  builtins/conversion.ts:22:31  GetMethod (builtin)
+  builtins/conversion.ts:24:27  Call (intrinsic)
+  builtins/conversion.ts:30:10  OrdinaryToPrimitive (builtin)
 
 OrdinaryToPrimitive: reentrant
-  builtins/conversion.ts:28:27  Get (intrinsic)
-  builtins/conversion.ts:30:29  Call (intrinsic)
+  builtins/conversion.ts:37:27  Get (intrinsic)
+  builtins/conversion.ts:39:29  Call (intrinsic)
 
 GetMethod: reentrant
-  builtins/conversion.ts:42:23  GetV (intrinsic)
+  builtins/conversion.ts:51:23  GetV (intrinsic)
 
 ToNumber: reentrant (%ToNumber)
-  builtins/conversion.ts:58:30  ToPrimitive (builtin)
+  builtins/conversion.ts:67:30  ToPrimitive (builtin)
 
 ToString: reentrant (%ToString)
-  builtins/conversion.ts:70:30  ToPrimitive (builtin)
+  builtins/conversion.ts:79:30  ToPrimitive (builtin)
 
 ToIntegerOrInfinity: reentrant
-  builtins/conversion.ts:79:36  ToNumber (builtin)
+  builtins/conversion.ts:88:36  ToNumber (builtin)
 
 ToLength: reentrant
-  builtins/conversion.ts:86:20  ToIntegerOrInfinity (builtin)
+  builtins/conversion.ts:95:20  ToIntegerOrInfinity (builtin)
 
 LengthOfArrayLike: reentrant (%LengthOfArrayLike)
-  builtins/conversion.ts:102:19  Get (intrinsic)
-  builtins/conversion.ts:102:10  ToLength (builtin)
+  builtins/conversion.ts:111:19  Get (intrinsic)
+  builtins/conversion.ts:111:10  ToLength (builtin)
 
 ToPropertyKey: reentrant (%ToPropertyKey)
-  builtins/conversion.ts:111:22  ToPrimitive (builtin)
+  builtins/conversion.ts:120:22  ToPrimitive (builtin)
 
 GetPrototypeFromConstructor: reentrant
-  builtins/conversion.ts:128:10  GetPrototypeFromConstructorSlow (builtin)
+  builtins/conversion.ts:137:10  GetPrototypeFromConstructorSlow (builtin)
 
 GetPrototypeFromConstructorSlow: reentrant (%GetPrototypeFromConstructorSlow)
-  builtins/conversion.ts:141:24  Get (intrinsic)
+  builtins/conversion.ts:150:24  Get (intrinsic)
 
 ToNumeric: reentrant (%ToNumeric)
-  builtins/conversion.ts:159:23  ToPrimitive (builtin)
+  builtins/conversion.ts:168:23  ToPrimitive (builtin)
 
 DVOutOfBounds: leaf
 
@@ -3531,112 +3534,112 @@ StringPrototypeLastIndexOf: reentrant (String.prototype.lastIndexOf)
   builtins/string.ts:174:46  ClampPosition (builtin)
 
 StringPrototypeIncludes: reentrant (String.prototype.includes)
-  builtins/string.ts:188:18  ThisToString (builtin)
-  builtins/string.ts:189:7  IsRegExp (builtin)
-  builtins/string.ts:192:23  ToString (builtin)
-  builtins/string.ts:193:22  ClampPosition (builtin)
+  builtins/string.ts:189:18  ThisToString (builtin)
+  builtins/string.ts:190:7  IsRegExp (builtin)
+  builtins/string.ts:193:23  ToString (builtin)
+  builtins/string.ts:194:22  ClampPosition (builtin)
 
 StringPrototypeStartsWith: reentrant (String.prototype.startsWith)
-  builtins/string.ts:202:18  ThisToString (builtin)
-  builtins/string.ts:203:7  IsRegExp (builtin)
-  builtins/string.ts:206:23  ToString (builtin)
-  builtins/string.ts:208:22  ClampPosition (builtin)
+  builtins/string.ts:204:18  ThisToString (builtin)
+  builtins/string.ts:205:7  IsRegExp (builtin)
+  builtins/string.ts:208:23  ToString (builtin)
+  builtins/string.ts:210:22  ClampPosition (builtin)
 
 StringPrototypeEndsWith: reentrant (String.prototype.endsWith)
-  builtins/string.ts:221:18  ThisToString (builtin)
-  builtins/string.ts:222:7  IsRegExp (builtin)
-  builtins/string.ts:225:23  ToString (builtin)
-  builtins/string.ts:227:54  ClampPosition (builtin)
+  builtins/string.ts:224:18  ThisToString (builtin)
+  builtins/string.ts:225:7  IsRegExp (builtin)
+  builtins/string.ts:228:23  ToString (builtin)
+  builtins/string.ts:230:54  ClampPosition (builtin)
 
 StringPrototypeLocaleCompare: reentrant (String.prototype.localeCompare)
-  builtins/string.ts:240:18  ThisToString (builtin)
-  builtins/string.ts:241:30  ToString (builtin)
+  builtins/string.ts:243:18  ThisToString (builtin)
+  builtins/string.ts:244:30  ToString (builtin)
 
 StringPrototypeSlice: reentrant (String.prototype.slice)
-  builtins/string.ts:253:18  ThisToString (builtin)
-  builtins/string.ts:255:21  RelativeIndex (builtin)
-  builtins/string.ts:256:19  RelativeIndex (builtin)
+  builtins/string.ts:256:18  ThisToString (builtin)
+  builtins/string.ts:258:21  RelativeIndex (builtin)
+  builtins/string.ts:259:19  RelativeIndex (builtin)
 
 StringPrototypeSubstring: reentrant (String.prototype.substring)
-  builtins/string.ts:270:18  ThisToString (builtin)
-  builtins/string.ts:272:18  ClampPosition (builtin)
-  builtins/string.ts:273:44  ClampPosition (builtin)
+  builtins/string.ts:273:18  ThisToString (builtin)
+  builtins/string.ts:275:18  ClampPosition (builtin)
+  builtins/string.ts:276:44  ClampPosition (builtin)
 
 StringPrototypeSubstr: reentrant (String.prototype.substr)
-  builtins/string.ts:282:18  ThisToString (builtin)
-  builtins/string.ts:284:25  RelativeIndex (builtin)
-  builtins/string.ts:287:17  ToIntegerOrInfinity (builtin)
+  builtins/string.ts:285:18  ThisToString (builtin)
+  builtins/string.ts:287:25  RelativeIndex (builtin)
+  builtins/string.ts:290:17  ToIntegerOrInfinity (builtin)
 
 StringPrototypeConcat: reentrant (String.prototype.concat)
-  builtins/string.ts:305:16  ThisToString (builtin)
-  builtins/string.ts:306:18  LengthOfArrayLike (builtin)
-  builtins/string.ts:308:19  Get (intrinsic)
-  builtins/string.ts:308:10  ToString (builtin)
+  builtins/string.ts:308:16  ThisToString (builtin)
+  builtins/string.ts:309:18  LengthOfArrayLike (builtin)
+  builtins/string.ts:311:19  Get (intrinsic)
+  builtins/string.ts:311:10  ToString (builtin)
 
 StringPrototypeRepeat: reentrant (String.prototype.repeat)
-  builtins/string.ts:320:18  ThisToString (builtin)
-  builtins/string.ts:321:18  ToIntegerOrInfinity (builtin)
+  builtins/string.ts:323:18  ThisToString (builtin)
+  builtins/string.ts:324:18  ToIntegerOrInfinity (builtin)
 
 StringPad: reentrant
-  builtins/string.ts:333:29  ToLength (builtin)
-  builtins/string.ts:338:56  ToString (builtin)
+  builtins/string.ts:336:29  ToLength (builtin)
+  builtins/string.ts:341:56  ToString (builtin)
 
 StringPrototypePadEnd: reentrant (String.prototype.padEnd)
-  builtins/string.ts:353:20  ThisToString (builtin)
-  builtins/string.ts:353:10  StringPad (builtin)
+  builtins/string.ts:356:20  ThisToString (builtin)
+  builtins/string.ts:356:10  StringPad (builtin)
 
 StringPrototypePadStart: reentrant (String.prototype.padStart)
-  builtins/string.ts:363:20  ThisToString (builtin)
-  builtins/string.ts:363:10  StringPad (builtin)
+  builtins/string.ts:366:20  ThisToString (builtin)
+  builtins/string.ts:366:10  StringPad (builtin)
 
 StringPrototypeToLowerCase: reentrant (String.prototype.toLowerCase)
-  builtins/string.ts:374:20  ThisToString (builtin)
+  builtins/string.ts:377:20  ThisToString (builtin)
 
 StringPrototypeToUpperCase: reentrant (String.prototype.toUpperCase)
-  builtins/string.ts:383:20  ThisToString (builtin)
+  builtins/string.ts:386:20  ThisToString (builtin)
 
 StringPrototypeToLocaleLowerCase: reentrant (String.prototype.toLocaleLowerCase)
-  builtins/string.ts:392:20  ThisToString (builtin)
+  builtins/string.ts:395:20  ThisToString (builtin)
 
 StringPrototypeToLocaleUpperCase: reentrant (String.prototype.toLocaleUpperCase)
-  builtins/string.ts:401:20  ThisToString (builtin)
+  builtins/string.ts:404:20  ThisToString (builtin)
 
 StringPrototypeTrim: reentrant (String.prototype.trim)
-  builtins/string.ts:410:18  ThisToString (builtin)
+  builtins/string.ts:413:18  ThisToString (builtin)
 
 StringPrototypeTrimStart: reentrant (String.prototype.trimStart, String.prototype.trimLeft)
-  builtins/string.ts:420:18  ThisToString (builtin)
+  builtins/string.ts:423:18  ThisToString (builtin)
 
 StringPrototypeTrimEnd: reentrant (String.prototype.trimEnd, String.prototype.trimRight)
-  builtins/string.ts:430:18  ThisToString (builtin)
+  builtins/string.ts:433:18  ThisToString (builtin)
 
 StringPrototypeIsWellFormed: reentrant (String.prototype.isWellFormed)
-  builtins/string.ts:438:26  ThisToString (builtin)
+  builtins/string.ts:441:26  ThisToString (builtin)
 
 StringPrototypeToWellFormed: reentrant (String.prototype.toWellFormed)
-  builtins/string.ts:446:26  ThisToString (builtin)
+  builtins/string.ts:449:26  ThisToString (builtin)
 
 StringPrototypeNormalize: reentrant (String.prototype.normalize)
-  builtins/string.ts:455:18  ThisToString (builtin)
-  builtins/string.ts:458:9  ToString (builtin)
+  builtins/string.ts:458:18  ThisToString (builtin)
+  builtins/string.ts:461:9  ToString (builtin)
 
 StringFromCharCode: reentrant (String.fromCharCode)
-  builtins/string.ts:488:3  CoerceNumbers (builtin)
+  builtins/string.ts:491:3  CoerceNumbers (builtin)
 
 StringFromCodePoint: reentrant (String.fromCodePoint)
-  builtins/string.ts:501:18  LengthOfArrayLike (builtin)
-  builtins/string.ts:503:25  Get (intrinsic)
-  builtins/string.ts:504:55  ToNumber (builtin)
-  builtins/string.ts:508:5  CreateDataPropertyOrThrow (intrinsic)
+  builtins/string.ts:504:18  LengthOfArrayLike (builtin)
+  builtins/string.ts:506:25  Get (intrinsic)
+  builtins/string.ts:507:55  ToNumber (builtin)
+  builtins/string.ts:511:5  CreateDataPropertyOrThrow (intrinsic)
 
 StringRaw: reentrant (String.raw)
-  builtins/string.ts:520:34  Get (intrinsic)
-  builtins/string.ts:521:29  LengthOfArrayLike (builtin)
-  builtins/string.ts:525:25  LengthOfArrayLike (builtin)
-  builtins/string.ts:528:19  Get (intrinsic)
-  builtins/string.ts:528:10  ToString (builtin)
-  builtins/string.ts:533:21  Get (intrinsic)
-  builtins/string.ts:533:12  ToString (builtin)
+  builtins/string.ts:523:34  Get (intrinsic)
+  builtins/string.ts:524:29  LengthOfArrayLike (builtin)
+  builtins/string.ts:528:25  LengthOfArrayLike (builtin)
+  builtins/string.ts:531:19  Get (intrinsic)
+  builtins/string.ts:531:10  ToString (builtin)
+  builtins/string.ts:536:21  Get (intrinsic)
+  builtins/string.ts:536:12  ToString (builtin)
 
 SymbolConstructor: reentrant (constructor Symbol)
   builtins/symbol.ts:14:20  ToString (builtin)

@@ -230,6 +230,11 @@ impl Heap {
         self.gc_pending
     }
 
+    /// Makes the next safepoint collect (a generated builtin that reached the cap, D3230).
+    pub fn request_collect(&mut self) {
+        self.gc_pending = true;
+    }
+
     /// The arena size at which `gc_pending` will be set.
     pub fn gc_threshold(&self) -> u32 {
         self.gc_threshold

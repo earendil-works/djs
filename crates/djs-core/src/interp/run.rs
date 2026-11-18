@@ -799,13 +799,25 @@ impl<'h> Exec<'h> {
                 let argc = int(self, 2) as u32;
                 let site = int(self, 3) as u32;
                 let mut shadow = crate::builtins::fast::Shadow {
-                    mask: int(self, 4) as u32 | 1 << site,
-                    vals: [0, 1, 2, 3].map(|k| self.get(stash + 5 + k)),
+                    mask: int(self, 4) as u32,
+                    vals: [0, 1, 2, 3].map(|k| self.get(stash + 6 + k)),
+                    collected: site == fastpath::COLLECT_SITE,
                 };
-                shadow.vals[site as usize] = v;
+                if !shadow.collected {
+                    shadow.mask |= 1 << site;
+                    shadow.vals[site as usize] = v;
+                }
+                let key = int(self, 5) as u32;
                 self.sp = stash;
                 self.own_shadow = Some(shadow);
-                return self.call(stash - 2 - argc, argc, cont, ret_pc);
+                // An error of the call is thrown where the first call would have thrown it.
+                return match self.call(stash - 2 - argc, argc, cont, ret_pc) {
+                    Err(f) => {
+                        self.pc = key;
+                        Ok(self.throw_fault(f, key))
+                    }
+                    r => r,
+                };
             }
             Continuation::Entry | Continuation::Job | Continuation::Each => unreachable!(),
         }

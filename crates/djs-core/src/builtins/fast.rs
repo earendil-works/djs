@@ -44,12 +44,16 @@ pub(crate) struct FastFn {
 pub(crate) struct Shadow {
     pub mask: u32,
     pub vals: [Value; 4],
+    /// The call is the one retry after a collection at the heap cap: a second failure
+    /// throws.
+    pub collected: bool,
 }
 
 impl Shadow {
     pub(crate) const EMPTY: Shadow = Shadow {
         mask: 0,
         vals: [Value::UNDEFINED; 4],
+        collected: false,
     };
 }
 
@@ -122,7 +126,7 @@ const fn ctor(
 
 /// The index of `ArrayPrototypePush`'s entry: the interpreter appends for it directly
 /// (interp/run/fastpath.rs, 0231; a test checks the index).
-pub(crate) const ARRAY_PUSH: usize = 10;
+pub(crate) const ARRAY_PUSH: usize = 9;
 
 /// The entries that pay their bytes (D2310: the rule and the measurements of every twin).
 pub(crate) static FAST: &[FastFn] = &[
@@ -131,7 +135,6 @@ pub(crate) static FAST: &[FastFn] = &[
     f("LengthOfArrayLike", length_of_array_like),
     f("ToPropertyKey", to_property_key),
     // ---- String ----
-    f("StringPrototypeIncludes", includes),
     f("StringPrototypeSplit", split),
     // 0230b: >2x QuickJS after the general fixes (D3120, D3121)
     // ---- Number ----
@@ -235,10 +238,6 @@ fn int_arg(heap: &mut Heap, v: Value) -> Result<Option<f64>, Fault> {
     Ok(num(heap, v)?.map(integer))
 }
 
-/// ClampPosition(v, len): ToIntegerOrInfinity, clamped to [0, len].
-fn clamp(p: f64, len: f64) -> f64 {
-    p.max(0.0).min(len)
-}
 
 /// RelativeIndex(v, len, dflt) of array.ts.
 fn relative(heap: &mut Heap, v: Value, len: f64, dflt: f64) -> Result<Option<f64>, Fault> {
@@ -255,9 +254,6 @@ fn relative(heap: &mut Heap, v: Value, len: f64, dflt: f64) -> Result<Option<f64
     }))
 }
 
-fn len(heap: &Heap, s: Str) -> f64 {
-    heap.str_len(s) as f64
-}
 
 fn some_str(s: Str) -> Fast {
     Ok(Some(Value::string(s)))
@@ -292,27 +288,7 @@ fn to_property_key(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
 
 // ---- String --------------------------------------------------------------------------
 
-/// The receiver and the search string of includes/indexOf/startsWith/...
-fn search(heap: &mut Heap, this: Value, search: Value) -> Result<Option<(Str, Str)>, Fault> {
-    let Some(s) = this_str(heap, this)? else {
-        return Ok(None);
-    };
-    // A primitive is never a RegExp (IsRegExp looks up @@match only on objects).
-    Ok(str(heap, search)?.map(|t| (s, t)))
-}
 
-fn includes(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
-    let Some((s, t)) = search(heap, this, arg(args, 0))? else {
-        return Ok(None);
-    };
-    let Some(p) = int_arg(heap, arg(args, 1))? else {
-        return Ok(None);
-    };
-    let start = clamp(p, len(heap, s)) as u32;
-    Ok(Some(Value::bool(
-        string::index_of(heap, s, t, start, false)? >= 0.0,
-    )))
-}
 
 fn new_array(heap: &mut Heap, values: &[Value]) -> Fast {
     let proto = realm::intrinsic_obj(heap, Intrinsic::ArrayProto);

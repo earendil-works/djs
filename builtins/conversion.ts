@@ -1,6 +1,15 @@
 // Type conversion abstract operations (ECMA-262 7.1) and friends.
 
 /**
+ * Get ( O, P ) for the conversion sites of generated (`@rust`) builtins: the interpreter
+ * calls it when one of them reaches a `Get`, which may call a getter.
+ * @intrinsic
+ */
+function GetSite(o: Value, key: Value): Value {
+  return Get(AsObj(o), key);
+}
+
+/**
  * ToPrimitive ( input [ , preferredType ] ), 7.1.1. `hint` is "default", "string" or
  * "number". The interpreter calls it for objects in `+`, comparisons and so on.
  * @intrinsic
