@@ -39,16 +39,12 @@ const I_F64_SQRT: u16 = iid("F64Sqrt");
 const I_F64_TAN: u16 = iid("F64Tan");
 const I_F64_TANH: u16 = iid("F64Tanh");
 const I_F64_TRUNC: u16 = iid("F64Trunc");
-const I_GET_SITE: u16 = iid("GetSite");
 const I_IS_ARRAY: u16 = iid("IsArray");
-const I_IS_REG_EXP_OBJECT: u16 = iid("IsRegExpObject");
 const I_NUMBER_POW: u16 = iid("NumberPow");
 const I_NUMBER_TO_INT32: u16 = iid("NumberToInt32");
 const I_PRIMITIVE_VALUE: u16 = iid("PrimitiveValue");
 const I_STRING_PARSE_FLOAT: u16 = iid("StringParseFloat");
 const I_STRING_PARSE_INT: u16 = iid("StringParseInt");
-const I_TO_BOOLEAN: u16 = iid("ToBoolean");
-const I_WELL_KNOWN_SYMBOL: u16 = iid("WellKnownSymbol");
 
 /// The generated builtins (`%MarkFast` finds them after `FAST`).
 pub(crate) static LEAVES: &[Leaf] = &[
@@ -93,9 +89,9 @@ pub(crate) static LEAVES: &[Leaf] = &[
     Leaf { run: shape_10, data: LeafData { ids: &[], lits: &[] } }, // StringPrototypeCharCodeAt
     Leaf { run: shape_11, data: LeafData { ids: &[], lits: &[0.0, 0.0] } }, // StringPrototypeIndexOf
     Leaf { run: shape_12, data: LeafData { ids: &[], lits: &[0.0, 0.0, 1.0] } }, // StringPrototypeLastIndexOf
-    Leaf { run: shape_13, data: LeafData { ids: &[I_WELL_KNOWN_SYMBOL, I_TO_BOOLEAN, I_IS_REG_EXP_OBJECT], lits: &[0.0, 0.0, 0.0, 0.0] } }, // StringPrototypeIncludes
-    Leaf { run: shape_14, data: LeafData { ids: &[I_WELL_KNOWN_SYMBOL, I_TO_BOOLEAN, I_IS_REG_EXP_OBJECT], lits: &[0.0, 0.0, 0.0, 0.0] } }, // StringPrototypeStartsWith
-    Leaf { run: shape_15, data: LeafData { ids: &[I_WELL_KNOWN_SYMBOL, I_TO_BOOLEAN, I_IS_REG_EXP_OBJECT], lits: &[0.0, 0.0, 0.0, 0.0] } }, // StringPrototypeEndsWith
+    Leaf { run: shape_13, data: LeafData { ids: &[], lits: &[0.0, 0.0, 0.0] } }, // StringPrototypeIncludes
+    Leaf { run: shape_14, data: LeafData { ids: &[], lits: &[0.0, 0.0, 0.0] } }, // StringPrototypeStartsWith
+    Leaf { run: shape_15, data: LeafData { ids: &[], lits: &[0.0, 0.0, 0.0] } }, // StringPrototypeEndsWith
     Leaf { run: shape_16, data: LeafData { ids: &[], lits: &[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] } }, // StringPrototypeSlice
     Leaf { run: shape_17, data: LeafData { ids: &[], lits: &[0.0, 0.0, 0.0, 0.0] } }, // StringPrototypeSubstring
     Leaf { run: shape_18, data: LeafData { ids: &[], lits: &[0.0, 1.0, 0.0, 0.0, 0.0] } }, // StringPrototypeRepeat
@@ -387,31 +383,22 @@ fn shape_13(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         }
         break 'b2 (ex.l_to_string_at(p_v_1, sh, 0)?);
         unreachable!() });
-    if ('b5: { let mut p_v_4: Value = a_searchString; 
-        if !((p_v_4).as_object().is_some()) {
-            break 'b5 ((d.lits[0] != 0.0));
-        }
-        let mut l_matcher_6: Value = { let a = p_v_4; if sh.mask & 2 != 0 { sh.vals[1] } else { let b = { let a = [ex.l_str("match")?, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 1)? }; return Err(Fault::convert(1, I_GET_SITE, a, b)) } };
-        if !(l_matcher_6).is_undefined() {
-            break 'b5 (({ let a = [l_matcher_6, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[1], a, 1)? }).as_bool() == Some(true));
-        }
-        break 'b5 (({ let a = [p_v_4, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[2], a, 1)? }).as_bool() == Some(true));
-        unreachable!() }) {
+    if { let a = a_searchString; a.as_object().is_some() && ex.l_is_regexp_site(a, sh, 1)? } {
         return Err(Exec::l_error(ErrorKind::TypeError, "regexp not supported"));
     }
-    let mut l_search_7: Value = ex.l_to_string_at(a_searchString, sh, 2)?;
-    let mut l_start_16: f64 = ('b12: { let mut p_v_8: Value = a_position; let mut p_len_11: f64 = ('b10: { let mut p_s_9: Value = l_s_3; 
-        break 'b10 (ex.l_str_len(p_s_9));
+    let mut l_search_4: Value = ex.l_to_string_at(a_searchString, sh, 2)?;
+    let mut l_start_13: f64 = ('b9: { let mut p_v_5: Value = a_position; let mut p_len_8: f64 = ('b7: { let mut p_s_6: Value = l_s_3; 
+        break 'b7 (ex.l_str_len(p_s_6));
         unreachable!() }); 
-        let mut l_p_15: f64 = ('b14: { let mut p_v_13: Value = p_v_8; 
-        break 'b14 (Exec::l_integer(ex.l_to_number_at(p_v_13, sh, 3)?));
+        let mut l_p_12: f64 = ('b11: { let mut p_v_10: Value = p_v_5; 
+        break 'b11 (Exec::l_integer(ex.l_to_number_at(p_v_10, sh, 3)?));
         unreachable!() });
-        if (l_p_15 < d.lits[1]) {
-            break 'b12 (d.lits[2]);
+        if (l_p_12 < d.lits[0]) {
+            break 'b9 (d.lits[1]);
         }
-        break 'b12 ((if (l_p_15 > p_len_11) { p_len_11 } else { l_p_15 }));
+        break 'b9 ((if (l_p_12 > p_len_8) { p_len_8 } else { l_p_12 }));
         unreachable!() });
-    return Ok(Value::bool(({ let s = l_s_3; let t = l_search_7; let f = lnum(l_start_16); ex.l_index_of(s, t, f, false)? } >= d.lits[3])));
+    return Ok(Value::bool(({ let s = l_s_3; let t = l_search_4; let f = lnum(l_start_13); ex.l_index_of(s, t, f, false)? } >= d.lits[2])));
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
@@ -425,38 +412,29 @@ fn shape_14(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         }
         break 'b2 (ex.l_to_string_at(p_v_1, sh, 0)?);
         unreachable!() });
-    if ('b5: { let mut p_v_4: Value = a_searchString; 
-        if !((p_v_4).as_object().is_some()) {
-            break 'b5 ((d.lits[0] != 0.0));
-        }
-        let mut l_matcher_6: Value = { let a = p_v_4; if sh.mask & 2 != 0 { sh.vals[1] } else { let b = { let a = [ex.l_str("match")?, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 1)? }; return Err(Fault::convert(1, I_GET_SITE, a, b)) } };
-        if !(l_matcher_6).is_undefined() {
-            break 'b5 (({ let a = [l_matcher_6, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[1], a, 1)? }).as_bool() == Some(true));
-        }
-        break 'b5 (({ let a = [p_v_4, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[2], a, 1)? }).as_bool() == Some(true));
-        unreachable!() }) {
+    if { let a = a_searchString; a.as_object().is_some() && ex.l_is_regexp_site(a, sh, 1)? } {
         return Err(Exec::l_error(ErrorKind::TypeError, "regexp not supported"));
     }
-    let mut l_search_7: Value = ex.l_to_string_at(a_searchString, sh, 2)?;
-    let mut l_len_10: f64 = ('b9: { let mut p_s_8: Value = l_s_3; 
-        break 'b9 (ex.l_str_len(p_s_8));
+    let mut l_search_4: Value = ex.l_to_string_at(a_searchString, sh, 2)?;
+    let mut l_len_7: f64 = ('b6: { let mut p_s_5: Value = l_s_3; 
+        break 'b6 (ex.l_str_len(p_s_5));
         unreachable!() });
-    let mut l_start_17: f64 = ('b13: { let mut p_v_11: Value = a_position; let mut p_len_12: f64 = l_len_10; 
-        let mut l_p_16: f64 = ('b15: { let mut p_v_14: Value = p_v_11; 
-        break 'b15 (Exec::l_integer(ex.l_to_number_at(p_v_14, sh, 3)?));
+    let mut l_start_14: f64 = ('b10: { let mut p_v_8: Value = a_position; let mut p_len_9: f64 = l_len_7; 
+        let mut l_p_13: f64 = ('b12: { let mut p_v_11: Value = p_v_8; 
+        break 'b12 (Exec::l_integer(ex.l_to_number_at(p_v_11, sh, 3)?));
         unreachable!() });
-        if (l_p_16 < d.lits[1]) {
-            break 'b13 (d.lits[2]);
+        if (l_p_13 < d.lits[0]) {
+            break 'b10 (d.lits[1]);
         }
-        break 'b13 ((if (l_p_16 > p_len_12) { p_len_12 } else { l_p_16 }));
+        break 'b10 ((if (l_p_13 > p_len_9) { p_len_9 } else { l_p_13 }));
         unreachable!() });
-    let mut l_searchLength_20: f64 = ('b19: { let mut p_s_18: Value = l_search_7; 
-        break 'b19 (ex.l_str_len(p_s_18));
+    let mut l_searchLength_17: f64 = ('b16: { let mut p_s_15: Value = l_search_4; 
+        break 'b16 (ex.l_str_len(p_s_15));
         unreachable!() });
-    if ((l_start_17 + l_searchLength_20) > l_len_10) {
-        return Ok(Value::bool((d.lits[3] != 0.0)));
+    if ((l_start_14 + l_searchLength_17) > l_len_7) {
+        return Ok(Value::bool((d.lits[2] != 0.0)));
     }
-    return Ok(Value::bool({ let a = { let s = l_s_3; let a = lnum(l_start_17); let b = lnum((l_start_17 + l_searchLength_20)); ex.l_substring(s, a, b)? }; let b = l_search_7; ex.n_strict_eq(a, b) }));
+    return Ok(Value::bool({ let a = { let s = l_s_3; let a = lnum(l_start_14); let b = lnum((l_start_14 + l_searchLength_17)); ex.l_substring(s, a, b)? }; let b = l_search_4; ex.n_strict_eq(a, b) }));
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
@@ -470,38 +448,29 @@ fn shape_15(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         }
         break 'b2 (ex.l_to_string_at(p_v_1, sh, 0)?);
         unreachable!() });
-    if ('b5: { let mut p_v_4: Value = a_searchString; 
-        if !((p_v_4).as_object().is_some()) {
-            break 'b5 ((d.lits[0] != 0.0));
-        }
-        let mut l_matcher_6: Value = { let a = p_v_4; if sh.mask & 2 != 0 { sh.vals[1] } else { let b = { let a = [ex.l_str("match")?, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 1)? }; return Err(Fault::convert(1, I_GET_SITE, a, b)) } };
-        if !(l_matcher_6).is_undefined() {
-            break 'b5 (({ let a = [l_matcher_6, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[1], a, 1)? }).as_bool() == Some(true));
-        }
-        break 'b5 (({ let a = [p_v_4, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[2], a, 1)? }).as_bool() == Some(true));
-        unreachable!() }) {
+    if { let a = a_searchString; a.as_object().is_some() && ex.l_is_regexp_site(a, sh, 1)? } {
         return Err(Exec::l_error(ErrorKind::TypeError, "regexp not supported"));
     }
-    let mut l_search_7: Value = ex.l_to_string_at(a_searchString, sh, 2)?;
-    let mut l_len_10: f64 = ('b9: { let mut p_s_8: Value = l_s_3; 
-        break 'b9 (ex.l_str_len(p_s_8));
+    let mut l_search_4: Value = ex.l_to_string_at(a_searchString, sh, 2)?;
+    let mut l_len_7: f64 = ('b6: { let mut p_s_5: Value = l_s_3; 
+        break 'b6 (ex.l_str_len(p_s_5));
         unreachable!() });
-    let mut l_end_17: f64 = (if (a_endPosition).is_undefined() { l_len_10 } else { ('b13: { let mut p_v_11: Value = a_endPosition; let mut p_len_12: f64 = l_len_10; 
-        let mut l_p_16: f64 = ('b15: { let mut p_v_14: Value = p_v_11; 
-        break 'b15 (Exec::l_integer(ex.l_to_number_at(p_v_14, sh, 3)?));
+    let mut l_end_14: f64 = (if (a_endPosition).is_undefined() { l_len_7 } else { ('b10: { let mut p_v_8: Value = a_endPosition; let mut p_len_9: f64 = l_len_7; 
+        let mut l_p_13: f64 = ('b12: { let mut p_v_11: Value = p_v_8; 
+        break 'b12 (Exec::l_integer(ex.l_to_number_at(p_v_11, sh, 3)?));
         unreachable!() });
-        if (l_p_16 < d.lits[1]) {
-            break 'b13 (d.lits[2]);
+        if (l_p_13 < d.lits[0]) {
+            break 'b10 (d.lits[1]);
         }
-        break 'b13 ((if (l_p_16 > p_len_12) { p_len_12 } else { l_p_16 }));
+        break 'b10 ((if (l_p_13 > p_len_9) { p_len_9 } else { l_p_13 }));
         unreachable!() }) });
-    let mut l_searchLength_20: f64 = ('b19: { let mut p_s_18: Value = l_search_7; 
-        break 'b19 (ex.l_str_len(p_s_18));
+    let mut l_searchLength_17: f64 = ('b16: { let mut p_s_15: Value = l_search_4; 
+        break 'b16 (ex.l_str_len(p_s_15));
         unreachable!() });
-    if (l_searchLength_20 > l_end_17) {
-        return Ok(Value::bool((d.lits[3] != 0.0)));
+    if (l_searchLength_17 > l_end_14) {
+        return Ok(Value::bool((d.lits[2] != 0.0)));
     }
-    return Ok(Value::bool({ let a = { let s = l_s_3; let a = lnum((l_end_17 - l_searchLength_20)); let b = lnum(l_end_17); ex.l_substring(s, a, b)? }; let b = l_search_7; ex.n_strict_eq(a, b) }));
+    return Ok(Value::bool({ let a = { let s = l_s_3; let a = lnum((l_end_14 - l_searchLength_17)); let b = lnum(l_end_14); ex.l_substring(s, a, b)? }; let b = l_search_4; ex.n_strict_eq(a, b) }));
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 

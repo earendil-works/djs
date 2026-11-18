@@ -476,6 +476,22 @@ impl<'a> E<'a> {
             Callee::Builtin(_) if callee == "ToPrimitive" => self.primitive_site(args),
             // ToString and ToNumber (conversion.ts) as one call each: the primitive case
             // inline, the object's site and the conversion out of line.
+            // IsRegExp (string.ts): its Get of @@match is a site; out of line for objects.
+            Callee::Builtin(_) if callee == "IsRegExp" => {
+                let [v] = args else {
+                    return Err("IsRegExp arity".into());
+                };
+                let (c, r) = self.expr(v)?;
+                let v = conv(c, r, Rt::Val);
+                let k = self.sites;
+                self.sites += 1;
+                Ok((
+                    format!(
+                        "{{ let a = {v}; a.as_object().is_some() && ex.l_is_regexp_site(a, sh, {k})? }}"
+                    ),
+                    Rt::Bool,
+                ))
+            }
             Callee::Builtin(_) if callee == "ToString" || callee == "ToNumber" => {
                 let [v] = args else {
                     return Err(format!("{callee} arity"));

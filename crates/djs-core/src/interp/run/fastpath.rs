@@ -356,6 +356,31 @@ impl Exec<'_> {
         self.l_to_string_slow(p)
     }
 
+    /// IsRegExp (string.ts) of the object `v` in a generated builtin, `k` the site of its
+    /// Get of @@match.
+    #[inline(never)]
+    pub(crate) fn l_is_regexp_site(
+        &mut self,
+        v: Value,
+        sh: &Shadow,
+        k: u32,
+    ) -> Result<bool, Fault> {
+        let matcher = if sh.mask & (1 << k) != 0 {
+            sh.vals[k as usize]
+        } else {
+            let sym = self.heap.atom_symbol(crate::heap::atoms::SYM_MATCH);
+            let key = Value::symbol(sym.expect("well-known symbol"));
+            // A constant: `iid` at run time would keep the intrinsic name table.
+            const GET_SITE: u16 = super::native::iid("GetSite");
+            return Err(Fault::convert(k, GET_SITE, v, key));
+        };
+        Ok(if matcher.is_undefined() {
+            crate::builtins::regexp::as_regexp(self.heap, v).is_some()
+        } else {
+            crate::interp::conv::to_boolean(self.heap, matcher)
+        })
+    }
+
     /// ToNumber (conversion.ts) in a generated builtin, `k` the object's conversion site.
     #[inline]
     pub(crate) fn l_to_number_at(&mut self, v: Value, sh: &Shadow, k: u32) -> Result<f64, Fault> {
