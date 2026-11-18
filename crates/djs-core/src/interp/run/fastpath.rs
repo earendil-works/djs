@@ -5,7 +5,7 @@
 use alloc::string::String;
 
 use super::Exec;
-use crate::builtins::fast::{FAST, MAX_ARGS};
+use crate::builtins::fast::{FAST, MAX_ARGS, Shadow};
 use crate::bytecode::template::func_flags;
 use crate::bytecode::{OPS, Op};
 #[cfg(djs_prelude)]
@@ -218,7 +218,6 @@ impl Exec<'_> {
         cont: Continuation,
         ret_pc: u32,
     ) -> super::Step {
-        use crate::builtins::fast::Shadow;
         use crate::interp::conv::FaultKind;
         let shadow = self.own_shadow.take().unwrap_or(Shadow::EMPTY);
         let n = (argc as usize).min(MAX_ARGS);
@@ -314,6 +313,17 @@ impl Exec<'_> {
         Ok(self.heap.atom_to_value(atom)?)
     }
 
+    /// A generated builtin's request to run ToPrimitive of the object `a` with `hint` at
+    /// conversion site `site` (out of line: the sites are many and cold).
+    #[cold]
+    #[inline(never)]
+    pub(crate) fn l_primitive_site(&mut self, site: u32, a: Value, hint: &'static str) -> Fault {
+        match self.l_str(hint) {
+            Ok(b) => Fault::convert(site, super::intrinsics::TO_PRIMITIVE, a, b),
+            Err(f) => f,
+        }
+    }
+
     /// An error with a literal message, thrown by a generated builtin.
     #[cold]
     #[inline(never)]
@@ -321,32 +331,63 @@ impl Exec<'_> {
         Fault::error(kind, alloc::string::String::from(msg))
     }
 
-    /// ToNumber of a primitive.
-    #[inline]
-    pub(crate) fn l_to_number(&mut self, v: Value) -> Result<f64, Fault> {
-        match v.as_number() {
-            Some(x) => Ok(x),
-            None => self.l_to_number_slow(v),
-        }
-    }
-
     #[inline(never)]
     fn l_to_number_slow(&mut self, v: Value) -> Result<f64, Fault> {
         crate::interp::conv::to_number(self.heap, v)
     }
 
-    /// ToString of a primitive.
-    #[inline]
-    pub(crate) fn l_to_string(&mut self, v: Value) -> Result<Value, Fault> {
-        if v.as_string().is_some() {
-            return Ok(v);
-        }
-        self.l_to_string_slow(v)
-    }
-
     #[inline(never)]
     fn l_to_string_slow(&mut self, v: Value) -> Result<Value, Fault> {
         Ok(Value::string(crate::interp::conv::to_string(self.heap, v)?))
+    }
+
+    /// ToString (conversion.ts) in a generated builtin, `k` the object's conversion site.
+    #[inline]
+    pub(crate) fn l_to_string_at(&mut self, v: Value, sh: &Shadow, k: u32) -> Result<Value, Fault> {
+        if v.as_string().is_some() {
+            return Ok(v);
+        }
+        self.l_to_string_site(v, sh, k)
+    }
+
+    #[inline(never)]
+    fn l_to_string_site(&mut self, v: Value, sh: &Shadow, k: u32) -> Result<Value, Fault> {
+        let p = self.l_site_primitive(v, sh, k, "string")?;
+        self.l_to_string_slow(p)
+    }
+
+    /// ToNumber (conversion.ts) in a generated builtin, `k` the object's conversion site.
+    #[inline]
+    pub(crate) fn l_to_number_at(&mut self, v: Value, sh: &Shadow, k: u32) -> Result<f64, Fault> {
+        match v.as_number() {
+            Some(x) => Ok(x),
+            None => self.l_to_number_site(v, sh, k),
+        }
+    }
+
+    #[inline(never)]
+    fn l_to_number_site(&mut self, v: Value, sh: &Shadow, k: u32) -> Result<f64, Fault> {
+        let p = self.l_site_primitive(v, sh, k, "number")?;
+        self.l_to_number_slow(p)
+    }
+
+    /// `v` itself, or for an object its primitive from site `k` (a request if the site
+    /// has not run yet).
+    #[inline]
+    fn l_site_primitive(
+        &mut self,
+        v: Value,
+        sh: &Shadow,
+        k: u32,
+        hint: &'static str,
+    ) -> Result<Value, Fault> {
+        if v.as_object().is_none() {
+            Ok(v)
+        } else if sh.mask & (1 << k) != 0 {
+            Ok(sh.vals[k as usize])
+        } else {
+            Err(self.l_primitive_site(k, v, hint))
+        }
     }
 
     pub(super) fn try_fast_call(

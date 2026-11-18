@@ -474,6 +474,22 @@ impl<'a> E<'a> {
             Callee::Intrinsic { reentrant: true } => Err(format!("reentrant %{callee}")),
             Callee::Intrinsic { .. } => self.leaf(callee, sig, args),
             Callee::Builtin(_) if callee == "ToPrimitive" => self.primitive_site(args),
+            // ToString and ToNumber (conversion.ts) as one call each: the primitive case
+            // inline, the object's site and the conversion out of line.
+            Callee::Builtin(_) if callee == "ToString" || callee == "ToNumber" => {
+                let [v] = args else {
+                    return Err(format!("{callee} arity"));
+                };
+                let (c, r) = self.expr(v)?;
+                let v = conv(c, r, Rt::Val);
+                let k = self.sites;
+                self.sites += 1;
+                Ok(if callee == "ToString" {
+                    (format!("ex.l_to_string_at({v}, sh, {k})?"), Rt::Val)
+                } else {
+                    (format!("ex.l_to_number_at({v}, sh, {k})?"), Rt::Num)
+                })
+            }
             Callee::Builtin(b) => self.inline(*b, args),
         }
     }
@@ -683,13 +699,13 @@ impl<'a> E<'a> {
         };
         let (c, r) = self.expr(v)?;
         let v = conv(c, r, Rt::Val);
-        self.consts.insert("ToPrimitive".into());
+        // The request is built out of line (`l_primitive_site`): one call per site.
+        let k = self.sites;
+        self.sites += 1;
         Ok((
-            self.site(
-                "ToPrimitive",
-                v,
-                format!("ex.l_str({hint})?"),
-                Some("a.as_object().is_none()"),
+            format!(
+                "{{ let a = {v}; if a.as_object().is_none() {{ a }} else if sh.mask & {} != 0 {{ sh.vals[{k}] }} else {{ return Err(ex.l_primitive_site({k}, a, {hint})) }} }}",
+                1u32 << k
             ),
             Rt::Val,
         ))

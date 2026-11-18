@@ -48,7 +48,6 @@ const I_PRIMITIVE_VALUE: u16 = iid("PrimitiveValue");
 const I_STRING_PARSE_FLOAT: u16 = iid("StringParseFloat");
 const I_STRING_PARSE_INT: u16 = iid("StringParseInt");
 const I_TO_BOOLEAN: u16 = iid("ToBoolean");
-const I_TO_PRIMITIVE: u16 = iid("ToPrimitive");
 const I_WELL_KNOWN_SYMBOL: u16 = iid("WellKnownSymbol");
 
 /// The generated builtins (`%MarkFast` finds them after `FAST`).
@@ -181,12 +180,7 @@ fn shape_0(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Leaf
 // MathAbs, MathAcos, MathAcosh, MathAsin, MathAsinh, MathAtan, MathAtanh, MathCbrt, MathCeil, MathClz32, MathCos, MathCosh, MathExp, MathExpm1, MathFloor, MathFround, MathF16round, MathLog, MathLog1p, MathLog10, MathLog2, MathRound, MathSign, MathSin, MathSinh, MathSqrt, MathTan, MathTanh, MathTrunc
 fn shape_1(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_x: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
-    return Ok(lnum(Exec::l_math(d.ids[0], ('b2: { let mut p_v_1: Value = a_x; 
-        if (p_v_1).as_object().is_some() {
-            break 'b2 (ex.l_to_number({ let a = p_v_1; if a.as_object().is_none() { a } else if sh.mask & 1 != 0 { sh.vals[0] } else { let b = ex.l_str("number")?; return Err(Fault::convert(0, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b2 (ex.l_to_number(p_v_1)?);
-        unreachable!() }), f64::NAN)));
+    return Ok(lnum(Exec::l_math(d.ids[0], ex.l_to_number_at(a_x, sh, 0)?, f64::NAN)));
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
@@ -194,18 +188,8 @@ fn shape_1(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Leaf
 fn shape_2(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_base: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
     let a_exponent: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
-    let mut l_b_3: f64 = ('b2: { let mut p_v_1: Value = a_base; 
-        if (p_v_1).as_object().is_some() {
-            break 'b2 (ex.l_to_number({ let a = p_v_1; if a.as_object().is_none() { a } else if sh.mask & 1 != 0 { sh.vals[0] } else { let b = ex.l_str("number")?; return Err(Fault::convert(0, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b2 (ex.l_to_number(p_v_1)?);
-        unreachable!() });
-    return Ok(lnum(f64_of({ let a = [lnum(l_b_3), lnum(('b5: { let mut p_v_4: Value = a_exponent; 
-        if (p_v_4).as_object().is_some() {
-            break 'b5 (ex.l_to_number({ let a = p_v_4; if a.as_object().is_none() { a } else if sh.mask & 2 != 0 { sh.vals[1] } else { let b = ex.l_str("number")?; return Err(Fault::convert(1, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b5 (ex.l_to_number(p_v_4)?);
-        unreachable!() })), Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 2)? })));
+    let mut l_b_1: f64 = ex.l_to_number_at(a_base, sh, 0)?;
+    return Ok(lnum(f64_of({ let a = [lnum(l_b_1), lnum(ex.l_to_number_at(a_exponent, sh, 1)?), Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 2)? })));
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
@@ -222,12 +206,7 @@ fn shape_3(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Leaf
     let mut l_r_5: f64 = d.lits[0];
     if !(a_radix).is_undefined() {
         l_r_5 = ('b7: { let mut p_v_6: Value = a_radix; 
-        break 'b7 (Exec::l_integer(('b9: { let mut p_v_8: Value = p_v_6; 
-        if (p_v_8).as_object().is_some() {
-            break 'b9 (ex.l_to_number({ let a = p_v_8; if a.as_object().is_none() { a } else if sh.mask & 1 != 0 { sh.vals[0] } else { let b = ex.l_str("number")?; return Err(Fault::convert(0, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b9 (ex.l_to_number(p_v_8)?);
-        unreachable!() })));
+        break 'b7 (Exec::l_integer(ex.l_to_number_at(p_v_6, sh, 0)?));
         unreachable!() });
     }
     return Ok({ let x = l_x_4; let a = lnum(l_r_5); ex.l_num_format(0, x, a)? });
@@ -245,12 +224,7 @@ fn shape_4(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Leaf
         break 'b2 (f64_of(l_n_3));
         unreachable!() });
     return Ok({ let x = l_x_4; let a = lnum(('b6: { let mut p_v_5: Value = a_fractionDigits; 
-        break 'b6 (Exec::l_integer(('b8: { let mut p_v_7: Value = p_v_5; 
-        if (p_v_7).as_object().is_some() {
-            break 'b8 (ex.l_to_number({ let a = p_v_7; if a.as_object().is_none() { a } else if sh.mask & 1 != 0 { sh.vals[0] } else { let b = ex.l_str("number")?; return Err(Fault::convert(0, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b8 (ex.l_to_number(p_v_7)?);
-        unreachable!() })));
+        break 'b6 (Exec::l_integer(ex.l_to_number_at(p_v_5, sh, 0)?));
         unreachable!() })); ex.l_num_format(1, x, a)? });
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
@@ -271,12 +245,7 @@ fn shape_5(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Leaf
 // GlobalParseFloat
 fn shape_6(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_string: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
-    return Ok(lnum(f64_of({ let a = [('b2: { let mut p_v_1: Value = a_string; 
-        if (p_v_1).as_object().is_some() {
-            break 'b2 (ex.l_to_string({ let a = p_v_1; if a.as_object().is_none() { a } else if sh.mask & 1 != 0 { sh.vals[0] } else { let b = ex.l_str("string")?; return Err(Fault::convert(0, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b2 (ex.l_to_string(p_v_1)?);
-        unreachable!() }), Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 1)? })));
+    return Ok(lnum(f64_of({ let a = [ex.l_to_string_at(a_string, sh, 0)?, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 1)? })));
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
@@ -284,106 +253,66 @@ fn shape_6(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Leaf
 fn shape_7(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_string: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
     let a_radix: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
-    let mut l_s_3: Value = ('b2: { let mut p_v_1: Value = a_string; 
-        if (p_v_1).as_object().is_some() {
-            break 'b2 (ex.l_to_string({ let a = p_v_1; if a.as_object().is_none() { a } else if sh.mask & 1 != 0 { sh.vals[0] } else { let b = ex.l_str("string")?; return Err(Fault::convert(0, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b2 (ex.l_to_string(p_v_1)?);
-        unreachable!() });
-    return Ok(lnum(f64_of({ let a = [l_s_3, lnum(f64_of({ let a = [lnum(('b5: { let mut p_v_4: Value = a_radix; 
-        if (p_v_4).as_object().is_some() {
-            break 'b5 (ex.l_to_number({ let a = p_v_4; if a.as_object().is_none() { a } else if sh.mask & 2 != 0 { sh.vals[1] } else { let b = ex.l_str("number")?; return Err(Fault::convert(1, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b5 (ex.l_to_number(p_v_4)?);
-        unreachable!() })), Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 1)? })), Value::UNDEFINED]; ex.l_leaf(d.ids[1], a, 2)? })));
+    let mut l_s_1: Value = ex.l_to_string_at(a_string, sh, 0)?;
+    return Ok(lnum(f64_of({ let a = [l_s_1, lnum(f64_of({ let a = [lnum(ex.l_to_number_at(a_radix, sh, 1)?), Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 1)? })), Value::UNDEFINED]; ex.l_leaf(d.ids[1], a, 2)? })));
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // StringPrototypeAt
 fn shape_8(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_index: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
-    let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
+    let mut l_s_3: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
             return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
-        break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
-        if (p_v_3).as_object().is_some() {
-            break 'b4 (ex.l_to_string({ let a = p_v_3; if a.as_object().is_none() { a } else if sh.mask & 1 != 0 { sh.vals[0] } else { let b = ex.l_str("string")?; return Err(Fault::convert(0, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b4 (ex.l_to_string(p_v_3)?);
-        unreachable!() }));
+        break 'b2 (ex.l_to_string_at(p_v_1, sh, 0)?);
         unreachable!() });
-    let mut l_len_8: f64 = ('b7: { let mut p_s_6: Value = l_s_5; 
-        break 'b7 (ex.l_str_len(p_s_6));
+    let mut l_len_6: f64 = ('b5: { let mut p_s_4: Value = l_s_3; 
+        break 'b5 (ex.l_str_len(p_s_4));
         unreachable!() });
-    let mut l_rel_13: f64 = ('b10: { let mut p_v_9: Value = a_index; 
-        break 'b10 (Exec::l_integer(('b12: { let mut p_v_11: Value = p_v_9; 
-        if (p_v_11).as_object().is_some() {
-            break 'b12 (ex.l_to_number({ let a = p_v_11; if a.as_object().is_none() { a } else if sh.mask & 2 != 0 { sh.vals[1] } else { let b = ex.l_str("number")?; return Err(Fault::convert(1, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b12 (ex.l_to_number(p_v_11)?);
-        unreachable!() })));
+    let mut l_rel_9: f64 = ('b8: { let mut p_v_7: Value = a_index; 
+        break 'b8 (Exec::l_integer(ex.l_to_number_at(p_v_7, sh, 1)?));
         unreachable!() });
-    let mut l_k_14: f64 = (if (l_rel_13 >= d.lits[0]) { l_rel_13 } else { (l_len_8 + l_rel_13) });
-    if ((l_k_14 < d.lits[1]) || (l_k_14 >= l_len_8)) {
+    let mut l_k_10: f64 = (if (l_rel_9 >= d.lits[0]) { l_rel_9 } else { (l_len_6 + l_rel_9) });
+    if ((l_k_10 < d.lits[1]) || (l_k_10 >= l_len_6)) {
         return Ok(Value::UNDEFINED);
     }
-    return Ok({ let s = l_s_5; let a = lnum(l_k_14); let b = lnum((l_k_14 + d.lits[2])); ex.l_substring(s, a, b)? });
+    return Ok({ let s = l_s_3; let a = lnum(l_k_10); let b = lnum((l_k_10 + d.lits[2])); ex.l_substring(s, a, b)? });
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // StringPrototypeCharAt
 fn shape_9(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_pos: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
-    let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
+    let mut l_s_3: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
             return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
-        break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
-        if (p_v_3).as_object().is_some() {
-            break 'b4 (ex.l_to_string({ let a = p_v_3; if a.as_object().is_none() { a } else if sh.mask & 1 != 0 { sh.vals[0] } else { let b = ex.l_str("string")?; return Err(Fault::convert(0, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b4 (ex.l_to_string(p_v_3)?);
-        unreachable!() }));
+        break 'b2 (ex.l_to_string_at(p_v_1, sh, 0)?);
         unreachable!() });
-    let mut l_p_10: f64 = ('b7: { let mut p_v_6: Value = a_pos; 
-        break 'b7 (Exec::l_integer(('b9: { let mut p_v_8: Value = p_v_6; 
-        if (p_v_8).as_object().is_some() {
-            break 'b9 (ex.l_to_number({ let a = p_v_8; if a.as_object().is_none() { a } else if sh.mask & 2 != 0 { sh.vals[1] } else { let b = ex.l_str("number")?; return Err(Fault::convert(1, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b9 (ex.l_to_number(p_v_8)?);
-        unreachable!() })));
+    let mut l_p_6: f64 = ('b5: { let mut p_v_4: Value = a_pos; 
+        break 'b5 (Exec::l_integer(ex.l_to_number_at(p_v_4, sh, 1)?));
         unreachable!() });
-    if ((l_p_10 < d.lits[0]) || (l_p_10 >= ('b12: { let mut p_s_11: Value = l_s_5; 
-        break 'b12 (ex.l_str_len(p_s_11));
+    if ((l_p_6 < d.lits[0]) || (l_p_6 >= ('b8: { let mut p_s_7: Value = l_s_3; 
+        break 'b8 (ex.l_str_len(p_s_7));
         unreachable!() }))) {
         return Ok(ex.l_str("")?);
     }
-    return Ok({ let s = l_s_5; let a = lnum(l_p_10); let b = lnum((l_p_10 + d.lits[1])); ex.l_substring(s, a, b)? });
+    return Ok({ let s = l_s_3; let a = lnum(l_p_6); let b = lnum((l_p_6 + d.lits[1])); ex.l_substring(s, a, b)? });
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // StringPrototypeCharCodeAt
 fn shape_10(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_pos: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
-    let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
+    let mut l_s_3: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
             return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
-        break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
-        if (p_v_3).as_object().is_some() {
-            break 'b4 (ex.l_to_string({ let a = p_v_3; if a.as_object().is_none() { a } else if sh.mask & 1 != 0 { sh.vals[0] } else { let b = ex.l_str("string")?; return Err(Fault::convert(0, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b4 (ex.l_to_string(p_v_3)?);
-        unreachable!() }));
+        break 'b2 (ex.l_to_string_at(p_v_1, sh, 0)?);
         unreachable!() });
-    return Ok(lnum(f64_of({ let s = l_s_5; let k = ('b7: { let mut p_v_6: Value = a_pos; 
-        break 'b7 (Exec::l_integer(('b9: { let mut p_v_8: Value = p_v_6; 
-        if (p_v_8).as_object().is_some() {
-            break 'b9 (ex.l_to_number({ let a = p_v_8; if a.as_object().is_none() { a } else if sh.mask & 2 != 0 { sh.vals[1] } else { let b = ex.l_str("number")?; return Err(Fault::convert(1, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b9 (ex.l_to_number(p_v_8)?);
-        unreachable!() })));
+    return Ok(lnum(f64_of({ let s = l_s_3; let k = ('b5: { let mut p_v_4: Value = a_pos; 
+        break 'b5 (Exec::l_integer(ex.l_to_number_at(p_v_4, sh, 1)?));
         unreachable!() }); ex.l_char_code_at(s, k)? })));
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
@@ -392,40 +321,25 @@ fn shape_10(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
 fn shape_11(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_searchString: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
     let a_position: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
-    let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
+    let mut l_s_3: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
             return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
-        break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
-        if (p_v_3).as_object().is_some() {
-            break 'b4 (ex.l_to_string({ let a = p_v_3; if a.as_object().is_none() { a } else if sh.mask & 1 != 0 { sh.vals[0] } else { let b = ex.l_str("string")?; return Err(Fault::convert(0, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b4 (ex.l_to_string(p_v_3)?);
-        unreachable!() }));
+        break 'b2 (ex.l_to_string_at(p_v_1, sh, 0)?);
         unreachable!() });
-    let mut l_search_8: Value = ('b7: { let mut p_v_6: Value = a_searchString; 
-        if (p_v_6).as_object().is_some() {
-            break 'b7 (ex.l_to_string({ let a = p_v_6; if a.as_object().is_none() { a } else if sh.mask & 2 != 0 { sh.vals[1] } else { let b = ex.l_str("string")?; return Err(Fault::convert(1, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b7 (ex.l_to_string(p_v_6)?);
-        unreachable!() });
-    let mut l_start_19: f64 = ('b13: { let mut p_v_9: Value = a_position; let mut p_len_12: f64 = ('b11: { let mut p_s_10: Value = l_s_5; 
-        break 'b11 (ex.l_str_len(p_s_10));
+    let mut l_search_4: Value = ex.l_to_string_at(a_searchString, sh, 1)?;
+    let mut l_start_13: f64 = ('b9: { let mut p_v_5: Value = a_position; let mut p_len_8: f64 = ('b7: { let mut p_s_6: Value = l_s_3; 
+        break 'b7 (ex.l_str_len(p_s_6));
         unreachable!() }); 
-        let mut l_p_18: f64 = ('b15: { let mut p_v_14: Value = p_v_9; 
-        break 'b15 (Exec::l_integer(('b17: { let mut p_v_16: Value = p_v_14; 
-        if (p_v_16).as_object().is_some() {
-            break 'b17 (ex.l_to_number({ let a = p_v_16; if a.as_object().is_none() { a } else if sh.mask & 4 != 0 { sh.vals[2] } else { let b = ex.l_str("number")?; return Err(Fault::convert(2, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b17 (ex.l_to_number(p_v_16)?);
-        unreachable!() })));
+        let mut l_p_12: f64 = ('b11: { let mut p_v_10: Value = p_v_5; 
+        break 'b11 (Exec::l_integer(ex.l_to_number_at(p_v_10, sh, 2)?));
         unreachable!() });
-        if (l_p_18 < d.lits[0]) {
-            break 'b13 (d.lits[1]);
+        if (l_p_12 < d.lits[0]) {
+            break 'b9 (d.lits[1]);
         }
-        break 'b13 ((if (l_p_18 > p_len_12) { p_len_12 } else { l_p_18 }));
+        break 'b9 ((if (l_p_12 > p_len_8) { p_len_8 } else { l_p_12 }));
         unreachable!() });
-    return Ok(lnum({ let s = l_s_5; let t = l_search_8; let f = lnum(l_start_19); ex.l_index_of(s, t, f, false)? }));
+    return Ok(lnum({ let s = l_s_3; let t = l_search_4; let f = lnum(l_start_13); ex.l_index_of(s, t, f, false)? }));
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
@@ -433,53 +347,33 @@ fn shape_11(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
 fn shape_12(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_searchString: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
     let a_position: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
-    let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
+    let mut l_s_3: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
             return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
-        break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
-        if (p_v_3).as_object().is_some() {
-            break 'b4 (ex.l_to_string({ let a = p_v_3; if a.as_object().is_none() { a } else if sh.mask & 1 != 0 { sh.vals[0] } else { let b = ex.l_str("string")?; return Err(Fault::convert(0, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b4 (ex.l_to_string(p_v_3)?);
-        unreachable!() }));
+        break 'b2 (ex.l_to_string_at(p_v_1, sh, 0)?);
         unreachable!() });
-    let mut l_search_8: Value = ('b7: { let mut p_v_6: Value = a_searchString; 
-        if (p_v_6).as_object().is_some() {
-            break 'b7 (ex.l_to_string({ let a = p_v_6; if a.as_object().is_none() { a } else if sh.mask & 2 != 0 { sh.vals[1] } else { let b = ex.l_str("string")?; return Err(Fault::convert(1, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b7 (ex.l_to_string(p_v_6)?);
+    let mut l_search_4: Value = ex.l_to_string_at(a_searchString, sh, 1)?;
+    let mut l_numPos_5: f64 = ex.l_to_number_at(a_position, sh, 2)?;
+    let mut l_len_8: f64 = ('b7: { let mut p_s_6: Value = l_s_3; 
+        break 'b7 (ex.l_str_len(p_s_6));
         unreachable!() });
-    let mut l_numPos_11: f64 = ('b10: { let mut p_v_9: Value = a_position; 
-        if (p_v_9).as_object().is_some() {
-            break 'b10 (ex.l_to_number({ let a = p_v_9; if a.as_object().is_none() { a } else if sh.mask & 4 != 0 { sh.vals[2] } else { let b = ex.l_str("number")?; return Err(Fault::convert(2, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b10 (ex.l_to_number(p_v_9)?);
+    let mut l_pos_15: f64 = (if !(l_numPos_5 == l_numPos_5) { l_len_8 } else { ('b11: { let mut p_v_9: Value = lnum(l_numPos_5); let mut p_len_10: f64 = l_len_8; 
+        let mut l_p_14: f64 = ('b13: { let mut p_v_12: Value = p_v_9; 
+        break 'b13 (Exec::l_integer(ex.l_to_number_at(p_v_12, sh, 3)?));
         unreachable!() });
-    let mut l_len_14: f64 = ('b13: { let mut p_s_12: Value = l_s_5; 
-        break 'b13 (ex.l_str_len(p_s_12));
-        unreachable!() });
-    let mut l_pos_23: f64 = (if !(l_numPos_11 == l_numPos_11) { l_len_14 } else { ('b17: { let mut p_v_15: Value = lnum(l_numPos_11); let mut p_len_16: f64 = l_len_14; 
-        let mut l_p_22: f64 = ('b19: { let mut p_v_18: Value = p_v_15; 
-        break 'b19 (Exec::l_integer(('b21: { let mut p_v_20: Value = p_v_18; 
-        if (p_v_20).as_object().is_some() {
-            break 'b21 (ex.l_to_number({ let a = p_v_20; if a.as_object().is_none() { a } else if sh.mask & 8 != 0 { sh.vals[3] } else { let b = ex.l_str("number")?; return Err(Fault::convert(3, I_TO_PRIMITIVE, a, b)) } })?);
+        if (l_p_14 < d.lits[0]) {
+            break 'b11 (d.lits[1]);
         }
-        break 'b21 (ex.l_to_number(p_v_20)?);
-        unreachable!() })));
-        unreachable!() });
-        if (l_p_22 < d.lits[0]) {
-            break 'b17 (d.lits[1]);
-        }
-        break 'b17 ((if (l_p_22 > p_len_16) { p_len_16 } else { l_p_22 }));
+        break 'b11 ((if (l_p_14 > p_len_10) { p_len_10 } else { l_p_14 }));
         unreachable!() }) });
-    let mut l_searchLen_26: f64 = ('b25: { let mut p_s_24: Value = l_search_8; 
-        break 'b25 (ex.l_str_len(p_s_24));
+    let mut l_searchLen_18: f64 = ('b17: { let mut p_s_16: Value = l_search_4; 
+        break 'b17 (ex.l_str_len(p_s_16));
         unreachable!() });
-    if (l_searchLen_26 > l_len_14) {
+    if (l_searchLen_18 > l_len_8) {
         return Ok(lnum((-d.lits[2])));
     }
-    return Ok(lnum({ let s = l_s_5; let t = l_search_8; let f = lnum((if (l_pos_23 < (l_len_14 - l_searchLen_26)) { l_pos_23 } else { (l_len_14 - l_searchLen_26) })); ex.l_index_of(s, t, f, true)? }));
+    return Ok(lnum({ let s = l_s_3; let t = l_search_4; let f = lnum((if (l_pos_15 < (l_len_8 - l_searchLen_18)) { l_pos_15 } else { (l_len_8 - l_searchLen_18) })); ex.l_index_of(s, t, f, true)? }));
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
@@ -487,52 +381,37 @@ fn shape_12(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
 fn shape_13(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_searchString: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
     let a_position: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
-    let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
+    let mut l_s_3: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
             return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
-        break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
-        if (p_v_3).as_object().is_some() {
-            break 'b4 (ex.l_to_string({ let a = p_v_3; if a.as_object().is_none() { a } else if sh.mask & 1 != 0 { sh.vals[0] } else { let b = ex.l_str("string")?; return Err(Fault::convert(0, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b4 (ex.l_to_string(p_v_3)?);
-        unreachable!() }));
+        break 'b2 (ex.l_to_string_at(p_v_1, sh, 0)?);
         unreachable!() });
-    if ('b7: { let mut p_v_6: Value = a_searchString; 
-        if !((p_v_6).as_object().is_some()) {
-            break 'b7 ((d.lits[0] != 0.0));
+    if ('b5: { let mut p_v_4: Value = a_searchString; 
+        if !((p_v_4).as_object().is_some()) {
+            break 'b5 ((d.lits[0] != 0.0));
         }
-        let mut l_matcher_8: Value = { let a = p_v_6; if sh.mask & 2 != 0 { sh.vals[1] } else { let b = { let a = [ex.l_str("match")?, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 1)? }; return Err(Fault::convert(1, I_GET_SITE, a, b)) } };
-        if !(l_matcher_8).is_undefined() {
-            break 'b7 (({ let a = [l_matcher_8, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[1], a, 1)? }).as_bool() == Some(true));
+        let mut l_matcher_6: Value = { let a = p_v_4; if sh.mask & 2 != 0 { sh.vals[1] } else { let b = { let a = [ex.l_str("match")?, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 1)? }; return Err(Fault::convert(1, I_GET_SITE, a, b)) } };
+        if !(l_matcher_6).is_undefined() {
+            break 'b5 (({ let a = [l_matcher_6, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[1], a, 1)? }).as_bool() == Some(true));
         }
-        break 'b7 (({ let a = [p_v_6, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[2], a, 1)? }).as_bool() == Some(true));
+        break 'b5 (({ let a = [p_v_4, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[2], a, 1)? }).as_bool() == Some(true));
         unreachable!() }) {
         return Err(Exec::l_error(ErrorKind::TypeError, "regexp not supported"));
     }
-    let mut l_search_11: Value = ('b10: { let mut p_v_9: Value = a_searchString; 
-        if (p_v_9).as_object().is_some() {
-            break 'b10 (ex.l_to_string({ let a = p_v_9; if a.as_object().is_none() { a } else if sh.mask & 4 != 0 { sh.vals[2] } else { let b = ex.l_str("string")?; return Err(Fault::convert(2, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b10 (ex.l_to_string(p_v_9)?);
-        unreachable!() });
-    let mut l_start_22: f64 = ('b16: { let mut p_v_12: Value = a_position; let mut p_len_15: f64 = ('b14: { let mut p_s_13: Value = l_s_5; 
-        break 'b14 (ex.l_str_len(p_s_13));
+    let mut l_search_7: Value = ex.l_to_string_at(a_searchString, sh, 2)?;
+    let mut l_start_16: f64 = ('b12: { let mut p_v_8: Value = a_position; let mut p_len_11: f64 = ('b10: { let mut p_s_9: Value = l_s_3; 
+        break 'b10 (ex.l_str_len(p_s_9));
         unreachable!() }); 
-        let mut l_p_21: f64 = ('b18: { let mut p_v_17: Value = p_v_12; 
-        break 'b18 (Exec::l_integer(('b20: { let mut p_v_19: Value = p_v_17; 
-        if (p_v_19).as_object().is_some() {
-            break 'b20 (ex.l_to_number({ let a = p_v_19; if a.as_object().is_none() { a } else if sh.mask & 8 != 0 { sh.vals[3] } else { let b = ex.l_str("number")?; return Err(Fault::convert(3, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b20 (ex.l_to_number(p_v_19)?);
-        unreachable!() })));
+        let mut l_p_15: f64 = ('b14: { let mut p_v_13: Value = p_v_8; 
+        break 'b14 (Exec::l_integer(ex.l_to_number_at(p_v_13, sh, 3)?));
         unreachable!() });
-        if (l_p_21 < d.lits[1]) {
-            break 'b16 (d.lits[2]);
+        if (l_p_15 < d.lits[1]) {
+            break 'b12 (d.lits[2]);
         }
-        break 'b16 ((if (l_p_21 > p_len_15) { p_len_15 } else { l_p_21 }));
+        break 'b12 ((if (l_p_15 > p_len_11) { p_len_11 } else { l_p_15 }));
         unreachable!() });
-    return Ok(Value::bool(({ let s = l_s_5; let t = l_search_11; let f = lnum(l_start_22); ex.l_index_of(s, t, f, false)? } >= d.lits[3])));
+    return Ok(Value::bool(({ let s = l_s_3; let t = l_search_7; let f = lnum(l_start_16); ex.l_index_of(s, t, f, false)? } >= d.lits[3])));
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
@@ -540,59 +419,44 @@ fn shape_13(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
 fn shape_14(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_searchString: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
     let a_position: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
-    let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
+    let mut l_s_3: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
             return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
-        break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
-        if (p_v_3).as_object().is_some() {
-            break 'b4 (ex.l_to_string({ let a = p_v_3; if a.as_object().is_none() { a } else if sh.mask & 1 != 0 { sh.vals[0] } else { let b = ex.l_str("string")?; return Err(Fault::convert(0, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b4 (ex.l_to_string(p_v_3)?);
-        unreachable!() }));
+        break 'b2 (ex.l_to_string_at(p_v_1, sh, 0)?);
         unreachable!() });
-    if ('b7: { let mut p_v_6: Value = a_searchString; 
-        if !((p_v_6).as_object().is_some()) {
-            break 'b7 ((d.lits[0] != 0.0));
+    if ('b5: { let mut p_v_4: Value = a_searchString; 
+        if !((p_v_4).as_object().is_some()) {
+            break 'b5 ((d.lits[0] != 0.0));
         }
-        let mut l_matcher_8: Value = { let a = p_v_6; if sh.mask & 2 != 0 { sh.vals[1] } else { let b = { let a = [ex.l_str("match")?, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 1)? }; return Err(Fault::convert(1, I_GET_SITE, a, b)) } };
-        if !(l_matcher_8).is_undefined() {
-            break 'b7 (({ let a = [l_matcher_8, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[1], a, 1)? }).as_bool() == Some(true));
+        let mut l_matcher_6: Value = { let a = p_v_4; if sh.mask & 2 != 0 { sh.vals[1] } else { let b = { let a = [ex.l_str("match")?, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 1)? }; return Err(Fault::convert(1, I_GET_SITE, a, b)) } };
+        if !(l_matcher_6).is_undefined() {
+            break 'b5 (({ let a = [l_matcher_6, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[1], a, 1)? }).as_bool() == Some(true));
         }
-        break 'b7 (({ let a = [p_v_6, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[2], a, 1)? }).as_bool() == Some(true));
+        break 'b5 (({ let a = [p_v_4, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[2], a, 1)? }).as_bool() == Some(true));
         unreachable!() }) {
         return Err(Exec::l_error(ErrorKind::TypeError, "regexp not supported"));
     }
-    let mut l_search_11: Value = ('b10: { let mut p_v_9: Value = a_searchString; 
-        if (p_v_9).as_object().is_some() {
-            break 'b10 (ex.l_to_string({ let a = p_v_9; if a.as_object().is_none() { a } else if sh.mask & 4 != 0 { sh.vals[2] } else { let b = ex.l_str("string")?; return Err(Fault::convert(2, I_TO_PRIMITIVE, a, b)) } })?);
+    let mut l_search_7: Value = ex.l_to_string_at(a_searchString, sh, 2)?;
+    let mut l_len_10: f64 = ('b9: { let mut p_s_8: Value = l_s_3; 
+        break 'b9 (ex.l_str_len(p_s_8));
+        unreachable!() });
+    let mut l_start_17: f64 = ('b13: { let mut p_v_11: Value = a_position; let mut p_len_12: f64 = l_len_10; 
+        let mut l_p_16: f64 = ('b15: { let mut p_v_14: Value = p_v_11; 
+        break 'b15 (Exec::l_integer(ex.l_to_number_at(p_v_14, sh, 3)?));
+        unreachable!() });
+        if (l_p_16 < d.lits[1]) {
+            break 'b13 (d.lits[2]);
         }
-        break 'b10 (ex.l_to_string(p_v_9)?);
+        break 'b13 ((if (l_p_16 > p_len_12) { p_len_12 } else { l_p_16 }));
         unreachable!() });
-    let mut l_len_14: f64 = ('b13: { let mut p_s_12: Value = l_s_5; 
-        break 'b13 (ex.l_str_len(p_s_12));
+    let mut l_searchLength_20: f64 = ('b19: { let mut p_s_18: Value = l_search_7; 
+        break 'b19 (ex.l_str_len(p_s_18));
         unreachable!() });
-    let mut l_start_23: f64 = ('b17: { let mut p_v_15: Value = a_position; let mut p_len_16: f64 = l_len_14; 
-        let mut l_p_22: f64 = ('b19: { let mut p_v_18: Value = p_v_15; 
-        break 'b19 (Exec::l_integer(('b21: { let mut p_v_20: Value = p_v_18; 
-        if (p_v_20).as_object().is_some() {
-            break 'b21 (ex.l_to_number({ let a = p_v_20; if a.as_object().is_none() { a } else if sh.mask & 8 != 0 { sh.vals[3] } else { let b = ex.l_str("number")?; return Err(Fault::convert(3, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b21 (ex.l_to_number(p_v_20)?);
-        unreachable!() })));
-        unreachable!() });
-        if (l_p_22 < d.lits[1]) {
-            break 'b17 (d.lits[2]);
-        }
-        break 'b17 ((if (l_p_22 > p_len_16) { p_len_16 } else { l_p_22 }));
-        unreachable!() });
-    let mut l_searchLength_26: f64 = ('b25: { let mut p_s_24: Value = l_search_11; 
-        break 'b25 (ex.l_str_len(p_s_24));
-        unreachable!() });
-    if ((l_start_23 + l_searchLength_26) > l_len_14) {
+    if ((l_start_17 + l_searchLength_20) > l_len_10) {
         return Ok(Value::bool((d.lits[3] != 0.0)));
     }
-    return Ok(Value::bool({ let a = { let s = l_s_5; let a = lnum(l_start_23); let b = lnum((l_start_23 + l_searchLength_26)); ex.l_substring(s, a, b)? }; let b = l_search_11; ex.n_strict_eq(a, b) }));
+    return Ok(Value::bool({ let a = { let s = l_s_3; let a = lnum(l_start_17); let b = lnum((l_start_17 + l_searchLength_20)); ex.l_substring(s, a, b)? }; let b = l_search_7; ex.n_strict_eq(a, b) }));
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
@@ -600,59 +464,44 @@ fn shape_14(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
 fn shape_15(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_searchString: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
     let a_endPosition: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
-    let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
+    let mut l_s_3: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
             return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
-        break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
-        if (p_v_3).as_object().is_some() {
-            break 'b4 (ex.l_to_string({ let a = p_v_3; if a.as_object().is_none() { a } else if sh.mask & 1 != 0 { sh.vals[0] } else { let b = ex.l_str("string")?; return Err(Fault::convert(0, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b4 (ex.l_to_string(p_v_3)?);
-        unreachable!() }));
+        break 'b2 (ex.l_to_string_at(p_v_1, sh, 0)?);
         unreachable!() });
-    if ('b7: { let mut p_v_6: Value = a_searchString; 
-        if !((p_v_6).as_object().is_some()) {
-            break 'b7 ((d.lits[0] != 0.0));
+    if ('b5: { let mut p_v_4: Value = a_searchString; 
+        if !((p_v_4).as_object().is_some()) {
+            break 'b5 ((d.lits[0] != 0.0));
         }
-        let mut l_matcher_8: Value = { let a = p_v_6; if sh.mask & 2 != 0 { sh.vals[1] } else { let b = { let a = [ex.l_str("match")?, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 1)? }; return Err(Fault::convert(1, I_GET_SITE, a, b)) } };
-        if !(l_matcher_8).is_undefined() {
-            break 'b7 (({ let a = [l_matcher_8, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[1], a, 1)? }).as_bool() == Some(true));
+        let mut l_matcher_6: Value = { let a = p_v_4; if sh.mask & 2 != 0 { sh.vals[1] } else { let b = { let a = [ex.l_str("match")?, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 1)? }; return Err(Fault::convert(1, I_GET_SITE, a, b)) } };
+        if !(l_matcher_6).is_undefined() {
+            break 'b5 (({ let a = [l_matcher_6, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[1], a, 1)? }).as_bool() == Some(true));
         }
-        break 'b7 (({ let a = [p_v_6, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[2], a, 1)? }).as_bool() == Some(true));
+        break 'b5 (({ let a = [p_v_4, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[2], a, 1)? }).as_bool() == Some(true));
         unreachable!() }) {
         return Err(Exec::l_error(ErrorKind::TypeError, "regexp not supported"));
     }
-    let mut l_search_11: Value = ('b10: { let mut p_v_9: Value = a_searchString; 
-        if (p_v_9).as_object().is_some() {
-            break 'b10 (ex.l_to_string({ let a = p_v_9; if a.as_object().is_none() { a } else if sh.mask & 4 != 0 { sh.vals[2] } else { let b = ex.l_str("string")?; return Err(Fault::convert(2, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b10 (ex.l_to_string(p_v_9)?);
+    let mut l_search_7: Value = ex.l_to_string_at(a_searchString, sh, 2)?;
+    let mut l_len_10: f64 = ('b9: { let mut p_s_8: Value = l_s_3; 
+        break 'b9 (ex.l_str_len(p_s_8));
         unreachable!() });
-    let mut l_len_14: f64 = ('b13: { let mut p_s_12: Value = l_s_5; 
-        break 'b13 (ex.l_str_len(p_s_12));
+    let mut l_end_17: f64 = (if (a_endPosition).is_undefined() { l_len_10 } else { ('b13: { let mut p_v_11: Value = a_endPosition; let mut p_len_12: f64 = l_len_10; 
+        let mut l_p_16: f64 = ('b15: { let mut p_v_14: Value = p_v_11; 
+        break 'b15 (Exec::l_integer(ex.l_to_number_at(p_v_14, sh, 3)?));
         unreachable!() });
-    let mut l_end_23: f64 = (if (a_endPosition).is_undefined() { l_len_14 } else { ('b17: { let mut p_v_15: Value = a_endPosition; let mut p_len_16: f64 = l_len_14; 
-        let mut l_p_22: f64 = ('b19: { let mut p_v_18: Value = p_v_15; 
-        break 'b19 (Exec::l_integer(('b21: { let mut p_v_20: Value = p_v_18; 
-        if (p_v_20).as_object().is_some() {
-            break 'b21 (ex.l_to_number({ let a = p_v_20; if a.as_object().is_none() { a } else if sh.mask & 8 != 0 { sh.vals[3] } else { let b = ex.l_str("number")?; return Err(Fault::convert(3, I_TO_PRIMITIVE, a, b)) } })?);
+        if (l_p_16 < d.lits[1]) {
+            break 'b13 (d.lits[2]);
         }
-        break 'b21 (ex.l_to_number(p_v_20)?);
-        unreachable!() })));
-        unreachable!() });
-        if (l_p_22 < d.lits[1]) {
-            break 'b17 (d.lits[2]);
-        }
-        break 'b17 ((if (l_p_22 > p_len_16) { p_len_16 } else { l_p_22 }));
+        break 'b13 ((if (l_p_16 > p_len_12) { p_len_12 } else { l_p_16 }));
         unreachable!() }) });
-    let mut l_searchLength_26: f64 = ('b25: { let mut p_s_24: Value = l_search_11; 
-        break 'b25 (ex.l_str_len(p_s_24));
+    let mut l_searchLength_20: f64 = ('b19: { let mut p_s_18: Value = l_search_7; 
+        break 'b19 (ex.l_str_len(p_s_18));
         unreachable!() });
-    if (l_searchLength_26 > l_end_23) {
+    if (l_searchLength_20 > l_end_17) {
         return Ok(Value::bool((d.lits[3] != 0.0)));
     }
-    return Ok(Value::bool({ let a = { let s = l_s_5; let a = lnum((l_end_23 - l_searchLength_26)); let b = lnum(l_end_23); ex.l_substring(s, a, b)? }; let b = l_search_11; ex.n_strict_eq(a, b) }));
+    return Ok(Value::bool({ let a = { let s = l_s_3; let a = lnum((l_end_17 - l_searchLength_20)); let b = lnum(l_end_17); ex.l_substring(s, a, b)? }; let b = l_search_7; ex.n_strict_eq(a, b) }));
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
@@ -660,60 +509,45 @@ fn shape_15(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
 fn shape_16(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_start: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
     let a_end: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
-    let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
+    let mut l_s_3: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
             return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
-        break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
-        if (p_v_3).as_object().is_some() {
-            break 'b4 (ex.l_to_string({ let a = p_v_3; if a.as_object().is_none() { a } else if sh.mask & 1 != 0 { sh.vals[0] } else { let b = ex.l_str("string")?; return Err(Fault::convert(0, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b4 (ex.l_to_string(p_v_3)?);
-        unreachable!() }));
+        break 'b2 (ex.l_to_string_at(p_v_1, sh, 0)?);
         unreachable!() });
-    let mut l_len_8: f64 = ('b7: { let mut p_s_6: Value = l_s_5; 
-        break 'b7 (ex.l_str_len(p_s_6));
+    let mut l_len_6: f64 = ('b5: { let mut p_s_4: Value = l_s_3; 
+        break 'b5 (ex.l_str_len(p_s_4));
         unreachable!() });
-    let mut l_from_19: f64 = ('b12: { let mut p_v_9: Value = a_start; let mut p_len_10: f64 = l_len_8; let mut p_dflt_11: f64 = d.lits[0]; 
-        if (p_v_9).is_undefined() {
-            break 'b12 (p_dflt_11);
+    let mut l_from_15: f64 = ('b10: { let mut p_v_7: Value = a_start; let mut p_len_8: f64 = l_len_6; let mut p_dflt_9: f64 = d.lits[0]; 
+        if (p_v_7).is_undefined() {
+            break 'b10 (p_dflt_9);
         }
-        let mut l_rel_17: f64 = ('b14: { let mut p_v_13: Value = p_v_9; 
-        break 'b14 (Exec::l_integer(('b16: { let mut p_v_15: Value = p_v_13; 
-        if (p_v_15).as_object().is_some() {
-            break 'b16 (ex.l_to_number({ let a = p_v_15; if a.as_object().is_none() { a } else if sh.mask & 2 != 0 { sh.vals[1] } else { let b = ex.l_str("number")?; return Err(Fault::convert(1, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b16 (ex.l_to_number(p_v_15)?);
-        unreachable!() })));
+        let mut l_rel_13: f64 = ('b12: { let mut p_v_11: Value = p_v_7; 
+        break 'b12 (Exec::l_integer(ex.l_to_number_at(p_v_11, sh, 1)?));
         unreachable!() });
-        if (l_rel_17 < d.lits[1]) {
-            let mut l_k_18: f64 = (p_len_10 + l_rel_17);
-            break 'b12 ((if (l_k_18 < d.lits[2]) { d.lits[3] } else { l_k_18 }));
+        if (l_rel_13 < d.lits[1]) {
+            let mut l_k_14: f64 = (p_len_8 + l_rel_13);
+            break 'b10 ((if (l_k_14 < d.lits[2]) { d.lits[3] } else { l_k_14 }));
         }
-        break 'b12 ((if (l_rel_17 < p_len_10) { l_rel_17 } else { p_len_10 }));
+        break 'b10 ((if (l_rel_13 < p_len_8) { l_rel_13 } else { p_len_8 }));
         unreachable!() });
-    let mut l_to_30: f64 = ('b23: { let mut p_v_20: Value = a_end; let mut p_len_21: f64 = l_len_8; let mut p_dflt_22: f64 = l_len_8; 
-        if (p_v_20).is_undefined() {
-            break 'b23 (p_dflt_22);
+    let mut l_to_24: f64 = ('b19: { let mut p_v_16: Value = a_end; let mut p_len_17: f64 = l_len_6; let mut p_dflt_18: f64 = l_len_6; 
+        if (p_v_16).is_undefined() {
+            break 'b19 (p_dflt_18);
         }
-        let mut l_rel_28: f64 = ('b25: { let mut p_v_24: Value = p_v_20; 
-        break 'b25 (Exec::l_integer(('b27: { let mut p_v_26: Value = p_v_24; 
-        if (p_v_26).as_object().is_some() {
-            break 'b27 (ex.l_to_number({ let a = p_v_26; if a.as_object().is_none() { a } else if sh.mask & 4 != 0 { sh.vals[2] } else { let b = ex.l_str("number")?; return Err(Fault::convert(2, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b27 (ex.l_to_number(p_v_26)?);
-        unreachable!() })));
+        let mut l_rel_22: f64 = ('b21: { let mut p_v_20: Value = p_v_16; 
+        break 'b21 (Exec::l_integer(ex.l_to_number_at(p_v_20, sh, 2)?));
         unreachable!() });
-        if (l_rel_28 < d.lits[4]) {
-            let mut l_k_29: f64 = (p_len_21 + l_rel_28);
-            break 'b23 ((if (l_k_29 < d.lits[5]) { d.lits[6] } else { l_k_29 }));
+        if (l_rel_22 < d.lits[4]) {
+            let mut l_k_23: f64 = (p_len_17 + l_rel_22);
+            break 'b19 ((if (l_k_23 < d.lits[5]) { d.lits[6] } else { l_k_23 }));
         }
-        break 'b23 ((if (l_rel_28 < p_len_21) { l_rel_28 } else { p_len_21 }));
+        break 'b19 ((if (l_rel_22 < p_len_17) { l_rel_22 } else { p_len_17 }));
         unreachable!() });
-    if (l_from_19 >= l_to_30) {
+    if (l_from_15 >= l_to_24) {
         return Ok(ex.l_str("")?);
     }
-    return Ok({ let s = l_s_5; let a = lnum(l_from_19); let b = lnum(l_to_30); ex.l_substring(s, a, b)? });
+    return Ok({ let s = l_s_3; let a = lnum(l_from_15); let b = lnum(l_to_24); ex.l_substring(s, a, b)? });
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
@@ -721,83 +555,58 @@ fn shape_16(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
 fn shape_17(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_start: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
     let a_end: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
-    let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
+    let mut l_s_3: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
             return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
-        break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
-        if (p_v_3).as_object().is_some() {
-            break 'b4 (ex.l_to_string({ let a = p_v_3; if a.as_object().is_none() { a } else if sh.mask & 1 != 0 { sh.vals[0] } else { let b = ex.l_str("string")?; return Err(Fault::convert(0, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b4 (ex.l_to_string(p_v_3)?);
-        unreachable!() }));
+        break 'b2 (ex.l_to_string_at(p_v_1, sh, 0)?);
         unreachable!() });
-    let mut l_len_8: f64 = ('b7: { let mut p_s_6: Value = l_s_5; 
-        break 'b7 (ex.l_str_len(p_s_6));
+    let mut l_len_6: f64 = ('b5: { let mut p_s_4: Value = l_s_3; 
+        break 'b5 (ex.l_str_len(p_s_4));
         unreachable!() });
-    let mut l_a_17: f64 = ('b11: { let mut p_v_9: Value = a_start; let mut p_len_10: f64 = l_len_8; 
-        let mut l_p_16: f64 = ('b13: { let mut p_v_12: Value = p_v_9; 
-        break 'b13 (Exec::l_integer(('b15: { let mut p_v_14: Value = p_v_12; 
-        if (p_v_14).as_object().is_some() {
-            break 'b15 (ex.l_to_number({ let a = p_v_14; if a.as_object().is_none() { a } else if sh.mask & 2 != 0 { sh.vals[1] } else { let b = ex.l_str("number")?; return Err(Fault::convert(1, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b15 (ex.l_to_number(p_v_14)?);
-        unreachable!() })));
+    let mut l_a_13: f64 = ('b9: { let mut p_v_7: Value = a_start; let mut p_len_8: f64 = l_len_6; 
+        let mut l_p_12: f64 = ('b11: { let mut p_v_10: Value = p_v_7; 
+        break 'b11 (Exec::l_integer(ex.l_to_number_at(p_v_10, sh, 1)?));
         unreachable!() });
-        if (l_p_16 < d.lits[0]) {
-            break 'b11 (d.lits[1]);
+        if (l_p_12 < d.lits[0]) {
+            break 'b9 (d.lits[1]);
         }
-        break 'b11 ((if (l_p_16 > p_len_10) { p_len_10 } else { l_p_16 }));
+        break 'b9 ((if (l_p_12 > p_len_8) { p_len_8 } else { l_p_12 }));
         unreachable!() });
-    let mut l_b_26: f64 = (if (a_end).is_undefined() { l_len_8 } else { ('b20: { let mut p_v_18: Value = a_end; let mut p_len_19: f64 = l_len_8; 
-        let mut l_p_25: f64 = ('b22: { let mut p_v_21: Value = p_v_18; 
-        break 'b22 (Exec::l_integer(('b24: { let mut p_v_23: Value = p_v_21; 
-        if (p_v_23).as_object().is_some() {
-            break 'b24 (ex.l_to_number({ let a = p_v_23; if a.as_object().is_none() { a } else if sh.mask & 4 != 0 { sh.vals[2] } else { let b = ex.l_str("number")?; return Err(Fault::convert(2, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b24 (ex.l_to_number(p_v_23)?);
-        unreachable!() })));
+    let mut l_b_20: f64 = (if (a_end).is_undefined() { l_len_6 } else { ('b16: { let mut p_v_14: Value = a_end; let mut p_len_15: f64 = l_len_6; 
+        let mut l_p_19: f64 = ('b18: { let mut p_v_17: Value = p_v_14; 
+        break 'b18 (Exec::l_integer(ex.l_to_number_at(p_v_17, sh, 2)?));
         unreachable!() });
-        if (l_p_25 < d.lits[2]) {
-            break 'b20 (d.lits[3]);
+        if (l_p_19 < d.lits[2]) {
+            break 'b16 (d.lits[3]);
         }
-        break 'b20 ((if (l_p_25 > p_len_19) { p_len_19 } else { l_p_25 }));
+        break 'b16 ((if (l_p_19 > p_len_15) { p_len_15 } else { l_p_19 }));
         unreachable!() }) });
-    return Ok((if (l_a_17 < l_b_26) { { let s = l_s_5; let a = lnum(l_a_17); let b = lnum(l_b_26); ex.l_substring(s, a, b)? } } else { { let s = l_s_5; let a = lnum(l_b_26); let b = lnum(l_a_17); ex.l_substring(s, a, b)? } }));
+    return Ok((if (l_a_13 < l_b_20) { { let s = l_s_3; let a = lnum(l_a_13); let b = lnum(l_b_20); ex.l_substring(s, a, b)? } } else { { let s = l_s_3; let a = lnum(l_b_20); let b = lnum(l_a_13); ex.l_substring(s, a, b)? } }));
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // StringPrototypeRepeat
 fn shape_18(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_count: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
-    let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
+    let mut l_s_3: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
             return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
-        break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
-        if (p_v_3).as_object().is_some() {
-            break 'b4 (ex.l_to_string({ let a = p_v_3; if a.as_object().is_none() { a } else if sh.mask & 1 != 0 { sh.vals[0] } else { let b = ex.l_str("string")?; return Err(Fault::convert(0, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b4 (ex.l_to_string(p_v_3)?);
-        unreachable!() }));
+        break 'b2 (ex.l_to_string_at(p_v_1, sh, 0)?);
         unreachable!() });
-    let mut l_n_10: f64 = ('b7: { let mut p_v_6: Value = a_count; 
-        break 'b7 (Exec::l_integer(('b9: { let mut p_v_8: Value = p_v_6; 
-        if (p_v_8).as_object().is_some() {
-            break 'b9 (ex.l_to_number({ let a = p_v_8; if a.as_object().is_none() { a } else if sh.mask & 2 != 0 { sh.vals[1] } else { let b = ex.l_str("number")?; return Err(Fault::convert(1, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b9 (ex.l_to_number(p_v_8)?);
-        unreachable!() })));
+    let mut l_n_6: f64 = ('b5: { let mut p_v_4: Value = a_count; 
+        break 'b5 (Exec::l_integer(ex.l_to_number_at(p_v_4, sh, 1)?));
         unreachable!() });
-    if ((l_n_10 < d.lits[0]) || (l_n_10 == (d.lits[1] / d.lits[2]))) {
+    if ((l_n_6 < d.lits[0]) || (l_n_6 == (d.lits[1] / d.lits[2]))) {
         return Err(Exec::l_error(ErrorKind::RangeError, "invalid repeat count"));
     }
-    if ((('b12: { let mut p_s_11: Value = l_s_5; 
-        break 'b12 (ex.l_str_len(p_s_11));
-        unreachable!() }) == d.lits[3]) || (l_n_10 == d.lits[4])) {
+    if ((('b8: { let mut p_s_7: Value = l_s_3; 
+        break 'b8 (ex.l_str_len(p_s_7));
+        unreachable!() }) == d.lits[3]) || (l_n_6 == d.lits[4])) {
         return Ok(ex.l_str("")?);
     }
-    return Ok({ let s = l_s_5; let k = lnum(l_n_10); ex.l_repeat(s, k)? });
+    return Ok({ let s = l_s_3; let k = lnum(l_n_6); ex.l_repeat(s, k)? });
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
@@ -805,53 +614,38 @@ fn shape_18(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
 fn shape_19(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_maxLength: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
     let a_fillString: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
-    return Ok(('b9: { let mut p_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
+    return Ok(('b7: { let mut p_s_3: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
             return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
-        break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
-        if (p_v_3).as_object().is_some() {
-            break 'b4 (ex.l_to_string({ let a = p_v_3; if a.as_object().is_none() { a } else if sh.mask & 1 != 0 { sh.vals[0] } else { let b = ex.l_str("string")?; return Err(Fault::convert(0, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b4 (ex.l_to_string(p_v_3)?);
-        unreachable!() }));
-        unreachable!() }); let mut p_maxLength_6: Value = a_maxLength; let mut p_fillString_7: Value = a_fillString; let mut p_atStart_8: bool = (d.lits[0] != 0.0); 
-        let mut l_intMaxLength_17: f64 = ('b11: { let mut p_v_10: Value = p_maxLength_6; 
-        let mut l_len_16: f64 = ('b13: { let mut p_v_12: Value = p_v_10; 
-        break 'b13 (Exec::l_integer(('b15: { let mut p_v_14: Value = p_v_12; 
-        if (p_v_14).as_object().is_some() {
-            break 'b15 (ex.l_to_number({ let a = p_v_14; if a.as_object().is_none() { a } else if sh.mask & 2 != 0 { sh.vals[1] } else { let b = ex.l_str("number")?; return Err(Fault::convert(1, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b15 (ex.l_to_number(p_v_14)?);
-        unreachable!() })));
+        break 'b2 (ex.l_to_string_at(p_v_1, sh, 0)?);
+        unreachable!() }); let mut p_maxLength_4: Value = a_maxLength; let mut p_fillString_5: Value = a_fillString; let mut p_atStart_6: bool = (d.lits[0] != 0.0); 
+        let mut l_intMaxLength_13: f64 = ('b9: { let mut p_v_8: Value = p_maxLength_4; 
+        let mut l_len_12: f64 = ('b11: { let mut p_v_10: Value = p_v_8; 
+        break 'b11 (Exec::l_integer(ex.l_to_number_at(p_v_10, sh, 1)?));
         unreachable!() });
-        if (l_len_16 <= d.lits[1]) {
-            break 'b11 (d.lits[2]);
+        if (l_len_12 <= d.lits[1]) {
+            break 'b9 (d.lits[2]);
         }
-        if (l_len_16 > d.lits[3]) {
-            break 'b11 (d.lits[4]);
+        if (l_len_12 > d.lits[3]) {
+            break 'b9 (d.lits[4]);
         }
-        break 'b11 (l_len_16);
+        break 'b9 (l_len_12);
         unreachable!() });
-        let mut l_stringLength_20: f64 = ('b19: { let mut p_s_18: Value = p_s_5; 
+        let mut l_stringLength_16: f64 = ('b15: { let mut p_s_14: Value = p_s_3; 
+        break 'b15 (ex.l_str_len(p_s_14));
+        unreachable!() });
+        if (l_intMaxLength_13 <= l_stringLength_16) {
+            break 'b7 (p_s_3);
+        }
+        let mut l_filler_17: Value = (if (p_fillString_5).is_undefined() { ex.l_str(" ")? } else { ex.l_to_string_at(p_fillString_5, sh, 2)? });
+        let mut l_fillerLength_20: f64 = ('b19: { let mut p_s_18: Value = l_filler_17; 
         break 'b19 (ex.l_str_len(p_s_18));
         unreachable!() });
-        if (l_intMaxLength_17 <= l_stringLength_20) {
-            break 'b9 (p_s_5);
+        if (l_fillerLength_20 == d.lits[5]) {
+            break 'b7 (p_s_3);
         }
-        let mut l_filler_23: Value = (if (p_fillString_7).is_undefined() { ex.l_str(" ")? } else { ('b22: { let mut p_v_21: Value = p_fillString_7; 
-        if (p_v_21).as_object().is_some() {
-            break 'b22 (ex.l_to_string({ let a = p_v_21; if a.as_object().is_none() { a } else if sh.mask & 4 != 0 { sh.vals[2] } else { let b = ex.l_str("string")?; return Err(Fault::convert(2, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b22 (ex.l_to_string(p_v_21)?);
-        unreachable!() }) });
-        let mut l_fillerLength_26: f64 = ('b25: { let mut p_s_24: Value = l_filler_23; 
-        break 'b25 (ex.l_str_len(p_s_24));
-        unreachable!() });
-        if (l_fillerLength_26 == d.lits[5]) {
-            break 'b9 (p_s_5);
-        }
-        break 'b9 ({ let s = p_s_5; let f = l_filler_23; let k = (l_intMaxLength_17 - l_stringLength_20); let a = p_atStart_8; ex.l_pad(s, f, k, a)? });
+        break 'b7 ({ let s = p_s_3; let f = l_filler_17; let k = (l_intMaxLength_13 - l_stringLength_16); let a = p_atStart_6; ex.l_pad(s, f, k, a)? });
         unreachable!() }));
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
@@ -862,12 +656,7 @@ fn shape_20(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
             return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
-        break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
-        if (p_v_3).as_object().is_some() {
-            break 'b4 (ex.l_to_string({ let a = p_v_3; if a.as_object().is_none() { a } else if sh.mask & 1 != 0 { sh.vals[0] } else { let b = ex.l_str("string")?; return Err(Fault::convert(0, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b4 (ex.l_to_string(p_v_3)?);
-        unreachable!() }));
+        break 'b2 (ex.l_to_string_at(p_v_1, sh, 0)?);
         unreachable!() }); let u = Value::bool((d.lits[0] != 0.0)); ex.l_case(s, u)? });
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
@@ -878,12 +667,7 @@ fn shape_21(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
             return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
-        break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
-        if (p_v_3).as_object().is_some() {
-            break 'b4 (ex.l_to_string({ let a = p_v_3; if a.as_object().is_none() { a } else if sh.mask & 1 != 0 { sh.vals[0] } else { let b = ex.l_str("string")?; return Err(Fault::convert(0, I_TO_PRIMITIVE, a, b)) } })?);
-        }
-        break 'b4 (ex.l_to_string(p_v_3)?);
-        unreachable!() }));
+        break 'b2 (ex.l_to_string_at(p_v_1, sh, 0)?);
         unreachable!() }); let w = lnum(d.lits[0]); ex.l_trim(s, w)? });
     Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
