@@ -58,6 +58,8 @@ fn builtins_gen_is_fresh() {
         (djs_bgen::PRELUDE_SLIM_PATH, &out.prelude_slim),
         (djs_bgen::REPORT_PATH, &out.report),
         (djs_bgen::NATIVES_PATH, &out.natives),
+        (djs_bgen::LEAVES_PATH, &out.leaves),
+        (djs_bgen::PRELUDE_NOEMBED_PATH, &out.prelude_noembed),
     ] {
         let on_disk = fs::read_to_string(dir.join(path)).unwrap_or_default();
         assert!(

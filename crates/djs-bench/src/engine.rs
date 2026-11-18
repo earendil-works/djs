@@ -117,7 +117,6 @@ pub fn engine(r: &mut Runner) {
     engines.push((
         "djs-bytecode",
         Box::new(Djs {
-            bytecode_builtins: true,
             ..Djs::default()
         }),
     ));

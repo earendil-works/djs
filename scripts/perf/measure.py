@@ -12,7 +12,6 @@ ap = argparse.ArgumentParser()
 ap.add_argument("-n", type=int, default=5)
 ap.add_argument("--djs", action="append")
 ap.add_argument("--noqjs", action="store_true")
-ap.add_argument("--backend", default=None)
 ap.add_argument("names", nargs="*")
 a = ap.parse_args()
 djs = a.djs or [os.path.join(here, "target/release/djs")]
@@ -40,7 +39,7 @@ res = {}
 for name in names:
     cmds = []
     for label, d in engines:
-        c = [d, "run", "--body"] + (["--backend", a.backend] if a.backend else []) + [os.path.join(tools, "w", name + ".js")]
+        c = [d, "run", "--body"] + [os.path.join(tools, "w", name + ".js")]
         cmds.append((label, c))
     if not a.noqjs:
         cmds.append(("qjs", [QJS, "--std", qfile(name)]))

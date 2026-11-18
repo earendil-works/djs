@@ -67,10 +67,6 @@ pub struct ExecOptions {
     /// Queue FinalizationRegistry cleanup jobs right after every collection (the
     /// default). Off, the host decides when: `Vm::schedule_finalization_cleanup` (D1513).
     pub finalization_after_gc: bool,
-    /// Run `@native` builtins as their generated Rust state machines (0063, the
-    /// default); off runs every builtin as bytecode (`--backend bytecode`). The choice
-    /// is made per call: frames already running keep their kind.
-    pub native_builtins: bool,
     /// Run the hottest simple instructions in the tier-0 loop (D1930, the default).
     /// Results, fuel and heap images are identical either way; off is for tests.
     pub hot_loop: bool,
@@ -92,7 +88,6 @@ impl Default for ExecOptions {
             gc_stress: false,
             max_stack: 1 << 20,
             finalization_after_gc: true,
-            native_builtins: true,
             hot_loop: true,
             hot_backedges: hot::HOT_BACKEDGES,
             #[cfg(feature = "embed")]
@@ -323,13 +318,14 @@ pub(crate) struct Exec<'h> {
     /// 0 for a bytecode frame. Native frames have `code_len` 0, so `fast_step` declines
     /// them and `step` hands them to `native_step`.
     native: u32,
-    /// Template flags that make `fast_call_at` decline: SLOPPY_THIS, and NATIVE when
-    /// native builtins are on.
+    /// Template flags that make the tier-0 loop's call decline: SLOPPY_THIS, NATIVE and
+    /// FAST.
     slow_call_flags: u32,
-    /// Experiment: the `@rust` builtin whose error is being thrown (its native frame is
-    /// the innermost of the error's stack).
+    /// The generated (`@rust`) builtin whose error is being thrown: its native frame is
+    /// the innermost of the error's stack (D3230).
     pub(super) native_callee: Option<Obj>,
-    /// Experiment: the shadow slots for the `@rust` builtin being called again.
+    /// The shadow slots for the generated builtin being called again after a conversion
+    /// site (D3230), from the `RetryCall` return to `own_call`.
     pub(super) own_shadow: Option<crate::builtins::fast::Shadow>,
     /// The host refused memory (D1690): the run stops at the next instruction boundary.
     host_oom: bool,
@@ -381,7 +377,8 @@ impl<'h> Exec<'h> {
             native: 0,
             // FAST always (experiment): `@rust` builtins have no bytecode, so even the
             // bytecode backend calls them through their entries; it skips the others.
-            // NATIVE always (experiment): `@native` builtins have no bytecode body.
+            // Builtins with generated Rust have no bytecode body (D3231): their calls
+            // always take the native frame or the fast entry.
             slow_call_flags: func_flags::SLOPPY_THIS | func_flags::FAST | func_flags::NATIVE,
             native_callee: None,
             own_shadow: None,

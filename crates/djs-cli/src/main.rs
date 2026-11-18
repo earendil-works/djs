@@ -7,7 +7,7 @@ mod strip;
 mod tools;
 
 const USAGE: &str = "usage: djs <command> ...\n\
-  djs run [--body] [--ts] [--gc-stress] [--suspend-every N] [--backend B]\n\
+  djs run [--body] [--ts] [--gc-stress] [--suspend-every N]\n\
           [--tools answers.json] <file.js>\n\
   djs resume [--tools answers.json] <dump.js>\n\
   djs disasm [--body] <file.js>\n\

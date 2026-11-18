@@ -352,9 +352,6 @@ def jobs():
           ' sleep="$s"; rc=$?; rm -rf "$d" "$v" "$s"; exit $rc',
           cls="rust", needs=["build:difftest", "build:core-tests"],
           summary=r"^(stress|ratchet|plain-node|dump-size):"),
-        J("difftest (bytecode backend)", f"{G}/bin/djs-difftest --engine djs --backend bytecode --ratchet"
-          f" --quiet --no-diff --times {G}/times/difftest-bytecode.tsv",
-          cls="rust", needs=["build:difftest"], summary=r"^ratchet:"),
         # 0161: the unchecked accessor build (D2520): the verifier against corrupt images
         # and e2e in debug (the accessors assert their bounds), then the corpus in release,
         # where they really do not check, with suspension and GC stress.

@@ -31,8 +31,11 @@ pub struct Output {
     pub report: String,
     /// `crates/djs-core/src/builtins/gen/natives.rs`: the Rust backend (0063).
     pub natives: String,
-    /// `crates/djs-core/src/builtins/gen/leaves.rs`: the leaf backend (experiment).
+    /// `crates/djs-core/src/builtins/gen/leaves.rs`: the leaf backend (D3230).
     pub leaves: String,
+    /// The prelude with the bodies of the builtins that have generated Rust too: what
+    /// the behavior test runs in qjs (not written out).
+    pub prelude_bodies: String,
 }
 
 pub const PRELUDE_PATH: &str = "gen/prelude.js";
@@ -102,9 +105,10 @@ pub fn compile(intrinsics: (&str, &str), modules: &[(String, String)]) -> Result
     let natives = emit_rust::emit(&program, &analysis, &sources)
         .map_err(|errors| render(&errors, &sources))?;
     Ok(Output {
-        prelude: emit_js::emit(&program, &sources, &[], false),
-        prelude_slim: emit_js::emit(&program, &sources, &omitted, true),
-        prelude_noembed: emit_js::emit(&program, &sources, &embed_only, false),
+        prelude: emit_js::emit(&program, &sources, &[], false, false),
+        prelude_slim: emit_js::emit(&program, &sources, &omitted, true, false),
+        prelude_noembed: emit_js::emit(&program, &sources, &embed_only, false, false),
+        prelude_bodies: emit_js::emit(&program, &sources, &[], false, true),
         report: analysis::report(&program, &analysis, &sources),
         natives,
         leaves: emit_leaf::emit(&program)?,

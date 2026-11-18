@@ -46,8 +46,6 @@ const SETUP: &str = "$262.evalScript = function evalScript(src) { return $262.__
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Djs {
     pub fuel: u64,
-    /// Run the `@native` builtins as bytecode (`--backend bytecode`, 0063).
-    pub bytecode_builtins: bool,
     /// Lazy functions (`--lazy`, `VmOptions::lazy_functions`, D2990).
     pub lazy: bool,
 }
@@ -56,7 +54,6 @@ impl Default for Djs {
     fn default() -> Djs {
         Djs {
             fuel: DEFAULT_FUEL,
-            bytecode_builtins: false,
             lazy: false,
         }
     }
@@ -102,7 +99,6 @@ impl Djs {
                 .map(|n| n as usize)
                 .unwrap_or(DEFAULT_LIMIT),
             exec: djs_core::vm::ExecOptions {
-                native_builtins: !self.bytecode_builtins,
                 ..Default::default()
             },
             #[cfg(feature = "lazy")]

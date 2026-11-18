@@ -835,14 +835,12 @@ mod tests {
 
     #[derive(Clone, Copy)]
     struct Mode {
-        native: bool,
         fuel: u64,
         suspend: bool,
         gc_stress: bool,
     }
 
     const PLAIN: Mode = Mode {
-        native: true,
         fuel: 1 << 40,
         suspend: false,
         gc_stress: false,
@@ -852,7 +850,6 @@ mod tests {
         VmOptions {
             exec: ExecOptions {
                 gc_stress: m.gc_stress,
-                native_builtins: m.native,
                 ..Default::default()
             },
             ..Default::default()
@@ -876,9 +873,8 @@ mod tests {
         vm
     }
 
-    /// Runs to the end; `switch` flips the backend at every stop. Returns the outcome
-    /// and the number of `run` calls.
-    fn finish(mut vm: Vm, m: Mode, switch: bool) -> (Outcome, u32) {
+    /// Runs to the end. Returns the outcome and the number of `run` calls.
+    fn finish(mut vm: Vm, m: Mode) -> (Outcome, u32) {
         let mut log = Vec::new();
         let mut runs = 0;
         loop {
@@ -908,16 +904,11 @@ mod tests {
                 let o = vm.options();
                 vm = Vm::from_bytes(vm.bytes().to_vec(), o).unwrap();
             }
-            if switch {
-                let mut o = vm.options();
-                o.exec.native_builtins = !o.exec.native_builtins;
-                vm.set_options(o);
-            }
         }
     }
 
     fn run(src: &str, m: Mode) -> Outcome {
-        finish(start(src, m), m, false).0
+        finish(start(src, m), m).0
     }
 
     /// Exercises the native builtins: callbacks, holes, getters, exceptions through
@@ -955,10 +946,6 @@ mod tests {
         }
     }
 
-    /// Both backends, resumed after every few units of fuel, through images and under
-    /// GC stress, agree. A sample of the modes (about a second): the exhaustive
-    /// version is `backends_agree_in_every_mode`, run it before merging backend
-    /// changes (`cargo test -p djs-core --lib backends_agree -- --ignored`).
     /// `PURE_LEAVES` (the hot loop's filter) is exactly what `pure_leaf` runs.
     #[test]
     fn pure_leaves_match_pure_leaf() {
@@ -971,22 +958,15 @@ mod tests {
         }
     }
 
+    /// Resumed after every few units of fuel, through images and under GC stress, the
+    /// native builtins give the same results. A sample of the modes (about a second):
+    /// the exhaustive version is `modes_agree_in_every_mode`.
     #[test]
-    fn backends_agree() {
+    fn modes_agree() {
         check_modes(&[
-            Mode {
-                native: false,
-                ..PLAIN
-            },
             Mode { fuel: 7, ..PLAIN },
             Mode {
                 fuel: 97,
-                suspend: true,
-                ..PLAIN
-            },
-            Mode {
-                native: false,
-                fuel: 211,
                 suspend: true,
                 ..PLAIN
             },
@@ -998,56 +978,23 @@ mod tests {
         ]);
     }
 
-    /// Every combination: an image round trip after every 7 units of fuel on both
-    /// backends, GC stress on both (about 30 s).
+    /// Every combination: an image round trip after every 7 units of fuel, GC stress
+    /// (about 15 s).
     #[test]
-    #[ignore = "exhaustive (30 s); run before merging backend changes"]
-    fn backends_agree_in_every_mode() {
-        let mut modes = Vec::new();
-        for native in [true, false] {
-            modes.push_out(Mode { native, ..PLAIN });
-            modes.push_out(Mode {
-                native,
+    #[ignore = "exhaustive (15 s); run before merging native backend changes"]
+    fn modes_agree_in_every_mode() {
+        check_modes(&[
+            Mode {
                 fuel: 7,
                 suspend: true,
                 ..PLAIN
-            });
-            modes.push_out(Mode {
-                native,
-                fuel: 50,
+            },
+            Mode {
+                fuel: 1,
                 gc_stress: true,
                 ..PLAIN
-            });
-        }
-        check_modes(&modes);
-    }
-
-    /// The backend may change between runs: running frames keep their kind.
-    #[test]
-    fn backend_switch_between_runs() {
-        let expected = run(SCRIPT, PLAIN);
-        let m = Mode { fuel: 13, ..PLAIN };
-        assert_eq!(finish(start(SCRIPT, m), m, true).0, expected);
-    }
-
-    /// Native builtins do the same work for less fuel: a sort of 2000 elements with a
-    /// comparator needs fewer slices of fuel than as bytecode. (Not the callback loops
-    /// of forEach, map, reduce ..: both backends run them in `%EachDense`, 0137.)
-    #[test]
-    #[ignore = "experiment: @native builtins have no bytecode backend any more"]
-    fn native_frames_are_used() {
-        let src = "const a = []; for (let i = 0; i < 2000; i++) a[i] = (i * 7) % 2000;\n\
-                   a.sort((x, y) => x - y); console.log(a[1999] * 1000 + a[0]);";
-        let m = Mode {
-            fuel: 1000,
-            ..PLAIN
-        };
-        let (native, nr) = finish(start(src, m), m, false);
-        let b = Mode { native: false, ..m };
-        let (bytecode, br) = finish(start(src, b), b, false);
-        assert_eq!(native, bytecode);
-        assert_eq!(native.log, ["1999000"]);
-        assert!(nr * 3 < br * 2, "native {nr} runs, bytecode {br}");
+            },
+        ]);
     }
 
     /// `Vm::backtrace` of a call suspended in a callback or in the builtin itself shows
@@ -1057,12 +1004,8 @@ mod tests {
         let src = "const a = []; for (let i = 0; i < 50; i++) a[i] = i;\n\
                    function cb(x) { let s = 0; for (let j = 0; j < x; j++) s += j; return s; }\n\
                    a.map(cb);";
-        for native in [true, false] {
-            let m = Mode {
-                native,
-                fuel: 3,
-                ..PLAIN
-            };
+        {
+            let m = Mode { fuel: 3, ..PLAIN };
             let mut vm = start(src, m);
             let mut traces = alloc::collections::BTreeSet::new();
             while vm.run(m.fuel) == Status::OutOfFuel {

@@ -86,7 +86,6 @@ impl Exec<'_> {
         // `arr.push(x)`, the commonest @fast call, straight to the heap's append (0231):
         // what `try_fast_call` and its `array_push` entry do, without the generic steps.
         if argc == 1
-            && self.opts.native_builtins
             && self.heap.arena().get(t, FuncTemplate::FAST) as usize
                 == crate::builtins::fast::ARRAY_PUSH
             && let Some(a) = self.get(base + 1).as_object()
@@ -173,9 +172,6 @@ impl Exec<'_> {
         argc: u32,
         next: u32,
     ) -> Result<bool, Fault> {
-        if !self.opts.native_builtins {
-            return Ok(false);
-        }
         let idx = self.heap.arena().get(t, FuncTemplate::FAST) as usize;
         let Some(new) = FAST.get(idx).and_then(|f| f.new) else {
             return Ok(false);
@@ -377,9 +373,6 @@ impl Exec<'_> {
         let Some(ff) = FAST.get(idx) else {
             return Ok(false);
         };
-        if !self.opts.native_builtins {
-            return Ok(false);
-        }
         let mut args = [Value::UNDEFINED; MAX_ARGS];
         for (i, a) in args.iter_mut().enumerate().take(argc as usize) {
             *a = self.get(base + 2 + i as u32);

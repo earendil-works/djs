@@ -42,8 +42,6 @@ options:
                       `difftest: no-stress` skip them
   --lazy              djs only: every djs run compiles functions at their first call
                       (VmOptions::lazy_functions, D2990)
-  --backend B         djs only: run the @native builtins as `native` code (default)
-                      or as `bytecode` (both must behave the same, 0063)
   --clusters          group the failures by the first line of what went wrong
   --idle-points       djs only: list the idle points (tool results delivered by
                       `host.later`, D2590) per case; the total is always printed
@@ -88,7 +86,6 @@ struct Args {
     plain_dumps: bool,
     plain_from: u32,
     determinism: bool,
-    bytecode_builtins: bool,
     clusters: bool,
     idle_points: bool,
 }
@@ -133,7 +130,6 @@ fn parse_args() -> Result<Args, String> {
         plain_dumps: false,
         plain_from: 0,
         determinism: false,
-        bytecode_builtins: false,
         clusters: false,
         idle_points: false,
     };
@@ -203,11 +199,6 @@ fn parse_args() -> Result<Args, String> {
                     .map_err(|_| format!("--plain-from: bad number `{v}`"))?;
             }
             "--determinism" => args.determinism = true,
-            "--backend" => match value("--backend")?.as_str() {
-                "native" => args.bytecode_builtins = false,
-                "bytecode" => args.bytecode_builtins = true,
-                other => return Err(format!("--backend: native or bytecode, not `{other}`")),
-            },
             "--clusters" => args.clusters = true,
             "--idle-points" => args.idle_points = true,
             "-q" | "--quiet" => args.quiet = true,
@@ -308,7 +299,6 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
         }
         "djs" => Box::new(Djs {
             image: args.determinism,
-            bytecode_builtins: args.bytecode_builtins,
             lazy: args.lazy,
             ..Djs::default()
         }),
@@ -632,7 +622,6 @@ fn stress_variants(args: &Args) -> Vec<(String, Box<dyn Engine>)> {
             suspend_every: Some(n),
             gc_stress: false,
             image: args.determinism,
-            bytecode_builtins: args.bytecode_builtins,
             dump_every_idle: false,
             plain_from: 0,
             lazy: args.lazy,
@@ -644,7 +633,6 @@ fn stress_variants(args: &Args) -> Vec<(String, Box<dyn Engine>)> {
             suspend_every: None,
             gc_stress: true,
             image: false,
-            bytecode_builtins: args.bytecode_builtins,
             dump_every_idle: false,
             plain_from: 0,
             lazy: args.lazy,
@@ -655,7 +643,6 @@ fn stress_variants(args: &Args) -> Vec<(String, Box<dyn Engine>)> {
         let e = Djs {
             dump_every_idle: true,
             plain_from: args.plain_from,
-            bytecode_builtins: args.bytecode_builtins,
             lazy: args.lazy,
             ..Djs::default()
         };

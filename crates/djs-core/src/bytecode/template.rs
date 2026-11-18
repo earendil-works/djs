@@ -42,12 +42,13 @@ pub mod func_flags {
     /// primitives their wrappers). Nothing else of sloppy mode.
     pub const SLOPPY_THIS: u32 = 1 << 9;
     /// 0063: a `@native` builtin; `FuncTemplate::NATIVE` holds its index into the
-    /// generated table (`builtins::gen`), set by `%MarkNative`. With
-    /// `ExecOptions::native_builtins` its calls get native frames.
+    /// generated table (`builtins::gen`), set by `%MarkNative`. Its calls get native
+    /// frames (it has no bytecode body, D3231).
     pub const NATIVE: u32 = 1 << 10;
     /// D1850: a builtin with a leaf fast path; `FuncTemplate::FAST` holds its index into
-    /// `builtins::fast::FAST`, set by `%MarkFast`. With `ExecOptions::native_builtins`
-    /// a call tries the fast path first and runs the builtin only when it declines.
+    /// `builtins::fast::FAST`, set by `%MarkFast`. A call tries the fast path first and
+    /// runs the builtin only when it declines. An index past `FAST` is a generated
+    /// (`@rust`) builtin of `builtins::gen::leaves`, which never declines (D3230).
     pub const FAST: u32 = 1 << 11;
     /// D2445: a privileged template whose `NAME` and `LENGTH` are its builtin closure's
     /// lazy `name` and `length` (set at base-image build time): the base keeps the name.

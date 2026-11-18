@@ -57,8 +57,6 @@ pub struct Djs {
     pub gc_stress: bool,
     /// Report the raw heap image's hash and the canonical hash (`--determinism`).
     pub image: bool,
-    /// Run the `@native` builtins as bytecode (`--backend bytecode`, 0063).
-    pub bytecode_builtins: bool,
     /// Dump at every idle point (a plain dump, D2830) and continue in a fresh VM that runs
     /// the dump as a Script; a chain of at most `PLAIN_LINKS` dumps, then the run goes on.
     /// The VMs have frozen builtins, which dumps need (D2836).
@@ -87,9 +85,6 @@ impl Djs {
         }
         if self.gc_stress {
             s += " --gc-stress";
-        }
-        if self.bytecode_builtins {
-            s += " --backend bytecode";
         }
         if self.dump_every_idle {
             s += " --plain-dumps";
@@ -232,7 +227,6 @@ impl Djs {
                 .unwrap_or(DEFAULT_LIMIT),
             exec: ExecOptions {
                 gc_stress: self.gc_stress,
-                native_builtins: !self.bytecode_builtins,
                 ..ExecOptions::default()
             },
             prefix_barrier: ARMED_AREAS.iter().any(|a| job.name.starts_with(a)),

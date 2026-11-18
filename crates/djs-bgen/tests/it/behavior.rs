@@ -1,4 +1,5 @@
-//! Runs the generated builtins (builtins/gen/prelude.js) in qjs against qjs's native
+//! Runs the builtins' TS sources, compiled to JS as for builtins/gen/prelude.js but with
+//! every body, in qjs against qjs's native
 //! Array.prototype methods (tests/behavior.js) and expects identical results, error
 //! messages and proxy trap orders. Skipped (with a note) when qjs is not available.
 
@@ -63,7 +64,10 @@ fn generated_builtins_match_qjs() {
         return;
     }
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let prelude = std::fs::read_to_string(root.join("../../builtins/gen/prelude.js")).unwrap();
+    // The TS sources of every builtin, those with generated Rust included (D3231).
+    let prelude = djs_bgen::compile_dir(&root.join("../../builtins"))
+        .unwrap_or_else(|e| panic!("{e}"))
+        .prelude_bodies;
     // `%Name` outside strings is an intrinsic call; inside a string (an install target
     // such as `"%ArrayIteratorPrototype%"`) it stays as it is.
     let prelude = intrinsic_calls_to_js(&prelude)

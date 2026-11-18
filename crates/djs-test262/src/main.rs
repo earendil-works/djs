@@ -39,8 +39,6 @@ run options:
   --engine NAME       qjs (default) or djs (in-process)
   --lazy              djs only: compile functions at their first call
                       (VmOptions::lazy_functions, D2990)
-  --backend B         djs only: run the @native builtins as `native` code (default)
-                      or as `bytecode` (0063)
   --qjs PATH          qjs binary (default: $DJS_QJS, else ~/Development/dquickts/qjs)
   --no-cache          qjs: run every test instead of reusing cached results (the
                       cache sits next to the test262 checkout, keyed by the qjs
@@ -70,7 +68,6 @@ struct Args {
     test262: Option<PathBuf>,
     config: PathBuf,
     paths: bool,
-    bytecode_builtins: bool,
     lazy: bool,
     engine: String,
     qjs: PathBuf,
@@ -110,7 +107,6 @@ fn parse_args() -> Result<Args, String> {
         test262: None,
         config: suite::workspace_root().join("tests/test262.toml"),
         paths: false,
-        bytecode_builtins: false,
         lazy: false,
         engine: "qjs".into(),
         qjs: Qjs::default_binary(),
@@ -150,11 +146,6 @@ fn parse_args() -> Result<Args, String> {
                 args.fuel = Some(n as u64);
             }
             "--lazy" if cfg!(feature = "lazy") => args.lazy = true,
-            "--backend" => match value(&a)?.as_str() {
-                "native" => args.bytecode_builtins = false,
-                "bytecode" => args.bytecode_builtins = true,
-                other => return Err(format!("--backend: native or bytecode, not `{other}`")),
-            },
             "--qjs" => args.qjs = value(&a)?.into(),
             "--timeout" => {
                 let v = value(&a)?;
@@ -304,7 +295,6 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
             })
         }
         "djs" => Box::new(djs_test262::djs::Djs {
-            bytecode_builtins: args.bytecode_builtins,
             lazy: args.lazy,
             fuel: args.fuel.unwrap_or(djs_test262::djs::DEFAULT_FUEL),
         }),

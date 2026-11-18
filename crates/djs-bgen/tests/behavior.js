@@ -658,6 +658,11 @@ const I = {
   StrIsWellFormed: (s) => s.isWellFormed(),
   StrToWellFormed: (s) => s.toWellFormed(),
   StrRepeat: (s, n) => (check(Number.isInteger(n) && n >= 0, "StrRepeat"), s.repeat(n)),
+  StrPad: (s, filler, n, atStart) => {
+    check(typeof filler === "string" && filler.length > 0 && Number.isInteger(n) && n > 0, "StrPad");
+    const run = filler.repeat(Math.ceil(n / filler.length)).slice(0, n);
+    return atStart ? run + s : s + run;
+  },
   StrFromCodeUnits: (list) => String.fromCharCode(...list),
   StrFromCodePoints: (list) => String.fromCodePoint(...list),
   // Bulk fast paths (0056, D1561): an Array with every element an own data property.

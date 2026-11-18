@@ -1,5 +1,5 @@
 //! `djs run [--body] [--ts] [--experimental-decorators] [--emit-decorator-metadata]
-//! [--gc-stress] [--suspend-every N] [--backend B] [--tools answers.json] <file.js>`: run
+//! [--gc-stress] [--suspend-every N] [--tools answers.json] <file.js>`: run
 //! a script, serving `console.log` and `print` as sync host calls, `later(v)` and
 //! `tools.x()` as async host calls (0174, D2602): `later` is answered with its argument,
 //! tools from `--tools answers.json`, one call at every idle point. A codemode body's
@@ -22,7 +22,7 @@ use djs_core::vm::{ExecOptions, Status, Vm, VmOptions};
 use crate::tools::{MAKE_TOOL, Tools};
 
 const USAGE: &str = "usage: djs run [--body] [--ts] [--experimental-decorators]\n\
-                [--emit-decorator-metadata] [--gc-stress] [--suspend-every N] [--backend B]\n\
+                [--emit-decorator-metadata] [--gc-stress] [--suspend-every N]\n\
                 [--tools answers.json] [--bind NAME=IDENTITY] <file.js>\n\
   --body             run as a codemode async body with parameters (tools, console)\n\
   --bind NAME=ID     with --body: one more parameter NAME, the async host function\n\
@@ -36,7 +36,6 @@ const USAGE: &str = "usage: djs run [--body] [--ts] [--experimental-decorators]\
   --gc-stress        collect garbage at every safepoint\n\
   --suspend-every N  run N fuel at a time; at every stop, continue in a fresh VM\n\
                      restored from the heap image\n\
-  --backend B        run the @native builtins as `native` code (default) or `bytecode`\n\
   --tools FILE       answer `tools.x()` calls from FILE, one at a time whenever the\n\
                      run is idle (docs/cli.md)\n\
   --dump-after K OUT write the run as a dump (`\"djs-dump\";`, a Script, D2830) to OUT\n\
@@ -49,7 +48,7 @@ const USAGE: &str = "usage: djs run [--body] [--ts] [--experimental-decorators]\
                      (with any of these, the VM has frozen builtins, which dumps need)";
 
 const RESUME_USAGE: &str = "usage: djs resume [--explain] [--tools answers.json] [--gc-stress]\n\
-                [--suspend-every N] [--backend B] [--debugger OUT] <dump.js>\n\
+                [--suspend-every N] [--debugger OUT] <dump.js>\n\
   runs a dump (`\"djs-dump\";`, a Script) in a fresh VM with frozen builtins, to its\n\
   end, answering open calls as `djs run` does (--dump-after, --dump-every-idle and\n\
   --debugger as for run); a `debugger;` pause the dump holds continues at once\n\
@@ -124,14 +123,6 @@ fn command(args: &[String], resume: bool) -> i32 {
                     return 2;
                 }
                 None => {
-                    eprintln!("{usage}");
-                    return 2;
-                }
-            },
-            "--backend" => match it.next().map(|s| s.as_str()) {
-                Some("native") => opts.bytecode_builtins = false,
-                Some("bytecode") => opts.bytecode_builtins = true,
-                _ => {
                     eprintln!("{usage}");
                     return 2;
                 }
@@ -412,8 +403,6 @@ pub struct RunOptions {
     pub suspend_every: Option<u64>,
     /// Parse as TypeScript.
     pub typescript: bool,
-    /// Run the `@native` builtins as bytecode (`--backend bytecode`, 0063).
-    pub bytecode_builtins: bool,
     /// TypeScript legacy decorators, and their metadata.
     pub experimental_decorators: bool,
     pub emit_decorator_metadata: bool,
@@ -437,7 +426,6 @@ impl RunOptions {
         VmOptions {
             exec: ExecOptions {
                 gc_stress: self.gc_stress,
-                native_builtins: !self.bytecode_builtins,
                 ..Default::default()
             },
             // Dumps need frozen builtins (D2836), and a resumed run goes on as the dumped

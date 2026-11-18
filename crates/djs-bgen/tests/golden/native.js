@@ -3,50 +3,10 @@
 (function () {
 
 // golden/native.ts:9 Example.prototype.loops
-function NativeLoops(f, ...rest) {
-  let $1;
-  let i = 0;
-  let u = 1;
-  let sum = 0;
-  const n = %LengthOfArrayLike(rest);
-  for (let k = 0; k < n; k++) {
-    const v = %Get(rest, k);
-    if (%Leaf(v) && %Leaf(%User(f, v))) {
-      continue;
-    }
-    i = i * 2 + 1;
-    u = u - 1 + 2;
-    sum += ($1 = ((%Leaf(v)) ? 1 : %LengthOfArrayLike(%User(v))), $1 * 2) + (i < 3 ? 1 : 0);
-    while (%Leaf(%User(f, k)) || i > 100) {
-      i--;
-      if (i < 0) {
-        break;
-      }
-    }
-  }
-  do {
-    i = i >> 1;
-  } while (i > 0);
-  return sum + (%Leaf(this) ? Count(%User(f)) : -1);
-}
+function NativeLoops(f, rest) {}
 
 // golden/native.ts:41 %NativeTry
-function NativeTry(f, ...rest) {
-  let r = rest;
-  try {
-    r = %User(f, "a\u00e9\ud800");
-    if (r === null) {
-      throw %NewError("null");
-    }
-  } catch (e) {
-    try {
-      r = %User(e);
-    } catch {
-      r = undefined;
-    }
-  }
-  return r;
-}
+function NativeTry(f, rest) {}
 
 // golden/native.ts:59
 function Inlined(v) {
@@ -78,48 +38,13 @@ function Count(v) {
 }
 
 // golden/native.ts:97 Fin
-function Fin(v) {
-  let n = 0;
-  while (n < 5) {
-    try {
-      if (%Leaf(%User(v, n))) {
-        break;
-      }
-      if (n > 3) {
-        return n;
-      }
-    } catch (e) {
-      %User(e);
-    } finally {
-      n++;
-    }
-  }
-  return n;
-}
+function Fin(v) {}
 
 // golden/native.ts:121 constructor Ctor
-function Ctor(v) {
-  if (new.target === undefined) {
-    return %User(v);
-  }
-  return %Make();
-}
+function Ctor(v) {}
 
 // golden/native.ts:134 %NativeHasGet
-function NativeHasGet(o, f) {
-  const n = %LengthOfArrayLike(o);
-  let sum = 0;
-  for (let k = 0; k < n; k++) {
-    if (%HasProperty(o, k)) {
-      %User(f, %Get(o, k), k);
-    }
-    if (%HasProperty(o, k)) {
-      %User(f, k);
-      sum += %Leaf(%Get(o, k)) ? 1 : 0;
-    }
-  }
-  return sum;
-}
+function NativeHasGet(o, f) {}
 
 %InstallMethod("globalThis", "Fin", Fin, 1);
 %InstallConstructor("globalThis", "Ctor", Ctor, 1, undefined);
