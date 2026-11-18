@@ -81,6 +81,8 @@ pub const REGIONS: &[(&str, Cut)] = &[
     // natives whole, since a suspended native frame stores its state machine's state.
     ("src/builtins/fast.rs", Cut::Item("pub(crate) static FAST")),
     ("src/builtins/gen/natives.rs", Cut::All),
+    // The generated leaf builtins' fast indexes follow `FAST` in this order (D3230).
+    ("src/builtins/gen/leaves.rs", Cut::Item("pub(crate) static LEAF_NAMES")),
     // Named slot numbers and codes of internal records: frames, generator and promise
     // records, Map/Set tables, weak references, RegExp programs, inline caches, ...
     ("src/heap/", Cut::TopConsts),
