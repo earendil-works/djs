@@ -12099,3 +12099,37 @@ Shipped module 426,903 → 429,693 B gz (+2,790; 1.499x quickjs-wasi, 289 B unde
 D020 budget), slim 360,594 → 363,372 (+2,778), measured against main at 0e58f62c. The
 ceilings rise by those deltas (429,767 and 363,475). The shipped module is now at the
 D020 limit: the next size increase needs an offsetting saving.
+
+## D3264: Generated builtins call their conversions out of line
+date: 2026-11-18 · by: owner · issue: 0252
+D3260 inlined every helper of a `@rust` builtin, conversion sites included. bgen's leaf
+backend now emits ToString, ToNumber and IsRegExp as one call each: the primitive case
+(a string, a number, a non-object) stays inline, and the object's site (the shadow slot
+or the request to the interpreter) and the conversion of a primitive of another type run
+in `Exec::l_to_string_at`/`l_to_number_at`/`l_is_regexp_site` (fastpath.rs); a bare
+ToPrimitive request is built by the cold `l_primitive_site`. Site numbers and their
+order are unchanged, so stored retry states keep their meaning (no COMPAT_VERSION bump).
+Generated code 24.3 → 14.5 KB raw; the shipped module 429,692 → 428,741 B gz, wasm
+instructions per call within ±2% of before on the 19 string/number/Math cases of
+wmicro. The same for ToIntegerOrInfinity (an int inline) was measured and dropped:
+−1.3 KB raw, +18 B gz. A constant intrinsic id in such a helper must be a `const`:
+`iid(...)` evaluated at run time keeps the intrinsic name table (+5 KB gz).
+
+## D3265: A separate call instruction for builtins: measured, not adopted
+date: 2026-11-18 · by: owner · issue: 0252
+A `call_builtin argc` opcode that the compiler emits for a callee of a builtin's name
+(`s.trim()`, `Math.floor()`, `String()`) was prototyped two ways: an arm in `run_hot`
+that runs the builtin out of line without leaving the loop, and an outer-loop exit that
+skips `load_frame`. They save 75 and 55 machine instructions per builtin call (5-9% of
+a builtin-call statement; a statement is ~1,000), but both slow down code without such
+calls: `loop` +1.6% / +1.1%, `tight` +1.8% / +0.9%, `calls`, `prop1`, `props` +1-2%
+(wmeasure, against a build-noise control of ±0.1%), the run_hot sensitivity of D1352 and
+D3122. A builtin call's time is mostly finding the callee (~450 for `Number.isInteger`)
+and `fast_leaf_call`'s generic dispatch (~150-200); leaving the loop is the smallest
+part. The patch is in work/scratch/0252-call-op of the primary checkout.
+
+## D3266: Size of 0252; the ceilings drop
+date: 2026-11-18 · by: owner · issue: 0252
+D3264 and dropping `to_case`'s two-byte ASCII path (one-byte strings take
+`latin1_case` since 0251): shipped 429,692 → 428,624 B gz (−1,068; 1,358 B under the
+D020 budget), slim 363,372 → 362,325 (−1,047). Ceilings 429,648 and 363,349.
