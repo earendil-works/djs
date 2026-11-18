@@ -30,7 +30,7 @@ pub(crate) enum FaultKind {
     Heap(HeapError),
     /// A generated (`@rust`) builtin asks for the prelude function of intrinsic `id`
     /// (`%ToPrimitive`, `%GetSite`) run on the two values, for its conversion site `site`
-    /// (D3230). `Exec::own_call` handles it; nothing else sees it.
+    /// (D3260). `Exec::own_call` handles it; nothing else sees it.
     Convert(u32, u16, Value, Value),
 }
 

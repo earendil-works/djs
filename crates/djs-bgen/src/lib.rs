@@ -31,7 +31,7 @@ pub struct Output {
     pub report: String,
     /// `crates/djs-core/src/builtins/gen/natives.rs`: the Rust backend (0063).
     pub natives: String,
-    /// `crates/djs-core/src/builtins/gen/leaves.rs`: the leaf backend (D3230).
+    /// `crates/djs-core/src/builtins/gen/leaves.rs`: the leaf backend (D3260).
     pub leaves: String,
     /// The prelude with the bodies of the builtins that have generated Rust too: what
     /// the behavior test runs in qjs (not written out).

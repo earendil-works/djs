@@ -17,7 +17,7 @@
 )]
 pub(crate) mod natives;
 
-// The leaf backend (D3230): `@rust` builtins as straight-line Rust.
+// The leaf backend (D3260): `@rust` builtins as straight-line Rust.
 #[rustfmt::skip]
 #[allow(
     non_snake_case,

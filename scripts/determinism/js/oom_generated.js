@@ -1,4 +1,4 @@
-// Allocations near the heap cap inside generated (`@rust`) builtins (D3230): large case
+// Allocations near the heap cap inside generated (`@rust`) builtins (D3260): large case
 // conversions, pads and trims between bursts of garbage. A builtin that reaches the cap
 // has the interpreter collect and calls it once more, instead of throwing while garbage
 // remains.

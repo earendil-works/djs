@@ -322,10 +322,10 @@ pub(crate) struct Exec<'h> {
     /// FAST.
     slow_call_flags: u32,
     /// The generated (`@rust`) builtin whose error is being thrown: its native frame is
-    /// the innermost of the error's stack (D3230).
+    /// the innermost of the error's stack (D3260).
     pub(super) native_callee: Option<Obj>,
     /// The shadow slots for the generated builtin being called again after a conversion
-    /// site (D3230), from the `RetryCall` return to `own_call`.
+    /// site (D3260), from the `RetryCall` return to `own_call`.
     pub(super) own_shadow: Option<crate::builtins::fast::Shadow>,
     /// The host refused memory (D1690): the run stops at the next instruction boundary.
     host_oom: bool,
@@ -375,7 +375,7 @@ impl<'h> Exec<'h> {
             consts: 0,
             lp: 0,
             native: 0,
-            // Builtins with generated Rust have no bytecode body (D3231): their calls
+            // Builtins with generated Rust have no bytecode body (D3261): their calls
             // always take the native frame or the fast entry.
             slow_call_flags: func_flags::SLOPPY_THIS | func_flags::FAST | func_flags::NATIVE,
             native_callee: None,

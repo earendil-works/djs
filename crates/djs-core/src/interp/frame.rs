@@ -62,7 +62,7 @@ pub enum Continuation {
     /// state is in the intrinsic's arguments right below the frame, then the frame is
     /// entered again for the next element, or the loop's k goes to the caller.
     Each,
-    /// A generated (`@rust`) builtin's conversion site (D3230): the result goes into the
+    /// A generated (`@rust`) builtin's conversion site (D3260): the result goes into the
     /// site's shadow slot and the builtin is called again. At the absolute stack index
     /// `stash`, right above the call's arguments: the call's continuation flags, return
     /// pc and argc, the site, the shadow mask, the key its errors are thrown at, and the

@@ -64,7 +64,7 @@ fn generated_builtins_match_qjs() {
         return;
     }
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    // The TS sources of every builtin, those with generated Rust included (D3231).
+    // The TS sources of every builtin, those with generated Rust included (D3261).
     let prelude = djs_bgen::compile_dir(&root.join("../../builtins"))
         .unwrap_or_else(|e| panic!("{e}"))
         .prelude_bodies;

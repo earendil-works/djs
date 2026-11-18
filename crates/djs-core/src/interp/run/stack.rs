@@ -87,7 +87,7 @@ impl Exec<'_> {
         if !self.has_frame() || out.len() as u32 >= limit {
             return out;
         }
-        // A generated builtin that threw (D3230): its frame, as a bytecode one's.
+        // A generated builtin that threw (D3260): its frame, as a bytecode one's.
         if let Some(f) = self.native_callee
             && !skip_prelude
             && below.is_none()
@@ -169,7 +169,7 @@ impl Exec<'_> {
                 });
             }
             let cont = Continuation::from_flags(flags);
-            // A generated builtin at a conversion site (D3230): its frame lies
+            // A generated builtin at a conversion site (D3260): its frame lies
             // between this one and the caller.
             if let Continuation::RetryCall(stash) = cont {
                 let argc = self.get(stash + 2).as_int().unwrap_or(0) as u32;

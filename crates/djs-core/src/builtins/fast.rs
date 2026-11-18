@@ -15,7 +15,7 @@
 //! Each entry mirrors its TS source step by step; keep them in sync.
 //!
 //! Builtins tagged `@rust` have no entry here: djs-bgen generates their whole
-//! implementation (`builtins/gen/leaves.rs`, D3230), and their fast indexes come after
+//! implementation (`builtins/gen/leaves.rs`, D3260), and their fast indexes come after
 //! this table's. They never decline.
 use crate::PushOut;
 
@@ -44,7 +44,7 @@ pub(crate) struct FastFn {
 }
 
 /// The results of a generated builtin's conversion sites done so far (bit k of `mask`:
-/// site k), D3230.
+/// site k), D3260.
 #[derive(Clone, Copy)]
 pub(crate) struct Shadow {
     pub mask: u32,

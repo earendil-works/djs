@@ -41,7 +41,7 @@ pub const HEADER: &str =
 /// `omit` are the files a build without djs-core's `embed` leaves out (`// @embed-only`,
 /// D3175).
 /// `bodies`: also the bodies of the builtins with generated Rust (for the behavior test,
-/// which runs the TS sources in qjs); the preludes djs runs have none (D3231).
+/// which runs the TS sources in qjs); the preludes djs runs have none (D3261).
 pub fn emit(p: &Program, sources: &Sources, omit: &[&str], slim: bool, bodies: bool) -> String {
     let file_of = |b: &Builtin| sources.file(p.function(b).span).name.as_str();
     let gone = |b: &Builtin| (slim && b.slim_omit) || omit.contains(&file_of(b));
@@ -117,7 +117,7 @@ pub fn emit(p: &Program, sources: &Sources, omit: &[&str], slim: bool, bodies: b
         let file = sources.file(f.span);
         let (line, _) = file.line_col(f.span.start);
         out.push_str(&format!("\n// {}:{line}{what}\n", file.name));
-        // One implementation per builtin (D3231): generated Rust (`@rust`, `@native`)
+        // One implementation per builtin (D3261): generated Rust (`@rust`, `@native`)
         // has no bytecode body, only the function object.
         if (b.rust || b.native) && !bodies {
             let params: Vec<&str> = f.params.iter().map(|p| p.name.as_str()).collect();

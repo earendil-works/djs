@@ -3670,7 +3670,7 @@ fn fast_entries_decline_at_the_cap() {
 
 #[test]
 fn generated_builtins_collect_at_the_cap() {
-    // Generated builtins (D3230): case conversion, pad and trim of large strings after
+    // Generated builtins (D3260): case conversion, pad and trim of large strings after
     // garbage. One that reaches the cap has the interpreter collect and calls it again;
     // without that, these caps printed `E`s.
     let src = include_str!("../../../../scripts/determinism/js/oom_generated.js");

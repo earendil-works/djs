@@ -230,7 +230,7 @@ impl Heap {
         self.gc_pending
     }
 
-    /// Makes the next safepoint collect (a generated builtin that reached the cap, D3230).
+    /// Makes the next safepoint collect (a generated builtin that reached the cap, D3260).
     pub fn request_collect(&mut self) {
         self.gc_pending = true;
     }
