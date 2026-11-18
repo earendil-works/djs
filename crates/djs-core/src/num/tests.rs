@@ -913,7 +913,7 @@ fn narrowed_units_parse_the_same() {
 #[test]
 fn to_fixed_small_path_matches_reference() {
     let mut rng = Rng(0x0f1e_2d3c_4b5a_6978);
-    let mut check = |x: f64, f: i32| {
+    let check = |x: f64, f: i32| {
         assert_eq!(
             to_fixed(x, f).unwrap().as_str(),
             ref_to_fixed(x, f as usize),
