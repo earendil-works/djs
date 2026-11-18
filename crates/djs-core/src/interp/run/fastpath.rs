@@ -425,36 +425,6 @@ impl Exec<'_> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::builtins::fast::FAST;
-
-    /// Every entry of the table is marked by the prelude (`@fast` in builtins/*.ts):
-    /// `%MarkFast` already fails the prelude for a tag without an entry, this catches an
-    /// entry without a tag (dead code).
-    #[test]
-    fn every_fast_entry_is_marked() {
-        let prelude = include_str!("../../../../../builtins/gen/prelude.js");
-        for f in FAST {
-            assert!(
-                prelude.contains(&alloc::format!("%MarkFast({});", f.name)),
-                "{} has a fast path but no @fast tag",
-                f.name
-            );
-        }
-        let marked = prelude.matches("%MarkFast(").count();
-        let mut names: alloc::vec::Vec<&str> = FAST.iter().map(|f| f.name).collect();
-        names.extend(crate::builtins::r#gen::leaves::LEAF_NAMES);
-        names.sort();
-        names.dedup();
-        assert_eq!(
-            marked,
-            names.len(),
-            "names in FAST are unique and all marked"
-        );
-    }
-}
-
 /// `native::num` out of line, for the generated builtins (size).
 #[inline(never)]
 pub(crate) fn lnum(n: f64) -> Value {
@@ -579,5 +549,35 @@ impl Exec<'_> {
         Ok(Value::string(crate::builtins::number::format(
             self.heap, op, x, arg,
         )?))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::builtins::fast::FAST;
+
+    /// Every entry of the table is marked by the prelude (`@fast` in builtins/*.ts):
+    /// `%MarkFast` already fails the prelude for a tag without an entry, this catches an
+    /// entry without a tag (dead code).
+    #[test]
+    fn every_fast_entry_is_marked() {
+        let prelude = include_str!("../../../../../builtins/gen/prelude.js");
+        for f in FAST {
+            assert!(
+                prelude.contains(&alloc::format!("%MarkFast({});", f.name)),
+                "{} has a fast path but no @fast tag",
+                f.name
+            );
+        }
+        let marked = prelude.matches("%MarkFast(").count();
+        let mut names: alloc::vec::Vec<&str> = FAST.iter().map(|f| f.name).collect();
+        names.extend(crate::builtins::r#gen::leaves::LEAF_NAMES);
+        names.sort();
+        names.dedup();
+        assert_eq!(
+            marked,
+            names.len(),
+            "names in FAST are unique and all marked"
+        );
     }
 }

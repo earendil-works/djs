@@ -62,15 +62,18 @@ impl Shadow {
     };
 }
 
+/// A generated builtin's function: `(ex, this, args, shadow, data)`.
+pub(crate) type LeafFn = fn(
+    &mut crate::interp::run::Exec<'_>,
+    Value,
+    &[Value],
+    &Shadow,
+    &LeafData,
+) -> Result<Value, Fault>;
+
 /// A generated builtin (`builtins/gen/leaves.rs`): its shape's function and its data.
 pub(crate) struct Leaf {
-    pub run: fn(
-        &mut crate::interp::run::Exec<'_>,
-        Value,
-        &[Value],
-        &Shadow,
-        &LeafData,
-    ) -> Result<Value, Fault>,
+    pub run: LeafFn,
     pub data: LeafData,
 }
 

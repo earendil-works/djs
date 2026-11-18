@@ -473,7 +473,7 @@ impl<'a> E<'a> {
             Callee::Intrinsic { reentrant: true } if callee == "Get" => self.get_site(args),
             Callee::Intrinsic { reentrant: true } => Err(format!("reentrant %{callee}")),
             Callee::Intrinsic { .. } => self.leaf(callee, sig, args),
-            Callee::Builtin(_) if callee == "ToPrimitive" => self.to_primitive(args),
+            Callee::Builtin(_) if callee == "ToPrimitive" => self.primitive_site(args),
             Callee::Builtin(b) => self.inline(*b, args),
         }
     }
@@ -673,7 +673,7 @@ impl<'a> E<'a> {
 
     /// `ToPrimitive(v, hint)`: a primitive is itself; an object's primitive comes from
     /// the site.
-    fn to_primitive(&mut self, args: &[Expr]) -> Result<(String, Rt), String> {
+    fn primitive_site(&mut self, args: &[Expr]) -> Result<(String, Rt), String> {
         let [v, hint] = args else {
             return Err("ToPrimitive arity".into());
         };
