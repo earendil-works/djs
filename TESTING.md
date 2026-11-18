@@ -133,9 +133,6 @@ Outputs:
   tests that now pass but are still listed (a stale entry; run `--update`).
 - `tests/test262/oracle-failures.txt`: tests that dquickts fails under our runner. These
   are reviewed by hand and are not automatic targets.
-- `--backend bytecode|native` (djs, 0063): run the `@native` builtins as their
-  generated Rust state machines (the default) or as bytecode. Both backends must give
-  the same results; see "Builtin backends" below.
 
 The runner is parallel (one test per worker) and fast enough to run the full active set
 in the gate.
@@ -279,7 +276,6 @@ scripts/difftest-import-dquickts.py  # re-split the dquickts tests (then --updat
 $D --engine djs --clusters           # djs in-process; failures grouped by error
 $D --engine djs --lazy --ratchet --suspend-every 97 --gc-stress --determinism
                                      # what the gate runs (--suspend-every 97 also runs 1009)
-$D --engine djs --backend bytecode --ratchet               # the gate, too (0063)
 $D --engine djs --update-ratchet     # after fixing cases: rewrite expected-failures.txt
 $D --engine djs --idle-points codemode   # the idle points per case (the total always prints)
 ```
@@ -299,7 +295,7 @@ With `--determinism` the plain run also compiles each case through the compile c
 (D3040): a copy of the VM compiles it and exports the blob, the VM imports it, and the two
 heaps must be the same bytes. `--lazy` runs every djs VM with lazy functions (D2990). The gate's stressed difftest and
 its plain dumps leg use it (the dump module is lazy, D2993), its test262 leg runs the active
-group both lazy and eager (in parallel), the other legs (the bytecode backend, unsafe-heap,
+group both lazy and eager (in parallel), the other legs (unsafe-heap,
 slim) run eager, and `vm::lazy_tests` checks that lazily compiled code equals eager code
 (D2991).
 `--plain-dumps` (0172, 0201, D2830) dumps the VM at every idle point (a plain Script: the
@@ -351,32 +347,28 @@ the cases that need direct eval (a hand-kept list in the script) with `skip-djs`
 second with qjs. `cargo test -p djs-difftest` checks the runner itself on a scratch
 corpus.
 
-## Builtin backends (0063)
+## Builtin backends (0063, D3260, D3261)
 
-Builtins in the builtin language compile to bytecode (the prelude) and, if tagged
-`@native`, also to Rust state machines (`crates/djs-core/src/builtins/gen/natives.rs`,
-ARCH "Generated state machines"). `ExecOptions::native_builtins` picks the backend per
-call (default on); `--backend bytecode|native` selects it in `djs run`, djs-difftest
-and djs-test262, and the engine track runs both (`engine/djs` and
-`engine/djs-bytecode`, with their ratio `engine/bytecode÷native/*`). The two must
-behave the same in every mode; only the fuel spent differs (D1633).
+Builtins in the builtin language compile to exactly one of: bytecode (the prelude), a
+Rust state machine (`@native`, `crates/djs-core/src/builtins/gen/natives.rs`, ARCH
+"Generated state machines"), or straight-line Rust (`@rust`, the leaf backend,
+`crates/djs-core/src/builtins/gen/leaves.rs`). A builtin with Rust has no bytecode body,
+so there is no second backend to compare against (D3261 superseded D1635): the generated
+code is checked against QuickJS by the corpus and against test262 like everything else.
 
-- The gate runs the corpus with the native backend in all stress modes (suspension
-  through heap images, GC stress) and once more, plainly, with the bytecode backend.
-- The test262 active group with the bytecode backend is a periodic check, not in the
-  gate: `djs-test262 run --engine djs --backend bytecode --group active --expected
-  tests/test262/expected-failures.txt` (run it when changing a `@native` builtin, bgen's
-  Rust backend or `interp/run/native.rs`). At 0063 both backends passed 37,504/37,722;
-  at 0091 the bytecode backend passes the active group with the same ratchet (40).
-- `@fast` entries (D1850, D1910) run only with the native backend, so the gate's bytecode
-  run keeps testing the TS paths they bypass.
-- Unit tests: `interp::run::native::tests` (both backends in plain, suspension and GC
-  stress modes, a backend switch between runs, fuel; `backends_agree` samples the modes
-  in about a second, the exhaustive `backends_agree_in_every_mode` is `#[ignore]`d:
-  run it with `cargo test -p djs-core --lib backends_agree -- --ignored` before merging
-  backend changes), bgen's golden fixture `crates/djs-bgen/tests/golden/native.ts` →
-  `native.rs.txt`, and `scripts/native-sizes.sh` for the wasm code size per native
-  function.
+- bgen's behavior test (`crates/djs-bgen/tests/it/behavior.rs`) runs the TS body of every
+  builtin, the generated ones included, in qjs against qjs's natives.
+- `tests/corpus/builtins/generated-conversions.js` and `latin1-case-trim.js` cover the
+  leaf backend's conversion sites (replay, errors after a replay, stack frames) and its
+  one-byte fast paths; `vm::tests::generated_builtins_collect_at_the_cap` its retry at
+  the heap cap (scripts/determinism/js/oom_generated.js).
+- `@fast` entries (D1850, D1910) always run; the corpus checks every case where they
+  must decline (`tests/corpus/builtins/fast-paths.js`, `fast-entries-*.js`).
+- Unit tests: `interp::run::native::tests` (plain, suspension and GC stress modes, fuel;
+  `modes_agree` samples the modes in about a second, the exhaustive
+  `modes_agree_in_every_mode` is `#[ignore]`d), bgen's golden fixture
+  `crates/djs-bgen/tests/golden/native.ts` → `native.rs.txt`, and
+  `scripts/native-sizes.sh` for the wasm code size per native function.
 
 ## TypeScript
 
@@ -609,8 +601,7 @@ of djs-core; the builtin registry's append-only check (`scripts/registry.py chec
 check`); the JS host package's tests on the dev modules; the npm package (below); the
 codemode workloads on djs (below); native versus wasm heap images;
 the wire and reader cross-language checks; difftest on djs with the ratchet, suspension,
-GC stress, heap-image determinism and a dump at every idle point; difftest with the
-bytecode backend; the unsafe-heap build, which the shipped and slim modules use (D3100;
+GC stress, heap-image determinism and a dump at every idle point; the unsafe-heap build, which the shipped and slim modules use (D3100;
 verifier and e2e in debug, the stressed corpus in release); the test262 active group against its ratchet; the slim build's legs (below);
 the size budget (below); pi's tests on the slim module and in the adapter's next mode
 (both on the shipped, unchecked builds);

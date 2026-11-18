@@ -392,9 +392,9 @@ The rule that makes G5 hold for builtins:
 #### The builtin language
 
 Builtins are written in a **strict subset of TypeScript**, in the spirit of V8's Torque.
-One source has two backends:
+Each builtin is compiled by exactly one of three backends (D3261):
 
-1. **Bytecode backend (every builtin).** djs-bgen erases types and emits plain JS with
+1. **Bytecode backend (the default).** djs-bgen erases types and emits plain JS with
    `%Intrinsic` calls. djs compiles it in privileged mode into the base snapshot (D1172).
    Privileged mode unlocks `%Name(...)` intrinsic calls (`call_intrinsic`, D1270); the
    proposal's privileged-only opcodes (unchecked element access, int32 loop counters,
@@ -406,12 +406,16 @@ One source has two backends:
    `indexOf`, `GetIterator`, the Map/Set constructors, the `JSON.stringify` slow path, …)
    and justified by benchmarks, since each one adds wasm size (D1634 keeps the native
    API out of line in wasm; `scripts/native-sizes.sh` prints the size per function).
+3. **Leaf backend (opt-in, `/** @rust */`, D3260).** djs-bgen emits one straight-line Rust
+   function per builtin (`builtins/gen/leaves.rs`), helpers inlined, no frame. For hot
+   builtins that meet user code only at their conversion sites (`ToPrimitive` of an
+   object, `Get`): there the function asks the interpreter to run the operation in a
+   frame (continuation `RetryCall`) and is called again with the result in the site's
+   shadow slot; everything before a site is pure, so the replay is unobservable.
 
-Because both backends compile the same source, they can be tested against each other
-(D1635): the gate runs the corpus with the native backend in every stress mode and once
-plainly with the bytecode backend, and `--backend bytecode|native` selects the backend in
-`djs run`, djs-difftest and djs-test262. `ExecOptions::native_builtins` picks the backend
-per call; fuel counts differ between them, results do not (D1633).
+A builtin with generated Rust has no bytecode body; the prelude keeps an empty function
+for its object (D3261). The generated code is checked against QuickJS (the corpus) and
+test262, and bgen's behavior test runs every builtin's TS body in qjs.
 
 The subset:
 
@@ -548,8 +552,8 @@ frame (JS or native) and later re-enters `array_map` at the saved state. `?` on 
 unwinds through the frame's handler table. `fr.goto` returns early (with the state already
 saved) when fuel is exhausted or a GC is pending.
 
-On the bytecode backend the same source compiles to ordinary JS frames. A reentrant call
-there is just a call, and suspension works as it does for user code.
+On the bytecode backend a builtin compiles to ordinary JS frames. A reentrant call there
+is just a call, and suspension works as it does for user code.
 
 The **regex** engine is our own backtracking engine (D1111). It compiles to regex bytecode
 stored in the heap (literals compile once, D1502), and its backtrack stack is in the
@@ -800,12 +804,12 @@ The original list, with what happened:
   patterns (D1360) handle arrow heads, generics and destructuring; dquickts'
   `test_typescript.ts` passes.
 - **Self-hosting cost.** Real, as feared: bytecode-backend builtins were slow. The answers
-  are the Rust backend (`@native`, D1631-D1635), `@fast` leaf entries (D1850, D1910) and
-  protocol shortcuts (D1351, D1800-D1802). Builtin-heavy code is still 2-4x quickjs-wasi.
+  are the Rust backend (`@native`, D1631-D1634), the leaf backend (`@rust`, D3260),
+  `@fast` leaf entries (D1850, D1910) and protocol shortcuts (D1351, D1800-D1802). Builtin-heavy code is still 2-4x quickjs-wasi.
 - **Builtin language scope creep.** Held: awkward cases became leaf intrinsics; the subset
   grew only try/finally and constructors in the Rust backend (D1803).
-- **Backend divergence.** Both backends run the corpus in the gate and pass the active
-  test262 group (D1635); the bgen behavior test compares the bytecode backend with qjs.
+- **Backend divergence.** Gone with D3261: each builtin has one implementation, checked
+  against QuickJS and test262; the bgen behavior test runs every TS body in qjs.
 - **Copying GC with large strings.** Still open: there is no large-object space. D1870's
   growth policy and append ropes (D1610) limit the damage; large tool outputs are copied
   by every collection.

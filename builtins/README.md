@@ -100,24 +100,29 @@ On builtin functions (JSDoc):
   optional or rest one).
 - `@intrinsic`: register it so that privileged code and the interpreter can call it
   as `%Name(...)` (for example `%ToPrimitive`).
-- `@native`: also compile it with the Rust backend (0063): a resumable Rust state
+- `@native`: compile it with the Rust backend (0063) instead of to bytecode: a resumable Rust state
   machine in `crates/djs-core/src/builtins/gen/natives.rs`, which `scripts/bgen.sh`
   writes too. A reentrant builtin it calls must be `@intrinsic`, unless it is a small
   internal helper that bgen inlines (D1632); leaf builtins it calls become Rust
   functions. `try`/`finally` and `@constructor` work too (D1803). Each one adds wasm size
-  (`scripts/native-sizes.sh`): tag a builtin only when a benchmark shows it is hot.
-  `--backend bytecode` (djs run, djs-difftest, djs-test262) runs the bytecode instead;
-  both must behave the same.
+  (`scripts/native-sizes.sh`): tag a builtin only when a benchmark shows it is hot. The
+  prelude keeps an empty function for it (D3261).
+- `@rust`: compile it with the leaf backend (D3260) to one straight-line Rust function
+  in `crates/djs-core/src/builtins/gen/leaves.rs`, instead of to bytecode. For hot
+  builtins that meet user code only at `ToPrimitive` of an object or at `Get` (the
+  conversion sites, where the interpreter runs the operation and calls the builtin
+  again): no loops, `try`, rest parameters or other reentrant calls, at most four
+  sites; bgen refuses anything else. About 50 B gz each. The bgen behavior test runs its
+  TS body in qjs; the corpus and test262 check the generated Rust.
 
 - `@fast`: has a leaf fast path in Rust, the entry of the same name in
-  `crates/djs-core/src/builtins/fast.rs` (D1850). With the native backend a call runs it
-  first; it either returns the builtin's result or declines and the builtin runs. The
+  `crates/djs-core/src/builtins/fast.rs` (D1850). A call runs it first; it either returns the builtin's result or declines and the builtin runs. The
   entry must mirror this source step by step and accept only arguments for which nothing
   observable can happen (primitives, leaf reads); every throwing case declines, and so
   does reaching the heap cap: an entry allocates before it changes anything, or makes
   only stores the builtin repeats (D1910). Keep the two in sync;
   `tests/corpus/builtins/fast-paths.js` and `fast-entries-array.js` check them against
-  qjs, and the bytecode-backend run tests the TS path. A constructor's entry may also
+  qjs, including every decline. Prefer `@rust` where the builtin fits it. A constructor's entry may also
   have a `new` part (`FastFn::new`, 0236): `new F(...)` with new.target F runs it.
 
 On intrinsics in `intrinsics.d.ts`, exactly one of:
