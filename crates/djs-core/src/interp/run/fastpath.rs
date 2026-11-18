@@ -52,9 +52,38 @@ impl Exec<'_> {
         // (`call0`..`call3` cost as much as `call`: the table's check.)
         let info = &OPS[Op::Call as usize];
         let next = self.pc + size;
+        let idx = self.heap.arena().get(t, FuncTemplate::FAST) as usize;
+        // A generated (`@rust`) builtin: straight to its function (a conversion or an
+        // error goes the general way, `own_call` through `step`).
+        if let Some(leaf) = crate::builtins::fast::leaf_of(idx)
+            && argc <= 3
+        {
+            let mut args = [Value::UNDEFINED; 3];
+            for (i, a) in args.iter_mut().enumerate().take(argc as usize) {
+                *a = self.get(base + 2 + i as u32);
+            }
+            let this = self.get(base + 1);
+            let empty = crate::builtins::fast::Shadow::EMPTY;
+            return match (leaf.run)(self, this, &args[..argc as usize], &empty, &leaf.data) {
+                Ok(v) => {
+                    self.sp = base;
+                    self.push(v);
+                    self.pc = next;
+                    self.fuel -= info.cost.fuel() as i64 + FAST_FUEL;
+                    true
+                }
+                Err(f) => {
+                    if matches!(&*f.0, FaultKind::Heap(HeapError::HostOutOfMemory)) {
+                        self.host_out_of_memory();
+                    }
+                    false
+                }
+            };
+        }
         // `arr.push(x)`, the commonest @fast call, straight to the heap's append (0231):
         // what `try_fast_call` and its `array_push` entry do, without the generic steps.
         if argc == 1
+            && self.opts.native_builtins
             && self.heap.arena().get(t, FuncTemplate::FAST) as usize
                 == crate::builtins::fast::ARRAY_PUSH
             && let Some(a) = self.get(base + 1).as_object()
@@ -141,6 +170,9 @@ impl Exec<'_> {
         argc: u32,
         next: u32,
     ) -> Result<bool, Fault> {
+        if !self.opts.native_builtins {
+            return Ok(false);
+        }
         let idx = self.heap.arena().get(t, FuncTemplate::FAST) as usize;
         let Some(new) = FAST.get(idx).and_then(|f| f.new) else {
             return Ok(false);
@@ -168,6 +200,127 @@ impl Exec<'_> {
         Ok(true)
     }
 
+    /// The generated function of the `@rust` builtin template `t` (experiment).
+    pub(super) fn owned(&self, t: u32) -> Option<&'static crate::builtins::fast::Leaf> {
+        crate::builtins::fast::leaf_of(self.heap.arena().get(t, FuncTemplate::FAST) as usize)
+    }
+
+    /// The call of a `@rust` builtin (experiment): its generated function runs with every
+    /// continuation. A conversion it asks for runs `%ToPrimitive` under `RetryCall`; the
+    /// call is then made again with the primitive in the site's shadow slot. An error is
+    /// thrown with the builtin as the innermost (native) frame.
+    #[inline(never)]
+    pub(super) fn own_call(
+        &mut self,
+        f: &'static crate::builtins::fast::Leaf,
+        base: u32,
+        argc: u32,
+        cont: Continuation,
+        ret_pc: u32,
+    ) -> super::Step {
+        use crate::builtins::fast::Shadow;
+        use crate::interp::conv::FaultKind;
+        let shadow = self.own_shadow.take().unwrap_or(Shadow::EMPTY);
+        let n = (argc as usize).min(MAX_ARGS);
+        let mut args = [Value::UNDEFINED; MAX_ARGS];
+        for (i, a) in args.iter_mut().enumerate().take(n) {
+            *a = self.get(base + 2 + i as u32);
+        }
+        let this = self.get(base + 1);
+        match (f.run)(self, this, &args[..n], &shadow, &f.data) {
+            Ok(v) => {
+                self.fuel -= FAST_FUEL;
+                self.sp = base;
+                match cont {
+                    Continuation::PushResult | Continuation::ConstructResult => self.push(v),
+                    Continuation::DiscardResult => {}
+                    Continuation::Replace(slot) | Continuation::Retry(slot) => self.set(slot, v),
+                    Continuation::Entry | Continuation::Job => {
+                        return Ok(self.bottom_done(cont, Ok(v)));
+                    }
+                    Continuation::Each | Continuation::RetryCall(_) => unreachable!(),
+                }
+                self.pc = ret_pc;
+                Ok(None)
+            }
+            Err(e) if matches!(*e.0, FaultKind::Convert(..)) => {
+                let FaultKind::Convert(site, value, hint) = *e.0 else {
+                    unreachable!()
+                };
+                let f = crate::interp::realm::installed_intrinsic(
+                    self.heap,
+                    super::intrinsics::TO_PRIMITIVE,
+                );
+                let hint = Value::string(self.heap.atom_string(hint)?);
+                let stash = base + 2 + argc;
+                self.sp = stash;
+                self.ensure(stash + 13)?;
+                for v in [
+                    cont.to_flags(),
+                    ret_pc as i32,
+                    argc as i32,
+                    site as i32,
+                    shadow.mask as i32,
+                ] {
+                    self.push(Value::int(v));
+                }
+                for v in shadow.vals {
+                    self.push(v);
+                }
+                let cbase = self.sp;
+                self.push(f);
+                self.push(Value::UNDEFINED);
+                self.push(value);
+                self.push(hint);
+                self.call(cbase, 2, Continuation::RetryCall(stash), ret_pc)
+            }
+            Err(f) => {
+                self.native_callee = self.get(base).as_object();
+                Err(f)
+            }
+        }
+    }
+
+    /// A leaf intrinsic for generated builtins: the pure ones directly, the others through
+    /// `call_intrinsic`.
+    #[inline(never)]
+    pub(crate) fn l_leaf(&mut self, id: u16, a: [Value; 3], n: u32) -> Result<Value, Fault> {
+        if super::hot::is_pure_leaf(id)
+            && let Some(v) = self.pure_leaf(id, a)?
+        {
+            return Ok(v);
+        }
+        self.n_leaf(id, &a[..n as usize])
+    }
+
+    /// ToNumber of a primitive.
+    #[inline]
+    pub(crate) fn l_to_number(&mut self, v: Value) -> Result<f64, Fault> {
+        match v.as_number() {
+            Some(x) => Ok(x),
+            None => self.l_to_number_slow(v),
+        }
+    }
+
+    #[inline(never)]
+    fn l_to_number_slow(&mut self, v: Value) -> Result<f64, Fault> {
+        crate::interp::conv::to_number(self.heap, v)
+    }
+
+    /// ToString of a primitive.
+    #[inline]
+    pub(crate) fn l_to_string(&mut self, v: Value) -> Result<Value, Fault> {
+        if v.as_string().is_some() {
+            return Ok(v);
+        }
+        self.l_to_string_slow(v)
+    }
+
+    #[inline(never)]
+    fn l_to_string_slow(&mut self, v: Value) -> Result<Value, Fault> {
+        Ok(Value::string(crate::interp::conv::to_string(self.heap, v)?))
+    }
+
     pub(super) fn try_fast_call(
         &mut self,
         t: u32,
@@ -185,9 +338,37 @@ impl Exec<'_> {
             _ => return Ok(false),
         };
         let idx = self.heap.arena().get(t, FuncTemplate::FAST) as usize;
+        // A generated builtin completes here only with a result: a conversion or an
+        // error takes `own_call` (through `Exec::call`).
+        if let Some(f) = crate::builtins::fast::leaf_of(idx) {
+            let mut args = [Value::UNDEFINED; MAX_ARGS];
+            for (i, a) in args.iter_mut().enumerate().take(argc as usize) {
+                *a = self.get(base + 2 + i as u32);
+            }
+            let this = self.get(base + 1);
+            let empty = crate::builtins::fast::Shadow::EMPTY;
+            return match (f.run)(self, this, &args[..argc as usize], &empty, &f.data) {
+                Ok(v) => {
+                    self.fuel -= FAST_FUEL;
+                    self.sp = base;
+                    match cont {
+                        Continuation::Replace(slot) => self.set(slot, v),
+                        _ if push => self.push(v),
+                        _ => {}
+                    }
+                    self.pc = ret_pc;
+                    Ok(true)
+                }
+                Err(f) if matches!(&*f.0, FaultKind::Heap(HeapError::HostOutOfMemory)) => Err(f),
+                _ => Ok(false),
+            };
+        }
         let Some(ff) = FAST.get(idx) else {
             return Ok(false);
         };
+        if !self.opts.native_builtins {
+            return Ok(false);
+        }
         let mut args = [Value::UNDEFINED; MAX_ARGS];
         for (i, a) in args.iter_mut().enumerate().take(argc as usize) {
             *a = self.get(base + 2 + i as u32);
@@ -238,6 +419,7 @@ mod tests {
         }
         let marked = prelude.matches("%MarkFast(").count();
         let mut names: alloc::vec::Vec<&str> = FAST.iter().map(|f| f.name).collect();
+        names.extend(crate::builtins::r#gen::leaves::LEAF_NAMES);
         names.sort();
         names.dedup();
         assert_eq!(
@@ -245,5 +427,132 @@ mod tests {
             names.len(),
             "names in FAST are unique and all marked"
         );
+    }
+}
+
+/// `native::num` out of line, for the generated builtins (size).
+#[inline(never)]
+pub(crate) fn lnum(n: f64) -> Value {
+    crate::interp::run::native::num(n)
+}
+
+/// Typed leaves for the generated builtins (experiment): what the `pure_leaf` arms do,
+/// called directly instead of through the dispatch.
+#[allow(missing_docs)]
+impl Exec<'_> {
+    #[inline]
+    fn l_idx(v: Value) -> u32 {
+        v.as_number()
+            .filter(|n| *n >= 0.0)
+            .map_or(0, |n| n.min(u32::MAX as f64) as u32)
+    }
+
+    #[inline(never)]
+    pub(crate) fn l_math(id: u16, x: f64, y: f64) -> f64 {
+        super::intrinsics::math_leaf(id, x, y).unwrap_or(f64::NAN)
+    }
+
+    #[inline]
+    pub(crate) fn l_integer(n: f64) -> f64 {
+        // Integral int32 values (the common index) skip the libm call; -0 becomes +0.
+        if (n as i32) as f64 == n {
+            return n + 0.0;
+        }
+        let t = if n.is_nan() { 0.0 } else { djs_libm::trunc(n) };
+        t + 0.0
+    }
+
+    #[inline]
+    pub(crate) fn l_str_len(&self, s: Value) -> f64 {
+        s.as_string().map_or(0.0, |s| self.heap.str_len(s) as f64)
+    }
+
+    fn l_flat(&mut self, s: Value) -> Result<crate::value::Str, Fault> {
+        let s = s.as_string().expect("string");
+        Ok(self.heap.contiguous(s)?)
+    }
+
+    #[inline(never)]
+    pub(crate) fn l_char_code_at(&mut self, s: Value, n: f64) -> Result<Value, Fault> {
+        let s = self.l_flat(s)?;
+        Ok(if n >= 0.0 && n < self.heap.str_len(s) as f64 {
+            Value::int(self.heap.char_code_at(s, n as u32).unwrap_or(0) as i32)
+        } else {
+            Value::NAN
+        })
+    }
+
+    #[inline(never)]
+    pub(crate) fn l_substring(&mut self, s: Value, a: Value, b: Value) -> Result<Value, Fault> {
+        let s = self.l_flat(s)?;
+        let r = crate::builtins::string::substring(self.heap, s, Self::l_idx(a), Self::l_idx(b))?;
+        Ok(Value::string(r))
+    }
+
+    #[inline(never)]
+    pub(crate) fn l_index_of(
+        &mut self,
+        s: Value,
+        t: Value,
+        from: Value,
+        last: bool,
+    ) -> Result<f64, Fault> {
+        let s = self.l_flat(s)?;
+        let t = t.as_string().expect("string");
+        crate::builtins::string::index_of(self.heap, s, t, Self::l_idx(from), last)
+    }
+
+    #[inline(never)]
+    pub(crate) fn l_trim(&mut self, s: Value, w: Value) -> Result<Value, Fault> {
+        let s = self.l_flat(s)?;
+        Ok(Value::string(crate::builtins::string::trim(
+            self.heap,
+            s,
+            w.as_int().unwrap_or(0),
+        )?))
+    }
+
+    #[inline(never)]
+    pub(crate) fn l_case(&mut self, s: Value, upper: Value) -> Result<Value, Fault> {
+        let s = self.l_flat(s)?;
+        Ok(Value::string(crate::builtins::string::to_case(
+            self.heap,
+            s,
+            upper.as_bool() == Some(true),
+        )?))
+    }
+
+    #[inline(never)]
+    pub(crate) fn l_pad(
+        &mut self,
+        s: Value,
+        f: Value,
+        n: f64,
+        at_start: bool,
+    ) -> Result<Value, Fault> {
+        let (s, f) = (
+            s.as_string().expect("string"),
+            f.as_string().expect("string"),
+        );
+        Ok(Value::string(crate::builtins::string::pad(
+            self.heap, s, f, n as u32, at_start,
+        )?))
+    }
+
+    #[inline(never)]
+    pub(crate) fn l_repeat(&mut self, s: Value, n: Value) -> Result<Value, Fault> {
+        let s = self.l_flat(s)?;
+        Ok(Value::string(crate::builtins::string::repeat(
+            self.heap,
+            s,
+            Self::l_idx(n),
+        )?))
+    }
+
+    #[inline(never)]
+    pub(crate) fn l_num_format(&mut self, op: u8, x: f64, arg: Value) -> Result<Value, Fault> {
+        Ok(Value::string(crate::builtins::number::format(
+            self.heap, op, x, arg,
+        )?))
     }
 }

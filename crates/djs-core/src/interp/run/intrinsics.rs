@@ -438,7 +438,7 @@ enum SetStep {
 }
 
 /// The libm intrinsics (djs-libm, D1150, D3174): `F64Sin(x)` and friends.
-fn math_leaf(id: u16, x: f64, y: f64) -> Option<f64> {
+pub(super) fn math_leaf(id: u16, x: f64, y: f64) -> Option<f64> {
     Some(match id {
         F64_ABS => djs_libm::fabs(x),
         F64_ACOS => djs_libm::acos(x),

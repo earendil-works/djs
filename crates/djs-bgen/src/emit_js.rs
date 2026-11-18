@@ -115,6 +115,18 @@ pub fn emit(p: &Program, sources: &Sources, omit: &[&str], slim: bool) -> String
         let file = sources.file(f.span);
         let (line, _) = file.line_col(f.span.start);
         out.push_str(&format!("\n// {}:{line}{what}\n", file.name));
+        // One implementation per builtin: generated Rust (`@rust`, `@native`) has no
+        // bytecode body.
+        if b.rust || b.native {
+            // Rust only: the function object without a body.
+            let params: Vec<&str> = f.params.iter().map(|p| p.name.as_str()).collect();
+            out.push_str(&format!(
+                "function {}({}) {{}}\n",
+                f.name,
+                params.join(", ")
+            ));
+            continue;
+        }
         for l in e.function(f) {
             out.push_str(&l);
             out.push('\n');
@@ -282,7 +294,7 @@ const INLINE_DEPTH: usize = 4;
 /// The longest inlined call, in characters of JS: every call site gets a copy, so only
 /// short bodies pay for themselves (0230: 160 kept most of the gain on the string and
 /// Math methods for ~1 KB gz of base image; 260 cost 1.4 KB more for little).
-const INLINE_TEXT: usize = 160;
+const INLINE_TEXT: usize = 80;
 
 fn indented(lines: Vec<String>) -> impl Iterator<Item = String> {
     lines.into_iter().map(|l| format!("  {l}"))

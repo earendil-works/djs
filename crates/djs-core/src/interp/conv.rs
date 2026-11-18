@@ -28,6 +28,10 @@ pub(crate) enum FaultKind {
     Error(ErrorKind, String),
     /// Out of memory, string too long, invalid array length.
     Heap(HeapError),
+    /// Experiment: a generated (`@rust`) builtin asks for ToPrimitive(value, hint) at
+    /// conversion site `site` before it can go on; `own_call` handles it, nothing else
+    /// sees it.
+    Convert(u32, Value, crate::heap::Atom),
 }
 
 impl Fault {
@@ -37,6 +41,12 @@ impl Fault {
             *self.0,
             FaultKind::Heap(crate::heap::HeapError::OutOfMemory)
         )
+    }
+
+    #[cold]
+    #[inline(never)]
+    pub(crate) fn convert(site: u32, v: Value, hint: crate::heap::Atom) -> Fault {
+        Fault(Box::new(FaultKind::Convert(site, v, hint)))
     }
 
     #[cold]

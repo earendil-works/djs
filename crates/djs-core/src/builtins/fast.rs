@@ -39,6 +39,44 @@ pub(crate) struct FastFn {
     pub new: Option<fn(&mut Heap, &[Value]) -> Fast>,
 }
 
+/// The primitives of the conversion sites done so far (bit k of `mask`: site k).
+#[derive(Clone, Copy)]
+pub(crate) struct Shadow {
+    pub mask: u32,
+    pub vals: [Value; 4],
+}
+
+impl Shadow {
+    pub(crate) const EMPTY: Shadow = Shadow {
+        mask: 0,
+        vals: [Value::UNDEFINED; 4],
+    };
+}
+
+/// A generated builtin (`builtins/gen/leaves.rs`): its shape's function and its data.
+pub(crate) struct Leaf {
+    pub run: fn(
+        &mut crate::interp::run::Exec<'_>,
+        Value,
+        &[Value],
+        &Shadow,
+        &LeafData,
+    ) -> Result<Value, Fault>,
+    pub data: LeafData,
+}
+
+/// What distinguishes builtins of one shape: their leaf intrinsics and number literals.
+pub(crate) struct LeafData {
+    pub ids: &'static [u16],
+    pub lits: &'static [f64],
+}
+
+/// The generated builtin at fast index `idx` (they come after `FAST`).
+pub(crate) fn leaf_of(idx: usize) -> Option<&'static Leaf> {
+    idx.checked_sub(FAST.len())
+        .and_then(|i| crate::builtins::r#gen::leaves::LEAVES.get(i))
+}
+
 /// The most arguments an entry looks at (calls with more decline).
 pub(crate) const MAX_ARGS: usize = 6;
 
@@ -51,7 +89,12 @@ impl FastFn {
 #[cfg(djs_prelude)]
 /// The index of the entry for builtin `name`.
 pub(crate) fn index(name: &str) -> Option<usize> {
-    FAST.iter().position(|f| f.name == name)
+    FAST.iter().position(|f| f.name == name).or_else(|| {
+        crate::builtins::r#gen::leaves::LEAF_NAMES
+            .iter()
+            .position(|&n| n == name)
+            .map(|i| FAST.len() + i)
+    })
 }
 
 const fn f(name: &'static str, run: fn(&mut Heap, Value, &[Value]) -> Fast) -> FastFn {
@@ -79,7 +122,7 @@ const fn ctor(
 
 /// The index of `ArrayPrototypePush`'s entry: the interpreter appends for it directly
 /// (interp/run/fastpath.rs, 0231; a test checks the index).
-pub(crate) const ARRAY_PUSH: usize = 21;
+pub(crate) const ARRAY_PUSH: usize = 10;
 
 /// The entries that pay their bytes (D2310: the rule and the measurements of every twin).
 pub(crate) static FAST: &[FastFn] = &[
@@ -89,21 +132,10 @@ pub(crate) static FAST: &[FastFn] = &[
     f("ToPropertyKey", to_property_key),
     // ---- String ----
     f("StringPrototypeIncludes", includes),
-    f("StringPrototypeIndexOf", index_of),
-    f("StringPrototypeSlice", slice),
-    f("StringPrototypeCharAt", char_at),
-    f("StringPrototypeCharCodeAt", char_code_at),
     f("StringPrototypeSplit", split),
     // 0230b: >2x QuickJS after the general fixes (D3120, D3121)
-    f("StringPrototypeSubstring", substring),
-    f("StringPrototypeAt", at),
-    f("StringPrototypeRepeat", repeat),
-    f("StringPrototypePadStart", pad_start),
-    f("StringPrototypePadEnd", pad_end),
     // ---- Number ----
     f("NumberConstructor", number_constructor),
-    f("NumberIsInteger", number_is_integer),
-    f("NumberPrototypeToFixed", to_fixed),
     f("StringConstructor", string_constructor),
     // ---- Math (0230: `Math.max(m, x)` in reduce callbacks) ----
     f("MathMax", math_max),
@@ -282,179 +314,6 @@ fn includes(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
     )))
 }
 
-fn index_of(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
-    let Some((s, t)) = search(heap, this, arg(args, 0))? else {
-        return Ok(None);
-    };
-    let Some(p) = int_arg(heap, arg(args, 1))? else {
-        return Ok(None);
-    };
-    let start = clamp(p, len(heap, s)) as u32;
-    Ok(Some(conv::number(string::index_of(
-        heap, s, t, start, false,
-    )?)))
-}
-
-fn slice(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
-    let Some(s) = this_str(heap, this)? else {
-        return Ok(None);
-    };
-    let n = len(heap, s);
-    let (Some(from), Some(to)) = (
-        relative(heap, arg(args, 0), n, 0.0)?,
-        relative(heap, arg(args, 1), n, n)?,
-    ) else {
-        return Ok(None);
-    };
-    if from >= to {
-        return empty(heap);
-    }
-    some_str(string::substring(heap, s, from as u32, to as u32)?)
-}
-
-/// String.prototype.substring: ClampPosition of both ends, then the smaller first.
-fn substring(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
-    let Some(s) = this_str(heap, this)? else {
-        return Ok(None);
-    };
-    let n = len(heap, s);
-    let Some(a) = int_arg(heap, arg(args, 0))? else {
-        return Ok(None);
-    };
-    let b = match arg(args, 1) {
-        v if v.is_undefined() => n,
-        v => match int_arg(heap, v)? {
-            Some(b) => clamp(b, n),
-            None => return Ok(None),
-        },
-    };
-    let a = clamp(a, n);
-    let (from, to) = if a < b { (a, b) } else { (b, a) };
-    some_str(string::substring(heap, s, from as u32, to as u32)?)
-}
-
-/// String.prototype.at: a relative index; `undefined` out of range.
-fn at(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
-    let Some(s) = this_str(heap, this)? else {
-        return Ok(None);
-    };
-    let n = len(heap, s);
-    let Some(rel) = int_arg(heap, arg(args, 0))? else {
-        return Ok(None);
-    };
-    let k = if rel >= 0.0 { rel } else { n + rel };
-    if k < 0.0 || k >= n {
-        return Ok(Some(Value::UNDEFINED));
-    }
-    some_str(string::substring(heap, s, k as u32, k as u32 + 1)?)
-}
-
-/// String.prototype.repeat; a RangeError (a negative or infinite count) declines.
-fn repeat(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
-    let Some(s) = this_str(heap, this)? else {
-        return Ok(None);
-    };
-    let Some(n) = int_arg(heap, arg(args, 0))? else {
-        return Ok(None);
-    };
-    if n < 0.0 || n == f64::INFINITY {
-        return Ok(None);
-    }
-    if heap.str_len(s) == 0 || n == 0.0 {
-        return empty(heap);
-    }
-    let s = heap.contiguous(s)?;
-    some_str(string::repeat(heap, s, n.min(u32::MAX as f64) as u32)?)
-}
-
-/// StringPad of string.ts: ToLength of `maxLength`, then the filler only if needed.
-fn pad(heap: &mut Heap, this: Value, args: &[Value], at_start: bool) -> Fast {
-    let Some(s) = this_str(heap, this)? else {
-        return Ok(None);
-    };
-    let Some(max) = int_arg(heap, arg(args, 0))? else {
-        return Ok(None);
-    };
-    let n = len(heap, s);
-    if max <= n {
-        return some_str(s);
-    }
-    // `None`: the default filler, one space.
-    let filler = match arg(args, 1) {
-        v if v.is_undefined() => None,
-        v => match str(heap, v)? {
-            Some(f) => Some(f),
-            None => return Ok(None),
-        },
-    };
-    let fl = filler.map_or(1, |f| heap.str_len(f));
-    if fl == 0 {
-        return some_str(s);
-    }
-    // Long pads and two-byte fillers are the builtin's (by doubling, in StrRepeat).
-    let fill = max - n;
-    if fill > 65536.0 || filler.is_some_and(|f| heap.str_is_two_byte(f)) {
-        return Ok(None);
-    }
-    let fill = fill as u32;
-    // The one-byte filler cycled into one buffer: one allocation for the run.
-    let unit: Vec<u8> = match filler {
-        Some(f) => heap.str_view_flat(f)?.units().map(|u| u as u8).collect(),
-        None => alloc::vec![b' '],
-    };
-    let bytes: Vec<u8> = unit.iter().copied().cycle().take(fill as usize).collect();
-    let run = heap.alloc_latin1(&bytes)?;
-    let whole = n as u32;
-    let mut pieces = if at_start {
-        [(run, 0, fill), (s, 0, whole)]
-    } else {
-        [(s, 0, whole), (run, 0, fill)]
-    };
-    some_str(string::join(heap, &mut pieces)?)
-}
-
-fn pad_start(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
-    pad(heap, this, args, true)
-}
-
-fn pad_end(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
-    pad(heap, this, args, false)
-}
-
-/// The code unit index of charAt/charCodeAt/codePointAt: `None` declines, `Some(None)`
-/// is out of range.
-fn position(heap: &mut Heap, s: Str, v: Value) -> Result<Option<Option<u32>>, Fault> {
-    let Some(p) = int_arg(heap, v)? else {
-        return Ok(None);
-    };
-    Ok(Some((p >= 0.0 && p < len(heap, s)).then_some(p as u32)))
-}
-
-fn char_at(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
-    let Some(s) = this_str(heap, this)? else {
-        return Ok(None);
-    };
-    match position(heap, s, arg(args, 0))? {
-        None => Ok(None),
-        Some(None) => empty(heap),
-        Some(Some(i)) => some_str(string::substring(heap, s, i, i + 1)?),
-    }
-}
-
-fn char_code_at(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
-    let Some(s) = this_str(heap, this)? else {
-        return Ok(None);
-    };
-    Ok(match position(heap, s, arg(args, 0))? {
-        None => None,
-        Some(None) => Some(Value::NAN),
-        Some(Some(i)) => {
-            let s = heap.contiguous(s)?;
-            Some(Value::int(heap.char_code_at(s, i).unwrap_or(0) as i32))
-        }
-    })
-}
-
 fn new_array(heap: &mut Heap, values: &[Value]) -> Fast {
     let proto = realm::intrinsic_obj(heap, Intrinsic::ArrayProto);
     Ok(Some(Value::object(
@@ -558,14 +417,6 @@ fn number_constructor(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
     Ok(num(heap, args[0])?.map(conv::number))
 }
 
-/// Number.prototype.toFixed of a Number; a RangeError (digits out of 0..=100) declines.
-fn to_fixed(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
-    let (Some(x), Some(d)) = (this.as_number(), int_arg(heap, arg(args, 0))?) else {
-        return Ok(None);
-    };
-    some_str(number::format(heap, 1, x, conv::number(d))?)
-}
-
 /// String(v) called (not constructed: only calls take fast entries) on a primitive other
 /// than a symbol (SymbolDescriptiveString stays with the builtin).
 fn string_constructor(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
@@ -574,13 +425,6 @@ fn string_constructor(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
         Some(v) if v.as_symbol().is_some() => Ok(None),
         Some(&v) => Ok(str(heap, v)?.map(Value::string)),
     }
-}
-
-/// Number.isInteger: never throws, so every argument is answered.
-fn number_is_integer(_: &mut Heap, _: Value, args: &[Value]) -> Fast {
-    Ok(Some(Value::bool(arg(args, 0).as_number().is_some_and(
-        |n| n.is_finite() && djs_libm::trunc(n) == n,
-    ))))
 }
 
 // ---- Math ----------------------------------------------------------------------------

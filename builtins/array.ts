@@ -207,6 +207,7 @@ function ArrayConstructor(...values: Value[]): Obj {
 /**
  * Array.isArray ( arg ), 23.1.2.2.
  * @builtin Array.isArray
+ * @rust
  */
 function ArrayIsArray(arg: Value): boolean {
   return IsArray(arg);

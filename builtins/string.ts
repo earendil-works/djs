@@ -97,6 +97,7 @@ function ClampPosition(v: Value, len: f64): f64 {
  * String.prototype.at ( index ), 22.1.3.1.
  * @builtin String.prototype.at
  * @fast
+ * @rust
  */
 function StringPrototypeAt(this: Value, index: Value): Value {
   const s: Str = ThisToString(this);
@@ -113,6 +114,7 @@ function StringPrototypeAt(this: Value, index: Value): Value {
  * String.prototype.charAt ( pos ), 22.1.3.2.
  * @builtin String.prototype.charAt
  * @fast
+ * @rust
  */
 function StringPrototypeCharAt(this: Value, pos: Value): Str {
   const s: Str = ThisToString(this);
@@ -127,6 +129,7 @@ function StringPrototypeCharAt(this: Value, pos: Value): Str {
  * String.prototype.charCodeAt ( pos ), 22.1.3.3.
  * @builtin String.prototype.charCodeAt
  * @fast
+ * @rust
  */
 function StringPrototypeCharCodeAt(this: Value, pos: Value): f64 {
   const s: Str = ThisToString(this);
@@ -148,6 +151,7 @@ function StringPrototypeCodePointAt(this: Value, pos: Value): Value {
  * String.prototype.indexOf ( searchString [ , position ] ), 22.1.3.9.
  * @builtin String.prototype.indexOf
  * @fast
+ * @rust
  */
 function StringPrototypeIndexOf(this: Value, searchString: Value, position?: Value): f64 {
   const s: Str = ThisToString(this);
@@ -159,6 +163,7 @@ function StringPrototypeIndexOf(this: Value, searchString: Value, position?: Val
 /**
  * String.prototype.lastIndexOf ( searchString [ , position ] ), 22.1.3.11.
  * @builtin String.prototype.lastIndexOf
+ * @rust
  */
 function StringPrototypeLastIndexOf(this: Value, searchString: Value, position?: Value): f64 {
   const s: Str = ThisToString(this);
@@ -242,6 +247,7 @@ function StringPrototypeLocaleCompare(this: Value, that: Value): f64 {
  * String.prototype.slice ( start, end ), 22.1.3.22.
  * @builtin String.prototype.slice
  * @fast
+ * @rust
  */
 function StringPrototypeSlice(this: Value, start: Value, end: Value): Str {
   const s: Str = ThisToString(this);
@@ -258,6 +264,7 @@ function StringPrototypeSlice(this: Value, start: Value, end: Value): Str {
  * String.prototype.substring ( start, end ), 22.1.3.25.
  * @builtin String.prototype.substring
  * @fast
+ * @rust
  */
 function StringPrototypeSubstring(this: Value, start: Value, end: Value): Str {
   const s: Str = ThisToString(this);
@@ -307,6 +314,7 @@ function StringPrototypeConcat(this: Value, ...args: Value[]): Str {
  * String.prototype.repeat ( count ), 22.1.3.19.
  * @builtin String.prototype.repeat
  * @fast
+ * @rust
  */
 function StringPrototypeRepeat(this: Value, count: Value): Str {
   const s: Str = ThisToString(this);
@@ -332,15 +340,14 @@ function StringPad(s: Str, maxLength: Value, fillString: Value, atStart: boolean
   if (fillerLength === 0) {
     return s;
   }
-  const fillLen: f64 = intMaxLength - stringLength;
-  const truncated: Str = StrSubstring(StrRepeat(filler, F64Ceil(fillLen / fillerLength)), 0, fillLen);
-  return atStart ? truncated + s : s + truncated;
+  return StrPad(s, filler, intMaxLength - stringLength, atStart);
 }
 
 /**
  * String.prototype.padEnd ( maxLength [ , fillString ] ), 22.1.3.16.
  * @builtin String.prototype.padEnd
  * @fast
+ * @rust
  */
 function StringPrototypePadEnd(this: Value, maxLength: Value, fillString?: Value): Str {
   return StringPad(ThisToString(this), maxLength, fillString, false);
@@ -350,6 +357,7 @@ function StringPrototypePadEnd(this: Value, maxLength: Value, fillString?: Value
  * String.prototype.padStart ( maxLength [ , fillString ] ), 22.1.3.17.
  * @builtin String.prototype.padStart
  * @fast
+ * @rust
  */
 function StringPrototypePadStart(this: Value, maxLength: Value, fillString?: Value): Str {
   return StringPad(ThisToString(this), maxLength, fillString, true);
@@ -360,6 +368,7 @@ function StringPrototypePadStart(this: Value, maxLength: Value, fillString?: Val
 /**
  * String.prototype.toLowerCase ( ), 22.1.3.28.
  * @builtin String.prototype.toLowerCase
+ * @rust
  */
 function StringPrototypeToLowerCase(this: Value): Str {
   return StrToCase(ThisToString(this), false);
@@ -368,6 +377,7 @@ function StringPrototypeToLowerCase(this: Value): Str {
 /**
  * String.prototype.toUpperCase ( ), 22.1.3.30.
  * @builtin String.prototype.toUpperCase
+ * @rust
  */
 function StringPrototypeToUpperCase(this: Value): Str {
   return StrToCase(ThisToString(this), true);
@@ -376,6 +386,7 @@ function StringPrototypeToUpperCase(this: Value): Str {
 /**
  * String.prototype.toLocaleLowerCase ( ), 22.1.3.26 (no locales: toLowerCase).
  * @builtin String.prototype.toLocaleLowerCase
+ * @rust
  */
 function StringPrototypeToLocaleLowerCase(this: Value): Str {
   return StrToCase(ThisToString(this), false);
@@ -384,6 +395,7 @@ function StringPrototypeToLocaleLowerCase(this: Value): Str {
 /**
  * String.prototype.toLocaleUpperCase ( ), 22.1.3.27 (no locales: toUpperCase).
  * @builtin String.prototype.toLocaleUpperCase
+ * @rust
  */
 function StringPrototypeToLocaleUpperCase(this: Value): Str {
   return StrToCase(ThisToString(this), true);
@@ -392,6 +404,7 @@ function StringPrototypeToLocaleUpperCase(this: Value): Str {
 /**
  * String.prototype.trim ( ), 22.1.3.32.
  * @builtin String.prototype.trim
+ * @rust
  */
 function StringPrototypeTrim(this: Value): Str {
   return StrTrim(ThisToString(this), 0);
@@ -401,6 +414,7 @@ function StringPrototypeTrim(this: Value): Str {
  * String.prototype.trimStart ( ), 22.1.3.34 (trimLeft is the same function, B.2.2.15).
  * @builtin String.prototype.trimStart
  * @builtin String.prototype.trimLeft
+ * @rust
  */
 function StringPrototypeTrimStart(this: Value): Str {
   return StrTrim(ThisToString(this), 1);
@@ -410,6 +424,7 @@ function StringPrototypeTrimStart(this: Value): Str {
  * String.prototype.trimEnd ( ), 22.1.3.33 (trimRight is the same function, B.2.2.16).
  * @builtin String.prototype.trimEnd
  * @builtin String.prototype.trimRight
+ * @rust
  */
 function StringPrototypeTrimEnd(this: Value): Str {
   return StrTrim(ThisToString(this), 2);

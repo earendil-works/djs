@@ -85,6 +85,7 @@ function MathSQRT2(): f64 {
 /**
  * Math.abs ( x ), 21.3.2.1.
  * @builtin Math.abs
+ * @rust
  */
 function MathAbs(x: Value): f64 {
   return F64Abs(ToNumber(x));
@@ -93,6 +94,7 @@ function MathAbs(x: Value): f64 {
 /**
  * Math.acos ( x ), 21.3.2.2.
  * @builtin Math.acos
+ * @rust
  */
 function MathAcos(x: Value): f64 {
   return F64Acos(ToNumber(x));
@@ -101,6 +103,7 @@ function MathAcos(x: Value): f64 {
 /**
  * Math.acosh ( x ), 21.3.2.3.
  * @builtin Math.acosh
+ * @rust
  */
 function MathAcosh(x: Value): f64 {
   return F64Acosh(ToNumber(x));
@@ -109,6 +112,7 @@ function MathAcosh(x: Value): f64 {
 /**
  * Math.asin ( x ), 21.3.2.4.
  * @builtin Math.asin
+ * @rust
  */
 function MathAsin(x: Value): f64 {
   return F64Asin(ToNumber(x));
@@ -117,6 +121,7 @@ function MathAsin(x: Value): f64 {
 /**
  * Math.asinh ( x ), 21.3.2.5.
  * @builtin Math.asinh
+ * @rust
  */
 function MathAsinh(x: Value): f64 {
   return F64Asinh(ToNumber(x));
@@ -125,6 +130,7 @@ function MathAsinh(x: Value): f64 {
 /**
  * Math.atan ( x ), 21.3.2.6.
  * @builtin Math.atan
+ * @rust
  */
 function MathAtan(x: Value): f64 {
   return F64Atan(ToNumber(x));
@@ -133,6 +139,7 @@ function MathAtan(x: Value): f64 {
 /**
  * Math.atanh ( x ), 21.3.2.7.
  * @builtin Math.atanh
+ * @rust
  */
 function MathAtanh(x: Value): f64 {
   return F64Atanh(ToNumber(x));
@@ -141,6 +148,7 @@ function MathAtanh(x: Value): f64 {
 /**
  * Math.cbrt ( x ), 21.3.2.9.
  * @builtin Math.cbrt
+ * @rust
  */
 function MathCbrt(x: Value): f64 {
   return F64Cbrt(ToNumber(x));
@@ -149,6 +157,7 @@ function MathCbrt(x: Value): f64 {
 /**
  * Math.ceil ( x ), 21.3.2.10.
  * @builtin Math.ceil
+ * @rust
  */
 function MathCeil(x: Value): f64 {
   return F64Ceil(ToNumber(x));
@@ -157,6 +166,7 @@ function MathCeil(x: Value): f64 {
 /**
  * Math.clz32 ( x ), 21.3.2.11.
  * @builtin Math.clz32
+ * @rust
  */
 function MathClz32(x: Value): f64 {
   return F64Clz32(ToNumber(x));
@@ -165,6 +175,7 @@ function MathClz32(x: Value): f64 {
 /**
  * Math.cos ( x ), 21.3.2.12.
  * @builtin Math.cos
+ * @rust
  */
 function MathCos(x: Value): f64 {
   return F64Cos(ToNumber(x));
@@ -173,6 +184,7 @@ function MathCos(x: Value): f64 {
 /**
  * Math.cosh ( x ), 21.3.2.13.
  * @builtin Math.cosh
+ * @rust
  */
 function MathCosh(x: Value): f64 {
   return F64Cosh(ToNumber(x));
@@ -181,6 +193,7 @@ function MathCosh(x: Value): f64 {
 /**
  * Math.exp ( x ), 21.3.2.14.
  * @builtin Math.exp
+ * @rust
  */
 function MathExp(x: Value): f64 {
   return F64Exp(ToNumber(x));
@@ -189,6 +202,7 @@ function MathExp(x: Value): f64 {
 /**
  * Math.expm1 ( x ), 21.3.2.15.
  * @builtin Math.expm1
+ * @rust
  */
 function MathExpm1(x: Value): f64 {
   return F64Expm1(ToNumber(x));
@@ -197,6 +211,7 @@ function MathExpm1(x: Value): f64 {
 /**
  * Math.floor ( x ), 21.3.2.16.
  * @builtin Math.floor
+ * @rust
  */
 function MathFloor(x: Value): f64 {
   return F64Floor(ToNumber(x));
@@ -205,6 +220,7 @@ function MathFloor(x: Value): f64 {
 /**
  * Math.fround ( x ), 21.3.2.17.
  * @builtin Math.fround
+ * @rust
  */
 function MathFround(x: Value): f64 {
   return F64Fround(ToNumber(x));
@@ -213,6 +229,7 @@ function MathFround(x: Value): f64 {
 /**
  * Math.f16round ( x ), 21.3.2.18.
  * @builtin Math.f16round
+ * @rust
  */
 function MathF16round(x: Value): f64 {
   return F64F16round(ToNumber(x));
@@ -250,6 +267,7 @@ function MathSumPrecise(items: Value): f64 {
 /**
  * Math.log ( x ), 21.3.2.20.
  * @builtin Math.log
+ * @rust
  */
 function MathLog(x: Value): f64 {
   return F64Log(ToNumber(x));
@@ -258,6 +276,7 @@ function MathLog(x: Value): f64 {
 /**
  * Math.log1p ( x ), 21.3.2.21.
  * @builtin Math.log1p
+ * @rust
  */
 function MathLog1p(x: Value): f64 {
   return F64Log1p(ToNumber(x));
@@ -266,6 +285,7 @@ function MathLog1p(x: Value): f64 {
 /**
  * Math.log10 ( x ), 21.3.2.22.
  * @builtin Math.log10
+ * @rust
  */
 function MathLog10(x: Value): f64 {
   return F64Log10(ToNumber(x));
@@ -274,6 +294,7 @@ function MathLog10(x: Value): f64 {
 /**
  * Math.log2 ( x ), 21.3.2.23.
  * @builtin Math.log2
+ * @rust
  */
 function MathLog2(x: Value): f64 {
   return F64Log2(ToNumber(x));
@@ -282,6 +303,7 @@ function MathLog2(x: Value): f64 {
 /**
  * Math.round ( x ), 21.3.2.28.
  * @builtin Math.round
+ * @rust
  */
 function MathRound(x: Value): f64 {
   return F64Round(ToNumber(x));
@@ -290,6 +312,7 @@ function MathRound(x: Value): f64 {
 /**
  * Math.sign ( x ), 21.3.2.29.
  * @builtin Math.sign
+ * @rust
  */
 function MathSign(x: Value): f64 {
   return F64Sign(ToNumber(x));
@@ -298,6 +321,7 @@ function MathSign(x: Value): f64 {
 /**
  * Math.sin ( x ), 21.3.2.30.
  * @builtin Math.sin
+ * @rust
  */
 function MathSin(x: Value): f64 {
   return F64Sin(ToNumber(x));
@@ -306,6 +330,7 @@ function MathSin(x: Value): f64 {
 /**
  * Math.sinh ( x ), 21.3.2.31.
  * @builtin Math.sinh
+ * @rust
  */
 function MathSinh(x: Value): f64 {
   return F64Sinh(ToNumber(x));
@@ -314,6 +339,7 @@ function MathSinh(x: Value): f64 {
 /**
  * Math.sqrt ( x ), 21.3.2.32.
  * @builtin Math.sqrt
+ * @rust
  */
 function MathSqrt(x: Value): f64 {
   return F64Sqrt(ToNumber(x));
@@ -322,6 +348,7 @@ function MathSqrt(x: Value): f64 {
 /**
  * Math.tan ( x ), 21.3.2.33.
  * @builtin Math.tan
+ * @rust
  */
 function MathTan(x: Value): f64 {
   return F64Tan(ToNumber(x));
@@ -330,6 +357,7 @@ function MathTan(x: Value): f64 {
 /**
  * Math.tanh ( x ), 21.3.2.34.
  * @builtin Math.tanh
+ * @rust
  */
 function MathTanh(x: Value): f64 {
   return F64Tanh(ToNumber(x));
@@ -338,6 +366,7 @@ function MathTanh(x: Value): f64 {
 /**
  * Math.trunc ( x ), 21.3.2.35.
  * @builtin Math.trunc
+ * @rust
  */
 function MathTrunc(x: Value): f64 {
   return F64Trunc(ToNumber(x));
@@ -364,6 +393,7 @@ function MathImul(x: Value, y: Value): f64 {
 /**
  * Math.pow ( base, exponent ), 21.3.2.26.
  * @builtin Math.pow
+ * @rust
  */
 function MathPow(base: Value, exponent: Value): f64 {
   const b: f64 = ToNumber(base);

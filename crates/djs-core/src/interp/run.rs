@@ -119,6 +119,7 @@ pub(crate) mod late;
 #[cfg(feature = "lazy")]
 mod lazy;
 pub(crate) mod native;
+pub(crate) use fastpath::lnum;
 pub(crate) mod promise;
 mod proxy;
 mod stack;
@@ -325,6 +326,11 @@ pub(crate) struct Exec<'h> {
     /// Template flags that make `fast_call_at` decline: SLOPPY_THIS, and NATIVE when
     /// native builtins are on.
     slow_call_flags: u32,
+    /// Experiment: the `@rust` builtin whose error is being thrown (its native frame is
+    /// the innermost of the error's stack).
+    pub(super) native_callee: Option<Obj>,
+    /// Experiment: the shadow slots for the `@rust` builtin being called again.
+    pub(super) own_shadow: Option<crate::builtins::fast::Shadow>,
     /// The host refused memory (D1690): the run stops at the next instruction boundary.
     host_oom: bool,
     /// The operands of the instruction being executed, if it can be retried after a
@@ -373,12 +379,12 @@ impl<'h> Exec<'h> {
             consts: 0,
             lp: 0,
             native: 0,
-            slow_call_flags: func_flags::SLOPPY_THIS
-                | if opts.native_builtins {
-                    func_flags::NATIVE | func_flags::FAST
-                } else {
-                    0
-                },
+            // FAST always (experiment): `@rust` builtins have no bytecode, so even the
+            // bytecode backend calls them through their entries; it skips the others.
+            // NATIVE always (experiment): `@native` builtins have no bytecode body.
+            slow_call_flags: func_flags::SLOPPY_THIS | func_flags::FAST | func_flags::NATIVE,
+            native_callee: None,
+            own_shadow: None,
             host_oom: false,
             retry_len: NO_RETRY,
             retry_ops: [Value::UNDEFINED; 4],
@@ -631,6 +637,11 @@ impl<'h> Exec<'h> {
             ObjectClass::Function => {
                 let t = self.template_of(o);
                 let flags = u32::from(self.heap.arena().get::<u16>(t, FuncTemplate::FLAGS));
+                if flags & func_flags::FAST != 0
+                    && let Some(own) = self.owned(t)
+                {
+                    return self.own_call(own, base, argc, cont, ret_pc);
+                }
                 if flags & self.slow_call_flags & func_flags::FAST != 0
                     && self.try_fast_call(t, base, argc, cont, ret_pc)?
                 {
@@ -723,8 +734,8 @@ impl<'h> Exec<'h> {
             Continuation::PushResult | Continuation::ConstructResult => self.push(p),
             Continuation::DiscardResult => {}
             Continuation::Replace(slot) | Continuation::Retry(slot) => self.set(slot, p),
-            // (`%EachDense` calls plain closures only.)
-            Continuation::Each => unreachable!(),
+            // (`%EachDense` calls plain closures only; `RetryCall` calls `%ToPrimitive`.)
+            Continuation::Each | Continuation::RetryCall(_) => unreachable!(),
             // `Vm::call` of an async host function: done at once (it must not run jobs,
             // which could collect); the next `run` drains the queue.
             Continuation::Entry => {
@@ -780,6 +791,22 @@ impl<'h> Exec<'h> {
                 self.push(if v.as_object().is_some() { v } else { this })
             }
             Continuation::Replace(slot) | Continuation::Retry(slot) => self.set(slot, v),
+            Continuation::RetryCall(stash) => {
+                // The operand's primitive; the `@rust` builtin's call again (experiment).
+                let int = |ex: &Self, k: u32| ex.get(stash + k).as_int().unwrap_or(0);
+                let cont = Continuation::from_flags(int(self, 0));
+                let ret_pc = int(self, 1) as u32;
+                let argc = int(self, 2) as u32;
+                let site = int(self, 3) as u32;
+                let mut shadow = crate::builtins::fast::Shadow {
+                    mask: int(self, 4) as u32 | 1 << site,
+                    vals: [0, 1, 2, 3].map(|k| self.get(stash + 5 + k)),
+                };
+                shadow.vals[site as usize] = v;
+                self.sp = stash;
+                self.own_shadow = Some(shadow);
+                return self.call(stash - 2 - argc, argc, cont, ret_pc);
+            }
             Continuation::Entry | Continuation::Job | Continuation::Each => unreachable!(),
         }
         self.safepoint();
@@ -955,6 +982,7 @@ impl<'h> Exec<'h> {
     /// Turns a fault at `pc` of the current frame (`None`: outside any frame) into the
     /// thrown value. New errors get a `stack`.
     pub(crate) fn fault_value(&mut self, f: Fault, pc: Option<u32>) -> Value {
+        let native = self.native_callee.take();
         let (kind, msg) = match *f.0 {
             FaultKind::Throw(v) => return v,
             FaultKind::Error(k, m) => (k, m),
@@ -970,13 +998,16 @@ impl<'h> Exec<'h> {
             FaultKind::Heap(HeapError::InvalidArrayLength) => {
                 (ErrorKind::RangeError, String::from("invalid array length"))
             }
+            FaultKind::Convert(..) => (ErrorKind::InternalError, String::from("stray conversion")),
         };
         let e = match realm::new_error(self.heap, kind, &msg) {
             Ok(e) => e,
             Err(_) => return self.out_of_memory(),
         };
         if let Some(pc) = pc {
+            self.native_callee = native;
             let _ = self.set_stack(e, pc);
+            self.native_callee = None;
         }
         e
     }

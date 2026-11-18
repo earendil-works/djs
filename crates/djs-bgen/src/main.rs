@@ -54,6 +54,7 @@ fn main() -> ExitCode {
         (djs_bgen::PRELUDE_NOEMBED_PATH, &out.prelude_noembed),
         (djs_bgen::REPORT_PATH, &out.report),
         (djs_bgen::NATIVES_PATH, &out.natives),
+        (djs_bgen::LEAVES_PATH, &out.leaves),
     ];
     if check {
         let stale: Vec<&str> = files

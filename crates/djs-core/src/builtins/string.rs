@@ -71,6 +71,9 @@ pub(crate) fn substring(heap: &mut Heap, s: Str, start: u32, end: u32) -> Result
     if let Some(slice) = heap.substring_slice(s, start, end)? {
         return Ok(slice);
     }
+    if let Some(r) = heap.latin1_copy(s, start, end)? {
+        return Ok(r);
+    }
     join(heap, &mut [(s, start, end)])
 }
 
@@ -278,6 +281,27 @@ fn push_code_point(out: &mut Vec<u16>, c: u32) {
 /// language-specific rules) and Final_Sigma for lowercase.
 pub(crate) fn to_case(heap: &mut Heap, s: Str, upper: bool) -> Result<Str, Fault> {
     use crate::unicode::case;
+    // One-byte strings in one pass into the arena. Lower case stays in Latin-1; upper
+    // case does too except for µ, ß and ÿ (which take the general path).
+    if !upper {
+        let lower = |c: u8| match c {
+            b'A'..=b'Z' | 0xC0..=0xDE if c != 0xD7 => c + 0x20,
+            _ => c,
+        };
+        if let Some(r) = heap.latin1_map(s, lower)? {
+            return Ok(r);
+        }
+    } else if let Some(StrView::Latin1(b)) = heap.str_view(s)
+        && !b.iter().any(|&c| matches!(c, 0xB5 | 0xDF | 0xFF))
+    {
+        let up = |c: u8| match c {
+            b'a'..=b'z' | 0xE0..=0xFE if c != 0xF7 => c - 0x20,
+            _ => c,
+        };
+        if let Some(r) = heap.latin1_map(s, up)? {
+            return Ok(r);
+        }
+    }
     let u = units(heap, s)?;
     if u.iter().all(|&c| c < 0x80) {
         let mapped: Vec<u8> = u
@@ -335,6 +359,25 @@ fn is_trim_space(c: u16) -> bool {
 
 /// trim (where 0), trimStart (1), trimEnd (2).
 pub(crate) fn trim(heap: &mut Heap, s: Str, where_: i32) -> Result<Str, Fault> {
+    // One-byte strings: the bytes directly (JS white space and line terminators below
+    // 0x100 are 0x09-0x0D, 0x20 and 0xA0).
+    if let Some(StrView::Latin1(b)) = heap.str_view(s) {
+        let ws = |c: &u8| matches!(*c, 9..=13 | 0x20 | 0xA0);
+        let start = if where_ != 2 {
+            b.iter().position(|c| !ws(c)).unwrap_or(b.len())
+        } else {
+            0
+        };
+        let end = if where_ != 1 {
+            b.iter()
+                .rposition(|c| !ws(c))
+                .map_or(start, |i| i + 1)
+                .max(start)
+        } else {
+            b.len()
+        };
+        return substring(heap, s, start as u32, end as u32);
+    }
     let view = heap.str_view_flat(s)?;
     let n = view.len();
     let mut start = 0;
@@ -368,6 +411,43 @@ pub(crate) fn well_formed(heap: &mut Heap, s: Str, fix: bool) -> Result<Value, F
         return Ok(Value::bool(ok));
     }
     Ok(Value::string(if ok { s } else { heap.alloc_utf16(&out)? }))
+}
+
+/// `s` padded with `fill` units of `filler` cycled (StringPad's last steps). One-byte
+/// strings are written into one buffer; others repeat, cut and join.
+pub(crate) fn pad(
+    heap: &mut Heap,
+    s: Str,
+    filler: Str,
+    fill: u32,
+    at_start: bool,
+) -> Result<Str, Fault> {
+    let s = heap.contiguous(s)?;
+    let filler = heap.contiguous(filler)?;
+    let n = heap.str_len(s);
+    if fill <= 65536
+        && let (Some(StrView::Latin1(a)), Some(StrView::Latin1(f))) =
+            (heap.str_view(s), heap.str_view(filler))
+    {
+        let mut out: Vec<u8> = crate::buf::vec_with_capacity((n + fill) as usize);
+        let run = f.iter().copied().cycle().take(fill as usize);
+        if at_start {
+            out.extend(run);
+            out.extend_from_slice(a);
+        } else {
+            out.extend_from_slice(a);
+            out.extend(run);
+        }
+        return Ok(heap.alloc_latin1(&out)?);
+    }
+    let fl = heap.str_len(filler);
+    let rep = repeat(heap, filler, fill.div_ceil(fl))?;
+    let run = substring(heap, rep, 0, fill)?;
+    Ok(if at_start {
+        heap.concat(run, s)?
+    } else {
+        heap.concat(s, run)?
+    })
 }
 
 /// `s` repeated `n` times, by doubling (ropes keep it O(log n) concatenations).

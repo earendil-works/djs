@@ -62,6 +62,11 @@ pub enum Continuation {
     /// state is in the intrinsic's arguments right below the frame, then the frame is
     /// entered again for the next element, or the loop's k goes to the caller.
     Each,
+    /// Experiment (`@rust` builtins): the result is the primitive of a Rust builtin's
+    /// operand. At the absolute stack index `stash` lie the call's continuation flags, its
+    /// return pc, its argc and the operand's slot, right above the call's arguments: the
+    /// operand is replaced and the call is made again.
+    RetryCall(u32),
 }
 
 /// Continuation kind bits of `flags` (bits 0-3); the `Replace` slot is in bits 8-30.
@@ -78,6 +83,7 @@ impl Continuation {
             5 => Continuation::Job,
             6 => Continuation::Retry((flags as u32 & 0x7FFF_FFFF) >> SLOT_SHIFT),
             7 => Continuation::Each,
+            8 => Continuation::RetryCall((flags as u32 & 0x7FFF_FFFF) >> SLOT_SHIFT),
             _ => Continuation::Entry,
         }
     }
@@ -94,6 +100,7 @@ impl Continuation {
             Continuation::Job => 5,
             Continuation::Retry(slot) => 6 | ((slot << SLOT_SHIFT) & 0x7FFF_FFFF) as i32,
             Continuation::Each => 7,
+            Continuation::RetryCall(slot) => 8 | ((slot << SLOT_SHIFT) & 0x7FFF_FFFF) as i32,
         }
     }
 

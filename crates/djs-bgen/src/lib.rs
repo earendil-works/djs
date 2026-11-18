@@ -6,6 +6,7 @@ pub mod ast;
 pub mod check;
 pub mod diag;
 pub mod emit_js;
+pub mod emit_leaf;
 pub mod emit_rust;
 pub mod lexer;
 pub mod parser;
@@ -30,6 +31,8 @@ pub struct Output {
     pub report: String,
     /// `crates/djs-core/src/builtins/gen/natives.rs`: the Rust backend (0063).
     pub natives: String,
+    /// `crates/djs-core/src/builtins/gen/leaves.rs`: the leaf backend (experiment).
+    pub leaves: String,
 }
 
 pub const PRELUDE_PATH: &str = "gen/prelude.js";
@@ -43,6 +46,7 @@ pub const EMBED_ONLY: &str = "// @embed-only";
 pub const REPORT_PATH: &str = "gen/resume-points.txt";
 /// Relative to the builtins directory.
 pub const NATIVES_PATH: &str = "../crates/djs-core/src/builtins/gen/natives.rs";
+pub const LEAVES_PATH: &str = "../crates/djs-core/src/builtins/gen/leaves.rs";
 
 /// Compiles in-memory sources: `intrinsics` is intrinsics.d.ts, `modules` are
 /// (name, text) pairs of builtin files in output order. Errors are rendered.
@@ -103,6 +107,7 @@ pub fn compile(intrinsics: (&str, &str), modules: &[(String, String)]) -> Result
         prelude_noembed: emit_js::emit(&program, &sources, &embed_only, false),
         report: analysis::report(&program, &analysis, &sources),
         natives,
+        leaves: emit_leaf::emit(&program)?,
     })
 }
 

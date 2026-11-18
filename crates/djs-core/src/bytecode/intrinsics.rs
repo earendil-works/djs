@@ -215,6 +215,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("StrIsWellFormed", L, 1, false),
     i("StrToWellFormed", L, 1, false),
     i("StrRepeat", L, 2, false),
+    i("StrPad", L, 4, false),
     i("StrFromCodeUnits", L, 1, false),
     i("StrFromCodePoints", L, 1, false),
     i("StrNormalize", L, 2, false),

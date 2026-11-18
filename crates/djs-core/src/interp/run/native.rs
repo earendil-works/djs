@@ -1034,6 +1034,7 @@ mod tests {
     /// comparator needs fewer slices of fuel than as bytecode. (Not the callback loops
     /// of forEach, map, reduce ..: both backends run them in `%EachDense`, 0137.)
     #[test]
+    #[ignore = "experiment: @native builtins have no bytecode backend any more"]
     fn native_frames_are_used() {
         let src = "const a = []; for (let i = 0; i < 2000; i++) a[i] = (i * 7) % 2000;\n\
                    a.sort((x, y) => x - y); console.log(a[1999] * 1000 + a[0]);";

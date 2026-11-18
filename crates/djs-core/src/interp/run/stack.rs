@@ -87,6 +87,13 @@ impl Exec<'_> {
         if !self.has_frame() || out.len() as u32 >= limit {
             return out;
         }
+        // A `@rust` builtin that threw (experiment): its frame, as a bytecode one's.
+        if let Some(f) = self.native_callee
+            && !skip_prelude
+            && below.is_none()
+        {
+            out.push_out(self.native_frame(f));
+        }
         let prelude = intrinsic(self.heap, Intrinsic::PreludeScript).as_internal();
         let (mut bp, mut hp, mut pc) = (self.bp, self.hp, pc);
         loop {
@@ -162,6 +169,20 @@ impl Exec<'_> {
                 });
             }
             let cont = Continuation::from_flags(flags);
+            // A `@rust` builtin converting an operand (experiment): its frame lies
+            // between this one and the caller.
+            if let Continuation::RetryCall(stash) = cont {
+                let argc = self.get(stash + 2).as_int().unwrap_or(0) as u32;
+                if let Some(g) = self.get(stash - 2 - argc).as_object() {
+                    let skipping = below.is_some();
+                    if below == Some(g) {
+                        below = None;
+                    }
+                    if !skip_prelude && !skipping && (out.len() as u32) < limit {
+                        out.push_out(self.native_frame(g));
+                    }
+                }
+            }
             if cont.is_bottom() || out.len() as u32 >= limit {
                 break;
             }
@@ -180,6 +201,25 @@ impl Exec<'_> {
             out.clear();
         }
         out
+    }
+
+    /// `at name (native)` for the builtin function `f`.
+    fn native_frame(&self, f: Obj) -> TraceFrame {
+        let name = self
+            .heap
+            .get_own_property(f, crate::heap::atoms::NAME)
+            .and_then(|p| p.value())
+            .and_then(|v| v.as_string())
+            .map(|s| self.heap.str_to_string(s))
+            .filter(|s| !s.is_empty());
+        TraceFrame {
+            func: Some(f),
+            name,
+            file: None,
+            pos: None,
+            native: true,
+            construct: false,
+        }
     }
 
     /// The default `stack` string: one `    at name (file:line:col)` line per frame.

@@ -123,6 +123,9 @@ pub struct Builtin {
     /// `@frame`: keeps a frame of its own, never inlined into its callers (0230): the
     /// engine looks for it on the stack.
     pub frame: bool,
+    /// `@rust` (experiment): implemented only in Rust (an owned entry of
+    /// `builtins/fast.rs`); the prelude keeps an empty function for its object.
+    pub rust: bool,
 }
 
 /// A checked program: every name resolved and every function type-correct.
@@ -154,6 +157,7 @@ const BUILTIN_TAGS: &[&str] = &[
     "fast",
     "slim-omit",
     "frame",
+    "rust",
 ];
 
 pub fn check(decls: Declarations, modules: Vec<Module>) -> Result<Program, Vec<Diagnostic>> {
@@ -339,6 +343,7 @@ fn builtin_info(
         fast: false,
         slim_omit: false,
         frame: false,
+        rust: false,
     };
     let mut length = None;
     let mut parent = None;
@@ -408,6 +413,10 @@ fn builtin_info(
             }
             "native" => b.native = true,
             "fast" => b.fast = true,
+            "rust" => {
+                b.rust = true;
+                b.fast = true;
+            }
             "slim-omit" => b.slim_omit = true,
             "frame" => b.frame = true,
             "intrinsic" => b.intrinsic = true,

@@ -594,6 +594,8 @@ declare function StrIsWellFormed(s: Str): boolean;
 declare function StrToWellFormed(s: Str): Str;
 /** s repeated n times (an integer ≥ 0; RangeError past the string length limit). @leaf */
 declare function StrRepeat(s: Str, n: f64): Str;
+/** s padded to its length + fillLen with the non-empty filler cycled, before s or after it (generated builtins only). @leaf */
+declare function StrPad(s: Str, filler: Str, fillLen: f64, atStart: boolean): Str;
 /** A string of the code units ToUint16(n) of the Numbers in a dense array. @leaf */
 declare function StrFromCodeUnits(list: Obj): Str;
 /** A string of the (valid) code points in a dense array. @leaf */

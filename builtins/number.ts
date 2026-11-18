@@ -35,6 +35,7 @@ function ThisNumberValue(value: Value): f64 {
  * Number.prototype.toString ( [ radix ] ), 21.1.3.6.
  * @builtin Number.prototype.toString
  * @length 1
+ * @rust
  */
 function NumberPrototypeToString(this: Value, radix?: Value): Str {
   const x: f64 = ThisNumberValue(this);
@@ -65,6 +66,7 @@ function NumberPrototypeValueOf(this: Value): f64 {
  * Number.prototype.toFixed ( fractionDigits ), 21.1.3.3.
  * @builtin Number.prototype.toFixed
  * @fast
+ * @rust
  */
 function NumberPrototypeToFixed(this: Value, fractionDigits: Value): Str {
   const x: f64 = ThisNumberValue(this);
@@ -113,6 +115,7 @@ function NumberIsFinite(number: Value): boolean {
  * Number.isInteger ( number ), 21.1.2.3.
  * @builtin Number.isInteger
  * @fast
+ * @rust
  */
 function NumberIsInteger(number: Value): boolean {
   if (!IsNumber(number)) {
@@ -214,6 +217,7 @@ function NumberPositiveInfinity(): f64 {
  * parseFloat ( string ), 19.2.4 (also Number.parseFloat).
  * @builtin globalThis.parseFloat
  * @builtin Number.parseFloat
+ * @rust
  */
 function GlobalParseFloat(string: Value): f64 {
   return StringParseFloat(ToString(string));
@@ -223,6 +227,7 @@ function GlobalParseFloat(string: Value): f64 {
  * parseInt ( string, radix ), 19.2.5 (also Number.parseInt).
  * @builtin globalThis.parseInt
  * @builtin Number.parseInt
+ * @rust
  */
 function GlobalParseInt(string: Value, radix: Value): f64 {
   const s: Str = ToString(string);

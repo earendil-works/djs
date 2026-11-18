@@ -519,6 +519,47 @@ impl Heap {
     }
 
     /// A string from Latin-1 bytes (each byte is one code unit).
+    /// `s[a .. b)` of a flat one-byte string, as a new flat string copied within the arena
+    /// once; `None` if `s` is not a flat one-byte cell.
+    pub(crate) fn latin1_copy(&mut self, s: Str, a: u32, b: u32) -> Result<Option<Str>, HeapError> {
+        if self.arena().get(s.0, Header::KIND) != CellKind::Str8 as u8 {
+            return Ok(None);
+        }
+        let dst = self.alloc_flat(b - a, false)?;
+        self.arena_mut()
+            .copy_within(s.0 + Str8::DATA.offset + a, b - a, dst + Str8::DATA.offset);
+        Ok(Some(Str(dst)))
+    }
+
+    /// A flat one-byte string with every byte mapped by `f` (`s` itself if none changes);
+    /// `None` if `s` is not a flat one-byte cell.
+    pub(crate) fn latin1_map(
+        &mut self,
+        s: Str,
+        f: impl Fn(u8) -> u8,
+    ) -> Result<Option<Str>, HeapError> {
+        if self.arena().get(s.0, Header::KIND) != CellKind::Str8 as u8 {
+            return Ok(None);
+        }
+        let len = self.str_len(s);
+        let data = s.0 + Str8::DATA.offset;
+        let Some(first) = self
+            .arena()
+            .slice(data, len)
+            .iter()
+            .position(|&c| f(c) != c)
+        else {
+            return Ok(Some(s));
+        };
+        let dst = self.alloc_flat(len, false)? + Str8::DATA.offset;
+        let a = self.arena_mut();
+        a.copy_within(data, len, dst);
+        for c in &mut a.slice_mut(dst, len)[first..] {
+            *c = f(*c);
+        }
+        Ok(Some(Str(dst - Str8::DATA.offset)))
+    }
+
     pub fn alloc_latin1(&mut self, data: &[u8]) -> Result<Str, HeapError> {
         let len = u32::try_from(data.len()).map_err(|_| HeapError::StringTooLong)?;
         if len > MAX_LEN {

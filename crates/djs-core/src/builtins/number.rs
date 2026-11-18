@@ -22,6 +22,8 @@ fn saturate(n: f64) -> i32 {
 pub(crate) fn format(heap: &mut Heap, op: u8, x: f64, arg: Value) -> Result<Str, Fault> {
     let digits = arg.as_number().map(saturate);
     let r = match op {
+        // Radix 10 without the radix path's large buffer.
+        0 if digits.unwrap_or(10) == 10 => Ok(heap.alloc_latin1(num::to_string(x).as_bytes())),
         0 => num::to_string_radix(x, digits.unwrap_or(10)).map(|s| heap.alloc_latin1(s.as_bytes())),
         1 => num::to_fixed(x, digits.unwrap_or(0)).map(|s| heap.alloc_latin1(s.as_bytes())),
         2 => num::to_exponential(x, digits).map(|s| heap.alloc_latin1(s.as_bytes())),
