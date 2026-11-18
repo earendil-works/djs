@@ -114,12 +114,7 @@ pub fn engine(r: &mut Runner) {
     // skipped with the reason.
     engines.push(("djs", Box::new(Djs::default())));
     // The same with every builtin as bytecode (0063): what the @native builtins buy.
-    engines.push((
-        "djs-bytecode",
-        Box::new(Djs {
-            ..Djs::default()
-        }),
-    ));
+    engines.push(("djs-bytecode", Box::new(Djs { ..Djs::default() })));
     let scripts = match load_scripts(&root.join("tests/bench")) {
         Ok(s) => s,
         Err(e) => return r.skip("engine", e),

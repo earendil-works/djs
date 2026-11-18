@@ -252,7 +252,12 @@ impl Exec<'_> {
                     // caller holds heap values in Rust locals.
                     _ if e.is_out_of_memory() && !shadow.collected && !self.host_oom => {
                         self.heap.request_collect();
-                        (COLLECT_SITE, super::intrinsics::TO_PRIMITIVE, Value::UNDEFINED, Value::UNDEFINED)
+                        (
+                            COLLECT_SITE,
+                            super::intrinsics::TO_PRIMITIVE,
+                            Value::UNDEFINED,
+                            Value::UNDEFINED,
+                        )
                     }
                     _ => {
                         self.native_callee = self.get(base).as_object();
@@ -299,6 +304,14 @@ impl Exec<'_> {
             return Ok(v);
         }
         self.n_leaf(id, &a[..n as usize])
+    }
+
+    /// A string literal of a generated builtin: its atom (looked up, not allocated per
+    /// call; bytecode has its literals in the constant pool).
+    #[inline(never)]
+    pub(crate) fn l_str(&mut self, s: &'static str) -> Result<Value, Fault> {
+        let atom = self.heap.atom_str(s)?;
+        Ok(self.heap.atom_to_value(atom)?)
     }
 
     /// An error with a literal message, thrown by a generated builtin.

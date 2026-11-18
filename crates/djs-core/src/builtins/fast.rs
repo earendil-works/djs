@@ -243,7 +243,6 @@ fn int_arg(heap: &mut Heap, v: Value) -> Result<Option<f64>, Fault> {
     Ok(num(heap, v)?.map(integer))
 }
 
-
 /// RelativeIndex(v, len, dflt) of array.ts.
 fn relative(heap: &mut Heap, v: Value, len: f64, dflt: f64) -> Result<Option<f64>, Fault> {
     if v.is_undefined() {
@@ -258,7 +257,6 @@ fn relative(heap: &mut Heap, v: Value, len: f64, dflt: f64) -> Result<Option<f64
         rel.min(len)
     }))
 }
-
 
 fn some_str(s: Str) -> Fast {
     Ok(Some(Value::string(s)))
@@ -292,8 +290,6 @@ fn to_property_key(heap: &mut Heap, _: Value, args: &[Value]) -> Fast {
 }
 
 // ---- String --------------------------------------------------------------------------
-
-
 
 fn new_array(heap: &mut Heap, values: &[Value]) -> Fast {
     let proto = realm::intrinsic_obj(heap, Intrinsic::ArrayProto);

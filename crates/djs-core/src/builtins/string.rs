@@ -412,17 +412,25 @@ pub(crate) fn pad(
         && let (Some(StrView::Latin1(a)), Some(StrView::Latin1(f))) =
             (heap.str_view(s), heap.str_view(filler))
     {
-        let total = (n + fill) as usize;
-        let mut out: Vec<u8> = crate::buf::vec_with_capacity(total);
-        if !at_start {
-            out.extend_from_slice(a);
-        }
-        while out.len() < total - if at_start { a.len() } else { 0 } {
-            let room = total - if at_start { a.len() } else { 0 } - out.len();
-            out.extend_from_slice(&f[..f.len().min(room)]);
-        }
+        let mut out: Vec<u8> = crate::buf::vec_with_capacity((n + fill) as usize);
+        let run = |out: &mut Vec<u8>| {
+            if let [c] = f {
+                out.resize(out.len() + fill as usize, *c);
+            } else {
+                let mut left = fill as usize;
+                while left > 0 {
+                    let k = left.min(f.len());
+                    out.extend_from_slice(&f[..k]);
+                    left -= k;
+                }
+            }
+        };
         if at_start {
+            run(&mut out);
             out.extend_from_slice(a);
+        } else {
+            out.extend_from_slice(a);
+            run(&mut out);
         }
         return Ok(heap.alloc_latin1(&out)?);
     }

@@ -373,7 +373,7 @@ impl<'a> E<'a> {
             ExprKind::Num(v, _) => (self.num_lit(format!("{v:?}")), Rt::Num),
             ExprKind::Str(units) => {
                 let s = rust_str(units).ok_or("string literal")?;
-                (format!("ex.n_str({s})?"), Rt::Val)
+                (format!("ex.l_str({s})?"), Rt::Val)
             }
             ExprKind::Paren(x) => self.expr(x)?,
             ExprKind::NewTarget => ("Value::UNDEFINED".into(), Rt::Val),
@@ -688,7 +688,7 @@ impl<'a> E<'a> {
             self.site(
                 "ToPrimitive",
                 v,
-                format!("ex.n_str({hint})?"),
+                format!("ex.l_str({hint})?"),
                 Some("a.as_object().is_none()"),
             ),
             Rt::Val,
@@ -704,7 +704,12 @@ impl<'a> E<'a> {
         let (kc, kr) = self.expr(key)?;
         self.consts.insert("GetSite".into());
         Ok((
-            self.site("GetSite", conv(oc, or, Rt::Val), conv(kc, kr, Rt::Val), None),
+            self.site(
+                "GetSite",
+                conv(oc, or, Rt::Val),
+                conv(kc, kr, Rt::Val),
+                None,
+            ),
             Rt::Val,
         ))
     }
