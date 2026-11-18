@@ -1167,6 +1167,12 @@ impl Heap {
         if self.arena().get(s.0, Header::KIND) != CellKind::Rope as u8 {
             return Ok(s);
         }
+        self.contiguous_rope(s)
+    }
+
+    /// [`Heap::contiguous`] of a rope, out of line so that the flat case stays small.
+    #[inline(never)]
+    fn contiguous_rope(&mut self, s: Str) -> Result<Str, HeapError> {
         // A rope flattened before (a string built once and read in a loop): its flat copy.
         if self.cell_flags(s.0) & flags::ROPE_FLATTENED != 0 {
             return Ok(Str(self.arena().get(s.0, Rope::LEFT).0));

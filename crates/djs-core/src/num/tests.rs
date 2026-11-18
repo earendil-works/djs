@@ -906,3 +906,52 @@ fn narrowed_units_parse_the_same() {
         }
     }
 }
+
+/// toFixed's 128-bit path (`fixed_small`: |x| < 2^53, up to 22 digits) against the
+/// reference, on the values scripts format: quotients, money-like decimals, exact
+/// halves at every digit count (the rounding direction), and values near 2^53.
+#[test]
+fn to_fixed_small_path_matches_reference() {
+    let mut rng = Rng(0x0f1e_2d3c_4b5a_6978);
+    let mut check = |x: f64, f: i32| {
+        assert_eq!(
+            to_fixed(x, f).unwrap().as_str(),
+            ref_to_fixed(x, f as usize),
+            "{x:e}.toFixed({f})"
+        );
+    };
+    for _ in 0..40_000 {
+        let f = rng.below(23) as i32;
+        let n = rng.below(1 << 20) as f64;
+        let d = (rng.below(1000) + 1) as f64;
+        check(n / d, f);
+        check(-n / d, f);
+        // An exact half at f digits: k + 0.5 scaled by 10^-f, as a double.
+        let k = rng.below(1 << 30) as f64;
+        check((k + 0.5) / 10f64.powi(f), f);
+        check((k * 2.0 + 1.0) / 2f64.powi(rng.below(60) as i32), f);
+        check(9007199254740991.0 - rng.below(1000) as f64 - 0.5, f);
+        check(f64::from_bits(rng.next() % 0x3FF0_0000_0000_0000), f);
+    }
+}
+
+#[test]
+fn u32_decimal_digits() {
+    let mut buf = [0u8; 10];
+    for n in [
+        0,
+        1,
+        9,
+        10,
+        99,
+        100,
+        4_294_967_295,
+        1_000_000_000,
+        123_456_789,
+    ] {
+        assert_eq!(
+            core::str::from_utf8(super::u32_decimal(n, &mut buf)).unwrap(),
+            alloc::format!("{n}")
+        );
+    }
+}
