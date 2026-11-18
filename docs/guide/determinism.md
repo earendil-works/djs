@@ -204,10 +204,10 @@ Some things are deliberately outside the guarantee:
 - **Weak references in the default mode.** When a `WeakRef`'s target dies depends on
   when collections run, and collections the host requests or a smaller heap cap change
   that. Deterministic mode makes them strong or absent for this reason.
-- **Fuel across backends.** A builtin compiled to Rust charges fuel per loop iteration
-  and call, and the same builtin as bytecode charges per instruction. Results are the
-  same, fuel counts are not, so the backend is part of the engine's identity.
-  djs-wasm always uses the Rust backend.
+- **Fuel of builtins in Rust.** A builtin compiled to Rust charges fuel per loop
+  iteration and call, or a flat amount per call, where bytecode charges per instruction.
+  Which builtins run as Rust is part of the build, so a different build may spend
+  different fuel on the same script.
 - **Other builds.** Journals are tied to the build hash, which covers the engine's
   sources (its math library's included) and features: a different build may run the same
   script in a different number of steps. Images are tied only to what they depend on

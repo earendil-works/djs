@@ -18,7 +18,7 @@ The command is built from the `djs-cli` crate: `cargo run -p djs-cli -- run file
 
 ```text
 djs run [--body] [--ts] [--experimental-decorators] [--emit-decorator-metadata]
-        [--gc-stress] [--suspend-every N] [--backend native|bytecode]
+        [--gc-stress] [--suspend-every N]
         [--tools answers.json] [--bind NAME=IDENTITY]
         [--dump-after K OUT] [--dump-every-idle] [--debugger OUT] file.js
 ```
@@ -48,9 +48,8 @@ Exit codes: 0 when the run succeeds; 1 for an uncaught exception (printed as
 
 The remaining flags exercise the engine: `--gc-stress` collects garbage at every
 safepoint, `--suspend-every N` runs N fuel at a time and continues each slice in a
-fresh VM restored from the heap image, and `--backend bytecode` runs the builtins that
-are compiled to native code as bytecode instead. A script's output must not change
-under any of them.
+fresh VM restored from the heap image. A script's output must not change under either
+of them.
 
 ### The answers file
 

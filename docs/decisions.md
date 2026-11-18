@@ -12027,3 +12027,75 @@ crates/djs-embed/CHANGES.md: a patch version only adds, a minor version (0.2) ma
 and every incompatible change is listed with what to do instead, so a host reads one file
 before it moves its pin. The structs with public fields (`Limits`) stay as they are within
 0.1 (a new field would break struct literals); new options come as methods.
+
+## D3260: The leaf backend: `@rust` builtins become straight-line Rust, user code at conversion sites
+date: 2026-11-17 · by: owner · issue: 0251
+djs-bgen gets a third backend (`crates/djs-bgen/src/emit_leaf.rs`). A builtin tagged
+`@rust` compiles to one straight-line Rust function in
+`crates/djs-core/src/builtins/gen/leaves.rs`, with no frame and no state machine: helpers
+inlined (labeled blocks), leaf intrinsics called directly (the common ones typed:
+`l_math`, `l_substring`, `l_trim`, ...; the rest through `pure_leaf`). bgen refuses a
+`@rust` builtin with a loop, `try`, a rest parameter or a reentrant intrinsic other than
+`Get`, and more than four sites.
+- **Conversion sites.** User code may run only at `ToPrimitive` of an object and at
+  `Get`. There the function returns `Fault::convert(site, id, a, b)`; `Exec::own_call`
+  pushes a stash above the call's arguments (continuation, return pc, argc, site, shadow
+  mask, the key errors are thrown at, four shadow values) and calls the prelude function
+  of `id` (`%ToPrimitive`, the new `%GetSite`) with the new continuation `RetryCall`. Its
+  return puts the result in the site's shadow slot and calls the builtin again
+  (`Exec::retry_call`). Everything before a site is pure, so the replay is unobservable;
+  arguments are never replaced, so checks of the original values (`this === null`) see
+  what the spec does (the first, hand-written version replaced them and got
+  `trim.call({ toString() { return null; } })` wrong). The stack walker shows the builtin
+  as `(native)` while a site's operation runs, and an error the builtin throws itself
+  gets the builtin as innermost frame (`Exec::native_callee`).
+- **The heap cap.** A generated builtin that reaches the cap is called once more after a
+  collection: the same `RetryCall` with the no-op `%ToPrimitive(undefined)`, whose frame
+  entry is the safepoint (`Heap::request_collect`); a second failure throws.
+  `generated_builtins_collect_at_the_cap` (scripts/determinism/js/oom_generated.js).
+- **Calls.** The fast index of a `@rust` builtin follows `FAST` (`fast::leaf_of`); the
+  call instruction's decline path calls the function directly, every other call goes
+  through `own_call`. Builtins whose bodies differ only in leaf ids and number literals
+  share one function (`LeafData`): 56 builtins, 22 functions.
+- **Which builtins.** The hot ones the classifier found leaf-shaped: the unary `Math`
+  functions, `trim*`, the case functions, `slice`, `substring`, `substr`, `at`, `charAt`,
+  `charCodeAt`, `indexOf`, `lastIndexOf`, `includes`, `startsWith`, `endsWith`, `repeat`,
+  `padStart`, `padEnd`, `toFixed`, `Number.prototype.toString`, `Number.isInteger`,
+  `parseInt`, `parseFloat`, `Math.pow`, `Array.isArray`. Their hand-written `@fast`
+  entries are deleted. Each costs about 50 B gz; cold leaf-shaped builtins stay bytecode.
+- **Leaves that changed with it:** one-byte fast paths for `trim`, the case functions and
+  short substrings; radix-10 `toString` without the radix formatter's buffer; the
+  `StrPad` leaf (one buffer).
+- Wasm instructions per call, main → this (quickjs-wasi): `lastIndexOf` 6,056 → 1,616
+  (1,714), `startsWith` 8,799 → 2,193 (1,628), `toLowerCase` 4,102 → 1,548 (2,102),
+  `trim` 3,319 → 1,628 (1,640), `Math.floor` 2,072 → 1,202 (1,423), `toString` 4,503 →
+  2,165 (1,627), `padStart` 3,703 → 2,555 (2,348), `slice` 2,141 → 1,753 (1,904); plain
+  calls unchanged. Workloads (pi-like, strings, json, higher-order, arrays, ...) ±1%.
+- COMPAT_VERSION 9 (the stash convention); the leaf table's order is in RECORDS_HASH.
+
+## D3261: One implementation per builtin; the bytecode backend option is gone
+date: 2026-11-17 · by: owner · issue: 0251
+Supersedes D1635 and the backend part of D1633. A builtin with generated Rust (`@rust`,
+`@native`) has no bytecode body: the prelude keeps an empty function for its object, name
+and length. `ExecOptions::native_builtins`, `--backend` of `djs run`, djs-difftest and
+djs-test262, and the gate's bytecode-backend leg are removed; `@native` calls always take
+native frames and `@fast` entries always run. The two-backend comparison checked one
+compilation of the TS source against another; QuickJS (the corpus) and test262 check
+behavior directly. bgen's behavior test still runs every TS body in qjs
+(`Output::prelude_bodies`, not written out), so the sources of the generated builtins stay
+checked against qjs's natives. Removing the `@native` bodies saves 0.65 KB gz.
+
+## D3262: The bytecode prelude's inlining budget drops to 40 characters
+date: 2026-11-17 · by: owner · issue: 0251
+D3121's 160 bought speed for the string and `Math` builtins that now run as generated
+Rust. With them gone from the bytecode, 40 gives the smallest base image (44,758 coded
+bytes; 0 is larger, since tiny helpers inlined are smaller than their calls): about
+1.2 KB gz less than 160. Bytecode builtins that relied on it (`replace`'s helpers) are
+within 1% of before; whole workloads are unchanged.
+
+## D3263: Size of 0251; the ceilings rise
+date: 2026-11-17 · by: owner · issue: 0251
+Shipped module 426,903 → 429,693 B gz (+2,790; 1.499x quickjs-wasi, 289 B under the
+D020 budget), slim 360,594 → 363,372 (+2,778), measured against main at 0e58f62c. The
+ceilings rise by those deltas (429,767 and 363,475). The shipped module is now at the
+D020 limit: the next size increase needs an offsetting saving.

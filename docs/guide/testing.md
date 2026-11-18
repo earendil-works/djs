@@ -10,8 +10,8 @@ change must pass.
 > **In short.** test262 checks conformance against a checked-in list of known failures
 > that may only shrink (the ratchet), and the difftest corpus runs codemode scripts in
 > djs and in QuickJS and compares what a model would see. Stress modes run the same
-> cases again while suspending, restoring, collecting and dumping all the time, with the
-> other builtin backend and in wasm, and require identical results. One gate, cached by
+> cases again while suspending, restoring, collecting and dumping all the time, and in
+> wasm, and require identical results. One gate, cached by
 > each check's inputs, runs all of it before anything reaches `main`.
 
 ## The oracle
@@ -183,9 +183,6 @@ stops happen everywhere:
 - **Native and wasm**: [`scripts/determinism/native-vs-wasm.sh`](../../scripts/determinism/native-vs-wasm.sh)
   runs the same programs in a native build and in djs-wasm and compares their images and
   fuel stop for stop ([wasm32 first](goals.md#wasm32-first)).
-- **Both builtin backends**: the corpus runs again with the builtins as bytecode instead
-  of generated Rust and without the `@fast` entries ([builtins](builtins.md)), so both
-  implementations of a builtin stay equal.
 - **The unchecked heap**: the shipped modules' arena accessors skip their bounds checks,
   so that build runs the stressed corpus in release, after its accessors' assertions
   have run the end-to-end tests in debug, and a host's codemode tests run on the shipped
@@ -280,8 +277,7 @@ consists of legs, each one check:
 - the host package's tests on the djs-wasm modules, native-versus-wasm images, and the
   cross-language wire and reader checks;
 - the difftest corpus with suspension, GC stress and determinism; the plain dumps in djs
-  and node with their size; the corpus again with the bytecode backend and on the
-  unchecked-heap build;
+  and node with their size; the corpus again on the unchecked-heap build;
 - the active test262 group against its ratchet;
 - the slim build's tests, corpora and test262, against their own ratchets;
 - the size budget of the shipped modules;

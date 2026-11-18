@@ -105,6 +105,7 @@ The call instructions all end in one routine that looks at the callee's object c
 | a closure of bytecode | a frame is pushed and the loop continues at its first instruction |
 | a lazy closure | the same; its only instruction, `lazy`, compiles the body and continues in the same frame ([lazy functions](compiler.md#lazy-functions)) |
 | a builtin with a `@fast` entry | the entry runs in Rust and either completes the call or declines, and the call goes on as below |
+| a `@rust` builtin | its generated Rust function runs without a frame; at a conversion site it has the interpreter run `ToPrimitive` or `Get` in a frame and is called again ([builtins](builtins.md#rust-rust-straight-line-builtins)) |
 | a `@native` builtin | a **native frame** is pushed: a Rust state machine runs in it |
 | a bound function or a Proxy | the frame is rewritten (the target, the bound `this` and arguments, or the trap) and dispatched again |
 | a builtin closure | the frame is rewritten to call the builtin it names, with its data as `this` |
@@ -125,7 +126,7 @@ slots. When `sort` calls its comparator, it does not call it from Rust: it write
 callee's frame on top of its own, saves the state to resume at, and returns to the loop.
 The loop runs the comparator like any other closure, and its return re-enters the native
 frame at the saved state. A native builtin in the middle of its loop is therefore as
-suspendable as bytecode. [Builtins](builtins.md#two-backends-from-one-source) shows the
+suspendable as bytecode. [Builtins](builtins.md#rust-native-state-machines) shows the
 generated code.
 
 A **host function** never runs inside the loop at all. A synchronous one parks the VM:
@@ -292,8 +293,8 @@ faster loop in front of it:
   else, and any case it declines (an int overflow, an object operand), goes to the
   general path (`step_once`), which runs that one instruction after the locals have been
   written back. Some declined cases are finished on the way out instead, by one call that
-  keeps the loop's own code as small as it is: a `@fast` builtin call (with `arr.push(x)`
-  appended straight to the array), `+` of a string with a primitive, and the
+  keeps the loop's own code as small as it is: a `@fast` or `@rust` builtin call (with
+  `arr.push(x)` appended straight to the array), `+` of a string with a primitive, and the
   instructions of `new`: the construct itself, the return into the constructing frame,
   `new.target`, the class constructor checks and `super()`. A trip through `step` costs
   more than most of these instructions do, and one `new C()` meets several of them. V8
