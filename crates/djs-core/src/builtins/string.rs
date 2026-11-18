@@ -281,26 +281,9 @@ fn push_code_point(out: &mut Vec<u16>, c: u32) {
 /// language-specific rules) and Final_Sigma for lowercase.
 pub(crate) fn to_case(heap: &mut Heap, s: Str, upper: bool) -> Result<Str, Fault> {
     use crate::unicode::case;
-    // One-byte strings in one pass into the arena. Lower case stays in Latin-1; upper
-    // case does too except for µ, ß and ÿ (which take the general path).
-    if !upper {
-        let lower = |c: u8| match c {
-            b'A'..=b'Z' | 0xC0..=0xDE if c != 0xD7 => c + 0x20,
-            _ => c,
-        };
-        if let Some(r) = heap.latin1_map(s, lower)? {
-            return Ok(r);
-        }
-    } else if let Some(StrView::Latin1(b)) = heap.str_view(s)
-        && !b.iter().any(|&c| matches!(c, 0xB5 | 0xDF | 0xFF))
-    {
-        let up = |c: u8| match c {
-            b'a'..=b'z' | 0xE0..=0xFE if c != 0xF7 => c - 0x20,
-            _ => c,
-        };
-        if let Some(r) = heap.latin1_map(s, up)? {
-            return Ok(r);
-        }
+    // One-byte strings in one pass into the arena (lower case always stays one-byte).
+    if let Some(r) = heap.latin1_case(s, upper)? {
+        return Ok(r);
     }
     let u = units(heap, s)?;
     if u.iter().all(|&c| c < 0x80) {
@@ -429,14 +412,17 @@ pub(crate) fn pad(
         && let (Some(StrView::Latin1(a)), Some(StrView::Latin1(f))) =
             (heap.str_view(s), heap.str_view(filler))
     {
-        let mut out: Vec<u8> = crate::buf::vec_with_capacity((n + fill) as usize);
-        let run = f.iter().copied().cycle().take(fill as usize);
+        let total = (n + fill) as usize;
+        let mut out: Vec<u8> = crate::buf::vec_with_capacity(total);
+        if !at_start {
+            out.extend_from_slice(a);
+        }
+        while out.len() < total - if at_start { a.len() } else { 0 } {
+            let room = total - if at_start { a.len() } else { 0 } - out.len();
+            out.extend_from_slice(&f[..f.len().min(room)]);
+        }
         if at_start {
-            out.extend(run);
             out.extend_from_slice(a);
-        } else {
-            out.extend_from_slice(a);
-            out.extend(run);
         }
         return Ok(heap.alloc_latin1(&out)?);
     }

@@ -175,7 +175,7 @@ pub(crate) static LEAF_NAMES: &[&str] = &[
 fn shape_0(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     let a_arg: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
     return Ok(Value::bool(({ let a = [a_arg, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 1)? }).as_bool() == Some(true)));
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // MathAbs, MathAcos, MathAcosh, MathAsin, MathAsinh, MathAtan, MathAtanh, MathCbrt, MathCeil, MathClz32, MathCos, MathCosh, MathExp, MathExpm1, MathFloor, MathFround, MathF16round, MathLog, MathLog1p, MathLog10, MathLog2, MathRound, MathSign, MathSin, MathSinh, MathSqrt, MathTan, MathTanh, MathTrunc
@@ -187,7 +187,7 @@ fn shape_1(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Leaf
         }
         break 'b2 (ex.l_to_number(p_v_1)?);
         unreachable!() }), f64::NAN)));
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // MathPow
@@ -206,7 +206,7 @@ fn shape_2(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Leaf
         }
         break 'b5 (ex.l_to_number(p_v_4)?);
         unreachable!() })), Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 2)? })));
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // NumberPrototypeToString
@@ -215,7 +215,7 @@ fn shape_3(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Leaf
     let mut l_x_4: f64 = ('b2: { let mut p_value_1: Value = this; 
         let mut l_n_3: Value = { let a = [p_value_1, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 1)? };
         if !((l_n_3).is_number()) {
-            return Err(Fault::error(ErrorKind::TypeError, String::from("not a number")));
+            return Err(Exec::l_error(ErrorKind::TypeError, "not a number"));
         }
         break 'b2 (f64_of(l_n_3));
         unreachable!() });
@@ -231,7 +231,7 @@ fn shape_3(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Leaf
         unreachable!() });
     }
     return Ok({ let x = l_x_4; let a = lnum(l_r_5); ex.l_num_format(0, x, a)? });
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // NumberPrototypeToFixed
@@ -240,7 +240,7 @@ fn shape_4(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Leaf
     let mut l_x_4: f64 = ('b2: { let mut p_value_1: Value = this; 
         let mut l_n_3: Value = { let a = [p_value_1, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 1)? };
         if !((l_n_3).is_number()) {
-            return Err(Fault::error(ErrorKind::TypeError, String::from("not a number")));
+            return Err(Exec::l_error(ErrorKind::TypeError, "not a number"));
         }
         break 'b2 (f64_of(l_n_3));
         unreachable!() });
@@ -252,7 +252,7 @@ fn shape_4(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Leaf
         break 'b8 (ex.l_to_number(p_v_7)?);
         unreachable!() })));
         unreachable!() })); ex.l_num_format(1, x, a)? });
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // NumberIsInteger
@@ -265,7 +265,7 @@ fn shape_5(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Leaf
     return Ok(Value::bool((('b3: { let mut p_n_2: f64 = l_n_1; 
         break 'b3 ((((p_n_2 == p_n_2) && !(p_n_2 == (d.lits[1] / d.lits[2]))) && !(p_n_2 == ((-d.lits[3]) / d.lits[4]))));
         unreachable!() }) && (Exec::l_integer(l_n_1) == l_n_1))));
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // GlobalParseFloat
@@ -277,7 +277,7 @@ fn shape_6(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Leaf
         }
         break 'b2 (ex.l_to_string(p_v_1)?);
         unreachable!() }), Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 1)? })));
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // GlobalParseInt
@@ -296,7 +296,7 @@ fn shape_7(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Leaf
         }
         break 'b5 (ex.l_to_number(p_v_4)?);
         unreachable!() })), Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[0], a, 1)? })), Value::UNDEFINED]; ex.l_leaf(d.ids[1], a, 2)? })));
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // StringPrototypeAt
@@ -304,7 +304,7 @@ fn shape_8(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Leaf
     let a_index: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
     let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
-            return Err(Fault::error(ErrorKind::TypeError, String::from("null or undefined are forbidden")));
+            return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
         break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
         if (p_v_3).as_object().is_some() {
@@ -329,7 +329,7 @@ fn shape_8(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Leaf
         return Ok(Value::UNDEFINED);
     }
     return Ok({ let s = l_s_5; let a = lnum(l_k_14); let b = lnum((l_k_14 + d.lits[2])); ex.l_substring(s, a, b)? });
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // StringPrototypeCharAt
@@ -337,7 +337,7 @@ fn shape_9(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Leaf
     let a_pos: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
     let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
-            return Err(Fault::error(ErrorKind::TypeError, String::from("null or undefined are forbidden")));
+            return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
         break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
         if (p_v_3).as_object().is_some() {
@@ -360,7 +360,7 @@ fn shape_9(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Leaf
         return Ok(ex.n_str("")?);
     }
     return Ok({ let s = l_s_5; let a = lnum(l_p_10); let b = lnum((l_p_10 + d.lits[1])); ex.l_substring(s, a, b)? });
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // StringPrototypeCharCodeAt
@@ -368,7 +368,7 @@ fn shape_10(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
     let a_pos: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
     let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
-            return Err(Fault::error(ErrorKind::TypeError, String::from("null or undefined are forbidden")));
+            return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
         break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
         if (p_v_3).as_object().is_some() {
@@ -385,7 +385,7 @@ fn shape_10(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         break 'b9 (ex.l_to_number(p_v_8)?);
         unreachable!() })));
         unreachable!() }); ex.l_char_code_at(s, k)? })));
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // StringPrototypeIndexOf
@@ -394,7 +394,7 @@ fn shape_11(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
     let a_position: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
     let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
-            return Err(Fault::error(ErrorKind::TypeError, String::from("null or undefined are forbidden")));
+            return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
         break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
         if (p_v_3).as_object().is_some() {
@@ -426,7 +426,7 @@ fn shape_11(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         break 'b13 ((if (l_p_18 > p_len_12) { p_len_12 } else { l_p_18 }));
         unreachable!() });
     return Ok(lnum({ let s = l_s_5; let t = l_search_8; let f = lnum(l_start_19); ex.l_index_of(s, t, f, false)? }));
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // StringPrototypeLastIndexOf
@@ -435,7 +435,7 @@ fn shape_12(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
     let a_position: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
     let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
-            return Err(Fault::error(ErrorKind::TypeError, String::from("null or undefined are forbidden")));
+            return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
         break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
         if (p_v_3).as_object().is_some() {
@@ -480,7 +480,7 @@ fn shape_12(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         return Ok(lnum((-d.lits[2])));
     }
     return Ok(lnum({ let s = l_s_5; let t = l_search_8; let f = lnum((if (l_pos_23 < (l_len_14 - l_searchLen_26)) { l_pos_23 } else { (l_len_14 - l_searchLen_26) })); ex.l_index_of(s, t, f, true)? }));
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // StringPrototypeIncludes
@@ -489,7 +489,7 @@ fn shape_13(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
     let a_position: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
     let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
-            return Err(Fault::error(ErrorKind::TypeError, String::from("null or undefined are forbidden")));
+            return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
         break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
         if (p_v_3).as_object().is_some() {
@@ -508,7 +508,7 @@ fn shape_13(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         }
         break 'b7 (({ let a = [p_v_6, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[2], a, 1)? }).as_bool() == Some(true));
         unreachable!() }) {
-        return Err(Fault::error(ErrorKind::TypeError, String::from("regexp not supported")));
+        return Err(Exec::l_error(ErrorKind::TypeError, "regexp not supported"));
     }
     let mut l_search_11: Value = ('b10: { let mut p_v_9: Value = a_searchString; 
         if (p_v_9).as_object().is_some() {
@@ -533,7 +533,7 @@ fn shape_13(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         break 'b16 ((if (l_p_21 > p_len_15) { p_len_15 } else { l_p_21 }));
         unreachable!() });
     return Ok(Value::bool(({ let s = l_s_5; let t = l_search_11; let f = lnum(l_start_22); ex.l_index_of(s, t, f, false)? } >= d.lits[3])));
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // StringPrototypeStartsWith
@@ -542,7 +542,7 @@ fn shape_14(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
     let a_position: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
     let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
-            return Err(Fault::error(ErrorKind::TypeError, String::from("null or undefined are forbidden")));
+            return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
         break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
         if (p_v_3).as_object().is_some() {
@@ -561,7 +561,7 @@ fn shape_14(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         }
         break 'b7 (({ let a = [p_v_6, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[2], a, 1)? }).as_bool() == Some(true));
         unreachable!() }) {
-        return Err(Fault::error(ErrorKind::TypeError, String::from("regexp not supported")));
+        return Err(Exec::l_error(ErrorKind::TypeError, "regexp not supported"));
     }
     let mut l_search_11: Value = ('b10: { let mut p_v_9: Value = a_searchString; 
         if (p_v_9).as_object().is_some() {
@@ -593,7 +593,7 @@ fn shape_14(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         return Ok(Value::bool((d.lits[3] != 0.0)));
     }
     return Ok(Value::bool({ let a = { let s = l_s_5; let a = lnum(l_start_23); let b = lnum((l_start_23 + l_searchLength_26)); ex.l_substring(s, a, b)? }; let b = l_search_11; ex.n_strict_eq(a, b) }));
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // StringPrototypeEndsWith
@@ -602,7 +602,7 @@ fn shape_15(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
     let a_endPosition: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
     let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
-            return Err(Fault::error(ErrorKind::TypeError, String::from("null or undefined are forbidden")));
+            return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
         break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
         if (p_v_3).as_object().is_some() {
@@ -621,7 +621,7 @@ fn shape_15(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         }
         break 'b7 (({ let a = [p_v_6, Value::UNDEFINED, Value::UNDEFINED]; ex.l_leaf(d.ids[2], a, 1)? }).as_bool() == Some(true));
         unreachable!() }) {
-        return Err(Fault::error(ErrorKind::TypeError, String::from("regexp not supported")));
+        return Err(Exec::l_error(ErrorKind::TypeError, "regexp not supported"));
     }
     let mut l_search_11: Value = ('b10: { let mut p_v_9: Value = a_searchString; 
         if (p_v_9).as_object().is_some() {
@@ -653,7 +653,7 @@ fn shape_15(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         return Ok(Value::bool((d.lits[3] != 0.0)));
     }
     return Ok(Value::bool({ let a = { let s = l_s_5; let a = lnum((l_end_23 - l_searchLength_26)); let b = lnum(l_end_23); ex.l_substring(s, a, b)? }; let b = l_search_11; ex.n_strict_eq(a, b) }));
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // StringPrototypeSlice
@@ -662,7 +662,7 @@ fn shape_16(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
     let a_end: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
     let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
-            return Err(Fault::error(ErrorKind::TypeError, String::from("null or undefined are forbidden")));
+            return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
         break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
         if (p_v_3).as_object().is_some() {
@@ -714,7 +714,7 @@ fn shape_16(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         return Ok(ex.n_str("")?);
     }
     return Ok({ let s = l_s_5; let a = lnum(l_from_19); let b = lnum(l_to_30); ex.l_substring(s, a, b)? });
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // StringPrototypeSubstring
@@ -723,7 +723,7 @@ fn shape_17(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
     let a_end: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
     let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
-            return Err(Fault::error(ErrorKind::TypeError, String::from("null or undefined are forbidden")));
+            return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
         break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
         if (p_v_3).as_object().is_some() {
@@ -764,7 +764,7 @@ fn shape_17(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         break 'b20 ((if (l_p_25 > p_len_19) { p_len_19 } else { l_p_25 }));
         unreachable!() }) });
     return Ok((if (l_a_17 < l_b_26) { { let s = l_s_5; let a = lnum(l_a_17); let b = lnum(l_b_26); ex.l_substring(s, a, b)? } } else { { let s = l_s_5; let a = lnum(l_b_26); let b = lnum(l_a_17); ex.l_substring(s, a, b)? } }));
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // StringPrototypeRepeat
@@ -772,7 +772,7 @@ fn shape_18(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
     let a_count: Value = args.get(0).copied().unwrap_or(Value::UNDEFINED);
     let mut l_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
-            return Err(Fault::error(ErrorKind::TypeError, String::from("null or undefined are forbidden")));
+            return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
         break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
         if (p_v_3).as_object().is_some() {
@@ -790,7 +790,7 @@ fn shape_18(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         unreachable!() })));
         unreachable!() });
     if ((l_n_10 < d.lits[0]) || (l_n_10 == (d.lits[1] / d.lits[2]))) {
-        return Err(Fault::error(ErrorKind::RangeError, String::from("invalid repeat count")));
+        return Err(Exec::l_error(ErrorKind::RangeError, "invalid repeat count"));
     }
     if ((('b12: { let mut p_s_11: Value = l_s_5; 
         break 'b12 (ex.l_str_len(p_s_11));
@@ -798,7 +798,7 @@ fn shape_18(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         return Ok(ex.n_str("")?);
     }
     return Ok({ let s = l_s_5; let k = lnum(l_n_10); ex.l_repeat(s, k)? });
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // StringPrototypePadEnd, StringPrototypePadStart
@@ -807,7 +807,7 @@ fn shape_19(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
     let a_fillString: Value = args.get(1).copied().unwrap_or(Value::UNDEFINED);
     return Ok(('b9: { let mut p_s_5: Value = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
-            return Err(Fault::error(ErrorKind::TypeError, String::from("null or undefined are forbidden")));
+            return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
         break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
         if (p_v_3).as_object().is_some() {
@@ -853,14 +853,14 @@ fn shape_19(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         }
         break 'b9 ({ let s = p_s_5; let f = l_filler_23; let k = (l_intMaxLength_17 - l_stringLength_20); let a = p_atStart_8; ex.l_pad(s, f, k, a)? });
         unreachable!() }));
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // StringPrototypeToLowerCase, StringPrototypeToUpperCase, StringPrototypeToLocaleLowerCase, StringPrototypeToLocaleUpperCase
 fn shape_20(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     return Ok({ let s = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
-            return Err(Fault::error(ErrorKind::TypeError, String::from("null or undefined are forbidden")));
+            return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
         break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
         if (p_v_3).as_object().is_some() {
@@ -869,14 +869,14 @@ fn shape_20(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         break 'b4 (ex.l_to_string(p_v_3)?);
         unreachable!() }));
         unreachable!() }); let u = Value::bool((d.lits[0] != 0.0)); ex.l_case(s, u)? });
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 
 // StringPrototypeTrim, StringPrototypeTrimStart, StringPrototypeTrimEnd
 fn shape_21(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &LeafData) -> Result<Value, Fault> {
     return Ok({ let s = ('b2: { let mut p_v_1: Value = this; 
         if ((p_v_1).is_undefined() || (p_v_1).is_null()) {
-            return Err(Fault::error(ErrorKind::TypeError, String::from("null or undefined are forbidden")));
+            return Err(Exec::l_error(ErrorKind::TypeError, "null or undefined are forbidden"));
         }
         break 'b2 (('b4: { let mut p_v_3: Value = p_v_1; 
         if (p_v_3).as_object().is_some() {
@@ -885,6 +885,6 @@ fn shape_21(ex: &mut Exec<'_>, this: Value, args: &[Value], sh: &Shadow, d: &Lea
         break 'b4 (ex.l_to_string(p_v_3)?);
         unreachable!() }));
         unreachable!() }); let w = lnum(d.lits[0]); ex.l_trim(s, w)? });
-    Err(Fault::error(ErrorKind::InternalError, String::from("fell through")))
+    Err(Exec::l_error(ErrorKind::InternalError, "fell through"))
 }
 

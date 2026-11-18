@@ -786,38 +786,42 @@ impl<'h> Exec<'h> {
                 self.push(if v.as_object().is_some() { v } else { this })
             }
             Continuation::Replace(slot) | Continuation::Retry(slot) => self.set(slot, v),
-            Continuation::RetryCall(stash) => {
-                // The operand's primitive; the `@rust` builtin's call again (experiment).
-                let int = |ex: &Self, k: u32| ex.get(stash + k).as_int().unwrap_or(0);
-                let cont = Continuation::from_flags(int(self, 0));
-                let ret_pc = int(self, 1) as u32;
-                let argc = int(self, 2) as u32;
-                let site = int(self, 3) as u32;
-                let mut shadow = crate::builtins::fast::Shadow {
-                    mask: int(self, 4) as u32,
-                    vals: [0, 1, 2, 3].map(|k| self.get(stash + 6 + k)),
-                    collected: site == fastpath::COLLECT_SITE,
-                };
-                if !shadow.collected {
-                    shadow.mask |= 1 << site;
-                    shadow.vals[site as usize] = v;
-                }
-                let key = int(self, 5) as u32;
-                self.sp = stash;
-                self.own_shadow = Some(shadow);
-                // An error of the call is thrown where the first call would have thrown it.
-                return match self.call(stash - 2 - argc, argc, cont, ret_pc) {
-                    Err(f) => {
-                        self.pc = key;
-                        Ok(self.throw_fault(f, key))
-                    }
-                    r => r,
-                };
-            }
+            Continuation::RetryCall(stash) => return self.retry_call(stash, v),
             Continuation::Entry | Continuation::Job | Continuation::Each => unreachable!(),
         }
         self.safepoint();
         Ok(None)
+    }
+
+    /// A conversion site's operation returned `v` (D3260): into the generated builtin's
+    /// shadow slot, and the builtin is called again. An error of that call is thrown
+    /// where the first call would have thrown it.
+    #[inline(never)]
+    fn retry_call(&mut self, stash: u32, v: Value) -> Step {
+        let int = |ex: &Self, k: u32| ex.get(stash + k).as_int().unwrap_or(0);
+        let cont = Continuation::from_flags(int(self, 0));
+        let ret_pc = int(self, 1) as u32;
+        let argc = int(self, 2) as u32;
+        let site = int(self, 3) as u32;
+        let mut shadow = crate::builtins::fast::Shadow {
+            mask: int(self, 4) as u32,
+            vals: [0, 1, 2, 3].map(|k| self.get(stash + 6 + k)),
+            collected: site == fastpath::COLLECT_SITE,
+        };
+        if !shadow.collected {
+            shadow.mask |= 1 << site;
+            shadow.vals[site as usize] = v;
+        }
+        let key = int(self, 5) as u32;
+        self.sp = stash;
+        self.own_shadow = Some(shadow);
+        match self.call(stash - 2 - argc, argc, cont, ret_pc) {
+            Err(f) => {
+                self.pc = key;
+                Ok(self.throw_fault(f, key))
+            }
+            r => r,
+        }
     }
 
     /// The bottom frame of the entry call or of a job returned (`Ok`) or threw (`Err`):

@@ -301,6 +301,13 @@ impl Exec<'_> {
         self.n_leaf(id, &a[..n as usize])
     }
 
+    /// An error with a literal message, thrown by a generated builtin.
+    #[cold]
+    #[inline(never)]
+    pub(crate) fn l_error(kind: crate::interp::ErrorKind, msg: &'static str) -> Fault {
+        Fault::error(kind, alloc::string::String::from(msg))
+    }
+
     /// ToNumber of a primitive.
     #[inline]
     pub(crate) fn l_to_number(&mut self, v: Value) -> Result<f64, Fault> {

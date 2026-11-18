@@ -531,31 +531,38 @@ impl Heap {
         Ok(Some(Str(dst)))
     }
 
-    /// A flat one-byte string with every byte mapped by `f` (`s` itself if none changes);
-    /// `None` if `s` is not a flat one-byte cell.
-    pub(crate) fn latin1_map(
-        &mut self,
-        s: Str,
-        f: impl Fn(u8) -> u8,
-    ) -> Result<Option<Str>, HeapError> {
+    /// A flat one-byte string in lower or upper case (`s` itself if no byte changes);
+    /// `None` if `s` is not a flat one-byte cell or (upper case) has one of µ, ß and ÿ,
+    /// whose upper case is not one byte.
+    pub(crate) fn latin1_case(&mut self, s: Str, upper: bool) -> Result<Option<Str>, HeapError> {
         if self.arena().get(s.0, Header::KIND) != CellKind::Str8 as u8 {
             return Ok(None);
         }
+        // Lower: A-Z and À-Þ but ×; upper: a-z and à-þ but ÷ (the letters of each case
+        // are 0x20 apart).
+        let (lo, hi, skip, shift) = if upper {
+            (0xE0, 0xFE, 0xF7, 0u8.wrapping_sub(0x20))
+        } else {
+            (0xC0, 0xDE, 0xD7, 0x20)
+        };
+        let (alo, ahi) = if upper { (b'a', b'z') } else { (b'A', b'Z') };
+        let changes = |c: u8| (alo..=ahi).contains(&c) || ((lo..=hi).contains(&c) && c != skip);
         let len = self.str_len(s);
         let data = s.0 + Str8::DATA.offset;
-        let Some(first) = self
-            .arena()
-            .slice(data, len)
-            .iter()
-            .position(|&c| f(c) != c)
-        else {
+        let bytes = self.arena().slice(data, len);
+        if upper && bytes.iter().any(|&c| matches!(c, 0xB5 | 0xDF | 0xFF)) {
+            return Ok(None);
+        }
+        let Some(first) = bytes.iter().position(|&c| changes(c)) else {
             return Ok(Some(s));
         };
         let dst = self.alloc_flat(len, false)? + Str8::DATA.offset;
         let a = self.arena_mut();
         a.copy_within(data, len, dst);
         for c in &mut a.slice_mut(dst, len)[first..] {
-            *c = f(*c);
+            if changes(*c) {
+                *c = c.wrapping_add(shift);
+            }
         }
         Ok(Some(Str(dst - Str8::DATA.offset)))
     }

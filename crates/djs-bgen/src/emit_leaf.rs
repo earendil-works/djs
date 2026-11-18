@@ -199,7 +199,7 @@ impl<'a> E<'a> {
         }
         let body = self.stmts(&f.body.stmts, 1)?;
         Ok(format!(
-            "{pre}{body}    Err(Fault::error(ErrorKind::InternalError, String::from(\"fell through\")))\n"
+            "{pre}{body}    Err(Exec::l_error(ErrorKind::InternalError, \"fell through\"))\n"
         ))
     }
 
@@ -302,7 +302,7 @@ impl<'a> E<'a> {
                 && let ExprKind::Str(units) = &m.kind
             {
                 let s = rust_str(units).ok_or("message")?;
-                return Ok(format!("Fault::error(ErrorKind::{k}, String::from({s}))"));
+                return Ok(format!("Exec::l_error(ErrorKind::{k}, {s})"));
             }
         }
         let (c, r) = self.expr(value)?;

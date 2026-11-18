@@ -30,6 +30,8 @@ for (let i = 0; i < 300; i++) {
 console.log(acc);
 try { console.log(String.prototype.trim.call({ toString() { return null; } })); } catch (e) { console.log(e.name, e.message); }
 try { console.log(String.prototype.toUpperCase.call({ toString() { return undefined; } })); } catch (e) { console.log(e.name, e.message); }
+// Get sites (IsRegExp of startsWith, endsWith, includes).
+{
 const log = [];
 console.log("hello".startsWith("he"), "hello".endsWith("lo"), "hello".includes("ll"), "hello".startsWith("l", 2), "hello".endsWith("l", 4), "hello".includes("h", 1));
 try { "abc".startsWith(/a/); } catch (e) { console.log(e.name, e.message); console.log(e.stack); }
@@ -41,7 +43,11 @@ try { String.prototype.includes.call(null, "a"); } catch (e) { console.log(e.nam
 console.log("a\u1234b".includes("\u1234"), "".startsWith(""), "abc".endsWith("", 1), "abc".includes("c", -5));
 try { String.prototype.trim.call({ toString() { return Symbol(); } }); } catch (e) { console.log(e.name, e.message); console.log(e.stack); }
 try { Math.floor({ valueOf() { return Symbol(); } }); } catch (e) { console.log(e.name, e.message); console.log(e.stack); }
+}
+// Errors of a builtin called again after a conversion.
+{
 function f() { try { return "x".padStart({ valueOf() { return 5; } }, { toString() { return Symbol(); } }); } catch (e) { return "caught " + e.message; } }
 console.log(f());
 console.log([{ valueOf() { return Symbol(); } }].map((x) => { try { return Math.abs(x); } catch (e) { return e.message; } })[0]);
 try { [{ valueOf() { return Symbol(); } }].map(Math.abs); } catch (e) { console.log(e.message); console.log(e.stack); }
+}

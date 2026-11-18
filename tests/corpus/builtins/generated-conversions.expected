@@ -1,2 +1,42 @@
-=== throw
-SyntaxError: invalid redefinition of lexical identifier
+3 null 4 null 0 3 3 -1 -4 31 5.5
+9 valueOf
+1
+TypeError cannot convert symbol to number
+
+TypeError cannot convert bigint to number
+
+TypeError toPrimitive
+
+hi| hi |  hi| abc ABC äö SS
+42 TRUE
+obj|
+TypeError null or undefined are forbidden
+
+TypeError cannot convert symbol to string
+
+1,2,3
+floor 1 trim 0 function 7 8 1
+6
+TypeError floor is not a constructor
+a
+90790
+null
+UNDEFINED
+true true true true true false
+TypeError regexp not supported
+
+TypeError regexp not supported
+true true
+true match,str,pos
+getter
+TypeError null or undefined are forbidden
+true true true true
+TypeError cannot convert symbol to string
+
+TypeError cannot convert symbol to number
+
+caught cannot convert symbol to string
+cannot convert symbol to number
+cannot convert symbol to number
+
+=== completed

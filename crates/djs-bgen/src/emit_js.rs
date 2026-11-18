@@ -295,7 +295,7 @@ const INLINE_DEPTH: usize = 4;
 /// The longest inlined call, in characters of JS: every call site gets a copy, so only
 /// short bodies pay for themselves (0230: 160 kept most of the gain on the string and
 /// Math methods for ~1 KB gz of base image; 260 cost 1.4 KB more for little).
-const INLINE_TEXT: usize = 80;
+const INLINE_TEXT: usize = 40;
 
 fn indented(lines: Vec<String>) -> impl Iterator<Item = String> {
     lines.into_iter().map(|l| format!("  {l}"))
