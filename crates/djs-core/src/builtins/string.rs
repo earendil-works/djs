@@ -286,23 +286,6 @@ pub(crate) fn to_case(heap: &mut Heap, s: Str, upper: bool) -> Result<Str, Fault
         return Ok(r);
     }
     let u = units(heap, s)?;
-    if u.iter().all(|&c| c < 0x80) {
-        let mapped: Vec<u8> = u
-            .iter()
-            .map(|&c| {
-                let b = c as u8;
-                if upper {
-                    b.to_ascii_uppercase()
-                } else {
-                    b.to_ascii_lowercase()
-                }
-            })
-            .collect();
-        if mapped.iter().zip(&u).all(|(&m, &c)| m as u16 == c) {
-            return Ok(s);
-        }
-        return Ok(heap.alloc_latin1(&mapped)?);
-    }
     let cps = code_points_of(&u);
     let mut out = crate::buf::vec_with_capacity(u.len());
     for (k, &(_, c)) in cps.iter().enumerate() {
