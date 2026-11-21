@@ -15,6 +15,10 @@ const original = Math.floor;
 // The patch happens while the arguments are evaluated: the callee was read before.
 console.log("patch in arguments", Math.floor((Math.floor = (x) => "patched " + x, 2.5)));
 for (let i = 0; i < 3; i++) console.log("patched", all());
+// ... also while it waits for the argument.
+const waiting = (async () => Math.floor(await 9.5))();
+Math.floor = (x) => "again " + x;
+console.log(await waiting, await (async () => Math.floor(await 9.5))());
 Math.floor = original;
 console.log("restored", all());
 Math.max = function () { return "max " + (this === Math) + " " + arguments.length; };

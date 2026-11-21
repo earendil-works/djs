@@ -106,6 +106,8 @@ impl Heap {
             .set(0, Roots::FLAGS, f | cells::ROOT_PREFIX_WRITTEN);
         // Frozen builtins keep refusing writes.
         self.gate_end = self.frozen_end;
+        // The known builtins are no longer the base's (D3300).
+        crate::interp::known::unpristine(self);
     }
 
     /// For writers that checked [`Heap::frozen`] already (a frozen builtin was refused):

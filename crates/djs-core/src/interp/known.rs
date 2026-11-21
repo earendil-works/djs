@@ -1,16 +1,21 @@
 //! Known builtins (D3300): `Math.floor`, `String`, `Number.isInteger` without looking
 //! them up.
 //!
-//! [`KNOWN`] lists globals and members of theirs that scripts use all the time. The base
-//! image's build appends their values to the realm's prelude function table
-//! (`Intrinsic::PreludeFunctions`, D2440) in the list's order, and names them in
-//! `Intrinsic::KnownNames`: word 0 is the table index of the first, then one word per
-//! value, a global's name atom with [`GLOBAL`] set followed by its members' atoms. Names
-//! and atom ids are the same in every VM of a build, so what the compiler emits for a name
-//! depends on nothing a script can change, and a compile-cache replay gives the code a
-//! compile would. A heap without a realm (the dumper's recompile for a text's suspension
-//! sites, the compiler's tests) goes by the list itself and numbers the values from 0:
-//! the code has the same shape, which is all such a compile is for.
+//! [`KNOWN`] lists globals and members of theirs that scripts use all the time. A realm
+//! names them in `Intrinsic::KnownNames`: word 0 is the index their values start at in
+//! the realm's prelude function table (`Intrinsic::PreludeFunctions`, D2440), then one
+//! word per value in the list's order, a global's name atom with [`GLOBAL`] set followed
+//! by its members' atoms. Names and atom ids are the same in every VM of a build, so what
+//! the compiler emits for a name depends on nothing a script can change, and a
+//! compile-cache replay gives the code a compile would. A heap without a realm (the
+//! dumper's recompile for a text's suspension sites, the compiler's tests) goes by the
+//! list itself and numbers the values from 0: the code has the same shape, which is all
+//! such a compile is for.
+//!
+//! The values are in the table only where a change of a builtin is noticed: the base
+//! image's build appends them ([`arm`]) when the realm becomes the builtin prefix. A VM
+//! without a prefix (`Vm::new` without frozen builtins) has the names and the same code,
+//! whose `get_builtin` declines.
 //!
 //! For a reference to a listed name the compiler emits `get_builtin k` (two for a method
 //! call: the function, then the object as `this`), a jump over the ordinary lookup, and
@@ -143,57 +148,82 @@ pub(crate) fn shadowed(heap: &mut Heap, key: Atom) {
     }
 }
 
-/// Appends the known builtins' values to the prelude function table, which the prelude
-/// has filled, names them and marks their globals' bindings (`STORE_WATCHED`). A base
-/// image keeps the table in its tail: a VM shortens it.
+/// Names the known builtins (after the prelude ran): `KnownNames`. Their values are not
+/// in the table yet, so every `get_builtin` of one declines: [`arm`] adds them.
 #[cfg(djs_prelude)]
 pub(crate) fn build(heap: &mut Heap) -> Result<(), crate::heap::HeapError> {
-    use alloc::vec::Vec;
-
-    use super::realm::{self, intrinsic_obj};
-    use crate::heap::Property;
-    use crate::value::Value;
-
-    let data = |heap: &mut Heap, o, name: &[u8]| {
-        let name = core::str::from_utf8(name).expect("ASCII");
-        let key = heap.atom_str(name)?;
-        match heap.get_own_property(o, key) {
-            Some(Property::Data { value, .. }) => Ok((key, value)),
-            _ => panic!("known builtin {name}: not an own data property"),
-        }
-    };
     let Some(short) = intrinsic(heap, Intrinsic::PreludeFunctions).as_internal() else {
         return Ok(());
     };
-    let g = intrinsic_obj(heap, Intrinsic::Global);
-    let mut known: Vec<(u32, Value)> = Vec::new();
+    let words = KNOWN.iter().filter(|&&b| b == b' ' || b == b'.').count() as u32 + 2;
+    let names = heap.alloc_u32_array(words)?;
+    heap.u32_array_set(names, 0, heap.value_array_len(short));
+    let mut i = 1;
     for group in KNOWN.split(|&b| b == b' ') {
-        let mut names = group.split(|&b| b == b'.');
-        let (key, x) = data(heap, g, names.next().expect("a name"))?;
-        heap.watch(g, key);
-        known.push((key.id() | GLOBAL, x));
-        for name in names {
-            let o = x.as_object().expect("known builtin: not an object");
-            let (key, f) = data(heap, o, name)?;
-            known.push((key.id(), f));
+        let mut flag = GLOBAL;
+        for name in group.split(|&b| b == b'.') {
+            let key = heap.atom_str(core::str::from_utf8(name).expect("ASCII"))?;
+            heap.u32_array_set(names, i, key.id() | flag);
+            (i, flag) = (i + 1, 0);
         }
     }
-    let first = heap.value_array_len(short);
-    let n = first + known.len() as u32;
-    let names = heap.alloc_u32_array(known.len() as u32 + 1)?;
+    let names = crate::value::Value::internal(names);
+    super::realm::set_intrinsic(heap, Intrinsic::KnownNames, names);
+    Ok(())
+}
+
+/// Appends the known builtins' values, as they are now, to the prelude function table
+/// and marks their globals' bindings (`STORE_WATCHED`): for the base image's build, when
+/// everything there is becomes the builtin prefix, whose first write ends this
+/// ([`unpristine`]). A base image keeps the table in its tail: a VM shortens it. Nothing
+/// happens if a listed name is no longer an own data property (a host changed the realm
+/// before making it a base): the names stay, the values are never there.
+#[cfg(djs_prelude)]
+pub(crate) fn arm(heap: &mut Heap) -> Result<(), crate::heap::HeapError> {
+    use alloc::vec::Vec;
+
+    use crate::heap::Property;
+    use crate::value::Value;
+
+    let Some((short, first)) = table(heap) else {
+        return Ok(());
+    };
+    let Some(names) = intrinsic(heap, Intrinsic::KnownNames).as_internal() else {
+        return Ok(());
+    };
+    let g = super::realm::intrinsic_obj(heap, Intrinsic::Global);
+    let mut values: Vec<Value> = Vec::new();
+    let mut owner = None;
+    for i in 1..heap.u32_array_len(names) {
+        let w = heap.u32_array_get(names, i);
+        let o = if w & GLOBAL != 0 { Some(g) } else { owner };
+        let key = Atom::from_id(w & !GLOBAL);
+        let Some(Property::Data { value, .. }) = o.and_then(|o| heap.get_own_property(o, key))
+        else {
+            return Ok(());
+        };
+        if w & GLOBAL != 0 {
+            owner = value.as_object();
+        }
+        values.push(value);
+    }
+    let n = first + values.len() as u32;
     let table = heap.alloc_value_array(n)?;
-    heap.arena_mut().set(table, ValueArray::LEN, n);
-    heap.u32_array_set(names, 0, first);
-    for i in 0..first {
-        let v = heap.value_array_get(short, i);
+    for i in 0..n {
+        let v = match i.checked_sub(first) {
+            Some(k) => values[k as usize],
+            None => heap.value_array_get(short, i),
+        };
         heap.value_array_set(table, i, v);
     }
-    for (i, &(name, v)) in known.iter().enumerate() {
-        heap.u32_array_set(names, i as u32 + 1, name);
-        heap.value_array_set(table, first + i as u32, v);
+    heap.arena_mut().set(table, ValueArray::LEN, n);
+    super::realm::set_intrinsic(heap, Intrinsic::PreludeFunctions, Value::internal(table));
+    for i in 1..heap.u32_array_len(names) {
+        let w = heap.u32_array_get(names, i);
+        if w & GLOBAL != 0 {
+            heap.watch(g, Atom::from_id(w & !GLOBAL));
+        }
     }
-    realm::set_intrinsic(heap, Intrinsic::KnownNames, Value::internal(names));
-    realm::set_intrinsic(heap, Intrinsic::PreludeFunctions, Value::internal(table));
     Ok(())
 }
 
@@ -209,6 +239,8 @@ mod tests {
         let mut vm = Vm::new(VmOptions::default()).unwrap();
         let mut bare = Heap::new().unwrap();
         let (_, first) = table(vm.heap()).expect("the known builtins");
+        // (Without a prefix the values are not there.)
+        assert!(!pristine(vm.heap()));
         let mut both = |g: &str, m: Option<&str>| {
             let find = |heap: &mut Heap| {
                 let g = heap.atom_str(g).unwrap();
@@ -244,7 +276,6 @@ mod tests {
         let math = vm.heap_mut().atom_str("Math").unwrap();
         let (x, f) = lookup(vm.heap(), math, index.id()).unwrap();
         assert_eq!(x, f);
-        assert!(pristine(vm.heap()));
         // A VM from a base image has them too (its build renumbers the atoms).
         vm.prepare_base_image().unwrap();
         let mut based = Vm::from_base(vm.bytes(), VmOptions::default()).unwrap();

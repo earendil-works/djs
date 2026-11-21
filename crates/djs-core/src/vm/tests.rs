@@ -4350,6 +4350,20 @@ fn open_host_call_keeps_the_dump_s_id() {
     vm.heap().verify().unwrap();
 }
 
+/// A VM from a base image (with the builtin prefix, where the known builtins' values
+/// are, D3300) and `console.log`.
+fn based_vm(opts: VmOptions) -> Vm {
+    let mut base = Vm::new(VmOptions::default()).unwrap();
+    base.prepare_base_image().unwrap();
+    let mut vm = Vm::from_base(base.bytes(), opts).unwrap();
+    let console = vm.new_object().unwrap();
+    let log = vm.new_host_function(LOG, "log").unwrap();
+    vm.define(console, "log", log).unwrap();
+    vm.define_global("console", Value::object(console)).unwrap();
+    assert!(crate::interp::known::pristine(vm.heap()));
+    vm
+}
+
 /// Known builtins (D3300): a later script's global lexical binding shadows a known
 /// global for the functions compiled before it; the site that read the table runs the
 /// ordinary lookup from then on (once through `step`, then through its patched jump).
@@ -4357,7 +4371,7 @@ fn open_host_call_keeps_the_dump_s_id() {
 fn known_builtins_end_with_a_global_lexical() {
     use crate::interp::known::pristine;
     let (vm, out) = run_script(
-        vm(),
+        based_vm(VmOptions::default()),
         "function f(x) { return Math.floor(x) + ':' + String(x) + ':' + [x].map(Math.ceil); }\n\
          var before = [f(1.5), f(2.5), f(3.5)].join();",
     );
@@ -4376,6 +4390,7 @@ fn known_builtins_end_with_a_global_lexical() {
         "1:1.5:2,2:2.5:3,3:3.5:4 mine 1.5:1.5:up 1.5 mine 2.5:2.5:up 2.5 mine 3.5:3.5:up 3.5 mine 4.5 mine 5.5"
     );
     // A `const` of another known name, in a VM made from an image of this one.
+    let mut vm = vm;
     let opts = vm.options();
     let vm = Vm::from_bytes(vm.image().to_vec(), opts).unwrap();
     assert!(!pristine(vm.heap()));
@@ -4393,14 +4408,18 @@ fn known_builtins_with_frozen_builtins() {
         ..VmOptions::default()
     };
     let (vm, out) = run_script(
-        vm_with(frozen),
+        based_vm(frozen),
         "function f(x) { return Math.floor(x) + String(x); }\n\
+         const attempt = (g) => { try { return g(); } catch (e) { return e.name; } };\n\
          var r = [f(1.5)];\n\
-         Math.floor = () => 'no'; r.push(f(2.5));\n\
-         try { Object.defineProperty(Math, 'floor', { value: 1 }); } catch (e) { r.push(e.name); }\n\
-         r.push(delete Math.floor, f(3.5)); r.join()",
+         r.push(attempt(() => { Math.floor = () => 'no'; }), f(2.5));\n\
+         r.push(attempt(() => Object.defineProperty(Math, 'floor', { value: 1 })), f(3.5));\n\
+         r.push(attempt(() => delete Math.floor), Reflect.set(Math, 'floor', 1), f(4.5)); r.join()",
     );
-    assert_eq!(out.result, "11.5,22.5,TypeError,false,33.5");
+    assert_eq!(
+        out.result,
+        "11.5,TypeError,22.5,TypeError,33.5,TypeError,false,44.5"
+    );
     assert!(pristine(vm.heap()));
     let (vm, out) = run_script(
         vm,
@@ -4420,16 +4439,21 @@ fn known_builtins_across_suspension() {
         Math.floor = (x) => 1000; for (let i = 0; i < 40; i++) t += f(i + 0.5);\n\
         Number = { isInteger: () => true }; for (let i = 0; i < 5; i++) t += f(i + 0.5);\n\
         console.log(t);";
-    let plain = run_js(SRC);
-    assert_eq!(plain.log, ["41105"]);
+    let (_, plain) = run_script(based_vm(VmOptions::default()), SRC);
+    assert_eq!(plain.log, ["46095"]);
+    // (Without a prefix the same code takes the ordinary lookups.)
+    assert_eq!(run_js(SRC), plain);
     for fuel in [1, 7, 97] {
-        let (_, out) = finish_script(vm(), SRC, fuel, true);
+        let (_, out) = finish_script(based_vm(VmOptions::default()), SRC, fuel, true);
         assert_eq!(out, plain, "fuel {fuel}");
     }
     let stress = VmOptions {
-        gc_stress: true,
+        exec: ExecOptions {
+            gc_stress: true,
+            ..ExecOptions::default()
+        },
         ..VmOptions::default()
     };
-    let (_, out) = finish_script(vm_with(stress), SRC, 13, true);
+    let (_, out) = finish_script(based_vm(stress), SRC, 13, true);
     assert_eq!(out, plain);
 }

@@ -9,8 +9,3 @@ console.log(t, await g(2), await g(2.5));
 function* gen() { const a = Math.floor(yield 1); const b = String(yield a); return Math.max(yield b, a); }
 const it = gen();
 console.log(it.next().value, it.next(2.5).value, it.next(7).value, it.next(1).value);
-// The builtin is patched while a call waits for its argument: that call keeps the
-// function it read, the next one sees the patch.
-const waiting = (async () => Math.floor(await later(9.5)))();
-Math.floor = (x) => "patched " + x;
-console.log(await waiting, await (async () => Math.floor(await later(9.5)))());
