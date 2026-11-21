@@ -13397,3 +13397,28 @@ date: 2026-11-21 · by: pidle · issue: 0270
 - wire's `transcode` was generic over the destination unit (two ~900-byte copies); it is
   one function writing one or two bytes per unit: −763 B raw, −58 B gz (duplicates
   compress well, so merging monomorphizations frees little gzip).
+
+## D3480: localeCompare of one-byte strings by bytes, as a generated leaf
+date: 2026-11-21 · by: pgc · issue: 0277
+`locale_compare` collected both strings' units into vectors and their code points into
+two more, for NFC (D3350) and QuickJS's code-point difference. Two one-byte strings need
+neither: every unit is a code point below U+0300, which NFC leaves alone, so the result is
+the first differing byte's difference, else the sign of the length difference, read in
+place. String.prototype.localeCompare is also `@rust` now (it was bytecode). Per call
+7,250 → 1,990 wasm instructions (quickjs-wasi 3,730); sorting 8 words with it 129.9k →
+55.7k (76.3k). tests/corpus/builtins/string-compare.js checks the values against qjs.
+
+## D3481: `a + b` of two short flat one-byte strings copies twice, without the walk
+date: 2026-11-21 · by: pgc · issue: 0277
+`Heap::concat` below `ROPE_MIN_LEN` wrote two flat pieces through `write_leaves` (a split
+of the arena, a kind read and a slice per piece). Two `Str8` pieces are now copied with
+two `copy_within`s into the new cell; mixed widths and slices take the short-leaves walk.
+Per op: `'a' + i` 1,880 → 1,710, `s + t` 1,250 → 1,180, templates `${a}-${i}` 3,320 →
+3,060 and `a${i}b` 3,290 → 3,060 (QuickJS 2,000 / 1,240 / 4,210 / 3,480).
+
+## D3482: One helper for one-byte copies of contiguous strings
+date: 2026-11-21 · by: pgc · issue: 0277
+`latin1_copy` (substring of a flat cell or a slice) and `alloc_latin1_pieces` (split's
+pieces, padStart/padEnd's result) did the same copy with different checks; both are
+`Heap::latin1_piece(s, a, b, extra)` now (a flat cell from one kind read, else the
+contiguous data). Together with D3480/D3481: module −8 B gz (428,730 vs 428,738).

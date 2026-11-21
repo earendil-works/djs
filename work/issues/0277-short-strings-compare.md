@@ -1,6 +1,6 @@
 # 0277: Short concatenations, template literals, string comparison, localeCompare, startsWith/endsWith
 
-status: in-progress
+status: done
 agent: pgc
 branch: issue/0277-short-strings-compare
 depends-on: 0269, 0268
@@ -20,10 +20,10 @@ Short flat strings should concatenate in a handful of instructions: a size-class
 copy without the leaf walk; comparison by bytes when both are one-byte flat.
 
 ## Acceptance criteria
-- [ ] per-op instructions vs QuickJS 2026 before/after; workload instructions (sequential, text, json, inspect build output strings)
-- [ ] memory unchanged (codemode-memory leg, mem-perturb on strbuild)
-- [ ] size: the module has ~950 B under the ceiling shared with pidle (Set/Map, ~865 B) and pscan (~120 B): size-neutral or offsets in your own code; ask before raising
-- [ ] gate green; decisions recorded
+- [x] per-op instructions vs QuickJS 2026 before/after; workload instructions (sequential, text, json, inspect build output strings)
+- [x] memory unchanged (codemode-memory leg, mem-perturb on strbuild)
+- [x] size: the module has ~950 B under the ceiling shared with pidle (Set/Map, ~865 B) and pscan (~120 B): size-neutral or offsets in your own code; ask before raising
+- [x] gate green; decisions recorded
 
 ## Shared context (all of 0256-0260)
 The owner asked to push both memory and speed as far as they go (2026-11-21). Background,
@@ -52,7 +52,24 @@ Never weaken determinism (collection points a function of the program, D1710), s
 anywhere, images, or the unsafe rules (AGENTS.md).
 
 ## Log
+Re-measured on main a0db6b9a (wasm instr/op, quickjs-wasi in parentheses): '+' and templates
+were already at 0.8–1.0x after 0268; `s < t` 1,540 (770) 2.0x; localeCompare 7,250 (3,740)
+1.9x, sorting with it 1.7x; startsWith/endsWith/at/repeat/(i).toString 1.15–1.3x.
+- D3480 localeCompare: one-byte strings by bytes + `@rust`: 1,990 (0.53x); sort 0.73x.
+- D3481 concat of two flat one-byte strings by two copies: −7..−9% per op on '+' and templates.
+- D3482 latin1_piece (one copy helper instead of two): size offset.
+- Not mine, routed to the coordinator for 0276 (pcall): `s < t` 2.0x is the general path
+  (Lt on two strings leaves the hot loop; `str_cmp` itself is a byte compare);
+  startsWith/endsWith/at/repeat/(i).toString 1.15–1.3x are generated-leaf call overhead
+  (a no-substring intrinsic for startsWith did not move it, 0269).
+- Workloads (sequential, inspect, text, json, fanout, heavy): within noise (load 40–65).
+  codemode memory rows unchanged.
 
 ## Follow-ups
 
 ## Result
+localeCompare 3.6x faster (now 0.53x QuickJS; sorting with it 0.73x), short concatenations
+and templates 7–9% fewer instructions (0.79–1.01x QuickJS), module −8 B gz (D3480–D3482).
+String `<` (2.0x) and the leaf-call overhead of startsWith/endsWith/at/repeat/toString
+(1.15–1.3x) are 0276's (pcall). Memory unchanged. New corpus case
+builtins/string-compare.js.
