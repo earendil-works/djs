@@ -27,7 +27,7 @@ compiled-prelude = ["djs-core/prelude"]
 alloc-stats = []
 # Exports `djs_disasm` (bytecode listings) for the docs site's live examples (0113).
 # Off by default: the shipping module does not carry the disassembler.
-docs = []
+docs = ["djs-core/intrinsic-names"]
 # Exports `vm_dump` (`Vm::dump`, 0167): a VM's bindings written as JavaScript. Off by
 # default: it costs the module 58 KB gzip (D2352); the gate's debug build turns it on.
 dump = ["djs-core/dump", "djs-core/lazy", "djs-core/compile-cache", "djs-prelude/names"]

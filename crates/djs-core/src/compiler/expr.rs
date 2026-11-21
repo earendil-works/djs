@@ -1862,7 +1862,13 @@ impl Parser<'_, '_> {
         }
         let name = self.lx.text(&self.tok);
         let name = core::str::from_utf8(name).unwrap_or("");
-        let Some(id) = crate::bytecode::intrinsics::intrinsic_id(name) else {
+        // Privileged code compiles only in builds that also run the prelude source, which
+        // have the names (D3340).
+        #[cfg(djs_intrinsic_names)]
+        let id = crate::bytecode::intrinsics::intrinsic_id(name);
+        #[cfg(not(djs_intrinsic_names))]
+        let id: Option<u16> = None;
+        let Some(id) = id else {
             return syntax(
                 self.tok.start,
                 crate::text::cat!("unknown intrinsic %", name),

@@ -62,8 +62,9 @@ fn fnv(mut h: u32, bytes: &[u8]) -> u32 {
 /// adds `Vm::dump`, a reader of the heap: a run never calls it. Nor `lazy` (D2990): the base
 /// holds no lazy template (the prelude is privileged), and lazy compilation is a VM option.
 /// Nor `compile-cache` (D3040): an import makes what the compile makes. Nor `prelude`
-/// (D3094): it only decides whether a wasm build can run the prelude source. `embed`
-/// counts (D3175): its base has builtins the others leave out.
+/// (D3094): it only decides whether a wasm build can run the prelude source. Nor
+/// `intrinsic-names` (D3340): names in messages and listings. `embed` counts (D3175): its
+/// base has builtins the others leave out.
 fn features() -> Vec<String> {
     enabled_features()
         .into_iter()
@@ -77,6 +78,7 @@ fn features() -> Vec<String> {
                 && f != "lazy"
                 && f != "compile-cache"
                 && f != "prelude"
+                && f != "intrinsic-names"
         })
         .collect()
 }
@@ -103,6 +105,16 @@ fn main() {
     let wasm = std::env::var("CARGO_CFG_TARGET_ARCH").is_ok_and(|a| a == "wasm32");
     if !wasm || std::env::var_os("CARGO_FEATURE_PRELUDE").is_some() {
         println!("cargo::rustc-cfg=djs_prelude");
+    }
+    // `djs_intrinsic_names` (D3340): the intrinsics' names (8 KB of static data), which
+    // only privileged code (the prelude source), the disassembler and the registry read;
+    // elsewhere they are in messages of engine bugs, which then say `%?`.
+    println!("cargo::rustc-check-cfg=cfg(djs_intrinsic_names)");
+    if !wasm
+        || std::env::var_os("CARGO_FEATURE_PRELUDE").is_some()
+        || std::env::var_os("CARGO_FEATURE_INTRINSIC_NAMES").is_some()
+    {
+        println!("cargo::rustc-cfg=djs_intrinsic_names");
     }
     let root = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let mut files = Vec::new();

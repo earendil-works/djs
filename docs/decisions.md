@@ -12343,3 +12343,19 @@ quote a character or token share one builder (−98); `true`/`false`/`null` are 
 as one number of their bytes instead of a copy compared three times (−242). Shipped
 429,168 → 428,963 B gz (−205). Speed unchanged (stringify of an escaped 80 KB text
 within noise).
+
+## D3340: The intrinsics' names only where something reads them
+date: 2026-11-21 · by: pstart · issue: 0263
+The intrinsic name table (`NAMES` + `NAME_ENDS`, 8,152 B of static data) served three
+readers: the compiler's `%Name(...)` calls in privileged code, the disassembler and the
+builtin registry, and the messages of engine bugs ("bad argument to %X", "%X is not
+installed"). Privileged code compiles only in builds that also run the prelude source
+(`djs_prelude`: native builds and wasm with `prelude`; the shipped modules start from the
+base image, whose privileged functions are compiled already and keep no source to compile
+again); the docs module's disassembler turns the names back on through djs-core's
+`intrinsic-names` feature (an image-neutral feature, not in the build hash). Everywhere
+else (`cfg(djs_intrinsic_names)` off) the table is gone, `intrinsic_id` does not exist, a
+privileged `%Name` would be "unknown intrinsic", and those engine-bug messages say `%?`.
+The dump module keeps working: its dumper takes the base's builtin paths from
+djs-prelude's `BASE_NAMES`, made natively. Shipped module 429,050 → 424,905 B gz
+(−4,145), data segment 99,123 → 90,883 B; slim 362,423 → 358,396.

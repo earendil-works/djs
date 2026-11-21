@@ -58,6 +58,16 @@ Never weaken determinism (collection points a function of the program, D1710), s
 anywhere, images, or the unsafe rules (AGENTS.md).
 
 ## Log
+- Static data (0261's map): the 4,280 B anonymous constant is `bytecode::ops::OPS`, 214
+  `OpInfo` records of 20 B (imms slice 8, size, pops/pushes with their Option<u8>s, cost,
+  flags); essential at run time. Packing it (imms as an index into one table, the Options
+  as a byte) would save ~1.5 KB but it sits on hot paths (`OPS[op].cost`, `size`): not now.
+  The intrinsic names: D3340 (−8.2 KB data, −4.1 KB gz).
+- Compile profile (wasm keep-names, steady state, sequential+inspect bodies): parse 38%,
+  `finish_unit` 38% (emit_function 28%, alloc_template_in 9% of which the stack walk 8%),
+  lexer 8%, dlmalloc+Vec growth ~10%. Natively (samply, cbench in work/scratch/0263): the same
+  shape, malloc 22% there. A compile allocates 425-605 times (alloc-stats module), peak
+  ~40 KB above the arena.
 
 ## Follow-ups
 

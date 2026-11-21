@@ -564,6 +564,7 @@ static SIGNATURES: [u8; COUNT] = {
     t
 };
 
+#[cfg(djs_intrinsic_names)]
 const NAMES_LEN: usize = {
     let mut n = 0;
     let mut k = 0;
@@ -573,9 +574,11 @@ const NAMES_LEN: usize = {
     }
     n
 };
+#[cfg(djs_intrinsic_names)]
 const _: () = assert!(NAMES_LEN <= u16::MAX as usize);
 
 /// All names, back to back.
+#[cfg(djs_intrinsic_names)]
 static NAMES: [u8; NAMES_LEN] = {
     let mut t = [0u8; NAMES_LEN];
     let (mut k, mut at) = (0, 0);
@@ -593,6 +596,7 @@ static NAMES: [u8; NAMES_LEN] = {
 };
 
 /// Where each name ends in [`NAMES`].
+#[cfg(djs_intrinsic_names)]
 static NAME_ENDS: [u16; COUNT] = {
     let mut t = [0u16; COUNT];
     let (mut k, mut at) = (0, 0);
@@ -636,7 +640,16 @@ pub fn params(id: u32) -> u32 {
     SIGNATURES.get(id as usize).map_or(0, |b| (b & 31) as u32)
 }
 
+/// The name of the intrinsic with id `id` ("?" for an unknown id, and for every id in
+/// builds without the names, D3340), for messages.
+#[cfg(not(djs_intrinsic_names))]
+pub fn intrinsic_name(id: u16) -> &'static str {
+    let _ = id;
+    "?"
+}
+
 /// The name of the intrinsic with id `id` ("?" for an unknown id), for messages.
+#[cfg(djs_intrinsic_names)]
 pub fn intrinsic_name(id: u16) -> &'static str {
     let i = id as usize;
     let end = NAME_ENDS.get(i).map_or(0, |&e| e as usize);
@@ -667,6 +680,7 @@ macro_rules! intrinsic_id_of {
 pub(crate) use intrinsic_id_of;
 
 /// The id of the intrinsic `name`.
+#[cfg(djs_intrinsic_names)]
 pub fn intrinsic_id(name: &str) -> Option<u16> {
     // Compares the bytes of each name in place: going through `intrinsic_name` (a UTF-8
     // check per name) made compiling the builtins' and the prelude's source 1.6x slower
