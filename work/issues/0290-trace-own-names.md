@@ -1,6 +1,6 @@
 # 0290: Stack traces name a frame by the function's own `name`; continuations take their origin's (GitHub PR #2)
 
-status: open
+status: in-progress
 agent: pcall
 branch: issue/0290-trace-own-names
 depends-on: -
