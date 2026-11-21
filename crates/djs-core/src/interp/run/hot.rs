@@ -65,6 +65,7 @@ const GETTER: u8 = 255;
 const _: () = assert!(crate::bytecode::OP_COUNT < GETTER as usize);
 const TO_STRING: u8 = Op::ToString as u8;
 const CONCAT: u8 = Op::Concat as u8;
+const TYPEOF: u8 = Op::Typeof as u8;
 
 /// The flags word of a `PushResult` frame (`fast_return`'s condition).
 const PUSH_RESULT: i32 = Continuation::PushResult.to_flags();
@@ -199,6 +200,9 @@ const _: () = assert!(
         && same_step(Op::StrictEq, Op::StrictNe)
         && same_step(Op::GetField, Op::GetMethod)
         && same_step(Op::JumpIfTrue, Op::JumpIfFalse)
+        && same_step(Op::Lt, Op::Le)
+        && same_step(Op::Lt, Op::Gt)
+        && same_step(Op::Lt, Op::Ge)
         && same_step(Op::PutField, Op::DefineField)
         && fuel_of(Op::Call) == fuel_of(Op::Call0)
         && fuel_of(Op::CallIntrinsic) == fuel_of(Op::CallIntrinsic8)
@@ -507,6 +511,39 @@ impl Exec<'_> {
         self.heap.get_element_fast(obj, i)
     }
 
+    /// `typeof v` for the loop, as `step` computes it: the string of the type's atom
+    /// (`None` if it had to be made and the heap is full).
+    #[inline(never)]
+    fn typeof_hit(&mut self, v: Value) -> Option<Value> {
+        let atom = conv::typeof_atom(self.heap, v);
+        self.heap.atom_string(atom).ok().map(Value::string)
+    }
+
+    /// A declined `<`, `<=`, `>` or `>=` of two strings (`decline_fast`, D3472): the
+    /// code unit order, as `Exec::compare` asks `conv::less_than`. False, with nothing
+    /// changed, for other operands.
+    fn decline_compare(&mut self, op: u8) -> bool {
+        let (a, c) = (self.get(self.sp - 2), self.get(self.sp - 1));
+        let (Some(x), Some(y)) = (a.as_string(), c.as_string()) else {
+            return false;
+        };
+        use core::cmp::Ordering::{Greater, Less};
+        let ord = self.heap.str_cmp(x, y);
+        let r = match op {
+            fast::LT => ord == Less,
+            fast::LE => ord != Greater,
+            fast::GT => ord == Greater,
+            _ => ord != Less,
+        };
+        self.sp -= 1;
+        self.set(self.sp - 1, Value::bool(r));
+        // (The four cost and advance the same: the table's check.)
+        let info = &OPS[Op::Lt as usize];
+        self.fuel -= info.cost.fuel() as i64;
+        self.pc += info.size as u32;
+        true
+    }
+
     /// A declined `to_string` or `concat` of a template literal (`Exec::concat_op`), in
     /// `decline_fast`. False, with nothing changed, when an operand is an object
     /// (ToPrimitive runs user code) or when it fails (a symbol, the heap cap): `step`
@@ -666,6 +703,9 @@ impl Exec<'_> {
         }
         if op == IN {
             return self.decline_in();
+        }
+        if matches!(op, fast::LT | fast::LE | fast::GT | fast::GE) {
+            return self.decline_compare(op);
         }
         if matches!(op, TO_STRING | CONCAT) {
             return self.decline_concat(op);
@@ -1178,6 +1218,15 @@ impl Exec<'_> {
                                 break Exit::Decline(op);
                             }
                             next!(Op::ToNumeric);
+                        }
+                        // `typeof x`: one of eight strings, each its atom's (D3472).
+                        TYPEOF => {
+                            let v = top!(0);
+                            let Some(s) = heap_call!(self.typeof_hit(v)) else {
+                                break Exit::Decline(TYPEOF);
+                            };
+                            st(b, slot!(sp - 1), s);
+                            next!(Op::Typeof);
                         }
                         // A template literal's `${s}` with a string: nothing to do.
                         TO_STRING => {
