@@ -12968,4 +12968,8 @@ instructions of `new RegExp`): 41.6K → 38.8K per pattern (QuickJS 22.1K), +225
 Measured and not kept: keeping one-term alternatives out of a `Vec` (another −3.5%, +200
 B), a bulk copy of the program into its cell (nothing), and for JSON the scan recording
 escape positions for the writer (one-layer escape-dense text −13% time, double-encoded
-text +4%, workloads within noise, +525 B).
+text +4%, workloads within noise, +525 B). Also measured, not kept: run-time `new RegExp`
+compiles in djs-wasm's compile zone through a host switch on the heap (another −8% of the
+create path, +383 B, most of it from the new heap field shifting offsets in every VM
+function), and a one-byte escaped-string scan over raw positions (escape-dense parse −4%
+instructions, workloads within noise, +181 B); patches in the issue's scratch.

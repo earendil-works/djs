@@ -1,6 +1,6 @@
 # 0267: Regexp compile speed; escape-dense JSON
 
-status: in-progress
+status: done
 agent: pscan
 branch: issue/0267-regexp-compile-json-escapes
 depends-on: 0264
@@ -73,5 +73,27 @@ anywhere, images, or the unsafe rules (AGENTS.md).
   (work/scratch/0267/json-escape-positions.patch).
 
 ## Follow-ups
+- Regexp compile at QuickJS speed needs a single-pass compiler (no tree) or an
+  allocation-free tree: 1-2 days and 1-2 KB (the coordinator declined for now).
+- Run-time compiles in the compile zone: a host switch costs ~380 B because a new Heap field
+  moves offsets in every VM function; a cheaper carrier (a field already passed, or the
+  zone keyed by something djs-wasm sees) would make it worth −8% of `new RegExp`.
 
 ## Result
+Landed (D3380): regexp literal runs are one parser node (same matcher program), the
+compiler's buffer sized from the pattern. Distinct-pattern compile (wasm instructions of
+`new RegExp`, 16 codemode-like patterns): 41.6K → 38.8K per pattern (−7%; QuickJS 22.1K,
+1.88x → 1.75x); size +253 B gz (427,531 → 427,784). Workloads (instructions, n=3): no
+change beyond noise (±3-5% on small bodies). test262 built-ins/RegExp, the regexp unit
+tests (new: literal runs forward, backward, case-insensitive, escaped, quantified), the
+corpus pass.
+
+Not landed, measured (patches in work/scratch/0267/):
+- JSON escapes cost ~183 machine instructions per escape over both passes (an 80 KB text
+  with 3,266 escapes: 990K vs 393K with one), most of it the SWAR words of the run plus a
+  mispredicted run end per pass, not the escape itself. Escape positions recorded by the
+  scan: one-layer text −13% time, double-encoded +4%, workloads within noise, +525 B. A
+  raw-position escaped-string scan: −4% instructions on the escape kernels, workloads
+  within noise, +181 B.
+- Run-time `new RegExp` in the compile zone (D3361) through a host switch: −8% more of the
+  create path, +383 B.
