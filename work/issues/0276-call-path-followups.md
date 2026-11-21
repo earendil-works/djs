@@ -1,6 +1,6 @@
 # 0276: Call path and cache follow-ups from 0268 and the 0270 sweep
 
-status: open
+status: in-progress
 agent: pcall
 branch: issue/0276-call-path-followups
 depends-on: 0268
