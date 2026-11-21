@@ -300,6 +300,61 @@ fn parse_long_runs_between_escapes() {
     }
 }
 
+/// The word-at-a-time string scans and writers (0260): an escape, a non-ASCII byte or a
+/// two-byte unit at every offset of strings of 0 to 17 units, at every alignment of the
+/// input, in all three encodings; and a raw control or an unterminated string at every
+/// offset.
+#[test]
+fn parse_strings_at_every_offset() {
+    let specials = [
+        ("\\n", "\n"),
+        ("\\\"", "\""),
+        ("\\\\", "\\"),
+        ("\\/", "/"),
+        ("\\u00ff", "ÿ"),
+        ("\\u20ac", "€"),
+        ("é", "é"),
+        ("ÿ", "ÿ"),
+        ("€", "€"),
+    ];
+    let letters = |r: core::ops::Range<usize>| -> String {
+        r.map(|i| (b'a' + (i % 26) as u8) as char).collect()
+    };
+    let units = |s: &str| -> Vec<u16> { s.encode_utf16().collect() };
+    for pad in 0..8 {
+        let pad = " ".repeat(pad);
+        for n in 0..=17 {
+            let plain = letters(0..n);
+            assert_eq!(
+                parse_all(&format!("{pad}[\"{plain}\"]")),
+                format!("[s:{}]", quote_units(&units(&plain)))
+            );
+            for at in 0..=n {
+                let (a, b) = (letters(0..at), letters(at..n));
+                for (esc, ch) in specials {
+                    let text = format!("{pad}[\"{a}{esc}{b}\",\"{a}{esc}{esc}{b}{esc}\"]");
+                    let one = units(&format!("{a}{ch}{b}"));
+                    let two = units(&format!("{a}{ch}{ch}{b}{ch}"));
+                    assert_eq!(
+                        parse_all(&text),
+                        format!("[s:{},s:{}]", quote_units(&one), quote_units(&two)),
+                        "{text:?}"
+                    );
+                }
+                let col = pad.len() + 3 + at;
+                assert_eq!(
+                    parse_all(&format!("{pad}[\"{a}\u{1}{b}\"]")),
+                    format!("Bad control character in string literal @1:{col}")
+                );
+                assert_eq!(
+                    parse_all(&format!("{pad}[\"{a}")),
+                    format!("Unexpected end of JSON input @1:{}", col - at - 1)
+                );
+            }
+        }
+    }
+}
+
 #[test]
 fn parse_strings_representation() {
     let mut h = Heap::new().unwrap();
