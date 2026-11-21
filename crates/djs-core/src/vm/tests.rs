@@ -3781,9 +3781,9 @@ fn hot_loop_is_invisible() {
           qs += q.x + q.t + m.size + new R(i).x + new F(i).a + new Set().size + new Date(i).getTime();\n\
           if (i % 10 === 0) qs += new Error('e' + i).message.length + (new Promise(() => {}) instanceof Promise); }\n\
         console.log(qs);\n";
-    const HOT: u32 = crate::interp::run::HOT_BACKEDGES;
+    const HOT: u32 = crate::interp::run::HOT_FUEL;
     let cases: &[(u64, bool, u32, bool)] = &[
-        // (fuel slice, gc stress, backward jumps per run_hot, suspend through images)
+        // (fuel slice, gc stress, fuel per run_hot, suspend through images)
         (1 << 40, false, HOT, false),
         (1, false, HOT, false),
         (3, false, HOT, true),
@@ -3799,11 +3799,11 @@ fn hot_loop_is_invisible() {
     let traces: Vec<(Vec<String>, Vec<String>)> = std::thread::scope(|s| {
         let runs: Vec<_> = cases
             .iter()
-            .map(|&(fuel, gc_stress, backedges, suspend)| {
+            .map(|&(fuel, gc_stress, hot_fuel, suspend)| {
                 let exec = move |hot_loop| ExecOptions {
                     gc_stress,
                     hot_loop,
-                    hot_backedges: backedges,
+                    hot_fuel,
                     ..Default::default()
                 };
                 let with = s.spawn(move || image_trace(src, exec(true), fuel, suspend));
@@ -3815,11 +3815,11 @@ fn hot_loop_is_invisible() {
             .map(|(a, b)| (a.join().unwrap(), b.join().unwrap()))
             .collect()
     });
-    for (&(fuel, gc_stress, backedges, _), (with, without)) in cases.iter().zip(traces) {
+    for (&(fuel, gc_stress, hot_fuel, _), (with, without)) in cases.iter().zip(traces) {
         assert!(with.len() > 2, "the program ran: {with:?}");
         assert_eq!(
             with, without,
-            "fuel {fuel}, gc stress {gc_stress}, back-edges {backedges}"
+            "fuel {fuel}, gc stress {gc_stress}, hot fuel {hot_fuel}"
         );
     }
 }

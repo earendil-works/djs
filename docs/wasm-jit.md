@@ -243,7 +243,7 @@ docs/lessons-from-pico.md). The prototype below does it for djs bytecode.
   The host does the compiling, as with pico. djs-wasm can stay import-free.
 - **V8 specifics.**
   - Wasm has no on-stack replacement: a long loop stays in Liftoff until its function is
-    entered again. Fuel slices provide those re-entries, as `HOT_BACKEDGES` does for
+    entered again. Fuel slices provide those re-entries, as `HOT_FUEL` does for
     `run_hot` today.
   - Dynamic tiering only optimizes a function after a budget of about 13 M "bytes
     executed" (`--wasm-tiering-budget`).

@@ -70,9 +70,10 @@ pub struct ExecOptions {
     /// Run the hottest simple instructions in the tier-0 loop (D1930, the default).
     /// Results, fuel and heap images are identical either way; off is for tests.
     pub hot_loop: bool,
-    /// Backward jumps after which the tier-0 loop returns to the run loop
-    /// (`hot::HOT_BACKEDGES`; tests lower it to force those exits).
-    pub hot_backedges: u32,
+    /// Fuel after which the tier-0 loop returns to the run loop at its next backward
+    /// jump or general-path instruction (`hot::HOT_FUEL`; tests lower it to force those
+    /// exits).
+    pub hot_fuel: u32,
     /// Reaching the heap's memory cap ends the run like host memory exhaustion
     /// (`Status::HostOutOfMemory`, D3181) instead of throwing a catchable
     /// `InternalError`: no `catch` or `finally` runs, the call is abandoned and the VM is
@@ -89,7 +90,7 @@ impl Default for ExecOptions {
             max_stack: 1 << 20,
             finalization_after_gc: true,
             hot_loop: true,
-            hot_backedges: hot::HOT_BACKEDGES,
+            hot_fuel: hot::HOT_FUEL,
             #[cfg(feature = "embed")]
             fatal_out_of_memory: false,
         }
@@ -104,7 +105,7 @@ mod each;
 mod fastpath;
 mod hot;
 #[cfg(test)]
-pub(crate) use hot::HOT_BACKEDGES;
+pub(crate) use hot::HOT_FUEL;
 pub(crate) use stack::settled_stack;
 mod ic;
 mod intrinsics;

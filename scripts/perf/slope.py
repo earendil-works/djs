@@ -31,7 +31,10 @@ def ins(wasm, f):
     for _ in range(a.r):
         r = subprocess.run(["/usr/bin/time", "-l", "node"] + flags + [run, f], capture_output=True, text=True, timeout=900,
                            env=dict(os.environ, ONCE="1", DJS_WASM=os.path.abspath(wasm)))
-        if r.returncode != 0 or "Error" in r.stdout: print("FAILED", f, r.stdout[-300:], r.stderr[-300:])
+        if r.returncode != 0 or not re.search(r"\t[\d.]+ ms", r.stdout):
+            err = [l for l in r.stderr.splitlines() if l.strip() and not re.match(r"\s+[\d.]+\s+(real|\w)", l)]
+            raise SystemExit(f"slope.py: run failed (exit {r.returncode}): {wasm} {f}\n" + "\n".join((r.stdout.splitlines() + err)[-12:]) +
+                             "\n(a build with another heap layout needs this checkout's reader: rebuild it here)")
         v = int(re.search(r"(\d+)\s+instructions retired", r.stderr).group(1))
         best = v if best is None else min(best, v)
     return best

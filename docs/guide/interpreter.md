@@ -358,9 +358,10 @@ instructions slower. One rule follows from V8's machine code for the loop: nothi
 computed for every instruction (the instruction word, an immediate, the opcode) may stay
 alive across a heap call in any arm. V8 spills such a value where it is defined, so
 every instruction would pay a store. The arms therefore extract their own immediates and
-read the opcode again after a call. The tier-0 loop also returns to the outer loop every
-16,384 backward jumps, because V8 moves wasm code to its optimizing tier only between
-calls, and a loop that never left would stay in the baseline code.
+read the opcode again after a call. The tier-0 loop also returns to the outer loop at a
+backward jump once 131,072 units of fuel went by, because V8 moves wasm code to its
+optimizing tier only between calls, and a loop that never left would stay in the baseline
+code.
 
 ## Where to look
 

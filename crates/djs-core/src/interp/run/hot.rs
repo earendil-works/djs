@@ -35,10 +35,12 @@ use crate::interp::frame::{self, Continuation, HEADER};
 use crate::interp::realm::Intrinsic;
 use crate::value::Value;
 
-/// Backward jumps before `run_hot` returns to the run loop anyway: V8 tiers wasm code up
-/// only between calls (no OSR, 0081 F0), so a loop that never leaves `run_hot` would
-/// stay in Liftoff code for a whole `vm_run`. Returning changes no state.
-pub(crate) const HOT_BACKEDGES: u32 = 1 << 14;
+/// Fuel after which `run_hot` returns to the run loop at the next backward jump anyway: V8
+/// tiers wasm code up only between calls (no OSR, 0081 F0), so a loop that never leaves
+/// `run_hot` would stay in Liftoff code for a whole `vm_run`. Returning changes no state.
+/// (A fuel mark, not a count of jumps: a counter is one more value that changes in the
+/// loop, and the loop has `fuel` at hand, D3392.)
+pub(crate) const HOT_FUEL: u32 = 1 << 17;
 
 const IS_NUMBER: u16 = super::intrinsics::id("IsNumber");
 const IS_OBJECT: u16 = super::intrinsics::id("IsObject");
@@ -165,6 +167,53 @@ pub(super) fn is_pure_leaf(id: u16) -> bool {
     PURE.get(id as usize / 64)
         .is_some_and(|w| w >> (id % 64) & 1 != 0)
 }
+
+/// An opcode's encoded size and its fuel, as constants. An arm of several opcodes that
+/// asks the table about an opcode it found at run time makes the loop index the table
+/// and load both (about 15 machine instructions in V8's code, D3392): such arms name one
+/// opcode, and the assertions below check that the others agree.
+const fn size_of(op: Op) -> u32 {
+    OPS[op as usize].size as u32
+}
+
+const fn fuel_of(op: Op) -> i64 {
+    OPS[op as usize].cost.fuel() as i64
+}
+
+/// Whether `a` and `b` advance and cost the same.
+const fn same_step(a: Op, b: Op) -> bool {
+    size_of(a) == size_of(b) && fuel_of(a) == fuel_of(b)
+}
+
+const _: () = assert!(
+    same_step(Op::Inc, Op::Dec)
+        && same_step(Op::IncLoc, Op::DecLoc)
+        && same_step(Op::StrictEq, Op::StrictNe)
+        && fuel_of(Op::Call) == fuel_of(Op::Call0)
+        && fuel_of(Op::CallIntrinsic) == fuel_of(Op::CallIntrinsic8)
+        && fuel_of(Op::Return) == fuel_of(Op::ReturnUndef)
+);
+// The closure-variable arm's opcodes all step as `get_cap`.
+const _: () = {
+    let ops = [
+        Op::GetCapChk,
+        Op::PutCap,
+        Op::PutCapChk,
+        Op::SetCap,
+        Op::SetCapChk,
+        Op::GetBox,
+        Op::GetBoxChk,
+        Op::PutBox,
+        Op::PutBoxChk,
+        Op::SetBox,
+        Op::SetBoxChk,
+    ];
+    let mut i = 0;
+    while i < ops.len() {
+        assert!(same_step(ops[i], Op::GetCap));
+        i += 1;
+    }
+};
 
 #[cold]
 #[inline(never)]
@@ -342,7 +391,7 @@ enum Exit {
     General,
     /// A safepoint completed with a collection wanted: run it now.
     Safepoint,
-    /// `hot_backedges` backward jumps: return to the run loop (V8 tier-up).
+    /// A backward jump after `hot_fuel` fuel: return to the run loop (V8 tier-up).
     Budget,
     /// `%EachDense`'s callback returned this value (0137).
     Each(Value),
@@ -483,8 +532,8 @@ impl Exec<'_> {
     }
 
     /// Runs instructions from `pc`, `step` included, until fuel runs out (`None`, the run
-    /// loop stops there), the run stops (`Some`), or `hot_backedges` backward jumps or
-    /// general-path instructions went by (`None`, for V8's tier-up).
+    /// loop stops there), the run stops (`Some`), or `hot_fuel` fuel went by and a
+    /// backward jump or a general-path instruction is reached (`None`, for V8's tier-up).
     ///
     /// The loop does not check `pc` against the code's length per instruction (D3390).
     /// It relies on what the stack checker enforces for every template
@@ -497,7 +546,8 @@ impl Exec<'_> {
     /// assert `pc < code_len` at every fetch.
     #[inline(never)]
     pub(super) fn run_hot(&mut self) -> Option<super::Status> {
-        let mut budget = self.opts.hot_backedges;
+        // The fuel at which a backward jump returns to the run loop (V8's tier-up).
+        let floor = self.fuel - self.opts.hot_fuel as i64;
         let slow_call_flags = self.slow_call_flags;
         // The frame data, re-read after a collection (and kept current by calls and
         // returns here).
@@ -583,6 +633,17 @@ impl Exec<'_> {
                             fuel -= info.cost.fuel() as i64;
                             ip += info.size as u32;
                         }};
+                        // `$op`, found at run time, steps as the constant `$like` does.
+                        ($op:expr, like $like:expr) => {{
+                            debug_assert!({
+                                let info = &OPS[$op as usize];
+                                sp + info.pop as u32 == sp0 + info.push as u32
+                                    && info.size as u32 == size_of($like)
+                                    && info.cost.fuel() as i64 == fuel_of($like)
+                            });
+                            fuel -= const { fuel_of($like) };
+                            ip += const { size_of($like) };
+                        }};
                     }
                     macro_rules! top {
                         ($k:expr) => {
@@ -615,8 +676,7 @@ impl Exec<'_> {
                                     if collect {
                                         break Exit::Safepoint;
                                     }
-                                    budget -= 1;
-                                    if budget == 0 {
+                                    if fuel < floor {
                                         break Exit::Budget;
                                     }
                                 }
@@ -656,7 +716,7 @@ impl Exec<'_> {
                     // arguments for instruction `$op` (`push_frame` with `PushResult`), or
                     // declines when the template needs the general path or the stack is full.
                     macro_rules! call_closure {
-                        ($op:expr, $base:expr, $argc:expr) => {{
+                        ($size:expr, $fuel:expr, $base:expr, $argc:expr) => {{
                             let (base, argc): (u32, u32) = ($base, $argc);
                             let Some(f) = ld(b, slot!(base)).as_object() else {
                                 break Exit::Decline(op);
@@ -685,9 +745,8 @@ impl Exec<'_> {
                             {
                                 break Exit::Decline(op);
                             }
-                            let info = &OPS[$op as usize];
-                            fuel -= info.cost.fuel() as i64;
-                            let ret_pc = ip + info.size as u32 - code;
+                            fuel -= $fuel;
+                            let ret_pc = ip + $size - code;
                             write_frame(
                                 b,
                                 vals,
@@ -769,8 +828,7 @@ impl Exec<'_> {
                                     if collect {
                                         break Exit::Safepoint;
                                     }
-                                    budget -= 1;
-                                    if budget == 0 {
+                                    if fuel < floor {
                                         break Exit::Budget;
                                     }
                                 }
@@ -876,7 +934,7 @@ impl Exec<'_> {
                                 }
                                 _ => push!(old),
                             }
-                            next!(op);
+                            next!(op, like Op::GetCap);
                         }
                         fast::PUSH_I8 => {
                             push!(Value::int(imm32!() as u8 as i8 as i32));
@@ -960,7 +1018,7 @@ impl Exec<'_> {
                                 break Exit::Decline(op);
                             };
                             st(b, slot!(sp - 1), Value::int(i));
-                            next!(if op == fast::INC { Op::Inc } else { Op::Dec });
+                            next!(Op::Inc);
                         }
                         fast::INC_LOC | fast::DEC_LOC => {
                             let d = if op == fast::INC_LOC { 1 } else { -1 };
@@ -969,11 +1027,7 @@ impl Exec<'_> {
                                 break Exit::Decline(op);
                             };
                             st(b, at, Value::int(i));
-                            next!(if op == fast::INC_LOC {
-                                Op::IncLoc
-                            } else {
-                                Op::DecLoc
-                            });
+                            next!(Op::IncLoc);
                         }
                         fast::ADD => binary!(
                             Op::Add,
@@ -1192,16 +1246,18 @@ impl Exec<'_> {
                         fast::CALL_INTRINSIC | fast::CALL_INTRINSIC8 => {
                             // (One arm for both: two copies of `intrinsic_hit` are a
                             // longer V8 tier-up, D2443.)
-                            let (id, argc, o) = if op == fast::CALL_INTRINSIC {
-                                (imm16!() as u16, (w >> 24) as u16 as u32, Op::CallIntrinsic)
+                            let (id, argc, size) = if op == fast::CALL_INTRINSIC {
+                                let argc = (w >> 24) as u16 as u32;
+                                (imm16!() as u16, argc, size_of(Op::CallIntrinsic))
                             } else {
                                 let id = imm16!() & 0xFF;
-                                (id as u16, arity(id), Op::CallIntrinsic8)
+                                (id as u16, arity(id), size_of(Op::CallIntrinsic8))
                             };
+                            const FUEL: i64 = fuel_of(Op::CallIntrinsic);
                             let base = sp - argc;
                             if id == CALL && argc >= 2 {
                                 // `f this a1 .. an`, as in `call_intrinsic`.
-                                call_closure!(o, base, argc - 2);
+                                call_closure!(size, FUEL, base, argc - 2);
                             } else {
                                 let mut a = [Value::UNDEFINED; 3];
                                 for (k, x) in a.iter_mut().enumerate().take(argc.min(3) as usize) {
@@ -1216,23 +1272,29 @@ impl Exec<'_> {
                                 };
                                 sp = base;
                                 push!(v);
-                                let info = &OPS[o as usize];
-                                fuel -= info.cost.fuel() as i64;
-                                ip += info.size as u32;
+                                fuel -= FUEL;
+                                ip += size;
                             }
                         }
                         // The global caches (D1620); the misses run `step`.
-                        GET_GLOBAL | GET_GLOBAL_TYPEOF => {
+                        // (One arm each, naming its opcode: as one arm that read the
+                        // opcode again after the call, V8 moved a value on the path of
+                        // the simple instructions, D3392.)
+                        GET_GLOBAL => {
                             let (key, ic) = (Atom::from_id(imm32!()), (w >> 40) as u16 as u32);
-                            let Some(v) = heap_call_op!(self.ic_global_get(key, ic)) else {
-                                break Exit::Decline(op);
+                            let Some(v) = heap_call!(self.ic_global_get(key, ic)) else {
+                                break Exit::Decline(GET_GLOBAL);
                             };
                             push!(v);
-                            next!(if op == GET_GLOBAL {
-                                Op::GetGlobal
-                            } else {
-                                Op::GetGlobalTypeof
-                            });
+                            next!(Op::GetGlobal);
+                        }
+                        GET_GLOBAL_TYPEOF => {
+                            let (key, ic) = (Atom::from_id(imm32!()), (w >> 40) as u16 as u32);
+                            let Some(v) = heap_call!(self.ic_global_get(key, ic)) else {
+                                break Exit::Decline(GET_GLOBAL_TYPEOF);
+                            };
+                            push!(v);
+                            next!(Op::GetGlobalTypeof);
                         }
                         PUT_GLOBAL => {
                             let (key, ic) = (Atom::from_id(imm32!()), (w >> 40) as u16 as u32);
@@ -1244,12 +1306,12 @@ impl Exec<'_> {
                             next!(Op::PutGlobal);
                         }
                         fast::CALL | fast::CALL0 | fast::CALL1 | fast::CALL2 | fast::CALL3 => {
-                            let (argc, o) = if op == fast::CALL {
-                                (imm16!(), Op::Call)
+                            let (argc, size) = if op == fast::CALL {
+                                (imm16!(), size_of(Op::Call))
                             } else {
-                                ((op - fast::CALL0) as u32, Op::Call0)
+                                ((op - fast::CALL0) as u32, size_of(Op::Call0))
                             };
-                            call_closure!(o, sp - 2 - argc, argc);
+                            call_closure!(size, fuel_of(Op::Call), sp - 2 - argc, argc);
                         }
                         fast::RETURN | fast::RETURN_UNDEF => {
                             // `fast_return`: into a PushResult frame of a bytecode caller.
@@ -1258,12 +1320,12 @@ impl Exec<'_> {
                                 if flags != EACH {
                                     break Exit::Decline(op);
                                 }
-                                let (v, o) = if op == fast::RETURN {
-                                    (top!(0), Op::Return)
+                                let v = if op == fast::RETURN {
+                                    top!(0)
                                 } else {
-                                    (Value::UNDEFINED, Op::ReturnUndef)
+                                    Value::UNDEFINED
                                 };
-                                fuel -= OPS[o as usize].cost.fuel() as i64;
+                                fuel -= fuel_of(Op::Return);
                                 break Exit::Each(v);
                             }
                             let int = |v: Value| v.as_int().unwrap_or(0) as u32;
@@ -1291,12 +1353,7 @@ impl Exec<'_> {
                             } else {
                                 Value::UNDEFINED
                             };
-                            let o = if op == fast::RETURN {
-                                Op::Return
-                            } else {
-                                Op::ReturnUndef
-                            };
-                            fuel -= OPS[o as usize].cost.fuel() as i64;
+                            fuel -= fuel_of(Op::Return);
                             // pop_frame, push the result.
                             st(b, slot!(bp), v);
                             sp = bp + 1;
@@ -1421,8 +1478,7 @@ impl Exec<'_> {
                         if let Some(st) = self.step_once() {
                             return Some(st);
                         }
-                        budget = budget.saturating_sub(1);
-                        if budget == 0 {
+                        if self.fuel < floor {
                             return None;
                         }
                     }
