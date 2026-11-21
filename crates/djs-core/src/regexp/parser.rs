@@ -140,8 +140,17 @@ impl ClassSet {
     }
 }
 
+#[inline(always)]
 fn err<T>(msg: &str) -> Result<T, SyntaxError> {
-    Err(SyntaxError::new(String::from(msg)))
+    Err(error(msg))
+}
+
+/// Out of line and not generic: one copy for every error site (a copy of `err` per
+/// result type was ~140 bytes of wasm each).
+#[cold]
+#[inline(never)]
+fn error(msg: &str) -> SyntaxError {
+    SyntaxError::new(String::from(msg))
 }
 
 fn is_digit(c: u32) -> bool {

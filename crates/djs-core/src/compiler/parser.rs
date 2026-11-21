@@ -856,9 +856,17 @@ impl<'a, 'h> Parser<'a, 'h> {
         String::from_utf8_lossy(self.lx.text(&self.tok)).into_owned()
     }
 
+    #[inline(always)]
     pub fn unexpected<T>(&mut self) -> PResult<T> {
+        Err(self.unexpected_error())
+    }
+
+    /// [`Parser::unexpected`]'s error, out of line and not generic.
+    #[cold]
+    #[inline(never)]
+    fn unexpected_error(&mut self) -> PErr {
         let text = self.tok_text();
-        syntax(
+        syntax_error(
             self.tok.start,
             crate::text::cat!("unexpected token in expression: '", text, "'"),
         )
