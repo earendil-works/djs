@@ -115,7 +115,8 @@ Kernels (µs per iteration, wall): JSON.parse of an 80 KB plain text 9.9 vs 52 (
 escaped text (3,266 escapes) 0.87x, find_latin1 self time in an includes loop −30%.
 Then (D3312, approved): two-byte JSON scan and escaped writer (fanout −8% more), regexp
 first sets of one or two bytes and multiline `^` (heavy −5.5%, text −4.8% more): +694 B
-gz, the ceiling raised 12 B to 429,660.
+gz; the 12 B ceiling raise of D3312 was undone (D3313): after 0263 the module is
+425,457 B gz.
 
 ### For the owner: the simd128 flag as a size option
 Building the shipped module with `-Ctarget-feature=+simd128` and no code change makes it

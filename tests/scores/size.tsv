@@ -16,6 +16,6 @@
 # shadow stack, +182 B; lowered back by 0257, D3283).
 # quickjs_wasi_gzip: quickjs-wasi 3.6.2 quickjs.wasm (pi's engine), gzip -9.
 quickjs_wasi_gzip	286655
-ceiling_gzip	429660
+ceiling_gzip	429648
 # slim_ceiling_gzip: the slim module (scripts/build-wasm.sh --slim, D2411), its own ratchet.
 slim_ceiling_gzip	363349

@@ -12375,3 +12375,9 @@ writer 429,308 (+189), regexp first set and multiline `^` 429,657 (+349). Effect
 (wasm instructions / wall min-time, load ~15): the two-byte pair fanout −7.6% / −8%;
 the regexp pair heavy −5.5% / −5%, text −4.8% / −4%. The ceiling goes 429,648 →
 429,660 (+12), within the 1.5x budget of 429,982. Slim 362,751 (its ceiling 363,349).
+
+## D3313: D3312's ceiling raise undone
+date: 2026-11-21 · by: pscan · issue: 0260
+0263 (D3340) landed under 0260's held kernels and freed 4,145 B gz: with them the shipped
+module is 425,457 B gz, so the ceiling goes back from 429,660 to 429,648 (D3312's +12
+was not needed).
