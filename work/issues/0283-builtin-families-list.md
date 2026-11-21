@@ -1,6 +1,6 @@
 # 0283: What each builtin family costs and gives: a list for the owner's decision
 
-status: in-progress
+status: done
 agent: pstart
 branch: issue/0283-families-list
 depends-on: 0271 (research)
@@ -29,9 +29,19 @@ End with 2-3 recommended packages (e.g. "pi-safe minimum", "idle-320", "max size
 their totals. Keep it short and readable: the owner decides from it.
 
 ## Acceptance criteria
-- [ ] families.md with measured numbers (state the method and load)
-- [ ] merged as docs (work/research), gate green
+- [x] families.md with measured numbers (state the method and load)
+- [x] merged as docs (work/research), gate green
 
 ## Log
+- Measured at 7b302395, load 20-80 (others building): sizes, pages and instruction counts
+  only. Scripts in work/research/0283 (they write to work/scratch/0283).
+- Base per family (famvar.sh), module/idle/rows per family and per package (famrun.sh),
+  Rust by function sizes plus the full-vs-slim build delta, test262 by t262.py over the
+  active paths, startup by icount.sh.
 
 ## Result
+work/research/0283/families.md: per family base KB, module bytes, test262 tests, usage, pi's
+needs, what a script sees and the lazy alternative; three packages. Idle 320 KiB needs
+package B (slim set + fromAsync + URI + DOMException/atob/btoa, Int8Array stub): idle arena
+~127.0 KB, five codemode rows -64 KiB, fanout +64 (growth step), module ~-35 KB gz, 4,864
+test262 tests. Proxy and Reflect can't go without breaking pi.

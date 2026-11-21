@@ -1,0 +1,10 @@
+import { readFileSync } from "node:fs";
+const { Sandbox } = await import("/Users/mitsuhiko/Development/djs/.worktrees/pstart/js/src/sandbox.ts");
+const module = new WebAssembly.Module(readFileSync(process.argv[2]));
+const silent = { log() {}, info() {}, warn() {}, error() {} };
+new Sandbox({ module, console: silent }).dispose();
+const sb: any = new Sandbox({ module, console: silent });
+const x = sb.x;
+console.log("arena len", x.vm_arena_len(sb.vm), "base", x.djs_base_len(), "memory KiB", x.memory.buffer.byteLength / 1024);
+sb.run("return 1");
+console.log("after return 1: arena len", x.vm_arena_len(sb.vm), "memory KiB", x.memory.buffer.byteLength / 1024);
