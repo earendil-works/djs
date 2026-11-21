@@ -12266,3 +12266,17 @@ D3280 and D3281: shipped 428,729 → 429,780 B gz (+1,051; +1,541 raw), slim 362
 ~150, djs-wasm (`djs_stack`, `djs_elastic_stack`, `vm_run`, compile) ~250, the seeded
 first segment ~140, larger Heap/Vm layouts ~200. Ceiling 429,648 → 429,830 (+182; still
 under the 1.5x budget of 429,982).
+
+## D3283: Size offsets for 0257; the ceiling drops back
+date: 2026-11-21 · by: pidle · issue: 0257
+- The regexp parser's `err::<T>` was one ~140-byte copy per result type (5); it is an
+  inline wrapper over one out-of-line `error`. `Parser::unexpected::<T>` likewise (2
+  copies): −717 B raw.
+- djs-wasm's exports copied their staged text before using it (`vm_compile*`'s name,
+  parameters and source, a blob; host function names, `vm_define`'s name, error
+  messages, the dump runtime's and `vm_dump`'s text); they borrow it now, which the
+  compiles and VM calls allow (staging is a separate field): −991 B raw.
+Shipped 429,780 → 429,353 B gz (−427), slim 362,805 → 362,423. The ceiling goes back
+from 429,830 to 429,648 (D3282's raise undone; the module is 295 B under it). Tried and
+dropped: one copy of `vm_new_host_function`/`vm_new_async_host_function` (−145 raw,
++42 gz) and `ts_try`/`ts_lookahead` through `dyn FnMut` (+350 gz: an inlining cascade).

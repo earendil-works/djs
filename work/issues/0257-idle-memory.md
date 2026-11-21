@@ -80,6 +80,9 @@ anywhere, images, or the unsafe rules (AGENTS.md).
 - Guide pages updated: limits.md (nesting in source), host.md (the stack protocol,
   exports, status 6), arena.md (dlmalloc's first memory). docs/host.md and
   docs/compiler.md 2.4 too. New gate leg: nesting test on the shipped module.
+- Merged batch 1 (86b42954). Batch 2, size offsets (D3283): regexp `err` and
+  `Parser::unexpected` out of line, djs-wasm exports borrow staged text: −427 B gz
+  (429,780 → 429,353); ceiling back to 429,648.
 
 ## Follow-ups
 - Stack + data in two pages (another −64 KiB): needs ~2 KB less data or a ~30 KiB stack
@@ -93,4 +96,5 @@ workload −128 KiB except heavy; slim idle 512 → 384. No measurable run-time 
 nesting limits and errors; a compile deeper than the small stack allows runs again on a
 128 KiB block the host provides (hosts other than the Sandbox/pi adapter: call
 `djs_elastic_stack(1)` and wrap with `elasticStack`, or keep it off and get the old
-behaviour on a 64 KiB stack). Size +1,051 B gz (D3282).
+behaviour on a 64 KiB stack). Size +1,051 B gz (D3282), then −427 B gz of offsets
+(D3283): net +624 B over main before 0257; ceiling back at 429,648.
