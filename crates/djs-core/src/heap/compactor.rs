@@ -29,8 +29,9 @@
 //! overflow rescans, the ephemeron fixpoint) cannot make it nondeterministic, and a full
 //! collection keeps the same cells at the same sizes as Cheney: live bytes, thresholds
 //! and GC points do not depend on which collector runs. The side tables (len/64 + len/128
-//! bytes, a fixed stack, and in a minor collection the remembered list) are allocated
-//! before anything is touched: a refusal leaves the heap as it was.
+//! bytes, a fixed stack, and in a minor collection the remembered list) are scratch right
+//! behind the arena's end, in its own buffer (D3364), reserved before anything is touched:
+//! a refusal leaves the heap as it was.
 use crate::PushOut;
 
 use alloc::vec::Vec;
@@ -48,9 +49,10 @@ use crate::value::{Obj, Value};
 /// or when the host refuses, cells are marked without being pushed and found by a rescan.
 const STACK_CAP: usize = 16 * 1024;
 
-/// Mark stack entries reserved up front (16 KiB): small enough for the wasm module's
-/// dlmalloc segment, where a bigger block becomes a page run at memory's end (D3143).
-const STACK_RESERVE: usize = 4 * 1024;
+/// Mark stack entries reserved up front (2 KiB): the stack is the scratch's last table and
+/// grows in place, so the reserve only has to cover small heaps; more would grow the
+/// arena's capacity by a page in runs whose tables fit the spare room (D3364).
+const STACK_RESERVE: usize = 512;
 
 #[cfg(test)]
 extern crate std;
@@ -73,10 +75,11 @@ fn stack_cap(len: u32) -> usize {
     (len as usize / 64).max(STACK_CAP)
 }
 
-/// Entries of the remembered list of a minor collection (16 KiB). Old regions point to
+/// Entries of the remembered list of a minor collection (4 KiB). Old regions point to
 /// few young cells (the interpreter's stack and registers, the handles, globals); past
-/// that, the update pass walks the old region instead.
-const REMEMBERED_CAP: usize = 4096;
+/// that, the update pass walks the old region instead. 4,096 entries made the scratch a
+/// page larger than media's arena had room for (D3364).
+const REMEMBERED_CAP: usize = 1024;
 
 fn remembered_cap() -> usize {
     #[cfg(test)]
@@ -112,12 +115,10 @@ struct Marker<'a> {
     prefix: u32,
     /// One bit per 8-byte word of a marked cell, from `old`.
     live: Live,
-    stack: Vec<u32>,
+    stack: Stack,
     overflow: bool,
     /// The lowest cell marked but not pushed since the last rescan.
     overflow_from: u32,
-    /// The largest stack (entries) before overflowing.
-    cap: usize,
     /// Marked ephemeron tables (their pairs need the fixpoint).
     ephemerons: u32,
     /// Ephemeron tables in the old region (found by the old walk).
@@ -130,7 +131,7 @@ struct Marker<'a> {
     /// The old walk's finds for the update pass: slots holding a young reference (a
     /// `Value` slot, or a `Ref` slot with [`REMEMBER_REF`]) and old collections to
     /// rehash ([`REMEMBER_REHASH`]). Valid only while `remembered_ok`.
-    remembered: Vec<u32>,
+    remembered: Stack,
     remembered_ok: bool,
     /// Bytes of marked leaf cells of at least [`super::gc::CHEAP_LEAF`] (D3144).
     cheap: u32,
@@ -199,7 +200,7 @@ impl Marker<'_> {
             return off;
         }
         self.arena.set(off, Header::GC, gc | gc_bits::MARK);
-        self.live.set(off, (h >> 32) as u32);
+        self.live.set(self.arena, off, (h >> 32) as u32);
         let kind = h as u8;
         if kind == CellKind::EphemeronArray as u8 {
             // A pair lives only through its key (the fixpoint below).
@@ -220,15 +221,12 @@ impl Marker<'_> {
             return off;
         }
         // The stack grows on demand (a refusal is only an overflow, handled by a rescan).
-        if self.stack.len() == self.stack.capacity()
-            && (self.stack.len() >= self.cap || self.stack.try_reserve(self.stack.len()).is_err())
-        {
+        if self.stack.len == self.stack.room && !self.stack.grow(self.arena) {
             self.overflow = true;
             self.overflow_from = self.overflow_from.min(off);
             return off;
         }
-        // Room was checked above: a plain push, inline (`push_out` is a call per cell).
-        self.stack.push(off);
+        self.stack.push(self.arena, off);
         off
     }
 
@@ -288,10 +286,10 @@ impl Marker<'_> {
         let mut detach: Vec<u32> = Vec::new();
         let room = detach.try_reserve_exact(self.slices as usize).is_ok();
         for pass in 0..2 {
-            let mut at = self.live.next_live(self.old);
+            let mut at = self.live.next_live(self.arena, self.old);
             while let Some(c) = at {
                 let h: u64 = self.arena.read(c);
-                at = self.live.next_live(c + (h >> 32) as u32);
+                at = self.live.next_live(self.arena, c + (h >> 32) as u32);
                 if h as u8 != CellKind::Slice as u8 {
                     continue;
                 }
@@ -338,7 +336,7 @@ impl Marker<'_> {
     }
 
     fn drain(&mut self) {
-        while let Some(c) = self.stack.pop() {
+        while let Some(c) = self.stack.pop(self.arena) {
             self.trace(c);
         }
     }
@@ -454,11 +452,11 @@ impl Marker<'_> {
         if !self.remembered_ok {
             return;
         }
-        if self.remembered.len() == self.remembered.capacity() {
+        if self.remembered.len == self.remembered.room {
             self.remembered_ok = false;
             return;
         }
-        self.remembered.push_out(entry);
+        self.remembered.push(self.arena, entry);
     }
 
     /// The first ephemeron table to resolve at or after `from`, in address order: old
@@ -475,12 +473,14 @@ impl Marker<'_> {
             }
             from = self.old;
         }
-        let mut at = self.live.next_live(from);
+        let mut at = self.live.next_live(self.arena, from);
         while let Some(c) = at {
             if self.arena.get(c, Header::KIND) == CellKind::EphemeronArray as u8 {
                 return Some(c);
             }
-            at = self.live.next_live(c + self.arena.get(c, Header::SIZE));
+            at = self
+                .live
+                .next_live(self.arena, c + self.arena.get(c, Header::SIZE));
         }
         None
     }
@@ -494,11 +494,13 @@ impl Marker<'_> {
                 self.overflow = false;
                 // Cells below the first one left unpushed were all traced.
                 let from = core::mem::replace(&mut self.overflow_from, u32::MAX);
-                let mut at = self.live.next_live(from);
+                let mut at = self.live.next_live(self.arena, from);
                 while let Some(c) = at {
                     self.trace(c);
                     self.drain();
-                    at = self.live.next_live(c + self.arena.get(c, Header::SIZE));
+                    at = self
+                        .live
+                        .next_live(self.arena, c + self.arena.get(c, Header::SIZE));
                 }
                 continue;
             }
@@ -630,97 +632,125 @@ fn is_collection(arena: &Arena, c: u32) -> bool {
 }
 
 /// The live-word bitmap of the cells from `base` (the old region's end) on: one bit per
-/// 8-byte word.
+/// 8-byte word, `words` u64 at `at` in the arena's scratch.
 struct Live {
     base: u32,
-    bits: Vec<u64>,
+    at: u32,
+    words: u32,
 }
 
 impl Live {
     /// Marks the `size` bytes of the cell at `off`.
-    fn set(&mut self, off: u32, size: u32) {
-        set_bits(&mut self.bits, (off - self.base) / 8, size / 8);
+    fn set(&self, arena: &mut Arena, off: u32, size: u32) {
+        let (mut i, end) = ((off - self.base) / 8, (off - self.base + size) / 8);
+        while i < end {
+            let w = i / 64;
+            let lo = i % 64;
+            let hi = (end - w * 64).min(64);
+            let mask = if hi - lo == 64 {
+                u64::MAX
+            } else {
+                ((1u64 << (hi - lo)) - 1) << lo
+            };
+            let a = self.at + 8 * w;
+            let v: u64 = arena.scratch_read(a);
+            arena.scratch_write(a, v | mask);
+            i = w * 64 + hi;
+        }
+    }
+
+    #[inline(always)]
+    fn word(&self, arena: &Arena, w: u32) -> u64 {
+        arena.scratch_read(self.at + 8 * w)
     }
 
     /// The first live word at or after `from` (`>= base`): the next marked cell when
     /// `from` is a cell boundary.
-    fn next_live(&self, from: u32) -> Option<u32> {
-        next_live(&self.bits, from - self.base).map(|r| r + self.base)
+    fn next_live(&self, arena: &Arena, from: u32) -> Option<u32> {
+        let i = (from - self.base) / 8;
+        let mut w = i / 64;
+        if w >= self.words {
+            return None;
+        }
+        let mut word = self.word(arena, w) & (u64::MAX << (i % 64));
+        loop {
+            if word != 0 {
+                return Some((w * 64 + word.trailing_zeros()) * 8 + self.base);
+            }
+            w += 1;
+            if w >= self.words {
+                return None;
+            }
+            word = self.word(arena, w);
+        }
     }
 
     /// The first dead word at or after `from` (`u32::MAX` if none).
-    fn next_dead(&self, from: u32) -> u32 {
-        match next_dead(&self.bits, from - self.base) {
-            u32::MAX => u32::MAX,
-            r => r + self.base,
-        }
-    }
-
-    /// The new address of the live cell at `a`, from the block table.
-    #[inline]
-    fn forward(&self, table: &[u32], a: u32) -> u32 {
-        let r = a - self.base;
-        let b = (r / BLOCK) as usize;
-        let below = self.bits[b] & ((1u64 << ((r / 8) % 64)) - 1);
-        table[b] + 8 * below.count_ones()
-    }
-}
-
-/// Sets `n` bits from bit `first`.
-fn set_bits(bits: &mut [u64], first: u32, n: u32) {
-    let (mut i, end) = (first as usize, (first + n) as usize);
-    while i < end {
-        let w = i / 64;
-        let lo = i % 64;
-        let hi = (end - w * 64).min(64);
-        let mask = if hi - lo == 64 {
-            u64::MAX
-        } else {
-            ((1u64 << (hi - lo)) - 1) << lo
-        };
-        bits[w] |= mask;
-        i = w * 64 + hi;
-    }
-}
-
-/// The offset of the first live word at or after `from`: the next marked cell when
-/// `from` is a cell boundary.
-fn next_live(bits: &[u64], from: u32) -> Option<u32> {
-    let i = (from / 8) as usize;
-    let mut w = i / 64;
-    if w >= bits.len() {
-        return None;
-    }
-    let mut word = bits[w] & (u64::MAX << (i % 64));
-    loop {
-        if word != 0 {
-            return Some(((w * 64) as u32 + word.trailing_zeros()) * 8);
-        }
-        w += 1;
-        if w >= bits.len() {
-            return None;
-        }
-        word = bits[w];
-    }
-}
-
-/// The offset of the first dead word at or after `from` (`u32::MAX` if none).
-fn next_dead(bits: &[u64], from: u32) -> u32 {
-    let i = (from / 8) as usize;
-    let mut w = i / 64;
-    if w >= bits.len() {
-        return u32::MAX;
-    }
-    let mut word = !bits[w] & (u64::MAX << (i % 64));
-    loop {
-        if word != 0 {
-            return ((w * 64) as u32 + word.trailing_zeros()) * 8;
-        }
-        w += 1;
-        if w >= bits.len() {
+    fn next_dead(&self, arena: &Arena, from: u32) -> u32 {
+        let i = (from - self.base) / 8;
+        let mut w = i / 64;
+        if w >= self.words {
             return u32::MAX;
         }
-        word = !bits[w];
+        let mut word = !self.word(arena, w) & (u64::MAX << (i % 64));
+        loop {
+            if word != 0 {
+                return (w * 64 + word.trailing_zeros()) * 8 + self.base;
+            }
+            w += 1;
+            if w >= self.words {
+                return u32::MAX;
+            }
+            word = !self.word(arena, w);
+        }
+    }
+
+    /// The new address of the live cell at `a`, from the block table at `table` (one u32
+    /// per word of the bitmap).
+    #[inline]
+    fn forward(&self, arena: &Arena, table: u32, a: u32) -> u32 {
+        let r = a - self.base;
+        let b = r / BLOCK;
+        let below = self.word(arena, b) & ((1u64 << ((r / 8) % 64)) - 1);
+        arena.scratch_read::<u32>(table + 4 * b) + 8 * below.count_ones()
+    }
+}
+
+/// A list of u32 in the arena's scratch: the mark stack (last, so it can grow) or the
+/// remembered list.
+struct Stack {
+    at: u32,
+    len: u32,
+    /// Entries the region holds now.
+    room: u32,
+    /// Entries it may grow to.
+    cap: u32,
+}
+
+impl Stack {
+    #[inline(always)]
+    fn push(&mut self, arena: &mut Arena, v: u32) {
+        arena.scratch_write(self.at + 4 * self.len, v);
+        self.len += 1;
+    }
+
+    #[inline(always)]
+    fn pop(&mut self, arena: &Arena) -> Option<u32> {
+        if self.len == 0 {
+            return None;
+        }
+        self.len -= 1;
+        Some(arena.scratch_read(self.at + 4 * self.len))
+    }
+
+    /// Doubles the region (it ends the scratch), up to `cap`; false if it cannot.
+    fn grow(&mut self, arena: &mut Arena) -> bool {
+        let room = (2 * self.room).min(self.cap);
+        if room <= self.room || arena.scratch_to(self.at + 4 * room).is_err() {
+            return false;
+        }
+        self.room = room;
+        true
     }
 }
 
@@ -749,20 +779,25 @@ impl Heap {
         if prefix > 0 {
             check_skipped_prefix(&self.arena, prefix);
         }
-        let blocks = (before - old).div_ceil(BLOCK) as usize;
-        let mut live: Vec<u64> = Vec::new();
-        let mut table: Vec<u32> = Vec::new();
-        let mut stack: Vec<u32> = Vec::new();
-        let mut remembered: Vec<u32> = Vec::new();
-        live.try_reserve_exact(blocks)
-            .and_then(|()| table.try_reserve_exact(blocks))
-            .and_then(|()| match old {
-                0 => Ok(()),
-                _ => remembered.try_reserve_exact(remembered_cap()),
-            })
-            .and_then(|()| stack.try_reserve_exact(STACK_RESERVE.min(stack_cap(before))))
-            .map_err(|_| HeapError::HostOutOfMemory)?;
-        live.resize(blocks, 0);
+        // The side tables, scratch behind the arena's end (D3364): the bitmap, the block
+        // table, the remembered list and last the mark stack, which can grow.
+        let blocks = (before - old).div_ceil(BLOCK);
+        let rem = if old == 0 { 0 } else { remembered_cap() as u32 };
+        let stack_room = STACK_RESERVE.min(stack_cap(before)) as u32;
+        let at = self.arena.scratch(12 * blocks + 4 * rem + 4 * stack_room)?;
+        let table = at + 8 * blocks;
+        let remembered = Stack {
+            at: table + 4 * blocks,
+            len: 0,
+            room: rem,
+            cap: rem,
+        };
+        let stack = Stack {
+            at: remembered.at + 4 * rem,
+            len: 0,
+            room: stack_room,
+            cap: stack_cap(before) as u32,
+        };
         // 1. Mark: from the roots cell, or (minor) from every old cell.
         let mut m = Marker {
             arena: &mut self.arena,
@@ -770,12 +805,12 @@ impl Heap {
             prefix,
             live: Live {
                 base: old,
-                bits: live,
+                at,
+                words: blocks,
             },
             stack,
             overflow: false,
             overflow_from: u32::MAX,
-            cap: stack_cap(before),
             ephemerons: 0,
             old_ephemerons: 0,
             weak_slices: full,
@@ -809,15 +844,16 @@ impl Heap {
         // Reused to remember the Map/Set objects (new offsets) for the rehash.
         let mut collections = m.stack;
         let mut all_collections = true;
+        let arena = &mut self.arena;
         // 2. Block table.
         let mut sum = old;
-        for &w in &live.bits {
-            table.push_out(sum);
-            sum += 8 * w.count_ones();
+        for w in 0..blocks {
+            arena.scratch_write(table + 4 * w, sum);
+            sum += 8 * live.word(arena, w).count_ones();
         }
         let after = sum;
         for d in &mut detach {
-            *d = live.forward(&table, *d);
+            *d = live.forward(arena, table, *d);
         }
         // The live bytes below the old region's end (a cell boundary, maybe of a dead
         // cell): its end after the slide.
@@ -825,7 +861,7 @@ impl Heap {
             if b >= before {
                 after
             } else {
-                live.forward(&table, b.max(old))
+                live.forward(arena, table, b.max(old))
             }
         };
         let old_end = slid(old_end);
@@ -837,16 +873,15 @@ impl Heap {
             slid(base_end)
         };
         // Nothing below the first dead word moves (usually the base image's cells).
-        let dense = live.next_dead(old).min(before);
+        let dense = live.next_dead(arena, old).min(before);
         // 3. Update the old region's references to young cells.
-        let arena = &mut self.arena;
         let update_slot = |arena: &mut Arena, slot: Slot| match slot {
             Slot::Value(s) => {
                 let v: Value = arena.read(s);
                 if let Some(t) = v.ref_offset()
                     && t >= dense
                 {
-                    let n = live.forward(&table, t);
+                    let n = live.forward(arena, table, t);
                     arena.write(s, Value::from_raw((v.to_bits() & !0xFFFF_FFFF) | n as u64));
                 }
             }
@@ -854,7 +889,8 @@ impl Heap {
                 if let Some(t) = arena.read::<Ref>(s).get()
                     && t >= dense
                 {
-                    arena.write(s, Ref(live.forward(&table, t)));
+                    let n = live.forward(arena, table, t);
+                    arena.write(s, Ref(n));
                 }
             }
         };
@@ -866,14 +902,15 @@ impl Heap {
         let mut remember_collection = |arena: &mut Arena, c: u32| {
             let gc = arena.get(c, Header::GC);
             arena.set(c, Header::GC, gc & !gc_bits::REHASH);
-            if collections.len() < collections.capacity() {
-                collections.push_out(c);
+            if collections.len < collections.room {
+                collections.push(arena, c);
             } else {
                 all_collections = false;
             }
         };
         if remembered_ok {
-            for &e in &remembered {
+            for i in 0..remembered.len {
+                let e: u32 = arena.scratch_read(remembered.at + 4 * i);
                 let s = e & !(REMEMBER_REF | REMEMBER_REHASH);
                 match e & (REMEMBER_REF | REMEMBER_REHASH) {
                     0 => update_slot(arena, Slot::Value(s)),
@@ -911,9 +948,9 @@ impl Heap {
         // so each cell is touched once (0224: a quarter fewer cycles than an update pass
         // and then a slide). Nothing here reads another cell: the templates' inline
         // caches were emptied by the mark.
-        let mut at = live.next_live(old);
+        let mut at = live.next_live(arena, old);
         while let Some(run) = at {
-            let end = live.next_dead(run).min(before);
+            let end = live.next_dead(arena, run).min(before);
             let mut c = run;
             while c < end {
                 // The whole header in one read: kind, gc bits, flags, size.
@@ -926,8 +963,9 @@ impl Heap {
                     let kind =
                         CellKind::from_u8(kb).unwrap_or_else(|| super::fail::bad_cell_kind(kb, c));
                     if kind == CellKind::Object && is_collection(arena, c) {
-                        if collections.len() < collections.capacity() {
-                            collections.push_out(live.forward(&table, c));
+                        if collections.len < collections.room {
+                            let n = live.forward(arena, table, c);
+                            collections.push(arena, n);
                         } else {
                             all_collections = false;
                         }
@@ -938,12 +976,17 @@ impl Heap {
                 }
                 c += size;
             }
-            let to = live.forward(&table, run);
+            let to = live.forward(arena, table, run);
             if to != run {
                 arena.copy_within(run, end - run, to);
             }
-            at = live.next_live(end);
+            at = live.next_live(arena, end);
         }
+        // The objects to rehash, out of the scratch before it goes (and the rehash
+        // allocates where it was).
+        let collections: Vec<u32> = (0..collections.len)
+            .map(|i| arena.scratch_read(collections.at + 4 * i))
+            .collect();
         arena.truncate(after);
         // Map/Set indexes hash object keys by offset (D1381): the ones remembered, or (if
         // there were more than the stack holds) a walk over the whole heap.

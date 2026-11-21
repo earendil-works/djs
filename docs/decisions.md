@@ -12749,3 +12749,26 @@ An idle VM keeps 0.5 KB there (the ~45 KB seen before was the first instance's c
 base, D3360); a collection's tables (16-111 KB) fit the floor's room and leave it again.
 So the floor comes down with the compile's peak, not with the tables. The patch is in
 work/scratch/0265/tables.patch of the primary checkout.
+
+## D3364: The collector's side tables in the arena's tail after all (supersedes D3363)
+date: 2026-11-21 · by: pstart · issue: 0265 (from 0258 item 4)
+With the static data smaller (0264: the seed in front of dlmalloc's first page is 24.4 KB),
+dlmalloc's first segment can be one page again (D3362's floor at ≤ 87 KiB) only if a
+collection's tables stop needing its room: at 89.9 KB of room heavy's tables (52 + 26 +
+2×16 KB) became page runs and cost it a page. So the bitmap, the block table, the
+remembered list and the mark stack are scratch behind the arena's end (`Arena::scratch`;
+the stack, last, grows in place), as D3363 built. Its one cost there, media's +64 KiB (the
+scratch grew the arena's capacity by a page where the tables had fit dlmalloc), goes with
+smaller fixed tables: the remembered list holds 1,024 entries (4 KiB; past that a minor
+collection's update pass walks the old region, as before past 4,096) and the stack starts
+at 512 entries (2 KiB) and grows. With the floor of D3366: every codemode row holds or
+drops (see there). djs-core's tests and the corpus under --gc-stress unchanged; time
+within ±1.5%.
+
+## D3365: Array.prototype.join's two-byte result straight into the arena: measured, not adopted
+date: 2026-11-21 · by: pstart · issue: 0265
+fanout's 80,000 B transient was `join`'s Vec<u16> of a two-byte result. Writing the result
+straight into a new Str16 cell (one-byte pieces widened in place, narrowed if no unit is
+wide) removed it, but fanout's memory rose 1,472 → 1,664 KiB: the result's cell is in the
+arena now while the buffer had been dlmalloc's transient room, and the arena grew past a
+collection's threshold. Patch: work/scratch/0265/join-attempt.patch.

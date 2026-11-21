@@ -405,6 +405,40 @@ impl Arena {
         self.slice_mut(off, len).fill(0);
     }
 
+    /// Makes `[len, len + bytes)` usable as scratch: zeroed, within the buffer, not part of
+    /// the heap (D3364: the collector's side tables live there instead of in the host's
+    /// allocator). Beyond the cap if need be: scratch is the host's memory, as it was.
+    /// Returns its start (`len`). Allocating, or truncating, ends it.
+    pub(crate) fn scratch(&mut self, bytes: u32) -> Result<u32, HeapError> {
+        self.scratch_to(self.len.checked_add(bytes).ok_or(HeapError::OutOfMemory)?)?;
+        Ok(self.len)
+    }
+
+    /// Grows the scratch to end at `end` (zeroed).
+    pub(crate) fn scratch_to(&mut self, end: u32) -> Result<(), HeapError> {
+        let end = end as usize;
+        if end > self.bytes.capacity() {
+            self.bytes
+                .try_reserve_exact(end - self.bytes.len())
+                .map_err(|_| HeapError::HostOutOfMemory)?;
+        }
+        zero_to(&mut self.bytes, end);
+        Ok(())
+    }
+
+    /// Reads scratch (or heap) bytes at `off`: no check against `len`.
+    #[inline(always)]
+    pub(crate) fn scratch_read<T: FieldType>(&self, off: u32) -> T {
+        T::read(&self.bytes, off as usize)
+    }
+
+    /// Writes scratch bytes at `off` (at or above `len`).
+    #[inline(always)]
+    pub(crate) fn scratch_write<T: FieldType>(&mut self, off: u32, v: T) {
+        debug_assert!(off >= self.len, "scratch write into the heap");
+        T::write(&mut self.bytes, off as usize, v)
+    }
+
     /// Frees everything from `to` on (`to <= len`). The zeroed frontier moves back to
     /// `to` too (the capacity stays): zeroing the freed bytes instead cost the collector
     /// a memset of all the garbage, and left a frontier far ahead, so every string
