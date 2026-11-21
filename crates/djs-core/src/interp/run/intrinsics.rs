@@ -530,1528 +530,1557 @@ fn bad_argument_fault(id: u16) -> Fault {
 impl Exec<'_> {
     /// Executes `call_intrinsic id, argc`; `next` is the following instruction.
     pub(super) fn call_intrinsic(&mut self, id: u16, argc: u32, next: u32) -> Step {
-        let Some(info) = intrinsic(id) else {
-            return Err(Fault::error(
-                ErrorKind::InternalError,
-                crate::text::cat!("bad bytecode: intrinsic ", id),
-            ));
-        };
-        let base = self.sp - argc;
-        let arg = |ex: &Self, i: u32| {
-            if i < argc {
-                ex.get(base + i)
-            } else {
-                Value::UNDEFINED
-            }
-        };
-        if info.kind == IntrinsicKind::Builtin {
-            if let Some(v) = self.iter_intrinsic_fast(id, base, argc)? {
-                self.sp = base;
-                self.push(v);
-                self.pc = next;
-                return Ok(None);
-            }
-            return self.call_installed(id, base, argc, next);
-        }
-        if let Some(step) = self.proxy_intrinsic(id, base, argc, next) {
-            return step;
-        }
-        let a0 = arg(self, 0);
-        let v = match id {
-            // Only the prelude calls these, while it builds the realm (D3094).
-            #[cfg(not(djs_prelude))]
-            INSTALL_CONSTRUCTOR
-            | INSTALL_PROTOTYPE
-            | INSTALL_PROTOTYPE_CONSTRUCTOR
-            | INSTALL_ACCESSOR
-            | INSTALL_VALUE
-            | INSTALL_METHOD
-            | MARK_NATIVE
-            | MARK_FAST
-            | INSTALL_INTRINSIC => {
+        // One exit for the arguments an intrinsic does not take (89 sites): each `return
+        // Err(..)` was a call and the result's two stores (0268).
+        'bad: {
+            let Some(info) = intrinsic(id) else {
                 return Err(Fault::error(
                     ErrorKind::InternalError,
-                    crate::text::cat!("%", intrinsic_name(id), " is not in this build"),
+                    crate::text::cat!("bad bytecode: intrinsic ", id),
                 ));
-            }
-            ARGUMENT_COUNT => Value::int(self.header_int(frame::ARGC) as i32),
-            THROW => return Err(Fault::throw(a0)),
-            GET | GET_V => {
-                // Dense elements first: builtins read arrays element by element.
-                if let (Some(o), Some(i)) = (a0.as_object(), index_key(arg(self, 1)))
-                    && let Some(v) = self.heap.get_element_fast(o, i)
-                {
+            };
+            let base = self.sp - argc;
+            let arg = |ex: &Self, i: u32| {
+                if i < argc {
+                    ex.get(base + i)
+                } else {
+                    Value::UNDEFINED
+                }
+            };
+            if info.kind == IntrinsicKind::Builtin {
+                if let Some(v) = self.iter_intrinsic_fast(id, base, argc)? {
                     self.sp = base;
                     self.push(v);
                     self.pc = next;
                     return Ok(None);
                 }
-                let key = conv::to_property_key(self.heap, arg(self, 1))?;
-                match self.lookup(a0, key)? {
-                    Got::Value(v) => v,
-                    Got::Getter(getter) => {
+                return self.call_installed(id, base, argc, next);
+            }
+            if let Some(step) = self.proxy_intrinsic(id, base, argc, next) {
+                return step;
+            }
+            let a0 = arg(self, 0);
+            let v = match id {
+                // Only the prelude calls these, while it builds the realm (D3094).
+                #[cfg(not(djs_prelude))]
+                INSTALL_CONSTRUCTOR
+                | INSTALL_PROTOTYPE
+                | INSTALL_PROTOTYPE_CONSTRUCTOR
+                | INSTALL_ACCESSOR
+                | INSTALL_VALUE
+                | INSTALL_METHOD
+                | MARK_NATIVE
+                | MARK_FAST
+                | INSTALL_INTRINSIC => {
+                    return Err(Fault::error(
+                        ErrorKind::InternalError,
+                        crate::text::cat!("%", intrinsic_name(id), " is not in this build"),
+                    ));
+                }
+                ARGUMENT_COUNT => Value::int(self.header_int(frame::ARGC) as i32),
+                THROW => return Err(Fault::throw(a0)),
+                GET | GET_V => {
+                    // Dense elements first: builtins read arrays element by element.
+                    if let (Some(o), Some(i)) = (a0.as_object(), index_key(arg(self, 1)))
+                        && let Some(v) = self.heap.get_element_fast(o, i)
+                    {
                         self.sp = base;
+                        self.push(v);
                         self.pc = next;
-                        return self.call_accessor(getter, a0, None);
+                        return Ok(None);
                     }
-                    Got::Proxy(p) => {
-                        self.sp = base;
-                        self.pc = next;
-                        return self.call_proxy_get(p, key, a0, Continuation::PushResult);
+                    let key = conv::to_property_key(self.heap, arg(self, 1))?;
+                    match self.lookup(a0, key)? {
+                        Got::Value(v) => v,
+                        Got::Getter(getter) => {
+                            self.sp = base;
+                            self.pc = next;
+                            return self.call_accessor(getter, a0, None);
+                        }
+                        Got::Proxy(p) => {
+                            self.sp = base;
+                            self.pc = next;
+                            return self.call_proxy_get(p, key, a0, Continuation::PushResult);
+                        }
                     }
                 }
-            }
-            SET => {
-                let Some(o) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                let key = conv::to_property_key(self.heap, arg(self, 1))?;
-                let v = arg(self, 2);
-                // The result (undefined) goes below a setter's frame, if one is called.
-                self.sp = base;
-                self.push(Value::UNDEFINED);
-                self.pc = next;
-                return self.set_property(o, key, v, 0);
-            }
-            HAS_PROPERTY => {
-                let Some(o) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                let key = conv::to_property_key(self.heap, arg(self, 1))?;
-                match self.heap.has_property_or_proxy(o, key) {
-                    Ok(r) => Value::bool(r),
-                    Err(p) => {
-                        self.sp = base;
-                        self.pc = next;
-                        let k = self.heap.atom_to_value(key)?;
-                        return self.call_prelude(
-                            proxy::PROXY_HAS,
-                            &[Value::object(p), k],
-                            Continuation::PushResult,
-                        );
-                    }
-                }
-            }
-            CREATE_DATA_PROPERTY_OR_THROW => {
-                let Some(o) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                // An Array's dense element (or the next one) takes the dense store.
-                if let Some(i) = index_key(arg(self, 1))
-                    && self.heap.object_class(o) == ObjectClass::Array
-                    && self.heap.create_element_fast(o, i, arg(self, 2))?
-                {
+                SET => {
+                    let Some(o) = a0.as_object() else {
+                        break 'bad;
+                    };
+                    let key = conv::to_property_key(self.heap, arg(self, 1))?;
+                    let v = arg(self, 2);
+                    // The result (undefined) goes below a setter's frame, if one is called.
                     self.sp = base;
                     self.push(Value::UNDEFINED);
                     self.pc = next;
-                    return Ok(None);
+                    return self.set_property(o, key, v, 0);
                 }
-                let key = conv::to_property_key(self.heap, arg(self, 1))?;
-                if !self.heap.create_data_property(o, key, arg(self, 2))? {
-                    return type_error("could not define property");
-                }
-                Value::UNDEFINED
-            }
-            DELETE_PROPERTY_OR_THROW => {
-                let Some(o) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                let key = conv::to_property_key(self.heap, arg(self, 1))?;
-                if !self.heap.delete_own_property(o, key)? {
-                    return type_error("could not delete property");
-                }
-                Value::UNDEFINED
-            }
-            // `f this a1 .. an` is already a call's stack layout.
-            CALL => return self.call(base, argc - 2, Continuation::PushResult, next),
-            EACH_DENSE => return self.each_dense(base, next),
-            SORT_COMPARE_CALL => return self.sort_compare_call(base, next),
-            // `f a1 .. an` is a construct's.
-            CONSTRUCT => return self.construct(argc - 1, next),
-            OBJECT_CREATE => {
-                let proto = match (a0.as_object(), a0.is_null()) {
-                    (Some(p), _) => Some(p),
-                    (None, true) => None,
-                    _ => return type_error("not an object"),
-                };
-                Value::object(self.heap.new_object(proto)?)
-            }
-            ARRAY_CREATE => {
-                let n = a0.as_number().unwrap_or(f64::NAN);
-                if !(n >= 0.0 && n <= u32::MAX as f64 && (n as u32) as f64 == n) {
-                    return Err(Fault::error(
-                        ErrorKind::RangeError,
-                        String::from("invalid array length"),
-                    ));
-                }
-                let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
-                Value::object(self.heap.new_array_with_length(Some(proto), n as u32)?)
-            }
-            NEW_TYPE_ERROR | NEW_RANGE_ERROR | NEW_SYNTAX_ERROR | NEW_REFERENCE_ERROR => {
-                let msg = match a0.as_string() {
-                    Some(s) => self.heap.str_to_string(s),
-                    None => return bad_argument(id),
-                };
-                let kind = match id {
-                    NEW_TYPE_ERROR => ErrorKind::TypeError,
-                    NEW_SYNTAX_ERROR => ErrorKind::SyntaxError,
-                    NEW_REFERENCE_ERROR => ErrorKind::ReferenceError,
-                    _ => ErrorKind::RangeError,
-                };
-                self.new_error_here(kind, &msg)?
-            }
-            NEW_NOT_CONSTRUCTOR_ERROR => {
-                let msg = self.not_a_constructor_message(a0);
-                self.new_error_here(ErrorKind::TypeError, &msg)?
-            }
-            WELL_KNOWN_SYMBOL => {
-                // The names are the prelude's one-byte string constants: compare their
-                // bytes in place instead of building a String on every call (0056).
-                let name: &[u8] = match a0.as_string().and_then(|s| self.heap.str_view(s)) {
-                    Some(crate::heap::StrView::Latin1(b)) => b,
-                    _ => b"",
-                };
-                // A table, not a `match` on byte strings (that compiled to 1.7 KB, 0107).
-                const NAMES: [(&[u8], crate::heap::atom::Atom); 16] = [
-                    (b"iterator", atoms::SYM_ITERATOR),
-                    (b"asyncIterator", atoms::SYM_ASYNC_ITERATOR),
-                    (b"hasInstance", atoms::SYM_HAS_INSTANCE),
-                    (b"toPrimitive", atoms::SYM_TO_PRIMITIVE),
-                    (b"toStringTag", atoms::SYM_TO_STRING_TAG),
-                    (b"species", atoms::SYM_SPECIES),
-                    (b"isConcatSpreadable", atoms::SYM_IS_CONCAT_SPREADABLE),
-                    (b"unscopables", atoms::SYM_UNSCOPABLES),
-                    (b"match", atoms::SYM_MATCH),
-                    (b"matchAll", atoms::SYM_MATCH_ALL),
-                    (b"replace", atoms::SYM_REPLACE),
-                    (b"search", atoms::SYM_SEARCH),
-                    (b"split", atoms::SYM_SPLIT),
-                    (b"dispose", atoms::SYM_DISPOSE),
-                    (b"asyncDispose", atoms::SYM_ASYNC_DISPOSE),
-                    (b"metadata", atoms::SYM_METADATA),
-                ];
-                let Some(&(_, atom)) = NAMES.iter().find(|(n, _)| *n == name) else {
-                    return bad_argument(id);
-                };
-                Value::symbol(self.heap.atom_symbol(atom).expect("well-known symbol"))
-            }
-            GET_PROTOTYPE_OF | PREVENT_EXTENSIONS | IS_EXTENSIBLE | OBJECT_CLASS_TAG => {
-                let Some(o) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                match id {
-                    GET_PROTOTYPE_OF => self
-                        .heap
-                        .get_prototype_of(o)
-                        .map_or(Value::NULL, Value::object),
-                    PREVENT_EXTENSIONS => Value::bool(self.heap.prevent_extensions(o)),
-                    IS_EXTENSIBLE => Value::bool(self.heap.is_extensible(o)),
-                    _ => {
-                        let tag = match self.heap.is_array(o) {
-                            None => return type_error("revoked proxy"),
-                            Some(true) => "Array",
-                            Some(false) if self.heap.is_proxy(o) && self.heap.is_callable(o) => {
-                                "Function"
-                            }
-                            Some(false) => object::class_tag(self.heap, o),
-                        };
-                        Value::string(self.heap.alloc_str(tag)?)
+                HAS_PROPERTY => {
+                    let Some(o) = a0.as_object() else {
+                        break 'bad;
+                    };
+                    let key = conv::to_property_key(self.heap, arg(self, 1))?;
+                    match self.heap.has_property_or_proxy(o, key) {
+                        Ok(r) => Value::bool(r),
+                        Err(p) => {
+                            self.sp = base;
+                            self.pc = next;
+                            let k = self.heap.atom_to_value(key)?;
+                            return self.call_prelude(
+                                proxy::PROXY_HAS,
+                                &[Value::object(p), k],
+                                Continuation::PushResult,
+                            );
+                        }
                     }
                 }
-            }
-            SET_PROTOTYPE_OF => {
-                let Some(o) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                let proto = arg(self, 1);
-                if proto.as_object().is_none() && !proto.is_null() {
-                    return bad_argument(id);
-                }
-                // Object.prototype is an immutable prototype exotic object (10.4.7).
-                if o == intrinsic_obj(self.heap, Intrinsic::ObjectProto)
-                    && self.heap.get_prototype_of(o) != proto.as_object()
-                {
-                    Value::FALSE
-                } else {
-                    Value::bool(self.heap.set_prototype_of(o, proto.as_object()))
-                }
-            }
-            SET_INTEGRITY_LEVEL | TEST_INTEGRITY_LEVEL => {
-                let Some(o) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                let frozen = arg(self, 1).as_bool() == Some(true);
-                Value::bool(if id == SET_INTEGRITY_LEVEL {
-                    object::set_integrity_level(self.heap, o, frozen)?
-                } else {
-                    object::test_integrity_level(self.heap, o, frozen)
-                })
-            }
-            WRAP_PRIMITIVE => {
-                let proto = arg(self, 1).as_object();
-                match realm::wrap_primitive(self.heap, a0, proto)? {
-                    Some(o) if proto.is_some() => Value::object(o),
-                    _ => return bad_argument(id),
-                }
-            }
-            BOUND_TARGET_FUNCTION => match a0.as_object() {
-                Some(o) if self.heap.object_class(o) == ObjectClass::BoundFunction => {
-                    self.heap.object_slot(o, 0)
-                }
-                _ => Value::UNDEFINED,
-            },
-            NEW_SYMBOL => {
-                if !a0.is_undefined() && a0.as_string().is_none() {
-                    return bad_argument(id);
-                }
-                Value::symbol(self.heap.new_symbol(a0)?)
-            }
-            SYMBOL_DESCRIPTION => match a0.as_symbol() {
-                Some(sym) => self.heap.symbol_description(sym),
-                None => return bad_argument(id),
-            },
-            SYMBOL_FOR => {
-                let Some(key) = a0.as_string() else {
-                    return bad_argument(id);
-                };
-                let registry = intrinsic_obj(self.heap, Intrinsic::SymbolRegistry);
-                let atom = self.heap.intern(key)?;
-                match self
-                    .heap
-                    .get_own_property(registry, atom)
-                    .and_then(|p| p.value())
-                {
-                    Some(sym) => sym,
-                    None => {
-                        let sym = Value::symbol(self.heap.new_symbol(a0)?);
-                        realm::define_hidden(self.heap, registry, atom, sym)?;
-                        sym
+                CREATE_DATA_PROPERTY_OR_THROW => {
+                    let Some(o) = a0.as_object() else {
+                        break 'bad;
+                    };
+                    // An Array's dense element (or the next one) takes the dense store.
+                    if let Some(i) = index_key(arg(self, 1))
+                        && self.heap.object_class(o) == ObjectClass::Array
+                        && self.heap.create_element_fast(o, i, arg(self, 2))?
+                    {
+                        self.sp = base;
+                        self.push(Value::UNDEFINED);
+                        self.pc = next;
+                        return Ok(None);
                     }
+                    let key = conv::to_property_key(self.heap, arg(self, 1))?;
+                    if !self.heap.create_data_property(o, key, arg(self, 2))? {
+                        return type_error("could not define property");
+                    }
+                    Value::UNDEFINED
                 }
-            }
-            SYMBOL_KEY_FOR => {
-                let Some(sym) = a0.as_symbol() else {
-                    return bad_argument(id);
-                };
-                // Registered symbols are described by their key.
-                let desc = self.heap.symbol_description(sym);
-                match desc.as_string() {
-                    Some(d) => {
-                        let registry = intrinsic_obj(self.heap, Intrinsic::SymbolRegistry);
-                        let atom = self.heap.intern(d)?;
-                        let found = self
+                DELETE_PROPERTY_OR_THROW => {
+                    let Some(o) = a0.as_object() else {
+                        break 'bad;
+                    };
+                    let key = conv::to_property_key(self.heap, arg(self, 1))?;
+                    if !self.heap.delete_own_property(o, key)? {
+                        return type_error("could not delete property");
+                    }
+                    Value::UNDEFINED
+                }
+                // `f this a1 .. an` is already a call's stack layout.
+                CALL => return self.call(base, argc - 2, Continuation::PushResult, next),
+                EACH_DENSE => return self.each_dense(base, next),
+                SORT_COMPARE_CALL => return self.sort_compare_call(base, next),
+                // `f a1 .. an` is a construct's.
+                CONSTRUCT => return self.construct(argc - 1, next),
+                OBJECT_CREATE => {
+                    let proto = match (a0.as_object(), a0.is_null()) {
+                        (Some(p), _) => Some(p),
+                        (None, true) => None,
+                        _ => return type_error("not an object"),
+                    };
+                    Value::object(self.heap.new_object(proto)?)
+                }
+                ARRAY_CREATE => {
+                    let n = a0.as_number().unwrap_or(f64::NAN);
+                    if !(n >= 0.0 && n <= u32::MAX as f64 && (n as u32) as f64 == n) {
+                        return Err(Fault::error(
+                            ErrorKind::RangeError,
+                            String::from("invalid array length"),
+                        ));
+                    }
+                    let proto = intrinsic_obj(self.heap, Intrinsic::ArrayProto);
+                    Value::object(self.heap.new_array_with_length(Some(proto), n as u32)?)
+                }
+                NEW_TYPE_ERROR | NEW_RANGE_ERROR | NEW_SYNTAX_ERROR | NEW_REFERENCE_ERROR => {
+                    let msg = match a0.as_string() {
+                        Some(s) => self.heap.str_to_string(s),
+                        None => break 'bad,
+                    };
+                    let kind = match id {
+                        NEW_TYPE_ERROR => ErrorKind::TypeError,
+                        NEW_SYNTAX_ERROR => ErrorKind::SyntaxError,
+                        NEW_REFERENCE_ERROR => ErrorKind::ReferenceError,
+                        _ => ErrorKind::RangeError,
+                    };
+                    self.new_error_here(kind, &msg)?
+                }
+                NEW_NOT_CONSTRUCTOR_ERROR => {
+                    let msg = self.not_a_constructor_message(a0);
+                    self.new_error_here(ErrorKind::TypeError, &msg)?
+                }
+                WELL_KNOWN_SYMBOL => {
+                    // The names are the prelude's one-byte string constants: compare their
+                    // bytes in place instead of building a String on every call (0056).
+                    let name: &[u8] = match a0.as_string().and_then(|s| self.heap.str_view(s)) {
+                        Some(crate::heap::StrView::Latin1(b)) => b,
+                        _ => b"",
+                    };
+                    // A table, not a `match` on byte strings (that compiled to 1.7 KB, 0107).
+                    const NAMES: [(&[u8], crate::heap::atom::Atom); 16] = [
+                        (b"iterator", atoms::SYM_ITERATOR),
+                        (b"asyncIterator", atoms::SYM_ASYNC_ITERATOR),
+                        (b"hasInstance", atoms::SYM_HAS_INSTANCE),
+                        (b"toPrimitive", atoms::SYM_TO_PRIMITIVE),
+                        (b"toStringTag", atoms::SYM_TO_STRING_TAG),
+                        (b"species", atoms::SYM_SPECIES),
+                        (b"isConcatSpreadable", atoms::SYM_IS_CONCAT_SPREADABLE),
+                        (b"unscopables", atoms::SYM_UNSCOPABLES),
+                        (b"match", atoms::SYM_MATCH),
+                        (b"matchAll", atoms::SYM_MATCH_ALL),
+                        (b"replace", atoms::SYM_REPLACE),
+                        (b"search", atoms::SYM_SEARCH),
+                        (b"split", atoms::SYM_SPLIT),
+                        (b"dispose", atoms::SYM_DISPOSE),
+                        (b"asyncDispose", atoms::SYM_ASYNC_DISPOSE),
+                        (b"metadata", atoms::SYM_METADATA),
+                    ];
+                    let Some(&(_, atom)) = NAMES.iter().find(|(n, _)| *n == name) else {
+                        break 'bad;
+                    };
+                    Value::symbol(self.heap.atom_symbol(atom).expect("well-known symbol"))
+                }
+                GET_PROTOTYPE_OF | PREVENT_EXTENSIONS | IS_EXTENSIBLE | OBJECT_CLASS_TAG => {
+                    let Some(o) = a0.as_object() else {
+                        break 'bad;
+                    };
+                    match id {
+                        GET_PROTOTYPE_OF => self
                             .heap
-                            .get_own_property(registry, atom)
-                            .and_then(|p| p.value());
-                        if found == Some(a0) {
-                            desc
-                        } else {
+                            .get_prototype_of(o)
+                            .map_or(Value::NULL, Value::object),
+                        PREVENT_EXTENSIONS => Value::bool(self.heap.prevent_extensions(o)),
+                        IS_EXTENSIBLE => Value::bool(self.heap.is_extensible(o)),
+                        _ => {
+                            let tag = match self.heap.is_array(o) {
+                                None => return type_error("revoked proxy"),
+                                Some(true) => "Array",
+                                Some(false)
+                                    if self.heap.is_proxy(o) && self.heap.is_callable(o) =>
+                                {
+                                    "Function"
+                                }
+                                Some(false) => object::class_tag(self.heap, o),
+                            };
+                            Value::string(self.heap.alloc_str(tag)?)
+                        }
+                    }
+                }
+                SET_PROTOTYPE_OF => {
+                    let Some(o) = a0.as_object() else {
+                        break 'bad;
+                    };
+                    let proto = arg(self, 1);
+                    if proto.as_object().is_none() && !proto.is_null() {
+                        break 'bad;
+                    }
+                    // Object.prototype is an immutable prototype exotic object (10.4.7).
+                    if o == intrinsic_obj(self.heap, Intrinsic::ObjectProto)
+                        && self.heap.get_prototype_of(o) != proto.as_object()
+                    {
+                        Value::FALSE
+                    } else {
+                        Value::bool(self.heap.set_prototype_of(o, proto.as_object()))
+                    }
+                }
+                SET_INTEGRITY_LEVEL | TEST_INTEGRITY_LEVEL => {
+                    let Some(o) = a0.as_object() else {
+                        break 'bad;
+                    };
+                    let frozen = arg(self, 1).as_bool() == Some(true);
+                    Value::bool(if id == SET_INTEGRITY_LEVEL {
+                        object::set_integrity_level(self.heap, o, frozen)?
+                    } else {
+                        object::test_integrity_level(self.heap, o, frozen)
+                    })
+                }
+                WRAP_PRIMITIVE => {
+                    let proto = arg(self, 1).as_object();
+                    match realm::wrap_primitive(self.heap, a0, proto)? {
+                        Some(o) if proto.is_some() => Value::object(o),
+                        _ => break 'bad,
+                    }
+                }
+                BOUND_TARGET_FUNCTION => match a0.as_object() {
+                    Some(o) if self.heap.object_class(o) == ObjectClass::BoundFunction => {
+                        self.heap.object_slot(o, 0)
+                    }
+                    _ => Value::UNDEFINED,
+                },
+                NEW_SYMBOL => {
+                    if !a0.is_undefined() && a0.as_string().is_none() {
+                        break 'bad;
+                    }
+                    Value::symbol(self.heap.new_symbol(a0)?)
+                }
+                SYMBOL_DESCRIPTION => match a0.as_symbol() {
+                    Some(sym) => self.heap.symbol_description(sym),
+                    None => break 'bad,
+                },
+                SYMBOL_FOR => {
+                    let Some(key) = a0.as_string() else {
+                        break 'bad;
+                    };
+                    let registry = intrinsic_obj(self.heap, Intrinsic::SymbolRegistry);
+                    let atom = self.heap.intern(key)?;
+                    match self
+                        .heap
+                        .get_own_property(registry, atom)
+                        .and_then(|p| p.value())
+                    {
+                        Some(sym) => sym,
+                        None => {
+                            let sym = Value::symbol(self.heap.new_symbol(a0)?);
+                            realm::define_hidden(self.heap, registry, atom, sym)?;
+                            sym
+                        }
+                    }
+                }
+                SYMBOL_KEY_FOR => {
+                    let Some(sym) = a0.as_symbol() else {
+                        break 'bad;
+                    };
+                    // Registered symbols are described by their key.
+                    let desc = self.heap.symbol_description(sym);
+                    match desc.as_string() {
+                        Some(d) => {
+                            let registry = intrinsic_obj(self.heap, Intrinsic::SymbolRegistry);
+                            let atom = self.heap.intern(d)?;
+                            let found = self
+                                .heap
+                                .get_own_property(registry, atom)
+                                .and_then(|p| p.value());
+                            if found == Some(a0) {
+                                desc
+                            } else {
+                                Value::UNDEFINED
+                            }
+                        }
+                        None => Value::UNDEFINED,
+                    }
+                }
+                COMPILE_EVAL | COMPILE_FUNCTION => {
+                    let (src, kind, body) = if id == COMPILE_EVAL {
+                        (a0, None, Value::UNDEFINED)
+                    } else {
+                        let kind = match a0.as_int() {
+                            Some(0) => DynamicKind::Normal,
+                            Some(1) => DynamicKind::Generator,
+                            Some(2) => DynamicKind::Async,
+                            Some(3) => DynamicKind::AsyncGenerator,
+                            _ => break 'bad,
+                        };
+                        (arg(self, 1), Some(kind), arg(self, 2))
+                    };
+                    let Some(s) = src.as_string() else {
+                        break 'bad;
+                    };
+                    // The compile is bounded by the source (D1591).
+                    let len =
+                        self.heap.str_len(s) + body.as_string().map_or(0, |b| self.heap.str_len(b));
+                    self.fuel -= COMPILE_FUEL_PER_UNIT * i64::from(len);
+                    let compiled = match kind {
+                        None => eval::compile_eval(self.heap, s)?,
+                        Some(kind) => {
+                            let Some(b) = body.as_string() else {
+                                break 'bad;
+                            };
+                            eval::compile_function(self.heap, kind, s, b)?
+                        }
+                    };
+                    match compiled {
+                        Ok(f) => f,
+                        Err(e) => {
+                            // qjs's stack starts with the position: `at <input>:line:col`.
+                            let err =
+                                realm::new_error(self.heap, ErrorKind::SyntaxError, &e.message)?;
+                            self.set_stack_at(err, self.pc, Some((e.line, e.col)))?;
+                            return Err(Fault::throw(err));
+                        }
+                    }
+                }
+                GLOBAL_OBJECT => realm::intrinsic(self.heap, Intrinsic::Global),
+                ENQUEUE_MICROTASK => {
+                    let job = realm::installed_intrinsic(self.heap, MICROTASK_JOB);
+                    let args = [a0, Value::UNDEFINED, Value::UNDEFINED, Value::UNDEFINED];
+                    promise::enqueue(self.heap, job, args)?;
+                    Value::UNDEFINED
+                }
+                URI_ENCODE | URI_DECODE | STR_ESCAPE | STR_UNESCAPE => {
+                    let Some(s) = a0.as_string() else {
+                        break 'bad;
+                    };
+                    // Linear work: charge for it like the other string scans.
+                    self.fuel -= i64::from(self.heap.str_len(s) / 8);
+                    let component = arg(self, 1).as_bool() == Some(true);
+                    Value::string(match id {
+                        URI_ENCODE => uri::encode(self.heap, s, component)?,
+                        URI_DECODE => uri::decode(self.heap, s, component)?,
+                        STR_ESCAPE => uri::escape(self.heap, s)?,
+                        _ => uri::unescape(self.heap, s)?,
+                    })
+                }
+                NUMBER_TO_INT32 => Value::int(conv::to_int32(a0.as_number().unwrap_or(f64::NAN))),
+                NUMBER_TO_UINT32 => {
+                    conv::number(number::to_uint32(a0.as_number().unwrap_or(f64::NAN)) as f64)
+                }
+                MATH_RANDOM => Value::number(number::random(self.heap)),
+                // An Array Iterator's slots: 0 the target (undefined once exhausted), 1 the
+                // next index (a Number), 2 the kind (0 keys, 1 values, 2 entries).
+                CREATE_ARRAY_ITERATOR => {
+                    let (Some(o), Some(kind)) = (a0.as_object(), arg(self, 1).as_int()) else {
+                        break 'bad;
+                    };
+                    let proto = realm::intrinsic_obj(self.heap, Intrinsic::ArrayIteratorProto);
+                    let it = self.heap.alloc_object(
+                        ObjectClass::ArrayIterator,
+                        Some(proto),
+                        ObjectClass::ArrayIterator.slots(),
+                    )?;
+                    self.heap.set_object_slot(it, 0, Value::object(o));
+                    self.heap.set_object_slot(it, 1, Value::int(0));
+                    self.heap.set_object_slot(it, 2, Value::int(kind));
+                    Value::object(it)
+                }
+                ARRAY_ITERATOR_TARGET => {
+                    // Kind 3 is a String Iterator (0034): not an Array Iterator for `next`.
+                    let it = self.array_iterator(a0)?;
+                    if self.heap.object_slot(it, 2).as_int() == Some(STRING_ITERATOR_KIND) {
+                        return type_error("Array Iterator object expected");
+                    }
+                    self.heap.object_slot(it, 0)
+                }
+                CREATE_STRING_ITERATOR => {
+                    let Some(s) = a0.as_string() else {
+                        break 'bad;
+                    };
+                    let proto = realm::intrinsic_obj(self.heap, Intrinsic::StringIteratorProto);
+                    let it = self.heap.alloc_object(
+                        ObjectClass::ArrayIterator,
+                        Some(proto),
+                        ObjectClass::ArrayIterator.slots(),
+                    )?;
+                    self.heap.set_object_slot(it, 0, Value::string(s));
+                    self.heap.set_object_slot(it, 1, Value::int(0));
+                    self.heap
+                        .set_object_slot(it, 2, Value::int(STRING_ITERATOR_KIND));
+                    Value::object(it)
+                }
+                STRING_ITERATOR_TARGET => match a0.as_object() {
+                    Some(o)
+                        if self.heap.object_class(o) == ObjectClass::ArrayIterator
+                            && self.heap.object_slot(o, 2).as_int()
+                                == Some(STRING_ITERATOR_KIND) =>
+                    {
+                        self.heap.object_slot(o, 0)
+                    }
+                    _ => return type_error("String Iterator object expected"),
+                },
+                STR_CODE_POINT_STRING => {
+                    let (Some(s), Some(i)) = (a0.as_string(), arg(self, 1).as_number()) else {
+                        break 'bad;
+                    };
+                    let s = self.heap.contiguous(s)?;
+                    let i = i as u32;
+                    let n = match string::code_point_at(self.heap, s, i) {
+                        Some(c) if c >= 65536.0 => 2,
+                        Some(_) => 1,
+                        None => break 'bad,
+                    };
+                    Value::string(string::substring(self.heap, s, i, i + n)?)
+                }
+                HAS_ORIGINAL_ITERATION => Value::bool(self.iteration_unmodified(a0)),
+                ARRAY_ITERATOR_INDEX => self.heap.object_slot(self.array_iterator(a0)?, 1),
+                ARRAY_ITERATOR_SET_INDEX => {
+                    let it = self.array_iterator(a0)?;
+                    let Some(i) = arg(self, 1).as_number() else {
+                        break 'bad;
+                    };
+                    self.heap.set_object_slot(it, 1, conv::number(i));
+                    Value::UNDEFINED
+                }
+                ARRAY_ITERATOR_FINISH => {
+                    let it = self.array_iterator(a0)?;
+                    self.heap.set_object_slot(it, 0, Value::UNDEFINED);
+                    Value::UNDEFINED
+                }
+                ARRAY_ITERATOR_KIND => self.heap.object_slot(self.array_iterator(a0)?, 2),
+                CREATE_ITER_RESULT_OBJECT => {
+                    let Some(done) = arg(self, 1).as_bool() else {
+                        break 'bad;
+                    };
+                    let proto = realm::intrinsic_obj(self.heap, Intrinsic::ObjectProto);
+                    let o = self.heap.new_object_from_entries(
+                        Some(proto),
+                        &[atoms::VALUE, atoms::DONE],
+                        &[a0, Value::bool(done)],
+                    )?;
+                    Value::object(o)
+                }
+                CREATE_ARRAY_FROM_PAIR => {
+                    let proto = realm::intrinsic_obj(self.heap, Intrinsic::ArrayProto);
+                    let pair = [a0, arg(self, 1)];
+                    Value::object(self.heap.new_array_from_values(Some(proto), &pair)?)
+                }
+                COMPARE_STRINGS => match (a0.as_string(), arg(self, 1).as_string()) {
+                    (Some(a), Some(b)) => conv::number(string::compare(self.heap, a, b)),
+                    _ => break 'bad,
+                },
+                STRING_CODE_POINTS => match a0.as_string() {
+                    Some(s) => Value::object(string::code_points(self.heap, s)?),
+                    None => break 'bad,
+                },
+                ARRAY_CAN_POP_DENSE => Value::bool(
+                    a0.as_object()
+                        .is_some_and(|o| self.heap.array_can_pop_dense(o)),
+                ),
+                ARRAY_POP_DENSE => {
+                    match a0.as_object().and_then(|o| self.heap.array_pop_dense(o)) {
+                        Some(v) => v,
+                        None => break 'bad,
+                    }
+                }
+                ARRAY_FILL_DENSE => {
+                    let (Some(o), Some(k), Some(fin)) = (
+                        a0.as_object(),
+                        arg(self, 2).as_number(),
+                        arg(self, 3).as_number(),
+                    ) else {
+                        break 'bad;
+                    };
+                    conv::number(decline_oom(
+                        self.array_fill_dense(o, arg(self, 1), k, fin),
+                        k,
+                    )?)
+                }
+                ARRAY_PUSH_DENSE => match a0.as_object() {
+                    Some(o) => {
+                        conv::number(decline_oom(self.array_push_dense(o, arg(self, 1)), -1.0)?)
+                    }
+                    None => break 'bad,
+                },
+                ARRAY_SEARCH_DENSE => {
+                    let (Some(o), Some(from), Some(len), Some(mode)) = (
+                        a0.as_object(),
+                        arg(self, 2).as_number(),
+                        arg(self, 3).as_number(),
+                        arg(self, 4).as_int(),
+                    ) else {
+                        break 'bad;
+                    };
+                    conv::number(self.array_search_dense(o, arg(self, 1), from, len, mode))
+                }
+                ARRAY_SLICE_DENSE => {
+                    let (Some(o), Some(k), Some(fin), Some(a)) = (
+                        a0.as_object(),
+                        arg(self, 1).as_number(),
+                        arg(self, 2).as_number(),
+                        arg(self, 3).as_object(),
+                    ) else {
+                        break 'bad;
+                    };
+                    Value::bool(decline_oom(self.array_slice_dense(o, k, fin, a), false)?)
+                }
+                ARRAY_JOIN_DENSE => {
+                    let (Some(o), Some(len), Some(sep)) = (
+                        a0.as_object(),
+                        arg(self, 1).as_number(),
+                        arg(self, 2).as_string(),
+                    ) else {
+                        break 'bad;
+                    };
+                    decline_oom(self.array_join_dense(o, len, sep), Value::UNDEFINED)?
+                }
+                TYPED_ARRAY_SET_FROM_DENSE if FULL => {
+                    match (a0.as_object(), arg(self, 1).as_object()) {
+                        (Some(o), Some(values)) => {
+                            Value::bool(self.typed_array_set_from_dense(o, values))
+                        }
+                        _ => break 'bad,
+                    }
+                }
+                ENUMERABLE_OWN_DATA_PROPERTIES => {
+                    let (Some(o), Some(kind)) = (a0.as_object(), arg(self, 1).as_int()) else {
+                        break 'bad;
+                    };
+                    decline_oom(self.enumerable_own_data(o, kind), Value::UNDEFINED)?
+                }
+                OBJECT_FROM_ENTRIES_DENSE => {
+                    decline_oom(self.object_from_entries_dense(a0), Value::UNDEFINED)?
+                }
+                IS_ARRAY_CONSTRUCTOR => {
+                    Value::bool(a0 == realm::installed_intrinsic(self.heap, ARRAY_CONSTRUCTOR))
+                }
+                IS_ORIGINAL_COLLECTION_ADDER => {
+                    let original = match arg(self, 1).as_int() {
+                        Some(0) => MAP_PROTOTYPE_SET,
+                        Some(1) => SET_PROTOTYPE_ADD,
+                        _ => break 'bad,
+                    };
+                    Value::bool(a0 == realm::installed_intrinsic(self.heap, original))
+                }
+                ITERATOR_FAST_READY => Value::bool(self.iter_fast_ready(a0, arg(self, 1))),
+                ITERATOR_FAST_DRAIN => {
+                    let n = arg(self, 3).as_number().unwrap_or(-1.0);
+                    conv::number(self.iter_fast_drain(a0, arg(self, 1), arg(self, 2), n)?)
+                }
+                ITERATOR_FAST_VALUE => match self.iter_fast_next(a0, arg(self, 1))? {
+                    super::iter::FastStep::Value(v) => v,
+                    _ => break 'bad,
+                },
+                ARRAY_SPLICE_DENSE => {
+                    let Some(o) = a0.as_object() else {
+                        break 'bad;
+                    };
+                    let as_u32 = |v: Value| {
+                        v.as_number()
+                            .filter(|&n| (n as u32) as f64 == n)
+                            .map(|n| n as u32)
+                    };
+                    match (
+                        as_u32(arg(self, 1)),
+                        as_u32(arg(self, 2)),
+                        as_u32(arg(self, 3)),
+                    ) {
+                        (Some(s), Some(d), Some(i)) => {
+                            Value::bool(self.heap.array_splice_dense(o, s, d, i)?)
+                        }
+                        _ => Value::FALSE,
+                    }
+                }
+                STR_LOCALE_COMPARE => match (a0.as_string(), arg(self, 1).as_string()) {
+                    (Some(a), Some(b)) => conv::number(string::locale_compare(self.heap, a, b)?),
+                    _ => break 'bad,
+                },
+                STR_FROM_CODE_UNITS | STR_FROM_CODE_POINTS => match a0.as_object() {
+                    Some(list) => Value::string(string::from_codes(
+                        self.heap,
+                        list,
+                        id == STR_FROM_CODE_POINTS,
+                    )?),
+                    None => break 'bad,
+                },
+                SORT_PRIMITIVES => match a0.as_object() {
+                    Some(o) => Value::bool(array::sort_primitives(self.heap, o)?),
+                    None => break 'bad,
+                },
+                SORT_START => match a0.as_object() {
+                    Some(o) => Value::object(array::sort_start(self.heap, o)?),
+                    None => break 'bad,
+                },
+                SORT_STEP => match (a0.as_object(), arg(self, 1).as_number()) {
+                    (Some(o), Some(v)) => Value::bool(array::sort_step(self.heap, o, v)?),
+                    _ => break 'bad,
+                },
+                SORT_OPERAND => match (a0.as_object(), arg(self, 1).as_number()) {
+                    (Some(o), Some(w)) => array::sort_operand(self.heap, o, w != 0.0),
+                    _ => break 'bad,
+                },
+                REALM_INTRINSIC => match self.realm_intrinsic(a0) {
+                    Some(v) => v,
+                    None => break 'bad,
+                },
+                STACK_TRACE_VALUE => {
+                    // The caller's frames (the builtin calling this is left out), below the
+                    // topmost call of `a0` if it is a function (D2010).
+                    self.new_stack(self.pc, true, a0.as_object(), None)?
+                }
+                SET_ERROR_STACK => {
+                    let Some(o) = a0.as_object() else {
+                        break 'bad;
+                    };
+                    realm::set_error_stack(self.heap, o, arg(self, 1))?;
+                    Value::UNDEFINED
+                }
+                CALL_SITE_SLOT => {
+                    let i = arg(self, 1).as_int().unwrap_or(-1);
+                    super::stack::callsite_slot(self.heap, a0, i as u32)?
+                }
+                DEFINE_DATA_PROPERTY_OR_THROW => {
+                    let Some(o) = a0.as_object() else {
+                        break 'bad;
+                    };
+                    let key = object::key(self.heap, arg(self, 1))?;
+                    let flags = object::flags(arg(self, 3));
+                    object::define_data_or_throw(self.heap, o, key, arg(self, 2), flags)?;
+                    Value::UNDEFINED
+                }
+                DEFINE_OWN_PROPERTY_FROM_RECORD => {
+                    let (Some(o), Some(rec)) = (a0.as_object(), arg(self, 2).as_object()) else {
+                        break 'bad;
+                    };
+                    let key = object::key(self.heap, arg(self, 1))?;
+                    Value::bool(object::define_from_record(self.heap, o, key, rec)?)
+                }
+                GET_OWN_PROPERTY_DESCRIPTOR_OBJECT | HAS_OWN_PROPERTY | OWN_PROPERTY_ATTRIBUTES => {
+                    let Some(o) = a0.as_object() else {
+                        break 'bad;
+                    };
+                    let key = object::key(self.heap, arg(self, 1))?;
+                    match id {
+                        HAS_OWN_PROPERTY => Value::bool(self.heap.has_own_property(o, key)),
+                        OWN_PROPERTY_ATTRIBUTES => {
+                            Value::int(object::attributes(self.heap, o, key))
+                        }
+                        _ => object::descriptor_object(self.heap, o, key)?,
+                    }
+                }
+                OWN_PROPERTY_KEYS => {
+                    let Some(o) = a0.as_object() else {
+                        break 'bad;
+                    };
+                    object::own_keys(self.heap, o, arg(self, 1).as_int().unwrap_or(0))?
+                }
+                CALL_WITH_ARRAY => {
+                    // `f this args` becomes `f this a1 .. an`.
+                    let Some(args) = arg(self, 2).as_object() else {
+                        break 'bad;
+                    };
+                    let n = self.heap.array_length(args);
+                    self.ensure(base + 2 + n)?;
+                    // A dense array (the usual `apply` argument) in one pass over its store
+                    // (D1784); holes are undefined.
+                    let dense: Option<alloc::vec::Vec<Value>> =
+                        self.heap.dense_array_values(args).map(|vs| {
+                            vs.map(|v| if v.is_hole() { Value::UNDEFINED } else { v })
+                                .collect()
+                        });
+                    match dense {
+                        Some(vs) => {
+                            for (i, v) in (0..).zip(vs) {
+                                self.set(base + 2 + i, v);
+                            }
+                        }
+                        None => {
+                            for i in 0..n {
+                                let v = self
+                                    .heap
+                                    .get_element_fast(args, i)
+                                    .unwrap_or(Value::UNDEFINED);
+                                self.set(base + 2 + i, v);
+                            }
+                        }
+                    }
+                    self.sp = base + 2 + n;
+                    return self.call(base, n, Continuation::PushResult, next);
+                }
+                COLLECTION_CLASS => Value::int(collection::class_index(self.heap, a0)),
+                COLLECTION_GET | COLLECTION_HAS | COLLECTION_SET | COLLECTION_DELETE
+                | COLLECTION_CLEAR | COLLECTION_SIZE | COLLECTION_ITERATOR => {
+                    if collection::class_index(self.heap, a0) < 0 {
+                        break 'bad;
+                    }
+                    let m = a0.as_object().expect("collection");
+                    let key = arg(self, 1);
+                    match id {
+                        COLLECTION_GET => {
+                            self.heap.collection_get(m, key).unwrap_or(Value::UNDEFINED)
+                        }
+                        COLLECTION_HAS => Value::bool(self.heap.collection_has(m, key)),
+                        COLLECTION_SET => {
+                            let key = collection::stored_key(self.heap, key)?;
+                            self.heap.collection_set(m, key, arg(self, 2))?;
+                            Value::UNDEFINED
+                        }
+                        COLLECTION_DELETE => Value::bool(self.heap.collection_delete(m, key)?),
+                        COLLECTION_CLEAR => {
+                            self.heap.collection_clear(m)?;
+                            Value::UNDEFINED
+                        }
+                        COLLECTION_SIZE => Value::int(self.heap.collection_size(m) as i32),
+                        _ => Value::object(collection::iterator(
+                            self.heap,
+                            m,
+                            key.as_int().unwrap_or(0),
+                        )?),
+                    }
+                }
+                COLLECTION_ITERATOR_NEXT => {
+                    collection::iterator_next(self.heap, a0, arg(self, 1).as_bool() == Some(true))?
+                }
+                COLLECTION_ITERATOR_STEP | COLLECTION_ITERATOR_KEY | COLLECTION_ITERATOR_VALUE => {
+                    let Some(it) = a0
+                        .as_object()
+                        .filter(|&o| self.heap.object_class(o) == ObjectClass::CollectionIterator)
+                    else {
+                        break 'bad;
+                    };
+                    match id {
+                        COLLECTION_ITERATOR_STEP => {
+                            Value::bool(self.heap.collection_iterator_next(it).is_some())
+                        }
+                        COLLECTION_ITERATOR_KEY => self.heap.object_slot(it, 4),
+                        _ => self.heap.object_slot(it, 5),
+                    }
+                }
+                CAN_BE_HELD_WEAKLY => Value::bool(collection::can_be_held_weakly(self.heap, a0)?),
+                DATE_NOW => realm::intrinsic(self.heap, Intrinsic::Clock),
+                DATE_VALUE | DATE_SET_VALUE => {
+                    let Some(o) = a0
+                        .as_object()
+                        .filter(|&o| self.heap.object_class(o) == ObjectClass::Date)
+                    else {
+                        return type_error("not a Date object");
+                    };
+                    if id == DATE_SET_VALUE {
+                        let t = arg(self, 1).as_number().unwrap_or(f64::NAN);
+                        self.heap.set_object_slot(o, 0, Value::number(t));
+                    }
+                    conv::number(self.heap.object_slot(o, 0).as_number().unwrap_or(f64::NAN))
+                }
+                DATE_FROM_FIELDS | DATE_SET_FIELDS => {
+                    let offset = self.time_zone_offset();
+                    let (list, local) = if id == DATE_FROM_FIELDS {
+                        (a0.as_object(), arg(self, 1).as_bool() == Some(true))
+                    } else {
+                        (
+                            arg(self, 2).as_object(),
+                            arg(self, 3).as_bool() == Some(true),
+                        )
+                    };
+                    let Some(list) = list else {
+                        break 'bad;
+                    };
+                    let n = self.heap.array_length(list).min(7);
+                    let nums: alloc::vec::Vec<f64> = (0..n)
+                        .map(|i| {
+                            self.heap
+                                .get_element_fast(list, i)
+                                .and_then(|v| v.as_number())
+                                .unwrap_or(f64::NAN)
+                        })
+                        .collect();
+                    let t = if id == DATE_FROM_FIELDS {
+                        let mut f = [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0];
+                        f[..nums.len()].copy_from_slice(&nums);
+                        date::from_fields_checked(&mut f, local, offset)
+                    } else {
+                        let t = a0.as_number().unwrap_or(f64::NAN);
+                        let first = arg(self, 1).as_int().unwrap_or(0).clamp(0, 6) as usize;
+                        let n = nums.len().min(7 - first);
+                        date::set_fields(t, first, &nums[..n], local, offset)
+                    };
+                    conv::number(t)
+                }
+                DATE_GET_FIELD => {
+                    let t = a0.as_number().unwrap_or(f64::NAN);
+                    let field = arg(self, 1).as_int().unwrap_or(0).clamp(0, 7) as usize;
+                    let local = arg(self, 2).as_bool() == Some(true);
+                    match date::fields(t, local, self.time_zone_offset(), false) {
+                        Some(f) => conv::number(f[field]),
+                        None => Value::NAN,
+                    }
+                }
+                DATE_FORMAT => {
+                    let t = a0.as_number().unwrap_or(f64::NAN);
+                    let fmt = arg(self, 1).as_int().unwrap_or(1) as u8;
+                    let part = arg(self, 2).as_int().unwrap_or(3) as u8;
+                    match date::format(t, fmt, part, self.time_zone_offset()) {
+                        Some(s) => Value::string(self.heap.alloc_str(&s)?),
+                        None if fmt == 2 => {
+                            return Err(Fault::error(
+                                ErrorKind::RangeError,
+                                String::from("Date value is NaN"),
+                            ));
+                        }
+                        None => Value::string(self.heap.alloc_str("Invalid Date")?),
+                    }
+                }
+                DATE_PARSE => {
+                    let Some(s) = a0.as_string() else {
+                        break 'bad;
+                    };
+                    let offset = self.time_zone_offset();
+                    conv::number(date::parse(self.heap.str_units(s), offset))
+                }
+                DATE_TIMEZONE_OFFSET => {
+                    let t = a0.as_number().unwrap_or(f64::NAN);
+                    if t.is_nan() {
+                        Value::NAN
+                    } else {
+                        conv::number(0.0 - self.time_zone_offset() as f64)
+                    }
+                }
+                ARRAY_BUFFER_CREATE if FULL => {
+                    let Some(proto) = a0.as_object() else {
+                        break 'bad;
+                    };
+                    let len = arg(self, 1).as_number().unwrap_or(f64::NAN);
+                    let max = arg(self, 2).as_number();
+                    let b = typed::buffer_create(self.heap, proto, len, max)?;
+                    // `max` true: an immutable buffer (D1970).
+                    if arg(self, 2) == Value::TRUE {
+                        self.heap.set_buffer_immutable(b);
+                    }
+                    Value::object(b)
+                }
+                BUFFER_INFO if FULL => {
+                    let b = typed::as_buffer(self.heap, a0)?;
+                    typed::buffer_info(self.heap, b, arg(self, 1).as_int().unwrap_or(0))
+                }
+                BUFFER_DETACH | BUFFER_RESIZE | BUFFER_TRANSFER if FULL => {
+                    let b = typed::as_buffer(self.heap, a0)?;
+                    let n = arg(self, 1).as_number().unwrap_or(0.0);
+                    match id {
+                        BUFFER_DETACH => {
+                            typed::buffer_detach(self.heap, b)?;
+                            Value::UNDEFINED
+                        }
+                        BUFFER_RESIZE => {
+                            typed::buffer_resize(self.heap, b, n as u32)?;
+                            Value::UNDEFINED
+                        }
+                        _ => Value::object(typed::buffer_transfer(
+                            self.heap,
+                            b,
+                            n,
+                            arg(self, 2).as_number(),
+                            arg(self, 2) == Value::TRUE,
+                        )?),
+                    }
+                }
+                BUFFER_COPY if FULL => {
+                    let src = typed::as_buffer(self.heap, a0)?;
+                    let dst = typed::as_buffer(self.heap, arg(self, 2))?;
+                    let num = |v: Value| v.as_number().unwrap_or(0.0) as u32;
+                    let (from, to, count) =
+                        (num(arg(self, 1)), num(arg(self, 3)), num(arg(self, 4)));
+                    if from as u64 + count as u64 > self.heap.buffer_len(src) as u64
+                        || to as u64 + count as u64 > self.heap.buffer_len(dst) as u64
+                    {
+                        break 'bad;
+                    }
+                    typed::buffer_copy(self.heap, src, from, dst, to, count);
+                    Value::UNDEFINED
+                }
+                SORT_NUMBERS if FULL => match a0.as_object() {
+                    Some(o) => {
+                        array::sort_numbers(self.heap, o)?;
+                        Value::UNDEFINED
+                    }
+                    None => break 'bad,
+                },
+                DATA_VIEW_CREATE if FULL => {
+                    let (Some(proto), Some(buffer)) = (a0.as_object(), arg(self, 1).as_object())
+                    else {
+                        break 'bad;
+                    };
+                    let off = arg(self, 2).as_number().unwrap_or(0.0);
+                    let len = arg(self, 3).as_number().unwrap_or(-1.0);
+                    Value::object(typed::data_view_create(self.heap, proto, buffer, off, len)?)
+                }
+                DATA_VIEW_FIELD if FULL => {
+                    let o = typed::as_data_view(self.heap, a0)?;
+                    let field = arg(self, 1).as_int().unwrap_or(0).clamp(0, 2);
+                    self.heap.object_slot(o, field as u32)
+                }
+                DATA_VIEW_GET | DATA_VIEW_SET if FULL => {
+                    let o = typed::as_data_view(self.heap, a0)?;
+                    let at = arg(self, 1).as_number().unwrap_or(-1.0);
+                    let Some(kind) = arg(self, 2)
+                        .as_int()
+                        .and_then(crate::heap::typed::Kind::from_i32)
+                    else {
+                        break 'bad;
+                    };
+                    if id == DATA_VIEW_GET {
+                        let little = arg(self, 3) == Value::TRUE;
+                        let e = typed::view_get(self.heap, o, at, kind, little);
+                        match e {
+                            crate::heap::typed::Elem::Number(n) => Value::number(n),
+                            _ => self.heap.elem_value(kind, e)?,
+                        }
+                    } else {
+                        let Some(e) = self.heap.element_of(kind, arg(self, 3)) else {
+                            break 'bad;
+                        };
+                        let little = arg(self, 4) == Value::TRUE;
+                        typed::view_set(self.heap, o, at, kind, e, little);
+                        Value::UNDEFINED
+                    }
+                }
+                IS_DATA_VIEW if FULL => Value::bool(
+                    a0.as_object()
+                        .is_some_and(|o| self.heap.object_class(o) == ObjectClass::DataView),
+                ),
+                REALM_CONSTRUCTOR => {
+                    let Some(k) = a0.as_string() else {
+                        break 'bad;
+                    };
+                    let ctors = intrinsic_obj(self.heap, Intrinsic::Constructors);
+                    let key = self.heap.intern(k)?;
+                    match self
+                        .heap
+                        .get_own_property(ctors, key)
+                        .and_then(|p| p.value())
+                    {
+                        Some(f) => f,
+                        None => break 'bad,
+                    }
+                }
+                IS_TYPED_ARRAY => {
+                    Value::bool(a0.as_object().is_some_and(|o| self.heap.is_typed_array(o)))
+                }
+                TYPED_ARRAY_CREATE if FULL => {
+                    let (Some(proto), Some(kind), Some(buffer)) = (
+                        a0.as_object(),
+                        arg(self, 1)
+                            .as_int()
+                            .and_then(crate::heap::typed::Kind::from_i32),
+                        arg(self, 2).as_object(),
+                    ) else {
+                        break 'bad;
+                    };
+                    let off = arg(self, 3).as_number().unwrap_or(0.0);
+                    let len = arg(self, 4).as_number().unwrap_or(-1.0);
+                    Value::object(typed::typed_array_create(
+                        self.heap, proto, kind, buffer, off, len,
+                    )?)
+                }
+                TYPED_ARRAY_FIELD => {
+                    let o = typed::as_typed_array(self.heap, a0)?;
+                    typed::typed_array_field(self.heap, o, arg(self, 1).as_int().unwrap_or(0))
+                }
+                TYPED_ARRAY_GET | TYPED_ARRAY_SET if FULL => {
+                    let o = typed::as_typed_array(self.heap, a0)?;
+                    let i = arg(self, 1).as_number().unwrap_or(-1.0);
+                    let index = (i >= 0.0 && i <= u32::MAX as f64 && i == djs_libm::trunc(i))
+                        .then_some(i as u32);
+                    if id == TYPED_ARRAY_GET {
+                        match index {
+                            Some(i) => self.heap.ta_get_alloc(o, i)?.unwrap_or(Value::UNDEFINED),
+                            None => Value::UNDEFINED,
+                        }
+                    } else {
+                        // A Number for a Number kind, a BigInt for a BigInt kind (converted).
+                        // Anything else is a primitive the caller did not convert (`undefined`
+                        // read past a shrunk buffer): ToBigInt's or ToNumber's TypeError.
+                        let kind = self.heap.ta_kind(o);
+                        let Some(e) = self.heap.element_of(kind, arg(self, 2)) else {
+                            return type_error(if kind.is_bigint() {
+                                "cannot convert to bigint"
+                            } else {
+                                "cannot convert bigint to number"
+                            });
+                        };
+                        if let Some(i) = index {
+                            self.heap.ta_set(o, i, e);
+                        }
+                        Value::UNDEFINED
+                    }
+                }
+                TYPED_ARRAY_COPY if FULL => {
+                    let src = typed::as_typed_array(self.heap, a0)?;
+                    let dst = typed::as_typed_array(self.heap, arg(self, 2))?;
+                    let num = |v: Value| v.as_number().unwrap_or(0.0) as u32;
+                    let (from, to, count) =
+                        (num(arg(self, 1)), num(arg(self, 3)), num(arg(self, 4)));
+                    let (ls, ld) = (
+                        self.heap.ta_length(src).unwrap_or(0),
+                        self.heap.ta_length(dst).unwrap_or(0),
+                    );
+                    if from as u64 + count as u64 > ls as u64
+                        || to as u64 + count as u64 > ld as u64
+                    {
+                        break 'bad;
+                    }
+                    typed::typed_array_copy(self.heap, src, from, dst, to, count);
+                    Value::UNDEFINED
+                }
+                TYPED_ARRAY_KIND_PROTO if FULL => {
+                    let Some(kind) = a0.as_int().and_then(crate::heap::typed::Kind::from_i32)
+                    else {
+                        break 'bad;
+                    };
+                    realm::intrinsic(self.heap, typed::kind_proto(kind))
+                }
+                BASE64_ENCODE | HEX_ENCODE if FULL => {
+                    let o = typed::as_typed_array(self.heap, a0)?;
+                    let Some(bytes) = typed::uint8_bytes(self.heap, o) else {
+                        return type_error("ArrayBuffer is detached");
+                    };
+                    let s = if id == HEX_ENCODE {
+                        typed::to_hex(bytes)
+                    } else {
+                        typed::to_base64(
+                            bytes,
+                            arg(self, 1).as_bool() == Some(true),
+                            arg(self, 2).as_bool() == Some(true),
+                        )
+                    };
+                    Value::string(self.heap.alloc_latin1(s.as_bytes())?)
+                }
+                BASE64_DECODE | HEX_DECODE if FULL => {
+                    let Some(s) = a0.as_string() else {
+                        break 'bad;
+                    };
+                    // (By chunk: a dump's buffers are megabytes of Latin-1.)
+                    let mut units: alloc::vec::Vec<u16> =
+                        crate::buf::vec_with_capacity(self.heap.str_len(s) as usize);
+                    for c in self.heap.str_chunks(s) {
+                        match c {
+                            crate::heap::StrView::Latin1(b) => {
+                                units.extend(b.iter().map(|&x| u16::from(x)))
+                            }
+                            c => units.extend(c.units()),
+                        }
+                    }
+                    let max_arg = if id == HEX_DECODE {
+                        arg(self, 1)
+                    } else {
+                        arg(self, 3)
+                    };
+                    let max = max_arg.as_number().unwrap_or(f64::INFINITY);
+                    let max = if max >= usize::MAX as f64 {
+                        usize::MAX
+                    } else {
+                        max as usize
+                    };
+                    let d = if id == HEX_DECODE {
+                        typed::from_hex(&units, max)
+                    } else {
+                        let last = arg(self, 2).as_int().unwrap_or(0) as u8;
+                        typed::from_base64(&units, arg(self, 1).as_bool() == Some(true), last, max)
+                    };
+                    typed::decoded_record(self.heap, d)?
+                }
+                proxy::CONSTRUCT_WITH_THIS => return self.construct_with_this(base, next),
+                CONSTRUCT_WITH_ARRAY => {
+                    // `f args newTarget` becomes `f a1 .. an`.
+                    let Some(args) = arg(self, 1).as_object() else {
+                        break 'bad;
+                    };
+                    let new_target = arg(self, 2);
+                    let n = self.heap.array_length(args);
+                    self.ensure(base + 1 + n)?;
+                    for i in 0..n {
+                        let v = self
+                            .heap
+                            .get_element_fast(args, i)
+                            .unwrap_or(Value::UNDEFINED);
+                        self.set(base + 1 + i, v);
+                    }
+                    self.sp = base + 1 + n;
+                    return self.construct_with(n, next, Some(new_target));
+                }
+                GET_WITH_RECEIVER => {
+                    let key = object::key(self.heap, arg(self, 1))?;
+                    let receiver = arg(self, 2);
+                    match self.lookup(a0, key)? {
+                        Got::Value(v) => v,
+                        Got::Getter(getter) => {
+                            self.sp = base;
+                            self.pc = next;
+                            return self.call_accessor(getter, receiver, None);
+                        }
+                        Got::Proxy(p) => {
+                            self.sp = base;
+                            self.pc = next;
+                            return self.call_proxy_get(p, key, receiver, Continuation::PushResult);
+                        }
+                    }
+                }
+                SET_WITH_RECEIVER => {
+                    let Some(o) = a0.as_object() else {
+                        break 'bad;
+                    };
+                    let key = object::key(self.heap, arg(self, 1))?;
+                    let (v, receiver) = (arg(self, 2), arg(self, 3));
+                    match self.ordinary_set(o, key, v, receiver)? {
+                        SetStep::Done(done) => Value::bool(done),
+                        SetStep::Setter(setter) => {
+                            // `true` goes below the setter's frame; its result is dropped.
+                            self.sp = base;
+                            self.push(Value::TRUE);
+                            self.pc = next;
+                            return self.call_accessor(setter, receiver, Some(v));
+                        }
+                        SetStep::Proxy(p) => {
+                            self.sp = base;
+                            self.pc = next;
+                            let k = self.heap.atom_to_value(key)?;
+                            let args = [Value::object(p), k, v, receiver];
+                            return self.call_prelude(
+                                proxy::PROXY_SET,
+                                &args,
+                                Continuation::PushResult,
+                            );
+                        }
+                        SetStep::Receiver(r) => {
+                            self.sp = base;
+                            self.pc = next;
+                            let k = self.heap.atom_to_value(key)?;
+                            let args = [Value::object(r), k, v];
+                            return self.call_prelude(
+                                proxy::PROXY_SET_ON_RECEIVER,
+                                &args,
+                                Continuation::PushResult,
+                            );
+                        }
+                        SetStep::ArrayLength(a) => {
+                            self.sp = base;
+                            self.pc = next;
+                            let args = [Value::object(a), v, Value::FALSE];
+                            return self.call_prelude(
+                                ARRAY_SET_LENGTH,
+                                &args,
+                                Continuation::PushResult,
+                            );
+                        }
+                    }
+                }
+                DELETE_PROPERTY => {
+                    let Some(o) = a0.as_object() else {
+                        break 'bad;
+                    };
+                    let key = object::key(self.heap, arg(self, 1))?;
+                    Value::bool(self.heap.delete_own_property(o, key)?)
+                }
+                BOUND_FUNCTION_CREATE => {
+                    let (Some(target), Some(args)) = (a0.as_object(), arg(self, 2).as_object())
+                    else {
+                        break 'bad;
+                    };
+                    function::bound_function_create(self.heap, target, arg(self, 1), args)?
+                }
+                FUNCTION_TO_STRING => Value::string(function::to_string(self.heap, a0)?),
+                NUMBER_POW => conv::number(conv::pow(
+                    a0.as_number().unwrap_or(f64::NAN),
+                    arg(self, 1).as_number().unwrap_or(f64::NAN),
+                )),
+                SYMBOL_DESCRIPTIVE_STRING => {
+                    let Some(sym) = a0.as_symbol() else {
+                        break 'bad;
+                    };
+                    let d = match self.heap.symbol_description(sym).as_string() {
+                        Some(d) => self.heap.str_to_string(d),
+                        None => String::new(),
+                    };
+                    Value::string(self.heap.alloc_str(&crate::text::cat!("Symbol(", d, ")"))?)
+                }
+                #[cfg(djs_prelude)]
+                INSTALL_CONSTRUCTOR => {
+                    self.install_constructor(
+                        a0,
+                        arg(self, 1),
+                        arg(self, 2),
+                        arg(self, 3),
+                        arg(self, 4),
+                    )?;
+                    Value::UNDEFINED
+                }
+                #[cfg(djs_prelude)]
+                INSTALL_PROTOTYPE => {
+                    self.install_prototype(a0, arg(self, 1), arg(self, 2))?;
+                    Value::UNDEFINED
+                }
+                #[cfg(djs_prelude)]
+                INSTALL_PROTOTYPE_CONSTRUCTOR => {
+                    self.install_prototype_constructor(a0)?;
+                    Value::UNDEFINED
+                }
+                #[cfg(djs_prelude)]
+                INSTALL_ACCESSOR => {
+                    self.install_accessor(a0, arg(self, 1), arg(self, 2), arg(self, 3))?;
+                    Value::UNDEFINED
+                }
+                #[cfg(djs_prelude)]
+                INSTALL_VALUE => {
+                    let Some(t) = a0.as_string() else {
+                        break 'bad;
+                    };
+                    let path = self.heap.str_to_string(t);
+                    let holder = self.resolve_path(&path)?;
+                    let (key, _) = self.install_key(arg(self, 1))?;
+                    let d = PropertyDescriptor::data(arg(self, 2), object::flags(arg(self, 3)));
+                    self.heap.define_own_property(holder, key, &d)?;
+                    Value::UNDEFINED
+                }
+                #[cfg(djs_prelude)]
+                INSTALL_METHOD => {
+                    self.install_method(a0, arg(self, 1), arg(self, 2), arg(self, 3))?;
+                    Value::UNDEFINED
+                }
+                IS_PROMISE => Value::bool(promise::as_promise(self.heap, a0).is_some()),
+                PROMISE_COMBINATOR_RUN => {
+                    let (kind, index) = (arg(self, 1).as_int(), arg(self, 2).as_number());
+                    let fixed = a0
+                        .as_object()
+                        .filter(|&o| self.heap.object_class(o) == ObjectClass::Record);
+                    let (Some(fixed), Some(kind), Some(index)) = (fixed, kind, index) else {
+                        break 'bad;
+                    };
+                    let (it, next) = (arg(self, 3), arg(self, 4));
+                    conv::number(self.promise_combinator_run(fixed, kind, index, it, next)?)
+                }
+                INTRINSIC_PROMISE => realm::installed_intrinsic(self.heap, PROMISE_CONSTRUCTOR),
+                PROMISE_STATE
+                | PROMISE_RESULT
+                | FULFILL_PROMISE
+                | REJECT_PROMISE
+                | PROMISE_CLAIM_RESOLVE
+                | PERFORM_PROMISE_THEN
+                | ENQUEUE_PROMISE_RESOLVE_THENABLE_JOB => {
+                    let Some(p) = promise::as_promise(self.heap, a0) else {
+                        break 'bad;
+                    };
+                    match id {
+                        PROMISE_STATE => Value::int(promise::state_of(self.heap, p)),
+                        PROMISE_RESULT => promise::result_of(self.heap, p),
+                        FULFILL_PROMISE | REJECT_PROMISE => {
+                            let v = arg(self, 1);
+                            promise::settle(self.heap, p, id == FULFILL_PROMISE, v)?;
+                            Value::UNDEFINED
+                        }
+                        PROMISE_CLAIM_RESOLVE => {
+                            let f = promise::flags(self.heap, p);
+                            promise::set_flags(self.heap, p, f | promise::FLAG_RESOLVED);
+                            Value::bool(f & promise::FLAG_RESOLVED == 0)
+                        }
+                        PERFORM_PROMISE_THEN => {
+                            let (f, r, cap) = (arg(self, 1), arg(self, 2), arg(self, 3));
+                            promise::perform_then(self.heap, p, f, r, cap)?;
+                            Value::UNDEFINED
+                        }
+                        _ => {
+                            let job =
+                                realm::installed_intrinsic(self.heap, PROMISE_RESOLVE_THENABLE_JOB);
+                            let args = [a0, arg(self, 1), arg(self, 2), Value::UNDEFINED];
+                            promise::enqueue(self.heap, job, args)?;
                             Value::UNDEFINED
                         }
                     }
-                    None => Value::UNDEFINED,
                 }
-            }
-            COMPILE_EVAL | COMPILE_FUNCTION => {
-                let (src, kind, body) = if id == COMPILE_EVAL {
-                    (a0, None, Value::UNDEFINED)
-                } else {
-                    let kind = match a0.as_int() {
-                        Some(0) => DynamicKind::Normal,
-                        Some(1) => DynamicKind::Generator,
-                        Some(2) => DynamicKind::Async,
-                        Some(3) => DynamicKind::AsyncGenerator,
-                        _ => return bad_argument(id),
-                    };
-                    (arg(self, 1), Some(kind), arg(self, 2))
-                };
-                let Some(s) = src.as_string() else {
-                    return bad_argument(id);
-                };
-                // The compile is bounded by the source (D1591).
-                let len =
-                    self.heap.str_len(s) + body.as_string().map_or(0, |b| self.heap.str_len(b));
-                self.fuel -= COMPILE_FUEL_PER_UNIT * i64::from(len);
-                let compiled = match kind {
-                    None => eval::compile_eval(self.heap, s)?,
-                    Some(kind) => {
-                        let Some(b) = body.as_string() else {
-                            return bad_argument(id);
-                        };
-                        eval::compile_function(self.heap, kind, s, b)?
-                    }
-                };
-                match compiled {
-                    Ok(f) => f,
-                    Err(e) => {
-                        // qjs's stack starts with the position: `at <input>:line:col`.
-                        let err = realm::new_error(self.heap, ErrorKind::SyntaxError, &e.message)?;
-                        self.set_stack_at(err, self.pc, Some((e.line, e.col)))?;
-                        return Err(Fault::throw(err));
-                    }
-                }
-            }
-            GLOBAL_OBJECT => realm::intrinsic(self.heap, Intrinsic::Global),
-            ENQUEUE_MICROTASK => {
-                let job = realm::installed_intrinsic(self.heap, MICROTASK_JOB);
-                let args = [a0, Value::UNDEFINED, Value::UNDEFINED, Value::UNDEFINED];
-                promise::enqueue(self.heap, job, args)?;
-                Value::UNDEFINED
-            }
-            URI_ENCODE | URI_DECODE | STR_ESCAPE | STR_UNESCAPE => {
-                let Some(s) = a0.as_string() else {
-                    return bad_argument(id);
-                };
-                // Linear work: charge for it like the other string scans.
-                self.fuel -= i64::from(self.heap.str_len(s) / 8);
-                let component = arg(self, 1).as_bool() == Some(true);
-                Value::string(match id {
-                    URI_ENCODE => uri::encode(self.heap, s, component)?,
-                    URI_DECODE => uri::decode(self.heap, s, component)?,
-                    STR_ESCAPE => uri::escape(self.heap, s)?,
-                    _ => uri::unescape(self.heap, s)?,
-                })
-            }
-            NUMBER_TO_INT32 => Value::int(conv::to_int32(a0.as_number().unwrap_or(f64::NAN))),
-            NUMBER_TO_UINT32 => {
-                conv::number(number::to_uint32(a0.as_number().unwrap_or(f64::NAN)) as f64)
-            }
-            MATH_RANDOM => Value::number(number::random(self.heap)),
-            // An Array Iterator's slots: 0 the target (undefined once exhausted), 1 the
-            // next index (a Number), 2 the kind (0 keys, 1 values, 2 entries).
-            CREATE_ARRAY_ITERATOR => {
-                let (Some(o), Some(kind)) = (a0.as_object(), arg(self, 1).as_int()) else {
-                    return bad_argument(id);
-                };
-                let proto = realm::intrinsic_obj(self.heap, Intrinsic::ArrayIteratorProto);
-                let it = self.heap.alloc_object(
-                    ObjectClass::ArrayIterator,
-                    Some(proto),
-                    ObjectClass::ArrayIterator.slots(),
-                )?;
-                self.heap.set_object_slot(it, 0, Value::object(o));
-                self.heap.set_object_slot(it, 1, Value::int(0));
-                self.heap.set_object_slot(it, 2, Value::int(kind));
-                Value::object(it)
-            }
-            ARRAY_ITERATOR_TARGET => {
-                // Kind 3 is a String Iterator (0034): not an Array Iterator for `next`.
-                let it = self.array_iterator(a0)?;
-                if self.heap.object_slot(it, 2).as_int() == Some(STRING_ITERATOR_KIND) {
-                    return type_error("Array Iterator object expected");
-                }
-                self.heap.object_slot(it, 0)
-            }
-            CREATE_STRING_ITERATOR => {
-                let Some(s) = a0.as_string() else {
-                    return bad_argument(id);
-                };
-                let proto = realm::intrinsic_obj(self.heap, Intrinsic::StringIteratorProto);
-                let it = self.heap.alloc_object(
-                    ObjectClass::ArrayIterator,
-                    Some(proto),
-                    ObjectClass::ArrayIterator.slots(),
-                )?;
-                self.heap.set_object_slot(it, 0, Value::string(s));
-                self.heap.set_object_slot(it, 1, Value::int(0));
-                self.heap
-                    .set_object_slot(it, 2, Value::int(STRING_ITERATOR_KIND));
-                Value::object(it)
-            }
-            STRING_ITERATOR_TARGET => match a0.as_object() {
-                Some(o)
-                    if self.heap.object_class(o) == ObjectClass::ArrayIterator
-                        && self.heap.object_slot(o, 2).as_int() == Some(STRING_ITERATOR_KIND) =>
-                {
-                    self.heap.object_slot(o, 0)
-                }
-                _ => return type_error("String Iterator object expected"),
-            },
-            STR_CODE_POINT_STRING => {
-                let (Some(s), Some(i)) = (a0.as_string(), arg(self, 1).as_number()) else {
-                    return bad_argument(id);
-                };
-                let s = self.heap.contiguous(s)?;
-                let i = i as u32;
-                let n = match string::code_point_at(self.heap, s, i) {
-                    Some(c) if c >= 65536.0 => 2,
-                    Some(_) => 1,
-                    None => return bad_argument(id),
-                };
-                Value::string(string::substring(self.heap, s, i, i + n)?)
-            }
-            HAS_ORIGINAL_ITERATION => Value::bool(self.iteration_unmodified(a0)),
-            ARRAY_ITERATOR_INDEX => self.heap.object_slot(self.array_iterator(a0)?, 1),
-            ARRAY_ITERATOR_SET_INDEX => {
-                let it = self.array_iterator(a0)?;
-                let Some(i) = arg(self, 1).as_number() else {
-                    return bad_argument(id);
-                };
-                self.heap.set_object_slot(it, 1, conv::number(i));
-                Value::UNDEFINED
-            }
-            ARRAY_ITERATOR_FINISH => {
-                let it = self.array_iterator(a0)?;
-                self.heap.set_object_slot(it, 0, Value::UNDEFINED);
-                Value::UNDEFINED
-            }
-            ARRAY_ITERATOR_KIND => self.heap.object_slot(self.array_iterator(a0)?, 2),
-            CREATE_ITER_RESULT_OBJECT => {
-                let Some(done) = arg(self, 1).as_bool() else {
-                    return bad_argument(id);
-                };
-                let proto = realm::intrinsic_obj(self.heap, Intrinsic::ObjectProto);
-                let o = self.heap.new_object_from_entries(
-                    Some(proto),
-                    &[atoms::VALUE, atoms::DONE],
-                    &[a0, Value::bool(done)],
-                )?;
-                Value::object(o)
-            }
-            CREATE_ARRAY_FROM_PAIR => {
-                let proto = realm::intrinsic_obj(self.heap, Intrinsic::ArrayProto);
-                let pair = [a0, arg(self, 1)];
-                Value::object(self.heap.new_array_from_values(Some(proto), &pair)?)
-            }
-            COMPARE_STRINGS => match (a0.as_string(), arg(self, 1).as_string()) {
-                (Some(a), Some(b)) => conv::number(string::compare(self.heap, a, b)),
-                _ => return bad_argument(id),
-            },
-            STRING_CODE_POINTS => match a0.as_string() {
-                Some(s) => Value::object(string::code_points(self.heap, s)?),
-                None => return bad_argument(id),
-            },
-            ARRAY_CAN_POP_DENSE => Value::bool(
-                a0.as_object()
-                    .is_some_and(|o| self.heap.array_can_pop_dense(o)),
-            ),
-            ARRAY_POP_DENSE => match a0.as_object().and_then(|o| self.heap.array_pop_dense(o)) {
-                Some(v) => v,
-                None => return bad_argument(id),
-            },
-            ARRAY_FILL_DENSE => {
-                let (Some(o), Some(k), Some(fin)) = (
-                    a0.as_object(),
-                    arg(self, 2).as_number(),
-                    arg(self, 3).as_number(),
-                ) else {
-                    return bad_argument(id);
-                };
-                conv::number(decline_oom(
-                    self.array_fill_dense(o, arg(self, 1), k, fin),
-                    k,
-                )?)
-            }
-            ARRAY_PUSH_DENSE => match a0.as_object() {
-                Some(o) => conv::number(decline_oom(self.array_push_dense(o, arg(self, 1)), -1.0)?),
-                None => return bad_argument(id),
-            },
-            ARRAY_SEARCH_DENSE => {
-                let (Some(o), Some(from), Some(len), Some(mode)) = (
-                    a0.as_object(),
-                    arg(self, 2).as_number(),
-                    arg(self, 3).as_number(),
-                    arg(self, 4).as_int(),
-                ) else {
-                    return bad_argument(id);
-                };
-                conv::number(self.array_search_dense(o, arg(self, 1), from, len, mode))
-            }
-            ARRAY_SLICE_DENSE => {
-                let (Some(o), Some(k), Some(fin), Some(a)) = (
-                    a0.as_object(),
-                    arg(self, 1).as_number(),
-                    arg(self, 2).as_number(),
-                    arg(self, 3).as_object(),
-                ) else {
-                    return bad_argument(id);
-                };
-                Value::bool(decline_oom(self.array_slice_dense(o, k, fin, a), false)?)
-            }
-            ARRAY_JOIN_DENSE => {
-                let (Some(o), Some(len), Some(sep)) = (
-                    a0.as_object(),
-                    arg(self, 1).as_number(),
-                    arg(self, 2).as_string(),
-                ) else {
-                    return bad_argument(id);
-                };
-                decline_oom(self.array_join_dense(o, len, sep), Value::UNDEFINED)?
-            }
-            TYPED_ARRAY_SET_FROM_DENSE if FULL => {
-                match (a0.as_object(), arg(self, 1).as_object()) {
-                    (Some(o), Some(values)) => {
-                        Value::bool(self.typed_array_set_from_dense(o, values))
-                    }
-                    _ => return bad_argument(id),
-                }
-            }
-            ENUMERABLE_OWN_DATA_PROPERTIES => {
-                let (Some(o), Some(kind)) = (a0.as_object(), arg(self, 1).as_int()) else {
-                    return bad_argument(id);
-                };
-                decline_oom(self.enumerable_own_data(o, kind), Value::UNDEFINED)?
-            }
-            OBJECT_FROM_ENTRIES_DENSE => {
-                decline_oom(self.object_from_entries_dense(a0), Value::UNDEFINED)?
-            }
-            IS_ARRAY_CONSTRUCTOR => {
-                Value::bool(a0 == realm::installed_intrinsic(self.heap, ARRAY_CONSTRUCTOR))
-            }
-            IS_ORIGINAL_COLLECTION_ADDER => {
-                let original = match arg(self, 1).as_int() {
-                    Some(0) => MAP_PROTOTYPE_SET,
-                    Some(1) => SET_PROTOTYPE_ADD,
-                    _ => return bad_argument(id),
-                };
-                Value::bool(a0 == realm::installed_intrinsic(self.heap, original))
-            }
-            ITERATOR_FAST_READY => Value::bool(self.iter_fast_ready(a0, arg(self, 1))),
-            ITERATOR_FAST_DRAIN => {
-                let n = arg(self, 3).as_number().unwrap_or(-1.0);
-                conv::number(self.iter_fast_drain(a0, arg(self, 1), arg(self, 2), n)?)
-            }
-            ITERATOR_FAST_VALUE => match self.iter_fast_next(a0, arg(self, 1))? {
-                super::iter::FastStep::Value(v) => v,
-                _ => return bad_argument(id),
-            },
-            ARRAY_SPLICE_DENSE => {
-                let Some(o) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                let as_u32 = |v: Value| {
-                    v.as_number()
-                        .filter(|&n| (n as u32) as f64 == n)
-                        .map(|n| n as u32)
-                };
-                match (
-                    as_u32(arg(self, 1)),
-                    as_u32(arg(self, 2)),
-                    as_u32(arg(self, 3)),
-                ) {
-                    (Some(s), Some(d), Some(i)) => {
-                        Value::bool(self.heap.array_splice_dense(o, s, d, i)?)
-                    }
-                    _ => Value::FALSE,
-                }
-            }
-            STR_LOCALE_COMPARE => match (a0.as_string(), arg(self, 1).as_string()) {
-                (Some(a), Some(b)) => conv::number(string::locale_compare(self.heap, a, b)?),
-                _ => return bad_argument(id),
-            },
-            STR_FROM_CODE_UNITS | STR_FROM_CODE_POINTS => match a0.as_object() {
-                Some(list) => Value::string(string::from_codes(
-                    self.heap,
-                    list,
-                    id == STR_FROM_CODE_POINTS,
-                )?),
-                None => return bad_argument(id),
-            },
-            SORT_PRIMITIVES => match a0.as_object() {
-                Some(o) => Value::bool(array::sort_primitives(self.heap, o)?),
-                None => return bad_argument(id),
-            },
-            SORT_START => match a0.as_object() {
-                Some(o) => Value::object(array::sort_start(self.heap, o)?),
-                None => return bad_argument(id),
-            },
-            SORT_STEP => match (a0.as_object(), arg(self, 1).as_number()) {
-                (Some(o), Some(v)) => Value::bool(array::sort_step(self.heap, o, v)?),
-                _ => return bad_argument(id),
-            },
-            SORT_OPERAND => match (a0.as_object(), arg(self, 1).as_number()) {
-                (Some(o), Some(w)) => array::sort_operand(self.heap, o, w != 0.0),
-                _ => return bad_argument(id),
-            },
-            REALM_INTRINSIC => match self.realm_intrinsic(a0) {
-                Some(v) => v,
-                None => return bad_argument(id),
-            },
-            STACK_TRACE_VALUE => {
-                // The caller's frames (the builtin calling this is left out), below the
-                // topmost call of `a0` if it is a function (D2010).
-                self.new_stack(self.pc, true, a0.as_object(), None)?
-            }
-            SET_ERROR_STACK => {
-                let Some(o) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                realm::set_error_stack(self.heap, o, arg(self, 1))?;
-                Value::UNDEFINED
-            }
-            CALL_SITE_SLOT => {
-                let i = arg(self, 1).as_int().unwrap_or(-1);
-                super::stack::callsite_slot(self.heap, a0, i as u32)?
-            }
-            DEFINE_DATA_PROPERTY_OR_THROW => {
-                let Some(o) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                let key = object::key(self.heap, arg(self, 1))?;
-                let flags = object::flags(arg(self, 3));
-                object::define_data_or_throw(self.heap, o, key, arg(self, 2), flags)?;
-                Value::UNDEFINED
-            }
-            DEFINE_OWN_PROPERTY_FROM_RECORD => {
-                let (Some(o), Some(rec)) = (a0.as_object(), arg(self, 2).as_object()) else {
-                    return bad_argument(id);
-                };
-                let key = object::key(self.heap, arg(self, 1))?;
-                Value::bool(object::define_from_record(self.heap, o, key, rec)?)
-            }
-            GET_OWN_PROPERTY_DESCRIPTOR_OBJECT | HAS_OWN_PROPERTY | OWN_PROPERTY_ATTRIBUTES => {
-                let Some(o) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                let key = object::key(self.heap, arg(self, 1))?;
-                match id {
-                    HAS_OWN_PROPERTY => Value::bool(self.heap.has_own_property(o, key)),
-                    OWN_PROPERTY_ATTRIBUTES => Value::int(object::attributes(self.heap, o, key)),
-                    _ => object::descriptor_object(self.heap, o, key)?,
-                }
-            }
-            OWN_PROPERTY_KEYS => {
-                let Some(o) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                object::own_keys(self.heap, o, arg(self, 1).as_int().unwrap_or(0))?
-            }
-            CALL_WITH_ARRAY => {
-                // `f this args` becomes `f this a1 .. an`.
-                let Some(args) = arg(self, 2).as_object() else {
-                    return bad_argument(id);
-                };
-                let n = self.heap.array_length(args);
-                self.ensure(base + 2 + n)?;
-                // A dense array (the usual `apply` argument) in one pass over its store
-                // (D1784); holes are undefined.
-                let dense: Option<alloc::vec::Vec<Value>> =
-                    self.heap.dense_array_values(args).map(|vs| {
-                        vs.map(|v| if v.is_hole() { Value::UNDEFINED } else { v })
-                            .collect()
-                    });
-                match dense {
-                    Some(vs) => {
-                        for (i, v) in (0..).zip(vs) {
-                            self.set(base + 2 + i, v);
-                        }
-                    }
-                    None => {
-                        for i in 0..n {
-                            let v = self
-                                .heap
-                                .get_element_fast(args, i)
-                                .unwrap_or(Value::UNDEFINED);
-                            self.set(base + 2 + i, v);
-                        }
-                    }
-                }
-                self.sp = base + 2 + n;
-                return self.call(base, n, Continuation::PushResult, next);
-            }
-            COLLECTION_CLASS => Value::int(collection::class_index(self.heap, a0)),
-            COLLECTION_GET | COLLECTION_HAS | COLLECTION_SET | COLLECTION_DELETE
-            | COLLECTION_CLEAR | COLLECTION_SIZE | COLLECTION_ITERATOR => {
-                if collection::class_index(self.heap, a0) < 0 {
-                    return bad_argument(id);
-                }
-                let m = a0.as_object().expect("collection");
-                let key = arg(self, 1);
-                match id {
-                    COLLECTION_GET => self.heap.collection_get(m, key).unwrap_or(Value::UNDEFINED),
-                    COLLECTION_HAS => Value::bool(self.heap.collection_has(m, key)),
-                    COLLECTION_SET => {
-                        let key = collection::stored_key(self.heap, key)?;
-                        self.heap.collection_set(m, key, arg(self, 2))?;
-                        Value::UNDEFINED
-                    }
-                    COLLECTION_DELETE => Value::bool(self.heap.collection_delete(m, key)?),
-                    COLLECTION_CLEAR => {
-                        self.heap.collection_clear(m)?;
-                        Value::UNDEFINED
-                    }
-                    COLLECTION_SIZE => Value::int(self.heap.collection_size(m) as i32),
-                    _ => Value::object(collection::iterator(
-                        self.heap,
-                        m,
-                        key.as_int().unwrap_or(0),
-                    )?),
-                }
-            }
-            COLLECTION_ITERATOR_NEXT => {
-                collection::iterator_next(self.heap, a0, arg(self, 1).as_bool() == Some(true))?
-            }
-            COLLECTION_ITERATOR_STEP | COLLECTION_ITERATOR_KEY | COLLECTION_ITERATOR_VALUE => {
-                let Some(it) = a0
-                    .as_object()
-                    .filter(|&o| self.heap.object_class(o) == ObjectClass::CollectionIterator)
-                else {
-                    return bad_argument(id);
-                };
-                match id {
-                    COLLECTION_ITERATOR_STEP => {
-                        Value::bool(self.heap.collection_iterator_next(it).is_some())
-                    }
-                    COLLECTION_ITERATOR_KEY => self.heap.object_slot(it, 4),
-                    _ => self.heap.object_slot(it, 5),
-                }
-            }
-            CAN_BE_HELD_WEAKLY => Value::bool(collection::can_be_held_weakly(self.heap, a0)?),
-            DATE_NOW => realm::intrinsic(self.heap, Intrinsic::Clock),
-            DATE_VALUE | DATE_SET_VALUE => {
-                let Some(o) = a0
-                    .as_object()
-                    .filter(|&o| self.heap.object_class(o) == ObjectClass::Date)
-                else {
-                    return type_error("not a Date object");
-                };
-                if id == DATE_SET_VALUE {
-                    let t = arg(self, 1).as_number().unwrap_or(f64::NAN);
-                    self.heap.set_object_slot(o, 0, Value::number(t));
-                }
-                conv::number(self.heap.object_slot(o, 0).as_number().unwrap_or(f64::NAN))
-            }
-            DATE_FROM_FIELDS | DATE_SET_FIELDS => {
-                let offset = self.time_zone_offset();
-                let (list, local) = if id == DATE_FROM_FIELDS {
-                    (a0.as_object(), arg(self, 1).as_bool() == Some(true))
-                } else {
-                    (
-                        arg(self, 2).as_object(),
-                        arg(self, 3).as_bool() == Some(true),
-                    )
-                };
-                let Some(list) = list else {
-                    return bad_argument(id);
-                };
-                let n = self.heap.array_length(list).min(7);
-                let nums: alloc::vec::Vec<f64> = (0..n)
-                    .map(|i| {
-                        self.heap
-                            .get_element_fast(list, i)
-                            .and_then(|v| v.as_number())
-                            .unwrap_or(f64::NAN)
-                    })
-                    .collect();
-                let t = if id == DATE_FROM_FIELDS {
-                    let mut f = [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0];
-                    f[..nums.len()].copy_from_slice(&nums);
-                    date::from_fields_checked(&mut f, local, offset)
-                } else {
-                    let t = a0.as_number().unwrap_or(f64::NAN);
-                    let first = arg(self, 1).as_int().unwrap_or(0).clamp(0, 6) as usize;
-                    let n = nums.len().min(7 - first);
-                    date::set_fields(t, first, &nums[..n], local, offset)
-                };
-                conv::number(t)
-            }
-            DATE_GET_FIELD => {
-                let t = a0.as_number().unwrap_or(f64::NAN);
-                let field = arg(self, 1).as_int().unwrap_or(0).clamp(0, 7) as usize;
-                let local = arg(self, 2).as_bool() == Some(true);
-                match date::fields(t, local, self.time_zone_offset(), false) {
-                    Some(f) => conv::number(f[field]),
-                    None => Value::NAN,
-                }
-            }
-            DATE_FORMAT => {
-                let t = a0.as_number().unwrap_or(f64::NAN);
-                let fmt = arg(self, 1).as_int().unwrap_or(1) as u8;
-                let part = arg(self, 2).as_int().unwrap_or(3) as u8;
-                match date::format(t, fmt, part, self.time_zone_offset()) {
-                    Some(s) => Value::string(self.heap.alloc_str(&s)?),
-                    None if fmt == 2 => {
-                        return Err(Fault::error(
-                            ErrorKind::RangeError,
-                            String::from("Date value is NaN"),
-                        ));
-                    }
-                    None => Value::string(self.heap.alloc_str("Invalid Date")?),
-                }
-            }
-            DATE_PARSE => {
-                let Some(s) = a0.as_string() else {
-                    return bad_argument(id);
-                };
-                let offset = self.time_zone_offset();
-                conv::number(date::parse(self.heap.str_units(s), offset))
-            }
-            DATE_TIMEZONE_OFFSET => {
-                let t = a0.as_number().unwrap_or(f64::NAN);
-                if t.is_nan() {
-                    Value::NAN
-                } else {
-                    conv::number(0.0 - self.time_zone_offset() as f64)
-                }
-            }
-            ARRAY_BUFFER_CREATE if FULL => {
-                let Some(proto) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                let len = arg(self, 1).as_number().unwrap_or(f64::NAN);
-                let max = arg(self, 2).as_number();
-                let b = typed::buffer_create(self.heap, proto, len, max)?;
-                // `max` true: an immutable buffer (D1970).
-                if arg(self, 2) == Value::TRUE {
-                    self.heap.set_buffer_immutable(b);
-                }
-                Value::object(b)
-            }
-            BUFFER_INFO if FULL => {
-                let b = typed::as_buffer(self.heap, a0)?;
-                typed::buffer_info(self.heap, b, arg(self, 1).as_int().unwrap_or(0))
-            }
-            BUFFER_DETACH | BUFFER_RESIZE | BUFFER_TRANSFER if FULL => {
-                let b = typed::as_buffer(self.heap, a0)?;
-                let n = arg(self, 1).as_number().unwrap_or(0.0);
-                match id {
-                    BUFFER_DETACH => {
-                        typed::buffer_detach(self.heap, b)?;
-                        Value::UNDEFINED
-                    }
-                    BUFFER_RESIZE => {
-                        typed::buffer_resize(self.heap, b, n as u32)?;
-                        Value::UNDEFINED
-                    }
-                    _ => Value::object(typed::buffer_transfer(
-                        self.heap,
-                        b,
-                        n,
-                        arg(self, 2).as_number(),
-                        arg(self, 2) == Value::TRUE,
-                    )?),
-                }
-            }
-            BUFFER_COPY if FULL => {
-                let src = typed::as_buffer(self.heap, a0)?;
-                let dst = typed::as_buffer(self.heap, arg(self, 2))?;
-                let num = |v: Value| v.as_number().unwrap_or(0.0) as u32;
-                let (from, to, count) = (num(arg(self, 1)), num(arg(self, 3)), num(arg(self, 4)));
-                if from as u64 + count as u64 > self.heap.buffer_len(src) as u64
-                    || to as u64 + count as u64 > self.heap.buffer_len(dst) as u64
-                {
-                    return bad_argument(id);
-                }
-                typed::buffer_copy(self.heap, src, from, dst, to, count);
-                Value::UNDEFINED
-            }
-            SORT_NUMBERS if FULL => match a0.as_object() {
-                Some(o) => {
-                    array::sort_numbers(self.heap, o)?;
-                    Value::UNDEFINED
-                }
-                None => return bad_argument(id),
-            },
-            DATA_VIEW_CREATE if FULL => {
-                let (Some(proto), Some(buffer)) = (a0.as_object(), arg(self, 1).as_object()) else {
-                    return bad_argument(id);
-                };
-                let off = arg(self, 2).as_number().unwrap_or(0.0);
-                let len = arg(self, 3).as_number().unwrap_or(-1.0);
-                Value::object(typed::data_view_create(self.heap, proto, buffer, off, len)?)
-            }
-            DATA_VIEW_FIELD if FULL => {
-                let o = typed::as_data_view(self.heap, a0)?;
-                let field = arg(self, 1).as_int().unwrap_or(0).clamp(0, 2);
-                self.heap.object_slot(o, field as u32)
-            }
-            DATA_VIEW_GET | DATA_VIEW_SET if FULL => {
-                let o = typed::as_data_view(self.heap, a0)?;
-                let at = arg(self, 1).as_number().unwrap_or(-1.0);
-                let Some(kind) = arg(self, 2)
-                    .as_int()
-                    .and_then(crate::heap::typed::Kind::from_i32)
-                else {
-                    return bad_argument(id);
-                };
-                if id == DATA_VIEW_GET {
-                    let little = arg(self, 3) == Value::TRUE;
-                    let e = typed::view_get(self.heap, o, at, kind, little);
-                    match e {
-                        crate::heap::typed::Elem::Number(n) => Value::number(n),
-                        _ => self.heap.elem_value(kind, e)?,
-                    }
-                } else {
-                    let Some(e) = self.heap.element_of(kind, arg(self, 3)) else {
-                        return bad_argument(id);
-                    };
-                    let little = arg(self, 4) == Value::TRUE;
-                    typed::view_set(self.heap, o, at, kind, e, little);
-                    Value::UNDEFINED
-                }
-            }
-            IS_DATA_VIEW if FULL => Value::bool(
-                a0.as_object()
-                    .is_some_and(|o| self.heap.object_class(o) == ObjectClass::DataView),
-            ),
-            REALM_CONSTRUCTOR => {
-                let Some(k) = a0.as_string() else {
-                    return bad_argument(id);
-                };
-                let ctors = intrinsic_obj(self.heap, Intrinsic::Constructors);
-                let key = self.heap.intern(k)?;
-                match self
-                    .heap
-                    .get_own_property(ctors, key)
-                    .and_then(|p| p.value())
-                {
-                    Some(f) => f,
-                    None => return bad_argument(id),
-                }
-            }
-            IS_TYPED_ARRAY => {
-                Value::bool(a0.as_object().is_some_and(|o| self.heap.is_typed_array(o)))
-            }
-            TYPED_ARRAY_CREATE if FULL => {
-                let (Some(proto), Some(kind), Some(buffer)) = (
-                    a0.as_object(),
-                    arg(self, 1)
-                        .as_int()
-                        .and_then(crate::heap::typed::Kind::from_i32),
-                    arg(self, 2).as_object(),
-                ) else {
-                    return bad_argument(id);
-                };
-                let off = arg(self, 3).as_number().unwrap_or(0.0);
-                let len = arg(self, 4).as_number().unwrap_or(-1.0);
-                Value::object(typed::typed_array_create(
-                    self.heap, proto, kind, buffer, off, len,
-                )?)
-            }
-            TYPED_ARRAY_FIELD => {
-                let o = typed::as_typed_array(self.heap, a0)?;
-                typed::typed_array_field(self.heap, o, arg(self, 1).as_int().unwrap_or(0))
-            }
-            TYPED_ARRAY_GET | TYPED_ARRAY_SET if FULL => {
-                let o = typed::as_typed_array(self.heap, a0)?;
-                let i = arg(self, 1).as_number().unwrap_or(-1.0);
-                let index = (i >= 0.0 && i <= u32::MAX as f64 && i == djs_libm::trunc(i))
-                    .then_some(i as u32);
-                if id == TYPED_ARRAY_GET {
-                    match index {
-                        Some(i) => self.heap.ta_get_alloc(o, i)?.unwrap_or(Value::UNDEFINED),
-                        None => Value::UNDEFINED,
-                    }
-                } else {
-                    // A Number for a Number kind, a BigInt for a BigInt kind (converted).
-                    // Anything else is a primitive the caller did not convert (`undefined`
-                    // read past a shrunk buffer): ToBigInt's or ToNumber's TypeError.
-                    let kind = self.heap.ta_kind(o);
-                    let Some(e) = self.heap.element_of(kind, arg(self, 2)) else {
-                        return type_error(if kind.is_bigint() {
-                            "cannot convert to bigint"
-                        } else {
-                            "cannot convert bigint to number"
-                        });
-                    };
-                    if let Some(i) = index {
-                        self.heap.ta_set(o, i, e);
-                    }
-                    Value::UNDEFINED
-                }
-            }
-            TYPED_ARRAY_COPY if FULL => {
-                let src = typed::as_typed_array(self.heap, a0)?;
-                let dst = typed::as_typed_array(self.heap, arg(self, 2))?;
-                let num = |v: Value| v.as_number().unwrap_or(0.0) as u32;
-                let (from, to, count) = (num(arg(self, 1)), num(arg(self, 3)), num(arg(self, 4)));
-                let (ls, ld) = (
-                    self.heap.ta_length(src).unwrap_or(0),
-                    self.heap.ta_length(dst).unwrap_or(0),
-                );
-                if from as u64 + count as u64 > ls as u64 || to as u64 + count as u64 > ld as u64 {
-                    return bad_argument(id);
-                }
-                typed::typed_array_copy(self.heap, src, from, dst, to, count);
-                Value::UNDEFINED
-            }
-            TYPED_ARRAY_KIND_PROTO if FULL => {
-                let Some(kind) = a0.as_int().and_then(crate::heap::typed::Kind::from_i32) else {
-                    return bad_argument(id);
-                };
-                realm::intrinsic(self.heap, typed::kind_proto(kind))
-            }
-            BASE64_ENCODE | HEX_ENCODE if FULL => {
-                let o = typed::as_typed_array(self.heap, a0)?;
-                let Some(bytes) = typed::uint8_bytes(self.heap, o) else {
-                    return type_error("ArrayBuffer is detached");
-                };
-                let s = if id == HEX_ENCODE {
-                    typed::to_hex(bytes)
-                } else {
-                    typed::to_base64(
-                        bytes,
-                        arg(self, 1).as_bool() == Some(true),
-                        arg(self, 2).as_bool() == Some(true),
-                    )
-                };
-                Value::string(self.heap.alloc_latin1(s.as_bytes())?)
-            }
-            BASE64_DECODE | HEX_DECODE if FULL => {
-                let Some(s) = a0.as_string() else {
-                    return bad_argument(id);
-                };
-                // (By chunk: a dump's buffers are megabytes of Latin-1.)
-                let mut units: alloc::vec::Vec<u16> =
-                    crate::buf::vec_with_capacity(self.heap.str_len(s) as usize);
-                for c in self.heap.str_chunks(s) {
-                    match c {
-                        crate::heap::StrView::Latin1(b) => {
-                            units.extend(b.iter().map(|&x| u16::from(x)))
-                        }
-                        c => units.extend(c.units()),
-                    }
-                }
-                let max_arg = if id == HEX_DECODE {
-                    arg(self, 1)
-                } else {
-                    arg(self, 3)
-                };
-                let max = max_arg.as_number().unwrap_or(f64::INFINITY);
-                let max = if max >= usize::MAX as f64 {
-                    usize::MAX
-                } else {
-                    max as usize
-                };
-                let d = if id == HEX_DECODE {
-                    typed::from_hex(&units, max)
-                } else {
-                    let last = arg(self, 2).as_int().unwrap_or(0) as u8;
-                    typed::from_base64(&units, arg(self, 1).as_bool() == Some(true), last, max)
-                };
-                typed::decoded_record(self.heap, d)?
-            }
-            proxy::CONSTRUCT_WITH_THIS => return self.construct_with_this(base, next),
-            CONSTRUCT_WITH_ARRAY => {
-                // `f args newTarget` becomes `f a1 .. an`.
-                let Some(args) = arg(self, 1).as_object() else {
-                    return bad_argument(id);
-                };
-                let new_target = arg(self, 2);
-                let n = self.heap.array_length(args);
-                self.ensure(base + 1 + n)?;
-                for i in 0..n {
-                    let v = self
-                        .heap
-                        .get_element_fast(args, i)
-                        .unwrap_or(Value::UNDEFINED);
-                    self.set(base + 1 + i, v);
-                }
-                self.sp = base + 1 + n;
-                return self.construct_with(n, next, Some(new_target));
-            }
-            GET_WITH_RECEIVER => {
-                let key = object::key(self.heap, arg(self, 1))?;
-                let receiver = arg(self, 2);
-                match self.lookup(a0, key)? {
-                    Got::Value(v) => v,
-                    Got::Getter(getter) => {
-                        self.sp = base;
-                        self.pc = next;
-                        return self.call_accessor(getter, receiver, None);
-                    }
-                    Got::Proxy(p) => {
-                        self.sp = base;
-                        self.pc = next;
-                        return self.call_proxy_get(p, key, receiver, Continuation::PushResult);
-                    }
-                }
-            }
-            SET_WITH_RECEIVER => {
-                let Some(o) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                let key = object::key(self.heap, arg(self, 1))?;
-                let (v, receiver) = (arg(self, 2), arg(self, 3));
-                match self.ordinary_set(o, key, v, receiver)? {
-                    SetStep::Done(done) => Value::bool(done),
-                    SetStep::Setter(setter) => {
-                        // `true` goes below the setter's frame; its result is dropped.
-                        self.sp = base;
-                        self.push(Value::TRUE);
-                        self.pc = next;
-                        return self.call_accessor(setter, receiver, Some(v));
-                    }
-                    SetStep::Proxy(p) => {
-                        self.sp = base;
-                        self.pc = next;
-                        let k = self.heap.atom_to_value(key)?;
-                        let args = [Value::object(p), k, v, receiver];
-                        return self.call_prelude(
-                            proxy::PROXY_SET,
-                            &args,
-                            Continuation::PushResult,
-                        );
-                    }
-                    SetStep::Receiver(r) => {
-                        self.sp = base;
-                        self.pc = next;
-                        let k = self.heap.atom_to_value(key)?;
-                        let args = [Value::object(r), k, v];
-                        return self.call_prelude(
-                            proxy::PROXY_SET_ON_RECEIVER,
-                            &args,
-                            Continuation::PushResult,
-                        );
-                    }
-                    SetStep::ArrayLength(a) => {
-                        self.sp = base;
-                        self.pc = next;
-                        let args = [Value::object(a), v, Value::FALSE];
-                        return self.call_prelude(
-                            ARRAY_SET_LENGTH,
-                            &args,
-                            Continuation::PushResult,
-                        );
-                    }
-                }
-            }
-            DELETE_PROPERTY => {
-                let Some(o) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                let key = object::key(self.heap, arg(self, 1))?;
-                Value::bool(self.heap.delete_own_property(o, key)?)
-            }
-            BOUND_FUNCTION_CREATE => {
-                let (Some(target), Some(args)) = (a0.as_object(), arg(self, 2).as_object()) else {
-                    return bad_argument(id);
-                };
-                function::bound_function_create(self.heap, target, arg(self, 1), args)?
-            }
-            FUNCTION_TO_STRING => Value::string(function::to_string(self.heap, a0)?),
-            NUMBER_POW => conv::number(conv::pow(
-                a0.as_number().unwrap_or(f64::NAN),
-                arg(self, 1).as_number().unwrap_or(f64::NAN),
-            )),
-            SYMBOL_DESCRIPTIVE_STRING => {
-                let Some(sym) = a0.as_symbol() else {
-                    return bad_argument(id);
-                };
-                let d = match self.heap.symbol_description(sym).as_string() {
-                    Some(d) => self.heap.str_to_string(d),
-                    None => String::new(),
-                };
-                Value::string(self.heap.alloc_str(&crate::text::cat!("Symbol(", d, ")"))?)
-            }
-            #[cfg(djs_prelude)]
-            INSTALL_CONSTRUCTOR => {
-                self.install_constructor(
-                    a0,
-                    arg(self, 1),
-                    arg(self, 2),
-                    arg(self, 3),
-                    arg(self, 4),
-                )?;
-                Value::UNDEFINED
-            }
-            #[cfg(djs_prelude)]
-            INSTALL_PROTOTYPE => {
-                self.install_prototype(a0, arg(self, 1), arg(self, 2))?;
-                Value::UNDEFINED
-            }
-            #[cfg(djs_prelude)]
-            INSTALL_PROTOTYPE_CONSTRUCTOR => {
-                self.install_prototype_constructor(a0)?;
-                Value::UNDEFINED
-            }
-            #[cfg(djs_prelude)]
-            INSTALL_ACCESSOR => {
-                self.install_accessor(a0, arg(self, 1), arg(self, 2), arg(self, 3))?;
-                Value::UNDEFINED
-            }
-            #[cfg(djs_prelude)]
-            INSTALL_VALUE => {
-                let Some(t) = a0.as_string() else {
-                    return bad_argument(id);
-                };
-                let path = self.heap.str_to_string(t);
-                let holder = self.resolve_path(&path)?;
-                let (key, _) = self.install_key(arg(self, 1))?;
-                let d = PropertyDescriptor::data(arg(self, 2), object::flags(arg(self, 3)));
-                self.heap.define_own_property(holder, key, &d)?;
-                Value::UNDEFINED
-            }
-            #[cfg(djs_prelude)]
-            INSTALL_METHOD => {
-                self.install_method(a0, arg(self, 1), arg(self, 2), arg(self, 3))?;
-                Value::UNDEFINED
-            }
-            IS_PROMISE => Value::bool(promise::as_promise(self.heap, a0).is_some()),
-            PROMISE_COMBINATOR_RUN => {
-                let (kind, index) = (arg(self, 1).as_int(), arg(self, 2).as_number());
-                let fixed = a0
-                    .as_object()
-                    .filter(|&o| self.heap.object_class(o) == ObjectClass::Record);
-                let (Some(fixed), Some(kind), Some(index)) = (fixed, kind, index) else {
-                    return bad_argument(id);
-                };
-                let (it, next) = (arg(self, 3), arg(self, 4));
-                conv::number(self.promise_combinator_run(fixed, kind, index, it, next)?)
-            }
-            INTRINSIC_PROMISE => realm::installed_intrinsic(self.heap, PROMISE_CONSTRUCTOR),
-            PROMISE_STATE
-            | PROMISE_RESULT
-            | FULFILL_PROMISE
-            | REJECT_PROMISE
-            | PROMISE_CLAIM_RESOLVE
-            | PERFORM_PROMISE_THEN
-            | ENQUEUE_PROMISE_RESOLVE_THENABLE_JOB => {
-                let Some(p) = promise::as_promise(self.heap, a0) else {
-                    return bad_argument(id);
-                };
-                match id {
-                    PROMISE_STATE => Value::int(promise::state_of(self.heap, p)),
-                    PROMISE_RESULT => promise::result_of(self.heap, p),
-                    FULFILL_PROMISE | REJECT_PROMISE => {
-                        let v = arg(self, 1);
-                        promise::settle(self.heap, p, id == FULFILL_PROMISE, v)?;
-                        Value::UNDEFINED
-                    }
-                    PROMISE_CLAIM_RESOLVE => {
-                        let f = promise::flags(self.heap, p);
-                        promise::set_flags(self.heap, p, f | promise::FLAG_RESOLVED);
-                        Value::bool(f & promise::FLAG_RESOLVED == 0)
-                    }
-                    PERFORM_PROMISE_THEN => {
-                        let (f, r, cap) = (arg(self, 1), arg(self, 2), arg(self, 3));
-                        promise::perform_then(self.heap, p, f, r, cap)?;
-                        Value::UNDEFINED
-                    }
-                    _ => {
-                        let job =
-                            realm::installed_intrinsic(self.heap, PROMISE_RESOLVE_THENABLE_JOB);
-                        let args = [a0, arg(self, 1), arg(self, 2), Value::UNDEFINED];
-                        promise::enqueue(self.heap, job, args)?;
-                        Value::UNDEFINED
-                    }
-                }
-            }
-            GENERATOR_STATE => match suspend::as_generator(self.heap, a0, suspend::GENERATOR) {
-                Some(g) => Value::int(suspend::state_of(self.heap, g)),
-                None => Value::int(-1),
-            },
-            GENERATOR_SET_STATE => {
-                let g = a0
-                    .as_object()
-                    .filter(|&o| self.heap.object_class(o) == ObjectClass::Generator);
-                let s = arg(self, 1).as_int().filter(|s| (0..=6).contains(s));
-                let (Some(g), Some(s)) = (g, s) else {
-                    return bad_argument(id);
-                };
-                suspend::set_state(self.heap, g, s);
-                Value::UNDEFINED
-            }
-            GENERATOR_RESUME => {
-                let (value, mode) = (arg(self, 1), arg(self, 2));
-                self.sp = base;
-                return self.generator_resume(a0, value, mode, next, Continuation::PushResult);
-            }
-            IS_ASYNC_FUNCTION_STATE => {
-                Value::bool(suspend::as_generator(self.heap, a0, suspend::ASYNC).is_some())
-            }
-            ASYNC_FUNCTION_PROMISE => match suspend::as_generator(self.heap, a0, suspend::ASYNC) {
-                Some(a) => suspend::promise_of(self.heap, a),
-                None => return bad_argument(id),
-            },
-            ASYNC_GENERATOR_STATE => {
-                match suspend::as_generator(self.heap, a0, suspend::ASYNC_GENERATOR) {
+                GENERATOR_STATE => match suspend::as_generator(self.heap, a0, suspend::GENERATOR) {
                     Some(g) => Value::int(suspend::state_of(self.heap, g)),
                     None => Value::int(-1),
-                }
-            }
-            ASYNC_GENERATOR_ENQUEUE | ASYNC_GENERATOR_FIRST_REQUEST | ASYNC_GENERATOR_DEQUEUE => {
-                let Some(g) = suspend::as_generator(self.heap, a0, suspend::ASYNC_GENERATOR) else {
-                    return bad_argument(id);
-                };
-                match id {
-                    ASYNC_GENERATOR_ENQUEUE => {
-                        suspend::enqueue_request(self.heap, g, arg(self, 1))?;
-                        Value::UNDEFINED
-                    }
-                    ASYNC_GENERATOR_FIRST_REQUEST => suspend::first_request(self.heap, g),
-                    _ => suspend::dequeue_request(self.heap, g),
-                }
-            }
-            CREATE_ASYNC_FROM_SYNC_ITERATOR => {
-                if a0.as_object().is_none() {
-                    return bad_argument(id);
-                }
-                let proto = intrinsic_obj(self.heap, Intrinsic::AsyncFromSyncIteratorProto);
-                let r = self
-                    .heap
-                    .alloc_object(ObjectClass::Record, Some(proto), 2)?;
-                self.heap.set_object_slot(r, 0, a0);
-                self.heap.set_object_slot(r, 1, arg(self, 1));
-                Value::object(r)
-            }
-            NEW_RECORD => {
-                let n = a0.as_int().and_then(|n| u32::try_from(n).ok());
-                let Some(n) = n.filter(|&n| n <= 16) else {
-                    return bad_argument(id);
-                };
-                let r = self.heap.alloc_object(ObjectClass::Record, None, n)?;
-                for i in 0..n {
-                    self.heap.set_object_slot(r, i, Value::UNDEFINED);
-                }
-                Value::object(r)
-            }
-            // (Without modules, the intrinsic falls to the unknown ones.)
-            MODULE_NAMESPACE if crate::MODULES => {
-                let op = a0.as_int().unwrap_or(-1);
-                crate::interp::module::namespace_op(
-                    self.heap,
-                    op,
-                    arg(self, 1),
-                    arg(self, 2),
-                    arg(self, 3),
-                )?
-            }
-            RECORD_GET | RECORD_SET => {
-                let r = a0
-                    .as_object()
-                    .filter(|&o| is_slot_object(self.heap.object_class(o)));
-                let i = arg(self, 1).as_int().and_then(|i| u32::try_from(i).ok());
-                let (Some(r), Some(i)) = (r, i) else {
-                    return bad_argument(id);
-                };
-                if i >= self.heap.object_slot_count(r) {
-                    return bad_argument(id);
-                }
-                if id == RECORD_GET {
-                    self.heap.object_slot(r, i)
-                } else {
-                    self.heap.set_object_slot(r, i, arg(self, 2));
+                },
+                GENERATOR_SET_STATE => {
+                    let g = a0
+                        .as_object()
+                        .filter(|&o| self.heap.object_class(o) == ObjectClass::Generator);
+                    let s = arg(self, 1).as_int().filter(|s| (0..=6).contains(s));
+                    let (Some(g), Some(s)) = (g, s) else {
+                        break 'bad;
+                    };
+                    suspend::set_state(self.heap, g, s);
                     Value::UNDEFINED
                 }
-            }
-            #[cfg(djs_prelude)]
-            MARK_NATIVE => {
-                self.mark_native(a0, arg(self, 1))?;
-                Value::UNDEFINED
-            }
-            #[cfg(djs_prelude)]
-            MARK_FAST => {
-                self.mark_fast(a0)?;
-                Value::UNDEFINED
-            }
-            #[cfg(djs_prelude)]
-            INSTALL_INTRINSIC => {
-                let name = a0
-                    .as_string()
-                    .map(|s| self.heap.str_to_string(s))
-                    .unwrap_or_default();
-                let f = arg(self, 1);
-                match intrinsic_id(&name) {
-                    Some(i) if intrinsic(i).unwrap().kind == IntrinsicKind::Builtin => {
-                        realm::install_intrinsic(self.heap, i, f);
-                        if let Some(&(_, proto, name)) =
-                            FUNCTION_KIND_CONSTRUCTORS.iter().find(|c| c.0 == i)
+                GENERATOR_RESUME => {
+                    let (value, mode) = (arg(self, 1), arg(self, 2));
+                    self.sp = base;
+                    return self.generator_resume(a0, value, mode, next, Continuation::PushResult);
+                }
+                IS_ASYNC_FUNCTION_STATE => {
+                    Value::bool(suspend::as_generator(self.heap, a0, suspend::ASYNC).is_some())
+                }
+                ASYNC_FUNCTION_PROMISE => {
+                    match suspend::as_generator(self.heap, a0, suspend::ASYNC) {
+                        Some(a) => suspend::promise_of(self.heap, a),
+                        None => break 'bad,
+                    }
+                }
+                ASYNC_GENERATOR_STATE => {
+                    match suspend::as_generator(self.heap, a0, suspend::ASYNC_GENERATOR) {
+                        Some(g) => Value::int(suspend::state_of(self.heap, g)),
+                        None => Value::int(-1),
+                    }
+                }
+                ASYNC_GENERATOR_ENQUEUE
+                | ASYNC_GENERATOR_FIRST_REQUEST
+                | ASYNC_GENERATOR_DEQUEUE => {
+                    let Some(g) = suspend::as_generator(self.heap, a0, suspend::ASYNC_GENERATOR)
+                    else {
+                        break 'bad;
+                    };
+                    match id {
+                        ASYNC_GENERATOR_ENQUEUE => {
+                            suspend::enqueue_request(self.heap, g, arg(self, 1))?;
+                            Value::UNDEFINED
+                        }
+                        ASYNC_GENERATOR_FIRST_REQUEST => suspend::first_request(self.heap, g),
+                        _ => suspend::dequeue_request(self.heap, g),
+                    }
+                }
+                CREATE_ASYNC_FROM_SYNC_ITERATOR => {
+                    if a0.as_object().is_none() {
+                        break 'bad;
+                    }
+                    let proto = intrinsic_obj(self.heap, Intrinsic::AsyncFromSyncIteratorProto);
+                    let r = self
+                        .heap
+                        .alloc_object(ObjectClass::Record, Some(proto), 2)?;
+                    self.heap.set_object_slot(r, 0, a0);
+                    self.heap.set_object_slot(r, 1, arg(self, 1));
+                    Value::object(r)
+                }
+                NEW_RECORD => {
+                    let n = a0.as_int().and_then(|n| u32::try_from(n).ok());
+                    let Some(n) = n.filter(|&n| n <= 16) else {
+                        break 'bad;
+                    };
+                    let r = self.heap.alloc_object(ObjectClass::Record, None, n)?;
+                    for i in 0..n {
+                        self.heap.set_object_slot(r, i, Value::UNDEFINED);
+                    }
+                    Value::object(r)
+                }
+                // (Without modules, the intrinsic falls to the unknown ones.)
+                MODULE_NAMESPACE if crate::MODULES => {
+                    let op = a0.as_int().unwrap_or(-1);
+                    crate::interp::module::namespace_op(
+                        self.heap,
+                        op,
+                        arg(self, 1),
+                        arg(self, 2),
+                        arg(self, 3),
+                    )?
+                }
+                RECORD_GET | RECORD_SET => {
+                    let r = a0
+                        .as_object()
+                        .filter(|&o| is_slot_object(self.heap.object_class(o)));
+                    let i = arg(self, 1).as_int().and_then(|i| u32::try_from(i).ok());
+                    let (Some(r), Some(i)) = (r, i) else {
+                        break 'bad;
+                    };
+                    if i >= self.heap.object_slot_count(r) {
+                        break 'bad;
+                    }
+                    if id == RECORD_GET {
+                        self.heap.object_slot(r, i)
+                    } else {
+                        self.heap.set_object_slot(r, i, arg(self, 2));
+                        Value::UNDEFINED
+                    }
+                }
+                #[cfg(djs_prelude)]
+                MARK_NATIVE => {
+                    self.mark_native(a0, arg(self, 1))?;
+                    Value::UNDEFINED
+                }
+                #[cfg(djs_prelude)]
+                MARK_FAST => {
+                    self.mark_fast(a0)?;
+                    Value::UNDEFINED
+                }
+                #[cfg(djs_prelude)]
+                INSTALL_INTRINSIC => {
+                    let name = a0
+                        .as_string()
+                        .map(|s| self.heap.str_to_string(s))
+                        .unwrap_or_default();
+                    let f = arg(self, 1);
+                    match intrinsic_id(&name) {
+                        Some(i) if intrinsic(i).unwrap().kind == IntrinsicKind::Builtin => {
+                            realm::install_intrinsic(self.heap, i, f);
+                            if let Some(&(_, proto, name)) =
+                                FUNCTION_KIND_CONSTRUCTORS.iter().find(|c| c.0 == i)
+                            {
+                                self.wire_function_kind_constructor(f, proto, name)?;
+                            }
+                        }
+                        _ => break 'bad,
+                    }
+                    Value::UNDEFINED
+                }
+                DOM_EXCEPTION_CREATE => {
+                    let (Some(proto), Some(name), Some(msg)) = (
+                        a0.as_object(),
+                        arg(self, 1).as_string(),
+                        arg(self, 2).as_string(),
+                    ) else {
+                        break 'bad;
+                    };
+                    // An Error with three slots (the stack, then name and message): nothing
+                    // else allocates one (D1840, D1971).
+                    let o = self.heap.alloc_object(ObjectClass::Error, Some(proto), 3)?;
+                    self.heap.set_object_slot(o, 1, Value::string(name));
+                    self.heap.set_object_slot(o, 2, Value::string(msg));
+                    Value::object(o)
+                }
+                DOM_EXCEPTION_FIELD => {
+                    let i = arg(self, 1).as_int().and_then(|i| u32::try_from(i).ok());
+                    match (a0.as_object(), i) {
+                        (Some(o), Some(i))
+                            if i < 2
+                                && self.heap.object_class(o) == ObjectClass::Error
+                                && self.heap.object_slot_count(o) == 3 =>
                         {
-                            self.wire_function_kind_constructor(f, proto, name)?;
+                            self.heap.object_slot(o, i + 1)
+                        }
+                        _ => Value::UNDEFINED,
+                    }
+                }
+                DOM_EXCEPTION_CODE => {
+                    let Some(s) = a0.as_string() else {
+                        break 'bad;
+                    };
+                    let units: alloc::vec::Vec<u16> = self.heap.str_units(s).collect();
+                    Value::int(crate::builtins::dom::code_of(&units))
+                }
+                DOM_EXCEPTION_CONSTANT => {
+                    let i = a0.as_int().and_then(|i| usize::try_from(i).ok());
+                    let Some(&(_, name)) =
+                        i.and_then(|i| crate::builtins::dom::NAMES.get(i.wrapping_sub(1)))
+                    else {
+                        break 'bad;
+                    };
+                    Value::string(self.heap.alloc_str(name)?)
+                }
+                // The five are consecutive (builtins/intrinsics.d.ts).
+                TEXT_CODEC_CREATE..=UTF8_DECODE if crate::EMBED => {
+                    let args = [a0, arg(self, 1), arg(self, 2), arg(self, 3), arg(self, 4)];
+                    let k = id - TEXT_CODEC_CREATE;
+                    match encoding::intrinsic(self.heap, k, args, &mut self.fuel)? {
+                        Some(v) => v,
+                        None => break 'bad,
+                    }
+                }
+                BTOA | ATOB => {
+                    let Some(s) = a0.as_string() else {
+                        break 'bad;
+                    };
+                    if id == BTOA {
+                        match crate::builtins::dom::btoa(self.heap.str_units(s)) {
+                            Some(out) => Value::string(self.heap.alloc_str(&out)?),
+                            None => Value::UNDEFINED,
+                        }
+                    } else {
+                        let units: alloc::vec::Vec<u16> = self.heap.str_units(s).collect();
+                        match crate::builtins::dom::atob(&units) {
+                            Some(bytes) => Value::string(self.heap.alloc_latin1(&bytes)?),
+                            None => Value::UNDEFINED,
                         }
                     }
-                    _ => return bad_argument(id),
                 }
-                Value::UNDEFINED
-            }
-            DOM_EXCEPTION_CREATE => {
-                let (Some(proto), Some(name), Some(msg)) = (
-                    a0.as_object(),
-                    arg(self, 1).as_string(),
-                    arg(self, 2).as_string(),
-                ) else {
-                    return bad_argument(id);
-                };
-                // An Error with three slots (the stack, then name and message): nothing
-                // else allocates one (D1840, D1971).
-                let o = self.heap.alloc_object(ObjectClass::Error, Some(proto), 3)?;
-                self.heap.set_object_slot(o, 1, Value::string(name));
-                self.heap.set_object_slot(o, 2, Value::string(msg));
-                Value::object(o)
-            }
-            DOM_EXCEPTION_FIELD => {
-                let i = arg(self, 1).as_int().and_then(|i| u32::try_from(i).ok());
-                match (a0.as_object(), i) {
-                    (Some(o), Some(i))
-                        if i < 2
-                            && self.heap.object_class(o) == ObjectClass::Error
-                            && self.heap.object_slot_count(o) == 3 =>
-                    {
-                        self.heap.object_slot(o, i + 1)
-                    }
-                    _ => Value::UNDEFINED,
+                F64_SUM_PRECISE => {
+                    let Some(list) = a0.as_object() else {
+                        break 'bad;
+                    };
+                    let n = self.heap.array_length(list);
+                    let heap = &*self.heap;
+                    let values = (0..n).map(|i| {
+                        heap.get_element_fast(list, i)
+                            .and_then(|v| v.as_number())
+                            .unwrap_or(f64::NAN)
+                    });
+                    conv::number(crate::builtins::math::sum_precise(values))
                 }
-            }
-            DOM_EXCEPTION_CODE => {
-                let Some(s) = a0.as_string() else {
-                    return bad_argument(id);
-                };
-                let units: alloc::vec::Vec<u16> = self.heap.str_units(s).collect();
-                Value::int(crate::builtins::dom::code_of(&units))
-            }
-            DOM_EXCEPTION_CONSTANT => {
-                let i = a0.as_int().and_then(|i| usize::try_from(i).ok());
-                let Some(&(_, name)) =
-                    i.and_then(|i| crate::builtins::dom::NAMES.get(i.wrapping_sub(1)))
-                else {
-                    return bad_argument(id);
-                };
-                Value::string(self.heap.alloc_str(name)?)
-            }
-            // The five are consecutive (builtins/intrinsics.d.ts).
-            TEXT_CODEC_CREATE..=UTF8_DECODE if crate::EMBED => {
-                let args = [a0, arg(self, 1), arg(self, 2), arg(self, 3), arg(self, 4)];
-                let k = id - TEXT_CODEC_CREATE;
-                match encoding::intrinsic(self.heap, k, args, &mut self.fuel)? {
-                    Some(v) => v,
-                    None => return bad_argument(id),
+                _ if let Some(r) = self.proxy_leaf(id, a0, arg(self, 1)) => r?,
+                // The pure leaves (the hot loop runs them itself; here after a fault, or
+                // with the hot loop off).
+                _ if argc <= 3
+                    && let Some(v) = self.pure_leaf(id, [a0, arg(self, 1), arg(self, 2)])? =>
+                {
+                    v
                 }
-            }
-            BTOA | ATOB => {
-                let Some(s) = a0.as_string() else {
-                    return bad_argument(id);
-                };
-                if id == BTOA {
-                    match crate::builtins::dom::btoa(self.heap.str_units(s)) {
-                        Some(out) => Value::string(self.heap.alloc_str(&out)?),
-                        None => Value::UNDEFINED,
-                    }
-                } else {
-                    let units: alloc::vec::Vec<u16> = self.heap.str_units(s).collect();
-                    match crate::builtins::dom::atob(&units) {
-                        Some(bytes) => Value::string(self.heap.alloc_latin1(&bytes)?),
-                        None => Value::UNDEFINED,
-                    }
-                }
-            }
-            F64_SUM_PRECISE => {
-                let Some(list) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                let n = self.heap.array_length(list);
-                let heap = &*self.heap;
-                let values = (0..n).map(|i| {
-                    heap.get_element_fast(list, i)
-                        .and_then(|v| v.as_number())
-                        .unwrap_or(f64::NAN)
-                });
-                conv::number(crate::builtins::math::sum_precise(values))
-            }
-            _ if let Some(r) = self.proxy_leaf(id, a0, arg(self, 1)) => r?,
-            // The pure leaves (the hot loop runs them itself; here after a fault, or
-            // with the hot loop off).
-            _ if argc <= 3
-                && let Some(v) = self.pure_leaf(id, [a0, arg(self, 1), arg(self, 2)])? =>
-            {
-                v
-            }
-            _ => return self.json_regexp_intrinsic(id, base, argc, next),
-        };
-        self.sp = base;
-        self.push(v);
-        self.pc = next;
-        Ok(None)
+                _ => return self.json_regexp_intrinsic(id, base, argc, next),
+            };
+            self.sp = base;
+            self.push(v);
+            self.pc = next;
+            return Ok(None);
+        }
+        bad_argument(id)
     }
 
     /// `%RealmIntrinsic(name)`: the realm's `<Constructor>Prototype`. The name is a
