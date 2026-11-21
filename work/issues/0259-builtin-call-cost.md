@@ -1,6 +1,6 @@
 # 0259: Builtin calls without finding the callee
 
-status: open
+status: in-progress
 agent: pcall
 branch: issue/0259-builtin-call-cost
 depends-on: -
