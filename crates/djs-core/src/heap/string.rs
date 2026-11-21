@@ -1690,4 +1690,3 @@ impl Heap {
         self.realm().as_internal().expect("realm")
     }
 }
-
