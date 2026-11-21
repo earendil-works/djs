@@ -47,6 +47,7 @@ engines.push({ name: "djs, prelude run each time", start: djsStartVm as unknown 
 function execute(engine: (typeof engines)[number], code: string, tool: (args: unknown) => unknown): Promise<void> {
   return new Promise((resolve, reject) => {
     let session: Session | undefined;
+    let ended = false;
     const queue: Message[] = [];
     const answer = (m: Message) => {
       const value = tool(m.args === undefined ? undefined : JSON.parse(m.args));
@@ -69,6 +70,7 @@ function execute(engine: (typeof engines)[number], code: string, tool: (args: un
             if (session) queueMicrotask(() => answer(m));
             else queue.push(m);
           } else if (m.type === "done" || m.type === "crash") {
+            ended = true;
             queueMicrotask(() => {
               session?.dispose();
               if (m.type === "crash" || m.ok === false) reject(new Error(m.error ?? m.message));
@@ -80,6 +82,9 @@ function execute(engine: (typeof engines)[number], code: string, tool: (args: un
       })
       .then((s) => {
         session = s;
+        // A script that ended before `startVm` resolved (`return 1`) is disposed here, as
+        // pi's launchers do when it settles: its instance goes back to the pool (D3023).
+        if (ended) s.dispose();
         for (const m of queue.splice(0)) queueMicrotask(() => answer(m));
       }, reject);
   });
