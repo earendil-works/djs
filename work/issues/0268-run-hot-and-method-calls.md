@@ -159,7 +159,43 @@ and teardown, table bounds check, instance check, signature check, target load) 
 - Numbers: D3390 (wmeasure −1.1% pi-like … −23.0% tight; steady state −8.5% … −30.2%;
   +49 B gz).
 
+### Batch 2: arm-local costs, slice reads, string keys (D3392, D3393)
+
+- (a) Arm-local: constants instead of run-time op-table lookups (inc/dec, the
+  closure-variable arm, call, return), `get_global` split in two arms, the tier-up exit as
+  a fuel mark (`ExecOptions::hot_fuel`, was `hot_backedges`), the wide conditional jumps
+  share a copy. Each piece checked alone with hotcode.sh (work/scratch/0268/pieces.py,
+  try.sh): one of them (get_global as one arm with the constant) put a move on nineteen
+  simple arms and was reshaped.
+- Structure experiments, not adopted (D3392): an inner loop that changes only ip, sp and
+  fuel (clean inner loop, but each re-entry costs ~40 instructions: prop +29%); six
+  stores for the frame header (−36 per call, but V8 swaps two registers on every
+  bytecode); branch hints through a post-link section (honoured by V8, no effect on the
+  shared path).
+- (b) `ic::hot_get`, `hot_length`, `hot_elem`: property, method, `length` and dense
+  element hits read from the loop's slice; stores and the rarer hits out of line
+  (`field_store`, `field_slow`, `elem_slow`). Debug builds assert every slice hit against
+  the heap's code. Own property 138 → 94 instructions, method lookup 206–229 → 143–158,
+  `a[1]` 141 → 105.
+- pgc's string-key helpers (D3402) wired: `o[k]`, `o[k] = v` in `elem_slow` (only reached
+  when the key is no index), `k in o` in `decline_fast`. New corpus case
+  language/string-key-elems.js (recorded from qjs), green with suspension, GC stress,
+  lazy and plain dumps.
+- Outside `touches:`: heap/atom.rs lost the three `#[allow(dead_code)]` on pgc's helpers;
+  vm/tests.rs and docs/wasm-jit.md follow the `hot_fuel` rename; tests/scores/size.tsv
+  (ceilings, approved by the coordinator).
+- Guide: interpreter.md (inline caches item, the decline list, the tier-up exit).
+- Checked: lib tests, e2e in four modes, difftest over the corpus plain and with
+  `--suspend-every 97 --gc-stress` on codemode/, language/, builtins/, test262
+  built-ins/Object, Array, TypedArray, Proxy and language/expressions.
+- Size +758 B gz (429,785), ceilings raised to 429,790 / slim 363,630 (D3393).
+
 ## Follow-ups
+- The frame header written by six stores instead of a loop: −36 of a call's 178
+  instructions, blocked by a V8 register swap on every bytecode (D3392). Worth another
+  attempt whenever run_hot's shape changes.
+- The two-loop structure (D3392): needs frame values read from `Exec` at re-entry; the
+  inner loop it gives is 3 instructions shorter per simple bytecode.
 - Superinstructions are open again: a new arm does not disturb the shared path (D3391),
   and a dispatch is ~18 of a simple instruction's 21 machine instructions. `s += i` runs 9
   bytecodes per iteration; `get_loc; push_i8; lt; jump_if_true8` as one compare-and-branch

@@ -13,9 +13,10 @@
 # table entries, realm slot and enum arms, +59 B, slim +138 B; raised by 0244, D3211: the
 # encoding builtins' intrinsic table entries and dispatch arm, +112 B, slim +74 B; raised by 0251,
 # D3263: builtins generated as Rust, +2,790 B, slim +2,778 B; raised by 0257, D3282: the elastic
-# shadow stack, +182 B; lowered back by 0257, D3283).
+# shadow stack, +182 B; lowered back by 0257, D3283; raised by 0268, D3393: property and element
+# hits read from the tier-0 loop's slice, string keys through the heap's helpers, +142 B, slim +281 B).
 # quickjs_wasi_gzip: quickjs-wasi 3.6.2 quickjs.wasm (pi's engine), gzip -9.
 quickjs_wasi_gzip	286655
-ceiling_gzip	429648
+ceiling_gzip	429790
 # slim_ceiling_gzip: the slim module (scripts/build-wasm.sh --slim, D2411), its own ratchet.
-slim_ceiling_gzip	363349
+slim_ceiling_gzip	363630

@@ -296,8 +296,8 @@ faster loop in front of it:
   general path (`step_once`), which runs that one instruction after the locals have been
   written back. Some declined cases are finished on the way out instead, by one call that
   keeps the loop's own code as small as it is: a `@fast` or `@rust` builtin call (with
-  `arr.push(x)` appended straight to the array), `+` of a string with a primitive, and the
-  instructions of `new`: the construct itself, the return into the constructing frame,
+  `arr.push(x)` appended straight to the array), `+` of a string with a primitive, `in`
+  with a string key, and the instructions of `new`: the construct itself, the return into the constructing frame,
   `new.target`, the class constructor checks and `super()`. A trip through `step` costs
   more than most of these instructions do, and one `new C()` meets several of them.
   Nothing the tier-0 loop does itself can collect or run user code, which
@@ -323,7 +323,15 @@ faster loop in front of it:
   in the disassembly), and the slots live with the function's template. A slot remembers
   where a property was found: a shape, a table index, or a prototype holder validated by
   an epoch. A hit is a compare and a load; a stale slot is a miss and is refilled, so
-  caches never change what a program does. The collector empties the slots that hold
+  caches never change what a program does. The tier-0 loop reads the two hits a program
+  meets most, an own property of an object with a shape and a prototype's property (a
+  method) for a receiver of the remembered shape, straight from its view of the arena,
+  as it reads `length` of an array or a string and a dense array element; the rarer hits
+  and every store go through the heap's functions, out of line. Debug builds recompute
+  each of these reads with the heap's functions and compare. An element access with a
+  string key (`counts[word]`) is answered without running code or allocating where that
+  is possible: a data property anywhere on the chain, a key no object has, a store into
+  an own writable property. The collector empties the slots that hold
   heap offsets, so a VM restored with warm caches behaves exactly like one with cold
   caches.
 - **Known builtins.** `Math.floor(x)`, `String(x)`, `Number.isInteger(x)` and a few

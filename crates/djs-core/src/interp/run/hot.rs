@@ -452,6 +452,7 @@ impl Exec<'_> {
     /// receiver whose shape is not the remembered one, the rarer primitives), and debug
     /// builds compare the slice's hits with it.
     #[inline(never)]
+    #[cfg_attr(not(debug_assertions), allow(unused_variables))]
     fn field_slow(&mut self, op: u8, key: Atom, ic: u32, o: Value) -> Option<Value> {
         // (`hot_length` answered these in a release build.)
         #[cfg(debug_assertions)]

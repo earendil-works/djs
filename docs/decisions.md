@@ -13055,3 +13055,128 @@ index, then hashes the name with the base key. Two fixes were built and dropped:
 - FNV-1a instead of SipHash as the base hash (the base index is fixed content, so it
   needs no key): 1,550 → 1,370, +293 B gz, COMPAT_VERSION bump. Not worth the bytes now.
   Patch: work/scratch/0269/base-fnv.patch.
+
+## D3392: Arm-local costs in run_hot; a second loop around it measured and not adopted (0268)
+date: 2026-11-21 · by: pcall · issue: 0268
+Read from V8's code with scripts/perf/hotcode.sh and measured with slope.py (D3391).
+- **Constants, not the op table.** `next!` with an opcode chosen at run time (`inc_loc` or
+  `dec_loc`, the twelve closure-variable opcodes, `call` or `call0`, `return` or
+  `return_undef`, the two `call_intrinsic` forms) made the loop index `OPS` and load size
+  and fuel: about 15 machine instructions per instruction. Such arms now name one opcode
+  (`next!(op, like Op::GetCap)`, `size_of`, `fuel_of`), and compile-time assertions check
+  that the others step the same. Static paths: `inc_loc` 46 → 29, `inc` 45 → 28, the
+  closure-variable arm 79 → 63, call 191 → 178, return 105 → 96.
+- **`get_global` and `get_global_typeof` are two arms.** As one arm, replacing the
+  run-time choice by the constant put a move on the path of nineteen simple arms
+  (`drop` 7 → 8); as two arms that name their opcode, nothing else moved (78 → 58).
+- **A fuel mark instead of a count of backward jumps.** `ExecOptions::hot_backedges`
+  (16,384 jumps) is `hot_fuel` (131,072 units): a backward jump leaves for the run loop
+  when the fuel is below `floor`, computed once per `run_hot`. One value less that
+  changes in the loop; `jump8` 20 → 17.
+- **The wide conditional jumps share one copy** of the jump (they are rare: only jumps
+  over more than 127 bytes); the short forms keep one each: one copy for both cost a
+  loop 1.6 instructions per iteration (+0.4% on `s += i`).
+- Together, steady state against main after D3390: empty `for` −8.2%, `s += i` −4.6%,
+  `s = f(s)` −5.0%, `p.m()` −3.2%, property get and put −3.2%, the others −1.2..−2.6%;
+  −35 B gz.
+- **Not adopted: six stores for a frame header instead of the loop over it.** V8 keeps
+  the loop, with its interrupt check per value: a call would lose 36 of its 178
+  instructions. But with that edit V8 keeps two values that never change in the loop in
+  different registers at the loop's head and at its tail and swaps them on every
+  bytecode: +4..6 instructions on every arm (`drop` 7 → 13), in every form tried (a
+  slice of six chunks, six `st`). Open: it is worth 10% of a call.
+- **Not adopted: an inner loop that changes only ip, sp and fuel.** Arms that change the
+  frame (call, return) or drop the arena slice (a heap call) leave it for an enclosing
+  loop and re-enter (`continue 'frame`). V8 then compiles the inner loop without a single
+  move: `drop` 20 instructions, `get_loc0` 26 (29 now), empty `for` −4.0%, `s += i`
+  −5.5%, ten `x;` −7.0%. But each re-entry runs the enclosing loop's head, about 40
+  instructions of reloads and re-spills of the frame's values: property get and put
+  +29%, `p.m()` +22%, `a.push(i)` +14%. With only the calls and returns re-entering, V8
+  shuffles on every bytecode (+7..10). What would make it pay: frame values read from
+  `Exec` at the re-entry instead of carried, and no re-entry for cache hits (D3393 reads
+  them from the slice). Not built.
+- **Not a lever: branch hints.** A `metadata.code.branch_hint` section for run_hot (a
+  post-link experiment: every conditional branch one side of which cannot return to the
+  dispatch without a call is hinted to the other side, 142 of 372) is honoured by node 26
+  (the code changes: `not` 83 → 41, `call_intrinsic` 68 → 60), but the simple arms and the
+  swap above stay exactly as they are, and rustc's LLVM does not emit the section.
+- Why V8 does this, as far as the code shows: its register allocator walks the blocks in
+  one linear order and splits every live value at every call it passes; where a value
+  sits at the head, in an arm and at the tail is decided separately, and the edges
+  between them get moves. The arms' order, which arms contain calls and what is live
+  across them all feed into it. Hence D3391's procedure rather than a stronger rule.
+The scratch scripts are in work/scratch/0268 of the primary checkout (pieces.py, r2.py,
+hints.py, twins/).
+
+## D3393: Property and element hits are read from the tier-0 loop's slice; string keys through the heap's helpers; the ceilings rise
+date: 2026-11-21 · by: pcall · issue: 0268
+An inline-cache hit in run_hot went through `&Heap`: every access loaded the arena's
+pointer and length again (the compiler cannot prove that nothing changed them), the
+slot's words were read as a checked slice, four opcodes shared one arm that tested the
+opcode three times, and the result came back as an `Option<Value>` through memory. An
+own-property read cost 131 machine instructions, a prototype (method) lookup 200–222.
+- **`ic::hot_get`** reads the two frequent hits from the loop's arena slice with plain
+  loads: an own property of a shape-mode receiver (the shape compare), and a prototype
+  property whose receiver has the remembered shape word, or is a string or a number (the
+  epoch, the receiver's class, its shape word, the prototype, the holder's slot: a shape
+  descriptor or a table entry). It mirrors `cached_get`, `proto_start` and
+  `Heap::data_at` check for check; anything else (a dictionary-mode receiver, another
+  shape, the rarer primitives, a miss) goes to `field_slow`, out of line, which is the
+  old code. `hot_length` does the same for `length` of an Array or a string, `hot_elem`
+  for a dense, non-hole element with an int key (`Heap::get_element_fast` without its
+  typed-array branch).
+- **Reads only.** Stores stay the heap's: `field_store` (out of line) for `put_field`
+  and `define_field`, `set_element_fast` for `a[i] = v`. A store has a write gate today
+  and may have to tell a collector tomorrow; a copy of it in the loop would miss that.
+- **Checked against the heap's own code**: in debug builds every hit of `hot_get`,
+  `hot_length` and `hot_elem` is recomputed by `field_slow` or `elem_slow` and asserted
+  equal. The tests, difftest and the stress modes are debug builds.
+- **`get_global` stays out of line**: the same treatment measured ±0 (1179 vs 1183 per
+  ten reads).
+- **String keys (D3402's helpers, wired here).** `o[k]` and `o[k] = v` with a string
+  key in `elem_slow`, reached only when the key is not an index, so the index paths do
+  not see it: as a second call inside the old element arm it cost `a[i]` 25 instructions.
+  `k in o` in `decline_fast` (`decline_in`): `in` is not an arm of the loop.
+  tests/corpus/language/string-key-elems.js covers own, inherited, missing and
+  never-interned keys, accessors, proxies, arrays, typed arrays, frozen objects and
+  refused stores, with suspension and GC stress.
+Measured (shipped module, node 26, main 968f3465 → branch; this includes D3392's parts).
+Per operation, steady state (slope.py, ten operations per iteration minus ten `x;`):
+
+| operation | main | branch |
+| --- | ---: | ---: |
+| `o.c` (own property) | 137.7 | 93.5 |
+| `s.charCodeAt` (string receiver) | 228.5 | 143.0 |
+| `a.push` | 206.1 | 145.6 |
+| `p.m` (class method) | 213.5 | 154.2 |
+| `p.hasOwnProperty` (depth 2) | 218.9 | 158.2 |
+| `n.toFixed` | 225.4 | 148.7 |
+| `s.length` | 99.3 | 54.8 |
+| `a[1]` | 140.5 | 105.3 |
+| `a[j] = i` | 210.0 | 191.8 |
+| `p.m()` | 625.5 | 546.2 |
+| `f()` | 440.4 | 419.9 |
+| `o[k]`, string key | 1521.2 | 943.2 |
+| `o[k] = i`, string key | 1391.3 | 825.8 |
+| `k in o` | 1185.3 | 808.9 |
+| `c[k] = (c[k] \|\| 0) + 1` | 3755.0 | 2533.3 |
+
+(The string-key rows on main already contain 0269's cheaper interning; before it they
+were 2008, 1878, 1671 and 4206.) Per iteration: empty `for` −8.6%, `s += i` −5.7%,
+`s = f(s)` −5.4%, `p.m()` −12.2%, property get and put −6.7%, `a.push(i)` −10.6%,
+`str.charCodeAt(i & 7)` −7.7%, `str.trim().length` −9.4%, `Math.floor(i / 3)` −2.7%.
+wmeasure (M instructions, n=3, spread ≤ 0.8%): arrays 6076.3 → 5234.0 (−13.9%), prop1
+1724.3 → 1519.7 (−11.9%), pushpop −6.9%, calls −5.9%, tight −5.4%, foreach −5.1%, call1
+−5.0%, loop −4.9%, props −3.1%, higher-order −2.0%, pi-like −1.5%, forof −1.2%, strings
+−1.1%, strbuild −1.1%, json −0.9%, json-date −0.3%, regexp-compile +1.3%, indexof +2.0%.
+The last two are the tier-up's timing, not the code: with `--wasm-sync-tier-up` they are
+−0.1% and −3.6%. V8's shared path is as after D3390 (dispatch 14, tail 4); run_hot's code
+shrinks from 20,448 to 18,184 bytes of arm64.
+Size, per piece (gzip, on the branch's base): D3392's parts −35 B; `hot_get`,
+`hot_length`, `field_slow`, `field_store` +301 B; `hot_elem`, `elem_slow` and the
+string-key helpers becoming live code (`existing_key_atom`, `proxy_on_chain`,
+`string_key_*`), `decline_in` +550 B; the shared wide jump and trims −92 B. Shipped
+429,027 → 429,785 (+758), slim 363,003 → 363,623 (+620). The coordinator approved a rise
+of the ceilings for this (up to 250 B on the shipped module): 429,648 → 429,790 and slim
+363,349 → 363,630. The shipped module stays 197 B under D020's 1.5x; part (c) of 0268 is
+to give bytes back.
