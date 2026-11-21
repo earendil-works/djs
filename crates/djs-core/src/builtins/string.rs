@@ -4,7 +4,7 @@ use crate::PushOut;
 
 use alloc::vec::Vec;
 
-use crate::heap::{Heap, StrView};
+use crate::heap::{CellKind, Heap, StrView};
 use crate::interp::conv::Fault;
 use crate::interp::{Intrinsic, realm};
 use crate::value::{Obj, Str, Value};
@@ -71,7 +71,7 @@ pub(crate) fn substring(heap: &mut Heap, s: Str, start: u32, end: u32) -> Result
     if let Some(slice) = heap.substring_slice(s, start, end)? {
         return Ok(slice);
     }
-    if let Some(StrView::Latin1(_)) = heap.str_view(s) {
+    if matches!(heap.cell_kind(s.0), CellKind::Str8 | CellKind::Slice) {
         return Ok(heap.latin1_piece(s, start, end, 0)?);
     }
     join(heap, &mut [(s, start, end)])
