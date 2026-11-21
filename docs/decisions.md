@@ -13383,7 +13383,10 @@ date: 2026-11-21 · by: pidle · issue: 0270
 Wasm instructions per op, main → branch (QuickJS 2026), ten elements: `[...set]` 122k →
 24k (9.6k), `Array.from(set)` 137k → 30k (11.2k), `new Set(arr)` 71k → 19k (16.4k),
 `[...new Set(arr)]` 192k → 39k (25.4k), `new Map(pairs)` 126k → 21k (18.0k),
-`new Map(Object.entries(o5))` 92k → 28k (24.7k). +817 B gz together with D3412.
+`new Map(Object.entries(o5))` 92k → 28k (24.7k). Shipped module 428,728 → 429,545 B gz
+(+817 together with D3412; ceiling 429,648 unchanged); slim 363,349 → 363,605: its
+ratchet goes to 363,609 (+260, approved by the coordinator: the slim module has no 1.5x
+budget, and these are codemode idioms).
 
 ## D3412: Date.parse reads the string's flat view; one wire transcode
 date: 2026-11-21 · by: pidle · issue: 0270
