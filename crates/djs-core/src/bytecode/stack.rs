@@ -266,26 +266,56 @@ impl Walk<'_> {
         Ok(())
     }
 
-    /// Checks `insn` at its depth and reaches its successors.
+    /// Checks `insn` at its depth and reaches its successors. (The op's table entry read
+    /// once: the `Insn` accessors each read it again, 0263.)
     fn step(&mut self, insn: &super::decode::Insn) -> Result<(), StackError> {
         let pc = insn.pc;
         let d = u32::from(self.s.depth[pc as usize]);
         let info = insn.info();
-        let pops = insn.pops();
+        let pops = u32::from(info.pop)
+            + info.pop_imm.map_or(0, |k| insn.imm(k as usize))
+            + info
+                .pop_arity
+                .map_or(0, |k| super::decode::arity(insn.imm(k as usize)));
         if pops > d {
             return Err(StackError::Underflow { pc, depth: d, pops });
         }
-        let after = d - pops + insn.pushes();
+        let after =
+            d - pops + u32::from(info.push) + info.push_imm.map_or(0, |k| insn.imm(k as usize));
         self.max = self.max.max(after).max(d);
         if self.max >= u32::from(UNKNOWN) {
             return Err(StackError::TooDeep { pc });
         }
+        let next = pc + u32::from(info.size);
         if info.has(flags::JUMP) || info.has(flags::BRANCH) {
-            let target = insn.jump_target().unwrap_or(self.len);
+            let target = match info.imms.last() {
+                Some(k) if k.is_target() => {
+                    let rel = insn.imm_i32(info.imms.len() - 1) as i64;
+                    (i64::from(next) + rel) as u32
+                }
+                _ => self.len,
+            };
             self.reach(pc, target, after)?;
         }
         if !info.no_fallthrough() {
-            self.reach(pc, insn.next_pc(), after)?;
+            // The next instruction: a start whenever there is one (code decodes in
+            // order), so no `forward` entry for it.
+            if next >= self.len {
+                return Err(StackError::FallsOffEnd { pc });
+            }
+            let slot = &mut self.s.depth[next as usize];
+            if *slot == UNKNOWN {
+                *slot = after as u16;
+                if next < self.decoded_to {
+                    self.s.work.push(next);
+                }
+            } else if u32::from(*slot) != after {
+                return Err(StackError::Mismatch {
+                    pc: next,
+                    depth: u32::from(*slot),
+                    other: after,
+                });
+            }
         }
         Ok(())
     }

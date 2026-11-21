@@ -12947,3 +12947,14 @@ date: 2026-11-21 · by: pgc · issue: 0269
   heavy −1.5%. +30 B gz.
 - `str_array_index` reads a flat key's first unit from its view instead of
   `char_code_at`: `o[k]` −160 instructions. +50 B gz.
+
+## D3369: The stack checker reads an op's table entry once and does not queue fallthroughs
+date: 2026-11-21 · by: pstart · issue: 0265
+`Walk::step` read `OPS[op]` through each `Insn` accessor (`pops`, `pushes`, `jump_target`,
+`next_pc`), six times per instruction, and sent every fallthrough through `reach`, which
+listed it among the forward targets to check once every start was known (8 bytes per
+instruction). The next instruction is always a start when there is one (code decodes in
+order), so a fallthrough now sets or checks its depth directly; jumps still go through
+`reach`. Same checks and errors. Compile −2.4..−3.2% (codemode bodies, wasm), +90 B gz.
+Measured and dropped in the same round: the resolver's constant pool hashing strings with
+the parser pool's unkeyed hash instead of the heap's keyed one (±0.3%, no gain).

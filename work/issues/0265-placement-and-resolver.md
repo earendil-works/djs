@@ -116,6 +116,12 @@ anywhere, images, or the unsafe rules (AGENTS.md).
   peak by site) and wasm traps on dlmalloc's second segment (keep-names build with the
   seed shrunk) to find what needs the room: the walk's buffers, then the peephole's second
   list, then the parser's tables alive during resolve.
+- Merged D3368 (1324f408). D3369: the checker's step reads OPS once, fallthroughs not
+  queued: compile −2.4..−3.2%. UnitPool unkeyed hash: no gain, dropped. Folding the depth
+  calculation into the emitter: not done; the walk is ~11% of a compile but it is the only
+  verifier of compiled code (unsafe-heap trusts its STACK), and the emitter would need its
+  own handling of labels reached first by backward jumps, skip8, truncate_last, gosub and
+  handler registration order; the cheaper walk keeps the independent check.
 
 ## Follow-ups
 
