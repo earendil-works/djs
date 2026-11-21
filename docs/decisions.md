@@ -13355,3 +13355,9 @@ derived `super(a)` 8.2k → 5.0k (4.4k), three levels 11.3k → 6.4k (5.8k), a d
 Tests it passed: lib, e2e plain, the active test262 group, difftest (plain, stress and
 plain-dumps --lazy on language/builtins/errors) and its corpus case
 language/class-ctor-frames.js.
+Before merging it: new opcodes change `run_hot`'s dispatch table even with its source
+untouched, so the patch's new ops (`super_call_frame`, `super_call_forward`,
+`ctor_result`) go at the end of the opcode table, and scripts/perf/hotcode.sh must show
+the same code before and after (dispatch 14 instructions, tail and back edge 4, the
+drop/get_loc0/add/inc_loc/call0 lines unchanged). `CLASS_CTOR` (bit 13) must stay below
+bit 16: the tier-0 loop reads template flags as a u16.
