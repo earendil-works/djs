@@ -1,6 +1,6 @@
 # 0269: String costs: views, short results, slices, appends
 
-status: in-progress
+status: done
 agent: pgc
 branch: issue/0269-string-costs
 depends-on: 0258
@@ -20,10 +20,10 @@ short-string allocation (header, size class, zeroing), slice creation vs copying
 results, the append buffer's growth, hashing of strings used as keys.
 
 ## Acceptance criteria
-- [ ] per-op instructions vs QuickJS and workload instructions before/after
-- [ ] memory unchanged or better (slices vs copies trade memory: measure heavy, mem-perturb)
-- [ ] exact semantics (WTF-16, one-byte/two-byte), corpus + test262 built-ins/String; images and dumps unchanged in meaning
-- [ ] size reported (~2.3 KB room under the ceiling, shared); gate green; decisions recorded
+- [x] per-op instructions vs QuickJS and workload instructions before/after
+- [x] memory unchanged or better (slices vs copies trade memory: measure heavy, mem-perturb)
+- [x] exact semantics (WTF-16, one-byte/two-byte), corpus + test262 built-ins/String; images and dumps unchanged in meaning
+- [x] size reported (~2.3 KB room under the ceiling, shared); gate green; decisions recorded
 
 ## Notes
 - pscan (0267) owns JSON and regexp scanning (swar.rs); pcall (0268) the call path and
@@ -89,5 +89,35 @@ String bucket: heavy 19% of djs samples (find_latin1 6%: pscan's kernel), fanout
   break the image/compile-cache invariants; an FNV base hash gives −180 instr for +293 B.
 
 ## Follow-ups
+- 0268 wires `Heap::string_key_get/has/set` (D3402) into hot.rs's element paths and `in`, and
+  measures o[k] / k in o / c[k] = … there (local wiring: o[k] 2.78k → 1.1k, stores
+  2.65k → 1.06k).
+- D3404 (growth step rounded down) lands with 0271's smaller base.
+- Base-atom keys ~1.5x QuickJS (D3405): an FNV base hash is ready (−180 instr, +293 B gz) if
+  bytes free up; aliases need a design that keeps the image and compile-cache invariants.
+- startsWith/endsWith/at/repeat/toString/template 1.2–1.4x: generated-leaf call overhead
+  (0268's area), not string work.
 
 ## Result
+Landed (main 2e4214e5, fd0a649d, 686a329a; D3400-D3403, D3405 negative, D3404 deferred).
+Final per op on main e69c9b0f against main 62cd4b66 (wasm instructions, quickjs-wasi in
+parentheses; load ~14–40, so instructions, not ms):
+
+| op | before | after | QuickJS |
+| --- | ---: | ---: | ---: |
+| s.replace('l','L') | 14,787 | 3,967 | 4,390 |
+| s.replaceAll('l','L') | 30,373 | 5,911 | 5,791 |
+| s.substr(2, 3) | 11,021 | 2,197 | 2,211 |
+| split line .includes('TODO') | 2,079 | 1,878 | 3,299 |
+| split line .trim() | 2,760 | 2,131 | 2,161 |
+| two-byte .slice(1, 4) | 3,318 | 2,509 | 2,322 |
+| o[k], string key (unwired path) | 2,895 | 2,375 | 982 |
+| slice/trim/charCodeAt/split/join/String(i) | | ±3% | 0.67–0.97x |
+
+Workloads (per batch, same base, fresh VMs, ±1–2% noise): fanout −3.0%, sequential −4.5%
+(D3400), text −1.5..−3% (D3401 replace), heavy −1.5% (slice views); the rest within noise.
+Memory: codemode-memory leg OK, rows unchanged (512/1472/768/448/640/896/1216/1344/3968
+KiB); native-track mem-perturb unchanged (json-objects 5.6, strbuild 12.1, jsonh 3.6,
+pi-like 1.2, strings 9.3 MiB). Size: +~870 B gz (batch 1 ~700, batch 2 ~180; the helpers
+link in with 0268's wiring). Corpus (string-ranges.js, fast-paths.js replace cases),
+test262 built-ins/String and annexB pass under GC stress and suspension. Guide: heap.md.
