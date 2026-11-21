@@ -72,6 +72,7 @@ pub(super) const PURE_LEAVES: &[&str] = &[
     "NewBuiltinClosure",
     "ErrorStack",
     "IsPendingStack",
+    "CaptureStack",
     "IsCallable",
     "IsConstructor",
     "IsArray",

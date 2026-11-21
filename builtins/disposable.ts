@@ -14,7 +14,7 @@
 
 /** The SuppressedError DisposeResources throws when a disposal throws after another. */
 function NewSuppressedError(error: Value, suppressed: Value): Obj {
-  const o: Obj = ErrorCreate(RealmIntrinsic("SuppressedErrorPrototype"));
+  const o: Obj = ErrorCreate(RealmIntrinsic("SuppressedErrorPrototype"), undefined);
   DefineDataPropertyOrThrow(o, "error", error, 5);
   DefineDataPropertyOrThrow(o, "suppressed", suppressed, 5);
   RecordStack(o);

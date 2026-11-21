@@ -52,14 +52,14 @@ result completes it) and JS builtins tagged `@intrinsic`. The id is the immediat
 | 39 | `WellKnownSymbol` | leaf | 1 | The well-known symbol Symbol.<name>. |
 | 40 | `RealmIntrinsic` | leaf | 1 | A realm intrinsic object by name: ObjectPrototype, FunctionPrototype, ArrayPrototype, ErrorPrototype and the native error prototypes (TypeErrorPrototype, ...). |
 | 41 | `ConstructorPrototype` | leaf | 2 | GetPrototypeFromConstructor where it runs no user code: newTarget's `prototype` if that is an object, else the realm's prototype `fallback` (named as for RealmIntrinsic), also for an undefined newTarget; undefined when reading `prototype` would call a getter or a proxy trap. |
-| 42 | `ErrorCreate` | leaf | 1 | An object with [[ErrorData]] and prototype `proto`. |
+| 42 | `ErrorCreate` | leaf | 2 | An object with [[ErrorData]] and prototype `proto`, with an own non-enumerable `message` when `message` (a string) is not undefined. |
 | 43 | `DOMExceptionCreate` | leaf | 3 | A DOMException: an object with [[ErrorData]], its name and message in slots. |
 | 44 | `DOMExceptionField` | leaf | 2 | Slot i (0 name, 1 message) of a DOMException; undefined if v is not one. |
 | 45 | `DOMExceptionCode` | leaf | 1 | The legacy code of a DOMException name, 0 if it has none. |
 | 46 | `DOMExceptionConstant` | leaf | 1 | The name of the legacy code constant i, 1 to 25 (`INDEX_SIZE_ERR`, ...). |
 | 47 | `Btoa` | leaf | 1 | btoa's base64 of the code units of s; undefined if one is above 0xFF. |
 | 48 | `Atob` | leaf | 1 | atob's forgiving-base64 decoding of s into a string of bytes; undefined if invalid. |
-| 49 | `CaptureStack` | leaf | 1 | Records `o.stack` from the current frames, without the prelude frames at the top: an Error constructor does not show itself. With Error.prepareStackTrace it is pending until FinishErrorStack. |
+| 49 | `CaptureStack` | leaf | 1 | Records `o.stack` from the current frames, without the prelude frames at the top: an Error constructor does not show itself. With Error.prepareStackTrace it is pending until FinishErrorStack: the result is then true. |
 | 50 | `ErrorStack` | leaf | 1 | The stack an Error object recorded, a pending one too, or undefined for any other value. |
 | 51 | `StackTraceValue` | leaf | 1 | The stack trace of the current frames (the calling builtin left out): a string, or a pending stack with Error.prepareStackTrace. With a function `below`, only the frames below its topmost call, none if it is not on the stack (Error.captureStackTrace). |
 | 52 | `IsPendingStack` | leaf | 1 | Whether v is a stack waiting for Error.prepareStackTrace. |

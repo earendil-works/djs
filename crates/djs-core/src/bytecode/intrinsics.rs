@@ -92,7 +92,7 @@ pub const INTRINSICS: &[IntrinsicInfo] = &[
     i("WellKnownSymbol", L, 1, false),
     i("RealmIntrinsic", L, 1, false),
     i("ConstructorPrototype", L, 2, false),
-    i("ErrorCreate", L, 1, false),
+    i("ErrorCreate", L, 2, false),
     i("DOMExceptionCreate", L, 3, false),
     i("DOMExceptionField", L, 2, false),
     i("DOMExceptionCode", L, 1, false),

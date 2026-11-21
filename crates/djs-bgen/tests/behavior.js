@@ -295,7 +295,11 @@ const I = {
   // (0236) Undefined sends every other case to GetPrototypeFromConstructorSlow, whose
   // steps answer the same.
   ConstructorPrototype: (nt, name) => (nt === undefined ? globalThis[name.replace(/Prototype$/, "")].prototype : undefined),
-  ErrorCreate: (proto) => Object.setPrototypeOf(new Error(), proto),
+  ErrorCreate: (proto, message) => {
+    const e = Object.setPrototypeOf(new Error(), proto);
+    if (message !== undefined) Object.defineProperty(e, "message", { value: message, writable: true, configurable: true });
+    return e;
+  },
   // DOMException, atob, btoa (0084): qjs has them natively.
   DOMExceptionCreate: (proto, name, message) => Object.setPrototypeOf(new DOMException(message, name), proto),
   DOMExceptionField: (v, i) => {
@@ -321,7 +325,7 @@ const I = {
       return undefined;
     }
   },
-  CaptureStack: (o) => {},
+  CaptureStack: (o) => false,
   // No Error.prepareStackTrace here: stacks are never pending (D2050).
   ErrorStack: (v) => undefined,
   IsPendingStack: (v) => false,

@@ -12709,3 +12709,26 @@ Slice parents kept by minor collections (0234's follow-up) do not set heavy's pe
 full collections at every point give the same live size at its second collection; the
 ~420 KB of parents appear at the third, which is the peak's trigger itself. A full
 collection "before the peak" buys nothing there.
+## D3370: new Error without four frames and two trips through `step`; the trace from heap strings
+date: 2026-11-21 · by: pidle · issue: 0266
+- `%ErrorCreate(proto, message)` defines the own `message` (writable, configurable) when
+  `message` is a string; ErrorConstruct (and SuppressedError) call it after ToString
+  instead of `DefineDataPropertyOrThrow`, which went through `step`. Creating the object
+  after ToString is unobservable; GetPrototypeFromConstructor still runs first.
+- `%CaptureStack(o)` returns whether the stack is pending and is a pure leaf (the hot
+  loop runs it): it reads only frame headers, and the frames it walks from are the
+  prelude's own (skipped), so the `pc` the hot loop leaves stale is never read.
+  RecordStack calls FinishErrorStack only for a pending stack.
+- ErrorConstruct writes out GetPrototypeFromConstructor's leaf path, ToString's string
+  case, InstallErrorCause's object test and RecordStack: one prelude frame instead of
+  five for `new Error("x")`.
+- `stackTraceLimit` and `prepareStackTrace` are well-known atoms: each new error read
+  both by name, hashing the strings with the keyed hash every time.
+- Trace frames keep names and files as heap strings (a template's name atom, the
+  installed `name`, the script's name), and the default string is written as code units
+  straight from them (no Rust `String` per name and file, no UTF-8 round trip);
+  CallSites share the same strings. `lookup_line` walks the table with one-byte numbers
+  inline.
+`new Error("x")` at a codemode body's top level: 27.9k → 15.2k wasm instructions (QuickJS
+2026 24.4k, quickjs-wasi 19.3k); one more frame on the stack 34.9k → 20.2k; with
+Error.stackTraceLimit = 0 18.1k → 9.1k. +143 B gzip.

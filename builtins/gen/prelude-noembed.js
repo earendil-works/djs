@@ -2626,7 +2626,7 @@ function SymbolMetadata() {
 
 // builtins/disposable.ts:16
 function NewSuppressedError(error, suppressed) {
-  const o = %ErrorCreate(%RealmIntrinsic("SuppressedErrorPrototype"));
+  const o = %ErrorCreate(%RealmIntrinsic("SuppressedErrorPrototype"), undefined);
   %DefineDataPropertyOrThrow(o, "error", error, 5);
   %DefineDataPropertyOrThrow(o, "suppressed", suppressed, 5);
   RecordStack(o);
@@ -3135,17 +3135,18 @@ function FinishErrorStack(o) {
 
 // builtins/error.ts:70
 function RecordStack(o) {
-  %CaptureStack(o);
-  FinishErrorStack(o);
+  if (%CaptureStack(o)) {
+    FinishErrorStack(o);
+  }
 }
 
-// builtins/error.ts:80 %ThrowWithStack
+// builtins/error.ts:81 %ThrowWithStack
 function ThrowWithStack(e) {
   FinishErrorStack(e);
   throw e;
 }
 
-// builtins/error.ts:90 set Error.prototype.stack
+// builtins/error.ts:91 set Error.prototype.stack
 function ErrorPrototypeSetStack(v) {
   if (!%IsObject(this)) {
     throw %NewTypeError("not an object");
@@ -3165,7 +3166,7 @@ function ErrorPrototypeSetStack(v) {
   return undefined;
 }
 
-// builtins/error.ts:114 Error.isError
+// builtins/error.ts:115 Error.isError
 function ErrorIsError(arg) {
   if (!%IsObject(arg) || %IsProxy(arg)) {
     return false;
@@ -3173,7 +3174,7 @@ function ErrorIsError(arg) {
   return %ObjectClassTag(%AsObj(arg)) === "Error";
 }
 
-// builtins/error.ts:127 Error.captureStackTrace
+// builtins/error.ts:128 Error.captureStackTrace
 function ErrorCaptureStackTrace(object, constructorOpt) {
   if (!%IsObject(object)) {
     throw %NewTypeError("not an object");
@@ -3187,68 +3188,77 @@ function ErrorCaptureStackTrace(object, constructorOpt) {
   %DefineDataPropertyOrThrow(o, "stack", stack, 5);
 }
 
-// builtins/error.ts:147 value Error.stackTraceLimit
+// builtins/error.ts:148 value Error.stackTraceLimit
 function ErrorStackTraceLimit() {
   return 10;
 }
 
-// builtins/error.ts:155
+// builtins/error.ts:156
 function ErrorConstruct(newTarget, fallback, message, options) {
-  const o = %ErrorCreate(GetPrototypeFromConstructor(newTarget, fallback));
-  if (message !== undefined) {
-    %DefineDataPropertyOrThrow(o, "message", ToString(message), 5);
+  const p = %ConstructorPrototype(newTarget, fallback);
+  const proto = p !== undefined ? %AsObj(p) : GetPrototypeFromConstructorSlow(newTarget, fallback);
+  let msg = undefined;
+  if (%IsString(message)) {
+    msg = message;
+  } else if (message !== undefined) {
+    msg = ToString(message);
   }
-  InstallErrorCause(o, options);
-  RecordStack(o);
+  const o = %ErrorCreate(proto, msg);
+  if (%IsObject(options)) {
+    InstallErrorCause(o, options);
+  }
+  if (%CaptureStack(o)) {
+    FinishErrorStack(o);
+  }
   return o;
 }
 
-// builtins/error.ts:170 constructor Error
+// builtins/error.ts:183 constructor Error
 function ErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "ErrorPrototype", message, options);
 }
 
-// builtins/error.ts:180 constructor EvalError
+// builtins/error.ts:193 constructor EvalError
 function EvalErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "EvalErrorPrototype", message, options);
 }
 
-// builtins/error.ts:190 constructor RangeError
+// builtins/error.ts:203 constructor RangeError
 function RangeErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "RangeErrorPrototype", message, options);
 }
 
-// builtins/error.ts:200 constructor ReferenceError
+// builtins/error.ts:213 constructor ReferenceError
 function ReferenceErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "ReferenceErrorPrototype", message, options);
 }
 
-// builtins/error.ts:210 constructor SyntaxError
+// builtins/error.ts:223 constructor SyntaxError
 function SyntaxErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "SyntaxErrorPrototype", message, options);
 }
 
-// builtins/error.ts:220 constructor TypeError
+// builtins/error.ts:233 constructor TypeError
 function TypeErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "TypeErrorPrototype", message, options);
 }
 
-// builtins/error.ts:230 constructor URIError
+// builtins/error.ts:243 constructor URIError
 function URIErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "URIErrorPrototype", message, options);
 }
 
-// builtins/error.ts:240 value Error.prototype.name
+// builtins/error.ts:253 value Error.prototype.name
 function ErrorPrototypeName() {
   return "Error";
 }
 
-// builtins/error.ts:249 value Error.prototype.message
+// builtins/error.ts:262 value Error.prototype.message
 function ErrorPrototypeMessage() {
   return "";
 }
 
-// builtins/error.ts:257 Error.prototype.toString
+// builtins/error.ts:270 Error.prototype.toString
 function ErrorPrototypeToString() {
   if (!%IsObject(this)) {
     throw %NewTypeError("not an object");
@@ -3267,68 +3277,70 @@ function ErrorPrototypeToString() {
   return nameStr + ": " + msgStr;
 }
 
-// builtins/error.ts:281 constructor InternalError
+// builtins/error.ts:294 constructor InternalError
 function InternalErrorConstructor(message, options) {
   return ErrorConstruct(new.target, "InternalErrorPrototype", message, options);
 }
 
-// builtins/error.ts:291 constructor AggregateError
+// builtins/error.ts:304 constructor AggregateError
 function AggregateErrorConstructor(errors, message, options) {
   const o = ErrorConstruct(new.target, "AggregateErrorPrototype", message, options);
   %DefineDataPropertyOrThrow(o, "errors", IterableToList(errors), 5);
   return o;
 }
 
-// builtins/error.ts:303 constructor SuppressedError
+// builtins/error.ts:316 constructor SuppressedError
 function SuppressedErrorConstructor(error, suppressed, message) {
-  const o = %ErrorCreate(GetPrototypeFromConstructor(new.target, "SuppressedErrorPrototype"));
+  const proto = GetPrototypeFromConstructor(new.target, "SuppressedErrorPrototype");
+  let msg = undefined;
   if (message !== undefined) {
-    %DefineDataPropertyOrThrow(o, "message", ToString(message), 5);
+    msg = ToString(message);
   }
+  const o = %ErrorCreate(proto, msg);
   %DefineDataPropertyOrThrow(o, "error", error, 5);
   %DefineDataPropertyOrThrow(o, "suppressed", suppressed, 5);
   RecordStack(o);
   return o;
 }
 
-// builtins/error.ts:321 %CallSitePrototype%.isNative
+// builtins/error.ts:336 %CallSitePrototype%.isNative
 function CallSiteIsNative() {
   return %CallSiteSlot(this, 5);
 }
 
-// builtins/error.ts:329 %CallSitePrototype%.isConstructor
+// builtins/error.ts:344 %CallSitePrototype%.isConstructor
 function CallSiteIsConstructor() {
   return %CallSiteSlot(this, 6);
 }
 
-// builtins/error.ts:337 %CallSitePrototype%.getFileName
+// builtins/error.ts:352 %CallSitePrototype%.getFileName
 function CallSiteGetFileName() {
   return %CallSiteSlot(this, 2);
 }
 
-// builtins/error.ts:345 %CallSitePrototype%.getFunction
+// builtins/error.ts:360 %CallSitePrototype%.getFunction
 function CallSiteGetFunction() {
   return %CallSiteSlot(this, 0);
 }
 
-// builtins/error.ts:353 %CallSitePrototype%.getFunctionName
+// builtins/error.ts:368 %CallSitePrototype%.getFunctionName
 function CallSiteGetFunctionName() {
   return %CallSiteSlot(this, 1);
 }
 
-// builtins/error.ts:361 %CallSitePrototype%.getLineNumber
+// builtins/error.ts:376 %CallSitePrototype%.getLineNumber
 function CallSiteGetLineNumber() {
   const line = %CallSiteSlot(this, 3);
   return line === 0 ? null : line;
 }
 
-// builtins/error.ts:370 %CallSitePrototype%.getColumnNumber
+// builtins/error.ts:385 %CallSitePrototype%.getColumnNumber
 function CallSiteGetColumnNumber() {
   const line = %CallSiteSlot(this, 3);
   return line === 0 ? null : %CallSiteSlot(this, 4);
 }
 
-// builtins/error.ts:380 value %CallSitePrototype%[Symbol.toStringTag]
+// builtins/error.ts:395 value %CallSitePrototype%[Symbol.toStringTag]
 function CallSiteToStringTag() {
   return "CallSite";
 }
@@ -6808,7 +6820,7 @@ function PromiseAnyRejectElement(x) {
 
 // builtins/promise.ts:514
 function NewAggregateError(errors) {
-  const e = %ErrorCreate(%RealmIntrinsic("AggregateErrorPrototype"));
+  const e = %ErrorCreate(%RealmIntrinsic("AggregateErrorPrototype"), undefined);
   %DefineDataPropertyOrThrow(e, "errors", CreateArrayFromList(errors), 5);
   %CaptureStack(e);
   return e;

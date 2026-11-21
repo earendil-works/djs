@@ -234,6 +234,9 @@ well_known! {
         HAS_INDICES = "hasIndices",
         REG_EXP = "RegExp",
         RAW_JSON = "rawJSON",
+        // Read from the Error constructor by every new error's stack (0266).
+        STACK_TRACE_LIMIT = "stackTraceLimit",
+        PREPARE_STACK_TRACE = "prepareStackTrace",
     }
     symbols {
         SYM_ITERATOR = "Symbol.iterator",

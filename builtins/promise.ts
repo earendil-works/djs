@@ -512,7 +512,7 @@ function PromiseAnyRejectElement(this: Value, x: Value): void {
 
 /** The AggregateError of Promise.any, with `errors` (qjs: an empty message). */
 function NewAggregateError(errors: Obj): Obj {
-  const e: Obj = ErrorCreate(RealmIntrinsic("AggregateErrorPrototype"));
+  const e: Obj = ErrorCreate(RealmIntrinsic("AggregateErrorPrototype"), undefined);
   DefineDataPropertyOrThrow(e, "errors", CreateArrayFromList(errors), 5);
   CaptureStack(e);
   return e;

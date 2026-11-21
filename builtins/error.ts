@@ -68,8 +68,9 @@ function FinishErrorStack(o: Obj): Value {
 
 /** Records the stack of a new error object made by a builtin (D1282, D2050). */
 function RecordStack(o: Obj): void {
-  CaptureStack(o);
-  FinishErrorStack(o);
+  if (CaptureStack(o)) {
+    FinishErrorStack(o);
+  }
 }
 
 /**
@@ -153,12 +154,24 @@ function ErrorStackTraceLimit(): i32 {
  * NativeError constructors, 20.5.6.1.1. `fallback` names the realm prototype.
  */
 function ErrorConstruct(newTarget: Value, fallback: Str, message: Value, options: Value): Obj {
-  const o: Obj = ErrorCreate(GetPrototypeFromConstructor(newTarget, fallback));
-  if (message !== undefined) {
-    DefineDataPropertyOrThrow(o, "message", ToString(message), 5);
+  // (The helpers' common paths written out: a frame each was a quarter of `new Error`.)
+  const p: Value = ConstructorPrototype(newTarget, fallback);
+  const proto: Obj = p !== undefined ? AsObj(p) : GetPrototypeFromConstructorSlow(newTarget, fallback);
+  // The message's own property is made with the object (the object's creation is not
+  // observable, so after ToString).
+  let msg: Value = undefined;
+  if (IsString(message)) {
+    msg = message;
+  } else if (message !== undefined) {
+    msg = ToString(message);
   }
-  InstallErrorCause(o, options);
-  RecordStack(o);
+  const o: Obj = ErrorCreate(proto, msg);
+  if (IsObject(options)) {
+    InstallErrorCause(o, options);
+  }
+  if (CaptureStack(o)) {
+    FinishErrorStack(o);
+  }
   return o;
 }
 
@@ -301,10 +314,12 @@ function AggregateErrorConstructor(errors: Value, message: Value, options?: Valu
  * @slim-omit
  */
 function SuppressedErrorConstructor(error: Value, suppressed: Value, message: Value): Obj {
-  const o: Obj = ErrorCreate(GetPrototypeFromConstructor(new.target, "SuppressedErrorPrototype"));
+  const proto: Obj = GetPrototypeFromConstructor(new.target, "SuppressedErrorPrototype");
+  let msg: Value = undefined;
   if (message !== undefined) {
-    DefineDataPropertyOrThrow(o, "message", ToString(message), 5);
+    msg = ToString(message);
   }
+  const o: Obj = ErrorCreate(proto, msg);
   DefineDataPropertyOrThrow(o, "error", error, 5);
   DefineDataPropertyOrThrow(o, "suppressed", suppressed, 5);
   RecordStack(o);

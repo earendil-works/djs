@@ -150,8 +150,11 @@ declare function RealmIntrinsic(name: Str): Obj;
  * would call a getter or a proxy trap. @leaf
  */
 declare function ConstructorPrototype(newTarget: Value, fallback: Str): Value;
-/** An object with [[ErrorData]] and prototype `proto`. @leaf */
-declare function ErrorCreate(proto: Obj): Obj;
+/**
+ * An object with [[ErrorData]] and prototype `proto`, with an own non-enumerable
+ * `message` when `message` (a string) is not undefined. @leaf
+ */
+declare function ErrorCreate(proto: Obj, message: Value): Obj;
 /** A DOMException: an object with [[ErrorData]], its name and message in slots (D1840). @leaf */
 declare function DOMExceptionCreate(proto: Obj, name: Str, message: Str): Obj;
 /** Slot i (0 name, 1 message) of a DOMException; undefined if v is not one. @leaf */
@@ -167,9 +170,9 @@ declare function Atob(s: Str): Value;
 /**
  * Records `o.stack` (D1282) from the current frames, without the prelude frames at the
  * top: an Error constructor does not show itself. With Error.prepareStackTrace it is
- * pending until FinishErrorStack (D2050). @leaf
+ * pending until FinishErrorStack (D2050): the result is then true. @leaf
  */
-declare function CaptureStack(o: Obj): void;
+declare function CaptureStack(o: Obj): boolean;
 /**
  * The stack an Error object recorded (D1971), a pending one too (D2050), or undefined
  * for any other value. @leaf

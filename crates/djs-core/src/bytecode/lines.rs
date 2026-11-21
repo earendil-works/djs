@@ -114,15 +114,45 @@ impl Iterator for LineEntries<'_> {
 }
 
 /// The source position of the instruction at `pc`: the last entry at or before it.
+/// (The entries' walk written out, with the one-byte numbers inline: a stack trace looks
+/// up every frame, 0266.)
 pub fn lookup_line(bytes: &[u8], pc: u32) -> Option<(u32, u32)> {
     let mut found = None;
-    for e in line_entries(bytes) {
-        if e.pc > pc {
+    let (mut at, mut p, mut line) = (0, 0u64, 1i64);
+    while at < bytes.len() {
+        let Some(dp) = uleb(bytes, &mut at) else {
+            break;
+        };
+        let Some(dl) = uleb(bytes, &mut at) else {
+            break;
+        };
+        let Some(col) = uleb(bytes, &mut at) else {
+            break;
+        };
+        p = p.saturating_add(dp);
+        line = line.saturating_add(unzigzag(dl));
+        if p > u64::from(pc)
+            || p > u32::MAX as u64
+            || !(1..=u32::MAX as i64).contains(&line)
+            || col > u32::MAX as u64
+        {
             break;
         }
-        found = Some((e.line, e.col));
+        found = Some((line as u32, col as u32));
     }
     found
+}
+
+/// [`read_uleb`] with the one-byte case inline.
+#[inline(always)]
+fn uleb(bytes: &[u8], at: &mut usize) -> Option<u64> {
+    match bytes.get(*at) {
+        Some(&b) if b < 0x80 => {
+            *at += 1;
+            Some(u64::from(b))
+        }
+        _ => read_uleb(bytes, at),
+    }
 }
 
 fn zigzag(v: i64) -> u64 {

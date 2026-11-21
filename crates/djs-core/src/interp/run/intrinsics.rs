@@ -1172,14 +1172,6 @@ impl Exec<'_> {
                 // topmost call of `a0` if it is a function (D2010).
                 self.new_stack(self.pc, true, a0.as_object(), None)?
             }
-            CAPTURE_STACK => {
-                let Some(o) = a0.as_object() else {
-                    return bad_argument(id);
-                };
-                let v = self.new_stack(self.pc, true, None, None)?;
-                realm::set_error_stack(self.heap, o, v)?;
-                Value::UNDEFINED
-            }
             SET_ERROR_STACK => {
                 let Some(o) = a0.as_object() else {
                     return bad_argument(id);
@@ -2275,11 +2267,27 @@ impl Exec<'_> {
                 let Some(proto) = a0.as_object() else {
                     return bad_argument(id);
                 };
-                Value::object(self.heap.alloc_object(
+                let o = self.heap.alloc_object(
                     ObjectClass::Error,
                     Some(proto),
                     ObjectClass::Error.slots(),
-                )?)
+                )?;
+                if let Some(m) = arg(1).as_string() {
+                    // Writable and configurable, as the Error constructors define it.
+                    let d = PropertyDescriptor::data(Value::string(m), PropFlags::from_bits(5));
+                    self.heap.define_own_property(o, atoms::MESSAGE, &d)?;
+                }
+                Value::object(o)
+            }
+            // The callers' frames: the prelude's own (the constructor) are left out, so
+            // `pc`, which the hot loop does not keep current, is never read (0266).
+            CAPTURE_STACK => {
+                let Some(o) = a0.as_object() else {
+                    return bad_argument(id);
+                };
+                let v = self.new_stack(self.pc, true, None, None)?;
+                realm::set_error_stack(self.heap, o, v)?;
+                Value::bool(super::stack::is_pending_stack(self.heap, v))
             }
             DATE_CREATE => {
                 let Some(proto) = a0.as_object() else {

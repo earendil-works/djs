@@ -1,0 +1,17 @@
+get prototype,message,cause true m 1
+["message","cause"]
+{"value":"x","writable":true,"enumerable":false,"configurable":true} false false
+42 string null true
+TypeError true
+inner
+true mine MyError: mine true
+2 true
+at inner (L25) | at outer (L24) | at <anonymous> (L26)
+at <anonymous> (L27) | at <anonymous> (L27) | at run (L194)
+at 7 (L28) | at <anonymous> (L29) | at run (L194)
+at get g (L28) | at <anonymous> (L30) | at run (L194)
+at <anonymous> (L31) | at map (native) | at <anonymous> (L31)
+at inner (L25)
+""
+inner:string:false,outer:string:false 7:string:false
+=== completed
