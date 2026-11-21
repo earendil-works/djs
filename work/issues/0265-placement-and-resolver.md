@@ -1,6 +1,6 @@
 # 0265: Allocator placement effects; the resolver's re-emit
 
-status: open
+status: in-progress
 agent: pstart
 branch: issue/0265-placement-resolver
 depends-on: 0263; part 2 after 0259 merges
