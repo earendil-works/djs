@@ -12445,3 +12445,17 @@ their first place and last value. Anything else (holes, Maps, generators, number
 symbol keys, a modified iterator) returns undefined and the general loop runs from the
 start: nothing observable happened. 105k → 14.9k wasm instructions per 8-key call
 (QuickJS 2026 14.7k); +374 B gzip (the coordinator approved the room).
+
+## D3332: Object spread into a fresh literal shares the source's shape
+date: 2026-11-21 · by: pidle · issue: 0262
+`copy_data_props` first tries `Heap::spread_clone(o, src)`: when the literal `o` has no
+properties yet (the spread is its first part) and `src` is an ordinary shape-mode object
+without elements whose every descriptor is a plain data property (writable, enumerable,
+configurable: literals, JSON.parse records, class instances), `o` gets `src`'s shape and
+a copy of its values block. CreateDataProperty per key in [[OwnPropertyKeys]] order
+would build the same properties; only the interleaving of strings and symbols in the
+shape differs, which [[OwnPropertyKeys]] does not show (strings, then symbols, each in
+insertion order). No shape is created, so the shape tree stays a function of the
+program. Frozen, sealed, read-only, non-enumerable or getter sources, index keys,
+dictionaries and exotic objects take the per-key path. `{ ...row, x: 1 }` over 8-key
+JSON rows: 16.0k → 4.0k wasm instructions per object (QuickJS 2026 12.2k); +174 B gzip.

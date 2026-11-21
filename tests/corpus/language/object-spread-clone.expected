@@ -1,0 +1,18 @@
+b,a,Symbol(s1) 1 2 x false true
+[["z",{"value":1,"writable":true,"enumerable":true,"configurable":true}],["y",{"value":[1,2],"writable":true,"enumerable":true,"configurable":true}],["x",{"value":{"w":null},"writable":true,"enumerable":true,"configurable":true}]]
+q,p false
+k,j,Symbol(s2),Symbol(s1)
+__proto__,v own __proto__ true
+b,extra,Symbol(s1) 5 1 2 b,a,Symbol(s1)
+b,a,b2,Symbol(s1) second
+null b,a,Symbol(s1)
+[["a",{"value":1,"writable":true,"enumerable":true,"configurable":true}]]
+[["a",{"value":1,"writable":true,"enumerable":true,"configurable":true}],["ro",{"value":2,"writable":true,"enumerable":true,"configurable":true}]]
+[["fz",{"value":1,"writable":true,"enumerable":true,"configurable":true}],["fy",{"value":2,"writable":true,"enumerable":true,"configurable":true}]] [["se",{"value":1,"writable":true,"enumerable":true,"configurable":true}]]
+[["a",{"value":1,"writable":true,"enumerable":true,"configurable":true}],["g",{"value":2,"writable":true,"enumerable":true,"configurable":true}]] get
+1,2,b,a 0,1
+39 39 false
+n  
+pe,more true
+x  
+=== completed

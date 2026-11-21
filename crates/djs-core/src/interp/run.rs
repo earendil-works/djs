@@ -3832,6 +3832,10 @@ impl<'h> Exec<'h> {
         let Some(s) = src.as_object() else {
             return Ok(true);
         };
+        // The first spread of plain data into a fresh literal: a copy of the values.
+        if self.heap.spread_clone(o, s)? {
+            return Ok(true);
+        }
         if self.heap.is_proxy(s) {
             return Ok(false);
         }

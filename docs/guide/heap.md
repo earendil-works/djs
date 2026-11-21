@@ -204,7 +204,10 @@ search in the parent's sorted `TRANSITIONS`, or created there. A chain's descrip
 one shared array that each extending child appends to, so a chain of n shapes costs O(n)
 bytes. `JSON.parse`, the host's value decoder and object literals with a known key count
 walk the transitions once per key and allocate the values block at its exact size, so
-every record of a JSON array shares one chain.
+every record of a JSON array shares one chain. A literal that starts with a spread of
+such an object, `{ ...row, extra: 1 }`, takes the source's shape and a copy of its
+values when every property is a plain data property, instead of adding the keys one by
+one.
 
 In numbers: a `{a, b, c, d}` literal costs <!--n heap/literal4/shape .0-->72<!--/n--> bytes of heap per object with a shape
 against <!--n heap/literal4/dictionary .0-->112<!--/n--> with a private table, and a five-key `JSON.parse` record <!--n heap/json5/shape .0-->104<!--/n--> against

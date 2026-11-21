@@ -596,6 +596,44 @@ impl Heap {
         Ok(true)
     }
 
+    /// `{...src}` into `o`, a fresh object literal without properties: when `src` is an
+    /// ordinary shape-mode object without elements whose properties are all plain data
+    /// properties (writable, enumerable, configurable), `o` takes `src`'s shape and a copy
+    /// of its values. That is the object CreateDataProperty of each key in
+    /// [[OwnPropertyKeys]] order builds (the order of strings among symbols is not
+    /// observable), with no shape created. False, with nothing changed, otherwise.
+    pub(crate) fn spread_clone(&mut self, o: Obj, src: Obj) -> Result<bool, HeapError> {
+        let p = self.props(src);
+        let plain = |h: &Self, x: Obj| {
+            h.object_class(x) == ObjectClass::Ordinary && !h.is_dictionary(x) && h.elements(x) == 0
+        };
+        if p == 0
+            || self.props(o) != 0
+            || !plain(self, o)
+            || !plain(self, src)
+            || !self.is_extensible(o)
+        {
+            return Ok(false);
+        }
+        let s = self.arena().get(p, PropValues::SHAPE).0;
+        let n = self.shape_count(s);
+        let all = PropFlags::ALL.bits() as u32;
+        if (0..n).any(|i| self.shape_desc(s, i).1 != all) {
+            return Ok(false);
+        }
+        let v = self.alloc_values(n)?;
+        let a = self.arena_mut();
+        a.copy_within(
+            PropValues::VALUES.at(p, 0),
+            8 * n,
+            PropValues::VALUES.at(v, 0),
+        );
+        a.set(v, PropValues::LEN, n);
+        a.set(v, PropValues::SHAPE, Ref(s));
+        a.set(o.0, Object::PROPS, Ref(v));
+        Ok(true)
+    }
+
     /// A new array with `values` as its dense elements (`length` = `values.len()`).
     /// Values may be holes.
     pub fn new_array_from_values(
