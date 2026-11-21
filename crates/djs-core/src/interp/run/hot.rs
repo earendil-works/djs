@@ -22,6 +22,7 @@
 //! runs `safepoint()` at that point). So suspension points, collections and heap images
 //! do not change (vm/tests.rs `hot_loop_is_invisible`).
 
+use super::ic::Hit;
 use super::{Exec, fast};
 use crate::bytecode::decode::arity;
 use crate::bytecode::special;
@@ -517,6 +518,53 @@ impl Exec<'_> {
         true
     }
 
+    /// A declined `get_field` whose cache slot points at an accessor on the prototype
+    /// chain (`ic::Hit::Getter`, D3470): calls the getter as `step` would
+    /// (`call_accessor`), without `step`'s lookup. False, with nothing changed, for
+    /// anything else and when the call fails (`step` runs the instruction then and
+    /// throws).
+    fn decline_getter(&mut self) -> bool {
+        let (key, ic, o) = (self.imm_atom(), self.imm_u16(5), self.top(0));
+        let b = self.heap.arena_mut().hot_bytes();
+        let Some(Hit::Getter(getter)) = super::ic::hot_get(b, self.template, ic, o, key) else {
+            return false;
+        };
+        // A closure (bytecode, `@fast` or native): `call` then pushes a frame or runs
+        // the builtin, and never stops the run.
+        if !getter
+            .as_object()
+            .is_some_and(|f| self.is_class(f, ObjectClass::Function))
+        {
+            return false;
+        }
+        #[cfg(debug_assertions)]
+        {
+            // The slot's answer is the lookup's.
+            use crate::heap::{Lookup, Property};
+            let start = o
+                .as_object()
+                .or_else(|| crate::interp::realm::primitive_proto(self.heap, o));
+            let found = start.map(|s| self.heap.lookup_property(s, key));
+            assert!(
+                matches!(found, Some(Lookup::Found(_, Property::Accessor { getter: g, .. })) if g == getter),
+                "the slot's getter differs from the lookup's"
+            );
+        }
+        let (pc, sp, fuel) = (self.pc, self.sp, self.fuel);
+        let info = &OPS[Op::GetField as usize];
+        self.fuel -= info.cost.fuel() as i64;
+        self.pc += info.size as u32;
+        self.sp -= 1;
+        match self.call_accessor(getter, o, None) {
+            Ok(None) => true,
+            r => {
+                debug_assert!(r.is_err(), "a getter stopped the run");
+                (self.pc, self.sp, self.fuel) = (pc, sp, fuel);
+                false
+            }
+        }
+    }
+
     /// A declined `in` with a string key and an object (`decline_fast`): the heap's
     /// answer where no proxy is on the chain (D3402), else false with nothing changed.
     fn decline_in(&mut self) -> bool {
@@ -605,6 +653,9 @@ impl Exec<'_> {
     fn decline_fast(&mut self, op: u8) -> bool {
         if fast::is_call(op) {
             return self.pc < self.code_len && self.fast_leaf_call(op);
+        }
+        if op == fast::GET_FIELD {
+            return self.decline_getter();
         }
         if op == IN {
             return self.decline_in();
@@ -1283,12 +1334,14 @@ impl Exec<'_> {
                             // The frequent hits are read from the slice (D3393); the
                             // others, and the misses, out of line.
                             let hit = if key == atoms::LENGTH && op == fast::GET_FIELD {
-                                hot_length(b, o)
+                                hot_length(b, o).map(Hit::Value)
                             } else {
                                 super::ic::hot_get(b, self.template, ic, o, key)
                             };
                             let r = match hit {
-                                Some(r) => {
+                                // An accessor: `decline_fast` calls the getter.
+                                Some(Hit::Getter(_)) => break Exit::Decline(op),
+                                Some(Hit::Value(r)) => {
                                     #[cfg(debug_assertions)]
                                     {
                                         let want = heap_call_op!(self.field_slow(op, key, ic, o));

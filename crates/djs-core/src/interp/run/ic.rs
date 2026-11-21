@@ -26,7 +26,14 @@
 //!   word 3 = the receiver's shape word (`Heap::receiver_shape`, 0083), or 0. The objects
 //!   from that prototype to the holder are marked `OBJ_IS_PROTO`, so a key added to one
 //!   of them or a prototype change bumps the epoch. The receiver must not have an own
-//!   `key`: an equal shape word proves that, otherwise the hit looks it up.
+//!   `key`: an equal shape word proves that, otherwise the hit looks it up. The holder's
+//!   entry may be an accessor (D3470): the tier-0 loop's hit then yields the getter to
+//!   call ([`Hit::Getter`]); [`cached_get`] treats it as a miss.
+//! - absent reads (D3470): a prototype-read slot with depth 1 and index 0 ("no entry"):
+//!   no object from the receiver's prototype (word 1) to the end of the chain has the
+//!   key, and none is a proxy or a typed array. Every object of the chain is marked
+//!   `OBJ_IS_PROTO`, so a key added to one of them bumps the epoch. The hit is
+//!   `undefined` without a walk.
 //! - additions (0083): word 0 = offset slot, kind `KIND_ADD`, `ADD_SET` for a
 //!   `put_field` site ([[Set]]) or 0 for `define_field` (CreateDataProperty); word 1 =
 //!   the receiver's shape word before, word 2 = the shape after. A [[Set]] addition also
@@ -155,6 +162,10 @@ pub(crate) fn cached_get(heap: &Heap, at: u32, o: Value, key: Atom) -> Option<Va
             if proto.offset() != w1 {
                 return None;
             }
+            if w0 & INDEX_MASK == 0 {
+                // An absent read: nothing on the chain has the key.
+                return Some(Value::UNDEFINED);
+            }
             let mut h = proto;
             for _ in 1..depth {
                 h = heap.get_prototype_of(h)?;
@@ -177,7 +188,7 @@ pub(crate) fn cached_get(heap: &Heap, at: u32, o: Value, key: Atom) -> Option<Va
 /// prototype hit over 200 (D3393). Reads only. Debug builds compare every hit with
 /// [`cached_get`] (hot.rs).
 #[inline(always)]
-pub(super) fn hot_get(b: &[u8], template: u32, ic: u32, o: Value, key: Atom) -> Option<Value> {
+pub(super) fn hot_get(b: &[u8], template: u32, ic: u32, o: Value, key: Atom) -> Option<Hit> {
     use crate::heap::cells::flags::OBJ_DICTIONARY;
     use crate::heap::cells::{Header, Object, PropValues};
     use crate::heap::layout::arena_read;
@@ -196,7 +207,8 @@ pub(super) fn hot_get(b: &[u8], template: u32, ic: u32, o: Value, key: Atom) -> 
     if w0 & IC_OFFSET_SLOT == 0 {
         return None;
     }
-    let index = (w0 & INDEX_MASK) - 1;
+    // (An absent read's index field is 0: it returns before `index` is used.)
+    let index = (w0 & INDEX_MASK).wrapping_sub(1);
     let depth = kind(w0);
     if depth == 0 {
         // `Heap::shaped_get`.
@@ -205,7 +217,10 @@ pub(super) fn hot_get(b: &[u8], template: u32, ic: u32, o: Value, key: Atom) -> 
         if dictionary(obj) || v == 0 || r32(v + PropValues::SHAPE.offset) != r32(at + 4) {
             return None;
         }
-        return Some(super::hot::ld(b, PropValues::VALUES.at(v, index)));
+        return Some(Hit::Value(super::hot::ld(
+            b,
+            PropValues::VALUES.at(v, index),
+        )));
     }
     if depth == KIND_ADD || r32(at + 8) != r32(Roots::PROTO_EPOCH.offset) {
         return None;
@@ -257,6 +272,10 @@ pub(super) fn hot_get(b: &[u8], template: u32, ic: u32, o: Value, key: Atom) -> 
     if proto == 0 || proto != r32(at + 4) {
         return None;
     }
+    if w0 & INDEX_MASK == 0 {
+        // An absent read: nothing on the chain has the key.
+        return Some(Hit::Value(Value::UNDEFINED));
+    }
     let mut h = proto;
     for _ in 1..depth {
         h = r32(h + Object::PROTO.offset);
@@ -267,10 +286,20 @@ pub(super) fn hot_get(b: &[u8], template: u32, ic: u32, o: Value, key: Atom) -> 
     hot_data_at(b, h, index, key)
 }
 
+/// What [`hot_get`] found.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum Hit {
+    /// The property's value.
+    Value(Value),
+    /// An accessor on the prototype chain: its getter, to call with the receiver.
+    Getter(Value),
+}
+
 /// `Heap::data_at` on the tier-0 loop's slice: the value of slot `index` of the object at
-/// `h` if that slot is the data property `key`.
+/// `h` if that slot is the data property `key`, or the getter if it is the accessor `key`
+/// (an accessor without a getter reads as undefined).
 #[inline(always)]
-fn hot_data_at(b: &[u8], h: u32, index: u32, key: Atom) -> Option<Value> {
+fn hot_data_at(b: &[u8], h: u32, index: u32, key: Atom) -> Option<Hit> {
     use crate::heap::cells::flags::OBJ_DICTIONARY;
     use crate::heap::cells::{Header, Object, PropEntry, PropTable, PropValues, Shape};
     use crate::heap::layout::arena_read;
@@ -299,10 +328,22 @@ fn hot_data_at(b: &[u8], h: u32, index: u32, key: Atom) -> Option<Value> {
         let e = U32Array::DATA.at(d, 1 + 2 * index);
         (r32(e), r32(e + 4), PropValues::VALUES.at(p, index))
     };
-    if k != key.id() || fl & STORE_ACCESSOR != 0 {
+    if k != key.id() {
         return None;
     }
-    Some(super::hot::ld(b, value))
+    let v = super::hot::ld(b, value);
+    if fl & STORE_ACCESSOR == 0 {
+        return Some(Hit::Value(v));
+    }
+    let getter = super::hot::ld(
+        b,
+        v.as_internal()? + crate::heap::cells::AccessorPair::GETTER.offset,
+    );
+    Some(if getter.is_undefined() {
+        Hit::Value(getter)
+    } else {
+        Hit::Getter(getter)
+    })
 }
 
 /// A put or define site's cache hit: true if the slot at `at` (0: none) still applies to
@@ -485,8 +526,16 @@ impl Exec<'_> {
 
     /// After a slow lookup found data property `key` on `holder`, on the prototype chain
     /// of `o`: remembers it (D1621), with the receiver's shape word (0083).
+    /// With `accessor`, the holder's `key` is an accessor (D3470).
     #[inline(never)]
-    pub(super) fn ic_proto_fill(&mut self, o: Value, key: Atom, holder: Obj, ic: u32) {
+    pub(super) fn ic_proto_fill(
+        &mut self,
+        o: Value,
+        key: Atom,
+        holder: Obj,
+        accessor: bool,
+        ic: u32,
+    ) {
         if key.as_int().is_some() {
             return;
         }
@@ -507,7 +556,7 @@ impl Exec<'_> {
         let Some(i) = self.heap.own_entry_index(holder, key) else {
             return;
         };
-        if i + 1 > INDEX_MASK || self.heap.data_at(holder, i, key).is_none() {
+        if i + 1 > INDEX_MASK || (!accessor && self.heap.data_at(holder, i, key).is_none()) {
             return;
         }
         let mut h = proto;
@@ -521,6 +570,35 @@ impl Exec<'_> {
         let w0 = IC_OFFSET_SLOT | depth << KIND_SHIFT | (i + 1);
         let epoch = self.heap.proto_epoch();
         let shape = o.as_object().map_or(0, |obj| self.heap.receiver_shape(obj));
+        self.ic_write(ic, [w0, proto.offset(), epoch, shape, 0]);
+    }
+
+    /// After a slow lookup found `key` neither on `obj` nor on its prototype chain:
+    /// remembers that (D3470), for a shape-mode receiver with a prototype whose chain has
+    /// no proxy and no typed array. The chain is marked `OBJ_IS_PROTO`, so that a key
+    /// added to it bumps the epoch; the receiver's shape word stands for its own keys.
+    #[inline(never)]
+    pub(super) fn ic_absent_fill(&mut self, obj: Obj, key: Atom, ic: u32) {
+        if key.as_int().is_some()
+            || exotic_own(self.heap, obj, key)
+            || self.heap.canonical_numeric_index(key).is_some()
+        {
+            return;
+        }
+        let shape = self.heap.receiver_shape(obj);
+        let Some(proto) = self.heap.get_prototype_of(obj) else {
+            return;
+        };
+        if shape == 0 || !self.chain_lacks(Some(proto), key) {
+            return;
+        }
+        let mut p = Some(proto);
+        while let Some(q) = p {
+            self.heap.mark_proto(q);
+            p = self.heap.get_prototype_of(q);
+        }
+        let w0 = IC_OFFSET_SLOT | 1 << KIND_SHIFT;
+        let epoch = self.heap.proto_epoch();
         self.ic_write(ic, [w0, proto.offset(), epoch, shape, 0]);
     }
 

@@ -3454,14 +3454,24 @@ impl<'h> Exec<'h> {
             },
         };
         let l = self.heap.lookup_property(start, key);
-        if let Lookup::Found(h, Property::Data { value, .. }) = l
-            && !value.is_hole()
-        {
-            if Value::object(h) == o {
-                self.ic_own_fill(h, key, ic);
-            } else {
-                self.ic_proto_fill(o, key, h, ic);
+        match l {
+            Lookup::Found(h, Property::Data { value, .. }) if !value.is_hole() => {
+                if Value::object(h) == o {
+                    self.ic_own_fill(h, key, ic);
+                } else {
+                    self.ic_proto_fill(o, key, h, false, ic);
+                }
             }
+            // An accessor on the prototype chain, and a key nothing has (D3470).
+            Lookup::Found(h, Property::Accessor { .. }) if Value::object(h) != o => {
+                self.ic_proto_fill(o, key, h, true, ic);
+            }
+            Lookup::Absent => {
+                if let Some(obj) = o.as_object() {
+                    self.ic_absent_fill(obj, key, ic);
+                }
+            }
+            _ => {}
         }
         self.got_of(l, key)
     }
