@@ -7,7 +7,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
 | 0280 | D020 budget +2 KB (owner); land parked construct path and object rest | pidle | .worktrees/pidle |
-| 0281 | Land the regexp matcher state reuse | pscan | .worktrees/pscan |
 | 0282 | @fast builtin getters (Map/Set size) | pcall | .worktrees/pcall |
 | 0283 | Builtin families: what each costs and gives (list for the owner) | pstart | .worktrees/pstart |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
@@ -54,6 +53,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0281 | Regexp lastIndex inserted directly (state reuse measured, dropped: a Heap field costs ~300 B gz) | 27bb1fa3 (agent pscan; D3520, D3521; test -6%, match -2.5%; -11 B gz) |
 | 0279 | Re-recorded published numbers after the push (load < 4) | f8dae01d (agent pstart; D3500; run time 1.38x faster than QuickJS, memory 1.12x QuickJS, new VM 0.07 ms, idle = QuickJS-NG) |
 | 0276 | Absent-key and accessor caches, typeof/string ===/< in the loop | 3482d0fe (agent pcall; D3470-D3472; o.missing 3.4x->0.89x QJS, typeof s 0.62x, s==="x" 0.27x, s<t 1.04x; props +1.5%; -118 B gz) |
 | 0278 | for-in enumerable keys only, no re-intern (object rest parked) | 27c8a9a4 (agent pidle; D3490, D3491; for-in 5 keys 20.5k->13.2k, array 60.5k->29.9k; -50 B gz) |
