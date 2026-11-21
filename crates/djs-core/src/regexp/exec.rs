@@ -426,27 +426,27 @@ pub fn resume_in(
 }
 
 /// The Latin-1 characters of the first set at `first` (`n (lo hi){n}`, sorted, then a
-/// bitmap), when there are one to four (repeated to fill four). From the ranges: a large
-/// set (`\s`, `\w`) is turned down at its count, before any work.
-fn first_bytes(code: Prog<'_>, first: usize) -> Option<[u8; 4]> {
+/// bitmap), when there are one or two (the one twice). From the ranges: a large set
+/// (`\s`, `\w`) is turned down at its count, before any work.
+fn first_bytes(code: Prog<'_>, first: usize) -> Option<[u8; 2]> {
     let n = code.at(first) as usize;
-    if n > 4 {
+    if n > 2 {
         return None;
     }
-    let mut set = [0u8; 4];
+    let mut set = [0u8; 2];
     let mut k = 0;
     for r in 0..n {
         let (lo, hi) = (code.at(first + 1 + 2 * r), code.at(first + 2 + 2 * r));
         for c in lo..=hi.min(0xFF) {
-            if k == 4 {
+            if k == 2 {
                 return None;
             }
             set[k] = c as u8;
             k += 1;
         }
     }
-    for i in k..4 {
-        set[i] = set[0];
+    if k == 1 {
+        set[1] = set[0];
     }
     (k > 0).then_some(set)
 }
@@ -454,8 +454,8 @@ fn first_bytes(code: Prog<'_>, first: usize) -> Option<[u8; 4]> {
 struct Machine<'a, 's> {
     code: Prog<'a>,
     input: Input<'a>,
-    /// The first set's characters when they are one to four bytes, for a one-byte input.
-    first_bytes: Option<[u8; 4]>,
+    /// The first set's characters when they are one or two bytes, for a one-byte input.
+    first_bytes: Option<[u8; 2]>,
     unicode: bool,
     /// Index of the first register slot.
     regs: usize,
@@ -685,7 +685,7 @@ impl Machine<'_, '_> {
                 // In one-byte text the only line terminators are \n and \r: eight
                 // bytes at a time (0260).
                 Input::Latin1(b) => {
-                    crate::swar::find_any(&b[p..limit], *b"\n\r\n\n").map(|k| p + k)
+                    crate::swar::find_either(&b[p..limit], b'\n', b'\r').map(|k| p + k)
                 }
                 input => (p..limit).find(|&i| is_line_terminator(input.unit(i))),
             };
@@ -732,9 +732,9 @@ impl Machine<'_, '_> {
         // One-byte strings are the common input: their loop on its own.
         let found = match self.input {
             Input::Latin1(b) => match self.first_bytes {
-                // A literal start (`function`, `TODO|FIXME`, `report` with `i`): eight
+                // A literal start (`function`, `TODO|FIXME`, `x` with `i`): eight
                 // bytes at a time (0260).
-                Some(set) => crate::swar::find_any(&b[p..end], set).map(|k| p + k),
+                Some([x, y]) => crate::swar::find_either(&b[p..end], x, y).map(|k| p + k),
                 None => (p..end).find(|&i| self.in_first(first, b[i] as u32)),
             },
             input => (p..end).find(|&i| self.in_first(first, input.unit(i))),

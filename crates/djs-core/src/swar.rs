@@ -77,15 +77,10 @@ pub(crate) fn find_byte(h: &[u8], b: u8) -> Option<usize> {
     find_with(h, |w| eq8(w, b), |c| c == b)
 }
 
-/// The index of the first byte of `h` in `set` (up to four bytes; repeat one for fewer):
-/// a regular expression's first characters, line terminators.
-pub(crate) fn find_any(h: &[u8], set: [u8; 4]) -> Option<usize> {
-    let [a, b, c, d] = set;
-    find_with(
-        h,
-        |w| eq8(w, a) | eq8(w, b) | eq8(w, c) | eq8(w, d),
-        |x| x == a || x == b || x == c || x == d,
-    )
+/// The index of the first byte of `h` that is `a` or `b`: a regular expression's first
+/// characters (`f`, `T|F`, `x` with `i`), line terminators.
+pub(crate) fn find_either(h: &[u8], a: u8, b: u8) -> Option<usize> {
+    find_with(h, |w| eq8(w, a) | eq8(w, b), |x| x == a || x == b)
 }
 
 /// The first byte where `hit` flags a word (exact for its lowest flag) or, in a haystack
@@ -169,21 +164,21 @@ mod tests {
     }
 
     #[test]
-    fn find_any_every_offset() {
-        let set = [b'\n', b'\r', 0xE9, b'\n'];
+    fn find_either_every_offset() {
+        let set = [b'\r', 0xE9];
         for n in 0..40 {
             for at in 0..n {
-                for (x, other) in [(b'\r', b'\n'), (0xE9, 0xEA), (b'\n', 0x0B)] {
+                for (x, other) in [(b'\r', b'\n'), (0xE9, 0xEA), (b'\n', 0x0B), (b'\r', 0xE9)] {
                     let mut h = alloc::vec![0x0Bu8; n];
                     h[at] = x;
                     if at + 1 < n {
                         h[at + 1] = other;
                     }
                     let want = h.iter().position(|c| set.contains(c));
-                    assert_eq!(find_any(&h, set), want, "{h:?}");
+                    assert_eq!(find_either(&h, set[0], set[1]), want, "{h:?}");
                 }
             }
-            assert_eq!(find_any(&alloc::vec![0u8; n], set), None);
+            assert_eq!(find_either(&alloc::vec![0u8; n], set[0], set[1]), None);
         }
     }
 
