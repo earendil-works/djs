@@ -1,6 +1,6 @@
 # 0281: Land the regexp matcher's state reuse (parked in 0275)
 
-status: in-progress
+status: done
 agent: pscan
 branch: issue/0281-regexp-state-reuse
 depends-on: 0280 (budget change)
@@ -46,5 +46,17 @@ Never weaken determinism (collection points a function of the program, D1710), s
 anywhere, images, or the unsafe rules (AGENTS.md).
 
 ## Log
+- Reuse patch rebased onto 7b302395: +470 B gz for match −3.7%, replace −2.0%, test −2.1%. A
+  dummy Vec field on Heap alone is +317 B gz (layout reorder re-offsets every heap field
+  access); field placement makes no difference; a bigger reserve without reuse gains nothing.
+  Not landed (coordinator agreed): D3520.
+- lastIndex of a new RegExp via heap.add_fresh_data: test −6%, match −2.5%, −11 B gz (D3521).
+- Workloads (ins.py): heavy, text unchanged, loop −1.8% (noise level).
+- Tests: test262 built-ins/RegExp, String/prototype; difftest builtins, codemode, language
+  plain and --suspend-every 97 --gc-stress; lib tests.
 
 ## Result
+Landed D3521 only: a new RegExp's `lastIndex` is inserted directly (test −6%, match −2.5%,
+−11 B gz, memory unchanged, no ceiling change). The state reuse (D3461) is not landed: on
+current main it costs +470 B gz for −2..−4%, most of it from adding a field to `Heap`
+(D3520: any new Heap field costs ~300 B gz through re-offset accesses).

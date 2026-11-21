@@ -13592,3 +13592,23 @@ D020's budget for the shipped module becomes 1.5x quickjs-wasi's gzip plus 2,048
 land the speedups parked for size in 0270, 0272, 0275, 0276 and 0278. The ratchet
 ceiling stays a ratchet: each batch that uses the allowance raises it by what it needs,
 recorded with its decision. The slim module keeps its own ratchet.
+## D3520: The matcher's memory kept between matches: not landed (a new Heap field costs ~300 B gz)
+date: 2026-11-21 · by: pscan · issue: 0281
+D3461's patch (the matcher's `ExecState::mem` kept in the heap between exec, replace and
+split, capped at 1024 words), re-measured on main 7b302395: match −3.7%, replace −2.0%,
+test −2.1% (slope.py, wasm), for +470 B gz (429,419 → 429,889). The gain is the
+malloc/free pair per exec: a bigger initial reserve without reuse gains nothing. The cost
+is mostly the field itself: an unused `Vec<u32>` field on `Heap` alone is +317 B gz
+(+349 raw), wherever it is declared, because rustc reorders the struct and every access to
+a heap field across the module gets a new offset. Worth knowing before adding any field to
+`Heap` (or another struct the whole engine reads): budget ~300 B gz for the layout change
+alone. Not landed; patch in work/scratch/0281/reuse-full.patch of the primary checkout.
+
+## D3521: A new RegExp's lastIndex is added directly
+date: 2026-11-21 · by: pscan · issue: 0281
+RegExpCreate (every evaluation of a regexp literal) defined `lastIndex` through
+define_own_property: a descriptor, the existing-property lookup and validation on an
+object that was just allocated. `Heap::add_fresh_data` inserts it (the shape transition
+only), for an object without properties that is not a builtin. Per iteration (slope.py,
+wasm): `/TODO|FIXME/.test(LINE)` −6%, `LINE.match(/^([^:]+):(\d+):/)` −2.5%; −11 B gz.
+Memory unchanged (the same shape and values block).
