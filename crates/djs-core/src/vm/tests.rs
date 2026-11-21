@@ -4398,6 +4398,36 @@ fn known_builtins_end_with_a_global_lexical() {
     assert_eq!(out.result, "mine 1.5:s:up 1.5");
 }
 
+/// Known builtins (D3300): a later script's `var` or function declaration of a known
+/// global's name assigns the global object's property.
+#[test]
+fn known_builtins_end_with_a_global_var_or_function() {
+    use crate::interp::known::pristine;
+    for (decl, want) in [
+        ("var String = (x) => 'var ' + x;", "var 1"),
+        ("function String(x) { return 'fn ' + x; }", "fn 1"),
+        ("var String;", "1"),
+        ("globalThis.String = (x) => 'this ' + x;", "this 1"),
+        (
+            "Object.assign(globalThis, { String: (x) => 'assign ' + x });",
+            "assign 1",
+        ),
+        (
+            "delete globalThis.String; globalThis.String = (x) => 'again ' + x;",
+            "again 1",
+        ),
+    ] {
+        let (vm, _) = run_script(
+            based_vm(VmOptions::default()),
+            "function f(x) { return String(x); } f(0); f(0);",
+        );
+        let (vm, out) = run_script(vm, &alloc::format!("{decl} f(1)"));
+        assert_eq!(out.result, want, "{decl}");
+        // (A `var` without an initializer leaves the binding alone.)
+        assert_eq!(pristine(vm.heap()), decl == "var String;", "{decl}");
+    }
+}
+
 /// Known builtins (D3300) with frozen builtins: a write to a builtin is refused and
 /// changes nothing, a global's binding can still change, and that ends the fast path.
 #[test]
