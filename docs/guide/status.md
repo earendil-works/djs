@@ -75,7 +75,7 @@ shipped build with the dumper, 1,835 KB (754 KB gzip). Module sizes measured at
 | of them `@native` (also compiled to Rust) | 8 |
 | of them `@fast` (a Rust leaf entry) | 43 |
 | difftest corpus cases | 655 |
-| base snapshot, bytes | 190,616 |
+| base snapshot, bytes | 190,640 |
 <!-- /gen -->
 
 ## Every recorded measurement
