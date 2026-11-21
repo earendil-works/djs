@@ -33,8 +33,8 @@ const FLOAT_ARG: Partial<Record<Op, number>> = { vm_set_now: 1, vm_resolve_host_
 
 type Djs = (op: number, a?: number, b?: number, c?: number, d?: number, e?: number, f?: number, t?: number) => number;
 
-/** What an instance of a module has, by module: its operations (`djs_has`). */
-const available = new WeakMap<WebAssembly.Module, Op[]>();
+/** The operations a module's build has (`djs_has`): name, number, position of a float argument. */
+const available = new WeakMap<WebAssembly.Module, [Op, number, number | undefined][]>();
 
 /**
  * The exports of an instance of djs-wasm `module` (a new one unless given) as one function
@@ -48,13 +48,11 @@ export function djsExports(module: WebAssembly.Module, instance = new WebAssembl
   let ops = available.get(module);
   if (ops === undefined) {
     const has = OPS.indexOf("djs_has");
-    ops = OPS.filter((_, i) => djs(has, i) === 1);
+    ops = OPS.flatMap((name, op) => (djs(has, op) === 1 ? [[name, op, FLOAT_ARG[name]] as [Op, number, number | undefined]] : []));
     available.set(module, ops);
   }
   const x: Record<string, unknown> = { memory: e.memory, __stack_pointer: e.__stack_pointer };
-  for (const name of ops) {
-    const op = OPS.indexOf(name);
-    const float = FLOAT_ARG[name];
+  for (const [name, op, float] of ops) {
     x[name] =
       float === 1
         ? (a: number, t: number) => djs(op, a, 0, 0, 0, 0, 0, t)

@@ -60,7 +60,9 @@ export interface StackExports {
  * call) stops before it has any effect; the wrappers then move the stack pointer to a larger
  * block for one more call and back. What compiles and its errors are the same as with a large
  * stack. Modules without the exports are returned as they are. Call it again after the
- * instance's memory was reset (a pooled instance).
+ * instance's memory was reset (a pooled instance). Replaces the functions in `x` (an object
+ * of `djsExports`, which is the caller's own): copying its ~70 properties into a new object
+ * cost a sandbox more than the rest of its JavaScript setup.
  */
 export function elasticStack<X extends StackExports>(x: X): X {
   const { __stack_pointer: sp, djs_stack: stack, vm_fuel_used: fuelUsed } = x;
@@ -79,7 +81,7 @@ export function elasticStack<X extends StackExports>(x: X): X {
     stack(0);
     return r;
   };
-  const y: X = Object.assign(Object.create(null), x);
+  const y = x;
   const run = x.vm_run;
   // The fuel of the last run's parts that stopped for the stack, which `vm_fuel_used` adds.
   let carry = 0;

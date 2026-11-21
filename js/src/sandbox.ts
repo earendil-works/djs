@@ -1813,10 +1813,16 @@ export class Sandbox {
     new Uint8Array(this.x.memory.buffer).set(bytes, at);
   }
 
+  /** Stages `s` as UTF-8: a short one (names) encoded in place, without a copy. */
   private stageText(s: string): number {
-    const b = textEncoder.encode(s);
-    this.stage(b);
-    return b.length;
+    if (s.length > 1024) {
+      const b = textEncoder.encode(s);
+      this.stage(b);
+      return b.length;
+    }
+    // At most 3 bytes per UTF-16 unit.
+    const at = this.x.djs_staging(3 * s.length);
+    return textEncoder.encodeInto(s, new Uint8Array(this.x.memory.buffer, at, 3 * s.length)).written;
   }
 
   private hostFunction(name: string, f: HostFunction | AsyncHostFunction, async = false): number {

@@ -300,11 +300,23 @@ function xorshift(x: bigint): bigint {
   return x ^ (x >> 27n);
 }
 
+/**
+ * The host's entropy, drawn in blocks: one `getRandomValues` call costs a few µs in node
+ * (D3273). Each word is used once.
+ */
+const entropyPool = new Uint32Array(256);
+let entropyAt = entropyPool.length;
+
 /** Reads a 64-bit seed for `Math.random` from the host's entropy. */
 function entropy(): [number, number] {
-  const words = new Uint32Array(2);
-  globalThis.crypto.getRandomValues(words);
-  return [words[0], words[1] | 1];
+  if (entropyAt === entropyPool.length) {
+    globalThis.crypto.getRandomValues(entropyPool);
+    entropyAt = 0;
+  }
+  const lo = entropyPool[entropyAt];
+  const hi = entropyPool[entropyAt + 1] | 1;
+  entropyAt += 2;
+  return [lo, hi];
 }
 
 class Session implements VmSession {
