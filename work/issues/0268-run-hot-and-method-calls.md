@@ -1,6 +1,6 @@
 # 0268: run_hot's sensitivity, receiver method calls, the general path
 
-status: open
+status: in-progress
 agent: pcall
 branch: issue/0268-run-hot-method-calls
 depends-on: 0259
