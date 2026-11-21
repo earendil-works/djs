@@ -277,7 +277,10 @@ function PromiseConstructor(executor: Value): Obj {
   if (!IsCallable(executor)) {
     throw NewTypeError("not a function");
   }
-  const promise: Obj = PromiseCreate(GetPrototypeFromConstructor(new.target, "PromisePrototype"));
+  // (GetPrototypeFromConstructor's leaf path written out: its frame was a tenth.)
+  const p: Value = ConstructorPrototype(new.target, "PromisePrototype");
+  const proto: Obj = p !== undefined ? AsObj(p) : GetPrototypeFromConstructorSlow(new.target, "PromisePrototype");
+  const promise: Obj = PromiseCreate(proto);
   const resolve: Fn = NewBuiltinClosure(0, promise, 1);
   const reject: Fn = NewBuiltinClosure(1, promise, 1);
   try {
