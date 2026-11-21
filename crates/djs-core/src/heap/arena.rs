@@ -271,25 +271,22 @@ impl Arena {
         let end = end as usize;
         if end > self.bytes.capacity() {
             let cap = self.bytes.capacity();
-            let mut want = if self.target == 0 || end <= self.target as usize {
-                // An eighth more, in whole wasm pages, but not past the target (D1870,
-                // D3140): wasm grows the arena in place at memory's end, so doubling only
-                // reserved pages the run might never touch, and memory never shrinks.
+            // An eighth more, in whole wasm pages, but not past the target (D1870, D3140):
+            // wasm grows the arena in place at memory's end, so doubling only reserved
+            // pages the run might never touch, and memory never shrinks. Past the target a
+            // collection is pending at the next safepoint, which usually comes soon: half the
+            // overshoot more, in pages (still geometric for a long stretch without a
+            // safepoint), instead of a step that the collection then leaves unused (D3291).
+            let t = self.target as usize;
+            let want = if t != 0 && end > t {
+                (end + (end - t) / 2).next_multiple_of(PAGE)
+            } else {
                 let w = (cap + (cap / 8).max(PAGE))
                     .next_multiple_of(PAGE)
                     .max(end)
                     .max(4096);
-                if self.target == 0 {
-                    w
-                } else {
-                    w.min(self.target as usize)
-                }
-            } else {
-                // Past the target a collection is pending: grow by a quarter, not double,
-                // so the from-space (the next spare) stays close to the threshold.
-                (cap + cap / 4).max(end)
+                if t == 0 { w } else { w.min(t) }
             };
-            want = want.max(end);
             let want = want.min(self.limit as usize);
             #[cfg(test)]
             if FAIL_NEXT_RESERVE.with(|f| f.replace(false)) {
