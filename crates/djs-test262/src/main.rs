@@ -39,6 +39,13 @@ run options:
   --engine NAME       qjs (default) or djs (in-process)
   --lazy              djs only: compile functions at their first call
                       (VmOptions::lazy_functions, D2990)
+  --gc-stress         djs only: collect garbage at every safepoint (D3440)
+  --exclude FILTER    leave out the tests a filter selects (repeatable)
+  --exclude-from FILE --exclude for each line of FILE (`#` starts a comment)
+  --shard K/N         run only every N-th selected test, from the K-th (0-based)
+  --deadline SECS     start no test after SECS seconds; the rest count as not run
+                      (left out of the tables and the ratchet), and the summary says
+                      how many
   --qjs PATH          qjs binary (default: $DJS_QJS, else ~/Development/dquickts/qjs)
   --no-cache          qjs: run every test instead of reusing cached results (the
                       cache sits next to the test262 checkout, keyed by the qjs
@@ -69,6 +76,10 @@ struct Args {
     config: PathBuf,
     paths: bool,
     lazy: bool,
+    gc_stress: bool,
+    shard: Option<(usize, usize)>,
+    excludes: Vec<String>,
+    deadline: Option<Duration>,
     engine: String,
     qjs: PathBuf,
     timeout: Option<Duration>,
@@ -108,6 +119,10 @@ fn parse_args() -> Result<Args, String> {
         config: suite::workspace_root().join("tests/test262.toml"),
         paths: false,
         lazy: false,
+        gc_stress: false,
+        shard: None,
+        excludes: Vec::new(),
+        deadline: None,
         engine: "qjs".into(),
         qjs: Qjs::default_binary(),
         timeout: None,
@@ -146,6 +161,38 @@ fn parse_args() -> Result<Args, String> {
                 args.fuel = Some(n as u64);
             }
             "--lazy" if cfg!(feature = "lazy") => args.lazy = true,
+            "--gc-stress" => args.gc_stress = true,
+            "--exclude" => args.excludes.push(value(&a)?),
+            "--exclude-from" => {
+                let f = value(&a)?;
+                let text = std::fs::read_to_string(&f).map_err(|e| format!("{f}: {e}"))?;
+                args.excludes.extend(
+                    text.lines()
+                        .map(|l| l.split('#').next().unwrap_or("").trim())
+                        .filter(|l| !l.is_empty())
+                        .map(String::from),
+                );
+            }
+            "--shard" => {
+                let v = value(&a)?;
+                let bad = || format!("--shard: expected K/N with K < N, got `{v}`");
+                let (k, n) = v.split_once('/').ok_or_else(bad)?;
+                let (k, n) = (
+                    k.parse::<usize>().map_err(|_| bad())?,
+                    n.parse::<usize>().map_err(|_| bad())?,
+                );
+                if k >= n {
+                    return Err(bad());
+                }
+                args.shard = Some((k, n));
+            }
+            "--deadline" => {
+                let v = value(&a)?;
+                let secs: f64 = v
+                    .parse()
+                    .map_err(|_| format!("--deadline: bad number `{v}`"))?;
+                args.deadline = Some(Duration::from_secs_f64(secs));
+            }
             "--qjs" => args.qjs = value(&a)?.into(),
             "--timeout" => {
                 let v = value(&a)?;
@@ -244,7 +291,11 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
         }
     }
 
-    let paths = suite.discover(&args.filters)?;
+    let mut paths = suite.discover(&args.filters)?;
+    if !args.excludes.is_empty() {
+        let out = suite.discover(&args.excludes)?;
+        paths.retain(|p| out.binary_search(p).is_err());
+    }
     if paths.is_empty() {
         return Err("no tests match the filters".into());
     }
@@ -296,6 +347,7 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
         }
         "djs" => Box::new(djs_test262::djs::Djs {
             lazy: args.lazy,
+            gc_stress: args.gc_stress,
             fuel: args.fuel.unwrap_or(djs_test262::djs::DEFAULT_FUEL),
         }),
         e => return Err(format!("unknown engine `{e}`")),
@@ -323,8 +375,16 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
         }
         None => engine.as_ref(),
     };
-    let (run_tests, other): (Vec<TestCase>, Vec<TestCase>) =
+    let (mut run_tests, mut other): (Vec<TestCase>, Vec<TestCase>) =
         all.into_iter().partition(|t| selected[t.group]);
+    if let Some((k, n)) = args.shard {
+        let (mine, rest): (Vec<_>, Vec<_>) = run_tests
+            .into_iter()
+            .enumerate()
+            .partition(|(i, _)| i % n == k);
+        run_tests = mine.into_iter().map(|(_, t)| t).collect();
+        other.extend(rest.into_iter().map(|(_, t)| t));
+    }
     if run_tests.is_empty() {
         return Err(
             "no tests selected (the matching tests are in skip groups; see --group)".into(),
@@ -343,11 +403,28 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
             })),
         memory_limit: args.memory_limit,
         progress: !args.quiet,
+        deadline: args.deadline.map(|d| Instant::now() + d),
     };
     let start = Instant::now();
     let refs: Vec<&TestCase> = run_tests.iter().collect();
     let outcomes = runner::run_all(engine, &suite, &refs, &opts);
     let elapsed = start.elapsed();
+    // Tests the deadline kept from starting count as not run, like other groups'.
+    let late = outcomes.iter().filter(|o| !o.ran).count();
+    let (outcomes, run_tests) = if late == 0 {
+        (outcomes, run_tests)
+    } else {
+        let mut kept = (Vec::new(), Vec::new());
+        for (o, t) in outcomes.into_iter().zip(run_tests) {
+            if o.ran {
+                kept.0.push(o);
+                kept.1.push(t);
+            } else {
+                other.push(t);
+            }
+        }
+        kept
+    };
     let cache_note = match &cache {
         Some(c) => {
             c.save()?;
@@ -370,6 +447,9 @@ fn real_main(args: &Args) -> Result<ExitCode, String> {
         args.jobs
     );
     print!("{}", report::summary(&config, &tests, &outs, &report_opts));
+    if late > 0 {
+        println!("\ndeadline: {late} tests not run (past --deadline)");
+    }
 
     // Reasons are single lines of bounded length, so the failures file stays readable.
     let reasons: Vec<Option<String>> = outcomes

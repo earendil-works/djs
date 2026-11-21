@@ -48,6 +48,8 @@ pub struct Djs {
     pub fuel: u64,
     /// Lazy functions (`--lazy`, `VmOptions::lazy_functions`, D2990).
     pub lazy: bool,
+    /// A collection at every safepoint (`--gc-stress`, D3440).
+    pub gc_stress: bool,
 }
 
 impl Default for Djs {
@@ -55,6 +57,7 @@ impl Default for Djs {
         Djs {
             fuel: DEFAULT_FUEL,
             lazy: false,
+            gc_stress: false,
         }
     }
 }
@@ -76,6 +79,7 @@ struct Session<'a> {
     start: Instant,
     /// Which limit ended the run, for the failure reason.
     limit: String,
+    gc_stress: bool,
 }
 
 impl Engine for Djs {
@@ -99,6 +103,7 @@ impl Djs {
                 .map(|n| n as usize)
                 .unwrap_or(DEFAULT_LIMIT),
             exec: djs_core::vm::ExecOptions {
+                gc_stress: self.gc_stress,
                 ..Default::default()
             },
             #[cfg(feature = "lazy")]
@@ -114,6 +119,7 @@ impl Djs {
             fuel_left: self.fuel,
             start: Instant::now(),
             limit: String::new(),
+            gc_stress: self.gc_stress,
         };
         s.install_host()
             .map_err(|e| format!("installing $262: {e:?}"))?;
@@ -279,7 +285,10 @@ impl Session<'_> {
         // The call's result, held while `import()`s are still answered and run.
         let mut result = None;
         loop {
-            let slice = SLICE.min(self.fuel_left.max(1));
+            // (Under GC stress a slice takes far longer: smaller ones keep the wall-clock
+            // limit close.)
+            let slice = if self.gc_stress { SLICE / 100 } else { SLICE };
+            let slice = slice.min(self.fuel_left.max(1));
             let status = self.vm.run(slice);
             if let VmStatus::Done(_) | VmStatus::Idle = status {
                 if let (VmStatus::Done(v), None) = (status, result) {

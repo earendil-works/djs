@@ -13,16 +13,27 @@ pub struct Options {
     pub memory_limit: Option<u64>,
     /// Show a progress line on stderr (only when it is a terminal).
     pub progress: bool,
+    /// No test starts after this (D3440).
+    pub deadline: Option<Instant>,
 }
 
 pub struct Outcome {
     pub verdict: Verdict,
     pub elapsed: Duration,
+    /// False for a test the deadline kept from starting (its verdict means nothing).
+    pub ran: bool,
 }
 
 /// Runs one test and judges the result.
 pub fn run_one(engine: &dyn Engine, suite: &Suite, test: &TestCase, opts: &Options) -> Outcome {
     let start = Instant::now();
+    if opts.deadline.is_some_and(|d| start >= d) {
+        return Outcome {
+            verdict: Verdict::Pass,
+            elapsed: Duration::ZERO,
+            ran: false,
+        };
+    }
     let verdict = match prepare_and_run(engine, suite, test, opts) {
         // Engines that meter fuel say which limit it was; subprocess engines only have
         // the wall clock.
@@ -42,6 +53,7 @@ pub fn run_one(engine: &dyn Engine, suite: &Suite, test: &TestCase, opts: &Optio
     Outcome {
         verdict,
         elapsed: start.elapsed(),
+        ran: true,
     }
 }
 
