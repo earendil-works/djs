@@ -8,7 +8,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- | --- |
 | 0277 | Short concatenations, templates, string compare, localeCompare, startsWith/endsWith | pgc | .worktrees/pgc |
 | 0271 | A smaller base image: idle at QuickJS parity (waiting on the owner: families) | pstart | parked |
-| 0270 | Construct path; sweep of everyday codemode ops vs QuickJS | pidle | .worktrees/pidle |
+| 0278 | for-in and destructuring, size-neutral | pidle | .worktrees/pidle |
 | 0276 | Call path and cache follow-ups (typeof, FAST flag, collection for-of, absent props, add cache) | pcall | .worktrees/pcall |
 | 0275 | Regexp exec with captures, global replace; JSON.parse of small objects | pscan | .worktrees/pscan |
 
@@ -24,6 +24,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 | --- | --- | --- |
 | - | 0270 sweep routes (wasm instr/op vs QuickJS 2026, main ~9ab27ba5): strings: replace("TODO","DONE") 4.2x (recheck after 0269), localeCompare 2.8x (sort with it 2.7x), startsWith+endsWith 2.1x, template 1.6x, string </===  1.4-1.5x; regexp/JSON: match(/^([^:]+):(\d+):/) 3.3x, replace(/\s+/g) 2.5x, JSON.parse 5-key object 1.36x; call/IC items sent to pcall (0268) | ready (pgc after 0273, pscan after 0272) |
 | - | pi: CodemodeSandbox starts a new worker per script (136-260 ms worker startup, cold prelude ~4 ms each); cross-worker image via SharedArrayBuffer possible in js/pi (0274 follow-ups) | owner (pi) |
+| - | Parked: construct path (0270, D3410, work/research/0270/construct-path.patch, +424 B gz: new C() -21%, derived -48%); EACH return in run_hot (0272, D3431); flatMap 5.7x, Array.from({length},fn) 1.9x (0270 follow-ups) | waits for size room |
 | - | GC nursery with a holder write barrier (D3294: heavy -13% memory; barrier-less version +5-9% CPU); test262 under gc-stress as a (nightly?) leg (0258 scratch patch) | owner (design) |
 | - | Flaky gate leg "pi tests (slim without lockdown)" (0260: failed once, passed on rerun); pi worker lifetime timing test at load ~50 (0256) | ready |
 | - | Stale entry in tests/pi/expected-failures.txt (next mode): update the ratchet | ready |
@@ -53,6 +54,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0270 | Sweep of everyday ops; Map/Set drain, new Set/Map, Date.parse (construct path parked) | 93aadaf7 (agent pidle; D3410-D3412; [...new Set(arr)] 192k->39k, new Map(pairs) 126k->21k, Date.parse 8.3k->4.4k; +817 B gz, slim ceiling +260) |
 | 0273 | test262 under GC stress as a full-only gate leg | 8e129b63 (agent pgc; D3440; 38,836 tests x2 modes, no findings) |
 | 0269 | String costs: rope copies, replace/replaceAll, slices, string keys, substr; join regression fixed | 601b4918 (agent pgc; D3400-D3406; replace 3.4x->1.2x, o[k] 2.9x->0.93x QJS (with 0268); pi output case 7,488->5,120 KiB) |
 | 0268 | run_hot: frame-level checks, slice-read ICs, string keys wired, concat arms; why edits move the loop | 4bc50cb6 (agent pcall; D3390-D3394; tight -23%/-5%, arrays -14%/-14%, prop1 -19%/-12%, strbuild -15%; net -289 B gz) |
