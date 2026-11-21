@@ -1,6 +1,6 @@
 # 0275: Regexp execution with captures and global replace; JSON.parse of small objects
 
-status: open
+status: in-progress
 agent: pscan
 branch: issue/0275-regexp-exec-json-small
 depends-on: -
