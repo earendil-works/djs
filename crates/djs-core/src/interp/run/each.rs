@@ -43,6 +43,15 @@ const FROM: i32 = 8;
 /// The comparisons of a sort with a comparator: O is the sort's state, K counts them.
 const SORT: i32 = 9;
 
+/// An index as a Number value: an int below 2^31 (every dense one in practice).
+#[inline(always)]
+fn index_value(k: u32) -> Value {
+    match i32::try_from(k) {
+        Ok(i) => Value::int(i),
+        Err(_) => conv::number(f64::from(k)),
+    }
+}
+
 impl Exec<'_> {
     /// `%EachDense(mode, o, k, len, f, thisArg, a)` from `call_intrinsic`: the arguments
     /// are at `base`, the caller resumes at `next`.
@@ -274,7 +283,7 @@ impl Exec<'_> {
     /// Enters the callback's frame for element `k` (`x`), with the current frame (the
     /// builtin's) as its caller resuming at `ret_pc`. `sp` is `base + STATE`.
     fn each_enter(&mut self, base: u32, k: u32, x: Value, ret_pc: u32) -> Step {
-        let kv = conv::number(f64::from(k));
+        let kv = index_value(k);
         self.set(base + K, kv);
         self.set(base + KVALUE, x);
         self.fuel -= super::native::CALL_FUEL;
@@ -364,7 +373,7 @@ impl Exec<'_> {
             self.pop_frame();
             return self.each_next(base, next);
         };
-        let kv = conv::number(f64::from(next));
+        let kv = index_value(next);
         self.set(base + K, kv);
         self.set(base + KVALUE, x);
         self.fuel -= super::native::CALL_FUEL;
