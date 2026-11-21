@@ -13715,3 +13715,27 @@ paths the loop got since D1930 (the cache kinds for absent keys and accessors, g
 with entries, typed arrays, `typeof`, string comparisons and equality, string keys with
 known and unknown keys, template literals, `in`) with 1, 2 and 3 units of fuel per
 slice and compares the arena's bytes at every stop with the loop off.
+
+## D3540: A fast keyed hash instead of SipHash-1-3 (owner)
+date: 2026-11-21 · by: owner (pgc) · issue: 0285
+The owner decided that codemode needs no strongly collision-resistant hash: a timeout
+bounds every run, so the worst a hash flood can do is end one run early. This supersedes
+D2433's choice of SipHash-1-3 and keeps the rest of D2433: the per-VM key from the seed
+(`Roots::HASH_KEY`), the fixed base key, the hashes cached per level, rekeying, the
+hash defined on code units (independent of width and rope shape), never 0.
+- **The hash:** units four to a 64-bit word, as before; each word is xored into a 64-bit
+  state and mixed by a 64×64→128-bit multiply folded to 64 bits (foldhash's and wyhash's
+  step) with a fixed multiplier; the state starts as the key xor a constant, and the
+  finish folds the last word (with the unit count) and the rotated key in. Latin-1 bytes
+  go four at a time (spread into 16-bit lanes), UTF-16LE eight bytes at a time, whenever
+  no unit is pending. `keyed_u64` (Map/Set keys that are numbers, BigInts, objects,
+  symbols) is two folds. The multipliers are fixed so that no key can make one zero.
+- **What it gives up:** a fixed set of keys built offline still spreads out in every VM
+  (the key is in the state); an attacker who can observe hash-dependent timings inside a
+  run and adapt could find collisions, which SipHash prevented. `hash_key_for_seed` is no
+  longer one-way: a script that reconstructs its `Math.random` seed can compute the key.
+  The base key is fixed and public: offline collisions against the base atom index are
+  possible and accepted (they only lengthen the attacker's own lookups there; the base
+  index never grows).
+- **Compatibility:** `vm::COMPAT_VERSION` 10 → 11 (string caches, atom and Map/Set
+  indexes hash differently).

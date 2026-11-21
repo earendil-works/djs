@@ -158,3 +158,48 @@ fn a_new_key_keeps_atoms_maps_and_order() {
     }
     h.verify().unwrap();
 }
+
+#[test]
+fn the_hash_is_one_of_code_units() {
+    // D3540: the same units hash the same whatever their width and however they are cut
+    // into pieces (ropes hash chunk by chunk, Latin-1 four bytes to a word when aligned).
+    use super::string::{KeyedHasher, StrView, hash_latin1_with, hash_units_with};
+    let mut rng = 0x9E37_79B9_7F4A_7C15u64;
+    let mut next = |n: u64| {
+        rng ^= rng << 13;
+        rng ^= rng >> 7;
+        rng ^= rng << 17;
+        rng % n
+    };
+    let mut seen = alloc::collections::BTreeSet::new();
+    for len in 0..40usize {
+        for _ in 0..8 {
+            let bytes: Vec<u8> = (0..len).map(|_| next(256) as u8).collect();
+            let units: Vec<u16> = bytes.iter().map(|&b| u16::from(b)).collect();
+            let wide: Vec<u8> = units.iter().flat_map(|u| u.to_le_bytes()).collect();
+            for key in [0, 0xDEAD_BEEF_0BAD_F00D] {
+                let h = hash_latin1_with(key, &bytes);
+                assert_ne!(h, 0);
+                assert_eq!(h, hash_units_with(key, &units), "{bytes:?}");
+                // Cut at random points, alternating widths.
+                let mut k = KeyedHasher::new(key);
+                let mut at = 0;
+                while at < len {
+                    let to = (at + 1 + next(6) as usize).min(len);
+                    if next(2) == 0 {
+                        k.write_view(StrView::Latin1(&bytes[at..to]));
+                    } else {
+                        k.write_view(StrView::Utf16(&wide[2 * at..2 * to]));
+                    }
+                    at = to;
+                }
+                assert_eq!(k.finish(), h, "{bytes:?}");
+                if key == 0 {
+                    seen.insert(h);
+                }
+            }
+        }
+    }
+    // 320 strings (a few repeated empty ones): no two distinct ones collide.
+    assert!(seen.len() >= 310, "{}", seen.len());
+}

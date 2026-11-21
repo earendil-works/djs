@@ -156,16 +156,22 @@ builtins refer to them as constants. In a VM made from the base image the table 
 levels: the base's atoms with their hash index in the builtin prefix, never written, and
 the VM's own after them, in a small list and index of its own.
 
-Both levels hash strings with the same function, SipHash-1-3 over code units, under
-different keys. The base's index uses a fixed key, the same in every VM of the build,
-since the prefix must be. The VM's own index, and Map and Set, use a key derived from
-the VM's random seed and kept in the image: the seed a host takes from its entropy or,
-in [deterministic mode](determinism.md), from the run's seed. A
-multiplicative hash with no key would be cheaper, but anyone can build thousands of
-strings that collide under it, and a script that reads such keys from a web page would
-spend quadratic time on them; under a secret key that does not work. A string caches
-the hash of its level: the base's strings the fixed one, the rest the keyed one.
-Reseeding a VM rehashes its own atoms and tables.
+Both levels hash strings with the same function under different keys: the code units,
+four to a 64-bit word, each word mixed into the state by a 64×64-bit multiply whose
+128-bit product is folded back to 64 bits. The base's index uses a fixed key, the same
+in every VM of the build, since the prefix must be. The VM's own index, and Map and Set,
+use a key derived from the VM's random seed and kept in the image: the seed a host takes
+from its entropy or, in [deterministic mode](determinism.md), from the run's seed. With
+no key, anyone could build thousands of strings that collide, and a script that reads
+such keys from a web page would spend quadratic time on them; under a key the same
+strings spread out. A string caches the hash of its level: the base's strings the fixed
+one, the rest the keyed one. Reseeding a VM rehashes its own atoms and tables.
+
+> **Trade-off.** A fast keyed hash over a cryptographic one. A keyed pseudo-random
+> function would also stop an attacker who sees hash-dependent timings and adapts; this
+> hash only stops keys built in advance. Codemode runs are bounded by a timeout anyway,
+> so the worst a flood can do is end one run early, and every interned name, JSON key
+> and Map key gets cheaper.
 
 > **Trade-off.** Atoms are never freed. A script that creates millions of distinct keys
 > (`obj["k" + i]`) grows the atom table for the life of the VM. A codemode VM usually

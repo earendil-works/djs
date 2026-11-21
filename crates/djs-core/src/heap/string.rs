@@ -146,59 +146,52 @@ impl Iterator for Units<'_> {
     }
 }
 
-/// The string hash (D2433): SipHash-1-3 over code units, four to a 64-bit word. A VM's own
-/// strings, atoms and Map/Set keys hash under the key in `Roots::HASH_KEY`: without it,
-/// keys can't be built to collide, as they could for the fixed multiply-rotate hash used
-/// before, and a collision flood (crafted JSON keys, Map keys) can't make lookups
-/// quadratic. The base image's atom index hashes under [`BASE_HASH_KEY`], the same in
-/// every VM of the build. Defined on code units, so it does not depend on the string's
-/// representation (width, rope shape), and never 0, because 0 marks "not computed".
+/// The string hash (D2433, D3540): a keyed multiply-fold hash over code units, four to a
+/// 64-bit word (the unit count in the last word), each word mixed in by a 64x64→128-bit
+/// multiply folded to 64 bits (as foldhash and wyhash do). A VM's own strings, atoms and
+/// Map/Set keys hash under the key in `Roots::HASH_KEY`, so a fixed set of keys built
+/// offline does not collide in every VM; the owner chose speed over SipHash's stronger
+/// guarantee, since a timeout bounds every run (D3540). The base image's atom index hashes
+/// under [`BASE_HASH_KEY`], the same in every VM of the build. Defined on code units, so
+/// it does not depend on the string's representation (width, rope shape), and never 0,
+/// because 0 marks "not computed".
 #[derive(Clone, Copy)]
 pub struct KeyedHasher {
-    v: [u64; 4],
-    /// Code units not yet compressed, 16 bits each from the low end.
+    h: u64,
+    key: u64,
+    /// Code units not yet mixed in, 16 bits each from the low end.
     word: u64,
     n: u32,
+}
+
+/// The multipliers (the fractional parts of π, as foldhash's seeds): fixed, so that no key
+/// can make one of them zero or small; the key enters the state.
+const M0: u64 = 0x243F_6A88_85A3_08D3;
+const M1: u64 = 0x1319_8A2E_0370_7344;
+
+/// The 128-bit product of `a` and `b`, its halves xored: every input bit reaches every
+/// output bit.
+#[inline(always)]
+fn fold_mul(a: u64, b: u64) -> u64 {
+    let p = u128::from(a) * u128::from(b);
+    (p as u64) ^ ((p >> 64) as u64)
 }
 
 impl KeyedHasher {
     #[inline]
     pub fn new(key: u64) -> KeyedHasher {
-        // A 128-bit SipHash key from the 64 bits of the image's.
-        let (k0, k1) = (key, key.rotate_left(32) ^ 0x6A09_E667_F3BC_C908);
         KeyedHasher {
-            v: [
-                k0 ^ 0x736F_6D65_7073_6575,
-                k1 ^ 0x646F_7261_6E64_6F6D,
-                k0 ^ 0x6C79_6765_6E65_7261,
-                k1 ^ 0x7465_6462_7974_6573,
-            ],
+            h: key ^ M0,
+            key,
             word: 0,
             n: 0,
         }
     }
 
-    #[inline(always)]
-    fn round(v: &mut [u64; 4]) {
-        v[0] = v[0].wrapping_add(v[1]);
-        v[1] = v[1].rotate_left(13) ^ v[0];
-        v[0] = v[0].rotate_left(32);
-        v[2] = v[2].wrapping_add(v[3]);
-        v[3] = v[3].rotate_left(16) ^ v[2];
-        v[0] = v[0].wrapping_add(v[3]);
-        v[3] = v[3].rotate_left(21) ^ v[0];
-        v[2] = v[2].wrapping_add(v[1]);
-        v[1] = v[1].rotate_left(17) ^ v[2];
-        v[2] = v[2].rotate_left(32);
-    }
-
-    // Out of line, as `finish64`: the hash is used in many places, and SipHash's rounds
-    // inlined into each cost KBs of module.
+    // Out of line: the hash is used in many places.
     #[inline(never)]
     fn compress(&mut self, m: u64) {
-        self.v[3] ^= m;
-        Self::round(&mut self.v);
-        self.v[0] ^= m;
+        self.h = fold_mul(self.h ^ m, M1);
     }
 
     #[inline]
@@ -212,38 +205,54 @@ impl KeyedHasher {
         }
     }
 
-    /// Code units as UTF-16LE bytes (a two-byte string's data).
-    fn write_utf16le(&mut self, bytes: &[u8]) {
-        for p in bytes.as_chunks::<2>().0 {
-            self.write(u16::from_le_bytes(*p));
-        }
-    }
-
     pub fn write_units(&mut self, units: &[u16]) {
         for &u in units {
             self.write(u);
         }
     }
 
+    /// The units of a view; four at a time while no unit is pending (D3540: Latin-1 bytes
+    /// spread into 16-bit lanes, UTF-16LE bytes as they are).
     #[inline(never)]
     pub fn write_view(&mut self, v: StrView) {
-        match v {
-            StrView::Latin1(b) => b.iter().for_each(|&u| self.write(u as u16)),
-            StrView::Utf16(b) => self.write_utf16le(b),
+        let (b, wide) = match v {
+            StrView::Latin1(b) => (b, false),
+            StrView::Utf16(b) => (b, true),
+        };
+        let step = if wide { 8 } else { 4 };
+        let mut i = 0;
+        if self.n & 3 == 0 {
+            while i + step <= b.len() {
+                let w = if wide {
+                    u64::from_le_bytes(b[i..i + 8].try_into().unwrap())
+                } else {
+                    let x = u64::from(u32::from_le_bytes(b[i..i + 4].try_into().unwrap()));
+                    let x = (x | x << 16) & 0x0000_FFFF_0000_FFFF;
+                    (x | x << 8) & 0x00FF_00FF_00FF_00FF
+                };
+                self.compress(w);
+                self.n += 4;
+                i += step;
+            }
+        }
+        while i < b.len() {
+            if wide {
+                self.write(u16::from_le_bytes([b[i], b[i + 1]]));
+                i += 2;
+            } else {
+                self.write(u16::from(b[i]));
+                i += 1;
+            }
         }
     }
 
     /// The 64-bit hash: the last units with the unit count in the top 16 bits (at most
-    /// three units are left, 48 bits), then SipHash's finalization.
+    /// three units are left, 48 bits), then one more fold with the key.
     #[inline(never)]
     fn finish64(mut self) -> u64 {
         let m = self.word | ((self.n as u64 & 0xFFFF) << 48);
         self.compress(m);
-        self.v[2] ^= 0xFF;
-        for _ in 0..3 {
-            Self::round(&mut self.v);
-        }
-        self.v[0] ^ self.v[1] ^ self.v[2] ^ self.v[3]
+        fold_mul(self.h ^ self.key.rotate_left(32), M0)
     }
 
     #[inline]
@@ -261,10 +270,9 @@ pub const BASE_HASH_KEY: u64 = 0;
 /// The keyed hash of one 64-bit word (Map/Set keys that are not strings, D2433).
 #[inline(never)]
 pub fn keyed_u64(key: u64, x: u64) -> u32 {
-    let mut h = KeyedHasher::new(key);
-    h.compress(x);
-    h.n = 4;
-    h.finish()
+    let h = fold_mul(fold_mul(x ^ key ^ M0, M1) ^ key.rotate_left(32), M0);
+    let h = (h ^ (h >> 32)) as u32;
+    if h == 0 { 1 } else { h }
 }
 
 /// The hash of Latin-1 code units under `key`.
