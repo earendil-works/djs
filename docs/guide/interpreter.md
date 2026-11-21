@@ -352,7 +352,9 @@ faster loop in front of it:
   strings, Maps and Sets step the iterator inside the interpreter when `next` is the
   original builtin, without allocating `{value, done}` objects (`iter_next`); a loop
   keeps its iterator and `next` in two locals, which `iter_next_loc` reads in the same
-  instruction.
+  instruction. Spreading an array or a Map or Set iterator into an array literal, and
+  `Array.from` of one, moves all the values that need no `next` call in one intrinsic
+  step (`%IteratorFastDrain`).
 - **Callbacks in one frame.** `map`, `forEach`, `filter` and the other callback loops
   hand their dense part to the intrinsic `%EachDense`, which keeps the loop's state in
   its own arguments below the callback's frame and pushes that frame once, with the

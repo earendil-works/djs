@@ -13361,3 +13361,36 @@ untouched, so the patch's new ops (`super_call_frame`, `super_call_forward`,
 the same code before and after (dispatch 14 instructions, tail and back edge 4, the
 drop/get_loc0/add/inc_loc/call0 lines unchanged). `CLASS_CTOR` (bit 13) must stay below
 bit 16: the tier-0 loop reads template flags as a u16.
+
+## D3411: Map and Set iteration without a result object per value; new Set/Map of an array in Rust
+date: 2026-11-21 · by: pidle · issue: 0270
+- `%IteratorFastDrain` takes Map and Set Iterators with their original `next`: the keys,
+  values or entry arrays from the iterator's position on are defined as elements of the
+  Array target in one step (ArraySpread's and Array.from's loops: `[...set]`,
+  `[...map.values()]`, `Array.from(set)`). The iterator moves before each store (no
+  peek), so the drain runs only into Arrays where every element definition succeeds
+  (`Heap::defines_elements`: not gated, extensible, no index properties outside the
+  dense store, writable `length`); a store into a hole gap is an ordinary definition. A
+  peek-then-commit version cost 356 B gz more.
+- The Map and Set constructors' `new` entries (FastFn::new) answer `new Set(array)` and
+  `new Map(array of entry arrays)` when the array's @@iterator and
+  %ArrayIteratorPrototype%.next are the originals, the prototype's `add` / `set` is the
+  original, and every element (a Map's entry array and its elements 0 and 1) is present:
+  then the constructor's loop would only add. Anything else declines before the new
+  collection escapes, and the builtin runs from scratch. `add` is a well-known atom.
+  (A drain into Sets/Maps from the constructors' JS loops instead was 340 B gz smaller
+  but 2.5x slower: 44k vs 17k for ten strings.)
+Wasm instructions per op, main → branch (QuickJS 2026), ten elements: `[...set]` 122k →
+24k (9.6k), `Array.from(set)` 137k → 30k (11.2k), `new Set(arr)` 71k → 19k (16.4k),
+`[...new Set(arr)]` 192k → 39k (25.4k), `new Map(pairs)` 126k → 21k (18.0k),
+`new Map(Object.entries(o5))` 92k → 28k (24.7k). +817 B gz together with D3412.
+
+## D3412: Date.parse reads the string's flat view; one wire transcode
+date: 2026-11-21 · by: pidle · issue: 0270
+- `date::parse` took the string's units through `str_units` (a rope walk with a Vec per
+  call) and pushed them into a Vec byte by byte; it now reads `str_view_flat` (flattening
+  a rope once) into a 127-byte stack buffer. Date.parse(ISO) 8.3k → 4.4k (QuickJS 2026
+  2.0k), new Date(ISO) 6.8k → 3.3k (3.0k).
+- wire's `transcode` was generic over the destination unit (two ~900-byte copies); it is
+  one function writing one or two bytes per unit: −763 B raw, −58 B gz (duplicates
+  compress well, so merging monomorphizations frees little gzip).

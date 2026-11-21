@@ -340,7 +340,9 @@ table while no builtin has been changed: the known builtins of
 [Making it fast](interpreter.md#making-it-fast).
 
 A constructor's entry can also answer `new`: `new Map()`, `new Set()`, `new Array(n)`
-and `new Date(v)` for a primitive or a Date. It runs only when `new.target` is the
+and `new Date(v)` for a primitive or a Date, and `new Set(array)` and `new Map(array)` of
+entry arrays when the array's iteration and the prototype's `add` or `set` are the
+originals and every element is present (the constructor's loop would then only add). It runs only when `new.target` is the
 constructor itself, whose `prototype` property can never change, so the new object's
 prototype is known without a lookup. A subclass's `super()` and `Reflect.construct`
 with another `new.target` run the builtin.
