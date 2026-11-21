@@ -87,4 +87,15 @@ species 2
 true
 [1] ["aa","bb"] [3,6]
 true
+a-X-c-b a-X-c-X a-b-c-b true
+_a-b-c-b _a_-_b_-_c_-_b_ _ _
+a-bb-c-b a-[a-|-c-b]-c-[a-b-c-|] a$b$c$b a-$-c-b
+a-b2-c-b a-9-c-13
+3232 1null12 ba naïve s s
+20 12-45 tttttttt
+a-Y-c-Y a-Y-c-Y 193
+replace null this -> TypeError: cannot convert to object
+replaceAll symbol -> TypeError: cannot convert symbol to string
+replaceAll non-global -> TypeError: regexp must have the 'g' flag
+44 xxxxxx M yyyyyyyyyyy
 === completed

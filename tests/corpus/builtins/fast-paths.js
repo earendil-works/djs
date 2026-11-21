@@ -167,3 +167,18 @@ console.log([1].map((x) => x), Array.prototype.map.call({ length: 2, 0: "a", 1: 
 const otherProto = [1];
 Object.setPrototypeOf(otherProto, MyArr.prototype);
 console.log(otherProto.map((x) => x) instanceof MyArr);
+
+// String.prototype.replace / replaceAll with string patterns (0269), and their declines
+const rs = "a-b-c-b";
+console.log(rs.replace("b", "X"), rs.replaceAll("b", "X"), rs.replace("z", "X"), rs.replaceAll("z", "X") === rs);
+console.log(rs.replace("", "_"), rs.replaceAll("", "_"), "".replaceAll("", "_"), "".replace("", "_"));
+console.log(rs.replace("b", "$&$&"), rs.replaceAll("b", "[$`|$']"), rs.replaceAll("-", "$$"), rs.replace("b", "$"));
+console.log(rs.replace("b", (m, p) => m + p), rs.replaceAll("b", (m, p, s) => p + s.length));
+console.log("1212".replaceAll(1, 3), "1212".replace(2, null), "aaa".replaceAll("aa", "b"), "naïve ŝ ŝ".replaceAll("ŝ", "s"));
+console.log("x".repeat(40).replaceAll("xx", "ŝ").length, (12345).toString().replace("3", "-"), "tttt".replaceAll("t", "tt"));
+console.log(rs.replace(/b/g, "Y"), rs.replaceAll(/b/g, "Y"), String.prototype.replace.call(123, 2, 9));
+attempt("replace null this", () => String.prototype.replace.call(null, "a", "b"));
+attempt("replaceAll symbol", () => "a".replaceAll(Symbol(), "b"));
+attempt("replaceAll non-global", () => "a".replaceAll(/a/, "b"));
+const rope = "start " + "x".repeat(30) + " middle " + "y".repeat(30);
+console.log(rope.replaceAll("x", "").length, rope.replace("middle", "M").slice(30, 50));

@@ -102,6 +102,7 @@ function StringReplacement(
 /**
  * String.prototype.replace ( searchValue, replaceValue ), 22.1.3.19.
  * @builtin String.prototype.replace
+ * @fast
  */
 function StringPrototypeReplace(this: Value, searchValue: Value, replaceValue: Value): Value {
   RequireThisCoercible(this);
@@ -137,6 +138,7 @@ function StringPrototypeReplace(this: Value, searchValue: Value, replaceValue: V
 /**
  * String.prototype.replaceAll ( searchValue, replaceValue ), 22.1.3.20.
  * @builtin String.prototype.replaceAll
+ * @fast
  */
 function StringPrototypeReplaceAll(this: Value, searchValue: Value, replaceValue: Value): Value {
   RequireThisCoercible(this);

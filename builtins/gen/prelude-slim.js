@@ -6592,7 +6592,7 @@ function StringReplacement(functionalReplace, replaceValue, replaceStr, searchSt
   return GetSubstitution(searchString, string, position, %ArrayCreate(0), 0, undefined, replaceStr);
 }
 
-// builtins/string-regexp.ts:106 String.prototype.replace
+// builtins/string-regexp.ts:107 String.prototype.replace
 function StringPrototypeReplace(searchValue, replaceValue) {
   RequireThisCoercible(this);
   if (%IsObject(searchValue)) {
@@ -6617,7 +6617,7 @@ function StringPrototypeReplace(searchValue, replaceValue) {
   return %StrSubstring(string, 0, position) + replacement + %StrSubstring(string, following, (%StrLength(string)));
 }
 
-// builtins/string-regexp.ts:141 String.prototype.replaceAll
+// builtins/string-regexp.ts:143 String.prototype.replaceAll
 function StringPrototypeReplaceAll(searchValue, replaceValue) {
   RequireThisCoercible(this);
   if (%IsObject(searchValue)) {
@@ -6659,7 +6659,7 @@ function StringPrototypeReplaceAll(searchValue, replaceValue) {
   return result;
 }
 
-// builtins/string-regexp.ts:194 String.prototype.split
+// builtins/string-regexp.ts:196 String.prototype.split
 function StringPrototypeSplit(separator, limit) {
   RequireThisCoercible(this);
   if (%IsObject(separator)) {
@@ -8079,6 +8079,8 @@ function GlobalAtob(...args) {
 %MarkFast(SetConstructor);
 %MarkFast(SetPrototypeAdd);
 %MarkFast(SetPrototypeHas);
+%MarkFast(StringPrototypeReplace);
+%MarkFast(StringPrototypeReplaceAll);
 %MarkFast(StringPrototypeSplit);
 %MarkFast(StringConstructor);
 %MarkFast(StringPrototypeAt);

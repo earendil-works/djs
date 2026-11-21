@@ -144,6 +144,13 @@ pub(crate) static FAST: &[FastFn] = &[
     f("ToPropertyKey", to_property_key),
     // ---- String ----
     f("StringPrototypeSplit", split),
+    // 0269: string patterns were 3.4x (replace) and 5.3x (replaceAll) QuickJS
+    f("StringPrototypeReplace", |h, this, a| {
+        replace(h, this, a, false)
+    }),
+    f("StringPrototypeReplaceAll", |h, this, a| {
+        replace(h, this, a, true)
+    }),
     // 0230b: >2x QuickJS after the general fixes (D3120, D3121)
     // ---- Number ----
     f("NumberConstructor", number_constructor),
@@ -302,6 +309,53 @@ fn new_array(heap: &mut Heap, values: &[Value]) -> Fast {
 }
 
 /// String.prototype.split with a primitive separator (an object's @@split is a lookup).
+/// String.prototype.replace and replaceAll with a primitive pattern and a replacement
+/// string without `$` (no GetSubstitution): the matches as in the builtin, then the
+/// result written once from the pieces.
+#[inline(never)]
+fn replace(heap: &mut Heap, this: Value, args: &[Value], all: bool) -> Fast {
+    let (search, with) = (arg(args, 0), arg(args, 1));
+    if search.as_object().is_some() || with.as_object().is_some() {
+        return Ok(None);
+    }
+    let Some(s) = this_str(heap, this)? else {
+        return Ok(None);
+    };
+    let (Some(p), Some(r)) = (str(heap, search)?, str(heap, with)?) else {
+        return Ok(None);
+    };
+    // (A two-byte replacement is searched as bytes: a `$` unit has the byte, and a
+    // unit that only contains it declines too, which is safe.)
+    let dollar = match heap.str_view_flat(r)? {
+        StrView::Latin1(b) | StrView::Utf16(b) => string::find_byte(b, b'$').is_some(),
+    };
+    if dollar {
+        return Ok(None);
+    }
+    let (n, m, rl) = (heap.str_len(s), heap.str_len(p), heap.str_len(r));
+    let mut pieces = Vec::new();
+    let (mut end, mut from) = (0, 0);
+    loop {
+        let at = string::index_of(heap, s, p, from, false)?;
+        if at < 0.0 {
+            break;
+        }
+        let k = at as u32;
+        pieces.push_out((s, end, k));
+        pieces.push_out((r, 0, rl));
+        end = k + m;
+        from = k + m.max(1);
+        if !all {
+            break;
+        }
+    }
+    if pieces.is_empty() {
+        return Ok(Some(Value::string(s)));
+    }
+    pieces.push_out((s, end.min(n), n));
+    Ok(Some(Value::string(string::join(heap, &mut pieces)?)))
+}
+
 fn split(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
     let (sep, limit) = (arg(args, 0), arg(args, 1));
     if sep.as_object().is_some() {
