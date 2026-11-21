@@ -13439,7 +13439,9 @@ no user code, so skipping GetMethod, the call, ThisRegExpObject and the `flags` 
 (about 100 bytecodes and two frames) is unobservable. Per iteration (slope.py, wasm):
 `LINE.match(/^([^:]+):(\d+):/)` 37.7k → 18.9k instructions, `S.replace(/\s+/g, ' ')`
 39.6k → 26.0k; +119 B gz, nearly all of it the prelude image (approved by the
-coordinator).
+coordinator). After 0270 the default module still fits its ceiling (429,634 of 429,648); the
+slim module's ceiling goes up by 38 B (363,609 → 363,647) for the same prelude change
+(within the coordinator's ≤ 60 B).
 
 ## D3461: The matcher's memory kept between matches: measured, not landed
 date: 2026-11-21 · by: pscan · issue: 0275
