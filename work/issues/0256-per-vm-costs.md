@@ -82,6 +82,21 @@ anywhere, images, or the unsafe rules (AGENTS.md).
   build-time `BASE_SAMPLE`). Tests: base tests corrupt a sampled byte now. host.md updated.
   Size 428,800 → 428,841 B gz (+41). djs-core lib, djs-prelude, djs-wasm, js tests (dev
   modules) pass.
+- Merged batch 1 (main 78d993b5). A/B main vs branch, 600 interleaved runs, load ~18:
+  new sandbox 0.182 → 0.130 ms (−28%), sequential −8%, inspect −7%, media −6%, fanout −3.4%.
+- Item 3 built properly (patch work/scratch/0256/item3-v2.patch): `VmOptions::extend_zeroed`
+  hook, Arena `high` mark (set at truncate), page allocator `fresh` page mark + top block's
+  zero suffix. Counted: skips 112 KB (sequential) to 820 KB (json) of memset per run. Time:
+  −1.1..+0.5%, noise (1000 runs, load ~18); +440 B gz. Dropped (D3272): the profile share is
+  first-touch page faults (synthetic: touching 8 fresh pages after memory.grow costs 53 µs,
+  ~6.6 µs per 64 KiB page), which move to the cells' first writes.
+- Per new sandbox now (steps.ts/calls.ts, b1): Instance ~100 µs (V8; synthetic modules show
+  ~0.3 µs per export, 65 exports ≈ 20 µs; data segment and memory the rest), provideBase
+  copy ~21 µs (faults of the base's pages), wasm calls ~23 µs (inject_ptr 8: allocator init
+  and two memory.grow; vm_define ×5 and vm_new_host_function ×4 ≈ 1 µs each, mostly first
+  touch), Sandbox JS ~30 µs.
+- Batch 2 (1d8fc522): entropy pool in sandbox.ts (getRandomValues 1-4 µs per call, ~1% of
+  sequential in the profile; D3273); `base_len` a build-time constant. Size 428,737 B gz.
 
 ## Follow-ups
 
