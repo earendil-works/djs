@@ -576,7 +576,6 @@ impl Exec<'_> {
     /// `decline_fast`. False, with nothing changed, when an operand is an object
     /// (ToPrimitive runs user code) or when it fails (a symbol, the heap cap): `step`
     /// runs it then, throws or retries.
-    #[inline(never)]
     fn decline_concat(&mut self, op: u8) -> bool {
         let concat = op == CONCAT;
         let n = if concat { self.imm_u16(1) } else { 1 };
@@ -641,7 +640,6 @@ impl Exec<'_> {
 
     /// A declined `in` with a string key and an object (`decline_fast`): the heap's
     /// answer where no proxy is on the chain (D3402), else false with nothing changed.
-    #[inline(never)]
     fn decline_in(&mut self) -> bool {
         let (k, o) = (self.get(self.sp - 2), self.get(self.sp - 1));
         let (Some(s), Some(obj)) = (k.as_string(), o.as_object()) else {
@@ -729,29 +727,23 @@ impl Exec<'_> {
         if fast::is_call(op) {
             return self.pc < self.code_len && self.fast_leaf_call(op);
         }
-        if op == GETTER {
-            return self.decline_getter();
-        }
-        if op == IN {
-            return self.decline_in();
-        }
-        if matches!(op, fast::LT | fast::LE | fast::GT | fast::GE) {
-            return self.decline_compare(op);
-        }
-        if matches!(op, TO_STRING | CONCAT) {
-            return self.decline_concat(op);
-        }
         if op != fast::ADD {
+            if op == IN {
+                return self.decline_in();
+            }
+            if matches!(op, TO_STRING | CONCAT) {
+                return self.decline_concat(op);
+            }
+            // (These two out of line: inside, they cost a `@fast` call, which runs in
+            // this function, 8 machine instructions.)
+            if op == GETTER {
+                return self.decline_getter();
+            }
+            if matches!(op, fast::LT | fast::LE | fast::GT | fast::GE) {
+                return self.decline_compare(op);
+            }
             return super::construct::takes(op) && self.decline_construct(op);
         }
-        self.decline_add()
-    }
-
-    /// `decline_fast`'s `+` of a string and a primitive. (Out of line, as its other
-    /// cases: with them inside, a `@fast` call, which runs in `decline_fast` itself,
-    /// took 8 machine instructions more.)
-    #[inline(never)]
-    fn decline_add(&mut self) -> bool {
         use crate::value::Kind;
         let (a, c) = (self.get(self.sp - 2), self.get(self.sp - 1));
         if a.as_string().is_none() && c.as_string().is_none() {
@@ -1442,20 +1434,20 @@ impl Exec<'_> {
                             // The frequent hits are read from the slice (D3393); the
                             // others, and the misses, out of line.
                             let hit = if key == atoms::LENGTH && op == fast::GET_FIELD {
-                                hot_length(b, o).map(Hit::Value)
+                                hot_length(b, o).ok_or(false)
                             } else {
                                 super::ic::hot_get(b, self.template, ic, o, key)
                             };
                             let r = match hit {
                                 // An accessor: `decline_fast` calls the getter.
-                                Some(Hit::Getter(_)) => {
+                                Err(true) => {
                                     // (`get_method` of an accessor is `step`'s.)
                                     if op == fast::GET_FIELD {
                                         break Exit::Decline(GETTER);
                                     }
                                     break Exit::Decline(fast::GET_METHOD);
                                 }
-                                Some(Hit::Value(r)) => {
+                                Ok(r) => {
                                     #[cfg(debug_assertions)]
                                     {
                                         let want = heap_call_op!(self.field_slow(op, key, ic, o));
@@ -1466,7 +1458,7 @@ impl Exec<'_> {
                                     }
                                     r
                                 }
-                                None => {
+                                Err(false) => {
                                     let hit = heap_call_op!(self.field_slow(op, key, ic, o));
                                     let Some(Hit::Value(r)) = hit else {
                                         break Exit::Decline(op);

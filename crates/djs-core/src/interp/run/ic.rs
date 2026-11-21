@@ -208,7 +208,13 @@ pub(crate) fn cached_get(heap: &Heap, at: u32, o: Value, key: Atom) -> Option<Hi
 /// prototype hit over 200 (D3393). Reads only. Debug builds compare every hit with
 /// [`cached_get`] (hot.rs).
 #[inline(always)]
-pub(super) fn hot_get(b: &[u8], template: u32, ic: u32, o: Value, key: Atom) -> Option<Hit> {
+pub(super) fn hot_get(
+    b: &[u8],
+    template: u32,
+    ic: u32,
+    o: Value,
+    key: Atom,
+) -> Result<Value, bool> {
     use crate::heap::cells::flags::OBJ_DICTIONARY;
     use crate::heap::cells::{Header, Object, PropValues};
     use crate::heap::layout::arena_read;
@@ -220,12 +226,12 @@ pub(super) fn hot_get(b: &[u8], template: u32, ic: u32, o: Value, key: Atom) -> 
     };
     let a = r32(template + FuncTemplate::IC.offset);
     if a == 0 || ic == NO_CACHE as u32 {
-        return None;
+        return Err(false);
     }
     let at = U32Array::DATA.at(a, ic * WORDS);
     let w0 = r32(at);
     if w0 & IC_OFFSET_SLOT == 0 {
-        return None;
+        return Err(false);
     }
     // (An absent read has no index: 0 here, which no object has as a slot.)
     let index = (w0 & INDEX_MASK).wrapping_sub(1);
@@ -234,30 +240,27 @@ pub(super) fn hot_get(b: &[u8], template: u32, ic: u32, o: Value, key: Atom) -> 
     // own), or the holder on its prototype chain.
     let h = if depth == 0 {
         // `Heap::shaped_get`.
-        let obj = o.as_object()?.offset();
+        let obj = o.as_object().ok_or(false)?.offset();
         let v = r32(obj + Object::PROPS.offset);
         if dictionary(obj) || v == 0 || r32(v + PropValues::SHAPE.offset) != r32(at + 4) {
-            return None;
+            return Err(false);
         }
-        return Some(Hit::Value(super::hot::ld(
-            b,
-            PropValues::VALUES.at(v, index),
-        )));
+        return Ok(super::hot::ld(b, PropValues::VALUES.at(v, index)));
     } else if depth >= KIND_OWN_ACCESSOR {
         // The receiver's own accessor (an addition slot is no read).
-        let obj = o.as_object()?.offset();
+        let obj = o.as_object().ok_or(false)?.offset();
         let v = r32(obj + Object::PROPS.offset);
         if depth != KIND_OWN_ACCESSOR
             || dictionary(obj)
             || v == 0
             || r32(v + PropValues::SHAPE.offset) != r32(at + 4)
         {
-            return None;
+            return Err(false);
         }
         obj
     } else {
         if r32(at + 8) != r32(Roots::PROTO_EPOCH.offset) {
-            return None;
+            return Err(false);
         }
         // `proto_start`, without its own-property lookup: the receiver's shape word must be
         // the remembered one.
@@ -272,7 +275,7 @@ pub(super) fn hot_get(b: &[u8], template: u32, ic: u32, o: Value, key: Atom) -> 
                     || (class == ObjectClass::Function as u32
                         && (length || key == crate::heap::atoms::NAME))
                 {
-                    return None;
+                    return Err(false);
                 }
                 let shape = if dictionary(obj) {
                     0
@@ -283,41 +286,47 @@ pub(super) fn hot_get(b: &[u8], template: u32, ic: u32, o: Value, key: Atom) -> 
                     }
                 };
                 if shape == 0 || shape != r32(at + 12) {
-                    return None;
+                    return Err(false);
                 }
                 r32(obj + Object::PROTO.offset)
             }
             None => {
                 let i = if o.as_string().is_some() {
                     if key == crate::heap::atoms::LENGTH || key.as_int().is_some() {
-                        return None;
+                        return Err(false);
                     }
                     Intrinsic::StringProto
                 } else if o.is_number() {
                     Intrinsic::NumberProto
                 } else {
-                    return None;
+                    return Err(false);
                 };
-                let realm = super::hot::ld(b, Roots::REALM.offset).as_internal()?;
+                let realm = super::hot::ld(b, Roots::REALM.offset)
+                    .as_internal()
+                    .ok_or(false)?;
                 let p =
                     super::hot::ld(b, crate::heap::cells::Realm::INTRINSICS.at(realm, i as u32));
-                p.as_object()?.offset()
+                p.as_object().ok_or(false)?.offset()
             }
         };
         if proto == 0 || proto != r32(at + 4) {
-            return None;
+            return Err(false);
         }
         let mut h = proto;
         for _ in 1..depth {
             h = r32(h + Object::PROTO.offset);
             if h == 0 {
                 // The end of the chain: where an absent read's depth leads.
-                return (depth == KIND_ABSENT).then_some(Hit::Value(Value::UNDEFINED));
+                return if depth == KIND_ABSENT {
+                    Ok(Value::UNDEFINED)
+                } else {
+                    Err(false)
+                };
             }
         }
         h
     };
-    hot_data_at(b, h, index, key)
+    hot_data_at(b, h, index, key).map_err(|getter| getter.is_some())
 }
 
 /// Slot `i` of `h` if it is the accessor `key` (D3470), read as the loop reads it: the
@@ -325,10 +334,13 @@ pub(super) fn hot_get(b: &[u8], template: u32, ic: u32, o: Value, key: Atom) -> 
 /// Out of line: [`cached_get`]'s two uses share it.
 #[inline(never)]
 fn accessor_at(heap: &Heap, h: Obj, i: u32, key: Atom) -> Option<Hit> {
-    hot_data_at(heap.arena().bytes(), h.offset(), i, key)
+    match hot_data_at(heap.arena().bytes(), h.offset(), i, key) {
+        Ok(v) => Some(Hit::Value(v)),
+        Err(getter) => getter.map(Hit::Getter),
+    }
 }
 
-/// What [`hot_get`] found.
+/// What a cache slot gives a read ([`cached_get`]).
 #[derive(Clone, Copy, PartialEq)]
 pub(super) enum Hit {
     /// The property's value.
@@ -338,10 +350,11 @@ pub(super) enum Hit {
 }
 
 /// `Heap::data_at` on the tier-0 loop's slice: the value of slot `index` of the object at
-/// `h` if that slot is the data property `key`, or the getter if it is the accessor `key`
-/// (an accessor without a getter reads as undefined).
+/// `h` if that slot is the data property `key` (an accessor without a getter reads as
+/// undefined); `Err` with the getter if it is the accessor `key`, with `None` for another
+/// slot.
 #[inline(always)]
-fn hot_data_at(b: &[u8], h: u32, index: u32, key: Atom) -> Option<Hit> {
+fn hot_data_at(b: &[u8], h: u32, index: u32, key: Atom) -> Result<Value, Option<Value>> {
     use crate::heap::cells::flags::OBJ_DICTIONARY;
     use crate::heap::cells::{Header, Object, PropEntry, PropTable, PropValues, Shape};
     use crate::heap::layout::arena_read;
@@ -350,11 +363,11 @@ fn hot_data_at(b: &[u8], h: u32, index: u32, key: Atom) -> Option<Hit> {
     let flags: u16 = u16::from_le_bytes(arena_read(b, (h + Header::FLAGS.offset) as usize));
     let p = r32(h + Object::PROPS.offset);
     if p == 0 {
-        return None;
+        return Err(None);
     }
     let (k, fl, value) = if flags & OBJ_DICTIONARY != 0 {
         if index >= r32(p + PropTable::COUNT.offset) {
-            return None;
+            return Err(None);
         }
         let e = PropTable::ENTRIES.at(p, index);
         (
@@ -364,28 +377,28 @@ fn hot_data_at(b: &[u8], h: u32, index: u32, key: Atom) -> Option<Hit> {
         )
     } else {
         if index >= r32(p + PropValues::LEN.offset) {
-            return None;
+            return Err(None);
         }
         let d = r32(r32(p + PropValues::SHAPE.offset) + Shape::DESCS.offset);
         let e = U32Array::DATA.at(d, 1 + 2 * index);
         (r32(e), r32(e + 4), PropValues::VALUES.at(p, index))
     };
     if k != key.id() {
-        return None;
+        return Err(None);
     }
     let v = super::hot::ld(b, value);
     if fl & STORE_ACCESSOR == 0 {
-        return Some(Hit::Value(v));
+        return Ok(v);
     }
     let getter = super::hot::ld(
         b,
-        v.as_internal()? + crate::heap::cells::AccessorPair::GETTER.offset,
+        v.as_internal().ok_or(None)? + crate::heap::cells::AccessorPair::GETTER.offset,
     );
-    Some(if getter.is_undefined() {
-        Hit::Value(getter)
+    if getter.is_undefined() {
+        Ok(getter)
     } else {
-        Hit::Getter(getter)
-    })
+        Err(Some(getter))
+    }
 }
 
 /// A put or define site's cache hit: true if the slot at `at` (0: none) still applies to
