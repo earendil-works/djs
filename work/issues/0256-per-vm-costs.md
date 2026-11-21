@@ -1,6 +1,6 @@
 # 0256: Per-VM and per-byte costs: base injection, hash keys, zeroing
 
-status: open
+status: in-progress
 agent: pstart
 branch: issue/0256-per-vm-costs
 depends-on: -
