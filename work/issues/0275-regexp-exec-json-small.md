@@ -1,6 +1,6 @@
 # 0275: Regexp execution with captures and global replace; JSON.parse of small objects
 
-status: in-progress
+status: done
 agent: pscan
 branch: issue/0275-regexp-exec-json-small
 depends-on: -
@@ -75,5 +75,28 @@ anywhere, images, or the unsafe rules (AGENTS.md).
 - Guide: none affected (builtins.md does not describe the RegExp fast paths).
 
 ## Follow-ups
+- The matcher's per-match memory (D3461, −6% match / −8% test) if room appears; patch in
+  work/scratch/0275/re-state-reuse.patch.
+- Regexp literal per evaluation: `create` defines lastIndex through define_own_property (a
+  quick insert or a cached shape would save ~4% of a match).
+- `\s+`-style replace: resume_in/Machine::run is ~30% (native) of the remaining 26k; the
+  matcher's per-match setup (exec_in reserve, find) is the next lever.
+- JSON.parse key atomization: the key cache is per parse, so a one-object parse hashes every
+  key (keyed hash + base/session atom lookups); a VM-lifetime cache would cost heap room.
 
 ## Result
+Landed (D3460, D3462, D3463; D3461 measured, not landed). Wasm instructions per iteration
+(slope.py, incl. the loop; main 207945d6 → branch; QuickJS built / quickjs-wasi):
+- `LINE.match(/^([^:]+):(\d+):/)`: 37.7k → 18.4-18.9k (−50%); 12.8k / 19.2k (was 2.95x
+  QuickJS, now 1.45x; below quickjs-wasi).
+- `S.replace(/\s+/g, ' ')`: 39.1k → 26.0-26.5k (−32..−35%); 16.4k / 73.0k.
+- `JSON.parse` of a 5-key object: 22.3k → 18.7-20.5k (−4..−9%, noisy); 18.9k / 22.9k.
+- `/TODO|FIXME/.test(LINE)`: unchanged (~10k; 11.5k / 14.0k).
+Workloads (wasm instructions per run, ins.py, main → branch): heavy −1.8%, text −3.8%, json
+−1.6%, loop and inspect unchanged.
+Size: +113 B gz on the default module (fits main's ceiling after 0270: 429,634 of 429,648);
+slim +38 B, its ceiling raised to 363,647 (approved).
+Tests: test262 built-ins/RegExp, String, JSON, Array, Object, Reflect, Proxy and
+language/expressions/object, language/literals all pass; difftest builtins, codemode,
+codemode-harvest, language plain, --suspend-every 97 --gc-stress and --plain-dumps; new corpus
+case builtins/regexp-pristine-paths.js.
