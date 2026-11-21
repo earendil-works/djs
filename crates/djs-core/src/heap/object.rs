@@ -1354,6 +1354,19 @@ impl Heap {
             .set(e, PropEntry::FLAGS, fl | STORE_WATCHED);
     }
 
+    /// Adds a data property to an object just allocated, which has no properties and is
+    /// not a builtin: what defining it would do, without the checks (a RegExp's
+    /// `lastIndex`, D3521).
+    pub(crate) fn add_fresh_data(
+        &mut self,
+        o: Obj,
+        key: Atom,
+        value: Value,
+        flags: PropFlags,
+    ) -> Result<(), HeapError> {
+        self.prop_insert(o, key, &Property::data(value, flags))
+    }
+
     /// Adds a property (the key must not be present): a shape transition, or a table
     /// entry in dictionary mode. Array-index keys make the object a dictionary and set
     /// `OBJ_INDEXED_PROPS`.

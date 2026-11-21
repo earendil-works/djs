@@ -142,9 +142,7 @@ pub(crate) fn create(
     heap.set_object_slot(o, SLOT_PROGRAM, Value::internal(cell));
     heap.set_object_slot(o, SLOT_SOURCE, Value::string(pattern));
     heap.set_object_slot(o, SLOT_FLAGS, Value::int(bits as i32));
-    let key = atoms::LAST_INDEX;
-    let d = PropertyDescriptor::data(Value::int(0), PropFlags::WRITABLE);
-    heap.define_own_property(o, key, &d)?;
+    heap.add_fresh_data(o, atoms::LAST_INDEX, Value::int(0), PropFlags::WRITABLE)?;
     Ok(o)
 }
 
