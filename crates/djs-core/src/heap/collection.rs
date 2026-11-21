@@ -22,7 +22,7 @@
 //! (`Heap::collection_rehash`), without allocating.
 use crate::PushOut;
 
-use super::cells::{EphemeronArray, ValueArray};
+use super::cells::{EphemeronArray, Object, ValueArray};
 use super::{CellKind, Heap, HeapError, ObjectClass};
 use crate::value::{Obj, Value};
 
@@ -93,12 +93,19 @@ impl Heap {
         }
     }
 
+    /// Slot `i` of collection `o`, read without `object_slot`'s count check: every
+    /// collection class has the three slots (a lookup reads two or three of them).
+    #[inline]
+    fn coll_slot(&self, o: Obj, i: u32) -> Value {
+        self.arena().read(Object::SLOTS.at(o.0, i))
+    }
+
     pub(super) fn collection_entries(&self, o: Obj) -> u32 {
-        self.object_slot(o, ENTRIES).as_internal().expect("entries")
+        self.coll_slot(o, ENTRIES).as_internal().expect("entries")
     }
 
     pub(super) fn collection_index(&self, o: Obj) -> u32 {
-        self.object_slot(o, INDEX).as_internal().expect("index")
+        self.coll_slot(o, INDEX).as_internal().expect("index")
     }
 
     /// Entry slots used (live and deleted).
@@ -108,7 +115,7 @@ impl Heap {
 
     /// The live entry count (`size`).
     pub fn collection_size(&self, o: Obj) -> u32 {
-        self.object_slot(o, LIVE).as_int().unwrap_or(0) as u32
+        self.coll_slot(o, LIVE).as_int().unwrap_or(0) as u32
     }
 
     /// The hash of a normalized key, keyed by the VM's hash key (D2433), so crafted keys
@@ -176,16 +183,20 @@ impl Heap {
 
     /// The entry number of `key` (normalized), if present.
     fn collection_find(&self, o: Obj, key: Value) -> Option<u32> {
+        self.collection_find_hashed(o, key, self.key_hash(key))
+    }
+
+    /// [`Heap::collection_find`] with the key's hash `h` known. The same key value
+    /// (the same string cell, an equal number) matches without the content comparison.
+    fn collection_find_hashed(&self, o: Obj, key: Value, h: u32) -> Option<u32> {
         let entries = self.collection_entries(o);
         let base = self.entries_base(o);
-        let index = self.collection_index(o);
-        let h = self.key_hash(key);
-        self.probe(index, h, |_, v| {
+        self.probe(self.collection_index(o), h, |_, v| {
             if v == 0 {
                 return Some(None);
             }
             let k = self.coll_key(entries, base, v - 1);
-            (!k.is_hole() && self.keys_equal(k, key)).then_some(Some(v - 1))
+            (k == key || !k.is_hole() && self.keys_equal(k, key)).then_some(Some(v - 1))
         })
     }
 
@@ -206,12 +217,13 @@ impl Heap {
     /// keys should be flat (the caller flattens them) so their hash is cheap.
     pub fn collection_set(&mut self, o: Obj, key: Value, value: Value) -> Result<(), HeapError> {
         let key = normalize_key(key);
-        if let Some(s) = key.as_string() {
+        let h = match key.as_string() {
             // Cached in the string (D2433): later lookups with it skip the keyed hash.
-            self.str_hash(s);
-        }
+            Some(s) => self.str_hash(s),
+            None => self.key_hash(key),
+        };
         let base = self.entries_base(o);
-        if let Some(n) = self.collection_find(o, key) {
+        if let Some(n) = self.collection_find_hashed(o, key, h) {
             let entries = self.collection_entries(o);
             self.value_array_set(entries, base + 2 * n + 1, value);
             return Ok(());
@@ -238,10 +250,11 @@ impl Heap {
         self.value_array_set(entries, len + 1, value);
         self.arena_mut().set(entries, ValueArray::LEN, len + 2);
         let index = self.collection_index(o);
-        let b = self.probe_empty(index, self.key_hash(key));
+        let b = self.probe_empty(index, h);
         self.u32_array_set(index, b, used + 1);
         let live = self.collection_size(o);
-        self.set_object_slot(o, LIVE, Value::int(live as i32 + 1));
+        self.arena_mut()
+            .write(Object::SLOTS.at(o.0, LIVE), Value::int(live as i32 + 1));
         Ok(())
     }
 
