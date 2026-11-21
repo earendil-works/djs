@@ -24,6 +24,31 @@ slope.py per op and the hotcode.sh check; report the design with numbers before 
 - [ ] per-op instructions vs QuickJS 2026 before/after for the red rows; workloads; run_hot's shared path unchanged
 - [ ] the every-stop equivalence test covers the new path
 - [ ] size reported (~1 KB of the owner's allowance left, shared with 0285 and 0287); gate green; decisions recorded
+## Log
+- Design (prototype on the branch, dev build and tests only: wasm builds and benchmarks
+  were on hold for 0284's recording):
+  1. **The method from the slot.** A prototype-read slot filled for a string or number
+     receiver while the builtins are pristine keeps the function itself in word 3 (a
+     primitive has no shape word) and a kind bit in word 4; the loop's slice read answers
+     with it while `ROOT_PREFIX_WRITTEN` is clear, without the realm, the prototype, the
+     chain walk and the entry check. Arm-local to `get_field`/`get_method`.
+  2. **The whole call from `field_slow`.** The `get_method` arm already has one
+     out-of-line call (`field_slow`, where 0282's getters run). A slot whose value is a
+     `@fast` builtin and whose site is `get_method; up to three plain pushes (local,
+     argument, small int, constant); call` gets a bit at fill time; the slice read
+     leaves such a slot to `field_slow`, which writes the stack as the instructions
+     would, runs `fast_leaf_call` itself and returns bytes to skip and fuel to charge
+     (`Hit::Call`). No exit from the loop, no dispatch of the pushes and the call, no
+     failed closure attempt, no `load_frame`. The shared path of run_hot is untouched;
+     the arm gets one more cold match arm.
+     Equal bytes at every stop: only when the fuel reaches the call (no stop in
+     between); a declined attempt is remembered (`fused_miss`) so that the call
+     instruction does not make it a second time; near the stack's end it is not tried
+     (a leaf's intrinsic may ask for slots).
+- `hot_loop_paths_are_invisible_at_every_stop` covers it: fuel 1, 2, 3, 5, 7, 11, calls
+  that succeed, throw and convert an object, and counters that the fused path ran and
+  declined.
+
 ## Shared context (all of 0256-0260)
 The owner asked to push both memory and speed as far as they go (2026-11-21). Background,
 fresh profiles and the ranked idea list: work/scratch/perfreview/ of the primary checkout
