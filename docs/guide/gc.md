@@ -61,9 +61,12 @@ A full collection runs three passes over the arena:
    visited once, and nothing below the first dead word moves, so fields pointing there
    stay as they are. Map and Set tables are rehashed last.
 
-The bitmap, the table and the stack take about 2.3% of the arena. They are allocated
-before anything is touched, so a host that cannot provide them gets an error with the
-heap unchanged.
+The bitmap, the table and the stack take about 2.3% of the arena. They live right behind
+the arena's last cell, in the arena's own buffer, so a collection asks the host's
+allocator for nothing: in wasm, a block it placed behind the arena would keep the arena
+from growing in place. They are reserved before anything is touched, so a host that
+cannot provide the room gets an error with the heap unchanged, and they are gone once
+the live cells have slid down.
 
 Because cells keep their order, the heap after a collection is the live cells in the
 order they were allocated. Collecting along the way and collecting once at the end leave
