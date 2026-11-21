@@ -681,7 +681,15 @@ impl Machine<'_, '_> {
             }
             let passes = usize::try_from((*fuel).max(0)).unwrap_or(usize::MAX);
             let limit = len.min(p.saturating_add(passes));
-            match (p..limit).find(|&i| is_line_terminator(self.input.unit(i))) {
+            let next = match self.input {
+                // In one-byte text the only line terminators are \n and \r: eight
+                // bytes at a time (0260).
+                Input::Latin1(b) => {
+                    crate::swar::find_any(&b[p..limit], *b"\n\r\n\n").map(|k| p + k)
+                }
+                input => (p..limit).find(|&i| is_line_terminator(input.unit(i))),
+            };
+            match next {
                 Some(q) => {
                     *fuel -= (q + 1 - p) as i64;
                     self.s.pos = (q + 1) as u32;
