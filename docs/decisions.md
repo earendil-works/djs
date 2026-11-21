@@ -13578,3 +13578,9 @@ date: 2026-11-21 · by: pcall · issue: 0276
   strbuild was 3% slower.
 V8's shared path is unchanged (dispatch 14, tail 4); run_hot's code is 18,696 B of
 arm64 (18,232).
+
+## D3500: status records state the load they were taken at
+date: 2026-11-21 · by: pstart · issue: 0279
+`scripts/status.py` speed, pi, startup, dumps, bounds and heap record `<group>/load`, the
+1-minute load average when the command started, as engines, ops and bridge already did.
+Published numbers are taken below a load of ~4; the record says whether they were.

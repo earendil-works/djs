@@ -507,6 +507,15 @@ def bridge():
     return new
 
 
+def loaded(new, group):
+    """`new` with `<group>/load`: the 1-minute load average when the measurement started
+    (records are taken on a quiet machine, below ~4; D3500)."""
+    return {**new, f"{group}/load": round(START_LOAD, 1)}
+
+
+START_LOAD = os.getloadavg()[0]
+
+
 def main():
     args = sys.argv[1:]
     if not args:
@@ -517,24 +526,24 @@ def main():
     elif args[0] == "speed":
         n = int(args[2]) if len(args) > 2 and args[1] == "-n" else 3
         build()
-        save(rows, speed(n))
+        save(rows, loaded(speed(n), "speed"))
     elif args[0] == "pi":
         build()
         build("--dump")
-        save(rows, pi())
+        save(rows, loaded(pi(), "pi"))
     elif args[0] == "startup":
         build()
-        save(rows, startup())
+        save(rows, loaded(startup(), "startup"))
     elif args[0] == "dumps":
         build()
         build("--dump")
-        save(rows, dumps())
+        save(rows, loaded(dumps(), "dumps"))
     elif args[0] == "bounds":
         build()
-        save(rows, bounds())
+        save(rows, loaded(bounds(), "bounds"))
     elif args[0] == "heap":
         build()
-        save(rows, heap())
+        save(rows, loaded(heap(), "heap"))
     elif args[0] == "bench":
         for at, new in bench():
             save(rows, new, at)
@@ -548,12 +557,12 @@ def main():
         save(rows, bridge())
     elif args[0] == "all":
         save(rows, size())
-        save(rows, speed(3))
-        save(rows, pi())
-        save(rows, startup())
-        save(rows, dumps())
-        save(rows, bounds())
-        save(rows, heap())
+        save(rows, loaded(speed(3), "speed"))
+        save(rows, loaded(pi(), "pi"))
+        save(rows, loaded(startup(), "startup"))
+        save(rows, loaded(dumps(), "dumps"))
+        save(rows, loaded(bounds(), "bounds"))
+        save(rows, loaded(heap(), "heap"))
         save(rows, engines())
         for at, new in bench():
             save(rows, new, at)
