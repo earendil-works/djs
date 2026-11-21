@@ -1294,7 +1294,10 @@ impl Vm {
             c.kind == crate::heap::CellKind::Object
                 && matches!(
                     self.heap.object_class(Obj(c.offset)),
-                    ObjectClass::Map | ObjectClass::Set | ObjectClass::WeakMap | ObjectClass::WeakSet
+                    ObjectClass::Map
+                        | ObjectClass::Set
+                        | ObjectClass::WeakMap
+                        | ObjectClass::WeakSet
                 )
         });
         assert!(!prefix_collection, "a Map or Set in the builtin prefix");
