@@ -50,7 +50,6 @@ impl Heap {
         let written = f & cells::ROOT_PREFIX_WRITTEN != 0;
         self.frozen_end = if frozen { end } else { 0 };
         self.gate_end = if frozen || !written { end } else { 0 };
-        self.pristine = end > 0 && !written;
         self.refresh_barrier();
     }
 
@@ -65,7 +64,8 @@ impl Heap {
     /// the property operations cannot set it).
     #[inline(always)]
     pub fn builtins_pristine(&self) -> bool {
-        self.pristine
+        // (`gate_end` is 0 without a prefix, and latched unless the builtins are frozen.)
+        self.gate_end != 0 && self.arena.get(0, Roots::FLAGS) & cells::ROOT_PREFIX_WRITTEN == 0
     }
 
     /// The write gate of the JS-visible property operations (D2304, D3290), before they
@@ -106,7 +106,6 @@ impl Heap {
             .set(0, Roots::FLAGS, f | cells::ROOT_PREFIX_WRITTEN);
         // Frozen builtins keep refusing writes.
         self.gate_end = self.frozen_end;
-        self.pristine = false;
     }
 
     /// For writers that checked [`Heap::frozen`] already (a frozen builtin was refused):

@@ -738,7 +738,9 @@ impl Heap {
         debug_assert!(old <= before);
         // The prefix's walk is skipped while nothing in it can reference the cells above
         // it (D3290).
-        let prefix = if base_end > 0 && old >= base_end && !self.prefix_written() {
+        let written =
+            self.arena.get(0, super::cells::Roots::FLAGS) & super::cells::ROOT_PREFIX_WRITTEN;
+        let prefix = if base_end > 0 && old >= base_end && written == 0 {
             base_end
         } else {
             0

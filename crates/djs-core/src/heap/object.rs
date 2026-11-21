@@ -2561,10 +2561,11 @@ impl Heap {
     /// `length` by one and returns the element. There `Get`, `DeletePropertyOrThrow` and
     /// `Set(length)` observe nothing else. `None`, with nothing changed, otherwise.
     pub fn array_pop_dense(&mut self, o: Obj) -> Option<Value> {
+        // (No latch, D3290: a builtin array has elements to pop only after a write that
+        // set it.)
         if !self.array_can_pop_dense(o) {
             return None;
         }
-        self.note_write(o);
         let len = self.array_length(o);
         let el = self.elements(o);
         let v = self.value_array_get(el, len - 1);
