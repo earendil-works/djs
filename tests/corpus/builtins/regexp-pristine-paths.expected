@@ -1,0 +1,26 @@
+["src/foo/bar.ts:42:","src/foo/bar.ts","42"]
+[0,true,"src/foo/bar.ts","42"]
+" a b "
+"a--b--c"
+[1,5]
+["f00",0]
+"b"
+"a7b7"
+"a2b4"
+"own match"
+"x"
+R.exec
+1
+R.exec
+R.exec
+"aBc"
+"aBc"
+patched exec
+"42"
+patched exec
+patched exec
+"a_b"
+"42"
+flags
+"a-b-"
+=== completed
