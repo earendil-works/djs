@@ -62,6 +62,70 @@ Never weaken determinism (collection points a function of the program, D1710), s
 anywhere, images, or the unsafe rules (AGENTS.md).
 
 ## Log
+### Research (2026-11-21, main 2fec34fb; tools in work/scratch/0271/)
+Idle today: arena 189,656 B = prefix 174,184 (`BASE_END`) + the image's per-VM part 9,936
+(realm, global object and its 67-entry table, stack, shape transitions, VM atoms) + the
+sandbox's 5,536 (adding `console` regrows the full global table: cap 134 + 512-bucket index,
+4.2 KB, the old 1.6 KB left as garbage). Two pages need <= 131,072: -58.6 KB.
+
+What the prefix is (basediet.py): 863 templates 85.4 KB (headers 41.4, code 39.6, handlers
+1.1, padding 3.2; one shared CONSTS pool, IC/INFO/CAPTURES all empty), 799 strings 25.7 KB
+(10.2 KB of text; 196 messages 8.2 KB), 863 function objects 20.7 KB, PropTables 14.9,
+U32Array indexes 9.4 (already 3/4 load, D2450), ValueArrays 10.6.
+
+Families (famvar.sh: the full base built with one builtins file left out, exact bytes):
+typedarray 15.9, dataview 5.2, arraybuffer 3.5 (together 25.5), iterator helpers 11.0, proxy
+7.6, disposable+SuppressedError 6.6, web (DOMException, atob/btoa) 6.0, decorators 4.2,
+asyncgen 3.1, weak 2.2, reflect 2.1, fromasync 2.1, symbol 1.8, generator 1.8, weakref 1.5,
+bigint 1.3, uri 0.8; date 8.2. The slim set (`@slim-omit`) together 50.4 KB.
+
+Page check (rows.ts; full module with families left out of the prelude, outputs identical):
+| base | idle | seq | fanout | media | inspect | loop | text | json | heavy |
+| --- | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| main 184.1 KB | 384 | 512 | 1472 | 768 | 448 | 704 | 896 | 1216 | 3968 |
+| slim set -50.4 | 384 | 448 | 1536 | 768 | 384 | 640 | 896 | 1152 | 3904 |
+| + Proxy -58.1 | 320 | 448 | 1536 | 768 | 384 | 640 | 896 | 1152 | 3904 |
+| + Reflect, weak, fromasync -64.7 | 320 | 448 | 1536 | 704 | 384 | 640 | 896 | 1152 | 3904 |
+| -58.1 and the eighth rounded down | 320 | 448 | 1472 | 768 | 384 | 640 | 832 | 1152 | 3904 |
+- -58.1 KB leaves the idle arena at 129,840: 1.2 KB of margin.
+- Text, media and fanout end above 8 arena pages, where D3140's step (`cap + cap/8`, rounded
+  up) is 2 pages, so a 58 KB smaller base saves a page only by luck there. With the eighth
+  rounded down to pages (floor-round.patch, pgc's rule), text drops too. Fanout's +64 is the
+  past-target rule's path (cap 21 vs 20 pages with 59 KB less live data).
+- Instructions (icount.sh, --wasm-sync-tier-up, -58.1 KB vs main): sandbox create -11.8%,
+  sequential -1.5%, inspect -1.7%, text -0.5%, json -0.3%. Module -14.5 KB gz (the base
+  section), the families' Rust natives still in.
+
+Ranked options (KB of idle arena; CPU; size; effort):
+1. Leave the cold families out of the shipped module's base (slim set + Proxy, -58.1;
+   + Reflect, WeakMap/WeakSet, fromAsync -64.7): idle 320 alone; CPU better (above); -14.5..-16
+   KB gz; days (a prelude/feature set). Semantics: those globals are absent in that module, an
+   owner decision (D2411's slim module already does it for the slim set).
+2. The same families as a second chunk loaded on first use: same memory for runs that don't
+   touch them, CPU ~0 if a lazy global rides the accessor branch of property reads (a prop
+   flag) and enumerations test an object flag; but Iterator helpers hang off
+   %IteratorPrototype% and fromAsync off Array, prefix holders that cannot be written (keep
+   them in the base or as stubs, -39 KB then); chunk cells sit above `BASE_END`, so frozen
+   mode, the registry/dumper and images need a second notion of "builtin". 2-3 weeks, loader
+   +2-4 KB gz.
+3. Global table headroom in the image (room for the host's globals, index sized for it):
+   -4.1 KB per VM, no CPU, small. Worth it with any choice (doubles the idle margin).
+4. Compact privileged templates: 32-byte header (CONSTS from the realm's pool, code at +32,
+   frame entry selects both on a FLAGS bit): -13.8 (-9.7 after 1); ~+4 instructions per frame
+   entry, pcall's path. 24-byte (counts as bytes): -20.7, a layout branch at frame entry.
+   IDEAS' 16-byte one breaks D2448 (a closure's ELEMENTS is its template, +8 must read 0).
+5. Function objects on first read: -20.7 (-14.5 after 1) minus a per-VM identity table; a tag
+   test on every value read from a prefix holder (proto IC hit, prop_read, enumerations,
+   dumper); a token that escapes is a heap-safety bug under unsafe-heap. After idea 3's
+   tokens if at all; 2-3 weeks.
+6. Prefix hash indexes as u16: -4.7; a width test on prefix-table probes (IC misses, atom
+   interning).
+7. Prefix strings without the cached HASH: -3.0; error messages packed in one cell: -3..4.
+   Moving messages to module data does not help: data pushes dlmalloc's room (the floor) out.
+Without families no combination gets there: 3+4(24 B)+5+6+7 = -53 KB < -58.6.
+Recommended: 1 (or 2 if the families must stay) + 3: idle 320 with ~5 KB margin, plus an idle
+row in the codemode-memory leg. Every row -64 KiB is not reachable from the base alone (text,
+media, fanout, above); it needs D3140's step rounded down (pgc).
 
 ## Follow-ups
 
