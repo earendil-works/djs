@@ -6,7 +6,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0265 | Allocator placement effects; the resolver re-emit | pstart | .worktrees/pstart |
+| 0271 | A smaller base image: idle at QuickJS parity | pstart | .worktrees/pstart |
 | 0270 | Construct path; sweep of everyday codemode ops vs QuickJS | pidle | .worktrees/pidle |
 | 0269 | String costs: views, short results, slices, appends | pgc | .worktrees/pgc |
 | 0268 | run_hot sensitivity, receiver method calls, the general path | pcall | .worktrees/pcall |
@@ -51,6 +51,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0265 | Placement, first instances, compile zone, GC tables behind the arena, floor 87 KiB, compile peaks | c3b74656 (agent pstart; D3360-D3369; idle 448->384 KiB, every row -64 KiB, text 896 KiB; codemode-memory gate leg; compile -2..-5%) |
 | 0266 | new Error, new Promise (items 1-3 were done by 0232b) | 07c56383 (agent pidle; D3370; new Error 28.0k->15.4k instr (QuickJS 24.2k); fanout -4%; +161 B gz) |
 | 0258 | GC: prefix latch and skip, growth past the target, knee at 1 MiB | c1dd82cb (agent pgc; D3290-D3294; heavy 4736->3904 KiB, strbuild 24.2->11.9 MiB, json-objects -18%; retune, survivor discount, nursery w/o barrier measured, not built) |
 | 0264 | Cold Unicode tables out of linear memory | eed09e26 (agent pscan; D3350, ABI 7; data 92->41 KB, 2 initial pages; -64 KiB/row waits for dlmalloc need <= 88 KB) |
