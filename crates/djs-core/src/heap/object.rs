@@ -1778,11 +1778,12 @@ impl Heap {
         self.alloc_cell(CellKind::PropTable, size)
     }
 
-    /// A hash index for the base image's table `t`, which is full and rarely grows (D2450):
-    /// sized for a load of at most 3/4 rather than 1/2 of the capacity.
+    /// A hash index for the base image's table `t`, which is full (or keeps a little room,
+    /// `GLOBAL_ROOM`) and rarely grows (D2450): sized for a load of at most 3/4 of its
+    /// capacity rather than 1/2.
     pub(super) fn build_table_index_dense(&mut self, t: u32) -> Result<(), HeapError> {
-        let count = self.arena().get(t, PropTable::COUNT);
-        self.build_index_with(t, (4 * count).div_ceil(3).next_power_of_two())
+        let cap = self.table_capacity(t);
+        self.build_index_with(t, (4 * cap).div_ceil(3).next_power_of_two())
     }
 
     fn build_index(&mut self, t: u32) -> Result<(), HeapError> {

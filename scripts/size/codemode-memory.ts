@@ -1,4 +1,4 @@
-// The wasm memory of each codemode workload (tests/bench/codemode) after its run, in a first
+// The wasm memory of an idle VM and of each codemode workload (tests/bench/codemode) after its run, in a first
 // instance of the module (which decodes the base) and in a later one (which gets it
 // injected), against tests/scores/codemode-memory.tsv (D3367). Memory is a deterministic
 // but chaotic function of where the allocator places the arena (D2047): a run whose arena
@@ -20,6 +20,18 @@ const root = join(import.meta.dirname, "../..");
 const kib = (b: number) => b / 1024;
 
 const rows: [string, number, number][] = [];
+// Idle: a new VM that ran nothing, the arena at the base plus the per-VM cells (0271).
+{
+  const e = djs(wasm);
+  await e.load();
+  const first = e.create({});
+  const a = kib(first.memory());
+  first.dispose();
+  const warm = e.create({});
+  const b = kib(warm.memory());
+  warm.dispose();
+  rows.push(["idle", a, b]);
+}
 // js/bench/engines/run.ts WORKLOADS, but ts (its body is TypeScript, compiled by the host).
 for (const name of ["sequential", "fanout", "media", "inspect", "loop", "text", "json", "heavy"]) {
   const src = readFileSync(join(root, "tests/bench/codemode", `${name}.js`), "utf8");

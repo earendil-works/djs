@@ -1338,7 +1338,8 @@ impl Vm {
             self.heap.atom_str(name)?;
         }
         crate::interp::run::promise::preallocate_queues(&mut self.heap)?;
-        self.heap.compact_for_image()?;
+        let global = self.global().0;
+        self.heap.compact_for_image(global)?;
         // Without the prelude's internal names (D2253).
         image::drop_internal_names(&mut self.heap)?;
         // The base's atoms go to the prefix, a VM's own to the tail (D2431).

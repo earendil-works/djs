@@ -13019,3 +13019,14 @@ made at the loop's start, so the end allocates nothing). Machine instructions pe
 (slope.py, 100-element arrays, wasm): forEach 799 → 750, map 868 → 816, filter 979 → 887,
 reduce 896 → 703, some/find/every ~722 → 630 (quickjs-wasi: 920, 996, 951, 769, ~705);
 heavy −2.3% workload instructions; +~130 B gz.
+
+## D3420: The base image's global table keeps room for 16 globals
+date: 2026-11-21 · by: pstart · issue: 0271
+`compact_for_image` shrank every property table to its live entries, the global object's
+included (67 entries, in the per-VM part of the image). The first global a host adds
+(`Sandbox` binds `console`, pi its tools) then copied the table at twice its live size
+with an index for that (`grow_table`: cap 134, 512 buckets, 4.2 KB) and left the old one
+(1.6 KB) as garbage until a collection. The global table now keeps `GLOBAL_ROOM` = 16 free
+entries and its dense index (D2450) is sized for its capacity: +256 B of image, idle arena
+189,656 → 185,680 B. No row is worse; loop 704 → 640 KiB. The codemode-memory leg (D3367)
+gets an idle row (a VM that ran nothing).

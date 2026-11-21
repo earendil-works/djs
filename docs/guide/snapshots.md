@@ -166,7 +166,9 @@ so the same bytes stay at the same offsets in every VM of the build.
 Every VM's memory holds the base, so it is built to be small:
 
 - property tables, the atom table and the value stack are shrunk to their used size
-  before the final collection;
+  before the final collection, except that the global object's table keeps room for 16
+  more entries: nearly every host adds a few globals (`console`, its tools), and a full
+  table would be copied at twice its size, with a new index, in every VM;
 - equal strings are stored once: a builtin's `name`, a constant in a function's pool and
   the atom table often hold the same string, and strings can't be told apart by where
   they live, so the base keeps the atom table's copy and points the others at it;

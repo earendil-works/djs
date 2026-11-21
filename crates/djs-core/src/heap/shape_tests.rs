@@ -348,7 +348,7 @@ fn compacted_shapes_keep_working() {
         .new_array_from_values(None, &[Value::object(a), Value::object(b)])
         .unwrap();
     h.set_realm(Value::object(arr));
-    h.compact_for_image().unwrap();
+    h.compact_for_image(0).unwrap();
     h.collect().unwrap();
     h.verify().unwrap();
     let arr = h.realm().as_object().unwrap();

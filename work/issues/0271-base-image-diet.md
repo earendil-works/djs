@@ -127,6 +127,14 @@ Recommended: 1 (or 2 if the families must stay) + 3: idle 320 with ~5 KB margin,
 row in the codemode-memory leg. Every row -64 KiB is not reachable from the base alone (text,
 media, fanout, above); it needs D3140's step rounded down (pgc).
 
+### Building
+- Coordinator (2026-11-21): (a) the families are the owner's call; pi needs Proxy, Reflect
+  and Int8Array (lockdown reads %TypedArray%), so price a variant that keeps them with 3 and
+  4. (b) floor-round.patch goes to pgc. (c) 5 is dropped; 4 needs slope.py on calls and
+  higher-order first, and pcall's review. Build 3 and the leg's idle row now.
+- D3420 (3): global table room 16, image +256 B, idle arena 189,656 → 185,680; loop
+  704 → 640 KiB, other rows unchanged; idle row in codemode-memory. Guide: snapshots.md.
+
 ## Follow-ups
 
 ## Result

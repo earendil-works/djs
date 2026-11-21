@@ -17,10 +17,16 @@ use alloc::vec::Vec;
 /// The value stack of an image: room for a few frames; `run` grows it on demand.
 pub(crate) const IMAGE_STACK: u32 = 256;
 
+/// Free entries the global object's table keeps in an image: a host's first globals
+/// (`console`, its tool functions and namespaces) go in without the table and its index
+/// being copied at twice the size, 4 KB of every new VM (0271).
+pub(crate) const GLOBAL_ROOM: u32 = 16;
+
 impl Heap {
     /// Shrinks property tables, the atom table's entries and the value stack (of an idle
-    /// VM: nothing above slot 0 is live) to their used sizes. Collect afterwards.
-    pub fn compact_for_image(&mut self) -> Result<(), HeapError> {
+    /// VM: nothing above slot 0 is live) to their used sizes, but leaves the table of
+    /// `global` (the global object, or 0) [`GLOBAL_ROOM`] free entries. Collect afterwards.
+    pub fn compact_for_image(&mut self, global: u32) -> Result<(), HeapError> {
         let objects: alloc::vec::Vec<u32> = self
             .cells()
             .filter(|c| c.kind == CellKind::Object)
@@ -29,7 +35,10 @@ impl Heap {
         for o in objects {
             let t: Ref = self.arena().get(o, Object::PROPS);
             match t.get() {
-                Some(t) if self.cell_flags(o) & OBJ_DICTIONARY != 0 => self.shrink_table(o, t)?,
+                Some(t) if self.cell_flags(o) & OBJ_DICTIONARY != 0 => {
+                    let room = if o == global { GLOBAL_ROOM } else { 0 };
+                    self.shrink_table(o, t, room)?
+                }
                 Some(v) => self.shrink_values(o, v)?,
                 None => {}
             }
@@ -303,19 +312,19 @@ impl Heap {
         Ok(())
     }
 
-    /// Replaces object `o`'s table `t` by one with exactly its live entries.
-    fn shrink_table(&mut self, o: u32, t: u32) -> Result<(), HeapError> {
+    /// Replaces object `o`'s table `t` by one with its live entries and `room` free ones.
+    fn shrink_table(&mut self, o: u32, t: u32, room: u32) -> Result<(), HeapError> {
         let count: u32 = self.arena().get(t, PropTable::COUNT);
         let deleted: u32 = self.arena().get(t, PropTable::DELETED);
         let live = count - deleted;
-        if live == PropTable::LAYOUT.tail_capacity(self.cell_size(t)) && deleted == 0 {
+        if live + room == PropTable::LAYOUT.tail_capacity(self.cell_size(t)) && deleted == 0 {
             if live > LINEAR_MAX {
                 self.build_table_index_dense(t)?;
             }
             return Ok(());
         }
         let size = PropTable::ENTRIES
-            .cell_size(live.max(1))
+            .cell_size((live + room).max(1))
             .ok_or(HeapError::OutOfMemory)?;
         let new = self.alloc_cell(CellKind::PropTable, size)?;
         let mut n = 0;
