@@ -6,7 +6,6 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
-| 0285 | Fast keyed hash instead of SipHash-1-3 (owner decision) | pgc | .worktrees/pgc |
 | 0286 | Builtin method calls on primitives outside the loop | pcall | .worktrees/pcall |
 | 0287 | Short result strings | pidle | .worktrees/pidle |
 | 0284 | Refresh the published numbers after 0280-0282 | pstart | .worktrees/pstart |
@@ -54,6 +53,7 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | merged |
 | --- | --- | --- |
+| 0285 | Fast keyed hash (owner: no strong flood resistance) | b1c5e9c9 (agent pgc; D3540, COMPAT 11; Map/Set/o[k]/JSON keys -4..-10%, json -2%, compile -1.3%; -117 B gz) |
 | 0282 | Fast builtin getters (Map/Set size, typed-array length/byteLength/byteOffset) in the loop; typed arrays in named-key caches | fe9ac03c (agent pcall; D3530, D3531, COMPAT 10; m.size 4.7x->0.89x QJS; loop/step string-key interning equivalence fixed; +515 B gz) |
 | 0283 | Builtin families list for the owner (work/research/0283/families.md) | 9e981724 (agent pstart; packages A/B/C; B = idle 320 KiB, ~-35 KB gz, pi-safe with an Int8Array stub) |
 | 0280 | D020 budget +2 KB (owner); construct path and object rest landed | 852e4a12 (agent pidle; D3510-D3512; new C() 2.66k->2.11k, derived 8.04k->4.34k, object rest 48.8k->13.3k; +1,017 B gz) |
