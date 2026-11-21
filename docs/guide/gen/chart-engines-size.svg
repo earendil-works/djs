@@ -86,8 +86,8 @@
 <text class="small" x="230.9" y="26.0" text-anchor="middle">1,000</text>
 <line class="grid" x1="322.9" y1="30.0" x2="322.9" y2="160.0"/>
 <text class="small" x="322.9" y="26.0" text-anchor="middle">10,000</text>
-<rect class="s0" x="166.6" y="37.0" width="64.0" height="12.0"/>
-<text class="small" x="234.6" y="47.0" text-anchor="start">992</text>
+<rect class="s0" x="166.6" y="37.0" width="64.1" height="12.0"/>
+<text class="small" x="234.7" y="47.0" text-anchor="start">995</text>
 <rect class="s3" x="166.6" y="55.0" width="46.3" height="12.0"/>
 <text class="small" x="216.9" y="65.0" text-anchor="start">637</text>
 <rect class="s1" x="166.6" y="73.0" width="63.0" height="12.0"/>
@@ -108,8 +108,8 @@
 <text class="small" x="563.6" y="26.0" text-anchor="middle">1,000</text>
 <line class="grid" x1="674.0" y1="30.0" x2="674.0" y2="160.0"/>
 <text class="small" x="674.0" y="26.0" text-anchor="middle">10,000</text>
-<rect class="s0" x="453.3" y="37.0" width="69.8" height="12.0"/>
-<text class="small" x="527.1" y="47.0" text-anchor="start">429</text>
+<rect class="s0" x="453.3" y="37.0" width="70.0" height="12.0"/>
+<text class="small" x="527.3" y="47.0" text-anchor="start">431</text>
 <rect class="s3" x="453.3" y="55.0" width="50.5" height="12.0"/>
 <text class="small" x="507.8" y="65.0" text-anchor="start">287</text>
 <rect class="s1" x="453.3" y="73.0" width="57.5" height="12.0"/>

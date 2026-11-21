@@ -323,7 +323,7 @@ string-keyed data properties, arrays with their holes, typed arrays as copies, B
 
 > **Trade-off.** Reading the arena directly over serializing in the VM. Reading a value
 > takes less time than the VM alone needs to turn it into JSON, before the host has
-> parsed anything: <!--n wire/read-vs-json-objects .1-->1.6<!--/n--> times less for many small objects, <!--n wire/read-vs-json-text .0-->9<!--/n--> times less for text with
+> parsed anything: <!--n wire/read-vs-json-objects .1-->1.5<!--/n--> times less for many small objects, <!--n wire/read-vs-json-text .0-->9<!--/n--> times less for text with
 > non-ASCII characters, and a 1 MiB string reads at memory-copy speed. Against the
 > engines that read values out as JSON text, that is six to nine times as fast ([the
 > benchmarks](benchmarks.md#passing-data-through-the-bridge)). The cost: the reader depends on the heap
@@ -339,9 +339,9 @@ variants from one source, by cargo features:
 
 | build | features | what it is for |
 | --- | --- | --- |
-| shipped | `full`, `unicode`, `cold-unicode` (the Unicode tables in custom sections) | every host: <!--n wasm/bytes mb-->1.0 MB<!--/n-->, <!--n wasm/gzip kb-->429 KB<!--/n--> with gzip |
-| slim | none | hosts that can do without typed arrays, BigInt, iterator helpers and the other families scripts never use ([full and slim](builtins.md#two-builds-full-and-slim)): <!--n slim/bytes mb-->0.9 MB<!--/n-->, <!--n slim/gzip kb-->363 KB<!--/n--> with gzip |
-| dump module | the shipped features and `dump` | the dumper, for hosts that persist runs: <!--n dump/bytes mb-->1.9 MB<!--/n-->, <!--n dump/gzip kb-->774 KB<!--/n--> with gzip |
+| shipped | `full`, `unicode`, `cold-unicode` (the Unicode tables in custom sections) | every host: <!--n wasm/bytes mb-->1.0 MB<!--/n-->, <!--n wasm/gzip kb-->431 KB<!--/n--> with gzip |
+| slim | none | hosts that can do without typed arrays, BigInt, iterator helpers and the other families scripts never use ([full and slim](builtins.md#two-builds-full-and-slim)): <!--n slim/bytes mb-->0.9 MB<!--/n-->, <!--n slim/gzip kb-->365 KB<!--/n--> with gzip |
+| dump module | the shipped features and `dump` | the dumper, for hosts that persist runs: <!--n dump/bytes mb-->1.9 MB<!--/n-->, <!--n dump/gzip kb-->776 KB<!--/n--> with gzip |
 | docs module | the dump module's and `docs` | this site's live examples: the dump module plus `djs_disasm`, the bytecode listing an edited example shows |
 
 The `dump` feature brings the writer of continuation dumps, the suspension-map recording

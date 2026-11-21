@@ -40,27 +40,27 @@ time.
 | property access (prop1) | 1.5G | 5.4G | 0.28 |
 | strings (split, slice, join, ...) | 1.6G | 5.8G | 0.28 |
 | arrays | 5.2G | 16.3G | 0.32 |
-| JSON round trips | 1.0G | 2.0G | 0.50 |
+| JSON round trips | 1.0G | 2.0G | 0.51 |
 | JSON with Dates | 0.8G | 1.7G | 0.46 |
 | for-of | 3.5G | 7.0G | 0.50 |
 | calls | 2.1G | 3.9G | 0.53 |
 | push/pop and string methods | 2.9G | 2.9G | 1.00 |
-| an agent-like script | 5.4G | 6.9G | 0.78 |
+| an agent-like script | 5.3G | 6.9G | 0.78 |
 | forEach | 3.6G | 5.8G | 0.62 |
 | map/filter/reduce (higher-order) | 3.9G | 4.5G | 0.85 |
 
-Machine instructions per workload (`scripts/perf/w/`), measured at 1a4c20de31,
+Machine instructions per workload (`scripts/perf/w/`), measured at edd129067f,
 2026-11-21; lower is better.
 <!-- /gen -->
 
 ## Size
 
 <!-- gen:status size -->
-`djs_wasm.wasm` is 992 KB (429 KB gzip, 363 KB brotli): 854 KB of code, 41 KB of data,
+`djs_wasm.wasm` is 995 KB (431 KB gzip, 364 KB brotli): 857 KB of code, 41 KB of data,
 and the base snapshot (the initialized realm with all builtins, 191 KB) coded to 45 KB
-in a custom section. The slim build is 864 KB (363 KB gzip); the dump module, the
-shipped build with the dumper, 1,884 KB (774 KB gzip). Module sizes measured at
-f8cb1e7924, 2026-11-21.
+in a custom section. The slim build is 867 KB (365 KB gzip); the dump module, the
+shipped build with the dumper, 1,888 KB (776 KB gzip). Module sizes measured at
+5cfd8dd8f3, 2026-11-21.
 <!-- /gen -->
 
 ## The engine in numbers
@@ -93,10 +93,10 @@ instructions.
 | `bounds/instructions-max-pct` | 31.4 | 9041ad864d, 2026-11-21 |
 | `bounds/instructions-median-pct` | 23.5 | 9041ad864d, 2026-11-21 |
 | `bounds/load` | 3.3 | 9041ad864d, 2026-11-21 |
-| `compile/typescript-lazy-time-pct` | 57 | 7989df32e2, 2026-11-21 |
-| `dump/bytes` | 1884014 | f8cb1e7924, 2026-11-21 |
-| `dump/extra-gzip` | 344745 | f8cb1e7924, 2026-11-21 |
-| `dump/gzip` | 774164 | f8cb1e7924, 2026-11-21 |
+| `compile/typescript-lazy-time-pct` | 57 | ab471c4906, 2026-11-21 |
+| `dump/bytes` | 1888167 | 5cfd8dd8f3, 2026-11-21 |
+| `dump/extra-gzip` | 344755 | 5cfd8dd8f3, 2026-11-21 |
+| `dump/gzip` | 775706 | 5cfd8dd8f3, 2026-11-21 |
 | `dumps/corpus-cases` | 300 | 4af5a6f108, 2026-11-21 |
 | `dumps/idle-points` | 1063 | 4af5a6f108, 2026-11-21 |
 | `dumps/load` | 3.7 | 4af5a6f108, 2026-11-21 |
@@ -111,7 +111,7 @@ instructions.
 | `dumps/write-ms-p99` | 1.601 | 4af5a6f108, 2026-11-21 |
 | `dumps/zstd-p50` | 1006 | 4af5a6f108, 2026-11-21 |
 | `dumps/zstd-p99` | 2962 | 4af5a6f108, 2026-11-21 |
-| `fuel/slice-us` | 9.2 | 93f515bb17, 2026-11-21 |
+| `fuel/slice-us` | 8.6 | 211ecfb72c, 2026-11-21 |
 | `heap/append-10m-memory` | 33947648 | 51646c9e90, 2026-11-21 |
 | `heap/json5/dictionary` | 152.0 | 51646c9e90, 2026-11-21 |
 | `heap/json5/shape` | 104.0 | 51646c9e90, 2026-11-21 |
@@ -123,46 +123,46 @@ instructions.
 | `heap/string-10mib-staged-memory` | 31981568 | 51646c9e90, 2026-11-21 |
 | `native/arrays-x` | 3.74 | 35ed5ab789, 2026-11-05 |
 | `native/foreach-x` | 2.1 | 35ed5ab789, 2026-11-05 |
-| `slim/base` | 133624 | f8cb1e7924, 2026-11-21 |
-| `slim/bytes` | 863569 | f8cb1e7924, 2026-11-21 |
-| `slim/gzip` | 363363 | f8cb1e7924, 2026-11-21 |
-| `speed/arrays/djs-wasm` | 5240.5 | 1a4c20de31, 2026-11-21 |
-| `speed/arrays/qjs-wasi` | 16343.3 | 1a4c20de31, 2026-11-21 |
-| `speed/calls/djs-wasm` | 2072.4 | 1a4c20de31, 2026-11-21 |
-| `speed/calls/qjs-wasi` | 3905.1 | 1a4c20de31, 2026-11-21 |
-| `speed/foreach/djs-wasm` | 3592.8 | 1a4c20de31, 2026-11-21 |
-| `speed/foreach/qjs-wasi` | 5788.8 | 1a4c20de31, 2026-11-21 |
-| `speed/forof/djs-wasm` | 3471.4 | 1a4c20de31, 2026-11-21 |
-| `speed/forof/qjs-wasi` | 6953.7 | 1a4c20de31, 2026-11-21 |
-| `speed/higher-order/djs-wasm` | 3867.9 | 1a4c20de31, 2026-11-21 |
-| `speed/higher-order/qjs-wasi` | 4540.0 | 1a4c20de31, 2026-11-21 |
-| `speed/json-date/djs-wasm` | 784.8 | 1a4c20de31, 2026-11-21 |
-| `speed/json-date/qjs-wasi` | 1717.4 | 1a4c20de31, 2026-11-21 |
-| `speed/json/djs-wasm` | 1021.2 | 1a4c20de31, 2026-11-21 |
-| `speed/json/qjs-wasi` | 2028.4 | 1a4c20de31, 2026-11-21 |
-| `speed/load` | 3.8 | 1a4c20de31, 2026-11-21 |
-| `speed/prop1/djs-wasm` | 1509.5 | 1a4c20de31, 2026-11-21 |
-| `speed/prop1/qjs-wasi` | 5397.9 | 1a4c20de31, 2026-11-21 |
-| `speed/push-pop/djs-wasm` | 2874.1 | 1a4c20de31, 2026-11-21 |
-| `speed/push-pop/qjs-wasi` | 2874.9 | 1a4c20de31, 2026-11-21 |
-| `speed/strings/djs-wasm` | 1610.4 | 1a4c20de31, 2026-11-21 |
-| `speed/strings/qjs-wasi` | 5774.8 | 1a4c20de31, 2026-11-21 |
-| `speed/tight/djs-wasm` | 3921.6 | 1a4c20de31, 2026-11-21 |
-| `speed/tight/qjs-wasi` | 15335.4 | 1a4c20de31, 2026-11-21 |
-| `startup/instantiate-us` | 17.6 | 8643704466, 2026-11-21 |
-| `startup/load` | 3.7 | 8643704466, 2026-11-21 |
-| `startup/sandbox-run-us` | 72.2 | 8643704466, 2026-11-21 |
-| `startup/sandbox-us` | 55.5 | 8643704466, 2026-11-21 |
-| `startup/vm-new-us` | 2.6 | 8643704466, 2026-11-21 |
-| `wasm/base-coded` | 45014 | f8cb1e7924, 2026-11-21 |
-| `wasm/brotli` | 363126 | f8cb1e7924, 2026-11-21 |
-| `wasm/bytes` | 991808 | f8cb1e7924, 2026-11-21 |
-| `wasm/code` | 854050 | f8cb1e7924, 2026-11-21 |
-| `wasm/data` | 41133 | f8cb1e7924, 2026-11-21 |
-| `wasm/gzip` | 429419 | f8cb1e7924, 2026-11-21 |
-| `wasm/ops` | 69 | f8cb1e7924, 2026-11-21 |
-| `wire/decode-vs-json-objects` | 2.21 | 6738f3ebb5, 2026-11-21 |
-| `wire/decode-vs-json-string` | 2.86 | 6738f3ebb5, 2026-11-21 |
-| `wire/read-vs-json-objects` | 1.58 | 6738f3ebb5, 2026-11-21 |
+| `slim/base` | 133624 | 5cfd8dd8f3, 2026-11-21 |
+| `slim/bytes` | 867047 | 5cfd8dd8f3, 2026-11-21 |
+| `slim/gzip` | 364897 | 5cfd8dd8f3, 2026-11-21 |
+| `speed/arrays/djs-wasm` | 5228.5 | edd129067f, 2026-11-21 |
+| `speed/arrays/qjs-wasi` | 16345.8 | edd129067f, 2026-11-21 |
+| `speed/calls/djs-wasm` | 2069.1 | edd129067f, 2026-11-21 |
+| `speed/calls/qjs-wasi` | 3901.1 | edd129067f, 2026-11-21 |
+| `speed/foreach/djs-wasm` | 3587.2 | edd129067f, 2026-11-21 |
+| `speed/foreach/qjs-wasi` | 5781.2 | edd129067f, 2026-11-21 |
+| `speed/forof/djs-wasm` | 3466.9 | edd129067f, 2026-11-21 |
+| `speed/forof/qjs-wasi` | 6952.6 | edd129067f, 2026-11-21 |
+| `speed/higher-order/djs-wasm` | 3861.3 | edd129067f, 2026-11-21 |
+| `speed/higher-order/qjs-wasi` | 4536.6 | edd129067f, 2026-11-21 |
+| `speed/json-date/djs-wasm` | 783.3 | edd129067f, 2026-11-21 |
+| `speed/json-date/qjs-wasi` | 1710.4 | edd129067f, 2026-11-21 |
+| `speed/json/djs-wasm` | 1024.7 | edd129067f, 2026-11-21 |
+| `speed/json/qjs-wasi` | 2024.3 | edd129067f, 2026-11-21 |
+| `speed/load` | 3.7 | edd129067f, 2026-11-21 |
+| `speed/prop1/djs-wasm` | 1513.3 | edd129067f, 2026-11-21 |
+| `speed/prop1/qjs-wasi` | 5395.0 | edd129067f, 2026-11-21 |
+| `speed/push-pop/djs-wasm` | 2858.3 | edd129067f, 2026-11-21 |
+| `speed/push-pop/qjs-wasi` | 2865.6 | edd129067f, 2026-11-21 |
+| `speed/strings/djs-wasm` | 1612.3 | edd129067f, 2026-11-21 |
+| `speed/strings/qjs-wasi` | 5779.0 | edd129067f, 2026-11-21 |
+| `speed/tight/djs-wasm` | 3918.9 | edd129067f, 2026-11-21 |
+| `speed/tight/qjs-wasi` | 15330.6 | edd129067f, 2026-11-21 |
+| `startup/instantiate-us` | 22.4 | eff46ec6ce, 2026-11-21 |
+| `startup/load` | 3.3 | eff46ec6ce, 2026-11-21 |
+| `startup/sandbox-run-us` | 85.7 | eff46ec6ce, 2026-11-21 |
+| `startup/sandbox-us` | 62.2 | eff46ec6ce, 2026-11-21 |
+| `startup/vm-new-us` | 2.7 | eff46ec6ce, 2026-11-21 |
+| `wasm/base-coded` | 45030 | 5cfd8dd8f3, 2026-11-21 |
+| `wasm/brotli` | 364410 | 5cfd8dd8f3, 2026-11-21 |
+| `wasm/bytes` | 995304 | 5cfd8dd8f3, 2026-11-21 |
+| `wasm/code` | 857433 | 5cfd8dd8f3, 2026-11-21 |
+| `wasm/data` | 41205 | 5cfd8dd8f3, 2026-11-21 |
+| `wasm/gzip` | 430951 | 5cfd8dd8f3, 2026-11-21 |
+| `wasm/ops` | 69 | 5cfd8dd8f3, 2026-11-21 |
+| `wire/decode-vs-json-objects` | 2.16 | ab471c4906, 2026-11-21 |
+| `wire/decode-vs-json-string` | 2.81 | ab471c4906, 2026-11-21 |
+| `wire/read-vs-json-objects` | 1.52 | ab471c4906, 2026-11-21 |
 | `wire/read-vs-json-text` | 9.06 | 6738f3ebb5, 2026-11-21 |
 <!-- /gen -->

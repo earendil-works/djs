@@ -25,9 +25,9 @@ the module as the default:
 
 | import | module | for |
 | --- | --- | --- |
-| `@earendil-works/djs` | the shipped module: <!--n wasm/bytes mb-->1.0 MB<!--/n-->, <!--n wasm/gzip kb-->429 KB<!--/n--> with gzip | every host |
-| `@earendil-works/djs/slim` | the slim module: <!--n slim/bytes mb-->0.9 MB<!--/n-->, <!--n slim/gzip kb-->363 KB<!--/n--> with gzip | hosts that can do without typed arrays, BigInt and the other families of [the slim build](language.md#the-slim-build) |
-| `@earendil-works/djs/dump` | the dump module: <!--n dump/bytes mb-->1.9 MB<!--/n-->, <!--n dump/gzip kb-->774 KB<!--/n--> with gzip | hosts that write [dumps](#continuation-dumps): the shipped module plus the dumper |
+| `@earendil-works/djs` | the shipped module: <!--n wasm/bytes mb-->1.0 MB<!--/n-->, <!--n wasm/gzip kb-->431 KB<!--/n--> with gzip | every host |
+| `@earendil-works/djs/slim` | the slim module: <!--n slim/bytes mb-->0.9 MB<!--/n-->, <!--n slim/gzip kb-->365 KB<!--/n--> with gzip | hosts that can do without typed arrays, BigInt and the other families of [the slim build](language.md#the-slim-build) |
+| `@earendil-works/djs/dump` | the dump module: <!--n dump/bytes mb-->1.9 MB<!--/n-->, <!--n dump/gzip kb-->776 KB<!--/n--> with gzip | hosts that write [dumps](#continuation-dumps): the shipped module plus the dumper |
 | `@earendil-works/djs/dump-runtime` | none | the helpers a [dump](dumps.md#djs-what-the-loading-host-provides) needs in a host without djs |
 
 A host that persists runs usually imports the main entry point and gives its sandboxes
@@ -179,7 +179,7 @@ it: `Object.fromEntries(map)`, `date.toISOString()`.
 
 > **Trade-off.** Reading the VM's memory over serializing in the VM. Reading a value
 > takes less time than the VM alone needs to turn it into JSON, before the host has
-> parsed anything: <!--n wire/read-vs-json-objects .1-->1.6<!--/n--> times less for many small objects, <!--n wire/read-vs-json-text .0-->9<!--/n--> times less for text with
+> parsed anything: <!--n wire/read-vs-json-objects .1-->1.5<!--/n--> times less for many small objects, <!--n wire/read-vs-json-text .0-->9<!--/n--> times less for text with
 > non-ASCII characters, and a 1 MiB string reads at memory-copy speed. The cost: no sharing or identity crosses
 > the boundary, and what crosses is data, not live objects.
 

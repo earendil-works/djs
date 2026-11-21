@@ -99,7 +99,7 @@ What a host ships: the wasm module, and the JavaScript some builds need around i
 
 | engine | wasm | gzip | brotli | JS glue, gzip |
 | --- | ---: | ---: | ---: | ---: |
-| djs | 992 KB | 429 KB | 363 KB | none |
+| djs | 995 KB | 431 KB | 364 KB | none |
 | quickjs-wasi | 637 KB | 287 KB | 247 KB | 28 KB |
 | QuickJS | 966 KB | 332 KB | 262 KB | none |
 | QuickJS-NG | 1,087 KB | 371 KB | 295 KB | none |
@@ -107,8 +107,8 @@ What a host ships: the wasm module, and the JavaScript some builds need around i
 | quickjs-emscripten (NG) | 529 KB | 247 KB | 212 KB | 8 KB |
 | monty | 24,593 KB | 7,628 KB | 4,804 KB | 55 KB |
 
-Module bytes as shipped; gzip -9, brotli quality 11; measured at d0bc2eef16, 2026-11-21,
-load 3.1.
+Module bytes as shipped; gzip -9, brotli quality 11; measured at c81310b606, 2026-11-21;
+d0bc2eef16, 2026-11-21, load 3.1.
 <!-- /gen -->
 
 djs's module is the largest of the JavaScript engines: it carries the TypeScript front
