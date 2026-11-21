@@ -2041,6 +2041,10 @@ impl<'h> Exec<'h> {
             self.pc = next;
             return Ok(None);
         }
+        // The top three operands, read once: most arms start by reading them, and each
+        // read is the stack's address, an index and a load (25 bytes of wasm, 200 sites;
+        // D3471). An arm uses them until it first changes the stack.
+        let (t0, t1, t2) = (self.top(0), self.top(1), self.top(2));
         match op {
             // ---- constants ----
             Op::Undefined => self.push(Value::UNDEFINED),
@@ -2083,8 +2087,11 @@ impl<'h> Exec<'h> {
                 self.push(Value::object(a));
             }
             Op::ArrayPush => {
-                let v = self.pop();
-                let a = self.top(0).as_object().expect("array");
+                let v = {
+                    self.sp -= 1;
+                    t0
+                };
+                let a = t1.as_object().expect("array");
                 let len = self.heap.array_length(a);
                 if !self.heap.set_element_fast(a, len, v)? {
                     let k = self.heap.atom_from_index(len)?;
@@ -2092,7 +2099,7 @@ impl<'h> Exec<'h> {
                 }
             }
             Op::ArrayHole => {
-                let a = self.top(0).as_object().expect("array");
+                let a = t0.as_object().expect("array");
                 let len = self.heap.array_length(a);
                 let d = PropertyDescriptor {
                     value: Some(conv::number(len as f64 + 1.0)),
@@ -2111,33 +2118,36 @@ impl<'h> Exec<'h> {
                 self.sp -= 1;
             }
             Op::Dup => {
-                let v = self.top(0);
+                let v = t0;
                 self.push(v);
             }
             Op::Dup2 => {
-                let (a, b) = (self.top(1), self.top(0));
+                let (a, b) = (t1, t0);
                 self.push(a);
                 self.push(b);
             }
             Op::Swap => {
-                let (a, b) = (self.top(1), self.top(0));
+                let (a, b) = (t1, t0);
                 self.set(self.sp - 2, b);
                 self.set(self.sp - 1, a);
             }
             Op::Nip => {
-                let b = self.pop();
+                let b = {
+                    self.sp -= 1;
+                    t0
+                };
                 self.set(self.sp - 1, b);
             }
             Op::Insert2 => {
                 // a b -> b a b
-                let (a, b) = (self.top(1), self.top(0));
+                let (a, b) = (t1, t0);
                 self.set(self.sp - 2, b);
                 self.set(self.sp - 1, a);
                 self.push(b);
             }
             Op::Insert3 => {
                 // a b c -> c a b c
-                let (a, b, c) = (self.top(2), self.top(1), self.top(0));
+                let (a, b, c) = (t2, t1, t0);
                 self.set(self.sp - 3, c);
                 self.set(self.sp - 2, a);
                 self.set(self.sp - 1, b);
@@ -2145,7 +2155,7 @@ impl<'h> Exec<'h> {
             }
             Op::Insert4 => {
                 // a b c d -> d a b c d
-                let (a, b, c, d) = (self.top(3), self.top(2), self.top(1), self.top(0));
+                let (a, b, c, d) = (self.top(3), t2, t1, t0);
                 self.set(self.sp - 4, d);
                 self.set(self.sp - 3, a);
                 self.set(self.sp - 2, b);
@@ -2154,14 +2164,14 @@ impl<'h> Exec<'h> {
             }
             Op::Rot3L => {
                 // x a b -> a b x
-                let (x, a, b) = (self.top(2), self.top(1), self.top(0));
+                let (x, a, b) = (t2, t1, t0);
                 self.set(self.sp - 3, a);
                 self.set(self.sp - 2, b);
                 self.set(self.sp - 1, x);
             }
             Op::Rot3R => {
                 // a b x -> x a b
-                let (a, b, x) = (self.top(2), self.top(1), self.top(0));
+                let (a, b, x) = (t2, t1, t0);
                 self.set(self.sp - 3, x);
                 self.set(self.sp - 2, a);
                 self.set(self.sp - 1, b);
@@ -2175,7 +2185,10 @@ impl<'h> Exec<'h> {
             Op::Poke => {
                 // x a1 .. an v -> v a1 .. an
                 let n = u32::from(self.heap.arena().bytes()[(self.code + self.pc + 1) as usize]);
-                let v = self.pop();
+                let v = {
+                    self.sp -= 1;
+                    t0
+                };
                 self.set(self.sp - 1 - n, v);
             }
 
@@ -2185,11 +2198,14 @@ impl<'h> Exec<'h> {
                 self.push(v);
             }
             Op::PutLoc => {
-                let v = self.pop();
+                let v = {
+                    self.sp -= 1;
+                    t0
+                };
                 self.set(self.lp + self.imm_u16(1), v);
             }
             Op::SetLoc => {
-                let v = self.top(0);
+                let v = t0;
                 self.set(self.lp + self.imm_u16(1), v);
             }
             Op::GetLocChk => {
@@ -2237,11 +2253,14 @@ impl<'h> Exec<'h> {
                 self.push(v);
             }
             Op::PutArg => {
-                let v = self.pop();
+                let v = {
+                    self.sp -= 1;
+                    t0
+                };
                 self.set(self.bp + 2 + self.imm_u16(1), v);
             }
             Op::SetArg => {
-                let v = self.top(0);
+                let v = t0;
                 self.set(self.bp + 2 + self.imm_u16(1), v);
             }
             Op::GetBox | Op::GetBoxChk => {
@@ -2272,7 +2291,7 @@ impl<'h> Exec<'h> {
                 self.set(self.lp + self.imm_u16(1), b);
             }
             Op::NewBoxInit => {
-                let v = self.top(0);
+                let v = t0;
                 let b = self.new_box(v)?;
                 self.sp -= 1;
                 self.set(self.lp + self.imm_u16(1), b);
@@ -2319,7 +2338,10 @@ impl<'h> Exec<'h> {
                         String::from("bad bytecode: put_builtin out of range"),
                     ));
                 }
-                let v = self.pop();
+                let v = {
+                    self.sp -= 1;
+                    t0
+                };
                 self.heap.value_array_set(t, i, v);
             }
             Op::PutCap | Op::SetCap | Op::PutCapChk | Op::SetCapChk => {
@@ -2372,7 +2394,7 @@ impl<'h> Exec<'h> {
             Op::PutGlobal => {
                 let key = self.imm_atom();
                 let ic = self.imm_u16(5);
-                let v = self.top(0);
+                let v = t0;
                 if self.ic_global_put(key, ic, v) {
                     self.sp -= 1;
                     self.pc = next;
@@ -2413,7 +2435,10 @@ impl<'h> Exec<'h> {
             }
             Op::InitGlobalLex => {
                 let key = self.imm_atom();
-                let v = self.pop();
+                let v = {
+                    self.sp -= 1;
+                    t0
+                };
                 realm::set_global_lexical(self.heap, key, v)?;
             }
             Op::GlobalDecls => {
@@ -2449,7 +2474,7 @@ impl<'h> Exec<'h> {
             Op::GetField => {
                 let key = self.imm_atom();
                 let ic = self.imm_u16(5);
-                let o = self.top(0);
+                let o = t0;
                 self.pc = next;
                 let got = self.lookup_ic(o, key, ic)?;
                 return self.get_property_got(o, key, got);
@@ -2457,7 +2482,7 @@ impl<'h> Exec<'h> {
             Op::GetMethod => {
                 let key = self.imm_atom();
                 let ic = self.imm_u16(5);
-                let o = self.top(0);
+                let o = t0;
                 match self.lookup_ic(o, key, ic)? {
                     Got::Value(f) => {
                         self.set(self.sp - 1, f);
@@ -2482,7 +2507,7 @@ impl<'h> Exec<'h> {
             Op::PutField => {
                 let key = self.imm_atom();
                 let ic = self.imm_u16(5);
-                let (o, v) = (self.top(1), self.top(0));
+                let (o, v) = (t1, t0);
                 let Some(obj) = o.as_object() else {
                     return self.put_on_primitive(o, key, v, 2, next);
                 };
@@ -2505,7 +2530,7 @@ impl<'h> Exec<'h> {
                 return self.set_property(obj, key, v, 2);
             }
             Op::GetElem => {
-                let (o, k) = (self.top(1), self.top(0));
+                let (o, k) = (t1, t0);
                 if let (Some(obj), Some(i)) = (o.as_object(), k.as_int())
                     && i >= 0
                     && let Some(v) = self.heap.get_element_fast(obj, i as u32)
@@ -2522,14 +2547,14 @@ impl<'h> Exec<'h> {
             // Object keys were converted by `primitive_operands`.
             Op::ToPropKey => {}
             Op::GetElem2 => {
-                let (o, k) = (self.top(1), self.top(0));
+                let (o, k) = (t1, t0);
                 let key = self.property_key(o, k)?;
                 self.push(Value::UNDEFINED);
                 self.pc = next;
                 return self.get_property(o, key);
             }
             Op::GetElemMethod => {
-                let (o, k) = (self.top(1), self.top(0));
+                let (o, k) = (t1, t0);
                 let key = self.property_key(o, k)?;
                 match self.lookup(o, key)? {
                     Got::Value(f) => {
@@ -2552,7 +2577,7 @@ impl<'h> Exec<'h> {
                 }
             }
             Op::PutElem => {
-                let (o, k, v) = (self.top(2), self.top(1), self.top(0));
+                let (o, k, v) = (t2, t1, t0);
                 let Some(obj) = o.as_object() else {
                     let key = conv::to_property_key(self.heap, k)?;
                     return self.put_on_primitive(o, key, v, 3, next);
@@ -2574,14 +2599,17 @@ impl<'h> Exec<'h> {
             Op::DefineField => {
                 let key = self.imm_atom();
                 let ic = self.imm_u16(5);
-                let v = self.pop();
-                let o = self.top(0).as_object().expect("object literal");
+                let v = {
+                    self.sp -= 1;
+                    t0
+                };
+                let o = t1.as_object().expect("object literal");
                 let old = self.heap.receiver_shape(o);
                 self.heap.create_data_property(o, key, v)?;
                 self.ic_add_fill(o, key, old, false, ic);
             }
             Op::In => {
-                let (k, o) = (self.top(1), self.top(0));
+                let (k, o) = (t1, t0);
                 let Some(obj) = o.as_object() else {
                     return type_error("invalid 'in' operand");
                 };
@@ -2605,19 +2633,25 @@ impl<'h> Exec<'h> {
             }
             Op::DefineMethod | Op::DefineGetter | Op::DefineSetter => {
                 let key = self.imm_atom();
-                let f = self.pop();
-                let o = self.top(0).as_object().expect("object literal");
+                let f = {
+                    self.sp -= 1;
+                    t0
+                };
+                let o = t1.as_object().expect("object literal");
                 self.define_literal_member(o, key, f, op)?;
             }
             Op::DefineMethodElem | Op::DefineGetterElem | Op::DefineSetterElem => {
-                let (o, k, f) = (self.top(2), self.top(1), self.top(0));
+                let (o, k, f) = (t2, t1, t0);
                 let key = self.property_key(o, k)?;
                 let obj = o.as_object().expect("object literal");
                 self.define_literal_member(obj, key, f, op)?;
                 self.sp -= 2;
             }
             Op::ForInStart => {
-                let v = self.pop();
+                let v = {
+                    self.sp -= 1;
+                    t0
+                };
                 let it = match v.as_object() {
                     // Traps decide the keys: a Record that %ForInStep walks.
                     Some(o) if self.chain_has_proxy(o) => self.for_in_proxy_start(o)?,
@@ -2627,7 +2661,7 @@ impl<'h> Exec<'h> {
             }
             Op::ForInNext => {
                 // `it -> it key done`
-                let it = self.top(0);
+                let it = t0;
                 if let Some(rec) = it.as_object() {
                     return self.for_in_proxy_next(rec, next);
                 }
@@ -2684,12 +2718,12 @@ impl<'h> Exec<'h> {
                 return self.call(base, 0, Continuation::PushResult, next);
             }
             Op::IterCheckObject => {
-                if self.top(0).as_object().is_none() {
+                if t0.as_object().is_none() {
                     return type_error("iterator must return an object");
                 }
             }
             Op::ArraySpread => {
-                let (a, src) = (self.top(1), self.top(0));
+                let (a, src) = (t1, t0);
                 let arr = a.as_object().expect("array literal");
                 if !self.array_spread(arr, src)? {
                     // The iterator protocol, in the builtin language (builtins/spread.ts):
@@ -2710,7 +2744,7 @@ impl<'h> Exec<'h> {
                 self.sp -= 1;
             }
             Op::DefineElem => {
-                let (o, k, v) = (self.top(2), self.top(1), self.top(0));
+                let (o, k, v) = (t2, t1, t0);
                 let key = self.property_key(o, k)?;
                 let obj = o.as_object().expect("object literal");
                 self.heap.create_data_property(obj, key, v)?;
@@ -2724,7 +2758,7 @@ impl<'h> Exec<'h> {
                         crate::text::cat!("not supported yet: copy_data_props ", mode),
                     ));
                 }
-                let (o, src) = (self.top(1), self.top(0));
+                let (o, src) = (t1, t0);
                 if !self.copy_data_props(o.as_object().expect("object literal"), src)? {
                     // Getters run user code: in the builtin language (builtins/spread.ts),
                     // `o src` becomes `%CopyDataProperties undefined o src`, pushing o.
@@ -2744,7 +2778,7 @@ impl<'h> Exec<'h> {
                 self.sp -= 1;
             }
             Op::Delete => {
-                let (o, k) = (self.top(1), self.top(0));
+                let (o, k) = (t1, t0);
                 if let Some(p) = o.as_object().filter(|&p| self.heap.is_proxy(p)) {
                     let key = self.property_key(o, k)?;
                     let k = self.heap.atom_to_value(key)?;
@@ -2766,8 +2800,11 @@ impl<'h> Exec<'h> {
                 return self.construct(argc, next);
             }
             Op::SetProto => {
-                let v = self.pop();
-                let o = self.top(0).as_object().expect("object literal");
+                let v = {
+                    self.sp -= 1;
+                    t0
+                };
+                let o = t1.as_object().expect("object literal");
                 if v.is_null() || v.as_object().is_some() {
                     // A fresh literal is extensible and cannot be on v's chain.
                     self.heap.set_prototype_of(o, v.as_object());
@@ -2775,20 +2812,20 @@ impl<'h> Exec<'h> {
             }
             Op::SetFunctionName => {
                 let prefix = self.heap.arena().bytes()[(self.code + self.pc + 1) as usize];
-                let (k, f) = (self.top(1), self.top(0));
+                let (k, f) = (t1, t0);
                 let key = self.property_key(f, k)?;
                 self.set_function_name(f, key, prefix)?;
             }
             Op::CallSpread => {
                 // `f this args -> r`
-                let args = self.top(0);
+                let args = t0;
                 let argc = self.spread_args(args)?;
                 let base = self.sp - 2 - argc;
                 return self.call(base, argc, Continuation::PushResult, next);
             }
             Op::ConstructSpread => {
                 // `f args -> r`
-                let args = self.top(0);
+                let args = t0;
                 let argc = self.spread_args(args)?;
                 return self.construct(argc, next);
             }
@@ -2836,14 +2873,17 @@ impl<'h> Exec<'h> {
             | Op::GetBuiltinCallee8
             | Op::Jump8 => return self.exec_short(op, next),
             Op::RequireObjectCoercible => {
-                if self.top(0).is_nullish() {
+                if t0.is_nullish() {
                     return type_error("cannot convert to object");
                 }
             }
 
             // ---- operators ----
             Op::Neg => {
-                let a = self.pop();
+                let a = {
+                    self.sp -= 1;
+                    t0
+                };
                 let v = match a.as_int() {
                     Some(i) if i != 0 && i != i32::MIN => Value::int(-i),
                     _ => Value::number(-conv::to_number(self.heap, a)?),
@@ -2852,30 +2892,45 @@ impl<'h> Exec<'h> {
             }
             Op::Plus | Op::ToNumeric => {
                 // A Number stays as it is (both forms are Numbers).
-                if !self.top(0).is_number() {
-                    let a = self.pop();
+                if !t0.is_number() {
+                    let a = {
+                        self.sp -= 1;
+                        t0
+                    };
                     let n = conv::to_number(self.heap, a)?;
                     self.push(conv::number(n));
                 }
             }
             Op::BNot => {
-                let a = self.pop();
+                let a = {
+                    self.sp -= 1;
+                    t0
+                };
                 let n = conv::to_int32(conv::to_number(self.heap, a)?);
                 self.push(Value::int(!n));
             }
             Op::Not => {
-                let a = self.pop();
+                let a = {
+                    self.sp -= 1;
+                    t0
+                };
                 let b = conv::to_boolean(self.heap, a);
                 self.push(Value::bool(!b));
             }
             Op::Typeof => {
-                let a = self.pop();
+                let a = {
+                    self.sp -= 1;
+                    t0
+                };
                 let s = self.heap.atom_string(conv::typeof_atom(self.heap, a))?;
                 self.push(Value::string(s));
             }
             Op::ToString | Op::Concat => self.concat_op(op == Op::Concat)?,
             Op::Inc | Op::Dec => {
-                let a = self.pop();
+                let a = {
+                    self.sp -= 1;
+                    t0
+                };
                 let d = if op == Op::Inc { 1 } else { -1 };
                 let v = match a.as_int().and_then(|i| i.checked_add(d)) {
                     Some(i) => Value::int(i),
@@ -2884,7 +2939,7 @@ impl<'h> Exec<'h> {
                 self.push(v);
             }
             Op::Add => {
-                let (a, b) = (self.top(1), self.top(0));
+                let (a, b) = (t1, t0);
                 let v = conv::add(self.heap, a, b)?;
                 self.sp -= 2;
                 self.push(v);
@@ -2912,19 +2967,25 @@ impl<'h> Exec<'h> {
             Op::Le => self.compare(true, true)?,
             Op::Ge => self.compare(false, true)?,
             Op::Eq | Op::Ne => {
-                let (a, b) = (self.top(1), self.top(0));
+                let (a, b) = (t1, t0);
                 let r = conv::loose_equals(self.heap, a, b)?;
                 self.sp -= 2;
                 self.push(Value::bool(r == (op == Op::Eq)));
             }
             Op::StrictEq | Op::StrictNe => {
-                let b = self.pop();
-                let a = self.pop();
+                let b = {
+                    self.sp -= 1;
+                    t0
+                };
+                let a = {
+                    self.sp -= 1;
+                    t1
+                };
                 let r = conv::strict_equals(self.heap, a, b);
                 self.push(Value::bool(r == (op == Op::StrictEq)));
             }
             Op::Instanceof => {
-                let (v, f) = (self.top(1), self.top(0));
+                let (v, f) = (t1, t0);
                 let g = realm::installed_intrinsic(self.heap, intrinsics::INSTANCEOF_OPERATOR);
                 let r = if g.is_undefined() || !self.instanceof_needs_builtin(f) {
                     self.instance_of(v, f, !g.is_undefined())?
@@ -2949,11 +3010,17 @@ impl<'h> Exec<'h> {
                 }
             }
             Op::IsNullish => {
-                let a = self.pop();
+                let a = {
+                    self.sp -= 1;
+                    t0
+                };
                 self.push(Value::bool(a.is_nullish()));
             }
             Op::IsUndefined => {
-                let a = self.pop();
+                let a = {
+                    self.sp -= 1;
+                    t0
+                };
                 self.push(Value::bool(a.is_undefined()));
             }
             // ---- control flow ----
@@ -2965,7 +3032,10 @@ impl<'h> Exec<'h> {
                 return Ok(None);
             }
             Op::JumpIfFalse | Op::JumpIfTrue => {
-                let v = self.pop();
+                let v = {
+                    self.sp -= 1;
+                    t0
+                };
                 let t = conv::to_boolean(self.heap, v);
                 if t == (op == Op::JumpIfTrue) {
                     self.pc = self.jump_target(next);
@@ -2978,7 +3048,10 @@ impl<'h> Exec<'h> {
                 return Ok(None);
             }
             Op::JumpIfFalse8 | Op::JumpIfTrue8 => {
-                let v = self.pop();
+                let v = {
+                    self.sp -= 1;
+                    t0
+                };
                 let t = conv::to_boolean(self.heap, v);
                 let offset = self.byte(self.pc + 1) as i8;
                 self.pc = next;
@@ -2991,11 +3064,17 @@ impl<'h> Exec<'h> {
                 return Ok(None);
             }
             Op::Throw => {
-                let v = self.pop();
+                let v = {
+                    self.sp -= 1;
+                    t0
+                };
                 return Err(Fault::throw(v));
             }
             Op::Return => {
-                let v = self.pop();
+                let v = {
+                    self.sp -= 1;
+                    t0
+                };
                 return self.do_return(v);
             }
             Op::ReturnUndef => return self.do_return(Value::UNDEFINED),
