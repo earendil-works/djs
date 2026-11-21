@@ -268,25 +268,23 @@ fn lex<const E: u8>(b: &[u8], pos: &mut usize) -> Result<Token, Fail> {
     Ok(Token { tok, start, end: p })
 }
 
-/// `true`, `false` or `null` for the word `start..end`.
+/// `true`, `false` or `null` for the word `start..end` (ASCII letters and digits): its
+/// bytes as one number, not a copy compared three times (0260: smaller).
 fn word(b: &[u8], e: u8, start: usize, end: usize) -> Option<Tok> {
-    let mut buf = [0u8; 5];
-    let n = end - start;
-    if n > 5 {
+    if end - start > 5 {
         return None;
     }
-    for (k, slot) in buf[..n].iter_mut().enumerate() {
-        *slot = if e == UTF16 {
-            peek::<UTF16>(b, start + k) as u8
-        } else {
-            b[start + k]
-        };
-    }
-    match &buf[..n] {
-        b"true" => Some(Tok::True),
-        b"false" => Some(Tok::False),
-        b"null" => Some(Tok::Null),
-        _ => None,
+    let w = if e == UTF16 { 2 } else { 1 };
+    let key = (start..end).fold(0u64, |k, i| k << 8 | b[w * i] as u64);
+    let is = |t: &[u8]| t.iter().fold(0u64, |k, &c| k << 8 | c as u64) == key;
+    if is(b"true") {
+        Some(Tok::True)
+    } else if is(b"false") {
+        Some(Tok::False)
+    } else if is(b"null") {
+        Some(Tok::Null)
+    } else {
+        None
     }
 }
 
