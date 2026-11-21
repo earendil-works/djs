@@ -13216,6 +13216,14 @@ size ratchet by checking a two-byte range's width on its high bytes (not a units
 iterator) and by `str_array_index` reading its first unit with `char_code_at` again
 (D3401's view read; `existing_key_atom` handles flat keys first since D3402): net
 −29 B.
+Follow-up (pstart's pi measurement): pi's output case (12 × console.log of a 1 MiB repeat
+string) kept 8,768 KiB of wasm memory against 7,488 at a0d85b06: not the arena but Rust
+lists of leaves, which wasm places as page runs of their own past 128 KB: the budget walk
+listed up to its 16K leaves before giving up, and `flatten` listed all 65K leaves of the
+rope (12-byte entries since D3400, 8 before). Now the budget walk only counts (the leaves
+are listed only when they are few), and `flatten` and append buffers write a rope 64K units
+at a time (`write_all`, a list of a few thousand leaves at most). That case: 5,120 KiB;
+tool-heavy 1,024, a fresh start 576; `[s].join(' ')` 2.2M → 2.0M instructions. Size −15 B.
 
 ## D3440: test262 under GC stress is a full-only gate leg
 date: 2026-11-21 · by: pgc · issue: 0273

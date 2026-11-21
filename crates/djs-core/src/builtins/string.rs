@@ -609,7 +609,7 @@ mod tests {
         assert_eq!(h.str_to_string(sub), "x".repeat(10));
         // Every leaf of the walk the second time: the flat copy.
         let mut leaves = alloc::vec::Vec::new();
-        assert!(h.collect_range(r, 0, n, 1, &mut leaves));
+        assert!(h.collect_range(r, 0, n, 1, Some(&mut leaves)));
         assert_eq!(leaves.len(), 1);
         // Two big pieces: copied straight from them, the rope stays as it is.
         let big = h.alloc_latin1(&[b'y'; 4000]).unwrap();

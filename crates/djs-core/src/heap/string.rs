@@ -616,9 +616,10 @@ impl Heap {
                 // a chain of one-character concatenations) is flattened in place once
                 // instead (D3406): walking its leaves at every join or substring cost
                 // more than copying it, and the flat copy serves the next one.
-                let mark = list.len();
-                if !self.collect_range(s, a, b, (b - a) / 64 + 8, &mut list) {
-                    list.truncate(mark);
+                // (Counted first, so that such a rope's leaves are never listed.)
+                if self.collect_range(s, a, b, (b - a) / 64 + 8, None) {
+                    self.collect_range(s, a, b, u32::MAX, Some(&mut list));
+                } else {
                     let f = self.flatten(s)?;
                     list.push_out((f.0, a, b - a));
                 }
@@ -1006,24 +1007,38 @@ impl Heap {
         n
     }
 
-    fn collect_leaves(&self, s: Str, out: &mut Vec<(u32, u32, u32)>) {
-        self.collect_range(s, 0, self.str_len(s), u32::MAX, out);
+    /// Writes the units of `s` into the flat cell `dst` from unit `at` on (as
+    /// `write_leaves`) and returns where they end: 64K units at a time, so that the list
+    /// of leaves stays small (D3406: a repeat rope has tens of thousands, and their list
+    /// was a page run of its own in wasm). The leaves must lie below `dst`.
+    fn write_all(&mut self, s: Str, dst: u32, at: u32) -> u32 {
+        let len = self.str_len(s);
+        let mut leaves = Vec::new();
+        for start in (0..len).step_by(1 << 16) {
+            leaves.clear();
+            let end = len.min(start + (1 << 16));
+            self.collect_range(s, start, end, u32::MAX, Some(&mut leaves));
+            self.write_leaves(&leaves, dst, at + start);
+        }
+        at + len
     }
 
     /// The leaves of `s` that hold its units `[a, b)`, as `(cell, first unit, units)` in
-    /// order, appended to `out`: subtrees outside the range are not entered. False (with
-    /// `out` partly filled) once it found more than `budget` leaves.
+    /// order, appended to `out` (only counted without one): subtrees outside the range are
+    /// not entered. False once it found more than `budget` leaves.
     pub(crate) fn collect_range(
         &self,
         s: Str,
         a: u32,
         b: u32,
         budget: u32,
-        out: &mut Vec<(u32, u32, u32)>,
+        mut out: Option<&mut Vec<(u32, u32, u32)>>,
     ) -> bool {
         if self.cell_kind(s.0) != CellKind::Rope {
             // A flat cell or a slice (most pieces): no walk.
-            out.push_out((s.0, a, b - a));
+            if let Some(out) = out {
+                out.push_out((s.0, a, b - a));
+            }
             return true;
         }
         let mut stack = alloc::vec![(s.0, self.str_len(s))];
@@ -1043,9 +1058,11 @@ impl Heap {
                     if found > budget {
                         return false;
                     }
-                    let from = a.saturating_sub(pos);
-                    let to = len.min(b - pos);
-                    out.push_out((off, from, to - from));
+                    if let Some(out) = out.as_deref_mut() {
+                        let from = a.saturating_sub(pos);
+                        let to = len.min(b - pos);
+                        out.push_out((off, from, to - from));
+                    }
                     pos += len;
                 }
             }
@@ -1209,10 +1226,8 @@ impl Heap {
             Err(HeapError::OutOfMemory) => self.alloc_flat(len, two_byte)?,
             Err(e) => return Err(e),
         };
-        let mut leaves = Vec::new();
-        self.collect_leaves(a, &mut leaves);
-        self.collect_leaves(b, &mut leaves);
-        self.write_leaves(&leaves, buf, 0);
+        let at = self.write_all(a, buf, 0);
+        self.write_all(b, buf, at);
         self.arena_mut().set(buf, Str8::LEN, len);
         self.set_cell_flags(buf, flags::STR_APPEND_BUF);
         self.new_append_rope(buf, len)
@@ -1258,10 +1273,8 @@ impl Heap {
                 buf
             }
             _ => {
-                let mut leaves = Vec::new();
-                self.collect_leaves(s, &mut leaves);
                 let dst = self.alloc_flat(len, two_byte)?;
-                self.write_leaves(&leaves, dst, 0);
+                self.write_all(s, dst, 0);
                 dst
             }
         };
