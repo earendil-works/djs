@@ -291,13 +291,20 @@ fn u32_at(w: &[u8], i: usize) -> u32 {
     u32::from_le_bytes([w[i], w[i + 1], w[i + 2], w[i + 3]])
 }
 
-/// The instruction at `ip` and the 7 bytes after it, or `None` at the very end of the
-/// arena (the caller declines and the general path reads it).
+/// The instruction at `ip` and the 7 bytes after it. The frame's code must be
+/// [`fetchable`]: the read is the arena's (checked natively and in tests, a plain load
+/// in the shipped modules, D3100).
 #[inline(always)]
-fn word(b: &[u8], ip: u32) -> Option<u64> {
-    let o = ip as usize;
-    b.get(o..o + 8)
-        .map(|s| u64::from_le_bytes(s.try_into().unwrap()))
+fn word(b: &[u8], ip: u32) -> u64 {
+    u64::from_le_bytes(arena_read(b, ip as usize))
+}
+
+/// Whether every instruction of the code ending at `end` can be fetched as a [`word`]:
+/// the last one may be a single byte, so 7 more bytes must exist. False only for code
+/// within the last bytes of the arena (the general path runs it).
+#[inline(always)]
+fn fetchable(b: &[u8], end: u32) -> bool {
+    end as u64 + 7 <= b.len() as u64
 }
 
 /// The arena offset of slot `i` of the object (or box) at `cell` with `Object::SLOTS`'s
@@ -478,6 +485,16 @@ impl Exec<'_> {
     /// Runs instructions from `pc`, `step` included, until fuel runs out (`None`, the run
     /// loop stops there), the run stops (`Some`), or `hot_backedges` backward jumps or
     /// general-path instructions went by (`None`, for V8's tier-up).
+    ///
+    /// The loop does not check `pc` against the code's length per instruction (D3390).
+    /// It relies on what the stack checker enforces for every template
+    /// (`alloc_template_in`, the only place that makes one: the compiler's functions,
+    /// lazily compiled ones and the builtins alike; images hold templates made that
+    /// way): execution cannot fall off the end of the code, and every jump lands on an
+    /// instruction inside it. Whether the frame has code at all (a native frame has
+    /// none) and whether its last instruction can be fetched as a word is checked where
+    /// the frame changes: on entry, in the call arm and in the return arm. Debug builds
+    /// assert `pc < code_len` at every fetch.
     #[inline(never)]
     pub(super) fn run_hot(&mut self) -> Option<super::Status> {
         let mut budget = self.opts.hot_backedges;
@@ -501,7 +518,7 @@ impl Exec<'_> {
             let mut ip = code + self.pc;
             let mut sp = self.sp;
             let mut fuel = self.fuel;
-            let exit = {
+            let exit = 'run: {
                 let mut collect = self.opts.gc_stress || self.heap.gc_pending();
                 let mut b: &mut [u8] = self.heap.arena_mut().hot_bytes();
                 // Ends the slice for a leaf heap call (`$e`), then takes it back.
@@ -518,13 +535,17 @@ impl Exec<'_> {
                         vals + 8 * ($i)
                     };
                 }
+                // A native frame (no code), or code within the arena's last bytes: the
+                // general path.
+                if ip >= end || !fetchable(b, end) {
+                    break 'run Exit::General;
+                }
                 loop {
-                    if fuel <= 0 || ip >= end {
+                    if fuel <= 0 {
                         break Exit::General;
                     }
-                    let Some(w) = word(b, ip) else {
-                        break Exit::General;
-                    };
+                    debug_assert!(ip < end, "pc past the end of the code");
+                    let w = word(b, ip);
                     let sp0 = sp;
                     let mut op = w as u8;
                     // `heap_call!` for the arms of several opcodes: the opcode is read
@@ -658,7 +679,10 @@ impl Exec<'_> {
                             let n = argc.max(params);
                             let new_hp = base + 2 + n;
                             let new_lp = new_hp + HEADER;
-                            if flags & slow_call_flags != 0 || new_lp + locals + stack > cap {
+                            if flags & slow_call_flags != 0
+                                || new_lp + locals + stack > cap
+                                || !fetchable(b, FuncTemplate::DATA.at(t, 0) + code_len)
+                            {
                                 break Exit::Decline(op);
                             }
                             let info = &OPS[$op as usize];
@@ -1302,6 +1326,10 @@ impl Exec<'_> {
                             if collect {
                                 break Exit::Safepoint;
                             }
+                            // A native caller (`code_len` 0) is the general path's.
+                            if native || !fetchable(b, end) {
+                                break Exit::General;
+                            }
                         }
                         // The short forms (D2443), after the others and one arm
                         // each: in the wasm build, merged arms and ranges (a second
@@ -1406,5 +1434,19 @@ impl Exec<'_> {
             // `step` may have collected, grown the stack or changed the frame.
             load_frame!();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn fetchable_needs_a_whole_word_for_the_last_instruction() {
+        let b = [0u8; 16];
+        // The last instruction may be the single byte at `end - 1`: its word ends at
+        // `end + 7`.
+        assert!(super::fetchable(&b, 9));
+        assert!(!super::fetchable(&b, 10));
+        assert!(!super::fetchable(&b, u32::MAX));
+        assert_eq!(super::word(&b, 8), 0);
     }
 }
