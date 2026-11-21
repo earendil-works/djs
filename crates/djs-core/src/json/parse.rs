@@ -714,6 +714,14 @@ fn line_col(b: &[u8], e: u8, pos: usize) -> (u32, u32) {
     (line, col + 1)
 }
 
+/// `prefix`, `what` and a closing quote.
+fn quoted(prefix: &str, what: String) -> String {
+    let mut s = String::from(prefix);
+    s += &what;
+    s.push('\'');
+    s
+}
+
 impl Msg {
     fn text(self, b: &[u8], e: u8, start: usize, end: usize) -> String {
         let s = match self {
@@ -730,29 +738,19 @@ impl Msg {
             Msg::DataAtEnd => "unexpected data at the end",
             Msg::StackOverflow => "stack overflow",
             Msg::UnexpectedChar(None) => "Unexpected token '",
+            // The rest name a character or the token, quoted.
             Msg::UnexpectedChar(Some(c)) => {
-                let mut s = String::from("Unexpected token '");
                 // QuickJS prints the first UTF-8 byte, which decodes to U+FFFD.
                 let c = if c < 0x80 {
                     c as u8 as char
                 } else {
                     char::REPLACEMENT_CHARACTER
                 };
-                s.push(c);
-                s.push('\'');
-                return s;
+                return quoted("Unexpected token '", c.into());
             }
-            Msg::Expecting(c) => {
-                let mut s = String::from("expecting '");
-                s.push(c as char);
-                s.push('\'');
-                return s;
-            }
+            Msg::Expecting(c) => return quoted("expecting '", (c as char).into()),
             Msg::UnexpectedToken => {
-                let mut s = String::from("unexpected token: '");
-                s += &token_text(b, e, start, end);
-                s.push('\'');
-                return s;
+                return quoted("unexpected token: '", token_text(b, e, start, end));
             }
         };
         String::from(s)
