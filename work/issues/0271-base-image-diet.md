@@ -154,6 +154,26 @@ media, fanout, above); it needs D3140's step rounded down (pgc).
       margin. Too thin.
   Rows would be as in the -58.1 row of the table (idle 320; seq, inspect, loop, json and
   heavy -64; text and media 0; fanout +64 unless pgc's rounding lands).
+- (ii)'s costs off the frame-entry path, measured on a prototype (offpath-cost.patch: every
+  template gets an 8-byte trailer at the cell's end; the first IC fill reads IC_COUNT from it;
+  `template::child` reads a 0 from it and adds it to INFO's address, one load more than a
+  real trailer; `Heap::probe` and the atom lookup test a u16 flag on the index and pick the
+  bucket width, the flag never set). slope.py -n 1M -r 3, --wasm-sync-tier-up, load 20-30,
+  A/A within 0.8%:
+  | case | A | B | delta |
+  | --- | --: | --: | --: |
+  | closure creation (`const f = (x) => x + i` in the loop) | 2389 / 2375 | 2425 / 2431 | +1.5 / +2.4% |
+  | `in Math` (prefix-table probe) | 2186 / 2178 | 2204 / 2190 | +0.8 / +0.5% |
+  | `Object.hasOwn(Array.prototype, k)` | 3869 | 3866 | 0 |
+  | call, method (control) | 828, 1184 | 827, 1188 | -0.1, +0.3% |
+  Compile (cab.ts, wall, sequential and text bodies): +1.4%, +1.7% (the atom lookup's
+  width test on every identifier, plus 8 bytes more per template written).
+  So (ii) is not free either: ~2% on closure creation (fewer than 36 instructions per
+  closure; the measurement is an upper bound by one load) and ~1.5% on compile. The u16
+  index part costs about half a percent on prefix probes. An alternative with no read-path
+  cost does not exist for the template header: everything left after CAPTURES (into the
+  header's free u16) is read at frame entry (FLAGS, counts, CODE_LEN, CONSTS), by IC ops (IC),
+  or at closure creation (INFO, NAME, LENGTH).
 
 ## Follow-ups
 
