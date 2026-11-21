@@ -56,6 +56,7 @@ fn djs_engine_fixture_suite() {
         timeout: Duration::from_secs(60),
         memory_limit: Some(4 << 20),
         progress: false,
+        deadline: None,
     };
     let refs: Vec<_> = tests.iter().collect();
     let outcomes = runner::run_all(&engine, &suite, &refs, &opts);

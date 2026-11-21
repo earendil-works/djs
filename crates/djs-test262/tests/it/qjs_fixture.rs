@@ -86,6 +86,7 @@ fn fixture_suite_with_qjs() {
         timeout,
         memory_limit: None,
         progress: false,
+        deadline: None,
     };
     let (hang, rest): (Vec<_>, Vec<_>) = tests.iter().partition(|t| t.path == "fail/timeout.js");
     assert_eq!(hang.len(), 1);

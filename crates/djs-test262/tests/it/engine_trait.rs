@@ -56,6 +56,7 @@ fn opts() -> Options {
         timeout: Duration::from_secs(5),
         memory_limit: None,
         progress: false,
+        deadline: None,
     }
 }
 
@@ -99,4 +100,21 @@ fn engine_panics_fail_only_that_test() {
             Verdict::Fail("crash: engine panicked: engine bug".into())
         );
     }
+}
+
+#[test]
+fn nothing_starts_after_the_deadline() {
+    // D3440: tests not started by the deadline are marked as not run (no job made).
+    let (suite, tests) = fixture();
+    let rec = Recorder(Mutex::new(Vec::new()));
+    let refs: Vec<_> = tests.iter().collect();
+    let o = Options {
+        deadline: Some(std::time::Instant::now()),
+        ..opts()
+    };
+    let outcomes = runner::run_all(&rec, &suite, &refs, &o);
+    assert!(rec.0.into_inner().unwrap().is_empty());
+    assert!(outcomes.iter().all(|o| !o.ran));
+    let outcomes = runner::run_all(&Recorder(Mutex::new(Vec::new())), &suite, &refs, &opts());
+    assert!(outcomes.iter().all(|o| o.ran));
 }
