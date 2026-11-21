@@ -105,6 +105,8 @@ pub(super) struct Parser<'a, 'h> {
     /// Break/continue targets of `f` (they never cross functions).
     pub blocks: Vec<BlockEnv>,
     pub buf8: Vec<u8>,
+    /// The cooked units of a string literal, reused across literals.
+    buf16: Vec<u16>,
     pub atom_undefined: Atom,
     pub atom_this: Atom,
     pub atom_arguments: Atom,
@@ -145,7 +147,9 @@ pub(super) struct Parser<'a, 'h> {
     /// String constants of the whole unit: functions share them
     /// (strings are immutable, so sharing is invisible; the prelude repeats its error
     /// messages and keys across hundreds of functions, 0043).
-    pub str_pool: Vec<(Vec<u16>, crate::value::Str)>,
+    /// (Compared by their contents in the heap: a copy of each string's units here was an
+    /// allocation per literal, 0263.)
+    pub str_pool: Vec<crate::value::Str>,
     /// `str_pool` by the hash of the units: `(hash, index)`, hash 0 empty.
     pub str_table: Vec<(u32, u32)>,
     /// The TypeScript grammar is on (`CompileOptions::typescript`).
@@ -355,6 +359,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             max_depth,
             blocks: Vec::new(),
             buf8: Vec::new(),
+            buf16: Vec::new(),
             atom_undefined,
             atom_this,
             atom_arguments,
@@ -1036,8 +1041,8 @@ impl<'a, 'h> Parser<'a, 'h> {
         loop {
             match self.str_table[i] {
                 (0, _) => break,
-                (k, e) if k == h && self.str_pool[e as usize].0 == units => {
-                    return Ok(self.str_pool[e as usize].1);
+                (k, e) if k == h && self.heap_units_eq(self.str_pool[e as usize], units) => {
+                    return Ok(self.str_pool[e as usize]);
                 }
                 _ => {}
             }
@@ -1045,18 +1050,53 @@ impl<'a, 'h> Parser<'a, 'h> {
         }
         let s = self.alloc_units(units)?;
         self.str_table[i] = (h, self.str_pool.len() as u32);
-        self.str_pool.push_out((units.to_vec(), s));
+        self.str_pool.push_out(s);
         Ok(s)
+    }
+
+    /// Whether the flat heap string `s` has the code units `units`.
+    fn heap_units_eq(&self, s: crate::value::Str, units: &[u16]) -> bool {
+        use crate::heap::string::StrView;
+        match self.heap.str_view(s) {
+            Some(StrView::Latin1(b)) => {
+                b.len() == units.len() && b.iter().zip(units).all(|(&b, &u)| u16::from(b) == u)
+            }
+            Some(StrView::Utf16(b)) => {
+                b.len() == 2 * units.len()
+                    && b.as_chunks::<2>()
+                        .0
+                        .iter()
+                        .zip(units)
+                        .all(|(&p, &u)| u16::from_le_bytes(p) == u)
+            }
+            None => false,
+        }
     }
 
     /// A heap string from UTF-16 units (one byte per unit when they are Latin-1).
     pub fn alloc_units(&mut self, units: &[u16]) -> PResult<crate::value::Str> {
-        Ok(if units.iter().all(|&u| u <= 0xFF) {
-            let bytes: Vec<u8> = units.iter().map(|&u| u as u8).collect();
-            self.heap.alloc_latin1(&bytes)?
-        } else {
-            self.heap.alloc_utf16(units)?
-        })
+        // (`alloc_utf16` narrows Latin-1 units itself, without a copy in between.)
+        Ok(self.heap.alloc_utf16(units)?)
+    }
+
+    /// The constant index of the current `String` token's cooked value.
+    pub fn cooked_string_const(&mut self) -> PResult<u32> {
+        let mut units = core::mem::take(&mut self.buf16);
+        units.clear();
+        self.lx.cook_string(&self.tok, &mut units);
+        let idx = self.string_const(&units);
+        self.buf16 = units;
+        idx
+    }
+
+    /// The atom of the current `String` token's cooked value.
+    pub fn cooked_string_atom(&mut self) -> PResult<Atom> {
+        let mut units = core::mem::take(&mut self.buf16);
+        units.clear();
+        self.lx.cook_string(&self.tok, &mut units);
+        let a = self.atom_of_units(&units);
+        self.buf16 = units;
+        a
     }
 
     /// The cooked value of the current `String` token as UTF-16.
@@ -1088,12 +1128,7 @@ impl<'a, 'h> Parser<'a, 'h> {
 
     /// The atom of a string given as UTF-16 (property keys).
     pub fn atom_of_units(&mut self, units: &[u16]) -> PResult<Atom> {
-        let s = if units.iter().all(|&u| u <= 0xFF) {
-            let bytes: Vec<u8> = units.iter().map(|&u| u as u8).collect();
-            self.heap.alloc_latin1(&bytes)?
-        } else {
-            self.heap.alloc_utf16(units)?
-        };
+        let s = self.heap.alloc_utf16(units)?;
         Ok(self.heap.intern(s)?)
     }
 

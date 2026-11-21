@@ -1530,8 +1530,7 @@ impl Parser<'_, '_> {
                 Ok(Expr::Value)
             }
             TokenKind::String => {
-                let units = self.cooked_string();
-                let idx = self.string_const(&units)?;
+                let idx = self.cooked_string_const()?;
                 self.next()?;
                 self.code().push_const(idx);
                 Ok(Expr::Str { idx })
@@ -2164,8 +2163,7 @@ impl Parser<'_, '_> {
                 Ok(None)
             }
             TokenKind::String => {
-                let units = self.cooked_string();
-                let a = self.atom_of_units(&units)?;
+                let a = self.cooked_string_atom()?;
                 self.next()?;
                 Ok(Some(a))
             }
