@@ -13627,3 +13627,12 @@ Wasm instructions per op with `--wasm-sync-tier-up`, main → branch (QuickJS 20
 4.73k (4.89k), three levels 10.34k → 5.82k (6.13k), `new Promise(() => {})` 6.80k →
 6.62k (6.58k), `new F(i)` 2.79k → 2.64k (2.88k). Shipped 429,648 → 430,037 B gz ceiling
 (module 429,419 → 430,037, +618 over main's module), slim ceiling 363,609 → 363,953.
+
+## D3512: Object rest lands (D3491)
+date: 2026-11-21 · by: pidle · issue: 0280
+D3491's parked patch on main 2bea8a5a, from the owner's allowance (D3510):
+`%CopyDataPropertiesExcluding` is answered in Rust (`copy_data_props` with the excluded
+keys as existing atoms) unless a getter would run or a key is not a string; the builtin
+handles those. No opcode or tier-0 loop change. `const {id, ...rest} = o5`: 48.8k →
+13.3k wasm instructions with `--wasm-sync-tier-up` (QuickJS 2026 9.5k). Shipped ceiling
+430,037 → 430,436 B gz (+399), slim 363,953 → 364,419. Corpus case language/object-rest.js.

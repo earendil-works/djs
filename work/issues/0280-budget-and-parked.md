@@ -1,6 +1,6 @@
 # 0280: D020 budget +2 KB (owner); land the parked construct path and object rest
 
-status: in-progress
+status: done
 agent: pidle
 branch: issue/0280-budget-parked
 depends-on: 0270, 0278
@@ -58,6 +58,20 @@ anywhere, images, or the unsafe rules (AGENTS.md).
 
 ## Log
 
+2026-11-21 (pidle)
+- D3510 (owner's +2,048 B gz allowance): budget.py reads `budget_allowance_gzip` from
+  size.tsv and prints "budget 1.5x + 2,048"; TESTING.md "Size budget". Merged first
+  (46af2771).
+- The construct path (D3511): D3410's patch re-applied on main (conflicts in run.rs
+  `slow_call_flags` and `define_field`, interpreter.md); new ops moved after `lazy`;
+  hotcode.sh summary identical to main's but for `check_ctor` → `ctor_result`. Merged
+  (2bea8a5a): +618 B gz over the module, ceiling 430,037, slim 363,953.
+- Object rest (D3512): D3491's patch; 48.8k → 13.3k; +399 B gz, slim +466.
+- Measured with `--wasm-sync-tier-up` (opsins.py); tests: lib, e2e plain, active
+  test262, difftest plain/stress/plain-dumps --lazy on language/builtins/errors/codemode.
+
 ## Follow-ups
 
 ## Result
+Budget +2 KB (D3510) on main first; the construct path (D3511) and object rest (D3512)
+landed from it: together +1,017 B gz of the 2,048 (module 429,419 → 430,436).
