@@ -889,10 +889,12 @@ impl<'a, 'o> Parser<'a, 'o> {
             src,
             opts,
             pos: 0,
-            stack: Vec::new(),
-            keys: Vec::new(),
-            values: Vec::new(),
-            key_buf: Vec::new(),
+            // Room for a small document (a tool result): growing from empty reallocated
+            // each of them two or three times per parse (D3463).
+            stack: crate::buf::vec_with_capacity(8),
+            keys: crate::buf::vec_with_capacity(16),
+            values: crate::buf::vec_with_capacity(16),
+            key_buf: crate::buf::vec_with_capacity(32),
             key_cache: [(0, 0, Atom::NULL); KEY_CACHE],
             slices: None,
         }
