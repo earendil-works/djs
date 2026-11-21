@@ -1,6 +1,6 @@
 # 0271: A smaller base image: idle at QuickJS parity (320 KiB)
 
-status: open
+status: in-progress
 agent: pstart
 branch: issue/0271-base-image-diet
 depends-on: 0265

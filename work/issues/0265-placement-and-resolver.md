@@ -1,6 +1,6 @@
 # 0265: Allocator placement effects; the resolver's re-emit
 
-status: in-progress
+status: done
 agent: pstart
 branch: issue/0265-placement-resolver
 depends-on: 0263; part 2 after 0259 merges
@@ -23,9 +23,9 @@ decisions: D3360-D3369
    a debug-build check), and fewer passes over each instruction where cheap.
 
 ## Acceptance criteria
-- [ ] part 1: an explanation with counts; a change only if it helps time or memory without hurting the other (mem-perturb distributions, D2047/D2048)
-- [ ] part 2: compile instructions per body, identical bytecode (golden fixtures, lazy/eager equality)
-- [ ] size reported; gate green; decisions recorded
+- [x] part 1: an explanation with counts; a change only if it helps time or memory without hurting the other (mem-perturb distributions, D2047/D2048)
+- [x] part 2: compile instructions per body, identical bytecode (golden fixtures, lazy/eager equality)
+- [x] size reported; gate green; decisions recorded
 
 ## Notes
 - pcall (0259) is about to merge changes in resolve.rs: don't start part 2 before it's on
@@ -126,3 +126,15 @@ anywhere, images, or the unsafe rules (AGENTS.md).
 ## Follow-ups
 
 ## Result
+Part 1 (placement): media's +15-17% was code layout of one binary, not placement (D3360's
+log). Landed: D3360 (first instances drop the coded base), D3361 (compile bump zone,
+supersedes D3342), D3362/D3366 (dlmalloc's first segment has a floor, now 87 KiB), D3364
+(GC side tables behind the arena, supersedes D3363; strbuild +0.2 MiB traded), D3367 (gate
+leg `codemode memory`), the gate's size build = the shipped module (cold-unicode). Codemode
+rows −64 KiB each but heavy (idle 448 → 384). Dropped: D3363 v1, D3365 (join into the
+arena), page runs with a gap behind the arena, the dual-backend scratch.
+Part 2 (compile): D3368 (compile peak 66.9 → 58.7 KB: text's arena moves only below ~78 KB
+of room), D3369 (stack checker −2.4..−3.2% of a compile). Dropped: an unkeyed constant pool
+hash; folding the depth calculation into the emitter (kept the independent verifier).
+Follow-up if more compile speed is wanted: fewer passes per instruction (phase-1 P1 →
+Insn → peephole → re-emit → shorten → walk).
