@@ -30,7 +30,7 @@ use super::cells::{AtomTable, Roots, Symbol, ValueArray};
 use super::layout::Ref;
 use super::string::{BASE_HASH_KEY, StrView, hash_latin1_with, hash_units_with};
 use super::{CellKind, Heap, HeapError};
-use crate::value::{Str, Sym, Value};
+use crate::value::{Obj, Str, Sym, Value};
 
 pub(crate) const INT_BIT: u32 = 1 << 31;
 pub(crate) const SYM_BIT: u32 = 1 << 30;
@@ -741,24 +741,11 @@ impl Heap {
 
     #[inline(always)]
     fn intern_inner(&mut self, s: Str) -> Result<Atom, HeapError> {
-        if let Some(i) = self.str_array_index(s)
-            && let Some(a) = Atom::int(i)
-        {
+        if let Some(a) = self.existing_key_atom(s) {
             return Ok(a);
         }
-        // A string of the builtin prefix is most likely a base atom's own (a builtin's
-        // name, a constant of the prelude): its fixed hash is cached and its keyed one is
-        // not, so it looks among the base's atoms first.
         let s = self.resolve_str(s);
-        if s.0 < self.base_end()
-            && let Some(a) = self.find_base_atom(Needle::Str(s))
-        {
-            return Ok(a);
-        }
         let hash = self.str_hash(s);
-        if let Some(a) = self.find_string_atom(hash, Needle::Str(s)) {
-            return Ok(a);
-        }
         let mut flat = self.flatten(s)?;
         if flat.0 < self.base_end() {
             // The VM's own atoms are strings above the prefix, which cache their keyed
@@ -767,6 +754,95 @@ impl Heap {
         }
         self.str_hash(flat);
         self.add_string_atom(flat, hash)
+    }
+
+    /// The atom `intern(s)` would return if it needs no new one (D3402): an integer atom
+    /// for an array index, else the string atom interned already. `None`: `s` is not
+    /// interned, so no object has it as a key.
+    pub(crate) fn existing_key_atom(&mut self, s: Str) -> Option<Atom> {
+        // A flat one-byte key of the VM's own that is not an index (the usual `o[k]`): its
+        // bytes read once and compared as bytes, not through the general string equality.
+        if self.arena().get(s.0, super::cells::Header::KIND) == CellKind::Str8 as u8
+            && s.0 >= self.base_end()
+        {
+            let (len, data) = (self.str_len(s), s.0 + super::cells::Str8::DATA.offset);
+            if len == 0 || !self.arena().read::<u8>(data).is_ascii_digit() {
+                let hash = self.str_hash(s);
+                let b = self.arena().slice(data, len);
+                return self.find_string_atom(hash, Needle::Latin1(b));
+            }
+        }
+        if let Some(i) = self.str_array_index(s)
+            && let Some(a) = Atom::int(i)
+        {
+            return Some(a);
+        }
+        // A string of the builtin prefix is most likely a base atom's own (a builtin's
+        // name, a constant of the prelude): its fixed hash is cached and its keyed one is
+        // not, so it looks among the base's atoms first.
+        let s = self.resolve_str(s);
+        if s.0 < self.base_end()
+            && let Some(a) = self.find_base_atom(Needle::Str(s))
+        {
+            return Some(a);
+        }
+        let hash = self.str_hash(s);
+        self.find_string_atom(hash, Needle::Str(s))
+    }
+
+    /// `o[s]` for a string key `s` where reading it runs no code and allocates nothing
+    /// (D3402): the value of a data property on `o`'s chain, or `undefined` when no object
+    /// on it has the key. `None` declines (the caller takes the general path): an
+    /// accessor, a proxy on the chain, a BigInt typed array element.
+    // (Called from the interpreter's element paths, wired by 0268.)
+    #[allow(dead_code)]
+    pub(crate) fn string_key_get(&mut self, o: Obj, s: Str) -> Option<Value> {
+        let Some(key) = self.existing_key_atom(s) else {
+            // No atom: no object has the key (a typed array's numeric string keys that
+            // are not interned read as undefined too); only a proxy could answer.
+            return (!self.proxy_on_chain(o)).then_some(Value::UNDEFINED);
+        };
+        match self.lookup_property(o, key) {
+            super::Lookup::Found(_, super::Property::Data { value, .. }) if !value.is_hole() => {
+                Some(value)
+            }
+            super::Lookup::Absent => Some(Value::UNDEFINED),
+            _ => None,
+        }
+    }
+
+    /// `s in o` for a string key `s` without a proxy on the chain (D3402); `None` declines.
+    // (Called from the interpreter's element paths, wired by 0268.)
+    #[allow(dead_code)]
+    pub(crate) fn string_key_has(&mut self, o: Obj, s: Str) -> Option<bool> {
+        match self.existing_key_atom(s) {
+            Some(key) => self.has_property_or_proxy(o, key).ok(),
+            None => (!self.proxy_on_chain(o)).then_some(false),
+        }
+    }
+
+    /// `o[s] = v` for a string key `s` when that only replaces the value of an own
+    /// writable data property of `o` (D3402): true when stored, false (nothing changed)
+    /// otherwise, including a key that is not interned yet (an addition).
+    // (Called from the interpreter's element paths, wired by 0268.)
+    #[allow(dead_code)]
+    pub(crate) fn string_key_set(&mut self, o: Obj, s: Str, v: Value) -> bool {
+        match self.existing_key_atom(s) {
+            Some(key) => self.set_own_data_value(o, key, v),
+            None => false,
+        }
+    }
+
+    /// Whether a proxy is on the prototype chain of `o` (`o` included).
+    fn proxy_on_chain(&self, o: Obj) -> bool {
+        let mut c = Some(o);
+        while let Some(x) = c {
+            if self.object_class(x) == super::ObjectClass::Proxy {
+                return true;
+            }
+            c = self.get_prototype_of(x);
+        }
+        false
     }
 
     /// The string atom of `s` if it is interned already (never an integer atom).
@@ -1030,6 +1106,80 @@ impl Heap {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn string_key_access() {
+        // D3402: the leaf o[s] / s in o / o[s] = v against the general lookup.
+        use crate::heap::{PropFlags, PropertyDescriptor};
+        let mut h = Heap::new().unwrap();
+        let proto = h.new_object(None).unwrap();
+        let o = h.new_object(Some(proto)).unwrap();
+        let alpha = h.atom_str("alpha").unwrap();
+        let inherited = h.atom_str("inherited").unwrap();
+        let getter = h.atom_str("getter").unwrap();
+        h.create_data_property(o, alpha, Value::int(1)).unwrap();
+        h.create_data_property(proto, inherited, Value::int(2))
+            .unwrap();
+        let f = h.new_object(None).unwrap();
+        let d = PropertyDescriptor::accessor(Value::object(f), Value::UNDEFINED, PropFlags::ALL);
+        h.define_own_property(o, getter, &d).unwrap();
+        let ro = h.atom_str("ro").unwrap();
+        let d = PropertyDescriptor::data(Value::int(5), PropFlags::new(false, true, true));
+        h.define_own_property(o, ro, &d).unwrap();
+        // Fresh strings with an atom's content: a rope too.
+        let key = |h: &mut Heap, t: &str| h.alloc_str(t).unwrap();
+        let k = key(&mut h, "alpha");
+        assert_eq!(h.string_key_get(o, k), Some(Value::int(1)));
+        let k = key(&mut h, "inherited");
+        assert_eq!(h.string_key_get(o, k), Some(Value::int(2)));
+        let (a, b) = (key(&mut h, "inheri"), key(&mut h, "ted"));
+        let r = h.concat(a, b).unwrap();
+        assert_eq!(h.string_key_get(o, r), Some(Value::int(2)));
+        let k = key(&mut h, "getter");
+        assert_eq!(h.string_key_get(o, k), None, "an accessor declines");
+        let k = key(&mut h, "absent-key");
+        assert_eq!(h.string_key_get(o, k), Some(Value::UNDEFINED));
+        assert_eq!(h.string_key_has(o, k), Some(false));
+        assert!(
+            !h.string_key_set(o, k, Value::int(3)),
+            "an addition declines"
+        );
+        assert!(h.existing_key_atom(k).is_none(), "nothing was interned");
+        let k = key(&mut h, "alpha");
+        assert_eq!(h.string_key_has(o, k), Some(true));
+        assert!(h.string_key_set(o, k, Value::int(7)));
+        assert_eq!(
+            h.get_own_property(o, alpha).unwrap().value(),
+            Some(Value::int(7))
+        );
+        let k = key(&mut h, "inherited");
+        assert_eq!(h.string_key_has(o, k), Some(true));
+        assert!(!h.string_key_set(o, k, Value::int(3)), "not own: declines");
+        let k = key(&mut h, "ro");
+        assert!(
+            !h.string_key_set(o, k, Value::int(3)),
+            "read-only: declines"
+        );
+        // Index strings are integer atoms.
+        let arr = h.new_array(None, 2).unwrap();
+        h.set_element_fast(arr, 0, Value::int(9)).unwrap();
+        let k = key(&mut h, "0");
+        assert_eq!(h.string_key_get(arr, k), Some(Value::int(9)));
+        let k = key(&mut h, "length");
+        assert_eq!(
+            h.string_key_get(arr, k).and_then(|v| v.as_number()),
+            Some(1.0)
+        );
+        // A proxy on the chain declines, interned key or not.
+        let handler = h.new_object(None).unwrap();
+        let p = h.new_proxy(proto, handler, 0).unwrap();
+        let under = h.new_object(Some(p)).unwrap();
+        for t in ["inherited", "never-interned"] {
+            let k = key(&mut h, t);
+            assert_eq!(h.string_key_get(under, k), None, "{t}");
+            assert_eq!(h.string_key_has(under, k), None, "{t}");
+        }
+    }
 
     #[test]
     fn array_index_parsing() {
