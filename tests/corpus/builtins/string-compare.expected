@@ -1,0 +1,16 @@
+"apple" "banana" -1 true false true
+"apple" "apples" -1 true false true
+"apples" "apple" 1 false true true
+"same" "same" 0 false false true
+"" "a" -1 true false true
+"a" "" 1 false true true
+"é" "e" 132 false true true
+"Zebra" "apple" -7 true false true
+"naïve" "naive" 134 false true true
+"ŝ" "s" 234 false true true
+"é" "é" 0 true false true
+"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxa" "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxb" -1 true false true
+apple,banana,date,fig,kiwi,lime,pear,plum,Äpfel,éclair,ŝip
+-1 true 2 3
+ left----| 0007 ["a","b","","c"] ["ines","f","ext"]
+=== completed

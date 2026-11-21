@@ -422,7 +422,7 @@ fn split(heap: &mut Heap, this: Value, args: &[Value]) -> Fast {
                 // Long lines of a long text share its units (D2542).
                 Value::string(piece)
             } else {
-                Value::string(heap.alloc_latin1_pieces(&[(s, a, b)], b - a)?)
+                Value::string(heap.latin1_piece(s, a, b, 0)?)
             });
         }
         return new_array(heap, &parts);

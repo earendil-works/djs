@@ -519,23 +519,22 @@ impl Heap {
     }
 
     /// A string from Latin-1 bytes (each byte is one code unit).
-    /// `s[a .. b)` of a flat one-byte string or a slice, as a new flat string copied within
-    /// the arena once; `None` for anything else.
-    pub(crate) fn latin1_copy(&mut self, s: Str, a: u32, b: u32) -> Result<Option<Str>, HeapError> {
-        let k = self.arena().get(s.0, Header::KIND);
-        let from = if k == CellKind::Str8 as u8 {
-            s.0 + Str8::DATA.offset
-        } else if k == CellKind::Slice as u8 {
-            // (A short piece of a split line: copied from the parent.)
-            let (parent, start) = self.slice_parts(s.0);
-            parent + Str8::DATA.offset + start
-        } else {
-            return Ok(None);
-        };
-        let dst = self.alloc_flat(b - a, false)?;
+    /// `s[a .. b)` of the contiguous one-byte string `s` (a flat cell, a slice or an append
+    /// rope), as a new flat one-byte string of `extra` more units (zeros, for the caller to
+    /// fill), copied within the arena once (0110, D3482).
+    pub(crate) fn latin1_piece(
+        &mut self,
+        s: Str,
+        a: u32,
+        b: u32,
+        extra: u32,
+    ) -> Result<Str, HeapError> {
+        let (from, two_byte) = self.contiguous_data(s);
+        assert!(!two_byte, "latin1_piece: a two-byte string");
+        let dst = self.alloc_flat(b - a + extra, false)?;
         self.arena_mut()
             .copy_within(from + a, b - a, dst + Str8::DATA.offset);
-        Ok(Some(Str(dst)))
+        Ok(Str(dst))
     }
 
     /// A flat one-byte string in lower or upper case (`s` itself if no byte changes);
@@ -641,44 +640,6 @@ impl Heap {
         });
         let dst = self.alloc_flat(total, two_byte)?;
         self.write_leaves(leaves, dst, 0);
-        Ok(Str(dst))
-    }
-
-    /// A one-byte string of the pieces `s[a .. b)`, copied within the arena once (no
-    /// bounce through a Rust buffer, 0110). Each piece must be flat, an append rope or a
-    /// slice (`str_view_flat` first) and one-byte; `total` is the sum of the lengths.
-    pub fn alloc_latin1_pieces(
-        &mut self,
-        pieces: &[(Str, u32, u32)],
-        total: u32,
-    ) -> Result<Str, HeapError> {
-        let dst = self.alloc_flat(total, false)?;
-        let mut at = dst + Str8::DATA.offset;
-        for &(s, a, b) in pieces {
-            // A flat one-byte cell from one kind read (most pieces); else the rope and
-            // slice cases.
-            let (cell, from) = if self.arena().get(s.0, Header::KIND) == CellKind::Str8 as u8 {
-                (s.0, 0)
-            } else {
-                let s = self.resolve_str(s);
-                let (cell, from) = match self.cell_kind(s.0) {
-                    CellKind::Slice => self.slice_parts(s.0),
-                    _ => (self.append_rope_buffer(s).unwrap_or(s.0), 0),
-                };
-                assert!(
-                    self.cell_kind(cell) == CellKind::Str8,
-                    "alloc_latin1_pieces: not a flat one-byte piece"
-                );
-                (cell, from)
-            };
-            assert!(
-                a <= b && from + b <= self.str_len(Str(cell)),
-                "alloc_latin1_pieces: piece out of range"
-            );
-            self.arena_mut()
-                .copy_within(cell + Str8::DATA.offset + from + a, b - a, at);
-            at += b - a;
-        }
         Ok(Str(dst))
     }
 
@@ -1397,12 +1358,15 @@ impl Heap {
         }
         let two_byte = self.str_is_two_byte(a) || self.str_is_two_byte(b);
         if len < ROPE_MIN_LEN {
-            // Two flat pieces (the usual `a + b`): copied as they are, without the walk
-            // and its two zeroed 32-entry arrays.
-            if self.cell_kind(a.0) != CellKind::Rope && self.cell_kind(b.0) != CellKind::Rope {
-                let dst = self.alloc_flat(len, two_byte)?;
-                self.write_leaves(&[(a.0, 0, la), (b.0, 0, lb)], dst, 0);
-                return Ok(Str(dst));
+            // Two flat one-byte pieces (the usual `a + b`): two copies within the arena,
+            // without the walk and its zeroed arrays (D3481).
+            let str8 = |h: &Self, s: Str| h.arena().get(s.0, Header::KIND) == CellKind::Str8 as u8;
+            if str8(self, a) && str8(self, b) {
+                let dst = self.alloc_flat(len, false)? + Str8::DATA.offset;
+                let ar = self.arena_mut();
+                ar.copy_within(a.0 + Str8::DATA.offset, la, dst);
+                ar.copy_within(b.0 + Str8::DATA.offset, lb, dst + la);
+                return Ok(Str(dst - Str8::DATA.offset));
             }
             let mut leaves = [(0, 0, 0); ROPE_MIN_LEN as usize];
             let n = self.short_leaves([(a.0, la), (b.0, lb)], &mut leaves);

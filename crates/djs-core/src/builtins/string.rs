@@ -71,8 +71,8 @@ pub(crate) fn substring(heap: &mut Heap, s: Str, start: u32, end: u32) -> Result
     if let Some(slice) = heap.substring_slice(s, start, end)? {
         return Ok(slice);
     }
-    if let Some(r) = heap.latin1_copy(s, start, end)? {
-        return Ok(r);
+    if let Some(StrView::Latin1(_)) = heap.str_view(s) {
+        return Ok(heap.latin1_piece(s, start, end, 0)?);
     }
     join(heap, &mut [(s, start, end)])
 }
@@ -366,7 +366,7 @@ pub(crate) fn pad(
         && !heap.str_is_two_byte(s)
         && let Some(c) = unit
     {
-        let out = heap.alloc_latin1_pieces(&[(s, 0, n)], n + fill)?;
+        let out = heap.latin1_piece(s, 0, n, fill)?;
         let d = Heap::str_data_offset(out);
         let a = heap.arena_mut();
         let run = if at_start {
@@ -547,6 +547,17 @@ pub(crate) fn normalize(heap: &mut Heap, s: Str, form: u8) -> Result<Option<Str>
 /// the `unicode-normalization` feature), then the difference of the first differing code
 /// points, else -1/0/1 by length.
 pub(crate) fn locale_compare(heap: &mut Heap, a: Str, b: Str) -> Result<f64, Fault> {
+    // Two one-byte strings (D3480): every unit is a code point below U+0300, which NFC
+    // leaves alone, so the bytes are compared where they are.
+    if let (Some(StrView::Latin1(x)), Some(StrView::Latin1(y))) =
+        (heap.str_view(a), heap.str_view(b))
+    {
+        let i = x.iter().zip(y).take_while(|(p, q)| p == q).count();
+        return Ok(match (x.get(i), y.get(i)) {
+            (Some(&p), Some(&q)) => f64::from(p) - f64::from(q),
+            _ => x.len().cmp(&y.len()) as i8 as f64,
+        });
+    }
     let (ua, ub) = (units(heap, a)?, units(heap, b)?);
     #[cfg(feature = "unicode-normalization")]
     let (ua, ub) = {
