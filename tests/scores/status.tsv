@@ -5,7 +5,7 @@ bounds/gzip	9222	9041ad864d	2026-11-21
 bounds/instructions-max-pct	31.4	9041ad864d	2026-11-21
 bounds/instructions-median-pct	23.5	9041ad864d	2026-11-21
 bounds/load	3.3	9041ad864d	2026-11-21
-compile/typescript-lazy-time-pct	56	35ed5ab789	2026-11-05
+compile/typescript-lazy-time-pct	57	7989df32e2	2026-11-21
 dump/bytes	1884014	f8cb1e7924	2026-11-21
 dump/extra-gzip	344745	f8cb1e7924	2026-11-21
 dump/gzip	774164	f8cb1e7924	2026-11-21
@@ -796,7 +796,7 @@ wasm/code	854050	f8cb1e7924	2026-11-21
 wasm/data	41133	f8cb1e7924	2026-11-21
 wasm/gzip	429419	f8cb1e7924	2026-11-21
 wasm/ops	69	f8cb1e7924	2026-11-21
-wire/decode-vs-json-objects	2.06	84b37a08b0	2026-11-05
-wire/decode-vs-json-string	15.7	84b37a08b0	2026-11-05
-wire/read-vs-json-objects	1.56	84b37a08b0	2026-11-05
-wire/read-vs-json-text	9.3	84b37a08b0	2026-11-05
+wire/decode-vs-json-objects	2.21	6738f3ebb5	2026-11-21
+wire/decode-vs-json-string	2.86	6738f3ebb5	2026-11-21
+wire/read-vs-json-objects	1.58	6738f3ebb5	2026-11-21
+wire/read-vs-json-text	9.06	6738f3ebb5	2026-11-21
