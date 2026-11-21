@@ -1,6 +1,6 @@
 # 0284: Refresh the published numbers after 0280-0282
 
-status: open
+status: in-progress
 agent: pstart
 branch: issue/0284-rerecord
 depends-on: 0279, 0280, 0281, 0282
