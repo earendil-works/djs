@@ -13767,3 +13767,5 @@ Wasm instructions per op (`--wasm-sync-tier-up`), main → branch (QuickJS 2026)
 Parked (work/research/0287/for-of-strings.patch): finishing the tier-0 loop's declined
 `iter_next_loc` of string iterators out of line (one `iter_plan`, ASCII units from the
 cache): for-of over a 10-character string 22.9k → 17.3k (11.2k), +243 B gz.
+Ceilings (from the owner's allowance, D3510): shipped 430,951 → 431,032, slim 364,897 →
+364,977.
