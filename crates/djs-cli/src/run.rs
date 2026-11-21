@@ -234,6 +234,10 @@ pub fn run_source(
                 CompileErrorKind::HostOutOfMemory => {
                     let _ = writeln!(err, "djs: out of host memory while compiling");
                 }
+                // Only with an elastic stack (D3280), which the CLI does not set.
+                CompileErrorKind::NeedStack => {
+                    let _ = writeln!(err, "djs: {}", e.message);
+                }
             }
             return 2;
         }

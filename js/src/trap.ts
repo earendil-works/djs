@@ -31,3 +31,77 @@ export function trapText(x: TrapExports, e: Error): string {
   }
   return e.message;
 }
+
+// ---- The elastic stack (D3280) ------------------------------------------------------------
+
+/** `vm_run`'s status for an instruction that compiles something deeper than the stack allows. */
+const NEED_STACK = 6;
+/** `vm_compile*`'s result for such a compile (`u32::MAX` as an i32). */
+const COMPILE_NEED_STACK = -1;
+/** The larger stack: the parser's deepest accepted nesting needs at most ~115 KiB (D2540). */
+const BIG_STACK = 128 * 1024;
+
+/** The exports `elasticStack` wraps and uses. */
+export interface StackExports {
+  __stack_pointer?: WebAssembly.Global;
+  djs_elastic_stack?(on: number): void;
+  djs_stack_alloc?(len: number): number;
+  djs_stack_free?(): void;
+  vm_run(vm: number, fuel: number): number;
+  vm_compile?(vm: number, goal: number, paramsLen: number, srcLen: number): number;
+  vm_compile_file?(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number): number;
+  vm_compile_cached?(vm: number, goal: number, nameLen: number, paramsLen: number, srcLen: number, blobLen: number): number;
+}
+
+/**
+ * The exports of a djs-wasm instance with an elastic stack (D3280): the module links a small
+ * shadow stack, enough for any script short of deep nesting. A compile that nests deeper (in
+ * `vm_compile*`, or at run time: `eval`, `Function`, `new RegExp`, a lazy function's first
+ * call) stops before it has any effect; the wrappers then move the stack pointer to a larger
+ * block for one more call and back. What compiles and its errors are the same as with a large
+ * stack. Modules without the exports are returned as they are. Call it again after the
+ * instance's memory was reset (a pooled instance).
+ */
+export function elasticStack<X extends StackExports>(x: X): X {
+  const sp = x.__stack_pointer;
+  const { djs_stack_alloc: alloc, djs_stack_free: free } = x;
+  if (!sp || !alloc || !free || !x.djs_elastic_stack) return x;
+  x.djs_elastic_stack(1);
+  // Already wrapped (a pooled instance): the static was reset with the memory, the wrappers
+  // are still in place.
+  if (wrapped.has(x)) return x;
+  const big = <T>(f: () => T): T => {
+    const small = sp.value as number;
+    sp.value = alloc(BIG_STACK);
+    // A trap leaves the pointer where it is: the instance is dead, `trapText` reads it.
+    const r = f();
+    sp.value = small;
+    free();
+    return r;
+  };
+  const y: X = Object.assign(Object.create(null), x);
+  const run = x.vm_run;
+  y.vm_run = (vm, fuel) => {
+    const st = run(vm, fuel);
+    if (st !== NEED_STACK) return st;
+    // Fuel 0: the run goes on with what this one had left.
+    return big(() => {
+      let s: number;
+      do s = run(vm, 0);
+      while (s === NEED_STACK);
+      return s;
+    });
+  };
+  for (const name of ["vm_compile", "vm_compile_file", "vm_compile_cached"] as const) {
+    const f = x[name] as ((...a: number[]) => number) | undefined;
+    if (!f) continue;
+    (y as Record<string, unknown>)[name] = (...a: number[]) => {
+      const h = f(...a);
+      return h === COMPILE_NEED_STACK ? big(() => f(...a)) : h;
+    };
+  }
+  wrapped.add(y);
+  return y;
+}
+
+const wrapped = new WeakSet<object>();

@@ -2,7 +2,7 @@
 // through the wire format (wire.ts) and come out through direct heap reads (reader.ts).
 
 import { IN_PLACE_MIN, encode, stringInPlace } from "./wire.ts";
-import { trapText } from "./trap.ts";
+import { elasticStack, trapText } from "./trap.ts";
 import { Opaque, readValue } from "./reader.ts";
 import { provideBase, rememberBase } from "./base.ts";
 import { scriptFor as dumpRuntimeFor } from "./dump-runtime.js";
@@ -785,7 +785,7 @@ export class Sandbox {
     if (module === undefined) {
       throw new SandboxError("misuse", "no compiled module: pass opts.module or await loadModule() first");
     }
-    const x = new WebAssembly.Instance(module, {}).exports as unknown as Exports;
+    const x = elasticStack(new WebAssembly.Instance(module, {}).exports as unknown as Exports);
     if (x.djs_abi_version() !== ABI_VERSION) {
       throw new SandboxError("misuse", `djs-wasm ABI ${x.djs_abi_version()}, expected ${ABI_VERSION}`);
     }

@@ -420,7 +420,7 @@ impl Vm {
             FaultKind::Throw(v) => v,
             FaultKind::Error(kind, msg) => self.error_value(kind, &msg),
             FaultKind::Heap(e) => self.error_value(ErrorKind::InternalError, e.as_str()),
-            FaultKind::Convert(..) => {
+            FaultKind::Convert(..) | FaultKind::NeedStack => {
                 self.error_value(ErrorKind::InternalError, "stray conversion")
             }
         }

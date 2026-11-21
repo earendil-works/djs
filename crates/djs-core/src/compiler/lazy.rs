@@ -44,6 +44,14 @@ const KINDS: [FuncKind; 13] = [
 
 /// Compiles lazy template `t` and returns its compiled template.
 pub fn compile_lazy(heap: &mut Heap, t: Ref) -> Result<Ref, CompileError> {
+    super::elastic(
+        heap,
+        |heap| compile_lazy_once(heap, t),
+        CompileError::need_stack,
+    )
+}
+
+fn compile_lazy_once(heap: &mut Heap, t: Ref) -> Result<Ref, CompileError> {
     let f = LazyFn::read(heap, t);
     let compiled = f.compile(heap, f.script, true, None)?;
     // The capture descriptors say where closures of `t` take their Boxes from, which
@@ -78,7 +86,11 @@ pub fn lazy_function_maps(
 ) -> Result<Vec<super::smap::FunctionMap>, CompileError> {
     let f = LazyFn::read(from, t);
     let mut maps = Vec::new();
-    f.compile(into, Ref::NULL, false, Some(&mut maps))?;
+    let mut once = |into: &mut Heap| {
+        maps.clear();
+        f.compile(into, Ref::NULL, false, Some(&mut maps))
+    };
+    super::elastic(into, &mut once, CompileError::need_stack)?;
     Ok(maps)
 }
 
@@ -86,7 +98,12 @@ pub fn lazy_function_maps(
 /// eager: the code it would have, for a dump to read (D2993).
 #[cfg(feature = "dump")]
 pub fn lazy_function_code(from: &Heap, t: Ref, into: &mut Heap) -> Result<Ref, CompileError> {
-    LazyFn::read(from, t).compile(into, Ref::NULL, false, None)
+    let f = LazyFn::read(from, t);
+    super::elastic(
+        into,
+        |into| f.compile(into, Ref::NULL, false, None),
+        CompileError::need_stack,
+    )
 }
 
 /// A lazy template's function as its compile needs it, read from the heap that holds it

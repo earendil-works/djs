@@ -232,6 +232,10 @@ pub(crate) mod pages {
         pages: *mut Pages<M>,
         /// Refuse new segments (a medium block that dlmalloc cannot place without growing).
         no_grow: core::cell::Cell<bool>,
+        /// Bytes `(address, length)` right before the first free page (the rest of the
+        /// static data's last page, D3281): the first segment, if it starts at that page,
+        /// starts here instead.
+        head: core::cell::Cell<(usize, usize)>,
     }
 
     // SAFETY: wasm32 has one thread; natively only tests use it, each on its own instance.
@@ -250,7 +254,13 @@ pub(crate) mod pages {
             }
             let n = size.div_ceil(PAGE);
             match pages.alloc(n) {
-                Some(p) => (pages.addr(p) as *mut u8, n * PAGE, 0),
+                Some(p) => {
+                    let (at, len) = self.head.take();
+                    if len > 0 && at + len == pages.addr(p) {
+                        return (at as *mut u8, len + n * PAGE, 0);
+                    }
+                    (pages.addr(p) as *mut u8, n * PAGE, 0)
+                }
                 None => (ptr::null_mut(), 0, 0),
             }
         }
@@ -309,8 +319,9 @@ pub(crate) mod pages {
         keep: Keep,
     }
 
-    /// dlmalloc's first segment, in pages (`PageAlloc::prime`).
-    const PRIME: usize = 2;
+    /// dlmalloc's first segment, in pages (`PageAlloc::prime`), besides the rest of the
+    /// static data's last page (`PageAlloc::seed`).
+    const PRIME: usize = 1;
 
     /// Whether a block of `layout` is huge (its own pages).
     fn huge(size: usize, align: usize) -> bool {
@@ -324,6 +335,7 @@ pub(crate) mod pages {
                 dl: dlmalloc::Dlmalloc::new_with_allocator(Sys {
                     pages: ptr::null_mut(),
                     no_grow: core::cell::Cell::new(false),
+                    head: core::cell::Cell::new((0, 0)),
                 }),
                 medium: [(usize::MAX, 0); MEDIUM_CAP],
                 top: (usize::MAX, 0),
@@ -342,13 +354,14 @@ pub(crate) mod pages {
             self.dl = dlmalloc::Dlmalloc::new_with_allocator(Sys {
                 pages,
                 no_grow: core::cell::Cell::new(false),
+                head: core::cell::Cell::new((0, 0)),
             });
         }
 
-        /// Gives dlmalloc its first segment now (`PRIME` pages), below everything else: the
-        /// first block an instance allocates is usually the arena, and a segment right after
-        /// it would keep it from growing in place. Two pages hold what a VM keeps in
-        /// dlmalloc and what most compiles need.
+        /// Gives dlmalloc its first segment now (`PRIME` pages and the `seed` before them),
+        /// below everything else: the first block an instance allocates is usually the
+        /// arena, and a segment right after it would keep it from growing in place. It
+        /// holds what a VM keeps in dlmalloc and what most compiles need.
         pub(crate) fn prime(&mut self) {
             // SAFETY: a valid size and alignment; the block is freed right away (dlmalloc
             // keeps the segment).
@@ -555,6 +568,13 @@ pub(crate) mod pages {
             self.pages.free(start, n);
         }
 
+        /// The `len` bytes at `at`, right before the first free page, become part of
+        /// dlmalloc's first segment (`prime`, D3281): in wasm the rest of the static data's
+        /// last page, which would otherwise stay unused.
+        pub(crate) fn seed(&mut self, at: usize, len: usize) {
+            self.dl.allocator().head.set((at, len));
+        }
+
         #[cfg(test)]
         pub(crate) fn pages(&self) -> &Pages<M> {
             &self.pages
@@ -618,11 +638,14 @@ mod wasm {
             if !*STATE.ready.get() {
                 *STATE.ready.get() = true;
                 a.init();
-                let first = (&raw const __heap_base as usize).div_ceil(PAGE);
+                // dlmalloc's chunks are 16-byte aligned.
+                let base = (&raw const __heap_base as usize).next_multiple_of(16);
+                let first = base.div_ceil(PAGE);
                 let end = wasm32::memory_size(0);
                 if first < end {
                     a.free_pages(first, end - first);
                 }
+                a.seed(base, first * PAGE - base);
                 a.prime();
             }
             a

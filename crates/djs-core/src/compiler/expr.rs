@@ -1472,6 +1472,7 @@ impl Parser<'_, '_> {
     /// errors (qjs reports them at the literal) and once for all evaluations, each of
     /// which creates a fresh RegExp: `program pattern flags; call_intrinsic %RegExpCreate
     /// 3`.
+    #[inline(never)]
     fn parse_regex_literal(&mut self) -> PResult<Expr> {
         let tok = self.lx.rescan_as_regex(self.tok)?;
         let text = self.lx.text(&tok);
@@ -1484,8 +1485,13 @@ impl Parser<'_, '_> {
         };
         let pattern = utf16(&text[1..close.max(1)]);
         let flags = utf16(&text[close + 1..]);
-        let program = match crate::builtins::regexp::compile(&pattern, &flags) {
+        let deep = self.max_depth == super::parser::MAX_DEPTH;
+        let program = match crate::builtins::regexp::compile(&pattern, &flags, deep) {
             Ok(program) => program,
+            Err(e) if e.need_stack() => {
+                self.need_stack();
+                return Err(super::PErr::need_stack());
+            }
             Err(e) => return syntax(tok.start, alloc::string::String::from(e.message())),
         };
         // The program is compiled once per literal and shared by the RegExp objects of

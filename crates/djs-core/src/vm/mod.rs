@@ -591,7 +591,11 @@ impl Vm {
                 return Ok(());
             }
             for t in todo {
-                let c = crate::compiler::compile_lazy(&mut self.heap, Ref(t)).map_err(|e| {
+                // Not elastic: no host call in between moves the stack.
+                let elastic = core::mem::replace(&mut self.heap.stack_elastic, false);
+                let c = crate::compiler::compile_lazy(&mut self.heap, Ref(t));
+                self.heap.stack_elastic = elastic;
+                let c = c.map_err(|e| {
                     if e.kind == crate::compiler::CompileErrorKind::HostOutOfMemory {
                         HeapError::HostOutOfMemory
                     } else {
@@ -939,6 +943,26 @@ impl Vm {
         state::set_pending_throw(&mut self.heap, Value::UNDEFINED);
         state::set_fuel_debt(&mut self.heap, 0);
         state::set_outcome(&mut self.heap, RunState::Idle, Value::UNDEFINED);
+        self.heap.stack_deep = false;
+    }
+
+    /// The elastic stack (D3280), for hosts whose stack is small (djs-wasm): with `on`, a
+    /// compile that nests deeper than the small stack allows (the parser's and the regexp
+    /// parser's limits) does not run again at once on the same stack. [`Vm::compile`]
+    /// fails with [`CompileErrorKind::NeedStack`](crate::compiler::CompileErrorKind), a run
+    /// whose instruction compiles (indirect `eval`, `Function`, `new RegExp`, a lazy
+    /// function's first call) stops before it with [`Status::OutOfFuel`] and
+    /// [`Vm::needs_stack`]. The host moves its stack to a larger one and calls again;
+    /// that compile then has the full limits. What compiles, the errors, heap images and
+    /// fuel are the same either way.
+    pub fn set_elastic_stack(&mut self, on: bool) {
+        self.heap.stack_elastic = on;
+    }
+
+    /// Whether the next compile needs the larger stack ([`Vm::set_elastic_stack`]): after
+    /// a compile or run that stopped for it, until that compile ran.
+    pub fn needs_stack(&self) -> bool {
+        self.heap.stack_deep
     }
 
     /// Runs with `fuel` (instruction cost units).

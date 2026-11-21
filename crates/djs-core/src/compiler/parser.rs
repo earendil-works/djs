@@ -19,6 +19,11 @@ use crate::value::Value;
 /// by the `depth_limit_fits_wasm_stack` test.
 pub(super) const MAX_DEPTH: u32 = 550;
 
+/// The nesting limit on the small stack (D3280): a compile that nests deeper runs again
+/// with [`MAX_DEPTH`] on a larger stack, so what compiles and its errors do not change.
+/// Scripts in practice nest less than 50 units (the codemode corpus: at most 44).
+pub(super) const SMALL_DEPTH: u32 = 200;
+
 /// Extra depth units of a class body, a C-style `for` and a destructuring pattern level:
 /// in wasm one nesting level of each takes ~1.4 KiB, ~210 B and ~230 B of stack, against
 /// 130–160 B for a plain statement level. With them the deepest accepted nesting of every
@@ -95,6 +100,8 @@ pub(super) struct Parser<'a, 'h> {
     /// The innermost scope of `f`.
     pub scope: ScopeId,
     pub depth: u32,
+    /// [`MAX_DEPTH`], or [`SMALL_DEPTH`] on the small stack (`Heap::stack_deep`).
+    pub max_depth: u32,
     /// Break/continue targets of `f` (they never cross functions).
     pub blocks: Vec<BlockEnv>,
     pub buf8: Vec<u8>,
@@ -328,6 +335,11 @@ impl<'a, 'h> Parser<'a, 'h> {
         let atom_new_target = heap.atom_str("new.target")?;
         let atom_home = heap.atom_str("<home>")?;
         let atom_active = heap.atom_str("<active>")?;
+        let max_depth = if heap.stack_deep {
+            MAX_DEPTH
+        } else {
+            SMALL_DEPTH
+        };
         let mut p = Parser {
             lx,
             tok,
@@ -340,6 +352,7 @@ impl<'a, 'h> Parser<'a, 'h> {
             done: alloc::vec![None],
             scope: BODY_SCOPE,
             depth: 0,
+            max_depth,
             blocks: Vec::new(),
             buf8: Vec::new(),
             atom_undefined,
@@ -784,6 +797,10 @@ impl<'a, 'h> Parser<'a, 'h> {
         }
     }
 
+    // Out of line: inlined into the recursive descent's ~140 callers it made them larger,
+    // and the inliner then merged parse_object, parse_array and others into parse_primary,
+    // whose frame every nesting level pays.
+    #[inline(never)]
     pub fn enter(&mut self) -> PResult<()> {
         self.enter_n(1)
     }
@@ -796,10 +813,29 @@ impl<'a, 'h> Parser<'a, 'h> {
     /// several times the stack of a plain level (docs/compiler.md 2.4, D1941).
     pub fn enter_n(&mut self, n: u32) -> PResult<()> {
         self.depth += n;
-        if self.depth > MAX_DEPTH {
-            return syntax(self.tok.start, "stack overflow");
+        if self.depth > self.max_depth {
+            return self.too_deep();
         }
         Ok(())
+    }
+
+    /// Past the nesting limit: on the small stack, the compile needs a larger one
+    /// (D3280); else a SyntaxError.
+    #[cold]
+    #[inline(never)]
+    fn too_deep(&mut self) -> PResult<()> {
+        if self.max_depth < MAX_DEPTH {
+            self.need_stack();
+            return Err(PErr::need_stack());
+        }
+        syntax(self.tok.start, "stack overflow")
+    }
+
+    /// Notes that this compile needs the larger stack. In the heap, not only as an
+    /// error: a speculative parse (TypeScript's `ts_try`) that swallows the error must
+    /// not change what compiles.
+    pub(super) fn need_stack(&mut self) {
+        self.heap.stack_need = true;
     }
 
     pub fn leave_n(&mut self, n: u32) {

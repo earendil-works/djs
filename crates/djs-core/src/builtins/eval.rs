@@ -47,6 +47,7 @@ fn compile_error(e: compiler::CompileError, col_shift: u32) -> Compiled {
         })),
         CompileErrorKind::OutOfMemory => Err(Fault::heap(HeapError::OutOfMemory)),
         CompileErrorKind::HostOutOfMemory => Err(Fault::heap(HeapError::HostOutOfMemory)),
+        CompileErrorKind::NeedStack => Err(Fault::need_stack()),
     }
 }
 

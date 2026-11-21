@@ -53,7 +53,15 @@ pub mod status {
     pub const IDLE: u32 = 4;
     /// The host could not provide memory below the cap (D1690): not a JS error.
     pub const HOST_OUT_OF_MEMORY: u32 = 5;
+    /// The next instruction compiles something that needs a larger stack (D3280, with
+    /// `vm_set_elastic_stack`): move the stack (`djs_stack_alloc`) and `vm_run` again,
+    /// with fuel 0 to go on with the fuel this run had left.
+    pub const NEED_STACK: u32 = 6;
 }
+
+/// What `vm_compile` returns for a compile that needs a larger stack (D3280): compile
+/// again on one.
+pub const COMPILE_NEED_STACK: u32 = u32::MAX;
 
 /// One VM and what the last `vm_run` reported.
 struct Slot {
@@ -64,6 +72,8 @@ struct Slot {
     call_id: u32,
     /// The fuel the last `vm_run` used (`vm_fuel_used`).
     fuel_used: u64,
+    /// The fuel of a `vm_run` that stopped with NEED_STACK, counted in the next one's.
+    fuel_carry: u64,
     /// `vm_set_dump_source_refs` (D2882).
     #[cfg_attr(not(feature = "dump"), allow(dead_code))]
     source_refs: bool,
@@ -114,6 +124,10 @@ instance_locals! {
     /// The message of the last panic. Separate from `STATE`, which may be left borrowed by
     /// the call that trapped.
     static PANIC: RefCell<String> = RefCell::new(String::new());
+    /// The larger stack of a compile that needs it (`djs_stack_alloc`, D3280).
+    static BIG_STACK: RefCell<Vec<u8>> = RefCell::new(Vec::new());
+    /// `djs_elastic_stack`.
+    static ELASTIC: core::cell::Cell<bool> = core::cell::Cell::new(false);
 }
 
 /// Records the message of a panic for `djs_panic_ptr` (best effort: never panics).
@@ -322,6 +336,7 @@ impl State {
             result: 0,
             call_id: 0,
             fuel_used: 0,
+            fuel_carry: 0,
             source_refs: true,
         };
         match self.vms.iter().position(Option::is_none) {
@@ -949,23 +964,24 @@ fn compile_with(
             Some(n) => {
                 let at = name_len + params_len + src_len;
                 let blob = (n > 0).then(|| staged(staging, at, n).to_vec());
-                slot.vm
-                    .compile_cached(&src, &opts, blob.as_deref())
-                    .map_err(|e| e.text())
+                elastic(&mut slot.vm, |vm| {
+                    vm.compile_cached(&src, &opts, blob.as_deref())
+                })
+                .map_err(|e| e.text())
             }
-            None => slot
-                .vm
-                .compile(&src, &opts)
+            None => elastic(&mut slot.vm, |vm| vm.compile(&src, &opts))
                 .map(|f| (f, None))
                 .map_err(|e| e.text()),
         };
         #[cfg(not(feature = "dump"))]
-        let result = slot
-            .vm
-            .compile(&src, &opts)
+        let result = elastic(&mut slot.vm, |vm| vm.compile(&src, &opts))
             .map(|f| (f, None::<Vec<u8>>))
             .map_err(|e| e.text());
         match result {
+            Err(msg) if slot.vm.needs_stack() => {
+                s.set_out(msg.as_bytes());
+                COMPILE_NEED_STACK
+            }
             Ok((f, blob)) => {
                 let h = slot.handle(f);
                 if h == 0 {
@@ -1392,6 +1408,45 @@ pub extern "C" fn vm_display(vm: u32, h: u32) -> usize {
 
 // ---- Calls and running ---------------------------------------------------------------
 
+/// Makes the instance's stack elastic (D3280, `Vm::set_elastic_stack`) with `on`
+/// nonzero: a compile that nests deeper than the module's small stack allows makes
+/// `vm_compile*` return `COMPILE_NEED_STACK` and `vm_run` NEED_STACK instead of running out
+/// of stack; the host calls again on a larger stack (`djs_stack_alloc`). Off (the default),
+/// the compile runs again at once on the module's stack, where deep nesting traps. Other
+/// exports that compile (the dump module's) always do that.
+#[unsafe(no_mangle)]
+pub extern "C" fn djs_elastic_stack(on: u32) {
+    ELASTIC.with(|e| e.set(on != 0));
+}
+
+/// Runs `f` with VM `vm` elastic if the instance is (`djs_elastic_stack`).
+fn elastic<R>(vm: &mut Vm, f: impl FnOnce(&mut Vm) -> R) -> R {
+    vm.set_elastic_stack(ELASTIC.with(|e| e.get()));
+    let r = f(vm);
+    vm.set_elastic_stack(false);
+    r
+}
+
+/// A block of `len` bytes for the shadow stack (D3280), from the page allocator: returns
+/// its end (the stack grows down), 16-byte aligned. The host sets `__stack_pointer` there,
+/// calls the export that needs it, sets the pointer back and calls `djs_stack_free`. One
+/// block at a time.
+#[unsafe(no_mangle)]
+pub extern "C" fn djs_stack_alloc(len: usize) -> usize {
+    djs_stack_free();
+    let block = Vec::with_capacity(len.next_multiple_of(16));
+    let end = block.as_ptr() as usize + block.capacity();
+    BIG_STACK.with(|b| *b.borrow_mut() = block);
+    end
+}
+
+/// Frees the block of `djs_stack_alloc`, if there is one. Call it on the module's own
+/// stack.
+#[unsafe(no_mangle)]
+pub extern "C" fn djs_stack_free() {
+    BIG_STACK.with(|b| *b.borrow_mut() = Vec::new());
+}
+
 /// Starts calling `f` (a handle) with `this` (a handle, 0 = undefined) and `argc`
 /// argument handles from staging (u32 LE each). Returns 0, or -1 if a call is already in
 /// progress or the heap is full.
@@ -1420,8 +1475,12 @@ pub extern "C" fn vm_call(vm: u32, f: u32, this: u32, argc: usize) -> i32 {
 pub extern "C" fn vm_run(vm: u32, fuel: u32) -> u32 {
     with(|s| {
         let slot = s.slot(vm);
-        let (st, used) = slot.vm.run_metered(fuel as u64);
-        slot.fuel_used = used;
+        let (st, used) = elastic(&mut slot.vm, |vm| vm.run_metered(fuel as u64));
+        slot.fuel_used = used + core::mem::take(&mut slot.fuel_carry);
+        if st == Status::OutOfFuel && slot.vm.needs_stack() {
+            slot.fuel_carry = slot.fuel_used;
+            return status::NEED_STACK;
+        }
         match st {
             Status::Done(v) => {
                 slot.result = slot.handle(v);

@@ -53,10 +53,15 @@ pub(crate) fn as_regexp(heap: &Heap, v: Value) -> Option<Obj> {
 }
 
 /// Compiles `pattern` with `flags` (both as written in the source or given to the
-/// constructor), with QuickJS's SyntaxError messages.
-pub(crate) fn compile(pattern: &[u16], flags: &[u16]) -> Result<Program, regexp::SyntaxError> {
+/// constructor), with QuickJS's SyntaxError messages; `deep` as for
+/// `regexp::compile_within`.
+pub(crate) fn compile(
+    pattern: &[u16],
+    flags: &[u16],
+    deep: bool,
+) -> Result<Program, regexp::SyntaxError> {
     let f = Flags::parse(flags)?;
-    regexp::compile(pattern, f)
+    regexp::compile_within(pattern, f, deep)
 }
 
 /// A U32Array cell holding `prog`'s words.
@@ -92,7 +97,22 @@ pub(crate) fn create(
             None => {
                 let p = units(heap, pattern)?;
                 let f = units(heap, flags)?;
-                let prog = match compile(&p, &f) {
+                // The elastic stack (D3280): a pattern that nests deeper than the small
+                // stack allows compiles again with the full limit, at once (natively) or
+                // after the host moved the stack (this instruction runs again then; the
+                // flattened strings are the ropes' memoized copies, so it allocates
+                // nothing twice).
+                let mut r = compile(&p, &f, heap.stack_deep);
+                heap.stack_deep = false;
+                if r.as_ref().is_err_and(|e| e.need_stack()) {
+                    heap.stack_deep = true;
+                    if heap.stack_elastic {
+                        return Err(Fault::need_stack());
+                    }
+                    r = compile(&p, &f, true);
+                    heap.stack_deep = false;
+                }
+                let prog = match r {
                     Ok(prog) => prog,
                     Err(e) => return syntax_error(e.message()),
                 };

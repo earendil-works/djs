@@ -6,7 +6,7 @@
 
 import { IN_PLACE_MIN, encode, stringInPlace } from "../src/wire.ts";
 import { readValue } from "../src/reader.ts";
-import { trapText } from "../src/trap.ts";
+import { elasticStack, trapText } from "../src/trap.ts";
 import { provideBase, rememberBase } from "../src/base.ts";
 import { script as dumpRuntimeScript, scriptFor as dumpRuntimeFor } from "../src/dump-runtime.js";
 
@@ -542,8 +542,9 @@ function renew(fresh: Uint8Array, x: Exports): Exports {
 function instantiate(module: WebAssembly.Module): Exports {
   const pool = pools.get(module);
   const pooled = pool?.free.pop();
-  if (pool && pooled) return renew(pool.fresh, pooled);
-  const x = new WebAssembly.Instance(module, {}).exports as unknown as Exports;
+  // The elastic stack (D3280): its switch is in memory, which `renew` resets.
+  if (pool && pooled) return elasticStack(renew(pool.fresh, pooled));
+  const x = elasticStack(new WebAssembly.Instance(module, {}).exports as unknown as Exports);
   // (Its memory before any call: what a pooled instance is made as again.)
   if (!pool) pools.set(module, { fresh: new Uint8Array(x.memory.buffer).slice(), free: [] });
   if (typeof x.djs_abi_version !== "function" || x.djs_abi_version() !== ABI_VERSION) {

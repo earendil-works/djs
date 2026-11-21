@@ -155,12 +155,15 @@ fn a_full_free_list_leaks_further_runs() {
 /// self-referential once initialized).
 fn page_alloc(cap: usize) -> &'static mut PageAlloc<Fake> {
     let mut mem = Fake::new(cap);
-    // As in wasm: memory that exists already (two pages) starts out free.
-    mem.grow(2);
+    // As in wasm: memory that exists already (three pages, the first part of the first
+    // one static data) starts out free, the rest of the static data's page seeds dlmalloc.
+    mem.grow(3);
     let a = Box::leak(Box::new(PageAlloc::new(mem)));
     // SAFETY: leaked: it never moves.
     unsafe { a.init() };
-    a.free_pages(0, 2);
+    a.free_pages(1, 2);
+    let base = a.pages().addr(0);
+    a.seed(base + 35_000, PAGE - 35_000);
     a.prime();
     a
 }
@@ -194,7 +197,7 @@ fn dlmalloc_is_primed_below_the_arena() {
     // What a VM keeps in dlmalloc and a compile's temporaries fit the primed segment, so
     // nothing lands behind the arena.
     let (a, mut arena, mut l) = with_arena(5);
-    let small: Vec<(*mut u8, Layout)> = (0..200)
+    let small: Vec<(*mut u8, Layout)> = (0..150)
         .map(|i| {
             let sl = Layout::from_size_align(64 + i * 5, 8).unwrap();
             // SAFETY: a non-zero size.
@@ -207,6 +210,21 @@ fn dlmalloc_is_primed_below_the_arena() {
         // SAFETY: live, with its layout.
         unsafe { a.dealloc(p, sl) };
     }
+}
+
+#[test]
+fn the_static_datas_last_page_seeds_dlmalloc() {
+    // dlmalloc's first segment starts in the rest of the static data's page and goes on
+    // into the primed page, one block across both.
+    let a = page_alloc(16);
+    let (seed, page1) = (a.pages().addr(0) + 35_000, a.pages().addr(1));
+    let l = Layout::from_size_align(60 << 10, 8).unwrap();
+    // SAFETY: a non-zero size.
+    let p = unsafe { a.alloc(l) } as usize;
+    assert!(p >= seed && p < page1 && p + l.size() > page1, "{p:#x}");
+    assert_eq!(a.pages().memory().pages(), 3);
+    // SAFETY: live, with its layout.
+    unsafe { a.dealloc(p as *mut u8, l) };
 }
 
 #[test]

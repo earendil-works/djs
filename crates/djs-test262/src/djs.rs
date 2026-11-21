@@ -518,6 +518,11 @@ fn compile_error(kind: CompileErrorKind, message: &str) -> ErrorInfo {
             name: "HostOutOfMemory".into(),
             message: "out of host memory".into(),
         },
+        // Only with an elastic stack (D3280), which native runs do not set.
+        CompileErrorKind::NeedStack => ErrorInfo {
+            name: "InternalError".into(),
+            message: message.into(),
+        },
     }
 }
 

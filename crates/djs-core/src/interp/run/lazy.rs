@@ -14,6 +14,7 @@ impl Exec<'_> {
             c = compile_lazy(self.heap, Ref(t)).map_err(|e| match e.kind {
                 CompileErrorKind::OutOfMemory => Fault::heap(HeapError::OutOfMemory),
                 CompileErrorKind::HostOutOfMemory => Fault::heap(HeapError::HostOutOfMemory),
+                CompileErrorKind::NeedStack => Fault::need_stack(),
                 CompileErrorKind::Syntax => Fault::error(ErrorKind::InternalError, e.text()),
             })?;
             let a = self.heap.arena_mut();

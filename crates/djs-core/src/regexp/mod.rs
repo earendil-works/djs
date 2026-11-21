@@ -101,12 +101,23 @@ impl Flags {
 /// A pattern or flags SyntaxError, with QuickJS' message.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct SyntaxError {
+    /// Empty: not a SyntaxError; the pattern nests deeper than the small stack's limit,
+    /// and compiles with the full one on a larger stack (D3280).
     message: String,
 }
 
 impl SyntaxError {
     fn new(message: String) -> SyntaxError {
         SyntaxError { message }
+    }
+
+    fn stack_request() -> SyntaxError {
+        SyntaxError::new(String::new())
+    }
+
+    /// Whether the pattern needs the full nesting limit (`compile_within`).
+    pub fn need_stack(&self) -> bool {
+        self.message.is_empty()
     }
 
     fn flags() -> SyntaxError {
@@ -158,6 +169,13 @@ impl Program {
 
 /// Compiles `pattern` (UTF-16 code units, as in the JS string) with `flags`.
 pub fn compile(pattern: &[u16], flags: Flags) -> Result<Program, SyntaxError> {
-    let parsed = parser::parse(pattern, flags)?;
+    compile_within(pattern, flags, true)
+}
+
+/// [`compile`] on the small stack (`deep` false) or a large one (D3280): with `deep`
+/// false, a pattern that nests deeper than `parser::SMALL_DEPTH` fails with a
+/// [`SyntaxError::need_stack`] error instead.
+pub fn compile_within(pattern: &[u16], flags: Flags, deep: bool) -> Result<Program, SyntaxError> {
+    let parsed = parser::parse(pattern, flags, deep)?;
     Ok(compiler::compile(&parsed, flags))
 }

@@ -19,6 +19,9 @@ use crate::unicode;
 /// module they compile and match in its 128 KiB stack with 10% to spare: 244 nested
 /// capture groups and 236 nested lookaheads trap there (D2540, D2545).
 const MAX_DEPTH: u32 = 212;
+/// The nesting limit on the small stack (D3280): a deeper pattern compiles again with
+/// [`MAX_DEPTH`] on a larger stack. Patterns in real scripts nest a few groups.
+pub(crate) const SMALL_DEPTH: u32 = 32;
 /// Capture group limit (qjs allows 254 groups; we allow more).
 pub(crate) const MAX_CAPTURES: u32 = 65535;
 /// Quantifier bounds saturate here, like qjs (`{99999999999}` means 2^31 - 1).
@@ -178,9 +181,14 @@ struct Parser<'a> {
     path: Vec<(u32, u32)>,
     next_disjunction: u32,
     depth: u32,
+    /// [`MAX_DEPTH`], or [`SMALL_DEPTH`] on the small stack.
+    max_depth: u32,
+    /// The pattern went past `max_depth` on the small stack: whatever came of the parse,
+    /// it needs the larger one.
+    need_stack: bool,
 }
 
-pub(crate) fn parse(src: &[u16], flags: Flags) -> Result<Parsed, SyntaxError> {
+pub(crate) fn parse(src: &[u16], flags: Flags, deep: bool) -> Result<Parsed, SyntaxError> {
     let mut p = Parser {
         src,
         pos: 0,
@@ -196,8 +204,14 @@ pub(crate) fn parse(src: &[u16], flags: Flags) -> Result<Parsed, SyntaxError> {
         path: Vec::new(),
         next_disjunction: 0,
         depth: 0,
+        max_depth: if deep { MAX_DEPTH } else { SMALL_DEPTH },
+        need_stack: false,
     };
-    let mut node = p.disjunction(false)?;
+    let node = p.disjunction(false);
+    if p.need_stack {
+        return Err(SyntaxError::stack_request());
+    }
+    let mut node = node?;
     if p.pos < src.len() {
         return err("extraneous characters at the end");
     }
@@ -280,10 +294,19 @@ impl Parser<'_> {
 
     fn enter(&mut self) -> Result<(), SyntaxError> {
         self.depth += 1;
-        if self.depth > MAX_DEPTH {
-            return err("stack overflow");
+        if self.depth > self.max_depth {
+            return self.too_deep();
         }
         Ok(())
+    }
+
+    #[cold]
+    fn too_deep(&mut self) -> Result<(), SyntaxError> {
+        if self.max_depth < MAX_DEPTH {
+            self.need_stack = true;
+            return Err(SyntaxError::stack_request());
+        }
+        err("stack overflow")
     }
 
     /// Decimal digits at `self.pos`; saturates at 2^31 - 1, or returns `None` on overflow

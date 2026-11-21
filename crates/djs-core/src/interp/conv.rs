@@ -32,6 +32,9 @@ pub(crate) enum FaultKind {
     /// (`%ToPrimitive`, `%GetSite`) run on the two values, for its conversion site `site`
     /// (D3260). `Exec::own_call` handles it; nothing else sees it.
     Convert(u32, u16, Value, Value),
+    /// A compile needs the larger stack (D3280): the run stops before the instruction,
+    /// and the host runs it again on a larger stack. Only with `Heap::stack_elastic`.
+    NeedStack,
 }
 
 impl Fault {
@@ -41,6 +44,12 @@ impl Fault {
             *self.0,
             FaultKind::Heap(crate::heap::HeapError::OutOfMemory)
         )
+    }
+
+    #[cold]
+    #[inline(never)]
+    pub(crate) fn need_stack() -> Fault {
+        Fault(Box::new(FaultKind::NeedStack))
     }
 
     #[cold]

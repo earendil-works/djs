@@ -200,6 +200,14 @@ pub struct Heap {
     prefix_copy: Option<alloc::vec::Vec<u8>>,
     /// The barrier is armed without frozen builtins (`VmOptions::prefix_barrier`).
     barrier_forced: bool,
+    /// The elastic stack (D3280, `compiler::elastic`). `stack_deep`: compiles may nest
+    /// to the full limits (the parser's and the regexp parser's), else only to the small
+    /// stack's; `stack_need`: a compile went past those; `stack_elastic`: the host runs
+    /// such a compile again on a larger stack, instead of the compile running again at
+    /// once on the same one (native builds).
+    pub(crate) stack_deep: bool,
+    pub(crate) stack_need: bool,
+    pub(crate) stack_elastic: bool,
     /// While a compile is recorded for the compile cache (D3040): every interning, in
     /// order (`compile_cache::Intern`).
     #[cfg(feature = "compile-cache")]
@@ -317,6 +325,9 @@ impl Heap {
             #[cfg(debug_assertions)]
             prefix_copy: None,
             barrier_forced: false,
+            stack_deep: false,
+            stack_need: false,
+            stack_elastic: false,
             #[cfg(feature = "compile-cache")]
             intern_log: None,
             #[cfg(test)]

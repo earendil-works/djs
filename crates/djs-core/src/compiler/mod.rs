@@ -227,6 +227,9 @@ pub enum CompileErrorKind {
     OutOfMemory,
     /// The host could not provide memory below the cap (D1690).
     HostOutOfMemory,
+    /// Not an error of the program: it nests deeper than the small stack allows, and the
+    /// host runs the compile again on a larger stack (D3280, `Vm::set_elastic_stack`).
+    NeedStack,
 }
 
 /// A compile error with its position: a byte offset and 1-based line/column (columns
@@ -242,6 +245,13 @@ pub struct CompileError {
 }
 
 impl CompileError {
+    /// [`CompileErrorKind::NeedStack`].
+    #[cfg(feature = "lazy")]
+    #[cold]
+    pub(crate) fn need_stack() -> CompileError {
+        error_at(b"", PErr::need_stack())
+    }
+
     /// The error as text: `SyntaxError: <message> at <line>:<col>` (the Display form,
     /// built without core::fmt for the shipped module, D2339).
     pub fn text(&self) -> String {
@@ -249,6 +259,7 @@ impl CompileError {
             CompileErrorKind::Syntax => "SyntaxError: ",
             CompileErrorKind::OutOfMemory => "out of memory",
             CompileErrorKind::HostOutOfMemory => "out of host memory",
+            CompileErrorKind::NeedStack => "needs a larger stack",
         });
         if self.kind == CompileErrorKind::Syntax {
             out.push_str(&self.message);
@@ -275,9 +286,16 @@ pub(super) enum PErrKind {
     Syntax { pos: u32, msg: Cow<'static, str> },
     Oom,
     HostOom,
+    NeedStack,
 }
 
 impl PErr {
+    #[cold]
+    #[inline(never)]
+    pub(super) fn need_stack() -> PErr {
+        PErr(Box::new(PErrKind::NeedStack))
+    }
+
     #[cold]
     #[inline(never)]
     pub(super) fn syntax(pos: u32, msg: Cow<'static, str>) -> PErr {
@@ -309,17 +327,53 @@ impl From<HeapError> for PErr {
 
 pub(super) type PResult<T> = Result<T, PErr>;
 
+/// Runs a compile `f` under the elastic stack (D3280). The parser and the regexp parser
+/// nest only to the small stack's limits unless `Heap::stack_deep` is set; a compile that
+/// went deeper sets `Heap::stack_need`. Then the full limits are armed and the compile
+/// runs again: here at once (native builds, whose stack is large), or, with
+/// `Heap::stack_elastic`, it fails with `need`'s error and the host runs it again on a
+/// larger stack. Either way the heap sees the same attempts, so heap images and fuel do
+/// not depend on which. Any other end disarms the full limits. Wraps a whole operation
+/// (every parse it makes), once.
+pub(crate) fn elastic<T, E>(
+    heap: &mut Heap,
+    mut f: impl FnMut(&mut Heap) -> Result<T, E>,
+    need: impl Fn() -> E,
+) -> Result<T, E> {
+    loop {
+        let r = f(heap);
+        if !core::mem::take(&mut heap.stack_need) {
+            heap.stack_deep = false;
+            return r;
+        }
+        heap.stack_deep = true;
+        if heap.stack_elastic {
+            return Err(need());
+        }
+    }
+}
+
+/// [`attempt`] under the elastic stack ([`elastic`]).
+fn parse<T>(
+    heap: &mut Heap,
+    src: &[u8],
+    opts: &CompileOptions<'_>,
+    f: impl Fn(parser::Parser<'_, '_>) -> PResult<T>,
+) -> PResult<T> {
+    elastic(heap, |heap| attempt(heap, src, opts, &f), PErr::need_stack)
+}
+
 /// Runs `f` on a parser of `src`. With the dumper, a scan for patterns stops at the
 /// first literal that shows a group is none (compiler/scan.rs), which can change which
 /// error a program that is not valid gets: after a syntax error the source is parsed
 /// again with exact scans, so errors stay what they were. Valid programs compile the
 /// same either way (0198).
 #[cfg(feature = "dump")]
-fn parse<T>(
+fn attempt<T>(
     heap: &mut Heap,
     src: &[u8],
     opts: &CompileOptions<'_>,
-    f: impl Fn(parser::Parser<'_, '_>) -> PResult<T>,
+    f: &impl Fn(parser::Parser<'_, '_>) -> PResult<T>,
 ) -> PResult<T> {
     let mut exact = false;
     loop {
@@ -336,11 +390,11 @@ fn parse<T>(
 
 /// Runs `f` on a parser of `src` (the scans are always exact without the dumper).
 #[cfg(not(feature = "dump"))]
-fn parse<T>(
+fn attempt<T>(
     heap: &mut Heap,
     src: &[u8],
     opts: &CompileOptions<'_>,
-    f: impl FnOnce(parser::Parser<'_, '_>) -> PResult<T>,
+    f: &impl Fn(parser::Parser<'_, '_>) -> PResult<T>,
 ) -> PResult<T> {
     parser::Parser::new(heap, src, opts).and_then(f)
 }
@@ -378,17 +432,19 @@ pub fn compile_module(
     }
     // A module with top-level await is an async body ([[HasTLA]]); which one is, the first
     // parse finds out (`Parser::module_await`): only those compile twice.
-    let first = parser::Parser::new(heap, src, &opts)
-        .map_err(|e| (e, false))
-        .and_then(|p| p.compile_module(false));
-    match first {
-        Ok(r) => Ok(r),
-        Err((_, true)) => parse(heap, src, &opts, |p| {
-            p.compile_module(true).map_err(|e| e.0)
-        })
-        .map_err(|e| error_at(src, e)),
-        Err((e, false)) => Err(error_at(src, e)),
-    }
+    let both = |heap: &mut Heap| {
+        let first = parser::Parser::new(heap, src, &opts)
+            .map_err(|e| (e, false))
+            .and_then(|p| p.compile_module(false));
+        match first {
+            Ok(r) => Ok(r),
+            Err((_, true)) => attempt(heap, src, &opts, &|p| {
+                p.compile_module(true).map_err(|e| e.0)
+            }),
+            Err((e, false)) => Err(e),
+        }
+    };
+    elastic(heap, both, PErr::need_stack).map_err(|e| error_at(src, e))
 }
 
 /// [`compile`] with lazy functions (D2990): the source is parsed whole (every early
@@ -546,7 +602,7 @@ pub fn prelude_function_names(
     src: &[u8],
     opts: &CompileOptions<'_>,
 ) -> Result<Vec<crate::heap::Atom>, CompileError> {
-    let result = parser::Parser::new(heap, src, opts).and_then(|mut p| {
+    let result = parse(heap, src, opts, |mut p| {
         p.builtin_names = Some(Vec::new());
         p.compile()
     });
@@ -647,6 +703,7 @@ fn error_at(src: &[u8], e: PErr) -> CompileError {
             0,
             String::from("out of host memory"),
         ),
+        PErrKind::NeedStack => (CompileErrorKind::NeedStack, 0, String::new()),
     };
     let (line, col) = LineTable::new(src).line_col(src, pos);
     CompileError {
