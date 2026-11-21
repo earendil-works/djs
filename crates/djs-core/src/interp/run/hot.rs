@@ -416,7 +416,8 @@ fn hot_elem(b: &[u8], o: Value, key: Value) -> Option<Value> {
 
 /// Whether the strings at `x` and `y` are equal, if both are flat one-byte cells
 /// (`Heap::str_eq` for those): the lengths, then eight bytes at a time. `None` for a
-/// two-byte string, a slice or a rope.
+/// two-byte string, a slice or a rope, and for equal lengths past
+/// [`crate::heap::work::FREE_COMPARE`]: the heap's comparison charges for those (0289).
 #[inline(never)]
 fn hot_str_eq(b: &[u8], x: u32, y: u32) -> Option<bool> {
     use crate::heap::CellKind;
@@ -428,6 +429,9 @@ fn hot_str_eq(b: &[u8], x: u32, y: u32) -> Option<bool> {
     let n = ld32(b, x + Str8::LEN.offset);
     if n != ld32(b, y + Str8::LEN.offset) {
         return Some(false);
+    }
+    if n > crate::heap::work::FREE_COMPARE {
+        return None;
     }
     // (A cell's size is a multiple of 8: the last word may reach into its padding.)
     let word = |s: u32, i: u32| u64::from_le_bytes(arena_read(b, (Str8::DATA.at(s, i)) as usize));

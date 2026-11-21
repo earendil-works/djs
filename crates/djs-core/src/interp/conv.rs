@@ -132,7 +132,8 @@ fn units(heap: &mut Heap, s: Str) -> Result<Vec<u16>, Fault> {
 
 pub(crate) fn string_to_number(heap: &mut Heap, s: Str) -> Result<f64, Fault> {
     let flat = heap.contiguous(s)?;
-    heap.charge_units(heap.str_len(flat) as usize);
+    // (Arithmetic per digit: an element's rate, not a scan's.)
+    heap.charge_elements(heap.str_len(flat) as usize);
     if let Some(StrView::Latin1(b)) = heap.str_view(flat) {
         return Ok(num::string_to_number(b));
     }

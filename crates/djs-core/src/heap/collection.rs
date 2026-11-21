@@ -123,6 +123,8 @@ impl Heap {
     /// (rebuilt after every collection).
     pub(super) fn key_hash(&self, k: Value) -> u32 {
         if let Some(s) = k.as_string() {
+            // As `str_hash` (a collection's rehash charges nothing, `work.rs`).
+            self.charge_units(self.str_len(s) as usize);
             return self.str_hash_uncached(s);
         }
         let key = self.hash_key();

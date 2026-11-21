@@ -79,12 +79,15 @@ impl Heap {
     }
 }
 
+/// The bytes of two strings a comparison reads for free: [`equal_blocks`]' block.
+pub(crate) const FREE_COMPARE: u32 = 256;
+
 /// The length of the equal prefix of `x` and `y` in whole blocks: what a comparison of
 /// the two is charged for. The caller compares the rest, where a difference is within
 /// the first block (or the shorter string ends), so it costs a constant at most.
 #[inline]
 pub(crate) fn equal_blocks(x: &[u8], y: &[u8]) -> usize {
-    const BLOCK: usize = 256;
+    const BLOCK: usize = FREE_COMPARE as usize;
     let n = x.len().min(y.len());
     let mut i = 0;
     while i + BLOCK <= n && x[i..i + BLOCK] == y[i..i + BLOCK] {

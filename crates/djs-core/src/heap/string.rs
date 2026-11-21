@@ -1437,6 +1437,9 @@ impl Heap {
     /// Map/Set and string equality use. Cached in strings above the builtin prefix; the
     /// prefix, which no VM writes, caches the base hash instead ([`Heap::str_hash_base`]).
     pub fn str_hash(&mut self, s: Str) -> u32 {
+        // Charged whether cached or not, so the charge depends on the call alone; the
+        // string's equality with what the hash finds costs about as much (`work.rs`).
+        self.charge_units(self.str_len(s) as usize);
         let s = self.resolve_str(s);
         if s.0 < self.base_end() {
             return self.keyed_content_hash(s);

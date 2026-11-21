@@ -49,6 +49,8 @@ fn units(heap: &mut Heap, s: Str) -> Result<Vec<u16>, Fault> {
 
 /// `s[start .. end)` in code units (the caller clamps the indexes).
 pub(crate) fn substring(heap: &mut Heap, s: Str, start: u32, end: u32) -> Result<Str, Fault> {
+    // (A piece costs about two elements: what a loop of them, `split('')`'s, adds up to.)
+    heap.charge_elements(2);
     let len = heap.str_len(s);
     if start == 0 && end >= len {
         return Ok(s);
@@ -336,6 +338,8 @@ pub(crate) fn trim(heap: &mut Heap, s: Str, where_: i32) -> Result<Str, Fault> {
         } else {
             b.len()
         };
+        // (The white space scanned.)
+        heap.charge_units(start + (b.len() - end));
         return substring(heap, s, start as u32, end as u32);
     }
     let view = heap.str_view_flat(s)?;
@@ -352,6 +356,7 @@ pub(crate) fn trim(heap: &mut Heap, s: Str, where_: i32) -> Result<Str, Fault> {
             end -= 1;
         }
     }
+    heap.charge_units(start + (n - end));
     substring(heap, s, start as u32, end as u32)
 }
 
