@@ -18,6 +18,7 @@ ap.add_argument("--wasm", action="append")
 ap.add_argument("--flag", action="append", default=[], help="another node flag")
 ap.add_argument("--no-sync", action="store_true", help="without --wasm-sync-tier-up")
 ap.add_argument("--qjs", action="store_true", help="quickjs-wasi as the last column")
+ap.add_argument("--qjs2", action="store_true", help="Bellard's QuickJS as the engine comparison builds it (vendor/engines) as the last column")
 ap.add_argument("--per", type=int, default=0, help="per operation: (case - first case) / K")
 ap.add_argument("files", nargs="*")
 a = ap.parse_args()
@@ -30,10 +31,12 @@ files = [f if f.endswith(".js") else os.path.join(cases, f + ".js") for f in a.f
     sorted(os.path.join(cases, f) for f in os.listdir(cases))
 flags = ([] if a.no_sync else ["--wasm-sync-tier-up"]) + a.flag
 tmp = tempfile.mkdtemp()
-QJS = "quickjs-wasi"
+QJS, QJS2 = "quickjs-wasi", "quickjs-built"
+if a.qjs2:
+    a.qjs = True
 def ins(wasm, f):
     best = None
-    runner = os.path.join(tools, "qjs-wasm-run.mjs") if wasm == QJS else run
+    runner = os.path.join(tools, "qjs-wasm-run.mjs") if wasm == QJS else os.path.join(tools, "qjs-built-run.mjs") if wasm == QJS2 else run
     for _ in range(a.r):
         r = subprocess.run(["/usr/bin/time", "-l", "node"] + flags + [runner, f], capture_output=True, text=True, timeout=900,
                            env=dict(os.environ, ONCE="1", DJS_WASM=os.path.abspath(wasm)))
@@ -44,7 +47,7 @@ def ins(wasm, f):
         v = int(re.search(r"(\d+)\s+instructions retired", r.stderr).group(1))
         best = v if best is None else min(best, v)
     return best
-builds = a.wasm + ([QJS] if a.qjs else [])
+builds = a.wasm + ([QJS2] if a.qjs2 else [QJS] if a.qjs else [])
 print(f"{'case':28} " + " ".join(f"{os.path.basename(w)[:14]:>14}" for w in builds) + ("   x qjs" if a.qjs else "   delta"))
 zero = None
 for f in files:

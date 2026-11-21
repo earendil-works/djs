@@ -4555,3 +4555,12 @@ fn known_builtins_across_suspension() {
     let (_, out) = finish_script(based_vm(stress), SRC, 13, true);
     assert_eq!(out, plain);
 }
+
+#[test]
+fn tmp_fused_probe() {
+    let fused = &crate::interp::run::fastpath::FUSED;
+    let n = |i: usize| fused[i].load(core::sync::atomic::Ordering::Relaxed);
+    let (a, b) = (n(0), n(1));
+    let _ = run_js("function f() { const s = ['  ab', 'c  '].join(''); let t = 0; for (let i = 0; i < 1000; i++) { t += s.trim().length + s.charCodeAt(1); } return t; } console.log(f());");
+    panic!("probe: made {} declined {}", n(0) - a, n(1) - b);
+}

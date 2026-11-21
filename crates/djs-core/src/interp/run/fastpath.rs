@@ -209,7 +209,8 @@ impl Exec<'_> {
     /// stack is near its end (a leaf may ask for slots), `f` is no `@fast` builtin now,
     /// or the builtin declines: its attempt is then made, and `fast_leaf_call`, which
     /// the call instruction of a `@fast` builtin always reaches, leaves the call to
-    /// `step`. Otherwise the bytes to skip and, above bit 16, the fuel to charge.
+    /// `step`. Otherwise the bytes to skip after the `get_method` and, above bit 16, the
+    /// fuel to charge besides its own.
     #[inline(never)]
     pub(super) fn fused_call(
         &mut self,
@@ -221,11 +222,13 @@ impl Exec<'_> {
     ) -> Option<u32> {
         /// Slots above the call's that a leaf's intrinsic may use (`n_leaf`).
         const ROOM: u32 = 8;
+        const SIZE: u32 = Op::GetMethod.size() as u32;
+        const FUEL: i64 = OPS[Op::GetMethod as usize].cost.fuel() as i64;
         let t = self.fast_template(f)?;
         let mut args = [Value::UNDEFINED; 3];
-        self.pc = pc + Op::GetMethod.size() as u32;
+        self.pc = pc + SIZE;
         let (n, pre) = self.scan_args(&mut args)?;
-        let pre = pre + OPS[Op::GetMethod as usize].cost.fuel() as i64;
+        let pre = pre + FUEL;
         let top = sp + 1 + n;
         if fuel <= pre || top + ROOM > self.heap.value_array_capacity(self.stack) {
             return None;
@@ -243,7 +246,9 @@ impl Exec<'_> {
             debug_assert!(self.stack == stack, "a fused call moved the stack");
             #[cfg(test)]
             FUSED[0].fetch_add(1, core::sync::atomic::Ordering::Relaxed);
-            return Some((self.pc - pc) | ((fuel - self.fuel) as u32) << 16);
+            // (Less the `get_method`'s own, which the loop's arm adds.)
+            let (skip, used) = (self.pc - pc - SIZE, fuel - self.fuel - FUEL);
+            return Some(skip | (used as u32) << 16);
         }
         #[cfg(test)]
         FUSED[1].fetch_add(1, core::sync::atomic::Ordering::Relaxed);

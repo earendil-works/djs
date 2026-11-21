@@ -1495,11 +1495,17 @@ impl Exec<'_> {
                                     (sp, ip - code, fuel)
                                 )) {
                                     Some(Hit::Value(r)) => r,
-                                    // The whole call was made (D3551): past it.
+                                    // The whole call was made and its result is in
+                                    // the receiver's slot (D3551): past the pushes
+                                    // and the call, and on like a `get_field`, which
+                                    // pushes no receiver. (No jump of its own: a
+                                    // `continue` here made V8 keep the loop's values
+                                    // in memory, every instruction +32.)
                                     Some(Hit::Call(x)) => {
                                         ip += x & 0xFFFF;
                                         fuel -= (x >> 16) as i64;
-                                        continue;
+                                        op = fast::GET_FIELD;
+                                        ld(b, slot!(sp - 1))
                                     }
                                     // A getter with a `@fast` entry, which ran: the
                                     // fuel of such a call (D3530).
