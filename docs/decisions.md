@@ -12624,14 +12624,18 @@ extends with the known values, then the ordinary lookup, skipped.
 - Not done by value identity at compile time (find the global's current value in the
   table): the code's shape would depend on the heap's state, and a dump of a VM that
   replaced `Math` could not find its suspension sites again.
-Measured (wasm, node --no-liftoff, machine instructions per statement, main 5a3891f6 +
-D3290 vs this): `Math.floor(i / 3)` 1,177 → 948 (−19%), `Math.floor(i)` 1,033 → 813,
-`Number.isInteger(i)` 917 → 696 (−24%), `Math.max(i, 3)` 1,167 → 950, `Array.isArray(a)`
-1,049 → 831, `String(i)` 1,409 → 1,257 (−11%), `Math.floor;` 436 → 160; method calls on
-receivers, closures and property access unchanged. wmeasure tight −0.3%, calls +0.2%,
-prop1 +0.7%, loop −0.1% (spread 0.2-0.8%). ops.ts (load ~6): Math.floor 100k 3.77 → 3.22
-ms, Number.isInteger 2.90 → 2.39, Math.max per line 0.86 → 0.75, String(i) 4.45 → 4.24.
-Size: +699 B gz (428,771 → 429,470; code +1,119 B raw, the rest the base image).
+Measured (wasm, node --no-liftoff, machine instructions per statement, main 09f9b41f vs
+this): `Math.floor(i / 3)` 1,171 → 942 (−20%), `Math.floor(i)` 1,036 → 814,
+`Number.isInteger(i)` 922 → 693 (−25%), `Math.max(i, 3)` 1,169 → 940, `Array.isArray(a)`
+1,053 → 830, `String(i)` 1,373 → 1,260 (−8%), `Math.floor;` 435 → 157; method calls on
+receivers (`s.trim()` 1,413 → 1,419), closures and property access unchanged. wmeasure
+tight −1.1%, calls −2.5%, prop1 −2.8%, loop −1.3% (spread up to 1.7%): no regression.
+ops.ts (load ~7, two runs each): Math.floor 100k 3.83/3.68 → 3.10/3.37 ms,
+Number.isInteger 3.01/2.88 → 2.31/2.36, Math.max per line 0.91/0.86 → 0.56/0.64, String(i)
+4.78/4.54 → 4.28/4.29; against QuickJS in the same runs Math.floor ~1.3x → ~1.1x,
+Number.isInteger ~1.17x → ~0.95x.
+Size: +648 B gz (426,556 → 427,204; slim 360,373 → 361,014; code +1,093 B raw, the rest
+the base image), 2,458 B below the ceiling.
 The image's descriptor changes with `Intrinsic` (RECORDS_HASH): no `COMPAT_VERSION` bump.
 
 ## D3301: Builtin calls: what was measured and not adopted (0259)

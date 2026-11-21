@@ -91,7 +91,7 @@ anywhere, images, or the unsafe rules (AGENTS.md).
     without a realm goes by the text;
   - size: static text list +1,463 B gz → names in the heap, a fixed-offset `jump8`
     instead of a label, 24 instead of 50 entries (an entry is ~7.5 B gz of base image),
-    packed lookup result: +699 B;
+    packed lookup result: +648 B;
   - a VM without a builtin prefix has no latch, so the values are added by
     `prepare_base_image` only (`known::arm`);
   - `prop_set_value` is inlined into run_hot: the watched-binding test there is only a
@@ -130,14 +130,18 @@ anywhere, images, or the unsafe rules (AGENTS.md).
   `Math.floor(x)`, `Math.max`, `String(x)`, `Number.isInteger(x)`, `Array.isArray(x)`,
   `parseInt` and 18 more names skip the global and member lookups while no builtin was
   changed, in VMs made from a base image.
-- Instructions per statement (wasm, node --no-liftoff): Math.floor(i / 3) 1,177 → 948
-  (−19%), Math.floor(i) 1,033 → 813, Number.isInteger(i) 917 → 696 (−24%),
-  Math.max(i, 3) 1,167 → 950, Array.isArray(a) 1,049 → 831, String(i) 1,409 → 1,257;
-  s.trim() 1,476 → 1,415 and s.charCodeAt(k) 1,202 → 1,185 (the shadow only).
-  wmeasure tight/calls/prop1/loop within ±0.7% (noise).
-- ops.ts (ms, load ~6, djs before → after): Math.floor 100k 3.77 → 3.22, Number.isInteger
-  100k 2.90 → 2.39, Math.max per line 0.86 → 0.75, String(i) 100k 4.45 → 4.24.
-- Size: −55 B gz (batch 1), +699 B gz (known builtins).
+- Instructions per statement (wasm, node --no-liftoff, main 09f9b41f vs the branch):
+  Math.floor(i / 3) 1,171 → 942 (−20%), Math.floor(i) 1,036 → 814, Number.isInteger(i)
+  922 → 693 (−25%), Math.max(i, 3) 1,169 → 940, Array.isArray(a) 1,053 → 830, String(i)
+  1,373 → 1,260 (−8%); s.trim(), s.charCodeAt(k), p.m(), f(i) unchanged (the shadow's
+  −20 landed with batch 1). wmeasure tight −1.1%, calls −2.5%, prop1 −2.8%, loop −1.3%
+  (spread up to 1.7%).
+- ops.ts (ms, load ~7, two runs each, djs before → after): Math.floor 100k 3.83/3.68 →
+  3.10/3.37 (vs QuickJS ~1.3x → ~1.1x), Number.isInteger 100k 3.01/2.88 → 2.31/2.36
+  (~1.17x → ~0.95x), Math.max per line 0.91/0.86 → 0.56/0.64, String(i) 100k 4.78/4.54 →
+  4.28/4.29; trim, charCodeAt loop and closure calls unchanged.
+- Size: −55 B gz (batch 1), +648 B gz (known builtins: 426,556 → 427,204, slim +641),
+  2,458 B below the ceiling.
 - Not adopted, with numbers: D3301.
 - Known gaps: receiver methods still pay their lookup (follow-up); a VM without a
   builtin prefix (`Vm::new` without frozen builtins) runs the ordinary lookups.
