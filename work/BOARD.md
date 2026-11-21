@@ -6,6 +6,11 @@ Owned by the coordinator. Status of all issues; details are in `issues/`.
 
 | issue | title | agent | worktree |
 | --- | --- | --- | --- |
+| 0256 | Per-VM and per-byte costs: base injection, hash keys, zeroing | pstart | .worktrees/pstart |
+| 0257 | Idle memory: elastic shadow stack, data padding, dlmalloc first segment | pidle | .worktrees/pidle |
+| 0258 | GC: minor collections skip the builtin prefix; headroom, big-string survivors | pgc | .worktrees/pgc |
+| 0259 | Builtin calls without finding the callee | pcall | .worktrees/pcall |
+| 0260 | Byte kernels word at a time (SWAR; simd128 measured for the owner) | pscan | .worktrees/pscan |
 
 ## Open (ready)
 

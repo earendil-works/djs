@@ -1,0 +1,65 @@
+# 0260: Byte kernels: search, JSON scanning and splitting, word at a time
+
+status: open
+agent: pscan
+branch: issue/0260-byte-kernels
+depends-on: -
+touches: crates/djs-core/src/builtins/string.rs (find_latin1, index_of, split helpers), crates/djs-core/src/json (parse scanners, write_escaped_*), crates/djs-core/src/regexp (literal-prefix scanning only), a small shared byte-scan module
+guide: builtins.md if a fast-path story changes
+decisions: D3310-D3319
+
+## Goal
+heavy spends >20% in byte kernels (find_latin1 7.5%, json write_escaped_latin1 8.1%,
+plain_run 5.3%, scan_rest, str_view), fanout ~29% in json, media 21%. These are
+byte-at-a-time loops. Make them word-at-a-time:
+1. SWAR over u64 (safe Rust, no target feature, works natively and in wasm): finding a
+   byte, finding "a byte that needs escaping / ends a JSON string run", memchr-style
+   two-byte search for includes/indexOf, newline splitting.
+2. wasm simd128 is a separate question: D016 and 0077 rule it out by default (it drops
+   SIMD-less runtimes). Measure what simd128 would add over SWAR on the same kernels in a
+   scratch build and report the numbers for the owner; do not ship it without a decision.
+Keep exact semantics (WTF-16, Latin-1 vs two-byte strings).
+
+## Acceptance criteria
+- [ ] per-kernel instructions (wmicro) and heavy/fanout/media/text/json run times, main vs branch
+- [ ] tests for edge cases: alignment, lengths 0-17, matches at every offset, non-ASCII Latin-1, two-byte strings
+- [ ] size reported (kernels should be small); gate green; decisions recorded
+- [ ] the simd128 numbers written up in the issue's Result
+
+## Notes
+- Overlap: 0256 (pstart) touches heap/string.rs's set_hash_key only; you touch the search
+  helpers. Keep to your functions.
+- The JSON parse/stringify paths are also what the benchmark's tool bridge uses, so the
+  workloads show them directly.
+
+## Shared context (all of 0256-0260)
+The owner asked to push both memory and speed as far as they go (2026-11-21). Background,
+fresh profiles and the ranked idea list: work/scratch/perfreview/ of the primary checkout
+(BRIEF.md, IDEAS.md; prof.ts and cat.py profile the codemode workloads in wasm). Read
+IDEAS.md's section for your issue first; its numbers are estimates, not measurements.
+
+Five issues run in parallel (0256 per-VM/per-byte costs, 0257 idle memory, 0258 GC,
+0259 builtin calls, 0260 byte kernels). Stay in your `touches:`; announced overlaps are in
+each issue's Notes.
+
+Measuring (D016: wasm32 under node is the yardstick):
+- run time and memory per workload: build the shipped module in your worktree
+  (`scripts/build-wasm.sh`, or `--keep-names` for profiles) and run
+  `DJS_WASM=$PWD/target/wasm32-unknown-unknown/wasm/djs_wasm.wasm node js/bench/engines/run.ts --engines djs --reps 25`
+  before and after, on main's build and yours, at load below ~4 (`uptime`; say the load).
+  Memory claims: scripts/perf/mem-perturb.sh (D2048).
+- instructions: scripts/perf/wmeasure.py / wmicro.py (TESTING.md "Instruction ratios").
+- Report per workload: ms and MiB, main vs branch, and the module's gzip bytes.
+
+Size: the shipped module is ~1.3 KB gzip under the D020 budget (ceilings, D3266). Report
+the bytes of every change; find offsets where you can. If a measured win needs more room
+than that, stop and tell the coordinator with the numbers: do not raise ceilings yourself.
+
+Never weaken determinism (collection points a function of the program, D1710), suspension
+anywhere, images, or the unsafe rules (AGENTS.md).
+
+## Log
+
+## Follow-ups
+
+## Result
