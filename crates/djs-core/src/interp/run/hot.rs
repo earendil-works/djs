@@ -57,6 +57,7 @@ const ARGUMENT_COUNT: u16 = super::intrinsics::id("ArgumentCount");
 const GET_GLOBAL: u8 = Op::GetGlobal as u8;
 const GET_GLOBAL_TYPEOF: u8 = Op::GetGlobalTypeof as u8;
 const PUT_GLOBAL: u8 = Op::PutGlobal as u8;
+const IN: u8 = Op::In as u8;
 
 /// The flags word of a `PushResult` frame (`fast_return`'s condition).
 const PUSH_RESULT: i32 = Continuation::PushResult.to_flags();
@@ -386,6 +387,21 @@ fn hot_length(b: &[u8], o: Value) -> Option<Value> {
         .map(Value::int)
 }
 
+/// `o[key]` for an int key and a dense, non-hole element (`Heap::get_element_fast`
+/// without its typed-array branch), read from the loop's slice.
+#[inline(always)]
+fn hot_elem(b: &[u8], o: Value, key: Value) -> Option<Value> {
+    let obj = o.as_object()?;
+    let i = key.as_int().and_then(|i| u32::try_from(i).ok())?;
+    // (A closure's `ELEMENTS` is its template, which reads as an empty array, D2448.)
+    let el = ld32(b, obj.offset() + Object::ELEMENTS.offset);
+    if el == 0 || i >= ld32(b, el + ValueArray::LEN.offset) {
+        return None;
+    }
+    let v = ld(b, ValueArray::VALUES.at(el, i));
+    (!v.is_hole()).then_some(v)
+}
+
 /// An array index key (as `intrinsics::index_key`).
 fn index_key(k: Value) -> Option<u32> {
     if let Some(i) = k.as_int() {
@@ -449,17 +465,51 @@ impl Exec<'_> {
         self.ic_get(o, key, ic)
     }
 
-    /// `fast_elem` on explicit operands: `o[key]`, or `o[key] = v` (`Some(undefined)`).
-    #[inline(always)]
-    fn elem_hit(&mut self, put: bool, o: Value, key: Value, v: Value) -> Option<Value> {
+    /// `fast_elem` on explicit operands, out of line: `o[key]`, or `o[key] = v`
+    /// (`Some(undefined)`). The loop reads dense elements itself (`hot_elem`) and asks
+    /// here for the rest: every store (the heap's to make: `set_element_fast` also
+    /// appends and fills holes where unobservable, D1783), a typed array's element, and a
+    /// string key (`counts[word]`, D3402), which the heap's string-key helpers answer
+    /// without running code or allocating: a read gives the data property on `o`'s
+    /// chain, or undefined when nothing on it has the key; a store only replaces the
+    /// value of an own writable data property. `None` (an accessor, a proxy, an
+    /// addition, a hole, another kind of key) is the general path's.
+    #[inline(never)]
+    fn elem_slow(&mut self, put: bool, o: Value, key: Value, v: Value) -> Option<Value> {
         let obj = o.as_object()?;
-        let i = key.as_int().and_then(|i| u32::try_from(i).ok())?;
+        let Some(i) = key.as_int().and_then(|i| u32::try_from(i).ok()) else {
+            let s = key.as_string()?;
+            if put {
+                return self
+                    .heap
+                    .string_key_set(obj, s, v)
+                    .then_some(Value::UNDEFINED);
+            }
+            return self.heap.string_key_get(obj, s);
+        };
         if put {
-            // `set_element_fast` also appends and fills holes where unobservable (D1783).
             return matches!(self.heap.set_element_fast(obj, i, v), Ok(true))
                 .then_some(Value::UNDEFINED);
         }
         self.heap.get_element_fast(obj, i)
+    }
+
+    /// A declined `in` with a string key and an object (`decline_fast`): the heap's
+    /// answer where no proxy is on the chain (D3402), else false with nothing changed.
+    fn decline_in(&mut self) -> bool {
+        let (k, o) = (self.get(self.sp - 2), self.get(self.sp - 1));
+        let (Some(s), Some(obj)) = (k.as_string(), o.as_object()) else {
+            return false;
+        };
+        let Some(r) = self.heap.string_key_has(obj, s) else {
+            return false;
+        };
+        self.sp -= 1;
+        self.set(self.sp - 1, Value::bool(r));
+        let info = &OPS[Op::In as usize];
+        self.fuel -= info.cost.fuel() as i64;
+        self.pc += info.size as u32;
+        true
     }
 
     /// `fast_intrinsic`'s leaf cases (not `%Call`): the result, or `None`.
@@ -521,7 +571,8 @@ impl Exec<'_> {
 
     /// What the loop declined, done here instead of through `step` where that is cheap:
     /// a call of a `@fast` builtin (D1850), `+` of a string and a primitive whose
-    /// ToString runs no user code and cannot throw (`"id " + i`, 0231), or an
+    /// ToString runs no user code and cannot throw (`"id " + i`, 0231), `in` with a
+    /// string key (`decline_in`), or an
     /// instruction of the construct path (`decline_construct`, 0236). False, with
     /// nothing changed, for anything else or at the heap cap (`step` runs it then and
     /// retries, D1700). One out-of-line call: changes to the loop's own code, even a
@@ -530,6 +581,9 @@ impl Exec<'_> {
     fn decline_fast(&mut self, op: u8) -> bool {
         if fast::is_call(op) {
             return self.pc < self.code_len && self.fast_leaf_call(op);
+        }
+        if op == IN {
+            return self.decline_in();
         }
         if op != fast::ADD {
             return super::construct::takes(op) && self.decline_construct(op);
@@ -1231,31 +1285,58 @@ impl Exec<'_> {
                             sp -= if op == fast::PUT_FIELD { 2 } else { 1 };
                             next!(op, like Op::PutField);
                         }
-                        fast::GET_ELEM | fast::GET_ELEM2 | fast::PUT_ELEM => {
-                            let put = op == fast::PUT_ELEM;
-                            let (o, key, v) = if put {
-                                (top!(2), top!(1), top!(0))
+                        fast::GET_ELEM | fast::GET_ELEM2 => {
+                            let (o, key) = (top!(1), top!(0));
+                            // A dense element is read from the slice (D3393); the rest
+                            // out of line.
+                            let r = match hot_elem(b, o, key) {
+                                Some(r) => {
+                                    #[cfg(debug_assertions)]
+                                    {
+                                        let want = heap_call_op!(self.elem_slow(false, o, key, r));
+                                        assert!(want == Some(r), "the slice's element differs");
+                                    }
+                                    r
+                                }
+                                None => {
+                                    let hit = heap_call_op!(self.elem_slow(
+                                        false,
+                                        o,
+                                        key,
+                                        Value::UNDEFINED
+                                    ));
+                                    let Some(r) = hit else {
+                                        break Exit::Decline(op);
+                                    };
+                                    r
+                                }
+                            };
+                            if op == fast::GET_ELEM2 {
+                                push!(r);
+                                next!(Op::GetElem2);
                             } else {
-                                (top!(1), top!(0), Value::UNDEFINED)
-                            };
-                            let Some(r) = heap_call_op!(self.elem_hit(put, o, key, v)) else {
-                                break Exit::Decline(op);
-                            };
-                            match op {
-                                fast::PUT_ELEM => {
-                                    sp -= 3;
-                                    next!(Op::PutElem);
-                                }
-                                fast::GET_ELEM2 => {
-                                    push!(r);
-                                    next!(Op::GetElem2);
-                                }
-                                _ => {
-                                    sp -= 1;
-                                    st(b, slot!(sp - 1), r);
-                                    next!(Op::GetElem);
-                                }
+                                sp -= 1;
+                                st(b, slot!(sp - 1), r);
+                                next!(Op::GetElem);
                             }
+                        }
+                        fast::PUT_ELEM => {
+                            let (o, key, v) = (top!(2), top!(1), top!(0));
+                            let index = key.as_int().and_then(|i| u32::try_from(i).ok());
+                            let done = match (o.as_object(), index) {
+                                // (In line, as it was: out of line a store into an
+                                // array cost 28 machine instructions more.)
+                                (Some(obj), Some(i)) => heap_call!(matches!(
+                                    self.heap.set_element_fast(obj, i, v),
+                                    Ok(true)
+                                )),
+                                _ => heap_call!(self.elem_slow(true, o, key, v)).is_some(),
+                            };
+                            if !done {
+                                break Exit::Decline(fast::PUT_ELEM);
+                            }
+                            sp -= 3;
+                            next!(Op::PutElem);
                         }
                         fast::ITER_NEXT => {
                             let (it, f) = (top!(1), top!(0));

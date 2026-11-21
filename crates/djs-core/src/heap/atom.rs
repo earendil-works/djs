@@ -794,8 +794,6 @@ impl Heap {
     /// (D3402): the value of a data property on `o`'s chain, or `undefined` when no object
     /// on it has the key. `None` declines (the caller takes the general path): an
     /// accessor, a proxy on the chain, a BigInt typed array element.
-    // (Called from the interpreter's element paths, wired by 0268.)
-    #[allow(dead_code)]
     pub(crate) fn string_key_get(&mut self, o: Obj, s: Str) -> Option<Value> {
         let Some(key) = self.existing_key_atom(s) else {
             // No atom: no object has the key (a typed array's numeric string keys that
@@ -812,8 +810,6 @@ impl Heap {
     }
 
     /// `s in o` for a string key `s` without a proxy on the chain (D3402); `None` declines.
-    // (Called from the interpreter's element paths, wired by 0268.)
-    #[allow(dead_code)]
     pub(crate) fn string_key_has(&mut self, o: Obj, s: Str) -> Option<bool> {
         match self.existing_key_atom(s) {
             Some(key) => self.has_property_or_proxy(o, key).ok(),
@@ -824,8 +820,6 @@ impl Heap {
     /// `o[s] = v` for a string key `s` when that only replaces the value of an own
     /// writable data property of `o` (D3402): true when stored, false (nothing changed)
     /// otherwise, including a key that is not interned yet (an addition).
-    // (Called from the interpreter's element paths, wired by 0268.)
-    #[allow(dead_code)]
     pub(crate) fn string_key_set(&mut self, o: Obj, s: Str, v: Value) -> bool {
         match self.existing_key_atom(s) {
             Some(key) => self.set_own_data_value(o, key, v),
