@@ -67,6 +67,21 @@ Never weaken determinism (collection points a function of the program, D1710), s
 anywhere, images, or the unsafe rules (AGENTS.md).
 
 ## Log
+- 2026-11-21: harness work/scratch/0256/ab.ts (primary checkout): two modules, interleaved
+  fresh instance + VM per run, median ms; `newvm` is a Sandbox created and disposed. A/A at
+  load 8: within 1%.
+- Hacks first, to size each item (load 6-9, A/B interleaved, 300 reps): inject without
+  zero-fill and hash: newvm −21%, sequential/inspect/media −6-7%, fanout −2%; then
+  set_hash_key from BASE_END: newvm another −15% (≈20 µs), small bodies −4-5%. zero_ahead
+  as a crude no-op above a global high-water mark: ≤3% on the small bodies, within noise
+  elsewhere (and the hack trapped on fanout: the real thing needs the allocator's
+  knowledge, see below).
+- Batch 1 (aa350a92): D3270 (`set_hash_key` walks from `BASE_END`, `prepare_base_image`
+  asserts no Map/Set in the prefix), D3271 (`djs_base_inject_ptr` does not zero, inject sets
+  the length, `is_base` = length + FNV sample of the roots and one word per 504 B against a
+  build-time `BASE_SAMPLE`). Tests: base tests corrupt a sampled byte now. host.md updated.
+  Size 428,800 → 428,841 B gz (+41). djs-core lib, djs-prelude, djs-wasm, js tests (dev
+  modules) pass.
 
 ## Follow-ups
 
