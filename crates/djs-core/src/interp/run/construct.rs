@@ -34,7 +34,6 @@ const GET_SUPER: u8 = Op::GetSuper as u8;
 const CHECK_THIS: u8 = Op::CheckThis as u8;
 const CHECK_THIS_UNINIT: u8 = Op::CheckThisUninit as u8;
 const CHECK_CTOR_RETURN: u8 = Op::CheckCtorReturn as u8;
-const ITER_NEXT_LOC: u8 = Op::IterNextLoc as u8;
 
 /// The opcodes `decline_construct` takes: the test before its call, so that the other
 /// declined instructions pay no call on their way to `step`.
@@ -54,7 +53,6 @@ pub(super) fn takes(op: u8) -> bool {
             | CHECK_THIS_UNINIT
             | CHECK_CTOR_RETURN
             | GET_SUPER
-            | ITER_NEXT_LOC
     )
 }
 
@@ -90,28 +88,6 @@ impl Exec<'_> {
                 self.advance_op(Op::Rest)
             }
             fast::RETURN | fast::RETURN_UNDEF => self.return_constructed(op),
-            // (Not the construct path: a for-of step the tier-0 loop leaves, a string's
-            // code point or a typed array's element, 0287. Only where the step produces
-            // a value; its allocation fails before the iterator moves.)
-            ITER_NEXT_LOC => {
-                let at = self.lp + self.imm_u16(1);
-                let (it, f) = (self.get(at), self.get(at + 1));
-                let plan = self.iter_plan(it, f);
-                if !matches!(plan, super::iter::Plan::Str(..) | super::iter::Plan::Elem(..)) {
-                    return false;
-                }
-                let Ok(super::iter::FastStep::Value(v)) = self.iter_take(plan) else {
-                    return false;
-                };
-                let next = self.pc + OPS[op as usize].size as u32;
-                self.fuel -= OPS[op as usize].cost.fuel() as i64;
-                self.pc = (next as i64 + self.imm_i32(3) as i64) as u32;
-                self.push(v);
-                if self.pc < next {
-                    self.safepoint();
-                }
-                true
-            }
             fast::SPECIAL_OBJECT => {
                 let v = match self.byte(self.pc + 1) {
                     special::NEW_TARGET => self.header(frame::NEW_TARGET),

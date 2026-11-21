@@ -126,16 +126,7 @@ impl Exec<'_> {
                 None => FastStep::Done,
             });
         }
-        let plan = self.iter_plan(it, f);
-        self.iter_take(plan)
-    }
-
-    /// Takes the step `plan` (from `iter_plan`): the value, having advanced the
-    /// iterator, or `Done`, having finished it. An allocation fails before the iterator
-    /// moves.
-    #[inline(never)]
-    pub(super) fn iter_take(&mut self, plan: Plan) -> Result<FastStep, Fault> {
-        Ok(match plan {
+        Ok(match self.iter_plan(it, f) {
             Plan::Slow => FastStep::Slow,
             Plan::Done(it) => {
                 self.heap.set_object_slot(it, 0, Value::UNDEFINED);
@@ -143,17 +134,11 @@ impl Exec<'_> {
             }
             Plan::Str(it, s, i) => {
                 let s = self.heap.contiguous(s)?;
-                // (An ASCII unit, the usual one, is its own code point: the cache's.)
-                let (cp, n) = match self.heap.char_code_at(s, i) {
-                    Some(u) if u < 128 => (self.heap.unit_string(u as u8)?, 1),
-                    _ => {
-                        let n = match string::code_point_at(self.heap, s, i) {
-                            Some(c) if c >= 65536.0 => 2,
-                            _ => 1,
-                        };
-                        (string::substring(self.heap, s, i, i + n)?, n)
-                    }
+                let n = match string::code_point_at(self.heap, s, i) {
+                    Some(c) if c >= 65536.0 => 2,
+                    _ => 1,
                 };
+                let cp = string::substring(self.heap, s, i, i + n)?;
                 self.heap
                     .set_object_slot(it, 1, conv::number((i + n) as f64));
                 FastStep::Value(Value::string(cp))
@@ -351,7 +336,7 @@ impl Exec<'_> {
     }
 
     /// What the next step of `it` with `next` method `f` does, without doing it.
-    pub(super) fn iter_plan(&self, it: Value, f: Value) -> Plan {
+    fn iter_plan(&self, it: Value, f: Value) -> Plan {
         let Some(it) = it.as_object() else {
             return Plan::Slow;
         };
@@ -426,7 +411,7 @@ impl Exec<'_> {
 }
 
 /// [`Exec::iter_plan`]'s answer: the iterator (and what the step reads).
-pub(super) enum Plan {
+enum Plan {
     Slow,
     Done(Obj),
     /// A String Iterator at code unit `i` of a string.
