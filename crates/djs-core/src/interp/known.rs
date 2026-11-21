@@ -43,14 +43,11 @@ const GLOBAL: u32 = 1 << 31;
 const KNOWN: &[u8] = b"Math.floor.ceil.round.trunc.abs.sqrt.max.min.pow.sign.random.PI \
 Number.isInteger.isFinite.isNaN String.fromCharCode Array.isArray parseInt parseFloat isNaN";
 
-/// The table indexes of the known global `global`, and of its member `member` when that
-/// is given and known.
+/// The table indexes of the known global `global` and of its member `member`, an atom's
+/// id; twice the global's when `member` is not a known member of it ([`NO_MEMBER`]: none
+/// is asked for).
 #[inline(never)]
-pub(crate) fn lookup(
-    heap: &Heap,
-    global: Atom,
-    member: Option<Atom>,
-) -> Option<(u16, Option<u16>)> {
+pub(crate) fn lookup(heap: &Heap, global: Atom, member: u32) -> Option<(u16, u16)> {
     if heap.realm().as_internal().is_none() {
         #[cfg(any(feature = "dump", test))]
         return by_text(heap, global, member);
@@ -58,29 +55,32 @@ pub(crate) fn lookup(
         return None;
     }
     let names = intrinsic(heap, Intrinsic::KnownNames).as_internal()?;
-    let (n, first) = (heap.u32_array_len(names), heap.u32_array_get(names, 0));
-    // The global's word, then its member's among the words up to the next global's.
-    // (Without a member `GLOBAL`, which is no word.)
-    let (mut want, mut kx, mut i) = (global.id() | GLOBAL, None, 1);
-    while i < n {
-        let w = heap.u32_array_get(names, i);
-        let k = (first + i - 1) as u16;
-        if w == want {
-            match kx {
-                Some(_) => return Some((kx?, Some(k))),
-                None => (kx, want) = (Some(k), member.map_or(GLOBAL, Atom::id)),
-            }
-        } else if kx.is_some() && w & GLOBAL != 0 {
-            break;
-        }
+    let n = heap.u32_array_len(names);
+    let mut i = 1;
+    while heap.u32_array_get(names, i) != global.id() | GLOBAL {
         i += 1;
+        if i >= n {
+            return None;
+        }
     }
-    Some((kx?, None))
+    // (Word 0 is the first value's index, and the words are from 1.)
+    let k = |i: u32| (heap.u32_array_get(names, 0) + i - 1) as u16;
+    let mut m = i + 1;
+    while m < n && heap.u32_array_get(names, m) & GLOBAL == 0 {
+        if heap.u32_array_get(names, m) == member {
+            return Some((k(i), k(m)));
+        }
+        m += 1;
+    }
+    Some((k(i), k(i)))
 }
+
+/// No member for [`lookup`]: no member's word has the bit.
+pub(crate) const NO_MEMBER: u32 = GLOBAL;
 
 /// [`lookup`] in a heap without a realm: by the names, the values numbered from 0.
 #[cfg(any(feature = "dump", test))]
-fn by_text(heap: &Heap, global: Atom, member: Option<Atom>) -> Option<(u16, Option<u16>)> {
+fn by_text(heap: &Heap, global: Atom, member: u32) -> Option<(u16, u16)> {
     let named = |a: Atom, name: &[u8]| a.is_string() && heap.atom_name(a).as_bytes() == name;
     let mut k = 0;
     for group in KNOWN.split(|&b| b == b' ') {
@@ -89,12 +89,12 @@ fn by_text(heap: &Heap, global: Atom, member: Option<Atom>) -> Option<(u16, Opti
         let kx = k;
         for name in names {
             k += 1;
-            if found && member.is_some_and(|m| named(m, name)) {
-                return Some((kx, Some(k)));
+            if found && named(Atom::from_id(member), name) {
+                return Some((kx, k));
             }
         }
         if found {
-            return Some((kx, None));
+            return Some((kx, kx));
         }
         k += 1;
     }
@@ -111,9 +111,8 @@ fn table(heap: &Heap) -> Option<(u32, u32)> {
 
 /// The builtins changed: `get_builtin` of a known builtin declines from now on.
 pub(crate) fn unpristine(heap: &mut Heap) {
-    if let Some((t, first)) = table(heap)
-        && heap.value_array_len(t) > first
-    {
+    // (The table never has fewer values than the prelude's functions.)
+    if let Some((t, first)) = table(heap) {
         heap.arena_mut().set(t, ValueArray::LEN, first);
     }
 }
@@ -139,7 +138,7 @@ pub(crate) fn renumber(heap: &mut Heap, moved: impl Fn(u32) -> u32) {
 /// binding shadows it, which is a change of it.
 #[inline(never)]
 pub(crate) fn shadowed(heap: &mut Heap, key: Atom) {
-    if lookup(heap, key, None).is_some() {
+    if lookup(heap, key, NO_MEMBER).is_some() {
         unpristine(heap);
     }
 }
@@ -213,12 +212,12 @@ mod tests {
         let mut both = |g: &str, m: Option<&str>| {
             let find = |heap: &mut Heap| {
                 let g = heap.atom_str(g).unwrap();
-                let m = m.map(|m| heap.atom_str(m).unwrap());
+                let m = m.map_or(NO_MEMBER, |m| heap.atom_str(m).unwrap().id());
                 lookup(heap, g, m)
             };
             let (a, b) = (find(vm.heap_mut()), find(&mut bare));
             let shift = |k: u16| k + first as u16;
-            assert_eq!(a, b.map(|(x, f)| (shift(x), f.map(shift))), "{g} {m:?}");
+            assert_eq!(a, b.map(|(x, f)| (shift(x), shift(f))), "{g} {m:?}");
             a
         };
         let mut k = first as u16;
@@ -226,39 +225,37 @@ mod tests {
             let mut names = group.split('.');
             let g = names.next().unwrap();
             let kx = k;
-            assert_eq!(both(g, None), Some((kx, None)));
-            assert_eq!(both(g, Some("nothing")), Some((kx, None)));
+            assert_eq!(both(g, None), Some((kx, kx)));
+            assert_eq!(both(g, Some("nothing")), Some((kx, kx)));
             for m in names {
                 k += 1;
-                assert_eq!(both(g, Some(m)), Some((kx, Some(k))));
+                assert_eq!(both(g, Some(m)), Some((kx, k)));
             }
             k += 1;
         }
         // A member is known under its own global only; other names are not known.
-        assert_eq!(both("Number", Some("floor")).unwrap().1, None);
+        let (x, f) = both("Number", Some("floor")).unwrap();
+        assert_eq!(x, f);
         assert_eq!(both("floor", None), None);
         assert_eq!(both("console", Some("log")), None);
         // (The index whose atom has the bits of `floor`'s.)
         let floor = vm.heap_mut().atom_str("floor").unwrap();
         let index = Atom::int(floor.id()).unwrap();
         let math = vm.heap_mut().atom_str("Math").unwrap();
-        assert_eq!(lookup(vm.heap(), math, Some(index)).unwrap().1, None);
+        let (x, f) = lookup(vm.heap(), math, index.id()).unwrap();
+        assert_eq!(x, f);
         assert!(pristine(vm.heap()));
-        // A VM from a base image has them too, with frozen builtins as well.
+        // A VM from a base image has them too (its build renumbers the atoms).
         vm.prepare_base_image().unwrap();
-        let opts = VmOptions {
-            frozen_builtins: true,
-            ..VmOptions::default()
-        };
-        let mut based = Vm::from_base(vm.bytes(), opts).unwrap();
+        let mut based = Vm::from_base(vm.bytes(), VmOptions::default()).unwrap();
         let math = based.heap_mut().atom_str("Math").unwrap();
         let floor = based.heap_mut().atom_str("floor").unwrap();
-        assert_eq!(
-            lookup(based.heap(), math, Some(floor)),
-            Some((first as u16, Some(first as u16 + 1)))
-        );
+        let k = first as u16;
+        assert_eq!(lookup(based.heap(), math, floor.id()), Some((k, k + 1)));
         assert!(pristine(based.heap()));
-        unpristine(vm.heap_mut());
-        assert!(!pristine(vm.heap()));
+        unpristine(based.heap_mut());
+        assert!(!pristine(based.heap()));
+        unpristine(based.heap_mut());
+        assert!(!pristine(based.heap()));
     }
 }

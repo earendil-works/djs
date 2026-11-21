@@ -1685,20 +1685,22 @@ fn fold_const_enum<'d>(
 /// jump skips that access too.
 #[inline(never)]
 fn emit_known(heap: &Heap, out: &mut CodeBuf, name: Atom, next: Option<&crate::bytecode::Insn>) {
-    let member = next.filter(|m| matches!(m.op, Op::GetMethod | Op::GetField));
-    let Some((kx, kf)) = crate::interp::known::lookup(heap, name, member.map(|m| m.atom(0))) else {
+    use crate::interp::known;
+    let (member, method) = match next {
+        Some(m) if m.op == Op::GetMethod => (m.imm(0), true),
+        Some(m) if m.op == Op::GetField => (m.imm(0), false),
+        _ => (known::NO_MEMBER, false),
+    };
+    let Some((kx, kf)) = known::lookup(heap, name, member) else {
         return;
     };
-    // (`get_global`, `get_field` and `get_method` have one size and no short form.)
-    let mut skip = Op::GetGlobal.size();
-    out.get_builtin(kf.unwrap_or(kx));
-    if let (Some(_), Some(m)) = (kf, member) {
-        skip += m.op.size();
-        if m.op == Op::GetMethod {
-            out.get_builtin(kx);
-        }
+    out.get_builtin(kf);
+    if kf != kx && method {
+        out.get_builtin(kx);
     }
-    out.skip8(skip as u8);
+    // (`get_global`, `get_field` and `get_method` have one size and no short form.)
+    let one = Op::GetGlobal.size() as u8;
+    out.skip8(if kf != kx { 2 * one } else { one });
 }
 
 /// The prelude function table slot of a reference, if it resolved to one.

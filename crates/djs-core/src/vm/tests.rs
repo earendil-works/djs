@@ -4349,3 +4349,87 @@ fn open_host_call_keeps_the_dump_s_id() {
     assert_eq!(vm.display(vm.outcome().unwrap().unwrap()), "A,0");
     vm.heap().verify().unwrap();
 }
+
+/// Known builtins (D3300): a later script's global lexical binding shadows a known
+/// global for the functions compiled before it; the site that read the table runs the
+/// ordinary lookup from then on (once through `step`, then through its patched jump).
+#[test]
+fn known_builtins_end_with_a_global_lexical() {
+    use crate::interp::known::pristine;
+    let (vm, out) = run_script(
+        vm(),
+        "function f(x) { return Math.floor(x) + ':' + String(x) + ':' + [x].map(Math.ceil); }\n\
+         var before = [f(1.5), f(2.5), f(3.5)].join();",
+    );
+    assert_eq!(out.result, "undefined");
+    assert!(pristine(vm.heap()));
+    // (`g` is compiled while the builtins are pristine, and first runs after.)
+    let (vm, _) = run_script(vm, "function g(x) { return Math.floor(x); }");
+    let (vm, out) = run_script(
+        vm,
+        "let Math = { floor: (x) => 'mine ' + x, ceil: (x) => 'up ' + x };\n\
+         [before, f(1.5), f(2.5), f(3.5), g(4.5), g(5.5)].join(' ')",
+    );
+    assert!(!pristine(vm.heap()));
+    assert_eq!(
+        out.result,
+        "1:1.5:2,2:2.5:3,3:3.5:4 mine 1.5:1.5:up 1.5 mine 2.5:2.5:up 2.5 mine 3.5:3.5:up 3.5 mine 4.5 mine 5.5"
+    );
+    // A `const` of another known name, in a VM made from an image of this one.
+    let opts = vm.options();
+    let vm = Vm::from_bytes(vm.image().to_vec(), opts).unwrap();
+    assert!(!pristine(vm.heap()));
+    let (_, out) = run_script(vm, "const String = () => 's'; f(1.5)");
+    assert_eq!(out.result, "mine 1.5:s:up 1.5");
+}
+
+/// Known builtins (D3300) with frozen builtins: a write to a builtin is refused and
+/// changes nothing, a global's binding can still change, and that ends the fast path.
+#[test]
+fn known_builtins_with_frozen_builtins() {
+    use crate::interp::known::pristine;
+    let frozen = VmOptions {
+        frozen_builtins: true,
+        ..VmOptions::default()
+    };
+    let (vm, out) = run_script(
+        vm_with(frozen),
+        "function f(x) { return Math.floor(x) + String(x); }\n\
+         var r = [f(1.5)];\n\
+         Math.floor = () => 'no'; r.push(f(2.5));\n\
+         try { Object.defineProperty(Math, 'floor', { value: 1 }); } catch (e) { r.push(e.name); }\n\
+         r.push(delete Math.floor, f(3.5)); r.join()",
+    );
+    assert_eq!(out.result, "11.5,22.5,TypeError,false,33.5");
+    assert!(pristine(vm.heap()));
+    let (vm, out) = run_script(
+        vm,
+        "String = (x) => '!'; globalThis.Math = { floor: () => 7 }; f(4.5)",
+    );
+    assert_eq!(out.result, "7!");
+    assert!(!pristine(vm.heap()));
+}
+
+/// Known builtins (D3300) across stops: a call's function and `this` come from the
+/// table, wait on the stack through image round trips and collections, and a change
+/// between two stops is seen by the next read.
+#[test]
+fn known_builtins_across_suspension() {
+    const SRC: &str = "function f(x) { return Math.max(Math.floor(x), Number.isInteger(x) ? 1 : 0) + String(x).length; }\n\
+        let t = 0; for (let i = 0; i < 40; i++) t += f(i + 0.5);\n\
+        Math.floor = (x) => 1000; for (let i = 0; i < 40; i++) t += f(i + 0.5);\n\
+        Number = { isInteger: () => true }; for (let i = 0; i < 5; i++) t += f(i + 0.5);\n\
+        console.log(t);";
+    let plain = run_js(SRC);
+    assert_eq!(plain.log, ["41105"]);
+    for fuel in [1, 7, 97] {
+        let (_, out) = finish_script(vm(), SRC, fuel, true);
+        assert_eq!(out, plain, "fuel {fuel}");
+    }
+    let stress = VmOptions {
+        gc_stress: true,
+        ..VmOptions::default()
+    };
+    let (_, out) = finish_script(vm_with(stress), SRC, 13, true);
+    assert_eq!(out, plain);
+}
