@@ -826,12 +826,13 @@ Control flow:
 | `construct` | `u16` argc | f a1..an → r | `new f(...)`, new.target = f, P1 |
 | `call_spread` / `construct_spread` | | f this arr → r / f arr → r | P1 |
 | `super_call` / `super_call_spread` | `u16` argc / | f a1..an nt → r / f arr nt → r | derived constructors (7.9) |
+| `super_call_frame` / `super_call_forward` | `u16` argc / | a1..an → r / → r | `super()` in the derived constructor itself: super constructor and new.target from the frame (7.9) |
 | `call_intrinsic` | `u16` id, `u16` argc | a1..an → r | privileged code only (7.3), P1 |
 | `get_iterator` | | o → iter | R (`%GetIterator` slow path), P1 |
 | `iter_check_object` | | v → v | TypeError if not an object, P1 |
 | `for_in_start` / `for_in_next` | | o → it / it → it key done | leaf (snapshot of keys), P1 |
 | `iterator_close` | | iter → | R (calls `return`), P1 |
-| `check_ctor` | | | class constructor called without `new`: TypeError |
+| `ctor_result` | | v → r | a base class constructor's `return v`: v if an object, else `this` |
 | `check_this` / `check_this_uninit` | | v → v / v → | a derived constructor's `this` (7.9) |
 | `check_ctor_return` | | v → v | a derived constructor's result: an object or `undefined` |
 | `throw_error` | `atom`, `u8` kind | | throws a TypeError/ReferenceError (`delete super.x`), TERM |
@@ -1619,16 +1620,28 @@ What the compiler emits:
   `StaticBlock` function (its own var scope), created and called by the static
   initializer at its position. `arguments` in either is an early error; `await` is
   reserved in static blocks.
-- **Constructors.** `check_ctor` first. A base constructor then calls `.fields` with
-  `this` (a runtime `undefined` check), before the parameters. A derived constructor
-  gets no `this` from `construct` (it is `undefined`, read through `check_this`);
-  `super(args)` is `<active>; get_super; args; new.target; super_call n`, then binds
-  `this` (`check_this_uninit`) and calls `.fields`. Its returns store the value in a
-  local and jump to an epilogue after the body, outside every try region (the result
-  check belongs to [[Construct]]): `check_ctor_return`, and `undefined` → the checked
-  `this`. Falling off the body returns the checked `this` directly; the epilogue is
-  emitted only when a `return` jumps to it (0236). Default constructors: `{}`, or `super(...args)` with `rest 0;
-  super_call_spread` (no iteration).
+- **Constructors.** A call without `new` never enters one: the template's
+  `func_flags::CLASS_CTOR` sends every call to `Exec::call`, which throws (0270). A
+  class constructor returns its object itself, and its construct frame returns as a
+  call's does: a base constructor ends with `special_object THIS; return`, and `return
+  v` is `v; ctor_result; return`. A base constructor calls `.fields` with `this` (a
+  runtime `undefined` check), before the parameters. A derived constructor gets no
+  `this` from `construct` (it is `undefined`, read through `check_this`). `super(args)`
+  in the constructor itself is `args; super_call_frame n` when the arguments run no
+  code (constants, the constructor's own bindings, literals of them), else
+  `special_object ACTIVE_FUNCTION; get_super` moved in front of the arguments, then
+  `special_object NEW_TARGET; super_call n`; in an arrow it is `<active>; get_super;
+  args; new.target; super_call n` through the captured pseudo-bindings. Then it binds
+  `this` (`check_this_uninit`) and calls `.fields`. A first `super()` that every run
+  reaches (no label created since the body began, no `return`, arrow or other
+  `super()` before it or in its arguments) needs no `check_this_uninit`, and the
+  constructor's own `this` reads after it no `check_this`. Its returns store the value
+  in a local and jump to an epilogue after the body, outside every try region (the
+  result check belongs to [[Construct]]): `check_ctor_return`, and `undefined` → the
+  checked `this`. Falling off the body returns the checked `this` directly; the
+  epilogue is emitted only when a `return` jumps to it (0236). Default constructors:
+  `special_object THIS; return`, or `super_call_forward` (the frame's arguments, no
+  array, no iteration).
 - **Home objects.** A function that uses `super.x` (itself or in arrows) declares the
   `<home>` pseudo-binding (`special_object HOME_OBJECT`); its template gets
   `func_flags::HOME`, and its closures a home slot after the captures, set by

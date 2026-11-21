@@ -996,7 +996,9 @@ impl Parser<'_, '_> {
                 let r = self.name_ref(s, pos);
                 self.code().name_get(r);
             }
-            (None, Key::Atom(a)) => self.code().push_atom(a),
+            // A plain name is `define_field`'s immediate (unless decorators run).
+            (None, Key::Atom(a)) if rec.is_some() => self.code().push_atom(a),
+            (None, Key::Atom(_)) => {}
             (None, Key::Private(a)) => {
                 let r = self.name_ref(a, pos);
                 self.code().name_get(r);
@@ -1040,6 +1042,8 @@ impl Parser<'_, '_> {
         self.mark(pos);
         if storage.is_some() || matches!(key, Key::Private(_)) {
             self.code().define_private_field(0);
+        } else if let (Key::Atom(a), None) = (key, rec) {
+            self.code().define_field(a, 0);
         } else {
             self.code().define_class_field();
         }
@@ -1247,9 +1251,10 @@ impl Parser<'_, '_> {
         Ok(())
     }
 
-    /// Starts a class constructor: the `new` check, and for a base class the field
-    /// initializer, which runs before the parameters (OrdinaryCallEvaluateBody after
-    /// InitializeInstanceElements, 10.2.2).
+    /// Starts a class constructor: for a base class the field initializer, which runs
+    /// before the parameters (OrdinaryCallEvaluateBody after InitializeInstanceElements,
+    /// 10.2.2). A call without `new` never gets here: the call paths throw it
+    /// (`func_flags::CLASS_CTOR`).
     fn begin_ctor(&mut self, b: &ClassBuild, props: Vec<Atom>) -> PResult<()> {
         let kind = if b.derived {
             FuncKind::DerivedCtor
@@ -1263,13 +1268,13 @@ impl Parser<'_, '_> {
         self.f.param_props = props;
         self.f.src_start = b.start;
         self.mark(pos);
-        self.code().check_ctor();
         if b.derived {
             let ret = self.heap.atom_str("<return>")?;
             self.f
                 .add_var(ret, VarKind::Internal, super::func::BODY_SCOPE);
             let l = self.new_label();
             self.f.ctor_return = Some((l, ret));
+            self.f.ctor_labels = self.f.code.label_count();
         } else {
             self.emit_this(pos);
             self.emit_param_prop_decls(pos);
@@ -1286,10 +1291,9 @@ impl Parser<'_, '_> {
         let props = self.ctor_param_props();
         for a in props {
             self.code().dup();
-            self.code().push_atom(a);
             self.code().undefined();
             self.mark(pos);
-            self.code().define_class_field();
+            self.code().define_field(a, 0);
             self.code().drop();
         }
     }
@@ -1321,23 +1325,13 @@ impl Parser<'_, '_> {
         let pos = b.start;
         self.begin_ctor(b, Vec::new())?;
         if b.derived {
-            self.declare_pseudo(VarKind::ActiveFunc);
-            let active = self.atom_active;
-            let r = self.name_ref(active, pos);
-            self.code().name_get(r);
-            self.code().get_super();
-            self.code().rest(0);
-            let nt = self
-                .new_target_ref(pos)
-                .ok_or_else(|| super::resolve::internal("no new.target"))?;
-            self.code().name_get(nt);
             self.mark(pos);
-            self.code().super_call_spread();
-            self.emit_bind_this(pos);
+            self.code().super_call_forward();
+            self.emit_bind_this(pos, true);
             self.code().return_();
             self.f.ctor_return = None;
         } else {
-            self.code().return_undef();
+            self.emit_return_undef();
         }
         self.end_function_at(Some(b.ctor_slot))?;
         Ok(())

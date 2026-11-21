@@ -1,0 +1,39 @@
+[{"x":1},{},{"r":7},{"f":1},{"x":2},{"x":3,"y":3},{"z":1},{"x":1}]
+class constructors must be invoked with 'new'
+class constructors must be invoked with 'new'
+derived class constructor must return an object or undefined
+4 9
+[{"a":[]},{"a":[1,2,3]},{"a":[5,{"cause":5},[5,1],"s",null]}]
+object true true
+'this' can be initialized only once
+{"x":3,"q":1}
+this is not initialized
+{"x":4,"q":1}
+this is not initialized
+{"x":1,"g":1}
+{"x":1,"o":1}
+'this' can be initialized only once
+ is not a constructor
+'Z0' is not defined
+{"p":7,"k":true} {"p":7,"k":false}
+3 true true
+Er: boom true true
+2
+true
+{"3":4,"x":1,"s t":2,"__proto__":6,"z":7} 3,x,y,s t,__proto__,z true 6
+f,g
+TypeError object is not extensible
+TypeError object is not extensible
+TypeError
+1 2
+TypeError class constructors must be invoked with 'new'
+{"x":1,"v":1} {"x":2,"v":2}
+arrow ReferenceError
+9
+twice 'this' can be initialized only once
+{"x":1,"t":1}
+11
+{"x":12}
+{"other":13}
+{"x":"TQ","y":"TQ!"}
+=== completed

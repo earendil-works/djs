@@ -1799,6 +1799,9 @@ impl Parser<'_, '_> {
     /// initializers.
     fn parse_super_call(&mut self, pos: u32) -> PResult<()> {
         use super::func::VarKind;
+        if matches!(self.own_this_function(), Ok(None)) {
+            return self.parse_own_super_call(pos);
+        }
         self.declare_pseudo(VarKind::ActiveFunc);
         let active = self.atom_active;
         let r = self.name_ref(active, pos);
@@ -1817,18 +1820,89 @@ impl Parser<'_, '_> {
             Args::Count(n) => self.code().super_call(n),
             Args::Array => self.code().super_call_spread(),
         }
-        self.emit_bind_this(pos);
+        self.emit_bind_this(pos, false);
         Ok(())
     }
 
+    /// `super(args)` in the derived constructor itself (0270): the super constructor
+    /// and new.target come from the frame, not from bindings its prologue sets up.
+    /// Arguments that run no code let `super_call_frame` read the super constructor
+    /// after them; otherwise it is read before them (SuperCall: GetSuperConstructor,
+    /// then ArgumentListEvaluation).
+    fn parse_own_super_call(&mut self, pos: u32) -> PResult<()> {
+        use crate::bytecode::special;
+        // Straight-line code from the entry, no `super()` before (in the arguments
+        // either) and no arrow that could have called one: `this` is unbound here, and
+        // bound for everything compiled after this call.
+        let straight = !self.f.ctor_return_used && self.f.code.label_count() == self.f.ctor_labels;
+        let unbound = |f: &super::func::FuncState| !f.super_called && !f.this_escaped;
+        let first = straight && unbound(&self.f);
+        self.names_push(pos, &["super.callee"]);
+        let start = self.f.code.pos();
+        let paren = self.tok.start;
+        let args = self.parse_args_as(ArgsOf::Super)?;
+        self.names_pop(1);
+        let first = first && unbound(&self.f);
+        self.f.super_called = true;
+        match args {
+            Args::Count(n) if self.runs_no_code(start) => {
+                self.mark(paren);
+                self.code().super_call_frame(n);
+            }
+            _ => {
+                let mid = self.f.code.pos();
+                self.code().special_object(special::ACTIVE_FUNCTION);
+                self.code().get_super();
+                let end = self.f.code.pos();
+                self.rotate_code(start, mid, end);
+                self.code().special_object(special::NEW_TARGET);
+                self.mark(paren);
+                match args {
+                    Args::Count(n) => self.code().super_call(n),
+                    Args::Array => self.code().super_call_spread(),
+                }
+            }
+        }
+        self.emit_bind_this(pos, first);
+        self.f.this_bound |= first;
+        Ok(())
+    }
+
+    /// Whether the code from `start` on only pushes constants, reads bindings of this
+    /// function and builds literals of them: nothing that runs user code.
+    fn runs_no_code(&self, start: u32) -> bool {
+        use crate::bytecode::Op;
+        self.f.code.insns_from(start).iter().all(|p| match p.op() {
+            Op::NameGet => {
+                let r = &self.f.refs[p.imm_a() as usize];
+                self.f.lookup(r.scope, r.atom).is_some()
+            }
+            Op::Undefined
+            | Op::Null
+            | Op::PushTrue
+            | Op::PushFalse
+            | Op::PushI8
+            | Op::PushI32
+            | Op::PushConst
+            | Op::PushAtom
+            | Op::Object
+            | Op::DefineField
+            | Op::ArrayFrom => true,
+            _ => false,
+        })
+    }
+
     /// After `super(...)` constructed `this` (on the stack, where it stays): binds it
-    /// (BindThisValue: a ReferenceError if it is bound already) and runs the field
-    /// initializers of the constructor's class (InitializeInstanceElements).
-    pub(super) fn emit_bind_this(&mut self, pos: u32) {
-        let this = self.this_ref(pos);
+    /// (BindThisValue: a ReferenceError if it is bound already; `unbound`: it cannot be)
+    /// and runs the field initializers of the constructor's class
+    /// (InitializeInstanceElements).
+    pub(super) fn emit_bind_this(&mut self, pos: u32, unbound: bool) {
         self.mark(pos);
-        self.code().name_get(this);
-        self.code().check_this_uninit();
+        if !unbound {
+            let this = self.this_ref(pos);
+            self.code().name_get(this);
+            self.code().check_this_uninit();
+        }
         self.code().dup();
         let this = self.this_ref(pos);
         self.code().name_put(this);

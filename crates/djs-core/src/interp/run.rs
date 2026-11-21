@@ -319,8 +319,8 @@ pub(crate) struct Exec<'h> {
     /// 0 for a bytecode frame. Native frames have `code_len` 0, so `fast_step` declines
     /// them and `step` hands them to `native_step`.
     native: u32,
-    /// Template flags that make the tier-0 loop's call decline: SLOPPY_THIS, NATIVE and
-    /// FAST.
+    /// Template flags that make the tier-0 loop's call decline: SLOPPY_THIS, NATIVE,
+    /// FAST and CLASS_CTOR.
     slow_call_flags: u32,
     /// The getter `field_slow` found through a cache slot, for `decline_getter` right
     /// after it in the same instruction (D3470). Never read later, never a root.
@@ -381,7 +381,10 @@ impl<'h> Exec<'h> {
             native: 0,
             // Builtins with generated Rust have no bytecode body (D3261): their calls
             // always take the native frame or the fast entry.
-            slow_call_flags: func_flags::SLOPPY_THIS | func_flags::FAST | func_flags::NATIVE,
+            slow_call_flags: func_flags::SLOPPY_THIS
+                | func_flags::FAST
+                | func_flags::NATIVE
+                | func_flags::CLASS_CTOR,
             hot_getter: Value::UNDEFINED,
             native_callee: None,
             own_shadow: None,
@@ -570,8 +573,7 @@ impl<'h> Exec<'h> {
     }
 
     /// `push_frame` with the template's fields already read. `new_target` is a
-    /// construct's: the frame is flagged as one and holds it before the entry's
-    /// safepoint, which may move it.
+    /// construct's: the frame holds it before the entry's safepoint, which may move it.
     #[inline(always)]
     #[allow(clippy::too_many_arguments)]
     fn push_frame_head(
@@ -595,7 +597,7 @@ impl<'h> Exec<'h> {
             Value::int(if bottom { 0 } else { self.hp as i32 }),
             Value::int(ret_pc as i32),
             Value::int(argc as i32),
-            Value::int(cont.to_flags() | new_target.map_or(0, |_| frame::FLAG_CONSTRUCT)),
+            Value::int(cont.to_flags()),
             new_target.unwrap_or(Value::UNDEFINED),
         ];
         let vals = ValueArray::VALUES.at(self.stack, 0);
@@ -652,6 +654,10 @@ impl<'h> Exec<'h> {
                 }
                 if flags & func_flags::SLOPPY_THIS != 0 {
                     self.bind_sloppy_this(base + 1)?;
+                }
+                // (A construct pushes its frame itself, `construct_call`.)
+                if flags & func_flags::CLASS_CTOR != 0 {
+                    return type_error("class constructors must be invoked with 'new'");
                 }
                 let th = hot::template_head(self.heap.arena().bytes(), t);
                 let top = base + 2 + argc.max(th.params) + HEADER + th.locals + th.stack;
@@ -2603,14 +2609,15 @@ impl<'h> Exec<'h> {
             Op::DefineField => {
                 let key = self.imm_atom();
                 let ic = self.imm_u16(5);
-                let v = {
-                    self.sp -= 1;
-                    t0
-                };
-                let o = t1.as_object().expect("object literal");
-                let old = self.heap.receiver_shape(o);
-                self.heap.create_data_property(o, key, v)?;
-                self.ic_add_fill(o, key, old, false, ic);
+                let (o, v) = (t1, t0);
+                let obj = o.as_object().expect("object literal or class field target");
+                let old = self.heap.receiver_shape(obj);
+                // A class field's target may be any object a base constructor returned.
+                if self.heap.is_proxy(obj) || !self.heap.create_data_property(obj, key, v)? {
+                    return self.define_field_slow(o, key, v, 1, next);
+                }
+                self.sp -= 1;
+                self.ic_add_fill(obj, key, old, false, ic);
             }
             Op::In => {
                 let (k, o) = (t1, t0);
@@ -3106,7 +3113,9 @@ impl<'h> Exec<'h> {
             | Op::DefineClassField
             | Op::SuperCall
             | Op::SuperCallSpread
-            | Op::CheckCtor
+            | Op::SuperCallFrame
+            | Op::SuperCallForward
+            | Op::CtorResult
             | Op::CheckThis
             | Op::CheckThisUninit
             | Op::CheckCtorReturn
@@ -4465,7 +4474,7 @@ impl<'h> Exec<'h> {
                 let th = hot::template_head(self.heap.arena().bytes(), t);
                 self.ensure(base + 2 + argc.max(th.params) + HEADER + th.locals + th.stack)?;
                 let nt = new_target.unwrap_or(f);
-                let cont = Continuation::ConstructResult;
+                let cont = self.construct_cont(fo, flags);
                 self.push_frame_head(t, &th, base, argc, cont, next, Some(nt));
                 return Ok(None);
             }
@@ -4484,11 +4493,23 @@ impl<'h> Exec<'h> {
             v
         });
         let r = r?;
-        let flags = self.header_int(frame::FLAGS) as i32 | frame::FLAG_CONSTRUCT;
-        self.set(self.hp + frame::FLAGS, Value::int(flags));
         let f = nt.unwrap_or_else(|| self.get(self.bp));
         self.set(self.hp + frame::NEW_TARGET, f);
         Ok(r)
+    }
+
+    /// The continuation of a construct's bytecode frame for function `fo` (template
+    /// flags `flags`): class constructors and builtins return the constructed object
+    /// themselves, so their frames return as calls do (the tier-0 loop takes those
+    /// returns); a plain function's result is checked (0270).
+    pub(super) fn construct_cont(&self, fo: Obj, flags: u32) -> Continuation {
+        let builtin =
+            self.heap.cell_flags(fo.offset()) & crate::heap::cells::flags::OBJ_BUILTIN != 0;
+        if builtin || flags & func_flags::CLASS_CTOR != 0 {
+            Continuation::PushResult
+        } else {
+            Continuation::ConstructResult
+        }
     }
 
     /// Whether `v instanceof f` needs the builtin InstanceofOperator: `f` has a

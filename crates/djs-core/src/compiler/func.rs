@@ -311,6 +311,14 @@ pub(super) struct FuncState {
     pub ctor_return: Option<(crate::bytecode::Label, Atom)>,
     /// A `return` jumped to that epilogue (falling off the body does not).
     pub ctor_return_used: bool,
+    /// Derived constructors (0270): the number of labels when the body began (a later
+    /// one means code that may not run, or run again); a `super()` of the function
+    /// itself was compiled; an arrow that may call `super()` was; `this` is bound for
+    /// all the code compiled from here on (a first `super()` that every run reaches).
+    pub ctor_labels: u32,
+    pub super_called: bool,
+    pub this_escaped: bool,
+    pub this_bound: bool,
     /// `async` function (or the codemode body): `await` is an operator.
     pub is_async: bool,
     /// Generator function: `yield` is an operator.
@@ -467,6 +475,10 @@ impl FuncState {
             fields_atom: Atom::NULL,
             ctor_return: None,
             ctor_return_used: false,
+            ctor_labels: 0,
+            super_called: false,
+            this_escaped: false,
+            this_bound: false,
             is_async: false,
             is_generator: false,
             tail_call: None,

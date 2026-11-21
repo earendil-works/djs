@@ -15,8 +15,7 @@ use crate::heap::cells::FuncTemplate;
 use crate::heap::cells::flags::{SYM_PRIVATE_METHOD, SYM_PRIVATE_READONLY};
 use crate::heap::{Atom, ObjectClass, PropFlags, Property, PropertyDescriptor, atoms};
 use crate::interp::conv::{self, Fault, type_error};
-use crate::interp::frame;
-use crate::interp::frame::Continuation;
+use crate::interp::frame::{self, Continuation};
 use crate::interp::realm::{ErrorKind, Intrinsic, intrinsic_obj};
 use crate::value::{Obj, Value};
 
@@ -221,34 +220,24 @@ impl Exec<'_> {
                 let (o, k, v) = (self.top(2), self.top(1), self.top(0));
                 let key = self.property_key(o, k)?;
                 let obj = o.as_object().expect("class field target");
-                if self.heap.is_proxy(obj) {
-                    // The proxy's defineProperty trap.
-                    self.sp -= 2;
-                    self.pc = next;
-                    let k = self.heap.atom_to_value(key)?;
-                    return self.call_prelude(
-                        PROXY_CREATE_DATA_PROPERTY_OR_THROW,
-                        &[o, k, v],
-                        Continuation::DiscardResult,
-                    );
-                }
                 // CreateDataPropertyOrThrow.
-                if !self.heap.create_data_property(obj, key, v)? {
-                    return type_error(if self.heap.has_own_property(obj, key) {
-                        "could not define property"
-                    } else {
-                        "object is not extensible"
-                    });
+                if self.heap.is_proxy(obj) || !self.heap.create_data_property(obj, key, v)? {
+                    return self.define_field_slow(o, key, v, 2, next);
                 }
                 self.sp -= 2;
             }
-            Op::SuperCall | Op::SuperCallSpread => {
-                let nt = self.pop();
-                let argc = if op == Op::SuperCall {
-                    self.imm_u16(1)
-                } else {
-                    let args = self.top(0);
-                    self.spread_args(args)?
+            Op::SuperCall | Op::SuperCallSpread | Op::SuperCallFrame | Op::SuperCallForward => {
+                let nt = match op {
+                    Op::SuperCall | Op::SuperCallSpread => self.pop(),
+                    _ => self.header(frame::NEW_TARGET),
+                };
+                let argc = match op {
+                    Op::SuperCall => self.imm_u16(1),
+                    Op::SuperCallSpread => {
+                        let args = self.top(0);
+                        self.spread_args(args)?
+                    }
+                    _ => self.place_frame_super(op == Op::SuperCallFrame)?,
                 };
                 // qjs's messages: the super constructor is the class's [[Prototype]].
                 let f = self.top(argc);
@@ -261,9 +250,10 @@ impl Exec<'_> {
                 }
                 return self.construct_with(argc, next, Some(nt));
             }
-            Op::CheckCtor => {
-                if self.header_int(frame::FLAGS) as i32 & frame::FLAG_CONSTRUCT == 0 {
-                    return type_error("class constructors must be invoked with 'new'");
+            Op::CtorResult => {
+                if self.top(0).as_object().is_none() {
+                    let this = self.get(self.bp + 1);
+                    self.set(self.sp - 1, this);
                 }
             }
             Op::CheckThis => {
@@ -484,5 +474,70 @@ impl Exec<'_> {
         }
         self.sp -= n;
         Ok(None)
+    }
+
+    /// `super_call_frame argc` (`a1 .. an`) or `super_call_forward`: the active
+    /// function's [[Prototype]] under the arguments, which are the frame's own for
+    /// `super_call_forward` (`f a1 .. an`, as `super_call` has them). Returns argc.
+    fn place_frame_super(&mut self, frame_args: bool) -> Result<u32, Fault> {
+        let f = self.frame_super();
+        if frame_args {
+            let argc = self.imm_u16(1);
+            self.ensure(self.sp + 1)?;
+            let base = self.sp - argc;
+            for i in (0..argc).rev() {
+                let v = self.get(base + i);
+                self.set(base + 1 + i, v);
+            }
+            self.set(base, f);
+            self.sp += 1;
+            return Ok(argc);
+        }
+        let argc = self.header_int(frame::ARGC);
+        self.ensure(self.sp + 1 + argc)?;
+        self.push(f);
+        for i in 0..argc {
+            let v = self.get(self.bp + 2 + i);
+            self.push(v);
+        }
+        Ok(argc)
+    }
+
+    /// The super constructor of the running (derived constructor) frame: its function's
+    /// [[Prototype]] (a class constructor is never a proxy).
+    pub(super) fn frame_super(&self) -> Value {
+        let active = self.get(self.bp).as_object().expect("frame callee");
+        self.heap
+            .get_prototype_of(active)
+            .map_or(Value::NULL, Value::object)
+    }
+
+    /// A class field `key` = `v` on `o` that is a proxy (its defineProperty trap) or
+    /// refused the definition (a TypeError): `o` stays of the instruction's `n`
+    /// operands above it.
+    pub(super) fn define_field_slow(
+        &mut self,
+        o: Value,
+        key: Atom,
+        v: Value,
+        n: u32,
+        next: u32,
+    ) -> Step {
+        let obj = o.as_object().expect("class field target");
+        if self.heap.is_proxy(obj) {
+            self.sp -= n;
+            self.pc = next;
+            let k = self.heap.atom_to_value(key)?;
+            return self.call_prelude(
+                PROXY_CREATE_DATA_PROPERTY_OR_THROW,
+                &[o, k, v],
+                Continuation::DiscardResult,
+            );
+        }
+        type_error(if self.heap.has_own_property(obj, key) {
+            "could not define property"
+        } else {
+            "object is not extensible"
+        })
     }
 }

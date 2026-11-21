@@ -53,6 +53,11 @@ pub mod func_flags {
     /// D2445: a privileged template whose `NAME` and `LENGTH` are its builtin closure's
     /// lazy `name` and `length` (set at base-image build time): the base keeps the name.
     pub const LAZY_NAME: u32 = 1 << 12;
+    /// A class constructor (either kind): a call without `new` is a TypeError, which the
+    /// call paths raise (the flag is in `Exec::slow_call_flags`, so the fast ones leave
+    /// it to `Exec::call`). Its code returns the constructed object itself, so a
+    /// construct enters it as an ordinary call that pushes its result (0270).
+    pub const CLASS_CTOR: u32 = 1 << 13;
 
     pub const fn kind(flags: u32) -> u32 {
         flags & KIND_MASK

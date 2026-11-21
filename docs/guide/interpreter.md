@@ -54,8 +54,8 @@ hp      prev_bp           int32
 hp+1    prev_hp           int32
 hp+2    ret_pc            int32: the caller's pc to resume
 hp+3    argc              int32: actual argument count
-hp+4    flags             int32: continuation | construct bit | native bit
-hp+5    new_target        Value
+hp+4    flags             int32: continuation | native bit
+hp+5    new_target        Value: undefined for a call
 lp      locals            lp = hp + 6, filled with undefined
 sb      operand stack     sb = lp + locals
 ```
@@ -156,7 +156,7 @@ There are only a few continuations:
 | --- | --- |
 | `PushResult` | push the value on the caller's operand stack (calls, getters) |
 | `DiscardResult` | drop it (setters) |
-| `ConstructResult` | use it if it is an object, else the frame's `this` (constructors) |
+| `ConstructResult` | use it if it is an object, else the frame's `this` (plain functions under `new`; class and builtin constructors return their object themselves and get `PushResult`) |
 | `Entry` | the bottom frame of the embedder's call: `run` returns `Done` |
 | `Job` | the bottom frame of a promise job: drop it and run the next job |
 | `Replace(slot)` | store it in a stack slot of the caller and continue after the instruction |
@@ -298,10 +298,15 @@ faster loop in front of it:
   keeps the loop's own code as small as it is: a `@fast` or `@rust` builtin call (with
   `arr.push(x)` appended straight to the array), `+` of a string with a primitive, the
   parts of a template literal, `<` of two strings, `in` with a string key, the call of a
-  getter that a cache slot found, and the instructions of `new`: the construct itself, the return into the constructing frame,
-  `new.target`, the class constructor checks and `super()`. A trip through `step` costs
-  more than most of these instructions do, and one `new C()` meets several of them.
-  Nothing the tier-0 loop does itself can collect or run user code, which
+  getter that a cache slot found, and the instructions of `new`: the construct itself,
+  the return into a plain function's constructing frame, `new.target`, the derived
+  constructor checks and `super()`. A trip through `step` costs more than most of these
+  instructions do, so the compiler keeps them out of class constructors where it can: a
+  call of a class without `new` is refused by the call itself, a class constructor
+  returns its object as a call returns its value, `super(...)` reads the super
+  constructor and new.target from the frame, and `this` is not checked after a first
+  `super()` that every run reaches. `new C()` leaves the loop once, a derived class once
+  more per `super()`. Nothing the tier-0 loop does itself can collect or run user code, which
   is why it may hold the state in locals. It charges the same fuel and stops at the same
   safepoints as the general path, so turning it off changes no result, no fuel count and
   no image.

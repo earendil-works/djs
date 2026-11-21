@@ -49,17 +49,17 @@ function 0.2 default: params=0 locals=0 stack=2 captures=1
 function 0.3 C: params=0 locals=1 stack=3 captures=1
     0  special_object 4
     2  put_loc0 (this)
-    3  check_ctor  ; 16:1
-    4  get_loc0 (this)
-    5  get_cap cap0 (<fields 0>)
-    8  dup
-    9  is_undefined
-   10  jump_if_true8 -> 15
-   12  pick 1
-   14  call0
+    3  get_loc0 (this)  ; 16:1
+    4  get_cap cap0 (<fields 0>)
+    7  dup
+    8  is_undefined
+    9  jump_if_true8 -> 14
+   11  pick 1
+   13  call0
+   14  drop
    15  drop
-   16  drop
-   17  return_undef
+   16  special_object 4
+   18  return
 module:
   env 0 d kind 3 aux 0
   env 1 a kind 3 aux 0

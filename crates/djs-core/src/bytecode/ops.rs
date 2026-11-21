@@ -510,8 +510,9 @@ ops! {
     GetElemMethod get_elem_method() pop 2 push 2 cost Access flags THROWS | CALLS;
     /// `obj key v ->`
     PutElem put_elem() pop 3 push 0 cost Access flags THROWS | CALLS | ALLOC;
-    /// `obj v -> obj`: CreateDataProperty (literals).
-    DefineField define_field(atom: Atom, ic: Cache) pop 2 push 1 cost Access flags THROWS | ALLOC;
+    /// `obj v -> obj`: CreateDataProperty (literals), or CreateDataPropertyOrThrow of a
+    /// class field with a plain name (any object: a proxy's trap runs).
+    DefineField define_field(atom: Atom, ic: Cache) pop 2 push 1 cost Access flags THROWS | CALLS | ALLOC;
     /// `obj key v -> obj`: computed keys.
     DefineElem define_elem() pop 3 push 1 cost Access flags THROWS | CALLS | ALLOC;
     /// `obj f -> obj`
@@ -678,6 +679,13 @@ ops! {
     SuperCall super_call(argc: Argc) pop 2 + imm 0 push 1 cost Call flags THROWS | CALLS | ALLOC;
     /// `f args newTarget -> r`: `super(...args)` with an argument array (spread).
     SuperCallSpread super_call_spread() pop 3 push 1 cost Call flags THROWS | CALLS | ALLOC;
+    /// `a1 .. an -> r`: `super(...)` in the derived constructor itself, with arguments
+    /// that run no code: constructs the active function's [[Prototype]] with the
+    /// frame's new.target (0270).
+    SuperCallFrame super_call_frame(argc: Argc) pop 0 + imm 0 push 1 cost Call flags THROWS | CALLS | ALLOC;
+    /// `-> r`: a default derived constructor's `super(...args)`: `super_call_frame` with
+    /// the frame's own arguments (no array).
+    SuperCallForward super_call_forward() pop 0 push 1 cost Call flags THROWS | CALLS | ALLOC;
     /// `a1 .. an -> r`: privileged code only (docs/compiler.md 7.3).
     CallIntrinsic call_intrinsic(id: Intrinsic, argc: Argc) pop 0 + imm 1 push 1 cost Call flags THROWS | CALLS | ALLOC;
     // ---- Generators and async functions (D1375; docs/compiler.md 7.7) ------------------
@@ -724,8 +732,9 @@ ops! {
     ForInStart for_in_start() pop 1 push 1 cost Alloc flags THROWS | ALLOC;
     /// `it -> it key done`
     ForInNext for_in_next() pop 1 push 3 cost Access flags THROWS;
-    /// TypeError if a class constructor is called without `new`.
-    CheckCtor check_ctor() pop 0 push 0 cost Basic flags THROWS;
+    /// `v -> r`: `return v` in a base class constructor: `v` if it is an object, else the
+    /// frame's `this` (the constructor's code returns its own result, 0270).
+    CtorResult ctor_result() pop 1 push 1 cost Basic;
     /// `v -> v`: a derived constructor's `this`: ReferenceError while uninitialized
     /// (`undefined`, before `super()`).
     CheckThis check_this() pop 1 push 1 cost Basic flags THROWS;

@@ -526,6 +526,10 @@ impl Parser<'_, '_> {
         if self.f.is_async && !self.f.is_generator {
             self.code().async_return(0);
         } else {
+            if self.f.kind == FuncKind::ClassCtor {
+                // A class constructor returns its result itself (0270).
+                self.code().ctor_result();
+            }
             self.code().return_();
         }
     }
@@ -566,6 +570,10 @@ impl Parser<'_, '_> {
         if self.f.is_async && !self.f.is_generator {
             self.code().undefined();
             self.code().async_return(0);
+        } else if self.f.kind == FuncKind::ClassCtor {
+            // A class constructor returns its result itself: `this` (0270).
+            self.code().special_object(crate::bytecode::special::THIS);
+            self.code().return_();
         } else {
             self.code().return_undef();
         }
@@ -584,6 +592,12 @@ impl Parser<'_, '_> {
             self.next()?;
         }
         self.enter()?;
+        // An arrow in a derived constructor may call `super()` (0270).
+        match self.own_this_function() {
+            Ok(None) => self.f.this_escaped = true,
+            Ok(Some(i)) => self.stack[i].f.this_escaped = true,
+            Err(()) => {}
+        }
         self.begin_function(FuncKind::Arrow)?;
         self.start_flavor((is_async, false))?;
         self.f.name = hint;

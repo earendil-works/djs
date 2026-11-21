@@ -108,6 +108,15 @@ pub struct P1 {
 }
 
 impl P1 {
+    pub fn op(self) -> Op {
+        self.op
+    }
+
+    /// The first immediate, raw.
+    pub fn imm_a(self) -> u32 {
+        self.a
+    }
+
     /// The instruction, with `pc` = its index.
     pub fn insn(self, index: u32) -> Insn {
         Insn::from_parts(self.op, index, [self.a, self.b])
@@ -462,6 +471,11 @@ impl CodeBuf<Final> {
 }
 
 impl CodeBuf<Phase1> {
+    /// The instructions from index `start` on.
+    pub fn insns_from(&self, start: u32) -> &[P1] {
+        self.insns.get(start as usize..).unwrap_or(&[])
+    }
+
     /// Moves the code in `mid..end` in front of `start..mid` (loop rotation, 0086).
     /// Phase-1 code refers to labels, not positions, so only the jump fixups move along.
     /// Nothing before `end` can be truncated afterwards, so the fixups need not stay

@@ -118,7 +118,8 @@ impl Exec<'_> {
             let script = debug.script;
             let builtin = self.heap.cell_flags(f.offset()) & OBJ_BUILTIN != 0;
             let flags = self.get(hp + frame::FLAGS).as_int().unwrap_or(0);
-            let construct = flags & frame::FLAG_CONSTRUCT != 0;
+            // A construct's frame holds its new.target (a call's is undefined).
+            let construct = !self.get(hp + frame::NEW_TARGET).is_undefined();
             // Prelude frames: privileged templates (D1980), or the prelude's script.
             let in_prelude =
                 u32::from(a.get::<u16>(t, FuncTemplate::FLAGS)) & func_flags::PRIVILEGED != 0

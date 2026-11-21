@@ -1642,6 +1642,9 @@ fn template_flags(f: &FuncState, privileged: bool) -> u32 {
     if f.home_var.is_some() {
         flags |= func_flags::HOME;
     }
+    if matches!(f.kind, FuncKind::ClassCtor | FuncKind::DerivedCtor) {
+        flags |= func_flags::CLASS_CTOR;
+    }
     flags
 }
 

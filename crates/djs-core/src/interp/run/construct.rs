@@ -9,6 +9,14 @@
 //! frame, safepoints), or returns false having changed nothing and `step` runs it: an
 //! error to throw, a callee or a `prototype` that needs the general path, a stack that
 //! must grow, the heap cap.
+//!
+//! The compiler keeps most of them out of class constructors (0270): a call without
+//! `new` is refused by the call paths (no `check_ctor`), class and builtin constructors
+//! return their object themselves (their frames return as calls do, in `run_hot`),
+//! `super(...)` in the constructor itself reads the super constructor and new.target
+//! from the frame (`super_call_frame`, `super_call_forward`), and `this` needs no check
+//! after a first `super()` that every run reaches. A class `new` now leaves the loop
+//! once (`construct`), a derived one once more per `super()`.
 
 use super::{Exec, NO_RETRY, fast};
 use crate::bytecode::template::func_flags;
@@ -19,10 +27,10 @@ use crate::value::Value;
 
 const CONSTRUCT: u8 = Op::Construct as u8;
 const SUPER_CALL: u8 = Op::SuperCall as u8;
-const SUPER_CALL_SPREAD: u8 = Op::SuperCallSpread as u8;
+const SUPER_CALL_FRAME: u8 = Op::SuperCallFrame as u8;
+const SUPER_CALL_FORWARD: u8 = Op::SuperCallForward as u8;
 const REST: u8 = Op::Rest as u8;
 const GET_SUPER: u8 = Op::GetSuper as u8;
-const CHECK_CTOR: u8 = Op::CheckCtor as u8;
 const CHECK_THIS: u8 = Op::CheckThis as u8;
 const CHECK_THIS_UNINIT: u8 = Op::CheckThisUninit as u8;
 const CHECK_CTOR_RETURN: u8 = Op::CheckCtorReturn as u8;
@@ -35,17 +43,28 @@ pub(super) fn takes(op: u8) -> bool {
         op,
         CONSTRUCT
             | SUPER_CALL
-            | SUPER_CALL_SPREAD
+            | SUPER_CALL_FRAME
+            | SUPER_CALL_FORWARD
             | REST
             | fast::RETURN
             | fast::RETURN_UNDEF
             | fast::SPECIAL_OBJECT
-            | CHECK_CTOR
             | CHECK_THIS
             | CHECK_THIS_UNINIT
             | CHECK_CTOR_RETURN
             | GET_SUPER
     )
+}
+
+/// Where `construct_fast` finds the arguments.
+#[derive(Clone, Copy)]
+enum Args {
+    /// Above the callee (`f a1 .. an`).
+    Above,
+    /// Where the callee goes (`a1 .. an`, `super_call_frame`).
+    Below,
+    /// The frame's own (`super_call_forward`).
+    Frame,
 }
 
 impl Exec<'_> {
@@ -57,7 +76,9 @@ impl Exec<'_> {
             return false;
         }
         let done = match op {
-            CONSTRUCT | SUPER_CALL | SUPER_CALL_SPREAD => self.construct_fast(op),
+            CONSTRUCT | SUPER_CALL | SUPER_CALL_FRAME | SUPER_CALL_FORWARD => {
+                self.construct_fast(op)
+            }
             REST => {
                 // An allocation that fails changes nothing: `step` runs it then.
                 let Ok(a) = self.rest_array() else {
@@ -75,10 +96,6 @@ impl Exec<'_> {
                 };
                 self.push(v);
                 self.advance_op(Op::SpecialObject)
-            }
-            CHECK_CTOR => {
-                self.header_int(frame::FLAGS) as i32 & frame::FLAG_CONSTRUCT != 0
-                    && self.advance_op(Op::CheckCtor)
             }
             CHECK_THIS => !self.top(0).is_undefined() && self.advance_op(Op::CheckThis),
             CHECK_THIS_UNINIT => {
@@ -122,27 +139,39 @@ impl Exec<'_> {
         true
     }
 
-    /// `construct argc` (`f a1 .. an`), `super_call argc` (`f a1 .. an newTarget`) or
-    /// `super_call_spread` (`f args newTarget`, the arguments in an array) of a
-    /// bytecode function or builtin constructor whose frame fits the stack: what
-    /// `construct_with` does after its checks.
+    /// `construct argc` (`f a1 .. an`), `super_call argc` (`f a1 .. an newTarget`),
+    /// `super_call_frame argc` (`a1 .. an`) or `super_call_forward` (the frame's
+    /// arguments) of a bytecode function or builtin constructor whose frame fits the
+    /// stack: what `construct_with` does after its checks. (`super_call_spread`, a
+    /// spread in `super(...)`, goes through `step`.)
     fn construct_fast(&mut self, op: u8) -> bool {
         let sup = op != CONSTRUCT;
-        let (base, argc, spread) = if op == SUPER_CALL_SPREAD {
-            // The compiler's argument array: its elements, in place of it (`spread_args`).
-            let Some(a) = self.top(1).as_object() else {
-                return false;
-            };
-            let n = self.heap.array_length(a);
-            if (0..n).any(|i| self.heap.get_element_fast(a, i).is_none()) {
-                return false;
+        // Where the arguments come from, and the new.target of a super call.
+        let (base, argc, args, f, nt) = match op {
+            SUPER_CALL_FRAME => {
+                let argc = self.imm_u16(1);
+                let nt = self.header(frame::NEW_TARGET);
+                (
+                    self.sp - argc,
+                    argc,
+                    Args::Below,
+                    self.frame_super(),
+                    Some(nt),
+                )
             }
-            (self.sp - 3, n, Some(a))
-        } else {
-            let argc = self.imm_u16(1);
-            (self.sp - 1 - argc - sup as u32, argc, None)
+            SUPER_CALL_FORWARD => {
+                let argc = self.header_int(frame::ARGC);
+                let nt = self.header(frame::NEW_TARGET);
+                (self.sp, argc, Args::Frame, self.frame_super(), Some(nt))
+            }
+            _ => {
+                let argc = self.imm_u16(1);
+                let base = self.sp - 1 - argc - sup as u32;
+                let nt = sup.then(|| self.top(0));
+                (base, argc, Args::Above, self.get(base), nt)
+            }
         };
-        let Some(fo) = self.get(base).as_object() else {
+        let Some(fo) = f.as_object() else {
             return false;
         };
         // (Bound functions and proxies are not of this class.)
@@ -164,7 +193,6 @@ impl Exec<'_> {
         if top > self.heap.value_array_capacity(self.stack) {
             return false;
         }
-        let nt = sup.then(|| self.top(0));
         let info = &OPS[op as usize];
         let next = self.pc + info.size as u32;
         // A constructor's `new` entry, as `construct_with` tries it: a host refusal
@@ -184,18 +212,30 @@ impl Exec<'_> {
             return false;
         };
         self.fuel -= info.cost.fuel() as i64;
-        if let Some(a) = spread {
-            // `f this a1 .. an` (the frame overwrites what lies above).
-            for i in 0..argc {
-                let v = self.heap.get_element_fast(a, i).unwrap_or(Value::UNDEFINED);
-                self.set(base + 2 + i, v);
+        // `f this a1 .. an` (the frame overwrites what lies above).
+        match args {
+            Args::Above => {
+                for i in (0..argc).rev() {
+                    let v = self.get(base + 1 + i);
+                    self.set(base + 2 + i, v);
+                }
             }
-            self.set(base + 1, this);
-            self.sp = base + 2 + argc;
-        } else {
-            self.sp -= sup as u32;
-            self.insert_this(base, argc, this);
+            Args::Below => {
+                for i in (0..argc).rev() {
+                    let v = self.get(base + i);
+                    self.set(base + 2 + i, v);
+                }
+            }
+            Args::Frame => {
+                for i in 0..argc {
+                    let v = self.get(self.bp + 2 + i);
+                    self.set(base + 2 + i, v);
+                }
+            }
         }
+        self.set(base, f);
+        self.set(base + 1, this);
+        self.sp = base + 2 + argc;
         // Cannot fail: the frame fits and `this` needs no binding.
         let r = self.construct_call(base, argc, nt, next);
         debug_assert!(matches!(r, Ok(None)));

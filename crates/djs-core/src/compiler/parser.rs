@@ -1477,12 +1477,15 @@ impl<'a, 'h> Parser<'a, 'h> {
     }
 
     /// Reads `this`. In a derived constructor (or an arrow in one) it is checked: it is
-    /// uninitialized until `super()` returns.
+    /// uninitialized until `super()` returns (not in the constructor itself after a
+    /// `super()` that every run reaches first, 0270).
     pub fn emit_this(&mut self, pos: u32) {
         let r = self.this_ref(pos);
         self.mark(pos);
         self.code().name_get(r);
-        if self.own_this_kind() == Some(FuncKind::DerivedCtor) {
+        if self.own_this_kind() == Some(FuncKind::DerivedCtor)
+            && !(self.f.kind == FuncKind::DerivedCtor && self.f.this_bound)
+        {
             self.code().check_this();
         }
     }
