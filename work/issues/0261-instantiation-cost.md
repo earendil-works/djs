@@ -1,6 +1,6 @@
 # 0261: Instantiation and sandbox setup costs
 
-status: open
+status: in-progress
 agent: pstart
 branch: issue/0261-instantiation-cost
 depends-on: 0256
