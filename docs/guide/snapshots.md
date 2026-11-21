@@ -155,7 +155,7 @@ the realm record, `Math.random`'s state, the global object, the global lexical s
 `Symbol.for`'s registry, Map and Set tables, the atom table's cell with room for the
 atoms the VM adds, the host call table, the interpreter state and the value stack, the
 queues for promise jobs, host results and unhandled rejections, and the VM's own shape
-tree, already holding the shapes of the objects builtins create; <!--n base/tail kb.1-->10.1 KB<!--/n--> in all.
+tree, already holding the shapes of the objects builtins create; <!--n base/tail kb.1-->10.4 KB<!--/n--> in all.
 Everything before the tail is the **builtin prefix**, which no VM writes to while
 builtins are merely used. The builtins' objects are marked as prototypes when the base is
 built, not when a cache first goes through them. Strings in the prefix don't cache their
