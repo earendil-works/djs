@@ -72,11 +72,27 @@ pub fn base_len() -> usize {
     djs_lzrc::decoded_len(&PACKED_HEADER).expect("the coded base has a header")
 }
 
-/// Whether `bytes` are the base image, by the coded image's length and FNV-1a hash: for a
-/// copy a host decoded once for many instances (D2252).
+/// Whether `bytes` are the base image, by its length and a sample of its bytes: for a copy
+/// a host decoded once for many instances (D2252). An identity check, not an integrity
+/// check (D3271): the host can write anywhere in the instance's memory anyway, and hashing
+/// all of the base cost every new instance more than the rest of its VM's setup.
 #[cfg(feature = "packed")]
 pub fn is_base(bytes: &[u8]) -> bool {
-    djs_lzrc::matches(&PACKED_HEADER, bytes)
+    bytes.len() == base_len() && base_sample(bytes) == BASE_SAMPLE
+}
+
+/// FNV-1a over the first 256 bytes (the roots: offsets that move with any change) and
+/// then one 8-byte word in every 504 bytes, about 360 words of the base's 23,000.
+#[cfg(feature = "packed")]
+fn base_sample(b: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut i = 0;
+    while let Some(w) = b.get(i..i + 8) {
+        let w: [u8; 8] = w.try_into().unwrap_or_default();
+        h = (h ^ u64::from_le_bytes(w)).wrapping_mul(0x100_0000_01b3);
+        i += if i < 256 { 8 } else { 504 };
+    }
+    h
 }
 
 /// A new VM from [`BASE`]. `opts.prelude` is ignored: the base has the prelude.
@@ -196,6 +212,12 @@ mod tests {
         assert!(BASE_PACKED.len() < BASE.len() / 3);
         assert_eq!(base_len(), BASE.len());
         assert!(is_base(BASE));
+        // The build script's sample is this one's.
+        assert_eq!(base_sample(BASE), BASE_SAMPLE);
+        let mut other = BASE.to_vec();
+        other[8] ^= 1;
+        assert!(!is_base(&other));
+        assert!(!is_base(&BASE[..BASE.len() - 8]));
         // Anything else is refused, not decoded.
         let mut bad = BASE_PACKED.to_vec();
         bad[BASE_PACKED.len() / 2] ^= 1;

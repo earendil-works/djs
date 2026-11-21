@@ -76,12 +76,13 @@ test("the coded base: decoded by the first instance, injected into later ones (D
   assert.ok(Buffer.from(read(second)).equals(Buffer.from(base)));
   const vm2b = second.vm_new(0);
   assert.ok(Buffer.from(arena(second, vm2b)).equals(Buffer.from(arena(second, vm2))));
-  // A damaged copy (or the wrong length) is refused, and the instance decodes its own.
+  // Another base (or the wrong length) is refused, and the instance decodes its own. The
+  // check is of identity, by a sample of the bytes (D3271): here a byte of the roots.
   const third = new WebAssembly.Instance(module, {}).exports as any;
   assert.equal(third.djs_base_inject_ptr(base.length + 8), 0);
   const at3 = third.djs_base_inject_ptr(base.length);
   const bad = base.slice();
-  bad[bad.length >> 1] ^= 4;
+  bad[40] ^= 4;
   new Uint8Array(third.memory.buffer, at3, bad.length).set(bad);
   assert.equal(third.djs_base_inject(), 0);
   provideCodedBase(module, third);

@@ -487,21 +487,30 @@ pub extern "C" fn djs_base_inject_ptr(len: usize) -> usize {
     // The next `vm_new` takes it as its arena (D2060): with the arena's capacity, or
     // reserving that moves it, and a base below the page allocator's `HUGE` leaves its
     // first block behind in dlmalloc's memory (0151).
+    // Not zeroed: the host overwrites all of it (D3271).
     let mut buf = base_buffer();
-    buf.resize(len, 0);
     let p = buf.as_mut_ptr() as usize;
     INJECTED.with(|i| *i.borrow_mut() = Some(buf));
     p
 }
 
 /// Takes the bytes written at `djs_base_inject_ptr` as this instance's base if they are
-/// the base (its length and FNV-1a hash): 1, or 0 (refused: the instance decodes its own
-/// at the first use).
+/// the base (`djs_prelude::is_base`: its length and a sample of its bytes, D3271): 1, or
+/// 0 (refused: the instance decodes its own at the first use).
 #[unsafe(no_mangle)]
 pub extern "C" fn djs_base_inject() -> u32 {
-    let Some(buf) = INJECTED.with(|i| i.borrow_mut().take()) else {
+    let Some(mut buf) = INJECTED.with(|i| i.borrow_mut().take()) else {
         return 0;
     };
+    let len = djs_prelude::base_len();
+    if buf.capacity() < len {
+        return 0;
+    }
+    // SAFETY: `djs_base_inject_ptr` reserved `len` bytes (checked), and the host wrote them through the memory export since. A host that did not
+    // leaves the stale bytes of linear memory there, which hold values like any other
+    // (wasm memory has no uninitialized state) and fail the identity check below or, if
+    // not, break this instance only: the host could write anywhere in it anyway.
+    unsafe { buf.set_len(len) };
     if !djs_prelude::is_base(&buf) {
         return 0;
     }

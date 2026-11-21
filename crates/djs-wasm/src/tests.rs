@@ -542,10 +542,10 @@ fn base_is_decoded_or_injected() {
     });
     assert_eq!(ok, 1);
     assert_ne!(vm, 0);
-    // A wrong length gets no room; a corrupted copy is refused and the instance decodes.
+    // A wrong length gets no room; another base is refused and the instance decodes. The
+    // check is of identity, by a sample of the bytes (D3271): here a byte of the roots.
     let mut bad = decoded.clone();
-    let mid = bad.len() / 2;
-    bad[mid] ^= 1;
+    bad[40] ^= 1;
     let expect = decoded.clone();
     in_instance(move || {
         assert_eq!(djs_base_inject_ptr(bad.len() - 1), 0);

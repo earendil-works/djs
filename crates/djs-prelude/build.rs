@@ -113,9 +113,12 @@ fn main() {
                 "/// The coded base's header (length and hash of the image).\n\
                  pub const PACKED_HEADER: [u8; 16] = [{}];\n\
                  /// The coded base's length.\n\
-                 pub const PACKED_LEN: usize = {};\n",
+                 pub const PACKED_LEN: usize = {};\n\
+                 /// `base_sample` of the image.\n\
+                 const BASE_SAMPLE: u64 = {};\n",
                 header.join(", "),
-                packed.len()
+                packed.len(),
+                base_sample(&image)
             ),
         )
         .expect("cannot write the coded image's header");
@@ -132,4 +135,15 @@ fn main() {
         )
         .expect("cannot write the coded image's section");
     }
+}
+
+/// djs-prelude's `base_sample` (lib.rs; its tests check that the two agree).
+fn base_sample(b: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut i = 0;
+    while i + 8 <= b.len() {
+        h = (h ^ u64::from_le_bytes(b[i..i + 8].try_into().unwrap())).wrapping_mul(0x100_0000_01b3);
+        i += if i < 256 { 8 } else { 504 };
+    }
+    h
 }

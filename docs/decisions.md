@@ -12154,3 +12154,24 @@ Wasm instructions: String(i) −24%, toFixed −23%, `(i).toString()` −12%, `'
 template −7%; ops.ts wall clock String(i) 6.3 → 4.6 ms, toFixed 6.0 → 4.1, padStart
 8.8 → 7.2; charCodeAt over a flattened rope −13%. Workloads (wmeasure) within ±0.8%,
 strbuild −3.9%. Size +162 B gz (428,786), slim +163.
+
+## D3270: A new hash key rewrites only what lies above the builtin prefix
+date: 2026-11-21 · by: pstart · issue: 0256
+`Heap::set_hash_key`, which every new VM runs when the host seeds it
+(`vm_set_random_seed`), walked all cells twice: once to clear cached string hashes, once to
+rebuild Map and Set indexes. The prefix's strings cache the fixed base hash and were
+skipped already, and the prefix holds no Map or Set, so both walks now start at
+`BASE_END` (8 KB of a new VM's 184 KB arena). `Vm::prepare_base_image` asserts that no
+Map, Set, WeakMap or WeakSet lies below `BASE_END`. About 20 µs per new VM in wasm.
+
+## D3271: The injected base is checked for identity, not hashed, and not zeroed first
+date: 2026-11-21 · by: pstart · issue: 0256
+`djs_base_inject_ptr` zero-filled a base-sized buffer that the host overwrites right
+after, and `djs_base_inject` hashed all of it with FNV-1a 64 (D2252). Now the buffer is
+handed out reserved but not initialized, `djs_base_inject` sets its length (djs-wasm's
+one new `unsafe`: the host wrote the bytes through the memory export; a host that did not
+leaves stale but defined linear memory), and `djs_prelude::is_base` compares the length
+and an FNV-1a sample: the first 256 bytes (the roots) and one word in every 504 bytes,
+against `BASE_SAMPLE` from the build script. The hash protected nothing a host cannot
+break anyway, since it can write anywhere in the instance's memory; what remains catches
+bytes from another build. A new sandbox in node: about 30 µs less of ~150 µs.

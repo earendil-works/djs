@@ -1288,6 +1288,16 @@ impl Vm {
             .set(0, crate::heap::cells::Roots::BASE_END, len - tail_bytes);
         // The prefix's strings cache the fixed hash, not the building VM's keyed one (D2433).
         self.heap.prefix_hashes_to_base();
+        // `Heap::set_hash_key` rebuilds Map and Set indexes above the prefix only (D3270).
+        let base = self.heap.base_end();
+        let prefix_collection = self.heap.cells().take_while(|c| c.offset < base).any(|c| {
+            c.kind == crate::heap::CellKind::Object
+                && matches!(
+                    self.heap.object_class(Obj(c.offset)),
+                    ObjectClass::Map | ObjectClass::Set | ObjectClass::WeakMap | ObjectClass::WeakSet
+                )
+        });
+        assert!(!prefix_collection, "a Map or Set in the builtin prefix");
         // The stored threshold by the prefix rule (D2442), now that there is a prefix:
         // a VM's first collection comes after as much growth as later ones.
         self.heap.reset_gc_threshold();

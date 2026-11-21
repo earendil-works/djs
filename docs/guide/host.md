@@ -192,7 +192,10 @@ for it, the host writes the bytes, and the instance decodes them when it needs t
 which takes a few milliseconds. Every sandbox is its own instance, so a host decodes only
 once per compiled module: it keeps the first instance's decoded copy (`djs_base_ptr`,
 `djs_base_len`) and writes it into each new instance instead (`djs_base_inject_ptr`, then
-`djs_base_inject`, which checks the bytes' length and hash before taking them).
+`djs_base_inject`, which checks the bytes' length and a sample of them before taking them).
+That check is of identity, against bytes from another module, not of integrity: the host
+can write anywhere in the instance's memory anyway, and hashing every byte cost a new
+sandbox more than the rest of its setup.
 [`js/src/base.ts`](../../js/src/base.ts) does this for the `Sandbox`.
 
 The decoded or written bytes then become the first VM's arena as they are, grown in

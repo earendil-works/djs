@@ -1391,7 +1391,9 @@ impl Heap {
     /// Replaces the keyed hash's key (D2433): the strings above the prefix forget their
     /// cached hashes, and the VM's own atom index and every Map/Set index are rebuilt
     /// under the new key (insertion order is the entries' order, which stays). No-op for
-    /// the key in use. The prefix is not written: its strings cache the base hash.
+    /// the key in use. The prefix is not written: its strings cache the base hash, and it
+    /// holds no Map or Set (`Vm::prepare_base_image` asserts it), so the walks start at
+    /// its end (D3270: the prefix is 96% of a new VM's arena).
     #[inline(never)]
     pub(crate) fn set_hash_key(&mut self, key: u64) {
         use super::ObjectClass;
@@ -1403,7 +1405,7 @@ impl Heap {
         // Two walks over the cells (headers only, nothing moves): every cached hash goes
         // before any index is rebuilt with the new key.
         for pass in 0..2 {
-            let mut c = 0;
+            let mut c = base;
             while c < self.arena().len() {
                 let h: u64 = self.arena().read(c);
                 let kind = h as u8;
@@ -1411,7 +1413,7 @@ impl Heap {
                     || kind == CellKind::Str16 as u8
                     || kind == CellKind::Rope as u8
                     || kind == CellKind::Slice as u8;
-                if pass == 0 && string && c >= base {
+                if pass == 0 && string {
                     self.arena_mut().set(c, Str8::HASH, 0);
                 } else if pass == 1
                     && kind == CellKind::Object as u8
